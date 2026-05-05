@@ -164,6 +164,25 @@ cmake -S . -B build
 cmake --build build -j
 ```
 
+### Política de inclusão de novos arquivos no build (CMake)
+
+O projeto **não usa mais `file(GLOB_RECURSE ...)`** para as listas principais de fontes.
+As listas `CORE_C_SOURCES`, `DIAGNOSTICS_SOURCES`, `PARSER_CPP_SOURCES`, `CLI_SOURCES` e `TEST_SOURCES` são mantidas manualmente em `CMakeLists.txt`.
+
+Ao criar, mover ou remover arquivos de código:
+
+1. Atualize explicitamente a lista correspondente em `CMakeLists.txt`.
+2. Confirme que os targets continuam com a composição esperada:
+   - `ZithCore`
+   - `ZithParse`
+   - `zith`
+   - `zith_tests` (quando `BUILD_TESTING=ON`)
+3. Reconfigure e rebuild:
+   - `cmake -S . -B build`
+   - `cmake --build build -j`
+
+Opcionalmente, para organização por submódulo, podem ser usados blocos `target_sources(...)` com caminhos explícitos (sem glob), mantendo a mesma política de atualização manual.
+
 ## Quick Start
 
 ### Installation

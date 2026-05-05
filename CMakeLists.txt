@@ -164,22 +164,45 @@ if(LLVM_FOUND)
 endif() # LLVM_FOUND
 
 # =============================================================================
-# Sources
+# Sources (manual lists; keep in sync when adding/removing files)
 # =============================================================================
-file(GLOB_RECURSE CORE_C_SOURCES "impl/memory/*.c")
-file(GLOB_RECURSE DIAGNOSTICS_SOURCES "impl/diagnostics/*.cpp")
-file(GLOB_RECURSE PARSER_CPP_SOURCES
-    "impl/lexer/*.cpp"
-    "impl/parser/*.cpp"
-    "impl/ast/*.cpp"
+set(CORE_C_SOURCES
+    impl/memory/arena_c_functions.c
+    impl/memory/file.c
 )
 
-file(GLOB_RECURSE IMPORT_SOURCES "impl/import/*.hpp")
+set(DIAGNOSTICS_SOURCES
+    impl/diagnostics/diagnostics.cpp
+)
 
-file(GLOB_RECURSE CLI_SOURCES
-    "impl/cli/*.cpp"
-    "impl/memory/*.h"
-    "impl/lexer/*.h"
+set(PARSER_CPP_SOURCES
+    impl/ast/ast.cpp
+    impl/lexer/keywords.cpp
+    impl/lexer/tokenizer.cpp
+    impl/parser/parser.cpp
+    impl/parser/parser_decl.cpp
+    impl/parser/parser_expr.cpp
+    impl/parser/parser_sema.cpp
+    impl/parser/parser_test.cpp
+    impl/parser/parser_utils.cpp
+)
+
+set(IMPORT_SOURCES
+    impl/import/import.hpp
+    impl/import/module_registry.hpp
+    impl/import/symbol_resolver.hpp
+    impl/import/symbol_table.hpp
+)
+
+set(CLI_SOURCES
+    impl/cli/CLI.cpp
+    impl/lexer/debug.h
+    impl/memory/arena_c_functions.h
+set(CLI_SOURCES
+    impl/cli/CLI.cpp
+    impl/cli/project_config/project_config.cpp
+    impl/cli/pipeline/pipeline.cpp
+    impl/cli/runtime_interpreted/runtime_interpreted.cpp
 )
 
 # ───────────────────────────────────────────────
@@ -285,7 +308,13 @@ if(BUILD_TESTING)
     )
     FetchContent_MakeAvailable(Catch2)
 
-    file(GLOB_RECURSE TEST_SOURCES "tests/*.cpp")
+    set(TEST_SOURCES
+        tests/test_expand_sema.cpp
+        tests/test_import.cpp
+        tests/test_import_system.cpp
+        tests/test_main.cpp
+        tests/test_parser.cpp
+    )
 
     if(TEST_SOURCES)
         add_executable(zith_tests ${TEST_SOURCES})
