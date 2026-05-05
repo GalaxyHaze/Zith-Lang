@@ -176,10 +176,11 @@ file(GLOB_RECURSE PARSER_CPP_SOURCES
 
 file(GLOB_RECURSE IMPORT_SOURCES "impl/import/*.hpp")
 
-file(GLOB_RECURSE CLI_SOURCES
-    "impl/cli/*.cpp"
-    "impl/memory/*.h"
-    "impl/lexer/*.h"
+set(CLI_SOURCES
+    impl/cli/CLI.cpp
+    impl/cli/project_config/project_config.cpp
+    impl/cli/pipeline/pipeline.cpp
+    impl/cli/runtime_interpreted/runtime_interpreted.cpp
 )
 
 # ───────────────────────────────────────────────
