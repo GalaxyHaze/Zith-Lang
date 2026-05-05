@@ -13,6 +13,9 @@
 #include <vector>
 #include "../lexer/debug.h"
 #include "../ast/ast.h"
+#include "project_config/project_config.hpp"
+#include "pipeline/pipeline.hpp"
+#include "runtime_interpreted/runtime_interpreted.hpp"
 
 static const char *zith_version = ZITH_VERSION;
 
@@ -372,8 +375,8 @@ static int cmd_check(const std::string &input_file,
     std::string src = input_file;
 
     if (src.empty()) {
-        ZithProject proj;
-        if (!try_load_project(proj)) {
+        zith::cli::project_config::ZithProject proj;
+        if (!zith::cli::project_config::try_load_project(proj)) {
             print_error("No input file and no ZithProject.toml found");
             return 1;
         }
@@ -385,14 +388,14 @@ static int cmd_check(const std::string &input_file,
     ZithTokenStream stream{};
     const char *source = nullptr;
     size_t src_size = 0;
-    ZithArena *arena = tokenize_file(src, stream, &source, &src_size, verbose);
+    ZithArena *arena = zith::cli::pipeline::tokenize_file(src, stream, &source, &src_size, verbose);
     if (!arena) return 1;
 
     zith_debug_tokens(stream.data, stream.len);
 
     std::vector<const char *> import_roots;
     size_t import_root_count;
-    ZithProject::build_import_roots(include_dirs, import_roots, import_root_count);
+    zith::cli::project_config::build_import_roots(include_dirs, import_roots, import_root_count);
 
     ZithNode *ast = zith_parse_with_source(arena,
                                                    source, src_size,
@@ -439,12 +442,12 @@ static int cmd_compile(const std::string &input_file,
     ZithTokenStream stream{};
     const char *source = nullptr;
     size_t src_size = 0;
-    ZithArena *arena = tokenize_file(input_file, stream, &source, &src_size, verbose);
+    ZithArena *arena = zith::cli::pipeline::tokenize_file(input_file, stream, &source, &src_size, verbose);
     if (!arena) return 1;
 
     std::vector<const char *> import_roots;
     size_t import_root_count;
-    ZithProject::build_import_roots(include_dirs, import_roots, import_root_count);
+    zith::cli::project_config::build_import_roots(include_dirs, import_roots, import_root_count);
 
     ZithNode *ast = zith_parse_with_source(arena, source, src_size, input_file.c_str(), stream,
                                            import_roots.data(), import_root_count);
@@ -500,8 +503,8 @@ static int cmd_build(const std::string &input_file,
     std::vector<std::string> extra_includes = include_dirs;
 
     if (src.empty()) {
-        ZithProject proj;
-        if (!try_load_project(proj)) {
+        zith::cli::project_config::ZithProject proj;
+        if (!zith::cli::project_config::try_load_project(proj)) {
             print_error("No input file and no ZithProject.toml found");
             return 1;
         }
@@ -543,8 +546,8 @@ static int cmd_execute(const std::string &target, bool interpreted, bool verbose
     std::string bin = target;
 
     if (bin.empty()) {
-        ZithProject proj;
-        if (!try_load_project(proj)) {
+        zith::cli::project_config::ZithProject proj;
+        if (!zith::cli::project_config::try_load_project(proj)) {
             print_error("No target specified and no ZithProject.toml found");
             return 1;
         }
@@ -581,7 +584,7 @@ static int cmd_execute(const std::string &target, bool interpreted, bool verbose
         }
         std::vector<const char *> import_roots;
         size_t import_root_count;
-        ZithProject::build_import_roots(include_dirs, import_roots, import_root_count);
+        zith::cli::project_config::build_import_roots(include_dirs, import_roots, import_root_count);
 
         ZithNode *ast = zith_parse_with_source(arena, source.c_str(), source.size(), bin.c_str(), stream,
                                                import_roots.data(), import_root_count);
@@ -589,7 +592,7 @@ static int cmd_execute(const std::string &target, bool interpreted, bool verbose
             zith_arena_destroy(arena);
             return 1;
         }
-        const int rc = run_interpreted_ast(ast);
+        const int rc = zith::cli::runtime_interpreted::run_interpreted_ast(ast);
         zith_arena_destroy(arena);
         return rc;
     }
@@ -853,7 +856,7 @@ extern "C" int zith_run(int argc, const char *const argv[]) {
                        interpreted, verbose, include_dirs);
 
     // Sem subcomando: tenta build via toml, senão mostra ajuda
-    ZithProject proj;
+    zith::cli::project_config::ZithProject proj;
     if (try_load_project(proj))
         return cmd_build("", "", mode_str, verbose, include_dirs);
 
