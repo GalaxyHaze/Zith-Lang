@@ -4,6 +4,9 @@
 
 ## Current Implementation State
 
+A matriz técnica detalhada (recurso, status, módulo responsável e cobertura de testes) está em `docs-architecture.md`, seção **Technical Status Matrix**.
+
+
 > **Last Updated:** April 30, 2026
 
 The parser and core tools are functional but incomplete. The spec (`Zith-spec.md`) defines the target design, while `impl/` contains what's currently implemented.
@@ -798,3 +801,11 @@ A: Yes. The `raw` keyword provides an explicit escape hatch for hardware-level p
 ## License
 
 Zith is licensed under the [MIT License](./license).
+
+
+## Checklist de release (status técnico)
+
+- [ ] Atualizar `docs-architecture.md` (Technical Status Matrix) para cada mudança relevante.
+- [ ] Atualizar este README quando itens mudarem entre *implemented/partial/planned*.
+- [ ] Garantir que cobertura de testes mencionada na matriz foi atualizada.
+- [ ] Se `docsaurus/` mudou, commitar `docs/` regenerado no mesmo PR.
