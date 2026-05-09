@@ -11,6 +11,7 @@ int main() {
 }
 #else
 #include <zith/zith.hpp>
+#include <ffi.h>
 
 int main(const int argc, const char* argv[]) {
     zith_run(argc, argv);
