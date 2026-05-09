@@ -198,6 +198,7 @@ set(CLI_SOURCES
     impl/cli/CLI.cpp
     impl/lexer/debug.h
     impl/memory/arena_c_functions.h
+)
 set(CLI_SOURCES
     impl/cli/CLI.cpp
     impl/cli/project_config/project_config.cpp
