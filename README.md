@@ -4,6 +4,9 @@
 
 ## Current Implementation State
 
+A matriz técnica detalhada (recurso, status, módulo responsável e cobertura de testes) está em `docs-architecture.md`, seção **Technical Status Matrix**.
+
+
 > **Last Updated:** April 30, 2026
 
 The parser and core tools are functional but incomplete. The spec (`Zith-spec.md`) defines the target design, while `impl/` contains what's currently implemented.
@@ -163,6 +166,25 @@ Dependências de código buscadas automaticamente pelo CMake:
 cmake -S . -B build
 cmake --build build -j
 ```
+
+### Política de inclusão de novos arquivos no build (CMake)
+
+O projeto **não usa mais `file(GLOB_RECURSE ...)`** para as listas principais de fontes.
+As listas `CORE_C_SOURCES`, `DIAGNOSTICS_SOURCES`, `PARSER_CPP_SOURCES`, `CLI_SOURCES` e `TEST_SOURCES` são mantidas manualmente em `CMakeLists.txt`.
+
+Ao criar, mover ou remover arquivos de código:
+
+1. Atualize explicitamente a lista correspondente em `CMakeLists.txt`.
+2. Confirme que os targets continuam com a composição esperada:
+   - `ZithCore`
+   - `ZithParse`
+   - `zith`
+   - `zith_tests` (quando `BUILD_TESTING=ON`)
+3. Reconfigure e rebuild:
+   - `cmake -S . -B build`
+   - `cmake --build build -j`
+
+Opcionalmente, para organização por submódulo, podem ser usados blocos `target_sources(...)` com caminhos explícitos (sem glob), mantendo a mesma política de atualização manual.
 
 ## Quick Start
 
@@ -798,3 +820,11 @@ A: Yes. The `raw` keyword provides an explicit escape hatch for hardware-level p
 ## License
 
 Zith is licensed under the [MIT License](./license).
+
+
+## Checklist de release (status técnico)
+
+- [ ] Atualizar `docs-architecture.md` (Technical Status Matrix) para cada mudança relevante.
+- [ ] Atualizar este README quando itens mudarem entre *implemented/partial/planned*.
+- [ ] Garantir que cobertura de testes mencionada na matriz foi atualizada.
+- [ ] Se `docsaurus/` mudou, commitar `docs/` regenerado no mesmo PR.

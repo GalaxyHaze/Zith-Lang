@@ -1331,3 +1331,43 @@ Coming from Rust? Here's what changes:
 8. **Direct URLs**: `/docs/cli` opens CLI overview immediately
 
 This architecture ensures long-term maintainability while providing an excellent user experience for both beginners and advanced users.
+
+
+---
+
+## Technical Status Matrix
+
+> Source of truth for implementation progress. Update this table whenever parser/compiler/runtime/docs behavior changes.
+
+| Recurso | Status | Arquivo/módulo responsável | Cobertura de testes |
+|---|---|---|---|
+| Lexer & tokenizer | implemented | `impl/lexer/tokenizer.cpp`, `impl/lexer/keywords.cpp` | `tests/test_parser.cpp` (tokens used by parser paths) |
+| Parser de declarações/expressões base | implemented | `impl/parser/parser.cpp`, `impl/parser/parser_decl.cpp`, `impl/parser/parser_expr.cpp` | `tests/test_parser.cpp`, `impl/parser/parser_test.cpp` |
+| Sistema de import/export | implemented | `impl/import/import.hpp`, `impl/import/module_registry.hpp`, `impl/import/symbol_resolver.hpp` | `tests/test_import.cpp`, `tests/test_import_system.cpp`, `tests/test_expand_sema.cpp` |
+| AST + arena de memória | implemented | `impl/ast/ast.cpp`, `impl/memory/arena.hpp` | Cobertura indireta via `tests/test_parser.cpp` e `tests/test_import*.cpp` |
+| Diagnósticos e erros de compilação | partial | `impl/diagnostics/diagnostics.cpp`, `impl/parser/parser_utils.cpp` | Cobertura parcial via asserts em `tests/test_parser.cpp` |
+| Tipos opcionais/failable (`?T`/`T!`) | partial | `impl/parser/parser_sema.cpp`, `impl/types/types.hpp` | Sem suíte dedicada; validar manualmente e ampliar testes |
+| Enum/union/trait parsing | planned | `impl/parser/` (módulos de declaração/sema) | Não coberto |
+| Semantic analysis/type checking completo | planned | `impl/types/`, futuras fases após parser | Não coberto |
+| Geração LLVM IR | planned | `include/LLVM/`, futura implementação em `impl/` | Não coberto |
+| Bytecode/VM pipeline | planned | `impl/main.cpp` (entry), módulos de backend ainda pendentes | Não coberto |
+
+## Release Checklist (Status & Documentação)
+
+Use este checklist em toda release/PR com mudança técnica relevante:
+
+- [ ] Atualizar **Technical Status Matrix** em `docs-architecture.md` (status, módulo e testes).
+- [ ] Atualizar o bloco **Current Implementation State** do `README.md` quando houver mudança de capacidade.
+- [ ] Incluir/ajustar testes em `tests/` e registrar cobertura na matriz.
+- [ ] Se houver mudança em documentação de usuário, sincronizar `docsaurus/docs/**` e gerar `docs/**` (quando `docs/` for versionado).
+- [ ] Validar localmente build/testes/documentação antes de publicar release.
+
+## Regra de sincronização `docsaurus/` ↔ `docs/`
+
+Como este repositório mantém artefatos gerados em `docs/`, a política é:
+
+1. **Fonte canônica:** arquivos editáveis em `docsaurus/` (`docsaurus/docs`, `docsaurus/src`, `docsaurus/static`, configuração).
+2. **Artefato gerado:** `docs/` deve sempre refletir exatamente o estado atual de `docsaurus/` após build.
+3. **Mudou `docsaurus/`?** Então o mesmo commit/PR deve incluir regeneração de `docs/` (sem adiar para outro PR).
+4. **Sem mudanças em `docsaurus/`:** evitar churn em `docs/` (não commitar rebuild desnecessário).
+5. **Checklist de revisão:** PR só é aprovado com diff coerente entre fonte (`docsaurus/`) e build (`docs/`).
