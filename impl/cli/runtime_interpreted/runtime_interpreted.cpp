@@ -1,5 +1,5 @@
 #include "runtime_interpreted.hpp"
-
+#include "../../ast/ast.h"
 #include <ankerl/unordered_dense.h>
 #include <cstdint>
 #include <iostream>
@@ -8,7 +8,6 @@
 
 namespace zith::cli::runtime_interpreted {
 
-namespace {
 void print_error(const std::string &msg) { std::cerr << "[error] " << msg << "\n"; }
 
 enum class RtValKind { Void, Int, Float, String, Bool };
@@ -53,11 +52,11 @@ RtValue eval_expr(RtContext &ctx, ZithNode *expr) { if(!expr) return {}; if(expr
 RtValue exec_stmt(RtContext &ctx, ZithNode *stmt, bool &did_return){ if(!stmt)return {}; if(stmt->type==ZITH_NODE_VAR_DECL){ auto *var=static_cast<ZithVarPayload*>(stmt->data.list.ptr); ctx.scopes.back()[std::string(var->name,var->name_len)] = eval_expr(ctx,var->initializer); return {}; } if(stmt->type==ZITH_NODE_RETURN){ did_return=true; return eval_expr(ctx,stmt->data.kids.a);} if(stmt->type==ZITH_NODE_BLOCK) return exec_block(ctx,stmt); (void)eval_expr(ctx,stmt); return {}; }
 
 RtValue exec_block(RtContext &ctx, ZithNode *block){ RtValue ret{}; if(!block||block->type!=ZITH_NODE_BLOCK) return ret; auto **stmts=static_cast<ZithNode **>(block->data.list.ptr); for(size_t i=0;i<block->data.list.len;++i){ bool did_return=false; RtValue v=exec_stmt(ctx,stmts[i],did_return); if(did_return) return v; } return ret; }
-} // namespace
+ // namespace
 
 int run_interpreted_ast(ZithNode *ast) {
     if (!ast || ast->type != ZITH_NODE_PROGRAM) return 1;
-    RtContext ctx{};
+    zith::cli::runtime_interpreted::RtContext ctx{};
     auto **decls = static_cast<ZithNode **>(ast->data.list.ptr);
     for (size_t i = 0; i < ast->data.list.len; ++i) {
         if (decls[i] && decls[i]->type == ZITH_NODE_FUNC_DECL) {
@@ -71,6 +70,7 @@ int run_interpreted_ast(ZithNode *ast) {
     exec_block(ctx, it->second->body);
     ctx.scopes.pop_back();
     return 0;
-}
 
 } // namespace zith::cli::runtime_interpreted
+
+}

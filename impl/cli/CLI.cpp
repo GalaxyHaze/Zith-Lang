@@ -16,6 +16,7 @@
 #include "project_config/project_config.hpp"
 #include "pipeline/pipeline.hpp"
 #include "runtime_interpreted/runtime_interpreted.hpp"
+//#include "runtime_interpreted/runtime_interpreted.hpp"
 
 static const char *zith_version = ZITH_VERSION;
 
@@ -50,7 +51,7 @@ static void print_not_implemented(const std::string &command) {
 // Preenche 'out_stream', 'out_source' e 'out_source_len' — o source fica na
 // arena para ser reutilizado pelo parser sem second load.
 // Retorna a arena (o chamador destrói); nullptr em caso de erro.
-static ZithArena *tokenize_file(const std::string &src_path,
+ZithArena *tokenize_file(const std::string &src_path,
                                     ZithTokenStream &out_stream,
                                     const char **out_source,
                                     size_t *out_source_len,
@@ -263,7 +264,7 @@ static RtValue exec_block(RtContext &ctx, ZithNode *block) {
     return ret;
 }
 
-static int run_interpreted_ast(ZithNode *ast) {
+/*static int run_interpreted_ast(ZithNode *ast) {
     if (!ast || ast->type != ZITH_NODE_PROGRAM) return 1;
     RtContext ctx{};
     auto **decls = static_cast<ZithNode **>(ast->data.list.ptr);
@@ -282,7 +283,8 @@ static int run_interpreted_ast(ZithNode *ast) {
     exec_block(ctx, it->second->body);
     ctx.scopes.pop_back();
     return 0;
-}
+}*/
+
 
 // ============================================================================
 // Comandos
