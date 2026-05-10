@@ -61,6 +61,7 @@ jobs:
             cmake_flags: >-
               -DCMAKE_C_COMPILER=clang
               -DCMAKE_CXX_COMPILER=clang++
+              -DCMAKE_LINKER=ld.lld
               -DCMAKE_C_COMPILER_TARGET=aarch64-unknown-linux-gnu
               -DCMAKE_CXX_COMPILER_TARGET=aarch64-unknown-linux-gnu
               -DCMAKE_SYSROOT=/usr/aarch64-linux-gnu
@@ -214,9 +215,16 @@ jobs:
       - name: Install musl sysroot
         shell: bash
         run: |
-          curl -fL --retry 5 --retry-delay 2 --connect-timeout 20 \
-            "https://musl.cc/${{ matrix.toolchain }}.tgz" \
-            -o "${{ matrix.toolchain }}.tgz"
+          for attempt in 1 2 3; do
+            if curl -fL --retry 5 --retry-delay 3 --connect-timeout 30 \
+              "https://musl.cc/${{ matrix.toolchain }}.tgz" \
+              -o "${{ matrix.toolchain }}.tgz"; then
+              break
+            fi
+            echo "Download attempt $attempt failed, retrying..."
+            rm -f "${{ matrix.toolchain }}.tgz"
+            sleep 5
+          done
           tar -xzf "${{ matrix.toolchain }}.tgz"
 
       - name: Configure CMake

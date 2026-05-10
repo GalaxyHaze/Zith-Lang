@@ -11,7 +11,9 @@ int main() {
 }
 #else
 #include <zith/zith.hpp>
+#ifndef ZITH_WASM
 #include <ffi.h>
+#endif
 
 int main(const int argc, const char* argv[]) {
     zith_run(argc, argv);

@@ -199,7 +199,6 @@ target_include_directories(ZithCore
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../include>
         $<INSTALL_INTERFACE:include>
         ${LLVM_INCLUDE_DIRS}
-        ${FFI_INCLUDE_DIRS}
 )
 target_link_libraries(ZithCore PUBLIC 
     tomlplusplus::tomlplusplus
@@ -345,7 +344,7 @@ message("")
 # WebAssembly (Emscripten)
 # =============================================================================
 if(EMSCRIPTEN)
-    add_executable(zith-wasm impl/main.cpp)
+    add_executable(zith-wasm ../impl/main.cpp)
 
     target_include_directories(zith-wasm PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/include
