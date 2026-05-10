@@ -147,7 +147,7 @@ jobs:
       - name: Configure CMake
         shell: bash
         run: |
-          cmake -B build -G Ninja \
+          cmake -S scripts -B build -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
             -DBUILD_TESTING=OFF \
             -DENABLE_WERROR=OFF \
@@ -223,7 +223,7 @@ jobs:
         shell: bash
         run: |
           SYSROOT="$PWD/${{ matrix.toolchain }}/${{ matrix.target_triple }}"
-          cmake -B build -G Ninja \
+          cmake -S scripts -B build -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
             -DBUILD_TESTING=OFF \
             -DENABLE_WERROR=OFF \
@@ -276,7 +276,7 @@ jobs:
       - name: Configure CMake
         shell: bash
         run: |
-          emcmake cmake -B build-wasm -G Ninja \
+          emcmake cmake -S scripts -B build-wasm -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
             -DBUILD_TESTING=OFF \
             -DENABLE_WERROR=OFF \
