@@ -157,7 +157,6 @@ Para compilar o projeto localmente, instale:
 Dependências de código buscadas automaticamente pelo CMake:
 
 - `CLI11` (v2.4.1)
-- `unordered_dense` (v4.0.0)
 - `tomlplusplus` (v3.4.0)
 
 ### Build rápido

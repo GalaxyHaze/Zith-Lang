@@ -43,6 +43,9 @@ struct ZithProject {
 };
 
 bool try_load_project(ZithProject &proj);
+bool try_load_project_from_path(ZithProject &proj, const std::string &project_file,
+                                std::vector<std::string> *warnings,
+                                std::vector<std::string> *errors);
 void build_import_roots(const std::vector<std::string> &extra_dirs,
                         std::vector<const char *> &roots_out,
                         size_t &count_out);

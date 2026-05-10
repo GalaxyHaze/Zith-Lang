@@ -5,7 +5,6 @@
 
 #include <CLI/CLI.hpp>
 #include <zith/zith.hpp>
-#include <ankerl/unordered_dense.h>
 #include <fstream>
 #include <iostream>
 #include <string>
@@ -85,9 +84,6 @@ ZithArena *tokenize_file(const std::string &src_path,
 
     return arena;
 }
-
-
-
 
 // ============================================================================
 // Comandos
@@ -466,7 +462,8 @@ EXAMPLES:
 
 LEARN MORE:
     Source: https://github.com/GalaxyHaze/Zith
-    Docs:   https://zith.run.place)";
+    Docs:   https://galaxyhaze.github.io/Zith/
+    )";
     return 0;
 }
 

@@ -704,6 +704,7 @@ ZithNode *parser_parse_declaration(Parser *p) {
     if (t->type == ZITH_TOKEN_FROM) return parse_from_import_decl(p);
     if (t->type == ZITH_TOKEN_EXPORT) return parse_export_decl(p);
     if (t->type == ZITH_TOKEN_CONST) { parser_advance(p); return parse_var_decl(p, ZITH_BINDING_CONST); }
+    if (t->type == ZITH_TOKEN_GLOBAL) { parser_advance(p); return parse_var_decl(p, ZITH_BINDING_GLOBAL); }
 
     ZithNode *expr = parser_parse_expression(p);
     parser_match(p, ZITH_TOKEN_SEMICOLON);

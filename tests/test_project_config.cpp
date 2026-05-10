@@ -5,7 +5,7 @@
 #include <string>
 #include <vector>
 
-#include "../impl/cli/project_config.hpp"
+#include "../impl/cli/project_config/project_config.hpp"
 
 namespace {
 void write_file(const std::filesystem::path &path, const std::string &content) {
@@ -14,6 +14,8 @@ void write_file(const std::filesystem::path &path, const std::string &content) {
     out << content;
 }
 } // namespace
+
+using namespace zith::cli::project_config;
 
 TEST_CASE("project parser loads required fields and resolves entry path", "[cli][project]") {
     const auto root = std::filesystem::temp_directory_path() / "zith_project_test_valid";

@@ -5,7 +5,7 @@
 #pragma once
 
 #include "module_registry.hpp"
-#include <ankerl/unordered_dense.h>
+#include <unordered_map>
 
 #include <cstdio>
 #include <vector>
@@ -170,7 +170,7 @@ private:
     // Check if two symbols are valid overloads
     bool are_valid_overloads(const SymbolEntry& a, const SymbolEntry& b) const;
 
-    using AliasMap = ankerl::unordered_dense::map<std::string, Alias>;
+    using AliasMap = std::unordered_map<std::string, Alias>;
     AliasMap aliases_;
     std::vector<Error> errors_;
 };

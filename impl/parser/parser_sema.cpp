@@ -8,7 +8,8 @@
 #include <cstdio>
 #include <string>
 #include <vector>
-#include <ankerl/unordered_dense.h>
+#include <unordered_map>
+#include <unordered_set>
 
 using zith::ArenaList;
 
@@ -31,13 +32,13 @@ struct SemaTypeInfo {
 };
 
 struct SemaScope {
-    ankerl::unordered_dense::map<std::string, SemaTypeInfo> vars;
+    std::unordered_map<std::string, SemaTypeInfo> vars;
 };
 
 struct SemaContext {
     Parser *p;
-    ankerl::unordered_dense::map<std::string, ZithFuncPayload *> functions;
-    ankerl::unordered_dense::set<std::string> imported_roots;
+    std::unordered_map<std::string, ZithFuncPayload *> functions;
+    std::unordered_set<std::string> imported_roots;
     SemaTypeInfo current_return{};
     std::vector<SemaScope> scopes;
 };

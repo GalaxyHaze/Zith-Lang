@@ -1,17 +1,26 @@
 import std/io/console;
-import examples/dev/prototype;
 
-struct Point{
-    var (x, y, z): unique i32; 
+pub struct Point{
+    var x, y, z: unique i32
 }
 
-fn prot(){
+pub global x;
 
+mod fn prot(): i32{
+    let x;
+    var x;
+    const x = 0;
+    
+    if ( x > 0)
+        return 0;
+    return -1;
 }
+
+fn proto(x, y){}
+
+const x: i32;
 
 fn main(){
     let x: Xablau;
-    log("Hallo");
-    test(5);
-    add();
+    prot(5);
 }

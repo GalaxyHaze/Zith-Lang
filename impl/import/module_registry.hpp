@@ -5,7 +5,7 @@
 #pragma once
 
 #include "import.hpp"
-#include <ankerl/unordered_dense.h>
+#include <unordered_map>
 
 #include <vector>
 #include <string>
@@ -180,7 +180,7 @@ private:
     uint32_t version_;
 
     std::vector<SymbolEntry> symbols_;
-    ankerl::unordered_dense::map<std::string, uint32_t> symbol_index_;
+    std::unordered_map<std::string, uint32_t> symbol_index_;
 };
 
 // ============================================================================
@@ -242,7 +242,7 @@ public:
 private:
     ModuleRegistry() = default;
 
-    using ModuleMap = ankerl::unordered_dense::map<std::string, std::shared_ptr<Module>>;
+    using ModuleMap = std::unordered_map<std::string, std::shared_ptr<Module>>;
     ModuleMap modules_;
 };
 

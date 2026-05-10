@@ -90,9 +90,9 @@ static constexpr auto TokenTable = std::to_array<std::pair<std::string_view, Zit
     {"recurse", ZITH_TOKEN_RECURSE},
 
     // --- Modificadores de acesso --------------------------------------------
-    {"public", ZITH_TOKEN_MODIFIER},
+    {"pub", ZITH_TOKEN_MODIFIER},
     {"private", ZITH_TOKEN_MODIFIER},
-    {"protected", ZITH_TOKEN_MODIFIER},
+    {"mod", ZITH_TOKEN_MODIFIER},
 
     // --- Controle de fluxo --------------------------------------------------
     {"if", ZITH_TOKEN_IF},

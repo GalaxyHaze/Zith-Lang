@@ -1,6 +1,9 @@
 cmake_minimum_required(VERSION 3.20)
 project(zith LANGUAGES C CXX)
 
+# Base directory is parent of scripts/
+set(BASE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/..)
+
 include(GNUInstallDirs)
 
 # =============================================================================
@@ -43,14 +46,6 @@ FetchContent_Declare(cli11
     GIT_SHALLOW TRUE
 )
 FetchContent_MakeAvailable(cli11)
-
-# --- unordered_dense ---
-FetchContent_Declare(unordered_dense
-    GIT_REPOSITORY https://github.com/martinus/unordered_dense.git
-    GIT_TAG v4.0.0
-    GIT_SHALLOW TRUE
-)
-FetchContent_MakeAvailable(unordered_dense)
 
 # --- tomlplusplus ---
 FetchContent_Declare(
@@ -167,43 +162,31 @@ endif() # LLVM_FOUND
 # Sources (manual lists; keep in sync when adding/removing files)
 # =============================================================================
 set(CORE_C_SOURCES
-    impl/memory/arena_c_functions.c
-    impl/memory/file.c
+    ../impl/memory/arena_c_functions.c
+    ../impl/memory/file.c
 )
 
 set(DIAGNOSTICS_SOURCES
-    impl/diagnostics/diagnostics.cpp
+    ../impl/diagnostics/diagnostics.cpp
 )
 
 set(PARSER_CPP_SOURCES
-    impl/ast/ast.cpp
-    impl/lexer/keywords.cpp
-    impl/lexer/tokenizer.cpp
-    impl/parser/parser.cpp
-    impl/parser/parser_decl.cpp
-    impl/parser/parser_expr.cpp
-    impl/parser/parser_sema.cpp
-    impl/parser/parser_test.cpp
-    impl/parser/parser_utils.cpp
-)
-
-set(IMPORT_SOURCES
-    impl/import/import.hpp
-    impl/import/module_registry.hpp
-    impl/import/symbol_resolver.hpp
-    impl/import/symbol_table.hpp
+    ../impl/ast/ast.cpp
+    ../impl/lexer/keywords.cpp
+    ../impl/lexer/tokenizer.cpp
+    ../impl/parser/parser.cpp
+    ../impl/parser/parser_decl.cpp
+    ../impl/parser/parser_expr.cpp
+    ../impl/parser/parser_sema.cpp
+    ../impl/parser/parser_test.cpp
+    ../impl/parser/parser_utils.cpp
+    ../impl/cli/project_config/project_config.cpp
 )
 
 set(CLI_SOURCES
-    impl/cli/CLI.cpp
-    impl/lexer/debug.h
-    impl/memory/arena_c_functions.h
-)
-set(CLI_SOURCES
-    impl/cli/CLI.cpp
-    impl/cli/project_config/project_config.cpp
-    impl/cli/pipeline/pipeline.cpp
-    impl/cli/runtime_interpreted/runtime_interpreted.cpp
+    ../impl/cli/CLI.cpp
+    ../impl/cli/pipeline/pipeline.cpp
+    ../impl/cli/runtime_interpreted/runtime_interpreted.cpp
 )
 
 # ───────────────────────────────────────────────
@@ -213,7 +196,7 @@ set(CLI_SOURCES
 add_library(ZithCore STATIC ${CORE_C_SOURCES} ${DIAGNOSTICS_SOURCES})
 target_include_directories(ZithCore
     PUBLIC
-        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../include>
         $<INSTALL_INTERFACE:include>
         ${LLVM_INCLUDE_DIRS}
         ${FFI_INCLUDE_DIRS}
@@ -224,15 +207,14 @@ target_link_libraries(ZithCore PUBLIC
 )
 
 # ────────
-add_library(ZithParse STATIC ${PARSER_CPP_SOURCES} ${IMPORT_SOURCES})
+add_library(ZithParse STATIC ${PARSER_CPP_SOURCES})
 target_include_directories(ZithParse
     PUBLIC
-        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../include>
 )
 target_link_libraries(ZithParse
     PUBLIC
         ZithCore
-        unordered_dense::unordered_dense
 )
 target_compile_definitions(ZithParse PRIVATE ZITH_VERSION="${ZITH_VERSION}")
 
@@ -244,9 +226,9 @@ set_target_properties(ZithParse PROPERTIES
 )
 
 # ────────
-add_executable(zith impl/main.cpp ${CLI_SOURCES})
+add_executable(zith ../impl/main.cpp ${CLI_SOURCES})
 
-target_include_directories(zith PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+target_include_directories(zith PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../include)
 
 target_link_libraries(zith
     PRIVATE
@@ -274,9 +256,9 @@ install(TARGETS zith ZithParse ZithCore
 # =============================================================================
 find_program(CLANG_FORMAT_EXE NAMES clang-format clang-format-18 clang-format-17 clang-format-16)
 file(GLOB_RECURSE ZITH_FORMAT_SOURCES
-    "impl/*.cpp" "impl/*.hpp" "impl/*.h" "impl/*.c"
-    "include/*.hpp" "include/*.h"
-    "tests/*.cpp"
+    "../impl/*.cpp" "../impl/*.hpp" "../impl/*.h" "../impl/*.c"
+    "../include/*.hpp" "../include/*.h"
+    "../tests/*.cpp"
 )
 
 if(CLANG_FORMAT_EXE)
@@ -310,16 +292,17 @@ if(BUILD_TESTING)
     FetchContent_MakeAvailable(Catch2)
 
     set(TEST_SOURCES
-        tests/test_expand_sema.cpp
-        tests/test_import.cpp
-        tests/test_import_system.cpp
-        tests/test_main.cpp
-        tests/test_parser.cpp
+        ../tests/test_expand_sema.cpp
+        ../tests/test_import.cpp
+        ../tests/test_import_system.cpp
+        ../tests/test_main.cpp
+        ../tests/test_parser.cpp
+        ../tests/test_project_config.cpp
     )
 
     if(TEST_SOURCES)
         add_executable(zith_tests ${TEST_SOURCES})
-        target_include_directories(zith_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+        target_include_directories(zith_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../include)
         
         # Garante que os testes também usem a versão correta
         target_compile_definitions(zith_tests PRIVATE ZITH_VERSION="${ZITH_VERSION}")

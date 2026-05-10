@@ -1,6 +1,6 @@
 #include "runtime_interpreted.hpp"
 #include "../../ast/ast.h"
-#include <ankerl/unordered_dense.h>
+#include <unordered_map>
 #include <cstdint>
 #include <iostream>
 #include <string>
@@ -23,8 +23,8 @@ struct RtValue {
 };
 
 struct RtContext {
-    ankerl::unordered_dense::map<std::string, ZithFuncPayload *> funcs;
-    std::vector<ankerl::unordered_dense::map<std::string, RtValue>> scopes;
+    std::unordered_map<std::string, ZithFuncPayload *> funcs;
+    std::vector<std::unordered_map<std::string, RtValue>> scopes;
 };
 
 // Forward declarations

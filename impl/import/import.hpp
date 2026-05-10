@@ -11,7 +11,7 @@
 #include <vector>
 #include <utility>
 #include <cstring>
-#include <ankerl/unordered_dense.h>
+#include <unordered_map>
 
 #ifdef __cplusplus
 extern "C" {

@@ -1,11 +1,11 @@
 // impl/import/symbol_table.hpp — Global symbol table for Zith
 //
-// Provides centralized symbol resolution using unordered_dense.
+// Provides centralized symbol resolution.
 // Thread-unsafe (single-threaded compiler context).
 #pragma once
 
 #include "import.hpp"
-#include <ankerl/unordered_dense.h>
+#include <unordered_map>
 
 #include <vector>
 #include <memory>
@@ -281,8 +281,8 @@ private:
         return SymbolResolution();
     }
 
-    using ImportMap = ankerl::unordered_dense::map<std::string, SymbolTableEntry>;
-    using SymbolMap = ankerl::unordered_dense::map<std::string, SymbolTableEntry>;
+    using ImportMap = std::unordered_map<std::string, SymbolTableEntry>;
+    using SymbolMap = std::unordered_map<std::string, SymbolTableEntry>;
 
     ImportMap imports_;
     SymbolMap symbols_by_name_;
