@@ -10,6 +10,7 @@ int main() {
     return 0;
 }
 #else
+
 #include <zith/zith.hpp>
 #ifndef ZITH_WASM
 #include <ffi.h>
