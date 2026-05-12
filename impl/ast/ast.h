@@ -8,8 +8,8 @@
 // Extended nodes live at 1000+ as required by the base header contract.
 #pragma once
 
-#include <zith/zith.hpp>
 #include "../types/types.hpp"
+#include <zith/zith.hpp>
 
 #ifdef __cplusplus
 extern "C" {
@@ -51,7 +51,7 @@ typedef struct {
     ZithNode **params;
     size_t param_count;
     ZithNode *return_type; // NULL = void / inferred
-    ZithNode *body; // NULL = forward declaration
+    ZithNode *body;        // NULL = forward declaration
     ZithVisibility visibility;
     bool is_extern;
 } ZithFuncPayload;
@@ -63,7 +63,7 @@ typedef struct {
     ZithBindingKind binding;
     ZithOwnership ownership;
     ZithVisibility visibility;
-    ZithNode *type_node; // NULL = inferred
+    ZithNode *type_node;   // NULL = inferred
     ZithNode *initializer; // NULL = no initial value
 } ZithVarPayload;
 
@@ -161,10 +161,10 @@ typedef struct {
 // ZITH_NODE_FOR (302) — list.ptr, list.len = 0
 typedef struct {
     ZithNode *iterator_var; // for-in only
-    ZithNode *iterable; // for-in only
-    ZithNode *init; // classic for only
-    ZithNode *condition; // NULL = infinite
-    ZithNode *step; // classic for only
+    ZithNode *iterable;     // for-in only
+    ZithNode *init;         // classic for only
+    ZithNode *condition;    // NULL = infinite
+    ZithNode *step;         // classic for only
     ZithNode *body;
     bool is_for_in;
 } ZithForPayload;
@@ -176,10 +176,10 @@ typedef struct {
     const char *path;
     size_t path_len;
     ZithVisibility vis;
-    const char *alias;      // para "as alias" (NULL se não tiver)
+    const char *alias; // para "as alias" (NULL se não tiver)
     size_t alias_len;
-    bool is_export;         // true = export, false = import
-    bool is_from;           // true = sintaxe "from x import y"
+    bool is_export; // true = export, false = import
+    bool is_from;   // true = sintaxe "from x import y"
 } ZithImportPayload;
 
 // ZITH_NODE_MARKER (1055) — named jump target with body
@@ -258,7 +258,8 @@ typedef struct {
 
 ZithNode *zith_ast_make_program(ZithArena *a, ZithNode **decls, size_t count);
 
-ZithNode * zith_ast_make_import_decl(ZithArena * arena, ZithSourceLoc loc, const ZithImportPayload & decl);
+ZithNode *zith_ast_make_import_decl(ZithArena *arena, ZithSourceLoc loc,
+                                    const ZithImportPayload &decl);
 
 ZithNode *zith_ast_make_literal(ZithArena *a, ZithSourceLoc loc, const ZithLiteral &lit);
 
@@ -266,26 +267,24 @@ ZithNode *zith_ast_make_identifier(ZithArena *a, ZithSourceLoc loc, const char *
 
 ZithNode *zith_ast_make_field(ZithArena *a, ZithSourceLoc loc, ZithFieldPayload field);
 
-ZithNode *zith_ast_make_binary_op(ZithArena *a, ZithSourceLoc loc, ZithTokenType op,
-                                          ZithNode *left, ZithNode *right);
+ZithNode *zith_ast_make_binary_op(ZithArena *a, ZithSourceLoc loc, ZithTokenType op, ZithNode *left,
+                                  ZithNode *right);
 
 ZithNode *zith_ast_make_unary_op(ZithArena *a, ZithSourceLoc loc, ZithTokenType op,
-                                         ZithNode *operand, bool is_postfix);
+                                 ZithNode *operand, bool is_postfix);
 
 ZithNode *zith_ast_make_call(ZithArena *a, ZithSourceLoc loc, ZithNode *callee, ZithNode **args,
-                                     size_t arg_count);
+                             size_t arg_count);
 
-ZithNode *zith_ast_make_recurse(ZithArena *a, ZithSourceLoc loc, ZithNode *callee,
-                                        ZithNode **args, size_t arg_count);
+ZithNode *zith_ast_make_recurse(ZithArena *a, ZithSourceLoc loc, ZithNode *callee, ZithNode **args,
+                                size_t arg_count);
 
-ZithNode *zith_ast_make_member(ZithArena *a, ZithSourceLoc loc, ZithNode *object,
-                                       ZithNode *member);
+ZithNode *zith_ast_make_member(ZithArena *a, ZithSourceLoc loc, ZithNode *object, ZithNode *member);
 
 ZithNode *zith_ast_make_arrow_call(ZithArena *a, ZithSourceLoc loc, ZithNode *receiver,
-                                           ZithNode *call);
+                                   ZithNode *call);
 
-ZithNode *zith_ast_make_cast(ZithArena *a, ZithSourceLoc loc, ZithNode *expr,
-                                     ZithNode *type_node);
+ZithNode *zith_ast_make_cast(ZithArena *a, ZithSourceLoc loc, ZithNode *expr, ZithNode *type_node);
 
 ZithNode *zith_ast_make_var_decl(ZithArena *a, ZithSourceLoc loc, const ZithVarPayload &decl);
 
@@ -297,11 +296,11 @@ ZithNode *zith_ast_make_block(ZithArena *a, ZithSourceLoc loc, ZithNode **stmts,
 
 // Cria um nó UNBODY que armazena o token stream bruto entre { e }
 // tokens aponta para o primeiro token após '{', token_count é o número de tokens até '}'
-ZithNode *zith_ast_make_unbody(ZithArena *a, ZithSourceLoc loc, 
-                                        const ZithToken *tokens, size_t token_count);
+ZithNode *zith_ast_make_unbody(ZithArena *a, ZithSourceLoc loc, const ZithToken *tokens,
+                               size_t token_count);
 
 ZithNode *zith_ast_make_if(ZithArena *a, ZithSourceLoc loc, ZithNode *cond, ZithNode *then_br,
-                                   ZithNode *else_br);
+                           ZithNode *else_br);
 
 ZithNode *zith_ast_make_for(ZithArena *a, ZithSourceLoc loc, ZithForPayload data);
 
@@ -330,7 +329,7 @@ ZithNode *zith_ast_make_marker(ZithArena *a, ZithSourceLoc loc, ZithMarkerPayloa
 ZithNode *zith_ast_make_entry(ZithArena *a, ZithSourceLoc loc, ZithMarkerPayload data);
 
 ZithNode *zith_ast_make_enum_variant(ZithArena *a, ZithSourceLoc loc,
-                                             const ZithEnumVariantPayload &data);
+                                     const ZithEnumVariantPayload &data);
 
 ZithNode *zith_ast_make_break(ZithArena *a, ZithSourceLoc loc, const char *label, size_t len);
 
@@ -346,10 +345,7 @@ ZithNode *zith_ast_make_error(ZithArena *a, ZithSourceLoc loc, const char *msg);
 
 typedef bool (*ZithASTVisitorFn)(ZithNode *node, void *userdata);
 
-void zith_ast_walk(ZithNode * root,
-                       ZithASTVisitorFn pre,
-                       ZithASTVisitorFn post,
-                       void*userdata);
+void zith_ast_walk(ZithNode *root, ZithASTVisitorFn pre, ZithASTVisitorFn post, void *userdata);
 
 // ============================================================================
 // Debug

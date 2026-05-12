@@ -1,7 +1,7 @@
+#include "../impl/ast/ast.h"
+#include "../impl/parser/parser.h"
 #include <catch2/catch_test_macros.hpp>
 #include <string>
-#include "../impl/parser/parser.h"
-#include "../impl/ast/ast.h"
 
 // ============================================================================
 // SCAN Phase — declarations and signatures
@@ -35,11 +35,11 @@ TEST_CASE("SCAN: function with parameters", "[scan]") {
     REQUIRE(ast->data.list.len == 1);
 
     auto *decl = static_cast<ZithNode **>(ast->data.list.ptr)[0];
-    auto *p = static_cast<ZithFuncPayload *>(decl->data.list.ptr);
+    auto *p    = static_cast<ZithFuncPayload *>(decl->data.list.ptr);
     REQUIRE(p->param_count == 3);
 
     auto *pa = static_cast<ZithParamPayload *>(p->params[0]->data.list.ptr);
-    REQUIRE(pa->name[0] == 'a' );
+    REQUIRE(pa->name[0] == 'a');
     auto *pb = static_cast<ZithParamPayload *>(p->params[1]->data.list.ptr);
     REQUIRE(pb->name[0] == 'b');
 }
@@ -49,19 +49,17 @@ TEST_CASE("SCAN: function body is UNBODY", "[scan]") {
     REQUIRE(ast);
 
     auto *decl = static_cast<ZithNode **>(ast->data.list.ptr)[0];
-    auto *p = static_cast<ZithFuncPayload *>(decl->data.list.ptr);
+    auto *p    = static_cast<ZithFuncPayload *>(decl->data.list.ptr);
     REQUIRE(p->body != nullptr);
     REQUIRE(p->body->type == ZITH_NODE_UNBODY);
     REQUIRE(p->body->data.list.len > 0);
 }
 
 TEST_CASE("SCAN: struct declaration", "[scan]") {
-    auto ast = parse_test(
-        "struct Point {\n"
-        "    x: i32,\n"
-        "    y: i32,\n"
-        "}"
-    );
+    auto ast = parse_test("struct Point {\n"
+                          "    x: i32,\n"
+                          "    y: i32,\n"
+                          "}");
     REQUIRE(ast);
     REQUIRE(ast->data.list.len == 1);
 
@@ -74,11 +72,9 @@ TEST_CASE("SCAN: struct declaration", "[scan]") {
 }
 
 TEST_CASE("SCAN: multiple declarations", "[scan]") {
-    auto ast = parse_test(
-        "fn foo() {}\n"
-        "fn bar() {}\n"
-        "fn baz() {}"
-    );
+    auto ast = parse_test("fn foo() {}\n"
+                          "fn bar() {}\n"
+                          "fn baz() {}");
     REQUIRE(ast);
     REQUIRE(ast->data.list.len == 3);
 }
@@ -134,25 +130,23 @@ TEST_CASE("SCAN: public visibility", "[scan]") {
     REQUIRE(ast);
 
     auto *decl = static_cast<ZithNode **>(ast->data.list.ptr)[0];
-    auto *p = static_cast<ZithFuncPayload *>(decl->data.list.ptr);
+    auto *p    = static_cast<ZithFuncPayload *>(decl->data.list.ptr);
     REQUIRE(p->visibility == ZITH_VIS_PUBLIC);
 }
 
 TEST_CASE("SCAN: struct with method", "[scan]") {
-    auto ast = parse_test(
-        "struct Vec {\n"
-        "    x: i32,\n"
-        "    fn len() -> i32 { }\n"
-        "}"
-    );
+    auto ast = parse_test("struct Vec {\n"
+                          "    x: i32,\n"
+                          "    fn len() -> i32 { }\n"
+                          "}");
     REQUIRE(ast);
 
     auto *sdecl = static_cast<ZithNode **>(ast->data.list.ptr)[0];
-    auto *sp = static_cast<ZithStructPayload *>(sdecl->data.list.ptr);
+    auto *sp    = static_cast<ZithStructPayload *>(sdecl->data.list.ptr);
     REQUIRE(sp->field_count == 1);
     REQUIRE(sp->method_count == 1);
 
-    auto *m = sp->methods[0];
+    auto *m  = sp->methods[0];
     auto *mp = static_cast<ZithFuncPayload *>(m->data.list.ptr);
     REQUIRE(std::string(mp->name) == "len");
 }
@@ -322,11 +316,9 @@ TEST_CASE("SCAN: export declaration", "[scan][module]") {
 }
 
 TEST_CASE("SCAN: mixed declarations with import, export, and functions", "[scan][module]") {
-    auto ast = parse_test(
-        "import std.io;\n"
-        "export std.io.println;\n"
-        "fn main() { }\n"
-    );
+    auto ast = parse_test("import std.io;\n"
+                          "export std.io.println;\n"
+                          "fn main() { }\n");
     REQUIRE(ast);
     REQUIRE(ast->data.list.len == 3);
 
@@ -653,45 +645,41 @@ TEST_CASE("SCAN: not operator tokenized", "[scan][lexer][operators]") {
 // ============================================================================
 
 TEST_CASE("SCAN: complex program with multiple keywords", "[scan][complex]") {
-    auto ast = parse_test(
-        "import std.io;\n"
-        "export std.io.println;\n"
-        "\n"
-        "trait Printable {\n"
-        "    fn print() -> void;\n"
-        "}\n"
-        "\n"
-        "struct Point {\n"
-        "    x: i32,\n"
-        "    y: i32,\n"
-        "    fn distance() -> f64 { }\n"
-        "}\n"
-        "\n"
-        "implement Printable for Point {\n"
-        "    fn print() -> void { }\n"
-        "}\n"
-        "\n"
-        "async fn fetch_data() -> i32 { }\n"
-        "\n"
-        "noreturn fn panic(msg) { }\n"
-        "\n"
-        "public fn main() { }\n"
-    );
+    auto ast = parse_test("import std.io;\n"
+                          "export std.io.println;\n"
+                          "\n"
+                          "trait Printable {\n"
+                          "    fn print() -> void;\n"
+                          "}\n"
+                          "\n"
+                          "struct Point {\n"
+                          "    x: i32,\n"
+                          "    y: i32,\n"
+                          "    fn distance() -> f64 { }\n"
+                          "}\n"
+                          "\n"
+                          "implement Printable for Point {\n"
+                          "    fn print() -> void { }\n"
+                          "}\n"
+                          "\n"
+                          "async fn fetch_data() -> i32 { }\n"
+                          "\n"
+                          "noreturn fn panic(msg) { }\n"
+                          "\n"
+                          "public fn main() { }\n");
     REQUIRE(ast);
     REQUIRE(ast->data.list.len >= 5);
 }
 
 TEST_CASE("SCAN: struct with ownership modifiers", "[scan][ownership]") {
-    auto ast = parse_test(
-        "struct Node {\n"
-        "    unique child: Node,\n"
-        "    shared parent: Node,\n"
-        "}"
-    );
+    auto ast = parse_test("struct Node {\n"
+                          "    unique child: Node,\n"
+                          "    shared parent: Node,\n"
+                          "}");
     REQUIRE(ast);
 
     auto *sdecl = static_cast<ZithNode **>(ast->data.list.ptr)[0];
-    auto *sp = static_cast<ZithStructPayload *>(sdecl->data.list.ptr);
+    auto *sp    = static_cast<ZithStructPayload *>(sdecl->data.list.ptr);
     REQUIRE(sp->field_count == 2);
 }
 
@@ -700,7 +688,7 @@ TEST_CASE("SCAN: function with error union return", "[scan][errors]") {
     REQUIRE(ast);
 
     auto *decl = static_cast<ZithNode **>(ast->data.list.ptr)[0];
-    auto *p = static_cast<ZithFuncPayload *>(decl->data.list.ptr);
+    auto *p    = static_cast<ZithFuncPayload *>(decl->data.list.ptr);
     REQUIRE(p->return_type != nullptr);
 }
 
@@ -754,7 +742,7 @@ TEST_CASE("Arena reuse: second parse resets arena", "[raii]") {
     REQUIRE(r2);
 
     auto **decls = static_cast<ZithNode **>(r2->data.list.ptr);
-    auto *p = static_cast<ZithFuncPayload *>(decls[0]->data.list.ptr);
+    auto *p      = static_cast<ZithFuncPayload *>(decls[0]->data.list.ptr);
     REQUIRE(p->name[0] == 'b');
 }
 

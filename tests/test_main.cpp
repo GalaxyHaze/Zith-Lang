@@ -6,8 +6,8 @@
 // Global debug flags - set via command line args
 // ============================================================================
 
-bool g_debug_tokens = false;  // --tokens: print token stream
-bool g_debug_dump = false;    // --dump: print AST
+bool g_debug_tokens = false; // --tokens: print token stream
+bool g_debug_dump   = false; // --dump: print AST
 
 // ============================================================================
 // Custom main to parse command-line arguments

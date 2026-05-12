@@ -3,19 +3,19 @@
 // Requires C++17 (structured bindings, if-initializers).
 // Depends on: CLI11, Zith/zith.h
 
+#include "../ast/ast.h"
+#include "../lexer/debug.h"
+#include "pipeline/pipeline.hpp"
+#include "project_config/project_config.hpp"
+#include "runtime_interpreted/runtime_interpreted.hpp"
 #include <CLI/CLI.hpp>
-#include <zith/zith.hpp>
 #include <fstream>
 #include <iostream>
 #include <string>
 #include <thread>
 #include <vector>
-#include "../lexer/debug.h"
-#include "../ast/ast.h"
-#include "project_config/project_config.hpp"
-#include "pipeline/pipeline.hpp"
-#include "runtime_interpreted/runtime_interpreted.hpp"
-//#include "runtime_interpreted/runtime_interpreted.hpp"
+#include <zith/zith.hpp>
+// #include "runtime_interpreted/runtime_interpreted.hpp"
 
 static const char *zith_version = ZITH_VERSION;
 
@@ -37,10 +37,9 @@ static void print_success(const std::string &action, const std::string &target) 
 
 static void print_not_implemented(const std::string &command) {
     std::cerr << "\n[!] Command '" << command << "' is not implemented yet.\n"
-            << "    This feature will be available in a future version of Zith.\n"
-            << "    Track progress at: https://github.com/GalaxyHaze/Zith\n\n";
+              << "    This feature will be available in a future version of Zith.\n"
+              << "    Track progress at: https://github.com/GalaxyHaze/Zith\n\n";
 }
-
 
 // ============================================================================
 // Pipeline
@@ -50,18 +49,15 @@ static void print_not_implemented(const std::string &command) {
 // Preenche 'out_stream', 'out_source' e 'out_source_len' — o source fica na
 // arena para ser reutilizado pelo parser sem second load.
 // Retorna a arena (o chamador destrói); nullptr em caso de erro.
-ZithArena *tokenize_file(const std::string &src_path,
-                                    ZithTokenStream &out_stream,
-                                    const char **out_source,
-                                    size_t *out_source_len,
-                                    bool verbose) {
+ZithArena *tokenize_file(const std::string &src_path, ZithTokenStream &out_stream,
+                         const char **out_source, size_t *out_source_len, bool verbose) {
     ZithArena *arena = zith_arena_create(64 * 1024);
     if (!arena) {
         print_error("Failed to create memory arena");
         return nullptr;
     }
 
-    size_t file_size = 0;
+    size_t file_size   = 0;
     const char *source = zith_load_file_to_arena(arena, src_path.c_str(), &file_size);
     if (!source) {
         print_error("Failed to load file: " + src_path);
@@ -79,8 +75,10 @@ ZithArena *tokenize_file(const std::string &src_path,
         print_info("Tokenized " + std::to_string(out_stream.len) + " tokens from " + src_path);
 
     // Return source pointer — already in arena, no extra allocation needed
-    if (out_source) *out_source = source;
-    if (out_source_len) *out_source_len = file_size;
+    if (out_source)
+        *out_source = source;
+    if (out_source_len)
+        *out_source_len = file_size;
 
     return arena;
 }
@@ -90,8 +88,7 @@ ZithArena *tokenize_file(const std::string &src_path,
 // ============================================================================
 
 // check — parse + semântica, só reporta erros, não produz artefacto
-static int cmd_check(const std::string &input_file,
-                     const std::string &mode_str, bool verbose,
+static int cmd_check(const std::string &input_file, const std::string &mode_str, bool verbose,
                      const std::vector<std::string> &include_dirs) {
     std::string src = input_file;
 
@@ -104,13 +101,15 @@ static int cmd_check(const std::string &input_file,
         src = proj.entry;
     }
 
-    if (verbose) print_info("Checking '" + src + "' in " + mode_str + " mode...");
+    if (verbose)
+        print_info("Checking '" + src + "' in " + mode_str + " mode...");
 
     ZithTokenStream stream{};
     const char *source = nullptr;
-    size_t src_size = 0;
+    size_t src_size    = 0;
     ZithArena *arena = zith::cli::pipeline::tokenize_file(src, stream, &source, &src_size, verbose);
-    if (!arena) return 1;
+    if (!arena)
+        return 1;
 
     zith_debug_tokens(stream.data, stream.len);
 
@@ -118,13 +117,11 @@ static int cmd_check(const std::string &input_file,
     size_t import_root_count;
     zith::cli::project_config::build_import_roots(include_dirs, import_roots, import_root_count);
 
-    ZithNode *ast = zith_parse_with_source(arena,
-                                                   source, src_size,
-                                                   src.c_str(), stream,
-                                                   import_roots.data(), import_root_count);
+    ZithNode *ast = zith_parse_with_source(arena, source, src_size, src.c_str(), stream,
+                                           import_roots.data(), import_root_count);
 
     // Debug: AST dump
-    if (verbose){
+    if (verbose) {
         if (ast) {
             std::this_thread::sleep_for(std::chrono::milliseconds(500));
             printf("\n\n\n-Starting AST\n");
@@ -148,11 +145,8 @@ static int cmd_check(const std::string &input_file,
 }
 
 // compile — check + gera objeto nativo (.o) ou bytecode (.nbc), sem linkar
-static int cmd_compile(const std::string &input_file,
-                       const std::string &output_file,
-                       const std::string &mode_str,
-                       bool interpreted,
-                       bool verbose,
+static int cmd_compile(const std::string &input_file, const std::string &output_file,
+                       const std::string &mode_str, bool interpreted, bool verbose,
                        const std::vector<std::string> &include_dirs) {
     (void)include_dirs;
     if (verbose) {
@@ -162,9 +156,11 @@ static int cmd_compile(const std::string &input_file,
 
     ZithTokenStream stream{};
     const char *source = nullptr;
-    size_t src_size = 0;
-    ZithArena *arena = zith::cli::pipeline::tokenize_file(input_file, stream, &source, &src_size, verbose);
-    if (!arena) return 1;
+    size_t src_size    = 0;
+    ZithArena *arena =
+        zith::cli::pipeline::tokenize_file(input_file, stream, &source, &src_size, verbose);
+    if (!arena)
+        return 1;
 
     std::vector<const char *> import_roots;
     size_t import_root_count;
@@ -195,9 +191,7 @@ static int cmd_compile(const std::string &input_file,
 
     // TODO: usar include_dirs para resolver imports no parse/sema
 
-    const std::string out = !output_file.empty()
-                                ? output_file
-                                : (interpreted ? "a.zbc" : "a.o");
+    const std::string out = !output_file.empty() ? output_file : (interpreted ? "a.zbc" : "a.o");
     if (interpreted) {
         std::ofstream ofs(out, std::ios::binary);
         if (!ofs) {
@@ -213,14 +207,12 @@ static int cmd_compile(const std::string &input_file,
 }
 
 // build — compile (nativo) + link → binário final
-static int cmd_build(const std::string &input_file,
-                     const std::string &output_file,
-                     const std::string &mode_str,
-                     bool verbose,
+static int cmd_build(const std::string &input_file, const std::string &output_file,
+                     const std::string &mode_str, bool verbose,
                      const std::vector<std::string> &include_dirs) {
-    std::string src = input_file;
-    std::string out = output_file;
-    std::string mode = mode_str;
+    std::string src                         = input_file;
+    std::string out                         = output_file;
+    std::string mode                        = mode_str;
     std::vector<std::string> extra_includes = include_dirs;
 
     if (src.empty()) {
@@ -230,12 +222,14 @@ static int cmd_build(const std::string &input_file,
             return 1;
         }
         src = proj.entry;
-        if (out.empty()) out = proj.output;
-        if (mode == "debug") mode = proj.mode;
+        if (out.empty())
+            out = proj.output;
+        if (mode == "debug")
+            mode = proj.mode;
 
         // Herdar configurações do projecto
-        extra_includes.insert(extra_includes.end(),
-                              proj.include_dirs.begin(), proj.include_dirs.end());
+        extra_includes.insert(extra_includes.end(), proj.include_dirs.begin(),
+                              proj.include_dirs.end());
 
         // TODO: propagar proj.lib_paths, proj.link_libs, proj.link_flags
         // TODO: aplicar proj.lto se mode == "release"
@@ -243,11 +237,12 @@ static int cmd_build(const std::string &input_file,
         // TODO: criar proj.bin_dir e proj.cache_dir se não existirem
     }
 
-    if (verbose) print_info("Building '" + src + "' → binary (" + mode + ")");
+    if (verbose)
+        print_info("Building '" + src + "' → binary (" + mode + ")");
 
     // compile: nativo apenas (interpreted = false)
-    if (const int rc = cmd_compile(src, "", mode, /*interpreted=*/false,
-                                   verbose, extra_includes); rc != 0)
+    if (const int rc = cmd_compile(src, "", mode, /*interpreted=*/false, verbose, extra_includes);
+        rc != 0)
         return rc;
 
     // TODO: invocar linker (LLD embutido ou system linker como fallback)
@@ -277,8 +272,7 @@ static int cmd_execute(const std::string &target, bool interpreted, bool verbose
 
     if (!zith_file_exists(bin.c_str())) {
         const std::string hint = interpreted ? "compile --interpreted" : "build";
-        print_error("Target not found: '" + bin +
-                    "' -- did you run 'zith " + hint + "' first?");
+        print_error("Target not found: '" + bin + "' -- did you run 'zith " + hint + "' first?");
         return 1;
     }
 
@@ -297,7 +291,8 @@ static int cmd_execute(const std::string &target, bool interpreted, bool verbose
         }
         std::string source((std::istreambuf_iterator<char>(ifs)), std::istreambuf_iterator<char>());
         ZithArena *arena = zith_arena_create(64 * 1024);
-        if (!arena) return 1;
+        if (!arena)
+            return 1;
         ZithTokenStream stream = zith_tokenize(arena, source.c_str(), source.size());
         if (!stream.data) {
             zith_arena_destroy(arena);
@@ -305,10 +300,11 @@ static int cmd_execute(const std::string &target, bool interpreted, bool verbose
         }
         std::vector<const char *> import_roots;
         size_t import_root_count;
-        zith::cli::project_config::build_import_roots(include_dirs, import_roots, import_root_count);
+        zith::cli::project_config::build_import_roots(include_dirs, import_roots,
+                                                      import_root_count);
 
-        ZithNode *ast = zith_parse_with_source(arena, source.c_str(), source.size(), bin.c_str(), stream,
-                                               import_roots.data(), import_root_count);
+        ZithNode *ast = zith_parse_with_source(arena, source.c_str(), source.size(), bin.c_str(),
+                                               stream, import_roots.data(), import_root_count);
         if (!ast) {
             zith_arena_destroy(arena);
             return 1;
@@ -322,22 +318,19 @@ static int cmd_execute(const std::string &target, bool interpreted, bool verbose
 }
 
 // run — build/compile + execute numa só invocação
-static int cmd_run(const std::string &input_file,
-                   const std::string &output_file,
-                   const std::string &mode_str,
-                   bool interpreted,
-                   bool verbose,
+static int cmd_run(const std::string &input_file, const std::string &output_file,
+                   const std::string &mode_str, bool interpreted, bool verbose,
                    const std::vector<std::string> &include_dirs) {
     if (interpreted) {
         const std::string bc = output_file.empty() ? "a.nbc" : output_file;
         if (const int rc = cmd_compile(input_file, bc, mode_str,
-                                       /*interpreted=*/true, verbose, include_dirs); rc != 0)
+                                       /*interpreted=*/true, verbose, include_dirs);
+            rc != 0)
             return rc;
         return cmd_execute(bc, /*interpreted=*/true, verbose, include_dirs);
     }
 
-    if (const int rc = cmd_build(input_file, output_file, mode_str,
-                                 verbose, include_dirs); rc != 0)
+    if (const int rc = cmd_build(input_file, output_file, mode_str, verbose, include_dirs); rc != 0)
         return rc;
 
     const std::string binary = output_file.empty() ? "a.out" : output_file;
@@ -363,8 +356,8 @@ static int cmd_fmt(const std::string & /*input_file*/, bool /*check_only*/, bool
     return 1;
 }
 
-static int cmd_docs(const std::string & /*input_file*/,
-                    const std::string & /*output_dir*/, bool /*verbose*/) {
+static int cmd_docs(const std::string & /*input_file*/, const std::string & /*output_dir*/,
+                    bool /*verbose*/) {
     // TODO: extrair doc-comments (/// ou /** */) durante o parse
     // TODO: gerar HTML estático ou Markdown por módulo/função/tipo
     // TODO: suporte a exemplos embutidos nos doc-comments (runnable snippets)
@@ -400,17 +393,17 @@ static int cmd_clean(bool /*verbose*/) {
 }
 
 #if defined(__VERSION__)
-    std::string compiler = __VERSION__;
+std::string compiler = __VERSION__;
 #elif defined(_MSC_FULL_VER)
-    std::string compiler = "MSVC " + std::to_string(_MSC_FULL_VER);
+std::string compiler = "MSVC " + std::to_string(_MSC_FULL_VER);
 #else
-    std::string compiler = "unknown compiler";
+std::string compiler = "unknown compiler";
 #endif
 
 static int cmd_version() {
     std::cout << "Zith Programming Language\n"
-            << "Version:  " << zith_version << "\n"
-            << "Compiler: " << compiler << "\n";
+              << "Version:  " << zith_version << "\n"
+              << "Compiler: " << compiler << "\n";
     // TODO: LLVMGetVersion() quando o backend estiver linkado
     // TODO: LLVMGetDefaultTargetTriple() para mostrar o host target
     return 0;
@@ -484,8 +477,8 @@ extern "C" int zith_run(int argc, const char *const argv[]) {
     bool verbose = false;
 
     app.add_option("-m,--mode", mode_str, "Build mode: debug, dev, release, fast, test")
-            ->transform(CLI::IsMember({"debug", "dev", "release", "fast", "test"}))
-            ->default_str("debug");
+        ->transform(CLI::IsMember({"debug", "dev", "release", "fast", "test"}))
+        ->default_str("debug");
     app.add_option("-o,--output", output_file, "Output file path");
     app.add_option("-I,--include", include_dirs, "Include directories (repeatable)");
     app.add_option("--emit", emit_target, "Emit: ast, ir, asm, obj, bin");
@@ -497,30 +490,32 @@ extern "C" int zith_run(int argc, const char *const argv[]) {
 
     // -- Subcomandos ----------------------------------------------------------
     std::string input_file;
-    bool interpreted = false;
-    bool fmt_check = false;
+    bool interpreted        = false;
+    bool fmt_check          = false;
     std::string docs_output = "docs";
 
     auto *check_cmd = app.add_subcommand("check", "Parse and type-check only");
     check_cmd->add_option("input", input_file, "Source file [optional, reads toml if omitted]")
-            ->check(CLI::ExistingFile);
+        ->check(CLI::ExistingFile);
 
     auto *compile_cmd = app.add_subcommand("compile", "Compile to object/bytecode, no linking");
     compile_cmd->add_option("input", input_file, "Source file (.zith)")
-            ->required()->check(CLI::ExistingFile);
+        ->required()
+        ->check(CLI::ExistingFile);
     compile_cmd->add_flag("--interpreted", interpreted, "Compile to bytecode instead of native");
 
     auto *build_cmd = app.add_subcommand("build", "Compile and link to native binary");
     build_cmd->add_option("input", input_file, "Source file [optional, reads toml if omitted]")
-            ->check(CLI::ExistingFile);
+        ->check(CLI::ExistingFile);
 
     auto *execute_cmd = app.add_subcommand("execute", "Run existing binary or bytecode");
-    execute_cmd->add_option("target", input_file, "Binary or bytecode [optional, reads toml if omitted]");
+    execute_cmd->add_option("target", input_file,
+                            "Binary or bytecode [optional, reads toml if omitted]");
     execute_cmd->add_flag("--interpreted", interpreted, "Run bytecode instead of native binary");
 
     auto *run_cmd = app.add_subcommand("run", "Build then execute");
     run_cmd->add_option("input", input_file, "Source file [optional, reads toml if omitted]")
-            ->check(CLI::ExistingFile);
+        ->check(CLI::ExistingFile);
     run_cmd->add_flag("--interpreted", interpreted, "Compile to bytecode and run interpreted");
 
     auto *test_cmd = app.add_subcommand("test", "Run examples in source");
@@ -535,12 +530,12 @@ extern "C" int zith_run(int argc, const char *const argv[]) {
     docs_cmd->add_option("-o,--output", docs_output, "Output directory")->default_str("docs");
 
     auto *repl_cmd = app.add_subcommand("repl", "Start interactive REPL");
-    auto *new_cmd = app.add_subcommand("new", "Create a new project");
+    auto *new_cmd  = app.add_subcommand("new", "Create a new project");
     new_cmd->add_option("name", input_file, "Project name")->required();
 
-    auto *clean_cmd = app.add_subcommand("clean", "Remove build artifacts");
+    auto *clean_cmd   = app.add_subcommand("clean", "Remove build artifacts");
     auto *version_cmd = app.add_subcommand("version", "Show version information");
-    auto *help_cmd = app.add_subcommand("help", "Show help message");
+    auto *help_cmd    = app.add_subcommand("help", "Show help message");
 
     // -- Parse ----------------------------------------------------------------
     try {
@@ -557,25 +552,32 @@ extern "C" int zith_run(int argc, const char *const argv[]) {
     }
 
     // -- Dispatch -------------------------------------------------------------
-    if (*help_cmd) return cmd_help();
-    if (*version_cmd) return cmd_version();
-    if (*new_cmd) return cmd_new(input_file, verbose);
-    if (*clean_cmd) return cmd_clean(verbose);
-    if (*repl_cmd) return cmd_repl(verbose);
-    if (*docs_cmd) return cmd_docs(input_file, docs_output, verbose);
-    if (*fmt_cmd) return cmd_fmt(input_file, fmt_check, verbose);
-    if (*test_cmd) return cmd_test(input_file, verbose);
-    if (*check_cmd) return cmd_check(input_file, mode_str, verbose, include_dirs);
+    if (*help_cmd)
+        return cmd_help();
+    if (*version_cmd)
+        return cmd_version();
+    if (*new_cmd)
+        return cmd_new(input_file, verbose);
+    if (*clean_cmd)
+        return cmd_clean(verbose);
+    if (*repl_cmd)
+        return cmd_repl(verbose);
+    if (*docs_cmd)
+        return cmd_docs(input_file, docs_output, verbose);
+    if (*fmt_cmd)
+        return cmd_fmt(input_file, fmt_check, verbose);
+    if (*test_cmd)
+        return cmd_test(input_file, verbose);
+    if (*check_cmd)
+        return cmd_check(input_file, mode_str, verbose, include_dirs);
     if (*compile_cmd)
-        return cmd_compile(input_file, output_file, mode_str,
-                           interpreted, verbose, include_dirs);
+        return cmd_compile(input_file, output_file, mode_str, interpreted, verbose, include_dirs);
     if (*build_cmd)
-        return cmd_build(input_file, output_file, mode_str,
-                         verbose, include_dirs);
-    if (*execute_cmd) return cmd_execute(input_file, interpreted, verbose, include_dirs);
+        return cmd_build(input_file, output_file, mode_str, verbose, include_dirs);
+    if (*execute_cmd)
+        return cmd_execute(input_file, interpreted, verbose, include_dirs);
     if (*run_cmd)
-        return cmd_run(input_file, output_file, mode_str,
-                       interpreted, verbose, include_dirs);
+        return cmd_run(input_file, output_file, mode_str, interpreted, verbose, include_dirs);
 
     // Sem subcomando: tenta build via toml, senão mostra ajuda
     zith::cli::project_config::ZithProject proj;

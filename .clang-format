@@ -8,3 +8,8 @@ AllowShortFunctionsOnASingleLine: Empty
 SortIncludes: CaseSensitive
 PointerAlignment: Right
 Standard: Latest
+
+AccessModifierOffset: -4
+ReflowComments: true
+AlignConsecutiveAssignments: true
+SpaceBeforeParens: ControlStatements

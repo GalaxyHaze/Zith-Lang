@@ -69,23 +69,37 @@ struct ParseResult {
     ParseResult() = default;
     explicit ParseResult(ZithNode *n) : node(n) {}
 
-    ~ParseResult() { reset(); }
+    ~ParseResult() {
+        reset();
+    }
 
     // non-copyable — the arena is shared, copies would dangle
-    ParseResult(const ParseResult &) = delete;
+    ParseResult(const ParseResult &)            = delete;
     ParseResult &operator=(const ParseResult &) = delete;
 
     // movable — transfers ownership
-    ParseResult(ParseResult &&o) noexcept : node(o.node) { o.node = nullptr; }
+    ParseResult(ParseResult &&o) noexcept : node(o.node) {
+        o.node = nullptr;
+    }
     ParseResult &operator=(ParseResult &&o) noexcept {
-        if (this != &o) { reset(); node = o.node; o.node = nullptr; }
+        if (this != &o) {
+            reset();
+            node   = o.node;
+            o.node = nullptr;
+        }
         return *this;
     }
 
     // Access
-    ZithNode *get() const { return node; }
-    ZithNode *operator->() const { return node; }
-    explicit operator bool() const { return node != nullptr; }
+    ZithNode *get() const {
+        return node;
+    }
+    ZithNode *operator->() const {
+        return node;
+    }
+    explicit operator bool() const {
+        return node != nullptr;
+    }
 
     // Reset the global arena, invalidating this result.
     // Safe to call multiple times.
@@ -102,7 +116,7 @@ inline ParseResult parse_test(const char *source) {
 // Legacy alias — available in both C and C++
 // ============================================================================
 
-static inline void parser_emit(Parser *p, ZithSourceLoc loc,
-                               ZithDiagSeverity severity, const char *msg) {
+static inline void parser_emit(Parser *p, ZithSourceLoc loc, ZithDiagSeverity severity,
+                               const char *msg) {
     parser_emit_diag(p, loc, severity, msg);
 }

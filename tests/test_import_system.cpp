@@ -13,9 +13,9 @@ TEST_CASE("MODULE REGISTRY: register and retrieve module", "[module][registry]")
 
     Module mod("test.module_a", "tests/modules/module_a.zith", 1);
     mod.add_symbol(SymbolEntry("Point", SymbolKind::Struct, Visibility::Public,
-                         SourceLocation("tests/modules/module_a.zith", 2)));
+                               SourceLocation("tests/modules/module_a.zith", 2)));
     mod.add_symbol(SymbolEntry("create_point", SymbolKind::Function, Visibility::Public,
-                         SourceLocation("tests/modules/module_a.zith", 8)));
+                               SourceLocation("tests/modules/module_a.zith", 8)));
 
     REQUIRE(ModuleRegistry::instance().register_module(std::move(mod)) == true);
     REQUIRE(ModuleRegistry::instance().exists("test.module_a") == true);
@@ -55,12 +55,12 @@ TEST_CASE("MODULE: symbol management", "[module][symbols]") {
     REQUIRE(mod.has_symbol("bar") == true);
     REQUIRE(mod.has_symbol("baz") == false);
 
-    auto* sym = mod.find_symbol("Foo");
+    auto *sym = mod.find_symbol("Foo");
     REQUIRE(sym != nullptr);
     REQUIRE(sym->kind() == SymbolKind::Struct);
     REQUIRE(sym->visibility() == Visibility::Public);
 
-    auto* priv_sym = mod.find_symbol("bar");
+    auto *priv_sym = mod.find_symbol("bar");
     REQUIRE(priv_sym != nullptr);
     REQUIRE(priv_sym->visibility() == Visibility::Private);
 }
@@ -71,19 +71,19 @@ TEST_CASE("SYMBOL RESOLVER: resolve fully qualified path", "[resolver][resolve]"
 
     Module mod("std.io", "std/io/console.zith");
     mod.add_symbol(SymbolEntry("log", SymbolKind::Function, Visibility::Public,
-                         SourceLocation("std/io/console.zith", 10)));
+                               SourceLocation("std/io/console.zith", 10)));
     mod.add_symbol(SymbolEntry("Console", SymbolKind::Struct, Visibility::Public,
-                         SourceLocation("std/io/console.zith", 1)));
+                               SourceLocation("std/io/console.zith", 1)));
     ModuleRegistry::instance().register_module(std::move(mod));
 
-    auto result = SymbolResolver::instance().resolve("std.io.log");
+    auto result    = SymbolResolver::instance().resolve("std.io.log");
     bool result_ok = static_cast<bool>(result);
     REQUIRE(result_ok == true);
     REQUIRE(result.symbol() != nullptr);
     REQUIRE(result.symbol()->name() == "log");
     REQUIRE(result.module_name() == "std.io");
 
-    auto result2 = SymbolResolver::instance().resolve("std.io.Console");
+    auto result2    = SymbolResolver::instance().resolve("std.io.Console");
     bool result2_ok = static_cast<bool>(result2);
     REQUIRE(result2_ok == true);
     REQUIRE(result2.symbol()->name() == "Console");
@@ -98,7 +98,7 @@ TEST_CASE("SYMBOL RESOLVER: resolve nested path", "[resolver][resolve][nested]")
     mod.add_symbol(SymbolEntry("print", SymbolKind::Function, Visibility::Public));
     ModuleRegistry::instance().register_module(std::move(mod));
 
-    auto result = SymbolResolver::instance().resolve("std.io.console.print");
+    auto result    = SymbolResolver::instance().resolve("std.io.console.print");
     bool result_ok = static_cast<bool>(result);
     REQUIRE(result_ok == true);
     REQUIRE(result.symbol() != nullptr);
@@ -111,11 +111,11 @@ TEST_CASE("SYMBOL RESOLVER: module not found error", "[resolver][error]") {
     ModuleRegistry::instance().clear();
     SymbolResolver::instance().clear_errors();
 
-    auto result = SymbolResolver::instance().resolve("nonexistent.symbol");
+    auto result          = SymbolResolver::instance().resolve("nonexistent.symbol");
     bool result_notfound = static_cast<bool>(result);
     REQUIRE(result_notfound == false);
 
-    const auto& errors = SymbolResolver::instance().errors();
+    const auto &errors = SymbolResolver::instance().errors();
     REQUIRE(errors.size() > 0);
     REQUIRE(errors[0].code == ErrorCode::ModuleNotFound);
 
@@ -129,11 +129,11 @@ TEST_CASE("SYMBOL RESOLVER: symbol not found error", "[resolver][error]") {
     Module mod("test.mod", "test.zith");
     ModuleRegistry::instance().register_module(std::move(mod));
 
-    auto result = SymbolResolver::instance().resolve("test.mod.missing");
+    auto result           = SymbolResolver::instance().resolve("test.mod.missing");
     bool result2_notfound = static_cast<bool>(result);
     REQUIRE(result2_notfound == false);
 
-    const auto& errors = SymbolResolver::instance().errors();
+    const auto &errors = SymbolResolver::instance().errors();
     REQUIRE(errors.size() > 0);
 
     ModuleRegistry::instance().clear();
@@ -145,11 +145,11 @@ TEST_CASE("SYMBOL RESOLVER: alias support", "[resolver][alias]") {
 
     Module mod("std.io", "std/io.zith");
     mod.add_symbol(SymbolEntry("log", SymbolKind::Function, Visibility::Public,
-                         SourceLocation("std/io.zith", 1)));
+                               SourceLocation("std/io.zith", 1)));
     ModuleRegistry::instance().register_module(std::move(mod));
 
-    bool alias_added = SymbolResolver::instance().add_alias("print", "std.io.log",
-                                              SourceLocation("test.zith", 5));
+    bool alias_added =
+        SymbolResolver::instance().add_alias("print", "std.io.log", SourceLocation("test.zith", 5));
     REQUIRE(alias_added == true);
     REQUIRE(SymbolResolver::instance().alias_exists("print") == true);
 
@@ -157,7 +157,7 @@ TEST_CASE("SYMBOL RESOLVER: alias support", "[resolver][alias]") {
     REQUIRE(aliased.has_value() == true);
     REQUIRE(aliased->name() == "log");
 
-    auto result = SymbolResolver::instance().resolve("std.io.log");
+    auto result    = SymbolResolver::instance().resolve("std.io.log");
     bool result_ok = static_cast<bool>(result);
     REQUIRE(result_ok == true);
 
@@ -175,14 +175,14 @@ TEST_CASE("SYMBOL RESOLVER: duplicate detection", "[resolver][duplicate]") {
     Module mod("test.dup", "test.zith");
     // Add symbol with a signature
     SymbolEntry existing("Foo", SymbolKind::Struct, Visibility::Public,
-                        SourceLocation("test.zith", 1));
+                         SourceLocation("test.zith", 1));
     existing.set_signature(TypeSignature({}, "int"));
     mod.add_symbol(std::move(existing));
     ModuleRegistry::instance().register_module(std::move(mod));
 
     // Try to add duplicate with same signature
     SymbolEntry new_sym("Foo", SymbolKind::Struct, Visibility::Public,
-                   SourceLocation("test.zith", 10));
+                        SourceLocation("test.zith", 10));
     new_sym.set_signature(TypeSignature({}, "int"));
 
     auto error = SymbolResolver::instance().detect_duplicate("test.dup", new_sym);
@@ -217,7 +217,8 @@ TEST_CASE("SYMBOL RESOLVER: valid function overloading", "[resolver][overload]")
     ModuleRegistry::instance().clear();
 }
 
-TEST_CASE("SYMBOL RESOLVER: invalid function overloading (duplicate signature)", "[resolver][overload][error]") {
+TEST_CASE("SYMBOL RESOLVER: invalid function overloading (duplicate signature)",
+          "[resolver][overload][error]") {
     ModuleRegistry::instance().clear();
 
     Module mod("test.overload", "test.zith");
@@ -261,11 +262,11 @@ TEST_CASE("SYMBOL RESOLVER: case sensitivity", "[resolver][case]") {
     mod.add_symbol(SymbolEntry("Log", SymbolKind::Function, Visibility::Public));
     ModuleRegistry::instance().register_module(std::move(mod));
 
-    auto result = SymbolResolver::instance().resolve("test.case.Log");
+    auto result    = SymbolResolver::instance().resolve("test.case.Log");
     bool result_ok = static_cast<bool>(result);
     REQUIRE(result_ok == true);
 
-    auto result_lower = SymbolResolver::instance().resolve("test.case.log");
+    auto result_lower    = SymbolResolver::instance().resolve("test.case.log");
     bool result_lower_ok = static_cast<bool>(result_lower);
     REQUIRE(result_lower_ok == false);
 

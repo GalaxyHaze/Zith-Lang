@@ -1,7 +1,7 @@
 // impl/parser/keywords.cpp
 #include "zith/zith.hpp"
-#include <string_view>
 #include <array>
+#include <string_view>
 
 // ============================================================================
 // Hash primitives
@@ -18,7 +18,7 @@ static constexpr uint64_t mix64(uint64_t x) {
 
 static constexpr uint64_t hash64(std::string_view sv) {
     uint64_t h = 0xcbf29ce484222325ULL;
-    for (const unsigned char c: sv) {
+    for (const unsigned char c : sv) {
         h ^= c;
         h *= 0x100000001b3ULL;
     }
@@ -29,24 +29,32 @@ static constexpr uint64_t hash64(std::string_view sv) {
 // Keyword + operator table
 // ============================================================================
 
-static constexpr auto TokenTable = std::to_array<std::pair<std::string_view, ZithTokenType> >({
+static constexpr auto TokenTable = std::to_array<std::pair<std::string_view, ZithTokenType>>({
 
     // --- Inteiros com sinal -------------------------------------------------
-    {"i8", ZITH_TOKEN_TYPE}, {"i16", ZITH_TOKEN_TYPE},
-    {"i32", ZITH_TOKEN_TYPE}, {"i64", ZITH_TOKEN_TYPE},
-    {"i128", ZITH_TOKEN_TYPE}, {"i256", ZITH_TOKEN_TYPE},
+    {"i8", ZITH_TOKEN_TYPE},
+    {"i16", ZITH_TOKEN_TYPE},
+    {"i32", ZITH_TOKEN_TYPE},
+    {"i64", ZITH_TOKEN_TYPE},
+    {"i128", ZITH_TOKEN_TYPE},
+    {"i256", ZITH_TOKEN_TYPE},
 
     // --- Inteiros sem sinal -------------------------------------------------
-    {"u8", ZITH_TOKEN_TYPE}, {"u16", ZITH_TOKEN_TYPE},
-    {"u32", ZITH_TOKEN_TYPE}, {"u64", ZITH_TOKEN_TYPE},
-    {"u128", ZITH_TOKEN_TYPE}, {"u256", ZITH_TOKEN_TYPE},
+    {"u8", ZITH_TOKEN_TYPE},
+    {"u16", ZITH_TOKEN_TYPE},
+    {"u32", ZITH_TOKEN_TYPE},
+    {"u64", ZITH_TOKEN_TYPE},
+    {"u128", ZITH_TOKEN_TYPE},
+    {"u256", ZITH_TOKEN_TYPE},
 
     // --- Ponto flutuante ----------------------------------------------------
-    {"f32", ZITH_TOKEN_TYPE}, {"f64", ZITH_TOKEN_TYPE},
+    {"f32", ZITH_TOKEN_TYPE},
+    {"f64", ZITH_TOKEN_TYPE},
     {"f128", ZITH_TOKEN_TYPE},
 
     // --- Primitivos gerais --------------------------------------------------
-    {"bool", ZITH_TOKEN_TYPE}, {"void", ZITH_TOKEN_TYPE},
+    {"bool", ZITH_TOKEN_TYPE},
+    {"void", ZITH_TOKEN_TYPE},
     {"null", ZITH_TOKEN_NULL},
 
     // --- Declarações de tipo ------------------------------------------------
@@ -156,11 +164,16 @@ static constexpr auto TokenTable = std::to_array<std::pair<std::string_view, Zit
     {"?", ZITH_TOKEN_QUESTION},
 
     // --- Delimitadores ------------------------------------------------------
-    {"(", ZITH_TOKEN_LPAREN}, {")", ZITH_TOKEN_RPAREN},
-    {"{", ZITH_TOKEN_LBRACE}, {"}", ZITH_TOKEN_RBRACE},
-    {"[", ZITH_TOKEN_LBRACKET}, {"]", ZITH_TOKEN_RBRACKET},
-    {",", ZITH_TOKEN_COMMA}, {";", ZITH_TOKEN_SEMICOLON},
-    {":", ZITH_TOKEN_COLON}, {".", ZITH_TOKEN_DOT},
+    {"(", ZITH_TOKEN_LPAREN},
+    {")", ZITH_TOKEN_RPAREN},
+    {"{", ZITH_TOKEN_LBRACE},
+    {"}", ZITH_TOKEN_RBRACE},
+    {"[", ZITH_TOKEN_LBRACKET},
+    {"]", ZITH_TOKEN_RBRACKET},
+    {",", ZITH_TOKEN_COMMA},
+    {";", ZITH_TOKEN_SEMICOLON},
+    {":", ZITH_TOKEN_COLON},
+    {".", ZITH_TOKEN_DOT},
 });
 
 // ============================================================================
@@ -173,87 +186,89 @@ static constexpr auto TokenTable = std::to_array<std::pair<std::string_view, Zit
 // Isso elimina o antigo scan O(N) de countsForBucket() em tempo de execução.
 // ============================================================================
 
-static constexpr size_t N = TokenTable.size();
+static constexpr size_t N           = TokenTable.size();
 static constexpr size_t BucketCount = 128;
-static constexpr size_t TableSize = 256;
+static constexpr size_t TableSize   = 256;
 
 namespace {
-    struct PerfectHash {
-        std::array<int16_t, TableSize> table{};
-        std::array<uint8_t, BucketCount> bucketSeed{};
+struct PerfectHash {
+    std::array<int16_t, TableSize> table{};
+    std::array<uint8_t, BucketCount> bucketSeed{};
 
-        constexpr PerfectHash() {
-            table.fill(-1);
-            bucketSeed.fill(0);
+    constexpr PerfectHash() {
+        table.fill(-1);
+        bucketSeed.fill(0);
 
-            // Agrupar entradas por bucket
-            std::array<uint8_t, BucketCount> counts{};
-            std::array<std::array<uint16_t, 16>, BucketCount> items{};
+        // Agrupar entradas por bucket
+        std::array<uint8_t, BucketCount> counts{};
+        std::array<std::array<uint16_t, 16>, BucketCount> items{};
 
-            for (size_t i = 0; i < N; ++i) {
-                const size_t b = hash64(TokenTable[i].first) % BucketCount;
-                items[b][counts[b]++] = static_cast<uint16_t>(i);
-            }
+        for (size_t i = 0; i < N; ++i) {
+            const size_t b        = hash64(TokenTable[i].first) % BucketCount;
+            items[b][counts[b]++] = static_cast<uint16_t>(i);
+        }
 
-            // Resolver cada bucket: encontrar seed sem colisão
-            for (size_t b = 0; b < BucketCount; ++b) {
-                if (counts[b] == 0) continue;
+        // Resolver cada bucket: encontrar seed sem colisão
+        for (size_t b = 0; b < BucketCount; ++b) {
+            if (counts[b] == 0)
+                continue;
 
-                for (uint8_t seed = 0; seed < 255; ++seed) {
-                    bool ok = true;
-                    std::array<size_t, 16> slots{};
+            for (uint8_t seed = 0; seed < 255; ++seed) {
+                bool ok = true;
+                std::array<size_t, 16> slots{};
 
-                    for (size_t k = 0; k < counts[b]; ++k) {
-                        const size_t i = items[b][k];
-                        const size_t slot = mix64(hash64(TokenTable[i].first) ^ seed) % TableSize;
+                for (size_t k = 0; k < counts[b]; ++k) {
+                    const size_t i    = items[b][k];
+                    const size_t slot = mix64(hash64(TokenTable[i].first) ^ seed) % TableSize;
 
-                        // Colisão intra-bucket
-                        for (size_t j = 0; j < k; ++j) {
-                            if (slots[j] == slot) {
-                                ok = false;
-                                break;
-                            }
-                        }
-                        if (!ok) break;
-
-                        // Colisão cross-bucket (slots já ocupados)
-                        if (table[slot] != -1) {
+                    // Colisão intra-bucket
+                    for (size_t j = 0; j < k; ++j) {
+                        if (slots[j] == slot) {
                             ok = false;
                             break;
                         }
-
-                        slots[k] = slot;
                     }
+                    if (!ok)
+                        break;
 
-                    if (ok) {
-                        bucketSeed[b] = seed;
-                        for (size_t k = 0; k < counts[b]; ++k) {
-                            const size_t i = items[b][k];
-                            const size_t slot = mix64(hash64(TokenTable[i].first) ^ seed) % TableSize;
-                            table[slot] = static_cast<int16_t>(i);
-                        }
+                    // Colisão cross-bucket (slots já ocupados)
+                    if (table[slot] != -1) {
+                        ok = false;
                         break;
                     }
+
+                    slots[k] = slot;
+                }
+
+                if (ok) {
+                    bucketSeed[b] = seed;
+                    for (size_t k = 0; k < counts[b]; ++k) {
+                        const size_t i    = items[b][k];
+                        const size_t slot = mix64(hash64(TokenTable[i].first) ^ seed) % TableSize;
+                        table[slot]       = static_cast<int16_t>(i);
+                    }
+                    break;
                 }
             }
         }
+    }
 
-        [[nodiscard]] constexpr ZithTokenType lookup(std::string_view sv) const {
-            if (sv.empty()) return ZITH_TOKEN_IDENTIFIER;
+    [[nodiscard]] constexpr ZithTokenType lookup(std::string_view sv) const {
+        if (sv.empty())
+            return ZITH_TOKEN_IDENTIFIER;
 
-            const uint64_t h = hash64(sv);
-            const size_t b = h % BucketCount;
-            const size_t idx = mix64(h ^ bucketSeed[b]) % TableSize;
-            const int16_t id = table[idx];
+        const uint64_t h = hash64(sv);
+        const size_t b   = h % BucketCount;
+        const size_t idx = mix64(h ^ bucketSeed[b]) % TableSize;
+        const int16_t id = table[idx];
 
-            if (id < 0) return ZITH_TOKEN_IDENTIFIER;
-            return (TokenTable[id].first == sv)
-                       ? TokenTable[id].second
-                       : ZITH_TOKEN_IDENTIFIER;
-        }
-    };
+        if (id < 0)
+            return ZITH_TOKEN_IDENTIFIER;
+        return (TokenTable[id].first == sv) ? TokenTable[id].second : ZITH_TOKEN_IDENTIFIER;
+    }
+};
 
-    constexpr auto g_hasher = PerfectHash{};
+constexpr auto g_hasher = PerfectHash{};
 } // anonymous namespace
 
 // ============================================================================
@@ -261,6 +276,7 @@ namespace {
 // ============================================================================
 
 extern "C" ZithTokenType zith_lookup_keyword(const char *str, const size_t len) {
-    if (!str || len == 0) return ZITH_TOKEN_IDENTIFIER;
+    if (!str || len == 0)
+        return ZITH_TOKEN_IDENTIFIER;
     return g_hasher.lookup(std::string_view(str, len));
 }

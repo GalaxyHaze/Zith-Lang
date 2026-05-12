@@ -1,7 +1,7 @@
 
 #ifdef ZITH_WASM
-#include <iostream>
 #include <cassert>
+#include <iostream>
 
 int main() {
     std::cout << "Thank you for installing Zith." << std::endl;
@@ -16,7 +16,7 @@ int main() {
 #include <ffi.h>
 #endif
 
-int main(const int argc, const char* argv[]) {
+int main(const int argc, const char *argv[]) {
     zith_run(argc, argv);
 }
 

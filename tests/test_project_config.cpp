@@ -55,7 +55,8 @@ TEST_CASE("project parser rejects invalid and out-of-range fields", "[cli][proje
     std::filesystem::remove_all(root);
     std::filesystem::create_directories(root);
     const auto file = root / "ZithProject.toml";
-    write_file(file, "name=1\nversion='0.1.0'\nentry='main.zith'\nopt_level=8\ndebug_level='high'\n");
+    write_file(file,
+               "name=1\nversion='0.1.0'\nentry='main.zith'\nopt_level=8\ndebug_level='high'\n");
 
     ZithProject proj;
     std::vector<std::string> warnings;
