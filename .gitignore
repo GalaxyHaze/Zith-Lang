@@ -51,3 +51,9 @@ docusaurus-docs/.docusaurus/
 docusaurus-docs/.cache/
 
 ```
+
+# wrangler files
+.wrangler
+.dev.vars*
+!.dev.vars.example
+!.env.example
