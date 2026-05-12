@@ -12,11 +12,7 @@ nvm use 20 > /dev/null
 echo "Building docs..."
 npm run build
 
-echo "Moving build to ../docs..."
-rm -rf ../docs/*
-cp -r build/* ../docs/
-rm -rf build
-
+echo "Docs built in build/ directory."
 echo "Starting dev server in background..."
 npm run serve > /dev/null 2>&1 &
 sleep 3

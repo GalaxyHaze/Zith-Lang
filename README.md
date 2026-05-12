@@ -41,7 +41,7 @@ The parser and core tools are functional but incomplete. The spec (`Zith-spec.md
 
 ## Documentation
 
-**[Read the Complete Documentation](https://galaxyhaze.github.io/Zith/docs/index.html?page=intro)** | [View on GitHub](https://github.com/GalaxyHaze/Zith/)
+**[Read the Complete Documentation](https://galaxyhaze.github.io/Zith/)** | [View on GitHub](https://github.com/GalaxyHaze/Zith/)
 
 The documentation includes:
 *   **Getting Started:** Installation and quick start tutorials.

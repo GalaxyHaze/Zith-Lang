@@ -1,4 +1,3 @@
-```
 # Build artifacts
 build/
 cmake-build-*/
@@ -45,9 +44,10 @@ htmlcov/
 Thumbs.db
 
 # Docusaurus
-docusaurus-docs/node_modules/
-docusaurus-docs/build/
-docusaurus-docs/.docusaurus/
-docusaurus-docs/.cache/
+docsaurus/node_modules/
+docsaurus/build/
+docsaurus/.docusaurus/
+docsaurus/.cache/
 
-```
+# Documentation build output
+docs/

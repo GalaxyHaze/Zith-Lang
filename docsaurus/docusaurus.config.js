@@ -36,7 +36,7 @@ const config = {
         docs: {
           sidebarPath: require.resolve('./sidebars.js'),
           routeBasePath: '/docs',
-          editUrl: 'https://github.com/galaxyhaze/Zith/tree/main/docusaurus-docs/',
+          editUrl: 'https://github.com/galaxyhaze/Zith/tree/main/docsaurus/',
         },
         blog: false,
         theme: {
