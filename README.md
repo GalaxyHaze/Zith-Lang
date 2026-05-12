@@ -4,7 +4,7 @@
 
 ## Current Implementation State
 
-A matriz técnica detalhada (recurso, status, módulo responsável e cobertura de testes) está em `docs-architecture.md`, seção **Technical Status Matrix**.
+The detailed technical matrix (feature, status, responsible module, and test coverage) is in `docs-architecture.md`, in the **Technical Status Matrix** section.
 
 
 > **Last Updated:** April 30, 2026
@@ -132,58 +132,57 @@ Zith Source Code (.zith)
 
 
 
-## Formatação de Código
+## Code Formatting
 
-O repositório inclui configuração de **clang-format** (`.clang-format`) e alvo de formatação no CMake.
+The repository includes **clang-format** configuration (`.clang-format`) and a formatting target in CMake.
 
 ```bash
-# Formatar automaticamente
+# Auto-format all sources
 cmake --build build --target fmt
 
-# Validar sem modificar arquivos
+# Validate formatting without modifying files
 cmake --build build --target fmt-check
 ```
 
-## Dependências para Compilação
+## Build Dependencies
 
-Para compilar o projeto localmente, instale:
+To compile the project locally, install:
 
 - **CMake 3.20+**
-- **Compilador C/C++ com suporte a C11/C++23** (GCC, Clang ou MSVC)
-- **Git** (usado pelo `FetchContent` do CMake)
-- **pkg-config** e **libffi-dev** (Linux/macOS, para FFI)
-- **LLVM (opcional, recomendado)** para funcionalidades de backend
+- **C/C++ compiler with C11/C++23 support** (GCC, Clang, or MSVC)
+- **Git** (used by CMake's `FetchContent`)
+- **pkg-config** and **libffi-dev** (Linux/macOS, for FFI)
+- **LLVM (optional, recommended)** for backend functionality
 
-Dependências de código buscadas automaticamente pelo CMake:
+Automatically fetched dependencies:
 
 - `CLI11` (v2.4.1)
 - `tomlplusplus` (v3.4.0)
 
-### Build rápido
+### Quick Build
 
 ```bash
 cmake -S . -B build
 cmake --build build -j
 ```
 
-### Política de inclusão de novos arquivos no build (CMake)
+### CMake File Policy
 
-O projeto **não usa mais `file(GLOB_RECURSE ...)`** para as listas principais de fontes.
-As listas `CORE_C_SOURCES`, `DIAGNOSTICS_SOURCES`, `PARSER_CPP_SOURCES`, `CLI_SOURCES` e `TEST_SOURCES` são mantidas manualmente em `CMakeLists.txt`.
+The project no longer uses `file(GLOB_RECURSE ...)` for its main source lists. The `CORE_C_SOURCES`, `DIAGNOSTICS_SOURCES`, `PARSER_CPP_SOURCES`, `CLI_SOURCES`, and `TEST_SOURCES` lists are maintained manually in `CMakeLists.txt`.
 
-Ao criar, mover ou remover arquivos de código:
+When creating, moving, or removing source files:
 
-1. Atualize explicitamente a lista correspondente em `CMakeLists.txt`.
-2. Confirme que os targets continuam com a composição esperada:
+1. Update the corresponding list in `CMakeLists.txt`.
+2. Verify the targets retain the expected composition:
    - `ZithCore`
    - `ZithParse`
    - `zith`
-   - `zith_tests` (quando `BUILD_TESTING=ON`)
-3. Reconfigure e rebuild:
+   - `zith_tests` (when `BUILD_TESTING=ON`)
+3. Reconfigure and rebuild:
    - `cmake -S . -B build`
    - `cmake --build build -j`
 
-Opcionalmente, para organização por submódulo, podem ser usados blocos `target_sources(...)` com caminhos explícitos (sem glob), mantendo a mesma política de atualização manual.
+Alternatively, you can use `target_sources(...)` blocks per sub-module with explicit paths (no glob), following the same manual update policy.
 
 ## Quick Start
 
@@ -793,7 +792,7 @@ Please open an issue with a clear description, steps to reproduce, and environme
 
 ## Resources
 
-*   [Documentation](https://galaxyhaze.github.io/Zith/docs/index.html?page=intro)
+*   [Documentation](https://galaxyhaze.github.io/Zith/)
 *   [Issue Tracker](https://github.com/GalaxyHaze/Zith/issues)
 *   [Discussions](https://github.com/GalaxyHaze/Zith/discussions)
 *   [GitHub Repository](https://github.com/GalaxyHaze/Zith)
@@ -821,9 +820,9 @@ A: Yes. The `raw` keyword provides an explicit escape hatch for hardware-level p
 Zith is licensed under the [MIT License](./license).
 
 
-## Checklist de release (status técnico)
+## Release Checklist (Technical Status)
 
-- [ ] Atualizar `docs-architecture.md` (Technical Status Matrix) para cada mudança relevante.
-- [ ] Atualizar este README quando itens mudarem entre *implemented/partial/planned*.
-- [ ] Garantir que cobertura de testes mencionada na matriz foi atualizada.
-- [ ] Se `docsaurus/` mudou, commitar `docs/` regenerado no mesmo PR.
+- [ ] Update `docs-architecture.md` (Technical Status Matrix) for each relevant change.
+- [ ] Update this README when items move between *implemented/partial/planned*.
+- [ ] Ensure test coverage mentioned in the matrix is up to date.
+- [ ] If `docsaurus/` changed, commit the regenerated `docs/` in the same PR.
