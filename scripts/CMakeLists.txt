@@ -61,9 +61,16 @@ if(WIN32 OR EMSCRIPTEN)
     set(ZITH_HAS_FFI OFF)
     message(STATUS "ℹ Skipping libffi discovery on this platform.")
 else()
-    find_package(PkgConfig REQUIRED)
-    pkg_check_modules(FFI REQUIRED libffi)
+    option(ZITH_ENABLE_FFI "Enable FFI support via libffi (requires libffi-dev installed)" ON)
+    if(NOT ZITH_ENABLE_FFI)
+        set(ZITH_HAS_FFI OFF)
+    else()
+        find_package(PkgConfig REQUIRED)
+        pkg_check_modules(FFI REQUIRED libffi)
+    endif()
 endif()
+
+option(ZITH_IS_WASM "Build target is WebAssembly" OFF)
 
 # =============================================================================
 # Compiler Flags
@@ -237,6 +244,9 @@ target_link_libraries(zith
 if(ZITH_HAS_FFI)
     target_include_directories(zith PRIVATE ${FFI_INCLUDE_DIRS})
     target_link_libraries(zith PRIVATE ${FFI_LIBRARIES})
+endif()
+if(ZITH_IS_WASM)
+    target_compile_definitions(zith PRIVATE ZITH_WASM)
 endif()
 target_compile_definitions(zith PRIVATE ZITH_VERSION="${ZITH_VERSION}" ZITH_EXECUTABLE)
 

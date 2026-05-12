@@ -59,13 +59,13 @@ jobs:
           - os: ubuntu-latest
             target_name: zith-linux-arm64
             cmake_flags: >-
-              -DCMAKE_C_COMPILER=clang
-              -DCMAKE_CXX_COMPILER=clang++
-              -DCMAKE_LINKER=ld.lld
+              -DCMAKE_C_COMPILER=aarch64-linux-gnu-gcc
+              -DCMAKE_CXX_COMPILER=aarch64-linux-gnu-g++
               -DCMAKE_C_COMPILER_TARGET=aarch64-unknown-linux-gnu
               -DCMAKE_CXX_COMPILER_TARGET=aarch64-unknown-linux-gnu
               -DCMAKE_SYSROOT=/usr/aarch64-linux-gnu
               -DCMAKE_CROSSCOMPILING=ON
+              -DZITH_ENABLE_FFI=OFF
 
           - os: macos-latest
             target_name: zith-macos-amd64
@@ -75,6 +75,7 @@ jobs:
               -DLLVM_DIR=$(brew --prefix llvm)/lib/cmake/llvm
               -DCMAKE_OSX_ARCHITECTURES=x86_64
               -DCMAKE_CROSSCOMPILING=ON
+              -DZITH_ENABLE_FFI=OFF
 
           - os: macos-latest
             target_name: zith-macos-arm64
@@ -82,6 +83,7 @@ jobs:
               -DCMAKE_C_COMPILER=$(brew --prefix llvm)/bin/clang
               -DCMAKE_CXX_COMPILER=$(brew --prefix llvm)/bin/clang++
               -DLLVM_DIR=$(brew --prefix llvm)/lib/cmake/llvm
+              -DZITH_ENABLE_FFI=OFF
 
           - os: windows-latest
             target_name: zith-windows-amd64.exe
@@ -89,6 +91,7 @@ jobs:
             cmake_flags: >-
               -DCMAKE_C_COMPILER=clang-cl
               -DCMAKE_CXX_COMPILER=clang-cl
+              -DZITH_ENABLE_FFI=OFF
 
           - os: windows-latest
             target_name: zith-windows-arm64.exe
@@ -99,6 +102,7 @@ jobs:
               -DCMAKE_C_COMPILER_TARGET=arm64-pc-windows-msvc
               -DCMAKE_CXX_COMPILER_TARGET=arm64-pc-windows-msvc
               -DCMAKE_CROSSCOMPILING=ON
+              -DZITH_ENABLE_FFI=OFF
 
     steps:
       - uses: actions/checkout@v4
@@ -215,19 +219,37 @@ jobs:
       - name: Install musl sysroot
         shell: bash
         run: |
-          for attempt in 1 2 3; do
-            if curl -fL --retry 5 --retry-delay 3 --connect-timeout 30 \
-              "https://musl.cc/${{ matrix.toolchain }}.tgz" \
-              -o "${{ matrix.toolchain }}.tgz"; then
-              break
-            fi
-            echo "Download attempt $attempt failed, retrying..."
-            rm -f "${{ matrix.toolchain }}.tgz"
-            sleep 5
-          done
-          tar -xzf "${{ matrix.toolchain }}.tgz"
+          set -e
+          TOOLCHAIN="${{ matrix.toolchain }}"
+          SYSROOT_DIR="$PWD/$TOOLCHAIN"
+          MIRRORS=(
+            "https://musl.cc/$TOOLCHAIN.tgz"
+            "https://github.com/richfelker/musl-cross-make/releases/download/$TOOLCHAIN/$TOOLCHAIN.tgz"
+          )
 
-      - name: Configure CMake
+          for attempt in 1 2 3 4 5; do
+            for mirror in "${MIRRORS[@]}"; do
+              echo "Attempt $attempt: trying $mirror"
+              if curl -fL --retry 3 --retry-delay 2 --connect-timeout 15 \
+                "$mirror" -o "$TOOLCHAIN.tgz" 2>/dev/null; then
+                echo "Downloaded successfully from $mirror"
+                break 2
+              fi
+            done
+            echo "All mirrors failed on attempt $attempt, retrying..."
+            rm -f "$TOOLCHAIN.tgz"
+            sleep $((attempt * 5))
+          done
+
+          tar -xzf "$TOOLCHAIN.tgz"
+
+          # Verify sysroot was extracted
+          if [ ! -d "$SYSROOT_DIR" ]; then
+            echo "ERROR: Sysroot not found at $SYSROOT_DIR"
+            exit 1
+          fi
+
+      - name: Configure CMake (musl)
         shell: bash
         run: |
           SYSROOT="$PWD/${{ matrix.toolchain }}/${{ matrix.target_triple }}"
@@ -242,7 +264,8 @@ jobs:
             -DCMAKE_CXX_COMPILER_TARGET=${{ matrix.target_triple }} \
             -DCMAKE_SYSROOT="$SYSROOT" \
             -DCMAKE_EXE_LINKER_FLAGS="--sysroot=$SYSROOT -fuse-ld=lld -static" \
-            -DCMAKE_CROSSCOMPILING=ON
+            -DCMAKE_CROSSCOMPILING=ON \
+            -DZITH_ENABLE_FFI=OFF
 
       - name: Build
         shell: bash
@@ -289,7 +312,8 @@ jobs:
             -DBUILD_TESTING=OFF \
             -DENABLE_WERROR=OFF \
             -DZITH_VERSION=${{ needs.create-release.outputs.tag }} \
-            -DCMAKE_CROSSCOMPILING=ON
+            -DCMAKE_CROSSCOMPILING=ON \
+            -DZITH_IS_WASM=ON
 
       - name: Build
         shell: bash

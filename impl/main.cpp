@@ -12,7 +12,7 @@ int main() {
 #else
 
 #include <zith/zith.hpp>
-#ifndef ZITH_WASM
+#ifndef ZITH_IS_WASM
 #include <ffi.h>
 #endif
 
