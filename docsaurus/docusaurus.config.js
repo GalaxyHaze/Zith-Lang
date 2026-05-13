@@ -103,7 +103,7 @@ const config = {
               },
               {
                 label: 'Add Your Project',
-                href: 'https://github.com/galaxyhaze/Zith/discussions',
+                href: 'https://github.com/galaxyhaze/Zith-discussions',
               },
             ],
           },
@@ -152,7 +152,7 @@ const config = {
               },
               {
                 label: 'Add Your Project',
-                href: 'https://github.com/galaxyhaze/Zith/discussions',
+                href: 'https://github.com/galaxyhaze/Zith-discussions',
               },
             ],
           },
@@ -165,7 +165,7 @@ const config = {
               },
               {
                 label: 'GitHub Discussions',
-                href: 'https://github.com/galaxyhaze/Zith/discussions',
+                href: 'https://github.com/galaxyhaze/Zith-discussions/discussions',
               },
               {
                 label: 'Report a Bug',
