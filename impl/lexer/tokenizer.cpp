@@ -20,7 +20,7 @@ struct LexError {
     ZithSourceLoc info;
 };
 
-// Tipo específico para o Tokenizer
+// Specific type for the Tokenizer
 using TokenList = ArenaList<ZithToken>;
 
 // ============================================================================
@@ -73,8 +73,6 @@ static ZithToken make_token(ZithArena *arena, ZithTokenType type, std::string_vi
     return ZithToken{.lexeme = {buf, lexeme.size()}, .loc = info, .type = type, .keyword_id = 0};
 }
 
-// ── Char classifiers ─────────────────────────────────────────────────────────
-
 static bool isSpace(unsigned char c) {
     return ::isspace(c) != 0;
 }
@@ -109,8 +107,6 @@ static bool isValidEscape(char c) {
     }
 }
 
-// ── Forward declarations ─────────────────────────────────────────────────────
-
 static void processIdentifier(const char *&current, const char *end, TokenList &tokens,
                               ZithSourceLoc &info, ZithArena *arena);
 
@@ -122,8 +118,6 @@ static void processNumber(const char *&current, const char *end, TokenList &toke
 
 static bool punctuation(const char *&current, const char *end, TokenList &tokens,
                         ZithSourceLoc &info, ZithArena *arena);
-
-// ── Comments ─────────────────────────────────────────────────────────────────
 
 static void skipSingleLine(ZithSourceLoc &info, const char *&current, const char *end) {
     while (current < end && *current != '\n') {
@@ -154,8 +148,6 @@ static void skipMultiLine(ZithSourceLoc &info, const char *&current, const char 
          start});
 }
 
-// ── Errors ───────────────────────────────────────────────────────────────────
-
 static void addCharError(std::vector<LexError> &error_list, const char *base_msg, const char c,
                          const ZithSourceLoc info, ZithArena *arena) {
     if (error_list.size() >= MAX_ERRORS)
@@ -183,8 +175,6 @@ static void addMsgError(std::vector<LexError> &error_list, ZithArena *arena, con
         std::memcpy(copy, msg, len + 1);
     error_list.push_back({copy, info});
 }
-
-// ── Processors ──────────────────────────────────────────────────────────────
 
 static void processIdentifier(const char *&current, const char *end, TokenList &tokens,
                               ZithSourceLoc &info, ZithArena *arena) {
@@ -269,7 +259,7 @@ static void processNumber(const char *&current, const char *end, TokenList &toke
 
     enum class Base { Decimal, Hex, Binary, Octal } base = Base::Decimal;
 
-    // ── Detect base prefix ────────────────────────────────────────────────────
+    // Detect base prefix
     if (*current == '0' && current + 1 < end) {
         const char next = static_cast<char>(toLower(static_cast<unsigned char>(*(current + 1))));
 
@@ -491,8 +481,6 @@ static bool punctuation(const char *&current, const char *end, TokenList &tokens
     return false;
 }
 
-// ── Main Loop ───────────────────────────────────────────────────────────────
-
 static void tokenize(std::string_view src, ZithArena *arena, TokenList &tokens,
                      std::vector<LexError> &error_list) {
     tokens.init(arena, 64);
@@ -624,14 +612,12 @@ void zith_debug_tokens(ZithArena *arena, const char *source, const size_t source
     size_t count    = 0;
     ZithToken *flat = tokens.flatten(arena, &count);
 
-    // ── Header ───────────────────────────────────────────────────────────────
-    std::cerr << "\n╔══════════════════════════════════════════════════════════╗\n";
-    std::cerr << "║            Zith Tokenizer — Debug Dump              ║\n";
-    std::cerr << "╠═══╦══════╦══════╦══════════════╦════════════════════════╣\n";
-    std::cerr << "║ # ║ Line ║ Col  ║ Type         ║ Lexeme                 ║\n";
-    std::cerr << "╠═══╩══════╩══════╩══════════════╩════════════════════════╣\n";
+    std::cerr << "\n+----------------------------------------------------+\n";
+    std::cerr << "|            Zith Tokenizer - Debug Dump              |\n";
+    std::cerr << "+---+------+------+--------------+--------------------+\n";
+    std::cerr << "| # | Line | Col  | Type         | Lexeme             |\n";
+    std::cerr << "+---+------+------+--------------+--------------------+\n";
 
-    // ── Rows ─────────────────────────────────────────────────────────────────
     for (size_t i = 0; i < count; ++i) {
         const ZithToken &tok = flat[i];
 
@@ -654,15 +640,14 @@ void zith_debug_tokens(ZithArena *arena, const char *source, const size_t source
 
         const char *type_name = token_type_name(tok.type);
 
-        std::cerr << "║ " << i << " \t║ " << tok.loc.line << " \t║ " << tok.loc.index << " \t║ "
-                  << type_name << " \t║ " << lexeme_buf << "\n";
+        std::cerr << "| " << i << " \t| " << tok.loc.line << " \t| " << tok.loc.index << " \t| "
+                  << type_name << " \t| " << lexeme_buf << "\n";
     }
 
-    // ── Footer ───────────────────────────────────────────────────────────────
-    std::cerr << "╚══════════════════════════════════════════════════════════╝\n";
+    std::cerr << "+----------------------------------------------------+\n";
     std::cerr << "  Total tokens : " << count << "\n";
 
-    // ── Errors ───────────────────────────────────────────────────────────────
+    // Errors
     if (!error_list.empty()) {
         std::cerr << "\n  Lexical errors (" << error_list.size() << "):\n";
         for (size_t i = 0; i < error_list.size(); ++i) {

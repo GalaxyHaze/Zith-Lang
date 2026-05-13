@@ -30,20 +30,20 @@ extern ZithNode *parser_parse_expression(Parser *p);
 // Helpers
 // ============================================================================
 
-// Captura tokens entre { e } para criar um nó UNBODY
+// Captures tokens between { and } to create an UNBODY node
 static ZithNode *capture_unbody(Parser *p) {
     const ZithSourceLoc loc = parser_peek(p)->loc;
 
     if (!parser_match(p, ZITH_TOKEN_LBRACE)) {
-        // Se não tem '{', retorna nullptr (não é um bloco)
+        // If no '{', returns nullptr (not a block)
         return nullptr;
     }
 
-    // Marca o início dos tokens do corpo (primeiro token após '{')
+    // Marks the start of body tokens (first token after '{')
     const size_t start_pos = p->pos;
     int depth              = 1;
 
-    // Avança até encontrar o '}' correspondente
+    // Advances until matching '}' found
     while (!parser_is_at_end(p) && depth > 0) {
         const ZithToken *t = parser_advance(p);
         if (t->type == ZITH_TOKEN_LBRACE)
@@ -52,12 +52,12 @@ static ZithNode *capture_unbody(Parser *p) {
             depth--;
     }
 
-    // Calcula quantos tokens estão no corpo (excluindo '{' e '}')
-    // start_pos aponta para o primeiro token após '{'
-    // p->pos agora aponta para o token após '}'
+    // Calculates how many tokens are in the body (excluding '{' and '}')
+    // start_pos points to the first token after '{'
+    // p->pos now points to the token after '}'
     const size_t token_count = p->pos - start_pos - 1; // -1 para excluir o '}'
 
-    // Os tokens do corpo começam em start_pos
+    // Body tokens start at start_pos
     const ZithToken *body_tokens = &p->tokens[start_pos];
 
     return zith_ast_make_unbody(p->arena, loc, body_tokens, token_count);
@@ -421,12 +421,12 @@ static ZithNode *parse_fn_decl(Parser *p, ZithSourceLoc loc, ZithVisibility vis,
 
     ZithNode *body = nullptr;
     if (p->mode == ZITH_MODE_SCAN) {
-        // SCAN mode: captura o corpo como UNBODY em vez de pular completamente
+        // SCAN mode: captures the body as UNBODY instead of skipping it entirely
         if (!parser_match(p, ZITH_TOKEN_COLON)) {
             body = capture_unbody(p);
         }
     } else {
-        // PARSE mode: parseia o corpo normalmente
+        // PARSE mode: parses the body normally
         if (!parser_check(p, ZITH_TOKEN_COLON))
             body = parse_body(p);
         else
@@ -536,7 +536,7 @@ static ZithNode *parse_struct_decl(Parser *p, ZithVisibility struct_vis) {
 
 static ZithNode *parse_import_decl(Parser *p) {
     const ZithSourceLoc loc = parser_peek(p)->loc;
-    parser_advance(p); // consome 'import'
+    parser_advance(p);     // consume 'import'
     char buf[256];
     size_t buf_len = 0;
 
@@ -547,7 +547,7 @@ static ZithNode *parse_import_decl(Parser *p) {
         buf_len = seg->lexeme.len;
     }
 
-    // Segmentos adicionais separados por '.' ou '/'
+    // Additional segments separated by '.' or '/'
     while (true) {
         if (parser_match(p, ZITH_TOKEN_DOT)) {
             if (buf_len < sizeof(buf) - 1)
@@ -650,9 +650,9 @@ static ZithNode *parse_import_decl(Parser *p) {
 
 static ZithNode *parse_from_import_decl(Parser *p) {
     const ZithSourceLoc loc = parser_peek(p)->loc;
-    parser_advance(p); // consome 'from'
+    parser_advance(p); // consume 'from'
 
-    // Parse do módulo base (ex: std.io.console ou std/io/console)
+    // Parse the base module (e.g. std.io.console or std/io/console)
     char module_buf[256];
     size_t module_len    = 0;
     const ZithToken *seg = parser_expect(p, ZITH_TOKEN_IDENTIFIER, "expected module name");
@@ -678,17 +678,17 @@ static ZithNode *parse_from_import_decl(Parser *p) {
         }
     }
 
-    // Espera keyword 'import'
+    // Expects 'import' keyword
     parser_expect(p, ZITH_TOKEN_IMPORT, "expected 'import' after 'from <module>'");
 
-    // Parse dos itens importados (ex: println, println as log)
+    // Parse imported items (e.g. println, println as log)
     char items_buf[256]; // size_t items_len = 0;
     const ZithToken *item = parser_expect(p, ZITH_TOKEN_IDENTIFIER, "expected item name");
     if (item->lexeme.len < sizeof(items_buf)) {
         memcpy(items_buf, item->lexeme.data, item->lexeme.len); /*items_len = item->lexeme.len;*/
     }
 
-    // Suporte a alias: import x as y
+    // Alias support: import x as y
     const char *alias = nullptr;
     size_t alias_len  = 0;
     if (parser_match(p, ZITH_TOKEN_AS)) {
@@ -699,7 +699,7 @@ static ZithNode *parse_from_import_decl(Parser *p) {
 
     parser_expect(p, ZITH_TOKEN_SEMICOLON, "expected ';'");
 
-    // Path = módulo base, alias = itens importados
+    // Path = base module, alias = imported items
     ZithImportPayload payload = {
         zith_arena_str(p->arena, module_buf, module_len),
         module_len,
@@ -715,18 +715,18 @@ static ZithNode *parse_from_import_decl(Parser *p) {
 
 static ZithNode *parse_export_decl(Parser *p) {
     const ZithSourceLoc loc = parser_peek(p)->loc;
-    parser_advance(p); // consome 'export'
+    parser_advance(p); // consume 'export'
     char buf[256];
     size_t buf_len = 0;
 
-    // Primeiro segmento (espera IDENTIFIER)
+    // First segment (expects IDENTIFIER)
     const ZithToken *seg = parser_expect(p, ZITH_TOKEN_IDENTIFIER, "expected module name");
     if (seg->lexeme.len < sizeof(buf)) {
         memcpy(buf, seg->lexeme.data, seg->lexeme.len);
         buf_len = seg->lexeme.len;
     }
 
-    // Segmentos adicionais separados por '.'
+    // Additional segments separated by '.'
     while (parser_match(p, ZITH_TOKEN_DOT)) {
         if (buf_len < sizeof(buf) - 1)
             buf[buf_len++] = '.';

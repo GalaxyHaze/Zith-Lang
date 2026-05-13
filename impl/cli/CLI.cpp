@@ -45,10 +45,10 @@ static void print_not_implemented(const std::string &command) {
 // Pipeline
 // ============================================================================
 
-// Tokeniza 'src_path' numa arena nova.
-// Preenche 'out_stream', 'out_source' e 'out_source_len' — o source fica na
-// arena para ser reutilizado pelo parser sem second load.
-// Retorna a arena (o chamador destrói); nullptr em caso de erro.
+// Tokenizes 'src_path' into a new arena.
+// Fills 'out_stream', 'out_source' and 'out_source_len' — the source stays in
+// the arena to be reused by the parser without a second load.
+// Returns the arena (caller destroys it); nullptr on error.
 ZithArena *tokenize_file(const std::string &src_path, ZithTokenStream &out_stream,
                          const char **out_source, size_t *out_source_len, bool verbose) {
     ZithArena *arena = zith_arena_create(64 * 1024);
@@ -84,10 +84,10 @@ ZithArena *tokenize_file(const std::string &src_path, ZithTokenStream &out_strea
 }
 
 // ============================================================================
-// Comandos
+// Commands
 // ============================================================================
 
-// check — parse + semântica, só reporta erros, não produz artefacto
+// check — parse + semantics, only reports errors, produces no artifact
 static int cmd_check(const std::string &input_file, const std::string &mode_str, bool verbose,
                      const std::vector<std::string> &include_dirs) {
     std::string src = input_file;
@@ -144,7 +144,7 @@ static int cmd_check(const std::string &input_file, const std::string &mode_str,
     return 0;
 }
 
-// compile — check + gera objeto nativo (.o) ou bytecode (.nbc), sem linkar
+// compile — check + generates native object (.o) or bytecode (.nbc), no linking
 static int cmd_compile(const std::string &input_file, const std::string &output_file,
                        const std::string &mode_str, bool interpreted, bool verbose,
                        const std::vector<std::string> &include_dirs) {
@@ -173,23 +173,23 @@ static int cmd_compile(const std::string &input_file, const std::string &output_
         return 1;
     }
 
-    // TODO [LLVM — caminho nativo]:
-    //   - Inicializar LLVMContext + LLVMModule + LLVMBuilder
-    //   - Percorrer AST e emitir LLVMValueRef por nó (codegen)
-    //   - Aplicar passes de optimização via LLVMPassManager (opt_level 0–3)
-    //   - LLVMTargetMachineEmitToFile → .o  (ou .ll se --emit ir)
-    //   - Se --emit asm → emitir .s via LLVMAssemblyFile
-    //   - Considerar llvm::orc::LLJIT para JIT futuro (REPL)
+    // TODO [LLVM — native path]:
+    //   - Initialize LLVMContext + LLVMModule + LLVMBuilder
+    //   - Traverse AST and emit LLVMValueRef per node (codegen)
+    //   - Apply optimization passes via LLVMPassManager (opt_level 0–3)
+    //   - LLVMTargetMachineEmitToFile → .o  (or .ll if --emit ir)
+    //   - If --emit asm → emit .s via LLVMAssemblyFile
+    //   - Consider llvm::orc::LLJIT for future JIT (REPL)
 
-    // TODO [Bytecode — caminho interpretado]:
-    //   - Definir formato .nbc:
-    //       header: magic + versão + nº de constantes + nº de instruções
-    //       pool de constantes (strings, números)
-    //       array de instruções (opcode 1 byte + operandos variáveis)
+    // TODO [Bytecode — interpreted path]:
+    //   - Define .nbc format:
+    //       header: magic + version + constant count + instruction count
+    //       constant pool (strings, numbers)
+    //       instruction array (1 byte opcode + variable operands)
     //   - zith_bytecode_emit(arena, ast) → ZithBytecode*
-    //   - Serializar para ficheiro .nbc
+    //   - Serialize to .nbc file
 
-    // TODO: usar include_dirs para resolver imports no parse/sema
+    // TODO: use include_dirs to resolve imports in parse/sema
 
     const std::string out = !output_file.empty() ? output_file : (interpreted ? "a.zbc" : "a.o");
     if (interpreted) {
@@ -206,7 +206,7 @@ static int cmd_compile(const std::string &input_file, const std::string &output_
     return 0;
 }
 
-// build — compile (nativo) + link → binário final
+// build — compile (native) + link → final binary
 static int cmd_build(const std::string &input_file, const std::string &output_file,
                      const std::string &mode_str, bool verbose,
                      const std::vector<std::string> &include_dirs) {
@@ -227,36 +227,36 @@ static int cmd_build(const std::string &input_file, const std::string &output_fi
         if (mode == "debug")
             mode = proj.mode;
 
-        // Herdar configurações do projecto
+        // Inherit project configurations
         extra_includes.insert(extra_includes.end(), proj.include_dirs.begin(),
                               proj.include_dirs.end());
 
         // TODO: propagar proj.lib_paths, proj.link_libs, proj.link_flags
         // TODO: aplicar proj.lto se mode == "release"
         // TODO: aplicar proj.opt_level / proj.debug_level ao LLVMTargetMachine
-        // TODO: criar proj.bin_dir e proj.cache_dir se não existirem
+        // TODO: create proj.bin_dir and proj.cache_dir if they don't exist
     }
 
     if (verbose)
         print_info("Building '" + src + "' → binary (" + mode + ")");
 
-    // compile: nativo apenas (interpreted = false)
+    // compile: native only (interpreted = false)
     if (const int rc = cmd_compile(src, "", mode, /*interpreted=*/false, verbose, extra_includes);
         rc != 0)
         return rc;
 
-    // TODO: invocar linker (LLD embutido ou system linker como fallback)
-    //   - recolher todos os .o (suporte multi-ficheiro no futuro)
-    //   - adicionar lib_paths e link_libs do projecto
-    //   - produzir binário final em `out`
-    // TODO: strip de debug se proj.strip_debug == true
+    // TODO: invoke linker (embedded LLD or system linker as fallback)
+    //   - collect all .o files (multi-file support in the future)
+    //   - add project lib_paths and link_libs
+    //   - produce final binary at `out`
+    // TODO: strip debug if proj.strip_debug == true
 
     const std::string binary = out.empty() ? "a.out" : out;
     print_success("Build", binary);
     return 0;
 }
 
-// execute — executa um binário ou bytecode já existente
+// execute — runs an existing binary or bytecode
 static int cmd_execute(const std::string &target, bool interpreted, bool verbose,
                        const std::vector<std::string> &include_dirs) {
     std::string bin = target;
@@ -279,9 +279,9 @@ static int cmd_execute(const std::string &target, bool interpreted, bool verbose
     if (verbose)
         print_info("Executing '" + bin + "'" + (interpreted ? " (interpreted)" : ""));
 
-    // TODO [nativo]: execv (POSIX) / CreateProcess (Windows)
-    //   - passar argv restantes ao processo filho
-    //   - retornar exit code do processo filho
+    // TODO [native]: execv (POSIX) / CreateProcess (Windows)
+    //   - pass remaining argv to child process
+    //   - return child process exit code
 
     if (interpreted) {
         std::ifstream ifs(bin, std::ios::binary);
@@ -317,7 +317,7 @@ static int cmd_execute(const std::string &target, bool interpreted, bool verbose
     return 1;
 }
 
-// run — build/compile + execute numa só invocação
+// run — build/compile + execute in a single invocation
 static int cmd_run(const std::string &input_file, const std::string &output_file,
                    const std::string &mode_str, bool interpreted, bool verbose,
                    const std::vector<std::string> &include_dirs) {
@@ -338,38 +338,38 @@ static int cmd_run(const std::string &input_file, const std::string &output_file
 }
 
 static int cmd_test(const std::string & /*input_file*/, bool /*verbose*/) {
-    // TODO: sintaxe de testes: #[test] fn my_test() { ... }
-    // TODO: descobrir automaticamente ficheiros *_test.zith em test_dir
-    // TODO: compilar e executar cada teste isoladamente
-    // TODO: reportar: passed / failed / ignored com tempo de execução
-    // TODO: filtro por nome: zith test foo::bar
+    // TODO: test syntax: #[test] fn my_test() { ... }
+    // TODO: auto-discover *_test.zith files in test_dir
+    // TODO: compile and run each test in isolation
+    // TODO: report: passed / failed / ignored with execution time
+    // TODO: filter by name: zith test foo::bar
     print_not_implemented("test");
     return 1;
 }
 
 static int cmd_fmt(const std::string & /*input_file*/, bool /*check_only*/, bool /*verbose*/) {
-    // TODO: pretty-printer sobre a AST (canonical form)
-    // TODO: suporte a ficheiro único ou directório recursivo
-    // TODO: --check → não modifica, retorna 1 se algum ficheiro difere (CI)
-    // TODO: .zith_fmt para config de estilo
+    // TODO: pretty-printer over the AST (canonical form)
+    // TODO: support single file or recursive directory
+    // TODO: --check → does not modify, returns 1 if any file differs (CI)
+    // TODO: .zith_fmt for style configuration
     print_not_implemented("fmt");
     return 1;
 }
 
 static int cmd_docs(const std::string & /*input_file*/, const std::string & /*output_dir*/,
                     bool /*verbose*/) {
-    // TODO: extrair doc-comments (/// ou /** */) durante o parse
-    // TODO: gerar HTML estático ou Markdown por módulo/função/tipo
-    // TODO: suporte a exemplos embutidos nos doc-comments (runnable snippets)
+    // TODO: extract doc-comments (/// or /** */) during parsing
+    // TODO: generate static HTML or Markdown per module/function/type
+    // TODO: support embedded examples in doc-comments (runnable snippets)
     print_not_implemented("docs");
     return 1;
 }
 
 static int cmd_repl(bool /*verbose*/) {
     // TODO: llvm::orc::LLJIT para JIT compilation
-    // TODO: readline / linenoise — input com histórico
+    // TODO: readline / linenoise — input with history
     // TODO: compilar cada linha/bloco incrementalmente
-    // TODO: manter contexto de variáveis entre expressões
+    // TODO: maintain variable context across expressions
     // TODO: comandos especiais: :quit, :type <expr>, :help, :load <file>
     print_not_implemented("repl");
     return 1;
@@ -387,7 +387,7 @@ static int cmd_clean(bool /*verbose*/) {
     // TODO: remover bin_dir (bin/)
     // TODO: remover cache_dir (.zith_cache/)
     // TODO: remover ficheiros .o, .nbc, .ll, .s
-    // TODO: opção --frozen para remover tudo
+    // TODO: --frozen option to remove everything
     print_not_implemented("clean");
     return 1;
 }
@@ -468,7 +468,7 @@ extern "C" int zith_run(int argc, const char *const argv[]) {
     CLI::App app{"Zith - A low-level general-purpose language"};
     app.require_subcommand(0, 1);
 
-    // -- Opções globais -------------------------------------------------------
+    // Global options
     std::string mode_str = "debug";
     std::string output_file;
     std::vector<std::string> include_dirs;
@@ -485,10 +485,10 @@ extern "C" int zith_run(int argc, const char *const argv[]) {
     app.add_option("--target", target_triple, "Target triple");
     app.add_flag("-v,--verbose", verbose, "Verbose output");
 
-    // TODO: propagar emit_target e target_triple para cmd_compile / cmd_build
-    // TODO: validar target_triple contra os targets suportados pelo LLVM linkado
+    // TODO: propagate emit_target and target_triple to cmd_compile / cmd_build
+    // TODO: validate target_triple against supported LLVM targets
 
-    // -- Subcomandos ----------------------------------------------------------
+    // Subcommands
     std::string input_file;
     bool interpreted        = false;
     bool fmt_check          = false;
@@ -579,7 +579,7 @@ extern "C" int zith_run(int argc, const char *const argv[]) {
     if (*run_cmd)
         return cmd_run(input_file, output_file, mode_str, interpreted, verbose, include_dirs);
 
-    // Sem subcomando: tenta build via toml, senão mostra ajuda
+    // No subcommand: try build via toml, otherwise show help
     zith::cli::project_config::ZithProject proj;
     if (try_load_project(proj))
         return cmd_build("", "", mode_str, verbose, include_dirs);

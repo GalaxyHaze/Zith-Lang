@@ -27,11 +27,11 @@
 // Diagnostics — only I/O error reporting needed
 extern void zith_io_error(const char *fmt, ...);
 
-// Extensão canónica dos ficheiros fonte Zith
+// Canonical extension for Zith source files
 #define ZITH_SOURCE_EXT ".zith"
 
 // ============================================================================
-// Helpers internos
+// Internal helpers
 // ============================================================================
 
 static int is_regular_file(const char *path) {
@@ -42,7 +42,7 @@ static int is_regular_file(const char *path) {
 }
 
 // ============================================================================
-// API pública
+// Public API
 // ============================================================================
 
 bool zith_file_exists(const char *path) {
@@ -62,7 +62,7 @@ size_t zith_file_size(const char *path) {
     return (size_t)st.st_size;
 }
 
-// Comparação de extensão case-insensitive
+// Case-insensitive extension comparison
 int zith_extension_matches(const char *path, const char *expected_ext) {
     if (!path || !expected_ext)
         return 0;
@@ -83,14 +83,14 @@ int zith_extension_matches(const char *path, const char *expected_ext) {
     return 1;
 }
 
-// Verifica se o ficheiro tem a extensão canónica (.zith)
+// Checks if the file has the canonical extension (.zith)
 bool zith_is_source_file(const char *path) {
     return zith_extension_matches(path, ZITH_SOURCE_EXT);
 }
 
-// Carrega um ficheiro fonte (.zith) para a arena.
-// Falha com erro descritivo se a extensão não for .zith,
-// o ficheiro não existir, não for regular, ou a leitura falhar.
+// Loads a source file (.zith) into the arena.
+// Fails with descriptive error if the extension is not .zith,
+// the file doesn't exist, is not a regular file, or reading fails.
 char *zith_load_file_to_arena(struct ZithArena *arena, const char *path, size_t *out_size) {
     if (!arena || !path || !out_size) {
         if (out_size)
@@ -98,7 +98,7 @@ char *zith_load_file_to_arena(struct ZithArena *arena, const char *path, size_t 
         return NULL;
     }
 
-    // Verificação de extensão — rejeita antes de abrir o ficheiro
+    // Extension check — reject before opening the file
     if (!zith_is_source_file(path)) {
         zith_io_error("'%s' is not a Zith source file (expected '%s')", path, ZITH_SOURCE_EXT);
         *out_size = 0;
@@ -126,7 +126,7 @@ char *zith_load_file_to_arena(struct ZithArena *arena, const char *path, size_t 
     if (fseek(f, 0, SEEK_SET) != 0)
         goto error;
 
-    // Ficheiro vazio — válido, retorna buffer com '\0'
+    // Empty file — valid, returns buffer with '\0'
     if (size == 0) {
         fclose(f);
         *out_size   = 0;

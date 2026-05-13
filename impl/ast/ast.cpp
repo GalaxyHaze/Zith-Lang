@@ -227,7 +227,7 @@ ZithNode *zith_ast_make_block(ZithArena *a, ZithSourceLoc loc, ZithNode **stmts,
     return n;
 }
 
-// UNBODY: armazena token stream bruto entre { e } para parseamento posterior
+// UNBODY: stores raw token stream between { and } for later parsing
 // list.ptr = ZithToken*, list.len = token_count
 ZithNode *zith_ast_make_unbody(ZithArena *a, ZithSourceLoc loc, const ZithToken *tokens,
                                size_t token_count) {
@@ -346,7 +346,7 @@ ZithNode *zith_ast_make_try_catch(ZithArena *a, ZithSourceLoc loc, ZithTryCatchP
 }
 
 // list → ZithImportPayload, list.len = path_len
-// Usado para IMPORT e EXPORT
+// Used for IMPORT and EXPORT
 ZithNode *zith_ast_make_import(ZithArena *a, ZithSourceLoc loc, ZithImportPayload data) {
     ZithNodeId node_type = data.is_export ? ZITH_NODE_EXPORT : ZITH_NODE_IMPORT;
     ZithNode *n          = alloc_node(a, node_type, loc);

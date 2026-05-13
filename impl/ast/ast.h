@@ -171,12 +171,12 @@ typedef struct {
 
 // ZITH_NODE_IMPORT (1042) — list.ptr, list.len = path_len
 // ZITH_NODE_EXPORT (1043) — list.ptr, list.len = path_len
-// Para sintaxe 'from': path = módulo base, alias = itens importados
+// For 'from' syntax: path = base module, alias = imported items
 typedef struct {
     const char *path;
     size_t path_len;
     ZithVisibility vis;
-    const char *alias; // para "as alias" (NULL se não tiver)
+    const char *alias; // for "as alias" (NULL if none)
     size_t alias_len;
     bool is_export; // true = export, false = import
     bool is_from;   // true = sintaxe "from x import y"
@@ -294,8 +294,8 @@ ZithNode *zith_ast_make_param(ZithArena *a, ZithSourceLoc loc, ZithParamPayload 
 
 ZithNode *zith_ast_make_block(ZithArena *a, ZithSourceLoc loc, ZithNode **stmts, size_t count);
 
-// Cria um nó UNBODY que armazena o token stream bruto entre { e }
-// tokens aponta para o primeiro token após '{', token_count é o número de tokens até '}'
+// Creates an UNBODY node that stores the raw token stream between { and }
+// tokens points to the first token after '{', token_count is the number of tokens until '}'
 ZithNode *zith_ast_make_unbody(ZithArena *a, ZithSourceLoc loc, const ZithToken *tokens,
                                size_t token_count);
 

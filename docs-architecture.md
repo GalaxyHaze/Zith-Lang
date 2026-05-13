@@ -1339,35 +1339,35 @@ This architecture ensures long-term maintainability while providing an excellent
 
 > Source of truth for implementation progress. Update this table whenever parser/compiler/runtime/docs behavior changes.
 
-| Recurso | Status | Arquivo/módulo responsável | Cobertura de testes |
-|---|---|---|---|
+| Feature | Status | Responsible File/Module | Test Coverage |
+|---|---|---|---|---|
 | Lexer & tokenizer | implemented | `impl/lexer/tokenizer.cpp`, `impl/lexer/keywords.cpp` | `tests/test_parser.cpp` (tokens used by parser paths) |
-| Parser de declarações/expressões base | implemented | `impl/parser/parser.cpp`, `impl/parser/parser_decl.cpp`, `impl/parser/parser_expr.cpp` | `tests/test_parser.cpp`, `impl/parser/parser_test.cpp` |
-| Sistema de import/export | implemented | `impl/import/import.hpp`, `impl/import/module_registry.hpp`, `impl/import/symbol_resolver.hpp` | `tests/test_import.cpp`, `tests/test_import_system.cpp`, `tests/test_expand_sema.cpp` |
-| AST + arena de memória | implemented | `impl/ast/ast.cpp`, `impl/memory/arena.hpp` | Cobertura indireta via `tests/test_parser.cpp` e `tests/test_import*.cpp` |
-| Diagnósticos e erros de compilação | partial | `impl/diagnostics/diagnostics.cpp`, `impl/parser/parser_utils.cpp` | Cobertura parcial via asserts em `tests/test_parser.cpp` |
-| Tipos opcionais/failable (`?T`/`T!`) | partial | `impl/parser/parser_sema.cpp`, `impl/types/types.hpp` | Sem suíte dedicada; validar manualmente e ampliar testes |
-| Enum/union/trait parsing | planned | `impl/parser/` (módulos de declaração/sema) | Não coberto |
-| Semantic analysis/type checking completo | planned | `impl/types/`, futuras fases após parser | Não coberto |
-| Geração LLVM IR | planned | `include/LLVM/`, futura implementação em `impl/` | Não coberto |
-| Bytecode/VM pipeline | planned | `impl/main.cpp` (entry), módulos de backend ainda pendentes | Não coberto |
+| Base declaration/expression parser | implemented | `impl/parser/parser.cpp`, `impl/parser/parser_decl.cpp`, `impl/parser/parser_expr.cpp` | `tests/test_parser.cpp`, `impl/parser/parser_test.cpp` |
+| Import/export system | implemented | `impl/import/import.hpp`, `impl/import/module_registry.hpp`, `impl/import/symbol_resolver.hpp` | `tests/test_import.cpp`, `tests/test_import_system.cpp`, `tests/test_expand_sema.cpp` |
+| AST + memory arena | implemented | `impl/ast/ast.cpp`, `impl/memory/arena.hpp` | Indirect coverage via `tests/test_parser.cpp` and `tests/test_import*.cpp` |
+| Compilation diagnostics and errors | partial | `impl/diagnostics/diagnostics.cpp`, `impl/parser/parser_utils.cpp` | Partial coverage via asserts in `tests/test_parser.cpp` |
+| Optional/failable types (`?T`/`T!`) | partial | `impl/parser/parser_sema.cpp`, `impl/types/types.hpp` | No dedicated suite; validate manually and expand tests |
+| Enum/union/trait parsing | planned | `impl/parser/` (declaration/sema modules) | Not covered |
+| Semantic analysis/type checking complete | planned | `impl/types/`, future phases after parser | Not covered |
+| LLVM IR generation | planned | `include/LLVM/`, future implementation in `impl/` | Not covered |
+| Bytecode/VM pipeline | planned | `impl/main.cpp` (entry), backend modules still pending | Not covered |
 
-## Release Checklist (Status & Documentação)
+## Release Checklist (Status & Documentation)
 
-Use este checklist em toda release/PR com mudança técnica relevante:
+Use this checklist on every release/PR with relevant technical changes:
 
-- [ ] Atualizar **Technical Status Matrix** em `docs-architecture.md` (status, módulo e testes).
-- [ ] Atualizar o bloco **Current Implementation State** do `README.md` quando houver mudança de capacidade.
-- [ ] Incluir/ajustar testes em `tests/` e registrar cobertura na matriz.
-- [ ] Se houver mudança em documentação de usuário, sincronizar `docsaurus/docs/**` e gerar `docs/**` (quando `docs/` for versionado).
-- [ ] Validar localmente build/testes/documentação antes de publicar release.
+- [ ] Update **Technical Status Matrix** in `docs-architecture.md` (status, module and tests).
+- [ ] Update the **Current Implementation State** block in `README.md` when there is a change in capability.
+- [ ] Include/adjust tests in `tests/` and register coverage in the matrix.
+- [ ] If there is a change in user documentation, sync `docsaurus/docs/**` and generate `docs/**` (when `docs/` is versioned).
+- [ ] Validate locally build/tests/documentation before publishing release.
 
-## Regra de sincronização `docsaurus/` ↔ `docs/`
+## Sync Rule `docsaurus/` ↔ `docs/`
 
-Como este repositório mantém artefatos gerados em `docs/`, a política é:
+Since this repository maintains generated artifacts in `docs/`, the policy is:
 
-1. **Fonte canônica:** arquivos editáveis em `docsaurus/` (`docsaurus/docs`, `docsaurus/src`, `docsaurus/static`, configuração).
-2. **Artefato gerado:** `docs/` deve sempre refletir exatamente o estado atual de `docsaurus/` após build.
-3. **Mudou `docsaurus/`?** Então o mesmo commit/PR deve incluir regeneração de `docs/` (sem adiar para outro PR).
-4. **Sem mudanças em `docsaurus/`:** evitar churn em `docs/` (não commitar rebuild desnecessário).
-5. **Checklist de revisão:** PR só é aprovado com diff coerente entre fonte (`docsaurus/`) e build (`docs/`).
+1. **Canonical source:** editable files in `docsaurus/` (`docsaurus/docs`, `docsaurus/src`, `docsaurus/static`, configuration).
+2. **Generated artifact:** `docs/` must always reflect exactly the current state of `docsaurus/` after build.
+3. **Changed `docsaurus/`?** Then the same commit/PR must include regeneration of `docs/` (do not defer to another PR).
+4. **No changes in `docsaurus/`:** avoid churn in `docs/` (do not commit unnecessary rebuild).
+5. **Review checklist:** PR is only approved with a coherent diff between source (`docsaurus/`) and build (`docs/`).

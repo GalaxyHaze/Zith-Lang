@@ -1,41 +1,41 @@
 # include/zith
 
-Headers públicos do compilador/SDK Zith.
+Public headers of the Zith compiler/SDK.
 
-## Organização da API pública
+## Public API Organization
 
-- `zith.hpp`: façade agregadora para compatibilidade e ponto único de include.
-- `token.hpp`: tokens, tipos-base de source (`ZithSourceLoc`, `ZithStr`, stream de tokens) e lexer.
-- `ast.hpp`: nós da AST e IDs de nós.
-- `parser.hpp`: parsing e parsing com contexto de import.
-- `memory.hpp`: arena allocator pública.
-- `import.hpp`: utilitários de arquivo/import usados pela superfície pública.
-- `diagnostics.hpp`: códigos de erro públicos.
+- `zith.hpp`: aggregate facade for compatibility and single include point.
+- `token.hpp`: tokens, source base types (`ZithSourceLoc`, `ZithStr`, token stream) and lexer.
+- `ast.hpp`: AST nodes and node IDs.
+- `parser.hpp`: parsing and parsing with import context.
+- `memory.hpp`: public arena allocator.
+- `import.hpp`: file/import utilities used by the public surface.
+- `diagnostics.hpp`: public error codes.
 
-## Fronteira pública vs interna
+## Public vs Internal Boundary
 
-- Tudo em `include/zith/*.hpp` (exceto `include/zith/impl/**`) é **API pública**.
-- Headers em `include/zith/impl/**` são **internos** e não fazem parte de contrato estável.
-- Consumidores externos devem incluir apenas `zith.hpp` ou headers granulares públicos.
+- Everything in `include/zith/*.hpp` (except `include/zith/impl/**`) is **public API**.
+- Headers in `include/zith/impl/**` are **internal** and not part of a stable contract.
+- External consumers should only include `zith.hpp` or granular public headers.
 
-## Convenções de estabilidade
+## Stability Conventions
 
-### Estável (API/ABI)
+### Stable (API/ABI)
 
-- Assinaturas de funções C exportadas nestes headers públicos.
-- Layout de structs públicos (`ZithToken`, `ZithTokenStream`, `ZithNode`, etc.).
-- Valores numéricos de enums/tags já publicados que impactem serialização, FFI ou plugins.
+- Exported C function signatures in these public headers.
+- Layout of public structs (`ZithToken`, `ZithTokenStream`, `ZithNode`, etc.).
+- Published numeric values of enums/tags that impact serialization, FFI or plugins.
 
-Mudanças nessas áreas exigem versionamento explícito e nota de migração.
+Changes in these areas require explicit versioning and a migration note.
 
 ### Experimental
 
-- Qualquer símbolo marcado futuramente com prefixo/sufixo `experimental` ou macro de feature.
-- Conteúdo em `include/zith/impl/**`.
-- Helpers C++ de conveniência no namespace `ZITH` podem evoluir mais rápido, desde que não quebrem a camada C subjacente.
+- Any symbol marked in the future with prefix/suffix `experimental` or feature macro.
+- Content in `include/zith/impl/**`.
+- C++ convenience helpers in the `ZITH` namespace may evolve faster, as long as they don't break the underlying C layer.
 
-## Diretriz de dependência
+## Dependency Guideline
 
-- Código interno pode depender da API pública.
-- API pública **não** deve expor tipos privados de `impl/`.
-- Evitar que headers públicos incluam headers de `impl/` direta ou indiretamente.
+- Internal code may depend on the public API.
+- Public API **must not** expose private types from `impl/`.
+- Avoid public headers including headers from `impl/` directly or indirectly.

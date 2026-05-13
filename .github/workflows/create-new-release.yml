@@ -47,8 +47,8 @@ jobs:
         with:
           tag_name: v${{ steps.tag.outputs.version }}
           name: Release v${{ steps.tag.outputs.version }}
-          # allow_update: true faz update se a release já existir
-          # em vez de falhar com "already exists"
+          # allow_update: true updates if the release already exists
+          # instead of failing with "already exists"
           draft: false
           prerelease: false
           body: |

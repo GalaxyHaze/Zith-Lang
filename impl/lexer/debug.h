@@ -4,12 +4,12 @@
 #include <zith/zith.hpp>
 
 // ============================================================================
-// Nome de cada token
+// Token names
 // ============================================================================
 
 inline const char *zith_token_type_name(ZithTokenType type) {
     switch (type) {
-    // -- Literais e identificadores ---------------------------------------
+    // Literals and identifiers
     case ZITH_TOKEN_STRING:
         return "STRING";
     case ZITH_TOKEN_NUMBER:
@@ -25,7 +25,7 @@ inline const char *zith_token_type_name(ZithTokenType type) {
     case ZITH_TOKEN_IDENTIFIER:
         return "IDENTIFIER";
 
-    // -- Aritméticos e lógicos --------------------------------------------
+    // Arithmetic and logical
     case ZITH_TOKEN_PLUS:
         return "PLUS";
     case ZITH_TOKEN_MINUS:
@@ -43,7 +43,7 @@ inline const char *zith_token_type_name(ZithTokenType type) {
     case ZITH_TOKEN_NOT:
         return "NOT";
 
-    // -- Comparação -------------------------------------------------------
+    // Comparison
     case ZITH_TOKEN_EQUAL:
         return "EQUAL";
     case ZITH_TOKEN_NOT_EQUAL:
@@ -57,7 +57,7 @@ inline const char *zith_token_type_name(ZithTokenType type) {
     case ZITH_TOKEN_GREATER_THAN_OR_EQUAL:
         return "GREATER_THAN_OR_EQUAL";
 
-    // -- Atribuição -------------------------------------------------------
+    // Assignment
     case ZITH_TOKEN_ASSIGNMENT:
         return "ASSIGNMENT";
     case ZITH_TOKEN_DECLARATION:
@@ -71,7 +71,7 @@ inline const char *zith_token_type_name(ZithTokenType type) {
     case ZITH_TOKEN_DIVIDE_EQUAL:
         return "DIVIDE_EQUAL";
 
-    // -- Especiais --------------------------------------------------------
+    // Special
     case ZITH_TOKEN_QUESTION:
         return "QUESTION";
     case ZITH_TOKEN_BANG:
@@ -79,7 +79,7 @@ inline const char *zith_token_type_name(ZithTokenType type) {
     case ZITH_TOKEN_ARROW:
         return "ARROW";
 
-    // -- Delimitadores ----------------------------------------------------
+    // Delimiters
     case ZITH_TOKEN_LPAREN:
         return "LPAREN";
     case ZITH_TOKEN_RPAREN:
@@ -105,7 +105,7 @@ inline const char *zith_token_type_name(ZithTokenType type) {
     case ZITH_TOKEN_SEMICOLON:
         return "SEMICOLON";
 
-    // -- Controle de fluxo ------------------------------------------------
+    // Flow control
     case ZITH_TOKEN_IF:
         return "IF";
     case ZITH_TOKEN_ELSE:
@@ -149,7 +149,7 @@ inline const char *zith_token_type_name(ZithTokenType type) {
     case ZITH_TOKEN_INFIX:
         return "INFIX";
 
-    // -- Concorrência -----------------------------------------------------
+    // Concurrency
     case ZITH_TOKEN_SPAWN:
         return "SPAWN";
     case ZITH_TOKEN_JOINED:
@@ -159,7 +159,7 @@ inline const char *zith_token_type_name(ZithTokenType type) {
     case ZITH_TOKEN_JOIN:
         return "JOIN";
 
-    // -- Erros ------------------------------------------------------------
+    // Errors
     case ZITH_TOKEN_TRY:
         return "TRY";
     case ZITH_TOKEN_CATCH:
@@ -173,7 +173,7 @@ inline const char *zith_token_type_name(ZithTokenType type) {
     case ZITH_TOKEN_DROP:
         return "DROP";
 
-    // -- Modificadores de propriedade / escopo ----------------------------
+    // Property / scope modifiers
     case ZITH_TOKEN_CONST:
         return "CONST";
     case ZITH_TOKEN_MUTABLE:
@@ -199,11 +199,11 @@ inline const char *zith_token_type_name(ZithTokenType type) {
     case ZITH_TOKEN_PACK:
         return "PACK";
 
-    // -- Modificadores de acesso ------------------------------------------
+    // Access modifiers
     case ZITH_TOKEN_MODIFIER:
         return "MODIFIER";
 
-    // -- Declarações de tipo ----------------------------------------------
+    // Type declarations
     case ZITH_TOKEN_TYPE:
         return "TYPE";
     case ZITH_TOKEN_STRUCT:
@@ -225,7 +225,7 @@ inline const char *zith_token_type_name(ZithTokenType type) {
     case ZITH_TOKEN_IMPLEMENT:
         return "IMPLEMENT";
 
-    // -- Funções ----------------------------------------------------------
+    // Functions
     case ZITH_TOKEN_FN:
         return "FN";
     case ZITH_TOKEN_ASYNC:
@@ -241,7 +241,7 @@ inline const char *zith_token_type_name(ZithTokenType type) {
     case ZITH_TOKEN_FLOWING:
         return "FLOWING";
 
-    // -- Controle interno -------------------------------------------------
+    // Internal control
     case ZITH_TOKEN_END:
         return "END";
     case ZITH_TOKEN_UNKNOWN:
@@ -252,10 +252,10 @@ inline const char *zith_token_type_name(ZithTokenType type) {
     }
 }
 
-// Categoria legível para agrupamento visual na tabela.
-// Usa casos explícitos para os tokens cujo valor numérico não segue
-// a ordem lógica das categorias (END, UNKNOWN, RECURSE, YIELD, ASYNC, FN
-// foram adicionados no fim do enum após tokens de controlo).
+// Readable category for visual grouping in the table.
+// Uses explicit cases for tokens whose numeric values don't follow
+// the logical category order (END, UNKNOWN, RECURSE, YIELD, ASYNC, FN
+// were added at the end of the enum after control tokens).
 static const char *token_category(ZithTokenType type) {
     switch (type) {
     case ZITH_TOKEN_END:
@@ -311,10 +311,10 @@ static const char *token_category(ZithTokenType type) {
 }
 
 // ============================================================================
-// Formatação do lexeme para display
+// Formats the lexeme for display
 //
-// Trunca lexemes longos e substitui caracteres de controlo por '?'
-// para não corromper o terminal.
+// Truncates long lexemes and replaces control characters with '?'
+// to avoid corrupting the terminal.
 // ============================================================================
 
 static void format_lexeme(char *out, size_t out_size, const char *data, size_t len) {
@@ -351,14 +351,13 @@ inline void zith_debug_tokens(const ZithToken *tokens, size_t count) {
         return;
     }
 
-    // ── Header ───────────────────────────────────────────────────────────────
     debug_print("\n"
                 " %-5s  %-4s  %-4s  %-12s  %-13s  %s\n"
                 " %-5s  %-4s  %-4s  %-12s  %-13s  %s\n",
                 "#", "Line", "Col", "Type", "Category", "Lexeme", "-----", "----", "----",
                 "------------", "-------------", "------------------------");
 
-    // ── Rows ─────────────────────────────────────────────────────────────────
+
     for (size_t i = 0; i < count; ++i) {
         const ZithToken &t = tokens[i];
 
@@ -369,6 +368,5 @@ inline void zith_debug_tokens(const ZithToken *tokens, size_t count) {
                     zith_token_type_name(t.type), token_category(t.type), lexeme_buf);
     }
 
-    // ── Footer ───────────────────────────────────────────────────────────────
     debug_print("\n Total: %zu token%s\n\n", count, count == 1 ? "" : "s");
 }

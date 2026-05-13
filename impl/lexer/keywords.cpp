@@ -31,7 +31,7 @@ static constexpr uint64_t hash64(std::string_view sv) {
 
 static constexpr auto TokenTable = std::to_array<std::pair<std::string_view, ZithTokenType>>({
 
-    // --- Inteiros com sinal -------------------------------------------------
+    // Signed integers
     {"i8", ZITH_TOKEN_TYPE},
     {"i16", ZITH_TOKEN_TYPE},
     {"i32", ZITH_TOKEN_TYPE},
@@ -39,7 +39,7 @@ static constexpr auto TokenTable = std::to_array<std::pair<std::string_view, Zit
     {"i128", ZITH_TOKEN_TYPE},
     {"i256", ZITH_TOKEN_TYPE},
 
-    // --- Inteiros sem sinal -------------------------------------------------
+    // Unsigned integers
     {"u8", ZITH_TOKEN_TYPE},
     {"u16", ZITH_TOKEN_TYPE},
     {"u32", ZITH_TOKEN_TYPE},
@@ -47,17 +47,17 @@ static constexpr auto TokenTable = std::to_array<std::pair<std::string_view, Zit
     {"u128", ZITH_TOKEN_TYPE},
     {"u256", ZITH_TOKEN_TYPE},
 
-    // --- Ponto flutuante ----------------------------------------------------
+    // Floating point
     {"f32", ZITH_TOKEN_TYPE},
     {"f64", ZITH_TOKEN_TYPE},
     {"f128", ZITH_TOKEN_TYPE},
 
-    // --- Primitivos gerais --------------------------------------------------
+    // General primitives
     {"bool", ZITH_TOKEN_TYPE},
     {"void", ZITH_TOKEN_TYPE},
     {"null", ZITH_TOKEN_NULL},
 
-    // --- Declarações de tipo ------------------------------------------------
+    // Type declarations
     {"type", ZITH_TOKEN_TYPE},
     {"struct", ZITH_TOKEN_STRUCT},
     {"component", ZITH_TOKEN_COMPONENT},
@@ -78,7 +78,7 @@ static constexpr auto TokenTable = std::to_array<std::pair<std::string_view, Zit
     {"from", ZITH_TOKEN_FROM},
     {"as", ZITH_TOKEN_AS},
 
-    // --- Bindings / modificadores de ownership ------------------------------
+    // Bindings / ownership modifiers
     {"let", ZITH_TOKEN_LET},
     {"var", ZITH_TOKEN_VAR},
     {"auto", ZITH_TOKEN_AUTO},
@@ -97,12 +97,12 @@ static constexpr auto TokenTable = std::to_array<std::pair<std::string_view, Zit
     {"noreturn", ZITH_TOKEN_NORETURN},
     {"recurse", ZITH_TOKEN_RECURSE},
 
-    // --- Modificadores de acesso --------------------------------------------
+    // Access modifiers
     {"pub", ZITH_TOKEN_MODIFIER},
     {"private", ZITH_TOKEN_MODIFIER},
     {"mod", ZITH_TOKEN_MODIFIER},
 
-    // --- Controle de fluxo --------------------------------------------------
+    // Flow control
     {"if", ZITH_TOKEN_IF},
     {"else", ZITH_TOKEN_ELSE},
     {"for", ZITH_TOKEN_FOR},
@@ -116,12 +116,12 @@ static constexpr auto TokenTable = std::to_array<std::pair<std::string_view, Zit
     {"scene", ZITH_TOKEN_SCENE},
     {"end", ZITH_TOKEN_END},
 
-    // --- Concorrência -------------------------------------------------------
+    // Concurrency
     {"spawn", ZITH_TOKEN_SPAWN},
     {"await", ZITH_TOKEN_AWAIT},
     {"join", ZITH_TOKEN_JOIN},
 
-    // --- Tratamento de erros ------------------------------------------------
+    // Error handling
     {"try", ZITH_TOKEN_TRY},
     {"catch", ZITH_TOKEN_CATCH},
     {"must", ZITH_TOKEN_MUST},
@@ -129,14 +129,14 @@ static constexpr auto TokenTable = std::to_array<std::pair<std::string_view, Zit
     {"do", ZITH_TOKEN_DO},
     {"drop", ZITH_TOKEN_DROP},
 
-    // --- Metaprogramação ---------------------------------------------------
+    // Metaprogramming
     {"require", ZITH_TOKEN_REQUIRE},
     {"is", ZITH_TOKEN_IS},
     {"prefix", ZITH_TOKEN_PREFIX},
     {"sufix", ZITH_TOKEN_SUFIX},
     {"infix", ZITH_TOKEN_INFIX},
 
-    // --- Operadores multi-caractere -----------------------------------------
+    // Multi-character operators
     {"and", ZITH_TOKEN_AND},
     {"or", ZITH_TOKEN_OR},
     {"not", ZITH_TOKEN_NOT_EQUAL},
@@ -151,7 +151,7 @@ static constexpr auto TokenTable = std::to_array<std::pair<std::string_view, Zit
     {":=", ZITH_TOKEN_DECLARATION},
     {"...", ZITH_TOKEN_DOTS},
 
-    // --- Operadores simples -------------------------------------------------
+    // Simple operators
     {"+", ZITH_TOKEN_PLUS},
     {"-", ZITH_TOKEN_MINUS},
     {"*", ZITH_TOKEN_MULTIPLY},
@@ -163,7 +163,7 @@ static constexpr auto TokenTable = std::to_array<std::pair<std::string_view, Zit
     {"!", ZITH_TOKEN_BANG},
     {"?", ZITH_TOKEN_QUESTION},
 
-    // --- Delimitadores ------------------------------------------------------
+    // Delimiters
     {"(", ZITH_TOKEN_LPAREN},
     {")", ZITH_TOKEN_RPAREN},
     {"{", ZITH_TOKEN_LBRACE},
@@ -177,13 +177,13 @@ static constexpr auto TokenTable = std::to_array<std::pair<std::string_view, Zit
 });
 
 // ============================================================================
-// Perfect hash (compile-time, dois níveis)
+// Perfect hash (compile-time, two-level)
 //
-// Nível 1 : bucket = hash(str) % BucketCount  →  seleciona um seed
-// Nível 2 : slot   = mix64(hash(str) ^ seed) % TableSize
+// Level 1 : bucket = hash(str) % BucketCount  →  selects a seed
+// Level 2 : slot   = mix64(hash(str) ^ seed) % TableSize
 //
-// Lookup usa SEMPRE o caminho com seed — sem bifurcação por tamanho de bucket.
-// Isso elimina o antigo scan O(N) de countsForBucket() em tempo de execução.
+// Lookup ALWAYS uses the seed path — no branching by bucket size.
+// This eliminates the old O(N) scan of countsForBucket() at runtime.
 // ============================================================================
 
 static constexpr size_t N           = TokenTable.size();
@@ -208,7 +208,7 @@ struct PerfectHash {
             items[b][counts[b]++] = static_cast<uint16_t>(i);
         }
 
-        // Resolver cada bucket: encontrar seed sem colisão
+        // Resolve each bucket: find a seed without collision
         for (size_t b = 0; b < BucketCount; ++b) {
             if (counts[b] == 0)
                 continue;
@@ -221,7 +221,7 @@ struct PerfectHash {
                     const size_t i    = items[b][k];
                     const size_t slot = mix64(hash64(TokenTable[i].first) ^ seed) % TableSize;
 
-                    // Colisão intra-bucket
+                    // Intra-bucket collision
                     for (size_t j = 0; j < k; ++j) {
                         if (slots[j] == slot) {
                             ok = false;
@@ -231,7 +231,7 @@ struct PerfectHash {
                     if (!ok)
                         break;
 
-                    // Colisão cross-bucket (slots já ocupados)
+                    // Cross-bucket collision (slots already taken)
                     if (table[slot] != -1) {
                         ok = false;
                         break;

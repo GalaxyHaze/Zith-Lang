@@ -56,12 +56,12 @@ jobs:
             --dir release-bins
           
           if [ ! -f "release-bins/zith-windows-amd64.exe" ]; then
-            echo "❌ Failed to download zith-windows-amd64.exe"
+            echo "Failed to download zith-windows-amd64.exe"
             exit 1
           fi
           
           if [ ! -f "release-bins/zith-windows-arm64.exe" ]; then
-            echo "❌ Failed to download zith-windows-arm64.exe"
+            echo "Failed to download zith-windows-arm64.exe"
             exit 1
           fi
           
