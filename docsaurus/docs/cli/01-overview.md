@@ -1,4 +1,5 @@
 ---
+id: overview
 title: CLI Reference
 sidebar_label: CLI Reference
 description: Overview of the Zith command-line interface.

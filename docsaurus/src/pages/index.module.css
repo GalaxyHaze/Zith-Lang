@@ -308,7 +308,7 @@
   flex-wrap: wrap;
 }
 
-.button--Outline {
+.buttonOutline {
   background: transparent;
   border: 2px solid var(--border);
   color: var(--text);
@@ -320,7 +320,7 @@
   transition: all var(--transition);
 }
 
-.button--Outline:hover {
+.buttonOutline:hover {
   border-color: var(--blue);
   color: var(--blue);
   text-decoration: none;

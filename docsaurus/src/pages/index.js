@@ -163,7 +163,7 @@ export default function Home() {
             <Link className="button button--primary button--lg" to="/docs/intro/overview">
               Get Started
             </Link>
-            <Link className="button button--Outline button--lg" href="https://github.com/galaxyhaze/Zith">
+            <Link className="button button--lg buttonOutline" href="https://github.com/galaxyhaze/Zith">
               View on GitHub
             </Link>
           </div>

@@ -124,4 +124,4 @@ Override configuration with environment variables:
 
 - **[CLI Reference](../cli/01-overview.md)** - Build and manage projects
 - **[Language Guide](../language/01-overview.md)** - Learn the language
-- **[Raw & Unsafe](../raw/01-overview.md)** - Advanced features
+- **[Advanced Topics](../advanced/01-overview.md)** - Advanced features

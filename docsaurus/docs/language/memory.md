@@ -26,4 +26,4 @@ This section will cover memory management in Zith.
 
 ---
 
-**Related:** [Variables & Ownership](./variables.md) | [Raw & Unsafe](../raw/01-overview.md)
+**Related:** [Variables & Ownership](./variables.md) | [Advanced Topics](../advanced/01-overview.md)

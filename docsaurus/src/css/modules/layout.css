@@ -4,6 +4,8 @@
 .main-wrapper {
   display: flex;
   min-height: 100vh;
+  background: linear-gradient(165deg, #05060b 0%, #0a0f1a 25%, #0d1525 50%, #0f1a30 75%, #07090f 100%);
+  background-attachment: fixed;
 }
 
 /* Doc page container */

@@ -1,4 +1,5 @@
 ---
+id: overview
 title: What is Zith?
 sidebar_label: Getting Started
 description: Introduction to the Zith programming language - a modern systems language with clarity and safety.
@@ -107,7 +108,7 @@ scene PauseMenu { /* isolated resources */ }
 |-------------|----------|
 | Understand why Zith matters | [Why Zith?](./why-zith.md) |
 | Install Zith | [Installation](./installation.md) |
-| Write my first program | [Quick Start](./quickstart.md) |
+| Write my first program | [Quick Start](../quickstart/01-hello-world.md) |
 | See CLI commands | [CLI Reference](../cli/01-overview.md) |
 
 | Learn the language | [Language Guide](../language/01-overview.md) |

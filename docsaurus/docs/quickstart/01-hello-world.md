@@ -202,7 +202,7 @@ fn main() {
 
 You've written your first Zith programs! Continue learning:
 
-1. **[Why Zith?](./why-zith.md)** - Understand Zith's advantages
+1. **[Why Zith?](../intro/why-zith.md)** - Understand Zith's advantages
 2. **[Syntax Basics](../language/syntax.md)** - Deep dive into syntax
 
 3. **[CLI Reference](../cli/01-overview.md)** - Master the command-line tools
@@ -211,4 +211,4 @@ You've written your first Zith programs! Continue learning:
 
 ---
 
-**Need help?** Visit our [FAQ](../faq/01-overview.md) or join the community on [GitHub](https://github.com/galaxyhaze/Zith/discussions).
+**Need help?** Visit our [FAQ](../faq/01-overview.md) or join the community on [GitHub](https://github.com/GalaxyHaze/Zith-discussions).

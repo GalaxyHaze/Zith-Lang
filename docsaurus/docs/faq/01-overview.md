@@ -1,4 +1,5 @@
 ---
+id: overview
 title: Frequently Asked Questions
 sidebar_label: FAQ
 description: Common questions about Zith.
@@ -53,4 +54,4 @@ A: Yes! Zith has a language server (LSP) with support for VS Code, Vim, Emacs, a
 
 ---
 
-**Have more questions?** Visit our [GitHub Discussions](https://github.com/galaxyhaze/Zith/discussions) or join the community!
+**Have more questions?** Visit our [GitHub Discussions](https://github.com/GalaxyHaze/Zith-discussions) or join the community!

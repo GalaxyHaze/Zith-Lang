@@ -1,10 +1,8 @@
 {
   "label": "Reference",
-  "position": 4,
+  "position": 8,
   "link": {
-    "type": "generated-index",
-    "title": "API Reference",
-    "description": "Standard library and API reference documentation.",
-    "slug": "/docs/reference/overview"
+    "type": "doc",
+    "id": "reference/stdlib"
   }
 }

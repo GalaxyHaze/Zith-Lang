@@ -26,4 +26,4 @@ This section will cover generics in Zith.
 
 ---
 
-**Related:** [Types](./types.md) | [Raw & Unsafe](../raw/01-overview.md)
+**Related:** [Types](./types.md) | [Advanced Topics](../advanced/01-overview.md)

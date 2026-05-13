@@ -1,4 +1,5 @@
 ---
+id: overview
 title: Language Guide
 sidebar_label: Language Guide
 description: Overview of the Zith programming language features.
@@ -43,7 +44,7 @@ Write reusable code with Zith's powerful generics system.
 
 ## Advanced Topics
 
-For more advanced features, see the **[Raw & Unsafe](../raw/01-overview.md)** section:
+For more advanced features, see the **[Advanced Topics](../advanced/01-overview.md)** section:
 
 - Traits and type classes
 - Spec-aligned ownership and NRM deep dives

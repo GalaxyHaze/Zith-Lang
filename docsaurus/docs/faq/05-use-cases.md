@@ -239,9 +239,9 @@ mod firmware {
 
 | Your Goal | Start Here |
 |-----------|-----------|
-| Game development | [Language Overview](../../technical/language/01-overview.md) |
-| CLI tools | [Quick Start](../../intro/quickstart.md) |
-| Systems programming | [Memory Management](../../technical/language/memory.md) |
+| Game development | [Language Overview](../language/01-overview.md) |
+| CLI tools | [Quick Start](../quickstart/01-hello-world.md) |
+| Systems programming | [Memory Management](../language/memory.md) |
 
 ---
 
