@@ -410,3 +410,6 @@ if(EMSCRIPTEN)
         target_compile_options(zith-wasm PRIVATE -Wall -Wextra -Wpedantic -Wno-error)
     endif()
 endif()
+
+install(TARGETS zith DESTINATION bin)
+
