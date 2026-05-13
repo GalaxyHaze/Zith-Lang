@@ -56,11 +56,36 @@ const config = {
           src: 'img/logo.svg',
         },
         items: [
-          {
+{
             type: 'docSidebar',
             sidebarId: 'tutorialSidebar',
             position: 'left',
             label: 'Documentation',
+          },
+          {
+            type: 'dropdown',
+            position: 'left',
+            label: 'Ecosystem',
+            items: [
+              {
+                label: 'Zith Core',
+                to: '/docs/intro/overview',
+              },
+              {
+                label: 'Zith LSP',
+                to: '#',
+                disabled: true,
+              },
+              {
+                label: 'Community',
+                to: '/docs/community/overview',
+              },
+            ],
+          },
+          {
+            href: '/docs/community/overview',
+            label: 'Community',
+            position: 'left',
           },
           {
             type: 'dropdown',
@@ -135,12 +160,20 @@ const config = {
             title: 'Community',
             items: [
               {
+                label: 'Discord',
+                href: 'https://discord.gg/zith-lang',
+              },
+              {
                 label: 'GitHub Discussions',
                 href: 'https://github.com/galaxyhaze/Zith/discussions',
               },
               {
                 label: 'Report a Bug',
                 href: 'https://github.com/galaxyhaze/Zith/issues',
+              },
+              {
+                label: 'Contributing',
+                to: '/docs/community/contributing',
               },
             ],
           },

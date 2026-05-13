@@ -104,6 +104,20 @@ const sidebars = {
         'advanced/generics-deep',
       ],
     },
+    {
+      type: 'category',
+      label: 'Community',
+      link: {
+        type: 'doc',
+        id: 'community/overview',
+      },
+      items: [
+        'community/overview',
+        'community/contributing',
+        'community/code-of-conduct',
+        'community/chat',
+      ],
+    },
   ],
 };
 

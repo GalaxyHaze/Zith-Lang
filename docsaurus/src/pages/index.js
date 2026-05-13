@@ -145,8 +145,8 @@ export default function Home() {
             <div className={styles.projectCard}>
               <h4>Add Your Project</h4>
               <p>Building something with Zith? Share it with the community!</p>
-              <Link to="https://github.com/galaxyhaze/Zith/discussions" className={styles.projectLink}>
-                Discuss on GitHub →
+              <Link to="/docs/community/overview" className={styles.projectLink}>
+                Join Community →
               </Link>
             </div>
           </div>
@@ -156,6 +156,9 @@ export default function Home() {
         <section className={styles.footerCta}>
           <Heading as="h2">Ready to Try Zith?</Heading>
           <p>Join the community and start building today</p>
+          <Link to="/docs/community/overview" className="button button--secondary button--lg" style={{ marginTop: '16px' }}>
+              Join Community
+          </Link>
           <div className={styles.footerCtaButtons}>
             <Link className="button button--primary button--lg" to="/docs/intro/overview">
               Get Started
