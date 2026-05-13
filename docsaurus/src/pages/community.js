@@ -116,16 +116,17 @@ export default function Community() {
           
           <div className={styles.giscusWrapper}>
             <Giscus
-              repo="GalaxyHaze/Zith"
-              repoId="R_kgDOGs6uYw"
-              category="General"
-              categoryId="DIC_kwDOGs6uYw4CR-F_"
-              mapping="title"
+              repo="GalaxyHaze/Zith-discussions"
+              repoId="R_kgDOScWRTA"
+              category="Announcements"
+              categoryId="DIC_kwDOScWRTM4C89P3"
+              mapping="pathname"
+              strict="0"
               reactionsEnabled="1"
               emitMetadata="0"
-              inputPosition="top"
-              theme="dark"
-              lang="en"
+              inputPosition="bottom"
+              theme="catppuccin_mocha"
+              lang="pt"
               loading="lazy"
             />
           </div>
