@@ -1,95 +1,111 @@
 #!/bin/bash
+set -e
 
-# 1. Setup Global Variables
 REPO="GalaxyHaze/Zith"
 VERSION=""
+USE_MUSL=false
 OUTPUT_NAME="zith"
 
-# 2. Determine Version
-if [ -n "$1" ]; then
-    VERSION="$1"
+usage() {
+    echo "Usage: $0 [--musl] [<version>]"
+    echo "  --musl        Download the musl-linked static binary"
+    echo "  <version>     Specific version to install (default: latest)"
+    exit 1
+}
+
+for arg in "$@"; do
+    case "$arg" in
+        --musl) USE_MUSL=true ;;
+        --help|-h) usage ;;
+        *) VERSION="$arg" ;;
+    esac
+done
+
+detect_latest_version() {
+    # Try authenticated request first (spares rate limit), fall back to unauthenticated
+    API_URL="https://api.github.com/repos/$REPO/releases/latest"
+    if [ -n "$GITHUB_TOKEN" ]; then
+        VERSION=$(curl -sH "Authorization: token $GITHUB_TOKEN" "$API_URL" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
+    else
+        VERSION=$(curl -s "$API_URL" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
+    fi
+
+    if [ -z "$VERSION" ]; then
+        echo "Error: Could not fetch latest version from GitHub (API rate limit?)." >&2
+        echo "Please specify a version manually: $0 v1.0.0" >&2
+        exit 1
+    fi
+}
+
+if [ -n "$VERSION" ]; then
     echo "Installing requested version: $VERSION"
 else
-    # We use the GitHub API. To avoid strict rate limits (60/hr), we avoid auth 
-    # but keep the URL standard. If this hits a limit, it will return 403.
-    API_URL="https://api.github.com/repos/$REPO/releases/latest"
-    
-    # Fetch latest tag
-    VERSION=$(curl -s "$API_URL" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
-    
-    if [ -z "$VERSION" ]; then
-        echo "Error: Could not fetch latest version from GitHub (API Rate Limit?)."
-        echo "Please specify a version manually: ./install.sh v1.0.0"
-        exit 1
-    fi
-    echo "No version specified. Installing latest version: $VERSION"
+    echo "No version specified. Fetching latest version..."
+    detect_latest_version
+    echo "Latest version found: $VERSION"
 fi
 
-
-# 3. Detect OS and Architecture
 OS="$(uname -s)"
 ARCH="$(uname -m)"
-
 FILE_NAME=""
 
-# Determine Filename based on OS and Arch
 case "$OS" in
-  Linux*)  
-      case "$ARCH" in
-          x86_64) FILE_NAME="zith-linux-amd64" ;;
-          aarch64|arm64) FILE_NAME="zith-linux-arm64" ;;
-          *) echo "Architecture not supported on Linux: $ARCH"; exit 1 ;;
-      esac
-      ;;
-  Darwin*) 
-      case "$ARCH" in
-          x86_64) FILE_NAME="zith-macos-amd64" ;;
-          arm64) FILE_NAME="zith-macos-arm64" ;;
-          *) echo "Architecture not supported on macOS: $ARCH"; exit 1 ;;
-      esac
-      ;;
-  # Covers Git Bash, MinGW, and MSYS on Windows
-  MINGW*|MSYS*|CYGWIN*)
-      FILE_NAME="zith-windows-amd64.exe"
-      OUTPUT_NAME="zith.exe"
-      ;;
-  *)      echo "OS not supported: $OS"; exit 1 ;;
+    Linux*)
+        if [ "$USE_MUSL" = true ]; then
+            case "$ARCH" in
+                x86_64)   FILE_NAME="zith-linux-amd64-musl" ;;
+                aarch64|arm64) FILE_NAME="zith-linux-arm64-musl" ;;
+                *) echo "Architecture not supported on Linux (musl): $ARCH" >&2; exit 1 ;;
+            esac
+        else
+            case "$ARCH" in
+                x86_64)   FILE_NAME="zith-linux-amd64" ;;
+                aarch64|arm64) FILE_NAME="zith-linux-arm64" ;;
+                *) echo "Architecture not supported on Linux: $ARCH" >&2; exit 1 ;;
+            esac
+        fi
+        ;;
+    Darwin*)
+        case "$ARCH" in
+            x86_64) FILE_NAME="zith-macos-amd64" ;;
+            arm64)  FILE_NAME="zith-macos-arm64" ;;
+            *) echo "Architecture not supported on macOS: $ARCH" >&2; exit 1 ;;
+        esac
+        ;;
+    MINGW*|MSYS*|CYGWIN*)
+        FILE_NAME="zith-windows-amd64.exe"
+        OUTPUT_NAME="zith.exe"
+        ;;
+    *) echo "OS not supported: $OS" >&2; exit 1 ;;
 esac
 
-# Safety Check
-if [ -z "$FILE_NAME" ]; then
-    echo "Error: Could not find a compatible binary for $OS $ARCH."
-    exit 1
-fi
-
 DOWNLOAD_URL="https://github.com/$REPO/releases/download/$VERSION/$FILE_NAME"
+TMP_DIR=$(mktemp -d)
+trap 'rm -rf "$TMP_DIR"' EXIT
+TMP_FILE="$TMP_DIR/$OUTPUT_NAME"
 
-echo "Downloading $FILE_NAME from $DOWNLOAD_URL..."
-
-# 4. Download the binary
-if ! curl -fsSL "$DOWNLOAD_URL" -o "$OUTPUT_NAME"; then
-    echo "Error: Failed to download binary."
-    echo "Please check the URL: $DOWNLOAD_URL"
+echo "Downloading $FILE_NAME..."
+if ! curl -fsSL "$DOWNLOAD_URL" -o "$TMP_FILE"; then
+    echo "Error: Failed to download binary." >&2
+    echo "Please check the URL: $DOWNLOAD_URL" >&2
     exit 1
 fi
 
-# 5. Install
-chmod +x "$OUTPUT_NAME"
+chmod +x "$TMP_FILE"
 
-if [[ "$OS" == MINGW* ]] || [[ "$OS" == MSYS* ]] || [[ "$OS" == CYGWIN* ]]; then
-    # Windows (Git Bash) - Just chmod, user must move it manually
-    # or add it to PATH manually. 
-    echo "Download complete: $OUTPUT_NAME"
-    echo "Please move '$OUTPUT_NAME' to a folder in your PATH."
-else
-    # Linux / macOS
-    echo "Installing Zith to /usr/local/bin/..."
-    
-    # Using 'sudo -v' checks if we have sudo rights nicely
-    if sudo mv "$OUTPUT_NAME" /usr/local/bin/zith; then
-        echo "Installation complete! Run 'zith --help' to get started."
-    else
-        echo "Installation failed. Please check your sudo permissions or try manually moving the file."
-        exit 1
-    fi
-fi
+case "$OS" in
+    MINGW*|MSYS*|CYGWIN*)
+        cp "$TMP_FILE" "./$OUTPUT_NAME"
+        echo "Download complete: ./$OUTPUT_NAME"
+        echo "Please move '$OUTPUT_NAME' to a folder in your PATH."
+        ;;
+    *)
+        echo "Installing Zith to /usr/local/bin/..."
+        if sudo mv "$TMP_FILE" /usr/local/bin/zith; then
+            echo "Installation complete! Run 'zith --help' to get started."
+        else
+            echo "Installation failed. Check sudo permissions or try manually moving the file." >&2
+            exit 1
+        fi
+        ;;
+esac
