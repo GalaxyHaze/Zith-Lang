@@ -30,16 +30,16 @@ Zith starts simple—like C—but scales gracefully to handle complex systems wi
 
 ## Key Features
 
-### 🎯 Expressivity
+###  Expressivity
 
 Every language construct communicates intent clearly:
 
 ```zith
-fn process(mut self: Health, dmg: view u16) { }
+fn process(self: mut Health, dmg: view u16) { }
          // ^ explicit ownership: view = read-only
 ```
 
-### 🛡️ Safety Through Typing
+###  Safety Through Typing
 
 The compiler detects errors through rigorous semantics:
 
@@ -50,7 +50,7 @@ let ref: view u16 = health;
 ref += 10;  // Compile Error: view does not allow writing
 ```
 
-### 🧩 Optional Complexity
+###  Optional Complexity
 
 Start simple, add features when needed:
 
@@ -63,7 +63,7 @@ component Position { x, y: i32 }
 entity Player { Position, ... }
 ```
 
-### 🔮 Contexts for Safe DSLs
+###  Contexts for Safe DSLs
 
 Domain-specific languages without strings or injection:
 
@@ -78,7 +78,7 @@ use context SQL {
 }
 ```
 
-### 🎬 Scenes as Logical Units
+###  Scenes as Logical Units
 
 Isolated resource containers for games and applications:
 
@@ -90,17 +90,17 @@ scene PauseMenu { /* isolated resources */ }
 
 ## Who Is Zith For?
 
-✅ **Beginners** learning low-level programming  
-✅ **Game developers** building engines and tools  
-✅ **Systems programmers** who want clarity without sacrificing control  
-✅ **DSL designers** creating domain-specific languages  
+**Beginners** learning low-level programming  
+**Game developers** building engines and tools  
+**Systems programmers** who want clarity without sacrificing control  
+**DSL designers** creating domain-specific languages  
 
 ## What Zith Is Not
 
-❌ A direct replacement for Rust (Rust offers stronger safety guarantees)  
-❌ A "better C++" (C++ has a massive ecosystem)  
-❌ A garbage-collected language (zero overhead is a priority)  
-❌ Suited for pure functional programming  
+A direct replacement for Rust (Rust offers stronger safety guarantees)  
+A "better C++" (C++ has a massive ecosystem)  
+A garbage-collected language (zero overhead is a priority)  
+Suited for pure functional programming  
 
 ## Next Steps
 
