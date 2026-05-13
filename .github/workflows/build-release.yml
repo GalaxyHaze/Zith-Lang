@@ -206,7 +206,7 @@ jobs:
         run: |
           docker run --rm --platform "${{ matrix.platform }}" \
             -v "$PWD:/work" -w /work alpine:3.23 sh -c "
-              apk add --no-cache clang cmake ninja musl-dev linux-headers
+              apk add --no-cache clang cmake ninja musl-dev linux-headers git
               cmake -S scripts -B build -G Ninja \
                 -DCMAKE_BUILD_TYPE=Release \
                 -DBUILD_TESTING=OFF \
