@@ -7,18 +7,6 @@
 #include <cstdint>
 
 #ifdef __cplusplus
-extern "C" {
-#endif
-
-// ============================================================================
-// Token Types — mirrored from ZithTokenType in zith.hpp
-// The C API enum remains in zith.hpp; this header provides C++ helpers
-// ============================================================================
-
-#ifdef __cplusplus
-
-// Forward declaration — actual enum lives in zith.hpp (C API contract)
-// We re-export it here under a C++-friendly namespace for internal use.
 #include <zith/zith.hpp>
 
 namespace zith {
@@ -29,8 +17,9 @@ namespace zith {
     using Str = ZithStr;
     using Slice = ZithSlice;
 }
-
 #endif // __cplusplus
+
+extern "C" {
 
 // ============================================================================
 // AST Node Types — extended node IDs (>= 1000)
@@ -155,6 +144,4 @@ typedef enum ZithParserMode {
     ZITH_MODE_SEMA  = 2,  // Semantic analysis (name resolution, types, borrow check)
 } ZithParserMode;
 
-#ifdef __cplusplus
 } // extern "C"
-#endif
