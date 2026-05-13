@@ -61,7 +61,8 @@ jobs:
             cmake_flags: >-
               -DCMAKE_C_COMPILER=aarch64-linux-gnu-gcc
               -DCMAKE_CXX_COMPILER=aarch64-linux-gnu-g++
-              -DCMAKE_CROSSCOMPILING=ON
+              -DCMAKE_SYSTEM_NAME=Linux
+              -DCMAKE_SYSTEM_PROCESSOR=aarch64
               -DZITH_ENABLE_FFI=OFF
 
           - os: macos-latest
