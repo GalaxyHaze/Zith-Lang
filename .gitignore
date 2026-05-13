@@ -50,4 +50,4 @@ docsaurus/.docusaurus/
 docsaurus/.cache/
 
 # Documentation build output
-docs/
+/docs/
