@@ -1,8 +1,8 @@
-name: Update Scoop Manifest
+name: Update Packages Manifest
 
 on:
   workflow_run:
-    workflows: ["Build and Release (Clang Only)"]
+    workflows: ["Build Artifact"]
     types:
       - completed
   workflow_dispatch:

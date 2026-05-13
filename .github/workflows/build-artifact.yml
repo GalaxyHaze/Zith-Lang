@@ -1,4 +1,4 @@
-name: Build and Release (Clang Only)
+name: Build Artifact
 
 on:
   push:
