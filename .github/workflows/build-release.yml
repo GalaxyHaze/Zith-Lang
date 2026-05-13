@@ -55,6 +55,7 @@ jobs:
               -DCMAKE_C_COMPILER=clang
               -DCMAKE_CXX_COMPILER=clang++
               -DCMAKE_LINKER=ld.lld
+              -DZITH_ENABLE_FFI=OFF
 
           - os: ubuntu-latest
             target_name: zith-linux-arm64
@@ -118,7 +119,7 @@ jobs:
           sudo apt-get install -y ninja-build clang-18 lld-18 \
             gcc-aarch64-linux-gnu g++-aarch64-linux-gnu \
             libc6-dev-arm64-cross libc6-arm64-cross \
-            binutils-aarch64-linux-gnu
+            binutils-aarch64-linux-gnu libffi-dev
           sudo ln -sf /usr/bin/clang-18 /usr/bin/clang
           sudo ln -sf /usr/bin/clang++-18 /usr/bin/clang++
           sudo ln -sf /usr/bin/ld.lld-18 /usr/bin/ld.lld
