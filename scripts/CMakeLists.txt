@@ -242,6 +242,7 @@ target_link_libraries(zith
         CLI11::CLI11
 )
 if(ZITH_HAS_FFI)
+    target_compile_definitions(zith PRIVATE ZITH_HAS_FFI)
     target_include_directories(zith PRIVATE ${FFI_INCLUDE_DIRS})
     target_link_libraries(zith PRIVATE ${FFI_LIBRARIES})
 endif()

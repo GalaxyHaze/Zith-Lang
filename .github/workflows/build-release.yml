@@ -61,9 +61,6 @@ jobs:
             cmake_flags: >-
               -DCMAKE_C_COMPILER=aarch64-linux-gnu-gcc
               -DCMAKE_CXX_COMPILER=aarch64-linux-gnu-g++
-              -DCMAKE_C_COMPILER_TARGET=aarch64-unknown-linux-gnu
-              -DCMAKE_CXX_COMPILER_TARGET=aarch64-unknown-linux-gnu
-              -DCMAKE_SYSROOT=/usr/aarch64-linux-gnu
               -DCMAKE_CROSSCOMPILING=ON
               -DZITH_ENABLE_FFI=OFF
 
@@ -192,91 +189,37 @@ jobs:
       matrix:
         include:
           - target_name: zith-linux-amd64-musl
-            target_triple: x86_64-linux-musl
-            toolchain: x86_64-linux-musl-cross
+            platform: linux/amd64
 
           - target_name: zith-linux-arm64-musl
-            target_triple: aarch64-linux-musl
-            toolchain: aarch64-linux-musl-cross
+            platform: linux/arm64
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup CMake
-        uses: jwlawson/actions-setup-cmake@v2
-        with:
-          cmake-version: '3.28.x'
+      - name: Set up QEMU (for arm64)
+        if: matrix.target_name == 'zith-linux-arm64-musl'
+        uses: docker/setup-qemu-action@v3
 
-      - name: Install Clang and tools
+      - name: Build inside Alpine container
         shell: bash
         run: |
-          sudo apt-get update
-          sudo apt-get install -y ninja-build clang-18 lld-18 wget xz-utils
-          sudo ln -sf /usr/bin/clang-18 /usr/bin/clang
-          sudo ln -sf /usr/bin/clang++-18 /usr/bin/clang++
-          sudo ln -sf /usr/bin/ld.lld-18 /usr/bin/ld.lld
-
-      - name: Install musl sysroot
-        shell: bash
-        run: |
-          set -e
-          TOOLCHAIN="${{ matrix.toolchain }}"
-          SYSROOT_DIR="$PWD/$TOOLCHAIN"
-          MIRRORS=(
-            "https://musl.cc/$TOOLCHAIN.tgz"
-            "https://github.com/richfelker/musl-cross-make/releases/download/$TOOLCHAIN/$TOOLCHAIN.tgz"
-          )
-
-          for attempt in 1 2 3 4 5; do
-            for mirror in "${MIRRORS[@]}"; do
-              echo "Attempt $attempt: trying $mirror"
-              if curl -fL --retry 3 --retry-delay 2 --connect-timeout 15 \
-                "$mirror" -o "$TOOLCHAIN.tgz" 2>/dev/null; then
-                echo "Downloaded successfully from $mirror"
-                break 2
-              fi
-            done
-            echo "All mirrors failed on attempt $attempt, retrying..."
-            rm -f "$TOOLCHAIN.tgz"
-            sleep $((attempt * 5))
-          done
-
-          tar -xzf "$TOOLCHAIN.tgz"
-
-          # Verify sysroot was extracted
-          if [ ! -d "$SYSROOT_DIR" ]; then
-            echo "ERROR: Sysroot not found at $SYSROOT_DIR"
-            exit 1
-          fi
-
-      - name: Configure CMake (musl)
-        shell: bash
-        run: |
-          SYSROOT="$PWD/${{ matrix.toolchain }}/${{ matrix.target_triple }}"
-          cmake -S scripts -B build -G Ninja \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DBUILD_TESTING=OFF \
-            -DENABLE_WERROR=OFF \
-            -DZITH_VERSION=${{ needs.create-release.outputs.tag }} \
-            -DCMAKE_C_COMPILER=clang \
-            -DCMAKE_CXX_COMPILER=clang++ \
-            -DCMAKE_C_COMPILER_TARGET=${{ matrix.target_triple }} \
-            -DCMAKE_CXX_COMPILER_TARGET=${{ matrix.target_triple }} \
-            -DCMAKE_SYSROOT="$SYSROOT" \
-            -DCMAKE_EXE_LINKER_FLAGS="--sysroot=$SYSROOT -fuse-ld=lld -static" \
-            -DCMAKE_CROSSCOMPILING=ON \
-            -DZITH_ENABLE_FFI=OFF
-
-      - name: Build
-        shell: bash
-        run: cmake --build build --config Release
-
-      - name: Prepare artifact
-        shell: bash
-        run: |
-          mkdir -p artifacts
-          chmod +x build/bin/zith
-          cp build/bin/zith "artifacts/${{ matrix.target_name }}"
+          docker run --rm --platform "${{ matrix.platform }}" \
+            -v "$PWD:/work" -w /work alpine:3.23 sh -c "
+              apk add --no-cache clang cmake ninja musl-dev linux-headers
+              cmake -S scripts -B build -G Ninja \
+                -DCMAKE_BUILD_TYPE=Release \
+                -DBUILD_TESTING=OFF \
+                -DENABLE_WERROR=OFF \
+                -DZITH_VERSION='${{ needs.create-release.outputs.tag }}' \
+                -DCMAKE_C_COMPILER=clang \
+                -DCMAKE_CXX_COMPILER=clang++ \
+                -DCMAKE_CROSSCOMPILING=OFF \
+                -DZITH_ENABLE_FFI=OFF
+              cmake --build build --config Release
+              mkdir -p artifacts
+              cp build/bin/zith artifacts/${{ matrix.target_name }}
+            "
 
       - name: Upload release asset
         uses: softprops/action-gh-release@v2
