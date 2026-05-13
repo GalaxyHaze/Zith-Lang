@@ -56,6 +56,7 @@ jobs:
               -DCMAKE_CXX_COMPILER=clang++
               -DCMAKE_LINKER=ld.lld
               -DZITH_ENABLE_FFI=OFF
+              -DZITH_ENABLE_LLVM=OFF
 
           - os: ubuntu-latest
             target_name: zith-linux-arm64
@@ -217,7 +218,9 @@ jobs:
                 -DCMAKE_C_COMPILER=clang \
                 -DCMAKE_CXX_COMPILER=clang++ \
                 -DCMAKE_CROSSCOMPILING=OFF \
-                -DZITH_ENABLE_FFI=OFF
+                -DZITH_ENABLE_FFI=OFF \
+                -DZITH_ENABLE_LLVM=OFF \
+                -DCMAKE_EXE_LINKER_FLAGS="-static"
               cmake --build build --config Release
               mkdir -p artifacts
               cp build/bin/zith artifacts/${{ matrix.target_name }}

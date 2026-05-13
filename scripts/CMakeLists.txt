@@ -147,34 +147,41 @@ endif()
 # =============================================================================
 # LLVM Configuration (Optional)
 # =============================================================================
+option(ZITH_ENABLE_LLVM "Enable LLVM backend support" ON)
 set(LLVM_DIR "" CACHE PATH "Path to LLVMConfig.cmake (optional)")
-if(CMAKE_CROSSCOMPILING AND NOT LLVM_DIR)
-    message(STATUS "Cross-compiling and no LLVM_DIR set: skipping LLVM discovery")
-    set(LLVM_FOUND FALSE)
-elseif(LLVM_DIR)
-    find_package(LLVM REQUIRED CONFIG PATHS "${LLVM_DIR}" NO_DEFAULT_PATH)
+
+if(ZITH_ENABLE_LLVM)
+    if(CMAKE_CROSSCOMPILING AND NOT LLVM_DIR)
+        message(STATUS "Cross-compiling and no LLVM_DIR set: skipping LLVM discovery")
+        set(LLVM_FOUND FALSE)
+    elseif(LLVM_DIR)
+        find_package(LLVM REQUIRED CONFIG PATHS "${LLVM_DIR}" NO_DEFAULT_PATH)
+    else()
+        find_package(LLVM)
+    endif()
+    if(LLVM_FOUND)
+        message(STATUS "✓ Found LLVM ${LLVM_PACKAGE_VERSION} at ${LLVM_DIR}")
+
+        add_definitions(-DLLVM_VERSION_MAJOR=${LLVM_VERSION_MAJOR})
+        include_directories(SYSTEM ${LLVM_INCLUDE_DIRS})
+
+        llvm_map_components_to_libnames(LLVM_LIBRARIES
+            analysis
+            core
+            instcombine
+            scalaropts
+            vectorize
+            ipo
+            irreader
+            support
+            target
+        )
+
+    endif() # LLVM_FOUND
 else()
-    find_package(LLVM)
+    message(STATUS "LLVM support disabled by ZITH_ENABLE_LLVM=OFF")
+    set(LLVM_FOUND FALSE)
 endif()
-if(LLVM_FOUND)
-    message(STATUS "✓ Found LLVM ${LLVM_PACKAGE_VERSION} at ${LLVM_DIR}")
-
-    add_definitions(-DLLVM_VERSION_MAJOR=${LLVM_VERSION_MAJOR})
-    include_directories(SYSTEM ${LLVM_INCLUDE_DIRS})
-
-    llvm_map_components_to_libnames(LLVM_LIBRARIES
-        analysis
-        core
-        instcombine
-        scalaropts
-        vectorize
-        ipo
-        irreader
-        support
-        target
-    )
-
-endif() # LLVM_FOUND
 
 # =============================================================================
 # Sources (manual lists; keep in sync when adding/removing files)
