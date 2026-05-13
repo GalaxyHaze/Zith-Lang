@@ -13,8 +13,11 @@
       "hash": "f4d31f5cbd6af70b8f14a1be1df2e1730faae1155064d55e30b68ca1853b6a7a"
     }
   },
-  "bin": "zith-windows-amd64.exe",
+  "bin": "zith.exe",
   "installer": {
-    "script": "Rename-Item \"$dir\\zith-windows-amd64.exe\" \"zith.exe\""
+    "script": [
+      "if ($architecture -eq '64bit') { Rename-Item \"$dir\\zith-windows-amd64.exe\" \"zith.exe\" }",
+      "if ($architecture -eq 'arm64') { Rename-Item \"$dir\\zith-windows-arm64.exe\" \"zith.exe\" }"
+    ]
   }
 }

@@ -20,6 +20,8 @@ jobs:
       github.event_name == 'workflow_dispatch' || 
       github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
 
     steps:
       - name: Resolve tag name
@@ -42,29 +44,10 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Verify release exists and is not draft
-        run: |
-          RELEASE_INFO=$(gh release view ${{ steps.tag.outputs.tag }} \
-            --repo ${{ github.repository }} \
-            --json isDraft,isPrerelease,name)
-          
-          IS_DRAFT=$(echo "$RELEASE_INFO" | jq '.isDraft')
-          
-          if [ "$IS_DRAFT" = "true" ]; then
-            echo "⚠️ Release is still in draft mode. Waiting for it to be published..."
-            exit 0
-          fi
-          
-          echo "✅ Release ${{ steps.tag.outputs.tag }} found and published"
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
       - name: Download release binaries
         id: download
         run: |
           mkdir -p release-bins
-          
-          echo "📥 Downloading Windows binaries for ${{ steps.tag.outputs.tag }}..."
           
           gh release download ${{ steps.tag.outputs.tag }} \
             --repo ${{ github.repository }} \
@@ -72,7 +55,6 @@ jobs:
             --pattern "zith-windows-arm64.exe" \
             --dir release-bins
           
-          # Verify downloads
           if [ ! -f "release-bins/zith-windows-amd64.exe" ]; then
             echo "❌ Failed to download zith-windows-amd64.exe"
             exit 1
@@ -83,7 +65,6 @@ jobs:
             exit 1
           fi
           
-          echo "✅ Binaries downloaded successfully"
           ls -lh release-bins/
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -91,16 +72,10 @@ jobs:
       - name: Compute SHA256 hashes
         id: hashes
         run: |
-          echo "🔐 Computing SHA256 hashes..."
-          
           AMD64=$(sha256sum release-bins/zith-windows-amd64.exe | cut -d' ' -f1)
           ARM64=$(sha256sum release-bins/zith-windows-arm64.exe | cut -d' ' -f1)
-          
           echo "amd64=$AMD64" >> $GITHUB_OUTPUT
           echo "arm64=$ARM64" >> $GITHUB_OUTPUT
-          
-          echo "AMD64: $AMD64"
-          echo "ARM64: $ARM64"
 
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -108,11 +83,7 @@ jobs:
           token: ${{ secrets.RELEASE_PAT }}
 
       - name: Update scoop manifest
-        id: update
         run: |
-          echo "📝 Updating scoop manifest..."
-          
-          # Backup original
           cp .github/scoop/bucket/zith.json .github/scoop/bucket/zith.json.bak
           
           jq \
@@ -127,39 +98,43 @@ jobs:
               .architecture.arm64.url = "https://github.com/GalaxyHaze/Zith/releases/download/v\($version)/zith-windows-arm64.exe"
             ' .github/scoop/bucket/zith.json.bak > .github/scoop/bucket/zith.json
           
-          # Validate JSON
           if ! jq empty .github/scoop/bucket/zith.json 2>/dev/null; then
-            echo "❌ Invalid JSON generated, restoring backup"
             cp .github/scoop/bucket/zith.json.bak .github/scoop/bucket/zith.json
             exit 1
           fi
           
-          echo "✅ Manifest updated successfully"
-          echo "Updated version: ${{ steps.tag.outputs.version }}"
-          
-          # Show diff
-          echo ""
-          echo "Changes:"
-          diff -u .github/scoop/bucket/zith.json.bak .github/scoop/bucket/zith.json || true
+          rm -f .github/scoop/bucket/zith.json.bak
 
-      - name: Commit and push changes
+      - name: Commit scoop changes
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          
           git add .github/scoop/bucket/zith.json
-          
-          # Only commit if there are changes
-          if git diff --staged --quiet; then
-            echo "⚠️ No changes to commit"
-          else
+          if ! git diff --staged --quiet; then
             git commit -m "chore: update scoop manifest to ${{ steps.tag.outputs.tag }}"
             git push
-            echo "✅ Changes pushed to repository"
           fi
+
+      - name: Compute brew source SHA256
+        id: brew
+        run: |
+          VERSION="${{ steps.tag.outputs.version }}"
+          VERSION="${VERSION#v}"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          URL="https://github.com/${{ github.repository }}/archive/refs/tags/v${VERSION}.tar.gz"
+          echo "url=$URL" >> $GITHUB_OUTPUT
+          SHA=$(curl -sL "$URL" | sha256sum | cut -d' ' -f1)
+          echo "sha256=$SHA" >> $GITHUB_OUTPUT
+
+      - name: Trigger homebrew update
+        run: |
+          gh api repos/GalaxyHaze/homebrew-zith/dispatches \
+            --method POST \
+            --field event_type=new-release \
+            --field client_payload="{\"version\":\"${{ steps.brew.outputs.version }}\",\"url\":\"${{ steps.brew.outputs.url }}\",\"sha256\":\"${{ steps.brew.outputs.sha256 }}\"}"
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_PAT }}
 
       - name: Clean up
         if: always()
-        run: |
-          rm -f .github/scoop/bucket/zith.json.bak
-          rm -rf release-bins
+        run: rm -rf release-bins
