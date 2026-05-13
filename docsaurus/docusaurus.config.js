@@ -161,7 +161,7 @@ const config = {
             items: [
               {
                 label: 'Discord',
-                href: 'https://discord.gg/zith-lang',
+                href: 'https://discord.gg/585JgbWCPr',
               },
               {
                 label: 'GitHub Discussions',

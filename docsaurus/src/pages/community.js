@@ -78,7 +78,7 @@ export default function Community() {
           
           <div className={styles.discordWidget}>
             <iframe
-              src="https://discord.com/widget?id=1295261366230855781&theme=dark"
+              src="https://discord.com/widget?id=585JgbWCPr&theme=dark"
               width="100%"
               height="500"
               allowtransparency
