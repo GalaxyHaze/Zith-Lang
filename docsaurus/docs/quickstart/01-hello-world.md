@@ -211,4 +211,4 @@ You've written your first Zith programs! Continue learning:
 
 ---
 
-**Need help?** Visit our [FAQ](../faq/01-overview.md) or join the community on [GitHub](https://github.com/GalaxyHaze/Zith-discussions).
+**Need help?** Visit our [FAQ](../faq/01-overview.md) or join the community on [GitHub](https://github.com/GalaxyHaze/Zith-discussions/discussions).

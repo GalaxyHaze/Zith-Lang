@@ -62,7 +62,7 @@ export default function Community() {
               </div>
               <h3>Discussions</h3>
               <p>Ask questions, share ideas, and connect with the community</p>
-              <Link href="https://github.com/GalaxyHaze/Zith-discussions/discussions" className="button button--secondary">
+              <Link href="https://github.com/GalaxyHaze/Zith-discussions/discussions/discussions" className="button button--secondary">
                 Join Discussions
               </Link>
             </div>
@@ -101,7 +101,7 @@ export default function Community() {
           </p>
           
           <div className={styles.discussionsCTA}>
-            <Link href="https://github.com/GalaxyHaze/Zith-discussions/discussions" className="button button--primary button--lg">
+            <Link href="https://github.com/GalaxyHaze/Zith-discussions/discussions/discussions" className="button button--primary button--lg">
               Browse Discussions
             </Link>
           </div>
@@ -116,7 +116,7 @@ export default function Community() {
           
           <div className={styles.giscusWrapper}>
             <Giscus
-              repo="GalaxyHaze/Zith-discussions"
+              repo="GalaxyHaze/Zith-discussions/discussions"
               repoId="R_kgDOScWRTA"
               category="Announcements"
               categoryId="DIC_kwDOScWRTM4C89P3"

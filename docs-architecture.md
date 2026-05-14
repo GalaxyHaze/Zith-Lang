@@ -558,7 +558,7 @@ const config = {
       ({
         docs: {
           sidebarPath: require.resolve('./sidebars.js'),
-          editUrl: 'https://github.com/galaxyhaze/Zith/tree/main/docs/',
+          editUrl: 'https://github.com/galaxyhaze/Zith/tree/master/docs/',
           routeBasePath: '/docs', // Serve docs at /docs
           showLastUpdateAuthor: true,
           showLastUpdateTime: true,

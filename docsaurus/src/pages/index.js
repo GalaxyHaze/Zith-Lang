@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import clsx from 'clsx';
 import Link from '@docusaurus/Link';
 import useDocusaurusContext from '@docusaurus/useDocusaurusContext';
@@ -5,8 +6,24 @@ import Layout from '@theme/Layout';
 import Heading from '@theme/Heading';
 import styles from './index.module.css';
 
+function useLatestVersion() {
+  const [version, setVersion] = useState('v0.1.0');
+
+  useEffect(() => {
+    fetch('https://api.github.com/repos/GalaxyHaze/Zith/releases/latest')
+      .then(res => res.json())
+      .then(data => {
+        if (data.tag_name) setVersion(data.tag_name);
+      })
+      .catch(() => {});
+  }, []);
+
+  return version;
+}
+
 export default function Home() {
   const {siteConfig} = useDocusaurusContext();
+  const version = useLatestVersion();
   
   return (
     <Layout title="Home" description={siteConfig.tagline}>
@@ -14,7 +31,7 @@ export default function Home() {
         
         {/* Hero Section */}
         <section className={styles.hero}>
-          <span className={styles.heroBadge}>v0.1.0</span>
+          <span className={styles.heroBadge}>{version}</span>
           <Heading as="h1" className={styles.heroTitle}>
             {siteConfig.title}
           </Heading>

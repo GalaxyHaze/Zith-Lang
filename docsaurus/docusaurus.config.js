@@ -8,7 +8,11 @@ const config = {
   favicon: 'img/favicon.svg',
 
   onBrokenLinks: 'warn',
-  onBrokenMarkdownLinks: 'warn',
+  markdown: {
+    hooks: {
+      onBrokenMarkdownLinks: 'warn',
+    },
+  },
 
   // Set the production url of your site here
   url: 'https://zith-lang.dev',
@@ -36,7 +40,12 @@ const config = {
         docs: {
           sidebarPath: require.resolve('./sidebars.js'),
           routeBasePath: '/docs',
-          editUrl: 'https://github.com/galaxyhaze/Zith/tree/main/docsaurus/',
+          editUrl: ({ docPath }) => {
+            if (process.env.NODE_ENV === 'development') {
+              return `http://localhost:37891/open?file=${docPath}`;
+            }
+            return `https://github.com/galaxyhaze/Zith/edit/master/docsaurus/docs/${docPath}`;
+          },
         },
         blog: false,
         theme: {
@@ -103,7 +112,7 @@ const config = {
               },
               {
                 label: 'Add Your Project',
-                href: 'https://github.com/galaxyhaze/Zith-discussions',
+                href: 'https://github.com/galaxyhaze/Zith-discussions/discussions',
               },
             ],
           },
@@ -152,7 +161,7 @@ const config = {
               },
               {
                 label: 'Add Your Project',
-                href: 'https://github.com/galaxyhaze/Zith-discussions',
+                href: 'https://github.com/galaxyhaze/Zith-discussions/discussions',
               },
             ],
           },

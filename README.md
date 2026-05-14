@@ -113,7 +113,7 @@ Full language specification: `Zith-spec.md`
 ## Resources
 
 - [Issue Tracker](https://github.com/GalaxyHaze/Zith/issues)
-- [Discussions](https://github.com/GalaxyHaze/Zith-discussions/discussions)
+- [Discussions](https://github.com/GalaxyHaze/Zith-discussions/discussions/discussions)
 - [Repository](https://github.com/GalaxyHaze/Zith)
 
 ---
