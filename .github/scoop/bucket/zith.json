@@ -1,16 +1,16 @@
 {
-  "version": "0.0.1.2",
+  "version": "0.0.1.2.1",
   "description": "The Zith programming language toolchain",
   "homepage": "https://github.com/GalaxyHaze/Zith",
   "license": "MIT",
   "architecture": {
     "64bit": {
-      "url": "https://github.com/GalaxyHaze/Zith/releases/download/v0.0.1.2/zith-windows-amd64.exe",
-      "hash": "9f4593c535a059ca360a76788be904adb4fe341e93610d7804905f303bd2ee48"
+      "url": "https://github.com/GalaxyHaze/Zith/releases/download/v0.0.1.2.1/zith-windows-amd64.exe",
+      "hash": "ae4145f808def8f8c19f73ccb76f565d17cefdaa3afa8a78e22f112cec661003"
     },
     "arm64": {
-      "url": "https://github.com/GalaxyHaze/Zith/releases/download/v0.0.1.2/zith-windows-arm64.exe",
-      "hash": "f4d31f5cbd6af70b8f14a1be1df2e1730faae1155064d55e30b68ca1853b6a7a"
+      "url": "https://github.com/GalaxyHaze/Zith/releases/download/v0.0.1.2.1/zith-windows-arm64.exe",
+      "hash": "9a49786cbbcd1d44b0fa948f0a772ccdfb54e025c8c30284d1dcfa4b9f3944a5"
     }
   },
   "bin": "zith.exe",
