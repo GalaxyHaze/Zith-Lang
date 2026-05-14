@@ -28,11 +28,12 @@ cd hello_world
 Open `src/main.zith` and replace the content with:
 
 ```zith
+from std/io/console;
 fn main() {
-    print("Hello, Zith!");
+    println("Hello, Zith!");
     
     // Variables are declared with 'let'
-    let name: str = "Developer";
+    let name: []char = "Developer";
     let age: u32 = 25;
     
     // String interpolation
@@ -42,22 +43,22 @@ fn main() {
     let x: i32 = 10;
     let y: i32 = 5;
     
-    print("{x} + {y} = {x + y}");
-    print("{x} - {y} = {x - y}");
-    print("{x} * {y} = {x * y}");
-    print("{x} / {y} = {x / y}");
+    println("{x} + {y} = {x + y}");
+    println("{x} - {y} = {x - y}");
+    println("{x} * {y} = {x * y}");
+    println("{x} / {y} = {x / y}");
 }
 ```
 
 ## Step 3: Run Your Program
 
 ```bash
-# Run directly
-zith run src/main.zith
+# Run directly using ZithProject.toml
+zith run
 
 # Or build and run
 zith build
-./build/hello_world
+zith execute
 ```
 
 **Expected output:**
@@ -96,11 +97,11 @@ Zith is statically typed with type inference:
 // Explicit type annotation
 let count: u32 = 42;
 let pi: f64 = 3.14159;
-let message: str = "Hello";
+let message: []char = "Hello";
 
 // Type inference (compiler figures it out)
 let inferred = 100;  // i32 by default
-let text = "World";  // str
+let text = "World";  // []char or string depending on context
 ```
 
 ### Control Flow
@@ -109,24 +110,22 @@ let text = "World";  // str
 // If-else statements
 let score: i32 = 85;
 
-if score >= 90 {
-    print("Excellent!");
-} else if score >= 70 {
-    print("Good job!");
+if (score >= 90) {
+    println("Excellent!");
+} else (score >= 70) {
+    println("Good job!");
 } else {
-    print("Keep practicing!");
+    println("Keep practicing!");
 }
 
 // For loops
-for i in 0..10 {
-    print("Count: {i}");
+for (i in 0..10) {
+    println("Count: {i}");
 }
 
 // While loops
-let mut counter: i32 = 0;
-while counter < 5 {
-    print("Counter: {counter}");
-    counter += 1;
+for (auto counter: i32, counter < 10){
+    println("Count: {counter}"
 }
 ```
 
@@ -141,11 +140,11 @@ fn main() {
     let a: i32 = 20;
     let b: i32 = 4;
     
-    print("Sum: {a + b}");
-    print("Difference: {a - b}");
-    print("Product: {a * b}");
-    print("Quotient: {a / b}");
-    print("Remainder: {a % b}");
+    println("Sum: {a + b}");
+    println("Difference: {a - b}");
+    println("Product: {a * b}");
+    println("Quotient: {a / b}");
+    println("Remainder: {a % b}");
 }
 ```
 
@@ -154,15 +153,15 @@ fn main() {
 Convert Celsius to Fahrenheit:
 
 ```zith
-fn celsius_to_fahrenheit(c: f64): f64 {
+fn celsiusToFahrenheit(c: f64): f64 {
     return (c * 9.0 / 5.0) + 32.0;
 }
 
 fn main() {
-    let temp_c: f64 = 25.0;
-    let temp_f = celsius_to_fahrenheit(temp_c);
+    let tempC: f64 = 25.0;
+    let tempF = celsiusToFahrenheit(tempC);
     
-    print("{temp_c}°C = {temp_f}°F");
+    print("{tempC}°C = {tempF}°F");
 }
 ```
 
@@ -172,13 +171,9 @@ Calculate factorial using a loop:
 
 ```zith
 fn factorial(n: u32): u64 {
-    let mut result: u64 = 1;
-    
-    for i in 1..(n + 1) {
-        result *= i as u64;
+    for (let |a,i|: i64 = 1), (i in 1..n + 1) {
+        a *= i
     }
-    
-    return result;
 }
 
 fn main() {
