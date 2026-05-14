@@ -4,12 +4,16 @@
 
 #ifndef ZITH_UTILS_H
 #define ZITH_UTILS_H
-
-// impl/memory/utils.h — Arena utilities for Zith
-#include <cstring>
 #pragma once
 
+#ifdef __cplusplus
+// impl/memory/utils.h — Arena utilities for Zith
+#include <cstring>
 #include <zith/zith.hpp>
+#include <filesystem>
+#include <fstream>
+
+namespace zith {
 
 template<typename T>
 struct ArenaList {
@@ -153,22 +157,16 @@ private:
     }
 };
 
-#include <fstream>
-#include <filesystem>
-#include <string>
 
-
-
-bool zith_create_file_robust(const std::string& path_str, const std::string& content) {
-    namespace fs = std::filesystem;
-    fs::path filepath(path_str);
+inline bool create_file(const std::string& path_str, const std::string& content) {
+    std::filesystem::path filepath(path_str);
 
     // 1. Extrai o diretório do caminho (ex: "folder/main.c" -> "folder")
-    fs::path dir = filepath.parent_path();
+    std::filesystem::path dir = filepath.parent_path();
 
     // 2. Se houver um diretório no path e ele não existir, cria toda a árvore
-    if (!dir.empty() && !fs::exists(dir)) {
-        if (!fs::create_directories(dir)) {
+    if (!dir.empty() && !std::filesystem::exists(dir)) {
+        if (!std::filesystem::create_directories(dir)) {
             return false; // Falha ao criar pastas
         }
     }
@@ -181,4 +179,7 @@ bool zith_create_file_robust(const std::string& path_str, const std::string& con
     return true;
 }
 
+} // namespace zith
+
 #endif //ZITH_UTILS_H
+#endif

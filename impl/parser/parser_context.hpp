@@ -143,7 +143,7 @@ public:
     ParserContext() : parser_{} {}
 
     // Initialize the parser with source and tokens
-    void init(ZITH::Arena &arena, const char *source, size_t source_len,
+    void init(zith::Arena &arena, const char *source, size_t source_len,
               const char *filename, ZithTokenStream tokens) {
         arena_ = &arena;
         diag_.set_arena(arena.get());
@@ -159,13 +159,13 @@ public:
     const DiagManager &diag() const { return diag_; }
 
     // Arena access
-    ZITH::Arena *arena() { return arena_; }
-    const ZITH::Arena *arena() const { return arena_; }
+    zith::Arena *arena() { return arena_; }
+    const zith::Arena *arena() const { return arena_; }
 
 private:
     Parser parser_;
     DiagManager diag_;
-    ZITH::Arena *arena_ = nullptr;
+    zith::Arena *arena_ = nullptr;
 };
 
 #endif // __cplusplus

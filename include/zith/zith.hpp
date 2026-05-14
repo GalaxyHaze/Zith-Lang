@@ -1,7 +1,9 @@
 // zith.hpp - Facade header for Zith programming language public API
 #pragma once
 
+#ifndef __cplusplus
 #include <string.h>
+#endif
 
 #include "ast.hpp"
 #include "diagnostics.hpp"
@@ -11,12 +13,14 @@
 #include "token.hpp"
 
 #ifdef __cplusplus
+#include <cstring>
 #include <memory>
 #include <stdexcept>
 #include <string>
 #include <string_view>
 
-namespace ZITH {
+
+namespace zith {
     class Arena {
         struct Deleter {
             void operator()(ZithArena *a) const { zith_arena_destroy(a); }
