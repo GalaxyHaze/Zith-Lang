@@ -11,28 +11,6 @@
 
 #include <zith/zith.hpp>
 
-// ============================================================================
-// ArenaList<T>
-//
-// Lista ligada de chunks alocados numa ZithArena.
-// Não aloca heap — todos os blocos vivem na arena do chamador.
-//
-// Uso típico:
-//
-//   ArenaList<ZithToken> tokens;
-//   tokens.init(arena, /*chunk_capacity=*/64);
-//   tokens.push(arena, some_token);
-//   ...
-//   size_t count = 0;
-//   ZithToken* flat = tokens.flatten(arena, &count);
-//
-// Invariantes:
-//   - init() deve ser chamado antes de qualquer push()
-//   - flatten() pode ser chamado zero ou mais vezes; não consome a lista
-//   - a lista e o array produzido por flatten() partilham a mesma arena;
-//     a lifetime de ambos é determinada pela arena
-// ============================================================================
-
 template<typename T>
 struct ArenaList {
     // ── Chunk interno ────────────────────────────────────────────────────────
@@ -174,5 +152,33 @@ private:
         tail_ = c;
     }
 };
+
+#include <fstream>
+#include <filesystem>
+#include <string>
+
+
+
+bool zith_create_file_robust(const std::string& path_str, const std::string& content) {
+    namespace fs = std::filesystem;
+    fs::path filepath(path_str);
+
+    // 1. Extrai o diretório do caminho (ex: "folder/main.c" -> "folder")
+    fs::path dir = filepath.parent_path();
+
+    // 2. Se houver um diretório no path e ele não existir, cria toda a árvore
+    if (!dir.empty() && !fs::exists(dir)) {
+        if (!fs::create_directories(dir)) {
+            return false; // Falha ao criar pastas
+        }
+    }
+
+    // 3. Agora cria o arquivo com segurança
+    std::ofstream file(filepath, std::ios::out | std::ios::binary);
+    if (!file) return false;
+
+    file << content;
+    return true;
+}
 
 #endif //ZITH_UTILS_H

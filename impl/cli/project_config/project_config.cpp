@@ -96,7 +96,7 @@ bool try_load_project_from_path(ZithProject &proj, const std::string &project_fi
         local_errors.emplace_back("Field 'opt_level' must be an integer");
     }
 
-    if (auto dbg = tbl["debug_level"].value<int64_t>()) {
+    if (const auto dbg = tbl["debug_level"].value<int64_t>()) {
         if (*dbg < 0 || *dbg > 3)
             local_errors.emplace_back("Field 'debug_level' must be in range 0..3");
         else
@@ -117,7 +117,7 @@ bool try_load_project_from_path(ZithProject &proj, const std::string &project_fi
 }
 
 bool try_load_project(ZithProject &proj) {
-    const std::string path = "ZithProject.toml";
+    constexpr auto path = "ZithProject.toml";
     if (!std::filesystem::exists(path))
         return false;
 
@@ -146,8 +146,8 @@ void build_import_roots(const std::vector<std::string> &extra_dirs,
         }
     }
 
-    std::sort(lib_dirs.begin(), lib_dirs.end());
-    lib_dirs.erase(std::unique(lib_dirs.begin(), lib_dirs.end()), lib_dirs.end());
+    std::ranges::sort(lib_dirs);
+    lib_dirs.erase(std::ranges::unique(lib_dirs).begin(), lib_dirs.end());
 
     const size_t total = lib_dirs.size() + extra_dirs.size();
     roots_out.resize(total);
