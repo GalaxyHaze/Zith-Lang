@@ -8,7 +8,7 @@
 // Extended nodes live at 1000+ as required by the base header contract.
 #pragma once
 
-#include "../types/types.hpp"
+#include <types/types.hpp>
 #include <zith/zith.hpp>
 
 #ifdef __cplusplus

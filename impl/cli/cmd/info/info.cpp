@@ -1,14 +1,14 @@
-#include "../commands.hpp"
+#include "cli/cmd/commands.hpp"
 
 #include <iostream>
 #include <string>
 
 #if defined(__VERSION__)
-static std::string compiler = __VERSION__;
+static auto compiler = __VERSION__;
 #elif defined(_MSC_FULL_VER)
-static std::string compiler = "MSVC " + std::to_string(_MSC_FULL_VER);
+static auto compiler = "MSVC " + std::to_string(_MSC_FULL_VER);
 #else
-static std::string compiler = "unknown compiler";
+static auto compiler = "unknown compiler";
 #endif
 
 namespace zith::cli::commands {

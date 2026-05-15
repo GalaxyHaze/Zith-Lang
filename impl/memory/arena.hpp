@@ -9,4 +9,4 @@
 #include "utils.hpp"
 #endif
 
-#include "arena_c_functions.h"
+#include <memory/arena.hpp>

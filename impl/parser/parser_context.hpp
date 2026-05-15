@@ -5,10 +5,10 @@
 #pragma once
 
 #include <zith/zith.hpp>
-#include "../ast/ast.h"
-#include "../diagnostics/diagnostics.hpp"
-#include "../memory/arena.hpp"
-#include "../types/types.hpp"
+#include "ast/ast.h"
+#include "diagnostics/diagnostics.hpp"
+#include "memory/arena.hpp"
+#include "types/types.hpp"
 
 #ifdef __cplusplus
 extern "C" {

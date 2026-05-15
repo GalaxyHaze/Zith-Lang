@@ -1,24 +1,21 @@
-// zith.hpp - Facade header for Zith programming language public API
 #pragma once
 
 #ifndef __cplusplus
-#include <string.h>
+#error "This header requires C++"
 #endif
 
-#include "ast.hpp"
-#include "diagnostics.hpp"
-#include "import.hpp"
-#include "memory.hpp"
-#include "parser.hpp"
-#include "token.hpp"
-
-#ifdef __cplusplus
 #include <cstring>
 #include <memory>
 #include <stdexcept>
 #include <string>
 #include <string_view>
 
+#include "zith/ast.h"
+#include "zith/diagnostics.h"
+#include "zith/import.h"
+#include "zith/memory.h"
+#include "zith/parser.h"
+#include "zith/token.h"
 
 namespace zith {
     class Arena {
@@ -64,4 +61,3 @@ namespace zith {
         void print_ast(const ZithNode *node, int indent = 0);
     }
 }
-#endif

@@ -2,8 +2,8 @@
 //
 // Refactored to use centralized DiagManager from diagnostics.hpp.
 // All fprintf/printf diagnostic calls are now routed through DiagManager.
-#include "../diagnostics/diagnostics.hpp"
-#include "../memory/arena.hpp"
+#include "diagnostics/diagnostics.hpp"
+#include "memory/arena.hpp"
 #include "parser.h"
 #include <cstdlib>
 #include <cstring>

@@ -1,7 +1,7 @@
-#include "../../pipeline/pipeline.hpp"
-#include "../../project_config/project_config.hpp"
-#include "../../runtime_interpreted/runtime_interpreted.hpp"
-#include "../commands.hpp"
+#include "cli/pipeline/pipeline.hpp"
+#include "cli/project_config/project_config.hpp"
+#include "cli/runtime_interpreted/runtime_interpreted.hpp"
+#include "cli/cmd/commands.hpp"
 #include <zith/zith.hpp>
 
 #include <fstream>

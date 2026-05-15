@@ -1,7 +1,7 @@
 #include <catch2/catch_test_macros.hpp>
 
-#include "../impl/import/module_registry.hpp"
-#include "../impl/import/symbol_resolver.hpp"
+#include "import/module_registry.hpp"
+#include "import/symbol_resolver.hpp"
 
 #include <string>
 #include <vector>

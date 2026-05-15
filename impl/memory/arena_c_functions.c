@@ -2,7 +2,7 @@
 #include <stddef.h> // gives you max_align_t on MSVC
 #include <stdlib.h>
 #include <string.h>
-#include <zith/zith.hpp>
+#include <zith/memory.h>
 
 #define ZITH_DEFAULT_BLOCK_SIZE (64 * 1024)
 

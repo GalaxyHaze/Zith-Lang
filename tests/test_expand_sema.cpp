@@ -1,7 +1,7 @@
 #include <catch2/catch_test_macros.hpp>
 
-#include "../impl/ast/ast.h"
-#include "../impl/parser/parser.h"
+#include "ast/ast.h"
+#include "parser/parser.h"
 
 TEST_CASE("FULL: function body is expanded into BLOCK", "[full][expand]") {
     auto ast = ParseResult(zith_parse_test_full("fn main() -> i32 {\n"

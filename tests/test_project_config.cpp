@@ -5,7 +5,7 @@
 #include <string>
 #include <vector>
 
-#include "../impl/cli/project_config/project_config.hpp"
+#include "cli/project_config/project_config.hpp"
 
 namespace {
 void write_file(const std::filesystem::path &path, const std::string &content) {

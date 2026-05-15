@@ -1,7 +1,7 @@
 // impl/parser/parser_test.cpp — Test utilities and RAII wrappers
 //
 // Refactored from parser.cpp. Provides convenience API for tests.
-#include "../memory/arena.hpp"
+#include "memory/arena.hpp"
 #include "parser.h"
 #include <cstring>
 

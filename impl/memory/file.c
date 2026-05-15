@@ -2,7 +2,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <zith/zith.hpp>
+#include <zith/memory.h>
+#include <zith/import.h>
 #ifdef _WIN32
 #ifndef S_ISREG
 #define S_ISREG(m) (((m) & _S_IFMT) == _S_IFREG)

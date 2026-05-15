@@ -27,7 +27,6 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 # =============================================================================
 # Project Version (Dynamic via CI or Default v0.0.1)
 # =============================================================================
-# Use FORCE to allow overriding via -DZITH_VERSION=... in CI
 if(NOT DEFINED ZITH_VERSION OR ZITH_VERSION STREQUAL "")
     set(ZITH_VERSION "v0.0.1")
 endif()
@@ -64,7 +63,6 @@ else()
     else()
         find_package(PkgConfig REQUIRED)
         pkg_check_modules(FFI REQUIRED libffi)
-        # Prefer static linking for portable binaries
         if(FFI_STATIC_LIBRARIES)
             set(FFI_LIBRARIES ${FFI_STATIC_LIBRARIES})
             set(FFI_INCLUDE_DIRS ${FFI_STATIC_INCLUDE_DIRS})
@@ -93,10 +91,7 @@ else ()
         add_compile_options(-Werror)
     endif()
 
-        # Clang Linker Setup (LLD)
     if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-        # Try to find the linker binary.
-        # Look for specific versions (e.g. ld.lld-18) and generic names (ld.lld, lld)
         find_program(LLD_EXE 
             NAMES 
                 ld.lld-18 ld.lld-17 ld.lld-16 
@@ -105,13 +100,7 @@ else ()
         )
 
         if(LLD_EXE)
-            # Get only the filename (e.g. "ld.lld" or "lld")
             get_filename_component(LLD_NAME "${LLD_EXE}" NAME_WE)
-            
-            # If the found name is "lld", remove ".exe" if on Windows,
-            # and ensure the flag is correct.
-            # Note: If the binary is 'lld', Clang generally accepts '-fuse-ld=lld',
-            # but 'ld.lld' is the safer default to avoid dispatcher errors.
             
             if (NOT CMAKE_EXE_LINKER_FLAGS MATCHES "-fuse-ld=")
                 set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fuse-ld=${LLD_NAME}")
@@ -119,7 +108,6 @@ else ()
                 message(STATUS "Using LLD linker: ${LLD_EXE} (flag: -fuse-ld=${LLD_NAME})")
             endif()
         elseif(UNIX AND NOT APPLE)
-            # If not found, do NOT force the flag to avoid the "invalid linker name" error
             message(WARNING "LLD linker not found in PATH. Build will proceed with default linker.")
         else()
             message(STATUS "LLD linker not found in PATH on this platform. Using default linker.")
@@ -130,15 +118,12 @@ endif ()
 # =============================================================================
 # Clang Extension Configuration
 # =============================================================================
-# If you have a path to the extension, set it here.
-# Example: -DCLANG_PLUGIN_PATH=/path/to/libMyPlugin.so
 if(DEFINED CLANG_PLUGIN_PATH AND EXISTS "${CLANG_PLUGIN_PATH}")
     message(STATUS "Loading Clang Extension: ${CLANG_PLUGIN_PATH}")
     add_compile_options(
         "$<$<COMPILE_LANGUAGE:CXX>:-Xclang>-load"
         "$<$<COMPILE_LANGUAGE:CXX>:-Xclang>${CLANG_PLUGIN_PATH}"
     )
-    # If the extension adds additional arguments, use -Xclang -plugin-arg-<PluginName>...
 endif()
 
 # =============================================================================
@@ -174,14 +159,14 @@ if(ZITH_ENABLE_LLVM)
             target
         )
 
-    endif() # LLVM_FOUND
+    endif()
 else()
     message(STATUS "LLVM support disabled by ZITH_ENABLE_LLVM=OFF")
     set(LLVM_FOUND FALSE)
 endif()
 
 # =============================================================================
-# Sources (manual lists; keep in sync when adding/removing files)
+# Sources
 # =============================================================================
 set(CORE_C_SOURCES
     ../impl/memory/arena_c_functions.c
@@ -206,6 +191,7 @@ set(PARSER_CPP_SOURCES
 )
 
 set(CLI_SOURCES
+    ../impl/cli/main.cpp
     ../impl/cli/CLI.cpp
     ../impl/cli/pipeline/pipeline.cpp
     ../impl/cli/runtime_interpreted/runtime_interpreted.cpp
@@ -215,7 +201,6 @@ set(CLI_SOURCES
     ../impl/cli/cmd/tool/tool.cpp
     ../impl/cli/cmd/interactive/interactive.cpp
     ../impl/cli/cmd/info/info.cpp
-        ../include/LLVM/codegen.hpp
 )
 
 # ───────────────────────────────────────────────
@@ -226,6 +211,7 @@ add_library(ZithCore STATIC ${CORE_C_SOURCES} ${DIAGNOSTICS_SOURCES})
 target_include_directories(ZithCore
     PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../include>
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../impl>
         $<INSTALL_INTERFACE:include>
         ${LLVM_INCLUDE_DIRS}
 )
@@ -238,6 +224,7 @@ add_library(ZithParse STATIC ${PARSER_CPP_SOURCES})
 target_include_directories(ZithParse
     PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../include>
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../impl>
 )
 target_link_libraries(ZithParse
     PUBLIC
@@ -252,9 +239,12 @@ set_target_properties(ZithParse PROPERTIES
     VISIBILITY_INLINES_HIDDEN ON
 )
 
-add_executable(zith ../impl/main.cpp ${CLI_SOURCES})
+add_executable(zith ${CLI_SOURCES})
 
-target_include_directories(zith PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../include)
+target_include_directories(zith PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/../include
+    ${CMAKE_CURRENT_SOURCE_DIR}/../impl
+)
 
 target_link_libraries(zith
     PRIVATE
@@ -332,9 +322,11 @@ if(BUILD_TESTING)
 
     if(TEST_SOURCES)
         add_executable(zith_tests ${TEST_SOURCES})
-        target_include_directories(zith_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../include)
+        target_include_directories(zith_tests PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR}/../include
+            ${CMAKE_CURRENT_SOURCE_DIR}/../impl
+        )
         
-        # Ensure tests also use the correct version
         target_compile_definitions(zith_tests PRIVATE ZITH_VERSION="${ZITH_VERSION}")
 
         target_link_libraries(zith_tests PRIVATE ZithParse Catch2::Catch2WithMain)
@@ -375,10 +367,11 @@ message("")
 # WebAssembly (Emscripten)
 # =============================================================================
 if(EMSCRIPTEN)
-    add_executable(zith-wasm ../impl/main.cpp)
+    add_executable(zith-wasm ../impl/cli/main.cpp)
 
     target_include_directories(zith-wasm PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/../include
+        ${CMAKE_CURRENT_SOURCE_DIR}/../impl
     )
 
     target_link_libraries(zith-wasm PRIVATE ZithParse)
@@ -414,4 +407,3 @@ if(EMSCRIPTEN)
 endif()
 
 install(TARGETS zith DESTINATION bin)
-

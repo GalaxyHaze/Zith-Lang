@@ -1,11 +1,6 @@
-// impl/parser/keywords.cpp
-#include "zith/zith.hpp"
+#include "keywords.hpp"
 #include <array>
 #include <string_view>
-
-// ============================================================================
-// Hash primitives
-// ============================================================================
 
 static constexpr uint64_t mix64(uint64_t x) {
     x ^= x >> 33;
@@ -25,13 +20,8 @@ static constexpr uint64_t hash64(std::string_view sv) {
     return mix64(h);
 }
 
-// ============================================================================
-// Keyword + operator table
-// ============================================================================
-
 static constexpr auto TokenTable = std::to_array<std::pair<std::string_view, ZithTokenType>>({
 
-    // Signed integers
     {"i8", ZITH_TOKEN_TYPE},
     {"i16", ZITH_TOKEN_TYPE},
     {"i32", ZITH_TOKEN_TYPE},
@@ -39,7 +29,6 @@ static constexpr auto TokenTable = std::to_array<std::pair<std::string_view, Zit
     {"i128", ZITH_TOKEN_TYPE},
     {"i256", ZITH_TOKEN_TYPE},
 
-    // Unsigned integers
     {"u8", ZITH_TOKEN_TYPE},
     {"u16", ZITH_TOKEN_TYPE},
     {"u32", ZITH_TOKEN_TYPE},
@@ -47,17 +36,14 @@ static constexpr auto TokenTable = std::to_array<std::pair<std::string_view, Zit
     {"u128", ZITH_TOKEN_TYPE},
     {"u256", ZITH_TOKEN_TYPE},
 
-    // Floating point
     {"f32", ZITH_TOKEN_TYPE},
     {"f64", ZITH_TOKEN_TYPE},
     {"f128", ZITH_TOKEN_TYPE},
 
-    // General primitives
     {"bool", ZITH_TOKEN_TYPE},
     {"void", ZITH_TOKEN_TYPE},
     {"null", ZITH_TOKEN_NULL},
 
-    // Type declarations
     {"type", ZITH_TOKEN_TYPE},
     {"struct", ZITH_TOKEN_STRUCT},
     {"component", ZITH_TOKEN_COMPONENT},
@@ -78,7 +64,6 @@ static constexpr auto TokenTable = std::to_array<std::pair<std::string_view, Zit
     {"from", ZITH_TOKEN_FROM},
     {"as", ZITH_TOKEN_AS},
 
-    // Bindings / ownership modifiers
     {"let", ZITH_TOKEN_LET},
     {"var", ZITH_TOKEN_VAR},
     {"auto", ZITH_TOKEN_AUTO},
@@ -97,12 +82,10 @@ static constexpr auto TokenTable = std::to_array<std::pair<std::string_view, Zit
     {"noreturn", ZITH_TOKEN_NORETURN},
     {"recurse", ZITH_TOKEN_RECURSE},
 
-    // Access modifiers
     {"pub", ZITH_TOKEN_MODIFIER},
     {"private", ZITH_TOKEN_MODIFIER},
     {"mod", ZITH_TOKEN_MODIFIER},
 
-    // Flow control
     {"if", ZITH_TOKEN_IF},
     {"else", ZITH_TOKEN_ELSE},
     {"for", ZITH_TOKEN_FOR},
@@ -116,12 +99,10 @@ static constexpr auto TokenTable = std::to_array<std::pair<std::string_view, Zit
     {"scene", ZITH_TOKEN_SCENE},
     {"end", ZITH_TOKEN_END},
 
-    // Concurrency
     {"spawn", ZITH_TOKEN_SPAWN},
     {"await", ZITH_TOKEN_AWAIT},
     {"join", ZITH_TOKEN_JOIN},
 
-    // Error handling
     {"try", ZITH_TOKEN_TRY},
     {"catch", ZITH_TOKEN_CATCH},
     {"must", ZITH_TOKEN_MUST},
@@ -129,14 +110,12 @@ static constexpr auto TokenTable = std::to_array<std::pair<std::string_view, Zit
     {"do", ZITH_TOKEN_DO},
     {"drop", ZITH_TOKEN_DROP},
 
-    // Metaprogramming
     {"require", ZITH_TOKEN_REQUIRE},
     {"is", ZITH_TOKEN_IS},
     {"prefix", ZITH_TOKEN_PREFIX},
     {"sufix", ZITH_TOKEN_SUFIX},
     {"infix", ZITH_TOKEN_INFIX},
 
-    // Multi-character operators
     {"and", ZITH_TOKEN_AND},
     {"or", ZITH_TOKEN_OR},
     {"not", ZITH_TOKEN_NOT_EQUAL},
@@ -151,7 +130,6 @@ static constexpr auto TokenTable = std::to_array<std::pair<std::string_view, Zit
     {":=", ZITH_TOKEN_DECLARATION},
     {"...", ZITH_TOKEN_DOTS},
 
-    // Simple operators
     {"+", ZITH_TOKEN_PLUS},
     {"-", ZITH_TOKEN_MINUS},
     {"*", ZITH_TOKEN_MULTIPLY},
@@ -163,7 +141,6 @@ static constexpr auto TokenTable = std::to_array<std::pair<std::string_view, Zit
     {"!", ZITH_TOKEN_BANG},
     {"?", ZITH_TOKEN_QUESTION},
 
-    // Delimiters
     {"(", ZITH_TOKEN_LPAREN},
     {")", ZITH_TOKEN_RPAREN},
     {"{", ZITH_TOKEN_LBRACE},
@@ -175,16 +152,6 @@ static constexpr auto TokenTable = std::to_array<std::pair<std::string_view, Zit
     {":", ZITH_TOKEN_COLON},
     {".", ZITH_TOKEN_DOT},
 });
-
-// ============================================================================
-// Perfect hash (compile-time, two-level)
-//
-// Level 1 : bucket = hash(str) % BucketCount  →  selects a seed
-// Level 2 : slot   = mix64(hash(str) ^ seed) % TableSize
-//
-// Lookup ALWAYS uses the seed path — no branching by bucket size.
-// This eliminates the old O(N) scan of countsForBucket() at runtime.
-// ============================================================================
 
 static constexpr size_t N           = TokenTable.size();
 static constexpr size_t BucketCount = 128;
@@ -199,7 +166,6 @@ struct PerfectHash {
         table.fill(-1);
         bucketSeed.fill(0);
 
-        // Agrupar entradas por bucket
         std::array<uint8_t, BucketCount> counts{};
         std::array<std::array<uint16_t, 16>, BucketCount> items{};
 
@@ -208,7 +174,6 @@ struct PerfectHash {
             items[b][counts[b]++] = static_cast<uint16_t>(i);
         }
 
-        // Resolve each bucket: find a seed without collision
         for (size_t b = 0; b < BucketCount; ++b) {
             if (counts[b] == 0)
                 continue;
@@ -221,7 +186,6 @@ struct PerfectHash {
                     const size_t i    = items[b][k];
                     const size_t slot = mix64(hash64(TokenTable[i].first) ^ seed) % TableSize;
 
-                    // Intra-bucket collision
                     for (size_t j = 0; j < k; ++j) {
                         if (slots[j] == slot) {
                             ok = false;
@@ -231,7 +195,6 @@ struct PerfectHash {
                     if (!ok)
                         break;
 
-                    // Cross-bucket collision (slots already taken)
                     if (table[slot] != -1) {
                         ok = false;
                         break;
@@ -269,14 +232,18 @@ struct PerfectHash {
 };
 
 constexpr auto g_hasher = PerfectHash{};
-} // anonymous namespace
+}
 
-// ============================================================================
-// C API
-// ============================================================================
+namespace zith::lexer {
+
+ZithTokenType lookup_keyword(std::string_view sv) {
+    return g_hasher.lookup(sv);
+}
+
+}
 
 extern "C" ZithTokenType zith_lookup_keyword(const char *str, const size_t len) {
     if (!str || len == 0)
         return ZITH_TOKEN_IDENTIFIER;
-    return g_hasher.lookup(std::string_view(str, len));
+    return zith::lexer::lookup_keyword(std::string_view(str, len));
 }

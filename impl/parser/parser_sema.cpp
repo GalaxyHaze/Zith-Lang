@@ -2,7 +2,7 @@
 //
 // Refactored from parser.cpp. Handles type checking, name resolution,
 // scope management, and control-flow analysis.
-#include "../memory/arena.hpp"
+#include "memory/arena.hpp"
 #include "parser.h"
 #include <cstdio>
 #include <cstring>

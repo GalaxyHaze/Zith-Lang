@@ -4,14 +4,13 @@
 //   - types/types.hpp for enums
 //   - memory/arena.hpp for allocation
 //   - diagnostics/diagnostics.hpp for debug output
-#include "ast.h"
-#include "../diagnostics/diagnostics.hpp"
-#include "../lexer/debug.h"
-#include "../memory/arena.hpp"
-#include "../types/types.hpp"
-#include <cstdint>
+#include <ast/ast.h>
 #include <cstdio>
 #include <cstring>
+#include <diagnostics/diagnostics.hpp>
+#include <lexer/debug.hpp>
+#include <memory/arena.hpp>
+#include <types/types.hpp>
 
 // ============================================================================
 // Internal helpers — C++ linkage only, not exported

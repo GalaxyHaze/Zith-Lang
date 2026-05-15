@@ -1,5 +1,5 @@
 #include "runtime_interpreted.hpp"
-#include "../../ast/ast.h"
+#include "ast/ast.h"
 #include <cstdint>
 #include <iostream>
 #include <string>
