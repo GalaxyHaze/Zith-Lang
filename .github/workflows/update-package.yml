@@ -139,7 +139,7 @@ jobs:
           gh api repos/GalaxyHaze/homebrew-zith/dispatches \
             --method POST \
             --field event_type=new-release \
-            --field client_payload="$PAYLOAD"
+            --input client_payload="$PAYLOAD"
 
       - name: Clean up
         if: always()
