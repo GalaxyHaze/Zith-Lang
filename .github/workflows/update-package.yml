@@ -119,7 +119,7 @@ jobs:
         id: brew
         run: |
           VERSION="${{ steps.tag.outputs.version }}"
-          VERSION="${VERSION#v}"
+          #VERSION="${VERSION#v}"
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           URL="https://github.com/${{ github.repository }}/archive/refs/tags/v${VERSION}.tar.gz"
           echo "url=$URL" >> $GITHUB_OUTPUT
@@ -130,16 +130,14 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.RELEASE_PAT }}
         run: |
-          PAYLOAD=$(jq -n \
-            --arg version "${{ steps.brew.outputs.version }}" \
-            --arg url "${{ steps.brew.outputs.url }}" \
-            --arg sha256 "${{ steps.brew.outputs.sha256 }}" \
-            '{version: $version, url: $url, sha256: $sha256}')
-          
           gh api repos/GalaxyHaze/homebrew-zith/dispatches \
             --method POST \
             --field event_type=new-release \
-            --input client_payload="$PAYLOAD"
+            --raw-field client_payload='{
+              "version": "${{ steps.brew.outputs.version }}",
+              "url": "${{ steps.brew.outputs.url }}",
+              "sha256": "${{ steps.brew.outputs.sha256 }}"
+            }'
 
       - name: Clean up
         if: always()
