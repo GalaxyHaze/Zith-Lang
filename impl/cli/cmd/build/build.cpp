@@ -1,10 +1,10 @@
-#include "../pipeline/pipeline.hpp"
-#include "../project_config/project_config.hpp"
-#include "commands.hpp"
+#include "../../pipeline/pipeline.hpp"
+#include "../../project_config/project_config.hpp"
+#include "../commands.hpp"
 #include <zith/zith.hpp>
 
-#include "../ast/ast.h"
-#include "../lexer/debug.h"
+#include "../../../ast/ast.h"
+#include "../../../lexer/debug.h"
 
 #include <fstream>
 #include <thread>

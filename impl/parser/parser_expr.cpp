@@ -7,14 +7,6 @@
 
 using zith::ArenaList;
 
-// Forward declarations
-extern const ZithToken *parser_peek(const Parser *p);
-extern const ZithToken *parser_peek_ahead(const Parser *p, size_t offset);
-extern const ZithToken *parser_advance(Parser *p);
-extern bool parser_check(const Parser *p, ZithTokenType type);
-extern bool parser_match(Parser *p, ZithTokenType type);
-extern const ZithToken *parser_expect(Parser *p, ZithTokenType type, const char *msg);
-extern void parser_error(Parser *p, const ZithSourceLoc loc, const char *msg);
 extern ZithLiteral parse_lit_number(const char *, size_t, ZithTokenType);
 
 // ============================================================================
@@ -149,14 +141,14 @@ static ZithNode *parse_nud(Parser *p) {
         return zith_ast_make_spawn(p->arena, loc, parser_parse_expression(p), false);
     default: {
         char buf[128];
-        snprintf(buf, sizeof(buf), "unexpected token '%.*s'", (int)t->lexeme.len, t->lexeme.data);
+        snprintf(buf, sizeof(buf), "unexpected token '%.*s'", static_cast<int>(t->lexeme.len), t->lexeme.data);
         parser_error(p, loc, buf);
         return zith_ast_make_error(p->arena, loc, buf);
     }
     }
 }
 
-static ZithNode *parse_expr_bp(Parser *p, int min_bp) {
+static ZithNode *parse_expr_bp(Parser *p, const int min_bp) {
     ZithNode *left = parse_nud(p);
     while (true) {
         const ZithTokenType op = parser_peek(p)->type;

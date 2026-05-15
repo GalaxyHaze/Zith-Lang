@@ -1,5 +1,5 @@
-#include "../pipeline/pipeline.hpp"
-#include "commands.hpp"
+#include "../../pipeline/pipeline.hpp"
+#include "../commands.hpp"
 
 #include <filesystem>
 #include <fstream>

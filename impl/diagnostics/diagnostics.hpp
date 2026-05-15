@@ -65,7 +65,7 @@ public:
     void note(ZithSourceLoc loc, const char *msg);
 
     // Emit a generic info message (no source location)
-    void info(const char *msg);
+    static void info(const char *msg);
 
     // Print all accumulated diagnostics with source context
     void print_all(const char *source, size_t source_len,
@@ -75,10 +75,10 @@ public:
     void print_summary(const char *filename = "<input>") const;
 
     // Check if any errors were emitted
-    bool had_error() const { return had_error_; }
+    [[nodiscard]] bool had_error() const { return had_error_; }
 
     // Access to raw list (for C API compatibility)
-    const ZithDiagList &list() const { return diags_; }
+    [[nodiscard]] const ZithDiagList &list() const { return diags_; }
 
     // Arena-backed storage — diagnostics live as long as the arena
     void set_arena(ZithArena *arena) { arena_ = arena; }

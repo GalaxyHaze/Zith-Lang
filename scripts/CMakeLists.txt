@@ -215,6 +215,7 @@ set(CLI_SOURCES
     ../impl/cli/cmd/tool/tool.cpp
     ../impl/cli/cmd/interactive/interactive.cpp
     ../impl/cli/cmd/info/info.cpp
+        ../include/LLVM/codegen.hpp
 )
 
 # ───────────────────────────────────────────────

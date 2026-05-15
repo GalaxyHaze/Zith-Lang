@@ -4,7 +4,6 @@
 // Replaces scattered fprintf/printf calls in parser_utils.cpp and elsewhere.
 #include "diagnostics.hpp"
 #include <cstdio>
-#include <cstdlib>
 #include <cstring>
 
 // ============================================================================
@@ -32,7 +31,7 @@ static bool find_source_line(const char *source, size_t source_len, size_t line_
         p++;
 
     *out_start = line_start;
-    *out_len   = (size_t)(p - line_start);
+    *out_len   = static_cast<size_t>(p - line_start);
     return true;
 }
 
@@ -44,8 +43,6 @@ static const char *severity_label(ZithDiagSeverity s) {
         return "warning";
     case ZITH_DIAG_NOTE:
         return "note";
-    case ZITH_DIAG_INFO:
-        return "info";
     default:
         return "info";
     }
@@ -74,7 +71,7 @@ void zith_diag_print_all(const ZithDiagList *diags, const char *source, size_t s
 
             if (find_source_line(source, source_len, d->loc.line, &line_ptr, &line_len)) {
                 // Print the actual code line
-                fprintf(stderr, "  %.*s\n", (int)line_len, line_ptr);
+                fprintf(stderr, "  %.*s\n", static_cast<int>(line_len), line_ptr);
 
                 // Print the caret (^^^) pointing to the error
                 fprintf(stderr, "  ");
@@ -112,10 +109,10 @@ void zith_diag_print_all(const ZithDiagList *diags, const char *source, size_t s
 // C++ DiagManager Implementation
 // ============================================================================
 
-void DiagManager::emit(ZithSourceLoc loc, ZithDiagSeverity severity, const char *msg) {
+void DiagManager::emit(const ZithSourceLoc loc, const ZithDiagSeverity severity, const char *msg) {
     // Grow the diagnostic list if needed
     if (diags_.count >= diags_.capacity) {
-        size_t new_cap = diags_.capacity == 0 ? 8 : diags_.capacity * 2;
+        const size_t new_cap = diags_.capacity == 0 ? 8 : diags_.capacity * 2;
         auto *buf      = static_cast<ZithDiagnostic *>(
             arena_ ? zith_arena_alloc(arena_, new_cap * sizeof(ZithDiagnostic))
                    : std::malloc(new_cap * sizeof(ZithDiagnostic)));
@@ -144,15 +141,15 @@ void DiagManager::emit(ZithSourceLoc loc, ZithDiagSeverity severity, const char 
         had_error_ = true;
 }
 
-void DiagManager::error(ZithSourceLoc loc, const char *msg) {
+void DiagManager::error(const ZithSourceLoc loc, const char *msg) {
     emit(loc, ZITH_DIAG_ERROR, msg);
 }
 
-void DiagManager::warning(ZithSourceLoc loc, const char *msg) {
+void DiagManager::warning(const ZithSourceLoc loc, const char *msg) {
     emit(loc, ZITH_DIAG_WARNING, msg);
 }
 
-void DiagManager::note(ZithSourceLoc loc, const char *msg) {
+void DiagManager::note(const ZithSourceLoc loc, const char *msg) {
     emit(loc, ZITH_DIAG_NOTE, msg);
 }
 
@@ -161,7 +158,7 @@ void DiagManager::info(const char *msg) {
     printf("[*] %s\n", msg);
 }
 
-void DiagManager::print_all(const char *source, size_t source_len, const char *filename) const {
+void DiagManager::print_all(const char *source, const size_t source_len, const char *filename) const {
     zith_diag_print_all(&diags_, source, source_len, filename);
 }
 
