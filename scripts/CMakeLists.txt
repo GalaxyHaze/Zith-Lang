@@ -209,6 +209,12 @@ set(CLI_SOURCES
     ../impl/cli/CLI.cpp
     ../impl/cli/pipeline/pipeline.cpp
     ../impl/cli/runtime_interpreted/runtime_interpreted.cpp
+    ../impl/cli/cmd/build/build.cpp
+    ../impl/cli/cmd/run/run.cpp
+    ../impl/cli/cmd/project/project.cpp
+    ../impl/cli/cmd/tool/tool.cpp
+    ../impl/cli/cmd/interactive/interactive.cpp
+    ../impl/cli/cmd/info/info.cpp
 )
 
 # ───────────────────────────────────────────────
