@@ -79,12 +79,12 @@ Functions in Zith look similar to C but with type annotations after the paramete
 
 ```zith
 // Function with parameters and return type
-fn add(a: i32, b: i32): i32 {
-    return a + b;
+fn add(a: i32, b: i32) {
+    a + b
 }
 
 // Function without return value (void)
-fn greet(name: str) {
+fn greet(name: []char) {
     print("Hello, {name}!");
 }
 ```
@@ -118,14 +118,20 @@ if (score >= 90) {
     println("Keep practicing!");
 }
 
-// For loops
+// For loop
 for (i in 0..10) {
     println("Count: {i}");
 }
 
-// While loops
-for (auto counter: i32, counter < 10){
+// 'While' loop, both use 'for' keyword
+for (counter = 1, counter <= 10){
     println("Count: {counter}"
+    ++counter;
+}
+
+//infinite loop
+for{
+  render();
 }
 ```
 
@@ -171,8 +177,8 @@ Calculate factorial using a loop:
 
 ```zith
 fn factorial(n: u32): u64 {
-    for (let |a,i|: i64 = 1), (i in 1..n + 1) {
-        a *= i
+    for ( auto a = 1), (i in 1..=n ) {
+        (a *= i) as u64
     }
 }
 
