@@ -127,13 +127,19 @@ jobs:
           echo "sha256=$SHA" >> $GITHUB_OUTPUT
 
       - name: Trigger homebrew update
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_PAT }}
         run: |
+          PAYLOAD=$(jq -n \
+            --arg version "${{ steps.brew.outputs.version }}" \
+            --arg url "${{ steps.brew.outputs.url }}" \
+            --arg sha256 "${{ steps.brew.outputs.sha256 }}" \
+            '{version: $version, url: $url, sha256: $sha256}')
+          
           gh api repos/GalaxyHaze/homebrew-zith/dispatches \
             --method POST \
             --field event_type=new-release \
-            --field client_payload="{\"version\":\"${{ steps.brew.outputs.version }}\",\"url\":\"${{ steps.brew.outputs.url }}\",\"sha256\":\"${{ steps.brew.outputs.sha256 }}\"}"
-        env:
-          GH_TOKEN: ${{ secrets.RELEASE_PAT }}
+            --field client_payload="$PAYLOAD"
 
       - name: Clean up
         if: always()
