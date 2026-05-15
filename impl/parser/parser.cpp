@@ -1,5 +1,8 @@
 // impl/parser/parser.cpp — Parser entry point and pipeline orchestration
-#include "parser.h"
+#include "zith/parser.h"
+
+#include "memory/utils.hpp"
+
 #include <cstring>
 #include <vector>
 
@@ -21,14 +24,14 @@ void parser_set_imported_decls(void *decls, ZithArena *arena) {
     g_import_loaded_this_file = true;
 }
 
-void *parser_get_imported_decls(void) {
+void *parser_get_imported_decls() {
     return &g_imported_decls_vec;
 }
 
-void parser_enter_scope(void) {
+void parser_enter_scope() {
     g_parser_depth++;
 }
-void parser_exit_scope(void) {
+void parser_exit_scope() {
     g_parser_depth--;
     if (g_parser_depth == 0) {
         g_imported_decls_vec.clear();

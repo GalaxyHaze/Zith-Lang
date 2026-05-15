@@ -1,5 +1,5 @@
-#include "ast/ast.h"
-#include "parser/parser.h"
+#include "zith/ast.h"
+#include "zith/parser.h"
 #include <catch2/catch_test_macros.hpp>
 #include <string>
 

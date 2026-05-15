@@ -1,4 +1,4 @@
-#include "tokenizer.hpp"
+#include "lexer/tokenizer.hpp"
 #include "keywords.hpp"
 #include "memory/utils.hpp"
 #include <cstring>
@@ -627,4 +627,115 @@ void zith_debug_tokenize(ZithArena *arena, const char *source, const size_t sour
     zith::lexer::debug_tokenize(std::string_view(source, source_len), arena, tokens, error_list);
 }
 
-#undef ZITH_NEWLINE
+
+const char *zith_token_type_name(ZithTokenType t) {
+    switch (t) {
+    case ZITH_TOKEN_IDENTIFIER: return "identifier";
+    case ZITH_TOKEN_TYPE: return "type";
+    case ZITH_TOKEN_STRUCT: return "struct";
+    case ZITH_TOKEN_COMPONENT: return "component";
+    case ZITH_TOKEN_ENUM: return "enum";
+    case ZITH_TOKEN_RAW: return "raw";
+    case ZITH_TOKEN_UNION: return "union";
+    case ZITH_TOKEN_FAMILY: return "family";
+    case ZITH_TOKEN_ENTITY: return "entity";
+    case ZITH_TOKEN_TRAIT: return "trait";
+    case ZITH_TOKEN_TYPEDEF: return "typedef";
+    case ZITH_TOKEN_IMPLEMENT: return "implement";
+    case ZITH_TOKEN_FN: return "fn";
+    case ZITH_TOKEN_IMPORT: return "import";
+    case ZITH_TOKEN_USE: return "use";
+    case ZITH_TOKEN_CONTEXT: return "context";
+    case ZITH_TOKEN_MACRO: return "macro";
+    case ZITH_TOKEN_EXPORT: return "export";
+    case ZITH_TOKEN_FROM: return "from";
+    case ZITH_TOKEN_AS: return "as";
+    case ZITH_TOKEN_LET: return "let";
+    case ZITH_TOKEN_VAR: return "var";
+    case ZITH_TOKEN_AUTO: return "auto";
+    case ZITH_TOKEN_CONST: return "const";
+    case ZITH_TOKEN_MUTABLE: return "mutable";
+    case ZITH_TOKEN_GLOBAL: return "global";
+    case ZITH_TOKEN_LEND: return "lend";
+    case ZITH_TOKEN_SHARED: return "shared";
+    case ZITH_TOKEN_VIEW: return "view";
+    case ZITH_TOKEN_UNIQUE: return "unique";
+    case ZITH_TOKEN_EXTENSION: return "extension";
+    case ZITH_TOKEN_YIELD: return "yield";
+    case ZITH_TOKEN_ASYNC: return "async";
+    case ZITH_TOKEN_FLOWING: return "flowing";
+    case ZITH_TOKEN_ENTRY: return "entry";
+    case ZITH_TOKEN_NORETURN: return "noreturn";
+    case ZITH_TOKEN_RECURSE: return "recurse";
+    case ZITH_TOKEN_MODIFIER: return "modifier";
+    case ZITH_TOKEN_IF: return "if";
+    case ZITH_TOKEN_ELSE: return "else";
+    case ZITH_TOKEN_FOR: return "for";
+    case ZITH_TOKEN_IN: return "in";
+    case ZITH_TOKEN_SWITCH: return "switch";
+    case ZITH_TOKEN_RETURN: return "return";
+    case ZITH_TOKEN_BREAK: return "break";
+    case ZITH_TOKEN_CONTINUE: return "continue";
+    case ZITH_TOKEN_GOTO: return "goto";
+    case ZITH_TOKEN_MARKER: return "marker";
+    case ZITH_TOKEN_SCENE: return "scene";
+    case ZITH_TOKEN_END: return "end";
+    case ZITH_TOKEN_SPAWN: return "spawn";
+    case ZITH_TOKEN_AWAIT: return "await";
+    case ZITH_TOKEN_JOIN: return "join";
+    case ZITH_TOKEN_TRY: return "try";
+    case ZITH_TOKEN_CATCH: return "catch";
+    case ZITH_TOKEN_MUST: return "must";
+    case ZITH_TOKEN_THROW: return "throw";
+    case ZITH_TOKEN_DO: return "do";
+    case ZITH_TOKEN_DROP: return "drop";
+    case ZITH_TOKEN_REQUIRE: return "require";
+    case ZITH_TOKEN_IS: return "is";
+    case ZITH_TOKEN_PREFIX: return "prefix";
+    case ZITH_TOKEN_SUFIX: return "sufix";
+    case ZITH_TOKEN_INFIX: return "infix";
+    case ZITH_TOKEN_AND: return "and";
+    case ZITH_TOKEN_OR: return "or";
+    case ZITH_TOKEN_NOT_EQUAL: return "not";
+    case ZITH_TOKEN_EQUAL: return "==";
+    case ZITH_TOKEN_GREATER_THAN_OR_EQUAL: return ">=";
+    case ZITH_TOKEN_LESS_THAN_OR_EQUAL: return "<=";
+    case ZITH_TOKEN_ARROW: return "->";
+    case ZITH_TOKEN_PLUS_EQUAL: return "+=";
+    case ZITH_TOKEN_MINUS_EQUAL: return "-=";
+    case ZITH_TOKEN_MULTIPLY_EQUAL: return "*=";
+    case ZITH_TOKEN_DIVIDE_EQUAL: return "/=";
+    case ZITH_TOKEN_DECLARATION: return ":=";
+    case ZITH_TOKEN_DOTS: return "...";
+    case ZITH_TOKEN_PLUS: return "+";
+    case ZITH_TOKEN_MINUS: return "-";
+    case ZITH_TOKEN_MULTIPLY: return "*";
+    case ZITH_TOKEN_DIVIDE: return "/";
+    case ZITH_TOKEN_MOD: return "%";
+    case ZITH_TOKEN_ASSIGNMENT: return "=";
+    case ZITH_TOKEN_LESS_THAN: return "<";
+    case ZITH_TOKEN_GREATER_THAN: return ">";
+    case ZITH_TOKEN_BANG: return "!";
+    case ZITH_TOKEN_QUESTION: return "?";
+    case ZITH_TOKEN_LPAREN: return "(";
+    case ZITH_TOKEN_RPAREN: return ")";
+    case ZITH_TOKEN_LBRACE: return "{";
+    case ZITH_TOKEN_RBRACE: return "}";
+    case ZITH_TOKEN_LBRACKET: return "[";
+    case ZITH_TOKEN_RBRACKET: return "]";
+    case ZITH_TOKEN_COMMA: return ",";
+    case ZITH_TOKEN_SEMICOLON: return ";";
+    case ZITH_TOKEN_COLON: return ":";
+    case ZITH_TOKEN_DOT: return ".";
+    case ZITH_TOKEN_NULL: return "null";
+    case ZITH_TOKEN_STRING: return "string";
+    case ZITH_TOKEN_NUMBER: return "number";
+    case ZITH_TOKEN_FLOAT: return "float";
+    case ZITH_TOKEN_HEXADECIMAL: return "hex";
+    case ZITH_TOKEN_BINARY: return "binary";
+    case ZITH_TOKEN_OCTAL: return "octal";
+    case ZITH_TOKEN_UNKNOWN: return "unknown";
+    default: return "?";
+    }
+}
+

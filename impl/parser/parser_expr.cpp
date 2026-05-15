@@ -2,7 +2,7 @@
 //
 // Refactored to use centralized modules.
 #include "memory/arena.hpp"
-#include "parser.h"
+#include "zith/parser.h"
 #include <cstring>
 
 using zith::ArenaList;

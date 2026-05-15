@@ -39,7 +39,7 @@ include(FetchContent)
 
 FetchContent_Declare(cli11
     GIT_REPOSITORY https://github.com/CLIUtils/CLI11.git
-    GIT_TAG v2.4.1
+    GIT_TAG v2.6.2
     GIT_SHALLOW TRUE
 )
 FetchContent_MakeAvailable(cli11)
@@ -192,7 +192,7 @@ set(PARSER_CPP_SOURCES
 
 set(CLI_SOURCES
     ../impl/cli/main.cpp
-    ../impl/cli/CLI.cpp
+    ../impl/cli/cli11_init.cpp
     ../impl/cli/pipeline/pipeline.cpp
     ../impl/cli/runtime_interpreted/runtime_interpreted.cpp
     ../impl/cli/cmd/build/build.cpp

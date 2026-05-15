@@ -4,7 +4,7 @@
 // All fprintf/printf diagnostic calls are now routed through DiagManager.
 #include "diagnostics/diagnostics.hpp"
 #include "memory/arena.hpp"
-#include "parser.h"
+#include "zith/parser.h"
 #include <cstdlib>
 #include <cstring>
 

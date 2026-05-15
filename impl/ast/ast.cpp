@@ -4,19 +4,18 @@
 //   - types/types.hpp for enums
 //   - memory/arena.hpp for allocation
 //   - diagnostics/diagnostics.hpp for debug output
-#include <ast/ast.h>
+#include "zith/ast.h"
 #include <cstdio>
 #include <cstring>
-#include <diagnostics/diagnostics.hpp>
-#include <lexer/debug.hpp>
-#include <memory/arena.hpp>
-#include <types/types.hpp>
+#include "diagnostics/diagnostics.hpp"
+#include "memory/arena.hpp"
+#include "types/types.hpp"
 
 // ============================================================================
 // Internal helpers — C++ linkage only, not exported
 // ============================================================================
 
-static ZithNode *alloc_node(ZithArena *a, ZithNodeId id, ZithSourceLoc loc) {
+static ZithNode *alloc_node(ZithArena *a, const uint16_t id, const ZithSourceLoc loc) {
     auto *n = static_cast<ZithNode *>(zith_arena_alloc(a, sizeof(ZithNode)));
     if (!n)
         return nullptr;
@@ -346,8 +345,9 @@ ZithNode *zith_ast_make_try_catch(ZithArena *a, ZithSourceLoc loc, ZithTryCatchP
 
 // list → ZithImportPayload, list.len = path_len
 // Used for IMPORT and EXPORT
-ZithNode *zith_ast_make_import(ZithArena *a, ZithSourceLoc loc, ZithImportPayload data) {
-    ZithNodeId node_type = data.is_export ? ZITH_NODE_EXPORT : ZITH_NODE_IMPORT;
+ZithNode *zith_ast_make_import(ZithArena *a, const ZithSourceLoc loc,
+                               const ZithImportPayload &data) {
+    const uint16_t node_type = data.is_export ? ZITH_NODE_EXPORT : ZITH_NODE_IMPORT;
     ZithNode *n          = alloc_node(a, node_type, loc);
     if (!n)
         return nullptr;
@@ -430,9 +430,10 @@ ZithNode *zith_ast_make_continue(ZithArena *a, ZithSourceLoc loc, const char *la
 }
 
 // kids.a = body/expr, custom = is_block
-ZithNode *zith_ast_make_spawn(ZithArena *a, ZithSourceLoc loc, ZithNode *body, bool is_block) {
-    const ZithNodeId id =
-        is_block ? (uint16_t)ZITH_NODE_SPAWN_STMT : (uint16_t)ZITH_NODE_SPAWN_EXPR;
+ZithNode *zith_ast_make_spawn(ZithArena *a, const ZithSourceLoc loc, ZithNode *body,
+                              const bool is_block) {
+    const auto id =
+        is_block ? static_cast<uint16_t>(ZITH_NODE_SPAWN_STMT) : static_cast<uint16_t>(ZITH_NODE_SPAWN_EXPR);
     ZithNode *n = alloc_node(a, id, loc);
     if (!n)
         return nullptr;
@@ -672,7 +673,7 @@ static void walk_children(ZithNode *n, ZithASTVisitorFn pre, ZithASTVisitorFn po
 // Debug
 // ============================================================================
 
-const char *zith_ast_node_name(ZithNodeId id) {
+const char *zith_ast_node_name(const uint16_t id) {
     switch (id) {
     case ZITH_NODE_ERROR:
         return "error";

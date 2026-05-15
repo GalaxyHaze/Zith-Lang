@@ -31,9 +31,9 @@ typedef enum ZithSymbolKind {
 // ============================================================================
 
 typedef enum ZithImportVisibility {
-    ZITH_VIS_PRIVATE   = 0,
-    ZITH_VIS_PUBLIC    = 1,
-    ZITH_VIS_PROTECTED = 2,
+    ZITH_IMPORT_VIS_PRIVATE   = 0,
+    ZITH_IMPORT_VIS_PUBLIC    = 1,
+    ZITH_IMPORT_VIS_PROTECTED = 2,
 } ZithImportVisibility;
 
 // ============================================================================

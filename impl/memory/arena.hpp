@@ -1,12 +1,5 @@
-// impl/memory/arena.hpp — Memory arena management (C++ wrapper)
+// impl/memory/arena.hpp — Memory arena C++ convenience
 #pragma once
 
-#include <cstddef>
-#include <zith/zith.hpp>
-
-#ifdef __cplusplus
-// ArenaList is defined in utils.hpp - include it for convenience
-#include "utils.hpp"
-#endif
-
-#include <memory/arena.hpp>
+#include "zith/memory.h"
+#include "memory/utils.hpp"

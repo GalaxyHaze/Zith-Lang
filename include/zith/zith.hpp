@@ -56,7 +56,7 @@ namespace zith {
     }
 
     namespace debug {
-        const char *token_type_name(ZithTokenType t);
+        inline const char *token_type_name(ZithTokenType t) { return zith_token_type_name(t); }
         void print_tokens(ZithTokenStream tokens);
         void print_ast(const ZithNode *node, int indent = 0);
     }

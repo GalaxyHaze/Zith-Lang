@@ -3,7 +3,11 @@
 // Centralizes all diagnostic emission and printing logic.
 // Replaces scattered fprintf/printf calls in parser_utils.cpp and elsewhere.
 #include "diagnostics.hpp"
+
+#include "zith/memory.h"
+
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 
 // ============================================================================

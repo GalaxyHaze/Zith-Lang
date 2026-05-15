@@ -3,8 +3,8 @@
 #include <cli/cmd/commands.hpp>
 #include <zith/zith.hpp>
 
-#include <ast/ast.h>
-#include <lexer/debug.hpp>
+#include <zith/ast.h>
+//#include <lexer/debug.hpp>
 
 #include <fstream>
 #include <thread>
@@ -36,7 +36,7 @@ int cmd_check(const std::string &input_file, const std::string &mode_str, const 
     if (!arena)
         return 1;
 
-    zith_debug_tokens(stream.data, stream.len);
+    //zith_debug_tokens(stream.data, stream.len);
 
     std::vector<const char *> import_roots;
     size_t import_root_count;

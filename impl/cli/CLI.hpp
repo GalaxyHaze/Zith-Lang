@@ -2,17 +2,15 @@
 //
 // Requires C++17 (structured bindings, if-initializers).
 // Depends on: CLI11, Zith/zith.h
+#pragma once
 
+#include "CLI/App.hpp"
+#include "CLI/ExtraValidators.hpp"
 #include "cmd/commands.hpp"
 #include "pipeline/pipeline.hpp"
 #include "project_config/project_config.hpp"
-#include "runtime_interpreted/runtime_interpreted.hpp"
-#include <CLI/CLI.hpp>
-#include <filesystem>
-#include <fstream>
 #include <iostream>
 #include <string>
-#include <thread>
 #include <vector>
 #include <zith/zith.hpp>
 
@@ -20,7 +18,7 @@ using namespace zith::cli::commands;
 using namespace zith::cli::pipeline;
 using namespace zith::cli::project_config;
 
-extern "C" int zith_run(const int argc, const char *const argv[]) {
+extern "C" inline int zith_run(const int argc, const char *const argv[]) {
     CLI::App app{"Zith - A low-level general-purpose language"};
     app.require_subcommand(0, 1);
 
@@ -128,8 +126,7 @@ extern "C" int zith_run(const int argc, const char *const argv[]) {
     if (*run_cmd)
         return cmd_run(input_file, output_file, mode_str, interpreted, verbose, include_dirs);
 
-    ZithProject proj;
-    if (try_load_project(proj))
+    if (ZithProject proj; try_load_project(proj))
         return cmd_build("", "", mode_str, verbose, include_dirs);
 
     return cmd_help();
