@@ -387,8 +387,10 @@ static int cmd_new(const std::string &project_name, bool verbose) {
 
     // ── Create directories ────────────────────────────────────────────────
     fs::create_directories(root / "src");
-    fs::create_directories(root / "lib");
-    fs::create_directories(root / "examples");
+    fs::create_directories(root / "asset");
+    fs::create_directories(root / "docs");
+    fs::create_directories(root / ".zmodules");
+    fs::create_directories(root / "tests");
 
     if (verbose) {
         print_info("Created project structure: " + root.string());
@@ -421,11 +423,11 @@ static int cmd_new(const std::string &project_name, bool verbose) {
         toml << "\n";
         toml << "[paths]\n";
         toml << "src_dir = \"src\"\n";
-        toml << "bin_dir = \"bin\"\n";
-        toml << "lib_dir = \"lib\"\n";
+        toml << "bin_dir = \"target\"\n";
+        toml << "mod_dir = \".zmodules\"\n";
         toml << "docs_dir = \"docs\"\n";
-        toml << "test_dir = \"examples\"\n";
-        toml << "cache_dir = \".zith_cache\"\n";
+        toml << "test_dir = \"test\"\n";
+        toml << "cache_dir = \".zcache\"\n";
         toml << "\n";
         toml << "# Optional: dependencies, link_libs, include_dirs, etc.\n";
     }
