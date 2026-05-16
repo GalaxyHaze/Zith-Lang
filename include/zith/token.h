@@ -116,6 +116,7 @@ typedef enum ZithTokenType {
     ZITH_TOKEN_SEMICOLON,
     ZITH_TOKEN_COLON,
     ZITH_TOKEN_DOT,
+    ZITH_TOKEN_PIPE,
 
     ZITH_TOKEN_NULL,
     ZITH_TOKEN_STRING,
@@ -125,6 +126,7 @@ typedef enum ZithTokenType {
     ZITH_TOKEN_BINARY,
     ZITH_TOKEN_OCTAL,
 
+    ZITH_TOKEN_SCOPE,
     ZITH_TOKEN_UNKNOWN,
     ZITH_TOKEN_END,
 } ZithTokenType;

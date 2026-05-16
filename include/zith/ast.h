@@ -51,6 +51,7 @@ typedef struct {
     ZithNode *return_type;
     ZithNode *body;
     ZithVisibility visibility;
+    int32_t vis_depth;
     bool is_extern;
 } ZithFuncPayload;
 
@@ -60,6 +61,7 @@ typedef struct {
     ZithBindingKind binding;
     ZithOwnership ownership;
     ZithVisibility visibility;
+    int32_t vis_depth;
     ZithNode *type_node;
     ZithNode *initializer;
 } ZithVarPayload;
@@ -78,6 +80,7 @@ typedef struct {
     size_t name_len;
     ZithOwnership ownership;
     ZithVisibility visibility;
+    int32_t vis_depth;
     ZithNode *type_node;
     ZithNode *default_value;
 } ZithFieldPayload;
@@ -90,6 +93,7 @@ typedef struct {
     ZithNode **methods;
     size_t method_count;
     ZithVisibility visibility;
+    int32_t vis_depth;
 } ZithStructPayload;
 
 typedef struct {
@@ -98,6 +102,7 @@ typedef struct {
     ZithNode **variants;
     size_t variant_count;
     ZithVisibility visibility;
+    int32_t vis_depth;
 } ZithEnumPayload;
 
 typedef struct {
@@ -106,6 +111,7 @@ typedef struct {
     ZithNode **types;
     size_t type_count;
     ZithVisibility visibility;
+    int32_t vis_depth;
     bool is_raw;
 } ZithUnionPayload;
 
@@ -164,6 +170,15 @@ typedef struct {
 } ZithImportPayload;
 
 typedef struct {
+    const char **names;
+    size_t *name_lens;
+    size_t count;
+    ZithNode *type_node;
+    ZithNode *initializer;
+    ZithBindingKind binding;
+} ZithDestructurePayload;
+
+typedef struct {
     const char *name;
     size_t name_len;
     ZithNode **params;
@@ -212,6 +227,7 @@ ZithNode *zith_ast_make_member(ZithArena *a, ZithSourceLoc loc, ZithNode *object
 ZithNode *zith_ast_make_arrow_call(ZithArena *a, ZithSourceLoc loc, ZithNode *receiver, ZithNode *call);
 ZithNode *zith_ast_make_cast(ZithArena *a, ZithSourceLoc loc, ZithNode *expr, ZithNode *type_node);
 ZithNode *zith_ast_make_param(ZithArena *a, ZithSourceLoc loc, ZithParamPayload param);
+ZithNode *zith_ast_make_destructure(ZithArena *a, ZithSourceLoc loc, const ZithDestructurePayload *decl);
 ZithNode *zith_ast_make_block(ZithArena *a, ZithSourceLoc loc, ZithNode **stmts, size_t count);
 ZithNode *zith_ast_make_unbody(ZithArena *a, ZithSourceLoc loc, const ZithToken *tokens, size_t token_count);
 ZithNode *zith_ast_make_if(ZithArena *a, ZithSourceLoc loc, ZithNode *cond, ZithNode *then_br, ZithNode *else_br);

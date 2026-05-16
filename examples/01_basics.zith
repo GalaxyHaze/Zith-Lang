@@ -79,7 +79,7 @@ fn demo_ownership() {
     // --- unique: Exclusive Ownership ---
     // This is the default owner type. It has sole responsibility for the data.
     // When it goes out of scope, the data is dropped.
-    let data: unique = 100;
+    let data: unique i32 = 100;
     
     // --- view: Immutable Borrow ---
     // Creates a read-only reference. You can have unlimited 'views' 

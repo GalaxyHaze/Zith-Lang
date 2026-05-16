@@ -149,8 +149,10 @@ static constexpr auto TokenTable = std::to_array<std::pair<std::string_view, Zit
     {"]", ZITH_TOKEN_RBRACKET},
     {",", ZITH_TOKEN_COMMA},
     {";", ZITH_TOKEN_SEMICOLON},
+    {"::", ZITH_TOKEN_SCOPE},
     {":", ZITH_TOKEN_COLON},
     {".", ZITH_TOKEN_DOT},
+    {"|", ZITH_TOKEN_PIPE},
 });
 
 static constexpr size_t N           = TokenTable.size();

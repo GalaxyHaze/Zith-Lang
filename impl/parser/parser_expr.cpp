@@ -23,10 +23,40 @@ ZithNode *parser_parse_type(Parser *p) {
         ZithNode *inner = parser_parse_type(p);
         return zith_ast_make_unary_op(p->arena, loc, ZITH_TOKEN_BANG, inner, true);
     }
-    // Ownership modifiers
-    if (parser_match(p, ZITH_TOKEN_UNIQUE) || parser_match(p, ZITH_TOKEN_SHARED) ||
-        parser_match(p, ZITH_TOKEN_VIEW) || parser_match(p, ZITH_TOKEN_LEND)) {
-        // TODO: Create ownership node
+    // Ownership modifiers in type position
+    {
+        uint16_t own_type = 0;
+        if (parser_match(p, ZITH_TOKEN_UNIQUE))
+            own_type = ZITH_NODE_TYPE_UNIQUE;
+        else if (parser_match(p, ZITH_TOKEN_SHARED))
+            own_type = ZITH_NODE_TYPE_SHARED;
+        else if (parser_match(p, ZITH_TOKEN_VIEW))
+            own_type = ZITH_NODE_TYPE_VIEW;
+        else if (parser_match(p, ZITH_TOKEN_LEND))
+            own_type = ZITH_NODE_TYPE_LEND;
+        else if (parser_match(p, ZITH_TOKEN_EXTENSION))
+            own_type = ZITH_NODE_TYPE_EXTENSION;
+
+        if (own_type) {
+            ZithNode *inner = nullptr;
+            // If next token is a type keyword or identifier, parse inner type
+            if (parser_check(p, ZITH_TOKEN_TYPE) || parser_check(p, ZITH_TOKEN_IDENTIFIER) ||
+                parser_check(p, ZITH_TOKEN_QUESTION) || parser_check(p, ZITH_TOKEN_BANG) ||
+                parser_check(p, ZITH_TOKEN_MULTIPLY) || parser_check(p, ZITH_TOKEN_LBRACKET) ||
+                parser_check(p, ZITH_TOKEN_UNIQUE) || parser_check(p, ZITH_TOKEN_SHARED) ||
+                parser_check(p, ZITH_TOKEN_VIEW) || parser_check(p, ZITH_TOKEN_LEND) ||
+                parser_check(p, ZITH_TOKEN_EXTENSION)) {
+                inner = parser_parse_type(p);
+            }
+            ZithNode *n = (ZithNode *)zith_arena_alloc(p->arena, sizeof(ZithNode));
+            if (n) {
+                memset(n, 0, sizeof(ZithNode));
+                n->type = own_type;
+                n->loc  = loc;
+                n->data.kids.a = inner;
+            }
+            return n;
+        }
     }
     if (parser_match(p, ZITH_TOKEN_MULTIPLY)) {
         ZithNode *inner = parser_parse_type(p);
@@ -131,14 +161,38 @@ static ZithNode *parse_nud(Parser *p) {
     }
     case ZITH_TOKEN_MINUS:
     case ZITH_TOKEN_BANG:
+    case ZITH_TOKEN_SCOPE:
         return zith_ast_make_unary_op(p->arena, loc, t->type, parse_expr_bp(p, 13), false);
     case ZITH_TOKEN_LPAREN: {
         ZithNode *expr = parser_parse_expression(p);
         parser_expect(p, ZITH_TOKEN_RPAREN, "expected ')'");
         return expr;
     }
+    case ZITH_TOKEN_PIPE: {
+        ArenaList<ZithNode *> items_b;
+        items_b.init(p->arena, 8);
+        while (!parser_check(p, ZITH_TOKEN_PIPE) && !parser_is_at_end(p)) {
+            items_b.push(p->arena, parser_parse_expression(p));
+            if (!parser_match(p, ZITH_TOKEN_COMMA))
+                break;
+        }
+        parser_expect(p, ZITH_TOKEN_PIPE, "expected '|' closing pack literal");
+        size_t count    = 0;
+        ZithNode **items = items_b.flatten(p->arena, &count);
+        ZithNode *n = (ZithNode *)zith_arena_alloc(p->arena, sizeof(ZithNode));
+        if (n) {
+            memset(n, 0, sizeof(ZithNode));
+            n->type = ZITH_NODE_TUPLE_LIT;
+            n->loc  = loc;
+            n->data.list.ptr = items;
+            n->data.list.len = count;
+        }
+        return n;
+    }
     case ZITH_TOKEN_SPAWN:
         return zith_ast_make_spawn(p->arena, loc, parser_parse_expression(p), false);
+    case ZITH_TOKEN_MUST:
+        return zith_ast_make_unary_op(p->arena, loc, ZITH_TOKEN_MUST, parse_expr_bp(p, 13), false);
     default: {
         char buf[128];
         snprintf(buf, sizeof(buf), "unexpected token '%.*s'", static_cast<int>(t->lexeme.len), t->lexeme.data);

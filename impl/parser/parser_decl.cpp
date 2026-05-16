@@ -25,6 +25,7 @@ extern bool check_kw(const Parser *p, const char *kw);
 
 extern ZithNode *parser_parse_type(Parser *p);
 extern ZithNode *parser_parse_expression(Parser *p);
+static ZithNode *parse_destructure_decl(Parser *p, ZithBindingKind binding, ZithVisibility vis, int32_t vis_depth);
 
 // ============================================================================
 // Helpers
@@ -177,26 +178,64 @@ static void register_import_symbol(Parser *p, const char *name, size_t len, Zith
     }
 }
 
-static ZithVisibility parse_visibility(Parser *p, ZithVisibility *current_vis) {
+static ZithVisibility parse_visibility(Parser *p, ZithVisibility *current_vis,
+                                       int32_t *depth_out) {
     ZithVisibility vis = *current_vis;
+    int32_t depth      = depth_out ? *depth_out : 0;
+    bool consumed      = false;
+
     if (parser_check(p, ZITH_TOKEN_MODIFIER)) {
         const char *d = parser_peek(p)->lexeme.data;
         size_t l      = parser_peek(p)->lexeme.len;
-        if (l == 6 && strncmp(d, "public", 6) == 0)
-            vis = ZITH_VIS_PUBLIC;
-        else if (l == 9 && strncmp(d, "protected", 9) == 0)
-            vis = ZITH_VIS_PROTECTED;
-        else if (l == 7 && strncmp(d, "private", 7) == 0)
-            vis = ZITH_VIS_PRIVATE;
+
+        if (l == 3 && strncmp(d, "pub", 3) == 0) {
+            vis   = ZITH_VIS_PUBLIC;
+            depth = 0;
+        } else if (l == 7 && strncmp(d, "private", 7) == 0) {
+            vis   = ZITH_VIS_PRIVATE;
+            depth = 0;
+        } else if (l == 3 && strncmp(d, "mod", 3) == 0) {
+            vis   = ZITH_VIS_MODULE;
+            depth = 1;
+            if (parser_peek_ahead(p, 1)->type == ZITH_TOKEN_LPAREN) {
+                parser_advance(p);
+                consumed = true;
+                parser_advance(p);
+                if (parser_peek(p)->type == ZITH_TOKEN_DOTS) {
+                    depth = -1;
+                    parser_advance(p);
+                } else if (parser_peek(p)->type == ZITH_TOKEN_DOT &&
+                           parser_peek_ahead(p, 1)->type == ZITH_TOKEN_DOT) {
+                    depth = -1;
+                    parser_advance(p);
+                    parser_advance(p);
+                } else if (parser_peek(p)->type == ZITH_TOKEN_NUMBER) {
+                    const char *num     = parser_peek(p)->lexeme.data;
+                    size_t num_len      = parser_peek(p)->lexeme.len;
+                    depth = 0;
+                    for (size_t i = 0; i < num_len; ++i)
+                        if (num[i] >= '0' && num[i] <= '9')
+                            depth = depth * 10 + (num[i] - '0');
+                    parser_advance(p);
+                }
+                parser_expect(p, ZITH_TOKEN_RPAREN, "expected ')' after mod depth");
+            }
+        }
 
         if (parser_peek_ahead(p, 1)->type == ZITH_TOKEN_COLON) {
+            if (!consumed)
+                parser_advance(p);
             parser_advance(p);
-            parser_advance(p); // modifier :
             *current_vis = vis;
+            if (depth_out)
+                *depth_out = depth;
             return (ZithVisibility)-1;
         }
-        parser_advance(p);
+        if (!consumed)
+            parser_advance(p);
     }
+    if (depth_out)
+        *depth_out = depth;
     return vis;
 }
 
@@ -206,44 +245,41 @@ static ZithVisibility parse_visibility(Parser *p, ZithVisibility *current_vis) {
 
 static ZithNode *parse_param(Parser *p) {
     const ZithSourceLoc loc = parser_peek(p)->loc;
-    ZithOwnership own       = ZITH_OWN_DEFAULT;
     bool is_mutable         = false;
-    if (parser_match(p, ZITH_TOKEN_UNIQUE))
-        own = ZITH_OWN_UNIQUE;
-    else if (parser_match(p, ZITH_TOKEN_SHARED))
-        own = ZITH_OWN_SHARED;
-    else if (parser_match(p, ZITH_TOKEN_VIEW))
-        own = ZITH_OWN_VIEW;
-    else if (parser_match(p, ZITH_TOKEN_LEND)) {
-        own        = ZITH_OWN_LEND;
-        is_mutable = true;
-    }
 
+    // TODO: Support destructure params (ZITH_NODE_DESTRUCTURE) in a future iteration
     const ZithToken *name = parser_expect(p, ZITH_TOKEN_IDENTIFIER, "expected param name");
     ZithNode *type_node   = nullptr;
-    if (parser_check(p, ZITH_TOKEN_COLON)) {
+    if (parser_match(p, ZITH_TOKEN_COLON)) {
         type_node = parser_parse_type(p);
     }
-    // parser_expect(p, ZITH_TOKEN_COLON, "expected ':'");
 
     ZithNode *def_val =
         parser_match(p, ZITH_TOKEN_ASSIGNMENT) ? parser_parse_expression(p) : nullptr;
+
+    ZithOwnership own = ZITH_OWN_DEFAULT;
+    if (type_node) {
+        switch (type_node->type) {
+        case ZITH_NODE_TYPE_UNIQUE: own = ZITH_OWN_UNIQUE; break;
+        case ZITH_NODE_TYPE_SHARED: own = ZITH_OWN_SHARED; break;
+        case ZITH_NODE_TYPE_VIEW:   own = ZITH_OWN_VIEW; break;
+        case ZITH_NODE_TYPE_LEND:   own = ZITH_OWN_LEND; is_mutable = true; break;
+        case ZITH_NODE_TYPE_PACK:   own = ZITH_OWN_PACK; break;
+        case ZITH_NODE_TYPE_EXTENSION: own = ZITH_OWN_DEFAULT; break;
+        }
+    }
 
     return zith_ast_make_param(
         p->arena, loc, {name->lexeme.data, name->lexeme.len, own, type_node, def_val, is_mutable});
 }
 
-static ZithNode *parse_var_decl(Parser *p, ZithBindingKind binding) {
+static ZithNode *parse_var_decl(Parser *p, ZithBindingKind binding, ZithVisibility vis = ZITH_VIS_PRIVATE, int32_t vis_depth = 0) {
     const ZithSourceLoc loc = parser_peek(p)->loc;
-    ZithOwnership own       = ZITH_OWN_DEFAULT;
-    if (parser_match(p, ZITH_TOKEN_UNIQUE))
-        own = ZITH_OWN_UNIQUE;
-    else if (parser_match(p, ZITH_TOKEN_SHARED))
-        own = ZITH_OWN_SHARED;
-    else if (parser_match(p, ZITH_TOKEN_VIEW))
-        own = ZITH_OWN_VIEW;
-    else if (parser_match(p, ZITH_TOKEN_LEND))
-        own = ZITH_OWN_LEND;
+
+    // Check for destructure pattern: let [x, y, z]
+    if (parser_check(p, ZITH_TOKEN_LBRACKET)) {
+        return parse_destructure_decl(p, binding, vis, vis_depth);
+    }
 
     const ZithToken *name = parser_expect(p, ZITH_TOKEN_IDENTIFIER, "expected variable name");
     ZithNode *type_node   = parser_match(p, ZITH_TOKEN_COLON) ? parser_parse_type(p) : nullptr;
@@ -262,7 +298,56 @@ static ZithNode *parse_var_decl(Parser *p, ZithBindingKind binding) {
     parser_expect(p, ZITH_TOKEN_SEMICOLON, "expected ';'");
     return zith_ast_make_var_decl(
         p->arena, loc,
-        {name->lexeme.data, name->lexeme.len, binding, own, ZITH_VIS_PRIVATE, type_node, init});
+        {name->lexeme.data, name->lexeme.len, binding, ZITH_OWN_DEFAULT, vis, vis_depth, type_node, init});
+}
+
+static ZithNode *parse_destructure_decl(Parser *p, ZithBindingKind binding, ZithVisibility /*vis*/, int32_t /*vis_depth*/) {
+    const ZithSourceLoc loc = parser_peek(p)->loc;
+    parser_advance(p); // consume '['
+
+    ArenaList<const char *> names_b;
+    ArenaList<size_t> name_lens_b;
+    names_b.init(p->arena, 8);
+    name_lens_b.init(p->arena, 8);
+
+    while (!parser_check(p, ZITH_TOKEN_RBRACKET) && !parser_is_at_end(p)) {
+        const ZithToken *name = parser_expect(p, ZITH_TOKEN_IDENTIFIER, "expected variable name in destructure");
+        names_b.push(p->arena, name->lexeme.data);
+        name_lens_b.push(p->arena, name->lexeme.len);
+        if (!parser_match(p, ZITH_TOKEN_COMMA))
+            break;
+    }
+    parser_expect(p, ZITH_TOKEN_RBRACKET, "expected ']' closing destructure");
+
+    // Parse optional type annotation: : type
+    ZithNode *type_node = parser_match(p, ZITH_TOKEN_COLON) ? parser_parse_type(p) : nullptr;
+
+    // Parse optional initializer: = expr  or  := expr
+    ZithNode *init = nullptr;
+    if (parser_match(p, ZITH_TOKEN_ASSIGNMENT) || parser_match(p, ZITH_TOKEN_DECLARATION)) {
+        if (p->mode == ZITH_MODE_SCAN) {
+            while (!parser_check(p, ZITH_TOKEN_SEMICOLON) && !parser_is_at_end(p))
+                parser_advance(p);
+        } else {
+            init = parser_parse_expression(p);
+        }
+    }
+    parser_expect(p, ZITH_TOKEN_SEMICOLON, "expected ';'");
+
+    size_t count = names_b.size();
+    const char **names = names_b.flatten(p->arena, &count);
+    size_t *name_lens = name_lens_b.flatten(p->arena, &count);
+
+    ZithDestructurePayload payload;
+    memset(&payload, 0, sizeof(payload));
+    payload.names       = names;
+    payload.name_lens   = name_lens;
+    payload.count       = count;
+    payload.type_node   = type_node;
+    payload.initializer = init;
+    payload.binding     = binding;
+
+    return zith_ast_make_destructure(p->arena, loc, &payload);
 }
 
 // ============================================================================
@@ -387,7 +472,7 @@ static ZithNode *parse_body(Parser *p) {
 // Top-Level Declarations
 // ============================================================================
 
-static ZithNode *parse_fn_decl(Parser *p, ZithSourceLoc loc, ZithVisibility vis, bool is_method) {
+static ZithNode *parse_fn_decl(Parser *p, ZithSourceLoc loc, ZithVisibility vis, int32_t vis_depth, bool is_method) {
     ZithFnKind kind = ZITH_FN_NORMAL;
     if (parser_match(p, ZITH_TOKEN_ASYNC)) {
         kind = ZITH_FN_ASYNC;
@@ -437,10 +522,10 @@ static ZithNode *parse_fn_decl(Parser *p, ZithSourceLoc loc, ZithVisibility vis,
     ZithNode **params = params_b.flatten(p->arena, &pcount);
     return zith_ast_make_func_decl(p->arena, loc,
                                    {name->lexeme.data, name->lexeme.len, kind, params, pcount,
-                                    ret_type, body, vis, is_method});
+                                    ret_type, body, vis, vis_depth, is_method});
 }
 
-static ZithNode *parse_struct_decl(Parser *p, ZithVisibility struct_vis) {
+static ZithNode *parse_struct_decl(Parser *p, ZithVisibility struct_vis, int32_t struct_depth) {
     const ZithSourceLoc loc = parser_peek(p)->loc;
     parser_advance(p); // consume 'struct'
     const ZithToken *name = parser_expect(p, ZITH_TOKEN_IDENTIFIER, "expected struct name");
@@ -457,35 +542,28 @@ static ZithNode *parse_struct_decl(Parser *p, ZithVisibility struct_vis) {
 
     while (!parser_check(p, ZITH_TOKEN_RBRACE) && !parser_is_at_end(p)) {
         // 1. Parse Visibility (public/private/protected)
-        ZithVisibility item_vis = parse_visibility(p, &current_vis);
+        int32_t item_depth = 0;
+        ZithVisibility item_vis = parse_visibility(p, &current_vis, &item_depth);
         if ((int)item_vis == -1)
             continue;
 
         // 2. Check for Methods (fn, async, etc)
         if (parser_check(p, ZITH_TOKEN_FN) || parser_check(p, ZITH_TOKEN_ASYNC) ||
             parser_check(p, ZITH_TOKEN_FLOWING) || parser_check(p, ZITH_TOKEN_NORETURN)) {
-            methods_b.push(p->arena, parse_fn_decl(p, parser_peek(p)->loc, item_vis, true));
+            methods_b.push(p->arena, parse_fn_decl(p, parser_peek(p)->loc, item_vis, item_depth, true));
             continue;
         }
 
         // 3. Check for Fields
-        // Matches: x: i32,  or  unique x: i32,  or  let x: i32,
+        // Matches: x: i32,  or  [x,y]: i32,  or  let x: i32,
         if (parser_check(p, ZITH_TOKEN_LET) || parser_check(p, ZITH_TOKEN_VAR) ||
-            parser_check(p, ZITH_TOKEN_IDENTIFIER) || parser_check(p, ZITH_TOKEN_UNIQUE) ||
-            parser_check(p, ZITH_TOKEN_SHARED)) {
+            parser_check(p, ZITH_TOKEN_IDENTIFIER)) {
 
             // Consume 'let' or 'var' if present (optional in your new syntax)
             if (parser_match(p, ZITH_TOKEN_LET) || parser_match(p, ZITH_TOKEN_VAR)) {
             }
 
             const ZithSourceLoc floc = parser_peek(p)->loc;
-            ZithOwnership own        = ZITH_OWN_DEFAULT;
-
-            // Parse Ownership (unique/shared)
-            if (parser_match(p, ZITH_TOKEN_UNIQUE))
-                own = ZITH_OWN_UNIQUE;
-            else if (parser_match(p, ZITH_TOKEN_SHARED))
-                own = ZITH_OWN_SHARED;
 
             // Parse Name
             const ZithToken *fname = parser_expect(p, ZITH_TOKEN_IDENTIFIER, "expected field name");
@@ -510,13 +588,25 @@ static ZithNode *parse_struct_decl(Parser *p, ZithVisibility struct_vis) {
                 }
             }
 
+            ZithOwnership field_own = ZITH_OWN_DEFAULT;
+            if (ftype) {
+                switch (ftype->type) {
+                case ZITH_NODE_TYPE_UNIQUE: field_own = ZITH_OWN_UNIQUE; break;
+                case ZITH_NODE_TYPE_SHARED: field_own = ZITH_OWN_SHARED; break;
+                case ZITH_NODE_TYPE_VIEW:   field_own = ZITH_OWN_VIEW; break;
+                case ZITH_NODE_TYPE_LEND:   field_own = ZITH_OWN_LEND; break;
+                case ZITH_NODE_TYPE_PACK:   field_own = ZITH_OWN_PACK; break;
+                case ZITH_NODE_TYPE_EXTENSION: field_own = ZITH_OWN_DEFAULT; break;
+                }
+            }
+
             // Use comma as separator, but allow last field to omit it before '}'
             if (parser_peek(p)->type != ZITH_TOKEN_RBRACE)
                 parser_expect(p, ZITH_TOKEN_COMMA, "expected ',' or ';'");
 
             fields_b.push(p->arena, zith_ast_make_field(p->arena, floc,
-                                                        {fname->lexeme.data, fname->lexeme.len, own,
-                                                         item_vis, ftype, fdef}));
+                                                         {fname->lexeme.data, fname->lexeme.len, field_own,
+                                                          item_vis, item_depth, ftype, fdef}));
             continue;
         }
 
@@ -531,7 +621,7 @@ static ZithNode *parse_struct_decl(Parser *p, ZithVisibility struct_vis) {
     ZithNode **fields  = fields_b.flatten(p->arena, &fc);
     ZithNode **methods = methods_b.flatten(p->arena, &mc);
     return zith_ast_make_struct(
-        p->arena, loc, {name->lexeme.data, name->lexeme.len, fields, fc, methods, mc, struct_vis});
+        p->arena, loc, {name->lexeme.data, name->lexeme.len, fields, fc, methods, mc, struct_vis, struct_depth});
 }
 
 static ZithNode *parse_import_decl(Parser *p) {
@@ -596,8 +686,15 @@ static ZithNode *parse_import_decl(Parser *p) {
         } else {
             size_t dot_pos = import_path.find('.');
             if (dot_pos != std::string::npos) {
-                root     = import_path.substr(0, dot_pos);
-                rel_path = import_path.substr(dot_pos + 1);
+                if (p->allow_dot_imports) {
+                    root     = import_path.substr(0, dot_pos);
+                    rel_path = import_path.substr(dot_pos + 1);
+                } else {
+                    parser_emit_diag(p, loc, ZITH_DIAG_ERROR,
+                                     "dot-separated import paths are disabled; use '/' instead");
+                    root     = import_path;
+                    rel_path = "";
+                }
             } else {
                 root     = import_path;
                 rel_path = "";
@@ -605,15 +702,23 @@ static ZithNode *parse_import_decl(Parser *p) {
         }
 
         bool allowed = false;
+        std::string root_dir;
         for (size_t i = 0; i < p->import_root_count; ++i) {
-            if (root == p->import_roots[i]) {
+            const char *root_full = p->import_roots[i];
+            const char *slash     = strrchr(root_full, '/');
+            const char *root_name = slash ? slash + 1 : root_full;
+            if (root == root_name) {
                 allowed = true;
+                root_dir = root_full;
                 break;
             }
         }
 
         if (allowed && !rel_path.empty()) {
-            std::string file_path = root + "/" + rel_path + ".zith";
+            std::string rel_fs_path;
+            rel_fs_path.reserve(rel_path.size());
+            for (char c : rel_path) rel_fs_path.push_back(c == '.' ? '/' : c);
+            std::string file_path = root_dir + "/" + rel_fs_path + ".zith";
             size_t file_size      = 0;
             char *source = zith_load_file_to_arena(p->arena, file_path.c_str(), &file_size);
 
@@ -710,6 +815,83 @@ static ZithNode *parse_from_import_decl(Parser *p) {
         true   // is_from = true
     };
     register_import_symbol(p, module_buf, module_len, ZITH_VIS_PRIVATE);
+
+    if (p->mode == ZITH_MODE_SCAN && p->import_roots && p->import_root_count > 0) {
+        std::string import_path(module_buf, module_len);
+
+        std::string root;
+        std::string rel_path;
+        size_t slash_pos = import_path.find('/');
+        if (slash_pos != std::string::npos) {
+            root     = import_path.substr(0, slash_pos);
+            rel_path = import_path.substr(slash_pos + 1);
+        } else {
+            size_t dot_pos = import_path.find('.');
+            if (dot_pos != std::string::npos) {
+                if (p->allow_dot_imports) {
+                    root     = import_path.substr(0, dot_pos);
+                    rel_path = import_path.substr(dot_pos + 1);
+                } else {
+                    parser_emit_diag(p, loc, ZITH_DIAG_ERROR,
+                                     "dot-separated import paths are disabled; use '/' instead");
+                    root     = import_path;
+                    rel_path = "";
+                }
+            } else {
+                root     = import_path;
+                rel_path = "";
+            }
+        }
+
+        bool allowed = false;
+        std::string root_dir;
+        for (size_t i = 0; i < p->import_root_count; ++i) {
+            const char *root_full = p->import_roots[i];
+            const char *slash     = strrchr(root_full, '/');
+            const char *root_name = slash ? slash + 1 : root_full;
+            if (root == root_name) {
+                allowed = true;
+                root_dir = root_full;
+                break;
+            }
+        }
+
+        if (allowed && !rel_path.empty()) {
+            std::string rel_fs_path;
+            rel_fs_path.reserve(rel_path.size());
+            for (char c : rel_path) rel_fs_path.push_back(c == '.' ? '/' : c);
+            std::string file_path = root_dir + "/" + rel_fs_path + ".zith";
+            size_t file_size      = 0;
+            char *source = zith_load_file_to_arena(p->arena, file_path.c_str(), &file_size);
+
+            if (source && file_size > 0) {
+                ZithTokenStream tokens = zith_tokenize(p->arena, source, file_size);
+                if (tokens.data) {
+                    Parser imp_parser;
+                    parser_init(&imp_parser, p->arena, source, file_size, file_path.c_str(),
+                                tokens);
+                    imp_parser.mode = ZITH_MODE_SCAN;
+
+                    ArenaList<ZithNode *> import_decls;
+                    import_decls.init(p->arena, 16);
+                    while (!parser_is_at_end(&imp_parser)) {
+                        size_t pb   = imp_parser.pos;
+                        ZithNode *d = parser_parse_declaration(&imp_parser);
+                        if (d)
+                            import_decls.push(p->arena, d);
+                        if (imp_parser.pos == pb && !parser_is_at_end(&imp_parser))
+                            parser_advance(&imp_parser);
+                    }
+
+                    if (import_decls.size() > 0) {
+                        extern void parser_set_imported_decls(void *decls, ZithArena *arena);
+                        parser_set_imported_decls(&import_decls, p->arena);
+                    }
+                }
+            }
+        }
+    }
+
     return zith_ast_make_import(p->arena, loc, payload);
 }
 
@@ -773,16 +955,23 @@ static ZithNode *parse_export_decl(Parser *p) {
 
         // Check if root is allowed
         bool allowed = false;
+        std::string root_dir;
         for (size_t i = 0; i < p->import_root_count; ++i) {
-            if (root == p->import_roots[i]) {
+            const char *root_full = p->import_roots[i];
+            const char *slash     = strrchr(root_full, '/');
+            const char *root_name = slash ? slash + 1 : root_full;
+            if (root == root_name) {
                 allowed = true;
+                root_dir = root_full;
                 break;
             }
         }
 
         if (allowed && !rel_path.empty()) {
-            // Build file path - resolve relative to current working directory (project root)
-            std::string file_path = root + "/" + rel_path + ".zith";
+            std::string rel_fs_path;
+            rel_fs_path.reserve(rel_path.size());
+            for (char c : rel_path) rel_fs_path.push_back(c == '.' ? '/' : c);
+            std::string file_path = root_dir + "/" + rel_fs_path + ".zith";
             size_t file_size      = 0;
             char *source = zith_load_file_to_arena(p->arena, file_path.c_str(), &file_size);
 
@@ -825,7 +1014,9 @@ ZithNode *parser_parse_declaration(Parser *p) {
             return nullptr;
     }
 
-    ZithVisibility vis = parse_visibility(p, &p->current_visibility);
+    int32_t vis_depth = 0;
+    ZithVisibility vis = parse_visibility(p, &p->current_visibility, &vis_depth);
+    p->current_vis_depth = vis_depth;
     if ((int)vis == -1)
         return nullptr;
 
@@ -834,10 +1025,10 @@ ZithNode *parser_parse_declaration(Parser *p) {
 
     if (t->type == ZITH_TOKEN_FN || t->type == ZITH_TOKEN_ASYNC || t->type == ZITH_TOKEN_FLOWING ||
         t->type == ZITH_TOKEN_NORETURN)
-        return parse_fn_decl(p, loc, vis, false);
+        return parse_fn_decl(p, loc, vis, vis_depth, false);
 
     if (t->type == ZITH_TOKEN_STRUCT)
-        return parse_struct_decl(p, vis);
+        return parse_struct_decl(p, vis, vis_depth);
     if (t->type == ZITH_TOKEN_IMPORT)
         return parse_import_decl(p);
     if (t->type == ZITH_TOKEN_FROM)
@@ -846,11 +1037,11 @@ ZithNode *parser_parse_declaration(Parser *p) {
         return parse_export_decl(p);
     if (t->type == ZITH_TOKEN_CONST) {
         parser_advance(p);
-        return parse_var_decl(p, ZITH_BINDING_CONST);
+        return parse_var_decl(p, ZITH_BINDING_CONST, vis, vis_depth);
     }
     if (t->type == ZITH_TOKEN_GLOBAL) {
         parser_advance(p);
-        return parse_var_decl(p, ZITH_BINDING_GLOBAL);
+        return parse_var_decl(p, ZITH_BINDING_GLOBAL, vis, vis_depth);
     }
 
     ZithNode *expr = parser_parse_expression(p);

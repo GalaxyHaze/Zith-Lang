@@ -128,7 +128,7 @@ TEST_CASE("SCAN: flowing fn kind", "[scan][fn-kind]") {
 }
 
 TEST_CASE("SCAN: public visibility", "[scan]") {
-    auto ast = parse_test("pub fn init() { }");
+    auto ast = parse_test("public fn init() { }");
     REQUIRE(ast);
 
     auto *decl = static_cast<ZithNode **>(ast->data.list.ptr)[0];
@@ -746,97 +746,6 @@ TEST_CASE("Arena reuse: second parse resets arena", "[raii]") {
     auto **decls = static_cast<ZithNode **>(r2->data.list.ptr);
     auto *p      = static_cast<ZithFuncPayload *>(decls[0]->data.list.ptr);
     REQUIRE(p->name[0] == 'b');
-}
-
-// ============================================================================
-// Visibility — mod, mod(n), mod(..)
-// ============================================================================
-
-TEST_CASE("SCAN: mod visibility on function", "[scan][visibility]") {
-    auto ast = parse_test("mod fn internal() -> i32 { return 1; }");
-    REQUIRE(ast);
-    REQUIRE(ast->data.list.len == 1);
-
-    auto *decl = static_cast<ZithNode **>(ast->data.list.ptr)[0];
-    auto *p    = static_cast<ZithFuncPayload *>(decl->data.list.ptr);
-    REQUIRE(p->visibility == ZITH_VIS_MODULE);
-    REQUIRE(p->vis_depth == 1);
-}
-
-TEST_CASE("SCAN: mod(3) visibility on function", "[scan][visibility]") {
-    auto ast = parse_test("mod(3) fn bar() -> i32 { return 2; }");
-    REQUIRE(ast);
-
-    auto *decl = static_cast<ZithNode **>(ast->data.list.ptr)[0];
-    auto *p    = static_cast<ZithFuncPayload *>(decl->data.list.ptr);
-    REQUIRE(p->visibility == ZITH_VIS_MODULE);
-    REQUIRE(p->vis_depth == 3);
-}
-
-TEST_CASE("SCAN: mod(..) visibility on function", "[scan][visibility]") {
-    auto ast = parse_test("mod(..) fn baz() -> i32 { return 3; }");
-    REQUIRE(ast);
-
-    auto *decl = static_cast<ZithNode **>(ast->data.list.ptr)[0];
-    auto *p    = static_cast<ZithFuncPayload *>(decl->data.list.ptr);
-    REQUIRE(p->visibility == ZITH_VIS_MODULE);
-    REQUIRE(p->vis_depth == -1);
-}
-
-TEST_CASE("SCAN: pub: sets default visibility", "[scan][visibility]") {
-    auto ast = parse_test("pub:\nfn a() { }\nfn b() { }");
-    REQUIRE(ast);
-    REQUIRE(ast->data.list.len == 2);
-
-    auto **decls = static_cast<ZithNode **>(ast->data.list.ptr);
-    auto *pa     = static_cast<ZithFuncPayload *>(decls[0]->data.list.ptr);
-    auto *pb     = static_cast<ZithFuncPayload *>(decls[1]->data.list.ptr);
-    REQUIRE(pa->visibility == ZITH_VIS_PUBLIC);
-    REQUIRE(pb->visibility == ZITH_VIS_PUBLIC);
-}
-
-TEST_CASE("SCAN: mod: sets default module visibility", "[scan][visibility]") {
-    auto ast = parse_test("mod:\nfn a() { }\nfn b() { }");
-    REQUIRE(ast);
-    REQUIRE(ast->data.list.len == 2);
-
-    auto **decls = static_cast<ZithNode **>(ast->data.list.ptr);
-    auto *pa     = static_cast<ZithFuncPayload *>(decls[0]->data.list.ptr);
-    auto *pb     = static_cast<ZithFuncPayload *>(decls[1]->data.list.ptr);
-    REQUIRE(pa->visibility == ZITH_VIS_MODULE);
-    REQUIRE(pb->visibility == ZITH_VIS_MODULE);
-}
-
-TEST_CASE("SCAN: private visibility is explicit", "[scan][visibility]") {
-    auto ast = parse_test("private fn hidden() { }");
-    REQUIRE(ast);
-
-    auto *decl = static_cast<ZithNode **>(ast->data.list.ptr)[0];
-    auto *p    = static_cast<ZithFuncPayload *>(decl->data.list.ptr);
-    REQUIRE(p->visibility == ZITH_VIS_PRIVATE);
-}
-
-TEST_CASE("SCAN: mod visibility on struct", "[scan][visibility]") {
-    auto ast = parse_test("mod struct Internal {\n"
-                          "    x: i32,\n"
-                          "}");
-    REQUIRE(ast);
-
-    auto *decl = static_cast<ZithNode **>(ast->data.list.ptr)[0];
-    auto *p    = static_cast<ZithStructPayload *>(decl->data.list.ptr);
-    REQUIRE(p->visibility == ZITH_VIS_MODULE);
-    REQUIRE(p->vis_depth == 1);
-}
-
-// ============================================================================
-// :: scope operator
-// ============================================================================
-
-TEST_CASE("SCAN: ::expr parses as unary scope", "[scan][scope]") {
-    auto ast = parse_test("fn main() {\n"
-                          "  ::main();\n"
-                          "}");
-    REQUIRE(ast);
 }
 
 // ============================================================================

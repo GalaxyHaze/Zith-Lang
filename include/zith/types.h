@@ -92,6 +92,9 @@ enum ZithNodeExtendedId : uint16_t {
     ZITH_NODE_TYPE_VIEW     = 1077,
     ZITH_NODE_TYPE_LEND     = 1078,
     ZITH_NODE_TYPE_PACK     = 1079,
+    ZITH_NODE_TYPE_EXTENSION = 1080,
+
+    ZITH_NODE_DESTRUCTURE   = 1081,
 
     ZITH_NODE_FIELD         = 1090,
     ZITH_NODE_ENUM_VARIANT  = 1091,
@@ -125,9 +128,9 @@ typedef enum ZithOwnership {
 } ZithOwnership;
 
 typedef enum ZithVisibility {
-    ZITH_VIS_PRIVATE   = 0,
-    ZITH_VIS_PUBLIC    = 1,
-    ZITH_VIS_PROTECTED = 2,
+    ZITH_VIS_PRIVATE = 0,
+    ZITH_VIS_PUBLIC  = 1,
+    ZITH_VIS_MODULE  = 2,
 } ZithVisibility;
 
 typedef enum ZithLiteralKind {

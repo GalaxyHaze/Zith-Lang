@@ -215,6 +215,31 @@ ZithNode *zith_ast_make_param(ZithArena *a, ZithSourceLoc loc, ZithParamPayload 
     return n;
 }
 
+// list → ZithDestructurePayload
+ZithNode *zith_ast_make_destructure(ZithArena *a, ZithSourceLoc loc, const ZithDestructurePayload *decl) {
+    ZithNode *n = alloc_node(a, ZITH_NODE_DESTRUCTURE, loc);
+    if (!n || !decl)
+        return n;
+    auto *p = alloc_payload<ZithDestructurePayload>(a, n);
+    if (!p)
+        return n;
+    p->count       = decl->count;
+    p->type_node   = decl->type_node;
+    p->initializer = decl->initializer;
+    p->binding     = decl->binding;
+    if (decl->count > 0 && decl->names) {
+        p->names = (const char **)zith_arena_alloc(a, decl->count * sizeof(const char *));
+        p->name_lens = (size_t *)zith_arena_alloc(a, decl->count * sizeof(size_t));
+        if (p->names && p->name_lens) {
+            for (size_t i = 0; i < decl->count; ++i) {
+                p->names[i] = zith_arena_strdup(a, decl->names[i]);
+                p->name_lens[i] = decl->name_lens[i];
+            }
+        }
+    }
+    return n;
+}
+
 // list.ptr = ZithNode**, list.len = count
 ZithNode *zith_ast_make_block(ZithArena *a, ZithSourceLoc loc, ZithNode **stmts, size_t count) {
     ZithNode *n = alloc_node(a, ZITH_NODE_BLOCK, loc);
@@ -501,6 +526,13 @@ static void walk_children(ZithNode *n, ZithASTVisitorFn pre, ZithASTVisitorFn po
     case ZITH_NODE_AWAIT_STMT:
     case ZITH_NODE_SPAWN_STMT:
     case ZITH_NODE_SPAWN_EXPR:
+    // Ownership type nodes (kids.a = inner type, nullable)
+    case ZITH_NODE_TYPE_UNIQUE:
+    case ZITH_NODE_TYPE_SHARED:
+    case ZITH_NODE_TYPE_VIEW:
+    case ZITH_NODE_TYPE_LEND:
+    case ZITH_NODE_TYPE_PACK:
+    case ZITH_NODE_TYPE_EXTENSION:
         zith_ast_walk(n->data.kids.a, pre, post, ud);
         break;
 
@@ -514,6 +546,7 @@ static void walk_children(ZithNode *n, ZithASTVisitorFn pre, ZithASTVisitorFn po
     // list.ptr = ZithNode**, list.len = count
     case ZITH_NODE_PROGRAM:
     case ZITH_NODE_BLOCK:
+    case ZITH_NODE_TUPLE_LIT:
         walk_node_list(static_cast<ZithNode **>(n->data.list.ptr), n->data.list.len, pre, post, ud);
         break;
 
@@ -531,6 +564,16 @@ static void walk_children(ZithNode *n, ZithASTVisitorFn pre, ZithASTVisitorFn po
     // list → ZithVarPayload
     case ZITH_NODE_VAR_DECL: {
         auto *p = static_cast<ZithVarPayload *>(n->data.list.ptr);
+        if (!p)
+            break;
+        zith_ast_walk(p->type_node, pre, post, ud);
+        zith_ast_walk(p->initializer, pre, post, ud);
+        break;
+    }
+
+    // list → ZithDestructurePayload
+    case ZITH_NODE_DESTRUCTURE: {
+        auto *p = static_cast<ZithDestructurePayload *>(n->data.list.ptr);
         if (!p)
             break;
         zith_ast_walk(p->type_node, pre, post, ud);
@@ -653,6 +696,8 @@ static void walk_children(ZithNode *n, ZithASTVisitorFn pre, ZithASTVisitorFn po
     case ZITH_NODE_ERROR:
         break;
 
+    // Ownership type nodes are walked via kids.a above — handled in the unary_op group
+
     // list → ZithMarkerPayload
     case ZITH_NODE_MARKER:
     case ZITH_NODE_ENTRY: {
@@ -759,6 +804,22 @@ const char *zith_ast_node_name(const uint16_t id) {
         return "struct_lit";
     case ZITH_NODE_ARRAY_LIT:
         return "array_lit";
+    case ZITH_NODE_TUPLE_LIT:
+        return "tuple_lit";
+    case ZITH_NODE_DESTRUCTURE:
+        return "destructure";
+    case ZITH_NODE_TYPE_UNIQUE:
+        return "unique";
+    case ZITH_NODE_TYPE_SHARED:
+        return "shared";
+    case ZITH_NODE_TYPE_VIEW:
+        return "view";
+    case ZITH_NODE_TYPE_LEND:
+        return "lend";
+    case ZITH_NODE_TYPE_PACK:
+        return "pack";
+    case ZITH_NODE_TYPE_EXTENSION:
+        return "extension";
     default:
         return "<?>";
     }
@@ -811,8 +872,8 @@ const char *zith_ast_visibility_name(ZithVisibility vis) {
         return "private";
     case ZITH_VIS_PUBLIC:
         return "public";
-    case ZITH_VIS_PROTECTED:
-        return "protected";
+    case ZITH_VIS_MODULE:
+        return "module";
     default:
         return "<?>";
     }
@@ -921,6 +982,20 @@ void zith_ast_print(const ZithNode *node, int indent) {
         break;
     }
 
+    // Ownership type nodes
+    case ZITH_NODE_TYPE_UNIQUE:
+    case ZITH_NODE_TYPE_SHARED:
+    case ZITH_NODE_TYPE_VIEW:
+    case ZITH_NODE_TYPE_LEND:
+    case ZITH_NODE_TYPE_PACK:
+    case ZITH_NODE_TYPE_EXTENSION: {
+        print_indent(indent + 1);
+        debug_print("ownership: %s\n", zith_ast_node_name(node->type));
+        if (node->data.kids.a)
+            zith_ast_print(node->data.kids.a, indent + 2);
+        break;
+    }
+
     case ZITH_NODE_FUNC_DECL: {
         auto *p = static_cast<const ZithFuncPayload *>(node->data.list.ptr);
         if (!p)
@@ -944,6 +1019,23 @@ void zith_ast_print(const ZithNode *node, int indent) {
                     (int)p->ownership);
         zith_ast_print(p->type_node, indent + 2);
         zith_ast_print(p->initializer, indent + 2);
+        break;
+    }
+
+    case ZITH_NODE_DESTRUCTURE: {
+        auto *p = static_cast<const ZithDestructurePayload *>(node->data.list.ptr);
+        if (!p)
+            break;
+        print_indent(indent + 1);
+        debug_print("destructure: %zu vars  binding: %d\n", p->count, (int)p->binding);
+        for (size_t i = 0; i < p->count; ++i) {
+            print_indent(indent + 2);
+            debug_print("name: %.*s\n", (int)p->name_lens[i], p->names[i]);
+        }
+        if (p->type_node)
+            zith_ast_print(p->type_node, indent + 2);
+        if (p->initializer)
+            zith_ast_print(p->initializer, indent + 2);
         break;
     }
 
@@ -1071,7 +1163,8 @@ void zith_ast_print(const ZithNode *node, int indent) {
     }
 
     case ZITH_NODE_STRUCT_LIT:
-    case ZITH_NODE_ARRAY_LIT: {
+    case ZITH_NODE_ARRAY_LIT:
+    case ZITH_NODE_TUPLE_LIT: {
         auto **items = static_cast<ZithNode **>(node->data.list.ptr);
         print_indent(indent + 1);
         debug_print("items: %zu\n", node->data.list.len);
