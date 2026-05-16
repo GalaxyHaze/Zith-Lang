@@ -56,6 +56,13 @@ bool zith_file_is_regular(const char *path) {
     return is_regular_file(path);
 }
 
+bool zith_is_directory(const char *path) {
+    struct stat st;
+    if (stat(path, &st) != 0)
+        return false;
+    return S_ISDIR(st.st_mode);
+}
+
 size_t zith_file_size(const char *path) {
     if (!is_regular_file(path))
         return 0;

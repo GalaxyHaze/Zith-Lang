@@ -128,6 +128,66 @@ TEST_CASE("FULL: call with no matching overload is rejected", "[full][sema][over
     REQUIRE(bad.get() == nullptr);
 }
 
+TEST_CASE("FULL: too few arguments to single overload is rejected", "[full][sema][overload]") {
+    auto bad = ParseResult(zith_parse_test_full("fn need_two(a: i32, b: i32) -> i32 { return a + b; }\n"
+                                                "fn main() -> i32 {\n"
+                                                "  return need_two(1);\n"
+                                                "}\n"));
+    REQUIRE(bad.get() == nullptr);
+}
+
+TEST_CASE("FULL: too many arguments to single overload is rejected", "[full][sema][overload]") {
+    auto bad = ParseResult(zith_parse_test_full("fn one_arg(x: i32) -> i32 { return x; }\n"
+                                                "fn main() -> i32 {\n"
+                                                "  return one_arg(1, 2, 3);\n"
+                                                "}\n"));
+    REQUIRE(bad.get() == nullptr);
+}
+
+TEST_CASE("FULL: correct argument count to single overload passes", "[full][sema][overload]") {
+    auto ast = ParseResult(zith_parse_test_full("fn single(x: i32) -> i32 { return x; }\n"
+                                                "fn main() -> i32 {\n"
+                                                "  return single(42);\n"
+                                                "}\n"));
+    REQUIRE(ast);
+}
+
+TEST_CASE("FULL: wrong arity for all overloads is rejected", "[full][sema][overload]") {
+    auto bad = ParseResult(zith_parse_test_full("fn f(x: i32) -> i32 { return x; }\n"
+                                                "fn f(x: i32, y: i32) -> i32 { return x + y; }\n"
+                                                "fn main() -> i32 {\n"
+                                                "  return f(1, 2, 3);\n"
+                                                "}\n"));
+    REQUIRE(bad.get() == nullptr);
+}
+
+TEST_CASE("FULL: member call too few arguments is rejected", "[full][sema][overload]") {
+    auto bad = ParseResult(zith_parse_test_full("import std.io.console as io;\n"
+                                                "fn parse(x: i32) -> i32 { return x; }\n"
+                                                "fn main() -> i32 {\n"
+                                                "  return io.parse();\n"
+                                                "}\n"));
+    REQUIRE(bad.get() == nullptr);
+}
+
+TEST_CASE("FULL: member call too many arguments is rejected", "[full][sema][overload]") {
+    auto bad = ParseResult(zith_parse_test_full("import std.io.console as io;\n"
+                                                "fn parse(x: i32) -> i32 { return x; }\n"
+                                                "fn main() -> i32 {\n"
+                                                "  return io.parse(1, 2, 3);\n"
+                                                "}\n"));
+    REQUIRE(bad.get() == nullptr);
+}
+
+TEST_CASE("FULL: member call correct argument count passes", "[full][sema][overload]") {
+    auto ast = ParseResult(zith_parse_test_full("import std.io.console as io;\n"
+                                                "fn parse(x: i32) -> i32 { return x; }\n"
+                                                "fn main() -> i32 {\n"
+                                                "  return io.parse(42);\n"
+                                                "}\n"));
+    REQUIRE(ast);
+}
+
 // ============================================================================
 // :: scope operator
 // ============================================================================

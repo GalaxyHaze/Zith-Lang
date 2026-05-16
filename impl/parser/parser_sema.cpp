@@ -293,6 +293,36 @@ static SemaTypeInfo sema_expr(SemaContext &ctx, ZithNode *expr) {
             sema_expr(ctx, call->callee);
             for (size_t i = 0; i < call->arg_count; ++i)
                 sema_expr(ctx, call->args[i]);
+            ZithNode *member_ident = call->callee->data.kids.b;
+            if (member_ident && member_ident->type == ZITH_NODE_IDENTIFIER) {
+                const std::string mname(member_ident->data.ident.str,
+                                        member_ident->data.ident.len);
+                auto it = ctx.functions.find(mname);
+                if (it != ctx.functions.end()) {
+                    const auto &m_overloads = it->second;
+                    bool arity_ok = false;
+                    for (auto *fn : m_overloads) {
+                        if (fn->param_count == call->arg_count) {
+                            arity_ok = true;
+                            break;
+                        }
+                    }
+                    if (!arity_ok) {
+                        size_t expected = m_overloads[0]->param_count;
+                        char buf[256];
+                        if (call->arg_count < expected) {
+                            snprintf(buf, sizeof(buf),
+                                     "too few arguments in call to '%s': expected %zu, got %zu",
+                                     mname.c_str(), expected, call->arg_count);
+                        } else {
+                            snprintf(buf, sizeof(buf),
+                                     "too many arguments in call to '%s': expected %zu, got %zu",
+                                     mname.c_str(), expected, call->arg_count);
+                        }
+                        parser_emit_diag(ctx.p, expr->loc, ZITH_DIAG_ERROR, buf);
+                    }
+                }
+            }
             return {};
         }
         if (callee_name == "print" || callee_name == "println") {
@@ -313,7 +343,22 @@ static SemaTypeInfo sema_expr(SemaContext &ctx, ZithNode *expr) {
         const auto &overloads = it->second;
         ZithFuncPayload *match = nullptr;
         if (overloads.size() == 1) {
-            match = overloads[0];
+            ZithFuncPayload *fn = overloads[0];
+            if (fn->param_count != arg_types.size()) {
+                char buf[256];
+                if (arg_types.size() < fn->param_count) {
+                    snprintf(buf, sizeof(buf),
+                             "too few arguments in call to '%s': expected %zu, got %zu",
+                             callee_name.c_str(), fn->param_count, arg_types.size());
+                } else {
+                    snprintf(buf, sizeof(buf),
+                             "too many arguments in call to '%s': expected %zu, got %zu",
+                             callee_name.c_str(), fn->param_count, arg_types.size());
+                }
+                parser_emit_diag(ctx.p, expr->loc, ZITH_DIAG_ERROR, buf);
+                return {};
+            }
+            match = fn;
         } else {
             for (auto *fn : overloads) {
                 if (fn->param_count != arg_types.size())

@@ -21,6 +21,7 @@ void       zith_arena_reset(ZithArena *arena);
 // File utilities
 bool       zith_file_exists(const char *path);
 bool       zith_file_is_regular(const char *path);
+bool       zith_is_directory(const char *path);
 size_t     zith_file_size(const char *path);
 bool       zith_is_source_file(const char *path);
 char      *zith_load_file_to_arena(ZithArena *arena, const char *path, size_t *out_size);

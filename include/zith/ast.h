@@ -167,6 +167,7 @@ typedef struct {
     size_t alias_len;
     bool is_export;
     bool is_from;
+    int recurse_depth;   // 0 = flat, -1 = infinite, N = N levels
 } ZithImportPayload;
 
 typedef struct {

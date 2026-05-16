@@ -16,6 +16,6 @@ struct Point{
 fn main(){
     let [x,y,z] = 5;
     let pack = |6, 0, -6|;
-    JASON.parse("hallo", 5);
-    printf();
+    JASON.parse();
+    printf("hello", " ");
 }

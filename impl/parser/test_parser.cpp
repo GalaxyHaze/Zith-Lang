@@ -229,6 +229,57 @@ TEST_CASE("SCAN: import declaration with mixed separators", "[scan][module]") {
     REQUIRE(payload->is_from == false);
 }
 
+TEST_CASE("SCAN: import with directory recursion (flat, default)", "[scan][module][directory]") {
+    auto ast = parse_test("import std.io;");
+    REQUIRE(ast);
+    REQUIRE(ast->type == ZITH_NODE_PROGRAM);
+
+    auto **decls = static_cast<ZithNode **>(ast->data.list.ptr);
+    REQUIRE(ast->data.list.len >= 1);
+
+    auto *import_node = decls[0];
+    REQUIRE(import_node->type == ZITH_NODE_IMPORT);
+
+    auto *payload = static_cast<ZithImportPayload *>(import_node->data.list.ptr);
+    REQUIRE(payload != nullptr);
+    REQUIRE(std::string(payload->path) == "std.io");
+    REQUIRE(payload->recurse_depth == 0);
+}
+
+TEST_CASE("SCAN: import with directory recursion (infinite)", "[scan][module][directory]") {
+    auto ast = parse_test("import std.io (...);");
+    REQUIRE(ast);
+    REQUIRE(ast->type == ZITH_NODE_PROGRAM);
+
+    auto **decls = static_cast<ZithNode **>(ast->data.list.ptr);
+    REQUIRE(ast->data.list.len >= 1);
+
+    auto *import_node = decls[0];
+    REQUIRE(import_node->type == ZITH_NODE_IMPORT);
+
+    auto *payload = static_cast<ZithImportPayload *>(import_node->data.list.ptr);
+    REQUIRE(payload != nullptr);
+    REQUIRE(std::string(payload->path) == "std.io");
+    REQUIRE(payload->recurse_depth == -1);
+}
+
+TEST_CASE("SCAN: import with directory recursion (N levels)", "[scan][module][directory]") {
+    auto ast = parse_test("import std.io (5);");
+    REQUIRE(ast);
+    REQUIRE(ast->type == ZITH_NODE_PROGRAM);
+
+    auto **decls = static_cast<ZithNode **>(ast->data.list.ptr);
+    REQUIRE(ast->data.list.len >= 1);
+
+    auto *import_node = decls[0];
+    REQUIRE(import_node->type == ZITH_NODE_IMPORT);
+
+    auto *payload = static_cast<ZithImportPayload *>(import_node->data.list.ptr);
+    REQUIRE(payload != nullptr);
+    REQUIRE(std::string(payload->path) == "std.io");
+    REQUIRE(payload->recurse_depth == 5);
+}
+
 TEST_CASE("SCAN: from declaration", "[scan][module]") {
     auto ast = parse_test("from std.io.console;");
     REQUIRE(ast);
@@ -281,6 +332,42 @@ TEST_CASE("SCAN: from with mixed path separators", "[scan][module]") {
     REQUIRE(std::string(payload->path) == "std.io/net/http");
     REQUIRE(payload->is_from == true);
     REQUIRE(payload->alias == nullptr);
+}
+
+TEST_CASE("SCAN: from with directory recursion (infinite)", "[scan][module][directory]") {
+    auto ast = parse_test("from std.io (...);");
+    REQUIRE(ast);
+    REQUIRE(ast->type == ZITH_NODE_PROGRAM);
+
+    auto **decls = static_cast<ZithNode **>(ast->data.list.ptr);
+    REQUIRE(ast->data.list.len >= 1);
+
+    auto *import_node = decls[0];
+    REQUIRE(import_node->type == ZITH_NODE_IMPORT);
+
+    auto *payload = static_cast<ZithImportPayload *>(import_node->data.list.ptr);
+    REQUIRE(payload != nullptr);
+    REQUIRE(std::string(payload->path) == "std.io");
+    REQUIRE(payload->is_from == true);
+    REQUIRE(payload->recurse_depth == -1);
+}
+
+TEST_CASE("SCAN: from with directory recursion (N levels)", "[scan][module][directory]") {
+    auto ast = parse_test("from std.io (3);");
+    REQUIRE(ast);
+    REQUIRE(ast->type == ZITH_NODE_PROGRAM);
+
+    auto **decls = static_cast<ZithNode **>(ast->data.list.ptr);
+    REQUIRE(ast->data.list.len >= 1);
+
+    auto *import_node = decls[0];
+    REQUIRE(import_node->type == ZITH_NODE_IMPORT);
+
+    auto *payload = static_cast<ZithImportPayload *>(import_node->data.list.ptr);
+    REQUIRE(payload != nullptr);
+    REQUIRE(std::string(payload->path) == "std.io");
+    REQUIRE(payload->is_from == true);
+    REQUIRE(payload->recurse_depth == 3);
 }
 
 TEST_CASE("SCAN: export declaration", "[scan][module]") {
