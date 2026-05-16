@@ -66,23 +66,24 @@ jobs:
               -DCMAKE_SYSTEM_NAME=Linux
               -DCMAKE_SYSTEM_PROCESSOR=aarch64
               -DZITH_ENABLE_FFI=OFF
+              -DZITH_ENABLE_LLVM=OFF
 
-          - os: macos-latest
+          - os: macos-13
             target_name: zith-macos-amd64
             cmake_flags: >-
               -DCMAKE_C_COMPILER=$(brew --prefix llvm)/bin/clang
               -DCMAKE_CXX_COMPILER=$(brew --prefix llvm)/bin/clang++
               -DLLVM_DIR=$(brew --prefix llvm)/lib/cmake/llvm
               -DCMAKE_OSX_ARCHITECTURES=x86_64
-              -DCMAKE_CROSSCOMPILING=ON
               -DZITH_ENABLE_FFI=OFF
 
-          - os: macos-latest
+          - os: macos-14
             target_name: zith-macos-arm64
             cmake_flags: >-
               -DCMAKE_C_COMPILER=$(brew --prefix llvm)/bin/clang
               -DCMAKE_CXX_COMPILER=$(brew --prefix llvm)/bin/clang++
               -DLLVM_DIR=$(brew --prefix llvm)/lib/cmake/llvm
+              -DCMAKE_OSX_ARCHITECTURES=arm64
               -DZITH_ENABLE_FFI=OFF
 
           - os: windows-latest
@@ -92,6 +93,7 @@ jobs:
               -DCMAKE_C_COMPILER=clang-cl
               -DCMAKE_CXX_COMPILER=clang-cl
               -DZITH_ENABLE_FFI=OFF
+              -DZITH_ENABLE_LLVM=OFF
 
           - os: windows-latest
             target_name: zith-windows-arm64.exe
@@ -103,6 +105,7 @@ jobs:
               -DCMAKE_CXX_COMPILER_TARGET=arm64-pc-windows-msvc
               -DCMAKE_CROSSCOMPILING=ON
               -DZITH_ENABLE_FFI=OFF
+              -DZITH_ENABLE_LLVM=OFF
 
     steps:
       - uses: actions/checkout@v4
@@ -159,9 +162,20 @@ jobs:
             -DZITH_VERSION=${{ needs.create-release.outputs.tag }} \
             ${{ matrix.cmake_flags }}
 
+      - name: Verify target architecture (macOS)
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          file "$(brew --prefix llvm)/lib/libLLVM.dylib"
+
       - name: Build
         shell: bash
         run: cmake --build build --config Release
+
+      - name: Verify built binary architecture (macOS)
+        if: runner.os == 'macOS'
+        shell: bash
+        run: file build/bin/zith
 
       - name: Prepare artifact
         shell: bash
