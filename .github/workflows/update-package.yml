@@ -31,7 +31,8 @@ jobs:
             TAG="${{ github.event.inputs.tag_name }}"
           else
             # Get latest release tag from workflow_run trigger
-            TAG=$(gh release list --repo ${{ github.repository }} --limit 1 --json tagName -q '.[0].tagName')
+            # Include draft releases since Build Artifact creates them as drafts
+            TAG=$(gh release list --repo ${{ github.repository }} --limit 1 --include-drafts --json tagName -q '.[0].tagName')
           fi
           
           # Ensure tag starts with 'v'
@@ -119,7 +120,6 @@ jobs:
         id: brew
         run: |
           VERSION="${{ steps.tag.outputs.version }}"
-          VERSION="${VERSION#v}"
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           URL="https://github.com/${{ github.repository }}/archive/refs/tags/v${VERSION}.tar.gz"
           echo "url=$URL" >> $GITHUB_OUTPUT
