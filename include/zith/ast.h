@@ -150,6 +150,11 @@ typedef struct {
 } ZithCallPayload;
 
 typedef struct {
+    ZithOwnership ownership;
+    ZithNode *expr;
+} ZithCallArgPayload;
+
+typedef struct {
     ZithNode *iterator_var;
     ZithNode *iterable;
     ZithNode *init;
@@ -227,6 +232,7 @@ ZithNode *zith_ast_make_recurse(ZithArena *a, ZithSourceLoc loc, ZithNode *calle
 ZithNode *zith_ast_make_member(ZithArena *a, ZithSourceLoc loc, ZithNode *object, ZithNode *member);
 ZithNode *zith_ast_make_arrow_call(ZithArena *a, ZithSourceLoc loc, ZithNode *receiver, ZithNode *call);
 ZithNode *zith_ast_make_cast(ZithArena *a, ZithSourceLoc loc, ZithNode *expr, ZithNode *type_node);
+ZithNode *zith_ast_make_call_arg(ZithArena *a, ZithSourceLoc loc, ZithCallArgPayload payload);
 ZithNode *zith_ast_make_param(ZithArena *a, ZithSourceLoc loc, ZithParamPayload param);
 ZithNode *zith_ast_make_destructure(ZithArena *a, ZithSourceLoc loc, const ZithDestructurePayload *decl);
 ZithNode *zith_ast_make_block(ZithArena *a, ZithSourceLoc loc, ZithNode **stmts, size_t count);

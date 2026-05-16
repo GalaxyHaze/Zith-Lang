@@ -434,6 +434,12 @@ static SemaTypeInfo sema_expr(SemaContext &ctx, ZithNode *expr) {
         }
         return sema_expr(ctx, expr->data.kids.a);
     }
+    case ZITH_NODE_CALL_ARG: {
+        auto *p = static_cast<ZithCallArgPayload *>(expr->data.list.ptr);
+        if (!p)
+            return {};
+        return sema_expr(ctx, p->expr);
+    }
     default:
         return {};
     }

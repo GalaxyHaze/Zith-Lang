@@ -99,6 +99,7 @@ enum ZithNodeExtendedId : uint16_t {
     ZITH_NODE_FIELD         = 1090,
     ZITH_NODE_ENUM_VARIANT  = 1091,
     ZITH_NODE_MATCH_ARM     = 1092,
+    ZITH_NODE_CALL_ARG      = 1093,
 };
 
 typedef enum ZithFnKind {
@@ -128,7 +129,7 @@ typedef enum ZithOwnership {
     ZITH_OWN_LEND     = 2,
     ZITH_OWN_UNIQUE   = 3,
     ZITH_OWN_SHARED   = 4,
-    ZITH_OWN_PACK     = 5,
+    ZITH_OWN_EXTENSION = 5,
 } ZithOwnership;
 
 typedef enum ZithVisibility {

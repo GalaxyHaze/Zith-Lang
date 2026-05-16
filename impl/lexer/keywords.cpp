@@ -72,7 +72,7 @@ static constexpr auto TokenTable = std::to_array<std::pair<std::string_view, Zit
     {"global", ZITH_TOKEN_GLOBAL},
     {"comptime", ZITH_TOKEN_COMPTIME},
     {"lend", ZITH_TOKEN_LEND},
-    {"shared", ZITH_TOKEN_SHARED},
+    {"share", ZITH_TOKEN_SHARED},
     {"view", ZITH_TOKEN_VIEW},
     {"unique", ZITH_TOKEN_UNIQUE},
     {"extension", ZITH_TOKEN_EXTENSION},

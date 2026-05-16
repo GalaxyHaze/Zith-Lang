@@ -272,8 +272,8 @@ static ZithNode *parse_param(Parser *p) {
         case ZITH_NODE_TYPE_SHARED: own = ZITH_OWN_SHARED; break;
         case ZITH_NODE_TYPE_VIEW:   own = ZITH_OWN_VIEW; break;
         case ZITH_NODE_TYPE_LEND:   own = ZITH_OWN_LEND; is_mutable = true; break;
-        case ZITH_NODE_TYPE_PACK:   own = ZITH_OWN_PACK; break;
-        case ZITH_NODE_TYPE_EXTENSION: own = ZITH_OWN_DEFAULT; break;
+        case ZITH_NODE_TYPE_PACK:   own = ZITH_OWN_EXTENSION; break;
+        case ZITH_NODE_TYPE_EXTENSION: own = ZITH_OWN_EXTENSION; break;
         }
     }
 
@@ -660,8 +660,8 @@ static ZithNode *parse_struct_decl(Parser *p, ZithVisibility struct_vis, int32_t
                             case ZITH_NODE_TYPE_SHARED: elem_own = ZITH_OWN_SHARED; break;
                             case ZITH_NODE_TYPE_VIEW:   elem_own = ZITH_OWN_VIEW; break;
                             case ZITH_NODE_TYPE_LEND:   elem_own = ZITH_OWN_LEND; break;
-                            case ZITH_NODE_TYPE_PACK:   elem_own = ZITH_OWN_PACK; break;
-                            case ZITH_NODE_TYPE_EXTENSION: elem_own = ZITH_OWN_DEFAULT; break;
+                            case ZITH_NODE_TYPE_PACK:   elem_own = ZITH_OWN_EXTENSION; break;
+                            case ZITH_NODE_TYPE_EXTENSION: elem_own = ZITH_OWN_EXTENSION; break;
                             }
                         }
                         fields_b.push(p->arena, zith_ast_make_field(p->arena, floc,
@@ -675,8 +675,8 @@ static ZithNode *parse_struct_decl(Parser *p, ZithVisibility struct_vis, int32_t
                         case ZITH_NODE_TYPE_SHARED: field_own = ZITH_OWN_SHARED; break;
                         case ZITH_NODE_TYPE_VIEW:   field_own = ZITH_OWN_VIEW; break;
                         case ZITH_NODE_TYPE_LEND:   field_own = ZITH_OWN_LEND; break;
-                        case ZITH_NODE_TYPE_PACK:   field_own = ZITH_OWN_PACK; break;
-                        case ZITH_NODE_TYPE_EXTENSION: field_own = ZITH_OWN_DEFAULT; break;
+                        case ZITH_NODE_TYPE_PACK:   field_own = ZITH_OWN_EXTENSION; break;
+                        case ZITH_NODE_TYPE_EXTENSION: field_own = ZITH_OWN_EXTENSION; break;
                         }
                     }
                     for (size_t i = 0; i < name_count; ++i) {
@@ -719,8 +719,8 @@ static ZithNode *parse_struct_decl(Parser *p, ZithVisibility struct_vis, int32_t
                 case ZITH_NODE_TYPE_SHARED: field_own = ZITH_OWN_SHARED; break;
                 case ZITH_NODE_TYPE_VIEW:   field_own = ZITH_OWN_VIEW; break;
                 case ZITH_NODE_TYPE_LEND:   field_own = ZITH_OWN_LEND; break;
-                case ZITH_NODE_TYPE_PACK:   field_own = ZITH_OWN_PACK; break;
-                case ZITH_NODE_TYPE_EXTENSION: field_own = ZITH_OWN_DEFAULT; break;
+                case ZITH_NODE_TYPE_PACK:   field_own = ZITH_OWN_EXTENSION; break;
+                case ZITH_NODE_TYPE_EXTENSION: field_own = ZITH_OWN_EXTENSION; break;
                 }
             }
 

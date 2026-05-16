@@ -1,21 +1,7 @@
-from std/io/console;
-from c/io;
-import utils/json as JASON;
 
-mod(5) const fn add(){
-
-}
-
-struct Point{
-    [x,y,z,w]: i32,
-    const size,
-    comptime counter,
-    global D4c
-}
+fn add( x: view i32, y: view i32 );
 
 fn main(){
-    let [x,y,z] = 5;
-    let pack = |6, 0, -6|;
-    JASON.parse();
-    printf("hello", " ");
+    let x = 5;
+    add( extensi x, 5);
 }

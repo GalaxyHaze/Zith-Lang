@@ -514,7 +514,7 @@ TEST_CASE("SCAN: unique keyword tokenized", "[scan][lexer][ownership]") {
 }
 
 TEST_CASE("SCAN: shared keyword tokenized", "[scan][lexer][ownership]") {
-    auto ast = parse_test("fn main() { shared x = 5; }");
+    auto ast = parse_test("fn main() { share x = 5; }");
     (void)ast;
 }
 
@@ -732,7 +732,7 @@ TEST_CASE("SCAN: complex program with multiple keywords", "[scan][complex]") {
 TEST_CASE("SCAN: struct with ownership modifiers", "[scan][ownership]") {
     auto ast = parse_test("struct Node {\n"
                           "    child: unique Node,\n"
-                          "    parent: shared Node,\n"
+                          "    parent: share Node,\n"
                           "}");
     REQUIRE(ast);
 
@@ -1038,6 +1038,216 @@ TEST_CASE("SCAN: struct destructure type count mismatch (more names than types)"
     REQUIRE(sp->field_count == 3);
 }
 
+// ============================================================================
+// Call-site ownership annotations
+// ============================================================================
+
+TEST_CASE("SCAN: call with view ownership annotation", "[scan][call][ownership]") {
+    auto ast = parse_test("fn test() { add(view x, view y); }");
+    REQUIRE(ast);
+}
+
+TEST_CASE("SCAN: call with lend ownership annotation", "[scan][call][ownership]") {
+    auto ast = parse_test("fn test() { add(lend x); }");
+    REQUIRE(ast);
+}
+
+TEST_CASE("SCAN: call with extension ownership annotation", "[scan][call][ownership]") {
+    auto ast = parse_test("fn test() { add(extension x); }");
+    REQUIRE(ast);
+}
+
+TEST_CASE("SCAN: call with unique ownership annotation", "[scan][call][ownership]") {
+    auto ast = parse_test("fn test() { add(unique x); }");
+    REQUIRE(ast);
+}
+
+TEST_CASE("SCAN: call with share ownership annotation", "[scan][call][ownership]") {
+    auto ast = parse_test("fn test() { add(share x); }");
+    REQUIRE(ast);
+}
+
+TEST_CASE("SCAN: call without ownership annotation (default)", "[scan][call][ownership]") {
+    auto ast = parse_test("fn test() { add(x, y); }");
+    REQUIRE(ast);
+}
+
+TEST_CASE("SCAN: method call with view ownership annotation", "[scan][call][ownership]") {
+    auto ast = parse_test("fn test() { obj.method(view x); }");
+    REQUIRE(ast);
+}
+
+TEST_CASE("SCAN: call with mixed annotations", "[scan][call][ownership]") {
+    auto ast = parse_test("fn test() { add(view a, b, lend c, d); }");
+    REQUIRE(ast);
+}
+
+TEST_CASE("SCAN: nested call with annotations", "[scan][call][ownership]") {
+    auto ast = parse_test("fn test() { foo(view bar(lend x)); }");
+    REQUIRE(ast);
+}
+
+TEST_CASE("SCAN: arrow call with view annotation", "[scan][call][ownership]") {
+    auto ast = parse_test("fn test() { x->foo(view y); }");
+    REQUIRE(ast);
+}
+
+TEST_CASE("SCAN: literal argument with view annotation", "[scan][call][ownership]") {
+    auto ast = parse_test("fn test() { add(view 42); }");
+    REQUIRE(ast);
+}
+
+TEST_CASE("FULL: call with view ownership annotation", "[full][call][ownership]") {
+    auto ast = zith_parse_test_full("fn test(a: view i32) { }\n"
+                                    "fn main() { let x: i32 = 42; test(view x); }");
+    REQUIRE(ast);
+}
+
+TEST_CASE("FULL: call with lend ownership annotation", "[full][call][ownership]") {
+    auto ast = zith_parse_test_full("fn test(a: lend i32) { }\n"
+                                    "fn main() { let x: i32 = 42; test(lend x); }");
+    REQUIRE(ast);
+}
+
+TEST_CASE("FULL: call with extension ownership annotation", "[full][call][ownership]") {
+    auto ast = zith_parse_test_full("fn test(a: extension i32) { }\n"
+                                    "fn main() { let x: i32 = 42; test(extension x); }");
+    REQUIRE(ast);
+}
+
+TEST_CASE("FULL: call_arg AST ownership is correct for view", "[full][call][ownership][ast]") {
+    auto ast = zith_parse_test_full("fn id(x: view i32): i32 { return x; }\n"
+                                    "fn main() { let x: i32 = 42; let y = id(view x); }");
+    REQUIRE(ast);
+
+    auto **decls = static_cast<ZithNode **>(ast->data.list.ptr);
+    REQUIRE(ast->data.list.len == 2);
+
+    auto *main_fn   = static_cast<ZithFuncPayload *>(decls[1]->data.list.ptr);
+    auto *block     = main_fn->body;
+    auto **stmts    = static_cast<ZithNode **>(block->data.list.ptr);
+    REQUIRE(block->data.list.len >= 2);
+
+    auto *var_decl  = static_cast<ZithVarPayload *>(stmts[1]->data.list.ptr);
+    auto *call      = static_cast<ZithCallPayload *>(var_decl->initializer->data.list.ptr);
+    REQUIRE(call->arg_count == 1);
+    REQUIRE(call->args[0]->type == ZITH_NODE_CALL_ARG);
+
+    auto *arg = static_cast<ZithCallArgPayload *>(call->args[0]->data.list.ptr);
+    REQUIRE(arg->ownership == ZITH_OWN_VIEW);
+    REQUIRE(arg->expr->type == ZITH_NODE_IDENTIFIER);
+}
+
+TEST_CASE("FULL: call_arg AST ownership is correct for lend", "[full][call][ownership][ast]") {
+    auto ast = zith_parse_test_full("fn id(x: lend i32): i32 { return x; }\n"
+                                    "fn main() { let x: i32 = 42; let y = id(lend x); }");
+    REQUIRE(ast);
+
+    auto **decls = static_cast<ZithNode **>(ast->data.list.ptr);
+    REQUIRE(ast->data.list.len == 2);
+
+    auto *main_fn   = static_cast<ZithFuncPayload *>(decls[1]->data.list.ptr);
+    auto *block     = main_fn->body;
+    auto **stmts    = static_cast<ZithNode **>(block->data.list.ptr);
+    REQUIRE(block->data.list.len >= 2);
+
+    auto *var_decl  = static_cast<ZithVarPayload *>(stmts[1]->data.list.ptr);
+    auto *call      = static_cast<ZithCallPayload *>(var_decl->initializer->data.list.ptr);
+    REQUIRE(call->arg_count == 1);
+    REQUIRE(call->args[0]->type == ZITH_NODE_CALL_ARG);
+
+    auto *arg = static_cast<ZithCallArgPayload *>(call->args[0]->data.list.ptr);
+    REQUIRE(arg->ownership == ZITH_OWN_LEND);
+    REQUIRE(arg->expr->type == ZITH_NODE_IDENTIFIER);
+}
+
+TEST_CASE("FULL: call_arg AST ownership is correct for extension", "[full][call][ownership][ast]") {
+    auto ast = zith_parse_test_full("fn id(x: extension i32): i32 { return x; }\n"
+                                    "fn main() { let x: i32 = 42; let y = id(extension x); }");
+    REQUIRE(ast);
+
+    auto **decls = static_cast<ZithNode **>(ast->data.list.ptr);
+    REQUIRE(ast->data.list.len == 2);
+
+    auto *main_fn   = static_cast<ZithFuncPayload *>(decls[1]->data.list.ptr);
+    auto *block     = main_fn->body;
+    auto **stmts    = static_cast<ZithNode **>(block->data.list.ptr);
+    REQUIRE(block->data.list.len >= 2);
+
+    auto *var_decl  = static_cast<ZithVarPayload *>(stmts[1]->data.list.ptr);
+    auto *call      = static_cast<ZithCallPayload *>(var_decl->initializer->data.list.ptr);
+    REQUIRE(call->arg_count == 1);
+    REQUIRE(call->args[0]->type == ZITH_NODE_CALL_ARG);
+
+    auto *arg = static_cast<ZithCallArgPayload *>(call->args[0]->data.list.ptr);
+    REQUIRE(arg->ownership == ZITH_OWN_EXTENSION);
+}
+
+TEST_CASE("FULL: call_arg AST ownership is correct for share", "[full][call][ownership][ast]") {
+    auto ast = zith_parse_test_full("fn id(x: share i32): i32 { return x; }\n"
+                                    "fn main() { let x: i32 = 42; let y = id(share x); }");
+    REQUIRE(ast);
+
+    auto **decls = static_cast<ZithNode **>(ast->data.list.ptr);
+    REQUIRE(ast->data.list.len == 2);
+
+    auto *main_fn   = static_cast<ZithFuncPayload *>(decls[1]->data.list.ptr);
+    auto *block     = main_fn->body;
+    auto **stmts    = static_cast<ZithNode **>(block->data.list.ptr);
+    REQUIRE(block->data.list.len >= 2);
+
+    auto *var_decl  = static_cast<ZithVarPayload *>(stmts[1]->data.list.ptr);
+    auto *call      = static_cast<ZithCallPayload *>(var_decl->initializer->data.list.ptr);
+    REQUIRE(call->arg_count == 1);
+    REQUIRE(call->args[0]->type == ZITH_NODE_CALL_ARG);
+
+    auto *arg = static_cast<ZithCallArgPayload *>(call->args[0]->data.list.ptr);
+    REQUIRE(arg->ownership == ZITH_OWN_SHARED);
+}
+
+TEST_CASE("FULL: call_arg AST ownership is correct for unique", "[full][call][ownership][ast]") {
+    auto ast = zith_parse_test_full("fn id(x: unique i32): i32 { return x; }\n"
+                                    "fn main() { let x: i32 = 42; let y = id(unique x); }");
+    REQUIRE(ast);
+
+    auto **decls = static_cast<ZithNode **>(ast->data.list.ptr);
+    REQUIRE(ast->data.list.len == 2);
+
+    auto *main_fn   = static_cast<ZithFuncPayload *>(decls[1]->data.list.ptr);
+    auto *block     = main_fn->body;
+    auto **stmts    = static_cast<ZithNode **>(block->data.list.ptr);
+    REQUIRE(block->data.list.len >= 2);
+
+    auto *var_decl  = static_cast<ZithVarPayload *>(stmts[1]->data.list.ptr);
+    auto *call      = static_cast<ZithCallPayload *>(var_decl->initializer->data.list.ptr);
+    REQUIRE(call->arg_count == 1);
+    REQUIRE(call->args[0]->type == ZITH_NODE_CALL_ARG);
+
+    auto *arg = static_cast<ZithCallArgPayload *>(call->args[0]->data.list.ptr);
+    REQUIRE(arg->ownership == ZITH_OWN_UNIQUE);
+}
+
+TEST_CASE("FULL: default arg has no CALL_ARG wrapper", "[full][call][ownership][ast]") {
+    auto ast = zith_parse_test_full("fn id(x: i32): i32 { return x; }\n"
+                                    "fn main() { let x: i32 = 42; let y = id(x); }");
+    REQUIRE(ast);
+
+    auto **decls = static_cast<ZithNode **>(ast->data.list.ptr);
+    REQUIRE(ast->data.list.len == 2);
+
+    auto *main_fn   = static_cast<ZithFuncPayload *>(decls[1]->data.list.ptr);
+    auto *block     = main_fn->body;
+    auto **stmts    = static_cast<ZithNode **>(block->data.list.ptr);
+    REQUIRE(block->data.list.len >= 2);
+
+    auto *var_decl  = static_cast<ZithVarPayload *>(stmts[1]->data.list.ptr);
+    auto *call      = static_cast<ZithCallPayload *>(var_decl->initializer->data.list.ptr);
+    REQUIRE(call->arg_count == 1);
+    REQUIRE(call->args[0]->type == ZITH_NODE_IDENTIFIER);
+}
+
+// ============================================================================
+// Cleanup
 // ============================================================================
 // Cleanup
 // ============================================================================

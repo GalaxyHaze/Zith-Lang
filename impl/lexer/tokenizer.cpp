@@ -658,7 +658,7 @@ const char *zith_token_type_name(ZithTokenType t) {
     case ZITH_TOKEN_GLOBAL: return "global";
     case ZITH_TOKEN_COMPTIME: return "comptime";
     case ZITH_TOKEN_LEND: return "lend";
-    case ZITH_TOKEN_SHARED: return "shared";
+    case ZITH_TOKEN_SHARED: return "share";
     case ZITH_TOKEN_VIEW: return "view";
     case ZITH_TOKEN_UNIQUE: return "unique";
     case ZITH_TOKEN_EXTENSION: return "extension";

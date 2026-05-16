@@ -108,6 +108,18 @@ ZithNode *zith_ast_make_unary_op(ZithArena *a, ZithSourceLoc loc, ZithTokenType 
     return n;
 }
 
+// list → ZithCallArgPayload
+ZithNode *zith_ast_make_call_arg(ZithArena *a, ZithSourceLoc loc, ZithCallArgPayload payload) {
+    ZithNode *n = alloc_node(a, ZITH_NODE_CALL_ARG, loc);
+    if (!n)
+        return nullptr;
+    auto *p = alloc_payload<ZithCallArgPayload>(a, n);
+    if (!p)
+        return n;
+    *p = payload;
+    return n;
+}
+
 // list → ZithCallPayload, list.len = arg_count
 ZithNode *zith_ast_make_call(ZithArena *a, ZithSourceLoc loc, ZithNode *callee, ZithNode **args,
                              size_t arg_count) {
@@ -602,6 +614,15 @@ static void walk_children(ZithNode *n, ZithASTVisitorFn pre, ZithASTVisitorFn po
         break;
     }
 
+    // list → ZithCallArgPayload
+    case ZITH_NODE_CALL_ARG: {
+        auto *p = static_cast<ZithCallArgPayload *>(n->data.list.ptr);
+        if (!p)
+            break;
+        zith_ast_walk(p->expr, pre, post, ud);
+        break;
+    }
+
     // list → ZithForPayload
     case ZITH_NODE_FOR: {
         auto *p = static_cast<ZithForPayload *>(n->data.list.ptr);
@@ -811,7 +832,7 @@ const char *zith_ast_node_name(const uint16_t id) {
     case ZITH_NODE_TYPE_UNIQUE:
         return "unique";
     case ZITH_NODE_TYPE_SHARED:
-        return "shared";
+        return "share";
     case ZITH_NODE_TYPE_VIEW:
         return "view";
     case ZITH_NODE_TYPE_LEND:
@@ -820,6 +841,8 @@ const char *zith_ast_node_name(const uint16_t id) {
         return "pack";
     case ZITH_NODE_TYPE_EXTENSION:
         return "extension";
+    case ZITH_NODE_CALL_ARG:
+        return "call_arg";
     default:
         return "<?>";
     }
@@ -1216,6 +1239,17 @@ void zith_ast_print(const ZithNode *node, int indent) {
         print_indent(indent + 1);
         debug_error("msg: %s\n", node->data.ident.str ? node->data.ident.str : "(null)");
         break;
+
+    case ZITH_NODE_CALL_ARG: {
+        auto *p = static_cast<const ZithCallArgPayload *>(node->data.list.ptr);
+        if (!p)
+            break;
+        print_indent(indent + 1);
+        debug_print("ownership: %d\n", (int)p->ownership);
+        if (p->expr)
+            zith_ast_print(p->expr, indent + 2);
+        break;
+    }
 
     default:
         break;

@@ -112,6 +112,32 @@ ZithNode *parser_parse_type(Parser *p) {
 }
 
 // ============================================================================
+// Call-site argument with optional ownership annotation
+// ============================================================================
+
+static ZithNode *parse_call_arg(Parser *p) {
+    const ZithSourceLoc loc = parser_peek(p)->loc;
+    ZithOwnership ownership = ZITH_OWN_DEFAULT;
+
+    if (parser_match(p, ZITH_TOKEN_VIEW))
+        ownership = ZITH_OWN_VIEW;
+    else if (parser_match(p, ZITH_TOKEN_LEND))
+        ownership = ZITH_OWN_LEND;
+    else if (parser_match(p, ZITH_TOKEN_EXTENSION))
+        ownership = ZITH_OWN_EXTENSION;
+    else if (parser_match(p, ZITH_TOKEN_UNIQUE))
+        ownership = ZITH_OWN_UNIQUE;
+    else if (parser_match(p, ZITH_TOKEN_SHARED))
+        ownership = ZITH_OWN_SHARED;
+
+    ZithNode *expr = parser_parse_expression(p);
+
+    if (ownership != ZITH_OWN_DEFAULT)
+        return zith_ast_make_call_arg(p->arena, loc, {ownership, expr});
+    return expr;
+}
+
+// ============================================================================
 // Expressions (Pratt Parser)
 // ============================================================================
 
@@ -172,7 +198,7 @@ static ZithNode *parse_nud(Parser *p) {
         ArenaList<ZithNode *> args_b;
         args_b.init(p->arena, 8);
         while (!parser_check(p, ZITH_TOKEN_RPAREN) && !parser_is_at_end(p)) {
-            args_b.push(p->arena, parser_parse_expression(p));
+            args_b.push(p->arena, parse_call_arg(p));
             if (!parser_match(p, ZITH_TOKEN_COMMA))
                 break;
         }
@@ -243,7 +269,7 @@ static ZithNode *parse_expr_bp(Parser *p, const int min_bp) {
                 ArenaList<ZithNode *> args_b;
                 args_b.init(p->arena, 8);
                 while (!parser_check(p, ZITH_TOKEN_RPAREN) && !parser_is_at_end(p)) {
-                    args_b.push(p->arena, parser_parse_expression(p));
+                    args_b.push(p->arena, parse_call_arg(p));
                     if (!parser_match(p, ZITH_TOKEN_COMMA))
                         break;
                 }
