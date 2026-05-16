@@ -132,14 +132,15 @@ endif()
 option(ZITH_ENABLE_LLVM "Enable LLVM backend support" ON)
 set(LLVM_DIR "" CACHE PATH "Path to LLVMConfig.cmake (optional)")
 
+if(APPLE AND CMAKE_OSX_ARCHITECTURES)
+    message(STATUS "Building for macOS arch: ${CMAKE_OSX_ARCHITECTURES}")
+endif()
+
 if(ZITH_ENABLE_LLVM)
-    if(CMAKE_CROSSCOMPILING AND NOT LLVM_DIR)
-        message(STATUS "Cross-compiling and no LLVM_DIR set: skipping LLVM discovery")
-        set(LLVM_FOUND FALSE)
-    elseif(LLVM_DIR)
+    if(LLVM_DIR)
         find_package(LLVM REQUIRED CONFIG PATHS "${LLVM_DIR}" NO_DEFAULT_PATH)
     else()
-        find_package(LLVM)
+        find_package(LLVM REQUIRED CONFIG)
     endif()
     if(LLVM_FOUND)
         message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION} at ${LLVM_DIR}")
@@ -191,7 +192,6 @@ set(PARSER_CPP_SOURCES
 
 set(CLI_SOURCES
     ../impl/cli/main.cpp
-    ../impl/cli/cli11_init.cpp
     ../impl/cli/pipeline/pipeline.cpp
     ../impl/cli/runtime_interpreted/runtime_interpreted.cpp
     ../impl/cli/cmd/build/build.cpp
@@ -239,6 +239,10 @@ set_target_properties(ZithParse PROPERTIES
 )
 
 add_executable(zith ${CLI_SOURCES})
+
+if(MINGW)
+    target_sources(zith PRIVATE ../impl/cli/cli11_init.cpp)
+endif()
 
 target_include_directories(zith PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/../include
