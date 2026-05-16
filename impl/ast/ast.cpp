@@ -906,6 +906,10 @@ const char *zith_ast_fn_kind_name(ZithFnKind kind) {
         return "noreturn fn";
     case ZITH_FN_FLOWING:
         return "flowing fn";
+    case ZITH_FN_RAW:
+        return "raw fn";
+    case ZITH_FN_CONST:
+        return "const fn";
     default:
         return "<?>";
     }

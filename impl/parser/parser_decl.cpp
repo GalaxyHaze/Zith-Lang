@@ -474,15 +474,25 @@ static ZithNode *parse_body(Parser *p) {
 
 static ZithNode *parse_fn_decl(Parser *p, ZithSourceLoc loc, ZithVisibility vis, int32_t vis_depth, bool is_method) {
     ZithFnKind kind = ZITH_FN_NORMAL;
+    bool fn_consumed = false;
     if (parser_match(p, ZITH_TOKEN_ASYNC)) {
         kind = ZITH_FN_ASYNC;
+    } else if (parser_match(p, ZITH_TOKEN_RAW)) {
+        kind = ZITH_FN_RAW;
+        fn_consumed = true;
+    } else if (parser_match(p, ZITH_TOKEN_CONST)) {
+        kind = ZITH_FN_CONST;
+        fn_consumed = true;
     } else if (parser_match(p, ZITH_TOKEN_FLOWING)) {
         kind = ZITH_FN_FLOWING;
     } else if (parser_match(p, ZITH_TOKEN_NORETURN)) {
         kind = ZITH_FN_NORETURN;
     }
 
-    parser_expect(p, ZITH_TOKEN_FN, "expected 'fn' keyword");
+    if (!fn_consumed)
+        parser_expect(p, ZITH_TOKEN_FN, "expected 'fn' keyword");
+    else
+        parser_expect(p, ZITH_TOKEN_FN, "expected 'fn' keyword after fn-kind modifier");
     const ZithToken *name = parser_expect(p, ZITH_TOKEN_IDENTIFIER, "expected function name");
 
     // Register function symbol in SCAN mode
@@ -547,9 +557,11 @@ static ZithNode *parse_struct_decl(Parser *p, ZithVisibility struct_vis, int32_t
         if ((int)item_vis == -1)
             continue;
 
-        // 2. Check for Methods (fn, async, etc)
+        // 2. Check for Methods (fn, async, raw fn, const fn, etc)
         if (parser_check(p, ZITH_TOKEN_FN) || parser_check(p, ZITH_TOKEN_ASYNC) ||
-            parser_check(p, ZITH_TOKEN_FLOWING) || parser_check(p, ZITH_TOKEN_NORETURN)) {
+            parser_check(p, ZITH_TOKEN_FLOWING) || parser_check(p, ZITH_TOKEN_NORETURN) ||
+            parser_check(p, ZITH_TOKEN_RAW) ||
+            (parser_check(p, ZITH_TOKEN_CONST) && parser_peek_ahead(p, 1)->type == ZITH_TOKEN_FN)) {
             methods_b.push(p->arena, parse_fn_decl(p, parser_peek(p)->loc, item_vis, item_depth, true));
             continue;
         }
@@ -1024,7 +1036,7 @@ ZithNode *parser_parse_declaration(Parser *p) {
     const ZithSourceLoc loc = t->loc;
 
     if (t->type == ZITH_TOKEN_FN || t->type == ZITH_TOKEN_ASYNC || t->type == ZITH_TOKEN_FLOWING ||
-        t->type == ZITH_TOKEN_NORETURN)
+        t->type == ZITH_TOKEN_NORETURN || t->type == ZITH_TOKEN_RAW)
         return parse_fn_decl(p, loc, vis, vis_depth, false);
 
     if (t->type == ZITH_TOKEN_STRUCT)
@@ -1036,6 +1048,9 @@ ZithNode *parser_parse_declaration(Parser *p) {
     if (t->type == ZITH_TOKEN_EXPORT)
         return parse_export_decl(p);
     if (t->type == ZITH_TOKEN_CONST) {
+        // Distinguish const fn vs const variable declaration
+        if (parser_peek_ahead(p, 1)->type == ZITH_TOKEN_FN)
+            return parse_fn_decl(p, loc, vis, vis_depth, false);
         parser_advance(p);
         return parse_var_decl(p, ZITH_BINDING_CONST, vis, vis_depth);
     }

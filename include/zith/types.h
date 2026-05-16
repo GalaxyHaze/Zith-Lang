@@ -106,6 +106,8 @@ typedef enum ZithFnKind {
     ZITH_FN_ASYNC    = 1,
     ZITH_FN_NORETURN = 2,
     ZITH_FN_FLOWING  = 3,
+    ZITH_FN_RAW      = 4,
+    ZITH_FN_CONST    = 5,
 } ZithFnKind;
 
 typedef enum ZithBindingKind {
