@@ -513,7 +513,7 @@ TEST_CASE("SCAN: unique keyword tokenized", "[scan][lexer][ownership]") {
     (void)ast;
 }
 
-TEST_CASE("SCAN: shared keyword tokenized", "[scan][lexer][ownership]") {
+TEST_CASE("SCAN: share keyword tokenized", "[scan][lexer][ownership]") {
     auto ast = parse_test("fn main() { share x = 5; }");
     (void)ast;
 }
