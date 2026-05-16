@@ -1,136 +1,75 @@
 ---
-id: struf-command
-title: Struf Command
-sidebar_label: check
-description: Analyze Zith code for errors without building. Fast feedback during development.
+id: run-command
+title: Run Command
+sidebar_label: run
+description: Compile and run Zith programs directly.
 ---
 
-# `zith check`
+# `zith run`
 
-The `check` command analyzes your code for errors without generating a binary. Perfect for quick feedback during development.
+The `run` command compiles and executes your Zith program in a single step. Ideal for quick testing and development.
 
 ## Usage
 
 ```bash
-zith check [options] [file|project]
+zith run [options] [file|project]
 ```
 
 ## Examples
 
-### Check Current Project
+### Run Current Project
 
 ```bash
-# Check entire project from root directory
-zith check
+# Run project from root directory
+zith run
 ```
 
-### Check Specific File
+### Run Specific File
 
 ```bash
-# Check a single file
-zith check src/main.zith
+# Run a single file
+zith run src/main.zith
 
-# Check with line numbers
-zith check --verbose src/module.zith
+# Run with arguments
+zith run src/script.zith -- arg1 arg2
 ```
 
-### Check All Files in Directory
+### Run with Debug Mode
 
 ```bash
-# Recursively check all .zith files
-zith check ./src/
+# Enable debug output
+zith run --debug src/main.zith
 ```
 
 ## Options
 
 | Flag | Description |
 |------|-------------|
-| `--verbose, -v` | Show detailed error information |
-| `--warnings-as-errors` | Treat warnings as errors |
-| `--no-color` | Disable colored output |
-| `--json` | Output errors in JSON format |
-| `--quiet, -q` | Only show errors, no warnings |
-
-## Output Format
-
-### Default Output
-
-```
-Checking src/main.zith...
-error[E001]: Type mismatch
-  --> src/main.zith:15:8
-   |
-15 | let x: i32 = "hello";
-   |         ^^^   ^^^^^^ expected i32, found str
-   |
-   = help: Change type to 'str' or value to an integer
-```
-
-### JSON Output
-
-```bash
-zith check --json
-```
-
-```json
-{
-  "file": "src/main.zith",
-  "line": 15,
-  "column": 8,
-  "level": "error",
-  "code": "E001",
-  "message": "Type mismatch",
-  "help": "Change type to 'str' or value to an integer"
-}
-```
+| `--debug`, `-d` | Enable debug output |
+| `--release` | Run in release mode (optimized) |
+| `--args <args>` | Pass arguments to program |
+| `--watch` | Re-run on file changes |
 
 ## Exit Codes
 
-- `0` - No errors found
-- `1` - Errors found
-- `2` - Fatal error (file not found, etc.)
+- `0` - Program executed successfully
+- `1` - Program exited with error
+- `2` - Compilation error
 
-## Common Error Codes
+## How It Works
 
-| Code | Description |
-|------|-------------|
-| E001 | Type mismatch |
-| E002 | Undefined variable |
-| E003 | Duplicate definition |
-| E004 | Missing return statement |
-| E005 | Invalid ownership modifier |
-| W001 | Unused variable (warning) |
-| W002 | Unreachable code (warning) |
-
-## Integration with Editors
-
-Use `--json` flag for editor integration:
-
-```bash
-# VS Code task example
-{
-  "label": "Zith Check",
-  "type": "shell",
-  "command": "zith check --json",
-  "problemMatcher": {
-    "owner": "zith",
-    "pattern": {
-      "file": "${file}",
-      "line": "${line}",
-      "message": "${message}"
-    }
-  }
-}
-```
+1. **Compile** - Runs `zith check` to verify code
+2. **Build** - Compiles to temporary binary
+3. **Execute** - Runs the compiled program
 
 ## Tips
 
-- Run `zith check` before committing to catch errors early
-- Use `--warnings-as-errors` in CI/CD pipelines
-- Combine with `zith fmt` for clean, error-free code
+- Use `--release` for performance testing
+- Use `--watch` during development for automatic re-runs
+- Pass `--` followed by args to send to your program
 
 ## See Also
 
-- [`zith build`](./build.md) - Build the project
-- [`zith fmt`](./fmt.md) - Format code
-- [`zith run`](./run.md) - Run program directly
+- [`zith build`](./build.md) - Full build pipeline
+- [`zith compile`](./compile.md) - Generate binary only
+- [`zith check`](./02-overview.md) - Check without running

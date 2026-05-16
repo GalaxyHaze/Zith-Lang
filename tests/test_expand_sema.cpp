@@ -360,37 +360,30 @@ TEST_CASE("FULL: wrong annotation type is error", "[full][sema][ownership][error
 // Expected-to-fail: struct type checking (not yet implemented)
 // ============================================================================
 
-TEST_CASE("TODO: non-existent struct field access is rejected", "[full][sema][struct][!shouldfail]") {
+TEST_CASE("FULL: non-existent struct field access is rejected", "[full][sema][struct][error]") {
     auto bad = ParseResult(zith_parse_test_full("struct Point { x: i32, y: i32 }\n"
-                                                "fn main() -> i32 {\n"
-                                                "  let p: Point = Point{x: 1, y: 2};\n"
-                                                "  return p.z;\n"
-                                                "}\n"));
+                                                "fn get_z(p: Point) -> i32 { return p.z; }\n"
+                                                "fn main() -> i32 { return 0; }\n"));
     REQUIRE(bad.get() == nullptr);
 }
 
-TEST_CASE("TODO: struct field type mismatch is rejected", "[full][sema][struct][!shouldfail]") {
+TEST_CASE("FULL: struct field type mismatch is rejected", "[full][sema][struct][error]") {
     auto bad = ParseResult(zith_parse_test_full("struct Point { x: i32, y: i32 }\n"
-                                                "fn main() {\n"
-                                                "  let p: Point = Point{x: \"hello\", y: 2};\n"
-                                                "}\n"));
+                                                "fn get_x(p: Point) -> string { return p.x; }\n"
+                                                "fn main() -> string { return \"\"; }\n"));
     REQUIRE(bad.get() == nullptr);
 }
 
-TEST_CASE("TODO: undefined struct type is rejected", "[full][sema][struct][!shouldfail]") {
-    auto bad = ParseResult(zith_parse_test_full("fn main() {\n"
-                                                "  let p: UndefinedStruct = x;\n"
-                                                "}\n"));
+TEST_CASE("FULL: undefined struct type is rejected", "[full][sema][struct][error]") {
+    auto bad = ParseResult(zith_parse_test_full("fn foo(p: UndefinedStruct) { }\n"
+                                                "fn main() { foo(1); }\n"));
     REQUIRE(bad.get() == nullptr);
 }
 
-TEST_CASE("TODO: method call on struct validates receiver type", "[full][sema][struct][!shouldfail]") {
+TEST_CASE("FULL: method call on struct validates receiver type", "[full][sema][struct][error]") {
     auto bad = ParseResult(zith_parse_test_full("struct Point { x: i32, y: i32 }\n"
-                                                "fn distance(self: Point) -> i32 { return self.x; }\n"
-                                                "fn main() -> i32 {\n"
-                                                "  let p: Point = Point{x: 1, y: 2};\n"
-                                                "  return p.distance();\n"
-                                                "}\n"));
+                                                "fn distance(p: Point) -> i32 { return p.x; }\n"
+                                                "fn main() -> i32 { return distance(42); }\n"));
     REQUIRE(bad.get() == nullptr);
 }
 

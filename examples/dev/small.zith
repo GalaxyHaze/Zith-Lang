@@ -1,7 +1,9 @@
 
-fn add( x: view i32, y: view i32 );
 
-fn main(){
+
+fn main() {
     let x = 5;
-    add( extensi x, 5);
+    if(x > 5)
+        return;
+
 }

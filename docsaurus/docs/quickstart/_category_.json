@@ -2,9 +2,7 @@
   "label": "Quickstart",
   "position": 2,
   "link": {
-    "type": "generated-index",
-    "title": "Quickstart Tutorials",
-    "description": "Hands-on tutorials to get you writing Zith code quickly.",
-    "slug": "/docs/quickstart/overview"
+    "type": "doc",
+    "id": "quickstart/quickstart"
   }
 }

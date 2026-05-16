@@ -13,6 +13,7 @@ enum class SemaType {
     String,
     Bool,
     Module,
+    Struct,
 };
 
 struct Type {
@@ -20,10 +21,15 @@ struct Type {
     bool optional = false;
     bool failable = false;
     ZithOwnership ownership = ZITH_OWN_DEFAULT;
+    const char *struct_name = nullptr;
 };
 
 inline bool type_match(const Type &a, const Type &b) {
-    return a.base == b.base && a.optional == b.optional && a.failable == b.failable;
+    if (a.base != b.base || a.optional != b.optional || a.failable != b.failable)
+        return false;
+    if (a.base == SemaType::Struct)
+        return a.struct_name && b.struct_name && strcmp(a.struct_name, b.struct_name) == 0;
+    return true;
 }
 
 } // namespace zith

@@ -4,5 +4,5 @@
 #include <cli/CLI.hpp>
 
 int main(const int argc, char** argv) {
-    zith_run(argc, argv);
+    return zith_run(argc, argv);
 }
