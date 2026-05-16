@@ -66,6 +66,7 @@ jobs:
               -DCMAKE_SYSTEM_NAME=Linux
               -DCMAKE_SYSTEM_PROCESSOR=aarch64
               -DZITH_ENABLE_FFI=OFF
+              -DZITH_ENABLE_LLVM=OFF
 
           - os: macos-13
             target_name: zith-macos-amd64
@@ -92,6 +93,7 @@ jobs:
               -DCMAKE_C_COMPILER=clang-cl
               -DCMAKE_CXX_COMPILER=clang-cl
               -DZITH_ENABLE_FFI=OFF
+              -DZITH_ENABLE_LLVM=OFF
 
           - os: windows-latest
             target_name: zith-windows-arm64.exe
@@ -103,6 +105,7 @@ jobs:
               -DCMAKE_CXX_COMPILER_TARGET=arm64-pc-windows-msvc
               -DCMAKE_CROSSCOMPILING=ON
               -DZITH_ENABLE_FFI=OFF
+              -DZITH_ENABLE_LLVM=OFF
 
     steps:
       - uses: actions/checkout@v4
