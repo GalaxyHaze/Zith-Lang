@@ -137,7 +137,13 @@ public:
                 kind_str = "import";
                 break;
             }
-            const char *vis_str = (sym.visibility == ZITH_VIS_PUBLIC) ? "pub" : "priv";
+            const char *vis_str;
+            if (sym.visibility == ZITH_VIS_PUBLIC)
+                vis_str = "pub";
+            else if (sym.visibility == ZITH_VIS_MODULE)
+                vis_str = "mod";
+            else
+                vis_str = "priv";
             printf("  [%s] %.*s (%s)\n", kind_str, (int)sym.name_len, sym.name, vis_str);
         }
     }

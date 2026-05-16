@@ -1005,8 +1005,12 @@ void zith_ast_print(const ZithNode *node, int indent) {
         if (!p)
             break;
         print_indent(indent + 1);
-        debug_print("%s %s  params: %zu  visibility: %s\n", zith_ast_fn_kind_name(p->kind), p->name,
-                    p->param_count, zith_ast_visibility_name(p->visibility));
+        if (p->visibility == ZITH_VIS_MODULE && p->vis_depth > 0)
+            debug_print("%s %s  params: %zu  visibility: %s(%d)\n", zith_ast_fn_kind_name(p->kind), p->name,
+                        p->param_count, zith_ast_visibility_name(p->visibility), p->vis_depth);
+        else
+            debug_print("%s %s  params: %zu  visibility: %s\n", zith_ast_fn_kind_name(p->kind), p->name,
+                        p->param_count, zith_ast_visibility_name(p->visibility));
         for (size_t i = 0; i < p->param_count; ++i)
             zith_ast_print(p->params[i], indent + 2);
         zith_ast_print(p->return_type, indent + 2);
@@ -1119,8 +1123,13 @@ void zith_ast_print(const ZithNode *node, int indent) {
         if (!p)
             break;
         print_indent(indent + 1);
-        debug_print("name: %s  vis: %s  fields: %zu  methods: %zu\n", p->name,
-                    zith_ast_visibility_name(p->visibility), p->field_count, p->method_count);
+        if (p->visibility == ZITH_VIS_MODULE && p->vis_depth > 0)
+            debug_print("name: %s  vis: %s(%d)  fields: %zu  methods: %zu\n", p->name,
+                        zith_ast_visibility_name(p->visibility), p->vis_depth,
+                        p->field_count, p->method_count);
+        else
+            debug_print("name: %s  vis: %s  fields: %zu  methods: %zu\n", p->name,
+                        zith_ast_visibility_name(p->visibility), p->field_count, p->method_count);
         for (size_t i = 0; i < p->field_count; ++i)
             zith_ast_print(p->fields[i], indent + 2);
         for (size_t i = 0; i < p->method_count; ++i)
