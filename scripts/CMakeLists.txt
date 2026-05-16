@@ -185,7 +185,6 @@ set(PARSER_CPP_SOURCES
     ../impl/parser/parser_decl.cpp
     ../impl/parser/parser_expr.cpp
     ../impl/parser/parser_sema.cpp
-    ../impl/parser/parser_test.cpp
     ../impl/parser/parser_utils.cpp
     ../impl/cli/project_config/project_config.cpp
 )
@@ -260,6 +259,10 @@ if(ZITH_IS_WASM)
     target_compile_definitions(zith PRIVATE ZITH_WASM)
 endif()
 target_compile_definitions(zith PRIVATE ZITH_VERSION="${ZITH_VERSION}" ZITH_EXECUTABLE)
+if(CMAKE_INSTALL_PREFIX)
+    set(ZITH_INSTALL_LIB_DIR "${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR}/zith/lib")
+    target_compile_definitions(zith PRIVATE ZITH_INSTALL_LIB_DIR="${ZITH_INSTALL_LIB_DIR}")
+endif()
 
 # ───────────────────────────────────────────────
 # Install
@@ -268,6 +271,11 @@ install(TARGETS zith ZithParse ZithCore
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
     ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+)
+
+install(DIRECTORY ../lib/
+    DESTINATION ${CMAKE_INSTALL_LIBDIR}/zith/lib
+    FILES_MATCHING PATTERN "*.zith"
 )
 
 
@@ -312,6 +320,7 @@ if(BUILD_TESTING)
     FetchContent_MakeAvailable(Catch2)
 
     set(TEST_SOURCES
+        ../impl/parser/parser_test.cpp
         ../tests/test_expand_sema.cpp
         ../tests/test_import.cpp
         ../tests/test_import_system.cpp

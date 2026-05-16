@@ -35,11 +35,13 @@ typedef struct Parser {
     bool inside_fn;
 
     ZithVisibility current_visibility;
+    int32_t current_vis_depth;
     ZithParserMode mode;
     ZithNode *scan_root;
 
     const char **import_roots;
     size_t import_root_count;
+    bool allow_dot_imports;
 } Parser;
 
 void parser_init(Parser *p, ZithArena *arena,
@@ -48,6 +50,7 @@ void parser_init(Parser *p, ZithArena *arena,
                  ZithTokenStream tokens);
 
 void parser_set_import_roots(Parser *p, const char **roots, size_t count);
+void parser_set_allow_dot_imports(Parser *p, bool allow);
 void parser_set_imported_decls(void *decls, ZithArena *arena);
 
 const ZithToken *parser_peek(const Parser *p);

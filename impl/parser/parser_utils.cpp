@@ -26,11 +26,13 @@ void parser_init(Parser *p, ZithArena *arena, const char *source, const size_t s
     p->fn_kind            = ZITH_FN_NORMAL;
     p->inside_fn          = false;
     p->current_visibility = ZITH_VIS_PRIVATE;
+    p->current_vis_depth  = 0;
     p->mode               = ZITH_MODE_SCAN;
     p->diags              = {nullptr, 0, 0};
     p->scan_root          = nullptr;
-    p->import_roots       = nullptr;
-    p->import_root_count  = 0;
+    p->import_roots        = nullptr;
+    p->import_root_count   = 0;
+    p->allow_dot_imports   = false;
 }
 
 // ============================================================================
@@ -200,6 +202,10 @@ void skip_block(Parser *p) {
 void parser_set_import_roots(Parser *p, const char **roots, size_t count) {
     p->import_roots      = roots;
     p->import_root_count = count;
+}
+
+void parser_set_allow_dot_imports(Parser *p, bool allow) {
+    p->allow_dot_imports = allow;
 }
 
 // ============================================================================

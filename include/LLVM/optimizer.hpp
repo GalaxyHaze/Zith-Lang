@@ -13,7 +13,7 @@
 #include <llvm/Transforms/IPO/IPO.h>
 #include <llvm/Transforms/ObjCARC/ObjCARC.h>
 
-namespace Zith {
+namespace zith {
 namespace LLVM {
 namespace Optimizer {
 using InstCombinePass = ::llvm::InstCombinePass;

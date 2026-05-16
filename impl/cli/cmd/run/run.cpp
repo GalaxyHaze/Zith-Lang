@@ -46,13 +46,13 @@ int cmd_execute(const std::string &target, const bool interpreted, const bool ve
             zith_arena_destroy(arena);
             return 1;
         }
-        std::vector<const char *> import_roots;
-        size_t import_root_count;
-        zith::cli::project_config::build_import_roots(include_dirs, import_roots,
-                                                      import_root_count);
+        std::vector<std::string> import_roots;
+        zith::cli::project_config::build_import_roots(include_dirs, import_roots);
+        std::vector<const char *> import_root_ptrs;
+        for (const auto &s : import_roots) import_root_ptrs.push_back(s.c_str());
 
         ZithNode *ast = zith_parse_with_source(arena, source.c_str(), source.size(), bin.c_str(),
-                                               stream, import_roots.data(), import_root_count);
+                                               stream, import_root_ptrs.data(), import_root_ptrs.size());
         if (!ast) {
             zith_arena_destroy(arena);
             return 1;

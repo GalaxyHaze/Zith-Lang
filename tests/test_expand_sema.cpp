@@ -2,6 +2,7 @@
 
 #include "zith/ast.h"
 #include "zith/parser.h"
+#include "zith/parser.hpp"
 
 TEST_CASE("FULL: function body is expanded into BLOCK", "[full][expand]") {
     auto ast = ParseResult(zith_parse_test_full("fn main() -> i32 {\n"
@@ -59,4 +60,117 @@ TEST_CASE("FULL: return type mismatch fails semantic phase", "[full][sema][retur
                                                 "  return \"oops\";\n"
                                                 "}\n"));
     REQUIRE(ast.get() == nullptr);
+}
+
+// ============================================================================
+// Typed parameters (regression: parser_check vs parser_match in parse_param)
+// ============================================================================
+
+TEST_CASE("FULL: typed function parameters are accepted", "[full][sema][params]") {
+    auto ast = ParseResult(zith_parse_test_full("fn add(a: i32, b: i32) -> i32 {\n"
+                                                "  return a + b;\n"
+                                                "}\n"));
+    REQUIRE(ast);
+    REQUIRE(ast->type == ZITH_NODE_PROGRAM);
+    REQUIRE(ast->data.list.len == 1);
+}
+
+TEST_CASE("FULL: mixed typed and untyped parameters", "[full][sema][params]") {
+    auto ast = ParseResult(zith_parse_test_full("fn foo(x: i32, y) -> i32 {\n"
+                                                "  return x;\n"
+                                                "}\n"));
+    REQUIRE(ast);
+}
+
+// ============================================================================
+// Function overloading
+// ============================================================================
+
+TEST_CASE("FULL: overloaded functions with different param counts", "[full][sema][overload]") {
+    auto ast = ParseResult(zith_parse_test_full("fn foo() -> i32 { return 0; }\n"
+                                                "fn foo(x: i32) -> i32 { return x; }\n"
+                                                "fn foo(x: i32, y: i32) -> i32 { return x + y; }\n"
+                                                "fn main() { return; }\n"));
+    REQUIRE(ast);
+    REQUIRE(ast->data.list.len == 4);
+}
+
+TEST_CASE("FULL: overloaded functions with different param types", "[full][sema][overload]") {
+    auto ast = ParseResult(zith_parse_test_full("fn bar(x: i32) -> i32 { return x; }\n"
+                                                "fn bar(x: string) -> string { return x; }\n"
+                                                "fn main() { return; }\n"));
+    REQUIRE(ast);
+    REQUIRE(ast->data.list.len == 3);
+}
+
+TEST_CASE("FULL: duplicate function with same signature is rejected", "[full][sema][overload]") {
+    auto bad = ParseResult(zith_parse_test_full("fn dup(a: i32) -> i32 { return a; }\n"
+                                                "fn dup(b: i32) -> i32 { return b; }\n"
+                                                "fn main() { return; }\n"));
+    REQUIRE(bad.get() == nullptr);
+}
+
+TEST_CASE("FULL: overloaded function call resolves to correct overload", "[full][sema][overload]") {
+    auto ast = ParseResult(zith_parse_test_full("fn add(x: i32, y: i32) -> i32 { return x + y; }\n"
+                                                "fn add(x: string, y: string) -> string { return x; }\n"
+                                                "fn main() -> i32 {\n"
+                                                "  return add(1, 2);\n"
+                                                "}\n"));
+    REQUIRE(ast);
+}
+
+TEST_CASE("FULL: call with no matching overload is rejected", "[full][sema][overload]") {
+    auto bad = ParseResult(zith_parse_test_full("fn compute(x: i32) -> i32 { return x; }\n"
+                                                "fn compute(x: i32, y: i32) -> i32 { return x + y; }\n"
+                                                "fn main() -> i32 {\n"
+                                                "  return compute(true);\n"
+                                                "}\n"));
+    REQUIRE(bad.get() == nullptr);
+}
+
+// ============================================================================
+// :: scope operator
+// ============================================================================
+
+TEST_CASE("FULL: ::expr resolves from outer scope", "[full][sema][scope]") {
+    auto ast = ParseResult(zith_parse_test_full("fn main() -> i32 {\n"
+                                                "  let x: i32 = 1;\n"
+                                                "  {\n"
+                                                "    let _: i32 = ::x;\n"
+                                                "  }\n"
+                                                "  return 0;\n"
+                                                "}\n"));
+    REQUIRE(ast);
+}
+
+
+
+// ============================================================================
+// Visibility — mod fn passes sema
+// ============================================================================
+
+TEST_CASE("FULL: mod visibility function compiles", "[full][sema][visibility]") {
+    auto ast = ParseResult(zith_parse_test_full("mod fn helper() -> i32 { return 42; }\n"
+                                                "fn main() -> i32 {\n"
+                                                "  return helper();\n"
+                                                "}\n"));
+    REQUIRE(ast);
+}
+
+TEST_CASE("FULL: mod(3) visibility function compiles", "[full][sema][visibility]") {
+    auto ast = ParseResult(zith_parse_test_full("mod(3) fn helper() -> i32 { return 7; }\n"
+                                                "fn main() -> i32 {\n"
+                                                "  return helper();\n"
+                                                "}\n"));
+    REQUIRE(ast);
+}
+
+TEST_CASE("FULL: pub: default applies to subsequent functions", "[full][sema][visibility]") {
+    auto ast = ParseResult(zith_parse_test_full("pub:\n"
+                                                "fn a() -> i32 { return 1; }\n"
+                                                "fn b() -> i32 { return 2; }\n"
+                                                "fn main() -> i32 {\n"
+                                                "  return a() + b();\n"
+                                                "}\n"));
+    REQUIRE(ast);
 }

@@ -1,4 +1,4 @@
-// impl/import/import.h — C ABI for Zith's import system
+// include/zith/import.h — C ABI for Zith's import system
 //
 // Provides C-compatible structures for the import system with visibility
 // levels and symbol categorization. Use via import.hpp for C++.

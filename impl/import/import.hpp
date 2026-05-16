@@ -39,9 +39,9 @@ enum class SymbolKind : uint8_t {
 };
 
 enum class Visibility : uint8_t {
-    Private   = ZITH_VIS_PRIVATE,
-    Public    = ZITH_VIS_PUBLIC,
-    Protected = ZITH_VIS_PROTECTED,
+    Private   = ZITH_IMPORT_VIS_PRIVATE,
+    Public    = ZITH_IMPORT_VIS_PUBLIC,
+    Protected = ZITH_IMPORT_VIS_PROTECTED,
 };
 
 enum class ChangeKind : uint8_t {

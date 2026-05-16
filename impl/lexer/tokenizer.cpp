@@ -416,7 +416,6 @@ static bool punctuation(const char *&current, const char *end, TokenList &tokens
     case ']':
     case ';':
     case ',':
-    case ':':
     case '?':
     case '@':
     case '#':
@@ -440,6 +439,7 @@ static bool punctuation(const char *&current, const char *end, TokenList &tokens
     case '<':
     case '>':
     case '.':
+    case ':':
         break;
 
     default:

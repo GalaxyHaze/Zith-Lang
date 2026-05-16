@@ -134,28 +134,31 @@ bool try_load_project(ZithProject &proj) {
 }
 
 void build_import_roots(const std::vector<std::string> &extra_dirs,
-                        std::vector<const char *> &roots_out, size_t &count_out) {
-    std::vector<std::string> lib_dirs;
+                        std::vector<std::string> &roots_out) {
+    roots_out.clear();
 
-    std::filesystem::path lib_path = "lib";
-    if (std::filesystem::exists(lib_path) && std::filesystem::is_directory(lib_path)) {
-        for (const auto &entry : std::filesystem::directory_iterator(lib_path)) {
+    auto add_subdirs = [&](const std::filesystem::path &base) {
+        if (!std::filesystem::exists(base) || !std::filesystem::is_directory(base))
+            return;
+        for (const auto &entry : std::filesystem::directory_iterator(base)) {
             if (entry.is_directory()) {
-                lib_dirs.push_back(entry.path().filename().string());
+                roots_out.push_back(entry.path().string());
             }
         }
+    };
+
+    add_subdirs(std::filesystem::absolute("lib"));
+
+#ifdef ZITH_INSTALL_LIB_DIR
+    add_subdirs(std::filesystem::path(ZITH_INSTALL_LIB_DIR));
+#endif
+
+    std::ranges::sort(roots_out);
+    roots_out.erase(std::ranges::unique(roots_out).begin(), roots_out.end());
+
+    for (const auto &dir : extra_dirs) {
+        roots_out.push_back(dir);
     }
-
-    std::ranges::sort(lib_dirs);
-    lib_dirs.erase(std::ranges::unique(lib_dirs).begin(), lib_dirs.end());
-
-    const size_t total = lib_dirs.size() + extra_dirs.size();
-    roots_out.resize(total);
-    for (size_t i = 0; i < lib_dirs.size(); ++i)
-        roots_out[i] = lib_dirs[i].c_str();
-    for (size_t i = 0; i < extra_dirs.size(); ++i)
-        roots_out[lib_dirs.size() + i] = extra_dirs[i].c_str();
-    count_out = total;
 }
 
 } // namespace zith::cli::project_config

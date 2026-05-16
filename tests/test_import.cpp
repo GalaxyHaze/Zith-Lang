@@ -1,7 +1,9 @@
 #include <catch2/catch_test_macros.hpp>
 
+#include "../include/zith/parser.h"
 #include "zith/ast.h"
 #include "zith/parser.h"
+#include "zith/parser.hpp"
 
 TEST_CASE("IMPORT: basic import from std", "[import][scan]") {
     auto ast = ParseResult(zith_parse_test("import std/io/console;"));

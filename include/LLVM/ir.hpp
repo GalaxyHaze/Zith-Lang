@@ -6,7 +6,7 @@
 #include <llvm/IR/Verifier.h>
 #include <llvm/IRReader/IRReader.h>
 
-namespace Zith {
+namespace zith {
 namespace LLVM {
 using IRBuilder = ::llvm::IRBuilder<>;
 using LLVMContext = ::llvm::LLVMContext;

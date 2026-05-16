@@ -38,12 +38,13 @@ int cmd_check(const std::string &input_file, const std::string &mode_str, const 
 
     //zith_debug_tokens(stream.data, stream.len);
 
-    std::vector<const char *> import_roots;
-    size_t import_root_count;
-    zith::cli::project_config::build_import_roots(include_dirs, import_roots, import_root_count);
+    std::vector<std::string> import_roots;
+    zith::cli::project_config::build_import_roots(include_dirs, import_roots);
+    std::vector<const char *> import_root_ptrs;
+    for (const auto &s : import_roots) import_root_ptrs.push_back(s.c_str());
 
     ZithNode *ast = zith_parse_with_source(arena, source, src_size, src.c_str(), stream,
-                                           import_roots.data(), import_root_count);
+                                           import_root_ptrs.data(), import_root_ptrs.size());
 
     if (verbose) {
         if (ast) {
@@ -85,12 +86,13 @@ int cmd_compile(const std::string &input_file, const std::string &output_file,
     if (!arena)
         return 1;
 
-    std::vector<const char *> import_roots;
-    size_t import_root_count;
-    zith::cli::project_config::build_import_roots(include_dirs, import_roots, import_root_count);
+    std::vector<std::string> import_roots;
+    zith::cli::project_config::build_import_roots(include_dirs, import_roots);
+    std::vector<const char *> import_root_ptrs;
+    for (const auto &s : import_roots) import_root_ptrs.push_back(s.c_str());
 
     const ZithNode *ast = zith_parse_with_source(arena, source, src_size, input_file.c_str(), stream,
-                                                 import_roots.data(), import_root_count);
+                                                 import_root_ptrs.data(), import_root_ptrs.size());
     if (!ast) {
         zith_arena_destroy(arena);
         return 1;

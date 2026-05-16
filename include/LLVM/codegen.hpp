@@ -13,7 +13,7 @@
 #include <llvm/Target/TargetOptions.h>
 #include <llvm/Target/TargetMachine.h>
 
-namespace Zith {
+namespace zith {
 namespace LLVM {
 namespace CodeGen {
 using TargetMachine = ::llvm::TargetMachine;

@@ -237,13 +237,6 @@ inline std::vector<std::string> SymbolResolver::parse_path(const std::string& pa
         components.push_back(current);
     }
 
-    // Debug output
-    fprintf(stderr, "DEBUG parse_path('%s') -> %zu components: ", path.c_str(), components.size());
-    for (size_t i = 0; i < components.size(); ++i) {
-        fprintf(stderr, "%s%s", components[i].c_str(), (i + 1 < components.size()) ? ", " : "");
-    }
-    fprintf(stderr, "\n");
-
     return components;
 }
 
@@ -319,8 +312,6 @@ inline SymbolResolution SymbolResolver::resolve_path(const std::vector<std::stri
         if (!symbol_name.empty()) symbol_name += ".";
         symbol_name += components[i];
     }
-    fprintf(stderr, "DEBUG: module='%s' (%zu parts), symbol='%s'\n", module_name.c_str(), module_parts, symbol_name.c_str());
-
     return resolve_in_module(module_name, symbol_name);
 }
 
@@ -388,7 +379,6 @@ inline bool SymbolResolver::add_alias(const std::string& alias_name,
 // Validate target exists
     auto result = resolve(target_path);
     if (!result) {
-        fprintf(stderr, "DEBUG: resolve('%s') failed\n", target_path.c_str());
         errors_.emplace_back(ErrorCode::SymbolNotFound,
                            "Target symbol '" + target_path + "' for alias '" + alias_name + "' not found",
                            loc.file_path, loc.line, loc.column);
@@ -431,9 +421,6 @@ inline bool SymbolResolver::add_alias(const std::string& alias_name,
             alias.target_symbol += components[i];
         }
     }
-    fprintf(stderr, "DEBUG add_alias: module='%s', symbol='%s'\n", 
-           alias.target_module.c_str(), alias.target_symbol.c_str());
-
     aliases_.emplace(alias_name, std::move(alias));
     return true;
 }
@@ -445,18 +432,14 @@ inline std::optional<SymbolEntry> SymbolResolver::resolve_alias(const std::strin
     }
 
     const Alias& alias = it->second;
-    fprintf(stderr, "DEBUG resolve_alias: alias='%s', target_module='%s', target_symbol='%s'\n", 
-           alias_name.c_str(), alias.target_module.c_str(), alias.target_symbol.c_str());
     
     auto mod = ModuleRegistry::instance().get_module(alias.target_module);
     if (!mod) {
-        fprintf(stderr, "DEBUG: module not found\n");
         return std::nullopt;
     }
 
     auto* sym = mod->find_symbol(alias.target_symbol);
     if (!sym) {
-        fprintf(stderr, "DEBUG: symbol '%s' not found in module\n", alias.target_symbol.c_str());
         return std::nullopt;
     }
 
@@ -602,10 +585,6 @@ inline bool SymbolResolver::is_valid_overload(const std::string& module_name,
             if (new_function.signature().has_value() && sym.signature().has_value()) {
                 identical = (*new_function.signature() == *sym.signature());
             }
-            fprintf(stderr, "DEBUG overload: existing='%s' -> new='%s', identical=%s\n",
-                   sym.signature()->to_string().c_str(),
-                   new_function.signature()->to_string().c_str(),
-                   identical ? "YES" : "NO");
             if (identical) {
                 return false;  // Same signature = invalid overload
             }
