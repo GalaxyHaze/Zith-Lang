@@ -197,7 +197,7 @@ ZithNode *zith_ast_make_func_decl(ZithArena *a, const ZithSourceLoc loc,
     if (!p)
         return n;
     *p               = decl;
-    p->name          = zith_arena_strdup(a, decl.name);
+    p->name          = zith_arena_str(a, decl.name, decl.name_len);
     n->data.list.len = decl.param_count;
     return n;
 }

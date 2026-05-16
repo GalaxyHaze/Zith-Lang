@@ -43,6 +43,7 @@ ZithNode *parser_parse_type(Parser *p) {
             if (parser_check(p, ZITH_TOKEN_TYPE) || parser_check(p, ZITH_TOKEN_IDENTIFIER) ||
                 parser_check(p, ZITH_TOKEN_QUESTION) || parser_check(p, ZITH_TOKEN_BANG) ||
                 parser_check(p, ZITH_TOKEN_MULTIPLY) || parser_check(p, ZITH_TOKEN_LBRACKET) ||
+                parser_check(p, ZITH_TOKEN_PIPE) ||
                 parser_check(p, ZITH_TOKEN_UNIQUE) || parser_check(p, ZITH_TOKEN_SHARED) ||
                 parser_check(p, ZITH_TOKEN_VIEW) || parser_check(p, ZITH_TOKEN_LEND) ||
                 parser_check(p, ZITH_TOKEN_EXTENSION)) {
@@ -68,6 +69,27 @@ ZithNode *parser_parse_type(Parser *p) {
         parser_expect(p, ZITH_TOKEN_RBRACKET, "expected ']' in array type");
         ZithNode *inner = parser_parse_type(p);
         return inner; // TODO: Create array node
+    }
+    if (parser_match(p, ZITH_TOKEN_PIPE)) {
+        ArenaList<ZithNode *> items_b;
+        items_b.init(p->arena, 8);
+        while (!parser_check(p, ZITH_TOKEN_PIPE) && !parser_is_at_end(p)) {
+            items_b.push(p->arena, parser_parse_type(p));
+            if (!parser_match(p, ZITH_TOKEN_COMMA))
+                break;
+        }
+        parser_expect(p, ZITH_TOKEN_PIPE, "expected '|' closing tuple type");
+        size_t count = items_b.size();
+        ZithNode **items = items_b.flatten(p->arena, &count);
+        ZithNode *n = (ZithNode *)zith_arena_alloc(p->arena, sizeof(ZithNode));
+        if (n) {
+            memset(n, 0, sizeof(ZithNode));
+            n->type = ZITH_NODE_TYPE_TUPLE;
+            n->loc  = loc;
+            n->data.list.ptr = items;
+            n->data.list.len = count;
+        }
+        return n;
     }
     if (parser_check(p, ZITH_TOKEN_TYPE) || parser_check(p, ZITH_TOKEN_IDENTIFIER)) {
         const ZithToken *t = parser_advance(p);

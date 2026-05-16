@@ -229,8 +229,8 @@ TEST_CASE("SCAN: import declaration with mixed separators", "[scan][module]") {
     REQUIRE(payload->is_from == false);
 }
 
-TEST_CASE("SCAN: from import declaration", "[scan][module]") {
-    auto ast = parse_test("from std.io.console import println;");
+TEST_CASE("SCAN: from declaration", "[scan][module]") {
+    auto ast = parse_test("from std.io.console;");
     REQUIRE(ast);
     REQUIRE(ast->type == ZITH_NODE_PROGRAM);
 
@@ -244,10 +244,11 @@ TEST_CASE("SCAN: from import declaration", "[scan][module]") {
     REQUIRE(payload != nullptr);
     REQUIRE(std::string(payload->path) == "std.io.console");
     REQUIRE(payload->is_from == true);
+    REQUIRE(payload->alias == nullptr);
 }
 
-TEST_CASE("SCAN: from import with slash separator", "[scan][module]") {
-    auto ast = parse_test("from std/io/console import println;");
+TEST_CASE("SCAN: from with slash separator", "[scan][module]") {
+    auto ast = parse_test("from std/io/console;");
     REQUIRE(ast);
     REQUIRE(ast->type == ZITH_NODE_PROGRAM);
 
@@ -261,29 +262,11 @@ TEST_CASE("SCAN: from import with slash separator", "[scan][module]") {
     REQUIRE(payload != nullptr);
     REQUIRE(std::string(payload->path) == "std/io/console");
     REQUIRE(payload->is_from == true);
+    REQUIRE(payload->alias == nullptr);
 }
 
-TEST_CASE("SCAN: from import declaration with alias", "[scan][module]") {
-    auto ast = parse_test("from std.io.console import println as log;");
-    REQUIRE(ast);
-    REQUIRE(ast->type == ZITH_NODE_PROGRAM);
-
-    auto **decls = static_cast<ZithNode **>(ast->data.list.ptr);
-    REQUIRE(ast->data.list.len >= 1);
-
-    auto *import_node = decls[0];
-    REQUIRE(import_node->type == ZITH_NODE_IMPORT);
-
-    auto *payload = static_cast<ZithImportPayload *>(import_node->data.list.ptr);
-    REQUIRE(payload != nullptr);
-    REQUIRE(std::string(payload->path) == "std.io.console");
-    REQUIRE(payload->is_from == true);
-    REQUIRE(payload->alias != nullptr);
-    REQUIRE(std::string(payload->alias, payload->alias_len) == "log");
-}
-
-TEST_CASE("SCAN: from import with mixed path separators", "[scan][module]") {
-    auto ast = parse_test("from std.io/net/http import request;");
+TEST_CASE("SCAN: from with mixed path separators", "[scan][module]") {
+    auto ast = parse_test("from std.io/net/http;");
     REQUIRE(ast);
     REQUIRE(ast->type == ZITH_NODE_PROGRAM);
 
@@ -297,6 +280,7 @@ TEST_CASE("SCAN: from import with mixed path separators", "[scan][module]") {
     REQUIRE(payload != nullptr);
     REQUIRE(std::string(payload->path) == "std.io/net/http");
     REQUIRE(payload->is_from == true);
+    REQUIRE(payload->alias == nullptr);
 }
 
 TEST_CASE("SCAN: export declaration", "[scan][module]") {
@@ -344,16 +328,6 @@ TEST_CASE("SCAN: import without module path", "[scan][error][module]") {
     (void)ast;
 }
 
-TEST_CASE("SCAN: from without import keyword", "[scan][error][module]") {
-    auto ast = parse_test("from std.io.console println;");
-    (void)ast;
-}
-
-TEST_CASE("SCAN: from without item", "[scan][error][module]") {
-    auto ast = parse_test("from std.io.console import ;");
-    (void)ast;
-}
-
 TEST_CASE("SCAN: export without path", "[scan][error][module]") {
     auto ast = parse_test("export ;");
     (void)ast;
@@ -365,7 +339,7 @@ TEST_CASE("SCAN: export without semicolon", "[scan][error][module]") {
 }
 
 TEST_CASE("SCAN: from without semicolon", "[scan][error][module]") {
-    auto ast = parse_test("from std.io.console import println");
+    auto ast = parse_test("from std.io.console");
     (void)ast;
 }
 
@@ -375,7 +349,7 @@ TEST_CASE("SCAN: import with double dot", "[scan][error][module]") {
 }
 
 TEST_CASE("SCAN: from with double dot", "[scan][error][module]") {
-    auto ast = parse_test("from std..io import println;");
+    auto ast = parse_test("from std..io;");
     (void)ast;
 }
 
@@ -386,11 +360,6 @@ TEST_CASE("SCAN: export with double dot", "[scan][error][module]") {
 
 TEST_CASE("SCAN: import alias without name", "[scan][error][module]") {
     auto ast = parse_test("import std.io as ;");
-    (void)ast;
-}
-
-TEST_CASE("SCAN: from import alias without name", "[scan][error][module]") {
-    auto ast = parse_test("from std.io import println as ;");
     (void)ast;
 }
 
@@ -685,6 +654,64 @@ TEST_CASE("SCAN: struct with ownership modifiers", "[scan][ownership]") {
     REQUIRE(sp->field_count == 2);
 }
 
+TEST_CASE("SCAN: struct with destructure fields [x,y]: i32", "[scan][struct][destructure]") {
+    auto ast = parse_test("struct Point {\n"
+                          "    [x, y]: i32,\n"
+                          "}");
+    REQUIRE(ast);
+    REQUIRE(ast->data.list.len == 1);
+
+    auto *decl = static_cast<ZithNode **>(ast->data.list.ptr)[0];
+    REQUIRE(decl->type == ZITH_NODE_STRUCT_DECL);
+
+    auto *sp = static_cast<ZithStructPayload *>(decl->data.list.ptr);
+    REQUIRE(sp->field_count == 2);
+
+    auto *f0 = static_cast<ZithFieldPayload *>(sp->fields[0]->data.list.ptr);
+    REQUIRE(std::string(f0->name, f0->name_len) == "x");
+    REQUIRE(f0->type_node != nullptr);
+
+    auto *f1 = static_cast<ZithFieldPayload *>(sp->fields[1]->data.list.ptr);
+    REQUIRE(std::string(f1->name, f1->name_len) == "y");
+    REQUIRE(f1->type_node != nullptr);
+}
+
+TEST_CASE("SCAN: struct with destructure tuple type [x,y]: |i32,u64|", "[scan][struct][destructure]") {
+    auto ast = parse_test("struct Pair {\n"
+                          "    [x, y]: |i32, u64|,\n"
+                          "}");
+    REQUIRE(ast);
+    REQUIRE(ast->data.list.len == 1);
+
+    auto *decl = static_cast<ZithNode **>(ast->data.list.ptr)[0];
+    REQUIRE(decl->type == ZITH_NODE_STRUCT_DECL);
+
+    auto *sp = static_cast<ZithStructPayload *>(decl->data.list.ptr);
+    REQUIRE(sp->field_count == 2);
+
+    auto *f0 = static_cast<ZithFieldPayload *>(sp->fields[0]->data.list.ptr);
+    REQUIRE(std::string(f0->name, f0->name_len) == "x");
+    REQUIRE(f0->type_node != nullptr);
+    REQUIRE(f0->type_node->type == ZITH_NODE_IDENTIFIER);
+
+    auto *f1 = static_cast<ZithFieldPayload *>(sp->fields[1]->data.list.ptr);
+    REQUIRE(std::string(f1->name, f1->name_len) == "y");
+    REQUIRE(f1->type_node != nullptr);
+    REQUIRE(f1->type_node->type == ZITH_NODE_IDENTIFIER);
+}
+
+TEST_CASE("SCAN: struct with let destructure fields let [a,b]: i32", "[scan][struct][destructure]") {
+    auto ast = parse_test("struct Data {\n"
+                          "    let [a, b]: i32,\n"
+                          "}");
+    REQUIRE(ast);
+    REQUIRE(ast->data.list.len == 1);
+
+    auto *decl = static_cast<ZithNode **>(ast->data.list.ptr)[0];
+    auto *sp = static_cast<ZithStructPayload *>(decl->data.list.ptr);
+    REQUIRE(sp->field_count == 2);
+}
+
 TEST_CASE("SCAN: function with error union return", "[scan][errors]") {
     auto ast = parse_test("fn operation() -> i32! { }");
     REQUIRE(ast);
@@ -749,6 +776,85 @@ TEST_CASE("Arena reuse: second parse resets arena", "[raii]") {
 }
 
 // ============================================================================
+// comptime, global, const on struct fields
+// ============================================================================
+
+TEST_CASE("SCAN: comptime variable declaration", "[scan][comptime]") {
+    auto ast = parse_test("comptime x: i32 = 42;");
+    REQUIRE(ast);
+    REQUIRE(ast->data.list.len == 1);
+
+    auto *decl = static_cast<ZithNode **>(ast->data.list.ptr)[0];
+    REQUIRE(decl->type == ZITH_NODE_VAR_DECL);
+
+    auto *p = static_cast<ZithVarPayload *>(decl->data.list.ptr);
+    REQUIRE(std::string(p->name, p->name_len) == "x");
+    REQUIRE(p->binding == ZITH_BINDING_COMPTIME);
+}
+
+TEST_CASE("SCAN: comptime fn declaration", "[scan][comptime]") {
+    auto ast = parse_test("comptime fn foo(): i32 { return 42; }");
+    REQUIRE(ast);
+    REQUIRE(ast->data.list.len == 1);
+
+    auto *decl = static_cast<ZithNode **>(ast->data.list.ptr)[0];
+    REQUIRE(decl->type == ZITH_NODE_FUNC_DECL);
+
+    auto *p = static_cast<ZithFuncPayload *>(decl->data.list.ptr);
+    REQUIRE(std::string(p->name, p->name_len) == "foo");
+    REQUIRE(p->kind == ZITH_FN_COMPTIME);
+}
+
+TEST_CASE("SCAN: struct with global field", "[scan][struct]") {
+    auto ast = parse_test("struct Config {\n"
+                          "    global name: string,\n"
+                          "}");
+    REQUIRE(ast);
+    REQUIRE(ast->data.list.len == 1);
+
+    auto *decl = static_cast<ZithNode **>(ast->data.list.ptr)[0];
+    REQUIRE(decl->type == ZITH_NODE_STRUCT_DECL);
+    auto *sp = static_cast<ZithStructPayload *>(decl->data.list.ptr);
+    REQUIRE(sp->field_count == 1);
+}
+
+TEST_CASE("SCAN: struct with const field", "[scan][struct]") {
+    auto ast = parse_test("struct Constants {\n"
+                          "    const pi: f64,\n"
+                          "}");
+    REQUIRE(ast);
+    REQUIRE(ast->data.list.len == 1);
+
+    auto *decl = static_cast<ZithNode **>(ast->data.list.ptr)[0];
+    REQUIRE(decl->type == ZITH_NODE_STRUCT_DECL);
+    auto *sp = static_cast<ZithStructPayload *>(decl->data.list.ptr);
+    REQUIRE(sp->field_count == 1);
+}
+
+TEST_CASE("SCAN: struct with comptime field", "[scan][struct]") {
+    auto ast = parse_test("struct Meta {\n"
+                          "    comptime value: i32,\n"
+                          "}");
+    REQUIRE(ast);
+    REQUIRE(ast->data.list.len == 1);
+
+    auto *decl = static_cast<ZithNode **>(ast->data.list.ptr)[0];
+    REQUIRE(decl->type == ZITH_NODE_STRUCT_DECL);
+    auto *sp = static_cast<ZithStructPayload *>(decl->data.list.ptr);
+    REQUIRE(sp->field_count == 1);
+}
+
+TEST_CASE("SCAN: comptime used inside function body", "[scan][comptime]") {
+    auto ast = parse_test("fn main() {\n"
+                          "    comptime x: i32 = 10;\n"
+                          "}");
+    REQUIRE(ast);
+
+    auto *decl = static_cast<ZithNode **>(ast->data.list.ptr)[0];
+    REQUIRE(decl->type == ZITH_NODE_FUNC_DECL);
+}
+
+// ============================================================================
 // Destructure & Pack Literals
 // ============================================================================
 
@@ -775,6 +881,74 @@ TEST_CASE("SCAN: pack literal |1,2,3|", "[scan][pack]") {
 TEST_CASE("SCAN: pack literal empty pipe", "[scan][pack]") {
     auto ast = parse_test("fn main() { let empty = ||; }");
     REQUIRE(ast);
+}
+
+// ============================================================================
+// Function Prototypes (body-less fn declarations)
+// ============================================================================
+
+TEST_CASE("SCAN: function prototype fn add();", "[scan][prototype]") {
+    auto ast = parse_test("fn add();");
+    REQUIRE(ast);
+    REQUIRE(ast->data.list.len == 1);
+
+    auto *decl = static_cast<ZithNode **>(ast->data.list.ptr)[0];
+    REQUIRE(decl->type == ZITH_NODE_FUNC_DECL);
+
+    auto *p = static_cast<ZithFuncPayload *>(decl->data.list.ptr);
+    REQUIRE(std::string(p->name, p->name_len) == "add");
+    REQUIRE(p->param_count == 0);
+    REQUIRE(p->body == nullptr);
+    REQUIRE(p->return_type == nullptr);
+}
+
+TEST_CASE("SCAN: function prototype with params and return fn add(a: i32): bool;", "[scan][prototype]") {
+    auto ast = parse_test("fn add(a: i32): bool;");
+    REQUIRE(ast);
+    REQUIRE(ast->data.list.len == 1);
+
+    auto *decl = static_cast<ZithNode **>(ast->data.list.ptr)[0];
+    REQUIRE(decl->type == ZITH_NODE_FUNC_DECL);
+
+    auto *p = static_cast<ZithFuncPayload *>(decl->data.list.ptr);
+    REQUIRE(std::string(p->name, p->name_len) == "add");
+    REQUIRE(p->param_count == 1);
+    REQUIRE(p->body == nullptr);
+    REQUIRE(p->return_type != nullptr);
+}
+
+// ============================================================================
+// Struct destructure error cases
+// ============================================================================
+
+TEST_CASE("SCAN: struct destructure type count mismatch (more types than names)", "[scan][struct][destructure][error]") {
+    auto ast = parse_test("struct Bad {\n"
+                          "    [x, y]: |i32, f32, f64|,\n"
+                          "}");
+    REQUIRE(ast);
+
+    auto *sdecl = static_cast<ZithNode **>(ast->data.list.ptr)[0];
+    REQUIRE(sdecl->type == ZITH_NODE_STRUCT_DECL);
+
+    auto *sp = static_cast<ZithStructPayload *>(sdecl->data.list.ptr);
+    REQUIRE(sp->field_count == 2);
+    for (size_t i = 0; i < sp->field_count; ++i) {
+        auto *f = static_cast<ZithFieldPayload *>(sp->fields[i]->data.list.ptr);
+        REQUIRE(f->type_node != nullptr);
+    }
+}
+
+TEST_CASE("SCAN: struct destructure type count mismatch (more names than types)", "[scan][struct][destructure][error]") {
+    auto ast = parse_test("struct Bad {\n"
+                          "    [x, y, z]: |i32, f32|,\n"
+                          "}");
+    REQUIRE(ast);
+
+    auto *sdecl = static_cast<ZithNode **>(ast->data.list.ptr)[0];
+    REQUIRE(sdecl->type == ZITH_NODE_STRUCT_DECL);
+
+    auto *sp = static_cast<ZithStructPayload *>(sdecl->data.list.ptr);
+    REQUIRE(sp->field_count == 3);
 }
 
 // ============================================================================

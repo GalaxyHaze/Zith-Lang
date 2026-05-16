@@ -108,6 +108,7 @@ typedef enum ZithFnKind {
     ZITH_FN_FLOWING  = 3,
     ZITH_FN_RAW      = 4,
     ZITH_FN_CONST    = 5,
+    ZITH_FN_COMPTIME = 6,
 } ZithFnKind;
 
 typedef enum ZithBindingKind {
@@ -118,6 +119,7 @@ typedef enum ZithBindingKind {
     ZITH_BINDING_GLOBAL     = 4,
     ZITH_BINDING_PERSISTENT = 5,
     ZITH_BINDING_LOCAL      = 6,
+    ZITH_BINDING_COMPTIME   = 7,
 } ZithBindingKind;
 
 typedef enum ZithOwnership {

@@ -180,7 +180,7 @@ static void register_struct_symbol(Parser *p, const ZithToken *name_tok, ZithVis
 
 static void register_import_symbol(Parser *p, const char *name, size_t len, ZithVisibility vis) {
     if (name && p->mode == ZITH_MODE_SCAN) {
-        ScanSymbolCollector::instance().add_import(name, len, vis);
+        ScanSymbolCollector::instance().add_import(zith_arena_str(p->arena, name, len), len, vis);
     }
 }
 
@@ -385,6 +385,12 @@ ZithNode *parser_parse_statement(Parser *p) {
     case ZITH_TOKEN_CONST:
         parser_advance(p);
         return parse_var_decl(p, ZITH_BINDING_CONST);
+    case ZITH_TOKEN_COMPTIME:
+        parser_advance(p);
+        return parse_var_decl(p, ZITH_BINDING_COMPTIME);
+    case ZITH_TOKEN_GLOBAL:
+        parser_advance(p);
+        return parse_var_decl(p, ZITH_BINDING_GLOBAL);
     case ZITH_TOKEN_IF: {
         parser_advance(p);
         ZithNode *cond   = parser_parse_expression(p);
@@ -489,6 +495,9 @@ static ZithNode *parse_fn_decl(Parser *p, ZithSourceLoc loc, ZithVisibility vis,
     } else if (parser_match(p, ZITH_TOKEN_CONST)) {
         kind = ZITH_FN_CONST;
         fn_consumed = true;
+    } else if (parser_match(p, ZITH_TOKEN_COMPTIME)) {
+        kind = ZITH_FN_COMPTIME;
+        fn_consumed = true;
     } else if (parser_match(p, ZITH_TOKEN_FLOWING)) {
         kind = ZITH_FN_FLOWING;
     } else if (parser_match(p, ZITH_TOKEN_NORETURN)) {
@@ -521,7 +530,9 @@ static ZithNode *parse_fn_decl(Parser *p, ZithSourceLoc loc, ZithVisibility vis,
         ret_type = parser_parse_type(p);
 
     ZithNode *body = nullptr;
-    if (p->mode == ZITH_MODE_SCAN) {
+    if (parser_match(p, ZITH_TOKEN_SEMICOLON)) {
+        // Prototype/forward declaration — no body
+    } else if (p->mode == ZITH_MODE_SCAN) {
         // SCAN mode: captures the body as UNBODY instead of skipping it entirely
         if (!parser_match(p, ZITH_TOKEN_COLON)) {
             body = capture_unbody(p);
@@ -573,12 +584,105 @@ static ZithNode *parse_struct_decl(Parser *p, ZithVisibility struct_vis, int32_t
         }
 
         // 3. Check for Fields
-        // Matches: x: i32,  or  [x,y]: i32,  or  let x: i32,
-        if (parser_check(p, ZITH_TOKEN_LET) || parser_check(p, ZITH_TOKEN_VAR) ||
+        // Matches: x: i32,  or  [x,y]: i32,  or  [x,y]: |i32,u64|,
+        //          let x: i32,  global x: i32,  const x: i32,  comptime x: i32,
+        if (parser_check(p, ZITH_TOKEN_LBRACKET) ||
+            parser_check(p, ZITH_TOKEN_LET) || parser_check(p, ZITH_TOKEN_VAR) ||
+            parser_check(p, ZITH_TOKEN_GLOBAL) || parser_check(p, ZITH_TOKEN_CONST) ||
+            parser_check(p, ZITH_TOKEN_COMPTIME) ||
             parser_check(p, ZITH_TOKEN_IDENTIFIER)) {
 
-            // Consume 'let' or 'var' if present (optional in your new syntax)
-            if (parser_match(p, ZITH_TOKEN_LET) || parser_match(p, ZITH_TOKEN_VAR)) {
+            // Consume binding keyword if present (optional)
+            if (parser_match(p, ZITH_TOKEN_LET) || parser_match(p, ZITH_TOKEN_VAR) ||
+                parser_match(p, ZITH_TOKEN_GLOBAL) || parser_match(p, ZITH_TOKEN_CONST) ||
+                parser_match(p, ZITH_TOKEN_COMPTIME)) {
+            }
+
+            // Check for destructure syntax: [name1, name2, ...]: type
+            if (parser_match(p, ZITH_TOKEN_LBRACKET)) {
+                const ZithSourceLoc floc = parser_peek(p)->loc;
+
+                ArenaList<const char *> fnames_b;
+                ArenaList<size_t> fname_lens_b;
+                fnames_b.init(p->arena, 8);
+                fname_lens_b.init(p->arena, 8);
+                while (!parser_check(p, ZITH_TOKEN_RBRACKET) && !parser_is_at_end(p)) {
+                    const ZithToken *tok = parser_expect(p, ZITH_TOKEN_IDENTIFIER, "expected field name");
+                    fnames_b.push(p->arena, tok->lexeme.data);
+                    fname_lens_b.push(p->arena, tok->lexeme.len);
+                    if (!parser_match(p, ZITH_TOKEN_COMMA))
+                        break;
+                }
+                parser_expect(p, ZITH_TOKEN_RBRACKET, "expected ']' closing destructure");
+
+                ZithNode *ftype = nullptr;
+                if (parser_match(p, ZITH_TOKEN_COLON)) {
+                    ftype = parser_parse_type(p);
+                }
+
+                ZithNode *fdef = nullptr;
+                if (parser_match(p, ZITH_TOKEN_ASSIGNMENT)) {
+                    if (p->mode == ZITH_MODE_SCAN) {
+                        while (!parser_check(p, ZITH_TOKEN_COMMA) &&
+                               !parser_check(p, ZITH_TOKEN_RBRACE) && !parser_is_at_end(p)) {
+                            parser_advance(p);
+                        }
+                    } else {
+                        fdef = parser_parse_expression(p);
+                    }
+                }
+
+                if (parser_peek(p)->type != ZITH_TOKEN_RBRACE)
+                    parser_expect(p, ZITH_TOKEN_COMMA, "expected ','");
+
+                size_t name_count = fnames_b.size();
+                const char **names = fnames_b.flatten(p->arena, &name_count);
+                size_t *name_lens = fname_lens_b.flatten(p->arena, &name_count);
+
+                if (ftype && ftype->type == ZITH_NODE_TYPE_TUPLE) {
+                    ZithNode **type_items = static_cast<ZithNode **>(ftype->data.list.ptr);
+                    size_t type_count = ftype->data.list.len;
+                    if (name_count != type_count) {
+                        char buf[256];
+                        snprintf(buf, sizeof(buf),
+                                 "destructure field count mismatch: %zu names but %zu types",
+                                 name_count, type_count);
+                        parser_emit_diag(p, floc, ZITH_DIAG_ERROR, buf);
+                    }
+                    for (size_t i = 0; i < name_count; ++i) {
+                        ZithNode *elem_type = (i < type_count) ? type_items[i] : nullptr;
+                        ZithOwnership elem_own = ZITH_OWN_DEFAULT;
+                        if (elem_type) {
+                            switch (elem_type->type) {
+                            case ZITH_NODE_TYPE_UNIQUE: elem_own = ZITH_OWN_UNIQUE; break;
+                            case ZITH_NODE_TYPE_SHARED: elem_own = ZITH_OWN_SHARED; break;
+                            case ZITH_NODE_TYPE_VIEW:   elem_own = ZITH_OWN_VIEW; break;
+                            case ZITH_NODE_TYPE_LEND:   elem_own = ZITH_OWN_LEND; break;
+                            case ZITH_NODE_TYPE_PACK:   elem_own = ZITH_OWN_PACK; break;
+                            case ZITH_NODE_TYPE_EXTENSION: elem_own = ZITH_OWN_DEFAULT; break;
+                            }
+                        }
+                        fields_b.push(p->arena, zith_ast_make_field(p->arena, floc,
+                            {names[i], name_lens[i], elem_own, item_vis, item_depth, elem_type, fdef}));
+                    }
+                } else {
+                    ZithOwnership field_own = ZITH_OWN_DEFAULT;
+                    if (ftype) {
+                        switch (ftype->type) {
+                        case ZITH_NODE_TYPE_UNIQUE: field_own = ZITH_OWN_UNIQUE; break;
+                        case ZITH_NODE_TYPE_SHARED: field_own = ZITH_OWN_SHARED; break;
+                        case ZITH_NODE_TYPE_VIEW:   field_own = ZITH_OWN_VIEW; break;
+                        case ZITH_NODE_TYPE_LEND:   field_own = ZITH_OWN_LEND; break;
+                        case ZITH_NODE_TYPE_PACK:   field_own = ZITH_OWN_PACK; break;
+                        case ZITH_NODE_TYPE_EXTENSION: field_own = ZITH_OWN_DEFAULT; break;
+                        }
+                    }
+                    for (size_t i = 0; i < name_count; ++i) {
+                        fields_b.push(p->arena, zith_ast_make_field(p->arena, floc,
+                            {names[i], name_lens[i], field_own, item_vis, item_depth, ftype, fdef}));
+                    }
+                }
+                continue;
             }
 
             const ZithSourceLoc floc = parser_peek(p)->loc;
@@ -801,36 +905,16 @@ static ZithNode *parse_from_import_decl(Parser *p) {
         }
     }
 
-    // Expects 'import' keyword
-    parser_expect(p, ZITH_TOKEN_IMPORT, "expected 'import' after 'from <module>'");
-
-    // Parse imported items (e.g. println, println as log)
-    char items_buf[256]; // size_t items_len = 0;
-    const ZithToken *item = parser_expect(p, ZITH_TOKEN_IDENTIFIER, "expected item name");
-    if (item->lexeme.len < sizeof(items_buf)) {
-        memcpy(items_buf, item->lexeme.data, item->lexeme.len); /*items_len = item->lexeme.len;*/
-    }
-
-    // Alias support: import x as y
-    const char *alias = nullptr;
-    size_t alias_len  = 0;
-    if (parser_match(p, ZITH_TOKEN_AS)) {
-        const ZithToken *alias_tok = parser_expect(p, ZITH_TOKEN_IDENTIFIER, "expected alias name");
-        alias                      = alias_tok->lexeme.data;
-        alias_len                  = alias_tok->lexeme.len;
-    }
-
     parser_expect(p, ZITH_TOKEN_SEMICOLON, "expected ';'");
 
-    // Path = base module, alias = imported items
     ZithImportPayload payload = {
         zith_arena_str(p->arena, module_buf, module_len),
         module_len,
         ZITH_VIS_PRIVATE,
-        alias,
-        alias_len,
-        false, // is_export = false
-        true   // is_from = true
+        nullptr,
+        0,
+        false,
+        true
     };
     register_import_symbol(p, module_buf, module_len, ZITH_VIS_PRIVATE);
 
@@ -1059,6 +1143,12 @@ ZithNode *parser_parse_declaration(Parser *p) {
             return parse_fn_decl(p, loc, vis, vis_depth, false);
         parser_advance(p);
         return parse_var_decl(p, ZITH_BINDING_CONST, vis, vis_depth);
+    }
+    if (t->type == ZITH_TOKEN_COMPTIME) {
+        if (parser_peek_ahead(p, 1)->type == ZITH_TOKEN_FN)
+            return parse_fn_decl(p, loc, vis, vis_depth, false);
+        parser_advance(p);
+        return parse_var_decl(p, ZITH_BINDING_COMPTIME, vis, vis_depth);
     }
     if (t->type == ZITH_TOKEN_GLOBAL) {
         parser_advance(p);
