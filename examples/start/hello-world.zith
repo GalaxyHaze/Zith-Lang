@@ -1,9 +1,4 @@
-//comment
-
-struct Point{
-    x: i32,
-    y: i32
-}
+from std/io/console;
 
 fn main(){
     println("-Hello World!");
