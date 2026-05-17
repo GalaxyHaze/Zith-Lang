@@ -33,7 +33,7 @@ static ZithNode *parse_destructure_decl(Parser *p, ZithBindingKind binding, Zith
 // ============================================================================
 // Helpers
 // ============================================================================
-/*
+
 // Captures tokens between { and } to create an UNBODY node
 static ZithNode *capture_unbody(Parser *p) {
     const ZithSourceLoc loc = parser_peek(p)->loc;
@@ -134,7 +134,7 @@ static void register_import_symbol(Parser *p, const char *name, size_t len, Zith
         }
     }
 }
-*/
+
 
 static ZithVisibility parse_visibility(Parser *p, ZithVisibility *current_vis,
                                        int32_t *depth_out) {
