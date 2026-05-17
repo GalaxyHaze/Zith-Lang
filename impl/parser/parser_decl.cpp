@@ -72,12 +72,19 @@ static ZithNode *capture_unbody(Parser *p) {
 // ============================================================================
 
 static void register_fn_symbol(Parser *p, const ZithToken *name_tok, ZithVisibility vis) {
-    if (name_tok && p->mode == ZITH_MODE_SCAN && p->current_module) {
+    if (name_tok && p->mode == ZITH_MODE_SCAN && p->filename) {
         auto &registry = zith::import::ModuleRegistry::instance();
-        auto mod = registry.get_module(p->current_module);
+        std::string module_name = p->filename; // Usar filename como identificador do módulo
+        auto mod = registry.get_module(module_name);
+        if (!mod) {
+            // Criar módulo se não existir
+            zith::import::Module new_mod(module_name, std::filesystem::path(p->filename));
+            registry.register_module(std::move(new_mod));
+            mod = registry.get_module(module_name);
+        }
         if (mod) {
             std::string name(name_tok->lexeme.data, name_tok->lexeme.len);
-            zith::import::SourceLocation loc(p->file_path ? p->file_path : "", name_tok->loc.line, name_tok->loc.column);
+            zith::import::SourceLocation loc(p->filename, name_tok->loc.line, 0);
             zith::import::SymbolKind kind = zith::import::SymbolKind::Function;
             zith::import::Visibility sym_vis = (vis == ZITH_VIS_PUBLIC) ? zith::import::Visibility::Public :
                                                (vis == ZITH_VIS_MODULE) ? zith::import::Visibility::Module :
@@ -89,12 +96,18 @@ static void register_fn_symbol(Parser *p, const ZithToken *name_tok, ZithVisibil
 }
 
 static void register_struct_symbol(Parser *p, const ZithToken *name_tok, ZithVisibility vis) {
-    if (name_tok && p->mode == ZITH_MODE_SCAN && p->current_module) {
+    if (name_tok && p->mode == ZITH_MODE_SCAN && p->filename) {
         auto &registry = zith::import::ModuleRegistry::instance();
-        auto mod = registry.get_module(p->current_module);
+        std::string module_name = p->filename;
+        auto mod = registry.get_module(module_name);
+        if (!mod) {
+            zith::import::Module new_mod(module_name, std::filesystem::path(p->filename));
+            registry.register_module(std::move(new_mod));
+            mod = registry.get_module(module_name);
+        }
         if (mod) {
             std::string name(name_tok->lexeme.data, name_tok->lexeme.len);
-            zith::import::SourceLocation loc(p->file_path ? p->file_path : "", name_tok->loc.line, name_tok->loc.column);
+            zith::import::SourceLocation loc(p->filename, name_tok->loc.line, 0);
             zith::import::SymbolKind kind = zith::import::SymbolKind::Struct;
             zith::import::Visibility sym_vis = (vis == ZITH_VIS_PUBLIC) ? zith::import::Visibility::Public :
                                                (vis == ZITH_VIS_MODULE) ? zith::import::Visibility::Module :

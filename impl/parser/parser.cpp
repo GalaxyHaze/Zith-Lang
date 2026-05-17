@@ -2,6 +2,7 @@
 #include "zith/parser.h"
 
 #include "memory/utils.hpp"
+#include "import/module_registry.hpp"
 
 #include <cstring>
 #include <vector>

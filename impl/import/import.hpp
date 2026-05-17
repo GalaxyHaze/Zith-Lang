@@ -36,12 +36,14 @@ enum class SymbolKind : uint8_t {
     Function  = ZITH_SYM_FUNCTION,
     Trait     = ZITH_SYM_TRAIT,
     Family    = ZITH_SYM_FAMILY,
+    Module    = 8,  // For import/module symbols
 };
 
 enum class Visibility : uint8_t {
     Private   = ZITH_IMPORT_VIS_PRIVATE,
     Public    = ZITH_IMPORT_VIS_PUBLIC,
     Protected = ZITH_IMPORT_VIS_PROTECTED,
+    Module    = 3,  // For mod depth visibility
 };
 
 enum class ChangeKind : uint8_t {
