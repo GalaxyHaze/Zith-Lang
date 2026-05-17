@@ -5,6 +5,7 @@
 // without parsing their contents — the parser does NOT analyze block content.
 #include "zith/parser.h"
 #include "memory/utils.hpp"
+#include "import/module_registry.hpp"
 #include <cstring>
 #include <string>
 #include <vector>
@@ -67,122 +68,57 @@ static ZithNode *capture_unbody(Parser *p) {
 }
 
 // ============================================================================
-// Symbol Registration in SCAN mode
+// Symbol Registration in SCAN mode - Using ModuleRegistry
 // ============================================================================
 
-struct ScannedSymbolEntry {
-    const char *name;
-    size_t name_len;
-    int kind;
-    ZithVisibility visibility;
-};
-
-class ScanSymbolCollector {
-public:
-    static ScanSymbolCollector &instance() {
-        static ScanSymbolCollector inst;
-        return inst;
-    }
-
-    void clear() {
-        symbols_.clear();
-    }
-
-    void add_function(const char *name, size_t len, ZithVisibility vis) {
-        ScannedSymbolEntry entry{name, len, 0, vis};
-        symbols_.push_back(entry);
-    }
-
-    void add_struct(const char *name, size_t len, ZithVisibility vis) {
-        ScannedSymbolEntry entry{name, len, 1, vis};
-        symbols_.push_back(entry);
-    }
-
-    void add_trait(const char *name, size_t len, ZithVisibility vis) {
-        ScannedSymbolEntry entry{name, len, 2, vis};
-        symbols_.push_back(entry);
-    }
-
-    void add_enum(const char *name, size_t len, ZithVisibility vis) {
-        ScannedSymbolEntry entry{name, len, 3, vis};
-        symbols_.push_back(entry);
-    }
-
-    void add_import(const char *name, size_t len, ZithVisibility vis) {
-        ScannedSymbolEntry entry{name, len, 4, vis};
-        symbols_.push_back(entry);
-    }
-
-    void print_symbols() const {
-        size_t n = symbols_.size();
-        if (n == 0) {
-            printf("  (no symbols)\n");
-            return;
-        }
-        for (size_t i = 0; i < n; ++i) {
-            const auto &sym      = symbols_[i];
-            const char *kind_str = "???";
-            switch (sym.kind) {
-            case 0:
-                kind_str = "fn";
-                break;
-            case 1:
-                kind_str = "struct";
-                break;
-            case 2:
-                kind_str = "trait";
-                break;
-            case 3:
-                kind_str = "enum";
-                break;
-            case 4:
-                kind_str = "import";
-                break;
-            }
-            const char *vis_str;
-            if (sym.visibility == ZITH_VIS_PUBLIC)
-                vis_str = "pub";
-            else if (sym.visibility == ZITH_VIS_MODULE)
-                vis_str = "mod";
-            else
-                vis_str = "priv";
-            printf("  [%s] %.*s (%s)\n", kind_str, (int)sym.name_len, sym.name, vis_str);
-        }
-    }
-
-    size_t count() const {
-        return symbols_.size();
-    }
-    const ScannedSymbolEntry *data() const {
-        return symbols_.data();
-    }
-
-private:
-    ScanSymbolCollector() = default;
-    std::vector<ScannedSymbolEntry> symbols_;
-};
-
-void clear_scanned_symbols() {
-    ScanSymbolCollector::instance().clear();
-}
-
 static void register_fn_symbol(Parser *p, const ZithToken *name_tok, ZithVisibility vis) {
-    if (name_tok && p->mode == ZITH_MODE_SCAN) {
-        ScanSymbolCollector::instance().add_function(name_tok->lexeme.data, name_tok->lexeme.len,
-                                                     vis);
+    if (name_tok && p->mode == ZITH_MODE_SCAN && p->current_module) {
+        auto &registry = zith::import::ModuleRegistry::instance();
+        auto mod = registry.get_module(p->current_module);
+        if (mod) {
+            std::string name(name_tok->lexeme.data, name_tok->lexeme.len);
+            zith::import::SourceLocation loc(p->file_path ? p->file_path : "", name_tok->loc.line, name_tok->loc.column);
+            zith::import::SymbolKind kind = zith::import::SymbolKind::Function;
+            zith::import::Visibility sym_vis = (vis == ZITH_VIS_PUBLIC) ? zith::import::Visibility::Public :
+                                               (vis == ZITH_VIS_MODULE) ? zith::import::Visibility::Module :
+                                                                          zith::import::Visibility::Private;
+            zith::import::SymbolEntry entry(name, kind, sym_vis, loc);
+            mod->add_symbol(std::move(entry));
+        }
     }
 }
 
 static void register_struct_symbol(Parser *p, const ZithToken *name_tok, ZithVisibility vis) {
-    if (name_tok && p->mode == ZITH_MODE_SCAN) {
-        ScanSymbolCollector::instance().add_struct(name_tok->lexeme.data, name_tok->lexeme.len,
-                                                   vis);
+    if (name_tok && p->mode == ZITH_MODE_SCAN && p->current_module) {
+        auto &registry = zith::import::ModuleRegistry::instance();
+        auto mod = registry.get_module(p->current_module);
+        if (mod) {
+            std::string name(name_tok->lexeme.data, name_tok->lexeme.len);
+            zith::import::SourceLocation loc(p->file_path ? p->file_path : "", name_tok->loc.line, name_tok->loc.column);
+            zith::import::SymbolKind kind = zith::import::SymbolKind::Struct;
+            zith::import::Visibility sym_vis = (vis == ZITH_VIS_PUBLIC) ? zith::import::Visibility::Public :
+                                               (vis == ZITH_VIS_MODULE) ? zith::import::Visibility::Module :
+                                                                          zith::import::Visibility::Private;
+            zith::import::SymbolEntry entry(name, kind, sym_vis, loc);
+            mod->add_symbol(std::move(entry));
+        }
     }
 }
 
 static void register_import_symbol(Parser *p, const char *name, size_t len, ZithVisibility vis) {
-    if (name && p->mode == ZITH_MODE_SCAN) {
-        ScanSymbolCollector::instance().add_import(zith_arena_str(p->arena, name, len), len, vis);
+    if (name && p->mode == ZITH_MODE_SCAN && p->current_module) {
+        auto &registry = zith::import::ModuleRegistry::instance();
+        auto mod = registry.get_module(p->current_module);
+        if (mod) {
+            std::string symbol_name(name, len);
+            zith::import::SourceLocation loc(p->file_path ? p->file_path : "", 0, 0);
+            zith::import::SymbolKind kind = zith::import::SymbolKind::Module;
+            zith::import::Visibility sym_vis = (vis == ZITH_VIS_PUBLIC) ? zith::import::Visibility::Public :
+                                               (vis == ZITH_VIS_MODULE) ? zith::import::Visibility::Module :
+                                                                          zith::import::Visibility::Private;
+            zith::import::SymbolEntry entry(symbol_name, kind, sym_vis, loc);
+            mod->add_symbol(std::move(entry));
+        }
     }
 }
 
@@ -1177,7 +1113,28 @@ ZithNode *parser_parse_declaration(Parser *p) {
 
 #ifdef __cplusplus
 void print_scanned_symbols() {
-    printf("Scanned symbols:\n");
-    ScanSymbolCollector::instance().print_symbols();
+    printf("Scanned symbols from ModuleRegistry:\n");
+    auto &registry = zith::import::ModuleRegistry::instance();
+    for (const auto &mod_name : registry.list_modules()) {
+        auto mod = registry.get_module(mod_name);
+        if (mod) {
+            printf("  Module: %s\n", mod_name.c_str());
+            for (const auto &sym : mod->symbols()) {
+                const char *kind_str = "???";
+                switch (sym.kind()) {
+                    case zith::import::SymbolKind::Function: kind_str = "fn"; break;
+                    case zith::import::SymbolKind::Struct: kind_str = "struct"; break;
+                    case zith::import::SymbolKind::Trait: kind_str = "trait"; break;
+                    case zith::import::SymbolKind::Enum: kind_str = "enum"; break;
+                    case zith::import::SymbolKind::Module: kind_str = "import"; break;
+                    default: kind_str = "unknown"; break;
+                }
+                const char *vis_str = "priv";
+                if (sym.visibility() == zith::import::Visibility::Public) vis_str = "pub";
+                else if (sym.visibility() == zith::import::Visibility::Module) vis_str = "mod";
+                printf("    [%s] %s (%s)\n", kind_str, sym.name().c_str(), vis_str);
+            }
+        }
+    }
 }
 #endif
