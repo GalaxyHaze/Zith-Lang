@@ -513,49 +513,55 @@ message("")
 # =============================================================================
 # WebAssembly Support (Emscripten)
 # =============================================================================
-if(EMSCRIPTEN)
-    message(STATUS "Configuring WebAssembly target...")
-    
-    add_executable(zith-wasm ../impl/cli/main.cpp)
+option(ZITH_BUILD_WASM "Build WebAssembly target" OFF)
 
-    target_include_directories(zith-wasm PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/../include
-        ${CMAKE_CURRENT_SOURCE_DIR}/../impl
-    )
+if(ZITH_BUILD_WASM)
+    if(NOT EMSCRIPTEN)
+        message(WARNING "ZITH_BUILD_WASM=ON but not compiling with Emscripten (emcc). Skipping WASM target.")
+    else()
+        message(STATUS "Configuring WebAssembly target...")
 
-    target_link_libraries(zith-wasm PRIVATE ZithParse CLI11::CLI11)
+        add_executable(zith-wasm ${CLI_SOURCES})
 
-    target_compile_definitions(zith-wasm PRIVATE
-        ZITH_VERSION="${ZITH_VERSION}"
-        ZITH_EXECUTABLE
-        ZITH_WASM
-    )
+        target_include_directories(zith-wasm PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR}/../include
+            ${CMAKE_CURRENT_SOURCE_DIR}/../impl
+        )
 
-    target_link_options(zith-wasm PRIVATE
-        "SHELL:-O3"
-        "SHELL:-flto"
-        "SHELL:--closure 1"
-        "SHELL:-s WASM=1"
-        "SHELL:-s FILESYSTEM=1"
-        "SHELL:-s ENVIRONMENT=web,node"
-        "SHELL:-s EXPORTED_RUNTIME_METHODS=['ccall','cwrap']"
-        "SHELL:-s ALLOW_MEMORY_GROWTH=1"
-    )
+        target_link_libraries(zith-wasm PRIVATE ZithParse CLI11::CLI11)
 
-    set_target_properties(zith-wasm PROPERTIES
-        SUFFIX ".html"
-        OUTPUT_NAME "zith"
-        RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
-    )
+        target_compile_definitions(zith-wasm PRIVATE
+            ZITH_VERSION="${ZITH_VERSION}"
+            ZITH_EXECUTABLE
+            ZITH_WASM
+        )
 
-    if (MSVC)
-        target_compile_options(zith-wasm PRIVATE /W4 /wd4100)
-    else ()
-        target_compile_options(zith-wasm PRIVATE -Wall -Wextra -Wpedantic -Wno-error)
+        target_link_options(zith-wasm PRIVATE
+            "SHELL:-O3"
+            "SHELL:-flto"
+            "SHELL:--closure 1"
+            "SHELL:-s WASM=1"
+            "SHELL:-s FILESYSTEM=1"
+            "SHELL:-s ENVIRONMENT=web,node"
+            "SHELL:-s EXPORTED_RUNTIME_METHODS=['ccall','cwrap']"
+            "SHELL:-s ALLOW_MEMORY_GROWTH=1"
+        )
+
+        set_target_properties(zith-wasm PROPERTIES
+            SUFFIX ".html"
+            OUTPUT_NAME "zith"
+            RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
+        )
+
+        if (MSVC)
+            target_compile_options(zith-wasm PRIVATE /W4 /wd4100)
+        else ()
+            target_compile_options(zith-wasm PRIVATE -Wall -Wextra -Wpedantic -Wno-error)
+        endif()
+
+        install(TARGETS zith-wasm DESTINATION bin)
+        message(STATUS "WebAssembly target configured")
     endif()
-    
-    install(TARGETS zith-wasm DESTINATION bin)
-    message(STATUS "WebAssembly target configured")
 endif()
 
 install(TARGETS zith DESTINATION bin)

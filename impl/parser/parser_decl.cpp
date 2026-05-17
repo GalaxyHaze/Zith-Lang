@@ -799,8 +799,8 @@ static void load_and_scan_module(Parser *p, const ZithSourceLoc loc,
         namespace fs = std::filesystem;
         if (recurse_depth == 0) {
             for (auto &entry : fs::directory_iterator(dir_path)) {
-                if (entry.is_regular_file() && zith_is_source_file(entry.path().c_str()))
-                    scan_file_and_collect_decls(p, entry.path().c_str());
+                if (entry.is_regular_file() && zith_is_source_file(entry.path().string().c_str()))
+                    scan_file_and_collect_decls(p, entry.path().string().c_str());
             }
         } else {
             int max_depth = (recurse_depth == -1) ? INT_MAX : recurse_depth;
@@ -810,8 +810,8 @@ static void load_and_scan_module(Parser *p, const ZithSourceLoc loc,
                     it.disable_recursion_pending();
                     continue;
                 }
-                if (it->is_regular_file() && zith_is_source_file(it->path().c_str()))
-                    scan_file_and_collect_decls(p, it->path().c_str());
+                if (it->is_regular_file() && zith_is_source_file(it->path().string().c_str()))
+                    scan_file_and_collect_decls(p, it->path().string().c_str());
             }
         }
     } catch (const std::exception &e) {
