@@ -11,6 +11,7 @@ using zith::ArenaList;
 // Global storage for imported declarations - cleared each parse
 static std::vector<ZithNode *> g_imported_decls_vec;
 static int g_parser_depth = 0;
+static ZithDiagList g_last_diags = {nullptr, 0, 0};
 
 bool g_import_loaded_this_file = false;
 
@@ -149,10 +150,17 @@ ZithNode *zith_parse_with_source(ZithArena *arena, const char *source, size_t so
     g_imported_decls_vec.clear();
     g_parser_depth = 0;
 
+    // Store diagnostics for LSP access
+    g_last_diags = p.diags;
+
     extern void zith_diag_print_all(const ZithDiagList *, const char *, size_t, const char *);
     zith_diag_print_all(&p.diags, source, source_len, filename);
 
     if (p.had_error)
         return nullptr;
     return expanded;
+}
+
+ZithDiagList *zith_get_parse_diagnostics(void) {
+    return &g_last_diags;
 }

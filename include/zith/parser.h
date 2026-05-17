@@ -83,6 +83,9 @@ ZithNode *zith_parse_with_source(ZithArena *arena, const char *source, size_t so
                                  const char *filename, ZithTokenStream tokens,
                                  const char **import_roots, size_t import_root_count);
 
+// Get diagnostics from parse (for LSP use)
+ZithDiagList *zith_get_parse_diagnostics(void);
+
 // Test helpers (use shared global arena)
 ZithNode *zith_parse_test(const char *source);
 ZithNode *zith_parse_test_full(const char *source);
