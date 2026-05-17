@@ -85,6 +85,7 @@ enum ZithNodeExtendedId : uint16_t {
     ZITH_NODE_TYPE_OPTIONAL = 1070,
     ZITH_NODE_TYPE_RESULT   = 1071,
     ZITH_NODE_TYPE_ARRAY    = 1072,
+    ZITH_NODE_TYPE_SLICE    = 1084,
     ZITH_NODE_TYPE_TUPLE    = 1073,
     ZITH_NODE_TYPE_POINTER  = 1074,
     ZITH_NODE_TYPE_UNIQUE   = 1075,
@@ -144,6 +145,8 @@ typedef enum ZithLiteralKind {
     ZITH_LIT_FLOAT  = 2,
     ZITH_LIT_STRING = 3,
     ZITH_LIT_BOOL   = 4,
+    ZITH_LIT_CHAR   = 5,
+    ZITH_LIT_NULL   = 6,
 } ZithLiteralKind;
 
 typedef enum ZithParserMode {

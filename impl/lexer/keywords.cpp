@@ -41,6 +41,7 @@ static constexpr auto TokenTable = std::to_array<std::pair<std::string_view, Zit
     {"f128", ZITH_TOKEN_TYPE},
 
     {"bool", ZITH_TOKEN_TYPE},
+    {"char", ZITH_TOKEN_TYPE},
     {"void", ZITH_TOKEN_TYPE},
     {"null", ZITH_TOKEN_NULL},
 

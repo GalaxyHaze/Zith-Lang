@@ -181,11 +181,62 @@ TEST_CASE("FULL: member call too many arguments is rejected", "[full][sema][over
 
 TEST_CASE("FULL: member call correct argument count passes", "[full][sema][overload]") {
     auto ast = ParseResult(zith_parse_test_full("import std.io.console as io;\n"
-                                                "fn parse(x: i32) -> i32 { return x; }\n"
-                                                "fn main() -> i32 {\n"
-                                                "  return io.parse(42);\n"
-                                                "}\n"));
+                                                 "fn parse(x: i32) -> i32 { return x; }\n"
+                                                 "fn main() -> i32 {\n"
+                                                 "  return io.parse(42);\n"
+                                                 "}\n"));
     REQUIRE(ast);
+}
+
+// ============================================================================
+// Return type overloading
+// ============================================================================
+
+TEST_CASE("FULL: overload disambiguation via contextual return type", "[full][sema][overload][return_type]") {
+    auto ast = ParseResult(zith_parse_test_full("fn add(x: i32, y: i32) -> i32 { return x + y; }\n"
+                                                 "fn add(x: f64, y: f64) -> f64 { return x + y; }\n"
+                                                 "fn main() -> i32 {\n"
+                                                 "  let result: i32 = add(1, 2);\n"
+                                                 "  return result;\n"
+                                                 "}\n"));
+    REQUIRE(ast);
+}
+
+TEST_CASE("FULL: overload disambiguation via explicit cast", "[full][sema][overload][return_type]") {
+    auto ast = ParseResult(zith_parse_test_full("fn add(x: i32, y: i32) -> i32 { return x + y; }\n"
+                                                 "fn add(x: f64, y: f64) -> f64 { return x + y; }\n"
+                                                 "fn main() -> f64 {\n"
+                                                 "  return add(1, 2) as f64;\n"
+                                                 "}\n"));
+    REQUIRE(ast);
+}
+
+TEST_CASE("FULL: overload disambiguation selects f64 via contextual type", "[full][sema][overload][return_type]") {
+    auto ast = ParseResult(zith_parse_test_full("fn convert(x: i32) -> i32 { return x; }\n"
+                                                 "fn convert(x: i32) -> f64 { return x as f64; }\n"
+                                                 "fn main() -> f64 {\n"
+                                                 "  let result: f64 = convert(42);\n"
+                                                 "  return result;\n"
+                                                 "}\n"));
+    REQUIRE(ast);
+}
+
+TEST_CASE("FULL: true ambiguity with same param types, different return types", "[full][sema][overload][return_type]") {
+    auto bad = ParseResult(zith_parse_test_full("fn decide(x: i32) -> i32 { return x; }\n"
+                                                "fn decide(x: i32) -> f64 { return x as f64; }\n"
+                                                "fn main() {\n"
+                                                "  let r = decide(1);\n"
+                                                "}\n"));
+    REQUIRE(bad.get() == nullptr);
+}
+
+TEST_CASE("FULL: no overload matches expected return type - same param types", "[full][sema][overload][return_type]") {
+    auto bad = ParseResult(zith_parse_test_full("fn type_narrow(x: i32) -> i32 { return x; }\n"
+                                                "fn type_narrow(x: i32) -> bool { return x > 0; }\n"
+                                                "fn main() -> f64 {\n"
+                                                "  return type_narrow(1);\n"
+                                                "}\n"));
+    REQUIRE(bad.get() == nullptr);
 }
 
 // ============================================================================
@@ -430,4 +481,44 @@ TEST_CASE("TODO: use-after-move in function call is rejected", "[full][sema][own
                                                 "  consume(x);\n"
                                                 "}\n"));
     REQUIRE(bad.get() == nullptr);
+}
+
+TEST_CASE("FULL: array literal with integers is accepted", "[full][sema][array]") {
+    auto ast = ParseResult(zith_parse_test_full("fn main() {\n"
+                                                "  let x = {1, 2, 3, 4, 5};\n"
+                                                "  return;\n"
+                                                "}"));
+    REQUIRE(ast);
+}
+
+TEST_CASE("FULL: array literal with mixed types is rejected", "[full][sema][array][error]") {
+    auto bad = ParseResult(zith_parse_test_full("fn main() {\n"
+                                                "  let x = {1, 2.5, 3};\n"
+                                                "  return;\n"
+                                                "}"));
+    REQUIRE(bad.get() == nullptr);
+}
+
+TEST_CASE("FULL: empty array literal is accepted", "[full][sema][array]") {
+    auto ast = ParseResult(zith_parse_test_full("fn main() {\n"
+                                                "  let x = {};\n"
+                                                "  return;\n"
+                                                "}"));
+    REQUIRE(ast);
+}
+
+TEST_CASE("FULL: array literal with explicit slice type", "[full][sema][array]") {
+    auto ast = ParseResult(zith_parse_test_full("fn main() {\n"
+                                                "  let x: []i32 = {1, 2, 3};\n"
+                                                "  return;\n"
+                                                "}"));
+    REQUIRE(ast);
+}
+
+TEST_CASE("FULL: array literal with explicit array type", "[full][sema][array]") {
+    auto ast = ParseResult(zith_parse_test_full("fn main() {\n"
+                                                "  let x: [3]i32 = {1, 2, 3};\n"
+                                                "  return;\n"
+                                                "}"));
+    REQUIRE(ast);
 }

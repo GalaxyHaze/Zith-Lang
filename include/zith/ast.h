@@ -215,12 +215,18 @@ ZithNode *zith_ast_make_var_decl(ZithArena *a, ZithSourceLoc loc, const ZithVarP
 ZithNode *zith_ast_make_func_decl(ZithArena *a, ZithSourceLoc loc, const ZithFuncPayload &decl);
 ZithNode *zith_ast_make_union(ZithArena *a, ZithSourceLoc loc, const ZithUnionPayload &decl);
 ZithNode *zith_ast_make_enum_variant(ZithArena *a, ZithSourceLoc loc, const ZithEnumVariantPayload &data);
+ZithNode *zith_ast_make_array_type(ZithArena *a, ZithSourceLoc loc, ZithNode *element_type, size_t size);
+ZithNode *zith_ast_make_slice_type(ZithArena *a, ZithSourceLoc loc, ZithNode *element_type);
+ZithNode *zith_ast_make_array_lit(ZithArena *a, ZithSourceLoc loc, ZithNode **items, size_t count);
 #else
 ZithNode *zith_ast_make_literal(ZithArena *a, ZithSourceLoc loc, const ZithLiteral *lit);
 ZithNode *zith_ast_make_var_decl(ZithArena *a, ZithSourceLoc loc, const ZithVarPayload *decl);
 ZithNode *zith_ast_make_func_decl(ZithArena *a, ZithSourceLoc loc, const ZithFuncPayload *decl);
 ZithNode *zith_ast_make_union(ZithArena *a, ZithSourceLoc loc, const ZithUnionPayload *decl);
 ZithNode *zith_ast_make_enum_variant(ZithArena *a, ZithSourceLoc loc, const ZithEnumVariantPayload *data);
+ZithNode *zith_ast_make_array_type(ZithArena *a, ZithSourceLoc loc, ZithNode *element_type, size_t size);
+ZithNode *zith_ast_make_slice_type(ZithArena *a, ZithSourceLoc loc, ZithNode *element_type);
+ZithNode *zith_ast_make_array_lit(ZithArena *a, ZithSourceLoc loc, ZithNode **items, size_t count);
 #endif
 
 ZithNode *zith_ast_make_identifier(ZithArena *a, ZithSourceLoc loc, const char *name, size_t len);

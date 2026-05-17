@@ -4,6 +4,7 @@
 #include "memory/arena.hpp"
 #include "zith/parser.h"
 #include <cstring>
+#include <cstdlib>
 
 using zith::ArenaList;
 
@@ -36,6 +37,20 @@ ZithNode *parser_parse_type(Parser *p) {
             own_type = ZITH_NODE_TYPE_LEND;
         else if (parser_match(p, ZITH_TOKEN_EXTENSION))
             own_type = ZITH_NODE_TYPE_EXTENSION;
+        else if (parser_match(p, ZITH_TOKEN_RAW)) {
+            ZithNode *inner = nullptr;
+            if (parser_check(p, ZITH_TOKEN_IDENTIFIER)) {
+                inner = parser_parse_type(p);
+            }
+            ZithNode *n = (ZithNode *)zith_arena_alloc(p->arena, sizeof(ZithNode));
+            if (n) {
+                memset(n, 0, sizeof(ZithNode));
+                n->type = ZITH_NODE_TYPE_POINTER;
+                n->loc  = loc;
+                n->data.kids.a = inner;
+            }
+            return n;
+        }
 
         if (own_type) {
             ZithNode *inner = nullptr;
@@ -64,11 +79,33 @@ ZithNode *parser_parse_type(Parser *p) {
         return inner; // TODO: Create pointer node
     }
     if (parser_match(p, ZITH_TOKEN_LBRACKET)) {
-        if (!parser_check(p, ZITH_TOKEN_RBRACKET))
-            parser_parse_expression(p);
+        size_t array_size = 0;
+        if (!parser_check(p, ZITH_TOKEN_RBRACKET)) {
+            if (parser_check(p, ZITH_TOKEN_NUMBER)) {
+                const ZithToken *size_tok = parser_advance(p);
+                array_size = static_cast<size_t>(size_tok->lexeme.len);
+                char *endptr = nullptr;
+                if (size_tok->lexeme.len > 0) {
+                    array_size = static_cast<size_t>(strtoull(size_tok->lexeme.data, &endptr, 10));
+                    if (endptr != size_tok->lexeme.data + size_tok->lexeme.len) {
+                        parser_error(p, size_tok->loc, "invalid array size");
+                        array_size = 0;
+                    }
+                }
+            } else {
+                parser_error(p, parser_peek(p)->loc, "expected number or ']' in array type");
+            }
+        }
         parser_expect(p, ZITH_TOKEN_RBRACKET, "expected ']' in array type");
         ZithNode *inner = parser_parse_type(p);
-        return inner; // TODO: Create array node
+        if (!inner)
+            return nullptr;
+        
+        if (array_size > 0) {
+            return zith_ast_make_array_type(p->arena, loc, inner, array_size);
+        } else {
+            return zith_ast_make_slice_type(p->arena, loc, inner);
+        }
     }
     if (parser_match(p, ZITH_TOKEN_PIPE)) {
         ArenaList<ZithNode *> items_b;
@@ -170,6 +207,8 @@ static BindingPower infix_bp(ZithTokenType op) {
         return {13, 14};
     case ZITH_TOKEN_DOT:
         return {15, 16};
+    case ZITH_TOKEN_AS:
+        return {17, 18};
     default:
         return {-1, -1};
     }
@@ -241,6 +280,26 @@ static ZithNode *parse_nud(Parser *p) {
         return zith_ast_make_spawn(p->arena, loc, parser_parse_expression(p), false);
     case ZITH_TOKEN_MUST:
         return zith_ast_make_unary_op(p->arena, loc, ZITH_TOKEN_MUST, parse_expr_bp(p, 13), false);
+    case ZITH_TOKEN_NULL: {
+        fprintf(stderr, "DEBUG: matched ZITH_TOKEN_NULL case!\n");
+        ZithLiteral lit;
+        lit.kind = ZITH_LIT_NULL;
+        lit.value.i64 = 0;
+        return zith_ast_make_literal(p->arena, loc, lit);
+    }
+    case ZITH_TOKEN_LBRACE: {
+        ArenaList<ZithNode *> items_b;
+        items_b.init(p->arena, 8);
+        while (!parser_check(p, ZITH_TOKEN_RBRACE) && !parser_is_at_end(p)) {
+            items_b.push(p->arena, parser_parse_expression(p));
+            if (!parser_match(p, ZITH_TOKEN_COMMA))
+                break;
+        }
+        parser_expect(p, ZITH_TOKEN_RBRACE, "expected '}' closing array literal");
+        size_t count    = 0;
+        ZithNode **items = items_b.flatten(p->arena, &count);
+        return zith_ast_make_array_lit(p->arena, loc, items, count);
+    }
     default: {
         char buf[128];
         snprintf(buf, sizeof(buf), "unexpected token '%.*s'", static_cast<int>(t->lexeme.len), t->lexeme.data);
@@ -282,6 +341,11 @@ static ZithNode *parse_expr_bp(Parser *p, const int min_bp) {
         }
         if (op == ZITH_TOKEN_ARROW) {
             left = zith_ast_make_arrow_call(p->arena, loc, left, parse_expr_bp(p, bp.right));
+            continue;
+        }
+        if (op == ZITH_TOKEN_AS) {
+            ZithNode *type_node = parser_parse_type(p);
+            left = zith_ast_make_cast(p->arena, loc, left, type_node);
             continue;
         }
         left = zith_ast_make_binary_op(p->arena, loc, op, left, parse_expr_bp(p, bp.right));

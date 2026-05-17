@@ -545,6 +545,9 @@ static void walk_children(ZithNode *n, ZithASTVisitorFn pre, ZithASTVisitorFn po
     case ZITH_NODE_TYPE_LEND:
     case ZITH_NODE_TYPE_PACK:
     case ZITH_NODE_TYPE_EXTENSION:
+    // Array/Slice types (kids.a = element type)
+    case ZITH_NODE_TYPE_ARRAY:
+    case ZITH_NODE_TYPE_SLICE:
         zith_ast_walk(n->data.kids.a, pre, post, ud);
         break;
 
@@ -841,6 +844,10 @@ const char *zith_ast_node_name(const uint16_t id) {
         return "pack";
     case ZITH_NODE_TYPE_EXTENSION:
         return "extension";
+    case ZITH_NODE_TYPE_ARRAY:
+        return "array";
+    case ZITH_NODE_TYPE_SLICE:
+        return "slice";
     case ZITH_NODE_CALL_ARG:
         return "call_arg";
     default:
@@ -886,6 +893,33 @@ ZithNode *zith_ast_make_union(ZithArena *a, const ZithSourceLoc loc, const ZithU
     *p               = decl;
     p->name          = zith_arena_str(a, decl.name, decl.name_len);
     n->data.list.len = decl.type_count;
+    return n;
+}
+
+ZithNode *zith_ast_make_array_type(ZithArena *a, ZithSourceLoc loc, ZithNode *element_type, size_t size) {
+    ZithNode *n = alloc_node(a, ZITH_NODE_TYPE_ARRAY, loc);
+    if (!n)
+        return nullptr;
+    n->data.list.ptr = element_type;
+    n->data.list.len = size;
+    return n;
+}
+
+ZithNode *zith_ast_make_slice_type(ZithArena *a, ZithSourceLoc loc, ZithNode *element_type) {
+    ZithNode *n = alloc_node(a, ZITH_NODE_TYPE_SLICE, loc);
+    if (!n)
+        return nullptr;
+    n->data.list.ptr = element_type;
+    n->data.list.len = 0;
+    return n;
+}
+
+ZithNode *zith_ast_make_array_lit(ZithArena *a, ZithSourceLoc loc, ZithNode **items, size_t count) {
+    ZithNode *n = alloc_node(a, ZITH_NODE_ARRAY_LIT, loc);
+    if (!n)
+        return nullptr;
+    n->data.list.ptr = items;
+    n->data.list.len = count;
     return n;
 }
 
@@ -1018,6 +1052,19 @@ void zith_ast_print(const ZithNode *node, int indent) {
     case ZITH_NODE_TYPE_EXTENSION: {
         print_indent(indent + 1);
         debug_print("ownership: %s\n", zith_ast_node_name(node->type));
+        if (node->data.kids.a)
+            zith_ast_print(node->data.kids.a, indent + 2);
+        break;
+    }
+
+    // Array/Slice type nodes
+    case ZITH_NODE_TYPE_ARRAY:
+    case ZITH_NODE_TYPE_SLICE: {
+        print_indent(indent + 1);
+        debug_print("type: %s", zith_ast_node_name(node->type));
+        if (node->data.custom > 0)
+            debug_print(" size: %zu", node->data.custom);
+        debug_print("\n");
         if (node->data.kids.a)
             zith_ast_print(node->data.kids.a, indent + 2);
         break;

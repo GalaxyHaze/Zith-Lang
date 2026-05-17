@@ -439,7 +439,6 @@ ZithNode *parser_parse_statement(Parser *p) {
             parser_match(p, ZITH_TOKEN_MINUS_EQUAL)) {
             const ZithSourceLoc aloc = parser_peek(p)->loc;
             ZithToken op_t           = *parser_peek(p);
-            parser_advance(p);
             expr = zith_ast_make_binary_op(p->arena, aloc, op_t.type, expr,
                                            parser_parse_expression(p));
         }

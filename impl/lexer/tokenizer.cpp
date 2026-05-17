@@ -102,6 +102,9 @@ static void processIdentifier(const char *&current, const char *end, TokenList &
 static void processString(const char *&current, const char *end, TokenList &tokens,
                           std::vector<LexError> &error_list, ZithSourceLoc &info, ZithArena *arena);
 
+static void processChar(const char *&current, const char *end, TokenList &tokens,
+                        std::vector<LexError> &error_list, ZithSourceLoc &info, ZithArena *arena);
+
 static void processNumber(const char *&current, const char *end, TokenList &tokens,
                           std::vector<LexError> &error_list, ZithSourceLoc &info, ZithArena *arena);
 
@@ -232,9 +235,68 @@ static void processString(const char *&current, const char *end, TokenList &toke
     }
 
     error_list.push_back(
-        {make_error_msg(arena, "Unterminated string literal starting at line ", startInfo.line),
+        {make_error_msg(arena, "Unterminated []char literal starting at line ", startInfo.line),
          startInfo});
     tokens.push(arena, make_token(arena, ZITH_TOKEN_STRING,
+                                  std::string_view(start, current - start), startInfo));
+}
+
+static void processChar(const char *&current, const char *end, TokenList &tokens,
+                        std::vector<LexError> &error_list, ZithSourceLoc &info,
+                        ZithArena *arena) {
+    const ZithSourceLoc startInfo = info;
+    const char *start             = current;
+    ++current;
+    ++info.index;
+
+    if (current >= end) {
+        error_list.push_back(
+            {make_error_msg(arena, "Unterminated char literal starting at line ", startInfo.line),
+             startInfo});
+        tokens.push(arena, make_token(arena, ZITH_TOKEN_CHAR,
+                                      std::string_view(start, current - start), startInfo));
+        return;
+    }
+
+    if (*current == '\\') {
+        const ZithSourceLoc escapeLoc = info;
+        ++current;
+        ++info.index;
+
+        if (current >= end) {
+            addMsgError(error_list, arena, "Unterminated escape sequence at end of file", escapeLoc);
+        } else {
+            if (!isValidEscape(*current)) {
+                char msg_buf[64];
+                size_t pos      = 0;
+                const char *pfx = "Invalid escape sequence '\\";
+                for (const char *p = pfx; *p && pos < sizeof(msg_buf) - 2;)
+                    msg_buf[pos++] = *p++;
+                if (pos < sizeof(msg_buf) - 1)
+                    msg_buf[pos++] = *current;
+                if (pos < sizeof(msg_buf) - 1)
+                    msg_buf[pos++] = '\'';
+                msg_buf[pos] = '\0';
+                error_list.push_back({make_error_msg(arena, msg_buf, escapeLoc.line), escapeLoc});
+            }
+            ++current;
+            ++info.index;
+        }
+    } else {
+        ++current;
+        ++info.index;
+    }
+
+    if (current < end && *current == '\'') {
+        ++current;
+        ++info.index;
+    } else {
+        error_list.push_back(
+            {make_error_msg(arena, "Unterminated char literal starting at line ", startInfo.line),
+             startInfo});
+    }
+
+    tokens.push(arena, make_token(arena, ZITH_TOKEN_CHAR,
                                   std::string_view(start, current - start), startInfo));
 }
 
@@ -506,6 +568,11 @@ static void tokenize_impl(std::string_view src, ZithArena *arena, TokenList &tok
 
         if (*current == '"') {
             processString(current, end, tokens, error_list, info, arena);
+            continue;
+        }
+
+        if (*current == '\'') {
+            processChar(current, end, tokens, error_list, info, arena);
             continue;
         }
 

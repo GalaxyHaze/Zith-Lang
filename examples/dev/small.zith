@@ -1,9 +1,6 @@
 
 
-
 fn main() {
-    let x = 5;
-    if(x > 5)
-        return;
+    let x: []i32 = {2,3,4,5};
 
 }

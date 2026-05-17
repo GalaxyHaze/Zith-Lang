@@ -8,12 +8,18 @@ namespace zith {
 enum class SemaType {
     Unknown = 0,
     Void,
+    Char,
     Int,
     Float,
     String,
     Bool,
+    Opaque,
+    Invalid,
+    VoidPtr,
     Module,
     Struct,
+    Array,
+    Slice,
 };
 
 struct Type {
@@ -22,6 +28,9 @@ struct Type {
     bool failable = false;
     ZithOwnership ownership = ZITH_OWN_DEFAULT;
     const char *struct_name = nullptr;
+    const char *type_name = nullptr;
+    size_t array_size = 0;
+    Type *element_type = nullptr;
 };
 
 inline bool type_match(const Type &a, const Type &b) {
