@@ -1,6 +1,7 @@
 // impl/parser/parser_context.hpp — C++ ParserContext wrapper
 #pragma once
 
+#include "diagnostics/diagnostics.hpp"
 #include "zith/parser.h"
 
 #ifdef __cplusplus

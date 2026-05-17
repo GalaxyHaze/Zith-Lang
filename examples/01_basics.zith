@@ -138,10 +138,10 @@ fn process(input: data) {
 
 // Struct definition inheriting from the 'Extension' trait.
 // This allows the struct to be used in an extension chain.
-struct DoubleLink<T>: Extension {
+struct DoubleLink {
     prev: ?Self,          // Optional pointer to the previous node (weak/parent link)
     next: ?unique Self,   // Unique pointer to the next node (strong ownership)
-    val: T                // The payload data
+    val: type                // The payload data
 }
 
 // Implementation block for the struct
@@ -149,7 +149,7 @@ implement DoubleLink {
     // --- Method: insert ---
     // Creates a new node extending the current one.
     // 'self' is the instance invoking the method.
-    fn insert(self, content: T) -> Self {
+    fn insert(mut self, content: T) -> Self {
         Self {
             // 'extension self' links the new node back to the parent.
             // This syntax likely utilizes the 'Extension' trait to establish 
