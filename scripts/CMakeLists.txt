@@ -33,17 +33,43 @@ endif()
 set(ZITH_VERSION "${ZITH_VERSION}" CACHE STRING "Project version" FORCE)
 
 # =============================================================================
+# Initialize Dependency Variables
+# =============================================================================
+set(LLVM_FOUND FALSE)
+set(ZITH_HAS_FFI OFF)
+set(ZITH_HAS_PKGCONFIG OFF)
+
+# =============================================================================
 # Fetch External Dependencies
 # =============================================================================
 include(FetchContent)
+
+# ───────────────────────────────────────────────
+# CLI11 - Build as static library to fix linker errors
+# ───────────────────────────────────────────────
+message(STATUS "Fetching CLI11...")
+
+# Force CLI11 to build as a static library (CLI11_PRECOMPILED).
+# This compiles the .cpp files required for vtables that are missing in header-only mode.
+set(CLI11_PRECOMPILED ON CACHE BOOL "" FORCE)
+set(CLI11_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+set(CLI11_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 
 FetchContent_Declare(cli11
     GIT_REPOSITORY https://github.com/CLIUtils/CLI11.git
     GIT_TAG v2.6.2
     GIT_SHALLOW TRUE
 )
+
 FetchContent_MakeAvailable(cli11)
 
+# CLI11::CLI11 target is now an actual static library object, not just headers
+message(STATUS "CLI11 fetched and available (Precompiled Static Lib)")
+
+# ───────────────────────────────────────────────
+# TOML++ - Header-Only Library
+# ───────────────────────────────────────────────
+message(STATUS "Fetching TOML++...")
 FetchContent_Declare(
     tomlplusplus
     GIT_REPOSITORY https://github.com/marzer/tomlplusplus.git
@@ -51,46 +77,156 @@ FetchContent_Declare(
     GIT_SHALLOW TRUE
 )
 FetchContent_MakeAvailable(tomlplusplus)
+message(STATUS "TOML++ available")
 
-set(ZITH_HAS_FFI ON)
-if(WIN32 OR EMSCRIPTEN)
-    set(ZITH_HAS_FFI OFF)
-    message(STATUS "Skipping libffi discovery on this platform.")
-else()
-    option(ZITH_ENABLE_FFI "Enable FFI support via libffi (requires libffi-dev installed)" ON)
-    if(NOT ZITH_ENABLE_FFI)
-        set(ZITH_HAS_FFI OFF)
+# =============================================================================
+# LLVM Configuration (Optional) - Must come BEFORE FFI setup
+# =============================================================================
+option(ZITH_ENABLE_LLVM "Enable LLVM backend support" ON)
+set(LLVM_DIR "" CACHE PATH "Path to LLVMConfig.cmake (optional)")
+
+if(APPLE AND CMAKE_OSX_ARCHITECTURES)
+    message(STATUS "Building for macOS architecture: ${CMAKE_OSX_ARCHITECTURES}")
+endif()
+
+if(ZITH_ENABLE_LLVM)
+    message(STATUS "Searching for LLVM...")
+    
+    if(LLVM_DIR)
+        message(STATUS "   Using specified LLVM_DIR: ${LLVM_DIR}")
+        find_package(LLVM QUIET CONFIG PATHS "${LLVM_DIR}" NO_DEFAULT_PATH)
     else()
-        find_package(PkgConfig REQUIRED)
-        pkg_check_modules(FFI REQUIRED libffi)
-        if(FFI_STATIC_LIBRARIES)
-            set(FFI_LIBRARIES ${FFI_STATIC_LIBRARIES})
-            set(FFI_INCLUDE_DIRS ${FFI_STATIC_INCLUDE_DIRS})
-            message(STATUS "libffi found (static)")
-        else()
-            message(STATUS "libffi found (dynamic)")
-        endif()
+        message(STATUS "   Searching system paths for LLVM...")
+        find_package(LLVM QUIET CONFIG)
     endif()
+
+    if(LLVM_FOUND)
+        message(STATUS "LLVM found: version ${LLVM_PACKAGE_VERSION}")
+        message(STATUS "   LLVM directory: ${LLVM_DIR}")
+        message(STATUS "   LLVM include path: ${LLVM_INCLUDE_DIRS}")
+
+        # Define LLVM version macro
+        add_compile_definitions(LLVM_VERSION_MAJOR=${LLVM_VERSION_MAJOR})
+        
+        # Map LLVM components to actual libraries (static linking)
+        llvm_map_components_to_libnames(LLVM_LIBRARIES
+            analysis
+            core
+            instcombine
+            scalaropts
+            vectorize
+            ipo
+            irreader
+            support
+            target
+        )
+
+        if(LLVM_LIBRARIES)
+            message(STATUS "   LLVM libraries mapped successfully")
+        else()
+            message(WARNING "LLVM found but no libraries could be mapped")
+            set(LLVM_FOUND FALSE)
+        endif()
+
+        # ───────────────────────────────────────────────
+        # FFI Setup - Only if LLVM is available
+        # ───────────────────────────────────────────────
+        if(NOT WIN32 AND NOT EMSCRIPTEN)
+            option(ZITH_ENABLE_FFI "Enable FFI support via libffi (requires libffi-dev installed)" ON)
+            
+            if(ZITH_ENABLE_FFI)
+                message(STATUS "Searching for libffi...")
+                
+                # Check if pkg-config is available
+                find_package(PkgConfig QUIET)
+                if(PkgConfig_FOUND)
+                    set(ZITH_HAS_PKGCONFIG ON)
+                    message(STATUS "   pkg-config found")
+                    
+                    # Search for libffi (QUIET mode, won't fail if not found)
+                    pkg_check_modules(FFI QUIET libffi)
+                    
+                    if(FFI_FOUND)
+                        if(FFI_STATIC_LIBRARIES)
+                            message(STATUS "libffi found (static libraries preferred)")
+                            message(STATUS "   Include dirs: ${FFI_STATIC_INCLUDE_DIRS}")
+                            set(FFI_LIBRARIES ${FFI_STATIC_LIBRARIES})
+                            set(FFI_INCLUDE_DIRS ${FFI_STATIC_INCLUDE_DIRS})
+                            set(ZITH_HAS_FFI ON)
+                        elseif(FFI_LIBRARIES)
+                            message(STATUS "libffi found (dynamic libraries)")
+                            message(STATUS "   Include dirs: ${FFI_INCLUDE_DIRS}")
+                            set(ZITH_HAS_FFI ON)
+                        else()
+                            message(WARNING "libffi pkg-config found but no libraries discovered")
+                            set(ZITH_HAS_FFI OFF)
+                        endif()
+                    else()
+                        message(STATUS "libffi not found via pkg-config")
+                        set(ZITH_HAS_FFI OFF)
+                    endif()
+                else()
+                    message(STATUS "pkg-config not found; skipping libffi discovery")
+                    set(ZITH_HAS_FFI OFF)
+                endif()
+                
+                if(ZITH_HAS_FFI)
+                    message(STATUS "FFI support will be compiled in")
+                else()
+                    message(STATUS "FFI support disabled (libffi not available)")
+                endif()
+            else()
+                message(STATUS "FFI support disabled by user (ZITH_ENABLE_FFI=OFF)")
+                set(ZITH_HAS_FFI OFF)
+            endif()
+        else()
+            if(WIN32)
+                message(STATUS "FFI not available on Windows platform")
+            elseif(EMSCRIPTEN)
+                message(STATUS "FFI not available in WebAssembly environment")
+            endif()
+            set(ZITH_HAS_FFI OFF)
+        endif()
+
+    else()
+        message(STATUS "LLVM not found")
+        if(ZITH_ENABLE_LLVM)
+            message(WARNING "LLVM was requested but not found. Building without LLVM backend.")
+            message(STATUS "   To use LLVM, install it and set -DLLVM_DIR=/path/to/llvm/lib/cmake/llvm")
+            message(STATUS "   To silence this warning, use -DZITH_ENABLE_LLVM=OFF")
+        endif()
+        set(LLVM_FOUND FALSE)
+        set(ZITH_HAS_FFI OFF)
+    endif()
+
+else()
+    message(STATUS "LLVM support disabled (ZITH_ENABLE_LLVM=OFF)")
+    message(STATUS "   FFI support also disabled (depends on LLVM)")
+    set(LLVM_FOUND FALSE)
+    set(ZITH_HAS_FFI OFF)
 endif()
 
 option(ZITH_IS_WASM "Build target is WebAssembly" OFF)
 
 # =============================================================================
-# Compiler Flags
+# Compiler Flags & Warnings
 # =============================================================================
 option(ENABLE_WERROR "Treat warnings as errors" OFF)
 
 if (MSVC)
-    add_compile_options(/W4 /wd4100) 
+    add_compile_options(/W4 /wd4100 /wd4201)
     if(ENABLE_WERROR)
         add_compile_options(/WX)
     endif()
+    message(STATUS "Compiler: MSVC with warning level 4")
 else ()
     add_compile_options(-Wall -Wextra -Wpedantic)
     if(ENABLE_WERROR)
         add_compile_options(-Werror)
     endif()
+    message(STATUS "Compiler: GCC/Clang with pedantic warnings enabled")
 
+    # Linker optimization: Prefer LLD on Clang
     if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
         find_program(LLD_EXE 
             NAMES 
@@ -105,12 +241,10 @@ else ()
             if (NOT CMAKE_EXE_LINKER_FLAGS MATCHES "-fuse-ld=")
                 set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fuse-ld=${LLD_NAME}")
                 set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -fuse-ld=${LLD_NAME}")
-                message(STATUS "Using LLD linker: ${LLD_EXE} (flag: -fuse-ld=${LLD_NAME})")
+                message(STATUS "Linker: Using LLD (${LLD_EXE})")
             endif()
         elseif(UNIX AND NOT APPLE)
-            message(WARNING "LLD linker not found in PATH. Build will proceed with default linker.")
-        else()
-            message(STATUS "LLD linker not found in PATH on this platform. Using default linker.")
+            message(STATUS "Linker: LLD not found, using system default")
         endif()
     endif ()
 endif ()
@@ -119,7 +253,7 @@ endif ()
 # Clang Extension Configuration
 # =============================================================================
 if(DEFINED CLANG_PLUGIN_PATH AND EXISTS "${CLANG_PLUGIN_PATH}")
-    message(STATUS "Loading Clang Extension: ${CLANG_PLUGIN_PATH}")
+    message(STATUS "Loading Clang plugin from: ${CLANG_PLUGIN_PATH}")
     add_compile_options(
         "$<$<COMPILE_LANGUAGE:CXX>:-Xclang>-load"
         "$<$<COMPILE_LANGUAGE:CXX>:-Xclang>${CLANG_PLUGIN_PATH}"
@@ -127,49 +261,7 @@ if(DEFINED CLANG_PLUGIN_PATH AND EXISTS "${CLANG_PLUGIN_PATH}")
 endif()
 
 # =============================================================================
-# LLVM Configuration (Optional)
-# =============================================================================
-option(ZITH_ENABLE_LLVM "Enable LLVM backend support" ON)
-set(LLVM_DIR "" CACHE PATH "Path to LLVMConfig.cmake (optional)")
-
-if(APPLE AND CMAKE_OSX_ARCHITECTURES)
-    message(STATUS "Building for macOS arch: ${CMAKE_OSX_ARCHITECTURES}")
-endif()
-
-if(ZITH_ENABLE_LLVM)
-    if(LLVM_DIR)
-        find_package(LLVM QUIET CONFIG PATHS "${LLVM_DIR}" NO_DEFAULT_PATH)
-    else()
-        find_package(LLVM QUIET CONFIG)
-    endif()
-    if(LLVM_FOUND)
-        message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION} at ${LLVM_DIR}")
-
-        add_definitions(-DLLVM_VERSION_MAJOR=${LLVM_VERSION_MAJOR})
-        include_directories(SYSTEM ${LLVM_INCLUDE_DIRS})
-
-        llvm_map_components_to_libnames(LLVM_LIBRARIES
-            analysis
-            core
-            instcombine
-            scalaropts
-            vectorize
-            ipo
-            irreader
-            support
-            target
-        )
-
-    else()
-        message(WARNING "LLVM not found. Building without LLVM backend. Set -DZITH_ENABLE_LLVM=OFF to silence this warning.")
-    endif()
-else()
-    message(STATUS "LLVM support disabled by ZITH_ENABLE_LLVM=OFF")
-    set(LLVM_FOUND FALSE)
-endif()
-
-# =============================================================================
-# Sources
+# Source Files Organization
 # =============================================================================
 set(CORE_C_SOURCES
     ../impl/memory/arena_c_functions.c
@@ -205,33 +297,45 @@ set(CLI_SOURCES
 )
 
 # ───────────────────────────────────────────────
-# Targets
+# Library Target: ZithCore
 # ───────────────────────────────────────────────
-
 add_library(ZithCore STATIC ${CORE_C_SOURCES} ${DIAGNOSTICS_SOURCES})
+
 target_include_directories(ZithCore
     PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../include>
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../impl>
         $<INSTALL_INTERFACE:include>
-        ${LLVM_INCLUDE_DIRS}
-)
-target_link_libraries(ZithCore PUBLIC 
-    tomlplusplus::tomlplusplus
-    ${LLVM_LIBRARIES}
 )
 
+# Link LLVM if available
+if(LLVM_FOUND)
+    target_include_directories(ZithCore SYSTEM PUBLIC ${LLVM_INCLUDE_DIRS})
+    target_link_libraries(ZithCore PUBLIC ${LLVM_LIBRARIES})
+endif()
+
+target_link_libraries(ZithCore PUBLIC tomlplusplus::tomlplusplus)
+
+# ───────────────────────────────────────────────
+# Library Target: ZithParse
+# ───────────────────────────────────────────────
+
 add_library(ZithParse STATIC ${PARSER_CPP_SOURCES})
+
 target_include_directories(ZithParse
     PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../include>
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../impl>
 )
-target_link_libraries(ZithParse
-    PUBLIC
-        ZithCore
+
+# Add CLI11::CLI11 here because ZithParse uses it
+target_link_libraries(ZithParse PUBLIC ZithCore CLI11::CLI11)
+
+target_compile_definitions(ZithParse
+    PRIVATE
+        ZITH_VERSION="${ZITH_VERSION}"
 )
-target_compile_definitions(ZithParse PRIVATE ZITH_VERSION="${ZITH_VERSION}")
+# ... rest of properties
 
 set_target_properties(ZithParse PROPERTIES
     VERSION 0.0.1
@@ -240,38 +344,52 @@ set_target_properties(ZithParse PROPERTIES
     VISIBILITY_INLINES_HIDDEN ON
 )
 
+# ───────────────────────────────────────────────
+# Executable Target: zith
+# ───────────────────────────────────────────────
 add_executable(zith ${CLI_SOURCES})
-
-if(MINGW)
-    target_sources(zith PRIVATE ../impl/cli/cli11_init.cpp)
-endif()
 
 target_include_directories(zith PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/../include
     ${CMAKE_CURRENT_SOURCE_DIR}/../impl
 )
 
-target_link_libraries(zith
-    PRIVATE
-        ZithParse
-        CLI11::CLI11
-)
+# Link core libraries - CLI11 is header-only, no special handling needed
+target_link_libraries(zith PRIVATE ZithParse CLI11::CLI11)
+
+# Link FFI if available (prefer static)
 if(ZITH_HAS_FFI)
     target_compile_definitions(zith PRIVATE ZITH_HAS_FFI)
     target_include_directories(zith PRIVATE ${FFI_INCLUDE_DIRS})
-    target_link_libraries(zith PRIVATE ${FFI_LIBRARIES})
+    
+    if(FFI_STATIC_LIBRARIES)
+        target_link_libraries(zith PRIVATE ${FFI_STATIC_LIBRARIES})
+        message(STATUS "Linking FFI (static): ${FFI_STATIC_LIBRARIES}")
+    else()
+        target_link_libraries(zith PRIVATE ${FFI_LIBRARIES})
+        message(STATUS "Linking FFI (dynamic): ${FFI_LIBRARIES}")
+    endif()
 endif()
+
+# WebAssembly target
 if(ZITH_IS_WASM)
     target_compile_definitions(zith PRIVATE ZITH_WASM)
+    message(STATUS "WebAssembly target enabled")
 endif()
-target_compile_definitions(zith PRIVATE ZITH_VERSION="${ZITH_VERSION}" ZITH_EXECUTABLE)
+
+# Version and installation defines
+target_compile_definitions(zith PRIVATE
+    ZITH_VERSION="${ZITH_VERSION}"
+    ZITH_EXECUTABLE
+)
+
 if(CMAKE_INSTALL_PREFIX)
     set(ZITH_INSTALL_LIB_DIR "${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR}/zith/lib")
     target_compile_definitions(zith PRIVATE ZITH_INSTALL_LIB_DIR="${ZITH_INSTALL_LIB_DIR}")
 endif()
 
 # ───────────────────────────────────────────────
-# Install
+# Install Targets
 # ───────────────────────────────────────────────
 install(TARGETS zith ZithParse ZithCore
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
@@ -284,18 +402,18 @@ install(DIRECTORY ../lib/
     FILES_MATCHING PATTERN "*.zith"
 )
 
-
 # =============================================================================
 # Code Formatting
 # =============================================================================
 find_program(CLANG_FORMAT_EXE NAMES clang-format clang-format-18 clang-format-17 clang-format-16)
-file(GLOB_RECURSE ZITH_FORMAT_SOURCES
-    "../impl/*.cpp" "../impl/*.hpp" "../impl/*.h" "../impl/*.c"
-    "../include/*.hpp" "../include/*.h"
-    "../tests/*.cpp"
-)
 
 if(CLANG_FORMAT_EXE)
+    file(GLOB_RECURSE ZITH_FORMAT_SOURCES
+        "../impl/*.cpp" "../impl/*.hpp" "../impl/*.h" "../impl/*.c"
+        "../include/*.hpp" "../include/*.h"
+        "../tests/*.cpp"
+    )
+    
     add_custom_target(fmt
         COMMAND ${CLANG_FORMAT_EXE} -i ${ZITH_FORMAT_SOURCES}
         WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
@@ -305,18 +423,22 @@ if(CLANG_FORMAT_EXE)
     add_custom_target(fmt-check
         COMMAND ${CLANG_FORMAT_EXE} --dry-run --Werror ${ZITH_FORMAT_SOURCES}
         WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-        COMMENT "Checking formatting with clang-format"
+        COMMENT "Checking code formatting with clang-format"
     )
+    
+    message(STATUS "Code formatting targets available: 'fmt' and 'fmt-check'")
 else()
-    message(STATUS "clang-format not found; 'fmt' and 'fmt-check' targets are unavailable.")
+    message(STATUS "clang-format not found; formatting targets unavailable")
 endif()
 
 # =============================================================================
-# Tests
+# Testing Configuration
 # =============================================================================
 include(CTest)
 
 if(BUILD_TESTING)
+    message(STATUS "Tests enabled; fetching Catch2...")
+    
     FetchContent_Declare(
         Catch2
         GIT_REPOSITORY https://github.com/catchorg/Catch2.git
@@ -337,6 +459,7 @@ if(BUILD_TESTING)
 
     if(TEST_SOURCES)
         add_executable(zith_tests ${TEST_SOURCES})
+        
         target_include_directories(zith_tests PRIVATE
             ${CMAKE_CURRENT_SOURCE_DIR}/../include
             ${CMAKE_CURRENT_SOURCE_DIR}/../impl
@@ -349,39 +472,50 @@ if(BUILD_TESTING)
         include(Catch)
 
         if(CMAKE_CROSSCOMPILING)
-            message(STATUS "Cross-compiling detected. Skipping test discovery.")
+            message(STATUS "Cross-compiling detected; registering manual test target")
             add_test(NAME zith_tests COMMAND zith_tests)
         else()
+            message(STATUS "Automatically discovering Catch2 tests")
             catch_discover_tests(zith_tests)
         endif()
-
-        message(STATUS "Tests target 'zith_tests' configured.")
     endif()
 
+    # CLI integration test
     add_test(
         NAME zith_cli_hello_interpreted
         COMMAND $<TARGET_FILE:zith> run --interpreted ${CMAKE_SOURCE_DIR}/examples/start/hello-world.zith
     )
+    message(STATUS "CLI integration test registered")
+else()
+    message(STATUS "Tests disabled (use -DBUILD_TESTING=ON to enable)")
 endif()
 
 # =============================================================================
-# Final Info
+# Build Summary
 # =============================================================================
 message("")
-message(STATUS "Build Summary")
-message(STATUS "   Version: ${ZITH_VERSION}")
+message(STATUS "========================================")
+message(STATUS "Zith Build Configuration Summary")
+message(STATUS "========================================")
+message(STATUS "   Version:           ${ZITH_VERSION}")
+message(STATUS "   LLVM Support:      ${LLVM_FOUND}")
+message(STATUS "   FFI Support:       ${ZITH_HAS_FFI}")
+message(STATUS "   WebAssembly:       ${ZITH_IS_WASM}")
 if (TARGET zith)
-    message(STATUS "   Executable 'zith' target configured.")
+    message(STATUS "   Executable:        zith (configured)")
 endif()
 if (TARGET zith_tests)
-    message(STATUS "   Tests executable 'zith_tests' configured.")
+    message(STATUS "   Tests:             zith_tests (configured)")
 endif()
+message(STATUS "========================================")
 message("")
 
 # =============================================================================
-# WebAssembly (Emscripten)
+# WebAssembly Support (Emscripten)
 # =============================================================================
 if(EMSCRIPTEN)
+    message(STATUS "Configuring WebAssembly target...")
+    
     add_executable(zith-wasm ../impl/cli/main.cpp)
 
     target_include_directories(zith-wasm PRIVATE
@@ -389,7 +523,7 @@ if(EMSCRIPTEN)
         ${CMAKE_CURRENT_SOURCE_DIR}/../impl
     )
 
-    target_link_libraries(zith-wasm PRIVATE ZithParse)
+    target_link_libraries(zith-wasm PRIVATE ZithParse CLI11::CLI11)
 
     target_compile_definitions(zith-wasm PRIVATE
         ZITH_VERSION="${ZITH_VERSION}"
@@ -419,6 +553,9 @@ if(EMSCRIPTEN)
     else ()
         target_compile_options(zith-wasm PRIVATE -Wall -Wextra -Wpedantic -Wno-error)
     endif()
+    
+    install(TARGETS zith-wasm DESTINATION bin)
+    message(STATUS "WebAssembly target configured")
 endif()
 
 install(TARGETS zith DESTINATION bin)
