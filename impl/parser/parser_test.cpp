@@ -33,8 +33,8 @@ ZithNode *zith_parse_test(const char *source) {
     p.had_error = false;
     p.mode      = ZITH_MODE_SCAN;
 
-    extern void clear_scanned_symbols();
-    clear_scanned_symbols();
+    // Clear ModuleRegistry for new scan phase
+    zith::import::ModuleRegistry::instance().clear();
 
     zith::ArenaList<ZithNode *> decls_b;
     decls_b.init(p.arena, 16);

@@ -49,8 +49,8 @@ static ZithNode *run_parser_phase(Parser *p, ZithParserMode mode) {
     parser_enter_scope();
 
     if (mode == ZITH_MODE_SCAN) {
-        extern void clear_scanned_symbols();
-        clear_scanned_symbols();
+        // Clear ModuleRegistry for new scan phase
+        zith::import::ModuleRegistry::instance().clear();
     }
 
     ArenaList<ZithNode *> decls_b;
