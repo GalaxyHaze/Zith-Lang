@@ -1,7 +1,7 @@
 // impl/lexer/keywords.hpp — Keyword lookup (C++ internal)
 #pragma once
 
-#include "zith/keyword.h"
+#include <zith/token.h>
 #include <string_view>
 
 namespace zith::lexer {

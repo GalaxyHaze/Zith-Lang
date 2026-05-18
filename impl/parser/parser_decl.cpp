@@ -3,14 +3,13 @@
 // Refactored to use centralized modules and proper SCAN/PARSE separation.
 // In SCAN mode, function bodies and blocks are captured as UNBODY nodes
 // without parsing their contents — the parser does NOT analyze block content.
-#include "import/import.hpp"
-#include "zith/parser.h"
-#include "memory/utils.hpp"
-#include "import/module_registry.hpp"
+#include <import/import.hpp>
+#include <zith/parser.h>
+#include <memory/utils.hpp>
+#include <import/module_registry.hpp>
 #include <cstring>
 #include <memory>
 #include <string>
-#include <vector>
 #include <filesystem>
 #include <climits>
 
