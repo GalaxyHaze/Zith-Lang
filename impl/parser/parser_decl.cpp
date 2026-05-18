@@ -71,69 +71,84 @@ static ZithNode *capture_unbody(Parser *p) {
 // Symbol Registration in SCAN mode - Using ModuleRegistry
 // ============================================================================
 
-static void register_fn_symbol(Parser *p, const ZithToken *name_tok, ZithVisibility vis) {
-    if (name_tok && p->mode == ZITH_MODE_SCAN && p->filename) {
-        auto &registry = zith::import::ModuleRegistry::instance();
-        std::string module_name = p->filename; // Usar filename como identificador do módulo
-        auto mod = registry.get_module(module_name);
-        if (!mod) {
-            // Criar módulo se não existir
-            zith::import::Module new_mod(module_name, std::filesystem::path(p->filename));
-            registry.register_module(std::move(new_mod));
-            mod = registry.get_module(module_name);
-        }
-        if (mod) {
-            std::string name(name_tok->lexeme.data, name_tok->lexeme.len);
-            zith::import::SourceLocation loc(p->filename, name_tok->loc.line, 0);
-            zith::import::SymbolKind kind = zith::import::SymbolKind::Function;
-            zith::import::Visibility sym_vis = (vis == ZITH_VIS_PUBLIC) ? zith::import::Visibility::Public :
-                                               (vis == ZITH_VIS_MODULE) ? zith::import::Visibility::Module :
-                                                                          zith::import::Visibility::Private;
-            zith::import::SymbolEntry entry(name, kind, sym_vis, loc);
-            mod->add_symbol(std::move(entry));
-        }
+static zith::import::Visibility to_import_visibility(ZithVisibility vis) {
+    return (vis == ZITH_VIS_PUBLIC)  ? zith::import::Visibility::Public :
+           (vis == ZITH_VIS_MODULE) ? zith::import::Visibility::Module :
+                                      zith::import::Visibility::Private;
+}
+
+static std::string parser_module_key(const Parser *p) {
+    if (p->current_module && p->current_module[0] != '\0')
+        return p->current_module;
+    if (p->filename && p->filename[0] != '\0')
+        return p->filename;
+    if (p->file_path && p->file_path[0] != '\0')
+        return p->file_path;
+    return {};
+}
+
+static std::string parser_module_path(const Parser *p) {
+    if (p->file_path && p->file_path[0] != '\0')
+        return p->file_path;
+    if (p->filename && p->filename[0] != '\0')
+        return p->filename;
+    if (p->current_module && p->current_module[0] != '\0')
+        return p->current_module;
+    return {};
+}
+
+static zith::import::Module *ensure_parser_module(Parser *p) {
+    if (p->mode != ZITH_MODE_SCAN)
+        return nullptr;
+
+    auto &registry = zith::import::ModuleRegistry::instance();
+    const std::string module_key  = parser_module_key(p);
+    const std::string module_path = parser_module_path(p);
+    if (module_key.empty())
+        return nullptr;
+
+    auto mod = registry.get_module(module_key);
+    if (!mod) {
+        zith::import::Module new_mod(module_key, std::filesystem::path(module_path));
+        registry.register_module(std::move(new_mod));
+        mod = registry.get_module(module_key);
     }
+    return mod;
+}
+
+static void register_symbol(Parser *p, const char *name, size_t len, int32_t line,
+                            ZithVisibility vis, zith::import::SymbolKind kind) {
+    if (!name || len == 0)
+        return;
+
+    auto mod = ensure_parser_module(p);
+    if (!mod)
+        return;
+
+    const std::string source_path = parser_module_path(p);
+    zith::import::SourceLocation loc(source_path, line, 0);
+    zith::import::SymbolEntry entry(std::string(name, len), kind, to_import_visibility(vis), loc);
+    mod->add_symbol(std::move(entry));
+}
+
+static void register_fn_symbol(Parser *p, const ZithToken *name_tok, ZithVisibility vis) {
+    if (!name_tok)
+        return;
+    register_symbol(p, name_tok->lexeme.data, name_tok->lexeme.len, name_tok->loc.line, vis,
+                    zith::import::SymbolKind::Function);
 }
 
 static void register_struct_symbol(Parser *p, const ZithToken *name_tok, ZithVisibility vis) {
-    if (name_tok && p->mode == ZITH_MODE_SCAN && p->filename) {
-        auto &registry = zith::import::ModuleRegistry::instance();
-        std::string module_name = p->filename;
-        auto mod = registry.get_module(module_name);
-        if (!mod) {
-            zith::import::Module new_mod(module_name, std::filesystem::path(p->filename));
-            registry.register_module(std::move(new_mod));
-            mod = registry.get_module(module_name);
-        }
-        if (mod) {
-            std::string name(name_tok->lexeme.data, name_tok->lexeme.len);
-            zith::import::SourceLocation loc(p->filename, name_tok->loc.line, 0);
-            zith::import::SymbolKind kind = zith::import::SymbolKind::Struct;
-            zith::import::Visibility sym_vis = (vis == ZITH_VIS_PUBLIC) ? zith::import::Visibility::Public :
-                                               (vis == ZITH_VIS_MODULE) ? zith::import::Visibility::Module :
-                                                                          zith::import::Visibility::Private;
-            zith::import::SymbolEntry entry(name, kind, sym_vis, loc);
-            mod->add_symbol(std::move(entry));
-        }
-    }
+    if (!name_tok)
+        return;
+    register_symbol(p, name_tok->lexeme.data, name_tok->lexeme.len, name_tok->loc.line, vis,
+                    zith::import::SymbolKind::Struct);
 }
 
 static void register_import_symbol(Parser *p, const char *name, size_t len, ZithVisibility vis) {
-    if (name && p->mode == ZITH_MODE_SCAN && p->current_module) {
-        auto &registry = zith::import::ModuleRegistry::instance();
-        auto mod = registry.get_module(p->current_module);
-        if (mod) {
-            std::string symbol_name(name, len);
-            zith::import::SourceLocation loc(p->file_path ? p->file_path : "", 0, 0);
-            zith::import::SymbolKind kind = zith::import::SymbolKind::Module;
-            zith::import::Visibility sym_vis = (vis == ZITH_VIS_PUBLIC) ? zith::import::Visibility::Public :
-                                               (vis == ZITH_VIS_MODULE) ? zith::import::Visibility::Module :
-                                                                          zith::import::Visibility::Private;
-            zith::import::SymbolEntry entry(symbol_name, kind, sym_vis, loc);
-            mod->add_symbol(std::move(entry));
-        }
-    }
+    register_symbol(p, name, len, 0, vis, zith::import::SymbolKind::Module);
 }
+
 
 
 static ZithVisibility parse_visibility(Parser *p, ZithVisibility *current_vis,
@@ -768,6 +783,74 @@ static void load_and_scan_module(Parser *p, const ZithSourceLoc loc,
     }
 }
 
+
+static bool split_import_path(Parser *p, const ZithSourceLoc loc,
+                              const std::string &import_path,
+                              std::string &root,
+                              std::string &rel_path) {
+    size_t slash_pos = import_path.find('/');
+    if (slash_pos != std::string::npos) {
+        root     = import_path.substr(0, slash_pos);
+        rel_path = import_path.substr(slash_pos + 1);
+        return true;
+    }
+
+    size_t dot_pos = import_path.find('.');
+    if (dot_pos != std::string::npos) {
+        if (!p->allow_dot_imports) {
+            parser_emit_diag(p, loc, ZITH_DIAG_ERROR,
+                             "dot-separated import paths are disabled; use '/' instead");
+            root     = import_path;
+            rel_path = "";
+            return false;
+        }
+        root     = import_path.substr(0, dot_pos);
+        rel_path = import_path.substr(dot_pos + 1);
+        return true;
+    }
+
+    root     = import_path;
+    rel_path = "";
+    return true;
+}
+
+static bool resolve_import_root_dir(const Parser *p, const std::string &root,
+                                    std::string &root_dir) {
+    for (size_t i = 0; i < p->import_root_count; ++i) {
+        const char *root_full = p->import_roots[i];
+        const char *slash     = strrchr(root_full, '/');
+        const char *root_name = slash ? slash + 1 : root_full;
+        if (root == root_name) {
+            root_dir = root_full;
+            return true;
+        }
+    }
+    return false;
+}
+
+static void scan_import_path_if_allowed(Parser *p, const ZithSourceLoc loc,
+                                        const char *path, size_t path_len,
+                                        int recurse_depth) {
+    if (p->mode != ZITH_MODE_SCAN || !p->import_roots || p->import_root_count == 0)
+        return;
+
+    std::string import_path(path, path_len);
+    std::string root;
+    std::string rel_path;
+    if (!split_import_path(p, loc, import_path, root, rel_path) || rel_path.empty())
+        return;
+
+    std::string root_dir;
+    if (!resolve_import_root_dir(p, root, root_dir))
+        return;
+
+    std::string rel_fs_path;
+    rel_fs_path.reserve(rel_path.size());
+    for (char c : rel_path)
+        rel_fs_path.push_back(c == '.' ? '/' : c);
+    load_and_scan_module(p, loc, root_dir, rel_fs_path, recurse_depth);
+}
+
 static ZithNode *parse_import_decl(Parser *p) {
     const ZithSourceLoc loc = parser_peek(p)->loc;
     parser_advance(p);     // consume 'import'
@@ -831,53 +914,7 @@ static ZithNode *parse_import_decl(Parser *p) {
                                  recurse_depth};
     register_import_symbol(p, buf, buf_len, ZITH_VIS_PRIVATE);
 
-    if (p->mode == ZITH_MODE_SCAN && p->import_roots && p->import_root_count > 0) {
-        std::string import_path(buf, buf_len);
-
-        std::string root;
-        std::string rel_path;
-        size_t slash_pos = import_path.find('/');
-        if (slash_pos != std::string::npos) {
-            root     = import_path.substr(0, slash_pos);
-            rel_path = import_path.substr(slash_pos + 1);
-        } else {
-            size_t dot_pos = import_path.find('.');
-            if (dot_pos != std::string::npos) {
-                if (p->allow_dot_imports) {
-                    root     = import_path.substr(0, dot_pos);
-                    rel_path = import_path.substr(dot_pos + 1);
-                } else {
-                    parser_emit_diag(p, loc, ZITH_DIAG_ERROR,
-                                     "dot-separated import paths are disabled; use '/' instead");
-                    root     = import_path;
-                    rel_path = "";
-                }
-            } else {
-                root     = import_path;
-                rel_path = "";
-            }
-        }
-
-        bool allowed = false;
-        std::string root_dir;
-        for (size_t i = 0; i < p->import_root_count; ++i) {
-            const char *root_full = p->import_roots[i];
-            const char *slash     = strrchr(root_full, '/');
-            const char *root_name = slash ? slash + 1 : root_full;
-            if (root == root_name) {
-                allowed = true;
-                root_dir = root_full;
-                break;
-            }
-        }
-
-        if (allowed && !rel_path.empty()) {
-            std::string rel_fs_path;
-            rel_fs_path.reserve(rel_path.size());
-            for (char c : rel_path) rel_fs_path.push_back(c == '.' ? '/' : c);
-            load_and_scan_module(p, loc, root_dir, rel_fs_path, recurse_depth);
-        }
-    }
+    scan_import_path_if_allowed(p, loc, buf, buf_len, recurse_depth);
 
     return zith_ast_make_import(p->arena, loc, payload);
 }
@@ -938,53 +975,7 @@ static ZithNode *parse_from_import_decl(Parser *p) {
     };
     register_import_symbol(p, module_buf, module_len, ZITH_VIS_PRIVATE);
 
-    if (p->mode == ZITH_MODE_SCAN && p->import_roots && p->import_root_count > 0) {
-        std::string import_path(module_buf, module_len);
-
-        std::string root;
-        std::string rel_path;
-        size_t slash_pos = import_path.find('/');
-        if (slash_pos != std::string::npos) {
-            root     = import_path.substr(0, slash_pos);
-            rel_path = import_path.substr(slash_pos + 1);
-        } else {
-            size_t dot_pos = import_path.find('.');
-            if (dot_pos != std::string::npos) {
-                if (p->allow_dot_imports) {
-                    root     = import_path.substr(0, dot_pos);
-                    rel_path = import_path.substr(dot_pos + 1);
-                } else {
-                    parser_emit_diag(p, loc, ZITH_DIAG_ERROR,
-                                     "dot-separated import paths are disabled; use '/' instead");
-                    root     = import_path;
-                    rel_path = "";
-                }
-            } else {
-                root     = import_path;
-                rel_path = "";
-            }
-        }
-
-        bool allowed = false;
-        std::string root_dir;
-        for (size_t i = 0; i < p->import_root_count; ++i) {
-            const char *root_full = p->import_roots[i];
-            const char *slash     = strrchr(root_full, '/');
-            const char *root_name = slash ? slash + 1 : root_full;
-            if (root == root_name) {
-                allowed = true;
-                root_dir = root_full;
-                break;
-            }
-        }
-
-        if (allowed && !rel_path.empty()) {
-            std::string rel_fs_path;
-            rel_fs_path.reserve(rel_path.size());
-            for (char c : rel_path) rel_fs_path.push_back(c == '.' ? '/' : c);
-            load_and_scan_module(p, loc, root_dir, rel_fs_path, recurse_depth);
-        }
-    }
+    scan_import_path_if_allowed(p, loc, module_buf, module_len, recurse_depth);
 
     return zith_ast_make_import(p->arena, loc, payload);
 }
@@ -1027,48 +1018,7 @@ static ZithNode *parse_export_decl(Parser *p) {
     register_import_symbol(p, buf, buf_len, ZITH_VIS_PUBLIC);
 
     // In SCAN mode, try to load and import the module
-    if (p->mode == ZITH_MODE_SCAN && p->import_roots && p->import_root_count > 0) {
-        std::string import_path(buf, buf_len);
-
-        // Convert path format: std/io/console -> root=std, path=io/console
-        std::string root;
-        std::string rel_path;
-        size_t slash_pos = import_path.find('/');
-        if (slash_pos != std::string::npos) {
-            root     = import_path.substr(0, slash_pos);
-            rel_path = import_path.substr(slash_pos + 1);
-        } else {
-            size_t dot_pos = import_path.find('.');
-            if (dot_pos != std::string::npos) {
-                root     = import_path.substr(0, dot_pos);
-                rel_path = import_path.substr(dot_pos + 1);
-            } else {
-                root     = import_path;
-                rel_path = "";
-            }
-        }
-
-        // Check if root is allowed
-        bool allowed = false;
-        std::string root_dir;
-        for (size_t i = 0; i < p->import_root_count; ++i) {
-            const char *root_full = p->import_roots[i];
-            const char *slash     = strrchr(root_full, '/');
-            const char *root_name = slash ? slash + 1 : root_full;
-            if (root == root_name) {
-                allowed = true;
-                root_dir = root_full;
-                break;
-            }
-        }
-
-        if (allowed && !rel_path.empty()) {
-            std::string rel_fs_path;
-            rel_fs_path.reserve(rel_path.size());
-            for (char c : rel_path) rel_fs_path.push_back(c == '.' ? '/' : c);
-            load_and_scan_module(p, loc, root_dir, rel_fs_path, 0);
-        }
-    }
+    scan_import_path_if_allowed(p, loc, buf, buf_len, 0);
 
     return zith_ast_make_import(p->arena, loc, payload);
 }
