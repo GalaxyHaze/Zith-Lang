@@ -1,27 +1,26 @@
 // impl/diagnostics/diagnostics.cpp — Diagnostic system implementation
 //
 // Centralizes all diagnostic emission and printing logic.
-// Replaces scattered fprintf/printf calls in parser_utils.cpp and elsewhere.
-#include "diagnostics.hpp"
+// Implements the v1 (legacy) C API and the v2 (new) C++ API bridge.
+#include "diagnostics/diagnostics.hpp"
 
 #include "zith/memory.h"
 
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <string>
 
 // ============================================================================
-// Internal Helpers
+// Internal Helpers (v1 legacy)
 // ============================================================================
 
-// Finds the start and length of a specific line number (1-based)
 static bool find_source_line(const char *source, size_t source_len, size_t line_num,
-                             const char **out_start, size_t *out_len) {
+                              const char **out_start, size_t *out_len) {
     const char *p   = source;
     const char *end = source + source_len;
     size_t cur      = 1;
 
-    // Move pointer to the start of the target line
     while (p < end && cur < line_num) {
         if (*p++ == '\n')
             cur++;
@@ -30,7 +29,6 @@ static bool find_source_line(const char *source, size_t source_len, size_t line_
         return false;
 
     const char *line_start = p;
-    // Find the end of the line
     while (p < end && *p != '\n')
         p++;
 
@@ -53,31 +51,27 @@ static const char *severity_label(ZithDiagSeverity s) {
 }
 
 // ============================================================================
-// C API — zith_diag_print_all
+// v1 C API — zith_diag_print_all (legacy, unchanged)
 // ============================================================================
 
 void zith_diag_print_all(const ZithDiagList *diags, const char *source, size_t source_len,
-                         const char *filename) {
+                          const char *filename) {
     if (!diags || diags->count == 0)
         return;
 
     for (size_t i = 0; i < diags->count; ++i) {
         const ZithDiagnostic *d = &diags->items[i];
 
-        // 1. Print the Header: file:line:col: severity: message
         fprintf(stderr, "%s:%zu:%zu: %s: %s\n", filename ? filename : "<input>", d->loc.line,
                 d->loc.index, severity_label(d->severity), d->message);
 
-        // 2. Print the Source Line and Caret
         if (source && source_len > 0) {
             const char *line_ptr = nullptr;
             size_t line_len      = 0;
 
             if (find_source_line(source, source_len, d->loc.line, &line_ptr, &line_len)) {
-                // Print the actual code line
                 fprintf(stderr, "  %.*s\n", static_cast<int>(line_len), line_ptr);
 
-                // Print the caret (^^^) pointing to the error
                 fprintf(stderr, "  ");
                 size_t col = d->loc.index;
                 for (size_t c = 0; c < col && c < line_len; ++c) {
@@ -88,7 +82,6 @@ void zith_diag_print_all(const ZithDiagList *diags, const char *source, size_t s
         }
     }
 
-    // 3. Print Summary
     size_t errors = 0, warnings = 0;
     for (size_t i = 0; i < diags->count; ++i) {
         if (diags->items[i].severity == ZITH_DIAG_ERROR)
@@ -110,39 +103,91 @@ void zith_diag_print_all(const ZithDiagList *diags, const char *source, size_t s
 }
 
 // ============================================================================
+// v2 C API — ZithDiagBag bridge
+// ============================================================================
+
+ZithDiagBag *zith_diag_bag_create(void) {
+    auto *bag = new ZithDiagBag();
+    bag->emitter.set_source_map(&bag->source_map);
+    return bag;
+}
+
+void zith_diag_bag_destroy(ZithDiagBag *bag) {
+    delete bag;
+}
+
+void zith_diag_bag_emit(ZithDiagBag *bag,
+                         const char *message,
+                         ZithSourceSpan span,
+                         int severity,
+                         uint32_t code) {
+    using namespace zith::diag;
+
+    DiagLevel level;
+    switch (severity) {
+    case 0: level = DiagLevel::Fatal; break;
+    case 1: level = DiagLevel::Bug; break;
+    case 2: level = DiagLevel::Error; break;
+    case 3: level = DiagLevel::Warning; break;
+    default: level = DiagLevel::Error; break;
+    }
+
+    DiagnosticBuilder(level, static_cast<DiagCode>(code))
+        .with_raw_message(message)
+        .with_span(SourceSpan{span.start, span.end, span.file_id})
+        .emit(bag->bag);
+}
+
+void zith_diag_bag_finalize(ZithDiagBag *bag) {
+    bag->bag.finalize();
+}
+
+void zith_diag_bag_print(const ZithDiagBag *bag) {
+    const_cast<ZithDiagBag*>(bag)->emitter.emit(bag->bag, stderr);
+}
+
+int zith_diag_bag_had_errors(const ZithDiagBag *bag) {
+    return bag->bag.had_errors() ? 1 : 0;
+}
+
+size_t zith_diag_bag_error_count(const ZithDiagBag *bag) {
+    return bag->bag.error_count();
+}
+
+size_t zith_diag_bag_warning_count(const ZithDiagBag *bag) {
+    return bag->bag.warning_count();
+}
+
+// ============================================================================
 // C++ DiagManager Implementation
 // ============================================================================
 
-void DiagManager::emit(const ZithSourceLoc loc, const ZithDiagSeverity severity, const char *msg) {
-    // Grow the diagnostic list if needed
-    if (diags_.count >= diags_.capacity) {
-        const size_t new_cap = diags_.capacity == 0 ? 8 : diags_.capacity * 2;
-        auto *buf      = static_cast<ZithDiagnostic *>(
-            arena_ ? zith_arena_alloc(arena_, new_cap * sizeof(ZithDiagnostic))
-                   : std::malloc(new_cap * sizeof(ZithDiagnostic)));
-        if (!buf)
-            return;
+DiagManager::DiagManager() {
+    emitter_.set_source_map(&source_map_);
+}
 
-        if (diags_.items) {
-            if (arena_) {
-                std::memcpy(buf, diags_.items, diags_.count * sizeof(ZithDiagnostic));
-            } else {
-                std::memcpy(buf, diags_.items, diags_.count * sizeof(ZithDiagnostic));
-                std::free(diags_.items);
-            }
-        }
-        diags_.items    = buf;
-        diags_.capacity = new_cap;
+void DiagManager::emit(const ZithSourceLoc loc, const ZithDiagSeverity severity, const char *msg) {
+    using namespace zith::diag;
+
+    DiagLevel level;
+    switch (severity) {
+    case ZITH_DIAG_ERROR:   level = DiagLevel::Error; break;
+    case ZITH_DIAG_WARNING: level = DiagLevel::Warning; break;
+    case ZITH_DIAG_NOTE:    level = DiagLevel::Note; break;
+    default:                level = DiagLevel::Help; break;
     }
 
-    ZithDiagnostic d;
-    d.message                    = (arena_ && msg) ? zith_arena_strdup(arena_, msg) : msg;
-    d.loc                        = loc;
-    d.severity                   = severity;
-    diags_.items[diags_.count++] = d;
+    // Create a simple diagnostic with just a message and single location
+    FileId fid = 0; // Default file for legacy API
+    Diagnostic d;
+    d.level = level;
+    d.code = DiagCode::UnexpectedToken; // Generic fallback
+    d.message = LazyMessage(msg ? std::string(msg) : std::string());
+    d.primary_span = SourceSpan::from_loc(loc, fid);
+    d.has_primary_span = true;
 
-    if (severity == ZITH_DIAG_ERROR)
-        had_error_ = true;
+    bag_.emit(std::move(d));
+    legacy_stale_ = true;
 }
 
 void DiagManager::error(const ZithSourceLoc loc, const char *msg) {
@@ -158,25 +203,70 @@ void DiagManager::note(const ZithSourceLoc loc, const char *msg) {
 }
 
 void DiagManager::info(const char *msg) {
-    // Info messages don't have source location — print directly
     printf("[*] %s\n", msg);
 }
 
+void DiagManager::rebuild_legacy_list() const {
+    legacy_storage_.clear();
+    legacy_list_.items = nullptr;
+    legacy_list_.count = 0;
+    legacy_list_.capacity = 0;
+
+    for (const auto& diag : bag_.diagnostics()) {
+        ZithDiagnostic zd;
+        zd.message = diag.message.get().c_str();
+        zd.loc = diag.primary_span.start;
+        switch (diag.level) {
+        case zith::diag::DiagLevel::Error:
+        case zith::diag::DiagLevel::Fatal:
+        case zith::diag::DiagLevel::Bug:
+            zd.severity = ZITH_DIAG_ERROR; break;
+        case zith::diag::DiagLevel::Warning:
+            zd.severity = ZITH_DIAG_WARNING; break;
+        default:
+            zd.severity = ZITH_DIAG_NOTE; break;
+        }
+        legacy_storage_.push_back(zd);
+    }
+
+    legacy_list_.items = legacy_storage_.data();
+    legacy_list_.count = legacy_storage_.size();
+    legacy_list_.capacity = legacy_storage_.size();
+    legacy_stale_ = false;
+}
+
 void DiagManager::print_all(const char *source, const size_t source_len, const char *filename) const {
-    zith_diag_print_all(&diags_, source, source_len, filename);
+    // If legacy list is requested, rebuild it
+    if (legacy_stale_) rebuild_legacy_list();
+
+    // Use v1 legacy printer for backward compat, or v2 emitter
+    if (source && filename) {
+        // Register source in the source map for the emitter
+        auto* mutable_this = const_cast<DiagManager*>(this);
+        mutable_this->source_map_.add_or_get_file(
+            filename ? filename : "<input>",
+            source ? std::string_view(source, source_len) : std::string_view());
+
+        const_cast<zith::diag::DiagnosticBag&>(bag_).finalize();
+        emitter_.emit(bag_, stderr);
+    } else {
+        zith_diag_print_all(&legacy_list_, source, source_len, filename);
+    }
 }
 
 void DiagManager::print_summary(const char *filename) const {
+    if (legacy_stale_) rebuild_legacy_list();
+
     size_t errors = 0, warnings = 0;
-    for (size_t i = 0; i < diags_.count; ++i) {
-        if (diags_.items[i].severity == ZITH_DIAG_ERROR)
+    for (size_t i = 0; i < legacy_list_.count; ++i) {
+        if (legacy_list_.items[i].severity == ZITH_DIAG_ERROR)
             errors++;
-        else if (diags_.items[i].severity == ZITH_DIAG_WARNING)
+        else if (legacy_list_.items[i].severity == ZITH_DIAG_WARNING)
             warnings++;
     }
 
     if (errors > 0 || warnings > 0) {
-        fprintf(stderr, "\n%s: ", filename);
+        fprintf(stderr, "\n%s: ", filename ? filename : "<input>");
         if (errors)
             fprintf(stderr, "%zu error(s)", errors);
         if (errors && warnings)
@@ -188,7 +278,7 @@ void DiagManager::print_summary(const char *filename) const {
 }
 
 // ============================================================================
-// Debug output helpers
+// Debug output helpers (unchanged)
 // ============================================================================
 
 #ifndef ZITH_NO_DEBUG
@@ -220,7 +310,7 @@ void debug_error(const char *fmt, ...) {
 #endif // ZITH_NO_DEBUG
 
 // ============================================================================
-// I/O error reporting
+// I/O error reporting (unchanged)
 // ============================================================================
 
 void zith_io_error(const char *fmt, ...) {

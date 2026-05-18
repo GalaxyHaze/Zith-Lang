@@ -283,6 +283,11 @@ set(CORE_C_SOURCES
 
 set(DIAGNOSTICS_SOURCES
     ../impl/diagnostics/diagnostics.cpp
+    ../impl/diagnostics/diagnostic_bag.cpp
+    ../impl/diagnostics/builder.cpp
+    ../impl/diagnostics/span.cpp
+    ../impl/diagnostics/emitter.cpp
+    ../impl/diagnostics/heuristic_engine.cpp
 )
 
 set(PARSER_CPP_SOURCES
@@ -483,6 +488,7 @@ if(BUILD_TESTING)
 
     set(TEST_SOURCES
         ../impl/parser/parser_test.cpp
+        ../tests/test_diagnostics_new.cpp
         ../tests/test_expand_sema.cpp
         ../tests/test_import.cpp
         ../tests/test_import_system.cpp

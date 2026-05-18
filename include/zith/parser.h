@@ -96,6 +96,33 @@ static inline void parser_emit(Parser *p, ZithSourceLoc loc, ZithDiagSeverity se
     parser_emit_diag(p, loc, severity, msg);
 }
 
+// New-style diagnostic functions (C++23, with error codes and formatting)
+#ifdef __cplusplus
+
+#include <cstdarg>
+
+// Forward declarations for zith::diag types
+namespace zith::diag { enum class DiagCode : uint32_t; }
+
+#if defined(__GNUC__) || defined(__clang__)
+#define ZITH_PRINTF_ATTR(fmt_idx, arg_idx) __attribute__((format(printf, fmt_idx, arg_idx)))
+#else
+#define ZITH_PRINTF_ATTR(fmt_idx, arg_idx)
+#endif
+
+void parser_error_new(Parser *p, zith::diag::DiagCode code,
+                       ZithSourceLoc loc, const char *fmt, ...)
+    ZITH_PRINTF_ATTR(4, 5);
+void parser_warning_new(Parser *p, zith::diag::DiagCode code,
+                         ZithSourceLoc loc, const char *fmt, ...)
+    ZITH_PRINTF_ATTR(4, 5);
+void parser_note_new(Parser *p, ZithSourceLoc loc, const char *fmt, ...)
+    ZITH_PRINTF_ATTR(3, 4);
+
+#undef ZITH_PRINTF_ATTR
+
+#endif
+
 #ifdef __cplusplus
 }
 #endif

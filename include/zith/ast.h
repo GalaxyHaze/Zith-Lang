@@ -193,6 +193,18 @@ typedef struct {
 } ZithMarkerPayload;
 
 typedef struct {
+    const char *name;       // field tag (NULL for untagged)
+    size_t name_len;        // 0 for untagged
+    ZithNode *value;
+} ZithStructLitFieldPayload;
+
+typedef struct {
+    ZithNode *type_spec;    // struct type node (NULL for type inference)
+    ZithNode **field_inits; // array of ZITH_NODE_STRUCT_LIT_FIELD
+    size_t field_count;
+} ZithStructLitPayload;
+
+typedef struct {
     ZithLiteralKind kind;
     union {
         int64_t i64;
@@ -218,6 +230,8 @@ ZithNode *zith_ast_make_enum_variant(ZithArena *a, ZithSourceLoc loc, const Zith
 ZithNode *zith_ast_make_array_type(ZithArena *a, ZithSourceLoc loc, ZithNode *element_type, size_t size);
 ZithNode *zith_ast_make_slice_type(ZithArena *a, ZithSourceLoc loc, ZithNode *element_type);
 ZithNode *zith_ast_make_array_lit(ZithArena *a, ZithSourceLoc loc, ZithNode **items, size_t count);
+ZithNode *zith_ast_make_struct_lit(ZithArena *a, ZithSourceLoc loc, const ZithStructLitPayload &data);
+ZithNode *zith_ast_make_struct_lit_field(ZithArena *a, ZithSourceLoc loc, const ZithStructLitFieldPayload &data);
 #else
 ZithNode *zith_ast_make_literal(ZithArena *a, ZithSourceLoc loc, const ZithLiteral *lit);
 ZithNode *zith_ast_make_var_decl(ZithArena *a, ZithSourceLoc loc, const ZithVarPayload *decl);
@@ -227,6 +241,8 @@ ZithNode *zith_ast_make_enum_variant(ZithArena *a, ZithSourceLoc loc, const Zith
 ZithNode *zith_ast_make_array_type(ZithArena *a, ZithSourceLoc loc, ZithNode *element_type, size_t size);
 ZithNode *zith_ast_make_slice_type(ZithArena *a, ZithSourceLoc loc, ZithNode *element_type);
 ZithNode *zith_ast_make_array_lit(ZithArena *a, ZithSourceLoc loc, ZithNode **items, size_t count);
+ZithNode *zith_ast_make_struct_lit(ZithArena *a, ZithSourceLoc loc, const ZithStructLitPayload *data);
+ZithNode *zith_ast_make_struct_lit_field(ZithArena *a, ZithSourceLoc loc, const ZithStructLitFieldPayload *data);
 #endif
 
 ZithNode *zith_ast_make_identifier(ZithArena *a, ZithSourceLoc loc, const char *name, size_t len);

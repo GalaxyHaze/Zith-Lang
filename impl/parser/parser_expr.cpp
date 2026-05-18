@@ -175,6 +175,34 @@ static ZithNode *parse_call_arg(Parser *p) {
 }
 
 // ============================================================================
+// Struct literal field parsing (shared helper)
+// ============================================================================
+
+static ZithNode **parse_struct_lit_fields(Parser *p, size_t *out_count) {
+    ArenaList<ZithNode *> fields_b;
+    fields_b.init(p->arena, 8);
+    while (!parser_check(p, ZITH_TOKEN_RBRACE) && !parser_is_at_end(p)) {
+        const ZithSourceLoc floc = parser_peek(p)->loc;
+        ZithStructLitFieldPayload fp = {};
+        // Check for tagged field: identifier :
+        if (parser_check(p, ZITH_TOKEN_IDENTIFIER) &&
+            parser_peek_ahead(p, 1)->type == ZITH_TOKEN_COLON) {
+            const ZithToken *tag = parser_advance(p);
+            parser_advance(p); // consume ':'
+            fp.name = tag->lexeme.data;
+            fp.name_len = tag->lexeme.len;
+        }
+        fp.value = parser_parse_expression(p);
+        ZithNode *fn = zith_ast_make_struct_lit_field(p->arena, floc, fp);
+        fields_b.push(p->arena, fn);
+        if (!parser_match(p, ZITH_TOKEN_COMMA))
+            break;
+    }
+    size_t count = fields_b.size();
+    return fields_b.flatten(p->arena, &count);
+}
+
+// ============================================================================
 // Expressions (Pratt Parser)
 // ============================================================================
 
@@ -232,19 +260,31 @@ static ZithNode *parse_nud(Parser *p) {
             p->arena, loc, {ZITH_LIT_STRING, {.string = {t->lexeme.data + 1, t->lexeme.len - 2}}});
     case ZITH_TOKEN_IDENTIFIER: {
         ZithNode *ident = zith_ast_make_identifier(p->arena, loc, t->lexeme.data, t->lexeme.len);
-        if (!parser_match(p, ZITH_TOKEN_LPAREN))
-            return ident;
-        ArenaList<ZithNode *> args_b;
-        args_b.init(p->arena, 8);
-        while (!parser_check(p, ZITH_TOKEN_RPAREN) && !parser_is_at_end(p)) {
-            args_b.push(p->arena, parse_call_arg(p));
-            if (!parser_match(p, ZITH_TOKEN_COMMA))
-                break;
+        if (parser_match(p, ZITH_TOKEN_LPAREN)) {
+            ArenaList<ZithNode *> args_b;
+            args_b.init(p->arena, 8);
+            while (!parser_check(p, ZITH_TOKEN_RPAREN) && !parser_is_at_end(p)) {
+                args_b.push(p->arena, parse_call_arg(p));
+                if (!parser_match(p, ZITH_TOKEN_COMMA))
+                    break;
+            }
+            parser_expect(p, ZITH_TOKEN_RPAREN, "expected ')'");
+            size_t count    = 0;
+            ZithNode **args = args_b.flatten(p->arena, &count);
+            return zith_ast_make_call(p->arena, loc, ident, args, count);
         }
-        parser_expect(p, ZITH_TOKEN_RPAREN, "expected ')'");
-        size_t count    = 0;
-        ZithNode **args = args_b.flatten(p->arena, &count);
-        return zith_ast_make_call(p->arena, loc, ident, args, count);
+        if (parser_match(p, ZITH_TOKEN_LBRACE)) {
+            // Struct literal: TypeName{ ... }
+            size_t field_count = 0;
+            ZithNode **field_inits = parse_struct_lit_fields(p, &field_count);
+            parser_expect(p, ZITH_TOKEN_RBRACE, "expected '}' closing struct literal");
+            ZithStructLitPayload slp = {};
+            slp.type_spec = ident;
+            slp.field_inits = field_inits;
+            slp.field_count = field_count;
+            return zith_ast_make_struct_lit(p->arena, loc, slp);
+        }
+        return ident;
     }
     case ZITH_TOKEN_MINUS:
     case ZITH_TOKEN_BANG:
@@ -288,6 +328,22 @@ static ZithNode *parse_nud(Parser *p) {
         return zith_ast_make_literal(p->arena, loc, lit);
     }
     case ZITH_TOKEN_LBRACE: {
+        // Check if this is a struct literal (first item looks like IDENTIFIER :)
+        bool is_struct_lit = false;
+        if (parser_check(p, ZITH_TOKEN_IDENTIFIER) &&
+            parser_peek_ahead(p, 1)->type == ZITH_TOKEN_COLON) {
+            is_struct_lit = true;
+        }
+        if (is_struct_lit) {
+            size_t field_count = 0;
+            ZithNode **field_inits = parse_struct_lit_fields(p, &field_count);
+            parser_expect(p, ZITH_TOKEN_RBRACE, "expected '}' closing struct literal");
+            ZithStructLitPayload slp = {};
+            slp.type_spec = nullptr;
+            slp.field_inits = field_inits;
+            slp.field_count = field_count;
+            return zith_ast_make_struct_lit(p->arena, loc, slp);
+        }
         ArenaList<ZithNode *> items_b;
         items_b.init(p->arena, 8);
         while (!parser_check(p, ZITH_TOKEN_RBRACE) && !parser_is_at_end(p)) {

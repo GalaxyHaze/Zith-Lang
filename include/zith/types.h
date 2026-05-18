@@ -101,6 +101,7 @@ enum ZithNodeExtendedId : uint16_t {
     ZITH_NODE_ENUM_VARIANT  = 1091,
     ZITH_NODE_MATCH_ARM     = 1092,
     ZITH_NODE_CALL_ARG      = 1093,
+    ZITH_NODE_STRUCT_LIT_FIELD = 1094,
 };
 
 typedef enum ZithFnKind {

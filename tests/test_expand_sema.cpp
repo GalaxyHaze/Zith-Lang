@@ -517,8 +517,183 @@ TEST_CASE("FULL: array literal with explicit slice type", "[full][sema][array]")
 
 TEST_CASE("FULL: array literal with explicit array type", "[full][sema][array]") {
     auto ast = ParseResult(zith_parse_test_full("fn main() {\n"
-                                                "  let x: [3]i32 = {1, 2, 3};\n"
-                                                "  return;\n"
-                                                "}"));
+                                                 "  let x: [3]i32 = {1, 2, 3};\n"
+                                                 "  return;\n"
+                                                 "}"));
     REQUIRE(ast);
+}
+
+// ============================================================================
+// Dirty variable (uninitialized) detection
+// ============================================================================
+
+TEST_CASE("FULL: uninitialized variable is dirty and cannot be accessed", "[full][sema][dirty]") {
+    auto bad = ParseResult(zith_parse_test_full("fn main() {\n"
+                                                 "  let x: i32;\n"
+                                                 "  let y = x;\n"
+                                                 "  return;\n"
+                                                 "}"));
+    REQUIRE(bad.get() == nullptr);
+}
+
+TEST_CASE("FULL: initialized variable is not dirty and can be accessed", "[full][sema][dirty]") {
+    auto ast = ParseResult(zith_parse_test_full("fn main() {\n"
+                                                 "  let x: i32 = 5;\n"
+                                                 "  let y = x;\n"
+                                                 "  return;\n"
+                                                 "}"));
+    REQUIRE(ast);
+}
+
+TEST_CASE("FULL: assignment clears dirty flag", "[full][sema][dirty]") {
+    auto ast = ParseResult(zith_parse_test_full("fn main() {\n"
+                                                 "  var x: i32;\n"
+                                                 "  x = 10;\n"
+                                                 "  let y = x;\n"
+                                                 "  return;\n"
+                                                 "}"));
+    REQUIRE(ast);
+}
+
+TEST_CASE("FULL: const requires initializer", "[full][sema][dirty]") {
+    auto bad = ParseResult(zith_parse_test_full("fn main() {\n"
+                                                 "  const x: i32;\n"
+                                                 "  return;\n"
+                                                 "}"));
+    REQUIRE(bad.get() == nullptr);
+}
+
+// ============================================================================
+// Reassignment checking
+// ============================================================================
+
+TEST_CASE("FULL: let variable cannot be reassigned", "[full][sema][reassign]") {
+    auto bad = ParseResult(zith_parse_test_full("fn main() {\n"
+                                                 "  let x: i32 = 1;\n"
+                                                 "  x = 2;\n"
+                                                 "  return;\n"
+                                                 "}"));
+    REQUIRE(bad.get() == nullptr);
+}
+
+TEST_CASE("FULL: const variable cannot be reassigned", "[full][sema][reassign]") {
+    auto bad = ParseResult(zith_parse_test_full("fn main() {\n"
+                                                 "  const x: i32 = 1;\n"
+                                                 "  x = 2;\n"
+                                                 "  return;\n"
+                                                 "}"));
+    REQUIRE(bad.get() == nullptr);
+}
+
+TEST_CASE("FULL: var variable can be reassigned", "[full][sema][reassign]") {
+    auto ast = ParseResult(zith_parse_test_full("fn main() {\n"
+                                                 "  var x: i32 = 1;\n"
+                                                 "  x = 2;\n"
+                                                 "  let y = x;\n"
+                                                 "  return;\n"
+                                                 "}"));
+    REQUIRE(ast);
+}
+
+// ============================================================================
+// Void / Invalid / Unknown instantiation prohibition
+// ============================================================================
+
+TEST_CASE("FULL: cannot instantiate void", "[full][sema][forbidden]") {
+    auto bad = ParseResult(zith_parse_test_full("fn main() {\n"
+                                                 "  let x: void = 1;\n"
+                                                 "  return;\n"
+                                                 "}"));
+    REQUIRE(bad.get() == nullptr);
+}
+
+TEST_CASE("FULL: cannot instantiate invalid", "[full][sema][forbidden]") {
+    auto bad = ParseResult(zith_parse_test_full("fn main() {\n"
+                                                 "  let x: invalid = 1;\n"
+                                                 "  return;\n"
+                                                 "}"));
+    REQUIRE(bad.get() == nullptr);
+}
+
+TEST_CASE("FULL: cannot instantiate unknown", "[full][sema][forbidden]") {
+    auto bad = ParseResult(zith_parse_test_full("fn main() {\n"
+                                                 "  let x: unknown = 1;\n"
+                                                 "  return;\n"
+                                                 "}"));
+    REQUIRE(bad.get() == nullptr);
+}
+
+TEST_CASE("FULL: ?void is allowed as optional type", "[full][sema][forbidden]") {
+    auto ast = ParseResult(zith_parse_test_full("fn main() {\n"
+                                                 "  let x: ?void = null;\n"
+                                                 "  return;\n"
+                                                 "}"));
+    REQUIRE(ast);
+}
+
+TEST_CASE("FULL: void expression used as value is rejected", "[full][sema][forbidden]") {
+    auto bad = ParseResult(zith_parse_test_full("fn ret_void() { return; }\n"
+                                                 "fn main() {\n"
+                                                 "  let x = ret_void();\n"
+                                                 "  return;\n"
+                                                 "}"));
+    REQUIRE(bad.get() == nullptr);
+}
+
+// ============================================================================
+// Struct literal construction
+// ============================================================================
+
+TEST_CASE("FULL: struct literal with tagged fields", "[full][sema][struct_lit]") {
+    auto ast = ParseResult(zith_parse_test_full("struct Point { x: i32, y: i32 }\n"
+                                                 "fn main() -> i32 {\n"
+                                                 "  let p = Point{ x: 5, y: 10 };\n"
+                                                 "  return p.x;\n"
+                                                 "}"));
+    REQUIRE(ast);
+}
+
+TEST_CASE("FULL: struct literal with positional (untagged) fields", "[full][sema][struct_lit]") {
+    auto ast = ParseResult(zith_parse_test_full("struct Point { x: i32, y: i32 }\n"
+                                                 "fn main() -> i32 {\n"
+                                                 "  let p = Point{ 5, 10 };\n"
+                                                 "  return p.x;\n"
+                                                 "}"));
+    REQUIRE(ast);
+}
+
+TEST_CASE("FULL: struct literal with mixed tagged/untagged fields", "[full][sema][struct_lit]") {
+    auto ast = ParseResult(zith_parse_test_full("struct Point { x: i32, y: i32, z: i32 }\n"
+                                                 "fn main() -> i32 {\n"
+                                                 "  let p = Point{ 5, z: 30, y: 10 };\n"
+                                                 "  return p.x + p.y + p.z;\n"
+                                                 "}"));
+    REQUIRE(ast);
+}
+
+TEST_CASE("FULL: struct literal with wrong tag is rejected", "[full][sema][struct_lit][error]") {
+    auto bad = ParseResult(zith_parse_test_full("struct Point { x: i32, y: i32 }\n"
+                                                 "fn main() -> i32 {\n"
+                                                 "  let p = Point{ x: 5, z: 10 };\n"
+                                                 "  return p.x;\n"
+                                                 "}"));
+    REQUIRE(bad.get() == nullptr);
+}
+
+TEST_CASE("FULL: struct literal with missing field is rejected", "[full][sema][struct_lit][error]") {
+    auto bad = ParseResult(zith_parse_test_full("struct Point { x: i32, y: i32 }\n"
+                                                 "fn main() -> i32 {\n"
+                                                 "  let p = Point{ x: 5 };\n"
+                                                 "  return p.x;\n"
+                                                 "}"));
+    REQUIRE(bad.get() == nullptr);
+}
+
+TEST_CASE("FULL: struct literal field type mismatch is rejected", "[full][sema][struct_lit][error]") {
+    auto bad = ParseResult(zith_parse_test_full("struct Point { x: i32, y: i32 }\n"
+                                                 "fn main() -> i32 {\n"
+                                                 "  let p = Point{ x: 5, y: \"oops\" };\n"
+                                                 "  return p.x;\n"
+                                                 "}"));
+    REQUIRE(bad.get() == nullptr);
 }

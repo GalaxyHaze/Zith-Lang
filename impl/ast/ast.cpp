@@ -626,6 +626,25 @@ static void walk_children(ZithNode *n, ZithASTVisitorFn pre, ZithASTVisitorFn po
         break;
     }
 
+    // list → ZithStructLitPayload
+    case ZITH_NODE_STRUCT_LIT: {
+        auto *p = static_cast<ZithStructLitPayload *>(n->data.list.ptr);
+        if (!p)
+            break;
+        zith_ast_walk(p->type_spec, pre, post, ud);
+        walk_node_list(p->field_inits, p->field_count, pre, post, ud);
+        break;
+    }
+
+    // list → ZithStructLitFieldPayload
+    case ZITH_NODE_STRUCT_LIT_FIELD: {
+        auto *p = static_cast<ZithStructLitFieldPayload *>(n->data.list.ptr);
+        if (!p)
+            break;
+        zith_ast_walk(p->value, pre, post, ud);
+        break;
+    }
+
     // list → ZithForPayload
     case ZITH_NODE_FOR: {
         auto *p = static_cast<ZithForPayload *>(n->data.list.ptr);
@@ -826,6 +845,8 @@ const char *zith_ast_node_name(const uint16_t id) {
         return "enum_variant";
     case ZITH_NODE_STRUCT_LIT:
         return "struct_lit";
+    case ZITH_NODE_STRUCT_LIT_FIELD:
+        return "struct_lit_field";
     case ZITH_NODE_ARRAY_LIT:
         return "array_lit";
     case ZITH_NODE_TUPLE_LIT:
@@ -920,6 +941,33 @@ ZithNode *zith_ast_make_array_lit(ZithArena *a, ZithSourceLoc loc, ZithNode **it
         return nullptr;
     n->data.list.ptr = items;
     n->data.list.len = count;
+    return n;
+}
+
+// list → ZithStructLitPayload
+ZithNode *zith_ast_make_struct_lit(ZithArena *a, ZithSourceLoc loc, const ZithStructLitPayload &data) {
+    ZithNode *n = alloc_node(a, ZITH_NODE_STRUCT_LIT, loc);
+    if (!n)
+        return nullptr;
+    auto *p = alloc_payload<ZithStructLitPayload>(a, n);
+    if (!p)
+        return n;
+    p->type_spec   = data.type_spec;
+    p->field_inits = data.field_inits;
+    p->field_count = data.field_count;
+    return n;
+}
+// list → ZithStructLitFieldPayload
+ZithNode *zith_ast_make_struct_lit_field(ZithArena *a, ZithSourceLoc loc, const ZithStructLitFieldPayload &data) {
+    ZithNode *n = alloc_node(a, ZITH_NODE_STRUCT_LIT_FIELD, loc);
+    if (!n)
+        return nullptr;
+    auto *p = alloc_payload<ZithStructLitFieldPayload>(a, n);
+    if (!p)
+        return n;
+    p->name     = data.name ? zith_arena_strdup(a, data.name) : nullptr;
+    p->name_len = data.name_len;
+    p->value    = data.value;
     return n;
 }
 
@@ -1245,7 +1293,29 @@ void zith_ast_print(const ZithNode *node, int indent) {
         break;
     }
 
-    case ZITH_NODE_STRUCT_LIT:
+    case ZITH_NODE_STRUCT_LIT: {
+        auto *p = static_cast<const ZithStructLitPayload *>(node->data.list.ptr);
+        print_indent(indent + 1);
+        debug_print("struct_lit fields: %zu\n", p ? p->field_count : 0);
+        if (p) {
+            if (p->type_spec) {
+                zith_ast_print(p->type_spec, indent + 2);
+            }
+            for (size_t i = 0; i < p->field_count; ++i) {
+                auto *f = static_cast<const ZithStructLitFieldPayload *>(p->field_inits[i]->data.list.ptr);
+                if (f) {
+                    print_indent(indent + 2);
+                    if (f->name)
+                        debug_print("tag: %.*s\n", (int)f->name_len, f->name);
+                    else
+                        debug_print("(positional)\n");
+                    zith_ast_print(f->value, indent + 3);
+                }
+                zith_ast_print(p->field_inits[i], indent + 2);
+            }
+        }
+        break;
+    }
     case ZITH_NODE_ARRAY_LIT:
     case ZITH_NODE_TUPLE_LIT: {
         auto **items = static_cast<ZithNode **>(node->data.list.ptr);
