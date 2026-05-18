@@ -1,5 +1,6 @@
 // impl/parser/parser_test.cpp — Test utilities and RAII wrappers
-#include "memory/arena.hpp"
+#include <import/module_registry.hpp>
+#include <memory/utils.hpp>
 #include "zith/parser.h"
 #include <cstring>
 

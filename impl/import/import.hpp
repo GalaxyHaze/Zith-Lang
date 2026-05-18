@@ -212,7 +212,9 @@ public:
             case Visibility::Public: public_types_.push_back(Symbol{std::move(name), kind, vis, nullptr}); break;
             case Visibility::Protected: protected_types_.push_back(Symbol{std::move(name), kind, vis, nullptr}); break;
             case Visibility::Private: private_types_.push_back(Symbol{std::move(name), kind, vis, nullptr}); break;
-        }
+            case Visibility::Module:
+                break;
+            }
         mark_dirty();
     }
 
@@ -221,7 +223,9 @@ public:
             case Visibility::Public: public_functions_.push_back(Symbol{std::move(name), SymbolKind::Function, vis, nullptr}); break;
             case Visibility::Protected: protected_functions_.push_back(Symbol{std::move(name), SymbolKind::Function, vis, nullptr}); break;
             case Visibility::Private: private_functions_.push_back(Symbol{std::move(name), SymbolKind::Function, vis, nullptr}); break;
-        }
+            case Visibility::Module:
+                break;
+            }
         mark_dirty();
     }
 
@@ -230,7 +234,9 @@ public:
             case Visibility::Public: public_traits_.push_back(Symbol{std::move(name), SymbolKind::Trait, vis, nullptr}); break;
             case Visibility::Protected: protected_traits_.push_back(Symbol{std::move(name), SymbolKind::Trait, vis, nullptr}); break;
             case Visibility::Private: private_traits_.push_back(Symbol{std::move(name), SymbolKind::Trait, vis, nullptr}); break;
-        }
+            case Visibility::Module:
+                break;
+            }
         mark_dirty();
     }
 
@@ -239,6 +245,7 @@ public:
             case Visibility::Public: public_traits_.push_back(Symbol{std::move(name), SymbolKind::Family, vis, nullptr}); break;
             case Visibility::Protected: protected_traits_.push_back(Symbol{std::move(name), SymbolKind::Family, vis, nullptr}); break;
             case Visibility::Private: private_traits_.push_back(Symbol{std::move(name), SymbolKind::Family, vis, nullptr}); break;
+            case Visibility::Module: private_traits_.push_back(Symbol{std::move(name), SymbolKind::Family, vis, nullptr}); break;
         }
         mark_dirty();
     }

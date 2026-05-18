@@ -3,10 +3,12 @@
 // Refactored to use centralized modules and proper SCAN/PARSE separation.
 // In SCAN mode, function bodies and blocks are captured as UNBODY nodes
 // without parsing their contents — the parser does NOT analyze block content.
+#include "import/import.hpp"
 #include "zith/parser.h"
 #include "memory/utils.hpp"
 #include "import/module_registry.hpp"
 #include <cstring>
+#include <memory>
 #include <string>
 #include <vector>
 #include <filesystem>
@@ -78,6 +80,7 @@ static zith::import::Visibility to_import_visibility(ZithVisibility vis) {
 }
 
 static std::string parser_module_key(const Parser *p) {
+    
     if (p->current_module && p->current_module[0] != '\0')
         return p->current_module;
     if (p->filename && p->filename[0] != '\0')
@@ -113,7 +116,7 @@ static zith::import::Module *ensure_parser_module(Parser *p) {
         registry.register_module(std::move(new_mod));
         mod = registry.get_module(module_key);
     }
-    return mod;
+    return mod.get();
 }
 
 static void register_symbol(Parser *p, const char *name, size_t len, int32_t line,
