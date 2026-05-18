@@ -2,6 +2,7 @@
 #pragma once
 
 #include "zith/types.h"
+#include <cstring>
 
 namespace zith {
 
@@ -34,10 +35,18 @@ struct Type {
 };
 
 inline bool type_match(const Type &a, const Type &b) {
-    if (a.base != b.base || a.optional != b.optional || a.failable != b.failable)
+    if (a.base != b.base || a.optional != b.optional || a.failable != b.failable ||
+        a.ownership != b.ownership)
         return false;
     if (a.base == SemaType::Struct)
         return a.struct_name && b.struct_name && strcmp(a.struct_name, b.struct_name) == 0;
+    if (a.base == SemaType::Array || a.base == SemaType::Slice) {
+        if (a.base == SemaType::Array && a.array_size != b.array_size)
+            return false;
+        if (!a.element_type || !b.element_type)
+            return a.element_type == b.element_type;
+        return type_match(*a.element_type, *b.element_type);
+    }
     return true;
 }
 

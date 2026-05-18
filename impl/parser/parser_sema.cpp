@@ -205,37 +205,69 @@ static Type sema_type_from_node(const ZithNode *n, const SemaContext *ctx = null
     return {};
 }
 
-static bool sema_assignable(const Type &dst, const Type &src) {
+static bool is_exact_match(const Type &lhs, const Type &rhs) {
+    return zith::type_match(lhs, rhs);
+}
+
+static bool is_assignable(const Type &dst, const Type &src);
+
+static bool is_coercible(const Type &dst, const Type &src) {
     if (dst.base == SemaType::Unknown || src.base == SemaType::Unknown)
         return true;
-    if (dst.base == SemaType::Opaque)
+    if (dst.base == SemaType::Invalid || src.base == SemaType::Invalid)
         return true;
-    if (src.base == SemaType::Opaque)
+    if (dst.base == SemaType::Opaque || src.base == SemaType::Opaque)
         return true;
     if (dst.base == SemaType::VoidPtr || src.base == SemaType::VoidPtr)
-        return true;
-    if (dst.base == SemaType::Invalid || src.base == SemaType::Invalid)
         return true;
     if (src.base == SemaType::Void && src.optional && dst.optional)
         return true;
     if (dst.base == SemaType::Slice && src.base == SemaType::Array) {
-        if (dst.element_type && src.element_type)
-            return sema_assignable(*dst.element_type, *src.element_type);
-        return true;
+        if (dst.array_size != 0)
+            return false;
+        if (!dst.element_type || !src.element_type)
+            return false;
+        return is_assignable(*dst.element_type, *src.element_type);
     }
+    return false;
+}
+
+static bool is_assignable(const Type &dst, const Type &src) {
+    if (is_exact_match(dst, src))
+        return true;
     if (dst.base != src.base)
-        return false;
+        return is_coercible(dst, src);
     if (dst.base == SemaType::Struct) {
         if (!dst.struct_name || !src.struct_name)
             return false;
         if (strcmp(dst.struct_name, src.struct_name) != 0)
             return false;
     }
+    if (dst.base == SemaType::Array || dst.base == SemaType::Slice) {
+        if (dst.base == SemaType::Array && dst.array_size != src.array_size)
+            return false;
+        if (!dst.element_type || !src.element_type)
+            return false;
+        if (!is_assignable(*dst.element_type, *src.element_type))
+            return false;
+    }
+    if (dst.ownership != src.ownership)
+        return false;
     if (!dst.optional && src.optional)
         return false;
     if (!dst.failable && src.failable)
         return false;
     return true;
+}
+
+static bool sema_assignable(const Type &dst, const Type &src) {
+    if (is_assignable(dst, src))
+        return true;
+    if (is_coercible(dst, src))
+        return true;
+    if (dst.base == SemaType::Unknown || src.base == SemaType::Unknown)
+        return true;
+    return false;
 }
 
 static void sema_push_scope(SemaContext &ctx) {
