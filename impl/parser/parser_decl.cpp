@@ -78,23 +78,13 @@ static zith::import::Visibility to_import_visibility(ZithVisibility vis) {
 }
 
 static std::string parser_module_key(const Parser *p) {
-    if (p->current_module && p->current_module[0] != '\0')
-        return p->current_module;
     if (p->filename && p->filename[0] != '\0')
         return p->filename;
-    if (p->file_path && p->file_path[0] != '\0')
-        return p->file_path;
     return {};
 }
 
 static std::string parser_module_path(const Parser *p) {
-    if (p->file_path && p->file_path[0] != '\0')
-        return p->file_path;
-    if (p->filename && p->filename[0] != '\0')
-        return p->filename;
-    if (p->current_module && p->current_module[0] != '\0')
-        return p->current_module;
-    return {};
+    return parser_module_key(p);
 }
 
 static zith::import::Module *ensure_parser_module(Parser *p) {
