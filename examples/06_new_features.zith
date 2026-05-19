@@ -6,7 +6,7 @@
 // and struct literal construction with tagged/positional/mixed fields.
 // ============================================================================
 
-import std.io.println as println;
+import std/io/console/log as println;
 
 // ----------------------------------------------------------------------------
 // 1. Structs
@@ -24,7 +24,7 @@ struct Vec3 {
 // ----------------------------------------------------------------------------
 // 2. Binding Mutability: let / const / comptime vs var / auto
 // ----------------------------------------------------------------------------
-fn demo_binding_mutability() -> i32 {
+fn demo_binding_mutability(): i32 {
     // --- let: cannot be reassigned ---
     let a: i32 = 10;
     // a = 20;  // COMPILE ERROR: cannot reassign 'let' variable 'a'
@@ -39,7 +39,7 @@ fn demo_binding_mutability() -> i32 {
     c = 60;  // OK
 
     // --- auto: can be reassigned ---
-    auto d = 70;
+    let d = 70;
     // d = 80;  // promoted to var by compiler
 
     return a + b + c;
@@ -48,7 +48,7 @@ fn demo_binding_mutability() -> i32 {
 // ----------------------------------------------------------------------------
 // 3. Dirty (uninitialized) variables
 // ----------------------------------------------------------------------------
-fn demo_dirty() -> i32 {
+fn demo_dirty(): i32 {
     var x: i32;
     // let y = x;  // COMPILE ERROR: variable 'x' is not initialized
     x = 42;  // assignment clears the dirty flag
@@ -59,7 +59,7 @@ fn demo_dirty() -> i32 {
 // ----------------------------------------------------------------------------
 // 4. Prohibition of void, invalid, unknown instantiation
 // ----------------------------------------------------------------------------
-fn demo_type_prohibition() -> i32 {
+fn demo_type_prohibition(): i32 {
     // let v: void = 1;     // COMPILE ERROR: cannot instantiate type 'void'
     // let i: invalid = 1;  // COMPILE ERROR: cannot instantiate type 'invalid'
     // let u: unknown = 1;  // COMPILE ERROR: cannot instantiate type 'unknown'
@@ -105,6 +105,7 @@ fn demo_struct_literals() -> i32 {
 fn main() {
     println("--- Demo: Binding Mutability ---");
     let sum = demo_binding_mutability();
+    let fail: !i32;
     println("Sum: {sum}");
 
     println("--- Demo: Dirty Variables ---");

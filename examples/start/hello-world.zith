@@ -1,19 +1,24 @@
 from std/io/console;
 
 struct Point{
-    let [x,y,z]
+    x: i32,
+    y: i32,
+    z: i32
 }
 
 fn getShare(): unique i32;
 
-fn takeShare(x: share i32){
+fn takeShare(x: unique i32){
 
 }
 
 fn main(){
     let data: unique i32 = getShare();
-    takeShare(share data);
-    let[x, y, z] = |0, 0, 0|;
+    takeShare(data);
+    let p: ?Point = null;
+    if (p)
+    let pack = |0, 0, 0|;
+    var x = 5;
     x = 5;
     println("-Hello World!");
 }
