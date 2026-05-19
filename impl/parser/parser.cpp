@@ -1,5 +1,6 @@
 // impl/parser/parser.cpp — Parser entry point and pipeline orchestration
 #include "zith/parser.h"
+#include "diagnostics/diagnostics.hpp"
 
 #include "memory/utils.hpp"
 #include "import/module_registry.hpp"
@@ -13,6 +14,7 @@ using zith::ArenaList;
 static std::vector<ZithNode *> g_imported_decls_vec;
 static int g_parser_depth = 0;
 static ZithDiagList g_last_diags = {nullptr, 0, 0};
+static DiagManager *g_last_diag_manager = nullptr;
 
 bool g_import_loaded_this_file = false;
 
@@ -107,10 +109,22 @@ static ZithNode *expand_unbody(Parser *parent, ZithNode *node) {
         size_t count     = 0;
         ZithNode **stmts = stmts_b.flatten(parent->arena, &count);
 
+        // Merge inner diagnostics into parent using v2 system
+        auto *inner_dm = static_cast<DiagManager*>(inner.diag_manager);
+        auto *parent_dm = static_cast<DiagManager*>(parent->diag_manager);
+        for (const auto& diag : inner_dm->bag().diagnostics()) {
+            parent_dm->emit_diagnostic(Diagnostic{
+                diag.level, diag.code, diag.message,
+                diag.primary_span, diag.has_primary_span,
+                diag.secondary_spans, diag.suggestions, {}, diag.caused_by
+            });
+        }
+        // Also copy legacy list for ABI compat
         for (size_t i = 0; i < inner.diags.count; ++i)
             parser_emit_diag(parent, inner.diags.items[i].loc, inner.diags.items[i].severity,
                              inner.diags.items[i].message);
 
+        parser_destroy(&inner);
         return zith_ast_make_block(parent->arena, node->loc, stmts, count);
     }
 
@@ -151,11 +165,24 @@ ZithNode *zith_parse_with_source(ZithArena *arena, const char *source, size_t so
     g_imported_decls_vec.clear();
     g_parser_depth = 0;
 
-    // Store diagnostics for LSP access
-    g_last_diags = p.diags;
+    // Finalize v2 diagnostics
+    auto *dm = static_cast<DiagManager*>(p.diag_manager);
+    dm->bag().finalize();
 
-    extern void zith_diag_print_all(const ZithDiagList *, const char *, size_t, const char *);
-    zith_diag_print_all(&p.diags, source, source_len, filename);
+    // Store diagnostics for LSP access (v1 ABI)
+    g_last_diags = p.diags;
+    g_last_diag_manager = dm;
+
+    // Print using v2 TerminalEmitter
+    dm->emitter().set_source_map(&dm->source_map());
+    dm->emitter().emit(dm->bag(), stderr);
+
+    // Sync had_error from v2 bag
+    p.had_error = p.had_error || dm->had_error();
+
+    // Note: DiagManager is NOT destroyed here — g_last_diag_manager keeps it alive
+    // for LSP access. It will be replaced on next parse call.
+    // Clean up previous global manager if any (leaked intentionally for now to avoid UAF)
 
     if (p.had_error)
         return nullptr;
@@ -164,4 +191,9 @@ ZithNode *zith_parse_with_source(ZithArena *arena, const char *source, size_t so
 
 ZithDiagList *zith_get_parse_diagnostics(void) {
     return &g_last_diags;
+}
+
+// v2: Get the DiagManager for direct access (LSP, etc.)
+DiagManager *zith_get_parse_diag_manager(void) {
+    return g_last_diag_manager;
 }

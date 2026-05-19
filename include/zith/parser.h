@@ -9,6 +9,11 @@
 extern "C" {
 #endif
 
+// Forward declaration for C++ DiagManager (defined in diagnostics.hpp)
+#ifdef __cplusplus
+class DiagManager;
+#endif
+
 typedef struct ZithSymbolTable ZithSymbolTable;
 
 typedef struct ZithScope {
@@ -31,6 +36,9 @@ typedef struct Parser {
     bool had_error;
     bool panic;
 
+    // v2 diagnostic manager (C++ only, opaque pointer for C ABI)
+    void *diag_manager;
+
     ZithFnKind fn_kind;
     bool inside_fn;
 
@@ -48,6 +56,8 @@ void parser_init(Parser *p, ZithArena *arena,
                  const char *source, size_t source_len,
                  const char *filename,
                  ZithTokenStream tokens);
+
+void parser_destroy(Parser *p);
 
 void parser_set_import_roots(Parser *p, const char **roots, size_t count);
 void parser_set_allow_dot_imports(Parser *p, bool allow);
@@ -85,6 +95,11 @@ ZithNode *zith_parse_with_source(ZithArena *arena, const char *source, size_t so
 
 // Get diagnostics from parse (for LSP use)
 ZithDiagList *zith_get_parse_diagnostics(void);
+
+// v2: Get the DiagManager for direct access (LSP, etc.)
+#ifdef __cplusplus
+DiagManager *zith_get_parse_diag_manager(void);
+#endif
 
 // Test helpers (use shared global arena)
 ZithNode *zith_parse_test(const char *source);

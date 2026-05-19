@@ -158,6 +158,20 @@ size_t zith_diag_bag_warning_count(const ZithDiagBag *bag) {
     return bag->bag.warning_count();
 }
 
+char *zith_diag_bag_get_json(const ZithDiagBag *bag) {
+    if (!bag) return nullptr;
+
+    zith::diag::JsonEmitter emitter(&bag->source_map);
+    std::string json = emitter.emit_to_string(bag->bag);
+    if (json.empty() || json == "[]\n") return nullptr;
+
+    char *result = static_cast<char *>(malloc(json.size() + 1));
+    if (result) {
+        memcpy(result, json.c_str(), json.size() + 1);
+    }
+    return result;
+}
+
 // ============================================================================
 // C++ DiagManager Implementation
 // ============================================================================

@@ -83,6 +83,11 @@ int  zith_diag_bag_had_errors(const ZithDiagBag *bag);
 size_t zith_diag_bag_error_count(const ZithDiagBag *bag);
 size_t zith_diag_bag_warning_count(const ZithDiagBag *bag);
 
+// Get diagnostics as JSON string (for LSP/tooling)
+// Returns a newly allocated string; caller must free() it.
+// Returns NULL if no diagnostics or bag is NULL.
+char *zith_diag_bag_get_json(const ZithDiagBag *bag);
+
 // ============================================================================
 // Debug/Utility
 // ============================================================================

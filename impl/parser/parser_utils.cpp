@@ -1,7 +1,7 @@
 // impl/parser/parser_utils.cpp — Token navigation, error handling, synchronization
 //
-// Refactored to use centralized DiagManager from diagnostics.hpp.
-// New-style diagnostics use zith::diag::DiagnosticBuilder for rich error reporting.
+// Refactored to use v2 DiagnosticBag as the implementation,
+// while maintaining v1 ZithDiagList ABI for backward compatibility.
 #include "diagnostics/diagnostics.hpp"
 #include "memory/arena.hpp"
 #include "zith/parser.h"
@@ -34,6 +34,21 @@ void parser_init(Parser *p, ZithArena *arena, const char *source, const size_t s
     p->import_roots        = nullptr;
     p->import_root_count   = 0;
     p->allow_dot_imports   = false;
+
+    // Initialize v2 DiagManager
+    p->diag_manager = new DiagManager();
+    static_cast<DiagManager*>(p->diag_manager)->set_arena(arena);
+
+    // Register source file in the SourceMap for v2 emitter
+    auto *dm = static_cast<DiagManager*>(p->diag_manager);
+    dm->source_map().add_or_get_file(p->filename, std::string_view(source, source_len));
+}
+
+void parser_destroy(Parser *p) {
+    if (p->diag_manager) {
+        delete static_cast<DiagManager*>(p->diag_manager);
+        p->diag_manager = nullptr;
+    }
 }
 
 // ============================================================================
@@ -111,6 +126,26 @@ bool check_kw(const Parser *p, const char *kw) {
 // ============================================================================
 
 void parser_emit_diag(Parser *p, ZithSourceLoc loc, ZithDiagSeverity severity, const char *msg) {
+    // v2: Emit to DiagnosticBag using DiagnosticBuilder
+    auto *dm = static_cast<DiagManager*>(p->diag_manager);
+    FileId fid = dm->source_map().add_or_get_file(p->filename, std::string_view(p->source, p->source_len));
+
+    using namespace zith::diag;
+    DiagLevel level;
+    DiagCode code = DiagCode::UnexpectedToken; // Generic fallback for legacy calls
+    switch (severity) {
+    case ZITH_DIAG_ERROR:   level = DiagLevel::Error; break;
+    case ZITH_DIAG_WARNING: level = DiagLevel::Warning; code = DiagCode::DeprecatedSyntax; break;
+    case ZITH_DIAG_NOTE:    level = DiagLevel::Note; break;
+    default:                level = DiagLevel::Help; break;
+    }
+
+    SourceSpan span = SourceSpan::from_loc(loc, fid);
+    DiagnosticBuilder(level, code, span)
+        .with_raw_message(msg ? msg : "")
+        .emit(dm->bag());
+
+    // v1 ABI: Also populate legacy list for backward compatibility
     if (p->diags.count >= p->diags.capacity) {
         size_t new_cap = p->diags.capacity == 0 ? 8 : p->diags.capacity * 2;
         auto *buf      = static_cast<ZithDiagnostic *>(
@@ -182,7 +217,7 @@ void parser_note(Parser *p, ZithSourceLoc loc, const char *msg) {
 
 #include "diagnostics/diagnostics.hpp"
 
-void parser_error_new(Parser *p, /*zith::diag::DiagCode code,*/
+void parser_error_new(Parser *p, zith::diag::DiagCode code,
                        ZithSourceLoc loc, const char *fmt, ...) {
     if (p->panic) return;
 
@@ -192,14 +227,22 @@ void parser_error_new(Parser *p, /*zith::diag::DiagCode code,*/
     vsnprintf(buf, sizeof(buf), fmt, args);
     va_end(args);
 
-    // Emit rich diagnostic using the new system
-    // For now, fall back to legacy while we build the bridge
+    auto *dm = static_cast<DiagManager*>(p->diag_manager);
+    FileId fid = dm->source_map().add_or_get_file(p->filename, std::string_view(p->source, p->source_len));
+
+    using namespace zith::diag;
+    SourceSpan span = SourceSpan::from_loc(loc, fid);
+    DiagnosticBuilder(DiagLevel::Error, code, span)
+        .with_raw_message(buf)
+        .emit(dm->bag());
+
+    // v1 ABI: Also populate legacy list
     parser_emit_diag(p, loc, ZITH_DIAG_ERROR, buf);
     p->panic = true;
     parser_synchronize(p);
 }
 
-void parser_warning_new(Parser *p, /*zith::diag::DiagCode code,*/
+void parser_warning_new(Parser *p, zith::diag::DiagCode code,
                         const ZithSourceLoc loc, const char *fmt, ...) {
     char buf[512];
     va_list args;
@@ -207,6 +250,16 @@ void parser_warning_new(Parser *p, /*zith::diag::DiagCode code,*/
     vsnprintf(buf, sizeof(buf), fmt, args);
     va_end(args);
 
+    auto *dm = static_cast<DiagManager*>(p->diag_manager);
+    FileId fid = dm->source_map().add_or_get_file(p->filename, std::string_view(p->source, p->source_len));
+
+    using namespace zith::diag;
+    SourceSpan span = SourceSpan::from_loc(loc, fid);
+    DiagnosticBuilder(DiagLevel::Warning, code, span)
+        .with_raw_message(buf)
+        .emit(dm->bag());
+
+    // v1 ABI
     parser_emit_diag(p, loc, ZITH_DIAG_WARNING, buf);
 }
 
@@ -217,6 +270,16 @@ void parser_note_new(Parser *p, ZithSourceLoc loc, const char *fmt, ...) {
     vsnprintf(buf, sizeof(buf), fmt, args);
     va_end(args);
 
+    auto *dm = static_cast<DiagManager*>(p->diag_manager);
+    FileId fid = dm->source_map().add_or_get_file(p->filename, std::string_view(p->source, p->source_len));
+
+    using namespace zith::diag;
+    SourceSpan span = SourceSpan::from_loc(loc, fid);
+    DiagnosticBuilder(DiagLevel::Note, DiagCode::UnexpectedToken, span)
+        .with_raw_message(buf)
+        .emit(dm->bag());
+
+    // v1 ABI
     parser_emit_diag(p, loc, ZITH_DIAG_NOTE, buf);
 }
 

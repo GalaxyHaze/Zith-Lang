@@ -54,6 +54,9 @@ public:
     void emit(const DiagnosticBag& bag, FILE* out = stdout) const;
     void emit_single(const Diagnostic& diag, FILE* out = stdout) const;
 
+    // Emit to a std::string instead of FILE*
+    std::string emit_to_string(const DiagnosticBag& bag) const;
+
     void set_source_map(const SourceMap* sm) { source_map_ = sm; }
 
 private:

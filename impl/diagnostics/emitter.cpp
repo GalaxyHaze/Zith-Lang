@@ -254,6 +254,32 @@ void JsonEmitter::write_escaped_json_string(FILE* out, std::string_view s) {
     fputc('"', out);
 }
 
+static std::string escape_json_string(std::string_view s) {
+    std::string result;
+    result.reserve(s.size() + 8);
+    result.push_back('"');
+    for (char c : s) {
+        switch (c) {
+        case '"':  result += "\\\""; break;
+        case '\\': result += "\\\\"; break;
+        case '\n': result += "\\n"; break;
+        case '\r': result += "\\r"; break;
+        case '\t': result += "\\t"; break;
+        default:
+            if (static_cast<unsigned char>(c) < 0x20) {
+                char buf[8];
+                snprintf(buf, sizeof(buf), "\\u%04x", static_cast<unsigned char>(c));
+                result += buf;
+            } else {
+                result.push_back(c);
+            }
+            break;
+        }
+    }
+    result.push_back('"');
+    return result;
+}
+
 void JsonEmitter::emit(const DiagnosticBag& bag, FILE* out) const {
     if (bag.total_count() == 0) {
         fprintf(out, "[]\n");
@@ -356,3 +382,87 @@ void JsonEmitter::render_diagnostic_json(const Diagnostic& diag, FILE* out, bool
 }
 
 } // namespace zith::diag
+
+std::string JsonEmitter::emit_to_string(const DiagnosticBag& bag) const {
+    if (bag.total_count() == 0) {
+        return "[]\n";
+    }
+
+    if (!bag.is_finalized()) {
+        const_cast<DiagnosticBag&>(bag).finalize();
+    }
+
+    std::string result = "[\n";
+    size_t count = bag.sorted_view().size();
+    for (size_t i = 0; i < count; ++i) {
+        const auto* diag = bag.sorted_view()[i];
+        bool trailing = (i + 1 < count);
+
+        result += "  {\n";
+        result += "    \"severity\": " + escape_json_string(diag_level_label(diag->level)) + ",\n";
+        result += "    \"code\": " + escape_json_string(diag_code_string(diag->code)) + ",\n";
+        result += "    \"message\": " + escape_json_string(diag->message.get()) + ",\n";
+
+        if (diag->has_primary_span && source_map_) {
+            const SourceFile* file = source_map_->lookup(diag->primary_span.file_id);
+            if (file) {
+                result += "    \"file\": " + escape_json_string(file->filename) + ",\n";
+            }
+            result += "    \"line\": " + std::to_string(diag->primary_span.start.line) + ",\n";
+            result += "    \"column\": " + std::to_string(diag->primary_span.start.index) + ",\n";
+
+            if (diag->primary_span.end.line != diag->primary_span.start.line ||
+                diag->primary_span.end.index != diag->primary_span.start.index) {
+                result += "    \"end_line\": " + std::to_string(diag->primary_span.end.line) + ",\n";
+                result += "    \"end_column\": " + std::to_string(diag->primary_span.end.index) + ",\n";
+            }
+        }
+
+        // Suggestions
+        if (!diag->suggestions.empty()) {
+            result += "    \"suggestions\": [\n";
+            for (size_t j = 0; j < diag->suggestions.size(); ++j) {
+                const auto& sug = diag->suggestions[j];
+                result += "      {\n";
+                result += "        \"label\": " + escape_json_string(sug.label) + ",\n";
+                result += "        \"replacement\": " + escape_json_string(sug.replacement) + ",\n";
+                result += "        \"span\": {\n";
+                result += "          \"start\": {\"line\": " + std::to_string(sug.span.start.line) +
+                          ", \"column\": " + std::to_string(sug.span.start.index) + "},\n";
+                result += "          \"end\": {\"line\": " + std::to_string(sug.span.end.line) +
+                          ", \"column\": " + std::to_string(sug.span.end.index) + "}\n";
+                result += "        },\n";
+                result += "        \"machine_applicable\": " +
+                          std::string(sug.is_machine_applicable ? "true" : "false") + "\n";
+                result += "      }";
+                if (j + 1 < diag->suggestions.size()) result += ",";
+                result += "\n";
+            }
+            result += "    ],\n";
+        }
+
+        // Children (notes, helps, hints)
+        if (!diag->children.empty()) {
+            result += "    \"children\": [\n";
+            bool first_child = true;
+            for (const auto& child_ptr : diag->children) {
+                if (!child_ptr) continue;
+                const auto& child = *child_ptr;
+                std::string msg = child.message.get();
+                if (!first_child) result += ",\n";
+                first_child = false;
+                result += "      {\n";
+                result += "        \"level\": " + escape_json_string(diag_level_label(child.level)) + ",\n";
+                result += "        \"message\": " + escape_json_string(msg) + "\n";
+                result += "      }";
+            }
+            result += "\n    ]\n";
+        }
+
+        result += "  }";
+        if (trailing) result += ",";
+        result += "\n";
+    }
+    result += "]\n";
+    return result;
+}
