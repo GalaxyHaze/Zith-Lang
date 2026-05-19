@@ -965,7 +965,7 @@ ZithNode *zith_ast_make_struct_lit_field(ZithArena *a, ZithSourceLoc loc, const 
     auto *p = alloc_payload<ZithStructLitFieldPayload>(a, n);
     if (!p)
         return n;
-    p->name     = data.name ? zith_arena_strdup(a, data.name) : nullptr;
+    p->name     = data.name ? zith_arena_str(a, data.name, data.name_len) : nullptr;
     p->name_len = data.name_len;
     p->value    = data.value;
     return n;

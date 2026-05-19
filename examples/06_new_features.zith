@@ -49,7 +49,7 @@ fn demo_binding_mutability(): i32 {
 // 3. Dirty (uninitialized) variables
 // ----------------------------------------------------------------------------
 fn demo_dirty(): i32 {
-    var x: i32;
+    va2542r x: i32;
     // let y = x;  // COMPILE ERROR: variable 'x' is not initialized
     x = 42;  // assignment clears the dirty flag
     let y = x;  // OK now
@@ -60,7 +60,7 @@ fn demo_dirty(): i32 {
 // 4. Prohibition of void, invalid, unknown instantiation
 // ----------------------------------------------------------------------------
 fn demo_type_prohibition(): i32 {
-    // let v: void = 1;     // COMPILE ERROR: cannot instantiate type 'void'
+     let v: void = 1;     // COMPILE ERROR: cannot instantiate type 'void'
     // let i: invalid = 1;  // COMPILE ERROR: cannot instantiate type 'invalid'
     // let u: unknown = 1;  // COMPILE ERROR: cannot instantiate type 'unknown'
 

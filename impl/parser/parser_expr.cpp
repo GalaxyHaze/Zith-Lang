@@ -199,6 +199,7 @@ static ZithNode **parse_struct_lit_fields(Parser *p, size_t *out_count) {
             break;
     }
     size_t count = fields_b.size();
+    *out_count = count;
     return fields_b.flatten(p->arena, &count);
 }
 
@@ -321,7 +322,6 @@ static ZithNode *parse_nud(Parser *p) {
     case ZITH_TOKEN_MUST:
         return zith_ast_make_unary_op(p->arena, loc, ZITH_TOKEN_MUST, parse_expr_bp(p, 13), false);
     case ZITH_TOKEN_NULL: {
-        fprintf(stderr, "DEBUG: matched ZITH_TOKEN_NULL case!\n");
         ZithLiteral lit;
         lit.kind = ZITH_LIT_NULL;
         lit.value.i64 = 0;
@@ -366,6 +366,11 @@ static ZithNode *parse_nud(Parser *p) {
 }
 
 static ZithNode *parse_expr_bp(Parser *p, const int min_bp) {
+    // Check for statement terminators - don't try to parse them as expressions
+    if (parser_check(p, ZITH_TOKEN_SEMICOLON) || parser_check(p, ZITH_TOKEN_RBRACE) ||
+        parser_check(p, ZITH_TOKEN_END)) {
+        return nullptr;
+    }
     ZithNode *left = parse_nud(p);
     while (true) {
         const ZithTokenType op = parser_peek(p)->type;

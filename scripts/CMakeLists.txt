@@ -82,15 +82,15 @@ message(STATUS "TOML++ available")
 # ───────────────────────────────────────────────
 # nlohmann/json - Header-Only Library (v3.10.5 for CMake 3.15 compatibility)
 # ───────────────────────────────────────────────
-#message(STATUS "Fetching nlohmann/json...")
-#FetchContent_Declare(
-#    nlohmann_json
-#    GIT_REPOSITORY https://github.com/nlohmann/json.git
-#    GIT_TAG v3.10.5
-#   GIT_SHALLOW TRUE
-#)
-#FetchContent_MakeAvailable(nlohmann_json)
-#message(STATUS "nlohmann/json available")
+message(STATUS "Fetching nlohmann/json...")
+FetchContent_Declare(
+    nlohmann_json
+    GIT_REPOSITORY https://github.com/nlohmann/json.git
+    GIT_TAG v3.10.5
+    GIT_SHALLOW TRUE
+)
+FetchContent_MakeAvailable(nlohmann_json)
+message(STATUS "nlohmann/json available")
 
 # =============================================================================
 # LLVM Configuration (Optional) - Must come BEFORE FFI setup
@@ -409,23 +409,25 @@ endif()
 # ───────────────────────────────────────────────
 # Executable Target: zith-lsp
 # ───────────────────────────────────────────────
-#set(LSP_SOURCES
-#    ../lsp/main.cpp
-#    ../lsp/message_handler.cpp
-#    ../lsp/document_manager.cpp
-#    ../lsp/handlers/diagnostics.cpp
-#)
+set(LSP_SOURCES
+    ../lsp/main.cpp
+    ../lsp/message_handler.cpp
+    ../lsp/document_manager.cpp
+    ../lsp/handlers/diagnostics.cpp
+    ../lsp/handlers/semantic_tokens.cpp
+    ../lsp/handlers/execute_command.cpp
+)
 
-#add_executable(zith-lsp ${LSP_SOURCES})
+add_executable(zith-lsp ${LSP_SOURCES})
 
-#target_include_directories(zith-lsp PRIVATE
-#    ${CMAKE_CURRENT_SOURCE_DIR}/../include
-#    ${CMAKE_CURRENT_SOURCE_DIR}/../impl
-#)
+target_include_directories(zith-lsp PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/../include
+    ${CMAKE_CURRENT_SOURCE_DIR}/../impl
+)
 
-#target_link_libraries(zith-lsp PRIVATE ZithCore ZithParse nlohmann_json::nlohmann_json)
+target_link_libraries(zith-lsp PRIVATE ZithCore ZithParse nlohmann_json::nlohmann_json)
 
-#target_compile_definitions(zith-lsp PRIVATE ZITH_VERSION="${ZITH_VERSION}")
+target_compile_definitions(zith-lsp PRIVATE ZITH_VERSION="${ZITH_VERSION}")
 
 # ───────────────────────────────────────────────
 # Install Targets

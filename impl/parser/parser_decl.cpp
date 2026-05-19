@@ -349,6 +349,9 @@ ZithNode *parser_parse_statement(Parser *p) {
     case ZITH_TOKEN_GLOBAL:
         parser_advance(p);
         return parse_var_decl(p, ZITH_BINDING_GLOBAL);
+    case ZITH_TOKEN_AUTO:
+        parser_advance(p);
+        return parse_var_decl(p, ZITH_BINDING_AUTO);
     case ZITH_TOKEN_IF: {
         parser_advance(p);
         ZithNode *cond   = parser_parse_expression(p);
@@ -391,11 +394,16 @@ ZithNode *parser_parse_statement(Parser *p) {
         return parser_parse_block(p);
     default: {
         ZithNode *expr = parser_parse_expression(p);
-        if (parser_match(p, ZITH_TOKEN_ASSIGNMENT) || parser_match(p, ZITH_TOKEN_PLUS_EQUAL) ||
-            parser_match(p, ZITH_TOKEN_MINUS_EQUAL)) {
-            const ZithSourceLoc aloc = parser_peek(p)->loc;
-            ZithToken op_t           = *parser_peek(p);
-            expr = zith_ast_make_binary_op(p->arena, aloc, op_t.type, expr,
+        ZithTokenType assign_type = ZITH_TOKEN_END;
+        if (parser_match(p, ZITH_TOKEN_ASSIGNMENT))
+            assign_type = ZITH_TOKEN_ASSIGNMENT;
+        else if (parser_match(p, ZITH_TOKEN_PLUS_EQUAL))
+            assign_type = ZITH_TOKEN_PLUS_EQUAL;
+        else if (parser_match(p, ZITH_TOKEN_MINUS_EQUAL))
+            assign_type = ZITH_TOKEN_MINUS_EQUAL;
+
+        if (assign_type != ZITH_TOKEN_END) {
+            expr = zith_ast_make_binary_op(p->arena, parser_peek(p)->loc, assign_type, expr,
                                            parser_parse_expression(p));
         }
         parser_expect(p, ZITH_TOKEN_SEMICOLON, "expected ';'");
@@ -1062,7 +1070,7 @@ ZithNode *parser_parse_declaration(Parser *p) {
     }
 
     ZithNode *expr = parser_parse_expression(p);
-    parser_match(p, ZITH_TOKEN_SEMICOLON);
+    parser_expect(p, ZITH_TOKEN_SEMICOLON, "expected ';'");
     return expr;
 }
 
