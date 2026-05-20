@@ -18,6 +18,7 @@ public:
     void finalize();
 
     const std::vector<Diagnostic>& diagnostics() const { return diagnostics_; }
+    std::vector<Diagnostic> take_diagnostics() { return std::move(diagnostics_); }
     const std::vector<const Diagnostic*>& sorted_view() const { return sorted_view_; }
 
     bool had_errors() const { return error_count_ > 0; }

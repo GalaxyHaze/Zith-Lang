@@ -1,6 +1,7 @@
-// impl/import/symbol_table.hpp — Global symbol table for Zith
+// impl/import/symbol_table.hpp — v1 Symbol Resolution (ABI/NIF layer)
 //
-// Provides centralized symbol resolution.
+// Provides centralized symbol resolution via the Import RAII container.
+// This is the v1/ABI layer: consumers should prefer v2 (symbol_resolver.hpp).
 // Thread-unsafe (single-threaded compiler context).
 #pragma once
 
@@ -60,146 +61,11 @@ private:
 // Global Symbol Table (Singleton)
 // ============================================================================
 
-class SymbolTable {
+class SymbolTable : public Singleton<SymbolTable> {
 public:
-    static SymbolTable& instance() {
-        static SymbolTable inst;
-        return inst;
-    }
-
-    bool register_import(Import& imp) {
-        std::string name = imp.name();
-        if (name.empty()) {
-            return false;
-        }
-
-        if (imports_.contains(name)) {
-            return false;
-        }
-
-        SymbolTableEntry entry(&imp);
-        imports_.emplace(name, entry);
-        index_import(imp);
-        return true;
-    }
-
-    void unregister_import(const std::string& name) {
-        auto it = imports_.find(name);
-        if (it != imports_.end()) {
-            unindex_import(*it->second.import_);
-            imports_.erase(it);
-        }
-    }
-
-    auto resolve(const std::string& fully_qualified_name) {
-        size_t sep_pos = fully_qualified_name.find('/');
-        if (sep_pos != std::string::npos) {
-            size_t candidate_pos = sep_pos;
-            while (candidate_pos != std::string::npos) {
-                std::string import_name = fully_qualified_name.substr(0, candidate_pos);
-                auto it = imports_.find(import_name);
-                if (it != imports_.end()) {
-                    Import* imp = it->second.import_;
-                    std::string symbol_name = fully_qualified_name.substr(candidate_pos + 1);
-                    return resolve_in_import(*imp, symbol_name);
-                }
-                candidate_pos = fully_qualified_name.find('/', candidate_pos + 1);
-            }
-            return SymbolResolution();
-        }
-
-        if (imports_.contains(fully_qualified_name)) {
-            return resolve_local(fully_qualified_name);
-        }
-        auto dot_pos = fully_qualified_name.find('.');
-        if (dot_pos == std::string::npos) {
-            return resolve_local(fully_qualified_name);
-        }
-        std::string import_name = fully_qualified_name.substr(0, dot_pos);
-        if (!imports_.contains(import_name)) {
-            return resolve_local(fully_qualified_name);
-        }
-        Import* imp = imports_[import_name].import_;
-        return resolve_in_import(*imp, fully_qualified_name.substr(dot_pos + 1));
-    }
-
-    SymbolResolution resolve_local(const std::string& name) {
-        for (auto& kv : imports_) {
-            auto result = resolve_in_import(*kv.second.import_, name);
-            if (result) {
-                return result;
-            }
-        }
-        return SymbolResolution();
-    }
-
-    std::vector<SymbolResolution> resolve_all(const std::string& fully_qualified_name) {
-        std::vector<SymbolResolution> results;
-
-        size_t sep_pos = fully_qualified_name.find('/');
-        if (sep_pos != std::string::npos) {
-            size_t candidate_pos = sep_pos;
-            while (candidate_pos != std::string::npos) {
-                std::string import_name = fully_qualified_name.substr(0, candidate_pos);
-                auto it = imports_.find(import_name);
-                if (it != imports_.end()) {
-                    Import* imp = it->second.import_;
-                    auto result = resolve_in_import(*imp, fully_qualified_name.substr(candidate_pos + 1));
-                    if (result) results.push_back(result);
-                    return results;
-                }
-                candidate_pos = fully_qualified_name.find('/', candidate_pos + 1);
-            }
-            return results;
-        }
-
-        if (imports_.contains(fully_qualified_name)) {
-            Import* imp = imports_[fully_qualified_name].import_;
-            auto result = resolve_in_import(*imp, fully_qualified_name);
-            if (result) results.push_back(result);
-            return results;
-        }
-        auto dot_pos = fully_qualified_name.find('.');
-        if (dot_pos == std::string::npos) {
-            for (auto& kv : imports_) {
-                auto result = resolve_in_import(*kv.second.import_, fully_qualified_name);
-                if (result) results.push_back(result);
-            }
-            return results;
-        }
-        std::string import_name = fully_qualified_name.substr(0, dot_pos);
-        if (imports_.contains(import_name)) {
-            Import* imp = imports_[import_name].import_;
-            auto result = resolve_in_import(*imp, fully_qualified_name.substr(dot_pos + 1));
-            if (result) results.push_back(result);
-        }
-        return results;
-    }
-
-    bool is_registered(const std::string& name) const {
-        return imports_.contains(name);
-    }
-
-    std::vector<std::string> list_imports() const {
-        std::vector<std::string> names;
-        names.reserve(imports_.size());
-        for (const auto& kv : imports_) {
-            names.push_back(kv.first);
-        }
-        return names;
-    }
-
-    Import* get_import(const std::string& name) const {
-        auto it = imports_.find(name);
-        return it != imports_.end() ? it->second.import_ : nullptr;
-    }
-
-    void clear() {
-        imports_.clear();
-        symbols_by_name_.clear();
-    }
 
 private:
+    friend struct Singleton<SymbolTable>;
     SymbolTable() = default;
 
     void index_import(Import& imp) {
@@ -223,7 +89,14 @@ private:
     }
 
     void unindex_import(Import& imp) {
-        (void)imp;
+        std::string prefix = imp.name() + ".";
+        for (auto it = symbols_by_name_.begin(); it != symbols_by_name_.end(); ) {
+            if (it->first.find(prefix) == 0) {
+                it = symbols_by_name_.erase(it);
+            } else {
+                ++it;
+            }
+        }
     }
 
     SymbolResolution resolve_in_import(Import& imp, const std::string& symbol_name) {

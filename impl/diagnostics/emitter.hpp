@@ -21,17 +21,17 @@ public:
 
     void emit(const DiagnosticBag& bag, FILE* out = stderr) const;
     void emit_single(const Diagnostic& diag, FILE* out = stderr) const;
-    void emit_summary(const DiagnosticBag& bag, FILE* out = stderr) const;
+    static void emit_summary(const DiagnosticBag& bag, FILE* out = stderr);
 
     void set_source_map(const SourceMap* sm) { source_map_ = sm; }
 
 private:
     const SourceMap* source_map_;
 
-    void render_header(const Diagnostic& diag, FILE* out) const;
+    static void render_header(const Diagnostic& diag, FILE* out);
     void render_code_frame(const Diagnostic& diag, FILE* out) const;
-    void render_line(FILE* out, const SourceFile* file, size_t line_1based, size_t highlight_col, size_t highlight_len) const;
-    void render_children(const Diagnostic& diag, FILE* out) const;
+    static void render_line(FILE* out, const SourceFile* file, size_t line_1based, size_t highlight_col, size_t highlight_len);
+    static void render_children(const Diagnostic& diag, FILE* out);
     void render_suggestions(const Diagnostic& diag, FILE* out) const;
 
     static void set_color(FILE* out, const char* ansi);

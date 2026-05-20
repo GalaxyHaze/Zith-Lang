@@ -51,8 +51,33 @@ struct TypeSignature {
     bool is_compatible_with(const TypeSignature& other) const;
 };
 
+inline std::string TypeSignature::to_string() const {
+    std::string result = "(";
+    for (size_t i = 0; i < param_types.size(); ++i) {
+        if (i > 0) result += ", ";
+        result += param_types[i];
+    }
+    result += ") -> " + return_type;
+    return result;
+}
+
+inline bool TypeSignature::is_compatible_with(const TypeSignature& other) const {
+    if (param_types.size() != other.param_types.size()) {
+        return false;
+    }
+
+    for (size_t i = 0; i < param_types.size(); ++i) {
+        if (param_types[i] != other.param_types[i]) {
+            return false;
+        }
+    }
+
+    return return_type == other.return_type;
+}
+
 // ============================================================================
 // Symbol Entry (extended with location and signature)
+// ============================================================================
 // ============================================================================
 
 class SymbolEntry {
@@ -187,59 +212,11 @@ private:
 // Module Registry (Singleton)
 // ============================================================================
 
-class ModuleRegistry {
+class ModuleRegistry : public Singleton<ModuleRegistry> {
 public:
-    static ModuleRegistry& instance() {
-        static ModuleRegistry inst;
-        return inst;
-    }
-
-    bool register_module(Module mod) {
-        std::string name = mod.name();
-        if (name.empty()) {
-            return false;
-        }
-
-        if (modules_.contains(name)) {
-            return false;
-        }
-
-        modules_.emplace(name, std::make_shared<Module>(std::move(mod)));
-        return true;
-    }
-
-    void unregister_module(const std::string& name) {
-        modules_.erase(name);
-    }
-
-    std::shared_ptr<Module> get_module(const std::string& name) const {
-        auto it = modules_.find(name);
-        if (it != modules_.end()) {
-            return it->second;
-        }
-        return nullptr;
-    }
-
-    bool exists(const std::string& name) const {
-        return modules_.contains(name);
-    }
-
-    std::vector<std::string> list_modules() const {
-        std::vector<std::string> names;
-        names.reserve(modules_.size());
-        for (const auto& kv : modules_) {
-            names.push_back(kv.first);
-        }
-        return names;
-    }
-
-    void clear() {
-        modules_.clear();
-    }
-
-    size_t module_count() const { return modules_.size(); }
 
 private:
+    friend struct Singleton<ModuleRegistry>;
     ModuleRegistry() = default;
 
     using ModuleMap = std::unordered_map<std::string, std::shared_ptr<Module>>;

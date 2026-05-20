@@ -3,7 +3,6 @@
 
 #include "zith/types.h"
 #include "zith/token.h"
-#include "zith/memory.h"
 
 #ifdef __cplusplus
 extern "C" {

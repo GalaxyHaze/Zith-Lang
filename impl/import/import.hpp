@@ -13,6 +13,21 @@
 #include <cstring>
 #include <unordered_map>
 
+// ============================================================================
+// Singleton CRTP Base
+// ============================================================================
+
+template<typename T>
+struct Singleton {
+    static T& instance() {
+        static T inst;
+        return inst;
+    }
+protected:
+    Singleton() = default;
+    friend T;
+};
+
 #ifdef __cplusplus
 extern "C" {
 #endif

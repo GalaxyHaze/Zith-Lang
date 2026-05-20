@@ -9,6 +9,10 @@
 using zith::ArenaList;
 
 extern ZithLiteral parse_lit_number(const char *, size_t, ZithTokenType);
+extern ZithNode *parser_make_list_node(Parser *p, ZithSourceLoc loc,
+                                       ZithNodeType type,
+                                       ZithNode *(*parse_fn)(Parser *),
+                                       const char *error_msg);
 
 // ============================================================================
 // Types
@@ -108,25 +112,8 @@ ZithNode *parser_parse_type(Parser *p) {
         }
     }
     if (parser_match(p, ZITH_TOKEN_PIPE)) {
-        ArenaList<ZithNode *> items_b;
-        items_b.init(p->arena, 8);
-        while (!parser_check(p, ZITH_TOKEN_PIPE) && !parser_is_at_end(p)) {
-            items_b.push(p->arena, parser_parse_type(p));
-            if (!parser_match(p, ZITH_TOKEN_COMMA))
-                break;
-        }
-        parser_expect(p, ZITH_TOKEN_PIPE, "expected '|' closing tuple type");
-        size_t count = items_b.size();
-        ZithNode **items = items_b.flatten(p->arena, &count);
-        ZithNode *n = (ZithNode *)zith_arena_alloc(p->arena, sizeof(ZithNode));
-        if (n) {
-            memset(n, 0, sizeof(ZithNode));
-            n->type = ZITH_NODE_TYPE_TUPLE;
-            n->loc  = loc;
-            n->data.list.ptr = items;
-            n->data.list.len = count;
-        }
-        return n;
+        return parser_make_list_node(p, loc, ZITH_NODE_TYPE_TUPLE,
+                                     parser_parse_type, "expected '|' closing tuple type");
     }
     if (parser_check(p, ZITH_TOKEN_TYPE) || parser_check(p, ZITH_TOKEN_IDENTIFIER)) {
         const ZithToken *t = parser_advance(p);
@@ -297,25 +284,8 @@ static ZithNode *parse_nud(Parser *p) {
         return expr;
     }
     case ZITH_TOKEN_PIPE: {
-        ArenaList<ZithNode *> items_b;
-        items_b.init(p->arena, 8);
-        while (!parser_check(p, ZITH_TOKEN_PIPE) && !parser_is_at_end(p)) {
-            items_b.push(p->arena, parser_parse_expression(p));
-            if (!parser_match(p, ZITH_TOKEN_COMMA))
-                break;
-        }
-        parser_expect(p, ZITH_TOKEN_PIPE, "expected '|' closing pack literal");
-        size_t count    = 0;
-        ZithNode **items = items_b.flatten(p->arena, &count);
-        ZithNode *n = (ZithNode *)zith_arena_alloc(p->arena, sizeof(ZithNode));
-        if (n) {
-            memset(n, 0, sizeof(ZithNode));
-            n->type = ZITH_NODE_TUPLE_LIT;
-            n->loc  = loc;
-            n->data.list.ptr = items;
-            n->data.list.len = count;
-        }
-        return n;
+        return parser_make_list_node(p, loc, ZITH_NODE_TUPLE_LIT,
+                                     parser_parse_expression, "expected '|' closing pack literal");
     }
     case ZITH_TOKEN_SPAWN:
         return zith_ast_make_spawn(p->arena, loc, parser_parse_expression(p), false);

@@ -22,8 +22,8 @@ public:
     explicit LazyMessage(std::string msg)
         : cached_(std::move(msg)) {}
 
-    LazyMessage(const LazyMessage&) = delete;
-    LazyMessage& operator=(const LazyMessage&) = delete;
+    LazyMessage(const LazyMessage&) = default;
+    LazyMessage& operator=(const LazyMessage&) = default;
 
     LazyMessage(LazyMessage&&) noexcept = default;
     LazyMessage& operator=(LazyMessage&&) noexcept = default;
@@ -33,7 +33,7 @@ public:
             cached_ = gen_();
         }
         if (cached_) return *cached_;
-        static const std::string empty;
+        static constexpr std::string empty;
         return empty;
     }
 
