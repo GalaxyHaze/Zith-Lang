@@ -432,11 +432,11 @@ target_compile_definitions(zith-lsp PRIVATE ZITH_VERSION="${ZITH_VERSION}")
 # ───────────────────────────────────────────────
 # Install Targets
 # ───────────────────────────────────────────────
-#install(TARGETS zith zith-lsp ZithParse ZithCore
-#    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
-#    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-#    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
-#)
+install(TARGETS zith zith-lsp ZithParse ZithCore
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+)
 
 install(DIRECTORY ../lib/
     DESTINATION ${CMAKE_INSTALL_LIBDIR}/zith/lib
