@@ -1,13 +1,22 @@
-// impl/parser/parser_context.hpp — C++ ParserContext wrapper
+// impl/parser/parser_context.hpp — C++ ParserContext wrapper + ParseContext
 #pragma once
 
 #include "diagnostics/diagnostics.hpp"
 #include "zith/parser.h"
+#include <vector>
 
 #ifdef __cplusplus
 #include "zith/zith.hpp"
 
 void print_scanned_symbols();
+
+struct ParseContext {
+    std::vector<ZithNode *> imported_decls;
+    int depth = 0;
+    bool import_loaded = false;
+    ZithDiagList last_diags = {nullptr, 0, 0};
+    DiagManager *last_diag_manager = nullptr;
+};
 
 class ParserContext {
 public:

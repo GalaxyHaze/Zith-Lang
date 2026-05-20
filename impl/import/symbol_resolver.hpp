@@ -1,10 +1,13 @@
-// impl/import/symbol_resolver.hpp — SymbolEntry resolution and validation
+// impl/import/symbol_resolver.hpp — v2 Symbol Resolution (current implementation)
 //
 // Provides fully qualified path resolution, duplicate detection,
 // function overloading validation, and alias support.
+// This is the v2 implementation: all new consumers should use this
+// instead of v1 (symbol_table.hpp).
 #pragma once
 
 #include "module_registry.hpp"
+#include "symbol_table.hpp"
 #include <unordered_map>
 
 #include <cstdio>
@@ -56,10 +59,10 @@ struct Error {
 // SymbolEntry Resolution Result
 // ============================================================================
 
-class SymbolResolution {
+class ResolvedSymbol {
 public:
-    SymbolResolution() : symbol_(nullptr), module_name_(), is_ambiguous_(false) {}
-    SymbolResolution(SymbolEntry* sym, const std::string& module_name)
+    ResolvedSymbol() : symbol_(nullptr), module_name_(), is_ambiguous_(false) {}
+    ResolvedSymbol(SymbolEntry* sym, const std::string& module_name)
         : symbol_(sym), module_name_(module_name), is_ambiguous_(false) {}
 
     explicit operator bool() const { return symbol_ != nullptr; }
@@ -104,23 +107,24 @@ struct Alias {
 // SymbolEntry Resolver
 // ============================================================================
 
-class SymbolResolver {
+class SymbolResolver : public Singleton<SymbolResolver> {
 public:
-    static SymbolResolver& instance() {
-        static SymbolResolver inst;
-        return inst;
-    }
 
+private:
+    friend struct Singleton<SymbolResolver>;
+    SymbolResolver() = default;
+
+public:
     // Resolution
-    SymbolResolution resolve(const std::string& fully_qualified_path);
-    SymbolResolution resolve_in_module(const std::string& module_name,
+    ResolvedSymbol resolve(const std::string& fully_qualified_path);
+    ResolvedSymbol resolve_in_module(const std::string& module_name,
                                       const std::string& symbol_name);
 
     // Module-level resolution (for import std.io;)
-    SymbolResolution resolve_module(const std::string& module_name);
+    ResolvedSymbol resolve_module(const std::string& module_name);
 
     // Multiple resolution (for auto-discovery)
-    std::vector<SymbolResolution> resolve_all(const std::string& symbol_name);
+    std::vector<ResolvedSymbol> resolve_all(const std::string& symbol_name);
 
 // Alias management
     bool add_alias(const std::string& alias_name,
@@ -147,8 +151,6 @@ public:
     std::optional<Error> detect_duplicate(const std::string& module_name,
                                             const SymbolEntry& new_symbol);
 
-    std::vector<Error> detect_all_conflicts(const std::string& module_name);
-
     // Overload validation
     bool is_valid_overload(const std::string& module_name,
                            const SymbolEntry& new_function);
@@ -165,7 +167,7 @@ private:
     std::vector<std::string> parse_path(const std::string& path) const;
 
     // Find module and symbol from path components
-    SymbolResolution resolve_path(const std::vector<std::string>& components);
+    ResolvedSymbol resolve_path(const std::vector<std::string>& components);
 
     // Check if two symbols are valid overloads
     bool are_valid_overloads(const SymbolEntry& a, const SymbolEntry& b) const;
@@ -174,34 +176,6 @@ private:
     AliasMap aliases_;
     std::vector<Error> errors_;
 };
-
-    // ============================================================================
-    // Implementation
-    // ============================================================================
-
-    inline std::string TypeSignature::to_string() const {
-    std::string result = "(";
-    for (size_t i = 0; i < param_types.size(); ++i) {
-        if (i > 0) result += ", ";
-        result += param_types[i];
-    }
-    result += ") -> " + return_type;
-    return result;
-}
-
-inline bool TypeSignature::is_compatible_with(const TypeSignature& other) const {
-    if (param_types.size() != other.param_types.size()) {
-        return false;
-    }
-
-    for (size_t i = 0; i < param_types.size(); ++i) {
-        if (param_types[i] != other.param_types[i]) {
-            return false;
-        }
-    }
-
-    return return_type == other.return_type;
-}
 
 inline std::string Error::to_string() const {
     std::string result = "Error " + std::to_string(static_cast<int>(code)) + ": " + message;
@@ -240,7 +214,7 @@ inline std::vector<std::string> SymbolResolver::parse_path(const std::string& pa
     return components;
 }
 
-inline SymbolResolution SymbolResolver::resolve(const std::string& fully_qualified_path) {
+inline ResolvedSymbol SymbolResolver::resolve(const std::string& fully_qualified_path) {
     if (auto it = aliases_.find(fully_qualified_path); it != aliases_.end()) {
         const Alias& alias = it->second;
         return resolve(alias.original_path);
@@ -248,15 +222,15 @@ inline SymbolResolution SymbolResolver::resolve(const std::string& fully_qualifi
 
     auto components = parse_path(fully_qualified_path);
     if (components.empty()) {
-        return SymbolResolution();
+        return ResolvedSymbol();
     }
 
     return resolve_path(components);
 }
 
-inline SymbolResolution SymbolResolver::resolve_path(const std::vector<std::string>& components) {
+inline ResolvedSymbol SymbolResolver::resolve_path(const std::vector<std::string>& components) {
     if (components.empty()) {
-        return SymbolResolution();
+        return ResolvedSymbol();
     }
 
     // If there's only one component, search all modules
@@ -276,7 +250,7 @@ inline SymbolResolution SymbolResolver::resolve_path(const std::vector<std::stri
             }
             return res;
         }
-        return SymbolResolution();
+        return ResolvedSymbol();
     }
 
     // Multiple components: find module by trying progressively longer names
@@ -303,7 +277,7 @@ inline SymbolResolution SymbolResolver::resolve_path(const std::vector<std::stri
     if (!mod) {
         errors_.emplace_back(ErrorCode::ModuleNotFound,
                           "Module not found for path");
-        return SymbolResolution();
+        return ResolvedSymbol();
     }
 
     // Build symbol name from remaining components after the module
@@ -315,43 +289,43 @@ inline SymbolResolution SymbolResolver::resolve_path(const std::vector<std::stri
     return resolve_in_module(module_name, symbol_name);
 }
 
-inline SymbolResolution SymbolResolver::resolve_in_module(const std::string& module_name,
+inline ResolvedSymbol SymbolResolver::resolve_in_module(const std::string& module_name,
                                                     const std::string& symbol_name) {
     auto mod = ModuleRegistry::instance().get_module(module_name);
     if (!mod) {
         errors_.emplace_back(ErrorCode::ModuleNotFound,
                           "Module '" + module_name + "' not found");
-        return SymbolResolution();
+        return ResolvedSymbol();
     }
 
     auto* sym = mod->find_symbol(symbol_name);
     if (!sym) {
         errors_.emplace_back(ErrorCode::SymbolNotFound,
                           "SymbolEntry '" + symbol_name + "' not found in module '" + module_name + "'");
-        return SymbolResolution();
+        return ResolvedSymbol();
     }
 
     if (!sym->is_exported() && sym->visibility() != Visibility::Public) {
         errors_.emplace_back(ErrorCode::SymbolNotExported,
                           "SymbolEntry '" + symbol_name + "' is not exported from module '" + module_name + "'");
-        return SymbolResolution();
+        return ResolvedSymbol();
     }
 
-    return SymbolResolution(sym, module_name);
+    return ResolvedSymbol(sym, module_name);
 }
 
-inline SymbolResolution SymbolResolver::resolve_module(const std::string& module_name) {
+inline ResolvedSymbol SymbolResolver::resolve_module(const std::string& module_name) {
     auto mod = ModuleRegistry::instance().get_module(module_name);
     if (!mod) {
         errors_.emplace_back(ErrorCode::ModuleNotFound,
                           "Module '" + module_name + "' not found");
-        return SymbolResolution();
+        return ResolvedSymbol();
     }
-    return SymbolResolution(nullptr, module_name);
+    return ResolvedSymbol(nullptr, module_name);
 }
 
-inline std::vector<SymbolResolution> SymbolResolver::resolve_all(const std::string& symbol_name) {
-    std::vector<SymbolResolution> results;
+inline std::vector<ResolvedSymbol> SymbolResolver::resolve_all(const std::string& symbol_name) {
+    std::vector<ResolvedSymbol> results;
 
     for (const auto& name : ModuleRegistry::instance().list_modules()) {
         auto mod = ModuleRegistry::instance().get_module(name);
@@ -447,8 +421,8 @@ inline std::optional<SymbolEntry> SymbolResolver::resolve_alias(const std::strin
 }
 
 inline void SymbolResolver::clear() {
-    ModuleRegistry::instance().clear();
     aliases_.clear();
+    clear_errors();
 }
 
 inline const std::vector<Error>& SymbolResolver::errors() const {
@@ -502,19 +476,6 @@ inline std::vector<Error> SymbolResolver::validate_symbol(const std::string& mod
 
 inline std::vector<Error> SymbolResolver::validate_module(Module& mod) {
     std::vector<Error> validation_errors;
-
-    const auto& symbols = mod.symbols();
-    for (size_t i = 0; i < symbols.size(); ++i) {
-        for (size_t j = i + 1; j < symbols.size(); ++j) {
-            if (symbols[i].name() == symbols[j].name()) {
-                if (!symbols[i].has_identical_signature(symbols[j])) {
-                    validation_errors.emplace_back(ErrorCode::DuplicateSymbol,
-                                                    "Duplicate symbol '" + symbols[i].name() + "'");
-                }
-            }
-        }
-    }
-
     return validation_errors;
 }
 
@@ -537,37 +498,6 @@ inline std::optional<Error> SymbolResolver::detect_duplicate(const std::string& 
     }
 
     return std::nullopt;
-}
-
-inline std::vector<Error> SymbolResolver::detect_all_conflicts(const std::string& module_name) {
-    std::vector<Error> conflicts;
-
-    auto mod = ModuleRegistry::instance().get_module(module_name);
-    if (!mod) {
-        return conflicts;
-    }
-
-    const auto& symbols = mod->symbols();
-    for (size_t i = 0; i < symbols.size(); ++i) {
-        for (size_t j = i + 1; j < symbols.size(); ++j) {
-            if (symbols[i].name() == symbols[j].name()) {
-                if (symbols[i].has_identical_signature(symbols[j])) {
-                    conflicts.emplace_back(ErrorCode::DuplicateSymbol,
-                                          "Duplicate symbol '" + symbols[i].name() + "'",
-                                          symbols[j].location().file_path,
-                                          symbols[j].location().line);
-                }
-            } else if (symbols[i].kind() == SymbolKind::Function &&
-                       symbols[j].kind() == SymbolKind::Function) {
-                if (!are_valid_overloads(symbols[i], symbols[j])) {
-                    conflicts.emplace_back(ErrorCode::InvalidOverload,
-                                     "Invalid overload for '" + symbols[i].name() + "'");
-                }
-            }
-        }
-    }
-
-    return conflicts;
 }
 
 inline bool SymbolResolver::is_valid_overload(const std::string& module_name,
@@ -606,13 +536,23 @@ inline bool SymbolResolver::are_valid_overloads(const SymbolEntry& a, const Symb
 // Convenience functions
 // ============================================================================
 
-inline SymbolResolution resolve_symbol(const std::string& fully_qualified_path) {
+inline ResolvedSymbol resolve_symbol(const std::string& fully_qualified_path) {
     return SymbolResolver::instance().resolve(fully_qualified_path);
 }
 
 inline bool symbol_exists(const std::string& fully_qualified_path) {
     auto result = resolve_symbol(fully_qualified_path);
     return static_cast<bool>(result);
+}
+
+// ============================================================================
+// Top-level reset
+// ============================================================================
+
+inline void reset_all() {
+    ModuleRegistry::instance().clear();
+    SymbolTable::instance().clear();
+    SymbolResolver::instance().clear();
 }
 
 } // namespace import

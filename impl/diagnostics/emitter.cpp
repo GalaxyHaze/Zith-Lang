@@ -10,29 +10,22 @@ namespace zith::diag {
 // TerminalEmitter
 // ============================================================================
 
-void TerminalEmitter::set_color(FILE* out, const char* ansi) {
-    fprintf(out, "%s", ansi);
-}
-
-void TerminalEmitter::reset_color(FILE* out) {
-    fprintf(out, "%s", RESET);
-}
-
-void TerminalEmitter::emit(const DiagnosticBag& bag, FILE* out) const {
-    if (bag.total_count() == 0) return;
+void TerminalEmitter::emit(const DiagnosticBag &bag, FILE *out) const {
+    if (bag.total_count() == 0)
+        return;
 
     if (!bag.is_finalized()) {
-        const_cast<DiagnosticBag&>(bag).finalize();
+        const_cast<DiagnosticBag &>(bag).finalize();
     }
 
-    for (const auto* diag : bag.sorted_view()) {
+    for (const auto *diag : bag.sorted_view()) {
         emit_single(*diag, out);
     }
 
     emit_summary(bag, out);
 }
 
-void TerminalEmitter::emit_single(const Diagnostic& diag, FILE* out) const {
+void TerminalEmitter::emit_single(const Diagnostic &diag, FILE *out) const {
     render_header(diag, out);
     if (diag.has_primary_span) {
         render_code_frame(diag, out);
@@ -41,7 +34,32 @@ void TerminalEmitter::emit_single(const Diagnostic& diag, FILE* out) const {
     render_children(diag, out);
 }
 
-void TerminalEmitter::render_header(const Diagnostic& diag, FILE* out) const {
+void TerminalEmitter::emit_summary(const DiagnosticBag &bag, FILE *out) {
+    const size_t errors   = bag.error_count();
+    const size_t warnings = bag.warning_count();
+
+    if (errors > 0 || warnings > 0) {
+        set_color(out, BOLD);
+        if (errors > 0) {
+            set_color(out, RED);
+            fprintf(out, "error: %zu ", errors);
+            fprintf(out, errors == 1 ? "error" : "errors");
+            reset_color(out);
+        }
+        if (errors > 0 && warnings > 0) {
+            fprintf(out, ", ");
+        }
+        if (warnings > 0) {
+            set_color(out, YELLOW);
+            fprintf(out, "%zu ", warnings);
+            fprintf(out, warnings == 1 ? "warning" : "warnings");
+            reset_color(out);
+        }
+        fprintf(out, "\n\n");
+    }
+}
+
+void TerminalEmitter::render_header(const Diagnostic &diag, FILE *out) {
     set_color(out, BOLD);
     switch (diag.level) {
     case DiagLevel::Fatal:
@@ -74,38 +92,35 @@ void TerminalEmitter::render_header(const Diagnostic& diag, FILE* out) const {
     fprintf(out, "\n");
 }
 
-void TerminalEmitter::render_code_frame(const Diagnostic& diag, FILE* out) const {
-    if (!source_map_) return;
+void TerminalEmitter::render_code_frame(const Diagnostic &diag, FILE *out) const {
+    if (!source_map_)
+        return;
 
-    const SourceFile* file = source_map_->lookup(diag.primary_span.file_id);
-    if (!file) return;
+    const SourceFile *file = source_map_->lookup(diag.primary_span.file_id);
+    if (!file)
+        return;
 
     // ── file:line:col header ──
     set_color(out, GRAY);
-    fprintf(out, "  %s%s:%zu:%zu%s\n",
-            BOLD,
-            file->filename.c_str(),
-            diag.primary_span.start.line,
-            diag.primary_span.start.index,
-            RESET);
+    fprintf(out, "  %s%s:%zu:%zu%s\n", BOLD, file->filename.c_str(), diag.primary_span.start.line,
+            diag.primary_span.start.index, RESET);
 
     // Determine the line range to show (context ±2 lines)
-    size_t start_line = diag.primary_span.start.line;
+    size_t start_line     = diag.primary_span.start.line;
     size_t context_before = (start_line > 2) ? start_line - 2 : 1;
-    size_t context_after = std::min(start_line + 2, file->line_count());
+    size_t context_after  = std::min(start_line + 2, file->line_count());
 
     // Render context lines
     for (size_t ln = context_before; ln <= context_after; ++ln) {
-        render_line(out, file, ln,
-                    (ln == start_line) ? diag.primary_span.start.index : SIZE_MAX,
+        render_line(out, file, ln, (ln == start_line) ? diag.primary_span.start.index : SIZE_MAX,
                     (ln == start_line) ? 1 : 0);
     }
 
     // Render secondary spans
-    for (const auto& ls : diag.secondary_spans) {
-        if (ls.span.start.line == diag.primary_span.start.line) continue;
-        render_line(out, file, ls.span.start.line,
-                    ls.span.start.index, 1);
+    for (const auto &ls : diag.secondary_spans) {
+        if (ls.span.start.line == diag.primary_span.start.line)
+            continue;
+        render_line(out, file, ls.span.start.line, ls.span.start.index, 1);
         // Label on next line
         if (ls.label.has_value()) {
             set_color(out, CYAN);
@@ -115,10 +130,11 @@ void TerminalEmitter::render_code_frame(const Diagnostic& diag, FILE* out) const
     }
 }
 
-void TerminalEmitter::render_line(FILE* out, const SourceFile* file, size_t line_1based,
-                                    size_t highlight_col, size_t highlight_len) const {
-    std::string_view text = file->line_text(line_1based);
-    if (text.empty()) return;
+void TerminalEmitter::render_line(FILE *out, const SourceFile *file, size_t line_1based,
+                                  const size_t highlight_col, size_t highlight_len) {
+    const std::string_view text = file->line_text(line_1based);
+    if (text.empty())
+        return;
 
     // Line number
     set_color(out, GRAY);
@@ -152,12 +168,14 @@ void TerminalEmitter::render_line(FILE* out, const SourceFile* file, size_t line
     }
 }
 
-void TerminalEmitter::render_children(const Diagnostic& diag, FILE* out) const {
-    for (const auto& child_ptr : diag.children) {
-        if (!child_ptr) continue;
-        const auto& child = *child_ptr;
-        std::string msg = child.message.get();
-        if (msg.empty()) continue;
+void TerminalEmitter::render_children(const Diagnostic &diag, FILE *out) {
+    for (const auto &child_ptr : diag.children) {
+        if (!child_ptr)
+            continue;
+        const auto &child = *child_ptr;
+        std::string msg   = child.message.get();
+        if (msg.empty())
+            continue;
 
         switch (child.level) {
         case DiagLevel::Note:
@@ -181,8 +199,8 @@ void TerminalEmitter::render_children(const Diagnostic& diag, FILE* out) const {
     }
 }
 
-void TerminalEmitter::render_suggestions(const Diagnostic& diag, FILE* out) const {
-    for (const auto& sug : diag.suggestions) {
+void TerminalEmitter::render_suggestions(const Diagnostic &diag, FILE *out) const {
+    for (const auto &sug : diag.suggestions) {
         if (!sug.label.empty()) {
             set_color(out, GREEN);
             fprintf(out, "  = suggestion: %s\n", sug.label.c_str());
@@ -190,8 +208,7 @@ void TerminalEmitter::render_suggestions(const Diagnostic& diag, FILE* out) cons
         }
 
         if (!sug.replacement.empty() && source_map_) {
-            const SourceFile* file = source_map_->lookup(sug.span.file_id);
-            if (file) {
+            if (const SourceFile *file = source_map_->lookup(sug.span.file_id)) {
                 std::string_view orig = file->line_text(sug.span.start.line);
                 set_color(out, RED);
                 fprintf(out, "    - %.*s\n", static_cast<int>(orig.size()), orig.data());
@@ -204,29 +221,12 @@ void TerminalEmitter::render_suggestions(const Diagnostic& diag, FILE* out) cons
     }
 }
 
-void TerminalEmitter::emit_summary(const DiagnosticBag& bag, FILE* out) const {
-    size_t errors = bag.error_count();
-    size_t warnings = bag.warning_count();
+void TerminalEmitter::set_color(FILE *out, const char *ansi) {
+    fprintf(out, "%s", ansi);
+}
 
-    if (errors > 0 || warnings > 0) {
-        set_color(out, BOLD);
-        if (errors > 0) {
-            set_color(out, RED);
-            fprintf(out, "error: %zu ", errors);
-            fprintf(out, errors == 1 ? "error" : "errors");
-            reset_color(out);
-        }
-        if (errors > 0 && warnings > 0) {
-            fprintf(out, ", ");
-        }
-        if (warnings > 0) {
-            set_color(out, YELLOW);
-            fprintf(out, "%zu ", warnings);
-            fprintf(out, warnings == 1 ? "warning" : "warnings");
-            reset_color(out);
-        }
-        fprintf(out, "\n\n");
-    }
+void TerminalEmitter::reset_color(FILE *out) {
+    fprintf(out, "%s", RESET);
 }
 
 // ============================================================================
@@ -383,7 +383,7 @@ void JsonEmitter::render_diagnostic_json(const Diagnostic& diag, FILE* out, bool
 
 } // namespace zith::diag
 
-std::string JsonEmitter::emit_to_string(const DiagnosticBag& bag) const {
+std::string zith::diag::JsonEmitter::emit_to_string(const DiagnosticBag& bag) const {
     if (bag.total_count() == 0) {
         return "[]\n";
     }
@@ -427,9 +427,9 @@ std::string JsonEmitter::emit_to_string(const DiagnosticBag& bag) const {
                 result += "        \"label\": " + escape_json_string(sug.label) + ",\n";
                 result += "        \"replacement\": " + escape_json_string(sug.replacement) + ",\n";
                 result += "        \"span\": {\n";
-                result += "          \"start\": {\"line\": " + std::to_string(sug.span.start.line) +
+                result += R"(          "start": {"line": )" + std::to_string(sug.span.start.line) +
                           ", \"column\": " + std::to_string(sug.span.start.index) + "},\n";
-                result += "          \"end\": {\"line\": " + std::to_string(sug.span.end.line) +
+                result += R"(          "end": {"line": )" + std::to_string(sug.span.end.line) +
                           ", \"column\": " + std::to_string(sug.span.end.index) + "}\n";
                 result += "        },\n";
                 result += "        \"machine_applicable\": " +

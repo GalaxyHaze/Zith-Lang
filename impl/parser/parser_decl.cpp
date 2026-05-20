@@ -29,6 +29,13 @@ extern bool check_kw(const Parser *p, const char *kw);
 
 extern ZithNode *parser_parse_type(Parser *p);
 extern ZithNode *parser_parse_expression(Parser *p);
+extern ZithNode *parser_parse_statement(Parser *p);
+extern ZithOwnership parser_ownership_from_node(const ZithNode *type_node);
+extern ZithNode *parser_make_list_node(Parser *p, ZithSourceLoc loc,
+                                       ZithNodeType type,
+                                       ZithNode *(*parse_fn)(Parser *),
+                                       const char *error_msg);
+extern ZithNode *parser_parse_block_body(Parser *p, bool expect_brace, ZithSourceLoc loc);
 static ZithNode *parse_destructure_decl(Parser *p, ZithBindingKind binding, ZithVisibility vis, int32_t vis_depth);
 
 // ============================================================================
@@ -221,17 +228,9 @@ static ZithNode *parse_param(Parser *p) {
     ZithNode *def_val =
         parser_match(p, ZITH_TOKEN_ASSIGNMENT) ? parser_parse_expression(p) : nullptr;
 
-    ZithOwnership own = ZITH_OWN_DEFAULT;
-    if (type_node) {
-        switch (type_node->type) {
-        case ZITH_NODE_TYPE_UNIQUE: own = ZITH_OWN_UNIQUE; break;
-        case ZITH_NODE_TYPE_SHARED: own = ZITH_OWN_SHARED; break;
-        case ZITH_NODE_TYPE_VIEW:   own = ZITH_OWN_VIEW; break;
-        case ZITH_NODE_TYPE_LEND:   own = ZITH_OWN_LEND; is_mutable = true; break;
-        case ZITH_NODE_TYPE_PACK:   own = ZITH_OWN_EXTENSION; break;
-        case ZITH_NODE_TYPE_EXTENSION: own = ZITH_OWN_EXTENSION; break;
-        }
-    }
+    ZithOwnership own = parser_ownership_from_node(type_node);
+    if (type_node && type_node->type == ZITH_NODE_TYPE_LEND)
+        is_mutable = true;
 
     return zith_ast_make_param(
         p->arena, loc, {name->lexeme.data, name->lexeme.len, own, type_node, def_val, is_mutable});
@@ -414,28 +413,14 @@ ZithNode *parser_parse_statement(Parser *p) {
 
 ZithNode *parser_parse_block(Parser *p) {
     const ZithSourceLoc loc = parser_peek(p)->loc;
-    parser_expect(p, ZITH_TOKEN_LBRACE, "expected '{'");
-    ArenaList<ZithNode *> stmts_b;
-    stmts_b.init(p->arena, 16);
-    while (!parser_check(p, ZITH_TOKEN_RBRACE) && !parser_is_at_end(p))
-        stmts_b.push(p->arena, parser_parse_statement(p));
-    parser_expect(p, ZITH_TOKEN_RBRACE, "expected '}'");
-    size_t count     = 0;
-    ZithNode **stmts = stmts_b.flatten(p->arena, &count);
-    return zith_ast_make_block(p->arena, loc, stmts, count);
+    return parser_parse_block_body(p, true, loc);
 }
 
 static ZithNode *parse_body(Parser *p) {
-    if (parser_match(p, ZITH_TOKEN_LBRACE)) {
-        ArenaList<ZithNode *> stmts_b;
-        stmts_b.init(p->arena, 16);
-        while (!parser_check(p, ZITH_TOKEN_RBRACE) && !parser_is_at_end(p))
-            stmts_b.push(p->arena, parser_parse_statement(p));
-        parser_expect(p, ZITH_TOKEN_RBRACE, "expected '}'");
-        size_t count     = 0;
-        ZithNode **stmts = stmts_b.flatten(p->arena, &count);
-        return zith_ast_make_block(p->arena, parser_peek(p)->loc, stmts, count);
-    }
+    const ZithSourceLoc loc = parser_peek(p)->loc;
+    ZithNode *block = parser_parse_block_body(p, false, loc);
+    if (block)
+        return block;
     ZithNode *stmt = parser_parse_statement(p);
     if (!stmt)
         return zith_ast_make_block(p->arena, parser_peek(p)->loc, nullptr, 0);
@@ -616,32 +601,13 @@ static ZithNode *parse_struct_decl(Parser *p, ZithVisibility struct_vis, int32_t
                     }
                     for (size_t i = 0; i < name_count; ++i) {
                         ZithNode *elem_type = (i < type_count) ? type_items[i] : nullptr;
-                        ZithOwnership elem_own = ZITH_OWN_DEFAULT;
-                        if (elem_type) {
-                            switch (elem_type->type) {
-                            case ZITH_NODE_TYPE_UNIQUE: elem_own = ZITH_OWN_UNIQUE; break;
-                            case ZITH_NODE_TYPE_SHARED: elem_own = ZITH_OWN_SHARED; break;
-                            case ZITH_NODE_TYPE_VIEW:   elem_own = ZITH_OWN_VIEW; break;
-                            case ZITH_NODE_TYPE_LEND:   elem_own = ZITH_OWN_LEND; break;
-                            case ZITH_NODE_TYPE_PACK:   elem_own = ZITH_OWN_EXTENSION; break;
-                            case ZITH_NODE_TYPE_EXTENSION: elem_own = ZITH_OWN_EXTENSION; break;
-                            }
-                        }
+                        ZithOwnership elem_own = parser_ownership_from_node(
+                            (i < type_count) ? type_items[i] : nullptr);
                         fields_b.push(p->arena, zith_ast_make_field(p->arena, floc,
                             {names[i], name_lens[i], elem_own, item_vis, item_depth, elem_type, fdef}));
                     }
                 } else {
-                    ZithOwnership field_own = ZITH_OWN_DEFAULT;
-                    if (ftype) {
-                        switch (ftype->type) {
-                        case ZITH_NODE_TYPE_UNIQUE: field_own = ZITH_OWN_UNIQUE; break;
-                        case ZITH_NODE_TYPE_SHARED: field_own = ZITH_OWN_SHARED; break;
-                        case ZITH_NODE_TYPE_VIEW:   field_own = ZITH_OWN_VIEW; break;
-                        case ZITH_NODE_TYPE_LEND:   field_own = ZITH_OWN_LEND; break;
-                        case ZITH_NODE_TYPE_PACK:   field_own = ZITH_OWN_EXTENSION; break;
-                        case ZITH_NODE_TYPE_EXTENSION: field_own = ZITH_OWN_EXTENSION; break;
-                        }
-                    }
+                    ZithOwnership field_own = parser_ownership_from_node(ftype);
                     for (size_t i = 0; i < name_count; ++i) {
                         fields_b.push(p->arena, zith_ast_make_field(p->arena, floc,
                             {names[i], name_lens[i], field_own, item_vis, item_depth, ftype, fdef}));
@@ -675,17 +641,7 @@ static ZithNode *parse_struct_decl(Parser *p, ZithVisibility struct_vis, int32_t
                 }
             }
 
-            ZithOwnership field_own = ZITH_OWN_DEFAULT;
-            if (ftype) {
-                switch (ftype->type) {
-                case ZITH_NODE_TYPE_UNIQUE: field_own = ZITH_OWN_UNIQUE; break;
-                case ZITH_NODE_TYPE_SHARED: field_own = ZITH_OWN_SHARED; break;
-                case ZITH_NODE_TYPE_VIEW:   field_own = ZITH_OWN_VIEW; break;
-                case ZITH_NODE_TYPE_LEND:   field_own = ZITH_OWN_LEND; break;
-                case ZITH_NODE_TYPE_PACK:   field_own = ZITH_OWN_EXTENSION; break;
-                case ZITH_NODE_TYPE_EXTENSION: field_own = ZITH_OWN_EXTENSION; break;
-                }
-            }
+            ZithOwnership field_own = parser_ownership_from_node(ftype);
 
             // Use comma as separator, but allow last field to omit it before '}'
             if (parser_peek(p)->type != ZITH_TOKEN_RBRACE)

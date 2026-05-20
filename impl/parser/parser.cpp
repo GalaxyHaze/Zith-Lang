@@ -1,5 +1,6 @@
 // impl/parser/parser.cpp — Parser entry point and pipeline orchestration
 #include "zith/parser.h"
+#include "parser_context.hpp"
 #include "diagnostics/diagnostics.hpp"
 
 #include "memory/utils.hpp"
@@ -10,35 +11,31 @@
 
 using zith::ArenaList;
 
-// Global storage for imported declarations - cleared each parse
-static std::vector<ZithNode *> g_imported_decls_vec;
-static int g_parser_depth = 0;
-static ZithDiagList g_last_diags = {nullptr, 0, 0};
-static DiagManager *g_last_diag_manager = nullptr;
-
-bool g_import_loaded_this_file = false;
+static thread_local ParseContext tls_parse_ctx{};
 
 void parser_set_imported_decls(void *decls, ZithArena *arena) {
-    auto *src        = static_cast<ArenaList<ZithNode *> *>(decls);
+    const auto *src        = static_cast<ArenaList<ZithNode *> *>(decls);
     size_t count     = 0;
     ZithNode **items = src->flatten(arena, &count);
+    if (!items)
+        return;
     for (size_t i = 0; i < count; ++i) {
-        g_imported_decls_vec.push_back(items[i]);
+        tls_parse_ctx.imported_decls.push_back(items[i]);
     }
-    g_import_loaded_this_file = true;
+    tls_parse_ctx.import_loaded = true;
 }
 
 void *parser_get_imported_decls() {
-    return &g_imported_decls_vec;
+    return &tls_parse_ctx.imported_decls;
 }
 
 void parser_enter_scope() {
-    g_parser_depth++;
+    tls_parse_ctx.depth++;
 }
 void parser_exit_scope() {
-    g_parser_depth--;
-    if (g_parser_depth == 0) {
-        g_imported_decls_vec.clear();
+    tls_parse_ctx.depth--;
+    if (tls_parse_ctx.depth == 0) {
+        tls_parse_ctx.imported_decls.clear();
     }
 }
 
@@ -112,11 +109,12 @@ static ZithNode *expand_unbody(Parser *parent, ZithNode *node) {
         // Merge inner diagnostics into parent using v2 system
         auto *inner_dm = static_cast<DiagManager*>(inner.diag_manager);
         auto *parent_dm = static_cast<DiagManager*>(parent->diag_manager);
-        for (const auto& diag : inner_dm->bag().diagnostics()) {
-            parent_dm->emit_diagnostic(Diagnostic{
-                diag.level, diag.code, diag.message,
+        for (auto& diag : inner_dm->bag().take_diagnostics()) {
+            parent_dm->emit_diagnostic(zith::diag::Diagnostic{
+                diag.level, diag.code, std::move(diag.message),
                 diag.primary_span, diag.has_primary_span,
-                diag.secondary_spans, diag.suggestions, {}, diag.caused_by
+                std::move(diag.secondary_spans), std::move(diag.suggestions),
+                std::move(diag.children), diag.caused_by
             });
         }
         // Also copy legacy list for ABI compat
@@ -162,16 +160,16 @@ ZithNode *zith_parse_with_source(ZithArena *arena, const char *source, size_t so
     sema_run(&p, expanded);
 
     // Clear imported decls after sema
-    g_imported_decls_vec.clear();
-    g_parser_depth = 0;
+    tls_parse_ctx.imported_decls.clear();
+    tls_parse_ctx.depth = 0;
 
     // Finalize v2 diagnostics
     auto *dm = static_cast<DiagManager*>(p.diag_manager);
     dm->bag().finalize();
 
     // Store diagnostics for LSP access (v1 ABI)
-    g_last_diags = p.diags;
-    g_last_diag_manager = dm;
+    tls_parse_ctx.last_diags = p.diags;
+    tls_parse_ctx.last_diag_manager = dm;
 
     // Print using v2 TerminalEmitter
     dm->emitter().set_source_map(&dm->source_map());
@@ -180,7 +178,7 @@ ZithNode *zith_parse_with_source(ZithArena *arena, const char *source, size_t so
     // Sync had_error from v2 bag
     p.had_error = p.had_error || dm->had_error();
 
-    // Note: DiagManager is NOT destroyed here — g_last_diag_manager keeps it alive
+    // Note: DiagManager is NOT destroyed here — last_diag_manager keeps it alive
     // for LSP access. It will be replaced on next parse call.
     // Clean up previous global manager if any (leaked intentionally for now to avoid UAF)
 
@@ -190,10 +188,10 @@ ZithNode *zith_parse_with_source(ZithArena *arena, const char *source, size_t so
 }
 
 ZithDiagList *zith_get_parse_diagnostics(void) {
-    return &g_last_diags;
+    return &tls_parse_ctx.last_diags;
 }
 
 // v2: Get the DiagManager for direct access (LSP, etc.)
 DiagManager *zith_get_parse_diag_manager(void) {
-    return g_last_diag_manager;
+    return tls_parse_ctx.last_diag_manager;
 }

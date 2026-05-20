@@ -47,7 +47,7 @@ public:
     void print_summary(const char *filename = "<input>") const;
 
     [[nodiscard]] bool had_error() const { return bag_.had_errors(); }
-    [[nodiscard]] const ZithDiagList &list() const { return legacy_list_; }
+    [[nodiscard]] ZithDiagList list() const;
 
     void set_arena(ZithArena *arena) { arena_ = arena; }
 
@@ -69,7 +69,33 @@ public:
         return zith::diag::DiagnosticBuilder(level, code);
     }
 
-    // Bridge: add new-style diagnostic directly to bag
+    // Backward-compatible emit using v2 builder (replaces legacy emit())
+    template <typename... Args>
+    void emit_error(ZithSourceLoc loc, zith::diag::DiagCode code,
+                    std::string_view fmt, Args&&... args) {
+        build(zith::diag::DiagLevel::Error, code)
+            .with_message(fmt, std::forward<Args>(args)...)
+            .with_span(zith::diag::SourceSpan::from_loc(loc, source_map_.get_or_add_file("<input>")))
+            .emit(bag_);
+    }
+
+    template <typename... Args>
+    void emit_warning(ZithSourceLoc loc, zith::diag::DiagCode code,
+                      std::string_view fmt, Args&&... args) {
+        build(zith::diag::DiagLevel::Warning, code)
+            .with_message(fmt, std::forward<Args>(args)...)
+            .with_span(zith::diag::SourceSpan::from_loc(loc, source_map_.get_or_add_file("<input>")))
+            .emit(bag_);
+    }
+
+    template <typename... Args>
+    void emit_note(ZithSourceLoc loc, std::string_view fmt, Args&&... args) {
+        build(zith::diag::DiagLevel::Note, zith::diag::DiagCode::UnexpectedToken)
+            .with_message(fmt, std::forward<Args>(args)...)
+            .with_span(zith::diag::SourceSpan::from_loc(loc, source_map_.get_or_add_file("<input>")))
+            .emit(bag_);
+    }
+
     void emit_diagnostic(zith::diag::Diagnostic diag) {
         bag_.emit(std::move(diag));
     }
@@ -81,13 +107,11 @@ private:
     zith::diag::HeuristicEngine heuristic_;
     ZithArena *arena_ = nullptr;
 
-    // Legacy flat list — built on-demand from bag_ for C ABI compatibility
     mutable ZithDiagList legacy_list_;
-    mutable bool legacy_stale_ = true;
     mutable std::vector<ZithDiagnostic> legacy_storage_;
+    mutable bool legacy_cached_ = false;
 
-    void rebuild_legacy_list() const;
-    void emit(ZithSourceLoc loc, ZithDiagSeverity severity, const char *msg);
+    ZithDiagList build_legacy_list() const;
 };
 
 // Convenience macros (unchanged)

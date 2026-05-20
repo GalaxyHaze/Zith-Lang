@@ -191,17 +191,12 @@ void DiagManager::emit(const ZithSourceLoc loc, const ZithDiagSeverity severity,
     default:                level = DiagLevel::Help; break;
     }
 
-    // Create a simple diagnostic with just a message and single location
-    FileId fid = 0; // Default file for legacy API
-    Diagnostic d;
-    d.level = level;
-    d.code = DiagCode::UnexpectedToken; // Generic fallback
-    d.message = LazyMessage(msg ? std::string(msg) : std::string());
-    d.primary_span = SourceSpan::from_loc(loc, fid);
-    d.has_primary_span = true;
+    build(level, DiagCode::UnexpectedToken)
+        .with_raw_message(msg ? std::string(msg) : std::string())
+        .with_span(SourceSpan::from_loc(loc, source_map_.get_or_add_file("<input>")))
+        .emit(bag_);
 
-    bag_.emit(std::move(d));
-    legacy_stale_ = true;
+    legacy_cached_ = false;
 }
 
 void DiagManager::error(const ZithSourceLoc loc, const char *msg) {
@@ -220,7 +215,7 @@ void DiagManager::info(const char *msg) {
     printf("[*] %s\n", msg);
 }
 
-void DiagManager::rebuild_legacy_list() const {
+ZithDiagList DiagManager::build_legacy_list() const {
     legacy_storage_.clear();
     legacy_list_.items = nullptr;
     legacy_list_.count = 0;
@@ -246,16 +241,16 @@ void DiagManager::rebuild_legacy_list() const {
     legacy_list_.items = legacy_storage_.data();
     legacy_list_.count = legacy_storage_.size();
     legacy_list_.capacity = legacy_storage_.size();
-    legacy_stale_ = false;
+    legacy_cached_ = true;
+    return legacy_list_;
+}
+
+ZithDiagList DiagManager::list() const {
+    return build_legacy_list();
 }
 
 void DiagManager::print_all(const char *source, const size_t source_len, const char *filename) const {
-    // If legacy list is requested, rebuild it
-    if (legacy_stale_) rebuild_legacy_list();
-
-    // Use v1 legacy printer for backward compat, or v2 emitter
     if (source && filename) {
-        // Register source in the source map for the emitter
         auto* mutable_this = const_cast<DiagManager*>(this);
         mutable_this->source_map_.add_or_get_file(
             filename ? filename : "<input>",
@@ -264,18 +259,19 @@ void DiagManager::print_all(const char *source, const size_t source_len, const c
         const_cast<zith::diag::DiagnosticBag&>(bag_).finalize();
         emitter_.emit(bag_, stderr);
     } else {
-        zith_diag_print_all(&legacy_list_, source, source_len, filename);
+        auto list = build_legacy_list();
+        zith_diag_print_all(&list, source, source_len, filename);
     }
 }
 
 void DiagManager::print_summary(const char *filename) const {
-    if (legacy_stale_) rebuild_legacy_list();
+    auto list = build_legacy_list();
 
     size_t errors = 0, warnings = 0;
-    for (size_t i = 0; i < legacy_list_.count; ++i) {
-        if (legacy_list_.items[i].severity == ZITH_DIAG_ERROR)
+    for (size_t i = 0; i < list.count; ++i) {
+        if (list.items[i].severity == ZITH_DIAG_ERROR)
             errors++;
-        else if (legacy_list_.items[i].severity == ZITH_DIAG_WARNING)
+        else if (list.items[i].severity == ZITH_DIAG_WARNING)
             warnings++;
     }
 

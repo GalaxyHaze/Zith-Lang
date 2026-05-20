@@ -5,9 +5,13 @@
 #include "diagnostics/diagnostics.hpp"
 #include "memory/arena.hpp"
 #include "zith/parser.h"
+#include "zith/ast.h"
 #include <cstdarg>
-#include <cstdlib>
 #include <cstring>
+
+using zith::ArenaList;
+
+extern ZithNode *parser_parse_statement(Parser *p);
 
 // ============================================================================
 // Parser Init
@@ -55,19 +59,21 @@ void parser_destroy(Parser *p) {
 // Token Navigation (unchanged)
 // ============================================================================
 
+namespace {
+static constexpr ZithToken static_eof = {{nullptr, 0}, {0, 0}, ZITH_TOKEN_END, 0};
+}
+
 const ZithToken *parser_peek(const Parser *p) {
     if (p->pos < p->count)
         return &p->tokens[p->pos];
-    static constexpr ZithToken eof = {{nullptr, 0}, {0, 0}, ZITH_TOKEN_END, 0};
-    return &eof;
+    return &static_eof;
 }
 
 const ZithToken *parser_peek_ahead(const Parser *p, size_t offset) {
     size_t idx = p->pos + offset;
     if (idx < p->count)
         return &p->tokens[idx];
-    static constexpr ZithToken eof = {{nullptr, 0}, {0, 0}, ZITH_TOKEN_END, 0};
-    return &eof;
+    return &static_eof;
 }
 
 const ZithToken *parser_advance(Parser *p) {
@@ -99,7 +105,7 @@ const ZithToken *parser_expect(Parser *p, ZithTokenType type, const char *msg) {
 
     const ZithToken *t = parser_peek(p);
     char buf[256];
-    snprintf(buf, sizeof(buf), "%s (got '%.*s')", msg, (int)t->lexeme.len, t->lexeme.data);
+    snprintf(buf, sizeof(buf), "%s (got '%.*s')", msg, static_cast<int>(t->lexeme.len), t->lexeme.data);
     parser_error(p, t->loc, buf);
     return t;
 }
@@ -128,7 +134,7 @@ bool check_kw(const Parser *p, const char *kw) {
 void parser_emit_diag(Parser *p, ZithSourceLoc loc, ZithDiagSeverity severity, const char *msg) {
     // v2: Emit to DiagnosticBag using DiagnosticBuilder
     auto *dm = static_cast<DiagManager*>(p->diag_manager);
-    FileId fid = dm->source_map().add_or_get_file(p->filename, std::string_view(p->source, p->source_len));
+    const zith::diag::FileId fid = dm->source_map().add_or_get_file(p->filename, std::string_view(p->source, p->source_len));
 
     using namespace zith::diag;
     DiagLevel level;
@@ -215,8 +221,6 @@ void parser_note(Parser *p, ZithSourceLoc loc, const char *msg) {
 
 #if defined(__cplusplus) && __cplusplus >= 202002L
 
-#include "diagnostics/diagnostics.hpp"
-
 void parser_error_new(Parser *p, zith::diag::DiagCode code,
                        ZithSourceLoc loc, const char *fmt, ...) {
     if (p->panic) return;
@@ -228,7 +232,7 @@ void parser_error_new(Parser *p, zith::diag::DiagCode code,
     va_end(args);
 
     auto *dm = static_cast<DiagManager*>(p->diag_manager);
-    FileId fid = dm->source_map().add_or_get_file(p->filename, std::string_view(p->source, p->source_len));
+    const zith::diag::FileId fid = dm->source_map().add_or_get_file(p->filename, std::string_view(p->source, p->source_len));
 
     using namespace zith::diag;
     SourceSpan span = SourceSpan::from_loc(loc, fid);
@@ -251,7 +255,7 @@ void parser_warning_new(Parser *p, zith::diag::DiagCode code,
     va_end(args);
 
     auto *dm = static_cast<DiagManager*>(p->diag_manager);
-    FileId fid = dm->source_map().add_or_get_file(p->filename, std::string_view(p->source, p->source_len));
+    const zith::diag::FileId fid = dm->source_map().add_or_get_file(p->filename, std::string_view(p->source, p->source_len));
 
     using namespace zith::diag;
     SourceSpan span = SourceSpan::from_loc(loc, fid);
@@ -271,7 +275,7 @@ void parser_note_new(Parser *p, ZithSourceLoc loc, const char *fmt, ...) {
     va_end(args);
 
     auto *dm = static_cast<DiagManager*>(p->diag_manager);
-    FileId fid = dm->source_map().add_or_get_file(p->filename, std::string_view(p->source, p->source_len));
+    const zith::diag::FileId fid = dm->source_map().add_or_get_file(p->filename, std::string_view(p->source, p->source_len));
 
     using namespace zith::diag;
     SourceSpan span = SourceSpan::from_loc(loc, fid);
@@ -314,6 +318,68 @@ void parser_set_import_roots(Parser *p, const char **roots, size_t count) {
 
 void parser_set_allow_dot_imports(Parser *p, bool allow) {
     p->allow_dot_imports = allow;
+}
+
+// ============================================================================
+// Ownership Helpers
+// ============================================================================
+
+ZithOwnership parser_ownership_from_node(const ZithNode *type_node) {
+    if (!type_node)
+        return ZITH_OWN_DEFAULT;
+    switch (type_node->type) {
+    case ZITH_NODE_TYPE_UNIQUE:    return ZITH_OWN_UNIQUE;
+    case ZITH_NODE_TYPE_SHARED:    return ZITH_OWN_SHARED;
+    case ZITH_NODE_TYPE_VIEW:      return ZITH_OWN_VIEW;
+    case ZITH_NODE_TYPE_LEND:      return ZITH_OWN_LEND;
+    case ZITH_NODE_TYPE_PACK:      return ZITH_OWN_EXTENSION;
+    case ZITH_NODE_TYPE_EXTENSION: return ZITH_OWN_EXTENSION;
+    default: return ZITH_OWN_DEFAULT;
+    }
+}
+
+// ============================================================================
+// List Node Helpers
+// ============================================================================
+
+ZithNode *parser_make_list_node(Parser *p, ZithSourceLoc loc,
+                                       ZithNodeType type,
+                                       ZithNode *(*parse_fn)(Parser *),
+                                       const char *error_msg) {
+    ArenaList<ZithNode *> items_b;
+    items_b.init(p->arena, 8);
+    while (!parser_check(p, ZITH_TOKEN_PIPE) && !parser_is_at_end(p)) {
+        items_b.push(p->arena, parse_fn(p));
+        if (!parser_match(p, ZITH_TOKEN_COMMA))
+            break;
+    }
+    parser_expect(p, ZITH_TOKEN_PIPE, error_msg);
+    size_t count    = 0;
+    ZithNode **items = items_b.flatten(p->arena, &count);
+    ZithNode *n = (ZithNode *)zith_arena_alloc(p->arena, sizeof(ZithNode));
+    if (n) {
+        memset(n, 0, sizeof(ZithNode));
+        n->type = type;
+        n->loc  = loc;
+        n->data.list.ptr = items;
+        n->data.list.len = count;
+    }
+    return n;
+}
+
+ZithNode *parser_parse_block_body(Parser *p, bool expect_brace, ZithSourceLoc loc) {
+    if (expect_brace)
+        parser_expect(p, ZITH_TOKEN_LBRACE, "expected '{'");
+    else if (!parser_match(p, ZITH_TOKEN_LBRACE))
+        return nullptr;
+    ArenaList<ZithNode *> stmts_b;
+    stmts_b.init(p->arena, 16);
+    while (!parser_check(p, ZITH_TOKEN_RBRACE) && !parser_is_at_end(p))
+        stmts_b.push(p->arena, parser_parse_statement(p));
+    parser_expect(p, ZITH_TOKEN_RBRACE, "expected '}'");
+    size_t count     = 0;
+    ZithNode **stmts = stmts_b.flatten(p->arena, &count);
+    return zith_ast_make_block(p->arena, loc, stmts, count);
 }
 
 // ============================================================================

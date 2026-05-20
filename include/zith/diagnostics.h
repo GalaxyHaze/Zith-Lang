@@ -34,7 +34,7 @@ typedef struct ZithDiagList {
 } ZithDiagList;
 
 // ============================================================================
-// v2 (New) Types — richer span, file tracking
+// v2 (New) Types — internal, used by C++ implementation
 // ============================================================================
 
 typedef uint32_t ZithFileId;
@@ -49,7 +49,7 @@ typedef struct ZithSourceSpan {
 typedef struct ZithDiagBag ZithDiagBag;
 
 // ============================================================================
-// v1 (Legacy) C API — fully supported
+// v1 (Legacy) C API — DEPRECATED, use zith_diag_bag_print instead
 // ============================================================================
 
 void zith_diag_print_all(const ZithDiagList *diags,
