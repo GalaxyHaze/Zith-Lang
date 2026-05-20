@@ -240,8 +240,8 @@ ZithNode *zith_ast_make_destructure(ZithArena *a, ZithSourceLoc loc, const ZithD
     p->initializer = decl->initializer;
     p->binding     = decl->binding;
     if (decl->count > 0 && decl->names) {
-        p->names = (const char **)zith_arena_alloc(a, decl->count * sizeof(const char *));
-        p->name_lens = (size_t *)zith_arena_alloc(a, decl->count * sizeof(size_t));
+        p->names = static_cast<const char **>(zith_arena_alloc(a, decl->count * sizeof(const char *)));
+        p->name_lens = static_cast<size_t *>(zith_arena_alloc(a, decl->count * sizeof(size_t)));
         if (p->names && p->name_lens) {
             for (size_t i = 0; i < decl->count; ++i) {
                 p->names[i] = zith_arena_strdup(a, decl->names[i]);
@@ -1035,7 +1035,7 @@ void zith_ast_print(const ZithNode *node, int indent) {
     switch (node->type) {
     case ZITH_NODE_IDENTIFIER:
         print_indent(indent + 1);
-        debug_print("name: %.*s\n", (int)node->data.ident.len, node->data.ident.str);
+        debug_print("name: %.*s\n", static_cast<int>(node->data.ident.len), node->data.ident.str);
         break;
 
     case ZITH_NODE_LITERAL: {
@@ -1049,10 +1049,10 @@ void zith_ast_print(const ZithNode *node, int indent) {
         debug_print("kind: %s  ", zith_ast_literal_kind_name(lit->kind));
         switch (lit->kind) {
         case ZITH_LIT_INT:
-            debug_print("value: %lld\n", (long long)lit->value.i64);
+            debug_print("value: %lld\n", static_cast<long long>(lit->value.i64));
             break;
         case ZITH_LIT_UINT:
-            debug_print("value: %llu\n", (unsigned long long)lit->value.u64);
+            debug_print("value: %llu\n", static_cast<unsigned long long>(lit->value.u64));
             break;
         case ZITH_LIT_FLOAT:
             debug_print("value: %g\n", lit->value.f64);
@@ -1061,7 +1061,7 @@ void zith_ast_print(const ZithNode *node, int indent) {
             debug_print("value: %s\n", lit->value.boolean ? "true" : "false");
             break;
         case ZITH_LIT_STRING:
-            debug_print("value: \"%.*s\"\n", (int)lit->value.string.len, lit->value.string.ptr);
+            debug_print("value: \"%.*s\"\n", static_cast<int>(lit->value.string.len), lit->value.string.ptr);
             break;
         default:
             debug_print("value: ?\n");
@@ -1073,7 +1073,7 @@ void zith_ast_print(const ZithNode *node, int indent) {
     case ZITH_NODE_BINARY_OP: {
         const auto op = static_cast<ZithTokenType>(node->data.list.len);
         print_indent(indent + 1);
-        debug_print("op: %s (%d)\n", zith_token_type_name(op), (int)op);
+        debug_print("op: %s (%d)\n", zith_token_type_name(op), static_cast<int>(op));
         if (node->data.kids.a)
             zith_ast_print(node->data.kids.a, indent + 2);
         if (node->data.kids.c)
@@ -1141,8 +1141,8 @@ void zith_ast_print(const ZithNode *node, int indent) {
         if (!p)
             break;
         print_indent(indent + 1);
-        debug_print("name: %s  binding: %d  own: %d\n", p->name, (int)p->binding,
-                    (int)p->ownership);
+        debug_print("name: %s  binding: %d  own: %d\n", p->name, static_cast<int>(p->binding),
+                    static_cast<int>(p->ownership));
         zith_ast_print(p->type_node, indent + 2);
         zith_ast_print(p->initializer, indent + 2);
         break;
@@ -1153,10 +1153,10 @@ void zith_ast_print(const ZithNode *node, int indent) {
         if (!p)
             break;
         print_indent(indent + 1);
-        debug_print("destructure: %zu vars  binding: %d\n", p->count, (int)p->binding);
+        debug_print("destructure: %zu vars  binding: %d\n", p->count, static_cast<int>(p->binding));
         for (size_t i = 0; i < p->count; ++i) {
             print_indent(indent + 2);
-            debug_print("name: %.*s\n", (int)p->name_lens[i], p->names[i]);
+            debug_print("name: %.*s\n", static_cast<int>(p->name_lens[i]), p->names[i]);
         }
         if (p->type_node)
             zith_ast_print(p->type_node, indent + 2);
@@ -1200,7 +1200,7 @@ void zith_ast_print(const ZithNode *node, int indent) {
         if (p->is_scene)
             debug_print("target: scene (special)");
         else
-            debug_print("target: %.*s", (int)p->target_len, p->target);
+            debug_print("target: %.*s", static_cast<int>(p->target_len), p->target);
         if (p->arg_count)
             debug_print("  args: %zu", p->arg_count);
         debug_print("\n");
@@ -1214,7 +1214,7 @@ void zith_ast_print(const ZithNode *node, int indent) {
         if (!p)
             break;
         print_indent(indent + 1);
-        debug_print("name: %.*s\n", (int)p->name_len, p->name);
+        debug_print("name: %.*s\n", static_cast<int>(p->name_len), p->name);
         if (p->value)
             zith_ast_print(p->value, indent + 2);
         break;
@@ -1227,7 +1227,7 @@ void zith_ast_print(const ZithNode *node, int indent) {
             break;
         print_indent(indent + 1);
         if (p->name)
-            debug_print("name: %.*s  params: %zu\n", (int)p->name_len, p->name, p->param_count);
+            debug_print("name: %.*s  params: %zu\n", static_cast<int>(p->name_len), p->name, p->param_count);
         else
             debug_print("(anonymous)  params: %zu\n", p->param_count);
         for (size_t i = 0; i < p->param_count; ++i)
@@ -1261,7 +1261,7 @@ void zith_ast_print(const ZithNode *node, int indent) {
             break;
         print_indent(indent + 1);
         debug_print("name: %s  vis: %s  types: %zu  raw: %d\n", p->name,
-                    zith_ast_visibility_name(p->visibility), p->type_count, (int)p->is_raw);
+                    zith_ast_visibility_name(p->visibility), p->type_count, static_cast<int>(p->is_raw));
         for (size_t i = 0; i < p->type_count; ++i)
             zith_ast_print(p->types[i], indent + 2);
         break;
@@ -1284,8 +1284,8 @@ void zith_ast_print(const ZithNode *node, int indent) {
         if (!p)
             break;
         print_indent(indent + 1);
-        debug_print("name: %.*s  vis: %s  own: %d\n", (int)p->name_len, p->name,
-                    zith_ast_visibility_name(p->visibility), (int)p->ownership);
+        debug_print("name: %.*s  vis: %s  own: %d\n", static_cast<int>(p->name_len), p->name,
+                    zith_ast_visibility_name(p->visibility), static_cast<int>(p->ownership));
         if (p->type_node)
             zith_ast_print(p->type_node, indent + 2);
         if (p->default_value)
@@ -1306,7 +1306,7 @@ void zith_ast_print(const ZithNode *node, int indent) {
                 if (f) {
                     print_indent(indent + 2);
                     if (f->name)
-                        debug_print("tag: %.*s\n", (int)f->name_len, f->name);
+                        debug_print("tag: %.*s\n", static_cast<int>(f->name_len), f->name);
                     else
                         debug_print("(positional)\n");
                     zith_ast_print(f->value, indent + 3);
@@ -1336,7 +1336,7 @@ void zith_ast_print(const ZithNode *node, int indent) {
         }
         if (import->alias) {
             print_indent(indent + 2);
-            debug_print("alias: %.*s\n", (int)import->alias_len, import->alias);
+            debug_print("alias: %.*s\n", static_cast<int>(import->alias_len), import->alias);
         }
         break;
     }
@@ -1347,7 +1347,7 @@ void zith_ast_print(const ZithNode *node, int indent) {
         debug_print("module export path: %s\n", export_decl->path);
         if (export_decl->alias) {
             print_indent(indent + 2);
-            debug_print("alias: %.*s\n", (int)export_decl->alias_len, export_decl->alias);
+            debug_print("alias: %.*s\n", static_cast<int>(export_decl->alias_len), export_decl->alias);
         }
         break;
     }
@@ -1362,7 +1362,7 @@ void zith_ast_print(const ZithNode *node, int indent) {
         if (!p)
             break;
         print_indent(indent + 1);
-        debug_print("ownership: %d\n", (int)p->ownership);
+        debug_print("ownership: %d\n", static_cast<int>(p->ownership));
         if (p->expr)
             zith_ast_print(p->expr, indent + 2);
         break;

@@ -4,6 +4,10 @@
 // Depends on: CLI11, Zith/zith.h
 #pragma once
 
+#ifdef _WIN32
+#include <windows.h>
+#endif
+
 #include "CLI/App.hpp"
 #include "CLI/ExtraValidators.hpp"
 #include "cmd/commands.hpp"
@@ -18,7 +22,31 @@ using namespace zith::cli::commands;
 using namespace zith::cli::pipeline;
 using namespace zith::cli::project_config;
 
+#ifdef _WIN32
+static void enable_virtual_terminal_processing() {
+    HANDLE hOut = GetStdHandle(STD_OUTPUT_HANDLE);
+    if (hOut != INVALID_HANDLE_VALUE) {
+        DWORD dwMode = 0;
+        if (GetConsoleMode(hOut, &dwMode)) {
+            dwMode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING;
+            SetConsoleMode(hOut, dwMode);
+        }
+    }
+    HANDLE hErr = GetStdHandle(STD_ERROR_HANDLE);
+    if (hErr != INVALID_HANDLE_VALUE) {
+        DWORD dwMode = 0;
+        if (GetConsoleMode(hErr, &dwMode)) {
+            dwMode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING;
+            SetConsoleMode(hErr, dwMode);
+        }
+    }
+}
+#endif
+
 extern "C" inline int zith_run(const int argc, const char *const argv[]) {
+#ifdef _WIN32
+    enable_virtual_terminal_processing();
+#endif
     CLI::App app{"Zith - A low-level general-purpose language"};
     app.require_subcommand(0, 1);
 

@@ -16,23 +16,23 @@
 using zith::ArenaList;
 
 // Forward declarations — parser utils
-extern const ZithToken *parser_peek(const Parser *p);
-extern const ZithToken *parser_peek_ahead(const Parser *p, size_t offset);
-extern const ZithToken *parser_advance(Parser *p);
-extern bool parser_check(const Parser *p, ZithTokenType type);
-extern bool parser_match(Parser *p, ZithTokenType type);
-extern const ZithToken *parser_expect(Parser *p, ZithTokenType type, const char *msg);
-extern void parser_error(Parser *p, ZithSourceLoc loc, const char *msg);
-extern void parser_synchronize(Parser *p);
-extern bool parser_check_kw(const Parser *p, const char *kw);
+
+
+
+
+
+
+
+
+
 extern bool check_kw(const Parser *p, const char *kw);
 
-extern ZithNode *parser_parse_type(Parser *p);
-extern ZithNode *parser_parse_expression(Parser *p);
-extern ZithNode *parser_parse_statement(Parser *p);
+
+
+
 extern ZithOwnership parser_ownership_from_node(const ZithNode *type_node);
 extern ZithNode *parser_make_list_node(Parser *p, ZithSourceLoc loc,
-                                       ZithNodeType type,
+                                       uint16_t type,
                                        ZithNode *(*parse_fn)(Parser *),
                                        const char *error_msg);
 extern ZithNode *parser_parse_block_body(Parser *p, bool expect_brace, ZithSourceLoc loc);
@@ -200,7 +200,7 @@ static ZithVisibility parse_visibility(Parser *p, ZithVisibility *current_vis,
             *current_vis = vis;
             if (depth_out)
                 *depth_out = depth;
-            return (ZithVisibility)-1;
+            return static_cast<ZithVisibility>(-1);
         }
         if (!consumed)
             parser_advance(p);
@@ -424,7 +424,7 @@ static ZithNode *parse_body(Parser *p) {
     ZithNode *stmt = parser_parse_statement(p);
     if (!stmt)
         return zith_ast_make_block(p->arena, parser_peek(p)->loc, nullptr, 0);
-    ZithNode **arr = (ZithNode **)zith_arena_alloc(p->arena, sizeof(ZithNode *));
+    ZithNode **arr = static_cast<ZithNode **>(zith_arena_alloc(p->arena, sizeof(ZithNode *)));
     if (arr)
         *arr = stmt;
     return zith_ast_make_block(p->arena, parser_peek(p)->loc, arr, arr ? 1 : 0);
@@ -1033,10 +1033,9 @@ ZithNode *parser_parse_declaration(Parser *p) {
 #ifdef __cplusplus
 void print_scanned_symbols() {
     printf("Scanned symbols from ModuleRegistry:\n");
-    auto &registry = zith::import::ModuleRegistry::instance();
-    for (const auto &mod_name : registry.list_modules()) {
-        auto mod = registry.get_module(mod_name);
-        if (mod) {
+    for (auto &registry = zith::import::ModuleRegistry::instance();
+         const auto &mod_name : registry.list_modules()) {
+        if (const auto mod = registry.get_module(mod_name)) {
             printf("  Module: %s\n", mod_name.c_str());
             for (const auto &sym : mod->symbols()) {
                 const char *kind_str = "???";

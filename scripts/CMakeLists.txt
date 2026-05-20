@@ -299,6 +299,7 @@ set(PARSER_CPP_SOURCES
     ../impl/parser/parser_expr.cpp
     ../impl/parser/parser_sema.cpp
     ../impl/parser/parser_utils.cpp
+    ../impl/parser/type_checker.cpp
     ../impl/cli/project_config/project_config.cpp
 )
 

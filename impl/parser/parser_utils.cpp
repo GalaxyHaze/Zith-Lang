@@ -49,10 +49,9 @@ void parser_init(Parser *p, ZithArena *arena, const char *source, const size_t s
 }
 
 void parser_destroy(Parser *p) {
-    if (p->diag_manager) {
-        delete static_cast<DiagManager*>(p->diag_manager);
-        p->diag_manager = nullptr;
-    }
+    // DiagManager ownership is transferred to ParseContext in zith_parse_with_source
+    // Do NOT delete it here — let ParseContext manage its lifecycle
+    p->diag_manager = nullptr;
 }
 
 // ============================================================================
@@ -343,9 +342,9 @@ ZithOwnership parser_ownership_from_node(const ZithNode *type_node) {
 // ============================================================================
 
 ZithNode *parser_make_list_node(Parser *p, ZithSourceLoc loc,
-                                       ZithNodeType type,
-                                       ZithNode *(*parse_fn)(Parser *),
-                                       const char *error_msg) {
+                                        uint16_t type,
+                                        ZithNode *(*parse_fn)(Parser *),
+                                        const char *error_msg) {
     ArenaList<ZithNode *> items_b;
     items_b.init(p->arena, 8);
     while (!parser_check(p, ZITH_TOKEN_PIPE) && !parser_is_at_end(p)) {
@@ -356,7 +355,7 @@ ZithNode *parser_make_list_node(Parser *p, ZithSourceLoc loc,
     parser_expect(p, ZITH_TOKEN_PIPE, error_msg);
     size_t count    = 0;
     ZithNode **items = items_b.flatten(p->arena, &count);
-    ZithNode *n = (ZithNode *)zith_arena_alloc(p->arena, sizeof(ZithNode));
+    auto *n = static_cast<ZithNode *>(zith_arena_alloc(p->arena, sizeof(ZithNode)));
     if (n) {
         memset(n, 0, sizeof(ZithNode));
         n->type = type;

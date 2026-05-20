@@ -13,8 +13,7 @@
 #include <filesystem>
 #include <memory>
 
-namespace zith {
-namespace import {
+namespace zith::import {
 
 // ============================================================================
 // Source Location
@@ -214,6 +213,35 @@ private:
 
 class ModuleRegistry : public Singleton<ModuleRegistry> {
 public:
+    std::shared_ptr<Module> get_module(const std::string& name) {
+        auto it = modules_.find(name);
+        return it != modules_.end() ? it->second : nullptr;
+    }
+
+    bool exists(const std::string& name) const {
+        return modules_.contains(name);
+    }
+
+    bool register_module(Module mod) {
+        if (modules_.contains(mod.name())) {
+            return false;
+        }
+        modules_[mod.name()] = std::make_shared<Module>(std::move(mod));
+        return true;
+    }
+
+    void clear() {
+        modules_.clear();
+    }
+
+    std::vector<std::string> list_modules() const {
+        std::vector<std::string> names;
+        names.reserve(modules_.size());
+        for (const auto& [name, _] : modules_) {
+            names.push_back(name);
+        }
+        return names;
+    }
 
 private:
     friend struct Singleton<ModuleRegistry>;
@@ -235,5 +263,4 @@ inline bool module_exists(const std::string& name) {
     return ModuleRegistry::instance().exists(name);
 }
 
-} // namespace import
 } // namespace zith

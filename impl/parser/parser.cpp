@@ -178,9 +178,11 @@ ZithNode *zith_parse_with_source(ZithArena *arena, const char *source, size_t so
     // Sync had_error from v2 bag
     p.had_error = p.had_error || dm->had_error();
 
-    // Note: DiagManager is NOT destroyed here — last_diag_manager keeps it alive
-    // for LSP access. It will be replaced on next parse call.
-    // Clean up previous global manager if any (leaked intentionally for now to avoid UAF)
+    // Transfer ownership of DiagManager to ParseContext for LSP access
+    // The parser's diag_manager pointer is still valid, but ParseContext now owns it
+    // It will be replaced on next parse call (old one deleted automatically by unique_ptr)
+    tls_parse_ctx.diag_manager.reset(dm);
+    p.diag_manager = tls_parse_ctx.diag_manager.get();
 
     if (p.had_error)
         return nullptr;

@@ -193,7 +193,7 @@ void DiagManager::emit(const ZithSourceLoc loc, const ZithDiagSeverity severity,
 
     build(level, DiagCode::UnexpectedToken)
         .with_raw_message(msg ? std::string(msg) : std::string())
-        .with_span(SourceSpan::from_loc(loc, source_map_.get_or_add_file("<input>")))
+        .with_span(SourceSpan::from_loc(loc, source_map_.add_or_get_file("<input>", "")))
         .emit(bag_);
 
     legacy_cached_ = false;

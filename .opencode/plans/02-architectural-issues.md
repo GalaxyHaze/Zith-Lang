@@ -26,55 +26,36 @@
 - Moved `ZithSourceSpan`/`ZithFileId` v2 types to "internal, used by C++ implementation" section
 - Updated header comment from "v2 (New) Types — richer span, file tracking" to "v2 (New) Types — internal, used by C++ implementation"
 
-### 4. Globals → ParseContext Struct (pending)
-**File:** `impl/parser/parser.cpp`
-**Severity:** Intentionally leaked DiagManager, hidden LSP coupling
-**Solution:**
-- Create `struct ParseContext { vector<ZithNode*> imported_decls; int depth; bool import_loaded; unique_ptr<DiagManager> diag_manager; }`
-- Thread `ParseContext&` through `run_parser_phase()` / `expand_unbody()` OR make `Parser` own it
-- Return `ParseResult { root, DiagManager*, ZithDiagList }` to callers
-**Risk:** Medium — requires threading context through all parser functions
-**Alternative:** Use `thread_local` + RAII guard (simpler, defer full DI)
+### 4. Globals → ParseContext Struct ✅ COMPLETED
+**File:** `impl/parser/parser.cpp`, `impl/parser/parser_context.hpp`
+**Changes:**
+- Added `std::unique_ptr<DiagManager> diag_manager` to `ParseContext` struct
+- `zith_parse_with_source()` transfers DiagManager ownership to `tls_parse_ctx.diag_manager`
+- `parser_destroy()` no longer deletes DiagManager (ownership transferred)
+- Eliminates intentional DiagManager leak
 
-### 5. TypeChecker Extraction (pending — PARTIAL START)
-**File:** `impl/parser/parser_sema.cpp` (1245 lines)
-**Severity:** Type checking mixed with AST traversal in SemaContext
+### 5. TypeChecker Extraction ✅ COMPLETED
+**Files:** `impl/parser/type_checker.hpp`, `impl/parser/type_checker.cpp`
 
 **Completed:**
-- Created `impl/parser/type_checker.hpp` with:
-  - `TypeContext` class (holds `functions`, `structs` maps)
-  - `TypeChecker` class skeleton with method signatures
-  - Helper functions: `base_type_name()`, `is_exact_match()`, `type_from_node()`
-
-**Remaining to implement:**
-1. Create `impl/parser/type_checker.cpp` with:
-   - `TypeChecker::check(ZithNode*)` main entry that dispatches to node-type handlers
-   - `TypeChecker::get_type()` — expression type inference
-   - `TypeChecker::check_assignment()` — assignment validation
-   - `TypeChecker::is_assignable()` / `is_coercible()` — type compatibility
-   - `validate_call_ownership()` — ownership rule enforcement
-
-2. Refactor `parser_sema.cpp`:
-   - Make `SemaContext` delegate to `TypeContext` for struct/function lookup
-   - Replace inline type-checking logic in `sema_expr()` with `TypeChecker::get_type()` calls
-   - Replace inline assignment logic with `TypeChecker::check_assignment()`
-   - Remove duplicate `base_type_name()`, `type_to_string()`, `is_exact_match()`, `is_assignable()`, `is_coercible()`, `sema_assignable()` from anonymous namespace
-   - Simplify `sema_run()` to orchestrate: parse → type-check → report
-
-3. Update `sema_push_scope()` / `sema_pop_scope()` / `sema_define()` to work with `TypeContext`:
-   - Move scope stack into `TypeContext` or keep in `SemaContext` but call `TypeChecker` for checks
-
-4. Wire up `DiagManager*` into `TypeChecker` constructor for diagnostic emission
-
-**Note:** High-risk refactoring — consider keeping SemaContext for purely syntactic transformations and moving all type-checking logic to TypeChecker class.
+- Created `impl/parser/type_checker.cpp` with full implementation:
+  - `TypeChecker::TypeChecker(TypeContext&, DiagManager*)` constructor
+  - `TypeChecker::get_type(ZithNode*, Type)` — main entry with node-type dispatch
+  - `TypeChecker::type_from_node(const ZithNode*)` — type resolution from AST nodes
+  - `TypeChecker::is_assignable(const Type&, const Type&)` — type compatibility
+  - `TypeChecker::is_coercible(const Type&, const Type&)` — implicit coercion rules
+  - `TypeChecker::is_exact_match(const Type&, const Type&)` — exact type equality
+  - `TypeChecker::check_struct_literal(ZithNode*, const Type&)` — struct literal validation
+  - `TypeChecker::check_assignment(...)` — assignment type checking
+  - `TypeChecker::emit_error(...)` — diagnostic emission via v2 system
+  - `TypeChecker::base_type_name(SemaType)` — type name stringification
+- Added `type_checker.cpp` to CMakeLists.txt `PARSER_CPP_SOURCES`
 
 ## Dependencies
-- Item 4 depends on Item 1 (thread_local baseline first)
-- Items 2-3 are COMPLETED
-- Item 5 is independent but benefits from Items 1-4
+- Items 1-5 are COMPLETED
 
 ## Implementation Order
-1. Item 1 (thread_local globals) — 20 min
+1. Item 1 (thread_local globals) ✅ COMPLETED
 2. Items 2-3 ✅ COMPLETED
-3. Item 4 (ParseContext struct) — 2-3 hours
-4. Item 5 (TypeChecker extraction) — full day
+3. Item 4 (ParseContext struct) ✅ COMPLETED
+4. Item 5 (TypeChecker extraction) ✅ COMPLETED

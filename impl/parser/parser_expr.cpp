@@ -4,13 +4,12 @@
 #include "memory/arena.hpp"
 #include "zith/parser.h"
 #include <cstring>
-#include <cstdlib>
 
 using zith::ArenaList;
 
 extern ZithLiteral parse_lit_number(const char *, size_t, ZithTokenType);
 extern ZithNode *parser_make_list_node(Parser *p, ZithSourceLoc loc,
-                                       ZithNodeType type,
+                                       uint16_t type,
                                        ZithNode *(*parse_fn)(Parser *),
                                        const char *error_msg);
 
@@ -46,7 +45,7 @@ ZithNode *parser_parse_type(Parser *p) {
             if (parser_check(p, ZITH_TOKEN_IDENTIFIER)) {
                 inner = parser_parse_type(p);
             }
-            ZithNode *n = (ZithNode *)zith_arena_alloc(p->arena, sizeof(ZithNode));
+            auto *n = static_cast<ZithNode *>(zith_arena_alloc(p->arena, sizeof(ZithNode)));
             if (n) {
                 memset(n, 0, sizeof(ZithNode));
                 n->type = ZITH_NODE_TYPE_POINTER;
@@ -68,7 +67,7 @@ ZithNode *parser_parse_type(Parser *p) {
                 parser_check(p, ZITH_TOKEN_EXTENSION)) {
                 inner = parser_parse_type(p);
             }
-            ZithNode *n = (ZithNode *)zith_arena_alloc(p->arena, sizeof(ZithNode));
+            auto *n = static_cast<ZithNode *>(zith_arena_alloc(p->arena, sizeof(ZithNode)));
             if (n) {
                 memset(n, 0, sizeof(ZithNode));
                 n->type = own_type;

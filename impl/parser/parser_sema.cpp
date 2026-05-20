@@ -47,6 +47,8 @@ struct SemaContext {
     std::unordered_map<std::string, StructDef> structs;
     Type current_return{};
     std::vector<SemaScope> scopes;
+    std::unordered_map<ZithFuncPayload *, Type> inferred_returns;
+    std::unordered_set<std::string> analyzing_fns;
 };
 
 static std::string ident_name(const ZithNode *n) {
@@ -326,18 +328,18 @@ static Type sema_lookup(const SemaContext &ctx, const std::string &name, size_t 
     return ve ? ve->type : Type{};
 }
 
-static bool var_is_dirty(const SemaContext &ctx, const std::string &name) {
+/*static bool var_is_dirty(const SemaContext &ctx, const std::string &name) {
     bool found = false;
     auto *ve = sema_lookup_var(ctx, name, 0, &found);
     return found && ve->is_dirty;
-}
+}*/
 
 static Type sema_expr(SemaContext &ctx, ZithNode *expr, Type expected_return = {});
 static void validate_call_ownership(SemaContext &ctx, ZithCallPayload *call, ZithFuncPayload *fn);
 
-static void sema_stmt(SemaContext &ctx, ZithNode *stmt) {
+Type sema_stmt(SemaContext &ctx, ZithNode *stmt) {
     if (!stmt)
-        return;
+        return {SemaType::Void, false, false, ZITH_OWN_DEFAULT};
     switch (stmt->type) {
     case ZITH_NODE_DESTRUCTURE: {
         auto *p = static_cast<ZithDestructurePayload *>(stmt->data.list.ptr);
@@ -348,7 +350,7 @@ static void sema_stmt(SemaContext &ctx, ZithNode *stmt) {
             char buf[256];
             const char *type_str = p->type_node->data.ident.str;
             size_t type_len = p->type_node->data.ident.len;
-            snprintf(buf, sizeof(buf), "undefined type '%.*s'", (int)type_len, type_str);
+            snprintf(buf, sizeof(buf), "undefined type '%.*s'", static_cast<int>(type_len), type_str);
             parser_emit_diag(ctx.p, stmt->loc, ZITH_DIAG_ERROR, buf);
         }
         Type init_type = sema_expr(ctx, p->initializer, declared.base != SemaType::Unknown ? declared : Type{});
@@ -373,7 +375,7 @@ static void sema_stmt(SemaContext &ctx, ZithNode *stmt) {
             }
             sema_define(ctx, name, var_type, p->binding, is_dirty);
         }
-        break;
+        return {SemaType::Void, false, false, ZITH_OWN_DEFAULT};
     }
     case ZITH_NODE_VAR_DECL: {
         auto *var = static_cast<ZithVarPayload *>(stmt->data.list.ptr);
@@ -383,7 +385,7 @@ static void sema_stmt(SemaContext &ctx, ZithNode *stmt) {
             char buf[256];
             const char *type_str = var->type_node->data.ident.str;
             size_t type_len = var->type_node->data.ident.len;
-            snprintf(buf, sizeof(buf), "undefined type '%.*s'", (int)type_len, type_str);
+            snprintf(buf, sizeof(buf), "undefined type '%.*s'", static_cast<int>(type_len), type_str);
             parser_emit_diag(ctx.p, stmt->loc, ZITH_DIAG_ERROR, buf);
         }
         // Prohibit instantiating void, invalid, unknown
@@ -428,7 +430,7 @@ static void sema_stmt(SemaContext &ctx, ZithNode *stmt) {
             Type resolved = declared.base != SemaType::Unknown ? declared : init;
             sema_define(ctx, name, resolved, var->binding, false);
         }
-        break;
+        return {SemaType::Void, false, false, ZITH_OWN_DEFAULT};
     }
     case ZITH_NODE_RETURN: {
         const Type ret = sema_expr(ctx, stmt->data.kids.a, ctx.current_return);
@@ -445,13 +447,13 @@ static void sema_stmt(SemaContext &ctx, ZithNode *stmt) {
             snprintf(buf, sizeof(buf), "return type mismatch: expected %s, got %s", exp, got);
             parser_emit_diag(ctx.p, stmt->loc, ZITH_DIAG_ERROR, buf);
         }
-        break;
+        return {SemaType::Void, false, false, ZITH_OWN_DEFAULT};
     }
     case ZITH_NODE_IF:
         sema_expr(ctx, stmt->data.kids.a);
         sema_stmt(ctx, stmt->data.kids.b);
         sema_stmt(ctx, stmt->data.kids.c);
-        break;
+        return {SemaType::Void, false, false, ZITH_OWN_DEFAULT};
     case ZITH_NODE_FOR: {
         auto *f = static_cast<ZithForPayload *>(stmt->data.list.ptr);
         sema_push_scope(ctx);
@@ -469,19 +471,19 @@ static void sema_stmt(SemaContext &ctx, ZithNode *stmt) {
             sema_stmt(ctx, f->body);
         }
         sema_pop_scope(ctx);
-        break;
+        return {SemaType::Void, false, false, ZITH_OWN_DEFAULT};
     }
     case ZITH_NODE_BLOCK: {
         sema_push_scope(ctx);
         auto **stmts = static_cast<ZithNode **>(stmt->data.list.ptr);
+        Type last_type = {SemaType::Void, false, false, ZITH_OWN_DEFAULT};
         for (size_t i = 0; i < stmt->data.list.len; ++i)
-            sema_stmt(ctx, stmts[i]);
+            last_type = sema_stmt(ctx, stmts[i]);
         sema_pop_scope(ctx);
-        break;
+        return last_type;
     }
     default:
-        sema_expr(ctx, stmt);
-        break;
+        return sema_expr(ctx, stmt);
     }
 }
 
@@ -644,6 +646,12 @@ static Type sema_expr(SemaContext &ctx, ZithNode *expr, Type expected_return) {
         if (it == ctx.functions.end()) {
             char buf[256];
             snprintf(buf, sizeof(buf), "undefined function '%s'", callee_name.c_str());
+            parser_emit_diag(ctx.p, expr->loc, ZITH_DIAG_ERROR, buf);
+            return {};
+        }
+        if (ctx.analyzing_fns.count(callee_name)) {
+            char buf[256];
+            snprintf(buf, sizeof(buf), "recursive function '%s' requires explicit return type annotation", callee_name.c_str());
             parser_emit_diag(ctx.p, expr->loc, ZITH_DIAG_ERROR, buf);
             return {};
         }
@@ -869,7 +877,7 @@ static Type sema_expr(SemaContext &ctx, ZithNode *expr, Type expected_return) {
             if (!ff)
                 continue;
 
-            size_t field_idx = (size_t)-1;
+            size_t field_idx = static_cast<size_t>(-1);
             if (ff->name) {
                 // Tagged field
                 const std::string tag(ff->name, ff->name_len);
@@ -879,10 +887,10 @@ static Type sema_expr(SemaContext &ctx, ZithNode *expr, Type expected_return) {
                         break;
                     }
                 }
-                if (field_idx == (size_t)-1) {
+                if (field_idx == static_cast<size_t>(-1)) {
                     char buf[256];
                     snprintf(buf, sizeof(buf), "struct '%s' has no field '%.*s'",
-                             struct_type.struct_name, (int)ff->name_len, ff->name);
+                             struct_type.struct_name, static_cast<int>(ff->name_len), ff->name);
                     parser_emit_diag(ctx.p, fp->loc, ZITH_DIAG_ERROR, buf);
                     continue;
                 }
@@ -902,7 +910,7 @@ static Type sema_expr(SemaContext &ctx, ZithNode *expr, Type expected_return) {
             if (field_used[field_idx]) {
                 char buf[256];
                 snprintf(buf, sizeof(buf), "duplicate field '%.*s' in struct literal",
-                         ff->name ? (int)ff->name_len : 0, ff->name ? ff->name : "(positional)");
+                         ff->name ? static_cast<int>(ff->name_len) : 0, ff->name ? ff->name : "(positional)");
                 parser_emit_diag(ctx.p, fp->loc, ZITH_DIAG_ERROR, buf);
                 continue;
             }
@@ -975,7 +983,7 @@ static Type sema_expr(SemaContext &ctx, ZithNode *expr, Type expected_return) {
             char buf[256];
             const char *type_str = expr->data.kids.b->data.ident.str;
             size_t type_len = expr->data.kids.b->data.ident.len;
-            snprintf(buf, sizeof(buf), "undefined type '%.*s'", (int)type_len, type_str);
+            snprintf(buf, sizeof(buf), "undefined type '%.*s'", static_cast<int>(type_len), type_str);
             parser_emit_diag(ctx.p, expr->loc, ZITH_DIAG_ERROR, buf);
             return dst;
         }
@@ -1212,18 +1220,52 @@ if (!zith::type_match(sema_type_from_node(ep->type_node, &ctx),
         if (!decl || decl->type != ZITH_NODE_FUNC_DECL)
             continue;
         auto *fn = static_cast<ZithFuncPayload *>(decl->data.list.ptr);
+        if (fn->return_type)
+            continue;
+
+        std::string fn_name(fn->name, fn->name_len);
+        ctx.analyzing_fns.insert(fn_name);
+
+        SemaContext infer_ctx{};
+        infer_ctx.p = p;
+        infer_ctx.functions = ctx.functions;
+        infer_ctx.structs = ctx.structs;
+        infer_ctx.analyzing_fns = ctx.analyzing_fns;
+
+        sema_push_scope(infer_ctx);
+        for (size_t pi = 0; pi < fn->param_count; ++pi) {
+            auto *param = static_cast<ZithParamPayload *>(fn->params[pi]->data.list.ptr);
+            Type param_type = sema_type_from_node(param->type_node, &infer_ctx);
+            sema_define(infer_ctx, std::string(param->name, param->name_len), param_type);
+        }
+        Type inferred = sema_stmt(infer_ctx, fn->body);
+        sema_pop_scope(infer_ctx);
+
+        ctx.analyzing_fns.erase(fn_name);
+        ctx.inferred_returns[fn] = inferred;
+    }
+
+    for (size_t i = 0; i < root->data.list.len; ++i) {
+        ZithNode *decl = decls[i];
+        if (!decl || decl->type != ZITH_NODE_FUNC_DECL)
+            continue;
+        auto *fn = static_cast<ZithFuncPayload *>(decl->data.list.ptr);
         sema_push_scope(ctx);
-        ctx.current_return = sema_type_from_node(fn->return_type, &ctx);
-        if (fn->return_type && ctx.current_return.base == SemaType::Unknown) {
-            char buf[256];
-            const char *type_str = fn->return_type->data.ident.str;
-            size_t type_len = fn->return_type->data.ident.len;
-            snprintf(buf, sizeof(buf), "undefined type '%.*s'", (int)type_len, type_str);
-            parser_emit_diag(ctx.p, decl->loc, ZITH_DIAG_ERROR, buf);
+        if (fn->return_type) {
+            ctx.current_return = sema_type_from_node(fn->return_type, &ctx);
+            if (ctx.current_return.base == SemaType::Unknown) {
+                char buf[256];
+                const char *type_str = fn->return_type->data.ident.str;
+                size_t type_len = fn->return_type->data.ident.len;
+                snprintf(buf, sizeof(buf), "undefined type '%.*s'", static_cast<int>(type_len), type_str);
+                parser_emit_diag(ctx.p, decl->loc, ZITH_DIAG_ERROR, buf);
+                ctx.current_return = {SemaType::Void, false, false, ZITH_OWN_DEFAULT};
+            }
+        } else if (ctx.inferred_returns.count(fn)) {
+            ctx.current_return = ctx.inferred_returns[fn];
+        } else {
             ctx.current_return = {SemaType::Void, false, false, ZITH_OWN_DEFAULT};
         }
-        if (ctx.current_return.base == SemaType::Unknown)
-            ctx.current_return = {SemaType::Void, false, false, ZITH_OWN_DEFAULT};
         for (size_t pi = 0; pi < fn->param_count; ++pi) {
             auto *param = static_cast<ZithParamPayload *>(fn->params[pi]->data.list.ptr);
             Type param_type = sema_type_from_node(param->type_node, &ctx);
@@ -1231,7 +1273,7 @@ if (!zith::type_match(sema_type_from_node(ep->type_node, &ctx),
                 char buf[256];
                 const char *type_str = param->type_node->data.ident.str;
                 size_t type_len = param->type_node->data.ident.len;
-                snprintf(buf, sizeof(buf), "undefined type '%.*s'", (int)type_len, type_str);
+                snprintf(buf, sizeof(buf), "undefined type '%.*s'", static_cast<int>(type_len), type_str);
                 parser_emit_diag(ctx.p, fn->params[pi]->loc, ZITH_DIAG_ERROR, buf);
             }
             sema_define(ctx, std::string(param->name, param->name_len), param_type);

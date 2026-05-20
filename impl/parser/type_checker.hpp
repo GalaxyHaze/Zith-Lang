@@ -1,5 +1,6 @@
 #pragma once
 
+#include "diagnostics/diagnostic.hpp"
 #include "memory/arena.hpp"
 #include "zith/parser.h"
 #include "zith/typesystem.hpp"
@@ -67,7 +68,7 @@ private:
     static bool is_exact_match(const Type& lhs, const Type& rhs);
 
     Type type_from_node(const ZithNode* n);
-    void emit_error(ZithSourceLoc loc, DiagCode code, const char* msg);
+    void emit_error(ZithSourceLoc loc, diag::DiagCode code, const char* msg);
 };
 
 inline const char* TypeChecker::base_type_name(SemaType t) {

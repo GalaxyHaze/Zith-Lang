@@ -7,6 +7,7 @@
 
 #ifdef __cplusplus
 #include "zith/zith.hpp"
+#include <memory>
 
 void print_scanned_symbols();
 
@@ -14,6 +15,7 @@ struct ParseContext {
     std::vector<ZithNode *> imported_decls;
     int depth = 0;
     bool import_loaded = false;
+    std::unique_ptr<DiagManager> diag_manager;
     ZithDiagList last_diags = {nullptr, 0, 0};
     DiagManager *last_diag_manager = nullptr;
 };

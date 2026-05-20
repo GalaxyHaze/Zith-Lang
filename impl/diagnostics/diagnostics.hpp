@@ -64,18 +64,18 @@ public:
     zith::diag::HeuristicEngine& heuristic() { return heuristic_; }
 
     // Convenience: create a new-style DiagnosticBuilder
-    zith::diag::DiagnosticBuilder build(zith::diag::DiagLevel level,
+    static zith::diag::DiagnosticBuilder build(zith::diag::DiagLevel level,
                                          zith::diag::DiagCode code) {
-        return zith::diag::DiagnosticBuilder(level, code);
+        return {level, code};
     }
 
     // Backward-compatible emit using v2 builder (replaces legacy emit())
     template <typename... Args>
-    void emit_error(ZithSourceLoc loc, zith::diag::DiagCode code,
+    void emit_error(const ZithSourceLoc loc, const zith::diag::DiagCode code,
                     std::string_view fmt, Args&&... args) {
         build(zith::diag::DiagLevel::Error, code)
             .with_message(fmt, std::forward<Args>(args)...)
-            .with_span(zith::diag::SourceSpan::from_loc(loc, source_map_.get_or_add_file("<input>")))
+            .with_span(zith::diag::SourceSpan::from_loc(loc, source_map_.add_or_get_file("<input>", "")))
             .emit(bag_);
     }
 
@@ -84,21 +84,24 @@ public:
                       std::string_view fmt, Args&&... args) {
         build(zith::diag::DiagLevel::Warning, code)
             .with_message(fmt, std::forward<Args>(args)...)
-            .with_span(zith::diag::SourceSpan::from_loc(loc, source_map_.get_or_add_file("<input>")))
+            .with_span(zith::diag::SourceSpan::from_loc(loc, source_map_.add_or_get_file("<input>", "")))
             .emit(bag_);
     }
 
     template <typename... Args>
-    void emit_note(ZithSourceLoc loc, std::string_view fmt, Args&&... args) {
+    void emit_note(const ZithSourceLoc loc, std::string_view fmt, Args&&... args) {
         build(zith::diag::DiagLevel::Note, zith::diag::DiagCode::UnexpectedToken)
             .with_message(fmt, std::forward<Args>(args)...)
-            .with_span(zith::diag::SourceSpan::from_loc(loc, source_map_.get_or_add_file("<input>")))
+            .with_span(zith::diag::SourceSpan::from_loc(loc, source_map_.add_or_get_file("<input>", "")))
             .emit(bag_);
     }
 
     void emit_diagnostic(zith::diag::Diagnostic diag) {
         bag_.emit(std::move(diag));
     }
+
+    // Legacy emit (v1 ABI compatibility)
+    void emit(ZithSourceLoc loc, ZithDiagSeverity severity, const char *msg);
 
 private:
     zith::diag::DiagnosticBag bag_;

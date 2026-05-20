@@ -255,9 +255,8 @@ static RtValue exec_stmt(RtContext &ctx, ZithNode *stmt, bool &did_return) {
     case ZITH_NODE_UNARY_OP:
     case ZITH_NODE_IDENTIFIER:
     case ZITH_NODE_LITERAL:
-        // Expression statements
-        (void)eval_expr(ctx, stmt);
-        return {};
+        // Expression statements — return value for implicit return
+        return eval_expr(ctx, stmt);
     case ZITH_NODE_BLOCK:
         return exec_block(ctx, stmt);
     default:
@@ -276,6 +275,7 @@ static RtValue exec_block(RtContext &ctx, ZithNode *block) {
         RtValue v       = exec_stmt(ctx, stmts[i], did_return);
         if (did_return)
             return v;
+        ret = v;
     }
     return ret;
 }

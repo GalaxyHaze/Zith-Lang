@@ -192,7 +192,7 @@ TEST_CASE("Duplicate errors are aggregated", "[diag][aggregation]") {
     for (int i = 0; i < 5; ++i) {
         DiagnosticBuilder(DiagLevel::Error, DiagCode::UndefinedIdentifier)
             .with_message("undefined identifier `z`")
-            .with_span({{(size_t)(7 + i), 5}, {size_t(8 + i), 5}, fid})
+            .with_span({{static_cast<size_t>(7 + i), 5}, {static_cast<size_t>(8 + i), 5}, fid})
             .emit(bag);
     }
 
