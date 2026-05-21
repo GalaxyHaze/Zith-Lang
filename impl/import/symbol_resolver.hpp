@@ -14,7 +14,6 @@
 #include <vector>
 #include <string>
 #include <optional>
-#include <stdexcept>
 
 namespace zith {
 namespace import {

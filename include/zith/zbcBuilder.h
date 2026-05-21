@@ -5,7 +5,7 @@
 #include <cassert>
 #include <cstdint>
 
-namespace Zith {
+namespace zith {
 
 class IRBuilder {
 private:

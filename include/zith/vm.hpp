@@ -276,11 +276,15 @@ enum Op : uint32_t {
     EXT_ASSERT = 6,
     };
 
+    class AJo{
+
+    };
+
 
     // 1. High-level IR Value (Used during construction/AST)
     // Note: We don't use this during execution, only during setup.
 
-class IRValue {
+/*class IRValue {
 
     union {
         int64_t     i64;
@@ -388,5 +392,5 @@ class IRValue {
         ~Context();
 
         int run(const Module& module, const std::string& entryFunctionName);
-    };
+    };*/
 }
