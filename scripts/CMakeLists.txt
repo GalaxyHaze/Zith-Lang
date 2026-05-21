@@ -279,6 +279,8 @@ endif()
 set(CORE_C_SOURCES
     ../impl/memory/arena_c_functions.c
     ../impl/memory/file.c
+    ../impl/vm/encoder.cpp
+    ../impl/vm/decoder.cpp
 )
 
 set(DIAGNOSTICS_SOURCES
@@ -288,6 +290,11 @@ set(DIAGNOSTICS_SOURCES
     ../impl/diagnostics/span.cpp
     ../impl/diagnostics/emitter.cpp
     ../impl/diagnostics/heuristic_engine.cpp
+)
+
+set(LLVM_SOURCES
+    ../impl/llvm/frontend.cpp
+    ../impl/llvm/backend.cpp
 )
 
 set(PARSER_CPP_SOURCES
@@ -319,6 +326,10 @@ set(CLI_SOURCES
 # Library Target: ZithCore
 # ───────────────────────────────────────────────
 add_library(ZithCore STATIC ${CORE_C_SOURCES} ${DIAGNOSTICS_SOURCES})
+
+if(LLVM_FOUND)
+    target_sources(ZithCore PRIVATE ${LLVM_SOURCES})
+endif()
 
 target_include_directories(ZithCore
     PUBLIC

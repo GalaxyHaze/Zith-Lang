@@ -1,170 +1,75 @@
+// include/zith/code.h — ZBC v2 opcode constants (SSA-based, LLVM-round-trippable)
 #pragma once
-#include <cstdint>
-#include <vector>
+#include "zith/vm.hpp"
 
-using ZithCode = std::vector<uint8_t>;
+// Re-export Zith opcodes for convenience
+using ZithOpcode = Zith::Opcode;
 
-// ============================================================================
-// Opcode Enum — mirrors Zith::Instructions from vm.hpp
-// ============================================================================
+static constexpr ZithOpcode OP_ADD          = Zith::OP_ADD;
+static constexpr ZithOpcode OP_SUB          = Zith::OP_SUB;
+static constexpr ZithOpcode OP_MUL          = Zith::OP_MUL;
+static constexpr ZithOpcode OP_SDIV         = Zith::OP_SDIV;
+static constexpr ZithOpcode OP_UDIV         = Zith::OP_UDIV;
+static constexpr ZithOpcode OP_SREM         = Zith::OP_SREM;
+static constexpr ZithOpcode OP_UREM         = Zith::OP_UREM;
+static constexpr ZithOpcode OP_AND          = Zith::OP_AND;
+static constexpr ZithOpcode OP_OR           = Zith::OP_OR;
+static constexpr ZithOpcode OP_XOR          = Zith::OP_XOR;
+static constexpr ZithOpcode OP_SHL          = Zith::OP_SHL;
+static constexpr ZithOpcode OP_ASHR         = Zith::OP_ASHR;
+static constexpr ZithOpcode OP_LSHR         = Zith::OP_LSHR;
 
-enum Op : uint8_t {
-    // ===== Core Integer ALU (0–16) =====
-    // Format: [op][dest][src1][src2] — 4 bytes
-    ADD    = 0,
-    SUB    = 1,
-    MUL    = 2,
-    DIV_S  = 3,
-    DIV_U  = 4,
-    MOD_S  = 5,
-    MOD_U  = 6,
-    AND    = 7,
-    OR     = 8,
-    XOR    = 9,
-    SHL    = 10,
-    SAR    = 11,
-    SHR    = 12,
-    ROL    = 13,
-    ROR    = 14,
-    MULH_S = 15,
-    MULH_U = 16,
+static constexpr ZithOpcode OP_FADD         = Zith::OP_FADD;
+static constexpr ZithOpcode OP_FSUB         = Zith::OP_FSUB;
+static constexpr ZithOpcode OP_FMUL         = Zith::OP_FMUL;
+static constexpr ZithOpcode OP_FDIV         = Zith::OP_FDIV;
+static constexpr ZithOpcode OP_FREM         = Zith::OP_FREM;
 
-    // ===== Float ALU (17–22) =====
-    FADD   = 17,
-    FSUB   = 18,
-    FMUL   = 19,
-    FDIV   = 20,
-    FMIN   = 21,
-    FMAX   = 22,
+static constexpr ZithOpcode OP_ICMP         = Zith::OP_ICMP;
+static constexpr ZithOpcode OP_FCMP         = Zith::OP_FCMP;
 
-    // ===== Integer Unary (23–29) =====
-    // Format: [op][dest][src] — 3 bytes
-    NEG    = 23,
-    NOT    = 24,
-    ABS    = 25,
-    POPCNT = 26,
-    CLZ    = 27,
-    CTZ    = 28,
-    BYTESWAP = 29,
+static constexpr ZithOpcode OP_LOAD         = Zith::OP_LOAD;
+static constexpr ZithOpcode OP_STORE        = Zith::OP_STORE;
+static constexpr ZithOpcode OP_ALLOCA       = Zith::OP_ALLOCA;
+static constexpr ZithOpcode OP_GEP          = Zith::OP_GEP;
 
-    // ===== Float Unary (30–37) =====
-    FNEG   = 30,
-    FABS   = 31,
-    FSQRT  = 32,
-    FFLOOR = 33,
-    FCEIL  = 34,
-    FTRUNC = 35,
-    FROUND = 36,
-    FCLASS = 37,
+static constexpr ZithOpcode OP_TRUNC        = Zith::OP_TRUNC;
+static constexpr ZithOpcode OP_ZEXT         = Zith::OP_ZEXT;
+static constexpr ZithOpcode OP_SEXT         = Zith::OP_SEXT;
+static constexpr ZithOpcode OP_FPTRUNC      = Zith::OP_FPTRUNC;
+static constexpr ZithOpcode OP_FPEXT        = Zith::OP_FPEXT;
+static constexpr ZithOpcode OP_FPTOUI       = Zith::OP_FPTOUI;
+static constexpr ZithOpcode OP_FPTOSI       = Zith::OP_FPTOSI;
+static constexpr ZithOpcode OP_UITOFP       = Zith::OP_UITOFP;
+static constexpr ZithOpcode OP_SITOFP       = Zith::OP_SITOFP;
+static constexpr ZithOpcode OP_PTR2INT      = Zith::OP_PTR2INT;
+static constexpr ZithOpcode OP_INT2PTR      = Zith::OP_INT2PTR;
+static constexpr ZithOpcode OP_BITCAST      = Zith::OP_BITCAST;
 
-    // ===== Register Copy (38) =====
-    MOV    = 38,
+static constexpr ZithOpcode OP_PHI          = Zith::OP_PHI;
+static constexpr ZithOpcode OP_FREEZE       = Zith::OP_FREEZE;
 
-    // ===== Four-Operand (39–40) =====
-    // Format: [op][dest][src1][src2][src3] — 5 bytes
-    FFMA   = 39,
-    SELECT = 40,
+static constexpr ZithOpcode OP_CALL         = Zith::OP_CALL;
+static constexpr ZithOpcode OP_CALL_INDIRECT = Zith::OP_CALL_INDIRECT;
+static constexpr ZithOpcode OP_INTRINSIC    = Zith::OP_INTRINSIC;
 
-    // ===== Immediate Loads (41–44) =====
-    MOV_I8   = 41,
-    MOV_I32  = 42,
-    MOV_I64  = 43,
-    MOV_F64  = 44,
+static constexpr ZithOpcode OP_ATOMICRMW    = Zith::OP_ATOMICRMW;
+static constexpr ZithOpcode OP_CMPXCHG      = Zith::OP_CMPXCHG;
+static constexpr ZithOpcode OP_FENCE        = Zith::OP_FENCE;
 
-    // ===== Stack Allocate (45) =====
-    ALLOCA  = 45,
+static constexpr ZithOpcode OP_EXTRACTVALUE = Zith::OP_EXTRACTVALUE;
+static constexpr ZithOpcode OP_INSERTVALUE  = Zith::OP_INSERTVALUE;
 
-    // ===== Comparisons (46–47) =====
-    // Format: [op][dest][cond][src1][src2] — 5 bytes
-    ICMP   = 46,
-    FCMP   = 47,
+static constexpr ZithOpcode OP_SELECT       = Zith::OP_SELECT;
 
-    // ===== Shift by Immediate (48–50) =====
-    // Format: [op][dest][src][i8] — 4 bytes
-    SHL_I  = 48,
-    SAR_I  = 49,
-    SHR_I  = 50,
+static constexpr ZithOpcode OP_CONST_INT    = Zith::OP_CONST_INT;
+static constexpr ZithOpcode OP_CONST_FLOAT  = Zith::OP_CONST_FLOAT;
+static constexpr ZithOpcode OP_CONST_PTR    = Zith::OP_CONST_PTR;
+static constexpr ZithOpcode OP_CONST_NULL   = Zith::OP_CONST_NULL;
+static constexpr ZithOpcode OP_CONST_AGG    = Zith::OP_CONST_AGG;
 
-    // ===== GetElementPtr (51) =====
-    GEP    = 51,
-
-    // ===== Test & Freeze (52–53) =====
-    TEST   = 52,
-    FREEZE = 53,
-
-    // ===== Memory Loads (54–57) =====
-    LOAD64 = 54,
-    LOAD32 = 55,
-    LOAD16 = 56,
-    LOAD8  = 57,
-
-    // ===== Memory Stores (58–61) =====
-    STORE64 = 58,
-    STORE32 = 59,
-    STORE16 = 60,
-    STORE8  = 61,
-
-    // ===== Float Memory (62–63) =====
-    LOADF64  = 62,
-    STOREF64 = 63,
-
-    // ===== Control Flow (64–75) =====
-    BR         = 64,
-    BR_COND    = 65,
-    BR_TABLE   = 66,
-    RET        = 67,
-    CALL       = 68,
-    CALL_DIRECT = 69,
-    INVOKE     = 70,
-    LANDINGPAD = 71,
-    PHI        = 72,
-    UNREACHABLE = 73,
-    EXTERN     = 74,
-    LABEL      = 75,
-
-    // ===== Type Conversions (76–79) =====
-    I2F        = 76,
-    F2I        = 77,
-    F2I_ROUND  = 78,
-    BITCAST    = 79,
-
-    // ===== Extend / Truncate (80–83) =====
-    SEXT8  = 80,
-    SEXT16 = 81,
-    ZEXT8  = 82,
-    ZEXT16 = 83,
-
-    // ===== Pointer Conversions (84–85) =====
-    PTR2I = 84,
-    I2PTR = 85,
-
-    // ===== Memory Fences (86–89) =====
-    FENCE_SEQ     = 86,
-    FENCE_ACQ     = 87,
-    FENCE_REL     = 88,
-    FENCE_ACQ_REL = 89,
-
-    // ===== Atomics (90) =====
-    CMPXCHG = 90,
-
-    // ===== Misc System (91–94) =====
-    NOP        = 91,
-    BREAKPOINT = 92,
-    YIELD      = 93,
-    SYSCALL    = 94,
-
-    // ===== Extension Space (95–254) =====
-    EXT_START = 95,
-
-    // ===== Halt (255) =====
-    HALT = 255,
-};
-
-// Extension set for debug (used when opcode = HALT in debug mode)
-enum ExtOp : uint32_t {
-    EXT_PRINT  = 0,
-    EXT_INPUT  = 1,
-    EXT_ASSERT = 2,
-    EXT_TRACE  = 3,
-    EXT_BREAKPOINT = 4,
-};
+static constexpr ZithOpcode OP_BR           = Zith::OP_BR;
+static constexpr ZithOpcode OP_COND_BR      = Zith::OP_COND_BR;
+static constexpr ZithOpcode OP_SWITCH       = Zith::OP_SWITCH;
+static constexpr ZithOpcode OP_RET          = Zith::OP_RET;
+static constexpr ZithOpcode OP_UNREACHABLE  = Zith::OP_UNREACHABLE;

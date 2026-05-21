@@ -46,7 +46,8 @@ bool try_load_project(ZithProject &proj);
 bool try_load_project_from_path(ZithProject &proj, const std::string &project_file,
                                 std::vector<std::string> *warnings,
                                 std::vector<std::string> *errors);
-void build_import_roots(const std::vector<std::string> &extra_dirs,
+void build_import_roots(const std::string &source_file,
+                        const std::vector<std::string> &extra_dirs,
                         std::vector<std::string> &roots_out);
 
 } // namespace zith::cli::project_config

@@ -7,6 +7,7 @@
 #include "zith/typesystem.hpp"
 #include "import/import.hpp"
 #include "import/module_registry.hpp"
+#include "parser_context.hpp"
 #include <cstdio>
 #include <cstring>
 #include <string>
@@ -1124,6 +1125,88 @@ void sema_run(Parser *p, ZithNode *root) {
                 }
             }
         }
+    }
+
+    auto find_imported_fn = [&](const std::string &name) -> ZithFuncPayload * {
+        if (!imported_decls_ptr) return nullptr;
+        auto *imported_vec = static_cast<std::vector<ZithNode *> *>(imported_decls_ptr);
+        for (auto *decl : *imported_vec) {
+            if (decl && decl->type == ZITH_NODE_FUNC_DECL) {
+                auto *fn = static_cast<ZithFuncPayload *>(decl->data.list.ptr);
+                if (fn && fn->name && std::string(fn->name, fn->name_len) == name)
+                    return fn;
+            }
+        }
+        return nullptr;
+    };
+
+    auto find_imported_struct = [&](const std::string &name) -> ZithStructPayload * {
+        if (!imported_decls_ptr) return nullptr;
+        auto *imported_vec = static_cast<std::vector<ZithNode *> *>(imported_decls_ptr);
+        for (auto *decl : *imported_vec) {
+            if (decl && decl->type == ZITH_NODE_STRUCT_DECL) {
+                auto *sd = static_cast<ZithStructPayload *>(decl->data.list.ptr);
+                if (sd && sd->name && std::string(sd->name, sd->name_len) == name)
+                    return sd;
+            }
+        }
+        return nullptr;
+    };
+
+    auto inject_module_symbols = [&](const std::string &module_path, ZithSourceLoc loc) {
+        auto mod = zith::import::ModuleRegistry::instance().get_module(module_path);
+        if (!mod) {
+            char buf[256];
+            snprintf(buf, sizeof(buf), "module '%s' not found", module_path.c_str());
+            parser_emit_diag(p, loc, ZITH_DIAG_ERROR, buf);
+            return;
+        }
+        for (const auto &sym : mod->symbols()) {
+            if (!sym.is_exported()) continue;
+            if (sym.kind() == zith::import::SymbolKind::Function) {
+                if (ctx.functions.count(sym.name())) {
+                    char buf[256];
+                    snprintf(buf, sizeof(buf), "conflict: function '%s' already defined", sym.name().c_str());
+                    parser_emit_diag(p, loc, ZITH_DIAG_ERROR, buf);
+                    continue;
+                }
+                ZithFuncPayload *fn = find_imported_fn(sym.name());
+                if (fn) {
+                    ctx.functions[sym.name()].push_back(fn);
+                }
+            } else if (sym.kind() == zith::import::SymbolKind::Struct) {
+                if (ctx.structs.count(sym.name())) {
+                    char buf[256];
+                    snprintf(buf, sizeof(buf), "conflict: struct '%s' already defined", sym.name().c_str());
+                    parser_emit_diag(p, loc, ZITH_DIAG_ERROR, buf);
+                    continue;
+                }
+                ZithStructPayload *sd = find_imported_struct(sym.name());
+                if (sd) {
+                    StructDef def;
+                    def.name = std::string(sd->name, sd->name_len);
+                    for (size_t fi = 0; fi < sd->field_count; ++fi) {
+                        auto *field_node = sd->fields[fi];
+                        if (!field_node || field_node->type != ZITH_NODE_FIELD) continue;
+                        auto *fp = static_cast<ZithFieldPayload *>(field_node->data.list.ptr);
+                        if (!fp) continue;
+                        StructField sf;
+                        sf.name = std::string(fp->name, fp->name_len);
+                        sf.type = sema_type_from_node(fp->type_node, &ctx);
+                        def.fields.push_back(std::move(sf));
+                    }
+                    ctx.structs[def.name] = std::move(def);
+                }
+            }
+        }
+    };
+
+    for (const auto &imp : get_tls_parse_ctx().from_imports) {
+        inject_module_symbols(imp.module_path, imp.loc);
+    }
+
+    for (const auto &re : get_tls_parse_ctx().re_exports) {
+        inject_module_symbols(re.module_path, re.loc);
     }
 
     auto **decls = static_cast<ZithNode **>(root->data.list.ptr);

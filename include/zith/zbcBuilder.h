@@ -1,558 +1,676 @@
+// include/zith/zbcBuilder.h — ZBC v2 IR builder (SSA-based, LLVM-round-trippable)
 #pragma once
 #include "zith/vm.hpp"
 #include <cassert>
 #include <cstdint>
 #include <cstring>
+#include <vector>
 
 namespace zith {
 
-using Zith::Code;
-using Zith::CondCode;
-using Zith::Instructions;
-using Zith::Register;
+using Zith::DecodedModule;
+using Zith::FunctionEntry;
+using Zith::GlobalEntry;
+using Zith::ModuleHeader;
+using Zith::Opcode;
+using Zith::StringEntry;
+using Zith::TypeEntry;
+using Zith::ZBC_VERSION;
+using Zith::ZBC_MAGIC;
 
-class IRBuilder {
+class ZbcBuilder {
 private:
-    Code code;
-    uint32_t nextReg = 0;
+    std::vector<uint8_t> buffer;
+    uint32_t next_value_id = 0;
+    uint32_t next_block_id = 0;
+    uint32_t current_block_id = 0;
+
+    std::vector<TypeEntry> types;
+    std::vector<std::string> string_storage;
+    std::vector<GlobalEntry> globals;
+    std::vector<FunctionEntry> functions;
+
+    uint8_t* emit_u8(uint8_t v) {
+        buffer.push_back(v);
+        return &buffer.back();
+    }
+
+    uint8_t* emit_u32(uint32_t v) {
+        buffer.push_back(v & 0xFF);
+        buffer.push_back((v >> 8) & 0xFF);
+        buffer.push_back((v >> 16) & 0xFF);
+        buffer.push_back((v >> 24) & 0xFF);
+        return &buffer[buffer.size() - 4];
+    }
+
+    uint8_t* emit_uleb(uint64_t v) {
+        uint8_t tmp[10];
+        int n = zith_uleb128_encode_uint64(tmp, v);
+        for (int i = 0; i < n; i++) buffer.push_back(tmp[i]);
+        return &buffer[buffer.size() - n];
+    }
+
+    uint8_t* emit_sleb(int64_t v) {
+        uint8_t tmp[10];
+        int n = zith_sleb128_encode_int64(tmp, v);
+        for (int i = 0; i < n; i++) buffer.push_back(tmp[i]);
+        return &buffer[buffer.size() - n];
+    }
+
+    uint8_t* emit_f64_bits(double v) {
+        uint64_t bits;
+        std::memcpy(&bits, &v, sizeof(bits));
+        for (int i = 0; i < 8; i++) buffer.push_back((bits >> (i * 8)) & 0xFF);
+        return &buffer[buffer.size() - 8];
+    }
+
+    uint32_t internString(std::string_view s) {
+        for (size_t i = 0; i < string_storage.size(); i++) {
+            if (string_storage[i] == s) return static_cast<uint32_t>(i);
+        }
+        string_storage.emplace_back(s);
+        return static_cast<uint32_t>(string_storage.size() - 1);
+    }
 
 public:
-    IRBuilder() = default;
+    ZbcBuilder() = default;
 
-    uint32_t allocReg() {
-        assert(nextReg < 256 && "Register limit exceeded (max 255)");
-        return nextReg++;
-    }
+    uint32_t newValueId() { return next_value_id++; }
+    uint32_t currentBlockId() const { return current_block_id; }
+    uint32_t newBlockId() { return next_block_id++; }
 
-    uint32_t currentOffset() const {
-        return code.size();
-    }
+    size_t currentOffset() const { return buffer.size(); }
 
     // ==========================================================================
-    // Core Integer ALU (0–16) — [op][dest][src1][src2] — 4 bytes
+    // Type Table
     // ==========================================================================
-    void emitADD(uint32_t dest, uint32_t src1, uint32_t src2) {
-        code.insert(code.end(), {Op::ADD, (uint8_t)dest, (uint8_t)src1, (uint8_t)src2});
-    }
-    void emitSUB(uint32_t dest, uint32_t src1, uint32_t src2) {
-        code.insert(code.end(), {Op::SUB, (uint8_t)dest, (uint8_t)src1, (uint8_t)src2});
-    }
-    void emitMUL(uint32_t dest, uint32_t src1, uint32_t src2) {
-        code.insert(code.end(), {Op::MUL, (uint8_t)dest, (uint8_t)src1, (uint8_t)src2});
-    }
-    void emitDIV_S(uint32_t dest, uint32_t src1, uint32_t src2) {
-        code.insert(code.end(), {Op::DIV_S, (uint8_t)dest, (uint8_t)src1, (uint8_t)src2});
-    }
-    void emitDIV_U(uint32_t dest, uint32_t src1, uint32_t src2) {
-        code.insert(code.end(), {Op::DIV_U, (uint8_t)dest, (uint8_t)src1, (uint8_t)src2});
-    }
-    void emitMOD_S(uint32_t dest, uint32_t src1, uint32_t src2) {
-        code.insert(code.end(), {Op::MOD_S, (uint8_t)dest, (uint8_t)src1, (uint8_t)src2});
-    }
-    void emitMOD_U(uint32_t dest, uint32_t src1, uint32_t src2) {
-        code.insert(code.end(), {Op::MOD_U, (uint8_t)dest, (uint8_t)src1, (uint8_t)src2});
-    }
-    void emitAND(uint32_t dest, uint32_t src1, uint32_t src2) {
-        code.insert(code.end(), {Op::AND, (uint8_t)dest, (uint8_t)src1, (uint8_t)src2});
-    }
-    void emitOR(uint32_t dest, uint32_t src1, uint32_t src2) {
-        code.insert(code.end(), {Op::OR, (uint8_t)dest, (uint8_t)src1, (uint8_t)src2});
-    }
-    void emitXOR(uint32_t dest, uint32_t src1, uint32_t src2) {
-        code.insert(code.end(), {Op::XOR, (uint8_t)dest, (uint8_t)src1, (uint8_t)src2});
-    }
-    void emitSHL(uint32_t dest, uint32_t src1, uint32_t src2) {
-        code.insert(code.end(), {Op::SHL, (uint8_t)dest, (uint8_t)src1, (uint8_t)src2});
-    }
-    void emitSAR(uint32_t dest, uint32_t src1, uint32_t src2) {
-        code.insert(code.end(), {Op::SAR, (uint8_t)dest, (uint8_t)src1, (uint8_t)src2});
-    }
-    void emitSHR(uint32_t dest, uint32_t src1, uint32_t src2) {
-        code.insert(code.end(), {Op::SHR, (uint8_t)dest, (uint8_t)src1, (uint8_t)src2});
-    }
-    void emitROL(uint32_t dest, uint32_t src1, uint32_t src2) {
-        code.insert(code.end(), {Op::ROL, (uint8_t)dest, (uint8_t)src1, (uint8_t)src2});
-    }
-    void emitROR(uint32_t dest, uint32_t src1, uint32_t src2) {
-        code.insert(code.end(), {Op::ROR, (uint8_t)dest, (uint8_t)src1, (uint8_t)src2});
-    }
-    void emitMULH_S(uint32_t dest, uint32_t src1, uint32_t src2) {
-        code.insert(code.end(), {Op::MULH_S, (uint8_t)dest, (uint8_t)src1, (uint8_t)src2});
-    }
-    void emitMULH_U(uint32_t dest, uint32_t src1, uint32_t src2) {
-        code.insert(code.end(), {Op::MULH_U, (uint8_t)dest, (uint8_t)src1, (uint8_t)src2});
+    uint32_t addType(ZithTypeId base) {
+        uint32_t id = static_cast<uint32_t>(types.size());
+        types.push_back(TypeEntry{base});
+        return id;
     }
 
     // ==========================================================================
-    // Float ALU (17–22) — [op][dest][src1][src2] — 4 bytes
+    // Globals
     // ==========================================================================
-    void emitFADD(uint32_t dest, uint32_t src1, uint32_t src2) {
-        code.insert(code.end(), {Op::FADD, (uint8_t)dest, (uint8_t)src1, (uint8_t)src2});
-    }
-    void emitFSUB(uint32_t dest, uint32_t src1, uint32_t src2) {
-        code.insert(code.end(), {Op::FSUB, (uint8_t)dest, (uint8_t)src1, (uint8_t)src2});
-    }
-    void emitFMUL(uint32_t dest, uint32_t src1, uint32_t src2) {
-        code.insert(code.end(), {Op::FMUL, (uint8_t)dest, (uint8_t)src1, (uint8_t)src2});
-    }
-    void emitFDIV(uint32_t dest, uint32_t src1, uint32_t src2) {
-        code.insert(code.end(), {Op::FDIV, (uint8_t)dest, (uint8_t)src1, (uint8_t)src2});
-    }
-    void emitFMIN(uint32_t dest, uint32_t src1, uint32_t src2) {
-        code.insert(code.end(), {Op::FMIN, (uint8_t)dest, (uint8_t)src1, (uint8_t)src2});
-    }
-    void emitFMAX(uint32_t dest, uint32_t src1, uint32_t src2) {
-        code.insert(code.end(), {Op::FMAX, (uint8_t)dest, (uint8_t)src1, (uint8_t)src2});
+    void addGlobal(std::string_view name, uint32_t type_id, ZithLinkage linkage,
+                   uint8_t align_log2 = 0, bool is_const = false) {
+        GlobalEntry entry{};
+        entry.name_string_id = internString(name);
+        entry.type_id = type_id;
+        entry.linkage = linkage;
+        entry.align_log2 = align_log2;
+        if (is_const) entry.flags |= 1;
+        globals.push_back(entry);
     }
 
     // ==========================================================================
-    // Integer Unary (23–29) — [op][dest][src] — 3 bytes
+    // Functions
     // ==========================================================================
-    void emitNEG(uint32_t dest, uint32_t src) {
-        code.insert(code.end(), {Op::NEG, (uint8_t)dest, (uint8_t)src});
-    }
-    void emitNOT(uint32_t dest, uint32_t src) {
-        code.insert(code.end(), {Op::NOT, (uint8_t)dest, (uint8_t)src});
-    }
-    void emitABS(uint32_t dest, uint32_t src) {
-        code.insert(code.end(), {Op::ABS, (uint8_t)dest, (uint8_t)src});
-    }
-    void emitPOPCNT(uint32_t dest, uint32_t src) {
-        code.insert(code.end(), {Op::POPCNT, (uint8_t)dest, (uint8_t)src});
-    }
-    void emitCLZ(uint32_t dest, uint32_t src) {
-        code.insert(code.end(), {Op::CLZ, (uint8_t)dest, (uint8_t)src});
-    }
-    void emitCTZ(uint32_t dest, uint32_t src) {
-        code.insert(code.end(), {Op::CTZ, (uint8_t)dest, (uint8_t)src});
-    }
-    void emitBYTESWAP(uint32_t dest, uint32_t src) {
-        code.insert(code.end(), {Op::BYTESWAP, (uint8_t)dest, (uint8_t)src});
+    void beginFunction(std::string_view name, uint32_t type_id, ZithLinkage linkage,
+                       uint32_t attr_flags = 0, ZithCallingConv cc = ZITH_CC_C,
+                       uint32_t n_params = 0) {
+        FunctionEntry entry{};
+        entry.name_string_id = internString(name);
+        entry.type_id = type_id;
+        entry.linkage = linkage;
+        entry.attr_flags = attr_flags;
+        entry.calling_conv = cc;
+        entry.n_params = n_params;
+        entry.n_blocks = 0;
+        functions.push_back(entry);
+        next_value_id = 0;
+        next_block_id = 0;
     }
 
-    // ==========================================================================
-    // Float Unary (30–37) — [op][dest][src] — 3 bytes
-    // ==========================================================================
-    void emitFNEG(uint32_t dest, uint32_t src) {
-        code.insert(code.end(), {Op::FNEG, (uint8_t)dest, (uint8_t)src});
-    }
-    void emitFABS(uint32_t dest, uint32_t src) {
-        code.insert(code.end(), {Op::FABS, (uint8_t)dest, (uint8_t)src});
-    }
-    void emitFSQRT(uint32_t dest, uint32_t src) {
-        code.insert(code.end(), {Op::FSQRT, (uint8_t)dest, (uint8_t)src});
-    }
-    void emitFFLOOR(uint32_t dest, uint32_t src) {
-        code.insert(code.end(), {Op::FFLOOR, (uint8_t)dest, (uint8_t)src});
-    }
-    void emitFCEIL(uint32_t dest, uint32_t src) {
-        code.insert(code.end(), {Op::FCEIL, (uint8_t)dest, (uint8_t)src});
-    }
-    void emitFTRUNC(uint32_t dest, uint32_t src) {
-        code.insert(code.end(), {Op::FTRUNC, (uint8_t)dest, (uint8_t)src});
-    }
-    void emitFROUND(uint32_t dest, uint32_t src) {
-        code.insert(code.end(), {Op::FROUND, (uint8_t)dest, (uint8_t)src});
-    }
-    void emitFCLASS(uint32_t dest, uint32_t src) {
-        code.insert(code.end(), {Op::FCLASS, (uint8_t)dest, (uint8_t)src});
-    }
-
-    // ==========================================================================
-    // Register Copy (38) — [op][dest][src] — 3 bytes
-    // ==========================================================================
-    void emitMOV(uint32_t dest, uint32_t src) {
-        code.insert(code.end(), {Op::MOV, (uint8_t)dest, (uint8_t)src});
-    }
-
-    // ==========================================================================
-    // Four-Operand (39–40) — [op][dest][src1][src2][src3] — 5 bytes
-    // ==========================================================================
-    void emitFFMA(uint32_t dest, uint32_t src1, uint32_t src2, uint32_t src3) {
-        code.insert(code.end(), {Op::FFMA, (uint8_t)dest, (uint8_t)src1, (uint8_t)src2, (uint8_t)src3});
-    }
-    void emitSELECT(uint32_t dest, uint32_t cond, uint32_t true_val, uint32_t false_val) {
-        code.insert(code.end(), {Op::SELECT, (uint8_t)dest, (uint8_t)cond, (uint8_t)true_val, (uint8_t)false_val});
-    }
-
-    // ==========================================================================
-    // Immediate Loads (41–44)
-    // ==========================================================================
-    void emitMOV_I8(uint32_t dest, uint8_t imm) {
-        code.insert(code.end(), {Op::MOV_I8, (uint8_t)dest, imm});
-    }
-    void emitMOV_I32(uint32_t dest, int32_t imm) {
-        code.push_back(Op::MOV_I32);
-        code.push_back((uint8_t)dest);
-        uint32_t u = (uint32_t)imm;
-        code.push_back(u & 0xFF);
-        code.push_back((u >> 8) & 0xFF);
-        code.push_back((u >> 16) & 0xFF);
-        code.push_back((u >> 24) & 0xFF);
-    }
-    void emitMOV_I64(uint32_t dest, int64_t imm) {
-        code.push_back(Op::MOV_I64);
-        code.push_back((uint8_t)dest);
-        uint64_t u = (uint64_t)imm;
-        for (int i = 0; i < 8; i++) {
-            code.push_back((u >> (i * 8)) & 0xFF);
-        }
-    }
-    void emitMOV_F64(uint32_t dest, double imm) {
-        code.push_back(Op::MOV_F64);
-        code.push_back((uint8_t)dest);
-        uint64_t bits;
-        memcpy(&bits, &imm, sizeof(double));
-        for (int i = 0; i < 8; i++) {
-            code.push_back((bits >> (i * 8)) & 0xFF);
+    void beginBlock() {
+        current_block_id = next_block_id++;
+        if (!functions.empty()) {
+            functions.back().n_blocks++;
         }
     }
 
     // ==========================================================================
-    // Stack Allocate (45) — [op][dest][i32_size][i8_align] — 10 bytes
+    // Integer ALU — [opcode][type][flags][result][lhs][rhs]
     // ==========================================================================
-    void emitALLOCA(uint32_t dest, uint32_t size, uint8_t align) {
-        code.push_back(Op::ALLOCA);
-        code.push_back((uint8_t)dest);
-        code.push_back(size & 0xFF);
-        code.push_back((size >> 8) & 0xFF);
-        code.push_back((size >> 16) & 0xFF);
-        code.push_back((size >> 24) & 0xFF);
-        code.push_back(align);
-        // 3 bytes padding reserved for future
-        code.push_back(0);
-        code.push_back(0);
-        code.push_back(0);
+    uint32_t emitAdd(ZithTypeId ty, uint32_t lhs, uint32_t rhs, uint8_t flags = 0) {
+        uint32_t res = newValueId();
+        emit_u8(OP_ADD);
+        emit_u8(static_cast<uint8_t>(ty));
+        emit_u8(flags);
+        emit_uleb(res);
+        emit_uleb(lhs);
+        emit_uleb(rhs);
+        return res;
+    }
+
+    uint32_t emitSub(ZithTypeId ty, uint32_t lhs, uint32_t rhs, uint8_t flags = 0) {
+        uint32_t res = newValueId();
+        emit_u8(OP_SUB);
+        emit_u8(static_cast<uint8_t>(ty));
+        emit_u8(flags);
+        emit_uleb(res);
+        emit_uleb(lhs);
+        emit_uleb(rhs);
+        return res;
+    }
+
+    uint32_t emitMul(ZithTypeId ty, uint32_t lhs, uint32_t rhs, uint8_t flags = 0) {
+        uint32_t res = newValueId();
+        emit_u8(OP_MUL);
+        emit_u8(static_cast<uint8_t>(ty));
+        emit_u8(flags);
+        emit_uleb(res);
+        emit_uleb(lhs);
+        emit_uleb(rhs);
+        return res;
+    }
+
+    uint32_t emitSDiv(ZithTypeId ty, uint32_t lhs, uint32_t rhs, uint8_t flags = 0) {
+        uint32_t res = newValueId();
+        emit_u8(OP_SDIV);
+        emit_u8(static_cast<uint8_t>(ty));
+        emit_u8(flags);
+        emit_uleb(res);
+        emit_uleb(lhs);
+        emit_uleb(rhs);
+        return res;
+    }
+
+    uint32_t emitUDiv(ZithTypeId ty, uint32_t lhs, uint32_t rhs, uint8_t flags = 0) {
+        uint32_t res = newValueId();
+        emit_u8(OP_UDIV);
+        emit_u8(static_cast<uint8_t>(ty));
+        emit_u8(flags);
+        emit_uleb(res);
+        emit_uleb(lhs);
+        emit_uleb(rhs);
+        return res;
+    }
+
+    uint32_t emitAnd(ZithTypeId ty, uint32_t lhs, uint32_t rhs) {
+        uint32_t res = newValueId();
+        emit_u8(OP_AND);
+        emit_u8(static_cast<uint8_t>(ty));
+        emit_uleb(res);
+        emit_uleb(lhs);
+        emit_uleb(rhs);
+        return res;
+    }
+
+    uint32_t emitOr(ZithTypeId ty, uint32_t lhs, uint32_t rhs) {
+        uint32_t res = newValueId();
+        emit_u8(OP_OR);
+        emit_u8(static_cast<uint8_t>(ty));
+        emit_uleb(res);
+        emit_uleb(lhs);
+        emit_uleb(rhs);
+        return res;
+    }
+
+    uint32_t emitXor(ZithTypeId ty, uint32_t lhs, uint32_t rhs) {
+        uint32_t res = newValueId();
+        emit_u8(OP_XOR);
+        emit_u8(static_cast<uint8_t>(ty));
+        emit_uleb(res);
+        emit_uleb(lhs);
+        emit_uleb(rhs);
+        return res;
+    }
+
+    uint32_t emitShl(ZithTypeId ty, uint32_t lhs, uint32_t rhs) {
+        uint32_t res = newValueId();
+        emit_u8(OP_SHL);
+        emit_u8(static_cast<uint8_t>(ty));
+        emit_uleb(res);
+        emit_uleb(lhs);
+        emit_uleb(rhs);
+        return res;
+    }
+
+    uint32_t emitAShr(ZithTypeId ty, uint32_t lhs, uint32_t rhs) {
+        uint32_t res = newValueId();
+        emit_u8(OP_ASHR);
+        emit_u8(static_cast<uint8_t>(ty));
+        emit_uleb(res);
+        emit_uleb(lhs);
+        emit_uleb(rhs);
+        return res;
+    }
+
+    uint32_t emitLShr(ZithTypeId ty, uint32_t lhs, uint32_t rhs) {
+        uint32_t res = newValueId();
+        emit_u8(OP_LSHR);
+        emit_u8(static_cast<uint8_t>(ty));
+        emit_uleb(res);
+        emit_uleb(lhs);
+        emit_uleb(rhs);
+        return res;
     }
 
     // ==========================================================================
-    // Comparisons (46–47) — [op][dest][cond][src1][src2] — 5 bytes
+    // Float ALU — [opcode][type][result][lhs][rhs]
     // ==========================================================================
-    void emitICMP(uint32_t dest, CondCode cond, uint32_t src1, uint32_t src2) {
-        code.insert(code.end(), {Op::ICMP, (uint8_t)dest, (uint8_t)cond, (uint8_t)src1, (uint8_t)src2});
+    uint32_t emitFAdd(ZithTypeId ty, uint32_t lhs, uint32_t rhs) {
+        uint32_t res = newValueId();
+        emit_u8(OP_FADD);
+        emit_u8(static_cast<uint8_t>(ty));
+        emit_uleb(res);
+        emit_uleb(lhs);
+        emit_uleb(rhs);
+        return res;
     }
-    void emitFCMP(uint32_t dest, CondCode cond, uint32_t src1, uint32_t src2) {
-        code.insert(code.end(), {Op::FCMP, (uint8_t)dest, (uint8_t)cond, (uint8_t)src1, (uint8_t)src2});
+
+    uint32_t emitFSub(ZithTypeId ty, uint32_t lhs, uint32_t rhs) {
+        uint32_t res = newValueId();
+        emit_u8(OP_FSUB);
+        emit_u8(static_cast<uint8_t>(ty));
+        emit_uleb(res);
+        emit_uleb(lhs);
+        emit_uleb(rhs);
+        return res;
+    }
+
+    uint32_t emitFMul(ZithTypeId ty, uint32_t lhs, uint32_t rhs) {
+        uint32_t res = newValueId();
+        emit_u8(OP_FMUL);
+        emit_u8(static_cast<uint8_t>(ty));
+        emit_uleb(res);
+        emit_uleb(lhs);
+        emit_uleb(rhs);
+        return res;
+    }
+
+    uint32_t emitFDiv(ZithTypeId ty, uint32_t lhs, uint32_t rhs) {
+        uint32_t res = newValueId();
+        emit_u8(OP_FDIV);
+        emit_u8(static_cast<uint8_t>(ty));
+        emit_uleb(res);
+        emit_uleb(lhs);
+        emit_uleb(rhs);
+        return res;
     }
 
     // ==========================================================================
-    // Shift by Immediate (48–50) — [op][dest][src][i8] — 4 bytes
+    // Comparisons — [opcode][i1][result][pred][lhs][rhs]
     // ==========================================================================
-    void emitSHL_I(uint32_t dest, uint32_t src, uint8_t shift) {
-        code.insert(code.end(), {Op::SHL_I, (uint8_t)dest, (uint8_t)src, shift});
+    uint32_t emitICmp(ZithICmpPred pred, uint32_t lhs, uint32_t rhs) {
+        uint32_t res = newValueId();
+        emit_u8(OP_ICMP);
+        emit_u8(ZITH_TYPE_I1);
+        emit_uleb(res);
+        emit_u8(static_cast<uint8_t>(pred));
+        emit_uleb(lhs);
+        emit_uleb(rhs);
+        return res;
     }
-    void emitSAR_I(uint32_t dest, uint32_t src, uint8_t shift) {
-        code.insert(code.end(), {Op::SAR_I, (uint8_t)dest, (uint8_t)src, shift});
-    }
-    void emitSHR_I(uint32_t dest, uint32_t src, uint8_t shift) {
-        code.insert(code.end(), {Op::SHR_I, (uint8_t)dest, (uint8_t)src, shift});
+
+    uint32_t emitFCmp(ZithFCmpPred pred, uint32_t lhs, uint32_t rhs) {
+        uint32_t res = newValueId();
+        emit_u8(OP_FCMP);
+        emit_u8(ZITH_TYPE_I1);
+        emit_uleb(res);
+        emit_u8(static_cast<uint8_t>(pred));
+        emit_uleb(lhs);
+        emit_uleb(rhs);
+        return res;
     }
 
     // ==========================================================================
-    // GetElementPtr (51) — [op][dest][ptr][index] — 4 bytes
+    // Memory — [opcode][type][result][addr][align][ordering]
     // ==========================================================================
-    void emitGEP(uint32_t dest, uint32_t ptr, uint32_t index) {
-        code.insert(code.end(), {Op::GEP, (uint8_t)dest, (uint8_t)ptr, (uint8_t)index});
+    uint32_t emitLoad(ZithTypeId ty, uint32_t addr, uint8_t align_log2 = 0,
+                      uint8_t ordering = ZITH_ORDER_SEQ_CST) {
+        uint32_t res = newValueId();
+        emit_u8(OP_LOAD);
+        emit_u8(static_cast<uint8_t>(ty));
+        emit_uleb(res);
+        emit_uleb(addr);
+        emit_u8(align_log2);
+        emit_u8(ordering);
+        return res;
+    }
+
+    void emitStore(ZithTypeId ty, uint32_t value, uint32_t addr, uint8_t align_log2 = 0,
+                   uint8_t ordering = ZITH_ORDER_SEQ_CST) {
+        emit_u8(OP_STORE);
+        emit_u8(static_cast<uint8_t>(ty));
+        emit_uleb(value);
+        emit_uleb(addr);
+        emit_u8(align_log2);
+        emit_u8(ordering);
+    }
+
+    uint32_t emitAlloca(ZithTypeId ty, uint32_t alloc_type_id, uint8_t align_log2 = 0) {
+        uint32_t res = newValueId();
+        emit_u8(OP_ALLOCA);
+        emit_u8(static_cast<uint8_t>(ty));
+        emit_uleb(res);
+        emit_uleb(alloc_type_id);
+        emit_u8(align_log2);
+        return res;
     }
 
     // ==========================================================================
-    // Test & Freeze (52–53)
+    // GEP — [opcode][ptr][result][base][n_indices][idx_type][idx_val]...
     // ==========================================================================
-    void emitTEST(uint32_t dest, uint32_t src1, uint32_t src2) {
-        code.insert(code.end(), {Op::TEST, (uint8_t)dest, (uint8_t)src1, (uint8_t)src2});
-    }
-    void emitFREEZE(uint32_t dest, uint32_t src) {
-        code.insert(code.end(), {Op::FREEZE, (uint8_t)dest, (uint8_t)src});
+    uint32_t emitGep(uint32_t base_ptr, const std::vector<std::pair<uint8_t, uint32_t>>& indices) {
+        uint32_t res = newValueId();
+        emit_u8(OP_GEP);
+        emit_u8(ZITH_TYPE_PTR);
+        emit_uleb(res);
+        emit_uleb(base_ptr);
+        emit_uleb(indices.size());
+        for (auto& [ty, val] : indices) {
+            emit_u8(ty);
+            emit_uleb(val);
+        }
+        return res;
     }
 
     // ==========================================================================
-    // Memory Loads (54–57) — [op][dest][addr] — 3 bytes
+    // Conversions — [opcode][result_type][result][src]
     // ==========================================================================
-    void emitLOAD64(uint32_t dest, uint32_t addr) {
-        code.insert(code.end(), {Op::LOAD64, (uint8_t)dest, (uint8_t)addr});
+    uint32_t emitTrunc(ZithTypeId dst_ty, uint32_t src) {
+        uint32_t res = newValueId();
+        emit_u8(OP_TRUNC);
+        emit_u8(static_cast<uint8_t>(dst_ty));
+        emit_uleb(res);
+        emit_uleb(src);
+        return res;
     }
-    void emitLOAD32(uint32_t dest, uint32_t addr) {
-        code.insert(code.end(), {Op::LOAD32, (uint8_t)dest, (uint8_t)addr});
+
+    uint32_t emitZExt(ZithTypeId dst_ty, uint32_t src) {
+        uint32_t res = newValueId();
+        emit_u8(OP_ZEXT);
+        emit_u8(static_cast<uint8_t>(dst_ty));
+        emit_uleb(res);
+        emit_uleb(src);
+        return res;
     }
-    void emitLOAD16(uint32_t dest, uint32_t addr) {
-        code.insert(code.end(), {Op::LOAD16, (uint8_t)dest, (uint8_t)addr});
+
+    uint32_t emitSExt(ZithTypeId dst_ty, uint32_t src) {
+        uint32_t res = newValueId();
+        emit_u8(OP_SEXT);
+        emit_u8(static_cast<uint8_t>(dst_ty));
+        emit_uleb(res);
+        emit_uleb(src);
+        return res;
     }
-    void emitLOAD8(uint32_t dest, uint32_t addr) {
-        code.insert(code.end(), {Op::LOAD8, (uint8_t)dest, (uint8_t)addr});
+
+    uint32_t emitBitCast(ZithTypeId dst_ty, uint32_t src) {
+        uint32_t res = newValueId();
+        emit_u8(OP_BITCAST);
+        emit_u8(static_cast<uint8_t>(dst_ty));
+        emit_uleb(res);
+        emit_uleb(src);
+        return res;
+    }
+
+    uint32_t emitPtrToInt(ZithTypeId dst_ty, uint32_t src) {
+        uint32_t res = newValueId();
+        emit_u8(OP_PTR2INT);
+        emit_u8(static_cast<uint8_t>(dst_ty));
+        emit_uleb(res);
+        emit_uleb(src);
+        return res;
+    }
+
+    uint32_t emitIntToPtr(uint32_t src) {
+        uint32_t res = newValueId();
+        emit_u8(OP_INT2PTR);
+        emit_u8(ZITH_TYPE_PTR);
+        emit_uleb(res);
+        emit_uleb(src);
+        return res;
     }
 
     // ==========================================================================
-    // Memory Stores (58–61) — [op][addr][src] — 3 bytes
+    // SSA — PHI, Freeze
     // ==========================================================================
-    void emitSTORE64(uint32_t addr, uint32_t src) {
-        code.insert(code.end(), {Op::STORE64, (uint8_t)addr, (uint8_t)src});
+    uint32_t emitPhi(ZithTypeId ty, const std::vector<std::pair<uint32_t, uint32_t>>& incoming) {
+        uint32_t res = newValueId();
+        emit_u8(OP_PHI);
+        emit_u8(static_cast<uint8_t>(ty));
+        emit_uleb(res);
+        emit_uleb(incoming.size());
+        for (auto& [vid, bid] : incoming) {
+            emit_uleb(vid);
+            emit_uleb(bid);
+        }
+        return res;
     }
-    void emitSTORE32(uint32_t addr, uint32_t src) {
-        code.insert(code.end(), {Op::STORE32, (uint8_t)addr, (uint8_t)src});
-    }
-    void emitSTORE16(uint32_t addr, uint32_t src) {
-        code.insert(code.end(), {Op::STORE16, (uint8_t)addr, (uint8_t)src});
-    }
-    void emitSTORE8(uint32_t addr, uint32_t src) {
-        code.insert(code.end(), {Op::STORE8, (uint8_t)addr, (uint8_t)src});
+
+    uint32_t emitFreeze(ZithTypeId ty, uint32_t src) {
+        uint32_t res = newValueId();
+        emit_u8(OP_FREEZE);
+        emit_u8(static_cast<uint8_t>(ty));
+        emit_uleb(res);
+        emit_uleb(src);
+        return res;
     }
 
     // ==========================================================================
-    // Float Memory (62–63) — [op][dest/addr][addr/src] — 3 bytes
+    // Select — [opcode][type][result][cond][true][false]
     // ==========================================================================
-    void emitLOADF64(uint32_t dest, uint32_t addr) {
-        code.insert(code.end(), {Op::LOADF64, (uint8_t)dest, (uint8_t)addr});
-    }
-    void emitSTOREF64(uint32_t addr, uint32_t src) {
-        code.insert(code.end(), {Op::STOREF64, (uint8_t)addr, (uint8_t)src});
+    uint32_t emitSelect(ZithTypeId ty, uint32_t cond, uint32_t true_val, uint32_t false_val) {
+        uint32_t res = newValueId();
+        emit_u8(OP_SELECT);
+        emit_u8(static_cast<uint8_t>(ty));
+        emit_uleb(res);
+        emit_uleb(cond);
+        emit_uleb(true_val);
+        emit_uleb(false_val);
+        return res;
     }
 
     // ==========================================================================
-    // Control Flow (64–75)
+    // Calls — [opcode][result_type][result][fn][n_args][arg_type][arg_val]...
     // ==========================================================================
-
-    // Labels are represented as placeholder offsets (4 bytes, LE).
-    // A linker pass resolves label IDs to actual offsets after emission.
-
-    // Unconditional branch (5 bytes)
-    void emitBR(uint32_t label_offset) {
-        code.push_back(Op::BR);
-        writeLabel(label_offset);
+    uint32_t emitCall(ZithTypeId ret_ty, uint32_t fn,
+                      const std::vector<std::pair<uint8_t, uint32_t>>& args) {
+        uint32_t res = newValueId();
+        emit_u8(OP_CALL);
+        emit_u8(static_cast<uint8_t>(ret_ty));
+        emit_uleb(res);
+        emit_uleb(fn);
+        emit_uleb(args.size());
+        for (auto& [ty, val] : args) {
+            emit_u8(ty);
+            emit_uleb(val);
+        }
+        return res;
     }
 
-    // Conditional branch (10 bytes): [BR_COND][cond][lbl_true][lbl_false]
-    void emitBR_COND(uint32_t cond_reg, uint32_t label_true, uint32_t label_false) {
-        code.push_back(Op::BR_COND);
-        code.push_back((uint8_t)cond_reg);
-        writeLabel(label_true);
-        writeLabel(label_false);
+    // ==========================================================================
+    // Atomics
+    // ==========================================================================
+    uint32_t emitAtomicRMW(ZithTypeId ty, ZithAtomicRMWOp op, uint32_t addr, uint32_t value,
+                           uint8_t ordering) {
+        uint32_t res = newValueId();
+        emit_u8(OP_ATOMICRMW);
+        emit_u8(static_cast<uint8_t>(ty));
+        emit_uleb(res);
+        emit_u8(static_cast<uint8_t>(op));
+        emit_uleb(addr);
+        emit_uleb(value);
+        emit_u8(ordering);
+        return res;
     }
 
-    // Jump table — variable length
-    void emitBR_TABLE(uint32_t val_reg, uint32_t default_label, uint32_t n_cases,
-                      const uint32_t* case_values, const uint32_t* case_labels) {
-        code.push_back(Op::BR_TABLE);
-        code.push_back((uint8_t)val_reg);
-        writeLabel(default_label);
-        code.push_back((uint8_t)n_cases);
-        for (uint32_t i = 0; i < n_cases; i++) {
-            writeI32(case_values[i]);
-            writeLabel(case_labels[i]);
+    uint32_t emitCmpXchg(ZithTypeId ty, uint32_t addr, uint32_t cmp, uint32_t new_val,
+                         uint8_t success_ordering, uint8_t failure_ordering) {
+        uint32_t res = newValueId();
+        emit_u8(OP_CMPXCHG);
+        emit_u8(static_cast<uint8_t>(ty));
+        emit_uleb(res);
+        emit_uleb(addr);
+        emit_uleb(cmp);
+        emit_uleb(new_val);
+        emit_u8(success_ordering);
+        emit_u8(failure_ordering);
+        return res;
+    }
+
+    void emitFence(uint8_t ordering) {
+        emit_u8(OP_FENCE);
+        emit_u8(ordering);
+    }
+
+    // ==========================================================================
+    // Constants
+    // ==========================================================================
+    uint32_t emitConstInt(ZithTypeId ty, int64_t value) {
+        uint32_t res = newValueId();
+        emit_u8(OP_CONST_INT);
+        emit_u8(static_cast<uint8_t>(ty));
+        emit_uleb(res);
+        emit_sleb(value);
+        return res;
+    }
+
+    uint32_t emitConstFloat(ZithTypeId ty, double value) {
+        uint32_t res = newValueId();
+        emit_u8(OP_CONST_FLOAT);
+        emit_u8(static_cast<uint8_t>(ty));
+        emit_uleb(res);
+        emit_f64_bits(value);
+        return res;
+    }
+
+    uint32_t emitConstNull(ZithTypeId ty) {
+        uint32_t res = newValueId();
+        emit_u8(OP_CONST_NULL);
+        emit_u8(static_cast<uint8_t>(ty));
+        emit_uleb(res);
+        return res;
+    }
+
+    // ==========================================================================
+    // Terminators
+    // ==========================================================================
+    void emitBr(uint32_t target_block) {
+        emit_u8(OP_BR);
+        emit_uleb(target_block);
+    }
+
+    void emitCondBr(uint32_t cond, uint32_t true_block, uint32_t false_block) {
+        emit_u8(OP_COND_BR);
+        emit_uleb(cond);
+        emit_uleb(true_block);
+        emit_uleb(false_block);
+    }
+
+    void emitSwitch(uint32_t value, uint32_t default_block,
+                    const std::vector<std::pair<int64_t, uint32_t>>& cases) {
+        emit_u8(OP_SWITCH);
+        emit_uleb(value);
+        emit_uleb(default_block);
+        emit_uleb(cases.size());
+        for (auto& [cv, target] : cases) {
+            emit_sleb(cv);
+            emit_uleb(target);
         }
     }
 
-    // Return — void (1 byte) or with value (2 bytes)
-    void emitRET() {
-        code.push_back(Op::RET);
-    }
-    void emitRET_VAL(uint32_t val_reg) {
-        code.push_back(Op::RET);
-        code.push_back((uint8_t)val_reg);
+    void emitRet() {
+        emit_u8(OP_RET);
+        emit_uleb(0);
     }
 
-    // Indirect call — variable length
-    void emitCALL(uint32_t ret_reg, uint32_t func_reg, uint32_t n_args, const uint32_t* args) {
-        code.push_back(Op::CALL);
-        code.push_back((uint8_t)ret_reg);
-        code.push_back((uint8_t)func_reg);
-        code.push_back((uint8_t)n_args);
-        for (uint32_t i = 0; i < n_args; i++) {
-            code.push_back((uint8_t)args[i]);
+    void emitRet(ZithTypeId ty, uint32_t value) {
+        emit_u8(OP_RET);
+        emit_uleb(1);
+        emit_u8(static_cast<uint8_t>(ty));
+        emit_uleb(value);
+    }
+
+    void emitUnreachable() {
+        emit_u8(OP_UNREACHABLE);
+    }
+
+    // ==========================================================================
+    // Raw byte emission (for custom instructions or extensions)
+    // ==========================================================================
+    void emitRaw(const std::vector<uint8_t>& bytes) {
+        for (auto b : bytes) buffer.push_back(b);
+    }
+
+    // ==========================================================================
+    // Finalize — returns the encoded module
+    // ==========================================================================
+    std::vector<uint8_t> finalize() {
+        std::vector<uint8_t> out;
+
+        // Header
+        for (int i = 0; i < 4; i++) out.push_back(ZBC_MAGIC[i]);
+        out.push_back(ZBC_VERSION);
+        out.push_back(0); // flags
+
+        // Type table
+        uint8_t tmp[10];
+        int n = zith_uleb128_encode_uint64(tmp, types.size());
+        for (int i = 0; i < n; i++) out.push_back(tmp[i]);
+        for (auto& t : types) {
+            out.push_back(static_cast<uint8_t>(t.base));
         }
-    }
 
-    // Direct call — variable length
-    void emitCALL_DIRECT(uint32_t ret_reg, uint32_t func_label, uint32_t n_args, const uint32_t* args) {
-        code.push_back(Op::CALL_DIRECT);
-        code.push_back((uint8_t)ret_reg);
-        writeLabel(func_label);
-        code.push_back((uint8_t)n_args);
-        for (uint32_t i = 0; i < n_args; i++) {
-            code.push_back((uint8_t)args[i]);
+        // String table
+        n = zith_uleb128_encode_uint64(tmp, string_storage.size());
+        for (int i = 0; i < n; i++) out.push_back(tmp[i]);
+        uint32_t offset = 0;
+        for (auto& s : string_storage) {
+            out.push_back(offset & 0xFF);
+            out.push_back((offset >> 8) & 0xFF);
+            out.push_back((offset >> 16) & 0xFF);
+            out.push_back((offset >> 24) & 0xFF);
+            uint32_t len = static_cast<uint32_t>(s.size());
+            out.push_back(len & 0xFF);
+            out.push_back((len >> 8) & 0xFF);
+            out.push_back((len >> 16) & 0xFF);
+            out.push_back((len >> 24) & 0xFF);
+            for (char c : s) out.push_back(static_cast<uint8_t>(c));
+            offset += len;
         }
-    }
 
-    // Invoke (call with landing pad)
-    void emitINVOKE(uint32_t ret_reg, uint32_t func_reg, uint32_t n_args,
-                    const uint32_t* args, uint32_t normal_label, uint32_t unwind_label) {
-        code.push_back(Op::INVOKE);
-        code.push_back((uint8_t)ret_reg);
-        code.push_back((uint8_t)func_reg);
-        code.push_back((uint8_t)n_args);
-        for (uint32_t i = 0; i < n_args; i++) {
-            code.push_back((uint8_t)args[i]);
+        // Globals
+        n = zith_uleb128_encode_uint64(tmp, globals.size());
+        for (int i = 0; i < n; i++) out.push_back(tmp[i]);
+        for (auto& g : globals) {
+            uint8_t gtmp[20];
+            uint8_t* p = gtmp;
+            int sz = zith_uleb128_encode_uint64(p, g.name_string_id); p += sz;
+            sz = zith_uleb128_encode_uint64(p, g.type_id); p += sz;
+            sz = zith_uleb128_encode_uint64(p, static_cast<uint64_t>(g.linkage)); p += sz;
+            *p++ = g.align_log2;
+            *p++ = g.flags;
+            sz = zith_uleb128_encode_uint64(p, g.init_value_id); p += sz;
+            for (uint8_t* q = gtmp; q < p; q++) out.push_back(*q);
         }
-        writeLabel(normal_label);
-        writeLabel(unwind_label);
-    }
 
-    // Landing pad (exception entry)
-    void emitLANDINGPAD(uint32_t dest) {
-        code.insert(code.end(), {Op::LANDINGPAD, (uint8_t)dest});
-    }
-
-    // PHI node — variable length
-    void emitPHI(uint32_t dest, uint32_t n_pairs,
-                 const uint32_t* src_regs, const uint32_t* labels) {
-        code.push_back(Op::PHI);
-        code.push_back((uint8_t)dest);
-        code.push_back((uint8_t)n_pairs);
-        for (uint32_t i = 0; i < n_pairs; i++) {
-            code.push_back((uint8_t)src_regs[i]);
-            writeLabel(labels[i]);
+        // Functions
+        n = zith_uleb128_encode_uint64(tmp, functions.size());
+        for (int i = 0; i < n; i++) out.push_back(tmp[i]);
+        for (auto& f : functions) {
+            uint8_t ftmp[40];
+            uint8_t* p = ftmp;
+            int sz = zith_uleb128_encode_uint64(p, f.name_string_id); p += sz;
+            sz = zith_uleb128_encode_uint64(p, f.type_id); p += sz;
+            sz = zith_uleb128_encode_uint64(p, static_cast<uint64_t>(f.linkage)); p += sz;
+            sz = zith_uleb128_encode_uint64(p, f.attr_flags); p += sz;
+            sz = zith_uleb128_encode_uint64(p, static_cast<uint64_t>(f.calling_conv)); p += sz;
+            sz = zith_uleb128_encode_uint64(p, f.n_params); p += sz;
+            sz = zith_uleb128_encode_uint64(p, f.n_blocks); p += sz;
+            for (uint8_t* q = ftmp; q < p; q++) out.push_back(*q);
         }
+
+        // Function bytecode
+        for (auto b : buffer) out.push_back(b);
+
+        return out;
     }
 
-    // Unreachable
-    void emitUNREACHABLE() {
-        code.push_back(Op::UNREACHABLE);
-    }
-
-    // External FFI call — variable length
-    void emitEXTERN(uint32_t func_id, uint32_t ret_reg, uint32_t n_args, const uint32_t* args) {
-        code.push_back(Op::EXTERN);
-        code.push_back((uint8_t)func_id);
-        code.push_back((uint8_t)ret_reg);
-        code.push_back((uint8_t)n_args);
-        for (uint32_t i = 0; i < n_args; i++) {
-            code.push_back((uint8_t)args[i]);
-        }
-    }
-
-    // Label marker (not executed; marks basic block start) — 5 bytes
-    void emitLABEL(uint32_t label_id) {
-        code.push_back(Op::LABEL);
-        writeLabel(label_id);
-    }
-
-    // ==========================================================================
-    // Type Conversions (76–79) — [op][dest][src] — 3 bytes
-    // ==========================================================================
-    void emitI2F(uint32_t dest, uint32_t src) {
-        code.insert(code.end(), {Op::I2F, (uint8_t)dest, (uint8_t)src});
-    }
-    void emitF2I(uint32_t dest, uint32_t src) {
-        code.insert(code.end(), {Op::F2I, (uint8_t)dest, (uint8_t)src});
-    }
-    void emitF2I_ROUND(uint32_t dest, uint32_t src) {
-        code.insert(code.end(), {Op::F2I_ROUND, (uint8_t)dest, (uint8_t)src});
-    }
-    void emitBITCAST(uint32_t dest, uint32_t src) {
-        code.insert(code.end(), {Op::BITCAST, (uint8_t)dest, (uint8_t)src});
-    }
-
-    // ==========================================================================
-    // Extend / Truncate (80–83) — [op][dest][src] — 3 bytes
-    // ==========================================================================
-    void emitSEXT8(uint32_t dest, uint32_t src) {
-        code.insert(code.end(), {Op::SEXT8, (uint8_t)dest, (uint8_t)src});
-    }
-    void emitSEXT16(uint32_t dest, uint32_t src) {
-        code.insert(code.end(), {Op::SEXT16, (uint8_t)dest, (uint8_t)src});
-    }
-    void emitZEXT8(uint32_t dest, uint32_t src) {
-        code.insert(code.end(), {Op::ZEXT8, (uint8_t)dest, (uint8_t)src});
-    }
-    void emitZEXT16(uint32_t dest, uint32_t src) {
-        code.insert(code.end(), {Op::ZEXT16, (uint8_t)dest, (uint8_t)src});
-    }
-
-    // ==========================================================================
-    // Pointer Conversions (84–85) — [op][dest][src] — 3 bytes
-    // ==========================================================================
-    void emitPTR2I(uint32_t dest, uint32_t src) {
-        code.insert(code.end(), {Op::PTR2I, (uint8_t)dest, (uint8_t)src});
-    }
-    void emitI2PTR(uint32_t dest, uint32_t src) {
-        code.insert(code.end(), {Op::I2PTR, (uint8_t)dest, (uint8_t)src});
-    }
-
-    // ==========================================================================
-    // Memory Fences (86–89) — [op][ordering] — 2 bytes
-    // ==========================================================================
-    void emitFENCE_SEQ() {
-        code.insert(code.end(), {Op::FENCE_SEQ, 0});
-    }
-    void emitFENCE_ACQ() {
-        code.insert(code.end(), {Op::FENCE_ACQ, 0});
-    }
-    void emitFENCE_REL() {
-        code.insert(code.end(), {Op::FENCE_REL, 0});
-    }
-    void emitFENCE_ACQ_REL() {
-        code.insert(code.end(), {Op::FENCE_ACQ_REL, 0});
-    }
-
-    // ==========================================================================
-    // Atomics (90) — [op][addr][cmp][new][ordering] — 5 bytes
-    // ==========================================================================
-    void emitCMPXCHG(uint32_t addr, uint32_t cmp, uint32_t new_val, uint8_t ordering) {
-        code.insert(code.end(), {Op::CMPXCHG, (uint8_t)addr, (uint8_t)cmp, (uint8_t)new_val, ordering});
-    }
-
-    // ==========================================================================
-    // Misc System (91–94)
-    // ==========================================================================
-    void emitNOP() {
-        code.push_back(Op::NOP);
-    }
-    void emitBREAKPOINT() {
-        code.push_back(Op::BREAKPOINT);
-    }
-    void emitYIELD() {
-        code.push_back(Op::YIELD);
-    }
-    void emitSYSCALL(uint8_t num) {
-        code.insert(code.end(), {Op::SYSCALL, num});
-    }
-
-    // ==========================================================================
-    // Halt (255) — [HALT] — 1 byte
-    // ==========================================================================
-    void emitHALT() {
-        code.push_back(Op::HALT);
-    }
-
-    // ==========================================================================
-    // Debug Extensions (HALT escape: [HALT][ext_op][args...])
-    // ==========================================================================
-    void emitPRINT(uint32_t reg) {
-        code.insert(code.end(), {Op::HALT, ExtOp::EXT_PRINT, (uint8_t)reg});
-    }
-    void emitINPUT(uint32_t reg) {
-        code.insert(code.end(), {Op::HALT, ExtOp::EXT_INPUT, (uint8_t)reg});
-    }
-    void emitASSERT(uint32_t reg) {
-        code.insert(code.end(), {Op::HALT, ExtOp::EXT_ASSERT, (uint8_t)reg});
-    }
-
-    // ==========================================================================
-    // Finalize
-    // ==========================================================================
-    Code finalize() {
-        return code;
-    }
-
-    const Code& getCode() const {
-        return code;
-    }
-
-private:
-    // Write a 32-bit label/offset in little-endian format
-    void writeLabel(uint32_t label) {
-        code.push_back(label & 0xFF);
-        code.push_back((label >> 8) & 0xFF);
-        code.push_back((label >> 16) & 0xFF);
-        code.push_back((label >> 24) & 0xFF);
-    }
-
-    void writeI32(int32_t val) {
-        uint32_t u = (uint32_t)val;
-        code.push_back(u & 0xFF);
-        code.push_back((u >> 8) & 0xFF);
-        code.push_back((u >> 16) & 0xFF);
-        code.push_back((u >> 24) & 0xFF);
-    }
+    const std::vector<uint8_t>& getBuffer() const { return buffer; }
 };
 
 } // namespace zith

@@ -13,6 +13,10 @@ using zith::ArenaList;
 
 static thread_local ParseContext tls_parse_ctx{};
 
+ParseContext &get_tls_parse_ctx() {
+    return tls_parse_ctx;
+}
+
 void parser_set_imported_decls(void *decls, ZithArena *arena) {
     const auto *src        = static_cast<ArenaList<ZithNode *> *>(decls);
     size_t count     = 0;
@@ -161,6 +165,8 @@ ZithNode *zith_parse_with_source(ZithArena *arena, const char *source, size_t so
 
     // Clear imported decls after sema
     tls_parse_ctx.imported_decls.clear();
+    tls_parse_ctx.from_imports.clear();
+    tls_parse_ctx.re_exports.clear();
     tls_parse_ctx.depth = 0;
 
     // Finalize v2 diagnostics

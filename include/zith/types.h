@@ -156,6 +156,146 @@ typedef enum ZithParserMode {
     ZITH_MODE_SEMA   = 2,
 } ZithParserMode;
 
+// ============================================================================
+// Zith Binary Code (ZBC) — LLVM-round-trippable IR types
+// ============================================================================
+
+// Value ID: references SSA values defined by prior instructions.
+// Encoded as unsigned LEB128 in the binary format.
+typedef uint32_t ZithValueId;
+
+// Type IDs matching LLVM's type system for lossless round-trip.
+typedef enum ZithTypeId {
+    ZITH_TYPE_VOID    = 0,
+    ZITH_TYPE_I1      = 1,
+    ZITH_TYPE_I8      = 2,
+    ZITH_TYPE_I16     = 3,
+    ZITH_TYPE_I32     = 4,
+    ZITH_TYPE_I64     = 5,
+    ZITH_TYPE_I128    = 6,
+    ZITH_TYPE_F16     = 7,
+    ZITH_TYPE_F32     = 8,
+    ZITH_TYPE_F64     = 9,
+    ZITH_TYPE_PTR     = 10,
+    ZITH_TYPE_FUNC    = 11,
+    ZITH_TYPE_STRUCT  = 12,
+    ZITH_TYPE_ARRAY   = 13,
+    ZITH_TYPE_VECTOR  = 14,
+} ZithTypeId;
+
+// Overflow flags for integer arithmetic (matches LLVM nsw/nuw/exact).
+typedef enum ZithOverflowFlags {
+    ZITH_OVERFLOW_NONE    = 0,
+    ZITH_OVERFLOW_NSW     = 1 << 0,
+    ZITH_OVERFLOW_NUW     = 1 << 1,
+    ZITH_OVERFLOW_EXACT   = 1 << 2,
+} ZithOverflowFlags;
+
+// Integer comparison predicates (matches LLVM ICMP).
+typedef enum ZithICmpPred {
+    ZITH_ICMP_EQ  = 0,
+    ZITH_ICMP_NE  = 1,
+    ZITH_ICMP_SLT = 2,
+    ZITH_ICMP_SLE = 3,
+    ZITH_ICMP_SGT = 4,
+    ZITH_ICMP_SGE = 5,
+    ZITH_ICMP_ULT = 6,
+    ZITH_ICMP_ULE = 7,
+    ZITH_ICMP_UGT = 8,
+    ZITH_ICMP_UGE = 9,
+} ZithICmpPred;
+
+// Floating-point comparison predicates (matches LLVM FCMP).
+typedef enum ZithFCmpPred {
+    ZITH_FCMP_FALSE = 0,
+    ZITH_FCMP_OEQ   = 1,
+    ZITH_FCMP_OGT   = 2,
+    ZITH_FCMP_OGE   = 3,
+    ZITH_FCMP_OLT   = 4,
+    ZITH_FCMP_OLE   = 5,
+    ZITH_FCMP_ONE   = 6,
+    ZITH_FCMP_ORD   = 7,
+    ZITH_FCMP_UNO   = 8,
+    ZITH_FCMP_UEQ   = 9,
+    ZITH_FCMP_UGT   = 10,
+    ZITH_FCMP_UGE   = 11,
+    ZITH_FCMP_ULT   = 12,
+    ZITH_FCMP_ULE   = 13,
+    ZITH_FCMP_UNE   = 14,
+    ZITH_FCMP_TRUE  = 15,
+} ZithFCmpPred;
+
+// Memory ordering for atomic operations (matches LLVM atomic ordering).
+typedef enum ZithMemoryOrdering {
+    ZITH_ORDER_UNORDERED  = 0,
+    ZITH_ORDER_MONOTONIC  = 1,
+    ZITH_ORDER_ACQUIRE    = 2,
+    ZITH_ORDER_RELEASE    = 3,
+    ZITH_ORDER_ACQ_REL    = 4,
+    ZITH_ORDER_SEQ_CST    = 5,
+} ZithMemoryOrdering;
+
+// Atomic read-modify-write operations.
+typedef enum ZithAtomicRMWOp {
+    ZITH_RMW_XCHG   = 0,
+    ZITH_RMW_ADD    = 1,
+    ZITH_RMW_SUB    = 2,
+    ZITH_RMW_AND    = 3,
+    ZITH_RMW_NAND   = 4,
+    ZITH_RMW_OR     = 5,
+    ZITH_RMW_XOR    = 6,
+    ZITH_RMW_MAX    = 7,
+    ZITH_RMW_MIN    = 8,
+    ZITH_RMW_UMAX   = 9,
+    ZITH_RMW_UMIN   = 10,
+    ZITH_RMW_FADD   = 11,
+    ZITH_RMW_FSUB   = 12,
+} ZithAtomicRMWOp;
+
+// Linkage types for globals and functions (matches LLVM linkage).
+typedef enum ZithLinkage {
+    ZITH_LINKAGE_PRIVATE              = 0,
+    ZITH_LINKAGE_INTERNAL             = 1,
+    ZITH_LINKAGE_AVAILABLE_EXTERNALLY = 2,
+    ZITH_LINKAGE_LINKONCE             = 3,
+    ZITH_LINKAGE_WEAK                 = 4,
+    ZITH_LINKAGE_COMMON               = 5,
+    ZITH_LINKAGE_APPENDING            = 6,
+    ZITH_LINKAGE_EXTERN_WEAK          = 7,
+    ZITH_LINKAGE_EXTERNAL             = 8,
+    ZITH_LINKAGE_LINKONCE_ODR         = 9,
+    ZITH_LINKAGE_WEAK_ODR             = 10,
+} ZithLinkage;
+
+// Function attributes (bitfield).
+typedef enum ZithFnAttr {
+    ZITH_FN_ATTR_NONE       = 0,
+    ZITH_FN_ATTR_NOUNWIND   = 1 << 0,
+    ZITH_FN_ATTR_READONLY   = 1 << 1,
+    ZITH_FN_ATTR_READNONE   = 1 << 2,
+    ZITH_FN_ATTR_WRITEONLY  = 1 << 3,
+    ZITH_FN_ATTR_ARGMEMONLY = 1 << 4,
+    ZITH_FN_ATTR_NORETURN   = 1 << 5,
+    ZITH_FN_ATTR_NOINLINE   = 1 << 6,
+    ZITH_FN_ATTR_ALWAYSINLINE = 1 << 7,
+    ZITH_FN_ATTR_NORECURSE  = 1 << 8,
+    ZITH_FN_ATTR_CONVERGENT = 1 << 9,
+} ZithFnAttr;
+
+// Calling convention.
+typedef enum ZithCallingConv {
+    ZITH_CC_C         = 0,
+    ZITH_CC_FAST      = 1,
+    ZITH_CC_COLD      = 2,
+    ZITH_CC_GHC       = 3,
+    ZITH_CC_HIPE      = 4,
+    ZITH_CC_ANY       = 5,
+    ZITH_CC_SWIFT     = 6,
+    ZITH_CC_PRESERVE_ALL = 7,
+    ZITH_CC_X86_64_SYSV = 8,
+    ZITH_CC_X86_64_WIN64 = 9,
+} ZithCallingConv;
+
 #ifdef __cplusplus
 }
 #endif
@@ -169,5 +309,17 @@ namespace zith {
     using LiteralKind = ZithLiteralKind;
     using ParserMode  = ZithParserMode;
     using NodeExtendedId = ZithNodeExtendedId;
+
+    // ZBC (Zith Binary Code) types
+    using ValueId       = ZithValueId;
+    using TypeId        = ZithTypeId;
+    using OverflowFlags = ZithOverflowFlags;
+    using ICmpPred      = ZithICmpPred;
+    using FCmpPred      = ZithFCmpPred;
+    using MemoryOrdering = ZithMemoryOrdering;
+    using AtomicRMWOp   = ZithAtomicRMWOp;
+    using Linkage       = ZithLinkage;
+    using FnAttr        = ZithFnAttr;
+    using CallingConv   = ZithCallingConv;
 }
 #endif

@@ -11,14 +11,29 @@
 
 void print_scanned_symbols();
 
+struct FromImportInfo {
+    std::string module_path;
+    int recurse_depth;
+    ZithSourceLoc loc;
+};
+
+struct ReExportInfo {
+    std::string module_path;
+    ZithSourceLoc loc;
+};
+
 struct ParseContext {
     std::vector<ZithNode *> imported_decls;
+    std::vector<FromImportInfo> from_imports;
+    std::vector<ReExportInfo> re_exports;
     int depth = 0;
     bool import_loaded = false;
     std::unique_ptr<DiagManager> diag_manager;
     ZithDiagList last_diags = {nullptr, 0, 0};
     DiagManager *last_diag_manager = nullptr;
 };
+
+ParseContext &get_tls_parse_ctx();
 
 class ParserContext {
 public:
