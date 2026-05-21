@@ -1,3 +1,3 @@
-pub fn log(msg: string) {
+pub fn log(msg: []char) {
     println(msg);
 }

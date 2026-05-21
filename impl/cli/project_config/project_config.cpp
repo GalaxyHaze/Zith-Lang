@@ -133,7 +133,8 @@ bool try_load_project(ZithProject &proj) {
     return ok;
 }
 
-void build_import_roots(const std::vector<std::string> &extra_dirs,
+void build_import_roots(const std::string &source_file,
+                        const std::vector<std::string> &extra_dirs,
                         std::vector<std::string> &roots_out) {
     roots_out.clear();
 
@@ -147,6 +148,19 @@ void build_import_roots(const std::vector<std::string> &extra_dirs,
         }
     };
 
+    auto find_lib_in_ancestors = [&]() {
+        std::filesystem::path dir = std::filesystem::absolute(source_file).parent_path();
+        for (int i = 0; i < 10 && !dir.empty(); ++i) {
+            auto lib_path = dir / "lib";
+            if (std::filesystem::exists(lib_path) && std::filesystem::is_directory(lib_path)) {
+                add_subdirs(lib_path);
+                return;
+            }
+            dir = dir.parent_path();
+        }
+    };
+
+    find_lib_in_ancestors();
     add_subdirs(std::filesystem::absolute("lib"));
 
 #ifdef ZITH_INSTALL_LIB_DIR

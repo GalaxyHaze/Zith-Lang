@@ -7,6 +7,7 @@
 #include <zith/parser.h>
 #include <memory/utils.hpp>
 #include <import/module_registry.hpp>
+#include "parser_context.hpp"
 #include <cstring>
 #include <memory>
 #include <string>
@@ -95,12 +96,38 @@ static std::string parser_module_path(const Parser *p) {
     return parser_module_key(p);
 }
 
+static std::string file_path_to_module_name(const std::string &file_path) {
+    std::string path = file_path;
+    if (path.size() > 5 && path.compare(path.size() - 5, 5, ".zith") == 0)
+        path.erase(path.size() - 5);
+    for (char &c : path)
+        if (c == '\\') c = '/';
+    for (const char *prefix : {"lib/", "src/"}) {
+        auto pos = path.find(prefix);
+        if (pos != std::string::npos) {
+            path.erase(0, pos + strlen(prefix));
+            break;
+        }
+    }
+    for (char &c : path)
+        if (c == '/') c = '.';
+    return path;
+}
+
+static std::string normalize_import_path(const char *path, size_t len) {
+    std::string result(path, len);
+    for (char &c : result)
+        if (c == '/') c = '.';
+    return result;
+}
+
 static zith::import::Module *ensure_parser_module(Parser *p) {
     if (p->mode != ZITH_MODE_SCAN)
         return nullptr;
 
     auto &registry = zith::import::ModuleRegistry::instance();
-    const std::string module_key  = parser_module_key(p);
+    const std::string raw_key = parser_module_key(p);
+    const std::string module_key  = file_path_to_module_name(raw_key);
     const std::string module_path = parser_module_path(p);
     if (module_key.empty())
         return nullptr;
@@ -774,7 +801,9 @@ static bool resolve_import_root_dir(const Parser *p, const std::string &root,
     for (size_t i = 0; i < p->import_root_count; ++i) {
         const char *root_full = p->import_roots[i];
         const char *slash     = strrchr(root_full, '/');
-        const char *root_name = slash ? slash + 1 : root_full;
+        const char *bslash    = strrchr(root_full, '\\');
+        const char *sep       = (bslash && (!slash || bslash > slash)) ? bslash : slash;
+        const char *root_name = sep ? sep + 1 : root_full;
         if (root == root_name) {
             root_dir = root_full;
             return true;
@@ -932,6 +961,9 @@ static ZithNode *parse_from_import_decl(Parser *p) {
 
     scan_import_path_if_allowed(p, loc, module_buf, module_len, recurse_depth);
 
+    std::string mod_path = normalize_import_path(module_buf, module_len);
+    get_tls_parse_ctx().from_imports.push_back({mod_path, recurse_depth, loc});
+
     return zith_ast_make_import(p->arena, loc, payload);
 }
 
@@ -974,6 +1006,9 @@ static ZithNode *parse_export_decl(Parser *p) {
 
     // In SCAN mode, try to load and import the module
     scan_import_path_if_allowed(p, loc, buf, buf_len, 0);
+
+    std::string mod_path = normalize_import_path(buf, buf_len);
+    get_tls_parse_ctx().re_exports.push_back({mod_path, loc});
 
     return zith_ast_make_import(p->arena, loc, payload);
 }

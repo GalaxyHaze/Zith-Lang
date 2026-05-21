@@ -47,7 +47,7 @@ int cmd_execute(const std::string &target, const bool interpreted, const bool ve
             return 1;
         }
         std::vector<std::string> import_roots;
-        zith::cli::project_config::build_import_roots(include_dirs, import_roots);
+        zith::cli::project_config::build_import_roots(bin, include_dirs, import_roots);
         std::vector<const char *> import_root_ptrs;
         for (const auto &s : import_roots) import_root_ptrs.push_back(s.c_str());
 
