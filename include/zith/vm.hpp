@@ -20,39 +20,34 @@ extern "C" {
 
     // Runtime Value (matches register size)
     typedef union {
-        int64_t     as_i64; // Serve para: bool, char, int8, int16, int32, int64
-        uint64_t    as_u64; // Serve para: uint8, uint16, uint32, uint64, size_t
-        double      as_f64; // Serve para: double (e float se convertido)
-        void*       as_ptr; // Ponteiros e Handles
-        
-        // Apenas se precisares de passar structs de 16 bytes POR VALOR
+        int64_t     as_i64;
+        uint64_t    as_u64;
+        double      as_f64;
+        void*       as_ptr;
         struct { uintptr_t low; uintptr_t high; } as_small;
     } ZithFFiValue;
 
 
     // --- FFI Definitions ---
-    
-    // Type IDs for the FFI system to know how to marshal data
+
     typedef enum {
         ZITH_FFI_VOID,
-        ZITH_FFI_I64,  // Covers int8, int16, int32, int64
+        ZITH_FFI_I64,
         ZITH_FFI_U64,
-        ZITH_FFI_F64,  // Covers float, double,
+        ZITH_FFI_F64,
         ZITH_FFI_SMALL,
-        ZITH_FFI_PTR   // Opaque pointer
+        ZITH_FFI_PTR
     } ZithFFIType;
 
-    // Describes the C function signature
     typedef struct {
         ZithFFIType ret_type;
-        ZithFFIType* arg_types; // Pointer to array of types
+        ZithFFIType* arg_types;
         uint8_t      arg_count;
     } ZithFFISignature;
 
-    // The actual entry passed to the VM
     typedef struct {
-        void*             func_ptr; // The C function address
-        ZithFFISignature  sig;      // How to call it
+        void*             func_ptr;
+        ZithFFISignature  sig;
     } ZithFFIFunction;
 
     // --- Module & Function ---
@@ -70,12 +65,9 @@ extern "C" {
 
     // --- Execution ---
 
-    // Updated signature: 
-    // 'externs' is the array of C functions you prepared.
-    // 'extern_count' is the length of that array.
     int ZithVmExecute(
-        ZithVmModule* module, 
-        ZithFFIFunction* externs, 
+        ZithVmModule* module,
+        ZithFFIFunction* externs,
         size_t extern_len,
         code_t* body
     );
@@ -84,313 +76,315 @@ extern "C" {
 }
 #endif
 
-#include <unordered_map>
 namespace Zith {
 
-    // Include/VM/Code.h
-#pragma once
-#include <cstdint>
-#include <vector>
+using Code = std::vector<uint8_t>;
 
-using Code = std::vector<uint32_t>;
+// ============================================================================
+// Register Convention (virtual registers r0–r255, all 64-bit)
+// ============================================================================
+//   r0  : zero register — always reads as 0, writes are ignored
+//   r1  : stack pointer (SP)
+//   r2  : frame pointer (FP)
+//   r3  : link register (LR) — return address for CALL
+//   r4  : thread base pointer (TP)
+//   r5–r7 : reserved for runtime/platform
+//   r8–r15 : argument / return registers (caller-saved)
+//   r16–r31 : callee-saved registers
+//   r32–r255 : free / temporary registers (caller-saved)
 
-// Organização dos 256 opcodes (.zbc Intermediate Representation):
-// 0-31:   Signed Integer Arithmetic & Logic
-// 32-63:  Unsigned Integer Arithmetic & Logic
-// 64-127: Floating Point & Vector Operations
-// 128-159: Data Movement (Load/Store/Atomic)
-// 160-191: Control Flow
-// 192-210: Comparison & Flags
-// 211-230: Type Conversions
-// 231-254: System, Memory, & Misc
-// 255:    HALT / Extension Set
+enum Register : reg_t {
+    REG_ZERO = 0,    // hardwired zero
+    REG_SP   = 1,    // stack pointer
+    REG_FP   = 2,    // frame pointer
+    REG_LR   = 3,    // link register (return address)
+    REG_TP   = 4,    // thread base pointer
+    REG_ARG0 = 8,    // first argument / return value
+    REG_ARG1 = 9,
+    REG_ARG2 = 10,
+    REG_ARG3 = 11,
+    REG_ARG4 = 12,
+    REG_ARG5 = 13,
+    REG_ARG6 = 14,
+    REG_ARG7 = 15,
+    REG_SAVED0 = 16, // first callee-saved
+    REG_SAVED15 = 31, // last callee-saved
+    REG_FREE0 = 32,  // first free/temporary
+};
 
-enum Op : uint32_t {
-    // ========== INTEIROS ASSINADOS (0-31) ==========
-    iADD = 0,    iSUB = 1,    iMUL = 2,    iDIV = 3,
-    iMOD = 4,    iAND = 5,    iOR  = 6,    iXOR = 7,
-    iNOT = 8,    iEQ  = 9,    iNE  = 10,   iLT  = 11,
-    iLE  = 12,   iGT  = 13,   iGE  = 14,   iNEG = 15,
-    
-    // Extended signed ops
-    iADC  = 16,  // Add with Carry
-    iSBB  = 17,  // Subtract with Borrow
-    iINC  = 18,  // Increment
-    iDEC  = 19,  // Decrement
-    iSHL  = 20,  // Shift Left Logical
-    iSAR  = 21,  // Shift Right Arithmetic
-    iROL  = 22,  // Rotate Left
-    iROR  = 23,  // Rotate Right
-    iCLZ  = 24,  // Count Leading Zeros (signed context)
-    iCTZ  = 25,  // Count Trailing Zeros
-    iSEXT = 26,  // Sign Extend
-    iPOPCNT = 27, // Population Count
-    iBYTESWAP = 28, // Byte Swap
-    iABS  = 29,  // Absolute Value
-    iIMULH = 30, // Signed Multiply High (result >> 32)
-    iIDIVH = 31, // Signed Divide High (Remainder logic)
+// ============================================================================
+// Condition Codes (used by ICMP / FCMP)
+// ============================================================================
 
-    // ========== INTEIROS SEM SINAL (32-63) ==========
-    uADD = 32,   uSUB = 33,   uMUL = 34,   uDIV = 35,
-    uMOD = 36,   uAND = 37,   uOR  = 38,   uXOR = 39,
-    uNOT = 40,   uEQ  = 41,   uNE  = 42,   uLT  = 43,
-    uLE  = 44,   uGT  = 45,   uGE  = 46,   uSHL = 47,
-    uSHR = 48,   // Shift Right Logical
-    
-    // Extended unsigned ops
-    uADC  = 49,  uSBB  = 50,  uINC  = 51,  uDEC  = 52,
-    uROL  = 53,  uROR  = 54,  uBT   = 55,  // Bit Test
-    uBTS  = 56,  // Bit Test and Set
-    uBTR  = 57,  // Bit Test and Reset
-    uBTC  = 58,  // Bit Test and Complement
-    uCLZ  = 59,  // Count Leading Zeros (unsigned context)
-    uBSF  = 60,  // Bit Scan Forward
-    uPOPCNT = 61, // Population Count
-    uBYTESWAP = 62, // Byte Swap
-    uUMULH = 63, // Unsigned Multiply High
+enum CondCode : reg_t {
+    // Signed integer
+    CC_EQ  = 0,    // equal
+    CC_NE  = 1,    // not equal
+    CC_SLT = 2,    // signed less-than
+    CC_SLE = 3,    // signed less-or-equal
+    CC_SGT = 4,    // signed greater-than
+    CC_SGE = 5,    // signed greater-or-equal
+    // Unsigned integer
+    CC_ULT = 6,    // unsigned less-than
+    CC_ULE = 7,    // unsigned less-or-equal
+    CC_UGT = 8,    // unsigned greater-than
+    CC_UGE = 9,    // unsigned greater-or-equal
+    // Float ordered
+    CC_OEQ = 10,   // ordered equal
+    CC_ONE = 11,   // ordered not equal
+    CC_OLT = 12,   // ordered less-than
+    CC_OLE = 13,   // ordered less-or-equal
+    CC_OGT = 14,   // ordered greater-than
+    CC_OGE = 15,   // ordered greater-or-equal
+    // Float unordered
+    CC_UEQ = 16,   // unordered equal
+    CC_UNE = 17,   // unordered not equal
+    CC_ULT = 18,   // unordered less-than
+    CC_ULE = 19,   // unordered less-or-equal
+    CC_UGT = 20,   // unordered greater-than
+    CC_UGE = 21,   // unordered greater-or-equal
+    CC_ORD = 22,   // ordered (no NaN)
+    CC_UNO = 23,   // unordered (is NaN)
+    CC_TRUE = 24,  // always true
+    CC_FALSE = 25, // always false
+};
 
-    // ========== FLOATS (64-127) ==========
-    fADD = 64,   fSUB = 65,   fMUL = 66,   fDIV = 67,
-    fMOD = 68,   fNEG = 69,   fEQ  = 70,   fNE  = 71,
-    fLT  = 72,   fLE  = 73,   fGT  = 74,   fGE  = 75,
-    fSIN = 76,   fCOS = 77,   fSQRT = 78,  fABS = 79,
-    fFLOOR = 80, fCEIL = 81,
-    
-    fSUBR = 82,  fDIVR = 83,
-    fMAX  = 84,  fMIN  = 85,
-    fFMA  = 86,  // Fused Multiply-Add
-    fFMS  = 87,  // Fused Multiply-Sub
-    fFNMA = 88,  // Fused Negate Multiply-Add
-    fRCP  = 89,  fRSQRT = 90,
-    fTAN  = 91,  fATAN = 92,  fATAN2 = 93,
-    fLOG  = 94,  fEXP  = 95,
-    fLOG2 = 96,  fEXP2 = 97,
-    fPOW  = 98,
-    fROUND = 99, fTRUNC = 100,
-    fGETEXP = 101, fGETMAN = 102, fSCALE = 103,
-    fCLASS = 104,
-    fUCOMI = 105, fCOMI = 106,
-    fMOV  = 107,  fMOVZ = 108,
-    fMOVA = 109,  fMOVU = 110,
-    fSWAP = 111,
-    fUNPCKL = 112, fUNPCKH = 113, fSHUF = 114, fBLEND = 115,
-    // Reserved space for future vector ops (116-127)
-    fRES116 = 116, fRES117 = 117, fRES118 = 118, fRES119 = 119,
-    fRES120 = 120, fRES121 = 121, fRES122 = 122, fRES123 = 123,
-    fRES124 = 124, fRES125 = 125, fRES126 = 126, fRES127 = 127,
+// ============================================================================
+// Instruction Set (.zbc Stable IR)
+// ============================================================================
+// Variable-width encoding. Each opcode determines its total byte length.
+// A decode table maps opcode → { length, format } for fast interpretation.
+//
+// Operand shorthand:
+//   r    = register byte  (reg_t,  1 byte)
+//   i8   = 8-bit immediate (1 byte)
+//   i32  = 32-bit immediate, little-endian (4 bytes)
+//   i64  = 64-bit immediate, little-endian (8 bytes)
+//   f64  = 64-bit IEEE-754 double, little-endian (8 bytes)
+//   lbl  = 32-bit signed label offset, from end of instruction (4 bytes)
+//   cond = condition code byte (CondCode, 1 byte)
+//   n    = count byte (1 byte)
 
-    // ========== MOVIMENTO DE DADOS (128-159) ==========
-    MOV    = 128,    MOVI   = 129,    MOVF   = 130,
-    LD     = 131,    ST     = 132,
-    LDB    = 133,    LDH    = 134,    // Load Byte/Halfword
-    STB    = 135,    STH    = 136,    // Store Byte/Halfword
-    // Slots 137-140 FREED (LDBZ, LDBS, LDHZ, LDHS removed)
-    RES137 = 137,  RES138 = 138,  RES139 = 139,  RES140 = 140,
-    
-    LEA    = 141,    // Load Effective Address
-    SWAP   = 142,    XCHG   = 143,    CMPXCHG = 144,
-    XADD   = 145,    MOVZX  = 146,    MOVSX   = 147,
-    // Reserved space for future addressing modes (148-159)
-    RES148 = 148,  RES149 = 149,  RES150 = 150,  RES151 = 151,
-    RES152 = 152,  RES153 = 153,  RES154 = 154,  RES155 = 155,
-    RES156 = 156,  RES157 = 157,  RES158 = 158,  RES159 = 159,
+enum Instructions : uint8_t {
 
-    // ========== CONTROLE DE FLUXO (160-191) ==========
-    JMP    = 160,    JT     = 161,    JF     = 162,
-    CALL   = 163,    RET    = 164,    EXTERN = 165,
-    
-    JO     = 166,    JNO    = 167,    JB     = 168,
-    JAE    = 169,    JZ     = 170,    JNZ    = 171,
-    JBE    = 172,    JA     = 173,    JS     = 174,
-    JNS    = 175,    JP     = 176,    JNP    = 177,
-    JL     = 178,    JGE    = 179,    JLE    = 180,
-    JG     = 181,
-    
-    CALLR  = 182,    JMPR   = 183,
-    // Slots 184-187 FREED (LOOP, LOOPE, LOOPNE, JCXZ removed)
-    RES184 = 184,  RES185 = 185,  RES186 = 186,  RES187 = 187,
-    
-    SYSCALL    = 188,    IRET   = 189,
-    BND_CHK = 191,  // Bounds Check (formerly BOUND)
+    // ===== Core Integer ALU (0–16) =====
+    // Format: [op][dest][src1][src2] — 4 bytes
+    ADD    = 0,     // dest = src1 + src2
+    SUB    = 1,     // dest = src1 - src2
+    MUL    = 2,     // dest = src1 * src2
+    DIV_S  = 3,     // dest = src1 / src2  (signed)
+    DIV_U  = 4,     // dest = src1 / src2  (unsigned)
+    MOD_S  = 5,     // dest = src1 % src2  (signed)
+    MOD_U  = 6,     // dest = src1 % src2  (unsigned)
+    AND    = 7,     // dest = src1 & src2
+    OR     = 8,     // dest = src1 | src2
+    XOR    = 9,     // dest = src1 ^ src2
+    SHL    = 10,    // dest = src1 << src2
+    SAR    = 11,    // dest = src1 >> src2  (arithmetic, sign-extending)
+    SHR    = 12,    // dest = src1 >> src2  (logical, zero-extending)
+    ROL    = 13,    // dest = rotate-left(src1, src2)
+    ROR    = 14,    // dest = rotate-right(src1, src2)
+    MULH_S = 15,    // dest = high 64 bits of signed src1 * src2
+    MULH_U = 16,    // dest = high 64 bits of unsigned src1 * src2
 
-    // ========== COMPARAÇÃO GENÉRICA (192-210) ==========
-    EQ     = 192,    NE     = 193,    LT     = 194,
-    LE     = 195,    GT     = 196,    GE     = 197,
-    TEST   = 198,    CMP    = 199,
-    SETO   = 200,    SETNO  = 201,    SETB   = 202,
-    SETAE  = 203,    SETZ   = 204,    SETNZ  = 205,
-    SETS   = 206,    SETNS  = 207,    SETL   = 208,
-    SETG   = 209,    SETP   = 210,
+    // ===== Float ALU (17–22) =====
+    // Format: [op][dest][src1][src2] — 4 bytes
+    FADD   = 17,    // dest = src1 + src2  (double)
+    FSUB   = 18,    // dest = src1 - src2
+    FMUL   = 19,    // dest = src1 * src2
+    FDIV   = 20,    // dest = src1 / src2
+    FMIN   = 21,    // dest = min(src1, src2)
+    FMAX   = 22,    // dest = max(src1, src2)
 
-    // ========== CONVERSÃO DE TIPOS (211-230) ==========
-    I2F    = 211,    F2I    = 212,    I2U    = 213,
-    U2I    = 214,    
-    f2iTRUNC = 215,  // Truncate Float to Int
-    f2iROUND = 216,  // Round Float to Int
-    F2D    = 217,    D2F    = 218,    I2D    = 219,
-    D2I    = 220,    SEXT8  = 221,    SEXT16 = 222,
-    ZEXT8  = 223,    ZEXT16 = 224,    CVTTSD2SI = 225,
-    CVTSD2SI = 226,  CVTSI2SD = 227,  CVTSS2SD = 228,
-    CVTSD2SS = 229,  PTR2I  = 230,
+    // ===== Integer Unary (23–29) =====
+    // Format: [op][dest][src] — 3 bytes
+    NEG    = 23,    // dest = -src  (two's complement)
+    NOT    = 24,    // dest = ~src  (bitwise complement)
+    ABS    = 25,    // dest = |src|  (signed absolute)
+    POPCNT = 26,    // dest = number of 1 bits in src
+    CLZ    = 27,    // dest = count leading zeros
+    CTZ    = 28,    // dest = count trailing zeros
+    BYTESWAP = 29,  // dest = byte-reversed src
 
-    // ========== MISC (231-254) ==========
-    NOP    = 231,    PUSH   = 232,    POP    = 233,
-    ENTER  = 234,    LEAVE  = 235,
-    //BND_CHK = 236,  // Bounds Check (Moved here from 191 in cleanup? No, mapped to 191 above. Let's place gCLZ here)
-    
-    // gCLZ takes 237. Renamed from CLZ for generic usage
-    gCLZ   = 237, 
-    yield  = 238, 
-    
-    // Memory Ordering (C++11 / LLVM Model)
-    FENCE_SEQ   = 239,  // Sequentially Consistent (mfence)
-    FENCE_ACQ   = 240,  // Acquire (lfence)
-    FENCE_REL   = 241,  // Release (sfence)
-    FENCE_ACQ_REL = 242, // Acquire/Release
+    // ===== Float Unary (30–37) =====
+    // Format: [op][dest][src] — 3 bytes
+    FNEG   = 30,    // dest = -src
+    FABS   = 31,    // dest = |src|
+    FSQRT  = 32,    // dest = sqrt(src)
+    FFLOOR = 33,    // dest = floor(src)
+    FCEIL  = 34,    // dest = ceil(src)
+    FTRUNC = 35,    // dest = trunc(src)
+    FROUND = 36,    // dest = round-to-nearest(src)
+    FCLASS = 37,    // dest = bitmask classification of src
 
-    // New Essential Primitives
-    TPB   = 243,  // Get Thread Pointer Base
-    ALLOCA = 244, // Stack Allocate (Alloca)
-    ASM = 245,  // Inline Assembly Container
+    // ===== Register Copy (38) =====
+    MOV    = 38,    // [MOV][dest][src] — 3 bytes
 
-    // Slots 246-247 FREED (INVD, WBINVD removed)
-    RES246 = 246, RES247 = 247,
+    // ===== Four-Operand (39–40) =====
+    // Format: [op][dest][src1][src2][src3] — 5 bytes
+    FFMA   = 39,    // dest = src1*src2 + src3  (fused multiply-add)
+    SELECT = 40,    // dest = src1 ? src2 : src3  (bitwise: if src1 != 0)
 
-    INT    = 248,    INT3   = 249,    INTO   = 250,
-    // Slot 251 FREED (Redundant IRET removed)
-    RES251 = 251,
-    /*SYSCALL = 252,*/   SYSRET = 253,   UNREACHABLE    = 254,
+    // ===== Immediate Loads (41–44) =====
+    MOV_I8   = 41,  // [MOV_I8][dest][i8] — 3 bytes; zero-extends to 64-bit
+    MOV_I32  = 42,  // [MOV_I32][dest][i32] — 6 bytes; sign-extends to 64-bit
+    MOV_I64  = 43,  // [MOV_I64][dest][i64] — 10 bytes
+    MOV_F64  = 44,  // [MOV_F64][dest][f64] — 10 bytes; IEEE-754 double bits
 
-    // ========== EXTENSION SET (255) ==========
-    HALT   = 255,
-    };
+    // ===== Stack Allocate (45) =====
+    ALLOCA  = 45,   // [ALLOCA][dest][i32_size][i8_align] — 10 bytes
 
-    // Extension set para debug (usados quando opcode=0xFF)
-    enum ExtOp : uint32_t {
-    EXT_PRINT  = 0,
-    EXT_INPUT  = 1,
-    EXT_OPEN   = 2,
-    EXT_READ   = 3,
-    EXT_WRITE  = 4,
-    EXT_CLOSE  = 5,
-    EXT_ASSERT = 6,
-    };
+    // ===== Comparisons (46–47) =====
+    // Format: [op][dest][cond][src1][src2] — 5 bytes
+    ICMP   = 46,    // dest = src1 cond src2  (integer; result 0 or 1)
+    FCMP   = 47,    // dest = src1 cond src2  (float; result 0 or 1)
 
-    class AJo{
+    // ===== Shift by Immediate (48–50) =====
+    // Format: [op][dest][src][i8] — 4 bytes
+    SHL_I  = 48,    // dest = src << i8
+    SAR_I  = 49,    // dest = src >> i8  (arithmetic)
+    SHR_I  = 50,    // dest = src >> i8  (logical)
 
-    };
+    // ===== GetElementPtr (51) =====
+    GEP    = 51,    // [GEP][dest][ptr][index] — 4 bytes; dest = ptr + index*8
 
+    // ===== Test & Freeze (52–53) =====
+    TEST   = 52,    // [TEST][dest][src1][src2] — 4 bytes; dest = (src1 & src2) != 0
+    FREEZE = 53,    // [FREEZE][dest][src] — 3 bytes; dest = src (freeze undef/poison)
 
-    // 1. High-level IR Value (Used during construction/AST)
-    // Note: We don't use this during execution, only during setup.
+    // ===== Memory Loads (54–57) =====
+    // Format: [op][dest][addr] — 3 bytes
+    LOAD64 = 54,    // dest = *(uint64_t*)addr
+    LOAD32 = 55,    // dest = *(uint32_t*)addr  (zero-extended)
+    LOAD16 = 56,    // dest = *(uint16_t*)addr  (zero-extended)
+    LOAD8  = 57,    // dest = *(uint8_t*)addr   (zero-extended)
 
-/*class IRValue {
+    // ===== Memory Stores (58–61) =====
+    // Format: [op][addr][src] — 3 bytes
+    STORE64 = 58,   // *(uint64_t*)addr = src
+    STORE32 = 59,   // *(uint32_t*)addr = (uint32_t)src
+    STORE16 = 60,   // *(uint16_t*)addr = (uint16_t)src
+    STORE8  = 61,   // *(uint8_t*)addr  = (uint8_t)src
 
-    union {
-        int64_t     i64;
-        uint64_t    u64;
-        double      f64;
-        const char* str;
-        std::nullptr_t none;
-    } value;
-    enum class type { I64, U64, F64, STR, NONE } tag;
+    // ===== Float Memory (62–63) =====
+    // Format: [op][dest/addr][addr/src] — 3 bytes
+    LOADF64 = 62,   // dest = *(double*)addr
+    STOREF64 = 63,  // *(double*)addr = src
 
-    public:
-    
-    template<class T>
-    IRValue(T val) { this->set(val); }
+    // ===== Control Flow (64–75) =====
 
-    bool isEmpty() const { return tag == type::NONE; }
+    // Unconditional branch
+    BR         = 64,   // [BR][lbl] — 5 bytes; jump to label
 
-    // Versão 1: Passando a TAG via template
-    template<type Tag>
-    auto is() const {
-        // Precisamos de if constexpr para que o compilador ignore os tipos que não batem com a Tag
-        if constexpr (Tag == type::I64) return (tag == Tag) ? std::optional<int64_t>(value.i64) : std::nullopt;
-        else if constexpr (Tag == type::U64) return (tag == Tag) ? std::optional<uint64_t>(value.u64) : std::nullopt;
-        else if constexpr (Tag == type::F64) return (tag == Tag) ? std::optional<double>(value.f64) : std::nullopt;
-        else if constexpr (Tag == type::STR) return (tag == Tag) ? std::optional<const char*>(value.str) : std::nullopt;
-        else return std::nullopt;
-    }
+    // Conditional branch
+    BR_COND    = 65,   // [BR_COND][cond][lbl_true][lbl_false] — 10 bytes
 
-    // Versão 2: Passando o TIPO via template (mais comum)
-    template<class T>
-    std::optional<T> is() const {
-        using D = std::decay_t<T>;
-        // Normaliza o tipo (ex: int vira int64_t)
-        using U = std::conditional_t<std::is_integral_v<D> && !std::is_same_v<D, bool>,
-                    std::conditional_t<std::is_signed_v<D>, int64_t, uint64_t>,
-                    std::conditional_t<std::is_convertible_v<D, const char*>, const char*, D>
-                  >;
+    // Jump table
+    BR_TABLE   = 66,   // [BR_TABLE][val][lbl_default][n][(i32,lbl)...] — variable
 
-        if constexpr (std::is_same_v<U, int64_t>) {
-            if (tag == type::I64) return static_cast<T>(value.i64);
-        } 
-        else if constexpr (std::is_same_v<U, uint64_t>) {
-            if (tag == type::U64) return static_cast<T>(value.u64);
-        } 
-        else if constexpr (std::is_same_v<U, double>) {
-            if (tag == type::F64) return static_cast<T>(value.f64);
-        } 
-        else if constexpr (std::is_same_v<U, const char*>) {
-            if (tag == type::STR) return value.str;
-        }
+    // Return
+    RET        = 67,   // [RET] — 1 byte  (void return)
+                       // [RET][val] — 2 bytes (return with value in reg)
 
-        return std::nullopt; 
-    }
+    // Indirect call (calls function pointer in register)
+    CALL       = 68,   // [CALL][ret_reg/0xFF][func_reg][n][args...] — variable
+                       // ret_reg=0xFF means no return value
 
-    template<class T>
-    void set(T&& val) {
-        using D = std::decay_t<T>;
-        using U = std::conditional_t<std::is_integral_v<D> && !std::is_same_v<D, bool>,
-                    std::conditional_t<std::is_signed_v<D>, int64_t, uint64_t>,
-                    std::conditional_t<std::is_convertible_v<D, const char*>, const char*, D>
-                  >;
+    // Direct call (calls a label in the same module)
+    CALL_DIRECT = 69,  // [CALL_DIRECT][ret_reg/0xFF][lbl][n][args...] — variable
 
-        // Atribuição segura via casting para a union
-        if constexpr (std::is_same_v<U, int64_t>) { value.i64 = (int64_t)val; tag = type::I64; }
-        else if constexpr (std::is_same_v<U, uint64_t>) { value.u64 = (uint64_t)val; tag = type::U64; }
-        else if constexpr (std::is_same_v<U, double>) { value.f64 = (double)val; tag = type::F64; }
-        else if constexpr (std::is_same_v<U, const char*>) { value.str = (const char*)val; tag = type::STR; }
-        else { value.none = nullptr; tag = type::NONE; }
-    }
-    };
+    // Invoke (call with exception landing pad)
+    INVOKE     = 70,   // [INVOKE][ret_reg/0xFF][func_reg][n][args...][lbl_normal][lbl_unwind]
+                       // — variable
 
-    struct Instruction {
-        uint8_t opcode;
-        // Flexible arguments for the builder, but we will constrain these to max 3 registers later
-        std::vector<IRValue> args; 
-    };
+    // Landing pad (exception entry)
+    LANDINGPAD = 71,   // [LANDINGPAD][dest] — 2 bytes
 
-    struct Function {
-        std::string name;
-        std::vector<Instruction> body;
-        std::vector<std::string> param_names;
-    };
+    // PHI node (SSA)
+    PHI        = 72,   // [PHI][dest][n][(reg,lbl)...] — variable
 
-    inline std::unordered_map<std::string_view, Function> functions = {};
+    // Unreachable (must terminate a basic block)
+    UNREACHABLE = 73,  // [UNREACHABLE] — 1 byte
 
-    // 2. Instruction Definition
-    
+    // External FFI call
+    EXTERN     = 74,   // [EXTERN][func_id][ret_reg/0xFF][n][args...] — variable
 
-    // 3. Function Definition
-    
+    // Label marker (not executed; marks basic block start)
+    LABEL      = 75,   // [LABEL][lbl_id] — 5 bytes
 
-    // 4. The Module
-    struct Module {
-        std::vector<Function> functions;
-        
-        // "Flatten" this Module into the C ABI format
-        // This function allocates memory that must be freed manually later
-        std::unique_ptr<ZithVmModule, void(*)(ZithVmModule*)> compile();
-    };
+    // ===== Type Conversions (76–79) =====
+    // Format: [op][dest][src] — 3 bytes
+    I2F        = 76,   // dest = (double)src  (signed int to double)
+    F2I        = 77,   // dest = (int64_t)src  (truncate double to signed int)
+    F2I_ROUND  = 78,   // dest = (int64_t)round(src)  (round-to-nearest)
+    BITCAST    = 79,   // dest = bitcast src  (reinterpret bits, same width)
 
-    // 5. The Wrapper Context
-    class Context {
-    public:
-        Context();
-        ~Context();
+    // ===== Extend / Truncate (80–83) =====
+    // Format: [op][dest][src] — 3 bytes
+    SEXT8  = 80,   // dest = sign-extend byte src to 64-bit
+    SEXT16 = 81,   // dest = sign-extend 16-bit src to 64-bit
+    ZEXT8  = 82,   // dest = zero-extend byte src to 64-bit
+    ZEXT16 = 83,   // dest = zero-extend 16-bit src to 64-bit
 
-        int run(const Module& module, const std::string& entryFunctionName);
-    };*/
-}
+    // ===== Pointer Conversions (84–85) =====
+    // Format: [op][dest][src] — 3 bytes
+    PTR2I = 84,    // dest = (uint64_t)src (pointer to integer)
+    I2PTR = 85,    // dest = (void*)src    (integer to pointer)
+
+    // ===== Memory Fences (86–89) =====
+    // Format: [op][ordering] — 2 bytes
+    FENCE_SEQ     = 86,  // sequentially consistent (mfence)
+    FENCE_ACQ     = 87,  // acquire (lfence)
+    FENCE_REL     = 88,  // release (sfence)
+    FENCE_ACQ_REL = 89,  // acquire + release
+
+    // ===== Atomics (90) =====
+    // Format: [op][addr][cmp][new][ordering] — 5 bytes
+    CMPXCHG = 90,   // *(uint64_t*)addr == cmp ? *(uint64_t*)addr = new : continue
+                     // ordering: 0=SEQ_CST, 1=ACQUIRE, 2=RELEASE, 3=ACQ_REL, 4=RELAXED
+
+    // ===== Misc System (91–94) =====
+    NOP        = 91,  // [NOP] — 1 byte
+    BREAKPOINT = 92,  // [BREAKPOINT] — 1 byte  (trap to debugger)
+    YIELD      = 93,  // [YIELD] — 1 byte  (hint: yield thread/scheduler)
+    SYSCALL    = 94,  // [SYSCALL][num] — 2 bytes
+
+    // ===== Extension Space (95–254) =====
+    // Open for vector ops, custom intrinsics, platform-specific extensions.
+    EXT_START = 95,
+
+    // ===== Halt (255) =====
+    HALT = 255,      // [HALT] — 1 byte; terminates execution
+};
+
+// ============================================================================
+// Instruction Decode Info
+// ============================================================================
+// For software VM decoding: total byte length and operand count per opcode.
+
+struct InstrDecode {
+    uint8_t length;    // total bytes (0 = variable, determined by operands)
+    uint8_t n_operands;
+};
+
+// The decode table is indexed by opcode. InstrDecodeTable[op] gives format.
+// (defined in the VM implementation)
+extern const InstrDecode InstrDecodeTable[256];
+
+// ============================================================================
+// Extension Opcodes (used via EXT_START sub-encoding or after HALT escape)
+// ============================================================================
+// Debug/trace extensions can use opcodes EXT_START + n, or the HALT escape.
+// For now, HALT escape: [HALT][ext_op][args...]
+
+enum ExtOp : uint8_t {
+    EXT_PRINT  = 0,   // print register value
+    EXT_INPUT  = 1,   // read input into register
+    EXT_OPEN   = 2,   // open file
+    EXT_READ   = 3,   // read from file
+    EXT_WRITE  = 4,   // write to file
+    EXT_CLOSE  = 5,   // close file
+    EXT_ASSERT = 6,   // assert (halt if register != 0)
+};
+
+} // namespace Zith

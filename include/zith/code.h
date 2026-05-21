@@ -1,238 +1,170 @@
-// Include/VM/Code.h
 #pragma once
 #include <cstdint>
 #include <vector>
 
 using ZithCode = std::vector<uint8_t>;
 
+// ============================================================================
+// Opcode Enum — mirrors Zith::Instructions from vm.hpp
+// ============================================================================
+
 enum Op : uint8_t {
-    // ========== INTEIROS ASSINADOS (0-31) ==========
-    iADD = 0,    iSUB = 1,    iMUL = 2,    iDIV = 3,
-    iMOD = 4,    iAND = 5,    iOR  = 6,    iXOR = 7,
-    iNOT = 8,    iEQ  = 9,    iNE  = 10,   iLT  = 11,
-    iLE  = 12,   iGT  = 13,   iGE  = 14,   iNEG = 15,
-    
-    // Bit operations
-    iSHL = 16,   iSAR = 17,   iROL = 18,   iROR = 19,
-    
-    // Bit counting
-    iCLZ = 20,   iCTZ = 21,   iPOPCNT = 22,
-    
-    // Special
-    iABS = 23,   iIMULH = 24, iIDIVH = 25,
-    
-    // Reserved para futuro (26-31)
-    iRES26 = 26, iRES27 = 27, iRES28 = 28,
-    iRES29 = 29, iRES30 = 30, iRES31 = 31,
+    // ===== Core Integer ALU (0–16) =====
+    // Format: [op][dest][src1][src2] — 4 bytes
+    ADD    = 0,
+    SUB    = 1,
+    MUL    = 2,
+    DIV_S  = 3,
+    DIV_U  = 4,
+    MOD_S  = 5,
+    MOD_U  = 6,
+    AND    = 7,
+    OR     = 8,
+    XOR    = 9,
+    SHL    = 10,
+    SAR    = 11,
+    SHR    = 12,
+    ROL    = 13,
+    ROR    = 14,
+    MULH_S = 15,
+    MULH_U = 16,
 
-    // ========== INTEIROS SEM SINAL (32-63) ==========
-    uADD = 32,   uSUB = 33,   uMUL = 34,   uDIV = 35,
-    uMOD = 36,   uAND = 37,   uOR  = 38,   uXOR = 39,
-    uNOT = 40,   uEQ  = 41,   uNE  = 42,   uLT  = 43,
-    uLE  = 44,   uGT  = 45,   uGE  = 46,
-    
-    // Bit operations
-    uSHL = 47,   uSHR = 48,   uROL = 49,   uROR = 50,
-    
-    // Bit test/set/clear/toggle
-    uBT  = 51,   uBTS = 52,   uBTR = 53,   uBTC = 54,
-    
-    // Bit counting
-    uCLZ = 55,   uCTZ = 56,   uPOPCNT = 57,
-    
-    // Special
-    uUMULH = 58,
-    
-    // Reserved (59-63)
-    uRES59 = 59, uRES60 = 60, uRES61 = 61,
-    uRES62 = 62, uRES63 = 63,
+    // ===== Float ALU (17–22) =====
+    FADD   = 17,
+    FSUB   = 18,
+    FMUL   = 19,
+    FDIV   = 20,
+    FMIN   = 21,
+    FMAX   = 22,
 
-    // ========== FLOATS (64-127) ==========
-    // Basic arithmetic
-    fADD = 64,   fSUB = 65,   fMUL = 66,   fDIV = 67,
-    fMOD = 68,   fNEG = 69,
-    
-    // Comparisons
-    fEQ  = 70,   fNE  = 71,   fLT  = 72,   fLE  = 73,
-    fGT  = 74,   fGE  = 75,
-    
-    // Math functions
-    fSIN = 76,   fCOS = 77,   fTAN = 78,   fATAN = 79,
-    fATAN2 = 80, fLOG = 81,   fEXP = 82,   fLOG2 = 83,
-    fEXP2 = 84,  fPOW = 85,   fSQRT = 86,  fABS = 87,
-    
-    // Rounding
-    fFLOOR = 88, fCEIL = 89,  fROUND = 90, fTRUNC = 91,
-    
-    // Advanced
-    fFMA = 92,   fFMS = 93,   fFNMA = 94,  fMAX = 95,
-    fMIN = 96,   fRCP = 97,   fRSQRT = 98,
-    
-    // Reserved (99-127) - para vetorização futura
-    fRES99 = 99, fRES100 = 100, fRES101 = 101, fRES102 = 102,
-    // ... (muitos reservados para vector ops depois)
-    fRES127 = 127,
+    // ===== Integer Unary (23–29) =====
+    // Format: [op][dest][src] — 3 bytes
+    NEG    = 23,
+    NOT    = 24,
+    ABS    = 25,
+    POPCNT = 26,
+    CLZ    = 27,
+    CTZ    = 28,
+    BYTESWAP = 29,
 
-    // ========== MOVIMENTO DE DADOS (128-159) ==========
-    // Load/Store
-    MOV    = 128,    // MOV dest, src (copia registro)
-    LD     = 129,    // LD dest, [addr] - load 64-bit
-    ST     = 130,    // ST [addr], src - store 64-bit
-    LDB    = 131,    // LD dest, [addr] - load byte
-    STB    = 132,    // ST [addr], src - store byte
-    LDH    = 133,    // LD dest, [addr] - load halfword (16-bit)
-    STH    = 134,    // ST [addr], src - store halfword
-    
-    // Immediate loads
-    MOVI   = 135,    // MOVI dest, imm64 - load immediate int
-    MOVF   = 136,    // MOVF dest, imm_double - load float immediate
-    MOVC   = 137,    // MOVC dest, imm_char - load char immediate
-    
-    // Conversions with zero/sign extend
-    MOVZX  = 138,    // Zero extend + move
-    MOVSX  = 139,    // Sign extend + move
-    
-    // Atomic operations
-    SWAP   = 140,    // SWAP r1, r2 - atomic swap registers
-    XCHG   = 141,    // XCHG [addr], reg - atomic exchange with memory
-    CMPXCHG = 142,   // CMPXCHG [addr], cmp_reg, new_reg - compare and swap
-    XADD   = 143,    // XADD [addr], reg - atomic add
-    
-    // Addressing
-    LEA    = 144,    // LEA dest, [base + offset] - load effective address
-    
-    // Reserved (145-159)
-    dRES145 = 145, dRES146 = 146, dRES147 = 147,
-    dRES148 = 148, dRES149 = 149, dRES150 = 150,
-    dRES151 = 151, dRES152 = 152, dRES153 = 153,
-    dRES154 = 154, dRES155 = 155, dRES156 = 156,
-    dRES157 = 157, dRES158 = 158, dRES159 = 159,
+    // ===== Float Unary (30–37) =====
+    FNEG   = 30,
+    FABS   = 31,
+    FSQRT  = 32,
+    FFLOOR = 33,
+    FCEIL  = 34,
+    FTRUNC = 35,
+    FROUND = 36,
+    FCLASS = 37,
 
-    // ========== CONTROLE DE FLUXO (160-191) ==========
-    // Unconditional
-    JMP    = 160,    // JMP target
-    CALL   = 161,    // CALL target
-    RET    = 162,    // RET
-    CALLR  = 163,    // CALLR reg (indirect call)
-    JMPR   = 164,    // JMPR reg (indirect jump)
-    
-    // Conditional (registro + target)
-    JT     = 165,    // JT cond_reg, target (jump if true/non-zero)
-    JF     = 166,    // JF cond_reg, target (jump if false/zero)
-    
-    // Comparação com jump implícita (dest, src1, src2, target)
-    JEQ    = 167,    // JEQ src1, src2, target (jump if equal)
-    JNE    = 168,    // JNE src1, src2, target
-    JLT    = 169,    // JLT src1, src2, target (signed less-than)
-    JLE    = 170,    // JLE src1, src2, target
-    JGT    = 171,    // JGT src1, src2, target
-    JGE    = 172,    // JGE src1, src2, target
-    
-    // Unsigned comparisons with jump
-    JULT   = 173,    // JULT src1, src2, target (unsigned less-than)
-    JULE   = 174,    // JULE src1, src2, target
-    JUGT   = 175,    // JUGT src1, src2, target
-    JUGE   = 176,    // JUGE src1, src2, target
-    
-    // FFI / External
-    EXTERN = 177,    // EXTERN func_id
-    
-    // Syscall / Exceptions
-    SYSCALL = 178,   // SYSCALL syscall_num
-    
-    // Reserved (179-191)
-    cfRES179 = 179, cfRES180 = 180, cfRES181 = 181,
-    cfRES182 = 182, cfRES183 = 183, cfRES184 = 184,
-    cfRES185 = 185, cfRES186 = 186, cfRES187 = 187,
-    cfRES188 = 188, cfRES189 = 189, cfRES190 = 190,
-    cfRES191 = 191,
+    // ===== Register Copy (38) =====
+    MOV    = 38,
 
-    // ========== COMPARAÇÃO (192-210) ==========
-    // Simple comparisons (result in dest)
-    EQ     = 192,    // EQ dest, src1, src2 (dest = src1 == src2)
-    NE     = 193,    // NE dest, src1, src2
-    LT     = 194,    // LT dest, src1, src2 (signed)
-    LE     = 195,
-    GT     = 196,
-    GE     = 197,
-    
-    // Unsigned
-    ULT    = 198,    // ULT dest, src1, src2
-    ULE    = 199,
-    UGT    = 200,
-    UGE    = 201,
-    
-    // Bitwise test
-    TEST   = 202,    // TEST dest, src1, src2 (dest = src1 & src2)
-    CMP    = 203,    // CMP dest, src1, src2 (dest = cmp result: -1, 0, 1)
-    
-    // Reserved (204-210)
-    cRES204 = 204, cRES205 = 205, cRES206 = 206,
-    cRES207 = 207, cRES208 = 208, cRES209 = 209,
-    cRES210 = 210,
+    // ===== Four-Operand (39–40) =====
+    // Format: [op][dest][src1][src2][src3] — 5 bytes
+    FFMA   = 39,
+    SELECT = 40,
 
-    // ========== CONVERSÃO DE TIPOS (211-230) ==========
-    I2F    = 211,    // int to float
-    F2I    = 212,    // float to int (truncate)
-    I2U    = 213,    // int to unsigned (bit reinterpret)
-    U2I    = 214,    // unsigned to int
-    
-    F2ITRUNC = 215,  // float to int truncate
-    F2IROUND = 216,  // float to int round
-    
-    // 32/64-bit conversions
-    I32TO64 = 217,   // Sign extend 32 to 64
-    U32TO64 = 218,   // Zero extend 32 to 64
-    I64TO32 = 219,   // Truncate 64 to 32
-    
-    // Float precision
-    F32TO64 = 220,   // float (32-bit) to double (64-bit)
-    F64TO32 = 221,   // double to float
-    
-    // Byte/halfword operations
-    SEXT8  = 222,    // Sign extend byte to 64-bit
-    SEXT16 = 223,    // Sign extend 16-bit to 64-bit
-    ZEXT8  = 224,    // Zero extend byte
-    ZEXT16 = 225,    // Zero extend 16-bit
-    
-    // Reserved (226-230)
-    cvRES226 = 226, cvRES227 = 227, cvRES228 = 228,
-    cvRES229 = 229, cvRES230 = 230,
+    // ===== Immediate Loads (41–44) =====
+    MOV_I8   = 41,
+    MOV_I32  = 42,
+    MOV_I64  = 43,
+    MOV_F64  = 44,
 
-    // ========== MISC / SYSTEM (231-254) ==========
-    NOP    = 231,    // NOP - no operation
-    
-    // Memory ordering (C++11 / LLVM model)
-    FENCE_SEQ   = 232,  // Sequentially Consistent
-    FENCE_ACQ   = 233,  // Acquire
-    FENCE_REL   = 234,  // Release
-    FENCE_ACQ_REL = 235, // Acquire/Release
-    
-    // Stack operations (para quando houver stack virtual)
-    PUSH   = 236,    // PUSH src
-    POP    = 237,    // POP dest
-    
-    // Allocation
-    ALLOCA = 238,    // ALLOCA dest, size - stack allocate
-    YIELD  = 239,    // YIELD - hint to scheduler
-    BREAKPOINT = 240,
-    // Reserved (241-254)
-    mRES241 = 241,mRES242 = 242, mRES243 = 243,
-    mRES244 = 244,mRES245 = 245, mRES246 = 246,
-    mRES247 = 247,mRES248 = 248, mRES249 = 249, 
-    mRES250 = 250,mRES251 = 251, mRES252 = 252, 
-    mRES253 = 253,mRES254 = 254,
+    // ===== Stack Allocate (45) =====
+    ALLOCA  = 45,
 
-    // ========== EXTENSION SET (255) ==========
-    // 0xFF é HALT normal, mas pode ter subcommands em debug mode
-    HALT   = 255,
+    // ===== Comparisons (46–47) =====
+    // Format: [op][dest][cond][src1][src2] — 5 bytes
+    ICMP   = 46,
+    FCMP   = 47,
+
+    // ===== Shift by Immediate (48–50) =====
+    // Format: [op][dest][src][i8] — 4 bytes
+    SHL_I  = 48,
+    SAR_I  = 49,
+    SHR_I  = 50,
+
+    // ===== GetElementPtr (51) =====
+    GEP    = 51,
+
+    // ===== Test & Freeze (52–53) =====
+    TEST   = 52,
+    FREEZE = 53,
+
+    // ===== Memory Loads (54–57) =====
+    LOAD64 = 54,
+    LOAD32 = 55,
+    LOAD16 = 56,
+    LOAD8  = 57,
+
+    // ===== Memory Stores (58–61) =====
+    STORE64 = 58,
+    STORE32 = 59,
+    STORE16 = 60,
+    STORE8  = 61,
+
+    // ===== Float Memory (62–63) =====
+    LOADF64  = 62,
+    STOREF64 = 63,
+
+    // ===== Control Flow (64–75) =====
+    BR         = 64,
+    BR_COND    = 65,
+    BR_TABLE   = 66,
+    RET        = 67,
+    CALL       = 68,
+    CALL_DIRECT = 69,
+    INVOKE     = 70,
+    LANDINGPAD = 71,
+    PHI        = 72,
+    UNREACHABLE = 73,
+    EXTERN     = 74,
+    LABEL      = 75,
+
+    // ===== Type Conversions (76–79) =====
+    I2F        = 76,
+    F2I        = 77,
+    F2I_ROUND  = 78,
+    BITCAST    = 79,
+
+    // ===== Extend / Truncate (80–83) =====
+    SEXT8  = 80,
+    SEXT16 = 81,
+    ZEXT8  = 82,
+    ZEXT16 = 83,
+
+    // ===== Pointer Conversions (84–85) =====
+    PTR2I = 84,
+    I2PTR = 85,
+
+    // ===== Memory Fences (86–89) =====
+    FENCE_SEQ     = 86,
+    FENCE_ACQ     = 87,
+    FENCE_REL     = 88,
+    FENCE_ACQ_REL = 89,
+
+    // ===== Atomics (90) =====
+    CMPXCHG = 90,
+
+    // ===== Misc System (91–94) =====
+    NOP        = 91,
+    BREAKPOINT = 92,
+    YIELD      = 93,
+    SYSCALL    = 94,
+
+    // ===== Extension Space (95–254) =====
+    EXT_START = 95,
+
+    // ===== Halt (255) =====
+    HALT = 255,
 };
 
-// Extension set para debug (usados quando opcode=0xFF em debug mode)
+// Extension set for debug (used when opcode = HALT in debug mode)
 enum ExtOp : uint32_t {
-    EXT_PRINT  = 0,     // Imprimir registrador
-    EXT_INPUT  = 1,     // Ler entrada
-    EXT_ASSERT = 2,     // Assert (falha se != 0)
-    EXT_TRACE  = 3,     // Trace execution
-    EXT_BREAKPOINT = 4, // Breakpoint
+    EXT_PRINT  = 0,
+    EXT_INPUT  = 1,
+    EXT_ASSERT = 2,
+    EXT_TRACE  = 3,
+    EXT_BREAKPOINT = 4,
 };
