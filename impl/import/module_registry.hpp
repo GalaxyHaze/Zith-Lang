@@ -223,10 +223,11 @@ public:
     }
 
     bool register_module(Module mod) {
-        if (modules_.contains(mod.name())) {
+        std::string mod_name = mod.name();
+        if (modules_.contains(mod_name)) {
             return false;
         }
-        modules_[mod.name()] = std::make_shared<Module>(std::move(mod));
+        modules_[std::move(mod_name)] = std::make_shared<Module>(std::move(mod));
         return true;
     }
 

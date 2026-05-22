@@ -53,8 +53,10 @@ bool TypeChecker::is_assignable(const Type& dst, const Type& src) {
         if (!is_assignable(*dst.element_type, *src.element_type))
             return false;
     }
-    if (dst.ownership != src.ownership)
-        return false;
+    if (dst.ownership != src.ownership) {
+        if (src.ownership != ZITH_OWN_DEFAULT && dst.ownership != ZITH_OWN_DEFAULT)
+            return false;
+    }
     if (!dst.optional && src.optional)
         return false;
     if (!dst.failable && src.failable)

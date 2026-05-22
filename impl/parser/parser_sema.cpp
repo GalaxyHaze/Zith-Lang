@@ -200,6 +200,8 @@ static Type sema_type_from_node(const ZithNode *n, const SemaContext *ctx = null
             return {SemaType::Float, false, false, ZITH_OWN_DEFAULT, nullptr, n->data.ident.str};
         if (name == "char")
             return {SemaType::Char, false, false, ZITH_OWN_DEFAULT, nullptr, n->data.ident.str};
+        if (name == "string")
+            return {SemaType::String, false, false, ZITH_OWN_DEFAULT, nullptr, n->data.ident.str};
         if (name == "bool")
             return {SemaType::Bool, false, false, ZITH_OWN_DEFAULT, nullptr, n->data.ident.str};
         if (name == "void")
@@ -268,8 +270,10 @@ static bool is_assignable(const Type &dst, const Type &src) {
         if (!is_assignable(*dst.element_type, *src.element_type))
             return false;
     }
-    if (dst.ownership != src.ownership)
-        return false;
+    if (dst.ownership != src.ownership) {
+        if (src.ownership != ZITH_OWN_DEFAULT && dst.ownership != ZITH_OWN_DEFAULT)
+            return false;
+    }
     if (!dst.optional && src.optional)
         return false;
     if (!dst.failable && src.failable)
@@ -530,6 +534,8 @@ static Type sema_expr(SemaContext &ctx, ZithNode *expr, Type expected_return) {
     }
     case ZITH_NODE_IDENTIFIER: {
         const std::string name = ident_name(expr);
+        if (name == "true" || name == "false")
+            return {SemaType::Bool, false, false, ZITH_OWN_DEFAULT, nullptr, nullptr};
         bool found = false;
         auto *ve = sema_lookup_var(ctx, name, 0, &found);
         if (!found && !name.empty()) {
@@ -987,7 +993,10 @@ static Type sema_expr(SemaContext &ctx, ZithNode *expr, Type expected_return) {
         auto *p = static_cast<ZithCallArgPayload *>(expr->data.list.ptr);
         if (!p)
             return {};
-        return sema_expr(ctx, p->expr);
+        Type t = sema_expr(ctx, p->expr);
+        if (p->ownership != ZITH_OWN_DEFAULT)
+            t.ownership = p->ownership;
+        return t;
     }
     case ZITH_NODE_CAST: {
         Type dst = sema_type_from_node(expr->data.kids.b, &ctx);

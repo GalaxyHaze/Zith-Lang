@@ -1,6 +1,6 @@
 # Fix `register_module` evaluation-order use-after-move
 
-## Status: PENDING
+## Status: COMPLETED
 
 ## Target
 `impl/import/module_registry.hpp` — one-line fix in `register_module()` causing module to be stored under empty key on C++17+.

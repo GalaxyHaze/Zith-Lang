@@ -40,10 +40,11 @@ void parser_init(Parser *p, ZithArena *arena, const char *source, const size_t s
     p->import_root_count   = 0;
     p->allow_dot_imports   = false;
 
-    // Initialize v2 DiagManager — owned by ParseContext (tls_parse_ctx)
+    // Initialize v2 DiagManager — arena-allocated, owned by ParseContext (tls_parse_ctx)
     auto &parse_ctx = get_tls_parse_ctx();
-    parse_ctx.diag_manager = std::make_unique<DiagManager>();
-    auto *dm = parse_ctx.diag_manager.get();
+    void *dm_mem = zith_arena_alloc(arena, sizeof(DiagManager));
+    parse_ctx.diag_manager = new (dm_mem) DiagManager();
+    auto *dm = parse_ctx.diag_manager;
     dm->set_arena(arena);
     p->diag_manager = dm;
 
@@ -52,8 +53,7 @@ void parser_init(Parser *p, ZithArena *arena, const char *source, const size_t s
 }
 
 void parser_destroy(Parser *p) {
-    // DiagManager ownership is transferred to ParseContext in zith_parse_with_source
-    // Do NOT delete it here — let ParseContext manage its lifecycle
+    // DiagManager is arena-allocated — no manual destruction needed
     p->diag_manager = nullptr;
 }
 

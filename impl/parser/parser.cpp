@@ -55,6 +55,9 @@ static ZithNode *run_parser_phase(Parser *p, ZithParserMode mode) {
     if (mode == ZITH_MODE_SCAN) {
         // Clear ModuleRegistry for new scan phase
         zith::import::ModuleRegistry::instance().clear();
+        // Clear import tracking state from previous runs
+        tls_parse_ctx.from_imports.clear();
+        tls_parse_ctx.re_exports.clear();
     }
 
     ArenaList<ZithNode *> decls_b;
@@ -92,6 +95,11 @@ static ZithNode *expand_unbody(Parser *parent, ZithNode *node) {
             memcpy(tokens, body_tokens, sizeof(ZithToken) * body_len);
         tokens[body_len] = {{nullptr, 0}, node->loc, ZITH_TOKEN_END, 0};
 
+        // Save parent's DiagManager before creating inner parser;
+        // parser_init overwrites tls_parse_ctx.diag_manager.
+        auto &parse_ctx = get_tls_parse_ctx();
+        auto *saved_dm = parse_ctx.diag_manager;
+
         Parser inner{};
         parser_init(&inner, parent->arena, parent->source, parent->source_len, parent->filename,
                     {tokens, body_len + 1});
@@ -112,7 +120,7 @@ static ZithNode *expand_unbody(Parser *parent, ZithNode *node) {
 
         // Merge inner diagnostics into parent using v2 system
         auto *inner_dm = static_cast<DiagManager*>(inner.diag_manager);
-        auto *parent_dm = static_cast<DiagManager*>(parent->diag_manager);
+        auto *parent_dm = saved_dm;
         for (auto& diag : inner_dm->bag().take_diagnostics()) {
             parent_dm->emit_diagnostic(zith::diag::Diagnostic{
                 diag.level, diag.code, std::move(diag.message),
@@ -121,12 +129,17 @@ static ZithNode *expand_unbody(Parser *parent, ZithNode *node) {
                 std::move(diag.children), diag.caused_by
             });
         }
+
+        parser_destroy(&inner);
+
+        // Restore parent's DiagManager to TLS
+        parse_ctx.diag_manager = saved_dm;
+
         // Also copy legacy list for ABI compat
         for (size_t i = 0; i < inner.diags.count; ++i)
             parser_emit_diag(parent, inner.diags.items[i].loc, inner.diags.items[i].severity,
                              inner.diags.items[i].message);
 
-        parser_destroy(&inner);
         return zith_ast_make_block(parent->arena, node->loc, stmts, count);
     }
 

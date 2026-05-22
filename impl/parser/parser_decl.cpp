@@ -992,13 +992,11 @@ static ZithNode *parse_export_decl(Parser *p) {
     }
 
     parser_expect(p, ZITH_TOKEN_SEMICOLON, "expected ';'");
-    auto alias                = "";
-    size_t alias_len          = 1;
     ZithImportPayload payload = {zith_arena_str(p->arena, buf, buf_len),
                                  buf_len,
                                  ZITH_VIS_PUBLIC,
-                                 alias,
-                                 alias_len,
+                                 nullptr,
+                                 0,
                                  true,
                                  false,
                                  0};
