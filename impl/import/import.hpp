@@ -307,65 +307,51 @@ public:
         changes_.clear();
     }
 
-    // Conversion to C ABI (deep copy into arena, caller must free with zith_import_destroy)
+    // Conversion to C ABI (arena-allocated, no destroy needed — arena bulk-free handles it)
     ZithImport* to_c(ZithArena* arena) const {
-        auto convert_arr = [&](const std::vector<Symbol>& src, ZithArena* a) {
+        auto convert_arr = [&](const std::vector<Symbol>& src) {
             ZithSymbolArray arr;
             arr.length = static_cast<uint32_t>(src.size());
             arr.capacity = arr.length;
-            if (a && arr.length > 0) {
-                arr.data = static_cast<ZithSymbol*>(zith_arena_alloc(a, arr.length * sizeof(ZithSymbol)));
-            } else {
-                arr.data = arr.length > 0 ? new ZithSymbol[arr.length] : nullptr;
-            }
+            arr.data = arr.length > 0
+                ? static_cast<ZithSymbol*>(zith_arena_alloc(arena, arr.length * sizeof(ZithSymbol)))
+                : nullptr;
             for (uint32_t i = 0; i < arr.length; ++i) {
                 arr.data[i] = src[i].to_c();
             }
             return arr;
         };
 
-        auto convert_changes = [&](const std::vector<Change>& src, ZithArena* a) {
+        auto convert_changes = [&](const std::vector<Change>& src) {
             ZithChangeArray arr;
             arr.length = static_cast<uint32_t>(src.size());
             arr.capacity = arr.length;
-            if (a && arr.length > 0) {
-                arr.data = static_cast<ZithChange*>(zith_arena_alloc(a, arr.length * sizeof(ZithChange)));
-            } else {
-                arr.data = arr.length > 0 ? new ZithChange[arr.length] : nullptr;
-            }
+            arr.data = arr.length > 0
+                ? static_cast<ZithChange*>(zith_arena_alloc(arena, arr.length * sizeof(ZithChange)))
+                : nullptr;
             for (uint32_t i = 0; i < arr.length; ++i) {
                 arr.data[i] = src[i].to_c();
             }
             return arr;
         };
 
-        ZithImport* imp;
-        if (arena) {
-            imp = static_cast<ZithImport*>(zith_arena_alloc(arena, sizeof(ZithImport)));
-        } else {
-            imp = new ZithImport{};
-        }
+        ZithImport* imp = static_cast<ZithImport*>(zith_arena_alloc(arena, sizeof(ZithImport)));
         if (!imp) return nullptr;
-        if (arena) {
-            imp->name = zith_arena_strdup(arena, name_.c_str());
-        } else {
-            imp->name = new char[name_.size() + 1];
-            std::strcpy(imp->name, name_.c_str());
-        }
+        imp->name = zith_arena_strdup(arena, name_.c_str());
         imp->version = version_;
 
-        imp->public_types = convert_arr(public_types_, arena);
-        imp->public_functions = convert_arr(public_functions_, arena);
-        imp->public_traits = convert_arr(public_traits_, arena);
-        imp->protected_types = convert_arr(protected_types_, arena);
-        imp->protected_functions = convert_arr(protected_functions_, arena);
-        imp->protected_traits = convert_arr(protected_traits_, arena);
-        imp->private_types = convert_arr(private_types_, arena);
-        imp->private_functions = convert_arr(private_functions_, arena);
-        imp->private_traits = convert_arr(private_traits_, arena);
+        imp->public_types = convert_arr(public_types_);
+        imp->public_functions = convert_arr(public_functions_);
+        imp->public_traits = convert_arr(public_traits_);
+        imp->protected_types = convert_arr(protected_types_);
+        imp->protected_functions = convert_arr(protected_functions_);
+        imp->protected_traits = convert_arr(protected_traits_);
+        imp->private_types = convert_arr(private_types_);
+        imp->private_functions = convert_arr(private_functions_);
+        imp->private_traits = convert_arr(private_traits_);
 
         imp->is_dirty = is_dirty_ ? 1 : 0;
-        imp->changes = convert_changes(changes_, arena);
+        imp->changes = convert_changes(changes_);
 
         return imp;
     }
