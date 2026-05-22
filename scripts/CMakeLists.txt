@@ -365,6 +365,10 @@ target_link_libraries(ZithParse PUBLIC ZithCore CLI11::CLI11)
 target_compile_definitions(ZithParse
     PRIVATE
         ZITH_VERSION="${ZITH_VERSION}"
+        ZITH_LIB_DIR=${BASE_DIR}/lib
+        ZITH_ALLOW_STD=1
+        ZITH_ALLOW_UTILS=1
+        ZITH_ALLOW_C=1
 )
 # ... rest of properties
 

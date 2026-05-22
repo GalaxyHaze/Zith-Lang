@@ -219,6 +219,28 @@ void build_import_roots(const std::string &source_file,
     for (const auto &dir : extra_dirs) {
         roots_out.push_back(dir);
     }
+
+#ifdef ZITH_LIB_DIR
+    {
+        auto always_allow = [&](const char *mod) {
+            std::filesystem::path mod_path = std::filesystem::path(ZITH_LIB_DIR) / mod;
+            std::string mod_str = mod_path.lexically_normal().string();
+            if (std::filesystem::is_directory(mod_path) &&
+                std::ranges::find(roots_out, mod_str) == roots_out.end()) {
+                roots_out.push_back(std::move(mod_str));
+            }
+        };
+#ifdef ZITH_ALLOW_STD
+        always_allow("std");
+#endif
+#ifdef ZITH_ALLOW_UTILS
+        always_allow("utils");
+#endif
+#ifdef ZITH_ALLOW_C
+        always_allow("c");
+#endif
+    }
+#endif
 }
 
 } // namespace zith::cli::project_config
