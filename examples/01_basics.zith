@@ -165,6 +165,8 @@ implement DoubleLink {
     }
 }
 
+trait 
+
 // ----------------------------------------------------------------------------
 // 5. Main Entry Point
 // ----------------------------------------------------------------------------
@@ -188,7 +190,7 @@ fn main() {
     // Insert a new node extending the root.
     // The 'insert' method takes a reference to it, more precise, a lend
     // to establish the link.
-    let new_node = root.insert(42);
+    let new_node = root.insert(42, );
     
     // Note: root is now 'aware' of new_node
     // new_node is 'part' of root, so it cant outlive the father

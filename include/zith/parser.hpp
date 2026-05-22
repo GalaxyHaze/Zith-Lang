@@ -5,6 +5,7 @@
 #error "This header requires C++"
 #endif
 
+#include "zith/memory.h"
 #include "zith/parser.h"
 
 // Forward: defined in parser_test.cpp

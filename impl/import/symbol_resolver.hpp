@@ -473,7 +473,7 @@ inline std::vector<Error> SymbolResolver::validate_symbol(const std::string& mod
     return validation_errors;
 }
 
-inline std::vector<Error> SymbolResolver::validate_module(Module& mod) {
+inline std::vector<Error> SymbolResolver::validate_module(Module& /*mod*/) {
     std::vector<Error> validation_errors;
     return validation_errors;
 }

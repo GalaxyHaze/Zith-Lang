@@ -63,6 +63,10 @@ private:
 
 class SymbolTable : public Singleton<SymbolTable> {
 public:
+    void clear() {
+        imports_.clear();
+        symbols_by_name_.clear();
+    }
 
 private:
     friend struct Singleton<SymbolTable>;
@@ -207,19 +211,6 @@ inline std::optional<Symbol> SymbolResolution::get_symbol() const {
     if (idx < priv_traits.size()) return priv_traits[idx];
 
     return std::nullopt;
-}
-
-// ============================================================================
-// Convenience functions
-// ============================================================================
-
-inline Import* resolve_import(const std::string& name) {
-    return SymbolTable::instance().get_import(name);
-}
-
-inline std::optional<Symbol> resolve_symbol(const std::string& fully_qualified_name) {
-    auto result = SymbolTable::instance().resolve(fully_qualified_name);
-    return result.get_symbol();
 }
 
 } // namespace import
