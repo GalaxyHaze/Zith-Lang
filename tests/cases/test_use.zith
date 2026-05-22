@@ -1,5 +1,0 @@
-import std.io.console;
-
-fn main() {
-    console.log("hello");
-}
