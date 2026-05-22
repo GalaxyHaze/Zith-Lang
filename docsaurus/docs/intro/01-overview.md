@@ -35,7 +35,7 @@ Zith starts simple—like C—but scales gracefully to handle complex systems wi
 Every language construct communicates intent clearly:
 
 ```zith
-fn process(self: mut Health, dmg: view u16) { }
+fn process(mut self: Health, dmg: view u16) { }
          // ^ explicit ownership: view = read-only
 ```
 

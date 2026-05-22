@@ -1,9 +1,9 @@
 # examples/dev
 
-Protótipos de desenvolvimento e testes rápidos de linguagem.
+Development prototypes and quick language testing.
 
 ## TODO
-- Separar exemplos descartáveis dos que devem virar testes.
+- Separate disposable examples from those that should become tests.
 
 ## FIXME
-- Evitar regressões mantendo compatibilidade com sintaxe atual.
+- Avoid regressions by maintaining compatibility with current syntax.

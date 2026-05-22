@@ -1,3 +1,10 @@
+---
+id: stdlib
+title: Standard Library
+sidebar_label: Standard Library
+description: Reference for the Zith standard library.
+---
+
 # Standard Library
 
 The Zith standard library is organized into three parts.

@@ -37,7 +37,7 @@ fn process<'a>(data: &'a mut Vec<i32>) -> &'a i32 {
 
 **Zith:** Ownership visible in types, no lifetime annotations
 ```zith
-fn process(data: mut [i32]): view i32 {
+fn process(data: lend [i32]): view i32 {
     return data[0];  // No lifetimes needed
 }
 ```
@@ -69,7 +69,7 @@ note: ...but the lifetime must also include the declared lifetime parameter 'a
 error[E005]: Invalid ownership modifier
   --> src/main.zith:10:8
    |
-10 | let ref: mut i32 = data;  // data is already borrowed
+10 | let ref: lend i32 = data;  // data is already borrowed
    |         ^^^ Cannot create mutable reference while other references exist
    |
    = help: Use 'view' for read-only access or wait for existing references to end
@@ -218,7 +218,7 @@ fn main() {
 **Zith:**
 ```zith
 fn main() {
-    let mut scores = Map<str, i32>.new();
+    var scores = Map<str, i32>.new();
     scores["Alice"] = 95;
     scores["Bob"] = 87;
     

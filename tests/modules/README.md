@@ -1,9 +1,9 @@
 # tests/modules
 
-Módulos `.zith` usados como fixtures dos testes de import.
+`.zith` modules used as fixtures for import tests.
 
 ## TODO
-- Cobrir cenários de dependência circular e export seletivo.
+- Cover circular dependency and selective export scenarios.
 
 ## FIXME
-- Nomear fixtures por comportamento para facilitar manutenção.
+- Name fixtures by behavior for easier maintenance.

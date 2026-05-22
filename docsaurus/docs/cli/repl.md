@@ -123,4 +123,4 @@ Loaded examples/test.zith
 ## See Also
 
 - **[Quickstart](../quickstart/01-hello-world.md)** - Writing first program
-- **[zith run`](./run.md)** - Run program file
+- **[zith run](./run.md)** - Run program file

@@ -1,9 +1,9 @@
 # examples/start
 
-Exemplos mínimos para início rápido com Zith.
+Minimal examples for a quick start with Zith.
 
 ## TODO
-- Adicionar exemplo de build + run com múltiplos ficheiros.
+- Add build + run example with multiple files.
 
 ## FIXME
-- Garantir que todos os exemplos compilam em CI.
+- Ensure all examples compile in CI.

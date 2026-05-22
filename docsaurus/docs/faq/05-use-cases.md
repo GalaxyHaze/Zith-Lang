@@ -58,9 +58,9 @@ scene GameLevel {
 // Safe system utility
 fn process_file(path: str): Result<[u8], IoError> {
     let file = File::open(path)?;
-    let mut buffer: unique [u8] = alloc.new([0; 4096]);
+    var buffer: unique [u8] = alloc.new([0; 4096]);
     
-    let bytes_read = file.read(mut buffer)?;
+    let bytes_read = file.read(lend buffer)?;
     return Ok(buffer[0..bytes_read]);
 }
 ```

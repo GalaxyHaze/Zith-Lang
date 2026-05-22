@@ -1,13 +1,13 @@
 # examples
 
-Exemplos de programas Zith.
+Zith program examples.
 
-## Estrutura
-- `start/`: exemplos iniciais.
-- `dev/`: protótipos e experimentos.
+## Structure
+- `start/`: beginner examples.
+- `dev/`: prototypes and experiments.
 
 ## TODO
-- Adicionar exemplos por tópico (ownership, módulos, erros).
+- Add examples by topic (ownership, modules, errors).
 
 ## FIXME
-- Padronizar estilo e comentários entre exemplos.
+- Standardize style and comments across examples.

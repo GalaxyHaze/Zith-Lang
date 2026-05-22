@@ -38,8 +38,8 @@ int main() {
 
             if (std::cin.gcount() == static_cast<std::streamsize>(contentLength)) {
                 try {
-                    auto response = handler.handleMessage(body);
-                    if (!response.is_null() && !response.empty()) {
+                    if (auto response = handler.handleMessage(body);
+                        !response.is_null() && !response.empty()) {
                         std::cout << "Content-Length: " << response.dump().size() << "\r\n\r\n" << response.dump() << std::flush;
                     }
                 } catch (const std::exception& e) {

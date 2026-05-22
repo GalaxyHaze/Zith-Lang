@@ -1,9 +1,9 @@
 # include/LLVM
 
-Headers relacionados à geração de IR, otimização e integração com LLVM.
+Headers related to IR generation, optimization, and LLVM integration.
 
 ## TODO
-- Documentar contrato de cada wrapper (`ir.hpp`, `optimizer.hpp`, `codegen.hpp`).
+- Document the contract for each wrapper (`ir.hpp`, `optimizer.hpp`, `codegen.hpp`).
 
 ## FIXME
-- Garantir fallback consistente quando LLVM não estiver disponível no ambiente.
+- Ensure consistent fallback when LLVM is not available in the environment.

@@ -125,7 +125,7 @@ for (i in 0..10) {
 
 // 'While' loop, both use 'for' keyword
 for (counter = 1, counter <= 10){
-    println("Count: {counter}"
+    println("Count: {counter}")
     ++counter;
 }
 

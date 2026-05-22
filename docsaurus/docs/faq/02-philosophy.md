@@ -61,7 +61,7 @@ Ownership, mutability, and effects are visible in types:
 // You can see ownership at a glance
 let data: unique [i32] = alloc.new([1, 2, 3]);
 let ref: view [i32] = data;      // Read-only borrow
-let mut_ref: mut [i32] = data;   // Mutable borrow (requires transfer)
+let mut_ref: lend [i32] = data;   // Mutable borrow (requires transfer)
 ```
 
 ### 5. Safety Without Punishment

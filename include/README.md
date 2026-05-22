@@ -1,13 +1,13 @@
 # include/
 
-Cabeçalhos públicos do projeto Zith.
+Public headers for the Zith project.
 
-## Estrutura
-- `zith/`: API pública principal.
-- `LLVM/`: wrappers/integrações de backend LLVM.
+## Structure
+- `zith/`: main public API.
+- `LLVM/`: LLVM backend wrappers/integrations.
 
 ## TODO
-- Definir política de versionamento da API pública.
+- Define public API versioning policy.
 
 ## FIXME
-- Revisar exposição de headers para evitar acoplamento interno.
+- Review header exposure to avoid internal coupling.

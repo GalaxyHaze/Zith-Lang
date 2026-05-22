@@ -24,18 +24,24 @@ Zith provides strong safety guarantees without runtime overhead through its comp
 
 ## Ownership System
 
-### Three Ownership Modifiers
+### Five Ownership Modifiers
 
 ```zith
 // unique - Full ownership, only one owner
 let data: unique i32 = alloc.new(42);
 
+// share - Shared ownership, multiple owners
+let shared: share i32 = data as share;
+
 // view - Read-only borrow, multiple allowed
 let ref1: view i32 = data;
 let ref2: view i32 = data;
 
-// mut - Mutable borrow, exclusive access
-let mut_ref: mut i32 = data;  // Transfers ownership temporarily
+// lend - Mutable borrow, exclusive access
+let mut_ref: lend i32 = data;  // Transfers ownership temporarily
+
+// extension - Hierarchical part-of relationship
+let child: extension Node = parent.node;
 ```
 
 ### Example: Safe Memory Access
@@ -90,7 +96,7 @@ fn process<'a>(data: &'a mut Vec<i32>, index: usize) -> &'a i32 {
 
 ```zith
 // Zith - Simpler, implicit lifetimes
-fn process(data: mut [i32], index: usize): view i32 {
+fn process(data: lend [i32], index: usize): view i32 {
     return data[index];  // ✅ No lifetime annotations needed
 }
 ```
@@ -171,7 +177,7 @@ When reviewing Zith code:
 1. **Check unsafe blocks** - Are they necessary? Documented?
 2. **Verify ownership transfers** - No accidental moves?
 3. **Review FFI boundaries** - Proper validation?
-4. **Look for view mutations** - Using `view` where `mut` needed?
+4. **Look for view mutations** - Using `view` where `lend` needed?
 
 ## Limitations
 

@@ -7,12 +7,6 @@ description: Global flags available for all Zith CLI commands.
 
 # Global Flags
 
-:::info Work in Progress
-
-This page is under construction. Content coming soon!
-
-:::
-
 ## Overview
 
 These flags are available across all Zith CLI commands.

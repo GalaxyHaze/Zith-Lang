@@ -19,7 +19,7 @@ Review the v2.0 architectural-spec topic map: NRM, ownership keywords, contexts,
 Learn the fundamental syntax of Zith including variables, types, and expressions.
 
 ### [Variables & Ownership](./variables.md)
-Understand Zith's unique ownership model with `unique`, `view`, and `mut` modifiers.
+Understand Zith's unique ownership model with `unique`, `share`, `view`, `lend`, and `extension` modifiers.
 
 ### [Type System](./types.md)
 Explore Zith's static type system, primitive types, and type inference.
@@ -60,7 +60,7 @@ For more advanced features, see the **[Advanced Topics](../advanced/01-overview.
 |-------|-------------|
 | Variables | `let x: i32 = 5;` |
 | Functions | `fn add(a: i32, b: i32): i32 { a + b }` |
-| Ownership | `unique`, `view`, `mut` modifiers |
+| Ownership | `unique`, `share`, `view`, `lend`, `extension` modifiers |
 | Control Flow | `if`, `for`, `while`, `match` |
 | Memory | Manual with safety guarantees |
 | Errors | Result types and exceptions |
