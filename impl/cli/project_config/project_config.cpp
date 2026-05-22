@@ -1,10 +1,19 @@
 #include "project_config.hpp"
 
 #include <algorithm>
+#include <cstdlib>
 #include <filesystem>
 #include <iostream>
 #include <toml++/toml.hpp>
 #include <zith/zith.hpp>
+
+#ifdef _WIN32
+#include <windows.h>
+#elif defined(__APPLE__)
+#include <mach-o/dyld.h>
+#else
+#include <unistd.h>
+#endif
 
 namespace zith::cli::project_config {
 
@@ -33,6 +42,26 @@ void set_string_field(const toml::table &tbl, const char *key, std::string &fiel
         else
             errors.emplace_back(std::string("Field '") + key + "' must be a string");
     }
+}
+
+std::string get_executable_dir() {
+#ifdef _WIN32
+    char buf[4096];
+    DWORD len = GetModuleFileNameA(NULL, buf, sizeof(buf));
+    if (len == 0 || len == sizeof(buf)) return {};
+    return std::filesystem::path(buf).parent_path().string();
+#elif defined(__APPLE__)
+    char buf[4096];
+    uint32_t size = sizeof(buf);
+    if (_NSGetExecutablePath(buf, &size) != 0) return {};
+    return std::filesystem::path(buf).parent_path().string();
+#else
+    char buf[4096];
+    ssize_t len = readlink("/proc/self/exe", buf, sizeof(buf) - 1);
+    if (len == -1) return {};
+    buf[len] = '\0';
+    return std::filesystem::path(buf).parent_path().string();
+#endif
 }
 
 } // namespace
@@ -166,6 +195,23 @@ void build_import_roots(const std::string &source_file,
 #ifdef ZITH_INSTALL_LIB_DIR
     add_subdirs(std::filesystem::path(ZITH_INSTALL_LIB_DIR));
 #endif
+
+    {
+        const char *zith_path_env = std::getenv("ZITH_PATH");
+        if (zith_path_env && *zith_path_env) {
+            add_subdirs(std::filesystem::path(zith_path_env));
+        }
+    }
+
+    {
+        // compiler-relative fallback: <exe_dir>/../lib/zith/lib
+        std::string exe_dir = get_executable_dir();
+        if (!exe_dir.empty()) {
+            std::filesystem::path stdlib_candidate =
+                std::filesystem::path(exe_dir).parent_path() / "lib" / "zith" / "lib";
+            add_subdirs(stdlib_candidate);
+        }
+    }
 
     std::ranges::sort(roots_out);
     roots_out.erase(std::ranges::unique(roots_out).begin(), roots_out.end());

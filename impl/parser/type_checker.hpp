@@ -47,7 +47,7 @@ public:
 
 class TypeChecker {
 public:
-    explicit TypeChecker(TypeContext& ctx, DiagManager* diag_mgr);
+    explicit TypeChecker(TypeContext& ctx, DiagManager* diag_mgr, ZithArena* arena = nullptr);
 
     Type get_type(ZithNode* node, Type expected_return = {});
 
@@ -64,6 +64,7 @@ public:
 private:
     TypeContext& ctx_;
     DiagManager* diag_;
+    ZithArena* arena_;
 
     static bool is_exact_match(const Type& lhs, const Type& rhs);
 

@@ -3,6 +3,7 @@
 // Refactored to use v2 DiagnosticBag as the implementation,
 // while maintaining v1 ZithDiagList ABI for backward compatibility.
 #include "diagnostics/diagnostics.hpp"
+#include "parser_context.hpp"
 #include "memory/arena.hpp"
 #include "zith/parser.h"
 #include "zith/ast.h"
@@ -39,12 +40,14 @@ void parser_init(Parser *p, ZithArena *arena, const char *source, const size_t s
     p->import_root_count   = 0;
     p->allow_dot_imports   = false;
 
-    // Initialize v2 DiagManager
-    p->diag_manager = new DiagManager();
-    static_cast<DiagManager*>(p->diag_manager)->set_arena(arena);
+    // Initialize v2 DiagManager — owned by ParseContext (tls_parse_ctx)
+    auto &parse_ctx = get_tls_parse_ctx();
+    parse_ctx.diag_manager = std::make_unique<DiagManager>();
+    auto *dm = parse_ctx.diag_manager.get();
+    dm->set_arena(arena);
+    p->diag_manager = dm;
 
     // Register source file in the SourceMap for v2 emitter
-    auto *dm = static_cast<DiagManager*>(p->diag_manager);
     dm->source_map().add_or_get_file(p->filename, std::string_view(source, source_len));
 }
 

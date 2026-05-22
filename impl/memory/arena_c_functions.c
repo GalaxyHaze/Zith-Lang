@@ -103,6 +103,11 @@ void zith_arena_reset(ZithArena *arena) {
 void zith_arena_destroy(ZithArena *arena) {
     if (!arena)
         return;
-    zith_arena_reset(arena);
+    ZithArenaBlock *block = arena->head;
+    while (block) {
+        ZithArenaBlock *next = block->next;
+        free(block);
+        block = next;
+    }
     free(arena);
 }

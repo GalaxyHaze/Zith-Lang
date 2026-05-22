@@ -5,6 +5,7 @@
 #pragma once
 
 #include "zith/import.h"
+#include "zith/memory.h"
 
 #include <memory>
 #include <string>
@@ -306,47 +307,65 @@ public:
         changes_.clear();
     }
 
-    // Conversion to C ABI (deep copy, caller must free with zith_import_destroy)
-    ZithImport* to_c() const {
-        auto convert_arr = [](const std::vector<Symbol>& src) {
+    // Conversion to C ABI (deep copy into arena, caller must free with zith_import_destroy)
+    ZithImport* to_c(ZithArena* arena) const {
+        auto convert_arr = [&](const std::vector<Symbol>& src, ZithArena* a) {
             ZithSymbolArray arr;
             arr.length = static_cast<uint32_t>(src.size());
-            arr.capacity = static_cast<uint32_t>(src.capacity());
-            arr.data = arr.length > 0 ? new ZithSymbol[arr.length] : nullptr;
+            arr.capacity = arr.length;
+            if (a && arr.length > 0) {
+                arr.data = static_cast<ZithSymbol*>(zith_arena_alloc(a, arr.length * sizeof(ZithSymbol)));
+            } else {
+                arr.data = arr.length > 0 ? new ZithSymbol[arr.length] : nullptr;
+            }
             for (uint32_t i = 0; i < arr.length; ++i) {
                 arr.data[i] = src[i].to_c();
             }
             return arr;
         };
 
-        auto convert_changes = [](const std::vector<Change>& src) {
+        auto convert_changes = [&](const std::vector<Change>& src, ZithArena* a) {
             ZithChangeArray arr;
             arr.length = static_cast<uint32_t>(src.size());
-            arr.capacity = static_cast<uint32_t>(src.capacity());
-            arr.data = arr.length > 0 ? new ZithChange[arr.length] : nullptr;
+            arr.capacity = arr.length;
+            if (a && arr.length > 0) {
+                arr.data = static_cast<ZithChange*>(zith_arena_alloc(a, arr.length * sizeof(ZithChange)));
+            } else {
+                arr.data = arr.length > 0 ? new ZithChange[arr.length] : nullptr;
+            }
             for (uint32_t i = 0; i < arr.length; ++i) {
                 arr.data[i] = src[i].to_c();
             }
             return arr;
         };
 
-        ZithImport* imp = new ZithImport{};
-        imp->name = new char[name_.size() + 1];
-        std::strcpy(imp->name, name_.c_str());
+        ZithImport* imp;
+        if (arena) {
+            imp = static_cast<ZithImport*>(zith_arena_alloc(arena, sizeof(ZithImport)));
+        } else {
+            imp = new ZithImport{};
+        }
+        if (!imp) return nullptr;
+        if (arena) {
+            imp->name = zith_arena_strdup(arena, name_.c_str());
+        } else {
+            imp->name = new char[name_.size() + 1];
+            std::strcpy(imp->name, name_.c_str());
+        }
         imp->version = version_;
 
-        imp->public_types = convert_arr(public_types_);
-        imp->public_functions = convert_arr(public_functions_);
-        imp->public_traits = convert_arr(public_traits_);
-        imp->protected_types = convert_arr(protected_types_);
-        imp->protected_functions = convert_arr(protected_functions_);
-        imp->protected_traits = convert_arr(protected_traits_);
-        imp->private_types = convert_arr(private_types_);
-        imp->private_functions = convert_arr(private_functions_);
-        imp->private_traits = convert_arr(private_traits_);
+        imp->public_types = convert_arr(public_types_, arena);
+        imp->public_functions = convert_arr(public_functions_, arena);
+        imp->public_traits = convert_arr(public_traits_, arena);
+        imp->protected_types = convert_arr(protected_types_, arena);
+        imp->protected_functions = convert_arr(protected_functions_, arena);
+        imp->protected_traits = convert_arr(protected_traits_, arena);
+        imp->private_types = convert_arr(private_types_, arena);
+        imp->private_functions = convert_arr(private_functions_, arena);
+        imp->private_traits = convert_arr(private_traits_, arena);
 
         imp->is_dirty = is_dirty_ ? 1 : 0;
-        imp->changes = convert_changes(changes_);
+        imp->changes = convert_changes(changes_, arena);
 
         return imp;
     }

@@ -6,8 +6,8 @@
 
 namespace zith {
 
-TypeChecker::TypeChecker(TypeContext& ctx, DiagManager* diag_mgr)
-    : ctx_(ctx), diag_(diag_mgr) {}
+TypeChecker::TypeChecker(TypeContext& ctx, DiagManager* diag_mgr, ZithArena* arena)
+    : ctx_(ctx), diag_(diag_mgr), arena_(arena) {}
 
 bool TypeChecker::is_exact_match(const Type& lhs, const Type& rhs) {
     return zith::type_match(lhs, rhs);
@@ -104,7 +104,10 @@ Type TypeChecker::type_from_node(const ZithNode* n) {
         if (inner.base != SemaType::Unknown) {
             Type arr;
             arr.base = SemaType::Array;
-            arr.element_type = new Type(inner);
+            if (arena_) {
+                auto *et = static_cast<Type *>(zith_arena_alloc(arena_, sizeof(Type)));
+                if (et) { *et = inner; arr.element_type = et; }
+            }
             arr.array_size = n->data.list.len;
             return arr;
         }
@@ -118,7 +121,10 @@ Type TypeChecker::type_from_node(const ZithNode* n) {
         if (inner.base != SemaType::Unknown) {
             Type slice;
             slice.base = SemaType::Slice;
-            slice.element_type = new Type(inner);
+            if (arena_) {
+                auto *et = static_cast<Type *>(zith_arena_alloc(arena_, sizeof(Type)));
+                if (et) { *et = inner; slice.element_type = et; }
+            }
             slice.array_size = 0;
             return slice;
         }
@@ -180,7 +186,10 @@ Type TypeChecker::get_type(ZithNode* node, Type expected_return) {
             Type char_type = {SemaType::Char, false, false, ZITH_OWN_DEFAULT};
             Type str;
             str.base = SemaType::Slice;
-            str.element_type = new Type(char_type);
+            if (arena_) {
+                auto *et = static_cast<Type *>(zith_arena_alloc(arena_, sizeof(Type)));
+                if (et) { *et = char_type; str.element_type = et; }
+            }
             str.array_size = 0;
             return str;
         }
@@ -291,14 +300,20 @@ Type TypeChecker::get_type(ZithNode* node, Type expected_return) {
             }
             Type arr;
             arr.base = SemaType::Array;
-            arr.element_type = new Type{SemaType::Int, false, false, ZITH_OWN_DEFAULT};
+            if (arena_) {
+                auto *et = static_cast<Type *>(zith_arena_alloc(arena_, sizeof(Type)));
+                if (et) { *et = Type{SemaType::Int, false, false, ZITH_OWN_DEFAULT}; arr.element_type = et; }
+            }
             arr.array_size = 0;
             return arr;
         }
         Type elem_type = get_type(items[0]);
         Type arr;
         arr.base = SemaType::Array;
-        arr.element_type = new Type(elem_type);
+        if (arena_) {
+            auto *et = static_cast<Type *>(zith_arena_alloc(arena_, sizeof(Type)));
+            if (et) { *et = elem_type; arr.element_type = et; }
+        }
         arr.array_size = count;
         return arr;
     }
