@@ -23,8 +23,8 @@ namespace zith::infra::util {
         Result(T&& val) : data(std::move(val)), valid(true) {}
         Result(const T& val) : data(val), valid(true) {}
         
-        explicit Result(E&& err) : data(std::move(err)), valid(false) {}
-        explicit Result(const E& err) : data(err), valid(false) {}
+        Result(E&& err) : data(std::move(err)), valid(false) {}
+        Result(const E& err) : data(err), valid(false) {}
 
         bool isOk() const noexcept { return valid; }
         bool isError() const noexcept { return !valid; }

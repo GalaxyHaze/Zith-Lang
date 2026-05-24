@@ -1,0 +1,246 @@
+#pragma once
+#include "frontend/lexer/token.hpp"
+#include <algorithm>
+#include <array>
+#include <cstdint>
+#include <string_view>
+#include <utility>
+
+namespace zith::frontend::lexer {
+
+namespace detail {
+
+constexpr uint64_t hash64(std::string_view sv) {
+    uint64_t h = 14695981039346656037ULL;
+    for (auto c : sv) {
+        h ^= static_cast<uint8_t>(c);
+        h *= 1099511628211ULL;
+    }
+    return h;
+}
+
+constexpr uint64_t mix64(uint64_t x) {
+    x ^= x >> 33;
+    x *= 0xff51afd7ed558ccdULL;
+    x ^= x >> 33;
+    x *= 0xc4ceb9fe1a85ec53ULL;
+    x ^= x >> 33;
+    return x;
+}
+
+static constexpr auto TokenTable = std::to_array<std::pair<std::string_view, TokenKind>>({
+
+    {"i8", TokenKind::Type},
+    {"i16", TokenKind::Type},
+    {"i32", TokenKind::Type},
+    {"i64", TokenKind::Type},
+    {"i128", TokenKind::Type},
+
+    {"u8", TokenKind::Type},
+    {"u16", TokenKind::Type},
+    {"u32", TokenKind::Type},
+    {"u64", TokenKind::Type},
+    {"u128", TokenKind::Type},
+
+    {"f32", TokenKind::Type},
+    {"f64", TokenKind::Type},
+    {"f128", TokenKind::Type},
+
+    {"bool", TokenKind::Type},
+    {"char", TokenKind::Type},
+    {"void", TokenKind::Type},
+    {"invalid", TokenKind::Type},
+    {"unknow", TokenKind::Type},
+    {"null", TokenKind::LitVal},
+
+    {"type", TokenKind::Typedef},
+    {"struct", TokenKind::Struct},
+    {"component", TokenKind::Struct},
+    {"enum", TokenKind::Struct},
+    {"raw", TokenKind::Raw},
+    {"union", TokenKind::Struct},
+    {"trait", TokenKind::Trait},
+    {"implement", TokenKind::Implement},
+    {"fn", TokenKind::Fn},
+    {"import", TokenKind::Module},
+    {"use", TokenKind::Using},
+    {"context", TokenKind::Context},
+    {"macro", TokenKind::Macro},
+    {"export", TokenKind::Module},
+    {"extern", TokenKind::Extern},
+    {"from", TokenKind::Module},
+    {"as", TokenKind::As},
+
+    {"let", TokenKind::Variable},
+    {"var", TokenKind::Variable},
+    {"auto", TokenKind::Variable},
+    {"const", TokenKind::Variable},
+    {"mut", TokenKind::Mutable},
+    {"global", TokenKind::Variable},
+    {"comptime", TokenKind::Variable},
+    {"lend", TokenKind::Ownership},
+    {"share", TokenKind::Ownership},
+    {"view", TokenKind::Ownership},
+    {"unique", TokenKind::Ownership},
+    {"extension", TokenKind::Ownership},
+    {"yield", TokenKind::Yield},
+    {"async", TokenKind::Fn},
+    {"flowing", TokenKind::Thread},
+    {"dock", TokenKind::Label},
+    {"noreturn", TokenKind::Type},
+
+    {"pub", TokenKind::Visibility},
+    {"mod", TokenKind::Visibility},
+
+    {"if", TokenKind::If},
+    {"else", TokenKind::If},
+    {"for", TokenKind::For},
+    {"in", TokenKind::In},
+    {"match", TokenKind::Match},
+    {"return", TokenKind::Control},
+    {"break", TokenKind::Control},
+    {"continue", TokenKind::Control},
+    {"jump", TokenKind::Control},
+    {"marker", TokenKind::Label},
+    {"scene", TokenKind::Scene},
+
+    {"spawn", TokenKind::Thread},
+    {"await", TokenKind::Thread},
+    {"join", TokenKind::Thread},
+
+    {"with", TokenKind::Error},
+    {"catch", TokenKind::Error},
+    {"must", TokenKind::Must},
+    {"throw", TokenKind::Error},
+    {"drop", TokenKind::Drop},
+
+    {"require", TokenKind::Require},
+    {"is", TokenKind::Is},
+    {"prefix", TokenKind::Word},
+    {"sufix", TokenKind::Word},
+    {"infix", TokenKind::Word},
+
+    {"and", TokenKind::Logical},
+    {"or", TokenKind::Logical},
+    {"not", TokenKind::Logical},
+    {"==", TokenKind::Comparision},
+    {">=", TokenKind::Comparision},
+    {"<=", TokenKind::Comparision},
+    {"->", TokenKind::Operators},
+    {"+=", TokenKind::Operators},
+    {"-=", TokenKind::Operators},
+    {"*=", TokenKind::Operators},
+    {"/=", TokenKind::Operators},
+    {"...", TokenKind::Punctuation},
+
+    {"+", TokenKind::Operators},
+    {"-", TokenKind::Operators},
+    {"*", TokenKind::Operators},
+    {"/", TokenKind::Operators},
+    {"%", TokenKind::Operators},
+    {"=", TokenKind::Operators},
+    {"<", TokenKind::Comparision},
+    {">", TokenKind::Comparision},
+    {"!", TokenKind::Punctuation},
+    {"?", TokenKind::Punctuation},
+
+    {"(", TokenKind::Punctuation},
+    {")", TokenKind::Punctuation},
+    {"{", TokenKind::Punctuation},
+    {"}", TokenKind::Punctuation},
+    {"[", TokenKind::Punctuation},
+    {"]", TokenKind::Punctuation},
+    {",", TokenKind::Punctuation},
+    {";", TokenKind::Punctuation},
+    {"::", TokenKind::Punctuation},
+    {":", TokenKind::Punctuation},
+    {".", TokenKind::Punctuation},
+    {"|", TokenKind::Operators},
+});
+
+static constexpr size_t N           = TokenTable.size();
+static constexpr size_t BucketCount = 128;
+static constexpr size_t TableSize   = 256;
+
+struct PerfectHash {
+    std::array<int16_t, TableSize> table{};
+    std::array<uint8_t, BucketCount> bucketSeed{};
+
+    constexpr PerfectHash() {
+        table.fill(-1);
+        bucketSeed.fill(0);
+
+        std::array<uint8_t, BucketCount> counts{};
+        std::array<std::array<uint16_t, 16>, BucketCount> items{};
+
+        for (size_t i = 0; i < N; ++i) {
+            const size_t b        = hash64(TokenTable[i].first) % BucketCount;
+            items[b][counts[b]++] = static_cast<uint16_t>(i);
+        }
+
+        for (size_t b = 0; b < BucketCount; ++b) {
+            if (counts[b] == 0)
+                continue;
+
+            for (uint8_t seed = 0; seed < 255; ++seed) {
+                bool ok = true;
+                std::array<size_t, 16> slots{};
+
+                for (size_t k = 0; k < counts[b]; ++k) {
+                    const size_t i    = items[b][k];
+                    const size_t slot = mix64(hash64(TokenTable[i].first) ^ seed) % TableSize;
+
+                    for (size_t j = 0; j < k; ++j) {
+                        if (slots[j] == slot) {
+                            ok = false;
+                            break;
+                        }
+                    }
+                    if (!ok)
+                        break;
+
+                    if (table[slot] != -1) {
+                        ok = false;
+                        break;
+                    }
+
+                    slots[k] = slot;
+                }
+
+                if (ok) {
+                    bucketSeed[b] = seed;
+                    for (size_t k = 0; k < counts[b]; ++k) {
+                        const size_t i    = items[b][k];
+                        const size_t slot = mix64(hash64(TokenTable[i].first) ^ seed) % TableSize;
+                        table[slot]       = static_cast<int16_t>(i);
+                    }
+                    break;
+                }
+            }
+        }
+    }
+
+    [[nodiscard]] constexpr TokenKind lookup(std::string_view sv) const {
+        if (sv.empty())
+            return TokenKind::Identifier;
+
+        const uint64_t h = hash64(sv);
+        const size_t b   = h % BucketCount;
+        const size_t idx = mix64(h ^ bucketSeed[b]) % TableSize;
+        const int16_t id = table[idx];
+
+        if (id < 0)
+            return TokenKind::Identifier;
+        return (TokenTable[id].first == sv) ? TokenTable[id].second : TokenKind::Identifier;
+    }
+};
+
+constexpr auto g_hasher = PerfectHash{};
+
+} // namespace detail
+
+inline TokenKind lookup_keyword(std::string_view sv) {
+    return detail::g_hasher.lookup(sv);
+}
+
+} // namespace zith::frontend::lexer

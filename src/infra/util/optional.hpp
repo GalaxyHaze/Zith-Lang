@@ -26,14 +26,14 @@ namespace zith::infra::util {
             new (data) T(std::forward<Args>(args)...);
         }
         
-        explicit Optional(std::nullptr_t) : valid(false) {}
+        Optional(std::nullptr_t) : valid(false) {}
 
         bool isValid() const noexcept { return valid; }
         bool isEmpty() const noexcept { return !valid; }
 
         explicit operator bool() const { return valid; }
 
-        T& value() { return data; }
+        T& value() { return *(T*)&data[0]; }
         const T& value() const { return (T)data; }
 
         // Adiciona isto dentro da tua struct Optional (tanto na genérica como na de ponteiros)

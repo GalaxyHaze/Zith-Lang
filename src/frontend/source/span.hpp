@@ -2,7 +2,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <algorithm> // Necessário para std::min e std::max
-#include "../infra/util/result.hpp" 
+#include <infra/util/result.hpp> 
 
 namespace zith::frontend {
 
