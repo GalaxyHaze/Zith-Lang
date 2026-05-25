@@ -184,7 +184,7 @@ static bool isPunctuation(const char c) {
                 processNumber();
         }
         vec.emplace_back(Span{0,0,0}, TokenKind::End);
-        return vec;
+        return TokenStream{};
 
         //return {nullptr, 0, 0, 0};
     }
