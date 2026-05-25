@@ -8,7 +8,7 @@ namespace zith::frontend::lexer {
 
     enum class TokenKind : uint8_t {
         Identifier,
-        As,
+        As, //as
         Using,
         Type,
         Struct,
@@ -19,13 +19,13 @@ namespace zith::frontend::lexer {
         Interface,
         Typedef,
         Implement,
-        Fn,
+        Fn, // fn, const fn, flowing fn. raw fn
         Module,
         Extern,
-        Macro,
+        Macro, // macro, raw macro, tag macro
         Context,
         Variable,
-        Ownership,
+        Ownership, //
         Yield,
         Label,
         Visibility,
@@ -54,7 +54,9 @@ namespace zith::frontend::lexer {
     };
 
     struct Token {
+        //lexeme
         zith::frontend::Span span;
+        //type of token
         TokenKind kind;
 
         [[nodiscard]] constexpr bool is(TokenKind k) const noexcept { return kind == k; }

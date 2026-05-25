@@ -68,7 +68,7 @@ namespace zith::frontend {
             std::error_code error;
 
             if (write) {
-                auto file = mio::make_mmap_sink(path, error);
+                auto file = mio::make_mmap_sink(std::string(path), error);
                 if (error) return zith::infra::util::Error{error.message()};
 
                 auto view = std::string_view{file.data(), file.size()};
@@ -83,7 +83,7 @@ namespace zith::frontend {
                 files.emplace_back(std::move(loc));
                 return id;
             } else {
-                auto file = mio::make_mmap_source(path, error);
+                auto file = mio::make_mmap_source(std::string(path), error);
                 if (error) return zith::infra::util::Error{error.message()};
 
                 auto view = std::string_view{file.data(), file.size()};

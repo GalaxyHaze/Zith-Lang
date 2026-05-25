@@ -12,7 +12,7 @@
 namespace zith::frontend::lexer {
 
     enum class ParserError: uint8_t {
-        Successs,
+        Successs = 0,
         UnexpectedToken,
         MissingSemicolon,
         InvalidNumber,
@@ -53,7 +53,7 @@ static bool isPunctuation(const char c) {
 
         default:
             return false;
-    }
+    } 
 }
 
 
@@ -62,7 +62,7 @@ static bool isPunctuation(const char c) {
 
         switch (pError) {
             case ParserError::Successs:
-                return "no";
+                return "";
             case ParserError::UnexpectedToken:
                 return locationPrefix + "Unexpected token found.";
             case ParserError::MissingSemicolon:
