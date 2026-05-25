@@ -2,13 +2,13 @@
 
 namespace zith::frontend {
 
-        auto SourceLoc::getSlice() const -> std::string_view {
+        std::string_view SourceLoc::getSlice() const {
             return std::visit([](const auto& arg) -> std::string_view {
                 return {arg.data(), arg.size()};
             }, file);
         }
 
-        auto SourceLoc::get() const -> const char* {
+        const char* SourceLoc::get() const  {
             return std::visit([](const auto& arg) { return arg.data(); }, file);
         }
 

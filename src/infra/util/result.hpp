@@ -1,5 +1,5 @@
 #pragma once
-#include <string_view>
+#include <string>
 #include <type_traits>
 #include <concepts>
 #include <variant> // Substitui a união manual propensa a bugs de ciclo de vida
@@ -7,7 +7,7 @@
 namespace zith::infra::util {
 
     struct Error {
-        std::string_view msg;
+        std::string msg;
     };
 
     template<class T>

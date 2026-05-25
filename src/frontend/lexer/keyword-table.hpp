@@ -50,7 +50,7 @@ static constexpr auto TokenTable = std::to_array<std::pair<std::string_view, Tok
     {"char", TokenKind::Type},
     {"void", TokenKind::Type},
     {"invalid", TokenKind::Type},
-    {"unknow", TokenKind::Type},
+    {"unknown", TokenKind::Type},
     {"null", TokenKind::LitVal},
 
     {"type", TokenKind::Typedef},
@@ -117,45 +117,13 @@ static constexpr auto TokenTable = std::to_array<std::pair<std::string_view, Tok
     {"require", TokenKind::Require},
     {"is", TokenKind::Is},
     {"prefix", TokenKind::Word},
-    {"sufix", TokenKind::Word},
+    {"suffix", TokenKind::Word},
     {"infix", TokenKind::Word},
 
     {"and", TokenKind::Logical},
     {"or", TokenKind::Logical},
     {"not", TokenKind::Logical},
-    {"==", TokenKind::Comparision},
-    {">=", TokenKind::Comparision},
-    {"<=", TokenKind::Comparision},
-    {"->", TokenKind::Operators},
-    {"+=", TokenKind::Operators},
-    {"-=", TokenKind::Operators},
-    {"*=", TokenKind::Operators},
-    {"/=", TokenKind::Operators},
-    {"...", TokenKind::Punctuation},
-
-    {"+", TokenKind::Operators},
-    {"-", TokenKind::Operators},
-    {"*", TokenKind::Operators},
-    {"/", TokenKind::Operators},
-    {"%", TokenKind::Operators},
-    {"=", TokenKind::Operators},
-    {"<", TokenKind::Comparision},
-    {">", TokenKind::Comparision},
-    {"!", TokenKind::Punctuation},
-    {"?", TokenKind::Punctuation},
-
-    {"(", TokenKind::Punctuation},
-    {")", TokenKind::Punctuation},
-    {"{", TokenKind::Punctuation},
-    {"}", TokenKind::Punctuation},
-    {"[", TokenKind::Punctuation},
-    {"]", TokenKind::Punctuation},
-    {",", TokenKind::Punctuation},
-    {";", TokenKind::Punctuation},
-    {"::", TokenKind::Punctuation},
-    {":", TokenKind::Punctuation},
-    {".", TokenKind::Punctuation},
-    {"|", TokenKind::Operators},
+    {"xor", TokenKind::Logical}
 });
 
 static constexpr size_t N           = TokenTable.size();
@@ -179,40 +147,26 @@ struct PerfectHash {
         }
 
         for (size_t b = 0; b < BucketCount; ++b) {
-            if (counts[b] == 0)
-                continue;
-
+            if (counts[b] == 0) continue;
             for (uint8_t seed = 0; seed < 255; ++seed) {
                 bool ok = true;
                 std::array<size_t, 16> slots{};
-
-                for (size_t k = 0; k < counts[b]; ++k) {
-                    const size_t i    = items[b][k];
+                for (size_t k = 0; k < counts[b] && ok; ++k) {
+                    const size_t i = items[b][k];
                     const size_t slot = mix64(hash64(TokenTable[i].first) ^ seed) % TableSize;
-
                     for (size_t j = 0; j < k; ++j) {
-                        if (slots[j] == slot) {
-                            ok = false;
-                            break;
-                        }
+                        if (slots[j] == slot) { ok = false; break; }
                     }
-                    if (!ok)
-                        break;
-
-                    if (table[slot] != -1) {
-                        ok = false;
-                        break;
-                    }
-
+                    if (!ok) break;
+                    if (table[slot] != -1) { ok = false; break; }
                     slots[k] = slot;
                 }
-
                 if (ok) {
                     bucketSeed[b] = seed;
                     for (size_t k = 0; k < counts[b]; ++k) {
-                        const size_t i    = items[b][k];
+                        const size_t i = items[b][k];
                         const size_t slot = mix64(hash64(TokenTable[i].first) ^ seed) % TableSize;
-                        table[slot]       = static_cast<int16_t>(i);
+                        table[slot] = static_cast<int16_t>(i);
                     }
                     break;
                 }

@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <algorithm> // Necessário para std::min e std::max
 #include <infra/util/result.hpp> 
+#include <string>
 
 namespace zith::frontend {
 
@@ -10,7 +11,10 @@ namespace zith::frontend {
     using FileId = uint32_t;
 
     struct Loc {
-        ByteOffset line, col;
+        ByteOffset line = 1, col = 1;
+        auto toString(){
+            return std::to_string(line)+":"+std::to_string(col);
+        }
     };
 
     struct Span { 

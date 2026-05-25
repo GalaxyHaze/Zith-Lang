@@ -13,9 +13,9 @@ namespace zith::frontend {
         std::string path;
         std::vector<ByteOffset> line_starts;
 
-        auto getSlice() const;
+        std::string_view getSlice() const;
 
-        auto get() const;
+        const char* get() const;
 
         // Reconstrói o mapa de linhas. OBRIGATÓRIO chamar após carregar o content.
         void buildLines() noexcept;

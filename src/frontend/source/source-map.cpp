@@ -1,11 +1,34 @@
 #include "source-map.hpp"
 #include "frontend/source/source-file.hpp"
+#include "frontend/source/span.hpp"
+#include "infra/util/result.hpp"
 #include <mutex>
 #include <shared_mutex>
 
 namespace zith::frontend {
 
-        auto SourceMap::add_file(const std::string_view path, const std::string_view content) -> FileId {
+        static bool is_valid_utf8(std::string_view s) noexcept {
+            for (size_t i = 0; i < s.size(); i++) {
+                auto c = static_cast<unsigned char>(s[i]);
+                if (c <= 0x7F) continue;
+                size_t follow;
+                if ((c & 0xE0) == 0xC0) follow = 1; // 2-byte
+                else if ((c & 0xF0) == 0xE0) follow = 2; // 3-byte
+                else if ((c & 0xF8) == 0xF0) follow = 3; // 4-byte
+                else return false;
+                if (i + follow >= s.size()) return false;
+                for (size_t j = 1; j <= follow; j++)
+                    if ((static_cast<unsigned char>(s[i + j]) & 0xC0) != 0x80) return false;
+                i += follow;
+            }
+            return true;
+        }
+
+        zith::infra::util::Result<FileId> SourceMap::add_file(const std::string_view path, const std::string_view content) {
+            
+            if (!is_valid_utf8(content))
+                return zith::infra::util::Error{"File is not valid UTF-8"};
+
             {
                 std::shared_lock lock(rw_mutex);
                 auto it = cache.find(std::string(path));
@@ -13,6 +36,7 @@ namespace zith::frontend {
             }
 
             std::unique_lock lock(rw_mutex);
+            
 
             auto it = cache.find(std::string(path));
             if (it != cache.end()) return it->second;
@@ -46,8 +70,14 @@ namespace zith::frontend {
             if (write) {
                 auto file = mio::make_mmap_sink(path, error);
                 if (error) return zith::infra::util::Error{error.message()};
+
+                auto view = std::string_view{file.data(), file.size()};
+                if (!is_valid_utf8(view))
+                    return zith::infra::util::Error{"File is not valid UTF-8"};
+
                 SourceLoc loc{std::move(file), std::string(path), {}};
                 loc.buildLines();
+
                 FileId id = static_cast<FileId>(files.size());
                 cache.emplace(path, id);
                 files.emplace_back(std::move(loc));
@@ -55,8 +85,14 @@ namespace zith::frontend {
             } else {
                 auto file = mio::make_mmap_source(path, error);
                 if (error) return zith::infra::util::Error{error.message()};
+
+                auto view = std::string_view{file.data(), file.size()};
+                if (!is_valid_utf8(view))
+                    return zith::infra::util::Error{"File is not valid UTF-8"};
+
                 SourceLoc loc{std::move(file), std::string(path), {}};
                 loc.buildLines();
+                
                 FileId id = static_cast<FileId>(files.size());
                 cache.emplace(path, id);
                 files.emplace_back(std::move(loc));
