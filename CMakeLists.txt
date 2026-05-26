@@ -27,13 +27,13 @@ FetchContent_MakeAvailable(mio)
 # --------------------------------------------
 
 file(GLOB_RECURSE ZITH_SOURCES
-    ${BASE_DIR}/src/*.cpp
+    src/*.cpp
 )
 
 add_executable(zith ${ZITH_SOURCES})
 
 target_include_directories(zith PRIVATE
-    ${BASE_DIR}/src
+        src
 )
 
 # Vincula o 'mio' ao seu projeto (ele adiciona os includes automaticamente)

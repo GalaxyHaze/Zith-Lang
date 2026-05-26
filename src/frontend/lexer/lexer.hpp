@@ -1,8 +1,13 @@
 #pragma once
 
 #include "frontend/lexer/token.hpp"
+#include "frontend/source/span.hpp"
+#include "infra/util/result.hpp"
+
 namespace zith::frontend::lexer {
 
-    constexpr TokenStream tokenize(std::string_view content);
+    auto tokenize(FileId id) -> infra::util::Result<TokenStream>;
+
+    void print_tokens(const TokenStream& stream, std::string_view source) noexcept;
 
 }

@@ -27,14 +27,14 @@ namespace zith::frontend {
         SourceMap(SourceMap&&) = delete;
         SourceMap(const SourceMap&) = delete;    
         
-        static zith::infra::util::Result<FileId> add_file(const std::string_view path, const std::string_view content);
+        static zith::infra::util::Result<FileId> add_file(std::string_view path, std::string_view content);
 
         // Não precisa de const noexcept em funções estáticas
         static bool isValid(FileId id) noexcept;
 
         static auto snippet(const Span& a) noexcept -> zith::infra::util::Result<std::string_view>;
 
-        static auto load_file(const std::string_view path, const bool write = false) -> zith::infra::util::Result<FileId>;
+        static auto load_file(std::string_view path, bool write = false) -> zith::infra::util::Result<FileId>;
 
         static auto get(FileId id) noexcept -> zith::infra::util::Optional<std::reference_wrapper<SourceLoc>>;
 
