@@ -3,6 +3,8 @@
 #include "frontend/source/source-file.hpp"
 #include "frontend/source/source-map.hpp"
 #include "frontend/source/span.hpp"
+#include "infra/alloc/arena.hpp"
+#include "infra/collections/dyn-array.hpp"
 #include "infra/util/result.hpp"
 #include <cctype>
 #include <cstdint>
@@ -22,7 +24,7 @@ namespace zith::frontend::lexer {
     static SourceLoc file; static FileId gId = 0;
     static const char *start = nullptr, *now = nullptr, *end = nullptr;
     static Loc loc;  static ParserError pError = ParserError::Successs;
-    static std::vector<Token> tokens = {};
+    static infra::collections::DynArray<Token> tokens(infra::alloc::SessionArena);
 
     static bool Ok(){
         return pError == ParserError::Successs;
@@ -118,7 +120,7 @@ static bool isPunctuation(const char c) {
             }
             loc.col++;
         }
-        tokens.emplace_back(Span{gId, (uint32_t)(before - start), (uint32_t)(now - start)}, TokenKind::Comments );
+        tokens.emplace(Span{gId, (uint32_t)(before - start), (uint32_t)(now - start)}, TokenKind::Comments );
 
     }
 
@@ -150,7 +152,7 @@ static bool isPunctuation(const char c) {
 
     constexpr auto tokenize(const FileId id) -> infra::util::Result<TokenStream>{
         gId = id;
-        std::vector<Token> vec;
+        //std::vector<Token> vec;
         auto file = SourceMap::get(id);
 
         if (!file)
@@ -183,7 +185,7 @@ static bool isPunctuation(const char c) {
             if ( isNum(*now) )
                 processNumber();
         }
-        vec.emplace_back(Span{0,0,0}, TokenKind::End);
+        tokens.emplace(Span{id,loc.line,loc.col}, TokenKind::End);
         return TokenStream{};
 
         //return {nullptr, 0, 0, 0};

@@ -127,6 +127,9 @@ namespace zith::infra::alloc {
         }
     };
 
+    inline thread_local Arena SessionArena;
+    inline thread_local Arena TestArena;
+
     class MarkPoint {
         Arena* arena_ = nullptr;
         Arena::Block* block_ = nullptr;
