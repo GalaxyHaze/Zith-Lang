@@ -10,7 +10,6 @@
 #include <cstdio>
 #include <cstdint>
 #include <string_view>
-#include <vector>
 
 namespace zith::frontend::lexer {
 
