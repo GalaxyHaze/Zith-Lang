@@ -12,7 +12,7 @@ namespace zith::frontend {
 
     struct Loc {
         ByteOffset line = 1, col = 1;
-        auto toString(){
+        auto toString() const {
             return std::to_string(line)+":"+std::to_string(col);
         }
     };

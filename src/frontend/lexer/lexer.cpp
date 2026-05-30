@@ -1,253 +1,390 @@
 #include "lexer.hpp"
-#include "frontend/lexer/token.hpp"
+#include "frontend/lexer/keyword-table.hpp"
+#include "frontend/source/span.hpp"
 #include "frontend/source/source-file.hpp"
 #include "frontend/source/source-map.hpp"
-#include "frontend/source/span.hpp"
-#include "infra/alloc/arena.hpp"
-#include "infra/collections/dyn-array.hpp"
-#include "infra/util/result.hpp"
 #include <cctype>
-#include <cstdio>
 #include <cstdint>
+#include <cstdio>
 #include <string_view>
 
 namespace zith::frontend::lexer {
 
-    enum class ParserError: uint8_t {
-        Success = 0,
-        UnexpectedToken,
-        MissingSemicolon,
-        InvalidNumber,
-        UnexpectedEOF
-    };
+bool Lexer::isNum(char c) {
+    return c >= '0' && c <= '9';
+}
 
-    static SourceLoc* file; static FileId gId = 0;
-    static const char *start = nullptr, *now = nullptr, *end = nullptr;
-    static Loc loc;  static auto pError = ParserError::Success;
-    static infra::collections::DynArray<Token> tokens(infra::alloc::SessionArena);
-
-    static bool Ok(){
-        return pError == ParserError::Success;
-    }
-
-    static bool isNum(const char c){
-        return c >= '0' && c <= '9';
-    }
-
-    static bool isPunctuation(const char c) {
-        switch (c) {
-            // Brackets and Parentheses
-            case '(': case ')':
-            case '[': case ']':
-            case '{': case '}':
-
-            // Operators and Punctuation
-            case '+': case '-': case '*': case '/': case '%':
-            case '=': case '<': case '>': case '!':
-            case '&': case '|': case '^': case '~':
-            case '?': case ':': case ';': case ',': case '.':
-
-            // Quotes and Misc Strings
-            case '"': case '\'': case '\\': case '#': case '@': case '`':
-                return true;
-
-            default:
-                return false;
-        }
-    }
-
-
-    std::string getErrorMsg() {
-        std::string locationPrefix = "[error]: at" + file->path + ":" + loc.toString() + ": ";
-
-        switch (pError) {
-            case ParserError::Success:
-                return "";
-            case ParserError::UnexpectedToken:
-                return locationPrefix + "Unexpected token found.";
-            case ParserError::MissingSemicolon:
-                return locationPrefix + "Missing semicolon ';'.";
-            case ParserError::InvalidNumber:
-                return locationPrefix + "Invalid number format.";
-            case ParserError::UnexpectedEOF:
-                return locationPrefix + "Unexpected End of File (EOF).";
-            default:
-                return locationPrefix + "Unknown parser error.";
-        }
-    }
-
-    static bool Open(){
-        return now < end;
-    }
-
-    static char peek(){
-        return (now + 1 <= end)? now[1] : '\0'; 
-    }
-
-    static char peek(const size_t n){
-        return (now + n <= end)? now[n] : '\0'; 
-    }
-
-    static bool consume(const size_t offset = 1){
-        if ( end - now < offset )
+bool Lexer::isPunctuation(char c) {
+    switch (c) {
+        case '(': case ')':
+        case '[': case ']':
+        case '{': case '}':
+        case '+': case '-': case '*': case '/': case '%':
+        case '=': case '<': case '>': case '!':
+        case '&': case '|': case '^': case '~':
+        case '?': case ':': case ';': case ',': case '.':
+        case '"': case '\'': case '\\': case '#': case '@': case '`':
+            return true;
+        default:
             return false;
-        now += offset;
+    }
+}
+
+bool Lexer::isOpen() const {
+    return now < end;
+}
+
+char Lexer::peek() const {
+    return (now + 1 <= end) ? now[1] : '\0';
+}
+
+char Lexer::peek(size_t n) const {
+    return (now + n <= end) ? now[n] : '\0';
+}
+
+bool Lexer::consume(size_t offset) {
+    if (end - now < offset)
+        return false;
+    now += offset;
+    return true;
+}
+
+bool Lexer::match(std::string_view must) {
+    if (end - now < must.size())
+        return false;
+    std::string_view rest{now, end};
+    if (rest.starts_with(must)) {
+        now += must.size();
         return true;
     }
+    return false;
+}
 
-    static bool match(const std::string_view must){
-        if ( end - now < must.size() )
-            return false;
-        std::string_view rest {now, end };
-        if (rest.starts_with(must)){
-            now += must.size();
-            return true;
-        }
-        return false;
-
+std::string Lexer::getErrorMsg() const {
+    std::string locationPrefix = "[error]: at" + file->path + ":" + loc.toString() + ": ";
+    switch (err) {
+        case ErrorKind::Success:          return "";
+        case ErrorKind::UnexpectedToken:  return locationPrefix + "Unexpected token found.";
+        case ErrorKind::MissingSemicolon: return locationPrefix + "Missing semicolon ';'.";
+        case ErrorKind::InvalidNumber:    return locationPrefix + "Invalid number format.";
+        case ErrorKind::UnexpectedEOF:    return locationPrefix + "Unexpected End of File (EOF).";
     }
+    return locationPrefix + "Unknown parser error.";
+}
 
-    static void singleComment() {
-        const auto before = now - 2;
-        while (Open()) {
-            if (*now == '\n'){
-                loc.col = 1;
-                loc.line++;
-                break;
-            }
+void Lexer::singleComment() {
+    const auto before = now - 2;
+    while (isOpen()) {
+        if (*now == '\n') {
+            loc.col = 1;
+            loc.line++;
+            break;
+        }
+        loc.col++;
+        now++;
+    }
+    tokens.emplace(Span{gId, static_cast<uint32_t>(before - start), static_cast<uint32_t>(now - start)}, TokenKind::Comments);
+}
+
+void Lexer::singleDoc() {
+    const auto before = now - 3;
+    while (isOpen()) {
+        if (*now == '\n') {
+            loc.col = 1;
+            loc.line++;
+            break;
+        }
+        loc.col++;
+        now++;
+    }
+    tokens.emplace(Span{gId, static_cast<uint32_t>(before - start), static_cast<uint32_t>(now - start)}, TokenKind::Docs);
+}
+
+void Lexer::multiComment() {
+    const auto before = now - 2;
+    while (isOpen()) {
+        if (*now == '*' && peek() == '/') {
+            now += 2;
+            tokens.emplace(Span{gId, static_cast<uint32_t>(before - start), static_cast<uint32_t>(now - start)}, TokenKind::Comments);
+            return;
+        }
+        if (*now == '\n') {
+            loc.col = 1;
+            loc.line++;
+        } else {
             loc.col++;
         }
-        tokens.emplace(Span{gId, static_cast<uint32_t>(before - start), static_cast<uint32_t>(now - start)}, TokenKind::Comments );
-
+        now++;
     }
+    err = ErrorKind::UnexpectedEOF;
+}
 
-    static void singleDoc(){
-
-    }
-
-    static void multiComment(){
-
-    }
-
-    static void multiDoc(){
-
-    }
-
-    static void processNumber(){
-
-    }
-
-    static void processString(){
-
-    }
-
-    static void processIdentifier(){
-
-    }
-
-    
-
-    auto tokenize(const FileId id) -> infra::util::Result<TokenStream>{
-        gId = id;
-        if ( auto i = SourceMap::get(id) ) {
-            file = &i.value().get();
+void Lexer::multiDoc() {
+    const auto before = now - 3;
+    while (isOpen()) {
+        if (*now == '*' && peek() == '/') {
+            now += 2;
+            tokens.emplace(Span{gId, static_cast<uint32_t>(before - start), static_cast<uint32_t>(now - start)}, TokenKind::Docs);
+            return;
         }
-
-        if (!file)
-            return infra::util::Error{"[error] Couldnt find the file"};
-
-        const auto content = file->getSlice();
-        start = now = content.data();
-        end = content.data() + content.size();
-        
-        while( Open() ){
-
-            if ( match("//") )
-                singleComment();
-
-            if ( match("///") )
-                singleDoc();
-
-            if ( match("/*") )
-                multiComment();
-
-            if ( match("/**") )
-                multiDoc();
-
-            if ( *now == '"')
-                processString();
-
-            if ( std::isspace(*now) )
-                consume(1);
-
-            if ( isNum(*now) )
-                processNumber();
+        if (*now == '\n') {
+            loc.col = 1;
+            loc.line++;
+        } else {
+            loc.col++;
         }
-        tokens.emplace(Span{id,loc.line,loc.col}, TokenKind::End);
-        return TokenStream{};
-
-        //return {nullptr, 0, 0, 0};
+        now++;
     }
+    err = ErrorKind::UnexpectedEOF;
+}
 
-    static const char* token_kind_name(TokenKind k) noexcept {
-        switch (k) {
-            case TokenKind::Identifier:   return "Identifier";
-            case TokenKind::As:           return "As";
-            case TokenKind::Using:        return "Using";
-            case TokenKind::Type:         return "Type";
-            case TokenKind::Struct:       return "Struct";
-            case TokenKind::Raw:          return "Raw";
-            case TokenKind::Must:         return "Must";
-            case TokenKind::Mutable:      return "Mutable";
-            case TokenKind::Trait:        return "Trait";
-            case TokenKind::Interface:    return "Interface";
-            case TokenKind::Typedef:      return "Typedef";
-            case TokenKind::Implement:    return "Implement";
-            case TokenKind::Fn:           return "Fn";
-            case TokenKind::Module:       return "Module";
-            case TokenKind::Extern:       return "Extern";
-            case TokenKind::Macro:        return "Macro";
-            case TokenKind::Context:      return "Context";
-            case TokenKind::Variable:     return "Variable";
-            case TokenKind::Ownership:    return "Ownership";
-            case TokenKind::Yield:        return "Yield";
-            case TokenKind::Label:        return "Label";
-            case TokenKind::Visibility:   return "Visibility";
-            case TokenKind::If:           return "If";
-            case TokenKind::For:          return "For";
-            case TokenKind::In:           return "In";
-            case TokenKind::Match:        return "Match";
-            case TokenKind::Control:      return "Control";
-            case TokenKind::Scene:        return "Scene";
-            case TokenKind::Thread:       return "Thread";
-            case TokenKind::Error:        return "Error";
-            case TokenKind::Drop:         return "Drop";
-            case TokenKind::Require:      return "Require";
-            case TokenKind::Is:           return "Is";
-            case TokenKind::Word:         return "Word";
-            case TokenKind::Logical:      return "Logical";
-            case TokenKind::Comparision:  return "Comparision";
-            case TokenKind::Operators:    return "Operators";
-            case TokenKind::Comments:     return "Comments";
-            case TokenKind::Docs:         return "Docs";
-            case TokenKind::Annotation:   return "Annotation";
-            case TokenKind::Punctuation:  return "Punctuation";
-            case TokenKind::LitVal:       return "LitVal";
-            case TokenKind::Unknown:      return "Unknown";
-            case TokenKind::End:          return "End";
+void Lexer::processNumber() {
+    const auto before = now;
+
+    if (*now == '0' && now + 1 < end) {
+        const char nxt = *(now + 1);
+        if (nxt == 'x' || nxt == 'X') {
+            now += 2;
+            while (now < end && (isNum(*now) || (*now >= 'a' && *now <= 'f') || (*now >= 'A' && *now <= 'F'))) {
+                loc.col++;
+                now++;
+            }
+            tokens.emplace(Span{gId, static_cast<uint32_t>(before - start), static_cast<uint32_t>(now - start)}, TokenKind::LitVal);
+            return;
         }
-        return "???";
-    }
-
-    void print_tokens(const TokenStream& stream, std::string_view source) noexcept {
-        for (uint32_t i = 0; i < stream.len; ++i) {
-            const auto& tok = stream.src[i];
-            auto lexeme = TokenStream::getLexeme(tok, source);
-            printf("  %-16s \"%.*s\"  [%u..%u]\n",
-                   token_kind_name(tok.kind),
-                   (int)lexeme.size(), lexeme.data(),
-                   tok.span.start, tok.span.end);
+        if (nxt == 'c' || nxt == 'C') {
+            now += 2;
+            while (now < end && *now >= '0' && *now <= '7') {
+                loc.col++;
+                now++;
+            }
+            tokens.emplace(Span{gId, static_cast<uint32_t>(before - start), static_cast<uint32_t>(now - start)}, TokenKind::LitVal);
+            return;
+        }
+        if (nxt == 'b' || nxt == 'B') {
+            now += 2;
+            while (now < end && (*now == '0' || *now == '1')) {
+                loc.col++;
+                now++;
+            }
+            tokens.emplace(Span{gId, static_cast<uint32_t>(before - start), static_cast<uint32_t>(now - start)}, TokenKind::LitVal);
+            return;
         }
     }
+
+    while (now < end && isNum(*now)) {
+        loc.col++;
+        now++;
+    }
+
+    if (now < end && *now == '.' && now + 1 < end && isNum(*(now + 1))) {
+        now++;
+        loc.col++;
+        while (now < end && isNum(*now)) {
+            loc.col++;
+            now++;
+        }
+    }
+
+    tokens.emplace(Span{gId, static_cast<uint32_t>(before - start), static_cast<uint32_t>(now - start)}, TokenKind::LitVal);
+}
+
+void Lexer::processString() {
+    const auto before = now;
+    const char quote = *now;
+    now++;
+    loc.col++;
+
+    while (isOpen()) {
+        if (*now == quote) {
+            now++;
+            loc.col++;
+            tokens.emplace(Span{gId, static_cast<uint32_t>(before - start), static_cast<uint32_t>(now - start)}, TokenKind::LitVal);
+            return;
+        }
+        if (*now == '\\') {
+            now++;
+            loc.col++;
+            if (!isOpen()) break;
+        }
+        if (*now == '\n') {
+            loc.line++;
+            loc.col = 1;
+        } else {
+            loc.col++;
+        }
+        now++;
+    }
+
+    err = ErrorKind::UnexpectedEOF;
+}
+
+void Lexer::processIdentifier() {
+    const auto before = now;
+    while (now < end && (std::isalnum(*now) || *now == '_')) {
+        loc.col++;
+        now++;
+    }
+    std::string_view word{before, static_cast<size_t>(now - before)};
+    TokenKind kind = lookup_keyword(word);
+    tokens.emplace(Span{gId, static_cast<uint32_t>(before - start), static_cast<uint32_t>(now - start)}, kind);
+}
+
+Lexer::Lexer()
+    : tokens(infra::alloc::SessionArena) {}
+
+auto Lexer::run(FileId id) -> infra::util::Result<TokenStream> {
+    err = ErrorKind::Success;
+    gId = id;
+
+    if (auto i = SourceMap::get(id)) {
+        file = &i.value().get();
+    }
+
+    if (!file)
+        return infra::util::Error{"[error] Couldnt find the file"};
+
+    const auto content = file->getSlice();
+    start = now = content.data();
+    end = content.data() + content.size();
+    loc = {1, 1};
+
+    while (isOpen()) {
+
+        if (std::isspace(*now)) {
+            if (*now == '\n') {
+                loc.line++;
+                loc.col = 1;
+            } else {
+                loc.col++;
+            }
+            now++;
+            continue;
+        }
+
+        if (match("///")) {
+            singleDoc();
+            continue;
+        }
+
+        if (match("//")) {
+            singleComment();
+            continue;
+        }
+
+        if (match("/**")) {
+            multiDoc();
+            continue;
+        }
+
+        if (match("/*")) {
+            multiComment();
+            continue;
+        }
+
+        if (*now == '"' || *now == '\'') {
+            processString();
+            continue;
+        }
+
+        if (isNum(*now)) {
+            processNumber();
+            continue;
+        }
+
+        if (std::isalpha(*now) || *now == '_') {
+            processIdentifier();
+            continue;
+        }
+
+        if (isPunctuation(*now)) {
+            const auto before = now;
+            loc.col++;
+            now++;
+            tokens.emplace(Span{gId, static_cast<uint32_t>(before - start), static_cast<uint32_t>(now - start)}, TokenKind::Punctuation);
+            continue;
+        }
+
+        {
+            const auto before = now;
+            loc.col++;
+            now++;
+            tokens.emplace(Span{gId, static_cast<uint32_t>(before - start), static_cast<uint32_t>(now - start)}, TokenKind::Unknown);
+        }
+    }
+
+    tokens.emplace(Span{gId, static_cast<uint32_t>(now - start), static_cast<uint32_t>(now - start)}, TokenKind::End);
+
+    if (err != ErrorKind::Success)
+        return infra::util::Error{getErrorMsg()};
+
+    return TokenStream{tokens.data(), static_cast<uint32_t>(tokens.size()), 0};
+}
+
+auto tokenize(FileId id) -> infra::util::Result<TokenStream> {
+    Lexer lexer;
+    return lexer.run(id);
+}
+
+const char* tokenKindName(TokenKind k) noexcept {
+    switch (k) {
+        case TokenKind::Identifier:   return "Identifier";
+        case TokenKind::As:           return "As";
+        case TokenKind::Using:        return "Using";
+        case TokenKind::Type:         return "Type";
+        case TokenKind::Struct:       return "Struct";
+        case TokenKind::Raw:          return "Raw";
+        case TokenKind::Must:         return "Must";
+        case TokenKind::Mutable:      return "Mutable";
+        case TokenKind::Trait:        return "Trait";
+        case TokenKind::Interface:    return "Interface";
+        case TokenKind::Typedef:      return "Typedef";
+        case TokenKind::Implement:    return "Implement";
+        case TokenKind::Fn:           return "Fn";
+        case TokenKind::Module:       return "Module";
+        case TokenKind::Extern:       return "Extern";
+        case TokenKind::Macro:        return "Macro";
+        case TokenKind::Context:      return "Context";
+        case TokenKind::Variable:     return "Variable";
+        case TokenKind::Ownership:    return "Ownership";
+        case TokenKind::Yield:        return "Yield";
+        case TokenKind::Label:        return "Label";
+        case TokenKind::Visibility:   return "Visibility";
+        case TokenKind::If:           return "If";
+        case TokenKind::For:          return "For";
+        case TokenKind::In:           return "In";
+        case TokenKind::Match:        return "Match";
+        case TokenKind::Control:      return "Control";
+        case TokenKind::Scene:        return "Scene";
+        case TokenKind::Thread:       return "Thread";
+        case TokenKind::Error:        return "Error";
+        case TokenKind::Drop:         return "Drop";
+        case TokenKind::Require:      return "Require";
+        case TokenKind::Is:           return "Is";
+        case TokenKind::Word:         return "Word";
+        case TokenKind::Logical:      return "Logical";
+        case TokenKind::Comparision:  return "Comparision";
+        case TokenKind::Operators:    return "Operators";
+        case TokenKind::Comments:     return "Comments";
+        case TokenKind::Docs:         return "Docs";
+        case TokenKind::Annotation:   return "Annotation";
+        case TokenKind::Punctuation:  return "Punctuation";
+        case TokenKind::LitVal:       return "LitVal";
+        case TokenKind::Unknown:      return "Unknown";
+        case TokenKind::End:          return "End";
+    }
+    return "???";
+}
+
+void printTokens(const TokenStream& stream, std::string_view source) noexcept {
+    for (uint32_t i = 0; i < stream.len; ++i) {
+        const auto& tok = stream.src[i];
+        auto lexeme = TokenStream::getLexeme(tok, source);
+        printf("  %-16s \"%.*s\"  [%u..%u]\n",
+               tokenKindName(tok.kind),
+               (int)lexeme.size(), lexeme.data(),
+               tok.span.start, tok.span.end);
+    }
+}
 
 }

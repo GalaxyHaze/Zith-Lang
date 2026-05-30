@@ -1,0 +1,41 @@
+#pragma once
+
+#include "middleend/hir/hir-types.hpp"
+#include <cstdint>
+#include <variant>
+#include <vector>
+
+namespace zith::middleend::mir {
+
+    using ValueId = uint32_t;
+    using BlockId = uint32_t;
+
+    inline constexpr ValueId kInvalidValue = ~ValueId{0};
+    inline constexpr BlockId kInvalidBlock = ~BlockId{0};
+
+    enum class MirOpcode : uint8_t {
+        Nop, Mov, Add, Sub, Mul, Div, Rem,
+        And, Or, Xor, Shl, Shr,
+        CmpEq, CmpNe, CmpLt, CmpLe, CmpGt, CmpGe,
+        Load, Store, Alloca,
+        Call, Ret, Jmp, Br, Phi
+    };
+
+    struct MirOperand {
+        ValueId value;
+        bool is_immediate = false;
+    };
+
+    struct MirInst {
+        MirOpcode opcode;
+        hir::HirTypeId type;
+        std::vector<MirOperand> operands;
+    };
+
+    struct MirBasicBlock {
+        BlockId id;
+        std::vector<MirInst> insts;
+        MirInst terminator;
+    };
+
+}

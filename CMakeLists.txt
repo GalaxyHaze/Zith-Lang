@@ -38,3 +38,18 @@ target_include_directories(zith PRIVATE
 
 # Vincula o 'mio' ao seu projeto (ele adiciona os includes automaticamente)
 target_link_libraries(zith PRIVATE mio)
+
+# --- Testes Unitários ---
+
+function(add_zith_test NAME SOURCE)
+    add_executable(${NAME} ${SOURCE})
+    target_include_directories(${NAME} PRIVATE src)
+    target_link_libraries(${NAME} PRIVATE mio)
+    set_target_properties(${NAME} PROPERTIES FOLDER "tests")
+endfunction()
+
+add_zith_test(zith-lexer-test  tests/unit/lexer-tokens.cpp)
+add_zith_test(zith-parser-expr  tests/unit/parser-expr.cpp)
+add_zith_test(zith-parser-stmt  tests/unit/parser-stmt.cpp)
+add_zith_test(zith-sema-test    tests/unit/sema-basics.cpp)
+add_zith_test(zith-mir-test     tests/unit/mir-lowering.cpp)
