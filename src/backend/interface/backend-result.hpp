@@ -1,6 +1,7 @@
 #pragma once
 
 #include "diagnostics/engine/diagnostic-engine.hpp"
+
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -14,4 +15,4 @@ namespace zith::backend::interface_ {
         diagnostics::engine::DiagnosticEngine diagnostics;
     };
 
-}
+} // namespace zith::backend::interface_

@@ -1,16 +1,17 @@
 #include "infra/interner/string-interner.hpp"
+
 #include <cstring>
 
 namespace zith::infra::interner {
 
-    StringInterner::StringInterner(infra::alloc::Arena& arena)
-        : arena_(&arena), strings_(arena) {}
+    StringInterner::StringInterner(infra::alloc::Arena &arena) : arena_(&arena), strings_(arena) {}
 
     InternedId StringInterner::intern(std::string_view str) {
         auto it = map_.find(str);
-        if (it != map_.end()) return it->second;
+        if (it != map_.end())
+            return it->second;
 
-        auto* copy = static_cast<char*>(arena_->alloc(str.size() + 1, 1));
+        auto *copy = static_cast<char *>(arena_->alloc(str.size() + 1, 1));
         std::memcpy(copy, str.data(), str.size());
         copy[str.size()] = '\0';
 
@@ -21,8 +22,9 @@ namespace zith::infra::interner {
     }
 
     std::string_view StringInterner::lookup(InternedId id) const {
-        if (id >= strings_.size()) return {};
+        if (id >= strings_.size())
+            return {};
         return strings_[id];
     }
 
-}
+} // namespace zith::infra::interner

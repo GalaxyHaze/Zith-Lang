@@ -1,6 +1,7 @@
 #pragma once
 
 #include "middleend/hir/hir-types.hpp"
+
 #include <cstdint>
 #include <variant>
 #include <vector>
@@ -14,11 +15,32 @@ namespace zith::middleend::mir {
     inline constexpr BlockId kInvalidBlock = ~BlockId{0};
 
     enum class MirOpcode : uint8_t {
-        Nop, Mov, Add, Sub, Mul, Div, Rem,
-        And, Or, Xor, Shl, Shr,
-        CmpEq, CmpNe, CmpLt, CmpLe, CmpGt, CmpGe,
-        Load, Store, Alloca,
-        Call, Ret, Jmp, Br, Phi
+        Nop,
+        Mov,
+        Add,
+        Sub,
+        Mul,
+        Div,
+        Rem,
+        And,
+        Or,
+        Xor,
+        Shl,
+        Shr,
+        CmpEq,
+        CmpNe,
+        CmpLt,
+        CmpLe,
+        CmpGt,
+        CmpGe,
+        Load,
+        Store,
+        Alloca,
+        Call,
+        Ret,
+        Jmp,
+        Br,
+        Phi
     };
 
     struct MirOperand {
@@ -38,4 +60,4 @@ namespace zith::middleend::mir {
         MirInst terminator;
     };
 
-}
+} // namespace zith::middleend::mir

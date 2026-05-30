@@ -1,16 +1,19 @@
 #include "emitter.hpp"
+
 #include <cstdio>
 
 namespace zith::diagnostics::engine {
 
-    Emitter::Emitter(const DiagnosticEngine& engine)
-        : engine_(&engine) {}
+    Emitter::Emitter(const DiagnosticEngine &engine) : engine_(&engine) {}
 
     void Emitter::emit() const {
-        for (auto& d : engine_->all()) {
-            std::fprintf(stderr, "[%s] %s\n",
-                d.isError() ? "ERROR" : d.isWarning() ? "WARN" : "NOTE",
-                d.message.c_str());
+        for (auto &d : engine_->all()) {
+            std::fprintf(stderr,
+                         "[%s] %s\n",
+                         d.isError()     ? "ERROR"
+                         : d.isWarning() ? "WARN"
+                                         : "NOTE",
+                         d.message.c_str());
         }
     }
 
@@ -19,4 +22,4 @@ namespace zith::diagnostics::engine {
         emit();
     }
 
-}
+} // namespace zith::diagnostics::engine

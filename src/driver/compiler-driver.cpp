@@ -2,15 +2,15 @@
 
 namespace zith::driver {
 
-    int CompilerDriver::compileFile(const std::string& path) {
+    int CompilerDriver::compileFile(const std::string &path) {
         Options opts;
         opts.input_files.push_back(path);
         return compileWithOptions(opts);
     }
 
-    int CompilerDriver::compileWithOptions(const Options& opts) {
+    int CompilerDriver::compileWithOptions(const Options &opts) {
         CompilationSession session(opts);
         return session.run();
     }
 
-}
+} // namespace zith::driver

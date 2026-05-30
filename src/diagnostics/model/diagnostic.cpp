@@ -10,4 +10,4 @@ namespace zith::diagnostics::model {
         return severity == Severity::Warning;
     }
 
-}
+} // namespace zith::diagnostics::model

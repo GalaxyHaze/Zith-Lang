@@ -12,4 +12,4 @@ namespace zith::middleend::sema {
         symbols::SymbolTable symbols;
     };
 
-}
+} // namespace zith::middleend::sema

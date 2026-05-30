@@ -11,8 +11,8 @@ namespace zith::infra::alloc {
         static constexpr size_t default_block_size = 4096;
 
         struct Block {
-            Block* next = nullptr;
-            Block* prev = nullptr;
+            Block *next = nullptr;
+            Block *prev = nullptr;
             size_t size = 0; // usable data size (not including Block header)
         };
 
@@ -22,34 +22,37 @@ namespace zith::infra::alloc {
             addBlock_(block_size_);
         }
 
-        ~Arena() noexcept { clear(); }
-
-        Arena(const Arena&) = delete;
-        auto operator=(const Arena&) = delete;
-
-        Arena(Arena&& other) noexcept
-            : head_(other.head_), current_(other.current_),
-              offset_(other.offset_), block_size_(other.block_size_) {
-            other.head_ = nullptr;
-            other.current_ = nullptr;
-            other.offset_ = 0;
+        ~Arena() noexcept {
+            clear();
         }
 
-        auto operator=(Arena&& other) noexcept -> Arena& {
+        Arena(const Arena &)          = delete;
+        auto operator=(const Arena &) = delete;
+
+        Arena(Arena &&other) noexcept :
+            head_(other.head_), current_(other.current_), offset_(other.offset_),
+            block_size_(other.block_size_) {
+            other.head_    = nullptr;
+            other.current_ = nullptr;
+            other.offset_  = 0;
+        }
+
+        auto operator=(Arena &&other) noexcept -> Arena & {
             if (this != &other) {
                 clear();
-                head_ = other.head_;
-                current_ = other.current_;
-                offset_ = other.offset_;
-                block_size_ = other.block_size_;
-                other.head_ = nullptr;
+                head_          = other.head_;
+                current_       = other.current_;
+                offset_        = other.offset_;
+                block_size_    = other.block_size_;
+                other.head_    = nullptr;
                 other.current_ = nullptr;
-                other.offset_ = 0;
+                other.offset_  = 0;
             }
             return *this;
         }
 
-        [[nodiscard]] auto alloc(size_t size, size_t alignment = alignof(std::max_align_t)) -> void* {
+        [[nodiscard]] auto alloc(size_t size, size_t alignment = alignof(std::max_align_t))
+                -> void * {
             size_t aligned_offset = alignUp_(offset_, alignment);
 
             if (!current_ || aligned_offset + size > current_->size) {
@@ -61,16 +64,15 @@ namespace zith::infra::alloc {
             return data_(current_) + aligned_offset;
         }
 
-        template<typename T, typename... Args>
-        [[nodiscard]] auto make(Args&&... args) -> T* {
-            auto* ptr = static_cast<T*>(alloc(sizeof(T), alignof(T)));
+        template <typename T, typename... Args> [[nodiscard]] auto make(Args &&...args) -> T * {
+            auto *ptr = static_cast<T *>(alloc(sizeof(T), alignof(T)));
             if (ptr) {
                 ::new (ptr) T(std::forward<Args>(args)...);
             }
             return ptr;
         }
 
-        [[nodiscard]] auto ptr() const noexcept -> const void* {
+        [[nodiscard]] auto ptr() const noexcept -> const void * {
             return data_(current_) + offset_;
         }
 
@@ -79,23 +81,23 @@ namespace zith::infra::alloc {
         }
 
         void clear() noexcept {
-            auto* block = head_;
+            auto *block = head_;
             while (block) {
-                auto* next = block->next;
+                auto *next = block->next;
                 ::operator delete(block, std::align_val_t(alignof(Block)));
                 block = next;
             }
-            head_ = nullptr;
+            head_    = nullptr;
             current_ = nullptr;
-            offset_ = 0;
+            offset_  = 0;
         }
 
         friend class MarkPoint;
 
     private:
-        Block* head_ = nullptr;
-        Block* current_ = nullptr;
-        size_t offset_ = 0;
+        Block *head_       = nullptr;
+        Block *current_    = nullptr;
+        size_t offset_     = 0;
         size_t block_size_ = default_block_size;
 
         void addBlock_(size_t min_size) {
@@ -103,10 +105,10 @@ namespace zith::infra::alloc {
                 min_size = block_size_;
             }
             size_t total = sizeof(Block) + min_size;
-            auto* mem = ::operator new(total, std::align_val_t(alignof(Block)));
-            auto* block = ::new (mem) Block{};
-            block->size = min_size;
-            block->prev = current_;
+            auto *mem    = ::operator new(total, std::align_val_t(alignof(Block)));
+            auto *block  = ::new (mem) Block{};
+            block->size  = min_size;
+            block->prev  = current_;
 
             if (current_) {
                 current_->next = block;
@@ -114,11 +116,11 @@ namespace zith::infra::alloc {
                 head_ = block;
             }
             current_ = block;
-            offset_ = 0;
+            offset_  = 0;
         }
 
-        static auto data_(Block* block) noexcept -> char* {
-            return reinterpret_cast<char*>(block) + sizeof(Block);
+        static auto data_(Block *block) noexcept -> char * {
+            return reinterpret_cast<char *>(block) + sizeof(Block);
         }
 
         static auto alignUp_(size_t value, size_t alignment) noexcept -> size_t {
@@ -131,13 +133,13 @@ namespace zith::infra::alloc {
     inline thread_local Arena TestArena;
 
     class MarkPoint {
-        Arena* arena_ = nullptr;
-        Arena::Block* block_ = nullptr;
-        size_t offset_ = 0;
+        Arena *arena_        = nullptr;
+        Arena::Block *block_ = nullptr;
+        size_t offset_       = 0;
 
     public:
-        explicit MarkPoint(Arena& arena) noexcept
-            : arena_(&arena), block_(arena.current_), offset_(arena.offset_) {}
+        explicit MarkPoint(Arena &arena) noexcept :
+            arena_(&arena), block_(arena.current_), offset_(arena.offset_) {}
 
         ~MarkPoint() noexcept {
             if (arena_) {
@@ -145,47 +147,48 @@ namespace zith::infra::alloc {
             }
         }
 
-        MarkPoint(const MarkPoint&) = delete;
-        auto operator=(const MarkPoint&) = delete;
+        MarkPoint(const MarkPoint &)      = delete;
+        auto operator=(const MarkPoint &) = delete;
 
-        MarkPoint(MarkPoint&& other) noexcept
-            : arena_(other.arena_), block_(other.block_), offset_(other.offset_) {
+        MarkPoint(MarkPoint &&other) noexcept :
+            arena_(other.arena_), block_(other.block_), offset_(other.offset_) {
             other.arena_ = nullptr;
         }
 
-        auto operator=(MarkPoint&& other) noexcept -> MarkPoint& {
+        auto operator=(MarkPoint &&other) noexcept -> MarkPoint & {
             if (this != &other) {
                 if (arena_) {
                     rollback();
                 }
-                arena_ = other.arena_;
-                block_ = other.block_;
-                offset_ = other.offset_;
+                arena_       = other.arena_;
+                block_       = other.block_;
+                offset_      = other.offset_;
                 other.arena_ = nullptr;
             }
             return *this;
         }
 
         void rollback() noexcept {
-            auto* arena = arena_;
-            arena_ = nullptr;
-            if (!arena) return;
+            auto *arena = arena_;
+            arena_      = nullptr;
+            if (!arena)
+                return;
 
-            auto* block = block_;
+            auto *block = block_;
             auto offset = offset_;
 
-            auto* to_free = block ? block->next : arena->head_;
+            auto *to_free = block ? block->next : arena->head_;
             while (to_free) {
-                auto* next = to_free->next;
+                auto *next = to_free->next;
                 ::operator delete(to_free, std::align_val_t(alignof(Arena::Block)));
                 to_free = next;
             }
 
             if (block) {
-                block->next = nullptr;
+                block->next     = nullptr;
                 arena->current_ = block;
             } else {
-                arena->head_ = nullptr;
+                arena->head_    = nullptr;
                 arena->current_ = nullptr;
             }
 

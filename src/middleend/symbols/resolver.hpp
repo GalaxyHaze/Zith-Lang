@@ -7,13 +7,14 @@
 namespace zith::middleend::symbols {
 
     class Resolver {
-        SymbolTable& syms_;
-        frontend::ast::AstBuilder& builder_;
-        diagnostics::engine::DiagnosticEngine& diags_;
+        SymbolTable &syms_;
+        frontend::ast::AstBuilder &builder_;
+        diagnostics::engine::DiagnosticEngine &diags_;
 
     public:
-        Resolver(SymbolTable& syms, frontend::ast::AstBuilder& builder,
-                 diagnostics::engine::DiagnosticEngine& diags);
+        Resolver(SymbolTable &syms,
+                 frontend::ast::AstBuilder &builder,
+                 diagnostics::engine::DiagnosticEngine &diags);
 
         void resolveProgram(frontend::ast::DeclId program);
 
@@ -23,4 +24,4 @@ namespace zith::middleend::symbols {
         void resolveExpr(frontend::ast::ExprId id);
     };
 
-}
+} // namespace zith::middleend::symbols

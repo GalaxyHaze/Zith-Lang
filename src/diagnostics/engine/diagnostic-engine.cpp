@@ -6,14 +6,17 @@ namespace zith::diagnostics::engine {
         diagnostics_.push_back(std::move(diag));
     }
 
-    void DiagnosticEngine::report(model::Severity sev, uint32_t code,
-                                    std::string msg, frontend::Span span) {
+    void DiagnosticEngine::report(model::Severity sev,
+                                  uint32_t code,
+                                  std::string msg,
+                                  frontend::Span span) {
         diagnostics_.push_back({sev, code, std::move(msg), span, {}});
     }
 
     bool DiagnosticEngine::hasErrors() const noexcept {
-        for (auto& d : diagnostics_)
-            if (d.isError()) return true;
+        for (auto &d : diagnostics_)
+            if (d.isError())
+                return true;
         return false;
     }
 
@@ -25,4 +28,4 @@ namespace zith::diagnostics::engine {
         diagnostics_.clear();
     }
 
-}
+} // namespace zith::diagnostics::engine

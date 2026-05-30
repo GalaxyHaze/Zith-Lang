@@ -1,6 +1,7 @@
 #pragma once
 
 #include "frontend/source/span.hpp"
+
 #include <string>
 #include <vector>
 
@@ -16,4 +17,4 @@ namespace zith::diagnostics::model {
         std::string message;
     };
 
-}
+} // namespace zith::diagnostics::model

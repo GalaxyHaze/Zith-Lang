@@ -10,7 +10,7 @@ namespace zith::middleend::types {
         infra::collections::DynArray<TypeData> types_;
 
     public:
-        explicit TypeIntern(infra::alloc::Arena& arena);
+        explicit TypeIntern(infra::alloc::Arena &arena);
 
         TypeId intern(TypeData data);
         TypeId internInt(IntWidth w);
@@ -19,8 +19,8 @@ namespace zith::middleend::types {
         TypeId internArray(TypeId elem, uint32_t count);
         TypeId internFn(std::vector<TypeId> params, TypeId ret);
 
-        const TypeData& lookup(TypeId id) const;
+        const TypeData &lookup(TypeId id) const;
         TypeKind kindOf(TypeId id) const;
     };
 
-}
+} // namespace zith::middleend::types

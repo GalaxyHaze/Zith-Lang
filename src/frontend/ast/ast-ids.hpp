@@ -31,4 +31,4 @@ namespace zith::frontend::ast {
     inline constexpr StmtId kInvalidStmt = ~StmtId{0};
     inline constexpr DeclId kInvalidDecl = ~DeclId{0};
 
-}
+} // namespace zith::frontend::ast

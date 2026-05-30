@@ -1,14 +1,15 @@
 #include "options.hpp"
+
 #include <cstdio>
 #include <cstring>
 
 namespace zith::driver {
 
-    Options parseArgs(int argc, char** argv) {
+    Options parseArgs(int argc, char **argv) {
         Options opts;
         for (int i = 1; i < argc; ++i) {
             if (std::strcmp(argv[i], "--tokens") == 0) {
-                opts.emit_tokens = true;
+                opts.emit_tokens  = true;
                 opts.print_tokens = true;
             } else if (std::strcmp(argv[i], "--emit-ast") == 0) {
                 opts.emit_ast = true;
@@ -25,4 +26,4 @@ namespace zith::driver {
         return opts;
     }
 
-}
+} // namespace zith::driver

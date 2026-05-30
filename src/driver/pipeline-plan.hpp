@@ -17,10 +17,10 @@ namespace zith::driver {
 
     struct PipelinePlan {
         Stage current = Stage::Source;
-        Stage target = Stage::Compiled;
+        Stage target  = Stage::Compiled;
 
         bool shouldStop() const noexcept;
         void advance() noexcept;
     };
 
-}
+} // namespace zith::driver

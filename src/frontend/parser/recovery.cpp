@@ -2,10 +2,11 @@
 
 namespace zith::frontend::parser::recovery {
 
-    void panic(lexer::TokenStream& stream, SyncSet sync_tokens) {
+    void panic(lexer::TokenStream &stream, SyncSet sync_tokens) {
         while (!stream.is_empty()) {
             for (auto tk : sync_tokens) {
-                if (stream.peek().is(tk)) return;
+                if (stream.peek().is(tk))
+                    return;
             }
             stream.advance();
         }
@@ -21,4 +22,4 @@ namespace zith::frontend::parser::recovery {
         }
     }
 
-}
+} // namespace zith::frontend::parser::recovery

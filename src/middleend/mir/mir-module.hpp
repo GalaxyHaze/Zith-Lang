@@ -3,6 +3,7 @@
 #include "infra/alloc/arena.hpp"
 #include "infra/collections/dyn-array.hpp"
 #include "middleend/mir/mir-inst.hpp"
+
 #include <string_view>
 #include <vector>
 
@@ -19,12 +20,12 @@ namespace zith::middleend::mir {
         infra::collections::DynArray<MirFunction> fns_;
 
     public:
-        explicit MirModule(infra::alloc::Arena& arena);
+        explicit MirModule(infra::alloc::Arena &arena);
 
-        MirFunction& addFn(std::string_view name);
-        MirFunction& getFn(size_t idx);
-        const MirFunction& getFn(size_t idx) const;
+        MirFunction &addFn(std::string_view name);
+        MirFunction &getFn(size_t idx);
+        const MirFunction &getFn(size_t idx) const;
         size_t fnCount() const noexcept;
     };
 
-}
+} // namespace zith::middleend::mir

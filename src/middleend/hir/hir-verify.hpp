@@ -6,13 +6,13 @@
 namespace zith::middleend::hir {
 
     class HirVerifier {
-        const HirModule& module_;
-        diagnostics::engine::DiagnosticEngine& diags_;
+        const HirModule &module_;
+        diagnostics::engine::DiagnosticEngine &diags_;
 
     public:
-        HirVerifier(const HirModule& module, diagnostics::engine::DiagnosticEngine& diags);
+        HirVerifier(const HirModule &module, diagnostics::engine::DiagnosticEngine &diags);
 
         bool verify();
     };
 
-}
+} // namespace zith::middleend::hir

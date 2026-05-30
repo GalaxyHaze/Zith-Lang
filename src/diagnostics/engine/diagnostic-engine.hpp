@@ -1,6 +1,7 @@
 #pragma once
 
 #include "diagnostics/model/diagnostic.hpp"
+
 #include <cstdint>
 #include <span>
 #include <vector>
@@ -19,4 +20,4 @@ namespace zith::diagnostics::engine {
         void clear();
     };
 
-}
+} // namespace zith::diagnostics::engine

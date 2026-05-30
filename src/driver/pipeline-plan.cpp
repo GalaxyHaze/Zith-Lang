@@ -10,4 +10,4 @@ namespace zith::driver {
         current = static_cast<Stage>(static_cast<uint8_t>(current) + 1);
     }
 
-}
+} // namespace zith::driver

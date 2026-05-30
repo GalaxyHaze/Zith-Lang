@@ -4,6 +4,7 @@
 #include "infra/collections/dyn-array.hpp"
 #include "middleend/hir/hir-expr.hpp"
 #include "middleend/hir/hir-types.hpp"
+
 #include <string_view>
 
 namespace zith::middleend::hir {
@@ -25,14 +26,14 @@ namespace zith::middleend::hir {
         std::vector<HirFunction> fns_;
 
     public:
-        explicit HirModule(infra::alloc::Arena& arena);
+        explicit HirModule(infra::alloc::Arena &arena);
 
         HirExprId addExpr(HirExpr expr);
-        HirFunction& addFn(std::string_view name);
-        HirFunction& getFn(size_t idx);
+        HirFunction &addFn(std::string_view name);
+        HirFunction &getFn(size_t idx);
 
-        const HirExpr& getExpr(HirExprId id) const;
-        const HirFunction& getFn(size_t idx) const;
+        const HirExpr &getExpr(HirExprId id) const;
+        const HirFunction &getFn(size_t idx) const;
     };
 
-}
+} // namespace zith::middleend::hir

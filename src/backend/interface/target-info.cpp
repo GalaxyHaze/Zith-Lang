@@ -6,4 +6,4 @@ namespace zith::backend::interface_ {
         return TargetInfo{Arch::X86_64, OS::Linux, Endian::Little, 8};
     }
 
-}
+} // namespace zith::backend::interface_

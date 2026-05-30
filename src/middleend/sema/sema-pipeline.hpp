@@ -16,11 +16,12 @@ namespace zith::middleend::sema {
         hir::HirModule hir_;
 
     public:
-        SemaPipeline(symbols::SymbolTable& syms, types::TypeIntern& types,
-                     diagnostics::engine::DiagnosticEngine& diags,
-                     frontend::ast::AstBuilder& builder);
+        SemaPipeline(symbols::SymbolTable &syms,
+                     types::TypeIntern &types,
+                     diagnostics::engine::DiagnosticEngine &diags,
+                     frontend::ast::AstBuilder &builder);
 
         SemaResult run(frontend::ast::DeclId program);
     };
 
-}
+} // namespace zith::middleend::sema

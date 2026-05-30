@@ -5,24 +5,26 @@
 #include "frontend/lexer/token.hpp"
 #include "frontend/parser/parse-result.hpp"
 #include "frontend/parser/recovery.hpp"
+
 #include <cstdint>
 
 namespace zith::frontend::parser {
 
     class Parser {
         lexer::TokenStream tokens_;
-        ast::AstBuilder& builder_;
-        diagnostics::engine::DiagnosticEngine& diags_;
+        ast::AstBuilder &builder_;
+        diagnostics::engine::DiagnosticEngine &diags_;
 
     public:
-        Parser(lexer::TokenStream tokens, ast::AstBuilder& builder,
-               diagnostics::engine::DiagnosticEngine& diags);
+        Parser(lexer::TokenStream tokens,
+               ast::AstBuilder &builder,
+               diagnostics::engine::DiagnosticEngine &diags);
 
         ProgramResult parseProgram();
 
     private:
-        [[nodiscard]] const lexer::Token& peek() const;
-        [[nodiscard]] const lexer::Token& peek(uint32_t n) const;
+        [[nodiscard]] const lexer::Token &peek() const;
+        [[nodiscard]] const lexer::Token &peek(uint32_t n) const;
         void advance();
         void advance(uint32_t n);
         bool match(lexer::TokenKind kind);
@@ -44,4 +46,4 @@ namespace zith::frontend::parser {
         int precedence(lexer::TokenKind kind) const;
     };
 
-}
+} // namespace zith::frontend::parser

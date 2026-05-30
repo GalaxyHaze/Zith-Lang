@@ -4,6 +4,7 @@
 #include "infra/collections/dyn-array.hpp"
 #include "infra/interner/string-interner.hpp"
 #include "middleend/symbols/symbol-id.hpp"
+
 #include <string_view>
 
 namespace zith::middleend::symbols {
@@ -14,12 +15,12 @@ namespace zith::middleend::symbols {
     };
 
     class SymbolTable {
-        infra::alloc::Arena* arena_;
+        infra::alloc::Arena *arena_;
         infra::collections::DynArray<Scope> scopes_;
         ScopeId current_ = kRootScope;
 
     public:
-        explicit SymbolTable(infra::alloc::Arena& arena);
+        explicit SymbolTable(infra::alloc::Arena &arena);
 
         ScopeId enterScope();
         void exitScope();
@@ -30,4 +31,4 @@ namespace zith::middleend::symbols {
         SymId lookupInScope(std::string_view name, ScopeId scope) const;
     };
 
-}
+} // namespace zith::middleend::symbols

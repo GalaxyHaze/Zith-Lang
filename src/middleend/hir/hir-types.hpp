@@ -1,6 +1,7 @@
 #pragma once
 
 #include "middleend/types/type-id.hpp"
+
 #include <cstdint>
 
 namespace zith::middleend::hir {
@@ -8,8 +9,16 @@ namespace zith::middleend::hir {
     using HirTypeId = types::TypeId;
 
     enum class HirTypeKind : uint8_t {
-        Int, Float, Bool, Char, Void, Never,
-        Ptr, Array, Struct, Fn
+        Int,
+        Float,
+        Bool,
+        Char,
+        Void,
+        Never,
+        Ptr,
+        Array,
+        Struct,
+        Fn
     };
 
-}
+} // namespace zith::middleend::hir

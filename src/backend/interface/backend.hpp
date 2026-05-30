@@ -10,9 +10,9 @@ namespace zith::backend::interface_ {
     public:
         virtual ~Backend() = default;
 
-        virtual BackendResult compile(const middleend::mir::MirModule& module,
-                                       const BackendOptions& opts) = 0;
-        virtual const char* name() const noexcept = 0;
+        virtual BackendResult compile(const middleend::mir::MirModule &module,
+                                      const BackendOptions &opts) = 0;
+        virtual const char *name() const noexcept                 = 0;
     };
 
-}
+} // namespace zith::backend::interface_

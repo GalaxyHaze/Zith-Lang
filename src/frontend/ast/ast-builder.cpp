@@ -2,8 +2,8 @@
 
 namespace zith::frontend::ast {
 
-    AstBuilder::AstBuilder(infra::alloc::Arena& arena)
-        : exprs_(arena), stmts_(arena), decls_(arena) {}
+    AstBuilder::AstBuilder(infra::alloc::Arena &arena) :
+        exprs_(arena), stmts_(arena), decls_(arena) {}
 
     ExprId AstBuilder::addExpr(ExprNode node) {
         ExprId id = static_cast<ExprId>(exprs_.size());
@@ -23,12 +23,24 @@ namespace zith::frontend::ast {
         return id;
     }
 
-    ExprNode& AstBuilder::getExpr(ExprId id) { return exprs_[id]; }
-    StmtNode& AstBuilder::getStmt(StmtId id) { return stmts_[id]; }
-    DeclNode& AstBuilder::getDecl(DeclId id) { return decls_[id]; }
-    const ExprNode& AstBuilder::getExpr(ExprId id) const { return exprs_[id]; }
-    const StmtNode& AstBuilder::getStmt(StmtId id) const { return stmts_[id]; }
-    const DeclNode& AstBuilder::getDecl(DeclId id) const { return decls_[id]; }
+    ExprNode &AstBuilder::getExpr(ExprId id) {
+        return exprs_[id];
+    }
+    StmtNode &AstBuilder::getStmt(StmtId id) {
+        return stmts_[id];
+    }
+    DeclNode &AstBuilder::getDecl(DeclId id) {
+        return decls_[id];
+    }
+    const ExprNode &AstBuilder::getExpr(ExprId id) const {
+        return exprs_[id];
+    }
+    const StmtNode &AstBuilder::getStmt(StmtId id) const {
+        return stmts_[id];
+    }
+    const DeclNode &AstBuilder::getDecl(DeclId id) const {
+        return decls_[id];
+    }
 
     LitValue AstBuilder::makeLit(LitKind kind, std::string_view raw) {
         return LitValue{kind, raw};
@@ -74,11 +86,13 @@ namespace zith::frontend::ast {
         return addStmt(RetNode{value});
     }
 
-    DeclId AstBuilder::fnDecl(std::string_view name, std::vector<std::string_view> params, ExprId body) {
+    DeclId
+    AstBuilder::fnDecl(std::string_view name, std::vector<std::string_view> params, ExprId body) {
         return addDecl(FnDeclNode{name, std::move(params), body});
     }
 
-    DeclId AstBuilder::structDecl(std::string_view name, std::vector<std::pair<std::string_view, uint32_t>> fields) {
+    DeclId AstBuilder::structDecl(std::string_view name,
+                                  std::vector<std::pair<std::string_view, uint32_t>> fields) {
         return addDecl(StructDeclNode{name, std::move(fields)});
     }
 
@@ -86,6 +100,8 @@ namespace zith::frontend::ast {
         return addDecl(ImportNode{std::move(path), alias});
     }
 
-    infra::alloc::Arena& AstBuilder::arena() { return infra::alloc::SessionArena; }
+    infra::alloc::Arena &AstBuilder::arena() {
+        return infra::alloc::SessionArena;
+    }
 
-}
+} // namespace zith::frontend::ast

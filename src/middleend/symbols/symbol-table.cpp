@@ -2,8 +2,7 @@
 
 namespace zith::middleend::symbols {
 
-    SymbolTable::SymbolTable(infra::alloc::Arena& arena)
-        : arena_(&arena), scopes_(arena) {
+    SymbolTable::SymbolTable(infra::alloc::Arena &arena) : arena_(&arena), scopes_(arena) {
         scopes_.emplace(Scope{kInvalidScope, infra::collections::DynArray<SymId>(arena)});
         current_ = kRootScope;
     }
@@ -21,7 +20,9 @@ namespace zith::middleend::symbols {
         }
     }
 
-    ScopeId SymbolTable::currentScope() const noexcept { return current_; }
+    ScopeId SymbolTable::currentScope() const noexcept {
+        return current_;
+    }
 
     SymId SymbolTable::declare(std::string_view name) {
         (void)name;
@@ -34,8 +35,9 @@ namespace zith::middleend::symbols {
     }
 
     SymId SymbolTable::lookupInScope(std::string_view name, ScopeId scope) const {
-        (void)name; (void)scope;
+        (void)name;
+        (void)scope;
         return kInvalidSym;
     }
 
-}
+} // namespace zith::middleend::symbols

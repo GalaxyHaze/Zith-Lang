@@ -37,4 +37,4 @@ namespace zith::driver {
         bool backendStage();
     };
 
-}
+} // namespace zith::driver

@@ -1,5 +1,6 @@
 #pragma once
 #include "frontend/source/span.hpp"
+
 #include <cstdint>
 #include <string_view>
 
@@ -8,7 +9,7 @@ namespace zith::frontend::lexer {
 
     enum class TokenKind : uint8_t {
         Identifier,
-        As, //as
+        As, // as
         Using,
         Type,
         Struct,
@@ -54,32 +55,39 @@ namespace zith::frontend::lexer {
     };
 
     struct Token {
-        //lexeme
+        // lexeme
         zith::frontend::Span span;
-        //type of token
+        // type of token
         TokenKind kind;
 
-        [[nodiscard]] constexpr bool is(TokenKind k) const noexcept { return kind == k; }
-        [[nodiscard]] constexpr bool is_not(TokenKind k) const noexcept { return kind != k; }
-        [[nodiscard]] constexpr bool is_eof() const noexcept { return kind == TokenKind::End; }
+        [[nodiscard]] constexpr bool is(TokenKind k) const noexcept {
+            return kind == k;
+        }
+        [[nodiscard]] constexpr bool is_not(TokenKind k) const noexcept {
+            return kind != k;
+        }
+        [[nodiscard]] constexpr bool is_eof() const noexcept {
+            return kind == TokenKind::End;
+        }
     };
 
     struct TokenStream {
-        Token* src = nullptr;
-        uint32_t len = 0;
+        Token *src      = nullptr;
+        uint32_t len    = 0;
         uint32_t offset = 0;
 
         // Retorna o token atual sem avançar o ponteiro (Lookahead)
-        [[nodiscard]] constexpr auto peek() const noexcept -> const Token& {
+        [[nodiscard]] constexpr auto peek() const noexcept -> const Token & {
             if (offset >= len) [[unlikely]] {
                 // Retorna o último elemento (que idealmente deve ser TokenKind::End)
-                return src[len - 1]; 
+                return src[len - 1];
             }
             return src[offset];
         }
 
-        // Retorna um token à frente baseado em uma distância (Lookahead arbitrário: peek(1), peek(2))
-        [[nodiscard]] constexpr auto peek(uint32_t lookahead) const noexcept -> const Token& {
+        // Retorna um token à frente baseado em uma distância (Lookahead arbitrário: peek(1),
+        // peek(2))
+        [[nodiscard]] constexpr auto peek(uint32_t lookahead) const noexcept -> const Token & {
             uint32_t target = offset + lookahead;
             if (target >= len) [[unlikely]] {
                 return src[len - 1];
@@ -99,7 +107,7 @@ namespace zith::frontend::lexer {
             offset = (offset + n > len) ? len : offset + n;
         }
 
-        // Verifica se o token atual é do tipo esperado e o avança. 
+        // Verifica se o token atual é do tipo esperado e o avança.
         // Caso contrário, não faz nada e retorna falso (Útil para branching no parser)
         constexpr bool match(TokenKind kind) noexcept {
             if (peek().is(kind)) {
@@ -109,8 +117,10 @@ namespace zith::frontend::lexer {
             return false;
         }
 
-        // Recupera o lexeme (string_view) extraindo os dados diretamente do buffer do arquivo original
-        [[nodiscard]] static auto getLexeme(const Token& token, std::string_view src) noexcept -> std::string_view {
+        // Recupera o lexeme (string_view) extraindo os dados diretamente do buffer do arquivo
+        // original
+        [[nodiscard]] static auto getLexeme(const Token &token, std::string_view src) noexcept
+                -> std::string_view {
             return src.substr(token.span.start, token.span.end - token.span.start);
         }
 
@@ -119,4 +129,4 @@ namespace zith::frontend::lexer {
             return offset >= len || peek().is_eof();
         }
     };
-}
+} // namespace zith::frontend::lexer

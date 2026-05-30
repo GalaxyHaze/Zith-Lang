@@ -3,18 +3,19 @@
 #include "backend/interface/backend-result.hpp"
 #include "backend/vm/bytecode-format.hpp"
 #include "middleend/mir/mir-module.hpp"
+
 #include <vector>
 
 namespace zith::backend::vm {
 
     class BytecodeEmitter {
-        const middleend::mir::MirModule& mir_;
+        const middleend::mir::MirModule &mir_;
         std::vector<uint8_t> buffer_;
 
     public:
-        explicit BytecodeEmitter(const middleend::mir::MirModule& mir);
+        explicit BytecodeEmitter(const middleend::mir::MirModule &mir);
 
         interface_::BackendResult emit();
     };
 
-}
+} // namespace zith::backend::vm
