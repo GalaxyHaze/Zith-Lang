@@ -3,6 +3,10 @@
 #include "frontend/lexer/token.hpp"
 #include "infra/collections/dyn-array.hpp"
 #include "infra/util/result.hpp"
+#include <string>
+#include <string_view>
+#include <utility>
+#include <variant>
 
 namespace zith::frontend {
 
@@ -47,14 +51,17 @@ namespace zith::frontend {
 
         public:
             Lexer();
-            auto run(FileId id) -> infra::util::Result<TokenStream>;
+            auto run(std::variant<FileId, std::pair<std::string_view, std::string>> input)
+                    -> infra::util::Result<TokenStream>;
         };
 
         auto tokenize(FileId id) -> infra::util::Result<TokenStream>;
 
+        auto tokenize(std::string_view, std::string) -> infra::util::Result<TokenStream>;
+
         const char *tokenKindName(TokenKind k) noexcept;
 
-        void printTokens(const TokenStream &stream, std::string_view source) noexcept;
+        void printTokens(const TokenStream &stream) noexcept;
 
     } // namespace lexer
 

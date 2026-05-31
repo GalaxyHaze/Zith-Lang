@@ -117,13 +117,6 @@ namespace zith::frontend::lexer {
             return false;
         }
 
-        // Recupera o lexeme (string_view) extraindo os dados diretamente do buffer do arquivo
-        // original
-        [[nodiscard]] static auto getLexeme(const Token &token, std::string_view src) noexcept
-                -> std::string_view {
-            return src.substr(token.span.start, token.span.end - token.span.start);
-        }
-
         // Verifica se chegamos ao fim dos tokens válidos
         [[nodiscard]] constexpr bool is_empty() const noexcept {
             return offset >= len || peek().is_eof();

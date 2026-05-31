@@ -293,11 +293,20 @@ namespace zith::frontend::lexer {
 
     Lexer::Lexer() : tokens(infra::alloc::SessionArena) {}
 
-    auto Lexer::run(FileId id) -> infra::util::Result<TokenStream> {
+    auto Lexer::run(std::variant<FileId, std::pair<std::string_view, std::string>> input)
+            -> infra::util::Result<TokenStream> {
         err = ErrorKind::Success;
-        gId = id;
 
-        if (auto i = SourceMap::get(id)) {
+        if (auto *id = std::get_if<FileId>(&input)) {
+            gId = *id;
+        } else {
+            auto &[name, content] = std::get<std::pair<std::string_view, std::string>>(input);
+            if (auto i = SourceMap::add_file(name, content)) {
+                gId = i.value();
+            }
+        }
+
+        if (auto i = SourceMap::get(gId)) {
             file = &i.value().get();
         }
 
@@ -390,7 +399,12 @@ namespace zith::frontend::lexer {
 
     auto tokenize(FileId id) -> infra::util::Result<TokenStream> {
         Lexer lexer;
-        return lexer.run(id);
+        return lexer.run(std::variant<FileId, std::pair<std::string_view, std::string>>(id));
+    }
+
+    auto tokenize(std::string_view name, std::string test) -> infra::util::Result<TokenStream> {
+        Lexer lexer;
+        return lexer.run(std::make_pair(name, std::move(test)));
     }
 
     const char *tokenKindName(TokenKind k) noexcept {
@@ -487,10 +501,11 @@ namespace zith::frontend::lexer {
         return "???";
     }
 
-    void printTokens(const TokenStream &stream, std::string_view source) noexcept {
+    void printTokens(const TokenStream &stream) noexcept {
         for (uint32_t i = 0; i < stream.len; ++i) {
             const auto &tok = stream.src[i];
-            auto lexeme     = TokenStream::getLexeme(tok, source);
+            auto res        = SourceMap::snippet(tok.span);
+            auto lexeme     = res.isOk() ? res.value() : std::string_view{};
             printf("  %-16s \"%.*s\"  [%u..%u]\n",
                    tokenKindName(tok.kind),
                    (int)lexeme.size(),

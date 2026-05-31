@@ -43,25 +43,31 @@ namespace zith::frontend::ast {
         ExprId rhs;
         BinaryOp op;
     };
+
     struct UnaryNode {
         ExprId operand;
         UnaryOp op;
     };
+
     struct CallNode {
         ExprId callee;
         std::vector<ExprId> args;
     };
+
     struct IdentNode {
         std::string_view name;
     };
+
     struct FieldNode {
         ExprId object;
         std::string_view field;
     };
+
     struct IndexNode {
         ExprId object;
         ExprId index;
     };
+    
 
     struct BlockNode {
         std::vector<StmtId> stmts;
