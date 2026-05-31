@@ -1,11 +1,11 @@
-#include <catch2/catch_test_macros.hpp>
+#include "test.h"
 
 #include <filesystem>
 #include <fstream>
 #include <string>
 #include <vector>
 
-#include "cli/project_config/project_config.hpp"
+#include "cli/project_config/project-config.hpp"
 
 namespace {
 void write_file(const std::filesystem::path &path, const std::string &content) {
@@ -13,7 +13,7 @@ void write_file(const std::filesystem::path &path, const std::string &content) {
     REQUIRE(out.good());
     out << content;
 }
-} // namespace
+}
 
 using namespace zith::cli::project_config;
 
@@ -64,3 +64,5 @@ TEST_CASE("project parser rejects invalid and out-of-range fields", "[cli][proje
     REQUIRE_FALSE(try_load_project_from_path(proj, file.string(), &warnings, &errors));
     REQUIRE(errors.size() >= 3);
 }
+
+TEST_MAIN()

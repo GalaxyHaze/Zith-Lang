@@ -1,5 +1,5 @@
 #include "diagnostics/builder.hpp"
-#include "diagnostics/diagnostic_bag.hpp"
+#include "diagnostics/diagnostic-bag.hpp"
 
 #include <utility>
 

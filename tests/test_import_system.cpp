@@ -1,7 +1,7 @@
-#include <catch2/catch_test_macros.hpp>
+#include "test.h"
 
-#include "import/module_registry.hpp"
-#include "import/symbol_resolver.hpp"
+#include "import/module-registry.hpp"
+#include "import/symbol-resolver.hpp"
 
 #include <string>
 #include <vector>
@@ -173,14 +173,12 @@ TEST_CASE("SYMBOL RESOLVER: duplicate detection", "[resolver][duplicate]") {
     SymbolResolver::instance().clear_errors();
 
     Module mod("test.dup", "test.zith");
-    // Add symbol with a signature
     SymbolEntry existing("Foo", SymbolKind::Struct, Visibility::Public,
                          SourceLocation("test.zith", 1));
     existing.set_signature(TypeSignature({}, "int"));
     mod.add_symbol(std::move(existing));
     ModuleRegistry::instance().register_module(std::move(mod));
 
-    // Try to add duplicate with same signature
     SymbolEntry new_sym("Foo", SymbolKind::Struct, Visibility::Public,
                         SourceLocation("test.zith", 10));
     new_sym.set_signature(TypeSignature({}, "int"));
@@ -298,3 +296,5 @@ TEST_CASE("SOURCE LOCATION: construction", "[location]") {
     REQUIRE(loc2.line == 10);
     REQUIRE(loc2.column == 5);
 }
+
+TEST_MAIN()

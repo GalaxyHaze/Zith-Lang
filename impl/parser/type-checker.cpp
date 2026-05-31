@@ -1,4 +1,4 @@
-#include "type_checker.hpp"
+#include "type-checker.hpp"
 #include "diagnostics/diagnostics.hpp"
 #include <cstdio>
 #include <cstring>

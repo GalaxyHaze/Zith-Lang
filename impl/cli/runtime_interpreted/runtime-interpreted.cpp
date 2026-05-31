@@ -1,4 +1,4 @@
-#include "runtime_interpreted.hpp"
+#include "runtime-interpreted.hpp"
 #include "zith/ast.h"
 #include <cstdint>
 #include <iostream>

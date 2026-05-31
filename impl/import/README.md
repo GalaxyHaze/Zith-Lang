@@ -8,9 +8,9 @@ Module loading, symbol resolution, and visibility management.
 import/
 ├── import.h          # C API
 ├── import.hpp         # C++ wrappers
-├── module_registry.hpp  # Module tracking
-├── symbol_table.hpp   # Symbol scope tables
-├── symbol_resolver.hpp  # Name resolution
+├── module-registry.hpp  # Module tracking
+├── symbol-table.hpp   # Symbol scope tables
+├── symbol-resolver.hpp  # Name resolution
 └── import_spec.md    # Detailed specification
 ```
 

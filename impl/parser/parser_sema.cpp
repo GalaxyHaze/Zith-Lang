@@ -6,8 +6,8 @@
 #include "zith/parser.h"
 #include "zith/typesystem.hpp"
 #include "import/import.hpp"
-#include "import/module_registry.hpp"
-#include "parser_context.hpp"
+#include "import/module-registry.hpp"
+#include "parser-context.hpp"
 #include <cstdio>
 #include <cstring>
 #include <string>

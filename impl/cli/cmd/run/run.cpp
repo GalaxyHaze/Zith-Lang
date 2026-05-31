@@ -1,6 +1,6 @@
 #include "cli/pipeline/pipeline.hpp"
-#include "cli/project_config/project_config.hpp"
-#include "cli/runtime_interpreted/runtime_interpreted.hpp"
+#include "cli/project_config/project-config.hpp"
+#include "cli/runtime_interpreted/runtime-interpreted.hpp"
 #include "cli/cmd/commands.hpp"
 #include <zith/zith.hpp>
 

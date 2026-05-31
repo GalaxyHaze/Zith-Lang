@@ -22,8 +22,8 @@ cli/
 │   └── info/                   # Information commands
 │       └── info.cpp            #   cmd_version, cmd_help
 ├── pipeline/                   # Pipeline utilities (tokenization, print helpers)
-├── project_config/             # ZithProject.toml parsing
-└── runtime_interpreted/        # Bytecode interpreter runtime
+├── project-config/             # ZithProject.toml parsing
+└── runtime-interpreted/        # Bytecode interpreter runtime
 ```
 
 ## Entry Point

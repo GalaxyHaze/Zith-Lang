@@ -1,4 +1,4 @@
-#include "project_config.hpp"
+#include "project-config.hpp"
 
 #include <algorithm>
 #include <cstdlib>

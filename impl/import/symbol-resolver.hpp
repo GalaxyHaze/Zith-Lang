@@ -1,13 +1,13 @@
-// impl/import/symbol_resolver.hpp — v2 Symbol Resolution (current implementation)
+// impl/import/symbol-resolver.hpp — v2 Symbol Resolution (current implementation)
 //
 // Provides fully qualified path resolution, duplicate detection,
 // function overloading validation, and alias support.
 // This is the v2 implementation: all new consumers should use this
-// instead of v1 (symbol_table.hpp).
+// instead of v1 (symbol-table.hpp).
 #pragma once
 
-#include "module_registry.hpp"
-#include "symbol_table.hpp"
+#include "module-registry.hpp"
+#include "symbol-table.hpp"
 #include <unordered_map>
 
 #include <cstdio>

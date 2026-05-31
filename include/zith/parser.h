@@ -1,4 +1,4 @@
-// include/zith/parser.h — Parser interface for Zith (C ABI)
+// include/zith/parser.h — Parser interface for Zith (pure C ABI)
 #pragma once
 
 #include "zith/ast.h"
@@ -7,11 +7,6 @@
 
 #ifdef __cplusplus
 extern "C" {
-#endif
-
-// Forward declaration for C++ DiagManager (defined in diagnostics.hpp)
-#ifdef __cplusplus
-class DiagManager;
 #endif
 
 typedef struct ZithSymbolTable ZithSymbolTable;
@@ -36,7 +31,6 @@ typedef struct Parser {
     bool had_error;
     bool panic;
 
-    // v2 diagnostic manager (C++ only, opaque pointer for C ABI)
     void *diag_manager;
 
     ZithFnKind fn_kind;
@@ -88,55 +82,15 @@ ZithNode *parser_parse_block(Parser *p);
 
 void sema_run(Parser *p, ZithNode *root);
 
-// Full parse pipeline: tokenize + parse + sema
 ZithNode *zith_parse_with_source(ZithArena *arena, const char *source, size_t source_len,
                                  const char *filename, ZithTokenStream tokens,
                                  const char **import_roots, size_t import_root_count);
 
-// Get diagnostics from parse (for LSP use)
 ZithDiagList *zith_get_parse_diagnostics(void);
 
-// v2: Get the DiagManager for direct access (LSP, etc.)
-#ifdef __cplusplus
-DiagManager *zith_get_parse_diag_manager(void);
-#endif
-
-// Test helpers (use shared global arena)
 ZithNode *zith_parse_test(const char *source);
 ZithNode *zith_parse_test_full(const char *source);
 void zith_test_arena_destroy(void);
-
-static inline void parser_emit(Parser *p, ZithSourceLoc loc, ZithDiagSeverity severity,
-                               const char *msg) {
-    parser_emit_diag(p, loc, severity, msg);
-}
-
-// New-style diagnostic functions (C++23, with error codes and formatting)
-#ifdef __cplusplus
-
-#include <cstdarg>
-
-// Forward declarations for zith::diag types
-namespace zith::diag { enum class DiagCode : uint32_t; }
-
-#if defined(__GNUC__) || defined(__clang__)
-#define ZITH_PRINTF_ATTR(fmt_idx, arg_idx) __attribute__((format(printf, fmt_idx, arg_idx)))
-#else
-#define ZITH_PRINTF_ATTR(fmt_idx, arg_idx)
-#endif
-
-void parser_error_new(Parser *p, zith::diag::DiagCode code,
-                       ZithSourceLoc loc, const char *fmt, ...)
-    ZITH_PRINTF_ATTR(4, 5);
-void parser_warning_new(Parser *p, zith::diag::DiagCode code,
-                         ZithSourceLoc loc, const char *fmt, ...)
-    ZITH_PRINTF_ATTR(4, 5);
-void parser_note_new(Parser *p, ZithSourceLoc loc, const char *fmt, ...)
-    ZITH_PRINTF_ATTR(3, 4);
-
-#undef ZITH_PRINTF_ATTR
-
-#endif
 
 #ifdef __cplusplus
 }

@@ -1,10 +1,10 @@
 // impl/parser/parser.cpp — Parser entry point and pipeline orchestration
 #include "zith/parser.h"
-#include "parser_context.hpp"
+#include "parser-context.hpp"
 #include "diagnostics/diagnostics.hpp"
 
 #include "memory/utils.hpp"
-#include "import/module_registry.hpp"
+#include "import/module-registry.hpp"
 
 #include <cstring>
 #include <vector>

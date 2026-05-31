@@ -1,6 +1,6 @@
 #pragma once
 
-#include "diagnostics/lazy_message.hpp"
+#include "diagnostics/lazy-message.hpp"
 #include "diagnostics/span.hpp"
 
 #include <cstdint>

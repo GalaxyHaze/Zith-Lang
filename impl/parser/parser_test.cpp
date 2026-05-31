@@ -1,5 +1,5 @@
 // impl/parser/parser_test.cpp — Test utilities and RAII wrappers
-#include <import/module_registry.hpp>
+#include <import/module-registry.hpp>
 #include <memory/utils.hpp>
 #include "zith/parser.h"
 #include <cstring>

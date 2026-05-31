@@ -1,4 +1,4 @@
-#include <catch2/catch_test_macros.hpp>
+#include "test.h"
 
 #include "../include/zith/parser.h"
 #include "zith/ast.h"
@@ -60,3 +60,5 @@ TEST_CASE("IMPORT: import with semicolon required", "[import][scan][error]") {
     auto ast = ParseResult(zith_parse_test("import std/io"));
     (void)ast;
 }
+
+TEST_MAIN()

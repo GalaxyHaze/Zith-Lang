@@ -1,18 +1,15 @@
-// zith_cli.cpp — CLI entry point for the Zith compiler
-//
-// Requires C++17 (structured bindings, if-initializers).
-// Depends on: CLI11, Zith/zith.h
+// impl/cli/CLI.hpp — CLI entry point for the Zith compiler
+// Uses arg.hpp instead of CLI11. C++17.
 #pragma once
 
 #ifdef _WIN32
 #include <windows.h>
 #endif
 
-#include "CLI/App.hpp"
-#include "CLI/ExtraValidators.hpp"
+#include "arg.hpp"
 #include "cmd/commands.hpp"
 #include "pipeline/pipeline.hpp"
-#include "project_config/project_config.hpp"
+#include "project_config/project-config.hpp"
 #include <iostream>
 #include <string>
 #include <vector>
@@ -46,8 +43,6 @@ extern "C" inline int zith_run(const int argc, const char *const argv[]) {
 #ifdef _WIN32
     enable_virtual_terminal_processing();
 #endif
-    CLI::App app{"Zith - A low-level general-purpose language"};
-    app.require_subcommand(0, 1);
 
     std::string mode_str = "debug";
     std::string output_file;
@@ -56,101 +51,90 @@ extern "C" inline int zith_run(const int argc, const char *const argv[]) {
     std::string target_triple;
     bool verbose = false;
 
-    app.add_option("-m,--mode", mode_str, "Build mode: debug, dev, release, fast, test")
-        ->transform(CLI::IsMember({"debug", "dev", "release", "fast", "test"}))
-        ->default_str("debug");
-    app.add_option("-o,--output", output_file, "Output file path");
-    app.add_option("-I,--include", include_dirs, "Include directories (repeatable)");
-    app.add_option("--emit", emit_target, "Emit: ast, ir, asm, obj, bin");
-    app.add_option("--target", target_triple, "Target triple");
-    app.add_flag("-v,--verbose", verbose, "Verbose output");
+    zith::arg::Parser app{"Zith - A low-level general-purpose language", argc, argv};
+
+    app.add_option("--mode", "-m", "Build mode: debug, dev, release, fast, test", &mode_str);
+    app.add_option("--output", "-o", "Output file path", &output_file);
+    app.add_repeatable("--include", "-I", "Include directories", &include_dirs);
+    app.add_option("--emit", "", "Emit: ast, ir, asm, obj, bin", &emit_target);
+    app.add_option("--target", "", "Target triple", &target_triple);
+    app.add_flag("--verbose", "-v", "Verbose output", &verbose);
 
     std::string input_file;
     bool interpreted = false;
     bool fmt_check = false;
     std::string docs_output = "docs";
 
-    auto *check_cmd = app.add_subcommand("check", "Parse and type-check only");
-    check_cmd->add_option("input", input_file, "Source file [optional, reads toml if omitted]")
-        ->check(CLI::ExistingFile);
-
-    auto *compile_cmd = app.add_subcommand("compile", "Compile to object/bytecode, no linking");
-    compile_cmd->add_option("input", input_file, "Source file (.zith)")
-        ->required()
-        ->check(CLI::ExistingFile);
-    compile_cmd->add_flag("--interpreted", interpreted, "Compile to bytecode instead of native");
-
-    auto *build_cmd = app.add_subcommand("build", "Compile and link to native binary");
-    build_cmd->add_option("input", input_file, "Source file [optional, reads toml if omitted]")
-        ->check(CLI::ExistingFile);
-
-    auto *execute_cmd = app.add_subcommand("execute", "Run existing binary or bytecode");
-    execute_cmd->add_option("target", input_file,
-                            "Binary or bytecode [optional, reads toml if omitted]");
-    execute_cmd->add_flag("--interpreted", interpreted, "Run bytecode instead of native binary");
-
-    auto *run_cmd = app.add_subcommand("run", "Build then execute");
-    run_cmd->add_option("input", input_file, "Source file [optional, reads toml if omitted]")
-        ->check(CLI::ExistingFile);
-    run_cmd->add_flag("--interpreted", interpreted, "Compile to bytecode and run interpreted");
-
-    auto *test_cmd = app.add_subcommand("test", "Run examples in source");
-    test_cmd->add_option("input", input_file, "Source file (.zith)")->check(CLI::ExistingFile);
-
-    auto *fmt_cmd = app.add_subcommand("fmt", "Format source code");
-    fmt_cmd->add_option("input", input_file, "Source file or directory")->required();
-    fmt_cmd->add_flag("--check", fmt_check, "Check formatting only, do not modify files");
-
-    auto *docs_cmd = app.add_subcommand("docs", "Generate documentation");
-    docs_cmd->add_option("input", input_file, "Source file (.zith)")->check(CLI::ExistingFile);
-    docs_cmd->add_option("-o,--output", docs_output, "Output directory")->default_str("docs");
-
-    auto *repl_cmd = app.add_subcommand("repl", "Start interactive REPL");
-    auto *new_cmd = app.add_subcommand("new", "Create a new project");
-    new_cmd->add_option("name", input_file, "Project name")->required();
-
-    auto *clean_cmd = app.add_subcommand("clean", "Remove build artifacts");
-    auto *version_cmd = app.add_subcommand("version", "Show version information");
-    auto *help_cmd = app.add_subcommand("help", "Show help message");
-
-    try {
-        app.parse(argc, argv);
-    } catch (const CLI::CallForHelp &) {
-        return cmd_help();
-    } catch (const CLI::CallForVersion &) {
+    app.add_subcommand("check", "Parse and type-check only", [&]() {
+        return cmd_check(input_file, mode_str, verbose, include_dirs);
+    });
+    app.add_subcommand("compile", "Compile to object/bytecode, no linking", [&]() {
+        return cmd_compile(input_file, output_file, mode_str, interpreted, verbose, include_dirs);
+    });
+    app.add_subcommand("build", "Compile and link to native binary", [&]() {
+        return cmd_build(input_file, output_file, mode_str, verbose, include_dirs);
+    });
+    app.add_subcommand("execute", "Run existing binary or bytecode", [&]() {
+        return cmd_execute(input_file, interpreted, verbose, include_dirs);
+    });
+    app.add_subcommand("run", "Build then execute", [&]() {
+        return cmd_run(input_file, output_file, mode_str, interpreted, verbose, include_dirs);
+    });
+    app.add_subcommand("test", "Run examples in source", [&]() {
+        return cmd_test(input_file, verbose);
+    });
+    app.add_subcommand("fmt", "Format source code", [&]() {
+        return cmd_fmt(input_file, fmt_check, verbose);
+    });
+    app.add_subcommand("docs", "Generate documentation", [&]() {
+        return cmd_docs(input_file, docs_output, verbose);
+    });
+    app.add_subcommand("repl", "Start interactive REPL", [&]() {
+        return cmd_repl(verbose);
+    });
+    app.add_subcommand("new", "Create a new project", [&]() {
+        return cmd_new(input_file, verbose);
+    });
+    app.add_subcommand("clean", "Remove build artifacts", [&]() {
+        return cmd_clean(verbose);
+    });
+    app.add_subcommand("version", "Show version information", [&]() {
         return cmd_version();
-    } catch (const CLI::ParseError &e) {
-        if (e.get_name() == "ExtrasError" && argc > 1 && std::string(argv[1]) == "help")
-            return cmd_help();
-        std::cerr << "[error] " << e.what() << "\n\n" << app.help();
+    });
+    app.add_subcommand("help", "Show help message", [&]() {
+        return cmd_help();
+    });
+
+    if (!app.parse()) {
+        std::cerr << app.help();
         return 1;
     }
 
-    if (*help_cmd)
+    if (app.is_subcommand("help"))
         return cmd_help();
-    if (*version_cmd)
+    if (app.is_subcommand("version"))
         return cmd_version();
-    if (*new_cmd)
+    if (app.is_subcommand("new"))
         return cmd_new(input_file, verbose);
-    if (*clean_cmd)
+    if (app.is_subcommand("clean"))
         return cmd_clean(verbose);
-    if (*repl_cmd)
+    if (app.is_subcommand("repl"))
         return cmd_repl(verbose);
-    if (*docs_cmd)
+    if (app.is_subcommand("docs"))
         return cmd_docs(input_file, docs_output, verbose);
-    if (*fmt_cmd)
+    if (app.is_subcommand("fmt"))
         return cmd_fmt(input_file, fmt_check, verbose);
-    if (*test_cmd)
+    if (app.is_subcommand("test"))
         return cmd_test(input_file, verbose);
-    if (*check_cmd)
+    if (app.is_subcommand("check"))
         return cmd_check(input_file, mode_str, verbose, include_dirs);
-    if (*compile_cmd)
+    if (app.is_subcommand("compile"))
         return cmd_compile(input_file, output_file, mode_str, interpreted, verbose, include_dirs);
-    if (*build_cmd)
+    if (app.is_subcommand("build"))
         return cmd_build(input_file, output_file, mode_str, verbose, include_dirs);
-    if (*execute_cmd)
+    if (app.is_subcommand("execute"))
         return cmd_execute(input_file, interpreted, verbose, include_dirs);
-    if (*run_cmd)
+    if (app.is_subcommand("run"))
         return cmd_run(input_file, output_file, mode_str, interpreted, verbose, include_dirs);
 
     if (ZithProject proj; try_load_project(proj))

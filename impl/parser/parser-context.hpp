@@ -1,4 +1,4 @@
-// impl/parser/parser_context.hpp — C++ ParserContext wrapper + ParseContext
+// impl/parser/parser-context.hpp — C++ ParserContext wrapper + ParseContext
 #pragma once
 
 #include "diagnostics/diagnostics.hpp"

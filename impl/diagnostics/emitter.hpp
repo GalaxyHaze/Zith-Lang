@@ -1,6 +1,6 @@
 #pragma once
 
-#include "diagnostics/diagnostic_bag.hpp"
+#include "diagnostics/diagnostic-bag.hpp"
 #include "diagnostics/span.hpp"
 
 #include <cstdio>

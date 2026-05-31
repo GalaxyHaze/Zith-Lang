@@ -272,5 +272,5 @@ impl/import/
 ├── import_spec.md      # This document
 ├── import.h           # C ABI definitions
 ├── import.hpp         # C++ wrapper
-└── symbol_table.hpp   # Global symbol resolution
+└── symbol-table.hpp   # Global symbol resolution
 ```

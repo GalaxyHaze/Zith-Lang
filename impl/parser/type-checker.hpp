@@ -8,6 +8,8 @@
 #include <unordered_map>
 #include <vector>
 
+class DiagManager;
+
 namespace zith {
 
 struct VarEntry {

@@ -1,4 +1,4 @@
-// impl/import/module_registry.hpp — Module registry for Zith's import system
+// impl/import/module-registry.hpp — Module registry for Zith's import system
 //
 // Provides centralized module management with file-to-module mapping,
 // tracking each module's source file, exported symbols, and version.

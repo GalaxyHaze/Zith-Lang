@@ -1,7 +1,7 @@
-// impl/import/symbol_table.hpp — v1 Symbol Resolution (ABI/NIF layer)
+// impl/import/symbol-table.hpp — v1 Symbol Resolution (ABI/NIF layer)
 //
 // Provides centralized symbol resolution via the Import RAII container.
-// This is the v1/ABI layer: consumers should prefer v2 (symbol_resolver.hpp).
+// This is the v1/ABI layer: consumers should prefer v2 (symbol-resolver.hpp).
 // Thread-unsafe (single-threaded compiler context).
 #pragma once
 

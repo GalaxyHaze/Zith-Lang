@@ -1,22 +1,18 @@
 #include "diagnostics/diagnostics.hpp"
 #include "diagnostics/format.hpp"
 #include "diagnostics/builder.hpp"
-#include "diagnostics/diagnostic_bag.hpp"
+#include "diagnostics/diagnostic-bag.hpp"
 #include "diagnostics/emitter.hpp"
-#include "diagnostics/heuristic_engine.hpp"
+#include "diagnostics/heuristic-engine.hpp"
 #include "diagnostics/span.hpp"
 
-#include <catch2/catch_test_macros.hpp>
+#include "test.h"
 #include <cstdio>
 #include <cstring>
 #include <string>
 #include <string_view>
 
 using namespace zith::diag;
-
-// ============================================================================
-// Helpers
-// ============================================================================
 
 static SourceMap make_test_map() {
     SourceMap sm;
@@ -33,10 +29,6 @@ static SourceMap make_test_map() {
         "}\n");
     return sm;
 }
-
-// ============================================================================
-// 1. Core Data Structures
-// ============================================================================
 
 TEST_CASE("SourceMap builds line index correctly", "[diag][core]") {
     SourceMap sm;
@@ -73,7 +65,7 @@ TEST_CASE("DiagCode string conversion", "[diag][core]") {
 }
 
 TEST_CASE("DiagLevel ordering", "[diag][core]") {
-    REQUIRE(Diagnostic{}.priority_order() == 2); // Error default
+    REQUIRE(Diagnostic{}.priority_order() == 2);
     Diagnostic fatal;   fatal.level = DiagLevel::Fatal;
     Diagnostic warning; warning.level = DiagLevel::Warning;
     Diagnostic note;    note.level = DiagLevel::Note;
@@ -83,10 +75,6 @@ TEST_CASE("DiagLevel ordering", "[diag][core]") {
     REQUIRE(warning.priority_order() < note.priority_order());
     REQUIRE(note.priority_order() < help.priority_order());
 }
-
-// ============================================================================
-// 2. DiagnosticBuilder (Fluent API)
-// ============================================================================
 
 TEST_CASE("DiagnosticBuilder produces a complete Diagnostic", "[diag][builder]") {
     DiagnosticBag bag;
@@ -139,22 +127,16 @@ TEST_CASE("DiagnosticBuilder with positional arguments", "[diag][builder]") {
     REQUIRE(children[0]->message.get() == "did you mean `foobar`?");
 }
 
-// ============================================================================
-// 3. Cascading Suppression
-// ============================================================================
-
 TEST_CASE("Cascading errors are suppressed", "[diag][suppression]") {
     DiagnosticBag bag;
     SourceMap sm = make_test_map();
     FileId fid = 0;
 
-    // Primary error: undefined type `Foo`
     SourceSpan def_span = {{0, 3}, {0, 6}, fid};
     DiagnosticBuilder(DiagLevel::Error, DiagCode::UndefinedType, def_span)
         .with_message("undefined type `Foo`")
         .emit(bag);
 
-    // Cascading error: using Foo in a function signature
     SourceSpan use_span = {{1, 14}, {1, 17}, fid};
     DiagnosticBuilder(DiagLevel::Error, DiagCode::TypeMismatch, use_span)
         .with_message("cannot use `Foo` as a parameter type")
@@ -163,12 +145,10 @@ TEST_CASE("Cascading errors are suppressed", "[diag][suppression]") {
 
     bag.finalize();
 
-    // The cascading error should be demoted to a note under the primary error
     const auto& diags = bag.diagnostics();
-    REQUIRE(diags.size() == 1); // Only the primary error remains
+    REQUIRE(diags.size() == 1);
     REQUIRE(diags[0].code == DiagCode::UndefinedType);
 
-    // The cascading error should now be a child note
     bool found_cascade = false;
     for (const auto& child : diags[0].children) {
         if (child->message.get().find("cannot use") != std::string::npos) {
@@ -179,16 +159,11 @@ TEST_CASE("Cascading errors are suppressed", "[diag][suppression]") {
     REQUIRE(found_cascade);
 }
 
-// ============================================================================
-// 4. Aggregate Duplicates
-// ============================================================================
-
 TEST_CASE("Duplicate errors are aggregated", "[diag][aggregation]") {
     DiagnosticBag bag;
     SourceMap sm = make_test_map();
     FileId fid = 0;
 
-    // Emit 5 identical errors
     for (int i = 0; i < 5; ++i) {
         DiagnosticBuilder(DiagLevel::Error, DiagCode::UndefinedIdentifier)
             .with_message("undefined identifier `z`")
@@ -198,7 +173,6 @@ TEST_CASE("Duplicate errors are aggregated", "[diag][aggregation]") {
 
     bag.finalize();
 
-    // Should be aggregated to 1 error + note about repetitions
     const auto& diags = bag.diagnostics();
     REQUIRE(diags.size() == 1);
     REQUIRE(diags[0].code == DiagCode::UndefinedIdentifier);
@@ -212,10 +186,6 @@ TEST_CASE("Duplicate errors are aggregated", "[diag][aggregation]") {
     }
     REQUIRE(found_repeat_note);
 }
-
-// ============================================================================
-// 5. Sorting
-// ============================================================================
 
 TEST_CASE("Diagnostics are sorted by severity then position", "[diag][sorting]") {
     DiagnosticBag bag;
@@ -242,18 +212,12 @@ TEST_CASE("Diagnostics are sorted by severity then position", "[diag][sorting]")
     const auto& sorted = bag.sorted_view();
     REQUIRE(sorted.size() == 3);
 
-    // Errors should come first, sorted by position
     REQUIRE(sorted[0]->level == DiagLevel::Error);
     REQUIRE(sorted[0]->code == DiagCode::ImmutableAssignment);
 
-    // Then warnings, sorted by position
     REQUIRE(sorted[1]->level == DiagLevel::Warning);
     REQUIRE(sorted[2]->level == DiagLevel::Warning);
 }
-
-// ============================================================================
-// 6. TerminalEmitter Output
-// ============================================================================
 
 TEST_CASE("TerminalEmitter produces expected output format", "[diag][emitter]") {
     DiagnosticBag bag;
@@ -272,10 +236,8 @@ TEST_CASE("TerminalEmitter produces expected output format", "[diag][emitter]") 
 
     bag.finalize();
 
-    // Capture emitter output
     TerminalEmitter emitter(&sm);
 
-    // Use a temporary file for capture
     FILE* f = tmpfile();
     REQUIRE(f != nullptr);
 
@@ -289,7 +251,6 @@ TEST_CASE("TerminalEmitter produces expected output format", "[diag][emitter]") 
 
     std::string_view output(buf, nread);
 
-    // Check key format elements
     REQUIRE(output.find("error") != std::string_view::npos);
     REQUIRE(output.find("[E0301]") != std::string_view::npos);
     REQUIRE(output.find("cannot assign to immutable binding") != std::string_view::npos);
@@ -299,10 +260,6 @@ TEST_CASE("TerminalEmitter produces expected output format", "[diag][emitter]") 
     REQUIRE(output.find("= help:") != std::string_view::npos);
     REQUIRE(output.find("= suggestion:") != std::string_view::npos);
 }
-
-// ============================================================================
-// 7. JsonEmitter Output
-// ============================================================================
 
 TEST_CASE("JsonEmitter produces valid JSON", "[diag][emitter]") {
     DiagnosticBag bag;
@@ -332,7 +289,6 @@ TEST_CASE("JsonEmitter produces valid JSON", "[diag][emitter]") {
 
     std::string_view output(buf, nread);
 
-    // Check JSON structure
     REQUIRE(output.find("\"severity\"") != std::string_view::npos);
     REQUIRE(output.find("\"code\"") != std::string_view::npos);
     REQUIRE(output.find("\"E0201\"") != std::string_view::npos);
@@ -342,12 +298,8 @@ TEST_CASE("JsonEmitter produces valid JSON", "[diag][emitter]") {
     REQUIRE(output.find("\"column\"") != std::string_view::npos);
     REQUIRE(output.find("\"suggestions\"") != std::string_view::npos);
     REQUIRE(output.find("\"children\"") != std::string_view::npos);
-    REQUIRE(output[0] == '['); // JSON array
+    REQUIRE(output[0] == '[');
 }
-
-// ============================================================================
-// 8. HeuristicEngine Suggestions
-// ============================================================================
 
 TEST_CASE("HeuristicEngine suggests close matches for undefined identifiers", "[diag][heuristic]") {
     HeuristicEngine engine;
@@ -390,42 +342,32 @@ TEST_CASE("HeuristicEngine suggests semicolon fix", "[diag][heuristic]") {
     REQUIRE(suggestions[0].label.find(";") != std::string::npos);
 }
 
-// ============================================================================
-// 9. End-to-End: Full Diagnostic Pipeline
-// ============================================================================
-
 TEST_CASE("Full pipeline: build -> suppress -> sort -> emit", "[diag][e2e]") {
     DiagnosticBag bag;
     SourceMap sm = make_test_map();
     FileId fid = 0;
 
-    // Simulate a compile session with mixed errors
-    // 1. A real type error (primary)
     DiagnosticBuilder(DiagLevel::Error, DiagCode::TypeMismatch)
         .with_message("expected `i32`, found `String`")
         .with_span({{6, 14}, {6, 16}, fid})
         .emit(bag);
 
-    // 2. A cascade: use of undefined type Foo (caused by earlier type error)
     DiagnosticBuilder(DiagLevel::Error, DiagCode::UndefinedType)
         .with_message("undefined type `Foo`")
         .with_span({{1, 8}, {1, 11}, fid})
         .emit(bag);
 
-    // 3. Another cascade
     DiagnosticBuilder(DiagLevel::Error, DiagCode::TypeMismatch)
         .with_message("cannot use `Foo` as parameter type")
         .with_span({{1, 14}, {1, 17}, fid})
         .with_cause(DiagCode::UndefinedType)
         .emit(bag);
 
-    // 4. A real warning
     DiagnosticBuilder(DiagLevel::Warning, DiagCode::UnusedVariable)
         .with_message("unused variable `y`")
         .with_span({{7, 8}, {7, 9}, fid})
         .emit(bag);
 
-    // 5. A real error (immutable assignment)
     DiagnosticBuilder(DiagLevel::Error, DiagCode::ImmutableAssignment)
         .with_message("cannot assign to immutable binding `x`")
         .with_span({{5, 4}, {5, 5}, fid})
@@ -435,21 +377,15 @@ TEST_CASE("Full pipeline: build -> suppress -> sort -> emit", "[diag][e2e]") {
 
     bag.finalize();
 
-    // Verify suppression worked
-    REQUIRE(bag.error_count() == 3); // TypeMismatch, UndefinedType, ImmutableAssignment
+    REQUIRE(bag.error_count() == 3);
 
     const auto& sorted = bag.sorted_view();
 
-    // Errors come first
     REQUIRE(sorted[0]->level == DiagLevel::Error);
     REQUIRE(sorted[1]->level == DiagLevel::Error);
     REQUIRE(sorted[2]->level == DiagLevel::Error);
-
-    // Warning last
     REQUIRE(sorted[3]->level == DiagLevel::Warning);
 
-    // The cascading error (cannot use Foo) should have been demoted
-    // to a child of the UndefinedType error
     const auto& undef_type = *sorted[1];
     REQUIRE(undef_type.code == DiagCode::UndefinedType);
 
@@ -463,7 +399,6 @@ TEST_CASE("Full pipeline: build -> suppress -> sort -> emit", "[diag][e2e]") {
     }
     REQUIRE(cascade_demoted);
 
-    // Output should also work cleanly
     TerminalEmitter emitter(&sm);
     FILE* f = tmpfile();
     REQUIRE(f != nullptr);
@@ -482,10 +417,6 @@ TEST_CASE("Full pipeline: build -> suppress -> sort -> emit", "[diag][e2e]") {
     REQUIRE(out.find("warning[W0001]") != std::string_view::npos);
 }
 
-// ============================================================================
-// 10. LazyMessage Evaluation
-// ============================================================================
-
 TEST_CASE("LazyMessage evaluates only once", "[diag][lazy]") {
     int eval_count = 0;
 
@@ -494,23 +425,18 @@ TEST_CASE("LazyMessage evaluates only once", "[diag][lazy]") {
         return "expensive computation";
     });
 
-    REQUIRE(eval_count == 0); // Not yet evaluated
+    REQUIRE(eval_count == 0);
     REQUIRE(msg.get() == "expensive computation");
     REQUIRE(eval_count == 1);
     REQUIRE(msg.get() == "expensive computation");
-    REQUIRE(eval_count == 1); // Cached
+    REQUIRE(eval_count == 1);
 }
-
-// ============================================================================
-// 11. Cap Limit
-// ============================================================================
 
 TEST_CASE("DiagnosticBag caps at MAX_DIAGNOSTICS", "[diag][cap]") {
     DiagnosticBag bag;
     SourceMap sm = make_test_map();
     FileId fid = 0;
 
-    // Emit more than MAX_DIAGNOSTICS
     for (size_t i = 0; i < MAX_DIAGNOSTICS + 10; ++i) {
         DiagnosticBuilder(DiagLevel::Error, DiagCode::UnexpectedToken)
             .with_message("unexpected token")
@@ -518,15 +444,10 @@ TEST_CASE("DiagnosticBag caps at MAX_DIAGNOSTICS", "[diag][cap]") {
             .emit(bag);
     }
 
-    // Should cap at MAX_DIAGNOSTICS
     bag.finalize();
     REQUIRE(bag.total_count() <= MAX_DIAGNOSTICS);
     REQUIRE(bag.error_count() <= MAX_DIAGNOSTICS);
 }
-
-// ============================================================================
-// 12. C ABI Bridge
-// ============================================================================
 
 TEST_CASE("C ABI bridge works correctly", "[diag][cabi]") {
     ZithDiagBag* bag = zith_diag_bag_create();
@@ -546,3 +467,5 @@ TEST_CASE("C ABI bridge works correctly", "[diag][cabi]") {
 
     zith_diag_bag_destroy(bag);
 }
+
+TEST_MAIN()

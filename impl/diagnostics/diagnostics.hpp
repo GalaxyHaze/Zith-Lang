@@ -9,9 +9,9 @@
 #include <zith/diagnostics.h>
 
 #include "diagnostics/builder.hpp"
-#include "diagnostics/diagnostic_bag.hpp"
+#include "diagnostics/diagnostic-bag.hpp"
 #include "diagnostics/emitter.hpp"
-#include "diagnostics/heuristic_engine.hpp"
+#include "diagnostics/heuristic-engine.hpp"
 #include "diagnostics/span.hpp"
 
 #ifdef __cplusplus

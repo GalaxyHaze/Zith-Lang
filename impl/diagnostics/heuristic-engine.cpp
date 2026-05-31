@@ -1,4 +1,4 @@
-#include "diagnostics/heuristic_engine.hpp"
+#include "diagnostics/heuristic-engine.hpp"
 #include "diagnostics/format.hpp"
 
 #include <algorithm>
