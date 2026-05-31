@@ -1,7 +1,7 @@
 // impl/parser/parser_expr.cpp — Pratt parser for expressions
 //
 // Refactored to use centralized modules.
-#include "memory/arena.hpp"
+#include "memory/utils.hpp"
 #include "zith/parser.h"
 #include <cstring>
 

@@ -3,8 +3,8 @@
 // Refactored to use v2 DiagnosticBag as the implementation,
 // while maintaining v1 ZithDiagList ABI for backward compatibility.
 #include "diagnostics/diagnostics.hpp"
+#include "memory/utils.hpp"
 #include "parser-context.hpp"
-#include "memory/arena.hpp"
 #include "zith/parser.h"
 #include "zith/ast.h"
 #include <cstdarg>

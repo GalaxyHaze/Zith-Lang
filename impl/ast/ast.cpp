@@ -5,11 +5,10 @@
 //   - memory/arena.hpp for allocation
 //   - diagnostics/diagnostics.hpp for debug output
 #include "zith/ast.h"
+#include "zith/diagnostics.h"
+#include "zith/memory.h"
 #include <cstdio>
 #include <cstring>
-#include "diagnostics/diagnostics.hpp"
-#include "memory/arena.hpp"
-#include "types/types.hpp"
 
 // ============================================================================
 // Internal helpers — C++ linkage only, not exported

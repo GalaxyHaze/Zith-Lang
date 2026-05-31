@@ -2,12 +2,10 @@
 //
 // Refactored from parser.cpp. Handles type checking, name resolution,
 // scope management, and control-flow analysis.
-#include "memory/arena.hpp"
+#include "parser/parser-context.hpp"
 #include "zith/parser.h"
 #include "zith/typesystem.hpp"
-#include "import/import.hpp"
 #include "import/module-registry.hpp"
-#include "parser-context.hpp"
 #include <cstdio>
 #include <cstring>
 #include <string>
@@ -15,7 +13,6 @@
 #include <unordered_set>
 #include <vector>
 
-using zith::ArenaList;
 using zith::Type;
 using zith::SemaType;
 
