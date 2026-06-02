@@ -61,267 +61,9 @@
     </configurations>
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="83a342da-cae5-4439-bab8-6f64fe90a81b" name="Changes" comment="Nothing, small fixes &amp; pointer hacks">
-      <change beforePath="$PROJECT_DIR$/.nojekyll" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/404.html" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/css/styles.29203ca9.css" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/css/styles.e6c84b2e.css" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/07862142.0a972d0d.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/07862142.13640568.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/07862142.3f703bd3.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/093e2a3c.af9f1c1a.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/093e2a3c.f50b3264.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/0a5567ef.1b8e8442.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/0a5567ef.9f63a737.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/0a5567ef.cf5bb8f5.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/0d531dad.2635e2d4.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/0d531dad.c57de38f.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/114f70ad.091f3e72.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/114f70ad.872353c0.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/14eb3368.cc866ed0.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/17896441.7e8e62c6.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/17896441.e3e80515.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/1a16542c.5ca9b010.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/1a16542c.e0ceee67.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/1a16542c.e291cbb7.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/1ae92706.500693ae.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/1ae92706.5794fce7.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/1ae92706.601db68f.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/212fe706.16e84c45.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/212fe706.7cc0ae23.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/212fe706.fc458473.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/2237.587141f8.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/2f77e8f3.28821673.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/2f77e8f3.3ae80b69.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/2f77e8f3.499cf51f.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/3436.33862d46.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/361771dc.42af89a4.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/361771dc.824b84be.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/361771dc.f4a5406e.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/39ddb24d.51d206e1.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/39ddb24d.71b27bc1.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/39ddb24d.f35bbad9.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/3aab7012.eba5593e.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/409c6691.8e5add2f.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/409c6691.d7cc69ae.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/409c6691.e90758d2.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/416.49ae474d.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/416.49ae474d.js.LICENSE.txt" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/42818b64.028c54da.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/42818b64.5f3e856e.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/42818b64.6b1bf675.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/49f279b5.26515db8.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/49f279b5.400aaa94.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/49f279b5.7cc58765.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/49f279b5.97350c80.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/535b7f33.d869e45a.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/535b7f33.e0fe81c7.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/5a615f7d.87602cf6.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/5e95c892.7a90a5cf.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/6626dbb1.0fb8cd44.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/6626dbb1.64db875a.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/6626dbb1.baa8e5fb.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/672ba3d6.3ac093fb.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/672ba3d6.d4d7f5f4.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/6ebe37f7.1a49d079.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/6ebe37f7.6223e308.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/6ebe37f7.8380eb97.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/760291e4.bd5a722f.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/760291e4.fe736a52.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/760291e4.fff0cf96.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/78e85b37.1e7f2cb6.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/78e85b37.69ea713b.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/78e85b37.ffc64ba0.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/7c105723.0742f093.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/7c105723.b4d7af3c.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/7c105723.b8d81512.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/7d1437f7.5363daf8.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/7fef215d.0ddd9627.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/7fef215d.67f09e78.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/7fef215d.95527810.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/81cf0525.b37739c8.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/81cf0525.ece46fb6.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/8908332b.137440c6.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/8908332b.1b835290.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/8908332b.b53475fd.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/8ce36cf2.1fbc8a43.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/8ce36cf2.9756d0c6.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/8ce36cf2.aed0ae2b.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/94a41a28.272a7463.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/99e3e96d.01f54216.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/99e3e96d.1fb3b267.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/99e3e96d.3c38a430.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/9a75e40c.84b30cf1.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/9a75e40c.a5927c07.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/9a75e40c.b319dfde.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/9c8a828e.2f21d4d5.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/9c8a828e.fa56bebb.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/9c8a828e.ffbba63a.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/9fa90a0e.11a6cc0b.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/9fa90a0e.7b368988.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/9fa90a0e.f90ac8ee.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/a0e9b8c2.3c75a2d8.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/a0e9b8c2.6a987e07.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/a0e9b8c2.f022c2d7.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/a177b87b.556f8fb1.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/a177b87b.a2a9e702.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/a177b87b.c375bc6b.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/a2a42140.0874af77.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/a2a42140.92e318f4.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/a2a42140.b7499969.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/a43669ab.43ecb6f9.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/a43669ab.569a0e56.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/a43669ab.9ff00fbf.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/a5e3c01c.2fae5382.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/a5e3c01c.745bff6b.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/a5e3c01c.dd5b5667.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/a7456010.f211e4ed.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/a7bd4aaa.43febedc.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/a94703ab.4ddb24da.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/ab330409.147a5cb6.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/ab330409.5b311e7f.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/ab330409.f4d98161.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/aba21aa0.935219ff.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/aba56429.838e0ab9.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/aba56429.c432142e.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/acb92e10.7ec1ce07.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/acb92e10.8fbbf79b.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/acb92e10.dc5a38da.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/b6eea487.0209bdcb.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/b6eea487.41ae084e.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/b6eea487.cc797f9d.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/b94e3c57.32f570fe.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/b94e3c57.3f144dce.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/b94e3c57.69c817ae.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/c25f30ce.4393d0d8.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/c25f30ce.712efdff.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/c25f30ce.823485fe.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/c4f5d8e4.4cd1535b.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/c4f5d8e4.9475e17f.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/c4f5d8e4.f77e66d9.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/c85eea80.4ab07013.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/c85eea80.b3ea292c.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/c85eea80.c70bd2d4.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/d0f74840.072aa47b.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/d0f74840.28fc116e.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/d0f74840.f38dd386.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/d78dffdc.aa8d0180.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/d78dffdc.d24dfc40.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/d78dffdc.fe818622.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/dc59239f.be00eb6a.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/dc5cff7e.21dd0101.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/dc5cff7e.3c861010.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/dd568c31.576f5aff.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/dd568c31.a08487b1.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/dd568c31.b976f219.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/dd568c31.be5fbe36.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/e26be504.2ed65da2.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/e26be504.3a783daf.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/e26be504.53e65158.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/e2c84421.1bee6f4e.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/e2c84421.291edd16.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/e2c84421.a9d3dc40.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/e3326475.53194215.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/e3326475.bb0bf015.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/e3326475.f5a04335.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/e451a9fc.14f38fc6.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/e451a9fc.1eb2dd04.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/e451a9fc.d71e1bf6.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/e9344622.3cdf332e.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/e9344622.7b3f5d43.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/e9344622.87b0fb36.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/ec1cf9a5.2763db36.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/ec1cf9a5.2b20aec4.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/ec1cf9a5.f849dc22.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/ec9b782b.28cde4d2.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/ec9b782b.65a38c00.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/ec9b782b.d477d685.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/f17f8f22.563afd14.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/f17f8f22.5912a912.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/f17f8f22.dfe9b5c1.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/f6f525a2.b3e2cf11.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/f6f525a2.ca4e65be.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/f6f525a2.ec292cc3.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/f7c1e884.9c535b1c.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/f7c1e884.a3f094ab.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/f7c1e884.f07dba84.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/ff08ec91.1321fe2c.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/ff08ec91.579dd9a7.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/ff08ec91.72133c5b.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/main.49eede2f.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/main.49eede2f.js.LICENSE.txt" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/main.c5f07f00.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/main.c5f07f00.js.LICENSE.txt" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/main.c7a9c188.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/main.c7a9c188.js.LICENSE.txt" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/runtime~main.371b7b43.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/runtime~main.88ced3e7.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/runtime~main.dc6dc562.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/assets/js/runtime~main.e13b8f1b.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/community.html" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/advanced/data-structures.html" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/advanced/generics-deep.html" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/advanced/how-to-use.html" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/advanced/macros.html" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/advanced/metaprogramming.html" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/advanced/overview.html" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/advanced/raw-pointers.html" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/advanced/traits.html" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/advanced/unsafe.html" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/cli/build.html" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/cli/check-command.html" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/cli/check.html" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/cli/clean.html" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/cli/compile.html" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/cli/docs.html" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/cli/flags.html" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/cli/fmt.html" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/cli/new.html" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/cli/overview.html" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/cli/repl.html" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/cli/run.html" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/cli/struf-command.html" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/community/chat.html" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/community/code-of-conduct.html" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/community/contributing.html" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/community/overview.html" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/docs/advanced/overview.html" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/docs/cli/overview.html" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/docs/intro/overview.html" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/docs/language/overview.html" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/docs/quickstart/overview.html" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/faq/overview.html" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/faq/philosophy.html" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/faq/rust-comparison.html" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/faq/security.html" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/faq/use-cases.html" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/intro/installation.html" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/intro/overview.html" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/intro/why-zith.html" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/language/concurrency.html" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/language/contexts.html" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/language/control-flow.html" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/language/ecs.html" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/language/errors.html" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/language/functions.html" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/language/generics.html" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/language/intrinsics.html" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/language/memory.html" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/language/modules.html" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/language/overview.html" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/language/ownership.html" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/language/packs.html" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/language/spec-core-topics.html" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/language/syntax.html" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/language/types.html" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/language/variables.html" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/project/overview.html" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/quickstart/quickstart.html" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/reference/stdlib.html" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/img/favicon.svg" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/img/logo.svg" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/index.html" beforeDir="false" afterPath="$PROJECT_DIR$/index.html" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/sitemap.xml" beforeDir="false" />
+    <list default="true" id="83a342da-cae5-4439-bab8-6f64fe90a81b" name="Changes" comment="draft of the site developed by: MieldewMeat">
+      <change afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -330,6 +72,7 @@
   </component>
   <component name="ExecutionTargetManager" SELECTED_TARGET="CMakeBuildProfile:Debug" />
   <component name="Git.Settings">
+    <option name="PUSH_AUTO_UPDATE" value="true" />
     <option name="RECENT_BRANCH_BY_REPOSITORY">
       <map>
         <entry key="$PROJECT_DIR$" value="rewrite" />
@@ -406,6 +149,7 @@
       <recent name="C:\Users\al24254\CLionProjects\Zith\scripts\cmake-build-debug\bin" />
     </key>
     <key name="MoveFile.RECENT_KEYS">
+      <recent name="C:\Users\al24254\CLionProjects\Zith" />
       <recent name="C:\Users\al24254\CLionProjects\Zith\include\zith" />
     </key>
   </component>
@@ -656,7 +400,7 @@
       <workItem from="1779447260344" duration="4455000" />
       <workItem from="1779789336564" duration="3762000" />
       <workItem from="1780052115108" duration="613000" />
-      <workItem from="1780394445670" duration="547000" />
+      <workItem from="1780394445670" duration="2611000" />
     </task>
     <task id="LOCAL-00001" summary="invite update">
       <option name="closed" value="true" />
@@ -754,7 +498,23 @@
       <option name="project" value="LOCAL" />
       <updated>1779794304672</updated>
     </task>
-    <option name="localTasksCounter" value="13" />
+    <task id="LOCAL-00013" summary="draft of the site developed by: MieldewMeat">
+      <option name="closed" value="true" />
+      <created>1780395145193</created>
+      <option name="number" value="00013" />
+      <option name="presentableId" value="LOCAL-00013" />
+      <option name="project" value="LOCAL" />
+      <updated>1780395145193</updated>
+    </task>
+    <task id="LOCAL-00014" summary="draft of the site developed by: MieldewMeat">
+      <option name="closed" value="true" />
+      <created>1780395170454</created>
+      <option name="number" value="00014" />
+      <option name="presentableId" value="LOCAL-00014" />
+      <option name="project" value="LOCAL" />
+      <updated>1780395170454</updated>
+    </task>
+    <option name="localTasksCounter" value="15" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -769,6 +529,17 @@
     <isAutomaticReloadCMake value="true" />
     <isAutomaticBootstrapAfterUpdate value="false" />
   </component>
+  <component name="Vcs.Log.Tabs.Properties">
+    <option name="TAB_STATES">
+      <map>
+        <entry key="MAIN">
+          <value>
+            <State />
+          </value>
+        </entry>
+      </map>
+    </option>
+  </component>
   <component name="VcsManagerConfiguration">
     <MESSAGE value="invite update" />
     <MESSAGE value="file" />
@@ -780,6 +551,7 @@
     <MESSAGE value="Ending nigthmare" />
     <MESSAGE value="Fix it later" />
     <MESSAGE value="Nothing, small fixes &amp; pointer hacks" />
-    <option name="LAST_COMMIT_MESSAGE" value="Nothing, small fixes &amp; pointer hacks" />
+    <MESSAGE value="draft of the site developed by: MieldewMeat" />
+    <option name="LAST_COMMIT_MESSAGE" value="draft of the site developed by: MieldewMeat" />
   </component>
 </project>
