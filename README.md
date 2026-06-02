@@ -6,7 +6,7 @@
 
 ##  Creator
 
-The site was created and is maintained by **MieldewMeat**.
+The site was created by [MieldewMeat](https://github.com/MieldewMeat).
 
 ---
 
@@ -31,6 +31,22 @@ We welcome community contributions! If you'd like to support the project by prop
 ## ️ Tech Stack
 
 - **HTML only** — no frameworks, no preprocessors
+- **Example**:
+```html
+    <h1>Title</h1>
+    <br>
+    <h2>Overview</h2>
+    <br>
+    <p>Text example.</p>
+    <br>
+    <h2>See also</h2>
+    <br>
+    <p>To jump across files</p>
+    <a href="./D-build.html">Build Guide</a>
+    <br>
+    <p>Or jump into a section</p>
+    <a href="./D-build.html#building">Building Section</a>
+  ```
 - The site handles all logic natively on its own
 
 ---

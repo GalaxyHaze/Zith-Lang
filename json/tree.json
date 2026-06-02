@@ -7,12 +7,12 @@
         "title": "CLI Reference",
         "link": "./D-cli.html",
         "children": [
-          { "title": "Check", "link": "./D-check.html" },
+          { "title": "Check", "link": "./D-NotDone.html" },
           { "title": "Build", "link": "./D-build.html" }
         ]
       },
-      { "title": "Syntax", "link": "./D-syntax.html" },
-      { "title": "Variables", "link": "./D-variables.html" }
+      { "title": "Syntax", "link": "./D-NotDone.html" },
+      { "title": "Variables", "link": "./D-NotDone.html" }
     ]
   }
 ]

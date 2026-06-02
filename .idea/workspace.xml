@@ -61,9 +61,11 @@
     </configurations>
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="83a342da-cae5-4439-bab8-6f64fe90a81b" name="Changes" comment="draft of the site developed by: MieldewMeat">
-      <change afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
+    <list default="true" id="83a342da-cae5-4439-bab8-6f64fe90a81b" name="Changes" comment="README">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/html/home.html" beforeDir="false" afterPath="$PROJECT_DIR$/html/home.html" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/json/tree.json" beforeDir="false" afterPath="$PROJECT_DIR$/json/tree.json" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -400,7 +402,7 @@
       <workItem from="1779447260344" duration="4455000" />
       <workItem from="1779789336564" duration="3762000" />
       <workItem from="1780052115108" duration="613000" />
-      <workItem from="1780394445670" duration="2611000" />
+      <workItem from="1780394445670" duration="4218000" />
     </task>
     <task id="LOCAL-00001" summary="invite update">
       <option name="closed" value="true" />
@@ -514,7 +516,15 @@
       <option name="project" value="LOCAL" />
       <updated>1780395170454</updated>
     </task>
-    <option name="localTasksCounter" value="15" />
+    <task id="LOCAL-00015" summary="README">
+      <option name="closed" value="true" />
+      <created>1780397068345</created>
+      <option name="number" value="00015" />
+      <option name="presentableId" value="LOCAL-00015" />
+      <option name="project" value="LOCAL" />
+      <updated>1780397068345</updated>
+    </task>
+    <option name="localTasksCounter" value="16" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -552,6 +562,7 @@
     <MESSAGE value="Fix it later" />
     <MESSAGE value="Nothing, small fixes &amp; pointer hacks" />
     <MESSAGE value="draft of the site developed by: MieldewMeat" />
-    <option name="LAST_COMMIT_MESSAGE" value="draft of the site developed by: MieldewMeat" />
+    <MESSAGE value="README" />
+    <option name="LAST_COMMIT_MESSAGE" value="README" />
   </component>
 </project>
