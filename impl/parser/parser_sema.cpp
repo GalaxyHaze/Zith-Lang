@@ -1331,6 +1331,8 @@ if (!zith::type_match(sema_type_from_node(ep->type_node, &ctx),
         infer_ctx.functions = ctx.functions;
         infer_ctx.structs = ctx.structs;
         infer_ctx.analyzing_fns = ctx.analyzing_fns;
+        infer_ctx.scopes = ctx.scopes;
+        infer_ctx.imported_roots = ctx.imported_roots;
 
         sema_push_scope(infer_ctx);
         for (size_t pi = 0; pi < fn->param_count; ++pi) {

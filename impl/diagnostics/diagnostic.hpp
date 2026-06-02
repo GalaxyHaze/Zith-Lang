@@ -165,7 +165,7 @@ struct LabeledSpan {
 };
 
 struct Diagnostic {
-    DiagLevel level;
+    DiagLevel level = DiagLevel::Error;
     DiagCode code;
     LazyMessage message;
 
