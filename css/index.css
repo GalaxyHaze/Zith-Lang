@@ -1,0 +1,82 @@
+
+/*==================
+BASE
+===================*/
+
+* {
+    box-sizing: border-box;
+}
+
+html, body{
+    margin:0;
+    padding:0;
+    min-height: 100vh;
+    min-height: 100dvh;
+    display: flex;
+    flex-direction: column;
+
+    font-family: ui-monospace, monospace;
+
+    background-color: #222222;
+    color: #FAF3E1;
+}
+
+/*==================
+TIPOGRAFIA
+===================*/
+
+a{
+    color: #FF6D1F;
+    font-size:20px;
+    text-decoration: none;
+}
+
+/*==================
+LAYOUT PRINCIPAL
+===================*/
+
+.center{
+    gap: 16px;
+    
+    flex: 1;
+
+    display: flex;
+    flex-direction: column;
+
+    justify-content: center;
+    align-items: center;
+}
+
+footer{
+    color:#555555;
+    margin-left: 30px;
+}
+
+footer a{
+    color: #aaaaaa;
+    font-size: 16px;
+}
+
+/*==================
+LOGO
+===================*/
+
+.logo {
+    display: flex;
+    flex-direction: column;
+
+    justify-content: center;
+    align-items: center;
+
+    gap:0;
+}
+
+.logo h1{
+    font-size: clamp(48px, 8vw, 100px);
+    margin: 0;
+}
+
+.logo img{
+    width: min(200px, 60vw);
+    height: auto;
+}

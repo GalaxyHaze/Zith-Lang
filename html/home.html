@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>ZithOS</title>
+        <link rel="icon" type="image/x-icon" href="../media/Logos/logo.png">
+        <link rel="stylesheet" href="../css/home.css">
+
+        <meta name="viewport" content="width=device-width, initial-scale=0.7">
+    </head>
+    <body>
+        <div id="loader">
+            <div id="terminal"></div>
+        </div>
+
+        <div class="main">
+
+            <div class="icons">
+                <div class="icon">
+                    <a href="./documentation/D-home.html" >
+                        <img src="../media/Icons/Documentation.svg">
+                        <p>Docs</p>
+                    </a>
+                </div>
+
+                <div class="icon">
+                    <a href="https://discord.gg/585JgbWCPr" target="_blank">
+                        <img src="../media/Icons/Discord.svg">
+                        <p>Discord</p>
+                    </a>
+                </div>
+
+                <div class="icon">
+                    <a href="https://github.com/GalaxyHaze/Zith" target="_">
+                        <img src="../media/Icons/Github.svg">
+                        <p>Github</p>
+                    </a>
+                </div>
+
+                <div class="icon" onclick="openWindow('contact')">
+                    <img src="../media/Icons/Phone.svg">
+                    <p>Contact</p>
+                </div>
+
+                <div class="icon" onclick="openWindow('download')">
+                    <img src="../media/Icons/Download.svg">
+                    <p>Download</p>
+                </div>
+
+                <div class="icon" onclick="openWindow('404About')">
+                    <img src="../media/Icons/Me.svg">
+                    <p>About Me</p>
+                </div>
+
+                <div class="icon" onclick="openWindow('news')">
+                    <img src="../media/Icons/News.svg">
+                    <p>News</p>
+                </div>
+
+            </div> 
+
+            <footer>
+                <div class="start" onclick="openWindow('start')">
+                    <img src="../media/Icons/Start.svg">
+                    <p>Start</p>
+                </div>
+            </footer>
+        </div>
+
+        <div class="window hidden" id="news">
+            <div class="titlebar">
+                <span>News.txt</span>
+                <div class="buttons">
+                    <button>-</button>
+                    <button onclick="toggleMaximize('news')">o</button>
+                    <button onclick="closeWindow('news')">x</button>
+                </div>
+            </div>
+            <div class="content">
+                <h2>News</h2>
+                <p>Site up now!</p>
+            </div>
+        </div>
+
+        <div class="window hidden" id="contact">
+            <div class="titlebar">
+                <span>contact.txt</span>
+                <div class="buttons">
+                    <button>-</button>
+                    <button onclick="toggleMaximize('contact')">o</button>
+                    <button onclick="closeWindow('contact')">x</button>
+                </div>
+            </div>
+            <div class="content">
+                <h2>Contact</h2>
+                <p>Email: diogoalexandredecodasilvapt@gmail.com</p>
+            </div>
+        </div>
+
+        <div class="window hidden" id="download">
+            <div class="titlebar">
+                <span>Download.md</span>
+                <div class="buttons">
+                    <button>-</button>
+                    <button onclick="toggleMaximize('download')">o</button>
+                    <button onclick="closeWindow('download')">x</button>
+                </div>
+            </div>
+            <div class="content">
+                <h2>Download</h2>
+                <p>Release: <a href="https://github.com/GalaxyHaze/Zith/releases" target="_blank">Downloads</a></p>
+            </div>
+        </div>
+
+        <div class="window hidden" id="404About">
+            <div class="titlebar">
+                <span>About me</span>
+                <div class="buttons">
+                    <button>-</button>
+                    <button onclick="toggleMaximize('404About')">o</button>
+                    <button onclick="closeWindow('404About')">x</button>
+                </div>
+            </div>
+            <div class="content">
+                <h2>IN BUILD</h2>
+                <p>Sorry but doesn't have a About me page yet.</p>
+            </div>
+        </div>
+
+        <div class="window hidden" id="start">
+            <div class="titlebar">
+                <span>ERROR</span>
+                <div class="buttons">
+                    <button>-</button>
+                    <button onclick="toggleMaximize('start')">o</button>
+                    <button onclick="closeWindow('start')">x</button>
+                </div>
+            </div>
+            <div class="content">
+                <h2>IN BUILD</h2>
+                <p>Sorry but doesn't have a Start page yet.</p>
+            </div>
+        </div>
+        
+        <div class="crt-overlay"></div>
+        <script src="../js/loader.js"></script>
+        <script src="../js/news.js"></script>
+        <script src="../js/windows.js"></script>
+    </body>
+
+</html>

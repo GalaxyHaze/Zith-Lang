@@ -1,0 +1,294 @@
+/*==================
+BASE
+===================*/
+
+* {
+    box-sizing: border-box;
+}
+
+html, body{
+    margin:0;
+    padding:0;
+    height: 100%;
+}
+body {
+    font-family: ui-monospace, monospace;
+    background-color: #000000;
+    color: #E87F24;
+
+    display: flex;
+    flex-direction: column;
+
+    background-image: url("../media/wallpaper.jpg");
+    background-size: cover;
+    background-position: center;
+    min-height: 0;
+}
+
+/*==================
+TIPO GRAFIA
+===================*/
+
+h1, h2, h3, h4, h5, h6 {
+    color: #FAF3E1;
+}
+
+/*==================
+LAYOUT PRINCIPAL
+===================*/
+
+.main{
+    min-height: 0;
+    flex:1;
+    display: flex;
+    flex-direction: column;
+
+    min-height: 0;
+}
+
+#loader{
+    position: fixed;
+    inset: 0;
+
+    background: #000000;
+
+    display: flex;
+    flex-direction: column;
+
+    z-index: 9999;
+}
+
+#terminal{
+    white-space: pre;
+    font-size:18px;
+}
+
+.ok{
+    color: #00ff88;
+}
+
+/*==================
+ICONS
+===================*/
+
+.icons{
+    margin-top:30px;
+    margin-left: 10px;
+
+    display: flex;
+    flex-direction: column;
+    
+    flex-wrap: wrap;
+    width: fit-content;
+    
+    flex:1;
+    min-height: 0;
+}
+
+.icon{
+    width: 80px;
+
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+
+    cursor: pointer;
+}
+.icon a{
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+
+    text-decoration: none;
+}
+.icon img{
+    width: 64px;
+    height: 64px;
+    object-fit: contain;
+
+    filter: drop-shadow(0 0px 4px rgba(0,0,0,0.6));
+}
+
+.icon p{
+    width: 80px;
+    text-align: center;
+
+    overflow-wrap: break-word;
+
+    color: #ffffff;
+    
+    text-shadow: 2px 2px 4px black;
+}
+
+/*==================
+EFEITOS
+===================*/
+
+.crt-overlay {
+    position: fixed;
+    inset: 0;
+
+    pointer-events: none;
+    z-index: 99999;
+
+    background:
+        repeating-linear-gradient(
+            to bottom,
+            rgba(0,0,0,0.15),
+            rgba(0,0,0,0.15) 1px,
+            transparent 1px,
+            transparent 3px
+        );
+
+    mix-blend-mode: multiply;
+    opacity: 0.4;
+
+    animation: flicker 0.15s infinite;
+}
+
+.crt-overlay::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+
+    background: radial-gradient(
+        ellipse at center,
+        transparent 40%,
+        rgba(0,0,0,0.6) 100%
+    );
+}
+
+.crt-overlay::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+
+    background-image: url("https://upload.wikimedia.org/wikipedia/commons/7/76/1k_Dissolve_Noise_Texture.png");
+
+    opacity: 0.05;
+    animation: noise 0.2s infinite;
+}
+
+/*==================
+ANIMAÇÕES
+===================*/
+
+@keyframes noise {
+    0% { transform: translate(0,0); }
+    10% { transform: translate(-1px,1px); }
+    20% { transform: translate(1px,-1px); }
+    30% { transform: translate(-1px,-1px); }
+    40% { transform: translate(1px,1px); }
+    50% { transform: translate(0,0); }
+}
+
+@keyframes flicker {
+    0% { opacity: 0.4; }
+    50% { opacity: 0.45; }
+    100% { opacity: 0.4; }
+}
+
+/*==================
+FOOTER
+===================*/
+
+footer{
+    background-color: #0000ff;
+    
+    box-shadow:
+        inset 0 10px 8px 0px rgba(69, 80, 196, 0.6),
+        inset 15px 10px 20px 10px #221e96;
+}
+
+footer .start{
+    cursor: pointer;
+
+    display: flex;
+    align-items: center;
+    gap: 10px;
+
+    padding: 0 10px;
+
+    color:#ffffff;
+    background-color: #7dc343;
+
+    text-decoration: none;
+
+    width: fit-content;
+
+    border-top-right-radius: 20px;
+    border-bottom-right-radius: 20px;
+
+    box-shadow: 
+        inset 0 10px 8px 0px rgba(83, 174, 92, 0.6),
+        inset -15px 10px 20px 10px rgb(36, 124, 45);
+}
+footer p{
+    text-shadow: 2px 2px 4px black;
+}
+footer img{
+    height: 24px;
+    filter: drop-shadow(0 0px 4px rgba(0,0,0,0.6));
+}
+
+/*==================
+FAKE WINDOW
+===================*/
+
+.window{
+    width: min(500px, 90vw);
+    height: min(400px, 80vh);
+
+    position: absolute;
+
+    border: 2px solid #000;
+    background-color: #444;
+
+    box-shadow: 6px 6px 10px #000;
+
+    display: flex;
+    flex-direction: column;
+}
+
+.window a{
+    color: #79eeff;
+}
+
+.titlebar{
+    height: 32px;
+
+    background-color: #0000ff;
+    color: #ffffff;
+
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+
+    padding: 0 10px;
+
+    cursor: move;
+
+    touch-action: none;
+    user-select: none;
+}
+.buttons{
+    display: flex;
+    gap: 4px;
+}
+.buttons button{
+    width: 24px;
+    height: 24px;
+    border: none;
+    background-color: #dcdcdc;
+    cursor: pointer;
+}
+
+.content{
+    flex: 1;
+    overflow: auto;
+    padding: 16px;
+}
+
+.hidden{
+    display: none;
+}

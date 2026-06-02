@@ -1,0 +1,18 @@
+[
+  {
+    "title": "Home",
+    "link": "../home.html",
+    "children": [
+      {
+        "title": "CLI Reference",
+        "link": "./D-cli.html",
+        "children": [
+          { "title": "Check", "link": "./D-check.html" },
+          { "title": "Build", "link": "./D-build.html" }
+        ]
+      },
+      { "title": "Syntax", "link": "./D-syntax.html" },
+      { "title": "Variables", "link": "./D-variables.html" }
+    ]
+  }
+]

@@ -1,0 +1,368 @@
+/*==================
+VARS
+===================*/
+
+:root {
+    --color-bg: #000;
+    --color-txt: #fff;
+
+    --color-sidebar: rgb(58, 58, 58);
+    --color-sidebar-shadow-1: rgba(64, 64, 64, 0.6);
+    --color-sidebar-shadow-2: rgb(46, 46, 46);
+
+    --color-cyan: #00ffff;
+    --color-orange: #ff6d1f;
+    --color-yellow: #fbff1f;
+    --color-owner: rgb(255, 85, 0);
+
+    --color-tree-line: rgba(255, 255, 255, 0.2);
+    --color-hover: rgba(255, 255, 255, 0.08);
+    --color-scanline: rgba(0, 0, 0, 0.15);
+    --color-vignette: rgba(0, 0, 0, 0.6);
+
+    --glow-white:
+        0 0 10px #fff,
+        0 0 40px #fff;
+    
+    --glow-cyan:
+        0 0 5px var(--color-cyan),
+        0 0 5px var(--color-cyan),
+        0 0 5px var(--color-cyan),
+        0 0 10px var(--color-cyan),
+        0 0 10px var(--color-cyan),
+        0 0 20px var(--color-cyan),
+        0 0 20px var(--color-cyan),
+        0 0 40px var(--color-cyan),
+        0 0 80px var(--color-cyan),
+        0 0 120px var(--color-cyan);
+
+    --glow-orange:
+        0 0 2px var(--color-orange),
+        0 0 5px var(--color-orange),
+        0 0 10px var(--color-orange),
+        0 0 40px var(--color-orange);
+    --glow-warning:
+        0 0 2px var(--color-yellow),
+        0 0 5px var(--color-orange),
+        0 0 10px var(--color-orange),
+        0 0 40px var(--color-orange);
+    --glow-owner:
+        0 0 2px var(--color-owner),
+        0 0 5px var(--color-owner),
+        0 0 10px var(--color-owner);
+
+}
+
+/*==================
+BASE
+===================*/
+
+html, body {
+    font-family: "Fira Code", monospace;
+
+    margin: 0;
+    padding: 0;
+
+    min-height: 100vh;
+    background: var(--color-bg);
+    color: var(--color-txt);
+}
+
+body {
+    display: flex;
+    overflow: hidden;
+}
+
+p, pre {
+    margin: 0;
+}
+
+a {
+    color: var(--color-orange);
+    text-decoration: none;
+}
+
+/*==================
+LAYOUT PRINCIPAL
+===================*/
+
+.lateralBar {
+    width: 260px;
+    min-width: 260px;
+
+    height: 100vh;
+    overflow-y: auto;
+
+    padding: 20px;
+
+    background-color: var(--color-sidebar);
+
+    box-sizing: border-box;
+
+    box-shadow: 
+        inset 0 10px 20px 0px var(--color-sidebar-shadow-1),
+        inset 15px 10px 20px 10px var(--color-sidebar-shadow-2);
+}
+
+.main {
+    flex: 1;
+
+    display: flex;
+    flex-direction: column;
+
+    height: 100vh;
+    overflow: hidden;
+}
+
+.top {
+    padding: 20px;
+    box-sizing: border-box;
+    display: flex;
+}
+
+.bottom {
+    flex: 1;
+    overflow: auto;
+    padding: 20px;
+    padding-top: 0;
+    padding-bottom: 40px;
+}
+
+.info {
+    padding: 48px;
+    font-size: 18px;
+    box-sizing: border-box;
+}
+
+/*==================
+COMPONENTS
+===================*/
+
+.logo {
+    font-size: 12px;
+    line-height: 1;
+
+    color: var(--color-cyan);
+
+    overflow-x: auto;
+    white-space: pre;
+
+    max-width: 100%;
+}
+
+.lastUpdated,
+.versionAdded,
+.lastUpdate,
+.outdated {
+    color: var(--color-yellow);
+}
+
+.owner {
+    color: var(--color-owner);
+}
+
+/*=================
+TREE
+==================*/
+
+.lateralBar ul {
+    list-style: none;
+    margin: 0;
+    padding-left: 18px;
+    position: relative;
+}
+
+.lateralBar li {
+    position: relative;
+    padding: 4px 0 4px 14px;
+}
+
+.lateralBar ul::before {
+    content: "";
+
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 6px;
+
+    width: 1px;
+
+    background: var(--color-vignette);
+}
+
+.lateralBar li::before {
+    content: "";
+
+    position: absolute;
+    top: 14px;
+    left: 6px;
+
+    width: 10px;
+    height: 1px;
+
+    background: var(--color-vignette);
+}
+
+.lateralBar > ul::before,
+.lateralBar > ul > li::before {
+    display: none;
+}
+
+.lateralBar a {
+    text-decoration: none;
+    color: var(--color-txt);
+
+    padding: 2px 6px;
+    border-radius: 6px;
+
+    display: inline-block;
+
+    transition: 0.15s;
+}
+
+.lateralBar a:hover {
+    background: var(--color-hover);
+}
+
+/*==================
+EFEITOS
+===================*/
+
+.main {
+    font-family: 'VT323';
+    
+    text-shadow: var(--glow-white);
+}
+
+.main .logo {
+    text-shadow: var(--glow-cyan);
+}
+
+.main a {
+    text-shadow: var(--glow-orange);
+}
+
+.lastUpdated,
+.versionAdded,
+.lastUpdate,
+.outdated {
+    text-shadow: var(--glow-warning);
+}
+
+.owner{
+    text-shadow: var(--glow-owner);
+}
+
+
+.crt-overlay {
+    position: fixed;
+    inset: 0;
+
+    pointer-events: none;
+    z-index: 99999;
+
+    background:
+        repeating-linear-gradient(
+            to bottom,
+            var(--color-scanline),
+            var(--color-scanline) 1px,
+            transparent 1px,
+            transparent 3px
+        );
+
+    mix-blend-mode: multiply;
+    opacity: 0.4;
+
+    animation: flicker 0.15s infinite;
+}
+
+.crt-overlay::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+
+    background: radial-gradient(
+        ellipse at center,
+        transparent 40%,
+        var(--color-vignette) 100%
+    );
+}
+
+.crt-overlay::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+
+    background-image: url("https://upload.wikimedia.org/wikipedia/commons/7/76/1k_Dissolve_Noise_Texture.png");
+
+    opacity: 0.05;
+    animation: noise 0.2s infinite;
+}
+
+/*==================
+ANIMAÇÕES
+===================*/
+
+@keyframes noise {
+    0% { transform: translate(0,0); }
+    10% { transform: translate(-1px,1px); }
+    20% { transform: translate(1px,-1px); }
+    30% { transform: translate(-1px,-1px); }
+    40% { transform: translate(1px,1px); }
+    50% { transform: translate(0,0); }
+}
+
+@keyframes flicker {
+    0% { opacity: 0.4; }
+    50% { opacity: 0.45; }
+    100% { opacity: 0.4; }
+}
+
+/*==================
+MOBILE
+===================*/
+
+@media (max-width: 1080px) {
+
+    body {
+        flex-direction: column;
+        height: 100dvh;
+        overflow: hidden;
+        font-size: 34px;
+    }
+
+    .lateralBar {
+        width: 100%;
+
+        max-height: 30vh;
+
+        overflow-y: auto;
+        flex-shrink: 0;
+    }
+
+    .main {
+        flex: 1;
+        min-height: 0;
+        height: auto;
+        overflow-y: auto;
+    }
+
+    .top {
+        flex-shrink: 0;
+        padding: 10px;
+    }
+
+    .bottom{
+        flex-shrink: 0;
+        flex: 1;
+    }
+
+    .info {
+        padding: 20px;
+        font-size: 32px;
+    }
+
+    .logo {
+        font-size: 14px;
+    }
+}
