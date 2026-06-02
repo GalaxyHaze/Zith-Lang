@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://zith-lang.org/sitemap.xml
