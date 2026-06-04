@@ -1,0 +1,31 @@
+<svg width="1200" height="630" viewBox="0 0 1200 630" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background -->
+  <rect width="1200" height="630" fill="#222222"/>
+  
+  <!-- LOGO INLINE (Embedded) -->
+  <!-- Transform move o logo para a posição x=460, y=80 -->
+  <g transform="translate(460, 80)">
+    <!-- Círculos de fundo do logo -->
+    <circle style="fill:#d38d5f;fill-opacity:1;stroke-width:0.264583" cx="135" cy="135" r="135" />
+    <circle style="fill:#ffe680;fill-opacity:1;stroke-width:0.25185" cx="133.50349" cy="135" r="128.50349" />
+    
+    <g id="g71-8" transform="matrix(15,0,0,15.416666,519.99985,38.750002)">
+      <path style="fill:#ff7f2a;fill-opacity:1;stroke-width:0.264583" d="M -24.99999,11 V 2 l 2,-2 h 3 v 1 h -4 v 10 z" id="path61-2" />
+      <path style="fill:#80e5ff;fill-opacity:1;stroke-width:0.264583" d="m -23.99999,12 h -8 v -2 l 7,-7 h -7 V 2 h 8 v 2 l -7,7 h 7 z" id="path60-45" />
+      <path style="fill:#ff7f2a;fill-opacity:1;stroke-width:0.264583" d="m -24.99999,1 h -3 V 0 h 4 z" id="path62-5" />
+      <path style="fill:#d45500;fill-opacity:1;stroke-width:0.264583" d="m -23.99999,7 h 2 v 1 h -2 z" id="path63-1" />
+      <path style="fill:#ff7f2a;fill-opacity:1;stroke-width:0.264583" d="M -21.99999,12 V 6 5 l 1,1 v 6 z" id="path64-7" />
+      <ellipse style="fill:#ff7f2a;fill-opacity:1;stroke-width:0.264583" id="path65-1" cx="-21.500006" cy="3.5" rx="0.49999997" ry="0.5" />
+    </g>
+    
+  </g>
+  
+  <!-- Title text -->
+  <text x="600" y="440" text-anchor="middle" font-family="ui-monospace, monospace" font-size="72" font-weight="bold" fill="#FAF3E1">Zith</text>
+  
+  <!-- Subtitle text -->
+  <text x="600" y="500" text-anchor="middle" font-family="ui-monospace, monospace" font-size="28" fill="#888888">A New Programming Language</text>
+  
+  <!-- URL -->
+  <text x="600" y="560" text-anchor="middle" font-family="ui-monospace, monospace" font-size="20" fill="#FF6D1F">zith-lang.org</text>
+</svg>

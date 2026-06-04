@@ -6,7 +6,7 @@
 
 ##  Creator
 
-The site was created by [MieldewMeat](https://github.com/MieldewMeat).
+The site was created by [GalaxyHaze](https://github.com/GalaxyHaze).
 
 ---
 

@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Generate Social Share Image</title>
+    <style>
+        body { font-family: monospace; background: #222; color: #fff; padding: 20px; }
+        .container { max-width: 1200px; margin: 0 auto; }
+        h1 { color: #FF6D1F; }
+        .instructions { background: #333; padding: 15px; border-radius: 5px; margin: 20px 0; }
+        .preview { border: 1px solid #555; margin: 20px 0; }
+        button { background: #FF6D1F; color: #fff; border: none; padding: 10px 20px; cursor: pointer; font-family: monospace; }
+        button:hover { background: #e65c0f; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Social Share Image Generator</h1>
+        
+        <div class="instructions">
+            <h2>Instructions:</h2>
+            <ol>
+                <li>Right-click on the preview image below</li>
+                <li>Select "Save image as..." or use a screenshot tool</li>
+                <li>Save as <code>social-share.png</code> in the <code>media/Logos/</code> folder</li>
+                <li>The image should be 1200x630 pixels</li>
+            </ol>
+        </div>
+        
+        <h2>Preview:</h2>
+        <div class="preview">
+            <img src="social-share.svg" width="1200" height="630" alt="Social Share Preview">
+        </div>
+        
+        <button onclick="downloadSVG()">Download SVG</button>
+        <button onclick="window.print()">Print Screen</button>
+    </div>
+    
+    <script>
+        function downloadSVG() {
+            const link = document.createElement('a');
+            link.href = 'social-share.svg';
+            link.download = 'social-share.svg';
+            link.click();
+        }
+    </script>
+</body>
+</html>
