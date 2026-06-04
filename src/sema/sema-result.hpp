@@ -4,12 +4,12 @@
 #include "zir/hir/hir-module.hpp"
 #include "import/symbol-table.hpp"
 
-namespace zith::middleend::sema {
+namespace zith::sema {
 
     struct SemaResult {
-        hir::HirModule hir;
-        diagnostics::engine::DiagnosticEngine diagnostics;
-        symbols::SymbolTable symbols;
+        zir::hir::HirModule hir;
+        diagnostics::DiagnosticEngine diagnostics;
+        import::SymbolTable symbols;
     };
 
-} // namespace zith::middleend::sema
+} // namespace zith::sema

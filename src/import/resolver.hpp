@@ -4,24 +4,24 @@
 #include "ast/ast-builder.hpp"
 #include "import/symbol-table.hpp"
 
-namespace zith::middleend::symbols {
+namespace zith::import {
 
     class Resolver {
         SymbolTable &syms_;
-        frontend::ast::AstBuilder &builder_;
-        diagnostics::engine::DiagnosticEngine &diags_;
+        ast::AstBuilder &builder_;
+        diagnostics::DiagnosticEngine &diags_;
 
     public:
         Resolver(SymbolTable &syms,
-                 frontend::ast::AstBuilder &builder,
-                 diagnostics::engine::DiagnosticEngine &diags);
+                 ast::AstBuilder &builder,
+                 diagnostics::DiagnosticEngine &diags);
 
-        void resolveProgram(frontend::ast::DeclId program);
+        void resolveProgram(ast::DeclId program);
 
     private:
-        void resolveDecl(frontend::ast::DeclId id);
-        void resolveStmt(frontend::ast::StmtId id);
-        void resolveExpr(frontend::ast::ExprId id);
+        void resolveDecl(ast::DeclId id);
+        void resolveStmt(ast::StmtId id);
+        void resolveExpr(ast::ExprId id);
     };
 
-} // namespace zith::middleend::symbols
+} // namespace zith::import

@@ -10,7 +10,7 @@
 #include <cstdio>
 #include <string_view>
 
-namespace zith::frontend::lexer {
+namespace zith::lexer {
 
     bool Lexer::isNum(char c) {
         return c >= '0' && c <= '9';
@@ -24,6 +24,24 @@ namespace zith::frontend::lexer {
             case ']':
             case '{':
             case '}':
+            case ':':
+            case ';':
+            case ',':
+            case '.':
+            case '"':
+            case '\'':
+            case '\\':
+            case '#':
+            case '@':
+            case '`':
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    bool Lexer::isOperator(char c) {
+        switch (c) {
             case '+':
             case '-':
             case '*':
@@ -38,16 +56,6 @@ namespace zith::frontend::lexer {
             case '^':
             case '~':
             case '?':
-            case ':':
-            case ';':
-            case ',':
-            case '.':
-            case '"':
-            case '\'':
-            case '\\':
-            case '#':
-            case '@':
-            case '`':
                 return true;
             default:
                 return false;
@@ -112,7 +120,7 @@ namespace zith::frontend::lexer {
             loc.col++;
             now++;
         }
-        tokens.emplace(Span{gId,
+        tokens.emplace(parser::Span{gId,
                             static_cast<uint32_t>(before - start),
                             static_cast<uint32_t>(now - start)},
                        TokenKind::Comments);
@@ -129,7 +137,7 @@ namespace zith::frontend::lexer {
             loc.col++;
             now++;
         }
-        tokens.emplace(Span{gId,
+        tokens.emplace(parser::Span{gId,
                             static_cast<uint32_t>(before - start),
                             static_cast<uint32_t>(now - start)},
                        TokenKind::Docs);
@@ -140,7 +148,7 @@ namespace zith::frontend::lexer {
         while (isOpen()) {
             if (*now == '*' && peek() == '/') {
                 now += 2;
-                tokens.emplace(Span{gId,
+                tokens.emplace(parser::Span{gId,
                                     static_cast<uint32_t>(before - start),
                                     static_cast<uint32_t>(now - start)},
                                TokenKind::Comments);
@@ -162,7 +170,7 @@ namespace zith::frontend::lexer {
         while (isOpen()) {
             if (*now == '*' && peek() == '/') {
                 now += 2;
-                tokens.emplace(Span{gId,
+                tokens.emplace(parser::Span{gId,
                                     static_cast<uint32_t>(before - start),
                                     static_cast<uint32_t>(now - start)},
                                TokenKind::Docs);
@@ -191,7 +199,7 @@ namespace zith::frontend::lexer {
                     loc.col++;
                     now++;
                 }
-                tokens.emplace(Span{gId,
+                tokens.emplace(parser::Span{gId,
                                     static_cast<uint32_t>(before - start),
                                     static_cast<uint32_t>(now - start)},
                                TokenKind::LitVal);
@@ -203,7 +211,7 @@ namespace zith::frontend::lexer {
                     loc.col++;
                     now++;
                 }
-                tokens.emplace(Span{gId,
+                tokens.emplace(parser::Span{gId,
                                     static_cast<uint32_t>(before - start),
                                     static_cast<uint32_t>(now - start)},
                                TokenKind::LitVal);
@@ -215,7 +223,7 @@ namespace zith::frontend::lexer {
                     loc.col++;
                     now++;
                 }
-                tokens.emplace(Span{gId,
+                tokens.emplace(parser::Span{gId,
                                     static_cast<uint32_t>(before - start),
                                     static_cast<uint32_t>(now - start)},
                                TokenKind::LitVal);
@@ -237,7 +245,7 @@ namespace zith::frontend::lexer {
             }
         }
 
-        tokens.emplace(Span{gId,
+        tokens.emplace(parser::Span{gId,
                             static_cast<uint32_t>(before - start),
                             static_cast<uint32_t>(now - start)},
                        TokenKind::LitVal);
@@ -253,7 +261,7 @@ namespace zith::frontend::lexer {
             if (*now == quote) {
                 now++;
                 loc.col++;
-                tokens.emplace(Span{gId,
+                tokens.emplace(parser::Span{gId,
                                     static_cast<uint32_t>(before - start),
                                     static_cast<uint32_t>(now - start)},
                                TokenKind::LitVal);
@@ -285,33 +293,33 @@ namespace zith::frontend::lexer {
         }
         std::string_view word{before, static_cast<size_t>(now - before)};
         TokenKind kind = lookup_keyword(word);
-        tokens.emplace(Span{gId,
+        tokens.emplace(parser::Span{gId,
                             static_cast<uint32_t>(before - start),
                             static_cast<uint32_t>(now - start)},
                        kind);
     }
 
-    Lexer::Lexer() : tokens(infra::alloc::SessionArena) {}
+    Lexer::Lexer() : tokens(memory::SessionArena) {}
 
-    auto Lexer::run(std::variant<FileId, std::pair<std::string_view, std::string>> input)
-            -> infra::util::Result<TokenStream> {
+    auto Lexer::run(std::variant<parser::FileId, std::pair<std::string_view, std::string>> input)
+            -> memory::Result<TokenStream> {
         err = ErrorKind::Success;
 
-        if (auto *id = std::get_if<FileId>(&input)) {
+        if (auto *id = std::get_if<parser::FileId>(&input)) {
             gId = *id;
         } else {
             auto &[name, content] = std::get<std::pair<std::string_view, std::string>>(input);
-            if (auto i = SourceMap::add_file(name, content)) {
+            if (auto i = parser::SourceMap::add_file(name, content)) {
                 gId = i.value();
             }
         }
 
-        if (auto i = SourceMap::get(gId)) {
+        if (auto i = parser::SourceMap::get(gId)) {
             file = &i.value().get();
         }
 
         if (!file)
-            return infra::util::Error{"[error] Couldnt find the file"};
+            return memory::Error{"[error] Couldnt find the file"};
 
         const auto content = file->getSlice();
         start = now = content.data();
@@ -365,11 +373,22 @@ namespace zith::frontend::lexer {
                 continue;
             }
 
+            if (isOperator(*now)) {
+                const auto before = now;
+                loc.col++;
+                now++;
+                tokens.emplace(parser::Span{gId,
+                                    static_cast<uint32_t>(before - start),
+                                    static_cast<uint32_t>(now - start)},
+                               TokenKind::Operators);
+                continue;
+            }
+
             if (isPunctuation(*now)) {
                 const auto before = now;
                 loc.col++;
                 now++;
-                tokens.emplace(Span{gId,
+                tokens.emplace(parser::Span{gId,
                                     static_cast<uint32_t>(before - start),
                                     static_cast<uint32_t>(now - start)},
                                TokenKind::Punctuation);
@@ -380,7 +399,7 @@ namespace zith::frontend::lexer {
                 const auto before = now;
                 loc.col++;
                 now++;
-                tokens.emplace(Span{gId,
+                tokens.emplace(parser::Span{gId,
                                     static_cast<uint32_t>(before - start),
                                     static_cast<uint32_t>(now - start)},
                                TokenKind::Unknown);
@@ -388,21 +407,21 @@ namespace zith::frontend::lexer {
         }
 
         tokens.emplace(
-                Span{gId, static_cast<uint32_t>(now - start), static_cast<uint32_t>(now - start)},
+                parser::Span{gId, static_cast<uint32_t>(now - start), static_cast<uint32_t>(now - start)},
                 TokenKind::End);
 
         if (err != ErrorKind::Success)
-            return infra::util::Error{getErrorMsg()};
+            return memory::Error{getErrorMsg()};
 
         return TokenStream{tokens.data(), static_cast<uint32_t>(tokens.size()), 0};
     }
 
-    auto tokenize(FileId id) -> infra::util::Result<TokenStream> {
+    auto tokenize(parser::FileId id) -> memory::Result<TokenStream> {
         Lexer lexer;
-        return lexer.run(std::variant<FileId, std::pair<std::string_view, std::string>>(id));
+        return lexer.run(std::variant<parser::FileId, std::pair<std::string_view, std::string>>(id));
     }
 
-    auto tokenize(std::string_view name, std::string test) -> infra::util::Result<TokenStream> {
+    auto tokenize(std::string_view name, std::string test) -> memory::Result<TokenStream> {
         Lexer lexer;
         return lexer.run(std::make_pair(name, std::move(test)));
     }
@@ -479,8 +498,8 @@ namespace zith::frontend::lexer {
                 return "Word";
             case TokenKind::Logical:
                 return "Logical";
-            case TokenKind::Comparision:
-                return "Comparision";
+            case TokenKind::Comparison:
+                return "Comparison";
             case TokenKind::Operators:
                 return "Operators";
             case TokenKind::Comments:
@@ -504,7 +523,7 @@ namespace zith::frontend::lexer {
     void printTokens(const TokenStream &stream) noexcept {
         for (uint32_t i = 0; i < stream.len; ++i) {
             const auto &tok = stream.src[i];
-            auto res        = SourceMap::snippet(tok.span);
+            auto res        = parser::SourceMap::snippet(tok.span);
             auto lexeme     = res.isOk() ? res.value() : std::string_view{};
             printf("  %-16s \"%.*s\"  [%u..%u]\n",
                    tokenKindName(tok.kind),
@@ -515,4 +534,4 @@ namespace zith::frontend::lexer {
         }
     }
 
-} // namespace zith::frontend::lexer
+} // namespace zith::lexer

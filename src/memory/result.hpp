@@ -4,7 +4,7 @@
 #include <type_traits>
 #include <variant> // Substitui a união manual propensa a bugs de ciclo de vida
 
-namespace zith::infra::util {
+namespace zith::memory {
 
     struct Error {
         std::string msg;
@@ -67,4 +67,4 @@ namespace zith::infra::util {
         }
     };
 
-} // namespace zith::infra::util
+} // namespace zith::memory

@@ -1,15 +1,15 @@
 #include "symbol-table.hpp"
 
-namespace zith::middleend::symbols {
+namespace zith::import {
 
-    SymbolTable::SymbolTable(infra::alloc::Arena &arena) : arena_(&arena), scopes_(arena) {
-        scopes_.emplace(Scope{kInvalidScope, infra::collections::DynArray<SymId>(arena)});
+    SymbolTable::SymbolTable(memory::Arena &arena) : arena_(&arena), scopes_(arena) {
+        scopes_.emplace(Scope{kInvalidScope, memory::DynArray<SymId>(arena)});
         current_ = kRootScope;
     }
 
     ScopeId SymbolTable::enterScope() {
         ScopeId id = static_cast<ScopeId>(scopes_.size());
-        scopes_.emplace(Scope{current_, infra::collections::DynArray<SymId>(*arena_)});
+        scopes_.emplace(Scope{current_, memory::DynArray<SymId>(*arena_)});
         current_ = id;
         return id;
     }
@@ -40,4 +40,4 @@ namespace zith::middleend::symbols {
         return kInvalidSym;
     }
 
-} // namespace zith::middleend::symbols
+} // namespace zith::import

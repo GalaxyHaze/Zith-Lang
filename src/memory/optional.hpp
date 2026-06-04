@@ -2,7 +2,7 @@
 #include <cstddef>
 #include <utility> // Para std::move
 
-namespace zith::infra::util {
+namespace zith::memory {
 
     // 1. Template Genérico (Não-ponteiros)
     template <class T> class Optional {
@@ -109,4 +109,4 @@ namespace zith::infra::util {
         }
     };
 
-} // namespace zith::infra::util
+} // namespace zith::memory

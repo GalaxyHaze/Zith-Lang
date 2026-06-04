@@ -7,7 +7,7 @@
 #include <string_view>
 #include <vector>
 
-namespace zith::middleend::mir {
+namespace zith::zir::mir {
 
     struct MirFunction {
         std::string_view name;
@@ -17,10 +17,10 @@ namespace zith::middleend::mir {
     };
 
     class MirModule {
-        infra::collections::DynArray<MirFunction> fns_;
+        memory::DynArray<MirFunction> fns_;
 
     public:
-        explicit MirModule(infra::alloc::Arena &arena);
+        explicit MirModule(memory::Arena &arena);
 
         MirFunction &addFn(std::string_view name);
         MirFunction &getFn(size_t idx);
@@ -28,4 +28,4 @@ namespace zith::middleend::mir {
         size_t fnCount() const noexcept;
     };
 
-} // namespace zith::middleend::mir
+} // namespace zith::zir::mir

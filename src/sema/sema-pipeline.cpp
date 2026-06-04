@@ -1,17 +1,17 @@
 #include "sema-pipeline.hpp"
 
-namespace zith::middleend::sema {
+namespace zith::sema {
 
-    SemaPipeline::SemaPipeline(symbols::SymbolTable &syms,
+    SemaPipeline::SemaPipeline(import::SymbolTable &syms,
                                types::TypeIntern &types,
-                               diagnostics::engine::DiagnosticEngine &diags,
-                               frontend::ast::AstBuilder &builder) :
+                               diagnostics::DiagnosticEngine &diags,
+                               ast::AstBuilder &builder) :
         ctx_(syms, types, diags, builder), unifier_(types, diags),
-        hir_(infra::alloc::SessionArena) {}
+        hir_(memory::SessionArena) {}
 
-    SemaResult SemaPipeline::run(frontend::ast::DeclId program) {
+    SemaResult SemaPipeline::run(ast::DeclId program) {
         (void)program;
         return SemaResult{std::move(hir_), std::move(ctx_.diags()), std::move(ctx_.syms())};
     }
 
-} // namespace zith::middleend::sema
+} // namespace zith::sema

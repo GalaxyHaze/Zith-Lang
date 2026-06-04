@@ -1,10 +1,10 @@
 #include "parser.hpp"
 
-namespace zith::frontend::parser {
+namespace zith::parser {
 
     Parser::Parser(lexer::TokenStream tokens,
                    ast::AstBuilder &builder,
-                   diagnostics::engine::DiagnosticEngine &diags) :
+                   diagnostics::DiagnosticEngine &diags) :
         tokens_(tokens), builder_(builder), diags_(diags) {}
 
     ProgramResult Parser::parseProgram() {
@@ -65,4 +65,4 @@ namespace zith::frontend::parser {
         return 0;
     }
 
-} // namespace zith::frontend::parser
+} // namespace zith::parser

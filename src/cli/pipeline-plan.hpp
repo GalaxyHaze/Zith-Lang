@@ -2,7 +2,7 @@
 
 #include <cstdint>
 
-namespace zith::driver {
+namespace zith::cli {
 
     enum class Stage : uint8_t {
         Source,
@@ -23,4 +23,4 @@ namespace zith::driver {
         void advance() noexcept;
     };
 
-} // namespace zith::driver
+} // namespace zith::cli

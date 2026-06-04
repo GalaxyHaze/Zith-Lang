@@ -4,7 +4,7 @@
 
 #include <initializer_list>
 
-namespace zith::frontend::parser::recovery {
+namespace zith::parser::recovery {
 
     using SyncSet = std::initializer_list<lexer::TokenKind>;
 
@@ -12,4 +12,4 @@ namespace zith::frontend::parser::recovery {
 
     bool isSync(lexer::TokenKind kind);
 
-} // namespace zith::frontend::parser::recovery
+} // namespace zith::parser::recovery

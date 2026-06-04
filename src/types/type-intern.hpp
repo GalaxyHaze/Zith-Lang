@@ -4,13 +4,13 @@
 #include "memory/dyn-array.hpp"
 #include "types/type-kind.hpp"
 
-namespace zith::middleend::types {
+namespace zith::types {
 
     class TypeIntern {
-        infra::collections::DynArray<TypeData> types_;
+        memory::DynArray<TypeData> types_;
 
     public:
-        explicit TypeIntern(infra::alloc::Arena &arena);
+        explicit TypeIntern(memory::Arena &arena);
 
         TypeId intern(TypeData data);
         TypeId internInt(IntWidth w);
@@ -23,4 +23,4 @@ namespace zith::middleend::types {
         TypeKind kindOf(TypeId id) const;
     };
 
-} // namespace zith::middleend::types
+} // namespace zith::types

@@ -3,7 +3,7 @@
 #include <string>
 #include <vector>
 
-namespace zith::driver {
+namespace zith::cli {
 
     struct Options {
         std::vector<std::string> input_files;
@@ -17,4 +17,4 @@ namespace zith::driver {
 
     Options parseArgs(int argc, char **argv);
 
-} // namespace zith::driver
+} // namespace zith::cli

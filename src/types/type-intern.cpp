@@ -1,8 +1,8 @@
 #include "type-intern.hpp"
 
-namespace zith::middleend::types {
+namespace zith::types {
 
-    TypeIntern::TypeIntern(infra::alloc::Arena &arena) : types_(arena) {}
+    TypeIntern::TypeIntern(memory::Arena &arena) : types_(arena) {}
 
     TypeId TypeIntern::intern(TypeData data) {
         (void)data;
@@ -41,4 +41,4 @@ namespace zith::middleend::types {
         return TypeKind::Error;
     }
 
-} // namespace zith::middleend::types
+} // namespace zith::types

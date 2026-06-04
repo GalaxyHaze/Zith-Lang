@@ -7,10 +7,10 @@
 
 #include <string_view>
 
-namespace zith::middleend::hir {
+namespace zith::zir::hir {
 
     struct HirBasicBlock {
-        infra::collections::DynArray<HirExprId> insts;
+        memory::DynArray<HirExprId> insts;
         HirExprId terminator = kInvalidHirExpr;
     };
 
@@ -22,11 +22,11 @@ namespace zith::middleend::hir {
     };
 
     class HirModule {
-        infra::collections::DynArray<HirExpr> exprs_;
+        memory::DynArray<HirExpr> exprs_;
         std::vector<HirFunction> fns_;
 
     public:
-        explicit HirModule(infra::alloc::Arena &arena);
+        explicit HirModule(memory::Arena &arena);
 
         HirExprId addExpr(HirExpr expr);
         HirFunction &addFn(std::string_view name);
@@ -36,4 +36,4 @@ namespace zith::middleend::hir {
         const HirFunction &getFn(size_t idx) const;
     };
 
-} // namespace zith::middleend::hir
+} // namespace zith::zir::hir

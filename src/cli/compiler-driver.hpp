@@ -3,7 +3,7 @@
 #include "cli/compilation-session.hpp"
 #include "cli/options.hpp"
 
-namespace zith::driver {
+namespace zith::cli {
 
     class CompilerDriver {
     public:
@@ -11,4 +11,4 @@ namespace zith::driver {
         int compileWithOptions(const Options &opts);
     };
 
-} // namespace zith::driver
+} // namespace zith::cli

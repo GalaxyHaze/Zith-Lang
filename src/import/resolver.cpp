@@ -1,15 +1,15 @@
 #include "resolver.hpp"
 
-namespace zith::middleend::symbols {
+namespace zith::import {
 
     Resolver::Resolver(SymbolTable &syms,
-                       frontend::ast::AstBuilder &builder,
-                       diagnostics::engine::DiagnosticEngine &diags) :
+                       ast::AstBuilder &builder,
+                       diagnostics::DiagnosticEngine &diags) :
         syms_(syms), builder_(builder), diags_(diags) {}
 
-    void Resolver::resolveProgram(frontend::ast::DeclId) {}
-    void Resolver::resolveDecl(frontend::ast::DeclId) {}
-    void Resolver::resolveStmt(frontend::ast::StmtId) {}
-    void Resolver::resolveExpr(frontend::ast::ExprId) {}
+    void Resolver::resolveProgram(ast::DeclId) {}
+    void Resolver::resolveDecl(ast::DeclId) {}
+    void Resolver::resolveStmt(ast::StmtId) {}
+    void Resolver::resolveExpr(ast::ExprId) {}
 
-} // namespace zith::middleend::symbols
+} // namespace zith::import

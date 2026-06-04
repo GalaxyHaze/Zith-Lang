@@ -7,7 +7,7 @@
 #include <variant>
 #include <vector>
 
-namespace zith::middleend::hir {
+namespace zith::zir::hir {
 
     using HirExprId = uint32_t;
     using HirDeclId = uint32_t;
@@ -87,4 +87,4 @@ namespace zith::middleend::hir {
                                  HirJump,
                                  HirPhi>;
 
-} // namespace zith::middleend::hir
+} // namespace zith::zir::hir

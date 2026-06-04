@@ -1,15 +1,15 @@
 #include "diagnostic-engine.hpp"
 
-namespace zith::diagnostics::engine {
+namespace zith::diagnostics {
 
-    void DiagnosticEngine::report(model::Diagnostic diag) {
+    void DiagnosticEngine::report(Diagnostic diag) {
         diagnostics_.push_back(std::move(diag));
     }
 
-    void DiagnosticEngine::report(model::Severity sev,
+    void DiagnosticEngine::report(Severity sev,
                                   uint32_t code,
                                   std::string msg,
-                                  frontend::Span span) {
+                                  parser::Span span) {
         diagnostics_.push_back({sev, code, std::move(msg), span, {}});
     }
 
@@ -20,7 +20,7 @@ namespace zith::diagnostics::engine {
         return false;
     }
 
-    std::span<const model::Diagnostic> DiagnosticEngine::all() const noexcept {
+    std::span<const Diagnostic> DiagnosticEngine::all() const noexcept {
         return diagnostics_;
     }
 
@@ -28,4 +28,4 @@ namespace zith::diagnostics::engine {
         diagnostics_.clear();
     }
 
-} // namespace zith::diagnostics::engine
+} // namespace zith::diagnostics

@@ -8,19 +8,19 @@
 #include <utility>
 #include <variant>
 
-namespace zith::frontend {
-
+namespace zith::parser {
     struct SourceLoc;
+}
 
-    namespace lexer {
+namespace zith::lexer {
 
-        class Lexer {
-            SourceLoc *file   = nullptr;
-            FileId gId        = 0;
+    class Lexer {
+            parser::SourceLoc *file   = nullptr;
+            parser::FileId gId        = 0;
             const char *start = nullptr;
             const char *now   = nullptr;
             const char *end   = nullptr;
-            Loc loc{1, 1};
+            parser::Loc loc{};
 
             enum class ErrorKind : uint8_t {
                 Success = 0,
@@ -31,10 +31,11 @@ namespace zith::frontend {
             };
 
             ErrorKind err = ErrorKind::Success;
-            infra::collections::DynArray<Token> tokens;
+            memory::DynArray<Token> tokens;
 
             static bool isNum(char c);
             static bool isPunctuation(char c);
+            static bool isOperator(char c);
             bool isOpen() const;
             char peek() const;
             char peek(size_t n) const;
@@ -51,18 +52,16 @@ namespace zith::frontend {
 
         public:
             Lexer();
-            auto run(std::variant<FileId, std::pair<std::string_view, std::string>> input)
-                    -> infra::util::Result<TokenStream>;
+            auto run(std::variant<parser::FileId, std::pair<std::string_view, std::string>> input)
+                    -> memory::Result<TokenStream>;
         };
 
-        auto tokenize(FileId id) -> infra::util::Result<TokenStream>;
+        auto tokenize(parser::FileId id) -> memory::Result<TokenStream>;
 
-        auto tokenize(std::string_view, std::string) -> infra::util::Result<TokenStream>;
+        auto tokenize(std::string_view, std::string) -> memory::Result<TokenStream>;
 
         const char *tokenKindName(TokenKind k) noexcept;
 
         void printTokens(const TokenStream &stream) noexcept;
 
-    } // namespace lexer
-
-} // namespace zith::frontend
+} // namespace zith::lexer

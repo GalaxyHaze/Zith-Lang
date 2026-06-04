@@ -1,6 +1,6 @@
 #include "source-file.hpp"
 
-namespace zith::frontend {
+namespace zith::parser {
 
     std::string_view SourceLoc::getSlice() const {
         return std::visit(
@@ -42,23 +42,23 @@ namespace zith::frontend {
 
     // Cria um sub-SourceLoc baseado em limites de bytes
     auto SourceLoc::slice(const ByteOffset start, const ByteOffset end) const
-            -> zith::infra::util::Result<std::string_view, zith::infra::util::Error> {
+            -> zith::memory::Result<std::string_view, zith::memory::Error> {
         auto content = getSlice();
 
         if (start >= content.size() || end > content.size() || start > end) {
-            return zith::infra::util::Result<std::string_view, zith::infra::util::Error>(
-                    zith::infra::util::Error{"Invalid slice boundaries"});
+            return zith::memory::Result<std::string_view, zith::memory::Error>(
+                    zith::memory::Error{"Invalid slice boundaries"});
         }
         return content.substr(start, end - start);
     }
 
     // Extrai o conteúdo textual exato apontado por um Span
     auto SourceLoc::snippet(const Span &span) const noexcept
-            -> zith::infra::util::Result<std::string_view, zith::infra::util::Error> {
+            -> zith::memory::Result<std::string_view, zith::memory::Error> {
         auto content = getSlice();
         if (span.start >= content.size() || span.end > content.size() || span.start > span.end) {
-            return zith::infra::util::Result<std::string_view, zith::infra::util::Error>(
-                    zith::infra::util::Error{"Span out of file bounds"});
+            return zith::memory::Result<std::string_view, zith::memory::Error>(
+                    zith::memory::Error{"Span out of file bounds"});
         }
         return std::string_view{content.data() + span.start, span.end - span.start};
     }
@@ -72,4 +72,4 @@ namespace zith::frontend {
         return path.substr(last_slash + 1);
     }
 
-} // namespace zith::frontend
+} // namespace zith::parser

@@ -1,8 +1,8 @@
 #include "hir-module.hpp"
 
-namespace zith::middleend::hir {
+namespace zith::zir::hir {
 
-    HirModule::HirModule(infra::alloc::Arena &arena) : exprs_(arena) {}
+    HirModule::HirModule(memory::Arena &arena) : exprs_(arena) {}
 
     HirExprId HirModule::addExpr(HirExpr expr) {
         HirExprId id = static_cast<HirExprId>(exprs_.size());
@@ -26,4 +26,4 @@ namespace zith::middleend::hir {
         return fns_[idx];
     }
 
-} // namespace zith::middleend::hir
+} // namespace zith::zir::hir

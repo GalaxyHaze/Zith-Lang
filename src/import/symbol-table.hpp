@@ -7,20 +7,20 @@
 
 #include <string_view>
 
-namespace zith::middleend::symbols {
+namespace zith::import {
 
     struct Scope {
         ScopeId parent = kInvalidScope;
-        infra::collections::DynArray<SymId> syms;
+        memory::DynArray<SymId> syms;
     };
 
     class SymbolTable {
-        infra::alloc::Arena *arena_;
-        infra::collections::DynArray<Scope> scopes_;
+        memory::Arena *arena_;
+        memory::DynArray<Scope> scopes_;
         ScopeId current_ = kRootScope;
 
     public:
-        explicit SymbolTable(infra::alloc::Arena &arena);
+        explicit SymbolTable(memory::Arena &arena);
 
         ScopeId enterScope();
         void exitScope();
@@ -31,4 +31,4 @@ namespace zith::middleend::symbols {
         SymId lookupInScope(std::string_view name, ScopeId scope) const;
     };
 
-} // namespace zith::middleend::symbols
+} // namespace zith::import

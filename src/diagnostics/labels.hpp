@@ -4,16 +4,16 @@
 
 #include <string>
 
-namespace zith::diagnostics::model {
+namespace zith::diagnostics {
 
     struct LabeledSpan {
-        frontend::Span span;
+        parser::Span span;
         std::string label;
     };
 
     struct Note {
-        frontend::Span span;
+        parser::Span span;
         std::string message;
     };
 
-} // namespace zith::diagnostics::model
+} // namespace zith::diagnostics

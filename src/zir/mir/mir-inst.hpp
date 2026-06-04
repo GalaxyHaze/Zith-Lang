@@ -6,7 +6,7 @@
 #include <variant>
 #include <vector>
 
-namespace zith::middleend::mir {
+namespace zith::zir::mir {
 
     using ValueId = uint32_t;
     using BlockId = uint32_t;
@@ -60,4 +60,4 @@ namespace zith::middleend::mir {
         MirInst terminator;
     };
 
-} // namespace zith::middleend::mir
+} // namespace zith::zir::mir

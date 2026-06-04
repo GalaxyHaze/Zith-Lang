@@ -7,7 +7,7 @@
 #include <variant>
 #include <vector>
 
-namespace zith::frontend {
+namespace zith::parser {
 
     struct SourceLoc {
         std::variant<mio::mmap_source, mio::mmap_sink, std::string> file;
@@ -26,14 +26,14 @@ namespace zith::frontend {
 
         // Cria um sub-SourceLoc baseado em limites de bytes
         auto slice(const ByteOffset start, const ByteOffset end) const
-                -> zith::infra::util::Result<std::string_view, zith::infra::util::Error>;
+                -> zith::memory::Result<std::string_view, zith::memory::Error>;
 
         // Extrai o conteúdo textual exato apontado por um Span
         auto snippet(const Span &span) const noexcept
-                -> zith::infra::util::Result<std::string_view, zith::infra::util::Error>;
+                -> zith::memory::Result<std::string_view, zith::memory::Error>;
 
         // Retorna apenas o nome do ficheiro, ignorando as diretorias
         auto filename() const noexcept -> std::string_view;
     };
 
-} // namespace zith::frontend
+} // namespace zith::parser

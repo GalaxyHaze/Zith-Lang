@@ -8,7 +8,7 @@
 #include <variant>
 #include <vector>
 
-namespace zith::frontend::ast {
+namespace zith::ast {
 
     enum class BinaryOp : uint8_t {
         Add,
@@ -129,4 +129,4 @@ namespace zith::frontend::ast {
 
     using DeclNode = std::variant<FnDeclNode, StructDeclNode, ImportNode>;
 
-} // namespace zith::frontend::ast
+} // namespace zith::ast

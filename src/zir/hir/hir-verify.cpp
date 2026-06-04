@@ -1,13 +1,13 @@
 #include "hir-verify.hpp"
 
-namespace zith::middleend::hir {
+namespace zith::zir::hir {
 
     HirVerifier::HirVerifier(const HirModule &module,
-                             diagnostics::engine::DiagnosticEngine &diags) :
+                             diagnostics::DiagnosticEngine &diags) :
         module_(module), diags_(diags) {}
 
     bool HirVerifier::verify() {
         return true;
     }
 
-} // namespace zith::middleend::hir
+} // namespace zith::zir::hir

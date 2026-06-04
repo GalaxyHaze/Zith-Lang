@@ -4,7 +4,7 @@
 
 #include <string_view>
 
-namespace zith::diagnostics::engine {
+namespace zith::diagnostics {
 
     class Emitter {
         const DiagnosticEngine *engine_;
@@ -16,4 +16,4 @@ namespace zith::diagnostics::engine {
         void emitTo(std::string_view source_text) const;
     };
 
-} // namespace zith::diagnostics::engine
+} // namespace zith::diagnostics

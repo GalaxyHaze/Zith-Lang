@@ -5,7 +5,7 @@
 #include <string_view>
 
 
-namespace zith::frontend::lexer {
+namespace zith::lexer {
 
     enum class TokenKind : uint8_t {
         Identifier,
@@ -43,7 +43,7 @@ namespace zith::frontend::lexer {
         Is,
         Word,
         Logical,
-        Comparision, // Mantido conforme seu original, ajuste para Comparison se preferir
+        Comparison,
         Operators,
         Comments,
         Docs,
@@ -56,7 +56,7 @@ namespace zith::frontend::lexer {
 
     struct Token {
         // lexeme
-        zith::frontend::Span span;
+        zith::parser::Span span;
         // type of token
         TokenKind kind;
 
@@ -122,4 +122,4 @@ namespace zith::frontend::lexer {
             return offset >= len || peek().is_eof();
         }
     };
-} // namespace zith::frontend::lexer
+} // namespace zith::lexer

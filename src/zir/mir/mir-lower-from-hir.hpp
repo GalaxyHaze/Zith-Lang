@@ -4,19 +4,19 @@
 #include "zir/hir/hir-module.hpp"
 #include "zir/mir/mir-module.hpp"
 
-namespace zith::middleend::mir {
+namespace zith::zir::mir {
 
     class MirLowering {
         const hir::HirModule &hir_;
-        diagnostics::engine::DiagnosticEngine &diags_;
+        diagnostics::DiagnosticEngine &diags_;
         MirModule mir_;
 
     public:
         MirLowering(const hir::HirModule &hir,
-                    infra::alloc::Arena &arena,
-                    diagnostics::engine::DiagnosticEngine &diags);
+                    memory::Arena &arena,
+                    diagnostics::DiagnosticEngine &diags);
 
         MirModule lower();
     };
 
-} // namespace zith::middleend::mir
+} // namespace zith::zir::mir

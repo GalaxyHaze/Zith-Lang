@@ -11,18 +11,18 @@
 #include "import/symbol-table.hpp"
 #include "types/type-intern.hpp"
 
-namespace zith::driver {
+namespace zith::cli {
 
     class CompilationSession {
         Options opts_;
         PipelinePlan plan_;
-        diagnostics::engine::DiagnosticEngine diags_;
+        diagnostics::DiagnosticEngine diags_;
 
-        infra::alloc::Arena ast_arena_;
-        infra::alloc::Arena sym_arena_;
-        infra::alloc::Arena type_arena_;
-        infra::alloc::Arena hir_arena_;
-        infra::alloc::Arena mir_arena_;
+        memory::Arena ast_arena_;
+        memory::Arena sym_arena_;
+        memory::Arena type_arena_;
+        memory::Arena hir_arena_;
+        memory::Arena mir_arena_;
 
     public:
         explicit CompilationSession(Options opts);
@@ -37,4 +37,4 @@ namespace zith::driver {
         bool zirStage();
     };
 
-} // namespace zith::driver
+} // namespace zith::cli

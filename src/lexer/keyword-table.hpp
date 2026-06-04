@@ -1,13 +1,10 @@
 #pragma once
 #include "lexer/token.hpp"
 
-#include <algorithm>
 #include <array>
 #include <cstdint>
-#include <string_view>
-#include <utility>
 
-namespace zith::frontend::lexer {
+namespace zith::lexer {
 
     namespace detail {
 
@@ -59,8 +56,13 @@ namespace zith::frontend::lexer {
                 {"component", TokenKind::Struct},
                 {"enum", TokenKind::Struct},
                 {"raw", TokenKind::Raw},
+                {"unsafe", TokenKind::Raw},
                 {"union", TokenKind::Struct},
                 {"trait", TokenKind::Trait},
+                {"interface", TokenKind::Interface},
+                {"capability", TokenKind::Trait},
+                {"extends", TokenKind::Trait},
+                {"dyn", TokenKind::Trait},
                 {"implement", TokenKind::Implement},
                 {"fn", TokenKind::Fn},
                 {"import", TokenKind::Module},
@@ -70,6 +72,7 @@ namespace zith::frontend::lexer {
                 {"export", TokenKind::Module},
                 {"extern", TokenKind::Extern},
                 {"from", TokenKind::Module},
+                {"alias", TokenKind::Module},
                 {"as", TokenKind::As},
 
                 {"let", TokenKind::Variable},
@@ -83,6 +86,7 @@ namespace zith::frontend::lexer {
                 {"share", TokenKind::Ownership},
                 {"view", TokenKind::Ownership},
                 {"unique", TokenKind::Ownership},
+                {"belong", TokenKind::Ownership},
                 {"extension", TokenKind::Ownership},
                 {"yield", TokenKind::Yield},
                 {"async", TokenKind::Fn},
@@ -98,11 +102,13 @@ namespace zith::frontend::lexer {
                 {"for", TokenKind::For},
                 {"in", TokenKind::In},
                 {"match", TokenKind::Match},
+                {"when", TokenKind::Match},
                 {"return", TokenKind::Control},
                 {"break", TokenKind::Control},
                 {"continue", TokenKind::Control},
                 {"jump", TokenKind::Control},
                 {"marker", TokenKind::Label},
+                {"dock", TokenKind::Label},
                 {"scene", TokenKind::Scene},
 
                 {"spawn", TokenKind::Thread},
@@ -113,6 +119,7 @@ namespace zith::frontend::lexer {
                 {"catch", TokenKind::Error},
                 {"must", TokenKind::Must},
                 {"throw", TokenKind::Error},
+                {"fail", TokenKind::Error},
                 {"drop", TokenKind::Drop},
 
                 {"require", TokenKind::Require},
@@ -124,7 +131,8 @@ namespace zith::frontend::lexer {
                 {"and", TokenKind::Logical},
                 {"or", TokenKind::Logical},
                 {"not", TokenKind::Logical},
-                {"xor", TokenKind::Logical}});
+                {"xor", TokenKind::Logical}
+            });
 
         static constexpr size_t N           = TokenTable.size();
         static constexpr size_t BucketCount = 128;
@@ -207,4 +215,4 @@ namespace zith::frontend::lexer {
         return detail::g_hasher.lookup(sv);
     }
 
-} // namespace zith::frontend::lexer
+} // namespace zith::lexer

@@ -1,6 +1,6 @@
 #include "recovery.hpp"
 
-namespace zith::frontend::parser::recovery {
+namespace zith::parser::recovery {
 
     void panic(lexer::TokenStream &stream, SyncSet sync_tokens) {
         while (!stream.is_empty()) {
@@ -22,4 +22,4 @@ namespace zith::frontend::parser::recovery {
         }
     }
 
-} // namespace zith::frontend::parser::recovery
+} // namespace zith::parser::recovery

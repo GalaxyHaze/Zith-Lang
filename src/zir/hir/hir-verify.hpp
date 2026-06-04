@@ -3,16 +3,16 @@
 #include "diagnostics/diagnostic-engine.hpp"
 #include "zir/hir/hir-module.hpp"
 
-namespace zith::middleend::hir {
+namespace zith::zir::hir {
 
     class HirVerifier {
         const HirModule &module_;
-        diagnostics::engine::DiagnosticEngine &diags_;
+        diagnostics::DiagnosticEngine &diags_;
 
     public:
-        HirVerifier(const HirModule &module, diagnostics::engine::DiagnosticEngine &diags);
+        HirVerifier(const HirModule &module, diagnostics::DiagnosticEngine &diags);
 
         bool verify();
     };
 
-} // namespace zith::middleend::hir
+} // namespace zith::zir::hir

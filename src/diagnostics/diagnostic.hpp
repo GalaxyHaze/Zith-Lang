@@ -6,12 +6,12 @@
 #include <string_view>
 #include <vector>
 
-namespace zith::diagnostics::model {
+namespace zith::diagnostics {
 
     enum class Severity : uint8_t { Note, Warning, Error, Bug };
 
     struct Label {
-        frontend::Span span;
+        parser::Span span;
         std::string message;
     };
 
@@ -19,11 +19,11 @@ namespace zith::diagnostics::model {
         Severity severity;
         uint32_t code;
         std::string message;
-        frontend::Span primary;
+        parser::Span primary;
         std::vector<Label> labels;
 
         bool isError() const noexcept;
         bool isWarning() const noexcept;
     };
 
-} // namespace zith::diagnostics::model
+} // namespace zith::diagnostics

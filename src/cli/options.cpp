@@ -3,7 +3,7 @@
 #include <cstdio>
 #include <cstring>
 
-namespace zith::driver {
+namespace zith::cli {
 
     Options parseArgs(int argc, char **argv) {
         Options opts;
@@ -26,4 +26,4 @@ namespace zith::driver {
         return opts;
     }
 
-} // namespace zith::driver
+} // namespace zith::cli

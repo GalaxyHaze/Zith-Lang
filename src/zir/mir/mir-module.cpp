@@ -1,8 +1,8 @@
 #include "mir-module.hpp"
 
-namespace zith::middleend::mir {
+namespace zith::zir::mir {
 
-    MirModule::MirModule(infra::alloc::Arena &arena) : fns_(arena) {}
+    MirModule::MirModule(memory::Arena &arena) : fns_(arena) {}
 
     MirFunction &MirModule::addFn(std::string_view name) {
         fns_.emplace();
@@ -20,4 +20,4 @@ namespace zith::middleend::mir {
         return fns_.size();
     }
 
-} // namespace zith::middleend::mir
+} // namespace zith::zir::mir

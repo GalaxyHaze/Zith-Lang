@@ -23,8 +23,26 @@ FetchContent_MakeAvailable(mio)
 file(GLOB_RECURSE ZITH_SOURCES
     src/*.cpp
 )
+file(GLOB_RECURSE ZITH_LIB_SOURCES
+    src/*.cpp
+)
+list(REMOVE_ITEM ZITH_LIB_SOURCES "${CMAKE_SOURCE_DIR}/src/cli/zithc-main.cpp")
 
-add_executable(zithc ${ZITH_SOURCES})
+add_library(zithc_objects OBJECT ${ZITH_LIB_SOURCES})
+
+target_include_directories(zithc_objects PRIVATE
+    src
+    include
+)
+
+target_link_libraries(zithc_objects PRIVATE mio)
+
+target_compile_definitions(zithc_objects PRIVATE
+    ZITH_VERSION="${ZITH_VERSION}"
+    ZITH_LIB_DIR="${CMAKE_CURRENT_SOURCE_DIR}/lib"
+)
+
+add_executable(zithc ${CMAKE_SOURCE_DIR}/src/cli/zithc-main.cpp $<TARGET_OBJECTS:zithc_objects>)
 
 target_include_directories(zithc PRIVATE
     src
@@ -43,7 +61,7 @@ include(CTest)
 if(BUILD_TESTING)
 
 function(add_zith_test NAME SOURCE)
-    add_executable(${NAME} ${SOURCE})
+    add_executable(${NAME} ${SOURCE} $<TARGET_OBJECTS:zithc_objects>)
     target_include_directories(${NAME} PRIVATE src include)
     target_link_libraries(${NAME} PRIVATE mio)
     set_target_properties(${NAME} PROPERTIES FOLDER "tests")

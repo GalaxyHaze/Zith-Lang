@@ -6,7 +6,7 @@
 #include <variant>
 #include <vector>
 
-namespace zith::middleend::types {
+namespace zith::types {
 
     enum class IntWidth : uint8_t { I8, I16, I32, I64, I128, U8, U16, U32, U64, U128 };
 
@@ -54,4 +54,4 @@ namespace zith::middleend::types {
     using TypeData =
             std::variant<TypeInt, TypeFloat, TypePtr, TypeArray, TypeStruct, TypeFn, TypeTypeVar>;
 
-} // namespace zith::middleend::types
+} // namespace zith::types

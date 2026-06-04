@@ -1,6 +1,6 @@
 #include "diagnostic.hpp"
 
-namespace zith::diagnostics::model {
+namespace zith::diagnostics {
 
     bool Diagnostic::isError() const noexcept {
         return severity == Severity::Error || severity == Severity::Bug;
@@ -10,4 +10,4 @@ namespace zith::diagnostics::model {
         return severity == Severity::Warning;
     }
 
-} // namespace zith::diagnostics::model
+} // namespace zith::diagnostics

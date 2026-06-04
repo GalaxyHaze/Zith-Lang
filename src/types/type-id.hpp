@@ -2,7 +2,7 @@
 
 #include <cstdint>
 
-namespace zith::middleend::types {
+namespace zith::types {
 
     using TypeId = uint32_t;
 
@@ -15,4 +15,4 @@ namespace zith::middleend::types {
     inline constexpr TypeId kFirstCustom = 6;
     inline constexpr TypeId kInvalidType = ~TypeId{0};
 
-} // namespace zith::middleend::types
+} // namespace zith::types

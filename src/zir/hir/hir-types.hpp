@@ -4,7 +4,7 @@
 
 #include <cstdint>
 
-namespace zith::middleend::hir {
+namespace zith::zir::hir {
 
     using HirTypeId = types::TypeId;
 
@@ -21,4 +21,4 @@ namespace zith::middleend::hir {
         Fn
     };
 
-} // namespace zith::middleend::hir
+} // namespace zith::zir::hir

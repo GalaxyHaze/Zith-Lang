@@ -4,17 +4,16 @@
 #include "memory/arena.hpp"
 #include "memory/dyn-array.hpp"
 
-#include <string_view>
 
-namespace zith::frontend::ast {
+namespace zith::ast {
 
     class AstBuilder {
-        infra::collections::DynArray<ExprNode> exprs_;
-        infra::collections::DynArray<StmtNode> stmts_;
-        infra::collections::DynArray<DeclNode> decls_;
+        memory::DynArray<ExprNode> exprs_;
+        memory::DynArray<StmtNode> stmts_;
+        memory::DynArray<DeclNode> decls_;
 
     public:
-        explicit AstBuilder(infra::alloc::Arena &arena);
+        explicit AstBuilder(memory::Arena &arena);
 
         ExprId addExpr(ExprNode node);
         StmtId addStmt(StmtNode node);
@@ -48,7 +47,7 @@ namespace zith::frontend::ast {
                           std::vector<std::pair<std::string_view, uint32_t>> fields);
         DeclId importDecl(std::vector<std::string_view> path, std::string_view alias = {});
 
-        infra::alloc::Arena &arena();
+        memory::Arena &arena();
     };
 
-} // namespace zith::frontend::ast
+} // namespace zith::ast

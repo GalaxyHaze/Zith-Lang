@@ -8,20 +8,20 @@
 #include "types/type-intern.hpp"
 #include "types/unify.hpp"
 
-namespace zith::middleend::sema {
+namespace zith::sema {
 
     class SemaPipeline {
         SemaContext ctx_;
         types::Unifier unifier_;
-        hir::HirModule hir_;
+        zir::hir::HirModule hir_;
 
     public:
-        SemaPipeline(symbols::SymbolTable &syms,
+        SemaPipeline(import::SymbolTable &syms,
                      types::TypeIntern &types,
-                     diagnostics::engine::DiagnosticEngine &diags,
-                     frontend::ast::AstBuilder &builder);
+                     diagnostics::DiagnosticEngine &diags,
+                     ast::AstBuilder &builder);
 
-        SemaResult run(frontend::ast::DeclId program);
+        SemaResult run(ast::DeclId program);
     };
 
-} // namespace zith::middleend::sema
+} // namespace zith::sema

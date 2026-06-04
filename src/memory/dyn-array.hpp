@@ -5,16 +5,16 @@
 #include <type_traits>
 #include <utility>
 
-namespace zith::infra::collections {
+namespace zith::memory {
 
     template <typename T> class DynArray {
-        alloc::Arena *arena_ = nullptr;
+        Arena *arena_ = nullptr;
         T *data_             = nullptr;
         size_t size_         = 0;
         size_t capacity_     = 0;
 
     public:
-        explicit DynArray(alloc::Arena &arena) noexcept : arena_(&arena) {}
+        explicit DynArray(Arena &arena) noexcept : arena_(&arena) {}
 
         ~DynArray() noexcept {
             if constexpr (!std::is_trivially_destructible_v<T>) {
@@ -150,4 +150,4 @@ namespace zith::infra::collections {
         }
     };
 
-} // namespace zith::infra::collections
+} // namespace zith::memory

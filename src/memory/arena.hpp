@@ -4,7 +4,7 @@
 #include <type_traits>
 #include <utility>
 
-namespace zith::infra::alloc {
+namespace zith::memory {
 
     class Arena {
     public:
@@ -200,4 +200,4 @@ namespace zith::infra::alloc {
         }
     };
 
-} // namespace zith::infra::alloc
+} // namespace zith::memory

@@ -1,6 +1,6 @@
 #include "compilation-session.hpp"
 
-namespace zith::driver {
+namespace zith::cli {
 
     CompilationSession::CompilationSession(Options opts) :
         opts_(std::move(opts)), ast_arena_(), sym_arena_(), type_arena_(), hir_arena_(),
@@ -36,4 +36,4 @@ namespace zith::driver {
         return true;
     }
 
-} // namespace zith::driver
+} // namespace zith::cli

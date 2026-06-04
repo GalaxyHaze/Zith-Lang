@@ -1,8 +1,8 @@
 #include "ast-builder.hpp"
 
-namespace zith::frontend::ast {
+namespace zith::ast {
 
-    AstBuilder::AstBuilder(infra::alloc::Arena &arena) :
+    AstBuilder::AstBuilder(memory::Arena &arena) :
         exprs_(arena), stmts_(arena), decls_(arena) {}
 
     ExprId AstBuilder::addExpr(ExprNode node) {
@@ -100,8 +100,8 @@ namespace zith::frontend::ast {
         return addDecl(ImportNode{std::move(path), alias});
     }
 
-    infra::alloc::Arena &AstBuilder::arena() {
-        return infra::alloc::SessionArena;
+    memory::Arena &AstBuilder::arena() {
+        return memory::SessionArena;
     }
 
-} // namespace zith::frontend::ast
+} // namespace zith::ast

@@ -1,8 +1,8 @@
 #include "unify.hpp"
 
-namespace zith::middleend::types {
+namespace zith::types {
 
-    Unifier::Unifier(TypeIntern &intern, diagnostics::engine::DiagnosticEngine &diags) :
+    Unifier::Unifier(TypeIntern &intern, diagnostics::DiagnosticEngine &diags) :
         intern_(intern), diags_(diags) {}
 
     TypeId Unifier::freshVar() {
@@ -22,4 +22,4 @@ namespace zith::middleend::types {
         return false;
     }
 
-} // namespace zith::middleend::types
+} // namespace zith::types

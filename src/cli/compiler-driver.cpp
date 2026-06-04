@@ -1,6 +1,6 @@
 #include "compiler-driver.hpp"
 
-namespace zith::driver {
+namespace zith::cli {
 
     int CompilerDriver::compileFile(const std::string &path) {
         Options opts;
@@ -13,4 +13,4 @@ namespace zith::driver {
         return session.run();
     }
 
-} // namespace zith::driver
+} // namespace zith::cli

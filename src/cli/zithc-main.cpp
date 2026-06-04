@@ -1,12 +1,14 @@
 #include "cli/compiler-driver.hpp"
 #include "cli/options.hpp"
+#include "compiler-driver.hpp"
 #include "lexer/lexer.hpp"
+#include "options.hpp"
 #include "parser/source-map.hpp"
 #include <cstdio>
 
 int main(int argc, char **argv) {
-    auto opts = zith::driver::parseArgs(argc, argv);
-    zith::driver::CompilerDriver driver;
+    auto opts = zith::cli::parseArgs(argc, argv);
+    zith::cli::CompilerDriver driver;
 
     if (opts.input_files.empty()) {
         std::fprintf(
@@ -15,8 +17,8 @@ int main(int argc, char **argv) {
         return 1;
     }
 
-    if ( auto tokens = zith::frontend::lexer::tokenize("simpleTest", "fn main(){}") )
-        zith::frontend::lexer::printTokens(tokens.value());
+    if ( auto tokens = zith::lexer::tokenize("simpleTest", "fn main(){}") )
+        zith::lexer::printTokens(tokens.value());
     else
         std::printf("some error had happen");
     return driver.compileWithOptions(opts);

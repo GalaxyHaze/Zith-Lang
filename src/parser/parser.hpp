@@ -8,17 +8,17 @@
 
 #include <cstdint>
 
-namespace zith::frontend::parser {
+namespace zith::parser {
 
     class Parser {
         lexer::TokenStream tokens_;
         ast::AstBuilder &builder_;
-        diagnostics::engine::DiagnosticEngine &diags_;
+        diagnostics::DiagnosticEngine &diags_;
 
     public:
         Parser(lexer::TokenStream tokens,
                ast::AstBuilder &builder,
-               diagnostics::engine::DiagnosticEngine &diags);
+               diagnostics::DiagnosticEngine &diags);
 
         ProgramResult parseProgram();
 
@@ -46,4 +46,4 @@ namespace zith::frontend::parser {
         int precedence(lexer::TokenKind kind) const;
     };
 
-} // namespace zith::frontend::parser
+} // namespace zith::parser

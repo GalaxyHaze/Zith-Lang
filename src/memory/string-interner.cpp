@@ -2,9 +2,9 @@
 
 #include <cstring>
 
-namespace zith::infra::interner {
+namespace zith::memory {
 
-    StringInterner::StringInterner(infra::alloc::Arena &arena) : arena_(&arena), strings_(arena) {}
+    StringInterner::StringInterner(memory::Arena &arena) : arena_(&arena), strings_(arena) {}
 
     InternedId StringInterner::intern(std::string_view str) {
         auto it = map_.find(str);
@@ -27,4 +27,4 @@ namespace zith::infra::interner {
         return strings_[id];
     }
 
-} // namespace zith::infra::interner
+} // namespace zith::memory

@@ -2,7 +2,7 @@
 
 #include <cstdio>
 
-namespace zith::diagnostics::engine {
+namespace zith::diagnostics {
 
     Emitter::Emitter(const DiagnosticEngine &engine) : engine_(&engine) {}
 
@@ -22,4 +22,4 @@ namespace zith::diagnostics::engine {
         emit();
     }
 
-} // namespace zith::diagnostics::engine
+} // namespace zith::diagnostics

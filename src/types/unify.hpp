@@ -5,15 +5,15 @@
 
 #include <vector>
 
-namespace zith::middleend::types {
+namespace zith::types {
 
     class Unifier {
         TypeIntern &intern_;
-        diagnostics::engine::DiagnosticEngine &diags_;
+        diagnostics::DiagnosticEngine &diags_;
         std::vector<TypeId> subst_;
 
     public:
-        Unifier(TypeIntern &intern, diagnostics::engine::DiagnosticEngine &diags);
+        Unifier(TypeIntern &intern, diagnostics::DiagnosticEngine &diags);
 
         TypeId freshVar();
         bool unify(TypeId a, TypeId b);
@@ -22,4 +22,4 @@ namespace zith::middleend::types {
         bool occurs(TypeId var, TypeId t) const;
     };
 
-} // namespace zith::middleend::types
+} // namespace zith::types
