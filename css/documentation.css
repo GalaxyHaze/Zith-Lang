@@ -21,7 +21,7 @@ VARS
     --crt-scanline-alpha: 0.15;
     --crt-noise-opacity: 0.05;
     --crt-vignette-opacity: 0.6;
-    --crt-flicker-animation: flicker 0.15s infinite;
+    --crt-flicker-animation: flicker 1s infinite;
     --text-glow-alpha: 0.5;
 
     --glow-white:
@@ -30,15 +30,9 @@ VARS
     
     --glow-cyan:
         0 0 5px rgba(0,255,255,var(--text-glow-alpha)),
-        0 0 5px rgba(0,255,255,var(--text-glow-alpha)),
-        0 0 5px rgba(0,255,255,var(--text-glow-alpha)),
-        0 0 10px rgba(0,255,255,var(--text-glow-alpha)),
-        0 0 10px rgba(0,255,255,var(--text-glow-alpha)),
-        0 0 20px rgba(0,255,255,var(--text-glow-alpha)),
-        0 0 20px rgba(0,255,255,var(--text-glow-alpha)),
+        0 0 15px rgba(0,255,255,var(--text-glow-alpha)),
         0 0 40px rgba(0,255,255,var(--text-glow-alpha)),
-        0 0 80px rgba(0,255,255,var(--text-glow-alpha)),
-        0 0 120px rgba(0,255,255,var(--text-glow-alpha));
+        0 0 80px rgba(0,255,255,var(--text-glow-alpha));
 
     --glow-orange:
         0 0 2px rgba(255,109,31,var(--text-glow-alpha)),
@@ -299,6 +293,7 @@ GEAR / SETTINGS
     top: 60px;
     right: 60px;
     z-index: 100000;
+    will-change: transform;
     border: 2px solid #000;
     background-color: #333;
     box-shadow: 6px 6px 10px #000;
@@ -376,8 +371,8 @@ EFEITOS
     pointer-events: none;
     z-index: 99999;
 
-    opacity: 1;
-    animation: var(--crt-flicker-animation, flicker 0.15s infinite);
+    will-change: opacity;
+    animation: var(--crt-flicker-animation, flicker 1s infinite);
 
     background:
         repeating-linear-gradient(
@@ -388,7 +383,7 @@ EFEITOS
             transparent 3px
         );
 
-    mix-blend-mode: multiply;
+    opacity: 0.85;
 }
 
 .crt-overlay::before {
@@ -408,10 +403,11 @@ EFEITOS
     position: absolute;
     inset: 0;
 
-    background-image: url("https://upload.wikimedia.org/wikipedia/commons/7/76/1k_Dissolve_Noise_Texture.png");
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='1' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.5'/%3E%3C/svg%3E");
 
     opacity: var(--crt-noise-opacity, 0.05);
-    animation: noise 0.2s infinite;
+    animation: noise 2s infinite;
+    background-size: 100px 100px;
 }
 
 /*==================
@@ -428,15 +424,15 @@ ANIMAÇÕES
 }
 
 @keyframes flicker {
-    0% { opacity: 0.4; }
-    50% { opacity: 0.45; }
-    100% { opacity: 0.4; }
+    0% { opacity: 0.65; }
+    50% { opacity: 0.7; }
+    100% { opacity: 0.65; }
 }
 
 @keyframes flicker-low {
-    0% { opacity: 0.45; }
-    50% { opacity: 0.5; }
-    100% { opacity: 0.45; }
+    0% { opacity: 0.65; }
+    50% { opacity: 0.7; }
+    100% { opacity: 0.65; }
 }
 
 @keyframes flicker-high {
@@ -444,6 +440,7 @@ ANIMAÇÕES
     50% { opacity: 1; }
     100% { opacity: 0.9; }
 }
+
 
 /*==================
 MOBILE
