@@ -1,0 +1,5 @@
+from std/io/console;
+
+fn main(){
+    @println("Hello, World!");
+}

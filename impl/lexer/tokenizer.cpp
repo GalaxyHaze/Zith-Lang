@@ -1,0 +1,809 @@
+#include "lexer/tokenizer.hpp"
+#include "keywords.hpp"
+#include "memory/utils.hpp"
+#include <cstring>
+#include <iostream>
+#include <string_view>
+#include <vector>
+
+#define ZITH_NEWLINE(loc)                                                                          \
+    do {                                                                                           \
+        (loc)->line++;                                                                             \
+        (loc)->index = 0;                                                                          \
+    } while (0)
+
+#define MAX_ERRORS 50
+
+namespace zith::lexer {
+
+static void uint_to_str(char *buf, const size_t buf_size, uint64_t value, size_t *out_len) {
+    if (buf_size == 0)
+        return;
+    if (value == 0) {
+        buf[0]   = '0';
+        buf[1]   = '\0';
+        *out_len = 1;
+        return;
+    }
+    char temp[21];
+    size_t len = 0;
+    while (value > 0 && len < sizeof(temp) - 1) {
+        temp[len++] = static_cast<char>('0' + (value % 10));
+        value /= 10;
+    }
+    const size_t out_len_val = (len < buf_size) ? len : buf_size - 1;
+    for (size_t i = 0; i < out_len_val; ++i)
+        buf[i] = temp[len - 1 - i];
+    buf[out_len_val] = '\0';
+    *out_len         = out_len_val;
+}
+
+static const char *make_error_msg(ZithArena *arena, const char *prefix, const uint64_t line) {
+    char stack_buf[128];
+    size_t pos = 0;
+    for (const char *p = prefix; *p && pos < sizeof(stack_buf) - 22;)
+        stack_buf[pos++] = *p++;
+
+    size_t num_len = 0;
+    uint_to_str(stack_buf + pos, sizeof(stack_buf) - pos, line, &num_len);
+    pos += num_len;
+
+    char *msg = static_cast<char *>(zith_arena_alloc(arena, pos + 1));
+    if (msg)
+        std::memcpy(msg, stack_buf, pos + 1);
+    return msg;
+}
+
+static ZithToken make_token(ZithArena *arena, ZithTokenType type, std::string_view lexeme,
+                            ZithSourceLoc info) {
+    auto *buf = static_cast<char *>(zith_arena_alloc(arena, lexeme.size()));
+    if (buf && !lexeme.empty())
+        std::memcpy(buf, lexeme.data(), lexeme.size());
+    return ZithToken{.lexeme = {buf, lexeme.size()}, .loc = info, .type = type, .keyword_id = 0};
+}
+
+static bool isSpace(unsigned char c) {
+    return ::isspace(c) != 0;
+}
+static bool isAlpha(unsigned char c) {
+    return ::isalpha(c) != 0;
+}
+static bool isDigit(unsigned char c) {
+    return ::isdigit(c) != 0;
+}
+static bool isAlphaNum(unsigned char c) {
+    return ::isalnum(c) != 0;
+}
+static bool isHexDigit(unsigned char c) {
+    return ::isxdigit(c) != 0;
+}
+static unsigned char toLower(unsigned char c) {
+    return static_cast<unsigned char>(::tolower(c));
+}
+
+static bool isValidEscape(char c) {
+    switch (c) {
+    case 'n':
+    case 't':
+    case 'r':
+    case '\\':
+    case '"':
+    case '0':
+    case '\'':
+        return true;
+    default:
+        return false;
+    }
+}
+
+static void processIdentifier(const char *&current, const char *end, TokenList &tokens,
+                              ZithSourceLoc &info, ZithArena *arena);
+
+static void processString(const char *&current, const char *end, TokenList &tokens,
+                          std::vector<LexError> &error_list, ZithSourceLoc &info, ZithArena *arena);
+
+static void processChar(const char *&current, const char *end, TokenList &tokens,
+                        std::vector<LexError> &error_list, ZithSourceLoc &info, ZithArena *arena);
+
+static void processNumber(const char *&current, const char *end, TokenList &tokens,
+                          std::vector<LexError> &error_list, ZithSourceLoc &info, ZithArena *arena);
+
+static bool punctuation(const char *&current, const char *end, TokenList &tokens,
+                        ZithSourceLoc &info, ZithArena *arena);
+
+static void skipSingleLine(ZithSourceLoc &info, const char *&current, const char *end) {
+    while (current < end && *current != '\n') {
+        ++current;
+        ++info.index;
+    }
+}
+
+static void skipMultiLine(ZithSourceLoc &info, const char *&current, const char *end,
+                          std::vector<LexError> &error_list, ZithArena *arena) {
+    const auto start = info;
+    current += 2;
+    info.index += 2;
+
+    while (current < end) {
+        if (*current == '*' && current + 1 < end && *(current + 1) == '/') {
+            current += 2;
+            info.index += 2;
+            return;
+        }
+        if (*current == '\n')
+            ZITH_NEWLINE(&info);
+        ++current;
+        ++info.index;
+    }
+    error_list.push_back(
+        {make_error_msg(arena, "Unterminated multi-line comment starting at line ", start.line),
+         start});
+}
+
+static void addCharError(std::vector<LexError> &error_list, const char *base_msg, const char c,
+                         const ZithSourceLoc info, ZithArena *arena) {
+    if (error_list.size() >= MAX_ERRORS)
+        return;
+
+    char stack_buf[64];
+    size_t pos = 0;
+    for (const char *p = base_msg; *p && pos < sizeof(stack_buf) - 5;)
+        stack_buf[pos++] = *p++;
+    stack_buf[pos++] = '\'';
+    stack_buf[pos++] = c;
+    stack_buf[pos++] = '\'';
+    stack_buf[pos]   = '\0';
+    error_list.push_back({make_error_msg(arena, stack_buf, info.line), info});
+}
+
+static void addMsgError(std::vector<LexError> &error_list, ZithArena *arena, const char *msg,
+                        const ZithSourceLoc info) {
+    if (error_list.size() >= MAX_ERRORS)
+        return;
+
+    const size_t len = strlen(msg);
+    char *copy       = static_cast<char *>(zith_arena_alloc(arena, len + 1));
+    if (copy)
+        std::memcpy(copy, msg, len + 1);
+    error_list.push_back({copy, info});
+}
+
+static void processIdentifier(const char *&current, const char *end, TokenList &tokens,
+                              ZithSourceLoc &info, ZithArena *arena) {
+    const ZithSourceLoc startInfo = info;
+    const char *start             = current;
+
+    while (current < end && (isAlphaNum(static_cast<unsigned char>(*current)) || *current == '_')) {
+        ++current;
+        ++info.index;
+    }
+    const std::string_view lexeme(start, current - start);
+    const ZithTokenType type = lookup_keyword(lexeme);
+    tokens.push(arena, make_token(arena, type, lexeme, startInfo));
+}
+
+static void processString(const char *&current, const char *end, TokenList &tokens,
+                          std::vector<LexError> &error_list, ZithSourceLoc &info,
+                          ZithArena *arena) {
+    const ZithSourceLoc startInfo = info;
+    const char *start             = current;
+    ++current;
+    ++info.index;
+
+    while (current < end) {
+        if (*current == '"') {
+            ++current;
+            ++info.index;
+            tokens.push(arena, make_token(arena, ZITH_TOKEN_STRING,
+                                          std::string_view(start, current - start), startInfo));
+            return;
+        }
+
+        if (*current == '\\') {
+            const ZithSourceLoc escapeLoc = info;
+            ++current;
+            ++info.index;
+
+            if (current >= end) {
+                addMsgError(error_list, arena, "Unterminated escape sequence at end of file",
+                            escapeLoc);
+                break;
+            }
+
+            if (!isValidEscape(*current)) {
+                char msg_buf[64];
+                size_t pos      = 0;
+                const char *pfx = "Invalid escape sequence '\\";
+                for (const char *p = pfx; *p && pos < sizeof(msg_buf) - 2;)
+                    msg_buf[pos++] = *p++;
+                if (pos < sizeof(msg_buf) - 1)
+                    msg_buf[pos++] = *current;
+                if (pos < sizeof(msg_buf) - 1)
+                    msg_buf[pos++] = '\'';
+                msg_buf[pos] = '\0';
+                error_list.push_back({make_error_msg(arena, msg_buf, escapeLoc.line), escapeLoc});
+            }
+            ++current;
+            ++info.index;
+            continue;
+        }
+
+        if (*current == '\n')
+            ZITH_NEWLINE(&info);
+        ++current;
+        ++info.index;
+    }
+
+    error_list.push_back(
+        {make_error_msg(arena, "Unterminated []char literal starting at line ", startInfo.line),
+         startInfo});
+    tokens.push(arena, make_token(arena, ZITH_TOKEN_STRING,
+                                  std::string_view(start, current - start), startInfo));
+}
+
+static void processChar(const char *&current, const char *end, TokenList &tokens,
+                        std::vector<LexError> &error_list, ZithSourceLoc &info,
+                        ZithArena *arena) {
+    const ZithSourceLoc startInfo = info;
+    const char *start             = current;
+    ++current;
+    ++info.index;
+
+    if (current >= end) {
+        error_list.push_back(
+            {make_error_msg(arena, "Unterminated char literal starting at line ", startInfo.line),
+             startInfo});
+        tokens.push(arena, make_token(arena, ZITH_TOKEN_CHAR,
+                                      std::string_view(start, current - start), startInfo));
+        return;
+    }
+
+    if (*current == '\\') {
+        const ZithSourceLoc escapeLoc = info;
+        ++current;
+        ++info.index;
+
+        if (current >= end) {
+            addMsgError(error_list, arena, "Unterminated escape sequence at end of file", escapeLoc);
+        } else {
+            if (!isValidEscape(*current)) {
+                char msg_buf[64];
+                size_t pos      = 0;
+                const char *pfx = "Invalid escape sequence '\\";
+                for (const char *p = pfx; *p && pos < sizeof(msg_buf) - 2;)
+                    msg_buf[pos++] = *p++;
+                if (pos < sizeof(msg_buf) - 1)
+                    msg_buf[pos++] = *current;
+                if (pos < sizeof(msg_buf) - 1)
+                    msg_buf[pos++] = '\'';
+                msg_buf[pos] = '\0';
+                error_list.push_back({make_error_msg(arena, msg_buf, escapeLoc.line), escapeLoc});
+            }
+            ++current;
+            ++info.index;
+        }
+    } else {
+        ++current;
+        ++info.index;
+    }
+
+    if (current < end && *current == '\'') {
+        ++current;
+        ++info.index;
+    } else {
+        error_list.push_back(
+            {make_error_msg(arena, "Unterminated char literal starting at line ", startInfo.line),
+             startInfo});
+    }
+
+    tokens.push(arena, make_token(arena, ZITH_TOKEN_CHAR,
+                                  std::string_view(start, current - start), startInfo));
+}
+
+static void processNumber(const char *&current, const char *end, TokenList &tokens,
+                          std::vector<LexError> &error_list, ZithSourceLoc &info,
+                          ZithArena *arena) {
+    const char *start             = current;
+    const ZithSourceLoc startInfo = info;
+
+    enum class Base { Decimal, Hex, Binary, Octal } base = Base::Decimal;
+
+    if (*current == '0' && current + 1 < end) {
+        const char next = static_cast<char>(toLower(static_cast<unsigned char>(*(current + 1))));
+
+        if (next == 'x') {
+            base = Base::Hex;
+            current += 2;
+            info.index += 2;
+            if (current >= end || !isHexDigit(static_cast<unsigned char>(*current))) {
+                error_list.push_back(
+                    {make_error_msg(arena, "Hex literal '0x' has no digits at line ",
+                                    startInfo.line),
+                     startInfo});
+                tokens.push(arena, make_token(arena, ZITH_TOKEN_HEXADECIMAL,
+                                              std::string_view(start, current - start), startInfo));
+                return;
+            }
+        } else if (next == 'b') {
+            base = Base::Binary;
+            current += 2;
+            info.index += 2;
+            if (current >= end || (*current != '0' && *current != '1')) {
+                error_list.push_back(
+                    {make_error_msg(arena, "Binary literal '0b' has no digits at line ",
+                                    startInfo.line),
+                     startInfo});
+                tokens.push(arena, make_token(arena, ZITH_TOKEN_BINARY,
+                                              std::string_view(start, current - start), startInfo));
+                return;
+            }
+        } else if (next == 'o') {
+            base = Base::Octal;
+            current += 2;
+            info.index += 2;
+            if (current >= end || *current < '0' || *current > '7') {
+                error_list.push_back(
+                    {make_error_msg(arena, "Octal literal '0o' has no digits at line ",
+                                    startInfo.line),
+                     startInfo});
+                tokens.push(arena, make_token(arena, ZITH_TOKEN_OCTAL,
+                                              std::string_view(start, current - start), startInfo));
+                return;
+            }
+        }
+    }
+
+    bool isFloat           = false;
+    bool prev_is_separator = false;
+
+    while (current < end) {
+        const auto c = static_cast<unsigned char>(*current);
+
+        if (c == '\'') {
+            if (prev_is_separator) {
+                error_list.push_back(
+                    {make_error_msg(arena, "Consecutive separators in numeric literal at line ",
+                                    info.line),
+                     info});
+            }
+            prev_is_separator = true;
+            ++current;
+            ++info.index;
+            continue;
+        }
+
+        switch (base) {
+        case Base::Hex:
+            if (!isHexDigit(c))
+                goto done;
+            break;
+
+        case Base::Binary:
+            if (c != '0' && c != '1')
+                goto done;
+            break;
+
+        case Base::Octal:
+            if (c < '0' || c > '7') {
+                if (c == '8' || c == '9') {
+                    error_list.push_back(
+                        {make_error_msg(arena, "Invalid digit in octal literal at line ",
+                                        info.line),
+                         info});
+                    ++current;
+                    ++info.index;
+                }
+                goto done;
+            }
+            break;
+
+        case Base::Decimal:
+            if (c == '.') {
+                if (isFloat)
+                    goto done;
+                if (!(current + 1 < end && isDigit(static_cast<unsigned char>(*(current + 1)))))
+                    goto done;
+                isFloat = true;
+            } else if (!isDigit(c)) {
+                goto done;
+            }
+            break;
+        }
+
+        prev_is_separator = false;
+        ++current;
+        ++info.index;
+    }
+
+done:
+    if (prev_is_separator) {
+        error_list.push_back(
+            {make_error_msg(arena, "Trailing separator in numeric literal at line ", info.line),
+             info});
+    }
+
+    if (current < end && (isAlpha(static_cast<unsigned char>(*current)) || *current == '_')) {
+        const char *suffixStart       = current;
+        const ZithSourceLoc suffixLoc = info;
+
+        while (current < end &&
+               (isAlphaNum(static_cast<unsigned char>(*current)) || *current == '_')) {
+            ++current;
+            ++info.index;
+        }
+
+        char msg_buf[160];
+        size_t pos = 0;
+        for (const char *p = "Invalid suffix '"; *p && pos < sizeof(msg_buf) - 1;)
+            msg_buf[pos++] = *p++;
+        for (const char *p = suffixStart; p < current && pos < sizeof(msg_buf) - 1;)
+            msg_buf[pos++] = *p++;
+        for (const char *p = "' on numeric literal at line "; *p && pos < sizeof(msg_buf) - 1;)
+            msg_buf[pos++] = *p++;
+        msg_buf[pos] = '\0';
+
+        error_list.push_back({make_error_msg(arena, msg_buf, suffixLoc.line), suffixLoc});
+    }
+
+    ZithTokenType type = ZITH_TOKEN_NUMBER;
+    switch (base) {
+    case Base::Hex:
+        type = ZITH_TOKEN_HEXADECIMAL;
+        break;
+    case Base::Binary:
+        type = ZITH_TOKEN_BINARY;
+        break;
+    case Base::Octal:
+        type = ZITH_TOKEN_OCTAL;
+        break;
+    case Base::Decimal:
+        type = isFloat ? ZITH_TOKEN_FLOAT : ZITH_TOKEN_NUMBER;
+        break;
+    }
+
+    tokens.push(arena,
+                make_token(arena, type, std::string_view(start, current - start), startInfo));
+}
+
+static bool punctuation(const char *&current, const char *end, TokenList &tokens,
+                        ZithSourceLoc &info, ZithArena *arena) {
+    const char c = *current;
+
+    switch (c) {
+    case '(':
+    case ')':
+    case '{':
+    case '}':
+    case '[':
+    case ']':
+    case ';':
+    case ',':
+    case '?':
+    case '@':
+    case '#':
+    case '~':
+        tokens.push(arena,
+                    make_token(arena, lookup_keyword(std::string_view(&c, 1)), std::string_view(&c, 1), info));
+        ++current;
+        ++info.index;
+        return true;
+
+    case '+':
+    case '-':
+    case '*':
+    case '/':
+    case '%':
+    case '^':
+    case '&':
+    case '|':
+    case '=':
+    case '!':
+    case '<':
+    case '>':
+    case '.':
+    case ':':
+        break;
+
+    default:
+        return false;
+    }
+
+    const ZithSourceLoc startInfo = info;
+
+    for (const int len : {3, 2, 1}) {
+        if (current + len > end)
+            continue;
+        const auto t = lookup_keyword(std::string_view(current, static_cast<size_t>(len)));
+        if (t != ZITH_TOKEN_IDENTIFIER) {
+            const std::string_view view(current, static_cast<size_t>(len));
+            current += len;
+            info.index += static_cast<size_t>(len);
+            tokens.push(arena, make_token(arena, t, view, startInfo));
+            return true;
+        }
+    }
+    return false;
+}
+
+static void tokenize_impl(std::string_view src, ZithArena *arena, TokenList &tokens,
+                          std::vector<LexError> &error_list) {
+    tokens.init(arena, 64);
+
+    ZithSourceLoc info{0, 1};
+    const char *current = src.data();
+    const char *end     = src.data() + src.size();
+
+    while (current < end) {
+        const auto c = static_cast<unsigned char>(*current);
+
+        if (isSpace(c)) {
+            if (*current == '\n')
+                ZITH_NEWLINE(&info);
+            ++current;
+            ++info.index;
+            continue;
+        }
+
+        if (*current == '/' && current + 1 < end) {
+            if (*(current + 1) == '/') {
+                skipSingleLine(info, current, end);
+                continue;
+            }
+            if (*(current + 1) == '*') {
+                skipMultiLine(info, current, end, error_list, arena);
+                continue;
+            }
+        }
+
+        if (isAlpha(c) || *current == '_') {
+            processIdentifier(current, end, tokens, info, arena);
+            continue;
+        }
+
+        if (isDigit(c) || (*current == '.' && current + 1 < end &&
+                           isDigit(static_cast<unsigned char>(*(current + 1))))) {
+            processNumber(current, end, tokens, error_list, info, arena);
+            continue;
+        }
+
+        if (*current == '"') {
+            processString(current, end, tokens, error_list, info, arena);
+            continue;
+        }
+
+        if (*current == '\'') {
+            processChar(current, end, tokens, error_list, info, arena);
+            continue;
+        }
+
+        if (punctuation(current, end, tokens, info, arena))
+            continue;
+
+        addCharError(error_list, "Unknown character ", *current, info, arena);
+        tokens.push(arena,
+                    make_token(arena, ZITH_TOKEN_UNKNOWN, std::string_view(current, 1), info));
+        ++current;
+        ++info.index;
+
+        if (error_list.size() >= MAX_ERRORS)
+            break;
+    }
+
+    tokens.push(arena, make_token(arena, ZITH_TOKEN_END, std::string_view{}, info));
+}
+
+ZithTokenStream tokenize(std::string_view source, ZithArena *arena, TokenList &tokens,
+                         std::vector<LexError> &errors) {
+    tokenize_impl(source, arena, tokens, errors);
+
+    if (!errors.empty()) {
+        return {nullptr, 0};
+    }
+
+    size_t count         = 0;
+    ZithToken *flat_data = tokens.flatten(arena, &count);
+
+    return {flat_data, count};
+}
+
+void debug_tokenize(std::string_view source, ZithArena *arena, TokenList &tokens,
+                    std::vector<LexError> &errors) {
+    tokenize_impl(source, arena, tokens, errors);
+
+    size_t count    = 0;
+    ZithToken *flat = tokens.flatten(arena, &count);
+
+    std::cerr << "\n+----------------------------------------------------+\n";
+    std::cerr << "|            Zith Tokenizer - Debug Dump              |\n";
+    std::cerr << "+---+------+------+--------------+--------------------+\n";
+    std::cerr << "| # | Line | Col  | Type         | Lexeme             |\n";
+    std::cerr << "+---+------+------+--------------+--------------------+\n";
+
+    for (size_t i = 0; i < count; ++i) {
+        const ZithToken &tok = flat[i];
+
+        char lexeme_buf[25];
+        size_t lex_len =
+            tok.lexeme.len < sizeof(lexeme_buf) - 1 ? tok.lexeme.len : sizeof(lexeme_buf) - 4;
+        std::memcpy(lexeme_buf, tok.lexeme.data, lex_len);
+        if (lex_len < tok.lexeme.len) {
+            lexeme_buf[lex_len++] = '.';
+            lexeme_buf[lex_len++] = '.';
+            lexeme_buf[lex_len++] = '.';
+        }
+        lexeme_buf[lex_len] = '\0';
+
+        for (size_t j = 0; j < lex_len; ++j)
+            if (static_cast<unsigned char>(lexeme_buf[j]) < 0x20)
+                lexeme_buf[j] = '?';
+
+        const char *type_name = "KEYWORD/OP";
+        switch (tok.type) {
+        case ZITH_TOKEN_IDENTIFIER: type_name = "IDENTIFIER"; break;
+        case ZITH_TOKEN_STRING: type_name = "STRING"; break;
+        case ZITH_TOKEN_NUMBER: type_name = "NUMBER"; break;
+        case ZITH_TOKEN_FLOAT: type_name = "FLOAT"; break;
+        case ZITH_TOKEN_HEXADECIMAL: type_name = "HEX"; break;
+        case ZITH_TOKEN_BINARY: type_name = "BINARY"; break;
+        case ZITH_TOKEN_OCTAL: type_name = "OCTAL"; break;
+        case ZITH_TOKEN_UNKNOWN: type_name = "UNKNOWN"; break;
+        case ZITH_TOKEN_END: type_name = "END"; break;
+        default: break;
+        }
+
+        std::cerr << "| " << i << " \t| " << tok.loc.line << " \t| " << tok.loc.index << " \t| "
+                  << type_name << " \t| " << lexeme_buf << "\n";
+    }
+
+    std::cerr << "+----------------------------------------------------+\n";
+    std::cerr << "  Total tokens : " << count << "\n";
+
+    if (!errors.empty()) {
+        std::cerr << "\n  Lexical errors (" << errors.size() << "):\n";
+        for (size_t i = 0; i < errors.size(); ++i) {
+            const auto &err = errors[i];
+            std::cerr << "  [" << i << "] line " << err.info.line << ", col " << err.info.index
+                      << " -> " << err.msg << "\n";
+        }
+    } else {
+        std::cerr << "  No lexical errors.\n";
+    }
+    std::cerr << '\n';
+}
+
+}
+
+ZithTokenStream zith_tokenize(ZithArena *arena, const char *source, const size_t source_len) {
+    if (!arena || !source)
+        return {nullptr, 0};
+
+    std::vector<zith::lexer::LexError> error_list;
+    zith::lexer::TokenList tokens;
+
+    return zith::lexer::tokenize(std::string_view(source, source_len), arena, tokens, error_list);
+}
+
+void zith_debug_tokenize(ZithArena *arena, const char *source, const size_t source_len) {
+    if (!arena || !source) {
+        std::cerr << "[zith_debug_tokens] null arena or source\n";
+        return;
+    }
+
+    std::vector<zith::lexer::LexError> error_list;
+    zith::lexer::TokenList tokens;
+    zith::lexer::debug_tokenize(std::string_view(source, source_len), arena, tokens, error_list);
+}
+
+
+const char *zith_token_type_name(ZithTokenType t) {
+    switch (t) {
+    case ZITH_TOKEN_IDENTIFIER: return "identifier";
+    case ZITH_TOKEN_TYPE: return "type";
+    case ZITH_TOKEN_STRUCT: return "struct";
+    case ZITH_TOKEN_COMPONENT: return "component";
+    case ZITH_TOKEN_ENUM: return "enum";
+    case ZITH_TOKEN_RAW: return "raw";
+    case ZITH_TOKEN_UNION: return "union";
+    case ZITH_TOKEN_FAMILY: return "family";
+    case ZITH_TOKEN_ENTITY: return "entity";
+    case ZITH_TOKEN_TRAIT: return "trait";
+    case ZITH_TOKEN_TYPEDEF: return "typedef";
+    case ZITH_TOKEN_IMPLEMENT: return "implement";
+    case ZITH_TOKEN_FN: return "fn";
+    case ZITH_TOKEN_IMPORT: return "import";
+    case ZITH_TOKEN_USE: return "use";
+    case ZITH_TOKEN_CONTEXT: return "context";
+    case ZITH_TOKEN_MACRO: return "macro";
+    case ZITH_TOKEN_EXPORT: return "export";
+    case ZITH_TOKEN_FROM: return "from";
+    case ZITH_TOKEN_AS: return "as";
+    case ZITH_TOKEN_LET: return "let";
+    case ZITH_TOKEN_VAR: return "var";
+    case ZITH_TOKEN_AUTO: return "auto";
+    case ZITH_TOKEN_CONST: return "const";
+    case ZITH_TOKEN_MUTABLE: return "mutable";
+    case ZITH_TOKEN_GLOBAL: return "global";
+    case ZITH_TOKEN_COMPTIME: return "comptime";
+    case ZITH_TOKEN_LEND: return "lend";
+    case ZITH_TOKEN_SHARED: return "share";
+    case ZITH_TOKEN_VIEW: return "view";
+    case ZITH_TOKEN_UNIQUE: return "unique";
+    case ZITH_TOKEN_EXTENSION: return "extension";
+    case ZITH_TOKEN_YIELD: return "yield";
+    case ZITH_TOKEN_ASYNC: return "async";
+    case ZITH_TOKEN_FLOWING: return "flowing";
+    case ZITH_TOKEN_ENTRY: return "entry";
+    case ZITH_TOKEN_NORETURN: return "noreturn";
+    case ZITH_TOKEN_RECURSE: return "recurse";
+    case ZITH_TOKEN_MODIFIER: return "modifier";
+    case ZITH_TOKEN_IF: return "if";
+    case ZITH_TOKEN_ELSE: return "else";
+    case ZITH_TOKEN_FOR: return "for";
+    case ZITH_TOKEN_IN: return "in";
+    case ZITH_TOKEN_SWITCH: return "switch";
+    case ZITH_TOKEN_RETURN: return "return";
+    case ZITH_TOKEN_BREAK: return "break";
+    case ZITH_TOKEN_CONTINUE: return "continue";
+    case ZITH_TOKEN_GOTO: return "goto";
+    case ZITH_TOKEN_MARKER: return "marker";
+    case ZITH_TOKEN_SCENE: return "scene";
+    case ZITH_TOKEN_END: return "end";
+    case ZITH_TOKEN_SPAWN: return "spawn";
+    case ZITH_TOKEN_AWAIT: return "await";
+    case ZITH_TOKEN_JOIN: return "join";
+    case ZITH_TOKEN_TRY: return "try";
+    case ZITH_TOKEN_CATCH: return "catch";
+    case ZITH_TOKEN_MUST: return "must";
+    case ZITH_TOKEN_THROW: return "throw";
+    case ZITH_TOKEN_DO: return "do";
+    case ZITH_TOKEN_DROP: return "drop";
+    case ZITH_TOKEN_REQUIRE: return "require";
+    case ZITH_TOKEN_IS: return "is";
+    case ZITH_TOKEN_PREFIX: return "prefix";
+    case ZITH_TOKEN_SUFIX: return "sufix";
+    case ZITH_TOKEN_INFIX: return "infix";
+    case ZITH_TOKEN_AND: return "and";
+    case ZITH_TOKEN_OR: return "or";
+    case ZITH_TOKEN_NOT_EQUAL: return "not";
+    case ZITH_TOKEN_EQUAL: return "==";
+    case ZITH_TOKEN_GREATER_THAN_OR_EQUAL: return ">=";
+    case ZITH_TOKEN_LESS_THAN_OR_EQUAL: return "<=";
+    case ZITH_TOKEN_ARROW: return "->";
+    case ZITH_TOKEN_PLUS_EQUAL: return "+=";
+    case ZITH_TOKEN_MINUS_EQUAL: return "-=";
+    case ZITH_TOKEN_MULTIPLY_EQUAL: return "*=";
+    case ZITH_TOKEN_DIVIDE_EQUAL: return "/=";
+    case ZITH_TOKEN_DECLARATION: return ":=";
+    case ZITH_TOKEN_DOTS: return "...";
+    case ZITH_TOKEN_PLUS: return "+";
+    case ZITH_TOKEN_MINUS: return "-";
+    case ZITH_TOKEN_MULTIPLY: return "*";
+    case ZITH_TOKEN_DIVIDE: return "/";
+    case ZITH_TOKEN_MOD: return "%";
+    case ZITH_TOKEN_ASSIGNMENT: return "=";
+    case ZITH_TOKEN_LESS_THAN: return "<";
+    case ZITH_TOKEN_GREATER_THAN: return ">";
+    case ZITH_TOKEN_BANG: return "!";
+    case ZITH_TOKEN_QUESTION: return "?";
+    case ZITH_TOKEN_LPAREN: return "(";
+    case ZITH_TOKEN_RPAREN: return ")";
+    case ZITH_TOKEN_LBRACE: return "{";
+    case ZITH_TOKEN_RBRACE: return "}";
+    case ZITH_TOKEN_LBRACKET: return "[";
+    case ZITH_TOKEN_RBRACKET: return "]";
+    case ZITH_TOKEN_COMMA: return ",";
+    case ZITH_TOKEN_SEMICOLON: return ";";
+    case ZITH_TOKEN_COLON: return ":";
+    case ZITH_TOKEN_DOT: return ".";
+    case ZITH_TOKEN_NULL: return "null";
+    case ZITH_TOKEN_STRING: return "string";
+    case ZITH_TOKEN_NUMBER: return "number";
+    case ZITH_TOKEN_FLOAT: return "float";
+    case ZITH_TOKEN_HEXADECIMAL: return "hex";
+    case ZITH_TOKEN_BINARY: return "binary";
+    case ZITH_TOKEN_OCTAL: return "octal";
+    case ZITH_TOKEN_UNKNOWN: return "unknown";
+    default: return "?";
+    }
+}
+

@@ -1,0 +1,19 @@
+module test.module_c;
+
+export struct Point {
+    x: int,
+    y: int,
+    z: int,
+}
+
+export fn create_point(x: int, y: int, z: int) -> Point {
+    Point { x, y, z }
+}
+
+export fn create_point(x: int, y: int) -> Point {
+    Point { x, y, z: 0 }
+}
+
+export struct DuplicateError {
+    message: string,
+}

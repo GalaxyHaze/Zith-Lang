@@ -1,0 +1,3 @@
+fn log(msg: []char) {
+    println(msg);
+}

@@ -1,0 +1,31 @@
+module test.module_b;
+
+import test.module_a;
+
+export struct Rect {
+    p1: test.module_a.Point,
+    p2: test.module_a.Point,
+}
+
+export fn create_rect(x1: int, y1: int, x2: int, y2: int) -> Rect {
+    let p1 = test.module_a.create_point(x1, y1)
+    let p2 = test.module_a.create_point(x2, y2)
+    Rect { p1, p2 }
+}
+
+export struct Color {
+    r: int,
+    g: int,
+    b: int,
+}
+
+export fn rgb(r: int, g: int, b: int) -> Color {
+    Color { r, g, b }
+}
+
+export fn rgb(value: int) -> Color {
+    let r = (value >> 16) & 0xFF
+    let g = (value >> 8) & 0xFF
+    let b = value & 0xFF
+    Color { r: r as int, g: g as int, b: b as int }
+}

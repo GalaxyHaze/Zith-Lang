@@ -1,0 +1,1 @@
+import mylibs/io/console; fn main() { hi(); }

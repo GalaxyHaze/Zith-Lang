@@ -1,0 +1,11 @@
+fn parse(data: string) -> string {
+  return data;
+}
+
+fn stringify(value: string) -> string {
+  return value;
+}
+
+fn isValid(data: string) -> bool {
+  return true;
+}

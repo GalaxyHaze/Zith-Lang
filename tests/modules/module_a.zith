@@ -1,0 +1,18 @@
+module test.module_a;
+
+export struct Point {
+    x: int,
+    y: int,
+}
+
+export fn create_point(x: int, y: int) -> Point {
+    Point { x, y }
+}
+
+export fn distance(p1: Point, p2: Point) -> float {
+    let dx = p2.x - p1.x
+    let dy = p2.y - p1.y
+    let dx_f = dx as float
+    let dy_f = dy as float
+    (dx_f * dx_f + dy_f * dy_f).sqrt()
+}
