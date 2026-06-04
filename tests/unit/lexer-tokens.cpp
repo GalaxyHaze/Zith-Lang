@@ -1,11 +1,8 @@
 #include "lexer/lexer.hpp"
 #include "lexer/token.hpp"
 #include "lexer/keyword-table.hpp"
-#include "memory/arena.hpp"
 
 #include <cstdio>
-#include <cstring>
-#include <string_view>
 
 static int failed = 0;
 static int passed = 0;
@@ -18,7 +15,6 @@ static int passed = 0;
 #define CHECK_EQ(a, b, msg) CHECK((a) == (b), msg)
 
 using namespace zith::lexer;
-using zith::memory::Arena;
 
 static void test_tokenize_simple_fn() {
     auto result = tokenize("test", "fn main() {}");
@@ -113,6 +109,11 @@ static void test_tokenize_expression() {
     CHECK(ts.peek().is(TokenKind::LitVal), "literal 3");
 }
 
+static void test_tokenize_error() {
+    auto result = tokenize("test", "\"unterminated");
+    CHECK(result.isError(), "unterminated string returns error");
+}
+
 int main() {
     std::printf("lexer-tokens tests\n");
     std::printf("=====================\n\n");
@@ -123,6 +124,7 @@ int main() {
     test_token_kind_names();
     test_token_stream_ops();
     test_tokenize_expression();
+    test_tokenize_error();
 
     std::printf("\nResults: %d passed, %d failed\n", passed, failed);
     return failed > 0 ? 1 : 0;

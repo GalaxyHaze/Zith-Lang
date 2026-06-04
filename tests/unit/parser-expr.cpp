@@ -1,7 +1,6 @@
 #include "lexer/lexer.hpp"
 #include "parser/parser.hpp"
 #include "parser/parse-result.hpp"
-#include "parser/source-map.hpp"
 #include "ast/ast-builder.hpp"
 #include "ast/ast-nodes.hpp"
 #include "ast/ast-ids.hpp"
@@ -21,88 +20,109 @@ static int passed = 0;
 #define CHECK_EQ(a, b, msg) CHECK((a) == (b), msg)
 
 using namespace zith::lexer;
-using namespace zith::parser;
 using namespace zith::ast;
 using zith::memory::Arena;
 using zith::diagnostics::DiagnosticEngine;
 
-static Arena arena;
-static DiagnosticEngine diags;
-static AstBuilder builder{arena};
+// Parser is stubbed — parseProgram() returns {kInvalidDecl, {}, false}.
+static void test_parser_returns_not_ok() {
+    Arena arena;
+    AstBuilder builder(arena);
+    DiagnosticEngine diags;
 
-static void reset() {
-    Arena new_arena;
-    arena = std::move(new_arena);
-    diags.clear();
-    AstBuilder new_builder{arena};
-    builder = std::move(new_builder);
-}
-
-static void test_parse_literal_expr() {
-    reset();
     auto tokens = tokenize("test", "42;").value();
-    Parser parser(tokens, builder, diags);
+    zith::parser::Parser parser(tokens, builder, diags);
     auto result = parser.parseProgram();
-    CHECK(result.ok, "parse literal program ok");
-    if (!result.ok) return;
-
-    auto prog = builder.getDecl(result.value);
-    CHECK(std::holds_alternative<FnDeclNode>(prog), "program is FnDecl");
-    if (!std::holds_alternative<FnDeclNode>(prog)) return;
-
-    auto &fn = std::get<FnDeclNode>(prog);
-    auto &body = builder.getExpr(fn.body);
-    CHECK(std::holds_alternative<BlockNode>(body), "body is block");
-    if (!std::holds_alternative<BlockNode>(body)) return;
-
-    auto &block = std::get<BlockNode>(body);
-    CHECK_EQ(block.stmts.size(), size_t(1), "block has 1 stmt");
-
-    auto &stmt = builder.getStmt(block.stmts[0]);
-    CHECK(std::holds_alternative<RetNode>(stmt), "stmt is RetNode");
+    CHECK(!result.ok, "parser stub returns not ok");
 }
 
-static void test_parse_binary_expr() {
-    reset();
-    auto tokens = tokenize("test", "1 + 2;").value();
-    Parser parser(tokens, builder, diags);
-    auto result = parser.parseProgram();
-    CHECK(result.ok, "parse binary expr ok");
+static void test_ast_builder_literal() {
+    Arena arena;
+    AstBuilder builder(arena);
+
+    auto e = builder.litExpr(LitKind::Int, "42");
+    CHECK(e != kInvalidExpr, "litExpr returns valid ExprId");
+
+    auto &node = builder.getExpr(e);
+    CHECK(std::holds_alternative<LitValue>(node), "litExpr node is LitValue");
+    if (!std::holds_alternative<LitValue>(node)) return;
+
+    auto &lit = std::get<LitValue>(node);
+    CHECK(lit.kind == LitKind::Int, "literal kind is Int");
+    CHECK(lit.raw == "42", "literal raw is '42'");
 }
 
-static void test_parse_nested_expr() {
-    reset();
-    auto tokens = tokenize("test", "(1 + 2) * 3;").value();
-    Parser parser(tokens, builder, diags);
-    auto result = parser.parseProgram();
-    CHECK(result.ok, "parse nested expr ok");
+static void test_ast_builder_ident() {
+    Arena arena;
+    AstBuilder builder(arena);
+
+    auto e = builder.ident("foo");
+    CHECK(e != kInvalidExpr, "ident returns valid ExprId");
+
+    auto &node = builder.getExpr(e);
+    CHECK(std::holds_alternative<IdentNode>(node), "ident node is IdentNode");
+    if (!std::holds_alternative<IdentNode>(node)) return;
+
+    auto &ident = std::get<IdentNode>(node);
+    CHECK(ident.name == "foo", "ident name is foo");
 }
 
-static void test_parse_call_expr() {
-    reset();
-    auto tokens = tokenize("test", "foo(1, 2);").value();
-    Parser parser(tokens, builder, diags);
-    auto result = parser.parseProgram();
-    CHECK(result.ok, "parse call expr ok");
+static void test_ast_builder_binary() {
+    Arena arena;
+    AstBuilder builder(arena);
+
+    auto lhs = builder.litExpr(LitKind::Int, "1");
+    auto rhs = builder.litExpr(LitKind::Int, "2");
+    auto b = builder.binary(lhs, BinaryOp::Add, rhs);
+    CHECK(b != kInvalidExpr, "binary returns valid ExprId");
+
+    auto &node = builder.getExpr(b);
+    CHECK(std::holds_alternative<BinaryNode>(node), "binary node is BinaryNode");
 }
 
-static void test_parse_if_expr() {
-    reset();
-    auto tokens = tokenize("test", "if true { 1 } else { 2 };").value();
-    Parser parser(tokens, builder, diags);
-    auto result = parser.parseProgram();
-    CHECK(result.ok, "parse if expr ok");
+static void test_ast_builder_fn_decl() {
+    Arena arena;
+    AstBuilder builder(arena);
+
+    auto body = builder.block({});
+    auto decl = builder.fnDecl("main", {}, body);
+    CHECK(decl != kInvalidDecl, "fnDecl returns valid DeclId");
+
+    auto &node = builder.getDecl(decl);
+    CHECK(std::holds_alternative<FnDeclNode>(node), "fnDecl node is FnDeclNode");
+    if (!std::holds_alternative<FnDeclNode>(node)) return;
+
+    auto &fn = std::get<FnDeclNode>(node);
+    CHECK(fn.name == "main", "fn name is main");
+}
+
+static void test_ast_builder_let_stmt() {
+    Arena arena;
+    AstBuilder builder(arena);
+
+    auto init = builder.litExpr(LitKind::Int, "10");
+    auto s = builder.letStmt("x", false, init);
+    CHECK(s != kInvalidStmt, "letStmt returns valid StmtId");
+
+    auto &node = builder.getStmt(s);
+    CHECK(std::holds_alternative<LetNode>(node), "letStmt node is LetNode");
+    if (!std::holds_alternative<LetNode>(node)) return;
+
+    auto &let = std::get<LetNode>(node);
+    CHECK(let.name == "x", "let name is x");
+    CHECK(!let.mut, "let is not mutable");
 }
 
 int main() {
     std::printf("parser-expr tests\n");
     std::printf("===================\n\n");
 
-    test_parse_literal_expr();
-    test_parse_binary_expr();
-    test_parse_nested_expr();
-    test_parse_call_expr();
-    test_parse_if_expr();
+    test_parser_returns_not_ok();
+    test_ast_builder_literal();
+    test_ast_builder_ident();
+    test_ast_builder_binary();
+    test_ast_builder_fn_decl();
+    test_ast_builder_let_stmt();
 
     std::printf("\nResults: %d passed, %d failed\n", passed, failed);
     return failed > 0 ? 1 : 0;

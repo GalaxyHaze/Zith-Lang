@@ -10,10 +10,10 @@
 
 | Icon | Meaning |
 |------|---------|
-| ✅ | Fully implemented |
-| ◐ | Partial (works but has gaps) |
-| 🚧 | Stub / not yet implemented |
-| ❌ | Missing / broken |
+| * | Fully implemented |
+| ** | Partial (works but has gaps) |
+| *** | Stub / not yet implemented |
+| **** | Missing / broken |
 
 ---
 
@@ -21,18 +21,18 @@
 
 ```
 Source → Lexer → Parser → AST → Sema → HIR → MIR → ZIR → (Interpreter)
-         ✅        🚧      ✅     🚧    ◐     🚧    ❌      ❌
+         *        ***      *     ***    **     ***    ****      ****
 ```
 
 ---
 
 ## Subsystem Status
 
-### Memory (`src/memory/`) ✅
+### Memory (`src/memory/`) *
 Arena allocator, dyn-array, optional, result, string interner.  
 All production-quality. The foundation of the entire compiler.
 
-### Lexer (`src/lexer/`) ✅
+### Lexer (`src/lexer/`) *
 Full tokenizer with:
 - Number literals (decimal, hex `0x`, octal `0c`, binary `0b`, float)
 - String/char literals with escape sequences
@@ -40,58 +40,58 @@ Full tokenizer with:
 - Keyword lookup via compile-time perfect hash (130+ keywords)
 - Operator/punctuation tokenization
 
-### Source Management (`src/parser/`) ✅
+### Source Management (`src/parser/`) *
 - `Span`, `Loc` types
 - `SourceFile` — mmap-based and string-backed file loading
 - `SourceMap` — thread-safe registry with caching
 - `Recovery` — basic panic-mode error recovery
 
-### AST (`src/ast/`) ✅
+### AST (`src/ast/`) *
 - Full AST data model (8 expression types, 3 statement types, 3 declaration types)
 - Arena-backed builder with ID-based handles
 - Binary/unary operator enums
 
-### Diagnostics (`src/diagnostics/`) ◐
-- Diagnostic engine, severity levels, labels — ✅
+### Diagnostics (`src/diagnostics/`) **
+- Diagnostic engine, severity levels, labels — *
 - Emitter — functional but **no source-aware output** (no snippets, underlines)
 
-### CLI (`src/cli/`) ◐
-- Option parsing (`--tokens`, `--emit-*`, `-o`) — ✅
-- Pipeline plan (stage enumeration, progression) — ✅
-- Compilation session — 🚧 **all pipeline stages are empty stubs**
+### CLI (`src/cli/`) **
+- Option parsing (`--tokens`, `--emit-*`, `-o`) — *
+- Pipeline plan (stage enumeration, progression) — *
+- Compilation session — *** **all pipeline stages are empty stubs**
 
-### Parser (`src/parser/`) 🚧
-- Class hierarchy designed with Pratt-style expression parsing — ◐
-- **Actual parsing:** all methods return `kInvalid*` / `false` — 🚧
+### Parser (`src/parser/`) ***
+- Class hierarchy designed with Pratt-style expression parsing — **
+- **Actual parsing:** all methods return `kInvalid*` / `false` — ***
 
-### Symbol Table (`src/import/`) 🚧
-- Scope enter/exit — ✅
-- `declare()`, `lookup()`, `lookupInScope()` — 🚧
-- Name resolver (`resolveProgram`, etc.) — 🚧
+### Symbol Table (`src/import/`) ***
+- Scope enter/exit — *
+- `declare()`, `lookup()`, `lookupInScope()` — ***
+- Name resolver (`resolveProgram`, etc.) — ***
 
-### Sema (`src/sema/`) 🚧
-- Context object (wiring for symbol table, types, diagnostics) — ✅
-- `SemaPipeline::run()` — **discards the program and returns empty result** — 🚧
+### Sema (`src/sema/`) ***
+- Context object (wiring for symbol table, types, diagnostics) — *
+- `SemaPipeline::run()` — **discards the program and returns empty result** — ***
 
-### Type System (`src/types/`) 🚧
-- Data model (type kinds, width enums, TypeData variant) — ✅
-- `TypeIntern` — all methods return hardcoded constants — 🚧
-- `Unifier` — all methods return `false` / `kErrorType` — 🚧
+### Type System (`src/types/`) ***
+- Data model (type kinds, width enums, TypeData variant) — *
+- `TypeIntern` — all methods return hardcoded constants — ***
+- `Unifier` — all methods return `false` / `kErrorType` — ***
 
-### HIR (`src/zir/hir/`) ◐
-- Expression model (10 variants: literals, binary, unary, let, var, call, ret, branch, jump, phi) — ✅
-- Module storage — ✅
-- `addFn()` silently drops the function name (`(void)name`) — ◐
-- Verifier — returns `true` with no logic — 🚧
+### HIR (`src/zir/hir/`) **
+- Expression model (10 variants: literals, binary, unary, let, var, call, ret, branch, jump, phi) — *
+- Module storage — *
+- `addFn()` silently drops the function name (`(void)name`) — **
+- Verifier — returns `true` with no logic — ***
 
-### MIR (`src/zir/mir/`) 🚧
-- Instruction model (22 opcodes, operands, basic blocks) — ✅
-- Module storage — ✅
-- Lowering (`HIR → MIR`) — **no translation occurs** — 🚧
-- Verifier — returns `true` with no logic — 🚧
-- No instruction visitor — ❌
+### MIR (`src/zir/mir/`) ***
+- Instruction model (22 opcodes, operands, basic blocks) — *
+- Module storage — *
+- Lowering (`HIR → MIR`) — **no translation occurs** — ***
+- Verifier — returns `true` with no logic — ***
+- No instruction visitor — ****
 
-### ZIR / Interpreter ❌
+### ZIR / Interpreter ****
 Not yet started.
 
 ---
@@ -100,10 +100,10 @@ Not yet started.
 
 | Test | Status | Notes |
 |------|--------|-------|
-| `zith-lexer-test` | ✅ PASS | 41/41 passing |
-| `zith-parser-expr` | ❌ FAIL | Parser is a stub |
-| `zith-parser-stmt` | ❌ FAIL | Parser is a stub |
-| `zith-sema-test` | ❌ FAIL | Type intern/unify are stubs |
+| `zith-lexer-test` | * PASS | 41/41 passing |
+| `zith-parser-expr` | **** FAIL | Parser is a stub |
+| `zith-parser-stmt` | **** FAIL | Parser is a stub |
+| `zith-sema-test` | **** FAIL | Type intern/unify are stubs |
 | `zith-mir-test` | 💥 SEGFAULT | MirLowering::lower() returns empty module |
 
 ---

@@ -2,8 +2,8 @@
 
 #include "parser/span.hpp"
 
+#include <cstdint>
 #include <string>
-#include <string_view>
 #include <vector>
 
 namespace zith::diagnostics {
