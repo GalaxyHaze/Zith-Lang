@@ -17,39 +17,43 @@ VARS
 
     --color-tree-line: rgba(255, 255, 255, 0.2);
     --color-hover: rgba(255, 255, 255, 0.08);
-    --color-scanline: rgba(0, 0, 0, 0.15);
     --color-vignette: rgba(0, 0, 0, 0.6);
+    --crt-scanline-alpha: 0.15;
+    --crt-noise-opacity: 0.05;
+    --crt-vignette-opacity: 0.6;
+    --crt-flicker-animation: flicker 0.15s infinite;
+    --text-glow-alpha: 0.5;
 
     --glow-white:
-        0 0 10px #fff,
-        0 0 40px #fff;
+        0 0 10px rgba(255,255,255,var(--text-glow-alpha)),
+        0 0 40px rgba(255,255,255,var(--text-glow-alpha));
     
     --glow-cyan:
-        0 0 5px var(--color-cyan),
-        0 0 5px var(--color-cyan),
-        0 0 5px var(--color-cyan),
-        0 0 10px var(--color-cyan),
-        0 0 10px var(--color-cyan),
-        0 0 20px var(--color-cyan),
-        0 0 20px var(--color-cyan),
-        0 0 40px var(--color-cyan),
-        0 0 80px var(--color-cyan),
-        0 0 120px var(--color-cyan);
+        0 0 5px rgba(0,255,255,var(--text-glow-alpha)),
+        0 0 5px rgba(0,255,255,var(--text-glow-alpha)),
+        0 0 5px rgba(0,255,255,var(--text-glow-alpha)),
+        0 0 10px rgba(0,255,255,var(--text-glow-alpha)),
+        0 0 10px rgba(0,255,255,var(--text-glow-alpha)),
+        0 0 20px rgba(0,255,255,var(--text-glow-alpha)),
+        0 0 20px rgba(0,255,255,var(--text-glow-alpha)),
+        0 0 40px rgba(0,255,255,var(--text-glow-alpha)),
+        0 0 80px rgba(0,255,255,var(--text-glow-alpha)),
+        0 0 120px rgba(0,255,255,var(--text-glow-alpha));
 
     --glow-orange:
-        0 0 2px var(--color-orange),
-        0 0 5px var(--color-orange),
-        0 0 10px var(--color-orange),
-        0 0 40px var(--color-orange);
+        0 0 2px rgba(255,109,31,var(--text-glow-alpha)),
+        0 0 5px rgba(255,109,31,var(--text-glow-alpha)),
+        0 0 10px rgba(255,109,31,var(--text-glow-alpha)),
+        0 0 40px rgba(255,109,31,var(--text-glow-alpha));
     --glow-warning:
-        0 0 2px var(--color-yellow),
-        0 0 5px var(--color-orange),
-        0 0 10px var(--color-orange),
-        0 0 40px var(--color-orange);
+        0 0 2px rgba(251,255,31,var(--text-glow-alpha)),
+        0 0 5px rgba(255,109,31,var(--text-glow-alpha)),
+        0 0 10px rgba(255,109,31,var(--text-glow-alpha)),
+        0 0 40px rgba(255,109,31,var(--text-glow-alpha));
     --glow-owner:
-        0 0 2px var(--color-owner),
-        0 0 5px var(--color-owner),
-        0 0 10px var(--color-owner);
+        0 0 2px rgba(255,85,0,var(--text-glow-alpha)),
+        0 0 5px rgba(255,85,0,var(--text-glow-alpha)),
+        0 0 10px rgba(255,85,0,var(--text-glow-alpha));
 
 }
 
@@ -225,8 +229,119 @@ TREE
 }
 
 /*==================
+GEAR / SETTINGS
+==================*/
+
+.gear {
+    position: fixed;
+    bottom: 16px;
+    right: 16px;
+    z-index: 99998;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    background: #222;
+    border: 2px solid #555;
+    border-radius: 6px;
+}
+.gear img {
+    height: 24px;
+    filter: drop-shadow(0 0px 4px rgba(0,0,0,0.6));
+    transition: transform 0.2s;
+}
+.gear:hover img {
+    transform: rotate(30deg);
+}
+
+.settings-group {
+    margin-bottom: 16px;
+}
+.settings-group:last-child {
+    margin-bottom: 0;
+}
+.settings-group h2 {
+    color: #E87F24;
+}
+.settings-options {
+    display: flex;
+    gap: 8px;
+    margin: 16px 0;
+}
+.settings-options button {
+    flex: 1;
+    padding: 8px;
+    background: #555;
+    color: #FAF3E1;
+    border: 2px solid #000;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 14px;
+}
+.settings-options button:hover {
+    background: #666;
+}
+.settings-options button.active {
+    background: #E87F24;
+    color: #000;
+}
+.settings-status {
+    color: #aaa;
+    font-size: 12px;
+    margin-top: 8px;
+}
+
+.window#settings {
+    width: min(400px, 80vw);
+    position: fixed;
+    top: 60px;
+    right: 60px;
+    z-index: 100000;
+    border: 2px solid #000;
+    background-color: #333;
+    box-shadow: 6px 6px 10px #000;
+    display: flex;
+    flex-direction: column;
+}
+.window#settings .titlebar {
+    height: 32px;
+    background-color: #0000ff;
+    color: #ffffff;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 10px;
+    cursor: move;
+    touch-action: none;
+    user-select: none;
+}
+.window#settings .buttons {
+    display: flex;
+    gap: 4px;
+}
+.window#settings .buttons button {
+    width: 24px;
+    height: 24px;
+    border: none;
+    background-color: #dcdcdc;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 13px;
+}
+.window#settings .content {
+    flex: 1;
+    overflow: auto;
+    padding: 16px;
+}
+.window#settings.hidden {
+    display: none;
+}
+
+/*==================
 EFEITOS
-===================*/
+==================*/
 
 .main {
     font-family: 'VT323';
@@ -261,19 +376,19 @@ EFEITOS
     pointer-events: none;
     z-index: 99999;
 
+    opacity: 1;
+    animation: var(--crt-flicker-animation, flicker 0.15s infinite);
+
     background:
         repeating-linear-gradient(
             to bottom,
-            var(--color-scanline),
-            var(--color-scanline) 1px,
+            rgba(0,0,0,var(--crt-scanline-alpha, 0.15)),
+            rgba(0,0,0,var(--crt-scanline-alpha, 0.15)) 1px,
             transparent 1px,
             transparent 3px
         );
 
     mix-blend-mode: multiply;
-    opacity: 0.4;
-
-    animation: flicker 0.15s infinite;
 }
 
 .crt-overlay::before {
@@ -284,7 +399,7 @@ EFEITOS
     background: radial-gradient(
         ellipse at center,
         transparent 40%,
-        var(--color-vignette) 100%
+        rgba(0,0,0,var(--crt-vignette-opacity, 0.6)) 100%
     );
 }
 
@@ -295,7 +410,7 @@ EFEITOS
 
     background-image: url("https://upload.wikimedia.org/wikipedia/commons/7/76/1k_Dissolve_Noise_Texture.png");
 
-    opacity: 0.05;
+    opacity: var(--crt-noise-opacity, 0.05);
     animation: noise 0.2s infinite;
 }
 
@@ -316,6 +431,18 @@ ANIMAÇÕES
     0% { opacity: 0.4; }
     50% { opacity: 0.45; }
     100% { opacity: 0.4; }
+}
+
+@keyframes flicker-low {
+    0% { opacity: 0.45; }
+    50% { opacity: 0.5; }
+    100% { opacity: 0.45; }
+}
+
+@keyframes flicker-high {
+    0% { opacity: 0.9; }
+    50% { opacity: 1; }
+    100% { opacity: 0.9; }
 }
 
 /*==================

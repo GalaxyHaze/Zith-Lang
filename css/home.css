@@ -6,6 +6,15 @@ BASE
     box-sizing: border-box;
 }
 
+:root {
+    --crt-scanline-alpha: 0.2;
+    --crt-noise-opacity: 0.05;
+    --icon-shadow-opacity: 0.3;
+    --crt-vignette-opacity: 0.6;
+    --crt-flicker-animation: none;
+    --text-glow-alpha: 0.5;
+}
+
 html, body{
     margin:0;
     padding:0;
@@ -106,7 +115,7 @@ ICONS
     height: 64px;
     object-fit: contain;
 
-    filter: drop-shadow(0 0px 4px rgba(0,0,0,0.6));
+    filter: drop-shadow(0 0px 4px rgba(0,0,0,var(--icon-shadow-opacity)));
 }
 
 .icon p{
@@ -131,19 +140,19 @@ EFEITOS
     pointer-events: none;
     z-index: 99999;
 
+    opacity: 1;
+    animation: var(--crt-flicker-animation, none);
+
     background:
         repeating-linear-gradient(
             to bottom,
-            rgba(0,0,0,0.15),
-            rgba(0,0,0,0.15) 1px,
+            rgba(0,0,0,var(--crt-scanline-alpha)),
+            rgba(0,0,0,var(--crt-scanline-alpha)) 1px,
             transparent 1px,
             transparent 3px
         );
 
     mix-blend-mode: multiply;
-    opacity: 0.4;
-
-    animation: flicker 0.15s infinite;
 }
 
 .crt-overlay::before {
@@ -154,7 +163,7 @@ EFEITOS
     background: radial-gradient(
         ellipse at center,
         transparent 40%,
-        rgba(0,0,0,0.6) 100%
+        rgba(0,0,0,var(--crt-vignette-opacity, 0.6)) 100%
     );
 }
 
@@ -165,7 +174,7 @@ EFEITOS
 
     background-image: url("https://upload.wikimedia.org/wikipedia/commons/7/76/1k_Dissolve_Noise_Texture.png");
 
-    opacity: 0.05;
+    opacity: var(--crt-noise-opacity);
     animation: noise 0.2s infinite;
 }
 
@@ -182,10 +191,16 @@ ANIMAÇÕES
     50% { transform: translate(0,0); }
 }
 
-@keyframes flicker {
-    0% { opacity: 0.4; }
-    50% { opacity: 0.45; }
-    100% { opacity: 0.4; }
+@keyframes flicker-low {
+    0% { opacity: 0.45; }
+    50% { opacity: 0.5; }
+    100% { opacity: 0.45; }
+}
+
+@keyframes flicker-high {
+    0% { opacity: 0.9; }
+    50% { opacity: 1; }
+    100% { opacity: 0.9; }
 }
 
 /*==================
@@ -198,6 +213,10 @@ footer{
     box-shadow:
         inset 0 10px 8px 0px rgba(69, 80, 196, 0.6),
         inset 15px 10px 20px 10px #221e96;
+
+    display: flex;
+    justify-content: space-between;
+    align-items: stretch;
 }
 
 footer .start{
@@ -229,6 +248,59 @@ footer p{
 footer img{
     height: 24px;
     filter: drop-shadow(0 0px 4px rgba(0,0,0,0.6));
+}
+
+/*==================
+GEAR / SETTINGS
+===================*/
+
+.gear{
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    padding: 0 10px;
+}
+.gear img{
+    height: 24px;
+    filter: drop-shadow(0 0px 4px rgba(0,0,0,0.6));
+    transition: transform 0.2s;
+}
+.gear:hover img{
+    transform: rotate(30deg);
+}
+
+.settings-group{
+    margin-bottom: 16px;
+}
+.settings-group:last-child{
+    margin-bottom: 0;
+}
+.settings-options{
+    display: flex;
+    gap: 8px;
+    margin: 16px 0;
+}
+.settings-options button{
+    flex: 1;
+    padding: 8px;
+    background: #555;
+    color: #FAF3E1;
+    border: 2px solid #000;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 14px;
+}
+.settings-options button:hover{
+    background: #666;
+}
+.settings-options button.active{
+    background: #E87F24;
+    color: #000;
+}
+.settings-status{
+    color: #aaa;
+    font-size: 12px;
+    margin-top: 8px;
 }
 
 /*==================

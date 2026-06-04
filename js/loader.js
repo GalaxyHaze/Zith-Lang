@@ -24,7 +24,6 @@ function typeLine() {
     if (index >= lines.length) {
         setTimeout(() => {
             document.getElementById("loader").style.display = "none";
-            document.getElementById("main-content").style.display = "block";
         }, 500);
         return;
     }
@@ -50,12 +49,10 @@ function typeLine() {
 
 window.addEventListener("DOMContentLoaded", () => {
     const loader = document.getElementById("loader");
-    const main = document.getElementById("main-content");
 
     const hasBooted = localStorage.getItem("boot_done");
     if (hasBooted) {
         loader.style.display = "none";
-        main.style.display = "block";
         return;
     }
     localStorage.setItem("boot_done", "true");

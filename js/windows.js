@@ -3,7 +3,7 @@ const windows = document.querySelectorAll(".window");
 
 const windowStates = {};
 
-let = highestZ = 1;
+let highestZ = 1;
 
 windows.forEach(windowE1 => {
 

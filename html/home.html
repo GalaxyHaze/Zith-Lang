@@ -63,6 +63,9 @@
                     <img src="../media/Icons/Start.svg">
                     <p>Start</p>
                 </div>
+                <div class="gear" onclick="openWindow('settings')">
+                    <img src="../media/Icons/Gear.svg">
+                </div>
             </footer>
         </div>
 
@@ -140,11 +143,51 @@
                 <p>Sorry but doesn't have a Start page yet.</p>
             </div>
         </div>
+
+        <div class="window hidden" id="settings">
+            <div class="titlebar">
+                <span>settings.ini</span>
+                <div class="buttons">
+                    <button>-</button>
+                    <button onclick="toggleMaximize('settings')">o</button>
+                    <button onclick="closeWindow('settings')">x</button>
+                </div>
+            </div>
+            <div class="content">
+                <div class="settings-group" data-group="scanlines">
+                    <h2>Scanlines</h2>
+                    <div class="settings-options">
+                        <button data-setting="scanlines" data-level="0">Off</button>
+                        <button data-setting="scanlines" data-level="1">Low</button>
+                        <button data-setting="scanlines" data-level="2">High</button>
+                    </div>
+                    <p class="settings-status">Current: Low</p>
+                </div>
+                <div class="settings-group" data-group="glow">
+                    <h2>Glow</h2>
+                    <div class="settings-options">
+                        <button data-setting="glow" data-level="0">Off</button>
+                        <button data-setting="glow" data-level="1">Low</button>
+                        <button data-setting="glow" data-level="2">High</button>
+                    </div>
+                    <p class="settings-status">Current: Low</p>
+                </div>
+                <div class="settings-group" data-group="noise">
+                    <h2>Noise</h2>
+                    <div class="settings-options">
+                        <button data-setting="noise" data-level="0">Off</button>
+                        <button data-setting="noise" data-level="1">Low</button>
+                        <button data-setting="noise" data-level="2">High</button>
+                    </div>
+                    <p class="settings-status">Current: Low</p>
+                </div>
+            </div>
+        </div>
         
         <div class="crt-overlay"></div>
         <script src="../js/loader.js"></script>
-        <script src="../js/news.js"></script>
         <script src="../js/windows.js"></script>
+        <script src="../js/settings.js"></script>
     </body>
 
 </html>
