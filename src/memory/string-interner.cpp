@@ -1,4 +1,4 @@
-#include "infra/interner/string-interner.hpp"
+#include "memory/string-interner.hpp"
 
 #include <cstring>
 

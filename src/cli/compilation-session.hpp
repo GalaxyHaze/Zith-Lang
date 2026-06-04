@@ -1,15 +1,15 @@
 #pragma once
 
-#include "diagnostics/engine/diagnostic-engine.hpp"
-#include "driver/options.hpp"
-#include "driver/pipeline-plan.hpp"
-#include "frontend/ast/ast-builder.hpp"
-#include "frontend/lexer/token.hpp"
-#include "frontend/source/source-map.hpp"
-#include "middleend/hir/hir-module.hpp"
-#include "middleend/mir/mir-module.hpp"
-#include "middleend/symbols/symbol-table.hpp"
-#include "middleend/types/type-intern.hpp"
+#include "diagnostics/diagnostic-engine.hpp"
+#include "cli/options.hpp"
+#include "cli/pipeline-plan.hpp"
+#include "ast/ast-builder.hpp"
+#include "lexer/token.hpp"
+#include "parser/source-map.hpp"
+#include "zir/hir/hir-module.hpp"
+#include "zir/mir/mir-module.hpp"
+#include "import/symbol-table.hpp"
+#include "types/type-intern.hpp"
 
 namespace zith::driver {
 
@@ -34,7 +34,7 @@ namespace zith::driver {
         bool parseStage();
         bool semaStage();
         bool mirStage();
-        bool backendStage();
+        bool zirStage();
     };
 
 } // namespace zith::driver

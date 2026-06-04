@@ -1,7 +1,7 @@
 #pragma once
 
-#include "driver/compilation-session.hpp"
-#include "driver/options.hpp"
+#include "cli/compilation-session.hpp"
+#include "cli/options.hpp"
 
 namespace zith::driver {
 

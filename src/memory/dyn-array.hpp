@@ -1,5 +1,5 @@
 #pragma once
-#include "infra/alloc/arena.hpp"
+#include "memory/arena.hpp"
 
 #include <cstddef>
 #include <type_traits>

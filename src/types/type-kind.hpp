@@ -1,6 +1,6 @@
 #pragma once
 
-#include "middleend/types/type-id.hpp"
+#include "types/type-id.hpp"
 
 #include <cstdint>
 #include <variant>

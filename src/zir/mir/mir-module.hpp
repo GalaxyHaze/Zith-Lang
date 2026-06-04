@@ -1,8 +1,8 @@
 #pragma once
 
-#include "infra/alloc/arena.hpp"
-#include "infra/collections/dyn-array.hpp"
-#include "middleend/mir/mir-inst.hpp"
+#include "memory/arena.hpp"
+#include "memory/dyn-array.hpp"
+#include "zir/mir/mir-inst.hpp"
 
 #include <string_view>
 #include <vector>

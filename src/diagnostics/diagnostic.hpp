@@ -1,6 +1,6 @@
 #pragma once
 
-#include "frontend/source/span.hpp"
+#include "parser/span.hpp"
 
 #include <string>
 #include <string_view>

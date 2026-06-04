@@ -1,7 +1,7 @@
 #pragma once
 
-#include "infra/alloc/arena.hpp"
-#include "infra/collections/dyn-array.hpp"
+#include "memory/arena.hpp"
+#include "memory/dyn-array.hpp"
 
 #include <cstdint>
 #include <string_view>

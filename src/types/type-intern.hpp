@@ -1,8 +1,8 @@
 #pragma once
 
-#include "infra/alloc/arena.hpp"
-#include "infra/collections/dyn-array.hpp"
-#include "middleend/types/type-kind.hpp"
+#include "memory/arena.hpp"
+#include "memory/dyn-array.hpp"
+#include "types/type-kind.hpp"
 
 namespace zith::middleend::types {
 

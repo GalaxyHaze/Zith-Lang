@@ -1,8 +1,8 @@
 #pragma once
 
-#include "diagnostics/engine/diagnostic-engine.hpp"
-#include "middleend/hir/hir-module.hpp"
-#include "middleend/symbols/symbol-table.hpp"
+#include "diagnostics/diagnostic-engine.hpp"
+#include "zir/hir/hir-module.hpp"
+#include "import/symbol-table.hpp"
 
 namespace zith::middleend::sema {
 

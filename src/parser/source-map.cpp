@@ -1,8 +1,8 @@
 #include "source-map.hpp"
 
-#include "frontend/source/source-file.hpp"
-#include "frontend/source/span.hpp"
-#include "infra/util/result.hpp"
+#include "parser/source-file.hpp"
+#include "parser/span.hpp"
+#include "memory/result.hpp"
 
 #include <mutex>
 #include <shared_mutex>

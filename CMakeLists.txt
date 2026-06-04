@@ -38,11 +38,25 @@ target_compile_definitions(zithc PRIVATE
     ZITH_LIB_DIR="${CMAKE_CURRENT_SOURCE_DIR}/lib"
 )
 
-file(GLOB_RECURSE ZITH_TEST_SOURCES tests/unit/*.cpp tests/integration/*.cpp)
+include(CTest)
 
-add_executable(zithc-test ${ZITH_TEST_SOURCES})
-target_include_directories(zithc-test PRIVATE src include)
-target_link_libraries(zithc-test PRIVATE mio)
+if(BUILD_TESTING)
+
+function(add_zith_test NAME SOURCE)
+    add_executable(${NAME} ${SOURCE})
+    target_include_directories(${NAME} PRIVATE src include)
+    target_link_libraries(${NAME} PRIVATE mio)
+    set_target_properties(${NAME} PROPERTIES FOLDER "tests")
+    add_test(NAME ${NAME} COMMAND ${NAME})
+endfunction()
+
+add_zith_test(zith-lexer-test  tests/unit/lexer-tokens.cpp)
+add_zith_test(zith-parser-expr  tests/unit/parser-expr.cpp)
+add_zith_test(zith-parser-stmt  tests/unit/parser-stmt.cpp)
+add_zith_test(zith-sema-test    tests/unit/sema-basics.cpp)
+add_zith_test(zith-mir-test     tests/unit/mir-lowering.cpp)
+
+endif()
 
 install(TARGETS zithc
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}

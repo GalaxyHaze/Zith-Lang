@@ -12,12 +12,12 @@ namespace zith::driver {
         TypeChecked,
         HirLowered,
         MirLowered,
-        Compiled
+        ZirInterpreted
     };
 
     struct PipelinePlan {
         Stage current = Stage::Source;
-        Stage target  = Stage::Compiled;
+        Stage target  = Stage::ZirInterpreted;
 
         bool shouldStop() const noexcept;
         void advance() noexcept;

@@ -1,7 +1,7 @@
 #pragma once
 
-#include "diagnostics/engine/diagnostic-engine.hpp"
-#include "frontend/ast/ast-ids.hpp"
+#include "diagnostics/diagnostic-engine.hpp"
+#include "ast/ast-ids.hpp"
 
 
 namespace zith::frontend::parser {

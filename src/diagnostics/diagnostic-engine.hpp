@@ -1,6 +1,6 @@
 #pragma once
 
-#include "diagnostics/model/diagnostic.hpp"
+#include "diagnostics/diagnostic.hpp"
 
 #include <cstdint>
 #include <span>

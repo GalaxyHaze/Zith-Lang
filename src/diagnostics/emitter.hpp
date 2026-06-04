@@ -1,6 +1,6 @@
 #pragma once
 
-#include "diagnostics/engine/diagnostic-engine.hpp"
+#include "diagnostics/diagnostic-engine.hpp"
 
 #include <string_view>
 

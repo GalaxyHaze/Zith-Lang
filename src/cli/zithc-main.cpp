@@ -1,7 +1,7 @@
-#include "driver/compiler-driver.hpp"
-#include "driver/options.hpp"
-#include "frontend/lexer/lexer.hpp"
-#include "frontend/source/source-map.hpp"
+#include "cli/compiler-driver.hpp"
+#include "cli/options.hpp"
+#include "lexer/lexer.hpp"
+#include "parser/source-map.hpp"
 #include <cstdio>
 
 int main(int argc, char **argv) {

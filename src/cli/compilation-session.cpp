@@ -15,7 +15,7 @@ namespace zith::driver {
             return 1;
         if (!mirStage())
             return 1;
-        if (!backendStage())
+        if (!zirStage())
             return 1;
         return 0;
     }
@@ -32,7 +32,7 @@ namespace zith::driver {
     bool CompilationSession::mirStage() {
         return true;
     }
-    bool CompilationSession::backendStage() {
+    bool CompilationSession::zirStage() {
         return true;
     }
 

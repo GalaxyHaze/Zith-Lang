@@ -1,9 +1,9 @@
 #pragma once
 
-#include "infra/alloc/arena.hpp"
-#include "infra/collections/dyn-array.hpp"
-#include "middleend/hir/hir-expr.hpp"
-#include "middleend/hir/hir-types.hpp"
+#include "memory/arena.hpp"
+#include "memory/dyn-array.hpp"
+#include "zir/hir/hir-expr.hpp"
+#include "zir/hir/hir-types.hpp"
 
 #include <string_view>
 

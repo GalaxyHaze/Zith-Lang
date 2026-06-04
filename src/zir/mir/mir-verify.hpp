@@ -1,7 +1,7 @@
 #pragma once
 
-#include "diagnostics/engine/diagnostic-engine.hpp"
-#include "middleend/mir/mir-module.hpp"
+#include "diagnostics/diagnostic-engine.hpp"
+#include "zir/mir/mir-module.hpp"
 
 namespace zith::middleend::mir {
 

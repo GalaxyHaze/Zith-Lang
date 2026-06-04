@@ -1,7 +1,7 @@
 #pragma once
 
-#include "frontend/ast/ast-ids.hpp"
-#include "frontend/source/span.hpp"
+#include "ast/ast-ids.hpp"
+#include "parser/span.hpp"
 
 #include <cstdint>
 #include <string_view>

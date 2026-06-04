@@ -1,5 +1,5 @@
 #pragma once
-#include "frontend/source/span.hpp"
+#include "parser/span.hpp"
 
 #include <cstdint>
 #include <string_view>

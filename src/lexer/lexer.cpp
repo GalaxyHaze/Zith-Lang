@@ -1,9 +1,9 @@
 #include "lexer.hpp"
 
-#include "frontend/lexer/keyword-table.hpp"
-#include "frontend/source/source-file.hpp"
-#include "frontend/source/source-map.hpp"
-#include "frontend/source/span.hpp"
+#include "lexer/keyword-table.hpp"
+#include "parser/source-file.hpp"
+#include "parser/source-map.hpp"
+#include "parser/span.hpp"
 
 #include <cctype>
 #include <cstdint>

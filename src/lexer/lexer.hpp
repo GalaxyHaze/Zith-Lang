@@ -1,8 +1,8 @@
 #pragma once
 
-#include "frontend/lexer/token.hpp"
-#include "infra/collections/dyn-array.hpp"
-#include "infra/util/result.hpp"
+#include "lexer/token.hpp"
+#include "memory/dyn-array.hpp"
+#include "memory/result.hpp"
 #include <string>
 #include <string_view>
 #include <utility>

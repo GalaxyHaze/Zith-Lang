@@ -1,8 +1,8 @@
 #pragma once
 
-#include "diagnostics/engine/diagnostic-engine.hpp"
-#include "frontend/ast/ast-builder.hpp"
-#include "middleend/symbols/symbol-table.hpp"
+#include "diagnostics/diagnostic-engine.hpp"
+#include "ast/ast-builder.hpp"
+#include "import/symbol-table.hpp"
 
 namespace zith::middleend::symbols {
 

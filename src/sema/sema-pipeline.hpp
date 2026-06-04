@@ -1,12 +1,12 @@
 #pragma once
 
-#include "diagnostics/engine/diagnostic-engine.hpp"
-#include "frontend/ast/ast-builder.hpp"
-#include "middleend/sema/sema-context.hpp"
-#include "middleend/sema/sema-result.hpp"
-#include "middleend/symbols/symbol-table.hpp"
-#include "middleend/types/type-intern.hpp"
-#include "middleend/types/unify.hpp"
+#include "diagnostics/diagnostic-engine.hpp"
+#include "ast/ast-builder.hpp"
+#include "sema/sema-context.hpp"
+#include "sema/sema-result.hpp"
+#include "import/symbol-table.hpp"
+#include "types/type-intern.hpp"
+#include "types/unify.hpp"
 
 namespace zith::middleend::sema {
 

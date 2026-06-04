@@ -1,7 +1,7 @@
 #pragma once
 
-#include "diagnostics/engine/diagnostic-engine.hpp"
-#include "middleend/types/type-intern.hpp"
+#include "diagnostics/diagnostic-engine.hpp"
+#include "types/type-intern.hpp"
 
 #include <vector>
 

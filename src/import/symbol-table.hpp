@@ -1,9 +1,9 @@
 #pragma once
 
-#include "infra/alloc/arena.hpp"
-#include "infra/collections/dyn-array.hpp"
-#include "infra/interner/string-interner.hpp"
-#include "middleend/symbols/symbol-id.hpp"
+#include "memory/arena.hpp"
+#include "memory/dyn-array.hpp"
+#include "memory/string-interner.hpp"
+#include "import/symbol-id.hpp"
 
 #include <string_view>
 

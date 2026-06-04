@@ -1,6 +1,6 @@
 #pragma once
 
-#include "middleend/hir/hir-types.hpp"
+#include "zir/hir/hir-types.hpp"
 
 #include <cstdint>
 #include <variant>

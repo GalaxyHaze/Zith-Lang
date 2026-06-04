@@ -1,7 +1,7 @@
 #pragma once
 
-#include "diagnostics/engine/diagnostic-engine.hpp"
-#include "middleend/hir/hir-module.hpp"
+#include "diagnostics/diagnostic-engine.hpp"
+#include "zir/hir/hir-module.hpp"
 
 namespace zith::middleend::hir {
 

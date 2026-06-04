@@ -1,10 +1,10 @@
 #pragma once
 
-#include "diagnostics/engine/diagnostic-engine.hpp"
-#include "frontend/ast/ast-builder.hpp"
-#include "frontend/lexer/token.hpp"
-#include "frontend/parser/parse-result.hpp"
-#include "frontend/parser/recovery.hpp"
+#include "diagnostics/diagnostic-engine.hpp"
+#include "ast/ast-builder.hpp"
+#include "lexer/token.hpp"
+#include "parser/parse-result.hpp"
+#include "parser/recovery.hpp"
 
 #include <cstdint>
 

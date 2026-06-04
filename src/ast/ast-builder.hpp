@@ -1,8 +1,8 @@
 #pragma once
 
-#include "frontend/ast/ast-nodes.hpp"
-#include "infra/alloc/arena.hpp"
-#include "infra/collections/dyn-array.hpp"
+#include "ast/ast-nodes.hpp"
+#include "memory/arena.hpp"
+#include "memory/dyn-array.hpp"
 
 #include <string_view>
 

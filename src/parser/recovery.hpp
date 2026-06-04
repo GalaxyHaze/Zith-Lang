@@ -1,6 +1,6 @@
 #pragma once
 
-#include "frontend/lexer/token.hpp"
+#include "lexer/token.hpp"
 
 #include <initializer_list>
 
