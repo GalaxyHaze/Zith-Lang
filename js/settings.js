@@ -20,8 +20,8 @@ var glowConfig = {
 
 var noiseConfig = {
     0: { noiseOpacity: 0, vignetteOpacity: 0, animation: 'none' },
-    1: { noiseOpacity: 0.05, vignetteOpacity: 0.6, animation: 'flicker-low 0.15s infinite' },
-    2: { noiseOpacity: 0.1, vignetteOpacity: 0.8, animation: 'flicker-high 0.15s infinite' }
+    1: { noiseOpacity: 0.05, vignetteOpacity: 0.6, animation: 'flicker-low 1s infinite' },
+    2: { noiseOpacity: 0.1, vignetteOpacity: 0.8, animation: 'flicker-high 1s infinite' }
 };
 
 var levelNames = { 0: 'Off', 1: 'Low', 2: 'High' };
