@@ -5,10 +5,10 @@
     "children": [
       {
         "title": "CLI Reference",
-        "link": "./D-cli.html",
+        "link": "./D-NotDone.html",
         "children": [
           { "title": "Check", "link": "./D-NotDone.html" },
-          { "title": "Build", "link": "./D-build.html" }
+          { "title": "Build", "link": "./D-NotDone.html" }
         ]
       },
       { "title": "Syntax", "link": "./D-NotDone.html" },
