@@ -75,6 +75,36 @@ use SQL QueryBlock {
 use SQL;   // pollutes the rest of the file
 ```
 
+
+### 1.5 Compilation Pipeline & .zir IR
+
+The Zith compiler follows a multi-stage pipeline:
+
+```
+SCAN -> SEMA -> SOLVE -> NRA -> HIR -> MIR -> LLVM / NATIVE
+                                                  \-> .zir
+```
+
+| Stage | Description |
+|---|---|
+| `SCAN` | Lexical analysis and parsing. Produces an AST. |
+| `SEMA` | Semantic analysis — name resolution, type checking, visibility enforcement. |
+| `SOLVE` | Generics instantiation, macro expansion, compile-time (`comptime`) evaluation. Fully resolves all types before NRA. |
+| `NRA` | Node Resource Analysis — memory ownership, aliasing, and lifetime validation. See §7. |
+| `HIR` | High-level IR — desugared, typed, NRA-validated IR. |
+| `MIR` | Mid-level IR — optimised, lowered closer to machine semantics. |
+| `LLVM` / `NATIVE` | Code generation via LLVM backend or direct native codegen. |
+
+#### .zir Intermediate Representation
+
+`.zir` is Zith's binary intermediate representation. It is the distribution format for libraries and VM execution.
+
+- **As a library:** `.zir` can be statically or dynamically linked. The consumer decides the linkage mode.
+- **As an executable:** `.zir` files carry a header with metadata (entry point, required features, ABI version). A Zith VM can interpret them directly.
+- **As a compilation target:** `.zir` can be passed to the LLVM backend for native code generation.
+
+This makes `.zir` the universal exchange format — distribute once, consume however the client prefers.
+
 ---
 
 ## 2. Module System
@@ -821,6 +851,42 @@ implement Node<T> {
     // NRA guarantees prev (belong) never outlives its owner
     // belong fields can be passed as lend to functions
 }
+```
+
+### 7.8 NRA Algorithm
+
+NRA maps every symbol or variable to a **resource node**. By default, the compiler is **lazy** — it only validates a node when it is used, viewed, or returned.
+
+#### Node Validation
+
+When a node is accessed, NRA checks:
+1. The node itself is `alive` (not `dead`).
+2. All nodes in its **dependency vector** (the fields or resources it belongs to or references) are valid.
+
+If a node is set to `dead` (e.g. after a move), the compiler inserts a diagnostic message recording **where** the node died and **why**. This information is used to produce precise NRA errors at the point of violation.
+
+#### Function Evaluation
+
+When NRA evaluates a function, it first checks: **was this function already analysed?** If yes, the cached result is reused.
+
+Otherwise, it inspects all return paths:
+- If **every** return path returns one of the function's arguments, then at the call site that node is **not consumed** — ownership stays with the caller.
+- If any path does **not** return an argument, the result is marked as **consumed**.
+
+Since memory modifiers (lend, view, unique, etc.) are part of the function signature, the compiler has all the information it needs to determine consumption.
+
+#### Branch Isolation (`if` / `else` / `when`)
+
+Inside conditional branches, each branch operates in **isolation** — it cannot see what other branches do:
+- A move, mutation, or invalidation inside one branch does **not** affect other branches.
+- After all branches complete, NRA **collects all side-effects** and applies them to the enclosing scope.
+
+#### The Return Trick
+
+If a conditional expression is used to recover a value but not all paths return, the compiler implicitly deduces `null` for the missing paths. The result type becomes `?T`:
+
+```zith
+let result = if (v is i32) { v } else { };     // ?i32
 ```
 
 > **Name linking:** The `fail` block name must match the enclosing block name. The compiler passes the error as the block's argument. An anonymous `fail` (no name) guards the current scope directly and receives the error the same way.
