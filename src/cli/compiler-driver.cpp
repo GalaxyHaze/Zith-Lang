@@ -36,8 +36,8 @@ int CompilerDriver::run(const Options &opts) {
     case Command::Repl:
         return commands::cmd_repl(opts);
     case Command::None:
-        // No subcommand — treat as build if input files exist or ZithProject.toml
-        return commands::cmd_build(opts);
+        // No subcommand — treat as help
+        return commands::cmd_help();
     }
     return 1;
 }
