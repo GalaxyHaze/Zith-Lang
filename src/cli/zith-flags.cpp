@@ -1,4 +1,5 @@
 #include "zith-flags.hpp"
+#include "cli/options.hpp"
 
 #include <algorithm>
 #include <cstdlib>
