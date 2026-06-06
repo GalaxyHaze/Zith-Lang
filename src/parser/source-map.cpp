@@ -73,7 +73,7 @@ namespace zith::parser {
         return id < files.size();
     }
 
-    auto SourceMap::load_file(const std::string_view path, const bool write)
+    [[nodiscard]] auto SourceMap::load_file(const std::string_view path, const bool write)
             -> zith::memory::Result<FileId> {
         {
             std::shared_lock lock(rw_mutex);

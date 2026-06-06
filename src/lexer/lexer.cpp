@@ -1,5 +1,6 @@
 #include "lexer.hpp"
 
+#include "diagnostics/error-codes.hpp"
 #include "lexer/keyword-table.hpp"
 #include "parser/source-file.hpp"
 #include "parser/source-map.hpp"
@@ -92,21 +93,15 @@ namespace zith::lexer {
         return false;
     }
 
-    std::string Lexer::getErrorMsg() const {
-        std::string locationPrefix = "[error]: at" + file->path + ":" + loc.toString() + ": ";
-        switch (err) {
-            case ErrorKind::Success:
-                return "";
-            case ErrorKind::UnexpectedToken:
-                return locationPrefix + "Unexpected token found.";
-            case ErrorKind::MissingSemicolon:
-                return locationPrefix + "Missing semicolon ';'.";
-            case ErrorKind::InvalidNumber:
-                return locationPrefix + "Invalid number format.";
-            case ErrorKind::UnexpectedEOF:
-                return locationPrefix + "Unexpected End of File (EOF).";
-        }
-        return locationPrefix + "Unknown parser error.";
+    parser::Span Lexer::spanAt(const char *p) const noexcept {
+        auto off = static_cast<uint32_t>(p - start);
+        return {gId, off, off + 1};
+    }
+
+    parser::Span Lexer::spanRange(const char *b, const char *e) const noexcept {
+        return {gId,
+                static_cast<uint32_t>(b - start),
+                static_cast<uint32_t>(e - start)};
     }
 
     void Lexer::singleComment() {
@@ -120,10 +115,7 @@ namespace zith::lexer {
             loc.col++;
             now++;
         }
-        tokens.emplace(parser::Span{gId,
-                            static_cast<uint32_t>(before - start),
-                            static_cast<uint32_t>(now - start)},
-                       TokenKind::Comments);
+        tokens.emplace(spanRange(before, now), TokenKind::Comments);
     }
 
     void Lexer::singleDoc() {
@@ -137,10 +129,7 @@ namespace zith::lexer {
             loc.col++;
             now++;
         }
-        tokens.emplace(parser::Span{gId,
-                            static_cast<uint32_t>(before - start),
-                            static_cast<uint32_t>(now - start)},
-                       TokenKind::Docs);
+        tokens.emplace(spanRange(before, now), TokenKind::Docs);
     }
 
     void Lexer::multiComment() {
@@ -148,10 +137,7 @@ namespace zith::lexer {
         while (isOpen()) {
             if (*now == '*' && peek() == '/') {
                 now += 2;
-                tokens.emplace(parser::Span{gId,
-                                    static_cast<uint32_t>(before - start),
-                                    static_cast<uint32_t>(now - start)},
-                               TokenKind::Comments);
+                tokens.emplace(spanRange(before, now), TokenKind::Comments);
                 return;
             }
             if (*now == '\n') {
@@ -162,7 +148,8 @@ namespace zith::lexer {
             }
             now++;
         }
-        err = ErrorKind::UnexpectedEOF;
+        diags_.report(diagnostics::Severity::Error, diagnostics::err::UnclosedString,
+                       "Unterminated block comment '/*'", spanRange(before, now));
     }
 
     void Lexer::multiDoc() {
@@ -170,10 +157,7 @@ namespace zith::lexer {
         while (isOpen()) {
             if (*now == '*' && peek() == '/') {
                 now += 2;
-                tokens.emplace(parser::Span{gId,
-                                    static_cast<uint32_t>(before - start),
-                                    static_cast<uint32_t>(now - start)},
-                               TokenKind::Docs);
+                tokens.emplace(spanRange(before, now), TokenKind::Docs);
                 return;
             }
             if (*now == '\n') {
@@ -184,7 +168,8 @@ namespace zith::lexer {
             }
             now++;
         }
-        err = ErrorKind::UnexpectedEOF;
+        diags_.report(diagnostics::Severity::Error, diagnostics::err::UnclosedString,
+                       "Unterminated doc comment '/**'", spanRange(before, now));
     }
 
     void Lexer::processNumber() {
@@ -199,10 +184,12 @@ namespace zith::lexer {
                     loc.col++;
                     now++;
                 }
-                tokens.emplace(parser::Span{gId,
-                                    static_cast<uint32_t>(before - start),
-                                    static_cast<uint32_t>(now - start)},
-                               TokenKind::LitVal);
+                if (now == before + 2) {
+                    diags_.report(diagnostics::Severity::Error, diagnostics::err::InvalidIntLiteral,
+                                   "Invalid hex literal: expected digits after '0x'",
+                                   spanAt(before));
+                }
+                tokens.emplace(spanRange(before, now), TokenKind::LitVal);
                 return;
             }
             if (nxt == 'c' || nxt == 'C') {
@@ -211,10 +198,12 @@ namespace zith::lexer {
                     loc.col++;
                     now++;
                 }
-                tokens.emplace(parser::Span{gId,
-                                    static_cast<uint32_t>(before - start),
-                                    static_cast<uint32_t>(now - start)},
-                               TokenKind::LitVal);
+                if (now == before + 2) {
+                    diags_.report(diagnostics::Severity::Error, diagnostics::err::InvalidIntLiteral,
+                                   "Invalid octal literal: expected digits after '0c'",
+                                   spanAt(before));
+                }
+                tokens.emplace(spanRange(before, now), TokenKind::LitVal);
                 return;
             }
             if (nxt == 'b' || nxt == 'B') {
@@ -223,10 +212,12 @@ namespace zith::lexer {
                     loc.col++;
                     now++;
                 }
-                tokens.emplace(parser::Span{gId,
-                                    static_cast<uint32_t>(before - start),
-                                    static_cast<uint32_t>(now - start)},
-                               TokenKind::LitVal);
+                if (now == before + 2) {
+                    diags_.report(diagnostics::Severity::Error, diagnostics::err::InvalidIntLiteral,
+                                   "Invalid binary literal: expected digits after '0b'",
+                                   spanAt(before));
+                }
+                tokens.emplace(spanRange(before, now), TokenKind::LitVal);
                 return;
             }
         }
@@ -245,10 +236,7 @@ namespace zith::lexer {
             }
         }
 
-        tokens.emplace(parser::Span{gId,
-                            static_cast<uint32_t>(before - start),
-                            static_cast<uint32_t>(now - start)},
-                       TokenKind::LitVal);
+        tokens.emplace(spanRange(before, now), TokenKind::LitVal);
     }
 
     void Lexer::processString() {
@@ -261,10 +249,7 @@ namespace zith::lexer {
             if (*now == quote) {
                 now++;
                 loc.col++;
-                tokens.emplace(parser::Span{gId,
-                                    static_cast<uint32_t>(before - start),
-                                    static_cast<uint32_t>(now - start)},
-                               TokenKind::LitVal);
+                tokens.emplace(spanRange(before, now), TokenKind::LitVal);
                 return;
             }
             if (*now == '\\') {
@@ -282,7 +267,8 @@ namespace zith::lexer {
             now++;
         }
 
-        err = ErrorKind::UnexpectedEOF;
+        diags_.report(diagnostics::Severity::Error, diagnostics::err::UnclosedString,
+                       "Unterminated string literal", spanRange(before, now));
     }
 
     void Lexer::processIdentifier() {
@@ -293,17 +279,13 @@ namespace zith::lexer {
         }
         std::string_view word{before, static_cast<size_t>(now - before)};
         TokenKind kind = lookup_keyword(word);
-        tokens.emplace(parser::Span{gId,
-                            static_cast<uint32_t>(before - start),
-                            static_cast<uint32_t>(now - start)},
-                       kind);
+        tokens.emplace(spanRange(before, now), kind);
     }
 
-    Lexer::Lexer() : tokens(memory::SessionArena) {}
+    Lexer::Lexer(diagnostics::DiagnosticEngine &diags) : diags_(diags), tokens(memory::SessionArena) {}
 
     auto Lexer::run(std::variant<parser::FileId, std::pair<std::string_view, std::string>> input)
             -> memory::Result<TokenStream> {
-        err = ErrorKind::Success;
 
         if (auto *id = std::get_if<parser::FileId>(&input)) {
             gId = *id;
@@ -377,10 +359,7 @@ namespace zith::lexer {
                 const auto before = now;
                 loc.col++;
                 now++;
-                tokens.emplace(parser::Span{gId,
-                                    static_cast<uint32_t>(before - start),
-                                    static_cast<uint32_t>(now - start)},
-                               TokenKind::Operators);
+                tokens.emplace(spanRange(before, now), TokenKind::Operators);
                 continue;
             }
 
@@ -388,10 +367,7 @@ namespace zith::lexer {
                 const auto before = now;
                 loc.col++;
                 now++;
-                tokens.emplace(parser::Span{gId,
-                                    static_cast<uint32_t>(before - start),
-                                    static_cast<uint32_t>(now - start)},
-                               TokenKind::Punctuation);
+                tokens.emplace(spanRange(before, now), TokenKind::Punctuation);
                 continue;
             }
 
@@ -399,31 +375,31 @@ namespace zith::lexer {
                 const auto before = now;
                 loc.col++;
                 now++;
-                tokens.emplace(parser::Span{gId,
-                                    static_cast<uint32_t>(before - start),
-                                    static_cast<uint32_t>(now - start)},
-                               TokenKind::Unknown);
+                auto span = spanRange(before, now);
+                diags_.report(diagnostics::Severity::Error, diagnostics::err::UnknownToken,
+                               std::string("Unexpected character '") + *before + "'", span);
+                tokens.emplace(span, TokenKind::Unknown);
             }
         }
 
         tokens.emplace(
-                parser::Span{gId, static_cast<uint32_t>(now - start), static_cast<uint32_t>(now - start)},
+                spanRange(now, now),
                 TokenKind::End);
 
-        if (err != ErrorKind::Success)
-            return memory::Error{getErrorMsg()};
+        if (diags_.hasErrors())
+            return memory::Error{"tokenization failed — see diagnostics for details"};
 
         return TokenStream{tokens.data(), static_cast<uint32_t>(tokens.size()), 0};
     }
 
-    auto tokenize(parser::FileId id) -> memory::Result<TokenStream> {
-        Lexer lexer;
+    auto tokenize(parser::FileId id, diagnostics::DiagnosticEngine &diags) -> memory::Result<TokenStream> {
+        Lexer lexer(diags);
         return lexer.run(std::variant<parser::FileId, std::pair<std::string_view, std::string>>(id));
     }
 
-    auto tokenize(std::string_view name, std::string test) -> memory::Result<TokenStream> {
-        Lexer lexer;
-        return lexer.run(std::make_pair(name, std::move(test)));
+    auto tokenize(std::string_view name, std::string content, diagnostics::DiagnosticEngine &diags) -> memory::Result<TokenStream> {
+        Lexer lexer(diags);
+        return lexer.run(std::make_pair(name, std::move(content)));
     }
 
     const char *tokenKindName(TokenKind k) noexcept {

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "diagnostics/diagnostic-engine.hpp"
 #include "lexer/token.hpp"
 #include "memory/dyn-array.hpp"
 #include "memory/result.hpp"
@@ -22,15 +23,7 @@ namespace zith::lexer {
             const char *end   = nullptr;
             parser::Loc loc{};
 
-            enum class ErrorKind : uint8_t {
-                Success = 0,
-                UnexpectedToken,
-                MissingSemicolon,
-                InvalidNumber,
-                UnexpectedEOF
-            };
-
-            ErrorKind err = ErrorKind::Success;
+            diagnostics::DiagnosticEngine &diags_;
             memory::DynArray<Token> tokens;
 
             static bool isNum(char c);
@@ -41,7 +34,6 @@ namespace zith::lexer {
             char peek(size_t n) const;
             bool consume(size_t offset = 1);
             bool match(std::string_view must);
-            std::string getErrorMsg() const;
             void singleComment();
             void singleDoc();
             void multiComment();
@@ -50,15 +42,18 @@ namespace zith::lexer {
             void processString();
             void processIdentifier();
 
+            parser::Span spanAt(const char *p) const noexcept;
+            parser::Span spanRange(const char *b, const char *e) const noexcept;
+
         public:
-            Lexer();
+            explicit Lexer(diagnostics::DiagnosticEngine &diags);
             auto run(std::variant<parser::FileId, std::pair<std::string_view, std::string>> input)
                     -> memory::Result<TokenStream>;
         };
 
-        auto tokenize(parser::FileId id) -> memory::Result<TokenStream>;
+        auto tokenize(parser::FileId id, diagnostics::DiagnosticEngine &diags) -> memory::Result<TokenStream>;
 
-        auto tokenize(std::string_view, std::string) -> memory::Result<TokenStream>;
+        auto tokenize(std::string_view, std::string, diagnostics::DiagnosticEngine &diags) -> memory::Result<TokenStream>;
 
         const char *tokenKindName(TokenKind k) noexcept;
 

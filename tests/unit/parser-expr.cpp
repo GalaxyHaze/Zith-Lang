@@ -30,7 +30,7 @@ static void test_parser_returns_not_ok() {
     AstBuilder builder(arena);
     DiagnosticEngine diags;
 
-    auto tokens = tokenize("test", "42;").value();
+    auto tokens = tokenize("test", "42;", diags).value();
     zith::parser::Parser parser(tokens, builder, diags);
     auto result = parser.parseProgram();
     CHECK(!result.ok, "parser stub returns not ok");

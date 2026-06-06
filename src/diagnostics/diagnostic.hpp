@@ -21,6 +21,7 @@ namespace zith::diagnostics {
         std::string message;
         parser::Span primary;
         std::vector<Label> labels;
+        std::vector<std::string> suggestions;
 
         bool isError() const noexcept;
         bool isWarning() const noexcept;

@@ -13,28 +13,28 @@
 
 namespace zith::cli {
 
-    class CompilationSession {
-        Options opts_;
-        PipelinePlan plan_;
-        diagnostics::DiagnosticEngine diags_;
+class CompilationSession {
+    Options opts_;
+    PipelinePlan plan_;
+    diagnostics::DiagnosticEngine diags_;
 
-        memory::Arena ast_arena_;
-        memory::Arena sym_arena_;
-        memory::Arena type_arena_;
-        memory::Arena hir_arena_;
-        memory::Arena mir_arena_;
+    memory::Arena ast_arena_;
+    memory::Arena sym_arena_;
+    memory::Arena type_arena_;
+    memory::Arena hir_arena_;
+    memory::Arena mir_arena_;
 
-    public:
-        explicit CompilationSession(Options opts);
+public:
+    explicit CompilationSession(Options opts);
 
-        int run();
+    int run();
 
-    private:
-        bool lexStage();
-        bool parseStage();
-        bool semaStage();
-        bool mirStage();
-        bool zirStage();
-    };
+private:
+    bool lexStage();
+    bool parseStage();
+    bool semaStage();
+    bool mirStage();
+    bool zirStage();
+};
 
 } // namespace zith::cli

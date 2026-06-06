@@ -1,5 +1,6 @@
 #pragma once
 
+#include "diagnostic.hpp"
 #include "diagnostics/diagnostic.hpp"
 
 #include <cstdint>

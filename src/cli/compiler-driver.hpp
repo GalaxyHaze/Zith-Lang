@@ -5,10 +5,9 @@
 
 namespace zith::cli {
 
-    class CompilerDriver {
-    public:
-        int compileFile(const std::string &path);
-        int compileWithOptions(const Options &opts);
-    };
+class CompilerDriver {
+public:
+    int run(const Options &opts);
+};
 
 } // namespace zith::cli

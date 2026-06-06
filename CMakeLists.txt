@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-set(CMAKE_POLICY_VERSION_MINIMUM 3.5)
+set(CMAKE_POLICY_VERSION_MINIMUM 3.20)
 project(zithc LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 23)
@@ -20,6 +20,13 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(mio)
 
+FetchContent_Declare(
+    tomlplusplus
+    GIT_REPOSITORY https://github.com/marzer/tomlplusplus.git
+    GIT_TAG master
+)
+FetchContent_MakeAvailable(tomlplusplus)
+
 file(GLOB_RECURSE ZITH_SOURCES
     src/*.cpp
 )
@@ -35,7 +42,7 @@ target_include_directories(zithc_objects PRIVATE
     include
 )
 
-target_link_libraries(zithc_objects PRIVATE mio)
+target_link_libraries(zithc_objects PRIVATE mio tomlplusplus::tomlplusplus)
 
 target_compile_definitions(zithc_objects PRIVATE
     ZITH_VERSION="${ZITH_VERSION}"

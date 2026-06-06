@@ -1,3 +1,4 @@
+#include "diagnostics/diagnostic-engine.hpp"
 #include "lexer/lexer.hpp"
 #include "lexer/token.hpp"
 #include "lexer/keyword-table.hpp"
@@ -16,8 +17,13 @@ static int passed = 0;
 
 using namespace zith::lexer;
 
+static auto makeDiags() {
+    return zith::diagnostics::DiagnosticEngine();
+}
+
 static void test_tokenize_simple_fn() {
-    auto result = tokenize("test", "fn main() {}");
+    auto diags = makeDiags();
+    auto result = tokenize("test", "fn main() {}", diags);
     CHECK(result.isOk(), "tokenize fn main");
     if (!result.isOk()) return;
 
@@ -39,7 +45,8 @@ static void test_tokenize_simple_fn() {
 }
 
 static void test_tokenize_let() {
-    auto result = tokenize("test", "let x: i32 = 42;");
+    auto diags = makeDiags();
+    auto result = tokenize("test", "let x: i32 = 42;", diags);
     CHECK(result.isOk(), "tokenize let x");
     if (!result.isOk()) return;
 
@@ -78,7 +85,8 @@ static void test_token_kind_names() {
 }
 
 static void test_token_stream_ops() {
-    auto result = tokenize("test", "a b c");
+    auto diags = makeDiags();
+    auto result = tokenize("test", "a b c", diags);
     CHECK(result.isOk(), "tokenize abc");
     if (!result.isOk()) return;
 
@@ -93,7 +101,8 @@ static void test_token_stream_ops() {
 }
 
 static void test_tokenize_expression() {
-    auto result = tokenize("test", "1 + 2 * 3");
+    auto diags = makeDiags();
+    auto result = tokenize("test", "1 + 2 * 3", diags);
     CHECK(result.isOk(), "tokenize expression");
     if (!result.isOk()) return;
 
@@ -110,8 +119,10 @@ static void test_tokenize_expression() {
 }
 
 static void test_tokenize_error() {
-    auto result = tokenize("test", "\"unterminated");
+    auto diags = makeDiags();
+    auto result = tokenize("test", "\"unterminated", diags);
     CHECK(result.isError(), "unterminated string returns error");
+    CHECK(diags.hasErrors(), "diagnostic engine has errors");
 }
 
 int main() {
