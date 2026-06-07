@@ -32,12 +32,12 @@ if ($Arch -match "ARM" -or $env:PROCESSOR_ARCHITECTURE -match "ARM64") {
 }
 
 if ($IsMusl) {
-    if ($IsArm64) { $FileName = "zith-windows-arm64-musl.exe" }
-    else          { $FileName = "zith-windows-amd64-musl.exe" }
+    if ($IsArm64) { $FileName = "zithc-windows-arm64-musl.exe" }
+    else          { $FileName = "zithc-windows-amd64-musl.exe" }
 } elseif ($IsArm64) {
-    $FileName = "zith-windows-arm64.exe"
+    $FileName = "zithc-windows-arm64.exe"
 } else {
-    $FileName = "zith-windows-amd64.exe"
+    $FileName = "zithc-windows-amd64.exe"
 }
 
 $DownloadUrl = "https://github.com/$Repo/releases/download/$Version/$FileName"

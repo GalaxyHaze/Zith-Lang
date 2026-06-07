@@ -171,6 +171,7 @@ set_target_properties(ZithParse PROPERTIES
 # Executable: zith
 # =============================================================================
 add_executable(zith ${CLI_SOURCES})
+set_target_properties(zith PROPERTIES OUTPUT_NAME zithc)
 
 target_include_directories(zith PRIVATE ${ZITH_INCLUDE_DIRS})
 target_link_libraries(zith PRIVATE ZithParse)

@@ -93,7 +93,7 @@ jobs:
               -DCMAKE_C_COMPILER=$(brew --prefix llvm)/bin/clang
               -DCMAKE_CXX_COMPILER=$(brew --prefix llvm)/bin/clang++
               -DLLVM_DIR=$(brew --prefix llvm)/lib/cmake/llvm
-              -DCMAKE_OSX_ARCHITECTURES=x86_64;arm64
+              "-DCMAKE_OSX_ARCHITECTURES=x86_64;arm64"
               -DZITH_ENABLE_FFI=OFF
 
           - os: windows-latest
@@ -191,10 +191,10 @@ jobs:
         run: |
           mkdir -p artifacts
           if [ "${{ runner.os }}" = "Windows" ]; then
-            cp build/zithc.exe "artifacts/${{ matrix.target_name }}"
+            cp build/bin/zithc.exe "artifacts/${{ matrix.target_name }}"
           else
-            chmod +x build/zithc
-            cp build/zithc "artifacts/${{ matrix.target_name }}"
+            chmod +x build/bin/zithc
+            cp build/bin/zithc "artifacts/${{ matrix.target_name }}"
           fi
 
       - name: Upload release asset
@@ -230,24 +230,28 @@ jobs:
       - name: Build inside Alpine container
         shell: bash
         run: |
-          docker run --rm --platform "${{ matrix.platform }}" \
-            -v "$PWD:/work" -w /work alpine:3.23 sh -c "
-              apk add --no-cache clang cmake ninja musl-dev linux-headers git
-              cmake -S . -B build -G Ninja \
-                -DCMAKE_BUILD_TYPE=Release \
-                -DBUILD_TESTING=OFF \
-                -DENABLE_WERROR=OFF \
-                -DZITH_VERSION='${{ needs.create-release.outputs.tag }}' \
-                -DCMAKE_C_COMPILER=clang \
-                -DCMAKE_CXX_COMPILER=clang++ \
-                -DCMAKE_CROSSCOMPILING=OFF \
-                -DZITH_ENABLE_FFI=OFF \
-                -DZITH_ENABLE_LLVM=OFF \
-                -DCMAKE_EXE_LINKER_FLAGS='-static'
-              cmake --build build --config Release
-              mkdir -p artifacts
-              cp build/zithc artifacts/${{ matrix.target_name }}
-            "
+          for i in 1 2 3; do
+            docker run --rm --platform "${{ matrix.platform }}" \
+              -v "$PWD:/work" -w /work alpine:3.23 sh -c "
+                apk add --no-cache clang cmake ninja musl-dev linux-headers git
+                cmake -S . -B build -G Ninja \
+                  -DCMAKE_BUILD_TYPE=Release \
+                  -DBUILD_TESTING=OFF \
+                  -DENABLE_WERROR=OFF \
+                  -DZITH_VERSION='${{ needs.create-release.outputs.tag }}' \
+                  -DCMAKE_C_COMPILER=clang \
+                  -DCMAKE_CXX_COMPILER=clang++ \
+                  -DCMAKE_CROSSCOMPILING=OFF \
+                  -DZITH_ENABLE_FFI=OFF \
+                  -DZITH_ENABLE_LLVM=OFF \
+                  -DCMAKE_EXE_LINKER_FLAGS='-static'
+                cmake --build build --config Release
+                mkdir -p artifacts
+                cp build/bin/zithc artifacts/${{ matrix.target_name }}
+              " && break
+            echo "Docker build failed (attempt $i), retrying in 10s..."
+            sleep 10
+          done
 
       - name: Upload release asset
         uses: softprops/action-gh-release@v2

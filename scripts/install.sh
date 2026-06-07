@@ -53,27 +53,27 @@ case "$OS" in
     Linux*)
         if [ "$USE_MUSL" = true ]; then
             case "$ARCH" in
-                x86_64)   FILE_NAME="zith-linux-amd64-musl" ;;
-                aarch64|arm64) FILE_NAME="zith-linux-arm64-musl" ;;
+                x86_64)   FILE_NAME="zithc-linux-amd64-musl" ;;
+                aarch64|arm64) FILE_NAME="zithc-linux-arm64-musl" ;;
                 *) echo "Architecture not supported on Linux (musl): $ARCH" >&2; exit 1 ;;
             esac
         else
             case "$ARCH" in
-                x86_64)   FILE_NAME="zith-linux-amd64" ;;
-                aarch64|arm64) FILE_NAME="zith-linux-arm64" ;;
+                x86_64)   FILE_NAME="zithc-linux-amd64" ;;
+                aarch64|arm64) FILE_NAME="zithc-linux-arm64" ;;
                 *) echo "Architecture not supported on Linux: $ARCH" >&2; exit 1 ;;
             esac
         fi
         ;;
     Darwin*)
         case "$ARCH" in
-            x86_64) FILE_NAME="zith-macos-amd64" ;;
-            arm64)  FILE_NAME="zith-macos-arm64" ;;
+            x86_64) FILE_NAME="zithc-macos-universal" ;;
+            arm64)  FILE_NAME="zithc-macos-universal" ;;
             *) echo "Architecture not supported on macOS: $ARCH" >&2; exit 1 ;;
         esac
         ;;
     MINGW*|MSYS*|CYGWIN*)
-        FILE_NAME="zith-windows-amd64.exe"
+        FILE_NAME="zithc-windows-amd64.exe"
         OUTPUT_NAME="zith.exe"
         ;;
     *) echo "OS not supported: $OS" >&2; exit 1 ;;
