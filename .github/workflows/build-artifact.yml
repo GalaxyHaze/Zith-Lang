@@ -206,43 +206,46 @@ jobs:
       matrix:
         include:
           - target_name: zithc-linux-amd64-musl
-            platform: linux/amd64
+            pkgs: musl-tools
+            cc: x86_64-linux-musl-gcc
+            cxx: x86_64-linux-musl-g++
 
           - target_name: zithc-linux-arm64-musl
-            platform: linux/arm64
+            pkgs: aarch64-linux-musl
+            cc: aarch64-linux-musl-gcc
+            cxx: aarch64-linux-musl-g++
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up QEMU (for arm64)
-        if: matrix.target_name == 'zithc-linux-arm64-musl'
-        uses: docker/setup-qemu-action@v3
+      - name: Install musl cross-compiler
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ${{ matrix.pkgs }}
 
-      - name: Build inside Alpine container
+      - name: Configure CMake
         shell: bash
         run: |
-          for i in 1 2 3; do
-            docker run --rm --platform "${{ matrix.platform }}" \
-              -v "$PWD:/work" -w /work alpine:3.23 sh -c "
-                apk add --no-cache clang cmake ninja musl-dev linux-headers git
-                cmake -S . -B build -G Ninja \
-                  -DCMAKE_BUILD_TYPE=Release \
-                  -DBUILD_TESTING=OFF \
-                  -DENABLE_WERROR=OFF \
-                  -DZITH_VERSION='${{ needs.create-release.outputs.tag }}' \
-                  -DCMAKE_C_COMPILER=clang \
-                  -DCMAKE_CXX_COMPILER=clang++ \
-                  -DCMAKE_CROSSCOMPILING=OFF \
-                  -DZITH_ENABLE_FFI=OFF \
-                  -DZITH_ENABLE_LLVM=OFF \
-                  -DCMAKE_EXE_LINKER_FLAGS='-static'
-                cmake --build build --config Release
-                mkdir -p artifacts
-                cp build/bin/zithc artifacts/${{ matrix.target_name }}
-              " && break
-            echo "Docker build failed (attempt $i), retrying in 10s..."
-            sleep 10
-          done
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DBUILD_TESTING=OFF \
+            -DENABLE_WERROR=OFF \
+            -DZITH_VERSION='${{ needs.create-release.outputs.tag }}' \
+            -DCMAKE_C_COMPILER=${{ matrix.cc }} \
+            -DCMAKE_CXX_COMPILER=${{ matrix.cxx }} \
+            -DCMAKE_EXE_LINKER_FLAGS='-static' \
+            -DZITH_ENABLE_FFI=OFF \
+            -DZITH_ENABLE_LLVM=OFF
+
+      - name: Build
+        shell: bash
+        run: cmake --build build --config Release
+
+      - name: Prepare artifact
+        shell: bash
+        run: |
+          mkdir -p artifacts
+          cp build/bin/zithc artifacts/${{ matrix.target_name }}
 
       - name: Upload release asset
         uses: softprops/action-gh-release@v2
