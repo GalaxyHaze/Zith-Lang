@@ -5,6 +5,8 @@
 #include "import/resolver.hpp"
 
 #include <cstdio>
+#include <filesystem>
+#include <toml++/toml.hpp>
 
 namespace zith::cli {
 
@@ -54,6 +56,33 @@ bool CompilationSession::runTo(Stage target) {
 }
 
 bool CompilationSession::lexStage() {
+    namespace fs = std::filesystem;
+
+    // If the path is a directory, resolve it to the project's entry file
+    if (fs::is_directory(file_path_)) {
+        auto toml_path = fs::path(file_path_) / "ZithProject.toml";
+        if (!fs::exists(toml_path)) {
+            std::fprintf(stderr, "[error] no ZithProject.toml found in '%s'\n",
+                         file_path_.c_str());
+            return false;
+        }
+        try {
+            auto tbl = toml::parse_file(toml_path.string());
+            if (auto *build = tbl["build"].as_table()) {
+                if (auto entry = build->get("entry")) {
+                    if (auto val = entry->value<std::string>()) {
+                        file_path_ = (fs::path(file_path_) / *val).string();
+                    }
+                }
+            }
+        } catch (const toml::parse_error &e) {
+            std::fprintf(stderr, "[error] failed to parse '%s': %.*s\n",
+                         toml_path.string().c_str(),
+                         (int)e.description().size(), e.description().data());
+            return false;
+        }
+    }
+
     auto file_result = parser::SourceMap::load_file(file_path_);
     if (!file_result) {
         std::fprintf(stderr, "[error] failed to load file '%s'\n", file_path_.c_str());
@@ -75,16 +104,12 @@ bool CompilationSession::lexStage() {
 }
 
 bool CompilationSession::parseStage() {
-    parser::Parser parser(tokens_, ast_builder_, diags_);
-    auto result = parser.parseProgram();
+    auto result = parser::parseProgram(tokens_, ast_builder_, diags_);
     program_ = result.value;
 
-    // If diagnostics were emitted during parsing, report them
     if (diags_.hasErrors())
         diags_.emit();
 
-    // Even if the parser is currently stubbed (ok=false),
-    // consider success as long as no real errors were reported
     return !diags_.hasErrors();
 }
 

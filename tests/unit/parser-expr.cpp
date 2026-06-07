@@ -24,16 +24,14 @@ using namespace zith::ast;
 using zith::memory::Arena;
 using zith::diagnostics::DiagnosticEngine;
 
-// Parser is stubbed — parseProgram() returns {kInvalidDecl, {}, false}.
-static void test_parser_returns_not_ok() {
+static void test_parser_reports_error_for_junk() {
     Arena arena;
     AstBuilder builder(arena);
     DiagnosticEngine diags;
 
     auto tokens = tokenize("test", "42;", diags).value();
-    zith::parser::Parser parser(tokens, builder, diags);
-    auto result = parser.parseProgram();
-    CHECK(!result.ok, "parser stub returns not ok");
+    auto result = zith::parser::parseProgram(tokens, builder, diags);
+    CHECK(diags.hasErrors(), "parser reports errors for junk input");
 }
 
 static void test_ast_builder_literal() {
@@ -117,7 +115,7 @@ int main() {
     std::printf("parser-expr tests\n");
     std::printf("===================\n\n");
 
-    test_parser_returns_not_ok();
+    test_parser_reports_error_for_junk();
     test_ast_builder_literal();
     test_ast_builder_ident();
     test_ast_builder_binary();
