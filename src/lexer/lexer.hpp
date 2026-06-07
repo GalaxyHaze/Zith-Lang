@@ -51,7 +51,7 @@ namespace zith::lexer {
                     -> memory::Result<TokenStream>;
         };
 
-        auto tokenize(parser::FileId id, diagnostics::DiagnosticEngine &diags) -> memory::Result<TokenStream>;
+        [[nodiscard]] auto tokenize(parser::FileId id, diagnostics::DiagnosticEngine &diags) -> memory::Result<TokenStream>;
 
         auto tokenize(std::string_view, std::string, diagnostics::DiagnosticEngine &diags) -> memory::Result<TokenStream>;
 

@@ -1,5 +1,5 @@
-#include "emitter.hpp"
-
+#include "diagnostic-engine.hpp"
+#include "diagnostics/diagnostic.hpp"
 #include "diagnostics/error-codes.hpp"
 #include "parser/source-map.hpp"
 #include "parser/source-file.hpp"
@@ -46,10 +46,8 @@ namespace {
 
 } // anonymous namespace
 
-    Emitter::Emitter(const DiagnosticEngine &engine) : engine_(&engine) {}
-
-    void Emitter::emit() const {
-        for (auto &d : engine_->all()) {
+    void DiagnosticEngine::emit() const {
+        for (auto &d : this->all()) {
             auto info = lookupError(d.code);
 
             printSeverityLabel(d.severity);
@@ -84,8 +82,8 @@ namespace {
         }
     }
 
-    void Emitter::emitTo(std::string_view source_text) const {
-        for (auto &d : engine_->all()) {
+    void DiagnosticEngine::emitTo(std::string_view source_text) const {
+        for (auto &d : this->all()) {
             auto info = lookupError(d.code);
 
             // Header

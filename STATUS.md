@@ -1,7 +1,7 @@
 # Zith Compiler — Implementation Status
 
 **Branch:** rewrite  
-**Date:** 2026-06-06  
+**Date:** 2026-06-07  
 **Build:** `cmake -B build && cmake --build build` — clean compile, 33 targets  
 **Tests:** `ctest --test-dir build` — 5/5 passing
 
@@ -22,8 +22,10 @@
 
 ```
 Source → Lexer → Parser → AST → Sema → HIR → MIR → ZIR → (Interpreter)
-         *        ***     *     ***    **     ***    ****      ****
+         *       (*)     *     ***    **     ***    ****      ****
 ```
+
+(*) Parser skeleton wired into pipeline; actual parsing returns stubs.
 
 ---
 
@@ -65,17 +67,17 @@ Full tokenizer with:
 | Config merging | \* | CLI flags → ZithFlags.toml cascade |
 | `cmd_help`, `cmd_version` | \* | Ported from master |
 | `cmd_new` | \* | Full project scaffolding |
-| `cmd_check` | \*\* | Runs frontend pipeline, reports pass/fail |
-| `cmd_compile` | \*\* | Chains via check → codegen (stub) |
-| `cmd_build` | \*\* | Chains via compile → link (stub) |
-| `cmd_run` | \*\* | Chains via build → execute (stub) |
-| `cmd_execute` | \*\*\* | Recognises target, execution stubbed |
+| `cmd_check` | \*\* | Uses `CompilationSession` pipeline, real lexer, reports pass/fail |
+| `cmd_compile` | \*\* | Uses `CompilationSession`, runs through MIR lowering |
+| `cmd_build` | \*\* | Uses `CompilationSession`, full pipeline |
+| `cmd_run` | \*\* | Compile + execute via pipeline |
+| `cmd_execute` | \*\* | Full pipeline + execution stub |
 | `cmd_fmt` | \*\*\* | Validates parse, no re-indent yet |
 | `cmd_test` | \*\*\* | Not implemented |
 | `cmd_docs` | \*\*\* | Not implemented |
 | `cmd_repl` | \*\*\* | Not implemented |
-| `cmd_clean` | \*\*\* | Not implemented |
-| Pipeline stages (`CompilationSession`) | \*\*\* | All 5 stages are pass-through stubs |
+| `cmd_clean` | \*\* | Recognizes target, no-op |
+| Pipeline stages (`CompilationSession`) | \*\* | Per-file pipeline driver; `lexStage` wired to real lexer, `parseStage` to parser (stub), rest TODO |
 
 ### ZithProject.toml integration \*\*\*
 Not yet wired in. `main()` has a TODO placeholder.

@@ -131,15 +131,8 @@ Options parseArgs(int argc, char **argv) {
             opts.command = subcommandToEnum(argv[i]);
             // Consume next arg as subcommand_arg for commands that take one
             if (opts.command == Options::Command::New ||
-                opts.command == Options::Command::Deps ||
-                opts.command == Options::Command::Check ||
-                opts.command == Options::Command::Compile ||
-                opts.command == Options::Command::Build ||
-                opts.command == Options::Command::Run ||
-                opts.command == Options::Command::Execute ||
-                opts.command == Options::Command::Test ||
-                opts.command == Options::Command::Fmt ||
-                opts.command == Options::Command::Docs) {
+                opts.command == Options::Command::Clean ||
+                opts.command == Options::Command::Deps) {
                 if (i + 1 < argc && argv[i + 1][0] != '-')
                     opts.subcommand_arg = argv[++i];
             }

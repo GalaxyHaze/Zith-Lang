@@ -73,10 +73,10 @@ int cmd_new(const Options &opts) {
         main_zith << "from std/io/console\n\n";
         main_zith << "fn main(): i32 {\n";
         main_zith << "    // TODO: your code here\n";
-        main_zith << "    // @ prefix macros";
+        main_zith << "    // @ prefix macros\n";
         main_zith << "    @println(\"Hello from " << name << "!\")\n";
         main_zith << "    //implicit return 0";
-        main_zith << "}\n";
+        main_zith << "\n}\n";
     }
 
     std::printf("[ok] Created project: %s\n", root.c_str());

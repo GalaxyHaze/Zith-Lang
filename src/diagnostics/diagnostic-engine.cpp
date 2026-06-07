@@ -24,8 +24,6 @@ namespace zith::diagnostics {
         return diagnostics_;
     }
 
-    void DiagnosticEngine::clear() {
-        diagnostics_.clear();
-    }
+    
 
 } // namespace zith::diagnostics
