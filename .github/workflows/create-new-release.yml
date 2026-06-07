@@ -83,11 +83,3 @@ jobs:
       tag_name: v${{ inputs.version }}
       draft: false
     secrets: inherit
-
-  update-packages:
-    name: Update Package Manifests
-    needs: build
-    uses: ./.github/workflows/update-package.yml
-    with:
-      tag_name: v${{ inputs.version }}
-    secrets: inherit

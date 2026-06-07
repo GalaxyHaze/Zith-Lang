@@ -1,13 +1,13 @@
 name: Build Artifact
 
 concurrency:
-  group: build-${{ github.ref_name }}
+  group: build-${{ inputs.tag_name || github.ref_name }}
   cancel-in-progress: true
 
 on:
   push:
     tags:
-      - '*'
+      - 'v[0-9]*.[0-9]*.[0-9]*'
   workflow_dispatch:
     inputs:
       tag_name:
@@ -48,10 +48,16 @@ jobs:
           TAG="${{ inputs.tag_name || github.event.inputs.tag_name || github.ref_name }}"
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
 
-          DRAFT="${{ inputs.draft != '' && inputs.draft || github.event.inputs.draft || 'true' }}"
+          DRAFT="true"
+          if [ "${{ github.event_name }}" = "workflow_call" ]; then
+            if [ "${{ inputs.draft }}" = "true" ]; then DRAFT="true"; else DRAFT="false"; fi
+          elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            if [ "${{ github.event.inputs.draft }}" = "true" ]; then DRAFT="true"; else DRAFT="false"; fi
+          fi
           echo "draft=$DRAFT" >> "$GITHUB_OUTPUT"
 
       - name: Create release
+        if: github.event_name != 'workflow_call'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.meta.outputs.tag }}
@@ -69,7 +75,7 @@ jobs:
       matrix:
         include:
           - os: ubuntu-latest
-            target_name: zithc-linux-amd64
+            target_name: zith-linux-amd64
             cmake_flags: >-
               -DCMAKE_C_COMPILER=clang
               -DCMAKE_CXX_COMPILER=clang++
@@ -78,7 +84,7 @@ jobs:
               -DZITH_ENABLE_LLVM=OFF
 
           - os: ubuntu-latest
-            target_name: zithc-linux-arm64
+            target_name: zith-linux-arm64
             cmake_flags: >-
               -DCMAKE_C_COMPILER=aarch64-linux-gnu-gcc
               -DCMAKE_CXX_COMPILER=aarch64-linux-gnu-g++
@@ -87,17 +93,26 @@ jobs:
               -DZITH_ENABLE_FFI=OFF
               -DZITH_ENABLE_LLVM=OFF
 
-          - os: macos-latest
-            target_name: zithc-macos-universal
+          - os: macos-13
+            target_name: zith-macos-amd64
             cmake_flags: >-
               -DCMAKE_C_COMPILER=$(brew --prefix llvm)/bin/clang
               -DCMAKE_CXX_COMPILER=$(brew --prefix llvm)/bin/clang++
               -DLLVM_DIR=$(brew --prefix llvm)/lib/cmake/llvm
-              "-DCMAKE_OSX_ARCHITECTURES=x86_64;arm64"
+              -DCMAKE_OSX_ARCHITECTURES=x86_64
+              -DZITH_ENABLE_FFI=OFF
+
+          - os: macos-14
+            target_name: zith-macos-arm64
+            cmake_flags: >-
+              -DCMAKE_C_COMPILER=$(brew --prefix llvm)/bin/clang
+              -DCMAKE_CXX_COMPILER=$(brew --prefix llvm)/bin/clang++
+              -DLLVM_DIR=$(brew --prefix llvm)/lib/cmake/llvm
+              -DCMAKE_OSX_ARCHITECTURES=arm64
               -DZITH_ENABLE_FFI=OFF
 
           - os: windows-latest
-            target_name: zithc-windows-amd64.exe
+            target_name: zith-windows-amd64.exe
             msvc_arch: amd64
             cmake_flags: >-
               -DCMAKE_C_COMPILER=clang-cl
@@ -106,7 +121,7 @@ jobs:
               -DZITH_ENABLE_LLVM=OFF
 
           - os: windows-latest
-            target_name: zithc-windows-arm64.exe
+            target_name: zith-windows-arm64.exe
             msvc_arch: amd64_arm64
             cmake_flags: >-
               -DCMAKE_C_COMPILER=clang-cl
@@ -121,7 +136,6 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Setup CMake
-        if: runner.os != 'macOS'
         uses: jwlawson/actions-setup-cmake@v2
         with:
           cmake-version: ${{ env.CMAKE_VERSION }}
@@ -163,6 +177,15 @@ jobs:
           clang --version
           clang++ --version
 
+      - name: Cache CMake build
+        uses: actions/cache@v4
+        with:
+          path: build
+          key: cmake-${{ matrix.target_name }}-${{ hashFiles('CMakeLists.txt', 'cmake/**/*.cmake', 'src/**/*.cpp', 'src/**/*.hpp', 'include/**/*.hpp') }}
+          restore-keys: |
+            cmake-${{ matrix.target_name }}-
+            cmake-
+
       - name: Configure CMake
         shell: bash
         run: |
@@ -173,10 +196,12 @@ jobs:
             -DZITH_VERSION=${{ needs.create-release.outputs.tag }} \
             ${{ matrix.cmake_flags }}
 
-      - name: Clean stale static libraries
+      - name: Clean stale macOS archives (prevent corruption)
         if: runner.os == 'macOS'
         shell: bash
-        run: rm -f build/lib/*.a
+        run: |
+          rm -f build/lib/*.a 2>/dev/null || true
+          rm -f build/bin/* 2>/dev/null || true
 
       - name: Build
         shell: bash
@@ -187,10 +212,10 @@ jobs:
         run: |
           mkdir -p artifacts
           if [ "${{ runner.os }}" = "Windows" ]; then
-            cp build/bin/zithc.exe "artifacts/${{ matrix.target_name }}"
+            cp build/bin/zith.exe "artifacts/${{ matrix.target_name }}"
           else
-            chmod +x build/bin/zithc
-            cp build/bin/zithc "artifacts/${{ matrix.target_name }}"
+            chmod +x build/bin/zith
+            cp build/bin/zith "artifacts/${{ matrix.target_name }}"
           fi
 
       - name: Upload release asset
@@ -210,51 +235,40 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - target_name: zithc-linux-amd64-musl
-            pkgs: musl-tools
-            cc: musl-gcc
-            cxx: musl-g++
+          - target_name: zith-linux-amd64-musl
+            platform: linux/amd64
 
-          - target_name: zithc-linux-arm64-musl
-            pkgs: aarch64-linux-musl
-            cc: aarch64-linux-musl-gcc
-            cxx: aarch64-linux-musl-g++
+          - target_name: zith-linux-arm64-musl
+            platform: linux/arm64
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install musl cross-compiler
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y musl-tools
-          if [ "${{ matrix.target_name }}" = "zithc-linux-arm64-musl" ]; then
-            curl -L https://musl.cc/aarch64-linux-musl-cross.tgz | sudo tar xz -C /opt
-            echo "/opt/aarch64-linux-musl-cross/bin" >> "$GITHUB_PATH"
-          fi
+      - name: Set up QEMU (for arm64)
+        if: matrix.target_name == 'zith-linux-arm64-musl'
+        uses: docker/setup-qemu-action@v3
 
-      - name: Configure CMake
+      - name: Build inside Alpine container
         shell: bash
         run: |
-          cmake -S . -B build -G Ninja \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DBUILD_TESTING=OFF \
-            -DENABLE_WERROR=OFF \
-            -DZITH_VERSION='${{ needs.create-release.outputs.tag }}' \
-            -DCMAKE_C_COMPILER=${{ matrix.cc }} \
-            -DCMAKE_CXX_COMPILER=${{ matrix.cxx }} \
-            -DCMAKE_EXE_LINKER_FLAGS='-static' \
-            -DZITH_ENABLE_FFI=OFF \
-            -DZITH_ENABLE_LLVM=OFF
-
-      - name: Build
-        shell: bash
-        run: cmake --build build --config Release
-
-      - name: Prepare artifact
-        shell: bash
-        run: |
-          mkdir -p artifacts
-          cp build/bin/zithc artifacts/${{ matrix.target_name }}
+          docker run --rm --platform "${{ matrix.platform }}" \
+            -v "$PWD:/work" -w /work alpine:3.23 sh -c "
+              apk add --no-cache clang cmake ninja musl-dev linux-headers git
+              cmake -S . -B build -G Ninja \
+                -DCMAKE_BUILD_TYPE=Release \
+                -DBUILD_TESTING=OFF \
+                -DENABLE_WERROR=OFF \
+                -DZITH_VERSION='${{ needs.create-release.outputs.tag }}' \
+                -DCMAKE_C_COMPILER=clang \
+                -DCMAKE_CXX_COMPILER=clang++ \
+                -DCMAKE_CROSSCOMPILING=OFF \
+                -DZITH_ENABLE_FFI=OFF \
+                -DZITH_ENABLE_LLVM=OFF \
+                -DCMAKE_EXE_LINKER_FLAGS='-static'
+              cmake --build build --config Release
+              mkdir -p artifacts
+              cp build/bin/zith artifacts/${{ matrix.target_name }}
+            "
 
       - name: Upload release asset
         uses: softprops/action-gh-release@v2
@@ -267,7 +281,7 @@ jobs:
 
   build-wasm:
     needs: create-release
-    name: Build zithc-wasm
+    name: Build zith-wasm
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -281,6 +295,14 @@ jobs:
         uses: jwlawson/actions-setup-cmake@v2
         with:
           cmake-version: ${{ env.CMAKE_VERSION }}
+
+      - name: Cache CMake build
+        uses: actions/cache@v4
+        with:
+          path: build-wasm
+          key: cmake-wasm-${{ hashFiles('CMakeLists.txt', 'cmake/**/*.cmake', 'src/**/*.cpp', 'src/**/*.hpp', 'include/**/*.hpp') }}
+          restore-keys: |
+            cmake-wasm-
 
       - name: Configure CMake
         shell: bash
@@ -303,13 +325,13 @@ jobs:
           mkdir -p artifacts wasm-staging
           [ -d build-wasm/bin ] && cp build-wasm/bin/* wasm-staging/ || true
           find build-wasm -maxdepth 1 -type f \( -name '*.wasm' -o -name '*.js' -o -name '*.html' \) -exec cp {} wasm-staging/ \;
-          cd wasm-staging && zip -r ../artifacts/zithc-wasm.zip . && cd ..
+          cd wasm-staging && zip -r ../artifacts/zith-wasm.zip . && cd ..
 
       - name: Upload release asset
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.create-release.outputs.tag }}
-          files: artifacts/zithc-wasm.zip
+          files: artifacts/zith-wasm.zip
           draft: ${{ needs.create-release.outputs.draft }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
