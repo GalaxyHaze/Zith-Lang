@@ -6,7 +6,24 @@ set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 if(NOT DEFINED ZITH_VERSION OR ZITH_VERSION STREQUAL "")
-    set(ZITH_VERSION "v0.0.1")
+    execute_process(
+        COMMAND git ls-remote --tags https://github.com/GalaxyHaze/Zith.git
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+        OUTPUT_VARIABLE GIT_TAGS
+        ERROR_QUIET
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+    )
+    if(GIT_TAGS)
+        string(REGEX MATCHALL "refs/tags/v[0-9]+\\.[0-9]+\\.[0-9]+" VERSION_TAGS "${GIT_TAGS}")
+        if(VERSION_TAGS)
+            list(SORT VERSION_TAGS COMPARE NATURAL)
+            list(POP_BACK VERSION_TAGS LATEST_TAG)
+            string(REGEX REPLACE "refs/tags/(.*)" "\\1" ZITH_VERSION "${LATEST_TAG}")
+        endif()
+    endif()
+    if(NOT DEFINED ZITH_VERSION OR ZITH_VERSION STREQUAL "")
+        set(ZITH_VERSION "v0.0.1")
+    endif()
 endif()
 set(ZITH_VERSION "${ZITH_VERSION}" CACHE STRING "Project version" FORCE)
 

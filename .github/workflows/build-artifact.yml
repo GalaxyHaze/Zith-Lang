@@ -1,5 +1,9 @@
 name: Build Artifact
 
+concurrency:
+  group: build-${{ github.ref_name }}
+  cancel-in-progress: true
+
 on:
   push:
     tags:
@@ -9,34 +13,49 @@ on:
       tag_name:
         description: 'Tag para a Release (ex: v1.0.0)'
         required: false
-        default: 'v0.0.1'
+        default: ''
+      draft:
+        description: 'Create release as draft'
+        type: boolean
+        default: true
   workflow_call:
     inputs:
       tag_name:
         type: string
         required: false
+      draft:
+        type: boolean
+        required: false
+        default: true
 
 permissions:
   contents: write
+
+env:
+  CMAKE_VERSION: '3.28.x'
 
 jobs:
   create-release:
     runs-on: ubuntu-latest
     outputs:
       tag: ${{ steps.meta.outputs.tag }}
+      draft: ${{ steps.meta.outputs.draft }}
     steps:
       - id: meta
-        name: Resolve tag
+        name: Resolve tag and draft mode
         shell: bash
         run: |
           TAG="${{ inputs.tag_name || github.event.inputs.tag_name || github.ref_name }}"
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
 
-      - name: Create draft release
+          DRAFT="${{ inputs.draft != '' && inputs.draft || github.event.inputs.draft || 'true' }}"
+          echo "draft=$DRAFT" >> "$GITHUB_OUTPUT"
+
+      - name: Create release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.meta.outputs.tag }}
-          draft: true
+          draft: ${{ steps.meta.outputs.draft }}
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -113,7 +132,7 @@ jobs:
       - name: Setup CMake
         uses: jwlawson/actions-setup-cmake@v2
         with:
-          cmake-version: '3.28.x'
+          cmake-version: ${{ env.CMAKE_VERSION }}
 
       - name: Install Linux dependencies
         if: runner.os == 'Linux'
@@ -152,30 +171,28 @@ jobs:
           clang --version
           clang++ --version
 
+      - name: Cache CMake build
+        uses: actions/cache@v4
+        with:
+          path: build
+          key: cmake-${{ matrix.target_name }}-${{ hashFiles('CMakeLists.txt', 'src/**/*.cpp', 'src/**/*.hpp', 'include/**/*.hpp') }}
+          restore-keys: |
+            cmake-${{ matrix.target_name }}-
+            cmake-
+
       - name: Configure CMake
         shell: bash
         run: |
-          cmake -S scripts -B build -G Ninja \
+          cmake -S . -B build -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
             -DBUILD_TESTING=OFF \
             -DENABLE_WERROR=OFF \
             -DZITH_VERSION=${{ needs.create-release.outputs.tag }} \
             ${{ matrix.cmake_flags }}
 
-      - name: Verify target architecture (macOS)
-        if: runner.os == 'macOS'
-        shell: bash
-        run: |
-          file "$(brew --prefix llvm)/lib/libLLVM.dylib"
-
       - name: Build
         shell: bash
         run: cmake --build build --config Release
-
-      - name: Verify built binary architecture (macOS)
-        if: runner.os == 'macOS'
-        shell: bash
-        run: file build/bin/zith
 
       - name: Prepare artifact
         shell: bash
@@ -193,7 +210,7 @@ jobs:
         with:
           tag_name: ${{ needs.create-release.outputs.tag }}
           files: artifacts/${{ matrix.target_name }}
-          draft: true
+          draft: ${{ needs.create-release.outputs.draft }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -224,7 +241,7 @@ jobs:
           docker run --rm --platform "${{ matrix.platform }}" \
             -v "$PWD:/work" -w /work alpine:3.23 sh -c "
               apk add --no-cache clang cmake ninja musl-dev linux-headers git
-              cmake -S scripts -B build -G Ninja \
+              cmake -S . -B build -G Ninja \
                 -DCMAKE_BUILD_TYPE=Release \
                 -DBUILD_TESTING=OFF \
                 -DENABLE_WERROR=OFF \
@@ -234,7 +251,7 @@ jobs:
                 -DCMAKE_CROSSCOMPILING=OFF \
                 -DZITH_ENABLE_FFI=OFF \
                 -DZITH_ENABLE_LLVM=OFF \
-                -DCMAKE_EXE_LINKER_FLAGS="-static"
+                -DCMAKE_EXE_LINKER_FLAGS='-static'
               cmake --build build --config Release
               mkdir -p artifacts
               cp build/bin/zith artifacts/${{ matrix.target_name }}
@@ -245,7 +262,7 @@ jobs:
         with:
           tag_name: ${{ needs.create-release.outputs.tag }}
           files: artifacts/${{ matrix.target_name }}
-          draft: true
+          draft: ${{ needs.create-release.outputs.draft }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -264,12 +281,18 @@ jobs:
       - name: Setup CMake
         uses: jwlawson/actions-setup-cmake@v2
         with:
-          cmake-version: '3.28.x'
+          cmake-version: ${{ env.CMAKE_VERSION }}
+
+      - name: Cache CMake build
+        uses: actions/cache@v4
+        with:
+          path: build-wasm
+          key: cmake-wasm-${{ hashFiles('CMakeLists.txt', 'src/**/*.cpp', 'src/**/*.hpp', 'include/**/*.hpp') }}
 
       - name: Configure CMake
         shell: bash
         run: |
-          emcmake cmake -S scripts -B build-wasm -G Ninja \
+          emcmake cmake -S . -B build-wasm -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
             -DBUILD_TESTING=OFF \
             -DENABLE_WERROR=OFF \
@@ -294,6 +317,6 @@ jobs:
         with:
           tag_name: ${{ needs.create-release.outputs.tag }}
           files: artifacts/zith-wasm.zip
-          draft: true
+          draft: ${{ needs.create-release.outputs.draft }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
