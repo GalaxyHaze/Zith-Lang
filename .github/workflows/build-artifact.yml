@@ -163,15 +163,6 @@ jobs:
           clang --version
           clang++ --version
 
-      - name: Cache CMake build
-        uses: actions/cache@v4
-        with:
-          path: build
-          key: cmake-${{ matrix.target_name }}-${{ hashFiles('CMakeLists.txt', 'src/**/*.cpp', 'src/**/*.hpp', 'include/**/*.hpp') }}
-          restore-keys: |
-            cmake-${{ matrix.target_name }}-
-            cmake-
-
       - name: Configure CMake
         shell: bash
         run: |
@@ -278,12 +269,6 @@ jobs:
         uses: jwlawson/actions-setup-cmake@v2
         with:
           cmake-version: ${{ env.CMAKE_VERSION }}
-
-      - name: Cache CMake build
-        uses: actions/cache@v4
-        with:
-          path: build-wasm
-          key: cmake-wasm-${{ hashFiles('CMakeLists.txt', 'src/**/*.cpp', 'src/**/*.hpp', 'include/**/*.hpp') }}
 
       - name: Configure CMake
         shell: bash
