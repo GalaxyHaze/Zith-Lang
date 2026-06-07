@@ -249,7 +249,7 @@ if(CLANG_FORMAT_EXE)
     file(GLOB_RECURSE ZITH_FORMAT_SOURCES
         "impl/*.cpp" "impl/*.hpp" "impl/*.h" "impl/*.c"
         "include/*.hpp" "include/*.h"
-        "tests/*.cpp" "tests/*.h"
+        "tests/*.cpp" "tests/*.hF"
     )
 
     add_custom_target(fmt
