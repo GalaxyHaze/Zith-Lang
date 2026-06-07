@@ -1,5 +1,9 @@
 name: Create Release Tag and Page
 
+concurrency:
+  group: release-${{ inputs.version }}
+  cancel-in-progress: false
+
 on:
   workflow_dispatch:
     inputs:
@@ -30,10 +34,10 @@ jobs:
         id: tag
         run: |
           VERSION="${{ inputs.version }}"
-          VERSION="${VERSION#v}"  # remove leading 'v' if user included it
+          VERSION="${VERSION#v}"
 
           if git rev-parse "v$VERSION" >/dev/null 2>&1; then
-            echo "Tag v$VERSION already exists — skipping creation, will update release page only."
+            echo "Tag v$VERSION already exists — skipping creation."
             echo "tag_created=false" >> $GITHUB_OUTPUT
           else
             git tag -a "v$VERSION" -m "Release v$VERSION"
@@ -42,13 +46,11 @@ jobs:
           fi
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
-      - name: Create or Update GitHub Release Page
+      - name: Create Release Page
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ steps.tag.outputs.version }}
           name: Release v${{ steps.tag.outputs.version }}
-          # allow_update: true updates if the release already exists
-          # instead of failing with "already exists"
           draft: false
           prerelease: false
           body: |
@@ -76,9 +78,8 @@ jobs:
   build:
     name: Trigger Build & Release
     needs: tag-and-release
-    uses:  ./.github/workflows/build-artifact.yml
+    uses: ./.github/workflows/build-artifact.yml
     with:
       tag_name: v${{ inputs.version }}
+      draft: false
     secrets: inherit
-    permissions:
-      contents: write

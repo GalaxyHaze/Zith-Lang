@@ -1,5 +1,9 @@
 name: Update Packages Manifest
 
+concurrency:
+  group: update-packages
+  cancel-in-progress: true
+
 on:
   workflow_run:
     workflows: ["Build Artifact"]
@@ -16,12 +20,10 @@ permissions:
 
 jobs:
   update-scoop:
-    if: |
-      github.event_name == 'workflow_dispatch' || 
+    if: >
+      github.event_name == 'workflow_dispatch' ||
       github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
 
     steps:
       - name: Resolve tag name
@@ -30,42 +32,38 @@ jobs:
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             TAG="${{ github.event.inputs.tag_name }}"
           else
-            # Get latest release tag from workflow_run trigger
-            # Include draft releases since Build Artifact creates them as drafts
             TAG=$(gh release list --repo ${{ github.repository }} --limit 1 --include-drafts --json tagName -q '.[0].tagName')
           fi
-          
-          # Ensure tag starts with 'v'
+
           if [[ ! "$TAG" =~ ^v ]]; then
             TAG="v$TAG"
           fi
-          
+
           echo "tag=$TAG" >> $GITHUB_OUTPUT
           echo "version=${TAG#v}" >> $GITHUB_OUTPUT
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Download release binaries
-        id: download
         run: |
           mkdir -p release-bins
-          
+
           gh release download ${{ steps.tag.outputs.tag }} \
             --repo ${{ github.repository }} \
             --pattern "zith-windows-amd64.exe" \
             --pattern "zith-windows-arm64.exe" \
             --dir release-bins
-          
+
           if [ ! -f "release-bins/zith-windows-amd64.exe" ]; then
             echo "Failed to download zith-windows-amd64.exe"
             exit 1
           fi
-          
+
           if [ ! -f "release-bins/zith-windows-arm64.exe" ]; then
             echo "Failed to download zith-windows-arm64.exe"
             exit 1
           fi
-          
+
           ls -lh release-bins/
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -86,7 +84,7 @@ jobs:
       - name: Update scoop manifest
         run: |
           cp .github/scoop/bucket/zith.json .github/scoop/bucket/zith.json.bak
-          
+
           jq \
             --arg version "${{ steps.tag.outputs.version }}" \
             --arg amd64 "${{ steps.hashes.outputs.amd64 }}" \
@@ -98,12 +96,12 @@ jobs:
               .architecture.arm64.hash = $arm64 |
               .architecture.arm64.url = "https://github.com/GalaxyHaze/Zith/releases/download/v\($version)/zith-windows-arm64.exe"
             ' .github/scoop/bucket/zith.json.bak > .github/scoop/bucket/zith.json
-          
+
           if ! jq empty .github/scoop/bucket/zith.json 2>/dev/null; then
             cp .github/scoop/bucket/zith.json.bak .github/scoop/bucket/zith.json
             exit 1
           fi
-          
+
           rm -f .github/scoop/bucket/zith.json.bak
 
       - name: Commit scoop changes
