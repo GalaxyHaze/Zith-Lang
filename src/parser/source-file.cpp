@@ -1,4 +1,5 @@
 #include "source-file.hpp"
+#include <string_view>
 
 namespace zith::parser {
 

@@ -1,7 +1,6 @@
 #pragma once
 
 #include "ast/ast-ids.hpp"
-#include "parser/span.hpp"
 
 #include <cstdint>
 #include <string_view>
@@ -15,7 +14,7 @@ namespace zith::ast {
         Sub,
         Mul,
         Div,
-        Rem,
+        Rest,
         Eq,
         Ne,
         Lt,

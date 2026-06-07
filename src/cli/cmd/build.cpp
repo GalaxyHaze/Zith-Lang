@@ -3,11 +3,9 @@
 
 #include <cstdio>
 #include <cstring>
-#include <filesystem>
 
 namespace zith::cli::commands {
 
-namespace fs = std::filesystem;
 
 int cmd_check(const Options &opts) {
     if (opts.input_files.empty()) {
