@@ -246,7 +246,7 @@ jobs:
 
       - name: Set up QEMU (for arm64)
         if: matrix.target_name == 'zith-linux-arm64-musl'
-        uses: docker/setup-qemu-action@v3
+        uses: docker/setup-qemu-action@v4
 
       - name: Build inside Alpine container
         shell: bash
