@@ -1,6 +1,7 @@
 #pragma once
 
 #include "diagnostic.hpp"
+#include "diagnostics/color.hpp"
 #include "diagnostics/diagnostic.hpp"
 
 #include <cstdint>
@@ -11,10 +12,15 @@ namespace zith::diagnostics {
 
     class DiagnosticEngine {
         memory::DynArray<Diagnostic> diagnostics_;
+        bool use_color_ = false;
+        ColorTheme theme_ = colorTheme;
 
     public:
         void report(Diagnostic diag);
         void report(Severity sev, uint32_t code, std::string msg, memory::Span span);
+
+        void setColor(bool enabled) { use_color_ = enabled; }
+        bool useColor() const noexcept { return use_color_; }
 
         void emit() const;
         void emitTo(std::string_view source_text) const;

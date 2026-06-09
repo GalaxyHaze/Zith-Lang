@@ -1,10 +1,28 @@
 #include "cli/commands.hpp"
 #include "cli/compilation-session.hpp"
+#include "diagnostics/color.hpp"
 
 #include <cstdio>
 #include <cstring>
+#include <unistd.h>
 
 namespace zith::cli::commands {
+
+    static bool useColor(const Options &opts) {
+        if (opts.color == "on") return true;
+        if (opts.color == "off") return false;
+        return isatty(fileno(stdout)) != 0;
+    }
+
+    static const char *green(const Options &opts) {
+        return useColor(opts) ? "\033[32m" : "";
+    }
+    static const char *red(const Options &opts) {
+        return useColor(opts) ? "\033[31m" : "";
+    }
+    static const char *reset(const Options &opts) {
+        return useColor(opts) ? "\033[0m" : "";
+    }
 
 
 int cmd_check(const Options &opts) {
@@ -38,28 +56,32 @@ int cmd_check(const Options &opts) {
         return c;
     };
 
+    auto ok_tag = [&](bool ok) {
+        std::printf("%s[%s]%s", ok ? green(opts) : red(opts),
+                    ok ? "ok" : "error", reset(opts));
+    };
+
     if (opts.verbose) {
         if (files.size() == 1) {
-            std::printf("%s %s\n",
-                        results[0] ? "[ok]" : "[error]",
-                        results[0] ? "check passed" : "check failed");
+            ok_tag(results[0]);
+            std::printf(" %s\n", results[0] ? "check passed" : "check failed");
         } else {
             std::string list;
-            for (size_t i = 0; i < files.size(); i++)
-                list += "\n\t" + files[i] + (results[i] ? ": passed" : ": failed");
-            std::printf("%s %zu/%zu passed%s\n",
-                        count(results) == files.size() ? "[ok]" : "[error]",
-                        count(results), files.size(), list.c_str());
+            for (size_t i = 0; i < files.size(); i++) {
+                list += "\n\t";
+                list += files[i];
+                list += results[i] ? ": passed" : ": failed";
+            }
+            ok_tag(count(results) == files.size());
+            std::printf(" %zu/%zu passed%s\n", count(results), files.size(), list.c_str());
         }
     } else {
         if (files.size() == 1) {
-            std::printf("%s %s\n",
-                        results[0] ? "[ok]" : "[error]",
-                        results[0] ? "check passed" : "check failed");
+            ok_tag(results[0]);
+            std::printf(" %s\n", results[0] ? "check passed" : "check failed");
         } else {
-            std::printf("%s %zu/%zu passed\n",
-                        count(results) == files.size() ? "[ok]" : "[error]",
-                        count(results), files.size());
+            ok_tag(count(results) == files.size());
+            std::printf(" %zu/%zu passed\n", count(results), files.size());
         }
     }
 
@@ -82,8 +104,11 @@ int cmd_compile(const Options &opts) {
             ok = false;
             exit_code = 1;
         }
-        if (opts.verbose)
-            std::printf("[%s] %s\n", ok ? "ok" : "error", file.c_str());
+        if (opts.verbose) {
+            std::printf("%s[%s]%s %s\n",
+                        ok ? green(opts) : red(opts),
+                        ok ? "ok" : "error", reset(opts), file.c_str());
+        }
     }
     return exit_code;
 }
@@ -104,8 +129,11 @@ int cmd_build(const Options &opts) {
             ok = false;
             exit_code = 1;
         }
-        if (opts.verbose)
-            std::printf("[%s] %s\n", ok ? "ok" : "error", file.c_str());
+        if (opts.verbose) {
+            std::printf("%s[%s]%s %s\n",
+                        ok ? green(opts) : red(opts),
+                        ok ? "ok" : "error", reset(opts), file.c_str());
+        }
     }
     return exit_code;
 }

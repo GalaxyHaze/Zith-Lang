@@ -35,13 +35,31 @@ namespace {
         return {line_num, start, end, source.substr(start, end - start)};
     }
 
-    void printSeverityLabel(Severity sev) {
+    void printSeverityLabel(Severity sev, bool color, const ColorTheme &theme) {
+        if (color) {
+            switch (sev) {
+                case Severity::Error:
+                    std::fputs(theme.severity_error.data(), stderr);
+                    break;
+                case Severity::Warning:
+                    std::fputs(theme.severity_warning.data(), stderr);
+                    break;
+                case Severity::Bug:
+                    std::fputs(theme.severity_bug.data(), stderr);
+                    break;
+                case Severity::Note:
+                    std::fputs(theme.severity_note.data(), stderr);
+                    break;
+            }
+        }
         switch (sev) {
             case Severity::Error:   std::fputs("error", stderr);   break;
             case Severity::Warning: std::fputs("warning", stderr); break;
             case Severity::Bug:     std::fputs("bug", stderr);     break;
             case Severity::Note:    std::fputs("note", stderr);    break;
         }
+        if (color)
+            std::fputs(ansi::reset.data(), stderr);
     }
 
 } // anonymous namespace
@@ -50,7 +68,7 @@ namespace {
         for (auto &d : this->all()) {
             auto info = lookupError(d.code);
 
-            printSeverityLabel(d.severity);
+            printSeverityLabel(d.severity, use_color_, theme_);
             if (info) {
                 std::fprintf(stderr, "[%c%04u]: %s\n", info->prefix, info->code, d.message.c_str());
             } else {
@@ -62,20 +80,33 @@ namespace {
             auto maybe_src = memory::SourceMap::get(d.primary.file);
             if (maybe_src.isValid()) {
                 auto &src = maybe_src.value().get();
-                std::fprintf(stderr, "  --> %s:%u:%u\n",
+                if (use_color_)
+                    std::fputs(theme_.location.data(), stderr);
+                std::fprintf(stderr, "  --> %s:%u:%u",
                              std::string(src.path).c_str(), loc.line, loc.col);
+                if (use_color_)
+                    std::fputs(ansi::reset.data(), stderr);
+                std::fputc('\n', stderr);
             }
 
             // Suggestions
             if (!d.suggestions.empty()) {
                 for (auto &s : d.suggestions) {
+                    if (use_color_)
+                        std::fputs(theme_.help_prefix.data(), stderr);
                     std::fprintf(stderr, "   = help: %s\n", s.c_str());
+                    if (use_color_)
+                        std::fputs(ansi::reset.data(), stderr);
                 }
             }
 
             // Tip from registry
             if (info && !info->tip.empty()) {
+                if (use_color_)
+                    std::fputs(theme_.tip_prefix.data(), stderr);
                 std::fprintf(stderr, "   = tip: %s\n", std::string(info->tip).c_str());
+                if (use_color_)
+                    std::fputs(ansi::reset.data(), stderr);
             }
 
             std::fputc('\n', stderr);
@@ -87,7 +118,7 @@ namespace {
             auto info = lookupError(d.code);
 
             // Header
-            printSeverityLabel(d.severity);
+            printSeverityLabel(d.severity, use_color_, theme_);
             if (info) {
                 std::fprintf(stderr, "[%c%04u]: %s\n", info->prefix, info->code, d.message.c_str());
             } else {
@@ -106,8 +137,13 @@ namespace {
             }
 
             auto loc = memory::SourceMap::loc(d.primary);
-            std::fprintf(stderr, "  --> %s:%u:%u\n",
+            if (use_color_)
+                std::fputs(theme_.location.data(), stderr);
+            std::fprintf(stderr, "  --> %s:%u:%u",
                          std::string(file_path).c_str(), loc.line, loc.col);
+            if (use_color_)
+                std::fputs(ansi::reset.data(), stderr);
+            std::fputc('\n', stderr);
 
             // Source line with underline
             if (d.primary.start < file_source.size()) {
@@ -116,8 +152,12 @@ namespace {
                 std::fprintf(stderr, "   |\n");
 
                 // Line number + content
-                std::fprintf(stderr, " %zu | %.*s\n",
-                             line.line_num,
+                if (use_color_)
+                    std::fputs(theme_.line_no.data(), stderr);
+                std::fprintf(stderr, " %zu | ", line.line_num);
+                if (use_color_)
+                    std::fputs(ansi::reset.data(), stderr);
+                std::fprintf(stderr, "%.*s\n",
                              static_cast<int>(line.text.size()),
                              line.text.data());
 
@@ -130,6 +170,8 @@ namespace {
                     col = line.text.size();
 
                 std::fputs("   | ", stderr);
+                if (use_color_)
+                    std::fputs(theme_.underline.data(), stderr);
                 for (size_t i = 0; i < col; i++)
                     std::fputc(' ', stderr);
                 for (size_t i = col; i < col + 1 && i < line.text.size(); i++)
@@ -146,6 +188,8 @@ namespace {
                         break;
                     }
                 }
+                if (use_color_)
+                    std::fputs(ansi::reset.data(), stderr);
                 std::fputc('\n', stderr);
 
                 // Secondary labels
@@ -161,13 +205,21 @@ namespace {
             // Suggestions
             if (!d.suggestions.empty()) {
                 for (auto &s : d.suggestions) {
+                    if (use_color_)
+                        std::fputs(theme_.help_prefix.data(), stderr);
                     std::fprintf(stderr, "   = help: %s\n", s.c_str());
+                    if (use_color_)
+                        std::fputs(ansi::reset.data(), stderr);
                 }
             }
 
             // Tip from registry
             if (info && !info->tip.empty()) {
+                if (use_color_)
+                    std::fputs(theme_.tip_prefix.data(), stderr);
                 std::fprintf(stderr, "   = tip: %s\n", std::string(info->tip).c_str());
+                if (use_color_)
+                    std::fputs(ansi::reset.data(), stderr);
             }
 
             std::fputc('\n', stderr);

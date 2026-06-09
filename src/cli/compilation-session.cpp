@@ -8,8 +8,18 @@
 #include <cstdio>
 #include <filesystem>
 #include <toml++/toml.hpp>
+#include <unistd.h>
 
 namespace zith::cli {
+
+static bool shouldUseColor(const std::string &setting) {
+    if (setting == "on")
+        return true;
+    if (setting == "off")
+        return false;
+    // auto: enable if stderr is a TTY
+    return isatty(fileno(stderr)) != 0;
+}
 
 CompilationSession::CompilationSession(const Options &opts, std::string file_path) :
     opts_(opts),
@@ -26,6 +36,7 @@ CompilationSession::CompilationSession(const Options &opts, std::string file_pat
     mir_module_(mir_arena_)
 {
     plan_.target = opts_.target_stage;
+    diags_.setColor(shouldUseColor(opts_.color));
 }
 
 bool CompilationSession::run() {
