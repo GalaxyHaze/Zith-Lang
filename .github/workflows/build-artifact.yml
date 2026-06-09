@@ -181,7 +181,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: build
-          key: cmake-${{ matrix.target_name }}-${{ hashFiles('CMakeLists.txt', 'cmake/**/*.cmake', 'src/**/*.cpp', 'src/**/*.hpp', 'include/**/*.hpp') }}
+          key: cmake-${{ matrix.target_name }}-${{ hashFiles('CMakeLists.txt', 'cmake/**/*.cmake', 'src/**/*.cpp', 'src/**/*.hpp') }}
           restore-keys: |
             cmake-${{ matrix.target_name }}-
             cmake-
@@ -300,7 +300,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: build-wasm
-          key: cmake-wasm-${{ hashFiles('CMakeLists.txt', 'cmake/**/*.cmake', 'src/**/*.cpp', 'src/**/*.hpp', 'include/**/*.hpp') }}
+          key: cmake-wasm-${{ hashFiles('CMakeLists.txt', 'cmake/**/*.cmake', 'src/**/*.cpp', 'src/**/*.hpp') }}
           restore-keys: |
             cmake-wasm-
 

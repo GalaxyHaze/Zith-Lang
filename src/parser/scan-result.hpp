@@ -1,10 +1,10 @@
 #pragma once
 
+#include "memory/dyn-array.hpp"
 #include "memory/span.hpp"
 #include "ast/ast-ids.hpp"
 
 #include <string_view>
-#include <cstdint>
 
 namespace zith::parser {
 

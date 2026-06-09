@@ -56,7 +56,6 @@ add_library(zithc_objects OBJECT ${ZITH_LIB_SOURCES})
 
 target_include_directories(zithc_objects PRIVATE
     src
-    include
 )
 
 target_link_libraries(zithc_objects PRIVATE mio tomlplusplus::tomlplusplus)
@@ -70,7 +69,6 @@ add_executable(zithc ${CMAKE_SOURCE_DIR}/src/cli/zithc-main.cpp $<TARGET_OBJECTS
 
 target_include_directories(zithc PRIVATE
     src
-    include
 )
 
 target_link_libraries(zithc PRIVATE mio)
@@ -86,7 +84,7 @@ if(BUILD_TESTING)
 
 function(add_zith_test NAME SOURCE)
     add_executable(${NAME} ${SOURCE} $<TARGET_OBJECTS:zithc_objects>)
-    target_include_directories(${NAME} PRIVATE src include)
+    target_include_directories(${NAME} PRIVATE src)
     target_link_libraries(${NAME} PRIVATE mio)
     set_target_properties(${NAME} PROPERTIES FOLDER "tests")
     add_test(NAME ${NAME} COMMAND ${NAME})
@@ -114,7 +112,7 @@ find_program(CLANG_FORMAT_EXE NAMES clang-format clang-format-18 clang-format-17
 if(CLANG_FORMAT_EXE)
     file(GLOB_RECURSE ZITH_FORMAT_SOURCES
         "src/*.cpp" "src/*.hpp" "src/*.h" "src/*.c"
-        "include/*.hpp" "include/*.h"
+
         "tests/*.cpp" "tests/*.h"
     )
 
