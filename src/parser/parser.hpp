@@ -4,7 +4,6 @@
 #include "ast/ast-builder.hpp"
 #include "lexer/token.hpp"
 #include "parser/parse-result.hpp"
-#include "parser/recovery.hpp"
 #include "parser/scan-result.hpp"
 #include "import/symbol-table.hpp"
 
