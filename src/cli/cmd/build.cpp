@@ -13,7 +13,7 @@ int cmd_check(const Options &opts) {
         return 1;
     }
 
-    std::vector<bool> results;
+    memory::DynArray<bool> results{memory::SessionArena};
     results.reserve(opts.input_files.size());
 
     // TODO: parallelize with std::async / thread pool
@@ -25,7 +25,7 @@ int cmd_check(const Options &opts) {
         bool ok = session.runTo(Stage::Parsed);
         if (session.hasErrors())
             ok = false;
-        results.push_back(ok);
+        results.push(ok);
     }
 
     auto count = [](auto &&r) {

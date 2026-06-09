@@ -2,7 +2,7 @@
 
 namespace zith::zir::hir {
 
-    HirModule::HirModule(memory::Arena &arena) : exprs_(arena) {}
+    HirModule::HirModule(memory::Arena &arena) : exprs_(arena), fns_(arena) {}
 
     HirExprId HirModule::addExpr(HirExpr expr) {
         HirExprId id = static_cast<HirExprId>(exprs_.size());
@@ -12,7 +12,7 @@ namespace zith::zir::hir {
 
     HirFunction &HirModule::addFn(std::string_view name) {
         (void)name;
-        fns_.emplace_back();
+        fns_.emplace();
         return fns_.back();
     }
 

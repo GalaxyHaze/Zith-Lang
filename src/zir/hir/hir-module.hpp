@@ -16,14 +16,14 @@ namespace zith::zir::hir {
 
     struct HirFunction {
         std::string_view name;
-        std::vector<HirTypeId> params;
+        memory::DynArray<HirTypeId> params;
         HirTypeId return_type;
-        std::vector<HirBasicBlock> blocks;
+        memory::DynArray<HirBasicBlock> blocks;
     };
 
     class HirModule {
         memory::DynArray<HirExpr> exprs_;
-        std::vector<HirFunction> fns_;
+        memory::DynArray<HirFunction> fns_;
 
     public:
         explicit HirModule(memory::Arena &arena);

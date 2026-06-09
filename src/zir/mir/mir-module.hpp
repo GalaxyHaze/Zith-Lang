@@ -11,9 +11,9 @@ namespace zith::zir::mir {
 
     struct MirFunction {
         std::string_view name;
-        std::vector<hir::HirTypeId> params;
+        memory::DynArray<hir::HirTypeId> params;
         hir::HirTypeId return_type;
-        std::vector<MirBasicBlock> blocks;
+        memory::DynArray<MirBasicBlock> blocks;
     };
 
     class MirModule {

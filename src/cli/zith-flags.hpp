@@ -114,14 +114,7 @@ inline Options loadZithFlags() {
     if (auto arr = tbl["include_dirs"].as_array()) {
         for (auto &elem : *arr) {
             if (auto s = elem.value<std::string>())
-                opts.include_dirs.push_back(*s);
-        }
-    }
-
-    if (auto arr = tbl["lib_paths"].as_array()) {
-        for (auto &elem : *arr) {
-            if (auto s = elem.value<std::string>())
-                opts.include_dirs.push_back(*s);
+                opts.include_dirs.push(*s);
         }
     }
 

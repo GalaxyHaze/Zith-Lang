@@ -32,8 +32,8 @@ namespace zith::ast {
         ExprId ident(std::string_view name);
         ExprId binary(ExprId lhs, BinaryOp op, ExprId rhs);
         ExprId unary(UnaryOp op, ExprId operand);
-        ExprId call(ExprId callee, std::vector<ExprId> args);
-        ExprId block(std::vector<StmtId> stmts, ExprId trailing = kInvalidExpr);
+        ExprId call(ExprId callee, memory::DynArray<ExprId> args);
+        ExprId block(memory::DynArray<StmtId> stmts, ExprId trailing = kInvalidExpr);
         ExprId ifExpr(ExprId cond, ExprId then_branch, ExprId else_branch = kInvalidExpr);
 
         StmtId letStmt(std::string_view name, bool mut, ExprId init = kInvalidExpr);
@@ -41,11 +41,11 @@ namespace zith::ast {
         StmtId retStmt(ExprId value = kInvalidExpr);
 
         DeclId fnDecl(std::string_view name,
-                      std::vector<std::string_view> params,
+                      memory::DynArray<std::string_view> params,
                       ExprId body = kInvalidExpr);
         DeclId structDecl(std::string_view name,
-                          std::vector<std::pair<std::string_view, uint32_t>> fields);
-        DeclId importDecl(std::vector<std::string_view> path, std::string_view alias = {});
+                          memory::DynArray<std::pair<std::string_view, uint32_t>> fields);
+        DeclId importDecl(memory::DynArray<std::string_view> path, std::string_view alias = {});
 
         memory::Arena &arena();
     };

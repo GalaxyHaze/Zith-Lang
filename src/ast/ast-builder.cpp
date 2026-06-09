@@ -62,11 +62,11 @@ namespace zith::ast {
         return addExpr(UnaryNode{operand, op});
     }
 
-    ExprId AstBuilder::call(ExprId callee, std::vector<ExprId> args) {
+    ExprId AstBuilder::call(ExprId callee, memory::DynArray<ExprId> args) {
         return addExpr(CallNode{callee, std::move(args)});
     }
 
-    ExprId AstBuilder::block(std::vector<StmtId> stmts, ExprId trailing) {
+    ExprId AstBuilder::block(memory::DynArray<StmtId> stmts, ExprId trailing) {
         return addExpr(BlockNode{std::move(stmts), trailing});
     }
 
@@ -87,16 +87,16 @@ namespace zith::ast {
     }
 
     DeclId
-    AstBuilder::fnDecl(std::string_view name, std::vector<std::string_view> params, ExprId body) {
+    AstBuilder::fnDecl(std::string_view name, memory::DynArray<std::string_view> params, ExprId body) {
         return addDecl(FnDeclNode{name, std::move(params), body});
     }
 
     DeclId AstBuilder::structDecl(std::string_view name,
-                                  std::vector<std::pair<std::string_view, uint32_t>> fields) {
+                                  memory::DynArray<std::pair<std::string_view, uint32_t>> fields) {
         return addDecl(StructDeclNode{name, std::move(fields)});
     }
 
-    DeclId AstBuilder::importDecl(std::vector<std::string_view> path, std::string_view alias) {
+    DeclId AstBuilder::importDecl(memory::DynArray<std::string_view> path, std::string_view alias) {
         return addDecl(ImportNode{std::move(path), alias});
     }
 

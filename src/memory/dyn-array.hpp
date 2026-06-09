@@ -2,6 +2,7 @@
 #include "memory/arena.hpp"
 
 #include <cstddef>
+#include <initializer_list>
 #include <type_traits>
 #include <utility>
 
@@ -15,8 +16,14 @@ namespace zith::memory {
 
     public:
         explicit DynArray(Arena &arena) noexcept : arena_(&arena) {}
+        DynArray() noexcept : arena_(&SessionArena) {}
+        DynArray(std::initializer_list<T> init) : arena_(&SessionArena) {
+            reserve(init.size());
+            for (const auto &v : init) push(v);
+        }
 
         ~DynArray() noexcept {
+            if (!data_) return;
             if constexpr (!std::is_trivially_destructible_v<T>) {
                 for (size_t i = 0; i < size_; i++) {
                     data_[i].~T();
@@ -114,6 +121,22 @@ namespace zith::memory {
         }
         [[nodiscard]] auto empty() const noexcept -> bool {
             return size_ == 0;
+        }
+
+        void clear() noexcept {
+            if constexpr (!std::is_trivially_destructible_v<T>) {
+                for (size_t i = 0; i < size_; i++) {
+                    data_[i].~T();
+                }
+            }
+            size_ = 0;
+        }
+
+        auto back() noexcept -> T & {
+            return data_[size_ - 1];
+        }
+        auto back() const noexcept -> const T & {
+            return data_[size_ - 1];
         }
 
         auto operator[](size_t index) -> T & {

@@ -5,7 +5,7 @@
 #include "memory/result.hpp"
 #include <string>
 
-namespace zith::parser {
+namespace zith::memory {
 
     using ByteOffset = uint32_t;
     using FileId     = uint32_t;
@@ -23,10 +23,9 @@ namespace zith::parser {
         ByteOffset end;
 
         // Simplificado para usar o template default <T>
-        auto len() const noexcept -> zith::memory::Result<size_t> {
+        auto len() const noexcept -> Result<size_t> {
             if (end < start) {
-                return zith::memory::Result<size_t>(
-                        zith::memory::Error{"end lesser than start"});
+                return Result<size_t>(Error{"end lesser than start"});
             }
             return static_cast<size_t>(end - start);
         }
@@ -40,20 +39,18 @@ namespace zith::parser {
         }
 
         // Simplificado para usar o template default <Span>
-        auto merge(const Span &other) const noexcept -> zith::memory::Result<Span> {
+        auto merge(const Span &other) const noexcept -> Result<Span> {
             if (file != other.file) {
-                return zith::memory::Result<Span>(
-                        zith::memory::Error{"Cannot merge spans from different files"});
+                return Result<Span>(Error{"Cannot merge spans from different files"});
             }
 
             bool overlaps = (start <= other.end) && (other.start <= end);
             if (!overlaps) {
-                return zith::memory::Result<Span>(
-                        zith::memory::Error{"Spans are disjoint and cannot be merged"});
+                return Result<Span>(Error{"Spans are disjoint and cannot be merged"});
             }
 
             return Span{file, std::min(start, other.start), std::max(end, other.end)};
         }
     };
 
-} // namespace zith::parser
+} // namespace zith::memory

@@ -17,7 +17,7 @@ namespace zith::types {
         TypeId internFloat(FloatWidth w);
         TypeId internPtr(TypeId pointee);
         TypeId internArray(TypeId elem, uint32_t count);
-        TypeId internFn(std::vector<TypeId> params, TypeId ret);
+        TypeId internFn(memory::DynArray<TypeId> params, TypeId ret);
 
         const TypeData &lookup(TypeId id) const;
         TypeKind kindOf(TypeId id) const;

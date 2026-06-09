@@ -5,7 +5,7 @@
 #include "cli/pipeline-plan.hpp"
 #include "ast/ast-builder.hpp"
 #include "lexer/token.hpp"
-#include "parser/source-map.hpp"
+#include "memory/source-map.hpp"
 #include "zir/hir/hir-module.hpp"
 #include "zir/mir/mir-module.hpp"
 #include "import/symbol-table.hpp"
@@ -51,7 +51,7 @@ class CompilationSession {
     zir::hir::HirModule hir_module_;
     zir::mir::MirModule mir_module_;
 
-    parser::FileId file_id_ = 0;
+    memory::FileId file_id_ = 0;
     lexer::TokenStream tokens_{};
     ast::DeclId program_ = ast::kInvalidDecl;
 

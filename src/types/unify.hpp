@@ -10,7 +10,7 @@ namespace zith::types {
     class Unifier {
         TypeIntern &intern_;
         diagnostics::DiagnosticEngine &diags_;
-        std::vector<TypeId> subst_;
+        memory::DynArray<TypeId> subst_;
 
     public:
         Unifier(TypeIntern &intern, diagnostics::DiagnosticEngine &diags);

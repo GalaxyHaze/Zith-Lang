@@ -1,18 +1,14 @@
 #pragma once
 #include "mio/mmap.hpp"
 #include "span.hpp"
+#include "memory/dyn-array.hpp"
 
-#include <string>
-#include <string_view>
-#include <variant>
-#include <vector>
-
-namespace zith::parser {
+namespace zith::memory {
 
     struct SourceLoc {
         std::variant<mio::mmap_source, mio::mmap_sink, std::string> file;
         std::string path;
-        std::vector<ByteOffset> line_starts;
+        memory::DynArray<ByteOffset> line_starts;
 
         std::string_view getSlice() const;
 
@@ -26,14 +22,14 @@ namespace zith::parser {
 
         // Cria um sub-SourceLoc baseado em limites de bytes
         auto slice(const ByteOffset start, const ByteOffset end) const
-                -> zith::memory::Result<std::string_view, zith::memory::Error>;
+                -> Result<std::string_view, Error>;
 
         // Extrai o conteúdo textual exato apontado por um Span
         auto snippet(const Span &span) const noexcept
-                -> zith::memory::Result<std::string_view, zith::memory::Error>;
+                -> Result<std::string_view, Error>;
 
         // Retorna apenas o nome do ficheiro, ignorando as diretorias
         auto filename() const noexcept -> std::string_view;
     };
 
-} // namespace zith::parser
+} // namespace zith::memory

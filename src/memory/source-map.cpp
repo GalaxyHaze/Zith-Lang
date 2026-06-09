@@ -1,13 +1,13 @@
 #include "source-map.hpp"
 
-#include "parser/source-file.hpp"
-#include "parser/span.hpp"
+#include "memory/source-file.hpp"
+#include "memory/span.hpp"
 #include "memory/result.hpp"
 
 #include <mutex>
 #include <shared_mutex>
 
-namespace zith::parser {
+namespace zith::memory {
 
     static bool is_valid_utf8(std::string_view s) noexcept {
         for (size_t i = 0; i < s.size(); i++) {
@@ -33,10 +33,10 @@ namespace zith::parser {
         return true;
     }
 
-    zith::memory::Result<FileId> SourceMap::add_file(const std::string_view path,
+    Result<FileId> SourceMap::add_file(const std::string_view path,
                                                           const std::string_view content) {
         if (!is_valid_utf8(content))
-            return zith::memory::Error{"File is not valid UTF-8"};
+            return Error{"File is not valid UTF-8"};
 
         {
             std::shared_lock lock(rw_mutex);
@@ -63,8 +63,8 @@ namespace zith::parser {
 
         FileId id = static_cast<FileId>(files.size());
         cache.emplace(path, id);
-        files.emplace_back(std::string(content), std::string(path));
-        files.back().buildLines();
+        auto &loc = files.emplace(std::string(content), std::string(path));
+        loc.buildLines();
         return id;
     }
 
@@ -74,7 +74,7 @@ namespace zith::parser {
     }
 
     [[nodiscard]] auto SourceMap::load_file(const std::string_view path, const bool write)
-            -> zith::memory::Result<FileId> {
+            -> Result<FileId> {
         {
             std::shared_lock lock(rw_mutex);
             auto it = cache.find(std::string(path));
@@ -93,40 +93,40 @@ namespace zith::parser {
         if (write) {
             auto file = mio::make_mmap_sink(std::string(path), error);
             if (error)
-                return zith::memory::Error{error.message()};
+                return Error{error.message()};
 
             auto view = std::string_view{file.data(), file.size()};
             if (!is_valid_utf8(view))
-                return zith::memory::Error{"File is not valid UTF-8"};
+                return Error{"File is not valid UTF-8"};
 
             SourceLoc loc{std::move(file), std::string(path), {}};
             loc.buildLines();
 
             FileId id = static_cast<FileId>(files.size());
             cache.emplace(path, id);
-            files.emplace_back(std::move(loc));
+            files.emplace(std::move(loc));
             return id;
         } else {
             auto file = mio::make_mmap_source(std::string(path), error);
             if (error)
-                return zith::memory::Error{error.message()};
+                return Error{error.message()};
 
             auto view = std::string_view{file.data(), file.size()};
             if (!is_valid_utf8(view))
-                return zith::memory::Error{"File is not valid UTF-8"};
+                return Error{"File is not valid UTF-8"};
 
             SourceLoc loc{std::move(file), std::string(path), {}};
             loc.buildLines();
 
             FileId id = static_cast<FileId>(files.size());
             cache.emplace(path, id);
-            files.emplace_back(std::move(loc));
+            files.emplace(std::move(loc));
             return id;
         }
     }
 
     auto SourceMap::get(FileId id) noexcept
-            -> zith::memory::Optional<std::reference_wrapper<SourceLoc>> {
+            -> Optional<std::reference_wrapper<SourceLoc>> {
         std::shared_lock lock(rw_mutex);
         if (id < files.size()) {
             return std::ref(files[id]);
@@ -134,10 +134,10 @@ namespace zith::parser {
         return nullptr;
     }
 
-    auto SourceMap::snippet(const Span &a) noexcept -> zith::memory::Result<std::string_view> {
+    auto SourceMap::snippet(const Span &a) noexcept -> Result<std::string_view> {
         std::shared_lock lock(rw_mutex);
         if (a.file >= files.size()) {
-            return zith::memory::Error{"Invalid File ID in Span"};
+            return Error{"Invalid File ID in Span"};
         }
         return files[a.file].snippet(a);
     }
@@ -150,4 +150,4 @@ namespace zith::parser {
         return files[a.file].loc(a.start);
     }
 
-} // namespace zith::parser
+} // namespace zith::memory

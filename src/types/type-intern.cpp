@@ -26,7 +26,7 @@ namespace zith::types {
         (void)count;
         return kErrorType;
     }
-    TypeId TypeIntern::internFn(std::vector<TypeId> params, TypeId ret) {
+    TypeId TypeIntern::internFn(memory::DynArray<TypeId> params, TypeId ret) {
         (void)params;
         (void)ret;
         return kErrorType;

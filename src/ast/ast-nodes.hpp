@@ -1,6 +1,7 @@
 #pragma once
 
 #include "ast/ast-ids.hpp"
+#include "memory/dyn-array.hpp"
 
 #include <cstdint>
 #include <string_view>
@@ -50,7 +51,7 @@ namespace zith::ast {
 
     struct CallNode {
         ExprId callee;
-        std::vector<ExprId> args;
+        memory::DynArray<ExprId> args;
     };
 
     struct IdentNode {
@@ -69,7 +70,7 @@ namespace zith::ast {
     
 
     struct BlockNode {
-        std::vector<StmtId> stmts;
+        memory::DynArray<StmtId> stmts;
         ExprId trailing = kInvalidExpr;
     };
 
@@ -96,22 +97,22 @@ namespace zith::ast {
 
     struct FnDeclNode {
         std::string_view name;
-        std::vector<std::string_view> params;
+        memory::DynArray<std::string_view> params;
         ExprId body = kInvalidExpr;
     };
 
     struct StructDeclNode {
         std::string_view name;
-        std::vector<std::pair<std::string_view, uint32_t>> fields;
+        memory::DynArray<std::pair<std::string_view, uint32_t>> fields;
     };
 
     struct ImportNode {
-        std::vector<std::string_view> path;
+        memory::DynArray<std::string_view> path;
         std::string_view alias;
     };
 
     struct ProgramNode {
-        std::vector<DeclId> decls;
+        memory::DynArray<DeclId> decls;
     };
 
     using ExprNode = std::variant<LitValue,

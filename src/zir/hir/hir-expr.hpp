@@ -59,7 +59,7 @@ namespace zith::zir::hir {
     };
     struct HirCall {
         HirExprId callee;
-        std::vector<HirExprId> args;
+        memory::DynArray<HirExprId> args;
     };
     struct HirRet {
         HirExprId value;
@@ -73,7 +73,7 @@ namespace zith::zir::hir {
         HirDeclId target;
     };
     struct HirPhi {
-        std::vector<HirExprId> incoming;
+        memory::DynArray<HirExprId> incoming;
     };
 
     using HirExpr = std::variant<HirLiteral,

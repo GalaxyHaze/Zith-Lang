@@ -10,11 +10,11 @@
 namespace zith::diagnostics {
 
     class DiagnosticEngine {
-        std::vector<Diagnostic> diagnostics_;
+        memory::DynArray<Diagnostic> diagnostics_;
 
     public:
         void report(Diagnostic diag);
-        void report(Severity sev, uint32_t code, std::string msg, parser::Span span);
+        void report(Severity sev, uint32_t code, std::string msg, memory::Span span);
 
         void emit() const;
         void emitTo(std::string_view source_text) const;

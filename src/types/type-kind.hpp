@@ -26,10 +26,10 @@ namespace zith::types {
         uint32_t count;
     };
     struct TypeStruct {
-        std::vector<TypeId> fields;
+        memory::DynArray<TypeId> fields;
     };
     struct TypeFn {
-        std::vector<TypeId> params;
+        memory::DynArray<TypeId> params;
         TypeId ret;
     };
     struct TypeTypeVar {

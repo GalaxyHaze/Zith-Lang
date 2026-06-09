@@ -2,9 +2,9 @@
 
 #include "diagnostics/error-codes.hpp"
 #include "lexer/keyword-table.hpp"
-#include "parser/source-file.hpp"
-#include "parser/source-map.hpp"
-#include "parser/span.hpp"
+#include "memory/source-file.hpp"
+#include "memory/source-map.hpp"
+#include "memory/span.hpp"
 
 #include <cctype>
 #include <cstdint>
@@ -93,12 +93,12 @@ namespace zith::lexer {
         return false;
     }
 
-    parser::Span Lexer::spanAt(const char *p) const noexcept {
+    memory::Span Lexer::spanAt(const char *p) const noexcept {
         auto off = static_cast<uint32_t>(p - start);
         return {gId, off, off + 1};
     }
 
-    parser::Span Lexer::spanRange(const char *b, const char *e) const noexcept {
+    memory::Span Lexer::spanRange(const char *b, const char *e) const noexcept {
         return {gId,
                 static_cast<uint32_t>(b - start),
                 static_cast<uint32_t>(e - start)};
@@ -284,19 +284,19 @@ namespace zith::lexer {
 
     Lexer::Lexer(diagnostics::DiagnosticEngine &diags) : diags_(diags), tokens(memory::SessionArena) {}
 
-    auto Lexer::run(std::variant<parser::FileId, std::pair<std::string_view, std::string>> input)
+    auto Lexer::run(std::variant<memory::FileId, std::pair<std::string_view, std::string>> input)
             -> memory::Result<TokenStream> {
 
-        if (auto *id = std::get_if<parser::FileId>(&input)) {
+        if (auto *id = std::get_if<memory::FileId>(&input)) {
             gId = *id;
         } else {
             auto &[name, content] = std::get<std::pair<std::string_view, std::string>>(input);
-            if (auto i = parser::SourceMap::add_file(name, content)) {
+            if (auto i = memory::SourceMap::add_file(name, content)) {
                 gId = i.value();
             }
         }
 
-        if (auto i = parser::SourceMap::get(gId)) {
+        if (auto i = memory::SourceMap::get(gId)) {
             file = &i.value().get();
         }
 
@@ -392,9 +392,9 @@ namespace zith::lexer {
         return TokenStream{tokens.data(), static_cast<uint32_t>(tokens.size()), 0};
     }
 
-    auto tokenize(parser::FileId id, diagnostics::DiagnosticEngine &diags) -> memory::Result<TokenStream> {
+    auto tokenize(memory::FileId id, diagnostics::DiagnosticEngine &diags) -> memory::Result<TokenStream> {
         Lexer lexer(diags);
-        return lexer.run(std::variant<parser::FileId, std::pair<std::string_view, std::string>>(id));
+        return lexer.run(std::variant<memory::FileId, std::pair<std::string_view, std::string>>(id));
     }
 
     auto tokenize(std::string_view name, std::string content, diagnostics::DiagnosticEngine &diags) -> memory::Result<TokenStream> {
@@ -499,7 +499,7 @@ namespace zith::lexer {
     void printTokens(const TokenStream &stream) noexcept {
         for (uint32_t i = 0; i < stream.len; ++i) {
             const auto &tok = stream.src[i];
-            auto res        = parser::SourceMap::snippet(tok.span);
+            auto res        = memory::SourceMap::snippet(tok.span);
             auto lexeme     = res.isOk() ? res.value() : std::string_view{};
             printf("  %-16s \"%.*s\"  [%u..%u]\n",
                    tokenKindName(tok.kind),

@@ -51,12 +51,12 @@ namespace zith::zir::mir {
     struct MirInst {
         MirOpcode opcode;
         hir::HirTypeId type;
-        std::vector<MirOperand> operands;
+        memory::DynArray<MirOperand> operands;
     };
 
     struct MirBasicBlock {
         BlockId id;
-        std::vector<MirInst> insts;
+        memory::DynArray<MirInst> insts;
         MirInst terminator;
     };
 

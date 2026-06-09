@@ -1,8 +1,8 @@
 #include "diagnostic-engine.hpp"
 #include "diagnostics/diagnostic.hpp"
 #include "diagnostics/error-codes.hpp"
-#include "parser/source-map.hpp"
-#include "parser/source-file.hpp"
+#include "memory/source-map.hpp"
+#include "memory/source-file.hpp"
 
 #include <cstdio>
 #include <string>
@@ -17,7 +17,7 @@ namespace {
         std::string_view text;
     };
 
-    LineInfo findLine(std::string_view source, parser::ByteOffset offset) {
+    LineInfo findLine(std::string_view source, memory::ByteOffset offset) {
         size_t start = offset;
         while (start > 0 && source[start - 1] != '\n')
             start--;
@@ -58,8 +58,8 @@ namespace {
             }
 
             // Location via SourceMap (file:line:col)
-            auto loc = parser::SourceMap::loc(d.primary);
-            auto maybe_src = parser::SourceMap::get(d.primary.file);
+            auto loc = memory::SourceMap::loc(d.primary);
+            auto maybe_src = memory::SourceMap::get(d.primary.file);
             if (maybe_src.isValid()) {
                 auto &src = maybe_src.value().get();
                 std::fprintf(stderr, "  --> %s:%u:%u\n",
@@ -98,14 +98,14 @@ namespace {
             std::string_view file_path = "<unknown>";
             std::string_view file_source = source_text;
 
-            auto maybe_src = parser::SourceMap::get(d.primary.file);
+            auto maybe_src = memory::SourceMap::get(d.primary.file);
             if (maybe_src.isValid()) {
                 auto &src = maybe_src.value().get();
                 file_path = src.path;
                 file_source = src.getSlice();
             }
 
-            auto loc = parser::SourceMap::loc(d.primary);
+            auto loc = memory::SourceMap::loc(d.primary);
             std::fprintf(stderr, "  --> %s:%u:%u\n",
                          std::string(file_path).c_str(), loc.line, loc.col);
 
@@ -152,7 +152,7 @@ namespace {
                 for (auto &lbl : d.labels) {
                     if (lbl.span.start == d.primary.start && lbl.span.end == d.primary.end)
                         continue;
-                    auto lbl_loc = parser::SourceMap::loc(lbl.span);
+                    auto lbl_loc = memory::SourceMap::loc(lbl.span);
                     std::fprintf(stderr, "     = note: %s (at %u:%u)\n",
                                  lbl.message.c_str(), lbl_loc.line, lbl_loc.col);
                 }

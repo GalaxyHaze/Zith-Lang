@@ -3,14 +3,16 @@
 namespace zith::diagnostics {
 
     void DiagnosticEngine::report(Diagnostic diag) {
-        diagnostics_.push_back(std::move(diag));
+        diagnostics_.push(std::move(diag));
     }
 
     void DiagnosticEngine::report(Severity sev,
-                                  uint32_t code,
-                                  std::string msg,
-                                  parser::Span span) {
-        diagnostics_.push_back({sev, code, std::move(msg), span, {}});
+                                   uint32_t code,
+                                   std::string msg,
+                                   memory::Span span) {
+        diagnostics_.emplace(sev, code, std::move(msg), span,
+                             memory::DynArray<Label>{},
+                             memory::DynArray<std::string>{});
     }
 
     bool DiagnosticEngine::hasErrors() const noexcept {
@@ -21,7 +23,7 @@ namespace zith::diagnostics {
     }
 
     std::span<const Diagnostic> DiagnosticEngine::all() const noexcept {
-        return diagnostics_;
+        return {diagnostics_.data(), diagnostics_.size()};
     }
 
     

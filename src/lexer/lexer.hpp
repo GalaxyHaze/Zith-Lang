@@ -9,19 +9,19 @@
 #include <utility>
 #include <variant>
 
-namespace zith::parser {
+namespace zith::memory {
     struct SourceLoc;
 }
 
 namespace zith::lexer {
 
     class Lexer {
-            parser::SourceLoc *file   = nullptr;
-            parser::FileId gId        = 0;
+            memory::SourceLoc *file   = nullptr;
+            memory::FileId gId        = 0;
             const char *start = nullptr;
             const char *now   = nullptr;
             const char *end   = nullptr;
-            parser::Loc loc{};
+            memory::Loc loc{};
 
             diagnostics::DiagnosticEngine &diags_;
             memory::DynArray<Token> tokens;
@@ -42,16 +42,16 @@ namespace zith::lexer {
             void processString();
             void processIdentifier();
 
-            parser::Span spanAt(const char *p) const noexcept;
-            parser::Span spanRange(const char *b, const char *e) const noexcept;
+            memory::Span spanAt(const char *p) const noexcept;
+            memory::Span spanRange(const char *b, const char *e) const noexcept;
 
         public:
             explicit Lexer(diagnostics::DiagnosticEngine &diags);
-            auto run(std::variant<parser::FileId, std::pair<std::string_view, std::string>> input)
+            auto run(std::variant<memory::FileId, std::pair<std::string_view, std::string>> input)
                     -> memory::Result<TokenStream>;
         };
 
-        [[nodiscard]] auto tokenize(parser::FileId id, diagnostics::DiagnosticEngine &diags) -> memory::Result<TokenStream>;
+        [[nodiscard]] auto tokenize(memory::FileId id, diagnostics::DiagnosticEngine &diags) -> memory::Result<TokenStream>;
 
         auto tokenize(std::string_view, std::string, diagnostics::DiagnosticEngine &diags) -> memory::Result<TokenStream>;
 

@@ -1,7 +1,7 @@
 #include "source-file.hpp"
 #include <string_view>
 
-namespace zith::parser {
+namespace zith::memory {
 
     std::string_view SourceLoc::getSlice() const {
         return std::visit(
@@ -15,12 +15,12 @@ namespace zith::parser {
     // Reconstrói o mapa de linhas. OBRIGATÓRIO chamar após carregar o content.
     void SourceLoc::buildLines() noexcept {
         line_starts.clear();
-        line_starts.push_back(0); // Linha 1 começa no índice 0
+        line_starts.push(0); // Linha 1 começa no índice 0
         auto content = getSlice();
 
         for (ByteOffset i = 0; i < content.size(); i++) {
             if (content[i] == '\n') {
-                line_starts.push_back(i + 1); // Próxima linha começa após o '\n'
+                line_starts.push(i + 1); // Próxima linha começa após o '\n'
             }
         }
     }
@@ -43,23 +43,21 @@ namespace zith::parser {
 
     // Cria um sub-SourceLoc baseado em limites de bytes
     auto SourceLoc::slice(const ByteOffset start, const ByteOffset end) const
-            -> zith::memory::Result<std::string_view, zith::memory::Error> {
+            -> Result<std::string_view, Error> {
         auto content = getSlice();
 
         if (start >= content.size() || end > content.size() || start > end) {
-            return zith::memory::Result<std::string_view, zith::memory::Error>(
-                    zith::memory::Error{"Invalid slice boundaries"});
+            return Result<std::string_view, Error>(Error{"Invalid slice boundaries"});
         }
         return content.substr(start, end - start);
     }
 
     // Extrai o conteúdo textual exato apontado por um Span
     auto SourceLoc::snippet(const Span &span) const noexcept
-            -> zith::memory::Result<std::string_view, zith::memory::Error> {
+            -> Result<std::string_view, Error> {
         auto content = getSlice();
         if (span.start >= content.size() || span.end > content.size() || span.start > span.end) {
-            return zith::memory::Result<std::string_view, zith::memory::Error>(
-                    zith::memory::Error{"Span out of file bounds"});
+            return Result<std::string_view, Error>(Error{"Span out of file bounds"});
         }
         return std::string_view{content.data() + span.start, span.end - span.start};
     }
@@ -73,4 +71,4 @@ namespace zith::parser {
         return path.substr(last_slash + 1);
     }
 
-} // namespace zith::parser
+} // namespace zith::memory

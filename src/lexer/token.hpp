@@ -1,5 +1,5 @@
 #pragma once
-#include "parser/span.hpp"
+#include "memory/span.hpp"
 
 #include <cstdint>
 #include <string_view>
@@ -56,7 +56,7 @@ namespace zith::lexer {
 
     struct Token {
         // lexeme
-        zith::parser::Span span;
+        zith::memory::Span span;
         // type of token
         TokenKind kind;
 

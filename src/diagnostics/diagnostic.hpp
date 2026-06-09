@@ -1,6 +1,7 @@
 #pragma once
 
-#include "parser/span.hpp"
+#include "memory/span.hpp"
+#include "memory/dyn-array.hpp"
 
 #include <cstdint>
 #include <string>
@@ -11,7 +12,7 @@ namespace zith::diagnostics {
     enum class Severity : uint8_t { Note, Warning, Error, Bug };
 
     struct Label {
-        parser::Span span;
+        memory::Span span;
         std::string message;
     };
 
@@ -19,9 +20,9 @@ namespace zith::diagnostics {
         Severity severity;
         uint32_t code;
         std::string message;
-        parser::Span primary;
-        std::vector<Label> labels;
-        std::vector<std::string> suggestions;
+        memory::Span primary;
+        memory::DynArray<Label> labels;
+        memory::DynArray<std::string> suggestions;
 
         bool isError() const noexcept;
         bool isWarning() const noexcept;

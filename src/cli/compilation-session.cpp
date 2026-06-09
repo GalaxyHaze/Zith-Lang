@@ -1,7 +1,7 @@
 #include "compilation-session.hpp"
 #include "lexer/lexer.hpp"
 #include "parser/parser.hpp"
-#include "parser/source-map.hpp"
+#include "memory/source-map.hpp"
 #include "import/resolver.hpp"
 
 #include <cstdio>
@@ -83,7 +83,7 @@ bool CompilationSession::lexStage() {
         }
     }
 
-    auto file_result = parser::SourceMap::load_file(file_path_);
+    auto file_result = memory::SourceMap::load_file(file_path_);
     if (!file_result) {
         std::fprintf(stderr, "[error] failed to load file '%s'\n", file_path_.c_str());
         return false;
@@ -105,7 +105,7 @@ bool CompilationSession::lexStage() {
 
 bool CompilationSession::parseStage() {
     auto result = parser::parseProgram(tokens_, ast_builder_, diags_);
-    program_ = result.value;
+    program_ = result.value();
 
     if (diags_.hasErrors())
         diags_.emit();
