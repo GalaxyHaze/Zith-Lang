@@ -33,13 +33,13 @@ static void test_symtab_declare() {
     CHECK_EQ(id, SymId(0), "declare returns 0 (stub)");
 }
 
-static void test_symtab_lookup_returns_invalid() {
+static void test_symtab_lookup_finds_declared() {
     Arena arena;
     SymbolTable syms(arena);
 
-    syms.declare("x");
+    auto id = syms.declare("x");
     auto found = syms.lookup("x");
-    CHECK_EQ(found, kInvalidSym, "lookup returns kInvalidSym (stub)");
+    CHECK_EQ(found, id, "lookup finds declared symbol");
 }
 
 static void test_symtab_not_found() {
@@ -116,7 +116,7 @@ int main() {
     std::printf("====================\n\n");
 
     test_symtab_declare();
-    test_symtab_lookup_returns_invalid();
+    test_symtab_lookup_finds_declared();
     test_symtab_not_found();
     test_symtab_scopes();
     test_type_intern_returns_constant_ids();

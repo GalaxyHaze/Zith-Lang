@@ -2,6 +2,7 @@
 #include "memory/source-map.hpp"
 #include "lexer/lexer.hpp"
 #include "diagnostics/error-codes.hpp"
+#include "import/symbol-table.hpp"
 
 #include <string_view>
 #include <vector>
@@ -180,33 +181,220 @@ namespace {
         return bld->fnDecl(name, std::move(params), body);
     }
 
-    ast::DeclId Parser::parseDecl() {
-        if (match(TokenKind::Fn))
-            return parseFnDecl();
+    // ── scan (first pass: register symbols, skip bodies) ───────────────────
 
-        diag->report(Severity::Error, ExpectedExpr,
-                       "expected declaration", peek().span);
-        advance();
-        return kInvalidDecl;
-    }
+    namespace {
 
-    ast::DeclId Parser::parseTopLevel() {
-        ast::DeclId first = kInvalidDecl;
-        while (!eof()) {
-            auto id = parseDecl();
-            if (first == kInvalidDecl)
-                first = id;
+        [[nodiscard]] memory::Span span_from_offset(uint32_t start, uint32_t end) {
+            // Build a Span from token offsets (file_id set by caller).
+            // For now, we use a zero-file placeholder — the caller overwrites it.
+            return {0, start, end};
         }
-        return first;
+
+        uint32_t skip_body_tokens(lexer::TokenStream &tok) {
+            // Count braces to find the end of a function body.
+            // Expects the cursor at '{', returns token offset of the matching '}'.
+            if (tok.is_empty()) return tok.offset;
+            uint32_t depth = 1;
+            tok.advance(); // consume '{'
+            while (!tok.is_empty() && depth > 0) {
+                if (tok.peek().kind == TokenKind::End) break;
+                // Check for brace using lexeme
+                auto res = memory::SourceMap::snippet(tok.peek().span);
+                if (res.isOk()) {
+                    auto s = res.value();
+                    if (s.size() == 1) {
+                        if (s[0] == '{') depth++;
+                        else if (s[0] == '}') depth--;
+                    }
+                }
+                tok.advance();
+            }
+            return tok.offset;
+        }
+
+    } // anonymous namespace
+
+    ScanResult scan(Parser &parser, import::SymbolTable &syms, bool sema) {
+        (void)sema; // used in future for import-only resolution
+        auto &tok = *parser.tok;
+        auto &bld = *parser.bld;
+        auto &diag = *parser.diag;
+        auto &program = parser.program;
+
+        ScanResult result{memory::SessionArena};
+
+        while (!tok.is_empty()) {
+            if (tok.peek().is_eof()) break;
+
+            // ── fn declaration ─────────────────────────────────────────
+            if (tok.peek().is(TokenKind::Fn)) {
+                tok.advance(); // consume 'fn'
+
+                if (!tok.peek().is(TokenKind::Identifier)) {
+                    diag.report(Severity::Error, ExpectedIdent,
+                                "expected function name", tok.peek().span);
+                    tok.advance();
+                    continue;
+                }
+
+                auto name = [&]{
+                    auto res = memory::SourceMap::snippet(tok.peek().span);
+                    return res.isOk() ? res.value() : std::string_view{};
+                }();
+                tok.advance();
+
+                // expected '('
+                if (!(tok.peek().is(TokenKind::Punctuation) &&
+                      [&]{ auto r = memory::SourceMap::snippet(tok.peek().span);
+                           return r.isOk() && r.value() == "("; }())) {
+                    diag.report(Severity::Error, ExpectedExpr,
+                                "expected '(' after function name", tok.peek().span);
+                    continue;
+                }
+                tok.advance(); // consume '('
+
+                // parse params
+                memory::DynArray<std::string_view> params{memory::SessionArena};
+                while (!tok.is_empty()) {
+                    if (tok.peek().is_eof()) break;
+                    if (tok.peek().is(TokenKind::Punctuation) &&
+                        [&]{ auto r = memory::SourceMap::snippet(tok.peek().span);
+                             return r.isOk() && r.value() == ")"; }())
+                        break;
+
+                    if (!tok.peek().is(TokenKind::Identifier)) {
+                        diag.report(Severity::Error, ExpectedIdent,
+                                    "expected parameter name", tok.peek().span);
+                        tok.advance();
+                        continue;
+                    }
+                    {
+                        auto r = memory::SourceMap::snippet(tok.peek().span);
+                        if (r.isOk()) params.push(r.value());
+                    }
+                    tok.advance();
+
+                    // skip optional comma
+                    if (tok.peek().is(TokenKind::Punctuation) &&
+                        [&]{ auto r = memory::SourceMap::snippet(tok.peek().span);
+                             return r.isOk() && r.value() == ","; }())
+                        tok.advance();
+                }
+                // consume ')'
+                if (tok.peek().is(TokenKind::Punctuation) &&
+                    [&]{ auto r = memory::SourceMap::snippet(tok.peek().span);
+                         return r.isOk() && r.value() == ")"; }())
+                    tok.advance();
+
+                // skip body
+                ast::ExprId body_node = kInvalidExpr;
+                uint32_t token_start = 0;
+                uint32_t token_end = 0;
+                memory::Span body_span{};
+
+                if (tok.peek().is(TokenKind::Punctuation) &&
+                    [&]{ auto r = memory::SourceMap::snippet(tok.peek().span);
+                         return r.isOk() && r.value() == "{"; }()) {
+                    token_start = tok.offset;
+                    body_span = tok.peek().span;
+                    token_end = skip_body_tokens(tok);
+                    body_span = {body_span.file, body_span.start, token_end};
+                    body_node = bld.unbody(body_span, token_start, token_end);
+                }
+
+                auto decl = bld.fnDecl(name, std::move(params), body_node);
+                program.decls.push(decl);
+                syms.declare(name);
+
+                result.fns.push({name, body_span, body_node});
+                continue;
+            }
+
+            // ── struct declaration ─────────────────────────────────────
+            if (tok.peek().is(TokenKind::Struct)) {
+                tok.advance(); // consume 'struct'
+
+                if (!tok.peek().is(TokenKind::Identifier)) {
+                    diag.report(Severity::Error, ExpectedIdent,
+                                "expected struct name", tok.peek().span);
+                    tok.advance();
+                    continue;
+                }
+
+                auto name = [&]{
+                    auto res = memory::SourceMap::snippet(tok.peek().span);
+                    return res.isOk() ? res.value() : std::string_view{};
+                }();
+                tok.advance();
+
+                syms.declare(name);
+
+                // skip fields for now
+                result.structs.push({name, {}, kInvalidExpr});
+                continue;
+            }
+
+            // ── import declaration (stub) ───────────────────────────────
+            if (tok.peek().is(TokenKind::Module)) {
+                tok.advance();
+                // skip import path tokens until we hit a newline/semicolon-like boundary
+                while (!tok.is_empty() && !tok.peek().is_eof()) {
+                    if (tok.peek().is(TokenKind::Punctuation) &&
+                        [&]{ auto r = memory::SourceMap::snippet(tok.peek().span);
+                             return r.isOk() && r.value() == ";"; }()) {
+                        tok.advance();
+                        break;
+                    }
+                    tok.advance();
+                }
+                continue;
+            }
+
+            // ── unknown token → skip ───────────────────────────────────
+            diag.report(Severity::Error, ExpectedExpr,
+                        "unexpected token", tok.peek().span);
+            tok.advance();
+        }
+
+        return result;
     }
 
-    // ── public API ─────────────────────────────────────────────────────────
+    // ── expand bodies (second pass: seek + parse real bodies) ──────────────
+
+    void Parser::expandBodies(ScanResult &result) {
+        for (auto &entry : result.fns) {
+            if (entry.body_node == kInvalidExpr)
+                continue;
+
+            // read token offsets from the UnbodyNode
+            auto &unbody = std::get<ast::UnbodyNode>(bld->getExpr(entry.body_node));
+
+            // seek to the start of the body (at '{')
+            tok->offset = unbody.token_start;
+
+            // consume '{' then parse the block body
+            consume('{');
+            auto body_id = parseBlock();
+
+            // replace UnbodyNode with the real parsed body
+            bld->getExpr(entry.body_node) = std::move(bld->getExpr(body_id));
+        }
+
+        // expand struct bodies (field parsing) in the future
+    }
+
+    // ── public API (backward compat) ─────────────────────────────────────
 
     ProgramResult parseProgram(lexer::TokenStream tokens,
                                 ast::AstBuilder &builder,
                                 diagnostics::DiagnosticEngine &diags) {
+        memory::Arena arena;
+        import::SymbolTable syms(arena);
         Parser p{&tokens, &builder, &diags};
-        return p.parseTopLevel();
+        auto result = scan(p, syms);
+        p.expandBodies(result);
+        return std::move(p.program);
     }
 
 } // namespace zith::parser

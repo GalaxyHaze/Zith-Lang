@@ -6,6 +6,7 @@
 #include "ast/ast-builder.hpp"
 #include "lexer/token.hpp"
 #include "memory/source-map.hpp"
+#include "parser/scan-result.hpp"
 #include "zir/hir/hir-module.hpp"
 #include "zir/mir/mir-module.hpp"
 #include "import/symbol-table.hpp"
@@ -53,7 +54,8 @@ class CompilationSession {
 
     memory::FileId file_id_ = 0;
     lexer::TokenStream tokens_{};
-    ast::DeclId program_ = ast::kInvalidDecl;
+    ast::ProgramNode program_{memory::DynArray<ast::DeclId>{ast_arena_}};
+    parser::ScanResult scan_result_{ast_arena_};
 
 public:
     CompilationSession(const Options &opts, std::string file_path);
@@ -68,6 +70,9 @@ public:
 private:
     void setTarget(Stage s) { plan_.target = s; }
     bool lexStage();
+    void scanStage();
+    void expandBodiesStage();
+    void solveStage();
     bool parseStage();
     bool semaStage();
     bool mirStage();

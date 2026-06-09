@@ -5,6 +5,8 @@
 #include "lexer/token.hpp"
 #include "parser/parse-result.hpp"
 #include "parser/recovery.hpp"
+#include "parser/scan-result.hpp"
+#include "import/symbol-table.hpp"
 
 
 namespace zith::parser {
@@ -13,6 +15,7 @@ namespace zith::parser {
         lexer::TokenStream *tok;
         ast::AstBuilder *bld;
         diagnostics::DiagnosticEngine *diag;
+        ast::ProgramNode program;
 
         std::string_view lexeme();
         const lexer::Token &peek();
@@ -31,11 +34,16 @@ namespace zith::parser {
         ast::StmtId parseStmt();
         ast::DeclId parseFnDecl();
         ast::DeclId parseDecl();
-        ast::DeclId parseTopLevel();
+
+        void expandBodies(ScanResult &result);
     };
 
     ProgramResult parseProgram(lexer::TokenStream tokens,
                                 ast::AstBuilder &builder,
                                 diagnostics::DiagnosticEngine &diags);
+
+    ScanResult scan(Parser &parser,
+                    import::SymbolTable &syms,
+                    bool sema = true);
 
 } // namespace zith::parser

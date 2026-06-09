@@ -16,7 +16,7 @@ namespace zith::import {
                  ast::AstBuilder &builder,
                  diagnostics::DiagnosticEngine &diags);
 
-        void resolveProgram(ast::DeclId program);
+        void resolveProgram(ast::ProgramNode &program);
 
     private:
         void resolveDecl(ast::DeclId id);

@@ -47,6 +47,8 @@ namespace zith::ast {
                           memory::DynArray<std::pair<std::string_view, uint32_t>> fields);
         DeclId importDecl(memory::DynArray<std::string_view> path, std::string_view alias = {});
 
+        ExprId unbody(memory::Span body_span, uint32_t token_start, uint32_t token_end);
+
         memory::Arena &arena();
     };
 

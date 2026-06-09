@@ -1,6 +1,7 @@
 #include "compilation-session.hpp"
 #include "lexer/lexer.hpp"
 #include "parser/parser.hpp"
+#include "ast/ast-printer.hpp"
 #include "memory/source-map.hpp"
 #include "import/resolver.hpp"
 
@@ -104,22 +105,47 @@ bool CompilationSession::lexStage() {
 }
 
 bool CompilationSession::parseStage() {
-    auto result = parser::parseProgram(tokens_, ast_builder_, diags_);
-    program_ = result.value();
+    scanStage();
+    if (diags_.hasErrors()) { diags_.emit(); return false; }
 
-    if (diags_.hasErrors())
-        diags_.emit();
+    expandBodiesStage();
+    if (diags_.hasErrors()) { diags_.emit(); return false; }
 
-    return !diags_.hasErrors();
+    solveStage();
+    if (diags_.hasErrors()) { diags_.emit(); return false; }
+
+    if (opts_.emit_ast) {
+        std::printf("--- AST ---\n");
+        ast::printAST(program_, ast_builder_);
+        std::printf("--- Symbols ---\n");
+        syms_.dump();
+        std::printf("---\n");
+    }
+
+    return true;
+}
+
+void CompilationSession::scanStage() {
+    parser::Parser parser(&tokens_, &ast_builder_, &diags_);
+    scan_result_ = parser::scan(parser, syms_);
+    program_ = std::move(parser.program);
+}
+
+void CompilationSession::expandBodiesStage() {
+    parser::Parser parser(&tokens_, &ast_builder_, &diags_);
+    parser.program = std::move(program_);
+    parser.expandBodies(scan_result_);
+    program_ = std::move(parser.program);
+}
+
+void CompilationSession::solveStage() {
+    // TODO: generics, macros, comptime
 }
 
 bool CompilationSession::semaStage() {
-    // TODO: wire up import resolution, type checker, HIR lowering
+    // TODO: wire up type checker, HIR lowering
     // Thread-safety: each session owns its own SymbolTable, TypeIntern,
     // and HirModule — safe to parallelize across files.
-    import::Resolver resolver(syms_, ast_builder_, diags_);
-    resolver.resolveProgram(program_);
-
     if (diags_.hasErrors()) {
         diags_.emit();
         return false;

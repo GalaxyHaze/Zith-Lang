@@ -2,7 +2,8 @@
 
 namespace zith::import {
 
-    SymbolTable::SymbolTable(memory::Arena &arena) : arena_(&arena), scopes_(arena) {
+    SymbolTable::SymbolTable(memory::Arena &arena) :
+        arena_(&arena), scopes_(arena), symbols_(arena) {
         scopes_.emplace(Scope{kInvalidScope, memory::DynArray<SymId>(arena)});
         current_ = kRootScope;
     }
@@ -25,19 +26,56 @@ namespace zith::import {
     }
 
     SymId SymbolTable::declare(std::string_view name) {
-        (void)name;
-        return 0;
+        SymId id = static_cast<SymId>(symbols_.size());
+        symbols_.push(SymbolData{name, current_});
+        scopes_[current_].syms.push(id);
+        return id;
     }
 
     SymId SymbolTable::lookup(std::string_view name) const {
-        (void)name;
+        ScopeId scope = current_;
+        while (scope != kInvalidScope) {
+            for (auto sid : scopes_[scope].syms) {
+                if (symbols_[sid].name == name)
+                    return sid;
+            }
+            scope = scopes_[scope].parent;
+        }
         return kInvalidSym;
     }
 
     SymId SymbolTable::lookupInScope(std::string_view name, ScopeId scope) const {
-        (void)name;
-        (void)scope;
+        for (auto sid : scopes_[scope].syms) {
+            if (symbols_[sid].name == name)
+                return sid;
+        }
         return kInvalidSym;
+    }
+
+    const SymbolData &SymbolTable::get(SymId id) const {
+        return symbols_[id];
+    }
+
+    ScopeId SymbolTable::scopeCount() const noexcept {
+        return static_cast<ScopeId>(scopes_.size());
+    }
+
+    void SymbolTable::dump(FILE *out) const {
+        std::fprintf(out, "SymbolTable (%zu symbols, %zu scopes):\n",
+                     symbols_.size(), scopes_.size());
+        for (ScopeId s = 0; s < static_cast<ScopeId>(scopes_.size()); ++s) {
+            auto &scope = scopes_[s];
+            if (scope.parent == kInvalidScope)
+                std::fprintf(out, "  Scope %u (root)\n", s);
+            else
+                std::fprintf(out, "  Scope %u (parent %u)\n", s, scope.parent);
+            for (auto sid : scope.syms) {
+                std::fprintf(out, "    [%u] %.*s\n",
+                             sid,
+                             (int)symbols_[sid].name.size(),
+                             symbols_[sid].name.data());
+            }
+        }
     }
 
 } // namespace zith::import

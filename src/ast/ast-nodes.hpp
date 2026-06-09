@@ -1,6 +1,7 @@
 #pragma once
 
 #include "ast/ast-ids.hpp"
+#include "memory/span.hpp"
 #include "memory/dyn-array.hpp"
 
 #include <cstdint>
@@ -111,6 +112,12 @@ namespace zith::ast {
         std::string_view alias;
     };
 
+    struct UnbodyNode {
+        memory::Span body_span;
+        uint32_t token_start;
+        uint32_t token_end;
+    };
+
     struct ProgramNode {
         memory::DynArray<DeclId> decls;
     };
@@ -123,7 +130,8 @@ namespace zith::ast {
                                   BlockNode,
                                   IfNode,
                                   FieldNode,
-                                  IndexNode>;
+                                  IndexNode,
+                                  UnbodyNode>;
 
     using StmtNode = std::variant<LetNode, AssignNode, RetNode, ExprId>;
 

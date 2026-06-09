@@ -100,6 +100,10 @@ namespace zith::ast {
         return addDecl(ImportNode{std::move(path), alias});
     }
 
+    ExprId AstBuilder::unbody(memory::Span body_span, uint32_t token_start, uint32_t token_end) {
+        return addExpr(UnbodyNode{body_span, token_start, token_end});
+    }
+
     memory::Arena &AstBuilder::arena() {
         return memory::SessionArena;
     }
