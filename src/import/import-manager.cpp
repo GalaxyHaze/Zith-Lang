@@ -359,7 +359,7 @@ void ImportManager::mergeInto(SymbolTable &main_syms, int32_t from_depth) {
         // ── Merge own symbols ──────────────────────────────────────
         auto merge_sym = [&](SymId sid, bool is_module, int32_t mod_depth) {
             auto &data = file.symbols.get(sid);
-            if (is_module && data.mod_depth >= 0 && call_depth > data.mod_depth)
+            if (is_module && data.mod_depth >= 0 && call_depth != data.mod_depth)
                 return;
             auto vis = is_module ? SymbolVisibility::Module : SymbolVisibility::Public;
             auto depth = is_module ? data.mod_depth : 0;
@@ -415,7 +415,7 @@ void ImportManager::mergeInto(SymbolTable &main_syms, int32_t from_depth) {
             }
             for (auto sid : ref.module_syms) {
                 auto &data = ref.symbols.get(sid);
-                if (data.mod_depth >= 0 && call_depth > data.mod_depth)
+                if (data.mod_depth >= 0 && call_depth != data.mod_depth)
                     continue;
                 if (file.is_from) {
                     declare_or_diag(arena_str(arena_, std::string(data.name)),
