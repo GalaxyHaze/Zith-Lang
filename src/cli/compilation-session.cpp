@@ -4,6 +4,7 @@
 #include "ast/ast-printer.hpp"
 #include "memory/source-map.hpp"
 #include "import/resolver.hpp"
+#include "diagnostics/error-codes.hpp"
 
 #include <cstdio>
 #include <filesystem>
@@ -122,6 +123,9 @@ bool CompilationSession::parseStage() {
     expandBodiesStage();
     if (diags_.hasErrors()) { diags_.emit(); return false; }
 
+    importStage();
+    if (diags_.hasErrors()) { diags_.emit(); return false; }
+
     solveStage();
     if (diags_.hasErrors()) { diags_.emit(); return false; }
 
@@ -133,6 +137,26 @@ bool CompilationSession::parseStage() {
         std::printf("---\n");
     }
 
+    return true;
+}
+
+bool CompilationSession::importStage() {
+    import::ImportManager import_mgr{sym_arena_, opts_, diags_};
+
+    for (auto decl_id : program_.decls) {
+        auto &decl = ast_builder_.getDecl(decl_id);
+        if (auto *import = std::get_if<ast::ImportNode>(&decl)) {
+            auto res = import_mgr.resolve(import->path, import->is_from);
+            if (!res) {
+                diags_.report(diagnostics::Severity::Error,
+                              diagnostics::err::ExpectedExpr,
+                              std::string(res.error().msg), {});
+                continue;
+            }
+        }
+    }
+
+    import_mgr.mergeInto(syms_);
     return true;
 }
 

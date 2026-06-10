@@ -10,6 +10,7 @@
 #include "zir/hir/hir-module.hpp"
 #include "zir/mir/mir-module.hpp"
 #include "import/symbol-table.hpp"
+#include "import/import-manager.hpp"
 #include "types/type-intern.hpp"
 
 #include <string>
@@ -74,6 +75,7 @@ private:
     void expandBodiesStage();
     void solveStage();
     bool parseStage();
+    bool importStage();
     bool semaStage();
     bool mirStage();
     bool zirStage();

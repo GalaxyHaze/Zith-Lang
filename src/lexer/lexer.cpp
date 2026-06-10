@@ -359,7 +359,7 @@ namespace zith::lexer {
                 const auto before = now;
                 loc.col++;
                 now++;
-                tokens.emplace(spanRange(before, now), TokenKind::Operators);
+                tokens.emplace(spanRange(before, now), TokenKind::Operators, *before);
                 continue;
             }
 
@@ -367,7 +367,7 @@ namespace zith::lexer {
                 const auto before = now;
                 loc.col++;
                 now++;
-                tokens.emplace(spanRange(before, now), TokenKind::Punctuation);
+                tokens.emplace(spanRange(before, now), TokenKind::Punctuation, *before);
                 continue;
             }
 
@@ -389,7 +389,7 @@ namespace zith::lexer {
         if (diags_.hasErrors())
             return memory::Error{"tokenization failed — see diagnostics for details"};
 
-        return TokenStream{tokens.data(), static_cast<uint32_t>(tokens.size()), 0};
+        return TokenStream{tokens.data(), static_cast<uint32_t>(tokens.size()), 0, start};
     }
 
     auto tokenize(memory::FileId id, diagnostics::DiagnosticEngine &diags) -> memory::Result<TokenStream> {
@@ -499,8 +499,7 @@ namespace zith::lexer {
     void printTokens(const TokenStream &stream) noexcept {
         for (uint32_t i = 0; i < stream.len; ++i) {
             const auto &tok = stream.src[i];
-            auto res        = memory::SourceMap::snippet(tok.span);
-            auto lexeme     = res.isOk() ? res.value() : std::string_view{};
+            auto lexeme     = stream.lexeme(tok);
             printf("  %-16s \"%.*s\"  [%u..%u]\n",
                    tokenKindName(tok.kind),
                    (int)lexeme.size(),

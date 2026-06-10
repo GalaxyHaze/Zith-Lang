@@ -110,6 +110,7 @@ namespace zith::ast {
     struct ImportNode {
         memory::DynArray<std::string_view> path;
         std::string_view alias;
+        bool is_from = false;
     };
 
     struct UnbodyNode {

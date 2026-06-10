@@ -95,6 +95,8 @@ add_zith_test(zith-parser-expr  tests/unit/parser-expr.cpp)
 add_zith_test(zith-parser-stmt  tests/unit/parser-stmt.cpp)
 add_zith_test(zith-sema-test    tests/unit/sema-basics.cpp)
 add_zith_test(zith-mir-test     tests/unit/mir-lowering.cpp)
+add_zith_test(zith-import-test  tests/unit/import-basics.cpp)
+add_zith_test(zith-import-e2e   tests/unit/import-e2e.cpp)
 
 endif()
 

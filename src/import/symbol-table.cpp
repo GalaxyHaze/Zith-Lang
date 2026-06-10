@@ -25,9 +25,9 @@ namespace zith::import {
         return current_;
     }
 
-    SymId SymbolTable::declare(std::string_view name) {
+    SymId SymbolTable::declare(std::string_view name, SymbolVisibility vis, int32_t depth) {
         SymId id = static_cast<SymId>(symbols_.size());
-        symbols_.push(SymbolData{name, current_});
+        symbols_.push(SymbolData{name, current_, vis, depth});
         scopes_[current_].syms.push(id);
         return id;
     }
@@ -56,6 +56,10 @@ namespace zith::import {
         return symbols_[id];
     }
 
+    size_t SymbolTable::symbolCount() const noexcept {
+        return symbols_.size();
+    }
+
     ScopeId SymbolTable::scopeCount() const noexcept {
         return static_cast<ScopeId>(scopes_.size());
     }
@@ -70,10 +74,16 @@ namespace zith::import {
             else
                 std::fprintf(out, "  Scope %u (parent %u)\n", s, scope.parent);
             for (auto sid : scope.syms) {
-                std::fprintf(out, "    [%u] %.*s\n",
-                             sid,
-                             (int)symbols_[sid].name.size(),
-                             symbols_[sid].name.data());
+                auto &sym = symbols_[sid];
+                auto vis = sym.visibility == SymbolVisibility::Public ? "pub" :
+                           sym.visibility == SymbolVisibility::Module ? "mod" : "priv";
+                std::fprintf(out, "    [%u] %s %.*s",
+                             sid, vis,
+                             (int)sym.name.size(),
+                             sym.name.data());
+                if (sym.visibility == SymbolVisibility::Module)
+                    std::fprintf(out, " (depth=%d)", sym.mod_depth);
+                std::fprintf(out, "\n");
             }
         }
     }

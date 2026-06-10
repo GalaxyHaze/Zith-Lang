@@ -59,6 +59,8 @@ namespace zith::lexer {
         zith::memory::Span span;
         // type of token
         TokenKind kind;
+        // single char for Punctuation/Operators (0 otherwise)
+        char punc = 0;
 
         [[nodiscard]] constexpr bool is(TokenKind k) const noexcept {
             return kind == k;
@@ -75,6 +77,14 @@ namespace zith::lexer {
         Token *src      = nullptr;
         uint32_t len    = 0;
         uint32_t offset = 0;
+        const char *file_base = nullptr;
+
+        [[nodiscard]] std::string_view lexeme(const Token &t) const noexcept {
+            return {file_base + t.span.start, t.span.end - t.span.start};
+        }
+        [[nodiscard]] std::string_view lexeme() const noexcept {
+            return lexeme(peek());
+        }
 
         // Retorna o token atual sem avançar o ponteiro (Lookahead)
         [[nodiscard]] constexpr auto peek() const noexcept -> const Token & {

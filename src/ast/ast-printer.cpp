@@ -207,7 +207,7 @@ namespace {
                 }
             },
             [&](const ImportNode &n) {
-                std::fprintf(out, "Import(");
+                std::fprintf(out, "%s(", n.is_from ? "From" : "Import");
                 for (size_t i = 0; i < n.path.size(); ++i) {
                     if (i > 0) std::fprintf(out, "::");
                     std::fprintf(out, "%.*s",

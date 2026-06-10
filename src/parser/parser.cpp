@@ -23,8 +23,8 @@ namespace {
     // ── token helpers ──────────────────────────────────────────────────────
 
     std::string_view Parser::lexeme() {
-        auto res = memory::SourceMap::snippet(tok->peek().span);
-        return res.isOk() ? res.value() : std::string_view{};
+        auto &s = tok->peek().span;
+        return {tok->file_base + s.start, s.end - s.start};
     }
 
     const lexer::Token &Parser::peek() { return tok->peek(); }
@@ -47,8 +47,7 @@ namespace {
     }
 
     bool Parser::consume(char c) {
-        auto l = lexeme();
-        if (l.size() == 1 && l[0] == c) {
+        if (tok->peek().punc == c) {
             advance();
             return true;
         }
@@ -73,7 +72,7 @@ namespace {
             return bld->ident(name);
         }
 
-        if (peek().is(TokenKind::Punctuation) && lexeme() == "(") {
+        if (peek().punc == '(') {
             advance();
             auto inner = parseExpr();
             if (!consume(')'))
@@ -102,7 +101,7 @@ namespace {
         memory::DynArray<ast::StmtId> stmts{memory::SessionArena};
 
         while (!eof()) {
-            if (peek().is(TokenKind::Punctuation) && lexeme() == "}")
+            if (peek().punc == '}')
                 break;
             stmts.push(parseStmt());
         }
@@ -116,7 +115,7 @@ namespace {
     ast::StmtId Parser::parseStmt() {
         if (peek().is(TokenKind::Control) && lexeme() == "return") {
             advance();
-            auto val = eof() || (peek().is(TokenKind::Punctuation) && lexeme() == "}")
+            auto val = eof() || peek().punc == '}'
                            ? kInvalidExpr
                            : parseExpr();
             return bld->retStmt(val);
@@ -160,7 +159,7 @@ namespace {
         }
 
         memory::DynArray<std::string_view> params{memory::SessionArena};
-        while (!eof() && !(peek().is(TokenKind::Punctuation) && lexeme() == ")")) {
+        while (!eof() && peek().punc != ')') {
             if (!peek().is(TokenKind::Identifier)) {
                 diag->report(Severity::Error, ExpectedIdent,
                                "expected parameter name", peek().span);
@@ -169,13 +168,13 @@ namespace {
             }
             params.push(lexeme());
             advance();
-            if (lexeme() == ",")
+            if (peek().punc == ',')
                 advance();
         }
         consume(')');
 
         ast::ExprId body = kInvalidExpr;
-        if (peek().is(TokenKind::Punctuation) && lexeme() == "{")
+        if (peek().punc == '{')
             body = parseBlock();
 
         return bld->fnDecl(name, std::move(params), body);
@@ -186,28 +185,17 @@ namespace {
     namespace {
 
         [[nodiscard]] memory::Span span_from_offset(uint32_t start, uint32_t end) {
-            // Build a Span from token offsets (file_id set by caller).
-            // For now, we use a zero-file placeholder — the caller overwrites it.
             return {0, start, end};
         }
 
         uint32_t skip_body_tokens(lexer::TokenStream &tok) {
-            // Count braces to find the end of a function body.
-            // Expects the cursor at '{', returns token offset of the matching '}'.
             if (tok.is_empty()) return tok.offset;
             uint32_t depth = 1;
-            tok.advance(); // consume '{'
+            tok.advance();
             while (!tok.is_empty() && depth > 0) {
                 if (tok.peek().kind == TokenKind::End) break;
-                // Check for brace using lexeme
-                auto res = memory::SourceMap::snippet(tok.peek().span);
-                if (res.isOk()) {
-                    auto s = res.value();
-                    if (s.size() == 1) {
-                        if (s[0] == '{') depth++;
-                        else if (s[0] == '}') depth--;
-                    }
-                }
+                if (tok.peek().punc == '{') depth++;
+                else if (tok.peek().punc == '}') depth--;
                 tok.advance();
             }
             return tok.offset;
@@ -216,51 +204,88 @@ namespace {
     } // anonymous namespace
 
     ScanResult scan(Parser &parser, import::SymbolTable &syms, bool sema) {
-        (void)sema; // used in future for import-only resolution
+        (void)sema;
         auto &tok = *parser.tok;
         auto &bld = *parser.bld;
         auto &diag = *parser.diag;
         auto &program = parser.program;
 
         ScanResult result{memory::SessionArena};
+        import::SymbolVisibility current_vis = import::SymbolVisibility::Private;
+        int32_t current_mod_depth = 0;
 
         while (!tok.is_empty()) {
             if (tok.peek().is_eof()) break;
 
+            // ── visibility modifier (pub / mod) ────────────────────────
+            if (tok.peek().is(TokenKind::Visibility)) {
+                auto kw = tok.lexeme();
+                tok.advance();
+
+                if (kw == "pub") {
+                    current_vis = import::SymbolVisibility::Public;
+                    continue;
+                }
+
+                if (kw == "mod") {
+                    current_vis = import::SymbolVisibility::Module;
+                    if (tok.peek().punc == '(') {
+                        tok.advance();
+                        if (tok.peek().punc == '.') {
+                            tok.advance(); // '.'
+                            tok.advance(); // '.'
+                            current_mod_depth = -1;
+                            if (tok.peek().punc == ')')
+                                tok.advance();
+                        } else if (tok.peek().is(TokenKind::LitVal)) {
+                            auto n = tok.lexeme();
+                            tok.advance();
+                            current_mod_depth = 1;
+                            if (!n.empty() && n[0] >= '0' && n[0] <= '9')
+                                current_mod_depth = n[0] - '0';
+                            if (tok.peek().punc == ')')
+                                tok.advance();
+                        } else {
+                            current_mod_depth = 1;
+                            if (tok.peek().punc == ')')
+                                tok.advance();
+                        }
+                    } else {
+                        current_mod_depth = 1;
+                    }
+                    continue;
+                }
+            }
+
             // ── fn declaration ─────────────────────────────────────────
             if (tok.peek().is(TokenKind::Fn)) {
-                tok.advance(); // consume 'fn'
+                tok.advance();
 
                 if (!tok.peek().is(TokenKind::Identifier)) {
                     diag.report(Severity::Error, ExpectedIdent,
                                 "expected function name", tok.peek().span);
                     tok.advance();
+                    current_vis = import::SymbolVisibility::Private;
+                    current_mod_depth = 0;
                     continue;
                 }
 
-                auto name = [&]{
-                    auto res = memory::SourceMap::snippet(tok.peek().span);
-                    return res.isOk() ? res.value() : std::string_view{};
-                }();
+                auto name = tok.lexeme();
                 tok.advance();
 
-                // expected '('
-                if (!(tok.peek().is(TokenKind::Punctuation) &&
-                      [&]{ auto r = memory::SourceMap::snippet(tok.peek().span);
-                           return r.isOk() && r.value() == "("; }())) {
+                if (tok.peek().punc != '(') {
                     diag.report(Severity::Error, ExpectedExpr,
                                 "expected '(' after function name", tok.peek().span);
+                    current_vis = import::SymbolVisibility::Private;
+                    current_mod_depth = 0;
                     continue;
                 }
-                tok.advance(); // consume '('
+                tok.advance();
 
-                // parse params
                 memory::DynArray<std::string_view> params{memory::SessionArena};
                 while (!tok.is_empty()) {
                     if (tok.peek().is_eof()) break;
-                    if (tok.peek().is(TokenKind::Punctuation) &&
-                        [&]{ auto r = memory::SourceMap::snippet(tok.peek().span);
-                             return r.isOk() && r.value() == ")"; }())
+                    if (tok.peek().punc == ')')
                         break;
 
                     if (!tok.peek().is(TokenKind::Identifier)) {
@@ -269,33 +294,21 @@ namespace {
                         tok.advance();
                         continue;
                     }
-                    {
-                        auto r = memory::SourceMap::snippet(tok.peek().span);
-                        if (r.isOk()) params.push(r.value());
-                    }
+                    params.push(tok.lexeme());
                     tok.advance();
 
-                    // skip optional comma
-                    if (tok.peek().is(TokenKind::Punctuation) &&
-                        [&]{ auto r = memory::SourceMap::snippet(tok.peek().span);
-                             return r.isOk() && r.value() == ","; }())
+                    if (tok.peek().punc == ',')
                         tok.advance();
                 }
-                // consume ')'
-                if (tok.peek().is(TokenKind::Punctuation) &&
-                    [&]{ auto r = memory::SourceMap::snippet(tok.peek().span);
-                         return r.isOk() && r.value() == ")"; }())
+                if (tok.peek().punc == ')')
                     tok.advance();
 
-                // skip body
                 ast::ExprId body_node = kInvalidExpr;
                 uint32_t token_start = 0;
                 uint32_t token_end = 0;
                 memory::Span body_span{};
 
-                if (tok.peek().is(TokenKind::Punctuation) &&
-                    [&]{ auto r = memory::SourceMap::snippet(tok.peek().span);
-                         return r.isOk() && r.value() == "{"; }()) {
+                if (tok.peek().punc == '{') {
                     token_start = tok.offset;
                     body_span = tok.peek().span;
                     token_end = skip_body_tokens(tok);
@@ -305,49 +318,70 @@ namespace {
 
                 auto decl = bld.fnDecl(name, std::move(params), body_node);
                 program.decls.push(decl);
-                syms.declare(name);
+                syms.declare(name, current_vis, current_mod_depth);
 
                 result.fns.push({name, body_span, body_node});
+                current_vis = import::SymbolVisibility::Private;
+                current_mod_depth = 0;
                 continue;
             }
 
             // ── struct declaration ─────────────────────────────────────
             if (tok.peek().is(TokenKind::Struct)) {
-                tok.advance(); // consume 'struct'
+                tok.advance();
 
                 if (!tok.peek().is(TokenKind::Identifier)) {
                     diag.report(Severity::Error, ExpectedIdent,
                                 "expected struct name", tok.peek().span);
                     tok.advance();
+                    current_vis = import::SymbolVisibility::Private;
+                    current_mod_depth = 0;
                     continue;
                 }
 
-                auto name = [&]{
-                    auto res = memory::SourceMap::snippet(tok.peek().span);
-                    return res.isOk() ? res.value() : std::string_view{};
-                }();
+                auto name = tok.lexeme();
                 tok.advance();
 
-                syms.declare(name);
+                syms.declare(name, current_vis, current_mod_depth);
 
-                // skip fields for now
                 result.structs.push({name, {}, kInvalidExpr});
+                current_vis = import::SymbolVisibility::Private;
+                current_mod_depth = 0;
                 continue;
             }
 
-            // ── import declaration (stub) ───────────────────────────────
+            // ── import declaration (from / import) ─────────────────────
             if (tok.peek().is(TokenKind::Module)) {
+                auto kw = tok.lexeme();
                 tok.advance();
-                // skip import path tokens until we hit a newline/semicolon-like boundary
-                while (!tok.is_empty() && !tok.peek().is_eof()) {
-                    if (tok.peek().is(TokenKind::Punctuation) &&
-                        [&]{ auto r = memory::SourceMap::snippet(tok.peek().span);
-                             return r.isOk() && r.value() == ";"; }()) {
-                        tok.advance();
-                        break;
+
+                if (kw == "from") {
+                    memory::DynArray<std::string_view> path{memory::SessionArena};
+                    while (!tok.is_empty() && !tok.peek().is_eof()) {
+                        if (tok.peek().is(TokenKind::Identifier)) {
+                            path.push(tok.lexeme());
+                            tok.advance();
+                        } else if (tok.peek().punc == '/') {
+                            tok.advance();
+                        } else {
+                            break;
+                        }
                     }
-                    tok.advance();
+                    if (!path.empty()) {
+                        auto decl = bld.importDecl(std::move(path), {}, true);
+                        program.decls.push(decl);
+                    }
+                } else if (kw == "import") {
+                    if (tok.peek().is(TokenKind::Identifier)) {
+                        memory::DynArray<std::string_view> path{memory::SessionArena};
+                        path.push(tok.lexeme());
+                        tok.advance();
+                        auto decl = bld.importDecl(std::move(path));
+                        program.decls.push(decl);
+                    }
                 }
+                current_vis = import::SymbolVisibility::Private;
+                current_mod_depth = 0;
                 continue;
             }
 
@@ -355,6 +389,8 @@ namespace {
             diag.report(Severity::Error, ExpectedExpr,
                         "unexpected token", tok.peek().span);
             tok.advance();
+            current_vis = import::SymbolVisibility::Private;
+            current_mod_depth = 0;
         }
 
         return result;
