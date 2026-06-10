@@ -38,6 +38,7 @@ namespace zith::cli {
 class CompilationSession {
     const Options &opts_;
     std::string file_path_;
+    std::string project_root_;
     PipelinePlan plan_;
 
     diagnostics::DiagnosticEngine diags_;

@@ -4,6 +4,9 @@
 #include "diagnostics/error-codes.hpp"
 #include "import/symbol-table.hpp"
 
+#include <cstdint>
+#include <cstdlib>
+#include <string>
 #include <string_view>
 #include <vector>
 
@@ -350,33 +353,98 @@ namespace {
                 continue;
             }
 
-            // ── import declaration (from / import) ─────────────────────
+            // ── import declaration (from / import / export) ─────────────
             if (tok.peek().is(TokenKind::Module)) {
                 auto kw = tok.lexeme();
                 tok.advance();
 
-                if (kw == "from") {
-                    memory::DynArray<std::string_view> path{memory::SessionArena};
+                auto parse_path = [&](memory::DynArray<std::string_view> &p) {
                     while (!tok.is_empty() && !tok.peek().is_eof()) {
                         if (tok.peek().is(TokenKind::Identifier)) {
-                            path.push(tok.lexeme());
+                            p.push(tok.lexeme());
                             tok.advance();
                         } else if (tok.peek().punc == '/') {
                             tok.advance();
+                        } else if (tok.peek().is(TokenKind::Punctuation) && tok.peek().punc == '.') {
+                            if (tok.peek(1).is(TokenKind::Punctuation) && tok.peek(1).punc == '.') {
+                                p.push(std::string_view{"..", 2});
+                                tok.advance(2);
+                            } else {
+                                break;
+                            }
                         } else {
                             break;
                         }
                     }
-                    if (!path.empty()) {
-                        auto decl = bld.importDecl(std::move(path), {}, true);
+                };
+
+                auto parse_depth = [&]() -> int32_t {
+                    if (tok.peek().punc == '(') {
+                        tok.advance();
+                        if (tok.peek().punc == '.') {
+                            tok.advance();
+                            tok.advance();
+                            if (tok.peek().punc == ')')
+                                tok.advance();
+                            return -1;
+                        } else if (tok.peek().is(TokenKind::LitVal)) {
+                            auto n = tok.lexeme();
+                            tok.advance();
+                            char *end = nullptr;
+                            long val = std::strtol(n.data(), &end, 10);
+                            if (end == n.data() || val <= 0 || val > INT32_MAX) {
+                                diag.report(Severity::Error, InvalidImportDepth,
+                                            "import depth must be a positive integer or '..'",
+                                            tok.peek().span);
+                                val = 1;
+                            }
+                            if (tok.peek().punc == ')')
+                                tok.advance();
+                            return static_cast<int32_t>(val);
+                        } else {
+                            diag.report(Severity::Error, InvalidImportDepth,
+                                        "expected import depth: positive integer or '..'",
+                                        tok.peek().span);
+                            if (tok.peek().punc == ')')
+                                tok.advance();
+                            return 1;
+                        }
+                    }
+                    return 1;
+                };
+
+                if (kw == "from" || kw == "export") {
+                    memory::DynArray<std::string_view> path{memory::SessionArena};
+                    parse_path(path);
+                    if (path.empty()) {
+                        diag.report(Severity::Error, ImportError,
+                                    "expected import path after '" + std::string(kw) + "'",
+                                    tok.peek().span);
+                    } else {
+                        auto import_depth = parse_depth();
+                        auto decl = bld.importDecl(std::move(path), {},
+                                                    kw == "from" || kw == "export", kw == "export",
+                                                    import_depth);
                         program.decls.push(decl);
                     }
                 } else if (kw == "import") {
-                    if (tok.peek().is(TokenKind::Identifier)) {
-                        memory::DynArray<std::string_view> path{memory::SessionArena};
-                        path.push(tok.lexeme());
-                        tok.advance();
-                        auto decl = bld.importDecl(std::move(path));
+                    memory::DynArray<std::string_view> path{memory::SessionArena};
+                    parse_path(path);
+                    if (path.empty()) {
+                        diag.report(Severity::Error, ImportError,
+                                    "expected import path after 'import'",
+                                    tok.peek().span);
+                    } else {
+                        auto import_depth = parse_depth();
+                        std::string_view alias{};
+                        if (tok.peek().is(TokenKind::As)) {
+                            tok.advance();
+                            if (tok.peek().is(TokenKind::Identifier)) {
+                                alias = tok.lexeme();
+                                tok.advance();
+                            }
+                        }
+                        auto decl = bld.importDecl(std::move(path), alias, false, false, import_depth);
                         program.decls.push(decl);
                     }
                 }

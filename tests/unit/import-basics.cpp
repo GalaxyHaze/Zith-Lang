@@ -269,12 +269,492 @@ static void test_scanner_pub_struct() {
     CHECK_EQ(data.visibility, SymbolVisibility::Public, "struct visibility is Public");
 }
 
+// ── export keyword ──────────────────────────────────────────────
+
+static void test_parse_export() {
+    Arena arena = make_arena();
+    AstBuilder builder(arena);
+    DiagnosticEngine diags;
+
+    auto token_result = tokenize("test", "export std/io/console", diags);
+    CHECK(token_result.isOk(), "tokenize 'export std/io/console'");
+    if (!token_result.isOk()) return;
+
+    auto tokens = std::move(token_result.value());
+    auto result = zith::parser::parseProgram(tokens, builder, diags);
+    CHECK(result.isOk(), "parse 'export std/io/console'");
+    if (!result.isOk()) return;
+
+    auto &program = result.value();
+    CHECK_EQ(program.decls.size(), size_t(1), "program has 1 decl");
+
+    auto &decl = builder.getDecl(program.decls[0]);
+    CHECK(std::holds_alternative<ImportNode>(decl), "decl is ImportNode");
+    if (!std::holds_alternative<ImportNode>(decl)) return;
+
+    auto &import = std::get<ImportNode>(decl);
+    CHECK_EQ(import.path.size(), size_t(3), "export path has 3 segments");
+    CHECK(import.path[0] == "std", "first segment is 'std'");
+    CHECK(import.path[1] == "io",  "second segment is 'io'");
+    CHECK(import.path[2] == "console", "third segment is 'console'");
+    CHECK(import.is_export, "is_export is true");
+}
+
+// ── Multi-segment import path ───────────────────────────────────
+
+static void test_import_multi_segment() {
+    Arena arena = make_arena();
+    AstBuilder builder(arena);
+    DiagnosticEngine diags;
+
+    auto token_result = tokenize("test", "import foo/bar/baz", diags);
+    CHECK(token_result.isOk(), "tokenize 'import foo/bar/baz'");
+    if (!token_result.isOk()) return;
+
+    auto tokens = std::move(token_result.value());
+    auto result = zith::parser::parseProgram(tokens, builder, diags);
+    CHECK(result.isOk(), "parse 'import foo/bar/baz'");
+    if (!result.isOk()) return;
+
+    auto &program = result.value();
+    CHECK_EQ(program.decls.size(), size_t(1), "program has 1 decl");
+
+    auto &decl = builder.getDecl(program.decls[0]);
+    CHECK(std::holds_alternative<ImportNode>(decl), "decl is ImportNode");
+    if (!std::holds_alternative<ImportNode>(decl)) return;
+
+    auto &import = std::get<ImportNode>(decl);
+    CHECK_EQ(import.path.size(), size_t(3), "import path has 3 segments");
+    CHECK(import.path[0] == "foo", "first segment is 'foo'");
+    CHECK(import.path[1] == "bar", "second segment is 'bar'");
+    CHECK(import.path[2] == "baz", "third segment is 'baz'");
+    CHECK(!import.is_from, "is_from is false");
+    CHECK(!import.is_export, "is_export is false");
+}
+
+// ── import path as alias ────────────────────────────────────────
+
+static void test_import_alias() {
+    Arena arena = make_arena();
+    AstBuilder builder(arena);
+    DiagnosticEngine diags;
+
+    auto token_result = tokenize("test", "import std/io/console as con", diags);
+    CHECK(token_result.isOk(), "tokenize 'import std/io/console as con'");
+    if (!token_result.isOk()) return;
+
+    auto tokens = std::move(token_result.value());
+    auto result = zith::parser::parseProgram(tokens, builder, diags);
+    CHECK(result.isOk(), "parse 'import std/io/console as con'");
+    if (!result.isOk()) return;
+
+    auto &program = result.value();
+    CHECK_EQ(program.decls.size(), size_t(1), "program has 1 decl");
+
+    auto &decl = builder.getDecl(program.decls[0]);
+    CHECK(std::holds_alternative<ImportNode>(decl), "decl is ImportNode");
+    if (!std::holds_alternative<ImportNode>(decl)) return;
+
+    auto &import = std::get<ImportNode>(decl);
+    CHECK_EQ(import.path.size(), size_t(3), "import path has 3 segments");
+    CHECK(import.path[0] == "std", "first segment is 'std'");
+    CHECK(import.path[1] == "io",  "second segment is 'io'");
+    CHECK(import.path[2] == "console", "third segment is 'console'");
+    CHECK(import.alias == "con", "alias is 'con'");
+    CHECK(!import.is_from, "is_from is false");
+}
+
+// ── .. in path segments ─────────────────────────────────────────
+
+static void test_import_dotdot() {
+    Arena arena = make_arena();
+    AstBuilder builder(arena);
+    DiagnosticEngine diags;
+
+    auto token_result = tokenize("test", "from ../lib/mymod", diags);
+    CHECK(token_result.isOk(), "tokenize 'from ../lib/mymod'");
+    if (!token_result.isOk()) return;
+
+    auto tokens = std::move(token_result.value());
+    auto result = zith::parser::parseProgram(tokens, builder, diags);
+    CHECK(result.isOk(), "parse 'from ../lib/mymod'");
+    if (!result.isOk()) return;
+
+    auto &program = result.value();
+    CHECK_EQ(program.decls.size(), size_t(1), "program has 1 decl");
+
+    auto &decl = builder.getDecl(program.decls[0]);
+    CHECK(std::holds_alternative<ImportNode>(decl), "decl is ImportNode");
+    if (!std::holds_alternative<ImportNode>(decl)) return;
+
+    auto &import = std::get<ImportNode>(decl);
+    CHECK_EQ(import.path.size(), size_t(3), "import path has 3 segments");
+    CHECK(import.path[0] == "..",   "first segment is '..'");
+    CHECK(import.path[1] == "lib",  "second segment is 'lib'");
+    CHECK(import.path[2] == "mymod", "third segment is 'mymod'");
+    CHECK(import.is_from, "is_from is true");
+}
+
+// ── export with multi-segment path ───────────────────────────────
+
+static void test_export_multi() {
+    Arena arena = make_arena();
+    AstBuilder builder(arena);
+    DiagnosticEngine diags;
+
+    auto token_result = tokenize("test", "export foo/bar/baz", diags);
+    CHECK(token_result.isOk(), "tokenize 'export foo/bar/baz'");
+    if (!token_result.isOk()) return;
+
+    auto tokens = std::move(token_result.value());
+    auto result = zith::parser::parseProgram(tokens, builder, diags);
+    CHECK(result.isOk(), "parse 'export foo/bar/baz'");
+    if (!result.isOk()) return;
+
+    auto &program = result.value();
+    CHECK_EQ(program.decls.size(), size_t(1), "program has 1 decl");
+
+    auto &decl = builder.getDecl(program.decls[0]);
+    CHECK(std::holds_alternative<ImportNode>(decl), "decl is ImportNode");
+    if (!std::holds_alternative<ImportNode>(decl)) return;
+
+    auto &import = std::get<ImportNode>(decl);
+    CHECK_EQ(import.path.size(), size_t(3), "export path has 3 segments");
+    CHECK(import.path[0] == "foo", "first segment is 'foo'");
+    CHECK(import.path[1] == "bar", "second segment is 'bar'");
+    CHECK(import.path[2] == "baz", "third segment is 'baz'");
+    CHECK(import.is_export, "is_export is true");
+    CHECK(import.is_from, "export uses is_from=true");
+}
+
+// ── export with .. ───────────────────────────────────────────────
+
+static void test_export_dotdot() {
+    Arena arena = make_arena();
+    AstBuilder builder(arena);
+    DiagnosticEngine diags;
+
+    auto token_result = tokenize("test", "export ../lib/mymod", diags);
+    CHECK(token_result.isOk(), "tokenize 'export ../lib/mymod'");
+    if (!token_result.isOk()) return;
+
+    auto tokens = std::move(token_result.value());
+    auto result = zith::parser::parseProgram(tokens, builder, diags);
+    CHECK(result.isOk(), "parse 'export ../lib/mymod'");
+    if (!result.isOk()) return;
+
+    auto &program = result.value();
+    CHECK_EQ(program.decls.size(), size_t(1), "program has 1 decl");
+
+    auto &decl = builder.getDecl(program.decls[0]);
+    CHECK(std::holds_alternative<ImportNode>(decl), "decl is ImportNode");
+    if (!std::holds_alternative<ImportNode>(decl)) return;
+
+    auto &import = std::get<ImportNode>(decl);
+    CHECK_EQ(import.path.size(), size_t(3), "export path has 3 segments");
+    CHECK(import.path[0] == "..",   "first segment is '..'");
+    CHECK(import.path[1] == "lib",  "second segment is 'lib'");
+    CHECK(import.path[2] == "mymod", "third segment is 'mymod'");
+    CHECK(import.is_export, "is_export is true");
+    CHECK(import.is_from, "export uses is_from=true");
+}
+
+// ── import with depth (N) ─────────────────────────────────────────
+
+static void test_import_depth_n() {
+    Arena arena = make_arena();
+    AstBuilder builder(arena);
+    DiagnosticEngine diags;
+
+    auto token_result = tokenize("test", "import mymod(3)", diags);
+    CHECK(token_result.isOk(), "tokenize 'import mymod(3)'");
+    if (!token_result.isOk()) return;
+
+    auto tokens = std::move(token_result.value());
+    auto result = zith::parser::parseProgram(tokens, builder, diags);
+    CHECK(result.isOk(), "parse 'import mymod(3)'");
+    if (!result.isOk()) return;
+
+    auto &program = result.value();
+    CHECK_EQ(program.decls.size(), size_t(1), "program has 1 decl");
+
+    auto &decl = builder.getDecl(program.decls[0]);
+    CHECK(std::holds_alternative<ImportNode>(decl), "decl is ImportNode");
+    if (!std::holds_alternative<ImportNode>(decl)) return;
+
+    auto &import = std::get<ImportNode>(decl);
+    CHECK_EQ(import.path.size(), size_t(1), "import path has 1 segment");
+    CHECK(import.path[0] == "mymod", "first segment is 'mymod'");
+    CHECK_EQ(import.import_depth, int32_t(3), "import_depth is 3");
+}
+
+// ── import with depth (..) ────────────────────────────────────────
+
+static void test_import_depth_infinite() {
+    Arena arena = make_arena();
+    AstBuilder builder(arena);
+    DiagnosticEngine diags;
+
+    auto token_result = tokenize("test", "import mymod(..)", diags);
+    CHECK(token_result.isOk(), "tokenize 'import mymod(..)'");
+    if (!token_result.isOk()) return;
+
+    auto tokens = std::move(token_result.value());
+    auto result = zith::parser::parseProgram(tokens, builder, diags);
+    CHECK(result.isOk(), "parse 'import mymod(..)'");
+    if (!result.isOk()) return;
+
+    auto &program = result.value();
+    CHECK_EQ(program.decls.size(), size_t(1), "program has 1 decl");
+
+    auto &decl = builder.getDecl(program.decls[0]);
+    CHECK(std::holds_alternative<ImportNode>(decl), "decl is ImportNode");
+    if (!std::holds_alternative<ImportNode>(decl)) return;
+
+    auto &import = std::get<ImportNode>(decl);
+    CHECK_EQ(import.path.size(), size_t(1), "import path has 1 segment");
+    CHECK(import.path[0] == "mymod", "first segment is 'mymod'");
+    CHECK_EQ(import.import_depth, int32_t(-1), "import_depth is -1 (infinite)");
+}
+
+// ── from with depth (N) ───────────────────────────────────────────
+
+static void test_from_depth_n() {
+    Arena arena = make_arena();
+    AstBuilder builder(arena);
+    DiagnosticEngine diags;
+
+    auto token_result = tokenize("test", "from mymod(2)", diags);
+    CHECK(token_result.isOk(), "tokenize 'from mymod(2)'");
+    if (!token_result.isOk()) return;
+
+    auto tokens = std::move(token_result.value());
+    auto result = zith::parser::parseProgram(tokens, builder, diags);
+    CHECK(result.isOk(), "parse 'from mymod(2)'");
+    if (!result.isOk()) return;
+
+    auto &program = result.value();
+    CHECK_EQ(program.decls.size(), size_t(1), "program has 1 decl");
+
+    auto &decl = builder.getDecl(program.decls[0]);
+    CHECK(std::holds_alternative<ImportNode>(decl), "decl is ImportNode");
+    if (!std::holds_alternative<ImportNode>(decl)) return;
+
+    auto &import = std::get<ImportNode>(decl);
+    CHECK_EQ(import.path.size(), size_t(1), "import path has 1 segment");
+    CHECK(import.path[0] == "mymod", "first segment is 'mymod'");
+    CHECK_EQ(import.import_depth, int32_t(2), "import_depth is 2");
+    CHECK(import.is_from, "is_from is true");
+}
+
+// ── import with depth + alias ─────────────────────────────────────
+
+static void test_import_depth_alias() {
+    Arena arena = make_arena();
+    AstBuilder builder(arena);
+    DiagnosticEngine diags;
+
+    auto token_result = tokenize("test", "import mymod(3) as m", diags);
+    CHECK(token_result.isOk(), "tokenize 'import mymod(3) as m'");
+    if (!token_result.isOk()) return;
+
+    auto tokens = std::move(token_result.value());
+    auto result = zith::parser::parseProgram(tokens, builder, diags);
+    CHECK(result.isOk(), "parse 'import mymod(3) as m'");
+    if (!result.isOk()) return;
+
+    auto &program = result.value();
+    CHECK_EQ(program.decls.size(), size_t(1), "program has 1 decl");
+
+    auto &decl = builder.getDecl(program.decls[0]);
+    CHECK(std::holds_alternative<ImportNode>(decl), "decl is ImportNode");
+    if (!std::holds_alternative<ImportNode>(decl)) return;
+
+    auto &import = std::get<ImportNode>(decl);
+    CHECK_EQ(import.path.size(), size_t(1), "import path has 1 segment");
+    CHECK(import.path[0] == "mymod", "first segment is 'mymod'");
+    CHECK_EQ(import.import_depth, int32_t(3), "import_depth is 3");
+    CHECK(import.alias == "m", "alias is 'm'");
+    CHECK(!import.is_from, "is_from is false");
+}
+
+// ── import with multi-segment path + depth + alias ────────────────
+
+static void test_import_multi_depth_alias() {
+    Arena arena = make_arena();
+    AstBuilder builder(arena);
+    DiagnosticEngine diags;
+
+    auto token_result = tokenize("test", "import foo/bar(5) as b", diags);
+    CHECK(token_result.isOk(), "tokenize 'import foo/bar(5) as b'");
+    if (!token_result.isOk()) return;
+
+    auto tokens = std::move(token_result.value());
+    auto result = zith::parser::parseProgram(tokens, builder, diags);
+    CHECK(result.isOk(), "parse 'import foo/bar(5) as b'");
+    if (!result.isOk()) return;
+
+    auto &program = result.value();
+    CHECK_EQ(program.decls.size(), size_t(1), "program has 1 decl");
+
+    auto &decl = builder.getDecl(program.decls[0]);
+    CHECK(std::holds_alternative<ImportNode>(decl), "decl is ImportNode");
+    if (!std::holds_alternative<ImportNode>(decl)) return;
+
+    auto &import = std::get<ImportNode>(decl);
+    CHECK_EQ(import.path.size(), size_t(2), "import path has 2 segments");
+    CHECK(import.path[0] == "foo", "first segment is 'foo'");
+    CHECK(import.path[1] == "bar", "second segment is 'bar'");
+    CHECK_EQ(import.import_depth, int32_t(5), "import_depth is 5");
+    CHECK(import.alias == "b", "alias is 'b'");
+}
+
+// ── import alias with multi-segment ──────────────────────────────
+
+static void test_import_alias_multi() {
+    Arena arena = make_arena();
+    AstBuilder builder(arena);
+    DiagnosticEngine diags;
+
+    auto token_result = tokenize("test", "import foo/bar/baz as x", diags);
+    CHECK(token_result.isOk(), "tokenize 'import foo/bar/baz as x'");
+    if (!token_result.isOk()) return;
+
+    auto tokens = std::move(token_result.value());
+    auto result = zith::parser::parseProgram(tokens, builder, diags);
+    CHECK(result.isOk(), "parse 'import foo/bar/baz as x'");
+    if (!result.isOk()) return;
+
+    auto &program = result.value();
+    CHECK_EQ(program.decls.size(), size_t(1), "program has 1 decl");
+
+    auto &decl = builder.getDecl(program.decls[0]);
+    CHECK(std::holds_alternative<ImportNode>(decl), "decl is ImportNode");
+    if (!std::holds_alternative<ImportNode>(decl)) return;
+
+    auto &import = std::get<ImportNode>(decl);
+    CHECK_EQ(import.path.size(), size_t(3), "import path has 3 segments");
+    CHECK(import.path[0] == "foo", "first segment is 'foo'");
+    CHECK(import.path[1] == "bar", "second segment is 'bar'");
+    CHECK(import.path[2] == "baz", "third segment is 'baz'");
+    CHECK(import.alias == "x", "alias is 'x'");
+    CHECK(!import.is_from, "is_from is false");
+}
+
+// ── import with .. as alias ──────────────────────────────────────
+
+static void test_import_dotdot_as_alias() {
+    Arena arena = make_arena();
+    AstBuilder builder(arena);
+    DiagnosticEngine diags;
+
+    auto token_result = tokenize("test", "import ../lib/mymod as m", diags);
+    CHECK(token_result.isOk(), "tokenize 'import ../lib/mymod as m'");
+    if (!token_result.isOk()) return;
+
+    auto tokens = std::move(token_result.value());
+    auto result = zith::parser::parseProgram(tokens, builder, diags);
+    CHECK(result.isOk(), "parse 'import ../lib/mymod as m'");
+    if (!result.isOk()) return;
+
+    auto &program = result.value();
+    CHECK_EQ(program.decls.size(), size_t(1), "program has 1 decl");
+
+    auto &decl = builder.getDecl(program.decls[0]);
+    CHECK(std::holds_alternative<ImportNode>(decl), "decl is ImportNode");
+    if (!std::holds_alternative<ImportNode>(decl)) return;
+
+    auto &import = std::get<ImportNode>(decl);
+    CHECK_EQ(import.path.size(), size_t(3), "import path has 3 segments");
+    CHECK(import.path[0] == "..",   "first segment is '..'");
+    CHECK(import.path[1] == "lib",  "second segment is 'lib'");
+    CHECK(import.path[2] == "mymod", "third segment is 'mymod'");
+    CHECK(import.alias == "m", "alias is 'm'");
+    CHECK(!import.is_from, "is_from is false");
+}
+
+// ── empty import path (should not crash, no import created) ──────
+
+static void test_empty_import() {
+    Arena arena = make_arena();
+    AstBuilder builder(arena);
+    DiagnosticEngine diags;
+
+    auto token_result = tokenize("test", "import", diags);
+    CHECK(token_result.isOk(), "tokenize 'import'");
+    if (!token_result.isOk()) return;
+
+    auto tokens = std::move(token_result.value());
+    auto result = zith::parser::parseProgram(tokens, builder, diags);
+    CHECK(result.isOk(), "parse 'import' (no crash)");
+    if (!result.isOk()) return;
+
+    auto &program = result.value();
+    CHECK_EQ(program.decls.size(), size_t(0), "no decls for empty import");
+}
+
+// ── empty from path (should not crash, no import created) ────────
+
+static void test_empty_from() {
+    Arena arena = make_arena();
+    AstBuilder builder(arena);
+    DiagnosticEngine diags;
+
+    auto token_result = tokenize("test", "from", diags);
+    CHECK(token_result.isOk(), "tokenize 'from'");
+    if (!token_result.isOk()) return;
+
+    auto tokens = std::move(token_result.value());
+    auto result = zith::parser::parseProgram(tokens, builder, diags);
+    CHECK(result.isOk(), "parse 'from' (no crash)");
+    if (!result.isOk()) return;
+
+    auto &program = result.value();
+    CHECK_EQ(program.decls.size(), size_t(0), "no decls for empty from");
+}
+
+// ── empty export path (should not crash, no import created) ──────
+
+static void test_empty_export() {
+    Arena arena = make_arena();
+    AstBuilder builder(arena);
+    DiagnosticEngine diags;
+
+    auto token_result = tokenize("test", "export", diags);
+    CHECK(token_result.isOk(), "tokenize 'export'");
+    if (!token_result.isOk()) return;
+
+    auto tokens = std::move(token_result.value());
+    auto result = zith::parser::parseProgram(tokens, builder, diags);
+    CHECK(result.isOk(), "parse 'export' (no crash)");
+    if (!result.isOk()) return;
+
+    auto &program = result.value();
+    CHECK_EQ(program.decls.size(), size_t(0), "no decls for empty export");
+}
+
 int main() {
     std::printf("import-basics tests\n");
     std::printf("======================\n\n");
 
     test_parse_from_import();
     test_parse_import_single();
+    test_parse_export();
+    test_export_multi();
+    test_export_dotdot();
+    test_import_multi_segment();
+    test_import_alias();
+    test_import_alias_multi();
+    test_import_depth_n();
+    test_import_depth_infinite();
+    test_from_depth_n();
+    test_import_depth_alias();
+    test_import_multi_depth_alias();
+    test_import_dotdot();
+    test_import_dotdot_as_alias();
+    test_empty_import();
+    test_empty_from();
+    test_empty_export();
     test_syms_declare_visibility();
     test_scanner_pub_visibility();
     test_scanner_mod_default();

@@ -96,8 +96,8 @@ namespace zith::ast {
         return addDecl(StructDeclNode{name, std::move(fields)});
     }
 
-    DeclId AstBuilder::importDecl(memory::DynArray<std::string_view> path, std::string_view alias, bool is_from) {
-        return addDecl(ImportNode{std::move(path), alias, is_from});
+    DeclId AstBuilder::importDecl(memory::DynArray<std::string_view> path, std::string_view alias, bool is_from, bool is_export, int32_t import_depth) {
+        return addDecl(ImportNode{std::move(path), alias, is_from, is_export, import_depth});
     }
 
     ExprId AstBuilder::unbody(memory::Span body_span, uint32_t token_start, uint32_t token_end) {

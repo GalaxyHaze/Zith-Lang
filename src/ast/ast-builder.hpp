@@ -45,7 +45,7 @@ namespace zith::ast {
                       ExprId body = kInvalidExpr);
         DeclId structDecl(std::string_view name,
                           memory::DynArray<std::pair<std::string_view, uint32_t>> fields);
-        DeclId importDecl(memory::DynArray<std::string_view> path, std::string_view alias = {}, bool is_from = false);
+        DeclId importDecl(memory::DynArray<std::string_view> path, std::string_view alias = {}, bool is_from = false, bool is_export = false, int32_t import_depth = 1);
 
         ExprId unbody(memory::Span body_span, uint32_t token_start, uint32_t token_end);
 

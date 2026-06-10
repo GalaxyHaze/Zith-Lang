@@ -8,6 +8,7 @@
 
 #include <cstdio>
 #include <filesystem>
+#include <vector>
 #include <toml++/toml.hpp>
 #include <unistd.h>
 
@@ -25,6 +26,7 @@ static bool shouldUseColor(const std::string &setting) {
 CompilationSession::CompilationSession(const Options &opts, std::string file_path) :
     opts_(opts),
     file_path_(std::move(file_path)),
+    project_root_(),
     ast_arena_(),
     sym_arena_(),
     type_arena_(),
@@ -36,6 +38,11 @@ CompilationSession::CompilationSession(const Options &opts, std::string file_pat
     hir_module_(hir_arena_),
     mir_module_(mir_arena_)
 {
+    namespace fs = std::filesystem;
+    if (fs::is_directory(file_path_))
+        project_root_ = fs::weakly_canonical(fs::path(file_path_)).string();
+    else
+        project_root_ = fs::weakly_canonical(fs::path(file_path_).parent_path()).string();
     plan_.target = opts_.target_stage;
     diags_.setColor(shouldUseColor(opts_.color));
 }
@@ -141,15 +148,74 @@ bool CompilationSession::parseStage() {
 }
 
 bool CompilationSession::importStage() {
-    import::ImportManager import_mgr{sym_arena_, opts_, diags_};
+    namespace fs = std::filesystem;
+
+    // ── Compute visible roots ──────────────────────────────────────
+    std::vector<std::string> visible_roots;
+
+    // 1. Stdlib path (relative to compiler executable)
+    {
+        char exe_buf[4096];
+        ssize_t exe_len = readlink("/proc/self/exe", exe_buf, sizeof(exe_buf) - 1);
+        if (exe_len != -1) {
+            exe_buf[exe_len] = '\0';
+            fs::path exe_dir = fs::path(exe_buf).parent_path();
+            auto candidates = {
+                exe_dir.parent_path() / "stdlib",
+                exe_dir / "stdlib",
+                exe_dir.parent_path() / "share" / "zith" / "stdlib",
+            };
+            for (auto &c : candidates) {
+                if (fs::is_directory(c)) {
+                    visible_roots.push_back(fs::weakly_canonical(c).string());
+                    break;
+                }
+            }
+        }
+    }
+
+    // 2. -I include dirs from CLI
+    for (auto &d : opts_.include_dirs)
+        visible_roots.push_back(fs::weakly_canonical(fs::path(d)).string());
+
+    // 3. Project root
+    if (!project_root_.empty())
+        visible_roots.push_back(project_root_);
+
+    // 4. ZithProject.toml [paths] entries
+    if (!project_root_.empty()) {
+        auto toml_path = fs::path(project_root_) / "ZithProject.toml";
+        if (fs::exists(toml_path)) {
+            try {
+                auto tbl = toml::parse_file(toml_path.string());
+                if (auto *paths = tbl["paths"].as_table()) {
+                    auto add_path = [&](std::string_view key) {
+                        if (auto val = paths->get(key)->value<std::string>()) {
+                            auto p = fs::weakly_canonical(fs::path(project_root_) / *val);
+                            visible_roots.push_back(p.string());
+                        }
+                    };
+                    if (paths->contains("src_dir"))  add_path("src_dir");
+                    if (paths->contains("mod_dir"))  add_path("mod_dir");
+                    if (paths->contains("test_dir")) add_path("test_dir");
+                }
+            } catch (...) {}
+        }
+    }
+
+    import::ImportManager import_mgr{sym_arena_, diags_, std::move(visible_roots)};
+
+    auto source_dir = fs::path(file_path_).parent_path().string();
 
     for (auto decl_id : program_.decls) {
         auto &decl = ast_builder_.getDecl(decl_id);
         if (auto *import = std::get_if<ast::ImportNode>(&decl)) {
-            auto res = import_mgr.resolve(import->path, import->is_from);
+            auto res = import_mgr.resolve(import->path, import->is_from,
+                                          import->is_export, import->alias,
+                                          import->import_depth, source_dir);
             if (!res) {
                 diags_.report(diagnostics::Severity::Error,
-                              diagnostics::err::ExpectedExpr,
+                              diagnostics::err::ImportError,
                               std::string(res.error().msg), {});
                 continue;
             }

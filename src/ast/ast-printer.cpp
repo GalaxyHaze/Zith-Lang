@@ -207,12 +207,20 @@ namespace {
                 }
             },
             [&](const ImportNode &n) {
-                std::fprintf(out, "%s(", n.is_from ? "From" : "Import");
+                std::fprintf(out, "%s%s(",
+                             n.is_export ? "Export " : "",
+                             n.is_from ? "From" : "Import");
                 for (size_t i = 0; i < n.path.size(); ++i) {
                     if (i > 0) std::fprintf(out, "::");
                     std::fprintf(out, "%.*s",
                                  (int)n.path[i].size(), n.path[i].data());
                 }
+                if (n.import_depth == -1)
+                    std::fprintf(out, "(..)");
+                else if (n.import_depth > 1)
+                    std::fprintf(out, "(%d)", n.import_depth);
+                if (!n.alias.empty())
+                    std::fprintf(out, " as %.*s", (int)n.alias.size(), n.alias.data());
                 std::fprintf(out, ")\n");
             },
         }, node);

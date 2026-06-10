@@ -20,6 +20,8 @@ namespace zith::diagnostics {
         inline constexpr ErrCode ExpectedSemicolon  = 1002;
         inline constexpr ErrCode UnclosedParen      = 1003;
         inline constexpr ErrCode ExpectedIdent      = 1004;
+        inline constexpr ErrCode InvalidImportDepth = 1005;
+        inline constexpr ErrCode ImportError        = 1006;
 
         // Semantic (2001-2999)
         inline constexpr ErrCode UndefinedIdent     = 2001;
