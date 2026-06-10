@@ -259,7 +259,7 @@ Options parseArgs(int argc, char **argv) {
         // --mode / -m
         if (std::strcmp(argv[i], "--mode") == 0 || std::strcmp(argv[i], "-m") == 0) {
             if (i + 1 >= argc) {
-                std::fprintf(stderr, "error: --mode/-m requires a value\n");
+                std::fprintf(stderr, "[error] --mode/-m requires a value\n");
                 printUsage();
                 std::exit(1);
             }
@@ -267,7 +267,7 @@ Options parseArgs(int argc, char **argv) {
             if (std::strcmp(val, "debug") != 0 && std::strcmp(val, "dev") != 0 &&
                 std::strcmp(val, "release") != 0 && std::strcmp(val, "fast") != 0 &&
                 std::strcmp(val, "test") != 0) {
-                std::fprintf(stderr, "error: invalid mode '%s' (expected debug|dev|release|fast|test)\n", val);
+                std::fprintf(stderr, "[error] invalid mode '%s' (expected debug|dev|release|fast|test)\n", val);
                 std::exit(1);
             }
             opts.mode = val;
@@ -277,7 +277,7 @@ Options parseArgs(int argc, char **argv) {
         // --output / -o
         if (std::strcmp(argv[i], "--output") == 0 || std::strcmp(argv[i], "-o") == 0) {
             if (i + 1 >= argc) {
-                std::fprintf(stderr, "error: --output/-o requires a value\n");
+                std::fprintf(stderr, "[error] --output/-o requires a value\n");
                 printUsage();
                 std::exit(1);
             }
@@ -288,7 +288,7 @@ Options parseArgs(int argc, char **argv) {
         // --include / -I
         if (std::strcmp(argv[i], "--include") == 0 || std::strcmp(argv[i], "-I") == 0) {
             if (i + 1 >= argc) {
-                std::fprintf(stderr, "error: --include/-I requires a value\n");
+                std::fprintf(stderr, "[error] --include/-I requires a value\n");
                 printUsage();
                 std::exit(1);
             }
@@ -310,7 +310,7 @@ Options parseArgs(int argc, char **argv) {
         // --emit
         if (std::strcmp(argv[i], "--emit") == 0) {
             if (i + 1 >= argc) {
-                std::fprintf(stderr, "error: --emit requires a value\n");
+                std::fprintf(stderr, "[error] --emit requires a value\n");
                 printUsage();
                 std::exit(1);
             }
@@ -319,7 +319,7 @@ Options parseArgs(int argc, char **argv) {
                 std::strcmp(val, "mir") != 0 && std::strcmp(val, "ir") != 0 &&
                 std::strcmp(val, "asm") != 0 && std::strcmp(val, "obj") != 0 &&
                 std::strcmp(val, "bin") != 0) {
-                std::fprintf(stderr, "error: invalid emit target '%s' (expected ast|hir|mir|ir|asm|obj|bin)\n", val);
+                std::fprintf(stderr, "[error] invalid emit target '%s' (expected ast|hir|mir|ir|asm|obj|bin)\n", val);
                 std::exit(1);
             }
             opts.emit_target = val;
@@ -329,7 +329,7 @@ Options parseArgs(int argc, char **argv) {
         // --target
         if (std::strcmp(argv[i], "--target") == 0) {
             if (i + 1 >= argc) {
-                std::fprintf(stderr, "error: --target requires a value\n");
+                std::fprintf(stderr, "[error] --target requires a value\n");
                 printUsage();
                 std::exit(1);
             }
@@ -340,13 +340,13 @@ Options parseArgs(int argc, char **argv) {
         // --opt-level
         if (std::strcmp(argv[i], "--opt-level") == 0) {
             if (i + 1 >= argc) {
-                std::fprintf(stderr, "error: --opt-level requires a value\n");
+                std::fprintf(stderr, "[error] --opt-level requires a value\n");
                 printUsage();
                 std::exit(1);
             }
             int val = std::atoi(argv[++i]);
             if (val < 0 || val > 3) {
-                std::fprintf(stderr, "error: --opt-level must be 0-3\n");
+                std::fprintf(stderr, "[error] --opt-level must be 0-3\n");
                 std::exit(1);
             }
             opts.opt_level = val;
@@ -356,13 +356,13 @@ Options parseArgs(int argc, char **argv) {
         // --debug-level
         if (std::strcmp(argv[i], "--debug-level") == 0) {
             if (i + 1 >= argc) {
-                std::fprintf(stderr, "error: --debug-level requires a value\n");
+                std::fprintf(stderr, "[error] --debug-level requires a value\n");
                 printUsage();
                 std::exit(1);
             }
             int val = std::atoi(argv[++i]);
             if (val < 0 || val > 3) {
-                std::fprintf(stderr, "error: --debug-level must be 0-3\n");
+                std::fprintf(stderr, "[error] --debug-level must be 0-3\n");
                 std::exit(1);
             }
             opts.debug_level = val;
@@ -372,14 +372,14 @@ Options parseArgs(int argc, char **argv) {
         // --color / -c
         if (std::strcmp(argv[i], "--color") == 0 || std::strcmp(argv[i], "-c") == 0) {
             if (i + 1 >= argc) {
-                std::fprintf(stderr, "error: --color/-c requires a value\n");
+                std::fprintf(stderr, "[error] --color/-c requires a value\n");
                 printUsage();
                 std::exit(1);
             }
             const char *val = argv[++i];
             if (std::strcmp(val, "auto") != 0 && std::strcmp(val, "on") != 0 &&
                 std::strcmp(val, "off") != 0) {
-                std::fprintf(stderr, "error: --color must be auto|on|off\n");
+                std::fprintf(stderr, "[error] --color must be auto|on|off\n");
                 std::exit(1);
             }
             opts.color = val;
@@ -388,7 +388,7 @@ Options parseArgs(int argc, char **argv) {
 
         // Unknown flag
         if (argv[i][0] == '-') {
-            std::fprintf(stderr, "error: unknown flag '%s'\n", argv[i]);
+            std::fprintf(stderr, "[error] unknown flag '%s'\n", argv[i]);
             printUsage();
             std::exit(1);
         }
