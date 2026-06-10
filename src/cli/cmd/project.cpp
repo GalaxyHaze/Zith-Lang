@@ -53,7 +53,8 @@ int cmd_new(const Options &opts) {
         toml << "opt_level = 0\n";
         toml << "\n";
         toml << "[paths]\n";
-        toml << "src_dir = \"src\"\n";
+        toml << "src_dir = [\"src\"]\n";
+        toml << "asset_dir = \"assets\"\n";
         toml << "bin_dir = \"target\"\n";
         toml << "mod_dir = \".zmodules\"\n";
         toml << "docs_dir = \"docs\"\n";

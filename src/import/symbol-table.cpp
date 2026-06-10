@@ -25,11 +25,16 @@ namespace zith::import {
         return current_;
     }
 
-    SymId SymbolTable::declare(std::string_view name, SymbolVisibility vis, int32_t depth) {
+    SymId SymbolTable::declare(std::string_view name, SymbolVisibility vis, int32_t depth,
+                                SymKind kind, ast::DeclId decl_id, memory::Span span) {
         SymId id = static_cast<SymId>(symbols_.size());
-        symbols_.push(SymbolData{name, current_, vis, depth});
+        symbols_.push(SymbolData{name, current_, vis, depth, kind, decl_id, span, {}});
         scopes_[current_].syms.push(id);
         return id;
+    }
+
+    SymbolData &SymbolTable::get(SymId id) {
+        return symbols_[id];
     }
 
     SymId SymbolTable::lookup(std::string_view name) const {
@@ -64,6 +69,20 @@ namespace zith::import {
         return static_cast<ScopeId>(scopes_.size());
     }
 
+    static const char *symKindName(SymKind k) {
+        switch (k) {
+            case SymKind::Fn:        return "fn";
+            case SymKind::Struct:    return "struct";
+            case SymKind::Trait:     return "trait";
+            case SymKind::Enum:      return "enum";
+            case SymKind::Alias:     return "alias";
+            case SymKind::Variable:  return "var";
+            case SymKind::Module:    return "mod";
+            case SymKind::Component: return "comp";
+        }
+        return "?";
+    }
+
     void SymbolTable::dump(FILE *out) const {
         std::fprintf(out, "SymbolTable (%zu symbols, %zu scopes):\n",
                      symbols_.size(), scopes_.size());
@@ -77,12 +96,13 @@ namespace zith::import {
                 auto &sym = symbols_[sid];
                 auto vis = sym.visibility == SymbolVisibility::Public ? "pub" :
                            sym.visibility == SymbolVisibility::Module ? "mod" : "priv";
-                std::fprintf(out, "    [%u] %s %.*s",
-                             sid, vis,
+                std::fprintf(out, "    [%u] %s %s %.*s",
+                             sid, vis, symKindName(sym.kind),
                              (int)sym.name.size(),
                              sym.name.data());
                 if (sym.visibility == SymbolVisibility::Module)
                     std::fprintf(out, " (depth=%d)", sym.mod_depth);
+                std::fprintf(out, " (%zu members)", sym.members.size());
                 std::fprintf(out, "\n");
             }
         }

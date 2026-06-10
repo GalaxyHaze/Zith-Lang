@@ -45,6 +45,10 @@ CompilationSession::CompilationSession(const Options &opts, std::string file_pat
         project_root_ = fs::weakly_canonical(fs::path(file_path_).parent_path()).string();
     plan_.target = opts_.target_stage;
     diags_.setColor(shouldUseColor(opts_.color));
+
+    auto toml_path = fs::path(project_root_) / "ZithProject.toml";
+    if (auto cfg = ProjectConfig::load(toml_path.string()))
+        project_config_ = std::move(*cfg);
 }
 
 bool CompilationSession::run() {
@@ -78,29 +82,12 @@ bool CompilationSession::runTo(Stage target) {
 bool CompilationSession::lexStage() {
     namespace fs = std::filesystem;
 
-    // If the path is a directory, resolve it to the project's entry file
     if (fs::is_directory(file_path_)) {
-        auto toml_path = fs::path(file_path_) / "ZithProject.toml";
-        if (!fs::exists(toml_path)) {
-            std::fprintf(stderr, "[error] no ZithProject.toml found in '%s'\n",
-                         file_path_.c_str());
+        if (project_config_.entry.empty()) {
+            std::fprintf(stderr, "[error] no entry file in ZithProject.toml\n");
             return false;
         }
-        try {
-            auto tbl = toml::parse_file(toml_path.string());
-            if (auto *build = tbl["build"].as_table()) {
-                if (auto entry = build->get("entry")) {
-                    if (auto val = entry->value<std::string>()) {
-                        file_path_ = (fs::path(file_path_) / *val).string();
-                    }
-                }
-            }
-        } catch (const toml::parse_error &e) {
-            std::fprintf(stderr, "[error] failed to parse '%s': %.*s\n",
-                         toml_path.string().c_str(),
-                         (int)e.description().size(), e.description().data());
-            return false;
-        }
+        file_path_ = (fs::path(project_root_) / project_config_.entry).string();
     }
 
     auto file_result = memory::SourceMap::load_file(file_path_);
@@ -182,25 +169,19 @@ bool CompilationSession::importStage() {
     if (!project_root_.empty())
         visible_roots.push_back(project_root_);
 
-    // 4. ZithProject.toml [paths] entries
-    if (!project_root_.empty()) {
-        auto toml_path = fs::path(project_root_) / "ZithProject.toml";
-        if (fs::exists(toml_path)) {
-            try {
-                auto tbl = toml::parse_file(toml_path.string());
-                if (auto *paths = tbl["paths"].as_table()) {
-                    auto add_path = [&](std::string_view key) {
-                        if (auto val = paths->get(key)->value<std::string>()) {
-                            auto p = fs::weakly_canonical(fs::path(project_root_) / *val);
-                            visible_roots.push_back(p.string());
-                        }
-                    };
-                    if (paths->contains("src_dir"))  add_path("src_dir");
-                    if (paths->contains("mod_dir"))  add_path("mod_dir");
-                    if (paths->contains("test_dir")) add_path("test_dir");
-                }
-            } catch (...) {}
-        }
+    // 4. src_dirs from ZithProject.toml [paths] (list)
+    for (const auto &sd : project_config_.src_dirs) {
+        auto p = fs::weakly_canonical(fs::path(project_root_) / sd);
+        visible_roots.push_back(p.string());
+    }
+    // 5. mod_dir, test_dir from ZithProject.toml [paths]
+    if (!project_config_.mod_dir.empty()) {
+        auto p = fs::weakly_canonical(fs::path(project_root_) / project_config_.mod_dir);
+        visible_roots.push_back(p.string());
+    }
+    if (!project_config_.test_dir.empty()) {
+        auto p = fs::weakly_canonical(fs::path(project_root_) / project_config_.test_dir);
+        visible_roots.push_back(p.string());
     }
 
     import::ImportManager import_mgr{sym_arena_, diags_, std::move(visible_roots)};

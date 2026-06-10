@@ -12,6 +12,7 @@
 #include "import/symbol-table.hpp"
 #include "import/import-manager.hpp"
 #include "types/type-intern.hpp"
+#include "cli/project-config.hpp"
 
 #include <string>
 
@@ -39,6 +40,7 @@ class CompilationSession {
     const Options &opts_;
     std::string file_path_;
     std::string project_root_;
+    ProjectConfig project_config_;
     PipelinePlan plan_;
 
     diagnostics::DiagnosticEngine diags_;
@@ -68,6 +70,7 @@ public:
     const diagnostics::DiagnosticEngine &diags() const { return diags_; }
     const std::string &filePath() const { return file_path_; }
     bool hasErrors() const { return diags_.hasErrors(); }
+    const ProjectConfig &projectConfig() const { return project_config_; }
 
 private:
     void setTarget(Stage s) { plan_.target = s; }

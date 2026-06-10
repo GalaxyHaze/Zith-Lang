@@ -273,6 +273,7 @@ namespace {
                     continue;
                 }
 
+                auto name_span = tok.peek().span;
                 auto name = tok.lexeme();
                 tok.advance();
 
@@ -319,9 +320,18 @@ namespace {
                     body_node = bld.unbody(body_span, token_start, token_end);
                 }
 
+                // Register fn symbol (before params are moved)
+                auto fn_sym = syms.declare(name, current_vis, current_mod_depth,
+                                            import::SymKind::Fn, ast::kInvalidDecl, name_span);
+                for (auto &p : params) {
+                    auto ps = syms.declare(p, current_vis, current_mod_depth,
+                                            import::SymKind::Variable);
+                    syms.get(fn_sym).members.push(ps);
+                }
+
                 auto decl = bld.fnDecl(name, std::move(params), body_node);
                 program.decls.push(decl);
-                syms.declare(name, current_vis, current_mod_depth);
+                syms.get(fn_sym).decl_id = decl;
 
                 result.fns.push({name, body_span, body_node});
                 current_vis = import::SymbolVisibility::Private;
@@ -342,10 +352,14 @@ namespace {
                     continue;
                 }
 
+                auto name_span = tok.peek().span;
                 auto name = tok.lexeme();
                 tok.advance();
 
-                syms.declare(name, current_vis, current_mod_depth);
+                auto decl = bld.structDecl(name, {});
+                program.decls.push(decl);
+                syms.declare(name, current_vis, current_mod_depth,
+                             import::SymKind::Struct, decl, name_span);
 
                 result.structs.push({name, {}, kInvalidExpr});
                 current_vis = import::SymbolVisibility::Private;
