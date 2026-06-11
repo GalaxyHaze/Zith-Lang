@@ -63,6 +63,10 @@ bool CompilationSession::runTo(Stage target) {
     auto t_start = std::chrono::steady_clock::now();
     plan_.target = target;
 
+    if (opts_.verbose)
+        writeOutput("%s[zithc] [starting]%s %s\n",
+                     ansicolor("\033[36m"), ansicolor("\033[0m"), file_path_.c_str());
+
     if (plan_.shouldStop())
         return !diags_.hasErrors();
     if (!lexStage())
@@ -96,8 +100,12 @@ bool CompilationSession::runTo(Stage target) {
     if (opts_.verbose) {
         auto dt = std::chrono::duration<double, std::milli>(
             std::chrono::steady_clock::now() - t_start).count();
-        std::fprintf(stderr, "%s %s (%.1fms total)\n",
-                     ok ? "✓" : "✗", file_path_.c_str(), dt);
+        writeOutput("%s[zithc] [done]%s %s %s%s%s (%.1fms)\n",
+                     ansicolor("\033[36m"), ansicolor("\033[0m"),
+                     file_path_.c_str(),
+                     ansicolor(ok ? "\033[32m" : "\033[31m"),
+                     ok ? "\xe2\x9c\x93" : "\xe2\x9c\x97",
+                     ansicolor("\033[0m"), dt);
     }
     return ok;
 }
@@ -108,7 +116,8 @@ bool CompilationSession::lexStage() {
 
     if (fs::is_directory(file_path_)) {
         if (project_config_.entry.empty()) {
-            std::fprintf(stderr, "[error] no entry file in ZithProject.toml\n");
+            writeOutput("%s[error]%s no entry file in ZithProject.toml\n",
+                         ansicolor("\033[31m"), ansicolor("\033[0m"));
             return false;
         }
         file_path_ = (fs::path(project_root_) / project_config_.entry).string();
@@ -118,15 +127,16 @@ bool CompilationSession::lexStage() {
         std::error_code ec;
         auto fsize = fs::file_size(file_path_, ec);
         if (ec)
-            std::fprintf(stderr, "[file] %s\n", file_path_.c_str());
+            writeOutput("[file] %s\n", file_path_.c_str());
         else
-            std::fprintf(stderr, "[file] %s (%.1f KiB)\n",
+            writeOutput("[file] %s (%.1f KiB)\n",
                          file_path_.c_str(), fsize / 1024.0);
     }
 
     auto file_result = source_map_.loadFile(file_path_);
     if (!file_result) {
-        std::fprintf(stderr, "[error] failed to load file '%s'\n", file_path_.c_str());
+        writeOutput("%s[error]%s failed to load file '%s'\n",
+                     ansicolor("\033[31m"), ansicolor("\033[0m"), file_path_.c_str());
         return false;
     }
     file_id_ = file_result.value();
@@ -144,7 +154,7 @@ bool CompilationSession::lexStage() {
     if (opts_.verbose) {
         auto dt = std::chrono::duration<double, std::milli>(
             std::chrono::steady_clock::now() - t0).count();
-        std::fprintf(stderr, "  [lex] %6u tokens  (%5.1fms)\n", tokens_.len, dt);
+        writeOutput("  [lex] %6u tokens  (%5.1fms)\n", tokens_.len, dt);
     }
 
     return true;
@@ -275,7 +285,7 @@ bool CompilationSession::importStage() {
     if (opts_.verbose) {
         auto dt = std::chrono::duration<double, std::milli>(
             std::chrono::steady_clock::now() - t0).count();
-        std::fprintf(stderr, "  [import] %zu symbols  (%5.1fms)\n",
+        writeOutput("  [import] %zu symbols  (%5.1fms)\n",
                      syms_.symbolCount(), dt);
     }
 
@@ -290,7 +300,7 @@ void CompilationSession::scanStage() {
     if (opts_.verbose) {
         auto dt = std::chrono::duration<double, std::milli>(
             std::chrono::steady_clock::now() - t0).count();
-        std::fprintf(stderr, "  [scan] %6zu top-level decls  (%5.1fms)\n",
+        writeOutput("  [scan] %6zu top-level decls  (%5.1fms)\n",
                      program_.decls.size(), dt);
     }
 }
@@ -318,7 +328,7 @@ bool CompilationSession::semaStage() {
     if (opts_.verbose) {
         auto dt = std::chrono::duration<double, std::milli>(
             std::chrono::steady_clock::now() - t0).count();
-        std::fprintf(stderr, "  [sema] — (stub)  (%5.1fms)\n", dt);
+        writeOutput("  [sema] \xe2\x80\x94 (stub)  (%5.1fms)\n", dt);
     }
     return true;
 }
@@ -330,7 +340,7 @@ bool CompilationSession::mirStage() {
     if (opts_.verbose) {
         auto dt = std::chrono::duration<double, std::milli>(
             std::chrono::steady_clock::now() - t0).count();
-        std::fprintf(stderr, "  [mir] %zu fns  (%5.1fms)\n",
+        writeOutput("  [mir] %zu fns  (%5.1fms)\n",
                      mir_module_.fnCount(), dt);
     }
     return true;
@@ -345,9 +355,39 @@ bool CompilationSession::zirStage() {
     if (opts_.verbose) {
         auto dt = std::chrono::duration<double, std::milli>(
             std::chrono::steady_clock::now() - t0).count();
-        std::fprintf(stderr, "  [zir] — (stub)  (%5.1fms)\n", dt);
+        writeOutput("  [zir] \xe2\x80\x94 (stub)  (%5.1fms)\n", dt);
     }
     return true;
+}
+
+void CompilationSession::writeOutput(const char *fmt, ...) {
+    va_list args;
+    va_start(args, fmt);
+    if (buffered_output_) {
+        va_list args_copy;
+        va_copy(args_copy, args);
+        int len = std::vsnprintf(nullptr, 0, fmt, args_copy);
+        va_end(args_copy);
+        if (len > 0) {
+            auto old = output_buffer_.size();
+            output_buffer_.resize(old + len);
+            std::vsnprintf(output_buffer_.data() + old, len + 1, fmt, args);
+        }
+    } else {
+        std::vfprintf(stderr, fmt, args);
+    }
+    va_end(args);
+}
+
+std::string CompilationSession::flushOutput() {
+    auto result = std::move(output_buffer_);
+    output_buffer_.clear();
+    return result;
+}
+
+void CompilationSession::emitDiagnostics() {
+    diags_.setSuppressEmit(false);
+    diags_.emit();
 }
 
 } // namespace zith::cli

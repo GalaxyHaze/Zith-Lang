@@ -14,6 +14,7 @@
 #include "zir/hir/hir-module.hpp"
 #include "zir/mir/mir-module.hpp"
 
+#include <cstdarg>
 #include <string>
 
 namespace zith::cli {
@@ -63,6 +64,20 @@ class CompilationSession {
     ast::ProgramNode program_{ast_arena_};
     parser::ScanResult scan_result_{ast_arena_};
 
+    std::string output_buffer_;
+    bool buffered_output_ = false;
+
+
+#if defined(__GNUC__) || defined(__clang__)
+    void writeOutput(const char *fmt, ...) __attribute__((format(printf, 2, 3)));
+#else
+    void writeOutput(const char *fmt, ...);
+#endif
+
+    const char *ansicolor(const char *code) const {
+        return diags_.useColor() ? code : "";
+    }
+
 public:
     CompilationSession(const Options &opts, std::string file_path);
 
@@ -81,6 +96,13 @@ public:
     const ProjectConfig &projectConfig() const {
         return project_config_;
     }
+
+    void setBuffered(bool b) {
+        buffered_output_ = b;
+        diags_.setSuppressEmit(b);
+    }
+    std::string flushOutput();
+    void emitDiagnostics();
 
 private:
     void setTarget(Stage s) {

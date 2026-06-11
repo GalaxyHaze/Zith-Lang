@@ -20,6 +20,7 @@ class DiagnosticEngine {
     bool use_color_                = false;
     ColorTheme theme_              = colorTheme;
     memory::SourceMap *source_map_ = nullptr;
+    mutable bool suppress_emit_    = false;
 
 public:
     explicit DiagnosticEngine(memory::Arena &arena) : diagnostics_(arena) {}
@@ -31,6 +32,10 @@ public:
     }
     bool useColor() const noexcept {
         return use_color_;
+    }
+
+    void setSuppressEmit(bool s) const noexcept {
+        suppress_emit_ = s;
     }
 
     void setSourceMap(memory::SourceMap *sm) noexcept {

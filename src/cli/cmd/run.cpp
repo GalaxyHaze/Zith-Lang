@@ -1,13 +1,25 @@
 #include "cli/commands.hpp"
 #include "cli/compilation-session.hpp"
+#include "diagnostics/color.hpp"
 
 #include <cstdio>
+#include <unistd.h>
 
 namespace zith::cli::commands {
 
+static bool useTermColor(const Options &opts, FILE *out) {
+    if (opts.color == "on") return true;
+    if (opts.color == "off") return false;
+    return isatty(fileno(out)) != 0;
+}
+#define CERR(c) (useTermColor(opts, stderr) ? diagnostics::ansi::c.data() : "")
+#define RERR   (useTermColor(opts, stderr) ? diagnostics::ansi::reset.data() : "")
+#define COUT(c) (useTermColor(opts, stdout) ? diagnostics::ansi::c.data() : "")
+#define ROUT   (useTermColor(opts, stdout) ? diagnostics::ansi::reset.data() : "")
+
 int cmd_execute(const Options &opts) {
     if (opts.input_files.empty()) {
-        std::fprintf(stderr, "no input files\n");
+        std::fprintf(stderr, "%sno input files%s\n", CERR(red), RERR);
         return 1;
     }
 
@@ -19,13 +31,13 @@ int cmd_execute(const Options &opts) {
         if (session.hasErrors())
             ok = false;
         if (opts.verbose)
-            std::printf("[%s] %s\n", ok ? "ok" : "error", file.c_str());
+            std::printf("%s[%s]%s %s\n", ok ? COUT(green) : COUT(red), ok ? "ok" : "error", ROUT, file.c_str());
         if (!ok)
             return 1;
     }
 
     // TODO: execute the compiled output / interpreted module
-    std::fprintf(stderr, "[soon] execution not implemented yet\n");
+    std::fprintf(stderr, "%s[soon]%s execution not implemented yet\n", CERR(yellow), RERR);
     return 1;
 }
 

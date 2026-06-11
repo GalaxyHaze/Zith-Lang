@@ -73,6 +73,8 @@ void printSeverityLabel(Severity sev, bool color, const ColorTheme &theme) {
 } // anonymous namespace
 
 void DiagnosticEngine::emit() const {
+    if (suppress_emit_)
+        return;
     for (auto &d : this->all()) {
         auto info = lookupError(d.code);
 

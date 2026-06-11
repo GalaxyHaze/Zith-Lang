@@ -4,6 +4,8 @@
 
 #include <cstdio>
 #include <cstring>
+#include <future>
+#include <memory>
 #include <vector>
 #ifdef _WIN32
 #include <io.h>
@@ -12,6 +14,11 @@
 #endif
 
 namespace zith::cli::commands {
+
+struct SessionResult {
+    std::unique_ptr<CompilationSession> session;
+    bool ok;
+};
 
 static bool useColor(const Options &opts) {
     if (opts.color == "on")
@@ -48,16 +55,31 @@ int cmd_check(const Options &opts) {
     std::vector<bool> results;
     results.reserve(files.size());
 
-    // TODO: parallelize with std::async / thread pool
-    // Thread-safety: each CompilationSession owns independent state,
-    // so they can run in parallel. SourceMap uses internal shared_mutex.
-    for (const auto &file : files) {
-        CompilationSession session(opts, file);
-        // check = lex + parse (syntax verification)
+    if (files.size() == 1) {
+        // Single file: sequential, immediate output
+        CompilationSession session(opts, files[0]);
         bool ok = session.runTo(Stage::Parsed);
         if (session.hasErrors())
             ok = false;
         results.push_back(ok);
+    } else {
+        // Multi-file: parallel with buffered output
+        std::vector<std::future<SessionResult>> futures;
+        futures.reserve(files.size());
+        for (const auto &file : files) {
+            futures.push_back(std::async(std::launch::async, [&opts, file]() -> SessionResult {
+                auto session = std::make_unique<CompilationSession>(opts, file);
+                session->setBuffered(true);
+                bool ok = session->runTo(Stage::Parsed);
+                return {std::move(session), ok};
+            }));
+        }
+        for (auto &f : futures) {
+            auto sr = f.get();
+            sr.session->emitDiagnostics();
+            std::fputs(sr.session->flushOutput().c_str(), stderr);
+            results.push_back(sr.ok);
+        }
     }
 
     auto count = [](auto &&r) {
@@ -100,48 +122,94 @@ int cmd_check(const Options &opts) {
 
 int cmd_compile(const Options &opts) {
     if (opts.input_files.empty()) {
-        std::fprintf(stderr, "no input files\n");
+        std::fprintf(stderr, "%sno input files%s\n", red(opts), reset(opts));
         return 1;
     }
 
-    int exit_code = 0;
-    // TODO: parallelize with std::async / thread pool
-    for (const auto &file : opts.input_files) {
+    if (opts.input_files.size() == 1) {
+        // Single file: sequential, immediate output
+        const auto &file = opts.input_files[0];
         CompilationSession session(opts, file);
-        // compile = up to MIR lowering (includes sema + HIR)
         bool ok = session.runTo(Stage::MirLowered);
         if (session.hasErrors()) {
-            ok        = false;
-            exit_code = 1;
+            ok = false;
         }
         if (opts.verbose) {
             std::printf("%s[%s]%s %s\n", ok ? green(opts) : red(opts), ok ? "ok" : "error",
                         reset(opts), file.c_str());
         }
+        return ok ? 0 : 1;
+    }
+
+    int exit_code = 0;
+    std::vector<std::future<SessionResult>> futures;
+    futures.reserve(opts.input_files.size());
+    for (const auto &file : opts.input_files) {
+        futures.push_back(std::async(std::launch::async, [&opts, file]() -> SessionResult {
+            auto session = std::make_unique<CompilationSession>(opts, file);
+            session->setBuffered(true);
+            bool ok = session->runTo(Stage::MirLowered);
+            return {std::move(session), ok};
+        }));
+    }
+    for (auto &f : futures) {
+        auto sr = f.get();
+        sr.session->emitDiagnostics();
+        std::fputs(sr.session->flushOutput().c_str(), stderr);
+        if (opts.verbose) {
+            std::printf("%s[%s]%s %s\n", sr.ok ? green(opts) : red(opts),
+                        sr.ok ? "ok" : "error", reset(opts),
+                        sr.session->filePath().c_str());
+        }
+        if (!sr.ok)
+            exit_code = 1;
     }
     return exit_code;
 }
 
 int cmd_build(const Options &opts) {
     if (opts.input_files.empty()) {
-        std::fprintf(stderr, "no input files\n");
+        std::fprintf(stderr, "%sno input files%s\n", red(opts), reset(opts));
         return 1;
     }
 
-    int exit_code = 0;
-    // TODO: parallelize with std::async / thread pool
-    for (const auto &file : opts.input_files) {
+    if (opts.input_files.size() == 1) {
+        // Single file: sequential, immediate output
+        const auto &file = opts.input_files[0];
         CompilationSession session(opts, file);
-        // build = full pipeline through codegen/interpretation
         bool ok = session.run();
         if (session.hasErrors()) {
-            ok        = false;
-            exit_code = 1;
+            ok = false;
         }
         if (opts.verbose) {
             std::printf("%s[%s]%s %s\n", ok ? green(opts) : red(opts), ok ? "ok" : "error",
                         reset(opts), file.c_str());
         }
+        return ok ? 0 : 1;
+    }
+
+    int exit_code = 0;
+    std::vector<std::future<SessionResult>> futures;
+    futures.reserve(opts.input_files.size());
+    for (const auto &file : opts.input_files) {
+        futures.push_back(std::async(std::launch::async, [&opts, file]() -> SessionResult {
+            auto session = std::make_unique<CompilationSession>(opts, file);
+            session->setBuffered(true);
+            bool ok = session->run();
+            return {std::move(session), ok};
+        }));
+    }
+    for (auto &f : futures) {
+        auto sr = f.get();
+        sr.session->emitDiagnostics();
+        std::fputs(sr.session->flushOutput().c_str(), stderr);
+        if (opts.verbose) {
+            std::printf("%s[%s]%s %s\n", sr.ok ? green(opts) : red(opts),
+                        sr.ok ? "ok" : "error", reset(opts),
+                        sr.session->filePath().c_str());
+        }
+        if (!sr.ok)
+            exit_code = 1;
     }
     return exit_code;
 }
