@@ -225,37 +225,18 @@ jobs:
       matrix:
         include:
           - target_name: zith-linux-amd64-musl
-            toolchain_url: https://musl.cc/x86_64-linux-musl-cross.tgz
-            toolchain_name: x86_64-linux-musl-cross
-            cc: x86_64-linux-musl-gcc
-            cxx: x86_64-linux-musl-g++
+            zig_target: x86_64-linux-musl
 
           - target_name: zith-linux-arm64-musl
-            toolchain_url: https://musl.cc/aarch64-linux-musl-cross.tgz
-            toolchain_name: aarch64-linux-musl-cross
-            cc: aarch64-linux-musl-gcc
-            cxx: aarch64-linux-musl-g++
+            zig_target: aarch64-linux-musl
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install musl cross-compiler
-        shell: bash
-        run: |
-          PRIMARY="${{ matrix.toolchain_url }}"
-          FALLBACK="$(echo "$PRIMARY" | sed 's|https://musl.cc/|https://more.musl.cc/|')"
-          for url in "$PRIMARY" "$FALLBACK"; do
-            echo "Trying $url ..."
-            for i in 1 2 3; do
-              if curl -sL --retry 5 --retry-delay 10 "$url" | sudo tar xz -C /opt 2>/dev/null; then
-                echo "Extracted from $url"
-                break 2
-              fi
-              sleep 5
-            done
-          done
-          echo "/opt/${{ matrix.toolchain_name }}/bin" >> "$GITHUB_PATH"
-          ${{ matrix.cc }} --version
+      - name: Setup Zig
+        uses: goto-bus-stop/setup-zig@v2
+        with:
+          version: latest
 
       - name: Build
         shell: bash
@@ -265,8 +246,8 @@ jobs:
             -DBUILD_TESTING=OFF \
             -DENABLE_WERROR=OFF \
             -DZITH_VERSION='${{ needs.create-release.outputs.tag || inputs.tag_name }}' \
-            -DCMAKE_C_COMPILER=${{ matrix.cc }} \
-            -DCMAKE_CXX_COMPILER=${{ matrix.cxx }} \
+            -DCMAKE_C_COMPILER="zig;cc;-target;${{ matrix.zig_target }}" \
+            -DCMAKE_CXX_COMPILER="zig;c++;-target;${{ matrix.zig_target }}" \
             -DZITH_ENABLE_FFI=OFF \
             -DCMAKE_EXE_LINKER_FLAGS='-static'
           cmake --build build --config Release
