@@ -29,6 +29,8 @@ _deps/
 # Editors
 .vscode/
 .idea/
+.cache
+.opencode
 
 # Environment
 .env

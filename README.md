@@ -147,18 +147,18 @@ brew install zithc
 
 **Linux / macOS:**
 ```bash
-curl -fsSL https://raw.githubusercontent.com/GalaxyHaze/Zith/master/scripts/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/GalaxyHaze/Zith/rewrite/scripts/install.sh | bash
 ```
 Pass `--musl` for a statically linked musl build, or a version tag (e.g. `v0.0.1`).
 
 **Windows (PowerShell):**
 ```powershell
-irm https://raw.githubusercontent.com/GalaxyHaze/Zith/master/scripts/install.ps1 | iex
+irm https://raw.githubusercontent.com/GalaxyHaze/Zith/rewrite/scripts/install.ps1 | iex
 ```
 
 **WebAssembly:**
 ```bash
-curl -fsSL https://raw.githubusercontent.com/GalaxyHaze/Zith/master/scripts/install-wasm.sh | bash
+curl -fsSL https://raw.githubusercontent.com/GalaxyHaze/Zith/rewrite/scripts/install-wasm.sh | bash
 ```
 
 ### Build from Source
