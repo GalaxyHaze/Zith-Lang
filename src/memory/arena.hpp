@@ -17,7 +17,7 @@ namespace zith::memory {
 
         Arena() : Arena(default_block_size) {}
 
-        explicit Arena(size_t block_size) : block_size_(block_size) {
+        explicit Arena(const size_t block_size) : block_size_(block_size) {
             addBlock_(block_size_);
         }
 
