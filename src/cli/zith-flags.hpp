@@ -128,7 +128,7 @@ inline Options loadZithFlags() {
     auto result = toml::parse_file(flags_path.string());
     if (!result)
         return {};
-    return process(*result);
+    return process(result);
 #endif
 }
 

@@ -94,7 +94,7 @@ struct ProjectConfig {
         auto result = toml::parse_file(toml_path);
         if (!result)
             return std::nullopt;
-        return process(*result);
+        return process(result);
 #endif
     }
 };
