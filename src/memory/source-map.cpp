@@ -47,7 +47,7 @@ namespace zith::memory {
                 FileId id = it->second;
                 lock.unlock();
                 std::unique_lock ulock(rw_mutex);
-                files[id] = SourceLoc(std::string(content), std::string(path));
+                files[id] = SourceLoc{std::string(content), std::string(path)};
                 files[id].buildLines();
                 return id;
             }
@@ -58,7 +58,7 @@ namespace zith::memory {
         auto it = cache.find(std::string(path));
         if (it != cache.end()) {
             FileId id = it->second;
-            files[id] = SourceLoc(std::string(content), std::string(path));
+            files[id] = SourceLoc{std::string(content), std::string(path)};
             files[id].buildLines();
             return id;
         }

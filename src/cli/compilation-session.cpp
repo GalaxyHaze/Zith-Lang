@@ -238,13 +238,13 @@ bool CompilationSession::importStage() {
 }
 
 void CompilationSession::scanStage() {
-    parser::Parser parser(&tokens_, &ast_builder_, &diags_);
+    parser::Parser parser{&tokens_, &ast_builder_, &diags_};
     scan_result_ = parser::scan(parser, syms_);
     program_ = std::move(parser.program);
 }
 
 void CompilationSession::expandBodiesStage() {
-    parser::Parser parser(&tokens_, &ast_builder_, &diags_);
+    parser::Parser parser{&tokens_, &ast_builder_, &diags_};
     parser.program = std::move(program_);
     parser.expandBodies(scan_result_);
     program_ = std::move(parser.program);
