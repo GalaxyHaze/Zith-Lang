@@ -6,7 +6,7 @@
 
 ##  Creator
 
-The site was created by [GalaxyHaze](https://github.com/GalaxyHaze).
+The site was created by [MieldewMeat](https://github.com/MieldewMeat).
 
 ---
 
@@ -20,7 +20,7 @@ Documentation for the Zith programming language is currently **in progress** and
 
 We welcome community contributions! If you'd like to support the project by proposing documentation:
 
-1. **Reach out** via [Discord](#) to coordinate with the team ( note: serve is not configured yet, We are sorry! )
+1. **Reach out** via [Discord](#https://discord.com/invite/a7h4cpWHg4) to coordinate with the team ( note: serve is not configured yet, We are sorry! )
 2. **Follow** the project's contribution rules and guidelines
 3. **Submit** your proposal for review
 
