@@ -169,7 +169,7 @@ jobs:
           clang++ --version
 
       - name: Cache CMake build
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: build
           key: cmake-${{ runner.os }}-${{ matrix.target_name }}-${{ hashFiles('CMakeLists.txt', 'cmake/**/*.cmake', 'src/**/*.cpp', 'src/**/*.hpp') }}
@@ -300,7 +300,7 @@ jobs:
           cmake-version: ${{ env.CMAKE_VERSION }}
 
       - name: Cache CMake build
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: build-wasm
           key: cmake-wasm-${{ hashFiles('CMakeLists.txt', 'cmake/**/*.cmake', 'src/**/*.cpp', 'src/**/*.hpp') }}
