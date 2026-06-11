@@ -1,3 +1,4 @@
+#include "memory/source-map.hpp"
 #include "lexer/lexer.hpp"
 #include "parser/parser.hpp"
 #include "ast/ast-builder.hpp"
@@ -5,18 +6,8 @@
 #include "ast/ast-ids.hpp"
 #include "diagnostics/diagnostic-engine.hpp"
 #include "memory/arena.hpp"
-
-#include <cstdio>
-
-static int failed = 0;
-static int passed = 0;
-
-#define CHECK(cond, msg) do { \
-    if (!(cond)) { std::printf("  FAIL: %s\n", msg); failed++; } \
-    else { std::printf("  PASS: %s\n", msg); passed++; } \
-} while(0)
-
-#define CHECK_EQ(a, b, msg) CHECK((a) == (b), msg)
+#include "../test-common.hpp"
+auto source_map = zith::memory::SourceMap();
 
 using namespace zith::lexer;
 using namespace zith::ast;
@@ -28,7 +19,7 @@ static void test_parser_reports_error_for_junk() {
     AstBuilder builder(arena);
     DiagnosticEngine diags;
 
-    auto tokens = tokenize("test", "42;", diags).value();
+    auto tokens = tokenize(source_map, "test", "42;", diags).value();
     auto result = zith::parser::parseProgram(tokens, builder, diags);
     CHECK(diags.hasErrors(), "parser reports errors for junk input");
 }
@@ -121,6 +112,6 @@ int main() {
     test_ast_builder_fn_decl();
     test_ast_builder_let_stmt();
 
-    std::printf("\nResults: %d passed, %d failed\n", passed, failed);
-    return failed > 0 ? 1 : 0;
+    std::printf("\nResults: %d passed, %d failed\n", g_test_passed, g_test_failed);
+    return g_test_failed > 0 ? 1 : 0;
 }

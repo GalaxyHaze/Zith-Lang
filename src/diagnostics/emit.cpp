@@ -76,8 +76,8 @@ namespace {
             }
 
             // Location via SourceMap (file:line:col)
-            auto loc = memory::SourceMap::loc(d.primary);
-            auto maybe_src = memory::SourceMap::get(d.primary.file);
+            auto loc = source_map_ ? source_map_->loc(d.primary) : memory::Loc{};
+            auto maybe_src = source_map_ ? source_map_->get(d.primary.file) : memory::Optional<std::reference_wrapper<memory::SourceLoc>>(nullptr);
             if (maybe_src.isValid()) {
                 auto &src = maybe_src.value().get();
                 if (use_color_)
@@ -129,14 +129,14 @@ namespace {
             std::string_view file_path = "<unknown>";
             std::string_view file_source = source_text;
 
-            auto maybe_src = memory::SourceMap::get(d.primary.file);
+            auto maybe_src = source_map_ ? source_map_->get(d.primary.file) : memory::Optional<std::reference_wrapper<memory::SourceLoc>>(nullptr);
             if (maybe_src.isValid()) {
                 auto &src = maybe_src.value().get();
                 file_path = src.path;
                 file_source = src.getSlice();
             }
 
-            auto loc = memory::SourceMap::loc(d.primary);
+            auto loc = source_map_ ? source_map_->loc(d.primary) : memory::Loc{};
             if (use_color_)
                 std::fputs(theme_.location.data(), stderr);
             std::fprintf(stderr, "  --> %s:%u:%u",
@@ -196,7 +196,7 @@ namespace {
                 for (auto &lbl : d.labels) {
                     if (lbl.span.start == d.primary.start && lbl.span.end == d.primary.end)
                         continue;
-                    auto lbl_loc = memory::SourceMap::loc(lbl.span);
+                    auto lbl_loc = source_map_ ? source_map_->loc(lbl.span) : memory::Loc{};
                     std::fprintf(stderr, "     = note: %s (at %u:%u)\n",
                                  lbl.message.c_str(), lbl_loc.line, lbl_loc.col);
                 }

@@ -8,6 +8,7 @@
 namespace zith::ast {
 
     class AstBuilder {
+        memory::Arena &arena_;
         memory::DynArray<ExprNode> exprs_;
         memory::DynArray<StmtNode> stmts_;
         memory::DynArray<DeclNode> decls_;

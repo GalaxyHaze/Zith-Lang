@@ -3,7 +3,7 @@
 namespace zith::ast {
 
     AstBuilder::AstBuilder(memory::Arena &arena) :
-        exprs_(arena), stmts_(arena), decls_(arena) {}
+        arena_(arena), exprs_(arena), stmts_(arena), decls_(arena) {}
 
     ExprId AstBuilder::addExpr(ExprNode node) {
         ExprId id = static_cast<ExprId>(exprs_.size());
@@ -105,7 +105,7 @@ namespace zith::ast {
     }
 
     memory::Arena &AstBuilder::arena() {
-        return memory::SessionArena;
+        return arena_;
     }
 
 } // namespace zith::ast

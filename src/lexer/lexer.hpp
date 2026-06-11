@@ -16,6 +16,7 @@ namespace zith::memory {
 namespace zith::lexer {
 
     class Lexer {
+            memory::SourceMap &source_map_;
             memory::SourceLoc *file   = nullptr;
             memory::FileId gId        = 0;
             const char *start = nullptr;
@@ -34,10 +35,8 @@ namespace zith::lexer {
             char peek(size_t n) const;
             bool consume(size_t offset = 1);
             bool match(std::string_view must);
-            void singleComment();
-            void singleDoc();
-            void multiComment();
-            void multiDoc();
+            void singleLineComment(size_t prefixLen, TokenKind kind);
+            void multiLineComment(size_t prefixLen, TokenKind kind);
             void processNumber();
             void processString();
             void processIdentifier();
@@ -46,14 +45,14 @@ namespace zith::lexer {
             memory::Span spanRange(const char *b, const char *e) const noexcept;
 
         public:
-            explicit Lexer(diagnostics::DiagnosticEngine &diags);
+            Lexer(memory::SourceMap &source_map, diagnostics::DiagnosticEngine &diags);
             auto run(std::variant<memory::FileId, std::pair<std::string_view, std::string>> input)
                     -> memory::Result<TokenStream>;
         };
 
-        [[nodiscard]] auto tokenize(memory::FileId id, diagnostics::DiagnosticEngine &diags) -> memory::Result<TokenStream>;
+        [[nodiscard]] auto tokenize(memory::SourceMap &source_map, memory::FileId id, diagnostics::DiagnosticEngine &diags) -> memory::Result<TokenStream>;
 
-        auto tokenize(std::string_view, std::string, diagnostics::DiagnosticEngine &diags) -> memory::Result<TokenStream>;
+        auto tokenize(memory::SourceMap &source_map, std::string_view, std::string, diagnostics::DiagnosticEngine &diags) -> memory::Result<TokenStream>;
 
         const char *tokenKindName(TokenKind k) noexcept;
 

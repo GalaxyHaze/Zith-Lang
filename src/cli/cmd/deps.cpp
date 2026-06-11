@@ -7,37 +7,37 @@ namespace zith::cli::commands {
 
 namespace {
 
-int deps_list(const Options &opts) {
+int depsList(const Options &opts) {
     (void)opts;
     std::fprintf(stderr, "[soon] not implemented yet\n");
     return 1;
 }
 
-int deps_add(const Options &opts) {
+int depsAdd(const Options &opts) {
     (void)opts;
     std::fprintf(stderr, "[soon] not implemented yet\n");
     return 1;
 }
 
-int deps_remove(const Options &opts) {
+int depsRemove(const Options &opts) {
     (void)opts;
     std::fprintf(stderr, "[soon] not implemented yet\n");
     return 1;
 }
 
-int deps_publish(const Options &opts) {
+int depsPublish(const Options &opts) {
     (void)opts;
     std::fprintf(stderr, "[soon] not implemented yet\n");
     return 1;
 }
 
-int deps_unpublish(const Options &opts) {
+int depsUnpublish(const Options &opts) {
     (void)opts;
     std::fprintf(stderr, "[soon] not implemented yet\n");
     return 1;
 }
 
-int deps_update(const Options &opts) {
+int depsUpdate(const Options &opts) {
     (void)opts;
     std::fprintf(stderr, "[soon] not implemented yet\n");
     return 1;
@@ -48,12 +48,12 @@ int deps_update(const Options &opts) {
 int cmd_deps(const Options &opts) {
     const std::string &sub = opts.subcommand_arg;
 
-    if (sub == "list")    return deps_list(opts);
-    if (sub == "add")     return deps_add(opts);
-    if (sub == "remove")  return deps_remove(opts);
-    if (sub == "publish")  return deps_publish(opts);
-    if (sub == "unpublish") return deps_unpublish(opts);
-    if (sub == "update")  return deps_update(opts);
+    if (sub == "list")    return depsList(opts);
+    if (sub == "add")     return depsAdd(opts);
+    if (sub == "remove")  return depsRemove(opts);
+    if (sub == "publish")  return depsPublish(opts);
+    if (sub == "unpublish") return depsUnpublish(opts);
+    if (sub == "update")  return depsUpdate(opts);
 
     std::fprintf(stderr,
         "[soon] not implemented yet\n"

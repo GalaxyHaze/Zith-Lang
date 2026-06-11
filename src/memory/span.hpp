@@ -22,15 +22,11 @@ namespace zith::memory {
         ByteOffset start;
         ByteOffset end;
 
-        // Simplificado para usar o template default <T>
-        auto len() const noexcept -> Result<size_t> {
-            if (end < start) {
-                return Result<size_t>(Error{"end lesser than start"});
-            }
-            return static_cast<size_t>(end - start);
+        auto len() const noexcept -> size_t {
+            return (end >= start) ? static_cast<size_t>(end - start) : 0;
         }
 
-        bool contains(size_t offset) const noexcept {
+        bool contains(ByteOffset offset) const noexcept {
             return (offset >= start && offset < end);
         }
 
@@ -44,9 +40,9 @@ namespace zith::memory {
                 return Result<Span>(Error{"Cannot merge spans from different files"});
             }
 
-            bool overlaps = (start <= other.end) && (other.start <= end);
+            bool overlaps = (start < other.end) && (other.start < end);
             if (!overlaps) {
-                return Result<Span>(Error{"Spans are disjoint and cannot be merged"});
+                return Result<Span>(Error{"Spans do not overlap and cannot be merged"});
             }
 
             return Span{file, std::min(start, other.start), std::max(end, other.end)};

@@ -1,29 +1,81 @@
 #pragma once
 #include <cstddef>
-#include <utility> // Para std::move
+#include <new>
+#include <type_traits>
+#include <utility>
 
 namespace zith::memory {
 
-    // 1. Template Genérico (Não-ponteiros)
     template <class T> class Optional {
-        // hack to 'bypass' default constructor needed
-        // enforce UB is REAL UB, yes, I want it to be the most broken asp
         alignas(T) char data[sizeof(T)] = {};
         bool valid{false};
 
     public:
+        Optional() = default;
+
         Optional(T &&val) : valid(true) {
             new (data) T(std::move(val));
         }
-        Optional(const T &&val) : valid(true) {
-            new (data) const T(std::move(val));
+
+        Optional(const T &val) : valid(true) {
+            new (data) T(val);
         }
 
-        template <class... Args> Optional(Args &&...args) : valid(true) {
+        template <class... Args> explicit Optional(Args &&...args) : valid(true) {
             new (data) T(std::forward<Args>(args)...);
         }
 
         Optional(std::nullptr_t) : valid(false) {}
+
+        Optional(const Optional &other) : valid(other.valid) {
+            if (valid) {
+                new (data) T(other.value());
+            }
+        }
+
+        Optional(Optional &&other) noexcept(std::is_nothrow_move_constructible_v<T>)
+            : valid(other.valid) {
+            if (valid) {
+                new (data) T(std::move(other.value()));
+            }
+        }
+
+        Optional &operator=(const Optional &other) {
+            if (this != &other) {
+                reset();
+                if (other.valid) {
+                    new (data) T(other.value());
+                    valid = true;
+                }
+            }
+            return *this;
+        }
+
+        Optional &operator=(Optional &&other) noexcept(std::is_nothrow_move_constructible_v<T>) {
+            if (this != &other) {
+                reset();
+                if (other.valid) {
+                    new (data) T(std::move(other.value()));
+                    valid = true;
+                }
+            }
+            return *this;
+        }
+
+        ~Optional() {
+            reset();
+        }
+
+        void reset() noexcept {
+            if constexpr (!std::is_trivially_destructible_v<T>) {
+                if (valid) {
+                    reinterpret_cast<T *>(data)->~T();
+                    valid = false;
+                }
+            } else {
+                valid = false;
+            }
+        }
 
         bool isValid() const noexcept {
             return valid;
@@ -32,23 +84,22 @@ namespace zith::memory {
             return !valid;
         }
 
-        explicit operator bool() const {
+        explicit operator bool() const noexcept {
             return valid;
         }
 
         T &value() {
-            return *(T *)&data[0];
+            return *reinterpret_cast<T *>(data);
         }
         const T &value() const {
-            return (T)data;
+            return *reinterpret_cast<const T *>(data);
         }
 
-        // Adiciona isto dentro da tua struct Optional (tanto na genérica como na de ponteiros)
         T *operator->() {
-            return &value();
+            return reinterpret_cast<T *>(data);
         }
         const T *operator->() const {
-            return &value();
+            return reinterpret_cast<const T *>(data);
         }
 
         T &operator*() & {
@@ -59,14 +110,12 @@ namespace zith::memory {
         }
     };
 
-    // 2. Especialização Parcial Correta (Apenas para Ponteiros T*)
     template <class T> class Optional<T *> {
         T *data = nullptr;
 
     public:
-        // Construtor unificado para ponteiros (aceita const T* ou T*)
+        Optional() = default;
         Optional(T *val) : data(val) {}
-
         explicit Optional(std::nullptr_t) : data(nullptr) {}
 
         bool isValid() const noexcept {
@@ -76,11 +125,10 @@ namespace zith::memory {
             return data == nullptr;
         }
 
-        explicit operator bool() const {
+        explicit operator bool() const noexcept {
             return data != nullptr;
         }
 
-        // Retorna a referência do objeto apontado
         T &value() {
             return *data;
         }
@@ -88,14 +136,12 @@ namespace zith::memory {
             return *data;
         }
 
-        // Bônus: Acesso ao ponteiro bruto se necessário
         T *get() const noexcept {
             return data;
         }
 
-        // Adiciona isto dentro da tua struct Optional (tanto na genérica como na de ponteiros)
         T *operator->() {
-            return &value();
+            return data;
         }
         const T *operator->() const {
             return data;
@@ -105,7 +151,7 @@ namespace zith::memory {
             return value();
         }
         const T &operator*() const & {
-            return data;
+            return value();
         }
     };
 

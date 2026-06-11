@@ -14,6 +14,7 @@ namespace zith::diagnostics {
         inline constexpr ErrCode UnclosedString     = 2;
         inline constexpr ErrCode InvalidEscape      = 3;
         inline constexpr ErrCode InvalidIntLiteral  = 4;
+        inline constexpr ErrCode UnclosedComment    = 5;
 
         // Parse (1001-1999)
         inline constexpr ErrCode ExpectedExpr       = 1001;

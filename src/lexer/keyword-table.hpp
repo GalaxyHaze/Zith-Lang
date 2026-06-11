@@ -108,7 +108,6 @@ namespace zith::lexer {
                 {"continue", TokenKind::Control},
                 {"jump", TokenKind::Control},
                 {"marker", TokenKind::Label},
-                {"dock", TokenKind::Label},
                 {"scene", TokenKind::Scene},
 
                 {"spawn", TokenKind::Thread},
@@ -209,9 +208,40 @@ namespace zith::lexer {
 
         constexpr auto g_hasher = PerfectHash{};
 
+        constexpr bool hasDuplicateKeywords() noexcept {
+            for (size_t i = 0; i < N; ++i)
+                for (size_t j = i + 1; j < N; ++j)
+                    if (TokenTable[i].first == TokenTable[j].first) return true;
+            return false;
+        }
+        static_assert(!hasDuplicateKeywords(), "TokenTable contains duplicate keywords");
+
+        constexpr bool hasBucketOverflow() noexcept {
+            std::array<uint8_t, BucketCount> counts{};
+            for (size_t i = 0; i < N; ++i) {
+                const size_t b = hash64(TokenTable[i].first) % BucketCount;
+                if (++counts[b] > 16) return true;
+            }
+            return false;
+        }
+        static_assert(!hasBucketOverflow(), "Bucket overflow (>16 keywords per bucket)");
+
+        constexpr bool allKeywordsPlaced() noexcept {
+            for (size_t i = 0; i < N; ++i) {
+                const uint64_t h      = hash64(TokenTable[i].first);
+                const size_t b        = h % BucketCount;
+                const size_t slot     = mix64(h ^ g_hasher.bucketSeed[b]) % TableSize;
+                const int16_t id      = g_hasher.table[slot];
+                if (id < 0) return false;
+                if (TokenTable[id].first != TokenTable[i].first) return false;
+            }
+            return true;
+        }
+        static_assert(allKeywordsPlaced(), "Not all keywords placed in the perfect hash table");
+
     } // namespace detail
 
-    inline TokenKind lookup_keyword(std::string_view sv) {
+    inline TokenKind lookupKeyword(std::string_view sv) {
         return detail::g_hasher.lookup(sv);
     }
 

@@ -58,7 +58,7 @@ int cmd_new(const Options &opts) {
         toml << "bin_dir = \"target\"\n";
         toml << "mod_dir = \".zmodules\"\n";
         toml << "docs_dir = \"docs\"\n";
-        toml << "test_dir = \"test\"\n";
+        toml << "test_dir = \"tests\"\n";
         toml << "\n";
     }
 

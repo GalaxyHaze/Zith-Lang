@@ -104,8 +104,8 @@ namespace zith::lexer {
                 static_cast<uint32_t>(e - start)};
     }
 
-    void Lexer::singleComment() {
-        const auto before = now - 2;
+    void Lexer::singleLineComment(size_t prefixLen, TokenKind kind) {
+        const auto before = now - prefixLen;
         while (isOpen()) {
             if (*now == '\n') {
                 loc.col = 1;
@@ -115,29 +115,16 @@ namespace zith::lexer {
             loc.col++;
             now++;
         }
-        tokens.emplace(spanRange(before, now), TokenKind::Comments);
+        tokens.emplace(spanRange(before, now), kind);
     }
 
-    void Lexer::singleDoc() {
-        const auto before = now - 3;
-        while (isOpen()) {
-            if (*now == '\n') {
-                loc.col = 1;
-                loc.line++;
-                break;
-            }
-            loc.col++;
-            now++;
-        }
-        tokens.emplace(spanRange(before, now), TokenKind::Docs);
-    }
-
-    void Lexer::multiComment() {
-        const auto before = now - 2;
+    void Lexer::multiLineComment(size_t prefixLen, TokenKind kind) {
+        const auto before = now - prefixLen;
+        const char *delim = (prefixLen == 2) ? "/*" : "/**";
         while (isOpen()) {
             if (*now == '*' && peek() == '/') {
                 now += 2;
-                tokens.emplace(spanRange(before, now), TokenKind::Comments);
+                tokens.emplace(spanRange(before, now), kind);
                 return;
             }
             if (*now == '\n') {
@@ -148,28 +135,9 @@ namespace zith::lexer {
             }
             now++;
         }
-        diags_.report(diagnostics::Severity::Error, diagnostics::err::UnclosedString,
-                       "Unterminated block comment '/*'", spanRange(before, now));
-    }
-
-    void Lexer::multiDoc() {
-        const auto before = now - 3;
-        while (isOpen()) {
-            if (*now == '*' && peek() == '/') {
-                now += 2;
-                tokens.emplace(spanRange(before, now), TokenKind::Docs);
-                return;
-            }
-            if (*now == '\n') {
-                loc.col = 1;
-                loc.line++;
-            } else {
-                loc.col++;
-            }
-            now++;
-        }
-        diags_.report(diagnostics::Severity::Error, diagnostics::err::UnclosedString,
-                       "Unterminated doc comment '/**'", spanRange(before, now));
+        diags_.report(diagnostics::Severity::Error, diagnostics::err::UnclosedComment,
+                       std::string("Unterminated block comment '") + delim + "'",
+                       spanRange(before, now));
     }
 
     void Lexer::processNumber() {
@@ -278,11 +246,12 @@ namespace zith::lexer {
             now++;
         }
         std::string_view word{before, static_cast<size_t>(now - before)};
-        TokenKind kind = lookup_keyword(word);
+        TokenKind kind = lookupKeyword(word);
         tokens.emplace(spanRange(before, now), kind);
     }
 
-    Lexer::Lexer(diagnostics::DiagnosticEngine &diags) : diags_(diags), tokens(memory::SessionArena) {}
+    Lexer::Lexer(memory::SourceMap &source_map, diagnostics::DiagnosticEngine &diags) :
+        source_map_(source_map), diags_(diags), tokens(memory::SessionArena) {}
 
     auto Lexer::run(std::variant<memory::FileId, std::pair<std::string_view, std::string>> input)
             -> memory::Result<TokenStream> {
@@ -291,12 +260,12 @@ namespace zith::lexer {
             gId = *id;
         } else {
             auto &[name, content] = std::get<std::pair<std::string_view, std::string>>(input);
-            if (auto i = memory::SourceMap::add_file(name, content)) {
+            if (auto i = source_map_.addFile(name, content)) {
                 gId = i.value();
             }
         }
 
-        if (auto i = memory::SourceMap::get(gId)) {
+        if (auto i = source_map_.get(gId)) {
             file = &i.value().get();
         }
 
@@ -321,22 +290,22 @@ namespace zith::lexer {
             }
 
             if (match("///")) {
-                singleDoc();
+                singleLineComment(3, TokenKind::Docs);
                 continue;
             }
 
             if (match("//")) {
-                singleComment();
+                singleLineComment(2, TokenKind::Comments);
                 continue;
             }
 
             if (match("/**")) {
-                multiDoc();
+                multiLineComment(3, TokenKind::Docs);
                 continue;
             }
 
             if (match("/*")) {
-                multiComment();
+                multiLineComment(2, TokenKind::Comments);
                 continue;
             }
 
@@ -392,107 +361,31 @@ namespace zith::lexer {
         return TokenStream{tokens.data(), static_cast<uint32_t>(tokens.size()), 0, start};
     }
 
-    auto tokenize(memory::FileId id, diagnostics::DiagnosticEngine &diags) -> memory::Result<TokenStream> {
-        Lexer lexer(diags);
+    auto tokenize(memory::SourceMap &source_map, memory::FileId id, diagnostics::DiagnosticEngine &diags) -> memory::Result<TokenStream> {
+        Lexer lexer(source_map, diags);
         return lexer.run(std::variant<memory::FileId, std::pair<std::string_view, std::string>>(id));
     }
 
-    auto tokenize(std::string_view name, std::string content, diagnostics::DiagnosticEngine &diags) -> memory::Result<TokenStream> {
-        Lexer lexer(diags);
+    auto tokenize(memory::SourceMap &source_map, std::string_view name, std::string content, diagnostics::DiagnosticEngine &diags) -> memory::Result<TokenStream> {
+        Lexer lexer(source_map, diags);
         return lexer.run(std::make_pair(name, std::move(content)));
     }
 
     const char *tokenKindName(TokenKind k) noexcept {
-        switch (k) {
-            case TokenKind::Identifier:
-                return "Identifier";
-            case TokenKind::As:
-                return "As";
-            case TokenKind::Using:
-                return "Using";
-            case TokenKind::Type:
-                return "Type";
-            case TokenKind::Struct:
-                return "Struct";
-            case TokenKind::Raw:
-                return "Raw";
-            case TokenKind::Must:
-                return "Must";
-            case TokenKind::Mutable:
-                return "Mutable";
-            case TokenKind::Trait:
-                return "Trait";
-            case TokenKind::Interface:
-                return "Interface";
-            case TokenKind::Typedef:
-                return "Typedef";
-            case TokenKind::Implement:
-                return "Implement";
-            case TokenKind::Fn:
-                return "Fn";
-            case TokenKind::Module:
-                return "Module";
-            case TokenKind::Extern:
-                return "Extern";
-            case TokenKind::Macro:
-                return "Macro";
-            case TokenKind::Context:
-                return "Context";
-            case TokenKind::Variable:
-                return "Variable";
-            case TokenKind::Ownership:
-                return "Ownership";
-            case TokenKind::Yield:
-                return "Yield";
-            case TokenKind::Label:
-                return "Label";
-            case TokenKind::Visibility:
-                return "Visibility";
-            case TokenKind::If:
-                return "If";
-            case TokenKind::For:
-                return "For";
-            case TokenKind::In:
-                return "In";
-            case TokenKind::Match:
-                return "Match";
-            case TokenKind::Control:
-                return "Control";
-            case TokenKind::Scene:
-                return "Scene";
-            case TokenKind::Thread:
-                return "Thread";
-            case TokenKind::Error:
-                return "Error";
-            case TokenKind::Drop:
-                return "Drop";
-            case TokenKind::Require:
-                return "Require";
-            case TokenKind::Is:
-                return "Is";
-            case TokenKind::Word:
-                return "Word";
-            case TokenKind::Logical:
-                return "Logical";
-            case TokenKind::Comparison:
-                return "Comparison";
-            case TokenKind::Operators:
-                return "Operators";
-            case TokenKind::Comments:
-                return "Comments";
-            case TokenKind::Docs:
-                return "Docs";
-            case TokenKind::Annotation:
-                return "Annotation";
-            case TokenKind::Punctuation:
-                return "Punctuation";
-            case TokenKind::LitVal:
-                return "LitVal";
-            case TokenKind::Unknown:
-                return "Unknown";
-            case TokenKind::End:
-                return "End";
-        }
+        static constexpr const char *names[] = {
+            "Identifier",  "As",     "Using",    "Type",      "Struct",
+            "Raw",         "Must",   "Mutable",  "Trait",     "Interface",
+            "Typedef",     "Implement", "Fn",    "Module",    "Extern",
+            "Macro",       "Context","Variable", "Ownership", "Yield",
+            "Label",       "Visibility", "If",   "For",       "In",
+            "Match",       "Control","Scene",   "Thread",    "Error",
+            "Drop",        "Require","Is",      "Word",      "Logical",
+            "Comparison",  "Operators", "Comments", "Docs",  "Annotation",
+            "Punctuation", "LitVal", "Unknown", "End"
+        };
+        size_t idx = static_cast<size_t>(k);
+        if (idx < std::size(names))
+            return names[idx];
         return "???";
     }
 

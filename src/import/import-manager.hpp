@@ -35,6 +35,7 @@ namespace zith::import {
         };
 
         ImportManager(memory::Arena &arena,
+                      memory::SourceMap &source_map,
                       diagnostics::DiagnosticEngine &diags,
                       std::vector<std::string> visible_roots = {});
 
@@ -65,6 +66,7 @@ namespace zith::import {
         };
 
         memory::Arena &arena_;
+        memory::SourceMap &source_map_;
         diagnostics::DiagnosticEngine &diags_;
         std::vector<std::string> visible_roots_;
         std::unordered_map<std::string, size_t> index_by_path_;

@@ -12,9 +12,10 @@ namespace zith::import {
 namespace fs = std::filesystem;
 
 ImportManager::ImportManager(memory::Arena &arena,
+                              memory::SourceMap &source_map,
                               diagnostics::DiagnosticEngine &diags,
                               std::vector<std::string> visible_roots)
-    : arena_(arena), diags_(diags),
+    : arena_(arena), source_map_(source_map), diags_(diags),
       visible_roots_(std::move(visible_roots)), files_(arena) {}
 
 bool ImportManager::isLoaded(std::string_view path) const {
@@ -131,12 +132,12 @@ auto ImportManager::resolve_file(const std::string &full_path,
     if (auto it = index_by_path_.find(import_key); it != index_by_path_.end())
         return it->second;
 
-    auto file_result = memory::SourceMap::load_file(full_path);
+    auto file_result = source_map_.loadFile(full_path);
     if (!file_result)
         return memory::Error{"failed to load '" + full_path + "'"};
 
     auto file_id = file_result.value();
-    auto token_result = lexer::tokenize(file_id, diags_);
+    auto token_result = lexer::tokenize(source_map_, file_id, diags_);
     if (!token_result)
         return memory::Error{"failed to tokenize '" + full_path + "'"};
 

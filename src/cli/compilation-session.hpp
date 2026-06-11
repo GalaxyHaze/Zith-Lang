@@ -43,6 +43,7 @@ class CompilationSession {
     ProjectConfig project_config_;
     PipelinePlan plan_;
 
+    memory::SourceMap source_map_;
     diagnostics::DiagnosticEngine diags_;
     memory::Arena ast_arena_;
     memory::Arena sym_arena_;

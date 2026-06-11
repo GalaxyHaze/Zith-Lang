@@ -14,7 +14,7 @@ namespace zith::memory {
     concept Failable = std::derived_from<T, Error>;
 
     template <class T, Failable E = Error> class Result {
-        // std::variant gere automaticamente os construtores, destrutores e movimentos de T e E!
+        static_assert(!std::is_same_v<T, E>, "Result<T, E> requires T and E to be different types");
         std::variant<T, E> data;
         bool valid;
 

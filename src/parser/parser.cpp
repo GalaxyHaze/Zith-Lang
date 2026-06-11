@@ -204,6 +204,37 @@ namespace {
             return tok.offset;
         }
 
+        static const char *symKindName(import::SymKind k) {
+            switch (k) {
+                case import::SymKind::Fn:        return "a fn";
+                case import::SymKind::Struct:    return "a struct";
+                case import::SymKind::Trait:     return "a trait";
+                case import::SymKind::Enum:      return "an enum";
+                case import::SymKind::Alias:     return "an alias";
+                case import::SymKind::Variable:  return "a variable";
+                case import::SymKind::Module:    return "a module";
+                case import::SymKind::Component: return "a component";
+            }
+            return "unknown";
+        }
+
+        [[nodiscard]] bool reportIfDuplicate(import::SymbolTable &syms,
+                                              diagnostics::DiagnosticEngine &diag,
+                                              std::string_view name,
+                                              memory::Span span,
+                                              import::SymId skip_id = import::kInvalidSym) {
+            auto existing = syms.lookup(name);
+            if (existing == import::kInvalidSym || existing == skip_id)
+                return false;
+            auto &prev = syms.get(existing);
+            std::string msg = "duplicate symbol '";
+            msg += name;
+            msg += "' — previous declaration is ";
+            msg += symKindName(prev.kind);
+            diag.report(Severity::Error, DuplicateDecl, std::move(msg), span);
+            return true;
+        }
+
     } // anonymous namespace
 
     ScanResult scan(Parser &parser, import::SymbolTable &syms, bool sema) {
@@ -287,6 +318,7 @@ namespace {
                 tok.advance();
 
                 memory::DynArray<std::string_view> params{memory::SessionArena};
+                memory::DynArray<memory::Span> param_spans{memory::SessionArena};
                 while (!tok.is_empty()) {
                     if (tok.peek().is_eof()) break;
                     if (tok.peek().punc == ')')
@@ -298,6 +330,7 @@ namespace {
                         tok.advance();
                         continue;
                     }
+                    param_spans.push(tok.peek().span);
                     params.push(tok.lexeme());
                     tok.advance();
 
@@ -320,18 +353,23 @@ namespace {
                     body_node = bld.unbody(body_span, token_start, token_end);
                 }
 
-                // Register fn symbol (before params are moved)
-                auto fn_sym = syms.declare(name, current_vis, current_mod_depth,
-                                            import::SymKind::Fn, ast::kInvalidDecl, name_span);
-                for (auto &p : params) {
-                    auto ps = syms.declare(p, current_vis, current_mod_depth,
-                                            import::SymKind::Variable);
-                    syms.get(fn_sym).members.push(ps);
+                auto fn_sym = import::kInvalidSym;
+                if (!reportIfDuplicate(syms, diag, name, name_span)) {
+                    fn_sym = syms.declare(name, current_vis, current_mod_depth,
+                                           import::SymKind::Fn, ast::kInvalidDecl, name_span);
+                    for (size_t i = 0; i < params.size(); i++) {
+                        if (!reportIfDuplicate(syms, diag, params[i], param_spans[i], fn_sym)) {
+                            auto ps = syms.declare(params[i], current_vis, current_mod_depth,
+                                                    import::SymKind::Variable);
+                            syms.get(fn_sym).members.push(ps);
+                        }
+                    }
                 }
 
                 auto decl = bld.fnDecl(name, std::move(params), body_node);
                 program.decls.push(decl);
-                syms.get(fn_sym).decl_id = decl;
+                if (fn_sym != import::kInvalidSym)
+                    syms.get(fn_sym).decl_id = decl;
 
                 result.fns.push({name, body_span, body_node});
                 current_vis = import::SymbolVisibility::Private;
@@ -358,8 +396,9 @@ namespace {
 
                 auto decl = bld.structDecl(name, {});
                 program.decls.push(decl);
-                syms.declare(name, current_vis, current_mod_depth,
-                             import::SymKind::Struct, decl, name_span);
+                if (!reportIfDuplicate(syms, diag, name, name_span))
+                    syms.declare(name, current_vis, current_mod_depth,
+                                 import::SymKind::Struct, decl, name_span);
 
                 result.structs.push({name, {}, kInvalidExpr});
                 current_vis = import::SymbolVisibility::Private;

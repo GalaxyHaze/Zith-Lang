@@ -45,6 +45,7 @@ CompilationSession::CompilationSession(const Options &opts, std::string file_pat
         project_root_ = fs::weakly_canonical(fs::path(file_path_).parent_path()).string();
     plan_.target = opts_.target_stage;
     diags_.setColor(shouldUseColor(opts_.color));
+    diags_.setSourceMap(&source_map_);
 
     auto toml_path = fs::path(project_root_) / "ZithProject.toml";
     if (auto cfg = ProjectConfig::load(toml_path.string()))
@@ -58,22 +59,23 @@ bool CompilationSession::run() {
 bool CompilationSession::runTo(Stage target) {
     plan_.target = target;
 
+    if (plan_.shouldStop()) return !diags_.hasErrors();
     if (!lexStage()) return false;
-    if (plan_.shouldStop()) return !diags_.hasErrors();
     plan_.advance();
 
+    if (plan_.shouldStop()) return !diags_.hasErrors();
     if (!parseStage()) return false;
-    if (plan_.shouldStop()) return !diags_.hasErrors();
     plan_.advance();
 
+    if (plan_.shouldStop()) return !diags_.hasErrors();
     if (!semaStage()) return false;
-    if (plan_.shouldStop()) return !diags_.hasErrors();
     plan_.advance();
 
+    if (plan_.shouldStop()) return !diags_.hasErrors();
     if (!mirStage()) return false;
-    if (plan_.shouldStop()) return !diags_.hasErrors();
     plan_.advance();
 
+    if (plan_.shouldStop()) return !diags_.hasErrors();
     if (!zirStage()) return false;
 
     return !diags_.hasErrors();
@@ -90,14 +92,14 @@ bool CompilationSession::lexStage() {
         file_path_ = (fs::path(project_root_) / project_config_.entry).string();
     }
 
-    auto file_result = memory::SourceMap::load_file(file_path_);
+    auto file_result = source_map_.loadFile(file_path_);
     if (!file_result) {
         std::fprintf(stderr, "[error] failed to load file '%s'\n", file_path_.c_str());
         return false;
     }
     file_id_ = file_result.value();
 
-    auto token_result = lexer::tokenize(file_id_, diags_);
+    auto token_result = lexer::tokenize(source_map_, file_id_, diags_);
     if (!token_result) {
         diags_.emit();
         return false;
@@ -184,7 +186,7 @@ bool CompilationSession::importStage() {
         visible_roots.push_back(p.string());
     }
 
-    import::ImportManager import_mgr{sym_arena_, diags_, std::move(visible_roots)};
+    import::ImportManager import_mgr{sym_arena_, source_map_, diags_, std::move(visible_roots)};
 
     auto source_dir = fs::path(file_path_).parent_path().string();
 

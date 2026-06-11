@@ -9,6 +9,8 @@
 
 namespace zith::memory {
 
+    SourceMap::SourceMap() : files(file_arena) {}
+
     static bool is_valid_utf8(std::string_view s) noexcept {
         for (size_t i = 0; i < s.size(); i++) {
             auto c = static_cast<unsigned char>(s[i]);
@@ -16,11 +18,11 @@ namespace zith::memory {
                 continue;
             size_t follow;
             if ((c & 0xE0) == 0xC0)
-                follow = 1; // 2-byte
+                follow = 1;
             else if ((c & 0xF0) == 0xE0)
-                follow = 2; // 3-byte
+                follow = 2;
             else if ((c & 0xF8) == 0xF0)
-                follow = 3; // 4-byte
+                follow = 3;
             else
                 return false;
             if (i + follow >= s.size())
@@ -33,8 +35,8 @@ namespace zith::memory {
         return true;
     }
 
-    Result<FileId> SourceMap::add_file(const std::string_view path,
-                                                          const std::string_view content) {
+    Result<FileId> SourceMap::addFile(const std::string_view path,
+                                      const std::string_view content) {
         if (!is_valid_utf8(content))
             return Error{"File is not valid UTF-8"};
 
@@ -73,7 +75,7 @@ namespace zith::memory {
         return id < files.size();
     }
 
-    [[nodiscard]] auto SourceMap::load_file(const std::string_view path, const bool write)
+    [[nodiscard]] auto SourceMap::loadFile(const std::string_view path, const bool write)
             -> Result<FileId> {
         {
             std::shared_lock lock(rw_mutex);

@@ -18,7 +18,7 @@ namespace zith::cli {
 
 namespace {
 
-std::string get_executable_dir() {
+std::string getExecutableDir() {
 #ifdef _WIN32
     char buf[4096];
     DWORD len = GetModuleFileNameA(NULL, buf, sizeof(buf));
@@ -42,7 +42,7 @@ std::string get_executable_dir() {
 }
 
 bool find_flags_file(std::filesystem::path &out) {
-    std::string exe_dir = get_executable_dir();
+    std::string exe_dir = getExecutableDir();
     if (exe_dir.empty())
         return false;
 

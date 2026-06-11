@@ -41,20 +41,28 @@ struct ProjectConfig {
             auto tbl = toml::parse_file(toml_path);
             ProjectConfig cfg;
 
+            auto read_str = [](const toml::table *tbl, std::string_view key) -> std::optional<std::string> {
+                if (auto *val = tbl->get(key))
+                    return val->value<std::string>();
+                return std::nullopt;
+            };
+
             if (auto *proj = tbl["project"].as_table()) {
-                if (auto v = proj->get("name")->value<std::string>())         cfg.name = *v;
-                if (auto v = proj->get("version")->value<std::string>())      cfg.version = *v;
-                if (auto v = proj->get("description")->value<std::string>())  cfg.description = *v;
-                if (auto v = proj->get("authors")->value<std::string>())      cfg.authors = *v;
-                if (auto v = proj->get("license")->value<std::string>())      cfg.license = *v;
-                if (auto v = proj->get("homepage")->value<std::string>())     cfg.homepage = *v;
+                if (auto v = read_str(proj, "name"))        cfg.name = *v;
+                if (auto v = read_str(proj, "version"))     cfg.version = *v;
+                if (auto v = read_str(proj, "description")) cfg.description = *v;
+                if (auto v = read_str(proj, "authors"))     cfg.authors = *v;
+                if (auto v = read_str(proj, "license"))     cfg.license = *v;
+                if (auto v = read_str(proj, "homepage"))    cfg.homepage = *v;
             }
 
             if (auto *build = tbl["build"].as_table()) {
-                if (auto v = build->get("entry")->value<std::string>())       cfg.entry = *v;
-                if (auto v = build->get("output")->value<std::string>())      cfg.output = *v;
-                if (auto v = build->get("mode")->value<std::string>())        cfg.mode = *v;
-                if (auto v = build->get("opt_level")->value<int>())           cfg.opt_level = *v;
+                if (auto v = read_str(build, "entry"))      cfg.entry = *v;
+                if (auto v = read_str(build, "output"))     cfg.output = *v;
+                if (auto v = read_str(build, "mode"))       cfg.mode = *v;
+                if (auto *ov = build->get("opt_level")) {
+                    if (auto v = ov->value<int>())          cfg.opt_level = *v;
+                }
             }
 
             if (auto *paths = tbl["paths"].as_table()) {
@@ -67,11 +75,11 @@ struct ProjectConfig {
                         cfg.src_dirs.push_back(*v);
                     }
                 }
-                if (auto v = paths->get("asset_dir")->value<std::string>())   cfg.asset_dir = *v;
-                if (auto v = paths->get("bin_dir")->value<std::string>())     cfg.bin_dir = *v;
-                if (auto v = paths->get("mod_dir")->value<std::string>())     cfg.mod_dir = *v;
-                if (auto v = paths->get("docs_dir")->value<std::string>())    cfg.docs_dir = *v;
-                if (auto v = paths->get("test_dir")->value<std::string>())    cfg.test_dir = *v;
+                if (auto v = read_str(paths, "asset_dir"))  cfg.asset_dir = *v;
+                if (auto v = read_str(paths, "bin_dir"))    cfg.bin_dir = *v;
+                if (auto v = read_str(paths, "mod_dir"))    cfg.mod_dir = *v;
+                if (auto v = read_str(paths, "docs_dir"))   cfg.docs_dir = *v;
+                if (auto v = read_str(paths, "test_dir"))   cfg.test_dir = *v;
             }
 
             return cfg;

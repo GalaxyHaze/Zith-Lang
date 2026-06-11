@@ -1,4 +1,5 @@
 #include "source-file.hpp"
+#include <algorithm>
 #include <string_view>
 
 namespace zith::memory {
@@ -29,6 +30,10 @@ namespace zith::memory {
     Loc SourceLoc::loc(const ByteOffset offset) const noexcept {
         if (offset >= getSlice().size()) {
             return Loc{0, 0}; // Fallback para fora de limites
+        }
+
+        if (line_starts.empty()) {
+            return Loc{1, offset + 1};
         }
 
         // Procura a primeira linha que começa DEPOIS do offset
@@ -68,7 +73,7 @@ namespace zith::memory {
         if (last_slash == std::string::npos) {
             return path;
         }
-        return path.substr(last_slash + 1);
+        return std::string_view(path).substr(last_slash + 1);
     }
 
 } // namespace zith::memory

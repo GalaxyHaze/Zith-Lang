@@ -2,18 +2,7 @@
 #include "ast/ast-nodes.hpp"
 #include "ast/ast-ids.hpp"
 #include "memory/arena.hpp"
-
-#include <cstdio>
-
-static int failed = 0;
-static int passed = 0;
-
-#define CHECK(cond, msg) do { \
-    if (!(cond)) { std::printf("  FAIL: %s\n", msg); failed++; } \
-    else { std::printf("  PASS: %s\n", msg); passed++; } \
-} while(0)
-
-#define CHECK_EQ(a, b, msg) CHECK((a) == (b), msg)
+#include "../test-common.hpp"
 
 using namespace zith::ast;
 using zith::memory::Arena;
@@ -128,6 +117,6 @@ int main() {
     test_block_with_stmts();
     test_assign_stmt();
 
-    std::printf("\nResults: %d passed, %d failed\n", passed, failed);
-    return failed > 0 ? 1 : 0;
+    std::printf("\nResults: %d passed, %d failed\n", g_test_passed, g_test_failed);
+    return g_test_failed > 0 ? 1 : 0;
 }

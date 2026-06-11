@@ -31,6 +31,12 @@ namespace zith::zir::hir {
         Xor
     };
 
+    enum class HirUnaryOp : uint8_t {
+        Neg,
+        Not,
+        BitNot,
+    };
+
     struct HirLiteral {
         HirTypeId type;
         union {
@@ -46,6 +52,7 @@ namespace zith::zir::hir {
         HirBinaryOp op;
     };
     struct HirUnary {
+        HirUnaryOp op;
         HirExprId operand;
     };
     struct HirLet {

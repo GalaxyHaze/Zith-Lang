@@ -11,8 +11,8 @@ namespace zith::zir::hir {
     }
 
     HirFunction &HirModule::addFn(std::string_view name) {
-        (void)name;
         fns_.emplace();
+        fns_.back().name = name;
         return fns_.back();
     }
 
