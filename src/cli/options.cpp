@@ -305,7 +305,7 @@ Options parseArgs(int argc, char **argv) {
             for (const char *p = val; ; ++p) {
                 if (*p == ',' || *p == '\0') {
                     if (p > start) {
-                        opts.include_dirs.emplace(start, p - start);
+                        opts.include_dirs.emplace(start, static_cast<size_t>(p - start));
                     }
                     if (*p == '\0')
                         break;

@@ -85,7 +85,7 @@ namespace zith::lexer {
     bool Lexer::match(std::string_view must) {
         if (end - now < must.size())
             return false;
-        std::string_view rest{now, end};
+        std::string_view rest(now, static_cast<size_t>(end - now));
         if (rest.starts_with(must)) {
             now += must.size();
             return true;
