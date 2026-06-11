@@ -48,7 +48,7 @@ static void printUsage() {
         "%sZith%s - A low-level general-purpose language\n"
         "\n"
         "%sUSAGE:%s\n"
-        "    zith [OPTIONS] <COMMAND> [ARGS]\n"
+        "    zithc [OPTIONS] <COMMAND> [ARGS]\n"
         "\n"
         "%sCOMMANDS:%s\n"
         "    %s-h, --help%s   Show this help message\n"

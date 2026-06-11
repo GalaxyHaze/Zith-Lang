@@ -17,7 +17,7 @@
 
 ### Fixed
 
-- Subcommand positional args no longer stolen from `input_files` (e.g. `zith build foo.zith` now correctly captures `foo.zith`).
+- Subcommand positional args no longer stolen from `input_files` (e.g. `zithc build foo.zith` now correctly captures `foo.zith`).
 - `CompilationSession::runTo()` returns `false` on stage hard-failure regardless of diagnostic count.
 - `handleFile` aborts replaced with graceful `return false` for multi-file resilience.
 

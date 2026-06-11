@@ -76,7 +76,7 @@ jobs:
       matrix:
         include:
           - os: ubuntu-latest
-            target_name: zith-linux-amd64
+            target_name: zithc-linux-amd64
             cmake_flags: >-
               -DCMAKE_C_COMPILER=clang
               -DCMAKE_CXX_COMPILER=clang++
@@ -85,7 +85,7 @@ jobs:
               -DZITH_ENABLE_LLVM=OFF
 
           - os: ubuntu-latest
-            target_name: zith-linux-arm64
+            target_name: zithc-linux-arm64
             cmake_flags: >-
               -DCMAKE_C_COMPILER=aarch64-linux-gnu-gcc
               -DCMAKE_CXX_COMPILER=aarch64-linux-gnu-g++
@@ -95,7 +95,7 @@ jobs:
               -DZITH_ENABLE_LLVM=OFF
 
           - os: macos-14
-            target_name: zith-macos-universal
+            target_name: zithc-macos-universal
             cmake_flags: >-
               -DCMAKE_C_COMPILER=$(brew --prefix llvm)/bin/clang
               -DCMAKE_CXX_COMPILER=$(brew --prefix llvm)/bin/clang++
@@ -103,7 +103,7 @@ jobs:
               -DZITH_ENABLE_FFI=OFF
 
           - os: windows-latest
-            target_name: zith-windows-amd64.exe
+            target_name: zithc-windows-amd64.exe
             msvc_arch: amd64
             cmake_flags: >-
               -DCMAKE_C_COMPILER=clang-cl
@@ -112,7 +112,7 @@ jobs:
               -DZITH_ENABLE_LLVM=OFF
 
           - os: windows-latest
-            target_name: zith-windows-arm64.exe
+            target_name: zithc-windows-arm64.exe
             msvc_arch: amd64_arm64
             cmake_flags: >-
               -DCMAKE_C_COMPILER=clang-cl
@@ -224,10 +224,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - target_name: zith-linux-amd64-musl
+          - target_name: zithc-linux-amd64-musl
             zig_target: x86_64-linux-musl
 
-          - target_name: zith-linux-arm64-musl
+          - target_name: zithc-linux-arm64-musl
             zig_target: aarch64-linux-musl
 
     steps:
@@ -271,7 +271,7 @@ jobs:
 
   build-wasm:
     needs: create-release
-    name: Build zith-wasm
+    name: Build zithc-wasm
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -316,13 +316,13 @@ jobs:
           mkdir -p artifacts wasm-staging
           [ -d build-wasm/bin ] && cp build-wasm/bin/* wasm-staging/ || true
           find build-wasm -maxdepth 1 -type f \( -name '*.wasm' -o -name '*.js' -o -name '*.html' \) -exec cp {} wasm-staging/ \;
-          cd wasm-staging && zip -r ../artifacts/zith-wasm.zip . && cd ..
+          cd wasm-staging && zip -r ../artifacts/zithc-wasm.zip . && cd ..
 
       - name: Upload release asset
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.create-release.outputs.tag || inputs.tag_name }}
-          files: artifacts/zith-wasm.zip
+          files: artifacts/zithc-wasm.zip
           draft: ${{ needs.create-release.outputs.draft || inputs.draft }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

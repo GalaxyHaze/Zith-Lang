@@ -57,7 +57,7 @@ int cmd_deps(const Options &opts) {
 
     std::fprintf(stderr,
         "[soon] not implemented yet\n"
-        "usage: zith deps (list|add|remove|publish|unpublish|update) [args]\n");
+        "usage: zithc deps (list|add|remove|publish|unpublish|update) [args]\n");
     return 1;
 }
 

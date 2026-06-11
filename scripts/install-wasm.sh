@@ -3,12 +3,12 @@ set -e
 
 REPO="GalaxyHaze/Zith"
 VERSION=""
-INSTALL_DIR="${ZITH_WASM_DIR:-$HOME/.zith-wasm}"
+INSTALL_DIR="${ZITH_WASM_DIR:-$HOME/.zithc-wasm}"
 
 usage() {
     echo "Usage: $0 [<version>] [--dir <path>]"
     echo "  <version>     Specific version to install (default: latest)"
-    echo "  --dir <path>  Installation directory (default: \$HOME/.zith-wasm)"
+    echo "  --dir <path>  Installation directory (default: \$HOME/.zithc-wasm)"
     exit 1
 }
 
@@ -42,16 +42,16 @@ else
     echo "Latest version found: $VERSION"
 fi
 
-DOWNLOAD_URL="https://github.com/$REPO/releases/download/$VERSION/zith-wasm.zip"
+DOWNLOAD_URL="https://github.com/$REPO/releases/download/$VERSION/zithc-wasm.zip"
 TMP_DIR=$(mktemp -d)
 trap 'rm -rf "$TMP_DIR"' EXIT
 
 echo "Downloading $DOWNLOAD_URL..."
-curl -fsSL "$DOWNLOAD_URL" -o "$TMP_DIR/zith-wasm.zip"
+curl -fsSL "$DOWNLOAD_URL" -o "$TMP_DIR/zithc-wasm.zip"
 
 echo "Extracting to $INSTALL_DIR..."
 mkdir -p "$INSTALL_DIR"
-unzip -o "$TMP_DIR/zith-wasm.zip" -d "$INSTALL_DIR"
+unzip -o "$TMP_DIR/zithc-wasm.zip" -d "$INSTALL_DIR"
 
 echo ""
 echo "Zith WebAssembly v${VERSION#v} installed to $INSTALL_DIR"

@@ -4,7 +4,7 @@ set -e
 REPO="GalaxyHaze/Zith"
 VERSION=""
 USE_MUSL=false
-OUTPUT_NAME="zith"
+OUTPUT_NAME="zithc"
 
 usage() {
     echo "Usage: $0 [--musl] [<version>]"
@@ -53,24 +53,24 @@ case "$OS" in
     Linux*)
         if [ "$USE_MUSL" = true ]; then
             case "$ARCH" in
-                x86_64)   FILE_NAME="zith-linux-amd64-musl" ;;
-                aarch64|arm64) FILE_NAME="zith-linux-arm64-musl" ;;
+                x86_64)   FILE_NAME="zithc-linux-amd64-musl" ;;
+                aarch64|arm64) FILE_NAME="zithc-linux-arm64-musl" ;;
                 *) echo "Architecture not supported on Linux (musl): $ARCH" >&2; exit 1 ;;
             esac
         else
             case "$ARCH" in
-                x86_64)   FILE_NAME="zith-linux-amd64" ;;
-                aarch64|arm64) FILE_NAME="zith-linux-arm64" ;;
+                x86_64)   FILE_NAME="zithc-linux-amd64" ;;
+                aarch64|arm64) FILE_NAME="zithc-linux-arm64" ;;
                 *) echo "Architecture not supported on Linux: $ARCH" >&2; exit 1 ;;
             esac
         fi
         ;;
     Darwin*)
-        FILE_NAME="zith-macos-universal"
+        FILE_NAME="zithc-macos-universal"
         ;;
     MINGW*|MSYS*|CYGWIN*)
-        FILE_NAME="zith-windows-amd64.exe"
-        OUTPUT_NAME="zith.exe"
+        FILE_NAME="zithc-windows-amd64.exe"
+        OUTPUT_NAME="zithc.exe"
         ;;
     *) echo "OS not supported: $OS" >&2; exit 1 ;;
 esac
@@ -97,8 +97,8 @@ case "$OS" in
         ;;
     *)
         echo "Installing Zith to /usr/local/bin/..."
-        if sudo mv "$TMP_FILE" /usr/local/bin/zith; then
-            echo "Installation complete! Run 'zith --help' to get started."
+        if sudo mv "$TMP_FILE" /usr/local/bin/zithc; then
+            echo "Installation complete! Run 'zithc --help' to get started."
         else
             echo "Installation failed. Check sudo permissions or try manually moving the file." >&2
             exit 1

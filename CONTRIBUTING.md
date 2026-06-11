@@ -21,11 +21,11 @@ Requires: CMake 3.20+, C++23 compiler (Clang 18+ or GCC 14+).
 
 ```bash
 cmake --build build          # builds all test targets
-./build/zith-lexer-test
-./build/zith-parser-expr
-./build/zith-parser-stmt
-./build/zith-sema-test
-./build/zith-mir-test
+./build/zithc-lexer-test
+./build/zithc-parser-expr
+./build/zithc-parser-stmt
+./build/zithc-sema-test
+./build/zithc-mir-test
 ```
 
 ## Pull Requests

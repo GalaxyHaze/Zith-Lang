@@ -17,9 +17,9 @@ Zith uses **Node Resource Analysis (NRA)** — a compile-time pass that enforces
 ## Quick Start
 
 ```bash
-zith new hello-world
+zithc new hello-world
 cd hello-world
-zith run
+zithc run
 ```
 
 ```zith
@@ -133,14 +133,14 @@ flow fn run(data: Stream): void {
 
 **Scoop:**
 ```powershell
-scoop bucket add zith https://github.com/GalaxyHaze/Zith.git
+scoop bucket add zithc https://github.com/GalaxyHaze/Zith.git
 scoop install zithc
 ```
 
 **Homebrew:**
 ```bash
-brew tap galaxyhaze/zith
-brew install zith
+brew tap galaxyhaze/zithc
+brew install zithc
 ```
 
 ### Install Scripts
@@ -174,7 +174,7 @@ Requires CMake 3.15+, a C++17 compiler (GCC/Clang/MSVC), and optionally LLVM for
 
 **Verify:**
 ```bash
-zith --help
+zithc --help
 ```
 
 ---
@@ -183,12 +183,12 @@ zith --help
 
 | Command | Description |
 |---------|-------------|
-| `zith build` | Build the project |
-| `zith build -m release` | Release build |
-| `zith check` | Syntax and type checking without compilation |
-| `zith compile <file>` | Compile to ZBC bytecode |
-| `zith execute <file.zbc>` | Run a compiled bytecode file |
-| `zith run` | Build and run in one command |
+| `zithc build` | Build the project |
+| `zithc build -m release` | Release build |
+| `zithc check` | Syntax and type checking without compilation |
+| `zithc compile <file>` | Compile to ZBC bytecode |
+| `zithc execute <file.zbc>` | Run a compiled bytecode file |
+| `zithc run` | Build and run in one command |
 
 ---
 

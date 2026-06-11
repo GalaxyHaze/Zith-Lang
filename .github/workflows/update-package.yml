@@ -142,7 +142,7 @@ jobs:
                 sha256: $sha256
               }
             }' | \
-          gh api repos/${{ github.repository_owner }}/homebrew-zith/dispatches --input -
+          gh api repos/${{ github.repository_owner }}/homebrew-zithc/dispatches --input -
 
       - name: Clean up
         if: always()

@@ -48,7 +48,7 @@ int cmd_help() {
         "%sZith%s - A low-level general-purpose language\n"
         "\n"
         "%sUSAGE:%s\n"
-        "    zith [OPTIONS] <COMMAND> [ARGS]\n"
+        "    zithc [OPTIONS] <COMMAND> [ARGS]\n"
         "\n"
         "%sCOMMANDS:%s\n"
         "    %s-h, --help%s   Show this help message\n"
@@ -78,10 +78,10 @@ int cmd_help() {
         "    %s-v, --verbose%s                           Verbose output\n"
         "\n"
         "%sEXAMPLES:%s\n"
-        "    zith build\n"
-        "    zith run main.zith -m release\n"
-        "    zith compile --interpreted main.zith -o main.nbc\n"
-        "    zith execute --interpreted\n"
+        "    zithc build\n"
+        "    zithc run main.zith -m release\n"
+        "    zithc compile --interpreted main.zith -o main.nbc\n"
+        "    zithc execute --interpreted\n"
         ,
         C(bold), RST,
         C(bold), RST,

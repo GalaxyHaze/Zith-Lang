@@ -32,16 +32,16 @@ if ($Arch -match "ARM" -or $env:PROCESSOR_ARCHITECTURE -match "ARM64") {
 }
 
 if ($IsMusl) {
-    if ($IsArm64) { $FileName = "zith-windows-arm64-musl.exe" }
-    else          { $FileName = "zith-windows-amd64-musl.exe" }
+    if ($IsArm64) { $FileName = "zithc-windows-arm64-musl.exe" }
+    else          { $FileName = "zithc-windows-amd64-musl.exe" }
 } elseif ($IsArm64) {
-    $FileName = "zith-windows-arm64.exe"
+    $FileName = "zithc-windows-arm64.exe"
 } else {
-    $FileName = "zith-windows-amd64.exe"
+    $FileName = "zithc-windows-amd64.exe"
 }
 
 $DownloadUrl = "https://github.com/$Repo/releases/download/$Version/$FileName"
-$TempPath = "$env:TEMP\zith-installer.exe"
+$TempPath = "$env:TEMP\zithc-installer.exe"
 $InstallDir = "$env:LOCALAPPDATA\Microsoft\WindowsApps"
 
 Write-Host "Downloading from $DownloadUrl..." -ForegroundColor Cyan
@@ -60,12 +60,12 @@ try {
         New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
     }
 
-    Copy-Item -Path $TempPath -Destination "$InstallDir\zith.exe" -Force
+    Copy-Item -Path $TempPath -Destination "$InstallDir\zithc.exe" -Force
     Remove-Item -Path $TempPath -Force
 
     Write-Host "--------------------------------------------------"
     Write-Host "Installation Complete!" -ForegroundColor Green
-    Write-Host "Run 'zith --help' in a NEW terminal window to get started."
+    Write-Host "Run 'zithc --help' in a NEW terminal window to get started."
     Write-Host "--------------------------------------------------"
 } catch {
     Write-Error "Failed to install to $InstallDir."

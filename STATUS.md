@@ -122,11 +122,11 @@ Not yet started.
 
 | Test | Status | Notes |
 |------|--------|-------|
-| `zith-lexer-test` | \* PASS | 41/41 passing |
-| `zith-parser-expr` | \*\*\*\* FAIL | Parser is a stub |
-| `zith-parser-stmt` | \*\*\*\* FAIL | Parser is a stub |
-| `zith-sema-test` | \*\*\*\* FAIL | Type intern/unify are stubs |
-| `zith-mir-test` | 💥 SEGFAULT | MirLowering::lower() returns empty module |
+| `zithc-lexer-test` | \* PASS | 41/41 passing |
+| `zithc-parser-expr` | \*\*\*\* FAIL | Parser is a stub |
+| `zithc-parser-stmt` | \*\*\*\* FAIL | Parser is a stub |
+| `zithc-sema-test` | \*\*\*\* FAIL | Type intern/unify are stubs |
+| `zithc-mir-test` | 💥 SEGFAULT | MirLowering::lower() returns empty module |
 
 ---
 
