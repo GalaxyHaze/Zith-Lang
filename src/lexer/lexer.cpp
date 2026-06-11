@@ -383,6 +383,8 @@ namespace zith::lexer {
             "Comparison",  "Operators", "Comments", "Docs",  "Annotation",
             "Punctuation", "LitVal", "Unknown", "End"
         };
+        static_assert(std::size(names) == static_cast<size_t>(TokenKind::End) + 1,
+                      "tokenKindName array must match TokenKind enum");
         size_t idx = static_cast<size_t>(k);
         if (idx < std::size(names))
             return names[idx];

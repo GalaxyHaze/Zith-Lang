@@ -8,6 +8,7 @@ on:
   push:
     tags:
       - 'v[0-9]*.[0-9]*.[0-9]*'
+      - 'v[0-9]*.[0-9]*.[0-9]*.[0-9]*'
   workflow_dispatch:
     inputs:
       tag_name:
@@ -93,22 +94,12 @@ jobs:
               -DZITH_ENABLE_FFI=OFF
               -DZITH_ENABLE_LLVM=OFF
 
-          - os: macos-13
-            target_name: zith-macos-amd64
-            cmake_flags: >-
-              -DCMAKE_C_COMPILER=$(brew --prefix llvm)/bin/clang
-              -DCMAKE_CXX_COMPILER=$(brew --prefix llvm)/bin/clang++
-              -DLLVM_DIR=$(brew --prefix llvm)/lib/cmake/llvm
-              -DCMAKE_OSX_ARCHITECTURES=x86_64
-              -DZITH_ENABLE_FFI=OFF
-
           - os: macos-14
-            target_name: zith-macos-arm64
+            target_name: zith-macos-universal
             cmake_flags: >-
               -DCMAKE_C_COMPILER=$(brew --prefix llvm)/bin/clang
               -DCMAKE_CXX_COMPILER=$(brew --prefix llvm)/bin/clang++
-              -DLLVM_DIR=$(brew --prefix llvm)/lib/cmake/llvm
-              -DCMAKE_OSX_ARCHITECTURES=arm64
+              -DCMAKE_OSX_ARCHITECTURES="x86_64;arm64"
               -DZITH_ENABLE_FFI=OFF
 
           - os: windows-latest
@@ -193,7 +184,7 @@ jobs:
             -DCMAKE_BUILD_TYPE=Release \
             -DBUILD_TESTING=OFF \
             -DENABLE_WERROR=OFF \
-            -DZITH_VERSION=${{ needs.create-release.outputs.tag }} \
+            -DZITH_VERSION=${{ needs.create-release.outputs.tag || inputs.tag_name }} \
             ${{ matrix.cmake_flags }}
 
       - name: Clean stale macOS archives (prevent corruption)
@@ -221,9 +212,9 @@ jobs:
       - name: Upload release asset
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ needs.create-release.outputs.tag }}
+          tag_name: ${{ needs.create-release.outputs.tag || inputs.tag_name }}
           files: artifacts/${{ matrix.target_name }}
-          draft: ${{ needs.create-release.outputs.draft }}
+          draft: ${{ needs.create-release.outputs.draft || inputs.draft }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -236,46 +227,49 @@ jobs:
       matrix:
         include:
           - target_name: zith-linux-amd64-musl
-            platform: linux/amd64
+            toolchain_url: https://musl.cc/x86_64-linux-musl-cross.tgz
+            toolchain_name: x86_64-linux-musl-cross
+            cc: x86_64-linux-musl-gcc
+            cxx: x86_64-linux-musl-g++
 
           - target_name: zith-linux-arm64-musl
-            platform: linux/arm64
+            toolchain_url: https://musl.cc/aarch64-linux-musl-cross.tgz
+            toolchain_name: aarch64-linux-musl-cross
+            cc: aarch64-linux-musl-gcc
+            cxx: aarch64-linux-musl-g++
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up QEMU (for arm64)
-        if: matrix.target_name == 'zith-linux-arm64-musl'
-        uses: docker/setup-qemu-action@v3
-
-      - name: Build inside Alpine container
+      - name: Install musl cross-compiler
         shell: bash
         run: |
-          docker run --rm --platform "${{ matrix.platform }}" \
-            -v "$PWD:/work" -w /work alpine:3.23 sh -c "
-              apk add --no-cache clang cmake ninja musl-dev linux-headers git
-              cmake -S . -B build -G Ninja \
-                -DCMAKE_BUILD_TYPE=Release \
-                -DBUILD_TESTING=OFF \
-                -DENABLE_WERROR=OFF \
-                -DZITH_VERSION='${{ needs.create-release.outputs.tag }}' \
-                -DCMAKE_C_COMPILER=clang \
-                -DCMAKE_CXX_COMPILER=clang++ \
-                -DCMAKE_CROSSCOMPILING=OFF \
-                -DZITH_ENABLE_FFI=OFF \
-                -DZITH_ENABLE_LLVM=OFF \
-                -DCMAKE_EXE_LINKER_FLAGS='-static'
-              cmake --build build --config Release
-              mkdir -p artifacts
-              cp build/bin/zith artifacts/${{ matrix.target_name }}
-            "
+          curl -sL "${{ matrix.toolchain_url }}" | sudo tar xz -C /opt
+          echo "/opt/${{ matrix.toolchain_name }}/bin" >> "$GITHUB_PATH"
+          ${{ matrix.cc }} --version
+
+      - name: Build
+        shell: bash
+        run: |
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DBUILD_TESTING=OFF \
+            -DENABLE_WERROR=OFF \
+            -DZITH_VERSION='${{ needs.create-release.outputs.tag || inputs.tag_name }}' \
+            -DCMAKE_C_COMPILER=${{ matrix.cc }} \
+            -DCMAKE_CXX_COMPILER=${{ matrix.cxx }} \
+            -DZITH_ENABLE_FFI=OFF \
+            -DCMAKE_EXE_LINKER_FLAGS='-static'
+          cmake --build build --config Release
+          mkdir -p artifacts
+          cp build/bin/zith artifacts/${{ matrix.target_name }}
 
       - name: Upload release asset
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ needs.create-release.outputs.tag }}
+          tag_name: ${{ needs.create-release.outputs.tag || inputs.tag_name }}
           files: artifacts/${{ matrix.target_name }}
-          draft: ${{ needs.create-release.outputs.draft }}
+          draft: ${{ needs.create-release.outputs.draft || inputs.draft }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -311,7 +305,7 @@ jobs:
             -DCMAKE_BUILD_TYPE=Release \
             -DBUILD_TESTING=OFF \
             -DENABLE_WERROR=OFF \
-            -DZITH_VERSION=${{ needs.create-release.outputs.tag }} \
+            -DZITH_VERSION=${{ needs.create-release.outputs.tag || inputs.tag_name }} \
             -DCMAKE_CROSSCOMPILING=ON \
             -DZITH_IS_WASM=ON
 
@@ -330,8 +324,8 @@ jobs:
       - name: Upload release asset
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ needs.create-release.outputs.tag }}
+          tag_name: ${{ needs.create-release.outputs.tag || inputs.tag_name }}
           files: artifacts/zith-wasm.zip
-          draft: ${{ needs.create-release.outputs.draft }}
+          draft: ${{ needs.create-release.outputs.draft || inputs.draft }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

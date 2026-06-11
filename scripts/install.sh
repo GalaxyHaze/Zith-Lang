@@ -66,11 +66,7 @@ case "$OS" in
         fi
         ;;
     Darwin*)
-        case "$ARCH" in
-            x86_64) FILE_NAME="zith-macos-amd64" ;;
-            arm64)  FILE_NAME="zith-macos-arm64" ;;
-            *) echo "Architecture not supported on macOS: $ARCH" >&2; exit 1 ;;
-        esac
+        FILE_NAME="zith-macos-universal"
         ;;
     MINGW*|MSYS*|CYGWIN*)
         FILE_NAME="zith-windows-amd64.exe"

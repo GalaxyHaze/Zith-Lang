@@ -88,11 +88,17 @@ namespace zith::memory {
             return valid;
         }
 
-        T &value() {
+        T &value() & {
             return *reinterpret_cast<T *>(data);
         }
-        const T &value() const {
+        const T &value() const & {
             return *reinterpret_cast<const T *>(data);
+        }
+        T &&value() && {
+            return std::move(*reinterpret_cast<T *>(data));
+        }
+        const T &&value() const && {
+            return std::move(*reinterpret_cast<const T *>(data));
         }
 
         T *operator->() {
@@ -107,6 +113,12 @@ namespace zith::memory {
         }
         const T &operator*() const & {
             return value();
+        }
+        T &&operator*() && {
+            return std::move(value());
+        }
+        const T &&operator*() const && {
+            return std::move(value());
         }
     };
 
@@ -129,11 +141,17 @@ namespace zith::memory {
             return data != nullptr;
         }
 
-        T &value() {
+        T &value() & {
             return *data;
         }
-        const T &value() const {
+        const T &value() const & {
             return *data;
+        }
+        T &&value() && {
+            return std::move(*data);
+        }
+        const T &&value() const && {
+            return std::move(*data);
         }
 
         T *get() const noexcept {
@@ -152,6 +170,12 @@ namespace zith::memory {
         }
         const T &operator*() const & {
             return value();
+        }
+        T &&operator*() && {
+            return std::move(value());
+        }
+        const T &&operator*() const && {
+            return std::move(value());
         }
     };
 
