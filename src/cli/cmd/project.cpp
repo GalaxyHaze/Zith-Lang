@@ -17,7 +17,7 @@ int cmd_new(const Options &opts) {
     namespace fs = std::filesystem;
     const fs::path root = fs::path(name).filename();
     if (fs::exists(root)) {
-        std::fprintf(stderr, "[error] directory '%s' already exists\n", root.c_str());
+        std::fprintf(stderr, "[error] directory '%s' already exists\n", root.string().c_str());
         return 1;
     }
 
@@ -28,7 +28,7 @@ int cmd_new(const Options &opts) {
     fs::create_directories(root / "tests");
 
     if (opts.verbose)
-        std::printf("[*] Created project structure: %s\n", root.c_str());
+        std::printf("[*] Created project structure: %s\n", root.string().c_str());
 
     {
         std::ofstream toml(root / "ZithProject.toml");
@@ -80,9 +80,9 @@ int cmd_new(const Options &opts) {
         main_zith << "\n}\n";
     }
 
-    std::printf("[ok] Created project: %s\n", root.c_str());
+    std::printf("[ok] Created project: %s\n", root.string().c_str());
     if (opts.verbose)
-        std::printf("  cd %s && zith build\n", root.c_str());
+        std::printf("  cd %s && zith build\n", root.string().c_str());
 
     return 0;
 }

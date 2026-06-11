@@ -172,10 +172,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: build
-          key: cmake-${{ matrix.target_name }}-${{ hashFiles('CMakeLists.txt', 'cmake/**/*.cmake', 'src/**/*.cpp', 'src/**/*.hpp') }}
+          key: cmake-${{ runner.os }}-${{ matrix.target_name }}-${{ hashFiles('CMakeLists.txt', 'cmake/**/*.cmake', 'src/**/*.cpp', 'src/**/*.hpp') }}
           restore-keys: |
-            cmake-${{ matrix.target_name }}-
-            cmake-
+            cmake-${{ runner.os }}-${{ matrix.target_name }}-
 
       - name: Configure CMake
         shell: bash
@@ -243,9 +242,17 @@ jobs:
       - name: Install musl cross-compiler
         shell: bash
         run: |
-          for i in 1 2 3; do
-            curl -sL --retry 5 --retry-delay 10 "${{ matrix.toolchain_url }}" | sudo tar xz -C /opt && break
-            sleep 5
+          PRIMARY="${{ matrix.toolchain_url }}"
+          FALLBACK="$(echo "$PRIMARY" | sed 's|https://musl.cc/|https://more.musl.cc/|')"
+          for url in "$PRIMARY" "$FALLBACK"; do
+            echo "Trying $url ..."
+            for i in 1 2 3; do
+              if curl -sL --retry 5 --retry-delay 10 "$url" | sudo tar xz -C /opt 2>/dev/null; then
+                echo "Extracted from $url"
+                break 2
+              fi
+              sleep 5
+            done
           done
           echo "/opt/${{ matrix.toolchain_name }}/bin" >> "$GITHUB_PATH"
           ${{ matrix.cc }} --version

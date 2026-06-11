@@ -12,6 +12,10 @@
 #include <toml++/toml.hpp>
 #ifdef _WIN32
 #include <io.h>
+#include <windows.h>
+#elif defined(__APPLE__)
+#include <mach-o/dyld.h>
+#include <unistd.h>
 #else
 #include <unistd.h>
 #endif
@@ -152,11 +156,27 @@ bool CompilationSession::importStage() {
 
     // 1. Stdlib path (relative to compiler executable)
     {
+        fs::path exe_dir;
         char exe_buf[4096];
+#ifdef _WIN32
+        DWORD len = GetModuleFileNameA(NULL, exe_buf, sizeof(exe_buf));
+        if (len != 0 && len != sizeof(exe_buf)) {
+            exe_buf[len] = '\0';
+            exe_dir = fs::path(exe_buf).parent_path();
+        }
+#elif defined(__APPLE__)
+        uint32_t size = sizeof(exe_buf);
+        if (_NSGetExecutablePath(exe_buf, &size) == 0) {
+            exe_dir = fs::path(exe_buf).parent_path();
+        }
+#else
         ssize_t exe_len = readlink("/proc/self/exe", exe_buf, sizeof(exe_buf) - 1);
         if (exe_len != -1) {
             exe_buf[exe_len] = '\0';
-            fs::path exe_dir = fs::path(exe_buf).parent_path();
+            exe_dir = fs::path(exe_buf).parent_path();
+        }
+#endif
+        if (!exe_dir.empty()) {
             auto candidates = {
                 exe_dir.parent_path() / "stdlib",
                 exe_dir / "stdlib",
