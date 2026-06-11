@@ -254,7 +254,7 @@ jobs:
             -DCMAKE_C_COMPILER="zig;cc;-target;${{ matrix.zig_target }}" \
             -DCMAKE_CXX_COMPILER="zig;c++;-target;${{ matrix.zig_target }}" \
             -DZITH_ENABLE_FFI=OFF \
-            -DCMAKE_EXE_LINKER_FLAGS='-static'
+            -DCMAKE_EXE_LINKER_FLAGS='-static -lc'
           cmake --build build --config Release
           mkdir -p artifacts
           cp build/zithc artifacts/${{ matrix.target_name }}
