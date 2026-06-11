@@ -85,7 +85,7 @@ jobs:
 
       - name: Update scoop manifest
         run: |
-          cp .github/scoop/bucket/zith.json .github/scoop/bucket/zith.json.bak
+          cp .github/scoop/bucket/zithc.json .github/scoop/bucket/zithc.json.bak
 
           jq \
             --arg version "${{ steps.tag.outputs.version }}" \
@@ -97,20 +97,20 @@ jobs:
               .architecture["64bit"].url = "https://github.com/${{ github.repository }}/releases/download/v\($version)/zith-windows-amd64.exe" |
               .architecture.arm64.hash = $arm64 |
               .architecture.arm64.url = "https://github.com/${{ github.repository }}/releases/download/v\($version)/zith-windows-arm64.exe"
-            ' .github/scoop/bucket/zith.json.bak > .github/scoop/bucket/zith.json
+            ' .github/scoop/bucket/zithc.json.bak > .github/scoop/bucket/zithc.json
 
-          if ! jq empty .github/scoop/bucket/zith.json 2>/dev/null; then
-            cp .github/scoop/bucket/zith.json.bak .github/scoop/bucket/zith.json
+          if ! jq empty .github/scoop/bucket/zithc.json 2>/dev/null; then
+            cp .github/scoop/bucket/zithc.json.bak .github/scoop/bucket/zithc.json
             exit 1
           fi
 
-          rm -f .github/scoop/bucket/zith.json.bak
+          rm -f .github/scoop/bucket/zithc.json.bak
 
       - name: Commit scoop changes
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add .github/scoop/bucket/zith.json
+          git add .github/scoop/bucket/zithc.json
           if ! git diff --staged --quiet; then
             git commit -m "chore: update scoop manifest to ${{ steps.tag.outputs.tag }}"
             git push

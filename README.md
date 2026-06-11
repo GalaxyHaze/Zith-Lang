@@ -134,7 +134,7 @@ flow fn run(data: Stream): void {
 **Scoop:**
 ```powershell
 scoop bucket add zith https://github.com/GalaxyHaze/Zith.git
-scoop install zith
+scoop install zithc
 ```
 
 **Homebrew:**
