@@ -124,7 +124,7 @@ jobs:
               -DZITH_ENABLE_LLVM=OFF
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Setup CMake
         uses: jwlawson/actions-setup-cmake@v2
@@ -231,7 +231,7 @@ jobs:
             zig_target: aarch64-linux-musl
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Setup Zig
         shell: bash
@@ -273,7 +273,7 @@ jobs:
     name: Build zith-wasm
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Setup Emscripten
         uses: emscripten-core/setup-emsdk@v16
