@@ -71,7 +71,7 @@ target_include_directories(zithc PRIVATE
     src
 )
 
-target_link_libraries(zithc PRIVATE mio)
+target_link_libraries(zithc PRIVATE mio tomlplusplus::tomlplusplus)
 
 target_compile_definitions(zithc PRIVATE
     ZITH_VERSION="${ZITH_VERSION}"
@@ -85,7 +85,7 @@ if(BUILD_TESTING)
 function(add_zith_test NAME SOURCE)
     add_executable(${NAME} ${SOURCE} $<TARGET_OBJECTS:zithc_objects>)
     target_include_directories(${NAME} PRIVATE src)
-    target_link_libraries(${NAME} PRIVATE mio)
+    target_link_libraries(${NAME} PRIVATE mio tomlplusplus::tomlplusplus)
     set_target_properties(${NAME} PROPERTIES FOLDER "tests")
     add_test(NAME ${NAME} COMMAND ${NAME})
 endfunction()

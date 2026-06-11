@@ -1,8 +1,8 @@
-#include "ast/ast-builder.hpp"
-#include "ast/ast-nodes.hpp"
-#include "ast/ast-ids.hpp"
-#include "memory/arena.hpp"
 #include "../test-common.hpp"
+#include "ast/ast-builder.hpp"
+#include "ast/ast-ids.hpp"
+#include "ast/ast-nodes.hpp"
+#include "memory/arena.hpp"
 
 using namespace zith::ast;
 using zith::memory::Arena;
@@ -20,7 +20,8 @@ static void test_struct_decl() {
 
     auto &node = builder.getDecl(decl);
     CHECK(std::holds_alternative<StructDeclNode>(node), "structDecl node is StructDeclNode");
-    if (!std::holds_alternative<StructDeclNode>(node)) return;
+    if (!std::holds_alternative<StructDeclNode>(node))
+        return;
 
     auto &s = std::get<StructDeclNode>(node);
     CHECK(s.name == "Point", "struct name is Point");
@@ -31,14 +32,15 @@ static void test_if_expr() {
     Arena arena;
     AstBuilder builder(arena);
 
-    auto cond = builder.ident("true");
+    auto cond   = builder.ident("true");
     auto then_b = builder.block(DynArray<StmtId>(arena));
-    auto e = builder.ifExpr(cond, then_b);
+    auto e      = builder.ifExpr(cond, then_b);
     CHECK(e != kInvalidExpr, "ifExpr returns valid ExprId");
 
     auto &node = builder.getExpr(e);
     CHECK(std::holds_alternative<IfNode>(node), "ifExpr node is IfNode");
-    if (!std::holds_alternative<IfNode>(node)) return;
+    if (!std::holds_alternative<IfNode>(node))
+        return;
 
     auto &iff = std::get<IfNode>(node);
     CHECK(iff.cond != kInvalidExpr, "if has condition");
@@ -50,10 +52,10 @@ static void test_if_else_expr() {
     Arena arena;
     AstBuilder builder(arena);
 
-    auto cond = builder.ident("cond");
+    auto cond   = builder.ident("cond");
     auto then_b = builder.block(DynArray<StmtId>(arena));
     auto else_b = builder.block(DynArray<StmtId>(arena));
-    auto e = builder.ifExpr(cond, then_b, else_b);
+    auto e      = builder.ifExpr(cond, then_b, else_b);
     CHECK(e != kInvalidExpr, "ifExpr with else returns valid ExprId");
 
     auto &node = builder.getExpr(e);
@@ -67,7 +69,7 @@ static void test_call_expr() {
     AstBuilder builder(arena);
 
     auto callee = builder.ident("foo");
-    auto arg = builder.litExpr(LitKind::Int, "1");
+    auto arg    = builder.litExpr(LitKind::Int, "1");
     DynArray<ExprId> args(arena);
     args.push(arg);
     auto e = builder.call(callee, std::move(args));
@@ -75,7 +77,8 @@ static void test_call_expr() {
 
     auto &node = builder.getExpr(e);
     CHECK(std::holds_alternative<CallNode>(node), "call node is CallNode");
-    if (!std::holds_alternative<CallNode>(node)) return;
+    if (!std::holds_alternative<CallNode>(node))
+        return;
 
     auto &call = std::get<CallNode>(node);
     CHECK_EQ(call.args.size(), size_t(1), "call has 1 arg");
@@ -95,7 +98,8 @@ static void test_block_with_stmts() {
 
     auto &node = builder.getExpr(block);
     CHECK(std::holds_alternative<BlockNode>(node), "block node is BlockNode");
-    if (!std::holds_alternative<BlockNode>(node)) return;
+    if (!std::holds_alternative<BlockNode>(node))
+        return;
 
     auto &b = std::get<BlockNode>(node);
     CHECK_EQ(b.stmts.size(), size_t(2), "block has 2 stmts");
@@ -107,8 +111,8 @@ static void test_assign_stmt() {
     AstBuilder builder(arena);
 
     auto target = builder.ident("x");
-    auto value = builder.litExpr(LitKind::Int, "5");
-    auto s = builder.assign(target, value);
+    auto value  = builder.litExpr(LitKind::Int, "5");
+    auto s      = builder.assign(target, value);
     CHECK(s != kInvalidStmt, "assign returns valid StmtId");
 
     auto &node = builder.getStmt(s);

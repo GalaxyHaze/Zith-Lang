@@ -6,177 +6,177 @@
 
 namespace zith::memory {
 
-    template <class T> class Optional {
-        alignas(T) char data[sizeof(T)] = {};
-        bool valid{false};
+template <class T> class Optional {
+    alignas(T) char data[sizeof(T)] = {};
+    bool valid{false};
 
-    public:
-        Optional() = default;
+public:
+    Optional() = default;
 
-        Optional(T &&val) : valid(true) {
-            new (data) T(std::move(val));
+    Optional(T &&val) : valid(true) {
+        new (data) T(std::move(val));
+    }
+
+    Optional(const T &val) : valid(true) {
+        new (data) T(val);
+    }
+
+    template <class... Args> explicit Optional(Args &&...args) : valid(true) {
+        new (data) T(std::forward<Args>(args)...);
+    }
+
+    Optional(std::nullptr_t) : valid(false) {}
+
+    Optional(const Optional &other) : valid(other.valid) {
+        if (valid) {
+            new (data) T(other.value());
         }
+    }
 
-        Optional(const T &val) : valid(true) {
-            new (data) T(val);
+    Optional(Optional &&other) noexcept(std::is_nothrow_move_constructible_v<T>)
+        : valid(other.valid) {
+        if (valid) {
+            new (data) T(std::move(other.value()));
         }
+    }
 
-        template <class... Args> explicit Optional(Args &&...args) : valid(true) {
-            new (data) T(std::forward<Args>(args)...);
-        }
-
-        Optional(std::nullptr_t) : valid(false) {}
-
-        Optional(const Optional &other) : valid(other.valid) {
-            if (valid) {
-                new (data) T(other.value());
-            }
-        }
-
-        Optional(Optional &&other) noexcept(std::is_nothrow_move_constructible_v<T>)
-            : valid(other.valid) {
-            if (valid) {
-                new (data) T(std::move(other.value()));
-            }
-        }
-
-        Optional &operator=(const Optional &other) {
-            if (this != &other) {
-                reset();
-                if (other.valid) {
-                    new (data) T(other.value());
-                    valid = true;
-                }
-            }
-            return *this;
-        }
-
-        Optional &operator=(Optional &&other) noexcept(std::is_nothrow_move_constructible_v<T>) {
-            if (this != &other) {
-                reset();
-                if (other.valid) {
-                    new (data) T(std::move(other.value()));
-                    valid = true;
-                }
-            }
-            return *this;
-        }
-
-        ~Optional() {
+    Optional &operator=(const Optional &other) {
+        if (this != &other) {
             reset();
+            if (other.valid) {
+                new (data) T(other.value());
+                valid = true;
+            }
         }
+        return *this;
+    }
 
-        void reset() noexcept {
-            if constexpr (!std::is_trivially_destructible_v<T>) {
-                if (valid) {
-                    reinterpret_cast<T *>(data)->~T();
-                    valid = false;
-                }
-            } else {
+    Optional &operator=(Optional &&other) noexcept(std::is_nothrow_move_constructible_v<T>) {
+        if (this != &other) {
+            reset();
+            if (other.valid) {
+                new (data) T(std::move(other.value()));
+                valid = true;
+            }
+        }
+        return *this;
+    }
+
+    ~Optional() {
+        reset();
+    }
+
+    void reset() noexcept {
+        if constexpr (!std::is_trivially_destructible_v<T>) {
+            if (valid) {
+                reinterpret_cast<T *>(data)->~T();
                 valid = false;
             }
+        } else {
+            valid = false;
         }
+    }
 
-        bool isValid() const noexcept {
-            return valid;
-        }
-        bool isEmpty() const noexcept {
-            return !valid;
-        }
+    bool isValid() const noexcept {
+        return valid;
+    }
+    bool isEmpty() const noexcept {
+        return !valid;
+    }
 
-        explicit operator bool() const noexcept {
-            return valid;
-        }
+    explicit operator bool() const noexcept {
+        return valid;
+    }
 
-        T &value() & {
-            return *reinterpret_cast<T *>(data);
-        }
-        const T &value() const & {
-            return *reinterpret_cast<const T *>(data);
-        }
-        T &&value() && {
-            return std::move(*reinterpret_cast<T *>(data));
-        }
-        const T &&value() const && {
-            return std::move(*reinterpret_cast<const T *>(data));
-        }
+    T &value() & {
+        return *reinterpret_cast<T *>(data);
+    }
+    const T &value() const & {
+        return *reinterpret_cast<const T *>(data);
+    }
+    T &&value() && {
+        return std::move(*reinterpret_cast<T *>(data));
+    }
+    const T &&value() const && {
+        return std::move(*reinterpret_cast<const T *>(data));
+    }
 
-        T *operator->() {
-            return reinterpret_cast<T *>(data);
-        }
-        const T *operator->() const {
-            return reinterpret_cast<const T *>(data);
-        }
+    T *operator->() {
+        return reinterpret_cast<T *>(data);
+    }
+    const T *operator->() const {
+        return reinterpret_cast<const T *>(data);
+    }
 
-        T &operator*() & {
-            return value();
-        }
-        const T &operator*() const & {
-            return value();
-        }
-        T &&operator*() && {
-            return std::move(value());
-        }
-        const T &&operator*() const && {
-            return std::move(value());
-        }
-    };
+    T &operator*() & {
+        return value();
+    }
+    const T &operator*() const & {
+        return value();
+    }
+    T &&operator*() && {
+        return std::move(value());
+    }
+    const T &&operator*() const && {
+        return std::move(value());
+    }
+};
 
-    template <class T> class Optional<T *> {
-        T *data = nullptr;
+template <class T> class Optional<T *> {
+    T *data = nullptr;
 
-    public:
-        Optional() = default;
-        Optional(T *val) : data(val) {}
-        explicit Optional(std::nullptr_t) : data(nullptr) {}
+public:
+    Optional() = default;
+    Optional(T *val) : data(val) {}
+    explicit Optional(std::nullptr_t) : data(nullptr) {}
 
-        bool isValid() const noexcept {
-            return data != nullptr;
-        }
-        bool isEmpty() const noexcept {
-            return data == nullptr;
-        }
+    bool isValid() const noexcept {
+        return data != nullptr;
+    }
+    bool isEmpty() const noexcept {
+        return data == nullptr;
+    }
 
-        explicit operator bool() const noexcept {
-            return data != nullptr;
-        }
+    explicit operator bool() const noexcept {
+        return data != nullptr;
+    }
 
-        T &value() & {
-            return *data;
-        }
-        const T &value() const & {
-            return *data;
-        }
-        T &&value() && {
-            return std::move(*data);
-        }
-        const T &&value() const && {
-            return std::move(*data);
-        }
+    T &value() & {
+        return *data;
+    }
+    const T &value() const & {
+        return *data;
+    }
+    T &&value() && {
+        return std::move(*data);
+    }
+    const T &&value() const && {
+        return std::move(*data);
+    }
 
-        T *get() const noexcept {
-            return data;
-        }
+    T *get() const noexcept {
+        return data;
+    }
 
-        T *operator->() {
-            return data;
-        }
-        const T *operator->() const {
-            return data;
-        }
+    T *operator->() {
+        return data;
+    }
+    const T *operator->() const {
+        return data;
+    }
 
-        T &operator*() & {
-            return value();
-        }
-        const T &operator*() const & {
-            return value();
-        }
-        T &&operator*() && {
-            return std::move(value());
-        }
-        const T &&operator*() const && {
-            return std::move(value());
-        }
-    };
+    T &operator*() & {
+        return value();
+    }
+    const T &operator*() const & {
+        return value();
+    }
+    T &&operator*() && {
+        return std::move(value());
+    }
+    const T &&operator*() const && {
+        return std::move(value());
+    }
+};
 
 } // namespace zith::memory

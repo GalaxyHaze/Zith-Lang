@@ -1,78 +1,75 @@
 #pragma once
 
-#include "memory/arena.hpp"
-#include "memory/dyn-array.hpp"
-#include "memory/string-interner.hpp"
+#include "ast/ast-ids.hpp"
 #include "import/symbol-id.hpp"
 #include "import/symbol-visibility.hpp"
+#include "memory/arena.hpp"
+#include "memory/dyn-array.hpp"
 #include "memory/span.hpp"
-#include "ast/ast-ids.hpp"
+#include "memory/string-interner.hpp"
 
 #include <cstdio>
 #include <string_view>
 
 namespace zith::import {
 
-    enum class SymKind : uint8_t {
-        Fn,
-        Struct,
-        Trait,
-        Enum,
-        Alias,
-        Variable,
-        Module,
-        Component,
-    };
+enum class SymKind : uint8_t {
+    Fn,
+    Struct,
+    Trait,
+    Enum,
+    Alias,
+    Variable,
+    Module,
+    Component,
+};
 
-    struct SymbolData {
-        std::string_view name;
-        ScopeId scope;
-        SymbolVisibility visibility = SymbolVisibility::Private;
-        int32_t mod_depth = 0;
-        SymKind kind = SymKind::Variable;
-        ast::DeclId decl_id = ast::kInvalidDecl;
-        memory::Span span{};
-        memory::DynArray<SymId> members;
+struct SymbolData {
+    std::string_view name;
+    ScopeId scope;
+    SymbolVisibility visibility = SymbolVisibility::Private;
+    int32_t mod_depth           = 0;
+    SymKind kind                = SymKind::Variable;
+    ast::DeclId decl_id         = ast::kInvalidDecl;
+    memory::Span span{};
+    memory::DynArray<SymId> members;
 
-        SymbolData(std::string_view name, ScopeId scope, SymbolVisibility vis, int32_t depth,
-                   SymKind ikind, ast::DeclId did, memory::Span ispan, memory::Arena &arena) :
-            name(name), scope(scope), visibility(vis), mod_depth(depth), kind(ikind),
-            decl_id(did), span(ispan), members(arena) {}
-    };
+    SymbolData(std::string_view name, ScopeId scope, SymbolVisibility vis, int32_t depth,
+               SymKind ikind, ast::DeclId did, memory::Span ispan, memory::Arena &arena)
+        : name(name), scope(scope), visibility(vis), mod_depth(depth), kind(ikind), decl_id(did),
+          span(ispan), members(arena) {}
+};
 
-    struct Scope {
-        ScopeId parent = kInvalidScope;
-        memory::DynArray<SymId> syms;
-    };
+struct Scope {
+    ScopeId parent = kInvalidScope;
+    memory::DynArray<SymId> syms;
+};
 
-    class SymbolTable {
-        memory::Arena *arena_;
-        memory::DynArray<Scope> scopes_;
-        memory::DynArray<SymbolData> symbols_;
-        ScopeId current_ = kRootScope;
+class SymbolTable {
+    memory::Arena *arena_;
+    memory::DynArray<Scope> scopes_;
+    memory::DynArray<SymbolData> symbols_;
+    ScopeId current_ = kRootScope;
 
-    public:
-        explicit SymbolTable(memory::Arena &arena);
+public:
+    explicit SymbolTable(memory::Arena &arena);
 
-        ScopeId enterScope();
-        void exitScope();
-        ScopeId currentScope() const noexcept;
+    ScopeId enterScope();
+    void exitScope();
+    ScopeId currentScope() const noexcept;
 
-        SymId declare(std::string_view name,
-                      SymbolVisibility vis = SymbolVisibility::Private,
-                      int32_t depth = 0,
-                      SymKind kind = SymKind::Variable,
-                      ast::DeclId decl_id = ast::kInvalidDecl,
-                      memory::Span span = {});
-        SymId lookup(std::string_view name) const;
-        SymId lookupInScope(std::string_view name, ScopeId scope) const;
+    SymId declare(std::string_view name, SymbolVisibility vis = SymbolVisibility::Private,
+                  int32_t depth = 0, SymKind kind = SymKind::Variable,
+                  ast::DeclId decl_id = ast::kInvalidDecl, memory::Span span = {});
+    SymId lookup(std::string_view name) const;
+    SymId lookupInScope(std::string_view name, ScopeId scope) const;
 
-        SymbolData &get(SymId id);
-        const SymbolData &get(SymId id) const;
-        size_t symbolCount() const noexcept;
-        ScopeId scopeCount() const noexcept;
+    SymbolData &get(SymId id);
+    const SymbolData &get(SymId id) const;
+    size_t symbolCount() const noexcept;
+    ScopeId scopeCount() const noexcept;
 
-        void dump(FILE *out = stdout) const;
-    };
+    void dump(FILE *out = stdout) const;
+};
 
 } // namespace zith::import

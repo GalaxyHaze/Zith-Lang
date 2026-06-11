@@ -1,14 +1,15 @@
-#include "memory/source-map.hpp"
-#include "import/import-manager.hpp"
-#include "ast/ast-printer.hpp"
 #include "ast/ast-builder.hpp"
-#include "ast/ast-nodes.hpp"
 #include "ast/ast-ids.hpp"
-#include "memory/arena.hpp"
-#include "memory/dyn-array.hpp"
+#include "ast/ast-nodes.hpp"
+#include "ast/ast-printer.hpp"
 #include "diagnostics/diagnostic-engine.hpp"
 #include "diagnostics/error-codes.hpp"
+#include "import/import-manager.hpp"
+#include "memory/arena.hpp"
+#include "memory/dyn-array.hpp"
+#include "memory/source-map.hpp"
 
+#include "../test-common.hpp"
 #include <cstdio>
 #include <cstdlib>
 #include <filesystem>
@@ -16,31 +17,37 @@
 #include <string>
 #include <string_view>
 #include <vector>
-#include "../test-common.hpp"
 
 // ── diagnostic assertion helpers ──────────────────────────────────
 
-#define CHECK_DIAG_COUNT(diags, n) do { \
-    auto _all = (diags).all(); \
-    CHECK_EQ(_all.size(), size_t(n), "expected " #n " diagnostic(s)"); \
-} while(0)
+#define CHECK_DIAG_COUNT(diags, n)                                                                 \
+    do {                                                                                           \
+        auto _all = (diags).all();                                                                 \
+        CHECK_EQ(_all.size(), size_t(n), "expected " #n " diagnostic(s)");                         \
+    } while (0)
 
-#define CHECK_DIAG_AT(diags, i, sev, errc) do { \
-    auto _all = (diags).all(); \
-    CHECK(i < _all.size(), "diagnostic index " #i " in range"); \
-    if (i < _all.size()) { \
-        CHECK_EQ(static_cast<int>(_all[i].severity), static_cast<int>(zith::diagnostics::Severity::sev), \
-                 "diagnostic[" #i "] severity is " #sev); \
-        CHECK_EQ(_all[i].code, zith::diagnostics::err::errc, \
-                 "diagnostic[" #i "] code is " #errc); \
-    } \
-} while(0)
+#define CHECK_DIAG_AT(diags, i, sev, errc)                                                         \
+    do {                                                                                           \
+        auto _all = (diags).all();                                                                 \
+        CHECK(i < _all.size(), "diagnostic index " #i " in range");                                \
+        if (i < _all.size()) {                                                                     \
+            CHECK_EQ(static_cast<int>(_all[i].severity),                                           \
+                     static_cast<int>(zith::diagnostics::Severity::sev),                           \
+                     "diagnostic[" #i "] severity is " #sev);                                      \
+            CHECK_EQ(_all[i].code, zith::diagnostics::err::errc,                                   \
+                     "diagnostic[" #i "] code is " #errc);                                         \
+        }                                                                                          \
+    } while (0)
 
 namespace fs = std::filesystem;
 
 static struct Cleanup {
     std::vector<std::string> dirs;
-    ~Cleanup() { for (auto &d : dirs) { std::filesystem::remove_all(d); } }
+    ~Cleanup() {
+        for (auto &d : dirs) {
+            std::filesystem::remove_all(d);
+        }
+    }
 } cleanup;
 
 using namespace zith::ast;
@@ -49,9 +56,10 @@ using zith::memory::Arena;
 using zith::memory::DynArray;
 
 static std::string make_tmp_dir() {
-    char tmpl[] = "/tmp/zith_e2e_XXXXXX";
+    char tmpl[]   = "/tmp/zith_e2e_XXXXXX";
     const char *d = mkdtemp(tmpl);
-    if (d) cleanup.dirs.push_back(d);
+    if (d)
+        cleanup.dirs.push_back(d);
     return d ? std::string(d) : std::string{};
 }
 static auto source_map = zith::memory::SourceMap();
@@ -62,7 +70,8 @@ static void test_import_with_prefix() {
     Arena arena;
     auto tmp_dir = make_tmp_dir();
     CHECK(!tmp_dir.empty(), "tmp dir created");
-    if (tmp_dir.empty()) return;
+    if (tmp_dir.empty())
+        return;
 
     {
         std::ofstream f(tmp_dir + "/mymod.zith");
@@ -78,7 +87,8 @@ static void test_import_with_prefix() {
     path.push("mymod");
     auto res = mgr.resolve(path, /*is_from=*/false);
     CHECK(res.isOk(), "resolve mymod");
-    if (!res.isOk()) return;
+    if (!res.isOk())
+        return;
 
     SymbolTable main_syms(arena);
     mgr.mergeInto(main_syms);
@@ -87,9 +97,9 @@ static void test_import_with_prefix() {
     main_syms.dump();
 
     CHECK(main_syms.lookup("mymod.greet") != kInvalidSym, "mymod.greet found (pub)");
-    CHECK(main_syms.lookup("mymod.util") != kInvalidSym,   "mymod.util found (mod(1) at depth 1)");
-    CHECK(main_syms.lookup("mymod.hidden") == kInvalidSym,  "mymod.hidden NOT found (private)");
-    CHECK(main_syms.lookup("greet") == kInvalidSym,         "bare greet NOT found (import uses prefix)");
+    CHECK(main_syms.lookup("mymod.util") != kInvalidSym, "mymod.util found (mod(1) at depth 1)");
+    CHECK(main_syms.lookup("mymod.hidden") == kInvalidSym, "mymod.hidden NOT found (private)");
+    CHECK(main_syms.lookup("greet") == kInvalidSym, "bare greet NOT found (import uses prefix)");
 }
 
 // ── test 2: from → bare + last-segment prefix ────────────────────
@@ -98,7 +108,8 @@ static void test_from_dual_registration() {
     Arena arena;
     auto tmp_dir = make_tmp_dir();
     CHECK(!tmp_dir.empty(), "tmp dir created");
-    if (tmp_dir.empty()) return;
+    if (tmp_dir.empty())
+        return;
 
     {
         std::ofstream f(tmp_dir + "/frommod.zith");
@@ -113,7 +124,8 @@ static void test_from_dual_registration() {
     path.push("frommod");
     auto res = mgr.resolve(path, /*is_from=*/true);
     CHECK(res.isOk(), "resolve frommod");
-    if (!res.isOk()) return;
+    if (!res.isOk())
+        return;
 
     SymbolTable main_syms(arena);
     mgr.mergeInto(main_syms);
@@ -122,10 +134,12 @@ static void test_from_dual_registration() {
     main_syms.dump();
 
     // from registers BOTH bare and last-segment prefixed
-    CHECK(main_syms.lookup("greet") != kInvalidSym,          "bare greet found (from)");
-    CHECK(main_syms.lookup("frommod.greet") != kInvalidSym,  "frommod.greet also found (last-segment prefix)");
-    CHECK(main_syms.lookup("util") != kInvalidSym,            "bare util found (mod(1) at depth 1)");
-    CHECK(main_syms.lookup("frommod.util") != kInvalidSym,   "frommod.util also found (last-segment prefix)");
+    CHECK(main_syms.lookup("greet") != kInvalidSym, "bare greet found (from)");
+    CHECK(main_syms.lookup("frommod.greet") != kInvalidSym,
+          "frommod.greet also found (last-segment prefix)");
+    CHECK(main_syms.lookup("util") != kInvalidSym, "bare util found (mod(1) at depth 1)");
+    CHECK(main_syms.lookup("frommod.util") != kInvalidSym,
+          "frommod.util also found (last-segment prefix)");
 }
 
 // ── test 3: mod(1) blocked at depth 2 ───────────────────────────
@@ -134,7 +148,8 @@ static void test_depth_blocks_at_distance() {
     Arena arena;
     auto tmp_dir = make_tmp_dir();
     CHECK(!tmp_dir.empty(), "tmp dir created");
-    if (tmp_dir.empty()) return;
+    if (tmp_dir.empty())
+        return;
 
     {
         std::ofstream f(tmp_dir + "/depthmod.zith");
@@ -150,7 +165,8 @@ static void test_depth_blocks_at_distance() {
     path.push("depthmod");
     auto res = mgr.resolve(path);
     CHECK(res.isOk(), "resolve depthmod");
-    if (!res.isOk()) return;
+    if (!res.isOk())
+        return;
 
     // merge at depth 2 → mod(1) should be blocked, pub and mod(3) pass
     SymbolTable main_syms(arena);
@@ -163,8 +179,8 @@ static void test_depth_blocks_at_distance() {
     main_syms.dump();
 
     CHECK(main_syms.lookup("depthmod.always_visible") != kInvalidSym, "pub always passes");
-    CHECK(main_syms.lookup("depthmod.limited") == kInvalidSym,        "mod(1) blocked at depth 2");
-    CHECK(main_syms.lookup("depthmod.deep_ok") != kInvalidSym,        "mod(3) passes at depth 2");
+    CHECK(main_syms.lookup("depthmod.limited") == kInvalidSym, "mod(1) blocked at depth 2");
+    CHECK(main_syms.lookup("depthmod.deep_ok") != kInvalidSym, "mod(3) passes at depth 2");
 }
 
 // ── test 4: from + depth — dual-registration respects depth ─────
@@ -173,7 +189,8 @@ static void test_from_depth_blocks() {
     Arena arena;
     auto tmp_dir = make_tmp_dir();
     CHECK(!tmp_dir.empty(), "tmp dir created");
-    if (tmp_dir.empty()) return;
+    if (tmp_dir.empty())
+        return;
 
     {
         std::ofstream f(tmp_dir + "/fdepth.zith");
@@ -187,7 +204,8 @@ static void test_from_depth_blocks() {
     path.push("fdepth");
     auto res = mgr.resolve(path, /*is_from=*/true);
     CHECK(res.isOk(), "resolve fdepth");
-    if (!res.isOk()) return;
+    if (!res.isOk())
+        return;
 
     SymbolTable main_syms(arena);
     mgr.mergeInto(main_syms, /*from_depth=*/2);
@@ -196,8 +214,9 @@ static void test_from_depth_blocks() {
     main_syms.dump();
 
     // Both bare and last-segment versions should be blocked
-    CHECK(main_syms.lookup("shallow") == kInvalidSym,       "bare shallow blocked (mod(1), depth 2)");
-    CHECK(main_syms.lookup("fdepth.shallow") == kInvalidSym, "fdepth.shallow blocked (mod(1), depth 2)");
+    CHECK(main_syms.lookup("shallow") == kInvalidSym, "bare shallow blocked (mod(1), depth 2)");
+    CHECK(main_syms.lookup("fdepth.shallow") == kInvalidSym,
+          "fdepth.shallow blocked (mod(1), depth 2)");
 }
 
 // ── test 5: import alias ─────────────────────────────────────────
@@ -206,7 +225,8 @@ static void test_import_alias() {
     Arena arena;
     auto tmp_dir = make_tmp_dir();
     CHECK(!tmp_dir.empty(), "tmp dir created");
-    if (tmp_dir.empty()) return;
+    if (tmp_dir.empty())
+        return;
 
     {
         fs::create_directories(tmp_dir + "/some/long");
@@ -223,7 +243,8 @@ static void test_import_alias() {
     path.push("path");
     auto res = mgr.resolve(path, /*is_from=*/false, /*is_export=*/false, "short");
     CHECK(res.isOk(), "resolve some/long/path with alias");
-    if (!res.isOk()) return;
+    if (!res.isOk())
+        return;
 
     SymbolTable main_syms(arena);
     mgr.mergeInto(main_syms);
@@ -231,8 +252,9 @@ static void test_import_alias() {
     std::printf("=== import alias ===\n");
     main_syms.dump();
 
-    CHECK(main_syms.lookup("short.hello") != kInvalidSym,  "short.hello found (alias)");
-    CHECK(main_syms.lookup("some.long.path.hello") == kInvalidSym, "full prefix NOT found (alias used)");
+    CHECK(main_syms.lookup("short.hello") != kInvalidSym, "short.hello found (alias)");
+    CHECK(main_syms.lookup("some.long.path.hello") == kInvalidSym,
+          "full prefix NOT found (alias used)");
 }
 
 // ── test 6: cycle detection ──────────────────────────────────────
@@ -241,7 +263,8 @@ static void test_cycle_detection() {
     Arena arena;
     auto tmp_dir = make_tmp_dir();
     CHECK(!tmp_dir.empty(), "tmp dir created");
-    if (tmp_dir.empty()) return;
+    if (tmp_dir.empty())
+        return;
 
     {
         std::ofstream f(tmp_dir + "/a.zith");
@@ -263,7 +286,8 @@ static void test_cycle_detection() {
     // First resolve a:
     auto res_a = mgr.resolve(path_a);
     CHECK(res_a.isOk(), "resolve a (first)");
-    if (!res_a.isOk()) return;
+    if (!res_a.isOk())
+        return;
 
     // Re-resolve a should return the cached index (dedup, not cycle)
     auto res_a2 = mgr.resolve(path_a);
@@ -276,7 +300,8 @@ static void test_not_visible() {
     Arena arena;
     auto tmp_dir = make_tmp_dir();
     CHECK(!tmp_dir.empty(), "tmp dir created");
-    if (tmp_dir.empty()) return;
+    if (tmp_dir.empty())
+        return;
 
     {
         std::ofstream f(tmp_dir + "/hidden.zith");
@@ -299,7 +324,8 @@ static void test_mod_dir_lookup() {
     Arena arena;
     auto tmp_dir = make_tmp_dir();
     CHECK(!tmp_dir.empty(), "tmp dir created");
-    if (tmp_dir.empty()) return;
+    if (tmp_dir.empty())
+        return;
 
     fs::create_directories(tmp_dir + "/mymod");
     {
@@ -314,7 +340,8 @@ static void test_mod_dir_lookup() {
     path.push("mymod");
     auto res = mgr.resolve(path);
     CHECK(res.isOk(), "resolve mymod (mod.zith dir)");
-    if (!res.isOk()) return;
+    if (!res.isOk())
+        return;
 
     SymbolTable main_syms(arena);
     mgr.mergeInto(main_syms);
@@ -328,7 +355,8 @@ static void test_hatch_escape() {
     Arena arena;
     auto tmp_dir = make_tmp_dir();
     CHECK(!tmp_dir.empty(), "tmp dir created");
-    if (tmp_dir.empty()) return;
+    if (tmp_dir.empty())
+        return;
 
     fs::create_directories(tmp_dir + "/src");
     {
@@ -343,10 +371,10 @@ static void test_hatch_escape() {
     path.push("..");
     path.push("lib");
     auto res = mgr.resolve(path, /*is_from=*/false, /*is_export=*/false,
-                           /*alias=*/{}, /*import_depth=*/1,
-                           tmp_dir + "/src/main.zith");
+                           /*alias=*/{}, /*import_depth=*/1, tmp_dir + "/src/main.zith");
     CHECK(res.isOk(), "resolve ../lib from src/main.zith");
-    if (!res.isOk()) return;
+    if (!res.isOk())
+        return;
 
     SymbolTable main_syms(arena);
     mgr.mergeInto(main_syms);
@@ -360,7 +388,8 @@ static void test_hatch_escape_blocked() {
     Arena arena;
     auto tmp_dir = make_tmp_dir();
     CHECK(!tmp_dir.empty(), "tmp dir created");
-    if (tmp_dir.empty()) return;
+    if (tmp_dir.empty())
+        return;
 
     fs::create_directories(tmp_dir + "/sub");
     {
@@ -377,8 +406,7 @@ static void test_hatch_escape_blocked() {
     path.push("outside");
     // Resolves to /tmp/outside.zith which is outside tmp_dir
     auto res = mgr.resolve(path, /*is_from=*/false, /*is_export=*/false,
-                           /*alias=*/{}, /*import_depth=*/1,
-                           tmp_dir + "/sub/x.zith");
+                           /*alias=*/{}, /*import_depth=*/1, tmp_dir + "/sub/x.zith");
     CHECK(!res.isOk(), "resolve ../../outside should fail (beyond visible root)");
 }
 
@@ -388,7 +416,8 @@ static void test_from_multi_segment() {
     Arena arena;
     auto tmp_dir = make_tmp_dir();
     CHECK(!tmp_dir.empty(), "tmp dir created");
-    if (tmp_dir.empty()) return;
+    if (tmp_dir.empty())
+        return;
 
     fs::create_directories(tmp_dir + "/sub/dir");
     {
@@ -405,7 +434,8 @@ static void test_from_multi_segment() {
     path.push("module");
     auto res = mgr.resolve(path, /*is_from=*/true);
     CHECK(res.isOk(), "resolve sub/dir/module (from)");
-    if (!res.isOk()) return;
+    if (!res.isOk())
+        return;
 
     SymbolTable main_syms(arena);
     mgr.mergeInto(main_syms);
@@ -414,8 +444,9 @@ static void test_from_multi_segment() {
     main_syms.dump();
 
     // Last segment is "module"
-    CHECK(main_syms.lookup("multi") != kInvalidSym,         "bare multi found (from)");
-    CHECK(main_syms.lookup("module.multi") != kInvalidSym,  "module.multi found (last-segment prefix)");
+    CHECK(main_syms.lookup("multi") != kInvalidSym, "bare multi found (from)");
+    CHECK(main_syms.lookup("module.multi") != kInvalidSym,
+          "module.multi found (last-segment prefix)");
     // Full path prefix should NOT appear with from
     CHECK(main_syms.lookup("sub.dir.module.multi") == kInvalidSym, "full prefix NOT used (from)");
 }
@@ -426,7 +457,8 @@ static void test_export_simple() {
     Arena arena;
     auto tmp_dir = make_tmp_dir();
     CHECK(!tmp_dir.empty(), "tmp dir created");
-    if (tmp_dir.empty()) return;
+    if (tmp_dir.empty())
+        return;
 
     {
         std::ofstream f(tmp_dir + "/exported.zith");
@@ -440,14 +472,16 @@ static void test_export_simple() {
     path.push("exported");
     auto res = mgr.resolve(path, /*is_from=*/true, /*is_export=*/true);
     CHECK(res.isOk(), "resolve exported (export)");
-    if (!res.isOk()) return;
+    if (!res.isOk())
+        return;
 
     SymbolTable main_syms(arena);
     mgr.mergeInto(main_syms);
 
     // Export behaves like from: bare + last-segment prefix
-    CHECK(main_syms.lookup("from_export") != kInvalidSym,          "bare from_export found (export)");
-    CHECK(main_syms.lookup("exported.from_export") != kInvalidSym, "exported.from_export found (last-segment)");
+    CHECK(main_syms.lookup("from_export") != kInvalidSym, "bare from_export found (export)");
+    CHECK(main_syms.lookup("exported.from_export") != kInvalidSym,
+          "exported.from_export found (last-segment)");
 }
 
 // ── test 13: multiple different imports ─────────────────────────
@@ -456,7 +490,8 @@ static void test_multiple_imports() {
     Arena arena;
     auto tmp_dir = make_tmp_dir();
     CHECK(!tmp_dir.empty(), "tmp dir created");
-    if (tmp_dir.empty()) return;
+    if (tmp_dir.empty())
+        return;
 
     {
         std::ofstream f(tmp_dir + "/a.zith");
@@ -474,13 +509,15 @@ static void test_multiple_imports() {
     path_a.push("a");
     auto res_a = mgr.resolve(path_a);
     CHECK(res_a.isOk(), "resolve a");
-    if (!res_a.isOk()) return;
+    if (!res_a.isOk())
+        return;
 
     DynArray<std::string_view> path_b(arena);
     path_b.push("b");
     auto res_b = mgr.resolve(path_b);
     CHECK(res_b.isOk(), "resolve b");
-    if (!res_b.isOk()) return;
+    if (!res_b.isOk())
+        return;
 
     SymbolTable main_syms(arena);
     mgr.mergeInto(main_syms);
@@ -495,7 +532,8 @@ static void test_import_dotdot_prefix() {
     Arena arena;
     auto tmp_dir = make_tmp_dir();
     CHECK(!tmp_dir.empty(), "tmp dir created");
-    if (tmp_dir.empty()) return;
+    if (tmp_dir.empty())
+        return;
 
     fs::create_directories(tmp_dir + "/nested");
     {
@@ -510,10 +548,10 @@ static void test_import_dotdot_prefix() {
     path.push("..");
     path.push("outer");
     auto res = mgr.resolve(path, /*is_from=*/false, /*is_export=*/false,
-                           /*alias=*/{}, /*import_depth=*/1,
-                           tmp_dir + "/nested/any.zith");
+                           /*alias=*/{}, /*import_depth=*/1, tmp_dir + "/nested/any.zith");
     CHECK(res.isOk(), "resolve ../outer from nested/any.zith");
-    if (!res.isOk()) return;
+    if (!res.isOk())
+        return;
 
     SymbolTable main_syms(arena);
     mgr.mergeInto(main_syms);
@@ -528,7 +566,8 @@ static void test_dir_depth_limited() {
     Arena arena;
     auto tmp_dir = make_tmp_dir();
     CHECK(!tmp_dir.empty(), "tmp dir created");
-    if (tmp_dir.empty()) return;
+    if (tmp_dir.empty())
+        return;
 
     fs::create_directories(tmp_dir + "/mydir/sub");
     {
@@ -549,7 +588,8 @@ static void test_dir_depth_limited() {
     auto res = mgr.resolve(path, /*is_from=*/false, /*is_export=*/false,
                            /*alias=*/{}, /*import_depth=*/1);
     CHECK(res.isOk(), "resolve mydir (depth=1)");
-    if (!res.isOk()) return;
+    if (!res.isOk())
+        return;
 
     SymbolTable main_syms(arena);
     mgr.mergeInto(main_syms);
@@ -558,7 +598,8 @@ static void test_dir_depth_limited() {
     main_syms.dump();
 
     CHECK(main_syms.lookup("mydir.a.top_fn") != kInvalidSym, "mydir.a.top_fn found (depth 1)");
-    CHECK(main_syms.lookup("mydir.sub.b.deep_fn") == kInvalidSym, "mydir.sub.b.deep_fn NOT found (depth >1)");
+    CHECK(main_syms.lookup("mydir.sub.b.deep_fn") == kInvalidSym,
+          "mydir.sub.b.deep_fn NOT found (depth >1)");
 }
 
 // ── test 16: directory import with infinite depth (..) ────────────
@@ -567,7 +608,8 @@ static void test_dir_depth_infinite() {
     Arena arena;
     auto tmp_dir = make_tmp_dir();
     CHECK(!tmp_dir.empty(), "tmp dir created");
-    if (tmp_dir.empty()) return;
+    if (tmp_dir.empty())
+        return;
 
     fs::create_directories(tmp_dir + "/mydir/sub");
     {
@@ -587,7 +629,8 @@ static void test_dir_depth_infinite() {
     auto res = mgr.resolve(path, /*is_from=*/false, /*is_export=*/false,
                            /*alias=*/{}, /*import_depth=*/-1);
     CHECK(res.isOk(), "resolve mydir (depth=..)");
-    if (!res.isOk()) return;
+    if (!res.isOk())
+        return;
 
     SymbolTable main_syms(arena);
     mgr.mergeInto(main_syms);
@@ -596,7 +639,8 @@ static void test_dir_depth_infinite() {
     main_syms.dump();
 
     CHECK(main_syms.lookup("mydir.a.top_fn") != kInvalidSym, "mydir.a.top_fn found");
-    CHECK(main_syms.lookup("mydir.sub.b.deep_fn") != kInvalidSym, "mydir.sub.b.deep_fn found (infinite depth)");
+    CHECK(main_syms.lookup("mydir.sub.b.deep_fn") != kInvalidSym,
+          "mydir.sub.b.deep_fn found (infinite depth)");
 }
 
 // ── test 17: from with directory depth (..) ───────────────────────
@@ -605,7 +649,8 @@ static void test_from_dir_depth_infinite() {
     Arena arena;
     auto tmp_dir = make_tmp_dir();
     CHECK(!tmp_dir.empty(), "tmp dir created");
-    if (tmp_dir.empty()) return;
+    if (tmp_dir.empty())
+        return;
 
     fs::create_directories(tmp_dir + "/mydir/sub");
     {
@@ -625,7 +670,8 @@ static void test_from_dir_depth_infinite() {
     auto res = mgr.resolve(path, /*is_from=*/true, /*is_export=*/false,
                            /*alias=*/{}, /*import_depth=*/-1);
     CHECK(res.isOk(), "resolve mydir (from, depth=..)");
-    if (!res.isOk()) return;
+    if (!res.isOk())
+        return;
 
     SymbolTable main_syms(arena);
     mgr.mergeInto(main_syms);
@@ -646,7 +692,8 @@ static void test_export_directory() {
     Arena arena;
     auto tmp_dir = make_tmp_dir();
     CHECK(!tmp_dir.empty(), "tmp dir created");
-    if (tmp_dir.empty()) return;
+    if (tmp_dir.empty())
+        return;
 
     {
         std::ofstream f(tmp_dir + "/inner.zith");
@@ -661,7 +708,8 @@ static void test_export_directory() {
     // Resolve as export (is_export=true, is_from=true)
     auto res = mgr.resolve(path, /*is_from=*/true, /*is_export=*/true);
     CHECK(res.isOk(), "resolve inner (export)");
-    if (!res.isOk()) return;
+    if (!res.isOk())
+        return;
 
     SymbolTable main_syms(arena);
     mgr.mergeInto(main_syms);
@@ -671,7 +719,8 @@ static void test_export_directory() {
 
     // export behaves like from: bare + last-segment prefix
     CHECK(main_syms.lookup("inner_fn") != kInvalidSym, "bare inner_fn found (export)");
-    CHECK(main_syms.lookup("inner.inner_fn") != kInvalidSym, "inner.inner_fn found (last-segment prefix)");
+    CHECK(main_syms.lookup("inner.inner_fn") != kInvalidSym,
+          "inner.inner_fn found (last-segment prefix)");
 }
 
 // ── test 19: cycle detection via re-export chain ─────────────────
@@ -680,7 +729,8 @@ static void test_cycle_via_re_export() {
     Arena arena;
     auto tmp_dir = make_tmp_dir();
     CHECK(!tmp_dir.empty(), "tmp dir created");
-    if (tmp_dir.empty()) return;
+    if (tmp_dir.empty())
+        return;
 
     {
         std::ofstream f(tmp_dir + "/acyc.zith");
@@ -720,7 +770,8 @@ static void test_cycle_via_re_export() {
     // bcyc also has its own entry
     CHECK(main_syms.lookup("bcyc.b_fn") != kInvalidSym, "bcyc.b_fn found (own entry)");
     // No circular re-export of acyc through bcyc (that re-export failed)
-    CHECK(main_syms.lookup("bcyc.a_fn") == kInvalidSym, "bcyc.a_fn NOT found (acyc re-export through bcyc failed)");
+    CHECK(main_syms.lookup("bcyc.a_fn") == kInvalidSym,
+          "bcyc.a_fn NOT found (acyc re-export through bcyc failed)");
 }
 
 // ── test 20: re-export chain (A → B → C) ──────────────────────────
@@ -729,7 +780,8 @@ static void test_re_export_chain() {
     Arena arena;
     auto tmp_dir = make_tmp_dir();
     CHECK(!tmp_dir.empty(), "tmp dir created");
-    if (tmp_dir.empty()) return;
+    if (tmp_dir.empty())
+        return;
 
     {
         std::ofstream f(tmp_dir + "/cchain.zith");
@@ -753,7 +805,8 @@ static void test_re_export_chain() {
     path.push("achain");
     auto res = mgr.resolve(path);
     CHECK(res.isOk(), "resolve achain");
-    if (!res.isOk()) return;
+    if (!res.isOk())
+        return;
 
     SymbolTable main_syms(arena);
     mgr.mergeInto(main_syms);
@@ -770,9 +823,11 @@ static void test_re_export_chain() {
     // achain's own symbol
     CHECK(main_syms.lookup("achain.a_top") != kInvalidSym, "achain.a_top found (own)");
     // bchain's symbol re-exported through achain
-    CHECK(main_syms.lookup("achain.b_mid") != kInvalidSym, "achain.b_mid found (re-exported from B)");
+    CHECK(main_syms.lookup("achain.b_mid") != kInvalidSym,
+          "achain.b_mid found (re-exported from B)");
     // cchain's symbol re-exported through achain (transitive)
-    CHECK(main_syms.lookup("achain.deep") != kInvalidSym, "achain.deep found (re-exported from C via B)");
+    CHECK(main_syms.lookup("achain.deep") != kInvalidSym,
+          "achain.deep found (re-exported from C via B)");
     // bchain's symbol also registered under its own prefix
     CHECK(main_syms.lookup("bchain.b_mid") != kInvalidSym, "bchain.b_mid found (own entry)");
     // cchain's symbol also registered under its own prefix
@@ -785,7 +840,8 @@ static void test_duplicate_public_symbols() {
     Arena arena;
     auto tmp_dir = make_tmp_dir();
     CHECK(!tmp_dir.empty(), "tmp dir created");
-    if (tmp_dir.empty()) return;
+    if (tmp_dir.empty())
+        return;
 
     {
         std::ofstream f(tmp_dir + "/dupa.zith");
@@ -804,13 +860,15 @@ static void test_duplicate_public_symbols() {
     path_a.push("dupa");
     auto res_a = mgr.resolve(path_a, /*is_from=*/true);
     CHECK(res_a.isOk(), "resolve dupa (from)");
-    if (!res_a.isOk()) return;
+    if (!res_a.isOk())
+        return;
 
     DynArray<std::string_view> path_b(arena);
     path_b.push("dupb");
     auto res_b = mgr.resolve(path_b, /*is_from=*/true);
     CHECK(res_b.isOk(), "resolve dupb (from)");
-    if (!res_b.isOk()) return;
+    if (!res_b.isOk())
+        return;
 
     CHECK_DIAG_COUNT(diags, 0);
 
@@ -833,7 +891,8 @@ static void test_isLoaded_and_get() {
     Arena arena;
     auto tmp_dir = make_tmp_dir();
     CHECK(!tmp_dir.empty(), "tmp dir created");
-    if (tmp_dir.empty()) return;
+    if (tmp_dir.empty())
+        return;
 
     {
         std::ofstream f(tmp_dir + "/apiz.zith");
@@ -849,7 +908,8 @@ static void test_isLoaded_and_get() {
     path.push("apiz");
     auto res = mgr.resolve(path);
     CHECK(res.isOk(), "resolve apiz");
-    if (!res.isOk()) return;
+    if (!res.isOk())
+        return;
 
     CHECK(mgr.isLoaded("apiz"), "isLoaded true after resolve");
     CHECK(mgr.isLoaded("nonexistent") == false, "isLoaded false for unknown path");
@@ -868,7 +928,8 @@ static void test_resolution_failure_diagnostics() {
     Arena arena;
     auto tmp_dir = make_tmp_dir();
     CHECK(!tmp_dir.empty(), "tmp dir created");
-    if (tmp_dir.empty()) return;
+    if (tmp_dir.empty())
+        return;
 
     zith::diagnostics::DiagnosticEngine diags(arena);
     // Empty visible roots — nothing can be resolved
@@ -890,7 +951,8 @@ static void test_import_empty_file() {
     Arena arena;
     auto tmp_dir = make_tmp_dir();
     CHECK(!tmp_dir.empty(), "tmp dir created");
-    if (tmp_dir.empty()) return;
+    if (tmp_dir.empty())
+        return;
 
     {
         std::ofstream f(tmp_dir + "/empty.zith");
@@ -904,7 +966,8 @@ static void test_import_empty_file() {
     path.push("empty");
     auto res = mgr.resolve(path);
     CHECK(res.isOk(), "resolve empty file");
-    if (!res.isOk()) return;
+    if (!res.isOk())
+        return;
 
     SymbolTable main_syms(arena);
     mgr.mergeInto(main_syms);
@@ -918,7 +981,8 @@ static void test_import_dedup_preserves_first_config() {
     Arena arena;
     auto tmp_dir = make_tmp_dir();
     CHECK(!tmp_dir.empty(), "tmp dir created");
-    if (tmp_dir.empty()) return;
+    if (tmp_dir.empty())
+        return;
 
     {
         std::ofstream f(tmp_dir + "/shared.zith");
@@ -933,7 +997,8 @@ static void test_import_dedup_preserves_first_config() {
     path.push("shared");
     auto res1 = mgr.resolve(path, /*is_from=*/false);
     CHECK(res1.isOk(), "first resolve (import)");
-    if (!res1.isOk()) return;
+    if (!res1.isOk())
+        return;
 
     // Second resolve as from — should return cached (first config wins)
     DynArray<std::string_view> path2(arena);

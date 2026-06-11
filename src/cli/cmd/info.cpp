@@ -9,7 +9,7 @@
 #endif
 
 #define STRINGIFY_IMPL(x) #x
-#define STRINGIFY(x)      STRINGIFY_IMPL(x)
+#define STRINGIFY(x) STRINGIFY_IMPL(x)
 
 namespace zith::cli::commands {
 
@@ -28,12 +28,12 @@ int cmd_version() {
     std::printf("%sZith%s Programming Language\n"
                 "Version:  %s\n"
                 "Compiler: %s\n",
-                C(bold), RST,
-                ZITH_VERSION,
+                C(bold), RST, ZITH_VERSION,
 #if defined(__clang__)
                 __clang_version__
 #elif defined(__GNUC__) || defined(__GNUG__)
-                "GCC " STRINGIFY(__GNUC__) "." STRINGIFY(__GNUC_MINOR__) "." STRINGIFY(__GNUC_PATCHLEVEL__)
+                "GCC " STRINGIFY(__GNUC__) "." STRINGIFY(__GNUC_MINOR__) "." STRINGIFY(
+                    __GNUC_PATCHLEVEL__)
 #elif defined(_MSC_FULL_VER)
                 "MSVC " STRINGIFY(_MSC_FULL_VER)
 #else
@@ -81,36 +81,12 @@ int cmd_help() {
         "    zithc build\n"
         "    zithc run main.zith -m release\n"
         "    zithc compile --interpreted main.zith -o main.nbc\n"
-        "    zithc execute --interpreted\n"
-        ,
-        C(bold), RST,
-        C(bold), RST,
-        C(bold), RST,
-        C(green), RST, C(green), RST,
-        C(bold), RST,
-        C(cyan), RST,
-        C(cyan), RST,
-        C(cyan), RST,
-        C(cyan), RST,
-        C(cyan), RST,
-        C(cyan), RST,
-        C(cyan), RST,
-        C(cyan), RST,
-        C(cyan), RST,
-        C(cyan), RST,
-        C(cyan), RST,
-        C(cyan), RST,
-        C(cyan), RST,
-        C(cyan), RST,
-        C(cyan), RST,
-        C(cyan), RST,
-        C(cyan), RST,
-        C(cyan), RST,
-        C(cyan), RST,
-        C(cyan), RST,
-        C(cyan), RST,
-        C(bold), RST
-    );
+        "    zithc execute --interpreted\n",
+        C(bold), RST, C(bold), RST, C(bold), RST, C(green), RST, C(green), RST, C(bold), RST,
+        C(cyan), RST, C(cyan), RST, C(cyan), RST, C(cyan), RST, C(cyan), RST, C(cyan), RST, C(cyan),
+        RST, C(cyan), RST, C(cyan), RST, C(cyan), RST, C(cyan), RST, C(cyan), RST, C(cyan), RST,
+        C(cyan), RST, C(cyan), RST, C(cyan), RST, C(cyan), RST, C(cyan), RST, C(cyan), RST, C(cyan),
+        RST, C(cyan), RST, C(bold), RST);
     return 0;
 }
 

@@ -1,18 +1,18 @@
 #pragma once
 
-#include "diagnostics/diagnostic-engine.hpp"
+#include "ast/ast-builder.hpp"
 #include "cli/options.hpp"
 #include "cli/pipeline-plan.hpp"
-#include "ast/ast-builder.hpp"
+#include "cli/project-config.hpp"
+#include "diagnostics/diagnostic-engine.hpp"
+#include "import/import-manager.hpp"
+#include "import/symbol-table.hpp"
 #include "lexer/token.hpp"
 #include "memory/source-map.hpp"
 #include "parser/scan-result.hpp"
+#include "types/type-intern.hpp"
 #include "zir/hir/hir-module.hpp"
 #include "zir/mir/mir-module.hpp"
-#include "import/symbol-table.hpp"
-#include "import/import-manager.hpp"
-#include "types/type-intern.hpp"
-#include "cli/project-config.hpp"
 
 #include <string>
 
@@ -69,13 +69,23 @@ public:
     bool run();
     bool runTo(Stage target);
 
-    const diagnostics::DiagnosticEngine &diags() const { return diags_; }
-    const std::string &filePath() const { return file_path_; }
-    bool hasErrors() const { return diags_.hasErrors(); }
-    const ProjectConfig &projectConfig() const { return project_config_; }
+    const diagnostics::DiagnosticEngine &diags() const {
+        return diags_;
+    }
+    const std::string &filePath() const {
+        return file_path_;
+    }
+    bool hasErrors() const {
+        return diags_.hasErrors();
+    }
+    const ProjectConfig &projectConfig() const {
+        return project_config_;
+    }
 
 private:
-    void setTarget(Stage s) { plan_.target = s; }
+    void setTarget(Stage s) {
+        plan_.target = s;
+    }
     bool lexStage();
     void scanStage();
     void expandBodiesStage();

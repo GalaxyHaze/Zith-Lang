@@ -1,17 +1,17 @@
-#include "import/symbol-table.hpp"
+#include "../test-common.hpp"
+#include "diagnostics/diagnostic-engine.hpp"
 #include "import/symbol-id.hpp"
+#include "import/symbol-table.hpp"
+#include "memory/arena.hpp"
+#include "types/type-id.hpp"
 #include "types/type-intern.hpp"
 #include "types/type-kind.hpp"
-#include "types/type-id.hpp"
 #include "types/unify.hpp"
-#include "diagnostics/diagnostic-engine.hpp"
-#include "memory/arena.hpp"
-#include "../test-common.hpp"
 
 using namespace zith::import;
 using namespace zith::types;
-using zith::memory::Arena;
 using zith::diagnostics::DiagnosticEngine;
+using zith::memory::Arena;
 
 // SymbolTable is stubbed — declare() returns 0, lookup() returns kInvalidSym
 static void test_symtab_declare() {
@@ -26,7 +26,7 @@ static void test_symtab_lookup_finds_declared() {
     Arena arena;
     SymbolTable syms(arena);
 
-    auto id = syms.declare("x");
+    auto id    = syms.declare("x");
     auto found = syms.lookup("x");
     CHECK_EQ(found, id, "lookup finds declared symbol");
 }

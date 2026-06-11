@@ -1,20 +1,20 @@
+#include "../test-common.hpp"
 #include "diagnostics/diagnostic-engine.hpp"
-#include "zir/hir/hir-module.hpp"
-#include "zir/hir/hir-expr.hpp"
-#include "zir/hir/hir-types.hpp"
-#include "zir/hir/hir-verify.hpp"
-#include "zir/mir/mir-module.hpp"
-#include "zir/mir/mir-inst.hpp"
-#include "zir/mir/mir-lower-from-hir.hpp"
-#include "zir/mir/mir-verify.hpp"
 #include "memory/arena.hpp"
 #include "types/type-id.hpp"
-#include "../test-common.hpp"
+#include "zir/hir/hir-expr.hpp"
+#include "zir/hir/hir-module.hpp"
+#include "zir/hir/hir-types.hpp"
+#include "zir/hir/hir-verify.hpp"
+#include "zir/mir/mir-inst.hpp"
+#include "zir/mir/mir-lower-from-hir.hpp"
+#include "zir/mir/mir-module.hpp"
+#include "zir/mir/mir-verify.hpp"
 
 using namespace zith::zir::hir;
 using namespace zith::zir::mir;
-using zith::memory::Arena;
 using zith::diagnostics::DiagnosticEngine;
+using zith::memory::Arena;
 
 static HirLiteral lit_int(int64_t v) {
     return HirLiteral{zith::types::kIntType, v};
@@ -29,7 +29,8 @@ static void test_hir_add_expr() {
 
     auto &expr = hir.getExpr(lit_id);
     CHECK(std::holds_alternative<HirLiteral>(expr), "expr is HirLiteral");
-    if (!std::holds_alternative<HirLiteral>(expr)) return;
+    if (!std::holds_alternative<HirLiteral>(expr))
+        return;
 
     auto &lit = std::get<HirLiteral>(expr);
     CHECK_EQ(lit.i, 42, "literal value is 42");
@@ -58,8 +59,8 @@ static void test_hir_add_fn_and_retrieve() {
     Arena arena;
     HirModule hir(arena);
 
-    auto &fn = hir.addFn("main");
-    fn.return_type = zith::types::kIntType;
+    auto &fn        = hir.addFn("main");
+    fn.return_type  = zith::types::kIntType;
     auto &retrieved = hir.getFn(0);
     CHECK_EQ(retrieved.return_type, zith::types::kIntType, "fn return type is kIntType");
 }

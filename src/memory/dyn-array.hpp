@@ -7,168 +7,168 @@
 
 namespace zith::memory {
 
-    template <typename T> class DynArray {
-        Arena *arena_ = nullptr;
-        T *data_             = nullptr;
-        size_t size_         = 0;
-        size_t capacity_     = 0;
+template <typename T> class DynArray {
+    Arena *arena_    = nullptr;
+    T *data_         = nullptr;
+    size_t size_     = 0;
+    size_t capacity_ = 0;
 
-    public:
-        explicit DynArray(Arena &arena) noexcept : arena_(&arena) {}
+public:
+    explicit DynArray(Arena &arena) noexcept : arena_(&arena) {}
 
-        ~DynArray() noexcept {
-            if (!data_) return;
+    ~DynArray() noexcept {
+        if (!data_)
+            return;
+        if constexpr (!std::is_trivially_destructible_v<T>) {
+            for (size_t i = 0; i < size_; i++) {
+                data_[i].~T();
+            }
+        }
+    }
+
+    DynArray(const DynArray &)       = delete;
+    auto operator=(const DynArray &) = delete;
+
+    DynArray(DynArray &&other) noexcept
+        : arena_(other.arena_), data_(other.data_), size_(other.size_), capacity_(other.capacity_) {
+        other.data_     = nullptr;
+        other.size_     = 0;
+        other.capacity_ = 0;
+    }
+
+    auto operator=(DynArray &&other) noexcept -> DynArray & {
+        if (this != &other) {
             if constexpr (!std::is_trivially_destructible_v<T>) {
                 for (size_t i = 0; i < size_; i++) {
                     data_[i].~T();
                 }
             }
-        }
-
-        DynArray(const DynArray &)       = delete;
-        auto operator=(const DynArray &) = delete;
-
-        DynArray(DynArray &&other) noexcept :
-            arena_(other.arena_), data_(other.data_), size_(other.size_),
-            capacity_(other.capacity_) {
+            arena_          = other.arena_;
+            data_           = other.data_;
+            size_           = other.size_;
+            capacity_       = other.capacity_;
             other.data_     = nullptr;
             other.size_     = 0;
             other.capacity_ = 0;
         }
+        return *this;
+    }
 
-        auto operator=(DynArray &&other) noexcept -> DynArray & {
-            if (this != &other) {
-                if constexpr (!std::is_trivially_destructible_v<T>) {
-                    for (size_t i = 0; i < size_; i++) {
-                        data_[i].~T();
-                    }
-                }
-                arena_          = other.arena_;
-                data_           = other.data_;
-                size_           = other.size_;
-                capacity_       = other.capacity_;
-                other.data_     = nullptr;
-                other.size_     = 0;
-                other.capacity_ = 0;
-            }
-            return *this;
+    void push(const T &value) {
+        if (size_ >= capacity_) {
+            grow_();
         }
+        ::new (&data_[size_]) T{value};
+        size_++;
+    }
 
-        void push(const T &value) {
-            if (size_ >= capacity_) {
-                grow_();
-            }
-            ::new (&data_[size_]) T{value};
-            size_++;
+    void push(T &&value) {
+        if (size_ >= capacity_) {
+            grow_();
         }
+        ::new (&data_[size_]) T{std::move(value)};
+        size_++;
+    }
 
-        void push(T &&value) {
-            if (size_ >= capacity_) {
-                grow_();
-            }
-            ::new (&data_[size_]) T{std::move(value)};
-            size_++;
+    template <typename... Args> auto &emplace(Args &&...args) {
+        if (size_ >= capacity_) {
+            grow_();
         }
+        auto *ptr = ::new (&data_[size_]) T{std::forward<Args>(args)...};
+        size_++;
+        return *ptr;
+    }
 
-        template <typename... Args> auto &emplace(Args &&...args) {
-            if (size_ >= capacity_) {
-                grow_();
-            }
-            auto *ptr = ::new (&data_[size_]) T{std::forward<Args>(args)...};
-            size_++;
-            return *ptr;
-        }
+    void reserve(size_t new_cap) {
+        if (new_cap <= capacity_)
+            return;
 
-        void reserve(size_t new_cap) {
-            if (new_cap <= capacity_)
-                return;
+        size_t old_bytes = capacity_ * sizeof(T);
+        size_t new_bytes = new_cap * sizeof(T);
+        size_t extra     = new_bytes - old_bytes;
 
-            size_t old_bytes = capacity_ * sizeof(T);
-            size_t new_bytes = new_cap * sizeof(T);
-            size_t extra     = new_bytes - old_bytes;
-
-            auto *data_end = reinterpret_cast<char *>(data_) + old_bytes;
-            if (data_end == arena_->ptr() && arena_->remaining() >= extra) {
-                (void)arena_->alloc(extra, alignof(T));
-                capacity_ = new_cap;
-                return;
-            }
-
-            auto *new_data = static_cast<T *>(arena_->alloc(new_bytes, alignof(T)));
-
-            if (data_) {
-                for (size_t i = 0; i < size_; i++) {
-                    ::new (&new_data[i]) T{std::move(data_[i])};
-                    data_[i].~T();
-                }
-            }
-
-            data_     = new_data;
+        auto *data_end = reinterpret_cast<char *>(data_) + old_bytes;
+        if (data_end == arena_->ptr() && arena_->remaining() >= extra) {
+            (void)arena_->alloc(extra, alignof(T));
             capacity_ = new_cap;
+            return;
         }
 
-        [[nodiscard]] auto size() const noexcept -> size_t {
-            return size_;
-        }
-        [[nodiscard]] auto capacity() const noexcept -> size_t {
-            return capacity_;
-        }
-        [[nodiscard]] auto empty() const noexcept -> bool {
-            return size_ == 0;
-        }
+        auto *new_data = static_cast<T *>(arena_->alloc(new_bytes, alignof(T)));
 
-        void clear() noexcept {
-            if constexpr (!std::is_trivially_destructible_v<T>) {
-                for (size_t i = 0; i < size_; i++) {
-                    data_[i].~T();
-                }
+        if (data_) {
+            for (size_t i = 0; i < size_; i++) {
+                ::new (&new_data[i]) T{std::move(data_[i])};
+                data_[i].~T();
             }
-            size_ = 0;
         }
 
-        auto back() noexcept -> T & {
-            return data_[size_ - 1];
-        }
-        auto back() const noexcept -> const T & {
-            return data_[size_ - 1];
-        }
+        data_     = new_data;
+        capacity_ = new_cap;
+    }
 
-        auto operator[](size_t index) -> T & {
-            return data_[index];
-        }
-        auto operator[](size_t index) const -> const T & {
-            return data_[index];
-        }
+    [[nodiscard]] auto size() const noexcept -> size_t {
+        return size_;
+    }
+    [[nodiscard]] auto capacity() const noexcept -> size_t {
+        return capacity_;
+    }
+    [[nodiscard]] auto empty() const noexcept -> bool {
+        return size_ == 0;
+    }
 
-        auto begin() noexcept -> T * {
-            return data_;
+    void clear() noexcept {
+        if constexpr (!std::is_trivially_destructible_v<T>) {
+            for (size_t i = 0; i < size_; i++) {
+                data_[i].~T();
+            }
         }
-        auto end() noexcept -> T * {
-            return data_ + size_;
-        }
-        auto begin() const noexcept -> const T * {
-            return data_;
-        }
-        auto end() const noexcept -> const T * {
-            return data_ + size_;
-        }
+        size_ = 0;
+    }
 
-        auto data() noexcept -> T * {
-            return data_;
-        }
-        auto data() const noexcept -> const T * {
-            return data_;
-        }
+    auto back() noexcept -> T & {
+        return data_[size_ - 1];
+    }
+    auto back() const noexcept -> const T & {
+        return data_[size_ - 1];
+    }
 
-        auto arena() noexcept -> Arena & {
-            return *arena_;
-        }
+    auto operator[](size_t index) -> T & {
+        return data_[index];
+    }
+    auto operator[](size_t index) const -> const T & {
+        return data_[index];
+    }
 
-    private:
-        void grow_() {
-            size_t new_cap = capacity_ == 0 ? 4 : capacity_ * 2;
-            reserve(new_cap);
-        }
-    };
+    auto begin() noexcept -> T * {
+        return data_;
+    }
+    auto end() noexcept -> T * {
+        return data_ + size_;
+    }
+    auto begin() const noexcept -> const T * {
+        return data_;
+    }
+    auto end() const noexcept -> const T * {
+        return data_ + size_;
+    }
+
+    auto data() noexcept -> T * {
+        return data_;
+    }
+    auto data() const noexcept -> const T * {
+        return data_;
+    }
+
+    auto arena() noexcept -> Arena & {
+        return *arena_;
+    }
+
+private:
+    void grow_() {
+        size_t new_cap = capacity_ == 0 ? 4 : capacity_ * 2;
+        reserve(new_cap);
+    }
+};
 
 } // namespace zith::memory

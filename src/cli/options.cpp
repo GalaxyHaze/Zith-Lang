@@ -44,7 +44,8 @@ void Options::deriveTargetStage() {
 }
 
 static void printUsage() {
-    std::fprintf(stderr,
+    std::fprintf(
+        stderr,
         "%sZith%s - A low-level general-purpose language\n"
         "\n"
         "%sUSAGE:%s\n"
@@ -75,43 +76,18 @@ static void printUsage() {
         "        %s--lto%s                               Enable LTO\n"
         "        %s--strip-debug%s                       Strip debug symbols\n"
         "    %s-c, --color%s <auto|on|off>               Color output\n"
-        "    %s-v, --verbose%s                           Verbose output\n"
-        ,
-        C(bold), RST,
-        C(bold), RST,
-        C(bold), RST,
-        C(green), RST, C(green), RST,
-        C(bold), RST,
-        C(cyan), RST,
-        C(cyan), RST,
-        C(cyan), RST,
-        C(cyan), RST,
-        C(cyan), RST,
-        C(cyan), RST,
-        C(cyan), RST,
-        C(cyan), RST,
-        C(cyan), RST,
-        C(cyan), RST,
-        C(cyan), RST,
-        C(cyan), RST,
-        C(cyan), RST,
-        C(cyan), RST,
-        C(cyan), RST,
-        C(cyan), RST,
-        C(cyan), RST,
-        C(cyan), RST,
-        C(cyan), RST,
-        C(cyan), RST,
-        C(cyan), RST
-    );
+        "    %s-v, --verbose%s                           Verbose output\n",
+        C(bold), RST, C(bold), RST, C(bold), RST, C(green), RST, C(green), RST, C(bold), RST,
+        C(cyan), RST, C(cyan), RST, C(cyan), RST, C(cyan), RST, C(cyan), RST, C(cyan), RST, C(cyan),
+        RST, C(cyan), RST, C(cyan), RST, C(cyan), RST, C(cyan), RST, C(cyan), RST, C(cyan), RST,
+        C(cyan), RST, C(cyan), RST, C(cyan), RST, C(cyan), RST, C(cyan), RST, C(cyan), RST, C(cyan),
+        RST, C(cyan), RST);
 }
 
 static bool isSubcommand(const char *arg) {
-    static const char *cmds[] = {
-        "build", "run", "check", "compile", "execute",
-        "test", "fmt", "docs", "repl",         "new", "clean", "deps",
-        "version", "help", nullptr
-    };
+    static const char *cmds[] = {"build", "run",  "check",   "compile", "execute",
+                                 "test",  "fmt",  "docs",    "repl",    "new",
+                                 "clean", "deps", "version", "help",    nullptr};
     for (const char **c = cmds; *c; ++c) {
         if (std::strcmp(arg, *c) == 0)
             return true;
@@ -120,20 +96,34 @@ static bool isSubcommand(const char *arg) {
 }
 
 static Options::Command subcommandToEnum(const char *arg) {
-    if (std::strcmp(arg, "build") == 0)    return Options::Command::Build;
-    if (std::strcmp(arg, "run") == 0)      return Options::Command::Run;
-    if (std::strcmp(arg, "check") == 0)    return Options::Command::Check;
-    if (std::strcmp(arg, "compile") == 0)  return Options::Command::Compile;
-    if (std::strcmp(arg, "execute") == 0)  return Options::Command::Execute;
-    if (std::strcmp(arg, "test") == 0)     return Options::Command::Test;
-    if (std::strcmp(arg, "fmt") == 0)      return Options::Command::Fmt;
-    if (std::strcmp(arg, "docs") == 0)     return Options::Command::Docs;
-    if (std::strcmp(arg, "repl") == 0)     return Options::Command::Repl;
-    if (std::strcmp(arg, "new") == 0)      return Options::Command::New;
-    if (std::strcmp(arg, "clean") == 0)    return Options::Command::Clean;
-    if (std::strcmp(arg, "deps") == 0)     return Options::Command::Deps;
-    if (std::strcmp(arg, "version") == 0)  return Options::Command::Version;
-    if (std::strcmp(arg, "help") == 0)     return Options::Command::Help;
+    if (std::strcmp(arg, "build") == 0)
+        return Options::Command::Build;
+    if (std::strcmp(arg, "run") == 0)
+        return Options::Command::Run;
+    if (std::strcmp(arg, "check") == 0)
+        return Options::Command::Check;
+    if (std::strcmp(arg, "compile") == 0)
+        return Options::Command::Compile;
+    if (std::strcmp(arg, "execute") == 0)
+        return Options::Command::Execute;
+    if (std::strcmp(arg, "test") == 0)
+        return Options::Command::Test;
+    if (std::strcmp(arg, "fmt") == 0)
+        return Options::Command::Fmt;
+    if (std::strcmp(arg, "docs") == 0)
+        return Options::Command::Docs;
+    if (std::strcmp(arg, "repl") == 0)
+        return Options::Command::Repl;
+    if (std::strcmp(arg, "new") == 0)
+        return Options::Command::New;
+    if (std::strcmp(arg, "clean") == 0)
+        return Options::Command::Clean;
+    if (std::strcmp(arg, "deps") == 0)
+        return Options::Command::Deps;
+    if (std::strcmp(arg, "version") == 0)
+        return Options::Command::Version;
+    if (std::strcmp(arg, "help") == 0)
+        return Options::Command::Help;
     return Options::Command::None;
 }
 
@@ -168,6 +158,15 @@ static void mergeFlags(zith::cli::Options &opts, const zith::cli::Options &defau
     opts.deriveTargetStage();
 }
 
+void mergeProjectConfig(Options &opts, const ProjectConfig &cfg) {
+    if (opts.mode == "debug" && !cfg.mode.empty() && cfg.mode != "debug")
+        opts.mode = cfg.mode;
+    if (opts.opt_level == 0 && cfg.opt_level != 0)
+        opts.opt_level = cfg.opt_level;
+    if (opts.output_file == "a.out" && !cfg.output.empty() && cfg.output != "a.out")
+        opts.output_file = cfg.output;
+}
+
 Options parseArgs(int argc, char **argv) {
     Options opts;
 
@@ -176,8 +175,7 @@ Options parseArgs(int argc, char **argv) {
         if (isSubcommand(argv[i]) && opts.command == Options::Command::None) {
             opts.command = subcommandToEnum(argv[i]);
             // Consume next arg as subcommand_arg for commands that take one
-            if (opts.command == Options::Command::New ||
-                opts.command == Options::Command::Clean ||
+            if (opts.command == Options::Command::New || opts.command == Options::Command::Clean ||
                 opts.command == Options::Command::Deps) {
                 if (i + 1 < argc && argv[i + 1][0] != '-')
                     opts.subcommand_arg = argv[++i];
@@ -199,7 +197,7 @@ Options parseArgs(int argc, char **argv) {
 
         // --tokens
         if (std::strcmp(argv[i], "--tokens") == 0) {
-            opts.emit_tokens = true;
+            opts.emit_tokens  = true;
             opts.print_tokens = true;
             continue;
         }
@@ -275,7 +273,9 @@ Options parseArgs(int argc, char **argv) {
             if (std::strcmp(val, "debug") != 0 && std::strcmp(val, "dev") != 0 &&
                 std::strcmp(val, "release") != 0 && std::strcmp(val, "fast") != 0 &&
                 std::strcmp(val, "test") != 0) {
-                std::fprintf(stderr, "[error] invalid mode '%s' (expected debug|dev|release|fast|test)\n", val);
+                std::fprintf(stderr,
+                             "[error] invalid mode '%s' (expected debug|dev|release|fast|test)\n",
+                             val);
                 std::exit(1);
             }
             opts.mode = val;
@@ -300,9 +300,9 @@ Options parseArgs(int argc, char **argv) {
                 printUsage();
                 std::exit(1);
             }
-            const char *val = argv[++i];
+            const char *val   = argv[++i];
             const char *start = val;
-            for (const char *p = val; ; ++p) {
+            for (const char *p = val;; ++p) {
                 if (*p == ',' || *p == '\0') {
                     if (p > start) {
                         opts.include_dirs.emplace_back(start, static_cast<size_t>(p - start));
@@ -327,7 +327,10 @@ Options parseArgs(int argc, char **argv) {
                 std::strcmp(val, "mir") != 0 && std::strcmp(val, "ir") != 0 &&
                 std::strcmp(val, "asm") != 0 && std::strcmp(val, "obj") != 0 &&
                 std::strcmp(val, "bin") != 0) {
-                std::fprintf(stderr, "[error] invalid emit target '%s' (expected ast|hir|mir|ir|asm|obj|bin)\n", val);
+                std::fprintf(
+                    stderr,
+                    "[error] invalid emit target '%s' (expected ast|hir|mir|ir|asm|obj|bin)\n",
+                    val);
                 std::exit(1);
             }
             opts.emit_target = val;

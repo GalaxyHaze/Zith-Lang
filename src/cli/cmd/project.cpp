@@ -14,7 +14,7 @@ int cmd_new(const Options &opts) {
         return 1;
     }
 
-    namespace fs = std::filesystem;
+    namespace fs        = std::filesystem;
     const fs::path root = fs::path(name).filename();
     if (fs::exists(root)) {
         std::fprintf(stderr, "[error] directory '%s' already exists\n", root.string().c_str());

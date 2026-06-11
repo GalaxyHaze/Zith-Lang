@@ -1,40 +1,39 @@
 #pragma once
-#include "mio/mmap.hpp"
-#include "span.hpp"
 #include "memory/arena.hpp"
 #include "memory/dyn-array.hpp"
+#include "mio/mmap.hpp"
+#include "span.hpp"
 
 namespace zith::memory {
 
-    struct SourceLoc {
-        using FileVar = std::variant<mio::mmap_source, mio::mmap_sink, std::string>;
-        FileVar file;
-        std::string path;
-        memory::DynArray<ByteOffset> line_starts;
+struct SourceLoc {
+    using FileVar = std::variant<mio::mmap_source, mio::mmap_sink, std::string>;
+    FileVar file;
+    std::string path;
+    memory::DynArray<ByteOffset> line_starts;
 
-        SourceLoc(FileVar file, std::string path, memory::Arena &arena) :
-            file(std::move(file)), path(std::move(path)), line_starts(arena) {}
+    SourceLoc(FileVar file, std::string path, memory::Arena &arena)
+        : file(std::move(file)), path(std::move(path)), line_starts(arena) {}
 
-        std::string_view getSlice() const;
+    std::string_view getSlice() const;
 
-        const char *get() const;
+    const char *get() const;
 
-        // Reconstrói o mapa de linhas. OBRIGATÓRIO chamar após carregar o content.
-        void buildLines() noexcept;
+    // Reconstrói o mapa de linhas. OBRIGATÓRIO chamar após carregar o content.
+    void buildLines() noexcept;
 
-        // O(log N) - Traduz um offset absoluto num par Linha/Coluna (1-indexed)
-        Loc loc(const ByteOffset offset) const noexcept;
+    // O(log N) - Traduz um offset absoluto num par Linha/Coluna (1-indexed)
+    Loc loc(const ByteOffset offset) const noexcept;
 
-        // Cria um sub-SourceLoc baseado em limites de bytes
-        auto slice(const ByteOffset start, const ByteOffset end) const
-                -> Result<std::string_view, Error>;
+    // Cria um sub-SourceLoc baseado em limites de bytes
+    auto slice(const ByteOffset start, const ByteOffset end) const
+        -> Result<std::string_view, Error>;
 
-        // Extrai o conteúdo textual exato apontado por um Span
-        auto snippet(const Span &span) const noexcept
-                -> Result<std::string_view, Error>;
+    // Extrai o conteúdo textual exato apontado por um Span
+    auto snippet(const Span &span) const noexcept -> Result<std::string_view, Error>;
 
-        // Retorna apenas o nome do ficheiro, ignorando as diretorias
-        auto filename() const noexcept -> std::string_view;
-    };
+    // Retorna apenas o nome do ficheiro, ignorando as diretorias
+    auto filename() const noexcept -> std::string_view;
+};
 
 } // namespace zith::memory

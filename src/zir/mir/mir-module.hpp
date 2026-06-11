@@ -9,25 +9,25 @@
 
 namespace zith::zir::mir {
 
-    struct MirFunction {
-        std::string_view name;
-        memory::DynArray<hir::HirTypeId> params;
-        hir::HirTypeId return_type;
-        memory::DynArray<MirBasicBlock> blocks;
+struct MirFunction {
+    std::string_view name;
+    memory::DynArray<hir::HirTypeId> params;
+    hir::HirTypeId return_type;
+    memory::DynArray<MirBasicBlock> blocks;
 
-        explicit MirFunction(memory::Arena &arena) : params(arena), blocks(arena) {}
-    };
+    explicit MirFunction(memory::Arena &arena) : params(arena), blocks(arena) {}
+};
 
-    class MirModule {
-        memory::DynArray<MirFunction> fns_;
+class MirModule {
+    memory::DynArray<MirFunction> fns_;
 
-    public:
-        explicit MirModule(memory::Arena &arena);
+public:
+    explicit MirModule(memory::Arena &arena);
 
-        MirFunction &addFn(std::string_view name);
-        MirFunction &getFn(size_t idx);
-        const MirFunction &getFn(size_t idx) const;
-        size_t fnCount() const noexcept;
-    };
+    MirFunction &addFn(std::string_view name);
+    MirFunction &getFn(size_t idx);
+    const MirFunction &getFn(size_t idx) const;
+    size_t fnCount() const noexcept;
+};
 
 } // namespace zith::zir::mir

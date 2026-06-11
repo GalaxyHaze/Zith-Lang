@@ -9,18 +9,18 @@
 
 namespace zith::memory {
 
-    using InternedId = uint32_t;
+using InternedId = uint32_t;
 
-    class StringInterner {
-        memory::Arena *arena_;
-        std::unordered_map<std::string_view, InternedId> map_;
-        memory::DynArray<const char *> strings_;
+class StringInterner {
+    memory::Arena *arena_;
+    std::unordered_map<std::string_view, InternedId> map_;
+    memory::DynArray<const char *> strings_;
 
-    public:
-        explicit StringInterner(memory::Arena &arena);
+public:
+    explicit StringInterner(memory::Arena &arena);
 
-        InternedId intern(std::string_view str);
-        std::string_view lookup(InternedId id) const;
-    };
+    InternedId intern(std::string_view str);
+    std::string_view lookup(InternedId id) const;
+};
 
 } // namespace zith::memory

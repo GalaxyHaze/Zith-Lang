@@ -6,17 +6,16 @@
 
 namespace zith::zir::mir {
 
-    class MirLowering {
-        const hir::HirModule &hir_;
-        diagnostics::DiagnosticEngine &diags_;
-        MirModule mir_;
+class MirLowering {
+    const hir::HirModule &hir_;
+    diagnostics::DiagnosticEngine &diags_;
+    MirModule mir_;
 
-    public:
-        MirLowering(const hir::HirModule &hir,
-                    memory::Arena &arena,
-                    diagnostics::DiagnosticEngine &diags);
+public:
+    MirLowering(const hir::HirModule &hir, memory::Arena &arena,
+                diagnostics::DiagnosticEngine &diags);
 
-        MirModule lower();
-    };
+    MirModule lower();
+};
 
 } // namespace zith::zir::mir

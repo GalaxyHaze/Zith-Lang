@@ -2,12 +2,11 @@
 
 namespace zith::zir::mir {
 
-    MirVerifier::MirVerifier(const MirModule &module,
-                             diagnostics::DiagnosticEngine &diags) :
-        module_(module), diags_(diags) {}
+MirVerifier::MirVerifier(const MirModule &module, diagnostics::DiagnosticEngine &diags)
+    : module_(module), diags_(diags) {}
 
-    bool MirVerifier::verify() {
-        return true;
-    }
+bool MirVerifier::verify() {
+    return true;
+}
 
 } // namespace zith::zir::mir

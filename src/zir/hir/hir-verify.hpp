@@ -5,14 +5,14 @@
 
 namespace zith::zir::hir {
 
-    class HirVerifier {
-        const HirModule &module_;
-        diagnostics::DiagnosticEngine &diags_;
+class HirVerifier {
+    const HirModule &module_;
+    diagnostics::DiagnosticEngine &diags_;
 
-    public:
-        HirVerifier(const HirModule &module, diagnostics::DiagnosticEngine &diags);
+public:
+    HirVerifier(const HirModule &module, diagnostics::DiagnosticEngine &diags);
 
-        bool verify();
-    };
+    bool verify();
+};
 
 } // namespace zith::zir::hir

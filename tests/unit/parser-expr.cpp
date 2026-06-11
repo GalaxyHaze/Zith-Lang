@@ -1,19 +1,19 @@
-#include "memory/source-map.hpp"
-#include "lexer/lexer.hpp"
-#include "parser/parser.hpp"
-#include "ast/ast-builder.hpp"
-#include "ast/ast-nodes.hpp"
-#include "ast/ast-ids.hpp"
-#include "diagnostics/diagnostic-engine.hpp"
-#include "memory/arena.hpp"
 #include "../test-common.hpp"
+#include "ast/ast-builder.hpp"
+#include "ast/ast-ids.hpp"
+#include "ast/ast-nodes.hpp"
+#include "diagnostics/diagnostic-engine.hpp"
+#include "lexer/lexer.hpp"
+#include "memory/arena.hpp"
+#include "memory/source-map.hpp"
+#include "parser/parser.hpp"
 auto source_map = zith::memory::SourceMap();
 
 using namespace zith::lexer;
 using namespace zith::ast;
+using zith::diagnostics::DiagnosticEngine;
 using zith::memory::Arena;
 using zith::memory::DynArray;
-using zith::diagnostics::DiagnosticEngine;
 
 static void test_parser_reports_error_for_junk() {
     Arena arena;
@@ -34,7 +34,8 @@ static void test_ast_builder_literal() {
 
     auto &node = builder.getExpr(e);
     CHECK(std::holds_alternative<LitValue>(node), "litExpr node is LitValue");
-    if (!std::holds_alternative<LitValue>(node)) return;
+    if (!std::holds_alternative<LitValue>(node))
+        return;
 
     auto &lit = std::get<LitValue>(node);
     CHECK(lit.kind == LitKind::Int, "literal kind is Int");
@@ -50,7 +51,8 @@ static void test_ast_builder_ident() {
 
     auto &node = builder.getExpr(e);
     CHECK(std::holds_alternative<IdentNode>(node), "ident node is IdentNode");
-    if (!std::holds_alternative<IdentNode>(node)) return;
+    if (!std::holds_alternative<IdentNode>(node))
+        return;
 
     auto &ident = std::get<IdentNode>(node);
     CHECK(ident.name == "foo", "ident name is foo");
@@ -62,7 +64,7 @@ static void test_ast_builder_binary() {
 
     auto lhs = builder.litExpr(LitKind::Int, "1");
     auto rhs = builder.litExpr(LitKind::Int, "2");
-    auto b = builder.binary(lhs, BinaryOp::Add, rhs);
+    auto b   = builder.binary(lhs, BinaryOp::Add, rhs);
     CHECK(b != kInvalidExpr, "binary returns valid ExprId");
 
     auto &node = builder.getExpr(b);
@@ -79,7 +81,8 @@ static void test_ast_builder_fn_decl() {
 
     auto &node = builder.getDecl(decl);
     CHECK(std::holds_alternative<FnDeclNode>(node), "fnDecl node is FnDeclNode");
-    if (!std::holds_alternative<FnDeclNode>(node)) return;
+    if (!std::holds_alternative<FnDeclNode>(node))
+        return;
 
     auto &fn = std::get<FnDeclNode>(node);
     CHECK(fn.name == "main", "fn name is main");
@@ -90,12 +93,13 @@ static void test_ast_builder_let_stmt() {
     AstBuilder builder(arena);
 
     auto init = builder.litExpr(LitKind::Int, "10");
-    auto s = builder.letStmt("x", false, init);
+    auto s    = builder.letStmt("x", false, init);
     CHECK(s != kInvalidStmt, "letStmt returns valid StmtId");
 
     auto &node = builder.getStmt(s);
     CHECK(std::holds_alternative<LetNode>(node), "letStmt node is LetNode");
-    if (!std::holds_alternative<LetNode>(node)) return;
+    if (!std::holds_alternative<LetNode>(node))
+        return;
 
     auto &let = std::get<LetNode>(node);
     CHECK(let.name == "x", "let name is x");

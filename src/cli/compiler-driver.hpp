@@ -7,7 +7,7 @@ namespace zith::cli {
 
 class CompilerDriver {
 public:
-    static int run(const Options &opts){
+    static int run(const Options &opts) {
         using Command = Options::Command;
 
         switch (opts.command) {

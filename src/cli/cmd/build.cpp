@@ -13,26 +13,27 @@
 
 namespace zith::cli::commands {
 
-    static bool useColor(const Options &opts) {
-        if (opts.color == "on") return true;
-        if (opts.color == "off") return false;
+static bool useColor(const Options &opts) {
+    if (opts.color == "on")
+        return true;
+    if (opts.color == "off")
+        return false;
 #ifdef _WIN32
-        return _isatty(_fileno(stdout)) != 0;
+    return _isatty(_fileno(stdout)) != 0;
 #else
-        return isatty(fileno(stdout)) != 0;
+    return isatty(fileno(stdout)) != 0;
 #endif
-    }
+}
 
-    static const char *green(const Options &opts) {
-        return useColor(opts) ? "\033[32m" : "";
-    }
-    static const char *red(const Options &opts) {
-        return useColor(opts) ? "\033[31m" : "";
-    }
-    static const char *reset(const Options &opts) {
-        return useColor(opts) ? "\033[0m" : "";
-    }
-
+static const char *green(const Options &opts) {
+    return useColor(opts) ? "\033[32m" : "";
+}
+static const char *red(const Options &opts) {
+    return useColor(opts) ? "\033[31m" : "";
+}
+static const char *reset(const Options &opts) {
+    return useColor(opts) ? "\033[0m" : "";
+}
 
 int cmd_check(const Options &opts) {
     std::vector<std::string> files;
@@ -61,13 +62,13 @@ int cmd_check(const Options &opts) {
 
     auto count = [](auto &&r) {
         size_t c = 0;
-        for (bool v : r) c += v;
+        for (bool v : r)
+            c += v;
         return c;
     };
 
     auto ok_tag = [&](bool ok) {
-        std::printf("%s[%s]%s", ok ? green(opts) : red(opts),
-                    ok ? "ok" : "error", reset(opts));
+        std::printf("%s[%s]%s", ok ? green(opts) : red(opts), ok ? "ok" : "error", reset(opts));
     };
 
     if (opts.verbose) {
@@ -110,13 +111,12 @@ int cmd_compile(const Options &opts) {
         // compile = up to MIR lowering (includes sema + HIR)
         bool ok = session.runTo(Stage::MirLowered);
         if (session.hasErrors()) {
-            ok = false;
+            ok        = false;
             exit_code = 1;
         }
         if (opts.verbose) {
-            std::printf("%s[%s]%s %s\n",
-                        ok ? green(opts) : red(opts),
-                        ok ? "ok" : "error", reset(opts), file.c_str());
+            std::printf("%s[%s]%s %s\n", ok ? green(opts) : red(opts), ok ? "ok" : "error",
+                        reset(opts), file.c_str());
         }
     }
     return exit_code;
@@ -135,13 +135,12 @@ int cmd_build(const Options &opts) {
         // build = full pipeline through codegen/interpretation
         bool ok = session.run();
         if (session.hasErrors()) {
-            ok = false;
+            ok        = false;
             exit_code = 1;
         }
         if (opts.verbose) {
-            std::printf("%s[%s]%s %s\n",
-                        ok ? green(opts) : red(opts),
-                        ok ? "ok" : "error", reset(opts), file.c_str());
+            std::printf("%s[%s]%s %s\n", ok ? green(opts) : red(opts), ok ? "ok" : "error",
+                        reset(opts), file.c_str());
         }
     }
     return exit_code;

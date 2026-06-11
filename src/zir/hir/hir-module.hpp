@@ -9,35 +9,35 @@
 
 namespace zith::zir::hir {
 
-    struct HirBasicBlock {
-        memory::DynArray<HirExprId> insts;
-        HirExprId terminator = kInvalidHirExpr;
+struct HirBasicBlock {
+    memory::DynArray<HirExprId> insts;
+    HirExprId terminator = kInvalidHirExpr;
 
-        explicit HirBasicBlock(memory::Arena &arena) : insts(arena) {}
-    };
+    explicit HirBasicBlock(memory::Arena &arena) : insts(arena) {}
+};
 
-    struct HirFunction {
-        std::string_view name;
-        memory::DynArray<HirTypeId> params;
-        HirTypeId return_type;
-        memory::DynArray<HirBasicBlock> blocks;
+struct HirFunction {
+    std::string_view name;
+    memory::DynArray<HirTypeId> params;
+    HirTypeId return_type;
+    memory::DynArray<HirBasicBlock> blocks;
 
-        explicit HirFunction(memory::Arena &arena) : params(arena), blocks(arena) {}
-    };
+    explicit HirFunction(memory::Arena &arena) : params(arena), blocks(arena) {}
+};
 
-    class HirModule {
-        memory::DynArray<HirExpr> exprs_;
-        memory::DynArray<HirFunction> fns_;
+class HirModule {
+    memory::DynArray<HirExpr> exprs_;
+    memory::DynArray<HirFunction> fns_;
 
-    public:
-        explicit HirModule(memory::Arena &arena);
+public:
+    explicit HirModule(memory::Arena &arena);
 
-        HirExprId addExpr(HirExpr expr);
-        HirFunction &addFn(std::string_view name);
-        HirFunction &getFn(size_t idx);
+    HirExprId addExpr(HirExpr expr);
+    HirFunction &addFn(std::string_view name);
+    HirFunction &getFn(size_t idx);
 
-        const HirExpr &getExpr(HirExprId id) const;
-        const HirFunction &getFn(size_t idx) const;
-    };
+    const HirExpr &getExpr(HirExprId id) const;
+    const HirFunction &getFn(size_t idx) const;
+};
 
 } // namespace zith::zir::hir

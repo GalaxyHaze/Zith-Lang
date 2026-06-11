@@ -1,9 +1,9 @@
 # Zith Compiler — Implementation Status
 
 **Branch:** rewrite  
-**Date:** 2026-06-07  
-**Build:** `cmake -B build && cmake --build build` — clean compile, 33 targets  
-**Tests:** `ctest --test-dir build` — 5/5 passing
+**Date:** 2026-06-11  
+**Build:** `cmake -B build && cmake --build build` — clean compile  
+**Tests:** `ctest --test-dir build` — **7/7 passing**
 
 ---
 
@@ -22,7 +22,7 @@
 
 ```
 Source → Lexer → Parser → AST → Sema → HIR → MIR → ZIR → (Interpreter)
-         *       (*)     *     ***    **     ***    ****      ****
+          *       (*)     *     ***    **     ***    ****      ****
 ```
 
 (*) Parser skeleton wired into pipeline; actual parsing returns stubs.
@@ -58,6 +58,13 @@ Full tokenizer with:
 - Diagnostic engine, severity levels, labels — \*
 - Emitter — functional but **no source-aware output** (no snippets, underlines)
 
+### Import System (`src/import/`) \*\*
+- Symbol table with scope management — \*
+- `declare()`, `lookup()`, `lookupInScope()` — \*
+- Visibility (`pub`, `priv`, `mod(n)`) — \*
+- Import resolution (`import`, `from`, `export`) — \*
+- Name resolver — \*
+
 ### CLI (`src/cli/`) \*\*
 
 | Component | Status | Notes |
@@ -85,11 +92,6 @@ Not yet wired in. `main()` has a TODO placeholder.
 ### Parser (`src/parser/`) \*\*\*
 - Class hierarchy designed with Pratt-style expression parsing — \*\*
 - **Actual parsing:** all methods return `kInvalid*` / `false` — \*\*\*
-
-### Symbol Table (`src/import/`) \*\*\*
-- Scope enter/exit — \*
-- `declare()`, `lookup()`, `lookupInScope()` — \*\*\*
-- Name resolver (`resolveProgram`, etc.) — \*\*\*
 
 ### Sema (`src/sema/`) \*\*\*
 - Context object (wiring for symbol table, types, diagnostics) — \*
@@ -122,27 +124,16 @@ Not yet started.
 
 | Test | Status | Notes |
 |------|--------|-------|
-| `zithc-lexer-test` | \* PASS | 41/41 passing |
-| `zithc-parser-expr` | \*\*\*\* FAIL | Parser is a stub |
-| `zithc-parser-stmt` | \*\*\*\* FAIL | Parser is a stub |
-| `zithc-sema-test` | \*\*\*\* FAIL | Type intern/unify are stubs |
-| `zithc-mir-test` | 💥 SEGFAULT | MirLowering::lower() returns empty module |
+| `zithc-lexer-test` | \* PASS | 43/43 passing |
+| `zithc-parser-expr` | \* PASS | AST builder tests |
+| `zithc-parser-stmt` | \* PASS | AST builder tests |
+| `zithc-sema-test` | \* PASS | Symbol table + basic sema context tests |
+| `zithc-mir-test` | \* PASS | HIR module + basic lowering scaffold |
+| `zithc-import-test` | \* PASS | Import resolution + symbol visibility tests |
+| `zithc-import-e2e` | \* PASS | End-to-end import pipeline tests |
 
 ---
 
-## Next Work
+## Next Steps
 
-### Short-term (CLI)
-1. **Wire up ZithProject.toml** — port project-config from master, merge into `main()`
-2. **Implement `cmd_clean`** — remove build artifacts (`target/`, `.zcache`, `.zmodules`)
-3. **Implement `cmd_fmt`** — full source formatter with re-indent and normalisation
-4. **Implement `cmd_execute`** — native fork+exec and interpreted bytecode runner
-
-### Medium-term (core compiler)
-5. **Implement the parser** — recursive-descent with Pratt expression parsing
-6. **Implement the type interner** — actual storage, dedup, kindOf
-7. **Implement name resolution** — symbol table declare/lookup
-8. **Wire up sema pipeline** — type checking and HIR lowering
-9. **Implement MIR lowering** — HIR → MIR translation
-10. **Verifiers** — HIR and MIR verification passes
-11. **ZIR interpreter / LLVM backend**
+See [NEXT_STEPS.md](NEXT_STEPS.md) for the prioritized roadmap.

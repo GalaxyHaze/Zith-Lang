@@ -5,14 +5,14 @@
 
 namespace zith::zir::mir {
 
-    class MirVerifier {
-        const MirModule &module_;
-        diagnostics::DiagnosticEngine &diags_;
+class MirVerifier {
+    const MirModule &module_;
+    diagnostics::DiagnosticEngine &diags_;
 
-    public:
-        MirVerifier(const MirModule &module, diagnostics::DiagnosticEngine &diags);
+public:
+    MirVerifier(const MirModule &module, diagnostics::DiagnosticEngine &diags);
 
-        bool verify();
-    };
+    bool verify();
+};
 
 } // namespace zith::zir::mir

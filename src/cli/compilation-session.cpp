@@ -1,15 +1,16 @@
 #include "compilation-session.hpp"
-#include "lexer/lexer.hpp"
-#include "parser/parser.hpp"
 #include "ast/ast-printer.hpp"
-#include "memory/source-map.hpp"
-#include "import/resolver.hpp"
 #include "diagnostics/error-codes.hpp"
+#include "import/resolver.hpp"
+#include "lexer/lexer.hpp"
+#include "memory/source-map.hpp"
+#include "parser/parser.hpp"
 
+#include <chrono>
 #include <cstdio>
 #include <filesystem>
-#include <vector>
 #include <toml++/toml.hpp>
+#include <vector>
 #ifdef _WIN32
 #include <io.h>
 #include <windows.h>
@@ -35,23 +36,11 @@ static bool shouldUseColor(const std::string &setting) {
 #endif
 }
 
-CompilationSession::CompilationSession(const Options &opts, std::string file_path) :
-    opts_(opts),
-    file_path_(std::move(file_path)),
-    project_root_(),
-    ast_arena_(),
-    sym_arena_(),
-    type_arena_(),
-    hir_arena_(),
-    mir_arena_(),
-    scratch_arena_(),
-    diags_(scratch_arena_),
-    ast_builder_(ast_arena_),
-    syms_(sym_arena_),
-    types_(type_arena_),
-    hir_module_(hir_arena_),
-    mir_module_(mir_arena_)
-{
+CompilationSession::CompilationSession(const Options &opts, std::string file_path)
+    : opts_(opts), file_path_(std::move(file_path)), project_root_(), ast_arena_(), sym_arena_(),
+      type_arena_(), hir_arena_(), mir_arena_(), scratch_arena_(), diags_(scratch_arena_),
+      ast_builder_(ast_arena_), syms_(sym_arena_), types_(type_arena_), hir_module_(hir_arena_),
+      mir_module_(mir_arena_) {
     namespace fs = std::filesystem;
     if (fs::is_directory(file_path_))
         project_root_ = fs::weakly_canonical(fs::path(file_path_)).string();
@@ -71,31 +60,50 @@ bool CompilationSession::run() {
 }
 
 bool CompilationSession::runTo(Stage target) {
+    auto t_start = std::chrono::steady_clock::now();
     plan_.target = target;
 
-    if (plan_.shouldStop()) return !diags_.hasErrors();
-    if (!lexStage()) return false;
+    if (plan_.shouldStop())
+        return !diags_.hasErrors();
+    if (!lexStage())
+        return false;
     plan_.advance();
 
-    if (plan_.shouldStop()) return !diags_.hasErrors();
-    if (!parseStage()) return false;
+    if (plan_.shouldStop())
+        return !diags_.hasErrors();
+    if (!parseStage())
+        return false;
     plan_.advance();
 
-    if (plan_.shouldStop()) return !diags_.hasErrors();
-    if (!semaStage()) return false;
+    if (plan_.shouldStop())
+        return !diags_.hasErrors();
+    if (!semaStage())
+        return false;
     plan_.advance();
 
-    if (plan_.shouldStop()) return !diags_.hasErrors();
-    if (!mirStage()) return false;
+    if (plan_.shouldStop())
+        return !diags_.hasErrors();
+    if (!mirStage())
+        return false;
     plan_.advance();
 
-    if (plan_.shouldStop()) return !diags_.hasErrors();
-    if (!zirStage()) return false;
+    if (plan_.shouldStop())
+        return !diags_.hasErrors();
+    if (!zirStage())
+        return false;
 
-    return !diags_.hasErrors();
+    bool ok = !diags_.hasErrors();
+    if (opts_.verbose) {
+        auto dt = std::chrono::duration<double, std::milli>(
+            std::chrono::steady_clock::now() - t_start).count();
+        std::fprintf(stderr, "%s %s (%.1fms total)\n",
+                     ok ? "✓" : "✗", file_path_.c_str(), dt);
+    }
+    return ok;
 }
 
 bool CompilationSession::lexStage() {
+    auto t0 = std::chrono::steady_clock::now();
     namespace fs = std::filesystem;
 
     if (fs::is_directory(file_path_)) {
@@ -104,6 +112,16 @@ bool CompilationSession::lexStage() {
             return false;
         }
         file_path_ = (fs::path(project_root_) / project_config_.entry).string();
+    }
+
+    if (opts_.verbose) {
+        std::error_code ec;
+        auto fsize = fs::file_size(file_path_, ec);
+        if (ec)
+            std::fprintf(stderr, "[file] %s\n", file_path_.c_str());
+        else
+            std::fprintf(stderr, "[file] %s (%.1f KiB)\n",
+                         file_path_.c_str(), fsize / 1024.0);
     }
 
     auto file_result = source_map_.loadFile(file_path_);
@@ -123,21 +141,39 @@ bool CompilationSession::lexStage() {
     if (opts_.print_tokens || opts_.emit_tokens)
         lexer::printTokens(tokens_);
 
+    if (opts_.verbose) {
+        auto dt = std::chrono::duration<double, std::milli>(
+            std::chrono::steady_clock::now() - t0).count();
+        std::fprintf(stderr, "  [lex] %6u tokens  (%5.1fms)\n", tokens_.len, dt);
+    }
+
     return true;
 }
 
 bool CompilationSession::parseStage() {
     scanStage();
-    if (diags_.hasErrors()) { diags_.emit(); return false; }
+    if (diags_.hasErrors()) {
+        diags_.emit();
+        return false;
+    }
 
     expandBodiesStage();
-    if (diags_.hasErrors()) { diags_.emit(); return false; }
+    if (diags_.hasErrors()) {
+        diags_.emit();
+        return false;
+    }
 
     importStage();
-    if (diags_.hasErrors()) { diags_.emit(); return false; }
+    if (diags_.hasErrors()) {
+        diags_.emit();
+        return false;
+    }
 
     solveStage();
-    if (diags_.hasErrors()) { diags_.emit(); return false; }
+    if (diags_.hasErrors()) {
+        diags_.emit();
+        return false;
+    }
 
     if (opts_.emit_ast) {
         std::printf("--- AST ---\n");
@@ -151,6 +187,7 @@ bool CompilationSession::parseStage() {
 }
 
 bool CompilationSession::importStage() {
+    auto t0 = std::chrono::steady_clock::now();
     namespace fs = std::filesystem;
 
     // ── Compute visible roots ──────────────────────────────────────
@@ -164,7 +201,7 @@ bool CompilationSession::importStage() {
         DWORD len = GetModuleFileNameA(NULL, exe_buf, sizeof(exe_buf));
         if (len != 0 && len != sizeof(exe_buf)) {
             exe_buf[len] = '\0';
-            exe_dir = fs::path(exe_buf).parent_path();
+            exe_dir      = fs::path(exe_buf).parent_path();
         }
 #elif defined(__APPLE__)
         uint32_t size = sizeof(exe_buf);
@@ -175,7 +212,7 @@ bool CompilationSession::importStage() {
         ssize_t exe_len = readlink("/proc/self/exe", exe_buf, sizeof(exe_buf) - 1);
         if (exe_len != -1) {
             exe_buf[exe_len] = '\0';
-            exe_dir = fs::path(exe_buf).parent_path();
+            exe_dir          = fs::path(exe_buf).parent_path();
         }
 #endif
         if (!exe_dir.empty()) {
@@ -223,12 +260,10 @@ bool CompilationSession::importStage() {
     for (auto decl_id : program_.decls) {
         auto &decl = ast_builder_.getDecl(decl_id);
         if (auto *import = std::get_if<ast::ImportNode>(&decl)) {
-            auto res = import_mgr.resolve(import->path, import->is_from,
-                                          import->is_export, import->alias,
-                                          import->import_depth, source_dir);
+            auto res = import_mgr.resolve(import->path, import->is_from, import->is_export,
+                                          import->alias, import->import_depth, source_dir);
             if (!res) {
-                diags_.report(diagnostics::Severity::Error,
-                              diagnostics::err::ImportError,
+                diags_.report(diagnostics::Severity::Error, diagnostics::err::ImportError,
                               std::string(res.error().msg), {});
                 continue;
             }
@@ -236,13 +271,28 @@ bool CompilationSession::importStage() {
     }
 
     import_mgr.mergeInto(syms_);
+
+    if (opts_.verbose) {
+        auto dt = std::chrono::duration<double, std::milli>(
+            std::chrono::steady_clock::now() - t0).count();
+        std::fprintf(stderr, "  [import] %zu symbols  (%5.1fms)\n",
+                     syms_.symbolCount(), dt);
+    }
+
     return true;
 }
 
 void CompilationSession::scanStage() {
+    auto t0 = std::chrono::steady_clock::now();
     parser::Parser parser(&tokens_, &ast_builder_, &diags_);
     scan_result_ = parser::scan(parser, syms_);
-    program_ = std::move(parser.program);
+    program_     = std::move(parser.program);
+    if (opts_.verbose) {
+        auto dt = std::chrono::duration<double, std::milli>(
+            std::chrono::steady_clock::now() - t0).count();
+        std::fprintf(stderr, "  [scan] %6zu top-level decls  (%5.1fms)\n",
+                     program_.decls.size(), dt);
+    }
 }
 
 void CompilationSession::expandBodiesStage() {
@@ -257,6 +307,7 @@ void CompilationSession::solveStage() {
 }
 
 bool CompilationSession::semaStage() {
+    auto t0 = std::chrono::steady_clock::now();
     // TODO: wire up type checker, HIR lowering
     // Thread-safety: each session owns its own SymbolTable, TypeIntern,
     // and HirModule — safe to parallelize across files.
@@ -264,20 +315,38 @@ bool CompilationSession::semaStage() {
         diags_.emit();
         return false;
     }
+    if (opts_.verbose) {
+        auto dt = std::chrono::duration<double, std::milli>(
+            std::chrono::steady_clock::now() - t0).count();
+        std::fprintf(stderr, "  [sema] — (stub)  (%5.1fms)\n", dt);
+    }
     return true;
 }
 
 bool CompilationSession::mirStage() {
+    auto t0 = std::chrono::steady_clock::now();
     // TODO: wire up HIR → MIR lowering, MIR verification
     // Thread-safety: each session owns its own MirModule — safe to parallelize.
+    if (opts_.verbose) {
+        auto dt = std::chrono::duration<double, std::milli>(
+            std::chrono::steady_clock::now() - t0).count();
+        std::fprintf(stderr, "  [mir] %zu fns  (%5.1fms)\n",
+                     mir_module_.fnCount(), dt);
+    }
     return true;
 }
 
 bool CompilationSession::zirStage() {
+    auto t0 = std::chrono::steady_clock::now();
     // TODO: wire up ZIR interpretation or LLVM codegen + emit
     // Serialization point: after this stage, results from multiple files
     // may need to be merged (linking, combining interpreted modules).
     // This is the only stage that may require inter-file synchronization.
+    if (opts_.verbose) {
+        auto dt = std::chrono::duration<double, std::milli>(
+            std::chrono::steady_clock::now() - t0).count();
+        std::fprintf(stderr, "  [zir] — (stub)  (%5.1fms)\n", dt);
+    }
     return true;
 }
 
