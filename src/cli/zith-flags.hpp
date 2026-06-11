@@ -77,51 +77,59 @@ bool find_flags_file(std::filesystem::path &out) {
 } // namespace
 
 inline Options loadZithFlags() {
-    Options opts;
-
     std::filesystem::path flags_path;
     if (!find_flags_file(flags_path))
-        return opts;
+        return {};
 
-    toml::table tbl;
-    try {
-        tbl = toml::parse_file(flags_path.string());
-    } catch (const toml::parse_error &) {
-        return opts;
-    }
+    auto process = [](const toml::table &tbl) -> Options {
+        Options opts;
 
-    if (auto v = tbl["mode"].value<std::string>())
-        opts.mode = *v;
-    if (auto v = tbl["opt_level"].value<int64_t>()) {
-        if (*v >= 0 && *v <= 3)
-            opts.opt_level = static_cast<int>(*v);
-    }
-    if (auto v = tbl["debug_level"].value<int64_t>()) {
-        if (*v >= 0 && *v <= 3)
-            opts.debug_level = static_cast<int>(*v);
-    }
-    if (auto v = tbl["verbose"].value<bool>())
-        opts.verbose = *v;
-    if (auto v = tbl["strict"].value<bool>())
-        opts.strict = *v;
-    if (auto v = tbl["strip_debug"].value<bool>())
-        opts.strip_debug = *v;
-    if (auto v = tbl["lto"].value<bool>())
-        opts.lto = *v;
-    if (auto v = tbl["color"].value<std::string>())
-        opts.color = *v;
-
-    if (auto arr = tbl["include_dirs"].as_array()) {
-        for (auto &elem : *arr) {
-            if (auto s = elem.value<std::string>())
-                opts.include_dirs.push(*s);
+        if (auto v = tbl["mode"].value<std::string>())
+            opts.mode = *v;
+        if (auto v = tbl["opt_level"].value<int64_t>()) {
+            if (*v >= 0 && *v <= 3)
+                opts.opt_level = static_cast<int>(*v);
         }
+        if (auto v = tbl["debug_level"].value<int64_t>()) {
+            if (*v >= 0 && *v <= 3)
+                opts.debug_level = static_cast<int>(*v);
+        }
+        if (auto v = tbl["verbose"].value<bool>())
+            opts.verbose = *v;
+        if (auto v = tbl["strict"].value<bool>())
+            opts.strict = *v;
+        if (auto v = tbl["strip_debug"].value<bool>())
+            opts.strip_debug = *v;
+        if (auto v = tbl["lto"].value<bool>())
+            opts.lto = *v;
+        if (auto v = tbl["color"].value<std::string>())
+            opts.color = *v;
+
+        if (auto arr = tbl["include_dirs"].as_array()) {
+            for (auto &elem : *arr) {
+                if (auto s = elem.value<std::string>())
+                    opts.include_dirs.push(*s);
+            }
+        }
+
+        if (auto v = tbl["emit_target"].value<std::string>())
+            opts.emit_target = *v;
+
+        return opts;
+    };
+
+#if TOML_EXCEPTIONS
+    try {
+        return process(toml::parse_file(flags_path.string()));
+    } catch (const toml::parse_error &) {
+        return {};
     }
-
-    if (auto v = tbl["emit_target"].value<std::string>())
-        opts.emit_target = *v;
-
-    return opts;
+#else
+    auto result = toml::parse_file(flags_path.string());
+    if (!result)
+        return {};
+    return process(*result);
+#endif
 }
 
 } // namespace zith::cli

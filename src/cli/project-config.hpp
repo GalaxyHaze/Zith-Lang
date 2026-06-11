@@ -37,15 +37,14 @@ struct ProjectConfig {
         if (!fs::exists(toml_path))
             return std::nullopt;
 
-        try {
-            auto tbl = toml::parse_file(toml_path);
-            ProjectConfig cfg;
+        auto read_str = [](const toml::table *tbl, std::string_view key) -> std::optional<std::string> {
+            if (auto *val = tbl->get(key))
+                return val->value<std::string>();
+            return std::nullopt;
+        };
 
-            auto read_str = [](const toml::table *tbl, std::string_view key) -> std::optional<std::string> {
-                if (auto *val = tbl->get(key))
-                    return val->value<std::string>();
-                return std::nullopt;
-            };
+        auto process = [&](const toml::table &tbl) -> std::optional<ProjectConfig> {
+            ProjectConfig cfg;
 
             if (auto *proj = tbl["project"].as_table()) {
                 if (auto v = read_str(proj, "name"))        cfg.name = *v;
@@ -83,9 +82,20 @@ struct ProjectConfig {
             }
 
             return cfg;
+        };
+
+#if TOML_EXCEPTIONS
+        try {
+            return process(toml::parse_file(toml_path));
         } catch (...) {
             return std::nullopt;
         }
+#else
+        auto result = toml::parse_file(toml_path);
+        if (!result)
+            return std::nullopt;
+        return process(*result);
+#endif
     }
 };
 
