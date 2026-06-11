@@ -5,19 +5,19 @@
   "license": "MIT",
   "architecture": {
     "64bit": {
-      "url": "https://github.com/GalaxyHaze/Zith/releases/download/v0.0.3.1/zith-windows-amd64.exe",
+      "url": "https://github.com/GalaxyHaze/Zith/releases/download/v0.0.3.1/zithc-windows-amd64.exe",
       "hash": "ba5ae58f19efebaad9988c72fac6afc3d7ddedb08d92edcef9798f034d3bb260"
     },
     "arm64": {
-      "url": "https://github.com/GalaxyHaze/Zith/releases/download/v0.0.3.1/zith-windows-arm64.exe",
+      "url": "https://github.com/GalaxyHaze/Zith/releases/download/v0.0.3.1/zithc-windows-arm64.exe",
       "hash": "3a760ab14862c3e550317f58d3616f594ce8805ee2bc6507f2967cf426eb281d"
     }
   },
-  "bin": "zith.exe",
+  "bin": "zithc.exe",
   "installer": {
     "script": [
-      "if ($architecture -eq '64bit') { Rename-Item \"$dir\\zith-windows-amd64.exe\" \"zith.exe\" }",
-      "if ($architecture -eq 'arm64') { Rename-Item \"$dir\\zith-windows-arm64.exe\" \"zith.exe\" }"
+      "if ($architecture -eq '64bit') { Rename-Item \"$dir\\zithc-windows-amd64.exe\" \"zithc.exe\" }",
+      "if ($architecture -eq 'arm64') { Rename-Item \"$dir\\zithc-windows-arm64.exe\" \"zithc.exe\" }"
     ]
   }
 }
