@@ -5,12 +5,20 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#ifdef _WIN32
+#include <io.h>
+#else
 #include <unistd.h>
+#endif
 
 namespace zith::cli {
 
 static bool useColor() {
+#ifdef _WIN32
+    return _isatty(_fileno(stderr)) != 0;
+#else
     return isatty(fileno(stderr)) != 0;
+#endif
 }
 
 #define C(c) (useColor() ? diagnostics::ansi::c.data() : "")

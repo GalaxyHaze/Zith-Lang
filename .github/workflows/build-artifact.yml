@@ -192,7 +192,6 @@ jobs:
         shell: bash
         run: |
           rm -f build/lib/*.a 2>/dev/null || true
-          rm -f build/bin/* 2>/dev/null || true
 
       - name: Build
         shell: bash
@@ -203,10 +202,10 @@ jobs:
         run: |
           mkdir -p artifacts
           if [ "${{ runner.os }}" = "Windows" ]; then
-            cp build/bin/zith.exe "artifacts/${{ matrix.target_name }}"
+            cp build/zithc.exe "artifacts/${{ matrix.target_name }}"
           else
-            chmod +x build/bin/zith
-            cp build/bin/zith "artifacts/${{ matrix.target_name }}"
+            chmod +x build/zithc
+            cp build/zithc "artifacts/${{ matrix.target_name }}"
           fi
 
       - name: Upload release asset
@@ -244,7 +243,10 @@ jobs:
       - name: Install musl cross-compiler
         shell: bash
         run: |
-          curl -sL "${{ matrix.toolchain_url }}" | sudo tar xz -C /opt
+          for i in 1 2 3; do
+            curl -sL --retry 5 --retry-delay 10 "${{ matrix.toolchain_url }}" | sudo tar xz -C /opt && break
+            sleep 5
+          done
           echo "/opt/${{ matrix.toolchain_name }}/bin" >> "$GITHUB_PATH"
           ${{ matrix.cc }} --version
 
@@ -262,7 +264,7 @@ jobs:
             -DCMAKE_EXE_LINKER_FLAGS='-static'
           cmake --build build --config Release
           mkdir -p artifacts
-          cp build/bin/zith artifacts/${{ matrix.target_name }}
+          cp build/zithc artifacts/${{ matrix.target_name }}
 
       - name: Upload release asset
         uses: softprops/action-gh-release@v2
@@ -301,6 +303,7 @@ jobs:
       - name: Configure CMake
         shell: bash
         run: |
+          rm -f build-wasm/CMakeCache.txt build-wasm/CMakeFiles -rf 2>/dev/null || true
           emcmake cmake -S . -B build-wasm -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
             -DBUILD_TESTING=OFF \

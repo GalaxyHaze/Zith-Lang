@@ -4,14 +4,22 @@
 
 #include <cstdio>
 #include <cstring>
+#ifdef _WIN32
+#include <io.h>
+#else
 #include <unistd.h>
+#endif
 
 namespace zith::cli::commands {
 
     static bool useColor(const Options &opts) {
         if (opts.color == "on") return true;
         if (opts.color == "off") return false;
+#ifdef _WIN32
+        return _isatty(_fileno(stdout)) != 0;
+#else
         return isatty(fileno(stdout)) != 0;
+#endif
     }
 
     static const char *green(const Options &opts) {

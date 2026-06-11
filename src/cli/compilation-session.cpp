@@ -10,7 +10,11 @@
 #include <filesystem>
 #include <vector>
 #include <toml++/toml.hpp>
+#ifdef _WIN32
+#include <io.h>
+#else
 #include <unistd.h>
+#endif
 
 namespace zith::cli {
 
@@ -20,7 +24,11 @@ static bool shouldUseColor(const std::string &setting) {
     if (setting == "off")
         return false;
     // auto: enable if stderr is a TTY
+#ifdef _WIN32
+    return _isatty(_fileno(stderr)) != 0;
+#else
     return isatty(fileno(stderr)) != 0;
+#endif
 }
 
 CompilationSession::CompilationSession(const Options &opts, std::string file_path) :

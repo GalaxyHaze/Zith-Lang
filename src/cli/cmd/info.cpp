@@ -2,7 +2,11 @@
 #include "diagnostics/color.hpp"
 
 #include <cstdio>
+#ifdef _WIN32
+#include <io.h>
+#else
 #include <unistd.h>
+#endif
 
 #define STRINGIFY_IMPL(x) #x
 #define STRINGIFY(x)      STRINGIFY_IMPL(x)
@@ -10,7 +14,11 @@
 namespace zith::cli::commands {
 
 static bool useColor() {
+#ifdef _WIN32
+    return _isatty(_fileno(stdout)) != 0;
+#else
     return isatty(fileno(stdout)) != 0;
+#endif
 }
 
 #define C(c) (useColor() ? diagnostics::ansi::c.data() : "")
