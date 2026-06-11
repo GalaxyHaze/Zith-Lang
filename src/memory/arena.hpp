@@ -1,7 +1,6 @@
 #pragma once
 #include <cstddef>
 #include <new>
-#include <type_traits>
 #include <utility>
 
 namespace zith::memory {
@@ -129,8 +128,8 @@ namespace zith::memory {
         }
     };
 
-    inline thread_local Arena SessionArena;
-    inline thread_local Arena TestArena;
+    extern thread_local Arena SessionArena;
+    extern thread_local Arena TestArena;
 
     class MarkPoint {
         Arena *arena_        = nullptr;
