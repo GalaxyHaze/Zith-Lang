@@ -23,9 +23,9 @@ static Arena make_arena() { return Arena(); }
 static void test_parse_from_import() {
     Arena arena = make_arena();
     AstBuilder builder(arena);
-    DiagnosticEngine diags;
+    DiagnosticEngine diags(arena);
 
-    auto token_result = tokenize(source_map, "test", "from std/io/console", diags);
+    auto token_result = tokenize(source_map, arena, "test", "from std/io/console", diags);
     CHECK(token_result.isOk(), "tokenize 'from std/io/console'");
     if (!token_result.isOk()) return;
 
@@ -53,9 +53,9 @@ static void test_parse_from_import() {
 static void test_parse_import_single() {
     Arena arena = make_arena();
     AstBuilder builder(arena);
-    DiagnosticEngine diags;
+    DiagnosticEngine diags(arena);
 
-    auto token_result = tokenize(source_map, "test", "import foo", diags);
+    auto token_result = tokenize(source_map, arena, "test", "import foo", diags);
     CHECK(token_result.isOk(), "tokenize 'import foo'");
     if (!token_result.isOk()) return;
 
@@ -97,10 +97,10 @@ static void test_syms_declare_visibility() {
 static void test_scanner_pub_visibility() {
     Arena arena = make_arena();
     AstBuilder builder(arena);
-    DiagnosticEngine diags;
+    DiagnosticEngine diags(arena);
     SymbolTable syms(arena);
 
-    auto token_result = tokenize(source_map, "test", "pub fn foo() {}", diags);
+    auto token_result = tokenize(source_map, arena, "test", "pub fn foo() {}", diags);
     CHECK(token_result.isOk(), "tokenize 'pub fn foo() {}'");
     if (!token_result.isOk()) return;
 
@@ -120,10 +120,10 @@ static void test_scanner_pub_visibility() {
 static void test_scanner_mod_default() {
     Arena arena = make_arena();
     AstBuilder builder(arena);
-    DiagnosticEngine diags;
+    DiagnosticEngine diags(arena);
     SymbolTable syms(arena);
 
-    auto token_result = tokenize(source_map, "test", "mod fn bar() {}", diags);
+    auto token_result = tokenize(source_map, arena, "test", "mod fn bar() {}", diags);
     CHECK(token_result.isOk(), "tokenize 'mod fn bar() {}'");
     if (!token_result.isOk()) return;
 
@@ -144,10 +144,10 @@ static void test_scanner_mod_default() {
 static void test_scanner_mod_n_depth() {
     Arena arena = make_arena();
     AstBuilder builder(arena);
-    DiagnosticEngine diags;
+    DiagnosticEngine diags(arena);
     SymbolTable syms(arena);
 
-    auto token_result = tokenize(source_map, "test", "mod(3) fn baz() {}", diags);
+    auto token_result = tokenize(source_map, arena, "test", "mod(3) fn baz() {}", diags);
     CHECK(token_result.isOk(), "tokenize 'mod(3) fn baz() {}'");
     if (!token_result.isOk()) return;
 
@@ -168,10 +168,10 @@ static void test_scanner_mod_n_depth() {
 static void test_scanner_mod_infinite_depth() {
     Arena arena = make_arena();
     AstBuilder builder(arena);
-    DiagnosticEngine diags;
+    DiagnosticEngine diags(arena);
     SymbolTable syms(arena);
 
-    auto token_result = tokenize(source_map, "test", "mod(..) fn qux() {}", diags);
+    auto token_result = tokenize(source_map, arena, "test", "mod(..) fn qux() {}", diags);
     CHECK(token_result.isOk(), "tokenize 'mod(..) fn qux() {}'");
     if (!token_result.isOk()) return;
 
@@ -192,10 +192,10 @@ static void test_scanner_mod_infinite_depth() {
 static void test_scanner_private_default() {
     Arena arena = make_arena();
     AstBuilder builder(arena);
-    DiagnosticEngine diags;
+    DiagnosticEngine diags(arena);
     SymbolTable syms(arena);
 
-    auto token_result = tokenize(source_map, "test", "fn plain() {}", diags);
+    auto token_result = tokenize(source_map, arena, "test", "fn plain() {}", diags);
     CHECK(token_result.isOk(), "tokenize 'fn plain() {}'");
     if (!token_result.isOk()) return;
 
@@ -216,10 +216,10 @@ static void test_scanner_private_default() {
 static void test_scanner_visibility_resets() {
     Arena arena = make_arena();
     AstBuilder builder(arena);
-    DiagnosticEngine diags;
+    DiagnosticEngine diags(arena);
     SymbolTable syms(arena);
 
-    auto token_result = tokenize(source_map, "test", "pub fn first() {}\nfn second() {}", diags);
+    auto token_result = tokenize(source_map, arena, "test", "pub fn first() {}\nfn second() {}", diags);
     CHECK(token_result.isOk(), "tokenize two fns with pub on first");
     if (!token_result.isOk()) return;
 
@@ -243,10 +243,10 @@ static void test_scanner_visibility_resets() {
 static void test_scanner_pub_struct() {
     Arena arena = make_arena();
     AstBuilder builder(arena);
-    DiagnosticEngine diags;
+    DiagnosticEngine diags(arena);
     SymbolTable syms(arena);
 
-    auto token_result = tokenize(source_map, "test", "pub struct Point", diags);
+    auto token_result = tokenize(source_map, arena, "test", "pub struct Point", diags);
     CHECK(token_result.isOk(), "tokenize 'pub struct Point'");
     if (!token_result.isOk()) return;
 
@@ -265,9 +265,9 @@ static void test_scanner_pub_struct() {
 static void test_parse_export() {
     Arena arena = make_arena();
     AstBuilder builder(arena);
-    DiagnosticEngine diags;
+    DiagnosticEngine diags(arena);
 
-    auto token_result = tokenize(source_map, "test", "export std/io/console", diags);
+    auto token_result = tokenize(source_map, arena, "test", "export std/io/console", diags);
     CHECK(token_result.isOk(), "tokenize 'export std/io/console'");
     if (!token_result.isOk()) return;
 
@@ -296,9 +296,9 @@ static void test_parse_export() {
 static void test_import_multi_segment() {
     Arena arena = make_arena();
     AstBuilder builder(arena);
-    DiagnosticEngine diags;
+    DiagnosticEngine diags(arena);
 
-    auto token_result = tokenize(source_map, "test", "import foo/bar/baz", diags);
+    auto token_result = tokenize(source_map, arena, "test", "import foo/bar/baz", diags);
     CHECK(token_result.isOk(), "tokenize 'import foo/bar/baz'");
     if (!token_result.isOk()) return;
 
@@ -328,9 +328,9 @@ static void test_import_multi_segment() {
 static void test_import_alias() {
     Arena arena = make_arena();
     AstBuilder builder(arena);
-    DiagnosticEngine diags;
+    DiagnosticEngine diags(arena);
 
-    auto token_result = tokenize(source_map, "test", "import std/io/console as con", diags);
+    auto token_result = tokenize(source_map, arena, "test", "import std/io/console as con", diags);
     CHECK(token_result.isOk(), "tokenize 'import std/io/console as con'");
     if (!token_result.isOk()) return;
 
@@ -360,9 +360,9 @@ static void test_import_alias() {
 static void test_import_dotdot() {
     Arena arena = make_arena();
     AstBuilder builder(arena);
-    DiagnosticEngine diags;
+    DiagnosticEngine diags(arena);
 
-    auto token_result = tokenize(source_map, "test", "from ../lib/mymod", diags);
+    auto token_result = tokenize(source_map, arena, "test", "from ../lib/mymod", diags);
     CHECK(token_result.isOk(), "tokenize 'from ../lib/mymod'");
     if (!token_result.isOk()) return;
 
@@ -391,9 +391,9 @@ static void test_import_dotdot() {
 static void test_export_multi() {
     Arena arena = make_arena();
     AstBuilder builder(arena);
-    DiagnosticEngine diags;
+    DiagnosticEngine diags(arena);
 
-    auto token_result = tokenize(source_map, "test", "export foo/bar/baz", diags);
+    auto token_result = tokenize(source_map, arena, "test", "export foo/bar/baz", diags);
     CHECK(token_result.isOk(), "tokenize 'export foo/bar/baz'");
     if (!token_result.isOk()) return;
 
@@ -423,9 +423,9 @@ static void test_export_multi() {
 static void test_export_dotdot() {
     Arena arena = make_arena();
     AstBuilder builder(arena);
-    DiagnosticEngine diags;
+    DiagnosticEngine diags(arena);
 
-    auto token_result = tokenize(source_map, "test", "export ../lib/mymod", diags);
+    auto token_result = tokenize(source_map, arena, "test", "export ../lib/mymod", diags);
     CHECK(token_result.isOk(), "tokenize 'export ../lib/mymod'");
     if (!token_result.isOk()) return;
 
@@ -455,9 +455,9 @@ static void test_export_dotdot() {
 static void test_import_depth_n() {
     Arena arena = make_arena();
     AstBuilder builder(arena);
-    DiagnosticEngine diags;
+    DiagnosticEngine diags(arena);
 
-    auto token_result = tokenize(source_map, "test", "import mymod(3)", diags);
+    auto token_result = tokenize(source_map, arena, "test", "import mymod(3)", diags);
     CHECK(token_result.isOk(), "tokenize 'import mymod(3)'");
     if (!token_result.isOk()) return;
 
@@ -484,9 +484,9 @@ static void test_import_depth_n() {
 static void test_import_depth_infinite() {
     Arena arena = make_arena();
     AstBuilder builder(arena);
-    DiagnosticEngine diags;
+    DiagnosticEngine diags(arena);
 
-    auto token_result = tokenize(source_map, "test", "import mymod(..)", diags);
+    auto token_result = tokenize(source_map, arena, "test", "import mymod(..)", diags);
     CHECK(token_result.isOk(), "tokenize 'import mymod(..)'");
     if (!token_result.isOk()) return;
 
@@ -513,9 +513,9 @@ static void test_import_depth_infinite() {
 static void test_from_depth_n() {
     Arena arena = make_arena();
     AstBuilder builder(arena);
-    DiagnosticEngine diags;
+    DiagnosticEngine diags(arena);
 
-    auto token_result = tokenize(source_map, "test", "from mymod(2)", diags);
+    auto token_result = tokenize(source_map, arena, "test", "from mymod(2)", diags);
     CHECK(token_result.isOk(), "tokenize 'from mymod(2)'");
     if (!token_result.isOk()) return;
 
@@ -543,9 +543,9 @@ static void test_from_depth_n() {
 static void test_import_depth_alias() {
     Arena arena = make_arena();
     AstBuilder builder(arena);
-    DiagnosticEngine diags;
+    DiagnosticEngine diags(arena);
 
-    auto token_result = tokenize(source_map, "test", "import mymod(3) as m", diags);
+    auto token_result = tokenize(source_map, arena, "test", "import mymod(3) as m", diags);
     CHECK(token_result.isOk(), "tokenize 'import mymod(3) as m'");
     if (!token_result.isOk()) return;
 
@@ -574,9 +574,9 @@ static void test_import_depth_alias() {
 static void test_import_multi_depth_alias() {
     Arena arena = make_arena();
     AstBuilder builder(arena);
-    DiagnosticEngine diags;
+    DiagnosticEngine diags(arena);
 
-    auto token_result = tokenize(source_map, "test", "import foo/bar(5) as b", diags);
+    auto token_result = tokenize(source_map, arena, "test", "import foo/bar(5) as b", diags);
     CHECK(token_result.isOk(), "tokenize 'import foo/bar(5) as b'");
     if (!token_result.isOk()) return;
 
@@ -605,9 +605,9 @@ static void test_import_multi_depth_alias() {
 static void test_import_alias_multi() {
     Arena arena = make_arena();
     AstBuilder builder(arena);
-    DiagnosticEngine diags;
+    DiagnosticEngine diags(arena);
 
-    auto token_result = tokenize(source_map, "test", "import foo/bar/baz as x", diags);
+    auto token_result = tokenize(source_map, arena, "test", "import foo/bar/baz as x", diags);
     CHECK(token_result.isOk(), "tokenize 'import foo/bar/baz as x'");
     if (!token_result.isOk()) return;
 
@@ -637,9 +637,9 @@ static void test_import_alias_multi() {
 static void test_import_dotdot_as_alias() {
     Arena arena = make_arena();
     AstBuilder builder(arena);
-    DiagnosticEngine diags;
+    DiagnosticEngine diags(arena);
 
-    auto token_result = tokenize(source_map, "test", "import ../lib/mymod as m", diags);
+    auto token_result = tokenize(source_map, arena, "test", "import ../lib/mymod as m", diags);
     CHECK(token_result.isOk(), "tokenize 'import ../lib/mymod as m'");
     if (!token_result.isOk()) return;
 
@@ -669,9 +669,9 @@ static void test_import_dotdot_as_alias() {
 static void test_empty_import() {
     Arena arena = make_arena();
     AstBuilder builder(arena);
-    DiagnosticEngine diags;
+    DiagnosticEngine diags(arena);
 
-    auto token_result = tokenize(source_map, "test", "import", diags);
+    auto token_result = tokenize(source_map, arena, "test", "import", diags);
     CHECK(token_result.isOk(), "tokenize 'import'");
     if (!token_result.isOk()) return;
 
@@ -689,9 +689,9 @@ static void test_empty_import() {
 static void test_empty_from() {
     Arena arena = make_arena();
     AstBuilder builder(arena);
-    DiagnosticEngine diags;
+    DiagnosticEngine diags(arena);
 
-    auto token_result = tokenize(source_map, "test", "from", diags);
+    auto token_result = tokenize(source_map, arena, "test", "from", diags);
     CHECK(token_result.isOk(), "tokenize 'from'");
     if (!token_result.isOk()) return;
 
@@ -709,9 +709,9 @@ static void test_empty_from() {
 static void test_empty_export() {
     Arena arena = make_arena();
     AstBuilder builder(arena);
-    DiagnosticEngine diags;
+    DiagnosticEngine diags(arena);
 
-    auto token_result = tokenize(source_map, "test", "export", diags);
+    auto token_result = tokenize(source_map, arena, "test", "export", diags);
     CHECK(token_result.isOk(), "tokenize 'export'");
     if (!token_result.isOk()) return;
 

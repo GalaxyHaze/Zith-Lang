@@ -14,6 +14,8 @@ namespace zith::zir::mir {
         memory::DynArray<hir::HirTypeId> params;
         hir::HirTypeId return_type;
         memory::DynArray<MirBasicBlock> blocks;
+
+        explicit MirFunction(memory::Arena &arena) : params(arena), blocks(arena) {}
     };
 
     class MirModule {

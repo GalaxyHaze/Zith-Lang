@@ -250,8 +250,8 @@ namespace zith::lexer {
         tokens.emplace(spanRange(before, now), kind);
     }
 
-    Lexer::Lexer(memory::SourceMap &source_map, diagnostics::DiagnosticEngine &diags) :
-        source_map_(source_map), diags_(diags), tokens(memory::SessionArena) {}
+    Lexer::Lexer(memory::SourceMap &source_map, memory::Arena &arena, diagnostics::DiagnosticEngine &diags) :
+        source_map_(source_map), arena_(arena), diags_(diags), tokens(arena) {}
 
     auto Lexer::run(std::variant<memory::FileId, std::pair<std::string_view, std::string>> input)
             -> memory::Result<TokenStream> {
@@ -361,13 +361,13 @@ namespace zith::lexer {
         return TokenStream{tokens.data(), static_cast<uint32_t>(tokens.size()), 0, start};
     }
 
-    auto tokenize(memory::SourceMap &source_map, memory::FileId id, diagnostics::DiagnosticEngine &diags) -> memory::Result<TokenStream> {
-        Lexer lexer(source_map, diags);
+    auto tokenize(memory::SourceMap &source_map, memory::Arena &arena, memory::FileId id, diagnostics::DiagnosticEngine &diags) -> memory::Result<TokenStream> {
+        Lexer lexer(source_map, arena, diags);
         return lexer.run(std::variant<memory::FileId, std::pair<std::string_view, std::string>>(id));
     }
 
-    auto tokenize(memory::SourceMap &source_map, std::string_view name, std::string content, diagnostics::DiagnosticEngine &diags) -> memory::Result<TokenStream> {
-        Lexer lexer(source_map, diags);
+    auto tokenize(memory::SourceMap &source_map, memory::Arena &arena, std::string_view name, std::string content, diagnostics::DiagnosticEngine &diags) -> memory::Result<TokenStream> {
+        Lexer lexer(source_map, arena, diags);
         return lexer.run(std::make_pair(name, std::move(content)));
     }
 

@@ -101,7 +101,7 @@ namespace {
     }
 
     ast::ExprId Parser::parseBlock() {
-        memory::DynArray<ast::StmtId> stmts{memory::SessionArena};
+        memory::DynArray<ast::StmtId> stmts{bld->arena()};
 
         while (!eof()) {
             if (peek().punc == '}')
@@ -161,7 +161,7 @@ namespace {
             return kInvalidDecl;
         }
 
-        memory::DynArray<std::string_view> params{memory::SessionArena};
+        memory::DynArray<std::string_view> params{bld->arena()};
         while (!eof() && peek().punc != ')') {
             if (!peek().is(TokenKind::Identifier)) {
                 diag->report(Severity::Error, ExpectedIdent,
@@ -244,7 +244,7 @@ namespace {
         auto &diag = *parser.diag;
         auto &program = parser.program;
 
-        ScanResult result{memory::SessionArena};
+        ScanResult result{bld.arena()};
         import::SymbolVisibility current_vis = import::SymbolVisibility::Private;
         int32_t current_mod_depth = 0;
 
@@ -317,8 +317,8 @@ namespace {
                 }
                 tok.advance();
 
-                memory::DynArray<std::string_view> params{memory::SessionArena};
-                memory::DynArray<memory::Span> param_spans{memory::SessionArena};
+                memory::DynArray<std::string_view> params{bld.arena()};
+                memory::DynArray<memory::Span> param_spans{bld.arena()};
                 while (!tok.is_empty()) {
                     if (tok.peek().is_eof()) break;
                     if (tok.peek().punc == ')')
@@ -394,7 +394,7 @@ namespace {
                 auto name = tok.lexeme();
                 tok.advance();
 
-                auto decl = bld.structDecl(name, {});
+                auto decl = bld.structDecl(name, memory::DynArray<std::pair<std::string_view, uint32_t>>(bld.arena()));
                 program.decls.push(decl);
                 if (!reportIfDuplicate(syms, diag, name, name_span))
                     syms.declare(name, current_vis, current_mod_depth,
@@ -467,7 +467,7 @@ namespace {
                 };
 
                 if (kw == "from" || kw == "export") {
-                    memory::DynArray<std::string_view> path{memory::SessionArena};
+                    memory::DynArray<std::string_view> path{bld.arena()};
                     parse_path(path);
                     if (path.empty()) {
                         diag.report(Severity::Error, ImportError,
@@ -481,7 +481,7 @@ namespace {
                         program.decls.push(decl);
                     }
                 } else if (kw == "import") {
-                    memory::DynArray<std::string_view> path{memory::SessionArena};
+                    memory::DynArray<std::string_view> path{bld.arena()};
                     parse_path(path);
                     if (path.empty()) {
                         diag.report(Severity::Error, ImportError,
@@ -548,7 +548,7 @@ namespace {
                                 diagnostics::DiagnosticEngine &diags) {
         memory::Arena arena;
         import::SymbolTable syms(arena);
-        Parser p{&tokens, &builder, &diags};
+        Parser p(&tokens, &builder, &diags);
         auto result = scan(p, syms);
         p.expandBodies(result);
         return std::move(p.program);

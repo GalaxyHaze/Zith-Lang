@@ -108,7 +108,7 @@ inline Options loadZithFlags() {
         if (auto arr = tbl["include_dirs"].as_array()) {
             for (auto &elem : *arr) {
                 if (auto s = elem.value<std::string>())
-                    opts.include_dirs.push(*s);
+                    opts.include_dirs.push_back(*s);
             }
         }
 

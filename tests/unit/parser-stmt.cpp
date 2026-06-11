@@ -6,12 +6,16 @@
 
 using namespace zith::ast;
 using zith::memory::Arena;
+using zith::memory::DynArray;
 
 static void test_struct_decl() {
     Arena arena;
     AstBuilder builder(arena);
 
-    auto decl = builder.structDecl("Point", {{"x", 0}, {"y", 0}});
+    DynArray<std::pair<std::string_view, uint32_t>> fields(arena);
+    fields.push({"x", 0u});
+    fields.push({"y", 0u});
+    auto decl = builder.structDecl("Point", std::move(fields));
     CHECK(decl != kInvalidDecl, "structDecl returns valid DeclId");
 
     auto &node = builder.getDecl(decl);
@@ -28,7 +32,7 @@ static void test_if_expr() {
     AstBuilder builder(arena);
 
     auto cond = builder.ident("true");
-    auto then_b = builder.block({});
+    auto then_b = builder.block(DynArray<StmtId>(arena));
     auto e = builder.ifExpr(cond, then_b);
     CHECK(e != kInvalidExpr, "ifExpr returns valid ExprId");
 
@@ -47,8 +51,8 @@ static void test_if_else_expr() {
     AstBuilder builder(arena);
 
     auto cond = builder.ident("cond");
-    auto then_b = builder.block({});
-    auto else_b = builder.block({});
+    auto then_b = builder.block(DynArray<StmtId>(arena));
+    auto else_b = builder.block(DynArray<StmtId>(arena));
     auto e = builder.ifExpr(cond, then_b, else_b);
     CHECK(e != kInvalidExpr, "ifExpr with else returns valid ExprId");
 
@@ -64,7 +68,9 @@ static void test_call_expr() {
 
     auto callee = builder.ident("foo");
     auto arg = builder.litExpr(LitKind::Int, "1");
-    auto e = builder.call(callee, {arg});
+    DynArray<ExprId> args(arena);
+    args.push(arg);
+    auto e = builder.call(callee, std::move(args));
     CHECK(e != kInvalidExpr, "call returns valid ExprId");
 
     auto &node = builder.getExpr(e);
@@ -81,7 +87,10 @@ static void test_block_with_stmts() {
 
     auto s1 = builder.letStmt("a", false, builder.litExpr(LitKind::Int, "1"));
     auto s2 = builder.retStmt(builder.ident("a"));
-    auto block = builder.block({s1, s2});
+    DynArray<StmtId> stmts(arena);
+    stmts.push(s1);
+    stmts.push(s2);
+    auto block = builder.block(std::move(stmts));
     CHECK(block != kInvalidExpr, "block returns valid ExprId");
 
     auto &node = builder.getExpr(block);

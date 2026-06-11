@@ -123,6 +123,8 @@ namespace zith::ast {
 
     struct ProgramNode {
         memory::DynArray<DeclId> decls;
+
+        explicit ProgramNode(memory::Arena &arena) : decls(arena) {}
     };
 
     using ExprNode = std::variant<LitValue,

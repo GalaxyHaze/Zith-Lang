@@ -84,8 +84,8 @@ static void test_type_intern_ptr_returns_error() {
 static void test_unifier_returns_false() {
     Arena arena;
     TypeIntern types(arena);
-    DiagnosticEngine diags;
-    Unifier unifier(types, diags);
+    DiagnosticEngine diags(arena);
+    Unifier unifier(types, diags, arena);
 
     CHECK(!unifier.unify(kIntType, kIntType), "unify returns false (stub)");
 }
@@ -93,8 +93,8 @@ static void test_unifier_returns_false() {
 static void test_fresh_var_returns_error_type() {
     Arena arena;
     TypeIntern types(arena);
-    DiagnosticEngine diags;
-    Unifier unifier(types, diags);
+    DiagnosticEngine diags(arena);
+    Unifier unifier(types, diags, arena);
 
     auto var = unifier.freshVar();
     CHECK_EQ(var, kErrorType, "freshVar returns kErrorType (stub)");

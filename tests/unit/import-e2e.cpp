@@ -71,7 +71,7 @@ static void test_import_with_prefix() {
         f << "fn hidden() {}\n";
     }
 
-    zith::diagnostics::DiagnosticEngine diags;
+    zith::diagnostics::DiagnosticEngine diags(arena);
     ImportManager mgr(arena, source_map, diags, {tmp_dir});
 
     DynArray<std::string_view> path(arena);
@@ -106,7 +106,7 @@ static void test_from_dual_registration() {
         f << "mod fn util() {}\n";
     }
 
-    zith::diagnostics::DiagnosticEngine diags;
+    zith::diagnostics::DiagnosticEngine diags(arena);
     ImportManager mgr(arena, source_map, diags, {tmp_dir});
 
     DynArray<std::string_view> path(arena);
@@ -143,7 +143,7 @@ static void test_depth_blocks_at_distance() {
         f << "mod(3) fn deep_ok() {}\n";
     }
 
-    zith::diagnostics::DiagnosticEngine diags;
+    zith::diagnostics::DiagnosticEngine diags(arena);
     ImportManager mgr(arena, source_map, diags, {tmp_dir});
 
     DynArray<std::string_view> path(arena);
@@ -180,7 +180,7 @@ static void test_from_depth_blocks() {
         f << "mod(1) fn shallow() {}\n";
     }
 
-    zith::diagnostics::DiagnosticEngine diags;
+    zith::diagnostics::DiagnosticEngine diags(arena);
     ImportManager mgr(arena, source_map, diags, {tmp_dir});
 
     DynArray<std::string_view> path(arena);
@@ -214,7 +214,7 @@ static void test_import_alias() {
         f << "pub fn hello() {}\n";
     }
 
-    zith::diagnostics::DiagnosticEngine diags;
+    zith::diagnostics::DiagnosticEngine diags(arena);
     ImportManager mgr(arena, source_map, diags, {tmp_dir});
 
     DynArray<std::string_view> path(arena);
@@ -252,7 +252,7 @@ static void test_cycle_detection() {
         f << "import a\n";
     }
 
-    zith::diagnostics::DiagnosticEngine diags;
+    zith::diagnostics::DiagnosticEngine diags(arena);
     ImportManager mgr(arena, source_map, diags, {tmp_dir});
 
     DynArray<std::string_view> path_a(arena);
@@ -283,7 +283,7 @@ static void test_not_visible() {
         f << "pub fn secret() {}\n";
     }
 
-    zith::diagnostics::DiagnosticEngine diags;
+    zith::diagnostics::DiagnosticEngine diags(arena);
     // Empty visible roots — file won't be found
     ImportManager mgr(arena, source_map, diags, {});
 
@@ -307,7 +307,7 @@ static void test_mod_dir_lookup() {
         f << "pub fn from_mod_dir() {}\n";
     }
 
-    zith::diagnostics::DiagnosticEngine diags;
+    zith::diagnostics::DiagnosticEngine diags(arena);
     ImportManager mgr(arena, source_map, diags, {tmp_dir});
 
     DynArray<std::string_view> path(arena);
@@ -336,7 +336,7 @@ static void test_hatch_escape() {
         f << "pub fn lib_fn() {}\n";
     }
 
-    zith::diagnostics::DiagnosticEngine diags;
+    zith::diagnostics::DiagnosticEngine diags(arena);
     ImportManager mgr(arena, source_map, diags, {tmp_dir});
 
     DynArray<std::string_view> path(arena);
@@ -368,7 +368,7 @@ static void test_hatch_escape_blocked() {
         f << "pub fn x() {}\n";
     }
 
-    zith::diagnostics::DiagnosticEngine diags;
+    zith::diagnostics::DiagnosticEngine diags(arena);
     ImportManager mgr(arena, source_map, diags, {tmp_dir});
 
     DynArray<std::string_view> path(arena);
@@ -396,7 +396,7 @@ static void test_from_multi_segment() {
         f << "pub fn multi() {}\n";
     }
 
-    zith::diagnostics::DiagnosticEngine diags;
+    zith::diagnostics::DiagnosticEngine diags(arena);
     ImportManager mgr(arena, source_map, diags, {tmp_dir});
 
     DynArray<std::string_view> path(arena);
@@ -433,7 +433,7 @@ static void test_export_simple() {
         f << "pub fn from_export() {}\n";
     }
 
-    zith::diagnostics::DiagnosticEngine diags;
+    zith::diagnostics::DiagnosticEngine diags(arena);
     ImportManager mgr(arena, source_map, diags, {tmp_dir});
 
     DynArray<std::string_view> path(arena);
@@ -467,7 +467,7 @@ static void test_multiple_imports() {
         f << "pub fn fn_b() {}\n";
     }
 
-    zith::diagnostics::DiagnosticEngine diags;
+    zith::diagnostics::DiagnosticEngine diags(arena);
     ImportManager mgr(arena, source_map, diags, {tmp_dir});
 
     DynArray<std::string_view> path_a(arena);
@@ -503,7 +503,7 @@ static void test_import_dotdot_prefix() {
         f << "pub fn outer_fn() {}\n";
     }
 
-    zith::diagnostics::DiagnosticEngine diags;
+    zith::diagnostics::DiagnosticEngine diags(arena);
     ImportManager mgr(arena, source_map, diags, {tmp_dir});
 
     DynArray<std::string_view> path(arena);
@@ -540,7 +540,7 @@ static void test_dir_depth_limited() {
         f << "pub fn deep_fn() {}\n";
     }
 
-    zith::diagnostics::DiagnosticEngine diags;
+    zith::diagnostics::DiagnosticEngine diags(arena);
     ImportManager mgr(arena, source_map, diags, {tmp_dir});
 
     DynArray<std::string_view> path(arena);
@@ -579,7 +579,7 @@ static void test_dir_depth_infinite() {
         f << "pub fn deep_fn() {}\n";
     }
 
-    zith::diagnostics::DiagnosticEngine diags;
+    zith::diagnostics::DiagnosticEngine diags(arena);
     ImportManager mgr(arena, source_map, diags, {tmp_dir});
 
     DynArray<std::string_view> path(arena);
@@ -617,7 +617,7 @@ static void test_from_dir_depth_infinite() {
         f << "pub fn deep_fn() {}\n";
     }
 
-    zith::diagnostics::DiagnosticEngine diags;
+    zith::diagnostics::DiagnosticEngine diags(arena);
     ImportManager mgr(arena, source_map, diags, {tmp_dir});
 
     DynArray<std::string_view> path(arena);
@@ -653,7 +653,7 @@ static void test_export_directory() {
         f << "pub fn inner_fn() {}\n";
     }
 
-    zith::diagnostics::DiagnosticEngine diags;
+    zith::diagnostics::DiagnosticEngine diags(arena);
     ImportManager mgr(arena, source_map, diags, {tmp_dir});
 
     DynArray<std::string_view> path(arena);
@@ -693,7 +693,7 @@ static void test_cycle_via_re_export() {
         f << "export acyc\n";
     }
 
-    zith::diagnostics::DiagnosticEngine diags;
+    zith::diagnostics::DiagnosticEngine diags(arena);
     ImportManager mgr(arena, source_map, diags, {tmp_dir});
 
     DynArray<std::string_view> path(arena);
@@ -746,7 +746,7 @@ static void test_re_export_chain() {
         f << "export bchain\n";
     }
 
-    zith::diagnostics::DiagnosticEngine diags;
+    zith::diagnostics::DiagnosticEngine diags(arena);
     ImportManager mgr(arena, source_map, diags, {tmp_dir});
 
     DynArray<std::string_view> path(arena);
@@ -796,7 +796,7 @@ static void test_duplicate_public_symbols() {
         f << "pub fn conflict() {}\n";
     }
 
-    zith::diagnostics::DiagnosticEngine diags;
+    zith::diagnostics::DiagnosticEngine diags(arena);
     ImportManager mgr(arena, source_map, diags, {tmp_dir});
 
     // Resolve both files with `from` (bare name registration)
@@ -840,7 +840,7 @@ static void test_isLoaded_and_get() {
         f << "pub fn api_fn() {}\n";
     }
 
-    zith::diagnostics::DiagnosticEngine diags;
+    zith::diagnostics::DiagnosticEngine diags(arena);
     ImportManager mgr(arena, source_map, diags, {tmp_dir});
 
     CHECK(!mgr.isLoaded("apiz"), "isLoaded false before resolve");
@@ -870,7 +870,7 @@ static void test_resolution_failure_diagnostics() {
     CHECK(!tmp_dir.empty(), "tmp dir created");
     if (tmp_dir.empty()) return;
 
-    zith::diagnostics::DiagnosticEngine diags;
+    zith::diagnostics::DiagnosticEngine diags(arena);
     // Empty visible roots — nothing can be resolved
     ImportManager mgr(arena, source_map, diags, {});
 
@@ -897,7 +897,7 @@ static void test_import_empty_file() {
         f << "\n";
     }
 
-    zith::diagnostics::DiagnosticEngine diags;
+    zith::diagnostics::DiagnosticEngine diags(arena);
     ImportManager mgr(arena, source_map, diags, {tmp_dir});
 
     DynArray<std::string_view> path(arena);
@@ -925,7 +925,7 @@ static void test_import_dedup_preserves_first_config() {
         f << "pub fn x() {}\n";
     }
 
-    zith::diagnostics::DiagnosticEngine diags;
+    zith::diagnostics::DiagnosticEngine diags(arena);
     ImportManager mgr(arena, source_map, diags, {tmp_dir});
 
     // First resolve as import (prefix)

@@ -44,6 +44,8 @@ CompilationSession::CompilationSession(const Options &opts, std::string file_pat
     type_arena_(),
     hir_arena_(),
     mir_arena_(),
+    scratch_arena_(),
+    diags_(scratch_arena_),
     ast_builder_(ast_arena_),
     syms_(sym_arena_),
     types_(type_arena_),
@@ -111,7 +113,7 @@ bool CompilationSession::lexStage() {
     }
     file_id_ = file_result.value();
 
-    auto token_result = lexer::tokenize(source_map_, file_id_, diags_);
+    auto token_result = lexer::tokenize(source_map_, scratch_arena_, file_id_, diags_);
     if (!token_result) {
         diags_.emit();
         return false;
@@ -238,13 +240,13 @@ bool CompilationSession::importStage() {
 }
 
 void CompilationSession::scanStage() {
-    parser::Parser parser{&tokens_, &ast_builder_, &diags_};
+    parser::Parser parser(&tokens_, &ast_builder_, &diags_);
     scan_result_ = parser::scan(parser, syms_);
     program_ = std::move(parser.program);
 }
 
 void CompilationSession::expandBodiesStage() {
-    parser::Parser parser{&tokens_, &ast_builder_, &diags_};
+    parser::Parser parser(&tokens_, &ast_builder_, &diags_);
     parser.program = std::move(program_);
     parser.expandBodies(scan_result_);
     program_ = std::move(parser.program);

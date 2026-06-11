@@ -3,6 +3,7 @@
 #include "diagnostic.hpp"
 #include "diagnostics/color.hpp"
 #include "diagnostics/diagnostic.hpp"
+#include "memory/dyn-array.hpp"
 
 #include <cstdint>
 #include <span>
@@ -21,6 +22,7 @@ namespace zith::diagnostics {
         memory::SourceMap *source_map_ = nullptr;
 
     public:
+        explicit DiagnosticEngine(memory::Arena &arena) : diagnostics_(arena) {}
         void report(Diagnostic diag);
         void report(Severity sev, uint32_t code, std::string msg, memory::Span span);
 

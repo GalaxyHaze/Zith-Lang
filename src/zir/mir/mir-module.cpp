@@ -5,7 +5,7 @@ namespace zith::zir::mir {
     MirModule::MirModule(memory::Arena &arena) : fns_(arena) {}
 
     MirFunction &MirModule::addFn(std::string_view name) {
-        fns_.emplace();
+        fns_.emplace(fns_.arena());
         fns_[fns_.size() - 1].name = name;
         return fns_[fns_.size() - 1];
     }

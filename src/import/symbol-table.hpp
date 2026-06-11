@@ -33,6 +33,11 @@ namespace zith::import {
         ast::DeclId decl_id = ast::kInvalidDecl;
         memory::Span span{};
         memory::DynArray<SymId> members;
+
+        SymbolData(std::string_view name, ScopeId scope, SymbolVisibility vis, int32_t depth,
+                   SymKind ikind, ast::DeclId did, memory::Span ispan, memory::Arena &arena) :
+            name(name), scope(scope), visibility(vis), mod_depth(depth), kind(ikind),
+            decl_id(did), span(ispan), members(arena) {}
     };
 
     struct Scope {

@@ -4,6 +4,7 @@
 
 #include <cstdio>
 #include <cstring>
+#include <vector>
 #ifdef _WIN32
 #include <io.h>
 #else
@@ -34,16 +35,16 @@ namespace zith::cli::commands {
 
 
 int cmd_check(const Options &opts) {
-    memory::DynArray<std::string> files{memory::SessionArena};
+    std::vector<std::string> files;
 
     if (opts.input_files.empty()) {
-        files.push(".");
+        files.push_back(".");
     } else {
         for (const auto &f : opts.input_files)
-            files.push(f);
+            files.push_back(f);
     }
 
-    memory::DynArray<bool> results{memory::SessionArena};
+    std::vector<bool> results;
     results.reserve(files.size());
 
     // TODO: parallelize with std::async / thread pool
@@ -55,7 +56,7 @@ int cmd_check(const Options &opts) {
         bool ok = session.runTo(Stage::Parsed);
         if (session.hasErrors())
             ok = false;
-        results.push(ok);
+        results.push_back(ok);
     }
 
     auto count = [](auto &&r) {

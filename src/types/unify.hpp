@@ -13,7 +13,7 @@ namespace zith::types {
         memory::DynArray<TypeId> subst_;
 
     public:
-        Unifier(TypeIntern &intern, diagnostics::DiagnosticEngine &diags);
+        Unifier(TypeIntern &intern, diagnostics::DiagnosticEngine &diags, memory::Arena &arena);
 
         TypeId freshVar();
         bool unify(TypeId a, TypeId b);

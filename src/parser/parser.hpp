@@ -16,6 +16,9 @@ namespace zith::parser {
         diagnostics::DiagnosticEngine *diag;
         ast::ProgramNode program;
 
+        Parser(lexer::TokenStream *tok, ast::AstBuilder *bld, diagnostics::DiagnosticEngine *diag) :
+            tok(tok), bld(bld), diag(diag), program(bld->arena()) {}
+
         std::string_view lexeme();
         const lexer::Token &peek();
         const lexer::Token &peek(uint32_t n);

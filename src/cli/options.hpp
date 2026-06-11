@@ -4,17 +4,14 @@
 
 #include <string>
 #include <vector>
-#include "memory/dyn-array.hpp"
-
 
 namespace zith::cli {
-using memory::DynArray;
 
 struct Options {
     // Input / output
-    DynArray<std::string> input_files;
+    std::vector<std::string> input_files;
     std::string output_file           = "a.out";
-    memory::DynArray<std::string> include_dirs;
+    std::vector<std::string> include_dirs;
 
     // Build configuration
     std::string mode                  = "debug";

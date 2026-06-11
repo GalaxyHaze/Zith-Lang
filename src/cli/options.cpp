@@ -160,7 +160,7 @@ static void mergeFlags(zith::cli::Options &opts, const zith::cli::Options &defau
         opts.verbose = defaults.verbose;
     if (opts.include_dirs.empty() && !defaults.include_dirs.empty()) {
         for (const auto &d : defaults.include_dirs)
-            opts.include_dirs.push(d);
+            opts.include_dirs.push_back(d);
     }
     if (opts.emit_target.empty() && !defaults.emit_target.empty())
         opts.emit_target = defaults.emit_target;
@@ -305,7 +305,7 @@ Options parseArgs(int argc, char **argv) {
             for (const char *p = val; ; ++p) {
                 if (*p == ',' || *p == '\0') {
                     if (p > start) {
-                        opts.include_dirs.emplace(start, static_cast<size_t>(p - start));
+                        opts.include_dirs.emplace_back(start, static_cast<size_t>(p - start));
                     }
                     if (*p == '\0')
                         break;
@@ -402,7 +402,7 @@ Options parseArgs(int argc, char **argv) {
         }
 
         // Positional: input file
-        opts.input_files.push(argv[i]);
+        opts.input_files.push_back(argv[i]);
     }
 
     opts.deriveTargetStage();

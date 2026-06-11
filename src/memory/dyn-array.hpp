@@ -2,7 +2,6 @@
 #include "memory/arena.hpp"
 
 #include <cstddef>
-#include <initializer_list>
 #include <type_traits>
 #include <utility>
 
@@ -16,11 +15,6 @@ namespace zith::memory {
 
     public:
         explicit DynArray(Arena &arena) noexcept : arena_(&arena) {}
-        DynArray() noexcept : arena_(&SessionArena) {}
-        DynArray(std::initializer_list<T> init) : arena_(&SessionArena) {
-            reserve(init.size());
-            for (const auto &v : init) push(v);
-        }
 
         ~DynArray() noexcept {
             if (!data_) return;
@@ -164,6 +158,10 @@ namespace zith::memory {
         }
         auto data() const noexcept -> const T * {
             return data_;
+        }
+
+        auto arena() noexcept -> Arena & {
+            return *arena_;
         }
 
     private:

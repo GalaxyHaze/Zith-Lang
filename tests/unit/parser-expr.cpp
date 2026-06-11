@@ -12,14 +12,15 @@ auto source_map = zith::memory::SourceMap();
 using namespace zith::lexer;
 using namespace zith::ast;
 using zith::memory::Arena;
+using zith::memory::DynArray;
 using zith::diagnostics::DiagnosticEngine;
 
 static void test_parser_reports_error_for_junk() {
     Arena arena;
     AstBuilder builder(arena);
-    DiagnosticEngine diags;
+    DiagnosticEngine diags(arena);
 
-    auto tokens = tokenize(source_map, "test", "42;", diags).value();
+    auto tokens = tokenize(source_map, arena, "test", "42;", diags).value();
     auto result = zith::parser::parseProgram(tokens, builder, diags);
     CHECK(diags.hasErrors(), "parser reports errors for junk input");
 }
@@ -72,8 +73,8 @@ static void test_ast_builder_fn_decl() {
     Arena arena;
     AstBuilder builder(arena);
 
-    auto body = builder.block({});
-    auto decl = builder.fnDecl("main", {}, body);
+    auto body = builder.block(DynArray<StmtId>(arena));
+    auto decl = builder.fnDecl("main", DynArray<std::string_view>(arena), body);
     CHECK(decl != kInvalidDecl, "fnDecl returns valid DeclId");
 
     auto &node = builder.getDecl(decl);

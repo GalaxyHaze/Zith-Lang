@@ -87,7 +87,7 @@ static void test_mir_add_multiple_fn() {
 static void test_mir_lower_no_crash() {
     Arena arena;
     HirModule hir(arena);
-    DiagnosticEngine diags;
+    DiagnosticEngine diags(arena);
 
     hir.addFn("main");
 
@@ -99,7 +99,7 @@ static void test_mir_lower_no_crash() {
 static void test_hir_verify_returns_true() {
     Arena arena;
     HirModule hir(arena);
-    DiagnosticEngine diags;
+    DiagnosticEngine diags(arena);
 
     HirVerifier verifier(hir, diags);
     CHECK(verifier.verify(), "hir verify returns true (stub)");
@@ -108,7 +108,7 @@ static void test_hir_verify_returns_true() {
 static void test_mir_verify_returns_true() {
     Arena arena;
     MirModule mir(arena);
-    DiagnosticEngine diags;
+    DiagnosticEngine diags(arena);
 
     MirVerifier verifier(mir, diags);
     CHECK(verifier.verify(), "mir verify returns true (stub)");

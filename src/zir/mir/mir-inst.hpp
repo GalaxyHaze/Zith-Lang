@@ -52,12 +52,16 @@ namespace zith::zir::mir {
         MirOpcode opcode;
         hir::HirTypeId type;
         memory::DynArray<MirOperand> operands;
+
+        explicit MirInst(memory::Arena &arena) : operands(arena) {}
     };
 
     struct MirBasicBlock {
         BlockId id;
         memory::DynArray<MirInst> insts;
         MirInst terminator;
+
+        explicit MirBasicBlock(memory::Arena &arena) : insts(arena), terminator(arena) {}
     };
 
 } // namespace zith::zir::mir

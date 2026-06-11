@@ -137,14 +137,14 @@ auto ImportManager::resolve_file(const std::string &full_path,
         return memory::Error{"failed to load '" + full_path + "'"};
 
     auto file_id = file_result.value();
-    auto token_result = lexer::tokenize(source_map_, file_id, diags_);
+    auto token_result = lexer::tokenize(source_map_, arena_, file_id, diags_);
     if (!token_result)
         return memory::Error{"failed to tokenize '" + full_path + "'"};
 
     lexer::TokenStream tokens = std::move(token_result.value());
     auto *builder = arena_.make<ast::AstBuilder>(arena_);
     SymbolTable syms(arena_);
-    parser::Parser parser{&tokens, builder, &diags_};
+    parser::Parser parser(&tokens, builder, &diags_);
     auto scan_result = parser::scan(parser, syms);
     parser.expandBodies(scan_result);
 

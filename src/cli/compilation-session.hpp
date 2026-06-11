@@ -26,7 +26,7 @@ namespace zith::cli {
 //
 // Thread-safety plan for multi-file parallel compilation:
 //   - Each file gets its own CompilationSession (independent state)
-//   - SessionArena is already thread_local
+//   - All arenas are owned per-session, no global thread_local state
 //   - SourceMap uses internal shared_mutex for concurrent reads
 //   - Stages run independently per file — no shared mutable state
 //   - After MIR lowering, results CAN be merged per-module or per-binary
@@ -44,12 +44,13 @@ class CompilationSession {
     PipelinePlan plan_;
 
     memory::SourceMap source_map_;
-    diagnostics::DiagnosticEngine diags_;
+    memory::Arena scratch_arena_;
     memory::Arena ast_arena_;
     memory::Arena sym_arena_;
     memory::Arena type_arena_;
     memory::Arena hir_arena_;
     memory::Arena mir_arena_;
+    diagnostics::DiagnosticEngine diags_;
 
     ast::AstBuilder ast_builder_;
     import::SymbolTable syms_;
@@ -59,7 +60,7 @@ class CompilationSession {
 
     memory::FileId file_id_ = 0;
     lexer::TokenStream tokens_{};
-    ast::ProgramNode program_{memory::DynArray<ast::DeclId>{ast_arena_}};
+    ast::ProgramNode program_{ast_arena_};
     parser::ScanResult scan_result_{ast_arena_};
 
 public:

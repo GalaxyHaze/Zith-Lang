@@ -17,6 +17,7 @@ namespace zith::lexer {
 
     class Lexer {
             memory::SourceMap &source_map_;
+            memory::Arena &arena_;
             memory::SourceLoc *file   = nullptr;
             memory::FileId gId        = 0;
             const char *start = nullptr;
@@ -45,14 +46,14 @@ namespace zith::lexer {
             memory::Span spanRange(const char *b, const char *e) const noexcept;
 
         public:
-            Lexer(memory::SourceMap &source_map, diagnostics::DiagnosticEngine &diags);
+            Lexer(memory::SourceMap &source_map, memory::Arena &arena, diagnostics::DiagnosticEngine &diags);
             auto run(std::variant<memory::FileId, std::pair<std::string_view, std::string>> input)
                     -> memory::Result<TokenStream>;
         };
 
-        [[nodiscard]] auto tokenize(memory::SourceMap &source_map, memory::FileId id, diagnostics::DiagnosticEngine &diags) -> memory::Result<TokenStream>;
+        [[nodiscard]] auto tokenize(memory::SourceMap &source_map, memory::Arena &arena, memory::FileId id, diagnostics::DiagnosticEngine &diags) -> memory::Result<TokenStream>;
 
-        auto tokenize(memory::SourceMap &source_map, std::string_view, std::string, diagnostics::DiagnosticEngine &diags) -> memory::Result<TokenStream>;
+        auto tokenize(memory::SourceMap &source_map, memory::Arena &arena, std::string_view, std::string, diagnostics::DiagnosticEngine &diags) -> memory::Result<TokenStream>;
 
         const char *tokenKindName(TokenKind k) noexcept;
 

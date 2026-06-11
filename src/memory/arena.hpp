@@ -128,9 +128,6 @@ namespace zith::memory {
         }
     };
 
-    extern thread_local Arena SessionArena;
-    extern thread_local Arena TestArena;
-
     class MarkPoint {
         Arena *arena_        = nullptr;
         Arena::Block *block_ = nullptr;

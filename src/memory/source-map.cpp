@@ -47,7 +47,7 @@ namespace zith::memory {
                 FileId id = it->second;
                 lock.unlock();
                 std::unique_lock ulock(rw_mutex);
-                files[id] = SourceLoc{std::string(content), std::string(path)};
+                files[id] = SourceLoc{std::string(content), std::string(path), file_arena};
                 files[id].buildLines();
                 return id;
             }
@@ -58,14 +58,14 @@ namespace zith::memory {
         auto it = cache.find(std::string(path));
         if (it != cache.end()) {
             FileId id = it->second;
-            files[id] = SourceLoc{std::string(content), std::string(path)};
+            files[id] = SourceLoc{std::string(content), std::string(path), file_arena};
             files[id].buildLines();
             return id;
         }
 
         FileId id = static_cast<FileId>(files.size());
         cache.emplace(path, id);
-        auto &loc = files.emplace(std::string(content), std::string(path));
+        auto &loc = files.emplace(std::string(content), std::string(path), file_arena);
         loc.buildLines();
         return id;
     }
@@ -101,7 +101,7 @@ namespace zith::memory {
             if (!is_valid_utf8(view))
                 return Error{"File is not valid UTF-8"};
 
-            SourceLoc loc{std::move(file), std::string(path), {}};
+            SourceLoc loc{std::move(file), std::string(path), file_arena};
             loc.buildLines();
 
             FileId id = static_cast<FileId>(files.size());
@@ -117,7 +117,7 @@ namespace zith::memory {
             if (!is_valid_utf8(view))
                 return Error{"File is not valid UTF-8"};
 
-            SourceLoc loc{std::move(file), std::string(path), {}};
+            SourceLoc loc{std::move(file), std::string(path), file_arena};
             loc.buildLines();
 
             FileId id = static_cast<FileId>(files.size());

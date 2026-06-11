@@ -10,6 +10,9 @@ namespace zith::sema {
         zir::hir::HirModule hir;
         diagnostics::DiagnosticEngine diagnostics;
         import::SymbolTable symbols;
+
+        SemaResult(zir::hir::HirModule hir, diagnostics::DiagnosticEngine diagnostics, import::SymbolTable symbols) :
+            hir(std::move(hir)), diagnostics(std::move(diagnostics)), symbols(std::move(symbols)) {}
     };
 
 } // namespace zith::sema

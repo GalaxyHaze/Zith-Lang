@@ -12,6 +12,8 @@ namespace zith::zir::hir {
     struct HirBasicBlock {
         memory::DynArray<HirExprId> insts;
         HirExprId terminator = kInvalidHirExpr;
+
+        explicit HirBasicBlock(memory::Arena &arena) : insts(arena) {}
     };
 
     struct HirFunction {
@@ -19,6 +21,8 @@ namespace zith::zir::hir {
         memory::DynArray<HirTypeId> params;
         HirTypeId return_type;
         memory::DynArray<HirBasicBlock> blocks;
+
+        explicit HirFunction(memory::Arena &arena) : params(arena), blocks(arena) {}
     };
 
     class HirModule {

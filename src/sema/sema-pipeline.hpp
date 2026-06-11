@@ -19,7 +19,8 @@ namespace zith::sema {
         SemaPipeline(import::SymbolTable &syms,
                      types::TypeIntern &types,
                      diagnostics::DiagnosticEngine &diags,
-                     ast::AstBuilder &builder);
+                     ast::AstBuilder &builder,
+                     memory::Arena &hir_arena);
 
         SemaResult run(ast::DeclId program);
     };

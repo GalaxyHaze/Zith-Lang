@@ -11,8 +11,8 @@ namespace zith::diagnostics {
                                    std::string msg,
                                    memory::Span span) {
         diagnostics_.emplace(sev, code, std::move(msg), span,
-                             memory::DynArray<Label>{},
-                             memory::DynArray<std::string>{});
+                             std::vector<Label>{},
+                             std::vector<std::string>{});
     }
 
     bool DiagnosticEngine::hasErrors() const noexcept {

@@ -2,8 +2,8 @@
 
 namespace zith::types {
 
-    Unifier::Unifier(TypeIntern &intern, diagnostics::DiagnosticEngine &diags) :
-        intern_(intern), diags_(diags) {}
+    Unifier::Unifier(TypeIntern &intern, diagnostics::DiagnosticEngine &diags, memory::Arena &arena) :
+        intern_(intern), diags_(diags), subst_(arena) {}
 
     TypeId Unifier::freshVar() {
         return kErrorType;

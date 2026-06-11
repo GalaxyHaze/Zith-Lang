@@ -4,17 +4,20 @@
 #include "lexer/token.hpp"
 #include "lexer/keyword-table.hpp"
 #include "../test-common.hpp"
+#include "memory/arena.hpp"
 static auto source_map = zith::memory::SourceMap();
 
 using namespace zith::lexer;
+using zith::memory::Arena;
 
-static auto makeDiags() {
-    return zith::diagnostics::DiagnosticEngine();
+static auto makeDiags(Arena &arena) {
+    return zith::diagnostics::DiagnosticEngine(arena);
 }
 
 static void test_tokenize_simple_fn() {
-    auto diags = makeDiags();
-    auto result = tokenize(source_map, "test", "fn main() {}", diags);
+    Arena arena;
+    auto diags = makeDiags(arena);
+    auto result = tokenize(source_map, arena, "test", "fn main() {}", diags);
     CHECK(result.isOk(), "tokenize fn main");
     if (!result.isOk()) return;
 
@@ -36,8 +39,9 @@ static void test_tokenize_simple_fn() {
 }
 
 static void test_tokenize_let() {
-    auto diags = makeDiags();
-    auto result = tokenize(source_map, "test", "let x: i32 = 42;", diags);
+    Arena arena;
+    auto diags = makeDiags(arena);
+    auto result = tokenize(source_map, arena, "test", "let x: i32 = 42;", diags);
     CHECK(result.isOk(), "tokenize let x");
     if (!result.isOk()) return;
 
@@ -76,8 +80,9 @@ static void test_token_kind_names() {
 }
 
 static void test_token_stream_ops() {
-    auto diags = makeDiags();
-    auto result = tokenize(source_map, "test", "a b c", diags);
+    Arena arena;
+    auto diags = makeDiags(arena);
+    auto result = tokenize(source_map, arena, "test", "a b c", diags);
     CHECK(result.isOk(), "tokenize abc");
     if (!result.isOk()) return;
 
@@ -92,8 +97,9 @@ static void test_token_stream_ops() {
 }
 
 static void test_tokenize_expression() {
-    auto diags = makeDiags();
-    auto result = tokenize(source_map, "test", "1 + 2 * 3", diags);
+    Arena arena;
+    auto diags = makeDiags(arena);
+    auto result = tokenize(source_map, arena, "test", "1 + 2 * 3", diags);
     CHECK(result.isOk(), "tokenize expression");
     if (!result.isOk()) return;
 
@@ -110,8 +116,9 @@ static void test_tokenize_expression() {
 }
 
 static void test_tokenize_error() {
-    auto diags = makeDiags();
-    auto result = tokenize(source_map, "test", "\"unterminated", diags);
+    Arena arena;
+    auto diags = makeDiags(arena);
+    auto result = tokenize(source_map, arena, "test", "\"unterminated", diags);
     CHECK(result.isError(), "unterminated string returns error");
     CHECK(diags.hasErrors(), "diagnostic engine has errors");
 }

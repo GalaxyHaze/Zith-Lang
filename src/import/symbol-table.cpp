@@ -28,7 +28,7 @@ namespace zith::import {
     SymId SymbolTable::declare(std::string_view name, SymbolVisibility vis, int32_t depth,
                                 SymKind kind, ast::DeclId decl_id, memory::Span span) {
         SymId id = static_cast<SymId>(symbols_.size());
-        symbols_.push(SymbolData{name, current_, vis, depth, kind, decl_id, span, {}});
+        symbols_.push(SymbolData{name, current_, vis, depth, kind, decl_id, span, *arena_});
         scopes_[current_].syms.push(id);
         return id;
     }

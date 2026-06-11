@@ -1,14 +1,19 @@
 #pragma once
 #include "mio/mmap.hpp"
 #include "span.hpp"
+#include "memory/arena.hpp"
 #include "memory/dyn-array.hpp"
 
 namespace zith::memory {
 
     struct SourceLoc {
-        std::variant<mio::mmap_source, mio::mmap_sink, std::string> file;
+        using FileVar = std::variant<mio::mmap_source, mio::mmap_sink, std::string>;
+        FileVar file;
         std::string path;
         memory::DynArray<ByteOffset> line_starts;
+
+        SourceLoc(FileVar file, std::string path, memory::Arena &arena) :
+            file(std::move(file)), path(std::move(path)), line_starts(arena) {}
 
         std::string_view getSlice() const;
 

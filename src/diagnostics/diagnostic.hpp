@@ -1,7 +1,6 @@
 #pragma once
 
 #include "memory/span.hpp"
-#include "memory/dyn-array.hpp"
 
 #include <cstdint>
 #include <string>
@@ -21,8 +20,8 @@ namespace zith::diagnostics {
         uint32_t code;
         std::string message;
         memory::Span primary;
-        memory::DynArray<Label> labels;
-        memory::DynArray<std::string> suggestions;
+        std::vector<Label> labels;
+        std::vector<std::string> suggestions;
 
         bool isError() const noexcept;
         bool isWarning() const noexcept;
