@@ -48,6 +48,10 @@ public:
     void emit() const;
     void emitTo(std::string_view source_text) const;
 
+    memory::DynArray<Diagnostic> &diagnostics() noexcept {
+        return diagnostics_;
+    }
+
     [[nodiscard]] bool hasErrors() const noexcept;
     [[nodiscard]] std::span<const Diagnostic> all() const noexcept;
     void clear();

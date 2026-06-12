@@ -17,6 +17,11 @@ enum class NodeKind : uint8_t {
     Return,
     FnDecl,
     StructDecl,
+    EnumDecl,
+    UnionDecl,
+    ComponentDecl,
+    TraitDecl,
+    InterfaceDecl,
     Import,
     Program
 };

@@ -86,6 +86,10 @@ static const char *symKindName(SymKind k) {
         return "mod";
     case SymKind::Component:
         return "comp";
+    case SymKind::Union:
+        return "union";
+    case SymKind::Interface:
+        return "interface";
     }
     return "?";
 }

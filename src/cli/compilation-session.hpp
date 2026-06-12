@@ -109,11 +109,10 @@ private:
         plan_.target = s;
     }
     bool lexStage();
-    void scanStage();
-    void expandBodiesStage();
-    void solveStage();
-    bool parseStage();
+    bool scanStage();
+    bool expandBodiesStage();
     bool importStage();
+    bool parseStage();
     bool semaStage();
     bool mirStage();
     bool zirStage();

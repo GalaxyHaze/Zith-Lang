@@ -127,13 +127,12 @@ int cmd_compile(const Options &opts) {
     }
 
     if (opts.input_files.size() == 1) {
-        // Single file: sequential, immediate output
         const auto &file = opts.input_files[0];
         CompilationSession session(opts, file);
+        session.setBuffered(true);
         bool ok = session.runTo(Stage::MirLowered);
-        if (session.hasErrors()) {
-            ok = false;
-        }
+        session.emitDiagnostics();
+        std::fputs(session.flushOutput().c_str(), stderr);
         if (opts.verbose) {
             std::printf("%s[%s]%s %s\n", ok ? green(opts) : red(opts), ok ? "ok" : "error",
                         reset(opts), file.c_str());

@@ -80,6 +80,11 @@ struct IfNode {
     ExprId else_branch = kInvalidExpr;
 };
 
+struct WhileNode {
+    ExprId cond;
+    ExprId body;
+};
+
 struct LetNode {
     bool mut = false;
     std::string_view name;
@@ -101,9 +106,54 @@ struct FnDeclNode {
     ExprId body = kInvalidExpr;
 };
 
+struct StructField {
+    std::string_view name;
+    uint32_t type_expr;
+};
+
 struct StructDeclNode {
     std::string_view name;
-    memory::DynArray<std::pair<std::string_view, uint32_t>> fields;
+    memory::DynArray<StructField> fields;
+};
+
+struct EnumVariant {
+    std::string_view name;
+    memory::DynArray<StructField> fields;
+    int64_t discriminant = -1;
+};
+
+struct EnumDeclNode {
+    std::string_view name;
+    memory::DynArray<EnumVariant> variants;
+};
+
+struct UnionVariant {
+    std::string_view name;
+    uint32_t type_expr;
+};
+
+struct UnionDeclNode {
+    std::string_view name;
+    memory::DynArray<UnionVariant> variants;
+};
+
+struct ComponentDeclNode {
+    std::string_view name;
+};
+
+struct TraitMethod {
+    std::string_view name;
+    memory::DynArray<std::string_view> params;
+};
+
+struct TraitDeclNode {
+    std::string_view name;
+    memory::DynArray<TraitMethod> methods;
+};
+
+struct InterfaceDeclNode {
+    std::string_view name;
+    memory::DynArray<TraitMethod> methods;
 };
 
 struct ImportNode {
@@ -127,10 +177,11 @@ struct ProgramNode {
 };
 
 using ExprNode = std::variant<LitValue, IdentNode, BinaryNode, UnaryNode, CallNode, BlockNode,
-                              IfNode, FieldNode, IndexNode, UnbodyNode>;
+                              IfNode, WhileNode, FieldNode, IndexNode, UnbodyNode>;
 
 using StmtNode = std::variant<LetNode, AssignNode, RetNode, ExprId>;
 
-using DeclNode = std::variant<FnDeclNode, StructDeclNode, ImportNode>;
+using DeclNode = std::variant<FnDeclNode, StructDeclNode, EnumDeclNode, UnionDeclNode,
+                               ComponentDeclNode, TraitDeclNode, InterfaceDeclNode, ImportNode>;
 
 } // namespace zith::ast

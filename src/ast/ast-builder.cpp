@@ -66,12 +66,24 @@ ExprId AstBuilder::call(ExprId callee, memory::DynArray<ExprId> args) {
     return addExpr(CallNode{callee, std::move(args)});
 }
 
+ExprId AstBuilder::field(ExprId object, std::string_view field_name) {
+    return addExpr(FieldNode{object, field_name});
+}
+
+ExprId AstBuilder::index(ExprId object, ExprId index) {
+    return addExpr(IndexNode{object, index});
+}
+
 ExprId AstBuilder::block(memory::DynArray<StmtId> stmts, ExprId trailing) {
     return addExpr(BlockNode{std::move(stmts), trailing});
 }
 
 ExprId AstBuilder::ifExpr(ExprId cond, ExprId then_branch, ExprId else_branch) {
     return addExpr(IfNode{cond, then_branch, else_branch});
+}
+
+ExprId AstBuilder::whileExpr(ExprId cond, ExprId body) {
+    return addExpr(WhileNode{cond, body});
 }
 
 StmtId AstBuilder::letStmt(std::string_view name, bool mut, ExprId init) {
@@ -92,8 +104,32 @@ DeclId AstBuilder::fnDecl(std::string_view name, memory::DynArray<std::string_vi
 }
 
 DeclId AstBuilder::structDecl(std::string_view name,
-                              memory::DynArray<std::pair<std::string_view, uint32_t>> fields) {
+                              memory::DynArray<StructField> fields) {
     return addDecl(StructDeclNode{name, std::move(fields)});
+}
+
+DeclId AstBuilder::enumDecl(std::string_view name,
+                            memory::DynArray<EnumVariant> variants) {
+    return addDecl(EnumDeclNode{name, std::move(variants)});
+}
+
+DeclId AstBuilder::unionDecl(std::string_view name,
+                             memory::DynArray<UnionVariant> variants) {
+    return addDecl(UnionDeclNode{name, std::move(variants)});
+}
+
+DeclId AstBuilder::componentDecl(std::string_view name) {
+    return addDecl(ComponentDeclNode{name});
+}
+
+DeclId AstBuilder::traitDecl(std::string_view name,
+                             memory::DynArray<TraitMethod> methods) {
+    return addDecl(TraitDeclNode{name, std::move(methods)});
+}
+
+DeclId AstBuilder::interfaceDecl(std::string_view name,
+                                 memory::DynArray<TraitMethod> methods) {
+    return addDecl(InterfaceDeclNode{name, std::move(methods)});
 }
 
 DeclId AstBuilder::importDecl(memory::DynArray<std::string_view> path, std::string_view alias,

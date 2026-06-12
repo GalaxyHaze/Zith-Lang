@@ -33,8 +33,11 @@ public:
     ExprId binary(ExprId lhs, BinaryOp op, ExprId rhs);
     ExprId unary(UnaryOp op, ExprId operand);
     ExprId call(ExprId callee, memory::DynArray<ExprId> args);
+    ExprId field(ExprId object, std::string_view field_name);
+    ExprId index(ExprId object, ExprId index);
     ExprId block(memory::DynArray<StmtId> stmts, ExprId trailing = kInvalidExpr);
     ExprId ifExpr(ExprId cond, ExprId then_branch, ExprId else_branch = kInvalidExpr);
+    ExprId whileExpr(ExprId cond, ExprId body);
 
     StmtId letStmt(std::string_view name, bool mut, ExprId init = kInvalidExpr);
     StmtId assign(ExprId target, ExprId value);
@@ -43,7 +46,16 @@ public:
     DeclId fnDecl(std::string_view name, memory::DynArray<std::string_view> params,
                   ExprId body = kInvalidExpr);
     DeclId structDecl(std::string_view name,
-                      memory::DynArray<std::pair<std::string_view, uint32_t>> fields);
+                      memory::DynArray<StructField> fields);
+    DeclId enumDecl(std::string_view name,
+                    memory::DynArray<EnumVariant> variants);
+    DeclId unionDecl(std::string_view name,
+                     memory::DynArray<UnionVariant> variants);
+    DeclId componentDecl(std::string_view name);
+    DeclId traitDecl(std::string_view name,
+                     memory::DynArray<TraitMethod> methods);
+    DeclId interfaceDecl(std::string_view name,
+                         memory::DynArray<TraitMethod> methods);
     DeclId importDecl(memory::DynArray<std::string_view> path, std::string_view alias = {},
                       bool is_from = false, bool is_export = false, int32_t import_depth = 1);
 

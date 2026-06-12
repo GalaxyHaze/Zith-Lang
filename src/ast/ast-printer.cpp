@@ -68,12 +68,12 @@ void print_expr_node(const ExprNode &node, const AstBuilder &bld, FILE *out, int
                        case BinaryOp::Ge:
                            op = ">=";
                            break;
-                       case BinaryOp::And:
-                           op = "&&";
-                           break;
-                       case BinaryOp::Or:
-                           op = "||";
-                           break;
+                    case BinaryOp::And:
+                            op = "and";
+                            break;
+                        case BinaryOp::Or:
+                            op = "or";
+                            break;
                        case BinaryOp::Xor:
                            op = "^";
                            break;
@@ -133,20 +133,29 @@ void print_expr_node(const ExprNode &node, const AstBuilder &bld, FILE *out, int
                            print_expr(n.trailing, bld, out, depth + 1);
                        }
                    },
-                   [&](const IfNode &n) {
-                       std::fprintf(out, "If\n");
-                       print_indent(out, depth + 1);
-                       std::fprintf(out, "cond: ");
-                       print_expr(n.cond, bld, out, depth + 1);
-                       print_indent(out, depth + 1);
-                       std::fprintf(out, "then: ");
-                       print_expr(n.then_branch, bld, out, depth + 1);
-                       if (n.else_branch != kInvalidExpr) {
-                           print_indent(out, depth + 1);
-                           std::fprintf(out, "else: ");
-                           print_expr(n.else_branch, bld, out, depth + 1);
-                       }
-                   },
+                    [&](const IfNode &n) {
+                        std::fprintf(out, "If\n");
+                        print_indent(out, depth + 1);
+                        std::fprintf(out, "cond: ");
+                        print_expr(n.cond, bld, out, depth + 1);
+                        print_indent(out, depth + 1);
+                        std::fprintf(out, "then: ");
+                        print_expr(n.then_branch, bld, out, depth + 1);
+                        if (n.else_branch != kInvalidExpr) {
+                            print_indent(out, depth + 1);
+                            std::fprintf(out, "else: ");
+                            print_expr(n.else_branch, bld, out, depth + 1);
+                        }
+                    },
+                    [&](const WhileNode &n) {
+                        std::fprintf(out, "While\n");
+                        print_indent(out, depth + 1);
+                        std::fprintf(out, "cond: ");
+                        print_expr(n.cond, bld, out, depth + 1);
+                        print_indent(out, depth + 1);
+                        std::fprintf(out, "body: ");
+                        print_expr(n.body, bld, out, depth + 1);
+                    },
                    [&](const FieldNode &n) {
                        std::fprintf(out, "Field(%.*s)\n", (int)n.field.size(), n.field.data());
                        print_indent(out, depth + 1);
@@ -238,9 +247,40 @@ void print_decl(DeclId id, const AstBuilder &bld, FILE *out, int depth) {
             },
             [&](const StructDeclNode &n) {
                 std::fprintf(out, "Struct(%.*s)\n", (int)n.name.size(), n.name.data());
-                for (auto &[field_name, field_type] : n.fields) {
+                for (auto &f : n.fields) {
                     print_indent(out, depth + 1);
-                    std::fprintf(out, "field %.*s\n", (int)field_name.size(), field_name.data());
+                    std::fprintf(out, "field %.*s\n", (int)f.name.size(), f.name.data());
+                }
+            },
+            [&](const EnumDeclNode &n) {
+                std::fprintf(out, "Enum(%.*s)\n", (int)n.name.size(), n.name.data());
+                for (auto &v : n.variants) {
+                    print_indent(out, depth + 1);
+                    std::fprintf(out, "variant %.*s\n", (int)v.name.size(), v.name.data());
+                }
+            },
+            [&](const UnionDeclNode &n) {
+                std::fprintf(out, "Union(%.*s)\n", (int)n.name.size(), n.name.data());
+                for (auto &v : n.variants) {
+                    print_indent(out, depth + 1);
+                    std::fprintf(out, "variant %.*s\n", (int)v.name.size(), v.name.data());
+                }
+            },
+            [&](const ComponentDeclNode &n) {
+                std::fprintf(out, "Component(%.*s)\n", (int)n.name.size(), n.name.data());
+            },
+            [&](const TraitDeclNode &n) {
+                std::fprintf(out, "Trait(%.*s)\n", (int)n.name.size(), n.name.data());
+                for (auto &m : n.methods) {
+                    print_indent(out, depth + 1);
+                    std::fprintf(out, "method %.*s\n", (int)m.name.size(), m.name.data());
+                }
+            },
+            [&](const InterfaceDeclNode &n) {
+                std::fprintf(out, "Interface(%.*s)\n", (int)n.name.size(), n.name.data());
+                for (auto &m : n.methods) {
+                    print_indent(out, depth + 1);
+                    std::fprintf(out, "method %.*s\n", (int)m.name.size(), m.name.data());
                 }
             },
             [&](const ImportNode &n) {

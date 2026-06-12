@@ -1,10 +1,12 @@
 #include "compilation-session.hpp"
 #include "ast/ast-printer.hpp"
 #include "diagnostics/error-codes.hpp"
+#include "diagnostics/heuristic-engine.hpp"
 #include "import/resolver.hpp"
 #include "lexer/lexer.hpp"
 #include "memory/source-map.hpp"
 #include "parser/parser.hpp"
+#include "sema/sema-pipeline.hpp"
 
 #include <chrono>
 #include <cstdio>
@@ -67,30 +69,56 @@ bool CompilationSession::runTo(Stage target) {
         writeOutput("%s[zithc] [starting]%s %s\n",
                      ansicolor("\033[36m"), ansicolor("\033[0m"), file_path_.c_str());
 
+    // Stage 1: Lex
     if (plan_.shouldStop())
         return !diags_.hasErrors();
     if (!lexStage())
         return false;
     plan_.advance();
 
+    // Stage 2: Scan (register symbols, create UnbodyNodes)
+    if (plan_.shouldStop())
+        return !diags_.hasErrors();
+    if (!scanStage())
+        return false;
+    plan_.advance();
+
+    // Stage 3: Expand bodies (replace UnbodyNodes with real AST)
+    if (plan_.shouldStop())
+        return !diags_.hasErrors();
+    if (!expandBodiesStage())
+        return false;
+    plan_.advance();
+
+    // Stage 4: Import resolution
+    if (plan_.shouldStop())
+        return !diags_.hasErrors();
+    if (!importStage())
+        return false;
+    plan_.advance();
+
+    // Stage 5: Parse validation
     if (plan_.shouldStop())
         return !diags_.hasErrors();
     if (!parseStage())
         return false;
     plan_.advance();
 
+    // Stage 6: Type checking + HIR lowering
     if (plan_.shouldStop())
         return !diags_.hasErrors();
     if (!semaStage())
         return false;
     plan_.advance();
 
+    // Stage 7: MIR lowering
     if (plan_.shouldStop())
         return !diags_.hasErrors();
     if (!mirStage())
         return false;
     plan_.advance();
 
+    // Stage 8: ZIR interpretation
     if (plan_.shouldStop())
         return !diags_.hasErrors();
     if (!zirStage())
@@ -161,25 +189,8 @@ bool CompilationSession::lexStage() {
 }
 
 bool CompilationSession::parseStage() {
-    scanStage();
-    if (diags_.hasErrors()) {
-        diags_.emit();
-        return false;
-    }
+    auto t0 = std::chrono::steady_clock::now();
 
-    expandBodiesStage();
-    if (diags_.hasErrors()) {
-        diags_.emit();
-        return false;
-    }
-
-    importStage();
-    if (diags_.hasErrors()) {
-        diags_.emit();
-        return false;
-    }
-
-    solveStage();
     if (diags_.hasErrors()) {
         diags_.emit();
         return false;
@@ -193,7 +204,13 @@ bool CompilationSession::parseStage() {
         std::printf("---\n");
     }
 
-    return true;
+    if (opts_.verbose) {
+        auto dt = std::chrono::duration<double, std::milli>(
+            std::chrono::steady_clock::now() - t0).count();
+        writeOutput("  [parse] %zu decls  (%5.1fms)\n", program_.decls.size(), dt);
+    }
+
+    return !diags_.hasErrors();
 }
 
 bool CompilationSession::importStage() {
@@ -292,35 +309,11 @@ bool CompilationSession::importStage() {
     return true;
 }
 
-void CompilationSession::scanStage() {
+bool CompilationSession::scanStage() {
     auto t0 = std::chrono::steady_clock::now();
     parser::Parser parser(&tokens_, &ast_builder_, &diags_);
     scan_result_ = parser::scan(parser, syms_);
     program_     = std::move(parser.program);
-    if (opts_.verbose) {
-        auto dt = std::chrono::duration<double, std::milli>(
-            std::chrono::steady_clock::now() - t0).count();
-        writeOutput("  [scan] %6zu top-level decls  (%5.1fms)\n",
-                     program_.decls.size(), dt);
-    }
-}
-
-void CompilationSession::expandBodiesStage() {
-    parser::Parser parser(&tokens_, &ast_builder_, &diags_);
-    parser.program = std::move(program_);
-    parser.expandBodies(scan_result_);
-    program_ = std::move(parser.program);
-}
-
-void CompilationSession::solveStage() {
-    // TODO: generics, macros, comptime
-}
-
-bool CompilationSession::semaStage() {
-    auto t0 = std::chrono::steady_clock::now();
-    // TODO: wire up type checker, HIR lowering
-    // Thread-safety: each session owns its own SymbolTable, TypeIntern,
-    // and HirModule — safe to parallelize across files.
     if (diags_.hasErrors()) {
         diags_.emit();
         return false;
@@ -328,9 +321,51 @@ bool CompilationSession::semaStage() {
     if (opts_.verbose) {
         auto dt = std::chrono::duration<double, std::milli>(
             std::chrono::steady_clock::now() - t0).count();
-        writeOutput("  [sema] \xe2\x80\x94 (stub)  (%5.1fms)\n", dt);
+        writeOutput("  [scan] %6zu top-level decls  (%5.1fms)\n",
+                     program_.decls.size(), dt);
     }
     return true;
+}
+
+bool CompilationSession::expandBodiesStage() {
+    auto t0 = std::chrono::steady_clock::now();
+    parser::Parser parser(&tokens_, &ast_builder_, &diags_);
+    parser.program = std::move(program_);
+    parser.expandBodies(scan_result_);
+    program_ = std::move(parser.program);
+    if (opts_.verbose) {
+        auto dt = std::chrono::duration<double, std::milli>(
+            std::chrono::steady_clock::now() - t0).count();
+        writeOutput("  [expand] %zu fns expanded  (%5.1fms)\n",
+                     scan_result_.fns.size(), dt);
+    }
+    return !diags_.hasErrors();
+}
+
+bool CompilationSession::semaStage() {
+    auto t0 = std::chrono::steady_clock::now();
+
+    if (diags_.hasErrors()) {
+        diags_.emit();
+        return false;
+    }
+
+    sema::SemaPipeline pipeline(syms_, types_, diags_, ast_builder_, hir_arena_);
+    if (!pipeline.run(program_)) {
+        diags_.emit();
+        return false;
+    }
+
+    hir_module_ = pipeline.takeHir();
+
+    if (opts_.verbose) {
+        auto dt = std::chrono::duration<double, std::milli>(
+            std::chrono::steady_clock::now() - t0).count();
+        writeOutput("  [sema] %zu fns lowered  (%5.1fms)\n",
+                     hir_module_.getFnCount(), dt);
+    }
+
+    return !diags_.hasErrors();
 }
 
 bool CompilationSession::mirStage() {
@@ -386,6 +421,11 @@ std::string CompilationSession::flushOutput() {
 }
 
 void CompilationSession::emitDiagnostics() {
+    diagnostics::HeuristicEngine heuristic;
+    auto &diags = diags_.diagnostics();
+    for (size_t i = 0; i < diags.size(); i++) {
+        heuristic.generate(diags[i], syms_, diags[i].suggestions);
+    }
     diags_.setSuppressEmit(false);
     diags_.emit();
 }
