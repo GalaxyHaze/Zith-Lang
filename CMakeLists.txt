@@ -62,7 +62,7 @@ target_link_libraries(zithc_objects PRIVATE mio tomlplusplus::tomlplusplus)
 
 target_compile_definitions(zithc_objects PRIVATE
     ZITH_VERSION="${ZITH_VERSION}"
-    ZITH_LIB_DIR="${CMAKE_CURRENT_SOURCE_DIR}/lib"
+    ZITH_STDLIB_DIR="${CMAKE_CURRENT_SOURCE_DIR}/stdlib"
 )
 
 add_executable(zithc ${CMAKE_SOURCE_DIR}/src/cli/zithc-main.cpp $<TARGET_OBJECTS:zithc_objects>)
@@ -75,7 +75,7 @@ target_link_libraries(zithc PRIVATE mio tomlplusplus::tomlplusplus)
 
 target_compile_definitions(zithc PRIVATE
     ZITH_VERSION="${ZITH_VERSION}"
-    ZITH_LIB_DIR="${CMAKE_CURRENT_SOURCE_DIR}/lib"
+    ZITH_STDLIB_DIR="${CMAKE_CURRENT_SOURCE_DIR}/stdlib"
 )
 
 include(CTest)
@@ -104,8 +104,8 @@ install(TARGETS zithc
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
 )
 
-install(DIRECTORY lib/
-    DESTINATION ${CMAKE_INSTALL_LIBDIR}/zith/lib
+install(DIRECTORY stdlib/
+    DESTINATION ${CMAKE_INSTALL_LIBDIR}/zith/stdlib
     FILES_MATCHING PATTERN "*.zith"
 )
 

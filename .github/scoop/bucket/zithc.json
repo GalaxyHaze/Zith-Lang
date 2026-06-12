@@ -5,19 +5,33 @@
   "license": "MIT",
   "architecture": {
     "64bit": {
-      "url": "https://github.com/GalaxyHaze/Zith/releases/download/v0.1.1/zithc-windows-amd64.exe",
-      "hash": "70b22786564b11b871f66cad7e9b61c48e8e72a8c784dc1c23f9571a7727d068"
+      "url": [
+        "https://github.com/GalaxyHaze/Zith/releases/download/v0.1.1/zithc-windows-amd64.exe",
+        "https://github.com/GalaxyHaze/Zith/releases/download/v0.1.1/zithc-stdlib-v0.1.1.zip"
+      ],
+      "hash": [
+        "70b22786564b11b871f66cad7e9b61c48e8e72a8c784dc1c23f9571a7727d068",
+        "0000000000000000000000000000000000000000000000000000000000000000"
+      ]
     },
     "arm64": {
-      "url": "https://github.com/GalaxyHaze/Zith/releases/download/v0.1.1/zithc-windows-arm64.exe",
-      "hash": "883ea549179a4a0f865f05ab5e79fe8f17831387c7b89bd742f195dae8892d36"
+      "url": [
+        "https://github.com/GalaxyHaze/Zith/releases/download/v0.1.1/zithc-windows-arm64.exe",
+        "https://github.com/GalaxyHaze/Zith/releases/download/v0.1.1/zithc-stdlib-v0.1.1.zip"
+      ],
+      "hash": [
+        "883ea549179a4a0f865f05ab5e79fe8f17831387c7b89bd742f195dae8892d36",
+        "0000000000000000000000000000000000000000000000000000000000000000"
+      ]
     }
   },
   "bin": "zithc.exe",
   "installer": {
     "script": [
       "if ($architecture -eq '64bit') { Rename-Item \"$dir\\zithc-windows-amd64.exe\" \"zithc.exe\" }",
-      "if ($architecture -eq 'arm64') { Rename-Item \"$dir\\zithc-windows-arm64.exe\" \"zithc.exe\" }"
+      "if ($architecture -eq 'arm64') { Rename-Item \"$dir\\zithc-windows-arm64.exe\" \"zithc.exe\" }",
+      "Expand-Archive -Path \"$dir\\zithc-stdlib-*.zip\" -DestinationPath \"$dir\\stdlib\" -Force",
+      "Remove-Item \"$dir\\zithc-stdlib-*.zip\" -Force"
     ]
   }
 }

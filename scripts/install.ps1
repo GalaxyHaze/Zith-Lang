@@ -63,6 +63,22 @@ try {
     Copy-Item -Path $TempPath -Destination "$InstallDir\zithc.exe" -Force
     Remove-Item -Path $TempPath -Force
 
+    # Download and extract stdlib
+    $StdlibUrl = "https://github.com/$Repo/releases/download/$Version/zithc-stdlib-$Version.zip"
+    $StdlibDir = "$InstallDir\stdlib"
+    Write-Host "Downloading stdlib..." -ForegroundColor Cyan
+    try {
+        Invoke-WebRequest -Uri $StdlibUrl -OutFile "$env:TEMP\zithc-stdlib.zip" -UseBasicParsing
+        if (-not (Test-Path $StdlibDir)) {
+            New-Item -ItemType Directory -Path $StdlibDir -Force | Out-Null
+        }
+        Expand-Archive -Path "$env:TEMP\zithc-stdlib.zip" -DestinationPath $StdlibDir -Force
+        Remove-Item -Path "$env:TEMP\zithc-stdlib.zip" -Force
+        Write-Host "Standard library installed to $StdlibDir" -ForegroundColor Green
+    } catch {
+        Write-Warning "Failed to download stdlib. The compiler may not find standard library files."
+    }
+
     Write-Host "--------------------------------------------------"
     Write-Host "Installation Complete!" -ForegroundColor Green
     Write-Host "Run 'zithc --help' in a NEW terminal window to get started."

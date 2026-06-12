@@ -93,11 +93,29 @@ case "$OS" in
     MINGW*|MSYS*|CYGWIN*)
         cp "$TMP_FILE" "./$OUTPUT_NAME"
         echo "Download complete: ./$OUTPUT_NAME"
+        STDLIB_URL="https://github.com/$REPO/releases/download/$VERSION/zithc-stdlib-$VERSION.zip"
+        echo "Downloading stdlib..."
+        if curl -fsSL "$STDLIB_URL" -o "$TMP_DIR/zithc-stdlib.zip"; then
+            unzip -o "$TMP_DIR/zithc-stdlib.zip" -d "./stdlib"
+            echo "Standard library extracted to ./stdlib"
+        else
+            echo "Warning: Failed to download stdlib." >&2
+        fi
         echo "Please move '$OUTPUT_NAME' to a folder in your PATH."
         ;;
     *)
         echo "Installing Zith to /usr/local/bin/..."
         if sudo mv "$TMP_FILE" /usr/local/bin/zithc; then
+            STDLIB_URL="https://github.com/$REPO/releases/download/$VERSION/zithc-stdlib-$VERSION.tar.gz"
+            STDLIB_DIR="/usr/local/share/zith/stdlib"
+            echo "Downloading stdlib..."
+            if curl -fsSL "$STDLIB_URL" -o "$TMP_DIR/zithc-stdlib.tar.gz"; then
+                sudo mkdir -p "$STDLIB_DIR"
+                sudo tar xzf "$TMP_DIR/zithc-stdlib.tar.gz" -C "$STDLIB_DIR"
+                echo "Standard library installed to $STDLIB_DIR"
+            else
+                echo "Warning: Failed to download stdlib." >&2
+            fi
             echo "Installation complete! Run 'zithc --help' to get started."
         else
             echo "Installation failed. Check sudo permissions or try manually moving the file." >&2

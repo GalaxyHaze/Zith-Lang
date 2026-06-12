@@ -54,6 +54,7 @@ jobs:
             --repo ${{ github.repository }} \
             --pattern "zithc-windows-amd64.exe" \
             --pattern "zithc-windows-arm64.exe" \
+            --pattern "zithc-stdlib-*.zip" \
             --dir release-bins
 
           if [ ! -f "release-bins/zithc-windows-amd64.exe" ]; then
@@ -66,6 +67,14 @@ jobs:
             exit 1
           fi
 
+          if [ ! -f "release-bins/zithc-stdlib-${{ steps.tag.outputs.tag }}.zip" ]; then
+            # fallback: try glob
+            STDLIB_ZIP=$(ls release-bins/zithc-stdlib-*.zip 2>/dev/null | head -1)
+            if [ -z "$STDLIB_ZIP" ]; then
+              echo "Warning: stdlib zip not found"
+            fi
+          fi
+
           ls -lh release-bins/
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -75,8 +84,15 @@ jobs:
         run: |
           AMD64=$(sha256sum release-bins/zithc-windows-amd64.exe | cut -d' ' -f1)
           ARM64=$(sha256sum release-bins/zithc-windows-arm64.exe | cut -d' ' -f1)
+          STDLIB_ZIP=$(ls release-bins/zithc-stdlib-*.zip 2>/dev/null | head -1)
+          if [ -n "$STDLIB_ZIP" ]; then
+            STDLIB=$(sha256sum "$STDLIB_ZIP" | cut -d' ' -f1)
+          else
+            STDLIB=""
+          fi
           echo "amd64=$AMD64" >> $GITHUB_OUTPUT
           echo "arm64=$ARM64" >> $GITHUB_OUTPUT
+          echo "stdlib=$STDLIB" >> $GITHUB_OUTPUT
 
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -87,16 +103,25 @@ jobs:
         run: |
           cp .github/scoop/bucket/zithc.json .github/scoop/bucket/zithc.json.bak
 
+          STDLIB_URL="https://github.com/${{ github.repository }}/releases/download/v${{ steps.tag.outputs.version }}/zithc-stdlib-v${{ steps.tag.outputs.version }}.zip"
+          STDLIB_HASH="${{ steps.hashes.outputs.stdlib }}"
+
           jq \
             --arg version "${{ steps.tag.outputs.version }}" \
             --arg amd64 "${{ steps.hashes.outputs.amd64 }}" \
             --arg arm64 "${{ steps.hashes.outputs.arm64 }}" \
+            --arg stdlibUrl "$STDLIB_URL" \
+            --arg stdlibHash "$STDLIB_HASH" \
             '
               .version = $version |
-              .architecture["64bit"].hash = $amd64 |
-              .architecture["64bit"].url = "https://github.com/${{ github.repository }}/releases/download/v\($version)/zithc-windows-amd64.exe" |
-              .architecture.arm64.hash = $arm64 |
-              .architecture.arm64.url = "https://github.com/${{ github.repository }}/releases/download/v\($version)/zithc-windows-arm64.exe"
+              .architecture["64bit"].url[0] = "https://github.com/${{ github.repository }}/releases/download/v\($version)/zithc-windows-amd64.exe" |
+              .architecture["64bit"].url[1] = $stdlibUrl |
+              .architecture["64bit"].hash[0] = $amd64 |
+              .architecture["64bit"].hash[1] = $stdlibHash |
+              .architecture.arm64.url[0] = "https://github.com/${{ github.repository }}/releases/download/v\($version)/zithc-windows-arm64.exe" |
+              .architecture.arm64.url[1] = $stdlibUrl |
+              .architecture.arm64.hash[0] = $arm64 |
+              .architecture.arm64.hash[1] = $stdlibHash
             ' .github/scoop/bucket/zithc.json.bak > .github/scoop/bucket/zithc.json
 
           if ! jq empty .github/scoop/bucket/zithc.json 2>/dev/null; then

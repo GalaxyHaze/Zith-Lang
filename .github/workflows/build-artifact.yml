@@ -269,6 +269,32 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+  package-stdlib:
+    needs: create-release
+    name: Package stdlib
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create stdlib archives
+        shell: bash
+        run: |
+          mkdir -p artifacts
+          TAG="${{ needs.create-release.outputs.tag || inputs.tag_name }}"
+          cd stdlib
+          tar czf "../artifacts/zithc-stdlib-${TAG}.tar.gz" .
+          zip -r "../artifacts/zithc-stdlib-${TAG}.zip" .
+          cd ..
+
+      - name: Upload stdlib release assets
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.create-release.outputs.tag || inputs.tag_name }}
+          files: artifacts/zithc-stdlib-*
+          draft: ${{ needs.create-release.outputs.draft || inputs.draft }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   build-wasm:
     needs: create-release
     name: Build zithc-wasm
