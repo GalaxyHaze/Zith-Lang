@@ -1,0 +1,40 @@
+<h1>Concurrency</h1>
+<p>Zith provides structured concurrency with thread safety guarantees.</p>
+<h2>Global Variables</h2>
+<p>Static variables with ownership rules:</p>
+<pre><code class="language-zith">// Must implement Shared trait (thread-safe)
+global score: share i32 = 0;
+
+// Must implement Lent trait (atomic access)
+global counter: unique i32 = 0;
+
+// Access
+global score += 10;</code></pre>
+<h2>Thread Safety</h2>
+<ul>
+  <li>**<code>global: share</code>** — requires <code>Shared</code> trait (explicitly thread-safe)</li>
+  <li>**<code>global: unique</code>** — requires <code>Lent</code> trait (atomic operations)</li>
+</ul>
+<h2>Spawning Threads</h2>
+<pre><code class="language-zith">fn concurrent_work() {
+    let handle = thread::spawn(|| {
+        // Convert entity to struct for threading
+        let data = @toStruct(player);
+        process(data);
+        data
+    });
+    
+    let result = handle.join();  // Must join before scope ends
+}</code></pre>
+<h2>Arc for Unbounded Sharing</h2>
+<pre><code class="language-zith">let arc_data = Arc.new(data);
+let clone1 = arc_data.clone();
+let clone2 = arc_data.clone();
+
+// All owners share, reference counted</code></pre>
+<h2>Rules</h2>
+<ul>
+  <li>Global variables must implement appropriate traits</li>
+  <li>Threads must join before scope ends (structured concurrency)</li>
+  <li>Use <code>@toStruct</code> to convert entities for threading</li>
+</ul>

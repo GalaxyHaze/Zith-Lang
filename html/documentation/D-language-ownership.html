@@ -1,0 +1,91 @@
+<h1>Ownership Keywords</h1>
+<p>Zith uses five explicit ownership keywords that enforce memory safety at compile-time through the Node Resource Model (NRM).</p>
+<h2>The Five Keywords</h2>
+<h3><code>unique</code> — Exclusive Ownership</h3>
+<p>Only one edge (reference) can point to a node at any time. When assigned, the original becomes a zombie.</p>
+<pre><code class="language-zith">let resource = unique ResourceHandle.new();
+let other = resource;              // resource is now zombie
+other.use();                      // OK
+resource.use();                  // ERROR: zombie</code></pre>
+<p><strong>Use case:</strong> Default ownership for most types.</p>
+<h3><code>share</code> — Shared Ownership</h3>
+<p>Multiple edges can point to the same node simultaneously. All owners can mutate.</p>
+<pre><code class="language-zith">let data = Data.new();
+let s1 = data as share;
+let s2 = s1;                     // Both valid
+s1.mutate();                     // OK
+s2.read();                       // OK</code></pre>
+<p><strong>Use case:</strong> Multiple owners, shared mutable state. Requires <code>Shared</code> trait.</p>
+<h3><code>view</code> — Read-Only Borrow</h3>
+<p>Read-only access without ownership transfer. Cannot outlive the owner.</p>
+<pre><code class="language-zith">fn print_info(data: view Resource) {
+    println("{}", data.name);      // OK (read)
+    data.modify();                 // ERROR: immutable
+}
+
+let res = Resource.new();
+print_info(view res);              // res still valid after</code></pre>
+<p><strong>Use case:</strong> Efficient reading without ownership.</p>
+<h3><code>lend</code> — Mutable Borrow</h3>
+<p>Exclusive mutable borrow. Must be returned to the owner.</p>
+<pre><code class="language-zith">fn increment(counter: lend i32) {
+    counter += 1;
+}
+
+var x = 0;
+increment(lend x);               // x is borrowed
+println("{}", x);                // prints 1, x is returned</code></pre>
+<p><strong>Use case:</strong> Temporary exclusive mutation.</p>
+<h3><code>extension</code> — Hierarchical Part-Of</h3>
+<p>Child is structurally part of parent; cannot outlive parent.</p>
+<pre><code class="language-zith">struct Node&lt;T&gt; {
+    value: T,
+    next: share Node&lt;T&gt;?,
+    prev: extension Node&lt;T&gt;?     // structurally part of parent
+}</code></pre>
+<p><strong>Use case:</strong> Self-referential structures (trees, linked lists). Eliminates need for weak pointers or unsafe.</p>
+<h2>Summary Table</h2>
+<table>
+  <tr>
+    <th>Keyword</th>
+    <th>Owns</th>
+    <th>Exclusive</th>
+    <th>Mutable</th>
+    <th>Thread Safe</th>
+  </tr>
+  <tr>
+    <td><code>unique</code></td>
+    <td>Yes</td>
+    <td>Yes</td>
+    <td>Yes</td>
+    <td>Yes (with Shared)</td>
+  </tr>
+  <tr>
+    <td><code>share</code></td>
+    <td>Yes</td>
+    <td>No</td>
+    <td>Yes</td>
+    <td>Yes (with Shared)</td>
+  </tr>
+  <tr>
+    <td><code>view</code></td>
+    <td>No</td>
+    <td>—</td>
+    <td>No</td>
+    <td>Yes</td>
+  </tr>
+  <tr>
+    <td><code>lend</code></td>
+    <td>No</td>
+    <td>Yes</td>
+    <td>Yes</td>
+    <td>Yes</td>
+  </tr>
+  <tr>
+    <td><code>extension</code></td>
+    <td>No</td>
+    <td>—</td>
+    <td>Yes</td>
+    <td>Yes</td>
+  </tr>
+</table>

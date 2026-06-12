@@ -1,0 +1,94 @@
+<h1>Intrinsics</h1>
+<p>Intrinsics provide compile-time metadata and reflection accessed via the <code>@</code> operator.</p>
+<h2>Type Information</h2>
+<pre><code class="language-zith">// Size of type
+let size = @sizeOf(T);
+
+// Members of struct
+for member in @members(T) {
+    println("{}: {}", member.name, member.type);
+}
+
+// Is type copyable?
+if @hasTrait(T, Copy) {
+    // T can be bitwise-copied
+}</code></pre>
+<h2>Location Information</h2>
+<pre><code class="language-zith">// Current file
+let file = @file();
+
+// Current line
+let line = @line();
+
+// Current function
+let fn_name = @funcName();
+
+// Create rich panic messages
+panic(@location() + ": something went wrong");</code></pre>
+<h2>Entity/Component Intrinsics</h2>
+<pre><code class="language-zith">// Components of an entity type
+for comp in @components(Player) {
+    println("{}", comp);  // Position, Health, ...
+}
+
+// Convert entity to struct
+let struct_data = @toStruct(player);
+
+// Convert struct back to entity
+let entity = @toEntity(struct_data, scene);
+
+// Register component dynamically
+@registerComponent(mut entity, NewComponent { /* ... */ });</code></pre>
+<h2>Compile-Time Evaluation</h2>
+<pre><code class="language-zith">// Compile-time constants
+const ARRAY_SIZE = @sizeOf([10]i32) / @sizeOf(i32);  // 10
+
+// Must be compile-time computable
+const MEM_LAYOUT = @members(MyStruct);</code></pre>
+<h2>Available Intrinsics</h2>
+<table>
+  <tr>
+    <th>Intrinsic</th>
+    <th>Description</th>
+  </tr>
+  <tr>
+    <td><code>@sizeOf(T)</code></td>
+    <td>Size of type in bytes</td>
+  </tr>
+  <tr>
+    <td><code>@members(T)</code></td>
+    <td>Struct members</td>
+  </tr>
+  <tr>
+    <td><code>@hasTrait(T, Trait)</code></td>
+    <td>Check if type has trait</td>
+  </tr>
+  <tr>
+    <td><code>@file()</code></td>
+    <td>Current file path</td>
+  </tr>
+  <tr>
+    <td><code>@line()</code></td>
+    <td>Current line number</td>
+  </tr>
+  <tr>
+    <td><code>@funcName()</code></td>
+    <td>Current function name</td>
+  </tr>
+  <tr>
+    <td><code>@location()</code></td>
+    <td>Full location (file:line)</td>
+  </tr>
+  <tr>
+    <td><code>@components(E)</code></td>
+    <td>Entity components</td>
+  </tr>
+  <tr>
+    <td><code>@toStruct(entity)</code></td>
+    <td>Entity to struct</td>
+  </tr>
+  <tr>
+    <td><code>@toEntity(struct, scene)</code></td>
+    <td>Struct to entity</td>
+  </tr>
+</table>

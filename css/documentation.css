@@ -335,6 +335,54 @@ GEAR / SETTINGS
 }
 
 /*==================
+CALLOUT BOXES
+==================*/
+
+.callout {
+    border-left: 4px solid;
+    padding: 12px 16px;
+    margin: 16px 0;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 4px;
+}
+.callout p {
+    margin: 4px 0;
+}
+.callout p:first-child {
+    margin-top: 0;
+}
+.callout p:last-child {
+    margin-bottom: 0;
+}
+.callout strong {
+    font-weight: bold;
+}
+.callout-warning {
+    border-color: var(--color-orange);
+    text-shadow: var(--glow-warning);
+}
+.callout-caution {
+    border-color: var(--color-yellow);
+    text-shadow: var(--glow-warning);
+}
+.callout-info {
+    border-color: var(--color-cyan);
+    text-shadow: var(--glow-cyan);
+}
+.callout-tip {
+    border-color: #00ff88;
+    text-shadow:
+        0 0 5px rgba(0,255,136,var(--text-glow-alpha)),
+        0 0 15px rgba(0,255,136,var(--text-glow-alpha));
+}
+.callout-danger {
+    border-color: #ff3333;
+    text-shadow:
+        0 0 5px rgba(255,51,51,var(--text-glow-alpha)),
+        0 0 15px rgba(255,51,51,var(--text-glow-alpha));
+}
+
+/*==================
 EFEITOS
 ==================*/
 
@@ -350,6 +398,92 @@ EFEITOS
 
 .main a {
     text-shadow: var(--glow-orange);
+}
+
+.main h1 {
+    color: #FAF3E1;
+    margin: 0 0 8px 0;
+}
+.main h2 {
+    color: #FAF3E1;
+    margin: 24px 0 8px 0;
+}
+.main h3 {
+    color: #FAF3E1;
+    margin: 20px 0 8px 0;
+}
+.main h4, .main h5, .main h6 {
+    color: #FAF3E1;
+    margin: 16px 0 6px 0;
+}
+.main p {
+    margin: 8px 0;
+    line-height: 1.5;
+    color: #e0e0e0;
+}
+.main ul, .main ol {
+    margin: 8px 0;
+    padding-left: 28px;
+    color: #e0e0e0;
+}
+.main li {
+    margin: 4px 0;
+}
+.main table {
+    border-collapse: collapse;
+    margin: 12px 0;
+    width: 100%;
+    color: #e0e0e0;
+}
+.main th, .main td {
+    border: 1px solid #555;
+    padding: 8px 12px;
+    text-align: left;
+}
+.main th {
+    background: rgba(255,255,255,0.08);
+    color: #FAF3E1;
+}
+.main td {
+    background: rgba(0,0,0,0.2);
+}
+.main pre {
+    margin: 12px 0;
+    padding: 12px 16px;
+    background: rgba(0,0,0,0.4);
+    border: 1px solid #444;
+    border-radius: 4px;
+    overflow-x: auto;
+}
+.main code {
+    font-family: "Fira Code", monospace;
+    font-size: 0.9em;
+    color: #f8f8f2;
+    background: rgba(255,255,255,0.08);
+    padding: 1px 5px;
+    border-radius: 3px;
+}
+.main pre code {
+    background: none;
+    padding: 0;
+    border: none;
+    font-size: 0.85em;
+    line-height: 1.5;
+}
+.main hr {
+    border: none;
+    border-top: 1px solid #555;
+    margin: 24px 0;
+}
+.main blockquote {
+    margin: 12px 0;
+    padding: 8px 16px;
+    border-left: 4px solid #888;
+    background: rgba(255,255,255,0.03);
+    color: #ccc;
+}
+.main img {
+    max-width: 100%;
 }
 
 .lastUpdated,

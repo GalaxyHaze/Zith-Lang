@@ -1,0 +1,26 @@
+<h1>Packs (Tuples & Ownership)</h1>
+<p>Packs are Zith's ownership-aware tuples that track the lifecycle of multiple values.</p>
+<h2>Basic Packs</h2>
+<pre><code class="language-zith">let pair = (42, "hello");
+let first = pair.0;   // 42
+let second = pair.1; // "hello"</code></pre>
+<h2>Named Packs</h2>
+<pre><code class="language-zith">let user = (name: "Alice", age: 30);
+let name = user.name;</code></pre>
+<h2>Ownership with Packs</h2>
+<p>Packs respect ownership keywords:</p>
+<pre><code class="language-zith">let owned = (unique Resource.new(), unique Other.new());
+let taken = owned;    // Both moved, original is zombie</code></pre>
+<h2>Destructuring</h2>
+<pre><code class="language-zith">let (a, b) = (1, 2);
+// a = 1, b = 2</code></pre>
+<h2>Pack Types</h2>
+<pre><code class="language-zith">fn process(pair: (i32, string)) { ... }
+fn user_info() -&gt; (name: string, email: string) { ... }</code></pre>
+<h2>Use Cases</h2>
+<ul>
+  <li>Multiple return values</li>
+  <li>Grouping related data</li>
+  <li>Function parameters</li>
+  <li>Pattern matching</li>
+</ul>

@@ -1,0 +1,54 @@
+<h1>Contexts (DSL Namespaces)</h1>
+<p>Contexts are isolated environments that define custom syntax, keywords, and operators for domain-specific languages (DSLs).</p>
+<h2>Defining a Context</h2>
+<pre><code class="language-zith">context WebApp {
+    // Macros
+    macro @getParam(name) {
+        request.params[name]
+    }
+    
+    // Constants
+    const VERSION = "1.0";
+    
+    // Custom keywords
+    macro async { /* async handling */ }
+    
+    // Tag macros (HTML-like syntax)
+    tag macro div(content) {
+        render("&lt;div&gt;", content, "&lt;/div&gt;")
+    }
+}</code></pre>
+<h2>Activating a Context</h2>
+<pre><code class="language-zith">context WebApp {
+    // WebApp syntax is active here
+    let version = VERSION;
+    let param = @getParam("name");
+    &lt;div&gt; Hello &lt;/div&gt;
+}
+// Outside, WebApp syntax is not available</code></pre>
+<h2>Rules</h2>
+<ul>
+  <li><strong>One Global Context:</strong> Only one context at module level</li>
+  <li><strong>Local Contexts:</strong> Can be opened in blocks</li>
+  <li><strong>Namespace Isolation:</strong> Contexts don't pollute global namespace</li>
+  <li><strong>Composition:</strong> Contexts can be nested</li>
+</ul>
+<pre><code class="language-zith">context Web {
+    context Database {
+        // Both Web and Database syntax available
+    }
+}</code></pre>
+<h2>Tag Macros</h2>
+<p>Tag macros provide HTML-like syntax for DSLs:</p>
+<pre><code class="language-zith">tag macro div(class: string, content) {
+    "&lt;div class=\"" + class + "\"&gt;" + content + "&lt;/div&gt;"
+}
+
+let html = &lt;div class="container"&gt;Content&lt;/div&gt;;</code></pre>
+<h2>Use Cases</h2>
+<ul>
+  <li><strong>Web Development:</strong> HTML, CSS, HTTP routing</li>
+  <li><strong>Database:</strong> SQL query building</li>
+  <li><strong>Graphics:</strong> Shader definitions</li>
+  <li><strong>Configuration:</strong> TOML/YAML-like syntax</li>
+</ul>

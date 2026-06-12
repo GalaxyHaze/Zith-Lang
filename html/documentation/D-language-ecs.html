@@ -1,0 +1,93 @@
+<h1>ECS & Scenes</h1>
+<p>Zith has native support for data-oriented programming through Entity Component System (ECS).</p>
+<h2>Components</h2>
+<p>Plain Old Data (POD) with optional inline functions:</p>
+<pre><code class="language-zith">component Position {
+    x: f32,
+    y: f32
+}
+
+component Velocity {
+    dx: f32,
+    dy: f32
+}
+
+component Health {
+    hp: u32,
+    max_hp: u32,
+    
+    fn take_damage(self: lend, damage: u32) {
+        self.hp = if self.hp &gt; damage {
+            self.hp - damage
+        } else {
+            0
+        };
+    }
+}</code></pre>
+<h2>Entities (Archetypes)</h2>
+<p>Container of components with strong typing:</p>
+<pre><code class="language-zith">entity Player {
+    Position,
+    Velocity,
+    Health,
+    Inventory
+}
+
+entity Projectile {
+    Position,
+    Velocity
+}
+
+// Access
+let player: Player = /* ... */;
+player.Health.take_damage(10);
+player.Position.x += 1.0;</code></pre>
+<h3>Dynamic Entities</h3>
+<p>For runtime component addition:</p>
+<pre><code class="language-zith">entity mut GameEntity {
+    // Dynamic components
+}
+
+let entity: GameEntity = scene.create_entity();
+entity.add_component(Position { x: 0, y: 0 });
+entity.add_component(Health { hp: 100, max_hp: 100 });</code></pre>
+<h2>Scenes (Memory Regions)</h2>
+<p>Scenes are global memory regions that organize entities:</p>
+<pre><code class="language-zith">scene GameWorld(require: 100 entities) {
+    // Allocate space for ~100 entities
+    
+    // Memory policy when full
+    policy: Terminate   // kill oldest (default)
+    policy: Grow      // dynamically grow
+    policy: Circular  // FIFO buffer
+}</code></pre>
+<h3>Scene Organization</h3>
+<pre><code class="language-zith">scene MainMenu {
+    entity MenuButton { /* ... */ }
+    entity TextDisplay { /* ... */ }
+}
+
+scene GameLevel {
+    entity Player { /* ... */ }
+    entity Enemy { /* ... */ }
+}
+
+// Transition between scenes
+transition(MainMenu, GameLevel);</code></pre>
+<h2>Threading</h2>
+<p>Convert entities to structs for threading:</p>
+<pre><code class="language-zith">let struct_data = @toStruct(player);
+
+thread::spawn(|| {
+    process(struct_data);
+    
+    // Reconstruct if needed
+    let reconstructed = @toEntity(struct_data, scene);
+});</code></pre>
+<h2>Rules</h2>
+<ul>
+  <li><strong>Scenes are global:</strong> Cannot be local/scoped</li>
+  <li><strong>Memory contiguity:</strong> Compiler allocates contiguously</li>
+  <li><strong>Type safety:</strong> Components checked at compile-time</li>
+  <li><strong>Dynamic entities:</strong> <code>mut</code> allows runtime components</li>
+</ul>

@@ -1,0 +1,101 @@
+<h1>Advanced Topics</h1>
+<div class="callout callout-warning">
+  <p><strong>&#9888; Warning:</strong> This section covers low-level operations that bypass Zith's safety guarantees. Only use these when absolutely necessary and when you fully understand the implications.</p>
+</div>
+<h2>What is "Raw & Unsafe"?</h2>
+<p>Zith's safety model handles 95% of use cases. The <code>raw</code> and <code>unsafe</code> features are reserved for situations where you need:</p>
+<ol>
+  <li><strong>FFI (Foreign Function Interface)</strong> - Calling C libraries directly</li>
+  <li><strong>Raw pointer arithmetic</strong> - Custom memory layouts and allocators</li>
+  <li><strong>Inline assembly</strong> - Platform-specific optimizations</li>
+  <li><strong>Union field access</strong> - Type punning scenarios</li>
+  <li><strong>Custom allocators</strong> - Building your own memory management</li>
+</ol>
+<h2>Key Concepts</h2>
+<h3><code>unsafe</code> Blocks</h3>
+<p>Code inside an <code>unsafe</code> block bypasses Zith's safety checks:</p>
+<pre><code class="language-zith">unsafe {
+    // All code here bypasses safety checks
+    let ptr: *mut u8 = cast_to_ptr(0x1000);
+    *ptr = 42;  // Direct memory write
+}</code></pre>
+<h3>Raw Pointers</h3>
+<p>Raw pointers (<code>*const T</code> and <code>*mut T</code>) give you direct memory access without compiler guarantees:</p>
+<pre><code class="language-zith">let value: i32 = 100;
+
+// Immutable raw pointer
+let imm_ptr: *const i32 = &amp;value;
+
+// Mutable raw pointer (requires unsafe)
+let mut_ptr: *mut i32 = unsafe { addr_of_mut!(value) };</code></pre>
+<h2>When to Use Raw & Unsafe</h2>
+<p> <strong>Appropriate uses:</strong> - Writing FFI bindings for C libraries - Implementing custom allocators or data structures - Performance-critical code with proven safety - Inline assembly for hardware access</p>
+<p> <strong>Avoid when:</strong> - Safe Zith constructs would work - You're not certain about memory invariants - The code will be frequently modified - Safety can be guaranteed at runtime instead</p>
+<h2>Topics in This Section</h2>
+<table>
+  <tr>
+    <th>Topic</th>
+    <th>Description</th>
+  </tr>
+  <tr>
+    <td><a href="./D-advanced-how-to-use.html">How to Use</a></td>
+    <td>Best practices for organizing raw/unsafe code</td>
+  </tr>
+  <tr>
+    <td><a href="./D-advanced-traits.html">Traits</a></td>
+    <td>Advanced trait usage with raw types</td>
+  </tr>
+  <tr>
+    <td><a href="./D-advanced-generics-deep.html">Generics Deep Dive</a></td>
+    <td>Complex generic patterns</td>
+  </tr>
+  <tr>
+    <td><a href="./D-advanced-metaprogramming.html">Metaprogramming</a></td>
+    <td>Code generation techniques</td>
+  </tr>
+  <tr>
+    <td><a href="./D-advanced-macros.html">Macros</a></td>
+    <td>Template and macro systems</td>
+  </tr>
+  <tr>
+    <td><a href="./D-advanced-data-structures.html">Data Structures</a></td>
+    <td>Building custom data structures</td>
+  </tr>
+  <tr>
+    <td><a href="./D-advanced-unsafe.html">Unsafe Operations</a></td>
+    <td>Detailed unsafe block usage</td>
+  </tr>
+  <tr>
+    <td><a href="./D-advanced-raw-pointers.html">Raw Pointers</a></td>
+    <td>Complete raw pointer guide</td>
+  </tr>
+</table>
+<h2>Safety Guidelines</h2>
+<ol>
+  <li><strong>Minimize unsafe scope</strong> - Keep <code>unsafe {}</code> blocks as small as possible</li>
+  <li><strong>Document invariants</strong> - Explain why the unsafe code is safe</li>
+  <li><strong>Add runtime checks</strong> - Validate inputs before entering unsafe blocks</li>
+  <li><strong>Write tests</strong> - Especially for unsafe code paths</li>
+  <li><strong>Review carefully</strong> - Unsafe code requires extra scrutiny</li>
+</ol>
+<h3>Example: Safe Wrapper Around Unsafe Code</h3>
+<pre><code class="language-zith">// Good: Small unsafe block with validation
+fn get_element(arr: &amp;[i32], index: usize): Option&lt;i32&gt; {
+    if index &gt;= arr.len() {
+        return None;
+    }
+    
+    unsafe {
+        Some(*arr.as_ptr().add(index))
+    }
+}</code></pre>
+<h2>Next Steps</h2>
+<ul>
+  <li>Learn <a href="./D-advanced-how-to-use.html">how to use</a> raw and unsafe features responsibly</li>
+  <li>Dive into <a href="./D-advanced-raw-pointers.html">raw pointers</a> for memory manipulation</li>
+  <li>Understand <a href="./D-advanced-unsafe.html">unsafe operations</a> in detail</li>
+</ul>
+<hr>
+<div class="callout callout-caution">
+  <p><strong>&#9888; Caution:</strong> With great power comes great responsibility. Always prefer safe Zith constructs when possible.</p>
+</div>

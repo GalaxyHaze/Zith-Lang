@@ -1,21 +1,110 @@
-<h1>Right way to write on the site</h1>
-<br>
-<h2>Principals</h2>
-<br>
-<p>Quando fores escrever no site eu quero que tu escrevas assim</p>
-<p>Neste caso estou a dizer de forma de organização</p>
-<p>Pois desta forma o codigo fica mais limpo e a leitura adaptada a isso</p>
-<br>
-<h2>Não deves fazer</h2>
-<br>
-<p>Nada de IA para escrever por ti</p>
-<p>Não mudar nada alem dos ficheiros em documentation excluindo D-homee o tree.json</p>
-<p>De resto acho que estas de boa, só não mexer mesmo</p>
-<br>
-<h2>Explicação de como escrever coisas</h2>
-<br>
-<p>Os br são paragrafos</p>
-<p>se quiseres fazer referencia para algo especifico podes fazer assim</p>
-<a href="./D-build.html">Test</a>
-<p>E se quiseres podes colocar no href o sitio de uma parte especifica</p>
-<a href="./D-build.html#building">Test</a>
+<h1>CLI Reference</h1>
+<div class="callout callout-info">
+  <p><strong>&#8505; Info:</strong> Jump to specific commands:</p>
+  <ul>
+    <li>[<code>zith check</code>](./check.md) - Check code for errors</li>
+    <li>[<code>zith compile</code>](./compile.md) - Compile to binary</li>
+    <li>[<code>zith build</code>](./build.md) - Build project</li>
+    <li>[<code>zith run</code>](./run.md) - Run program directly</li>
+    <li>[<code>zith new</code>](./new.md) - Create new project</li>
+    <li>[<code>zith fmt</code>](./fmt.md) - Format code</li>
+  </ul>
+</div>
+<h2>Overview</h2>
+<p>The Zith CLI provides all the tools you need to develop, build, and run Zith programs. Each command is designed to be intuitive and follow Unix conventions.</p>
+<h2>Command Structure</h2>
+<p>All Zith commands follow this pattern:</p>
+<pre><code class="language-bash">zith &lt;command&gt; [options] [arguments]</code></pre>
+<h3>Global Flags</h3>
+<p>These flags work with all commands:</p>
+<table>
+  <tr>
+    <th>Flag</th>
+    <th>Description</th>
+    <th>Default</th>
+  </tr>
+  <tr>
+    <td><code>--help</code>, <code>-h</code></td>
+    <td>Show help message</td>
+    <td>-</td>
+  </tr>
+  <tr>
+    <td><code>--version</code>, <code>-v</code></td>
+    <td>Show version info</td>
+    <td>-</td>
+  </tr>
+  <tr>
+    <td><code>--verbose</code></td>
+    <td>Enable verbose output</td>
+    <td><code>false</code></td>
+  </tr>
+  <tr>
+    <td><code>--config <path></code></td>
+    <td>Specify config file</td>
+    <td><code>ZithProject.toml</code></td>
+  </tr>
+</table>
+<h2>Available Commands</h2>
+<h3>Development Workflow</h3>
+<h3>Quick Reference Table</h3>
+<table>
+  <tr>
+    <th>Command</th>
+    <th>Purpose</th>
+    <th>Typical Use Case</th>
+  </tr>
+  <tr>
+    <td>[<code>new</code>](./new.md)</td>
+    <td>Create new project</td>
+    <td>Starting a fresh project</td>
+  </tr>
+  <tr>
+    <td>[<code>check</code>](./check.md)</td>
+    <td>Static analysis</td>
+    <td>Before committing code</td>
+  </tr>
+  <tr>
+    <td>[<code>compile</code>](./compile.md)</td>
+    <td>Generate binary</td>
+    <td>Production builds</td>
+  </tr>
+  <tr>
+    <td>[<code>build</code>](./build.md)</td>
+    <td>Full build pipeline</td>
+    <td>Development workflow</td>
+  </tr>
+  <tr>
+    <td>[<code>run</code>](./run.md)</td>
+    <td>Compile and execute</td>
+    <td>Quick testing</td>
+  </tr>
+  <tr>
+    <td>[<code>fmt</code>](./fmt.md)</td>
+    <td>Format code</td>
+    <td>Before commits</td>
+  </tr>
+  <tr>
+    <td>[<code>repl</code>](./repl.md)</td>
+    <td>Interactive shell</td>
+    <td>Experimentation</td>
+  </tr>
+  <tr>
+    <td>[<code>clean</code>](./clean.md)</td>
+    <td>Remove build artifacts</td>
+    <td>Cleanup</td>
+  </tr>
+  <tr>
+    <td>[<code>docs</code>](./docs.md)</td>
+    <td>Generate documentation</td>
+    <td>Building docs</td>
+  </tr>
+</table>
+<div class="callout callout-tip">
+  <p><strong>&#128161; Tip:</strong> Use <code>zith <command> --help</code> for detailed information about any command.</p>
+</div>
+<h2>Next Steps</h2>
+<ul>
+  <li>Learn about individual commands in the sidebar</li>
+  <li>Read about <a href="./D-cli-flags.html">global flags</a></li>
+  <li>Set up your <a href="./D-project-overview.html">project configuration</a></li>
+</ul>

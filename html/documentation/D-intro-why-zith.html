@@ -1,0 +1,207 @@
+<h1>Why Choose Zith?</h1>
+<p>Zith was designed to fill a gap in the systems programming landscape: <strong>a language that's as safe as Rust but simpler to learn and use</strong>.</p>
+<p>The current prototype specification (<code>Zith-spec.md</code>, v2.0 architectural revision) formalizes the model around NRM, five ownership keywords, contexts/DSLs, packs, ECS/scenes, and concurrency rules.</p>
+<h2>The Problem with Current Options</h2>
+<table>
+  <tr>
+    <th>Language</th>
+    <th>Safety</th>
+    <th>Simplicity</th>
+    <th>Learning Curve</th>
+    <th>Ecosystem</th>
+  </tr>
+  <tr>
+    <td>C</td>
+    <td> Manual memory management</td>
+    <td> Simple syntax</td>
+    <td>Easy</td>
+    <td>Massive</td>
+  </tr>
+  <tr>
+    <td>C++</td>
+    <td> Complex rules</td>
+    <td> Extremely complex</td>
+    <td>Very Hard</td>
+    <td>Massive</td>
+  </tr>
+  <tr>
+    <td>Rust</td>
+    <td> Excellent</td>
+    <td> Steep learning curve</td>
+    <td>Very Hard</td>
+    <td>Growing</td>
+  </tr>
+  <tr>
+    <td>Zig</td>
+    <td> Good</td>
+    <td> Simple</td>
+    <td>Moderate</td>
+    <td>Small</td>
+  </tr>
+  <tr>
+    <td><strong>Zith</strong></td>
+    <td> Strong</td>
+    <td> Intuitive</td>
+    <td><strong>Easy</strong></td>
+    <td>Emerging</td>
+  </tr>
+</table>
+<h2>What Makes Zith Special</h2>
+<h3>1.  Explicit Ownership Without Complexity</h3>
+<p>Zith's ownership model is <strong>visible in the type system</strong>, not hidden in borrow checker errors:</p>
+<pre><code class="language-zith">// Clear ownership modifiers
+fn process(mut self: Health, dmg: view u16) {
+    // 'mut self' = I own and can modify
+    // 'view u16' = read-only reference
+}
+
+// No lifetime annotations needed
+fn get_health(player: view Player): view u16 {
+    return player.health;  // Safe, no lifetimes to specify
+}</code></pre>
+<h3>2.  Compile-Time Safety Without GC</h3>
+<pre><code class="language-zith">// Memory safety enforced at compile time
+let health: unique u16 = alloc.new(100);
+let ref: view u16 = health;  // Borrow
+
+ref += 10;  //  Compile Error: view doesn't allow mutation
+health = 50; //  OK: owner can still modify
+
+// No garbage collector, no runtime overhead</code></pre>
+<h3>3.  Start Simple, Scale When Needed</h3>
+<p>Zith grows with your project complexity:</p>
+<p><strong>Level 1: C-like Basics</strong> ```zith fn add(a: i32, b: i32): i32 { return a + b; }</p>
+<p>fn main() { let result = add(5, 3); print(result); } ```</p>
+<p><strong>Level 2: Components & Entities</strong> ```zith component Position { x: i32, y: i32, }</p>
+<p>component Velocity { dx: i32, dy: i32, }</p>
+<p>entity Player { Position, Velocity, Health, } ```</p>
+<p><strong>Level 3: Domain-Specific Languages</strong> ```zith context SQL { use infix = SQL.operators;</p>
+<p>infix operator SELECT(cols); infix operator FROM(table); infix operator WHERE(condition); }</p>
+<p>use context SQL { result = SELECT * FROM users WHERE age > 18; } ```</p>
+<h3>4.  Safe DSLs with Contexts</h3>
+<p>Create embedded domain-specific languages without string parsing or injection vulnerabilities:</p>
+<pre><code class="language-zith">context QueryBuilder {
+    fn select(table: str, columns: [str]) -&gt; Query;
+    fn where(query: Query, condition: Condition) -&gt; Query;
+}
+
+use context QueryBuilder {
+    let query = select("users", ["name", "email"])
+                |&gt; where(age &gt; 18);
+    
+    // Type-safe, no SQL injection possible
+}</code></pre>
+<h3>5.  Scenes for Resource Isolation</h3>
+<p>Perfect for games, simulations, and modular applications:</p>
+<pre><code class="language-zith">scene MainMenu {
+    resources: {
+        background: Texture,
+        buttons: [Button],
+    }
+    
+    fn on_enter() { /* load menu */ }
+    fn on_exit() { /* cleanup */ }
+}
+
+scene GameLevel {
+    resources: {
+        world: World,
+        entities: [Entity],
+    }
+    
+    fn update(dt: f32) { /* game logic */ }
+}
+
+// Automatic resource cleanup when scene changes</code></pre>
+<h3>6.  Native ECS Support</h3>
+<p>Built-in entity-component-system for data-oriented design:</p>
+<pre><code class="language-zith">component Position { x: f32, y: f32 }
+component Velocity { dx: f32, dy: f32 }
+component Render { sprite: Sprite }
+
+// System processes all entities with matching components
+system movement_system(entities: [Entity with Position, Velocity]) {
+    for entity in entities {
+        entity.position.x += entity.velocity.dx;
+        entity.position.y += entity.velocity.dy;
+    }
+}</code></pre>
+<h2>Real-World Use Cases</h2>
+<h3> Perfect For:</h3>
+<ul>
+  <li><strong>Game Engines</strong> - Native ECS, scenes, performance</li>
+  <li><strong>Embedded Systems</strong> - Zero overhead, predictable memory</li>
+  <li><strong>CLI Tools</strong> - Fast compilation, simple deployment</li>
+  <li><strong>Network Services</strong> - Safe concurrency, clear ownership</li>
+  <li><strong>DSLs & Compilers</strong> - Context system, pattern matching</li>
+  <li><strong>Learning Systems Programming</strong> - Gentle learning curve</li>
+</ul>
+<h3> Consider Alternatives If:</h3>
+<ul>
+  <li>You need maximum ecosystem (C++/Rust)</li>
+  <li>You want pure functional programming (Haskell/OCaml)</li>
+  <li>You need garbage collection convenience (Go/Java)</li>
+  <li>You're building web frontends (JavaScript/TypeScript)</li>
+</ul>
+<h2>Comparison with Rust</h2>
+<table>
+  <tr>
+    <th>Feature</th>
+    <th>Rust</th>
+    <th>Zith</th>
+  </tr>
+  <tr>
+    <td>Memory Safety</td>
+    <td> Borrow checker</td>
+    <td> Ownership types</td>
+  </tr>
+  <tr>
+    <td>Learning Curve</td>
+    <td> Very steep</td>
+    <td> Gentle</td>
+  </tr>
+  <tr>
+    <td>Syntax</td>
+    <td>Complex keywords</td>
+    <td>C-like familiarity</td>
+  </tr>
+  <tr>
+    <td>Lifetimes</td>
+    <td>Explicit annotations</td>
+    <td>Implicit through types</td>
+  </tr>
+  <tr>
+    <td>Error Handling</td>
+    <td>Result/Option</td>
+    <td>Similar + exceptions</td>
+  </tr>
+  <tr>
+    <td>Compile Time</td>
+    <td>Slow</td>
+    <td>Fast</td>
+  </tr>
+  <tr>
+    <td>Ecosystem</td>
+    <td>Large</td>
+    <td>Growing</td>
+  </tr>
+  <tr>
+    <td>Best For</td>
+    <td>Maximum safety</td>
+    <td>Balance of safety & simplicity</td>
+  </tr>
+</table>
+<h2>Getting Started</h2>
+<p>Ready to try Zith? Here's your path:</p>
+<ol>
+  <li><strong><a href="./D-intro-installation.html">Installation</a></strong> - Set up Zith in minutes</li>
+  <li><strong><a href="./D-quickstart-hello-world.html">Quick Start</a></strong> - Write your first program</li>
+  <li><strong><a href="./D-cli.html">CLI Reference</a></strong> - Learn the tools</li>
+</ol>
+<ol>
+  <li><strong><a href="./D-language-overview.html">Language Guide</a></strong> - Deep dive</li>
+  <li><strong><a href="./D-language-spec-core-topics.html">Spec Core Topics</a></strong> - Spec topic map</li>
+  <li>---</li>
+</ol>
+<p><strong>Zith proves you don't have to choose between safety and simplicity.</strong></p>
+<p><a href="./D-intro-installation.html">Next: Installation →</a></p>

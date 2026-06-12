@@ -4,15 +4,96 @@
     "link": "../home.html",
     "children": [
       {
+        "title": "Quick Start",
+        "link": "./D-quickstart-hello-world.html"
+      },
+      {
+        "title": "Introduction",
+        "link": "./D-intro-overview.html",
+        "children": [
+          { "title": "Installation", "link": "./D-intro-installation.html" },
+          { "title": "Why Zith?", "link": "./D-intro-why-zith.html" }
+        ]
+      },
+      {
+        "title": "Language Guide",
+        "link": "./D-language-overview.html",
+        "children": [
+          { "title": "Syntax", "link": "./D-language-syntax.html" },
+          { "title": "Variables", "link": "./D-language-variables.html" },
+          { "title": "Types", "link": "./D-language-types.html" },
+          { "title": "Control Flow", "link": "./D-language-control-flow.html" },
+          { "title": "Functions", "link": "./D-language-functions.html" },
+          { "title": "Ownership", "link": "./D-language-ownership.html" },
+          { "title": "Memory", "link": "./D-language-memory.html" },
+          { "title": "Modules", "link": "./D-language-modules.html" },
+          { "title": "Generics", "link": "./D-language-generics.html" },
+          { "title": "Errors", "link": "./D-language-errors.html" },
+          { "title": "Contexts", "link": "./D-language-contexts.html" },
+          { "title": "Concurrency", "link": "./D-language-concurrency.html" },
+          { "title": "ECS", "link": "./D-language-ecs.html" },
+          { "title": "Intrinsics", "link": "./D-language-intrinsics.html" },
+          { "title": "Packs", "link": "./D-language-packs.html" },
+          { "title": "Spec Core Topics", "link": "./D-language-spec-core-topics.html" }
+        ]
+      },
+      {
         "title": "CLI Reference",
         "link": "./D-cli.html",
         "children": [
-          { "title": "Check", "link": "./D-NotDone.html" },
-          { "title": "Build", "link": "./D-build.html" }
+          { "title": "Check", "link": "./D-cli-check.html" },
+          { "title": "Build", "link": "./D-cli-build.html" },
+          { "title": "Compile", "link": "./D-cli-compile.html" },
+          { "title": "Run", "link": "./D-cli-run.html" },
+          { "title": "New", "link": "./D-cli-new.html" },
+          { "title": "Fmt", "link": "./D-cli-fmt.html" },
+          { "title": "Clean", "link": "./D-cli-clean.html" },
+          { "title": "Docs", "link": "./D-cli-docs.html" },
+          { "title": "REPL", "link": "./D-cli-repl.html" },
+          { "title": "Flags", "link": "./D-cli-flags.html" }
         ]
       },
-      { "title": "Syntax", "link": "./D-NotDone.html" },
-      { "title": "Variables", "link": "./D-NotDone.html" }
+      {
+        "title": "Advanced Topics",
+        "link": "./D-advanced-overview.html",
+        "children": [
+          { "title": "How to Use", "link": "./D-advanced-how-to-use.html" },
+          { "title": "Traits", "link": "./D-advanced-traits.html" },
+          { "title": "Generics Deep", "link": "./D-advanced-generics-deep.html" },
+          { "title": "Metaprogramming", "link": "./D-advanced-metaprogramming.html" },
+          { "title": "Macros", "link": "./D-advanced-macros.html" },
+          { "title": "Data Structures", "link": "./D-advanced-data-structures.html" },
+          { "title": "Unsafe", "link": "./D-advanced-unsafe.html" },
+          { "title": "Raw Pointers", "link": "./D-advanced-raw-pointers.html" }
+        ]
+      },
+      {
+        "title": "FAQ",
+        "link": "./D-faq-overview.html",
+        "children": [
+          { "title": "Philosophy", "link": "./D-faq-philosophy.html" },
+          { "title": "Security", "link": "./D-faq-security.html" },
+          { "title": "Rust Comparison", "link": "./D-faq-rust-comparison.html" },
+          { "title": "Use Cases", "link": "./D-faq-use-cases.html" }
+        ]
+      },
+      {
+        "title": "Community",
+        "link": "./D-community-overview.html",
+        "children": [
+          { "title": "Chat", "link": "./D-community-chat.html" },
+          { "title": "Contributing", "link": "./D-community-contributing.html" },
+          { "title": "Code of Conduct", "link": "./D-community-code-of-conduct.html" }
+        ]
+      },
+      {
+        "title": "Project",
+        "link": "./D-project-overview.html"
+      },
+      {
+        "title": "Stdlib Reference",
+        "link": "./D-reference-stdlib.html"
+      }
     ]
   }
 ]

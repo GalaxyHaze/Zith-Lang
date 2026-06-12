@@ -1,0 +1,67 @@
+<h1>Zith Spec Core Topics</h1>
+<p>This document maps the prototype specification in <code>Zith-spec.md</code> into documentation-friendly sections.</p>
+<h2>1) Introduction & Philosophy</h2>
+<p>Zith targets a universal systems workflow: explicit behavior, compile-time safety, and zero-cost abstractions.</p>
+<ul>
+  <li><strong>Explicit over implicit</strong> semantics.</li>
+  <li><strong>Safety by default</strong> without a garbage collector.</li>
+  <li><strong>Universal applicability</strong> through contexts and data-oriented patterns.</li>
+</ul>
+<h2>2) Node Resource Model (NRM)</h2>
+<p>NRM models values as nodes and bindings as edges in a graph analyzed at compile time.</p>
+<ul>
+  <li>Tracks connectivity, validity, and move state.</li>
+  <li>Distinguishes origins: stack, heap, and custom allocators.</li>
+  <li>Performs branch-aware liveness checks for failable/optional outcomes.</li>
+</ul>
+<h2>3) Ownership Keywords (Five-Rule Model)</h2>
+<p>Zith defines five ownership/borrowing modes:</p>
+<ul>
+  <li><code>unique</code> — exclusive ownership and moves.</li>
+  <li><code>share</code> — shared ownership.</li>
+  <li><code>view</code> — read-only borrow.</li>
+  <li><code>lend</code> — temporary mutable borrow.</li>
+  <li><code>extension</code> — parent-child structural relationship.</li>
+</ul>
+<h2>4) Type System & Type Navigation</h2>
+<p>The specification combines nominal and structural typing, and introduces safe navigation in failable/optional paths.</p>
+<ul>
+  <li>Primitives, user types, generics, and trait-oriented capabilities.</li>
+  <li>Optional/failable navigation patterns designed for explicit error-aware code.</li>
+</ul>
+<h2>5) Lexical Structure, Operators, and Contexts</h2>
+<p>The spec formalizes syntax/operator behavior and introduces <strong>contexts</strong> as scoped DSL namespaces.</p>
+<ul>
+  <li>Contexts allow domain-specific operators and naming rules.</li>
+  <li>Useful for SQL-like, graphics, or protocol-oriented embedded DSLs.</li>
+</ul>
+<h2>6) Packs, Flows, and Functions</h2>
+<ul>
+  <li><strong>Packs</strong> support grouped values with ownership-aware behavior.</li>
+  <li><strong>Flow constructs</strong> make control transfer explicit.</li>
+  <li>Functions integrate ownership rules directly in signatures.</li>
+</ul>
+<h2>7) Data-Oriented Architecture (ECS & Scenes)</h2>
+<p>The spec includes first-class patterns for entity/component systems and scene/resource boundaries.</p>
+<ul>
+  <li>ECS for cache-friendly simulation logic.</li>
+  <li>Scenes for lifecycle-scoped allocation and cleanup.</li>
+</ul>
+<h2>8) Intrinsics, Error Handling, and Concurrency</h2>
+<ul>
+  <li><code>@</code> intrinsics provide compiler/runtime-level functionality.</li>
+  <li>Try/catch and failable returns model recoverable failures.</li>
+  <li>Concurrency and globals are constrained through ownership and trait rules.</li>
+</ul>
+<h2>9) Standard Library & Comparisons</h2>
+<p>The specification outlines standard-library direction and compares Zith's approach to contemporary systems languages.</p>
+<h2>10) Recommended Reading Order</h2>
+<ol>
+  <li>Language Overview</li>
+  <li>Ownership and Memory</li>
+  <li>Type System and Errors</li>
+  <li>Contexts and DSLs</li>
+  <li>ECS/Scenes and architecture-level patterns</li>
+</ol>
+<hr>
+<p>If you're new to Zith, start at <a href="./D-language-overview.html">Language Overview</a>, then continue with <a href="./D-language-variables.html">Variables</a>, <a href="./D-language-memory.html">Memory</a>, and <a href="./D-language-errors.html">Errors</a>.</p>
