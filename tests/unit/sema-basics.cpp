@@ -8,18 +8,22 @@
 #include "types/type-kind.hpp"
 #include "types/unify.hpp"
 
+#include <span>
+
 using namespace zith::import;
 using namespace zith::types;
 using zith::diagnostics::DiagnosticEngine;
 using zith::memory::Arena;
 
-// SymbolTable is stubbed — declare() returns 0, lookup() returns kInvalidSym
+// ── SymbolTable tests ─────────────────────────────────────────────
+
 static void test_symtab_declare() {
     Arena arena;
     SymbolTable syms(arena);
 
     auto id = syms.declare("x");
-    CHECK_EQ(id, SymId(0), "declare returns 0 (stub)");
+    CHECK(id != kInvalidSym, "declare returns valid SymId");
+    CHECK_EQ(syms.get(id).name, "x", "declared symbol name is 'x'");
 }
 
 static void test_symtab_lookup_finds_declared() {
@@ -31,7 +35,7 @@ static void test_symtab_lookup_finds_declared() {
     CHECK_EQ(found, id, "lookup finds declared symbol");
 }
 
-static void test_symtab_not_found() {
+static void test_symtab_lookup_not_found() {
     Arena arena;
     SymbolTable syms(arena);
 
@@ -54,65 +58,395 @@ static void test_symtab_scopes() {
     CHECK_EQ(syms.currentScope(), kRootScope, "after exit, back to root");
 }
 
-static void test_type_intern_returns_constant_ids() {
+static void test_symtab_scope_hides_outer() {
+    Arena arena;
+    SymbolTable syms(arena);
+
+    syms.declare("x");
+    syms.enterScope();
+    syms.declare("x");
+    auto found = syms.lookup("x");
+    CHECK(found != kInvalidSym, "inner x found");
+    CHECK_EQ(syms.get(found).name, "x", "inner x name correct");
+    syms.exitScope();
+}
+
+// ── TypeIntern tests ──────────────────────────────────────────────
+
+static void test_type_intern_predefined_ids() {
+    Arena arena;
+    TypeIntern types(arena);
+
+    CHECK_EQ(types.count(), size_t(5), "5 predefined types seeded");
+    CHECK_EQ(types.kindOf(kErrorType), TypeKind::Error, "0 → Error");
+    CHECK_EQ(types.kindOf(kNeverType), TypeKind::Never, "1 → Never");
+    CHECK_EQ(types.kindOf(kVoidType),  TypeKind::Void,  "2 → Void");
+    CHECK_EQ(types.kindOf(kBoolType),  TypeKind::Bool,  "3 → Bool");
+    CHECK_EQ(types.kindOf(kCharType),  TypeKind::Char,  "4 → Char");
+}
+
+static void test_type_intern_int() {
     Arena arena;
     TypeIntern types(arena);
 
     auto i32 = types.internInt(IntWidth::I32);
-    CHECK_EQ(i32, kIntType, "internInt returns kIntType (stub)");
+    CHECK(i32 != kErrorType, "internInt returns valid id");
+    CHECK(i32 >= kFirstCustom, "internInt id >= kFirstCustom");
+    CHECK_EQ(types.kindOf(i32), TypeKind::Int, "kindOf is Int");
+
+    auto i32_b = types.internInt(IntWidth::I32);
+    CHECK(i32_b != i32, "no dedup — each call creates new entry");
+    CHECK_EQ(types.count(), size_t(7), "2 new int types added");
+}
+
+static void test_type_intern_float() {
+    Arena arena;
+    TypeIntern types(arena);
 
     auto f64 = types.internFloat(FloatWidth::F64);
-    CHECK_EQ(f64, kFloatType, "internFloat returns kFloatType (stub)");
+    CHECK(f64 != kErrorType, "internFloat returns valid id");
+    CHECK_EQ(types.kindOf(f64), TypeKind::Float, "kindOf is Float");
 }
 
-static void test_type_kind_of_returns_error() {
+static void test_type_intern_ptr() {
     Arena arena;
     TypeIntern types(arena);
 
-    auto id = types.internInt(IntWidth::I32);
-    CHECK_EQ(types.kindOf(id), TypeKind::Error, "kindOf returns Error (stub)");
+    auto i32   = types.internInt(IntWidth::I32);
+    auto ptr   = types.internPtr(i32);
+    CHECK_EQ(types.kindOf(ptr), TypeKind::Ptr, "kindOf is Ptr");
+
+    auto &data = std::get<TypePtr>(types.lookup(ptr));
+    CHECK_EQ(data.pointee, i32, "pointee is i32");
 }
 
-static void test_type_intern_ptr_returns_error() {
+static void test_type_intern_array() {
     Arena arena;
     TypeIntern types(arena);
 
-    auto ptr = types.internPtr(kIntType);
-    CHECK_EQ(ptr, kErrorType, "internPtr returns kErrorType (stub)");
+    auto u8   = types.internInt(IntWidth::U8);
+    auto arr  = types.internArray(u8, 4);
+    CHECK_EQ(types.kindOf(arr), TypeKind::Array, "kindOf is Array");
+
+    auto &data = std::get<TypeArray>(types.lookup(arr));
+    CHECK_EQ(data.elem,  u8,  "elem is u8");
+    CHECK_EQ(data.count, 4u,  "count is 4");
 }
 
-static void test_unifier_returns_false() {
+static void test_type_intern_slice() {
+    Arena arena;
+    TypeIntern types(arena);
+
+    auto u8   = types.internInt(IntWidth::U8);
+    auto sl   = types.internArray(u8, 0);
+    CHECK_EQ(types.kindOf(sl), TypeKind::Array, "kindOf is Array (count=0 = slice)");
+
+    auto &data = std::get<TypeArray>(types.lookup(sl));
+    CHECK_EQ(data.elem,  u8, "elem is u8");
+    CHECK_EQ(data.count, 0u, "count is 0 (slice)");
+}
+
+static void test_type_intern_fn() {
+    Arena arena;
+    TypeIntern types(arena);
+
+    auto i32  = types.internInt(IntWidth::I32);
+    auto void_ = kVoidType;
+
+    TypeId param_arr[] = {i32, i32};
+    auto fn   = types.internFn(param_arr, void_);
+    CHECK_EQ(types.kindOf(fn), TypeKind::Fn, "kindOf is Fn");
+
+    auto &data = std::get<TypeFn>(types.lookup(fn));
+    CHECK_EQ(data.ret, void_, "return type is void");
+    CHECK_EQ(data.params.size(), size_t(2), "2 parameters");
+    CHECK_EQ(data.params[0], i32, "param[0] is i32");
+    CHECK_EQ(data.params[1], i32, "param[1] is i32");
+}
+
+static void test_type_intern_struct() {
+    Arena arena;
+    TypeIntern types(arena);
+
+    auto s = types.internStruct(42);
+    CHECK_EQ(types.kindOf(s), TypeKind::Struct, "kindOf is Struct");
+    CHECK_EQ(std::get<TypeStruct>(types.lookup(s)).def_id, TypeId(42), "def_id is 42");
+}
+
+static void test_type_intern_optional() {
+    Arena arena;
+    TypeIntern types(arena);
+
+    auto i32 = types.internInt(IntWidth::I32);
+    auto opt = types.internOptional(i32);
+    CHECK_EQ(types.kindOf(opt), TypeKind::Optional, "kindOf is Optional");
+    CHECK_EQ(std::get<TypeOptional>(types.lookup(opt)).inner, i32, "inner is i32");
+}
+
+static void test_type_intern_failable() {
+    Arena arena;
+    TypeIntern types(arena);
+
+    auto i32 = types.internInt(IntWidth::I32);
+    auto fail = types.internFailable(i32);
+    CHECK_EQ(types.kindOf(fail), TypeKind::Failable, "kindOf is Failable");
+    CHECK_EQ(std::get<TypeFailable>(types.lookup(fail)).inner, i32, "inner is i32");
+}
+
+static void test_type_intern_type_var() {
+    Arena arena;
+    TypeIntern types(arena);
+
+    auto v1 = types.internTypeVar();
+    auto v2 = types.internTypeVar();
+    CHECK(v1 != v2, "each fresh type var gets unique id");
+    CHECK_EQ(types.kindOf(v1), TypeKind::TypeVar, "kindOf is TypeVar");
+}
+
+static void test_kind_of_invalid() {
+    Arena arena;
+    TypeIntern types(arena);
+
+    CHECK_EQ(types.kindOf(kInvalidType), TypeKind::Error, "kInvalidType → Error");
+}
+
+// ── Unifier tests ─────────────────────────────────────────────────
+
+static void test_unify_trivial() {
     Arena arena;
     TypeIntern types(arena);
     DiagnosticEngine diags(arena);
     Unifier unifier(types, diags, arena);
 
-    CHECK(!unifier.unify(kIntType, kIntType), "unify returns false (stub)");
+    auto i32 = types.internInt(IntWidth::I32);
+    CHECK(unifier.unify(i32, i32), "unify same type");
 }
 
-static void test_fresh_var_returns_error_type() {
+static void test_unify_different_primitive_fails() {
     Arena arena;
     TypeIntern types(arena);
     DiagnosticEngine diags(arena);
     Unifier unifier(types, diags, arena);
 
+    auto i32 = types.internInt(IntWidth::I32);
+    auto i64 = types.internInt(IntWidth::I64);
+    CHECK(!unifier.unify(i32, i64), "unify I32 != I64");
+}
+
+static void test_unify_var() {
+    Arena arena;
+    TypeIntern types(arena);
+    DiagnosticEngine diags(arena);
+    Unifier unifier(types, diags, arena);
+
+    auto i32 = types.internInt(IntWidth::I32);
     auto var = unifier.freshVar();
-    CHECK_EQ(var, kErrorType, "freshVar returns kErrorType (stub)");
+    CHECK(unifier.unify(var, i32), "unify var with i32");
+    CHECK_EQ(unifier.substitute(var), i32, "var resolved to i32");
+}
+
+static void test_unify_var_transitive() {
+    Arena arena;
+    TypeIntern types(arena);
+    DiagnosticEngine diags(arena);
+    Unifier unifier(types, diags, arena);
+
+    auto i32 = types.internInt(IntWidth::I32);
+    auto a   = unifier.freshVar();
+    auto b   = unifier.freshVar();
+
+    CHECK(unifier.unify(a, b), "unify a = b");
+    CHECK(unifier.unify(b, i32), "unify b = i32");
+    CHECK_EQ(unifier.substitute(a), i32, "a resolved through b to i32");
+}
+
+static void test_unify_occurs_check() {
+    Arena arena;
+    TypeIntern types(arena);
+    DiagnosticEngine diags(arena);
+    Unifier unifier(types, diags, arena);
+
+    auto a = unifier.freshVar();
+    auto p = types.internPtr(a);
+
+    CHECK(!unifier.unify(a, p), "unify a = ptr(a) fails (cyclic)");
+}
+
+static void test_unify_occurs_check_transitive() {
+    Arena arena;
+    TypeIntern types(arena);
+    DiagnosticEngine diags(arena);
+    Unifier unifier(types, diags, arena);
+
+    auto a = unifier.freshVar();
+    auto b = unifier.freshVar();
+    auto p = types.internPtr(b);
+
+    CHECK(unifier.unify(a, p), "unify a = ptr(b) succeeds (a != b)");
+    CHECK(!unifier.unify(b, a), "unify b = a fails (would make ptr(a) cyclic via a = ptr(b))");
+}
+
+static void test_unify_occurs_transitive_deep() {
+    Arena arena;
+    TypeIntern types(arena);
+    DiagnosticEngine diags(arena);
+    Unifier unifier(types, diags, arena);
+
+    auto a = unifier.freshVar();
+    auto b = unifier.freshVar();
+    auto c = unifier.freshVar();
+    auto p = types.internPtr(c);
+
+    // a = ptr(c),  b = ptr(a) → b = ptr(ptr(c))
+    CHECK(unifier.unify(a, p), "a = ptr(c)");
+    auto q = types.internPtr(a);
+    CHECK(unifier.unify(b, q), "b = ptr(a) = ptr(ptr(c))");
+    CHECK(!unifier.unify(c, b), "c = b fails (cyclic: c in b = ptr(ptr(c)))");
+}
+
+static void test_unify_fn() {
+    Arena arena;
+    TypeIntern types(arena);
+    DiagnosticEngine diags(arena);
+    Unifier unifier(types, diags, arena);
+
+    auto i32 = types.internInt(IntWidth::I32);
+    auto i64 = types.internInt(IntWidth::I64);
+
+    TypeId p1[] = {i32, i32};
+    TypeId p2[] = {i32, i32};
+    auto fn_a = types.internFn(p1, i32);
+    auto fn_b = types.internFn(p2, i32);
+    CHECK(unifier.unify(fn_a, fn_b), "unify identical fn types");
+
+    TypeId p3[] = {i32, i64};
+    auto fn_c = types.internFn(p3, i32);
+    CHECK(!unifier.unify(fn_a, fn_c), "unify fn with different param types fails");
+}
+
+static void test_fresh_var_unique() {
+    Arena arena;
+    TypeIntern types(arena);
+    DiagnosticEngine diags(arena);
+    Unifier unifier(types, diags, arena);
+
+    auto a = unifier.freshVar();
+    auto b = unifier.freshVar();
+    CHECK(a != b, "each freshVar returns unique id");
+    CHECK(a != kErrorType, "freshVar != kErrorType");
+}
+
+static void test_assignable_same() {
+    Arena arena;
+    TypeIntern types(arena);
+    DiagnosticEngine diags(arena);
+    Unifier unifier(types, diags, arena);
+
+    auto i32 = types.internInt(IntWidth::I32);
+    CHECK(unifier.isAssignable(i32, i32), "i32 ≤ i32");
+}
+
+static void test_assignable_never() {
+    Arena arena;
+    TypeIntern types(arena);
+    DiagnosticEngine diags(arena);
+    Unifier unifier(types, diags, arena);
+
+    auto i32 = types.internInt(IntWidth::I32);
+    CHECK(unifier.isAssignable(i32, kNeverType), "Never ≤ i32 (bottom type)");
+}
+
+static void test_coercible_int_widening() {
+    Arena arena;
+    TypeIntern types(arena);
+    DiagnosticEngine diags(arena);
+    Unifier unifier(types, diags, arena);
+
+    auto i8  = types.internInt(IntWidth::I8);
+    auto i32 = types.internInt(IntWidth::I32);
+    CHECK(unifier.isCoercible(i32, i8), "i8 coerces to i32");
+    CHECK(!unifier.isCoercible(i8, i32), "i32 does NOT coerce to i8");
+}
+
+static void test_coercible_float_widening() {
+    Arena arena;
+    TypeIntern types(arena);
+    DiagnosticEngine diags(arena);
+    Unifier unifier(types, diags, arena);
+
+    auto f32 = types.internFloat(FloatWidth::F32);
+    auto f64 = types.internFloat(FloatWidth::F64);
+    CHECK(unifier.isCoercible(f64, f32), "f32 coerces to f64");
+    CHECK(!unifier.isCoercible(f32, f64), "f64 does NOT coerce to f32");
+}
+
+static void test_unify_optional() {
+    Arena arena;
+    TypeIntern types(arena);
+    DiagnosticEngine diags(arena);
+    Unifier unifier(types, diags, arena);
+
+    auto i32 = types.internInt(IntWidth::I32);
+    auto a   = types.internOptional(i32);
+    auto b   = types.internOptional(i32);
+    CHECK(unifier.unify(a, b), "unify identical optional types");
+}
+
+static void test_unify_failable() {
+    Arena arena;
+    TypeIntern types(arena);
+    DiagnosticEngine diags(arena);
+    Unifier unifier(types, diags, arena);
+
+    auto i32 = types.internInt(IntWidth::I32);
+    auto a   = types.internFailable(i32);
+    auto b   = types.internFailable(i32);
+    CHECK(unifier.unify(a, b), "unify identical failable types");
 }
 
 int main() {
     std::printf("sema-basics tests\n");
     std::printf("====================\n\n");
 
+    // SymbolTable
     test_symtab_declare();
     test_symtab_lookup_finds_declared();
-    test_symtab_not_found();
+    test_symtab_lookup_not_found();
     test_symtab_scopes();
-    test_type_intern_returns_constant_ids();
-    test_type_kind_of_returns_error();
-    test_type_intern_ptr_returns_error();
-    test_unifier_returns_false();
-    test_fresh_var_returns_error_type();
+    test_symtab_scope_hides_outer();
+
+    // TypeIntern
+    test_type_intern_predefined_ids();
+    test_type_intern_int();
+    test_type_intern_float();
+    test_type_intern_ptr();
+    test_type_intern_array();
+    test_type_intern_slice();
+    test_type_intern_fn();
+    test_type_intern_struct();
+    test_type_intern_optional();
+    test_type_intern_failable();
+    test_type_intern_type_var();
+    test_kind_of_invalid();
+
+    // Unifier
+    test_unify_trivial();
+    test_unify_different_primitive_fails();
+    test_unify_var();
+    test_unify_var_transitive();
+    test_unify_occurs_check();
+    test_unify_occurs_check_transitive();
+    test_unify_occurs_transitive_deep();
+    test_unify_fn();
+    test_unify_optional();
+    test_unify_failable();
+    test_fresh_var_unique();
+
+    // Assignability / Coercibility
+    test_assignable_same();
+    test_assignable_never();
+    test_coercible_int_widening();
+    test_coercible_float_widening();
 
     std::printf("\nResults: %d passed, %d failed\n", g_test_passed, g_test_failed);
     return g_test_failed > 0 ? 1 : 0;

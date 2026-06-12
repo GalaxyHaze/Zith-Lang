@@ -1,9 +1,8 @@
 #pragma once
 
 #include "diagnostics/diagnostic-engine.hpp"
+#include "memory/dyn-array.hpp"
 #include "types/type-intern.hpp"
-
-#include <vector>
 
 namespace zith::types {
 
@@ -16,10 +15,13 @@ public:
     Unifier(TypeIntern &intern, diagnostics::DiagnosticEngine &diags, memory::Arena &arena);
 
     TypeId freshVar();
+
     bool unify(TypeId a, TypeId b);
     TypeId substitute(TypeId t) const;
-
     bool occurs(TypeId var, TypeId t) const;
+
+    bool isAssignable(TypeId dst, TypeId src) const;
+    bool isCoercible(TypeId dst, TypeId src) const;
 };
 
 } // namespace zith::types

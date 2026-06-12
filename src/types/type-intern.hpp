@@ -17,10 +17,15 @@ public:
     TypeId internFloat(FloatWidth w);
     TypeId internPtr(TypeId pointee);
     TypeId internArray(TypeId elem, uint32_t count);
-    TypeId internFn(memory::DynArray<TypeId> params, TypeId ret);
+    TypeId internFn(std::span<const TypeId> params, TypeId ret);
+    TypeId internStruct(TypeId def_id);
+    TypeId internOptional(TypeId inner);
+    TypeId internFailable(TypeId inner);
+    TypeId internTypeVar();
 
     const TypeData &lookup(TypeId id) const;
     TypeKind kindOf(TypeId id) const;
+    size_t count() const noexcept;
 };
 
 } // namespace zith::types

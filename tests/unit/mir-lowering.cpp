@@ -2,6 +2,8 @@
 #include "diagnostics/diagnostic-engine.hpp"
 #include "memory/arena.hpp"
 #include "types/type-id.hpp"
+#include "types/type-intern.hpp"
+#include "types/type-kind.hpp"
 #include "zir/hir/hir-expr.hpp"
 #include "zir/hir/hir-module.hpp"
 #include "zir/hir/hir-types.hpp"
@@ -15,9 +17,21 @@ using namespace zith::zir::hir;
 using namespace zith::zir::mir;
 using zith::diagnostics::DiagnosticEngine;
 using zith::memory::Arena;
+using zith::types::TypeIntern;
+using zith::types::IntWidth;
+
+static Arena global_arena;
+static TypeIntern *g_types = nullptr;
+
+static TypeIntern &testTypes() {
+    if (!g_types)
+        g_types = new TypeIntern(global_arena);
+    return *g_types;
+}
 
 static HirLiteral lit_int(int64_t v) {
-    return HirLiteral{zith::types::kIntType, v};
+    auto i32 = testTypes().internInt(IntWidth::I32);
+    return HirLiteral{i32, v};
 }
 
 static void test_hir_add_expr() {
@@ -59,10 +73,12 @@ static void test_hir_add_fn_and_retrieve() {
     Arena arena;
     HirModule hir(arena);
 
+    auto i32 = testTypes().internInt(IntWidth::I32);
+
     auto &fn        = hir.addFn("main");
-    fn.return_type  = zith::types::kIntType;
+    fn.return_type  = i32;
     auto &retrieved = hir.getFn(0);
-    CHECK_EQ(retrieved.return_type, zith::types::kIntType, "fn return type is kIntType");
+    CHECK_EQ(retrieved.return_type, i32, "fn return type is i32");
 }
 
 static void test_mir_module_create() {
