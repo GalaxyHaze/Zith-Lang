@@ -266,7 +266,7 @@ GEAR / SETTINGS
     padding: 0 10px;
 }
 .gear img{
-    height: 24px;
+    height: 32px;
     filter: drop-shadow(0 0px 4px rgba(0,0,0,0.6));
     transition: transform 0.2s;
 }
@@ -290,7 +290,6 @@ GEAR / SETTINGS
     padding: 8px;
     background: #555;
     color: #FAF3E1;
-    border: 2px solid #000;
     cursor: pointer;
     font-family: inherit;
     font-size: 14px;
@@ -318,7 +317,6 @@ FAKE WINDOW
 
     position: absolute;
 
-    border: 2px solid #000;
     background-color: #444;
 
     box-shadow: 6px 6px 10px #000;

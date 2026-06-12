@@ -238,7 +238,6 @@ GEAR / SETTINGS
     width: 40px;
     height: 40px;
     background: #222;
-    border: 2px solid #555;
     border-radius: 6px;
 }
 .gear img {
@@ -257,7 +256,7 @@ GEAR / SETTINGS
     margin-bottom: 0;
 }
 .settings-group h2 {
-    color: #E87F24;
+    color: var(--color-orange);
 }
 .settings-options {
     display: flex;
@@ -267,22 +266,22 @@ GEAR / SETTINGS
 .settings-options button {
     flex: 1;
     padding: 8px;
-    background: #555;
-    color: #FAF3E1;
+    background: var(--color-bg);
+    color: var(--color-txt);
     border: 2px solid #000;
     cursor: pointer;
     font-family: inherit;
     font-size: 14px;
 }
 .settings-options button:hover {
-    background: #666;
+    background: var(--color-hover);
 }
 .settings-options button.active {
-    background: #E87F24;
-    color: #000;
+    background: var(--color-orange);
+    color: var(--color-bg);
 }
 .settings-status {
-    color: #aaa;
+    color: var(--color-txt);
     font-size: 12px;
     margin-top: 8px;
 }
@@ -622,5 +621,13 @@ MOBILE
 
     .logo {
         font-size: 14px;
+    }
+
+    .gear {
+        width: 75px;
+        height: 75px;
+    }
+    .gear img {
+        height: 50px;
     }
 }
