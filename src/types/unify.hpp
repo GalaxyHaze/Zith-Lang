@@ -16,7 +16,7 @@ public:
 
     TypeId freshVar();
 
-    bool unify(TypeId a, TypeId b);
+    bool unify(TypeId a, TypeId b, memory::Span span = {});
     TypeId substitute(TypeId t) const;
     bool occurs(TypeId var, TypeId t) const;
 

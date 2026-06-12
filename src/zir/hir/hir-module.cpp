@@ -26,4 +26,8 @@ const HirFunction &HirModule::getFn(size_t idx) const {
     return fns_[idx];
 }
 
+size_t HirModule::getFnCount() const {
+    return fns_.size();
+}
+
 } // namespace zith::zir::hir

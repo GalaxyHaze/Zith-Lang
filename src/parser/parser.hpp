@@ -29,6 +29,7 @@ struct Parser {
     bool consume(char c);
 
     ast::ExprId parsePrimary();
+    ast::ExprId parsePrefix();
     ast::ExprId parseExpr(int min_prec);
     ast::ExprId parseExpr();
     ast::ExprId parseBlock();

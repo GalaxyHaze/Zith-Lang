@@ -59,6 +59,9 @@ std::optional<ErrorInfo> lookupError(ErrCode code) noexcept {
     case err::InvalidCast:
         return ErrorInfo{code, 'E', "types", "Invalid cast",
                          "The source and target types are not compatible for casting"};
+    case err::CyclicType:
+        return ErrorInfo{code, 'E', "types", "Cyclic type",
+                         "A type cannot contain itself \u2014 check the type definition"};
 
     // Ownership
     case err::UseAfterMove:

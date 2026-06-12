@@ -6,7 +6,6 @@
 #include "memory/arena.hpp"
 #include "memory/dyn-array.hpp"
 #include "memory/span.hpp"
-#include "memory/string-interner.hpp"
 
 #include <cstdio>
 #include <string_view>
@@ -17,11 +16,13 @@ enum class SymKind : uint8_t {
     Fn,
     Struct,
     Trait,
+    Interface,
     Enum,
     Alias,
     Variable,
     Module,
     Component,
+    Union,
 };
 
 struct SymbolData {

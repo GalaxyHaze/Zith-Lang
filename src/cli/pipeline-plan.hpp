@@ -7,8 +7,10 @@ namespace zith::cli {
 enum class Stage : uint8_t {
     Source,
     Lexed,
+    Scanned,
+    Expanded,
+    Imported,
     Parsed,
-    Resolved,
     TypeChecked,
     HirLowered,
     MirLowered,

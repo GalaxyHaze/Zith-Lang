@@ -22,7 +22,7 @@ fn sub_vals(val_d, val_e) {
 }
 
 fn mul_vals(val_f, val_g) {
-  return val_f * val_g
+  return val_f * val_o
 }
 
 fn div_vals(val_h, val_i) {

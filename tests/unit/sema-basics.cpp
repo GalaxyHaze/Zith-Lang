@@ -95,8 +95,12 @@ static void test_type_intern_int() {
     CHECK_EQ(types.kindOf(i32), TypeKind::Int, "kindOf is Int");
 
     auto i32_b = types.internInt(IntWidth::I32);
-    CHECK(i32_b != i32, "no dedup — each call creates new entry");
-    CHECK_EQ(types.count(), size_t(7), "2 new int types added");
+    CHECK_EQ(i32_b, i32, "dedup — same Int(I32) returns existing id");
+    CHECK_EQ(types.count(), size_t(6), "only 1 new int type added (dedup)");
+
+    auto i64 = types.internInt(IntWidth::I64);
+    CHECK(i64 != i32, "different width creates new id");
+    CHECK_EQ(types.count(), size_t(7), "2 int types total after dedup");
 }
 
 static void test_type_intern_float() {
@@ -164,13 +168,70 @@ static void test_type_intern_fn() {
     CHECK_EQ(data.params[1], i32, "param[1] is i32");
 }
 
-static void test_type_intern_struct() {
+static void test_type_define_struct_empty() {
     Arena arena;
     TypeIntern types(arena);
 
-    auto s = types.internStruct(42);
+    auto s = types.defineStruct("Point");
     CHECK_EQ(types.kindOf(s), TypeKind::Struct, "kindOf is Struct");
-    CHECK_EQ(std::get<TypeStruct>(types.lookup(s)).def_id, TypeId(42), "def_id is 42");
+    CHECK_EQ(types.getStructDef(s).name, "Point", "struct name is Point");
+    CHECK_EQ(types.fieldCount(s), size_t(0), "no fields yet");
+}
+
+static void test_type_struct_add_field() {
+    Arena arena;
+    TypeIntern types(arena);
+
+    auto i32 = types.internInt(IntWidth::I32);
+    auto f64 = types.internFloat(FloatWidth::F64);
+
+    auto s = types.defineStruct("Point");
+    types.addField(s, "x", i32);
+    types.addField(s, "y", i32);
+    types.addField(s, "z", f64);
+
+    CHECK_EQ(types.fieldCount(s), size_t(3), "3 fields");
+    CHECK(types.hasField(s, "x"), "has field 'x'");
+    CHECK(types.hasField(s, "z"), "has field 'z'");
+    CHECK(!types.hasField(s, "w"), "no field 'w'");
+    CHECK_EQ(types.fieldType(s, "x"), i32, "field 'x' type is i32");
+    CHECK_EQ(types.fieldType(s, "z"), f64, "field 'z' type is f64");
+    CHECK_EQ(types.fieldType(s, "w"), kErrorType, "missing field returns kErrorType");
+}
+
+static void test_type_struct_field_by_index() {
+    Arena arena;
+    TypeIntern types(arena);
+
+    auto i32 = types.internInt(IntWidth::I32);
+    auto s   = types.defineStruct("Pair");
+
+    types.addField(s, "first", i32);
+    types.addField(s, "second", i32);
+
+    CHECK_EQ(types.getField(s, 0).name, "first", "field 0 name");
+    CHECK_EQ(types.getField(s, 0).type, i32, "field 0 type");
+    CHECK_EQ(types.getField(s, 1).name, "second", "field 1 name");
+}
+
+static void test_type_struct_fields_span_across_defs() {
+    Arena arena;
+    TypeIntern types(arena);
+
+    auto i32 = types.internInt(IntWidth::I32);
+    auto f64 = types.internFloat(FloatWidth::F64);
+
+    auto p = types.defineStruct("Point");
+    types.addField(p, "x", i32);
+
+    auto r = types.defineStruct("Rect");
+    types.addField(r, "tl", p);
+    types.addField(r, "br", p);
+
+    CHECK_EQ(types.fieldCount(p), size_t(1), "Point has 1 field");
+    CHECK_EQ(types.fieldCount(r), size_t(2), "Rect has 2 fields");
+    CHECK_EQ(types.getStructDef(p).name, "Point", "Point name intact");
+    CHECK_EQ(types.getStructDef(r).name, "Rect", "Rect name intact");
 }
 
 static void test_type_intern_optional() {
@@ -423,7 +484,10 @@ int main() {
     test_type_intern_array();
     test_type_intern_slice();
     test_type_intern_fn();
-    test_type_intern_struct();
+    test_type_define_struct_empty();
+    test_type_struct_add_field();
+    test_type_struct_field_by_index();
+    test_type_struct_fields_span_across_defs();
     test_type_intern_optional();
     test_type_intern_failable();
     test_type_intern_type_var();

@@ -31,6 +31,8 @@ class HirModule {
 
 public:
     explicit HirModule(memory::Arena &arena);
+    HirModule(HirModule &&) = default;
+    HirModule &operator=(HirModule &&) = default;
 
     HirExprId addExpr(HirExpr expr);
     HirFunction &addFn(std::string_view name);
@@ -38,6 +40,7 @@ public:
 
     const HirExpr &getExpr(HirExprId id) const;
     const HirFunction &getFn(size_t idx) const;
+    size_t getFnCount() const;
 };
 
 } // namespace zith::zir::hir

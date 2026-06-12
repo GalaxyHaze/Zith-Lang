@@ -20,9 +20,11 @@ struct ScanResult {
     memory::DynArray<ScanEntry> unions;
     memory::DynArray<ScanEntry> enums;
     memory::DynArray<ScanEntry> components;
+    memory::DynArray<ScanEntry> traits;
 
     explicit ScanResult(memory::Arena &arena)
-        : fns(arena), structs(arena), unions(arena), enums(arena), components(arena) {}
+        : fns(arena), structs(arena), unions(arena), enums(arena), components(arena),
+          traits(arena) {}
 };
 
 } // namespace zith::parser

@@ -27,7 +27,48 @@ TypeKind kindFromIndex(size_t idx) {
 
 } // anonymous namespace
 
-TypeIntern::TypeIntern(memory::Arena &arena) : types_(arena) {
+namespace {
+
+bool typeDataEqual(const TypeData &a, const TypeData &b) {
+    if (a.index() != b.index()) return false;
+    switch (static_cast<TypeKind>(a.index())) {
+    case TypeKind::Int:
+        return std::get<TypeInt>(a).width == std::get<TypeInt>(b).width;
+    case TypeKind::Float:
+        return std::get<TypeFloat>(a).width == std::get<TypeFloat>(b).width;
+    case TypeKind::Ptr:
+        return std::get<TypePtr>(a).pointee == std::get<TypePtr>(b).pointee;
+    case TypeKind::Array: {
+        auto &aa = std::get<TypeArray>(a);
+        auto &bb = std::get<TypeArray>(b);
+        return aa.elem == bb.elem && aa.count == bb.count;
+    }
+    case TypeKind::Struct:
+        return std::get<TypeStruct>(a).def_id == std::get<TypeStruct>(b).def_id;
+    case TypeKind::Fn: {
+        auto &fa = std::get<TypeFn>(a);
+        auto &fb = std::get<TypeFn>(b);
+        if (fa.params.size() != fb.params.size()) return false;
+        if (fa.ret != fb.ret) return false;
+        for (size_t i = 0; i < fa.params.size(); i++)
+            if (fa.params[i] != fb.params[i]) return false;
+        return true;
+    }
+    case TypeKind::TypeVar:
+        return std::get<TypeTypeVar>(a).id == std::get<TypeTypeVar>(b).id;
+    case TypeKind::Optional:
+        return std::get<TypeOptional>(a).inner == std::get<TypeOptional>(b).inner;
+    case TypeKind::Failable:
+        return std::get<TypeFailable>(a).inner == std::get<TypeFailable>(b).inner;
+    default:
+        return true; // Error, Never, Void, Bool, Char, Opaque — no fields
+    }
+}
+
+} // anonymous namespace
+
+TypeIntern::TypeIntern(memory::Arena &arena)
+    : arena_(arena), types_(arena), struct_defs_(arena) {
     types_.push(TypeError{});
     types_.push(TypeNever{});
     types_.push(TypeVoid{});
@@ -36,6 +77,13 @@ TypeIntern::TypeIntern(memory::Arena &arena) : types_(arena) {
 }
 
 TypeId TypeIntern::intern(TypeData data) {
+    // Skip dedup for type variables — each call creates a fresh variable
+    if (!std::holds_alternative<TypeTypeVar>(data)) {
+        for (TypeId i = kFirstCustom; i < static_cast<TypeId>(types_.size()); i++) {
+            if (typeDataEqual(types_[i], data))
+                return i;
+        }
+    }
     TypeId id = static_cast<TypeId>(types_.size());
     types_.push(std::move(data));
     return id;
@@ -61,10 +109,6 @@ TypeId TypeIntern::internFn(std::span<const TypeId> params, TypeId ret) {
     return intern(TypeFn{params, ret});
 }
 
-TypeId TypeIntern::internStruct(TypeId def_id) {
-    return intern(TypeStruct{def_id});
-}
-
 TypeId TypeIntern::internOptional(TypeId inner) {
     return intern(TypeOptional{inner});
 }
@@ -76,6 +120,56 @@ TypeId TypeIntern::internFailable(TypeId inner) {
 TypeId TypeIntern::internTypeVar() {
     return intern(TypeTypeVar{static_cast<uint32_t>(types_.size())});
 }
+
+// ── Struct definition helpers ──────────────────────────────────────
+
+TypeId TypeIntern::defineStruct(std::string_view name) {
+    TypeId def_id = static_cast<TypeId>(struct_defs_.size());
+    struct_defs_.push(StructDef{name, memory::DynArray<StructField>(arena_)});
+    return intern(TypeStruct{def_id});
+}
+
+void TypeIntern::addField(TypeId struct_type, std::string_view field_name, TypeId field_type) {
+    auto &def = getStructDef(struct_type);
+    def.fields.push(StructField{field_name, field_type});
+}
+
+const StructDef &TypeIntern::getStructDef(TypeId struct_type) const {
+    auto &td = std::get<TypeStruct>(types_[struct_type]);
+    return struct_defs_[td.def_id];
+}
+
+StructDef &TypeIntern::getStructDef(TypeId struct_type) {
+    return const_cast<StructDef &>(const_cast<const TypeIntern *>(this)->getStructDef(struct_type));
+}
+
+size_t TypeIntern::fieldCount(TypeId struct_type) const {
+    return getStructDef(struct_type).fields.size();
+}
+
+const StructField &TypeIntern::getField(TypeId struct_type, size_t index) const {
+    return getStructDef(struct_type).fields[index];
+}
+
+bool TypeIntern::hasField(TypeId struct_type, std::string_view name) const {
+    auto &def = getStructDef(struct_type);
+    for (auto &f : def.fields) {
+        if (f.name == name)
+            return true;
+    }
+    return false;
+}
+
+TypeId TypeIntern::fieldType(TypeId struct_type, std::string_view name) const {
+    auto &def = getStructDef(struct_type);
+    for (auto &f : def.fields) {
+        if (f.name == name)
+            return f.type;
+    }
+    return kErrorType;
+}
+
+// ── Query ─────────────────────────────────────────────────────────
 
 const TypeData &TypeIntern::lookup(TypeId id) const {
     return types_[id];

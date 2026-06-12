@@ -34,6 +34,7 @@ inline constexpr ErrCode UnusedDecl     = 2004;
 inline constexpr ErrCode TypeMismatch = 3001;
 inline constexpr ErrCode CannotInfer  = 3002;
 inline constexpr ErrCode InvalidCast  = 3003;
+inline constexpr ErrCode CyclicType   = 3004;
 
 // NRA / Ownership (4001-4999)
 inline constexpr ErrCode UseAfterMove   = 4001;

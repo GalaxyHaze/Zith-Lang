@@ -50,6 +50,8 @@ static constexpr auto TokenTable = std::to_array<std::pair<std::string_view, Tok
     {"invalid", TokenKind::Type},
     {"unknown", TokenKind::Type},
     {"null", TokenKind::LitVal},
+    {"true", TokenKind::LitVal},
+    {"false", TokenKind::LitVal},
 
     {"type", TokenKind::Typedef},
     {"struct", TokenKind::Struct},
@@ -106,6 +108,7 @@ static constexpr auto TokenTable = std::to_array<std::pair<std::string_view, Tok
     {"return", TokenKind::Control},
     {"break", TokenKind::Control},
     {"continue", TokenKind::Control},
+    {"while", TokenKind::Control},
     {"jump", TokenKind::Control},
     {"marker", TokenKind::Label},
     {"scene", TokenKind::Scene},
