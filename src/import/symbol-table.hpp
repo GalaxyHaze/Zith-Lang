@@ -33,12 +33,14 @@ struct SymbolData {
     SymKind kind                = SymKind::Variable;
     ast::DeclId decl_id         = ast::kInvalidDecl;
     memory::Span span{};
+    SymId target = kInvalidSym;
     memory::DynArray<SymId> members;
 
     SymbolData(std::string_view name, ScopeId scope, SymbolVisibility vis, int32_t depth,
-               SymKind ikind, ast::DeclId did, memory::Span ispan, memory::Arena &arena)
+               SymKind ikind, ast::DeclId did, memory::Span ispan, SymId itarget,
+               memory::Arena &arena)
         : name(name), scope(scope), visibility(vis), mod_depth(depth), kind(ikind), decl_id(did),
-          span(ispan), members(arena) {}
+          span(ispan), target(itarget), members(arena) {}
 };
 
 struct Scope {
@@ -61,7 +63,12 @@ public:
 
     SymId declare(std::string_view name, SymbolVisibility vis = SymbolVisibility::Private,
                   int32_t depth = 0, SymKind kind = SymKind::Variable,
-                  ast::DeclId decl_id = ast::kInvalidDecl, memory::Span span = {});
+                  ast::DeclId decl_id = ast::kInvalidDecl, memory::Span span = {},
+                  SymId target = kInvalidSym);
+    SymId declareInScope(ScopeId scope, std::string_view name,
+                         SymbolVisibility vis = SymbolVisibility::Private, int32_t depth = 0,
+                         SymKind kind = SymKind::Variable, ast::DeclId decl_id = ast::kInvalidDecl,
+                         memory::Span span = {}, SymId target = kInvalidSym);
     SymId lookup(std::string_view name) const;
     SymId lookupInScope(std::string_view name, ScopeId scope) const;
 

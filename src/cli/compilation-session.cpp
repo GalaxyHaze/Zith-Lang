@@ -41,7 +41,8 @@ static bool shouldUseColor(const std::string &setting) {
 CompilationSession::CompilationSession(const Options &opts, std::string file_path)
     : opts_(opts), file_path_(std::move(file_path)), project_root_(), ast_arena_(), sym_arena_(),
       type_arena_(), hir_arena_(), mir_arena_(), scratch_arena_(), diags_(scratch_arena_),
-      ast_builder_(ast_arena_), syms_(sym_arena_), types_(type_arena_), hir_module_(hir_arena_),
+      ast_builder_(ast_arena_), import_mgr_(sym_arena_, source_map_, diags_), syms_(sym_arena_),
+      resolved_syms_(sym_arena_), types_(type_arena_), hir_module_(hir_arena_),
       mir_module_(mir_arena_) {
     namespace fs = std::filesystem;
     if (fs::is_directory(file_path_))
@@ -90,21 +91,28 @@ bool CompilationSession::runTo(Stage target) {
         return false;
     plan_.advance();
 
-    // Stage 4: Type checking + body expansion + HIR lowering
+    // Stage 4: Name resolution
+    if (plan_.shouldStop())
+        return !diags_.hasErrors();
+    if (!resolveStage())
+        return false;
+    plan_.advance();
+
+    // Stage 5: Type checking + body expansion + HIR lowering
     if (plan_.shouldStop())
         return !diags_.hasErrors();
     if (!semaStage())
         return false;
     plan_.advance();
 
-    // Stage 5: MIR lowering
+    // Stage 6: MIR lowering
     if (plan_.shouldStop())
         return !diags_.hasErrors();
     if (!mirStage())
         return false;
     plan_.advance();
 
-    // Stage 6: ZIR interpretation
+    // Stage 7: ZIR interpretation
     if (plan_.shouldStop())
         return !diags_.hasErrors();
     if (!zirStage())
@@ -241,15 +249,15 @@ bool CompilationSession::importStage() {
         visible_roots.push_back(p.string());
     }
 
-    import::ImportManager import_mgr{sym_arena_, source_map_, diags_, std::move(visible_roots)};
+    import_mgr_.setVisibleRoots(std::move(visible_roots));
 
     auto source_dir = fs::path(file_path_).parent_path().string();
 
     for (auto decl_id : program_.decls) {
         auto &decl = ast_builder_.getDecl(decl_id);
         if (auto *import = std::get_if<ast::ImportNode>(&decl)) {
-            auto res = import_mgr.resolve(import->path, import->is_from, import->is_export,
-                                          import->alias, import->import_depth, source_dir);
+            auto res = import_mgr_.resolve(import->path, import->is_from, import->is_export,
+                                           import->alias, import->import_depth, source_dir);
             if (!res) {
                 diags_.report(diagnostics::Severity::Error, diagnostics::err::ImportError,
                               std::string(res.error().msg), {});
@@ -258,7 +266,7 @@ bool CompilationSession::importStage() {
         }
     }
 
-    import_mgr.mergeInto(syms_);
+    import_mgr_.mergeInto(syms_);
 
     if (opts_.verbose) {
         auto dt = std::chrono::duration<double, std::milli>(
@@ -268,6 +276,22 @@ bool CompilationSession::importStage() {
     }
 
     return true;
+}
+
+bool CompilationSession::resolveStage() {
+    auto t0 = std::chrono::steady_clock::now();
+
+    import::Resolver resolver(syms_, import_mgr_, ast_builder_, diags_);
+    resolver.resolveProgram(program_);
+    resolved_syms_ = resolver.takeResolvedTable();
+
+    if (opts_.verbose) {
+        auto dt = std::chrono::duration<double, std::milli>(
+            std::chrono::steady_clock::now() - t0).count();
+        writeOutput("  [resolve] %5.1fms\n", dt);
+    }
+
+    return !diags_.hasErrors();
 }
 
 bool CompilationSession::scanStage() {
@@ -312,7 +336,7 @@ bool CompilationSession::semaStage() {
         std::printf("---\n");
     }
 
-    sema::SemaPipeline pipeline(syms_, types_, diags_, ast_builder_, hir_arena_);
+    sema::SemaPipeline pipeline(syms_, types_, diags_, ast_builder_, hir_arena_, &resolved_syms_);
     if (!pipeline.run(program_)) {
         diags_.emit();
         return false;

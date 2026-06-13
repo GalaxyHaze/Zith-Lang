@@ -48,6 +48,12 @@ std::optional<ErrorInfo> lookupError(ErrCode code) noexcept {
     case err::UnusedDecl:
         return ErrorInfo{code, 'E', "semantic", "Unused declaration",
                          "Remove the unused binding or prefix with _"};
+    case err::NotNamespace:
+        return ErrorInfo{code, 'E', "semantic", "Not a namespace",
+                         "Use dot notation only on modules, structs, enums, traits, interfaces, or unions"};
+    case err::NoMember:
+        return ErrorInfo{code, 'E', "semantic", "No such member",
+                         "Check the spelling or visibility of the member in the parent"};
 
     // Types
     case err::TypeMismatch:

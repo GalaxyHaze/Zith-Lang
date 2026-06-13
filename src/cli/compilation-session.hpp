@@ -54,7 +54,9 @@ class CompilationSession {
     diagnostics::DiagnosticEngine diags_;
 
     ast::AstBuilder ast_builder_;
+    import::ImportManager import_mgr_;
     import::SymbolTable syms_;
+    memory::DynArray<import::SymId> resolved_syms_;
     types::TypeIntern types_;
     zir::hir::HirModule hir_module_;
     zir::mir::MirModule mir_module_;
@@ -111,6 +113,7 @@ private:
     bool lexStage();
     bool scanStage();
     bool importStage();
+    bool resolveStage();
     bool semaStage();
     bool mirStage();
     bool zirStage();

@@ -104,6 +104,7 @@ add_zith_test(zithc-import-test    tests/unit/import-basics.cpp)
 add_zith_test(zithc-import-e2e     tests/unit/import-e2e.cpp)
 add_zith_test(zithc-heuristic-engine tests/unit/heuristic-engine.cpp)
 add_zith_test(zithc-ast-printer      tests/unit/ast-printer.cpp)
+add_zith_test(zithc-resolver-test    tests/unit/resolver-test.cpp)
 add_zith_test(zithc-arena-test       tests/unit/arena-test.cpp)
 add_zith_test(zithc-source-map-test tests/unit/source-map-test.cpp)
 

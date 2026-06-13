@@ -5,6 +5,7 @@
 #include "import/symbol-table.hpp"
 #include "memory/arena.hpp"
 #include "memory/dyn-array.hpp"
+#include "memory/optional.hpp"
 #include "memory/result.hpp"
 #include "memory/source-map.hpp"
 
@@ -34,6 +35,11 @@ public:
         memory::DynArray<size_t> re_exported_files;
     };
 
+    struct SymOrigin {
+        size_t file_idx;
+        SymId local_sym;
+    };
+
     ImportManager(memory::Arena &arena, memory::SourceMap &source_map,
                   diagnostics::DiagnosticEngine &diags,
                   std::vector<std::string> visible_roots = {});
@@ -46,6 +52,8 @@ public:
 
     const LoadedFile &get(size_t idx) const;
     bool isLoaded(std::string_view path) const;
+    memory::Optional<SymOrigin> originOf(SymId main_sym) const;
+    void setVisibleRoots(std::vector<std::string> roots);
 
 private:
     struct DirEntry {
@@ -69,6 +77,7 @@ private:
     std::unordered_map<std::string, size_t> index_by_path_;
     std::unordered_set<std::string> resolving_;
     memory::DynArray<LoadedFile> files_;
+    memory::DynArray<SymOrigin> sym_origins_;
 
     auto find_file(const std::string &import_key, std::string_view source_file) const
         -> memory::Optional<std::string>;

@@ -9,6 +9,7 @@ enum class Stage : uint8_t {
     Lexed,
     Scanned,
     Imported,
+    Resolved,
     TypeChecked,
     HirLowered,
     MirLowered,

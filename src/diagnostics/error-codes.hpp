@@ -29,6 +29,8 @@ inline constexpr ErrCode UndefinedIdent = 2001;
 inline constexpr ErrCode DuplicateDecl  = 2002;
 inline constexpr ErrCode WrongArity     = 2003;
 inline constexpr ErrCode UnusedDecl     = 2004;
+inline constexpr ErrCode NotNamespace   = 2005;
+inline constexpr ErrCode NoMember       = 2006;
 
 // Types (3001-3999)
 inline constexpr ErrCode TypeMismatch = 3001;

@@ -62,9 +62,10 @@ types::TypeId defaultTypeForLit(ast::LitKind kind, types::TypeIntern &types) {
 
 SemaPipeline::SemaPipeline(import::SymbolTable &syms, types::TypeIntern &types,
                            diagnostics::DiagnosticEngine &diags, ast::AstBuilder &builder,
-                           memory::Arena &hir_arena)
+                           memory::Arena &hir_arena,
+                           const memory::DynArray<import::SymId> *resolved)
     : ctx_(syms, types, diags, builder), unifier_(types, diags, hir_arena), hir_arena_(hir_arena),
-      hir_(hir_arena) {}
+      hir_(hir_arena), resolved_(resolved) {}
 
 bool SemaPipeline::run(const ast::ProgramNode &program) {
     // First pass: register all fn declarations as HIR function stubs
@@ -113,10 +114,10 @@ zir::hir::HirExprId SemaPipeline::visitExpr(ast::ExprId id) {
         return zir::hir::kInvalidHirExpr;
 
     auto &node = ctx_.builder().getExpr(id);
-    return std::visit([this](auto &n) -> zir::hir::HirExprId {
+    return std::visit([this, id](auto &n) -> zir::hir::HirExprId {
         using T = std::decay_t<decltype(n)>;
         if constexpr (std::is_same_v<T, ast::LitValue>)    return visitLiteral(n);
-        if constexpr (std::is_same_v<T, ast::IdentNode>)   return visitIdent(n);
+        if constexpr (std::is_same_v<T, ast::IdentNode>)   return visitIdent(n, id);
         if constexpr (std::is_same_v<T, ast::BinaryNode>)  return visitBinary(n);
         if constexpr (std::is_same_v<T, ast::UnaryNode>)   return visitUnary(n);
         if constexpr (std::is_same_v<T, ast::CallNode>)    return visitCall(n);
@@ -150,11 +151,16 @@ zir::hir::HirExprId SemaPipeline::visitLiteral(const ast::LitValue &n) {
     return hir_.addExpr(zir::hir::HirExpr{lit});
 }
 
-zir::hir::HirExprId SemaPipeline::visitIdent(const ast::IdentNode &n) {
-    auto sym = ctx_.syms().lookup(n.name);
+zir::hir::HirExprId SemaPipeline::visitIdent(const ast::IdentNode &n, ast::ExprId id) {
+    import::SymId sym = import::kInvalidSym;
+    if (resolved_ && id != ast::kInvalidExpr && id < resolved_->size())
+        sym = (*resolved_)[id];
+    if (sym == import::kInvalidSym)
+        sym = ctx_.syms().lookup(n.name);
     if (sym == import::kInvalidSym) {
-        ctx_.diags().report(Severity::Error, UndefinedIdent,
-                            std::string("undefined identifier '") + std::string(n.name) + "'", {});
+        if (!resolved_ || id >= resolved_->size() || (*resolved_)[id] != import::kInvalidSym)
+            ctx_.diags().report(Severity::Error, UndefinedIdent,
+                                std::string("undefined identifier '") + std::string(n.name) + "'", {});
         return zir::hir::kInvalidHirExpr;
     }
 

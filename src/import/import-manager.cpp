@@ -14,8 +14,8 @@ namespace fs = std::filesystem;
 ImportManager::ImportManager(memory::Arena &arena, memory::SourceMap &source_map,
                              diagnostics::DiagnosticEngine &diags,
                              std::vector<std::string> visible_roots)
-    : arena_(arena), source_map_(source_map), diags_(diags),
-      visible_roots_(std::move(visible_roots)), files_(arena) {}
+     : arena_(arena), source_map_(source_map), diags_(diags),
+      visible_roots_(std::move(visible_roots)), files_(arena), sym_origins_(arena) {}
 
 bool ImportManager::isLoaded(std::string_view path) const {
     auto key = std::string(path);
@@ -339,7 +339,18 @@ auto ImportManager::resolve(const memory::DynArray<std::string_view> &path, bool
 void ImportManager::mergeInto(SymbolTable &main_syms, int32_t from_depth) {
     int32_t call_depth = from_depth + 1;
 
-    for (auto &file : files_) {
+    auto record_origin = [&](SymId main_sid, size_t file_idx, SymId local_sid) {
+        if (main_sid >= sym_origins_.size()) {
+            if (main_sid >= sym_origins_.capacity())
+                sym_origins_.reserve(main_sid + 1);
+            while (sym_origins_.size() <= main_sid)
+                sym_origins_.push(SymOrigin{size_t(-1), kInvalidSym});
+        }
+        sym_origins_[main_sid] = SymOrigin{file_idx, local_sid};
+    };
+
+    for (size_t fi = 0; fi < files_.size(); ++fi) {
+        auto &file = files_[fi];
         auto prefix = file.ns + ".";
         auto ls     = last_segment(file.import_key);
 
@@ -350,20 +361,22 @@ void ImportManager::mergeInto(SymbolTable &main_syms, int32_t from_depth) {
                 return;
             auto vis             = is_module ? SymbolVisibility::Module : SymbolVisibility::Public;
             auto depth           = is_module ? data.mod_depth : 0;
-            auto declare_or_diag = [&](std::string_view name, SymbolVisibility v, int32_t d) {
-                if (main_syms.lookupInScope(name, kRootScope) != kInvalidSym)
+            auto declare_or_diag = [&](std::string_view name, SymbolVisibility v, int32_t d, SymId ls) {
+                if (main_syms.lookupInScope(name, kRootScope) != kInvalidSym) {
                     diags_.report(diagnostics::Severity::Error, diagnostics::err::DuplicateDecl,
                                   "duplicate symbol '" + std::string(name) + "'", {});
-                else
-                    main_syms.declare(name, v, d);
+                    return;
+                }
+                auto main_id = main_syms.declare(name, v, d);
+                record_origin(main_id, fi, ls);
             };
             if (file.is_from) {
-                declare_or_diag(arena_str(arena_, std::string(data.name)), vis, depth);
+                declare_or_diag(arena_str(arena_, std::string(data.name)), vis, depth, sid);
                 auto qualified = std::string(ls) + "." + std::string(data.name);
-                declare_or_diag(arena_str(arena_, qualified), vis, depth);
+                declare_or_diag(arena_str(arena_, qualified), vis, depth, sid);
             } else {
                 std::string qualified = prefix + std::string(data.name);
-                declare_or_diag(arena_str(arena_, qualified), vis, depth);
+                declare_or_diag(arena_str(arena_, qualified), vis, depth, sid);
             }
         };
 
@@ -374,52 +387,66 @@ void ImportManager::mergeInto(SymbolTable &main_syms, int32_t from_depth) {
 
         // ── Merge re-exported files ────────────────────────────────
         std::unordered_set<size_t> visited;
-        auto declare_or_diag = [&](std::string_view name, SymbolVisibility v, int32_t d) {
-            if (main_syms.lookupInScope(name, kRootScope) != kInvalidSym)
+        auto declare_re_export = [&](std::string_view name, SymbolVisibility v, int32_t d,
+                                     size_t ri, SymId ls) {
+            if (main_syms.lookupInScope(name, kRootScope) != kInvalidSym) {
                 diags_.report(diagnostics::Severity::Error, diagnostics::err::DuplicateDecl,
                               "duplicate symbol '" + std::string(name) + "'", {});
-            else
-                main_syms.declare(name, v, d);
-        };
-        auto process_re_exports = [&](auto &self, size_t file_idx) -> void {
-            if (!visited.insert(file_idx).second)
                 return;
-            auto &ref = files_[file_idx];
+            }
+            auto main_id = main_syms.declare(name, v, d);
+            record_origin(main_id, ri, ls);
+        };
+        auto process_re_exports = [&](auto &self, size_t re_idx) -> void {
+            if (!visited.insert(re_idx).second)
+                return;
+            auto &ref = files_[re_idx];
             for (auto sid : ref.public_syms) {
                 auto &data = ref.symbols.get(sid);
+                auto name = arena_str(arena_, std::string(data.name));
                 if (file.is_from) {
-                    declare_or_diag(arena_str(arena_, std::string(data.name)),
-                                    SymbolVisibility::Public, 0);
-                    auto qualified = std::string(ls) + "." + std::string(data.name);
-                    declare_or_diag(arena_str(arena_, qualified), SymbolVisibility::Public, 0);
+                    declare_re_export(name, SymbolVisibility::Public, 0, re_idx, sid);
+                    auto qualified = arena_str(arena_, std::string(ls) + "." + std::string(data.name));
+                    declare_re_export(qualified, SymbolVisibility::Public, 0, re_idx, sid);
                 } else {
-                    std::string qualified = prefix + std::string(data.name);
-                    declare_or_diag(arena_str(arena_, qualified), SymbolVisibility::Public, 0);
+                    auto qualified = arena_str(arena_, prefix + std::string(data.name));
+                    declare_re_export(qualified, SymbolVisibility::Public, 0, re_idx, sid);
                 }
             }
             for (auto sid : ref.module_syms) {
                 auto &data = ref.symbols.get(sid);
                 if (data.mod_depth >= 0 && call_depth != data.mod_depth)
                     continue;
+                auto name = arena_str(arena_, std::string(data.name));
                 if (file.is_from) {
-                    declare_or_diag(arena_str(arena_, std::string(data.name)),
-                                    SymbolVisibility::Module, data.mod_depth);
-                    auto qualified = std::string(ls) + "." + std::string(data.name);
-                    declare_or_diag(arena_str(arena_, qualified), SymbolVisibility::Module,
-                                    data.mod_depth);
+                    declare_re_export(name, SymbolVisibility::Module, data.mod_depth, re_idx, sid);
+                    auto qualified = arena_str(arena_, std::string(ls) + "." + std::string(data.name));
+                    declare_re_export(qualified, SymbolVisibility::Module, data.mod_depth, re_idx, sid);
                 } else {
-                    std::string qualified = prefix + std::string(data.name);
-                    declare_or_diag(arena_str(arena_, qualified), SymbolVisibility::Module,
-                                    data.mod_depth);
+                    auto qualified = arena_str(arena_, prefix + std::string(data.name));
+                    declare_re_export(qualified, SymbolVisibility::Module, data.mod_depth, re_idx, sid);
                 }
             }
-            for (auto re_idx : ref.re_exported_files)
-                self(self, re_idx);
+            for (auto r : ref.re_exported_files)
+                self(self, r);
         };
 
         for (auto re_idx : file.re_exported_files)
             process_re_exports(process_re_exports, re_idx);
     }
+}
+
+memory::Optional<ImportManager::SymOrigin> ImportManager::originOf(SymId main_sym) const {
+    if (main_sym >= sym_origins_.size())
+        return {};
+    auto &o = sym_origins_[main_sym];
+    if (o.file_idx == size_t(-1))
+        return {};
+    return o;
+}
+
+void ImportManager::setVisibleRoots(std::vector<std::string> roots) {
+    visible_roots_ = std::move(roots);
 }
 
 } // namespace zith::import
