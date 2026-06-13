@@ -74,6 +74,10 @@ ExprId AstBuilder::index(ExprId object, ExprId index) {
     return addExpr(IndexNode{object, index});
 }
 
+ExprId AstBuilder::range(ExprId lhs, ExprId rhs) {
+    return addExpr(RangeNode{lhs, rhs});
+}
+
 ExprId AstBuilder::block(memory::DynArray<StmtId> stmts, ExprId trailing) {
     return addExpr(BlockNode{std::move(stmts), trailing});
 }

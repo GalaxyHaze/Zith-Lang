@@ -69,6 +69,11 @@ struct IndexNode {
     ExprId index;
 };
 
+struct RangeNode {
+    ExprId lhs;
+    ExprId rhs;
+};
+
 struct BlockNode {
     memory::DynArray<StmtId> stmts;
     ExprId trailing = kInvalidExpr;
@@ -177,7 +182,7 @@ struct ProgramNode {
 };
 
 using ExprNode = std::variant<LitValue, IdentNode, BinaryNode, UnaryNode, CallNode, BlockNode,
-                              IfNode, WhileNode, FieldNode, IndexNode, UnbodyNode>;
+                              IfNode, WhileNode, FieldNode, IndexNode, RangeNode, UnbodyNode>;
 
 using StmtNode = std::variant<LetNode, AssignNode, RetNode, ExprId>;
 

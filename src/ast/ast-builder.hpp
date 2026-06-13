@@ -35,6 +35,7 @@ public:
     ExprId call(ExprId callee, memory::DynArray<ExprId> args);
     ExprId field(ExprId object, std::string_view field_name);
     ExprId index(ExprId object, ExprId index);
+    ExprId range(ExprId lhs, ExprId rhs);
     ExprId block(memory::DynArray<StmtId> stmts, ExprId trailing = kInvalidExpr);
     ExprId ifExpr(ExprId cond, ExprId then_branch, ExprId else_branch = kInvalidExpr);
     ExprId whileExpr(ExprId cond, ExprId body);

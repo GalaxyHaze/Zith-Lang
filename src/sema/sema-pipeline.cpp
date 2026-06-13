@@ -125,6 +125,7 @@ zir::hir::HirExprId SemaPipeline::visitExpr(ast::ExprId id) {
         if constexpr (std::is_same_v<T, ast::WhileNode>)   return visitWhile(n);
         if constexpr (std::is_same_v<T, ast::FieldNode>)   return zir::hir::kInvalidHirExpr;
         if constexpr (std::is_same_v<T, ast::IndexNode>)   return zir::hir::kInvalidHirExpr;
+        if constexpr (std::is_same_v<T, ast::RangeNode>)   return zir::hir::kInvalidHirExpr;
         if constexpr (std::is_same_v<T, ast::UnbodyNode>)  return zir::hir::kInvalidHirExpr;
         return zir::hir::kInvalidHirExpr;
     }, node);
@@ -223,12 +224,13 @@ zir::hir::HirExprId SemaPipeline::visitIf(const ast::IfNode &n) {
     if (n.else_branch != ast::kInvalidExpr)
         else_expr = visitExpr(n.else_branch);
 
-    // If with no else — return kInvalidHirExpr or the then branch
-    if (else_expr == zir::hir::kInvalidHirExpr)
-        return then_expr;
-
-    // For now, represent if/else as just the last value
-    return else_expr;
+    zir::hir::HirBranch branch;
+    branch.cond = cond;
+    // Both branches point to block 0 for now (skeleton)
+    // Real block management will create proper then/else blocks
+    branch.then_block = 0;
+    branch.else_block = else_expr != zir::hir::kInvalidHirExpr ? 0 : 0;
+    return hir_.addExpr(zir::hir::HirExpr{std::move(branch)});
 }
 
 zir::hir::HirExprId SemaPipeline::visitWhile(const ast::WhileNode &n) {

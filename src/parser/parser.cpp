@@ -143,6 +143,7 @@ bool tryCompoundOp(const lexer::Token &first, const lexer::Token &second,
     if (first.punc == '>' && second.punc == '=') { out_op = ast::BinaryOp::Ge; return true; }
     if (first.punc == '<' && second.punc == '<') { out_op = ast::BinaryOp::Shl; return true; }
     if (first.punc == '>' && second.punc == '>') { out_op = ast::BinaryOp::Shr; return true; }
+    if (first.punc == '=' && second.punc == '>') { out_op = ast::BinaryOp::Eq; return true; }
     // && and || are not valid — use and / or instead
     return false;
 }
@@ -368,11 +369,33 @@ ast::ExprId Parser::parseExpr(int min_prec) {
             continue;
         }
 
+        // ── Postfix: ..range ────────────────────────────────────
+        if (tok.punc == '.' && peek(1).punc == '.') {
+            advance(2);
+            auto rhs = parseExpr(min_prec + 1);
+            lhs = bld->range(lhs, rhs);
+            continue;
+        }
+
         // ── Postfix: .field ─────────────────────────────────────
         if (tok.punc == '.') {
             advance();
             if (!peek().is(TokenKind::Identifier)) {
                 diag->report(Severity::Error, ExpectedIdent, "expected field name after '.'",
+                             peek().span);
+                continue;
+            }
+            auto field = lexeme();
+            advance();
+            lhs = bld->field(lhs, field);
+            continue;
+        }
+
+        // ── Postfix: ->field (member access by pointer) ─────────
+        if (tok.is(lexer::TokenKind::Operators) && tok.punc == '-' && peek(1).punc == '>') {
+            advance(2);
+            if (!peek().is(TokenKind::Identifier)) {
+                diag->report(Severity::Error, ExpectedIdent, "expected field name after '->'",
                              peek().span);
                 continue;
             }

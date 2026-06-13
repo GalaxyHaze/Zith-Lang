@@ -168,12 +168,19 @@ void print_expr_node(const ExprNode &node, const AstBuilder &bld, FILE *out, int
                        print_indent(out, depth + 1);
                        print_expr(n.index, bld, out, depth + 1);
                    },
-                   [&](const UnbodyNode &n) {
-                       std::fprintf(out, "Unbody(spans [%u..%u], tokens [%u..%u])\n",
-                                    n.body_span.start, n.body_span.end, n.token_start, n.token_end);
-                   },
-               },
-               node);
+                    [&](const RangeNode &n) {
+                        std::fprintf(out, "Range\n");
+                        print_indent(out, depth + 1);
+                        print_expr(n.lhs, bld, out, depth + 1);
+                        print_indent(out, depth + 1);
+                        print_expr(n.rhs, bld, out, depth + 1);
+                    },
+                    [&](const UnbodyNode &n) {
+                        std::fprintf(out, "Unbody(spans [%u..%u], tokens [%u..%u])\n",
+                                     n.body_span.start, n.body_span.end, n.token_start, n.token_end);
+                    },
+                },
+                node);
 }
 
 void print_expr(ExprId id, const AstBuilder &bld, FILE *out, int depth) {
