@@ -46,7 +46,7 @@
                     <p>Download</p>
                 </div>
 
-                <div class="icon" onclick="openWindow('404About')">
+                <div class="icon" onclick="openWindow('aboutMe')">
                     <img src="../media/Icons/Me.svg">
                     <p>About Me</p>
                 </div>
@@ -99,19 +99,16 @@
             </div>
         </div>
 
-        <div class="window hidden" id="404About">
+        <div class="window hidden" id="aboutMe">
             <div class="titlebar">
                 <span>About me</span>
                 <div class="buttons">
                     <button>-</button>
-                    <button onclick="toggleMaximize('404About')">o</button>
-                    <button onclick="closeWindow('404About')">x</button>
+                    <button onclick="toggleMaximize('aboutMe')">o</button>
+                    <button onclick="closeWindow('aboutMe')">x</button>
                 </div>
             </div>
-            <div class="content">
-                <h2>IN BUILD</h2>
-                <p>Sorry but doesn't have a About me page yet.</p>
-            </div>
+            <div class="content" id="aboutMeContent"></div>
         </div>
 
         <div class="window hidden" id="start">
@@ -192,6 +189,43 @@
                     const body = html.match(/<body[^>]*>([\s\S]*)<\/body>/i);
                     document.getElementById('newsContent').innerHTML = body ? body[1] : html;
                 });
+            fetch('../about/index.html')
+                .then(r => r.text())
+                .then(html => {
+                    const body = html.match(/<body[^>]*>([\s\S]*)<\/body>/i);
+                    document.getElementById('aboutMeContent').innerHTML = body ? body[1] : html;
+                    loadPostList();
+                });
+            function loadPostList() {
+                var list = document.getElementById('postList');
+                if (!list) return;
+                fetch('/about/posts/index.json')
+                    .then(function(r) { return r.json(); })
+                    .then(function(entries) {
+                        if (!Array.isArray(entries)) { list.innerHTML = ''; return; }
+                        list.innerHTML = entries.map(function(e) {
+                            return '<li><span class="post-date">' + e.date + '</span>' +
+                                   '<a href="#" onclick="return loadPost(\'/about/posts/' + e.file + '\')">' + e.title + '</a></li>';
+                        }).join('');
+                    })
+                    .catch(function() { list.innerHTML = '<li class="error">Failed to load entries.</li>'; });
+            }
+            function loadPost(url) {
+                fetch(url)
+                    .then(r => r.text())
+                    .then(html => {
+                        const body = html.match(/<body[^>]*>([\s\S]*)<\/body>/i);
+                        var el = document.getElementById('postContent');
+                        el.innerHTML = body ? body[1] : html;
+                        el.classList.remove('hidden');
+                    })
+                    .catch(function() {
+                        var el = document.getElementById('postContent');
+                        el.innerHTML = '<p class="error">Failed to load entry.</p>';
+                        el.classList.remove('hidden');
+                    });
+                return false;
+            }
         </script>
     </body>
 
