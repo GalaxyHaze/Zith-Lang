@@ -1,5 +1,5 @@
+#pragma once
 #include "cli/options.hpp"
-
 #include <cstdlib>
 #include <filesystem>
 #include <string>

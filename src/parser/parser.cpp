@@ -685,8 +685,7 @@ static void scan_skip_expr(lexer::TokenStream &tok) {
 
 } // anonymous namespace
 
-ScanResult scan(Parser &parser, import::SymbolTable &syms, bool sema) {
-    (void)sema;
+ScanResult scan(Parser &parser, import::SymbolTable &syms) {
     auto &tok     = *parser.tok;
     auto &bld     = *parser.bld;
     auto &diag    = *parser.diag;

@@ -1,13 +1,10 @@
 #pragma once
-
-#include "diagnostic.hpp"
 #include "diagnostics/color.hpp"
 #include "diagnostics/diagnostic.hpp"
 #include "memory/dyn-array.hpp"
 
 #include <cstdint>
 #include <span>
-#include <vector>
 
 namespace zith::memory {
 class SourceMap;

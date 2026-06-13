@@ -12,7 +12,7 @@ static void test_struct_decl() {
     Arena arena;
     AstBuilder builder(arena);
 
-    DynArray<std::pair<std::string_view, uint32_t>> fields(arena);
+    DynArray<StructField> fields(arena);
     fields.push({"x", 0u});
     fields.push({"y", 0u});
     auto decl = builder.structDecl("Point", std::move(fields));

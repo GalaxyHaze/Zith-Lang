@@ -43,6 +43,6 @@ struct Parser {
 ProgramResult parseProgram(lexer::TokenStream tokens, ast::AstBuilder &builder,
                            diagnostics::DiagnosticEngine &diags);
 
-ScanResult scan(Parser &parser, import::SymbolTable &syms, bool sema = true);
+ScanResult scan(Parser &parser, import::SymbolTable &syms);
 
 } // namespace zith::parser
