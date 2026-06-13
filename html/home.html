@@ -138,9 +138,7 @@
                     <button onclick="closeWindow('news')">x</button>
                 </div>
             </div>
-            <div class="content" id="newsContent">
-                <p>Loading changelog...</p>
-            </div>
+            <div class="content" id="newsContent"></div>
         </div>
 
         <div class="window hidden" id="settings">
@@ -191,15 +189,8 @@
             fetch('../changelog.html')
                 .then(r => r.text())
                 .then(html => {
-                    const parser = new DOMParser();
-                    const doc = parser.parseFromString(html, 'text/html');
-                    const changelogContent = doc.querySelector('.changelog .content');
-                    if (changelogContent) {
-                        document.getElementById('newsContent').innerHTML = changelogContent.innerHTML;
-                    }
-                })
-                .catch(() => {
-                    document.getElementById('newsContent').innerHTML = '<p>Failed to load changelog.</p>';
+                    const body = html.match(/<body[^>]*>([\s\S]*)<\/body>/i);
+                    document.getElementById('newsContent').innerHTML = body ? body[1] : html;
                 });
         </script>
     </body>
