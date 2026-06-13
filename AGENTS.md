@@ -36,7 +36,7 @@ Tests use a custom framework (`CHECK`/`CHECK_EQ` macros + `TEST_MAIN` in `tests/
 
 ## CI / Release
 
-- Branch `rewrite` is main development branch
+- Branch `main` is primary development branch
 - Release builds cross-compile for 6 targets (Linux amd64/arm64, macOS universal, Windows amd64/arm64, Linux musl, WASM)
 - `BUILD_TESTING=OFF` and `ENABLE_WERROR=OFF` in CI release builds
 - Use `ZITH_VERSION` CMake variable to set version, falls back to latest git tag or `v0.0.1`

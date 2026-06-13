@@ -1,6 +1,6 @@
 # Zith Compiler — Implementation Status
 
-**Branch:** rewrite  
+**Branch:** main  
 **Date:** 2026-06-11  
 **Build:** `cmake -B build && cmake --build build` — clean compile  
 **Tests:** `ctest --test-dir build` — **7/7 passing**
@@ -72,7 +72,7 @@ Full tokenizer with:
 | Argument parsing (`parseArgs`) | \* | 21 flags, 13 subcommands, full validation |
 | `ZithFlags.toml` loader | \* | Reads default config from compiler-relative path |
 | Config merging | \* | CLI flags → ZithFlags.toml cascade |
-| `cmd_help`, `cmd_version` | \* | Ported from master |
+| `cmd_help`, `cmd_version` | \* | Ported from legacy |
 | `cmd_new` | \* | Full project scaffolding |
 | `cmd_check` | \*\* | Uses `CompilationSession` pipeline, real lexer, reports pass/fail |
 | `cmd_compile` | \*\* | Uses `CompilationSession`, runs through MIR lowering |

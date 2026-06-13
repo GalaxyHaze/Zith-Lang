@@ -27,7 +27,7 @@ Each phase builds on the previous one — complete items in order for the most e
 ## Phase 1 — Project Config & CLI Polish
 
 ### 1.1 Wire up `ZithProject.toml`
-- Port project-config from `master` branch
+- Port project-config from `legacy` branch
 - Merge into `main()` before pipeline execution
 - Config struct already exists in `src/cli/project-config.hpp` (stub)
 
