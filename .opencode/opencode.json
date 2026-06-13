@@ -1,0 +1,48 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "instructions": ["AGENTS.md", "docs/api-guide.md"],
+  "skills": {
+    "paths": [".opencode/skills"]
+  },
+  "command": {
+    "changelog": {
+      "description": "Write a changelog and update the gh-pages",
+      "template": "{file:commands/changelog.md}",
+      "agent": "build"
+    }
+  },
+  "agent": {
+    "code-reviewer": {
+      "description": "Reviews Zith compiler code for correctness, style, and architecture adherence.",
+      "mode": "subagent",
+      "permission": {
+        "edit": "deny",
+        "bash": "deny"
+      }
+    },
+    "ci-workflows": {
+      "description": "Maintains and debugs GitHub Actions workflows, especially build-artifact.yml.",
+      "mode": "subagent",
+      "permission": {
+        "edit": "allow",
+        "bash": "deny"
+      }
+    },
+    "test-writer": {
+      "description": "Writes and fixes unit tests using the custom CHECK/CHECK_EQ framework.",
+      "mode": "subagent",
+      "permission": {
+        "edit": "allow",
+        "bash": "allow"
+      }
+    },
+    "compiller-review": {
+      "description": "Reviews C++ compiler code for correctness, performance, and architecture adherence.",
+      "mode": "subagent",
+      "permission": {
+        "edit": "deny",
+        "bash": "deny"
+      }
+    }
+  }
+}

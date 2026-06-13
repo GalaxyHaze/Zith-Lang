@@ -30,9 +30,6 @@ _deps/
 .vscode/
 .idea/
 .cache
-.opencode
-!.opencode/agents/**
-!.opencode/skills/**
 
 # Environment
 .env
