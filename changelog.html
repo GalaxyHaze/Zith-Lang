@@ -1,10 +1,10 @@
 <!DOCTYPE html>
 <html lang="en">
-<head><meta charset="UTF-8"><title>Changelog - v0.2.0</title></head>
+<head><meta charset="UTF-8"><title>Changelog - v0.3.0</title></head>
 <body>
 
 <div class="changelog-entry">
-    <h2>Release v0.2.0</h2>
+    <h2>Release v0.3.0</h2>
     <p class="lastUpdated">13 June 2026</p>
 
     <hr>
@@ -12,15 +12,13 @@
     <section>
         <h3>Summary</h3>
         <p>
-            We're excited to share the <strong>v0.2.0</strong> release of the Zith compiler! 
-            This drop brings major progress across the entire pipeline — from lexer all the way 
-            through to MIR. We've introduced a "did you mean?" diagnostic engine that catches 
-            typos with Levenshtein-powered suggestions, added dedicated AST nodes for enums, 
-            unions, components, traits and interfaces, and layered in a fresh set of parser, 
-            sema, type-system, and unification tests. The tooling side also got some love: 
-            opencode agents for CI, code review, test writing, and a new <code>changelog</code> 
-            command to automate release notes. This is our biggest update yet, and we hope 
-            you enjoy the ride!
+            This release introduces the <strong>Name Resolution System</strong> — a dedicated pipeline stage
+            between import resolution and semantic analysis. The new <code>Resolver</code> module walks the
+            AST after all imports are known, resolves every identifier to its <code>SymId</code>, and records
+            results in a side table that the Sema pipeline consumes directly. We've also extended the parser
+            with range syntax (<code>..</code>), arrow member access (<code>-&gt;</code>), and fat arrows
+            (<code>=&gt;</code>), added a <code>RangeNode</code> to the AST, fixed several diagnostic edge
+            cases, and made the compiler portable to Windows.
         </p>
     </section>
 
@@ -29,13 +27,13 @@
     <section>
         <h3>Highlights</h3>
         <ul>
-            <li><strong>Heuristic diagnostic engine</strong> — "did you mean?" suggestions for undefined identifiers and type mismatches</li>
-            <li><strong>Dedicated AST node types</strong> — <code>EnumDeclNode</code>, <code>UnionDeclNode</code>, <code>ComponentDeclNode</code>, <code>TraitDeclNode</code>, <code>InterfaceDeclNode</code></li>
-            <li><strong>Expanded test coverage</strong> — full parser scan/expression tests, sema-to-HIR lowering, type deduplication, unify errors</li>
-            <li><strong>Comprehensive API guide</strong> — new <code>docs/api-guide.md</code> documenting all 8 pipeline stages</li>
-            <li><strong>Opencode automation</strong> — agents for CI workflows, code review, compiler review, and test writing</li>
-            <li><strong>Type system internals</strong> — type interning, unification, and kind system groundwork</li>
-            <li><strong>Improved diagnostics</strong> — better error codes, color output, and emit formatting</li>
+            <li><strong>Name Resolution Pipeline Stage</strong> — new <code>Resolve</code> stage between import and sema, with qualified and unqualified name resolution</li>
+            <li><strong>Alias Resolution</strong> — import aliases (<code>import foo as f</code>) are resolved through the symbol table with target tracking</li>
+            <li><strong>Improved Diagnostics</strong> — specific error codes for non-namespace access (<code>NotNamespace</code>) and missing members (<code>NoMember</code>)</li>
+            <li><strong>Parser Extensions</strong> — range operator <code>..</code>, arrow access <code>-&gt;</code>, fat arrow <code>=&gt;</code></li>
+            <li><strong>AST RangeNode</strong> — new expression node with lhs/rhs sub-expressions, wired through builder and printer</li>
+            <li><strong>Windows Support</strong> — <code>_WIN32</code> guards added to 5 CLI command files for cross-platform compatibility</li>
+            <li><strong>Comprehensive Resolver Tests</strong> — 10 test cases covering unqualified, qualified, scope, alias, and edge-case resolution</li>
         </ul>
     </section>
 
@@ -46,32 +44,37 @@
 
         <h4>Added</h4>
         <ul>
-            <li>Heuristic engine with Levenshtein-distance "did you mean?" suggestions (<code>src/sema/heuristic-engine.*</code>)</li>
-            <li>Dedicated AST nodes for enum, union, component, trait, and interface declarations</li>
-            <li>Full parser scan tests and expression-body tests in <code>tests/unit/parser-*.cpp</code></li>
-            <li>Sema-to-HIR lowering tests (<code>tests/unit/sema-hir.cpp</code>)</li>
-            <li>Type deduplication and unification error tests</li>
-            <li>Opencode agents and skills for CI, code review, test writing, and changelog generation</li>
-            <li>Project documentation: <code>AGENTS.md</code>, <code>ARCH-COMPARISON.md</code>, <code>ARCH-PLAN.md</code>, <code>NEXT_STEPS.md</code></li>
-            <li>Compiler API guide at <code>docs/api-guide.md</code></li>
-            <li>Working features example: <code>examples/working-features.zith</code></li>
+            <li>Full <code>Resolver</code> implementation (<code>src/import/resolver.*</code>) — qualified and unqualified name lookup, scope management, alias following, side table recording</li>
+            <li><code>Stage::Resolved</code> enum value in pipeline plan — new pipeline stage between <code>Imported</code> and <code>TypeChecked</code></li>
+            <li><code>resolveStage()</code> in <code>CompilationSession</code> — instantiates Resolver, runs it, extracts resolved table for sema</li>
+            <li><code>RangeNode</code> AST node with <code>lhs</code>/<code>rhs</code> expression fields, builder method, and printer support</li>
+            <li><code>SymOrigin</code> tracking in <code>ImportManager</code> — records which file and local symbol each merged symbol originates from (<code>originOf()</code> query)</li>
+            <li><code>SymbolTable::declareInScope()</code> — declare a symbol in a specific scope (not just current)</li>
+            <li>Error codes <code>NotNamespace</code> (2005) and <code>NoMember</code> (2006) with human-readable descriptions</li>
+            <li>Windows <code>_WIN32</code> guards in <code>tool.cpp</code>, <code>run.cpp</code>, <code>project.cpp</code>, <code>interactive.cpp</code>, <code>deps.cpp</code></li>
+            <li><code>Resolver::takeResolvedTable()</code> — moves out the resolved symbol side table for consumption by later stages</li>
+            <li><code>SemaPipeline::resolved_</code> pointer — optional reference to the resolver side table, checked before fallback lookup in <code>visitIdent</code></li>
+            <li>10 resolver unit tests in <code>tests/unit/resolver-test.cpp</code></li>
         </ul>
 
         <h4>Changed</h4>
         <ul>
-            <li>AST builder and printer — enum, union, component, trait, interface node support</li>
-            <li>CLI pipeline plan and compilation session — refined stage gating and option handling</li>
-            <li>Diagnostic engine — improved emit logic, error code registry, color support</li>
-            <li>Import manager and resolver — symbol table scope management and module resolution</li>
-            <li>Lexer — keyword table, token kinds, and scanner edge cases</li>
-            <li>Memory layer — arena, dyn-array, optional, result, source-map, string-interning refinements</li>
-            <li>Parser — scan and body expansion passes, recovery heuristics</li>
-            <li>Sema context and pipeline — typing context and function return tracking</li>
-            <li>Type system — type interning, unification, kind IDs, canonical type creation</li>
-            <li>HIR and MIR — instruction types, module structure, lowering passes, verification</li>
-            <li>stdlib — <code>unstable/json.zith</code> updates</li>
-            <li>Build system — CMakeLists, GitHub workflows, install scripts</li>
-            <li>Test common infrastructure — test framework macros and helpers</li>
+            <li>Resolved table integration — <code>visitIdent</code> checks the resolver side table first, falls back to <code>syms().lookup()</code>, and skips duplicate diagnostics when the resolver already reported an error</li>
+            <li>Import alias declaration now stores the target <code>SymId</code> in the symbol's <code>target</code> field, enabling alias chain resolution</li>
+            <li>Symbol table <code>SymbolData</code> struct — added <code>SymId target</code> field and updated constructor signature (8 parameters)</li>
+            <li><code>declare</code> / <code>declareInScope</code> accept optional <code>SymId target</code> parameter</li>
+            <li>Parser — <code>tryCompoundOp</code> extended for <code>=&gt;</code>, <code>..</code> range detection before <code>.</code> field access, <code>-&gt;</code> arrow member access</li>
+            <li>Diagnostics emit — fixed <code>Optional(nullptr)</code> to <code>{}</code>, added bounds checks on <code>d.primary.end</code>, clamped unsigned subtraction</li>
+            <li><code>visitIf</code> in SemaPipeline — creates proper <code>HirBranch</code> node instead of discarding the then_branch value</li>
+            <li><code>CompilationSession</code> constructor — initializes <code>resolved_syms_</code> from <code>sym_arena_</code></li>
+            <li>Import merge re-exports — restored duplicate-checking <code>declare_re_export</code> lambda</li>
+        </ul>
+
+        <h4>Fixed</h4>
+        <ul>
+            <li>Diagnostic emit — null optional crash in <code>emit.cpp</code> when optional holds <code>nullptr</code></li>
+            <li>Diagnostic emit — bounds check on <code>d.primary.end</code> before access</li>
+            <li>Import merge — re-export path was silently overwriting duplicates instead of reporting <code>DuplicateDecl</code></li>
         </ul>
     </section>
 
@@ -80,33 +83,32 @@
     <section>
         <h3>Modified Files Reference</h3>
         <ul>
-            <li><a href="https://github.com/GalaxyHaze/Zith/blob/main/src/sema/heuristic-engine.cpp">src/sema/heuristic-engine.cpp</a></li>
-            <li><a href="https://github.com/GalaxyHaze/Zith/blob/main/src/sema/heuristic-engine.hpp">src/sema/heuristic-engine.hpp</a></li>
-            <li><a href="https://github.com/GalaxyHaze/Zith/blob/main/src/ast/ast-builder.cpp">src/ast/ast-builder.cpp</a></li>
-            <li><a href="https://github.com/GalaxyHaze/Zith/blob/main/src/ast/ast-builder.hpp">src/ast/ast-builder.hpp</a></li>
+            <li><a href="https://github.com/GalaxyHaze/Zith/blob/main/src/import/resolver.hpp">src/import/resolver.hpp</a></li>
+            <li><a href="https://github.com/GalaxyHaze/Zith/blob/main/src/import/resolver.cpp">src/import/resolver.cpp</a></li>
+            <li><a href="https://github.com/GalaxyHaze/Zith/blob/main/src/import/import-manager.hpp">src/import/import-manager.hpp</a></li>
+            <li><a href="https://github.com/GalaxyHaze/Zith/blob/main/src/import/import-manager.cpp">src/import/import-manager.cpp</a></li>
+            <li><a href="https://github.com/GalaxyHaze/Zith/blob/main/src/import/symbol-table.hpp">src/import/symbol-table.hpp</a></li>
+            <li><a href="https://github.com/GalaxyHaze/Zith/blob/main/src/import/symbol-table.cpp">src/import/symbol-table.cpp</a></li>
+            <li><a href="https://github.com/GalaxyHaze/Zith/blob/main/src/cli/compilation-session.hpp">src/cli/compilation-session.hpp</a></li>
+            <li><a href="https://github.com/GalaxyHaze/Zith/blob/main/src/cli/compilation-session.cpp">src/cli/compilation-session.cpp</a></li>
+            <li><a href="https://github.com/GalaxyHaze/Zith/blob/main/src/cli/pipeline-plan.hpp">src/cli/pipeline-plan.hpp</a></li>
             <li><a href="https://github.com/GalaxyHaze/Zith/blob/main/src/ast/ast-nodes.hpp">src/ast/ast-nodes.hpp</a></li>
+            <li><a href="https://github.com/GalaxyHaze/Zith/blob/main/src/ast/ast-builder.hpp">src/ast/ast-builder.hpp</a></li>
+            <li><a href="https://github.com/GalaxyHaze/Zith/blob/main/src/ast/ast-builder.cpp">src/ast/ast-builder.cpp</a></li>
             <li><a href="https://github.com/GalaxyHaze/Zith/blob/main/src/ast/ast-printer.cpp">src/ast/ast-printer.cpp</a></li>
             <li><a href="https://github.com/GalaxyHaze/Zith/blob/main/src/parser/parser.cpp">src/parser/parser.cpp</a></li>
-            <li><a href="https://github.com/GalaxyHaze/Zith/blob/main/src/parser/parser.hpp">src/parser/parser.hpp</a></li>
+            <li><a href="https://github.com/GalaxyHaze/Zith/blob/main/src/sema/sema-pipeline.hpp">src/sema/sema-pipeline.hpp</a></li>
             <li><a href="https://github.com/GalaxyHaze/Zith/blob/main/src/sema/sema-pipeline.cpp">src/sema/sema-pipeline.cpp</a></li>
-            <li><a href="https://github.com/GalaxyHaze/Zith/blob/main/src/types/type-intern.cpp">src/types/type-intern.cpp</a></li>
-            <li><a href="https://github.com/GalaxyHaze/Zith/blob/main/src/types/unify.cpp">src/types/unify.cpp</a></li>
-            <li><a href="https://github.com/GalaxyHaze/Zith/blob/main/src/zir/hir/hir-expr.hpp">src/zir/hir/hir-expr.hpp</a></li>
-            <li><a href="https://github.com/GalaxyHaze/Zith/blob/main/src/zir/mir/mir-inst.hpp">src/zir/mir/mir-inst.hpp</a></li>
-            <li><a href="https://github.com/GalaxyHaze/Zith/blob/main/src/cli/compilation-session.cpp">src/cli/compilation-session.cpp</a></li>
-            <li><a href="https://github.com/GalaxyHaze/Zith/blob/main/src/diagnostics/diagnostic-engine.cpp">src/diagnostics/diagnostic-engine.cpp</a></li>
-            <li><a href="https://github.com/GalaxyHaze/Zith/blob/main/src/memory/arena.hpp">src/memory/arena.hpp</a></li>
-            <li><a href="https://github.com/GalaxyHaze/Zith/blob/main/tests/unit/parser-scan.cpp">tests/unit/parser-scan.cpp</a></li>
-            <li><a href="https://github.com/GalaxyHaze/Zith/blob/main/tests/unit/parser-full.cpp">tests/unit/parser-full.cpp</a></li>
-            <li><a href="https://github.com/GalaxyHaze/Zith/blob/main/tests/unit/sema-hir.cpp">tests/unit/sema-hir.cpp</a></li>
-            <li><a href="https://github.com/GalaxyHaze/Zith/blob/main/tests/unit/type-dedup.cpp">tests/unit/type-dedup.cpp</a></li>
-            <li><a href="https://github.com/GalaxyHaze/Zith/blob/main/tests/unit/unify-errors.cpp">tests/unit/unify-errors.cpp</a></li>
-            <li><a href="https://github.com/GalaxyHaze/Zith/blob/main/docs/api-guide.md">docs/api-guide.md</a></li>
-            <li><a href="https://github.com/GalaxyHaze/Zith/blob/main/examples/working-features.zith">examples/working-features.zith</a></li>
+            <li><a href="https://github.com/GalaxyHaze/Zith/blob/main/src/diagnostics/emit.cpp">src/diagnostics/emit.cpp</a></li>
+            <li><a href="https://github.com/GalaxyHaze/Zith/blob/main/src/diagnostics/error-codes.hpp">src/diagnostics/error-codes.hpp</a></li>
+            <li><a href="https://github.com/GalaxyHaze/Zith/blob/main/src/diagnostics/error-codes.cpp">src/diagnostics/error-codes.cpp</a></li>
+            <li><a href="https://github.com/GalaxyHaze/Zith/blob/main/src/cli/cmd/tool.cpp">src/cli/cmd/tool.cpp</a></li>
+            <li><a href="https://github.com/GalaxyHaze/Zith/blob/main/src/cli/cmd/run.cpp">src/cli/cmd/run.cpp</a></li>
+            <li><a href="https://github.com/GalaxyHaze/Zith/blob/main/src/cli/cmd/project.cpp">src/cli/cmd/project.cpp</a></li>
+            <li><a href="https://github.com/GalaxyHaze/Zith/blob/main/src/cli/cmd/interactive.cpp">src/cli/cmd/interactive.cpp</a></li>
+            <li><a href="https://github.com/GalaxyHaze/Zith/blob/main/src/cli/cmd/deps.cpp">src/cli/cmd/deps.cpp</a></li>
+            <li><a href="https://github.com/GalaxyHaze/Zith/blob/main/tests/unit/resolver-test.cpp">tests/unit/resolver-test.cpp</a></li>
             <li><a href="https://github.com/GalaxyHaze/Zith/blob/main/CMakeLists.txt">CMakeLists.txt</a></li>
-            <li><a href="https://github.com/GalaxyHaze/Zith/blob/main/AGENTS.md">AGENTS.md</a></li>
-            <li><a href="https://github.com/GalaxyHaze/Zith/blob/main/ARCH-PLAN.md">ARCH-PLAN.md</a></li>
-            <li><a href="https://github.com/GalaxyHaze/Zith/blob/main/.opencode/opencode.json">.opencode/opencode.json</a></li>
         </ul>
     </section>
 </div>
