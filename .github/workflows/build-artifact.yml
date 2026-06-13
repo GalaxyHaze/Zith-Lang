@@ -156,6 +156,11 @@ jobs:
         shell: bash
         run: choco install llvm ninja -y
 
+      - name: Add Chocolatey LLVM to PATH
+        if: runner.os == 'Windows'
+        shell: bash
+        run: echo "C:/Program Files/LLVM/bin" >> "$GITHUB_PATH"
+
       - name: Setup MSVC environment
         if: runner.os == 'Windows'
         uses: ilammy/msvc-dev-cmd@v1
