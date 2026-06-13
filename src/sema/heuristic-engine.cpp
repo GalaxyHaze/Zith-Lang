@@ -1,10 +1,12 @@
-#include "diagnostics/heuristic-engine.hpp"
+#include "sema/heuristic-engine.hpp"
 #include "diagnostics/error-codes.hpp"
 
 #include <algorithm>
 #include <limits>
 
-namespace zith::diagnostics {
+namespace zith::sema {
+
+namespace err = diagnostics::err;
 
 size_t HeuristicEngine::levenshteinDistance(std::string_view a, std::string_view b) {
     size_t n = a.size();
@@ -45,7 +47,7 @@ std::string_view HeuristicEngine::findBestMatch(std::string_view target,
     return best;
 }
 
-void HeuristicEngine::generate(const Diagnostic &diag, import::SymbolTable &syms,
+void HeuristicEngine::generate(const diagnostics::Diagnostic &diag, import::SymbolTable &syms,
                                 std::vector<std::string> &out_suggestions) const {
     switch (diag.code) {
     case err::UndefinedIdent: {

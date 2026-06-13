@@ -110,9 +110,7 @@ private:
     }
     bool lexStage();
     bool scanStage();
-    bool expandBodiesStage();
     bool importStage();
-    bool parseStage();
     bool semaStage();
     bool mirStage();
     bool zirStage();

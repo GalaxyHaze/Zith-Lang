@@ -7,11 +7,11 @@
 #include <string_view>
 #include <vector>
 
-namespace zith::diagnostics {
+namespace zith::sema {
 
 class HeuristicEngine {
 public:
-    void generate(const Diagnostic &diag, import::SymbolTable &syms,
+    void generate(const diagnostics::Diagnostic &diag, import::SymbolTable &syms,
                   std::vector<std::string> &out_suggestions) const;
 
 private:

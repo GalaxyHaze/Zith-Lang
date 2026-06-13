@@ -58,19 +58,19 @@ int cmd_check(const Options &opts) {
     if (files.size() == 1) {
         // Single file: sequential, immediate output
         CompilationSession session(opts, files[0]);
-        bool ok = session.runTo(Stage::Parsed);
-        if (session.hasErrors())
-            ok = false;
-        results.push_back(ok);
-    } else {
-        // Multi-file: parallel with buffered output
-        std::vector<std::future<SessionResult>> futures;
-        futures.reserve(files.size());
-        for (const auto &file : files) {
-            futures.push_back(std::async(std::launch::async, [&opts, file]() -> SessionResult {
-                auto session = std::make_unique<CompilationSession>(opts, file);
-                session->setBuffered(true);
-                bool ok = session->runTo(Stage::Parsed);
+        bool ok = session.runTo(Stage::TypeChecked);
+    if (session.hasErrors())
+        ok = false;
+    results.push_back(ok);
+} else {
+    // Multi-file: parallel with buffered output
+    std::vector<std::future<SessionResult>> futures;
+    futures.reserve(files.size());
+    for (const auto &file : files) {
+        futures.push_back(std::async(std::launch::async, [&opts, file]() -> SessionResult {
+            auto session = std::make_unique<CompilationSession>(opts, file);
+            session->setBuffered(true);
+            bool ok = session->runTo(Stage::TypeChecked);
                 return {std::move(session), ok};
             }));
         }

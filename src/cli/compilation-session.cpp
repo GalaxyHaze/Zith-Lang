@@ -1,7 +1,7 @@
 #include "compilation-session.hpp"
 #include "ast/ast-printer.hpp"
 #include "diagnostics/error-codes.hpp"
-#include "diagnostics/heuristic-engine.hpp"
+#include "sema/heuristic-engine.hpp"
 #include "import/resolver.hpp"
 #include "lexer/lexer.hpp"
 #include "memory/source-map.hpp"
@@ -83,42 +83,28 @@ bool CompilationSession::runTo(Stage target) {
         return false;
     plan_.advance();
 
-    // Stage 3: Expand bodies (replace UnbodyNodes with real AST)
-    if (plan_.shouldStop())
-        return !diags_.hasErrors();
-    if (!expandBodiesStage())
-        return false;
-    plan_.advance();
-
-    // Stage 4: Import resolution
+    // Stage 3: Import resolution
     if (plan_.shouldStop())
         return !diags_.hasErrors();
     if (!importStage())
         return false;
     plan_.advance();
 
-    // Stage 5: Parse validation
-    if (plan_.shouldStop())
-        return !diags_.hasErrors();
-    if (!parseStage())
-        return false;
-    plan_.advance();
-
-    // Stage 6: Type checking + HIR lowering
+    // Stage 4: Type checking + body expansion + HIR lowering
     if (plan_.shouldStop())
         return !diags_.hasErrors();
     if (!semaStage())
         return false;
     plan_.advance();
 
-    // Stage 7: MIR lowering
+    // Stage 5: MIR lowering
     if (plan_.shouldStop())
         return !diags_.hasErrors();
     if (!mirStage())
         return false;
     plan_.advance();
 
-    // Stage 8: ZIR interpretation
+    // Stage 6: ZIR interpretation
     if (plan_.shouldStop())
         return !diags_.hasErrors();
     if (!zirStage())
@@ -186,31 +172,6 @@ bool CompilationSession::lexStage() {
     }
 
     return true;
-}
-
-bool CompilationSession::parseStage() {
-    auto t0 = std::chrono::steady_clock::now();
-
-    if (diags_.hasErrors()) {
-        diags_.emit();
-        return false;
-    }
-
-    if (opts_.emit_ast) {
-        std::printf("--- AST ---\n");
-        ast::printAST(program_, ast_builder_);
-        std::printf("--- Symbols ---\n");
-        syms_.dump();
-        std::printf("---\n");
-    }
-
-    if (opts_.verbose) {
-        auto dt = std::chrono::duration<double, std::milli>(
-            std::chrono::steady_clock::now() - t0).count();
-        writeOutput("  [parse] %zu decls  (%5.1fms)\n", program_.decls.size(), dt);
-    }
-
-    return !diags_.hasErrors();
 }
 
 bool CompilationSession::importStage() {
@@ -327,27 +288,28 @@ bool CompilationSession::scanStage() {
     return true;
 }
 
-bool CompilationSession::expandBodiesStage() {
-    auto t0 = std::chrono::steady_clock::now();
-    parser::Parser parser(&tokens_, &ast_builder_, &diags_);
-    parser.program = std::move(program_);
-    parser.expandBodies(scan_result_);
-    program_ = std::move(parser.program);
-    if (opts_.verbose) {
-        auto dt = std::chrono::duration<double, std::milli>(
-            std::chrono::steady_clock::now() - t0).count();
-        writeOutput("  [expand] %zu fns expanded  (%5.1fms)\n",
-                     scan_result_.fns.size(), dt);
-    }
-    return !diags_.hasErrors();
-}
-
 bool CompilationSession::semaStage() {
     auto t0 = std::chrono::steady_clock::now();
 
     if (diags_.hasErrors()) {
         diags_.emit();
         return false;
+    }
+
+    // Expand unbody nodes into real AST before type-checking
+    {
+        parser::Parser parser(&tokens_, &ast_builder_, &diags_);
+        parser.program = std::move(program_);
+        parser.expandBodies(scan_result_);
+        program_ = std::move(parser.program);
+    }
+
+    if (opts_.emit_ast) {
+        std::printf("--- AST ---\n");
+        ast::printAST(program_, ast_builder_);
+        std::printf("--- Symbols ---\n");
+        syms_.dump();
+        std::printf("---\n");
     }
 
     sema::SemaPipeline pipeline(syms_, types_, diags_, ast_builder_, hir_arena_);
@@ -421,7 +383,7 @@ std::string CompilationSession::flushOutput() {
 }
 
 void CompilationSession::emitDiagnostics() {
-    diagnostics::HeuristicEngine heuristic;
+    sema::HeuristicEngine heuristic;
     auto &diags = diags_.diagnostics();
     for (size_t i = 0; i < diags.size(); i++) {
         heuristic.generate(diags[i], syms_, diags[i].suggestions);
