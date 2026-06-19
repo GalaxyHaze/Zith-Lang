@@ -39,19 +39,6 @@ Result<FileId> SourceMap::addFile(const std::string_view path, const std::string
     if (!is_valid_utf8(content))
         return Error{"File is not valid UTF-8"};
 
-    {
-        std::shared_lock lock(rw_mutex);
-        auto it = cache.find(std::string(path));
-        if (it != cache.end()) {
-            FileId id = it->second;
-            lock.unlock();
-            std::unique_lock ulock(rw_mutex);
-            files[id] = SourceLoc{std::string(content), std::string(path), file_arena};
-            files[id].buildLines();
-            return id;
-        }
-    }
-
     std::unique_lock lock(rw_mutex);
 
     auto it = cache.find(std::string(path));
@@ -69,20 +56,13 @@ Result<FileId> SourceMap::addFile(const std::string_view path, const std::string
     return id;
 }
 
-bool SourceMap::isValid(FileId id) noexcept {
+bool SourceMap::isValid(FileId id) const noexcept {
     std::shared_lock lock(rw_mutex);
     return id < files.size();
 }
 
 [[nodiscard]] auto SourceMap::loadFile(const std::string_view path, const bool write)
     -> Result<FileId> {
-    {
-        std::shared_lock lock(rw_mutex);
-        auto it = cache.find(std::string(path));
-        if (it != cache.end())
-            return it->second;
-    }
-
     std::unique_lock lock(rw_mutex);
 
     auto it = cache.find(std::string(path));

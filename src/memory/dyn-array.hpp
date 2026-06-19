@@ -136,6 +136,10 @@ public:
         return data_[size_ - 1];
     }
     auto back() const noexcept -> const T & {
+        if (size() == 0) {
+            std::fprintf(stderr, "[error] attemp to use 'back' on DynArray siz 0");
+            std::abort();
+        }
         return data_[size_ - 1];
     }
 

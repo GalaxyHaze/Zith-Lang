@@ -72,6 +72,8 @@ struct Token {
     }
 };
 
+inline constexpr Token kEndToken{{}, TokenKind::End, 0};
+
 struct TokenStream {
     Token *src            = nullptr;
     uint32_t len          = 0;
@@ -87,9 +89,8 @@ struct TokenStream {
 
     // Retorna o token atual sem avançar o ponteiro (Lookahead)
     [[nodiscard]] constexpr auto peek() const noexcept -> const Token & {
-        if (offset >= len) [[unlikely]] {
-            // Retorna o último elemento (que idealmente deve ser TokenKind::End)
-            return src[len - 1];
+        if (len == 0 || offset >= len) [[unlikely]] {
+            return kEndToken;
         }
         return src[offset];
     }
@@ -98,8 +99,8 @@ struct TokenStream {
     // peek(2))
     [[nodiscard]] constexpr auto peek(uint32_t lookahead) const noexcept -> const Token & {
         uint32_t target = offset + lookahead;
-        if (target >= len) [[unlikely]] {
-            return src[len - 1];
+        if (len == 0 || target >= len) [[unlikely]] {
+            return kEndToken;
         }
         return src[target];
     }

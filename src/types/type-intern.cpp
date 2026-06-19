@@ -1,5 +1,7 @@
 #include "type-intern.hpp"
 
+#include <cstring>
+
 namespace zith::types {
 
 namespace {
@@ -48,9 +50,9 @@ bool typeDataEqual(const TypeData &a, const TypeData &b) {
     case TypeKind::Fn: {
         auto &fa = std::get<TypeFn>(a);
         auto &fb = std::get<TypeFn>(b);
-        if (fa.params.size() != fb.params.size()) return false;
+        if (fa.param_count != fb.param_count) return false;
         if (fa.ret != fb.ret) return false;
-        for (size_t i = 0; i < fa.params.size(); i++)
+        for (size_t i = 0; i < fa.param_count; i++)
             if (fa.params[i] != fb.params[i]) return false;
         return true;
     }
@@ -106,7 +108,10 @@ TypeId TypeIntern::internArray(TypeId elem, uint32_t count) {
 }
 
 TypeId TypeIntern::internFn(std::span<const TypeId> params, TypeId ret) {
-    return intern(TypeFn{params, ret});
+    auto *param_copy = static_cast<TypeId *>(
+        arena_.alloc(params.size() * sizeof(TypeId), alignof(TypeId)));
+    std::memcpy(param_copy, params.data(), params.size() * sizeof(TypeId));
+    return intern(TypeFn{param_copy, params.size(), ret});
 }
 
 TypeId TypeIntern::internOptional(TypeId inner) {

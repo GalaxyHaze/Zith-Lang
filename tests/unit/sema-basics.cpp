@@ -163,7 +163,7 @@ static void test_type_intern_fn() {
 
     auto &data = std::get<TypeFn>(types.lookup(fn));
     CHECK_EQ(data.ret, void_, "return type is void");
-    CHECK_EQ(data.params.size(), size_t(2), "2 parameters");
+    CHECK_EQ(data.param_count, size_t(2), "2 parameters");
     CHECK_EQ(data.params[0], i32, "param[0] is i32");
     CHECK_EQ(data.params[1], i32, "param[1] is i32");
 }

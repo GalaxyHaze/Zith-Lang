@@ -751,9 +751,10 @@ ScanResult scan(Parser &parser, import::SymbolTable &syms) {
                     } else if (tok.peek().is(TokenKind::LitVal)) {
                         auto n = tok.lexeme();
                         tok.advance();
-                        current_mod_depth = 1;
-                        if (!n.empty() && n[0] >= '0' && n[0] <= '9')
-                            current_mod_depth = n[0] - '0';
+                        char *end = nullptr;
+                        long val = std::strtol(n.data(), &end, 10);
+                        current_mod_depth = (end > n.data() && val >= 1 && val <= INT32_MAX)
+                            ? static_cast<int32_t>(val) : 1;
                         if (tok.peek().punc == ')')
                             tok.advance();
                     } else {

@@ -256,9 +256,10 @@ auto Lexer::run(std::variant<memory::FileId, std::pair<std::string_view, std::st
         gId = *id;
     } else {
         auto &[name, content] = std::get<std::pair<std::string_view, std::string>>(input);
-        if (auto i = source_map_.addFile(name, content)) {
-            gId = i.value();
-        }
+        auto add_result = source_map_.addFile(name, content);
+        if (!add_result)
+            return memory::Error{add_result.error().msg};
+        gId = add_result.value();
     }
 
     if (auto i = source_map_.get(gId)) {

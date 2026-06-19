@@ -19,14 +19,14 @@ class SourceMap {
     memory::Arena file_arena;
     memory::DynArray<SourceLoc> files;
     std::unordered_map<std::string, FileId> cache;
-    std::shared_mutex rw_mutex;
+    mutable std::shared_mutex rw_mutex;
 
 public:
     SourceMap();
 
     Result<FileId> addFile(std::string_view path, std::string_view content);
 
-    bool isValid(FileId id) noexcept;
+    bool isValid(FileId id) const noexcept;
 
     auto snippet(const Span &a) noexcept -> Result<std::string_view>;
 

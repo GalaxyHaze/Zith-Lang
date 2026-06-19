@@ -1,5 +1,6 @@
 #pragma once
 #include <cstddef>
+#include <cstdlib>
 #include <new>
 #include <type_traits>
 #include <utility>
@@ -142,15 +143,19 @@ public:
     }
 
     T &value() & {
+        if (!data) std::abort();
         return *data;
     }
     const T &value() const & {
+        if (!data) std::abort();
         return *data;
     }
     T &&value() && {
+        if (!data) std::abort();
         return std::move(*data);
     }
     const T &&value() const && {
+        if (!data) std::abort();
         return std::move(*data);
     }
 

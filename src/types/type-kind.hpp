@@ -22,7 +22,7 @@ struct TypeFloat     { FloatWidth width; };
 struct TypePtr       { TypeId pointee; };
 struct TypeArray     { TypeId elem; uint32_t count; };
 struct TypeStruct    { TypeId def_id; };
-struct TypeFn        { std::span<const TypeId> params; TypeId ret; };
+struct TypeFn        { const TypeId *params; size_t param_count; TypeId ret; };
 struct TypeTypeVar   { uint32_t id; };
 struct TypeOptional  { TypeId inner; };
 struct TypeFailable  { TypeId inner; };

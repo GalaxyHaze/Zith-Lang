@@ -47,8 +47,8 @@ bool Unifier::occurs(TypeId var, TypeId t) const {
         auto &fn = std::get<TypeFn>(data);
         if (occurs(var, fn.ret))
             return true;
-        for (auto p : fn.params) {
-            if (occurs(var, p))
+        for (size_t i = 0; i < fn.param_count; i++) {
+            if (occurs(var, fn.params[i]))
                 return true;
         }
         return false;
@@ -142,14 +142,14 @@ bool Unifier::unify(TypeId a, TypeId b, memory::Span span) {
     case TypeKind::Fn: {
         auto &fn_a = std::get<TypeFn>(data_a);
         auto &fn_b = std::get<TypeFn>(data_b);
-        if (fn_a.params.size() != fn_b.params.size()) {
+        if (fn_a.param_count != fn_b.param_count) {
             diags_.report(diagnostics::Severity::Error, diagnostics::err::TypeMismatch,
                           "type mismatch: function parameter count differs", span);
             return false;
         }
         if (!unify(fn_a.ret, fn_b.ret, span))
             return false;
-        for (size_t i = 0; i < fn_a.params.size(); i++) {
+        for (size_t i = 0; i < fn_a.param_count; i++) {
             if (!unify(fn_a.params[i], fn_b.params[i], span))
                 return false;
         }
@@ -210,11 +210,11 @@ bool Unifier::isAssignable(TypeId dst, TypeId src) const {
     case TypeKind::Fn: {
         auto &fn_dst = std::get<TypeFn>(data_dst);
         auto &fn_src = std::get<TypeFn>(data_src);
-        if (fn_dst.params.size() != fn_src.params.size())
+        if (fn_dst.param_count != fn_src.param_count)
             return false;
         if (!isAssignable(fn_dst.ret, fn_src.ret))
             return false;
-        for (size_t i = 0; i < fn_dst.params.size(); i++) {
+        for (size_t i = 0; i < fn_dst.param_count; i++) {
             if (!isAssignable(fn_dst.params[i], fn_src.params[i]))
                 return false;
         }
