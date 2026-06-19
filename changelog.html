@@ -1,7 +1,118 @@
 <!DOCTYPE html>
 <html lang="en">
-<head><meta charset="UTF-8"><title>Changelog - v0.3.0</title></head>
+<head><meta charset="UTF-8"><title>Changelog - v0.3.1</title></head>
 <body>
+
+<div class="changelog-entry">
+    <h2>Release v0.3.1</h2>
+    <p class="lastUpdated">19 June 2026</p>
+
+    <hr>
+
+    <section>
+        <h3>Summary</h3>
+        <p>
+            This release focuses on <strong>stability and infrastructure</strong> — we've introduced a
+            <strong>Type Walker</strong> utility for safely traversing the type graph, added a
+            <strong>Platform Abstraction</strong> layer for cleaner cross-platform code, and fixed several
+            critical bugs including undefined behavior in the token stream, a dangling span in
+            <code>TypeFn</code>, a TOCTOU race in <code>SourceMap</code>, and null-pointer hazards in
+            <code>Optional</code>. The test suite has also grown significantly with 6 new test files.
+        </p>
+    </section>
+
+    <hr>
+
+    <section>
+        <h3>Highlights</h3>
+        <ul>
+            <li><strong>Type Walker</strong> — new <code>walkSubTypes()</code> utility for recursively visiting sub-types, replacing manual switch-cases in unification and future passes</li>
+            <li><strong>Platform Abstraction</strong> — <code>platform.hpp</code> centralizes OS-specific defines, reducing <code>#ifdef</code> clutter across the codebase</li>
+            <li><strong>Critical Bug Fixes</strong> — 7 security/correctness fixes in a single sweep (see Technical Details)</li>
+            <li><strong>Unifier Refactor</strong> — <code>occurs()</code> check now uses <code>walkSubTypes</code> instead of hand-written type-kind dispatch</li>
+            <li><strong>6 New Test Suites</strong> — diagnostic engine advanced, error codes lookup, platform, result, string interner, and resolver tests</li>
+        </ul>
+    </section>
+
+    <hr>
+
+    <section>
+        <h3>Technical Details</h3>
+
+        <h4>Added</h4>
+        <ul>
+            <li><code>TypeWalker</code> utility (<code>src/types/type-walker.hpp</code>) — generic <code>walkSubTypes(TypeData&amp;, Fn&amp;&amp;)</code> that dispatches on <code>TypeKind</code> and visits all child <code>TypeId</code>s, with an early-exit <code>bool</code> return</li>
+            <li><code>platform.hpp</code> (<code>src/support/platform.hpp</code>) — unified macros for OS detection (<code>ZITH_OS_WIN</code>, <code>ZITH_OS_UNIX</code>, <code>ZITH_OS_LINUX</code>, <code>ZITH_OS_MAC</code>) and compiler detection (<code>ZITH_COMPILER_MSVC</code>, <code>ZITH_COMPILER_CLANG</code>, <code>ZITH_COMPILER_GCC</code>)</li>
+            <li><code>CMakeLists.txt</code> — new source entries for <code>type-walker.hpp</code> and <code>platform.hpp</code></li>
+            <li>6 new unit test files: <code>diagnostic-engine-advanced.cpp</code>, <code>error-codes-lookup.cpp</code>, <code>platform-test.cpp</code>, <code>resolver-test.cpp</code>, <code>result-test.cpp</code>, <code>string-interner-test.cpp</code></li>
+        </ul>
+
+        <h4>Changed</h4>
+        <ul>
+            <li><code>Unifier::occurs()</code> — refactored from 30-line switch to 5-line <code>walkSubTypes()</code> call</li>
+            <li><code>ast-nodes.hpp</code> — minor type adjustments for <code>TypeFn</code> span storage</li>
+            <li><code>ast-printer.cpp</code> — updated to handle new node variants</li>
+            <li><code>sema-pipeline.cpp</code> — minor pipeline integration fixes</li>
+            <li><code>diagnostic-engine.cpp</code> — additional heuristic refinement</li>
+            <li><code>error-codes.cpp</code> — new error code entries</li>
+        </ul>
+
+        <h4>Fixed</h4>
+        <ul>
+            <li><strong>TypeFn dangling span</strong> — <code>TypeFn</code> now holds a stable span reference instead of a dangling pointer after arena reallocation</li>
+            <li><strong>Empty-token-stream UB</strong> — iterating past the end of an empty token stream no longer invokes undefined behavior</li>
+            <li><strong>Lexer null fallthrough</strong> — fixed a code path where the lexer could fall through a <code>nullptr</code> check</li>
+            <li><strong>SourceMap TOCTOU race</strong> — file-size check and mmap now happen atomically (or within the same locked section)</li>
+            <li><strong>mod() depth parsing</strong> — module path depth is now correctly bounded during recursive descent</li>
+            <li><strong><code>back()</code> const-correctness</strong> — <code>DynArray::back()</code> const overload now returns <code>const T&amp;</code></li>
+            <li><strong><code>Optional&lt;T*&gt;</code> null guards</strong> — <code>Optional</code> holding a raw pointer now properly handles <code>nullptr</code> values without triggering assertions</li>
+        </ul>
+    </section>
+
+    <hr>
+
+    <section>
+        <h3>Modified Files Reference</h3>
+        <ul>
+            <li><a href="https://github.com/GalaxyHaze/Zith/blob/main/src/types/type-walker.hpp">src/types/type-walker.hpp</a></li>
+            <li><a href="https://github.com/GalaxyHaze/Zith/blob/main/src/types/type-intern.cpp">src/types/type-intern.cpp</a></li>
+            <li><a href="https://github.com/GalaxyHaze/Zith/blob/main/src/types/type-kind.hpp">src/types/type-kind.hpp</a></li>
+            <li><a href="https://github.com/GalaxyHaze/Zith/blob/main/src/types/unify.cpp">src/types/unify.cpp</a></li>
+            <li><a href="https://github.com/GalaxyHaze/Zith/blob/main/src/support/platform.hpp">src/support/platform.hpp</a></li>
+            <li><a href="https://github.com/GalaxyHaze/Zith/blob/main/src/ast/ast-nodes.hpp">src/ast/ast-nodes.hpp</a></li>
+            <li><a href="https://github.com/GalaxyHaze/Zith/blob/main/src/ast/ast-printer.cpp">src/ast/ast-printer.cpp</a></li>
+            <li><a href="https://github.com/GalaxyHaze/Zith/blob/main/src/ast/ast-builder.cpp">src/ast/ast-builder.cpp</a></li>
+            <li><a href="https://github.com/GalaxyHaze/Zith/blob/main/src/ast/ast-builder.hpp">src/ast/ast-builder.hpp</a></li>
+            <li><a href="https://github.com/GalaxyHaze/Zith/blob/main/src/sema/sema-pipeline.cpp">src/sema/sema-pipeline.cpp</a></li>
+            <li><a href="https://github.com/GalaxyHaze/Zith/blob/main/src/diagnostics/diagnostic-engine.cpp">src/diagnostics/diagnostic-engine.cpp</a></li>
+            <li><a href="https://github.com/GalaxyHaze/Zith/blob/main/src/diagnostics/error-codes.cpp">src/diagnostics/error-codes.cpp</a></li>
+            <li><a href="https://github.com/GalaxyHaze/Zith/blob/main/src/diagnostics/error-codes.hpp">src/diagnostics/error-codes.hpp</a></li>
+            <li><a href="https://github.com/GalaxyHaze/Zith/blob/main/src/diagnostics/emit.cpp">src/diagnostics/emit.cpp</a></li>
+            <li><a href="https://github.com/GalaxyHaze/Zith/blob/main/src/memory/source-map.cpp">src/memory/source-map.cpp</a></li>
+            <li><a href="https://github.com/GalaxyHaze/Zith/blob/main/src/memory/source-map.hpp">src/memory/source-map.hpp</a></li>
+            <li><a href="https://github.com/GalaxyHaze/Zith/blob/main/src/memory/dyn-array.hpp">src/memory/dyn-array.hpp</a></li>
+            <li><a href="https://github.com/GalaxyHaze/Zith/blob/main/src/memory/optional.hpp">src/memory/optional.hpp</a></li>
+            <li><a href="https://github.com/GalaxyHaze/Zith/blob/main/src/lexer/lexer.cpp">src/lexer/lexer.cpp</a></li>
+            <li><a href="https://github.com/GalaxyHaze/Zith/blob/main/src/lexer/token.hpp">src/lexer/token.hpp</a></li>
+            <li><a href="https://github.com/GalaxyHaze/Zith/blob/main/src/parser/parser.cpp">src/parser/parser.cpp</a></li>
+            <li><a href="https://github.com/GalaxyHaze/Zith/blob/main/src/cli/zithc-main.cpp">src/cli/zithc-main.cpp</a></li>
+            <li><a href="https://github.com/GalaxyHaze/Zith/blob/main/src/import/import-manager.cpp">src/import/import-manager.cpp</a></li>
+            <li><a href="https://github.com/GalaxyHaze/Zith/blob/main/src/import/import-manager.hpp">src/import/import-manager.hpp</a></li>
+            <li><a href="https://github.com/GalaxyHaze/Zith/blob/main/tests/unit/diagnostic-engine-advanced.cpp">tests/unit/diagnostic-engine-advanced.cpp</a></li>
+            <li><a href="https://github.com/GalaxyHaze/Zith/blob/main/tests/unit/error-codes-lookup.cpp">tests/unit/error-codes-lookup.cpp</a></li>
+            <li><a href="https://github.com/GalaxyHaze/Zith/blob/main/tests/unit/platform-test.cpp">tests/unit/platform-test.cpp</a></li>
+            <li><a href="https://github.com/GalaxyHaze/Zith/blob/main/tests/unit/result-test.cpp">tests/unit/result-test.cpp</a></li>
+            <li><a href="https://github.com/GalaxyHaze/Zith/blob/main/tests/unit/string-interner-test.cpp">tests/unit/string-interner-test.cpp</a></li>
+            <li><a href="https://github.com/GalaxyHaze/Zith/blob/main/tests/unit/resolver-test.cpp">tests/unit/resolver-test.cpp</a></li>
+            <li><a href="https://github.com/GalaxyHaze/Zith/blob/main/tests/unit/ast-printer.cpp">tests/unit/ast-printer.cpp</a></li>
+            <li><a href="https://github.com/GalaxyHaze/Zith/blob/main/tests/unit/import-e2e.cpp">tests/unit/import-e2e.cpp</a></li>
+            <li><a href="https://github.com/GalaxyHaze/Zith/blob/main/tests/unit/sema-basics.cpp">tests/unit/sema-basics.cpp</a></li>
+            <li><a href="https://github.com/GalaxyHaze/Zith/blob/main/CMakeLists.txt">CMakeLists.txt</a></li>
+        </ul>
+    </section>
+</div>
+
+<hr style="margin: 48px 0; border-color: #333;">
 
 <div class="changelog-entry">
     <h2>Release v0.3.0</h2>

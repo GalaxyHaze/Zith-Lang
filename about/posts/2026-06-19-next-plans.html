@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><title>Next Plans for Zith</title></head>
+<body>
+
+<h2>Next Plans for Zith</h2>
+<p class="post-date">2026-06-19</p>
+<hr>
+<p>
+    Here's what's on the roadmap for the next few weeks:
+</p>
+
+<h3>Short-term (v0.4.0)</h3>
+<ul>
+    <li><strong>Type system refinements</strong> — finish wiring the <code>TypeWalker</code> into all
+        passes that currently duplicate the type-kind switch. The unification pass was just the
+        first consumer.</li>
+    <li><strong>Compilation session overhaul</strong> — the pipeline is getting more complex and the
+        current <code>CompilationSession</code> needs better stage isolation and error recovery.</li>
+    <li><strong>More comprehensive error reporting</strong> — the heuristic diagnostic engine is
+        working but needs more "did you mean?" coverage for type mismatches and missing symbols.</li>
+    <li><strong>Standard library expansion</strong> — basic collections (<code>Array</code>,
+        <code>List</code>, <code>Map</code>) need to be usable from Zith code.</li>
+</ul>
+
+<h3>Medium-term</h3>
+<ul>
+    <li><strong>Self-hosted parser</strong> — the dream is to have the Zith parser written in Zith itself.
+        This requires the FFI and bootstrapping infrastructure to be solid first.</li>
+    <li><strong>MIR optimizations</strong> — the mid-level IR needs a proper optimization pass
+        pipeline before we can generate competitive machine code.</li>
+    <li><strong>Package manager maturity</strong> — <code>zithc new</code>, <code>zithc build</code>,
+        and dependency resolution work but the UX is rough.</li>
+</ul>
+
+<h3>Long-term vision</h3>
+<ul>
+    <li><strong>LLVM backend stabilization</strong> — we have the IR, but codegen quality and
+        platform coverage need significant work.</li>
+    <li><strong>Language server (LSP)</strong> — the foundation exists but it's disabled. Proper
+        IDE support will be a force multiplier for adoption.</li>
+    <li><strong>Self-hosting</strong> — the ultimate milestone. A Zith compiler written in Zith.</li>
+</ul>
+
+<hr>
+<p>
+    As always, this is a solo project driven by curiosity and caffeine. Things move at the pace
+    they move. But the direction is clear, and every release brings us a step closer.
+</p>
+<hr>
+<p class="post-date"><em>— Haze</em></p>
+
+</body>
+</html>
