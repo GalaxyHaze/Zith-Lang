@@ -6,6 +6,7 @@
 #include "import/import-manager.hpp"
 #include "import/resolver.hpp"
 #include "import/symbol-table.hpp"
+#include "support/platform.hpp"
 #include "import/symbol-visibility.hpp"
 #include "import/symbol-id.hpp"
 #include "memory/arena.hpp"
@@ -33,14 +34,17 @@ static SourceMap source_map;
 static struct Cleanup {
     std::vector<std::string> dirs;
     ~Cleanup() {
-        for (auto &d : dirs)
-            fs::remove_all(d);
+        for (auto &d : dirs) {
+            std::error_code ec;
+            fs::remove_all(d, ec);
+        }
     }
 } cleanup;
 
 static std::string make_tmp_dir() {
-    char tmpl[] = "/tmp/zith_resolver_XXXXXX";
-    const char *d = mkdtemp(tmpl);
+    auto base = fs::temp_directory_path();
+    std::string tmpl = (base / "zith_resolver_XXXXXX").string();
+    char *d = zith::support::mkdtemp(tmpl.data());
     if (d)
         cleanup.dirs.push_back(d);
     return d ? std::string(d) : std::string{};

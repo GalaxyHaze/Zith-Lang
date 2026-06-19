@@ -51,12 +51,12 @@ static auto arena_str(memory::Arena &arena, const std::string &s) -> std::string
 }
 
 static bool path_under_root(const fs::path &p, const fs::path &root) {
-    auto r = root.lexically_normal().string();
+    auto r = root.lexically_normal().generic_string();
     if (r.empty())
         return false;
     if (r.back() != '/')
         r += '/';
-    auto f = p.lexically_normal().string();
+    auto f = p.lexically_normal().generic_string();
     return f.size() >= r.size() && f.substr(0, r.size()) == r;
 }
 
@@ -210,7 +210,7 @@ void ImportManager::collect_dir_files(const std::string &dir_path, const std::st
     for (auto &entry : fs::directory_iterator(dir)) {
         auto &p = entry.path();
         if (entry.is_regular_file() && p.extension() == ".zith") {
-            auto rel = fs::relative(p, fs::path(base_dir)).string();
+            auto rel = fs::relative(p, fs::path(base_dir)).generic_string();
             if (rel.size() >= 5)
                 rel = rel.substr(0, rel.size() - 5);
             out.push_back({p.string(), rel, current_depth});

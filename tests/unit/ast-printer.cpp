@@ -14,8 +14,12 @@ using zith::memory::DynArray;
 
 // Helper: open /dev/null FILE* for printer output
 static FILE *devnull() {
+#ifdef _WIN32
+    FILE *f = fopen("NUL", "w");
+#else
     FILE *f = fopen("/dev/null", "w");
-    CHECK(f != nullptr, "fopen /dev/null succeeded");
+#endif
+    CHECK(f != nullptr, "fopen null device succeeded");
     return f;
 }
 

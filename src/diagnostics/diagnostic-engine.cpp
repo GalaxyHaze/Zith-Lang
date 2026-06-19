@@ -22,4 +22,8 @@ std::span<const Diagnostic> DiagnosticEngine::all() const noexcept {
     return {diagnostics_.data(), diagnostics_.size()};
 }
 
+void DiagnosticEngine::clear() {
+    diagnostics_.clear();
+}
+
 } // namespace zith::diagnostics

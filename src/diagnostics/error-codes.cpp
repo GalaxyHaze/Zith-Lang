@@ -33,6 +33,12 @@ std::optional<ErrorInfo> lookupError(ErrCode code) noexcept {
     case err::ExpectedIdent:
         return ErrorInfo{code, 'E', "parse", "Expected identifier",
                          "A name (variable, function, type) is required here"};
+    case err::InvalidImportDepth:
+        return ErrorInfo{code, 'E', "parse", "Invalid import depth",
+                         "Import depth must be an integer or '..' for infinite depth"};
+    case err::ImportError:
+        return ErrorInfo{code, 'E', "parse", "Import error",
+                         "Check the module path and ensure the file exists"};
 
     // Semantic
     case err::UndefinedIdent:
