@@ -1,4 +1,5 @@
 #include "unify.hpp"
+#include "types/type-walker.hpp"
 #include "diagnostics/error-codes.hpp"
 
 #include <span>
@@ -31,31 +32,13 @@ bool Unifier::occurs(TypeId var, TypeId t) const {
     if (resolved >= intern_.count())
         return false;
 
-    auto kind = intern_.kindOf(resolved);
     auto &data = intern_.lookup(resolved);
-
-    switch (kind) {
-    case TypeKind::Ptr:
-        return occurs(var, std::get<TypePtr>(data).pointee);
-    case TypeKind::Array:
-        return occurs(var, std::get<TypeArray>(data).elem);
-    case TypeKind::Optional:
-        return occurs(var, std::get<TypeOptional>(data).inner);
-    case TypeKind::Failable:
-        return occurs(var, std::get<TypeFailable>(data).inner);
-    case TypeKind::Fn: {
-        auto &fn = std::get<TypeFn>(data);
-        if (occurs(var, fn.ret))
-            return true;
-        for (size_t i = 0; i < fn.param_count; i++) {
-            if (occurs(var, fn.params[i]))
-                return true;
-        }
-        return false;
-    }
-    default:
-        return false;
-    }
+    bool found = false;
+    walkSubTypes(data, [&](TypeId child) {
+        if (!found && occurs(var, child))
+            found = true;
+    });
+    return found;
 }
 
 bool Unifier::unify(TypeId a, TypeId b, memory::Span span) {

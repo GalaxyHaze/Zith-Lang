@@ -8,6 +8,7 @@
 #include "memory/arena.hpp"
 #include "memory/dyn-array.hpp"
 #include "memory/source-map.hpp"
+#include "support/platform.hpp"
 
 #include "../test-common.hpp"
 #include <cstdio>
@@ -56,8 +57,9 @@ using zith::memory::Arena;
 using zith::memory::DynArray;
 
 static std::string make_tmp_dir() {
-    char tmpl[]   = "/tmp/zith_e2e_XXXXXX";
-    const char *d = mkdtemp(tmpl);
+    auto base = fs::temp_directory_path();
+    std::string tmpl = (base / "zith_e2e_XXXXXX").string();
+    char *d = zith::support::mkdtemp(tmpl.data());
     if (d)
         cleanup.dirs.push_back(d);
     return d ? std::string(d) : std::string{};

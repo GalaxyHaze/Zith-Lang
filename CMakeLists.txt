@@ -107,6 +107,11 @@ add_zith_test(zithc-ast-printer      tests/unit/ast-printer.cpp)
 add_zith_test(zithc-resolver-test    tests/unit/resolver-test.cpp)
 add_zith_test(zithc-arena-test       tests/unit/arena-test.cpp)
 add_zith_test(zithc-source-map-test tests/unit/source-map-test.cpp)
+add_zith_test(zithc-platform-test   tests/unit/platform-test.cpp)
+add_zith_test(zithc-error-codes     tests/unit/error-codes-lookup.cpp)
+add_zith_test(zithc-diag-advanced   tests/unit/diagnostic-engine-advanced.cpp)
+add_zith_test(zithc-result          tests/unit/result-test.cpp)
+add_zith_test(zithc-string-interner tests/unit/string-interner-test.cpp)
 
 endif()
 

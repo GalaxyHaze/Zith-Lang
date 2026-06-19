@@ -1,10 +1,12 @@
 #include "cli/compiler-driver.hpp"
 #include "cli/options.hpp"
 #include "cli/project-config.hpp"
+#include "support/platform.hpp"
 
 #include <filesystem>
 
 int main(const int argc, char **argv) {
+    zith::support::enableVirtualTerminal();
     auto opts = zith::cli::parseArgs(argc, argv);
 
     // Search for ZithProject.toml from CWD upward and merge build settings.
