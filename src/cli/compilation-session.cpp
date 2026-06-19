@@ -8,6 +8,8 @@
 #include "sema/heuristic-engine.hpp"
 #include "sema/sema-pipeline.hpp"
 #include "solve/solver.hpp"
+#include "zir/zir/zir-emitter.hpp"
+#include "zir/zir/zir-interp.hpp"
 
 #include <chrono>
 #include <cstdio>
@@ -44,7 +46,7 @@ CompilationSession::CompilationSession(const Options &opts, std::string file_pat
       type_arena_(), hir_arena_(), mir_arena_(), scratch_arena_(), diags_(scratch_arena_),
       ast_builder_(ast_arena_), import_mgr_(sym_arena_, source_map_, diags_), syms_(sym_arena_),
       resolved_syms_(sym_arena_), types_(type_arena_), hir_module_(hir_arena_),
-      mir_module_(mir_arena_) {
+      mir_module_(mir_arena_), zir_module_() {
     namespace fs = std::filesystem;
     if (fs::is_directory(file_path_))
         project_root_ = fs::weakly_canonical(fs::path(file_path_)).string();
@@ -57,6 +59,12 @@ CompilationSession::CompilationSession(const Options &opts, std::string file_pat
     auto toml_path = fs::path(project_root_) / "ZithProject.toml";
     if (auto cfg = ProjectConfig::load(toml_path.string()))
         project_config_ = std::move(*cfg);
+
+    // Register built-in functions
+    syms_.declare("write", import::SymbolVisibility::Public, 0, import::SymKind::Fn, ast::kInvalidDecl,
+                  memory::Span{});
+    syms_.declare("input", import::SymbolVisibility::Public, 0, import::SymKind::Fn, ast::kInvalidDecl,
+                  memory::Span{});
 }
 
 bool CompilationSession::run() {
@@ -386,14 +394,25 @@ bool CompilationSession::mirStage() {
 
 bool CompilationSession::zirStage() {
     auto t0 = std::chrono::steady_clock::now();
-    // TODO: wire up ZIR interpretation or LLVM codegen + emit
-    // Serialization point: after this stage, results from multiple files
-    // may need to be merged (linking, combining interpreted modules).
-    // This is the only stage that may require inter-file synchronization.
+
     if (opts_.verbose) {
-        auto dt = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0)
-                      .count();
-        writeOutput("  [zir] \xe2\x80\x94 (stub)  (%5.1fms)\n", dt);
+        writeOutput("  [zirc] lowering HIR -> ZIR\n");
+    }
+
+    zir::ZirEmitter emitter(hir_module_, zir_module_);
+    emitter.emit();
+
+    if (opts_.verbose) {
+        writeOutput("  [zirc] running interpreter\n");
+    }
+
+    zir::ZirInterpreter interp(zir_module_);
+    interp.run();
+
+    auto dt = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0)
+                  .count();
+    if (opts_.verbose) {
+        writeOutput("  [zir] \xe2\x80\x94 (interpreted)  (%5.1fms)\n", dt);
     }
     return true;
 }

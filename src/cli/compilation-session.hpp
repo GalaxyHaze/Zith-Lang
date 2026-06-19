@@ -13,6 +13,7 @@
 #include "types/type-intern.hpp"
 #include "zir/hir/hir-module.hpp"
 #include "zir/mir/mir-module.hpp"
+#include "zir/zir/zir-inst.hpp"
 
 #include <cstdarg>
 #include <string>
@@ -60,6 +61,7 @@ class CompilationSession {
     types::TypeIntern types_;
     zir::hir::HirModule hir_module_;
     zir::mir::MirModule mir_module_;
+    zir::ZirModule zir_module_;
 
     memory::FileId file_id_ = 0;
     lexer::TokenStream tokens_{};
