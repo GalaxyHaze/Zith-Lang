@@ -90,9 +90,20 @@ struct WhileNode {
     ExprId body;
 };
 
+struct FnParam {
+    std::string_view name;
+    TypeExprId type = kInvalidTypeExpr;
+};
+
+struct GenericParam {
+    std::string_view name;
+    memory::DynArray<TypeExprId> bounds;
+};
+
 struct LetNode {
     bool mut = false;
-    std::string_view name;
+    TypeExprId type_annot = kInvalidTypeExpr;
+    memory::DynArray<std::string_view> names;
     ExprId init = kInvalidExpr;
 };
 
@@ -107,13 +118,15 @@ struct RetNode {
 
 struct FnDeclNode {
     std::string_view name;
-    memory::DynArray<std::string_view> params;
+    memory::DynArray<GenericParam> generic_params;
+    memory::DynArray<FnParam> params;
+    TypeExprId return_type = kInvalidTypeExpr;
     ExprId body = kInvalidExpr;
 };
 
 struct StructField {
     std::string_view name;
-    uint32_t type_expr;
+    TypeExprId type_expr = kInvalidTypeExpr;
 };
 
 struct StructDeclNode {
@@ -134,7 +147,7 @@ struct EnumDeclNode {
 
 struct UnionVariant {
     std::string_view name;
-    uint32_t type_expr;
+    TypeExprId type_expr = kInvalidTypeExpr;
 };
 
 struct UnionDeclNode {
@@ -187,6 +200,6 @@ using ExprNode = std::variant<LitValue, IdentNode, BinaryNode, UnaryNode, CallNo
 using StmtNode = std::variant<LetNode, AssignNode, RetNode, ExprId>;
 
 using DeclNode = std::variant<FnDeclNode, StructDeclNode, EnumDeclNode, UnionDeclNode,
-                               ComponentDeclNode, TraitDeclNode, InterfaceDeclNode, ImportNode>;
+                              ComponentDeclNode, TraitDeclNode, InterfaceDeclNode, ImportNode>;
 
 } // namespace zith::ast

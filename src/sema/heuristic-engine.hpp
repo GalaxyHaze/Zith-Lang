@@ -16,8 +16,7 @@ public:
 
 private:
     static size_t levenshteinDistance(std::string_view a, std::string_view b);
-    static std::string_view findBestMatch(std::string_view target,
-                                          const import::SymbolTable &syms);
+    static std::string_view findBestMatch(std::string_view target, const import::SymbolTable &syms);
 };
 
-} // namespace zith::diagnostics
+} // namespace zith::sema

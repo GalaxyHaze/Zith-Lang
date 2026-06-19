@@ -12,8 +12,8 @@ namespace zith::support {
 
 #ifdef _WIN32
 
-inline char* mkdtemp(char* tmpl) {
-    char* X = std::strstr(tmpl, "XXXXXX");
+inline char *mkdtemp(char *tmpl) {
+    char *X = std::strstr(tmpl, "XXXXXX");
     if (!X)
         return nullptr;
 
@@ -35,7 +35,7 @@ inline char* mkdtemp(char* tmpl) {
 
 #else
 
-inline char* mkdtemp(char* tmpl) {
+inline char *mkdtemp(char *tmpl) {
     return ::mkdtemp(tmpl);
 }
 
@@ -43,10 +43,7 @@ inline char* mkdtemp(char* tmpl) {
 
 inline void enableVirtualTerminal() {
 #ifdef _WIN32
-    HANDLE handles[] = {
-        GetStdHandle(STD_OUTPUT_HANDLE),
-        GetStdHandle(STD_ERROR_HANDLE)
-    };
+    HANDLE handles[] = {GetStdHandle(STD_OUTPUT_HANDLE), GetStdHandle(STD_ERROR_HANDLE)};
     for (auto h : handles) {
         if (h == INVALID_HANDLE_VALUE || h == NULL)
             continue;

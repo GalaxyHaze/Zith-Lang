@@ -1,8 +1,8 @@
+#include "ast/ast-printer.hpp"
 #include "../test-common.hpp"
 #include "ast/ast-builder.hpp"
 #include "ast/ast-ids.hpp"
 #include "ast/ast-nodes.hpp"
-#include "ast/ast-printer.hpp"
 #include "memory/arena.hpp"
 #include "memory/dyn-array.hpp"
 
@@ -70,9 +70,9 @@ static void test_print_expr_binary() {
     AstBuilder builder(arena);
     DynArray<DeclId> decls(arena);
 
-    auto lhs = builder.litExpr(LitKind::Int, "1");
-    auto rhs = builder.litExpr(LitKind::Int, "2");
-    auto bin = builder.binary(lhs, BinaryOp::Add, rhs);
+    auto lhs  = builder.litExpr(LitKind::Int, "1");
+    auto rhs  = builder.litExpr(LitKind::Int, "2");
+    auto bin  = builder.binary(lhs, BinaryOp::Add, rhs);
     auto body = builder.block(DynArray<StmtId>(arena), bin);
     auto fn   = builder.fnDecl("test_fn", DynArray<std::string_view>(arena), body);
     decls.push(fn);
@@ -91,9 +91,9 @@ static void test_print_expr_unary() {
     DynArray<DeclId> decls(arena);
 
     auto operand = builder.litExpr(LitKind::Int, "5");
-    auto un = builder.unary(UnaryOp::Neg, operand);
-    auto body = builder.block(DynArray<StmtId>(arena), un);
-    auto fn   = builder.fnDecl("test_fn", DynArray<std::string_view>(arena), body);
+    auto un      = builder.unary(UnaryOp::Neg, operand);
+    auto body    = builder.block(DynArray<StmtId>(arena), un);
+    auto fn      = builder.fnDecl("test_fn", DynArray<std::string_view>(arena), body);
     decls.push(fn);
     ProgramNode prog(arena);
     prog.decls = std::move(decls);
@@ -131,10 +131,10 @@ static void test_print_expr_field() {
     AstBuilder builder(arena);
     DynArray<DeclId> decls(arena);
 
-    auto obj   = builder.ident("point");
-    auto f     = builder.field(obj, "x");
-    auto body  = builder.block(DynArray<StmtId>(arena), f);
-    auto fn    = builder.fnDecl("test_fn", DynArray<std::string_view>(arena), body);
+    auto obj  = builder.ident("point");
+    auto f    = builder.field(obj, "x");
+    auto body = builder.block(DynArray<StmtId>(arena), f);
+    auto fn   = builder.fnDecl("test_fn", DynArray<std::string_view>(arena), body);
     decls.push(fn);
     ProgramNode prog(arena);
     prog.decls = std::move(decls);
@@ -208,10 +208,10 @@ static void test_print_expr_while() {
     AstBuilder builder(arena);
     DynArray<DeclId> decls(arena);
 
-    auto cond  = builder.litExpr(LitKind::Bool, "true");
-    auto body  = builder.block(DynArray<StmtId>(arena));
-    auto wh    = builder.whileExpr(cond, body);
-    auto fn    = builder.fnDecl("test_fn", DynArray<std::string_view>(arena), wh);
+    auto cond = builder.litExpr(LitKind::Bool, "true");
+    auto body = builder.block(DynArray<StmtId>(arena));
+    auto wh   = builder.whileExpr(cond, body);
+    auto fn   = builder.fnDecl("test_fn", DynArray<std::string_view>(arena), wh);
     decls.push(fn);
     ProgramNode prog(arena);
     prog.decls = std::move(decls);

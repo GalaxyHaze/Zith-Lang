@@ -59,18 +59,18 @@ int cmd_check(const Options &opts) {
         // Single file: sequential, immediate output
         CompilationSession session(opts, files[0]);
         bool ok = session.runTo(Stage::TypeChecked);
-    if (session.hasErrors())
-        ok = false;
-    results.push_back(ok);
-} else {
-    // Multi-file: parallel with buffered output
-    std::vector<std::future<SessionResult>> futures;
-    futures.reserve(files.size());
-    for (const auto &file : files) {
-        futures.push_back(std::async(std::launch::async, [&opts, file]() -> SessionResult {
-            auto session = std::make_unique<CompilationSession>(opts, file);
-            session->setBuffered(true);
-            bool ok = session->runTo(Stage::TypeChecked);
+        if (session.hasErrors())
+            ok = false;
+        results.push_back(ok);
+    } else {
+        // Multi-file: parallel with buffered output
+        std::vector<std::future<SessionResult>> futures;
+        futures.reserve(files.size());
+        for (const auto &file : files) {
+            futures.push_back(std::async(std::launch::async, [&opts, file]() -> SessionResult {
+                auto session = std::make_unique<CompilationSession>(opts, file);
+                session->setBuffered(true);
+                bool ok = session->runTo(Stage::TypeChecked);
                 return {std::move(session), ok};
             }));
         }
@@ -156,9 +156,8 @@ int cmd_compile(const Options &opts) {
         sr.session->emitDiagnostics();
         std::fputs(sr.session->flushOutput().c_str(), stderr);
         if (opts.verbose) {
-            std::printf("%s[%s]%s %s\n", sr.ok ? green(opts) : red(opts),
-                        sr.ok ? "ok" : "error", reset(opts),
-                        sr.session->filePath().c_str());
+            std::printf("%s[%s]%s %s\n", sr.ok ? green(opts) : red(opts), sr.ok ? "ok" : "error",
+                        reset(opts), sr.session->filePath().c_str());
         }
         if (!sr.ok)
             exit_code = 1;
@@ -203,9 +202,8 @@ int cmd_build(const Options &opts) {
         sr.session->emitDiagnostics();
         std::fputs(sr.session->flushOutput().c_str(), stderr);
         if (opts.verbose) {
-            std::printf("%s[%s]%s %s\n", sr.ok ? green(opts) : red(opts),
-                        sr.ok ? "ok" : "error", reset(opts),
-                        sr.session->filePath().c_str());
+            std::printf("%s[%s]%s %s\n", sr.ok ? green(opts) : red(opts), sr.ok ? "ok" : "error",
+                        reset(opts), sr.session->filePath().c_str());
         }
         if (!sr.ok)
             exit_code = 1;

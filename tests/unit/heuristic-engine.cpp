@@ -111,8 +111,7 @@ static void test_generate_undefined_ident_suggests_match() {
 
     CHECK_EQ(suggestions.size(), size_t(1), "generate produced 1 suggestion for UndefinedIdent");
     if (suggestions.size() > 0) {
-        CHECK(suggestions[0].find("foobar") != std::string::npos,
-              "suggestion mentions 'foobar'");
+        CHECK(suggestions[0].find("foobar") != std::string::npos, "suggestion mentions 'foobar'");
     }
 }
 
@@ -129,8 +128,7 @@ static void test_generate_undefined_ident_no_close_match() {
     std::vector<std::string> suggestions;
     engine.generate(diag, syms, suggestions);
 
-    CHECK_EQ(suggestions.size(), size_t(0),
-             "generate produces no suggestion when no close match");
+    CHECK_EQ(suggestions.size(), size_t(0), "generate produces no suggestion when no close match");
 }
 
 static void test_generate_type_mismatch_returns_cast_suggestion() {
@@ -181,8 +179,7 @@ static void test_generate_undefined_ident_no_quotes_in_message() {
     std::vector<std::string> suggestions;
     engine.generate(diag, syms, suggestions);
 
-    CHECK_EQ(suggestions.size(), size_t(0),
-             "no suggestion when message has no quoted identifier");
+    CHECK_EQ(suggestions.size(), size_t(0), "no suggestion when message has no quoted identifier");
 }
 
 int main() {

@@ -77,17 +77,28 @@ namespace {
 uint8_t infixPrec(const lexer::Token &t) {
     if (t.is(lexer::TokenKind::Punctuation)) {
         switch (t.punc) {
-        case '|': return 6;
-        case '^': return 7;
-        case '&': return 8;
-        case '<': return 10;
-        case '>': return 10;
-        case '+': return 12;
-        case '-': return 12;
-        case '*': return 14;
-        case '/': return 14;
-        case '%': return 14;
-        default:  return 0;
+        case '|':
+            return 6;
+        case '^':
+            return 7;
+        case '&':
+            return 8;
+        case '<':
+            return 10;
+        case '>':
+            return 10;
+        case '+':
+            return 12;
+        case '-':
+            return 12;
+        case '*':
+            return 14;
+        case '/':
+            return 14;
+        case '%':
+            return 14;
+        default:
+            return 0;
         }
     }
     if (t.is(lexer::TokenKind::Logical)) {
@@ -96,21 +107,36 @@ uint8_t infixPrec(const lexer::Token &t) {
     }
     if (t.is(lexer::TokenKind::Operators)) {
         switch (t.punc) {
-        case '|': return 6;
-        case '^': return 7;
-        case '&': return 8;
-        case '<': return 10;
-        case '>': return 10;
-        case '+': return 12;
-        case '-': return 12;
-        case '*': return 14;
-        case '/': return 14;
-        case '%': return 14;
-        case '=': return 0;  // '=' is assignment, not binary comparison
-        case '!': return 0;  // '!' is prefix/postfix, not binary
-        case '~': return 0;
-        case '?': return 0;
-        default:  return 0;
+        case '|':
+            return 6;
+        case '^':
+            return 7;
+        case '&':
+            return 8;
+        case '<':
+            return 10;
+        case '>':
+            return 10;
+        case '+':
+            return 12;
+        case '-':
+            return 12;
+        case '*':
+            return 14;
+        case '/':
+            return 14;
+        case '%':
+            return 14;
+        case '=':
+            return 0; // '=' is assignment, not binary comparison
+        case '!':
+            return 0; // '!' is prefix/postfix, not binary
+        case '~':
+            return 0;
+        case '?':
+            return 0;
+        default:
+            return 0;
         }
     }
     return 0;
@@ -118,32 +144,58 @@ uint8_t infixPrec(const lexer::Token &t) {
 
 // Word operator ('and', 'or', 'xor') → BinaryOp
 ast::BinaryOp binaryOpForWord(std::string_view w) {
-    if (w == "and") return ast::BinaryOp::And;
-    if (w == "or")  return ast::BinaryOp::Or;
-    if (w == "xor") return ast::BinaryOp::Xor;
+    if (w == "and")
+        return ast::BinaryOp::And;
+    if (w == "or")
+        return ast::BinaryOp::Or;
+    if (w == "xor")
+        return ast::BinaryOp::Xor;
     return ast::BinaryOp::Add; // unreachable
 }
 
 uint8_t wordPrec(std::string_view w) {
-    if (w == "or")  return 2;
-    if (w == "xor") return 4;
-    if (w == "and") return 3;
+    if (w == "or")
+        return 2;
+    if (w == "xor")
+        return 4;
+    if (w == "and")
+        return 3;
     return 0;
 }
 
 // Map a multi-char operator sequence to a BinaryOp.
 // Returns true if the two tokens form a compound operator.
-bool tryCompoundOp(const lexer::Token &first, const lexer::Token &second,
-                   ast::BinaryOp &out_op) {
+bool tryCompoundOp(const lexer::Token &first, const lexer::Token &second, ast::BinaryOp &out_op) {
     if (!first.is(lexer::TokenKind::Operators) || !second.is(lexer::TokenKind::Operators))
         return false;
-    if (first.punc == '=' && second.punc == '=') { out_op = ast::BinaryOp::Eq; return true; }
-    if (first.punc == '!' && second.punc == '=') { out_op = ast::BinaryOp::Ne; return true; }
-    if (first.punc == '<' && second.punc == '=') { out_op = ast::BinaryOp::Le; return true; }
-    if (first.punc == '>' && second.punc == '=') { out_op = ast::BinaryOp::Ge; return true; }
-    if (first.punc == '<' && second.punc == '<') { out_op = ast::BinaryOp::Shl; return true; }
-    if (first.punc == '>' && second.punc == '>') { out_op = ast::BinaryOp::Shr; return true; }
-    if (first.punc == '=' && second.punc == '>') { out_op = ast::BinaryOp::Eq; return true; }
+    if (first.punc == '=' && second.punc == '=') {
+        out_op = ast::BinaryOp::Eq;
+        return true;
+    }
+    if (first.punc == '!' && second.punc == '=') {
+        out_op = ast::BinaryOp::Ne;
+        return true;
+    }
+    if (first.punc == '<' && second.punc == '=') {
+        out_op = ast::BinaryOp::Le;
+        return true;
+    }
+    if (first.punc == '>' && second.punc == '=') {
+        out_op = ast::BinaryOp::Ge;
+        return true;
+    }
+    if (first.punc == '<' && second.punc == '<') {
+        out_op = ast::BinaryOp::Shl;
+        return true;
+    }
+    if (first.punc == '>' && second.punc == '>') {
+        out_op = ast::BinaryOp::Shr;
+        return true;
+    }
+    if (first.punc == '=' && second.punc == '>') {
+        out_op = ast::BinaryOp::Eq;
+        return true;
+    }
     // && and || are not valid — use and / or instead
     return false;
 }
@@ -151,18 +203,30 @@ bool tryCompoundOp(const lexer::Token &first, const lexer::Token &second,
 // Single-char operator → BinaryOp
 ast::BinaryOp binaryOpForChar(char c) {
     switch (c) {
-    case '+': return ast::BinaryOp::Add;
-    case '-': return ast::BinaryOp::Sub;
-    case '*': return ast::BinaryOp::Mul;
-    case '/': return ast::BinaryOp::Div;
-    case '%': return ast::BinaryOp::Rest;
-    case '<': return ast::BinaryOp::Lt;
-    case '>': return ast::BinaryOp::Gt;
-    case '=': return ast::BinaryOp::Eq;   // single '=' is not Eq in parser — only == is
-    case '!': return ast::BinaryOp::Ne;   // single '!' is not Ne — it's prefix/postfix
-    case '&': return ast::BinaryOp::And;  // single '&' is not And in parser
-    case '|': return ast::BinaryOp::Or;   // single '|' is not Or in parser
-    default:  return ast::BinaryOp::Add;  // unreachable
+    case '+':
+        return ast::BinaryOp::Add;
+    case '-':
+        return ast::BinaryOp::Sub;
+    case '*':
+        return ast::BinaryOp::Mul;
+    case '/':
+        return ast::BinaryOp::Div;
+    case '%':
+        return ast::BinaryOp::Rest;
+    case '<':
+        return ast::BinaryOp::Lt;
+    case '>':
+        return ast::BinaryOp::Gt;
+    case '=':
+        return ast::BinaryOp::Eq; // single '=' is not Eq in parser — only == is
+    case '!':
+        return ast::BinaryOp::Ne; // single '!' is not Ne — it's prefix/postfix
+    case '&':
+        return ast::BinaryOp::And; // single '&' is not And in parser
+    case '|':
+        return ast::BinaryOp::Or; // single '|' is not Or in parser
+    default:
+        return ast::BinaryOp::Add; // unreachable
     }
 }
 
@@ -189,7 +253,7 @@ ast::ExprId Parser::parsePrimary() {
     // 'if' expression
     if (peek().is(TokenKind::If) && lexeme() == "if") {
         advance();
-        auto cond = parseExpr();
+        auto cond               = parseExpr();
         ast::ExprId then_branch = kInvalidExpr;
         if (peek().punc == '{') {
             advance();
@@ -211,7 +275,7 @@ ast::ExprId Parser::parsePrimary() {
     // 'while' expression
     if (peek().is(TokenKind::Control) && lexeme() == "while") {
         advance();
-        auto cond = parseExpr();
+        auto cond        = parseExpr();
         ast::ExprId body = kInvalidExpr;
         if (peek().punc == '{') {
             advance();
@@ -226,7 +290,7 @@ ast::ExprId Parser::parsePrimary() {
         // for (init; cond; step) body
         // desugar: { init; while cond { body; step; } }
         auto desugar_block = bld->block(memory::DynArray<ast::StmtId>{bld->arena()});
-        auto &block = std::get<ast::BlockNode>(bld->getExpr(desugar_block));
+        auto &block        = std::get<ast::BlockNode>(bld->getExpr(desugar_block));
 
         if (peek().punc == '(') {
             advance();
@@ -271,7 +335,7 @@ ast::ExprId Parser::parsePrimary() {
 
             // Build while cond { body; step; }
             auto body_block = bld->block(memory::DynArray<ast::StmtId>{bld->arena()});
-            auto &bb = std::get<ast::BlockNode>(bld->getExpr(body_block));
+            auto &bb        = std::get<ast::BlockNode>(bld->getExpr(body_block));
             if (loop_body != kInvalidExpr) {
                 auto &lb = std::get<ast::BlockNode>(bld->getExpr(loop_body));
                 for (auto s : lb.stmts)
@@ -281,7 +345,8 @@ ast::ExprId Parser::parsePrimary() {
             if (step != kInvalidExpr)
                 bb.stmts.push(bld->addStmt(step));
 
-            ast::ExprId while_cond = cond != kInvalidExpr ? cond : bld->litExpr(ast::LitKind::Bool, "true");
+            ast::ExprId while_cond =
+                cond != kInvalidExpr ? cond : bld->litExpr(ast::LitKind::Bool, "true");
             auto while_expr = bld->whileExpr(while_cond, body_block);
             block.stmts.push(bld->addStmt(while_expr));
         }
@@ -350,7 +415,8 @@ ast::ExprId Parser::parseExpr(int min_prec) {
     auto lhs = parsePrefix();
 
     for (;;) {
-        if (eof()) break;
+        if (eof())
+            break;
 
         auto &tok = peek();
 
@@ -373,7 +439,7 @@ ast::ExprId Parser::parseExpr(int min_prec) {
         if (tok.punc == '.' && peek(1).punc == '.') {
             advance(2);
             auto rhs = parseExpr(min_prec + 1);
-            lhs = bld->range(lhs, rhs);
+            lhs      = bld->range(lhs, rhs);
             continue;
         }
 
@@ -427,12 +493,13 @@ ast::ExprId Parser::parseExpr(int min_prec) {
 
         // ── Word infix: and / or / xor ──────────────────────────
         if (tok.is(lexer::TokenKind::Logical)) {
-            auto word = lexeme();
+            auto word    = lexeme();
             uint8_t prec = wordPrec(word);
-            if (prec == 0 || prec < min_prec) break;
+            if (prec == 0 || prec < min_prec)
+                break;
             advance();
             auto rhs = parseExpr(prec + 1);
-            lhs = bld->binary(lhs, binaryOpForWord(word), rhs);
+            lhs      = bld->binary(lhs, binaryOpForWord(word), rhs);
             continue;
         }
 
@@ -440,16 +507,18 @@ ast::ExprId Parser::parseExpr(int min_prec) {
         ast::BinaryOp compound_op;
         if (tryCompoundOp(tok, peek(1), compound_op)) {
             uint8_t prec = infixPrec(tok);
-            if (prec < min_prec) break;
+            if (prec < min_prec)
+                break;
             advance(2);
             auto rhs = parseExpr(prec + 1);
-            lhs = bld->binary(lhs, compound_op, rhs);
+            lhs      = bld->binary(lhs, compound_op, rhs);
             continue;
         }
 
         // ── Infix binary operator (single char) ─────────────────
         uint8_t prec = infixPrec(tok);
-        if (prec == 0 || prec < min_prec) break;
+        if (prec == 0 || prec < min_prec)
+            break;
 
         // Check that it's really an infix operator, not part of a compound
         ast::BinaryOp compound_check;
@@ -461,7 +530,7 @@ ast::ExprId Parser::parseExpr(int min_prec) {
         char op_punc = tok.punc;
         advance();
         auto rhs = parseExpr(prec + 1);
-        lhs = bld->binary(lhs, binaryOpForChar(op_punc), rhs);
+        lhs      = bld->binary(lhs, binaryOpForChar(op_punc), rhs);
     }
 
     return lhs;
@@ -501,14 +570,16 @@ ast::StmtId Parser::parseStmt() {
 
     if (peek().is(TokenKind::Control) && lexeme() == "break") {
         advance();
-        if (peek().punc == ';') advance();
+        if (peek().punc == ';')
+            advance();
         // placeholder: break with no loop context
         return bld->addStmt(bld->litExpr(ast::LitKind::Nil, "null"));
     }
 
     if (peek().is(TokenKind::Control) && lexeme() == "continue") {
         advance();
-        if (peek().punc == ';') advance();
+        if (peek().punc == ';')
+            advance();
         return bld->addStmt(bld->litExpr(ast::LitKind::Nil, "null"));
     }
 
@@ -751,10 +822,11 @@ ScanResult scan(Parser &parser, import::SymbolTable &syms) {
                     } else if (tok.peek().is(TokenKind::LitVal)) {
                         auto n = tok.lexeme();
                         tok.advance();
-                        char *end = nullptr;
-                        long val = std::strtol(n.data(), &end, 10);
+                        char *end         = nullptr;
+                        long val          = std::strtol(n.data(), &end, 10);
                         current_mod_depth = (end > n.data() && val >= 1 && val <= INT32_MAX)
-                            ? static_cast<int32_t>(val) : 1;
+                                                ? static_cast<int32_t>(val)
+                                                : 1;
                         if (tok.peek().punc == ')')
                             tok.advance();
                     } else {
@@ -858,7 +930,7 @@ ScanResult scan(Parser &parser, import::SymbolTable &syms) {
 
         // ── struct-like declaration (struct / enum / union / component) ─
         if (tok.peek().is(TokenKind::Struct)) {
-            auto kw   = tok.lexeme();
+            auto kw = tok.lexeme();
             tok.advance();
 
             if (!tok.peek().is(TokenKind::Identifier)) {
@@ -884,23 +956,17 @@ ScanResult scan(Parser &parser, import::SymbolTable &syms) {
             else
                 sk = import::SymKind::Struct;
 
-            auto decl = ast::kInvalidDecl;
+            auto decl             = ast::kInvalidDecl;
             ast::ExprId body_node = kInvalidExpr;
             memory::Span body_span{};
 
             // create appropriate AST node
             if (kw == "struct") {
-                decl = bld.structDecl(
-                    name,
-                    memory::DynArray<ast::StructField>(bld.arena()));
+                decl = bld.structDecl(name, memory::DynArray<ast::StructField>(bld.arena()));
             } else if (kw == "enum") {
-                decl = bld.enumDecl(
-                    name,
-                    memory::DynArray<ast::EnumVariant>(bld.arena()));
+                decl = bld.enumDecl(name, memory::DynArray<ast::EnumVariant>(bld.arena()));
             } else if (kw == "union") {
-                decl = bld.unionDecl(
-                    name,
-                    memory::DynArray<ast::UnionVariant>(bld.arena()));
+                decl = bld.unionDecl(name, memory::DynArray<ast::UnionVariant>(bld.arena()));
             } else {
                 decl = bld.componentDecl(name);
             }
@@ -971,9 +1037,9 @@ ScanResult scan(Parser &parser, import::SymbolTable &syms) {
                                     auto fname      = tok.lexeme();
                                     tok.advance();
                                     if (!reportIfDuplicate(syms, diag, fname, fname_span)) {
-                                        auto fs = syms.declare(
-                                            fname, import::SymbolVisibility::Private, 0,
-                                            import::SymKind::Variable);
+                                        auto fs =
+                                            syms.declare(fname, import::SymbolVisibility::Private,
+                                                         0, import::SymKind::Variable);
                                         if (decl != ast::kInvalidDecl && fs != import::kInvalidSym)
                                             syms.get(fs).decl_id = decl;
                                     }
@@ -1141,7 +1207,7 @@ ScanResult scan(Parser &parser, import::SymbolTable &syms) {
 
         // ── trait / interface declaration ────────────────────────────
         if (tok.peek().is(TokenKind::Trait) || tok.peek().is(TokenKind::Interface)) {
-            auto kw   = tok.lexeme();
+            auto kw = tok.lexeme();
             tok.advance();
 
             if (!tok.peek().is(TokenKind::Identifier)) {
@@ -1157,12 +1223,12 @@ ScanResult scan(Parser &parser, import::SymbolTable &syms) {
             auto name      = tok.lexeme();
             tok.advance();
 
-            import::SymKind sk = (kw == "interface")
-                ? import::SymKind::Interface
-                : import::SymKind::Trait;
-            auto decl = (kw == "interface")
-                ? bld.interfaceDecl(name, memory::DynArray<ast::TraitMethod>(bld.arena()))
-                : bld.traitDecl(name, memory::DynArray<ast::TraitMethod>(bld.arena()));
+            import::SymKind sk =
+                (kw == "interface") ? import::SymKind::Interface : import::SymKind::Trait;
+            auto decl =
+                (kw == "interface")
+                    ? bld.interfaceDecl(name, memory::DynArray<ast::TraitMethod>(bld.arena()))
+                    : bld.traitDecl(name, memory::DynArray<ast::TraitMethod>(bld.arena()));
 
             ast::ExprId body_node = kInvalidExpr;
             memory::Span body_span{};
@@ -1369,6 +1435,246 @@ ScanResult scan(Parser &parser, import::SymbolTable &syms) {
     return result;
 }
 
+// ── type expression parsing ────────────────────────────────────────────
+
+namespace {
+
+bool matchBuiltinType(std::string_view name, ast::BuiltinType &out) {
+    if (name == "i8")       { out = ast::BuiltinType::I8;    return true; }
+    if (name == "i16")      { out = ast::BuiltinType::I16;   return true; }
+    if (name == "i32")      { out = ast::BuiltinType::I32;   return true; }
+    if (name == "i64")      { out = ast::BuiltinType::I64;   return true; }
+    if (name == "i128")     { out = ast::BuiltinType::I128;  return true; }
+    if (name == "u8")       { out = ast::BuiltinType::U8;    return true; }
+    if (name == "u16")      { out = ast::BuiltinType::U16;   return true; }
+    if (name == "u32")      { out = ast::BuiltinType::U32;   return true; }
+    if (name == "u64")      { out = ast::BuiltinType::U64;   return true; }
+    if (name == "u128")     { out = ast::BuiltinType::U128;  return true; }
+    if (name == "f32")      { out = ast::BuiltinType::F32;   return true; }
+    if (name == "f64")      { out = ast::BuiltinType::F64;   return true; }
+    if (name == "bool")     { out = ast::BuiltinType::Bool;  return true; }
+    if (name == "char")     { out = ast::BuiltinType::Char;  return true; }
+    if (name == "void")     { out = ast::BuiltinType::Void;  return true; }
+    if (name == "never" || name == "noreturn")
+                            { out = ast::BuiltinType::Never; return true; }
+    if (name == "invalid")  { out = ast::BuiltinType::Invalid; return true; }
+    if (name == "unknown")  { out = ast::BuiltinType::Unknown; return true; }
+    if (name == "opaque")   { out = ast::BuiltinType::Opaque; return true; }
+    return false;
+}
+
+} // anonymous namespace
+
+ast::TypeExprId Parser::parsePrimaryType() {
+    // ── builtin types (i32, bool, void, …) ──────────────────────────
+    if (peek().is(TokenKind::Type)) {
+        ast::BuiltinType bt;
+        if (matchBuiltinType(lexeme(), bt)) {
+            advance();
+            return bld->builtinExpr(bt);
+        }
+        // fall through: treat as a path
+        memory::DynArray<std::string_view> segments{bld->arena()};
+        segments.push(lexeme());
+        advance();
+        return bld->pathExpr(std::move(segments));
+    }
+
+    // ── pointer / ownership-qualified types ─────────────────────────
+    {
+        bool has_mut = false;
+        ast::OwnershipKw ownership = ast::OwnershipKw::Default;
+
+        if (peek().is(TokenKind::Mutable)) {
+            has_mut = true;
+            advance();
+        }
+
+        if (peek().is(TokenKind::Ownership)) {
+            auto kw = lexeme();
+            if (kw == "unique")  ownership = ast::OwnershipKw::Unique;
+            if (kw == "share")   ownership = ast::OwnershipKw::Share;
+            if (kw == "lend")    ownership = ast::OwnershipKw::Lend;
+            if (kw == "view")    ownership = ast::OwnershipKw::View;
+            if (kw == "belong")  ownership = ast::OwnershipKw::Belong;
+            advance();
+
+            // qualifier without '*': lend T, share T, etc.
+            if (peek().punc != '*') {
+                auto inner = parsePrimaryType();
+                return bld->addTypeExpr(ast::TypePtrExpr{inner, has_mut, ownership});
+            }
+        }
+
+        if (peek().punc == '*') {
+            advance();
+            auto inner = parsePrimaryType();
+            return bld->addTypeExpr(ast::TypePtrExpr{inner, has_mut, ownership});
+        }
+
+        if (has_mut || ownership != ast::OwnershipKw::Default) {
+            // qualifier without pointer and without '*' — already handled above
+            // but if we consumed mut and there's no ownership/*, it's an error
+            diag->report(diagnostics::Severity::Error, diagnostics::err::ExpectedExpr,
+                         "expected pointer type after 'mut'", peek().span);
+            return bld->inferExpr();
+        }
+    }
+
+    // ── optional type: ?T ───────────────────────────────────────────
+    if (peek().punc == '?') {
+        advance();
+        auto inner = parsePrimaryType();
+        return bld->addTypeExpr(ast::TypeOptional{inner});
+    }
+
+    // ── pack type: |T, U| or |name: T, U| ─────────────────────────
+    if (peek().punc == '|') {
+        advance();
+        memory::DynArray<ast::TypePackMember> members{bld->arena()};
+        while (!peek().is_eof() && peek().punc != '|') {
+            if (peek().is(TokenKind::Identifier)) {
+                // lookahead: if next token is ':', it's a named member
+                if (peek(1).punc == ':') {
+                    auto name = lexeme();
+                    advance(); // name
+                    advance(); // ':'
+                    auto type = parsePrimaryType();
+                    members.push({name, type});
+                } else {
+                    auto type = parsePrimaryType();
+                    members.push({std::string_view{}, type});
+                }
+            } else {
+                // positional — no name needed for packs starting with '(' or type kw
+                auto type = parsePrimaryType();
+                members.push({std::string_view{}, type});
+            }
+            if (peek().punc == ',')
+                advance();
+        }
+        if (peek().punc == '|')
+            advance();
+        return bld->addTypeExpr(ast::TypePack{std::move(members)});
+    }
+
+    // ── parenthesized: (T) or fn(...) ─────────────────────────────
+    if (peek().punc == '(') {
+        advance();
+        auto inner = parseTypeExpr();
+        if (peek().punc == ')')
+            advance();
+        return inner;
+    }
+
+    // ── slice / array: []T or [N]T ────────────────────────────────
+    if (peek().punc == '[') {
+        advance();
+        if (peek().punc == ']') {
+            advance();
+            auto elem = parsePrimaryType();
+            return bld->addTypeExpr(ast::TypeSlice{elem});
+        }
+        // [N]T — parse count expression then type
+        // For now: count is an integer literal
+        auto count_expr = bld->inferExpr(); // placeholder
+        while (!peek().is_eof() && peek().punc != ']')
+            advance();
+        if (peek().punc == ']')
+            advance();
+        auto elem = parsePrimaryType();
+        return bld->addTypeExpr(ast::TypeArray{elem, count_expr});
+    }
+
+    // ── fn type: fn(T): U ─────────────────────────────────────────
+    if (peek().is(TokenKind::Fn)) {
+        advance();
+        memory::DynArray<ast::TypeExprId> params{bld->arena()};
+        if (peek().punc == '(') {
+            advance();
+            while (!peek().is_eof() && peek().punc != ')') {
+                params.push(parseTypeExpr());
+                if (peek().punc == ',')
+                    advance();
+            }
+            if (peek().punc == ')')
+                advance();
+        }
+        auto ret = bld->inferExpr();
+        if (peek().punc == ':') {
+            advance();
+            ret = parseTypeExpr();
+        }
+        return bld->addTypeExpr(ast::TypeFnExpr{std::move(params), ret});
+    }
+
+    // ── infer type: _ ──────────────────────────────────────────────
+    if (peek().punc == '_') {
+        advance();
+        return bld->inferExpr();
+    }
+
+    // ── identifier / path: Vec, std.vec.Vec ────────────────────────
+    if (peek().is(TokenKind::Identifier)) {
+        auto id = lexeme();
+        // check for builtin types that aren't TokenKind::Type (never, opaque)
+        ast::BuiltinType bt;
+        if (peek(1).punc != '.' && matchBuiltinType(id, bt)) {
+            advance();
+            return bld->builtinExpr(bt);
+        }
+        auto seg = id;
+        advance();
+        memory::DynArray<std::string_view> segments{bld->arena()};
+        segments.push(seg);
+        // qualified path: std.vec.Vec
+        while (peek().punc == '.') {
+            advance();
+            if (peek().is(TokenKind::Identifier)) {
+                segments.push(lexeme());
+                advance();
+            } else {
+                break;
+            }
+        }
+        return bld->pathExpr(std::move(segments));
+    }
+
+    diag->report(diagnostics::Severity::Error, diagnostics::err::ExpectedExpr,
+                 "expected type expression", peek().span);
+    return bld->inferExpr();
+}
+
+ast::TypeExprId Parser::parseOrExpr() {
+    auto left = parsePrimaryType();
+
+    // 'or' as identifier — check lexeme
+    while (peek().is(TokenKind::Identifier) && lexeme() == "or") {
+        advance();
+        auto right = parsePrimaryType();
+
+        // If left is not already a TypeSum, convert it
+        auto &node = bld->getTypeExpr(left);
+        if (auto *sum = std::get_if<ast::TypeSum>(&node)) {
+            sum->members.push(right);
+        } else {
+            memory::DynArray<ast::TypeExprId> members{bld->arena()};
+            members.push(left);
+            members.push(right);
+            left = bld->addTypeExpr(ast::TypeSum{std::move(members)});
+        }
+    }
+
+    return left;
+}
+
+ast::TypeExprId Parser::parseTypeExpr() {
+    // typeExpr → orExpr ('+' orExpr)*   (AND of constraints)
+    // For now: '+' not yet implemented (requires trait system)
+    // Just parse a single orExpr
+    return parseOrExpr();
+}
+
 // ── struct body expansion (parse field list) ─────────────────────────
 
 namespace {
@@ -1379,7 +1685,7 @@ struct FieldInfo {
 };
 
 void parseStructBody(Parser &p, memory::Span body_span, memory::DynArray<FieldInfo> &out_fields) {
-    auto *tok = p.tok;
+    auto *tok  = p.tok;
     auto *diag = p.diag;
 
     // advance past '{'
@@ -1394,8 +1700,10 @@ void parseStructBody(Parser &p, memory::Span body_span, memory::DynArray<FieldIn
         if (tok->peek().is(lexer::TokenKind::Visibility)) {
             tok->advance();
             if (tok->peek().punc == '(' && tok->lexeme() == "mod")
-                while (!tok->is_empty() && tok->peek().punc != ')') tok->advance();
-            if (tok->peek().punc == ')') tok->advance();
+                while (!tok->is_empty() && tok->peek().punc != ')')
+                    tok->advance();
+            if (tok->peek().punc == ')')
+                tok->advance();
             continue;
         }
 
@@ -1403,9 +1711,16 @@ void parseStructBody(Parser &p, memory::Span body_span, memory::DynArray<FieldIn
         if (tok->peek().is(lexer::TokenKind::Fn) ||
             (tok->peek().is(lexer::TokenKind::Control) && tok->lexeme() == "flowing")) {
             while (!tok->is_empty() && !tok->peek().is_eof()) {
-                if (tok->peek().punc == ';') { tok->advance(); break; }
-                if (tok->peek().punc == '{') { skip_balanced(*tok, '{', '}'); break; }
-                if (tok->peek().punc == '}') break;
+                if (tok->peek().punc == ';') {
+                    tok->advance();
+                    break;
+                }
+                if (tok->peek().punc == '{') {
+                    skip_balanced(*tok, '{', '}');
+                    break;
+                }
+                if (tok->peek().punc == '}')
+                    break;
                 tok->advance();
             }
             continue;
@@ -1419,13 +1734,24 @@ void parseStructBody(Parser &p, memory::Span body_span, memory::DynArray<FieldIn
                     auto fname = tok->lexeme();
                     tok->advance();
                     out_fields.push({fname, {}});
-                } else { tok->advance(); }
-                if (tok->peek().punc == ',') tok->advance();
+                } else {
+                    tok->advance();
+                }
+                if (tok->peek().punc == ',')
+                    tok->advance();
             }
-            if (tok->peek().punc == ']') tok->advance();
-            if (tok->peek().punc == ':') { tok->advance(); scan_skip_type_expr(*tok); }
-            if (tok->peek().punc == '=') { tok->advance(); scan_skip_expr(*tok); }
-            if (tok->peek().punc == ',') tok->advance();
+            if (tok->peek().punc == ']')
+                tok->advance();
+            if (tok->peek().punc == ':') {
+                tok->advance();
+                scan_skip_type_expr(*tok);
+            }
+            if (tok->peek().punc == '=') {
+                tok->advance();
+                scan_skip_expr(*tok);
+            }
+            if (tok->peek().punc == ',')
+                tok->advance();
             continue;
         }
 
@@ -1438,11 +1764,15 @@ void parseStructBody(Parser &p, memory::Span body_span, memory::DynArray<FieldIn
                 tok->advance();
                 auto type_start = tok->offset;
                 scan_skip_type_expr(*tok);
-                type_lexeme = tok->lexeme();  // won't be correct for multi-token types
+                type_lexeme = tok->lexeme(); // won't be correct for multi-token types
             }
             out_fields.push({fname, type_lexeme});
-            if (tok->peek().punc == '=') { tok->advance(); scan_skip_expr(*tok); }
-            if (tok->peek().punc == ',') tok->advance();
+            if (tok->peek().punc == '=') {
+                tok->advance();
+                scan_skip_expr(*tok);
+            }
+            if (tok->peek().punc == ',')
+                tok->advance();
             continue;
         }
 

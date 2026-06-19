@@ -273,9 +273,10 @@ Options parseArgs(int argc, char **argv) {
             if (std::strcmp(val, "debug") != 0 && std::strcmp(val, "dev") != 0 &&
                 std::strcmp(val, "release") != 0 && std::strcmp(val, "fast") != 0 &&
                 std::strcmp(val, "test") != 0) {
-                std::fprintf(stderr,
-                             "%s[error]%s invalid mode '%s' (expected debug|dev|release|fast|test)\n",
-                             C(red), RST, val);
+                std::fprintf(
+                    stderr,
+                    "%s[error]%s invalid mode '%s' (expected debug|dev|release|fast|test)\n",
+                    C(red), RST, val);
                 std::exit(1);
             }
             opts.mode = val;

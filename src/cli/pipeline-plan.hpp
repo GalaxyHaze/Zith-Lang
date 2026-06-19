@@ -11,6 +11,7 @@ enum class Stage : uint8_t {
     Imported,
     Resolved,
     TypeChecked,
+    Solved,
     HirLowered,
     MirLowered,
     ZirInterpreted

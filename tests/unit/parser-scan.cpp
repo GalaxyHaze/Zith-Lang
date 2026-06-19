@@ -16,9 +16,9 @@ using namespace zith::ast;
 using zith::diagnostics::DiagnosticEngine;
 using zith::import::SymbolTable;
 using zith::memory::Arena;
+using zith::parser::Parser;
 using zith::parser::scan;
 using zith::parser::ScanResult;
-using zith::parser::Parser;
 
 // helper: run scan only (no expand) on src, return ScanResult + SymbolTable
 static void do_scan(Arena &arena, AstBuilder &builder, DiagnosticEngine &diags, SymbolTable &syms,
@@ -26,7 +26,7 @@ static void do_scan(Arena &arena, AstBuilder &builder, DiagnosticEngine &diags, 
     auto toks = tokenize(g_source_map, arena, "test", std::string(src), diags).value();
     Parser parser(&toks, &builder, &diags);
     auto result = scan(parser, syms);
-    out_result = std::move(result);
+    out_result  = std::move(result);
 }
 
 // ── struct scan tests ─────────────────────────────────────────────────────
@@ -61,8 +61,7 @@ static void test_scan_struct_with_fields() {
     SymbolTable syms(arena);
     ScanResult result(arena);
 
-    do_scan(arena, builder, diags, syms,
-            "struct Point { x: i32, y: f64, }", result);
+    do_scan(arena, builder, diags, syms, "struct Point { x: i32, y: f64, }", result);
 
     CHECK_EQ(result.structs.size(), size_t(1), "one struct scanned");
 
@@ -84,8 +83,7 @@ static void test_scan_struct_with_methods() {
     ScanResult result(arena);
 
     do_scan(arena, builder, diags, syms,
-            "struct Foo { data: i32, fn get() -> i32 { return data; } fn set(v: i32) {} }",
-            result);
+            "struct Foo { data: i32, fn get() -> i32 { return data; } fn set(v: i32) {} }", result);
 
     CHECK_EQ(result.structs.size(), size_t(1), "one struct scanned");
     CHECK(syms.lookup("data") != zith::import::kInvalidSym, "field data registered");
@@ -107,7 +105,8 @@ static void test_scan_enum_simple() {
     CHECK(syms.lookup("Green") != zith::import::kInvalidSym, "variant Green registered");
     CHECK(syms.lookup("Blue") != zith::import::kInvalidSym, "variant Blue registered");
     CHECK(syms.lookup("Color") != zith::import::kInvalidSym, "enum Color registered");
-    CHECK_EQ(syms.get(syms.lookup("Color")).kind, zith::import::SymKind::Enum, "Color is kind Enum");
+    CHECK_EQ(syms.get(syms.lookup("Color")).kind, zith::import::SymKind::Enum,
+             "Color is kind Enum");
 }
 
 static void test_scan_union_simple() {
@@ -123,7 +122,8 @@ static void test_scan_union_simple() {
     CHECK(syms.lookup("i") != zith::import::kInvalidSym, "variant i registered");
     CHECK(syms.lookup("f") != zith::import::kInvalidSym, "variant f registered");
     CHECK(syms.lookup("Value") != zith::import::kInvalidSym, "union Value registered");
-    CHECK_EQ(syms.get(syms.lookup("Value")).kind, zith::import::SymKind::Union, "Value is kind Union");
+    CHECK_EQ(syms.get(syms.lookup("Value")).kind, zith::import::SymKind::Union,
+             "Value is kind Union");
 }
 
 static void test_scan_component_empty() {
@@ -148,8 +148,8 @@ static void test_scan_trait_simple() {
     SymbolTable syms(arena);
     ScanResult result(arena);
 
-    do_scan(arena, builder, diags, syms, "trait Iterator { fn next() -> i32; fn has_next() -> bool; }",
-            result);
+    do_scan(arena, builder, diags, syms,
+            "trait Iterator { fn next() -> i32; fn has_next() -> bool; }", result);
 
     CHECK_EQ(result.traits.size(), size_t(1), "one trait scanned");
     CHECK(syms.lookup("Iterator") != zith::import::kInvalidSym, "trait Iterator registered");
@@ -180,8 +180,7 @@ static void test_scan_implement() {
     SymbolTable syms(arena);
     ScanResult result(arena);
 
-    do_scan(arena, builder, diags, syms,
-            "implement Foo for Bar { fn method() {} }", result);
+    do_scan(arena, builder, diags, syms, "implement Foo for Bar { fn method() {} }", result);
 
     // implement blocks produce no ScanEntry entries
     CHECK(result.fns.empty(), "no fn entries from implement");

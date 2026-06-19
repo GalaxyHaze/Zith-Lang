@@ -12,8 +12,10 @@
 namespace zith::cli::commands {
 
 static bool useTermColor(const Options &opts, FILE *out) {
-    if (opts.color == "on") return true;
-    if (opts.color == "off") return false;
+    if (opts.color == "on")
+        return true;
+    if (opts.color == "off")
+        return false;
 #ifdef _WIN32
     return _isatty(_fileno(out)) != 0;
 #else
@@ -21,9 +23,9 @@ static bool useTermColor(const Options &opts, FILE *out) {
 #endif
 }
 #define CERR(c) (useTermColor(opts, stderr) ? diagnostics::ansi::c.data() : "")
-#define RERR   (useTermColor(opts, stderr) ? diagnostics::ansi::reset.data() : "")
+#define RERR (useTermColor(opts, stderr) ? diagnostics::ansi::reset.data() : "")
 #define COUT(c) (useTermColor(opts, stdout) ? diagnostics::ansi::c.data() : "")
-#define ROUT   (useTermColor(opts, stdout) ? diagnostics::ansi::reset.data() : "")
+#define ROUT (useTermColor(opts, stdout) ? diagnostics::ansi::reset.data() : "")
 
 int cmd_execute(const Options &opts) {
     if (opts.input_files.empty()) {
@@ -39,7 +41,8 @@ int cmd_execute(const Options &opts) {
         if (session.hasErrors())
             ok = false;
         if (opts.verbose)
-            std::printf("%s[%s]%s %s\n", ok ? COUT(green) : COUT(red), ok ? "ok" : "error", ROUT, file.c_str());
+            std::printf("%s[%s]%s %s\n", ok ? COUT(green) : COUT(red), ok ? "ok" : "error", ROUT,
+                        file.c_str());
         if (!ok)
             return 1;
     }

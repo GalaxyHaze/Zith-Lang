@@ -43,8 +43,7 @@ static void test_make_string_view() {
 
     auto *sv = arena.make<std::string_view>("hello, arena");
     CHECK(sv != nullptr, "make<std::string_view> returns non-null");
-    CHECK_EQ(*sv, std::string_view("hello, arena"),
-             "make<std::string_view> value is correct");
+    CHECK_EQ(*sv, std::string_view("hello, arena"), "make<std::string_view> value is correct");
 }
 
 static void test_make_multiple() {
@@ -93,8 +92,7 @@ static void test_alignment_4() {
 
     void *p = arena.alloc(4, 4);
     CHECK(p != nullptr, "alloc with 4-byte alignment succeeds");
-    CHECK_EQ(reinterpret_cast<uintptr_t>(p) % 4, size_t(0),
-             "pointer is 4-byte aligned");
+    CHECK_EQ(reinterpret_cast<uintptr_t>(p) % 4, size_t(0), "pointer is 4-byte aligned");
 }
 
 static void test_alignment_8() {
@@ -102,8 +100,7 @@ static void test_alignment_8() {
 
     void *p = arena.alloc(8, 8);
     CHECK(p != nullptr, "alloc with 8-byte alignment succeeds");
-    CHECK_EQ(reinterpret_cast<uintptr_t>(p) % 8, size_t(0),
-             "pointer is 8-byte aligned");
+    CHECK_EQ(reinterpret_cast<uintptr_t>(p) % 8, size_t(0), "pointer is 8-byte aligned");
 }
 
 // ── Arena move ──────────────────────────────────────────────────

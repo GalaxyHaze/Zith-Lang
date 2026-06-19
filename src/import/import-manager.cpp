@@ -14,7 +14,7 @@ namespace fs = std::filesystem;
 ImportManager::ImportManager(memory::Arena &arena, memory::SourceMap &source_map,
                              diagnostics::DiagnosticEngine &diags,
                              std::vector<std::string> visible_roots)
-     : arena_(arena), source_map_(source_map), diags_(diags),
+    : arena_(arena), source_map_(source_map), diags_(diags),
       visible_roots_(std::move(visible_roots)), files_(arena), sym_origins_(arena) {}
 
 bool ImportManager::isLoaded(std::string_view path) const {
@@ -350,7 +350,7 @@ void ImportManager::mergeInto(SymbolTable &main_syms, int32_t from_depth) {
     };
 
     for (size_t fi = 0; fi < files_.size(); ++fi) {
-        auto &file = files_[fi];
+        auto &file  = files_[fi];
         auto prefix = file.ns + ".";
         auto ls     = last_segment(file.import_key);
 
@@ -361,7 +361,8 @@ void ImportManager::mergeInto(SymbolTable &main_syms, int32_t from_depth) {
                 return;
             auto vis             = is_module ? SymbolVisibility::Module : SymbolVisibility::Public;
             auto depth           = is_module ? data.mod_depth : 0;
-            auto declare_or_diag = [&](std::string_view name, SymbolVisibility v, int32_t d, SymId ls) {
+            auto declare_or_diag = [&](std::string_view name, SymbolVisibility v, int32_t d,
+                                       SymId ls) {
                 if (main_syms.lookupInScope(name, kRootScope) != kInvalidSym) {
                     diags_.report(diagnostics::Severity::Error, diagnostics::err::DuplicateDecl,
                                   "duplicate symbol '" + std::string(name) + "'", {});
@@ -403,10 +404,11 @@ void ImportManager::mergeInto(SymbolTable &main_syms, int32_t from_depth) {
             auto &ref = files_[re_idx];
             for (auto sid : ref.public_syms) {
                 auto &data = ref.symbols.get(sid);
-                auto name = arena_str(arena_, std::string(data.name));
+                auto name  = arena_str(arena_, std::string(data.name));
                 if (file.is_from) {
                     declare_re_export(name, SymbolVisibility::Public, 0, re_idx, sid);
-                    auto qualified = arena_str(arena_, std::string(ls) + "." + std::string(data.name));
+                    auto qualified =
+                        arena_str(arena_, std::string(ls) + "." + std::string(data.name));
                     declare_re_export(qualified, SymbolVisibility::Public, 0, re_idx, sid);
                 } else {
                     auto qualified = arena_str(arena_, prefix + std::string(data.name));
@@ -420,11 +422,14 @@ void ImportManager::mergeInto(SymbolTable &main_syms, int32_t from_depth) {
                 auto name = arena_str(arena_, std::string(data.name));
                 if (file.is_from) {
                     declare_re_export(name, SymbolVisibility::Module, data.mod_depth, re_idx, sid);
-                    auto qualified = arena_str(arena_, std::string(ls) + "." + std::string(data.name));
-                    declare_re_export(qualified, SymbolVisibility::Module, data.mod_depth, re_idx, sid);
+                    auto qualified =
+                        arena_str(arena_, std::string(ls) + "." + std::string(data.name));
+                    declare_re_export(qualified, SymbolVisibility::Module, data.mod_depth, re_idx,
+                                      sid);
                 } else {
                     auto qualified = arena_str(arena_, prefix + std::string(data.name));
-                    declare_re_export(qualified, SymbolVisibility::Module, data.mod_depth, re_idx, sid);
+                    declare_re_export(qualified, SymbolVisibility::Module, data.mod_depth, re_idx,
+                                      sid);
                 }
             }
             for (auto r : ref.re_exported_files)

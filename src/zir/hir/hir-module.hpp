@@ -31,7 +31,7 @@ class HirModule {
 
 public:
     explicit HirModule(memory::Arena &arena);
-    HirModule(HirModule &&) = default;
+    HirModule(HirModule &&)            = default;
     HirModule &operator=(HirModule &&) = default;
 
     HirExprId addExpr(HirExpr expr);

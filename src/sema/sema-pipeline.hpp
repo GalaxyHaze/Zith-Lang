@@ -18,9 +18,13 @@ class SemaPipeline {
     types::Unifier unifier_;
     memory::Arena &hir_arena_;
     zir::hir::HirModule hir_;
-    zir::hir::HirFunction *current_fn_ = nullptr;
-    types::TypeId current_fn_ret_type_ = types::kVoidType;
-    const memory::DynArray<import::SymId> *resolved_ = nullptr;
+    zir::hir::HirFunction *current_fn_                  = nullptr;
+    types::TypeId current_fn_ret_type_                  = types::kVoidType;
+    const memory::DynArray<import::SymId> *resolved_    = nullptr;
+    memory::DynArray<types::TypeId> hir_types_;
+
+    zir::hir::HirExprId addHirExpr(zir::hir::HirExpr expr, types::TypeId type);
+    types::TypeId exprType(zir::hir::HirExprId id) const;
 
     zir::hir::HirExprId visitExpr(ast::ExprId id);
     zir::hir::HirExprId visitLiteral(const ast::LitValue &n);
@@ -41,10 +45,16 @@ public:
                  memory::Arena &hir_arena,
                  const memory::DynArray<import::SymId> *resolved = nullptr);
 
-    import::SymbolTable &syms() noexcept { return ctx_.syms(); }
+    import::SymbolTable &syms() noexcept {
+        return ctx_.syms();
+    }
     bool run(const ast::ProgramNode &program);
-    zir::hir::HirModule takeHir() { return std::move(hir_); }
-    const zir::hir::HirModule &hir() const { return hir_; }
+    zir::hir::HirModule takeHir() {
+        return std::move(hir_);
+    }
+    const zir::hir::HirModule &hir() const {
+        return hir_;
+    }
 };
 
 } // namespace zith::sema

@@ -21,9 +21,9 @@ static struct Cleanup {
 } cleanup;
 
 static std::string make_tmp_dir() {
-    auto base = fs::temp_directory_path();
+    auto base        = fs::temp_directory_path();
     std::string tmpl = (base / "zith_platform_test_XXXXXX").string();
-    char *d = zith::support::mkdtemp(tmpl.data());
+    char *d          = zith::support::mkdtemp(tmpl.data());
     if (d) {
         cleanup.dirs.push_back(d);
         return d;
@@ -38,19 +38,18 @@ static void test_mkdtemp_basic() {
         return;
 
     CHECK(fs::is_directory(dir), "temporary directory exists on disk");
-    CHECK(dir.find("XXXXXX") == std::string::npos,
-          "XXXXXX was replaced with random characters");
+    CHECK(dir.find("XXXXXX") == std::string::npos, "XXXXXX was replaced with random characters");
 }
 
 static void test_mkdtemp_invalid() {
     char tmpl[] = "/tmp/no_template_suffix";
-    char *d = zith::support::mkdtemp(tmpl);
+    char *d     = zith::support::mkdtemp(tmpl);
     CHECK(d == nullptr, "mkdtemp returns nullptr when template lacks XXXXXX");
 }
 
 static void test_mkdtemp_empty() {
     char tmpl[] = "";
-    char *d = zith::support::mkdtemp(tmpl);
+    char *d     = zith::support::mkdtemp(tmpl);
     CHECK(d == nullptr, "mkdtemp returns nullptr for empty template");
 }
 

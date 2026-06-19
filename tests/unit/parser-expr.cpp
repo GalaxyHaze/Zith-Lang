@@ -102,7 +102,7 @@ static void test_ast_builder_let_stmt() {
         return;
 
     auto &let = std::get<LetNode>(node);
-    CHECK(let.name == "x", "let name is x");
+    CHECK(let.names[0] == "x", "let name is x");
     CHECK(!let.mut, "let is not mutable");
 }
 

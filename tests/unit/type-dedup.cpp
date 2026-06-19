@@ -52,8 +52,8 @@ static void test_dedup_ptr_same() {
     TypeIntern types(arena);
 
     auto i32 = types.internInt(IntWidth::I32);
-    auto a = types.internPtr(i32);
-    auto b = types.internPtr(i32);
+    auto a   = types.internPtr(i32);
+    auto b   = types.internPtr(i32);
     CHECK_EQ(a, b, "same pointee Ptr dedup");
 }
 
@@ -63,8 +63,8 @@ static void test_dedup_ptr_different() {
 
     auto i32 = types.internInt(IntWidth::I32);
     auto i64 = types.internInt(IntWidth::I64);
-    auto a = types.internPtr(i32);
-    auto b = types.internPtr(i64);
+    auto a   = types.internPtr(i32);
+    auto b   = types.internPtr(i64);
     CHECK(a != b, "different pointee Ptr produces different ids");
 }
 
@@ -73,8 +73,8 @@ static void test_dedup_array_same() {
     TypeIntern types(arena);
 
     auto u8 = types.internInt(IntWidth::U8);
-    auto a = types.internArray(u8, 4);
-    auto b = types.internArray(u8, 4);
+    auto a  = types.internArray(u8, 4);
+    auto b  = types.internArray(u8, 4);
     CHECK_EQ(a, b, "same elem+count Array dedup");
 }
 
@@ -83,8 +83,8 @@ static void test_dedup_array_different_count() {
     TypeIntern types(arena);
 
     auto u8 = types.internInt(IntWidth::U8);
-    auto a = types.internArray(u8, 4);
-    auto b = types.internArray(u8, 8);
+    auto a  = types.internArray(u8, 4);
+    auto b  = types.internArray(u8, 8);
     CHECK(a != b, "different count Array produces different ids");
 }
 
@@ -92,10 +92,10 @@ static void test_dedup_array_different_elem() {
     Arena arena;
     TypeIntern types(arena);
 
-    auto u8 = types.internInt(IntWidth::U8);
+    auto u8  = types.internInt(IntWidth::U8);
     auto i32 = types.internInt(IntWidth::I32);
-    auto a = types.internArray(u8, 4);
-    auto b = types.internArray(i32, 4);
+    auto a   = types.internArray(u8, 4);
+    auto b   = types.internArray(i32, 4);
     CHECK(a != b, "different elem Array produces different ids");
 }
 
@@ -103,13 +103,13 @@ static void test_dedup_fn_same() {
     Arena arena;
     TypeIntern types(arena);
 
-    auto i32 = types.internInt(IntWidth::I32);
+    auto i32   = types.internInt(IntWidth::I32);
     auto void_ = kVoidType;
 
     TypeId p1[] = {i32, i32};
     TypeId p2[] = {i32, i32};
-    auto a = types.internFn(p1, void_);
-    auto b = types.internFn(p2, void_);
+    auto a      = types.internFn(p1, void_);
+    auto b      = types.internFn(p2, void_);
     CHECK_EQ(a, b, "identical fn types dedup");
 }
 
@@ -122,8 +122,8 @@ static void test_dedup_fn_different_ret() {
 
     TypeId p1[] = {i32, i32};
     TypeId p2[] = {i32, i32};
-    auto a = types.internFn(p1, i32);
-    auto b = types.internFn(p2, i64);
+    auto a      = types.internFn(p1, i32);
+    auto b      = types.internFn(p2, i64);
     CHECK(a != b, "different return type fn produces different ids");
 }
 
@@ -131,13 +131,13 @@ static void test_dedup_fn_different_param_count() {
     Arena arena;
     TypeIntern types(arena);
 
-    auto i32 = types.internInt(IntWidth::I32);
+    auto i32   = types.internInt(IntWidth::I32);
     auto void_ = kVoidType;
 
     TypeId p1[] = {i32};
     TypeId p2[] = {i32, i32};
-    auto a = types.internFn(p1, void_);
-    auto b = types.internFn(p2, void_);
+    auto a      = types.internFn(p1, void_);
+    auto b      = types.internFn(p2, void_);
     CHECK(a != b, "different param count fn produces different ids");
 }
 
@@ -146,8 +146,8 @@ static void test_dedup_optional_same() {
     TypeIntern types(arena);
 
     auto i32 = types.internInt(IntWidth::I32);
-    auto a = types.internOptional(i32);
-    auto b = types.internOptional(i32);
+    auto a   = types.internOptional(i32);
+    auto b   = types.internOptional(i32);
     CHECK_EQ(a, b, "same inner Optional dedup");
 }
 
@@ -157,8 +157,8 @@ static void test_dedup_optional_different() {
 
     auto i32 = types.internInt(IntWidth::I32);
     auto i64 = types.internInt(IntWidth::I64);
-    auto a = types.internOptional(i32);
-    auto b = types.internOptional(i64);
+    auto a   = types.internOptional(i32);
+    auto b   = types.internOptional(i64);
     CHECK(a != b, "different inner Optional produces different ids");
 }
 
@@ -167,8 +167,8 @@ static void test_dedup_failable_same() {
     TypeIntern types(arena);
 
     auto i32 = types.internInt(IntWidth::I32);
-    auto a = types.internFailable(i32);
-    auto b = types.internFailable(i32);
+    auto a   = types.internFailable(i32);
+    auto b   = types.internFailable(i32);
     CHECK_EQ(a, b, "same inner Failable dedup");
 }
 
@@ -178,8 +178,8 @@ static void test_dedup_failable_different() {
 
     auto i32 = types.internInt(IntWidth::I32);
     auto i64 = types.internInt(IntWidth::I64);
-    auto a = types.internFailable(i32);
-    auto b = types.internFailable(i64);
+    auto a   = types.internFailable(i32);
+    auto b   = types.internFailable(i64);
     CHECK(a != b, "different inner Failable produces different ids");
 }
 

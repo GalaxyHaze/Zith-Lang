@@ -4,8 +4,8 @@
 #include <cstdio>
 #include <string>
 
-using zith::memory::Result;
 using zith::memory::Error;
+using zith::memory::Result;
 
 static void test_ok_construction() {
     Result<int> r(42);
@@ -55,27 +55,22 @@ static void test_map_error() {
 
 static void test_and_then_ok() {
     Result<int> r(10);
-    auto chained = r.and_then([](int x) -> Result<int> {
-        return Result<int>(x + 5);
-    });
+    auto chained = r.and_then([](int x) -> Result<int> { return Result<int>(x + 5); });
     CHECK(chained.isOk(), "and_then of ok is ok");
     CHECK_EQ(chained.value(), 15, "and_then chain result");
 }
 
 static void test_and_then_error() {
     Result<int> r(Error{"initial"});
-    auto chained = r.and_then([](int x) -> Result<int> {
-        return Result<int>(x + 5);
-    });
+    auto chained = r.and_then([](int x) -> Result<int> { return Result<int>(x + 5); });
     CHECK(chained.isError(), "and_then of error is error");
     CHECK_EQ(chained.error().msg, "initial", "and_then propagates error");
 }
 
 static void test_and_then_chained_error() {
     Result<int> r(10);
-    auto chained = r.and_then([](int) -> Result<int> {
-        return Result<int>(Error{"chain failed"});
-    });
+    auto chained =
+        r.and_then([](int) -> Result<int> { return Result<int>(Error{"chain failed"}); });
     CHECK(chained.isError(), "and_then produces error from chain");
     CHECK_EQ(chained.error().msg, "chain failed", "and_then error message");
 }
@@ -94,9 +89,7 @@ static void test_error_with_string() {
 
 static void test_map_different_type() {
     Result<int> r(3);
-    auto mapped = r.map([](int x) -> std::string {
-        return std::to_string(x);
-    });
+    auto mapped = r.map([](int x) -> std::string { return std::to_string(x); });
     CHECK(mapped.isOk(), "map changes type");
     CHECK_EQ(mapped.value(), "3", "map changes value type");
 }

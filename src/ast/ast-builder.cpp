@@ -3,7 +3,7 @@
 namespace zith::ast {
 
 AstBuilder::AstBuilder(memory::Arena &arena)
-    : arena_(arena), exprs_(arena), stmts_(arena), decls_(arena) {}
+    : arena_(arena), exprs_(arena), stmts_(arena), decls_(arena), type_exprs_(arena) {}
 
 ExprId AstBuilder::addExpr(ExprNode node) {
     ExprId id = static_cast<ExprId>(exprs_.size());
@@ -90,8 +90,15 @@ ExprId AstBuilder::whileExpr(ExprId cond, ExprId body) {
     return addExpr(WhileNode{cond, body});
 }
 
+StmtId AstBuilder::letStmt(memory::DynArray<std::string_view> names, bool mut,
+                           TypeExprId type_annot, ExprId init) {
+    return addStmt(LetNode{mut, type_annot, std::move(names), init});
+}
+
 StmtId AstBuilder::letStmt(std::string_view name, bool mut, ExprId init) {
-    return addStmt(LetNode{mut, name, init});
+    memory::DynArray<std::string_view> names{arena_};
+    names.push(name);
+    return addStmt(LetNode{mut, kInvalidTypeExpr, std::move(names), init});
 }
 
 StmtId AstBuilder::assign(ExprId target, ExprId value) {
@@ -102,23 +109,31 @@ StmtId AstBuilder::retStmt(ExprId value) {
     return addStmt(RetNode{value});
 }
 
-DeclId AstBuilder::fnDecl(std::string_view name, memory::DynArray<std::string_view> params,
+DeclId AstBuilder::fnDecl(std::string_view name, memory::DynArray<GenericParam> generic_params,
+                          memory::DynArray<FnParam> params, TypeExprId return_type,
                           ExprId body) {
-    return addDecl(FnDeclNode{name, std::move(params), body});
+    return addDecl(FnDeclNode{name, std::move(generic_params), std::move(params),
+                              return_type, body});
 }
 
-DeclId AstBuilder::structDecl(std::string_view name,
-                              memory::DynArray<StructField> fields) {
+DeclId AstBuilder::fnDecl(std::string_view name, memory::DynArray<std::string_view> param_names,
+                          ExprId body) {
+    memory::DynArray<FnParam> params{arena_};
+    for (auto &pn : param_names)
+        params.push({pn, kInvalidTypeExpr});
+    return addDecl(FnDeclNode{name, memory::DynArray<GenericParam>{arena_}, std::move(params),
+                              kInvalidTypeExpr, body});
+}
+
+DeclId AstBuilder::structDecl(std::string_view name, memory::DynArray<StructField> fields) {
     return addDecl(StructDeclNode{name, std::move(fields)});
 }
 
-DeclId AstBuilder::enumDecl(std::string_view name,
-                            memory::DynArray<EnumVariant> variants) {
+DeclId AstBuilder::enumDecl(std::string_view name, memory::DynArray<EnumVariant> variants) {
     return addDecl(EnumDeclNode{name, std::move(variants)});
 }
 
-DeclId AstBuilder::unionDecl(std::string_view name,
-                             memory::DynArray<UnionVariant> variants) {
+DeclId AstBuilder::unionDecl(std::string_view name, memory::DynArray<UnionVariant> variants) {
     return addDecl(UnionDeclNode{name, std::move(variants)});
 }
 
@@ -126,13 +141,11 @@ DeclId AstBuilder::componentDecl(std::string_view name) {
     return addDecl(ComponentDeclNode{name});
 }
 
-DeclId AstBuilder::traitDecl(std::string_view name,
-                             memory::DynArray<TraitMethod> methods) {
+DeclId AstBuilder::traitDecl(std::string_view name, memory::DynArray<TraitMethod> methods) {
     return addDecl(TraitDeclNode{name, std::move(methods)});
 }
 
-DeclId AstBuilder::interfaceDecl(std::string_view name,
-                                 memory::DynArray<TraitMethod> methods) {
+DeclId AstBuilder::interfaceDecl(std::string_view name, memory::DynArray<TraitMethod> methods) {
     return addDecl(InterfaceDeclNode{name, std::move(methods)});
 }
 
@@ -143,6 +156,34 @@ DeclId AstBuilder::importDecl(memory::DynArray<std::string_view> path, std::stri
 
 ExprId AstBuilder::unbody(memory::Span body_span, uint32_t token_start, uint32_t token_end) {
     return addExpr(UnbodyNode{body_span, token_start, token_end});
+}
+
+// ── Type expression helpers ─────────────────────────────────────────
+
+TypeExprId AstBuilder::addTypeExpr(TypeExprNode node) {
+    TypeExprId id = static_cast<TypeExprId>(type_exprs_.size());
+    type_exprs_.push(std::move(node));
+    return id;
+}
+
+TypeExprNode &AstBuilder::getTypeExpr(TypeExprId id) {
+    return type_exprs_[id];
+}
+
+const TypeExprNode &AstBuilder::getTypeExpr(TypeExprId id) const {
+    return type_exprs_[id];
+}
+
+TypeExprId AstBuilder::builtinExpr(BuiltinType kind) {
+    return addTypeExpr(TypeBuiltin{kind});
+}
+
+TypeExprId AstBuilder::pathExpr(memory::DynArray<std::string_view> segments) {
+    return addTypeExpr(TypePath{std::move(segments)});
+}
+
+TypeExprId AstBuilder::inferExpr() {
+    return addTypeExpr(TypeInfer{});
 }
 
 memory::Arena &AstBuilder::arena() {

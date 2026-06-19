@@ -129,7 +129,7 @@ public:
     }
 
     auto back() noexcept -> T & {
-        if (size() == 0){
+        if (size() == 0) {
             std::fprintf(stderr, "[error] attemp to use 'back' on DynArray siz 0");
             std::abort();
         }

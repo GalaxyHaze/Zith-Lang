@@ -69,7 +69,6 @@ class CompilationSession {
     std::string output_buffer_;
     bool buffered_output_ = false;
 
-
 #if defined(__GNUC__) || defined(__clang__)
     void writeOutput(const char *fmt, ...) __attribute__((format(printf, 2, 3)));
 #else
@@ -115,6 +114,7 @@ private:
     bool importStage();
     bool resolveStage();
     bool semaStage();
+    bool solveStage();
     bool mirStage();
     bool zirStage();
 };

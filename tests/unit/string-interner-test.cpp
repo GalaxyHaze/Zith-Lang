@@ -7,8 +7,8 @@
 #include <string_view>
 
 using zith::memory::Arena;
-using zith::memory::StringInterner;
 using zith::memory::InternedId;
+using zith::memory::StringInterner;
 
 static void test_intern_basic() {
     Arena arena;

@@ -5,12 +5,12 @@
 #include "diagnostics/error-codes.hpp"
 #include "import/import-manager.hpp"
 #include "import/resolver.hpp"
-#include "import/symbol-table.hpp"
-#include "support/platform.hpp"
-#include "import/symbol-visibility.hpp"
 #include "import/symbol-id.hpp"
+#include "import/symbol-table.hpp"
+#include "import/symbol-visibility.hpp"
 #include "memory/arena.hpp"
 #include "memory/source-map.hpp"
+#include "support/platform.hpp"
 
 #include <cstdio>
 #include <cstdlib>
@@ -42,9 +42,9 @@ static struct Cleanup {
 } cleanup;
 
 static std::string make_tmp_dir() {
-    auto base = fs::temp_directory_path();
+    auto base        = fs::temp_directory_path();
     std::string tmpl = (base / "zith_resolver_XXXXXX").string();
-    char *d = zith::support::mkdtemp(tmpl.data());
+    char *d          = zith::support::mkdtemp(tmpl.data());
     if (d)
         cleanup.dirs.push_back(d);
     return d ? std::string(d) : std::string{};
@@ -60,8 +60,7 @@ struct ResolverFixture {
     ImportManager import_mgr;
 
     ResolverFixture()
-        : diags(arena), builder(arena), syms(arena),
-          import_mgr(arena, source_map, diags, {}) {}
+        : diags(arena), builder(arena), syms(arena), import_mgr(arena, source_map, diags, {}) {}
 
     ResolverFixture(std::vector<std::string> roots)
         : diags(arena), builder(arena), syms(arena),
@@ -112,7 +111,7 @@ static void test_unqualified_ident() {
     auto greet_sym = fx.syms.declare("greet", SymbolVisibility::Public, 0, SymKind::Fn);
 
     // Build: fn __test() { greet }
-    auto greet_ident = fx.builder.ident("greet");
+    auto greet_ident      = fx.builder.ident("greet");
     auto [prog, ident_id] = fx.buildFnWrapping(greet_ident);
 
     resolver.resolveProgram(prog);
@@ -129,7 +128,7 @@ static void test_undefined_ident_diag() {
     auto resolver = fx.makeResolver();
 
     // Build: fn __test() { nope }
-    auto nope_ident = fx.builder.ident("nope");
+    auto nope_ident       = fx.builder.ident("nope");
     auto [prog, ident_id] = fx.buildFnWrapping(nope_ident);
 
     resolver.resolveProgram(prog);
@@ -143,8 +142,7 @@ static void test_undefined_ident_diag() {
     if (all_diags.size() >= 1) {
         CHECK_EQ(static_cast<int>(all_diags[0].severity), static_cast<int>(Severity::Error),
                  "severity is Error");
-        CHECK_EQ(all_diags[0].code, err::UndefinedIdent,
-                 "code is UndefinedIdent");
+        CHECK_EQ(all_diags[0].code, err::UndefinedIdent, "code is UndefinedIdent");
     }
 }
 
@@ -161,7 +159,7 @@ static void test_qualified_name() {
     auto greet_sym = fx.syms.declare("greet", SymbolVisibility::Public, 0, SymKind::Fn);
 
     // Build: fn __test() { mymod.greet }
-    auto ident_id = fx.builder.ident("mymod.greet");
+    auto ident_id  = fx.builder.ident("mymod.greet");
     auto [prog, _] = fx.buildFnWrapping(ident_id);
 
     resolver.resolveProgram(prog);
@@ -217,7 +215,7 @@ static void test_block_scope_outer() {
 
     // Build: fn __test() { let x = outer }
     auto outer_ident = fx.builder.ident("outer");
-    auto let_stmt = fx.builder.letStmt("x", false, outer_ident);
+    auto let_stmt    = fx.builder.letStmt("x", false, outer_ident);
 
     DynArray<StmtId> stmts(fx.arena);
     stmts.push(let_stmt);
@@ -337,8 +335,7 @@ static void test_alias_from_imports() {
         CHECK(data.name == "m", "alias name is 'm'");
         CHECK_EQ(static_cast<int>(data.kind), static_cast<int>(SymKind::Alias),
                  "alias has kind Alias");
-        CHECK_EQ(static_cast<int>(data.visibility),
-                 static_cast<int>(SymbolVisibility::Public),
+        CHECK_EQ(static_cast<int>(data.visibility), static_cast<int>(SymbolVisibility::Public),
                  "alias visibility is Public");
     }
 }

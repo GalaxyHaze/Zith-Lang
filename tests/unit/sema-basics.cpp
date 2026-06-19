@@ -80,9 +80,9 @@ static void test_type_intern_predefined_ids() {
     CHECK_EQ(types.count(), size_t(5), "5 predefined types seeded");
     CHECK_EQ(types.kindOf(kErrorType), TypeKind::Error, "0 → Error");
     CHECK_EQ(types.kindOf(kNeverType), TypeKind::Never, "1 → Never");
-    CHECK_EQ(types.kindOf(kVoidType),  TypeKind::Void,  "2 → Void");
-    CHECK_EQ(types.kindOf(kBoolType),  TypeKind::Bool,  "3 → Bool");
-    CHECK_EQ(types.kindOf(kCharType),  TypeKind::Char,  "4 → Char");
+    CHECK_EQ(types.kindOf(kVoidType), TypeKind::Void, "2 → Void");
+    CHECK_EQ(types.kindOf(kBoolType), TypeKind::Bool, "3 → Bool");
+    CHECK_EQ(types.kindOf(kCharType), TypeKind::Char, "4 → Char");
 }
 
 static void test_type_intern_int() {
@@ -116,37 +116,60 @@ static void test_type_intern_ptr() {
     Arena arena;
     TypeIntern types(arena);
 
-    auto i32   = types.internInt(IntWidth::I32);
-    auto ptr   = types.internPtr(i32);
+    auto i32 = types.internInt(IntWidth::I32);
+    auto ptr = types.internPtr(i32);
     CHECK_EQ(types.kindOf(ptr), TypeKind::Ptr, "kindOf is Ptr");
 
     auto &data = std::get<TypePtr>(types.lookup(ptr));
     CHECK_EQ(data.pointee, i32, "pointee is i32");
+    CHECK_EQ(data.is_mut, false, "default is_mut is false");
+    CHECK_EQ(data.ownership, OwnershipKind::Default, "default ownership is Default");
+
+    auto mut_ptr = types.internPtr(i32, true);
+    auto &md     = std::get<TypePtr>(types.lookup(mut_ptr));
+    CHECK_EQ(md.is_mut, true, "is_mut true when requested");
+    CHECK_EQ(md.ownership, OwnershipKind::Default, "still default ownership");
+
+    auto unique_ptr = types.internPtr(i32, false, OwnershipKind::Unique);
+    auto &ud        = std::get<TypePtr>(types.lookup(unique_ptr));
+    CHECK_EQ(ud.is_mut, false, "is_mut false");
+    CHECK_EQ(ud.ownership, OwnershipKind::Unique, "ownership set to Unique");
+
+    // Dedup: same is_mut + ownership + pointee → same TypeId
+    auto ptr2 = types.internPtr(i32);
+    CHECK_EQ(ptr, ptr2, "same Ptr fields dedup");
+    auto mut_ptr2 = types.internPtr(i32, true);
+    CHECK_EQ(mut_ptr, mut_ptr2, "same mut Ptr dedup");
+    auto unique_ptr2 = types.internPtr(i32, false, OwnershipKind::Unique);
+    CHECK_EQ(unique_ptr, unique_ptr2, "same unique Ptr dedup");
+    // Different qualifiers → different TypeIds
+    CHECK(ptr != mut_ptr, "default vs mut are distinct");
+    CHECK(ptr != unique_ptr, "default vs unique are distinct");
 }
 
 static void test_type_intern_array() {
     Arena arena;
     TypeIntern types(arena);
 
-    auto u8   = types.internInt(IntWidth::U8);
-    auto arr  = types.internArray(u8, 4);
+    auto u8  = types.internInt(IntWidth::U8);
+    auto arr = types.internArray(u8, 4);
     CHECK_EQ(types.kindOf(arr), TypeKind::Array, "kindOf is Array");
 
     auto &data = std::get<TypeArray>(types.lookup(arr));
-    CHECK_EQ(data.elem,  u8,  "elem is u8");
-    CHECK_EQ(data.count, 4u,  "count is 4");
+    CHECK_EQ(data.elem, u8, "elem is u8");
+    CHECK_EQ(data.count, 4u, "count is 4");
 }
 
 static void test_type_intern_slice() {
     Arena arena;
     TypeIntern types(arena);
 
-    auto u8   = types.internInt(IntWidth::U8);
-    auto sl   = types.internArray(u8, 0);
+    auto u8 = types.internInt(IntWidth::U8);
+    auto sl = types.internArray(u8, 0);
     CHECK_EQ(types.kindOf(sl), TypeKind::Array, "kindOf is Array (count=0 = slice)");
 
     auto &data = std::get<TypeArray>(types.lookup(sl));
-    CHECK_EQ(data.elem,  u8, "elem is u8");
+    CHECK_EQ(data.elem, u8, "elem is u8");
     CHECK_EQ(data.count, 0u, "count is 0 (slice)");
 }
 
@@ -154,11 +177,11 @@ static void test_type_intern_fn() {
     Arena arena;
     TypeIntern types(arena);
 
-    auto i32  = types.internInt(IntWidth::I32);
+    auto i32   = types.internInt(IntWidth::I32);
     auto void_ = kVoidType;
 
     TypeId param_arr[] = {i32, i32};
-    auto fn   = types.internFn(param_arr, void_);
+    auto fn            = types.internFn(param_arr, void_);
     CHECK_EQ(types.kindOf(fn), TypeKind::Fn, "kindOf is Fn");
 
     auto &data = std::get<TypeFn>(types.lookup(fn));
@@ -248,7 +271,7 @@ static void test_type_intern_failable() {
     Arena arena;
     TypeIntern types(arena);
 
-    auto i32 = types.internInt(IntWidth::I32);
+    auto i32  = types.internInt(IntWidth::I32);
     auto fail = types.internFailable(i32);
     CHECK_EQ(types.kindOf(fail), TypeKind::Failable, "kindOf is Failable");
     CHECK_EQ(std::get<TypeFailable>(types.lookup(fail)).inner, i32, "inner is i32");
@@ -376,12 +399,12 @@ static void test_unify_fn() {
 
     TypeId p1[] = {i32, i32};
     TypeId p2[] = {i32, i32};
-    auto fn_a = types.internFn(p1, i32);
-    auto fn_b = types.internFn(p2, i32);
+    auto fn_a   = types.internFn(p1, i32);
+    auto fn_b   = types.internFn(p2, i32);
     CHECK(unifier.unify(fn_a, fn_b), "unify identical fn types");
 
     TypeId p3[] = {i32, i64};
-    auto fn_c = types.internFn(p3, i32);
+    auto fn_c   = types.internFn(p3, i32);
     CHECK(!unifier.unify(fn_a, fn_c), "unify fn with different param types fails");
 }
 

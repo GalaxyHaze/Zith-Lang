@@ -21,16 +21,16 @@ using namespace zith::ast;
 using namespace zith::zir::hir;
 using zith::diagnostics::DiagnosticEngine;
 using zith::import::SymbolTable;
-using zith::lexer::TokenStream;
 using zith::lexer::tokenize;
+using zith::lexer::TokenStream;
 using zith::memory::Arena;
 using zith::parser::Parser;
 using zith::parser::scan;
 using zith::parser::ScanResult;
 using zith::sema::SemaPipeline;
-using zith::types::TypeIntern;
 using zith::types::kErrorType;
 using zith::types::kVoidType;
+using zith::types::TypeIntern;
 
 // ── helpers ──────────────────────────────────────────────────────────
 
@@ -45,13 +45,14 @@ struct SemaTestContext {
     TypeIntern types;
 
     SemaTestContext()
-        : ast_arena(), sym_arena(), type_arena(), hir_arena(),
-          bld(ast_arena), diags(ast_arena), syms(sym_arena), types(type_arena) {}
+        : ast_arena(), sym_arena(), type_arena(), hir_arena(), bld(ast_arena), diags(ast_arena),
+          syms(sym_arena), types(type_arena) {}
 };
 
 // Run the full pipeline: lex → scan → expand → sema
 static bool runSema(SemaTestContext &ctx, std::string_view src, HirModule &out_hir) {
-    auto toks = tokenize(sema_hir_source_map, ctx.ast_arena, "test", std::string(src), ctx.diags).value();
+    auto toks =
+        tokenize(sema_hir_source_map, ctx.ast_arena, "test", std::string(src), ctx.diags).value();
 
     Parser parser(&toks, &ctx.bld, &ctx.diags);
     auto result = scan(parser, ctx.syms);

@@ -57,9 +57,9 @@ using zith::memory::Arena;
 using zith::memory::DynArray;
 
 static std::string make_tmp_dir() {
-    auto base = fs::temp_directory_path();
+    auto base        = fs::temp_directory_path();
     std::string tmpl = (base / "zith_e2e_XXXXXX").string();
-    char *d = zith::support::mkdtemp(tmpl.data());
+    char *d          = zith::support::mkdtemp(tmpl.data());
     if (d)
         cleanup.dirs.push_back(d);
     return d ? std::string(d) : std::string{};

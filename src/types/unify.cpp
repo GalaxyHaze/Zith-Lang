@@ -1,6 +1,6 @@
 #include "unify.hpp"
-#include "types/type-walker.hpp"
 #include "diagnostics/error-codes.hpp"
+#include "types/type-walker.hpp"
 
 #include <span>
 #include <variant>
@@ -103,8 +103,21 @@ bool Unifier::unify(TypeId a, TypeId b, memory::Span span) {
             return false;
         }
         return true;
-    case TypeKind::Ptr:
-        return unify(std::get<TypePtr>(data_a).pointee, std::get<TypePtr>(data_b).pointee, span);
+    case TypeKind::Ptr: {
+        auto &pa = std::get<TypePtr>(data_a);
+        auto &pb = std::get<TypePtr>(data_b);
+        if (pa.is_mut != pb.is_mut) {
+            diags_.report(diagnostics::Severity::Error, diagnostics::err::TypeMismatch,
+                          "type mismatch: mutability differs", span);
+            return false;
+        }
+        if (pa.ownership != pb.ownership) {
+            diags_.report(diagnostics::Severity::Error, diagnostics::err::TypeMismatch,
+                          "type mismatch: ownership qualifier differs", span);
+            return false;
+        }
+        return unify(pa.pointee, pb.pointee, span);
+    }
     case TypeKind::Array: {
         auto &arr_a = std::get<TypeArray>(data_a);
         auto &arr_b = std::get<TypeArray>(data_b);
@@ -139,9 +152,79 @@ bool Unifier::unify(TypeId a, TypeId b, memory::Span span) {
         return true;
     }
     case TypeKind::Optional:
-        return unify(std::get<TypeOptional>(data_a).inner, std::get<TypeOptional>(data_b).inner, span);
+        return unify(std::get<TypeOptional>(data_a).inner, std::get<TypeOptional>(data_b).inner,
+                     span);
     case TypeKind::Failable:
-        return unify(std::get<TypeFailable>(data_a).inner, std::get<TypeFailable>(data_b).inner, span);
+        return unify(std::get<TypeFailable>(data_a).inner, std::get<TypeFailable>(data_b).inner,
+                     span);
+    case TypeKind::Slice:
+        return unify(std::get<TypeSlice>(data_a).elem, std::get<TypeSlice>(data_b).elem, span);
+    case TypeKind::Enum:
+        if (std::get<TypeEnum>(data_a).def_id != std::get<TypeEnum>(data_b).def_id) {
+            diags_.report(diagnostics::Severity::Error, diagnostics::err::TypeMismatch,
+                          "type mismatch: different enum types", span);
+            return false;
+        }
+        return true;
+    case TypeKind::Union:
+        if (std::get<TypeUnion>(data_a).def_id != std::get<TypeUnion>(data_b).def_id) {
+            diags_.report(diagnostics::Severity::Error, diagnostics::err::TypeMismatch,
+                          "type mismatch: different union types", span);
+            return false;
+        }
+        return true;
+    case TypeKind::Pack: {
+        auto &pa = std::get<TypePack>(data_a);
+        auto &pb = std::get<TypePack>(data_b);
+        if (pa.count != pb.count) {
+            diags_.report(diagnostics::Severity::Error, diagnostics::err::TypeMismatch,
+                          "type mismatch: pack member count differs", span);
+            return false;
+        }
+        for (size_t i = 0; i < pa.count; i++) {
+            if (!unify(pa.members[i], pb.members[i], span))
+                return false;
+        }
+        return true;
+    }
+    case TypeKind::Sum: {
+        auto &sa = std::get<TypeSum>(data_a);
+        auto &sb = std::get<TypeSum>(data_b);
+        if (sa.count != sb.count) {
+            diags_.report(diagnostics::Severity::Error, diagnostics::err::TypeMismatch,
+                          "type mismatch: sum member count differs", span);
+            return false;
+        }
+        for (size_t i = 0; i < sa.count; i++) {
+            if (!unify(sa.members[i], sb.members[i], span))
+                return false;
+        }
+        return true;
+    }
+    case TypeKind::GenericParam: {
+        auto &ga = std::get<TypeGenericParam>(data_a);
+        auto &gb = std::get<TypeGenericParam>(data_b);
+        if (ga.decl_id != gb.decl_id || ga.param_index != gb.param_index) {
+            diags_.report(diagnostics::Severity::Error, diagnostics::err::TypeMismatch,
+                          "type mismatch: different generic parameters", span);
+            return false;
+        }
+        return true;
+    }
+    case TypeKind::Incomplete: {
+        auto &ia = std::get<TypeIncomplete>(data_a);
+        auto &ib = std::get<TypeIncomplete>(data_b);
+        if (ia.base != ib.base || ia.arg_count != ib.arg_count) {
+            diags_.report(diagnostics::Severity::Error, diagnostics::err::TypeMismatch,
+                          "type mismatch: incomplete type structure differs", span);
+            return false;
+        }
+        for (size_t i = 0; i < ia.arg_count; i++) {
+            if (!unify(ia.args[i], ib.args[i], span))
+                return false;
+        }
+        return true;
+    }
     default:
         return true;
     }
@@ -178,9 +261,15 @@ bool Unifier::isAssignable(TypeId dst, TypeId src) const {
         return std::get<TypeInt>(data_dst).width == std::get<TypeInt>(data_src).width;
     case TypeKind::Float:
         return std::get<TypeFloat>(data_dst).width == std::get<TypeFloat>(data_src).width;
-    case TypeKind::Ptr:
-        return isAssignable(std::get<TypePtr>(data_dst).pointee,
-                            std::get<TypePtr>(data_src).pointee);
+    case TypeKind::Ptr: {
+        auto &pd = std::get<TypePtr>(data_dst);
+        auto &ps = std::get<TypePtr>(data_src);
+        if (pd.ownership != ps.ownership)
+            return false;
+        if (pd.is_mut && !ps.is_mut)
+            return false;
+        return isAssignable(pd.pointee, ps.pointee);
+    }
     case TypeKind::Array: {
         auto &arr_dst = std::get<TypeArray>(data_dst);
         auto &arr_src = std::get<TypeArray>(data_src);
@@ -209,6 +298,52 @@ bool Unifier::isAssignable(TypeId dst, TypeId src) const {
     case TypeKind::Failable:
         return isAssignable(std::get<TypeFailable>(data_dst).inner,
                             std::get<TypeFailable>(data_src).inner);
+    case TypeKind::Slice:
+        return isAssignable(std::get<TypeSlice>(data_dst).elem, std::get<TypeSlice>(data_src).elem);
+    case TypeKind::Enum:
+        return std::get<TypeEnum>(data_dst).def_id == std::get<TypeEnum>(data_src).def_id;
+    case TypeKind::Union:
+        return std::get<TypeUnion>(data_dst).def_id == std::get<TypeUnion>(data_src).def_id;
+    case TypeKind::Pack: {
+        auto &pd = std::get<TypePack>(data_dst);
+        auto &ps = std::get<TypePack>(data_src);
+        if (pd.count != ps.count)
+            return false;
+        for (size_t i = 0; i < pd.count; i++)
+            if (!isAssignable(pd.members[i], ps.members[i]))
+                return false;
+        return true;
+    }
+    case TypeKind::Sum: {
+        // src is assignable if every member of src is assignable to dst
+        auto &sd = std::get<TypeSum>(data_dst);
+        auto &ss = std::get<TypeSum>(data_src);
+        // For now: exact match
+        if (sd.count != ss.count)
+            return false;
+        for (size_t i = 0; i < sd.count; i++)
+            if (!isAssignable(sd.members[i], ss.members[i]))
+                return false;
+        return true;
+    }
+    case TypeKind::GenericParam: {
+        auto &gd = std::get<TypeGenericParam>(data_dst);
+        auto &gs = std::get<TypeGenericParam>(data_src);
+        return gd.decl_id == gs.decl_id && gd.param_index == gs.param_index;
+    }
+    case TypeKind::Incomplete: {
+        auto &id = std::get<TypeIncomplete>(data_dst);
+        auto &is = std::get<TypeIncomplete>(data_src);
+        if (id.base != is.base || id.arg_count != is.arg_count)
+            return false;
+        for (size_t i = 0; i < id.arg_count; i++)
+            if (!isAssignable(id.args[i], is.args[i]))
+                return false;
+        return true;
+    }
+    case TypeKind::Unknown:
+        // Everything is assignable to unknown
+        return true;
     case TypeKind::Never:
         return true;
     default:
@@ -234,13 +369,23 @@ bool Unifier::isCoercible(TypeId dst, TypeId src) const {
     if (kind_dst == TypeKind::Int && kind_src == TypeKind::Int) {
         auto w_dst = std::get<TypeInt>(intern_.lookup(dst)).width;
         auto w_src = std::get<TypeInt>(intern_.lookup(src)).width;
-        auto to_u = [](IntWidth w) -> uint8_t {
+        auto to_u  = [](IntWidth w) -> uint8_t {
             switch (w) {
-            case IntWidth::I8:  case IntWidth::U8:  return 8;
-            case IntWidth::I16: case IntWidth::U16: return 16;
-            case IntWidth::I32: case IntWidth::U32: return 32;
-            case IntWidth::I64: case IntWidth::U64: return 64;
-            case IntWidth::I128: case IntWidth::U128: return 128;
+            case IntWidth::I8:
+            case IntWidth::U8:
+                return 8;
+            case IntWidth::I16:
+            case IntWidth::U16:
+                return 16;
+            case IntWidth::I32:
+            case IntWidth::U32:
+                return 32;
+            case IntWidth::I64:
+            case IntWidth::U64:
+                return 64;
+            case IntWidth::I128:
+            case IntWidth::U128:
+                return 128;
             }
             return 0;
         };

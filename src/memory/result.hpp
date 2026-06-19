@@ -21,8 +21,8 @@ public:
     Result(T &&val) : data(std::move(val)) {}
     Result(const T &val) : data(val) {}
 
-    Result(E &&err) : data(std::move(err)){}
-    Result(const E &err) : data(err){}
+    Result(E &&err) : data(std::move(err)) {}
+    Result(const E &err) : data(err) {}
 
     bool isOk() const noexcept {
         return data.index() == 0;

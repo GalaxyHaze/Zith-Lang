@@ -9,8 +9,8 @@
 
 using namespace zith::diagnostics;
 using zith::memory::Arena;
-using zith::memory::Span;
 using zith::memory::FileId;
+using zith::memory::Span;
 
 static Span makeSpan(uint32_t start = 0, uint32_t end = 0, FileId file = FileId{0}) {
     return Span{file, start, end};

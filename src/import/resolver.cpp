@@ -51,7 +51,7 @@ void Resolver::resolveDecl(ast::DeclId id) {
             if constexpr (std::is_same_v<T, ast::FnDeclNode>) {
                 auto fn_scope = syms_.enterScope();
                 for (auto &p : n.params)
-                    syms_.declareInScope(fn_scope, p);
+                    syms_.declareInScope(fn_scope, p.name);
                 if (n.body != ast::kInvalidExpr)
                     resolveExpr(n.body);
                 syms_.exitScope();
@@ -196,9 +196,9 @@ SymId Resolver::lookupQualified(std::string_view name) {
     std::string prefix(first);
     for (;;) {
         auto next_dot = remaining.find('.');
-        auto segment  = next_dot == std::string_view::npos ? remaining
-                                                           : remaining.substr(0, next_dot);
-        auto found    = syms_.lookupInScope(segment, scope);
+        auto segment =
+            next_dot == std::string_view::npos ? remaining : remaining.substr(0, next_dot);
+        auto found = syms_.lookupInScope(segment, scope);
         if (found == kInvalidSym) {
             diags_.report(diagnostics::Severity::Error, diagnostics::err::NoMember,
                           "no member '" + std::string(segment) + "' in '" + prefix + "'", {});

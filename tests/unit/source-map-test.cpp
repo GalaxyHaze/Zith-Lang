@@ -56,8 +56,7 @@ static void test_snippet_basic() {
     auto snip = sm.snippet(Span{id, 0, 5});
     CHECK(snip.isOk(), "snippet for [0,5) succeeds");
     if (snip.isOk()) {
-        CHECK_EQ(snip.value(), std::string_view("hello"),
-                 "snippet returns first 5 characters");
+        CHECK_EQ(snip.value(), std::string_view("hello"), "snippet returns first 5 characters");
     }
 }
 
@@ -88,8 +87,7 @@ static void test_snippet_entire_file() {
     auto snip = sm.snippet(Span{id, 0, 12});
     CHECK(snip.isOk(), "snippet for entire file succeeds");
     if (snip.isOk()) {
-        CHECK_EQ(snip.value(), std::string_view("hello\nworld\n"),
-                 "snippet returns full content");
+        CHECK_EQ(snip.value(), std::string_view("hello\nworld\n"), "snippet returns full content");
     }
 }
 
@@ -124,7 +122,7 @@ static void test_loc_first_line() {
         return;
 
     FileId id = result.value();
-    Loc loc = sm.loc(Span{id, 0, 0});
+    Loc loc   = sm.loc(Span{id, 0, 0});
     CHECK_EQ(loc.line, size_t(1), "offset 0 is line 1");
     CHECK_EQ(loc.col, size_t(1), "offset 0 is col 1");
 }
@@ -220,7 +218,7 @@ static void test_add_multiple_independent_files() {
     SourceMap sm;
 
     auto r1 = sm.addFile("alpha.zith", "aaa");
-    auto r2 = sm.addFile("beta.zith",  "bbb");
+    auto r2 = sm.addFile("beta.zith", "bbb");
     auto r3 = sm.addFile("gamma.zith", "ccc");
     CHECK(r1.isOk() && r2.isOk() && r3.isOk(), "three files added successfully");
     if (!r1.isOk() || !r2.isOk() || !r3.isOk())
@@ -238,9 +236,12 @@ static void test_add_multiple_independent_files() {
     auto s3 = sm.snippet(Span{id3, 0, 3});
 
     CHECK(s1.isOk() && s2.isOk() && s3.isOk(), "all snippets succeed");
-    if (s1.isOk()) CHECK_EQ(s1.value(), std::string_view("aaa"), "alpha snippet correct");
-    if (s2.isOk()) CHECK_EQ(s2.value(), std::string_view("bbb"), "beta snippet correct");
-    if (s3.isOk()) CHECK_EQ(s3.value(), std::string_view("ccc"), "gamma snippet correct");
+    if (s1.isOk())
+        CHECK_EQ(s1.value(), std::string_view("aaa"), "alpha snippet correct");
+    if (s2.isOk())
+        CHECK_EQ(s2.value(), std::string_view("bbb"), "beta snippet correct");
+    if (s3.isOk())
+        CHECK_EQ(s3.value(), std::string_view("ccc"), "gamma snippet correct");
 }
 
 int main() {

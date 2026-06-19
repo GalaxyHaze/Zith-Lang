@@ -12,8 +12,10 @@
 namespace zith::cli::commands {
 
 static bool useTermColor(const Options &opts, FILE *out) {
-    if (opts.color == "on") return true;
-    if (opts.color == "off") return false;
+    if (opts.color == "on")
+        return true;
+    if (opts.color == "off")
+        return false;
 #ifdef _WIN32
     return _isatty(_fileno(out)) != 0;
 #else
@@ -21,7 +23,7 @@ static bool useTermColor(const Options &opts, FILE *out) {
 #endif
 }
 #define CERR(c) (useTermColor(opts, stderr) ? diagnostics::ansi::c.data() : "")
-#define RERR   (useTermColor(opts, stderr) ? diagnostics::ansi::reset.data() : "")
+#define RERR (useTermColor(opts, stderr) ? diagnostics::ansi::reset.data() : "")
 
 namespace {
 
@@ -79,8 +81,10 @@ int cmd_deps(const Options &opts) {
     if (sub == "update")
         return depsUpdate(opts);
 
-    std::fprintf(stderr, "%s[soon]%s not implemented yet\n"
-                         "usage: zithc deps (list|add|remove|publish|unpublish|update) [args]\n", CERR(yellow), RERR);
+    std::fprintf(stderr,
+                 "%s[soon]%s not implemented yet\n"
+                 "usage: zithc deps (list|add|remove|publish|unpublish|update) [args]\n",
+                 CERR(yellow), RERR);
     return 1;
 }
 

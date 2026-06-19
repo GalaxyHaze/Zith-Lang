@@ -37,6 +37,11 @@ struct Parser {
     ast::DeclId parseFnDecl();
     ast::DeclId parseDecl();
 
+    // ── Type expression parsing ─────────────────────────────────────
+    ast::TypeExprId parseTypeExpr();
+    ast::TypeExprId parseOrExpr();
+    ast::TypeExprId parsePrimaryType();
+
     void expandBodies(ScanResult &result);
 };
 

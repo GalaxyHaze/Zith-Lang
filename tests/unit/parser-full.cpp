@@ -3,12 +3,12 @@
 #include "ast/ast-ids.hpp"
 #include "ast/ast-nodes.hpp"
 #include "diagnostics/diagnostic-engine.hpp"
+#include "import/symbol-table.hpp"
 #include "lexer/lexer.hpp"
 #include "memory/arena.hpp"
 #include "memory/source-map.hpp"
 #include "parser/parser.hpp"
 #include "parser/scan-result.hpp"
-#include "import/symbol-table.hpp"
 
 auto parser_full_source_map = zith::memory::SourceMap();
 
@@ -19,8 +19,8 @@ using zith::import::SymbolTable;
 using zith::memory::Arena;
 using zith::memory::DynArray;
 using zith::parser::Parser;
-using zith::parser::ScanResult;
 using zith::parser::scan;
+using zith::parser::ScanResult;
 
 // ── helpers ──────────────────────────────────────────────────────────
 
@@ -41,7 +41,8 @@ static void test_parse_binary_add() {
     auto e = parseExprStr(arena, bld, diags, "1 + 2");
     CHECK(e != kInvalidExpr, "parsed binary + expression");
     CHECK(std::holds_alternative<BinaryNode>(bld.getExpr(e)), "binary + node is BinaryNode");
-    if (!std::holds_alternative<BinaryNode>(bld.getExpr(e))) return;
+    if (!std::holds_alternative<BinaryNode>(bld.getExpr(e)))
+        return;
     auto &bin = std::get<BinaryNode>(bld.getExpr(e));
     CHECK(bin.op == BinaryOp::Add, "binary + op is Add");
     CHECK(std::holds_alternative<LitValue>(bld.getExpr(bin.lhs)), "+ lhs is literal");
@@ -554,13 +555,14 @@ static void test_parse_let_stmt() {
     AstBuilder bld(arena);
     DiagnosticEngine diags(arena);
 
-    auto toks = tokenize(parser_full_source_map, arena, "test", std::string("let x = 42"), diags).value();
+    auto toks =
+        tokenize(parser_full_source_map, arena, "test", std::string("let x = 42"), diags).value();
     Parser p(&toks, &bld, &diags);
     auto s = p.parseStmt();
     CHECK(s != kInvalidStmt, "parsed let statement");
     CHECK(std::holds_alternative<LetNode>(bld.getStmt(s)), "let stmt is LetNode");
     auto &let = std::get<LetNode>(bld.getStmt(s));
-    CHECK(let.name == "x", "let name is x");
+    CHECK(let.names[0] == "x", "let name is x");
     CHECK(!let.mut, "let is not mutable");
     CHECK(let.init != kInvalidExpr, "let has initializer");
 }
@@ -570,12 +572,13 @@ static void test_parse_let_stmt_no_init() {
     AstBuilder bld(arena);
     DiagnosticEngine diags(arena);
 
-    auto toks = tokenize(parser_full_source_map, arena, "test", std::string("let x"), diags).value();
+    auto toks =
+        tokenize(parser_full_source_map, arena, "test", std::string("let x"), diags).value();
     Parser p(&toks, &bld, &diags);
     auto s = p.parseStmt();
     CHECK(s != kInvalidStmt, "parsed let statement without init");
     auto &let = std::get<LetNode>(bld.getStmt(s));
-    CHECK(let.name == "x", "let name is x");
+    CHECK(let.names[0] == "x", "let name is x");
     CHECK(let.init == kInvalidExpr, "let has no initializer");
 }
 
@@ -584,7 +587,8 @@ static void test_parse_return_stmt() {
     AstBuilder bld(arena);
     DiagnosticEngine diags(arena);
 
-    auto toks = tokenize(parser_full_source_map, arena, "test", std::string("return 42"), diags).value();
+    auto toks =
+        tokenize(parser_full_source_map, arena, "test", std::string("return 42"), diags).value();
     Parser p(&toks, &bld, &diags);
     auto s = p.parseStmt();
     CHECK(s != kInvalidStmt, "parsed return statement");
@@ -598,7 +602,8 @@ static void test_parse_return_void() {
     AstBuilder bld(arena);
     DiagnosticEngine diags(arena);
 
-    auto toks = tokenize(parser_full_source_map, arena, "test", std::string("return"), diags).value();
+    auto toks =
+        tokenize(parser_full_source_map, arena, "test", std::string("return"), diags).value();
     Parser p(&toks, &bld, &diags);
     auto s = p.parseStmt();
     CHECK(s != kInvalidStmt, "parsed bare return");
@@ -611,7 +616,8 @@ static void test_parse_assign_stmt() {
     AstBuilder bld(arena);
     DiagnosticEngine diags(arena);
 
-    auto toks = tokenize(parser_full_source_map, arena, "test", std::string("x = 5"), diags).value();
+    auto toks =
+        tokenize(parser_full_source_map, arena, "test", std::string("x = 5"), diags).value();
     Parser p(&toks, &bld, &diags);
     auto s = p.parseStmt();
     CHECK(s != kInvalidStmt, "parsed expression statement (assignment TBD)");
@@ -624,7 +630,9 @@ static void test_parse_block() {
     AstBuilder bld(arena);
     DiagnosticEngine diags(arena);
 
-    auto toks = tokenize(parser_full_source_map, arena, "test", std::string("{ let x = 1; x }"), diags).value();
+    auto toks =
+        tokenize(parser_full_source_map, arena, "test", std::string("{ let x = 1; x }"), diags)
+            .value();
     Parser p(&toks, &bld, &diags);
     auto e = p.parseBlock();
     CHECK(e != kInvalidExpr, "parsed block");
@@ -663,7 +671,8 @@ static void test_parse_error_in_let() {
     AstBuilder bld(arena);
     DiagnosticEngine diags(arena);
 
-    auto toks = tokenize(parser_full_source_map, arena, "test", std::string("let 42 = 1"), diags).value();
+    auto toks =
+        tokenize(parser_full_source_map, arena, "test", std::string("let 42 = 1"), diags).value();
     Parser p(&toks, &bld, &diags);
     auto s = p.parseStmt();
     CHECK(diags.hasErrors(), "let with invalid name produces errors");
@@ -678,7 +687,8 @@ static void test_scan_fn_body() {
     SymbolTable syms(arena);
 
     auto toks = tokenize(parser_full_source_map, arena, "test",
-                         std::string("fn foo() { return 1; }"), diags).value();
+                         std::string("fn foo() { return 1; }"), diags)
+                    .value();
     Parser parser(&toks, &bld, &diags);
     auto result = scan(parser, syms);
 
@@ -701,7 +711,8 @@ static void test_scan_struct_body() {
     SymbolTable syms(arena);
 
     auto toks = tokenize(parser_full_source_map, arena, "test",
-                         std::string("struct Point { x: i32, y: f64 }"), diags).value();
+                         std::string("struct Point { x: i32, y: f64 }"), diags)
+                    .value();
     Parser parser(&toks, &bld, &diags);
     auto result = scan(parser, syms);
 
@@ -721,9 +732,10 @@ static void test_scan_struct_with_methods() {
     DiagnosticEngine diags(arena);
     SymbolTable syms(arena);
 
-    auto toks = tokenize(parser_full_source_map, arena, "test",
-                         std::string("struct Foo { data: i32, fn get() -> i32 { return data; } }"),
-                         diags).value();
+    auto toks =
+        tokenize(parser_full_source_map, arena, "test",
+                 std::string("struct Foo { data: i32, fn get() -> i32 { return data; } }"), diags)
+            .value();
     Parser parser(&toks, &bld, &diags);
     auto result = scan(parser, syms);
 
@@ -742,8 +754,8 @@ static void test_scan_multiple_fns() {
     SymbolTable syms(arena);
 
     auto toks = tokenize(parser_full_source_map, arena, "test",
-                         std::string("fn a() {} fn b() { return 1; } fn c(x) { x }"),
-                         diags).value();
+                         std::string("fn a() {} fn b() { return 1; } fn c(x) { x }"), diags)
+                    .value();
     Parser parser(&toks, &bld, &diags);
     auto result = scan(parser, syms);
 
@@ -759,8 +771,8 @@ static void test_parse_program_with_fns() {
     DiagnosticEngine diags(arena);
 
     auto toks = tokenize(parser_full_source_map, arena, "test",
-                         std::string("fn foo(x) { return x; } fn bar() { foo(1); }"),
-                         diags).value();
+                         std::string("fn foo(x) { return x; } fn bar() { foo(1); }"), diags)
+                    .value();
     auto prog_result = zith::parser::parseProgram(toks, bld, diags);
     CHECK(prog_result.isOk(), "parseProgram returns value");
     auto &program = prog_result.value();

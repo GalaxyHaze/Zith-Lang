@@ -11,7 +11,7 @@ int main(const int argc, char **argv) {
 
     // Search for ZithProject.toml from CWD upward and merge build settings.
     // CLI flags take priority over project config.
-    namespace fs = std::filesystem;
+    namespace fs    = std::filesystem;
     fs::path search = fs::current_path();
     while (true) {
         auto toml_path = search / "ZithProject.toml";
@@ -26,8 +26,8 @@ int main(const int argc, char **argv) {
     }
 
     if (opts.verbose) {
-        std::fprintf(stderr, "[config] Mode: %s | Opt: %d | Debug: %d\n",
-                     opts.mode.c_str(), opts.opt_level, opts.debug_level);
+        std::fprintf(stderr, "[config] Mode: %s | Opt: %d | Debug: %d\n", opts.mode.c_str(),
+                     opts.opt_level, opts.debug_level);
         if (!opts.target_triple.empty())
             std::fprintf(stderr, "[config] Target: %s\n", opts.target_triple.c_str());
         if (!opts.include_dirs.empty()) {

@@ -94,10 +94,10 @@ void DiagnosticEngine::emit() const {
                              ? source_map_->get(d.primary.file)
                              : memory::Optional<std::reference_wrapper<memory::SourceLoc>>{};
         if (maybe_src.isValid()) {
-            auto &src = maybe_src.value().get();
-            file_path = src.path;
+            auto &src   = maybe_src.value().get();
+            file_path   = src.path;
             file_source = src.getSlice();
-            loc        = source_map_->loc(d.primary);
+            loc         = source_map_->loc(d.primary);
 
             if (use_color_)
                 std::fputs(theme_.location.data(), stderr);
@@ -107,8 +107,8 @@ void DiagnosticEngine::emit() const {
             std::fputc('\n', stderr);
 
             // Source line with underline
-            if (!file_source.empty() && d.primary.start < file_source.size()
-                && d.primary.end <= file_source.size()) {
+            if (!file_source.empty() && d.primary.start < file_source.size() &&
+                d.primary.end <= file_source.size()) {
                 auto line = findLine(file_source, d.primary.start);
 
                 std::fprintf(stderr, "   |\n");
@@ -121,8 +121,10 @@ void DiagnosticEngine::emit() const {
                 std::fprintf(stderr, "%.*s\n", static_cast<int>(line.text.size()),
                              line.text.data());
 
-                size_t col     = d.primary.start >= line.line_start ? d.primary.start - line.line_start : 0;
-                size_t end_col = d.primary.end >= line.line_start ? d.primary.end - line.line_start : 0;
+                size_t col =
+                    d.primary.start >= line.line_start ? d.primary.start - line.line_start : 0;
+                size_t end_col =
+                    d.primary.end >= line.line_start ? d.primary.end - line.line_start : 0;
                 if (end_col > line.text.size())
                     end_col = line.text.size();
                 if (col > line.text.size())
@@ -213,7 +215,7 @@ void DiagnosticEngine::emitTo(std::string_view source_text) const {
                 std::fputs(ansi::reset.data(), stderr);
             std::fprintf(stderr, "%.*s\n", static_cast<int>(line.text.size()), line.text.data());
 
-            size_t col     = d.primary.start >= line.line_start ? d.primary.start - line.line_start : 0;
+            size_t col = d.primary.start >= line.line_start ? d.primary.start - line.line_start : 0;
             size_t end_col = d.primary.end >= line.line_start ? d.primary.end - line.line_start : 0;
             if (end_col > line.text.size())
                 end_col = line.text.size();

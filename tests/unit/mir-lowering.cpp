@@ -17,8 +17,8 @@ using namespace zith::zir::hir;
 using namespace zith::zir::mir;
 using zith::diagnostics::DiagnosticEngine;
 using zith::memory::Arena;
-using zith::types::TypeIntern;
 using zith::types::IntWidth;
+using zith::types::TypeIntern;
 
 static Arena global_arena;
 static TypeIntern *g_types = nullptr;

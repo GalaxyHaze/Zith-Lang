@@ -1,12 +1,13 @@
 #include "compilation-session.hpp"
 #include "ast/ast-printer.hpp"
 #include "diagnostics/error-codes.hpp"
-#include "sema/heuristic-engine.hpp"
 #include "import/resolver.hpp"
 #include "lexer/lexer.hpp"
 #include "memory/source-map.hpp"
 #include "parser/parser.hpp"
+#include "sema/heuristic-engine.hpp"
 #include "sema/sema-pipeline.hpp"
+#include "solve/solver.hpp"
 
 #include <chrono>
 #include <cstdio>
@@ -67,8 +68,8 @@ bool CompilationSession::runTo(Stage target) {
     plan_.target = target;
 
     if (opts_.verbose)
-        writeOutput("%s[zithc] [starting]%s %s\n",
-                     ansicolor("\033[36m"), ansicolor("\033[0m"), file_path_.c_str());
+        writeOutput("%s[zithc] [starting]%s %s\n", ansicolor("\033[36m"), ansicolor("\033[0m"),
+                    file_path_.c_str());
 
     // Stage 1: Lex
     if (plan_.shouldStop())
@@ -105,14 +106,21 @@ bool CompilationSession::runTo(Stage target) {
         return false;
     plan_.advance();
 
-    // Stage 6: MIR lowering
+    // Stage 6: Solver (generic instantiation, monomorphization)
+    if (plan_.shouldStop())
+        return !diags_.hasErrors();
+    if (!solveStage())
+        return false;
+    plan_.advance();
+
+    // Stage 7: MIR lowering
     if (plan_.shouldStop())
         return !diags_.hasErrors();
     if (!mirStage())
         return false;
     plan_.advance();
 
-    // Stage 7: ZIR interpretation
+    // Stage 8: ZIR interpretation
     if (plan_.shouldStop())
         return !diags_.hasErrors();
     if (!zirStage())
@@ -120,26 +128,25 @@ bool CompilationSession::runTo(Stage target) {
 
     bool ok = !diags_.hasErrors();
     if (opts_.verbose) {
-        auto dt = std::chrono::duration<double, std::milli>(
-            std::chrono::steady_clock::now() - t_start).count();
-        writeOutput("%s[zithc] [done]%s %s %s%s%s (%.1fms)\n",
-                     ansicolor("\033[36m"), ansicolor("\033[0m"),
-                     file_path_.c_str(),
-                     ansicolor(ok ? "\033[32m" : "\033[31m"),
-                     ok ? "\xe2\x9c\x93" : "\xe2\x9c\x97",
-                     ansicolor("\033[0m"), dt);
+        auto dt =
+            std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t_start)
+                .count();
+        writeOutput("%s[zithc] [done]%s %s %s%s%s (%.1fms)\n", ansicolor("\033[36m"),
+                    ansicolor("\033[0m"), file_path_.c_str(),
+                    ansicolor(ok ? "\033[32m" : "\033[31m"), ok ? "\xe2\x9c\x93" : "\xe2\x9c\x97",
+                    ansicolor("\033[0m"), dt);
     }
     return ok;
 }
 
 bool CompilationSession::lexStage() {
-    auto t0 = std::chrono::steady_clock::now();
+    auto t0      = std::chrono::steady_clock::now();
     namespace fs = std::filesystem;
 
     if (fs::is_directory(file_path_)) {
         if (project_config_.entry.empty()) {
-            writeOutput("%s[error]%s no entry file in ZithProject.toml\n",
-                         ansicolor("\033[31m"), ansicolor("\033[0m"));
+            writeOutput("%s[error]%s no entry file in ZithProject.toml\n", ansicolor("\033[31m"),
+                        ansicolor("\033[0m"));
             return false;
         }
         file_path_ = (fs::path(project_root_) / project_config_.entry).string();
@@ -151,14 +158,13 @@ bool CompilationSession::lexStage() {
         if (ec)
             writeOutput("[file] %s\n", file_path_.c_str());
         else
-            writeOutput("[file] %s (%.1f KiB)\n",
-                         file_path_.c_str(), fsize / 1024.0);
+            writeOutput("[file] %s (%.1f KiB)\n", file_path_.c_str(), fsize / 1024.0);
     }
 
     auto file_result = source_map_.loadFile(file_path_);
     if (!file_result) {
-        writeOutput("%s[error]%s failed to load file '%s'\n",
-                     ansicolor("\033[31m"), ansicolor("\033[0m"), file_path_.c_str());
+        writeOutput("%s[error]%s failed to load file '%s'\n", ansicolor("\033[31m"),
+                    ansicolor("\033[0m"), file_path_.c_str());
         return false;
     }
     file_id_ = file_result.value();
@@ -174,8 +180,8 @@ bool CompilationSession::lexStage() {
         lexer::printTokens(tokens_);
 
     if (opts_.verbose) {
-        auto dt = std::chrono::duration<double, std::milli>(
-            std::chrono::steady_clock::now() - t0).count();
+        auto dt = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0)
+                      .count();
         writeOutput("  [lex] %6u tokens  (%5.1fms)\n", tokens_.len, dt);
     }
 
@@ -183,7 +189,7 @@ bool CompilationSession::lexStage() {
 }
 
 bool CompilationSession::importStage() {
-    auto t0 = std::chrono::steady_clock::now();
+    auto t0      = std::chrono::steady_clock::now();
     namespace fs = std::filesystem;
 
     // ── Compute visible roots ──────────────────────────────────────
@@ -269,10 +275,9 @@ bool CompilationSession::importStage() {
     import_mgr_.mergeInto(syms_);
 
     if (opts_.verbose) {
-        auto dt = std::chrono::duration<double, std::milli>(
-            std::chrono::steady_clock::now() - t0).count();
-        writeOutput("  [import] %zu symbols  (%5.1fms)\n",
-                     syms_.symbolCount(), dt);
+        auto dt = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0)
+                      .count();
+        writeOutput("  [import] %zu symbols  (%5.1fms)\n", syms_.symbolCount(), dt);
     }
 
     return true;
@@ -286,8 +291,8 @@ bool CompilationSession::resolveStage() {
     resolved_syms_ = resolver.takeResolvedTable();
 
     if (opts_.verbose) {
-        auto dt = std::chrono::duration<double, std::milli>(
-            std::chrono::steady_clock::now() - t0).count();
+        auto dt = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0)
+                      .count();
         writeOutput("  [resolve] %5.1fms\n", dt);
     }
 
@@ -304,10 +309,9 @@ bool CompilationSession::scanStage() {
         return false;
     }
     if (opts_.verbose) {
-        auto dt = std::chrono::duration<double, std::milli>(
-            std::chrono::steady_clock::now() - t0).count();
-        writeOutput("  [scan] %6zu top-level decls  (%5.1fms)\n",
-                     program_.decls.size(), dt);
+        auto dt = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0)
+                      .count();
+        writeOutput("  [scan] %6zu top-level decls  (%5.1fms)\n", program_.decls.size(), dt);
     }
     return true;
 }
@@ -345,13 +349,27 @@ bool CompilationSession::semaStage() {
     hir_module_ = pipeline.takeHir();
 
     if (opts_.verbose) {
-        auto dt = std::chrono::duration<double, std::milli>(
-            std::chrono::steady_clock::now() - t0).count();
-        writeOutput("  [sema] %zu fns lowered  (%5.1fms)\n",
-                     hir_module_.getFnCount(), dt);
+        auto dt = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0)
+                      .count();
+        writeOutput("  [sema] %zu fns lowered  (%5.1fms)\n", hir_module_.getFnCount(), dt);
     }
 
     return !diags_.hasErrors();
+}
+
+bool CompilationSession::solveStage() {
+    auto t0 = std::chrono::steady_clock::now();
+    solve::Solver solver(types_, ast_builder_, program_, syms_, diags_, hir_arena_);
+    if (!solver.solve(hir_module_)) {
+        diags_.emit();
+        return false;
+    }
+    if (opts_.verbose) {
+        auto dt = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0)
+                      .count();
+        writeOutput("  [solve] \xe2\x80\x94 (stub)  (%5.1fms)\n", dt);
+    }
+    return true;
 }
 
 bool CompilationSession::mirStage() {
@@ -359,10 +377,9 @@ bool CompilationSession::mirStage() {
     // TODO: wire up HIR → MIR lowering, MIR verification
     // Thread-safety: each session owns its own MirModule — safe to parallelize.
     if (opts_.verbose) {
-        auto dt = std::chrono::duration<double, std::milli>(
-            std::chrono::steady_clock::now() - t0).count();
-        writeOutput("  [mir] %zu fns  (%5.1fms)\n",
-                     mir_module_.fnCount(), dt);
+        auto dt = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0)
+                      .count();
+        writeOutput("  [mir] %zu fns  (%5.1fms)\n", mir_module_.fnCount(), dt);
     }
     return true;
 }
@@ -374,8 +391,8 @@ bool CompilationSession::zirStage() {
     // may need to be merged (linking, combining interpreted modules).
     // This is the only stage that may require inter-file synchronization.
     if (opts_.verbose) {
-        auto dt = std::chrono::duration<double, std::milli>(
-            std::chrono::steady_clock::now() - t0).count();
+        auto dt = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0)
+                      .count();
         writeOutput("  [zir] \xe2\x80\x94 (stub)  (%5.1fms)\n", dt);
     }
     return true;
