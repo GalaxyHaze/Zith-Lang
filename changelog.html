@@ -1,7 +1,105 @@
 <!DOCTYPE html>
 <html lang="en">
-<head><meta charset="UTF-8"><title>Changelog - v0.3.2</title></head>
+<head><meta charset="UTF-8"><title>Changelog - v0.1.3</title></head>
 <body>
+
+<div class="changelog-entry">
+    <h2>Release v0.1.3</h2>
+    <p class="lastUpdated">20 June 2026</p>
+
+    <hr>
+
+    <section>
+        <h3>Summary</h3>
+        <p>
+            This release introduces the <strong>ZIR bytecode IR</strong> subsystem, completes the migration
+            from <code>std::vector</code> to <code>DynArray</code> in two core subsystems, adds
+            <strong>Span</strong> fields on all AST nodes, and ports the ZIR interpreter from the prototype
+            branch. The compiler now has proper arena-backed containers throughout ZIR and Diagnostics,
+            source-location tracking on every AST node, and a complete stack-based bytecode interpreter
+            ready for pipeline integration.
+        </p>
+    </section>
+
+    <hr>
+
+    <section>
+        <h3>Highlights</h3>
+        <ul>
+            <li><strong>ZIR Bytecode IR</strong> — 26 opcodes, bytecode emitter (HIR → ZIR), stack-based interpreter, block/function/module types. Ported from prototype and adapted for <code>DynArray</code>.</li>
+            <li><strong>AST Span coverage</strong> — every <code>ExprNode</code>, <code>StmtNode</code>, and <code>DeclNode</code> variant now carries a <code>memory::Span</code> for source location tracking</li>
+            <li><strong><code>std::vector</code> → <code>DynArray</code></strong> — ZIR structs (blocks, functions, modules) and Diagnostics (labels, suggestions) now use arena-backed <code>DynArray</code></li>
+            <li><strong>ZirInterpreter register file</strong> — fixed 16-slot <code>std::array</code> replaces <code>std::vector</code> for predictable performance</li>
+            <li><strong>Pratt parser foundation</strong> — span tracking in parser prepares for complete expression/statement parsing in v0.2.0.0</li>
+            <li><strong>Version roadmap</strong> — comprehensive plan from v0.2.0.0 through v0.8.0.0 with all 4 codegen paths documented</li>
+        </ul>
+    </section>
+
+    <hr>
+
+    <section>
+        <h3>Technical Details</h3>
+
+        <h4>Added</h4>
+        <ul>
+            <li><code>src/zir/zir/zir-inst.hpp</code> — 26 instruction opcodes, <code>ZirBlock</code> / <code>ZirFn</code> / <code>ZirModule</code> types with <code>DynArray</code> fields, arena-backed construction</li>
+            <li><code>src/zir/zir/zir-emitter.hpp</code> / <code>.cpp</code> — <code>ZirEmitter</code> from HIR to ZIR bytecode, takes <code>memory::Arena&amp;</code> in constructor</li>
+            <li><code>src/zir/zir/zir-interp.hpp</code> / <code>.cpp</code> — <code>ZirInterpreter</code> with stack VM, 16-slot <code>std::array&lt;Value, 16&gt;</code> register file</li>
+            <li><code>Span</code> field to all AST nodes — <code>LitValue</code>, <code>BinaryNode</code>, <code>UnaryNode</code>, <code>CallNode</code>, <code>IdentNode</code>, <code>FieldNode</code>, <code>IndexNode</code>, <code>RangeNode</code>, <code>BlockNode</code>, <code>IfNode</code>, <code>WhileNode</code>, <code>LetNode</code>, <code>AssignNode</code>, <code>RetNode</code>, <code>FnDeclNode</code>, <code>StructDeclNode</code>, <code>EnumDeclNode</code>, <code>UnionDeclNode</code>, <code>ComponentDeclNode</code>, <code>TraitDeclNode</code>, <code>InterfaceDeclNode</code>, <code>ImportNode</code></li>
+            <li><code>tests/unit/dyn-array-test.cpp</code> — 14 test functions, 272 assertions for DynArray</li>
+            <li><code>tests/unit/flat-map-test.cpp</code> — 19 test functions, 3724 assertions for FlatMap</li>
+            <li><code>.opencode/plans/version-roadmap.md</code> — full version plan v0.2.0.0 through v0.8.0.0</li>
+            <li><code>.opencode/plans/NEXT_STEPS.md</code> — phased checklists matching version roadmap</li>
+            <li><code>STATUS.md</code> — updated with 27/27 tests, pipeline states for all subsystems</li>
+        </ul>
+
+        <h4>Changed</h4>
+        <ul>
+            <li><code>ZirBlock::code</code>, <code>ZirFn::blocks</code>, <code>ZirModule::{functions, constants}</code> — <code>std::vector</code> → <code>DynArray</code></li>
+            <li><code>Diagnostic::labels</code>, <code>Diagnostic::suggestions</code> — <code>std::vector</code> → <code>DynArray</code>. <code>Diagnostic</code> now takes <code>Arena&amp;</code> + 4 core fields in constructor</li>
+            <li><code>ZirInterpreter::locals_</code> — <code>std::vector&lt;Value&gt;</code> → <code>std::array&lt;Value, 16&gt;</code></li>
+            <li><code>DynArray::emplace()</code>/<code>push()</code> — brace <code>{}</code> → parens <code>()</code> init to avoid narrowing</li>
+            <li><code>TEST_MAIN</code> macro — uses <code>#name</code> stringification</li>
+            <li><code>HeuristicEngine::generate()</code> — takes <code>DynArray&lt;std::string&gt;&amp;</code></li>
+            <li><code>AstBuilder</code> — all builder methods accept optional <code>memory::Span</code></li>
+            <li><code>Parser</code> — <code>spanFrom()</code> helper, span computation in all parse functions</li>
+        </ul>
+
+        <h4>Fixed</h4>
+        <ul>
+            <li><strong>Narrowing conversions</strong> — <code>DynArray::emplace()</code>/<code>push()</code> with <code>uint32_t</code>/<code>uint8_t</code> no longer produce narrowing errors</li>
+            <li><strong>TEST_MAIN stringification</strong> — test names now stringify correctly via <code>#name</code></li>
+        </ul>
+    </section>
+
+    <hr>
+
+    <section>
+        <h3>Modified Files Reference</h3>
+        <ul>
+            <li><a href="https://github.com/GalaxyHaze/Zith/blob/main/src/zir/zir/zir-inst.hpp">src/zir/zir/zir-inst.hpp</a></li>
+            <li><a href="https://github.com/GalaxyHaze/Zith/blob/main/src/zir/zir/zir-emitter.hpp">src/zir/zir/zir-emitter.hpp</a></li>
+            <li><a href="https://github.com/GalaxyHaze/Zith/blob/main/src/zir/zir/zir-emitter.cpp">src/zir/zir/zir-emitter.cpp</a></li>
+            <li><a href="https://github.com/GalaxyHaze/Zith/blob/main/src/zir/zir/zir-interp.hpp">src/zir/zir/zir-interp.hpp</a></li>
+            <li><a href="https://github.com/GalaxyHaze/Zith/blob/main/src/zir/zir/zir-interp.cpp">src/zir/zir/zir-interp.cpp</a></li>
+            <li><a href="https://github.com/GalaxyHaze/Zith/blob/main/src/ast/ast-nodes.hpp">src/ast/ast-nodes.hpp</a></li>
+            <li><a href="https://github.com/GalaxyHaze/Zith/blob/main/src/ast/ast-builder.hpp">src/ast/ast-builder.hpp</a></li>
+            <li><a href="https://github.com/GalaxyHaze/Zith/blob/main/src/ast/ast-builder.cpp">src/ast/ast-builder.cpp</a></li>
+            <li><a href="https://github.com/GalaxyHaze/Zith/blob/main/src/parser/parser.cpp">src/parser/parser.cpp</a></li>
+            <li><a href="https://github.com/GalaxyHaze/Zith/blob/main/src/parser/parser.hpp">src/parser/parser.hpp</a></li>
+            <li><a href="https://github.com/GalaxyHaze/Zith/blob/main/src/diagnostics/diagnostic.hpp">src/diagnostics/diagnostic.hpp</a></li>
+            <li><a href="https://github.com/GalaxyHaze/Zith/blob/main/src/diagnostics/diagnostic-engine.cpp">src/diagnostics/diagnostic-engine.cpp</a></li>
+            <li><a href="https://github.com/GalaxyHaze/Zith/blob/main/src/sema/heuristic-engine.hpp">src/sema/heuristic-engine.hpp</a></li>
+            <li><a href="https://github.com/GalaxyHaze/Zith/blob/main/src/sema/heuristic-engine.cpp">src/sema/heuristic-engine.cpp</a></li>
+            <li><a href="https://github.com/GalaxyHaze/Zith/blob/main/src/memory/dyn-array.hpp">src/memory/dyn-array.hpp</a></li>
+            <li><a href="https://github.com/GalaxyHaze/Zith/blob/main/tests/unit/dyn-array-test.cpp">tests/unit/dyn-array-test.cpp</a></li>
+            <li><a href="https://github.com/GalaxyHaze/Zith/blob/main/tests/unit/flat-map-test.cpp">tests/unit/flat-map-test.cpp</a></li>
+            <li><a href="https://github.com/GalaxyHaze/Zith/blob/main/tests/unit/zir-interp-units.cpp">tests/unit/zir-interp-units.cpp</a></li>
+        </ul>
+    </section>
+</div>
+
+<hr style="margin: 48px 0; border-color: #333;">
 
 <div class="changelog-entry">
     <h2>Release v0.3.2</h2>
