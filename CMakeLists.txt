@@ -57,38 +57,29 @@ file(GLOB_RECURSE ZITH_LIB_SOURCES
 )
 list(REMOVE_ITEM ZITH_LIB_SOURCES "${CMAKE_SOURCE_DIR}/src/cli/zithc-main.cpp")
 
-add_library(zithc_objects OBJECT ${ZITH_LIB_SOURCES})
+# ── Static library (all sources except main entry point) ──────────
+add_library(zithcLib STATIC ${ZITH_LIB_SOURCES})
 
-target_include_directories(zithc_objects PUBLIC
+target_include_directories(zithcLib PUBLIC
     src
 )
 
-target_link_libraries(zithc_objects PUBLIC mio tomlplusplus::tomlplusplus)
+target_link_libraries(zithcLib PUBLIC mio tomlplusplus::tomlplusplus)
 
-target_compile_definitions(zithc_objects PUBLIC
+target_compile_definitions(zithcLib PUBLIC
     ZITH_VERSION="${ZITH_VERSION}"
     ZITH_STDLIB_DIR="${CMAKE_CURRENT_SOURCE_DIR}/stdlib"
 )
 
-if(ZITH_BUILD_CAPI)
-    # ── Static library for LSP / embedding (includes C ABI) ──────────
-    add_library(zithcLib STATIC $<TARGET_OBJECTS:zithc_objects>)
-    set_target_properties(zithcLib PROPERTIES
-        OUTPUT_NAME "zithc"
-        PUBLIC_HEADER "src/capi/zithc-capi.h"
-    )
-endif()
+set_target_properties(zithcLib PROPERTIES
+    OUTPUT_NAME "zithc"
+    PUBLIC_HEADER "src/capi/zithc-capi.h"
+)
 
 if(ZITH_BUILD_CLI)
     # ── CLI executable ────────────────────────────────────────────────
-    add_executable(zithc ${CMAKE_SOURCE_DIR}/src/cli/zithc-main.cpp $<TARGET_OBJECTS:zithc_objects>)
-
-    target_include_directories(zithc PRIVATE src)
-    target_link_libraries(zithc PRIVATE mio tomlplusplus::tomlplusplus)
-    target_compile_definitions(zithc PRIVATE
-        ZITH_VERSION="${ZITH_VERSION}"
-        ZITH_STDLIB_DIR="${CMAKE_CURRENT_SOURCE_DIR}/stdlib"
-    )
+    add_executable(zithc ${CMAKE_SOURCE_DIR}/src/cli/zithc-main.cpp)
+    target_link_libraries(zithc PRIVATE zithcLib)
 endif()
 
 include(CTest)
@@ -96,9 +87,8 @@ include(CTest)
 if(BUILD_TESTING)
 
 function(add_zith_test NAME SOURCE)
-    add_executable(${NAME} ${SOURCE} $<TARGET_OBJECTS:zithc_objects>)
-    target_include_directories(${NAME} PRIVATE src)
-    target_link_libraries(${NAME} PRIVATE mio tomlplusplus::tomlplusplus)
+    add_executable(${NAME} ${SOURCE})
+    target_link_libraries(${NAME} PRIVATE zithcLib)
     set_target_properties(${NAME} PROPERTIES FOLDER "tests")
     add_test(NAME ${NAME} COMMAND ${NAME})
 endfunction()
