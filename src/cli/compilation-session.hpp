@@ -98,6 +98,12 @@ public:
     const ProjectConfig &projectConfig() const {
         return project_config_;
     }
+    const memory::SourceMap &sourceMap() const {
+        return source_map_;
+    }
+    memory::FileId fileId() const {
+        return file_id_;
+    }
 
     void setBuffered(bool b) {
         buffered_output_ = b;

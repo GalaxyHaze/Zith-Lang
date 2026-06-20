@@ -108,6 +108,19 @@ void zithc_emit_diagnostics(zithc_session *session) {
     if (session) session->session.emitDiagnostics();
 }
 
+zithc_position zithc_offset_to_position(zithc_session *session, uint32_t offset) {
+    zithc_position result = {0, 0};
+    if (!session) return result;
+    try {
+        auto &s = session->session;
+        zith::memory::Span span{s.fileId(), offset, offset + 1};
+        auto loc = s.sourceMap().loc(span);
+        result.line = loc.line > 0 ? loc.line - 1 : 0;
+        result.col  = loc.col  > 0 ? loc.col  - 1 : 0;
+    } catch (...) {}
+    return result;
+}
+
 const char *zithc_last_error(zithc_session *session) {
     if (!session) return "null session";
     return session->last_error.c_str();

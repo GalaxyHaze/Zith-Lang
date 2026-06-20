@@ -34,7 +34,7 @@ public:
 
     auto get(FileId id) noexcept -> Optional<std::reference_wrapper<SourceLoc>>;
 
-    auto loc(const Span &a) noexcept -> Loc;
+    auto loc(const Span &a) const noexcept -> Loc;
 };
 
 } // namespace zith::memory

@@ -122,7 +122,7 @@ auto SourceMap::snippet(const Span &a) noexcept -> Result<std::string_view> {
     return files[a.file].snippet(a);
 }
 
-auto SourceMap::loc(const Span &a) noexcept -> Loc {
+auto SourceMap::loc(const Span &a) const noexcept -> Loc {
     std::shared_lock lock(rw_mutex);
     if (a.file >= files.size()) {
         return Loc{0, 0};

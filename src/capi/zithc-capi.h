@@ -34,6 +34,12 @@ typedef enum {
     ZITHC_STAGE_ZIR_INTERPRETED = 9
 } zithc_stage;
 
+// ── Position (0-based line/col, as LSP expects) ───────────────────────
+typedef struct {
+    uint32_t line;
+    uint32_t col;
+} zithc_position;
+
 // ── Source span ───────────────────────────────────────────────────────
 typedef struct {
     uint32_t start;
@@ -64,6 +70,9 @@ size_t zithc_diag_count(zithc_session *session);
 zithc_diagnostic zithc_diag_get(zithc_session *session, size_t index);
 bool zithc_has_errors(zithc_session *session);
 void zithc_emit_diagnostics(zithc_session *session);
+
+// ── Position conversion ───────────────────────────────────────────────
+zithc_position zithc_offset_to_position(zithc_session *session, uint32_t offset);
 
 // ── Error info ────────────────────────────────────────────────────────
 const char *zithc_last_error(zithc_session *session);
