@@ -6,8 +6,6 @@
 
 #include <cstring>
 #include <new>
-#include <stdexcept>
-#include <string>
 
 struct zithc_session {
     zith::cli::Options opts;
@@ -35,24 +33,16 @@ extern "C" {
 zithc_session *zithc_session_create(const char *file_path) {
     if (!file_path || file_path[0] == '\0')
         return nullptr;
-    try {
-        auto *s = new zithc_session(file_path);
-        return s;
-    } catch (const std::exception &) {
-        return nullptr;
-    }
+    auto *s = new (std::nothrow) zithc_session(file_path);
+    return s;
 }
 
 zithc_session *zithc_session_create_from_buffer(const char *uri, const char *content,
                                                  size_t length) {
     if (!uri || uri[0] == '\0' || !content)
         return nullptr;
-    try {
-        auto *s = new zithc_session(uri, content, length);
-        return s;
-    } catch (const std::exception &) {
-        return nullptr;
-    }
+    auto *s = new (std::nothrow) zithc_session(uri, content, length);
+    return s;
 }
 
 void zithc_session_destroy(zithc_session *session) {
@@ -61,25 +51,15 @@ void zithc_session_destroy(zithc_session *session) {
 
 bool zithc_run(zithc_session *session) {
     if (!session) return false;
-    try {
-        return session->session.run();
-    } catch (const std::exception &e) {
-        session->last_error = e.what();
-        return false;
-    }
+    return session->session.run();
 }
 
 bool zithc_run_to(zithc_session *session, int stage) {
     if (!session) return false;
     if (stage < ZITHC_STAGE_SOURCE || stage > ZITHC_STAGE_ZIR_INTERPRETED)
         return false;
-    try {
-        auto s = static_cast<zith::cli::Stage>(stage);
-        return session->session.runTo(s);
-    } catch (const std::exception &e) {
-        session->last_error = e.what();
-        return false;
-    }
+    auto s = static_cast<zith::cli::Stage>(stage);
+    return session->session.runTo(s);
 }
 
 size_t zithc_diag_count(zithc_session *session) {
@@ -111,13 +91,11 @@ void zithc_emit_diagnostics(zithc_session *session) {
 zithc_position zithc_offset_to_position(zithc_session *session, uint32_t offset) {
     zithc_position result = {0, 0};
     if (!session) return result;
-    try {
-        auto &s = session->session;
-        zith::memory::Span span{s.fileId(), offset, offset + 1};
-        auto loc = s.sourceMap().loc(span);
-        result.line = loc.line > 0 ? loc.line - 1 : 0;
-        result.col  = loc.col  > 0 ? loc.col  - 1 : 0;
-    } catch (...) {}
+    auto &s = session->session;
+    zith::memory::Span span{s.fileId(), offset, offset + 1};
+    auto loc = s.sourceMap().loc(span);
+    result.line = loc.line > 0 ? loc.line - 1 : 0;
+    result.col  = loc.col  > 0 ? loc.col  - 1 : 0;
     return result;
 }
 
