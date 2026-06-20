@@ -115,6 +115,16 @@ public:
     std::string flushOutput();
     void emitDiagnostics();
 
+    // ── LSP feature accessors ─────────────────────────────────────────
+    const lexer::TokenStream &tokens() const { return tokens_; }
+    const parser::ScanResult &scanResult() const { return scan_result_; }
+    const import::SymbolTable &symbolTable() const { return syms_; }
+    const memory::DynArray<import::SymId> &resolvedSyms() const { return resolved_syms_; }
+    const ast::AstBuilder &astBuilder() const { return ast_builder_; }
+    ast::AstBuilder &astBuilder() { return ast_builder_; }
+    const ast::ProgramNode &program() const { return program_; }
+    const types::TypeIntern &types() const { return types_; }
+
 private:
     void setTarget(Stage s) {
         plan_.target = s;

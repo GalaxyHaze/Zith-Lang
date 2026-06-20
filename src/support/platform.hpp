@@ -6,6 +6,8 @@
 #ifdef _WIN32
 #include <cstdlib>
 #include <windows.h>
+#else
+#include <stdlib.h>
 #endif
 
 namespace zith::support {
