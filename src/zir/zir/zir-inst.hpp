@@ -46,7 +46,7 @@ struct ZirInst {
     uint32_t imm32 = 0;
     uint8_t imm8   = 0;
 
-    ZirInst() = default;
+    ZirInst() : op(ZirOp::Nop) {}
     explicit ZirInst(ZirOp op, uint32_t imm32 = 0, uint8_t imm8 = 0)
         : op(op), imm32(imm32), imm8(imm8) {}
 };

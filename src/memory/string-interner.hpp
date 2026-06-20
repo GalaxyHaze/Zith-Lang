@@ -2,10 +2,10 @@
 
 #include "memory/arena.hpp"
 #include "memory/dyn-array.hpp"
+#include "memory/flat_map.hpp"
 
 #include <cstdint>
 #include <string_view>
-#include <unordered_map>
 
 namespace zith::memory {
 
@@ -13,7 +13,7 @@ using InternedId = uint32_t;
 
 class StringInterner {
     memory::Arena *arena_;
-    std::unordered_map<std::string_view, InternedId> map_;
+    FlatMap<std::string_view, InternedId> map_;
     memory::DynArray<const char *> strings_;
 
 public:

@@ -19,7 +19,7 @@ inline int g_test_failed = 0;
 
 #define TEST_MAIN(name)                                                                            \
     int main() {                                                                                   \
-        std::printf("%s tests\n", name);                                                           \
+        std::printf("%s tests\n", #name);                                                          \
         std::printf("=====================\n\n");                                                  \
         g_test_passed = 0;                                                                         \
         g_test_failed = 0;                                                                         \

@@ -5,10 +5,11 @@
 #include "memory/source-file.hpp"
 #include "span.hpp"
 
+#include "memory/flat_map.hpp"
+
 #include <functional>
 #include <shared_mutex>
 #include <string>
-#include <unordered_map>
 #include <vector>
 
 namespace zith::memory {
@@ -18,7 +19,7 @@ struct SourceLoc;
 class SourceMap {
     memory::Arena file_arena;
     memory::DynArray<SourceLoc> files;
-    std::unordered_map<std::string, FileId> cache;
+    FlatMap<std::string, FileId> cache;
     mutable std::shared_mutex rw_mutex;
 
 public:

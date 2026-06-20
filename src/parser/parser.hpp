@@ -43,6 +43,8 @@ struct Parser {
     ast::TypeExprId parsePrimaryType();
 
     void expandBodies(ScanResult &result);
+
+    memory::Span spanFrom(memory::Span start) const;
 };
 
 ProgramResult parseProgram(lexer::TokenStream tokens, ast::AstBuilder &builder,

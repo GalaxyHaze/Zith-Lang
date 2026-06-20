@@ -112,6 +112,9 @@ add_zith_test(zithc-error-codes     tests/unit/error-codes-lookup.cpp)
 add_zith_test(zithc-diag-advanced   tests/unit/diagnostic-engine-advanced.cpp)
 add_zith_test(zithc-result          tests/unit/result-test.cpp)
 add_zith_test(zithc-string-interner tests/unit/string-interner-test.cpp)
+add_zith_test(zithc-zir-inst tests/unit/zir/test_zir_inst.cpp)
+add_zith_test(zithc-zir-emitter tests/unit/zir/test_zir_emitter.cpp)
+add_zith_test(zithc-zir-interp tests/unit/zir/test_zir_interp.cpp)
 
 endif()
 

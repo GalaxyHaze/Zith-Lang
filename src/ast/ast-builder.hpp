@@ -29,38 +29,41 @@ public:
     const StmtNode &getStmt(StmtId id) const;
     const DeclNode &getDecl(DeclId id) const;
 
-    LitValue makeLit(LitKind kind, std::string_view raw);
-    ExprId litExpr(LitKind kind, std::string_view raw);
-    ExprId ident(std::string_view name);
-    ExprId binary(ExprId lhs, BinaryOp op, ExprId rhs);
-    ExprId unary(UnaryOp op, ExprId operand);
-    ExprId call(ExprId callee, memory::DynArray<ExprId> args);
-    ExprId field(ExprId object, std::string_view field_name);
-    ExprId index(ExprId object, ExprId index);
-    ExprId range(ExprId lhs, ExprId rhs);
-    ExprId block(memory::DynArray<StmtId> stmts, ExprId trailing = kInvalidExpr);
-    ExprId ifExpr(ExprId cond, ExprId then_branch, ExprId else_branch = kInvalidExpr);
-    ExprId whileExpr(ExprId cond, ExprId body);
+    LitValue makeLit(LitKind kind, std::string_view raw, memory::Span span = {});
+    ExprId litExpr(LitKind kind, std::string_view raw, memory::Span span = {});
+    ExprId ident(std::string_view name, memory::Span span = {});
+    ExprId binary(ExprId lhs, BinaryOp op, ExprId rhs, memory::Span span = {});
+    ExprId unary(UnaryOp op, ExprId operand, memory::Span span = {});
+    ExprId call(ExprId callee, memory::DynArray<ExprId> args, memory::Span span = {});
+    ExprId field(ExprId object, std::string_view field_name, memory::Span span = {});
+    ExprId index(ExprId object, ExprId index, memory::Span span = {});
+    ExprId range(ExprId lhs, ExprId rhs, memory::Span span = {});
+    ExprId block(memory::DynArray<StmtId> stmts, ExprId trailing = kInvalidExpr, memory::Span span = {});
+    ExprId ifExpr(ExprId cond, ExprId then_branch, ExprId else_branch = kInvalidExpr, memory::Span span = {});
+    ExprId whileExpr(ExprId cond, ExprId body, memory::Span span = {});
 
     StmtId letStmt(memory::DynArray<std::string_view> names, bool mut,
-                   TypeExprId type_annot = kInvalidTypeExpr, ExprId init = kInvalidExpr);
-    StmtId letStmt(std::string_view name, bool mut, ExprId init = kInvalidExpr);
-    StmtId assign(ExprId target, ExprId value);
-    StmtId retStmt(ExprId value = kInvalidExpr);
+                   TypeExprId type_annot = kInvalidTypeExpr, ExprId init = kInvalidExpr,
+                   memory::Span span = {});
+    StmtId letStmt(std::string_view name, bool mut, ExprId init = kInvalidExpr,
+                   memory::Span span = {});
+    StmtId assign(ExprId target, ExprId value, memory::Span span = {});
+    StmtId retStmt(ExprId value = kInvalidExpr, memory::Span span = {});
 
     DeclId fnDecl(std::string_view name, memory::DynArray<GenericParam> generic_params,
                   memory::DynArray<FnParam> params, TypeExprId return_type = kInvalidTypeExpr,
-                  ExprId body = kInvalidExpr);
+                  ExprId body = kInvalidExpr, memory::Span span = {});
     DeclId fnDecl(std::string_view name, memory::DynArray<std::string_view> param_names,
-                  ExprId body = kInvalidExpr);
-    DeclId structDecl(std::string_view name, memory::DynArray<StructField> fields);
-    DeclId enumDecl(std::string_view name, memory::DynArray<EnumVariant> variants);
-    DeclId unionDecl(std::string_view name, memory::DynArray<UnionVariant> variants);
-    DeclId componentDecl(std::string_view name);
-    DeclId traitDecl(std::string_view name, memory::DynArray<TraitMethod> methods);
-    DeclId interfaceDecl(std::string_view name, memory::DynArray<TraitMethod> methods);
+                  ExprId body = kInvalidExpr, memory::Span span = {});
+    DeclId structDecl(std::string_view name, memory::DynArray<StructField> fields, memory::Span span = {});
+    DeclId enumDecl(std::string_view name, memory::DynArray<EnumVariant> variants, memory::Span span = {});
+    DeclId unionDecl(std::string_view name, memory::DynArray<UnionVariant> variants, memory::Span span = {});
+    DeclId componentDecl(std::string_view name, memory::Span span = {});
+    DeclId traitDecl(std::string_view name, memory::DynArray<TraitMethod> methods, memory::Span span = {});
+    DeclId interfaceDecl(std::string_view name, memory::DynArray<TraitMethod> methods, memory::Span span = {});
     DeclId importDecl(memory::DynArray<std::string_view> path, std::string_view alias = {},
-                      bool is_from = false, bool is_export = false, int32_t import_depth = 1);
+                      bool is_from = false, bool is_export = false, int32_t import_depth = 1,
+                      memory::Span span = {});
 
     ExprId unbody(memory::Span body_span, uint32_t token_start, uint32_t token_end);
 
@@ -71,6 +74,10 @@ public:
     TypeExprId builtinExpr(BuiltinType kind);
     TypeExprId pathExpr(memory::DynArray<std::string_view> segments);
     TypeExprId inferExpr();
+
+    memory::Span exprSpan(ExprId id) const;
+    memory::Span stmtSpan(StmtId id) const;
+    memory::Span declSpan(DeclId id) const;
 
     memory::Arena &arena();
 };

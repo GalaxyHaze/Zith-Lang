@@ -69,6 +69,14 @@ bool Parser::consume(char c) {
     return false;
 }
 
+memory::Span Parser::spanFrom(memory::Span start) const {
+    if (tok->offset > 0) {
+        auto &prev = tok->src[tok->offset - 1];
+        return {start.file, start.start, prev.span.end};
+    }
+    return start;
+}
+
 // ── operator precedence ────────────────────────────────────────────────
 
 namespace {
@@ -252,6 +260,7 @@ ast::ExprId Parser::parsePrimary() {
 
     // 'if' expression
     if (peek().is(TokenKind::If) && lexeme() == "if") {
+        auto if_span = peek().span;
         advance();
         auto cond               = parseExpr();
         ast::ExprId then_branch = kInvalidExpr;
@@ -269,11 +278,12 @@ ast::ExprId Parser::parsePrimary() {
                 else_branch = parseBlock();
             }
         }
-        return bld->ifExpr(cond, then_branch, else_branch);
+        return bld->ifExpr(cond, then_branch, else_branch, spanFrom(if_span));
     }
 
     // 'while' expression
     if (peek().is(TokenKind::Control) && lexeme() == "while") {
+        auto while_span = peek().span;
         advance();
         auto cond        = parseExpr();
         ast::ExprId body = kInvalidExpr;
@@ -281,7 +291,7 @@ ast::ExprId Parser::parsePrimary() {
             advance();
             body = parseBlock();
         }
-        return bld->whileExpr(cond, body);
+        return bld->whileExpr(cond, body, spanFrom(while_span));
     }
 
     // 'for' expression — desugar into while
@@ -355,20 +365,22 @@ ast::ExprId Parser::parsePrimary() {
     }
 
     if (peek().is(TokenKind::LitVal)) {
-        auto lit = lexeme();
+        auto lit_span = peek().span;
+        auto lit      = lexeme();
         advance();
         auto kind = ast::LitKind::Int;
         if (lit == "true" || lit == "false")
             kind = ast::LitKind::Bool;
         else if (lit == "null")
             kind = ast::LitKind::Nil;
-        return bld->litExpr(kind, lit);
+        return bld->litExpr(kind, lit, lit_span);
     }
 
     if (peek().is(TokenKind::Identifier)) {
-        auto name = lexeme();
+        auto id_span = peek().span;
+        auto name    = lexeme();
         advance();
-        return bld->ident(name);
+        return bld->ident(name, id_span);
     }
 
     if (peek().punc == '(') {
@@ -387,25 +399,35 @@ ast::ExprId Parser::parsePrimary() {
 ast::ExprId Parser::parsePrefix() {
     // Unary prefix operators
     if (peek().punc == '-') {
+        auto op_span = peek().span;
         advance();
-        return bld->unary(ast::UnaryOp::Neg, parsePrefix());
+        auto operand = parsePrefix();
+        return bld->unary(ast::UnaryOp::Neg, operand, spanFrom(op_span));
     }
     if (peek().punc == '!') {
+        auto op_span = peek().span;
         advance();
-        return bld->unary(ast::UnaryOp::Not, parsePrefix());
+        auto operand = parsePrefix();
+        return bld->unary(ast::UnaryOp::Not, operand, spanFrom(op_span));
     }
     if (peek().punc == '&') {
+        auto op_span = peek().span;
         advance();
-        return bld->unary(ast::UnaryOp::Ref, parsePrefix());
+        auto operand = parsePrefix();
+        return bld->unary(ast::UnaryOp::Ref, operand, spanFrom(op_span));
     }
     if (peek().punc == '*') {
+        auto op_span = peek().span;
         advance();
-        return bld->unary(ast::UnaryOp::Deref, parsePrefix());
+        auto operand = parsePrefix();
+        return bld->unary(ast::UnaryOp::Deref, operand, spanFrom(op_span));
     }
     // word prefix 'not'
     if (peek().is(TokenKind::Logical) && lexeme() == "not") {
+        auto op_span = peek().span;
         advance();
-        return bld->unary(ast::UnaryOp::Not, parsePrefix());
+        auto operand = parsePrefix();
+        return bld->unary(ast::UnaryOp::Not, operand, spanFrom(op_span));
     }
 
     return parsePrimary();
@@ -418,10 +440,14 @@ ast::ExprId Parser::parseExpr(int min_prec) {
         if (eof())
             break;
 
-        auto &tok = peek();
+        if (lhs == kInvalidExpr)
+            break;
+
+        auto &cur = peek();
 
         // ── Postfix: call ( args ) ──────────────────────────────
-        if (tok.punc == '(') {
+        if (cur.punc == '(') {
+            auto lhs_span = bld->exprSpan(lhs);
             advance();
             memory::DynArray<ast::ExprId> args{bld->arena()};
             if (peek().punc != ')') {
@@ -431,106 +457,128 @@ ast::ExprId Parser::parseExpr(int min_prec) {
             }
             if (!consume(')'))
                 diag->report(Severity::Error, UnclosedParen, "expected ')'", peek().span);
-            lhs = bld->call(lhs, std::move(args));
+            auto end_span = tok->src[tok->offset - 1].span;
+            lhs = bld->call(lhs, std::move(args),
+                            memory::Span{lhs_span.file, lhs_span.start, end_span.end});
             continue;
         }
 
         // ── Postfix: ..range ────────────────────────────────────
-        if (tok.punc == '.' && peek(1).punc == '.') {
+        if (cur.punc == '.' && peek(1).punc == '.') {
+            auto lhs_span = bld->exprSpan(lhs);
             advance(2);
             auto rhs = parseExpr(min_prec + 1);
-            lhs      = bld->range(lhs, rhs);
+            auto rhs_span = (rhs != kInvalidExpr) ? bld->exprSpan(rhs) : lhs_span;
+            lhs = bld->range(lhs, rhs,
+                             memory::Span{lhs_span.file, lhs_span.start, rhs_span.end});
             continue;
         }
 
         // ── Postfix: .field ─────────────────────────────────────
-        if (tok.punc == '.') {
+        if (cur.punc == '.') {
+            auto lhs_span = bld->exprSpan(lhs);
             advance();
             if (!peek().is(TokenKind::Identifier)) {
                 diag->report(Severity::Error, ExpectedIdent, "expected field name after '.'",
                              peek().span);
                 continue;
             }
-            auto field = lexeme();
+            auto field_span = peek().span;
+            auto field      = lexeme();
             advance();
-            lhs = bld->field(lhs, field);
+            lhs = bld->field(lhs, field,
+                             memory::Span{lhs_span.file, lhs_span.start, field_span.end});
             continue;
         }
 
         // ── Postfix: ->field (member access by pointer) ─────────
-        if (tok.is(lexer::TokenKind::Operators) && tok.punc == '-' && peek(1).punc == '>') {
+        if (cur.is(lexer::TokenKind::Operators) && cur.punc == '-' && peek(1).punc == '>') {
+            auto lhs_span = bld->exprSpan(lhs);
             advance(2);
             if (!peek().is(TokenKind::Identifier)) {
                 diag->report(Severity::Error, ExpectedIdent, "expected field name after '->'",
                              peek().span);
                 continue;
             }
-            auto field = lexeme();
+            auto field_span = peek().span;
+            auto field      = lexeme();
             advance();
-            lhs = bld->field(lhs, field);
+            lhs = bld->field(lhs, field,
+                             memory::Span{lhs_span.file, lhs_span.start, field_span.end});
             continue;
         }
 
         // ── Postfix: [index] ────────────────────────────────────
-        if (tok.punc == '[') {
+        if (cur.punc == '[') {
+            auto lhs_span = bld->exprSpan(lhs);
             advance();
             auto index = parseExpr();
-            if (!consume(']'))
+            if (index != kInvalidExpr && !consume(']'))
                 diag->report(Severity::Error, ExpectedExpr, "expected ']'", peek().span);
-            lhs = bld->index(lhs, index);
+            auto end_span = tok->src[tok->offset - 1].span;
+            lhs = bld->index(lhs, index,
+                             memory::Span{lhs_span.file, lhs_span.start, end_span.end});
             continue;
         }
 
         // ── Postfix: unwrap ! ───────────────────────────────────
-        if (tok.is(lexer::TokenKind::Operators) && tok.punc == '!' &&
+        if (cur.is(lexer::TokenKind::Operators) && cur.punc == '!' &&
             !peek(1).is(lexer::TokenKind::Operators)) {
-            // single '!' = unwrap postfix; '!=' is handled as compound op
+            auto lhs_span = bld->exprSpan(lhs);
             advance();
-            // wrap in unary "deref" as unwrap placeholder
-            lhs = bld->unary(ast::UnaryOp::Deref, lhs);
+            auto end_span = tok->src[tok->offset - 1].span;
+            lhs = bld->unary(ast::UnaryOp::Deref, lhs,
+                             memory::Span{lhs_span.file, lhs_span.start, end_span.end});
             continue;
         }
 
         // ── Word infix: and / or / xor ──────────────────────────
-        if (tok.is(lexer::TokenKind::Logical)) {
+        if (cur.is(lexer::TokenKind::Logical)) {
             auto word    = lexeme();
             uint8_t prec = wordPrec(word);
             if (prec == 0 || prec < min_prec)
                 break;
             advance();
             auto rhs = parseExpr(prec + 1);
-            lhs      = bld->binary(lhs, binaryOpForWord(word), rhs);
+            auto lhs_span = bld->exprSpan(lhs);
+            auto rhs_span = (rhs != kInvalidExpr) ? bld->exprSpan(rhs) : lhs_span;
+            lhs = bld->binary(lhs, binaryOpForWord(word), rhs,
+                              memory::Span{lhs_span.file, lhs_span.start, rhs_span.end});
             continue;
         }
 
         // ── Compound operator: ==, !=, <=, >=, <<, >> ───
         ast::BinaryOp compound_op;
-        if (tryCompoundOp(tok, peek(1), compound_op)) {
-            uint8_t prec = infixPrec(tok);
+        if (tryCompoundOp(cur, peek(1), compound_op)) {
+            uint8_t prec = infixPrec(cur);
             if (prec < min_prec)
                 break;
             advance(2);
             auto rhs = parseExpr(prec + 1);
-            lhs      = bld->binary(lhs, compound_op, rhs);
+            auto lhs_span = bld->exprSpan(lhs);
+            auto rhs_span = (rhs != kInvalidExpr) ? bld->exprSpan(rhs) : lhs_span;
+            lhs = bld->binary(lhs, compound_op, rhs,
+                              memory::Span{lhs_span.file, lhs_span.start, rhs_span.end});
             continue;
         }
 
         // ── Infix binary operator (single char) ─────────────────
-        uint8_t prec = infixPrec(tok);
+        uint8_t prec = infixPrec(cur);
         if (prec == 0 || prec < min_prec)
             break;
 
         // Check that it's really an infix operator, not part of a compound
         ast::BinaryOp compound_check;
-        if (tryCompoundOp(tok, peek(1), compound_check)) {
-            // let the compound handler above deal with it on next iteration
+        if (tryCompoundOp(cur, peek(1), compound_check)) {
             break;
         }
 
-        char op_punc = tok.punc;
         advance();
         auto rhs = parseExpr(prec + 1);
-        lhs      = bld->binary(lhs, binaryOpForChar(op_punc), rhs);
+        auto lhs_span = bld->exprSpan(lhs);
+        auto rhs_span = (rhs != kInvalidExpr) ? bld->exprSpan(rhs) : lhs_span;
+        lhs = bld->binary(lhs, binaryOpForChar(cur.punc), rhs,
+                          memory::Span{lhs_span.file, lhs_span.start, rhs_span.end});
     }
 
     return lhs;
@@ -541,6 +589,7 @@ ast::ExprId Parser::parseExpr() {
 }
 
 ast::ExprId Parser::parseBlock() {
+    auto start_span = peek().span;
     memory::DynArray<ast::StmtId> stmts{bld->arena()};
 
     while (!eof()) {
@@ -550,8 +599,9 @@ ast::ExprId Parser::parseBlock() {
         stmts.push(parseStmt());
     }
 
-    consume('}');
-    return bld->block(std::move(stmts));
+    if (peek().punc == '}')
+        advance();
+    return bld->block(std::move(stmts), kInvalidExpr, spanFrom(start_span));
 }
 
 // ── statement parsing ──────────────────────────────────────────────────
@@ -559,31 +609,36 @@ ast::ExprId Parser::parseBlock() {
 ast::StmtId Parser::parseStmt() {
     skipComments(*tok);
     if (peek().is(TokenKind::Control) && lexeme() == "return") {
+        auto ret_span = peek().span;
         advance();
         auto val = eof() || peek().punc == '}' ? kInvalidExpr : parseExpr();
         if (peek().punc == ';')
             advance();
         else
             recovery::panic(*tok, {TokenKind::End, TokenKind::Punctuation});
-        return bld->retStmt(val);
+        return bld->retStmt(val, spanFrom(ret_span));
     }
 
     if (peek().is(TokenKind::Control) && lexeme() == "break") {
+        auto br_span = peek().span;
         advance();
         if (peek().punc == ';')
             advance();
-        // placeholder: break with no loop context
-        return bld->addStmt(bld->litExpr(ast::LitKind::Nil, "null"));
+        auto nil = bld->litExpr(ast::LitKind::Nil, "null", peek().span);
+        return bld->addStmt(nil);
     }
 
     if (peek().is(TokenKind::Control) && lexeme() == "continue") {
+        auto cont_span = peek().span;
         advance();
         if (peek().punc == ';')
             advance();
-        return bld->addStmt(bld->litExpr(ast::LitKind::Nil, "null"));
+        auto nil = bld->litExpr(ast::LitKind::Nil, "null", peek().span);
+        return bld->addStmt(nil);
     }
 
     if (peek().is(TokenKind::Variable)) {
+        auto let_span = peek().span;
         advance();
         if (!peek().is(TokenKind::Identifier)) {
             diag->report(Severity::Error, ExpectedIdent, "expected variable name", peek().span);
@@ -597,7 +652,7 @@ ast::StmtId Parser::parseStmt() {
             init = parseExpr();
         if (peek().punc == ';')
             advance();
-        return bld->letStmt(name, false, init);
+        return bld->letStmt(name, false, init, spanFrom(let_span));
     }
 
     auto expr = parseExpr();
@@ -613,7 +668,8 @@ ast::DeclId Parser::parseFnDecl() {
         diag->report(Severity::Error, ExpectedIdent, "expected function name", peek().span);
         return kInvalidDecl;
     }
-    auto name = lexeme();
+    auto name_span = peek().span;
+    auto name      = lexeme();
     advance();
 
     if (!consume('(')) {
@@ -640,7 +696,7 @@ ast::DeclId Parser::parseFnDecl() {
     if (peek().punc == '{')
         body = parseBlock();
 
-    return bld->fnDecl(name, std::move(params), body);
+    return bld->fnDecl(name, std::move(params), body, spanFrom(name_span));
 }
 
 // ── scan (first pass: register symbols, skip bodies) ───────────────────
@@ -917,7 +973,7 @@ ScanResult scan(Parser &parser, import::SymbolTable &syms) {
                 }
             }
 
-            auto decl = bld.fnDecl(name, std::move(params), body_node);
+            auto decl = bld.fnDecl(name, std::move(params), body_node, span_from_offset(name_span.start, name_span.end));
             program.decls.push(decl);
             if (fn_sym != import::kInvalidSym)
                 syms.get(fn_sym).decl_id = decl;
@@ -962,13 +1018,16 @@ ScanResult scan(Parser &parser, import::SymbolTable &syms) {
 
             // create appropriate AST node
             if (kw == "struct") {
-                decl = bld.structDecl(name, memory::DynArray<ast::StructField>(bld.arena()));
+                decl = bld.structDecl(name, memory::DynArray<ast::StructField>(bld.arena()),
+                                      name_span);
             } else if (kw == "enum") {
-                decl = bld.enumDecl(name, memory::DynArray<ast::EnumVariant>(bld.arena()));
+                decl = bld.enumDecl(name, memory::DynArray<ast::EnumVariant>(bld.arena()),
+                                    name_span);
             } else if (kw == "union") {
-                decl = bld.unionDecl(name, memory::DynArray<ast::UnionVariant>(bld.arena()));
+                decl = bld.unionDecl(name, memory::DynArray<ast::UnionVariant>(bld.arena()),
+                                     name_span);
             } else {
-                decl = bld.componentDecl(name);
+                decl = bld.componentDecl(name, name_span);
             }
 
             // ── scan body: register member names, skip implementations ──
@@ -1227,8 +1286,10 @@ ScanResult scan(Parser &parser, import::SymbolTable &syms) {
                 (kw == "interface") ? import::SymKind::Interface : import::SymKind::Trait;
             auto decl =
                 (kw == "interface")
-                    ? bld.interfaceDecl(name, memory::DynArray<ast::TraitMethod>(bld.arena()))
-                    : bld.traitDecl(name, memory::DynArray<ast::TraitMethod>(bld.arena()));
+                    ? bld.interfaceDecl(name, memory::DynArray<ast::TraitMethod>(bld.arena()),
+                                        name_span)
+                    : bld.traitDecl(name, memory::DynArray<ast::TraitMethod>(bld.arena()),
+                                    name_span);
 
             ast::ExprId body_node = kInvalidExpr;
             memory::Span body_span{};
@@ -1329,7 +1390,8 @@ ScanResult scan(Parser &parser, import::SymbolTable &syms) {
 
         // ── import declaration (from / import / export) ─────────────
         if (tok.peek().is(TokenKind::Module)) {
-            auto kw = tok.lexeme();
+            auto kw_span = tok.peek().span;
+            auto kw      = tok.lexeme();
             tok.advance();
 
             auto parse_path = [&](memory::DynArray<std::string_view> &p) {
@@ -1397,7 +1459,7 @@ ScanResult scan(Parser &parser, import::SymbolTable &syms) {
                 } else {
                     auto import_depth = parse_depth();
                     auto decl = bld.importDecl(std::move(path), {}, kw == "from" || kw == "export",
-                                               kw == "export", import_depth);
+                                               kw == "export", import_depth, kw_span);
                     program.decls.push(decl);
                 }
             } else if (kw == "import") {
@@ -1416,7 +1478,8 @@ ScanResult scan(Parser &parser, import::SymbolTable &syms) {
                             tok.advance();
                         }
                     }
-                    auto decl = bld.importDecl(std::move(path), alias, false, false, import_depth);
+                    auto decl = bld.importDecl(std::move(path), alias, false, false, import_depth,
+                                               kw_span);
                     program.decls.push(decl);
                 }
             }
