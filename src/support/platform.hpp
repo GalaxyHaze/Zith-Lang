@@ -8,6 +8,7 @@
 #include <windows.h>
 #else
 #include <stdlib.h>
+#include <unistd.h>
 #endif
 
 namespace zith::support {

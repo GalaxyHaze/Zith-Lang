@@ -61,6 +61,10 @@ struct Token {
     // single char for Punctuation/Operators (0 otherwise)
     char punc = 0;
 
+    constexpr Token() noexcept : span{}, kind{TokenKind::Unknown}, punc{0} {}
+    constexpr Token(zith::memory::Span span_, TokenKind kind_, char punc_ = 0) noexcept
+        : span(span_), kind(kind_), punc(punc_) {}
+
     [[nodiscard]] constexpr bool is(TokenKind k) const noexcept {
         return kind == k;
     }
@@ -72,7 +76,7 @@ struct Token {
     }
 };
 
-inline constexpr Token kEndToken{{}, TokenKind::End, 0};
+inline constexpr Token kEndToken{{}, TokenKind::End};
 
 struct TokenStream {
     Token *src            = nullptr;
