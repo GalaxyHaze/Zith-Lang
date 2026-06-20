@@ -18,6 +18,11 @@ struct zithc_session {
         : opts(), session(opts, file_path) {
         session.setBuffered(true);
     }
+    zithc_session(const char *uri, const char *content, size_t length)
+        : opts(), session(opts, uri) {
+        session.setBuffered(true);
+        session.setContent(std::string(content, length));
+    }
 };
 
 static_assert(static_cast<int>(zith::diagnostics::Severity::Note) == ZITHC_SEVERITY_NOTE,
@@ -32,6 +37,18 @@ zithc_session *zithc_session_create(const char *file_path) {
         return nullptr;
     try {
         auto *s = new zithc_session(file_path);
+        return s;
+    } catch (const std::exception &) {
+        return nullptr;
+    }
+}
+
+zithc_session *zithc_session_create_from_buffer(const char *uri, const char *content,
+                                                 size_t length) {
+    if (!uri || uri[0] == '\0' || !content)
+        return nullptr;
+    try {
+        auto *s = new zithc_session(uri, content, length);
         return s;
     } catch (const std::exception &) {
         return nullptr;

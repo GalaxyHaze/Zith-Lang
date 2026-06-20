@@ -68,6 +68,7 @@ class CompilationSession {
 
     std::string output_buffer_;
     bool buffered_output_ = false;
+    std::string content_override_;  // non-empty = compile from buffer, not disk
 
 #if defined(__GNUC__) || defined(__clang__)
     void writeOutput(const char *fmt, ...) __attribute__((format(printf, 2, 3)));
@@ -101,6 +102,9 @@ public:
     void setBuffered(bool b) {
         buffered_output_ = b;
         diags_.setSuppressEmit(b);
+    }
+    void setContent(std::string content) {
+        content_override_ = std::move(content);
     }
     std::string flushOutput();
     void emitDiagnostics();

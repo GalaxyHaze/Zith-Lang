@@ -5,6 +5,9 @@ project(zithc LANGUAGES C CXX)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+option(ZITH_BUILD_CLI  "Build the zithc CLI executable"  ON)
+option(ZITH_BUILD_CAPI "Build the C ABI (zithcLib library)" ON)
+
 if(NOT DEFINED ZITH_VERSION OR ZITH_VERSION STREQUAL "")
     execute_process(
         COMMAND git ls-remote --tags https://github.com/GalaxyHaze/Zith.git
@@ -67,22 +70,26 @@ target_compile_definitions(zithc_objects PUBLIC
     ZITH_STDLIB_DIR="${CMAKE_CURRENT_SOURCE_DIR}/stdlib"
 )
 
-# ── Static library for LSP / embedding (includes C ABI) ──────────────
-add_library(zithcLib STATIC $<TARGET_OBJECTS:zithc_objects>)
-set_target_properties(zithcLib PROPERTIES
-    OUTPUT_NAME "zithc"
-    PUBLIC_HEADER "src/capi/zithc-capi.h"
-)
+if(ZITH_BUILD_CAPI)
+    # ── Static library for LSP / embedding (includes C ABI) ──────────
+    add_library(zithcLib STATIC $<TARGET_OBJECTS:zithc_objects>)
+    set_target_properties(zithcLib PROPERTIES
+        OUTPUT_NAME "zithc"
+        PUBLIC_HEADER "src/capi/zithc-capi.h"
+    )
+endif()
 
-# ── CLI executable ────────────────────────────────────────────────────
-add_executable(zithc ${CMAKE_SOURCE_DIR}/src/cli/zithc-main.cpp $<TARGET_OBJECTS:zithc_objects>)
+if(ZITH_BUILD_CLI)
+    # ── CLI executable ────────────────────────────────────────────────
+    add_executable(zithc ${CMAKE_SOURCE_DIR}/src/cli/zithc-main.cpp $<TARGET_OBJECTS:zithc_objects>)
 
-target_include_directories(zithc PRIVATE src)
-target_link_libraries(zithc PRIVATE mio tomlplusplus::tomlplusplus)
-target_compile_definitions(zithc PRIVATE
-    ZITH_VERSION="${ZITH_VERSION}"
-    ZITH_STDLIB_DIR="${CMAKE_CURRENT_SOURCE_DIR}/stdlib"
-)
+    target_include_directories(zithc PRIVATE src)
+    target_link_libraries(zithc PRIVATE mio tomlplusplus::tomlplusplus)
+    target_compile_definitions(zithc PRIVATE
+        ZITH_VERSION="${ZITH_VERSION}"
+        ZITH_STDLIB_DIR="${CMAKE_CURRENT_SOURCE_DIR}/stdlib"
+    )
+endif()
 
 include(CTest)
 
@@ -126,13 +133,17 @@ add_zith_test(zithc-zir-interp     tests/unit/zir/test_zir_interp.cpp)
 
 endif()
 
-install(TARGETS zithc
-    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
-)
-install(TARGETS zithcLib
-    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
-    PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/zithc
-)
+if(ZITH_BUILD_CLI)
+    install(TARGETS zithc
+        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+    )
+endif()
+if(ZITH_BUILD_CAPI)
+    install(TARGETS zithcLib
+        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/zithc
+    )
+endif()
 
 install(DIRECTORY stdlib/
     DESTINATION ${CMAKE_INSTALL_LIBDIR}/zith/stdlib

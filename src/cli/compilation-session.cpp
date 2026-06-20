@@ -161,7 +161,9 @@ bool CompilationSession::lexStage() {
             writeOutput("[file] %s (%.1f KiB)\n", file_path_.c_str(), fsize / 1024.0);
     }
 
-    auto file_result = source_map_.loadFile(file_path_);
+    auto file_result = !content_override_.empty()
+        ? source_map_.addFile(file_path_, content_override_)
+        : source_map_.loadFile(file_path_);
     if (!file_result) {
         writeOutput("%s[error]%s failed to load file '%s'\n", ansicolor("\033[31m"),
                     ansicolor("\033[0m"), file_path_.c_str());

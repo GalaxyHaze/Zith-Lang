@@ -50,6 +50,9 @@ typedef struct {
 
 // ── Session lifecycle ─────────────────────────────────────────────────
 zithc_session *zithc_session_create(const char *file_path);
+zithc_session *zithc_session_create_from_buffer(const char *uri,
+                                                 const char *content,
+                                                 size_t length);
 void zithc_session_destroy(zithc_session *session);
 
 // ── Pipeline control ──────────────────────────────────────────────────
