@@ -1,7 +1,89 @@
 <!DOCTYPE html>
 <html lang="en">
-<head><meta charset="UTF-8"><title>Changelog - v0.3.1</title></head>
+<head><meta charset="UTF-8"><title>Changelog - v0.3.2</title></head>
 <body>
+
+<div class="changelog-entry">
+    <h2>Release v0.3.2</h2>
+    <p class="lastUpdated">20 June 2026</p>
+
+    <hr>
+
+    <section>
+        <h3>Summary</h3>
+        <p>
+            This release focuses on <strong>infrastructure and code quality</strong> — we've extracted core
+            utilities into a standalone <strong>zith-util</strong> repo, replaced all <code>std::unordered_map</code>
+            usage with a custom open-addressing <strong>FlatMap</strong>, and added <code>Span</code> fields to
+            every AST node in preparation for LSP support. The compiler is now free of STL hash maps.
+        </p>
+    </section>
+
+    <hr>
+
+    <section>
+        <h3>Highlights</h3>
+        <ul>
+            <li><strong>zith-util extracted</strong> — <code>Optional</code>, <code>Result</code>, <code>Arena</code>, <code>DynArray</code>, and <code>FlatMap</code> moved to their own GitHub repo for independent reuse</li>
+            <li><strong>FlatMap replaces std::unordered_map</strong> — open-addressing hash map with Fibonacci hashing, transparent string lookup, installed across 4 subsystems</li>
+            <li><strong>AST Span coverage</strong> — every <code>ExprNode</code>, <code>StmtNode</code>, and <code>DeclNode</code> variant now carries a <code>memory::Span</code> for source location tracking</li>
+            <li><strong>Zero STL hash maps</strong> — <code>&lt;unordered_map&gt;</code> and <code>&lt;unordered_set&gt;</code> completely eliminated from the compiler source</li>
+            <li><strong>LSP Preparation</strong> — span fields lay the groundwork for go-to-definition, hover, and diagnostics with precise source locations</li>
+        </ul>
+    </section>
+
+    <hr>
+
+    <section>
+        <h3>Technical Details</h3>
+
+        <h4>Added</h4>
+        <ul>
+            <li><code>zith-util</code> repo (<code>GalaxyHaze/zith-util</code>) — extracted headers for <code>optional.hpp</code>, <code>result.hpp</code>, <code>arena.hpp</code>, <code>dyn_array.hpp</code>, <code>flat_map.hpp</code> with their own CMake INTERFACE library target and README</li>
+            <li><code>src/memory/flat_map.hpp</code> — open-addressing <code>FlatMap&lt;Key, Value&gt;</code> with Fibonacci hashing, transparent <code>std::string</code>/<code>std::string_view</code> lookup, iterator support, and STL-like API</li>
+            <li><code>Span</code> field to all AST nodes — <code>LitValue</code>, <code>BinaryNode</code>, <code>UnaryNode</code>, <code>CallNode</code>, <code>IdentNode</code>, <code>FieldNode</code>, <code>IndexNode</code>, <code>RangeNode</code>, <code>BlockNode</code>, <code>IfNode</code>, <code>WhileNode</code>, <code>LetNode</code>, <code>AssignNode</code>, <code>RetNode</code>, <code>FnDeclNode</code>, <code>StructDeclNode</code>, <code>EnumDeclNode</code>, <code>UnionDeclNode</code>, <code>ComponentDeclNode</code>, <code>TraitDeclNode</code>, <code>InterfaceDeclNode</code>, <code>ImportNode</code></li>
+        </ul>
+
+        <h4>Changed</h4>
+        <ul>
+            <li><code>StringInterner</code> — <code>std::unordered_map&lt;std::string_view, InternedId&gt;</code> replaced with <code>FlatMap</code></li>
+            <li><code>SourceMap</code> — file path cache switched from <code>std::unordered_map&lt;std::string, FileId&gt;</code> to <code>FlatMap</code></li>
+            <li><code>ImportManager</code> — <code>index_by_path_</code> and <code>resolving_</code> (formerly <code>std::unordered_set</code>) both migrated to <code>FlatMap</code></li>
+            <li><code>TypeLower</code> — generic context pointer changed from <code>std::unordered_map&lt;std::string_view, TypeId&gt;*</code> to <code>FlatMap*</code></li>
+            <li><code>AstBuilder</code> — all builder methods now accept an optional <code>memory::Span</code> parameter</li>
+            <li><code>Parser</code> — expression, statement, and declaration builders now pass computed token spans to the AST nodes</li>
+        </ul>
+
+        <h4>Fixed</h4>
+        <ul>
+            <li><strong>vector&lt;bool&gt; specialization</strong> — <code>FlatMap</code> with <code>bool</code> value triggers <code>std::vector&lt;bool&gt;</code> bit-vector proxy reference issue; <code>resolving_</code> changed from <code>FlatMap&lt;string, bool&gt;</code> to <code>FlatMap&lt;string, char&gt;</code></li>
+            <li><strong>Missing unordered_set include</strong> — <code>import-manager.cpp</code> still used <code>std::unordered_set&lt;size_t&gt;</code> for merge visited set; include restored locally</li>
+        </ul>
+    </section>
+
+    <hr>
+
+    <section>
+        <h3>Modified Files Reference</h3>
+        <ul>
+            <li><a href="https://github.com/GalaxyHaze/Zith/blob/main/src/memory/flat_map.hpp">src/memory/flat_map.hpp</a></li>
+            <li><a href="https://github.com/GalaxyHaze/Zith/blob/main/src/memory/string-interner.hpp">src/memory/string-interner.hpp</a></li>
+            <li><a href="https://github.com/GalaxyHaze/Zith/blob/main/src/memory/string-interner.cpp">src/memory/string-interner.cpp</a></li>
+            <li><a href="https://github.com/GalaxyHaze/Zith/blob/main/src/memory/source-map.hpp">src/memory/source-map.hpp</a></li>
+            <li><a href="https://github.com/GalaxyHaze/Zith/blob/main/src/memory/source-map.cpp">src/memory/source-map.cpp</a></li>
+            <li><a href="https://github.com/GalaxyHaze/Zith/blob/main/src/ast/ast-nodes.hpp">src/ast/ast-nodes.hpp</a></li>
+            <li><a href="https://github.com/GalaxyHaze/Zith/blob/main/src/ast/ast-builder.hpp">src/ast/ast-builder.hpp</a></li>
+            <li><a href="https://github.com/GalaxyHaze/Zith/blob/main/src/ast/ast-builder.cpp">src/ast/ast-builder.cpp</a></li>
+            <li><a href="https://github.com/GalaxyHaze/Zith/blob/main/src/import/import-manager.hpp">src/import/import-manager.hpp</a></li>
+            <li><a href="https://github.com/GalaxyHaze/Zith/blob/main/src/import/import-manager.cpp">src/import/import-manager.cpp</a></li>
+            <li><a href="https://github.com/GalaxyHaze/Zith/blob/main/src/types/type-lower.hpp">src/types/type-lower.hpp</a></li>
+            <li><a href="https://github.com/GalaxyHaze/Zith/blob/main/src/types/type-lower.cpp">src/types/type-lower.cpp</a></li>
+            <li><a href="https://github.com/GalaxyHaze/Zith/blob/main/src/parser/parser.cpp">src/parser/parser.cpp</a></li>
+        </ul>
+    </section>
+</div>
+
+<hr style="margin: 48px 0; border-color: #333;">
 
 <div class="changelog-entry">
     <h2>Release v0.3.1</h2>
