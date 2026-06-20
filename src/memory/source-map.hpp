@@ -1,5 +1,6 @@
 #pragma once
 #include "memory/arena.hpp"
+#include "memory/flat_map.hpp"
 #include "memory/optional.hpp"
 #include "memory/result.hpp"
 #include "memory/source-file.hpp"
@@ -8,7 +9,6 @@
 #include <functional>
 #include <shared_mutex>
 #include <string>
-#include <unordered_map>
 #include <vector>
 
 namespace zith::memory {
@@ -18,7 +18,7 @@ struct SourceLoc;
 class SourceMap {
     memory::Arena file_arena;
     memory::DynArray<SourceLoc> files;
-    std::unordered_map<std::string, FileId> cache;
+    FlatMap<std::string, FileId> cache;
     mutable std::shared_mutex rw_mutex;
 
 public:

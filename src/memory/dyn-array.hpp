@@ -60,7 +60,7 @@ public:
         if (size_ >= capacity_) {
             grow_();
         }
-        ::new (&data_[size_]) T{value};
+        ::new (&data_[size_]) T(value);
         size_++;
     }
 
@@ -68,7 +68,7 @@ public:
         if (size_ >= capacity_) {
             grow_();
         }
-        ::new (&data_[size_]) T{std::move(value)};
+        ::new (&data_[size_]) T(std::move(value));
         size_++;
     }
 
@@ -76,7 +76,7 @@ public:
         if (size_ >= capacity_) {
             grow_();
         }
-        auto *ptr = ::new (&data_[size_]) T{std::forward<Args>(args)...};
+        auto *ptr = ::new (&data_[size_]) T(std::forward<Args>(args)...);
         size_++;
         return *ptr;
     }
@@ -100,7 +100,7 @@ public:
 
         if (data_) {
             for (size_t i = 0; i < size_; i++) {
-                ::new (&new_data[i]) T{std::move(data_[i])};
+                ::new (&new_data[i]) T(std::move(data_[i]));
                 data_[i].~T();
             }
         }

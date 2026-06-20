@@ -1,10 +1,10 @@
 #pragma once
 
+#include "memory/dyn-array.hpp"
 #include "memory/span.hpp"
 
 #include <cstdint>
 #include <string>
-#include <vector>
 
 namespace zith::diagnostics {
 
@@ -20,8 +20,12 @@ struct Diagnostic {
     uint32_t code;
     std::string message;
     memory::Span primary;
-    std::vector<Label> labels;
-    std::vector<std::string> suggestions;
+    memory::DynArray<Label> labels;
+    memory::DynArray<std::string> suggestions;
+
+    Diagnostic(memory::Arena &arena, Severity sev, uint32_t code, std::string msg, memory::Span span)
+        : severity(sev), code(code), message(std::move(msg)), primary(span),
+          labels(arena), suggestions(arena) {}
 
     bool isError() const noexcept;
     bool isWarning() const noexcept;

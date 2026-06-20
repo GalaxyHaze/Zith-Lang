@@ -3,10 +3,10 @@
 #include "ast/ast-builder.hpp"
 #include "ast/type-expr.hpp"
 #include "diagnostics/diagnostic-engine.hpp"
+#include "memory/flat_map.hpp"
 #include "types/type-intern.hpp"
 
 #include <string_view>
-#include <unordered_map>
 
 namespace zith::types {
 
@@ -17,12 +17,12 @@ class TypeLower {
     ast::AstBuilder &ast_;
     TypeIntern &intern_;
     diagnostics::DiagnosticEngine &diags_;
-    const std::unordered_map<std::string_view, TypeId> *generic_ctx_ = nullptr;
+    const memory::FlatMap<std::string_view, TypeId> *generic_ctx_ = nullptr;
 
 public:
     TypeLower(ast::AstBuilder &ast, TypeIntern &intern, diagnostics::DiagnosticEngine &diags);
 
-    void setGenericContext(const std::unordered_map<std::string_view, TypeId> *ctx);
+    void setGenericContext(const memory::FlatMap<std::string_view, TypeId> *ctx);
 
     /// Lower a type expression by its ID (reads from AstBuilder).
     TypeId lower(ast::TypeExprId id);

@@ -11,12 +11,12 @@
 #undef private
 
 #include <string>
-#include <vector>
 
 using namespace zith::diagnostics;
 using namespace zith::import;
 using namespace zith::sema;
 using zith::memory::Arena;
+using zith::memory::DynArray;
 using zith::memory::Span;
 
 // ── Levenshtein distance tests ──────────────────────────────────
@@ -101,12 +101,9 @@ static void test_generate_undefined_ident_suggests_match() {
     SymbolTable syms(arena);
     syms.declare("foobar");
 
-    Diagnostic diag;
-    diag.code    = err::UndefinedIdent;
-    diag.message = "undefined identifier 'foobaz'";
-
+    Diagnostic diag(arena, Severity::Error, err::UndefinedIdent, "undefined identifier 'foobaz'", {});
     HeuristicEngine engine;
-    std::vector<std::string> suggestions;
+    DynArray<std::string> suggestions(arena);
     engine.generate(diag, syms, suggestions);
 
     CHECK_EQ(suggestions.size(), size_t(1), "generate produced 1 suggestion for UndefinedIdent");
@@ -120,12 +117,9 @@ static void test_generate_undefined_ident_no_close_match() {
     SymbolTable syms(arena);
     syms.declare("xyz");
 
-    Diagnostic diag;
-    diag.code    = err::UndefinedIdent;
-    diag.message = "undefined identifier 'aaaaa'";
-
+    Diagnostic diag(arena, Severity::Error, err::UndefinedIdent, "undefined identifier 'aaaaa'", {});
     HeuristicEngine engine;
-    std::vector<std::string> suggestions;
+    DynArray<std::string> suggestions(arena);
     engine.generate(diag, syms, suggestions);
 
     CHECK_EQ(suggestions.size(), size_t(0), "generate produces no suggestion when no close match");
@@ -135,12 +129,9 @@ static void test_generate_type_mismatch_returns_cast_suggestion() {
     Arena arena;
     SymbolTable syms(arena);
 
-    Diagnostic diag;
-    diag.code    = err::TypeMismatch;
-    diag.message = "type mismatch";
-
+    Diagnostic diag(arena, Severity::Error, err::TypeMismatch, "type mismatch", {});
     HeuristicEngine engine;
-    std::vector<std::string> suggestions;
+    DynArray<std::string> suggestions(arena);
     engine.generate(diag, syms, suggestions);
 
     CHECK_EQ(suggestions.size(), size_t(1), "generate produced 1 suggestion for TypeMismatch");
@@ -154,12 +145,9 @@ static void test_generate_unrelated_code_no_suggestions() {
     Arena arena;
     SymbolTable syms(arena);
 
-    Diagnostic diag;
-    diag.code    = err::UnclosedString; // unrelated error code
-    diag.message = "unclosed string literal";
-
+    Diagnostic diag(arena, Severity::Error, err::UnclosedString, "unclosed string literal", {});
     HeuristicEngine engine;
-    std::vector<std::string> suggestions;
+    DynArray<std::string> suggestions(arena);
     engine.generate(diag, syms, suggestions);
 
     CHECK_EQ(suggestions.size(), size_t(0),
@@ -171,12 +159,9 @@ static void test_generate_undefined_ident_no_quotes_in_message() {
     SymbolTable syms(arena);
     syms.declare("foo");
 
-    Diagnostic diag;
-    diag.code    = err::UndefinedIdent;
-    diag.message = "undefined identifier (no quotes here)";
-
+    Diagnostic diag(arena, Severity::Error, err::UndefinedIdent, "undefined identifier (no quotes here)", {});
     HeuristicEngine engine;
-    std::vector<std::string> suggestions;
+    DynArray<std::string> suggestions(arena);
     engine.generate(diag, syms, suggestions);
 
     CHECK_EQ(suggestions.size(), size_t(0), "no suggestion when message has no quoted identifier");

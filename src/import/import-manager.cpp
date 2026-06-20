@@ -6,6 +6,7 @@
 #include <cstring>
 #include <filesystem>
 #include <string>
+#include <unordered_set>
 #include <vector>
 
 namespace zith::import {
@@ -127,8 +128,8 @@ auto ImportManager::resolve_file(const std::string &full_path, const std::string
                                  const std::string &ns, bool is_from, bool is_export,
                                  const std::string &alias, int32_t import_depth)
     -> memory::Result<size_t> {
-    if (auto it = index_by_path_.find(import_key); it != index_by_path_.end())
-        return it->second;
+    if (auto *existing = index_by_path_.get(import_key))
+        return *existing;
 
     auto file_result = source_map_.loadFile(full_path);
     if (!file_result)
@@ -193,7 +194,7 @@ auto ImportManager::resolve_file(const std::string &full_path, const std::string
         std::move(module_syms),
         std::move(re_exported_files),
     });
-    index_by_path_[import_key] = idx;
+    index_by_path_.insert(import_key, idx);
     return idx;
 }
 
@@ -235,7 +236,7 @@ auto ImportManager::resolve_directory(const std::string &import_key, const std::
     for (auto &entry : files) {
         auto sub_key = import_key + "/" + entry.relative_stem;
 
-        if (index_by_path_.count(sub_key))
+        if (index_by_path_.contains(sub_key))
             continue;
 
         // Build ns: strip .zith, replace / with .
@@ -271,7 +272,7 @@ auto ImportManager::resolve_directory(const std::string &import_key, const std::
             first_idx = res.value();
     }
 
-    index_by_path_[import_key] = first_idx;
+    index_by_path_.insert(import_key, first_idx);
     return first_idx;
 }
 
@@ -282,14 +283,14 @@ auto ImportManager::resolve(const memory::DynArray<std::string_view> &path, bool
     auto import_key = join_path(path, '/');
 
     // ── Dedup ───────────────────────────────────────────────────────
-    if (auto it = index_by_path_.find(import_key); it != index_by_path_.end())
-        return it->second;
+    if (auto *existing = index_by_path_.get(import_key))
+        return *existing;
 
     // ── Cycle detection ────────────────────────────────────────────
-    if (resolving_.count(import_key))
+    if (resolving_.contains(import_key))
         return memory::Error{"circular import detected: '" + import_key + "'"};
 
-    resolving_.insert(import_key);
+    resolving_.insert(import_key, char(1));
     ResolveGuard guard{resolving_, import_key};
 
     auto file_path = find_file(import_key, source_file);

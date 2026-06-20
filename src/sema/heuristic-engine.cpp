@@ -52,7 +52,7 @@ std::string_view HeuristicEngine::findBestMatch(std::string_view target,
 }
 
 void HeuristicEngine::generate(const diagnostics::Diagnostic &diag, import::SymbolTable &syms,
-                               std::vector<std::string> &out_suggestions) const {
+                               memory::DynArray<std::string> &out_suggestions) const {
     switch (diag.code) {
     case err::UndefinedIdent: {
         auto start = diag.message.find('\'');
@@ -61,14 +61,14 @@ void HeuristicEngine::generate(const diagnostics::Diagnostic &diag, import::Symb
             std::string_view unknown(diag.message.data() + start + 1, end - start - 1);
             std::string_view best = findBestMatch(unknown, syms);
             if (!best.empty() && best != unknown) {
-                out_suggestions.push_back(std::string("did you mean '") + std::string(best) + "'?");
+                out_suggestions.push(std::string("did you mean '") + std::string(best) + "'?");
             }
         }
         break;
     }
 
     case err::TypeMismatch: {
-        out_suggestions.push_back("use an explicit cast with `as <type>` or convert via a method");
+        out_suggestions.push("use an explicit cast with `as <type>` or convert via a method");
         break;
     }
     default:

@@ -37,57 +37,68 @@ enum class LitKind : uint8_t { Int, Float, Bool, String, Char, Nil };
 struct LitValue {
     LitKind kind;
     std::string_view raw;
+    memory::Span span{};
 };
 
 struct BinaryNode {
     ExprId lhs;
     ExprId rhs;
     BinaryOp op;
+    memory::Span span{};
 };
 
 struct UnaryNode {
     ExprId operand;
     UnaryOp op;
+    memory::Span span{};
 };
 
 struct CallNode {
     ExprId callee;
     memory::DynArray<ExprId> args;
+    memory::Span span{};
 };
 
 struct IdentNode {
     std::string_view name;
+    memory::Span span{};
 };
 
 struct FieldNode {
     ExprId object;
     std::string_view field;
+    memory::Span span{};
 };
 
 struct IndexNode {
     ExprId object;
     ExprId index;
+    memory::Span span{};
 };
 
 struct RangeNode {
     ExprId lhs;
     ExprId rhs;
+    memory::Span span{};
 };
 
 struct BlockNode {
     memory::DynArray<StmtId> stmts;
     ExprId trailing = kInvalidExpr;
+    memory::Span span{};
 };
 
 struct IfNode {
     ExprId cond;
     ExprId then_branch;
     ExprId else_branch = kInvalidExpr;
+    memory::Span span{};
 };
 
 struct WhileNode {
     ExprId cond;
     ExprId body;
+    memory::Span span{};
 };
 
 struct FnParam {
@@ -105,15 +116,18 @@ struct LetNode {
     TypeExprId type_annot = kInvalidTypeExpr;
     memory::DynArray<std::string_view> names;
     ExprId init = kInvalidExpr;
+    memory::Span span{};
 };
 
 struct AssignNode {
     ExprId target;
     ExprId value;
+    memory::Span span{};
 };
 
 struct RetNode {
     ExprId value = kInvalidExpr;
+    memory::Span span{};
 };
 
 struct FnDeclNode {
@@ -122,6 +136,7 @@ struct FnDeclNode {
     memory::DynArray<FnParam> params;
     TypeExprId return_type = kInvalidTypeExpr;
     ExprId body = kInvalidExpr;
+    memory::Span span{};
 };
 
 struct StructField {
@@ -132,6 +147,7 @@ struct StructField {
 struct StructDeclNode {
     std::string_view name;
     memory::DynArray<StructField> fields;
+    memory::Span span{};
 };
 
 struct EnumVariant {
@@ -143,6 +159,7 @@ struct EnumVariant {
 struct EnumDeclNode {
     std::string_view name;
     memory::DynArray<EnumVariant> variants;
+    memory::Span span{};
 };
 
 struct UnionVariant {
@@ -153,10 +170,12 @@ struct UnionVariant {
 struct UnionDeclNode {
     std::string_view name;
     memory::DynArray<UnionVariant> variants;
+    memory::Span span{};
 };
 
 struct ComponentDeclNode {
     std::string_view name;
+    memory::Span span{};
 };
 
 struct TraitMethod {
@@ -167,11 +186,13 @@ struct TraitMethod {
 struct TraitDeclNode {
     std::string_view name;
     memory::DynArray<TraitMethod> methods;
+    memory::Span span{};
 };
 
 struct InterfaceDeclNode {
     std::string_view name;
     memory::DynArray<TraitMethod> methods;
+    memory::Span span{};
 };
 
 struct ImportNode {
@@ -180,12 +201,14 @@ struct ImportNode {
     bool is_from         = false;
     bool is_export       = false;
     int32_t import_depth = 1;
+    memory::Span span{};
 };
 
 struct UnbodyNode {
     memory::Span body_span;
     uint32_t token_start;
     uint32_t token_end;
+    memory::Span span{};
 };
 
 struct ProgramNode {

@@ -10,7 +10,7 @@ TypeLower::TypeLower(ast::AstBuilder &ast, TypeIntern &intern,
                      diagnostics::DiagnosticEngine &diags)
     : ast_(ast), intern_(intern), diags_(diags) {}
 
-void TypeLower::setGenericContext(const std::unordered_map<std::string_view, TypeId> *ctx) {
+void TypeLower::setGenericContext(const memory::FlatMap<std::string_view, TypeId> *ctx) {
     generic_ctx_ = ctx;
 }
 
@@ -133,9 +133,8 @@ TypeId TypeLower::lowerNode(const ast::TypeExprNode &node) {
 
         TypeId operator()(const ast::TypeGenericParamRef &n) {
             if (self.generic_ctx_) {
-                auto it = self.generic_ctx_->find(n.name);
-                if (it != self.generic_ctx_->end())
-                    return it->second;
+                auto *val = self.generic_ctx_->get(n.name);
+                if (val) return *val;
             }
             self.diags_.report(diagnostics::Severity::Error, diagnostics::err::UndefinedIdent,
                                "unknown generic parameter '" + std::string(n.name) + "'", {});

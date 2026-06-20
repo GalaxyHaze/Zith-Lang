@@ -5,14 +5,13 @@
 #include "import/symbol-table.hpp"
 #include "memory/arena.hpp"
 #include "memory/dyn-array.hpp"
+#include "memory/flat_map.hpp"
 #include "memory/optional.hpp"
 #include "memory/result.hpp"
 #include "memory/source-map.hpp"
 
 #include <string>
 #include <string_view>
-#include <unordered_map>
-#include <unordered_set>
 #include <vector>
 
 namespace zith::import {
@@ -63,7 +62,7 @@ private:
     };
 
     struct ResolveGuard {
-        std::unordered_set<std::string> &set;
+        memory::FlatMap<std::string, char> &set;
         std::string key;
         ~ResolveGuard() {
             set.erase(key);
@@ -74,8 +73,8 @@ private:
     memory::SourceMap &source_map_;
     diagnostics::DiagnosticEngine &diags_;
     std::vector<std::string> visible_roots_;
-    std::unordered_map<std::string, size_t> index_by_path_;
-    std::unordered_set<std::string> resolving_;
+    memory::FlatMap<std::string, size_t> index_by_path_;
+    memory::FlatMap<std::string, char> resolving_;
     memory::DynArray<LoadedFile> files_;
     memory::DynArray<SymOrigin> sym_origins_;
 

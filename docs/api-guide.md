@@ -2,10 +2,10 @@
 
 ## Pipeline Overview
 
-The compiler processes source files through 8 sequential stages:
+The compiler processes source files through 9 sequential stages:
 
 ```
-Source -> Lexed -> Parsed -> Resolved -> TypeChecked -> HirLowered -> MirLowered -> ZirInterpreted
+Source -> Lexed -> Parsed -> Resolved -> TypeChecked -> Solved -> HirLowered -> MirLowered -> ZirInterpreted
 ```
 
 Each stage maps to a method on `CompilationSession` and is gated by `PipelinePlan`.
@@ -124,12 +124,34 @@ Arena-backed, flat ID-based AST:
   - `run(program)` — Two-pass: first register all fn stubs, then visit each fn body
   - Produces `HirModule` with typed, validated IR
 
-### 9. HIR/MIR (`src/zir/`)
+### 8a. Solver (`src/solve/`)
+
+- **`Solver`** — Generic constraint checking and monomorphization pass. Runs between type-checking and HIR lowering.
+  - `collectGenerics()` — Finds generic type parameters in function signatures
+  - `verifyGenericConstraints()` — Checks numeric bounds (`T: i32`, `T: f32`, etc.)
+  - `resolveIncompleteInFn()` — Replaces unresolved type variables with concrete types
+  - Constructor takes `TypeIntern&, AstBuilder&, ProgramNode&, SymbolTable&, DiagnosticEngine&, Arena&`
+
+Currently handles only numeric constraint bounds; generics infrastructure ready for future expansion.
+
+### 9. HIR/MIR/ZIR (`src/zir/`)
 
 - **`HirModule`** / **`HirFunction`** — Typed high-level IR. Functions have entry blocks with `HirExpr` instructions.
-  - HirExpr variants: `HirLiteral`, `HirVar`, `HirBinary`, `HirUnary`, `HirCall`, `HirLet`, `HirBlock`, `HirIf`, `HirWhile`, `HirReturn`
+  - HirExpr variants: `HirLiteral`, `HirVar`, `HirBinary`, `HirUnary`, `HirCall`, `HirLet`, `HirRet`, `HirBranch`, `HirJump`, `HirPhi`
 
 - **`MirModule`** / **`MirFunction`** — Mid-level IR with basic blocks and typed opcodes. Lowered from HIR via `lowerFromHir()`.
+
+- **`ZirModule`** / **`ZirFn`** / **`ZirBlock`** / **`ZirInst`** (`src/zir/zir/`) — Bytecode IR for direct interpretation.
+  - 26 opcodes: `Halt`, `Push`, `Dup`, `Pop`, `Load`, `Store`, `AddI`/`SubI`/`MulI`/`DivI`/`CmpI`, `AddF`/`SubF`/`MulF`/`DivF`/`CmpF`, `Br`, `BrZ`, `BrGt`, `Call`, `Ret`, `Write`, `Input`, `CastI32`, `CastF64`, `Nop`
+  - `ZirModule.constants` — `std::vector<std::variant<int64_t, double, std::string>>` constant pool
+  - Lowered from HIR via `ZirEmitter`
+
+- **`ZirInterpreter`** (`src/zir/zir/zir-interp.hpp`) — Stack-based bytecode VM.
+  - `run()` — Executes first function in module; returns 0 on completion
+  - Stack values: `std::variant<int64_t, double, std::string>`
+  - Built-in `write()` prints `"Hello, World!\n"` (MVP placeholder)
+  - Built-in `input()` reads a line from stdin
+  - Register-based locals array (16 slots), frame-slot via `Load`/`Store`
 
 ### 10. Memory (`src/memory/`)
 
@@ -166,7 +188,9 @@ zithc run file.zith --interpreted
 4. **Printer**: Add visitor in `ast-printer.cpp`
 5. **Sema**: Add lowering in `sema-pipeline.cpp`
 6. **HIR**: Add instruction type if needed in `hir-expr.hpp`
-7. **Tests**: Add unit test in `tests/unit/`
+7. **Solver**: Add constraint checking in `solver.cpp` if new generic bounds are needed
+8. **ZIR**: Add opcode in `zir-inst.hpp`, handler in `zir-interp.hpp`, lowering in `zir-emitter.cpp`
+9. **Tests**: Add unit test in `tests/unit/`
 
 ## Key Design Decisions
 

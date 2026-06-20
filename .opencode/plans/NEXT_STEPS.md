@@ -1,141 +1,100 @@
 # Next Steps — Zith Compiler
 
-**Last updated:** 2026-06-11
+**Last updated:** 2026-06-20
 
-This document outlines the prioritized next steps for the Zith compiler rewrite.  
-Each phase builds on the previous one — complete items in order for the most efficient path to a working compiler.
-
----
-
-## Phase 0 — Quick Wins (low effort, high impact)
-
-### 0.1 Fix clang-format violations
-- `cmake --build build -t fmt` to auto-format all source files
-- Then verify with `cmake --build build -t fmt-check`
-- **Why:** CI will reject PRs that aren't formatted. Do this first.
-
-### 0.2 Implement `cmd_clean`
-- Remove `target/`, `.zcache`, `.zmodules` build artifacts
-- Single-file change in `src/cli/cmd/`
-
-### 0.3 Implement `cmd_fmt`
-- Full source formatter with re-indent and normalisation
-- Parser+printer based — needs the real parser (Phase 2), so defer if needed
+Current target: **v0.2.0.0 — Real Parser**
 
 ---
 
-## Phase 1 — Project Config & CLI Polish
+## Current Status
 
-### 1.1 Wire up `ZithProject.toml`
-- Port project-config from `legacy` branch
-- Merge into `main()` before pipeline execution
-- Config struct already exists in `src/cli/project-config.hpp` (stub)
-
-### 1.2 Implement `cmd_execute`
-- Native fork+exec after compilation
-- Bytecode runner for interpreted mode (post-ZIR)
-
-### 1.3 Remaining CLI commands
-- `cmd_test` — test runner
-- `cmd_docs` — doc generator
-- `cmd_repl` — interactive REPL
+- **27/27 tests passing** — clean compile
+- Full lexer, AST builder, arena system — production-quality
+- Parser: scan pass working, body expansion working, span computation on all AST nodes
+- Pratt parser skeleton in place, most expressions parsing
+- ZIR instruction model, emitter, and interpreter implemented (not yet wired into pipeline)
+- `std::vector` usage identified for replacement in v0.3.0.0
 
 ---
 
-## Phase 2 — Core Compiler: Parser
+## Priority Queue
 
-### 2.1 Implement the parser
-- Recursive-descent with Pratt expression parsing (design already in place)
-- All 8 expression types, 3 statement types, 3 declaration types
-- Parse real `.zith` files end-to-end
+### v0.2.0.0 — Real Parser
 
-### 2.2 Wire parser into pipeline
-- Replace `kInvalid*` stubs in `CompilationSession::parseStage()`
+- [ ] Complete all expression types in Pratt parser (field, index, call, range, unary prefix)
+- [ ] Complete statement parsing (let with types, assign, return)
+- [ ] Complete declaration parsing in scan pass (struct fields, enum variants, union variants, trait/interface methods)
+- [ ] Wire body expansion to produce real AST (not stubs)
+- [ ] C-compatibility hooks in parser (`extern "C"` blocks, ABI attributes groundwork)
+- [ ] Cleanup unnecessary `#include <vector>` in files that don't use it
 
-### 2.3 Enable parser tests
-- `zithc-parser-expr` and `zithc-parser-stmt` should test real parsing, not just AST builder
+### v0.3.0.0 — Type System + DynArray Purge
 
----
+- [ ] `TypeIntern` deduplication — actual storage and structural comparison
+- [ ] `Unifier` — type unification with error reporting
+- [ ] `TypeLower` pass — TypeExpr → TypeId
+- [ ] `std::vector` → `DynArray` in `src/zir/zir/` (zir-inst.hpp, zir-interp.hpp, zir-emitter.cpp)
+- [ ] `std::vector` → `DynArray` in `src/diagnostics/` (diagnostic.hpp, diagnostic-engine.cpp)
 
-## Phase 3 — Type System
+### v0.3.5.0 — Full Sema
 
-### 3.1 Implement `TypeIntern` properly
-- Actual storage and deduplication of types
-- `kindOf()`, `isType()`, structural comparison
+- [ ] `SemaPipeline` traverses AST → typed HIR
+- [ ] Name resolution fully wired through resolver
+- [ ] Generics/solver constraint checking
+- [ ] HIR verifier validates expression types and CFG structure
 
-### 3.2 Implement `Unifier`
-- Type unification for inference and checking
-- Error reporting on type mismatch
+### v0.4.0.0 — Macros
 
----
+- [ ] Compile-time code transformation stage
+- [ ] Macro declaration syntax
+- [ ] Macro expansion during compilation
+- [ ] Integration with sema pipeline
 
-## Phase 4 — Name Resolution & Semantic Analysis
+### v0.5.0.0 — Interpreter MVP
 
-### 4.1 Implement name resolution
-- Wire up symbol table `declare()`/`lookup()` in the resolver
-- Module scope chaining
+- [ ] HIR → MIR lowering (real translation, 22 opcodes)
+- [ ] MIR verifier
+- [ ] MIR → ZIR bytecode emission
+- [ ] Wire ZIR interpreter into `CompilationSession::zirStage()`
+- [ ] `zithc run --interpreted` works for single-file programs
+- [ ] Native attempt displays: "Native support has not yet been added."
 
-### 4.2 Wire up Sema pipeline
-- `SemaPipeline::run()` should traverse AST and produce typed HIR
-- Type checking, name resolution, HIR lowering all in one pass
+### v0.6.0.0 — LLVM Native Backend
 
----
+- [ ] MIR → LLVM IR emission
+- [ ] LLVM IR → object file
+- [ ] `zithc compile` produces native binary
+- [ ] Hello-world end-to-end
 
-## Phase 5 — HIR & MIR
+### v0.7.0.0 — Optimization Pipeline
 
-### 5.1 Fix HIR `addFn()` — stop dropping function names
-- One-line fix in `hir-module.cpp`
+- [ ] MIR → LLVM IR → LLVM opt → MIR custom target backend
+- [ ] `-O1`/`-O2`/`-O3` flag integration
+- [ ] Optimized interpreter path (opt → MIR' → ZIR → VM)
+- [ ] ZIR → LLVM as secondary codegen path
 
-### 5.2 Implement verifiers
-- HIR verifier — validate expression types, CFG structure
-- MIR verifier — validate operands, basic block links
+### v0.8.0.0 — Production (Compiler Complete)
 
-### 5.3 Implement MIR lowering
-- `MirLowering::lower()` should translate HIR → MIR
-- 22 opcodes, operands, basic blocks
-
----
-
-## Phase 6 — Code Generation
-
-### 6.1 ZIR / Interpreter
-- Portable intermediate format
-- Interpreted bytecode runner
-
-### 6.2 LLVM backend
-- Native code generation via LLVM
-- Multi-target (Linux, macOS, Windows, WASM)
-
----
-
-## Phase 7 — Quality & Polish
-
-### 7.1 Source-aware diagnostics
-- Emitter should show source snippets with underlines
-- `diagnostics::emit.cpp` — the main file to change
-
-### 7.2 Test coverage
-- Property-based testing for lexer, parser
-- Fuzz testing for the full pipeline
-
-### 7.3 Performance
-- Profile arena allocation, lexer hot paths
-- Parallelize pipeline stages where possible
+- [ ] Multi-file compilation + linking
+- [ ] C-ABI compatibility (`extern "C"`, struct layout)
+- [ ] Source-aware diagnostics (snippets, underlines)
+- [ ] All 4 codegen paths complete
+- [ ] **Compiler feature-complete** — all later versions are stdlib
 
 ---
 
 ## Quick Reference
 
-```text
-Phase 0:  Format → cmd_clean → cmd_fmt
-Phase 1:  ZithProject.toml → cmd_execute → remaining CLI
-Phase 2:  Parser implementation
-Phase 3:  TypeIntern → Unifier
-Phase 4:  Name resolution → Sema pipeline
-Phase 5:  HIR fix → Verifiers → MIR lowering
-Phase 6:  ZIR interpreter → LLVM backend
-Phase 7:  Diagnostics → Tests → Performance
+```
+v0.2.0.0  Parser
+v0.3.0.0  Type System + DynArray
+v0.3.5.0  Full Sema
+v0.4.0.0  Macros
+v0.5.0.0  Interpreter MVP
+v0.6.0.0  LLVM Native
+v0.7.0.0  Optimization Pipeline
+v0.8.0.0  Production (compiler done)
+v0.9.0.0+ Stdlib era
 ```
 
-Current test suite: **7/7 passing**  
-Current build: **clean compile**
+All test binaries: 27 registered, 27 passing.

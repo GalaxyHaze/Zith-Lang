@@ -1,9 +1,9 @@
 # Zith Compiler — Implementation Status
 
 **Branch:** main  
-**Date:** 2026-06-11  
+**Date:** 2026-06-20  
 **Build:** `cmake -B build && cmake --build build` — clean compile  
-**Tests:** `ctest --test-dir build` — **7/7 passing**
+**Tests:** `ctest --test-dir build` — **27/27 passing**
 
 ---
 
@@ -22,10 +22,8 @@
 
 ```
 Source → Lexer → Parser → AST → Sema → HIR → MIR → ZIR → (Interpreter)
-          *       (*)     *     ***    **     ***    ****      ****
+          *       *      *     ***    **     ***    ***       ***
 ```
-
-(*) Parser skeleton wired into pipeline; actual parsing returns stubs.
 
 ---
 
@@ -89,9 +87,14 @@ Full tokenizer with:
 ### ZithProject.toml integration \*\*\*
 Not yet wired in. `main()` has a TODO placeholder.
 
-### Parser (`src/parser/`) \*\*\*
-- Class hierarchy designed with Pratt-style expression parsing — \*\*
-- **Actual parsing:** all methods return `kInvalid*` / `false` — \*\*\*
+### Parser (`src/parser/`) \*\*
+- Class hierarchy designed with Pratt-style expression parsing — \*
+- Body expansion via `expandBodies()` — \*
+- Scan pass registers top-level decls — \*
+- Span computation on all AST nodes — \*
+- **Actual expression parsing:** recursive-descent + Pratt for all expr types — \*\*
+- **Statement parsing:** let, assign, return — \*\*
+- **Decl parsing (scan):** fn, struct, enum, union, trait, interface, import — \*
 
 ### Sema (`src/sema/`) \*\*\*
 - Context object (wiring for symbol table, types, diagnostics) — \*
@@ -115,8 +118,11 @@ Not yet wired in. `main()` has a TODO placeholder.
 - Verifier — returns `true` with no logic — \*\*\*
 - No instruction visitor — \*\*\*\*
 
-### ZIR / Interpreter \*\*\*\*
-Not yet started.
+### ZIR / Interpreter \*\*\*
+- ZIR instruction model, block, function, module types — \*
+- ZIR emitter (HIR → ZIR bytecode) — \*
+- ZIR interpreter (stack-based VM with 26 opcodes) — \*
+- Not yet wired into CompilationSession pipeline — \*\*\*
 
 ---
 
@@ -125,15 +131,38 @@ Not yet started.
 | Test | Status | Notes |
 |------|--------|-------|
 | `zithc-lexer-test` | \* PASS | 43/43 passing |
-| `zithc-parser-expr` | \* PASS | AST builder tests |
-| `zithc-parser-stmt` | \* PASS | AST builder tests |
+| `zithc-parser-expr` | \* PASS | Expression parsing + AST builder |
+| `zithc-parser-stmt` | \* PASS | Statement parsing + AST builder |
+| `zithc-parser-scan` | \* PASS | Scan pass tests |
+| `zithc-parser-full` | \* PASS | Full pipeline parse tests |
 | `zithc-sema-test` | \* PASS | Symbol table + basic sema context tests |
-| `zithc-mir-test` | \* PASS | HIR module + basic lowering scaffold |
+| `zithc-type-dedup` | \* PASS | Type deduplication tests |
+| `zithc-unify-errors` | \* PASS | Unifier error reporting tests |
+| `zithc-sema-hir` | \* PASS | Sema → HIR lowering tests |
+| `zithc-mir-test` | \* PASS | HIR module + MIR lowering scaffold |
 | `zithc-import-test` | \* PASS | Import resolution + symbol visibility tests |
 | `zithc-import-e2e` | \* PASS | End-to-end import pipeline tests |
+| `zithc-heuristic-engine` | \* PASS | "Did you mean?" suggestion engine |
+| `zithc-ast-printer` | \* PASS | AST pretty-printer |
+| `zithc-resolver-test` | \* PASS | Name resolver tests |
+| `zithc-arena-test` | \* PASS | Arena allocator tests |
+| `zithc-source-map-test` | \* PASS | Source map + file loading tests |
+| `zithc-platform-test` | \* PASS | Platform detection tests |
+| `zithc-error-codes` | \* PASS | Error code lookup tests |
+| `zithc-diag-advanced` | \* PASS | Advanced diagnostic tests |
+| `zithc-result` | \* PASS | Result type tests |
+| `zithc-string-interner` | \* PASS | String interner tests |
+| `zithc-dyn-array-test` | \* PASS | DynArray container tests |
+| `zithc-flat-map-test` | \* PASS | FlatMap container tests |
+| `zithc-zir-inst` | \* PASS | ZIR instruction model tests |
+| `zithc-zir-emitter` | \* PASS | ZIR emitter tests |
+| `zithc-zir-interp` | \* PASS | ZIR interpreter tests |
 
 ---
 
 ## Next Steps
 
-See [NEXT_STEPS.md](NEXT_STEPS.md) for the prioritized roadmap.
+See [NEXT_STEPS.md](NEXT_STEPS.md) for current priorities.
+See [version-roadmap.md](.opencode/plans/version-roadmap.md) for the full version plan.
+
+**Current target:** v0.2.0.0 — Complete Pratt parser.

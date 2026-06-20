@@ -130,7 +130,7 @@ static void test_report_diagnostic_struct() {
     Arena arena;
     DiagnosticEngine de(arena);
 
-    Diagnostic d{Severity::Error, err::UnknownToken, "test msg", makeSpan(1, 3), {}, {}};
+    Diagnostic d(arena, Severity::Error, err::UnknownToken, "test msg", makeSpan(1, 3));
     de.report(std::move(d));
 
     CHECK_EQ(de.all().size(), size_t(1), "report from Diagnostic struct");

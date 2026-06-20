@@ -41,16 +41,16 @@ Result<FileId> SourceMap::addFile(const std::string_view path, const std::string
 
     std::unique_lock lock(rw_mutex);
 
-    auto it = cache.find(std::string(path));
-    if (it != cache.end()) {
-        FileId id = it->second;
+    auto *existing = cache.get(std::string(path));
+    if (existing) {
+        FileId id = *existing;
         files[id] = SourceLoc{std::string(content), std::string(path), file_arena};
         files[id].buildLines();
         return id;
     }
 
     FileId id = static_cast<FileId>(files.size());
-    cache.emplace(path, id);
+    cache.insert(std::string(path), id);
     auto &loc = files.emplace(std::string(content), std::string(path), file_arena);
     loc.buildLines();
     return id;
@@ -65,9 +65,9 @@ bool SourceMap::isValid(FileId id) const noexcept {
     -> Result<FileId> {
     std::unique_lock lock(rw_mutex);
 
-    auto it = cache.find(std::string(path));
-    if (it != cache.end())
-        return it->second;
+    auto *existing = cache.get(std::string(path));
+    if (existing)
+        return *existing;
 
     std::error_code error;
 
@@ -84,7 +84,7 @@ bool SourceMap::isValid(FileId id) const noexcept {
         loc.buildLines();
 
         FileId id = static_cast<FileId>(files.size());
-        cache.emplace(path, id);
+        cache.insert(std::string(path), id);
         files.emplace(std::move(loc));
         return id;
     } else {
@@ -100,7 +100,7 @@ bool SourceMap::isValid(FileId id) const noexcept {
         loc.buildLines();
 
         FileId id = static_cast<FileId>(files.size());
-        cache.emplace(path, id);
+        cache.insert(std::string(path), id);
         files.emplace(std::move(loc));
         return id;
     }
