@@ -3,13 +3,13 @@
 #include "import/symbol-table.hpp"
 #include "lexer/lexer.hpp"
 #include "memory/source-map.hpp"
-#include "parser/recovery.hpp"
+#include "parser/operators.hpp"
+#include "parser/scan-helpers.hpp"
 
 #include <cstdint>
 #include <cstdlib>
 #include <string>
 #include <string_view>
-#include <vector>
 
 namespace zith::parser {
 
@@ -21,6 +21,7 @@ using ast::kInvalidStmt;
 using diagnostics::Severity;
 using lexer::TokenKind;
 using namespace zith::diagnostics::err;
+using namespace operators;
 
 } // anonymous namespace
 
@@ -69,6 +70,43 @@ bool Parser::consume(char c) {
     return false;
 }
 
+bool Parser::consume(TokenKind kind) {
+    if (match(kind)) {
+        advance();
+        return true;
+    }
+    return false;
+}
+
+bool Parser::expectPunc(char c) {
+    if (peek().punc == c) {
+        advance();
+        return true;
+    }
+    std::string msg = "expected '";
+    msg += c;
+    msg += "'";
+    diag->report(Severity::Error, ExpectedExpr, std::move(msg), peek().span);
+    return false;
+}
+
+bool Parser::expectIdent(std::string_view &out) {
+    if (!peek().is(TokenKind::Identifier)) {
+        diag->report(Severity::Error, ExpectedIdent, "expected identifier", peek().span);
+        return false;
+    }
+    out = lexeme();
+    advance();
+    return true;
+}
+
+std::string_view Parser::expectIdent() {
+    std::string_view name;
+    if (!expectIdent(name))
+        recovery::panic(*tok, {TokenKind::End, TokenKind::Punctuation});
+    return name;
+}
+
 memory::Span Parser::spanFrom(memory::Span start) const {
     if (tok->offset > 0) {
         auto &prev = tok->src[tok->offset - 1];
@@ -76,169 +114,6 @@ memory::Span Parser::spanFrom(memory::Span start) const {
     }
     return start;
 }
-
-// ── operator precedence ────────────────────────────────────────────────
-
-namespace {
-
-// Pratt infix precedence by operator token
-uint8_t infixPrec(const lexer::Token &t) {
-    if (t.is(lexer::TokenKind::Punctuation)) {
-        switch (t.punc) {
-        case '|':
-            return 6;
-        case '^':
-            return 7;
-        case '&':
-            return 8;
-        case '<':
-            return 10;
-        case '>':
-            return 10;
-        case '+':
-            return 12;
-        case '-':
-            return 12;
-        case '*':
-            return 14;
-        case '/':
-            return 14;
-        case '%':
-            return 14;
-        default:
-            return 0;
-        }
-    }
-    if (t.is(lexer::TokenKind::Logical)) {
-        // 'and' = 4, 'or' = 2, 'xor' = 5
-        return 2; // will refine per token
-    }
-    if (t.is(lexer::TokenKind::Operators)) {
-        switch (t.punc) {
-        case '|':
-            return 6;
-        case '^':
-            return 7;
-        case '&':
-            return 8;
-        case '<':
-            return 10;
-        case '>':
-            return 10;
-        case '+':
-            return 12;
-        case '-':
-            return 12;
-        case '*':
-            return 14;
-        case '/':
-            return 14;
-        case '%':
-            return 14;
-        case '=':
-            return 0; // '=' is assignment, not binary comparison
-        case '!':
-            return 0; // '!' is prefix/postfix, not binary
-        case '~':
-            return 0;
-        case '?':
-            return 0;
-        default:
-            return 0;
-        }
-    }
-    return 0;
-}
-
-// Word operator ('and', 'or', 'xor') → BinaryOp
-ast::BinaryOp binaryOpForWord(std::string_view w) {
-    if (w == "and")
-        return ast::BinaryOp::And;
-    if (w == "or")
-        return ast::BinaryOp::Or;
-    if (w == "xor")
-        return ast::BinaryOp::Xor;
-    return ast::BinaryOp::Add; // unreachable
-}
-
-uint8_t wordPrec(std::string_view w) {
-    if (w == "or")
-        return 2;
-    if (w == "xor")
-        return 4;
-    if (w == "and")
-        return 3;
-    return 0;
-}
-
-// Map a multi-char operator sequence to a BinaryOp.
-// Returns true if the two tokens form a compound operator.
-bool tryCompoundOp(const lexer::Token &first, const lexer::Token &second, ast::BinaryOp &out_op) {
-    if (!first.is(lexer::TokenKind::Operators) || !second.is(lexer::TokenKind::Operators))
-        return false;
-    if (first.punc == '=' && second.punc == '=') {
-        out_op = ast::BinaryOp::Eq;
-        return true;
-    }
-    if (first.punc == '!' && second.punc == '=') {
-        out_op = ast::BinaryOp::Ne;
-        return true;
-    }
-    if (first.punc == '<' && second.punc == '=') {
-        out_op = ast::BinaryOp::Le;
-        return true;
-    }
-    if (first.punc == '>' && second.punc == '=') {
-        out_op = ast::BinaryOp::Ge;
-        return true;
-    }
-    if (first.punc == '<' && second.punc == '<') {
-        out_op = ast::BinaryOp::Shl;
-        return true;
-    }
-    if (first.punc == '>' && second.punc == '>') {
-        out_op = ast::BinaryOp::Shr;
-        return true;
-    }
-    if (first.punc == '=' && second.punc == '>') {
-        out_op = ast::BinaryOp::Eq;
-        return true;
-    }
-    // && and || are not valid — use and / or instead
-    return false;
-}
-
-// Single-char operator → BinaryOp
-ast::BinaryOp binaryOpForChar(char c) {
-    switch (c) {
-    case '+':
-        return ast::BinaryOp::Add;
-    case '-':
-        return ast::BinaryOp::Sub;
-    case '*':
-        return ast::BinaryOp::Mul;
-    case '/':
-        return ast::BinaryOp::Div;
-    case '%':
-        return ast::BinaryOp::Rest;
-    case '<':
-        return ast::BinaryOp::Lt;
-    case '>':
-        return ast::BinaryOp::Gt;
-    case '=':
-        return ast::BinaryOp::Eq; // single '=' is not Eq in parser — only == is
-    case '!':
-        return ast::BinaryOp::Ne; // single '!' is not Ne — it's prefix/postfix
-    case '&':
-        return ast::BinaryOp::And; // single '&' is not And in parser
-    case '|':
-        return ast::BinaryOp::Or; // single '|' is not Or in parser
-    default:
-        return ast::BinaryOp::Add; // unreachable
-    }
-}
-
-} // anonymous namespace
 
 // ── comment skipping helper ────────────────────────────────────────────
 
@@ -449,12 +324,7 @@ ast::ExprId Parser::parseExpr(int min_prec) {
         if (cur.punc == '(') {
             auto lhs_span = bld->exprSpan(lhs);
             advance();
-            memory::DynArray<ast::ExprId> args{bld->arena()};
-            if (peek().punc != ')') {
-                args.push(parseExpr());
-                while (consume(','))
-                    args.push(parseExpr());
-            }
+            auto args = parseCommaList(')', [&]{ return parseExpr(); });
             if (!consume(')'))
                 diag->report(Severity::Error, UnclosedParen, "expected ')'", peek().span);
             auto end_span = tok->src[tok->offset - 1].span;
@@ -478,14 +348,10 @@ ast::ExprId Parser::parseExpr(int min_prec) {
         if (cur.punc == '.') {
             auto lhs_span = bld->exprSpan(lhs);
             advance();
-            if (!peek().is(TokenKind::Identifier)) {
-                diag->report(Severity::Error, ExpectedIdent, "expected field name after '.'",
-                             peek().span);
-                continue;
-            }
             auto field_span = peek().span;
-            auto field      = lexeme();
-            advance();
+            std::string_view field;
+            if (!expectIdent(field))
+                continue;
             lhs = bld->field(lhs, field,
                              memory::Span{lhs_span.file, lhs_span.start, field_span.end});
             continue;
@@ -495,14 +361,10 @@ ast::ExprId Parser::parseExpr(int min_prec) {
         if (cur.is(lexer::TokenKind::Operators) && cur.punc == '-' && peek(1).punc == '>') {
             auto lhs_span = bld->exprSpan(lhs);
             advance(2);
-            if (!peek().is(TokenKind::Identifier)) {
-                diag->report(Severity::Error, ExpectedIdent, "expected field name after '->'",
-                             peek().span);
-                continue;
-            }
             auto field_span = peek().span;
-            auto field      = lexeme();
-            advance();
+            std::string_view field;
+            if (!expectIdent(field))
+                continue;
             lhs = bld->field(lhs, field,
                              memory::Span{lhs_span.file, lhs_span.start, field_span.end});
             continue;
@@ -612,10 +474,10 @@ ast::StmtId Parser::parseStmt() {
         auto ret_span = peek().span;
         advance();
         auto val = eof() || peek().punc == '}' ? kInvalidExpr : parseExpr();
-        if (peek().punc == ';')
-            advance();
+        if (peek().punc != ';')
+            skipUntil({TokenKind::End, TokenKind::Punctuation});
         else
-            recovery::panic(*tok, {TokenKind::End, TokenKind::Punctuation});
+            advance();
         return bld->retStmt(val, spanFrom(ret_span));
     }
 
@@ -640,22 +502,27 @@ ast::StmtId Parser::parseStmt() {
     if (peek().is(TokenKind::Variable)) {
         auto let_span = peek().span;
         advance();
-        if (!peek().is(TokenKind::Identifier)) {
-            diag->report(Severity::Error, ExpectedIdent, "expected variable name", peek().span);
-            recovery::panic(*tok, {TokenKind::End, TokenKind::Punctuation});
-            return kInvalidStmt;
-        }
-        auto name = lexeme();
-        advance();
+        auto name = expectIdent();
+        auto type_annot = parseOptTypeAnnotation();
         ast::ExprId init = kInvalidExpr;
         if (consume('='))
             init = parseExpr();
         if (peek().punc == ';')
             advance();
-        return bld->letStmt(name, false, init, spanFrom(let_span));
+        memory::DynArray<std::string_view> names{bld->arena()};
+        names.push(name);
+        return bld->letStmt(std::move(names), false, type_annot, init, spanFrom(let_span));
     }
 
     auto expr = parseExpr();
+    if (peek().punc == '=') {
+        auto assign_span = peek().span;
+        advance();
+        auto rhs = parseExpr();
+        if (peek().punc == ';')
+            advance();
+        return bld->assign(expr, rhs, spanFrom(assign_span));
+    }
     if (peek().punc == ';')
         advance();
     return bld->addStmt(expr);
@@ -703,135 +570,7 @@ ast::DeclId Parser::parseFnDecl() {
 
 namespace {
 
-[[nodiscard]] memory::Span span_from_offset(uint32_t start, uint32_t end) {
-    return {0, start, end};
-}
-
-uint32_t skip_body_tokens(lexer::TokenStream &tok) {
-    if (tok.is_empty())
-        return tok.offset;
-    uint32_t depth = 1;
-    tok.advance();
-    while (!tok.is_empty() && depth > 0) {
-        if (tok.peek().kind == TokenKind::End)
-            break;
-        if (tok.peek().punc == '{')
-            depth++;
-        else if (tok.peek().punc == '}')
-            depth--;
-        tok.advance();
-    }
-    return tok.offset;
-}
-
-static const char *symKindName(import::SymKind k) {
-    switch (k) {
-    case import::SymKind::Fn:
-        return "a fn";
-    case import::SymKind::Struct:
-        return "a struct";
-    case import::SymKind::Trait:
-        return "a trait";
-    case import::SymKind::Interface:
-        return "a interface";
-    case import::SymKind::Enum:
-        return "an enum";
-    case import::SymKind::Alias:
-        return "an alias";
-    case import::SymKind::Variable:
-        return "a variable";
-    case import::SymKind::Module:
-        return "a module";
-    case import::SymKind::Component:
-        return "a component";
-    case import::SymKind::Union:
-        return "a union";
-    }
-    return "unknown";
-}
-
-// skip past a balanced pair: ( ... ), { ... }, [ ... ]
-// cursor must be ON the opening delimiter; it is consumed first.
-static void skip_balanced(lexer::TokenStream &tok, char open, char close) {
-    int depth = 1;
-    tok.advance(); // consume the opening delimiter
-    while (!tok.is_empty()) {
-        if (tok.peek().is_eof())
-            break;
-        if (tok.peek().punc == open)
-            depth++;
-        else if (tok.peek().punc == close)
-            depth--;
-        tok.advance();
-        if (depth == 0)
-            break;
-    }
-}
-
-// skip past a type expression during scan — just advances past tokens until a
-// terminator (comma, brace, bracket, semicolon, equals, paren) is found.
-static void scan_skip_type_expr(lexer::TokenStream &tok) {
-    while (!tok.is_empty()) {
-        auto &t = tok.peek();
-        if (t.is_eof())
-            break;
-        if (t.punc == ',' || t.punc == '}' || t.punc == ']' || t.punc == ';' || t.punc == '=' ||
-            t.punc == ')' || t.punc == '|')
-            break;
-        if (t.punc == '(') {
-            skip_balanced(tok, '(', ')');
-            continue;
-        }
-        if (t.punc == '|') {
-            skip_balanced(tok, '|', '|');
-            continue;
-        }
-        if (t.punc == '[') {
-            skip_balanced(tok, '[', ']');
-            continue;
-        }
-        tok.advance();
-    }
-}
-
-// skip past an expression during scan until a terminator
-static void scan_skip_expr(lexer::TokenStream &tok) {
-    while (!tok.is_empty()) {
-        auto &t = tok.peek();
-        if (t.is_eof())
-            break;
-        if (t.punc == ',' || t.punc == '}' || t.punc == ';' || t.punc == ')')
-            break;
-        if (t.punc == '(') {
-            skip_balanced(tok, '(', ')');
-            continue;
-        }
-        if (t.punc == '{') {
-            skip_balanced(tok, '{', '}');
-            continue;
-        }
-        if (t.punc == '[') {
-            skip_balanced(tok, '[', ']');
-            continue;
-        }
-        tok.advance();
-    }
-}
-
-[[nodiscard]] bool reportIfDuplicate(import::SymbolTable &syms, diagnostics::DiagnosticEngine &diag,
-                                     std::string_view name, memory::Span span,
-                                     import::SymId skip_id = import::kInvalidSym) {
-    auto existing = syms.lookup(name);
-    if (existing == import::kInvalidSym || existing == skip_id)
-        return false;
-    auto &prev      = syms.get(existing);
-    std::string msg = "duplicate symbol '";
-    msg += name;
-    msg += "' — previous declaration is ";
-    msg += symKindName(prev.kind);
-    diag.report(Severity::Error, DuplicateDecl, std::move(msg), span);
-    return true;
-}
+using namespace scan_detail;
 
 } // anonymous namespace
 
@@ -955,7 +694,7 @@ ScanResult scan(Parser &parser, import::SymbolTable &syms) {
             if (tok.peek().punc == '{') {
                 token_start = tok.offset;
                 body_span   = tok.peek().span;
-                token_end   = skip_body_tokens(tok);
+                token_end   = skipBody(tok);
                 body_span   = {body_span.file, body_span.start, token_end};
                 body_node   = bld.unbody(body_span, token_start, token_end);
             }
@@ -973,7 +712,7 @@ ScanResult scan(Parser &parser, import::SymbolTable &syms) {
                 }
             }
 
-            auto decl = bld.fnDecl(name, std::move(params), body_node, span_from_offset(name_span.start, name_span.end));
+            auto decl = bld.fnDecl(name, std::move(params), body_node, spanFromOffset(name_span.start, name_span.end));
             program.decls.push(decl);
             if (fn_sym != import::kInvalidSym)
                 syms.get(fn_sym).decl_id = decl;
@@ -1047,7 +786,7 @@ ScanResult scan(Parser &parser, import::SymbolTable &syms) {
                             auto vkw = tok.lexeme();
                             tok.advance();
                             if (vkw == "mod" && tok.peek().punc == '(')
-                                skip_balanced(tok, '(', ')');
+                                skipBalanced(tok, '(', ')');
                             continue;
                         }
 
@@ -1077,7 +816,7 @@ ScanResult scan(Parser &parser, import::SymbolTable &syms) {
                                     break;
                                 }
                                 if (tok.peek().punc == '{') {
-                                    skip_balanced(tok, '{', '}');
+                                    skipBalanced(tok, '{', '}');
                                     break;
                                 }
                                 if (tok.peek().punc == '}')
@@ -1113,12 +852,12 @@ ScanResult scan(Parser &parser, import::SymbolTable &syms) {
                             // skip type annotation
                             if (tok.peek().punc == ':') {
                                 tok.advance();
-                                scan_skip_type_expr(tok);
+                                skipTypeExpr(tok);
                             }
                             // skip default value
                             if (tok.peek().punc == '=') {
                                 tok.advance();
-                                scan_skip_expr(tok);
+                                skipExpr(tok);
                             }
                             if (tok.peek().punc == ',')
                                 tok.advance();
@@ -1139,12 +878,12 @@ ScanResult scan(Parser &parser, import::SymbolTable &syms) {
                             // skip type annotation
                             if (tok.peek().punc == ':') {
                                 tok.advance();
-                                scan_skip_type_expr(tok);
+                                skipTypeExpr(tok);
                             }
                             // skip default value
                             if (tok.peek().punc == '=') {
                                 tok.advance();
-                                scan_skip_expr(tok);
+                                skipExpr(tok);
                             }
                             if (tok.peek().punc == ',')
                                 tok.advance();
@@ -1178,14 +917,14 @@ ScanResult scan(Parser &parser, import::SymbolTable &syms) {
 
                             // tuple variant: Variant(Type1, Type2)
                             if (tok.peek().punc == '(')
-                                skip_balanced(tok, '(', ')');
+                                skipBalanced(tok, '(', ')');
                             // struct variant: Variant { field: Type }
                             if (tok.peek().punc == '{')
-                                skip_balanced(tok, '{', '}');
+                                skipBalanced(tok, '{', '}');
                             // discriminant assignment: Variant = 1
                             if (tok.peek().punc == '=') {
                                 tok.advance();
-                                scan_skip_expr(tok);
+                                skipExpr(tok);
                             }
                         } else {
                             tok.advance();
@@ -1219,12 +958,12 @@ ScanResult scan(Parser &parser, import::SymbolTable &syms) {
                             // skip type annotation: variant: Type
                             if (tok.peek().punc == ':') {
                                 tok.advance();
-                                scan_skip_type_expr(tok);
+                                skipTypeExpr(tok);
                             }
                             // skip default
                             if (tok.peek().punc == '=') {
                                 tok.advance();
-                                scan_skip_expr(tok);
+                                skipExpr(tok);
                             }
                         } else {
                             tok.advance();
@@ -1238,7 +977,7 @@ ScanResult scan(Parser &parser, import::SymbolTable &syms) {
 
                 } else if (kw == "component") {
                     // component body: skip entirely during scan
-                    skip_balanced(tok, '{', '}');
+                    skipBalanced(tok, '{', '}');
                 }
 
                 body_span = {body_span.file, body_span.start, tok.offset};
@@ -1325,7 +1064,7 @@ ScanResult scan(Parser &parser, import::SymbolTable &syms) {
                                 break;
                             }
                             if (tok.peek().punc == '{') {
-                                skip_balanced(tok, '{', '}');
+                                skipBalanced(tok, '{', '}');
                                 break;
                             }
                             if (tok.peek().punc == '}')
@@ -1373,7 +1112,7 @@ ScanResult scan(Parser &parser, import::SymbolTable &syms) {
             // during scan: skip to '{' and create unbody
             while (!tok.is_empty() && !tok.peek().is_eof()) {
                 if (tok.peek().punc == '{') {
-                    skip_balanced(tok, '{', '}');
+                    skipBalanced(tok, '{', '}');
                     break;
                 }
                 if (tok.peek().punc == ';') {
@@ -1779,7 +1518,7 @@ void parseStructBody(Parser &p, memory::Span body_span, memory::DynArray<FieldIn
                     break;
                 }
                 if (tok->peek().punc == '{') {
-                    skip_balanced(*tok, '{', '}');
+                    skipBalanced(*tok, '{', '}');
                     break;
                 }
                 if (tok->peek().punc == '}')
@@ -1807,11 +1546,11 @@ void parseStructBody(Parser &p, memory::Span body_span, memory::DynArray<FieldIn
                 tok->advance();
             if (tok->peek().punc == ':') {
                 tok->advance();
-                scan_skip_type_expr(*tok);
+                skipTypeExpr(*tok);
             }
             if (tok->peek().punc == '=') {
                 tok->advance();
-                scan_skip_expr(*tok);
+                skipExpr(*tok);
             }
             if (tok->peek().punc == ',')
                 tok->advance();
@@ -1826,13 +1565,13 @@ void parseStructBody(Parser &p, memory::Span body_span, memory::DynArray<FieldIn
             if (tok->peek().punc == ':') {
                 tok->advance();
                 auto type_start = tok->offset;
-                scan_skip_type_expr(*tok);
+                skipTypeExpr(*tok);
                 type_lexeme = tok->lexeme(); // won't be correct for multi-token types
             }
             out_fields.push({fname, type_lexeme});
             if (tok->peek().punc == '=') {
                 tok->advance();
-                scan_skip_expr(*tok);
+                skipExpr(*tok);
             }
             if (tok->peek().punc == ',')
                 tok->advance();
@@ -1847,6 +1586,20 @@ void parseStructBody(Parser &p, memory::Span body_span, memory::DynArray<FieldIn
 }
 
 } // anonymous namespace
+
+// ── Parser helper implementations ───────────────────────────────────────
+
+ast::TypeExprId Parser::parseOptTypeAnnotation() {
+    if (peek().punc == ':') {
+        advance();
+        return parseTypeExpr();
+    }
+    return ast::kInvalidTypeExpr;
+}
+
+void Parser::skipUntil(std::initializer_list<lexer::TokenKind> sync_tokens) {
+    recovery::panic(*tok, sync_tokens);
+}
 
 // ── expand bodies (second pass: seek + parse real bodies) ──────────────
 

@@ -47,6 +47,8 @@ FetchContent_MakeAvailable(tomlplusplus)
 file(GLOB_RECURSE ZITH_SOURCES
     src/*.cpp
 )
+
+# Compiler library sources (all .cpp minus main entry point)
 file(GLOB_RECURSE ZITH_LIB_SOURCES
     src/*.cpp
 )
@@ -54,25 +56,29 @@ list(REMOVE_ITEM ZITH_LIB_SOURCES "${CMAKE_SOURCE_DIR}/src/cli/zithc-main.cpp")
 
 add_library(zithc_objects OBJECT ${ZITH_LIB_SOURCES})
 
-target_include_directories(zithc_objects PRIVATE
+target_include_directories(zithc_objects PUBLIC
     src
 )
 
-target_link_libraries(zithc_objects PRIVATE mio tomlplusplus::tomlplusplus)
+target_link_libraries(zithc_objects PUBLIC mio tomlplusplus::tomlplusplus)
 
-target_compile_definitions(zithc_objects PRIVATE
+target_compile_definitions(zithc_objects PUBLIC
     ZITH_VERSION="${ZITH_VERSION}"
     ZITH_STDLIB_DIR="${CMAKE_CURRENT_SOURCE_DIR}/stdlib"
 )
 
-add_executable(zithc ${CMAKE_SOURCE_DIR}/src/cli/zithc-main.cpp $<TARGET_OBJECTS:zithc_objects>)
-
-target_include_directories(zithc PRIVATE
-    src
+# ── Static library for LSP / embedding (includes C ABI) ──────────────
+add_library(zithcLib STATIC $<TARGET_OBJECTS:zithc_objects>)
+set_target_properties(zithcLib PROPERTIES
+    OUTPUT_NAME "zithc"
+    PUBLIC_HEADER "src/capi/zithc-capi.h"
 )
 
-target_link_libraries(zithc PRIVATE mio tomlplusplus::tomlplusplus)
+# ── CLI executable ────────────────────────────────────────────────────
+add_executable(zithc ${CMAKE_SOURCE_DIR}/src/cli/zithc-main.cpp $<TARGET_OBJECTS:zithc_objects>)
 
+target_include_directories(zithc PRIVATE src)
+target_link_libraries(zithc PRIVATE mio tomlplusplus::tomlplusplus)
 target_compile_definitions(zithc PRIVATE
     ZITH_VERSION="${ZITH_VERSION}"
     ZITH_STDLIB_DIR="${CMAKE_CURRENT_SOURCE_DIR}/stdlib"
@@ -122,6 +128,10 @@ endif()
 
 install(TARGETS zithc
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+)
+install(TARGETS zithcLib
+    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/zithc
 )
 
 install(DIRECTORY stdlib/
