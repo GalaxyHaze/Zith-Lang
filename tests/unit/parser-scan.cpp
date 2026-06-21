@@ -239,7 +239,27 @@ static void test_scan_multiple_decls() {
     CHECK(!diags.hasErrors(), "no errors with multiple distinct decls");
 }
 
-// ── main ──────────────────────────────────────────────────────────────────
+// ── doc comment tests ─────────────────────────────────────────────────
+
+static void test_scan_doc_comments() {
+    Arena arena;
+    AstBuilder builder(arena);
+    DiagnosticEngine diags(arena);
+    SymbolTable syms(arena);
+    ScanResult result(arena);
+
+    do_scan(arena, builder, diags, syms, "/// A point\nstruct Pt {}", result);
+
+    CHECK_EQ(result.structs.size(), size_t(1), "1 struct");
+    auto id = syms.lookup("Pt");
+    CHECK(id != zith::import::kInvalidSym, "Pt found");
+    auto &data = syms.get(id);
+    CHECK(data.doc_span.len() > 0, "Pt has doc span");
+    CHECK(data.doc_span.start < data.doc_span.end, "doc span start < end");
+    std::printf("  doc_span for Pt: {%u, %u, %u}\n", data.doc_span.file, data.doc_span.start, data.doc_span.end);
+}
+
+// ── main ──────────────────────────────────────────────────
 
 int main() {
     std::printf("parser-scan tests\n");
@@ -262,6 +282,8 @@ int main() {
 
     test_scan_duplicate_name();
     test_scan_multiple_decls();
+
+    test_scan_doc_comments();
 
     std::printf("\nResults: %d passed, %d failed\n", g_test_passed, g_test_failed);
     return g_test_failed > 0 ? 1 : 0;

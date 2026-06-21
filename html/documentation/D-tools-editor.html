@@ -1,0 +1,71 @@
+<h1>VS Code Extension</h1>
+
+<div class="callout callout-info">
+  <p><strong>&#8505; Info:</strong> The official Zith VS Code extension is available now. LSP integration is a work-in-progress — contributions welcome!</p>
+</div>
+
+<h2>Overview</h2>
+<p>The <strong>Zith</strong> extension provides rich editing support for the Zith programming language in Visual Studio Code. It is the official extension maintained by <a href="https://github.com/GalaxyHaze">GalaxyHaze</a>.</p>
+
+<ul>
+  <li><strong>Repository:</strong> <a href="https://github.com/GalaxyHaze/zith-extension">github.com/GalaxyHaze/zith-extension</a></li>
+  <li><strong>Website:</strong> <a href="https://zith-lang.org">zith-lang.org</a></li>
+</ul>
+
+<h2>Features</h2>
+
+<h3>Syntax Highlighting</h3>
+<p>Full colorization for keywords, operators, strings, numbers, and comments in <code>.zith</code> files using the "Zith Dark" color theme with a purple and red palette.</p>
+
+<h3>Code Snippets</h3>
+<p>Quick templates for common Zith patterns:</p>
+<ul>
+  <li><code>fn</code> — Function declaration</li>
+  <li><code>struct</code>, <code>enum</code>, <code>union</code> — Data type declarations</li>
+  <li><code>component</code>, <code>trait</code>, <code>impl</code> — ECS and trait system</li>
+  <li><code>if</code>, <code>for</code>, <code>while</code>, <code>match</code> — Control flow</li>
+  <li><code>let</code>, <code>letmut</code> — Variable bindings</li>
+  <li><code>import</code>, <code>from</code> — Module imports</li>
+  <li><code>macro</code> — Macro declarations</li>
+</ul>
+
+<h3>Dark Color Theme</h3>
+<p>"Zith Dark" — a dark theme with deep purple background (<code>#1E1A2D</code>) and purple/red accent colors optimized for readability.</p>
+
+<h2>Installation</h2>
+
+<h3>From VS Code Marketplace</h3>
+<p>Open VS Code, go to the Extensions view (<code>Ctrl+Shift+X</code>), search for <strong>"Zith"</strong>, and click Install.</p>
+
+<h3>Manual Install (.vsix)</h3>
+<ol>
+  <li>Download the latest <code>.vsix</code> from the <a href="https://github.com/GalaxyHaze/zith-extension/releases">releases page</a></li>
+  <li>In VS Code, run <strong>Extensions → Install from VSIX...</strong></li>
+  <li>Select the downloaded file</li>
+</ol>
+
+<h2>LSP Server Setup</h2>
+
+<div class="callout callout-warning">
+  <p><strong>&#9888; Warning:</strong> LSP integration is a <strong>work-in-progress</strong>. The extension currently provides syntax highlighting and snippets only. Language server features (diagnostics, completions, go-to-definition) will be available in a future release.</p>
+</div>
+
+<p>To download the <code>zith-lsp</code> binary (when available):</p>
+<pre><code class="language-bash">node scripts/download-lsp.js</code></pre>
+<p>For a specific version:</p>
+<pre><code class="language-bash">node scripts/download-lsp.js v0.2.0</code></pre>
+
+<h2>Contributing</h2>
+<p>The extension and LSP server are open-source under the MIT license. Contributions are welcome!</p>
+<ul>
+  <li>Report bugs or suggest features on the <a href="https://github.com/GalaxyHaze/zith-extension/issues">issue tracker</a></li>
+  <li>Submit pull requests on <a href="https://github.com/GalaxyHaze/zith-extension">GitHub</a></li>
+  <li>Help with LSP implementation — see the <a href="./D-community-contributing.html">contributing guide</a></li>
+</ul>
+
+<h2>Links</h2>
+<ul>
+  <li><a href="https://github.com/GalaxyHaze/zith-extension">VS Code Extension Repository</a></li>
+  <li><a href="https://github.com/GalaxyHaze/Zith">Zith Language Repository</a></li>
+  <li><a href="https://zith-lang.org">Zith Website</a></li>
+</ul>

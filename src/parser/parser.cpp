@@ -584,12 +584,24 @@ ScanResult scan(Parser &parser, import::SymbolTable &syms) {
     import::SymbolVisibility current_vis = import::SymbolVisibility::Private;
     int32_t current_mod_depth            = 0;
 
+    memory::Span lastDocSpan{};
+
     while (!tok.is_empty()) {
         if (tok.peek().is_eof())
             break;
 
-        // ── skip comment / doc tokens ──────────────────────────────
-        if (tok.peek().is(TokenKind::Comments) || tok.peek().is(TokenKind::Docs)) {
+        // ── capture doc comments ───────────────────────────────────
+        if (tok.peek().is(TokenKind::Docs)) {
+            if (lastDocSpan.start == 0 && lastDocSpan.end == 0)
+                lastDocSpan = tok.peek().span;
+            else
+                lastDocSpan.end = tok.peek().span.end;
+            tok.advance();
+            continue;
+        }
+
+        // ── skip plain comments ────────────────────────────────────
+        if (tok.peek().is(TokenKind::Comments)) {
             tok.advance();
             continue;
         }
@@ -702,15 +714,18 @@ ScanResult scan(Parser &parser, import::SymbolTable &syms) {
             auto fn_sym = import::kInvalidSym;
             if (!reportIfDuplicate(syms, diag, name, name_span)) {
                 fn_sym = syms.declare(name, current_vis, current_mod_depth, import::SymKind::Fn,
-                                      ast::kInvalidDecl, name_span);
+                                      ast::kInvalidDecl, name_span, import::kInvalidSym,
+                                      lastDocSpan);
                 for (size_t i = 0; i < params.size(); i++) {
                     if (!reportIfDuplicate(syms, diag, params[i], param_spans[i], fn_sym)) {
                         auto ps = syms.declare(params[i], current_vis, current_mod_depth,
-                                               import::SymKind::Variable);
+                                               import::SymKind::Variable,
+                                               ast::kInvalidDecl, param_spans[i]);
                         syms.get(fn_sym).members.push(ps);
                     }
                 }
             }
+            lastDocSpan = {};
 
             auto decl = bld.fnDecl(name, std::move(params), body_node, spanFromOffset(name_span.start, name_span.end));
             program.decls.push(decl);
@@ -804,7 +819,8 @@ ScanResult scan(Parser &parser, import::SymbolTable &syms) {
                                 // register method name as fn member
                                 if (!reportIfDuplicate(syms, diag, mname, mname_span)) {
                                     auto ms = syms.declare(mname, current_vis, current_mod_depth,
-                                                           import::SymKind::Fn);
+                                                           import::SymKind::Fn,
+                                                           ast::kInvalidDecl, mname_span);
                                     if (decl != ast::kInvalidDecl && ms != import::kInvalidSym)
                                         syms.get(ms).decl_id = decl;
                                 }
@@ -837,7 +853,8 @@ ScanResult scan(Parser &parser, import::SymbolTable &syms) {
                                     if (!reportIfDuplicate(syms, diag, fname, fname_span)) {
                                         auto fs =
                                             syms.declare(fname, import::SymbolVisibility::Private,
-                                                         0, import::SymKind::Variable);
+                                                         0, import::SymKind::Variable,
+                                                         ast::kInvalidDecl, fname_span);
                                         if (decl != ast::kInvalidDecl && fs != import::kInvalidSym)
                                             syms.get(fs).decl_id = decl;
                                     }
@@ -871,7 +888,8 @@ ScanResult scan(Parser &parser, import::SymbolTable &syms) {
                             tok.advance();
                             if (!reportIfDuplicate(syms, diag, fname, fname_span)) {
                                 auto fs = syms.declare(fname, import::SymbolVisibility::Private, 0,
-                                                       import::SymKind::Variable);
+                                                       import::SymKind::Variable,
+                                                       ast::kInvalidDecl, fname_span);
                                 if (decl != ast::kInvalidDecl && fs != import::kInvalidSym)
                                     syms.get(fs).decl_id = decl;
                             }
@@ -910,7 +928,8 @@ ScanResult scan(Parser &parser, import::SymbolTable &syms) {
 
                             if (!reportIfDuplicate(syms, diag, vname, v_span)) {
                                 auto vs = syms.declare(vname, import::SymbolVisibility::Private, 0,
-                                                       import::SymKind::Variable);
+                                                       import::SymKind::Variable,
+                                                       ast::kInvalidDecl, v_span);
                                 if (decl != ast::kInvalidDecl && vs != import::kInvalidSym)
                                     syms.get(vs).decl_id = decl;
                             }
@@ -950,7 +969,8 @@ ScanResult scan(Parser &parser, import::SymbolTable &syms) {
 
                             if (!reportIfDuplicate(syms, diag, vname, v_span)) {
                                 auto vs = syms.declare(vname, import::SymbolVisibility::Private, 0,
-                                                       import::SymKind::Variable);
+                                                       import::SymKind::Variable,
+                                                       ast::kInvalidDecl, v_span);
                                 if (decl != ast::kInvalidDecl && vs != import::kInvalidSym)
                                     syms.get(vs).decl_id = decl;
                             }
@@ -986,7 +1006,9 @@ ScanResult scan(Parser &parser, import::SymbolTable &syms) {
 
             program.decls.push(decl);
             if (!reportIfDuplicate(syms, diag, name, name_span))
-                syms.declare(name, current_vis, current_mod_depth, sk, decl, name_span);
+                syms.declare(name, current_vis, current_mod_depth, sk, decl, name_span,
+                             import::kInvalidSym, lastDocSpan);
+            lastDocSpan = {};
 
             ScanEntry entry{name, body_span, body_node};
             if (kw == "struct")
@@ -1052,7 +1074,8 @@ ScanResult scan(Parser &parser, import::SymbolTable &syms) {
                             tok.advance();
                             if (!reportIfDuplicate(syms, diag, mname, m_span)) {
                                 auto ms = syms.declare(mname, import::SymbolVisibility::Private, 0,
-                                                       import::SymKind::Fn);
+                                                       import::SymKind::Fn,
+                                                       ast::kInvalidDecl, m_span);
                                 if (decl != ast::kInvalidDecl && ms != import::kInvalidSym)
                                     syms.get(ms).decl_id = decl;
                             }
@@ -1095,7 +1118,9 @@ ScanResult scan(Parser &parser, import::SymbolTable &syms) {
 
             program.decls.push(decl);
             if (!reportIfDuplicate(syms, diag, name, name_span))
-                syms.declare(name, current_vis, current_mod_depth, sk, decl, name_span);
+                syms.declare(name, current_vis, current_mod_depth, sk, decl, name_span,
+                             import::kInvalidSym, lastDocSpan);
+            lastDocSpan = {};
 
             result.traits.push({name, body_span, body_node});
             current_vis       = import::SymbolVisibility::Private;
@@ -1124,6 +1149,7 @@ ScanResult scan(Parser &parser, import::SymbolTable &syms) {
 
             current_vis       = import::SymbolVisibility::Private;
             current_mod_depth = 0;
+            lastDocSpan       = {};
             continue;
         }
 
@@ -1224,12 +1250,14 @@ ScanResult scan(Parser &parser, import::SymbolTable &syms) {
             }
             current_vis       = import::SymbolVisibility::Private;
             current_mod_depth = 0;
+            lastDocSpan       = {};
             continue;
         }
 
         // ── unknown token → skip ───────────────────────────────────
         diag.report(Severity::Error, ExpectedExpr, "unexpected token", tok.peek().span);
         tok.advance();
+        lastDocSpan       = {};
         current_vis       = import::SymbolVisibility::Private;
         current_mod_depth = 0;
     }
@@ -1418,6 +1446,7 @@ ast::TypeExprId Parser::parsePrimaryType() {
 
     // ── identifier / path: Vec, std.vec.Vec ────────────────────────
     if (peek().is(TokenKind::Identifier)) {
+        auto id_span = peek().span;
         auto id = lexeme();
         // check for builtin types that aren't TokenKind::Type (never, opaque)
         ast::BuiltinType bt;
@@ -1429,17 +1458,19 @@ ast::TypeExprId Parser::parsePrimaryType() {
         advance();
         memory::DynArray<std::string_view> segments{bld->arena()};
         segments.push(seg);
+        auto path_span = id_span;
         // qualified path: std.vec.Vec
         while (peek().punc == '.') {
             advance();
             if (peek().is(TokenKind::Identifier)) {
+                path_span.end = peek().span.end;
                 segments.push(lexeme());
                 advance();
             } else {
                 break;
             }
         }
-        return bld->pathExpr(std::move(segments));
+        return bld->pathExpr(std::move(segments), path_span);
     }
 
     diag->report(diagnostics::Severity::Error, diagnostics::err::ExpectedExpr,

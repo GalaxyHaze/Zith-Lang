@@ -61,6 +61,9 @@ zithc_session *zithc_session_create_from_buffer(const char *uri,
                                                  size_t length);
 void zithc_session_destroy(zithc_session *session);
 
+// ── Configuration ─────────────────────────────────────────────────────
+void zithc_session_add_include_dir(zithc_session *session, const char *dir);
+
 // ── Pipeline control ──────────────────────────────────────────────────
 bool zithc_run(zithc_session *session);
 bool zithc_run_to(zithc_session *session, int stage);
@@ -68,6 +71,8 @@ bool zithc_run_to(zithc_session *session, int stage);
 // ── Diagnostics ───────────────────────────────────────────────────────
 size_t zithc_diag_count(zithc_session *session);
 zithc_diagnostic zithc_diag_get(zithc_session *session, size_t index);
+size_t zithc_diag_suggestion_count(zithc_session *session, size_t diag_index);
+const char *zithc_diag_suggestion_get(zithc_session *session, size_t diag_index, size_t sug_index);
 bool zithc_has_errors(zithc_session *session);
 void zithc_emit_diagnostics(zithc_session *session);
 

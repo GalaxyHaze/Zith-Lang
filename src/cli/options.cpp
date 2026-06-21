@@ -398,6 +398,24 @@ Options parseArgs(int argc, char **argv) {
             continue;
         }
 
+        // --check (fmt)
+        if (std::strcmp(argv[i], "--check") == 0) {
+            opts.fmt_check = true;
+            continue;
+        }
+
+        // -i / --in-place (fmt)
+        if (std::strcmp(argv[i], "-i") == 0 || std::strcmp(argv[i], "--in-place") == 0) {
+            opts.fmt_in_place = true;
+            continue;
+        }
+
+        // "-" is a positional arg meaning stdin, not a flag
+        if (std::strcmp(argv[i], "-") == 0) {
+            opts.input_files.push_back("-");
+            continue;
+        }
+
         // Unknown flag
         if (argv[i][0] == '-') {
             std::fprintf(stderr, "%s[error]%s unknown flag '%s'\n", C(red), RST, argv[i]);

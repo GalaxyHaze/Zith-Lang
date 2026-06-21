@@ -13,6 +13,7 @@
 #include "types/type-intern.hpp"
 #include "zir/hir/hir-module.hpp"
 #include "zir/mir/mir-module.hpp"
+#include "zir/zir/zir-inst.hpp"
 
 #include <cstdarg>
 #include <string>
@@ -51,6 +52,7 @@ class CompilationSession {
     memory::Arena type_arena_;
     memory::Arena hir_arena_;
     memory::Arena mir_arena_;
+    memory::Arena zir_arena_;
     diagnostics::DiagnosticEngine diags_;
 
     ast::AstBuilder ast_builder_;
@@ -60,6 +62,7 @@ class CompilationSession {
     types::TypeIntern types_;
     zir::hir::HirModule hir_module_;
     zir::mir::MirModule mir_module_;
+    zir::ZirModule zir_module_;
 
     memory::FileId file_id_ = 0;
     lexer::TokenStream tokens_{};
@@ -87,6 +90,9 @@ public:
     bool runTo(Stage target);
 
     const diagnostics::DiagnosticEngine &diags() const {
+        return diags_;
+    }
+    diagnostics::DiagnosticEngine &diags() {
         return diags_;
     }
     const std::string &filePath() const {
@@ -124,6 +130,8 @@ public:
     ast::AstBuilder &astBuilder() { return ast_builder_; }
     const ast::ProgramNode &program() const { return program_; }
     const types::TypeIntern &types() const { return types_; }
+
+    std::string fmtStage();
 
 private:
     void setTarget(Stage s) {

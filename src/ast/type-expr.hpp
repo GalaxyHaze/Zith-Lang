@@ -23,6 +23,7 @@ enum class OwnershipKw : uint8_t {
 
 struct TypePath {
     memory::DynArray<std::string_view> segments;
+    memory::Span span{};
 };
 
 struct TypeBuiltin {

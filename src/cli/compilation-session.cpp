@@ -5,6 +5,7 @@
 #include "lexer/lexer.hpp"
 #include "memory/source-map.hpp"
 #include "parser/parser.hpp"
+#include "formatter/fmt-visitor.hpp"
 #include "sema/heuristic-engine.hpp"
 #include "sema/sema-pipeline.hpp"
 #include "solve/solver.hpp"
@@ -44,7 +45,7 @@ CompilationSession::CompilationSession(const Options &opts, std::string file_pat
       type_arena_(), hir_arena_(), mir_arena_(), scratch_arena_(), diags_(scratch_arena_),
       ast_builder_(ast_arena_), import_mgr_(sym_arena_, source_map_, diags_), syms_(sym_arena_),
       resolved_syms_(sym_arena_), types_(type_arena_), hir_module_(hir_arena_),
-      mir_module_(mir_arena_) {
+      mir_module_(mir_arena_), zir_module_(zir_arena_) {
     namespace fs = std::filesystem;
     if (fs::is_directory(file_path_))
         project_root_ = fs::weakly_canonical(fs::path(file_path_)).string();
@@ -268,7 +269,7 @@ bool CompilationSession::importStage() {
                                            import->alias, import->import_depth, source_dir);
             if (!res) {
                 diags_.report(diagnostics::Severity::Error, diagnostics::err::ImportError,
-                              std::string(res.error().msg), {});
+                              std::string(res.error().msg), import->span);
                 continue;
             }
         }
@@ -398,6 +399,27 @@ bool CompilationSession::zirStage() {
         writeOutput("  [zir] \xe2\x80\x94 (stub)  (%5.1fms)\n", dt);
     }
     return true;
+}
+
+std::string CompilationSession::fmtStage() {
+    // Run lex + scan
+    if (!lexStage())
+        return {};
+    if (!scanStage())
+        return {};
+
+    // Expand unbody nodes into real AST
+    {
+        parser::Parser parser(&tokens_, &ast_builder_, &diags_);
+        parser.program = std::move(program_);
+        parser.expandBodies(scan_result_);
+        program_ = std::move(parser.program);
+    }
+
+    // Run formatter
+    formatter::FmtVisitor visitor(ast_builder_, program_);
+    visitor.format();
+    return visitor.result();
 }
 
 void CompilationSession::writeOutput(const char *fmt, ...) {

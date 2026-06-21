@@ -214,7 +214,7 @@ zir::hir::HirExprId SemaPipeline::visitIdent(const ast::IdentNode &n, ast::ExprI
         if (!resolved_ || id >= resolved_->size() || (*resolved_)[id] != import::kInvalidSym)
             ctx_.diags().report(Severity::Error, UndefinedIdent,
                                 std::string("undefined identifier '") + std::string(n.name) + "'",
-                                {});
+                                n.span);
         return zir::hir::kInvalidHirExpr;
     }
 
@@ -359,7 +359,9 @@ void SemaPipeline::visitStmt(ast::StmtId id) {
 
             // Check type annotation if present
             if (n.type_annot != ast::kInvalidTypeExpr) {
-                // TODO: lower TypeExprNode → TypeId via TypeLower
+                types::TypeLower lower(pipeline.ctx_.builder(), pipeline.ctx_.types(),
+                                       pipeline.ctx_.diags(), pipeline.ctx_.syms());
+                decl_type = lower.lower(n.type_annot);
             }
 
             zir::hir::HirExprId init = zir::hir::kInvalidHirExpr;

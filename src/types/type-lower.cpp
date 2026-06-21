@@ -6,9 +6,12 @@
 
 namespace zith::types {
 
+namespace err = diagnostics::err;
+
 TypeLower::TypeLower(ast::AstBuilder &ast, TypeIntern &intern,
-                     diagnostics::DiagnosticEngine &diags)
-    : ast_(ast), intern_(intern), diags_(diags) {}
+                     diagnostics::DiagnosticEngine &diags,
+                     const import::SymbolTable &syms)
+    : ast_(ast), intern_(intern), diags_(diags), syms_(syms) {}
 
 void TypeLower::setGenericContext(const memory::FlatMap<std::string_view, TypeId> *ctx) {
     generic_ctx_ = ctx;
@@ -26,8 +29,35 @@ TypeId TypeLower::lowerNode(const ast::TypeExprNode &node) {
         ast::AstBuilder &ast;
 
         TypeId operator()(const ast::TypePath &n) {
-            // Path resolution requires symbol table access.
-            // Wired up properly in sema — for now return error.
+            // Single-segment path: look up name in symbol table
+            if (n.segments.size() == 1) {
+                auto sym_id = self.syms_.lookup(n.segments[0]);
+                if (sym_id == import::kInvalidSym) {
+                    self.diags_.report(diagnostics::Severity::Error,
+                        diagnostics::err::UndefinedIdent,
+                        "undefined type '" + std::string(n.segments[0]) + "'",
+                        n.span);
+                    return kErrorType;
+                }
+                auto &data = self.syms_.get(sym_id);
+                switch (data.kind) {
+                case import::SymKind::Struct:
+                case import::SymKind::Enum:
+                case import::SymKind::Union:
+                case import::SymKind::Trait:
+                case import::SymKind::Interface:
+                case import::SymKind::Alias:
+                    // Known type — return unknown so unification handles init checks
+                    return self.intern_.internUnknown();
+                default:
+                    self.diags_.report(diagnostics::Severity::Error,
+                        diagnostics::err::UndefinedIdent,
+                        "'" + std::string(n.segments[0]) + "' is not a type",
+                        n.span);
+                    return kErrorType;
+                }
+            }
+            // Multi-segment path (qualified) — not supported yet
             self.diags_.report(diagnostics::Severity::Error, diagnostics::err::CannotInfer,
                                "unresolved type path", {});
             return kErrorType;

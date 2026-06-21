@@ -72,7 +72,7 @@ public:
     TypeExprNode &getTypeExpr(TypeExprId id);
     const TypeExprNode &getTypeExpr(TypeExprId id) const;
     TypeExprId builtinExpr(BuiltinType kind);
-    TypeExprId pathExpr(memory::DynArray<std::string_view> segments);
+    TypeExprId pathExpr(memory::DynArray<std::string_view> segments, memory::Span span = {});
     TypeExprId inferExpr();
 
     memory::Span exprSpan(ExprId id) const;

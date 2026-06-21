@@ -9,6 +9,10 @@
 
 // --- Basic fn declarations ---
 
+import std/io/console as console
+
+/// Ativa ou desativa os LEDs da placa de circuito.
+/// estado Use 1 para ligar e 0 para desligar.
 fn identity(val_a) {
   return val_a
 }
@@ -22,6 +26,7 @@ fn sub_vals(val_d, val_e) {
 }
 
 fn mul_vals(val_f, val_g) {
+  let val_o: i37;
   return val_f * val_o
 }
 

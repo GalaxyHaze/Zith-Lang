@@ -1,0 +1,72 @@
+#pragma once
+
+#include "ast/ast-builder.hpp"
+#include "ast/ast-nodes.hpp"
+#include "ast/type-expr.hpp"
+#include "memory/span.hpp"
+
+#include <string>
+
+namespace zith::formatter {
+
+class FmtVisitor {
+    const ast::AstBuilder &builder_;
+    const ast::ProgramNode &program_;
+    std::string out_;
+    int indent_ = 0;
+
+public:
+    FmtVisitor(const ast::AstBuilder &builder, const ast::ProgramNode &program);
+
+    void format();
+    const std::string &result() const { return out_; }
+
+private:
+    // Declarations
+    void visitDecl(ast::DeclId id);
+    void emitFnDecl(const ast::FnDeclNode &node);
+    void emitStructDecl(const ast::StructDeclNode &node);
+    void emitEnumDecl(const ast::EnumDeclNode &node);
+    void emitUnionDecl(const ast::UnionDeclNode &node);
+    void emitTraitDecl(const ast::TraitDeclNode &node);
+    void emitInterfaceDecl(const ast::InterfaceDeclNode &node);
+    void emitComponentDecl(const ast::ComponentDeclNode &node);
+    void emitImport(const ast::ImportNode &node);
+
+    // Statements
+    void visitStmt(ast::StmtId id);
+    void emitLet(const ast::LetNode &node);
+    void emitAssign(const ast::AssignNode &node);
+    void emitRet(const ast::RetNode &node);
+
+    // Expressions
+    void visitExpr(ast::ExprId id, int parent_prec = -1);
+    void emitLit(const ast::LitValue &node);
+    void emitIdent(const ast::IdentNode &node);
+    void emitBinary(const ast::BinaryNode &node);
+    void emitUnary(const ast::UnaryNode &node);
+    void emitCall(const ast::CallNode &node);
+    void emitBlock(const ast::BlockNode &node);
+    void emitIf(const ast::IfNode &node);
+    void emitWhile(const ast::WhileNode &node);
+    void emitField(const ast::FieldNode &node);
+    void emitIndex(const ast::IndexNode &node);
+    void emitRange(const ast::RangeNode &node);
+
+    // Type expressions
+    void emitType(ast::TypeExprId id);
+    void emitBuiltinType(ast::BuiltinType kind);
+
+    // Precedence helpers
+    static int binopPrecedence(ast::BinaryOp op);
+    static const char *binopText(ast::BinaryOp op);
+    static const char *unaryopText(ast::UnaryOp op);
+    static bool isLeftAssoc(ast::BinaryOp op);
+
+    // Output helpers
+    void indent();
+    void newline();
+    void emit(std::string_view text);
+};
+
+} // namespace zith::formatter

@@ -43,6 +43,10 @@ struct Options {
     // Behaviour flags
     bool verbose = false;
 
+    // Fmt command flags
+    bool fmt_check    = false;
+    bool fmt_in_place = false;
+
     // Subcommand
     enum class Command {
         None,

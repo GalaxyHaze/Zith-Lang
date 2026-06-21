@@ -8,6 +8,7 @@
 #include "sema/sema-context.hpp"
 #include "sema/sema-result.hpp"
 #include "types/type-intern.hpp"
+#include "types/type-lower.hpp"
 #include "types/unify.hpp"
 #include "zir/hir/hir-module.hpp"
 

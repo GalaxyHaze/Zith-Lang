@@ -3,6 +3,8 @@
 #include "cli/options.hpp"
 #include "diagnostics/diagnostic.hpp"
 #include "diagnostics/diagnostic-engine.hpp"
+#include "diagnostics/error-codes.hpp"
+#include "sema/heuristic-engine.hpp"
 
 #include <cstring>
 #include <new>
@@ -49,6 +51,11 @@ void zithc_session_destroy(zithc_session *session) {
     delete session;
 }
 
+void zithc_session_add_include_dir(zithc_session *session, const char *dir) {
+    if (session && dir)
+        session->opts.include_dirs.emplace_back(dir);
+}
+
 bool zithc_run(zithc_session *session) {
     if (!session) return false;
     return session->session.run();
@@ -70,14 +77,37 @@ size_t zithc_diag_count(zithc_session *session) {
 zithc_diagnostic zithc_diag_get(zithc_session *session, size_t index) {
     zithc_diagnostic result = {ZITHC_SEVERITY_ERROR, 0, nullptr, {0, 0}};
     if (!session) return result;
-    auto all = session->session.diags().all();
+    auto &all = session->session.diags().diagnostics();
     if (index >= all.size()) return result;
     auto &d = all[index];
+    // Auto-fill suggestions for UndefinedIdent diagnostics
+    if (d.code == zith::diagnostics::err::UndefinedIdent && d.suggestions.empty()) {
+        zith::sema::HeuristicEngine heuristic;
+        heuristic.generate(d, const_cast<zith::import::SymbolTable &>(
+                                session->session.symbolTable()),
+                           d.suggestions);
+    }
     result.severity = static_cast<zithc_severity>(static_cast<int>(d.severity));
     result.code     = d.code;
     result.message  = d.message.c_str();
     result.span     = {d.primary.start, d.primary.end};
     return result;
+}
+size_t zithc_diag_suggestion_count(zithc_session *session, size_t diag_index) {
+    if (!session) return 0;
+    auto &all = session->session.diags().diagnostics();
+    if (diag_index >= all.size()) return 0;
+    return all[diag_index].suggestions.size();
+}
+
+const char *zithc_diag_suggestion_get(zithc_session *session, size_t diag_index,
+                                      size_t sug_index) {
+    if (!session) return nullptr;
+    auto &all = session->session.diags().diagnostics();
+    if (diag_index >= all.size()) return nullptr;
+    auto &sug = all[diag_index].suggestions;
+    if (sug_index >= sug.size()) return nullptr;
+    return sug[sug_index].c_str();
 }
 
 bool zithc_has_errors(zithc_session *session) {

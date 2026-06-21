@@ -178,8 +178,10 @@ TypeExprId AstBuilder::builtinExpr(BuiltinType kind) {
     return addTypeExpr(TypeBuiltin{kind});
 }
 
-TypeExprId AstBuilder::pathExpr(memory::DynArray<std::string_view> segments) {
-    return addTypeExpr(TypePath{std::move(segments)});
+TypeExprId AstBuilder::pathExpr(memory::DynArray<std::string_view> segments, memory::Span span) {
+    TypePath p{std::move(segments)};
+    p.span = span;
+    return addTypeExpr(std::move(p));
 }
 
 TypeExprId AstBuilder::inferExpr() {

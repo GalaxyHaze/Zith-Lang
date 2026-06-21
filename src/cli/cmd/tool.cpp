@@ -30,12 +30,6 @@ int cmd_test(const Options &opts) {
     return 1;
 }
 
-int cmd_fmt(const Options &opts) {
-    (void)opts;
-    std::fprintf(stderr, "%s[soon]%s not implemented yet\n", CERR(yellow), RERR);
-    return 1;
-}
-
 int cmd_docs(const Options &opts) {
     (void)opts;
     std::fprintf(stderr, "%s[soon]%s not implemented yet\n", CERR(yellow), RERR);
