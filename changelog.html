@@ -4,6 +4,99 @@
 <body>
 
 <div class="changelog-entry">
+    <h2>Release v0.2.0 — The LSP Awakening</h2>
+    <p class="lastUpdated">21 June 2026</p>
+
+    <hr>
+
+    <section>
+        <h3>Summary</h3>
+        <p>
+            This is the one. The <strong>Zith Language Server</strong> finally comes alive, bringing real IDE
+            superpowers to VS Code. Hover over a symbol and see its type. Press Ctrl+Space and get completions
+            — including import path suggestions. Hit Ctrl+Shift+O and navigate your file through a structured
+            symbol tree, with children. Make a typo? The LSP will whisper "did you mean?" right in your editor.
+            And if you hover over something that <em>isn't</em> quite valid yet — don't worry, the hover still
+            shows you what it <em>thinks</em> it is.
+        </p>
+        <p>
+            We also shipped a brand new <a href="https://marketplace.visualstudio.com/items?itemName=AboveHaze.zith-language">VS Code extension</a>
+            that bundles it all together: the LSP auto-downloads on first activation, the standard library is
+            fetched automatically (no credentials needed), and you get syntax highlighting, snippets, task
+            runners, and problem matchers out of the box. Install once, start coding.
+        </p>
+    </section>
+
+    <hr>
+
+    <section>
+        <h3>Highlights</h3>
+        <ul>
+            <li><strong>Hover That Works</strong> — hover over any symbol and see its declaration info. Functions show their full signature (<code>fn greet(name: str): str</code>). Structs, enums, unions, traits, type aliases, and variables all show their kind and name. And if you hover over a typo, the LSP won't just give up — it falls back to basic info and even suggests what you <em>might</em> have meant via Levenshtein distance.</li>
+            <li><strong>Did-You-Mean Quick Fix</strong> — undefined identifier? The lightbulb pops up with one-click replacements. The LSP computes Levenshtein suggestions against the entire symbol table and turns them into actionable quick fixes.</li>
+            <li><strong>Doc Comments on Hover</strong> — <code>///</code> and <code>/** */</code> doc comments are now captured during scanning and displayed when you hover over any declaration. Finally, your documentation has a home.</li>
+            <li><strong>Smart Completion</strong> — completions work in two modes: in normal code you get local + imported symbols (fully type-checked when possible); inside <code>import</code>/<code>from</code>/<code>export</code> statements you get live filesystem-driven module path suggestions (<code>std/</code>, <code>std/io/console</code>, etc).</li>
+            <li><strong>Document Symbols with Children</strong> — the outline view finally shows nested symbols. Struct fields, enum variants, function parameters, union variants, and methods all appear as proper children. No more flat lists.</li>
+            <li><strong>Auto-Download Everything</strong> — the extension downloads the LSP binary from GitHub releases (or falls back to a local build) and fetches the standard library from the public <code>GalaxyHaze/Zith</code> repo, all on first activation. No manual setup.</li>
+            <li><strong>Resilient Hover</strong> — even on incomplete or broken code, the LSP doesn't bail out. It runs to <code>TypeChecked</code> when it can (for full type info), but falls back gracefully to the symbol table when parsing fails mid-edit. Your editor stays useful no matter what state your code is in.</li>
+        </ul>
+    </section>
+
+    <hr>
+
+    <section>
+        <h3>Technical Details</h3>
+
+        <h4>Added</h4>
+        <ul>
+            <li><strong>Doc comment storage</strong> — <code>SymbolData::doc_span</code> field captures the span of <code>///</code> or <code>/** */</code> tokens preceding each declaration during the scan phase. Doc comments are no longer discarded.</li>
+            <li><strong>Code Actions infrastructure</strong> — <code>textDocument/codeAction</code> handler and provider in the LSP, wired into the dispatch loop and exposed as <code>"codeActionProvider": {"codeActionKinds": ["quickfix"]}</code> in capabilities</li>
+            <li><strong>Did-you-mean quick fix</strong> — <code>provideCodeActions</code> reads embedded suggestions from diagnostic <code>data.suggestions</code> and emits one <code>quickfix</code> per Levenshtein match, with a <code>TextEdit</code> replacing the misspelled token.</li>
+            <li><strong>Import path completion</strong> — <code>scanStdlibPath()</code> in <code>features/completion.cpp</code> walks the stdlib filesystem for module path suggestions, prefix-filtered and deduplicated</li>
+            <li><strong>Auto-download stdlib</strong> — <code>download-lsp.js</code> fetches <code>stdlib/</code> from the public <code>GalaxyHaze/Zith</code> repo Contents API to <code>server/stdlib/</code>; extension calls <code>ensureStdlib()</code> on activation</li>
+            <li><strong>LSP binary auto-download</strong> — 3-tier fallback: GitHub release → local copy → source build, with clear failure message as last resort</li>
+            <li><strong>Stdlib path forwarding</strong> — <code>stdlibPath_</code> read from <code>initializationOptions.stdlibPath</code> in <code>onInitialize</code>, passed to diagnostics, hover, and completion providers</li>
+            <li><strong>C API</strong> — <code>zithc_session_add_include_dir()</code> exposes include directory support for the LSP's use</li>
+        </ul>
+
+        <h4>Changed</h4>
+        <ul>
+            <li><strong>Hover resilience</strong> — <code>runTo(TypeChecked)</code> failure no longer aborts hover; basic symbol info (kind + name) always shows, type-expr details render conditionally only when type-checking succeeded</li>
+            <li><strong>JSON-RPC respond()</strong> — removed <code>is_null()</code> guard so every response includes a <code>"result"</code> field, fixing malformed responses (hover on unknown tokens previously sent empty envelopes)</li>
+            <li><strong>DocumentSymbol children</strong> — replaced hardcoded <code>"children": []</code> with recursive JSON serialization; children resolved via linear sym-id scan and <code>decl_id</code> match map</li>
+            <li><strong>spanToRange</strong> — removed the <code>span.end &lt;= span.start</code> guard that zeroed all ranges (root cause: mixed byte-offset and token-index units in <code>ScanEntry.span</code>). Now computes single-point range from start position only.</li>
+            <li><strong>symKindToLspSymbolKind</strong> — fixed out-of-range LSP symbol kind values for Alias, Variable, Module, Trait, and Enum</li>
+            <li><strong>Import error positions</strong> — compiler <code>compilation-session.cpp:271</code> uses <code>import-&gt;span</code> instead of <code>{}</code>, so import errors point to the <code>import</code>/<code>from</code>/<code>export</code> keyword instead of line 1</li>
+            <li><strong>Parser scan phase</strong> — 7 <code>syms.declare()</code> calls patched with name spans for child symbols (fn params, struct fields, enum variants, union variants, struct/trait methods)</li>
+            <li><strong>Stdlib path config removed</strong> — <code>zith.lsp.stdlibPath</code> VS Code setting eliminated; path is auto-detected from <code>server/stdlib/</code></li>
+        </ul>
+
+        <h4>Fixed</h4>
+        <ul>
+            <li><strong>Hover returning malformed JSON-RPC</strong> — <code>respond()</code> no longer omits the <code>result</code> field for null results</li>
+            <li><strong>DocumentSymbol positions stuck at (1,1)</strong> — <code>spanToRange</code> no longer zeroes all spans; now computes correct single-point ranges from token start</li>
+            <li><strong>DocumentSymbol children always empty</strong> — children are now built from symbol table entries via <code>decl_id</code> matching and <code>SymbolData.members</code> iteration</li>
+            <li><strong>Hover fails on incomplete code</strong> — <code>runTo(TypeChecked)</code> failure no longer aborts the entire hover; symbol-table fallback always provides basic info</li>
+            <li><strong>Stdlib download 403</strong> — <code>User-Agent</code> header added to GitHub Contents API requests</li>
+        </ul>
+    </section>
+
+    <hr>
+
+    <section>
+        <h3>Get the Extension</h3>
+        <p>
+            Install from the <a href="https://marketplace.visualstudio.com/items?itemName=AboveHaze.zith-language">VS Code Marketplace</a>.
+            Open any <code>.zith</code> file and the LSP starts automatically. No config, no fuss.
+        </p>
+    </section>
+
+    <hr>
+</div>
+
+<hr style="margin: 48px 0; border-color: #333;">
+
+<div class="changelog-entry">
     <h2>Release v0.1.3</h2>
     <p class="lastUpdated">20 June 2026</p>
 
