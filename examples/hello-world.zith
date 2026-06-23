@@ -8,6 +8,5 @@ fn add(): i32{
 
 fn main(){
     
-    if (5)
     
 }
