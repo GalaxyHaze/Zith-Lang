@@ -1,4 +1,13 @@
-fn main   () 
-{
+fn add(x, y): i32{
+
+}
+
+fn add(): i32{
+
+}
+
+fn main(){
+    
+    if (5)
     
 }

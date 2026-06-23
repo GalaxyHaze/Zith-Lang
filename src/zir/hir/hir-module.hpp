@@ -1,5 +1,6 @@
 #pragma once
 
+#include "ast/ast-ids.hpp"
 #include "memory/arena.hpp"
 #include "memory/dyn-array.hpp"
 #include "zir/hir/hir-expr.hpp"
@@ -20,6 +21,7 @@ struct HirFunction {
     std::string_view name;
     memory::DynArray<HirTypeId> params;
     HirTypeId return_type;
+    ast::DeclId decl_id = ast::kInvalidDecl;
     memory::DynArray<HirBasicBlock> blocks;
 
     explicit HirFunction(memory::Arena &arena) : params(arena), blocks(arena) {}

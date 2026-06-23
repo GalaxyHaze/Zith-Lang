@@ -77,6 +77,7 @@ struct Parser {
     void expandBodies(ScanResult &result);
 
     memory::Span spanFrom(memory::Span start) const;
+    memory::Span spanFrom(ast::ExprId lhs, ast::ExprId rhs) const;
 };
 
 ProgramResult parseProgram(lexer::TokenStream tokens, ast::AstBuilder &builder,

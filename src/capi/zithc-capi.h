@@ -76,6 +76,9 @@ const char *zithc_diag_suggestion_get(zithc_session *session, size_t diag_index,
 bool zithc_has_errors(zithc_session *session);
 void zithc_emit_diagnostics(zithc_session *session);
 
+// ── Hover ──────────────────────────────────────────────────────────────
+const char *zithc_hover(zithc_session *session, uint32_t offset);
+
 // ── Position conversion ───────────────────────────────────────────────
 zithc_position zithc_offset_to_position(zithc_session *session, uint32_t offset);
 

@@ -31,6 +31,8 @@ inline constexpr ErrCode WrongArity     = 2003;
 inline constexpr ErrCode UnusedDecl     = 2004;
 inline constexpr ErrCode NotNamespace   = 2005;
 inline constexpr ErrCode NoMember       = 2006;
+inline constexpr ErrCode NoMatchingFn   = 2007;
+inline constexpr ErrCode AmbiguousCall  = 2008;
 
 // Types (3001-3999)
 inline constexpr ErrCode TypeMismatch = 3001;

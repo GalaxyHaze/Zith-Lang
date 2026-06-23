@@ -4,7 +4,9 @@
 #include "memory/dyn-array.hpp"
 #include "types/type-kind.hpp"
 
+#include <string>
 #include <string_view>
+#include <unordered_map>
 
 namespace zith::types {
 
@@ -23,6 +25,9 @@ class TypeIntern {
     memory::DynArray<TypeData> types_;
     memory::DynArray<size_t> hashes_;
     memory::DynArray<StructDef> struct_defs_;
+    std::unordered_map<std::string, TypeId> named_types_;
+    uint32_t next_enum_def_id_ = 0;
+    uint32_t next_union_def_id_ = 0;
 
     static size_t computeHash(const TypeData &data);
 
@@ -43,6 +48,8 @@ public:
     TypeId internFailable(TypeId inner);
     TypeId internTypeVar();
     TypeId internUnknown();
+    TypeId registerNamedType(std::string_view name, TypeKind kind);
+    TypeId lookupNamedType(std::string_view name) const;
     TypeId internSlice(TypeId elem);
     TypeId internEnum(TypeId def_id);
     TypeId internUnion(TypeId def_id);

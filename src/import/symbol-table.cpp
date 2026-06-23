@@ -68,6 +68,19 @@ SymId SymbolTable::lookupInScope(std::string_view name, ScopeId scope) const {
     return kInvalidSym;
 }
 
+memory::DynArray<SymId> SymbolTable::lookupAll(std::string_view name, memory::Arena &arena) const {
+    memory::DynArray<SymId> result{arena};
+    ScopeId scope = current_;
+    while (scope != kInvalidScope) {
+        for (auto sid : scopes_[scope].syms) {
+            if (symbols_[sid].name == name)
+                result.push(sid);
+        }
+        scope = scopes_[scope].parent;
+    }
+    return result;
+}
+
 const SymbolData &SymbolTable::get(SymId id) const {
     return symbols_[id];
 }

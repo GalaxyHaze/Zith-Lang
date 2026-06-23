@@ -63,19 +63,12 @@ bool Solver::collectGenerics() {
         auto &decl = ast_.getDecl(decl_id);
 
         if (auto *fn = std::get_if<ast::FnDeclNode>(&decl)) {
-            bool is_generic = !fn->generic_params.empty();
-            for (auto &p : fn->params) {
-                if (p.type != ast::kInvalidTypeExpr) {
-                    is_generic = true;
-                    break;
-                }
-            }
-            if (!is_generic && fn->return_type == ast::kInvalidTypeExpr)
+            if (fn->generic_params.empty())
                 continue;
 
             GenericFnInfo info;
-            info.name       = fn->name;
-            info.is_generic = is_generic || fn->return_type != ast::kInvalidTypeExpr;
+            info.name        = fn->name;
+            info.is_generic  = true;
             info.return_type = types::kErrorType;
             generic_fns_.push(info);
         }

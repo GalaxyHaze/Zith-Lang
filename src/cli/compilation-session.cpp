@@ -1,5 +1,6 @@
 #include "compilation-session.hpp"
 #include "ast/ast-printer.hpp"
+#include "cli/terminal.hpp"
 #include "diagnostics/error-codes.hpp"
 #include "import/resolver.hpp"
 #include "lexer/lexer.hpp"
@@ -16,29 +17,13 @@
 #include <toml++/toml.hpp>
 #include <vector>
 #ifdef _WIN32
-#include <io.h>
 #include <windows.h>
 #elif defined(__APPLE__)
 #include <mach-o/dyld.h>
-#include <unistd.h>
-#else
-#include <unistd.h>
 #endif
+#include <unistd.h>
 
 namespace zith::cli {
-
-static bool shouldUseColor(const std::string &setting) {
-    if (setting == "on")
-        return true;
-    if (setting == "off")
-        return false;
-    // auto: enable if stderr is a TTY
-#ifdef _WIN32
-    return _isatty(_fileno(stderr)) != 0;
-#else
-    return isatty(fileno(stderr)) != 0;
-#endif
-}
 
 CompilationSession::CompilationSession(const Options &opts, std::string file_path)
     : opts_(opts), file_path_(std::move(file_path)), project_root_(), ast_arena_(), sym_arena_(),
@@ -52,7 +37,7 @@ CompilationSession::CompilationSession(const Options &opts, std::string file_pat
     else
         project_root_ = fs::weakly_canonical(fs::path(file_path_).parent_path()).string();
     plan_.target = opts_.target_stage;
-    diags_.setColor(shouldUseColor(opts_.color));
+    diags_.setColor(term::useColor(opts_));
     diags_.setSourceMap(&source_map_);
 
     auto toml_path = fs::path(project_root_) / "ZithProject.toml";

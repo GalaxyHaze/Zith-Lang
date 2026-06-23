@@ -294,6 +294,36 @@ TypeId TypeIntern::internUnknown() {
     return intern(TypeUnknown{});
 }
 
+TypeId TypeIntern::registerNamedType(std::string_view name, TypeKind kind) {
+    auto it = named_types_.find(std::string(name));
+    if (it != named_types_.end())
+        return it->second;
+
+    TypeId tid = kErrorType;
+    switch (kind) {
+    case TypeKind::Struct:
+        tid = defineStruct(name);
+        break;
+    case TypeKind::Enum:
+        tid = internEnum(static_cast<TypeId>(next_enum_def_id_++));
+        break;
+    case TypeKind::Union:
+        tid = internUnion(static_cast<TypeId>(next_union_def_id_++));
+        break;
+    default:
+        return kErrorType;
+    }
+    named_types_[std::string(name)] = tid;
+    return tid;
+}
+
+TypeId TypeIntern::lookupNamedType(std::string_view name) const {
+    auto it = named_types_.find(std::string(name));
+    if (it != named_types_.end())
+        return it->second;
+    return kErrorType;
+}
+
 TypeId TypeIntern::internSlice(TypeId elem) {
     return intern(TypeSlice{elem});
 }

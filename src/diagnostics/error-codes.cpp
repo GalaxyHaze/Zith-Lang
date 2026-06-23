@@ -61,6 +61,12 @@ std::optional<ErrorInfo> lookupError(ErrCode code) noexcept {
     case err::NoMember:
         return ErrorInfo{code, 'E', "semantic", "No such member",
                          "Check the spelling or visibility of the member in the parent"};
+    case err::NoMatchingFn:
+        return ErrorInfo{code, 'E', "semantic", "No matching function",
+                         "No function with the provided arguments exists. Check argument types and arity"};
+    case err::AmbiguousCall:
+        return ErrorInfo{code, 'E', "semantic", "Ambiguous call",
+                         "Multiple functions match the provided arguments. Add explicit type annotations"};
 
     // Types
     case err::TypeMismatch:

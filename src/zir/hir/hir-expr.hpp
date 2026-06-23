@@ -1,5 +1,6 @@
 #pragma once
 
+#include "import/symbol-id.hpp"
 #include "zir/hir/hir-types.hpp"
 
 #include <cstdint>
@@ -52,6 +53,7 @@ struct HirVar {
 struct HirCall {
     HirExprId callee;
     memory::DynArray<HirExprId> args;
+    import::SymId resolved_fn = import::kInvalidSym;
 };
 struct HirRet {
     HirExprId value;

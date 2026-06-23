@@ -67,6 +67,26 @@ private:
     void indent();
     void newline();
     void emit(std::string_view text);
+
+    template <typename Container, typename Fn>
+    void emitCommaList(const Container &items, Fn &&emit_one) {
+        for (size_t i = 0; i < items.size(); i++) {
+            if (i > 0)
+                emit(", ");
+            emit_one(items[i]);
+        }
+    }
+
+    void emitBraceBlock(auto &&body) {
+        emit(" {");
+        newline();
+        indent_++;
+        body();
+        indent_--;
+        indent();
+        emit("}");
+        newline();
+    }
 };
 
 } // namespace zith::formatter

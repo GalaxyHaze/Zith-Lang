@@ -1,4 +1,5 @@
 #include "../../test-common.hpp"
+#include "import/symbol-table.hpp"
 #include "zir/zir/zir-emitter.hpp"
 #include "zir/hir/hir-module.hpp"
 #include "zir/hir/hir-expr.hpp"
@@ -7,13 +8,16 @@
 using namespace zith::zir;
 using namespace zith::zir::hir;
 using namespace zith::types;
+using zith::import::SymbolTable;
 using zith::memory::Arena;
 
 static void test_emitter_add_const_int() {
     Arena arena;
+    Arena sym_arena;
+    SymbolTable syms(sym_arena);
     HirModule hir(arena);
     ZirModule mod(arena);
-    ZirEmitter emitter(hir, mod, arena);
+    ZirEmitter emitter(hir, mod, arena, syms);
 
     ZirIndex idx1 = emitter.addConst(int64_t{42});
     ZirIndex idx2 = emitter.addConst(int64_t{99});
@@ -27,9 +31,11 @@ static void test_emitter_add_const_int() {
 
 static void test_emitter_add_const_double() {
     Arena arena;
+    Arena sym_arena;
+    SymbolTable syms(sym_arena);
     HirModule hir(arena);
     ZirModule mod(arena);
-    ZirEmitter emitter(hir, mod, arena);
+    ZirEmitter emitter(hir, mod, arena, syms);
 
     ZirIndex idx = emitter.addConst(3.14);
 
@@ -40,9 +46,11 @@ static void test_emitter_add_const_double() {
 
 static void test_emitter_add_const_string() {
     Arena arena;
+    Arena sym_arena;
+    SymbolTable syms(sym_arena);
     HirModule hir(arena);
     ZirModule mod(arena);
-    ZirEmitter emitter(hir, mod, arena);
+    ZirEmitter emitter(hir, mod, arena, syms);
 
     ZirIndex idx = emitter.addConst("hello");
 
@@ -54,9 +62,11 @@ static void test_emitter_add_const_string() {
 
 static void test_emitter_mixed_constants() {
     Arena arena;
+    Arena sym_arena;
+    SymbolTable syms(sym_arena);
     HirModule hir(arena);
     ZirModule mod(arena);
-    ZirEmitter emitter(hir, mod, arena);
+    ZirEmitter emitter(hir, mod, arena, syms);
 
     emitter.addConst(int64_t{1});
     emitter.addConst(2.5);
@@ -69,9 +79,11 @@ static void test_emitter_mixed_constants() {
 
 static void test_emitter_emit_empty_module() {
     Arena arena;
+    Arena sym_arena;
+    SymbolTable syms(sym_arena);
     HirModule hir(arena);
     ZirModule mod(arena);
-    ZirEmitter emitter(hir, mod, arena);
+    ZirEmitter emitter(hir, mod, arena, syms);
 
     emitter.emit();
 
@@ -80,12 +92,14 @@ static void test_emitter_emit_empty_module() {
 
 static void test_emitter_emit_single_function() {
     Arena arena;
+    Arena sym_arena;
+    SymbolTable syms(sym_arena);
     HirModule hir(arena);
     auto &fn = hir.addFn("main");
     fn.return_type = kVoidType;
 
     ZirModule mod(arena);
-    ZirEmitter emitter(hir, mod, arena);
+    ZirEmitter emitter(hir, mod, arena, syms);
     emitter.emit();
 
     CHECK_EQ(mod.functions.size(), 1u, "module has 1 function");

@@ -14,6 +14,8 @@ using ast::BinaryOp;
 using ast::LitKind;
 using ast::UnaryOp;
 using diagnostics::Severity;
+using diagnostics::err::AmbiguousCall;
+using diagnostics::err::NoMatchingFn;
 using diagnostics::err::TypeMismatch;
 using diagnostics::err::UndefinedIdent;
 using diagnostics::err::WrongArity;
@@ -106,6 +108,17 @@ types::TypeId SemaPipeline::exprType(zir::hir::HirExprId id) const {
 }
 
 bool SemaPipeline::run(const ast::ProgramNode &program) {
+    // Pass 0: register user-defined types (structs, enums, unions)
+    for (auto decl_id : program.decls) {
+        auto &decl = ctx_.builder().getDecl(decl_id);
+        if (auto *sd = std::get_if<ast::StructDeclNode>(&decl))
+            ctx_.types().registerNamedType(sd->name, types::TypeKind::Struct);
+        else if (auto *ed = std::get_if<ast::EnumDeclNode>(&decl))
+            ctx_.types().registerNamedType(ed->name, types::TypeKind::Enum);
+        else if (auto *ud = std::get_if<ast::UnionDeclNode>(&decl))
+            ctx_.types().registerNamedType(ud->name, types::TypeKind::Union);
+    }
+
     // First pass: register all fn declarations as HIR function stubs
     for (auto decl_id : program.decls) {
         auto &decl = ctx_.builder().getDecl(decl_id);
@@ -120,14 +133,18 @@ bool SemaPipeline::run(const ast::ProgramNode &program) {
         auto &decl = ctx_.builder().getDecl(decl_id);
         if (auto *fn = std::get_if<ast::FnDeclNode>(&decl)) {
             current_fn_ = &hir_.getFn(fn_idx);
+            current_fn_->decl_id = decl_id;
             fn_idx++;
 
-            // Set up parameter types (default to error/unknown for now)
+            // Lower param types
+            types::TypeLower lower(ctx_.builder(), ctx_.types(), ctx_.diags(), ctx_.syms());
             for (size_t i = 0; i < fn->params.size(); i++) {
-                current_fn_->params.push(types::kErrorType);
+                auto lowered = lower.lower(fn->params[i].type);
+                current_fn_->params.push(lowered);
             }
-            current_fn_->return_type = types::kErrorType;
-            current_fn_ret_type_     = types::kErrorType;
+            // Lower return type
+            current_fn_->return_type = lower.lower(fn->return_type);
+            current_fn_ret_type_     = current_fn_->return_type;
 
             if (fn->body != ast::kInvalidExpr) {
                 // Create entry basic block
@@ -218,10 +235,18 @@ zir::hir::HirExprId SemaPipeline::visitIdent(const ast::IdentNode &n, ast::ExprI
         return zir::hir::kInvalidHirExpr;
     }
 
+    auto &data = ctx_.syms().get(sym);
+
     zir::hir::HirVar var;
     var.name    = n.name;
     var.version = 0;
-    return addHirExpr(zir::hir::HirExpr{var}, types::kErrorType);
+
+    // Function names get unknown type so visitCall can do overload resolution
+    types::TypeId ident_type = types::kErrorType;
+    if (data.kind == import::SymKind::Fn)
+        ident_type = ctx_.types().internUnknown();
+
+    return addHirExpr(zir::hir::HirExpr{var}, ident_type);
 }
 
 zir::hir::HirExprId SemaPipeline::visitBinary(const ast::BinaryNode &n) {
@@ -274,24 +299,97 @@ zir::hir::HirExprId SemaPipeline::visitCall(const ast::CallNode &n) {
         }
     }
 
-    // If callee is a function type, check arity
-    if (callee_type != types::kErrorType) {
+    import::SymId resolved_fn = import::kInvalidSym;
+    types::TypeId result_type = types::kErrorType;
+    size_t match_count = 0;
+
+    // Overload resolution: if callee is an identifier (fn name)
+    const auto &callee_expr = hir_.getExpr(callee);
+    if (auto *var = std::get_if<zir::hir::HirVar>(&callee_expr)) {
+        auto callee_name = var->name;
+        auto candidates = syms().lookupAll(callee_name, hir_arena_);
+        size_t fn_candidate_count = 0;
+        for (auto sym_id : candidates) {
+            auto &data = syms().get(sym_id);
+            if (data.kind != import::SymKind::Fn)
+                continue;
+            fn_candidate_count++;
+            if (data.decl_id == ast::kInvalidDecl)
+                continue;
+
+            auto &decl = ctx_.builder().getDecl(data.decl_id);
+            auto *fn_decl = std::get_if<ast::FnDeclNode>(&decl);
+            if (!fn_decl)
+                continue;
+
+            // Arity check
+            if (fn_decl->params.size() != n.args.size())
+                continue;
+
+            // Find matching HirFunction and check param types
+            for (size_t fi = 0; fi < hir_.getFnCount(); fi++) {
+                auto &hfn = hir_.getFn(fi);
+                if (hfn.decl_id != data.decl_id)
+                    continue;
+
+                bool match = true;
+                for (size_t i = 0; i < hfn.params.size(); i++) {
+                    if (hfn.params[i] == types::kErrorType)
+                        continue;
+                    if (i >= arg_types.size() || arg_types[i] == types::kErrorType)
+                        continue;
+                    if (!unifier_.isAssignable(hfn.params[i], arg_types[i])) {
+                        match = false;
+                        break;
+                    }
+                }
+
+                if (match) {
+                    match_count++;
+                    if (match_count == 1) {
+                        resolved_fn = sym_id;
+                        result_type = hfn.return_type;
+                    }
+                }
+                break; // found the HirFunction for this decl
+            }
+        }
+
+        if (match_count == 0 && fn_candidate_count > 0) {
+            if (n.args.size() > 0) {
+                    ctx_.diags().report(Severity::Error, NoMatchingFn,
+                                    "no matching function for call to '" + std::string(callee_name) + "'", n.span);
+            } else {
+                ctx_.diags().report(Severity::Error, WrongArity,
+                                    "wrong number of arguments in call", n.span);
+            }
+        } else if (match_count > 1) {
+            ctx_.diags().report(Severity::Error, AmbiguousCall,
+                                "ambiguous call '" + std::string(callee_name) + "' — multiple functions match", n.span);
+            resolved_fn = import::kInvalidSym;
+            result_type = types::kErrorType;
+        }
+    }
+
+    // Fallback: check callee as function type (fn pointers, etc.)
+    if (resolved_fn == import::kInvalidSym && callee_type != types::kErrorType) {
         auto fn_ptr = std::get_if<types::TypeFn>(&ctx_.types().lookup(callee_type));
         if (fn_ptr) {
             if (hir_args.size() != fn_ptr->param_count) {
                 ctx_.diags().report(Severity::Error, WrongArity,
                                     "wrong number of arguments in call", {});
             }
-            // Check each argument type against parameter type
             for (size_t i = 0; i < hir_args.size() && i < fn_ptr->param_count; i++) {
                 if (arg_types[i] != types::kErrorType)
-                    unifier_.unify(arg_types[i], fn_ptr->params[i]);
+                    unifier_.unify(arg_types[i], fn_ptr->params[i], n.span);
             }
+            result_type = fn_ptr->ret;
         }
     }
 
     zir::hir::HirCall call{callee, std::move(hir_args)};
-    return addHirExpr(zir::hir::HirExpr{std::move(call)}, types::kErrorType);
+    call.resolved_fn = resolved_fn;
+    return addHirExpr(zir::hir::HirExpr{std::move(call)}, result_type);
 }
 
 zir::hir::HirExprId SemaPipeline::visitBlock(const ast::BlockNode &n) {

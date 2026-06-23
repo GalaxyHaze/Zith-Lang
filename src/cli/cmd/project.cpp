@@ -1,35 +1,21 @@
 #include "cli/commands.hpp"
+#include "cli/terminal.hpp"
 #include "diagnostics/color.hpp"
 
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
 #include <string>
-#ifdef _WIN32
-#include <io.h>
-#else
-#include <unistd.h>
-#endif
 
 namespace zith::cli::commands {
 
-static bool useTermColor(const Options &opts, FILE *out) {
-    if (opts.color == "on")
-        return true;
-    if (opts.color == "off")
-        return false;
-#ifdef _WIN32
-    return _isatty(_fileno(out)) != 0;
-#else
-    return isatty(fileno(out)) != 0;
-#endif
-}
-#define CERR(c) (useTermColor(opts, stderr) ? diagnostics::ansi::c.data() : "")
-#define RERR (useTermColor(opts, stderr) ? diagnostics::ansi::reset.data() : "")
-#define COUT(c) (useTermColor(opts, stdout) ? diagnostics::ansi::c.data() : "")
-#define ROUT (useTermColor(opts, stdout) ? diagnostics::ansi::reset.data() : "")
+#define CERR(c) term::err(TERM, diagnostics::ansi::c.data())
+#define RERR   term::err_rst(TERM)
+#define COUT(c) term::out(TERM, diagnostics::ansi::c.data())
+#define ROUT   term::out_rst(TERM)
 
 int cmd_new(const Options &opts) {
+    auto TERM = term::init(opts);
     const std::string &name = opts.subcommand_arg;
     if (name.empty()) {
         std::fprintf(stderr, "%s[error]%s project name required\n", CERR(red), RERR);
@@ -113,7 +99,7 @@ int cmd_new(const Options &opts) {
 }
 
 int cmd_clean(const Options &opts) {
-    (void)opts;
+    auto TERM = term::init(opts);
     std::fprintf(stderr, "%s[soon]%s not implemented yet\n", CERR(yellow), RERR);
     return 1;
 }

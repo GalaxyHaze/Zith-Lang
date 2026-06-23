@@ -1,5 +1,6 @@
 #include "zir/zir/zir-emitter.hpp"
 
+#include "import/symbol-table.hpp"
 #include "types/type-kind.hpp"
 
 #include <cstring>
@@ -7,8 +8,9 @@
 
 namespace zith::zir {
 
-ZirEmitter::ZirEmitter(const hir::HirModule &hir, ZirModule &out, memory::Arena &arena)
-    : hir_(hir), out_(out), arena_(arena) {}
+ZirEmitter::ZirEmitter(const hir::HirModule &hir, ZirModule &out, memory::Arena &arena,
+                       const import::SymbolTable &syms)
+    : hir_(hir), out_(out), arena_(arena), syms_(syms) {}
 
 ZirIndex ZirEmitter::addConst(int64_t v) {
     out_.constants.push(v);
@@ -86,6 +88,17 @@ void emitCall(const hir::HirCall &call, const hir::HirModule &hir, ZirEmitter *e
         code.emplace(ZirOp::Write, 0, static_cast<uint8_t>(call.args.size()));
     } else if (callee_name == "input") {
         code.emplace(ZirOp::Input, 0, 0);
+    } else if (call.resolved_fn != import::kInvalidSym) {
+        // Use resolved_fn to find the correct function index
+        auto &data = emitter->getSyms().get(call.resolved_fn);
+        uint8_t fn_index = 0;
+        for (size_t i = 0; i < hir.getFnCount(); i++) {
+            if (hir.getFn(i).decl_id == data.decl_id) {
+                fn_index = static_cast<uint8_t>(i);
+                break;
+            }
+        }
+        code.emplace(ZirOp::Call, fn_index, static_cast<uint8_t>(call.args.size()));
     } else {
         code.emplace(ZirOp::Call, 0, static_cast<uint8_t>(call.args.size()));
     }

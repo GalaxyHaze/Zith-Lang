@@ -1,10 +1,11 @@
 #include "cli/commands.hpp"
 #include "cli/compilation-session.hpp"
+#include "cli/files.hpp"
+#include "cli/terminal.hpp"
 #include "diagnostics/color.hpp"
 
 #include <algorithm>
 #include <cstdio>
-#include <filesystem>
 #include <fstream>
 #include <future>
 #include <memory>
@@ -20,24 +21,10 @@
 
 namespace zith::cli::commands {
 
-namespace fs = std::filesystem;
-
-static bool useTermColor(const Options &opts, FILE *out) {
-    if (opts.color == "on")
-        return true;
-    if (opts.color == "off")
-        return false;
-#ifdef _WIN32
-    return _isatty(_fileno(out)) != 0;
-#else
-    return isatty(fileno(out)) != 0;
-#endif
-}
-
-#define CERR(c) (useTermColor(opts, stderr) ? diagnostics::ansi::c.data() : "")
-#define RERR (useTermColor(opts, stderr) ? diagnostics::ansi::reset.data() : "")
-#define COUT(c) (useTermColor(opts, stdout) ? diagnostics::ansi::c.data() : "")
-#define ROUT (useTermColor(opts, stdout) ? diagnostics::ansi::reset.data() : "")
+#define CERR(c) term::err(TERM, diagnostics::ansi::c.data())
+#define RERR   term::err_rst(TERM)
+#define COUT(c) term::out(TERM, diagnostics::ansi::c.data())
+#define ROUT   term::out_rst(TERM)
 
 static bool isStdinTerminal() {
 #ifdef _WIN32
@@ -54,18 +41,6 @@ static std::string readStdin() {
     while ((n = fread(buf, 1, sizeof(buf), stdin)) > 0)
         content.append(buf, n);
     return content;
-}
-
-static std::vector<std::string> findZithFiles(const std::string &dir) {
-    std::vector<std::string> files;
-    if (!fs::is_directory(dir))
-        return files;
-    for (const auto &entry : fs::recursive_directory_iterator(dir)) {
-        if (entry.is_regular_file() && entry.path().extension() == ".zith")
-            files.push_back(entry.path().string());
-    }
-    std::sort(files.begin(), files.end());
-    return files;
 }
 
 static std::string readFile(const std::string &path) {
@@ -92,6 +67,7 @@ struct FmtFileResult {
 };
 
 int cmd_fmt(const Options &opts) {
+    auto TERM = term::init(opts);
     std::vector<std::string> files;
     bool has_stdin = false;
 
@@ -99,7 +75,7 @@ int cmd_fmt(const Options &opts) {
         if (!isStdinTerminal()) {
             has_stdin = true;
         } else {
-            files = findZithFiles(".");
+            files = cli::findZithFiles(".");
             if (files.empty()) {
                 std::fprintf(stderr, "%s[error]%s no .zith files found\n", CERR(red), RERR);
                 return 1;

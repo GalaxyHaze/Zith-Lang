@@ -26,7 +26,7 @@ fn sub_vals(val_d, val_e) {
 }
 
 fn mul_vals(val_f, val_g) {
-  let val_o: i37;
+  let val_o: i32;
   return val_f * val_o
 }
 

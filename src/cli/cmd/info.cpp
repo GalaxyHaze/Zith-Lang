@@ -1,30 +1,19 @@
 #include "cli/commands.hpp"
+#include "cli/terminal.hpp"
 #include "diagnostics/color.hpp"
 
 #include <cstdio>
-#ifdef _WIN32
-#include <io.h>
-#else
-#include <unistd.h>
-#endif
 
 #define STRINGIFY_IMPL(x) #x
 #define STRINGIFY(x) STRINGIFY_IMPL(x)
 
 namespace zith::cli::commands {
 
-static bool useColor() {
-#ifdef _WIN32
-    return _isatty(_fileno(stdout)) != 0;
-#else
-    return isatty(fileno(stdout)) != 0;
-#endif
-}
-
-#define C(c) (useColor() ? diagnostics::ansi::c.data() : "")
-#define RST (useColor() ? diagnostics::ansi::reset.data() : "")
+#define C(c) term::out(TERM, diagnostics::ansi::c.data())
+#define RST term::out_rst(TERM)
 
 int cmd_version() {
+    auto TERM = term::init();
     std::printf("%sZith%s Programming Language\n"
                 "Version:  %s\n"
                 "Compiler: %s\n",
@@ -44,6 +33,7 @@ int cmd_version() {
 }
 
 int cmd_help() {
+    auto TERM = term::init();
     std::printf(
         "%sZith%s - A low-level general-purpose language\n"
         "\n"

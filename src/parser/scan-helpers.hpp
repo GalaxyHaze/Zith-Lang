@@ -76,7 +76,7 @@ inline void skipTypeExpr(lexer::TokenStream &tok) {
         if (t.is_eof())
             break;
         if (t.punc == ',' || t.punc == '}' || t.punc == ']' || t.punc == ';' || t.punc == '=' ||
-            t.punc == ')' || t.punc == '|')
+            t.punc == ')' || t.punc == '|' || t.punc == '{')
             break;
         if (t.punc == '(') { skipBalanced(tok, '(', ')'); continue; }
         if (t.punc == '|') { skipBalanced(tok, '|', '|'); continue; }

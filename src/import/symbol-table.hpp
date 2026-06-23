@@ -73,6 +73,7 @@ public:
                          memory::Span doc_span = {});
     SymId lookup(std::string_view name) const;
     SymId lookupInScope(std::string_view name, ScopeId scope) const;
+    memory::DynArray<SymId> lookupAll(std::string_view name, memory::Arena &arena) const;
 
     SymbolData &get(SymId id);
     const SymbolData &get(SymId id) const;

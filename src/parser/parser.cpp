@@ -115,6 +115,12 @@ memory::Span Parser::spanFrom(memory::Span start) const {
     return start;
 }
 
+memory::Span Parser::spanFrom(ast::ExprId lhs, ast::ExprId rhs) const {
+    auto ls = bld->exprSpan(lhs);
+    auto rs = (rhs != ast::kInvalidExpr) ? bld->exprSpan(rhs) : ls;
+    return {ls.file, ls.start, rs.end};
+}
+
 // ── comment skipping helper ────────────────────────────────────────────
 
 static void skipComments(lexer::TokenStream &tok) {
@@ -335,12 +341,9 @@ ast::ExprId Parser::parseExpr(int min_prec) {
 
         // ── Postfix: ..range ────────────────────────────────────
         if (cur.punc == '.' && peek(1).punc == '.') {
-            auto lhs_span = bld->exprSpan(lhs);
             advance(2);
             auto rhs = parseExpr(min_prec + 1);
-            auto rhs_span = (rhs != kInvalidExpr) ? bld->exprSpan(rhs) : lhs_span;
-            lhs = bld->range(lhs, rhs,
-                             memory::Span{lhs_span.file, lhs_span.start, rhs_span.end});
+            lhs = bld->range(lhs, rhs, spanFrom(lhs, rhs));
             continue;
         }
 
@@ -402,10 +405,7 @@ ast::ExprId Parser::parseExpr(int min_prec) {
                 break;
             advance();
             auto rhs = parseExpr(prec + 1);
-            auto lhs_span = bld->exprSpan(lhs);
-            auto rhs_span = (rhs != kInvalidExpr) ? bld->exprSpan(rhs) : lhs_span;
-            lhs = bld->binary(lhs, binaryOpForWord(word), rhs,
-                              memory::Span{lhs_span.file, lhs_span.start, rhs_span.end});
+            lhs = bld->binary(lhs, binaryOpForWord(word), rhs, spanFrom(lhs, rhs));
             continue;
         }
 
@@ -417,10 +417,7 @@ ast::ExprId Parser::parseExpr(int min_prec) {
                 break;
             advance(2);
             auto rhs = parseExpr(prec + 1);
-            auto lhs_span = bld->exprSpan(lhs);
-            auto rhs_span = (rhs != kInvalidExpr) ? bld->exprSpan(rhs) : lhs_span;
-            lhs = bld->binary(lhs, compound_op, rhs,
-                              memory::Span{lhs_span.file, lhs_span.start, rhs_span.end});
+            lhs = bld->binary(lhs, compound_op, rhs, spanFrom(lhs, rhs));
             continue;
         }
 
@@ -437,10 +434,7 @@ ast::ExprId Parser::parseExpr(int min_prec) {
 
         advance();
         auto rhs = parseExpr(prec + 1);
-        auto lhs_span = bld->exprSpan(lhs);
-        auto rhs_span = (rhs != kInvalidExpr) ? bld->exprSpan(rhs) : lhs_span;
-        lhs = bld->binary(lhs, binaryOpForChar(cur.punc), rhs,
-                          memory::Span{lhs_span.file, lhs_span.start, rhs_span.end});
+        lhs = bld->binary(lhs, binaryOpForChar(cur.punc), rhs, spanFrom(lhs, rhs));
     }
 
     return lhs;
@@ -673,6 +667,7 @@ ScanResult scan(Parser &parser, import::SymbolTable &syms) {
                 continue;
             }
             tok.advance();
+            uint32_t param_token_start = tok.offset;
 
             memory::DynArray<std::string_view> params{bld.arena()};
             memory::DynArray<memory::Span> param_spans{bld.arena()};
@@ -681,6 +676,32 @@ ScanResult scan(Parser &parser, import::SymbolTable &syms) {
                     break;
                 if (tok.peek().punc == ')')
                     break;
+
+                // destructured params: [a, b, c]: Type
+                if (tok.peek().punc == '[') {
+                    tok.advance(); // consume '['
+                    while (!tok.is_empty() && tok.peek().punc != ']') {
+                        if (tok.peek().is(TokenKind::Identifier)) {
+                            param_spans.push(tok.peek().span);
+                            params.push(tok.lexeme());
+                            tok.advance();
+                        } else {
+                            tok.advance();
+                        }
+                        if (tok.peek().punc == ',')
+                            tok.advance();
+                    }
+                    if (tok.peek().punc == ']')
+                        tok.advance();
+                    // skip type annotation
+                    if (tok.peek().punc == ':') {
+                        tok.advance();
+                        skipTypeExpr(tok);
+                    }
+                    if (tok.peek().punc == ',')
+                        tok.advance();
+                    continue;
+                }
 
                 if (!tok.peek().is(TokenKind::Identifier)) {
                     diag.report(Severity::Error, ExpectedIdent, "expected parameter name",
@@ -692,11 +713,23 @@ ScanResult scan(Parser &parser, import::SymbolTable &syms) {
                 params.push(tok.lexeme());
                 tok.advance();
 
+                // skip type annotation : TypeExpr
+                if (tok.peek().punc == ':') {
+                    tok.advance();
+                    skipTypeExpr(tok);
+                }
+
                 if (tok.peek().punc == ',')
                     tok.advance();
             }
             if (tok.peek().punc == ')')
                 tok.advance();
+
+            // skip return type annotation : TypeExpr
+            if (tok.peek().punc == ':') {
+                tok.advance();
+                skipTypeExpr(tok);
+            }
 
             ast::ExprId body_node = kInvalidExpr;
             uint32_t token_start  = 0;
@@ -711,19 +744,14 @@ ScanResult scan(Parser &parser, import::SymbolTable &syms) {
                 body_node   = bld.unbody(body_span, token_start, token_end);
             }
 
-            auto fn_sym = import::kInvalidSym;
-            if (!reportIfDuplicate(syms, diag, name, name_span)) {
-                fn_sym = syms.declare(name, current_vis, current_mod_depth, import::SymKind::Fn,
-                                      ast::kInvalidDecl, name_span, import::kInvalidSym,
-                                      lastDocSpan);
-                for (size_t i = 0; i < params.size(); i++) {
-                    if (!reportIfDuplicate(syms, diag, params[i], param_spans[i], fn_sym)) {
-                        auto ps = syms.declare(params[i], current_vis, current_mod_depth,
-                                               import::SymKind::Variable,
-                                               ast::kInvalidDecl, param_spans[i]);
-                        syms.get(fn_sym).members.push(ps);
-                    }
-                }
+            auto fn_sym = syms.declare(name, current_vis, current_mod_depth, import::SymKind::Fn,
+                                       ast::kInvalidDecl, name_span, import::kInvalidSym,
+                                       lastDocSpan);
+            for (size_t i = 0; i < params.size(); i++) {
+                auto ps = syms.declare(params[i], current_vis, current_mod_depth,
+                                       import::SymKind::Variable,
+                                       ast::kInvalidDecl, param_spans[i]);
+                syms.get(fn_sym).members.push(ps);
             }
             lastDocSpan = {};
 
@@ -732,7 +760,7 @@ ScanResult scan(Parser &parser, import::SymbolTable &syms) {
             if (fn_sym != import::kInvalidSym)
                 syms.get(fn_sym).decl_id = decl;
 
-            result.fns.push({name, body_span, body_node});
+            result.fns.push({name, body_span, body_node, param_token_start});
             current_vis       = import::SymbolVisibility::Private;
             current_mod_depth = 0;
             continue;
@@ -1639,8 +1667,62 @@ void Parser::expandBodies(ScanResult &result) {
         if (entry.body_node == kInvalidExpr)
             continue;
 
-        auto &unbody = std::get<ast::UnbodyNode>(bld->getExpr(entry.body_node));
+        // Re-parse fn signature for typed params and return type
+        tok->offset = entry.param_token_start;
 
+        memory::DynArray<ast::FnParam> typed_params{bld->arena()};
+        while (!tok->is_empty()) {
+            if (tok->peek().is_eof() || tok->peek().punc == ')')
+                break;
+
+            if (tok->peek().punc == '[') {
+                // destructured params: [a, b, c]: Type
+                tok->advance();
+                memory::DynArray<std::string_view> names{bld->arena()};
+                while (!tok->is_empty() && tok->peek().punc != ']') {
+                    if (tok->peek().is(TokenKind::Identifier)) {
+                        names.push(tok->lexeme());
+                        tok->advance();
+                    } else {
+                        tok->advance();
+                    }
+                    if (tok->peek().punc == ',')
+                        tok->advance();
+                }
+                if (tok->peek().punc == ']')
+                    tok->advance();
+                ast::TypeExprId type_expr = parseOptTypeAnnotation();
+                for (auto &n : names)
+                    typed_params.push({n, type_expr});
+            } else if (tok->peek().is(TokenKind::Identifier)) {
+                auto name = tok->lexeme();
+                tok->advance();
+                ast::TypeExprId type_expr = parseOptTypeAnnotation();
+                typed_params.push({name, type_expr});
+            } else {
+                tok->advance();
+            }
+
+            if (tok->peek().punc == ',')
+                tok->advance();
+        }
+        consume(')');
+        ast::TypeExprId return_type = parseOptTypeAnnotation();
+
+        // Find the corresponding FnDeclNode and update its params/return_type
+        for (auto &decl_id : program.decls) {
+            auto &decl = bld->getDecl(decl_id);
+            if (auto *fn = std::get_if<ast::FnDeclNode>(&decl)) {
+                if (fn->body == entry.body_node) {
+                    fn->params = std::move(typed_params);
+                    fn->return_type = return_type;
+                    break;
+                }
+            }
+        }
+
+        // Now parse the body — position should be at `{`
+        auto &unbody = std::get<ast::UnbodyNode>(bld->getExpr(entry.body_node));
         tok->offset = unbody.token_start;
 
         consume('{');

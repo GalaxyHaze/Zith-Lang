@@ -80,15 +80,13 @@ void FmtVisitor::emitFnDecl(const ast::FnDeclNode &node) {
     }
 
     emit("(");
-    for (size_t i = 0; i < node.params.size(); i++) {
-        if (i > 0)
-            emit(", ");
-        emit(node.params[i].name);
-        if (node.params[i].type != ast::kInvalidTypeExpr) {
+    emitCommaList(node.params, [&](const ast::FnParam &p) {
+        emit(p.name);
+        if (p.type != ast::kInvalidTypeExpr) {
             emit(": ");
-            emitType(node.params[i].type);
+            emitType(p.type);
         }
-    }
+    });
     emit(")");
 
     // Return type (not populated by parser yet, but ready)
@@ -115,23 +113,18 @@ void FmtVisitor::emitStructDecl(const ast::StructDeclNode &node) {
         newline();
         return;
     }
-    emit(" {");
-    newline();
-    indent_++;
-    for (size_t i = 0; i < node.fields.size(); i++) {
-        indent();
-        emit(node.fields[i].name);
-        if (node.fields[i].type_expr != ast::kInvalidTypeExpr) {
-            emit(": ");
-            emitType(node.fields[i].type_expr);
+    emitBraceBlock([&] {
+        for (size_t i = 0; i < node.fields.size(); i++) {
+            indent();
+            emit(node.fields[i].name);
+            if (node.fields[i].type_expr != ast::kInvalidTypeExpr) {
+                emit(": ");
+                emitType(node.fields[i].type_expr);
+            }
+            emit(",");
+            newline();
         }
-        emit(",");
-        newline();
-    }
-    indent_--;
-    indent();
-    emit("}");
-    newline();
+    });
 }
 
 void FmtVisitor::emitEnumDecl(const ast::EnumDeclNode &node) {
@@ -143,38 +136,31 @@ void FmtVisitor::emitEnumDecl(const ast::EnumDeclNode &node) {
         newline();
         return;
     }
-    emit(" {");
-    newline();
-    indent_++;
-    for (size_t i = 0; i < node.variants.size(); i++) {
-        indent();
-        emit(node.variants[i].name);
-        if (node.variants[i].fields.size() > 0) {
-            emit("(");
-            for (size_t j = 0; j < node.variants[i].fields.size(); j++) {
-                if (j > 0)
-                    emit(", ");
-                emit(node.variants[i].fields[j].name);
-                if (node.variants[i].fields[j].type_expr != ast::kInvalidTypeExpr) {
-                    emit(": ");
-                    emitType(node.variants[i].fields[j].type_expr);
-                }
+    emitBraceBlock([&] {
+        for (size_t i = 0; i < node.variants.size(); i++) {
+            indent();
+            emit(node.variants[i].name);
+            if (node.variants[i].fields.size() > 0) {
+                emit("(");
+                emitCommaList(node.variants[i].fields, [&](const ast::StructField &f) {
+                    emit(f.name);
+                    if (f.type_expr != ast::kInvalidTypeExpr) {
+                        emit(": ");
+                        emitType(f.type_expr);
+                    }
+                });
+                emit(")");
             }
-            emit(")");
+            if (node.variants[i].discriminant >= 0) {
+                emit(" = ");
+                char buf[32];
+                std::snprintf(buf, sizeof(buf), "%lld", (long long)node.variants[i].discriminant);
+                emit(buf);
+            }
+            emit(",");
+            newline();
         }
-        if (node.variants[i].discriminant >= 0) {
-            emit(" = ");
-            char buf[32];
-            std::snprintf(buf, sizeof(buf), "%lld", (long long)node.variants[i].discriminant);
-            emit(buf);
-        }
-        emit(",");
-        newline();
-    }
-    indent_--;
-    indent();
-    emit("}");
-    newline();
+    });
 }
 
 void FmtVisitor::emitUnionDecl(const ast::UnionDeclNode &node) {
@@ -186,22 +172,17 @@ void FmtVisitor::emitUnionDecl(const ast::UnionDeclNode &node) {
         newline();
         return;
     }
-    emit(" {");
-    newline();
-    indent_++;
-    for (size_t i = 0; i < node.variants.size(); i++) {
-        indent();
-        emit(node.variants[i].name);
-        emit(": ");
-        if (node.variants[i].type_expr != ast::kInvalidTypeExpr)
-            emitType(node.variants[i].type_expr);
-        emit(",");
-        newline();
-    }
-    indent_--;
-    indent();
-    emit("}");
-    newline();
+    emitBraceBlock([&] {
+        for (size_t i = 0; i < node.variants.size(); i++) {
+            indent();
+            emit(node.variants[i].name);
+            emit(": ");
+            if (node.variants[i].type_expr != ast::kInvalidTypeExpr)
+                emitType(node.variants[i].type_expr);
+            emit(",");
+            newline();
+        }
+    });
 }
 
 void FmtVisitor::emitTraitDecl(const ast::TraitDeclNode &node) {
@@ -213,26 +194,17 @@ void FmtVisitor::emitTraitDecl(const ast::TraitDeclNode &node) {
         newline();
         return;
     }
-    emit(" {");
-    newline();
-    indent_++;
-    for (size_t i = 0; i < node.methods.size(); i++) {
-        indent();
-        emit("fn ");
-        emit(node.methods[i].name);
-        emit("(");
-        for (size_t j = 0; j < node.methods[i].params.size(); j++) {
-            if (j > 0)
-                emit(", ");
-            emit(node.methods[i].params[j]);
+    emitBraceBlock([&] {
+        for (size_t i = 0; i < node.methods.size(); i++) {
+            indent();
+            emit("fn ");
+            emit(node.methods[i].name);
+            emit("(");
+            emitCommaList(node.methods[i].params, [&](std::string_view p) { emit(p); });
+            emit(");");
+            newline();
         }
-        emit(");");
-        newline();
-    }
-    indent_--;
-    indent();
-    emit("}");
-    newline();
+    });
 }
 
 void FmtVisitor::emitInterfaceDecl(const ast::InterfaceDeclNode &node) {
@@ -244,26 +216,17 @@ void FmtVisitor::emitInterfaceDecl(const ast::InterfaceDeclNode &node) {
         newline();
         return;
     }
-    emit(" {");
-    newline();
-    indent_++;
-    for (size_t i = 0; i < node.methods.size(); i++) {
-        indent();
-        emit("fn ");
-        emit(node.methods[i].name);
-        emit("(");
-        for (size_t j = 0; j < node.methods[i].params.size(); j++) {
-            if (j > 0)
-                emit(", ");
-            emit(node.methods[i].params[j]);
+    emitBraceBlock([&] {
+        for (size_t i = 0; i < node.methods.size(); i++) {
+            indent();
+            emit("fn ");
+            emit(node.methods[i].name);
+            emit("(");
+            emitCommaList(node.methods[i].params, [&](std::string_view p) { emit(p); });
+            emit(");");
+            newline();
         }
-        emit(");");
-        newline();
-    }
-    indent_--;
-    indent();
-    emit("}");
-    newline();
+    });
 }
 
 void FmtVisitor::emitComponentDecl(const ast::ComponentDeclNode &node) {
@@ -322,11 +285,7 @@ void FmtVisitor::emitLet(const ast::LetNode &node) {
         emit("var ");
     else
         emit("let ");
-    for (size_t i = 0; i < node.names.size(); i++) {
-        if (i > 0)
-            emit(", ");
-        emit(node.names[i]);
-    }
+    emitCommaList(node.names, [&](std::string_view n) { emit(n); });
     if (node.type_annot != ast::kInvalidTypeExpr) {
         emit(": ");
         emitType(node.type_annot);
@@ -424,11 +383,7 @@ void FmtVisitor::emitUnary(const ast::UnaryNode &node) {
 void FmtVisitor::emitCall(const ast::CallNode &node) {
     visitExpr(node.callee);
     emit("(");
-    for (size_t i = 0; i < node.args.size(); i++) {
-        if (i > 0)
-            emit(", ");
-        visitExpr(node.args[i]);
-    }
+    emitCommaList(node.args, [&](ast::ExprId e) { visitExpr(e); });
     emit(")");
 }
 
@@ -534,11 +489,7 @@ void FmtVisitor::emitType(ast::TypeExprId id) {
         },
         [&](const ast::TypeFnExpr &n) {
             emit("fn(");
-            for (size_t i = 0; i < n.params.size(); i++) {
-                if (i > 0)
-                    emit(", ");
-                emitType(n.params[i]);
-            }
+            emitCommaList(n.params, [&](ast::TypeExprId t) { emitType(t); });
             emit(")");
             if (n.ret != ast::kInvalidTypeExpr) {
                 emit(": ");
@@ -558,22 +509,16 @@ void FmtVisitor::emitType(ast::TypeExprId id) {
         [&](const ast::TypeApp &n) {
             emitType(n.base);
             emit("<");
-            for (size_t i = 0; i < n.args.size(); i++) {
-                if (i > 0)
-                    emit(", ");
-                emitType(n.args[i]);
-            }
+            emitCommaList(n.args, [&](ast::TypeExprId t) { emitType(t); });
             emit(">");
         },
         [&](const ast::TypePack &n) {
             emit("{ ");
-            for (size_t i = 0; i < n.members.size(); i++) {
-                if (i > 0)
-                    emit(", ");
-                emit(n.members[i].name);
+            emitCommaList(n.members, [&](const ast::TypePackMember &m) {
+                emit(m.name);
                 emit(": ");
-                emitType(n.members[i].type);
-            }
+                emitType(m.type);
+            });
             emit(" }");
         },
         [&](const ast::TypeSum &n) {

@@ -1,28 +1,16 @@
 #include "options.hpp"
+#include "cli/terminal.hpp"
 #include "cli/zith-flags.hpp"
 #include "diagnostics/color.hpp"
 
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
-#ifdef _WIN32
-#include <io.h>
-#else
-#include <unistd.h>
-#endif
 
 namespace zith::cli {
 
-static bool useColor() {
-#ifdef _WIN32
-    return _isatty(_fileno(stderr)) != 0;
-#else
-    return isatty(fileno(stderr)) != 0;
-#endif
-}
-
-#define C(c) (useColor() ? diagnostics::ansi::c.data() : "")
-#define RST (useColor() ? diagnostics::ansi::reset.data() : "")
+#define C(c) term::err(OPT_TERM, diagnostics::ansi::c.data())
+#define RST term::err_rst(OPT_TERM)
 
 void Options::deriveTargetStage() {
     if (emit_ast)
@@ -44,6 +32,7 @@ void Options::deriveTargetStage() {
 }
 
 static void printUsage() {
+    auto OPT_TERM = term::init();
     std::fprintf(
         stderr,
         "%sZith%s - A low-level general-purpose language\n"
@@ -168,6 +157,14 @@ void mergeProjectConfig(Options &opts, const ProjectConfig &cfg) {
 }
 
 Options parseArgs(int argc, char **argv) {
+    auto OPT_TERM = term::init();
+    auto requireValue = [&](int i, const char *flag) {
+        if (i + 1 >= argc) {
+            std::fprintf(stderr, "%s[error]%s %s requires a value\n", C(red), RST, flag);
+            printUsage();
+            std::exit(1);
+        }
+    };
     Options opts;
 
     for (int i = 1; i < argc; ++i) {
@@ -264,11 +261,7 @@ Options parseArgs(int argc, char **argv) {
 
         // --mode / -m
         if (std::strcmp(argv[i], "--mode") == 0 || std::strcmp(argv[i], "-m") == 0) {
-            if (i + 1 >= argc) {
-                std::fprintf(stderr, "%s[error]%s --mode/-m requires a value\n", C(red), RST);
-                printUsage();
-                std::exit(1);
-            }
+            requireValue(i, "--mode/-m");
             const char *val = argv[++i];
             if (std::strcmp(val, "debug") != 0 && std::strcmp(val, "dev") != 0 &&
                 std::strcmp(val, "release") != 0 && std::strcmp(val, "fast") != 0 &&
@@ -285,22 +278,14 @@ Options parseArgs(int argc, char **argv) {
 
         // --output / -o
         if (std::strcmp(argv[i], "--output") == 0 || std::strcmp(argv[i], "-o") == 0) {
-            if (i + 1 >= argc) {
-                std::fprintf(stderr, "%s[error]%s --output/-o requires a value\n", C(red), RST);
-                printUsage();
-                std::exit(1);
-            }
+            requireValue(i, "--output/-o");
             opts.output_file = argv[++i];
             continue;
         }
 
         // --include / -I
         if (std::strcmp(argv[i], "--include") == 0 || std::strcmp(argv[i], "-I") == 0) {
-            if (i + 1 >= argc) {
-                std::fprintf(stderr, "%s[error]%s --include/-I requires a value\n", C(red), RST);
-                printUsage();
-                std::exit(1);
-            }
+            requireValue(i, "--include/-I");
             const char *val   = argv[++i];
             const char *start = val;
             for (const char *p = val;; ++p) {
@@ -318,11 +303,7 @@ Options parseArgs(int argc, char **argv) {
 
         // --emit
         if (std::strcmp(argv[i], "--emit") == 0) {
-            if (i + 1 >= argc) {
-                std::fprintf(stderr, "%s[error]%s --emit requires a value\n", C(red), RST);
-                printUsage();
-                std::exit(1);
-            }
+            requireValue(i, "--emit");
             const char *val = argv[++i];
             if (std::strcmp(val, "ast") != 0 && std::strcmp(val, "hir") != 0 &&
                 std::strcmp(val, "mir") != 0 && std::strcmp(val, "ir") != 0 &&
@@ -340,22 +321,14 @@ Options parseArgs(int argc, char **argv) {
 
         // --target
         if (std::strcmp(argv[i], "--target") == 0) {
-            if (i + 1 >= argc) {
-                std::fprintf(stderr, "%s[error]%s --target requires a value\n", C(red), RST);
-                printUsage();
-                std::exit(1);
-            }
+            requireValue(i, "--target");
             opts.target_triple = argv[++i];
             continue;
         }
 
         // --opt-level
         if (std::strcmp(argv[i], "--opt-level") == 0) {
-            if (i + 1 >= argc) {
-                std::fprintf(stderr, "%s[error]%s --opt-level requires a value\n", C(red), RST);
-                printUsage();
-                std::exit(1);
-            }
+            requireValue(i, "--opt-level");
             int val = std::atoi(argv[++i]);
             if (val < 0 || val > 3) {
                 std::fprintf(stderr, "%s[error]%s --opt-level must be 0-3\n", C(red), RST);
@@ -367,11 +340,7 @@ Options parseArgs(int argc, char **argv) {
 
         // --debug-level
         if (std::strcmp(argv[i], "--debug-level") == 0) {
-            if (i + 1 >= argc) {
-                std::fprintf(stderr, "%s[error]%s --debug-level requires a value\n", C(red), RST);
-                printUsage();
-                std::exit(1);
-            }
+            requireValue(i, "--debug-level");
             int val = std::atoi(argv[++i]);
             if (val < 0 || val > 3) {
                 std::fprintf(stderr, "%s[error]%s --debug-level must be 0-3\n", C(red), RST);
@@ -383,11 +352,7 @@ Options parseArgs(int argc, char **argv) {
 
         // --color / -c
         if (std::strcmp(argv[i], "--color") == 0 || std::strcmp(argv[i], "-c") == 0) {
-            if (i + 1 >= argc) {
-                std::fprintf(stderr, "%s[error]%s --color/-c requires a value\n", C(red), RST);
-                printUsage();
-                std::exit(1);
-            }
+            requireValue(i, "--color/-c");
             const char *val = argv[++i];
             if (std::strcmp(val, "auto") != 0 && std::strcmp(val, "on") != 0 &&
                 std::strcmp(val, "off") != 0) {

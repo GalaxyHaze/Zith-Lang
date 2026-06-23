@@ -46,9 +46,12 @@ TypeId TypeLower::lowerNode(const ast::TypeExprNode &node) {
                 case import::SymKind::Union:
                 case import::SymKind::Trait:
                 case import::SymKind::Interface:
-                case import::SymKind::Alias:
-                    // Known type — return unknown so unification handles init checks
+                case import::SymKind::Alias: {
+                    auto tid = self.intern_.lookupNamedType(n.segments[0]);
+                    if (tid != types::kErrorType)
+                        return tid;
                     return self.intern_.internUnknown();
+                }
                 default:
                     self.diags_.report(diagnostics::Severity::Error,
                         diagnostics::err::UndefinedIdent,
