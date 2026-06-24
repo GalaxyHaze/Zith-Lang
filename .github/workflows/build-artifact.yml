@@ -113,13 +113,11 @@ jobs:
 
           - os: windows-latest
             target_name: zithc-windows-arm64.exe
-            msvc_arch: amd64_arm64
             cmake_flags: >-
-              -DCMAKE_C_COMPILER=clang-cl
-              -DCMAKE_CXX_COMPILER=clang-cl
-              -DCMAKE_C_COMPILER_TARGET=arm64-pc-windows-msvc
-              -DCMAKE_CXX_COMPILER_TARGET=arm64-pc-windows-msvc
-              -DCMAKE_CROSSCOMPILING=ON
+              -DCMAKE_C_COMPILER=zig;cc;-target;aarch64-windows-msvc
+              -DCMAKE_CXX_COMPILER=zig;c++;-target;aarch64-windows-msvc
+              -DCMAKE_EXE_LINKER_FLAGS="-static -lc"
+              -DCMAKE_CXX_FLAGS="-fno-cxx-exceptions"
               -DZITH_ENABLE_FFI=OFF
               -DZITH_ENABLE_LLVM=OFF
 
@@ -162,10 +160,22 @@ jobs:
         run: echo "C:/Program Files/LLVM/bin" >> "$GITHUB_PATH"
 
       - name: Setup MSVC environment
-        if: runner.os == 'Windows'
+        if: runner.os == 'Windows' && matrix.msvc_arch != ''
         uses: ilammy/msvc-dev-cmd@v1
         with:
           arch: ${{ matrix.msvc_arch }}
+
+      - name: Setup Zig (for Windows arm64 cross-compile)
+        if: runner.os == 'Windows' && matrix.msvc_arch == ''
+        shell: bash
+        run: |
+          ZIG_VER=$(curl -sL https://ziglang.org/download/index.json \
+            | python3 -c "import sys,json; d=json.load(sys.stdin); v=[k for k in d if k[0].isdigit()]; v.sort(); print(v[-1])")
+          curl -sL "https://ziglang.org/download/$ZIG_VER/zig-windows-x86_64-$ZIG_VER.zip" \
+            -o /tmp/zig.zip
+          unzip -q /tmp/zig.zip -d /opt
+          echo "/opt/zig-windows-x86_64-$ZIG_VER" >> "$GITHUB_PATH"
+          zig version
 
       - name: Verify Clang
         shell: bash
@@ -173,13 +183,8 @@ jobs:
           clang --version
           clang++ --version
 
-      - name: Cache CMake build
-        uses: actions/cache@v4
-        with:
-          path: build
-          key: cmake-${{ runner.os }}-${{ matrix.target_name }}-${{ hashFiles('CMakeLists.txt', 'cmake/**/*.cmake', 'src/**/*.cpp', 'src/**/*.hpp') }}
-          restore-keys: |
-            cmake-${{ runner.os }}-${{ matrix.target_name }}-
+      - name: Clean stale build artifacts
+        run: rm -rf build
 
       - name: Configure CMake
         shell: bash
@@ -337,16 +342,15 @@ jobs:
             cmake_flags: >-
               -DCMAKE_C_COMPILER=clang-cl
               -DCMAKE_CXX_COMPILER=clang-cl
+              -DZITH_ENABLE_FFI=OFF
 
           - os: windows-latest
             target_name: windows-arm64.exe
-            msvc_arch: amd64_arm64
             cmake_flags: >-
-              -DCMAKE_C_COMPILER=clang-cl
-              -DCMAKE_CXX_COMPILER=clang-cl
-              -DCMAKE_C_COMPILER_TARGET=arm64-pc-windows-msvc
-              -DCMAKE_CXX_COMPILER_TARGET=arm64-pc-windows-msvc
-              -DCMAKE_CROSSCOMPILING=ON
+              -DCMAKE_C_COMPILER=zig;cc;-target;aarch64-windows-msvc
+              -DCMAKE_CXX_COMPILER=zig;c++;-target;aarch64-windows-msvc
+              -DCMAKE_EXE_LINKER_FLAGS="-static -lc"
+              -DCMAKE_CXX_FLAGS="-fno-cxx-exceptions"
               -DZITH_ENABLE_FFI=OFF
 
     steps:
@@ -398,10 +402,27 @@ jobs:
         run: echo "C:/Program Files/LLVM/bin" >> "$GITHUB_PATH"
 
       - name: Setup MSVC environment
-        if: runner.os == 'Windows'
+        if: runner.os == 'Windows' && matrix.msvc_arch != ''
         uses: ilammy/msvc-dev-cmd@v1
         with:
           arch: ${{ matrix.msvc_arch }}
+
+      - name: Setup Zig (for Windows arm64 cross-compile)
+        if: runner.os == 'Windows' && matrix.msvc_arch == ''
+        shell: bash
+        run: |
+          ZIG_VER=$(curl -sL https://ziglang.org/download/index.json \
+            | python3 -c "import sys,json; d=json.load(sys.stdin); v=[k for k in d if k[0].isdigit()]; v.sort(); print(v[-1])")
+          curl -sL "https://ziglang.org/download/$ZIG_VER/zig-windows-x86_64-$ZIG_VER.zip" \
+            -o /tmp/zig.zip
+          unzip -q /tmp/zig.zip -d /opt
+          echo "/opt/zig-windows-x86_64-$ZIG_VER" >> "$GITHUB_PATH"
+          zig version
+
+      - name: Clean stale build artifacts
+        shell: bash
+        working-directory: lsp
+        run: rm -rf build
 
       - name: Configure zith-lsp
         shell: bash
