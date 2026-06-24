@@ -1,7 +1,7 @@
 name: Clear All Caches
 
 on:
-  workflow_dispatch:  # Manually trigger from Actions tab
+  workflow_dispatch:
 
 jobs:
   clear-cache:
@@ -11,23 +11,8 @@ jobs:
     steps:
       - name: Clear all caches
         run: |
-          echo "Fetching list of all cache keys..."
-          cacheKeys=$(gh cache list --limit 100 --json key --jq '.[].key' 2>&1)
-          
-          if [ -z "$cacheKeys" ]; then
-            echo "No caches found or error retrieving cache list:"
-            echo "$cacheKeys"
-            exit 0
-          fi
-          
-          echo "Found caches: $cacheKeys"
-          
-          echo "Deleting caches..."
-          while IFS= read -r cacheKey; do
-            [ -z "$cacheKey" ] && continue
-            echo "Deleting cache: $cacheKey"
-            gh cache delete "$cacheKey" --confirm || echo "Failed to delete $cacheKey"
-          done <<< "$cacheKeys"
+          echo "Deleting all caches..."
+          gh cache delete --all --succeed-on-no-caches
           echo "Done!"
         env:
           GH_TOKEN: ${{ github.token }}
