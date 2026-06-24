@@ -68,7 +68,6 @@ target_link_libraries(zithcLib PUBLIC mio tomlplusplus::tomlplusplus)
 
 target_compile_definitions(zithcLib PUBLIC
     ZITH_VERSION="${ZITH_VERSION}"
-    ZITH_STDLIB_DIR="${CMAKE_CURRENT_SOURCE_DIR}/stdlib"
 )
 
 set_target_properties(zithcLib PROPERTIES

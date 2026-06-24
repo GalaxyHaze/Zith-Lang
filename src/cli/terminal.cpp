@@ -30,8 +30,13 @@ Term init(const Options &opts) {
 
 Term init() {
     Term t;
+#ifdef _WIN32
+    t.cerr_on = _isatty(_fileno(stderr));
+    t.cout_on = _isatty(_fileno(stdout));
+#else
     t.cerr_on = isatty(fileno(stderr));
     t.cout_on = isatty(fileno(stdout));
+#endif
     return t;
 }
 
