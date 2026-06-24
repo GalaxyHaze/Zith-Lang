@@ -12,7 +12,7 @@ jobs:
       - name: Clear all caches
         run: |
           echo "Fetching list of all cache keys..."
-          cacheKeys=$(gh cache list --limit 100 --json id --jq '.[].id')
+          cacheKeys=$(gh cache list --limit 99999 --json id --jq '.[].id')
           
           set +e
           echo "Deleting caches..."
