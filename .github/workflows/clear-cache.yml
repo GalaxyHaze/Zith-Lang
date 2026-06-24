@@ -12,14 +12,22 @@ jobs:
       - name: Clear all caches
         run: |
           echo "Fetching list of all cache keys..."
-          cacheKeys=$(gh cache list --limit 99999 --json id --jq '.[].id')
+          cacheKeys=$(gh cache list --limit 100 --json key --jq '.[].key' 2>&1)
           
-          set +e
+          if [ -z "$cacheKeys" ]; then
+            echo "No caches found or error retrieving cache list:"
+            echo "$cacheKeys"
+            exit 0
+          fi
+          
+          echo "Found caches: $cacheKeys"
+          
           echo "Deleting caches..."
-          for cacheKey in $cacheKeys
-          do
-            gh cache delete $cacheKey --confirm
-          done
+          while IFS= read -r cacheKey; do
+            [ -z "$cacheKey" ] && continue
+            echo "Deleting cache: $cacheKey"
+            gh cache delete "$cacheKey" --confirm || echo "Failed to delete $cacheKey"
+          done <<< "$cacheKeys"
           echo "Done!"
         env:
           GH_TOKEN: ${{ github.token }}
