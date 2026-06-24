@@ -333,11 +333,11 @@ jobs:
               -DCMAKE_SYSTEM_PROCESSOR=aarch64
 
           - os: macos-14
-            target_name: macos-arm64
+            target_name: macos-universal
             cmake_flags: >-
               -DCMAKE_C_COMPILER=$(xcrun -f clang)
               -DCMAKE_CXX_COMPILER=$(xcrun -f clang++)
-              -DCMAKE_OSX_ARCHITECTURES=arm64
+              -DCMAKE_OSX_ARCHITECTURES="x86_64;arm64"
               -DCMAKE_AR=$(xcrun -f ar)
               -DCMAKE_RANLIB=$(xcrun -f ranlib)
               -DZITH_ENABLE_FFI=OFF
