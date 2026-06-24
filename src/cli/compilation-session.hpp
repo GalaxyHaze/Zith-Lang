@@ -125,6 +125,7 @@ public:
     const lexer::TokenStream &tokens() const { return tokens_; }
     const parser::ScanResult &scanResult() const { return scan_result_; }
     const import::SymbolTable &symbolTable() const { return syms_; }
+    import::SymbolTable &symbolTable() { return syms_; }
     const memory::DynArray<import::SymId> &resolvedSyms() const { return resolved_syms_; }
     const ast::AstBuilder &astBuilder() const { return ast_builder_; }
     ast::AstBuilder &astBuilder() { return ast_builder_; }

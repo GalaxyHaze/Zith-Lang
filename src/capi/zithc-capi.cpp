@@ -154,9 +154,7 @@ zithc_diagnostic zithc_diag_get(zithc_session *session, size_t index) {
     // Auto-fill suggestions for UndefinedIdent diagnostics
     if (d.code == zith::diagnostics::err::UndefinedIdent && d.suggestions.empty()) {
         zith::sema::HeuristicEngine heuristic;
-        heuristic.generate(d, const_cast<zith::import::SymbolTable &>(
-                                session->session.symbolTable()),
-                           d.suggestions);
+        heuristic.generate(d, session->session.symbolTable(), d.suggestions);
     }
     // Enrich overload errors with all function signatures
     if ((d.code == zith::diagnostics::err::NoMatchingFn ||
