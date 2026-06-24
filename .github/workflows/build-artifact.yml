@@ -436,9 +436,10 @@ jobs:
         shell: bash
         working-directory: lsp
         run: |
+          SRC="${GITHUB_WORKSPACE//\\/\/}/zithc-src"
           cmake -S . -B build -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
-            -DZITHC_SOURCE_DIR=${{ github.workspace }}/zithc-src \
+            -DZITHC_SOURCE_DIR="${SRC}" \
             ${{ matrix.cmake_flags }}
 
       - name: Build zith-lsp
