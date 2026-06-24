@@ -119,6 +119,9 @@ jobs:
             cmake_flags: >-
               -DCMAKE_C_COMPILER=clang-cl
               -DCMAKE_CXX_COMPILER=clang-cl
+              -DCMAKE_SYSTEM_PROCESSOR=ARM64
+              -DCMAKE_C_COMPILER_TARGET=aarch64-pc-windows-msvc
+              -DCMAKE_CXX_COMPILER_TARGET=aarch64-pc-windows-msvc
               -DZITH_ENABLE_FFI=OFF
               -DZITH_ENABLE_LLVM=OFF
 
@@ -353,6 +356,9 @@ jobs:
             cmake_flags: >-
               -DCMAKE_C_COMPILER=clang-cl
               -DCMAKE_CXX_COMPILER=clang-cl
+              -DCMAKE_SYSTEM_PROCESSOR=ARM64
+              -DCMAKE_C_COMPILER_TARGET=aarch64-pc-windows-msvc
+              -DCMAKE_CXX_COMPILER_TARGET=aarch64-pc-windows-msvc
               -DZITH_ENABLE_FFI=OFF
 
     steps:
