@@ -5,7 +5,6 @@
 #include "import/symbol-table.hpp"
 #include "lexer/token.hpp"
 #include "parser/parse-result.hpp"
-#include "parser/recovery.hpp"
 #include "parser/scan-result.hpp"
 
 #include <initializer_list>

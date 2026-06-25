@@ -2,6 +2,7 @@
 
 #include "ast/ast-ids.hpp"
 #include "diagnostics/diagnostic-engine.hpp"
+#include "diagnostics/error-codes.hpp"
 #include "import/symbol-table.hpp"
 #include "lexer/token.hpp"
 #include "memory/span.hpp"
@@ -11,7 +12,19 @@
 #include <string>
 #include <string_view>
 
-namespace zith::parser::scan_detail {
+namespace zith::parser {
+
+// Skip Comments and Docs tokens — used throughout all parser passes
+inline void skipComments(lexer::TokenStream &tok) {
+    while (!tok.is_empty()) {
+        auto &t = tok.peek();
+        if (t.is_not(lexer::TokenKind::Comments) && t.is_not(lexer::TokenKind::Docs))
+            break;
+        tok.advance();
+    }
+}
+
+namespace scan_detail {
 
 inline memory::Span spanFromOffset(uint32_t start, uint32_t end) {
     return {0, start, end};
@@ -115,4 +128,5 @@ inline bool reportIfDuplicate(import::SymbolTable &syms, diagnostics::Diagnostic
     return true;
 }
 
-} // namespace zith::parser::scan
+} // namespace scan_detail
+} // namespace zith::parser
