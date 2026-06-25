@@ -1,5 +1,20 @@
 [
   {
+    "file": "2026-06-23-extension-and-ide.html",
+    "title": "Editor Tooling — VS Code Extension &amp; Zith IDE",
+    "date": "2026-06-23"
+  },
+  {
+    "file": "2026-06-22-zith-lsp-progress.html",
+    "title": "zith-lsp Progress — Hover, Position, Diagnostics",
+    "date": "2026-06-22"
+  },
+  {
+    "file": "2026-06-21-zithc-improvements.html",
+    "title": "zithc Improvements — Formatter, CAPI, Cross-Platform",
+    "date": "2026-06-21"
+  },
+  {
     "file": "2026-06-19-workflow-ai.html",
     "title": "Working on Workflow-AI",
     "date": "2026-06-19"

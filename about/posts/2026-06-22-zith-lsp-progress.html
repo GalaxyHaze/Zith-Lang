@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><title>zith-lsp Progress — Hover, Position, Diagnostics</title></head>
+<body>
+
+<h2>zith-lsp Progress — Hover, Position, Diagnostics</h2>
+<p class="post-date">2026-06-22</p>
+<hr>
+<p>
+    The <strong>zith-lsp</strong> server has been the focus this week, and it's finally taking
+    shape. Most of the groundwork lives in the CAPI layer of zithc itself — the LSP binary is
+    a thin wrapper that talks to zithcLib over a C ABI.
+</p>
+
+<h3>What's Working Now</h3>
+
+<p><strong>Hover.</strong>
+    <code>zithc_hover()</code> takes a session and a byte offset, finds the identifier at that
+    position, and returns a markdown-formatted function signature. This means an editor can show
+    type information on mouseover without re-parsing the source.
+</p>
+
+<p><strong>Position conversion.</strong>
+    The <code>zithc_offset_to_position()</code> function converts byte offsets to 0-based
+    line/column pairs — essential for LSP protocol compatibility.
+</p>
+
+<p><strong>Diagnostics with intelligence.</strong>
+    The heuristic engine has been integrated into the LSP path. When you have an undefined
+    identifier, the compiler not only reports the error but suggests the closest match via
+    Levenshtein distance. For ambiguous calls or no-matching-function errors, it lists all
+    candidate signatures so you can see what went wrong.
+</p>
+
+<p><strong>Cross-file support.</strong>
+    The <code>merge_sym()</code> function now preserves declaration IDs, spans, kinds, targets,
+    and documentation spans across import boundaries. This is the data foundation for
+    go-to-definition and find-references — the LSP just needs to be wired through.
+</p>
+
+<h3>Build System</h3>
+<p>
+    The LSP builds alongside the compiler in CI. The macOS build produces a universal binary
+    (x86_64 + ARM64), and the Windows build works with both MSVC and clang-cl. The CI caches
+    have been cleaned up to avoid the corruption issues we were seeing before.
+</p>
+
+<h3>What's Next</h3>
+<p>
+    Completions and go-to-definition are the next targets. The symbol table and cross-file
+    merging infrastructure is ready — it's a matter of wiring the LSP protocol messages.
+</p>
+
+<hr>
+<p class="post-date"><em>— Haze</em></p>
+
+</body>
+</html>

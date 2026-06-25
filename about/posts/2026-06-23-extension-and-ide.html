@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><title>Editor Tooling — VS Code Extension &amp; Zith IDE</title></head>
+<body>
+
+<h2>Editor Tooling — VS Code Extension &amp; Zith IDE</h2>
+<p class="post-date">2026-06-23</p>
+<hr>
+<p>
+    Two editor-related projects got attention this week: the VS Code extension got some needed
+    fixes, and I started a minimal standalone IDE for Zith.
+</p>
+
+<h3>VS Code Extension</h3>
+<p>
+    The <strong>Zith</strong> extension on the marketplace has been updated. The main work was
+    fixing the LSP binary download pipeline — <code>download-lsp.js</code> now pulls the correct
+    platform-specific binary from the CI artifacts, and the extension correctly discovers it at
+    startup.
+</p>
+<p>
+    Syntax highlighting, snippets, and the "Zith Dark" theme are all stable. The TextMate grammar
+    covers all the latest keyword additions (component, union, scene, spawn, etc.) and the
+    snippets match the current function, struct, and control flow syntax.
+</p>
+
+<h3>Zith IDE</h3>
+<p>
+    Beyond the extension, I've been experimenting with a small standalone IDE — something lighter
+    than VS Code but with deeper Zith integration. It's early days, but the idea is to have a
+    zero-config environment where you just open a <code>.zith</code> file and get syntax
+    highlighting, inline diagnostics from the LSP, and quick-run without any project setup.
+</p>
+<p>
+    I'll share more details once it's in a sharable state.
+</p>
+
+<hr>
+<p class="post-date"><em>— Haze</em></p>
+
+</body>
+</html>

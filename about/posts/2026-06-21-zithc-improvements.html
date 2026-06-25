@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><title>zithc Improvements — Formatter, CAPI, Cross-Platform</title></head>
+<body>
+
+<h2>zithc Improvements — Formatter, CAPI, Cross-Platform</h2>
+<p class="post-date">2026-06-21</p>
+<hr>
+<p>
+    I've been hammering on <strong>zithc</strong> — the compiler itself — and a lot has landed since
+    the last update. Three big areas got significant attention.
+</p>
+
+<h3>1. Code Formatter</h3>
+<p>
+    The formatter is now a proper compiler pass, not an afterthought. A dedicated
+    <code>FmtVisitor</code> (938 lines in <code>fmt-visitor.cpp</code>) walks every declaration,
+    statement, and expression type with precedence-aware output and brace-block handling.
+</p>
+<p>
+    You can run it via <code>zith fmt</code> on any source file. It handles comma-separated lists,
+    complex type expressions, semicolons vs braces, and nested blocks cleanly. There's also a
+    companion test suite at <code>tests/unit/fmt-visitor.cpp</code> to keep formatting consistent
+    across refactors.
+</p>
+
+<h3>2. C API (zithcLib)</h3>
+<p>
+    The C ABI that the LSP consumes got major upgrades. The session lifecycle is solid — create
+    from file or buffer, destroy, run the pipeline. New additions include:
+</p>
+<ul>
+    <li><strong>Hover</strong> — <code>zithc_hover()</code> looks up an identifier at a byte offset
+        and returns a markdown signature</li>
+    <li><strong>Position conversion</strong> — <code>zithc_offset_to_position()</code> converts byte
+        offsets to 0-based line/column pairs</li>
+    <li><strong>Diagnostics with suggestions</strong> — the "did you mean?" heuristic engine and
+        overload error enrichment are exposed for tooling</li>
+    <li><strong>Cross-file symbol merging</strong> — <code>merge_sym()</code> preserves declaration
+        IDs, spans, kinds, and targets across imports — groundwork for go-to-definition</li>
+</ul>
+<p>
+    The CAPI is now clean enough that I ripped out all the <code>try/catch</code> blocks in favor
+    of <code>nothrow new</code> — the C boundary is pure C, no exception machinery needed.
+</p>
+
+<h3>3. Cross-Platform &amp; Portability</h3>
+<p>
+    The CI build matrix now covers Linux, Windows (MSVC + clang-cl), and macOS (x86_64 + ARM64).
+    Getting there required a bunch of fixes:
+</p>
+<ul>
+    <li>Guarded <code>unistd.h</code> behind <code>_WIN32</code> checks</li>
+    <li>Fixed <code>isatty</code> on Windows</li>
+    <li>Used <code>xcrun</code> on macOS for SDK path discovery</li>
+    <li>Switched Windows ARM64 to Zig cc for reliable cross-compilation</li>
+    <li>Fixed <code>Token</code> constructor for musl libc compatibility</li>
+    <li>Removed <code>OBJECT</code> library pattern that broke macOS universal binaries</li>
+</ul>
+<p>
+    The formatter and CLI now share a set of common file and terminal utilities, so new commands
+    don't keep reinventing the same wheels.
+</p>
+<p>
+    v0.3.1 captured the critical bug fixes (TypeFn dangling span, empty-token-stream UB, lexer
+    null fallthrough, SourceMap TOCTOU race), but the real headway is in the CAPI and formatter.
+</p>
+
+<hr>
+<p class="post-date"><em>— Haze</em></p>
+
+</body>
+</html>
