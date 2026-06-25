@@ -1,5 +1,6 @@
 <h1>Security Model</h1>
 <p>Zith provides strong safety guarantees without runtime overhead through its compile-time ownership system.</p>
+
 <h2>Memory Safety Guarantees</h2>
 <h3>What Zith Prevents at Compile-Time</h3>
 <table>
@@ -9,7 +10,7 @@
   </tr>
   <tr>
     <td><strong>Use-after-free</strong></td>
-    <td>Ownership tracking ensures memory is valid</td>
+    <td>Ownership tracking via NRA ensures memory is valid</td>
   </tr>
   <tr>
     <td><strong>Double-free</strong></td>
@@ -25,125 +26,110 @@
   </tr>
   <tr>
     <td><strong>Null pointer dereference</strong></td>
-    <td>No null by default, use <code>Option</code> types</td>
+    <td>No null by default, use <code>?T</code> types</td>
   </tr>
   <tr>
     <td><strong>Uninitialized memory</strong></td>
     <td>Compiler enforces initialization</td>
   </tr>
 </table>
-<h2>Ownership System</h2>
-<h3>Three Ownership Modifiers</h3>
-<pre><code class="language-zith">// unique - Full ownership, only one owner
-let data: unique i32 = alloc.new(42);
 
-// view - Read-only borrow, multiple allowed
-let ref1: view i32 = data;
-let ref2: view i32 = data;
+<h2>Ownership System (NRA)</h2>
+<h3>Six Ownership Keywords</h3>
+<pre><code class="language-zith">default  // Default ownership, full control
+lend     // Exclusive mutable borrow, temporary
+view     // Read-only borrow, multiple allowed
+unique   // Single owner, heap-allocated, movable
+share    // Multiple mutable names, synchronized
+belong   // Back-pointer, part-of relationship</code></pre>
 
-// mut - Mutable borrow, exclusive access
-let mut_ref: mut i32 = data;  // Transfers ownership temporarily</code></pre>
 <h3>Example: Safe Memory Access</h3>
-<pre><code class="language-zith">fn process_data() {
-    // Allocate with explicit ownership
-    let buffer: unique [u8] = alloc.new([0; 1024]);
-    
+<pre><code class="language-zith">fn processData() {
+    var buffer: [u8] = [0; 1024];
+
     // Create read-only views (safe, multiple allowed)
     let header: view [u8] = buffer[0..64];
     let payload: view [u8] = buffer[64..];
-    
-    // Can read from both views
-    print("Header: {header}");
-    print("Payload: {payload}");
-    
-    // buffer still owns the memory, freed at end of scope
-}  // Automatic cleanup here</code></pre>
+
+    @println("Header: {header}");
+    @println("Payload: {payload}");
+}</code></pre>
+
 <h2>Comparison with Other Languages</h2>
+
 <h3>vs C/C++</h3>
 <pre><code class="language-c">// C - Manual, error-prone
 void process() {
     int* ptr = malloc(sizeof(int) * 100);
-    // ... use ptr ...
     free(ptr);
     free(ptr);  //  Double-free! Undefined behavior
 }</code></pre>
 <pre><code class="language-zith">// Zith - Compile-time safety
 fn process() {
-    let ptr: unique [i32] = alloc.new([0; 100]);
-    // ... use ptr ...
+    var ptr: [i32] = [0; 100];
 }  //  Automatically freed, double-free impossible</code></pre>
+
 <h3>vs Rust</h3>
 <pre><code class="language-rust">// Rust - Powerful but complex lifetimes
 fn process&lt;'a&gt;(data: &amp;'a mut Vec&lt;i32&gt;, index: usize) -&gt; &amp;'a i32 {
     &amp;data[index]  // Lifetime annotations required
 }</code></pre>
 <pre><code class="language-zith">// Zith - Simpler, implicit lifetimes
-fn process(data: mut [i32], index: usize): view i32 {
-    return data[index];  //  No lifetime annotations needed
+fn process(data: lend [i32], index: usize): view i32 {
+    data[index]  //  No lifetime annotations needed
 }</code></pre>
+
 <h2>Unsafe Code</h2>
 <p>When you need to bypass safety checks:</p>
 <pre><code class="language-zith">unsafe {
     // Raw pointer operations
     let raw_ptr = alloc.raw_alloc(1024);
-    
+
     // FFI calls
     libc::printf("Unsafe operation\n");
-    
-    // Inline assembly
-    asm!("nop");
 }  // You're responsible for safety here</code></pre>
 <p><strong>Best Practice:</strong> Minimize unsafe blocks, isolate them, and document why they're safe.</p>
+
 <h2>Security Best Practices</h2>
+
 <h3>1. Use Safe Abstractions</h3>
 <pre><code class="language-zith">//  Good: Use safe collections
-let vec = Vec&lt;i32&gt;.new();
+let vec = Vec{ 1, 2, 3 };</code></pre>
 
-//  Avoid: Raw pointers when not needed
-let ptr = alloc.raw_alloc(...);</code></pre>
 <h3>2. Leverage the Type System</h3>
-<pre><code class="language-zith">// Encode invariants in types
-struct NonZeroU32 {
+<pre><code class="language-zith">struct NonZeroU32 {
     value: u32,  // Invariant: never zero
-    
-    fn new(v: u32): Option&lt;Self&gt; {
-        if v == 0 { return None; }
-        return Some(Self { value: v });
+
+    fn new(v: u32): ?Self {
+        if (v == 0) ? none
+        else Self { value: v }
     }
 }</code></pre>
+
 <h3>3. Minimize Unsafe</h3>
-<pre><code class="language-zith">//  Isolate unsafe code
-fn safe_wrapper() {
+<pre><code class="language-zith">fn safeWrapper() {
     unsafe {
         // Only the necessary unsafe operations
     }
-    // Rest of function is safe
 }</code></pre>
+
 <h3>4. Use Views for Borrowing</h3>
-<pre><code class="language-zith">//  Pass views instead of copying
-fn process_large_data(data: view [u8]) {
+<pre><code class="language-zith">fn processLargeData(data: view [u8]) {
     // Read-only access, no copy
 }
 
-//  Don't pass by value unnecessarily
-fn process_large_data(data: [u8]) {  // Copies entire array!</code></pre>
-<h2>Auditing for Security</h2>
-<p>When reviewing Zith code:</p>
-<ol>
-  <li><strong>Check unsafe blocks</strong> - Are they necessary? Documented?</li>
-  <li><strong>Verify ownership transfers</strong> - No accidental moves?</li>
-  <li><strong>Review FFI boundaries</strong> - Proper validation?</li>
-  <li><strong>Look for view mutations</strong> - Using <code>view</code> where <code>mut</code> needed?</li>
-</ol>
+fn processLargeData(data: [u8]) {  // Copies entire array!</code></pre>
+
 <h2>Limitations</h2>
 <p>Zith's safety model doesn't prevent:</p>
 <ul>
-  <li><strong>Logic errors</strong> - Wrong algorithms are still possible</li>
-  <li><strong>Integer overflows</strong> - Enable overflow checks in debug</li>
-  <li><strong>Resource leaks</strong> - File handles, network connections (use RAII)</li>
-  <li><strong>Side channels</strong> - Timing attacks, cache attacks</li>
+  <li><strong>Logic errors</strong> — Wrong algorithms are still possible</li>
+  <li><strong>Integer overflows</strong> — Enable overflow checks in debug</li>
+  <li><strong>Resource leaks</strong> — File handles, network connections</li>
+  <li><strong>Side channels</strong> — Timing attacks, cache attacks</li>
 </ul>
+
 <h2>Conclusion</h2>
-<p>Zith provides <strong>strong memory safety guarantees</strong> through its ownership system, preventing entire classes of vulnerabilities at compile-time while maintaining zero runtime overhead.</p>
+<p>Zith provides <strong>strong memory safety guarantees</strong> through its NRA ownership system, preventing entire classes of vulnerabilities at compile-time while maintaining zero runtime overhead.</p>
 <hr>
 <p><strong>Next:</strong> Compare with <a href="./D-faq-rust-comparison.html">Rust</a> →</p>

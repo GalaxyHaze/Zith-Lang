@@ -1,46 +1,72 @@
 <h1>Use Cases</h1>
 <p>Zith is designed for specific domains where its unique features shine.</p>
+
 <h2>Ideal Use Cases</h2>
-<h3> Game Development</h3>
-<p><strong>Why Zith excels:</strong> - Native ECS (Entity-Component-System) support - Scene management built into the language - Zero-overhead performance - Safe concurrency for multi-threaded rendering</p>
-<p><strong>Example:</strong> ```zith component Position { x: f32, y: f32 } component Velocity { dx: f32, dy: f32 } component Sprite { texture: Texture, frame: u32 }</p>
-<p>entity Player { Position, Velocity, Sprite, Health }</p>
-<p>scene GameLevel { entities: [Entity], physics: PhysicsWorld,</p>
-<p>fn update(dt: f32) { // System processes entities automatically movement_system.run(entities, dt); render_system.run(entities, camera); } } ```</p>
-<p><strong>Real projects:</strong> - 2D game engines - Game tools and editors - Server-side game logic - Procedural generation tools</p>
-<h3> Systems Programming</h3>
-<p><strong>Why Zith excels:</strong> - Manual memory control without GC - Compile-time safety guarantees - C FFI for existing libraries - Predictable performance</p>
-<p><strong>Example:</strong> ```zith // Safe system utility fn process_file(path: str): Result<[u8], IoError> { let file = File::open(path)?; let mut buffer: unique [u8] = alloc.new([0; 4096]);</p>
-<p>let bytes_read = file.read(mut buffer)?; return Ok(buffer[0..bytes_read]); } ```</p>
-<p><strong>Real projects:</strong> - CLI tools - File processors - Network services - Embedded controllers - Device drivers (with unsafe)</p>
-<h3> Domain-Specific Languages (DSLs)</h3>
-<p><strong>Why Zith excels:</strong> - Context system for safe embedded languages - No string parsing or injection risks - Type-safe by design - Clean syntax for DSL users</p>
-<p><strong>Example:</strong> ```zith context SQL { use infix = SQL.operators;</p>
-<p>infix operator SELECT(cols); infix operator FROM(table); infix operator WHERE(condition); infix operator ORDER_BY(col, dir); }</p>
-<p>use context SQL { let query = SELECT(["name", "email"]) FROM(users) WHERE(age > 18 AND active = true) ORDER_BY(name, ASC);</p>
-<p>// Type-safe, no SQL injection possible let results = db.execute(query); } ```</p>
-<p><strong>Real projects:</strong> - Query builders - Configuration languages - Template engines - Build systems - Rule engines</p>
-<h3> Data Processing</h3>
-<p><strong>Why Zith excels:</strong> - Fast compilation for rapid iteration - Efficient memory usage - Safe parallel processing - Easy integration with C libraries</p>
-<p><strong>Example:</strong> ``<code>zith fn process_dataset(data: view [Record]): [Result] { return data .parallel_filter(|r| r.valid) .parallel_map(|r| transform(r)) .collect(); } </code>``</p>
-<p><strong>Real projects:</strong> - ETL pipelines - Log processors - Data analysis tools - Batch processors</p>
-<h3> Embedded Systems</h3>
-<p><strong>Why Zith excels:</strong> - No runtime overhead - Deterministic memory usage - Direct hardware access (via unsafe) - Small binary sizes</p>
-<p><strong>Example:</strong> ``<code>zith #[no_std] mod firmware { unsafe { let gpio = 0x40020000 as *mut u32; *gpio = 0x01;  // Set pin high } } </code>``</p>
-<p><strong>Real projects:</strong> - Microcontroller firmware - IoT devices - Real-time systems - Robotics controllers</p>
+
+<h3>Game Development</h3>
+<p><strong>Why Zith excels:</strong> Native ECS support, scenes built into the language, zero-overhead performance, safe concurrency.</p>
+<pre><code class="language-zith">component Position { x: f32, y: f32 }
+component Velocity { dx: f32, dy: f32 }
+
+scene GameLevel {
+    fn update(dt: f32) {
+        // Systems process entities automatically
+        movement_system.run(entities, dt);
+        render_system.run(entities, camera);
+    }
+}</code></pre>
+<p><strong>Real projects:</strong> 2D game engines, game tools and editors, server-side game logic, procedural generation tools.</p>
+
+<h3>Systems Programming</h3>
+<p><strong>Why Zith excels:</strong> Manual memory control without GC, compile-time safety, C FFI, predictable performance.</p>
+<pre><code class="language-zith">fn processFile(path: string): [u8]! {
+    let file = File.open(path)!
+    file.readAll()!
+}</code></pre>
+<p><strong>Real projects:</strong> CLI tools, file processors, network services, embedded controllers, device drivers (with <code>unsafe</code>).</p>
+
+<h3>Domain-Specific Languages (DSLs)</h3>
+<p><strong>Why Zith excels:</strong> Context system for safe embedded languages, no string parsing or injection risks, type-safe by design.</p>
+<pre><code class="language-zith">use SQL QueryBlock {
+    SELECT name, email FROM users
+    WHERE age > 18 AND active = true
+    ORDER BY name ASC
+}</code></pre>
+<p><strong>Real projects:</strong> Query builders, configuration languages, template engines, build systems, rule engines.</p>
+
+<h3>Data Processing</h3>
+<p><strong>Why Zith excels:</strong> Fast compilation, efficient memory usage, safe parallel processing, C interop.</p>
+<pre><code class="language-zith">fn processDataset(data: view [Record]): [Result] {
+    data
+        -> filter(|r| r.valid)
+        -> map(|r| transform(r))
+}</code></pre>
+<p><strong>Real projects:</strong> ETL pipelines, log processors, data analysis tools, batch processors.</p>
+
+<h3>Embedded Systems</h3>
+<p><strong>Why Zith excels:</strong> No runtime overhead, deterministic memory, direct hardware access (via <code>unsafe</code>), small binaries.</p>
+<pre><code class="language-zith">raw fn setPin(addr: opaque, val: u32) {
+    unsafe {
+        let ptr = addr as *u32;
+        *ptr = val;
+    }
+}</code></pre>
+<p><strong>Real projects:</strong> Microcontroller firmware, IoT devices, real-time systems, robotics controllers.</p>
+
 <h2>Not Recommended For</h2>
-<h3> Web Frontend Development</h3>
-<p><strong>Why not:</strong> - No native WASM target yet (in progress) - Better alternatives exist (TypeScript, ReasonML) - DOM manipulation not a priority</p>
-<p><strong>Alternative:</strong> Use TypeScript, ReScript, or compile to JS</p>
-<h3> Pure Functional Programming</h3>
-<p><strong>Why not:</strong> - Imperative by design - Limited higher-kinded types - No lazy evaluation by default</p>
-<p><strong>Alternative:</strong> Use Haskell, OCaml, or Scala</p>
-<h3> Rapid Web Backend Prototyping</h3>
-<p><strong>Why not:</strong> - Smaller web framework ecosystem - More verbose than Python/Ruby - Compilation time (though fast) vs interpreted</p>
-<p><strong>Alternative:</strong> Use Python (FastAPI), Ruby (Rails), or Go</p>
-<h3> Mobile App Development</h3>
-<p><strong>Why not:</strong> - Limited mobile platform support - No native UI frameworks - iOS/Android tooling immature</p>
-<p><strong>Alternative:</strong> Use Swift, Kotlin, or Flutter/Dart</p>
+
+<h3>Web Frontend Development</h3>
+<p><strong>Why not:</strong> No native WASM target yet (in progress), better alternatives exist (TypeScript, ReScript).</p>
+
+<h3>Pure Functional Programming</h3>
+<p><strong>Why not:</strong> Imperative by design, limited higher-kinded types, no lazy evaluation by default.</p>
+
+<h3>Rapid Web Backend Prototyping</h3>
+<p><strong>Why not:</strong> Smaller web framework ecosystem, more verbose than Python/Ruby.</p>
+
+<h3>Mobile App Development</h3>
+<p><strong>Why not:</strong> Limited mobile platform support, no native UI frameworks, iOS/Android tooling immature.</p>
+
 <h2>Industry Applications</h2>
 <h3>Gaming Industry</h3>
 <ul>
@@ -66,13 +92,7 @@
   <li><strong>Research prototypes</strong>: Quick implementation</li>
   <li><strong>Student projects</strong>: Accessible yet powerful</li>
 </ul>
-<h2>Success Stories</h2>
-<h3>Case Study 1: Indie Game Studio</h3>
-<p><strong>Challenge:</strong> Needed fast iteration for gameplay prototyping <strong>Solution:</strong> Zith's ECS and scene system <strong>Result:</strong> 40% faster development cycle vs C++</p>
-<h3>Case Study 2: Data Pipeline Tool</h3>
-<p><strong>Challenge:</strong> Process TB of logs safely and efficiently <strong>Solution:</strong> Zith's ownership model + parallel processing <strong>Result:</strong> Zero memory bugs in production, 2x faster than Python</p>
-<h3>Case Study 3: Educational Platform</h3>
-<p><strong>Challenge:</strong> Teach systems programming without overwhelming students <strong>Solution:</strong> Zith's gentle learning curve <strong>Result:</strong> 80% course completion rate vs 50% with C</p>
+
 <h2>Getting Started with Your Use Case</h2>
 <table>
   <tr>

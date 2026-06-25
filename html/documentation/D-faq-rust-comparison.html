@@ -1,5 +1,6 @@
 <h1>Zith vs Rust</h1>
 <p>Both Zith and Rust offer memory safety without garbage collection, but they take different approaches.</p>
+
 <h2>Quick Comparison</h2>
 <table>
   <tr>
@@ -11,7 +12,7 @@
   <tr>
     <td><strong>Memory Safety</strong></td>
     <td> Borrow checker</td>
-    <td> Ownership types</td>
+    <td> NRA ownership types</td>
     <td>Tie</td>
   </tr>
   <tr>
@@ -21,15 +22,27 @@
     <td> Zith</td>
   </tr>
   <tr>
-    <td><strong>Syntax</strong></td>
-    <td>Complex keywords</td>
-    <td>C-like</td>
+    <td><strong>Lifetimes</strong></td>
+    <td>Explicit annotations</td>
+    <td>Implicit through types</td>
     <td> Zith</td>
   </tr>
   <tr>
-    <td><strong>Lifetimes</strong></td>
-    <td>Explicit annotations</td>
-    <td>Implicit</td>
+    <td><strong>Error Handling</strong></td>
+    <td>Result/Option + macros</td>
+    <td>Failable types + chain flow</td>
+    <td> Zith</td>
+  </tr>
+  <tr>
+    <td><strong>DSLs</strong></td>
+    <td> Macros only</td>
+    <td> Contexts + words + macros</td>
+    <td> Zith</td>
+  </tr>
+  <tr>
+    <td><strong>State Machines</strong></td>
+    <td>External crates</td>
+    <td>Built-in flow fn / markers</td>
     <td> Zith</td>
   </tr>
   <tr>
@@ -45,12 +58,6 @@
     <td> Rust</td>
   </tr>
   <tr>
-    <td><strong>Safety Guarantees</strong></td>
-    <td>Maximum</td>
-    <td>Strong</td>
-    <td> Rust</td>
-  </tr>
-  <tr>
     <td><strong>Beginner Friendly</strong></td>
     <td></td>
     <td></td>
@@ -62,109 +69,103 @@
     <td> Built-in</td>
     <td> Zith</td>
   </tr>
-  <tr>
-    <td><strong>Safe DSLs</strong></td>
-    <td> (macros)</td>
-    <td> Contexts</td>
-    <td> Zith</td>
-  </tr>
 </table>
+
 <h2>Key Differences</h2>
+
 <h3>1. Ownership Model</h3>
-<p><strong>Rust:</strong> Uses a borrow checker with lifetimes ``<code>rust fn process<'a>(data: &'a mut Vec<i32>) -> &'a i32 { &data[0]  // Lifetime annotations required } </code>``</p>
-<p><strong>Zith:</strong> Ownership visible in types, no lifetime annotations ``<code>zith fn process(data: mut [i32]): view i32 { return data[0];  // No lifetimes needed } </code>``</p>
+<pre><code class="language-rust">// Rust: borrow checker with lifetimes
+fn process&lt;'a&gt;(data: &amp;'a mut Vec&lt;i32&gt;) -&gt; &amp;'a i32 {
+    &amp;data[0]
+}</code></pre>
+<pre><code class="language-zith">// Zith: ownership visible in types, no lifetimes
+fn process(data: lend [i32]): view i32 {
+    data[0]
+}</code></pre>
+
 <h3>2. Error Messages</h3>
-<p><strong>Rust:</strong> Can be complex, especially with lifetimes ``<code> error[E0495]: cannot infer an appropriate lifetime due to conflicting requirements --> src/main.rs:10:5 | 10 |     fn get(&self) -> &i32 { &self.data } |     ^^^^^^^^^^^^^^^^^^^^^ | note: first, the lifetime cannot outlive the anonymous lifetime #1 defined on line 9... --> src/main.rs:9:12 | 9  | struct Foo { data: i32 } |            ^^^^ note: ...but the lifetime must also include the declared lifetime parameter 'a --> src/main.rs:8:16 | 8  | impl<'a> Foo { |                ^ </code>``</p>
-<p><strong>Zith:</strong> Simpler, more direct ``<code> error[E005]: Invalid ownership modifier --> src/main.zith:10:8 | 10 | let ref: mut i32 = data;  // data is already borrowed |         ^^^ Cannot create mutable reference while other references exist | = help: Use 'view' for read-only access or wait for existing references to end </code>``</p>
+<pre><code>// Rust
+error[E0495]: cannot infer an appropriate lifetime
+  --&gt; src/main.rs:10:5
+   |
+10 |     fn get(&amp;self) -&gt; &amp;i32 { &amp;self.data }
+   |     ^^^^^^^^^^^^^^^^^^^^^
+   = note: first, the lifetime cannot outlive ...
+
+// Zith
+error[E005]: Invalid ownership modifier
+  --&gt; src/main.zith:10:8
+   |
+10 | let ref: lend i32 = data;
+   |         ^^^^ Cannot create mutable reference while other references exist
+   | = help: Use 'view' for read-only access</code></pre>
+
 <h3>3. Syntax Complexity</h3>
-<p><strong>Rust:</strong> Many special keywords and concepts ``<code>rust let x: Box<dyn Iterator<Item = i32> + 'static> = Box::new(vec![1, 2, 3].into_iter()); </code>``</p>
-<p><strong>Zith:</strong> More straightforward ``<code>zith let x: Iterator<i32> = vec![1, 2, 3].iter(); </code>``</p>
+<pre><code class="language-rust">// Rust: many special keywords
+let x: Box&lt;dyn Iterator&lt;Item = i32&gt; + 'static&gt; = ...;
+
+// Zith: more straightforward
+let x: dyn Iterator(i32) = ...;</code></pre>
+
 <h3>4. Generics</h3>
-<p><strong>Rust:</strong> Powerful but verbose ``<code>rust fn process<T: Clone + Debug>(items: Vec<T>) -> Vec<T> where T: PartialEq, { items.clone() } </code>``</p>
-<p><strong>Zith:</strong> Cleaner syntax ``<code>zith fn process<T>(items: [T]) -> [T] where T: Clone + Debug + PartialEq { return items.clone(); } </code>``</p>
+<pre><code class="language-rust">// Rust: powerful but verbose
+fn process&lt;T: Clone + Debug&gt;(items: Vec&lt;T&gt;) -&gt; Vec&lt;T&gt;
+where T: PartialEq { items.clone() }
+
+// Zith: cleaner
+fn process&lt;T&gt;(items: [T]) -&gt; [T]
+    where T: Clone + Debug + PartialEq { items.clone() }</code></pre>
+
 <h2>When to Choose Zith</h2>
-<h3> Choose Zith If:</h3>
-<ol>
-  <li><strong>You're learning systems programming</strong></li>
-  <li>Gentler learning curve</li>
-  <li>Faster feedback from compiler</li>
-  <li>Less frustration with borrow checker</li>
-</ol>
-<ol>
-  <li><strong>You're building games</strong></li>
-  <li>Native ECS support</li>
-  <li>Scene management built-in</li>
-  <li>Performance-focused design</li>
-</ol>
-<ol>
-  <li><strong>You want rapid prototyping</strong></li>
-  <li>Faster compilation</li>
-  <li>Simpler syntax</li>
-  <li>Less boilerplate</li>
-</ol>
-<ol>
-  <li><strong>You need safe DSLs</strong></li>
-  <li>Context system for embedded languages</li>
-  <li>No macro complexity</li>
-  <li>Type-safe by design</li>
-</ol>
-<ol>
-  <li><strong>Your team has mixed experience levels</strong></li>
-  <li>Easier onboarding for juniors</li>
-  <li>C-like familiarity for seniors</li>
-  <li>Consistent code style</li>
-</ol>
+<ul>
+  <li><strong>Learning systems programming</strong> — gentler curve, faster feedback</li>
+  <li><strong>Building games</strong> — native ECS, scenes, flow functions</li>
+  <li><strong>Rapid prototyping</strong> — faster compilation, simpler syntax</li>
+  <li><strong>Safe DSLs</strong> — context system, no macro complexity</li>
+  <li><strong>Mixed-experience teams</strong> — easier onboarding, C-like familiarity</li>
+</ul>
+
 <h2>When to Choose Rust</h2>
-<h3> Choose Rust If:</h3>
-<ol>
-  <li><strong>Maximum safety is critical</strong></li>
-  <li>More mature safety guarantees</li>
-  <li>Larger body of proven code</li>
-  <li>More security audits</li>
-</ol>
-<ol>
-  <li><strong>You need a large ecosystem</strong></li>
-  <li>Crates.io has 100k+ packages</li>
-  <li>More libraries for common tasks</li>
-  <li>Better community support</li>
-</ol>
-<ol>
-  <li><strong>Production deployment is imminent</strong></li>
-  <li>More battle-tested</li>
-  <li>Better tooling maturity</li>
-  <li>Larger talent pool</li>
-</ol>
-<ol>
-  <li><strong>You need specific platforms</strong></li>
-  <li>WASM support is excellent</li>
-  <li>More OS/architecture support</li>
-  <li>Better mobile support</li>
-</ol>
-<ol>
-  <li><strong>Formal verification matters</strong></li>
-  <li>More research backing</li>
-  <li>Formal methods integration</li>
-  <li>Academic interest</li>
-</ol>
-<h2>Migration Considerations</h2>
-<h3>From Rust to Zith</h3>
-<p><strong>Easier:</strong> - Ownership concepts transfer directly - Similar performance characteristics - Zero-cost abstractions</p>
-<p><strong>Challenges:</strong> - Smaller ecosystem - Different error handling - Learning Zith-specific features (contexts, scenes)</p>
-<h3>From C/C++ to Zith</h3>
-<p><strong>Easier:</strong> - Familiar C-like syntax - No radical paradigm shift - Gradual feature adoption</p>
-<p><strong>Benefits:</strong> - Memory safety without GC - Modern tooling - Better error messages</p>
-<h2>Code Comparison Example</h2>
+<ul>
+  <li><strong>Maximum safety is critical</strong> — more mature guarantees</li>
+  <li><strong>Large ecosystem needed</strong> — crates.io has 100k+ packages</li>
+  <li><strong>Production deployment imminent</strong> — more battle-tested</li>
+  <li><strong>Specific platforms</strong> — WASM, more OS/arch support</li>
+</ul>
+
+<h2>Code Comparison</h2>
 <h3>Same Program in Both Languages</h3>
-<p><strong>Rust:</strong> ```rust use std::collections::HashMap;</p>
-<p>fn main() { let mut scores: HashMap<&str, i32> = HashMap::new(); scores.insert("Alice", 95); scores.insert("Bob", 87);</p>
-<p>for (name, score) in &scores { println!("{}: {}", name, score); }</p>
-<p>if let Some(alice_score) = scores.get("Alice") { println!("Alice scored: {}", alice_score); } } ```</p>
-<p><strong>Zith:</strong> ```zith fn main() { let mut scores = Map<str, i32>.new(); scores["Alice"] = 95; scores["Bob"] = 87;</p>
-<p>for (name, score) in scores { print("{name}: {score}"); }</p>
-<p>if let alice_score = scores.get("Alice") { print("Alice scored: {alice_score}"); } } ```</p>
+<pre><code class="language-rust">// Rust
+use std::collections::HashMap;
+
+fn main() {
+    let mut scores: HashMap&lt;&amp;str, i32&gt; = HashMap::new();
+    scores.insert("Alice", 95);
+    scores.insert("Bob", 87);
+
+    for (name, score) in &amp;scores {
+        println!("{}: {}", name, score);
+    }
+
+    if let Some(alice_score) = scores.get("Alice") {
+        println!("Alice scored: {}", alice_score);
+    }
+}</code></pre>
+<pre><code class="language-zith">// Zith
+fn main() {
+    var scores = Map{ "Alice": 95, "Bob": 87 };
+
+    for (name, score) in scores {
+        @println("{name}: {score}");
+    }
+
+    if let alice_score = scores.get("Alice") {
+        @println("Alice scored: {alice_score}");
+    }
+}</code></pre>
+
 <h2>The Bottom Line</h2>
-<p><strong>Zith</strong> is for developers who want: - Memory safety without complexity - Fast iteration and compilation - Built-in features for specific domains (games, DSLs) - A gentler introduction to systems programming</p>
-<p><strong>Rust</strong> is for developers who need: - Maximum safety guarantees - A mature ecosystem - Production-proven track record - Platform diversity</p>
-<p>Both are excellent choices. The best depends on your specific needs, team expertise, and project requirements.</p>
+<p><strong>Zith</strong> is for developers who want memory safety without complexity, fast iteration, built-in features for games and DSLs, and a gentler introduction to systems programming.</p>
+<p><strong>Rust</strong> is for developers who need maximum safety guarantees, a mature ecosystem, production-proven track record, and platform diversity.</p>
 <hr>
 <p><strong>Next:</strong> Explore <a href="./D-faq-use-cases.html">Use Cases</a> →</p>

@@ -69,10 +69,10 @@ let pt = Point { x: 1.0, y: 2.0 };
 var pt2 = Point { x: 1.0, y: 2.0 };
 pt2.x = 3.0;                        // OK: var binding, deep mutability</code></pre>
 
-<p>To control mutability at a finer grain, use memory keywords on the <em>type</em> rather than the binding:</p>
+<p>To control mutability at a finer grain, use <code>var</code> at the binding for mutable access, and <code>let</code> to prevent reassignment:</p>
 
-<pre><code class="language-zith">let pt: mut Point = Point { x: 1.0, y: 2.0 };  // cannot reassign pt, but fields are mutable
-var pt2: Point = Point { x: 1.0, y: 2.0 };      // can reassign pt2, but Point fields follow</code></pre>
+<pre><code class="language-zith">let pt = Point { x: 1.0, y: 2.0 };              // immutable binding, no mutations
+var pt2 = Point { x: 1.0, y: 2.0 };             // mutable binding, deep mutation allowed</code></pre>
 
 <h2>Destructuring</h2>
 

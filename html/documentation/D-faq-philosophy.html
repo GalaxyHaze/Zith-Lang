@@ -1,7 +1,9 @@
 <h1>Language Philosophy</h1>
 <p>Zith was created with clear principles that guide every design decision.</p>
+
 <h2>Why Zith Exists</h2>
 <p>Zith was born from a simple observation: <strong>systems programming languages had become either too complex or too unsafe</strong>.</p>
+
 <h3>The Gap We Fill</h3>
 <table>
   <tr>
@@ -41,64 +43,67 @@
     <td><strong>Safe AND accessible</strong></td>
   </tr>
 </table>
+
 <h2>Core Design Principles</h2>
+
 <h3>1. Clarity Over Cleverness</h3>
 <p>Every language feature should be immediately understandable:</p>
-<pre><code class="language-zith">// Clear ownership - no hidden magic
-fn process(mut self: Health, dmg: view u16) {
-    // 'mut self' = I own this and can modify
+<pre><code class="language-zith">fn process(self: lend Health, dmg: view u16) {
+    // 'lend' = exclusive mutable borrow
     // 'view u16' = read-only reference
 }</code></pre>
+
 <h3>2. Progressive Complexity</h3>
-<p>Start simple, add features only when needed:</p>
 <ul>
   <li><strong>Level 1</strong>: C-like syntax for beginners</li>
   <li><strong>Level 2</strong>: Components and entities for game dev</li>
   <li><strong>Level 3</strong>: Contexts for DSLs and advanced metaprogramming</li>
 </ul>
+
 <h3>3. Zero Runtime Overhead</h3>
-<p>Everything happens at compile-time:</p>
 <ul>
   <li>No garbage collector</li>
   <li>No hidden allocations</li>
   <li>No runtime type information (unless explicitly requested)</li>
 </ul>
+
 <h3>4. Explicit Is Better Than Implicit</h3>
 <p>Ownership, mutability, and effects are visible in types:</p>
-<pre><code class="language-zith">// You can see ownership at a glance
-let data: unique [i32] = alloc.new([1, 2, 3]);
+<pre><code class="language-zith">var data: [i32] = [1, 2, 3];
 let ref: view [i32] = data;      // Read-only borrow
-let mut_ref: mut [i32] = data;   // Mutable borrow (requires transfer)</code></pre>
+let mut_ref: lend [i32] = data;  // Exclusive mutable borrow</code></pre>
+
 <h3>5. Safety Without Punishment</h3>
-<p>The compiler helps you, not fights you:</p>
 <ul>
   <li>Clear error messages with suggestions</li>
   <li>Gradual learning curve for ownership</li>
   <li>Escape hatches when needed (<code>unsafe</code> blocks)</li>
 </ul>
+
 <h2>Trade-offs We Made</h2>
-<h3> What We Gained</h3>
+<h3>What We Gained</h3>
 <ul>
   <li><strong>Accessibility</strong>: Easier to learn than Rust</li>
   <li><strong>Expressiveness</strong>: Rich feature set for complex domains</li>
   <li><strong>Performance</strong>: Zero-cost abstractions</li>
   <li><strong>Safety</strong>: Compile-time guarantees without GC</li>
 </ul>
-<h3> What We Accepted</h3>
+
+<h3>What We Accepted</h3>
 <ul>
   <li><strong>Smaller ecosystem</strong>: Growing, but not as large as Rust/C++</li>
   <li><strong>Less proven</strong>: Newer language, fewer battle-tested projects</li>
   <li><strong>Tooling maturity</strong>: Improving rapidly but still developing</li>
 </ul>
+
 <h2>Our Vision</h2>
-<p>Zith aims to be:</p>
 <ol>
   <li><strong>The best language for learning systems programming</strong></li>
   <li><strong>A practical choice for game engines and graphics</strong></li>
   <li><strong>A bridge between C simplicity and modern safety</strong></li>
   <li><strong>A platform for safe DSL creation</strong></li>
 </ol>
-<p>We're not trying to replace Rust for all use cases. Instead, we offer an alternative that prioritizes <strong>accessibility without sacrificing safety</strong>.</p>
+
 <h2>Guiding Questions</h2>
 <p>Every feature proposal is evaluated against:</p>
 <ol>
@@ -108,6 +113,5 @@ let mut_ref: mut [i32] = data;   // Mutable borrow (requires transfer)</code></p
   <li>Does this maintain zero runtime overhead?</li>
   <li>Does this improve safety without hurting ergonomics?</li>
 </ol>
-<p>If a feature doesn't pass these tests, it doesn't make it into Zith.</p>
 <hr>
 <p><strong>Next:</strong> Learn about <a href="./D-faq-security.html">Security</a> →</p>

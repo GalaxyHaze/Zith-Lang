@@ -91,7 +91,7 @@ a = Point { x: 3.0, y: 4.0 };      // OK: reassignment creates a new node for a<
 </ul>
 
 <pre><code class="language-zith">fn update(a: lend Point, b: lend Point) { }
-let pt = mut Point { x: 1.0, y: 2.0 };
+let pt = Point { x: 1.0, y: 2.0 };
 // update(pt, pt);                  -- COMPILE ERROR: same node in two arguments</code></pre>
 
 <h3>Rule 2 — No Dead Node Access</h3>
@@ -113,9 +113,9 @@ let b = a;
 <p>A <code>lend</code> value may not be stored, moved, or captured. It may be passed as a call argument or returned (passing the promise to the caller).</p>
 
 <pre><code class="language-zith">fn scale(p: lend Point, factor: f32) { p.x *= factor; p.y *= factor; }
-let pt = mut Point { x: 3.0, y: 4.0 };
+var pt = Point { x: 3.0, y: 4.0 };
 scale(pt, 2.0);                      // pt is lent to scale
-@println(pt.x);                      // OK: borrow has ended</code></pre>
+@println(pt.x);                      // OK: lend has ended</code></pre>
 
 <h2>Ownership in Practice</h2>
 
@@ -127,9 +127,9 @@ scale(pt, 2.0);                      // pt is lent to scale
     p.y += dy;
 }
 
-let pt = mut Point { x: 0.0, y: 0.0 };
+var pt = Point { x: 0.0, y: 0.0 };
 move_by(pt, 5.0, 3.0);
-// pt is accessible again here</code></pre>
+// pt is accessible again here — lend has ended</code></pre>
 
 <h3><code>view</code> — Read-Only Non-Owning Reference</h3>
 <p>Many <code>view</code> references may coexist. The underlying value cannot be mutated through a <code>view</code>.</p>
