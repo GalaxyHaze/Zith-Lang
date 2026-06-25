@@ -50,6 +50,24 @@ use WebApp {
     }
 }</code></pre>
 
+<h2>Tag Macros — HTML-like DSL Syntax</h2>
+<p>Tag macros let you define XML/HTML-like syntax inside a context. They expand at compile time into function calls.</p>
+
+<pre><code class="language-zith">context HTML {
+    tag macro div(content) { "&lt;div&gt;" + content + "&lt;/div&gt;" }
+    tag macro span(content) { "&lt;span&gt;" + content + "&lt;/span&gt;" }
+    tag macro a(href: string, content) {
+        "&lt;a href=\\"" + href + "\\"&gt;" + content + "&lt;/a&gt;"
+    }
+}
+
+use HTML { &lt;div&gt; &lt;span&gt;Hello&lt;/span&gt; &lt;a href="/"&gt;Home&lt;/a&gt; &lt;/div&gt; }
+
+// Expands at compile time to:
+// "&lt;div&gt;&lt;span&gt;Hello&lt;/span&gt;&lt;a href=\"/\"&gt;Home&lt;/a&gt;&lt;/div&gt;"</code></pre>
+
+<p>Tag macros are pure compile-time expansions — no runtime parsing, no injection vulnerabilities. The arguments are type-checked Zith expressions.</p>
+
 <h2>Use Cases</h2>
 <ul>
   <li><strong>Web Development:</strong> HTML templating, HTTP routing DSLs</li>

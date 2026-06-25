@@ -1,5 +1,10 @@
 <h1>Standard Library</h1>
-<p>The Zith standard library is available via <code>std</code> — guaranteed stable across versions within an edition.</p>
+<p>The Zith standard library is organised in three tiers:</p>
+<ul>
+  <li><strong><code>std</code></strong> — Stable. Guaranteed backward compatibility within an edition.</li>
+  <li><strong><code>utils</code></strong> — Experimental. May change between versions.</li>
+  <li><strong><code>c</code></strong> — C bindings. FFI wrappers for common C libraries.</li>
+</ul>
 
 <h2>Importing Modules</h2>
 <pre><code class="language-zith">from std.io.console;     // console I/O macros

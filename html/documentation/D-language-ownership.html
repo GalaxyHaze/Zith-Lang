@@ -284,5 +284,15 @@ let _ = spawn worker(Rc.clone(shared));             // runtime reference countin
   </tr>
 </table>
 
+<h2>Best Practices</h2>
+<ul>
+  <li><strong>Default to <code>default</code></strong> — Start with implicit ownership. Most code doesn't need explicit keywords.</li>
+  <li><strong>Use <code>view</code> for reading</strong> — For functions that only need read access. Allows multiple callers.</li>
+  <li><strong>Use <code>lend</code> for temporary mutation</strong> — When you need exclusive write access for a function call.</li>
+  <li><strong>Use <code>unique</code> for heap-allocated single-owner data</strong> — Moves instead of copies, no aliasing.</li>
+  <li><strong>Use <code>share</code> intentionally</strong> — Only when multiple mutable references are truly needed.</li>
+  <li><strong>Use <code>belong</code> for back-pointers</strong> — Trees, linked lists, graphs where child refers to parent.</li>
+</ul>
+
 <hr>
 <p><strong>Next:</strong> <a href="./D-language-memory.html">Memory Management</a> — allocation, scenes, and runtime memory strategies.</p>
