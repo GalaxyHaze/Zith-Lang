@@ -93,6 +93,13 @@
       {
         "title": "Stdlib Reference",
         "link": "./D-reference-stdlib.html"
+      },
+      {
+        "title": "Development",
+        "link": "./D-dev-wasm-build.html",
+        "children": [
+          { "title": "WASM Build", "link": "./D-dev-wasm-build.html" }
+        ]
       }
     ]
   }

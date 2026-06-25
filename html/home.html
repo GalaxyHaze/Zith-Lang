@@ -56,6 +56,11 @@
                     <p>News</p>
                 </div>
 
+                <div class="icon" onclick="openWindow('playground')">
+                    <img src="../media/Icons/Playground.svg">
+                    <p>Playground</p>
+                </div>
+
             </div> 
 
             <footer>
@@ -121,8 +126,22 @@
                 </div>
             </div>
             <div class="content">
-                <h2>IN BUILD</h2>
-                <p>Sorry but doesn't have a Start page yet.</p>
+                <div class="start-section">
+                    <p class="start-heading">Getting Started</p>
+                    <a href="./documentation/D-intro-installation.html" target="_blank" class="start-link">Install Zith</a>
+                    <a href="./documentation/D-quickstart-hello-world.html" target="_blank" class="start-link">Write your first program</a>
+                    <a href="./documentation/D-language-overview.html" target="_blank" class="start-link">Language overview</a>
+                </div>
+                <div class="start-section">
+                    <p class="start-heading">Tools</p>
+                    <a href="./documentation/D-cli.html" target="_blank" class="start-link">CLI reference</a>
+                    <a href="./documentation/D-home.html" target="_blank" class="start-link">Full documentation</a>
+                </div>
+                <div class="start-section">
+                    <p class="start-heading">Community</p>
+                    <a href="https://github.com/GalaxyHaze/Zith" target="_blank" class="start-link">GitHub</a>
+                    <a href="https://discord.gg/" target="_blank" class="start-link">Discord</a>
+                </div>
             </div>
         </div>
 
@@ -136,6 +155,23 @@
                 </div>
             </div>
             <div class="content" id="newsContent"></div>
+        </div>
+
+        <div class="window hidden" id="playground">
+            <div class="titlebar">
+                <span>Playground.zith</span>
+                <div class="buttons">
+                    <button>-</button>
+                    <button onclick="toggleMaximize('playground')">o</button>
+                    <button onclick="closeWindow('playground')">x</button>
+                </div>
+            </div>
+            <div class="content">
+                <p><em>WASM backend required — coming soon.</em></p>
+                <hr>
+                <p>Write Zith code and run it in the browser once the WASM build is ready.</p>
+                <p>Requirements are tracked <a href="./documentation/D-dev-wasm-build.html" target="_blank">here</a>.</p>
+            </div>
         </div>
 
         <div class="window hidden" id="settings">

@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg
+   width="512"
+   height="512"
+   viewBox="0 0 135.46666 135.46667"
+   version="1.1"
+   id="svg1"
+   xml:space="preserve"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <g id="layer1">
+    <path
+       d="M 33.86666 13.546667 L 33.86666 121.92 L 114.90666 67.733333 Z"
+       style="fill:#ff7f2a;stroke-width:0.264583"
+       id="play" />
+    <rect
+       x="13.546667"
+       y="13.546667"
+       width="108.37333"
+       height="108.37333"
+       rx="6"
+       ry="6"
+       style="fill:none;stroke:#ff7f2a;stroke-width:5.29167"
+       id="frame" />
+  </g>
+</svg>

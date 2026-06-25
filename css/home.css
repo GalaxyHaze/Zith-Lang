@@ -365,6 +365,34 @@ FAKE WINDOW
     padding: 16px;
 }
 
+.start-section {
+    margin-bottom: 16px;
+}
+.start-section:last-child {
+    margin-bottom: 0;
+}
+.start-heading {
+    color: var(--color-orange, #E87F24);
+    font-size: 14px;
+    font-weight: bold;
+    margin: 0 0 6px 0;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+.start-link {
+    display: block;
+    color: #79eeff;
+    text-decoration: none;
+    padding: 4px 8px;
+    margin: 2px 0;
+    font-size: 13px;
+    border-radius: 4px;
+    transition: background 0.15s;
+}
+.start-link:hover {
+    background: rgba(255,255,255,0.08);
+}
+
 .hidden{
     display: none;
 }
