@@ -1,47 +1,51 @@
 <h1>Standard Library</h1>
-<p>The Zith standard library is organized into three parts.</p>
-<h2>Library Structure</h2>
-<h3><code>std</code> — Stable</h3>
-<p>Guaranteed backward compatibility.</p>
-<pre><code class="language-zith">import std;</code></pre>
-<h3><code>utils</code> — Experimental</h3>
-<p>May change between versions.</p>
-<pre><code class="language-zith">import utils;</code></pre>
-<h3><code>c</code> — C Bindings</h3>
-<p>FFI for C libraries.</p>
-<pre><code class="language-zith">import c;</code></pre>
-<h2>Common Modules</h2>
-<pre><code class="language-zith">std/io/console{println, print, eprint}
-std/collections{Vec, Map, Set}
-std::thread::spawn, join
-std::memory::allocate, deallocate
-std::fs::File, open, read, write
-std::json::parse, serialize</code></pre>
-<h2>Standard Traits</h2>
-<pre><code class="language-zith">trait Copy { }
-trait Shared { }
-trait Lent { }
-trait ToString { }
-trait Drawable { }</code></pre>
-<h2>Collections</h2>
-<h3><code>Vec<T></code></h3>
-<p>Dynamic array:</p>
-<pre><code class="language-zith">let vec = Vec::new();
-vec.push(42);
+<p>The Zith standard library is available via <code>std</code> — guaranteed stable across versions within an edition.</p>
+
+<h2>Importing Modules</h2>
+<pre><code class="language-zith">from std.io.console;     // console I/O macros
+from std.mem.arena;      // arena/scene allocation
+from std.collections;    // Vec, Map, Set
+from std.fs;             // file system
+from std.json;           // JSON parsing/serialization</code></pre>
+
+<h2>Console I/O (<code>std.io.console</code>)</h2>
+<pre><code class="language-zith">@println("Hello, World!");
+@println("Value: {}", x);
+@print("no newline");
+@eprint("error message");</code></pre>
+
+<h2>Collections (<code>std.collections</code>)</h2>
+
+<h3><code>Vec&lt;T&gt;</code> — Dynamic Array</h3>
+<pre><code class="language-zith">let vec = Vec{ 1, 2, 3 };
+vec.push(4);
 let first = vec[0];</code></pre>
-<h3><code>Map<K, V></code></h3>
-<p>Key-value store:</p>
-<pre><code class="language-zith">let map = Map::new();
-map.insert("key", "value");
-let val = map.get("key");</code></pre>
-<h3><code>Set<T></code></h3>
-<p>Unique elements:</p>
-<pre><code class="language-zith">let set = Set::new();
+
+<h3><code>Map&lt;K, V&gt;</code> — Key-Value Store</h3>
+<pre><code class="language-zith">let map = Map{ "key": "value" };
+map.insert("name", "Zith");
+let val = map.get("name");</code></pre>
+
+<h3><code>Set&lt;T&gt;</code> — Unique Elements</h3>
+<pre><code class="language-zith">let set = Set{ 1, 2, 3 };
 set.insert(42);</code></pre>
-<h2>I/O</h2>
-<pre><code class="language-zith">println("Hello");       // print to stdout
-print("Value: {}", x); // formatted
-eprint("Error");      // stderr</code></pre>
-<h2>Threading</h2>
-<pre><code class="language-zith">std::thread::spawn(|| { /* work */ })
-std::thread::join(handle)</code></pre>
+
+<h2>File System (<code>std.fs</code>)</h2>
+<pre><code class="language-zith">let file = File.open("data.txt")!;
+let data = file.read()!;
+file.write("output")!;</code></pre>
+
+<h2>Memory &amp; Arenas (<code>std.mem.arena</code>)</h2>
+<pre><code class="language-zith">let arena = @allocate(Arena, 1024);
+let ptr = arena.alloc::&lt;Player&gt;(32);</code></pre>
+
+<h2>Concurrency</h2>
+<pre><code class="language-zith">spawn || { @println("Hello from a task!"); };</code></pre>
+
+<h2>Other Modules</h2>
+<ul>
+  <li><code>std.json</code> — JSON parsing and serialization</li>
+  <li><code>std.time</code> — Timing and sleep utilities</li>
+  <li><code>std.math</code> — Math constants and functions</li>
+  <li><code>std.net</code> — Networking primitives</li>
+</ul>
