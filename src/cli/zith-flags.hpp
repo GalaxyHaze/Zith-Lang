@@ -1,21 +1,25 @@
 #pragma once
 #include "cli/options.hpp"
 #include <cstdlib>
-#include <filesystem>
 #include <string>
-#include <toml++/toml.hpp>
 #include <vector>
+
+#ifndef ZITH_IS_WASM
+#include <filesystem>
+#include <toml++/toml.hpp>
+#endif
 
 #ifdef _WIN32
 #include <windows.h>
 #elif defined(__APPLE__)
 #include <mach-o/dyld.h>
-#else
+#elif !defined(ZITH_IS_WASM)
 #include <unistd.h>
 #endif
 
 namespace zith::cli {
 
+#ifndef ZITH_IS_WASM
 namespace {
 
 std::string getExecutableDir() {
@@ -131,5 +135,11 @@ inline Options loadZithFlags() {
     return process(result);
 #endif
 }
+
+#else
+inline Options loadZithFlags() {
+    return {};
+}
+#endif
 
 } // namespace zith::cli

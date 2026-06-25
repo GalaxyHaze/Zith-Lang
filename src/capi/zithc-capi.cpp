@@ -273,4 +273,56 @@ const char *zithc_last_error(zithc_session *session) {
     return session->last_error.c_str();
 }
 
+const char *zithc_run_to_json(zithc_session *session, int stage) {
+    if (!session) return R"({"success":false,"errors":[{"severity":"error","code":0,"message":"null session","span":{"start":0,"end":0}}]})";
+
+    if (stage < 0)
+        session->session.run();
+    else
+        session->session.runTo(static_cast<zith::cli::Stage>(stage));
+
+    auto &diags = session->session.diags();
+    auto &all = diags.diagnostics();
+
+    std::string json;
+    json += "{\"success\":";
+    json += diags.hasErrors() ? "false" : "true";
+    json += ",\"errors\":[";
+
+    for (size_t i = 0; i < all.size(); ++i) {
+        if (i > 0) json += ",";
+        auto &d = all[i];
+        json += "{\"severity\":\"";
+        switch (d.severity) {
+            case zith::diagnostics::Severity::Note:    json += "note"; break;
+            case zith::diagnostics::Severity::Warning: json += "warning"; break;
+            case zith::diagnostics::Severity::Error:   json += "error"; break;
+            case zith::diagnostics::Severity::Bug:     json += "bug"; break;
+        }
+        json += "\",\"code\":";
+        json += std::to_string(d.code);
+        json += ",\"message\":\"";
+        // Escape JSON special chars in message
+        for (auto c : d.message) {
+            switch (c) {
+                case '"':  json += "\\\""; break;
+                case '\\': json += "\\\\"; break;
+                case '\n': json += "\\n"; break;
+                case '\r': json += "\\r"; break;
+                case '\t': json += "\\t"; break;
+                default:   json += c;
+            }
+        }
+        json += "\",\"span\":{\"start\":";
+        json += std::to_string(d.primary.start);
+        json += ",\"end\":";
+        json += std::to_string(d.primary.end);
+        json += "}}";
+    }
+
+    json += "]}";
+    session->last_error = std::move(json);
+    return session->last_error.c_str();
+}
+
 } // extern "C"

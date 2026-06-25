@@ -46,7 +46,7 @@ bool Solver::solve(zir::hir::HirModule &hir) {
     if (!collectGenerics())
         return false;
 
-    if (!verifyGenericConstraints())
+    if (!verifyGenericConstraints(hir))
         return false;
 
     for (size_t i = 0; i < hir.getFnCount(); i++) {
@@ -132,9 +132,9 @@ bool Solver::checkNumericBoundsInFn(zir::hir::HirFunction &fn) {
     return true;
 }
 
-bool Solver::verifyGenericConstraints() {
-    for (auto &ginfo : generic_fns_) {
-        if (!checkNumericBounds(ginfo.return_type))
+bool Solver::verifyGenericConstraints(zir::hir::HirModule &hir) {
+    for (size_t i = 0; i < hir.getFnCount(); i++) {
+        if (!checkNumericBoundsInFn(hir.getFn(i)))
             return false;
     }
     return true;

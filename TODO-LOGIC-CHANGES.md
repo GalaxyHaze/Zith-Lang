@@ -1,20 +1,16 @@
 # Logic Changes Still Needed
 
-These are bugs or missing implementations found during code review. Unlike the
-refactors already completed (color system, comma-list helpers, spanFrom, etc.),
-each of these changes *alters behavior* and needs design consideration before
-switching from stub/no-op to real logic.
+These are bugs or missing implementations found during code review. Items
+marked **[FIXED]** have been resolved in the current session.
 
 ---
 
-## 1. `mapUnaryOp` Ref/Deref fall-through to Neg  [BUG]
+## ~~1. `mapUnaryOp` Ref/Deref fall-through to Neg~~  **[FIXED]**
 
 **File:** `src/sema/sema-pipeline.cpp:58-67`
 
-`case ast::UnaryOp::Ref:` and `case ast::UnaryOp::Deref:` lack `break` statements
-and fall through to `case ast::UnaryOp::Neg:`. `&x` and `*x` silently become `-x`.
-
-**Fix:** Add a `break` (or better, emit a `HirUnary` with the correct op) for each case.
+Added `Ref`/`Deref` to `HirUnaryOp` enum and proper cases in `mapUnaryOp`.
+Removed the fall-through `default` case.
 
 ---
 
@@ -24,11 +20,15 @@ and fall through to `case ast::UnaryOp::Neg:`. `&x` and `*x` silently become `-x
 
 `expandBodies` iterates `result.structs` but ignores `result.enums`,
 `result.unions`, and `result.traits`. Block bodies in enum/union/trait
-declarations are never re-parsed, making their fields/variants/methods
-invisible to sema.
+declarations are never re-parsed.
 
-**Fix:** Add loops for `result.enums`, `result.unions`, `result.traits`
-alongside the existing `result.structs` loop.
+**Note:** The struct body expansion (`parseStructBody`) is also effectively a
+no-op — it reads tokens but never writes back to `StructDeclNode.fields`.
+All AST type declarations have empty fields/variants/methods arrays. Sema
+uses the symbol table (populated during scan), so basic lookups work.
+
+**Fix:** Write `parseEnumBody`, `parseUnionBody`, `parseTraitBody` functions
+and wire the results back to the AST nodes.
 
 ---
 
@@ -44,14 +44,12 @@ generate no HIR.
 
 ---
 
-## 4. Generic constraint verification is a no-op  [STUB]
+## ~~4. Generic constraint verification is a no-op~~  **[FIXED]**
 
 **File:** `src/solve/solver.cpp:135-141`
 
-`verifyGenericConstraints` iterates functions but never calls
-`checkNumericBoundsInFn`. Generic numeric bounds are silently ignored.
-
-**Fix:** Call `checkNumericBoundsInFn()` inside the loop.
+Changed `verifyGenericConstraints` to accept `HirModule&`, iterates the
+actual module's functions, and calls `checkNumericBoundsInFn` on each.
 
 ---
 
@@ -59,7 +57,7 @@ generate no HIR.
 
 **File:** `src/solve/solver.hpp:26`
 
-`memory::DynArray<MonoCandidate> monomorphs_` exists but no code ever
+`memory::DynArray<MonomorphEntry> monomorphs_` exists but no code ever
 pushes to it. Monomorphization is completely missing.
 
 **Fix:** Implement monomorph candidate collection in `Solver::collectGenerics`
@@ -110,14 +108,12 @@ essentially linear — both branches are always taken sequentially.
 
 ---
 
-## 9. Multi-name let ignores extra names  [BUG]
+## ~~9. Multi-name let ignores extra names~~  **[FIXED]**
 
 **File:** `src/sema/sema-pipeline.cpp:478-481`
 
-`visitLet` allocates a single `HirLet` for `names[0]` and ignores
-`names[1..]`. `let a, b = expr` silently only introduces `a`.
-
-**Fix:** Emit a `HirLet` for each name in the array.
+Changed the single-name declaration + HirLet emission into a loop over
+all names in `n.names`.
 
 ---
 
@@ -135,10 +131,9 @@ the result as the array count.
 
 ## 11. Trait `+` constraint not parsed  [STUB]
 
-**File:** `src/parser/parser.cpp:1539`
+**File:** `src/parser/parser.cpp:1533-1536`
 
-`parseOptTraitConstraint` reads a single trait name and ignores any
-following `+ Trait2 + Trait3`. Multi-trait bounds are silently truncated
-to the first trait.
+`parseTypeExpr` only calls `parseOrExpr` and ignores `+ Trait2 + Trait3`.
+The comment says "requires trait system".
 
-**Fix:** Loop while `consume('+')` and parse additional trait type exprs.
+**Fix:** Implement when the trait system is in place.

@@ -61,9 +61,12 @@ zir::hir::HirUnaryOp mapUnaryOp(ast::UnaryOp op) {
         return zir::hir::HirUnaryOp::Neg;
     case UnaryOp::Not:
         return zir::hir::HirUnaryOp::Not;
-    default:
-        return zir::hir::HirUnaryOp::Neg;
+    case UnaryOp::Ref:
+        return zir::hir::HirUnaryOp::Ref;
+    case UnaryOp::Deref:
+        return zir::hir::HirUnaryOp::Deref;
     }
+    return zir::hir::HirUnaryOp::Neg;
 }
 
 types::TypeId defaultTypeForLit(ast::LitKind kind, types::TypeIntern &types) {
@@ -477,19 +480,20 @@ void SemaPipeline::visitStmt(ast::StmtId id) {
                     pipeline.unifier_.unify(decl_type, init_type);
             }
 
-            auto var_name = n.names.empty() ? std::string_view{} : n.names[0];
-            pipeline.syms().declare(var_name, import::SymbolVisibility::Private, 0, sym_kind,
-                                    ast::kInvalidDecl, memory::Span{});
+            for (auto var_name : n.names) {
+                pipeline.syms().declare(var_name, import::SymbolVisibility::Private, 0, sym_kind,
+                                        ast::kInvalidDecl, memory::Span{});
 
-            zir::hir::HirLet hir_let;
-            hir_let.name = var_name;
-            hir_let.type = init_type;
-            hir_let.init = init;
+                zir::hir::HirLet hir_let;
+                hir_let.name = var_name;
+                hir_let.type = init_type;
+                hir_let.init = init;
 
-            auto hir_id = pipeline.addHirExpr(zir::hir::HirExpr{hir_let}, init_type);
-            if (pipeline.current_fn_) {
-                if (!pipeline.current_fn_->blocks.empty())
-                    pipeline.current_fn_->blocks[0].insts.push(hir_id);
+                auto hir_id = pipeline.addHirExpr(zir::hir::HirExpr{hir_let}, init_type);
+                if (pipeline.current_fn_) {
+                    if (!pipeline.current_fn_->blocks.empty())
+                        pipeline.current_fn_->blocks[0].insts.push(hir_id);
+                }
             }
         }
 

@@ -1,13 +1,20 @@
 #pragma once
 #include "memory/arena.hpp"
 #include "memory/dyn-array.hpp"
-#include "mio/mmap.hpp"
 #include "span.hpp"
+
+#ifndef ZITH_IS_WASM
+#include "mio/mmap.hpp"
+#endif
 
 namespace zith::memory {
 
 struct SourceLoc {
+#ifndef ZITH_IS_WASM
     using FileVar = std::variant<mio::mmap_source, mio::mmap_sink, std::string>;
+#else
+    using FileVar = std::string;
+#endif
     FileVar file;
     std::string path;
     memory::DynArray<ByteOffset> line_starts;

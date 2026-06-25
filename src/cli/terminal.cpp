@@ -3,7 +3,7 @@
 
 #ifdef _WIN32
 #include <io.h>
-#else
+#elif !defined(ZITH_IS_WASM)
 #include <unistd.h>
 #endif
 
@@ -14,7 +14,10 @@ static bool shouldUse(const std::string &setting, FILE *stream) {
         return true;
     if (setting == "off")
         return false;
-#ifdef _WIN32
+#ifdef ZITH_IS_WASM
+    (void)stream;
+    return false;
+#elif _WIN32
     return _isatty(_fileno(stream)) != 0;
 #else
     return isatty(fileno(stream)) != 0;
@@ -30,7 +33,10 @@ Term init(const Options &opts) {
 
 Term init() {
     Term t;
-#ifdef _WIN32
+#ifdef ZITH_IS_WASM
+    t.cerr_on = false;
+    t.cout_on = false;
+#elif _WIN32
     t.cerr_on = _isatty(_fileno(stderr));
     t.cout_on = _isatty(_fileno(stdout));
 #else

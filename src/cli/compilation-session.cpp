@@ -20,7 +20,7 @@
 #include <windows.h>
 #elif defined(__APPLE__)
 #include <mach-o/dyld.h>
-#else
+#elif !defined(ZITH_IS_WASM)
 #include <unistd.h>
 #endif
 
@@ -32,18 +32,21 @@ CompilationSession::CompilationSession(const Options &opts, std::string file_pat
       ast_builder_(ast_arena_), import_mgr_(sym_arena_, source_map_, diags_), syms_(sym_arena_),
       resolved_syms_(sym_arena_), types_(type_arena_), hir_module_(hir_arena_),
       mir_module_(mir_arena_), zir_module_(zir_arena_) {
+    plan_.target = opts_.target_stage;
+    diags_.setColor(term::useColor(opts_));
+    diags_.setSourceMap(&source_map_);
+
+#ifndef ZITH_IS_WASM
     namespace fs = std::filesystem;
     if (fs::is_directory(file_path_))
         project_root_ = fs::weakly_canonical(fs::path(file_path_)).string();
     else
         project_root_ = fs::weakly_canonical(fs::path(file_path_).parent_path()).string();
-    plan_.target = opts_.target_stage;
-    diags_.setColor(term::useColor(opts_));
-    diags_.setSourceMap(&source_map_);
 
     auto toml_path = fs::path(project_root_) / "ZithProject.toml";
     if (auto cfg = ProjectConfig::load(toml_path.string()))
         project_config_ = std::move(*cfg);
+#endif
 }
 
 bool CompilationSession::run() {
@@ -128,6 +131,8 @@ bool CompilationSession::runTo(Stage target) {
 
 bool CompilationSession::lexStage() {
     auto t0      = std::chrono::steady_clock::now();
+
+#ifndef ZITH_IS_WASM
     namespace fs = std::filesystem;
 
     if (fs::is_directory(file_path_)) {
@@ -147,6 +152,7 @@ bool CompilationSession::lexStage() {
         else
             writeOutput("[file] %s (%.1f KiB)\n", file_path_.c_str(), fsize / 1024.0);
     }
+#endif
 
     auto file_result = !content_override_.empty()
         ? source_map_.addFile(file_path_, content_override_)
@@ -185,6 +191,7 @@ bool CompilationSession::importStage() {
     std::vector<std::string> visible_roots;
 
     // 1. Stdlib path (relative to compiler executable)
+#ifndef ZITH_IS_WASM
     {
         fs::path exe_dir;
         char exe_buf[4096];
@@ -220,6 +227,7 @@ bool CompilationSession::importStage() {
             }
         }
     }
+#endif
 
     // 2. -I include dirs from CLI
     for (auto &d : opts_.include_dirs)

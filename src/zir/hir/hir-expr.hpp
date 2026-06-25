@@ -21,6 +21,8 @@ enum class HirUnaryOp : uint8_t {
     Neg,
     Not,
     BitNot,
+    Ref,
+    Deref,
 };
 
 struct HirLiteral {

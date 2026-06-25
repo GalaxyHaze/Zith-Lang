@@ -79,6 +79,9 @@ void zithc_emit_diagnostics(zithc_session *session);
 // ── Hover ──────────────────────────────────────────────────────────────
 const char *zithc_hover(zithc_session *session, uint32_t offset);
 
+// ── JSON result (for WASM/playground) ──────────────────────────────────
+const char *zithc_run_to_json(zithc_session *session, int stage);
+
 // ── Position conversion ───────────────────────────────────────────────
 zithc_position zithc_offset_to_position(zithc_session *session, uint32_t offset);
 

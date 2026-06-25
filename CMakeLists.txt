@@ -7,6 +7,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 option(ZITH_BUILD_CLI  "Build the zithc CLI executable"  ON)
 option(ZITH_BUILD_CAPI "Build the C ABI (zithcLib library)" ON)
+option(ZITH_IS_WASM    "Build for WebAssembly target"    OFF)
 
 if(NOT DEFINED ZITH_VERSION OR ZITH_VERSION STREQUAL "")
     execute_process(
@@ -33,12 +34,14 @@ set(ZITH_VERSION "${ZITH_VERSION}" CACHE STRING "Project version" FORCE)
 include(GNUInstallDirs)
 include(FetchContent)
 
-FetchContent_Declare(
-    mio
-    GIT_REPOSITORY https://github.com/vimpunk/mio.git
-    GIT_TAG master
-)
-FetchContent_MakeAvailable(mio)
+if(NOT ZITH_IS_WASM)
+    FetchContent_Declare(
+        mio
+        GIT_REPOSITORY https://github.com/vimpunk/mio.git
+        GIT_TAG master
+    )
+    FetchContent_MakeAvailable(mio)
+endif()
 
 FetchContent_Declare(
     tomlplusplus
@@ -64,11 +67,21 @@ target_include_directories(zithcLib PUBLIC
     src
 )
 
-target_link_libraries(zithcLib PUBLIC mio tomlplusplus::tomlplusplus)
+if(ZITH_IS_WASM)
+    target_compile_definitions(zithcLib PUBLIC ZITH_IS_WASM=1)
+else()
+    target_link_libraries(zithcLib PUBLIC mio)
+endif()
+
+target_link_libraries(zithcLib PUBLIC tomlplusplus::tomlplusplus)
 
 target_compile_definitions(zithcLib PUBLIC
     ZITH_VERSION="${ZITH_VERSION}"
 )
+
+if(ZITH_IS_WASM)
+    target_compile_definitions(tomlplusplus::tomlplusplus INTERFACE TOML_EXCEPTIONS=0)
+endif()
 
 set_target_properties(zithcLib PROPERTIES
     OUTPUT_NAME "zithc"

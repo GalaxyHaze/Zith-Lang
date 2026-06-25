@@ -15,7 +15,7 @@
 
 #ifdef _WIN32
 #include <io.h>
-#else
+#elif !defined(ZITH_IS_WASM)
 #include <unistd.h>
 #endif
 
@@ -27,7 +27,9 @@ namespace zith::cli::commands {
 #define ROUT   term::out_rst(TERM)
 
 static bool isStdinTerminal() {
-#ifdef _WIN32
+#ifdef ZITH_IS_WASM
+    return false;
+#elif _WIN32
     return _isatty(_fileno(stdin)) != 0;
 #else
     return isatty(fileno(stdin)) != 0;

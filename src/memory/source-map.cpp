@@ -7,6 +7,10 @@
 #include <mutex>
 #include <shared_mutex>
 
+#ifndef ZITH_IS_WASM
+#include <system_error>
+#endif
+
 namespace zith::memory {
 
 SourceMap::SourceMap() : files(file_arena) {}
@@ -63,6 +67,10 @@ bool SourceMap::isValid(FileId id) const noexcept {
 
 [[nodiscard]] auto SourceMap::loadFile(const std::string_view path, const bool write)
     -> Result<FileId> {
+    (void)write;
+#ifdef ZITH_IS_WASM
+    return Error{"loadFile not available in WASM; use addFile instead"};
+#else
     std::unique_lock lock(rw_mutex);
 
     auto *existing = cache.get(std::string(path));
@@ -104,6 +112,7 @@ bool SourceMap::isValid(FileId id) const noexcept {
         files.emplace(std::move(loc));
         return id;
     }
+#endif
 }
 
 auto SourceMap::get(FileId id) noexcept -> Optional<std::reference_wrapper<SourceLoc>> {

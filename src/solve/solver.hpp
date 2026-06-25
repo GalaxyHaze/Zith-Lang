@@ -44,7 +44,7 @@ class Solver {
     bool checkNumericBoundsInFn(zir::hir::HirFunction &fn);
     bool resolveIncompleteInFn(zir::hir::HirFunction &fn);
     bool resolveIncompleteType(types::TypeId &t);
-    bool verifyGenericConstraints();
+    bool verifyGenericConstraints(zir::hir::HirModule &hir);
     std::string mangleName(std::string_view base, types::TypeId arg);
 
 public:
