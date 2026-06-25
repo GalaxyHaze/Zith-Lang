@@ -1,5 +1,6 @@
 const sidebar = document.getElementById("sidebar");
 const content = document.getElementById("content");
+const filebarPath = document.getElementById("filebarPath");
 
 (function loadMenu() {
     const cached = sessionStorage.getItem("tree_json");
@@ -51,6 +52,13 @@ function renderMenu(items, parent) {
     parent.appendChild(ul);
 }
 
+function updateFilebar(path) {
+    const filename = path.split("/").pop() || "_";
+    filebarPath.textContent = filename;
+}
+
+let initialLoad = true;
+
 function loadPage(path, anchor = null) {
     fetch(path)
         .then(res => {
@@ -59,6 +67,23 @@ function loadPage(path, anchor = null) {
         })
         .then(html => {
             content.innerHTML = html;
+
+            updateFilebar(path);
+
+            const filename = path.split("/").pop() || "_";
+            const titleMatch = html.match(/<h1>([^<]+)<\/h1>/);
+            const pageTitle = titleMatch ? titleMatch[1] : filename;
+            document.title = pageTitle + " — Zith Documentation";
+
+            if (initialLoad) {
+                initialLoad = false;
+            } else {
+                history.pushState(
+                    { path: path, anchor: anchor },
+                    "",
+                    "?page=" + path.replace("./", "")
+                );
+            }
 
             requestAnimationFrame(() => {
                 if (anchor) {
@@ -82,6 +107,15 @@ function loadPage(path, anchor = null) {
         });
 }
 
+function getPageFromURL() {
+    const params = new URLSearchParams(window.location.search);
+    const page = params.get("page");
+    if (page) {
+        return "./" + page;
+    }
+    return null;
+}
+
 document.addEventListener("click", e => {
     const link = e.target.closest("a");
     if (!link) return;
@@ -96,3 +130,21 @@ document.addEventListener("click", e => {
     const [file, anchor] = href.split("#");
     loadPage(file, anchor || null);
 });
+
+window.addEventListener("popstate", e => {
+    if (e.state && e.state.path) {
+        loadPage(e.state.path, e.state.anchor || null);
+    } else {
+        const page = getPageFromURL();
+        if (page) {
+            loadPage(page);
+        }
+    }
+});
+
+{
+    const page = getPageFromURL();
+    if (page) {
+        loadPage(page);
+    }
+}

@@ -485,6 +485,27 @@ EFEITOS
     max-width: 100%;
 }
 
+.filebar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 20px;
+    margin: 0 20px 0 20px;
+    background: rgba(0, 0, 0, 0.5);
+    border: 1px solid #333;
+    border-left: 3px solid var(--color-orange);
+    font-family: "Fira Code", monospace;
+    font-size: 13px;
+    color: #aaa;
+}
+.filebar-icon {
+    color: var(--color-orange);
+    font-weight: bold;
+}
+.filebar-path {
+    color: var(--color-cyan);
+}
+
 .lastUpdated,
 .versionAdded,
 .lastUpdate,
