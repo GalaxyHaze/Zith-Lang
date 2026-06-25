@@ -116,6 +116,32 @@ LAYOUT PRINCIPAL
     padding: 20px;
     box-sizing: border-box;
     display: flex;
+    flex-wrap: wrap;
+    gap: 12px 20px;
+}
+
+.filebar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 16px;
+    background: rgba(0, 0, 0, 0.6);
+    border: 1px solid #444;
+    border-left: 4px solid var(--color-orange);
+    font-family: "Fira Code", monospace;
+    font-size: 16px;
+    color: #aaa;
+    align-self: flex-start;
+    min-width: 200px;
+}
+.filebar-icon {
+    color: var(--color-orange);
+    font-weight: bold;
+    font-size: 18px;
+}
+.filebar-path {
+    color: var(--color-cyan);
+    white-space: nowrap;
 }
 
 .bottom {
@@ -483,27 +509,6 @@ EFEITOS
 }
 .main img {
     max-width: 100%;
-}
-
-.filebar {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 6px 20px;
-    margin: 0 20px 0 20px;
-    background: rgba(0, 0, 0, 0.5);
-    border: 1px solid #333;
-    border-left: 3px solid var(--color-orange);
-    font-family: "Fira Code", monospace;
-    font-size: 13px;
-    color: #aaa;
-}
-.filebar-icon {
-    color: var(--color-orange);
-    font-weight: bold;
-}
-.filebar-path {
-    color: var(--color-cyan);
 }
 
 .lastUpdated,
