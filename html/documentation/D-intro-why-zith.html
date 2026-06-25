@@ -1,149 +1,220 @@
-<h1>Why Choose Zith?</h1>
-<p>Zith was designed to fill a gap in the systems programming landscape: <strong>a language that's as safe as Rust but simpler to learn and use</strong>.</p>
-<p>The current prototype specification (<code>Zith-spec.md</code>, v2.0 architectural revision) formalizes the model around NRM, five ownership keywords, contexts/DSLs, packs, ECS/scenes, and concurrency rules.</p>
-<h2>The Problem with Current Options</h2>
+<h1>Why Zith?</h1>
+<p>Zith is a systems language with safety, expressiveness, and a small, composable core.<br>
+<strong>No GC. No borrow checker. No hidden allocator.</strong></p>
+<p>Compiled, statically typed, and memory-safe by default — with low-level control when you need it and high-level ergonomics when you don't.</p>
+
+<h2>1. Types That Work With You</h2>
+<p>Structs, enums, components, unions, generics — the basics are here and work as expected. See <a href="./D-language-types.html">Type System</a>.</p>
+
+<pre><code class="language-zith">struct Point { [x, y, z]: f32 }
+
+fn dot(a: view Point, b: view Point): f32 {
+    a.x * b.x + a.y * b.y + a.z * b.z
+}</code></pre>
+
+<p>Unions are runtime tagged. <code>dyn</code> gives dynamic type erasure with compile-time safety. <code>is</code> narrows both, letting you operate on the concrete type inside each branch:</p>
+
+<pre><code class="language-zith">union Value { i32, f64, string }
+
+fn handle(v: dyn Value) {
+    if (v is i32) {
+        v += 32;            // v is i32 here
+    } else (v is f64) {
+        @println("{v:.2}"); // v is f64 here
+    }
+}</code></pre>
+
+<p>No manual type switches. No unsafe downcasts. The compiler tracks the type through every branch.</p>
+
+<h2>2. Data Flows Forward</h2>
+<p>The <code>-&gt;</code> operator pipes values left to right. <code>..</code> refers to the previous value. See <a href="./D-language-control-flow.html">Control Flow</a>.</p>
+
+<pre><code class="language-zith">getData() -> process(..) -> validate(..) -> save(..);</code></pre>
+
+<p>Inline blocks and comma sub-chains keep side-effects local without breaking the flow.</p>
+
+<h2>3. Errors Are Just Values</h2>
+<p>No exceptions. No try/catch. <code>?T</code> for optionals, <code>T!</code> for results. Propagate with <code>?</code> or <code>!</code>. Recover with <code>or</code>. See <a href="./D-language-errors.html">Error Handling</a>.</p>
+
+<pre><code class="language-zith">fn loadConfig(path: string): Config! {
+    let file = File.open(path)!
+    let data = file.read()!
+    parse(data)!
+}
+
+let name = ?user.name or "guest";
+let data = !primary() or backup() or defaultData;</code></pre>
+
+<p><code>with</code> bundles multiple fallible calls, <code>catch</code> handles any failure:</p>
+
+<pre><code class="language-zith">with (connectDb(), user: getUser(id)) {
+    process(user);
+} catch (err) {
+    log(err);
+}</code></pre>
+
+<h2>4. The Combo — Chain + Error Handling</h2>
+<p>This is where Zith pulls ahead of most systems languages. Chain flow and error propagation together:</p>
+
+<pre><code class="language-zith">readFile("config.toml")
+    -> decode(..)!
+    -> validate(..)?
+    -> apply(..);</code></pre>
+
+<p>Compare to Go, where the same logic is buried in boilerplate:</p>
+
+<pre><code class="language-go">// Go
+data, err := readFile("config.toml")
+if err != nil { return err }
+decoded, err := decode(data)
+if err != nil { return err }
+if validated, err := validate(decoded); err == nil {
+    err = apply(validated)
+}
+return err</code></pre>
+
+<p>The Zith version does the same thing — read, decode, validate, apply — without a single <code>if err != nil</code>. The <code>!</code> propagates errors out; <code>?</code> continues on null; the chain keeps the data moving forward.</p>
+
+<p>Recovery stays on the same line:</p>
+
+<pre><code class="language-zith">readFile("config.toml") ->
+    { decode(..)! -> validate(..)? -> apply(..) }
+    or fallbackConfig();   // any failure -> use default</code></pre>
+
+<p>Or with <code>fail</code> blocks for contextual error handling:</p>
+
+<pre><code class="language-zith">loadConfig {
+    readFile("config.toml")
+        -> decode(..)!
+        -> validate(..)!
+} fail loadConfig(err) {
+    if (err is NotFound) { continue(defaultConfig()); }
+    throw Error{ context: "load failed", cause: err };
+}</code></pre>
+
+<p>A real-world example — processing a request pipeline:</p>
+
+<pre><code class="language-zith">parseRequest(raw)!
+    -> authenticate(..)!
+    -> validate(..)?
+    -> queryDb(..)!
+    -> marshal(..)
+    -> send(..);</code></pre>
+
+<p>In Go this is ~30 lines of <code>if err != nil</code>. In Zith it is one.</p>
+
+<h2>5. How Does This Stay Safe?</h2>
+<p><strong><a href="./D-language-ownership.html">Node Resource Analysis (NRA).</a></strong></p>
+<p>No borrow checker. No garbage collector. No reference counting. The compiler statically tracks every value's ownership, lifetime, and aliasing — and catches misuse before the program runs.</p>
+
+<pre><code class="language-zith">var a = Point { x: 1.0, y: 2.0 };
+let b = a;       // b owns the data; a is now dead
+// a.x           -- compile error: a is dead
+a = Point{3, 4}; // fine: reassignment creates a new node</code></pre>
+
+<p>For borrowing, two keywords cover most code:</p>
+
 <table>
   <tr>
-    <th>Language</th>
-    <th>Safety</th>
-    <th>Simplicity</th>
-    <th>Learning Curve</th>
-    <th>Ecosystem</th>
+    <th>Keyword</th>
+    <th>Meaning</th>
   </tr>
   <tr>
-    <td>C</td>
-    <td> Manual memory management</td>
-    <td> Simple syntax</td>
-    <td>Easy</td>
-    <td>Massive</td>
+    <td><code>lend</code></td>
+    <td>Exclusive mutable borrow</td>
   </tr>
   <tr>
-    <td>C++</td>
-    <td> Complex rules</td>
-    <td> Extremely complex</td>
-    <td>Very Hard</td>
-    <td>Massive</td>
-  </tr>
-  <tr>
-    <td>Rust</td>
-    <td> Excellent</td>
-    <td> Steep learning curve</td>
-    <td>Very Hard</td>
-    <td>Growing</td>
-  </tr>
-  <tr>
-    <td>Zig</td>
-    <td> Good</td>
-    <td> Simple</td>
-    <td>Moderate</td>
-    <td>Small</td>
-  </tr>
-  <tr>
-    <td><strong>Zith</strong></td>
-    <td> Strong</td>
-    <td> Intuitive</td>
-    <td><strong>Easy</strong></td>
-    <td>Emerging</td>
+    <td><code>view</code></td>
+    <td>Read-only borrow (many can coexist)</td>
   </tr>
 </table>
-<h2>What Makes Zith Special</h2>
-<h3>1.  Explicit Ownership Without Complexity</h3>
-<p>Zith's ownership model is <strong>visible in the type system</strong>, not hidden in borrow checker errors:</p>
-<pre><code class="language-zith">// Clear ownership modifiers
-fn process(mut self: Health, dmg: view u16) {
-    // 'mut self' = I own and can modify
-    // 'view u16' = read-only reference
-}
 
-// No lifetime annotations needed
-fn get_health(player: view Player): view u16 {
-    return player.health;  // Safe, no lifetimes to specify
+<pre><code class="language-zith">fn scale(p: lend Point, factor: f32) { p.x *= factor; }
+
+fn length(p: view Point): f32 {
+    sqrt(p.x * p.x + p.y * p.y)
 }</code></pre>
-<h3>2.  Compile-Time Safety Without GC</h3>
-<pre><code class="language-zith">// Memory safety enforced at compile time
-let health: unique u16 = alloc.new(100);
-let ref: view u16 = health;  // Borrow
 
-ref += 10;  //  Compile Error: view doesn't allow mutation
-health = 50; //  OK: owner can still modify
+<p>For advanced ownership: <code>unique</code> (single owner), <code>share</code> (multiple mutable names), <code>belong</code> (part-of relationship for back-pointers).</p>
 
-// No garbage collector, no runtime overhead</code></pre>
-<h3>3.  Start Simple, Scale When Needed</h3>
-<p>Zith grows with your project complexity:</p>
-<p><strong>Level 1: C-like Basics</strong> ```zith fn add(a: i32, b: i32): i32 { return a + b; }</p>
-<p>fn main() { let result = add(5, 3); print(result); } ```</p>
-<p><strong>Level 2: Components & Entities</strong> ```zith component Position { x: i32, y: i32, }</p>
-<p>component Velocity { dx: i32, dy: i32, }</p>
-<p>entity Player { Position, Velocity, Health, } ```</p>
-<p><strong>Level 3: Domain-Specific Languages</strong> ```zith context SQL { use infix = SQL.operators;</p>
-<p>infix operator SELECT(cols); infix operator FROM(table); infix operator WHERE(condition); }</p>
-<p>use context SQL { result = SELECT * FROM users WHERE age > 18; } ```</p>
-<h3>4.  Safe DSLs with Contexts</h3>
-<p>Create embedded domain-specific languages without string parsing or injection vulnerabilities:</p>
-<pre><code class="language-zith">context QueryBuilder {
-    fn select(table: str, columns: [str]) -&gt; Query;
-    fn where(query: Query, condition: Condition) -&gt; Query;
-}
+<p>Safe by default. Zero runtime overhead. No ceremony.</p>
 
-use context QueryBuilder {
-    let query = select("users", ["name", "email"])
-                |&gt; where(age &gt; 18);
-    
-    // Type-safe, no SQL injection possible
-}</code></pre>
-<h3>5.  Scenes for Resource Isolation</h3>
-<p>Perfect for games, simulations, and modular applications:</p>
-<pre><code class="language-zith">scene MainMenu {
-    resources: {
-        background: Texture,
-        buttons: [Button],
+<h2>6. Low-Level Control, Not Low-Level Ceremony</h2>
+<p>C interop is first-class — include headers directly, call functions immediately. See <a href="./D-language-ownership.html">Raw &amp; Unsafe</a>.</p>
+
+<pre><code class="language-zith">import "openssl/ssl.h";
+SSL_CTX_new(method);</code></pre>
+
+<p>When you need to bypass safety, <code>raw fn</code> and <code>unsafe</code> blocks are explicit and scoped:</p>
+
+<pre><code class="language-zith">raw fn readRegister(addr: opaque): u32 {
+    unsafe {
+        let ptr = addr as *u32;
+        *ptr
     }
-    
-    fn on_enter() { /* load menu */ }
-    fn on_exit() { /* cleanup */ }
+}</code></pre>
+
+<p>The <code>Trust</code> capability lets you expose safe wrappers over unsafe internals:</p>
+
+<pre><code class="language-zith">trait MMIONode extends Trust {
+    raw fn read(self, offset: u64): u32 {}
+    raw fn write(self, offset: u64, val: u32) {}
+}
+
+fn safe_copy(src: view MMIONode, dst: lend MMIONode) {
+    let v = src.read(0x00);
+    dst.write(0x00, v);
+}</code></pre>
+
+<h2>7. Scoped Contexts for DSLs</h2>
+<p>Group macros, operators, and DSLs under <code>use</code> blocks. No global pollution. See <a href="./D-language-contexts.html">Contexts</a>.</p>
+
+<pre><code class="language-zith">use SQL QueryBlock {
+    SELECT * FROM users WHERE id = :id
+}
+
+// Outside, SQL syntax is unavailable</code></pre>
+
+<h2>8. Flow Functions &amp; State Machines</h2>
+<p>Built-in state machines via markers, docks, and jumps for embedded, OS, and game loops. See <a href="./D-language-control-flow.html">Control Flow</a>.</p>
+
+<pre><code class="language-zith">flow fn scheduler(): noreturn {
+    marker ContextSwitch(next: TaskId) {
+        saveRegisters();
+        loadTask(next);
+    }
+    dock { jump ContextSwitch(nextTask); }
+}</code></pre>
+
+<h2>9. Comptime &amp; Reflection</h2>
+<p><code>const fn</code> and <code>const</code> blocks for compile-time computation. <code>@</code> intrinsics for reflection and type manipulation. See <a href="./D-language-intrinsics.html">Intrinsics</a>.</p>
+
+<pre><code class="language-zith">const fn processData(data: []char): JsonValue { ... }
+const parsed = processData(AssetData);
+
+// Reflection at compile time
+let isStruct = (T is @struct);
+for (member in @members(MyStruct)) {
+    @println("{}: {}", member.name, member.type);
+}</code></pre>
+
+<h2>10. Scenes for Memory Regions</h2>
+<p>Perfect for games, simulations, and modular applications — isolated memory regions with automatic cleanup. See <a href="./D-language-ecs.html">ECS &amp; Scenes</a>.</p>
+
+<pre><code class="language-zith">scene MainMenu {
+    entity MenuButton { /* ... */ }
+    entity TextDisplay { /* ... */ }
 }
 
 scene GameLevel {
-    resources: {
-        world: World,
-        entities: [Entity],
-    }
-    
-    fn update(dt: f32) { /* game logic */ }
+    entity Player { /* ... */ }
+    entity Enemy { /* ... */ }
 }
 
-// Automatic resource cleanup when scene changes</code></pre>
-<h3>6.  Native ECS Support</h3>
-<p>Built-in entity-component-system for data-oriented design:</p>
-<pre><code class="language-zith">component Position { x: f32, y: f32 }
-component Velocity { dx: f32, dy: f32 }
-component Render { sprite: Sprite }
+transition(MainMenu, GameLevel);   // old scene dies, new scene allocates</code></pre>
 
-// System processes all entities with matching components
-system movement_system(entities: [Entity with Position, Velocity]) {
-    for entity in entities {
-        entity.position.x += entity.velocity.dx;
-        entity.position.y += entity.velocity.dy;
-    }
-}</code></pre>
-<h2>Real-World Use Cases</h2>
-<h3> Perfect For:</h3>
-<ul>
-  <li><strong>Game Engines</strong> - Native ECS, scenes, performance</li>
-  <li><strong>Embedded Systems</strong> - Zero overhead, predictable memory</li>
-  <li><strong>CLI Tools</strong> - Fast compilation, simple deployment</li>
-  <li><strong>Network Services</strong> - Safe concurrency, clear ownership</li>
-  <li><strong>DSLs & Compilers</strong> - Context system, pattern matching</li>
-  <li><strong>Learning Systems Programming</strong> - Gentle learning curve</li>
-</ul>
-<h3> Consider Alternatives If:</h3>
-<ul>
-  <li>You need maximum ecosystem (C++/Rust)</li>
-  <li>You want pure functional programming (Haskell/OCaml)</li>
-  <li>You need garbage collection convenience (Go/Java)</li>
-  <li>You're building web frontends (JavaScript/TypeScript)</li>
-</ul>
 <h2>Comparison with Rust</h2>
+
 <table>
   <tr>
     <th>Feature</th>
@@ -152,18 +223,13 @@ system movement_system(entities: [Entity with Position, Velocity]) {
   </tr>
   <tr>
     <td>Memory Safety</td>
-    <td> Borrow checker</td>
-    <td> Ownership types</td>
+    <td>Borrow checker</td>
+    <td>NRA (ownership types)</td>
   </tr>
   <tr>
     <td>Learning Curve</td>
-    <td> Very steep</td>
-    <td> Gentle</td>
-  </tr>
-  <tr>
-    <td>Syntax</td>
-    <td>Complex keywords</td>
-    <td>C-like familiarity</td>
+    <td>Very steep</td>
+    <td>Gentle</td>
   </tr>
   <tr>
     <td>Lifetimes</td>
@@ -172,8 +238,18 @@ system movement_system(entities: [Entity with Position, Velocity]) {
   </tr>
   <tr>
     <td>Error Handling</td>
-    <td>Result/Option</td>
-    <td>Similar + exceptions</td>
+    <td>Result/Option + macros</td>
+    <td>Failable types + chain flow</td>
+  </tr>
+  <tr>
+    <td>DSLs</td>
+    <td>Macros only</td>
+    <td>Contexts + words + macros</td>
+  </tr>
+  <tr>
+    <td>State Machines</td>
+    <td>External crates</td>
+    <td>Built-in flow fn / markers</td>
   </tr>
   <tr>
     <td>Compile Time</td>
@@ -185,23 +261,34 @@ system movement_system(entities: [Entity with Position, Velocity]) {
     <td>Large</td>
     <td>Growing</td>
   </tr>
-  <tr>
-    <td>Best For</td>
-    <td>Maximum safety</td>
-    <td>Balance of safety & simplicity</td>
-  </tr>
 </table>
+
+<h2>Real-World Use Cases</h2>
+
+<h3>Perfect For:</h3>
+<ul>
+  <li><strong>Game Engines</strong> — Native ECS, scenes, flow functions</li>
+  <li><strong>Embedded Systems</strong> — Zero overhead, predictable memory</li>
+  <li><strong>CLI Tools</strong> — Fast compilation, simple deployment</li>
+  <li><strong>Network Services</strong> — Safe concurrency, clear ownership</li>
+  <li><strong>DSLs &amp; Compilers</strong> — Context system, pattern matching</li>
+  <li><strong>Learning Systems Programming</strong> — Gentle learning curve</li>
+</ul>
+
+<h3>Consider Alternatives If:</h3>
+<ul>
+  <li>You need maximum ecosystem (C++/Rust)</li>
+  <li>You want pure functional programming (Haskell/OCaml)</li>
+  <li>You need garbage collection convenience (Go/Java)</li>
+  <li>You're building web frontends (JavaScript/TypeScript)</li>
+</ul>
+
 <h2>Getting Started</h2>
-<p>Ready to try Zith? Here's your path:</p>
 <ol>
-  <li><strong><a href="./D-intro-installation.html">Installation</a></strong> - Set up Zith in minutes</li>
-  <li><strong><a href="./D-quickstart-hello-world.html">Quick Start</a></strong> - Write your first program</li>
-  <li><strong><a href="./D-cli.html">CLI Reference</a></strong> - Learn the tools</li>
+  <li><a href="./D-intro-installation.html">Installation</a> — Set up Zith in minutes</li>
+  <li><a href="./D-quickstart-hello-world.html">Quick Start</a> — Write your first program</li>
+  <li><a href="./D-language-overview.html">Language Guide</a> — Deep dive into features</li>
 </ol>
-<ol>
-  <li><strong><a href="./D-language-overview.html">Language Guide</a></strong> - Deep dive</li>
-  <li><strong><a href="./D-language-spec-core-topics.html">Spec Core Topics</a></strong> - Spec topic map</li>
-  <li>---</li>
-</ol>
-<p><strong>Zith proves you don't have to choose between safety and simplicity.</strong></p>
-<p><a href="./D-intro-installation.html">Next: Installation →</a></p>
+<hr>
+<p><strong>Zith proves you don't have to choose between safety and simplicity.</strong><br>
+<em>Zith — A systems language with a small core and a large toolbox.</em></p>

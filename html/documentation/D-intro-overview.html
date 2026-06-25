@@ -19,14 +19,14 @@
 <h2>Key Features</h2>
 <h3>Expressivity</h3>
 <p>Every language construct communicates intent clearly:</p>
-<pre><code class="language-zith">fn process(self: mut Health, dmg: view u16) { }
-         // ^ explicit ownership: view = read-only</code></pre>
+<pre><code class="language-zith">fn process(self: lend Health, dmg: view u16) { }
+         // ^ lend = exclusive mutable borrow; view = read-only</code></pre>
 <h3>Safety Through Typing</h3>
 <p>The compiler detects errors through rigorous semantics:</p>
-<pre><code class="language-zith">let health: unique u16 = alloc.new(100);
+<pre><code class="language-zith">var health: u16 = 100;
 let ref: view u16 = health;
 
-ref += 10;  // Compile Error: view does not allow writing</code></pre>
+// ref += 10;  -- Compile Error: view does not allow mutation</code></pre>
 <h3>Optional Complexity</h3>
 <p>Start simple, add features when needed:</p>
 <pre><code class="language-zith">// Basic: functions like C
@@ -37,13 +37,8 @@ component Position { x, y: i32 }
 entity Player { Position, ... }</code></pre>
 <h3>Contexts for Safe DSLs</h3>
 <p>Domain-specific languages without strings or injection:</p>
-<pre><code class="language-zith">context SQL {
-    use infix = SQL.operators;
-    infix operator SELECT(cols);
-}
-
-use context SQL {
-    result = SELECT * FROM users WHERE age &gt; 18;
+<pre><code class="language-zith">use SQL QueryBlock {
+    SELECT * FROM users WHERE age &gt; 18;
 }</code></pre>
 <h3>Scenes as Logical Units</h3>
 <p>Isolated resource containers for games and applications:</p>
