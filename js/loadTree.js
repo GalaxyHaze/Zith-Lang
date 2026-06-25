@@ -59,7 +59,7 @@ function updateFilebar(path) {
 
 let initialLoad = true;
 
-function loadPage(path, anchor = null) {
+function loadPage(path, anchor = null, opts = {}) {
     fetch(path)
         .then(res => {
             if (!res.ok) throw new Error("Page not found");
@@ -75,9 +75,11 @@ function loadPage(path, anchor = null) {
             const pageTitle = titleMatch ? titleMatch[1] : filename;
             document.title = pageTitle + " — Zith Documentation";
 
+            const skipPush = opts.fromPop || initialLoad;
             if (initialLoad) {
                 initialLoad = false;
-            } else {
+            }
+            if (!skipPush) {
                 history.pushState(
                     { path: path, anchor: anchor },
                     "",
@@ -133,11 +135,11 @@ document.addEventListener("click", e => {
 
 window.addEventListener("popstate", e => {
     if (e.state && e.state.path) {
-        loadPage(e.state.path, e.state.anchor || null);
+        loadPage(e.state.path, e.state.anchor || null, { fromPop: true });
     } else {
         const page = getPageFromURL();
         if (page) {
-            loadPage(page);
+            loadPage(page, null, { fromPop: true });
         }
     }
 });
