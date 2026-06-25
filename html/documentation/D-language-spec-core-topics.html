@@ -1,67 +1,96 @@
 <h1>Zith Spec Core Topics</h1>
-<p>This document maps the prototype specification in <code>Zith-spec.md</code> into documentation-friendly sections.</p>
-<h2>1) Introduction & Philosophy</h2>
-<p>Zith targets a universal systems workflow: explicit behavior, compile-time safety, and zero-cost abstractions.</p>
+<p>This document maps the language specification (<code>docs/Zith-spec.md</code>) into documentation-friendly sections.</p>
+
+<h2>1) Introduction &amp; Philosophy</h2>
+<p>Zith is a statically typed, compiled, general-purpose language with a deliberately small, stable core and a large, specialised toolbox. See <a href="./D-intro-overview.html">Overview</a>.</p>
 <ul>
   <li><strong>Explicit over implicit</strong> semantics.</li>
-  <li><strong>Safety by default</strong> without a garbage collector.</li>
+  <li><strong>Safety by default</strong> through Node Resource Analysis (NRA) — no borrow checker, no GC.</li>
   <li><strong>Universal applicability</strong> through contexts and data-oriented patterns.</li>
+  <li><strong>The Rule of Three:</strong> if a function or block uses more than three specialised tools, rethink the design.</li>
 </ul>
-<h2>2) Node Resource Model (NRM)</h2>
-<p>NRM models values as nodes and bindings as edges in a graph analyzed at compile time.</p>
+
+<h2>2) Node Resource Analysis (NRA)</h2>
+<p>NRA models values as <strong>nodes</strong> and bindings as <strong>edges</strong> in a graph analysed at compile time. See <a href="./D-language-ownership.html">Memory Model — NRA</a>.</p>
 <ul>
   <li>Tracks connectivity, validity, and move state.</li>
-  <li>Distinguishes origins: stack, heap, and custom allocators.</li>
+  <li>Distinguishes origins: <code>literal</code>, <code>allocator</code>, <code>stack</code>, <code>view</code>.</li>
   <li>Performs branch-aware liveness checks for failable/optional outcomes.</li>
+  <li>Four rules: argument exclusivity, no dead node access, no escaping <code>belong</code>, <code>lend</code> behavioural promise.</li>
 </ul>
-<h2>3) Ownership Keywords (Five-Rule Model)</h2>
-<p>Zith defines five ownership/borrowing modes:</p>
+
+<h2>3) Ownership Keywords (Five Modes)</h2>
+<p>Zith defines six ownership/borrowing modes:</p>
 <ul>
-  <li><code>unique</code> — exclusive ownership and moves.</li>
-  <li><code>share</code> — shared ownership.</li>
-  <li><code>view</code> — read-only borrow.</li>
-  <li><code>lend</code> — temporary mutable borrow.</li>
-  <li><code>extension</code> — parent-child structural relationship.</li>
+  <li><code>default</code> — owned, exclusive (no keyword needed).</li>
+  <li><code>lend</code> — exclusive mutable temporary borrow.</li>
+  <li><code>view</code> — read-only non-owning reference.</li>
+  <li><code>unique</code> — exclusive ownership and transfer.</li>
+  <li><code>share</code> — compile-time-proven shared mutable state.</li>
+  <li><code>belong</code> — parent-child structural relationship (back-pointers).</li>
 </ul>
-<h2>4) Type System & Type Navigation</h2>
-<p>The specification combines nominal and structural typing, and introduces safe navigation in failable/optional paths.</p>
+
+<h2>4) Type System</h2>
+<p>The specification combines nominal and structural typing. See <a href="./D-language-types.html">Type System</a>.</p>
 <ul>
-  <li>Primitives, user types, generics, and trait-oriented capabilities.</li>
-  <li>Optional/failable navigation patterns designed for explicit error-aware code.</li>
+  <li>Primitives, slices/arrays, user types, generics, and trait-oriented capabilities.</li>
+  <li>Optional/failable navigation: <code>?T</code>, <code>T!</code>, <code>?</code>, <code>!</code>, <code>or</code>.</li>
+  <li>Pattern matching with <code>when</code> and union narrowing with <code>is</code>.</li>
 </ul>
-<h2>5) Lexical Structure, Operators, and Contexts</h2>
-<p>The spec formalizes syntax/operator behavior and introduces <strong>contexts</strong> as scoped DSL namespaces.</p>
+
+<h2>5) Module System &amp; Visibility</h2>
+<p>See <a href="./D-language-modules.html">Module System</a>.</p>
 <ul>
-  <li>Contexts allow domain-specific operators and naming rules.</li>
-  <li>Useful for SQL-like, graphics, or protocol-oriented embedded DSLs.</li>
+  <li><code>import</code>, <code>from</code>, <code>export</code>, <code>alias</code>, <code>use</code>.</li>
+  <li>Visibility: <code>pub</code>, <code>mod</code>, <code>mod(N)</code>, <code>mod(..)</code>.</li>
+  <li>Type constraints with <code>or</code> vs union separators with <code>,</code>.</li>
 </ul>
-<h2>6) Packs, Flows, and Functions</h2>
+
+<h2>6) Functions &amp; Closures</h2>
+<p>See <a href="./D-language-functions.html">Functions</a>.</p>
 <ul>
-  <li><strong>Packs</strong> support grouped values with ownership-aware behavior.</li>
-  <li><strong>Flow constructs</strong> make control transfer explicit.</li>
-  <li>Functions integrate ownership rules directly in signatures.</li>
+  <li>Six function kinds: <code>fn</code>, <code>const fn</code>, <code>async fn</code>, <code>async&lt;Generator&gt; fn</code>, <code>flow fn</code>, <code>raw fn</code>.</li>
+  <li>Closures as packs: <code>|capture| (params) { body }</code>.</li>
+  <li>Dynamic levels: <code>static</code> vs <code>dyn</code>, <code>opaque</code> packs.</li>
+  <li><code>@</code> prefix for macros, bare names for functions.</li>
 </ul>
-<h2>7) Data-Oriented Architecture (ECS & Scenes)</h2>
-<p>The spec includes first-class patterns for entity/component systems and scene/resource boundaries.</p>
+
+<h2>7) Control Flow</h2>
+<p>See <a href="./D-language-control-flow.html">Control Flow</a>.</p>
 <ul>
-  <li>ECS for cache-friendly simulation logic.</li>
-  <li>Scenes for lifecycle-scoped allocation and cleanup.</li>
+  <li>Parentheses required on conditions; English logical keywords (<code>and</code>, <code>or</code>, <code>not</code>).</li>
+  <li><code>for</code>, <code>if</code>/<code>else</code>, <code>when</code> pattern matching, <code>-&gt;</code> chain flow.</li>
+  <li><code>flow fn</code> with markers, docks, and jumps.</li>
 </ul>
-<h2>8) Intrinsics, Error Handling, and Concurrency</h2>
+
+<h2>8) Error Handling</h2>
+<p>Fully static, return-based. See <a href="./D-language-errors.html">Error Handling</a>.</p>
 <ul>
-  <li><code>@</code> intrinsics provide compiler/runtime-level functionality.</li>
-  <li>Try/catch and failable returns model recoverable failures.</li>
-  <li>Concurrency and globals are constrained through ownership and trait rules.</li>
+  <li><code>?T</code> (optional) and <code>T!</code> (result) with <code>?</code> / <code>!</code> propagation.</li>
+  <li><code>or</code> fallback, <code>with</code>/<code>catch</code>, <code>fail</code> blocks, <code>throw</code>.</li>
+  <li><code>must</code> (debug panic) vs <code>raw</code> (always unchecked).</li>
 </ul>
-<h2>9) Standard Library & Comparisons</h2>
-<p>The specification outlines standard-library direction and compares Zith's approach to contemporary systems languages.</p>
+
+<h2>9) Data-Oriented Architecture</h2>
+<p>See <a href="./D-language-ecs.html">ECS &amp; Scenes</a>.</p>
+<ul>
+  <li>Components as POD data, scenes as memory regions (arenas).</li>
+  <li>Scene transition replaces memory; custom allocators supported.</li>
+</ul>
+
 <h2>10) Recommended Reading Order</h2>
 <ol>
-  <li>Language Overview</li>
-  <li>Ownership and Memory</li>
-  <li>Type System and Errors</li>
-  <li>Contexts and DSLs</li>
-  <li>ECS/Scenes and architecture-level patterns</li>
+  <li><a href="./D-language-overview.html">Language Overview</a></li>
+  <li><a href="./D-language-ownership.html">Memory Model — NRA</a></li>
+  <li><a href="./D-language-types.html">Type System</a></li>
+  <li><a href="./D-language-variables.html">Mutability &amp; Bindings</a></li>
+  <li><a href="./D-language-functions.html">Functions</a></li>
+  <li><a href="./D-language-control-flow.html">Control Flow</a></li>
+  <li><a href="./D-language-errors.html">Error Handling</a></li>
+  <li><a href="./D-language-modules.html">Module System</a></li>
+  <li><a href="./D-language-ecs.html">ECS &amp; Scenes</a></li>
+  <li><a href="./D-language-contexts.html">Contexts</a></li>
 </ol>
+
 <hr>
-<p>If you're new to Zith, start at <a href="./D-language-overview.html">Language Overview</a>, then continue with <a href="./D-language-variables.html">Variables</a>, <a href="./D-language-memory.html">Memory</a>, and <a href="./D-language-errors.html">Errors</a>.</p>
+<p><strong>Start here:</strong> <a href="./D-language-overview.html">Language Overview</a></p>

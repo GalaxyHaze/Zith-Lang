@@ -1,94 +1,120 @@
 <h1>Intrinsics</h1>
-<p>Intrinsics provide compile-time metadata and reflection accessed via the <code>@</code> operator.</p>
-<h2>Type Information</h2>
-<pre><code class="language-zith">// Size of type
-let size = @sizeOf(T);
+<p>Intrinsics provide compile-time metadata, reflection, and type manipulation — accessed via the <code>@</code> prefix.</p>
 
-// Members of struct
-for member in @members(T) {
-    println("{}: {}", member.name, member.type);
+<h2>Type Reflection</h2>
+
+<pre><code class="language-zith">// Check type kind
+let isPrim = (T is @primitive);     // bool, i32, f64, etc.
+let isStr  = (T is @struct);        // struct
+let isComp = (T is @component);     // component
+let isUn   = (T is @union);         // union
+let isEn   = (T is @enum);          // enum
+
+// Check nullability
+let nullable = (T is @nullable);    // ?T</code></pre>
+
+<h2>Struct/Type Introspection</h2>
+
+<pre><code class="language-zith">// Iterate fields of a struct
+for (member in @members(MyStruct)) {
+    @println("{}: {}", member.name, member.type);
 }
 
-// Is type copyable?
-if @hasTrait(T, Copy) {
-    // T can be bitwise-copied
+// Get field visibility
+for (field in @fields(MyStruct)) {
+    @println("{}: {}", field.name, field.visibility);  // pub, mod, private
 }</code></pre>
-<h2>Location Information</h2>
-<pre><code class="language-zith">// Current file
-let file = @file();
 
-// Current line
-let line = @line();
+<h2>Compile-Time Type Manipulation</h2>
+<p>You can create types and modify them before they are "finalised":</p>
 
-// Current function
-let fn_name = @funcName();
+<pre><code class="language-zith">// Create a new type
+type Custom = @struct;
 
-// Create rich panic messages
-panic(@location() + ": something went wrong");</code></pre>
-<h2>Entity/Component Intrinsics</h2>
-<pre><code class="language-zith">// Components of an entity type
-for comp in @components(Player) {
-    println("{}", comp);  // Position, Health, ...
-}
+// Add fields — allowed while type is not yet returned/instantiated
+@appendField Custom, x: i32;
+@appendField Custom, y: f32;
 
-// Convert entity to struct
-let struct_data = @toStruct(player);
+// Add methods
+@appendMethod Custom, fn distance(self): f32 { sqrt(self.x*self.x + self.y*self.y) }
 
-// Convert struct back to entity
-let entity = @toEntity(struct_data, scene);
+// Type is "done" once returned or instantiated
+let p: Custom = Custom { x: 1, y: 2.0 };</code></pre>
 
-// Register component dynamically
-@registerComponent(mut entity, NewComponent { /* ... */ });</code></pre>
-<h2>Compile-Time Evaluation</h2>
-<pre><code class="language-zith">// Compile-time constants
-const ARRAY_SIZE = @sizeOf([10]i32) / @sizeOf(i32);  // 10
+<div class="callout callout-info">
+  <p><strong>&#8505; Note:</strong> Primitive aliases are immutable — you cannot add fields to <code>type Celsius = i32</code>.</p>
+</div>
 
-// Must be compile-time computable
-const MEM_LAYOUT = @members(MyStruct);</code></pre>
+<h2>Pack Reflection</h2>
+
+<pre><code class="language-zith">let pack = @pack closure;   // extract the capture pack from a closure
+@pack closure = pack;        // inject a pack into a closure</code></pre>
+
+<h2>Compile-Time Constants</h2>
+
+<pre><code class="language-zith">const ARRAY_SIZE = @sizeOf([10]i32) / @sizeOf(i32);  // evaluated at compile time
+const MEM_LAYOUT = @members(MyStruct);                // struct member info</code></pre>
+
 <h2>Available Intrinsics</h2>
+
 <table>
   <tr>
     <th>Intrinsic</th>
     <th>Description</th>
   </tr>
   <tr>
-    <td><code>@sizeOf(T)</code></td>
-    <td>Size of type in bytes</td>
+    <td><code>@primitive</code></td>
+    <td>Check if a type is a primitive</td>
+  </tr>
+  <tr>
+    <td><code>@struct</code></td>
+    <td>Check if a type is a struct</td>
+  </tr>
+  <tr>
+    <td><code>@component</code></td>
+    <td>Check if a type is a component</td>
+  </tr>
+  <tr>
+    <td><code>@union</code></td>
+    <td>Check if a type is a union</td>
+  </tr>
+  <tr>
+    <td><code>@enum</code></td>
+    <td>Check if a type is an enum</td>
+  </tr>
+  <tr>
+    <td><code>@nullable</code></td>
+    <td>Check if a type is <code>?T</code></td>
   </tr>
   <tr>
     <td><code>@members(T)</code></td>
-    <td>Struct members</td>
+    <td>Iterate struct fields (name, type)</td>
   </tr>
   <tr>
-    <td><code>@hasTrait(T, Trait)</code></td>
-    <td>Check if type has trait</td>
+    <td><code>@fields(T)</code></td>
+    <td>Iterate struct fields with visibility</td>
   </tr>
   <tr>
-    <td><code>@file()</code></td>
-    <td>Current file path</td>
+    <td><code>@appendField T, name: type</code></td>
+    <td>Add a field to a type at compile time</td>
   </tr>
   <tr>
-    <td><code>@line()</code></td>
-    <td>Current line number</td>
+    <td><code>@appendMethod T, fn ...</code></td>
+    <td>Add a method to a type at compile time</td>
   </tr>
   <tr>
-    <td><code>@funcName()</code></td>
-    <td>Current function name</td>
+    <td><code>@pack closure</code></td>
+    <td>Extract / inject a closure's capture pack</td>
   </tr>
   <tr>
-    <td><code>@location()</code></td>
-    <td>Full location (file:line)</td>
+    <td><code>@allocate(T, init)</code></td>
+    <td>Allocate within the current scene</td>
   </tr>
   <tr>
-    <td><code>@components(E)</code></td>
-    <td>Entity components</td>
-  </tr>
-  <tr>
-    <td><code>@toStruct(entity)</code></td>
-    <td>Entity to struct</td>
-  </tr>
-  <tr>
-    <td><code>@toEntity(struct, scene)</code></td>
-    <td>Struct to entity</td>
+    <td><code>@sizeOf(T)</code></td>
+    <td>Size of type in bytes</td>
   </tr>
 </table>
+
+<hr>
+<p><strong>Related:</strong> <a href="./D-language-types.html">Type System</a> | <a href="./D-language-functions.html">Functions</a></p>

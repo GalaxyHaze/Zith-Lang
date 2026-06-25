@@ -1,54 +1,62 @@
-<h1>Contexts (DSL Namespaces)</h1>
-<p>Contexts are isolated environments that define custom syntax, keywords, and operators for domain-specific languages (DSLs).</p>
-<h2>Defining a Context</h2>
+<h1>Contexts</h1>
+<p>A <strong>context</strong> bundles macros, constants, words, and other declarations into an isolated namespace. It is the primary mechanism for creating domain-specific languages (DSLs) in Zith.</p>
+
+<h2>Defining &amp; Using a Context</h2>
+<p>A context is activated with <code>use</code>, either scoped to a block or globally (one active per category at a time).</p>
+
+<pre><code class="language-zith">use SQL QueryBlock {
+    SELECT * FROM users WHERE id = :id
+}
+
+use SQL;   // global activation — replaces previous context</code></pre>
+
+<h2>Context-Bound Extensibility (Best Practice)</h2>
+<p>Macros and words should ideally live inside a <code>context</code> block. Activating them globally is possible but discouraged — similar to <code>using namespace std;</code> in C++.</p>
+
+<pre><code class="language-zith">// Preferred
+use SQL QueryBlock {
+    // SQL words and macros active only here
+}
+
+// Discouraged
+use SQL;   // pollutes the rest of the file</code></pre>
+
+<h2>Contexts with Macros</h2>
+
 <pre><code class="language-zith">context WebApp {
-    // Macros
-    macro @getParam(name) {
-        request.params[name]
-    }
-    
+    // Macros scoped to this context
+    macro @getParam(name) { request.params[name] }
+
     // Constants
     const VERSION = "1.0";
-    
+
     // Custom keywords
-    macro async { /* async handling */ }
-    
-    // Tag macros (HTML-like syntax)
-    tag macro div(content) {
-        render("&lt;div&gt;", content, "&lt;/div&gt;")
-    }
-}</code></pre>
-<h2>Activating a Context</h2>
-<pre><code class="language-zith">context WebApp {
-    // WebApp syntax is active here
+    macro @async { /* async handling */ }
+}
+
+// Activate in a block
+use WebApp {
     let version = VERSION;
     let param = @getParam("name");
-    &lt;div&gt; Hello &lt;/div&gt;
 }
 // Outside, WebApp syntax is not available</code></pre>
-<h2>Rules</h2>
-<ul>
-  <li><strong>One Global Context:</strong> Only one context at module level</li>
-  <li><strong>Local Contexts:</strong> Can be opened in blocks</li>
-  <li><strong>Namespace Isolation:</strong> Contexts don't pollute global namespace</li>
-  <li><strong>Composition:</strong> Contexts can be nested</li>
-</ul>
-<pre><code class="language-zith">context Web {
-    context Database {
+
+<h2>Nesting Contexts</h2>
+<p>All named blocks in Zith may receive a context. Contexts can be nested:</p>
+
+<pre><code class="language-zith">use Web {
+    use Database {
         // Both Web and Database syntax available
     }
 }</code></pre>
-<h2>Tag Macros</h2>
-<p>Tag macros provide HTML-like syntax for DSLs:</p>
-<pre><code class="language-zith">tag macro div(class: string, content) {
-    "&lt;div class=\"" + class + "\"&gt;" + content + "&lt;/div&gt;"
-}
 
-let html = &lt;div class="container"&gt;Content&lt;/div&gt;;</code></pre>
 <h2>Use Cases</h2>
 <ul>
-  <li><strong>Web Development:</strong> HTML, CSS, HTTP routing</li>
-  <li><strong>Database:</strong> SQL query building</li>
-  <li><strong>Graphics:</strong> Shader definitions</li>
-  <li><strong>Configuration:</strong> TOML/YAML-like syntax</li>
+  <li><strong>Web Development:</strong> HTML templating, HTTP routing DSLs</li>
+  <li><strong>Database:</strong> SQL query building with compile-time validation</li>
+  <li><strong>Graphics:</strong> Shader definitions, scene descriptions</li>
+  <li><strong>Configuration:</strong> Custom configuration file parsers</li>
 </ul>
+
+<hr>
+<p><strong>Related:</strong> <a href="./D-advanced-macros.html">Macros</a> | <a href="./D-language-types.html">Type System</a></p>
