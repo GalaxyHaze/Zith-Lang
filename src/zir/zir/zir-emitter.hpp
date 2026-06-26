@@ -23,7 +23,9 @@ public:
 
     void emit();
 
-    const import::SymbolTable &getSyms() const noexcept { return syms_; }
+    const import::SymbolTable &getSyms() const noexcept {
+        return syms_;
+    }
 
     ZirIndex addConst(int64_t v);
     ZirIndex addConst(double v);

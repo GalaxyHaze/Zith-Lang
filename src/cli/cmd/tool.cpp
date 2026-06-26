@@ -7,7 +7,7 @@
 namespace zith::cli::commands {
 
 #define CERR(c) term::err(TERM, diagnostics::ansi::c.data())
-#define RERR   term::err_rst(TERM)
+#define RERR term::err_rst(TERM)
 
 int cmd_test(const Options &opts) {
     auto TERM = term::init(opts);

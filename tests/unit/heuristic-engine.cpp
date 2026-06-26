@@ -101,7 +101,8 @@ static void test_generate_undefined_ident_suggests_match() {
     SymbolTable syms(arena);
     syms.declare("foobar");
 
-    Diagnostic diag(arena, Severity::Error, err::UndefinedIdent, "undefined identifier 'foobaz'", {});
+    Diagnostic diag(arena, Severity::Error, err::UndefinedIdent, "undefined identifier 'foobaz'",
+                    {});
     HeuristicEngine engine;
     DynArray<std::string> suggestions(arena);
     engine.generate(diag, syms, suggestions);
@@ -117,7 +118,8 @@ static void test_generate_undefined_ident_no_close_match() {
     SymbolTable syms(arena);
     syms.declare("xyz");
 
-    Diagnostic diag(arena, Severity::Error, err::UndefinedIdent, "undefined identifier 'aaaaa'", {});
+    Diagnostic diag(arena, Severity::Error, err::UndefinedIdent, "undefined identifier 'aaaaa'",
+                    {});
     HeuristicEngine engine;
     DynArray<std::string> suggestions(arena);
     engine.generate(diag, syms, suggestions);
@@ -159,7 +161,8 @@ static void test_generate_undefined_ident_no_quotes_in_message() {
     SymbolTable syms(arena);
     syms.declare("foo");
 
-    Diagnostic diag(arena, Severity::Error, err::UndefinedIdent, "undefined identifier (no quotes here)", {});
+    Diagnostic diag(arena, Severity::Error, err::UndefinedIdent,
+                    "undefined identifier (no quotes here)", {});
     HeuristicEngine engine;
     DynArray<std::string> suggestions(arena);
     engine.generate(diag, syms, suggestions);

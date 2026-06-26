@@ -5,6 +5,8 @@
 #include "diagnostics/error-codes.hpp"
 #include "import/symbol-table.hpp"
 #include "lexer/token.hpp"
+#include "memory/arena.hpp"
+#include "memory/dyn-array.hpp"
 #include "memory/span.hpp"
 
 #include <cstdint>
@@ -22,6 +24,31 @@ inline void skipComments(lexer::TokenStream &tok) {
             break;
         tok.advance();
     }
+}
+
+// Parse delimited list: parser() items separated by commas, stops at `close`
+template <typename Fn>
+auto parseDelimited(lexer::TokenStream &tok, memory::Arena &arena, char close, Fn parser)
+    -> memory::DynArray<decltype(parser())> {
+    using T     = decltype(parser());
+    auto result = memory::DynArray<T>{arena};
+    skipComments(tok);
+    if (tok.peek().punc != close) {
+        result.push(parser());
+        while (!tok.is_empty()) {
+            skipComments(tok);
+            if (tok.peek().punc == ',') {
+                tok.advance();
+                skipComments(tok);
+                if (tok.peek().punc == close)
+                    break;
+                result.push(parser());
+            } else {
+                break;
+            }
+        }
+    }
+    return result;
 }
 
 namespace scan_detail {
@@ -49,16 +76,26 @@ inline uint32_t skipBody(lexer::TokenStream &tok) {
 
 inline const char *symKindName(import::SymKind k) {
     switch (k) {
-    case import::SymKind::Fn:        return "a fn";
-    case import::SymKind::Struct:    return "a struct";
-    case import::SymKind::Trait:     return "a trait";
-    case import::SymKind::Interface: return "a interface";
-    case import::SymKind::Enum:      return "an enum";
-    case import::SymKind::Alias:     return "an alias";
-    case import::SymKind::Variable:  return "a variable";
-    case import::SymKind::Module:    return "a module";
-    case import::SymKind::Component: return "a component";
-    case import::SymKind::Union:     return "a union";
+    case import::SymKind::Fn:
+        return "a fn";
+    case import::SymKind::Struct:
+        return "a struct";
+    case import::SymKind::Trait:
+        return "a trait";
+    case import::SymKind::Interface:
+        return "a interface";
+    case import::SymKind::Enum:
+        return "an enum";
+    case import::SymKind::Alias:
+        return "an alias";
+    case import::SymKind::Variable:
+        return "a variable";
+    case import::SymKind::Module:
+        return "a module";
+    case import::SymKind::Component:
+        return "a component";
+    case import::SymKind::Union:
+        return "a union";
     }
     return "unknown";
 }
@@ -91,9 +128,18 @@ inline void skipTypeExpr(lexer::TokenStream &tok) {
         if (t.punc == ',' || t.punc == '}' || t.punc == ']' || t.punc == ';' || t.punc == '=' ||
             t.punc == ')' || t.punc == '|' || t.punc == '{')
             break;
-        if (t.punc == '(') { skipBalanced(tok, '(', ')'); continue; }
-        if (t.punc == '|') { skipBalanced(tok, '|', '|'); continue; }
-        if (t.punc == '[') { skipBalanced(tok, '[', ']'); continue; }
+        if (t.punc == '(') {
+            skipBalanced(tok, '(', ')');
+            continue;
+        }
+        if (t.punc == '|') {
+            skipBalanced(tok, '|', '|');
+            continue;
+        }
+        if (t.punc == '[') {
+            skipBalanced(tok, '[', ']');
+            continue;
+        }
         tok.advance();
     }
 }
@@ -106,9 +152,18 @@ inline void skipExpr(lexer::TokenStream &tok) {
             break;
         if (t.punc == ',' || t.punc == '}' || t.punc == ';' || t.punc == ')')
             break;
-        if (t.punc == '(') { skipBalanced(tok, '(', ')'); continue; }
-        if (t.punc == '{') { skipBalanced(tok, '{', '}'); continue; }
-        if (t.punc == '[') { skipBalanced(tok, '[', ']'); continue; }
+        if (t.punc == '(') {
+            skipBalanced(tok, '(', ')');
+            continue;
+        }
+        if (t.punc == '{') {
+            skipBalanced(tok, '{', '}');
+            continue;
+        }
+        if (t.punc == '[') {
+            skipBalanced(tok, '[', ']');
+            continue;
+        }
         tok.advance();
     }
 }
@@ -124,7 +179,8 @@ inline bool reportIfDuplicate(import::SymbolTable &syms, diagnostics::Diagnostic
     msg += name;
     msg += "' — previous declaration is ";
     msg += symKindName(prev.kind);
-    diag.report(diagnostics::Severity::Error, diagnostics::err::DuplicateDecl, std::move(msg), span);
+    diag.report(diagnostics::Severity::Error, diagnostics::err::DuplicateDecl, std::move(msg),
+                span);
     return true;
 }
 

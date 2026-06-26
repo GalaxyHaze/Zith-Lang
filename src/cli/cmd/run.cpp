@@ -8,9 +8,9 @@
 namespace zith::cli::commands {
 
 #define CERR(c) term::err(TERM, diagnostics::ansi::c.data())
-#define RERR   term::err_rst(TERM)
+#define RERR term::err_rst(TERM)
 #define COUT(c) term::out(TERM, diagnostics::ansi::c.data())
-#define ROUT   term::out_rst(TERM)
+#define ROUT term::out_rst(TERM)
 
 int cmd_execute(const Options &opts) {
     auto TERM = term::init(opts);

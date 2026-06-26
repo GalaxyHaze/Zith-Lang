@@ -173,7 +173,7 @@ void Parser::expandBodies(ScanResult &result) {
             auto &decl = bld->getDecl(decl_id);
             if (auto *fn = std::get_if<ast::FnDeclNode>(&decl)) {
                 if (fn->body == entry.body_node) {
-                    fn->params = std::move(typed_params);
+                    fn->params      = std::move(typed_params);
                     fn->return_type = return_type;
                     break;
                 }
@@ -182,7 +182,7 @@ void Parser::expandBodies(ScanResult &result) {
 
         // Now parse the body — position should be at `{`
         auto &unbody = std::get<ast::UnbodyNode>(bld->getExpr(entry.body_node));
-        tok->offset = unbody.token_start;
+        tok->offset  = unbody.token_start;
 
         consume('{');
         auto body_id = parseBlock();

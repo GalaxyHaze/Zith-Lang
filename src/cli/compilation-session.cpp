@@ -2,11 +2,11 @@
 #include "ast/ast-printer.hpp"
 #include "cli/terminal.hpp"
 #include "diagnostics/error-codes.hpp"
+#include "formatter/fmt-visitor.hpp"
 #include "import/resolver.hpp"
 #include "lexer/lexer.hpp"
 #include "memory/source-map.hpp"
 #include "parser/parser.hpp"
-#include "formatter/fmt-visitor.hpp"
 #include "sema/heuristic-engine.hpp"
 #include "sema/sema-pipeline.hpp"
 #include "solve/solver.hpp"
@@ -103,14 +103,21 @@ bool CompilationSession::runTo(Stage target) {
         return false;
     plan_.advance();
 
-    // Stage 7: MIR lowering
+    // Stage 7: NRA (Node Resource Analysis — ownership/borrowing)
+    if (plan_.shouldStop())
+        return !diags_.hasErrors();
+    if (!nraStage())
+        return false;
+    plan_.advance();
+
+    // Stage 8: MIR lowering
     if (plan_.shouldStop())
         return !diags_.hasErrors();
     if (!mirStage())
         return false;
     plan_.advance();
 
-    // Stage 8: ZIR interpretation
+    // Stage 9: ZIR interpretation
     if (plan_.shouldStop())
         return !diags_.hasErrors();
     if (!zirStage())
@@ -130,7 +137,7 @@ bool CompilationSession::runTo(Stage target) {
 }
 
 bool CompilationSession::lexStage() {
-    auto t0      = std::chrono::steady_clock::now();
+    auto t0 = std::chrono::steady_clock::now();
 
 #ifndef ZITH_IS_WASM
     namespace fs = std::filesystem;
@@ -155,8 +162,8 @@ bool CompilationSession::lexStage() {
 #endif
 
     auto file_result = !content_override_.empty()
-        ? source_map_.addFile(file_path_, content_override_)
-        : source_map_.loadFile(file_path_);
+                           ? source_map_.addFile(file_path_, content_override_)
+                           : source_map_.loadFile(file_path_);
     if (!file_result) {
         writeOutput("%s[error]%s failed to load file '%s'\n", ansicolor("\033[31m"),
                     ansicolor("\033[0m"), file_path_.c_str());
@@ -365,6 +372,19 @@ bool CompilationSession::solveStage() {
         auto dt = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0)
                       .count();
         writeOutput("  [solve] \xe2\x80\x94 (stub)  (%5.1fms)\n", dt);
+    }
+    return true;
+}
+
+bool CompilationSession::nraStage() {
+    auto t0 = std::chrono::steady_clock::now();
+    // NRA (Node Resource Analysis) — ownership/borrowing pass.
+    // Operates on the typed HIR: tracks origin of every string/struct/array node
+    // and enforces: no use-after-move, no double-borrow, no conflicting borrows.
+    if (opts_.verbose) {
+        auto dt = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0)
+                      .count();
+        writeOutput("  [nra] \xe2\x80\x94 (stub)  (%5.1fms)\n", dt);
     }
     return true;
 }

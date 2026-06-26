@@ -157,7 +157,7 @@ void mergeProjectConfig(Options &opts, const ProjectConfig &cfg) {
 }
 
 Options parseArgs(int argc, char **argv) {
-    auto OPT_TERM = term::init();
+    auto OPT_TERM     = term::init();
     auto requireValue = [&](int i, const char *flag) {
         if (i + 1 >= argc) {
             std::fprintf(stderr, "%s[error]%s %s requires a value\n", C(red), RST, flag);

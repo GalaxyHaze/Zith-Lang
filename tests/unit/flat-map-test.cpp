@@ -219,7 +219,8 @@ static void test_string_keys() {
 
     // contains with transparent lookup
     CHECK(map.contains(std::string_view("foo")), "contains with string_view finds 'foo'");
-    CHECK(!map.contains(std::string_view("nonexistent")), "contains with string_view returns false for missing");
+    CHECK(!map.contains(std::string_view("nonexistent")),
+          "contains with string_view returns false for missing");
 
     // operator[] with string_view
     CHECK_EQ(map[std::string_view("hello")], 1, "operator[] with string_view on existing key");
@@ -241,7 +242,7 @@ static void test_iteration() {
 
     // Sum values via range-for
     int sum_values = 0;
-    int count = 0;
+    int count      = 0;
     for (const auto &[k, v] : map) {
         sum_values += v;
         count++;
@@ -394,7 +395,7 @@ static void test_string_view_key() {
 
     // Look up by std::string (transparent)
     std::string key = "beta";
-    v = map.get(key);
+    v               = map.get(key);
     CHECK(v != nullptr, "transparent get with std::string on string_view map");
     CHECK_EQ(*v, 2, "value correct for std::string lookup");
 
@@ -490,13 +491,15 @@ static void test_large_string_keys() {
     for (int i = 0; i < 500; i++) {
         std::string key = "key_" + std::to_string(i);
         CHECK(map.contains(key), (std::string("contains string key ") + std::to_string(i)).c_str());
-        CHECK_EQ(*map.get(key), i, (std::string("value correct for string key ") + std::to_string(i)).c_str());
+        CHECK_EQ(*map.get(key), i,
+                 (std::string("value correct for string key ") + std::to_string(i)).c_str());
     }
 
     // Transparent lookup for all (via string_view to avoid ambiguous hash)
     for (int i = 0; i < 500; i++) {
         std::string key = "key_" + std::to_string(i);
-        CHECK_EQ(*map.get(std::string_view(key)), i, "transparent lookup works for all string keys");
+        CHECK_EQ(*map.get(std::string_view(key)), i,
+                 "transparent lookup works for all string keys");
     }
 }
 

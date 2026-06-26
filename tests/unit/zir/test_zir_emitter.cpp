@@ -1,9 +1,9 @@
 #include "../../test-common.hpp"
 #include "import/symbol-table.hpp"
-#include "zir/zir/zir-emitter.hpp"
-#include "zir/hir/hir-module.hpp"
-#include "zir/hir/hir-expr.hpp"
 #include "memory/arena.hpp"
+#include "zir/hir/hir-expr.hpp"
+#include "zir/hir/hir-module.hpp"
+#include "zir/zir/zir-emitter.hpp"
 
 using namespace zith::zir;
 using namespace zith::zir::hir;
@@ -95,7 +95,7 @@ static void test_emitter_emit_single_function() {
     Arena sym_arena;
     SymbolTable syms(sym_arena);
     HirModule hir(arena);
-    auto &fn = hir.addFn("main");
+    auto &fn       = hir.addFn("main");
     fn.return_type = kVoidType;
 
     ZirModule mod(arena);

@@ -135,7 +135,7 @@ bool SemaPipeline::run(const ast::ProgramNode &program) {
     for (auto decl_id : program.decls) {
         auto &decl = ctx_.builder().getDecl(decl_id);
         if (auto *fn = std::get_if<ast::FnDeclNode>(&decl)) {
-            current_fn_ = &hir_.getFn(fn_idx);
+            current_fn_          = &hir_.getFn(fn_idx);
             current_fn_->decl_id = decl_id;
             fn_idx++;
 
@@ -304,13 +304,13 @@ zir::hir::HirExprId SemaPipeline::visitCall(const ast::CallNode &n) {
 
     import::SymId resolved_fn = import::kInvalidSym;
     types::TypeId result_type = types::kErrorType;
-    size_t match_count = 0;
+    size_t match_count        = 0;
 
     // Overload resolution: if callee is an identifier (fn name)
     const auto &callee_expr = hir_.getExpr(callee);
     if (auto *var = std::get_if<zir::hir::HirVar>(&callee_expr)) {
-        auto callee_name = var->name;
-        auto candidates = syms().lookupAll(callee_name, hir_arena_);
+        auto callee_name          = var->name;
+        auto candidates           = syms().lookupAll(callee_name, hir_arena_);
         size_t fn_candidate_count = 0;
         for (auto sym_id : candidates) {
             auto &data = syms().get(sym_id);
@@ -320,7 +320,7 @@ zir::hir::HirExprId SemaPipeline::visitCall(const ast::CallNode &n) {
             if (data.decl_id == ast::kInvalidDecl)
                 continue;
 
-            auto &decl = ctx_.builder().getDecl(data.decl_id);
+            auto &decl    = ctx_.builder().getDecl(data.decl_id);
             auto *fn_decl = std::get_if<ast::FnDeclNode>(&decl);
             if (!fn_decl)
                 continue;
@@ -360,15 +360,18 @@ zir::hir::HirExprId SemaPipeline::visitCall(const ast::CallNode &n) {
 
         if (match_count == 0 && fn_candidate_count > 0) {
             if (n.args.size() > 0) {
-                    ctx_.diags().report(Severity::Error, NoMatchingFn,
-                                    "no matching function for call to '" + std::string(callee_name) + "'", n.span);
+                ctx_.diags().report(
+                    Severity::Error, NoMatchingFn,
+                    "no matching function for call to '" + std::string(callee_name) + "'", n.span);
             } else {
                 ctx_.diags().report(Severity::Error, WrongArity,
                                     "wrong number of arguments in call", n.span);
             }
         } else if (match_count > 1) {
             ctx_.diags().report(Severity::Error, AmbiguousCall,
-                                "ambiguous call '" + std::string(callee_name) + "' — multiple functions match", n.span);
+                                "ambiguous call '" + std::string(callee_name) +
+                                    "' — multiple functions match",
+                                n.span);
             resolved_fn = import::kInvalidSym;
             result_type = types::kErrorType;
         }
@@ -407,8 +410,6 @@ zir::hir::HirExprId SemaPipeline::visitBlock(const ast::BlockNode &n) {
     // Return the trailing expression with its type
     return last;
 }
-
-
 
 zir::hir::HirExprId SemaPipeline::visitIf(const ast::IfNode &n) {
     auto cond                     = visitExpr(n.cond);
@@ -466,7 +467,7 @@ void SemaPipeline::visitStmt(ast::StmtId id) {
             }
 
             zir::hir::HirExprId init = zir::hir::kInvalidHirExpr;
-            types::TypeId init_type = types::kErrorType;
+            types::TypeId init_type  = types::kErrorType;
             if (n.init != ast::kInvalidExpr) {
                 init = pipeline.visitExpr(n.init);
                 if (init != zir::hir::kInvalidHirExpr) {
@@ -506,7 +507,7 @@ void SemaPipeline::visitStmt(ast::StmtId id) {
 
         void operator()(const ast::RetNode &n) {
             zir::hir::HirExprId val = zir::hir::kInvalidHirExpr;
-            types::TypeId val_type = types::kVoidType;
+            types::TypeId val_type  = types::kVoidType;
             if (n.value != ast::kInvalidExpr) {
                 val = pipeline.visitExpr(n.value);
                 if (val != zir::hir::kInvalidHirExpr)

@@ -16,9 +16,15 @@ struct SessionResult {
     bool ok;
 };
 
-static const char *green(const term::Term &t) { return term::out(t, "\033[32m"); }
-static const char *red(const term::Term &t)   { return term::out(t, "\033[31m"); }
-static const char *rst(const term::Term &t)   { return term::out_rst(t); }
+static const char *green(const term::Term &t) {
+    return term::out(t, "\033[32m");
+}
+static const char *red(const term::Term &t) {
+    return term::out(t, "\033[31m");
+}
+static const char *rst(const term::Term &t) {
+    return term::out_rst(t);
+}
 
 int cmd_check(const Options &opts) {
     auto TERM = term::init(opts);

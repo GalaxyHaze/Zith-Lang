@@ -16,9 +16,11 @@ using zith::memory::DynArray;
 struct MoveOnly {
     int value;
     explicit MoveOnly(int v) : value(v) {}
-    MoveOnly(const MoveOnly &) = delete;
+    MoveOnly(const MoveOnly &)       = delete;
     auto operator=(const MoveOnly &) = delete;
-    MoveOnly(MoveOnly &&other) noexcept : value(other.value) { other.value = -1; }
+    MoveOnly(MoveOnly &&other) noexcept : value(other.value) {
+        other.value = -1;
+    }
     auto operator=(MoveOnly &&other) noexcept -> MoveOnly & {
         if (this != &other) {
             value       = other.value;
@@ -36,24 +38,26 @@ struct DtorCounter {
     int id = 0;
 
     DtorCounter() : id(++alive) {}
-    DtorCounter(const DtorCounter &o) noexcept : id(o.id) { ++alive; }
+    DtorCounter(const DtorCounter &o) noexcept : id(o.id) {
+        ++alive;
+    }
     DtorCounter(DtorCounter &&o) noexcept : id(o.id) {
         o.id = -1;
         ++alive;
     }
     auto operator=(const DtorCounter &o) noexcept -> DtorCounter & = default;
-    auto operator=(DtorCounter &&o) noexcept -> DtorCounter & = default;
+    auto operator=(DtorCounter &&o) noexcept -> DtorCounter &      = default;
     ~DtorCounter() noexcept {
         ++dtor_calls;
         --alive;
     }
 };
 
-int DtorCounter::alive     = 0;
+int DtorCounter::alive      = 0;
 int DtorCounter::dtor_calls = 0;
 
 static void reset_counters() {
-    DtorCounter::alive     = 0;
+    DtorCounter::alive      = 0;
     DtorCounter::dtor_calls = 0;
 }
 

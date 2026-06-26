@@ -38,8 +38,8 @@ struct SymbolData {
     memory::DynArray<SymId> members;
 
     SymbolData(std::string_view name, ScopeId scope, SymbolVisibility vis, int32_t depth,
-               SymKind ikind, ast::DeclId did, memory::Span ispan, memory::Span idoc,
-               SymId itarget, memory::Arena &arena)
+               SymKind ikind, ast::DeclId did, memory::Span ispan, memory::Span idoc, SymId itarget,
+               memory::Arena &arena)
         : name(name), scope(scope), visibility(vis), mod_depth(depth), kind(ikind), decl_id(did),
           span(ispan), doc_span(idoc), target(itarget), members(arena) {}
 };

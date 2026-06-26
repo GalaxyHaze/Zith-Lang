@@ -256,7 +256,8 @@ static void test_scan_doc_comments() {
     auto &data = syms.get(id);
     CHECK(data.doc_span.len() > 0, "Pt has doc span");
     CHECK(data.doc_span.start < data.doc_span.end, "doc span start < end");
-    std::printf("  doc_span for Pt: {%u, %u, %u}\n", data.doc_span.file, data.doc_span.start, data.doc_span.end);
+    std::printf("  doc_span for Pt: {%u, %u, %u}\n", data.doc_span.file, data.doc_span.start,
+                data.doc_span.end);
 }
 
 // ── main ──────────────────────────────────────────────────

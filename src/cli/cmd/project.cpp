@@ -10,12 +10,12 @@
 namespace zith::cli::commands {
 
 #define CERR(c) term::err(TERM, diagnostics::ansi::c.data())
-#define RERR   term::err_rst(TERM)
+#define RERR term::err_rst(TERM)
 #define COUT(c) term::out(TERM, diagnostics::ansi::c.data())
-#define ROUT   term::out_rst(TERM)
+#define ROUT term::out_rst(TERM)
 
 int cmd_new(const Options &opts) {
-    auto TERM = term::init(opts);
+    auto TERM               = term::init(opts);
     const std::string &name = opts.subcommand_arg;
     if (name.empty()) {
         std::fprintf(stderr, "%s[error]%s project name required\n", CERR(red), RERR);

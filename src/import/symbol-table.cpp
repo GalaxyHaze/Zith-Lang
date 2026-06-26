@@ -28,8 +28,8 @@ SymId SymbolTable::declare(std::string_view name, SymbolVisibility vis, int32_t 
                            ast::DeclId decl_id, memory::Span span, SymId target,
                            memory::Span doc_span) {
     SymId id = static_cast<SymId>(symbols_.size());
-    symbols_.push(SymbolData{name, current_, vis, depth, kind, decl_id, span, doc_span, target,
-                             *arena_});
+    symbols_.push(
+        SymbolData{name, current_, vis, depth, kind, decl_id, span, doc_span, target, *arena_});
     scopes_[current_].syms.push(id);
     return id;
 }
@@ -38,8 +38,8 @@ SymId SymbolTable::declareInScope(ScopeId scope, std::string_view name, SymbolVi
                                   int32_t depth, SymKind kind, ast::DeclId decl_id,
                                   memory::Span span, SymId target, memory::Span doc_span) {
     SymId id = static_cast<SymId>(symbols_.size());
-    symbols_.push(SymbolData{name, scope, vis, depth, kind, decl_id, span, doc_span, target,
-                             *arena_});
+    symbols_.push(
+        SymbolData{name, scope, vis, depth, kind, decl_id, span, doc_span, target, *arena_});
     scopes_[scope].syms.push(id);
     return id;
 }

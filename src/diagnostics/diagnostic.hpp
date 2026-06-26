@@ -23,9 +23,10 @@ struct Diagnostic {
     memory::DynArray<Label> labels;
     memory::DynArray<std::string> suggestions;
 
-    Diagnostic(memory::Arena &arena, Severity sev, uint32_t code, std::string msg, memory::Span span)
-        : severity(sev), code(code), message(std::move(msg)), primary(span),
-          labels(arena), suggestions(arena) {}
+    Diagnostic(memory::Arena &arena, Severity sev, uint32_t code, std::string msg,
+               memory::Span span)
+        : severity(sev), code(code), message(std::move(msg)), primary(span), labels(arena),
+          suggestions(arena) {}
 
     bool isError() const noexcept;
     bool isWarning() const noexcept;

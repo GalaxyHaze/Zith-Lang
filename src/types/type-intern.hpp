@@ -26,7 +26,7 @@ class TypeIntern {
     memory::DynArray<size_t> hashes_;
     memory::DynArray<StructDef> struct_defs_;
     std::unordered_map<std::string, TypeId> named_types_;
-    uint32_t next_enum_def_id_ = 0;
+    uint32_t next_enum_def_id_  = 0;
     uint32_t next_union_def_id_ = 0;
 
     static size_t computeHash(const TypeData &data);

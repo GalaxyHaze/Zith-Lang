@@ -8,8 +8,7 @@ namespace zith::types {
 
 namespace err = diagnostics::err;
 
-TypeLower::TypeLower(ast::AstBuilder &ast, TypeIntern &intern,
-                     diagnostics::DiagnosticEngine &diags,
+TypeLower::TypeLower(ast::AstBuilder &ast, TypeIntern &intern, diagnostics::DiagnosticEngine &diags,
                      const import::SymbolTable &syms)
     : ast_(ast), intern_(intern), diags_(diags), syms_(syms) {}
 
@@ -33,10 +32,9 @@ TypeId TypeLower::lowerNode(const ast::TypeExprNode &node) {
             if (n.segments.size() == 1) {
                 auto sym_id = self.syms_.lookup(n.segments[0]);
                 if (sym_id == import::kInvalidSym) {
-                    self.diags_.report(diagnostics::Severity::Error,
-                        diagnostics::err::UndefinedIdent,
-                        "undefined type '" + std::string(n.segments[0]) + "'",
-                        n.span);
+                    self.diags_.report(
+                        diagnostics::Severity::Error, diagnostics::err::UndefinedIdent,
+                        "undefined type '" + std::string(n.segments[0]) + "'", n.span);
                     return kErrorType;
                 }
                 auto &data = self.syms_.get(sym_id);
@@ -53,10 +51,9 @@ TypeId TypeLower::lowerNode(const ast::TypeExprNode &node) {
                     return self.intern_.internUnknown();
                 }
                 default:
-                    self.diags_.report(diagnostics::Severity::Error,
-                        diagnostics::err::UndefinedIdent,
-                        "'" + std::string(n.segments[0]) + "' is not a type",
-                        n.span);
+                    self.diags_.report(
+                        diagnostics::Severity::Error, diagnostics::err::UndefinedIdent,
+                        "'" + std::string(n.segments[0]) + "' is not a type", n.span);
                     return kErrorType;
                 }
             }
@@ -68,31 +65,50 @@ TypeId TypeLower::lowerNode(const ast::TypeExprNode &node) {
 
         TypeId operator()(const ast::TypeBuiltin &n) {
             switch (n.kind) {
-            case ast::BuiltinType::I8:    return self.intern_.internInt(IntWidth::I8);
-            case ast::BuiltinType::I16:   return self.intern_.internInt(IntWidth::I16);
-            case ast::BuiltinType::I32:   return self.intern_.internInt(IntWidth::I32);
-            case ast::BuiltinType::I64:   return self.intern_.internInt(IntWidth::I64);
-            case ast::BuiltinType::I128:  return self.intern_.internInt(IntWidth::I128);
-            case ast::BuiltinType::U8:    return self.intern_.internInt(IntWidth::U8);
-            case ast::BuiltinType::U16:   return self.intern_.internInt(IntWidth::U16);
-            case ast::BuiltinType::U32:   return self.intern_.internInt(IntWidth::U32);
-            case ast::BuiltinType::U64:   return self.intern_.internInt(IntWidth::U64);
-            case ast::BuiltinType::U128:  return self.intern_.internInt(IntWidth::U128);
-            case ast::BuiltinType::F32:   return self.intern_.internFloat(FloatWidth::F32);
-            case ast::BuiltinType::F64:   return self.intern_.internFloat(FloatWidth::F64);
-            case ast::BuiltinType::Bool:  return kBoolType;
-            case ast::BuiltinType::Char:  return kCharType;
-            case ast::BuiltinType::Void:  return kVoidType;
-            case ast::BuiltinType::Never: return kNeverType;
-            case ast::BuiltinType::Unknown: return self.intern_.internUnknown();
-            case ast::BuiltinType::Invalid: return kErrorType;
-            case ast::BuiltinType::Opaque:  return self.intern_.intern(TypeOpaque{});
+            case ast::BuiltinType::I8:
+                return self.intern_.internInt(IntWidth::I8);
+            case ast::BuiltinType::I16:
+                return self.intern_.internInt(IntWidth::I16);
+            case ast::BuiltinType::I32:
+                return self.intern_.internInt(IntWidth::I32);
+            case ast::BuiltinType::I64:
+                return self.intern_.internInt(IntWidth::I64);
+            case ast::BuiltinType::I128:
+                return self.intern_.internInt(IntWidth::I128);
+            case ast::BuiltinType::U8:
+                return self.intern_.internInt(IntWidth::U8);
+            case ast::BuiltinType::U16:
+                return self.intern_.internInt(IntWidth::U16);
+            case ast::BuiltinType::U32:
+                return self.intern_.internInt(IntWidth::U32);
+            case ast::BuiltinType::U64:
+                return self.intern_.internInt(IntWidth::U64);
+            case ast::BuiltinType::U128:
+                return self.intern_.internInt(IntWidth::U128);
+            case ast::BuiltinType::F32:
+                return self.intern_.internFloat(FloatWidth::F32);
+            case ast::BuiltinType::F64:
+                return self.intern_.internFloat(FloatWidth::F64);
+            case ast::BuiltinType::Bool:
+                return kBoolType;
+            case ast::BuiltinType::Char:
+                return kCharType;
+            case ast::BuiltinType::Void:
+                return kVoidType;
+            case ast::BuiltinType::Never:
+                return kNeverType;
+            case ast::BuiltinType::Unknown:
+                return self.intern_.internUnknown();
+            case ast::BuiltinType::Invalid:
+                return kErrorType;
+            case ast::BuiltinType::Opaque:
+                return self.intern_.intern(TypeOpaque{});
             }
             return kErrorType;
         }
 
         TypeId operator()(const ast::TypePtrExpr &n) {
-            auto pointee = self.lower(n.pointee);
+            auto pointee   = self.lower(n.pointee);
             auto ownership = static_cast<OwnershipKind>(n.ownership);
             return self.intern_.internPtr(pointee, n.is_mut, ownership);
         }
@@ -111,7 +127,8 @@ TypeId TypeLower::lowerNode(const ast::TypeExprNode &node) {
             memory::DynArray<TypeId> params{ast.arena()};
             for (auto p : n.params)
                 params.push(self.lower(p));
-            return self.intern_.internFn(std::span<const TypeId>{params.data(), params.size()}, ret);
+            return self.intern_.internFn(std::span<const TypeId>{params.data(), params.size()},
+                                         ret);
         }
 
         TypeId operator()(const ast::TypeOptional &n) {
@@ -119,7 +136,7 @@ TypeId TypeLower::lowerNode(const ast::TypeExprNode &node) {
         }
 
         TypeId operator()(const ast::TypeFailable &n) {
-            auto inner = self.lower(n.inner);
+            auto inner     = self.lower(n.inner);
             bool has_error = n.error != ast::kInvalidTypeExpr && n.error != self.ast_.inferExpr();
             if (has_error) {
                 auto err = self.lower(n.error);
@@ -136,7 +153,7 @@ TypeId TypeLower::lowerNode(const ast::TypeExprNode &node) {
             for (auto a : n.args)
                 args.push(self.lower(a));
             return self.intern_.internIncomplete(base,
-                std::span<const TypeId>{args.data(), args.size()});
+                                                 std::span<const TypeId>{args.data(), args.size()});
         }
 
         TypeId operator()(const ast::TypePack &n) {
@@ -155,8 +172,7 @@ TypeId TypeLower::lowerNode(const ast::TypeExprNode &node) {
             memory::DynArray<TypeId> members{ast.arena()};
             for (auto m : n.members)
                 members.push(self.lower(m));
-            return self.intern_.internSum(
-                std::span<const TypeId>{members.data(), members.size()});
+            return self.intern_.internSum(std::span<const TypeId>{members.data(), members.size()});
         }
 
         TypeId operator()(const ast::TypeInfer &) {
@@ -167,7 +183,8 @@ TypeId TypeLower::lowerNode(const ast::TypeExprNode &node) {
         TypeId operator()(const ast::TypeGenericParamRef &n) {
             if (self.generic_ctx_) {
                 auto *val = self.generic_ctx_->get(n.name);
-                if (val) return *val;
+                if (val)
+                    return *val;
             }
             self.diags_.report(diagnostics::Severity::Error, diagnostics::err::UndefinedIdent,
                                "unknown generic parameter '" + std::string(n.name) + "'", {});

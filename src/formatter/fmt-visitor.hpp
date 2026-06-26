@@ -19,7 +19,9 @@ public:
     FmtVisitor(const ast::AstBuilder &builder, const ast::ProgramNode &program);
 
     void format();
-    const std::string &result() const { return out_; }
+    const std::string &result() const {
+        return out_;
+    }
 
 private:
     // Declarations

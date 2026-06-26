@@ -9,7 +9,6 @@
 namespace zith::parser {
 
 using lexer::TokenKind;
-using namespace zith::diagnostics::err;
 using namespace operators;
 
 namespace {
@@ -20,26 +19,82 @@ using ast::kInvalidStmt;
 using diagnostics::Severity;
 
 bool matchBuiltinType(std::string_view name, ast::BuiltinType &out) {
-    if (name == "i8")       { out = ast::BuiltinType::I8;    return true; }
-    if (name == "i16")      { out = ast::BuiltinType::I16;   return true; }
-    if (name == "i32")      { out = ast::BuiltinType::I32;   return true; }
-    if (name == "i64")      { out = ast::BuiltinType::I64;   return true; }
-    if (name == "i128")     { out = ast::BuiltinType::I128;  return true; }
-    if (name == "u8")       { out = ast::BuiltinType::U8;    return true; }
-    if (name == "u16")      { out = ast::BuiltinType::U16;   return true; }
-    if (name == "u32")      { out = ast::BuiltinType::U32;   return true; }
-    if (name == "u64")      { out = ast::BuiltinType::U64;   return true; }
-    if (name == "u128")     { out = ast::BuiltinType::U128;  return true; }
-    if (name == "f32")      { out = ast::BuiltinType::F32;   return true; }
-    if (name == "f64")      { out = ast::BuiltinType::F64;   return true; }
-    if (name == "bool")     { out = ast::BuiltinType::Bool;  return true; }
-    if (name == "char")     { out = ast::BuiltinType::Char;  return true; }
-    if (name == "void")     { out = ast::BuiltinType::Void;  return true; }
-    if (name == "never" || name == "noreturn")
-                            { out = ast::BuiltinType::Never; return true; }
-    if (name == "invalid")  { out = ast::BuiltinType::Invalid; return true; }
-    if (name == "unknown")  { out = ast::BuiltinType::Unknown; return true; }
-    if (name == "opaque")   { out = ast::BuiltinType::Opaque; return true; }
+    if (name == "i8") {
+        out = ast::BuiltinType::I8;
+        return true;
+    }
+    if (name == "i16") {
+        out = ast::BuiltinType::I16;
+        return true;
+    }
+    if (name == "i32") {
+        out = ast::BuiltinType::I32;
+        return true;
+    }
+    if (name == "i64") {
+        out = ast::BuiltinType::I64;
+        return true;
+    }
+    if (name == "i128") {
+        out = ast::BuiltinType::I128;
+        return true;
+    }
+    if (name == "u8") {
+        out = ast::BuiltinType::U8;
+        return true;
+    }
+    if (name == "u16") {
+        out = ast::BuiltinType::U16;
+        return true;
+    }
+    if (name == "u32") {
+        out = ast::BuiltinType::U32;
+        return true;
+    }
+    if (name == "u64") {
+        out = ast::BuiltinType::U64;
+        return true;
+    }
+    if (name == "u128") {
+        out = ast::BuiltinType::U128;
+        return true;
+    }
+    if (name == "f32") {
+        out = ast::BuiltinType::F32;
+        return true;
+    }
+    if (name == "f64") {
+        out = ast::BuiltinType::F64;
+        return true;
+    }
+    if (name == "bool") {
+        out = ast::BuiltinType::Bool;
+        return true;
+    }
+    if (name == "char") {
+        out = ast::BuiltinType::Char;
+        return true;
+    }
+    if (name == "void") {
+        out = ast::BuiltinType::Void;
+        return true;
+    }
+    if (name == "never" || name == "noreturn") {
+        out = ast::BuiltinType::Never;
+        return true;
+    }
+    if (name == "invalid") {
+        out = ast::BuiltinType::Invalid;
+        return true;
+    }
+    if (name == "unknown") {
+        out = ast::BuiltinType::Unknown;
+        return true;
+    }
+    if (name == "opaque") {
+        out = ast::BuiltinType::Opaque;
+        return true;
+    }
     return false;
 }
 
@@ -47,14 +102,13 @@ bool matchBuiltinType(std::string_view name, ast::BuiltinType &out) {
 
 ast::TypeExprId Parser::parsePrimaryType() {
     // ── builtin types (i32, bool, void, …) ──────────────────────────
-    if (peek().is(TokenKind::Type)) {
+    if (check(TokenKind::Type)) {
         ast::BuiltinType bt;
         if (matchBuiltinType(lexeme(), bt)) {
             advance();
             return bld->builtinExpr(bt);
         }
-        // fall through: treat as a path
-        memory::DynArray<std::string_view> segments{bld->arena()};
+        auto segments = memory::DynArray<std::string_view>{bld->arena()};
         segments.push(lexeme());
         advance();
         return bld->pathExpr(std::move(segments));
@@ -62,46 +116,45 @@ ast::TypeExprId Parser::parsePrimaryType() {
 
     // ── pointer / ownership-qualified types ─────────────────────────
     {
-        bool has_mut = false;
+        bool has_mut               = false;
         ast::OwnershipKw ownership = ast::OwnershipKw::Default;
 
-        if (peek().is(TokenKind::Mutable)) {
+        if (consume(TokenKind::Mutable))
             has_mut = true;
-            advance();
-        }
 
-        if (peek().is(TokenKind::Ownership)) {
+        if (check(TokenKind::Ownership)) {
             auto kw = lexeme();
-            if (kw == "unique")  ownership = ast::OwnershipKw::Unique;
-            if (kw == "share")   ownership = ast::OwnershipKw::Share;
-            if (kw == "lend")    ownership = ast::OwnershipKw::Lend;
-            if (kw == "view")    ownership = ast::OwnershipKw::View;
-            if (kw == "belong")  ownership = ast::OwnershipKw::Belong;
+            if (kw == "unique")
+                ownership = ast::OwnershipKw::Unique;
+            if (kw == "share")
+                ownership = ast::OwnershipKw::Share;
+            if (kw == "lend")
+                ownership = ast::OwnershipKw::Lend;
+            if (kw == "view")
+                ownership = ast::OwnershipKw::View;
+            if (kw == "belong")
+                ownership = ast::OwnershipKw::Belong;
             advance();
 
-            // qualifier without '*': lend T, share T, etc.
-            if (peek().punc != '*') {
+            if (!check('*')) {
                 auto inner = parsePrimaryType();
                 return bld->addTypeExpr(ast::TypePtrExpr{inner, has_mut, ownership});
             }
         }
 
-        if (peek().punc == '*') {
-            advance();
+        if (consume('*')) {
             auto inner = parsePrimaryType();
             return bld->addTypeExpr(ast::TypePtrExpr{inner, has_mut, ownership});
         }
 
         if (has_mut || ownership != ast::OwnershipKw::Default) {
-            diag->report(diagnostics::Severity::Error, diagnostics::err::ExpectedExpr,
-                         "expected pointer type after 'mut'", peek().span);
+            errorExpected("pointer type after 'mut'");
             return bld->inferExpr();
         }
     }
 
     // ── optional type: ?T ───────────────────────────────────────────
-    if (peek().punc == '?') {
-        advance();
+    if (consume('?')) {
         auto inner = parsePrimaryType();
         return bld->addTypeExpr(ast::TypeOptional{inner});
     }
@@ -110,93 +163,75 @@ ast::TypeExprId Parser::parsePrimaryType() {
     if (peek().punc == '|') {
         advance();
         memory::DynArray<ast::TypePackMember> members{bld->arena()};
-        while (!peek().is_eof() && peek().punc != '|') {
-            if (peek().is(TokenKind::Identifier)) {
-                // lookahead: if next token is ':', it's a named member
+        while (!peek().is_eof() && !check('|')) {
+            if (check(TokenKind::Identifier)) {
                 if (peek(1).punc == ':') {
                     auto name = lexeme();
-                    advance(); // name
-                    advance(); // ':'
-                    auto type = parsePrimaryType();
-                    members.push({name, type});
+                    advance();
+                    advance();
+                    members.push({name, parsePrimaryType()});
                 } else {
-                    auto type = parsePrimaryType();
-                    members.push({std::string_view{}, type});
+                    members.push({std::string_view{}, parsePrimaryType()});
                 }
             } else {
-                // positional — no name needed for packs starting with '(' or type kw
-                auto type = parsePrimaryType();
-                members.push({std::string_view{}, type});
+                members.push({std::string_view{}, parsePrimaryType()});
             }
-            if (peek().punc == ',')
+            if (check(','))
                 advance();
         }
-        if (peek().punc == '|')
+        if (check('|'))
             advance();
         return bld->addTypeExpr(ast::TypePack{std::move(members)});
     }
 
     // ── parenthesized: (T) or fn(...) ─────────────────────────────
-    if (peek().punc == '(') {
-        advance();
+    if (consume('(')) {
         auto inner = parseTypeExpr();
-        if (peek().punc == ')')
+        if (check(')'))
             advance();
         return inner;
     }
 
     // ── slice / array: []T or [N]T ────────────────────────────────
-    if (peek().punc == '[') {
-        advance();
-        if (peek().punc == ']') {
+    if (consume('[')) {
+        if (check(']')) {
             advance();
-            auto elem = parsePrimaryType();
-            return bld->addTypeExpr(ast::TypeSlice{elem});
+            return bld->addTypeExpr(ast::TypeSlice{parsePrimaryType()});
         }
-        // [N]T — parse count expression then type
-        // For now: count is an integer literal
-        auto count_expr = bld->inferExpr(); // placeholder
-        while (!peek().is_eof() && peek().punc != ']')
+        auto count_expr = bld->inferExpr();
+        while (!peek().is_eof() && !check(']'))
             advance();
-        if (peek().punc == ']')
+        if (check(']'))
             advance();
-        auto elem = parsePrimaryType();
-        return bld->addTypeExpr(ast::TypeArray{elem, count_expr});
+        return bld->addTypeExpr(ast::TypeArray{parsePrimaryType(), count_expr});
     }
 
     // ── fn type: fn(T): U ─────────────────────────────────────────
-    if (peek().is(TokenKind::Fn)) {
-        advance();
+    if (consume(TokenKind::Fn)) {
         memory::DynArray<ast::TypeExprId> params{bld->arena()};
-        if (peek().punc == '(') {
-            advance();
-            while (!peek().is_eof() && peek().punc != ')') {
+        if (consume('(')) {
+            while (!peek().is_eof() && !check(')')) {
                 params.push(parseTypeExpr());
-                if (peek().punc == ',')
+                if (check(','))
                     advance();
             }
-            if (peek().punc == ')')
+            if (check(')'))
                 advance();
         }
         auto ret = bld->inferExpr();
-        if (peek().punc == ':') {
-            advance();
+        if (consume(':'))
             ret = parseTypeExpr();
-        }
         return bld->addTypeExpr(ast::TypeFnExpr{std::move(params), ret});
     }
 
     // ── infer type: _ ──────────────────────────────────────────────
-    if (peek().punc == '_') {
-        advance();
+    if (consume('_'))
         return bld->inferExpr();
-    }
 
     // ── identifier / path: Vec, std.vec.Vec ────────────────────────
-    if (peek().is(TokenKind::Identifier)) {
+    if (check(TokenKind::Identifier)) {
         auto id_span = peek().span;
-        auto id = lexeme();
-        // check for builtin types that aren't TokenKind::Type (never, opaque)
+        auto id      = lexeme();
         ast::BuiltinType bt;
         if (peek(1).punc != '.' && matchBuiltinType(id, bt)) {
             advance();
@@ -207,10 +242,9 @@ ast::TypeExprId Parser::parsePrimaryType() {
         memory::DynArray<std::string_view> segments{bld->arena()};
         segments.push(seg);
         auto path_span = id_span;
-        // qualified path: std.vec.Vec
-        while (peek().punc == '.') {
+        while (check('.')) {
             advance();
-            if (peek().is(TokenKind::Identifier)) {
+            if (check(TokenKind::Identifier)) {
                 path_span.end = peek().span.end;
                 segments.push(lexeme());
                 advance();
@@ -221,8 +255,7 @@ ast::TypeExprId Parser::parsePrimaryType() {
         return bld->pathExpr(std::move(segments), path_span);
     }
 
-    diag->report(diagnostics::Severity::Error, diagnostics::err::ExpectedExpr,
-                 "expected type expression", peek().span);
+    errorExpected("type expression");
     return bld->inferExpr();
 }
 
@@ -230,8 +263,7 @@ ast::TypeExprId Parser::parseOrExpr() {
     auto left = parsePrimaryType();
 
     // 'or' as identifier — check lexeme
-    while (peek().is(TokenKind::Identifier) && lexeme() == "or") {
-        advance();
+    while (check(TokenKind::Identifier) && match("or")) {
         auto right = parsePrimaryType();
 
         // If left is not already a TypeSum, convert it

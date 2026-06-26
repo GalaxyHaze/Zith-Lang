@@ -369,8 +369,8 @@ void ImportManager::mergeInto(SymbolTable &main_syms, int32_t from_depth) {
                                   "duplicate symbol '" + std::string(name) + "'", {});
                     return;
                 }
-                auto main_id = main_syms.declare(name, v, d, data.kind, data.decl_id,
-                                                   data.span, data.target, data.doc_span);
+                auto main_id = main_syms.declare(name, v, d, data.kind, data.decl_id, data.span,
+                                                 data.target, data.doc_span);
                 record_origin(main_id, fi, ls);
             };
             if (file.is_from) {
@@ -409,19 +409,18 @@ void ImportManager::mergeInto(SymbolTable &main_syms, int32_t from_depth) {
                 auto &data = ref.symbols.get(sid);
                 auto name  = arena_str(arena_, std::string(data.name));
                 if (file.is_from) {
-                    declare_re_export(name, SymbolVisibility::Public, 0, data.kind,
-                                      data.decl_id, data.span, data.target, data.doc_span,
-                                      re_idx, sid);
+                    declare_re_export(name, SymbolVisibility::Public, 0, data.kind, data.decl_id,
+                                      data.span, data.target, data.doc_span, re_idx, sid);
                     auto qualified =
                         arena_str(arena_, std::string(ls) + "." + std::string(data.name));
                     declare_re_export(qualified, SymbolVisibility::Public, 0, data.kind,
-                                      data.decl_id, data.span, data.target, data.doc_span,
-                                      re_idx, sid);
+                                      data.decl_id, data.span, data.target, data.doc_span, re_idx,
+                                      sid);
                 } else {
                     auto qualified = arena_str(arena_, prefix + std::string(data.name));
                     declare_re_export(qualified, SymbolVisibility::Public, 0, data.kind,
-                                      data.decl_id, data.span, data.target, data.doc_span,
-                                      re_idx, sid);
+                                      data.decl_id, data.span, data.target, data.doc_span, re_idx,
+                                      sid);
                 }
             }
             for (auto sid : ref.module_syms) {
@@ -431,18 +430,18 @@ void ImportManager::mergeInto(SymbolTable &main_syms, int32_t from_depth) {
                 auto name = arena_str(arena_, std::string(data.name));
                 if (file.is_from) {
                     declare_re_export(name, SymbolVisibility::Module, data.mod_depth, data.kind,
-                                      data.decl_id, data.span, data.target, data.doc_span,
-                                      re_idx, sid);
+                                      data.decl_id, data.span, data.target, data.doc_span, re_idx,
+                                      sid);
                     auto qualified =
                         arena_str(arena_, std::string(ls) + "." + std::string(data.name));
-                    declare_re_export(qualified, SymbolVisibility::Module, data.mod_depth, data.kind,
-                                      data.decl_id, data.span, data.target, data.doc_span,
-                                      re_idx, sid);
+                    declare_re_export(qualified, SymbolVisibility::Module, data.mod_depth,
+                                      data.kind, data.decl_id, data.span, data.target,
+                                      data.doc_span, re_idx, sid);
                 } else {
                     auto qualified = arena_str(arena_, prefix + std::string(data.name));
-                    declare_re_export(qualified, SymbolVisibility::Module, data.mod_depth, data.kind,
-                                      data.decl_id, data.span, data.target, data.doc_span,
-                                      re_idx, sid);
+                    declare_re_export(qualified, SymbolVisibility::Module, data.mod_depth,
+                                      data.kind, data.decl_id, data.span, data.target,
+                                      data.doc_span, re_idx, sid);
                 }
             }
             for (auto r : ref.re_exported_files)

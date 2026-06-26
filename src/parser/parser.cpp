@@ -14,22 +14,73 @@ namespace zith::parser {
 
 using ast::kInvalidDecl;
 using ast::kInvalidExpr;
-using ast::kInvalidStmt;
+// using ast::kInvalidStmt;
 using diagnostics::Severity;
 using lexer::TokenKind;
 using namespace diagnostics::err;
 
+// ── non-consuming checks ────────────────────────────────────────────────
+
+bool Parser::check(lexer::TokenKind kind) const {
+    return !eof() && peek().kind == kind;
+}
+
+bool Parser::check(char c) const {
+    return !eof() && peek().punc == c;
+}
+
+bool Parser::checkAny(std::initializer_list<lexer::TokenKind> kinds) const {
+    if (eof())
+        return false;
+    for (auto k : kinds)
+        if (peek().kind == k)
+            return true;
+    return false;
+}
+
+const lexer::Token &Parser::previous() const {
+    return tok->src[tok->offset - 1];
+}
+
+bool Parser::isAtStartOfStmt() const {
+    if (eof())
+        return false;
+    switch (peek().kind) {
+    case lexer::TokenKind::Variable:
+    case lexer::TokenKind::Control:
+    case lexer::TokenKind::If:
+    case lexer::TokenKind::For:
+    case lexer::TokenKind::Identifier:
+    case lexer::TokenKind::LitVal:
+    case lexer::TokenKind::Punctuation:
+    case lexer::TokenKind::End:
+        return true;
+    default:
+        return false;
+    }
+}
+
+void Parser::errorHere(std::string_view msg) {
+    diag->report(Severity::Error, diagnostics::err::ExpectedExpr, std::string(msg), peek().span);
+}
+
+void Parser::errorExpected(std::string_view expected) {
+    std::string msg = "expected ";
+    msg += expected;
+    diag->report(Severity::Error, diagnostics::err::ExpectedExpr, std::move(msg), peek().span);
+}
+
 // ── token helpers ──────────────────────────────────────────────────────
 
-std::string_view Parser::lexeme() {
+std::string_view Parser::lexeme() const {
     return tok->lexeme();
 }
 
-const lexer::Token &Parser::peek() {
+const lexer::Token &Parser::peek() const {
     return tok->peek();
 }
 
-const lexer::Token &Parser::peek(uint32_t n) {
+const lexer::Token &Parser::peek(uint32_t n) const {
     return tok->peek(n);
 }
 
@@ -41,12 +92,20 @@ void Parser::advance(uint32_t n) {
     tok->advance(n);
 }
 
-bool Parser::eof() {
+bool Parser::eof() const {
     return tok->is_empty();
 }
 
 bool Parser::match(TokenKind kind) {
     if (!eof() && peek().is(kind)) {
+        advance();
+        return true;
+    }
+    return false;
+}
+
+bool Parser::match(const std::string_view &kind) {
+    if (!eof() && lexeme() == kind) {
         advance();
         return true;
     }
@@ -60,6 +119,18 @@ bool Parser::expect(TokenKind kind) {
     }
     diag->report(Severity::Error, ExpectedExpr,
                  std::string("expected ") + lexer::tokenKindName(kind) + " but got " +
+                     lexer::tokenKindName(peek().kind),
+                 peek().span);
+    return false;
+}
+
+bool Parser::expect(const std::string_view &kind) {
+    if (lexeme() == kind) {
+        advance();
+        return true;
+    }
+    diag->report(Severity::Error, ExpectedExpr,
+                 std::string("expected ") + kind.data() + " but got " +
                      lexer::tokenKindName(peek().kind),
                  peek().span);
     return false;
@@ -82,42 +153,38 @@ bool Parser::consume(TokenKind kind) {
 }
 
 bool Parser::expectPunc(char c) {
-    if (!eof() && peek().punc == c) {
-        advance();
+    if (consume(c))
         return true;
-    }
     std::string msg = "expected '";
     msg += c;
     msg += "'";
-    diag->report(Severity::Error, ExpectedExpr, std::move(msg), peek().span);
+    errorHere(msg);
     return false;
 }
 
 bool Parser::expectIdent(std::string_view &out) {
-    if (!eof() && peek().is(TokenKind::Identifier)) {
+    if (check(TokenKind::Identifier)) {
         out = lexeme();
         advance();
         return true;
     }
-    diag->report(Severity::Error, ExpectedIdent, "expected identifier", peek().span);
+    errorHere("expected identifier");
     return false;
 }
 
 std::string_view Parser::expectIdent() {
-    if (!eof() && peek().is(TokenKind::Identifier)) {
+    if (check(TokenKind::Identifier)) {
         auto name = lexeme();
         advance();
         return name;
     }
-    diag->report(Severity::Error, ExpectedIdent, "expected identifier", peek().span);
+    errorHere("expected identifier");
     return {};
 }
 
 memory::Span Parser::spanFrom(memory::Span start) const {
-    if (tok->offset > 0) {
-        auto &prev = tok->src[tok->offset - 1];
-        return {start.file, start.start, prev.span.end};
-    }
+    if (tok->offset > 0)
+        return {start.file, start.start, previous().span.end};
     return start;
 }
 
@@ -131,44 +198,40 @@ memory::Span Parser::spanFrom(ast::ExprId lhs, ast::ExprId rhs) const {
 
 ast::StmtId Parser::parseStmt() {
     skipComments(*tok);
-    if (peek().is(TokenKind::Control) && lexeme() == "return") {
-        auto ret_span = peek().span;
-        advance();
-        auto val = eof() || peek().punc == '}' ? kInvalidExpr : parseExpr();
-        if (peek().punc != ';')
+    auto ret_span = peek().span;
+    if (match("return")) {
+        auto val = eof() || check('}') ? kInvalidExpr : parseExpr();
+        if (!check(';'))
             skipUntil({TokenKind::End, TokenKind::Punctuation});
         else
             advance();
         return bld->retStmt(val, spanFrom(ret_span));
     }
 
-    if (peek().is(TokenKind::Control) && lexeme() == "break") {
-        auto br_span = peek().span;
-        advance();
-        if (peek().punc == ';')
+    auto br_span = peek().span;
+    if (match("break")) {
+        if (check(';'))
             advance();
         auto nil = bld->litExpr(ast::LitKind::Nil, "null", peek().span);
         return bld->addStmt(nil);
     }
 
-    if (peek().is(TokenKind::Control) && lexeme() == "continue") {
-        auto cont_span = peek().span;
-        advance();
-        if (peek().punc == ';')
+    auto cont_span = peek().span;
+    if (match("continue")) {
+        if (check(';'))
             advance();
         auto nil = bld->litExpr(ast::LitKind::Nil, "null", peek().span);
         return bld->addStmt(nil);
     }
 
-    if (peek().is(TokenKind::Variable)) {
-        auto let_span = peek().span;
-        advance();
-        auto name = expectIdent();
-        auto type_annot = parseOptTypeAnnotation();
+    if (consume(TokenKind::Variable)) {
+        auto let_span    = previous().span;
+        auto name        = expectIdent();
+        auto type_annot  = parseOptTypeAnnotation();
         ast::ExprId init = kInvalidExpr;
         if (consume('='))
             init = parseExpr();
-        if (peek().punc == ';')
+        if (check(';'))
             advance();
         memory::DynArray<std::string_view> names{bld->arena()};
         names.push(name);
@@ -176,24 +239,25 @@ ast::StmtId Parser::parseStmt() {
     }
 
     auto expr = parseExpr();
-    if (peek().punc == '=') {
+    if (check('=')) {
         auto assign_span = peek().span;
         advance();
         auto rhs = parseExpr();
-        if (peek().punc == ';')
+        if (check(';'))
             advance();
         return bld->assign(expr, rhs, spanFrom(assign_span));
     }
-    if (peek().punc == ';')
+    if (check(';'))
         advance();
+
     return bld->addStmt(expr);
 }
 
 // ── declaration parsing ────────────────────────────────────────────────
 
 ast::DeclId Parser::parseFnDecl() {
-    if (!peek().is(TokenKind::Identifier)) {
-        diag->report(Severity::Error, ExpectedIdent, "expected function name", peek().span);
+    if (!check(TokenKind::Identifier)) {
+        errorHere("expected function name");
         return kInvalidDecl;
     }
     auto name_span = peek().span;
@@ -201,27 +265,24 @@ ast::DeclId Parser::parseFnDecl() {
     advance();
 
     if (!consume('(')) {
-        diag->report(Severity::Error, ExpectedExpr, "expected '(' after function name",
-                     peek().span);
+        errorExpected("'(' after function name");
         return kInvalidDecl;
     }
 
-    memory::DynArray<std::string_view> params{bld->arena()};
-    while (!eof() && peek().punc != ')') {
-        if (!peek().is(TokenKind::Identifier)) {
-            diag->report(Severity::Error, ExpectedIdent, "expected parameter name", peek().span);
+    auto params = parseDelimited(*tok, bld->arena(), ')', [this]() -> std::string_view {
+        if (!check(TokenKind::Identifier)) {
+            errorHere("expected parameter name");
             advance();
-            continue;
+            return {};
         }
-        params.push(lexeme());
+        auto n = lexeme();
         advance();
-        if (peek().punc == ',')
-            advance();
-    }
+        return n;
+    });
     consume(')');
 
     ast::ExprId body = kInvalidExpr;
-    if (peek().punc == '{')
+    if (check('{'))
         body = parseBlock();
 
     return bld->fnDecl(name, std::move(params), body, spanFrom(name_span));
@@ -229,11 +290,11 @@ ast::DeclId Parser::parseFnDecl() {
 
 ast::DeclId Parser::parseDecl() {
     skipComments(*tok);
-    if (peek().is(TokenKind::Fn))
+    if (check(TokenKind::Fn))
         return parseFnDecl();
-    if (peek().is(TokenKind::Struct))
+    if (check(TokenKind::Struct))
         return kInvalidDecl; // handled during scan
-    diag->report(Severity::Error, ExpectedExpr, "expected declaration", peek().span);
+    errorHere("expected declaration");
     advance();
     return kInvalidDecl;
 }
@@ -241,10 +302,8 @@ ast::DeclId Parser::parseDecl() {
 // ── Parser helper implementations ───────────────────────────────────────
 
 ast::TypeExprId Parser::parseOptTypeAnnotation() {
-    if (peek().punc == ':') {
-        advance();
+    if (consume(':'))
         return parseTypeExpr();
-    }
     return ast::kInvalidTypeExpr;
 }
 

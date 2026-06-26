@@ -90,7 +90,7 @@ void emitCall(const hir::HirCall &call, const hir::HirModule &hir, ZirEmitter *e
         code.emplace(ZirOp::Input, 0, 0);
     } else if (call.resolved_fn != import::kInvalidSym) {
         // Use resolved_fn to find the correct function index
-        auto &data = emitter->getSyms().get(call.resolved_fn);
+        auto &data       = emitter->getSyms().get(call.resolved_fn);
         uint8_t fn_index = 0;
         for (size_t i = 0; i < hir.getFnCount(); i++) {
             if (hir.getFn(i).decl_id == data.decl_id) {

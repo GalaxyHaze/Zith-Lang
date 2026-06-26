@@ -19,9 +19,9 @@ class SemaPipeline {
     types::Unifier unifier_;
     memory::Arena &hir_arena_;
     zir::hir::HirModule hir_;
-    zir::hir::HirFunction *current_fn_                  = nullptr;
-    types::TypeId current_fn_ret_type_                  = types::kVoidType;
-    const memory::DynArray<import::SymId> *resolved_    = nullptr;
+    zir::hir::HirFunction *current_fn_               = nullptr;
+    types::TypeId current_fn_ret_type_               = types::kVoidType;
+    const memory::DynArray<import::SymId> *resolved_ = nullptr;
     memory::DynArray<types::TypeId> hir_types_;
 
     zir::hir::HirExprId addHirExpr(zir::hir::HirExpr expr, types::TypeId type);

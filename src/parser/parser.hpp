@@ -22,19 +22,36 @@ struct Parser {
         : tok(tok), bld(bld), diag(diag), program(bld->arena()) {}
 
     // ── Token helpers ────────────────────────────────────────────────
-    std::string_view lexeme();
-    const lexer::Token &peek();
-    const lexer::Token &peek(uint32_t n);
+    std::string_view lexeme() const;
+    const lexer::Token &peek() const;
+    const lexer::Token &peek(uint32_t n) const;
     void advance();
     void advance(uint32_t n);
-    [[nodiscard]] bool eof();
+    [[nodiscard]] bool eof() const;
     bool match(lexer::TokenKind kind);
+    bool match(const std::string_view &kind);
     bool expect(lexer::TokenKind kind);
+    bool expect(const std::string_view &kind);
     bool consume(char c);
     bool consume(lexer::TokenKind kind);
     bool expectPunc(char c);
     bool expectIdent(std::string_view &out);
     std::string_view expectIdent();
+
+    // ── Non-consuming checks (companion to match/consume) ─────────
+    [[nodiscard]] bool check(lexer::TokenKind kind) const;
+    [[nodiscard]] bool check(char c) const;
+    [[nodiscard]] bool checkAny(std::initializer_list<lexer::TokenKind> kinds) const;
+
+    // ── Previous token access ──────────────────────────────────────
+    const lexer::Token &previous() const;
+
+    // ── Start-of-construct detection (for error recovery) ─────────
+    [[nodiscard]] bool isAtStartOfStmt() const;
+
+    // ── Structured error helpers ─────────────────────────────────
+    void errorHere(std::string_view msg);
+    void errorExpected(std::string_view expected);
 
     // ── Expression parsing ───────────────────────────────────────────
     ast::ExprId parsePrimary();
@@ -59,7 +76,7 @@ struct Parser {
     // Parse comma-separated list delimited by `close` (e.g., `)` for parens)
     template <typename Fn>
     auto parseCommaList(char close, Fn parser) -> memory::DynArray<decltype(parser())> {
-        using T = decltype(parser());
+        using T     = decltype(parser());
         auto result = memory::DynArray<T>{bld->arena()};
         if (peek().punc != close) {
             result.push(parser());

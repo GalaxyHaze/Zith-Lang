@@ -6,7 +6,9 @@ namespace zith::formatter {
 
 namespace {
 
-template <class... Ts> struct overloaded : Ts... { using Ts::operator()...; };
+template <class... Ts> struct overloaded : Ts... {
+    using Ts::operator()...;
+};
 template <class... Ts> overloaded(Ts...) -> overloaded<Ts...>;
 
 } // anonymous namespace
@@ -44,15 +46,16 @@ void FmtVisitor::emit(std::string_view text) {
 void FmtVisitor::visitDecl(ast::DeclId id) {
     const auto &node = builder_.getDecl(id);
     std::visit(overloaded{
-        [&](const ast::FnDeclNode &n) { emitFnDecl(n); },
-        [&](const ast::StructDeclNode &n) { emitStructDecl(n); },
-        [&](const ast::EnumDeclNode &n) { emitEnumDecl(n); },
-        [&](const ast::UnionDeclNode &n) { emitUnionDecl(n); },
-        [&](const ast::TraitDeclNode &n) { emitTraitDecl(n); },
-        [&](const ast::InterfaceDeclNode &n) { emitInterfaceDecl(n); },
-        [&](const ast::ComponentDeclNode &n) { emitComponentDecl(n); },
-        [&](const ast::ImportNode &n) { emitImport(n); },
-    }, node);
+                   [&](const ast::FnDeclNode &n) { emitFnDecl(n); },
+                   [&](const ast::StructDeclNode &n) { emitStructDecl(n); },
+                   [&](const ast::EnumDeclNode &n) { emitEnumDecl(n); },
+                   [&](const ast::UnionDeclNode &n) { emitUnionDecl(n); },
+                   [&](const ast::TraitDeclNode &n) { emitTraitDecl(n); },
+                   [&](const ast::InterfaceDeclNode &n) { emitInterfaceDecl(n); },
+                   [&](const ast::ComponentDeclNode &n) { emitComponentDecl(n); },
+                   [&](const ast::ImportNode &n) { emitImport(n); },
+               },
+               node);
 }
 
 void FmtVisitor::emitFnDecl(const ast::FnDeclNode &node) {
@@ -267,16 +270,17 @@ void FmtVisitor::emitImport(const ast::ImportNode &node) {
 void FmtVisitor::visitStmt(ast::StmtId id) {
     const auto &node = builder_.getStmt(id);
     std::visit(overloaded{
-        [&](const ast::LetNode &n) { emitLet(n); },
-        [&](const ast::AssignNode &n) { emitAssign(n); },
-        [&](const ast::RetNode &n) { emitRet(n); },
-        [&](ast::ExprId eid) {
-            indent();
-            visitExpr(eid);
-            emit(";");
-            newline();
-        },
-    }, node);
+                   [&](const ast::LetNode &n) { emitLet(n); },
+                   [&](const ast::AssignNode &n) { emitAssign(n); },
+                   [&](const ast::RetNode &n) { emitRet(n); },
+                   [&](ast::ExprId eid) {
+                       indent();
+                       visitExpr(eid);
+                       emit(";");
+                       newline();
+                   },
+               },
+               node);
 }
 
 void FmtVisitor::emitLet(const ast::LetNode &node) {
@@ -328,31 +332,36 @@ void FmtVisitor::visitExpr(ast::ExprId id, int parent_prec) {
     }
     const auto &node = builder_.getExpr(id);
     std::visit(overloaded{
-        [&](const ast::LitValue &n) { emitLit(n); },
-        [&](const ast::IdentNode &n) { emitIdent(n); },
-        [&](const ast::BinaryNode &n) {
-            int prec = binopPrecedence(n.op);
-            bool need_paren = parent_prec > prec ||
-                              (parent_prec == prec && !isLeftAssoc(n.op));
-            if (need_paren) emit("(");
-            emitBinary(n);
-            if (need_paren) emit(")");
-        },
-        [&](const ast::UnaryNode &n) {
-            int prec = 8;
-            if (parent_prec > prec) emit("(");
-            emitUnary(n);
-            if (parent_prec > prec) emit(")");
-        },
-        [&](const ast::CallNode &n) { emitCall(n); },
-        [&](const ast::BlockNode &n) { emitBlock(n); },
-        [&](const ast::IfNode &n) { emitIf(n); },
-        [&](const ast::WhileNode &n) { emitWhile(n); },
-        [&](const ast::FieldNode &n) { emitField(n); },
-        [&](const ast::IndexNode &n) { emitIndex(n); },
-        [&](const ast::RangeNode &n) { emitRange(n); },
-        [&](const ast::UnbodyNode &) { },
-    }, node);
+                   [&](const ast::LitValue &n) { emitLit(n); },
+                   [&](const ast::IdentNode &n) { emitIdent(n); },
+                   [&](const ast::BinaryNode &n) {
+                       int prec = binopPrecedence(n.op);
+                       bool need_paren =
+                           parent_prec > prec || (parent_prec == prec && !isLeftAssoc(n.op));
+                       if (need_paren)
+                           emit("(");
+                       emitBinary(n);
+                       if (need_paren)
+                           emit(")");
+                   },
+                   [&](const ast::UnaryNode &n) {
+                       int prec = 8;
+                       if (parent_prec > prec)
+                           emit("(");
+                       emitUnary(n);
+                       if (parent_prec > prec)
+                           emit(")");
+                   },
+                   [&](const ast::CallNode &n) { emitCall(n); },
+                   [&](const ast::BlockNode &n) { emitBlock(n); },
+                   [&](const ast::IfNode &n) { emitIf(n); },
+                   [&](const ast::WhileNode &n) { emitWhile(n); },
+                   [&](const ast::FieldNode &n) { emitField(n); },
+                   [&](const ast::IndexNode &n) { emitIndex(n); },
+                   [&](const ast::RangeNode &n) { emitRange(n); },
+                   [&](const ast::UnbodyNode &) {},
+               },
+               node);
 }
 
 void FmtVisitor::emitLit(const ast::LitValue &node) {
@@ -455,105 +464,155 @@ void FmtVisitor::emitType(ast::TypeExprId id) {
     }
     const auto &node = builder_.getTypeExpr(id);
     std::visit(overloaded{
-        [&](const ast::TypePath &n) {
-            for (size_t i = 0; i < n.segments.size(); i++) {
-                if (i > 0)
-                    emit("::");
-                emit(n.segments[i]);
-            }
-        },
-        [&](const ast::TypeBuiltin &n) { emitBuiltinType(n.kind); },
-        [&](const ast::TypePtrExpr &n) {
-            emit("*");
-            if (n.is_mut)
-                emit("mut ");
-            switch (n.ownership) {
-            case ast::OwnershipKw::Unique: emit("unique "); break;
-            case ast::OwnershipKw::Share:  emit("share "); break;
-            case ast::OwnershipKw::Lend:   emit("lend "); break;
-            case ast::OwnershipKw::View:   emit("view "); break;
-            case ast::OwnershipKw::Belong: emit("belong "); break;
-            default: break;
-            }
-            emitType(n.pointee);
-        },
-        [&](const ast::TypeSlice &n) {
-            emit("[]");
-            emitType(n.elem);
-        },
-        [&](const ast::TypeArray &n) {
-            emit("[");
-            emitType(n.count);
-            emit("]");
-            emitType(n.elem);
-        },
-        [&](const ast::TypeFnExpr &n) {
-            emit("fn(");
-            emitCommaList(n.params, [&](ast::TypeExprId t) { emitType(t); });
-            emit(")");
-            if (n.ret != ast::kInvalidTypeExpr) {
-                emit(": ");
-                emitType(n.ret);
-            }
-        },
-        [&](const ast::TypeOptional &n) {
-            emit("?");
-            emitType(n.inner);
-        },
-        [&](const ast::TypeFailable &n) {
-            emitType(n.inner);
-            emit("!");
-            if (n.error != ast::kInvalidTypeExpr)
-                emitType(n.error);
-        },
-        [&](const ast::TypeApp &n) {
-            emitType(n.base);
-            emit("<");
-            emitCommaList(n.args, [&](ast::TypeExprId t) { emitType(t); });
-            emit(">");
-        },
-        [&](const ast::TypePack &n) {
-            emit("{ ");
-            emitCommaList(n.members, [&](const ast::TypePackMember &m) {
-                emit(m.name);
-                emit(": ");
-                emitType(m.type);
-            });
-            emit(" }");
-        },
-        [&](const ast::TypeSum &n) {
-            for (size_t i = 0; i < n.members.size(); i++) {
-                if (i > 0)
-                    emit(" | ");
-                emitType(n.members[i]);
-            }
-        },
-        [&](const ast::TypeInfer &) { emit("_"); },
-        [&](const ast::TypeGenericParamRef &n) { emit(n.name); },
-    }, node);
+                   [&](const ast::TypePath &n) {
+                       for (size_t i = 0; i < n.segments.size(); i++) {
+                           if (i > 0)
+                               emit("::");
+                           emit(n.segments[i]);
+                       }
+                   },
+                   [&](const ast::TypeBuiltin &n) { emitBuiltinType(n.kind); },
+                   [&](const ast::TypePtrExpr &n) {
+                       emit("*");
+                       if (n.is_mut)
+                           emit("mut ");
+                       switch (n.ownership) {
+                       case ast::OwnershipKw::Unique:
+                           emit("unique ");
+                           break;
+                       case ast::OwnershipKw::Share:
+                           emit("share ");
+                           break;
+                       case ast::OwnershipKw::Lend:
+                           emit("lend ");
+                           break;
+                       case ast::OwnershipKw::View:
+                           emit("view ");
+                           break;
+                       case ast::OwnershipKw::Belong:
+                           emit("belong ");
+                           break;
+                       default:
+                           break;
+                       }
+                       emitType(n.pointee);
+                   },
+                   [&](const ast::TypeSlice &n) {
+                       emit("[]");
+                       emitType(n.elem);
+                   },
+                   [&](const ast::TypeArray &n) {
+                       emit("[");
+                       emitType(n.count);
+                       emit("]");
+                       emitType(n.elem);
+                   },
+                   [&](const ast::TypeFnExpr &n) {
+                       emit("fn(");
+                       emitCommaList(n.params, [&](ast::TypeExprId t) { emitType(t); });
+                       emit(")");
+                       if (n.ret != ast::kInvalidTypeExpr) {
+                           emit(": ");
+                           emitType(n.ret);
+                       }
+                   },
+                   [&](const ast::TypeOptional &n) {
+                       emit("?");
+                       emitType(n.inner);
+                   },
+                   [&](const ast::TypeFailable &n) {
+                       emitType(n.inner);
+                       emit("!");
+                       if (n.error != ast::kInvalidTypeExpr)
+                           emitType(n.error);
+                   },
+                   [&](const ast::TypeApp &n) {
+                       emitType(n.base);
+                       emit("<");
+                       emitCommaList(n.args, [&](ast::TypeExprId t) { emitType(t); });
+                       emit(">");
+                   },
+                   [&](const ast::TypePack &n) {
+                       emit("{ ");
+                       emitCommaList(n.members, [&](const ast::TypePackMember &m) {
+                           emit(m.name);
+                           emit(": ");
+                           emitType(m.type);
+                       });
+                       emit(" }");
+                   },
+                   [&](const ast::TypeSum &n) {
+                       for (size_t i = 0; i < n.members.size(); i++) {
+                           if (i > 0)
+                               emit(" | ");
+                           emitType(n.members[i]);
+                       }
+                   },
+                   [&](const ast::TypeInfer &) { emit("_"); },
+                   [&](const ast::TypeGenericParamRef &n) { emit(n.name); },
+               },
+               node);
 }
 
 void FmtVisitor::emitBuiltinType(ast::BuiltinType kind) {
     switch (kind) {
-    case ast::BuiltinType::I8:      emit("i8"); break;
-    case ast::BuiltinType::I16:     emit("i16"); break;
-    case ast::BuiltinType::I32:     emit("i32"); break;
-    case ast::BuiltinType::I64:     emit("i64"); break;
-    case ast::BuiltinType::I128:    emit("i128"); break;
-    case ast::BuiltinType::U8:      emit("u8"); break;
-    case ast::BuiltinType::U16:     emit("u16"); break;
-    case ast::BuiltinType::U32:     emit("u32"); break;
-    case ast::BuiltinType::U64:     emit("u64"); break;
-    case ast::BuiltinType::U128:    emit("u128"); break;
-    case ast::BuiltinType::F32:     emit("f32"); break;
-    case ast::BuiltinType::F64:     emit("f64"); break;
-    case ast::BuiltinType::Bool:    emit("bool"); break;
-    case ast::BuiltinType::Char:    emit("char"); break;
-    case ast::BuiltinType::Void:    emit("void"); break;
-    case ast::BuiltinType::Never:   emit("noreturn"); break;
-    case ast::BuiltinType::Unknown: emit("unknown"); break;
-    case ast::BuiltinType::Invalid: emit("invalid"); break;
-    case ast::BuiltinType::Opaque:  emit("opaque"); break;
+    case ast::BuiltinType::I8:
+        emit("i8");
+        break;
+    case ast::BuiltinType::I16:
+        emit("i16");
+        break;
+    case ast::BuiltinType::I32:
+        emit("i32");
+        break;
+    case ast::BuiltinType::I64:
+        emit("i64");
+        break;
+    case ast::BuiltinType::I128:
+        emit("i128");
+        break;
+    case ast::BuiltinType::U8:
+        emit("u8");
+        break;
+    case ast::BuiltinType::U16:
+        emit("u16");
+        break;
+    case ast::BuiltinType::U32:
+        emit("u32");
+        break;
+    case ast::BuiltinType::U64:
+        emit("u64");
+        break;
+    case ast::BuiltinType::U128:
+        emit("u128");
+        break;
+    case ast::BuiltinType::F32:
+        emit("f32");
+        break;
+    case ast::BuiltinType::F64:
+        emit("f64");
+        break;
+    case ast::BuiltinType::Bool:
+        emit("bool");
+        break;
+    case ast::BuiltinType::Char:
+        emit("char");
+        break;
+    case ast::BuiltinType::Void:
+        emit("void");
+        break;
+    case ast::BuiltinType::Never:
+        emit("noreturn");
+        break;
+    case ast::BuiltinType::Unknown:
+        emit("unknown");
+        break;
+    case ast::BuiltinType::Invalid:
+        emit("invalid");
+        break;
+    case ast::BuiltinType::Opaque:
+        emit("opaque");
+        break;
     }
 }
 
@@ -561,9 +620,12 @@ void FmtVisitor::emitBuiltinType(ast::BuiltinType kind) {
 
 int FmtVisitor::binopPrecedence(ast::BinaryOp op) {
     switch (op) {
-    case ast::BinaryOp::Or:  return 1;
-    case ast::BinaryOp::And: return 2;
-    case ast::BinaryOp::Xor: return 3;
+    case ast::BinaryOp::Or:
+        return 1;
+    case ast::BinaryOp::And:
+        return 2;
+    case ast::BinaryOp::Xor:
+        return 3;
     case ast::BinaryOp::Eq:
     case ast::BinaryOp::Ne:
     case ast::BinaryOp::Lt:
@@ -587,32 +649,52 @@ int FmtVisitor::binopPrecedence(ast::BinaryOp op) {
 
 const char *FmtVisitor::binopText(ast::BinaryOp op) {
     switch (op) {
-    case ast::BinaryOp::Add:  return "+";
-    case ast::BinaryOp::Sub:  return "-";
-    case ast::BinaryOp::Mul:  return "*";
-    case ast::BinaryOp::Div:  return "/";
-    case ast::BinaryOp::Rest: return "%";
-    case ast::BinaryOp::Eq:   return "==";
-    case ast::BinaryOp::Ne:   return "!=";
-    case ast::BinaryOp::Lt:   return "<";
-    case ast::BinaryOp::Le:   return "<=";
-    case ast::BinaryOp::Gt:   return ">";
-    case ast::BinaryOp::Ge:   return ">=";
-    case ast::BinaryOp::And:  return "and";
-    case ast::BinaryOp::Or:   return "or";
-    case ast::BinaryOp::Xor:  return "xor";
-    case ast::BinaryOp::Shl:  return "<<";
-    case ast::BinaryOp::Shr:  return ">>";
+    case ast::BinaryOp::Add:
+        return "+";
+    case ast::BinaryOp::Sub:
+        return "-";
+    case ast::BinaryOp::Mul:
+        return "*";
+    case ast::BinaryOp::Div:
+        return "/";
+    case ast::BinaryOp::Rest:
+        return "%";
+    case ast::BinaryOp::Eq:
+        return "==";
+    case ast::BinaryOp::Ne:
+        return "!=";
+    case ast::BinaryOp::Lt:
+        return "<";
+    case ast::BinaryOp::Le:
+        return "<=";
+    case ast::BinaryOp::Gt:
+        return ">";
+    case ast::BinaryOp::Ge:
+        return ">=";
+    case ast::BinaryOp::And:
+        return "and";
+    case ast::BinaryOp::Or:
+        return "or";
+    case ast::BinaryOp::Xor:
+        return "xor";
+    case ast::BinaryOp::Shl:
+        return "<<";
+    case ast::BinaryOp::Shr:
+        return ">>";
     }
     return "?";
 }
 
 const char *FmtVisitor::unaryopText(ast::UnaryOp op) {
     switch (op) {
-    case ast::UnaryOp::Neg:  return "-";
-    case ast::UnaryOp::Not:  return "not";
-    case ast::UnaryOp::Ref:  return "&";
-    case ast::UnaryOp::Deref: return "*";
+    case ast::UnaryOp::Neg:
+        return "-";
+    case ast::UnaryOp::Not:
+        return "not";
+    case ast::UnaryOp::Ref:
+        return "&";
+    case ast::UnaryOp::Deref:
+        return "*";
     }
     return "?";
 }

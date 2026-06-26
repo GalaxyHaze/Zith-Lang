@@ -141,17 +141,9 @@ Currently handles only numeric constraint bounds; generics infrastructure ready 
 
 - **`MirModule`** / **`MirFunction`** — Mid-level IR with basic blocks and typed opcodes. Lowered from HIR via `lowerFromHir()`.
 
-- **`ZirModule`** / **`ZirFn`** / **`ZirBlock`** / **`ZirInst`** (`src/zir/zir/`) — Bytecode IR for direct interpretation.
-  - 26 opcodes: `Halt`, `Push`, `Dup`, `Pop`, `Load`, `Store`, `AddI`/`SubI`/`MulI`/`DivI`/`CmpI`, `AddF`/`SubF`/`MulF`/`DivF`/`CmpF`, `Br`, `BrZ`, `BrGt`, `Call`, `Ret`, `Write`, `Input`, `CastI32`, `CastF64`, `Nop`
-  - `ZirModule.constants` — `std::vector<std::variant<int64_t, double, std::string>>` constant pool
-  - Lowered from HIR via `ZirEmitter`
-
-- **`ZirInterpreter`** (`src/zir/zir/zir-interp.hpp`) — Stack-based bytecode VM.
-  - `run()` — Executes first function in module; returns 0 on completion
-  - Stack values: `std::variant<int64_t, double, std::string>`
-  - Built-in `write()` prints `"Hello, World!\n"` (MVP placeholder)
-  - Built-in `input()` reads a line from stdin
-  - Register-based locals array (16 slots), frame-slot via `Load`/`Store`
+- **`ZirModule`** / **`ZirFn`** / **`ZirBlock`** / **`ZirInst`** (`lib/zasm/`) — Register-based 64-bit fixed-encoding IR. Compiled from `.zas` assembly via `Assembler`, interpreted by `ThreadedInterp` or lowered to LLVM IR.
+  - 76 opcodes: `Halt`, `Nop`, `Unreachable`, `Mov`/`Li`/`Ld`/`St`/`Ldr`/`Str`/`Lea`, `Add`--`Ashr` (ALU), `Seqz`--`Sgeu` (int compare), `FSeq`--`FSge` (float compare), `Sext`--`FpExt` (conversions), `Br`/`Bz`/`Bnz`/`Bgt`/`Bge`/`Blt`/`Ble` (branches), `Call`/`CallExt`/`Ret`, `Select`, `Alloca`/`Memset`/`Memcpy`, `Syscall`, `TlsLd`/`TlsSt`
+  - See `lib/zasm/docs/zir-asm.md` for instruction encoding API and opcode field reference.
 
 ### 10. Memory (`src/memory/`)
 

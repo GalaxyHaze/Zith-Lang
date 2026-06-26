@@ -22,9 +22,9 @@
 namespace zith::cli::commands {
 
 #define CERR(c) term::err(TERM, diagnostics::ansi::c.data())
-#define RERR   term::err_rst(TERM)
+#define RERR term::err_rst(TERM)
 #define COUT(c) term::out(TERM, diagnostics::ansi::c.data())
-#define ROUT   term::out_rst(TERM)
+#define ROUT term::out_rst(TERM)
 
 static bool isStdinTerminal() {
 #ifdef ZITH_IS_WASM
@@ -95,8 +95,8 @@ int cmd_fmt(const Options &opts) {
     // Stdin mode
     if (has_stdin) {
         if (opts.fmt_check) {
-            std::fprintf(stderr, "%s[error]%s --check is not supported with stdin\n",
-                         CERR(red), RERR);
+            std::fprintf(stderr, "%s[error]%s --check is not supported with stdin\n", CERR(red),
+                         RERR);
             return 1;
         }
         if (opts.fmt_in_place) {
@@ -105,7 +105,7 @@ int cmd_fmt(const Options &opts) {
             return 1;
         }
 
-        Options file_opts = opts;
+        Options file_opts     = opts;
         file_opts.interpreted = false;
         CompilationSession session(file_opts, "<stdin>");
         session.setContent(readStdin());
@@ -129,12 +129,12 @@ int cmd_fmt(const Options &opts) {
     futures.reserve(files.size());
     for (const auto &file : files) {
         futures.push_back(std::async(std::launch::async, [&opts, file]() -> FmtFileResult {
-            Options file_opts = opts;
+            Options file_opts     = opts;
             file_opts.interpreted = false;
-            auto session = std::make_unique<CompilationSession>(file_opts, file);
+            auto session          = std::make_unique<CompilationSession>(file_opts, file);
             session->setBuffered(true);
             std::string formatted = session->fmtStage();
-            bool ok = !session->hasErrors();
+            bool ok               = !session->hasErrors();
             return {std::move(session), std::move(formatted), ok};
         }));
     }
@@ -153,9 +153,9 @@ int cmd_fmt(const Options &opts) {
         if (opts.fmt_check) {
             std::string original = readFile(files[i]);
             if (result.formatted != original) {
-                std::fprintf(stderr, "%s[check]%s %s would be reformatted\n", CERR(yellow),
-                             RERR, files[i].c_str());
-                any_diff = true;
+                std::fprintf(stderr, "%s[check]%s %s would be reformatted\n", CERR(yellow), RERR,
+                             files[i].c_str());
+                any_diff  = true;
                 exit_code = 1;
             } else {
                 std::fprintf(stdout, "%s[ok]%s %s\n", COUT(green), ROUT, files[i].c_str());

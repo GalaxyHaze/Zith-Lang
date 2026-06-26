@@ -24,8 +24,7 @@ class TypeLower {
     const memory::FlatMap<std::string_view, TypeId> *generic_ctx_ = nullptr;
 
 public:
-    TypeLower(ast::AstBuilder &ast, TypeIntern &intern,
-              diagnostics::DiagnosticEngine &diags,
+    TypeLower(ast::AstBuilder &ast, TypeIntern &intern, diagnostics::DiagnosticEngine &diags,
               const import::SymbolTable &syms);
 
     void setGenericContext(const memory::FlatMap<std::string_view, TypeId> *ctx);

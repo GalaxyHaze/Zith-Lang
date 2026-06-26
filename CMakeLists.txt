@@ -65,6 +65,7 @@ add_library(zithcLib STATIC ${ZITH_LIB_SOURCES})
 
 target_include_directories(zithcLib PUBLIC
     src
+    lib/zasm/include
 )
 
 if(ZITH_IS_WASM)
@@ -135,6 +136,9 @@ add_zith_test(zithc-zir-emitter    tests/unit/zir/test_zir_emitter.cpp)
 add_zith_test(zithc-zir-interp     tests/unit/zir/test_zir_interp.cpp)
 
 endif()
+
+# ── zasm ── assembler CLI for .zas files (submodule) ──────────────
+add_subdirectory(lib/zasm)
 
 if(ZITH_BUILD_CLI)
     install(TARGETS zithc

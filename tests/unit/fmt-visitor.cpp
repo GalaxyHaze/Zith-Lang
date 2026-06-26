@@ -39,9 +39,9 @@ static void test_fmt_fn_with_body() {
 
     DynArray<std::string_view> params(arena);
     params.push("x");
-    auto lit = builder.litExpr(LitKind::Int, "1");
+    auto lit  = builder.litExpr(LitKind::Int, "1");
     auto body = builder.block(DynArray<StmtId>(arena), lit);
-    auto fn = builder.fnDecl("foo", std::move(params), body);
+    auto fn   = builder.fnDecl("foo", std::move(params), body);
     decls.push(fn);
     ProgramNode prog(arena);
     prog.decls = std::move(decls);
@@ -62,9 +62,10 @@ static void test_fmt_fn_with_return_type() {
     auto ret_type = builder.builtinExpr(BuiltinType::I32);
     DynArray<FnParam> params(arena);
     params.push(FnParam{"x", builder.builtinExpr(BuiltinType::I32)});
-    auto lit = builder.litExpr(LitKind::Int, "0");
+    auto lit  = builder.litExpr(LitKind::Int, "0");
     auto body = builder.block(DynArray<StmtId>(arena), lit);
-    auto fn = builder.fnDecl("add", DynArray<GenericParam>(arena), std::move(params), ret_type, body);
+    auto fn =
+        builder.fnDecl("add", DynArray<GenericParam>(arena), std::move(params), ret_type, body);
     decls.push(fn);
     ProgramNode prog(arena);
     prog.decls = std::move(decls);
@@ -384,7 +385,7 @@ static void test_fmt_let() {
     DynArray<StmtId> stmts(arena);
     stmts.push(builder.letStmt("x", false, builder.litExpr(LitKind::Int, "42")));
     auto body = builder.block(std::move(stmts));
-    auto fn = builder.fnDecl("main", DynArray<std::string_view>(arena), body);
+    auto fn   = builder.fnDecl("main", DynArray<std::string_view>(arena), body);
     decls.push(fn);
     ProgramNode prog(arena);
     prog.decls = std::move(decls);
@@ -405,7 +406,7 @@ static void test_fmt_var() {
     DynArray<StmtId> stmts(arena);
     stmts.push(builder.letStmt("x", true, builder.litExpr(LitKind::Int, "0")));
     auto body = builder.block(std::move(stmts));
-    auto fn = builder.fnDecl("main", DynArray<std::string_view>(arena), body);
+    auto fn   = builder.fnDecl("main", DynArray<std::string_view>(arena), body);
     decls.push(fn);
     ProgramNode prog(arena);
     prog.decls = std::move(decls);
@@ -426,10 +427,10 @@ static void test_fmt_let_typed() {
     DynArray<StmtId> stmts(arena);
     auto name_arr = DynArray<std::string_view>(arena);
     name_arr.push("name");
-    stmts.push(builder.letStmt(std::move(name_arr), false,
-                               builder.builtinExpr(BuiltinType::I32), kInvalidExpr));
+    stmts.push(builder.letStmt(std::move(name_arr), false, builder.builtinExpr(BuiltinType::I32),
+                               kInvalidExpr));
     auto body = builder.block(std::move(stmts));
-    auto fn = builder.fnDecl("main", DynArray<std::string_view>(arena), body);
+    auto fn   = builder.fnDecl("main", DynArray<std::string_view>(arena), body);
     decls.push(fn);
     ProgramNode prog(arena);
     prog.decls = std::move(decls);
@@ -451,7 +452,7 @@ static void test_fmt_assign() {
     auto target = builder.ident("x");
     stmts.push(builder.assign(target, builder.litExpr(LitKind::Int, "10")));
     auto body = builder.block(std::move(stmts));
-    auto fn = builder.fnDecl("main", DynArray<std::string_view>(arena), body);
+    auto fn   = builder.fnDecl("main", DynArray<std::string_view>(arena), body);
     decls.push(fn);
     ProgramNode prog(arena);
     prog.decls = std::move(decls);
@@ -472,7 +473,7 @@ static void test_fmt_return() {
     DynArray<StmtId> stmts(arena);
     stmts.push(builder.retStmt(builder.litExpr(LitKind::Int, "99")));
     auto body = builder.block(std::move(stmts));
-    auto fn = builder.fnDecl("main", DynArray<std::string_view>(arena), body);
+    auto fn   = builder.fnDecl("main", DynArray<std::string_view>(arena), body);
     decls.push(fn);
     ProgramNode prog(arena);
     prog.decls = std::move(decls);
@@ -493,7 +494,7 @@ static void test_fmt_return_void() {
     DynArray<StmtId> stmts(arena);
     stmts.push(builder.retStmt());
     auto body = builder.block(std::move(stmts));
-    auto fn = builder.fnDecl("main", DynArray<std::string_view>(arena), body);
+    auto fn   = builder.fnDecl("main", DynArray<std::string_view>(arena), body);
     decls.push(fn);
     ProgramNode prog(arena);
     prog.decls = std::move(decls);
@@ -513,11 +514,11 @@ static void test_fmt_binary_add() {
     AstBuilder builder(arena);
     DynArray<DeclId> decls(arena);
 
-    auto lhs = builder.litExpr(LitKind::Int, "1");
-    auto rhs = builder.litExpr(LitKind::Int, "2");
-    auto bin = builder.binary(lhs, BinaryOp::Add, rhs);
+    auto lhs  = builder.litExpr(LitKind::Int, "1");
+    auto rhs  = builder.litExpr(LitKind::Int, "2");
+    auto bin  = builder.binary(lhs, BinaryOp::Add, rhs);
     auto body = builder.block(DynArray<StmtId>(arena), bin);
-    auto fn = builder.fnDecl("main", DynArray<std::string_view>(arena), body);
+    auto fn   = builder.fnDecl("main", DynArray<std::string_view>(arena), body);
     decls.push(fn);
     ProgramNode prog(arena);
     prog.decls = std::move(decls);
@@ -536,11 +537,11 @@ static void test_fmt_binary_precedence_keep() {
     DynArray<DeclId> decls(arena);
 
     // (1 + 2) * 3  → parens needed because + has lower prec than *
-    auto add = builder.binary(builder.litExpr(LitKind::Int, "1"), BinaryOp::Add,
-                              builder.litExpr(LitKind::Int, "2"));
-    auto mul = builder.binary(add, BinaryOp::Mul, builder.litExpr(LitKind::Int, "3"));
+    auto add  = builder.binary(builder.litExpr(LitKind::Int, "1"), BinaryOp::Add,
+                               builder.litExpr(LitKind::Int, "2"));
+    auto mul  = builder.binary(add, BinaryOp::Mul, builder.litExpr(LitKind::Int, "3"));
     auto body = builder.block(DynArray<StmtId>(arena), mul);
-    auto fn = builder.fnDecl("main", DynArray<std::string_view>(arena), body);
+    auto fn   = builder.fnDecl("main", DynArray<std::string_view>(arena), body);
     decls.push(fn);
     ProgramNode prog(arena);
     prog.decls = std::move(decls);
@@ -559,11 +560,11 @@ static void test_fmt_binary_precedence_no_parens() {
     DynArray<DeclId> decls(arena);
 
     // 1 + 2 * 3  → no parens needed because * has higher prec
-    auto mul = builder.binary(builder.litExpr(LitKind::Int, "2"), BinaryOp::Mul,
-                              builder.litExpr(LitKind::Int, "3"));
-    auto add = builder.binary(builder.litExpr(LitKind::Int, "1"), BinaryOp::Add, mul);
+    auto mul  = builder.binary(builder.litExpr(LitKind::Int, "2"), BinaryOp::Mul,
+                               builder.litExpr(LitKind::Int, "3"));
+    auto add  = builder.binary(builder.litExpr(LitKind::Int, "1"), BinaryOp::Add, mul);
     auto body = builder.block(DynArray<StmtId>(arena), add);
-    auto fn = builder.fnDecl("main", DynArray<std::string_view>(arena), body);
+    auto fn   = builder.fnDecl("main", DynArray<std::string_view>(arena), body);
     decls.push(fn);
     ProgramNode prog(arena);
     prog.decls = std::move(decls);
@@ -582,13 +583,13 @@ static void test_fmt_binary_or_and() {
     DynArray<DeclId> decls(arena);
 
     // (a or b) and c  → parens needed because or has lower prec than and
-    auto a = builder.ident("a");
-    auto b = builder.ident("b");
-    auto c = builder.ident("c");
-    auto or_expr = builder.binary(a, BinaryOp::Or, b);
+    auto a        = builder.ident("a");
+    auto b        = builder.ident("b");
+    auto c        = builder.ident("c");
+    auto or_expr  = builder.binary(a, BinaryOp::Or, b);
     auto and_expr = builder.binary(or_expr, BinaryOp::And, c);
-    auto body = builder.block(DynArray<StmtId>(arena), and_expr);
-    auto fn = builder.fnDecl("main", DynArray<std::string_view>(arena), body);
+    auto body     = builder.block(DynArray<StmtId>(arena), and_expr);
+    auto fn       = builder.fnDecl("main", DynArray<std::string_view>(arena), body);
     decls.push(fn);
     ProgramNode prog(arena);
     prog.decls = std::move(decls);
@@ -607,11 +608,11 @@ static void test_fmt_unary_neg_binary() {
     DynArray<DeclId> decls(arena);
 
     // -(1 + 2)  → parens needed because unary has higher prec
-    auto add = builder.binary(builder.litExpr(LitKind::Int, "1"), BinaryOp::Add,
-                              builder.litExpr(LitKind::Int, "2"));
-    auto neg = builder.unary(UnaryOp::Neg, add);
+    auto add  = builder.binary(builder.litExpr(LitKind::Int, "1"), BinaryOp::Add,
+                               builder.litExpr(LitKind::Int, "2"));
+    auto neg  = builder.unary(UnaryOp::Neg, add);
     auto body = builder.block(DynArray<StmtId>(arena), neg);
-    auto fn = builder.fnDecl("main", DynArray<std::string_view>(arena), body);
+    auto fn   = builder.fnDecl("main", DynArray<std::string_view>(arena), body);
     decls.push(fn);
     ProgramNode prog(arena);
     prog.decls = std::move(decls);
@@ -631,12 +632,12 @@ static void test_fmt_not_precedence() {
 
     // not a == b → should be (not a) == b since not has higher prec
     // Actually, let's test: not (a == b), which needs parens
-    auto a = builder.ident("a");
-    auto b = builder.ident("b");
-    auto eq = builder.binary(a, BinaryOp::Eq, b);
+    auto a        = builder.ident("a");
+    auto b        = builder.ident("b");
+    auto eq       = builder.binary(a, BinaryOp::Eq, b);
     auto not_expr = builder.unary(UnaryOp::Not, eq);
-    auto body = builder.block(DynArray<StmtId>(arena), not_expr);
-    auto fn = builder.fnDecl("main", DynArray<std::string_view>(arena), body);
+    auto body     = builder.block(DynArray<StmtId>(arena), not_expr);
+    auto fn       = builder.fnDecl("main", DynArray<std::string_view>(arena), body);
     decls.push(fn);
     ProgramNode prog(arena);
     prog.decls = std::move(decls);
@@ -655,13 +656,13 @@ static void test_fmt_comparison_non_assoc() {
     DynArray<DeclId> decls(arena);
 
     // (a == b) == c  → parens for non-assoc comparison
-    auto a = builder.ident("a");
-    auto b = builder.ident("b");
-    auto c = builder.ident("c");
+    auto a     = builder.ident("a");
+    auto b     = builder.ident("b");
+    auto c     = builder.ident("c");
     auto inner = builder.binary(a, BinaryOp::Eq, b);
     auto outer = builder.binary(inner, BinaryOp::Eq, c);
-    auto body = builder.block(DynArray<StmtId>(arena), outer);
-    auto fn = builder.fnDecl("main", DynArray<std::string_view>(arena), body);
+    auto body  = builder.block(DynArray<StmtId>(arena), outer);
+    auto fn    = builder.fnDecl("main", DynArray<std::string_view>(arena), body);
     decls.push(fn);
     ProgramNode prog(arena);
     prog.decls = std::move(decls);
@@ -685,9 +686,9 @@ static void test_fmt_call() {
     args.push(builder.litExpr(LitKind::Int, "1"));
     args.push(builder.litExpr(LitKind::Int, "2"));
     auto callee = builder.ident("add");
-    auto call = builder.call(callee, std::move(args));
-    auto body = builder.block(DynArray<StmtId>(arena), call);
-    auto fn = builder.fnDecl("main", DynArray<std::string_view>(arena), body);
+    auto call   = builder.call(callee, std::move(args));
+    auto body   = builder.block(DynArray<StmtId>(arena), call);
+    auto fn     = builder.fnDecl("main", DynArray<std::string_view>(arena), body);
     decls.push(fn);
     ProgramNode prog(arena);
     prog.decls = std::move(decls);
@@ -705,10 +706,10 @@ static void test_fmt_field() {
     AstBuilder builder(arena);
     DynArray<DeclId> decls(arena);
 
-    auto obj = builder.ident("point");
-    auto f = builder.field(obj, "x");
+    auto obj  = builder.ident("point");
+    auto f    = builder.field(obj, "x");
     auto body = builder.block(DynArray<StmtId>(arena), f);
-    auto fn = builder.fnDecl("main", DynArray<std::string_view>(arena), body);
+    auto fn   = builder.fnDecl("main", DynArray<std::string_view>(arena), body);
     decls.push(fn);
     ProgramNode prog(arena);
     prog.decls = std::move(decls);
@@ -726,10 +727,10 @@ static void test_fmt_index() {
     AstBuilder builder(arena);
     DynArray<DeclId> decls(arena);
 
-    auto arr = builder.ident("arr");
-    auto idx = builder.index(arr, builder.litExpr(LitKind::Int, "0"));
+    auto arr  = builder.ident("arr");
+    auto idx  = builder.index(arr, builder.litExpr(LitKind::Int, "0"));
     auto body = builder.block(DynArray<StmtId>(arena), idx);
-    auto fn = builder.fnDecl("main", DynArray<std::string_view>(arena), body);
+    auto fn   = builder.fnDecl("main", DynArray<std::string_view>(arena), body);
     decls.push(fn);
     ProgramNode prog(arena);
     prog.decls = std::move(decls);
@@ -747,11 +748,12 @@ static void test_fmt_if() {
     AstBuilder builder(arena);
     DynArray<DeclId> decls(arena);
 
-    auto cond = builder.binary(builder.ident("x"), BinaryOp::Gt, builder.litExpr(LitKind::Int, "0"));
+    auto cond =
+        builder.binary(builder.ident("x"), BinaryOp::Gt, builder.litExpr(LitKind::Int, "0"));
     auto then_body = builder.block(DynArray<StmtId>(arena), builder.litExpr(LitKind::Int, "1"));
-    auto if_expr = builder.ifExpr(cond, then_body);
-    auto body = builder.block(DynArray<StmtId>(arena), if_expr);
-    auto fn = builder.fnDecl("main", DynArray<std::string_view>(arena), body);
+    auto if_expr   = builder.ifExpr(cond, then_body);
+    auto body      = builder.block(DynArray<StmtId>(arena), if_expr);
+    auto fn        = builder.fnDecl("main", DynArray<std::string_view>(arena), body);
     decls.push(fn);
     ProgramNode prog(arena);
     prog.decls = std::move(decls);
@@ -769,12 +771,12 @@ static void test_fmt_if_else() {
     AstBuilder builder(arena);
     DynArray<DeclId> decls(arena);
 
-    auto cond = builder.ident("flag");
+    auto cond      = builder.ident("flag");
     auto then_body = builder.litExpr(LitKind::Int, "1");
     auto else_body = builder.litExpr(LitKind::Int, "2");
-    auto if_expr = builder.ifExpr(cond, then_body, else_body);
-    auto body = builder.block(DynArray<StmtId>(arena), if_expr);
-    auto fn = builder.fnDecl("main", DynArray<std::string_view>(arena), body);
+    auto if_expr   = builder.ifExpr(cond, then_body, else_body);
+    auto body      = builder.block(DynArray<StmtId>(arena), if_expr);
+    auto fn        = builder.fnDecl("main", DynArray<std::string_view>(arena), body);
     decls.push(fn);
     ProgramNode prog(arena);
     prog.decls = std::move(decls);
@@ -792,11 +794,12 @@ static void test_fmt_while() {
     AstBuilder builder(arena);
     DynArray<DeclId> decls(arena);
 
-    auto cond = builder.binary(builder.ident("x"), BinaryOp::Lt, builder.litExpr(LitKind::Int, "10"));
+    auto cond =
+        builder.binary(builder.ident("x"), BinaryOp::Lt, builder.litExpr(LitKind::Int, "10"));
     auto wbody = builder.block(DynArray<StmtId>(arena), builder.litExpr(LitKind::Int, "0"));
-    auto w = builder.whileExpr(cond, wbody);
-    auto body = builder.block(DynArray<StmtId>(arena), w);
-    auto fn = builder.fnDecl("main", DynArray<std::string_view>(arena), body);
+    auto w     = builder.whileExpr(cond, wbody);
+    auto body  = builder.block(DynArray<StmtId>(arena), w);
+    auto fn    = builder.fnDecl("main", DynArray<std::string_view>(arena), body);
     decls.push(fn);
     ProgramNode prog(arena);
     prog.decls = std::move(decls);
@@ -814,9 +817,10 @@ static void test_fmt_range() {
     AstBuilder builder(arena);
     DynArray<DeclId> decls(arena);
 
-    auto range = builder.range(builder.litExpr(LitKind::Int, "0"), builder.litExpr(LitKind::Int, "10"));
+    auto range =
+        builder.range(builder.litExpr(LitKind::Int, "0"), builder.litExpr(LitKind::Int, "10"));
     auto body = builder.block(DynArray<StmtId>(arena), range);
-    auto fn = builder.fnDecl("main", DynArray<std::string_view>(arena), body);
+    auto fn   = builder.fnDecl("main", DynArray<std::string_view>(arena), body);
     decls.push(fn);
     ProgramNode prog(arena);
     prog.decls = std::move(decls);
@@ -871,7 +875,7 @@ static void test_fmt_block_with_stmts_and_trailing() {
     DynArray<StmtId> stmts(arena);
     stmts.push(builder.letStmt("x", false, builder.litExpr(LitKind::Int, "1")));
     auto body = builder.block(std::move(stmts), builder.ident("x"));
-    auto fn = builder.fnDecl("main", DynArray<std::string_view>(arena), body);
+    auto fn   = builder.fnDecl("main", DynArray<std::string_view>(arena), body);
     decls.push(fn);
     ProgramNode prog(arena);
     prog.decls = std::move(decls);

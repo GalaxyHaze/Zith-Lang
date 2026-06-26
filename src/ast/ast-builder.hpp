@@ -38,8 +38,10 @@ public:
     ExprId field(ExprId object, std::string_view field_name, memory::Span span = {});
     ExprId index(ExprId object, ExprId index, memory::Span span = {});
     ExprId range(ExprId lhs, ExprId rhs, memory::Span span = {});
-    ExprId block(memory::DynArray<StmtId> stmts, ExprId trailing = kInvalidExpr, memory::Span span = {});
-    ExprId ifExpr(ExprId cond, ExprId then_branch, ExprId else_branch = kInvalidExpr, memory::Span span = {});
+    ExprId block(memory::DynArray<StmtId> stmts, ExprId trailing = kInvalidExpr,
+                 memory::Span span = {});
+    ExprId ifExpr(ExprId cond, ExprId then_branch, ExprId else_branch = kInvalidExpr,
+                  memory::Span span = {});
     ExprId whileExpr(ExprId cond, ExprId body, memory::Span span = {});
 
     StmtId letStmt(memory::DynArray<std::string_view> names, bool mut,
@@ -55,12 +57,17 @@ public:
                   ExprId body = kInvalidExpr, memory::Span span = {});
     DeclId fnDecl(std::string_view name, memory::DynArray<std::string_view> param_names,
                   ExprId body = kInvalidExpr, memory::Span span = {});
-    DeclId structDecl(std::string_view name, memory::DynArray<StructField> fields, memory::Span span = {});
-    DeclId enumDecl(std::string_view name, memory::DynArray<EnumVariant> variants, memory::Span span = {});
-    DeclId unionDecl(std::string_view name, memory::DynArray<UnionVariant> variants, memory::Span span = {});
+    DeclId structDecl(std::string_view name, memory::DynArray<StructField> fields,
+                      memory::Span span = {});
+    DeclId enumDecl(std::string_view name, memory::DynArray<EnumVariant> variants,
+                    memory::Span span = {});
+    DeclId unionDecl(std::string_view name, memory::DynArray<UnionVariant> variants,
+                     memory::Span span = {});
     DeclId componentDecl(std::string_view name, memory::Span span = {});
-    DeclId traitDecl(std::string_view name, memory::DynArray<TraitMethod> methods, memory::Span span = {});
-    DeclId interfaceDecl(std::string_view name, memory::DynArray<TraitMethod> methods, memory::Span span = {});
+    DeclId traitDecl(std::string_view name, memory::DynArray<TraitMethod> methods,
+                     memory::Span span = {});
+    DeclId interfaceDecl(std::string_view name, memory::DynArray<TraitMethod> methods,
+                         memory::Span span = {});
     DeclId importDecl(memory::DynArray<std::string_view> path, std::string_view alias = {},
                       bool is_from = false, bool is_export = false, int32_t import_depth = 1,
                       memory::Span span = {});

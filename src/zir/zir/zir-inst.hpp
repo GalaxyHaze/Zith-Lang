@@ -10,7 +10,7 @@
 
 namespace zith::zir {
 
-using ZirIndex = uint32_t;
+using ZirIndex                          = uint32_t;
 inline constexpr ZirIndex kInvalidIndex = ~ZirIndex{0};
 
 enum class ZirOp : uint8_t {
@@ -61,8 +61,8 @@ struct ZirBlock {
 struct ZirFn {
     std::string_view name;
     memory::DynArray<ZirBlock> blocks;
-    uint8_t param_count  = 0;
-    uint8_t local_count   = 0;
+    uint8_t param_count    = 0;
+    uint8_t local_count    = 0;
     types::TypeId ret_type = types::kVoidType;
 
     explicit ZirFn(memory::Arena &arena) : blocks(arena) {}

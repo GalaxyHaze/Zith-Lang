@@ -38,9 +38,10 @@ bool typeHasGenericParam(types::TypeId t, types::TypeIntern &types) {
 } // anonymous namespace
 
 Solver::Solver(types::TypeIntern &types, ast::AstBuilder &ast, ast::ProgramNode &program,
-               import::SymbolTable &syms, diagnostics::DiagnosticEngine &diags, memory::Arena &hir_arena)
-    : types_(types), ast_(ast), program_(program), syms_(syms), diags_(diags), hir_arena_(hir_arena),
-      generic_fns_(hir_arena), monomorphs_(hir_arena) {}
+               import::SymbolTable &syms, diagnostics::DiagnosticEngine &diags,
+               memory::Arena &hir_arena)
+    : types_(types), ast_(ast), program_(program), syms_(syms), diags_(diags),
+      hir_arena_(hir_arena), generic_fns_(hir_arena), monomorphs_(hir_arena) {}
 
 bool Solver::solve(zir::hir::HirModule &hir) {
     if (!collectGenerics())

@@ -112,7 +112,7 @@ struct GenericParam {
 };
 
 struct LetNode {
-    bool mut = false;
+    bool mut              = false;
     TypeExprId type_annot = kInvalidTypeExpr;
     memory::DynArray<std::string_view> names;
     ExprId init = kInvalidExpr;
@@ -135,7 +135,7 @@ struct FnDeclNode {
     memory::DynArray<GenericParam> generic_params;
     memory::DynArray<FnParam> params;
     TypeExprId return_type = kInvalidTypeExpr;
-    ExprId body = kInvalidExpr;
+    ExprId body            = kInvalidExpr;
     memory::Span span{};
 };
 

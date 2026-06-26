@@ -8,7 +8,7 @@
 namespace zith::cli::commands {
 
 #define CERR(c) term::err(TERM, diagnostics::ansi::c.data())
-#define RERR   term::err_rst(TERM)
+#define RERR term::err_rst(TERM)
 
 namespace {
 
@@ -51,7 +51,7 @@ int depsUpdate(const Options &opts) {
 } // namespace
 
 int cmd_deps(const Options &opts) {
-    auto TERM = term::init(opts);
+    auto TERM              = term::init(opts);
     const std::string &sub = opts.subcommand_arg;
 
     if (sub == "list")

@@ -39,10 +39,10 @@ static void test_zir_block_code_vector() {
 static void test_zir_fn_fields() {
     Arena arena;
     ZirFn fn(arena);
-    fn.name = "main";
+    fn.name        = "main";
     fn.param_count = 2;
     fn.local_count = 4;
-    fn.ret_type = kVoidType;
+    fn.ret_type    = kVoidType;
 
     CHECK_EQ(fn.name, "main", "fn name is main");
     CHECK_EQ(fn.param_count, 2u, "fn has 2 params");

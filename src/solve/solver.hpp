@@ -18,7 +18,7 @@ struct GenericParamInfo {
 
 struct GenericFnInfo {
     std::string_view name;
-    bool is_generic     = false;
+    bool is_generic           = false;
     types::TypeId return_type = types::kErrorType;
 };
 

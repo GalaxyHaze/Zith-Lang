@@ -29,9 +29,10 @@ typedef enum {
     ZITHC_STAGE_RESOLVED        = 4,
     ZITHC_STAGE_TYPE_CHECKED    = 5,
     ZITHC_STAGE_SOLVED          = 6,
-    ZITHC_STAGE_HIR_LOWERED     = 7,
-    ZITHC_STAGE_MIR_LOWERED     = 8,
-    ZITHC_STAGE_ZIR_INTERPRETED = 9
+    ZITHC_STAGE_NRA_RESOLVED    = 7,
+    ZITHC_STAGE_HIR_LOWERED     = 8,
+    ZITHC_STAGE_MIR_LOWERED     = 9,
+    ZITHC_STAGE_ZIR_INTERPRETED = 10
 } zithc_stage;
 
 // ── Position (0-based line/col, as LSP expects) ───────────────────────
@@ -56,9 +57,8 @@ typedef struct {
 
 // ── Session lifecycle ─────────────────────────────────────────────────
 zithc_session *zithc_session_create(const char *file_path);
-zithc_session *zithc_session_create_from_buffer(const char *uri,
-                                                 const char *content,
-                                                 size_t length);
+zithc_session *zithc_session_create_from_buffer(const char *uri, const char *content,
+                                                size_t length);
 void zithc_session_destroy(zithc_session *session);
 
 // ── Configuration ─────────────────────────────────────────────────────

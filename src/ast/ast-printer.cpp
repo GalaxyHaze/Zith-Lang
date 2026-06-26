@@ -199,10 +199,10 @@ void print_stmt(StmtId id, const AstBuilder &bld, FILE *out, int depth) {
     }
     auto &node = bld.getStmt(id);
     std::visit(overloaded{
-                    [&](const LetNode &n) {
-                        auto var_name = n.names.empty() ? std::string_view{} : n.names[0];
-                        std::fprintf(out, "Let(%.*s, mut=%s)\n", (int)var_name.size(), var_name.data(),
-                                     n.mut ? "true" : "false");
+                   [&](const LetNode &n) {
+                       auto var_name = n.names.empty() ? std::string_view{} : n.names[0];
+                       std::fprintf(out, "Let(%.*s, mut=%s)\n", (int)var_name.size(),
+                                    var_name.data(), n.mut ? "true" : "false");
                        if (n.init != kInvalidExpr) {
                            print_indent(out, depth + 1);
                            std::fprintf(out, "init: ");
@@ -237,17 +237,17 @@ void print_decl(DeclId id, const AstBuilder &bld, FILE *out, int depth) {
     std::visit(overloaded{
                    [&](const FnDeclNode &n) {
                        std::fprintf(out, "Fn(%.*s)\n", (int)n.name.size(), n.name.data());
-                        if (n.params.size() > 0) {
-                            print_indent(out, depth + 1);
-                            std::fprintf(out, "params: ");
-                            for (size_t i = 0; i < n.params.size(); ++i) {
-                                if (i > 0)
-                                    std::fprintf(out, ", ");
-                                std::fprintf(out, "%.*s", (int)n.params[i].name.size(),
-                                             n.params[i].name.data());
-                            }
-                            std::fprintf(out, "\n");
-                        }
+                       if (n.params.size() > 0) {
+                           print_indent(out, depth + 1);
+                           std::fprintf(out, "params: ");
+                           for (size_t i = 0; i < n.params.size(); ++i) {
+                               if (i > 0)
+                                   std::fprintf(out, ", ");
+                               std::fprintf(out, "%.*s", (int)n.params[i].name.size(),
+                                            n.params[i].name.data());
+                           }
+                           std::fprintf(out, "\n");
+                       }
                        if (n.body != kInvalidExpr) {
                            print_indent(out, depth + 1);
                            print_expr(n.body, bld, out, depth + 1);

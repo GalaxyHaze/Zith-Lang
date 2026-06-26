@@ -19,7 +19,9 @@ class ZirInterpreter {
 
     using Value = std::variant<int64_t, double, std::string>;
 
-    void push(Value v) { stack_.push(std::move(v)); }
+    void push(Value v) {
+        stack_.push(std::move(v));
+    }
 
     Value pop() {
         if (stack_.empty())

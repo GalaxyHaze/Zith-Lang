@@ -152,7 +152,7 @@ size_t hashCombine(size_t h, size_t v) {
 
 size_t TypeIntern::computeHash(const TypeData &data) {
     size_t h = 14695981039346656037ULL; // FNV offset basis
-    h = hashCombine(h, static_cast<size_t>(data.index()));
+    h        = hashCombine(h, static_cast<size_t>(data.index()));
 
     switch (static_cast<TypeKind>(data.index())) {
     case TypeKind::Int:

@@ -3,8 +3,8 @@
 #include "zir/zir/zir-inst.hpp"
 #include "zir/zir/zir-interp.hpp"
 
-#include <sstream>
 #include <iostream>
+#include <sstream>
 
 using namespace zith::zir;
 using zith::memory::Arena;
@@ -21,7 +21,7 @@ static void test_interpret_push_ret() {
     Arena arena;
     ZirModule mod(arena);
     ZirFn fn(arena);
-    fn.name = "main";
+    fn.name        = "main";
     fn.param_count = 0;
     fn.local_count = 0;
     ZirBlock block(arena);
@@ -233,7 +233,7 @@ static void test_interpret_store_load() {
     mod.constants.push(int64_t{123});
 
     ZirFn fn(arena);
-    fn.name = "main";
+    fn.name        = "main";
     fn.local_count = 4;
     ZirBlock block(arena);
     block.code.emplace(ZirOp::Push, 0);

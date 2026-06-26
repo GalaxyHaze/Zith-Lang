@@ -71,7 +71,7 @@ class CompilationSession {
 
     std::string output_buffer_;
     bool buffered_output_ = false;
-    std::string content_override_;  // non-empty = compile from buffer, not disk
+    std::string content_override_; // non-empty = compile from buffer, not disk
 
 #if defined(__GNUC__) || defined(__clang__)
     void writeOutput(const char *fmt, ...) __attribute__((format(printf, 2, 3)));
@@ -122,15 +122,33 @@ public:
     void emitDiagnostics();
 
     // ── LSP feature accessors ─────────────────────────────────────────
-    const lexer::TokenStream &tokens() const { return tokens_; }
-    const parser::ScanResult &scanResult() const { return scan_result_; }
-    const import::SymbolTable &symbolTable() const { return syms_; }
-    import::SymbolTable &symbolTable() { return syms_; }
-    const memory::DynArray<import::SymId> &resolvedSyms() const { return resolved_syms_; }
-    const ast::AstBuilder &astBuilder() const { return ast_builder_; }
-    ast::AstBuilder &astBuilder() { return ast_builder_; }
-    const ast::ProgramNode &program() const { return program_; }
-    const types::TypeIntern &types() const { return types_; }
+    const lexer::TokenStream &tokens() const {
+        return tokens_;
+    }
+    const parser::ScanResult &scanResult() const {
+        return scan_result_;
+    }
+    const import::SymbolTable &symbolTable() const {
+        return syms_;
+    }
+    import::SymbolTable &symbolTable() {
+        return syms_;
+    }
+    const memory::DynArray<import::SymId> &resolvedSyms() const {
+        return resolved_syms_;
+    }
+    const ast::AstBuilder &astBuilder() const {
+        return ast_builder_;
+    }
+    ast::AstBuilder &astBuilder() {
+        return ast_builder_;
+    }
+    const ast::ProgramNode &program() const {
+        return program_;
+    }
+    const types::TypeIntern &types() const {
+        return types_;
+    }
 
     std::string fmtStage();
 
@@ -144,6 +162,7 @@ private:
     bool resolveStage();
     bool semaStage();
     bool solveStage();
+    bool nraStage();
     bool mirStage();
     bool zirStage();
 };
