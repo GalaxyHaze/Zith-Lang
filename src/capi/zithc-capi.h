@@ -31,8 +31,8 @@ typedef enum {
     ZITHC_STAGE_SOLVED          = 6,
     ZITHC_STAGE_NRA_RESOLVED    = 7,
     ZITHC_STAGE_HIR_LOWERED     = 8,
-    ZITHC_STAGE_MIR_LOWERED     = 9,
-    ZITHC_STAGE_ZIR_INTERPRETED = 10
+    ZITHC_STAGE_CODEGEN_READY   = 9,
+    ZITHC_STAGE_CACHED          = 10
 } zithc_stage;
 
 // ── Position (0-based line/col, as LSP expects) ───────────────────────

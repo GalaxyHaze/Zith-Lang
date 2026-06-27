@@ -26,13 +26,13 @@
 
 namespace zith::session {
 
-CompilationSession::CompilationSession(const Options &opts, std::string file_path)
+CompilationSession::CompilationSession(const cli::Options &opts, std::string file_path)
     : opts_(opts), file_path_(std::move(file_path)), project_root_(), ast_arena_(), sym_arena_(),
       type_arena_(), hir_arena_(), scratch_arena_(), diags_(scratch_arena_),
       ast_builder_(ast_arena_), import_mgr_(sym_arena_, source_map_, diags_), syms_(sym_arena_),
       resolved_syms_(sym_arena_), types_(type_arena_), hir_module_(hir_arena_) {
     plan_.target = opts_.target_stage;
-    diags_.setColor(term::useColor(opts_));
+    diags_.setColor(cli::term::useColor(opts_));
     diags_.setSourceMap(&source_map_);
 
 #ifndef ZITH_IS_WASM
@@ -43,7 +43,7 @@ CompilationSession::CompilationSession(const Options &opts, std::string file_pat
         project_root_ = fs::weakly_canonical(fs::path(file_path_).parent_path()).string();
 
     auto toml_path = fs::path(project_root_) / "ZithProject.toml";
-    if (auto cfg = ProjectConfig::load(toml_path.string()))
+    if (auto cfg = cli::ProjectConfig::load(toml_path.string()))
         project_config_ = std::move(*cfg);
 #endif
 }

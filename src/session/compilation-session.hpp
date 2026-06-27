@@ -38,10 +38,10 @@ namespace zith::session {
 //   session.run();
 //   if (session.hasErrors()) { ... }
 class CompilationSession {
-    const Options &opts_;
+    const cli::Options &opts_;
     std::string file_path_;
     std::string project_root_;
-    ProjectConfig project_config_;
+    cli::ProjectConfig project_config_;
     PipelinePlan plan_;
 
     memory::SourceMap source_map_;
@@ -79,7 +79,7 @@ class CompilationSession {
     }
 
 public:
-    CompilationSession(const Options &opts, std::string file_path);
+    CompilationSession(const cli::Options &opts, std::string file_path);
 
     bool run();
     bool runTo(Stage target);
@@ -96,7 +96,7 @@ public:
     bool hasErrors() const {
         return diags_.hasErrors();
     }
-    const ProjectConfig &projectConfig() const {
+    const cli::ProjectConfig &projectConfig() const {
         return project_config_;
     }
     const memory::SourceMap &sourceMap() const {

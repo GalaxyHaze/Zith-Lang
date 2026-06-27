@@ -24,6 +24,7 @@ class SemaPipeline {
     memory::DynArray<types::TypeId> hir_types_;
 
     hir::HirExprId addHirExpr(hir::HirExpr expr, types::TypeId type);
+    types::TypeId current_fn_ret_type_ = types::kErrorType;
     types::TypeId exprType(hir::HirExprId id) const;
 
     hir::HirExprId visitExpr(ast::ExprId id);

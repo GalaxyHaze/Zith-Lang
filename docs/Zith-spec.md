@@ -1,7 +1,28 @@
 # ZITH Language Specification
-*Draft v0.9 — 2026*
+**Draft v0.9 — 2026**
 
-> A general-purpose, multi-paradigm language built on a small, composable core and a large specialised toolbox.
+> Zith is a statically typed systems programming language with a small, composable core and a large toolbox for domain-specific work. It proves memory safety at compile time without a garbage collector or borrow checker.
+
+## Introduction
+
+Zith gives you full control with a minimal & clean syntax — you don't have to choose between verbose but safe or readable but slow. Its memory model, Node Resource Analysis (NRA), proves ownership and lifetime safety using six keywords: `lend`, `view`, `unique`, `share`, `belong`, and `default` (no keyword).
+
+Beyond memory safety, Zith has a general-purpose core with a much larger toolbox: markers, contexts (DSLs), words (custom operators), comptime. You choose when to use them. Zith also follows the **Rule of Three**: "if a function needs more than three specialized tools, something went wrong."
+
+This document is a draft of language specification, currently v0.9. It serves three audiences: developers learning Zith for the first time, contributors working on the `zithc` compiler, and tooling authors building editors, linters, or other infrastructure around the language.
+
+### Notation used in this document
+
+| Symbol | Meaning |
+|---|---|
+| `?T` | Optional type — `T` or `null` (§8.1) |
+| `T!` | Result type — `T` or an error (§8.1) |
+| `?` / `!` (postfix) | Unwrap an optional / result, propagating or falling back (§8.3) |
+| `@name` | Compiler intrinsic or macro invocation (§11.3, §15) |
+| `#name` | Variable or field attribute, e.g. `#thread_local` or `#volatile` |
+| `::` | Scope resolution — reach past a shadowed name (§2.3) |
+
+This is a draft specification and remains subject to change as the compiler matures.
 
 ---
 
@@ -20,9 +41,9 @@
 11. [Comptime](#11-comptime)
 12. [Assets](#12-assets)
 13. [Raw & Unsafe](#13-raw--unsafe)
-14. [Data-Oriented Architecture: ECS & Scenes](#14-data-oriented-architecture-ecs--scenes)
+14. [Runtime: Polymorphism & Dynamic Behaviour](#14-runtime-polymorphism--dynamic-behaviour)
 15. [Macros](#15-macros)
-16. [Words (Custom Operators)](#16-words-custom-operators)
+16. [Words](#16-words-custom-operators)
 17. [Contexts](#17-contexts)
 18. [C Interop](#18-c-interop)
 19. [Project Configuration](#19-project-configuration)
@@ -34,36 +55,34 @@
 
 ## 1. Overview & Design Philosophy
 
-### 1.1 What Zith Is
+### 1.1 Who Zith Is For
 
-Zith is a statically typed, compiled, general-purpose language. Its primary paradigm is OOP built around traits and interfaces rather than classical inheritance. Functional and procedural styles are first-class citizens.
+If you are looking for just a 'new' language, clone or 'normal', so Zith is not for you. Zith was created for people starting to learn or open-minded, to discover new ways to think and structure your code, while having a powerful, readable, safe & expressive language.
 
-### 1.2 The Toolbox Philosophy
+### 1.2 Our Philosophy
 
-Zith has a deliberately small, stable core and a large, specialised toolbox.
+Zith aims to be small and stable at its core — covering everyday needs — while offering a large kit that helps in specific domains where most languages need a lot of tricks to work.
+The compiler is a copilot: it gives you the tools, and you build the systems.
 
-| Core (always used) | Specialised toolbox (domain‑specific) |
+| Everyday | Domain-specific |
 |---|---|
-| `struct`, `fn`, `lend`, `view` | `scene` — for games / memory‑intensive domains |
-| `trait`, `interface` | `marker`, `dock`, `jump` — for OS / embedded / state machines |
+| `struct`, `fn`, `lend`, `view`, `trait`, `interface` | `marker`, `dock`, `jump` — for Games, State Machine, OS & embeded |
 | `?T`, `T!`, `or` | `context`, `word` — for DSLs and APIs |
-| `when`, `for`, `->` | `async<Generator>` — for data pipelines |
-
-**The Rule of Three:** if a single function or block uses more than three specialised tools, that is a signal to rethink the design. The core is sufficient for most code.
+| `when`, `for`, `->` | `async` — for data pipelines |
 
 ### 1.3 Design Goals
 
-- Expressive, minimal syntax that favours readability without sacrificing power.
-- Memory safety without a borrow checker or GC — via Node Resource Analysis (NRA).
-- Composable behaviour through traits, capabilities, and interfaces.
+- Expressive, minimal syntax that favors readability without sacrificing power.
+- Memory safety via Node Resource Analysis (NRA).
+- Composable behavior through traits, capabilities, and interfaces.
 - Static, zero-overhead error handling with rich recovery semantics.
 - Compile-time computation (`comptime`) as a first-class feature.
-- Low-level control (flow functions, markers, scenes) without sacrificing safety in normal code.
-- Extensibility through words and macros — ideally scoped inside contexts, not polluting the global namespace.
+- Low-level control — flow functions, markers — without sacrificing safety in everyday code.
+- Extensibility through words and macros, ideally scoped inside contexts rather than polluting the global namespace.
 
 ### 1.4 Context-Bound Extensibility (Best Practice)
 
-Macros and words should ideally live inside a `context` block. Activating them globally is possible but discouraged — similar to `using namespace std;` in C++.
+Macros and words should ideally live inside a `context` block. Activating them globally is possible but discouraged — the same code smell as `using namespace std;` in C++.
 
 ```zith
 // Preferred
@@ -75,35 +94,28 @@ use SQL QueryBlock {
 use SQL;   // pollutes the rest of the file
 ```
 
+### 1.5 Compilation Pipeline
 
-### 1.5 Compilation Pipeline & .zir IR
-
-The Zith compiler follows a multi-stage pipeline:
+The `zithc` compiler follows a multi-stage pipeline:
 
 ```
-SCAN -> SEMA -> SOLVE -> NRA -> HIR -> MIR -> LLVM / NATIVE
-                                                  \-> .zir
+source -> lex -> scan -> resolve(import/symbols) -> sema -> comptime -> NRA -> HIR -> LLVM
 ```
+>Note: when you compile a library, after LLVM it outputs `.zirl` (Zith Intermediate Representation Library).
 
 | Stage | Description |
 |---|---|
-| `SCAN` | Lexical analysis and parsing. Produces an AST. |
-| `SEMA` | Semantic analysis — name resolution, type checking, visibility enforcement. |
-| `SOLVE` | Generics instantiation, macro expansion, compile-time (`comptime`) evaluation. Fully resolves all types before NRA. |
-| `NRA` | Node Resource Analysis — memory ownership, aliasing, and lifetime validation. See §7. |
-| `HIR` | High-level IR — desugared, typed, NRA-validated IR. |
-| `MIR` | Mid-level IR — optimised, lowered closer to machine semantics. |
-| `LLVM` / `NATIVE` | Code generation via LLVM backend or direct native codegen. |
+|`source`| Receive arguments from CLI, load the file |
+|  `lex` | Tokenize the file into a `TokenStream`
+| `scan` | Find top-level declarations from the token stream |
+| `resolve` | Resolve imported symbols, report duplicates
+| `sema` | Semantic analysis — name resolution, type checking, visibility |
+| `comptime` | Generic instantiation, macro expansion, `comptime` evaluation |
+| `NRA` | Apply NRA to ensure memory safety |
+| `HIR` | Build High-level IR — desugared, typed, NRA-validated |
+| `LLVM` | Code generation via the LLVM backend |
 
-#### .zir Intermediate Representation
-
-`.zir` is Zith's binary intermediate representation. It is the distribution format for libraries and VM execution.
-
-- **As a library:** `.zir` can be statically or dynamically linked. The consumer decides the linkage mode.
-- **As an executable:** `.zir` files carry a header with metadata (entry point, required features, ABI version). A Zith VM can interpret them directly.
-- **As a compilation target:** `.zir` can be passed to the LLVM backend for native code generation.
-
-This makes `.zir` the universal exchange format — distribute once, consume however the client prefers.
+`.zirl` files serve as cache and distribution format for compiled libraries — no headers needed, OS-agnostic, and you choose static or dynamic linking at the client side. Distribute once, link however the consumer prefers.
 
 ---
 
@@ -111,11 +123,11 @@ This makes `.zir` the universal exchange format — distribute once, consume how
 
 ### 2.1 Import Keywords
 
-| Keyword | Behaviour |
+| Keyword | Behavior |
 |---|---|
-| `import path opt‑in(as name)` | Imports a module; path becomes its namespace or you access via `name.symbol`. |
-| `from path` | Injects all public symbols directly into scope (sugar for beginners). |
-| `export path` | Re‑exports a dependency; consumers of this module also receive it. |
+| `import path` / `import path as name` | Imports a module under its path as a namespace, or under an explicit alias. Members are accessed as `name.symbol` |
+| `from path` | Injects all visible symbols directly into scope, sugar for simple cases |
+| `export path` | Re-exports a dependency; consumers of this module receive it as well |
 
 ```zith
 import std/io/console as console;
@@ -127,47 +139,56 @@ from std/io/console;
 export std/io/console;
 ```
 
-### 2.2 `alias` vs `use`
+### 2.2 `alias` vs `use` vs `type`
+
+These two keywords are easy to conflate but serve distinct purposes:
 
 | Keyword | Purpose | Example |
 |---|---|---|
 | `alias` | Create a name alias for a type, namespace, or symbol. | `alias Vec = std.collections.DynArray;` |
-| `use` | Bring a word, context, or operator into the current scope. | `use DOT = math.vec.dot;` / `use SQL;` |
+| `type` | Creates a new distinct type from an existing one | `type Celsius = f32;` |
+| `use` | Bring a word, context, or operator into the current scope. | `use math.vec.dot as DOT;` / `use SQL;` |
 
 ```zith
 alias Vec   = std.collections.DynArray;
 alias print = std.io.console.println;
 
-use math.vec.dot;
+use math.vec.dot as DOT;
 use SQL;
+
+type angle = f32;
+type celsius = f32;
+type uuid = u128;
 ```
 
 ### 2.3 Namespace Access & Scope Resolution
 
-Namespaces are accessed with `.` — e.g. `std.io.console.println`. The `::` operator reaches upward past a shadowed name to the outer scope.
+Namespaces are accessed with `.` — e.g. `std.io.console.println`. The `::` operator reaches upward past a shadowed name to the outer scope:
 
 ```zith
 let x = 10;
 {
     let x = 20;
-    @println(::x);   // 10 -- outer scope
+    @println(::x);   // 10, outer scope
 }
 ```
 
-### 2.4 Type Constraints vs Union Separators
+### 2.4 Type Constraints vs. Union Separators
+
+Type constraints and union variants look similar but use different separators to avoid ambiguity:
 
 | Construct | Separator | Semantics |
 |---|---|---|
-| Type constraint | `or` (keyword) | Compile‑time template restriction. Dispatched at compile time. |
-| Union body | `,` (comma) | Runtime tagged union. Variants separated by commas. |
+| Type constraint | `or` (keyword) | Compile-time restriction / constraint |
+| Union body | `,` (comma) | Runtime tagged union; variants separated by commas. |
 
 ```zith
 // Type constraint -- compile-time dispatch
 type Number = i32 or f64 or bool;
 fn convert<T: Number>(val: T): string { ... }
 
-// Union -- runtime tagged
-union Number { i32, f64, bool }
+// Union by default is runtime tagged
+union AnyNumber { i32, f64, bool }
 ```
 
 ### 2.5 Visibility
@@ -176,9 +197,9 @@ union Number { i32, f64, bool }
 |---|---|
 | *(none)* | Private — visible only within the declaring file. |
 | `pub` | Public — visible to any importer. |
-| `mod` | Module‑local — visible to immediate sibling files in the same directory. |
-| `mod(..)` | Visible to all sub‑directories, unlimited depth. |
-| `mod(N)` | Visible to exactly N levels of sub‑directories deep. |
+| `mod` | Module-local — visible to immediate sibling files in the same directory. |
+| `mod(..)` | Visible to all sub-directories, unlimited depth. |
+| `mod(N)` | Visible to exactly N levels of sub-directories deep. |
 
 ---
 
@@ -192,43 +213,43 @@ union Number { i32, f64, bool }
 | Signed integers | `i8`, `i16`, `i32`, `i64`, `i128` |
 | Floats | `f32`, `f64` |
 | Other primitives | `bool`, `char`, `void` |
-| Compiler‑internal | `unknown` — valid but unresolved type (not user‑instantiable). `invalid` — dead/uninitialised state (moved variable, proven‑null). Neither can be named or stored by user code. |
-| Special | `noreturn`, `null`, `File`, `Folder` |
-| Opaque | `opaque` — non‑owning tagged `void*`. `unique opaque` — owns the pointed‑to value. `raw opaque` — untagged `void*` (C interop). |
+| Compiler-internal | `unknown` — a valid but unresolved type, not user-instantiable. `invalid` — a dead or uninitialized state (a moved variable, a proven-null variable). Neither can be named or stored by user code. |
+| Special | `never`, `null` |
+| Opaque | `opaque` — a reference type (`view` by default), equivalent to a tagged `void*`. `raw opaque` is an untagged `void*`, used for C interop. |
 
 ### 3.2 Slice & Array Types
 
 | Syntax | Meaning |
 |---|---|
-| `[]T` | Slice — fat pointer (pointer + length). String literals are `[]char`. |
-| `[N]T` | Fixed‑size array, stack‑allocated. |
-| `[_]T` | Deduced‑size array — compiler infers N from the initialiser. |
+| `[]T` | Slice — a fat pointer (pointer + length). String literals are `[]char`. |
+| `[N]T` | Fixed-size array, stack-allocated. |
+| `[_]T` | Deduced-size array — the compiler infers `N` from the initializer. |
 
 #### Strings & Origin Tracking
 
-NRA tracks the **origin** of every string node (`literal`, `allocator`, `stack`):
+`char` is a UTF-8 code unit. `string` is a built-in library type backed by `[]char` with UTF-8 encoding.
+
+NRA tracks the **origin** of every string node — `literal`, `allocator`, or `local` (see §7.1 for the complete set):
 
 ```zith
-// []char implicitly casts to string -- zero cost (literal origin)
+// []char implicitly casts to string, zero-cost (literal origin)
 let s: string = "hello";
 
 // Concatenation changes origin to allocator -- triggers allocation
 let greeting = "hello" + " " + "world";
 ```
 
-> `string` is a built‑in library type. `[]char` is the primitive representation.
-
 ### 3.3 Enum
 
-A closed set of named constants. All values must be known at compile time. Three styles:
+A closed set of named constants. All values must be known at compile time. Zith supports three styles:
 
-#### C‑style
+#### C-style
 ```zith
 enum Direction { North, South, East, West }
 enum Status: i32 { Ok = 0, Err = 1, Pending = 2 }
 ```
 
-#### Struct‑backed
+#### Struct-backed
 ```zith
 enum Color: rgb {
     red   = { r: 255, g: 50,  b: 0,   a: 255 },
@@ -236,34 +257,11 @@ enum Color: rgb {
 }
 ```
 
-#### ADT‑style (Rust‑like)
-```zith
-union Shape {
-    Circle = { radius: f32 },
-    Rect   = { w: f32, h: f32 },
-    Point,
-}
-
-enum Constants: union {
-    pi      = 3.14f,
-    vector  = |x: -1, y: 0, z: -1, w: 1|,
-    nothing = 0
-}
-
-fn area(s: Shape): f32 {
-    when (s) {
-        Circle = s.radius * s.radius * Constants.pi,
-        Rect   = s.w * s.h,
-        Point  = Constants.nothing,
-    }
-}
-```
-
 ### 3.4 Struct
 
 #### Field Declaration & Grouping
 
-Individual fields for unrelated members; `[]` groups for semantically related fields of the same type:
+Use individual fields for unrelated members, and `[]` groups for semantically related fields that share a type:
 
 ```zith
 struct Sample { name: string, age: i32 }
@@ -276,20 +274,24 @@ struct Transform {
 }
 ```
 
-#### Generic Structs & Self‑referential Patterns
+#### Generic Structs & Self-Referential Patterns
 
 ```zith
 struct Pair<T, U> { first: T, second: U }
 
-// Doubly‑linked list node
+// Doubly-linked list node
 struct Node<T> {
     data: T,
+    //Self = Node<T>
     next: ?unique Self,   // owns next; null at tail
-    prev: ?belong Self,   // back‑ref; lifetime tied to parent; null at head
+    prev: ?belong Self,   // back-ref; lifetime tied to parent; null at head
 }
 ```
 
 #### Implementation Blocks
+
+To implement fns declared by the type, we do: `implement Type{}`
+To implement a specific trait, we do: `implement Type as Trait`
 
 ```zith
 implement Node<T> {
@@ -300,40 +302,46 @@ implement Node<T> {
 implement Node<T> as Printable {
     fn print(self) { @println("Node({self.data})"); }
 }
+
+//for specific implementations based on type
+implement Node<f32> {...}
 ```
 
-> A struct body may declare method signatures without bodies. Those must then be implemented in an `implement` block.
+> All types beside `component` must implement they fns declared inside `implement`
 
 #### `self`, `other`, `Self`
 
-`self` is the current instance. `other` is a conventional second instance parameter. `Self` (capitalised) refers to the concrete type being implemented.
+`self` is the current instance. `other` is a shorthand for a second instance parameter. `Self` (capitalized) refers to the concrete type currently being implemented.
 
 ### 3.5 Component
 
-A plain‑old‑data (POD) struct. **Copy by default** (alongside primitives). Cannot implement traits. May have inline functions limited to pure transformations. Represents a C‑compatible struct.
+A plain-old-data (POD) struct, **copy by default** alongside primitives. Components cannot implement traits, and any inline functions are limited to pure transformations.
 
 ```zith
 component Vec2 {
     [x, y]: f32,
     fn length(self): f32 { sqrt(self.x*self.x + self.y*self.y) }
-    fn dot(self, other: Self): f32 { self.x*other.x + self.y*other.y }
+    fn dot(self, other: Self): f32 { 
+        self.x*other.x + self.y*other.y 
+    }
 }
 ```
 
 A component must satisfy all of the following constraints:
-- All fields are primitives or other components (no structs, unions, enums that aren’t integers).
-- No trait implementations (no `implement ComponentName as Trait`).
-- Inline functions allowed, but can only perform pure transformations:
+
+- Every field is a primitive or another component — no structs, unions, or non-integer enums.
+- No trait declarations (`component Name: Traits` is not allowed).
+- Inline functions are permitted but restricted to pure transformations:
   - No side effects (I/O, allocation, global mutation).
   - Only arithmetic, comparisons, and field access.
-  - Must return a value; cannot return `void`.
-- Copy is always bitwise (memcpy‑safe).
-- Layout is C‑compatible (no vtable, no fat pointers).
-- Cannot contain self‑referential fields (`?unique Self`, `?belong Self`).
+  - Must return a value — `void` is not allowed.
+- Copying is always bitwise (memcpy-safe).
+- Layout is C-compatible — no vtable, no fat pointers.
+- No self-referential fields (`?unique Self`, `?belong Self`).
 
 ### 3.6 Union
 
-By default a `union` is runtime tagged. Variants separated by commas.
+By default, a `union` is runtime-tagged, with variants separated by commas:
 
 ```zith
 union Value { i32, f64, bool }
@@ -342,56 +350,55 @@ union Value { i32, f64, bool }
 let x: union = when (flag) { 0 = 42, 1 = 3.14, 2 = true };
 ```
 
-> Without the `union` type hint the compiler cannot deduce a union — it must be stated explicitly.
+> Without an explicit `union` type hint, the compiler cannot deduce a union — it must be stated explicitly.
+>
+> `dyn` works the same way as a type hint — see §14.2.
 
-`raw union` is a C‑union, only valid inside `raw` contexts. Accessing the wrong variant is undefined behaviour.
+`raw union` is a C-style union, valid only inside `raw` contexts. Accessing the wrong variant is undefined behavior.
 
-### 3.7 Packs (`| |`)
+#### ADT-style (Named Variants)
 
-A **Pack** unifies variadics, named tuples, and explicit closure captures. Internally a closure is a pack plus a static function or a function pointer.
-
-```zith
-// Bare pack -- named tuple
-let pos  = |x: 1.0, y: 2.0, z: 0.0|;
-@println(pos.x);       // named access
-@println(pos.0);       // positional access
-
-// Closure = pack + () + body
-// Move by default
-let addBase = |view base| (n: i32): i32 { base + n };
-
-// Explicit capture, move 'base' into the closure
-let f = |base| (n: i32): i32 { base + n };
-```
-
-#### `static` vs `dyn`
-
-By default a closure generates an **inline** (static) call. The `dyn` qualifier makes it an **indirect** call via function pointer. The capture pack signature is still known at compile time unless `opaque` is used.
+Unions can also have named variants, similar to Rust enums:
 
 ```zith
-let closure: dyn = |base| { ... };
+union Shape {
+    Circle = { radius: f32 },
+    Rect   = { w: f32, h: f32 },
+    Point,
+}
 
-// Extract / inject the pack at compile time
-let pack = @pack closure;
-@pack closure = pack;
+fn area(s: Shape): f32 {
+    when (s) {
+        Circle = s.radius * s.radius * 3.14f,
+        Rect   = s.w * s.h,
+        Point  = 0,
+    }
+}
 ```
 
-#### Dynamic Levels
+You can also combine `enum` with `union` for compile-time constants that carry data:
 
-| Level | Syntax | Semantics |
-|---|---|---|
-| Full static | `let f = \|x\| x + 1;` | Zero overhead. |
-| Semi‑dynamic | `let f: dyn = \|x\| x + 1;` | Function pointer; capture signature statically known. |
-| Dynamic pack, static fn | `let f: \|opaque\| = \|x\| x + 1;` | Capture pack opaque, no type info inside. |
-| Full dynamic | `let f: dyn \|opaque\| = \|x\| x + 1;` | Both function and capture opaque; full fat pointer. |
+```zith
+enum Constants: union {
+    pi      = 3.14f,
+    vector  = |x: -1, y: 0, z: -1, w: 1|,
+    nothing = 0,
+}
+```
 
-> Closures are detailed here; see §5 for function kinds.
+> Both `union` & `enum` can have methods, but neither can implement traits.
 
-### 3.8 Union Narrowing (`is`) & Flow Typing
+### 3.7 Union Narrowing (`is`) & Flow Typing
 
-The `is` operator narrows a union within a branch. Inside each branch, invalidations (mutations, moves) do not affect other branches. After the if/else or when block, all changes and side-effects are applied to the enclosing scope and the type **widens back** to the full union.
+The `is` operator narrows a union within a branch. Branches are isolated — moves inside one branch don't affect others. After the block completes, the type **widens back** to the full union. The underlying tag does not revert — the value stays `i32` internally — but the type system treats it as the full union again.
 
-If you want to "recover" a narrowed value, make the if return and store it. The compiler deduces "not all control flows return" to Optional — when a branch does not return, it returns null.
+Zith has no `else` keyword — the compiler deduces branches implicitly. When you write a conditional as an expression and not every branch returns a value, the missing branches return `null`. The result becomes `?T`:
+
+```zith
+let result = if (v is i32) v;   // ?i32 — missing branch returns null
+```
+
+Using the narrowed value outside the `if` is a **compile error**. Recover it by storing the result of the branch expression.
 
 ```zith
 fn handle(v: Val): void {
@@ -405,15 +412,11 @@ fn handle(v: Val): void {
     // v is Val again (full union)
 }
 
-// Widening -- mutation inside branch resets type
+// Widening — mutation inside a branch
 when (v) {
-    i32 = { v = 42; },   // v mutated to i32
+    i32 = { v = 42 },   // v is still i32 internally, but types as Val after
 }
-// v is Val again here (widened back to full union)
-
-// Recovering a narrowed value via if-return
-let result = if (v is i32) { v } else { null };
-// result is ?i32 -- null when branch did not return
+// v is Val again here
 
 // when with branch tags
 when (v) {
@@ -424,53 +427,57 @@ when (v) {
 
 when (shape) {
     Circle = @println("circle r={shape.radius}"),
-    Rect   = let [val..] = shape,   // ignore second field
+    Rect   = let [val..] = shape,   // val = w; remaining fields ignored
     _      = @println("other"),
 }
 
-// Standalone boolean & compile‑time reflection
-// All conditions / booleans tests must be inside '()'
+// Standalone boolean narrowing & compile-time reflection
+// All boolean conditions must be wrapped in parentheses.
 let numeric  = (v is i32) or (v is f64);
 let isStruct = (T is @struct);
 ```
 
-### 3.9 Generics
+### 3.8 Generics
 
 ```zith
-// Explicit
+// Explicit constraints
 fn serialize<T: Serializable + Printable, U: Clone>(val: T, ctx: U): string { ... }
 
-// Implicit -- constraints inferred from usage at call site
-fn add(a, b) { a + b }   // Arithmetic implicitly required
+// Implicit constraints inferred from usage at the call site
+fn add(a, b) { a + b }   // Arithmetic is implicitly required
 ```
 
-### 3.10 `when` — Pattern Matching
+### 3.9 `when` — Pattern Matching
 
 ```zith
 when (count) {
     0       = @println("none"),
     1       = @println("one"),
-    2..10   = @println("few"),
+    2..=10  = @println("few"),
     _       = @println("many"),
 }
 
-// As expression
-let label = when (score) { 90..100 = "A",  70..90 = "B",  _ = "C" };
+// As an expression
+let label = when (score) { 
+    90..100 = "A",
+    70..90 = "B", 
+    _ = "C" 
+};
 
-// .. ignore the rest
+// '..' ignores the remaining fields
 when (point) {
     [x..] = @println("x=", x),
-    _         = @println("no match"),
+    _     = @println("no match"),
 }
 
-// .. get the last element
+// '..' before a binding captures the last element
 when (point) {
     [..w] = @println("w={w}"),
-    _         = @println("no match"),
+    _     = @println("no match"),
 }
 ```
 
-### 3.11 Cast Operator
+### 3.10  Cast Operator
 
 ```zith
 let n: i32 = 42;
@@ -481,21 +488,18 @@ let f = n as f64;
 
 ## 4. Traits, Interfaces & Capabilities
 
-### 4.1 Traits vs Interfaces
+### 4.1 Traits vs. Interfaces
 
 | | Trait | Interface |
 |---|---|---|
-| Typing | Nominal — must be explicitly implemented. | Structural (duck‑typed) — auto‑satisfied if members match. |
-| Can extend? | Yes (`requires` / `extends`). | can `requires`. |
-| Has implementation? | Yes (default methods allowed). | No — declaration only. |
-| Field access? | Only via `requires Interface`. | Yes — directly. |
+| **Typing** | Nominal — must be explicitly implemented. | Structural (duck-typed) — automatically satisfied when members match. |
+| **Extensible** | Yes — via `extends`, or as a precondition using `requires`. | No — interfaces cannot extend each other, though a trait may `requires` one. |
+| **Has implementation?** | Yes — default method bodies are allowed. | No — declaration only. |
+| **Field access** | Only through a trait that `requires` the interface. | Yes — directly, since interfaces are structural. |
 
 ### 4.2 Traits
 
-- `requires Cond` appears **before** the `trait` keyword. Forces any implementing type to already satisfy that trait or interface.
-- `self` / `other` are special parameter keywords. `Self` is the concrete implementing type.
-- Traits may provide default method implementations.
-- For ambiguous method names, disambiguate with the trait as namespace: `TraitName.method(self, ...)`
+A `requires Cond` clause goes **before** `trait` or `interface`. It forces any implementing type to also satisfy that condition. Traits may provide default method bodies. Use `self` / `other` as the conventional instance parameters, and `Self` (capitalized) for the concrete implementing type.
 
 ```zith
 trait Printable {
@@ -509,16 +513,18 @@ trait JsonSerializable {
     fn toJson(self): string;
 }
 
-// Disambiguate overlapping method names
+// Disambiguate overlapping method names using the trait as a namespace
 Printable.print(self);
 JsonSerializable.print(self);
 ```
 
 ### 4.3 Interfaces
 
-Interfaces are structural: a type satisfies an interface automatically if it has the required members. A trait that `requires` an interface gains read/write access to those fields.
+Interfaces are structural — if it quacks, it's a duck. Any type that has the required members satisfies the interface automatically, without an explicit `implement` declaration. You can also add `requires` to interfaces.
 
 ```zith
+// will only accept structs and reject components
+requires @isStruct
 interface iPositioned { [x, y, z]: f32 }
 
 requires iPositioned
@@ -532,26 +538,28 @@ trait Movable {
 struct Enemy { [x, y, z]: f32, health: i32 }
 ```
 
-### 4.4 Capabilities — Built‑in Reference
+### 4.4 Capabilities — Built-in Reference
 
-Capabilities are special traits consumed by the compiler to unlock operations, enforce rules, or modify NRA behaviour.
+Capabilities are special traits that feed the compiler more information, unlocking special rules and optimizations.
 
-| Capability | What it enables |
+| Capability | What it does |
 |---|---|
-| `Copy` | Implicit bitwise copy. Components and primitives are Copy by default. |
-| `Functor` | `operator()` — makes the type callable like a function. |
-| `Arithmetic` | Operators `+`, `-`, `*`, `/`, `%`, etc. |
-| `Error` | `operator throw` — required for `throw MyError;` |
-| `Null` | Activates associated traits only when NRA has proven the value IS null. Negative capability — fires on proven‑invalid state. |
-| `Fail` | Activates associated traits only when NRA has proven the value IS an error/broken. Cannot coexist with `Null` on the same value. |
-| `Allocator` | Custom allocator backend for Scenes and `@allocate`. `delete fn free;` makes a bump‑only allocator. |
-| `Generator` | Enables `async<Generator> fn`. Only meaningful on async functions. |
-| `Share` | Required for `global: share` and thread‑crossing. **share is mutable** — does not imply read‑only. |
-| `Lent` | Enables `global: unique` runtime‑checked exclusive borrow. |
+| `Copy` | Implicit bitwise copy. Components and primitives are `Copy` by default. |
+| `Functor` | `operator()` — makes a type callable like a function. |
+| `Arithmetic` | Operators `+`, `-`, `*`, `/`, `%`, and so on. |
+| `Error` | `operator throw`, required for `throw MyError;`. |
+| `Null` | A negative capability — its traits activate only once NRA has proven a value IS `null`. Outside the proven-null branch, calling the method is a **compile error**. |
+| `Fail` | A negative capability — its traits activate only once NRA has proven a value IS an error. Cannot coexist with `Null` on the **same level**, but `?T!` can have `Null` on the outer level and `Fail` on the inner. |
+| `Allocator` | To provide custom allocators |
+| `Generator` | Allows create custom Generators & receive the return of an `async fn`.  |
+| `Share` | Required for `global: share` and crossing thread boundaries |
+| `Lent` | Enables `global: unique`, a runtime-checked exclusive borrow |
 | `Trust` | A trait extending `Trust` may contain `raw fn` methods callable from safe contexts. |
-| `Unique` | Singleton type. Cannot be instantiated; type name acts as the instance. All fields implicitly global; mutable fields require thread‑safety. |
+| `Unique` | Marks a singleton type. It cannot be instantiated — the type name itself acts as the instance. All fields must implement `Share` (thread-safe). A `unique Local` variant is a singleton thread-local. |
 
-#### Null & Fail — Negative Capabilities
+#### `Null` & `Fail` — Negative Capabilities
+
+Dispatch is based on NRA state. Inside a proven-null branch, the `Null` trait unlocks. Outside it, calling `Null` methods is a **compile error**:
 
 ```zith
 implement Config as Null {
@@ -563,23 +571,29 @@ implement Config! as Fail {
 
 let cfg: ?Config = loadConfig();
 if (cfg is null) {
-    cfg.onMissing();   // Null trait unlocked here
+    cfg.onMissing();   // OK — Null trait unlocked here
 }
+// cfg.onMissing();   -- COMPILE ERROR: outside null branch
+
+// Multi-level: ?T! — Null on outer, Fail on inner
+// cfg.onError() is only valid inside a proven-error branch
 ```
 
-#### Trust — Safe Sections with Raw Code
+`Null` and `Fail` are per-level. A `?T!` value can activate `Null` (outer `?`) independently from `Fail` (inner `!`).
+
+#### `Trust` — Safe Sections with Raw Code
 
 ```zith
 trait Place extends Trust {
     raw fn sample(): i32 {}
 }
 
-fn safe_caller(a: impl Place) {
-    let v = a.sample();   // allowed: Trust in scope via Place
+fn safeCaller(a: Place) {
+    let v = a.sample();
 }
 ```
 
-#### Unique — Singleton Types
+#### `Unique` — Singleton Types
 
 ```zith
 struct AppConfig: Unique { host: string, port: u16 }
@@ -589,20 +603,20 @@ AppConfig.port = 8080;
 // let cfg = AppConfig { ... };  -- COMPILE ERROR
 ```
 
-#### Share — Thread‑crossing Mutable State
+#### `Share` — Mutable State Across Thread Boundaries
 
 ```zith
-// Share is mutable -- multiple names, multiple threads, all can write
-global counter: share AtomicI32 = 0;
+// Share is mutable, multiple names, multiple threads, all can write
+global counter: share Atomic<i32> = 0;
 
-// Without Share capability, cross‑thread access is a compile error
+// Without the Share capability, cross-thread access is a compile error
 struct LocalOnly { data: i32 }
 // global bad: share LocalOnly = ...;  -- COMPILE ERROR: lacks Share
 ```
 
 ### 4.5 Operator Overloading
 
-Capability‑based and strict:
+Operator overloading is capability-based and strict — you implement only the operators you need:
 
 ```zith
 implement Vec3 as Arithmetic {
@@ -611,20 +625,20 @@ implement Vec3 as Arithmetic {
 }
 
 implement Pipeline as Functor {
-    fn ()(self, input: []u8): []u8 { ... }
+    fn (self, input: []u8): []u8 { ... }
 }
 let out = pipe(raw_bytes);
 ```
 
 ### 4.6 Extension (`extends`)
 
-`extends` copies the base type's fields and traits into the new struct. After `:`, additional traits to implement may be listed:
+`extends` copies the base type's fields and traits into the new struct. An optional `:` after the base lists further traits to implement:
 
 ```zith
 struct Dog extends Animal {}
 struct T extends Base: Transform, Collision {}
 
-// Traits may extend capabilities or other traits
+// Traits may also extend capabilities or other traits
 trait SafeBuffer extends Trust {
     raw fn readByte(self, offset: u64): u8 {}
 }
@@ -634,100 +648,80 @@ trait SafeBuffer extends Trust {
 
 ## 5. Functions
 
-### 5.1 Return Type & Implicit Returns
+### 5.1 Return Types & Implicit Returns
 
 ```zith
-fn add(a: i32, b: i32): i32 { a + b }   // explicit, implicit return
+fn add(a: i32, b: i32): i32 { a + b }   // explicit type, implicit return
 fn add(a: i32, b: i32)      { a + b }   // inferred type
 
-// By default, bound‑check: if ok, return normally; if not, propagate as 'null'
+// Bounds-checked indexing: returns the element if in range, otherwise
+// propagates null via the implicit optional from '?'.
 fn first<T>(slice: []T): ?T {
     slice[0]?
 }
 ```
 
-> The compiler cannot infer a union return type without an explicit `union` type hint.
+> The compiler cannot infer a `union` or `dyn` return type without an explicit type hint.
 
 ### 5.2 Function Kinds
 
 | Kind | Description |
 |---|---|
 | `fn` | Standard runtime function. |
-| `const fn` | Resolved at compile time. |
-| `async fn` | Coroutine (default). |
-| `async<Generator> fn` | Explicit generator — yields a typed sequence. |
-| `flow fn` | Enables marker/dock control flow. |
-| `raw fn` | Always unchecked — bypasses safety in both debug and release. Compiler warns in release if `raw` could be removed. |
+| `const fn` | Resolved entirely at compile time. |
+| `async fn` | Coroutine\<T\> | 
+| `flow fn` | Enables marker/dock control flow (§9.4). |
+| `raw fn` | Always unchecked, bypassing safety in both debug and release. The compiler warns in release builds if `raw` could be removed. |
 
-> Function kinds are orthogonal and cannot be mixed.
+> Function kinds are orthogonal and cannot be combined on a single declaration.
 
-**Macro calls use `@` prefix** — `@println`, `@log`, `@serialize`. Functions use bare names — `console.write`, `process`, `save`.
+Macro calls use the `@` prefix — `@println`, `@log`, `@serialize` — while ordinary function calls use a bare name, such as `console.write`, `process`, or `save`. See §15 for the full rule.
 
 ### 5.3 `async fn` & `yield`
 
 ```zith
-// Default coroutine
+// An async fn returns Coroutine<T>, not T directly.
+// Only types implementing Generator can receive it.
 async fn fetch(url: string): Response! {
     yield;
     get_response()!
 }
-
-// Explicit generator
-async<Generator> fn range(start: i32, end: i32): ?i32 {
-    for (i in start..end) {
-         yield i;
-         i += 1;
-    }
-}
-
-for (v in range(0, 10)) { @println(v); }
 ```
-
-### 5.4 Closures
-
-A closure is a pack with callable semantics. Capture modes and dynamic levels are detailed in §3.7. Briefly:
-
-```zith
-let addBase = |base| (n: i32): i32 { base + n };
-let f1 = |view x| (n: i32) { x + n };
-let f2 = |x| (n: i32) { x += n; };
-```
-
----
 
 ## 6. Mutability & Bindings
 
 ### 6.1 Deep Mutability Model
 
-Zith uses deep mutability: the modifier on a binding propagates into all nested fields. Fields inside a struct are `auto` by default — they follow the mutability of the containing instance.
+Zith uses deep mutability: a modifier on a binding flows into every nested field. Fields inside a struct inherit the mutability of the instance that holds them — no per-field `mut` annotation needed.
 
 ### 6.2 Binding Keywords
 
 | Keyword | Controls | Semantics |
 |---|---|---|
-| `let` | Binding | Immutable. Cannot be reassigned. |
-| `var` | Binding | Mutable. Can be reassigned. |
+| `let` | Binding | Immutable — cannot be reassigned. |
+| `var` | Binding | Mutable — can be reassigned. |
 | `global` | Binding | Static storage duration. |
-| `const` | Both | Compile‑time constant. Binding and content frozen. |
-| `comptime` | Both | Mutable during compilation (e.g. compile‑time counter), frozen at runtime. |
+| `const` | Binding | Compile-time constant |
 
-> Bindings only control reassignability. Content mutability is controlled via memory keywords on the type (see §7).
+
+> `let`/`var` control reassignability of the binding itself. Content mutability is handled separately through memory keywords (§7).
 
 ```zith
-let x: mut Point;      // cannot reassign x, but Point fields are mutable
-var y: Point;          // can reassign y, Point fields immutable
+let x: mut Point;      // cannot reassign x, but Point's fields are mutable
+var y: Point;          // can reassign y; Point's fields are immutable
 const PI = 3.14159;
-comptime COUNT = 0;
-comptime COUNT += 1;   // valid at compile time only
+const COUNT: mut = 0;
+COUNT += 1;   // valid at compile time only
 ```
 
 ### 6.3 Destructuring
 
 ```zith
-let [x, y, z]: f32;           // grouped -- same type, related semantics
-let name: string; let age: i32;   // individual -- unrelated
+let [x, y, z]: f32 = 1.0f;             // grouped same type, related semantics
+let name: string; let age: i32; // individual unrelated
+let [x,y,z] = | 5,4,'c'|;   // pack literal — see §3.9
 
-// In a for loop, if loop doesn't run, 0 is the default
+// If the loop never runs, 'or' supplies the fallback value
 let r = for ([acc, i]: i32), (i in 0..n) {
             acc *= i + 1
         } or 0;
@@ -737,20 +731,30 @@ let r = for ([acc, i]: i32), (i in 0..n) {
 
 ## 7. Memory Model (NRA)
 
-### 7.1 What NRA Does (and Does Not Do)
+### 7.1 What NRA Tracks
 
-Node Resource Analysis (NRA) is the final compiler pass, after SEMA + SOLVE have fully resolved all types. It is responsible for:
+NRA watches every value in your program and classifies it into one of three states:
 
-- Tracking whether a node (value) is `alive`, `dead`, or `lent`.
-- Ensuring ownership rules: `unique` nodes have exactly one owner; `belong` nodes cannot outlive their parent.
-- Validating aliasing: `share` allows multiple names; `lend` is exclusive.
-- Tracking node origins (`literal`, `allocator`, `local`, `view`) to enable zero‑cost coercions.
+| State | Meaning |
+|---|---|
+| `alive` | Ready to read or use |
+| `dead` | Moved away — you cannot read it, only reassign |
+| `lent` | Temporarily borrowed — exclusive while the borrow lasts |
 
-NRA does **not** infer types — that is SEMA/SOLVE's job.
+It also tracks the **origin** of each node — where the value came from:
+
+| Origin | Example |
+|---|---|
+| `literal` | `"hello"`, `42` — zero cost, no allocation |
+| `allocator` | Heap-allocated via `new` or concatenation |
+| `local` | Stack variable |
+| `view` | Read-only reference to another node |
+
+With these two axes (state + origin), NRA enforces the rules in §7.4.
 
 ### 7.2 Move Semantics
 
-Moving `a` to `b` redirects the name `b` to `a`'s node. The name `a` is set to **dead** and cannot be read — only reassigned:
+Moving `a` to `b` redirects the name `b` to `a`'s node. The name `a` is considered **dead** / **invalid** and cannot be read — only reassigned:
 
 ```zith
 var a = Point { x: 1.0, y: 2.0 };
@@ -758,35 +762,35 @@ let b = a;                          // b -> a's node; a becomes dead
 // println(a.x);                    -- COMPILE ERROR: a is dead
 @println(b.x);                       // OK
 
-a = Point { x: 3.0, y: 4.0 };      // OK: reassignment creates new node for a
+a = Point { x: 3.0, y: 4.0 };      // OK: reassignment creates a new node for a
 ```
 
-Effectively, if a is not reassigned, it is as if a never existed and b has always held `Point{x: 1.0, y: 2.0}`.
+In effect, if `a` is never reassigned, it is as though `a` never existed and `b` has held `Point { x: 1.0, y: 2.0 }` all along.
 
 ### 7.3 Memory Keywords
 
 | Keyword | Relationship | Common use |
 |---|---|---|
 | `default` | Owned. Lifetime follows the binding. | Variables, struct fields |
-| `lend` | Exclusive mutable temporary. Cannot be stored, moved, or captured. **Can be returned** (passes the behavioural promise to the caller). **Belong fields can be passed as `lend` to functions.** | Passing mutable refs to fns |
-| `view` | Read‑only non‑owning ref. Many views may coexist. | Inspecting without ownership |
-| `unique` | Single‑owner guarantee. Only one name in the graph. | Ownership‑transfer patterns |
-| `share` | Multiple names, same node. Statically validated — no ref‑count. Mutable. | Compile‑time‑proven sharing |
-| `belong` | Part‑of. Node lifetime tied to parent. Cannot be stored independently. Can be passed as `lend` to functions. | Back‑pointers, hierarchies |
+| `lend` | Exclusive mutable temporary. Cannot be stored, moved, or captured — but **can be returned**, passing the promise to the caller. `belong` fields can also be passed as `lend`. | Passing mutable references to functions |
+| `view` | Read-only, non-owning reference. Many views may coexist. | Inspecting without ownership |
+| `unique` | Single-owner guarantee — only one name in the graph. | Ownership-transfer patterns |
+| `share` | Multiple names, same node, statically validated — no ref-counting. Mutable. | Compile-time-proven sharing |
+| `belong` | Part-of relationship. Node lifetime tied to its parent; cannot be stored independently. Can be passed as `lend`. | Back-pointers, hierarchies |
 
 > In practice, most code only needs `lend` and `view`.
 
 ### 7.4 The Four NRA Rules
 
-**Rule 1 — Argument Exclusivity:** in any call expression, each argument must refer to a distinct node. No exceptions.
-- `default` / `unique` / `lend` duplicated → **ownership error**
-- `share` / `view` duplicated → **logic error** (same resource in two argument positions is almost certainly a bug)
+**Rule 1 — Argument Exclusivity.** In any call expression, each argument must refer to a distinct node, without exception:
+- Duplicating a `default` / `unique` / `lend` argument → **ownership error**.
+- Duplicating a `share` / `view` argument → **logic error** (passing the same resource twice is almost certainly a bug).
 
-**Rule 2 — No Dead Node Access:** a symbol may not be read if its node is in state `dead`.
+**Rule 2 — No Dead Node Access.** A symbol cannot be read while its node is `dead`.
 
-**Rule 3 — No Escaping `belong`:** a `belong` node may not be stored in any location whose lifetime exceeds any node in its `dependency nodes`. At every use, all parents must be `alive`.
+**Rule 3 — No Escaping `belong`.** A `belong` node cannot be stored anywhere whose lifetime exceeds any node in its dependency vector. At every use, all of its parents must be `alive`.
 
-**Rule 4 — `lend` Behavioural Promise:** a `lend` value may not be stored, moved, or captured. It may be passed as a call argument or returned (passing the promise to the caller).
+**Rule 4 — `lend` Behavioral Promise.** A `lend` value cannot be stored, moved, or captured. It may be passed as a call argument or returned — in the latter case, passing the promise on to the caller.
 
 ### 7.5 NRA in Practice
 
@@ -797,43 +801,43 @@ let pt = mut Point { x: 3.0, y: 4.0 };
 scale(pt, 2.0);
 @println(pt.x);   // OK: borrow ended
 
-// view -- multiple read‑only refs
+// view -- multiple read-only refs
 let v1: view Point = pt;
 let v2: view Point = pt;   // fine
 
-// share -- no ref‑count, statically proven
+// share -- no ref-count, statically proven
 let a: share Config = load();
-let b: share Config = a;   // both point to same node
+let b: share Config = a;   // both point to the same node
 
-// belong -- back‑pointer cannot outlive parent
+// belong -- back-pointer cannot outlive its parent
 struct Tree<T> {
     data:     T,
     children: []unique Self,
     parent:   ?belong Self,
 }
 
-// belong fields passed as lend
+// belong fields can be passed as lend
 fn getParent(self: view Node): lend Node { self.parent }
 ```
 
 ### 7.6 NRA Limitations & Escape Hatches
 
-NRA cannot statically validate all shared / view cycles across threads:
+NRA cannot statically validate every shared or viewed cycle across threads. Three escape hatches cover the remaining cases:
 
 ```zith
-// await -- safe: compiler knows thread is done before scope ends
+// await -- safe: the compiler knows the thread is done before the scope ends
 let handle = spawn worker(shared_data);
 await handle;
 
-// #wontRemain -- promise: thread dies before scope ends
-#wontRemain let _ = spawn quick_task(shared_data);
+// #wont_remain -- a promise that the thread dies before the scope ends
+#wont_remain let _ = spawn quick_task(shared_data);
 
-// Rc -- runtime ref‑count fallback
+// Rc -- runtime ref-count fallback
 let shared = Rc.new(HeavyResource.init());
 let _ = spawn worker(Rc.clone(shared));
 ```
 
-### 7.7 Self‑referential Types
+### 7.7 Self-Referential Types
 
 ```zith
 struct Node<T> {
@@ -847,82 +851,71 @@ implement Node<T> {
         self.next = unique Node { data, next: null, prev: belong self };
     }
 }
-    // Freeing the head frees the entire chain (unique ownership chain)
-    // NRA guarantees prev (belong) never outlives its owner
-    // belong fields can be passed as lend to functions
-}
 ```
 
-### 7.8 NRA Algorithm
+- Freeing the head frees the entire chain, since `next` forms a `unique` ownership chain.
+- NRA guarantees `prev` (`belong`) never outlives its owner.
+- `belong` fields may be passed as `lend` to functions.
 
-NRA maps every symbol or variable to a **resource node**. By default, the compiler is **lazy** — it only validates a node when it is used, viewed, or returned.
+### 7.8 How NRA Resolves Nodes
+
+Every symbol gets a **resource node**. NRA is **lazy** — it only validates a node when you use, view, or return it.
 
 #### Node Validation
 
-When a node is accessed, NRA checks:
-1. The node itself is `alive` (not `dead`).
-2. All nodes in its **dependency vector** (the fields or resources it belongs to or references) are valid.
+When you access a node, NRA checks:
 
-If a node is set to `dead` (e.g. after a move), the compiler inserts a diagnostic message recording **where** the node died and **why**. This information is used to produce precise NRA errors at the point of violation.
+1. The node itself is `alive` (not `dead`).
+2. Every node in its **dependency vector** — the fields or resources it belongs to or references — is also valid.
+
+If a node is `dead` (say, after a move), NRA records where and why. You get an error pointing right at the violation.
 
 #### Function Evaluation
 
-When NRA evaluates a function, it first checks: **was this function already analysed?** If yes, the cached result is reused.
+NRA caches function results. If it has seen a function before, it reuses the cached analysis. Otherwise, it inspects every return path:
 
-Otherwise, it inspects all return paths:
-- If **every** return path returns one of the function's arguments, then at the call site that node is **not consumed** — ownership stays with the caller.
-- If any path does **not** return an argument, the result is marked as **consumed**.
+- **Every** path returns one of the function's arguments → caller's node is **not consumed** (ownership stays with you).
+- **Any** path doesn't return an argument → the result is **consumed**.
 
-Since memory modifiers (lend, view, unique, etc.) are part of the function signature, the compiler has all the information it needs to determine consumption.
+Since memory modifiers (`lend`, `view`, `unique`, ...) are in the function signature, NRA knows everything it needs without re-analyzing the body.
 
 #### Branch Isolation (`if` / `else` / `when`)
 
-Inside conditional branches, each branch operates in **isolation** — it cannot see what other branches do:
-- A move, mutation, or invalidation inside one branch does **not** affect other branches.
-- After all branches complete, NRA **collects all side-effects** and applies them to the enclosing scope.
-
-#### The Return Trick
-
-If a conditional expression is used to recover a value but not all paths return, the compiler implicitly deduces `null` for the missing paths. The result type becomes `?T`:
-
-```zith
-let result = if (v is i32) { v } else { };     // ?i32
-```
-
-> **Name linking:** The `fail` block name must match the enclosing block name. The compiler passes the error as the block's argument. An anonymous `fail` (no name) guards the current scope directly and receives the error the same way.
-
----
+Each branch runs in isolation. A move inside one branch cannot affect the others. After all branches complete, NRA applies the side effects of whichever branch actually ran.
 
 ## 8. Error Handling
 
-Fully static, return‑based. No exceptions. No semicolon required after `?` or `!`.
+Error handling in Zith is fully static and return-based — there are no exceptions, and no semicolon is required after `?` or `!`.
 
 ### 8.1 Failable Types
 
 | Syntax | Meaning | Propagated by |
 |---|---|---|
-| `?T` | Optional — T or null. | `?` (postfix) |
-| `T!` | Result — T or an error. Equivalent to Rust's `Result<T, E>` where `E` must implement the `Error` trait. Compiler infers anonymous error union for multiple error types. | `!` (postfix) |
+| `?T` | Optional — `T` or `null`. | `?` (postfix) |
+| `T!` | Result — `T` or an error. Equivalent to a `Result<T, E>` where `E` implements `Error`. The compiler infers an anonymous error union when multiple error types are possible. | `!` (postfix) |
 
-Failable types may be stacked — notation is linear and unambiguous:
+Failable types may be stacked, and the notation reads linearly:
 
 ```zith
-// Optional pointer to an optional Result of optional i32 or IoError
 ?*?(?i32 ! IoError)
 ```
 
-### 8.2 `must` vs `raw`
+Read left to right, outer to inner: an *optional* **pointer** to an *optional* **Result**, where the Result's success type is `?i32` and its error type is `IoError`.
+
+### 8.2 `must` vs. `raw`
 
 | | Debug mode | Release mode |
 |---|---|---|
-| `must` | Panics with file + line location. | Compiler guides you to remove, becomes an if/else + early return with a custom error code. |
+| `must` | Panics with file and line information. | The compiler guides you to remove it, turning it into an `if`/`else` with an early return and a custom error code. |
 | `raw` | Always unchecked. | Always unchecked. |
 
 ```zith
 let cfg: ?Config = tryLoad();
-let c1 = must cfg;   // panics debug; compiler warns/guides in release
+let c1 = must cfg;   // panics in debug; compiler warns/guides in release
 let c2 = raw cfg;    // always unchecked; compiler always warns
 ```
+
+`must` also doubles as an assertion: `must(cond)` panics with file and line info if `cond` is false (debug only). In release, the compiler guides you to replace it with proper error handling.
 
 ### 8.3 Propagation & Fallback
 
@@ -936,34 +929,50 @@ fn readConfig(path: string): Config! {
 let name = ?user.name or "guest";
 let data = !primary() or backup() or default;
 
-// Propagation inside chain flow
+// Propagation inside a chain
 readFile("data.bin") -> parse(..)! -> validate(..)? -> process(..)
 ```
 
-`?` / `!`, `raw`, `must` are needed to access Failable types:
-- **?** : If the value is invalid (null), fall back to the `or` alternative. The `or` value becomes the **Integral** — the valid, unwrapped T.
-- **!** : If the value is invalid (error), fall back to the `or` alternative. The `or` value becomes the Integral.
+Accessing a failable type's inner value requires one of four operators: `?`, `!`, `raw`, or `must`.
 
-> **Integral** = the valid, non-null, non-error value of a failable type — the inner T that `?` and `!` unwrap to.
+- both **`?`** / **`!`** unwraps a failable type (Result or Optional), if the value is 'invalid' evaluation falls through to the 'or' alternative.
+- the difference is: **`?`** can return T(We will refer to it as 'Integral') or null, while **`!`** returns Integral or an Error.
 
-> They are one per 'island': `let x = ?Opt or default;`, not `let x = ?Y.?data.?fic();` nor `let x = ?Opt?`.
+You can chain with `or` until it finds an Integral result(short-circuit)
+
+Each expression may use at most one `?` or `!` before it must resolve to an Integral via `or`. A second, unresolved `?` or `!` in the same expression is invalid:
+
+```zith
+let x = ?opt or default;     // valid -- resolves immediately
+let x = ?y.?data.?fn();      // invalid -- multiple unresolved '?' in one expression
+let x = ?y or default.data()?fn()? // valid
+let x = ?y.data()?fn()?  // valid — but redundant if y itself is already Integral (non-optional)
+let x = ?opt?;                // invalid -- '?' cannot follow another '?'
+```
 
 ### 8.4 `with` / `catch`
 
+| Form | Behavior |
+|---|---|
+| `with` | Short-circuit — the first failure jumps straight to `catch` |
+| `eager with` | Eager — every expression is evaluated; `catch` runs if any failed |
+
 ```zith
-// Short‑circuit: first failure jumps to catch
+// Short-circuit
 with (connectDb(), user: getUser(id)) {
     process(user);
-} catch (err) { log(err); }
+}
+catch (err) { log(err); }   // any name works; 'err' is convention
 
-// Eager: all expressions evaluated; catch runs if any failed
-with! ( a:fetchA(), b: fetchB() ) { use(b); }
-catch { log(a,b); }
+// Eager — all expressions run, then catch if any failed
+eager with (a: fetchA(), b: fetchB()) {
+    use(b);
+} catch { log(a, b); }
 ```
 
 ### 8.5 `fail` Blocks
 
-A `fail` block runs when an error would escape the associated scope. Can appear after a named block (external) or inside a block (nameless scope guard):
+A `fail` block runs when an error would otherwise escape its associated scope. It can follow a named block (external) or sit inside a block as a scope guard (nameless):
 
 ```zith
 // External fail
@@ -975,7 +984,7 @@ loadConfigure {
     throw Error{ context: "load failed", cause: err };
 }
 
-// Nameless fail -- guards current scope
+// Nameless fail -- guards the current scope
 {
     fail (err) { log("scope error:", err); }
     risky()!
@@ -983,11 +992,15 @@ loadConfigure {
 }
 ```
 
-Options inside a `fail` block:
+> **Name linking:** an external `fail` block's name must match the block it guards. When there is only one failable block in scope, the name can be omitted. A nameless `fail` guards the current scope directly — the compiler passes the error the same way.
+
+Inside a `fail` block, you have four options:
+
 - `continue(value)` — resume after the block with a replacement value.
 - `return value;` — exit the enclosing function.
-- `throw value;` — propagate a new error (requires `Error` capability).
-- Fallthrough — original error propagates unchanged.
+- `throw value;` — propagate a new error (requires the `Error` capability).
+- Fall through — the original error propagates unchanged.
+- To extract the Integral or Error respectively: `@ok err`, `@err err`
 
 ### 8.6 `throw`
 
@@ -1004,7 +1017,7 @@ fn divide(a: i32, b: i32): i32! {
 
 ### 9.1 Syntax Rules
 
-Parentheses `()` are mandatory on all control structure conditions except function calls. Logical operators use English keywords; bitwise use standard symbols followed by `.`.
+Parentheses `()` are mandatory on every control structure's condition except function calls. Logical operators use English keywords; bitwise operators use standard symbols followed by `.`:
 
 ```zith
 if (x > 0 and y < 10) { ... }
@@ -1018,27 +1031,27 @@ let mask = a &. b |. c ^. d;
 for { ... }                                     // infinite
 for (i in 0..=9) { @println(i); }               // inclusive range
 for (i in 0..9)  { @println(i); }               // exclusive range
-for (i = 0), (i < 10), (i += 1) { ... }       // init / cond / step
+for (i = 0), (i < 10), (i += 1) { ... }         // init / cond / step
 for (v in range(0, 100)) { @println(v); }       // over a generator
 
-// Destructure group with fallback
+// Destructured group with fallback
 let r = for ([acc, i]: i32), (i in 0..n) { acc *= i + 1 } or 0;
 ```
 
-> If the loop may not run, the return is deduced as optional — unless `or` collapses it to non‑optional.
+> If the loop body may never run, its return value is deduced as optional — unless `or` collapses it to a non-optional value.
 
-> The init/cond/step form uses comma-separated parenthesised expressions: `for (i = 0), (i < 10), (i += 1)`. An alternative flat form is also accepted: `for (i = 0, i < 10, i += 1)`.
+> The init/cond/step form accepts comma-separated, parenthesized expressions — `for (i = 0), (i < 10), (i += 1)` — or the flat alternative, `for (i = 0, i < 10, i += 1)`.
 
 ### 9.3 Chain Flow (`->`)
 
-The `->` operator pipes output left‑to‑right. Previous value is `..`. Tags capture values for later. `!` and `?` propagate out of the chain normally. Precedence: left‑to‑right, lower than function calls.
+The `->` operator pipes output left to right. The previous value is available as `..`, and tags capture values for later use. `!` and `?` propagate out of the chain normally. Precedence is left-to-right and lower than function calls.
 
 ```zith
 getData() -> process(..) -> save(..);
 
 getData()
     -> raw:    parse(..)
-    -> parsed: validate(..)!       // ! propagates out
+    -> parsed: validate(..)!       // ! propagates out of the chain
     -> connectDb()
     -> save(parsed);
 
@@ -1047,62 +1060,70 @@ readFile("data.bin")
     -> { let h = parse_header(..); validate(h)! }
     -> process_body(..);
 
-// Comma sub‑chain -- f1, f2 receive foo's value but do NOT advance the chain
+// Comma sub-chain -- f1 and f2 receive foo's value but do NOT advance the chain
 foo(), f1(..), f2(..) -> f3(..);
 
-// Parenthesised real sub‑chain
-foo(), (f1(..) -> f2()) -> f3(..);
+// Parenthesized sub-chain -- this one does advance inside the sub-chain
+// But dont effect the main chain
+foo(), ( f1(..) -> f2() ) -> f3(..);
+         ^                      ^
+         |                      |
+         foo                    foo
 ```
 
-> Comma sub‑chains are useful for side‑effects (logging, validation) without disrupting the main data flow.
+> Comma sub-chains are useful for side effects — logging, validation — without disrupting the main data flow.
 
 ### 9.4 `flow` Functions & Markers
+
+A `flow fn` lets you write control flow using **markers** — named blocks that act like labels, and **docks** — jump sites that activate them.
 
 ```zith
 flow fn run(data: Stream): void {
     marker Process(chunk: Chunk, count: i32) {
         transform(chunk);
-        // count preserved from last invocation if not updated
+        // count carries over from the last jump unless you update it
     }
 
     stackful marker Stack() {
-        // stackful behaviour — locals dropped before jump
+        // stackful: locals drop before the jump
     }
 
-    let i = 0;
-    for item in data {
+    for ( i = 0, item in data ) {
         dock { jump Process(item, i); }
         i += 1;
     }
 }
 
-// Global marker
+// Global marker — usable from any flow fn
 marker ContextSwitch(next: TaskId) {
     saveRegisters();
     loadTask(next);
 }
 
-// noreturn: dock return variable never modified; calling dock can never resume
-flow fn scheduler(): noreturn { ... }
+// never: the dock never resumes because its return variable is never set
+flow fn scheduler(): never { ... }
 ```
 
-**Marker rules:**
-- Hoisted to top of flow fn; skipped during normal execution.
-- Cannot access external variables or declare their own locals.
-- Arguments live in a `thread_local` blob. Bits preserved across invocations unless explicitly updated.
-- It can receive any thing from outer scope (dock).
-- Global markers may call regular functions, but NOT `flow`‑controlled functions — unless they return `noreturn`.
+#### Marker Rules
 
-#### Stackful Markers (opt‑in)
+| Rule | Detail |
+|---|---|
+| Hoisting | Markers are lifted to the top of the `flow fn`. Normal execution skips over them. |
+| Scope | Markers cannot see outer variables or declare their own locals. |
+| Arguments | Stored in a `thread_local` blob. Values persist between jumps unless you update them. |
+| Input from dock | Markers receive values via `jump` from any `dock` in the same `flow fn`. |
+| Global markers | May call regular functions, but not `flow` functions — unless the target is `never`. |
 
-By default, markers are **stackless**. You can opt into stackful markers with the `stackful` modifier. When a `jump` is executed from inside a stackful marker, all local owned nodes are dropped (cleaned up) before the jump. Only owned (move/copy) or `view`/`lend` values may cross a `jump` — `lend` of a local is forbidden as it would not survive the cleanup.
+#### Stackful vs Stackless
+
+Markers are **stackless** by default — can't create local variables. Opt into **stackful** with the `stackful` modifier: before the jump, all local variables are cleaned. Only owned (move/copy), `view`, or `lend` values may cross the jump if they are `outside`(came from dock) while local are forbidden — it would dangle after cleanup.
 
 ```zith
 flow fn run(data: Stream): void {
     stackful marker Process(chunk: Chunk) {
-        let buffer = allocate(chunk.size);  // owned -- dropped before jump
-        transform(buffer);
-        // jump here drops buffer, only chunk crosses
+        let buffer = allocate(chunk.size);  // owned — dropped before jump
+        jump transform(buffer);
+        // only chunk crosses the jump
     }
 }
 ```
@@ -1120,31 +1141,31 @@ let handle = spawn worker_fn(data);
 // Explicit thread type capability
 let handle = spawn GreenThread fn worker_fn(data);
 
-// Fire‑and‑forget
+// Fire-and-forget
 let _ = spawn background_task();
 
-// #wontRemain -- promise the thread dies before scope ends
-#wontRemain let _ = spawn quick_task(shared_data);
+// #wont_remain -- promise the thread dies before the scope ends
+#wont_remain let _ = spawn quickTask(sharedData);
 ```
 
-### 10.2 Compile‑time Safety Enforcement
+### 10.2 Compile-Time Safety Enforcement
 
 If a thread accesses shared data, the compiler requires **one of**:
-- `await handle` before the shared data goes out of scope.
-- `#wontRemain` attribute on the spawn.
 
-Missing both is a **compile error**. Violating the `#wontRemain` promise is not caught — the shared data may become a dangling reference.
-> One alternative is use `global: share T` or use `Rc`.
+- `await handle` before the shared data goes out of scope, or
+- the `#wont_remain` attribute on the spawn.
+
+Missing both is a **compile error**. Violating the `#wont_remain` promise is not caught by the compiler — the shared data may become a dangling reference. An alternative to both is using `global: share T` or `Rc`.
 
 | Keyword / Method | Semantics |
 |---|---|
 | `await handle` | Waits for the thread to finish. |
-| `await globalVar` | Blocks until the global variable has been initialised. |
+| `await globalVar` | Blocks until the global variable has been initialized. |
 | `handle.send(msg)` | Sends a message to the running thread. |
-| `#wontRemain` | Attribute on spawn. Promise: thread dies before enclosing scope ends. |
+| `#wont_remain` | Attribute on `spawn`. Promises the thread dies before the enclosing scope ends. |
 
 ```zith
-let handle = spawn worker(shared_data);
+let handle = spawn worker(sharedData);
 await handle;
 
 global cfg: Config;
@@ -1156,26 +1177,25 @@ await cfg;
 
 ## 11. Comptime
 
-Comptime covers compile‑time computation: reflection, type manipulation, and `const` blocks.
+Comptime covers compile-time computation: reflection, type manipulation, and `const` blocks.
 
 ### 11.1 Comptime Bindings
 
-The `comptime` keyword makes a binding mutable during compilation and frozen at runtime:
 
 ```zith
-comptime counter = 0;
+const counter: mut = 0;
 counter += 1;   // valid at compile time
-// counter += input().nextI32();          // COMPILE ERROR: frozen at runtime
+// counter += input().nextI32();   // COMPILE ERROR: frozen at runtime
 ```
 
 ### 11.2 `const` Blocks
 
-`const {...}` executes code at compile time. All values inside must be computable at compile time — if any depend on runtime input, the compiler emits an error.
+A `const { ... }` block executes its contents at compile time. Every value inside must be computable at compile time — if anything depends on runtime input, the compiler reports an error.
 
-`const fn` functions are forced to resolve everything at compile time and **must** be called inside a `const` block (or assigned to a `const` binding). They cannot be called at runtime.
+`const fn` functions resolve entirely at compile time and **must** be called inside a `const` block or assigned to a `const` binding; they cannot be called at runtime.
 
 ```zith
-const result = {
+const result {
     let x = 10;
     let y = 20;
     x + y   // evaluated at compile time
@@ -1186,26 +1206,26 @@ const fn processJson(data: []char): JsonValue { ... }
 const parsed = processJson(Data);  // runs at compile time
 ```
 
-> Some macros / functions are overloaded at compile‑time; a compile‑time throw will emit the error message.
+> Some macros and functions are overloaded to run at compile time; a compile-time `throw` surfaces as a compiler error message.
 
 ### 11.3 Reflection
 
 Use `@` intrinsics to inspect types at compile time:
 
 ```zith
-// Iterate fields of a struct
+// Iterate the fields of a struct
 for ( member in @members(MyStruct) ) {
     @println("{}: {}", member.name, member.type);
 }
 
-// Check type kind
+// Check a type's kind
 let isPrim = (T is @primitive);    // bool, i32, f64, etc.
 let isStr  = (T is @struct);       // struct
 let isComp = (T is @component);    // component
 let isUn   = (T is @union);        // union
 let isEn   = (T is @enum);         // enum
 
-// Get field visibility
+// Inspect field visibility
 for ( field in @fields(MyStruct) ) {
     @println("{}: {}", field.name, field.visibility);  // pub, mod, private
 }
@@ -1216,34 +1236,36 @@ let nullable = (T is @nullable);   // ?T
 
 ### 11.4 Type Manipulation
 
-You can create types and modify them before they are “finalised”:
+You can create a type and modify it before it is "finalized":
 
 ```zith
 // Create a new type
 type Custom = @struct;
 
-// Add fields -- allowed while type is not yet returned/instantiated
+// Add fields -- allowed while the type is not yet returned or instantiated
 @appendField Custom, x: i32;
 @appendField Custom, y: f32;
 
 // Add methods
 @appendMethod Custom, fn distance(self): f32 { sqrt(self.x*self.x + self.y*self.y) }
 
-// Type is "done" once returned or instantiated; passing to generic functions also counts
+// The type is "done" once it's returned or instantiated
 let p: Custom = Custom { x: 1, y: 2.0 };
 
-// Primitive aliases are IMMUTABLE -- cannot add fields
-type Celsius = i32;   // Celsius is i32, no fields to modify
+// Primitive aliases are IMMUTABLE -- they have no fields to modify
+type Celsius = i32;
 @appendField Celsius, x: i32;  // COMPILE ERROR: type is 'done' (primitive)
 ```
 
-> A type is “done” when you return it or instantiate it. Until then, you can add/remove fields and methods.
+> A type built via `@struct` is "done" the moment it is returned or instantiated. Until then, fields and methods can be added or removed; passing the type to a generic function also counts as "done."
+>
+> A type created with `type` (e.g. `type Celsius = i32`) is a primitive alias — it has no fields to modify and is always immutable. You can still add methods via `implement`, but you cannot `@appendField`.
 
 ---
 
 ## 12. Assets
 
-Assets are external files (JSON, images, data) that the compiler validates and makes available at compile time.
+Assets are external files — JSON, images, other data — that the compiler validates and makes available at compile time.
 
 ### 12.1 Configuration
 
@@ -1258,7 +1280,7 @@ version = "0.1.0"
 assets = ["assets/", "../someOtherFolder"]
 ```
 
-The compiler checks that all paths exist and are readable at compile time.
+The compiler verifies that every declared path exists and is readable.
 
 ### 12.2 Importing Assets
 
@@ -1267,13 +1289,13 @@ import assets/data.json as Data;
 import assets/sprites/player.png as PlayerSprite;
 ```
 
-> Using `as` is mandatory to avoid conflicts between files with the same name but different extensions.
+> `as` is mandatory here, to avoid conflicts between files that share a name but differ in extension.
 
-Assets are available as compile‑time constants.
+Imported assets are available as compile-time constants.
 
 ### 12.3 Processing Assets at Compile Time
 
-Combine with `const fn` to process assets at compile time:
+Combine assets with `const fn` to process them before the program runs:
 
 ```zith
 import assets/config.json as ConfigData;
@@ -1288,7 +1310,7 @@ const CONFIG = parseConfig(ConfigData);   // runs at compile time
 
 ### 12.4 Runtime Assets
 
-For assets loaded at runtime (not declared in `[assets]`), use standard file I/O:
+Assets not declared in `[assets]` are loaded at runtime with standard file I/O:
 
 ```zith
 let runtimeData = fs.read("runtime/save.json")!;
@@ -1302,49 +1324,48 @@ let runtimeData = fs.read("runtime/save.json")!;
 
 ```
 Safe code (default)
-    └─ raw fn / raw blocks (always unchecked)
-         └─ unsafe keyword (only inside raw contexts, stronger bypass)
+    └─ needs raw blocks to call raw fn
+         └─ needs to be inside a raw block / fn to use unsafe block
 ```
 
 | | `raw` | `unsafe` |
 |---|---|---|
-| **What it is** | Base‑level bypass. Always unchecked. | Stronger bypass. Only valid inside `raw` contexts. |
-| **Scope** | Any expression or statement. | Only inside `raw fn` or `raw` blocks. |
+| **What it is** | A base-level bypass, always unchecked. | A stronger bypass, valid only inside `raw` contexts. |
+| **Scope** | Any expression or statement. | Only inside a `raw fn` or `raw` block. |
 | **Debug mode** | Unchecked. | Unchecked. |
-| **Release mode** | Unchecked. Compiler warns. | Unchecked. Compiler warns. |
-| **Use case** | C interop, performance‑critical paths. | Operations that are undefined if misused (pointer arithmetic, inline assembly). |
+| **Release mode** | Unchecked; compiler warns. | Unchecked; compiler warns. |
+| **Use case** | C interop, performance-critical paths. | Operations undefined if misused — pointer arithmetic, inline assembly. |
 
 ### 13.2 `raw fn`
 
 A `raw fn` bypasses safety checks in both debug and release. The compiler warns if `raw` could be removed in release builds.
 
 ```zith
-raw fn c_compat(x: opaque): opaque {
-    // no safety checks, no bounds checking, no null checks
-    x
+raw fn c_compat(x: raw opaque): raw opaque {
+    // basic validations still exist but allows:
+    // mut *, use raw opaque / union & etc..
 }
 ```
 
-### 13.3 `unsafe` Keyword
-
-`unsafe` provides a stronger bypass than `raw`. It is only valid inside `raw` contexts (`raw fn` or `raw` blocks). Use `unsafe` for operations that are undefined if misused: pointer arithmetic, inline assembly, accessing hardware registers.
+### 13.3 `unsafe`
 
 ```zith
 raw fn dangerous(x: opaque) {
     unsafe {
-        // pointer arithmetic -- undefined if x is invalid
-        let ptr = x as *i32;
-        *ptr = 42;
-
-        // inline assembly
-        asm("mov rax, {x}", x = x);
+        // extension of raw — completely disables compiler checks
+        // allows: bypass mutability, bit_cast, arbitrary address assignment,
+        // inline assembly, etc.
+        asm {
+            mov rax, x         // x is a Zith var — compiler maps it
+            call someFn         // can call Zith fns from asm
+        }
     }
 }
 ```
 
-### 13.4 `Trust` Capability
+### 13.4 `Trust` as a Bridge
 
-`Trust` bridges safe code to raw/unsafe. A trait extending `Trust` may contain `raw fn` methods callable from safe contexts:
+`Trust` bridges safe code to raw and unsafe code. A trait extending `Trust` may contain `raw fn` methods that are callable from safe contexts:
 
 ```zith
 trait Place extends Trust {
@@ -1352,7 +1373,7 @@ trait Place extends Trust {
 }
 
 fn safe_caller(a: impl Place) {
-    let v = a.sample();   // allowed: Trust in scope via Place
+    let v = a.sample();   // allowed: Trust is in scope via Place
 }
 ```
 
@@ -1362,84 +1383,93 @@ fn safe_caller(a: impl Place) {
 |---|---|
 | C interop, headerless libraries | `raw fn` |
 | Pointer arithmetic, inline assembly | `unsafe` inside `raw fn` |
-| Exposing low‑level operations to safe code | `Trust` capability |
+| Exposing low-level operations to safe code | `Trust` capability |
 | Normal application code | Neither — stay safe |
 
 ---
 
-## 14. Data-Oriented Architecture: ECS & Scenes
+## 14. Runtime: Polymorphism & Dynamic Behaviour
 
-### 14.1 Components
+### 14.1 Static vs Dynamic Dispatch
 
-Components are plain‑data `component` structs (see §3.5) that serve as the building blocks for data‑oriented designs. They are copy‑by‑default, C‑compatible, and may contain pure transformation functions.
+By default, Zith uses static dispatch — the compiler knows the exact implementation at compile time. Zero overhead.
+
+Use `dyn` for dynamic dispatch. At the call site you get polymorphism; the compiler and LLVM can often optimize away the indirection, making it zero-cost in practice.
+
+### 14.2 `dyn` as a Type Hint
+
+Like `union` (see §3.6), `dyn` works as a **type hint**. When the compiler can't deduce the concrete type, you write `dyn` to tell it you want dynamic behavior:
 
 ```zith
-component Position {
-    [x, y]: f32
+let x: dyn = 5;
+if (x is i32) x += 32;   // smart-cast inside the branch
+
+// dyn []T — dynamic Trait slice
+let items: dyn []Drawable = shapes;
+// dyn slice
+let dynList: dyn [];
+
+// In many cases LLVM strips the dyn overhead entirely
+// even if not, compare the type is a simple int comparission
+// in terms of performance, is union + ptr indirection, still fast
+```
+
+Inside a smart-cast branch (`is`), the type narrows to the concrete type. Mutations inside the branch affect the inner value; outside, assigning to the variable changes what the `dyn` points to (if `var`).
+
+### 14.3 `dyn` Traits
+
+`dyn Trait` is a `view` by default — a read-only, non-owning reference with a vtable. That means `view dyn` is redundant.
+
+All other memory keywords work with `dyn`:
+
+| Keyword | `dyn` behavior |
+|---|---|
+| `view dyn` | Redundant — `dyn` is already a view |
+| `share dyn` | Multiple names, same dynamic value |
+| `lend dyn` | Exclusive mutable borrow of a dynamic value |
+| `unique dyn` | Single-owner dynamic value |
+
+```zith
+fn draw_all(items: dyn []Drawable) {
+    for (item in items) { item.render(); }
 }
 
-component Velocity {
-    dx: f32,
-    dy: f32
-}
-
-component Health {
-    hp: u32,
-    max_hp: u32,
-
-    fn takeDamage(self: lend, damage: u32) {
-        self.hp = if self.hp > damage { self.hp - damage } else { 0 };
-    }
+//specific verbose, you could use an interface or alias to simplify
+fn modify(shape: lend dyn Drawable) {
+    shape.scale(2.0);
 }
 ```
 
-### 14.2 Scenes (Memory Regions)
+`dyn` does **not** work with `interface` (see §4.3) — only traits. Interfaces are structural and don't carry a vtable.
 
-A Scene is a memory region (arena / zone allocator). Entering a new scene **replaces** the previous one — resetting memory rather than stacking. A Scene may specify a custom `Allocator`.
+When you write a type that could be `dyn` or `opaque`, prefer `dyn` — is short and usually better to understand. Reserve `opaque` for cases where you specifically need `raw opaque` (untagged `void*`, C interop).
 
-```zith
-// Default allocator
-scene GameLevel {
-    let terrain  = @allocate(Terrain, levelData);
-    let entities = @allocate([_]Entity, entityList);
-    runLevel(terrain, entities);
-    // all memory freed here
-}
+### 14.4 `dyn` vs Generics
 
-// Custom bump allocator
-scene GameFrame: BumpAllocator {
-    let scratch = @allocate([4096]u8);
-    renderFrame(scratch);
-}
-```
+| | Generics | `dyn` |
+|---|---|---|
+| Dispatch | Static — one copy per type | Dynamic — single code path |
+| Code size | Larger (N copies) | Smaller (one copy) |
+| Performance | No indirection | Vtable indirection (often elided by LLVM) |
+| When to use | Hot loops, known types at compile time | Heterogeneous collections, plugins |
 
 ```zith
-scene MainMenu {
-    entity MenuButton { /* ... */ }
-    entity TextDisplay { /* ... */ }
-}
+// Generic — compiler monomorphizes
+fn log<T: Printable>(val: T) { val.print(); }
 
-scene GameLevel {
-    entity Player { /* ... */ }
-    entity Enemy { /* ... */ }
-    entity Item { /* ... */ }
-}
-
-// Transition between scenes
-transition(MainMenu, GameLevel);  // old scene dies, new scene allocates
+// dyn — vtable dispatch, LLVM may inline away the overhead
+fn logDyn(val: dyn Printable) { val.print(); }
 ```
 
-> `@` — compiler intrinsics / reflection: `@allocate`, `@struct`, `@nullable`, etc.
-> `#` — variable/field attributes: `#volatile`, `#thread_local`, `#wontRemain`, etc.
+### 14.5 Object Safety
 
-### 14.3 ECS Patterns
+A trait is object-safe if all its methods meet these rules:
 
-Use a **scene per logical region**:
+- No `Self` in parameter or return types (except `self`, `other`)
+- No generic type parameters on the method
+- No `Self: Sized` requirements
 
-```zith
-scene MainLevel { /* all main level entities/resources */ }
-scene BossRoom  { /* boss‑specific entities */ }
-```
+If you try to use a non-object-safe trait with `dyn`, the compiler rejects it.
 
 ---
 
@@ -1447,11 +1477,13 @@ scene BossRoom  { /* boss‑specific entities */ }
 
 | Type | Description |
 |---|---|
-| Normal (scoped) | Hygienic. Symbols do not leak into the call site scope. **Requires `@` prefix at call site.** |
-| Raw macro | Inserts code literally at the call site. Not hygienic. **Requires `@` prefix at call site.** |
-| Tag macro | HTML‑like syntax. Tag attributes (e.g. `id=5`) available as `attributes` (only when macro is the first argument). Content between tags forms remaining arguments. **Uses `<>` syntax, no `@` prefix.** |
+| Normal (scoped) | Hygienic — symbols do not leak into the call site's scope. Requires the `@` prefix at the call site. |
+| Raw macro | Inserts code literally at the call site; not hygienic. Also requires the `@` prefix. |
+| Tag macro | HTML-like syntax. Tag attributes (e.g. `id=5`) are available as `attributes` when the macro is the first argument; content between tags forms the remaining arguments. Uses `<>` syntax — no `@` prefix. |
 
-> Best practice: define macros inside a `context` block.
+> Best practice: define macros inside a `context` block (§17) rather than activating them globally.
+
+- They all have special arguments that can manipulate the AST. Both `default` & `raw` macros have 'attributes' (capture / `[]`)
 
 ```zith
 macro log(msg: expr) { @println("[LOG] ", msg); }
@@ -1462,12 +1494,12 @@ raw macro swap(a: identifier, b: identifier) {
 
 <Section title="Overview"> body </Section>
 
-// Macro parameter meta‑types: identifier, expr, condition, body
+// Macro parameter meta-types: identifier, expr, condition, body
 ```
 
-### 15.1 `@` Prefix Rule
+### 15.1 The `@` Prefix Rule
 
-Normal and raw macros require the `@` prefix at the call site. This distinguishes them from function calls:
+The `@` prefix is what distinguishes a macro call from an ordinary function call:
 
 ```zith
 // Macro call -- @ prefix
@@ -1481,7 +1513,7 @@ process(data);
 save(file);
 ```
 
-Tag macros use `<>` syntax and do not need `@`:
+Tag macros are the one exception — they use `<>` syntax and never take the `@` prefix:
 
 ```zith
 <div class="container"> content </div>
@@ -1492,73 +1524,89 @@ Tag macros use `<>` syntax and do not need `@`:
 
 ## 16. Words (Custom Operators)
 
-Words are custom operators using identifiers. Positions: **prefix**, **infix**, **suffix**. Each position has a fixed language‑defined precedence.
+Words let you define custom operators from identifiers. Each word has a fixed position — **prefix**, **infix**, or **suffix** — with language-defined precedence.
 
-- Must be activated with `use` even if already imported.
-- Two words of the same name in the same scope: compile error.
-- Compiler errors on any ambiguity, even potential ambiguity.
-- Best practice: define words inside a `context`.
+- You must activate a word with `use`, even if you already imported its module.
+- Two words with the same name in the same scope: compile error.
+- If the compiler sees any ambiguity (even potential), it errors out.
+- Best practice: define words inside a `context` (§17).
+
+| Position | Example | Reads as |
+|---|---|---|
+| Infix | `a DOT b` | `dot(a, b)` |
+| Prefix | `not x` | `not(x)` |
+| Suffix | `x!` | `assert(x)` |
 
 ```zith
 use math.vec.dot as DOT;
 use math.vec.cross as CROSS;
 
-let d = vec1 DOT vec2;
-let c = vec1 CROSS vec2;
+let d = vec1 DOT vec2;      // dot(vec1, vec2)
+let c = vec1 CROSS vec2;    // cross(vec1, vec2)
 ```
+
+> Words let you pass keywords, words, and macros as arguments.
+
+- **Macros:** Better for heavy logic, still require `()` syntax, can't return values.
+- **Words:** Work as keywords, let you return values, and can delegate to macros. Better for lightweight tasks.
 
 ---
 
 ## 17. Contexts
 
-A context bundles macros, constants, words, and other declarations. Applied to a block or activated globally (one active per category at a time).
+A context bundles macros, constants, words, and other declarations into a reusable package. You can apply it to a single block or activate it globally — only one context per category may be active at a time.
 
 ```zith
+// Scoped: macros and words active only inside this block
 use SQL QueryBlock {
     SELECT * FROM users WHERE id = :id
 }
 
-use SQL;   // global activation -- replaces previous context
+// Global: replaces any previous context of the same kind
+use SQL;
 ```
 
-All named blocks in Zith may receive a context.
+You can attach a context to any named block in Zith.
+
+### Best Practice
+
+Define your macros and words inside context blocks rather than leaving them globally active. Think of it as a lightweight namespace for DSLs — keeps the rest of your code clean.
 
 ---
 
 ## 18. C Interop
 
-Zith has three modes of C interop, designed to make using C libraries as frictionless as possible.
+Zith offers three modes of C interop, designed to make using existing C libraries as frictionless as possible.
 
 ### 18.1 Automatic Binding via `.h`
 
-Including a C header automatically generates bindings. All functions become `raw fn` by default. Pointer types are inferred:
+Including a C header automatically generates bindings. Every function becomes a `raw fn` by default, and pointer types are inferred:
 
 ```zith
 import "openssl/ssl.h";
 
-// All C functions now available as raw fn
+// All C functions are now available as raw fn
 SSL_CTX_new(method);
 ```
 
 | C type | Inferred Zith type |
 |---|---|
-| `T*` | `share T` (non‑owning by default) |
+| `T*` | `share T` (non-owning by default) |
 | `const T*` | `T*` |
-| `T**` | `share T*` (assumes ownership) |
+| `T**` | `share T*` |
 | `void*` | `raw opaque` |
 | `int`, `float`, etc. | direct primitive equivalents |
 
 ### 18.2 Manual Binding with Semantic Annotation
 
-Override or supplement auto‑generated bindings to add Zith semantics:
+Override or supplement auto-generated bindings to attach Zith-specific semantics:
 
 ```zith
-// Raw bind (default)
-fn bindToC = extern 'C' malloc(size: u64): opaque;
-
-// With semantic annotation -- compiler enforces qualifier on Zith side
+// With semantic annotation -- the compiler now enforces this qualifier on the Zith side
+// This also introduce proper namespace to C fns
 fn bindToC = extern 'C' malloc(size: u64): unique opaque;
-//                                          ^ compiler treats return as unique owned
+// While is like a C function -- no overload, no namespace, no visibility modifier
+extern 'C' malloc(size: u64): unique opaque;
 ```
 
 ### 18.3 External (No Header)
@@ -1566,7 +1614,7 @@ fn bindToC = extern 'C' malloc(size: u64): unique opaque;
 For assembly routines, headerless libraries, or code deliberately outside the project:
 
 ```zith
-// Linker resolves; compiler has no information about the function
+// The linker resolves this; the compiler has no information about the function
 fn bindTo = extern someAsmRoutine(x: u64): u64;
 ```
 
@@ -1576,14 +1624,14 @@ fn bindTo = extern someAsmRoutine(x: u64): u64;
 extern 'C' fn my_function(x: i32): i32 {
     x * 2
 }
-// Generates a C‑compatible symbol; callable from C as a regular function
+// Generates a C-compatible symbol, callable from C as an ordinary function
 ```
 
 ---
 
 ## 19. Project Configuration
 
-### 19.1 `ZithProject` (per‑project)
+### 19.1 `ZithProject.toml` (per-project)
 
 ```toml
 [project]
@@ -1591,12 +1639,12 @@ name    = "my_app"
 version = "0.1.0"
 
 [build]
-runtime = true          # default: true; set false for OS/embedded
+runtime = true            # default: true; set false for OS/embedded targets
 asm     = "x86_64_intel"  # required if using inline assembly
-                          # error if diverges from machine or other project files
+                          # errors if it diverges from the host machine or other project files
 
 [assets]
-paths = ["assets/", ]  # compile‑time validated asset paths
+paths = ["assets/"]       # compile-time-validated asset paths
 
 [dependencies]
 std = "bundled"
@@ -1605,61 +1653,76 @@ std = "bundled"
 ### 19.2 `ZithFlags` (compiler / global)
 
 ```
---runtime=false     # disable runtime globally: removes most allocators,
-                    # disables `must`, disables dynamic linked libs and
-                    # anything that depends on them, forces all available
+--runtime=false     # disable the runtime globally: removes most allocators,
+                    # disables `must`, disables dynamically linked libraries and
+                    # anything that depends on them, and forces all available
                     # std to be statically linked
---asm=arm64         # set assembly dialect globally
---release           # release mode (raw warns, must -> UB)
+--asm=arm64         # set the assembly dialect globally
+--release           # release mode 
 --debug             # debug mode (default)
 ```
 
-> `runtime = false` disables heap, standard stack assumptions, and signal handlers. All standard library features that require a runtime become unavailable at compile time.
+> `runtime = false` disables the heap, standard stack assumptions, and signal handlers. Any standard library feature that requires a runtime becomes unavailable at compile time.
 
 ---
 
 ## 20. Standard Library
 
-### 20.1 Three‑Part Structure
+### 20.1 Three-Part Structure
 
-**`std`** — Stable, essential APIs (guaranteed backward compatibility)
+| Namespace | Stability | Use when |
+|---|---|---|
+| `std` | Stable, backward-compatible | You need a guaranteed API |
+| `soon` | Experimental, may change | You're prototyping and don't mind breakage |
+| `c` | Direct C FFI bindings | You need to call C APIs |
 
 ```zith
 import std;
+import soon;   // use with caution — API may shift
+import c;       // raw C bindings
 ```
 
-**`utils`** — Experimental, unstable features (may change)
+### 20.2 Core Modules
+
+#### `std/io/console`
+```zith
+fn println(msg: []char): void;
+fn print(msg: []char): void;
+fn eprint(msg: []char): void;
+```
 
 ```zith
-import utils;  // use with caution
+@println("hello");
 ```
 
-**`c`** — C ecosystem bindings (FFI)
+#### `std/collections/DynArray`
 
 ```zith
-import c;      // direct C library access
+struct DynArray<T> {
+    fn push(self: lend, val: T);
+    fn pop(self): ?T;
+    fn len(self): u64;
+    fn get(self, index: u64): ?T;
+}
 ```
 
-### 20.2 Common Modules
-
+#### `std/fs`
 ```zith
-std/io/console{println, print, eprint}
-std/collections{DynArray, HashMap, Set}
-std/memory/malloc
-std/fs/{File, open, read, write}
-std/json
+struct File { ... }
+
+fn open(path: string): File!;
+fn read(self: view File): []u8!;
+fn write(self: lend File, data: []u8): void!;
 ```
 
-### 20.3 Traits
+### 20.3 Common Traits
 
-```zith
-trait Copy { }
-trait Shared { }
-trait Lent { }
-trait ToString { }
-trait Drawable { }
-```
-> More will be added later.
+| Trait | What it enables |
+|---|---|
+| `Copy` | Bitwise copy — primitives and components get this by default |
+| `Clone` | `fn clone(self): Self!` |
+| `Lent` | Can appear as a `lend` parameter |
+| `Shared` | Safe to share across threads |
 
 ---
 
@@ -1667,34 +1730,57 @@ trait Drawable { }
 
 ### 21.1 Ownership Patterns
 
-- **Default to `unique`:** `let resource: unique = Resource.new();`
-- **Use `share` for intentional multiple owners:** implement `Share` and clone.
+- **Resources shall be `unique`:** `let resource: unique = Resource.new();`
+- **Use `share` for intentional multiple owners:** implement `Share` and `Clone` explicitly.
 - **Use `view` for reading:** `fn process(config: view Config)`
 - **Use `lend` for temporary mutation:** `fn update(state: lend GameState)`
-- **Use `belong` for part‑of relationships** (back‑pointers).
+- **Use `belong` for part-of relationships,** such as back-pointers.
 
 ### 21.2 Optional & Failable Patterns
 
 - **Prefer `?...or` for optionals:** `let name = ?user.name or "guest";`
-- **Prefer `!...or` for fallaibles:** `let config = !loadPrimary() or loadBackup() or defaultConfig();`
-- **Avoid `must` except for initialization:** `const API_KEY = must !env("API_KEY");`
+- **Prefer `!...or` for failables:** `let config = !loadPrimary() or loadBackup() or defaultConfig();`
+- **Reserve `must` for initialization:** `const API_KEY = must env("API_KEY");`
 
 ### 21.3 Context Patterns
 
-- **Group related DSL features:** define macros and words inside a `context` block.
-- **Activate one global context per domain** to avoid pollution.
+- Group related DSL features by defining macros and words inside a single `context` block.
+- Activate at most one global context per domain to avoid pollution.
 
 ### 21.4 Error Handling Patterns
 
-- **Add context to errors** with `fail` blocks and custom `throw`.
-- **Use error chains:** `let data = !step1() or step2() or step3() or AllFailed;`
+- Add context to errors using `fail` blocks and custom `throw` statements.
+- Chain fallbacks explicitly: `let data = !step1() or step2() or step3() or AllFailed;`
 
 ### 21.5 Macro Patterns
 
-- **Prefer scoped macros inside contexts** rather than global activation.
-- Use the `@` prefix for macros, bare names for functions to keep code clear.
+- Prefer macros scoped inside contexts over global activation.
+- Prefer to apply context per block for same reason
 
-### 21.6 Naming Conventions
+### 21.6 Rule of Three
+
+If a function needs more than three specialized tools (markers, words, contexts, macros, comptime), something went wrong. Split the function or reconsider your abstraction.
+
+```
+// Good — two tools: marker + word
+flow fn process() {
+    dock init { ... }
+    step1 -> step2
+}
+
+// Warning sign — four tools in one function
+flow fn process() {
+    dock init { ... }
+    use Math;              // context
+    use assert AS CHECK;   // word
+    step1 -> step2
+    // Prefer: move the context/word usage to a wrapper function
+}
+```
+
+The Rule of Three keeps code readable. Zith gives you many tools — you don't have to use them all at once.
+
+### 21.7 Naming Conventions
 
 | Construct | Convention | Examples |
 |---|---|---|
@@ -1704,82 +1790,87 @@ trait Drawable { }
 | Traits & interfaces | PascalCase | `Printable`, `iPositioned` |
 | Files | kebab-case | `game-loop.zith`, `asset-manager.zith` |
 | Constants & comptime | UPPER_SNAKE_CASE | `MAX_SIZE`, `PI`, `DEFAULT_TIMEOUT` |
-| Enums | PascalCase for type, PascalCase or UPPER for variants | `enum Direction { North, South }` |
+| Enums | PascalCase for the type; PascalCase for variants | `enum Direction { North, South }` |
 
 ---
 
 ## 22. Appendix — Keyword & Operator Reference
 
+### 22.1 Keywords & Operators
+
 | Keyword | Category | Summary |
 |---|---|---|
-| `import` / `from` / `export` | Module | Import / inject into scope / re‑export. |
+| `import` / `from` / `export` | Module | Import / inject into scope / re-export. |
 | `alias` | Module | Name alias for a type, namespace, or symbol. |
 | `use` | Module | Bring a word, context, or operator into scope. |
-| `type` | Types | Distinct type copy or compile‑time constraint (with `or`). |
+| `type` | Types | Distinct type copy, or a compile-time constraint (with `or`). |
 | `as` | Types | Cast / coercion. Also used in `implement T as Trait`. |
-| `is` | Types | Type‑check / narrowing. Boolean. Supports `@struct`, `@nullable`, etc. |
-| `enum` | Types | Closed compile‑time constants. C‑style, struct‑backed, or ADT‑style. |
-| `union` | Types | Runtime tagged union. Variants separated by commas. |
+| `is` | Types | Type check / narrowing. Boolean. Supports `@struct`, `@nullable`, etc. |
+| `enum` | Types | Closed compile-time constants — C-style, struct-backed, or ADT-style. |
+| `union` | Types | Runtime tagged union; variants separated by commas. |
 | `struct` | Types | Record type. Fields may be grouped with `[]`. |
-| `component` | Types | POD / Copy‑by‑default struct. No traits. C‑compatible. |
+| `component` | Types | POD / copy-by-default struct. No traits. C-compatible. |
 | `implement` | Types | `implement T {}` or `implement T as Trait {}`. |
-| `when` | Types | Pattern matching. Ranges, type dispatch, branch tags, `_(N)` ignore. |
-| `[]T` / `[N]T` / `[_]T` | Types | Slice / fixed array / deduced‑size array. |
+| `when` | Types | Pattern matching — ranges, type dispatch, branch tags, `..` to ignore fields. |
+| `[]T` / `[N]T` / `[_]T` | Types | Slice / fixed array / deduced-size array. |
 | `\| \|` | Types | Pack — named tuple / variadic / closure capture group. |
-| `pub` / `mod` / `mod(..)` / `mod(N)` | Visibility | Public / module‑local with optional depth. |
-| `let` / `var` / `global` / `const` / `comptime` | Bindings | Immutable / mutable / static / compile‑time / compile‑time mutable. |
-| `default` / `lend` / `view` / `unique` / `share` / `belong` | Memory | NRA memory qualifiers. See §7. |
-| `fn` / `const fn` / `async fn` / `async<Generator> fn` / `flow fn` / `raw fn` | Functions | Function kinds. Orthogonal; cannot be mixed. |
-| `yield` | Functions | Suspend an async fn; optionally produce a value. |
+| `pub` / `mod` / `mod(..)` / `mod(N)` | Visibility | Public / module-local, with optional depth. |
+| `let` / `var` / `global` / `const` | Bindings | Immutable / mutable / static storage / compile-time constant. |
+| `default` / `lend` / `view` / `unique` / `share` / `belong` | Memory | NRA memory qualifiers — `default` is implicit when no keyword is written (§7). |
+| `fn` / `const fn` / `async fn` / `flow fn` / `raw fn` | Functions | Function kinds. Orthogonal; cannot be combined. |
+| `yield` | Functions | Suspend an async fn, optionally producing a value. |
 | `trait` / `interface` / `capability` / `extends` / `requires` / `dyn` | OOP | Nominal traits, structural interfaces, capabilities, extension, constraints, dynamic dispatch. |
-| `Copy` / `Functor` / `Arithmetic` / `Error` | Capabilities | Operator and behaviour capabilities. |
-| `Null` / `Fail` | Capabilities | Negative — activate only in proven‑invalid states. |
+| `Copy` / `Functor` / `Arithmetic` / `Error` | Capabilities | Operator and behavior capabilities. |
+| `Null` / `Fail` | Capabilities | Negative — activate only in proven-invalid states. |
 | `Allocator` / `Generator` / `Share` / `Lent` / `Trust` / `Unique` | Capabilities | Memory, async, threading, and safety capabilities. |
-| `marker` / `dock` / `jump` | Flow | Hoisted blocks, jump sites, invocations for `flow fn`. |
-| `stackful` | Flow | Opt‑in modifier for stackful markers (default is stackless). |
-| `->` / `..` | Chain | Chain flow / placeholder for previous value. Left‑to‑right. |
-| `,` (in chain) | Chain | Sub‑chain: applies but does not advance the main chain value. |
-| `spawn` / `await` / `handle.send` | Threads | Spawn thread, wait, send message. |
-| `#wontRemain` | Threads | Promise: thread dies before enclosing scope ends. |
+| `marker` / `dock` / `jump` | Flow | Hoisted blocks, jump sites, and invocations for `flow fn`. |
+| `stackful` | Flow | Opt-in modifier for stackful markers (stackless is the default). |
+| `->` / `..` | Chain | Chain flow / placeholder for the previous value. Left-to-right. |
+| `,` (in a chain) | Chain | Sub-chain — applies but does not advance the main chain value. |
+| `spawn` / `await` / `handle.send` | Threads | Spawn a thread, wait on it, send it a message. |
+| `#wont_remain` | Threads | Promise that the thread dies before the enclosing scope ends. |
 | `?T` / `T!` | Errors | Optional / Result types. May be stacked. |
 | `?` / `!` (postfix) | Errors | Propagate Option / Result. No semicolon. Propagate out of chains. |
-| `or` | Errors / Loops / Types | Fallback / collapse optional loop return / type constraint separator. |
-| `must` | Errors | Panic in debug; UB in release if invalid. |
-| `raw` | Errors / Raw | Always unchecked (debug + release). Compiler warns in release. |
-| `unsafe` | Raw | Stronger bypass than raw. Only valid inside raw contexts. |
-| `throw` / `fail` / `continue(v)` / `with` / `with!` | Errors | Explicit throw, scoped recovery, resume, bundled fallible ops. |
-| `::` | Operators | Scope resolution — access shadowed outer name. |
+| `or` | Errors / Loops / Types | Fallback / collapse an optional loop return / type constraint separator. |
+| `must` | Errors | Panic in debug; guided removal in release. |
+| `raw` | Errors / Raw | Always unchecked, in both debug and release. Compiler warns in release. |
+| `unsafe` | Raw | Stronger than `raw`; valid only inside raw contexts. |
+| `throw` / `fail` / `continue(v)` / `with` / `eager with` | Errors | Explicit throw, scoped recovery, resume, bundled fallible operations. |
+| `::` | Operators | Scope resolution — access a shadowed outer name. |
 | `and` / `or` / `not` / `xor` | Operators | Logical (English keywords). |
-| `&` / `\|` / `^` / `~` / `<<` / `>>` | Operators | Bitwise (standard symbols). |
-| `@` / `#` | Annotations | `@` intrinsics/reflection + macro prefix. `#` variable/field attributes. |
-| `extern 'C'` | Interop | C binding — auto via `.h`, manual, or external. |
+| `&.` / `\|.` / `^.` / `~` / `<<` / `>>` | Operators | Bitwise. |
+| `@` / `#` | Annotations | `@` for intrinsics, reflection, and the macro prefix. `#` for variable/field attributes. |
+| `extern 'C'` | Interop | C binding — automatic via `.h`, manual, or external. |
 | `runtime` / `asm` | Config | `ZithProject` / `ZithFlags` build settings. |
 | `assets` | Config | `ZithProject.toml` asset path declarations. |
 
-## Compiler Intrinsics & Attributes
+### 22.2 Compiler Intrinsics
 
 | Intrinsic | Summary |
 |---|---|
-| `@fields(T)` | Iterate fields/members of a type |
-| `@sizeOf(T)` | Size of type in bytes |
-| `@hasTrait(T, Trait)` | Check if type implements a trait |
-| `@struct` / `@component` / `@union` / `@enum` | Type kind checks (used with `is`) |
-| `@nullable` | Check if type is nullable (`?T`) |
-| `@primitive` | Check if type is a primitive |
-| `@allocate(T, data)` | Scene‑scoped allocation |
-| `@pack` | Extract/inject closure pack |
-| `@toStruct(entity)` | Convert pack to plain struct |
-| `@toPack(struct, scene)` | Convert struct back to pack |
-| `@appendField Type, name: T` | Add field to a type being constructed |
-| `@appendMethod Type, fn ...` | Add method to a type being constructed |
-| `@file()` / `@line()` / `@fnName()` | Location information |
-| `@location()` | Rich panic message source |
+| `@fields(T)` | Iterate the fields/members of a type. |
+| `@sizeOf(T)` | Size of a type, in bytes. |
+| `@hasTrait(T, Trait)` | Check whether a type implements a trait. |
+| `@struct` / `@component` / `@union` / `@enum` | Type-kind checks, used with `is`. |
+| `@nullable` | Check whether a type is nullable (`?T`). |
+| `@primitive` | Check whether a type is a primitive. |
+| `@allocate(T, data)` | Allocate within the current memory region. |
+| `@pack` | Extract or inject a closure's capture pack. |
+| `@toStruct(pack)` | Convert a pack to a plain struct. |
+| `@toPack(struct, region)` | Convert a struct back to a pack. |
+| `@appendField Type, name: T` | Add a field to a type being constructed. |
+| `@appendMethod Type, fn ...` | Add a method to a type being constructed. |
+| `@file()` / `@line()` / `@fnName()` | Location information. |
+| `@location()` | Rich panic message source. |
+| `@ok`/`@err`  | Retrieve the T | E from `catch` & `fail`     |
+
+### 22.3 Attributes
 
 | Attribute | Summary |
 |---|---|
-| `#volatile` | Variable is volatile (compiler must not optimise away) |
-| `#locaL_worker` | Variable is thread‑local storage |
-| `#wontRemain` | Promise: thread dies before enclosing scope ends |
+| `#volatile` | The variable is volatile; the compiler must not optimize it away. |
+| `#thread_local` | The variable uses thread-local storage. |
+| `#wont_remain` | A promise that the thread dies before the enclosing scope ends. |
 
 ---
 

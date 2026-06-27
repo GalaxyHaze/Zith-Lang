@@ -18,7 +18,7 @@
 
 struct zithc_session {
     zith::cli::Options opts;
-    zith::cli::CompilationSession session;
+    zith::session::CompilationSession session;
     std::string last_error;
     std::string hover_result_;
 
@@ -37,6 +37,10 @@ static_assert(static_cast<int>(zith::diagnostics::Severity::Note) == ZITHC_SEVER
 static_assert(static_cast<int>(zith::cli::Stage::Source) == ZITHC_STAGE_SOURCE,
               "stage enum mismatch");
 static_assert(static_cast<int>(zith::cli::Stage::NraResolved) == ZITHC_STAGE_NRA_RESOLVED,
+              "stage enum mismatch");
+static_assert(static_cast<int>(zith::cli::Stage::CodegenReady) == ZITHC_STAGE_CODEGEN_READY,
+              "stage enum mismatch");
+static_assert(static_cast<int>(zith::cli::Stage::Cached) == ZITHC_STAGE_CACHED,
               "stage enum mismatch");
 
 namespace {
@@ -156,7 +160,7 @@ bool zithc_run(zithc_session *session) {
 bool zithc_run_to(zithc_session *session, int stage) {
     if (!session)
         return false;
-    if (stage < ZITHC_STAGE_SOURCE || stage > ZITHC_STAGE_ZIR_INTERPRETED)
+    if (stage < ZITHC_STAGE_SOURCE || stage > ZITHC_STAGE_CACHED)
         return false;
     auto s = static_cast<zith::cli::Stage>(stage);
     return session->session.runTo(s);
