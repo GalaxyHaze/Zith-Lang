@@ -1,4 +1,4 @@
-#include "cli/compiler-driver.hpp"
+#include "session/compiler-driver.hpp"
 #include "cli/options.hpp"
 #include "cli/project-config.hpp"
 #include "support/platform.hpp"

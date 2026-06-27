@@ -1,5 +1,5 @@
 #include "cli/commands.hpp"
-#include "cli/compilation-session.hpp"
+#include "session/compilation-session.hpp"
 #include "cli/terminal.hpp"
 #include "diagnostics/color.hpp"
 
@@ -20,9 +20,9 @@ int cmd_execute(const Options &opts) {
     }
 
     // TODO: execute = full pipeline + run interpreted binary
-    // For now, run the pipeline to completion (ZirInterpreted)
+    // For now, run the pipeline to completion
     for (const auto &file : opts.input_files) {
-        CompilationSession session(opts, file);
+        session::CompilationSession session(opts, file);
         bool ok = session.run();
         if (session.hasErrors())
             ok = false;

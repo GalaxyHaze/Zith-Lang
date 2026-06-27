@@ -1,7 +1,7 @@
 #include "parser.hpp"
 
 #include "diagnostics/error-codes.hpp"
-#include "import/symbol-table.hpp"
+#include "symbols/symbol-table.hpp"
 #include "lexer/lexer.hpp"
 #include "memory/source-map.hpp"
 #include "parser/operators.hpp"
@@ -14,7 +14,7 @@
 
 namespace zith::parser {
 
-ScanResult scan(Parser &parser, import::SymbolTable &syms) {
+ScanResult scan(Parser &parser, symbols::SymbolTable &syms) {
     using namespace diagnostics::err;
     auto &tok     = *parser.tok;
     auto &bld     = *parser.bld;
@@ -22,7 +22,7 @@ ScanResult scan(Parser &parser, import::SymbolTable &syms) {
     auto &program = parser.program;
 
     ScanResult result{bld.arena()};
-    import::SymbolVisibility current_vis = import::SymbolVisibility::Private;
+    symbols::SymbolVisibility current_vis = symbols::SymbolVisibility::Private;
     int32_t current_mod_depth            = 0;
 
     memory::Span lastDocSpan{};
@@ -53,12 +53,12 @@ ScanResult scan(Parser &parser, import::SymbolTable &syms) {
             tok.advance();
 
             if (kw == "pub") {
-                current_vis = import::SymbolVisibility::Public;
+                current_vis = symbols::SymbolVisibility::Public;
                 continue;
             }
 
             if (kw == "mod") {
-                current_vis = import::SymbolVisibility::Module;
+                current_vis = symbols::SymbolVisibility::Module;
                 if (tok.peek().punc == '(') {
                     tok.advance();
                     if (tok.peek().punc == '.') {
@@ -97,7 +97,7 @@ ScanResult scan(Parser &parser, import::SymbolTable &syms) {
                 diag.report(diagnostics::Severity::Error, ExpectedIdent, "expected function name",
                             tok.peek().span);
                 tok.advance();
-                current_vis       = import::SymbolVisibility::Private;
+                current_vis       = symbols::SymbolVisibility::Private;
                 current_mod_depth = 0;
                 continue;
             }
@@ -109,7 +109,7 @@ ScanResult scan(Parser &parser, import::SymbolTable &syms) {
             if (tok.peek().punc != '(') {
                 diag.report(diagnostics::Severity::Error, ExpectedExpr,
                             "expected '(' after function name", tok.peek().span);
-                current_vis       = import::SymbolVisibility::Private;
+                current_vis       = symbols::SymbolVisibility::Private;
                 current_mod_depth = 0;
                 continue;
             }
@@ -192,12 +192,12 @@ ScanResult scan(Parser &parser, import::SymbolTable &syms) {
             }
 
             auto fn_sym =
-                syms.declare(name, current_vis, current_mod_depth, import::SymKind::Fn,
-                             ast::kInvalidDecl, name_span, import::kInvalidSym, lastDocSpan);
+                syms.declare(name, current_vis, current_mod_depth, symbols::SymKind::Fn,
+                             ast::kInvalidDecl, name_span, symbols::kInvalidSym, lastDocSpan);
             for (size_t i = 0; i < params.size(); i++) {
                 auto ps =
                     syms.declare(params[i], current_vis, current_mod_depth,
-                                 import::SymKind::Variable, ast::kInvalidDecl, param_spans[i]);
+                                 symbols::SymKind::Variable, ast::kInvalidDecl, param_spans[i]);
                 syms.get(fn_sym).members.push(ps);
             }
             lastDocSpan = {};
@@ -205,11 +205,11 @@ ScanResult scan(Parser &parser, import::SymbolTable &syms) {
             auto decl = bld.fnDecl(name, std::move(params), body_node,
                                    scan_detail::spanFromOffset(name_span.start, name_span.end));
             program.decls.push(decl);
-            if (fn_sym != import::kInvalidSym)
+            if (fn_sym != symbols::kInvalidSym)
                 syms.get(fn_sym).decl_id = decl;
 
             result.fns.push({name, body_span, body_node, param_token_start});
-            current_vis       = import::SymbolVisibility::Private;
+            current_vis       = symbols::SymbolVisibility::Private;
             current_mod_depth = 0;
             continue;
         }
@@ -223,7 +223,7 @@ ScanResult scan(Parser &parser, import::SymbolTable &syms) {
                 diag.report(diagnostics::Severity::Error, ExpectedIdent,
                             "expected name after '" + std::string(kw) + "'", tok.peek().span);
                 tok.advance();
-                current_vis       = import::SymbolVisibility::Private;
+                current_vis       = symbols::SymbolVisibility::Private;
                 current_mod_depth = 0;
                 continue;
             }
@@ -232,15 +232,15 @@ ScanResult scan(Parser &parser, import::SymbolTable &syms) {
             auto name      = tok.lexeme();
             tok.advance();
 
-            import::SymKind sk;
+            symbols::SymKind sk;
             if (kw == "enum")
-                sk = import::SymKind::Enum;
+                sk = symbols::SymKind::Enum;
             else if (kw == "union")
-                sk = import::SymKind::Union;
+                sk = symbols::SymKind::Union;
             else if (kw == "component")
-                sk = import::SymKind::Component;
+                sk = symbols::SymKind::Component;
             else
-                sk = import::SymKind::Struct;
+                sk = symbols::SymKind::Struct;
 
             auto decl             = ast::kInvalidDecl;
             ast::ExprId body_node = ast::kInvalidExpr;
@@ -296,9 +296,9 @@ ScanResult scan(Parser &parser, import::SymbolTable &syms) {
                                 if (!scan_detail::reportIfDuplicate(syms, diag, mname,
                                                                     mname_span)) {
                                     auto ms = syms.declare(mname, current_vis, current_mod_depth,
-                                                           import::SymKind::Fn, ast::kInvalidDecl,
+                                                           symbols::SymKind::Fn, ast::kInvalidDecl,
                                                            mname_span);
-                                    if (decl != ast::kInvalidDecl && ms != import::kInvalidSym)
+                                    if (decl != ast::kInvalidDecl && ms != symbols::kInvalidSym)
                                         syms.get(ms).decl_id = decl;
                                 }
                             }
@@ -330,10 +330,10 @@ ScanResult scan(Parser &parser, import::SymbolTable &syms) {
                                     if (!scan_detail::reportIfDuplicate(syms, diag, fname,
                                                                         fname_span)) {
                                         auto fs =
-                                            syms.declare(fname, import::SymbolVisibility::Private,
-                                                         0, import::SymKind::Variable,
+                                            syms.declare(fname, symbols::SymbolVisibility::Private,
+                                                         0, symbols::SymKind::Variable,
                                                          ast::kInvalidDecl, fname_span);
-                                        if (decl != ast::kInvalidDecl && fs != import::kInvalidSym)
+                                        if (decl != ast::kInvalidDecl && fs != symbols::kInvalidSym)
                                             syms.get(fs).decl_id = decl;
                                     }
                                 } else {
@@ -365,10 +365,10 @@ ScanResult scan(Parser &parser, import::SymbolTable &syms) {
                             auto fname      = tok.lexeme();
                             tok.advance();
                             if (!scan_detail::reportIfDuplicate(syms, diag, fname, fname_span)) {
-                                auto fs = syms.declare(fname, import::SymbolVisibility::Private, 0,
-                                                       import::SymKind::Variable, ast::kInvalidDecl,
+                                auto fs = syms.declare(fname, symbols::SymbolVisibility::Private, 0,
+                                                       symbols::SymKind::Variable, ast::kInvalidDecl,
                                                        fname_span);
-                                if (decl != ast::kInvalidDecl && fs != import::kInvalidSym)
+                                if (decl != ast::kInvalidDecl && fs != symbols::kInvalidSym)
                                     syms.get(fs).decl_id = decl;
                             }
                             // skip type annotation
@@ -405,10 +405,10 @@ ScanResult scan(Parser &parser, import::SymbolTable &syms) {
                             tok.advance();
 
                             if (!scan_detail::reportIfDuplicate(syms, diag, vname, v_span)) {
-                                auto vs = syms.declare(vname, import::SymbolVisibility::Private, 0,
-                                                       import::SymKind::Variable, ast::kInvalidDecl,
+                                auto vs = syms.declare(vname, symbols::SymbolVisibility::Private, 0,
+                                                       symbols::SymKind::Variable, ast::kInvalidDecl,
                                                        v_span);
-                                if (decl != ast::kInvalidDecl && vs != import::kInvalidSym)
+                                if (decl != ast::kInvalidDecl && vs != symbols::kInvalidSym)
                                     syms.get(vs).decl_id = decl;
                             }
 
@@ -446,10 +446,10 @@ ScanResult scan(Parser &parser, import::SymbolTable &syms) {
                             tok.advance();
 
                             if (!scan_detail::reportIfDuplicate(syms, diag, vname, v_span)) {
-                                auto vs = syms.declare(vname, import::SymbolVisibility::Private, 0,
-                                                       import::SymKind::Variable, ast::kInvalidDecl,
+                                auto vs = syms.declare(vname, symbols::SymbolVisibility::Private, 0,
+                                                       symbols::SymKind::Variable, ast::kInvalidDecl,
                                                        v_span);
-                                if (decl != ast::kInvalidDecl && vs != import::kInvalidSym)
+                                if (decl != ast::kInvalidDecl && vs != symbols::kInvalidSym)
                                     syms.get(vs).decl_id = decl;
                             }
 
@@ -485,7 +485,7 @@ ScanResult scan(Parser &parser, import::SymbolTable &syms) {
             program.decls.push(decl);
             if (!scan_detail::reportIfDuplicate(syms, diag, name, name_span))
                 syms.declare(name, current_vis, current_mod_depth, sk, decl, name_span,
-                             import::kInvalidSym, lastDocSpan);
+                             symbols::kInvalidSym, lastDocSpan);
             lastDocSpan = {};
 
             ScanEntry entry{name, body_span, body_node};
@@ -498,7 +498,7 @@ ScanResult scan(Parser &parser, import::SymbolTable &syms) {
             else if (kw == "component")
                 result.components.push(entry);
 
-            current_vis       = import::SymbolVisibility::Private;
+            current_vis       = symbols::SymbolVisibility::Private;
             current_mod_depth = 0;
             continue;
         }
@@ -512,7 +512,7 @@ ScanResult scan(Parser &parser, import::SymbolTable &syms) {
                 diag.report(diagnostics::Severity::Error, ExpectedIdent,
                             "expected name after '" + std::string(kw) + "'", tok.peek().span);
                 tok.advance();
-                current_vis       = import::SymbolVisibility::Private;
+                current_vis       = symbols::SymbolVisibility::Private;
                 current_mod_depth = 0;
                 continue;
             }
@@ -521,8 +521,8 @@ ScanResult scan(Parser &parser, import::SymbolTable &syms) {
             auto name      = tok.lexeme();
             tok.advance();
 
-            import::SymKind sk =
-                (kw == "interface") ? import::SymKind::Interface : import::SymKind::Trait;
+            symbols::SymKind sk =
+                (kw == "interface") ? symbols::SymKind::Interface : symbols::SymKind::Trait;
             auto decl = (kw == "interface")
                             ? bld.interfaceDecl(
                                   name, memory::DynArray<ast::TraitMethod>(bld.arena()), name_span)
@@ -551,9 +551,9 @@ ScanResult scan(Parser &parser, import::SymbolTable &syms) {
                             tok.advance();
                             if (!scan_detail::reportIfDuplicate(syms, diag, mname, m_span)) {
                                 auto ms =
-                                    syms.declare(mname, import::SymbolVisibility::Private, 0,
-                                                 import::SymKind::Fn, ast::kInvalidDecl, m_span);
-                                if (decl != ast::kInvalidDecl && ms != import::kInvalidSym)
+                                    syms.declare(mname, symbols::SymbolVisibility::Private, 0,
+                                                 symbols::SymKind::Fn, ast::kInvalidDecl, m_span);
+                                if (decl != ast::kInvalidDecl && ms != symbols::kInvalidSym)
                                     syms.get(ms).decl_id = decl;
                             }
                         }
@@ -596,11 +596,11 @@ ScanResult scan(Parser &parser, import::SymbolTable &syms) {
             program.decls.push(decl);
             if (!scan_detail::reportIfDuplicate(syms, diag, name, name_span))
                 syms.declare(name, current_vis, current_mod_depth, sk, decl, name_span,
-                             import::kInvalidSym, lastDocSpan);
+                             symbols::kInvalidSym, lastDocSpan);
             lastDocSpan = {};
 
             result.traits.push({name, body_span, body_node});
-            current_vis       = import::SymbolVisibility::Private;
+            current_vis       = symbols::SymbolVisibility::Private;
             current_mod_depth = 0;
             continue;
         }
@@ -624,7 +624,7 @@ ScanResult scan(Parser &parser, import::SymbolTable &syms) {
                 tok.advance();
             }
 
-            current_vis       = import::SymbolVisibility::Private;
+            current_vis       = symbols::SymbolVisibility::Private;
             current_mod_depth = 0;
             lastDocSpan       = {};
             continue;
@@ -727,7 +727,7 @@ ScanResult scan(Parser &parser, import::SymbolTable &syms) {
                     program.decls.push(decl);
                 }
             }
-            current_vis       = import::SymbolVisibility::Private;
+            current_vis       = symbols::SymbolVisibility::Private;
             current_mod_depth = 0;
             lastDocSpan       = {};
             continue;
@@ -738,7 +738,7 @@ ScanResult scan(Parser &parser, import::SymbolTable &syms) {
                     tok.peek().span);
         tok.advance();
         lastDocSpan       = {};
-        current_vis       = import::SymbolVisibility::Private;
+        current_vis       = symbols::SymbolVisibility::Private;
         current_mod_depth = 0;
     }
 

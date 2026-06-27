@@ -1,12 +1,14 @@
 #pragma once
 
-#include "cli/pipeline-plan.hpp"
+#include "session/pipeline-plan.hpp"
 #include "cli/project-config.hpp"
 
 #include <string>
 #include <vector>
 
 namespace zith::cli {
+
+using session::Stage;
 
 struct Options {
     // Input / output
@@ -37,7 +39,7 @@ struct Options {
     std::string emit_target;
 
     // Derived: pipeline target stage
-    Stage target_stage = Stage::ZirInterpreted;
+    Stage target_stage = Stage::Cached;
     bool interpreted   = false;
 
     // Behaviour flags

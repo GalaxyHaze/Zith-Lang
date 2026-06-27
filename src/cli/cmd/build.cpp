@@ -1,5 +1,5 @@
 #include "cli/commands.hpp"
-#include "cli/compilation-session.hpp"
+#include "session/compilation-session.hpp"
 #include "cli/terminal.hpp"
 #include "diagnostics/color.hpp"
 
@@ -12,7 +12,7 @@
 namespace zith::cli::commands {
 
 struct SessionResult {
-    std::unique_ptr<CompilationSession> session;
+    std::unique_ptr<session::CompilationSession> session;
     bool ok;
 };
 
@@ -42,7 +42,7 @@ int cmd_check(const Options &opts) {
 
     if (files.size() == 1) {
         // Single file: sequential, immediate output
-        CompilationSession session(opts, files[0]);
+        session::CompilationSession session(opts, files[0]);
         bool ok = session.runTo(Stage::TypeChecked);
         if (session.hasErrors())
             ok = false;
@@ -53,7 +53,7 @@ int cmd_check(const Options &opts) {
         futures.reserve(files.size());
         for (const auto &file : files) {
             futures.push_back(std::async(std::launch::async, [&opts, file]() -> SessionResult {
-                auto session = std::make_unique<CompilationSession>(opts, file);
+                auto session = std::make_unique<session::CompilationSession>(opts, file);
                 session->setBuffered(true);
                 bool ok = session->runTo(Stage::TypeChecked);
                 return {std::move(session), ok};
@@ -114,9 +114,9 @@ int cmd_compile(const Options &opts) {
 
     if (opts.input_files.size() == 1) {
         const auto &file = opts.input_files[0];
-        CompilationSession session(opts, file);
+        session::CompilationSession session(opts, file);
         session.setBuffered(true);
-        bool ok = session.runTo(Stage::MirLowered);
+        bool ok = session.runTo(session::Stage::CodegenReady);
         session.emitDiagnostics();
         std::fputs(session.flushOutput().c_str(), stderr);
         if (opts.verbose) {
@@ -131,9 +131,9 @@ int cmd_compile(const Options &opts) {
     futures.reserve(opts.input_files.size());
     for (const auto &file : opts.input_files) {
         futures.push_back(std::async(std::launch::async, [&opts, file]() -> SessionResult {
-            auto session = std::make_unique<CompilationSession>(opts, file);
+            auto session = std::make_unique<session::CompilationSession>(opts, file);
             session->setBuffered(true);
-            bool ok = session->runTo(Stage::MirLowered);
+            bool ok = session->runTo(session::Stage::CodegenReady);
             return {std::move(session), ok};
         }));
     }
@@ -161,7 +161,7 @@ int cmd_build(const Options &opts) {
     if (opts.input_files.size() == 1) {
         // Single file: sequential, immediate output
         const auto &file = opts.input_files[0];
-        CompilationSession session(opts, file);
+        session::CompilationSession session(opts, file);
         bool ok = session.run();
         if (session.hasErrors()) {
             ok = false;
@@ -178,7 +178,7 @@ int cmd_build(const Options &opts) {
     futures.reserve(opts.input_files.size());
     for (const auto &file : opts.input_files) {
         futures.push_back(std::async(std::launch::async, [&opts, file]() -> SessionResult {
-            auto session = std::make_unique<CompilationSession>(opts, file);
+            auto session = std::make_unique<session::CompilationSession>(opts, file);
             session->setBuffered(true);
             bool ok = session->run();
             return {std::move(session), ok};

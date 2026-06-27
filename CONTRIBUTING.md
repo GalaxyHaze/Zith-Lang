@@ -1,35 +1,49 @@
-# Contributing
+# Contributing to Zith
 
-## Build
+## Building
 
 ```bash
 cmake -B build
 cmake --build build
 ```
 
-Requires: CMake 3.20+, C++23 compiler (Clang 18+ or GCC 14+).
+Requires C++20, CMake 3.20+, and LLVM (for codegen).
 
-## Code Style
+## Project structure
 
-- Follow LLVM style (4-space indent, 100 columns, attach braces)
-- Use `#pragma once` for headers
-- Use `snake_case` for files, types in `PascalCase`, functions in `camelCase`
-- Namespace format: `zith::layer::module`
-- Prefer arena allocation over `new`/`delete`
-
-## Testing
-
-```bash
-cmake --build build          # builds all test targets
-./build/zithc-lexer-test
-./build/zithc-parser-expr
-./build/zithc-parser-stmt
-./build/zithc-sema-test
-./build/zithc-mir-test
+```
+src/
+  memory/       - Arena allocator, DynArray, FlatMap, utilities
+  ast/          - ID-based AST data model and builder
+  lexer/        - Tokenizer
+  parser/       - Recursive-descent + Pratt parser
+  diagnostics/  - Error reporting, diagnostic engine
+  symbols/      - Symbol table, import resolution, name resolver
+  types/        - Type intern, unification, lowering
+  sema/         - Semantic analysis, type checking, HIR lowering
+  hir/          - High-level IR (typed, lowered from AST)
+  comptime/     - Compile-time evaluation, monomorphization
+  codegen/      - LLVM IR codegen
+  output/       - Binary sectioned format (.irl/.mod)
+  cache/        - Incremental compilation
+  formatter/    - Code formatter
+  cli/          - CLI argument parsing, command dispatch
+  session/      - Per-file compilation session, pipeline orchestration
+  capi/         - C ABI wrapper
+  support/      - Platform compatibility
 ```
 
-## Pull Requests
+## Code style
 
-- Keep commits focused and rebased on `rewrite`
-- Write descriptive commit messages
-- Ensure all tests pass before opening
+- clang-format (see `.clang-format` at root)
+- Namespaces match directory names under `src/`
+- Arena-backed allocation throughout
+- No exceptions, no RTTI
+
+## Pipeline
+
+```
+Source → Lex → Scan → Import → Resolve → Sema → Solve → NRA → HIR → Codegen → Cache
+```
+
+Each stage is a method on `CompilationSession` in `src/session/`.

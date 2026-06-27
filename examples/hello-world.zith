@@ -1,12 +1,5 @@
-fn add(x, y): i32{
-
-}
-
-fn add(): i32{
-
-}
+from std/io/console
 
 fn main(){
-    
-    
+    @println("Hello, world!");
 }

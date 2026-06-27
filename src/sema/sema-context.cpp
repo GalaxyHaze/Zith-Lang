@@ -2,11 +2,11 @@
 
 namespace zith::sema {
 
-SemaContext::SemaContext(import::SymbolTable &syms, types::TypeIntern &types,
+SemaContext::SemaContext(symbols::SymbolTable &syms, types::TypeIntern &types,
                          diagnostics::DiagnosticEngine &diags, ast::AstBuilder &builder)
     : syms_(syms), types_(types), diags_(diags), builder_(builder) {}
 
-import::SymbolTable &SemaContext::syms() noexcept {
+symbols::SymbolTable &SemaContext::syms() noexcept {
     return syms_;
 }
 types::TypeIntern &SemaContext::types() noexcept {

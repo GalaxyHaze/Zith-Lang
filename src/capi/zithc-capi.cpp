@@ -1,5 +1,5 @@
 #include "zithc-capi.h"
-#include "cli/compilation-session.hpp"
+#include "session/compilation-session.hpp"
 #include "cli/options.hpp"
 #include "diagnostics/diagnostic-engine.hpp"
 #include "diagnostics/diagnostic.hpp"
@@ -193,7 +193,7 @@ zithc_diagnostic zithc_diag_get(zithc_session *session, size_t index) {
             auto all = session->session.symbolTable().lookupAll(fn_name, tmp_arena);
             for (auto sym_id : all) {
                 auto &data = session->session.symbolTable().get(sym_id);
-                if (data.kind != zith::import::SymKind::Fn ||
+                if (data.kind != zith::symbols::SymKind::Fn ||
                     data.decl_id == zith::ast::kInvalidDecl)
                     continue;
                 auto &decl = session->session.astBuilder().getDecl(data.decl_id);
@@ -283,7 +283,7 @@ const char *zithc_hover(zithc_session *session, uint32_t offset) {
     std::string result;
     for (auto sym_id : all) {
         auto &data = session->session.symbolTable().get(sym_id);
-        if (data.kind != zith::import::SymKind::Fn || data.decl_id == zith::ast::kInvalidDecl)
+        if (data.kind != zith::symbols::SymKind::Fn || data.decl_id == zith::ast::kInvalidDecl)
             continue;
         auto &decl = session->session.astBuilder().getDecl(data.decl_id);
         auto *fn   = std::get_if<zith::ast::FnDeclNode>(&decl);

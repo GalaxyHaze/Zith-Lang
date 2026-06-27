@@ -1,5 +1,5 @@
 #include "cli/commands.hpp"
-#include "cli/compilation-session.hpp"
+#include "session/compilation-session.hpp"
 #include "cli/files.hpp"
 #include "cli/terminal.hpp"
 #include "diagnostics/color.hpp"
@@ -63,7 +63,7 @@ static bool writeFile(const std::string &path, const std::string &content) {
 }
 
 struct FmtFileResult {
-    std::unique_ptr<CompilationSession> session;
+    std::unique_ptr<session::CompilationSession> session;
     std::string formatted;
     bool ok;
 };
@@ -107,7 +107,7 @@ int cmd_fmt(const Options &opts) {
 
         Options file_opts     = opts;
         file_opts.interpreted = false;
-        CompilationSession session(file_opts, "<stdin>");
+        session::CompilationSession session(file_opts, "<stdin>");
         session.setContent(readStdin());
         session.setBuffered(true);
 
@@ -131,7 +131,7 @@ int cmd_fmt(const Options &opts) {
         futures.push_back(std::async(std::launch::async, [&opts, file]() -> FmtFileResult {
             Options file_opts     = opts;
             file_opts.interpreted = false;
-            auto session          = std::make_unique<CompilationSession>(file_opts, file);
+            auto session          = std::make_unique<session::CompilationSession>(file_opts, file);
             session->setBuffered(true);
             std::string formatted = session->fmtStage();
             bool ok               = !session->hasErrors();

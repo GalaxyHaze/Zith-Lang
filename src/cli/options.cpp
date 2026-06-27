@@ -18,16 +18,16 @@ void Options::deriveTargetStage() {
     else if (emit_hir)
         target_stage = Stage::HirLowered;
     else if (emit_mir || emit_ir || emit_asm)
-        target_stage = Stage::MirLowered;
+        target_stage = Stage::CodegenReady;
     else if (!emit_target.empty()) {
         if (emit_target == "ast")
             target_stage = Stage::Imported;
         else if (emit_target == "hir")
             target_stage = Stage::HirLowered;
         else if (emit_target == "mir" || emit_target == "ir" || emit_target == "asm")
-            target_stage = Stage::MirLowered;
+            target_stage = Stage::CodegenReady;
         else if (emit_target == "obj" || emit_target == "bin")
-            target_stage = Stage::ZirInterpreted;
+            target_stage = Stage::Cached;
     }
 }
 
