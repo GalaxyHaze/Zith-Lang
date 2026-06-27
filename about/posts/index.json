@@ -1,5 +1,10 @@
 [
   {
+    "file": "2026-06-24-introducing-zasm.html",
+    "title": "Introducing zasm — ZIR Assembler",
+    "date": "2026-06-24"
+  },
+  {
     "file": "2026-06-23-extension-and-ide.html",
     "title": "Editor Tooling — VS Code Extension &amp; Zith IDE",
     "date": "2026-06-23"

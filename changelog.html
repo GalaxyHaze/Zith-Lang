@@ -1,10 +1,56 @@
 <!DOCTYPE html>
 <html lang="en">
-<head><meta charset="UTF-8"><title>Changelog - v0.1.3</title></head>
+<head><meta charset="UTF-8"><title>Changelog</title></head>
 <body>
 
 <div class="changelog-entry">
-    <h2>Release v0.2.0 — The LSP Awakening</h2>
+    <h2>v0.4.0 — Introducing zasm</h2>
+    <p class="lastUpdated">24 June 2026</p>
+
+    <hr>
+
+    <section>
+        <h3>What</h3>
+        <p>
+            <strong>zasm</strong> is a standalone assembler for ZIR (Zith Intermediate Representation).
+            It compiles <code>.zas</code> assembly files to ZIR bytecode and runs them through a
+            built-in interpreter. ZIR is the same IR zithc targets, so zasm gives a direct path
+            from assembly to execution.
+        </p>
+    </section>
+
+    <hr>
+
+    <section>
+        <h3>Supported features</h3>
+        <ul>
+            <li>32 registers (zero, sp, fp, ret, a0-a6, t0-t17, db, link)</li>
+            <li>Integer and float arithmetic — add, sub, mul, div, rem, fadd/fsub/fmul/fdiv</li>
+            <li>Memory — ld/st, ldr/str, push/pop, alloca, stm (store multiple)</li>
+            <li>Branch — br, conditional (bz/bnz/bgt/bge/blt/ble)</li>
+            <li>Internal calls (call) with recursion support</li>
+            <li>External C FFI (callext) — call any C function with an args struct</li>
+            <li>Constants — .const for integers, floats, strings, typed data</li>
+            <li>Macros — #define for textual substitution</li>
+            <li>Scoped labels inside { } blocks, forward references</li>
+        </ul>
+    </section>
+
+    <hr>
+
+    <section>
+        <h3>What's next</h3>
+        <p>
+            The syntax needs cleanup — common patterns are too verbose. Better error messages
+            for label/function namespace rules. LLVM IR lowering from ZIR is the big one.
+        </p>
+    </section>
+</div>
+
+<hr style="margin: 48px 0; border-color: #333;">
+
+<div class="changelog-entry">
+    <h2>v0.2.0 — The LSP Awakening</h2>
     <p class="lastUpdated">21 June 2026</p>
 
     <hr>
