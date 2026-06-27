@@ -41,6 +41,8 @@ if(NOT ZITH_IS_WASM)
         GIT_TAG master
     )
     FetchContent_MakeAvailable(mio)
+
+    find_package(LLVM REQUIRED CONFIG)
 endif()
 
 FetchContent_Declare(
@@ -49,6 +51,9 @@ FetchContent_Declare(
     GIT_TAG master
 )
 FetchContent_MakeAvailable(tomlplusplus)
+
+# ── zith-core ── standalone memory utilities (no external deps) ────
+add_subdirectory(src/memory)
 
 file(GLOB_RECURSE ZITH_SOURCES
     src/*.cpp
@@ -65,14 +70,16 @@ add_library(zithcLib STATIC ${ZITH_LIB_SOURCES})
 
 target_include_directories(zithcLib PUBLIC
     src
-    lib/zasm/include
 )
 
 if(ZITH_IS_WASM)
     target_compile_definitions(zithcLib PUBLIC ZITH_IS_WASM=1)
 else()
     target_link_libraries(zithcLib PUBLIC mio)
+    target_link_libraries(zithcLib PUBLIC LLVM)
 endif()
+
+target_link_libraries(zithcLib PUBLIC zith-core)
 
 target_link_libraries(zithcLib PUBLIC tomlplusplus::tomlplusplus)
 
@@ -106,39 +113,35 @@ function(add_zith_test NAME SOURCE)
     add_test(NAME ${NAME} COMMAND ${NAME})
 endfunction()
 
-add_zith_test(zithc-lexer-test     tests/unit/lexer-tokens.cpp)
-add_zith_test(zithc-parser-expr    tests/unit/parser-expr.cpp)
-add_zith_test(zithc-parser-stmt    tests/unit/parser-stmt.cpp)
-add_zith_test(zithc-parser-scan    tests/unit/parser-scan.cpp)
-add_zith_test(zithc-parser-full    tests/unit/parser-full.cpp)
-add_zith_test(zithc-sema-test      tests/unit/sema-basics.cpp)
-add_zith_test(zithc-type-dedup     tests/unit/type-dedup.cpp)
-add_zith_test(zithc-unify-errors   tests/unit/unify-errors.cpp)
-add_zith_test(zithc-sema-hir       tests/unit/sema-hir.cpp)
-add_zith_test(zithc-mir-test       tests/unit/mir-lowering.cpp)
-add_zith_test(zithc-import-test    tests/unit/import-basics.cpp)
-add_zith_test(zithc-import-e2e     tests/unit/import-e2e.cpp)
-add_zith_test(zithc-heuristic-engine tests/unit/heuristic-engine.cpp)
-add_zith_test(zithc-ast-printer      tests/unit/ast-printer.cpp)
-add_zith_test(zithc-resolver-test    tests/unit/resolver-test.cpp)
-add_zith_test(zithc-arena-test       tests/unit/arena-test.cpp)
-add_zith_test(zithc-source-map-test tests/unit/source-map-test.cpp)
-add_zith_test(zithc-platform-test   tests/unit/platform-test.cpp)
-add_zith_test(zithc-error-codes     tests/unit/error-codes-lookup.cpp)
-add_zith_test(zithc-diag-advanced   tests/unit/diagnostic-engine-advanced.cpp)
-add_zith_test(zithc-result          tests/unit/result-test.cpp)
-add_zith_test(zithc-string-interner tests/unit/string-interner-test.cpp)
-add_zith_test(zithc-dyn-array-test tests/unit/dyn-array-test.cpp)
-add_zith_test(zithc-flat-map-test tests/unit/flat-map-test.cpp)
-add_zith_test(zithc-fmt-visitor      tests/unit/fmt-visitor.cpp)
-add_zith_test(zithc-zir-inst       tests/unit/zir/test_zir_inst.cpp)
-add_zith_test(zithc-zir-emitter    tests/unit/zir/test_zir_emitter.cpp)
-add_zith_test(zithc-zir-interp     tests/unit/zir/test_zir_interp.cpp)
+add_zith_test(zithc-lexer-test         tests/unit/lexer-tokens.cpp)
+add_zith_test(zithc-parser-expr        tests/unit/parser-expr.cpp)
+add_zith_test(zithc-parser-stmt        tests/unit/parser-stmt.cpp)
+add_zith_test(zithc-parser-scan        tests/unit/parser-scan.cpp)
+add_zith_test(zithc-parser-full        tests/unit/parser-full.cpp)
+add_zith_test(zithc-sema-test          tests/unit/sema-basics.cpp)
+add_zith_test(zithc-type-dedup         tests/unit/type-dedup.cpp)
+add_zith_test(zithc-unify-errors       tests/unit/unify-errors.cpp)
+add_zith_test(zithc-sema-hir           tests/unit/sema-hir.cpp)
+add_zith_test(zithc-import-test        tests/unit/import-basics.cpp)
+add_zith_test(zithc-import-e2e         tests/unit/import-e2e.cpp)
+add_zith_test(zithc-heuristic-engine   tests/unit/heuristic-engine.cpp)
+add_zith_test(zithc-ast-printer        tests/unit/ast-printer.cpp)
+add_zith_test(zithc-resolver-test      tests/unit/resolver-test.cpp)
+add_zith_test(zithc-arena-test         tests/unit/arena-test.cpp)
+add_zith_test(zithc-source-map-test    tests/unit/source-map-test.cpp)
+add_zith_test(zithc-platform-test      tests/unit/platform-test.cpp)
+add_zith_test(zithc-error-codes        tests/unit/error-codes-lookup.cpp)
+add_zith_test(zithc-diag-advanced      tests/unit/diagnostic-engine-advanced.cpp)
+add_zith_test(zithc-result             tests/unit/result-test.cpp)
+add_zith_test(zithc-string-interner    tests/unit/string-interner-test.cpp)
+add_zith_test(zithc-dyn-array-test     tests/unit/dyn-array-test.cpp)
+add_zith_test(zithc-flat-map-test      tests/unit/flat-map-test.cpp)
+add_zith_test(zithc-fmt-visitor        tests/unit/fmt-visitor.cpp)
+add_zith_test(zithc-codegen-basics     tests/unit/codegen/codegen-basics.cpp)
+add_zith_test(zithc-format-roundtrip   tests/unit/format/format-roundtrip.cpp)
+add_zith_test(zithc-cache-basics       tests/unit/cache/cache-basics.cpp)
 
 endif()
-
-# ── zasm ── assembler CLI for .zas files (submodule) ──────────────
-add_subdirectory(lib/zasm)
 
 if(ZITH_BUILD_CLI)
     install(TARGETS zithc
@@ -162,7 +165,6 @@ find_program(CLANG_FORMAT_EXE NAMES clang-format clang-format-18 clang-format-17
 if(CLANG_FORMAT_EXE)
     file(GLOB_RECURSE ZITH_FORMAT_SOURCES
         "src/*.cpp" "src/*.hpp" "src/*.h" "src/*.c"
-
         "tests/*.cpp" "tests/*.h"
     )
 

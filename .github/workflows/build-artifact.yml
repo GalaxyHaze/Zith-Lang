@@ -141,7 +141,7 @@ jobs:
           sudo apt-get install -y ninja-build clang-18 lld-18 \
             gcc-aarch64-linux-gnu g++-aarch64-linux-gnu \
             libc6-dev-arm64-cross libc6-arm64-cross \
-            binutils-aarch64-linux-gnu libffi-dev
+            binutils-aarch64-linux-gnu
           sudo ln -sf /usr/bin/clang-18 /usr/bin/clang
           sudo ln -sf /usr/bin/clang++-18 /usr/bin/clang++
           sudo ln -sf /usr/bin/ld.lld-18 /usr/bin/ld.lld
@@ -388,7 +388,7 @@ jobs:
           sudo apt-get install -y ninja-build clang-18 lld-18 \
             gcc-aarch64-linux-gnu g++-aarch64-linux-gnu \
             libc6-dev-arm64-cross libc6-arm64-cross \
-            binutils-aarch64-linux-gnu libffi-dev
+            binutils-aarch64-linux-gnu
           sudo ln -sf /usr/bin/clang-18 /usr/bin/clang
           sudo ln -sf /usr/bin/clang++-18 /usr/bin/clang++
           sudo ln -sf /usr/bin/ld.lld-18 /usr/bin/ld.lld
