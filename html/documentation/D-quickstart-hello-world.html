@@ -88,7 +88,7 @@ for (i in 0..10) {
 }
 
 // Conditional for
-for (var i: i32 = 0; i < 10; i += 1) {
+for (var i: i32 = 0, i < 10, i += 1) {
     @println("Count: {i}");
 }</code></pre>
 
@@ -119,7 +119,7 @@ fn main() {
 
 <h3>Exercise 3: Factorial</h3>
 <pre><code class="language-zith">fn factorial(n: u32): u64 {
-    for (|a|: u64 = 1; i in 1..n + 1) {
+    for ([a,i]: u64 = 1; i in 1..=n) {
         a *= i
     }
 }
@@ -168,4 +168,4 @@ fn main() {
   <li><a href="./D-cli.html">CLI Reference</a> — Master the command-line tools</li>
 </ul>
 <hr>
-<p><strong>Need help?</strong> Visit our <a href="./D-faq-overview.html">FAQ</a> or join the discussion on <a href="https://github.com/GalaxyHaze/Zith/discussions">GitHub</a>.</p>
+<p><strong>Need help?</strong> Visit our <a href="./D-faq-overview.html">FAQ</a> or join the discussion on <a href="https://github.com/GalaxyHaze/Zith-discussions/discussions">GitHub</a>.</p>
