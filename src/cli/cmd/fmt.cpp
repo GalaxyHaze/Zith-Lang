@@ -1,11 +1,9 @@
 #include "cli/commands.hpp"
-#include "session/compilation-session.hpp"
-#include "cli/files.hpp"
 #include "cli/terminal.hpp"
-#include "diagnostics/color.hpp"
+#include "session/compilation-session.hpp"
 
-#include <algorithm>
 #include <cstdio>
+#include <filesystem>
 #include <fstream>
 #include <future>
 #include <memory>
@@ -21,10 +19,7 @@
 
 namespace zith::cli::commands {
 
-#define CERR(c) term::err(TERM, diagnostics::ansi::c.data())
-#define RERR term::err_rst(TERM)
-#define COUT(c) term::out(TERM, diagnostics::ansi::c.data())
-#define ROUT term::out_rst(TERM)
+namespace fs = std::filesystem;
 
 static bool isStdinTerminal() {
 #ifdef ZITH_IS_WASM
@@ -34,6 +29,18 @@ static bool isStdinTerminal() {
 #else
     return isatty(fileno(stdin)) != 0;
 #endif
+}
+
+static std::vector<std::string> findZithFiles(const std::string &dir) {
+    std::vector<std::string> files;
+    std::error_code ec;
+    if (!fs::is_directory(dir, ec))
+        return files;
+    for (const auto &entry : fs::recursive_directory_iterator(dir, ec)) {
+        if (entry.is_regular_file() && entry.path().extension() == ".zith")
+            files.push_back(entry.path().string());
+    }
+    return files;
 }
 
 static std::string readStdin() {
@@ -63,28 +70,30 @@ static bool writeFile(const std::string &path, const std::string &content) {
 }
 
 struct FmtFileResult {
-    std::unique_ptr<session::CompilationSession> session;
     std::string formatted;
     bool ok;
 };
 
-int cmd_fmt(const Options &opts) {
+int fmt(const Options &opts) {
     auto TERM = term::init(opts);
+    term::UsagePrinter out{stdout, TERM.coutOn};
+    term::UsagePrinter err{stderr, TERM.cerrOn};
     std::vector<std::string> files;
     bool has_stdin = false;
 
-    if (opts.input_files.empty()) {
+    if (opts.inputFiles.empty()) {
         if (!isStdinTerminal()) {
             has_stdin = true;
         } else {
-            files = cli::findZithFiles(".");
+            files = findZithFiles(".");
             if (files.empty()) {
-                std::fprintf(stderr, "%s[error]%s no .zith files found\n", CERR(red), RERR);
+                err.red("[error]");
+                std::fprintf(stderr, " no .zith files found\n");
                 return 1;
             }
         }
     } else {
-        for (const auto &f : opts.input_files) {
+        for (const auto &f : opts.inputFiles) {
             if (f == "-")
                 has_stdin = true;
             else
@@ -94,20 +103,18 @@ int cmd_fmt(const Options &opts) {
 
     // Stdin mode
     if (has_stdin) {
-        if (opts.fmt_check) {
-            std::fprintf(stderr, "%s[error]%s --check is not supported with stdin\n", CERR(red),
-                         RERR);
+        if (opts.flags.fmtCheck()) {
+            err.red("[error]");
+            std::fprintf(stderr, " --check is not supported with stdin\n");
             return 1;
         }
-        if (opts.fmt_in_place) {
-            std::fprintf(stderr, "%s[error]%s -i/--in-place is not supported with stdin\n",
-                         CERR(red), RERR);
+        if (opts.flags.fmtInPlace()) {
+            err.red("[error]");
+            std::fprintf(stderr, " -i/--in-place is not supported with stdin\n");
             return 1;
         }
 
-        Options file_opts     = opts;
-        file_opts.interpreted = false;
-        session::CompilationSession session(file_opts, "<stdin>");
+        session::CompilationSession session(opts, "<stdin>");
         session.setContent(readStdin());
         session.setBuffered(true);
 
@@ -124,18 +131,15 @@ int cmd_fmt(const Options &opts) {
     int exit_code = 0;
     bool any_diff = false;
 
-    // Parallel formatting
     std::vector<std::future<FmtFileResult>> futures;
     futures.reserve(files.size());
     for (const auto &file : files) {
         futures.push_back(std::async(std::launch::async, [&opts, file]() -> FmtFileResult {
-            Options file_opts     = opts;
-            file_opts.interpreted = false;
-            auto session          = std::make_unique<session::CompilationSession>(file_opts, file);
-            session->setBuffered(true);
-            std::string formatted = session->fmtStage();
-            bool ok               = !session->hasErrors();
-            return {std::move(session), std::move(formatted), ok};
+            session::CompilationSession session(opts, file);
+            session.setBuffered(true);
+            std::string formatted = session.fmtStage();
+            bool ok               = !session.hasErrors();
+            return {std::move(formatted), ok};
         }));
     }
 
@@ -143,30 +147,31 @@ int cmd_fmt(const Options &opts) {
         auto result = futures[i].get();
 
         if (!result.ok) {
-            std::fprintf(stderr, "%s[error]%s failed to format %s\n", CERR(red), RERR,
-                         files[i].c_str());
-            result.session->emitDiagnostics();
+            err.red("[error]");
+            std::fprintf(stderr, " failed to format %s\n", files[i].c_str());
             exit_code = 1;
             continue;
         }
 
-        if (opts.fmt_check) {
+        if (opts.flags.fmtCheck()) {
             std::string original = readFile(files[i]);
             if (result.formatted != original) {
-                std::fprintf(stderr, "%s[check]%s %s would be reformatted\n", CERR(yellow), RERR,
-                             files[i].c_str());
+                err.yellow("[check]");
+                std::fprintf(stderr, " %s would be reformatted\n", files[i].c_str());
                 any_diff  = true;
                 exit_code = 1;
             } else {
-                std::fprintf(stdout, "%s[ok]%s %s\n", COUT(green), ROUT, files[i].c_str());
+                out.green("[ok]");
+                std::printf(" %s\n", files[i].c_str());
             }
-        } else if (opts.fmt_in_place) {
+        } else if (opts.flags.fmtInPlace()) {
             if (!writeFile(files[i], result.formatted)) {
-                std::fprintf(stderr, "%s[error]%s failed to write %s\n", CERR(red), RERR,
-                             files[i].c_str());
+                err.red("[error]");
+                std::fprintf(stderr, " failed to write %s\n", files[i].c_str());
                 exit_code = 1;
-            } else if (opts.verbose) {
-                std::fprintf(stdout, "%s[fmt]%s %s\n", COUT(green), ROUT, files[i].c_str());
+            } else if (opts.flags.verbose()) {
+                out.green("[fmt]");
+                std::printf(" %s\n", files[i].c_str());
             }
         } else {
             if (i > 0)
@@ -175,9 +180,11 @@ int cmd_fmt(const Options &opts) {
         }
     }
 
-    if (any_diff && opts.fmt_check) {
-        std::fprintf(stderr, "%s[check]%s some files need reformatting\n", CERR(yellow), RERR);
-        std::fprintf(stderr, "%s[check]%s run `zithc fmt -i` to reformat\n", CERR(yellow), RERR);
+    if (any_diff && opts.flags.fmtCheck()) {
+        err.yellow("[check]");
+        std::fprintf(stderr, " some files need reformatting\n");
+        err.yellow("[check]");
+        std::fprintf(stderr, " run `zithc fmt -i` to reformat\n");
     }
 
     return exit_code;

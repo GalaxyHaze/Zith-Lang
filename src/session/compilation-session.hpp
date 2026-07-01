@@ -2,17 +2,16 @@
 
 #include "ast/ast-builder.hpp"
 #include "cli/options.hpp"
-#include "session/pipeline-plan.hpp"
 #include "cli/project-config.hpp"
 #include "diagnostics/diagnostic-engine.hpp"
-#include "symbols/import-manager.hpp"
-#include "symbols/symbol-table.hpp"
+#include "hir/hir-module.hpp"
 #include "lexer/token.hpp"
 #include "memory/source-map.hpp"
 #include "parser/scan-result.hpp"
+#include "session/pipeline-plan.hpp"
+#include "symbols/import-manager.hpp"
+#include "symbols/symbol-table.hpp"
 #include "types/type-intern.hpp"
-#include "hir/hir-module.hpp"
-
 
 #include <cstdarg>
 #include <string>
@@ -38,10 +37,10 @@ namespace zith::session {
 //   session.run();
 //   if (session.hasErrors()) { ... }
 class CompilationSession {
-    const cli::Options &opts_;
+    const Options &opts_;
     std::string file_path_;
     std::string project_root_;
-    cli::ProjectConfig project_config_;
+    ProjectConfig project_config_;
     PipelinePlan plan_;
 
     memory::SourceMap source_map_;
@@ -79,7 +78,7 @@ class CompilationSession {
     }
 
 public:
-    CompilationSession(const cli::Options &opts, std::string file_path);
+    CompilationSession(const Options &opts, std::string file_path);
 
     bool run();
     bool runTo(Stage target);
@@ -96,7 +95,7 @@ public:
     bool hasErrors() const {
         return diags_.hasErrors();
     }
-    const cli::ProjectConfig &projectConfig() const {
+    const ProjectConfig &projectConfig() const {
         return project_config_;
     }
     const memory::SourceMap &sourceMap() const {

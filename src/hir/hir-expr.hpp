@@ -1,7 +1,8 @@
 #pragma once
 
-#include "symbols/symbol-id.hpp"
 #include "hir/hir-types.hpp"
+#include "memory/dyn-array.hpp"
+#include "symbols/symbol-id.hpp"
 
 #include <cstdint>
 #include <string_view>

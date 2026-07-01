@@ -1,6 +1,6 @@
 #pragma once
 #include "memory/arena.hpp"
-#include "memory/flat_map.hpp"
+#include "memory/flat-map.hpp"
 #include "memory/optional.hpp"
 #include "memory/result.hpp"
 #include "memory/source-file.hpp"

@@ -1,11 +1,11 @@
 #pragma once
 
 #include "ast/ast-ids.hpp"
-#include "symbols/symbol-id.hpp"
-#include "symbols/symbol-visibility.hpp"
 #include "memory/arena.hpp"
 #include "memory/dyn-array.hpp"
 #include "memory/span.hpp"
+#include "symbols/symbol-id.hpp"
+#include "symbols/symbol-visibility.hpp"
 
 #include <cstdio>
 #include <string_view>

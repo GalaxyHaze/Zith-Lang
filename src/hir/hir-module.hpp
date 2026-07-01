@@ -1,10 +1,10 @@
 #pragma once
 
 #include "ast/ast-ids.hpp"
-#include "memory/arena.hpp"
-#include "memory/dyn-array.hpp"
 #include "hir/hir-expr.hpp"
 #include "hir/hir-types.hpp"
+#include "memory/arena.hpp"
+#include "memory/dyn-array.hpp"
 
 #include <string_view>
 

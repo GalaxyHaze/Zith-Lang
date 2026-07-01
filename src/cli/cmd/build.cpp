@@ -1,7 +1,6 @@
 #include "cli/commands.hpp"
-#include "session/compilation-session.hpp"
 #include "cli/terminal.hpp"
-#include "diagnostics/color.hpp"
+#include "session/compilation-session.hpp"
 
 #include <cstdio>
 #include <cstring>
@@ -16,24 +15,16 @@ struct SessionResult {
     bool ok;
 };
 
-static const char *green(const term::Term &t) {
-    return term::out(t, "\033[32m");
-}
-static const char *red(const term::Term &t) {
-    return term::out(t, "\033[31m");
-}
-static const char *rst(const term::Term &t) {
-    return term::out_rst(t);
-}
-
-int cmd_check(const Options &opts) {
+int check(const Options &opts) {
     auto TERM = term::init(opts);
+    term::UsagePrinter out{stdout, TERM.coutOn};
+    term::UsagePrinter err{stderr, TERM.cerrOn};
     std::vector<std::string> files;
 
-    if (opts.input_files.empty()) {
+    if (opts.inputFiles.empty()) {
         files.push_back(".");
     } else {
-        for (const auto &f : opts.input_files)
+        for (const auto &f : opts.inputFiles)
             files.push_back(f);
     }
 
@@ -41,21 +32,19 @@ int cmd_check(const Options &opts) {
     results.reserve(files.size());
 
     if (files.size() == 1) {
-        // Single file: sequential, immediate output
         session::CompilationSession session(opts, files[0]);
-        bool ok = session.runTo(Stage::TypeChecked);
+        bool ok = session.runTo(session::Stage::TypeChecked);
         if (session.hasErrors())
             ok = false;
         results.push_back(ok);
     } else {
-        // Multi-file: parallel with buffered output
         std::vector<std::future<SessionResult>> futures;
         futures.reserve(files.size());
         for (const auto &file : files) {
             futures.push_back(std::async(std::launch::async, [&opts, file]() -> SessionResult {
                 auto session = std::make_unique<session::CompilationSession>(opts, file);
                 session->setBuffered(true);
-                bool ok = session->runTo(Stage::TypeChecked);
+                bool ok = session->runTo(session::Stage::TypeChecked);
                 return {std::move(session), ok};
             }));
         }
@@ -74,13 +63,9 @@ int cmd_check(const Options &opts) {
         return c;
     };
 
-    auto ok_tag = [&](bool ok) {
-        std::printf("%s[%s]%s", ok ? green(TERM) : red(TERM), ok ? "ok" : "error", rst(TERM));
-    };
-
-    if (opts.verbose) {
+    if (opts.flags.verbose()) {
         if (files.size() == 1) {
-            ok_tag(results[0]);
+            results[0] ? out.green("[ok]") : out.red("[error]");
             std::printf(" %s\n", results[0] ? "check passed" : "check failed");
         } else {
             std::string list;
@@ -89,15 +74,15 @@ int cmd_check(const Options &opts) {
                 list += files[i];
                 list += results[i] ? ": passed" : ": failed";
             }
-            ok_tag(count(results) == files.size());
+            (count(results) == files.size() ? out.green("[ok]") : out.red("[error]"));
             std::printf(" %zu/%zu passed%s\n", count(results), files.size(), list.c_str());
         }
     } else {
         if (files.size() == 1) {
-            ok_tag(results[0]);
+            results[0] ? out.green("[ok]") : out.red("[error]");
             std::printf(" %s\n", results[0] ? "check passed" : "check failed");
         } else {
-            ok_tag(count(results) == files.size());
+            (count(results) == files.size() ? out.green("[ok]") : out.red("[error]"));
             std::printf(" %zu/%zu passed\n", count(results), files.size());
         }
     }
@@ -105,31 +90,35 @@ int cmd_check(const Options &opts) {
     return count(results) == files.size() ? 0 : 1;
 }
 
-int cmd_compile(const Options &opts) {
+int compile(const Options &opts) {
     auto TERM = term::init(opts);
-    if (opts.input_files.empty()) {
-        std::fprintf(stderr, "%sno input files%s\n", red(TERM), rst(TERM));
+    term::UsagePrinter out{stdout, TERM.coutOn};
+    term::UsagePrinter err{stderr, TERM.cerrOn};
+
+    if (opts.inputFiles.empty()) {
+        err.red("[error]");
+        std::fprintf(stderr, " no input files\n");
         return 1;
     }
 
-    if (opts.input_files.size() == 1) {
-        const auto &file = opts.input_files[0];
+    if (opts.inputFiles.size() == 1) {
+        const auto &file = opts.inputFiles[0];
         session::CompilationSession session(opts, file);
         session.setBuffered(true);
         bool ok = session.runTo(session::Stage::CodegenReady);
         session.emitDiagnostics();
         std::fputs(session.flushOutput().c_str(), stderr);
-        if (opts.verbose) {
-            std::printf("%s[%s]%s %s\n", ok ? green(TERM) : red(TERM), ok ? "ok" : "error",
-                        rst(TERM), file.c_str());
+        if (opts.flags.verbose()) {
+            ok ? out.green("[ok]") : out.red("[error]");
+            std::printf(" %s\n", file.c_str());
         }
         return ok ? 0 : 1;
     }
 
     int exit_code = 0;
     std::vector<std::future<SessionResult>> futures;
-    futures.reserve(opts.input_files.size());
-    for (const auto &file : opts.input_files) {
+    futures.reserve(opts.inputFiles.size());
+    for (const auto &file : opts.inputFiles) {
         futures.push_back(std::async(std::launch::async, [&opts, file]() -> SessionResult {
             auto session = std::make_unique<session::CompilationSession>(opts, file);
             session->setBuffered(true);
@@ -141,9 +130,9 @@ int cmd_compile(const Options &opts) {
         auto sr = f.get();
         sr.session->emitDiagnostics();
         std::fputs(sr.session->flushOutput().c_str(), stderr);
-        if (opts.verbose) {
-            std::printf("%s[%s]%s %s\n", sr.ok ? green(TERM) : red(TERM), sr.ok ? "ok" : "error",
-                        rst(TERM), sr.session->filePath().c_str());
+        if (opts.flags.verbose()) {
+            sr.ok ? out.green("[ok]") : out.red("[error]");
+            std::printf(" %s\n", sr.session->filePath().c_str());
         }
         if (!sr.ok)
             exit_code = 1;
@@ -151,32 +140,34 @@ int cmd_compile(const Options &opts) {
     return exit_code;
 }
 
-int cmd_build(const Options &opts) {
+int build(const Options &opts) {
     auto TERM = term::init(opts);
-    if (opts.input_files.empty()) {
-        std::fprintf(stderr, "%sno input files%s\n", red(TERM), rst(TERM));
+    term::UsagePrinter out{stdout, TERM.coutOn};
+    term::UsagePrinter err{stderr, TERM.cerrOn};
+
+    if (opts.inputFiles.empty()) {
+        err.red("[error]");
+        std::fprintf(stderr, " no input files\n");
         return 1;
     }
 
-    if (opts.input_files.size() == 1) {
-        // Single file: sequential, immediate output
-        const auto &file = opts.input_files[0];
+    if (opts.inputFiles.size() == 1) {
+        const auto &file = opts.inputFiles[0];
         session::CompilationSession session(opts, file);
         bool ok = session.run();
-        if (session.hasErrors()) {
+        if (session.hasErrors())
             ok = false;
-        }
-        if (opts.verbose) {
-            std::printf("%s[%s]%s %s\n", ok ? green(TERM) : red(TERM), ok ? "ok" : "error",
-                        rst(TERM), file.c_str());
+        if (opts.flags.verbose()) {
+            ok ? out.green("[ok]") : out.red("[error]");
+            std::printf(" %s\n", file.c_str());
         }
         return ok ? 0 : 1;
     }
 
-    int exit_code = 0;
+    /*int exit_code = 0;
     std::vector<std::future<SessionResult>> futures;
-    futures.reserve(opts.input_files.size());
-    for (const auto &file : opts.input_files) {
+    futures.reserve(opts.inputFiles.size());
+    for (const auto &file : opts.inputFiles) {
         futures.push_back(std::async(std::launch::async, [&opts, file]() -> SessionResult {
             auto session = std::make_unique<session::CompilationSession>(opts, file);
             session->setBuffered(true);
@@ -188,14 +179,14 @@ int cmd_build(const Options &opts) {
         auto sr = f.get();
         sr.session->emitDiagnostics();
         std::fputs(sr.session->flushOutput().c_str(), stderr);
-        if (opts.verbose) {
-            std::printf("%s[%s]%s %s\n", sr.ok ? green(TERM) : red(TERM), sr.ok ? "ok" : "error",
-                        rst(TERM), sr.session->filePath().c_str());
+        if (opts.flags.verbose()) {
+            sr.ok ? out.green("[ok]") : out.red("[error]");
+            std::printf(" %s\n", sr.session->filePath().c_str());
         }
         if (!sr.ok)
             exit_code = 1;
     }
-    return exit_code;
+    return exit_code;*/
 }
 
 } // namespace zith::cli::commands

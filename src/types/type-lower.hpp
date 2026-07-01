@@ -4,8 +4,8 @@
 #include "ast/type-expr.hpp"
 #include "diagnostics/diagnostic-engine.hpp"
 #include "diagnostics/error-codes.hpp"
+#include "memory/flat-map.hpp"
 #include "symbols/symbol-table.hpp"
-#include "memory/flat_map.hpp"
 #include "types/type-intern.hpp"
 
 #include <string_view>

@@ -20,6 +20,9 @@ struct TransparentStringHash {
     size_t operator()(const std::string &s) const noexcept {
         return std::hash<std::string_view>{}(s);
     }
+    size_t operator()(const char *s) const noexcept {
+        return std::hash<std::string_view>{}(s);
+    }
 };
 
 enum : uint8_t { FM_EMPTY = 0, FM_OCCUPIED = 1, FM_ERASED = 2 };
@@ -37,6 +40,7 @@ class FlatMap {
     std::vector<uint8_t> metadata_;
     std::vector<Key> keys_;
     std::vector<Value> values_;
+    std::vector<size_t> hashes_;
     size_t size_ = 0;
 
     Hash hasher_;
@@ -46,42 +50,50 @@ class FlatMap {
         return metadata_.size();
     }
 
-    size_t probe(size_t hash) const {
-        if (capacity() == 0)
+    static size_t probe(size_t hash, size_t cap) {
+        if (cap == 0)
             return 0;
-        // Fibonacci hashing for better distribution
         hash = hash ^ (hash >> 16);
         hash *= 0x9e3779b97f4a7c15ULL;
-        return hash & (capacity() - 1);
+        return hash & (cap - 1);
     }
 
-    size_t find_slot(const Key &key) const {
+    // Internal: lookup with precomputed hash
+    template <typename LK> size_t find_slot(LK &&key, size_t hash) const {
         if (capacity() == 0)
             return SIZE_MAX;
-        size_t idx = probe(hasher_(key));
+        size_t idx = probe(hash, capacity());
         while (metadata_[idx] != FM_EMPTY) {
-            if (metadata_[idx] == FM_OCCUPIED && eq_(keys_[idx], key))
-                return idx;
-            idx = (idx + 1) & (capacity() - 1);
-        }
-        return size_t(-1);
-    }
-
-    template <typename LK> size_t find_slot(LK &&key) const {
-        if (capacity() == 0)
-            return size_t(-1);
-        size_t idx = probe(hasher_(key));
-        while (metadata_[idx] != FM_EMPTY) {
-            if (metadata_[idx] == FM_OCCUPIED && eq_(keys_[idx], std::forward<LK>(key)))
+            if (metadata_[idx] == FM_OCCUPIED && hashes_[idx] == hash &&
+                eq_(keys_[idx], std::forward<LK>(key)))
                 return idx;
             idx = (idx + 1) & (capacity() - 1);
         }
         return SIZE_MAX;
     }
 
+    // Internal: insert with precomputed hash, overwrites existing
+    Value &insert(const Key &key, Value value, size_t hash) {
+        if (size_ >= capacity() * 7 / 10)
+            rehash(capacity() ? capacity() * 2 : 16);
+        size_t idx = probe(hash, capacity());
+        while (metadata_[idx] == FM_OCCUPIED) {
+            if (hashes_[idx] == hash && eq_(keys_[idx], key)) {
+                values_[idx] = std::move(value);
+                return values_[idx];
+            }
+            idx = (idx + 1) & (capacity() - 1);
+        }
+        metadata_[idx] = FM_OCCUPIED;
+        keys_[idx]     = key;
+        values_[idx]   = std::move(value);
+        hashes_[idx]   = hash;
+        size_++;
+        return values_[idx];
+    }
+
     void rehash(size_t new_cap) {
-        new_cap = std::max(new_cap, size_t(16));
-        // round up to power of 2
+        new_cap  = std::max(new_cap, size_t(16));
         size_t p = 1;
         while (p < new_cap)
             p <<= 1;
@@ -90,15 +102,17 @@ class FlatMap {
         auto old_keys   = std::move(keys_);
         auto old_values = std::move(values_);
         auto old_meta   = std::move(metadata_);
+        auto old_hashes = std::move(hashes_);
 
         keys_.assign(new_cap, Key{});
         values_.assign(new_cap, Value{});
         metadata_.assign(new_cap, FM_EMPTY);
+        hashes_.assign(new_cap, 0);
         size_ = 0;
 
         for (size_t i = 0; i < old_meta.size(); i++) {
             if (old_meta[i] == FM_OCCUPIED)
-                insert(std::move(old_keys[i]), std::move(old_values[i]));
+                insert(std::move(old_keys[i]), std::move(old_values[i]), old_hashes[i]);
         }
     }
 
@@ -109,19 +123,21 @@ public:
     }
 
     FlatMap(const FlatMap &o)
-        : metadata_(o.metadata_), keys_(o.keys_), values_(o.values_), size_(o.size_) {}
+        : metadata_(o.metadata_), keys_(o.keys_), values_(o.values_), hashes_(o.hashes_),
+          size_(o.size_) {}
     FlatMap &operator=(const FlatMap &o) {
         if (this != &o) {
             metadata_ = o.metadata_;
             keys_     = o.keys_;
             values_   = o.values_;
+            hashes_   = o.hashes_;
             size_     = o.size_;
         }
         return *this;
     }
     FlatMap(FlatMap &&o) noexcept
         : metadata_(std::move(o.metadata_)), keys_(std::move(o.keys_)),
-          values_(std::move(o.values_)), size_(o.size_) {
+          values_(std::move(o.values_)), hashes_(std::move(o.hashes_)), size_(o.size_) {
         o.size_ = 0;
     }
     FlatMap &operator=(FlatMap &&o) noexcept {
@@ -129,6 +145,7 @@ public:
             metadata_ = std::move(o.metadata_);
             keys_     = std::move(o.keys_);
             values_   = std::move(o.values_);
+            hashes_   = std::move(o.hashes_);
             size_     = o.size_;
             o.size_   = 0;
         }
@@ -141,42 +158,36 @@ public:
     }
 
     Value &insert(const Key &key, Value value) {
-        if (size_ >= capacity() * 7 / 10)
-            rehash(capacity() ? capacity() * 2 : 16);
-        size_t idx = probe(hasher_(key));
-        while (metadata_[idx] == FM_OCCUPIED) {
-            if (eq_(keys_[idx], key)) {
-                values_[idx] = std::move(value);
-                return values_[idx];
-            }
-            idx = (idx + 1) & (capacity() - 1);
-        }
-        metadata_[idx] = FM_OCCUPIED;
-        keys_[idx]     = key;
-        values_[idx]   = std::move(value);
-        size_++;
-        return values_[idx];
+        return insert(key, std::move(value), hasher_(key));
     }
 
     Value &insert(const Key &key) {
         Value v{};
-        return insert(key, std::move(v));
+        return insert(key, std::move(v), hasher_(key));
+    }
+
+    // Lookup with precomputed hash — lets callers (e.g. StringInterner)
+    // compute the hash once and reuse it across get + insert-on-miss
+    Value *get(const Key &key, size_t hash) {
+        size_t idx = find_slot(key, hash);
+        return (idx != SIZE_MAX) ? &values_[idx] : nullptr;
+    }
+    const Value *get(const Key &key, size_t hash) const {
+        return const_cast<FlatMap *>(this)->get(key, hash);
     }
 
     Value *get(const Key &key) {
-        size_t idx = find_slot(key);
-        return (idx != size_t(-1)) ? &values_[idx] : nullptr;
+        return get(key, hasher_(key));
     }
-
     const Value *get(const Key &key) const {
         return const_cast<FlatMap *>(this)->get(key);
     }
 
     template <typename LK> Value *get(LK &&key) {
-        size_t idx = find_slot(std::forward<LK>(key));
-        return (idx != size_t(-1)) ? &values_[idx] : nullptr;
+        size_t h   = hasher_(key);
+        size_t idx = find_slot(std::forward<LK>(key), h);
+        return (idx != SIZE_MAX) ? &values_[idx] : nullptr;
     }
-
     template <typename LK> const Value *get(LK &&key) const {
         return const_cast<FlatMap *>(this)->get(std::forward<LK>(key));
     }
@@ -184,7 +195,6 @@ public:
     bool contains(const Key &key) const {
         return get(key) != nullptr;
     }
-
     template <typename LK> bool contains(LK &&key) const {
         return get(std::forward<LK>(key)) != nullptr;
     }
@@ -204,8 +214,8 @@ public:
     }
 
     void erase(const Key &key) {
-        size_t idx = find_slot(key);
-        if (idx != size_t(-1)) {
+        size_t idx = find_slot(key, hasher_(key));
+        if (idx != SIZE_MAX) {
             metadata_[idx] = FM_ERASED;
             size_--;
         }

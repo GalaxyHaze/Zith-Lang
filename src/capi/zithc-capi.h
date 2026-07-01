@@ -22,17 +22,17 @@ typedef enum {
 
 // ── Pipeline stages (matches cli::Stage) ──────────────────────────────
 typedef enum {
-    ZITHC_STAGE_SOURCE          = 0,
-    ZITHC_STAGE_LEXED           = 1,
-    ZITHC_STAGE_SCANNED         = 2,
-    ZITHC_STAGE_IMPORTED        = 3,
-    ZITHC_STAGE_RESOLVED        = 4,
-    ZITHC_STAGE_TYPE_CHECKED    = 5,
-    ZITHC_STAGE_SOLVED          = 6,
-    ZITHC_STAGE_NRA_RESOLVED    = 7,
-    ZITHC_STAGE_HIR_LOWERED     = 8,
-    ZITHC_STAGE_CODEGEN_READY   = 9,
-    ZITHC_STAGE_CACHED          = 10
+    ZITHC_STAGE_SOURCE        = 0,
+    ZITHC_STAGE_LEXED         = 1,
+    ZITHC_STAGE_SCANNED       = 2,
+    ZITHC_STAGE_IMPORTED      = 3,
+    ZITHC_STAGE_RESOLVED      = 4,
+    ZITHC_STAGE_TYPE_CHECKED  = 5,
+    ZITHC_STAGE_SOLVED        = 6,
+    ZITHC_STAGE_NRA_RESOLVED  = 7,
+    ZITHC_STAGE_HIR_LOWERED   = 8,
+    ZITHC_STAGE_CODEGEN_READY = 9,
+    ZITHC_STAGE_CACHED        = 10
 } zithc_stage;
 
 // ── Position (0-based line/col, as LSP expects) ───────────────────────

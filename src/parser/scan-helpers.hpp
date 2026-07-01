@@ -3,11 +3,11 @@
 #include "ast/ast-ids.hpp"
 #include "diagnostics/diagnostic-engine.hpp"
 #include "diagnostics/error-codes.hpp"
-#include "symbols/symbol-table.hpp"
 #include "lexer/token.hpp"
 #include "memory/arena.hpp"
 #include "memory/dyn-array.hpp"
 #include "memory/span.hpp"
+#include "symbols/symbol-table.hpp"
 
 #include <cstdint>
 #include <cstdlib>

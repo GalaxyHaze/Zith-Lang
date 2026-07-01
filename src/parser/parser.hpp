@@ -2,10 +2,10 @@
 
 #include "ast/ast-builder.hpp"
 #include "diagnostics/diagnostic-engine.hpp"
-#include "symbols/symbol-table.hpp"
 #include "lexer/token.hpp"
 #include "parser/parse-result.hpp"
 #include "parser/scan-result.hpp"
+#include "symbols/symbol-table.hpp"
 
 #include <initializer_list>
 #include <string_view>

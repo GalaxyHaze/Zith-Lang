@@ -3,14 +3,14 @@
 #include "ast/ast-builder.hpp"
 #include "ast/ast-nodes.hpp"
 #include "diagnostics/diagnostic-engine.hpp"
-#include "symbols/symbol-table.hpp"
+#include "hir/hir-module.hpp"
 #include "memory/dyn-array.hpp"
 #include "sema/sema-context.hpp"
 #include "sema/sema-result.hpp"
+#include "symbols/symbol-table.hpp"
 #include "types/type-intern.hpp"
 #include "types/type-lower.hpp"
 #include "types/unify.hpp"
-#include "hir/hir-module.hpp"
 
 namespace zith::sema {
 
@@ -19,7 +19,7 @@ class SemaPipeline {
     types::Unifier unifier_;
     memory::Arena &hir_arena_;
     hir::HirModule hir_;
-    hir::HirFunction *current_fn_               = nullptr;
+    hir::HirFunction *current_fn_                     = nullptr;
     const memory::DynArray<symbols::SymId> *resolved_ = nullptr;
     memory::DynArray<types::TypeId> hir_types_;
 

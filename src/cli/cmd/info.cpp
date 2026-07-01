@@ -1,6 +1,5 @@
 #include "cli/commands.hpp"
 #include "cli/terminal.hpp"
-#include "diagnostics/color.hpp"
 
 #include <cstdio>
 
@@ -9,15 +8,15 @@
 
 namespace zith::cli::commands {
 
-#define C(c) term::out(TERM, diagnostics::ansi::c.data())
-#define RST term::out_rst(TERM)
+int version() {
+    auto term = term::init();
+    term::UsagePrinter p{stdout, term.coutOn};
 
-int cmd_version() {
-    auto TERM = term::init();
-    std::printf("%sZith%s Programming Language\n"
+    p.bold("Zith ");
+    std::printf("- A low-level general-purpose language\n"
                 "Version:  %s\n"
                 "Compiler: %s\n",
-                C(bold), RST, ZITH_VERSION,
+                ZITH_VERSION,
 #if defined(__clang__)
                 __clang_version__
 #elif defined(__GNUC__) || defined(__GNUG__)
@@ -32,51 +31,46 @@ int cmd_version() {
     return 0;
 }
 
-int cmd_help() {
-    auto TERM = term::init();
-    std::printf(
-        "%sZith%s - A low-level general-purpose language\n"
-        "\n"
-        "%sUSAGE:%s\n"
-        "    zithc [OPTIONS] <COMMAND> [ARGS]\n"
-        "\n"
-        "%sCOMMANDS:%s\n"
-        "    %s-h, --help%s   Show this help message\n"
-        "        %s--version%s Show version information\n"
-        "\n"
-        "%sOPTIONS:%s\n"
-        "    %s-h, --help%s                              Show help\n"
-        "        %s--version%s                           Show version\n"
-        "    %s-m, --mode%s <debug|dev|release|fast|test> Build mode [default: debug]\n"
-        "    %s-o, --output%s <FILE>                     Output file path\n"
-        "    %s-I, --include%s <DIR>                     Add include directory (repeatable)\n"
-        "        %s--emit%s <ast|hir|mir|ir|asm|obj|bin> Emit intermediate representation\n"
-        "        %s--target%s <TRIPLE>                   Target triple\n"
-        "        %s--tokens%s                            Print and emit tokens\n"
-        "        %s--emit-ast%s                          Emit AST\n"
-        "        %s--emit-hir%s                          Emit HIR\n"
-        "        %s--emit-mir%s                          Emit MIR\n"
-        "        %s--emit-ir%s                           Emit LLVM IR\n"
-        "        %s--emit-asm%s                          Emit assembly\n"
-        "        %s--interpreted%s                       Use bytecode path\n"
-        "        %s--opt-level%s <0-3>                   Optimization level\n"
-        "        %s--debug-level%s <0-3>                 Debug info level\n"
-        "    %s-s, --strict%s                            Apply stricter rules\n"
-        "        %s--lto%s                               Enable LTO\n"
-        "        %s--strip-debug%s                       Strip debug symbols\n"
-        "    %s-c, --color%s <auto|on|off>               Color output [default: auto]\n"
-        "    %s-v, --verbose%s                           Verbose output\n"
-        "\n"
-        "%sEXAMPLES:%s\n"
-        "    zithc build\n"
-        "    zithc run main.zith -m release\n"
-        "    zithc compile --interpreted main.zith -o main.nbc\n"
-        "    zithc execute --interpreted\n",
-        C(bold), RST, C(bold), RST, C(bold), RST, C(green), RST, C(green), RST, C(bold), RST,
-        C(cyan), RST, C(cyan), RST, C(cyan), RST, C(cyan), RST, C(cyan), RST, C(cyan), RST, C(cyan),
-        RST, C(cyan), RST, C(cyan), RST, C(cyan), RST, C(cyan), RST, C(cyan), RST, C(cyan), RST,
-        C(cyan), RST, C(cyan), RST, C(cyan), RST, C(cyan), RST, C(cyan), RST, C(cyan), RST, C(cyan),
-        RST, C(cyan), RST, C(bold), RST);
+int help() {
+    auto term = term::init();
+    term::UsagePrinter p{stdout, term.coutOn};
+
+    p.bold("Zith ");
+    std::printf("- A low-level general-purpose language\n\n");
+    p.section("USAGE:");
+    std::printf("    zithc [OPTIONS] <COMMAND> [ARGS]\n\n");
+    p.section("COMMANDS:");
+    p.green("  -h, --help");
+    std::printf("   Show this help message\n");
+    p.green("      --version");
+    std::printf(" Show version information\n\n");
+    p.section("OPTIONS:");
+    p.flag("-h, --help", "Show help");
+    p.flag("    --version", "Show version");
+    p.flag("-m, --mode <debug|dev|release|fast|test>", "Build mode [default: debug]");
+    p.flag("-o, --output <FILE>", "Output file path");
+    p.flag("-I, --include <DIR>", "Add include directory (repeatable)");
+    p.flag("    --emit <ast|hir|ir|asm|obj|bin>", "Emit intermediate representation");
+    p.flag("    --target <TRIPLE>", "Target triple");
+    p.flag("    --tokens", "Print and emit tokens");
+    p.flag("    --emit-ast", "Emit AST");
+    p.flag("    --emit-hir", "Emit HIR");
+    p.flag("    --emit-ir", "Emit LLVM IR");
+    p.flag("    --emit-asm", "Emit assembly");
+    p.flag("    --interpreted", "Use bytecode path");
+    p.flag("    --opt-level <0-3>", "Optimization level");
+    p.flag("    --debug-level <0-3>", "Debug info level");
+    p.flag("-s, --strict", "Apply stricter rules");
+    p.flag("    --lto", "Enable LTO");
+    p.flag("    --strip-debug", "Strip debug symbols");
+    p.flag("-c, --color <auto|on|off>", "Color output [default: auto]");
+    p.flag("-v, --verbose", "Verbose output");
+    std::printf("\n");
+    p.section("EXAMPLES:");
+    std::printf("    zithc build\n"
+                "    zithc run main.zith -m release\n"
+                "    zithc compile --interpreted main.zith -o main.nbc\n"
+                "    zithc execute --interpreted\n");
     return 0;
 }
 

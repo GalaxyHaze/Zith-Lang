@@ -303,8 +303,8 @@ hir::HirExprId SemaPipeline::visitCall(const ast::CallNode &n) {
     }
 
     symbols::SymId resolved_fn = symbols::kInvalidSym;
-    types::TypeId result_type = types::kErrorType;
-    size_t match_count        = 0;
+    types::TypeId result_type  = types::kErrorType;
+    size_t match_count         = 0;
 
     // Overload resolution: if callee is an identifier (fn name)
     const auto &callee_expr = hir_.getExpr(callee);
@@ -412,8 +412,8 @@ hir::HirExprId SemaPipeline::visitBlock(const ast::BlockNode &n) {
 }
 
 hir::HirExprId SemaPipeline::visitIf(const ast::IfNode &n) {
-    auto cond                     = visitExpr(n.cond);
-    auto then_expr                = visitExpr(n.then_branch);
+    auto cond                = visitExpr(n.cond);
+    auto then_expr           = visitExpr(n.then_branch);
     hir::HirExprId else_expr = hir::kInvalidHirExpr;
     if (n.else_branch != ast::kInvalidExpr)
         else_expr = visitExpr(n.else_branch);
@@ -466,8 +466,8 @@ void SemaPipeline::visitStmt(ast::StmtId id) {
                 decl_type = lower.lower(n.type_annot);
             }
 
-            hir::HirExprId init = hir::kInvalidHirExpr;
-            types::TypeId init_type  = types::kErrorType;
+            hir::HirExprId init     = hir::kInvalidHirExpr;
+            types::TypeId init_type = types::kErrorType;
             if (n.init != ast::kInvalidExpr) {
                 init = pipeline.visitExpr(n.init);
                 if (init != hir::kInvalidHirExpr) {
@@ -506,8 +506,8 @@ void SemaPipeline::visitStmt(ast::StmtId id) {
         }
 
         void operator()(const ast::RetNode &n) {
-            hir::HirExprId val = hir::kInvalidHirExpr;
-            types::TypeId val_type  = types::kVoidType;
+            hir::HirExprId val     = hir::kInvalidHirExpr;
+            types::TypeId val_type = types::kVoidType;
             if (n.value != ast::kInvalidExpr) {
                 val = pipeline.visitExpr(n.value);
                 if (val != hir::kInvalidHirExpr)

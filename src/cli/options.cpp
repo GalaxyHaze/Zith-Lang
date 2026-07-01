@@ -1,340 +1,325 @@
 #include "options.hpp"
+#include "cli/commands.hpp"
 #include "cli/terminal.hpp"
 #include "cli/zith-flags.hpp"
-#include "diagnostics/color.hpp"
 
+#include <cctype>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <ranges>
+#include <string_view>
+#include <toml++/toml.hpp>
+#include <type_traits>
+#include <utility>
 
-namespace zith::cli {
+namespace zith {
 
-#define C(c) term::err(OPT_TERM, diagnostics::ansi::c.data())
-#define RST term::err_rst(OPT_TERM)
+struct ModeDefaults {
+    uint8_t optLevel;
+    uint8_t debugLevel;
+    bool stripDebug;
+    bool lto;
+};
+
+// Custom, Debug, Develop, Release, Fast, Small
+static constexpr ModeDefaults modeDefaults[] = {
+    { 0, 2, false, false },  // Custom
+    { 0, 3, false, false },  // Debug
+    { 1, 2, false, false },  // Develop
+    { 2, 1, true,  false },  // Release
+    { 3, 0, true,  true  },  // Fast
+    { 2, 0, true,  true  },  // Small
+};
+
+static ModeDefaults getDefaults(Options::Mode mode) {
+    auto idx = static_cast<size_t>(mode);
+    if (idx >= std::size(modeDefaults))
+        idx = 1; // fallback to Debug
+    return modeDefaults[idx];
+}
 
 void Options::deriveTargetStage() {
-    if (emit_ast)
-        target_stage = Stage::Imported;
-    else if (emit_hir)
-        target_stage = Stage::HirLowered;
-    else if (emit_mir || emit_ir || emit_asm)
-        target_stage = Stage::CodegenReady;
-    else if (!emit_target.empty()) {
-        if (emit_target == "ast")
-            target_stage = Stage::Imported;
-        else if (emit_target == "hir")
-            target_stage = Stage::HirLowered;
-        else if (emit_target == "mir" || emit_target == "ir" || emit_target == "asm")
-            target_stage = Stage::CodegenReady;
-        else if (emit_target == "obj" || emit_target == "bin")
-            target_stage = Stage::Cached;
+    if (flags.emitAst())
+        targetStage = session::Stage::Imported;
+    else if (flags.emitHir())
+        targetStage = session::Stage::HirLowered;
+    else if (flags.emitIr() || flags.emitAsm())
+        targetStage = session::Stage::CodegenReady;
+    else {
+        switch (emitTarget) {
+        case EmitTarget::Ast:
+            targetStage = session::Stage::Imported;
+            break;
+        case EmitTarget::Hir:
+            targetStage = session::Stage::HirLowered;
+            break;
+        case EmitTarget::Ir:
+        case EmitTarget::Asm:
+            targetStage = session::Stage::CodegenReady;
+            break;
+        case EmitTarget::Obj:
+        case EmitTarget::Bin:
+            targetStage = session::Stage::Cached;
+            break;
+        default:
+            break;
+        }
     }
 }
 
-static void printUsage() {
-    auto OPT_TERM = term::init();
-    std::fprintf(
-        stderr,
-        "%sZith%s - A low-level general-purpose language\n"
-        "\n"
-        "%sUSAGE:%s\n"
-        "    zithc [OPTIONS] <COMMAND> [ARGS]\n"
-        "\n"
-        "%sCOMMANDS:%s\n"
-        "    %s-h, --help%s   Show this help message\n"
-        "        %s--version%s Show version information\n"
-        "\n"
-        "%sOPTIONS:%s\n"
-        "    %s-h, --help%s                              Show help\n"
-        "        %s--version%s                           Show version\n"
-        "    %s-m, --mode%s <debug|dev|release|fast|test> Build mode\n"
-        "    %s-o, --output%s <FILE>                     Output file path\n"
-        "    %s-I, --include%s <DIR>                     Add include directory (repeatable)\n"
-        "        %s--emit%s <ast|hir|mir|ir|asm|obj|bin> Emit intermediate representation\n"
-        "        %s--target%s <TRIPLE>                   Target triple\n"
-        "        %s--tokens%s                            Print and emit tokens\n"
-        "        %s--emit-ast%s                          Emit AST\n"
-        "        %s--emit-hir%s                          Emit HIR\n"
-        "        %s--emit-mir%s                          Emit MIR\n"
-        "        %s--emit-ir%s                           Emit LLVM IR\n"
-        "        %s--emit-asm%s                          Emit assembly\n"
-        "        %s--interpreted%s                       Use bytecode path\n"
-        "        %s--opt-level%s <0-3>                   Optimization level\n"
-        "        %s--debug-level%s <0-3>                 Debug info level\n"
-        "    %s-s, --strict%s                            Apply stricter rules\n"
-        "        %s--lto%s                               Enable LTO\n"
-        "        %s--strip-debug%s                       Strip debug symbols\n"
-        "    %s-c, --color%s <auto|on|off>               Color output\n"
-        "    %s-v, --verbose%s                           Verbose output\n",
-        C(bold), RST, C(bold), RST, C(bold), RST, C(green), RST, C(green), RST, C(bold), RST,
-        C(cyan), RST, C(cyan), RST, C(cyan), RST, C(cyan), RST, C(cyan), RST, C(cyan), RST, C(cyan),
-        RST, C(cyan), RST, C(cyan), RST, C(cyan), RST, C(cyan), RST, C(cyan), RST, C(cyan), RST,
-        C(cyan), RST, C(cyan), RST, C(cyan), RST, C(cyan), RST, C(cyan), RST, C(cyan), RST, C(cyan),
-        RST, C(cyan), RST);
+void Cli::printUsage() {
+    err.bold("Zith ");
+    printf("- A clean minimal system language\n\n");
+    err.section("USAGE:");
+    printf("    zithc [OPTIONS] <COMMAND> [ARGS]\n\n");
+    err.section("COMMANDS:");
+    err.green("  -h, --help");
+    fprintf(stderr, "   Show help message\n");
+    err.green("  --version");
+    fprintf(stderr, " Show version information\n\n");
+    err.section("OPTIONS:");
+    err.flag("-h, --help", "Show help");
+    err.flag("    --version", "Show version");
+    err.flag("-m, --mode <debug|dev|release|fast|small>", "Build mode");
+    err.flag("-o, --output <FILE>", "Output file path");
+    err.flag("-I, --include <DIR>", "Add include directory (repeatable)");
+    err.flag("    --emit <ast|hir|ir|asm|obj|bin>", "Emit intermediate representation");
+    err.flag("    --target <TRIPLE>", "Target triple");
+    err.flag("    --emit-tokens", "Print and emit tokens");
+    err.flag("    --emit-ast", "Emit AST");
+    err.flag("    --emit-hir", "Emit HIR");
+    err.flag("    --emit-ir", "Emit LLVM IR");
+    err.flag("    --emit-asm", "Emit assembly");
+    err.flag("    --interpreted", "Use bytecode path");
+    err.flag("    --opt-level <0-3>", "Optimization level");
+    err.flag("    --debug-level <0-3>", "Debug info level");
+    err.flag("-s, --strict", "Apply stricter rules");
+    err.flag("    --lto", "Enable link-time optimization");
+    err.flag("    --strip-debug", "Strip debug symbols");
+    err.flag("-c, --color <auto|on|off>", "Color output");
+    err.flag("-v, --verbose", "Verbose output");
+}
+
+static bool compare(const char *a, const char *b) {
+    return std::strcmp(a, b) == 0;
+}
+template <class... Args> static bool compare(const char *a, Args &&...args) {
+    static_assert((std::is_same_v<std::decay_t<Args>, const char *> && ...),
+                  "All 'args' must be 'const char*'");
+    return ((std::strcmp(a, args) == 0) || ...);
 }
 
 static bool isSubcommand(const char *arg) {
     static const char *cmds[] = {"build", "run",  "check",   "compile", "execute",
-                                 "test",  "fmt",  "docs",    "repl",    "new",
+                                 "test",  "fmt",  "docs",    "repl",    "create",
                                  "clean", "deps", "version", "help",    nullptr};
-    for (const char **c = cmds; *c; ++c) {
-        if (std::strcmp(arg, *c) == 0)
+    for (auto cmd : cmds) {
+        if (compare(cmd, arg))
             return true;
     }
     return false;
 }
 
-static Options::Command subcommandToEnum(const char *arg) {
-    if (std::strcmp(arg, "build") == 0)
-        return Options::Command::Build;
-    if (std::strcmp(arg, "run") == 0)
-        return Options::Command::Run;
-    if (std::strcmp(arg, "check") == 0)
-        return Options::Command::Check;
-    if (std::strcmp(arg, "compile") == 0)
-        return Options::Command::Compile;
-    if (std::strcmp(arg, "execute") == 0)
-        return Options::Command::Execute;
-    if (std::strcmp(arg, "test") == 0)
-        return Options::Command::Test;
-    if (std::strcmp(arg, "fmt") == 0)
-        return Options::Command::Fmt;
-    if (std::strcmp(arg, "docs") == 0)
-        return Options::Command::Docs;
-    if (std::strcmp(arg, "repl") == 0)
-        return Options::Command::Repl;
-    if (std::strcmp(arg, "new") == 0)
-        return Options::Command::New;
-    if (std::strcmp(arg, "clean") == 0)
-        return Options::Command::Clean;
-    if (std::strcmp(arg, "deps") == 0)
-        return Options::Command::Deps;
-    if (std::strcmp(arg, "version") == 0)
-        return Options::Command::Version;
-    if (std::strcmp(arg, "help") == 0)
-        return Options::Command::Help;
-    return Options::Command::None;
-}
+#define Command Options::Command
+static Command subcommandToEnum(const char *arg) {
+    if (compare(arg, "build"))
+        return Command::Build;
+    if (compare(arg, "run"))
+        return Command::Run;
+    if (compare(arg, "check"))
+        return Command::Check;
+    if (compare(arg, "compile"))
+        return Command::Compile;
+    if (compare(arg, "execute"))
+        return Command::Execute;
+    if (compare(arg, "test"))
+        return Command::Test;
+    if (compare(arg, "fmt"))
+        return Command::Fmt;
+    if (compare(arg, "docs"))
+        return Command::Docs;
+    if (compare(arg, "repl"))
+        return Command::Repl;
+    if (compare(arg, "create"))
+        return Command::Create;
+    if (compare(arg, "clean"))
+        return Command::Clean;
+    if (compare(arg, "deps"))
+        return Command::Deps;
+    if (compare(arg, "version"))
+        return Command::Version;
+    if (compare(arg, "help"))
+        return Command::Help;
+    return Command::None;
+} 
+#undef Command
 
-static void mergeFlags(zith::cli::Options &opts, const zith::cli::Options &defaults) {
-    if (opts.output_file == "a.out" && defaults.output_file != "a.out")
-        opts.output_file = defaults.output_file;
-    if (opts.mode == "debug" && defaults.mode != "debug")
-        opts.mode = defaults.mode;
-    if (opts.target_triple.empty() && !defaults.target_triple.empty())
-        opts.target_triple = defaults.target_triple;
-    if (opts.opt_level == 0 && defaults.opt_level != 0)
-        opts.opt_level = defaults.opt_level;
-    if (opts.debug_level == 2 && defaults.debug_level != 2)
-        opts.debug_level = defaults.debug_level;
-    if (!opts.strict && defaults.strict)
-        opts.strict = defaults.strict;
-    if (!opts.lto && defaults.lto)
-        opts.lto = defaults.lto;
-    if (!opts.strip_debug && defaults.strip_debug)
-        opts.strip_debug = defaults.strip_debug;
-    if (opts.color == "auto" && defaults.color != "auto")
-        opts.color = defaults.color;
-    if (!opts.verbose && defaults.verbose)
-        opts.verbose = defaults.verbose;
-    if (opts.include_dirs.empty() && !defaults.include_dirs.empty()) {
-        for (const auto &d : defaults.include_dirs)
-            opts.include_dirs.push_back(d);
-    }
-    if (opts.emit_target.empty() && !defaults.emit_target.empty())
-        opts.emit_target = defaults.emit_target;
+void Cli::parseArgs(int argc, char **argv) {
+    this->args = std::make_pair(argc, argv);
 
-    opts.deriveTargetStage();
-}
-
-void mergeProjectConfig(Options &opts, const ProjectConfig &cfg) {
-    if (opts.mode == "debug" && !cfg.mode.empty() && cfg.mode != "debug")
-        opts.mode = cfg.mode;
-    if (opts.opt_level == 0 && cfg.opt_level != 0)
-        opts.opt_level = cfg.opt_level;
-    if (opts.output_file == "a.out" && !cfg.output.empty() && cfg.output != "a.out")
-        opts.output_file = cfg.output;
-}
-
-Options parseArgs(int argc, char **argv) {
-    auto OPT_TERM     = term::init();
-    auto requireValue = [&](int i, const char *flag) {
-        if (i + 1 >= argc) {
-            std::fprintf(stderr, "%s[error]%s %s requires a value\n", C(red), RST, flag);
-            printUsage();
-            std::exit(1);
-        }
-    };
-    Options opts;
-
-    for (int i = 1; i < argc; ++i) {
-        // Subcommand detection
-        if (isSubcommand(argv[i]) && opts.command == Options::Command::None) {
-            opts.command = subcommandToEnum(argv[i]);
+    for (int& i = this->current; i < argc; ++i) {
+        if (isSubcommand(argv[i]))
             // Consume next arg as subcommand_arg for commands that take one
-            if (opts.command == Options::Command::New || opts.command == Options::Command::Clean ||
-                opts.command == Options::Command::Deps) {
-                if (i + 1 < argc && argv[i + 1][0] != '-')
-                    opts.subcommand_arg = argv[++i];
+            switch (this->opts.command = subcommandToEnum(argv[i])) {
+            case Options::Command::Create:
+            case Options::Command::Clean:
+            case Options::Command::Deps:
+                if (i + 1 < argc && argv[i + 1][0] != '-') {
+                    this->opts.subcommandArg = this->stringPool.intern(argv[i + 1]);
+                    this->opts.subcommandStr = argv[i + 1];
+                    ++i;
+                }
+            default:
+                continue;
             }
-            continue;
-        }
 
-        // --help / -h
-        if (std::strcmp(argv[i], "--help") == 0 || std::strcmp(argv[i], "-h") == 0) {
+        if (compare(argv[i], "-h", "--help")) {
             opts.command = Options::Command::Help;
             continue;
         }
 
-        // --version
-        if (std::strcmp(argv[i], "--version") == 0) {
+        if (compare(argv[i], "--version")) {
             opts.command = Options::Command::Version;
             continue;
         }
 
-        // --tokens
-        if (std::strcmp(argv[i], "--tokens") == 0) {
-            opts.emit_tokens  = true;
-            opts.print_tokens = true;
+        if (compare(argv[i], "--emit-tokens")) {
+            opts.flags.emitTokens(true);
             continue;
         }
 
-        // --emit-ast
-        if (std::strcmp(argv[i], "--emit-ast") == 0) {
-            opts.emit_ast = true;
+        if (compare(argv[i], "--emit-ast")) {
+            opts.flags.emitAst(true);
             continue;
         }
 
-        // --emit-hir
-        if (std::strcmp(argv[i], "--emit-hir") == 0) {
-            opts.emit_hir = true;
+        if (compare(argv[i], "--emit-hir")) {
+            opts.flags.emitHir(true);
             continue;
         }
 
-        // --emit-mir
-        if (std::strcmp(argv[i], "--emit-mir") == 0) {
-            opts.emit_mir = true;
+        if (compare(argv[i], "--emit-ir")) {
+            opts.flags.emitIr(true);
             continue;
         }
 
-        // --emit-ir
-        if (std::strcmp(argv[i], "--emit-ir") == 0) {
-            opts.emit_ir = true;
+        if (compare(argv[i], "--emit-asm")) {
+            opts.flags.emitAsm(true);
             continue;
         }
 
-        // --emit-asm
-        if (std::strcmp(argv[i], "--emit-asm") == 0) {
-            opts.emit_asm = true;
+        if (compare(argv[i], "--interpreted")) {
+            opts.flags.interpreted(true);
             continue;
         }
 
-        // --interpreted
-        if (std::strcmp(argv[i], "--interpreted") == 0) {
-            opts.interpreted = true;
+        if (compare(argv[i], "--verbose", "-v")) {
+            opts.flags.verbose(true);
             continue;
         }
 
-        // --verbose / -v
-        if (std::strcmp(argv[i], "--verbose") == 0 || std::strcmp(argv[i], "-v") == 0) {
-            opts.verbose = true;
+        if (compare(argv[i], "--strict", "-s")) {
+            opts.flags.strict(true);
             continue;
         }
 
-        // --strict / -s
-        if (std::strcmp(argv[i], "--strict") == 0 || std::strcmp(argv[i], "-s") == 0) {
-            opts.strict = true;
+        if (compare(argv[i], "--lto")) {
+            opts.flags.lto(true);
             continue;
         }
 
-        // --lto
-        if (std::strcmp(argv[i], "--lto") == 0) {
-            opts.lto = true;
+        if (compare(argv[i], "--strip-debug")) {
+            opts.flags.stripDebug(true);
             continue;
         }
 
-        // --strip-debug
-        if (std::strcmp(argv[i], "--strip-debug") == 0) {
-            opts.strip_debug = true;
-            continue;
-        }
-
-        // --mode / -m
-        if (std::strcmp(argv[i], "--mode") == 0 || std::strcmp(argv[i], "-m") == 0) {
+        if (compare("-m", "--mode")) {
             requireValue(i, "--mode/-m");
-            const char *val = argv[++i];
-            if (std::strcmp(val, "debug") != 0 && std::strcmp(val, "dev") != 0 &&
-                std::strcmp(val, "release") != 0 && std::strcmp(val, "fast") != 0 &&
-                std::strcmp(val, "test") != 0) {
-                std::fprintf(
-                    stderr,
-                    "%s[error]%s invalid mode '%s' (expected debug|dev|release|fast|test)\n",
-                    C(red), RST, val);
+            auto val = argv[++i];
+            Options::Mode m;
+            if (std::strcmp(val, "debug") == 0)
+                m = Options::Mode::Debug;
+            else if (compare(val, "dev"))
+                m = Options::Mode::Develop;
+            else if (compare(val, "release"))
+                m = Options::Mode::Release;
+            else if (compare(val, "fast"))
+                m = Options::Mode::Fast;
+            else if (compare(val, "small"))
+                m = Options::Mode::Small;
+            else {
+                err.red("[error] invalid mode, expected: debug|dev|release|fast|small\ngot: ");
+                err.red(val);
+                err.red("\n");
                 std::exit(1);
             }
-            opts.mode = val;
+            opts.flags.mode(m);
             continue;
         }
 
-        // --output / -o
-        if (std::strcmp(argv[i], "--output") == 0 || std::strcmp(argv[i], "-o") == 0) {
+        if (compare("-o", "--output")) {
             requireValue(i, "--output/-o");
-            opts.output_file = argv[++i];
+            opts.outputFile = argv[++i];
             continue;
         }
 
-        // --include / -I
-        if (std::strcmp(argv[i], "--include") == 0 || std::strcmp(argv[i], "-I") == 0) {
+        if (compare("--include", "-I")) {
             requireValue(i, "--include/-I");
-            const char *val   = argv[++i];
-            const char *start = val;
-            for (const char *p = val;; ++p) {
-                if (*p == ',' || *p == '\0') {
-                    if (p > start) {
-                        opts.include_dirs.emplace_back(start, static_cast<size_t>(p - start));
-                    }
-                    if (*p == '\0')
-                        break;
-                    start = p + 1;
+            std::string_view arg = argv[++i];
+
+            for (auto token : arg | std::ranges::views::split(',')) {
+                std::string_view span(token); 
+                if (!span.empty()) {          
+                    opts.includeDirs.push(std::string(span));
                 }
             }
-            continue;
         }
 
         // --emit
         if (std::strcmp(argv[i], "--emit") == 0) {
             requireValue(i, "--emit");
             const char *val = argv[++i];
-            if (std::strcmp(val, "ast") != 0 && std::strcmp(val, "hir") != 0 &&
-                std::strcmp(val, "mir") != 0 && std::strcmp(val, "ir") != 0 &&
-                std::strcmp(val, "asm") != 0 && std::strcmp(val, "obj") != 0 &&
-                std::strcmp(val, "bin") != 0) {
-                std::fprintf(
-                    stderr,
-                    "%s[error]%s invalid emit target '%s' (expected ast|hir|mir|ir|asm|obj|bin)\n",
-                    C(red), RST, val);
+            Options::EmitTarget target;
+            if (std::strcmp(val, "ast") == 0)
+                target = Options::EmitTarget::Ast;
+            else if (std::strcmp(val, "hir") == 0)
+                target = Options::EmitTarget::Hir;
+            else if (std::strcmp(val, "ir") == 0)
+                target = Options::EmitTarget::Ir;
+            else if (std::strcmp(val, "asm") == 0)
+                target = Options::EmitTarget::Asm;
+            else if (std::strcmp(val, "obj") == 0)
+                target = Options::EmitTarget::Obj;
+            else if (std::strcmp(val, "bin") == 0)
+                target = Options::EmitTarget::Bin;
+            else {
+                err.red("[error]");
+                std::fprintf(stderr,
+                             " invalid emit target '%s' (expected ast|hir|ir|asm|obj|bin)\n", val);
                 std::exit(1);
             }
-            opts.emit_target = val;
+            opts.emitTarget = target;
             continue;
         }
 
         // --target
         if (std::strcmp(argv[i], "--target") == 0) {
             requireValue(i, "--target");
-            opts.target_triple = argv[++i];
+            opts.targetTriple = this->stringPool.intern(argv[++i]);
             continue;
         }
 
         // --opt-level
         if (std::strcmp(argv[i], "--opt-level") == 0) {
             requireValue(i, "--opt-level");
-            int val = std::atoi(argv[++i]);
+            int val = std::atoi(argv[++i] );
             if (val < 0 || val > 3) {
-                std::fprintf(stderr, "%s[error]%s --opt-level must be 0-3\n", C(red), RST);
+                err.red("[error]");
+                std::fprintf(stderr, " --opt-level must be 0-3\n");
                 std::exit(1);
             }
-            opts.opt_level = val;
+            opts.flags.optLevel(static_cast<uint8_t>(val));
             continue;
         }
 
@@ -343,10 +328,11 @@ Options parseArgs(int argc, char **argv) {
             requireValue(i, "--debug-level");
             int val = std::atoi(argv[++i]);
             if (val < 0 || val > 3) {
-                std::fprintf(stderr, "%s[error]%s --debug-level must be 0-3\n", C(red), RST);
+                err.red("[error]");
+                std::fprintf(stderr, " --debug-level must be 0-3\n");
                 std::exit(1);
             }
-            opts.debug_level = val;
+            opts.flags.debugLevel(static_cast<uint8_t>(val));
             continue;
         }
 
@@ -354,47 +340,268 @@ Options parseArgs(int argc, char **argv) {
         if (std::strcmp(argv[i], "--color") == 0 || std::strcmp(argv[i], "-c") == 0) {
             requireValue(i, "--color/-c");
             const char *val = argv[++i];
-            if (std::strcmp(val, "auto") != 0 && std::strcmp(val, "on") != 0 &&
-                std::strcmp(val, "off") != 0) {
-                std::fprintf(stderr, "%s[error]%s --color must be auto|on|off\n", C(red), RST);
+            Options::Color c;
+            if (std::strcmp(val, "auto") == 0)
+                c = Options::Color::Auto;
+            else if (std::strcmp(val, "on") == 0)
+                c = Options::Color::On;
+            else if (std::strcmp(val, "off") == 0)
+                c = Options::Color::Off;
+            else {
+                err.red("[error]");
+                std::fprintf(stderr, " --color must be auto|on|off\n");
                 std::exit(1);
             }
-            opts.color = val;
+            opts.flags.color(c);
             continue;
         }
 
         // --check (fmt)
         if (std::strcmp(argv[i], "--check") == 0) {
-            opts.fmt_check = true;
+            opts.flags.fmtCheck(true);
             continue;
         }
 
         // -i / --in-place (fmt)
         if (std::strcmp(argv[i], "-i") == 0 || std::strcmp(argv[i], "--in-place") == 0) {
-            opts.fmt_in_place = true;
+            opts.flags.fmtInPlace(true);
             continue;
         }
 
         // "-" is a positional arg meaning stdin, not a flag
         if (std::strcmp(argv[i], "-") == 0) {
-            opts.input_files.push_back("-");
+            opts.inputFiles.push(std::string("-"));
             continue;
         }
 
         // Unknown flag
         if (argv[i][0] == '-') {
-            std::fprintf(stderr, "%s[error]%s unknown flag '%s'\n", C(red), RST, argv[i]);
+            err.red("[error]");
+            std::fprintf(stderr, " unknown flag '%s'\n", argv[i]);
             printUsage();
             std::exit(1);
         }
 
         // Positional: input file
-        opts.input_files.push_back(argv[i]);
+        opts.inputFiles.push(std::string(argv[i]));
     }
 
     opts.deriveTargetStage();
-    mergeFlags(opts, loadZithFlags());
-    return opts;
 }
 
-} // namespace zith::cli
+void Cli::loadFlags() {
+    namespace fs = std::filesystem;
+
+    // Apply mode defaults first
+    auto defaults = getDefaults(opts.flags.mode());
+    opts.flags.optLevel(defaults.optLevel);
+    opts.flags.debugLevel(defaults.debugLevel);
+    opts.flags.stripDebug(defaults.stripDebug);
+    opts.flags.lto(defaults.lto);
+    if (opts.flags.color() == Options::Color::Auto)
+        opts.flags.color(Options::Color::Auto);
+
+    // Try to find ZithFlags.toml
+    std::filesystem::path flagsPath;
+    if (!find_flags_file(flagsPath))
+        return;
+
+    auto process = [&](const toml::table &tbl) {
+        if (auto v = tbl["mode"].value<std::string>()) {
+            if (*v == "debug")       opts.flags.mode(Options::Mode::Debug);
+            else if (*v == "dev")    opts.flags.mode(Options::Mode::Develop);
+            else if (*v == "release")opts.flags.mode(Options::Mode::Release);
+            else if (*v == "fast")   opts.flags.mode(Options::Mode::Fast);
+            else if (*v == "small")  opts.flags.mode(Options::Mode::Small);
+        }
+        if (auto v = tbl["opt_level"].value<int64_t>())
+            if (*v >= 0 && *v <= 3)
+                opts.flags.optLevel(static_cast<uint8_t>(*v));
+        if (auto v = tbl["debug_level"].value<int64_t>())
+            if (*v >= 0 && *v <= 3)
+                opts.flags.debugLevel(static_cast<uint8_t>(*v));
+        if (auto v = tbl["verbose"].value<bool>())
+            opts.flags.verbose(*v);
+        if (auto v = tbl["strict"].value<bool>())
+            opts.flags.strict(*v);
+        if (auto v = tbl["strip_debug"].value<bool>())
+            opts.flags.stripDebug(*v);
+        if (auto v = tbl["lto"].value<bool>())
+            opts.flags.lto(*v);
+        if (auto v = tbl["color"].value<std::string>()) {
+            if (*v == "auto")       opts.flags.color(Options::Color::Auto);
+            else if (*v == "on")    opts.flags.color(Options::Color::On);
+            else if (*v == "off")   opts.flags.color(Options::Color::Off);
+        }
+        if (auto arr = tbl["include_dirs"].as_array()) {
+            for (auto &elem : *arr)
+                if (auto s = elem.value<std::string>())
+                    opts.includeDirs.push(*s);
+        }
+        if (auto v = tbl["emit_target"].value<std::string>()) {
+            if (*v == "ast")        opts.emitTarget = Options::EmitTarget::Ast;
+            else if (*v == "hir")   opts.emitTarget = Options::EmitTarget::Hir;
+            else if (*v == "ir")    opts.emitTarget = Options::EmitTarget::Ir;
+            else if (*v == "asm")   opts.emitTarget = Options::EmitTarget::Asm;
+            else if (*v == "obj")   opts.emitTarget = Options::EmitTarget::Obj;
+            else if (*v == "bin")   opts.emitTarget = Options::EmitTarget::Bin;
+        }
+    };
+
+    // Re-apply mode defaults after TOML values
+    auto applyModeDefaults = [&]() {
+        auto d = getDefaults(opts.flags.mode());
+        opts.flags.optLevel(d.optLevel);
+        opts.flags.debugLevel(d.debugLevel);
+        opts.flags.stripDebug(d.stripDebug);
+        opts.flags.lto(d.lto);
+    };
+
+#if TOML_EXCEPTIONS
+    try {
+        process(toml::parse_file(flagsPath.string()));
+    } catch (const toml::parse_error &) {
+        return;
+    }
+#else
+    auto result = toml::parse_file(flagsPath.string());
+    if (!result)
+        return;
+    process(result);
+#endif
+
+    applyModeDefaults();
+}
+
+void Cli::loadProject() {
+    namespace fs = std::filesystem;
+
+    fs::path search = fs::current_path();
+    while (true) {
+        auto tomlPath = search / "ZithProject.toml";
+        if (fs::exists(tomlPath)) {
+            auto process = [&](const toml::table &tbl) {
+                if (auto *build = tbl["build"].as_table()) {
+                    if (auto v = build->get("entry"))
+                        if (auto s = v->value<std::string>())
+                            config.entry = *s;
+                    if (auto v = build->get("output"))
+                        if (auto s = v->value<std::string>())
+                            config.output = *s;
+                    if (auto v = build->get("mode"))
+                        if (auto s = v->value<std::string>()) {
+                            if (*s == "debug")       config.mode = "debug";
+                            else if (*s == "dev")    config.mode = "dev";
+                            else if (*s == "release")config.mode = "release";
+                            else if (*s == "fast")   config.mode = "fast";
+                            else if (*s == "small")  config.mode = "small";
+                        }
+                    if (auto v = build->get("opt_level"))
+                        if (auto i = v->value<int>())
+                            config.opt_level = *i;
+                }
+                if (auto *paths = tbl["paths"].as_table()) {
+                    if (auto *src = paths->get("src_dir")) {
+                        if (auto *arr = src->as_array()) {
+                            for (auto &elem : *arr)
+                                if (auto s = elem.value<std::string>())
+                                    config.srcDirs.push(*s);
+                        } else if (auto s = src->value<std::string>()) {
+                            config.srcDirs.push(*s);
+                        }
+                    }
+                    if (auto v = paths->get("bin_dir"))
+                        if (auto s = v->value<std::string>())
+                            config.binDir = *s;
+                    if (auto v = paths->get("mod_dir"))
+                        if (auto s = v->value<std::string>())
+                            config.modDir = *s;
+                    if (auto v = paths->get("docs_dir"))
+                        if (auto s = v->value<std::string>())
+                            config.docsDir = *s;
+                    if (auto v = paths->get("test_dir"))
+                        if (auto s = v->value<std::string>())
+                            config.testDir = *s;
+                    if (auto v = paths->get("asset_dir"))
+                        if (auto s = v->value<std::string>())
+                            config.assetDir = *s;
+                }
+                if (auto *proj = tbl["project"].as_table()) {
+                    if (auto v = proj->get("name"))
+                        if (auto s = v->value<std::string>())
+                            config.name = *s;
+                    if (auto v = proj->get("version"))
+                        if (auto s = v->value<std::string>())
+                            config.version = *s;
+                    if (auto v = proj->get("description"))
+                        if (auto s = v->value<std::string>())
+                            config.description = *s;
+                    if (auto v = proj->get("authors"))
+                        if (auto s = v->value<std::string>())
+                            config.authors = *s;
+                    if (auto v = proj->get("license"))
+                        if (auto s = v->value<std::string>())
+                            config.license = *s;
+                    if (auto v = proj->get("homepage"))
+                        if (auto s = v->value<std::string>())
+                            config.homepage = *s;
+                }
+            };
+
+#if TOML_EXCEPTIONS
+            try {
+                process(toml::parse_file(tomlPath.string()));
+            } catch (const toml::parse_error &) {
+                return;
+            }
+#else
+            auto result = toml::parse_file(tomlPath.string());
+            if (!result)
+                return;
+            process(result);
+#endif
+            return;
+        }
+        if (search == search.root_path())
+            break;
+        search = search.parent_path();
+    }
+}
+
+int Cli::dispatch() {
+    using Command = Options::Command;
+    switch (opts.command) {
+    case Command::None:
+    case Command::Help:
+        return cli::commands::help();
+    case Command::Version:
+        return cli::commands::version();
+    case Command::Build:
+        return cli::commands::build(opts);
+    case Command::Run:
+        return cli::commands::run(opts);
+    case Command::Check:
+        return cli::commands::check(opts);
+    case Command::Compile:
+        return cli::commands::compile(opts);
+    case Command::Execute:
+        return cli::commands::execute(opts);
+    case Command::Test:
+        return cli::commands::test(opts);
+    case Command::Fmt:
+        return cli::commands::fmt(opts);
+    case Command::Docs:
+        return cli::commands::docs(opts);
+    case Command::Repl:
+        return cli::commands::repl(opts);
+    case Command::Create:
+        return cli::commands::create(opts);
+    case Command::Clean:
+        return cli::commands::clean(opts);
+    case Command::Deps:
+        return cli::commands::deps(opts);
+    }
+    return 1;
+}
+
+} // namespace zith

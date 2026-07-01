@@ -3,10 +3,10 @@
 #include "ast/ast-builder.hpp"
 #include "ast/ast-nodes.hpp"
 #include "diagnostics/diagnostic-engine.hpp"
-#include "symbols/symbol-table.hpp"
-#include "memory/arena.hpp"
-#include "types/type-intern.hpp"
 #include "hir/hir-module.hpp"
+#include "memory/arena.hpp"
+#include "symbols/symbol-table.hpp"
+#include "types/type-intern.hpp"
 
 #include <string_view>
 

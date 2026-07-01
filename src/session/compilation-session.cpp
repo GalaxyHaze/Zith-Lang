@@ -1,15 +1,15 @@
 #include "compilation-session.hpp"
 #include "ast/ast-printer.hpp"
 #include "cli/terminal.hpp"
+#include "comptime/solver.hpp"
 #include "diagnostics/error-codes.hpp"
 #include "formatter/fmt-visitor.hpp"
-#include "symbols/resolver.hpp"
 #include "lexer/lexer.hpp"
 #include "memory/source-map.hpp"
 #include "parser/parser.hpp"
 #include "sema/heuristic-engine.hpp"
 #include "sema/sema-pipeline.hpp"
-#include "comptime/solver.hpp"
+#include "symbols/resolver.hpp"
 
 #include <chrono>
 #include <cstdio>
@@ -26,13 +26,14 @@
 
 namespace zith::session {
 
-CompilationSession::CompilationSession(const cli::Options &opts, std::string file_path)
+CompilationSession::CompilationSession(const Options &opts, std::string file_path)
     : opts_(opts), file_path_(std::move(file_path)), project_root_(), ast_arena_(), sym_arena_(),
       type_arena_(), hir_arena_(), scratch_arena_(), diags_(scratch_arena_),
       ast_builder_(ast_arena_), import_mgr_(sym_arena_, source_map_, diags_), syms_(sym_arena_),
-      resolved_syms_(sym_arena_), types_(type_arena_), hir_module_(hir_arena_) {
-    plan_.target = opts_.target_stage;
-    diags_.setColor(cli::term::useColor(opts_));
+      resolved_syms_(sym_arena_), types_(type_arena_), hir_module_(hir_arena_),
+      project_config_(ast_arena_) {
+    plan_.target = opts_.targetStage;
+    diags_.setColor(term::useColor(opts_));
     diags_.setSourceMap(&source_map_);
 
 #ifndef ZITH_IS_WASM
@@ -43,8 +44,33 @@ CompilationSession::CompilationSession(const cli::Options &opts, std::string fil
         project_root_ = fs::weakly_canonical(fs::path(file_path_).parent_path()).string();
 
     auto toml_path = fs::path(project_root_) / "ZithProject.toml";
-    if (auto cfg = cli::ProjectConfig::load(toml_path.string()))
-        project_config_ = std::move(*cfg);
+    if (fs::exists(toml_path)) {
+#if TOML_EXCEPTIONS
+        try {
+            auto tbl = toml::parse_file(toml_path.string());
+            if (auto *build = tbl["build"].as_table()) {
+                if (auto v = build->get("entry"))
+                    if (auto s = v->value<std::string>())
+                        project_config_.entry = *s;
+                if (auto v = build->get("output"))
+                    if (auto s = v->value<std::string>())
+                        project_config_.output = *s;
+            }
+        } catch (...) {}
+#else
+        auto result = toml::parse_file(toml_path.string());
+        if (result) {
+            if (auto *build = result["build"].as_table()) {
+                if (auto v = build->get("entry"))
+                    if (auto s = v->value<std::string>())
+                        project_config_.entry = *s;
+                if (auto v = build->get("output"))
+                    if (auto s = v->value<std::string>())
+                        project_config_.output = *s;
+            }
+        }
+#endif
+    }
 #endif
 }
 
@@ -56,7 +82,7 @@ bool CompilationSession::runTo(Stage target) {
     auto t_start = std::chrono::steady_clock::now();
     plan_.target = target;
 
-    if (opts_.verbose)
+    if (opts_.flags.verbose())
         writeOutput("%s[zithc] [starting]%s %s\n", ansicolor("\033[36m"), ansicolor("\033[0m"),
                     file_path_.c_str());
 
@@ -123,7 +149,7 @@ bool CompilationSession::runTo(Stage target) {
         return false;
 
     bool ok = !diags_.hasErrors();
-    if (opts_.verbose) {
+    if (opts_.flags.verbose()) {
         auto dt =
             std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t_start)
                 .count();
@@ -150,7 +176,7 @@ bool CompilationSession::lexStage() {
         file_path_ = (fs::path(project_root_) / project_config_.entry).string();
     }
 
-    if (opts_.verbose) {
+    if (opts_.flags.verbose()) {
         std::error_code ec;
         auto fsize = fs::file_size(file_path_, ec);
         if (ec)
@@ -177,10 +203,10 @@ bool CompilationSession::lexStage() {
     }
     tokens_ = token_result.value();
 
-    if (opts_.print_tokens || opts_.emit_tokens)
+    if (opts_.flags.printTokens() || opts_.flags.emitTokens())
         lexer::printTokens(tokens_);
 
-    if (opts_.verbose) {
+    if (opts_.flags.verbose()) {
         auto dt = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0)
                       .count();
         writeOutput("  [lex] %6u tokens  (%5.1fms)\n", tokens_.len, dt);
@@ -236,7 +262,7 @@ bool CompilationSession::importStage() {
 #endif
 
     // 2. -I include dirs from CLI
-    for (auto &d : opts_.include_dirs)
+    for (auto &d : opts_.includeDirs)
         visible_roots.push_back(fs::weakly_canonical(fs::path(d)).string());
 
     // 3. Project root
@@ -244,17 +270,17 @@ bool CompilationSession::importStage() {
         visible_roots.push_back(project_root_);
 
     // 4. src_dirs from ZithProject.toml [paths] (list)
-    for (const auto &sd : project_config_.src_dirs) {
+    for (const auto &sd : project_config_.srcDirs) {
         auto p = fs::weakly_canonical(fs::path(project_root_) / sd);
         visible_roots.push_back(p.string());
     }
     // 5. mod_dir, test_dir from ZithProject.toml [paths]
-    if (!project_config_.mod_dir.empty()) {
-        auto p = fs::weakly_canonical(fs::path(project_root_) / project_config_.mod_dir);
+    if (!project_config_.modDir.empty()) {
+        auto p = fs::weakly_canonical(fs::path(project_root_) / project_config_.modDir);
         visible_roots.push_back(p.string());
     }
-    if (!project_config_.test_dir.empty()) {
-        auto p = fs::weakly_canonical(fs::path(project_root_) / project_config_.test_dir);
+    if (!project_config_.testDir.empty()) {
+        auto p = fs::weakly_canonical(fs::path(project_root_) / project_config_.testDir);
         visible_roots.push_back(p.string());
     }
 
@@ -277,7 +303,7 @@ bool CompilationSession::importStage() {
 
     import_mgr_.mergeInto(syms_);
 
-    if (opts_.verbose) {
+    if (opts_.flags.verbose()) {
         auto dt = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0)
                       .count();
         writeOutput("  [import] %zu symbols  (%5.1fms)\n", syms_.symbolCount(), dt);
@@ -293,7 +319,7 @@ bool CompilationSession::resolveStage() {
     resolver.resolveProgram(program_);
     resolved_syms_ = resolver.takeResolvedTable();
 
-    if (opts_.verbose) {
+    if (opts_.flags.verbose()) {
         auto dt = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0)
                       .count();
         writeOutput("  [resolve] %5.1fms\n", dt);
@@ -311,7 +337,7 @@ bool CompilationSession::scanStage() {
         diags_.emit();
         return false;
     }
-    if (opts_.verbose) {
+    if (opts_.flags.verbose()) {
         auto dt = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0)
                       .count();
         writeOutput("  [scan] %6zu top-level decls  (%5.1fms)\n", program_.decls.size(), dt);
@@ -335,7 +361,7 @@ bool CompilationSession::semaStage() {
         program_ = std::move(parser.program);
     }
 
-    if (opts_.emit_ast) {
+    if (opts_.flags.emitAst()) {
         std::printf("--- AST ---\n");
         ast::printAST(program_, ast_builder_);
         std::printf("--- Symbols ---\n");
@@ -351,7 +377,7 @@ bool CompilationSession::semaStage() {
 
     hir_module_ = pipeline.takeHir();
 
-    if (opts_.verbose) {
+    if (opts_.flags.verbose()) {
         auto dt = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0)
                       .count();
         writeOutput("  [sema] %zu fns lowered  (%5.1fms)\n", hir_module_.getFnCount(), dt);
@@ -367,7 +393,7 @@ bool CompilationSession::solveStage() {
         diags_.emit();
         return false;
     }
-    if (opts_.verbose) {
+    if (opts_.flags.verbose()) {
         auto dt = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0)
                       .count();
         writeOutput("  [solve] \xe2\x80\x94 (stub)  (%5.1fms)\n", dt);
@@ -380,7 +406,7 @@ bool CompilationSession::nraStage() {
     // NRA (Node Resource Analysis) — ownership/borrowing pass.
     // Operates on the typed HIR: tracks origin of every string/struct/array node
     // and enforces: no use-after-move, no double-borrow, no conflicting borrows.
-    if (opts_.verbose) {
+    if (opts_.flags.verbose()) {
         auto dt = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0)
                       .count();
         writeOutput("  [nra] \xe2\x80\x94 (stub)  (%5.1fms)\n", dt);
@@ -390,7 +416,7 @@ bool CompilationSession::nraStage() {
 
 bool CompilationSession::codegenStage() {
     auto t0 = std::chrono::steady_clock::now();
-    if (opts_.verbose) {
+    if (opts_.flags.verbose()) {
         auto dt = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0)
                       .count();
         writeOutput("  [codegen] \xe2\x80\x94 (stub)  (%5.1fms)\n", dt);
@@ -400,7 +426,7 @@ bool CompilationSession::codegenStage() {
 
 bool CompilationSession::cacheStage() {
     auto t0 = std::chrono::steady_clock::now();
-    if (opts_.verbose) {
+    if (opts_.flags.verbose()) {
         auto dt = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0)
                       .count();
         writeOutput("  [cache] \xe2\x80\x94 (stub)  (%5.1fms)\n", dt);

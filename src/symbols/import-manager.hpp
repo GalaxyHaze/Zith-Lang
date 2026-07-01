@@ -2,13 +2,13 @@
 
 #include "ast/ast-builder.hpp"
 #include "diagnostics/diagnostic-engine.hpp"
-#include "symbols/symbol-table.hpp"
 #include "memory/arena.hpp"
 #include "memory/dyn-array.hpp"
-#include "memory/flat_map.hpp"
+#include "memory/flat-map.hpp"
 #include "memory/optional.hpp"
 #include "memory/result.hpp"
 #include "memory/source-map.hpp"
+#include "symbols/symbol-table.hpp"
 
 #include <string>
 #include <string_view>

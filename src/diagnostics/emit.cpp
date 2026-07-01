@@ -1,4 +1,5 @@
 #include "diagnostic-engine.hpp"
+#include "cli/terminal.hpp"
 #include "diagnostics/diagnostic.hpp"
 #include "diagnostics/error-codes.hpp"
 #include "memory/source-file.hpp"
@@ -6,6 +7,8 @@
 
 #include <cstdio>
 #include <string>
+
+using namespace zith::term;
 
 namespace zith::diagnostics {
 namespace {

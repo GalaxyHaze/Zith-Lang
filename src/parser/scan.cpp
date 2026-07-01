@@ -1,11 +1,11 @@
 #include "parser.hpp"
 
 #include "diagnostics/error-codes.hpp"
-#include "symbols/symbol-table.hpp"
 #include "lexer/lexer.hpp"
 #include "memory/source-map.hpp"
 #include "parser/operators.hpp"
 #include "parser/scan-helpers.hpp"
+#include "symbols/symbol-table.hpp"
 
 #include <cstdint>
 #include <cstdlib>
@@ -23,7 +23,7 @@ ScanResult scan(Parser &parser, symbols::SymbolTable &syms) {
 
     ScanResult result{bld.arena()};
     symbols::SymbolVisibility current_vis = symbols::SymbolVisibility::Private;
-    int32_t current_mod_depth            = 0;
+    int32_t current_mod_depth             = 0;
 
     memory::Span lastDocSpan{};
 
@@ -366,8 +366,8 @@ ScanResult scan(Parser &parser, symbols::SymbolTable &syms) {
                             tok.advance();
                             if (!scan_detail::reportIfDuplicate(syms, diag, fname, fname_span)) {
                                 auto fs = syms.declare(fname, symbols::SymbolVisibility::Private, 0,
-                                                       symbols::SymKind::Variable, ast::kInvalidDecl,
-                                                       fname_span);
+                                                       symbols::SymKind::Variable,
+                                                       ast::kInvalidDecl, fname_span);
                                 if (decl != ast::kInvalidDecl && fs != symbols::kInvalidSym)
                                     syms.get(fs).decl_id = decl;
                             }
@@ -406,8 +406,8 @@ ScanResult scan(Parser &parser, symbols::SymbolTable &syms) {
 
                             if (!scan_detail::reportIfDuplicate(syms, diag, vname, v_span)) {
                                 auto vs = syms.declare(vname, symbols::SymbolVisibility::Private, 0,
-                                                       symbols::SymKind::Variable, ast::kInvalidDecl,
-                                                       v_span);
+                                                       symbols::SymKind::Variable,
+                                                       ast::kInvalidDecl, v_span);
                                 if (decl != ast::kInvalidDecl && vs != symbols::kInvalidSym)
                                     syms.get(vs).decl_id = decl;
                             }
@@ -447,8 +447,8 @@ ScanResult scan(Parser &parser, symbols::SymbolTable &syms) {
 
                             if (!scan_detail::reportIfDuplicate(syms, diag, vname, v_span)) {
                                 auto vs = syms.declare(vname, symbols::SymbolVisibility::Private, 0,
-                                                       symbols::SymKind::Variable, ast::kInvalidDecl,
-                                                       v_span);
+                                                       symbols::SymKind::Variable,
+                                                       ast::kInvalidDecl, v_span);
                                 if (decl != ast::kInvalidDecl && vs != symbols::kInvalidSym)
                                     syms.get(vs).decl_id = decl;
                             }

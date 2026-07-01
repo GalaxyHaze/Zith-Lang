@@ -43,19 +43,4 @@ inline char *mkdtemp(char *tmpl) {
 
 #endif
 
-inline void enableVirtualTerminal() {
-#ifdef _WIN32
-    HANDLE handles[] = {GetStdHandle(STD_OUTPUT_HANDLE), GetStdHandle(STD_ERROR_HANDLE)};
-    for (auto h : handles) {
-        if (h == INVALID_HANDLE_VALUE || h == NULL)
-            continue;
-        DWORD mode = 0;
-        if (GetConsoleMode(h, &mode)) {
-            mode |= 0x0004; // ENABLE_VIRTUAL_TERMINAL_PROCESSING
-            SetConsoleMode(h, mode);
-        }
-    }
-#endif
-}
-
 } // namespace zith::support

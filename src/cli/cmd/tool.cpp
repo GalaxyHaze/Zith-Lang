@@ -1,23 +1,23 @@
 #include "cli/commands.hpp"
 #include "cli/terminal.hpp"
-#include "diagnostics/color.hpp"
 
 #include <cstdio>
 
 namespace zith::cli::commands {
 
-#define CERR(c) term::err(TERM, diagnostics::ansi::c.data())
-#define RERR term::err_rst(TERM)
-
-int cmd_test(const Options &opts) {
+int test(const Options &opts) {
     auto TERM = term::init(opts);
-    std::fprintf(stderr, "%s[soon]%s not implemented yet\n", CERR(yellow), RERR);
+    term::UsagePrinter err{stderr, TERM.cerrOn};
+    err.yellow("[soon]");
+    std::fprintf(stderr, " not implemented yet\n");
     return 1;
 }
 
-int cmd_docs(const Options &opts) {
+int docs(const Options &opts) {
     auto TERM = term::init(opts);
-    std::fprintf(stderr, "%s[soon]%s not implemented yet\n", CERR(yellow), RERR);
+    term::UsagePrinter err{stderr, TERM.cerrOn};
+    err.yellow("[soon]");
+    std::fprintf(stderr, " not implemented yet\n");
     return 1;
 }
 
