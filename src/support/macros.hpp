@@ -15,3 +15,10 @@ template <class T> constexpr T alloc(auto &&allocator) {
         return (T)allocator->alloc(sizeof(void *));
     return (T)allocator.alloc(sizeof(void *));
 }
+
+#define as(val, type) __AS__IMPL<type>(val)
+
+template<class Target, class Origin>
+constexpr decltype(auto) __AS__IMPL(Origin&& o) noexcept {
+    return static_cast<Target>(std::forward<Origin>(o));
+}

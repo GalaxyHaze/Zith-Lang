@@ -115,7 +115,7 @@ static bool isSubcommand(const char *arg) {
                                  "test",  "fmt",  "docs",    "repl",    "create",
                                  "clean", "deps", "version", "help",    nullptr};
     for (auto cmd : cmds) {
-        if (compare(cmd, arg))
+        if (cmd && compare(cmd, arg))
             return true;
     }
     return false;
@@ -402,7 +402,7 @@ void Cli::loadFlags() {
         opts.flags.color(Options::Color::Auto);
 
     // Try to find ZithFlags.toml
-    std::filesystem::path flagsPath;
+    fs::path flagsPath;
     if (!find_flags_file(flagsPath))
         return;
 
