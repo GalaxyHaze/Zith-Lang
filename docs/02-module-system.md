@@ -20,7 +20,7 @@ export std/io/console;
 
 ### 2.2 `alias` vs `use` vs `type`
 
-These two keywords are easy to conflate but serve distinct purposes:
+These three keywords are easy to conflate but serve distinct purposes:
 
 | Keyword | Purpose | Example |
 |---|---|---|

@@ -4,7 +4,7 @@
 
 | | Trait | Interface |
 |---|---|---|
-| **Typing** | Nominal — must be explicitly implemented. | Structural (duck-typed) — automatically satisfied when members match. |
+| **Typing** | Nominal — must be explicitly implemented. | Structural (duck-typed) — automatically satisfied when fields match. |
 | **Extensible** | Yes — via `extends`, or as a precondition using `requires`. | No — interfaces cannot extend each other, though a trait may `requires` one. |
 | **Has implementation?** | Yes — default method bodies are allowed. | No — declaration only. |
 | **Field access** | Only through a trait that `requires` the interface. | Yes — directly, since interfaces are structural. |
@@ -32,7 +32,7 @@ JsonSerializable.print(self);
 
 ### 4.3 Interfaces
 
-Interfaces are structural — if it quacks, it's a duck. Any type that has the required members satisfies the interface automatically, without an explicit `implement` declaration. You can also add `requires` to interfaces.
+Interfaces are structural — if it quacks, it's a duck. Any type that has the required fields satisfies the interface automatically, without an explicit `implement` declaration. You can also add `requires` to interfaces.
 
 ```zith
 // will only accept structs and reject components
