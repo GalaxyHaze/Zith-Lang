@@ -86,8 +86,7 @@ flow fn run(data: Stream): void {
 ### Memory & Ownership
 
 - **NRA** — compile-time ownership tracking without a borrow checker
-- `unique`, `share`, `view`, `lend`, `belong` — zero-cost memory qualifiers
-- `scene` — arena-based memory regions for data-oriented designs
+- `unique`, `share`, `view`, `lend`, `belong` — zero-cost memory modifiers
 
 ### Type System
 
@@ -194,9 +193,33 @@ zithc --help
 
 ## Documentation
 
-- [Language Specification](Zith-spec.md)
+- [Language Specification](docs/Zith-spec.md) — overview, quick reference, and appendix
 - [Full docs](https://zith-lang.org)
-- [API headers](include/zith/README.md)
+
+### Spec Sections
+
+| # | Topic | File |
+|---|-------|------|
+| 2 | [Module System](docs/02-module-system.md) | `import`, `from`, `export`, visibility |
+| 3 | [Type System](docs/03-type-system.md) | Primitives, structs, enums, unions, generics |
+| 4 | [Traits & Interfaces](docs/04-traits-interfaces.md) | Nominal traits, structural interfaces, capabilities |
+| 5 | [Functions](docs/05-functions.md) | `fn`, `const fn`, `async fn`, `flow fn`, `raw fn` |
+| 6 | [Mutability & Bindings](docs/06-mutability-bindings.md) | `let`, `var`, `global`, `const`, deep mutability |
+| 7 | [Memory Model (NRA)](docs/07-memory-model.md) | Ownership, modifiers, the four rules |
+| 8 | [Error Handling](docs/08-error-handling.md) | `?T`, `T!`, `with`/`catch`, `fail` blocks |
+| 9 | [Control Flow](docs/09-control-flow.md) | `if`, `when`, `for`, `->`, markers, docks |
+| 10 | [Concurrency](docs/10-concurrency.md) | `spawn`, `await`, thread safety |
+| 11 | [Comptime](docs/11-comptime.md) | `const`, reflection, intrinsics |
+| 12 | [Assets](docs/12-assets.md) | Compile-time asset processing |
+| 13 | [Raw & Unsafe](docs/13-raw-unsafe.md) | `raw`, `unsafe`, `Trust` |
+| 14 | [Polymorphism](docs/14-polymorphism.md) | `dyn`, static vs dynamic dispatch |
+| 15 | [Macros](docs/15-macros.md) | Scoped, raw, tag macros |
+| 16 | [Words](docs/16-words.md) | Custom operators |
+| 17 | [Contexts](docs/17-contexts.md) | DSL bundling, scoped activation |
+| 18 | [C Interop](docs/18-c-interop.md) | `.h` import, `extern 'C'` |
+| 19 | [Project Config](docs/19-project-config.md) | `ZithProject.toml`, `ZithFlags` |
+| 20 | [Standard Library](docs/20-standard-library.md) | `std`, `soon`, `c` namespaces |
+| 21 | [Best Practices](docs/21-best-practices.md) | Ownership patterns, naming conventions |
 
 ---
 
