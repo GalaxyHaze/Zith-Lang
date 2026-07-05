@@ -33,8 +33,34 @@
           { "title": "Concurrency", "link": "./D-language-concurrency.html" },
           { "title": "ECS", "link": "./D-language-ecs.html" },
           { "title": "Intrinsics", "link": "./D-language-intrinsics.html" },
-          { "title": "Packs", "link": "./D-language-packs.html" },
-          { "title": "Spec Core Topics", "link": "./D-language-spec-core-topics.html" }
+          { "title": "Packs", "link": "./D-language-packs.html" }
+        ]
+      },
+      {
+        "title": "Specification",
+        "link": "./D-spec-overview.html",
+        "children": [
+          { "title": "Overview", "link": "./D-spec-overview.html" },
+          { "title": "Module System", "link": "./D-spec-module-system.html" },
+          { "title": "Type System", "link": "./D-spec-type-system.html" },
+          { "title": "Traits & Interfaces", "link": "./D-spec-traits-interfaces.html" },
+          { "title": "Functions", "link": "./D-spec-functions.html" },
+          { "title": "Mutability & Bindings", "link": "./D-spec-mutability-bindings.html" },
+          { "title": "Memory Model", "link": "./D-spec-memory-model.html" },
+          { "title": "Error Handling", "link": "./D-spec-error-handling.html" },
+          { "title": "Control Flow", "link": "./D-spec-control-flow.html" },
+          { "title": "Concurrency", "link": "./D-spec-concurrency.html" },
+          { "title": "Comptime", "link": "./D-spec-comptime.html" },
+          { "title": "Assets", "link": "./D-spec-assets.html" },
+          { "title": "Raw & Unsafe", "link": "./D-spec-raw-unsafe.html" },
+          { "title": "Polymorphism", "link": "./D-spec-polymorphism.html" },
+          { "title": "Macros", "link": "./D-spec-macros.html" },
+          { "title": "Words", "link": "./D-spec-words.html" },
+          { "title": "Contexts", "link": "./D-spec-contexts.html" },
+          { "title": "C Interop", "link": "./D-spec-c-interop.html" },
+          { "title": "Project Config", "link": "./D-spec-project-config.html" },
+          { "title": "Standard Library", "link": "./D-spec-standard-library.html" },
+          { "title": "Best Practices", "link": "./D-spec-best-practices.html" }
         ]
       },
       {

@@ -5,11 +5,11 @@
   <p><strong>&#8505; What NRA does:</strong> tracks whether a node is <code>alive</code>, <code>dead</code>, or <code>lent</code>; ensures <code>unique</code> nodes have exactly one owner; validates that <code>belong</code> nodes do not outlive their parent; and enforces argument exclusivity in every call expression.</p>
 </div>
 
-<h2>Memory Keywords (The Five Ownership Modes)</h2>
+<h2>Memory Modifiers (The Five Ownership Modes)</h2>
 
 <table>
   <tr>
-    <th>Keyword</th>
+    <th>Modifier</th>
     <th>Owns?</th>
     <th>Exclusive?</th>
     <th>Mutable?</th>
@@ -227,7 +227,7 @@ let _ = spawn worker(Rc.clone(shared));             // runtime reference countin
 
 <table>
   <tr>
-    <th>Keyword</th>
+    <th>Modifier</th>
     <th>Owns</th>
     <th>Exclusive</th>
     <th>Mutable</th>
@@ -293,6 +293,8 @@ let _ = spawn worker(Rc.clone(shared));             // runtime reference countin
   <li><strong>Use <code>share</code> intentionally</strong> — Only when multiple mutable references are truly needed.</li>
   <li><strong>Use <code>belong</code> for back-pointers</strong> — Trees, linked lists, graphs where child refers to parent.</li>
 </ul>
+
+<p><strong>See also:</strong> <a href="./D-spec-memory-model.html">Spec: Memory Model (NRA)</a></p>
 
 <hr>
 <p><strong>Next:</strong> <a href="./D-language-memory.html">Memory Management</a> — allocation, scenes, and runtime memory strategies.</p>

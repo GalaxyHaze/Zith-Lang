@@ -1,0 +1,92 @@
+<h2>21. Best Practices & Patterns</h2>
+<h3>21.1 Ownership Patterns</h3>
+<ul>
+  <li>**Resources shall be <code>unique</code>:** <code>let resource: unique = Resource.new();</code></li>
+  <li>**Use <code>share</code> for intentional multiple owners:** implement <code>Share</code> and <code>Clone</code> explicitly.</li>
+  <li>**Use <code>view</code> for reading:** <code>fn process(config: view Config)</code></li>
+  <li>**Use <code>lend</code> for temporary mutation:** <code>fn update(state: lend GameState)</code></li>
+  <li>**Use <code>belong</code> for part-of relationships,** such as back-pointers.</li>
+</ul>
+<h3>21.2 Optional & Failable Patterns</h3>
+<ul>
+  <li>**Prefer <code>?...or</code> for optionals:** <code>let name = ?user.name or "guest";</code></li>
+  <li>**Prefer <code>!...or</code> for failables:** <code>let config = !loadPrimary() or loadBackup() or defaultConfig();</code></li>
+  <li>**Reserve <code>must</code> for initialization:** <code>const API_KEY = must env("API_KEY");</code></li>
+</ul>
+<h3>21.3 Context Patterns</h3>
+<ul>
+  <li>Group related DSL features by defining macros and words inside a single <code>context</code> block.</li>
+  <li>Activate at most one global context per domain to avoid pollution.</li>
+</ul>
+<h3>21.4 Error Handling Patterns</h3>
+<ul>
+  <li>Add context to errors using <code>fail</code> blocks and custom <code>throw</code> statements.</li>
+  <li>Chain fallbacks explicitly: <code>let data = !step1() or step2() or step3() or AllFailed;</code></li>
+</ul>
+<h3>21.5 Macro Patterns</h3>
+<ul>
+  <li>Prefer macros scoped inside contexts over global activation.</li>
+  <li>Prefer to apply context per block for the same reason.</li>
+</ul>
+<h3>21.6 Rule of Three</h3>
+<p>If a function needs more than three specialized tools (markers, words, contexts, macros, comptime, inline error handling), something went wrong. Split the function or reconsider your abstraction.</p>
+<pre><code>// Good — two tools: marker + word
+flow fn process() {
+    dock init { ... }
+    step1 -&gt; step2
+}
+
+// Warning sign — four tools in one function
+flow fn process() {
+    dock init { ... }          // marker
+    use Math;                  // context
+    use assert AS CHECK;       // word
+    risky()!                   // inline error handling
+    // Prefer: move the context/word usage to a wrapper function
+}</code></pre>
+<p>The Rule of Three keeps code readable. Zith gives you many tools — you don't have to use them all at once.</p>
+<h3>21.7 Naming Conventions</h3>
+<table>
+  <tr>
+    <th>Construct</th>
+    <th>Convention</th>
+    <th>Examples</th>
+  </tr>
+  <tr>
+    <td>Variables & functions</td>
+    <td>camelCase</td>
+    <td><code>playerHealth</code>, <code>getDamage</code>, <code>loadConfig</code></td>
+  </tr>
+  <tr>
+    <td>Components</td>
+    <td>single word, lowercase</td>
+    <td><code>rgb</code>, <code>color</code>, <code>file</code>, <code>vertex</code>, <code>health</code></td>
+  </tr>
+  <tr>
+    <td>Structs</td>
+    <td>PascalCase</td>
+    <td><code>Point</code>, <code>Container</code>, <code>DynArray</code>, <code>GameConfig</code></td>
+  </tr>
+  <tr>
+    <td>Traits & interfaces</td>
+    <td>PascalCase</td>
+    <td><code>Printable</code>, <code>iPositioned</code> (interfaces use lowercase <code>i</code> prefix)</td>
+  </tr>
+  <tr>
+    <td>Files</td>
+    <td>kebab-case</td>
+    <td><code>game-loop.zith</code>, <code>asset-manager.zith</code></td>
+  </tr>
+  <tr>
+    <td>Constants & comptime</td>
+    <td>UPPER_SNAKE_CASE</td>
+    <td><code>MAX_SIZE</code>, <code>PI</code>, <code>DEFAULT_TIMEOUT</code></td>
+  </tr>
+  <tr>
+    <td>Enums</td>
+    <td>PascalCase for the type; PascalCase for variants</td>
+    <td><code>enum Direction { North, South }</code></td>
+  </tr>
+</table>
+<hr>
+<p><em><a href="D-language-spec-core-topics.html">Zith Language Specification</a> — Draft v0.9</em></p>

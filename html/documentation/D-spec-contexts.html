@@ -1,0 +1,14 @@
+<h2>17. Contexts</h2>
+<p>A context bundles macros, constants, words, and other declarations into a reusable package. You can apply it to a single block or activate it globally — only one context may be active at a time in a given scope.</p>
+<pre><code class="language-zith">// Scoped: macros and words active only inside this block
+use SQL {
+    SELECT * FROM users WHERE id = :id
+}
+
+// Global: replaces any previous active context
+use SQL;</code></pre>
+<p>You can attach a context to any named block in Zith.</p>
+<h3>Best Practice</h3>
+<p>Define your macros and words inside context blocks rather than leaving them globally active. Think of it as a lightweight namespace for DSLs — keeps the rest of your code clean.</p>
+<hr>
+<p><em><a href="D-language-spec-core-topics.html">Zith Language Specification</a> — Draft v0.9</em></p>

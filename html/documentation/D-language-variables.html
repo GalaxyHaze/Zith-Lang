@@ -2,7 +2,7 @@
 <p>Zith uses <strong>deep mutability</strong>: the modifier on a binding propagates into all nested fields. Fields inside a struct are <code>auto</code> by default — they follow the mutability of the containing instance.</p>
 
 <div class="callout callout-warning">
-  <p><strong>&#9888; Important:</strong> Bindings only control <strong>reassignability</strong>. Content mutability is controlled via memory keywords on the type (see <a href="./D-language-ownership.html">Memory Model — NRA</a>).</p>
+  <p><strong>&#9888; Important:</strong> Bindings only control <strong>reassignability</strong>. Content mutability is controlled via memory modifiers on the type (see <a href="./D-language-ownership.html">Memory Model — NRA</a>).</p>
 </div>
 
 <h2>Binding Keywords</h2>
@@ -93,6 +93,8 @@ let r = for ([acc, i]: i32), (i in 0..n) {
 
 <pre><code class="language-zith">global counter: share i32 = 0;          // requires Share capability
 global config: unique Config = load();  // requires Lent capability (atomic access)</code></pre>
+
+<p><strong>See also:</strong> <a href="./D-spec-mutability-bindings.html">Spec: Mutability &amp; Bindings</a></p>
 
 <hr>
 <p><strong>Next:</strong> <a href="./D-language-functions.html">Functions</a></p>

@@ -70,6 +70,29 @@ OLD_TO_NEW = {
     "project/01-overview.md":         "D-project-overview.html",
     "quickstart/01-hello-world.md":   "D-quickstart-hello-world.html",
     "reference/stdlib.md":            "D-reference-stdlib.html",
+
+    # Spec files
+    "Zith-spec-overview.md":          "D-spec-overview.html",
+    "02-module-system.md":            "D-spec-module-system.html",
+    "03-type-system.md":              "D-spec-type-system.html",
+    "04-traits-interfaces.md":        "D-spec-traits-interfaces.html",
+    "05-functions.md":                "D-spec-functions.html",
+    "06-mutability-bindings.md":      "D-spec-mutability-bindings.html",
+    "07-memory-model.md":             "D-spec-memory-model.html",
+    "08-error-handling.md":           "D-spec-error-handling.html",
+    "09-control-flow.md":             "D-spec-control-flow.html",
+    "10-concurrency.md":              "D-spec-concurrency.html",
+    "11-comptime.md":                 "D-spec-comptime.html",
+    "12-assets.md":                   "D-spec-assets.html",
+    "13-raw-unsafe.md":               "D-spec-raw-unsafe.html",
+    "14-polymorphism.md":             "D-spec-polymorphism.html",
+    "15-macros.md":                   "D-spec-macros.html",
+    "16-words.md":                    "D-spec-words.html",
+    "17-contexts.md":                 "D-spec-contexts.html",
+    "18-c-interop.md":                "D-spec-c-interop.html",
+    "19-project-config.md":           "D-spec-project-config.html",
+    "20-standard-library.md":         "D-spec-standard-library.html",
+    "21-best-practices.md":           "D-spec-best-practices.html",
 }
 
 
@@ -84,15 +107,21 @@ def resolve_link(url, source_dir):
     if url.startswith("#"):
         return url
 
+    # Split anchor from the URL
+    anchor = ""
+    if "#" in url:
+        url, anchor = url.split("#", 1)
+        anchor = f"#{anchor}"
+
     # Resolve the URL relative to the source directory
     resolved = os.path.normpath(os.path.join(source_dir, url))
     resolved = resolved.lstrip("./")
 
     if resolved in OLD_TO_NEW:
-        return f"./{OLD_TO_NEW[resolved]}"
+        return f"./{OLD_TO_NEW[resolved]}{anchor}"
 
     # Fallback: just swap the extension
-    return re.sub(r'\.mdx?$', '.html', url)
+    return re.sub(r'\.mdx?$', '.html', url) + anchor
 
 
 def convert_link(match, source_dir):

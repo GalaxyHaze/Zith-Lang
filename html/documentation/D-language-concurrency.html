@@ -81,5 +81,7 @@ await handle;                        // compiler verifies thread is done before 
 <pre><code class="language-zith">let shared = Rc.new(HeavyResource.init());
 let _ = spawn worker(Rc.clone(shared));              // runtime reference counting</code></pre>
 
+<p><strong>See also:</strong> <a href="./D-spec-concurrency.html">Spec: Concurrency &amp; Threads</a></p>
+
 <hr>
 <p><strong>Related:</strong> <a href="./D-language-ownership.html">Memory Model — NRA</a> | <a href="./D-language-variables.html">Mutability &amp; Bindings</a></p>
