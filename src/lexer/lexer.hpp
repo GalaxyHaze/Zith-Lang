@@ -23,7 +23,6 @@ class Lexer {
     const char *start       = nullptr;
     const char *now         = nullptr;
     const char *end         = nullptr;
-    memory::Loc loc{};
 
     diagnostics::DiagnosticEngine &diags_;
     memory::DynArray<Token> tokens;
@@ -34,7 +33,6 @@ class Lexer {
     bool isOpen() const;
     char peek() const;
     char peek(size_t n) const;
-    bool consume(size_t offset = 1);
     bool match(std::string_view must);
     void singleLineComment(size_t prefixLen, TokenKind kind);
     void multiLineComment(size_t prefixLen, TokenKind kind);

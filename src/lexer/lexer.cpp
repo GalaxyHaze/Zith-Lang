@@ -6,7 +6,6 @@
 #include "memory/source-map.hpp"
 #include "memory/span.hpp"
 
-#include <cctype>
 #include <cstdint>
 #include <cstdio>
 #include <string_view>
@@ -15,6 +14,18 @@ namespace zith::lexer {
 
 bool Lexer::isNum(char c) {
     return c >= '0' && c <= '9';
+}
+
+static bool isAsciiSpace(char c) {
+    return c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\f' || c == '\v';
+}
+
+static bool isAsciiAlpha(char c) {
+    return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z');
+}
+
+static bool isAsciiAlnum(char c) {
+    return isAsciiAlpha(c) || (c >= '0' && c <= '9');
 }
 
 bool Lexer::isPunctuation(char c) {
@@ -68,18 +79,11 @@ bool Lexer::isOpen() const {
 }
 
 char Lexer::peek() const {
-    return (now + 1 <= end) ? now[1] : '\0';
+    return (now + 1 < end) ? now[1] : '\0';
 }
 
 char Lexer::peek(size_t n) const {
-    return (now + n <= end) ? now[n] : '\0';
-}
-
-bool Lexer::consume(size_t offset) {
-    if (end - now < offset)
-        return false;
-    now += offset;
-    return true;
+    return (now + n < end) ? now[n] : '\0';
 }
 
 bool Lexer::match(std::string_view must) {
@@ -106,11 +110,8 @@ void Lexer::singleLineComment(size_t prefixLen, TokenKind kind) {
     const auto before = now - prefixLen;
     while (isOpen()) {
         if (*now == '\n') {
-            loc.col = 1;
-            loc.line++;
             break;
         }
-        loc.col++;
         now++;
     }
     tokens.emplace(spanRange(before, now), kind);
@@ -124,12 +125,6 @@ void Lexer::multiLineComment(size_t prefixLen, TokenKind kind) {
             now += 2;
             tokens.emplace(spanRange(before, now), kind);
             return;
-        }
-        if (*now == '\n') {
-            loc.col = 1;
-            loc.line++;
-        } else {
-            loc.col++;
         }
         now++;
     }
@@ -147,7 +142,6 @@ void Lexer::processNumber() {
             now += 2;
             while (now < end &&
                    (isNum(*now) || (*now >= 'a' && *now <= 'f') || (*now >= 'A' && *now <= 'F'))) {
-                loc.col++;
                 now++;
             }
             if (now == before + 2) {
@@ -160,12 +154,14 @@ void Lexer::processNumber() {
         if (nxt == 'c' || nxt == 'C') {
             now += 2;
             while (now < end && *now >= '0' && *now <= '7') {
-                loc.col++;
                 now++;
             }
             if (now == before + 2) {
                 diags_.report(diagnostics::Severity::Error, diagnostics::err::InvalidIntLiteral,
                               "Invalid octal literal: expected digits after '0c'", spanAt(before));
+            } else if (now < end && isNum(*now)) {
+                diags_.report(diagnostics::Severity::Error, diagnostics::err::InvalidIntLiteral,
+                              "Invalid octal digit in literal", spanAt(now));
             }
             tokens.emplace(spanRange(before, now), TokenKind::LitVal);
             return;
@@ -173,7 +169,6 @@ void Lexer::processNumber() {
         if (nxt == 'b' || nxt == 'B') {
             now += 2;
             while (now < end && (*now == '0' || *now == '1')) {
-                loc.col++;
                 now++;
             }
             if (now == before + 2) {
@@ -186,15 +181,12 @@ void Lexer::processNumber() {
     }
 
     while (now < end && isNum(*now)) {
-        loc.col++;
         now++;
     }
 
     if (now < end && *now == '.' && now + 1 < end && isNum(*(now + 1))) {
         now++;
-        loc.col++;
         while (now < end && isNum(*now)) {
-            loc.col++;
             now++;
         }
     }
@@ -206,28 +198,28 @@ void Lexer::processString() {
     const auto before = now;
     const char quote  = *now;
     now++;
-    loc.col++;
 
     while (isOpen()) {
         if (*now == quote) {
             now++;
-            loc.col++;
             tokens.emplace(spanRange(before, now), TokenKind::LitVal);
             return;
         }
         if (*now == '\\') {
             now++;
-            loc.col++;
             if (!isOpen())
                 break;
-        }
-        if (*now == '\n') {
-            loc.line++;
-            loc.col = 1;
+            char esc = *now;
+            if (esc != 'n' && esc != 't' && esc != 'r' && esc != '0' && esc != '\\' &&
+                esc != '"' && esc != '\'') {
+                diags_.report(diagnostics::Severity::Error, diagnostics::err::InvalidEscape,
+                              std::string("Invalid escape sequence '\\") + esc + "'",
+                              spanAt(now - 1));
+            }
+            now++;
         } else {
-            loc.col++;
+            now++;
         }
-        now++;
     }
 
     diags_.report(diagnostics::Severity::Error, diagnostics::err::UnclosedString,
@@ -236,8 +228,7 @@ void Lexer::processString() {
 
 void Lexer::processIdentifier() {
     const auto before = now;
-    while (now < end && (std::isalnum(*now) || *now == '_')) {
-        loc.col++;
+    while (now < end && (isAsciiAlnum(*now) || *now == '_')) {
         now++;
     }
     std::string_view word{before, static_cast<size_t>(now - before)};
@@ -272,16 +263,9 @@ auto Lexer::run(std::variant<memory::FileId, std::pair<std::string_view, std::st
     const auto content = file->getSlice();
     start = now = content.data();
     end         = content.data() + content.size();
-    loc         = {1, 1};
 
     while (isOpen()) {
-        if (std::isspace(*now)) {
-            if (*now == '\n') {
-                loc.line++;
-                loc.col = 1;
-            } else {
-                loc.col++;
-            }
+        if (isAsciiSpace(*now)) {
             now++;
             continue;
         }
@@ -316,14 +300,13 @@ auto Lexer::run(std::variant<memory::FileId, std::pair<std::string_view, std::st
             continue;
         }
 
-        if (std::isalpha(*now) || *now == '_') {
+        if (isAsciiAlpha(*now) || *now == '_') {
             processIdentifier();
             continue;
         }
 
         if (isOperator(*now)) {
             const auto before = now;
-            loc.col++;
             now++;
             tokens.emplace(spanRange(before, now), TokenKind::Operators, *before);
             continue;
@@ -331,7 +314,6 @@ auto Lexer::run(std::variant<memory::FileId, std::pair<std::string_view, std::st
 
         if (isPunctuation(*now)) {
             const auto before = now;
-            loc.col++;
             now++;
             tokens.emplace(spanRange(before, now), TokenKind::Punctuation, *before);
             continue;
@@ -339,7 +321,6 @@ auto Lexer::run(std::variant<memory::FileId, std::pair<std::string_view, std::st
 
         {
             const auto before = now;
-            loc.col++;
             now++;
             auto span = spanRange(before, now);
             diags_.report(diagnostics::Severity::Error, diagnostics::err::UnknownToken,
