@@ -5,8 +5,7 @@
 #include "hir/hir-types.hpp"
 #include "memory/arena.hpp"
 #include "memory/dyn-array.hpp"
-
-#include <string_view>
+#include "memory/string-interner.hpp"
 
 namespace zith::hir {
 
@@ -18,7 +17,7 @@ struct HirBasicBlock {
 };
 
 struct HirFunction {
-    std::string_view name;
+    memory::InternedId name;
     memory::DynArray<HirTypeId> params;
     HirTypeId return_type;
     ast::DeclId decl_id = ast::kInvalidDecl;
@@ -37,7 +36,7 @@ public:
     HirModule &operator=(HirModule &&) = default;
 
     HirExprId addExpr(HirExpr expr);
-    HirFunction &addFn(std::string_view name);
+    HirFunction &addFn(memory::InternedId name);
     HirFunction &getFn(size_t idx);
 
     const HirExpr &getExpr(HirExprId id) const;

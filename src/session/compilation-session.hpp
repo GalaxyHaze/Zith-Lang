@@ -7,6 +7,7 @@
 #include "hir/hir-module.hpp"
 #include "lexer/token.hpp"
 #include "memory/source-map.hpp"
+#include "memory/string-interner.hpp"
 #include "parser/scan-result.hpp"
 #include "session/pipeline-plan.hpp"
 #include "symbols/import-manager.hpp"
@@ -14,58 +15,43 @@
 #include "types/type-intern.hpp"
 
 #include <cstdarg>
+#include <functional>
+#include <memory>
 #include <string>
 
 namespace zith::session {
 
-// Per-file compilation pipeline.
-//
-// Each CompilationSession owns its own diagnostic engine, arenas,
-// AST builder, symbol table, and intermediate representations.
-// This design is naturally thread-safe: files don't share mutable state.
-//
-// Thread-safety plan for multi-file parallel compilation:
-//   - Each file gets its own CompilationSession (independent state)
-//   - All arenas are owned per-session, no global thread_local state
-//   - SourceMap uses internal shared_mutex for concurrent reads
-//   - Stages run independently per file — no shared mutable state
-//   - After MIR lowering, results CAN be merged per-module or per-binary
-//     (this is the only potential serialization point)
-//
-// Usage:
-//   CompilationSession session(opts, "foo.zith");
-//   session.run();
-//   if (session.hasErrors()) { ... }
 class CompilationSession {
-    const Options &opts_;
-    std::string file_path_;
-    std::string project_root_;
-    ProjectConfig project_config_;
-    PipelinePlan plan_;
+    std::reference_wrapper<const Options> mOpts;
+    std::string mFilePath;
+    std::string mProjectRoot;
+    ProjectConfig mProjectConfig;
+    PipelinePlan mPlan;
 
-    memory::SourceMap source_map_;
-    memory::Arena scratch_arena_;
-    memory::Arena ast_arena_;
-    memory::Arena sym_arena_;
-    memory::Arena type_arena_;
-    memory::Arena hir_arena_;
-    diagnostics::DiagnosticEngine diags_;
+    memory::SourceMap mSourceMap;
+    memory::Arena mScratchArena;
+    memory::Arena mAstArena;
+    memory::Arena mSymArena;
+    memory::Arena mTypeArena;
+    memory::Arena mHirArena;
+    diagnostics::DiagnosticEngine mDiags;
 
-    ast::AstBuilder ast_builder_;
-    symbols::ImportManager import_mgr_;
-    symbols::SymbolTable syms_;
-    memory::DynArray<symbols::SymId> resolved_syms_;
-    types::TypeIntern types_;
-    hir::HirModule hir_module_;
+    std::unique_ptr<memory::StringInterner> mInterner;
+    ast::AstBuilder mAstBuilder;
+    symbols::ImportManager mImportMgr;
+    symbols::SymbolTable mSyms;
+    memory::DynArray<symbols::SymId> mResolvedSyms;
+    types::TypeIntern mTypes;
+    hir::HirModule mHirModule;
 
-    memory::FileId file_id_ = 0;
-    lexer::TokenStream tokens_{};
-    ast::ProgramNode program_{ast_arena_};
-    parser::ScanResult scan_result_{ast_arena_};
+    memory::FileId mFileId = 0;
+    lexer::TokenStream mTokens{};
+    ast::ProgramNode mProgram{mAstArena};
+    parser::ScanResult mScanResult{mAstArena};
 
-    std::string output_buffer_;
-    bool buffered_output_ = false;
-    std::string content_override_; // non-empty = compile from buffer, not disk
+    std::string mOutputBuffer;
+    bool mBufferedOutput = false;
+    std::string mContentOverride;
 
 #if defined(__GNUC__) || defined(__clang__)
     void writeOutput(const char *fmt, ...) __attribute__((format(printf, 2, 3)));
@@ -74,81 +60,88 @@ class CompilationSession {
 #endif
 
     const char *ansicolor(const char *code) const {
-        return diags_.useColor() ? code : "";
+        return mDiags.useColor() ? code : "";
     }
 
 public:
-    CompilationSession(const Options &opts, std::string file_path);
+    CompilationSession(const Options &opts, std::string filePath);
+
+    CompilationSession(CompilationSession &&) = default;
+    CompilationSession &operator=(CompilationSession &&) = delete;
+    CompilationSession(const CompilationSession &) = delete;
+    CompilationSession &operator=(const CompilationSession &) = delete;
 
     bool run();
     bool runTo(Stage target);
 
     const diagnostics::DiagnosticEngine &diags() const {
-        return diags_;
+        return mDiags;
     }
     diagnostics::DiagnosticEngine &diags() {
-        return diags_;
+        return mDiags;
     }
     const std::string &filePath() const {
-        return file_path_;
+        return mFilePath;
     }
     bool hasErrors() const {
-        return diags_.hasErrors();
+        return mDiags.hasErrors();
     }
     const ProjectConfig &projectConfig() const {
-        return project_config_;
+        return mProjectConfig;
     }
     const memory::SourceMap &sourceMap() const {
-        return source_map_;
+        return mSourceMap;
     }
     memory::FileId fileId() const {
-        return file_id_;
+        return mFileId;
     }
 
     void setBuffered(bool b) {
-        buffered_output_ = b;
-        diags_.setSuppressEmit(b);
+        mBufferedOutput = b;
+        mDiags.setSuppressEmit(b);
     }
     void setContent(std::string content) {
-        content_override_ = std::move(content);
+        mContentOverride = std::move(content);
     }
     std::string flushOutput();
     void emitDiagnostics();
 
-    // ── LSP feature accessors ─────────────────────────────────────────
     const lexer::TokenStream &tokens() const {
-        return tokens_;
+        return mTokens;
     }
     const parser::ScanResult &scanResult() const {
-        return scan_result_;
+        return mScanResult;
     }
     const symbols::SymbolTable &symbolTable() const {
-        return syms_;
+        return mSyms;
     }
     symbols::SymbolTable &symbolTable() {
-        return syms_;
+        return mSyms;
     }
     const memory::DynArray<symbols::SymId> &resolvedSyms() const {
-        return resolved_syms_;
+        return mResolvedSyms;
     }
     const ast::AstBuilder &astBuilder() const {
-        return ast_builder_;
+        return mAstBuilder;
     }
     ast::AstBuilder &astBuilder() {
-        return ast_builder_;
+        return mAstBuilder;
     }
     const ast::ProgramNode &program() const {
-        return program_;
+        return mProgram;
     }
     const types::TypeIntern &types() const {
-        return types_;
+        return mTypes;
+    }
+    memory::StringInterner &interner() {
+        return *mInterner;
     }
 
     std::string fmtStage();
 
 private:
     void setTarget(Stage s) {
-        plan_.target = s;
+        mPlan.target = s;
     }
     bool lexStage();
     bool scanStage();

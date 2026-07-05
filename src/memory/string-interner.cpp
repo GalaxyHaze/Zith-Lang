@@ -7,6 +7,8 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <mutex>
+#include <shared_mutex>
 #include <string_view>
 
 namespace zith::memory {
@@ -16,6 +18,8 @@ StringInterner::StringInterner(Arena &arena) : allocator_(&arena) {
 }
 
 InternedId StringInterner::intern(std::string_view str) {
+    std::unique_lock lock(rwMutex_);
+
     auto *existing = map->get(str);
     if (existing)
         return *existing;
@@ -29,6 +33,8 @@ InternedId StringInterner::intern(std::string_view str) {
 }
 
 std::string_view StringInterner::lookup(InternedId id) const {
+    std::shared_lock lock(rwMutex_);
+
     if (id >= pool->size())
         return {};
     return (*pool)[id];
@@ -38,7 +44,7 @@ void StringInterner::init() {
     pool = reinterpret_cast<DynArray<std::string_view> *>(allocator_->alloc(sizeof(DynArray<std::string_view>), alignof(DynArray<std::string_view>)));
     map  = reinterpret_cast<FlatMap<std::string_view, InternedId> *>(allocator_->alloc(sizeof(FlatMap<std::string_view, InternedId>), alignof(FlatMap<std::string_view, InternedId>)));
     if (!pool || !map) {
-        fprintf(stderr,
+        std::fprintf(stderr,
                 "at: StringInterner, occured an internal error, due to: nullptr at allocator\n");
         std::abort();
     }

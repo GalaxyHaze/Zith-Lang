@@ -316,7 +316,7 @@ void Parser::skipUntil(std::initializer_list<lexer::TokenKind> sync_tokens) {
 ProgramResult parseProgram(lexer::TokenStream tokens, ast::AstBuilder &builder,
                            diagnostics::DiagnosticEngine &diags) {
     memory::Arena arena;
-    symbols::SymbolTable syms(arena);
+    symbols::SymbolTable syms(arena, &builder.interner());
     Parser p(&tokens, &builder, &diags);
     auto result = scan(p, syms);
     p.expandBodies(result);

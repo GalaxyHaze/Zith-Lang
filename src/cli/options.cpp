@@ -68,39 +68,6 @@ void Options::deriveTargetStage() {
     }
 }
 
-void Cli::printUsage() {
-    err.bold("Zith ");
-    printf("- A clean minimal system language\n\n");
-    err.section("USAGE:");
-    printf("    zithc [OPTIONS] <COMMAND> [ARGS]\n\n");
-    err.section("COMMANDS:");
-    err.green("  -h, --help");
-    fprintf(stderr, "   Show help message\n");
-    err.green("  --version");
-    fprintf(stderr, " Show version information\n\n");
-    err.section("OPTIONS:");
-    err.flag("-h, --help", "Show help");
-    err.flag("    --version", "Show version");
-    err.flag("-m, --mode <debug|dev|release|fast|small>", "Build mode");
-    err.flag("-o, --output <FILE>", "Output file path");
-    err.flag("-I, --include <DIR>", "Add include directory (repeatable)");
-    err.flag("    --emit <ast|hir|ir|asm|obj|bin>", "Emit intermediate representation");
-    err.flag("    --target <TRIPLE>", "Target triple");
-    err.flag("    --emit-tokens", "Print and emit tokens");
-    err.flag("    --emit-ast", "Emit AST");
-    err.flag("    --emit-hir", "Emit HIR");
-    err.flag("    --emit-ir", "Emit LLVM IR");
-    err.flag("    --emit-asm", "Emit assembly");
-    err.flag("    --interpreted", "Use bytecode path");
-    err.flag("    --opt-level <0-3>", "Optimization level");
-    err.flag("    --debug-level <0-3>", "Debug info level");
-    err.flag("-s, --strict", "Apply stricter rules");
-    err.flag("    --lto", "Enable link-time optimization");
-    err.flag("    --strip-debug", "Strip debug symbols");
-    err.flag("-c, --color <auto|on|off>", "Color output");
-    err.flag("-v, --verbose", "Verbose output");
-}
-
 static bool compare(const char *a, const char *b) {
     return std::strcmp(a, b) == 0;
 }
@@ -170,6 +137,7 @@ void Cli::parseArgs(int argc, char **argv) {
                     this->opts.subcommandStr = argv[i + 1];
                     ++i;
                 }
+                continue;
             default:
                 continue;
             }
@@ -234,7 +202,7 @@ void Cli::parseArgs(int argc, char **argv) {
             continue;
         }
 
-        if (compare("-m", "--mode")) {
+        if (compare(argv[i], "-m", "--mode")) {
             requireValue(i, "--mode/-m");
             auto val = argv[++i];
             Options::Mode m;
@@ -264,7 +232,7 @@ void Cli::parseArgs(int argc, char **argv) {
             continue;
         }
 
-        if (compare("--include", "-I")) {
+        if (compare(argv[i], "-I", "--include")) {
             requireValue(i, "--include/-I");
             std::string_view arg = argv[++i];
 
@@ -274,6 +242,20 @@ void Cli::parseArgs(int argc, char **argv) {
                     opts.includeDirs.push(std::string(span));
                 }
             }
+            continue;
+        }
+
+        if (compare(argv[i], "-A", "--assets")) {
+            requireValue(i, "--assets/-A");
+            std::string_view arg = argv[++i];
+
+            for (auto token : arg | std::ranges::views::split(',')) {
+                std::string_view span(token);
+                if (!span.empty()) {
+                    opts.assetDirs.push(std::string(span));
+                }
+            }
+            continue;
         }
 
         // --emit
@@ -378,7 +360,7 @@ void Cli::parseArgs(int argc, char **argv) {
         if (argv[i][0] == '-') {
             err.red("[error]");
             std::fprintf(stderr, " unknown flag '%s'\n", argv[i]);
-            printUsage();
+            cli::commands::help(stderr);
             std::exit(1);
         }
 
@@ -398,8 +380,6 @@ void Cli::loadFlags() {
     opts.flags.debugLevel(defaults.debugLevel);
     opts.flags.stripDebug(defaults.stripDebug);
     opts.flags.lto(defaults.lto);
-    if (opts.flags.color() == Options::Color::Auto)
-        opts.flags.color(Options::Color::Auto);
 
     // Try to find ZithFlags.toml
     fs::path flagsPath;

@@ -10,7 +10,7 @@ HirExprId HirModule::addExpr(HirExpr expr) {
     return id;
 }
 
-HirFunction &HirModule::addFn(std::string_view name) {
+HirFunction &HirModule::addFn(memory::InternedId name) {
     fns_.emplace(exprs_.arena());
     fns_.back().name = name;
     return fns_.back();

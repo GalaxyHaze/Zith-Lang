@@ -2,10 +2,10 @@
 
 #include "hir/hir-types.hpp"
 #include "memory/dyn-array.hpp"
+#include "memory/string-interner.hpp"
 #include "symbols/symbol-id.hpp"
 
 #include <cstdint>
-#include <string_view>
 #include <variant>
 #include <vector>
 
@@ -45,12 +45,12 @@ struct HirUnary {
     HirExprId operand;
 };
 struct HirLet {
-    std::string_view name;
+    memory::InternedId name;
     HirTypeId type;
     HirExprId init;
 };
 struct HirVar {
-    std::string_view name;
+    memory::InternedId name;
     uint32_t version;
 };
 struct HirCall {

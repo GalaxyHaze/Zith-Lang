@@ -7,9 +7,7 @@
 #include "span.hpp"
 
 #include <functional>
-#include <shared_mutex>
 #include <string>
-#include <vector>
 
 namespace zith::memory {
 
@@ -19,7 +17,6 @@ class SourceMap {
     memory::Arena file_arena;
     memory::DynArray<SourceLoc> files;
     FlatMap<std::string, FileId> cache;
-    mutable std::shared_mutex rw_mutex;
 
 public:
     SourceMap();

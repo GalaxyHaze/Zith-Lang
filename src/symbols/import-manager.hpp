@@ -39,8 +39,8 @@ public:
         SymId local_sym;
     };
 
-    ImportManager(memory::Arena &arena, memory::SourceMap &source_map,
-                  diagnostics::DiagnosticEngine &diags,
+    ImportManager(memory::Arena &arena, memory::StringInterner &interner,
+                  memory::SourceMap &source_map, diagnostics::DiagnosticEngine &diags,
                   std::vector<std::string> visible_roots = {});
 
     auto resolve(const memory::DynArray<std::string_view> &path, bool is_from = false,
@@ -70,6 +70,7 @@ private:
     };
 
     memory::Arena &arena_;
+    memory::StringInterner &interner_;
     memory::SourceMap &source_map_;
     diagnostics::DiagnosticEngine &diags_;
     std::vector<std::string> visible_roots_;

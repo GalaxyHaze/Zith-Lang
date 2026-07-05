@@ -2,6 +2,7 @@
 
 #include "memory/arena.hpp"
 #include "memory/dyn-array.hpp"
+#include "memory/string-interner.hpp"
 #include "types/type-kind.hpp"
 
 #include <string>
@@ -11,17 +12,18 @@
 namespace zith::types {
 
 struct StructField {
-    std::string_view name;
+    memory::InternedId name;
     TypeId type;
 };
 
 struct StructDef {
-    std::string_view name;
+    memory::InternedId name;
     memory::DynArray<StructField> fields;
 };
 
 class TypeIntern {
     memory::Arena &arena_;
+    memory::StringInterner &interner_;
     memory::DynArray<TypeData> types_;
     memory::DynArray<size_t> hashes_;
     memory::DynArray<StructDef> struct_defs_;
@@ -29,10 +31,10 @@ class TypeIntern {
     uint32_t next_enum_def_id_  = 0;
     uint32_t next_union_def_id_ = 0;
 
-    static size_t computeHash(const TypeData &data);
+    size_t computeHash(const TypeData &data);
 
 public:
-    explicit TypeIntern(memory::Arena &arena);
+    explicit TypeIntern(memory::Arena &arena, memory::StringInterner &interner);
 
     // ── Intern existing TypeData ─────────────────────────────────
     TypeId intern(TypeData data);
@@ -66,8 +68,8 @@ public:
     StructDef &getStructDef(TypeId struct_type);
     size_t fieldCount(TypeId struct_type) const;
     const StructField &getField(TypeId struct_type, size_t index) const;
-    bool hasField(TypeId struct_type, std::string_view name) const;
-    TypeId fieldType(TypeId struct_type, std::string_view name) const;
+    bool hasField(TypeId struct_type, std::string_view name);
+    TypeId fieldType(TypeId struct_type, std::string_view name);
 
     // ── Query ────────────────────────────────────────────────────
     const TypeData &lookup(TypeId id) const;

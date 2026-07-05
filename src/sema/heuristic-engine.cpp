@@ -38,14 +38,15 @@ std::string_view HeuristicEngine::findBestMatch(std::string_view target,
     size_t best_dist = std::numeric_limits<size_t>::max();
 
     for (size_t i = 0; i < syms.symbolCount(); ++i) {
-        auto &data = syms.get(static_cast<symbols::SymId>(i));
-        if (data.name.empty())
+        auto &data    = syms.get(static_cast<symbols::SymId>(i));
+        auto sym_name = syms.interner().lookup(data.name);
+        if (sym_name.empty())
             continue;
-        size_t dist     = levenshteinDistance(target, data.name);
-        size_t max_dist = std::max(target.size(), data.name.size()) / 3 + 1;
+        size_t dist     = levenshteinDistance(target, sym_name);
+        size_t max_dist = std::max(target.size(), sym_name.size()) / 3 + 1;
         if (dist < best_dist && dist <= max_dist) {
             best_dist = dist;
-            best      = data.name;
+            best      = sym_name;
         }
     }
     return best;

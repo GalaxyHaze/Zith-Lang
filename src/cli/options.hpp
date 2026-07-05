@@ -6,6 +6,10 @@
 #include "memory/dyn-array.hpp"
 #include "memory/string-interner.hpp"
 #include "session/pipeline-plan.hpp"
+
+namespace zith::cli::commands {
+    int help(FILE *dest);
+}
 #include <bitset>
 #include <cstdint>
 #include <string>
@@ -153,6 +157,8 @@ struct Options {
     explicit Options(memory::Arena &allocator)
         : includeDirs(allocator), inputFiles(allocator), assetDirs(allocator), flags(), targetTriple() {}
 
+    memory::StringInterner *stringPool = nullptr;
+
     void deriveTargetStage();
 };
 
@@ -161,16 +167,16 @@ struct Cli {
     Cli() :
     generalAllocator(),
     opts(generalAllocator),
-    config(generalAllocator)
+    config(generalAllocator),
+    stringPool(generalAllocator)
     {
-        this->stringPool = memory::StringInterner(generalAllocator);
+        opts.stringPool = &stringPool;
         term::enableVirtual();
     }
 
     void parseArgs(int argc, char **argv);
     void loadFlags();
     void loadProject();
-    void printUsage();
     int dispatch();
 
     void requireValue(int i, const char *flag) {
@@ -178,20 +184,20 @@ struct Cli {
             err.red("[error]");
             err.red(flag);
             err.red(" requires a value\n");
-            printUsage();
+            cli::commands::help(stderr);
             std::exit(1);
         }
     }
 
-    term::UsagePrinter out;
-    term::UsagePrinter err;
+    memory::Arena generalAllocator;
     Options opts;
     ProjectConfig config;
+    memory::StringInterner stringPool;
+    term::UsagePrinter out;
+    term::UsagePrinter err;
     std::pair<int, char **> args;
     int current = 0;
     Session *session = nullptr;
-    memory::Arena generalAllocator;
-    memory::StringInterner stringPool;
 };
 
 } // namespace zith

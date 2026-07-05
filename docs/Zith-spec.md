@@ -66,7 +66,7 @@ The compiler is a copilot: it gives you the tools, and you build the systems.
 
 | Everyday | Domain-specific |
 |---|---|
-| `struct`, `fn`, `lend`, `view`, `trait`, `interface` | `marker`, `dock`, `jump` — for Games, State Machine, OS & embeded |
+| `struct`, `fn`, `lend`, `view`, `trait`, `interface` | `marker`, `dock`, `jump` — for Games, State Machine, OS & embedded |
 | `?T`, `T!`, `or` | `context`, `word` — for DSLs and APIs |
 | `when`, `for`, `->` | `async` — for data pipelines |
 
@@ -101,14 +101,14 @@ The `zithc` compiler follows a multi-stage pipeline:
 ```
 source -> lex -> scan -> resolve(import/symbols) -> sema -> comptime -> NRA -> HIR -> LLVM
 ```
->Note: when you compile a library, after LLVM it outputs `.zirl` (Zith Intermediate Representation Library).
+> Note: when you compile a library, after LLVM it outputs `.zirl` (Zith Intermediate Representation Library).
 
 | Stage | Description |
 |---|---|
-|`source`| Receive arguments from CLI, load the file |
-|  `lex` | Tokenize the file into a `TokenStream`
+| `source` | Receive arguments from CLI, load the file |
+| `lex` | Tokenize the file into a `TokenStream` |
 | `scan` | Find top-level declarations from the token stream |
-| `resolve` | Resolve imported symbols, report duplicates
+| `resolve` | Resolve imported symbols, report duplicates |
 | `sema` | Semantic analysis — name resolution, type checking, visibility |
 | `comptime` | Generic instantiation, macro expansion, `comptime` evaluation |
 | `NRA` | Apply NRA to ensure memory safety |
@@ -307,7 +307,7 @@ implement Node<T> as Printable {
 implement Node<f32> {...}
 ```
 
-> All types beside `component` must implement they fns declared inside `implement`
+> All types beside `component` must implement their fns declared inside `implement`
 
 #### `self`, `other`, `Self`
 
@@ -392,7 +392,7 @@ enum Constants: union {
 
 The `is` operator narrows a union within a branch. Branches are isolated — moves inside one branch don't affect others. After the block completes, the type **widens back** to the full union. The underlying tag does not revert — the value stays `i32` internally — but the type system treats it as the full union again.
 
-Zith has no `else` keyword — the compiler deduces branches implicitly. When you write a conditional as an expression and not every branch returns a value, the missing branches return `null`. The result becomes `?T`:
+When you write a conditional as an expression and not every branch returns a value, the missing branches return `null`. The result becomes `?T`:
 
 ```zith
 let result = if (v is i32) v;   // ?i32 — missing branch returns null
@@ -477,7 +477,7 @@ when (point) {
 }
 ```
 
-### 3.10  Cast Operator
+### 3.10 Cast Operator
 
 ```zith
 let n: i32 = 42;
@@ -551,9 +551,9 @@ Capabilities are special traits that feed the compiler more information, unlocki
 | `Null` | A negative capability — its traits activate only once NRA has proven a value IS `null`. Outside the proven-null branch, calling the method is a **compile error**. |
 | `Fail` | A negative capability — its traits activate only once NRA has proven a value IS an error. Cannot coexist with `Null` on the **same level**, but `?T!` can have `Null` on the outer level and `Fail` on the inner. |
 | `Allocator` | To provide custom allocators |
-| `Generator` | Allows create custom Generators & receive the return of an `async fn`.  |
+| `Generator` | Allows creating custom Generators & receive the return of an `async fn`.  |
 | `Share` | Required for `global: share` and crossing thread boundaries |
-| `Lent` | Enables `global: unique`, a runtime-checked exclusive borrow |
+| `Lent` | Enables `global: unique`, a runtime-checked exclusive borrow. Also allows `lend` parameters. |
 | `Trust` | A trait extending `Trust` may contain `raw fn` methods callable from safe contexts. |
 | `Unique` | Marks a singleton type. It cannot be instantiated — the type name itself acts as the instance. All fields must implement `Share` (thread-safe). A `unique Local` variant is a singleton thread-local. |
 
@@ -669,7 +669,7 @@ fn first<T>(slice: []T): ?T {
 |---|---|
 | `fn` | Standard runtime function. |
 | `const fn` | Resolved entirely at compile time. |
-| `async fn` | Coroutine\<T\> | 
+| `async fn` | Returns `Coroutine<T>` — a lazy generator with a default base implementation. Must be consumed by a type implementing `Generator`. |
 | `flow fn` | Enables marker/dock control flow (§9.4). |
 | `raw fn` | Always unchecked, bypassing safety in both debug and release. The compiler warns in release builds if `raw` could be removed. |
 
@@ -681,6 +681,7 @@ Macro calls use the `@` prefix — `@println`, `@log`, `@serialize` — while or
 
 ```zith
 // An async fn returns Coroutine<T>, not T directly.
+// Coroutine<T> has a default base implementation.
 // Only types implementing Generator can receive it.
 async fn fetch(url: string): Response! {
     yield;
@@ -701,10 +702,10 @@ Zith uses deep mutability: a modifier on a binding flows into every nested field
 | `let` | Binding | Immutable — cannot be reassigned. |
 | `var` | Binding | Mutable — can be reassigned. |
 | `global` | Binding | Static storage duration. |
-| `const` | Binding | Compile-time constant |
+| `const` | Binding | Compile-time constant. |
 
 
-> `let`/`var` control reassignability of the binding itself. Content mutability is handled separately through memory keywords (§7).
+> `let`/`var` control reassignability of the binding itself. Content mutability is handled separately through memory modifiers (§7).
 
 ```zith
 let x: mut Point;      // cannot reassign x, but Point's fields are mutable
@@ -719,13 +720,32 @@ COUNT += 1;   // valid at compile time only
 ```zith
 let [x, y, z]: f32 = 1.0f;             // grouped same type, related semantics
 let name: string; let age: i32; // individual unrelated
-let [x,y,z] = | 5,4,'c'|;   // pack literal — see §3.9
+let [x,y,z] = | 5,4,'c'|;   // pack literal — see §6.4
 
 // If the loop never runs, 'or' supplies the fallback value
 let r = for ([acc, i]: i32), (i in 0..n) {
             acc *= i + 1
         } or 0;
 ```
+
+### 6.4 Pack Literals
+
+Packs group heterogeneous values into a lightweight tuple-like structure. They are declared with `| |` and can be destructured with `[ ]`:
+
+```zith
+// Pack literal
+let p = | 5, 4, 'c' |;
+
+// Destructure
+let [a, b, c] = p;
+
+// Used in for loops with type annotation
+let r = for ([acc, i]: i32), (i in 0..n) {
+            acc *= i + 1
+        } or 0;
+```
+
+> Packs are not structs — they have no named fields and no fixed memory layout. They are primarily used for destructuring and as loop accumulators.
 
 ---
 
@@ -792,6 +812,8 @@ In effect, if `a` is never reassigned, it is as though `a` never existed and `b`
 
 **Rule 4 — `lend` Behavioral Promise.** A `lend` value cannot be stored, moved, or captured. It may be passed as a call argument or returned — in the latter case, passing the promise on to the caller.
 
+> For details on how NRA resolves nodes and validates these rules, see §7.8.
+
 ### 7.5 NRA in Practice
 
 ```zith
@@ -832,7 +854,7 @@ await handle;
 // #wont_remain -- a promise that the thread dies before the scope ends
 #wont_remain let _ = spawn quick_task(shared_data);
 
-// Rc -- runtime ref-count fallback
+// Rc -- runtime ref-count fallback (defined in std/rc)
 let shared = Rc.new(HeavyResource.init());
 let _ = spawn worker(Rc.clone(shared));
 ```
@@ -858,6 +880,8 @@ implement Node<T> {
 - `belong` fields may be passed as `lend` to functions.
 
 ### 7.8 How NRA Resolves Nodes
+
+> *This section is relevant for tooling authors and compiler contributors.*
 
 Every symbol gets a **resource node**. NRA is **lazy** — it only validates a node when you use, view, or return it.
 
@@ -1064,7 +1088,7 @@ readFile("data.bin")
 foo(), f1(..), f2(..) -> f3(..);
 
 // Parenthesized sub-chain -- this one does advance inside the sub-chain
-// But dont effect the main chain
+// But don't affect the main chain
 foo(), ( f1(..) -> f2() ) -> f3(..);
          ^                      ^
          |                      |
@@ -1138,8 +1162,8 @@ flow fn run(data: Stream): void {
 // Default thread type
 let handle = spawn worker_fn(data);
 
-// Explicit thread type capability
-let handle = spawn GreenThread fn worker_fn(data);
+// Explicit thread type
+let handle = spawn worker_fn(data) with GreenThread;
 
 // Fire-and-forget
 let _ = spawn background_task();
@@ -1206,7 +1230,7 @@ const fn processJson(data: []char): JsonValue { ... }
 const parsed = processJson(Data);  // runs at compile time
 ```
 
-> Some macros and functions are overloaded to run at compile time; a compile-time `throw` surfaces as a compiler error message.
+> Some macros and functions are overloaded to run at compile time; a compile-time `throw` halts compilation and displays the error message — equivalent to `static_assert` in other languages.
 
 ### 11.3 Reflection
 
@@ -1214,8 +1238,8 @@ Use `@` intrinsics to inspect types at compile time:
 
 ```zith
 // Iterate the fields of a struct
-for ( member in @members(MyStruct) ) {
-    @println("{}: {}", member.name, member.type);
+for ( field in @fields MyStruct ) {
+    @println("{}: {}", field.name, field.type);
 }
 
 // Check a type's kind
@@ -1226,7 +1250,7 @@ let isUn   = (T is @union);        // union
 let isEn   = (T is @enum);         // enum
 
 // Inspect field visibility
-for ( field in @fields(MyStruct) ) {
+for ( field in @fields MyStruct ) {
     @println("{}: {}", field.name, field.visibility);  // pub, mod, private
 }
 
@@ -1235,6 +1259,8 @@ let nullable = (T is @nullable);   // ?T
 ```
 
 ### 11.4 Type Manipulation
+
+> *This section is relevant for tooling authors and compiler contributors.*
 
 You can create a type and modify it before it is "finalized":
 
@@ -1245,6 +1271,9 @@ type Custom = @struct;
 // Add fields -- allowed while the type is not yet returned or instantiated
 @appendField Custom, x: i32;
 @appendField Custom, y: f32;
+
+// Remove a field
+@removeField Custom, x;
 
 // Add methods
 @appendMethod Custom, fn distance(self): f32 { sqrt(self.x*self.x + self.y*self.y) }
@@ -1257,9 +1286,9 @@ type Celsius = i32;
 @appendField Celsius, x: i32;  // COMPILE ERROR: type is 'done' (primitive)
 ```
 
-> A type built via `@struct` is "done" the moment it is returned or instantiated. Until then, fields and methods can be added or removed; passing the type to a generic function also counts as "done."
+> A type built via `@struct` is "done" the moment it is returned or instantiated. Until then, `@appendField`, `@removeField`, and `@appendMethod` are available. Passing the type to a generic function also counts as "done."
 >
-> A type created with `type` (e.g. `type Celsius = i32`) is a primitive alias — it has no fields to modify and is always immutable. You can still add methods via `implement`, but you cannot `@appendField`.
+> A type created with `type` (e.g. `type Celsius = i32`) is a primitive alias — it has no fields to modify and is always immutable. You can still add methods via `implement`, but you cannot `@appendField` or `@removeField`.
 
 ---
 
@@ -1410,7 +1439,7 @@ let items: dyn []Drawable = shapes;
 let dynList: dyn [];
 
 // In many cases LLVM strips the dyn overhead entirely
-// even if not, compare the type is a simple int comparission
+// even if not, compare the type is a simple int comparison
 // in terms of performance, is union + ptr indirection, still fast
 ```
 
@@ -1420,7 +1449,7 @@ Inside a smart-cast branch (`is`), the type narrows to the concrete type. Mutati
 
 `dyn Trait` is a `view` by default — a read-only, non-owning reference with a vtable. That means `view dyn` is redundant.
 
-All other memory keywords work with `dyn`:
+All other memory modifiers work with `dyn`:
 
 | Keyword | `dyn` behavior |
 |---|---|
@@ -1442,7 +1471,7 @@ fn modify(shape: lend dyn Drawable) {
 
 `dyn` does **not** work with `interface` (see §4.3) — only traits. Interfaces are structural and don't carry a vtable.
 
-When you write a type that could be `dyn` or `opaque`, prefer `dyn` — is short and usually better to understand. Reserve `opaque` for cases where you specifically need `raw opaque` (untagged `void*`, C interop).
+When you write a type that could be `dyn` or `opaque`, prefer `dyn` — it's short and clearer. Reserve `opaque` for cases where you specifically need `raw opaque` (untagged `void*`, C interop).
 
 ### 14.4 `dyn` vs Generics
 
@@ -1483,7 +1512,7 @@ If you try to use a non-object-safe trait with `dyn`, the compiler rejects it.
 
 > Best practice: define macros inside a `context` block (§17) rather than activating them globally.
 
-- They all have special arguments that can manipulate the AST. Both `default` & `raw` macros have 'attributes' (capture / `[]`)
+- They all have special arguments that can manipulate the AST. Default and raw macros accept attributes via `[capture]` syntax; tag macros receive attributes as `attributes`.
 
 ```zith
 macro log(msg: expr) { @println("[LOG] ", msg); }
@@ -1492,7 +1521,12 @@ raw macro swap(a: identifier, b: identifier) {
     let _tmp = a; a = b; b = _tmp;
 }
 
+// Default/raw macro with capture attribute
+@closure[capture](){ ... }
+
+// Tag macro — attributes come from the tag syntax
 <Section title="Overview"> body </Section>
+<cool id=5, name="name"> content </cool>
 
 // Macro parameter meta-types: identifier, expr, condition, body
 ```
@@ -1531,24 +1565,58 @@ Words let you define custom operators from identifiers. Each word has a fixed po
 - If the compiler sees any ambiguity (even potential), it errors out.
 - Best practice: define words inside a `context` (§17).
 
-| Position | Example | Reads as |
+### 16.1 Word Types
+
+| Type | Description | Example |
 |---|---|---|
-| Infix | `a DOT b` | `dot(a, b)` |
-| Prefix | `not x` | `not(x)` |
-| Suffix | `x!` | `assert(x)` |
+| `operator` | A word with defined behavior — infix, prefix, or suffix. | `use math.vec.dot as DOT;` |
+| `token` | A word with low precedence that does nothing alone. Serves as a named argument for macros and other words. | `token SELECT;` |
+
+#### Operator Words
 
 ```zith
 use math.vec.dot as DOT;
 use math.vec.cross as CROSS;
+use logical.not as NOT;
+use utils.assert as CHECK;
 
-let d = vec1 DOT vec2;      // dot(vec1, vec2)
-let c = vec1 CROSS vec2;    // cross(vec1, vec2)
+// Infix — reads as dot(vec1, vec2)
+let d = vec1 DOT vec2;
+
+// Prefix — reads as NOT flag
+let result = NOT flag;
+
+// Suffix — reads as CHECK(input)
+let value = input CHECK;
 ```
 
-> Words let you pass keywords, words, and macros as arguments.
+| Position | Reads as |
+|---|---|
+| Infix | `a DOT b` → `dot(a, b)` |
+| Prefix | `not x` → `not(x)` |
+| Suffix | `x!` → `assert(x)` |
+
+#### Token Words
+
+Token words have low precedence and do nothing alone. They serve as named arguments for macros and other words — e.g., SQL keywords:
+
+```zith
+token SELECT;
+token FROM;
+token WHERE;
+
+// Operator* defines behavior for a token
+operator* (SELECT, list) { ... }
+```
+
+> Tokens are useful for DSLs where keywords need to be passed as arguments without function call syntax.
+
+### 16.2 Words vs. Macros
 
 - **Macros:** Better for heavy logic, still require `()` syntax, can't return values.
 - **Words:** Work as keywords, let you return values, and can delegate to macros. Better for lightweight tasks.
+
+> Words let you pass keywords, words, and macros as arguments.
 
 ---
 
@@ -1602,11 +1670,10 @@ SSL_CTX_new(method);
 Override or supplement auto-generated bindings to attach Zith-specific semantics:
 
 ```zith
-// With semantic annotation -- the compiler now enforces this qualifier on the Zith side
-// This also introduce proper namespace to C fns
+// Equivalent declarations — malloc is a C function (no namespace)
+// bindToC is subject to Zith namespace rules
 fn bindToC = extern 'C' malloc(size: u64): unique opaque;
-// While is like a C function -- no overload, no namespace, no visibility modifier
-extern 'C' malloc(size: u64): unique opaque;
+extern 'C' malloc(size: u64): unique opaque;   // same thing, no namespace alias
 ```
 
 ### 18.3 External (No Header)
@@ -1722,7 +1789,7 @@ fn write(self: lend File, data: []u8): void!;
 | `Copy` | Bitwise copy — primitives and components get this by default |
 | `Clone` | `fn clone(self): Self!` |
 | `Lent` | Can appear as a `lend` parameter |
-| `Shared` | Safe to share across threads |
+| `Share` | Safe to share across threads |
 
 ---
 
@@ -1755,7 +1822,7 @@ fn write(self: lend File, data: []u8): void!;
 ### 21.5 Macro Patterns
 
 - Prefer macros scoped inside contexts over global activation.
-- Prefer to apply context per block for same reason
+- Prefer to apply context per block for the same reason.
 
 ### 21.6 Rule of Three
 
@@ -1787,7 +1854,7 @@ The Rule of Three keeps code readable. Zith gives you many tools — you don't h
 | Variables & functions | camelCase | `playerHealth`, `getDamage`, `loadConfig` |
 | Components | single word, lowercase | `rgb`, `color`, `file`, `vertex`, `health` |
 | Structs | PascalCase | `Point`, `Container`, `DynArray`, `GameConfig` |
-| Traits & interfaces | PascalCase | `Printable`, `iPositioned` |
+| Traits & interfaces | PascalCase | `Printable`, `iPositioned` (interfaces use lowercase `i` prefix) |
 | Files | kebab-case | `game-loop.zith`, `asset-manager.zith` |
 | Constants & comptime | UPPER_SNAKE_CASE | `MAX_SIZE`, `PI`, `DEFAULT_TIMEOUT` |
 | Enums | PascalCase for the type; PascalCase for variants | `enum Direction { North, South }` |
@@ -1816,10 +1883,10 @@ The Rule of Three keeps code readable. Zith gives you many tools — you don't h
 | `\| \|` | Types | Pack — named tuple / variadic / closure capture group. |
 | `pub` / `mod` / `mod(..)` / `mod(N)` | Visibility | Public / module-local, with optional depth. |
 | `let` / `var` / `global` / `const` | Bindings | Immutable / mutable / static storage / compile-time constant. |
-| `default` / `lend` / `view` / `unique` / `share` / `belong` | Memory | NRA memory qualifiers — `default` is implicit when no keyword is written (§7). |
+| `default` / `lend` / `view` / `unique` / `share` / `belong` | Memory | NRA memory modifiers — `default` is implicit when no keyword is written (§7). |
 | `fn` / `const fn` / `async fn` / `flow fn` / `raw fn` | Functions | Function kinds. Orthogonal; cannot be combined. |
 | `yield` | Functions | Suspend an async fn, optionally producing a value. |
-| `trait` / `interface` / `capability` / `extends` / `requires` / `dyn` | OOP | Nominal traits, structural interfaces, capabilities, extension, constraints, dynamic dispatch. |
+| `trait` / `interface` / `extends` / `requires` / `dyn` | OOP | Nominal traits, structural interfaces, extension, constraints, dynamic dispatch. |
 | `Copy` / `Functor` / `Arithmetic` / `Error` | Capabilities | Operator and behavior capabilities. |
 | `Null` / `Fail` | Capabilities | Negative — activate only in proven-invalid states. |
 | `Allocator` / `Generator` / `Share` / `Lent` / `Trust` / `Unique` | Capabilities | Memory, async, threading, and safety capabilities. |
@@ -1848,21 +1915,22 @@ The Rule of Three keeps code readable. Zith gives you many tools — you don't h
 
 | Intrinsic | Summary |
 |---|---|
-| `@fields(T)` | Iterate the fields/members of a type. |
-| `@sizeOf(T)` | Size of a type, in bytes. |
-| `@hasTrait(T, Trait)` | Check whether a type implements a trait. |
+| `@fields T` | Iterate the fields/members of a type. |
+| `@sizeOf T` | Size of a type, in bytes. |
+| `@hasTrait T, Trait` | Check whether a type implements a trait. |
 | `@struct` / `@component` / `@union` / `@enum` | Type-kind checks, used with `is`. |
 | `@nullable` | Check whether a type is nullable (`?T`). |
 | `@primitive` | Check whether a type is a primitive. |
-| `@allocate(T, data)` | Allocate within the current memory region. |
+| `@allocate T, data` | Allocate within the current memory region. |
 | `@pack` | Extract or inject a closure's capture pack. |
-| `@toStruct(pack)` | Convert a pack to a plain struct. |
-| `@toPack(struct, region)` | Convert a struct back to a pack. |
+| `@toStruct pack` | Convert a pack to a plain struct. |
+| `@toPack struct, region` | Convert a struct back to a pack. |
 | `@appendField Type, name: T` | Add a field to a type being constructed. |
+| `@removeField Type, name` | Remove a field from a type being constructed. |
 | `@appendMethod Type, fn ...` | Add a method to a type being constructed. |
-| `@file()` / `@line()` / `@fnName()` | Location information. |
-| `@location()` | Rich panic message source. |
-| `@ok`/`@err`  | Retrieve the T | E from `catch` & `fail`     |
+| `@file` / `@line` / `@fnName` | Location information. |
+| `@location` | Rich panic message source. |
+| `@ok` / `@err` | Retrieve the T or E from `catch` & `fail`. |
 
 ### 22.3 Attributes
 

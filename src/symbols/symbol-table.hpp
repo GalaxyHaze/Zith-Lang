@@ -4,11 +4,11 @@
 #include "memory/arena.hpp"
 #include "memory/dyn-array.hpp"
 #include "memory/span.hpp"
+#include "memory/string-interner.hpp"
 #include "symbols/symbol-id.hpp"
 #include "symbols/symbol-visibility.hpp"
 
 #include <cstdio>
-#include <string_view>
 
 namespace zith::symbols {
 
@@ -26,7 +26,7 @@ enum class SymKind : uint8_t {
 };
 
 struct SymbolData {
-    std::string_view name;
+    memory::InternedId name;
     ScopeId scope;
     SymbolVisibility visibility = SymbolVisibility::Private;
     int32_t mod_depth           = 0;
@@ -37,7 +37,7 @@ struct SymbolData {
     SymId target = kInvalidSym;
     memory::DynArray<SymId> members;
 
-    SymbolData(std::string_view name, ScopeId scope, SymbolVisibility vis, int32_t depth,
+    SymbolData(memory::InternedId name, ScopeId scope, SymbolVisibility vis, int32_t depth,
                SymKind ikind, ast::DeclId did, memory::Span ispan, memory::Span idoc, SymId itarget,
                memory::Arena &arena)
         : name(name), scope(scope), visibility(vis), mod_depth(depth), kind(ikind), decl_id(did),
@@ -51,34 +51,51 @@ struct Scope {
 
 class SymbolTable {
     memory::Arena *arena_;
+    memory::StringInterner *interner_;
     memory::DynArray<Scope> scopes_;
     memory::DynArray<SymbolData> symbols_;
     ScopeId current_ = kRootScope;
 
 public:
-    explicit SymbolTable(memory::Arena &arena);
+    SymbolTable(memory::Arena &arena, memory::StringInterner *interner);
 
     ScopeId enterScope();
     void exitScope();
     ScopeId currentScope() const noexcept;
 
+    SymId declare(memory::InternedId name, SymbolVisibility vis = SymbolVisibility::Private,
+                  int32_t depth = 0, SymKind kind = SymKind::Variable,
+                  ast::DeclId decl_id = ast::kInvalidDecl, memory::Span span = {},
+                  SymId target = kInvalidSym, memory::Span doc_span = {});
     SymId declare(std::string_view name, SymbolVisibility vis = SymbolVisibility::Private,
                   int32_t depth = 0, SymKind kind = SymKind::Variable,
                   ast::DeclId decl_id = ast::kInvalidDecl, memory::Span span = {},
                   SymId target = kInvalidSym, memory::Span doc_span = {});
+    SymId declareInScope(ScopeId scope, memory::InternedId name,
+                         SymbolVisibility vis = SymbolVisibility::Private, int32_t depth = 0,
+                         SymKind kind = SymKind::Variable, ast::DeclId decl_id = ast::kInvalidDecl,
+                         memory::Span span = {}, SymId target = kInvalidSym,
+                         memory::Span doc_span = {});
     SymId declareInScope(ScopeId scope, std::string_view name,
                          SymbolVisibility vis = SymbolVisibility::Private, int32_t depth = 0,
                          SymKind kind = SymKind::Variable, ast::DeclId decl_id = ast::kInvalidDecl,
                          memory::Span span = {}, SymId target = kInvalidSym,
                          memory::Span doc_span = {});
+    SymId lookup(memory::InternedId name) const;
     SymId lookup(std::string_view name) const;
+    SymId lookupInScope(memory::InternedId name, ScopeId scope) const;
     SymId lookupInScope(std::string_view name, ScopeId scope) const;
+    memory::DynArray<SymId> lookupAll(memory::InternedId name, memory::Arena &arena) const;
     memory::DynArray<SymId> lookupAll(std::string_view name, memory::Arena &arena) const;
 
     SymbolData &get(SymId id);
     const SymbolData &get(SymId id) const;
     size_t symbolCount() const noexcept;
     ScopeId scopeCount() const noexcept;
+
+    memory::StringInterner &interner() const {
+        return *interner_;
+    }
 
     void dump(FILE *out = stdout) const;
 };

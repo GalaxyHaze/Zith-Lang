@@ -12,10 +12,11 @@
 namespace zith::symbols {
 namespace fs = std::filesystem;
 
-ImportManager::ImportManager(memory::Arena &arena, memory::SourceMap &source_map,
+ImportManager::ImportManager(memory::Arena &arena, memory::StringInterner &interner,
+                             memory::SourceMap &source_map,
                              diagnostics::DiagnosticEngine &diags,
                              std::vector<std::string> visible_roots)
-    : arena_(arena), source_map_(source_map), diags_(diags),
+    : arena_(arena), interner_(interner), source_map_(source_map), diags_(diags),
       visible_roots_(std::move(visible_roots)), files_(arena), sym_origins_(arena) {}
 
 bool ImportManager::isLoaded(std::string_view path) const {
@@ -141,8 +142,8 @@ auto ImportManager::resolve_file(const std::string &full_path, const std::string
         return memory::Error{"failed to tokenize '" + full_path + "'"};
 
     lexer::TokenStream tokens = std::move(token_result.value());
-    auto *builder             = arena_.make<ast::AstBuilder>(arena_);
-    SymbolTable syms(arena_);
+    auto *builder             = arena_.make<ast::AstBuilder>(arena_, interner_);
+    SymbolTable syms(arena_, &interner_);
     parser::Parser parser(&tokens, builder, &diags_);
     auto scan_result = parser::scan(parser, syms);
     parser.expandBodies(scan_result);
@@ -374,11 +375,12 @@ void ImportManager::mergeInto(SymbolTable &main_syms, int32_t from_depth) {
                 record_origin(main_id, fi, ls);
             };
             if (file.is_from) {
-                declare_or_diag(arena_str(arena_, std::string(data.name)), vis, depth, sid);
-                auto qualified = std::string(ls) + "." + std::string(data.name);
+                auto sym_name_s = std::string(interner_.lookup(data.name));
+                declare_or_diag(arena_str(arena_, sym_name_s), vis, depth, sid);
+                auto qualified = std::string(ls) + "." + sym_name_s;
                 declare_or_diag(arena_str(arena_, qualified), vis, depth, sid);
             } else {
-                std::string qualified = prefix + std::string(data.name);
+                std::string qualified = prefix + std::string(interner_.lookup(data.name));
                 declare_or_diag(arena_str(arena_, qualified), vis, depth, sid);
             }
         };
@@ -406,18 +408,19 @@ void ImportManager::mergeInto(SymbolTable &main_syms, int32_t from_depth) {
                 return;
             auto &ref = files_[re_idx];
             for (auto sid : ref.public_syms) {
-                auto &data = ref.symbols.get(sid);
-                auto name  = arena_str(arena_, std::string(data.name));
+                auto &data   = ref.symbols.get(sid);
+                auto sym_str = interner_.lookup(data.name);
+                auto name    = arena_str(arena_, std::string(sym_str));
                 if (file.is_from) {
                     declare_re_export(name, SymbolVisibility::Public, 0, data.kind, data.decl_id,
                                       data.span, data.target, data.doc_span, re_idx, sid);
                     auto qualified =
-                        arena_str(arena_, std::string(ls) + "." + std::string(data.name));
+                        arena_str(arena_, std::string(ls) + "." + std::string(sym_str));
                     declare_re_export(qualified, SymbolVisibility::Public, 0, data.kind,
                                       data.decl_id, data.span, data.target, data.doc_span, re_idx,
                                       sid);
                 } else {
-                    auto qualified = arena_str(arena_, prefix + std::string(data.name));
+                    auto qualified = arena_str(arena_, prefix + std::string(sym_str));
                     declare_re_export(qualified, SymbolVisibility::Public, 0, data.kind,
                                       data.decl_id, data.span, data.target, data.doc_span, re_idx,
                                       sid);
@@ -427,18 +430,19 @@ void ImportManager::mergeInto(SymbolTable &main_syms, int32_t from_depth) {
                 auto &data = ref.symbols.get(sid);
                 if (data.mod_depth >= 0 && call_depth != data.mod_depth)
                     continue;
-                auto name = arena_str(arena_, std::string(data.name));
+                auto sym_str = interner_.lookup(data.name);
+                auto name    = arena_str(arena_, std::string(sym_str));
                 if (file.is_from) {
                     declare_re_export(name, SymbolVisibility::Module, data.mod_depth, data.kind,
                                       data.decl_id, data.span, data.target, data.doc_span, re_idx,
                                       sid);
                     auto qualified =
-                        arena_str(arena_, std::string(ls) + "." + std::string(data.name));
+                        arena_str(arena_, std::string(ls) + "." + std::string(sym_str));
                     declare_re_export(qualified, SymbolVisibility::Module, data.mod_depth,
                                       data.kind, data.decl_id, data.span, data.target,
                                       data.doc_span, re_idx, sid);
                 } else {
-                    auto qualified = arena_str(arena_, prefix + std::string(data.name));
+                    auto qualified = arena_str(arena_, prefix + std::string(sym_str));
                     declare_re_export(qualified, SymbolVisibility::Module, data.mod_depth,
                                       data.kind, data.decl_id, data.span, data.target,
                                       data.doc_span, re_idx, sid);

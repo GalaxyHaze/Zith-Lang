@@ -1,29 +1,36 @@
 #include "cli/commands.hpp"
 #include "cli/terminal.hpp"
 #include "session/compilation-session.hpp"
+#include "session/pipeline-plan.hpp"
 
 #include <cstdio>
-#include <cstring>
 #include <future>
 #include <memory>
 #include <vector>
 
 namespace zith::cli::commands {
 
+namespace {
+
 struct SessionResult {
     std::unique_ptr<session::CompilationSession> session;
     bool ok;
 };
 
+} // namespace
+
+// ── check ──────────────────────────────────────────────────────────────────
+
 int check(const Options &opts) {
     auto TERM = term::init(opts);
     term::UsagePrinter out{stdout, TERM.coutOn};
     term::UsagePrinter err{stderr, TERM.cerrOn};
-    std::vector<std::string> files;
 
+    std::vector<std::string> files;
     if (opts.inputFiles.empty()) {
         files.push_back(".");
     } else {
+        files.reserve(opts.inputFiles.size());
         for (const auto &f : opts.inputFiles)
             files.push_back(f);
     }
@@ -33,7 +40,10 @@ int check(const Options &opts) {
 
     if (files.size() == 1) {
         session::CompilationSession session(opts, files[0]);
+        session.setBuffered(true);
         bool ok = session.runTo(session::Stage::TypeChecked);
+        session.emitDiagnostics();
+        std::fputs(session.flushOutput().c_str(), stderr);
         if (session.hasErrors())
             ok = false;
         results.push_back(ok);
@@ -56,9 +66,9 @@ int check(const Options &opts) {
         }
     }
 
-    auto count = [](auto &&r) {
+    auto okCount = [&results]() -> size_t {
         size_t c = 0;
-        for (bool v : r)
+        for (bool v : results)
             c += v;
         return c;
     };
@@ -74,21 +84,23 @@ int check(const Options &opts) {
                 list += files[i];
                 list += results[i] ? ": passed" : ": failed";
             }
-            (count(results) == files.size() ? out.green("[ok]") : out.red("[error]"));
-            std::printf(" %zu/%zu passed%s\n", count(results), files.size(), list.c_str());
+            (okCount() == files.size() ? out.green("[ok]") : out.red("[error]"));
+            std::printf(" %zu/%zu passed%s\n", okCount(), files.size(), list.c_str());
         }
     } else {
         if (files.size() == 1) {
             results[0] ? out.green("[ok]") : out.red("[error]");
             std::printf(" %s\n", results[0] ? "check passed" : "check failed");
         } else {
-            (count(results) == files.size() ? out.green("[ok]") : out.red("[error]"));
-            std::printf(" %zu/%zu passed\n", count(results), files.size());
+            (okCount() == files.size() ? out.green("[ok]") : out.red("[error]"));
+            std::printf(" %zu/%zu passed\n", okCount(), files.size());
         }
     }
 
-    return count(results) == files.size() ? 0 : 1;
+    return okCount() == files.size() ? 0 : 1;
 }
+
+// ── compile ────────────────────────────────────────────────────────────────
 
 int compile(const Options &opts) {
     auto TERM = term::init(opts);
@@ -140,6 +152,8 @@ int compile(const Options &opts) {
     return exit_code;
 }
 
+// ── build ──────────────────────────────────────────────────────────────────
+
 int build(const Options &opts) {
     auto TERM = term::init(opts);
     term::UsagePrinter out{stdout, TERM.coutOn};
@@ -154,7 +168,10 @@ int build(const Options &opts) {
     if (opts.inputFiles.size() == 1) {
         const auto &file = opts.inputFiles[0];
         session::CompilationSession session(opts, file);
+        session.setBuffered(true);
         bool ok = session.run();
+        session.emitDiagnostics();
+        std::fputs(session.flushOutput().c_str(), stderr);
         if (session.hasErrors())
             ok = false;
         if (opts.flags.verbose()) {
@@ -164,7 +181,7 @@ int build(const Options &opts) {
         return ok ? 0 : 1;
     }
 
-    /*int exit_code = 0;
+    int exit_code = 0;
     std::vector<std::future<SessionResult>> futures;
     futures.reserve(opts.inputFiles.size());
     for (const auto &file : opts.inputFiles) {
@@ -186,7 +203,7 @@ int build(const Options &opts) {
         if (!sr.ok)
             exit_code = 1;
     }
-    return exit_code;*/
+    return exit_code;
 }
 
 } // namespace zith::cli::commands

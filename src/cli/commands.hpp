@@ -16,6 +16,6 @@ int create(const Options &opts);
 int clean(const Options &opts);
 int deps(const Options &opts);
 int version();
-int help();
+int help(FILE *dest = stdout);
 
 } // namespace zith::cli::commands

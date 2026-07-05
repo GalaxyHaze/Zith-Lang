@@ -4,9 +4,6 @@
 #include "memory/source-file.hpp"
 #include "memory/span.hpp"
 
-#include <mutex>
-#include <shared_mutex>
-
 #ifndef ZITH_IS_WASM
 #include <system_error>
 #endif
@@ -43,8 +40,6 @@ Result<FileId> SourceMap::addFile(const std::string_view path, const std::string
     if (!is_valid_utf8(content))
         return Error{"File is not valid UTF-8"};
 
-    std::unique_lock lock(rw_mutex);
-
     auto *existing = cache.get(std::string(path));
     if (existing) {
         FileId id = *existing;
@@ -61,17 +56,14 @@ Result<FileId> SourceMap::addFile(const std::string_view path, const std::string
 }
 
 bool SourceMap::isValid(FileId id) const noexcept {
-    std::shared_lock lock(rw_mutex);
     return id < files.size();
 }
 
-[[nodiscard]] auto SourceMap::loadFile(const std::string_view path, const bool write)
-    -> Result<FileId> {
+auto SourceMap::loadFile(const std::string_view path, const bool write) -> Result<FileId> {
     (void)write;
 #ifdef ZITH_IS_WASM
     return Error{"loadFile not available in WASM; use addFile instead"};
 #else
-    std::unique_lock lock(rw_mutex);
 
     auto *existing = cache.get(std::string(path));
     if (existing)
@@ -116,7 +108,6 @@ bool SourceMap::isValid(FileId id) const noexcept {
 }
 
 auto SourceMap::get(FileId id) noexcept -> Optional<std::reference_wrapper<SourceLoc>> {
-    std::shared_lock lock(rw_mutex);
     if (id < files.size()) {
         return std::ref(files[id]);
     }
@@ -124,7 +115,6 @@ auto SourceMap::get(FileId id) noexcept -> Optional<std::reference_wrapper<Sourc
 }
 
 auto SourceMap::snippet(const Span &a) noexcept -> Result<std::string_view> {
-    std::shared_lock lock(rw_mutex);
     if (a.file >= files.size()) {
         return Error{"Invalid File ID in Span"};
     }
@@ -132,7 +122,6 @@ auto SourceMap::snippet(const Span &a) noexcept -> Result<std::string_view> {
 }
 
 auto SourceMap::loc(const Span &a) const noexcept -> Loc {
-    std::shared_lock lock(rw_mutex);
     if (a.file >= files.size()) {
         return Loc{0, 0};
     }

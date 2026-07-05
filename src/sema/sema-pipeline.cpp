@@ -126,7 +126,7 @@ bool SemaPipeline::run(const ast::ProgramNode &program) {
     for (auto decl_id : program.decls) {
         auto &decl = ctx_.builder().getDecl(decl_id);
         if (auto *fn = std::get_if<ast::FnDeclNode>(&decl)) {
-            hir_.addFn(fn->name);
+            hir_.addFn(ctx_.syms().interner().intern(fn->name));
         }
     }
 
@@ -241,7 +241,7 @@ hir::HirExprId SemaPipeline::visitIdent(const ast::IdentNode &n, ast::ExprId id)
     auto &data = ctx_.syms().get(sym);
 
     hir::HirVar var;
-    var.name    = n.name;
+    var.name    = ctx_.syms().interner().intern(n.name);
     var.version = 0;
 
     // Function names get unknown type so visitCall can do overload resolution
@@ -362,14 +362,14 @@ hir::HirExprId SemaPipeline::visitCall(const ast::CallNode &n) {
             if (n.args.size() > 0) {
                 ctx_.diags().report(
                     Severity::Error, NoMatchingFn,
-                    "no matching function for call to '" + std::string(callee_name) + "'", n.span);
+                    "no matching function for call to '" + std::string(syms().interner().lookup(callee_name)) + "'", n.span);
             } else {
                 ctx_.diags().report(Severity::Error, WrongArity,
                                     "wrong number of arguments in call", n.span);
             }
         } else if (match_count > 1) {
             ctx_.diags().report(Severity::Error, AmbiguousCall,
-                                "ambiguous call '" + std::string(callee_name) +
+                                "ambiguous call '" + std::string(syms().interner().lookup(callee_name)) +
                                     "' — multiple functions match",
                                 n.span);
             resolved_fn = symbols::kInvalidSym;
@@ -486,7 +486,7 @@ void SemaPipeline::visitStmt(ast::StmtId id) {
                                         ast::kInvalidDecl, memory::Span{});
 
                 hir::HirLet hir_let;
-                hir_let.name = var_name;
+                hir_let.name = pipeline.syms().interner().intern(var_name);
                 hir_let.type = init_type;
                 hir_let.init = init;
 

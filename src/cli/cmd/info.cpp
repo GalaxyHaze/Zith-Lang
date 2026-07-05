@@ -13,7 +13,7 @@ int version() {
     term::UsagePrinter p{stdout, term.coutOn};
 
     p.bold("Zith ");
-    std::printf("- A low-level general-purpose language\n"
+    std::printf("- A minimal system programming language\n"
                 "Version:  %s\n"
                 "Compiler: %s\n",
                 ZITH_VERSION,
@@ -31,28 +31,31 @@ int version() {
     return 0;
 }
 
-int help() {
+int help(FILE *dest) {
     auto term = term::init();
-    term::UsagePrinter p{stdout, term.coutOn};
+    term::UsagePrinter p{dest, term.coutOn};
 
     p.bold("Zith ");
-    std::printf("- A low-level general-purpose language\n\n");
+    std::fprintf(dest, "- A minimal system programming language\n\n");
     p.section("USAGE:");
-    std::printf("    zithc [OPTIONS] <COMMAND> [ARGS]\n\n");
+    std::fprintf(dest, "    zithc [OPTIONS] <COMMAND> [ARGS]\n\n");
     p.section("COMMANDS:");
     p.green("  -h, --help");
-    std::printf("   Show this help message\n");
+    std::fprintf(dest, "   Show this help message\n");
     p.green("      --version");
-    std::printf(" Show version information\n\n");
+    std::fprintf(dest, " Show version information\n\n");
     p.section("OPTIONS:");
     p.flag("-h, --help", "Show help");
     p.flag("    --version", "Show version");
-    p.flag("-m, --mode <debug|dev|release|fast|test>", "Build mode [default: debug]");
+    p.flag("-m, --mode <debug|dev|release|fast|small>", "Build mode [default: debug]");
     p.flag("-o, --output <FILE>", "Output file path");
     p.flag("-I, --include <DIR>", "Add include directory (repeatable)");
+    p.flag("-A, --assets <DIR>", "Add asset directory (repeatable)");
+    p.flag("    --check", "Check formatting without modifying");
+    p.flag("-i, --in-place", "Format files in-place");
     p.flag("    --emit <ast|hir|ir|asm|obj|bin>", "Emit intermediate representation");
     p.flag("    --target <TRIPLE>", "Target triple");
-    p.flag("    --tokens", "Print and emit tokens");
+    p.flag("    --emit-tokens", "Print and emit tokens");
     p.flag("    --emit-ast", "Emit AST");
     p.flag("    --emit-hir", "Emit HIR");
     p.flag("    --emit-ir", "Emit LLVM IR");
@@ -65,12 +68,12 @@ int help() {
     p.flag("    --strip-debug", "Strip debug symbols");
     p.flag("-c, --color <auto|on|off>", "Color output [default: auto]");
     p.flag("-v, --verbose", "Verbose output");
-    std::printf("\n");
+    std::fprintf(dest, "\n");
     p.section("EXAMPLES:");
-    std::printf("    zithc build\n"
-                "    zithc run main.zith -m release\n"
-                "    zithc compile --interpreted main.zith -o main.nbc\n"
-                "    zithc execute --interpreted\n");
+    std::fprintf(dest, "    zithc build\n"
+                       "    zithc run main.zith -m release\n"
+                       "    zithc run main.zith         # build + execute\n"
+                       "    zithc execute main.zith     # execute a pre-compiled binary\n");
     return 0;
 }
 

@@ -2,7 +2,8 @@
 
 namespace zith::symbols {
 
-SymbolTable::SymbolTable(memory::Arena &arena) : arena_(&arena), scopes_(arena), symbols_(arena) {
+SymbolTable::SymbolTable(memory::Arena &arena, memory::StringInterner *interner)
+    : arena_(&arena), interner_(interner), scopes_(arena), symbols_(arena) {
     scopes_.emplace(Scope{kInvalidScope, memory::DynArray<SymId>(arena)});
     current_ = kRootScope;
 }
@@ -24,7 +25,7 @@ ScopeId SymbolTable::currentScope() const noexcept {
     return current_;
 }
 
-SymId SymbolTable::declare(std::string_view name, SymbolVisibility vis, int32_t depth, SymKind kind,
+SymId SymbolTable::declare(memory::InternedId name, SymbolVisibility vis, int32_t depth, SymKind kind,
                            ast::DeclId decl_id, memory::Span span, SymId target,
                            memory::Span doc_span) {
     SymId id = static_cast<SymId>(symbols_.size());
@@ -34,7 +35,7 @@ SymId SymbolTable::declare(std::string_view name, SymbolVisibility vis, int32_t 
     return id;
 }
 
-SymId SymbolTable::declareInScope(ScopeId scope, std::string_view name, SymbolVisibility vis,
+SymId SymbolTable::declareInScope(ScopeId scope, memory::InternedId name, SymbolVisibility vis,
                                   int32_t depth, SymKind kind, ast::DeclId decl_id,
                                   memory::Span span, SymId target, memory::Span doc_span) {
     SymId id = static_cast<SymId>(symbols_.size());
@@ -44,11 +45,24 @@ SymId SymbolTable::declareInScope(ScopeId scope, std::string_view name, SymbolVi
     return id;
 }
 
+SymId SymbolTable::declare(std::string_view name, SymbolVisibility vis, int32_t depth, SymKind kind,
+                           ast::DeclId decl_id, memory::Span span, SymId target,
+                           memory::Span doc_span) {
+    return declare(interner_->intern(name), vis, depth, kind, decl_id, span, target, doc_span);
+}
+
+SymId SymbolTable::declareInScope(ScopeId scope, std::string_view name, SymbolVisibility vis,
+                                  int32_t depth, SymKind kind, ast::DeclId decl_id,
+                                  memory::Span span, SymId target, memory::Span doc_span) {
+    return declareInScope(scope, interner_->intern(name), vis, depth, kind, decl_id, span, target,
+                          doc_span);
+}
+
 SymbolData &SymbolTable::get(SymId id) {
     return symbols_[id];
 }
 
-SymId SymbolTable::lookup(std::string_view name) const {
+SymId SymbolTable::lookup(memory::InternedId name) const {
     ScopeId scope = current_;
     while (scope != kInvalidScope) {
         for (auto sid : scopes_[scope].syms) {
@@ -60,7 +74,7 @@ SymId SymbolTable::lookup(std::string_view name) const {
     return kInvalidSym;
 }
 
-SymId SymbolTable::lookupInScope(std::string_view name, ScopeId scope) const {
+SymId SymbolTable::lookupInScope(memory::InternedId name, ScopeId scope) const {
     for (auto sid : scopes_[scope].syms) {
         if (symbols_[sid].name == name)
             return sid;
@@ -68,7 +82,19 @@ SymId SymbolTable::lookupInScope(std::string_view name, ScopeId scope) const {
     return kInvalidSym;
 }
 
+SymId SymbolTable::lookup(std::string_view name) const {
+    return lookup(interner_->intern(name));
+}
+
+SymId SymbolTable::lookupInScope(std::string_view name, ScopeId scope) const {
+    return lookupInScope(interner_->intern(name), scope);
+}
+
 memory::DynArray<SymId> SymbolTable::lookupAll(std::string_view name, memory::Arena &arena) const {
+    return lookupAll(interner_->intern(name), arena);
+}
+
+memory::DynArray<SymId> SymbolTable::lookupAll(memory::InternedId name, memory::Arena &arena) const {
     memory::DynArray<SymId> result{arena};
     ScopeId scope = current_;
     while (scope != kInvalidScope) {
@@ -132,8 +158,9 @@ void SymbolTable::dump(FILE *out) const {
             auto vis  = sym.visibility == SymbolVisibility::Public   ? "pub"
                         : sym.visibility == SymbolVisibility::Module ? "mod"
                                                                      : "priv";
+            auto sym_name = interner_->lookup(sym.name);
             std::fprintf(out, "    [%u] %s %s %.*s", sid, vis, symKindName(sym.kind),
-                         (int)sym.name.size(), sym.name.data());
+                         (int)sym_name.size(), sym_name.data());
             if (sym.visibility == SymbolVisibility::Module)
                 std::fprintf(out, " (depth=%d)", sym.mod_depth);
             std::fprintf(out, " (%zu members)", sym.members.size());
