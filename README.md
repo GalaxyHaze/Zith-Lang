@@ -1,5 +1,9 @@
 # Zith
 
+![Build](https://github.com/GalaxyHaze/Zith/actions/workflows/ci.yml/badge.svg)
+![License](https://img.shields.io/github/license/GalaxyHaze/Zith)
+![Version](https://img.shields.io/github/v/release/GalaxyHaze/Zith)
+
 A statically typed, compiled, general-purpose language with compile-time ownership tracking and zero-cost abstractions.
 
 **Status:** Active development — not production-ready.
