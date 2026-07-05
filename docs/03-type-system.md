@@ -24,7 +24,7 @@
 
 `char` is a UTF-8 code unit. `string` is a built-in library type backed by `[]char` with UTF-8 encoding.
 
-NRA tracks the **origin** of every string node — `literal`, `allocator`, or `local` (see [§7.1](07-memory-model.md#71-axes-of-every-node) for the complete set):
+NRA tracks the **origin** of every string node — `literal`, `allocator`, or `local` (see [§7.1](07-memory-model.md#71-what-nra-tracks) for the complete set):
 
 ```zith
 // []char implicitly casts to string, zero-cost (literal origin)
@@ -56,7 +56,7 @@ enum Color: rgb {
 
 #### Field Declaration & Grouping
 
-Use individual fields for unrelated members, and `[]` groups for semantically related fields that share a type:
+Use individual fields for unrelated fields, and `[]` groups for semantically related fields that share a type:
 
 ```zith
 struct Sample { name: string, age: i32 }

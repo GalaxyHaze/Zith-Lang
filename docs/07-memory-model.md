@@ -19,7 +19,7 @@ It also tracks the **origin** of each node — where the value came from:
 | `local` | Stack variable |
 | `view` | Read-only reference to another node |
 
-With these two axes (state + origin), NRA enforces the rules in [§7.4](#74-nra-rules).
+With these two axes (state + origin), NRA enforces the rules in [§7.4](#74-the-four-nra-rules).
 
 ### 7.2 Move Semantics
 
@@ -36,9 +36,9 @@ a = Point { x: 3.0, y: 4.0 };      // OK: reassignment creates a new node for a
 
 In effect, if `a` is never reassigned, it is as though `a` never existed and `b` has held `Point { x: 1.0, y: 2.0 }` all along.
 
-### 7.3 Memory Keywords
+### 7.3 Memory Modifiers
 
-| Keyword | Relationship | Common use |
+| Modifier | Relationship | Common use |
 |---|---|---|
 | `default` | Owned. Lifetime follows the binding. | Variables, struct fields |
 | `lend` | Exclusive mutable temporary. Cannot be stored, moved, or captured — but **can be returned**, passing the promise to the caller. `belong` fields can also be passed as `lend`. | Passing mutable references to functions |
@@ -78,7 +78,7 @@ Each memory modifier carries an implicit content mutability level:
 
 **Rule 4 — `lend` Behavioral Promise.** A `lend` value cannot be stored, moved, or captured. It may be passed as a call argument or returned — in the latter case, passing the promise on to the caller.
 
-> For details on how NRA resolves nodes and validates these rules, see [§7.8](#78-how-nra-resolves-a-node).
+> For details on how NRA resolves nodes and validates these rules, see [§7.8](#78-how-nra-resolves-nodes).
 
 ### 7.5 NRA in Practice
 

@@ -15,12 +15,12 @@ This document is a draft of language specification, currently v0.9. It serves th
 
 | Symbol | Meaning |
 |---|---|
-| `?T` | Optional type — `T` or `null` (§8.1) |
-| `T!` | Result type — `T` or an error (§8.1) |
-| `?` / `!` (postfix) | Unwrap an optional / result, propagating or falling back (§8.3) |
-| `@name` | Compiler intrinsic or macro invocation (§11.3, §15) |
+| `?T` | Optional type — `T` or `null` ([§8.1](08-error-handling.md#81-failable-types)) |
+| `T!` | Result type — `T` or an error ([§8.1](08-error-handling.md#81-failable-types)) |
+| `?` / `!` (postfix) | Unwrap an optional / result, propagating or falling back ([§8.3](08-error-handling.md#83-propagation--fallback)) |
+| `@name` | Compiler intrinsic or macro invocation ([§11.3](11-comptime.md#113-reflection), [§15](15-macros.md)) |
 | `#name` | Variable or field attribute, e.g. `#thread_local` or `#volatile` |
-| `::` | Scope resolution — reach past a shadowed name (§2.3) |
+| `::` | Scope resolution — reach past a shadowed name ([§2.3](02-module-system.md#23-namespace-access--scope-resolution)) |
 
 This is a draft specification and remains subject to change as the compiler matures.
 
@@ -86,7 +86,7 @@ Macros and words should ideally live inside a `context` block. Activating them g
 
 ```zith
 // Preferred
-use SQL QueryBlock {
+use SQL {
     // SQL words and macros active only here
 }
 
@@ -141,7 +141,7 @@ export std/io/console;
 
 ### 2.2 `alias` vs `use` vs `type`
 
-These two keywords are easy to conflate but serve distinct purposes:
+These three keywords are easy to conflate but serve distinct purposes:
 
 | Keyword | Purpose | Example |
 |---|---|---|
@@ -229,7 +229,7 @@ union AnyNumber { i32, f64, bool }
 
 `char` is a UTF-8 code unit. `string` is a built-in library type backed by `[]char` with UTF-8 encoding.
 
-NRA tracks the **origin** of every string node — `literal`, `allocator`, or `local` (see §7.1 for the complete set):
+NRA tracks the **origin** of every string node — `literal`, `allocator`, or `local` (see [§7.1](07-memory-model.md#71-what-nra-tracks) for the complete set):
 
 ```zith
 // []char implicitly casts to string, zero-cost (literal origin)
@@ -261,7 +261,7 @@ enum Color: rgb {
 
 #### Field Declaration & Grouping
 
-Use individual fields for unrelated members, and `[]` groups for semantically related fields that share a type:
+Use individual fields for unrelated fields, and `[]` groups for semantically related fields that share a type:
 
 ```zith
 struct Sample { name: string, age: i32 }
@@ -380,7 +380,7 @@ let x: union = when (flag) {
 
 > Without an explicit `union` type hint, the compiler cannot deduce a union — it must be stated explicitly.
 >
-> `dyn` works the same way as a type hint — see §14.2.
+> `dyn` works the same way as a type hint — see [§14.2](14-polymorphism.md#142-dyn-as-a-type-hint).
 
 `raw union` is an untagged C-style union, valid only inside `raw` contexts. Accessing the wrong variant is undefined behavior.
 
@@ -522,7 +522,7 @@ let f = n as f64;
 
 | | Trait | Interface |
 |---|---|---|
-| **Typing** | Nominal — must be explicitly implemented. | Structural (duck-typed) — automatically satisfied when members match. |
+| **Typing** | Nominal — must be explicitly implemented. | Structural (duck-typed) — automatically satisfied when fields match. |
 | **Extensible** | Yes — via `extends`, or as a precondition using `requires`. | No — interfaces cannot extend each other, though a trait may `requires` one. |
 | **Has implementation?** | Yes — default method bodies are allowed. | No — declaration only. |
 | **Field access** | Only through a trait that `requires` the interface. | Yes — directly, since interfaces are structural. |
@@ -550,7 +550,7 @@ JsonSerializable.print(self);
 
 ### 4.3 Interfaces
 
-Interfaces are structural — if it quacks, it's a duck. Any type that has the required members satisfies the interface automatically, without an explicit `implement` declaration. You can also add `requires` to interfaces.
+Interfaces are structural — if it quacks, it's a duck. Any type that has the required fields satisfies the interface automatically, without an explicit `implement` declaration. You can also add `requires` to interfaces.
 
 ```zith
 // will only accept structs and reject components
@@ -700,12 +700,12 @@ fn first<T>(slice: []T): ?T {
 | `fn` | Standard runtime function. |
 | `const fn` | Resolved entirely at compile time. |
 | `async fn` | Returns `Coroutine<T>` — a lazy generator with a default base implementation. Must be consumed by a type implementing `Generator`. |
-| `flow fn` | Enables marker/dock control flow (§9.4). |
+| `flow fn` | Enables marker/dock control flow ([§9.4](09-control-flow.md#94-flow-functions--markers)). |
 | `raw fn` | Always unchecked, bypassing safety in both debug and release. The compiler warns in release builds if `raw` could be removed. |
 
 > Function kinds are orthogonal and cannot be combined on a single declaration.
 
-Macro calls use the `@` prefix — `@println`, `@log`, `@serialize` — while ordinary function calls use a bare name, such as `console.write`, `process`, or `save`. See §15 for the full rule.
+Macro calls use the `@` prefix — `@println`, `@log`, `@serialize` — while ordinary function calls use a bare name, such as `console.write`, `process`, or `save`. See [§15](15-macros.md) for the full rule.
 
 ### 5.3 `async fn` & `yield`
 
@@ -735,7 +735,7 @@ Zith uses deep mutability: a modifier on a binding flows into every nested field
 | `const` | Binding | Compile-time constant. |
 
 
-> `let`/`var` control reassignability of the binding itself. Content mutability is handled separately through memory modifiers (§7).
+> `let`/`var` control reassignability of the binding itself. Content mutability is handled separately through memory modifiers ([§7](07-memory-model.md)).
 
 ```zith
 // let/var control REBIND only. Content mutability comes from memory modifiers.
@@ -759,7 +759,7 @@ COUNT += 1;   // valid at compile time only
 ```zith
 let [x, y, z]: f32 = 1.0f;             // grouped same type, related semantics
 let name: string; let age: i32; // individual unrelated
-let [x,y,z] = | 5,4,'c'|;   // pack literal — see §6.4
+let [x,y,z] = | 5,4,'c'|;   // pack literal — see [§6.4](#64-pack-literals)
 
 // If the loop never runs, 'or' supplies the fallback value
 let r = for ([acc, i]: i32), (i in 0..n) {
@@ -809,7 +809,7 @@ It also tracks the **origin** of each node — where the value came from:
 | `local` | Stack variable |
 | `view` | Read-only reference to another node |
 
-With these two axes (state + origin), NRA enforces the rules in §7.4.
+With these two axes (state + origin), NRA enforces the rules in [§7.4](#74-the-four-nra-rules).
 
 ### 7.2 Move Semantics
 
@@ -826,9 +826,9 @@ a = Point { x: 3.0, y: 4.0 };      // OK: reassignment creates a new node for a
 
 In effect, if `a` is never reassigned, it is as though `a` never existed and `b` has held `Point { x: 1.0, y: 2.0 }` all along.
 
-### 7.3 Memory Keywords
+### 7.3 Memory Modifiers
 
-| Keyword | Relationship | Common use |
+| Modifier | Relationship | Common use |
 |---|---|---|
 | `default` | Owned. Lifetime follows the binding. | Variables, struct fields |
 | `lend` | Exclusive mutable temporary. Cannot be stored, moved, or captured — but **can be returned**, passing the promise to the caller. `belong` fields can also be passed as `lend`. | Passing mutable references to functions |
@@ -868,7 +868,7 @@ Each memory modifier carries an implicit content mutability level:
 
 **Rule 4 — `lend` Behavioral Promise.** A `lend` value cannot be stored, moved, or captured. It may be passed as a call argument or returned — in the latter case, passing the promise on to the caller.
 
-> For details on how NRA resolves nodes and validates these rules, see §7.8.
+> For details on how NRA resolves nodes and validates these rules, see [§7.8](#78-how-nra-resolves-nodes).
 
 ### 7.5 NRA in Practice
 
@@ -1517,7 +1517,7 @@ Use `dyn` for dynamic dispatch. At the call site you get polymorphism; the compi
 
 ### 14.2 `dyn` as a Type Hint
 
-Like `union` (see §3.6), `dyn` works as a **type hint**. When the compiler can't deduce the concrete type, you write `dyn` to tell it you want dynamic behavior:
+Like `union` (see [§3.6](03-type-system.md#36-union)), `dyn` works as a **type hint**. When the compiler can't deduce the concrete type, you write `dyn` to tell it you want dynamic behavior:
 
 ```zith
 let x: dyn = 5;
@@ -1559,7 +1559,7 @@ fn modify(shape: lend dyn Drawable) {
 }
 ```
 
-`dyn` does **not** work with `interface` (see §4.3) — only traits. Interfaces are structural and don't carry a vtable.
+`dyn` does **not** work with `interface` (see [§4.3](04-traits-interfaces.md#43-capabilities)) — only traits. Interfaces are structural and don't carry a vtable.
 
 When you write a type that could be `dyn` or `opaque`, prefer `dyn` — it's short and clearer. Reserve `opaque` for cases where you specifically need `raw opaque` (untagged `void*`, C interop).
 
@@ -1600,7 +1600,7 @@ If you try to use a non-object-safe trait with `dyn`, the compiler rejects it.
 | Raw macro | Inserts code literally at the call site; not hygienic. Also requires the `@` prefix. |
 | Tag macro | HTML-like syntax. Tag attributes (e.g. `id=5`) are available as `attributes` when the macro is the first argument; content between tags forms the remaining arguments. Uses `<>` syntax — no `@` prefix. |
 
-> Best practice: define macros inside a `context` block (§17) rather than activating them globally.
+> Best practice: define macros inside a `context` block ([§17](17-contexts.md)) rather than activating them globally.
 
 - They all have special arguments that can manipulate the AST. Default and raw macros accept attributes via `[capture]` syntax; tag macros receive attributes as `attributes`.
 
@@ -1653,7 +1653,7 @@ Words let you define custom operators from identifiers. Each word has a fixed po
 - You must activate a word with `use`, even if you already imported its module.
 - Two words with the same name in the same scope: compile error.
 - If the compiler sees any ambiguity (even potential), it errors out.
-- Best practice: define words inside a `context` (§17).
+- Best practice: define words inside a `context` ([§17](17-contexts.md)).
 
 ### 16.1 Word Types
 
@@ -1980,7 +1980,7 @@ The Rule of Three keeps code readable. Zith gives you many tools — you don't h
 | `\| \|` | Types | Pack — named tuple / variadic / closure capture group. |
 | `pub` / `mod` / `mod(..)` / `mod(N)` | Visibility | Public / module-local, with optional depth. |
 | `let` / `var` / `global` / `const` | Bindings | Immutable / mutable / static storage / compile-time constant. |
-| `default` / `lend` / `view` / `unique` / `share` / `belong` | Memory | NRA memory modifiers — `default` is implicit when no keyword is written (§7). |
+| `default` / `lend` / `view` / `unique` / `share` / `belong` | Memory | NRA memory modifiers — `default` is implicit when no keyword is written ([§7](07-memory-model.md)). |
 | `fn` / `const fn` / `async fn` / `flow fn` / `raw fn` | Functions | Function kinds. Orthogonal; cannot be combined. |
 | `yield` | Functions | Suspend an async fn, optionally producing a value. |
 | `trait` / `interface` / `extends` / `requires` / `dyn` | OOP | Nominal traits, structural interfaces, extension, constraints, dynamic dispatch. |
@@ -1991,7 +1991,7 @@ The Rule of Three keeps code readable. Zith gives you many tools — you don't h
 | `stackful` | Flow | Opt-in modifier for stackful markers (stackless is the default). |
 | `->` / `..` | Chain | Chain flow / placeholder for the previous value. Left-to-right. |
 | `,` (in a chain) | Chain | Sub-chain — applies but does not advance the main chain value. |
-| `operator` / `token` | Words | Custom operator definition / token word definition (§16). Must be defined inside a `context` — global operator overloading is prohibited. |
+| `operator` / `token` | Words | Custom operator definition / token word definition ([§16](16-words.md)). Must be defined inside a `context` — global operator overloading is prohibited. |
 | `spawn` / `await` / `handle.send` | Threads | Spawn a thread, wait on it, send it a message. |
 | `#wont_remain` | Threads | Promise that the thread dies before the enclosing scope ends. |
 | `?T` / `T!` | Errors | Optional / Result types. May be stacked. |
@@ -2013,7 +2013,7 @@ The Rule of Three keeps code readable. Zith gives you many tools — you don't h
 
 | Intrinsic | Summary |
 |---|---|
-| `@fields T` | Iterate the fields/members of a type. |
+| `@fields T` | Iterate the fields of a type. |
 | `@sizeOf T` | Size of a type, in bytes. |
 | `@hasTrait T, Trait` | Check whether a type implements a trait. |
 | `@struct` / `@component` / `@union` / `@enum` | Type-kind checks, used with `is`. |

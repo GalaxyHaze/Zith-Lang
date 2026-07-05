@@ -172,7 +172,7 @@ source -> lex -> scan -> resolve(import/symbols) -> sema -> comptime -> NRA -> H
 
 | Intrinsic | Summary |
 |---|---|
-| `@fields T` | Iterate the fields/members of a type. |
+| `@fields T` | Iterate the fields of a type. |
 | `@sizeOf T` | Size of a type, in bytes. |
 | `@hasTrait T, Trait` | Check whether a type implements a trait. |
 | `@struct` / `@component` / `@union` / `@enum` | Type-kind checks, used with `is`. |
