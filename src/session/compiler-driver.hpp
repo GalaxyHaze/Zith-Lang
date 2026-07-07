@@ -23,8 +23,6 @@ public:
             return commands::deps(opts);
         case Command::Check:
             return commands::check(opts);
-        case Command::Compile:
-            return commands::compile(opts);
         case Command::Build:
             return commands::build(opts);
         case Command::Execute:

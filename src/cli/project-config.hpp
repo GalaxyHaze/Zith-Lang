@@ -20,6 +20,8 @@ struct ProjectConfig {
     std::string testDir;
     std::string assetDir;
 
+    std::string projectRoot; // directory containing ZithProject.toml
+
     // [project]
     std::string name;
     std::string version;

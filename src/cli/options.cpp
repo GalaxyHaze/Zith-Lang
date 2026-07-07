@@ -78,9 +78,9 @@ template <class... Args> static bool compare(const char *a, Args &&...args) {
 }
 
 static bool isSubcommand(const char *arg) {
-    static const char *cmds[] = {"build", "run",  "check",   "compile", "execute",
-                                 "test",  "fmt",  "docs",    "repl",    "create",
-                                 "clean", "deps", "version", "help",    nullptr};
+    static const char *cmds[] = {"build", "run",  "check",   "execute",
+                                  "test",  "fmt",  "docs",    "repl",    "create",
+                                  "clean", "deps", "version", "help",    nullptr};
     for (auto cmd : cmds) {
         if (cmd && compare(cmd, arg))
             return true;
@@ -96,8 +96,6 @@ static Command subcommandToEnum(const char *arg) {
         return Command::Run;
     if (compare(arg, "check"))
         return Command::Check;
-    if (compare(arg, "compile"))
-        return Command::Compile;
     if (compare(arg, "execute"))
         return Command::Execute;
     if (compare(arg, "test"))
@@ -194,11 +192,13 @@ void Cli::parseArgs(int argc, char **argv) {
 
         if (compare(argv[i], "--lto")) {
             opts.flags.lto(true);
+            opts.cliFields |= Options::kCliLto;
             continue;
         }
 
         if (compare(argv[i], "--strip-debug")) {
             opts.flags.stripDebug(true);
+            opts.cliFields |= Options::kCliStripDebug;
             continue;
         }
 
@@ -226,7 +226,7 @@ void Cli::parseArgs(int argc, char **argv) {
             continue;
         }
 
-        if (compare("-o", "--output")) {
+        if (compare(argv[i], "-o", "--output")) {
             requireValue(i, "--output/-o");
             opts.outputFile = argv[++i];
             continue;
@@ -302,6 +302,7 @@ void Cli::parseArgs(int argc, char **argv) {
                 std::exit(1);
             }
             opts.flags.optLevel(static_cast<uint8_t>(val));
+            opts.cliFields |= Options::kCliOptLevel;
             continue;
         }
 
@@ -315,6 +316,7 @@ void Cli::parseArgs(int argc, char **argv) {
                 std::exit(1);
             }
             opts.flags.debugLevel(static_cast<uint8_t>(val));
+            opts.cliFields |= Options::kCliDebugLevel;
             continue;
         }
 
@@ -374,12 +376,16 @@ void Cli::parseArgs(int argc, char **argv) {
 void Cli::loadFlags() {
     namespace fs = std::filesystem;
 
-    // Apply mode defaults first
+    // Apply mode defaults first (but don't overwrite CLI-set values)
     auto defaults = getDefaults(opts.flags.mode());
-    opts.flags.optLevel(defaults.optLevel);
-    opts.flags.debugLevel(defaults.debugLevel);
-    opts.flags.stripDebug(defaults.stripDebug);
-    opts.flags.lto(defaults.lto);
+    if (!(opts.cliFields & Options::kCliOptLevel))
+        opts.flags.optLevel(defaults.optLevel);
+    if (!(opts.cliFields & Options::kCliDebugLevel))
+        opts.flags.debugLevel(defaults.debugLevel);
+    if (!(opts.cliFields & Options::kCliStripDebug))
+        opts.flags.stripDebug(defaults.stripDebug);
+    if (!(opts.cliFields & Options::kCliLto))
+        opts.flags.lto(defaults.lto);
 
     // Try to find ZithFlags.toml
     fs::path flagsPath;
@@ -428,13 +434,17 @@ void Cli::loadFlags() {
         }
     };
 
-    // Re-apply mode defaults after TOML values
+    // Re-apply mode defaults after TOML values (but not for CLI-set fields)
     auto applyModeDefaults = [&]() {
         auto d = getDefaults(opts.flags.mode());
-        opts.flags.optLevel(d.optLevel);
-        opts.flags.debugLevel(d.debugLevel);
-        opts.flags.stripDebug(d.stripDebug);
-        opts.flags.lto(d.lto);
+        if (!(opts.cliFields & Options::kCliOptLevel))
+            opts.flags.optLevel(d.optLevel);
+        if (!(opts.cliFields & Options::kCliDebugLevel))
+            opts.flags.debugLevel(d.debugLevel);
+        if (!(opts.cliFields & Options::kCliStripDebug))
+            opts.flags.stripDebug(d.stripDebug);
+        if (!(opts.cliFields & Options::kCliLto))
+            opts.flags.lto(d.lto);
     };
 
 #if TOML_EXCEPTIONS
@@ -460,6 +470,7 @@ void Cli::loadProject() {
     while (true) {
         auto tomlPath = search / "ZithProject.toml";
         if (fs::exists(tomlPath)) {
+            config.projectRoot = fs::weakly_canonical(search).string();
             auto process = [&](const toml::table &tbl) {
                 if (auto *build = tbl["build"].as_table()) {
                     if (auto v = build->get("entry"))
@@ -550,6 +561,19 @@ void Cli::loadProject() {
 
 int Cli::dispatch() {
     using Command = Options::Command;
+    if (opts.inputFiles.empty() && !config.projectRoot.empty()) {
+        switch (opts.command) {
+        case Command::Build:
+        case Command::Check:
+        case Command::Run:
+        case Command::Execute:
+            opts.inputFiles.push(config.projectRoot);
+            break;
+        default:
+            break;
+        }
+    }
+
     switch (opts.command) {
     case Command::None:
     case Command::Help:
@@ -562,8 +586,6 @@ int Cli::dispatch() {
         return cli::commands::run(opts);
     case Command::Check:
         return cli::commands::check(opts);
-    case Command::Compile:
-        return cli::commands::compile(opts);
     case Command::Execute:
         return cli::commands::execute(opts);
     case Command::Test:

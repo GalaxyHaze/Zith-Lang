@@ -111,7 +111,6 @@ static constexpr auto TokenTable = std::to_array<std::pair<std::string_view, Tok
     {"while", TokenKind::Control},
     {"jump", TokenKind::Control},
     {"marker", TokenKind::Label},
-    {"scene", TokenKind::Scene},
 
     {"spawn", TokenKind::Thread},
     {"await", TokenKind::Thread},

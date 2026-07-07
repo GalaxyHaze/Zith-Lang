@@ -54,6 +54,8 @@ private:
     void emitField(const ast::FieldNode &node);
     void emitIndex(const ast::IndexNode &node);
     void emitRange(const ast::RangeNode &node);
+    void emitIntrinsic(const ast::IntrinsicNode &node);
+    void emitMacroCall(const ast::MacroCallNode &node);
 
     // Type expressions
     void emitType(ast::TypeExprId id);

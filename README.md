@@ -189,7 +189,6 @@ zithc --help
 | `zithc build` | Build the project |
 | `zithc build -m release` | Release build |
 | `zithc check` | Syntax and type checking without compilation |
-| `zithc compile <file>` | Compile to ZBC bytecode |
 | `zithc execute <file.zbc>` | Run a compiled bytecode file |
 | `zithc run` | Build and run in one command |
 

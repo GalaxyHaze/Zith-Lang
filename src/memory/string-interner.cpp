@@ -41,8 +41,8 @@ std::string_view StringInterner::lookup(InternedId id) const {
 }
 
 void StringInterner::init() {
-    pool = reinterpret_cast<DynArray<std::string_view> *>(allocator_->alloc(sizeof(DynArray<std::string_view>), alignof(DynArray<std::string_view>)));
-    map  = reinterpret_cast<FlatMap<std::string_view, InternedId> *>(allocator_->alloc(sizeof(FlatMap<std::string_view, InternedId>), alignof(FlatMap<std::string_view, InternedId>)));
+    pool = allocator_->make<DynArray<std::string_view>>(*allocator_);
+    map  = allocator_->make<FlatMap<std::string_view, InternedId>>();
     if (!pool || !map) {
         std::fprintf(stderr,
                 "at: StringInterner, occured an internal error, due to: nullptr at allocator\n");

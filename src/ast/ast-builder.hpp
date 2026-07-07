@@ -75,6 +75,8 @@ public:
                       memory::Span span = {});
 
     ExprId unbody(memory::Span body_span, uint32_t token_start, uint32_t token_end);
+    ExprId intrinsic(IntrinsicKind kind, memory::DynArray<ExprId> args, memory::Span span = {});
+    ExprId macroCall(std::string_view name, memory::DynArray<ExprId> args, memory::Span span = {});
 
     // ── Type expression helpers ──────────────────────────────────────
     TypeExprId addTypeExpr(TypeExprNode node);

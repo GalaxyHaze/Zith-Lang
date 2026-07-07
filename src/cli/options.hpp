@@ -131,6 +131,14 @@ struct Options {
 
     } flags;
 
+    // Tracks which mode-dependent fields were explicitly set by CLI
+    // so loadFlags() doesn't overwrite them.
+    uint8_t cliFields = 0;
+    static constexpr uint8_t kCliOptLevel   = 1 << 0;
+    static constexpr uint8_t kCliDebugLevel = 1 << 1;
+    static constexpr uint8_t kCliStripDebug = 1 << 2;
+    static constexpr uint8_t kCliLto        = 1 << 3;
+
     EmitTarget emitTarget = EmitTarget::None;
     session::Stage targetStage = session::Stage::Cached;
 
@@ -139,7 +147,6 @@ struct Options {
         Build,
         Run,
         Check,
-        Compile,
         Execute,
         Test,
         Fmt,
@@ -196,7 +203,7 @@ struct Cli {
     term::UsagePrinter out;
     term::UsagePrinter err;
     std::pair<int, char **> args;
-    int current = 0;
+    int current = 1;
     Session *session = nullptr;
 };
 

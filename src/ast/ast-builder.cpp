@@ -164,6 +164,14 @@ ExprId AstBuilder::unbody(memory::Span body_span, uint32_t token_start, uint32_t
     return addExpr(UnbodyNode{body_span, token_start, token_end});
 }
 
+ExprId AstBuilder::intrinsic(IntrinsicKind kind, memory::DynArray<ExprId> args, memory::Span span) {
+    return addExpr(IntrinsicNode{kind, std::move(args), span});
+}
+
+ExprId AstBuilder::macroCall(std::string_view name, memory::DynArray<ExprId> args, memory::Span span) {
+    return addExpr(MacroCallNode{name, std::move(args), span});
+}
+
 // ── Type expression helpers ─────────────────────────────────────────
 
 TypeExprId AstBuilder::addTypeExpr(TypeExprNode node) {

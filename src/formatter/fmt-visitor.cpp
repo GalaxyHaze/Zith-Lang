@@ -359,9 +359,11 @@ void FmtVisitor::visitExpr(ast::ExprId id, int parent_prec) {
                    [&](const ast::FieldNode &n) { emitField(n); },
                    [&](const ast::IndexNode &n) { emitIndex(n); },
                    [&](const ast::RangeNode &n) { emitRange(n); },
-                   [&](const ast::UnbodyNode &) {},
-               },
-               node);
+                    [&](const ast::UnbodyNode &) {},
+                    [&](const ast::IntrinsicNode &n) { emitIntrinsic(n); },
+                    [&](const ast::MacroCallNode &n) { emitMacroCall(n); },
+                },
+                node);
 }
 
 void FmtVisitor::emitLit(const ast::LitValue &node) {
@@ -453,6 +455,49 @@ void FmtVisitor::emitRange(const ast::RangeNode &node) {
     visitExpr(node.lhs);
     emit("..");
     visitExpr(node.rhs);
+}
+
+void FmtVisitor::emitIntrinsic(const ast::IntrinsicNode &node) {
+    emit("@");
+    // Map kind back to name — keep it simple for now
+    switch (node.kind) {
+    case ast::IntrinsicKind::Fields:        emit("fields"); break;
+    case ast::IntrinsicKind::SizeOf:        emit("sizeOf"); break;
+    case ast::IntrinsicKind::AlignOf:       emit("alignOf"); break;
+    case ast::IntrinsicKind::HasTrait:      emit("hasTrait"); break;
+    case ast::IntrinsicKind::Struct:        emit("struct"); break;
+    case ast::IntrinsicKind::Component:     emit("component"); break;
+    case ast::IntrinsicKind::Union:         emit("union"); break;
+    case ast::IntrinsicKind::Enum:          emit("enum"); break;
+    case ast::IntrinsicKind::Nullable:      emit("nullable"); break;
+    case ast::IntrinsicKind::Primitive:     emit("primitive"); break;
+    case ast::IntrinsicKind::Allocate:      emit("allocate"); break;
+    case ast::IntrinsicKind::Pack:          emit("pack"); break;
+    case ast::IntrinsicKind::ToStruct:      emit("toStruct"); break;
+    case ast::IntrinsicKind::ToPack:        emit("toPack"); break;
+    case ast::IntrinsicKind::AppendField:   emit("appendField"); break;
+    case ast::IntrinsicKind::RemoveField:   emit("removeField"); break;
+    case ast::IntrinsicKind::AppendMethod:  emit("appendMethod"); break;
+    case ast::IntrinsicKind::File:          emit("file"); break;
+    case ast::IntrinsicKind::Line:          emit("line"); break;
+    case ast::IntrinsicKind::FnName:        emit("fnName"); break;
+    case ast::IntrinsicKind::Location:      emit("location"); break;
+    case ast::IntrinsicKind::Ok:            emit("ok"); break;
+    case ast::IntrinsicKind::Err:           emit("err"); break;
+    case ast::IntrinsicKind::OffsetOf:      emit("offsetOf"); break;
+    }
+    if (node.args.size() > 0) {
+        emit(" ");
+        emitCommaList(node.args, [&](ast::ExprId e) { visitExpr(e); });
+    }
+}
+
+void FmtVisitor::emitMacroCall(const ast::MacroCallNode &node) {
+    emit("@");
+    emit(node.name);
+    emit("(");
+    emitCommaList(node.args, [&](ast::ExprId e) { visitExpr(e); });
+    emit(")");
 }
 
 // ── Type expressions ──────────────────────────────────────────

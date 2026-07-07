@@ -148,6 +148,14 @@ void Resolver::resolveExpr(ast::ExprId id) {
         }
         void operator()(const ast::LitValue &) {}
         void operator()(const ast::UnbodyNode &) {}
+        void operator()(const ast::IntrinsicNode &n) {
+            for (auto arg : n.args)
+                r.resolveExpr(arg);
+        }
+        void operator()(const ast::MacroCallNode &n) {
+            for (auto arg : n.args)
+                r.resolveExpr(arg);
+        }
     };
 
     std::visit(ExprVisitor{*this, id}, node);

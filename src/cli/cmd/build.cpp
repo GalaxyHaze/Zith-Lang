@@ -5,77 +5,30 @@
 
 #include <cstdio>
 #include <future>
-#include <memory>
 #include <vector>
 
 namespace zith::cli::commands {
 
 namespace {
 
-struct SessionResult {
-    std::unique_ptr<session::CompilationSession> session;
-    bool ok;
+struct Printers {
+    term::UsagePrinter out;
+    term::UsagePrinter err;
 };
 
-} // namespace
-
-// ── check ──────────────────────────────────────────────────────────────────
-
-int check(const Options &opts) {
+Printers initPrinters(const Options &opts) {
     auto TERM = term::init(opts);
-    term::UsagePrinter out{stdout, TERM.coutOn};
-    term::UsagePrinter err{stderr, TERM.cerrOn};
+    return {{stdout, TERM.coutOn}, {stderr, TERM.cerrOn}};
+}
 
-    std::vector<std::string> files;
-    if (opts.inputFiles.empty()) {
-        files.push_back(".");
-    } else {
-        files.reserve(opts.inputFiles.size());
-        for (const auto &f : opts.inputFiles)
-            files.push_back(f);
-    }
+void printCheckResults(const Printers &p, const std::vector<std::string> &files,
+                       const std::vector<bool> &results, bool verbose) {
+    size_t passed = countPassed(results);
+    bool allPassed = (passed == files.size());
 
-    std::vector<bool> results;
-    results.reserve(files.size());
-
-    if (files.size() == 1) {
-        session::CompilationSession session(opts, files[0]);
-        session.setBuffered(true);
-        bool ok = session.runTo(session::Stage::TypeChecked);
-        session.emitDiagnostics();
-        std::fputs(session.flushOutput().c_str(), stderr);
-        if (session.hasErrors())
-            ok = false;
-        results.push_back(ok);
-    } else {
-        std::vector<std::future<SessionResult>> futures;
-        futures.reserve(files.size());
-        for (const auto &file : files) {
-            futures.push_back(std::async(std::launch::async, [&opts, file]() -> SessionResult {
-                auto session = std::make_unique<session::CompilationSession>(opts, file);
-                session->setBuffered(true);
-                bool ok = session->runTo(session::Stage::TypeChecked);
-                return {std::move(session), ok};
-            }));
-        }
-        for (auto &f : futures) {
-            auto sr = f.get();
-            sr.session->emitDiagnostics();
-            std::fputs(sr.session->flushOutput().c_str(), stderr);
-            results.push_back(sr.ok);
-        }
-    }
-
-    auto okCount = [&results]() -> size_t {
-        size_t c = 0;
-        for (bool v : results)
-            c += v;
-        return c;
-    };
-
-    if (opts.flags.verbose()) {
+    if (verbose) {
         if (files.size() == 1) {
-            results[0] ? out.green("[ok]") : out.red("[error]");
+            results[0] ? p.out.green("[ok]") : p.out.red("[error]");
             std::printf(" %s\n", results[0] ? "check passed" : "check failed");
         } else {
             std::string list;
@@ -84,126 +37,115 @@ int check(const Options &opts) {
                 list += files[i];
                 list += results[i] ? ": passed" : ": failed";
             }
-            (okCount() == files.size() ? out.green("[ok]") : out.red("[error]"));
-            std::printf(" %zu/%zu passed%s\n", okCount(), files.size(), list.c_str());
+            allPassed ? p.out.green("[ok]") : p.out.red("[error]");
+            std::printf(" %zu/%zu passed%s\n", passed, files.size(), list.c_str());
         }
     } else {
         if (files.size() == 1) {
-            results[0] ? out.green("[ok]") : out.red("[error]");
+            results[0] ? p.out.green("[ok]") : p.out.red("[error]");
             std::printf(" %s\n", results[0] ? "check passed" : "check failed");
         } else {
-            (okCount() == files.size() ? out.green("[ok]") : out.red("[error]"));
-            std::printf(" %zu/%zu passed\n", okCount(), files.size());
+            allPassed ? p.out.green("[ok]") : p.out.red("[error]");
+            std::printf(" %zu/%zu passed\n", passed, files.size());
         }
     }
-
-    return okCount() == files.size() ? 0 : 1;
 }
 
-// ── compile ────────────────────────────────────────────────────────────────
+void printBuildResults(const Printers &p, const std::vector<std::string> &files,
+                       const std::vector<bool> &results, bool verbose) {
+    if (files.size() == 1) {
+        if (verbose) {
+            results[0] ? p.out.green("[ok]") : p.out.red("[error]");
+            std::printf(" %s\n", files[0].c_str());
+        }
+    } else {
+        for (size_t i = 0; i < files.size(); i++) {
+            if (verbose) {
+                results[i] ? p.out.green("[ok]") : p.out.red("[error]");
+                std::printf(" %s\n", files[i].c_str());
+            }
+        }
+    }
+}
 
-int compile(const Options &opts) {
-    auto TERM = term::init(opts);
-    term::UsagePrinter out{stdout, TERM.coutOn};
-    term::UsagePrinter err{stderr, TERM.cerrOn};
+} // namespace
 
-    if (opts.inputFiles.empty()) {
-        err.red("[error]");
-        std::fprintf(stderr, " no input files\n");
+// ── Shared helpers (non-anonymous, declared in commands.hpp) ───────────────
+
+static bool processFile(const Options &opts, const std::string &file, session::Stage stage) {
+    session::CompilationSession session(opts, file);
+    session.setBuffered(true);
+    bool ok = (stage == session::Stage::Cached) ? session.run() : session.runTo(stage);
+    session.emitDiagnostics();
+    std::fputs(session.flushOutput().c_str(), stderr);
+    return session.hasErrors() ? false : ok;
+}
+
+std::vector<std::string> collectFiles(const Options &opts) {
+    std::vector<std::string> files;
+    if (!opts.inputFiles.empty()) {
+        files.reserve(opts.inputFiles.size());
+        for (const auto &f : opts.inputFiles)
+            files.push_back(f);
+    }
+    return files;
+}
+
+std::vector<bool> runOnFiles(const Options &opts, const std::vector<std::string> &files,
+                             session::Stage stage) {
+    std::vector<bool> results(files.size());
+
+    if (files.size() == 1) {
+        results[0] = processFile(opts, files[0], stage);
+    } else {
+        std::vector<std::future<bool>> futures;
+        futures.reserve(files.size());
+        for (const auto &file : files)
+            futures.push_back(std::async(std::launch::async, [&opts, &file, stage]() {
+                return processFile(opts, file, stage);
+            }));
+        for (size_t i = 0; i < futures.size(); i++)
+            results[i] = futures[i].get();
+    }
+
+    return results;
+}
+
+size_t countPassed(const std::vector<bool> &results) {
+    size_t c = 0;
+    for (bool v : results)
+        c += v;
+    return c;
+}
+
+// ── check ──────────────────────────────────────────────────────────────────
+
+int check(const Options &opts) {
+    auto p = initPrinters(opts);
+    auto files = collectFiles(opts);
+    if (files.empty()) {
+        p.err.red("[error]");
+        std::fprintf(stderr, " no input files and no ZithProject.toml found\n");
         return 1;
     }
-
-    if (opts.inputFiles.size() == 1) {
-        const auto &file = opts.inputFiles[0];
-        session::CompilationSession session(opts, file);
-        session.setBuffered(true);
-        bool ok = session.runTo(session::Stage::CodegenReady);
-        session.emitDiagnostics();
-        std::fputs(session.flushOutput().c_str(), stderr);
-        if (opts.flags.verbose()) {
-            ok ? out.green("[ok]") : out.red("[error]");
-            std::printf(" %s\n", file.c_str());
-        }
-        return ok ? 0 : 1;
-    }
-
-    int exit_code = 0;
-    std::vector<std::future<SessionResult>> futures;
-    futures.reserve(opts.inputFiles.size());
-    for (const auto &file : opts.inputFiles) {
-        futures.push_back(std::async(std::launch::async, [&opts, file]() -> SessionResult {
-            auto session = std::make_unique<session::CompilationSession>(opts, file);
-            session->setBuffered(true);
-            bool ok = session->runTo(session::Stage::CodegenReady);
-            return {std::move(session), ok};
-        }));
-    }
-    for (auto &f : futures) {
-        auto sr = f.get();
-        sr.session->emitDiagnostics();
-        std::fputs(sr.session->flushOutput().c_str(), stderr);
-        if (opts.flags.verbose()) {
-            sr.ok ? out.green("[ok]") : out.red("[error]");
-            std::printf(" %s\n", sr.session->filePath().c_str());
-        }
-        if (!sr.ok)
-            exit_code = 1;
-    }
-    return exit_code;
+    auto results = runOnFiles(opts, files, session::Stage::TypeChecked);
+    printCheckResults(p, files, results, opts.flags.verbose());
+    return countPassed(results) == files.size() ? 0 : 1;
 }
 
 // ── build ──────────────────────────────────────────────────────────────────
 
 int build(const Options &opts) {
-    auto TERM = term::init(opts);
-    term::UsagePrinter out{stdout, TERM.coutOn};
-    term::UsagePrinter err{stderr, TERM.cerrOn};
-
-    if (opts.inputFiles.empty()) {
-        err.red("[error]");
-        std::fprintf(stderr, " no input files\n");
+    auto p = initPrinters(opts);
+    auto files = collectFiles(opts);
+    if (files.empty()) {
+        p.err.red("[error]");
+        std::fprintf(stderr, " no input files and no ZithProject.toml found\n");
         return 1;
     }
-
-    if (opts.inputFiles.size() == 1) {
-        const auto &file = opts.inputFiles[0];
-        session::CompilationSession session(opts, file);
-        session.setBuffered(true);
-        bool ok = session.run();
-        session.emitDiagnostics();
-        std::fputs(session.flushOutput().c_str(), stderr);
-        if (session.hasErrors())
-            ok = false;
-        if (opts.flags.verbose()) {
-            ok ? out.green("[ok]") : out.red("[error]");
-            std::printf(" %s\n", file.c_str());
-        }
-        return ok ? 0 : 1;
-    }
-
-    int exit_code = 0;
-    std::vector<std::future<SessionResult>> futures;
-    futures.reserve(opts.inputFiles.size());
-    for (const auto &file : opts.inputFiles) {
-        futures.push_back(std::async(std::launch::async, [&opts, file]() -> SessionResult {
-            auto session = std::make_unique<session::CompilationSession>(opts, file);
-            session->setBuffered(true);
-            bool ok = session->run();
-            return {std::move(session), ok};
-        }));
-    }
-    for (auto &f : futures) {
-        auto sr = f.get();
-        sr.session->emitDiagnostics();
-        std::fputs(sr.session->flushOutput().c_str(), stderr);
-        if (opts.flags.verbose()) {
-            sr.ok ? out.green("[ok]") : out.red("[error]");
-            std::printf(" %s\n", sr.session->filePath().c_str());
-        }
-        if (!sr.ok)
-            exit_code = 1;
-    }
-    return exit_code;
+    auto results = runOnFiles(opts, files, session::Stage::Cached);
+    printBuildResults(p, files, results, opts.flags.verbose());
+    return countPassed(results) == files.size() ? 0 : 1;
 }
 
 } // namespace zith::cli::commands

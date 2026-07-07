@@ -379,7 +379,8 @@ hir::HirExprId SemaPipeline::visitCall(const ast::CallNode &n) {
 
     // Fallback: check callee as function type (fn pointers, etc.)
     if (resolved_fn == symbols::kInvalidSym && callee_type != types::kErrorType) {
-        auto fn_ptr = std::get_if<types::TypeFn>(&ctx_.types().lookup(callee_type));
+        auto &fn_type = ctx_.types().lookup(callee_type);
+        auto fn_ptr = std::get_if<types::TypeFn>(&fn_type);
         if (fn_ptr) {
             if (hir_args.size() != fn_ptr->param_count) {
                 ctx_.diags().report(Severity::Error, WrongArity,

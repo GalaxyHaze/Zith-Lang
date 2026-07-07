@@ -67,6 +67,8 @@ if(BUILD_TESTING)
         target_link_libraries(${NAME} PRIVATE zithcLib)
         add_test(NAME ${NAME} COMMAND ${NAME})
     endfunction()
+
+    add_zith_test(test-lexer tests/test-lexer.cpp)
 endif()
 
 if(ZITH_BUILD_CLI)

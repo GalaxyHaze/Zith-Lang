@@ -175,12 +175,26 @@ void print_expr_node(const ExprNode &node, const AstBuilder &bld, FILE *out, int
                        print_indent(out, depth + 1);
                        print_expr(n.rhs, bld, out, depth + 1);
                    },
-                   [&](const UnbodyNode &n) {
-                       std::fprintf(out, "Unbody(spans [%u..%u], tokens [%u..%u])\n",
-                                    n.body_span.start, n.body_span.end, n.token_start, n.token_end);
-                   },
-               },
-               node);
+                    [&](const UnbodyNode &n) {
+                        std::fprintf(out, "Unbody(spans [%u..%u], tokens [%u..%u])\n",
+                                     n.body_span.start, n.body_span.end, n.token_start, n.token_end);
+                    },
+                    [&](const IntrinsicNode &n) {
+                        std::fprintf(out, "Intrinsic(%d)\n", static_cast<int>(n.kind));
+                        for (auto arg : n.args) {
+                            print_indent(out, depth + 1);
+                            print_expr(arg, bld, out, depth + 1);
+                        }
+                    },
+                    [&](const MacroCallNode &n) {
+                        std::fprintf(out, "MacroCall(%.*s)\n", (int)n.name.size(), n.name.data());
+                        for (auto arg : n.args) {
+                            print_indent(out, depth + 1);
+                            print_expr(arg, bld, out, depth + 1);
+                        }
+                    },
+                },
+                node);
 }
 
 void print_expr(ExprId id, const AstBuilder &bld, FILE *out, int depth) {
