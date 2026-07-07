@@ -1,26 +1,8 @@
 #pragma once
 
-#include <cstdio>
 #include <string_view>
 
 namespace zith::diagnostics {
-
-namespace ansi {
-inline constexpr std::string_view reset = "\033[0m";
-inline constexpr std::string_view bold  = "\033[1m";
-
-inline constexpr std::string_view red     = "\033[31m";
-inline constexpr std::string_view green   = "\033[32m";
-inline constexpr std::string_view yellow  = "\033[33m";
-inline constexpr std::string_view blue    = "\033[34m";
-inline constexpr std::string_view magenta = "\033[35m";
-inline constexpr std::string_view cyan    = "\033[36m";
-
-inline constexpr std::string_view bright_red    = "\033[91m";
-inline constexpr std::string_view bright_green  = "\033[92m";
-inline constexpr std::string_view bright_yellow = "\033[93m";
-inline constexpr std::string_view bright_cyan   = "\033[96m";
-} // namespace ansi
 
 struct ColorTheme {
     std::string_view severity_error;

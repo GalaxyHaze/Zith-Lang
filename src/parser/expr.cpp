@@ -11,6 +11,64 @@ namespace zith::parser {
 
 using lexer::TokenKind;
 
+namespace {
+
+ast::IntrinsicKind lookupIntrinsic(std::string_view name) {
+         if (name == "fields")        return ast::IntrinsicKind::Fields;
+    else if (name == "sizeOf")        return ast::IntrinsicKind::SizeOf;
+    else if (name == "alignOf")       return ast::IntrinsicKind::AlignOf;
+    else if (name == "hasTrait")      return ast::IntrinsicKind::HasTrait;
+    else if (name == "struct")        return ast::IntrinsicKind::Struct;
+    else if (name == "component")     return ast::IntrinsicKind::Component;
+    else if (name == "union")         return ast::IntrinsicKind::Union;
+    else if (name == "enum")          return ast::IntrinsicKind::Enum;
+    else if (name == "nullable")      return ast::IntrinsicKind::Nullable;
+    else if (name == "primitive")     return ast::IntrinsicKind::Primitive;
+    else if (name == "allocate")      return ast::IntrinsicKind::Allocate;
+    else if (name == "pack")          return ast::IntrinsicKind::Pack;
+    else if (name == "toStruct")      return ast::IntrinsicKind::ToStruct;
+    else if (name == "toPack")        return ast::IntrinsicKind::ToPack;
+    else if (name == "appendField")   return ast::IntrinsicKind::AppendField;
+    else if (name == "removeField")   return ast::IntrinsicKind::RemoveField;
+    else if (name == "appendMethod")  return ast::IntrinsicKind::AppendMethod;
+    else if (name == "file")          return ast::IntrinsicKind::File;
+    else if (name == "line")          return ast::IntrinsicKind::Line;
+    else if (name == "fnName")        return ast::IntrinsicKind::FnName;
+    else if (name == "location")      return ast::IntrinsicKind::Location;
+    else if (name == "ok")            return ast::IntrinsicKind::Ok;
+    else if (name == "err")           return ast::IntrinsicKind::Err;
+    else if (name == "offsetOf")      return ast::IntrinsicKind::OffsetOf;
+    return static_cast<ast::IntrinsicKind>(255); // sentinel
+}
+
+bool isIntrinsic(std::string_view name) {
+    return lookupIntrinsic(name) != static_cast<ast::IntrinsicKind>(255);
+}
+
+int intrinsicArgCount(ast::IntrinsicKind kind) {
+    switch (kind) {
+    case ast::IntrinsicKind::Struct:     case ast::IntrinsicKind::Component:
+    case ast::IntrinsicKind::Union:      case ast::IntrinsicKind::Enum:
+    case ast::IntrinsicKind::Nullable:   case ast::IntrinsicKind::Primitive:
+    case ast::IntrinsicKind::File:       case ast::IntrinsicKind::Line:
+    case ast::IntrinsicKind::FnName:     case ast::IntrinsicKind::Location:
+    case ast::IntrinsicKind::Pack:
+        return 0;
+    case ast::IntrinsicKind::Fields:     case ast::IntrinsicKind::SizeOf:
+    case ast::IntrinsicKind::AlignOf:    case ast::IntrinsicKind::ToStruct:
+    case ast::IntrinsicKind::Ok:         case ast::IntrinsicKind::Err:
+        return 1;
+    case ast::IntrinsicKind::HasTrait:   case ast::IntrinsicKind::OffsetOf:
+    case ast::IntrinsicKind::Allocate:   case ast::IntrinsicKind::ToPack:
+    case ast::IntrinsicKind::AppendField:case ast::IntrinsicKind::RemoveField:
+    case ast::IntrinsicKind::AppendMethod:
+        return 2;
+    }
+    return 0;
+}
+
+} // anonymous namespace
+
 // ── expression parsing ─────────────────────────────────────────────────
 
 ast::ExprId Parser::parsePrimary() {
@@ -115,6 +173,47 @@ ast::ExprId Parser::parsePrimary() {
         return desugar_block;
     }
 
+    // @ — macro calls and compiler intrinsics
+    if (consume('@')) {
+        skipComments(*tok);
+        auto start_span = peek().span;
+        if (!check(TokenKind::Identifier)) {
+            errorExpected("identifier after '@'");
+            return ast::kInvalidExpr;
+        }
+        auto name = lexeme();
+        advance();
+
+        // Macro call: @name(args)
+        if (check('(')) {
+            advance();
+            auto args = parseDelimited(*tok, bld->arena(), ')', [this] { return parseExpr(); });
+            consume(')');
+            return bld->macroCall(name, std::move(args), spanFrom(start_span));
+        }
+
+        // Intrinsic: @name or @name arg1, arg2
+        auto kind = lookupIntrinsic(name);
+        if (kind == static_cast<ast::IntrinsicKind>(255)) {
+            errorExpected("known intrinsic or '@' macro with parentheses");
+            return ast::kInvalidExpr;
+        }
+
+        memory::DynArray<ast::ExprId> args{bld->arena()};
+        int expected = intrinsicArgCount(kind);
+        if (expected > 0 && !eof() && !check(';') && !check('}') && !check(')') && !check(',')) {
+            auto arg = parseExpr();
+            if (arg != ast::kInvalidExpr) {
+                args.push(arg);
+                if (expected > 1 && check(',')) {
+                    advance();
+                    args.push(parseExpr());
+                }
+            }
+        }
+        return bld->intrinsic(kind, std::move(args), spanFrom(start_span));
+    }
+
     // parens
     if (consume('(')) {
         auto expr = parseExpr();
@@ -135,8 +234,8 @@ ast::ExprId Parser::parsePrimary() {
         return bld->litExpr(kind, lit, lit_span);
     }
 
-    // identifiers
-    if (check(TokenKind::Identifier)) {
+    // identifiers — includes type keywords like i32, f64, etc.
+    if (check(TokenKind::Identifier) || check(TokenKind::Type)) {
         auto name = lexeme();
         auto span = peek().span;
         advance();
@@ -144,7 +243,7 @@ ast::ExprId Parser::parsePrimary() {
     }
 
     errorExpected("expression");
-    return bld->inferExpr();
+    return ast::kInvalidExpr;
 }
 
 ast::ExprId Parser::parsePrefix() {

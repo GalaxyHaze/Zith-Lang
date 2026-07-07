@@ -4,8 +4,8 @@
 #include "ast/type-expr.hpp"
 #include "diagnostics/diagnostic-engine.hpp"
 #include "diagnostics/error-codes.hpp"
-#include "import/symbol-table.hpp"
-#include "memory/flat_map.hpp"
+#include "memory/flat-map.hpp"
+#include "symbols/symbol-table.hpp"
 #include "types/type-intern.hpp"
 
 #include <string_view>
@@ -20,12 +20,12 @@ class TypeLower {
     ast::AstBuilder &ast_;
     TypeIntern &intern_;
     diagnostics::DiagnosticEngine &diags_;
-    const import::SymbolTable &syms_;
+    const symbols::SymbolTable &syms_;
     const memory::FlatMap<std::string_view, TypeId> *generic_ctx_ = nullptr;
 
 public:
     TypeLower(ast::AstBuilder &ast, TypeIntern &intern, diagnostics::DiagnosticEngine &diags,
-              const import::SymbolTable &syms);
+              const symbols::SymbolTable &syms);
 
     void setGenericContext(const memory::FlatMap<std::string_view, TypeId> *ctx);
 

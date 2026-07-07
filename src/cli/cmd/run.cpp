@@ -1,46 +1,45 @@
 #include "cli/commands.hpp"
-#include "cli/compilation-session.hpp"
 #include "cli/terminal.hpp"
-#include "diagnostics/color.hpp"
+#include "session/compilation-session.hpp"
+#include "session/pipeline-plan.hpp"
 
 #include <cstdio>
+#include <future>
 
 namespace zith::cli::commands {
 
-#define CERR(c) term::err(TERM, diagnostics::ansi::c.data())
-#define RERR term::err_rst(TERM)
-#define COUT(c) term::out(TERM, diagnostics::ansi::c.data())
-#define ROUT term::out_rst(TERM)
-
-int cmd_execute(const Options &opts) {
+int execute(const Options &opts) {
     auto TERM = term::init(opts);
-    if (opts.input_files.empty()) {
-        std::fprintf(stderr, "%sno input files%s\n", CERR(red), RERR);
+    term::UsagePrinter out{stdout, TERM.coutOn};
+    term::UsagePrinter err{stderr, TERM.cerrOn};
+
+    auto files = collectFiles(opts);
+    if (files.empty()) {
+        err.red("[error]");
+        std::fprintf(stderr, " no input files and no ZithProject.toml found\n");
         return 1;
     }
 
-    // TODO: execute = full pipeline + run interpreted binary
-    // For now, run the pipeline to completion (ZirInterpreted)
-    for (const auto &file : opts.input_files) {
-        CompilationSession session(opts, file);
-        bool ok = session.run();
-        if (session.hasErrors())
-            ok = false;
-        if (opts.verbose)
-            std::printf("%s[%s]%s %s\n", ok ? COUT(green) : COUT(red), ok ? "ok" : "error", ROUT,
-                        file.c_str());
-        if (!ok)
-            return 1;
+    auto results = runOnFiles(opts, files, session::Stage::Cached);
+    bool allPassed = (countPassed(results) == files.size());
+
+    if (opts.flags.verbose()) {
+        for (size_t i = 0; i < files.size(); i++) {
+            results[i] ? out.green("[ok]") : out.red("[error]");
+            std::printf(" %s\n", files[i].c_str());
+        }
     }
 
-    // TODO: execute the compiled output / interpreted module
-    std::fprintf(stderr, "%s[soon]%s execution not implemented yet\n", CERR(yellow), RERR);
+    if (!allPassed)
+        return 1;
+
+    err.yellow("[soon]");
+    std::fprintf(stderr, " execution not implemented yet\n");
     return 1;
 }
 
-int cmd_run(const Options &opts) {
-    // run = compile + execute in one step
-    return cmd_execute(opts);
+int run(const Options &opts) {
+    return execute(opts);
 }
 
 } // namespace zith::cli::commands

@@ -1,15 +1,13 @@
 #pragma once
 #include "memory/arena.hpp"
-#include "memory/flat_map.hpp"
+#include "memory/flat-map.hpp"
 #include "memory/optional.hpp"
 #include "memory/result.hpp"
 #include "memory/source-file.hpp"
 #include "span.hpp"
 
 #include <functional>
-#include <shared_mutex>
 #include <string>
-#include <vector>
 
 namespace zith::memory {
 
@@ -19,7 +17,6 @@ class SourceMap {
     memory::Arena file_arena;
     memory::DynArray<SourceLoc> files;
     FlatMap<std::string, FileId> cache;
-    mutable std::shared_mutex rw_mutex;
 
 public:
     SourceMap();

@@ -217,8 +217,48 @@ struct ProgramNode {
     explicit ProgramNode(memory::Arena &arena) : decls(arena) {}
 };
 
+enum class IntrinsicKind : uint8_t {
+    Fields,
+    SizeOf,
+    AlignOf,
+    HasTrait,
+    Struct,
+    Component,
+    Union,
+    Enum,
+    Nullable,
+    Primitive,
+    Allocate,
+    Pack,
+    ToStruct,
+    ToPack,
+    AppendField,
+    RemoveField,
+    AppendMethod,
+    File,
+    Line,
+    FnName,
+    Location,
+    Ok,
+    Err,
+    OffsetOf,
+};
+
+struct IntrinsicNode {
+    IntrinsicKind kind;
+    memory::DynArray<ExprId> args;
+    memory::Span span{};
+};
+
+struct MacroCallNode {
+    std::string_view name;
+    memory::DynArray<ExprId> args;
+    memory::Span span{};
+};
+
 using ExprNode = std::variant<LitValue, IdentNode, BinaryNode, UnaryNode, CallNode, BlockNode,
-                              IfNode, WhileNode, FieldNode, IndexNode, RangeNode, UnbodyNode>;
+                              IfNode, WhileNode, FieldNode, IndexNode, RangeNode, UnbodyNode,
+                              IntrinsicNode, MacroCallNode>;
 
 using StmtNode = std::variant<LetNode, AssignNode, RetNode, ExprId>;
 

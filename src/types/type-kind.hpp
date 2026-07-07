@@ -1,5 +1,6 @@
 #pragma once
 
+#include "memory/string-interner.hpp"
 #include "types/type-id.hpp"
 
 #include <cstdint>
@@ -65,7 +66,7 @@ struct TypeUnion {
 };
 struct TypePack {
     const TypeId *members;
-    const std::string_view *names;
+    const memory::InternedId *names;
     size_t count;
 };
 struct TypeSum {

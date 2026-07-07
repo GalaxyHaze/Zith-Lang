@@ -1,23 +1,47 @@
 #include "cli/commands.hpp"
 #include "cli/terminal.hpp"
-#include "diagnostics/color.hpp"
 
 #include <cstdio>
 
 namespace zith::cli::commands {
 
-#define CERR(c) term::err(TERM, diagnostics::ansi::c.data())
-#define RERR term::err_rst(TERM)
+namespace {
 
-int cmd_test(const Options &opts) {
+int stubCommand(const Options &opts, const char *name) {
     auto TERM = term::init(opts);
-    std::fprintf(stderr, "%s[soon]%s not implemented yet\n", CERR(yellow), RERR);
+    term::UsagePrinter err{stderr, TERM.cerrOn};
+    err.yellow("[soon]");
+    std::fprintf(stderr, " %s not implemented yet\n", name);
     return 1;
 }
 
-int cmd_docs(const Options &opts) {
+} // namespace
+
+int test(const Options &opts) {
+    return stubCommand(opts, "test");
+}
+
+int docs(const Options &opts) {
+    return stubCommand(opts, "docs");
+}
+
+int repl(const Options &opts) {
+    return stubCommand(opts, "repl");
+}
+
+int clean(const Options &opts) {
+    return stubCommand(opts, "clean");
+}
+
+int deps(const Options &opts) {
     auto TERM = term::init(opts);
-    std::fprintf(stderr, "%s[soon]%s not implemented yet\n", CERR(yellow), RERR);
+    term::UsagePrinter err{stderr, TERM.cerrOn};
+    err.yellow("[soon]");
+    std::fprintf(stderr, " deps not implemented yet\n");
+    if (opts.subcommandStr.empty()) {
+        std::fprintf(stderr,
+                     "usage: zithc deps (list|add|remove|publish|unpublish|update) [args]\n");
+    }
     return 1;
 }
 

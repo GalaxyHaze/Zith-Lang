@@ -1,10 +1,10 @@
 #include "zithc-capi.h"
-#include "cli/compilation-session.hpp"
 #include "cli/options.hpp"
 #include "diagnostics/diagnostic-engine.hpp"
 #include "diagnostics/diagnostic.hpp"
 #include "diagnostics/error-codes.hpp"
 #include "sema/heuristic-engine.hpp"
+#include "session/compilation-session.hpp"
 
 #include "ast/ast-nodes.hpp"
 #include "ast/type-expr.hpp"
@@ -17,16 +17,18 @@
 #include <string>
 
 struct zithc_session {
-    zith::cli::Options opts;
-    zith::cli::CompilationSession session;
+    zith::memory::Arena arena;
+    zith::memory::StringInterner pool;
+    zith::Options opts;
+    zith::session::CompilationSession session;
     std::string last_error;
     std::string hover_result_;
 
-    zithc_session(const char *file_path) : opts(), session(opts, file_path) {
+    zithc_session(const char *file_path) : arena(), pool(arena), opts(arena), session(opts, file_path) {
         session.setBuffered(true);
     }
     zithc_session(const char *uri, const char *content, size_t length)
-        : opts(), session(opts, uri) {
+        : arena(), pool(arena), opts(arena), session(opts, uri) {
         session.setBuffered(true);
         session.setContent(std::string(content, length));
     }
@@ -34,9 +36,13 @@ struct zithc_session {
 
 static_assert(static_cast<int>(zith::diagnostics::Severity::Note) == ZITHC_SEVERITY_NOTE,
               "severity enum mismatch");
-static_assert(static_cast<int>(zith::cli::Stage::Source) == ZITHC_STAGE_SOURCE,
+static_assert(static_cast<int>(zith::session::Stage::Source) == ZITHC_STAGE_SOURCE,
               "stage enum mismatch");
-static_assert(static_cast<int>(zith::cli::Stage::NraResolved) == ZITHC_STAGE_NRA_RESOLVED,
+static_assert(static_cast<int>(zith::session::Stage::NraResolved) == ZITHC_STAGE_NRA_RESOLVED,
+              "stage enum mismatch");
+static_assert(static_cast<int>(zith::session::Stage::CodegenReady) == ZITHC_STAGE_CODEGEN_READY,
+              "stage enum mismatch");
+static_assert(static_cast<int>(zith::session::Stage::Cached) == ZITHC_STAGE_CACHED,
               "stage enum mismatch");
 
 namespace {
@@ -144,7 +150,7 @@ void zithc_session_destroy(zithc_session *session) {
 
 void zithc_session_add_include_dir(zithc_session *session, const char *dir) {
     if (session && dir)
-        session->opts.include_dirs.emplace_back(dir);
+        session->opts.includeDirs.push(std::string(dir));
 }
 
 bool zithc_run(zithc_session *session) {
@@ -156,9 +162,9 @@ bool zithc_run(zithc_session *session) {
 bool zithc_run_to(zithc_session *session, int stage) {
     if (!session)
         return false;
-    if (stage < ZITHC_STAGE_SOURCE || stage > ZITHC_STAGE_ZIR_INTERPRETED)
+    if (stage < ZITHC_STAGE_SOURCE || stage > ZITHC_STAGE_CACHED)
         return false;
-    auto s = static_cast<zith::cli::Stage>(stage);
+    auto s = static_cast<zith::session::Stage>(stage);
     return session->session.runTo(s);
 }
 
@@ -193,7 +199,7 @@ zithc_diagnostic zithc_diag_get(zithc_session *session, size_t index) {
             auto all = session->session.symbolTable().lookupAll(fn_name, tmp_arena);
             for (auto sym_id : all) {
                 auto &data = session->session.symbolTable().get(sym_id);
-                if (data.kind != zith::import::SymKind::Fn ||
+                if (data.kind != zith::symbols::SymKind::Fn ||
                     data.decl_id == zith::ast::kInvalidDecl)
                     continue;
                 auto &decl = session->session.astBuilder().getDecl(data.decl_id);
@@ -283,7 +289,7 @@ const char *zithc_hover(zithc_session *session, uint32_t offset) {
     std::string result;
     for (auto sym_id : all) {
         auto &data = session->session.symbolTable().get(sym_id);
-        if (data.kind != zith::import::SymKind::Fn || data.decl_id == zith::ast::kInvalidDecl)
+        if (data.kind != zith::symbols::SymKind::Fn || data.decl_id == zith::ast::kInvalidDecl)
             continue;
         auto &decl = session->session.astBuilder().getDecl(data.decl_id);
         auto *fn   = std::get_if<zith::ast::FnDeclNode>(&decl);
@@ -326,7 +332,7 @@ const char *zithc_run_to_json(zithc_session *session, int stage) {
     if (stage < 0)
         session->session.run();
     else
-        session->session.runTo(static_cast<zith::cli::Stage>(stage));
+        session->session.runTo(static_cast<zith::session::Stage>(stage));
 
     auto &diags = session->session.diags();
     auto &all   = diags.diagnostics();

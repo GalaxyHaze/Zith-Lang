@@ -2,10 +2,10 @@
 
 #include "ast/ast-builder.hpp"
 #include "diagnostics/diagnostic-engine.hpp"
-#include "import/symbol-table.hpp"
 #include "lexer/token.hpp"
 #include "parser/parse-result.hpp"
 #include "parser/scan-result.hpp"
+#include "symbols/symbol-table.hpp"
 
 #include <initializer_list>
 #include <string_view>
@@ -99,6 +99,6 @@ struct Parser {
 ProgramResult parseProgram(lexer::TokenStream tokens, ast::AstBuilder &builder,
                            diagnostics::DiagnosticEngine &diags);
 
-ScanResult scan(Parser &parser, import::SymbolTable &syms);
+ScanResult scan(Parser &parser, symbols::SymbolTable &syms);
 
 } // namespace zith::parser

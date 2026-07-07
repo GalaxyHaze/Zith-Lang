@@ -181,4 +181,8 @@ private:
     }
 };
 
+template <class T> auto makeDynArray(Arena &allocator) {
+    return DynArray<T>(allocator);
+}
+
 } // namespace zith::memory

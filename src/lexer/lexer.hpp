@@ -16,34 +16,37 @@ struct SourceLoc;
 namespace zith::lexer {
 
 class Lexer {
-    memory::SourceMap &source_map_;
-    memory::Arena &arena_;
+    memory::SourceMap &sourceMap;
+    memory::Arena &arena;
     memory::SourceLoc *file = nullptr;
     memory::FileId gId      = 0;
     const char *start       = nullptr;
     const char *now         = nullptr;
     const char *end         = nullptr;
-    memory::Loc loc{};
 
-    diagnostics::DiagnosticEngine &diags_;
+    diagnostics::DiagnosticEngine &diags;
     memory::DynArray<Token> tokens;
 
-    static bool isNum(char c);
+    static bool isNum(char c) { return c >= '0' && c <= '9'; }
     static bool isPunctuation(char c);
     static bool isOperator(char c);
-    bool isOpen() const;
-    char peek() const;
-    char peek(size_t n) const;
-    bool consume(size_t offset = 1);
+    bool isOpen() const { return now < end; }
+    char peek() const { return (now + 1 < end) ? now[1] : '\0'; }
+    char peek(size_t n) const { return (now + n < end) ? now[n] : '\0'; }
     bool match(std::string_view must);
-    void singleLineComment(size_t prefixLen, TokenKind kind);
-    void multiLineComment(size_t prefixLen, TokenKind kind);
+    void singleLineComment(bool isDoc);
+    void multiLineComment(bool isDoc);
     void processNumber();
     void processString();
     void processIdentifier();
 
-    memory::Span spanAt(const char *p) const noexcept;
-    memory::Span spanRange(const char *b, const char *e) const noexcept;
+    memory::Span spanAt(const char *p) const noexcept { 
+        auto off = static_cast<uint32_t>(p - start);
+        return {gId, off, off + 1};
+    }
+    memory::Span spanRange(const char *b, const char *e) const noexcept { 
+        return {gId, static_cast<uint32_t>(b - start), static_cast<uint32_t>(e - start)};
+    }
 
 public:
     Lexer(memory::SourceMap &source_map, memory::Arena &arena,

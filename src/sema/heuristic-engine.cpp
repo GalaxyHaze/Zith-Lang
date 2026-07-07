@@ -33,25 +33,26 @@ size_t HeuristicEngine::levenshteinDistance(std::string_view a, std::string_view
 }
 
 std::string_view HeuristicEngine::findBestMatch(std::string_view target,
-                                                const import::SymbolTable &syms) {
+                                                const symbols::SymbolTable &syms) {
     std::string_view best;
     size_t best_dist = std::numeric_limits<size_t>::max();
 
     for (size_t i = 0; i < syms.symbolCount(); ++i) {
-        auto &data = syms.get(static_cast<import::SymId>(i));
-        if (data.name.empty())
+        auto &data    = syms.get(static_cast<symbols::SymId>(i));
+        auto sym_name = syms.interner().lookup(data.name);
+        if (sym_name.empty())
             continue;
-        size_t dist     = levenshteinDistance(target, data.name);
-        size_t max_dist = std::max(target.size(), data.name.size()) / 3 + 1;
+        size_t dist     = levenshteinDistance(target, sym_name);
+        size_t max_dist = std::max(target.size(), sym_name.size()) / 3 + 1;
         if (dist < best_dist && dist <= max_dist) {
             best_dist = dist;
-            best      = data.name;
+            best      = sym_name;
         }
     }
     return best;
 }
 
-void HeuristicEngine::generate(const diagnostics::Diagnostic &diag, import::SymbolTable &syms,
+void HeuristicEngine::generate(const diagnostics::Diagnostic &diag, symbols::SymbolTable &syms,
                                memory::DynArray<std::string> &out_suggestions) const {
     switch (diag.code) {
     case err::UndefinedIdent: {

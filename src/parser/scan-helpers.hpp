@@ -3,11 +3,11 @@
 #include "ast/ast-ids.hpp"
 #include "diagnostics/diagnostic-engine.hpp"
 #include "diagnostics/error-codes.hpp"
-#include "import/symbol-table.hpp"
 #include "lexer/token.hpp"
 #include "memory/arena.hpp"
 #include "memory/dyn-array.hpp"
 #include "memory/span.hpp"
+#include "symbols/symbol-table.hpp"
 
 #include <cstdint>
 #include <cstdlib>
@@ -74,27 +74,27 @@ inline uint32_t skipBody(lexer::TokenStream &tok) {
     return tok.offset;
 }
 
-inline const char *symKindName(import::SymKind k) {
+inline const char *symKindName(symbols::SymKind k) {
     switch (k) {
-    case import::SymKind::Fn:
+    case symbols::SymKind::Fn:
         return "a fn";
-    case import::SymKind::Struct:
+    case symbols::SymKind::Struct:
         return "a struct";
-    case import::SymKind::Trait:
+    case symbols::SymKind::Trait:
         return "a trait";
-    case import::SymKind::Interface:
+    case symbols::SymKind::Interface:
         return "a interface";
-    case import::SymKind::Enum:
+    case symbols::SymKind::Enum:
         return "an enum";
-    case import::SymKind::Alias:
+    case symbols::SymKind::Alias:
         return "an alias";
-    case import::SymKind::Variable:
+    case symbols::SymKind::Variable:
         return "a variable";
-    case import::SymKind::Module:
+    case symbols::SymKind::Module:
         return "a module";
-    case import::SymKind::Component:
+    case symbols::SymKind::Component:
         return "a component";
-    case import::SymKind::Union:
+    case symbols::SymKind::Union:
         return "a union";
     }
     return "unknown";
@@ -168,11 +168,11 @@ inline void skipExpr(lexer::TokenStream &tok) {
     }
 }
 
-inline bool reportIfDuplicate(import::SymbolTable &syms, diagnostics::DiagnosticEngine &diag,
+inline bool reportIfDuplicate(symbols::SymbolTable &syms, diagnostics::DiagnosticEngine &diag,
                               std::string_view name, memory::Span span,
-                              import::SymId skip_id = import::kInvalidSym) {
+                              symbols::SymId skip_id = symbols::kInvalidSym) {
     auto existing = syms.lookup(name);
-    if (existing == import::kInvalidSym || existing == skip_id)
+    if (existing == symbols::kInvalidSym || existing == skip_id)
         return false;
     auto &prev      = syms.get(existing);
     std::string msg = "duplicate symbol '";

@@ -4,18 +4,20 @@
 #include "ast/type-expr.hpp"
 #include "memory/arena.hpp"
 #include "memory/dyn-array.hpp"
+#include "memory/string-interner.hpp"
 
 namespace zith::ast {
 
 class AstBuilder {
     memory::Arena &arena_;
+    memory::StringInterner &interner_;
     memory::DynArray<ExprNode> exprs_;
     memory::DynArray<StmtNode> stmts_;
     memory::DynArray<DeclNode> decls_;
     memory::DynArray<TypeExprNode> type_exprs_;
 
 public:
-    explicit AstBuilder(memory::Arena &arena);
+    AstBuilder(memory::Arena &arena, memory::StringInterner &interner);
 
     ExprId addExpr(ExprNode node);
     StmtId addStmt(StmtNode node);
@@ -73,6 +75,8 @@ public:
                       memory::Span span = {});
 
     ExprId unbody(memory::Span body_span, uint32_t token_start, uint32_t token_end);
+    ExprId intrinsic(IntrinsicKind kind, memory::DynArray<ExprId> args, memory::Span span = {});
+    ExprId macroCall(std::string_view name, memory::DynArray<ExprId> args, memory::Span span = {});
 
     // ── Type expression helpers ──────────────────────────────────────
     TypeExprId addTypeExpr(TypeExprNode node);
@@ -87,6 +91,7 @@ public:
     memory::Span declSpan(DeclId id) const;
 
     memory::Arena &arena();
+    memory::StringInterner &interner();
 };
 
 } // namespace zith::ast

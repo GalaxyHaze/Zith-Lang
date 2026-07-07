@@ -128,8 +128,8 @@ bool typeDataEqual(const TypeData &a, const TypeData &b) {
 
 } // anonymous namespace
 
-TypeIntern::TypeIntern(memory::Arena &arena)
-    : arena_(arena), types_(arena), hashes_(arena), struct_defs_(arena) {
+TypeIntern::TypeIntern(memory::Arena &arena, memory::StringInterner &interner)
+    : arena_(arena), interner_(interner), types_(arena), hashes_(arena), struct_defs_(arena) {
     types_.push(TypeError{});
     hashes_.push(computeHash(types_.back()));
     types_.push(TypeNever{});
@@ -208,7 +208,8 @@ size_t TypeIntern::computeHash(const TypeData &data) {
         h       = hashCombine(h, p.count);
         for (size_t i = 0; i < p.count; i++) {
             h = hashCombine(h, p.members[i]);
-            for (auto c : p.names[i])
+            auto name = interner_.lookup(p.names[i]);
+            for (auto c : name)
                 h = hashCombine(h, static_cast<size_t>(c));
         }
         break;
@@ -342,10 +343,10 @@ TypeId TypeIntern::internPack(std::span<const TypeId> members,
     auto *m      = static_cast<TypeId *>(arena_.alloc(count * sizeof(TypeId), alignof(TypeId)));
     std::memcpy(m, members.data(), count * sizeof(TypeId));
 
-    auto *n = static_cast<std::string_view *>(
-        arena_.alloc(count * sizeof(std::string_view), alignof(std::string_view)));
+    auto *n = static_cast<memory::InternedId *>(
+        arena_.alloc(count * sizeof(memory::InternedId), alignof(memory::InternedId)));
     for (size_t i = 0; i < count; i++)
-        n[i] = names[i];
+        n[i] = interner_.intern(names[i]);
 
     return intern(TypePack{m, n, count});
 }
@@ -372,13 +373,13 @@ TypeId TypeIntern::internIncomplete(TypeId base, std::span<const TypeId> args) {
 
 TypeId TypeIntern::defineStruct(std::string_view name) {
     TypeId def_id = static_cast<TypeId>(struct_defs_.size());
-    struct_defs_.push(StructDef{name, memory::DynArray<StructField>(arena_)});
+    struct_defs_.push(StructDef{interner_.intern(name), memory::DynArray<StructField>(arena_)});
     return intern(TypeStruct{def_id});
 }
 
 void TypeIntern::addField(TypeId struct_type, std::string_view field_name, TypeId field_type) {
     auto &def = getStructDef(struct_type);
-    def.fields.push(StructField{field_name, field_type});
+    def.fields.push(StructField{interner_.intern(field_name), field_type});
 }
 
 const StructDef &TypeIntern::getStructDef(TypeId struct_type) const {
@@ -398,19 +399,21 @@ const StructField &TypeIntern::getField(TypeId struct_type, size_t index) const 
     return getStructDef(struct_type).fields[index];
 }
 
-bool TypeIntern::hasField(TypeId struct_type, std::string_view name) const {
+bool TypeIntern::hasField(TypeId struct_type, std::string_view name) {
     auto &def = getStructDef(struct_type);
+    auto id   = interner_.intern(name);
     for (auto &f : def.fields) {
-        if (f.name == name)
+        if (f.name == id)
             return true;
     }
     return false;
 }
 
-TypeId TypeIntern::fieldType(TypeId struct_type, std::string_view name) const {
+TypeId TypeIntern::fieldType(TypeId struct_type, std::string_view name) {
     auto &def = getStructDef(struct_type);
+    auto id   = interner_.intern(name);
     for (auto &f : def.fields) {
-        if (f.name == name)
+        if (f.name == id)
             return f.type;
     }
     return kErrorType;

@@ -34,7 +34,6 @@ enum class TokenKind : uint8_t {
     In,
     Match,
     Control,
-    Scene,
     Thread,
     Error,
     Drop,

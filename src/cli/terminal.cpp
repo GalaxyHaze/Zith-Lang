@@ -7,12 +7,12 @@
 #include <unistd.h>
 #endif
 
-namespace zith::cli::term {
+namespace zith::term {
 
-static bool shouldUse(const std::string &setting, FILE *stream) {
-    if (setting == "on")
+static bool shouldUse(const Options::Color color, FILE *stream) {
+    if (color == Options::Color::On)
         return true;
-    if (setting == "off")
+    if (color == Options::Color::Off)
         return false;
 #ifdef ZITH_IS_WASM
     (void)stream;
@@ -26,28 +26,28 @@ static bool shouldUse(const std::string &setting, FILE *stream) {
 
 Term init(const Options &opts) {
     Term t;
-    t.cerr_on = shouldUse(opts.color, stderr);
-    t.cout_on = shouldUse(opts.color, stdout);
+    t.cerrOn = shouldUse(opts.flags.color(), stderr);
+    t.coutOn = shouldUse(opts.flags.color(), stdout);
     return t;
 }
 
 Term init() {
     Term t;
 #ifdef ZITH_IS_WASM
-    t.cerr_on = false;
-    t.cout_on = false;
+    t.cerrOn = false;
+    t.coutOn = false;
 #elif _WIN32
-    t.cerr_on = _isatty(_fileno(stderr));
-    t.cout_on = _isatty(_fileno(stdout));
+    t.cerrOn = _isatty(_fileno(stderr));
+    t.coutOn = _isatty(_fileno(stdout));
 #else
-    t.cerr_on = isatty(fileno(stderr));
-    t.cout_on = isatty(fileno(stdout));
+    t.cerrOn = isatty(fileno(stderr));
+    t.coutOn = isatty(fileno(stdout));
 #endif
     return t;
 }
 
 bool useColor(const Options &opts) {
-    return shouldUse(opts.color, stderr);
+    return shouldUse(opts.flags.color(), stderr);
 }
 
 } // namespace zith::cli::term

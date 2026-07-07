@@ -9,7 +9,7 @@ namespace zith::types {
 namespace err = diagnostics::err;
 
 TypeLower::TypeLower(ast::AstBuilder &ast, TypeIntern &intern, diagnostics::DiagnosticEngine &diags,
-                     const import::SymbolTable &syms)
+                     const symbols::SymbolTable &syms)
     : ast_(ast), intern_(intern), diags_(diags), syms_(syms) {}
 
 void TypeLower::setGenericContext(const memory::FlatMap<std::string_view, TypeId> *ctx) {
@@ -31,7 +31,7 @@ TypeId TypeLower::lowerNode(const ast::TypeExprNode &node) {
             // Single-segment path: look up name in symbol table
             if (n.segments.size() == 1) {
                 auto sym_id = self.syms_.lookup(n.segments[0]);
-                if (sym_id == import::kInvalidSym) {
+                if (sym_id == symbols::kInvalidSym) {
                     self.diags_.report(
                         diagnostics::Severity::Error, diagnostics::err::UndefinedIdent,
                         "undefined type '" + std::string(n.segments[0]) + "'", n.span);
@@ -39,12 +39,12 @@ TypeId TypeLower::lowerNode(const ast::TypeExprNode &node) {
                 }
                 auto &data = self.syms_.get(sym_id);
                 switch (data.kind) {
-                case import::SymKind::Struct:
-                case import::SymKind::Enum:
-                case import::SymKind::Union:
-                case import::SymKind::Trait:
-                case import::SymKind::Interface:
-                case import::SymKind::Alias: {
+                case symbols::SymKind::Struct:
+                case symbols::SymKind::Enum:
+                case symbols::SymKind::Union:
+                case symbols::SymKind::Trait:
+                case symbols::SymKind::Interface:
+                case symbols::SymKind::Alias: {
                     auto tid = self.intern_.lookupNamedType(n.segments[0]);
                     if (tid != types::kErrorType)
                         return tid;

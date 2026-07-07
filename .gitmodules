@@ -1,3 +1,0 @@
-[submodule "lib/zasm"]
-	path = lib/zasm
-	url = https://github.com/GalaxyHaze/zasm.git
