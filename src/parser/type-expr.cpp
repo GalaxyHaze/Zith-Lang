@@ -3,8 +3,10 @@
 #include "diagnostics/error-codes.hpp"
 #include "parser/operators.hpp"
 
+#include <array>
 #include <cstdlib>
 #include <string>
+#include <string_view>
 
 namespace zith::parser {
 
@@ -18,82 +20,40 @@ using ast::kInvalidExpr;
 using ast::kInvalidStmt;
 using diagnostics::Severity;
 
+struct BuiltinTypeEntry {
+    std::string_view name;
+    ast::BuiltinType type;
+};
+
+static constexpr BuiltinTypeEntry builtin_types[] = {
+    {"i8",      ast::BuiltinType::I8},
+    {"i16",     ast::BuiltinType::I16},
+    {"i32",     ast::BuiltinType::I32},
+    {"i64",     ast::BuiltinType::I64},
+    {"i128",    ast::BuiltinType::I128},
+    {"u8",      ast::BuiltinType::U8},
+    {"u16",     ast::BuiltinType::U16},
+    {"u32",     ast::BuiltinType::U32},
+    {"u64",     ast::BuiltinType::U64},
+    {"u128",    ast::BuiltinType::U128},
+    {"f32",     ast::BuiltinType::F32},
+    {"f64",     ast::BuiltinType::F64},
+    {"bool",    ast::BuiltinType::Bool},
+    {"char",    ast::BuiltinType::Char},
+    {"void",    ast::BuiltinType::Void},
+    {"never",   ast::BuiltinType::Never},
+    {"noreturn", ast::BuiltinType::Never},
+    {"invalid", ast::BuiltinType::Invalid},
+    {"unknown", ast::BuiltinType::Unknown},
+    {"opaque",  ast::BuiltinType::Opaque},
+};
+
 bool matchBuiltinType(std::string_view name, ast::BuiltinType &out) {
-    if (name == "i8") {
-        out = ast::BuiltinType::I8;
-        return true;
-    }
-    if (name == "i16") {
-        out = ast::BuiltinType::I16;
-        return true;
-    }
-    if (name == "i32") {
-        out = ast::BuiltinType::I32;
-        return true;
-    }
-    if (name == "i64") {
-        out = ast::BuiltinType::I64;
-        return true;
-    }
-    if (name == "i128") {
-        out = ast::BuiltinType::I128;
-        return true;
-    }
-    if (name == "u8") {
-        out = ast::BuiltinType::U8;
-        return true;
-    }
-    if (name == "u16") {
-        out = ast::BuiltinType::U16;
-        return true;
-    }
-    if (name == "u32") {
-        out = ast::BuiltinType::U32;
-        return true;
-    }
-    if (name == "u64") {
-        out = ast::BuiltinType::U64;
-        return true;
-    }
-    if (name == "u128") {
-        out = ast::BuiltinType::U128;
-        return true;
-    }
-    if (name == "f32") {
-        out = ast::BuiltinType::F32;
-        return true;
-    }
-    if (name == "f64") {
-        out = ast::BuiltinType::F64;
-        return true;
-    }
-    if (name == "bool") {
-        out = ast::BuiltinType::Bool;
-        return true;
-    }
-    if (name == "char") {
-        out = ast::BuiltinType::Char;
-        return true;
-    }
-    if (name == "void") {
-        out = ast::BuiltinType::Void;
-        return true;
-    }
-    if (name == "never" || name == "noreturn") {
-        out = ast::BuiltinType::Never;
-        return true;
-    }
-    if (name == "invalid") {
-        out = ast::BuiltinType::Invalid;
-        return true;
-    }
-    if (name == "unknown") {
-        out = ast::BuiltinType::Unknown;
-        return true;
-    }
-    if (name == "opaque") {
-        out = ast::BuiltinType::Opaque;
-        return true;
+    for (auto &entry : builtin_types) {
+        if (entry.name == name) {
+            out = entry.type;
+            return true;
+        }
     }
     return false;
 }
@@ -147,8 +107,12 @@ ast::TypeExprId Parser::parsePrimaryType() {
             return bld->addTypeExpr(ast::TypePtrExpr{inner, has_mut, ownership});
         }
 
-        if (has_mut || ownership != ast::OwnershipKw::Default) {
-            errorExpected("pointer type after 'mut'");
+        if (has_mut) {
+            auto inner = parsePrimaryType();
+            return bld->addTypeExpr(ast::TypeMut{inner});
+        }
+        if (ownership != ast::OwnershipKw::Default) {
+            errorExpected("pointer type after ownership qualifier");
             return bld->inferExpr();
         }
     }
@@ -187,8 +151,15 @@ ast::TypeExprId Parser::parsePrimaryType() {
     // ── parenthesized: (T) or fn(...) ─────────────────────────────
     if (consume('(')) {
         auto inner = parseTypeExpr();
-        if (check(')'))
+        if (check(')')) {
             advance();
+        } else {
+            // didn't find ')' — skip to it for recovery
+            while (!peek().is_eof() && !check(')'))
+                advance();
+            if (check(')'))
+                advance();
+        }
         return inner;
     }
 
@@ -262,20 +233,32 @@ ast::TypeExprId Parser::parsePrimaryType() {
 ast::TypeExprId Parser::parseOrExpr() {
     auto left = parsePrimaryType();
 
-    // 'or' as identifier — check lexeme
-    while (check(TokenKind::Identifier) && match("or")) {
-        auto right = parsePrimaryType();
-
-        // If left is not already a TypeSum, convert it
-        auto &node = bld->getTypeExpr(left);
-        if (auto *sum = std::get_if<ast::TypeSum>(&node)) {
-            sum->members.push(right);
-        } else {
-            memory::DynArray<ast::TypeExprId> members{bld->arena()};
-            members.push(left);
-            members.push(right);
-            left = bld->addTypeExpr(ast::TypeSum{std::move(members)});
+    while (true) {
+        // failable: Type!Error
+        if (check('!')) {
+            advance();
+            auto right = parsePrimaryType();
+            left = bld->addTypeExpr(ast::TypeFailable{left, right});
+            continue;
         }
+
+        // sum: Type or Error
+        if (match("or")) {
+            auto right = parsePrimaryType();
+
+            auto &node = bld->getTypeExpr(left);
+            if (auto *sum = std::get_if<ast::TypeSum>(&node)) {
+                sum->members.push(right);
+            } else {
+                memory::DynArray<ast::TypeExprId> members{bld->arena()};
+                members.push(left);
+                members.push(right);
+                left = bld->addTypeExpr(ast::TypeSum{std::move(members)});
+            }
+            continue;
+        }
+
+        break;
     }
 
     return left;

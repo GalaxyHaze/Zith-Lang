@@ -64,10 +64,20 @@ void Parser::errorHere(std::string_view msg) {
     diag->report(Severity::Error, diagnostics::err::ExpectedExpr, std::string(msg), peek().span);
 }
 
+void Parser::errorHere(std::string_view msg, diagnostics::ErrCode code) {
+    diag->report(Severity::Error, code, std::string(msg), peek().span);
+}
+
 void Parser::errorExpected(std::string_view expected) {
     std::string msg = "expected ";
     msg += expected;
     diag->report(Severity::Error, diagnostics::err::ExpectedExpr, std::move(msg), peek().span);
+}
+
+void Parser::errorExpected(std::string_view expected, diagnostics::ErrCode code) {
+    std::string msg = "expected ";
+    msg += expected;
+    diag->report(Severity::Error, code, std::move(msg), peek().span);
 }
 
 // ── token helpers ──────────────────────────────────────────────────────

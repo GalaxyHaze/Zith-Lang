@@ -23,6 +23,12 @@ public:
     explicit DiagnosticEngine(memory::Arena &arena) : diagnostics_(arena) {}
     void report(Diagnostic diag);
     void report(Severity sev, uint32_t code, std::string msg, memory::Span span);
+    void report(Severity sev, uint32_t code, std::string msg, memory::Span span,
+                std::initializer_list<std::string> suggestions);
+
+    void reportError(uint32_t code, std::string msg, memory::Span span);
+    void reportError(uint32_t code, std::string msg, memory::Span span,
+                     std::initializer_list<std::string> suggestions);
 
     void setColor(bool enabled) {
         use_color_ = enabled;
@@ -45,6 +51,12 @@ public:
     void emit() const;
     void emitTo(std::string_view source_text) const;
 
+private:
+    void emitLabelLine(const char* label, std::string_view msg) const;
+    void emitOne(const Diagnostic& d, std::string_view source,
+                 const char* location_line, bool has_secondary_labels) const;
+
+public:
     memory::DynArray<Diagnostic> &diagnostics() noexcept {
         return diagnostics_;
     }

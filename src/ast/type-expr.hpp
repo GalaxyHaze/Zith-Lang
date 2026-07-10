@@ -95,8 +95,12 @@ struct TypeGenericParamRef {
     std::string_view name;
 };
 
+struct TypeMut {
+    TypeExprId inner;
+};
+
 using TypeExprNode =
     std::variant<TypePath, TypeBuiltin, TypePtrExpr, TypeSlice, TypeArray, TypeFnExpr, TypeOptional,
-                 TypeFailable, TypeApp, TypePack, TypeSum, TypeInfer, TypeGenericParamRef>;
+                 TypeFailable, TypeApp, TypePack, TypeSum, TypeInfer, TypeGenericParamRef, TypeMut>;
 
 } // namespace zith::ast

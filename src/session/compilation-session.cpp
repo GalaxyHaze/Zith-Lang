@@ -288,12 +288,28 @@ bool CompilationSession::importStage() {
 
     mImportMgr.setVisibleRoots(std::move(visible_roots));
 
+    // Asset roots
+    std::vector<std::string> asset_roots;
+    for (auto &d : mOpts.get().assetDirs)
+        asset_roots.push_back(fs::weakly_canonical(fs::path(d)).string());
+    if (!mProjectConfig.assetDir.empty()) {
+        auto p = fs::weakly_canonical(fs::path(mProjectRoot) / mProjectConfig.assetDir);
+        asset_roots.push_back(p.string());
+    }
+    if (!mProjectRoot.empty()) {
+        auto default_assets = fs::weakly_canonical(fs::path(mProjectRoot) / "assets");
+        if (fs::is_directory(default_assets))
+            asset_roots.push_back(default_assets.string());
+    }
+    mImportMgr.setAssetRoots(std::move(asset_roots));
+
     auto source_dir = fs::path(mFilePath).parent_path().string();
 
     for (auto decl_id : mProgram.decls) {
         auto &decl = mAstBuilder.getDecl(decl_id);
         if (auto *import = std::get_if<ast::ImportNode>(&decl)) {
-            auto res = mImportMgr.resolve(import->path, import->is_from, import->is_export,
+            auto res = mImportMgr.resolve(import->path, import->symbols,
+                                            import->is_from, import->is_export, import->is_asset,
                                             import->alias, import->import_depth, source_dir);
             if (!res) {
                 mDiags.report(diagnostics::Severity::Error, diagnostics::err::ImportError,
@@ -367,7 +383,7 @@ bool CompilationSession::semaStage() {
         std::printf("--- AST ---\n");
         ast::printAST(mProgram, mAstBuilder);
         std::printf("--- Symbols ---\n");
-        mSyms.dump();
+        mSyms.dump(stdout, &mAstBuilder);
         std::printf("---\n");
     }
 

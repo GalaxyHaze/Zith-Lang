@@ -40,9 +40,8 @@ static ModeDefaults getDefaults(Options::Mode mode) {
 }
 
 void Options::deriveTargetStage() {
-    if (flags.emitAst())
-        targetStage = session::Stage::Imported;
-    else if (flags.emitHir())
+    // emitAst is handled inside semaStage (body expansion + print) — no short-circuit
+    if (flags.emitHir())
         targetStage = session::Stage::HirLowered;
     else if (flags.emitIr() || flags.emitAsm())
         targetStage = session::Stage::CodegenReady;

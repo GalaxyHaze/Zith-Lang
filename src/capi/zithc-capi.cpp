@@ -118,6 +118,8 @@ std::string typeExprToShortString(const zith::ast::AstBuilder &bld, zith::ast::T
                        typeExprToShortString(bld, v.elem);
             } else if constexpr (std::is_same_v<T, zith::ast::TypeInfer>) {
                 return "_";
+            } else if constexpr (std::is_same_v<T, zith::ast::TypeMut>) {
+                return "mut " + typeExprToShortString(bld, v.inner);
             } else {
                 return "?";
             }

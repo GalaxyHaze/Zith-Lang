@@ -69,6 +69,10 @@ if(BUILD_TESTING)
     endfunction()
 
     add_zith_test(test-lexer tests/test-lexer.cpp)
+    add_zith_test(test-import tests/test-import.cpp)
+    add_zith_test(test-alias tests/test-alias.cpp)
+    add_zith_test(test-struct tests/test-struct.cpp)
+    add_zith_test(test-scan tests/test-scan.cpp)
 endif()
 
 if(ZITH_BUILD_CLI)

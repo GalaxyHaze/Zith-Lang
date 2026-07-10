@@ -4,8 +4,10 @@
 #include "parser/operators.hpp"
 #include "parser/scan-helpers.hpp"
 
+#include <array>
 #include <cstdlib>
 #include <string>
+#include <string_view>
 
 namespace zith::parser {
 
@@ -13,57 +15,50 @@ using lexer::TokenKind;
 
 namespace {
 
-ast::IntrinsicKind lookupIntrinsic(std::string_view name) {
-         if (name == "fields")        return ast::IntrinsicKind::Fields;
-    else if (name == "sizeOf")        return ast::IntrinsicKind::SizeOf;
-    else if (name == "alignOf")       return ast::IntrinsicKind::AlignOf;
-    else if (name == "hasTrait")      return ast::IntrinsicKind::HasTrait;
-    else if (name == "struct")        return ast::IntrinsicKind::Struct;
-    else if (name == "component")     return ast::IntrinsicKind::Component;
-    else if (name == "union")         return ast::IntrinsicKind::Union;
-    else if (name == "enum")          return ast::IntrinsicKind::Enum;
-    else if (name == "nullable")      return ast::IntrinsicKind::Nullable;
-    else if (name == "primitive")     return ast::IntrinsicKind::Primitive;
-    else if (name == "allocate")      return ast::IntrinsicKind::Allocate;
-    else if (name == "pack")          return ast::IntrinsicKind::Pack;
-    else if (name == "toStruct")      return ast::IntrinsicKind::ToStruct;
-    else if (name == "toPack")        return ast::IntrinsicKind::ToPack;
-    else if (name == "appendField")   return ast::IntrinsicKind::AppendField;
-    else if (name == "removeField")   return ast::IntrinsicKind::RemoveField;
-    else if (name == "appendMethod")  return ast::IntrinsicKind::AppendMethod;
-    else if (name == "file")          return ast::IntrinsicKind::File;
-    else if (name == "line")          return ast::IntrinsicKind::Line;
-    else if (name == "fnName")        return ast::IntrinsicKind::FnName;
-    else if (name == "location")      return ast::IntrinsicKind::Location;
-    else if (name == "ok")            return ast::IntrinsicKind::Ok;
-    else if (name == "err")           return ast::IntrinsicKind::Err;
-    else if (name == "offsetOf")      return ast::IntrinsicKind::OffsetOf;
-    return static_cast<ast::IntrinsicKind>(255); // sentinel
-}
+struct IntrinsicEntry {
+    std::string_view name;
+    ast::IntrinsicKind kind;
+    int arg_count;
+};
 
-bool isIntrinsic(std::string_view name) {
-    return lookupIntrinsic(name) != static_cast<ast::IntrinsicKind>(255);
+static constexpr IntrinsicEntry intrinsics[] = {
+    {"fields",      ast::IntrinsicKind::Fields,      1},
+    {"sizeOf",      ast::IntrinsicKind::SizeOf,      1},
+    {"alignOf",     ast::IntrinsicKind::AlignOf,     1},
+    {"hasTrait",    ast::IntrinsicKind::HasTrait,    2},
+    {"struct",      ast::IntrinsicKind::Struct,      0},
+    {"component",   ast::IntrinsicKind::Component,   0},
+    {"union",       ast::IntrinsicKind::Union,       0},
+    {"enum",        ast::IntrinsicKind::Enum,        0},
+    {"nullable",    ast::IntrinsicKind::Nullable,    0},
+    {"primitive",   ast::IntrinsicKind::Primitive,   0},
+    {"allocate",    ast::IntrinsicKind::Allocate,    2},
+    {"pack",        ast::IntrinsicKind::Pack,        0},
+    {"toStruct",    ast::IntrinsicKind::ToStruct,    1},
+    {"toPack",      ast::IntrinsicKind::ToPack,      2},
+    {"appendField", ast::IntrinsicKind::AppendField, 2},
+    {"removeField", ast::IntrinsicKind::RemoveField, 2},
+    {"appendMethod",ast::IntrinsicKind::AppendMethod,2},
+    {"file",        ast::IntrinsicKind::File,        0},
+    {"line",        ast::IntrinsicKind::Line,        0},
+    {"fnName",      ast::IntrinsicKind::FnName,      0},
+    {"location",    ast::IntrinsicKind::Location,    0},
+    {"ok",          ast::IntrinsicKind::Ok,          1},
+    {"err",         ast::IntrinsicKind::Err,         1},
+    {"offsetOf",    ast::IntrinsicKind::OffsetOf,    2},
+};
+
+const IntrinsicEntry *findIntrinsic(std::string_view name) {
+    for (auto &entry : intrinsics)
+        if (entry.name == name)
+            return &entry;
+    return nullptr;
 }
 
 int intrinsicArgCount(ast::IntrinsicKind kind) {
-    switch (kind) {
-    case ast::IntrinsicKind::Struct:     case ast::IntrinsicKind::Component:
-    case ast::IntrinsicKind::Union:      case ast::IntrinsicKind::Enum:
-    case ast::IntrinsicKind::Nullable:   case ast::IntrinsicKind::Primitive:
-    case ast::IntrinsicKind::File:       case ast::IntrinsicKind::Line:
-    case ast::IntrinsicKind::FnName:     case ast::IntrinsicKind::Location:
-    case ast::IntrinsicKind::Pack:
-        return 0;
-    case ast::IntrinsicKind::Fields:     case ast::IntrinsicKind::SizeOf:
-    case ast::IntrinsicKind::AlignOf:    case ast::IntrinsicKind::ToStruct:
-    case ast::IntrinsicKind::Ok:         case ast::IntrinsicKind::Err:
-        return 1;
-    case ast::IntrinsicKind::HasTrait:   case ast::IntrinsicKind::OffsetOf:
-    case ast::IntrinsicKind::Allocate:   case ast::IntrinsicKind::ToPack:
-    case ast::IntrinsicKind::AppendField:case ast::IntrinsicKind::RemoveField:
-    case ast::IntrinsicKind::AppendMethod:
-        return 2;
-    }
+    for (auto &entry : intrinsics)
+        if (entry.kind == kind)
+            return entry.arg_count;
     return 0;
 }
 
@@ -193,12 +188,13 @@ ast::ExprId Parser::parsePrimary() {
         }
 
         // Intrinsic: @name or @name arg1, arg2
-        auto kind = lookupIntrinsic(name);
-        if (kind == static_cast<ast::IntrinsicKind>(255)) {
+        auto *intrinsic = findIntrinsic(name);
+        if (!intrinsic) {
             errorExpected("known intrinsic or '@' macro with parentheses");
             return ast::kInvalidExpr;
         }
 
+        auto kind                = intrinsic->kind;
         memory::DynArray<ast::ExprId> args{bld->arena()};
         int expected = intrinsicArgCount(kind);
         if (expected > 0 && !eof() && !check(';') && !check('}') && !check(')') && !check(',')) {
@@ -231,6 +227,14 @@ ast::ExprId Parser::parsePrimary() {
             kind = ast::LitKind::Bool;
         else if (lit == "null")
             kind = ast::LitKind::Nil;
+        else if (lit.size() > 0 && lit[0] == '"')
+            kind = ast::LitKind::String;
+        else if (lit.size() > 0 && lit[0] == '\'')
+            kind = ast::LitKind::Char;
+        else if (lit.find('.') != std::string_view::npos ||
+                 lit.find('e') != std::string_view::npos ||
+                 lit.find('E') != std::string_view::npos)
+            kind = ast::LitKind::Float;
         return bld->litExpr(kind, lit, lit_span);
     }
 

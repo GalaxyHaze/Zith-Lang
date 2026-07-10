@@ -5,6 +5,7 @@
 #include "lexer/token.hpp"
 #include "parser/parse-result.hpp"
 #include "parser/scan-result.hpp"
+#include "diagnostics/error-codes.hpp"
 #include "symbols/symbol-table.hpp"
 
 #include <initializer_list>
@@ -51,7 +52,9 @@ struct Parser {
 
     // ── Structured error helpers ─────────────────────────────────
     void errorHere(std::string_view msg);
+    void errorHere(std::string_view msg, diagnostics::ErrCode code);
     void errorExpected(std::string_view expected);
+    void errorExpected(std::string_view expected, diagnostics::ErrCode code);
 
     // ── Expression parsing ───────────────────────────────────────────
     ast::ExprId parsePrimary();
@@ -72,19 +75,6 @@ struct Parser {
 
     // Parse `: Type` annotation if present, returns kInvalidTypeExpr otherwise
     ast::TypeExprId parseOptTypeAnnotation();
-
-    // Parse comma-separated list delimited by `close` (e.g., `)` for parens)
-    template <typename Fn>
-    auto parseCommaList(char close, Fn parser) -> memory::DynArray<decltype(parser())> {
-        using T     = decltype(parser());
-        auto result = memory::DynArray<T>{bld->arena()};
-        if (peek().punc != close) {
-            result.push(parser());
-            while (consume(','))
-                result.push(parser());
-        }
-        return result;
-    }
 
     // Skip tokens until a sync point is found (error recovery)
     void skipUntil(std::initializer_list<lexer::TokenKind> sync_tokens);

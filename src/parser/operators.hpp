@@ -5,89 +5,56 @@
 
 namespace zith::parser::operators {
 
+struct WordOpEntry {
+    std::string_view word;
+    ast::BinaryOp op;
+    uint8_t prec;
+};
+
+static constexpr WordOpEntry word_ops[] = {
+    {"and", ast::BinaryOp::And, 3},
+    {"or",  ast::BinaryOp::Or,  2},
+    {"xor", ast::BinaryOp::Xor, 4},
+};
+
 inline uint8_t infixPrec(const lexer::Token &t) {
-    if (t.is(lexer::TokenKind::Punctuation)) {
-        switch (t.punc) {
-        case '|':
-            return 6;
-        case '^':
-            return 7;
-        case '&':
-            return 8;
-        case '<':
-            return 10;
-        case '>':
-            return 10;
-        case '+':
-            return 12;
-        case '-':
-            return 12;
-        case '*':
-            return 14;
-        case '/':
-            return 14;
-        case '%':
-            return 14;
-        default:
-            return 0;
-        }
+    switch (t.punc) {
+    case '|':
+        return 6;
+    case '^':
+        return 7;
+    case '&':
+        return 8;
+    case '<':
+        return 10;
+    case '>':
+        return 10;
+    case '+':
+        return 12;
+    case '-':
+        return 12;
+    case '*':
+        return 14;
+    case '/':
+        return 14;
+    case '%':
+        return 14;
+    default:
+        return 0;
     }
-    if (t.is(lexer::TokenKind::Logical))
-        return 2;
-    if (t.is(lexer::TokenKind::Operators)) {
-        switch (t.punc) {
-        case '|':
-            return 6;
-        case '^':
-            return 7;
-        case '&':
-            return 8;
-        case '<':
-            return 10;
-        case '>':
-            return 10;
-        case '+':
-            return 12;
-        case '-':
-            return 12;
-        case '*':
-            return 14;
-        case '/':
-            return 14;
-        case '%':
-            return 14;
-        case '=':
-            return 0;
-        case '!':
-            return 0;
-        case '~':
-            return 0;
-        case '?':
-            return 0;
-        default:
-            return 0;
-        }
-    }
-    return 0;
 }
 
 inline ast::BinaryOp binaryOpForWord(std::string_view w) {
-    if (w == "and")
-        return ast::BinaryOp::And;
-    if (w == "or")
-        return ast::BinaryOp::Or;
-    if (w == "xor")
-        return ast::BinaryOp::Xor;
+    for (auto &entry : word_ops)
+        if (entry.word == w)
+            return entry.op;
     return ast::BinaryOp::Add;
 }
 
 inline uint8_t wordPrec(std::string_view w) {
-    if (w == "or")
-        return 2;
-    if (w == "xor")
-        return 4;
-    if (w == "and")
-        return 3;
+    for (auto &entry : word_ops)
+        if (entry.word == w)
+            return entry.prec;
     return 0;
 }
 

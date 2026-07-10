@@ -2,7 +2,7 @@
 
 namespace zith::diagnostics {
 
-std::optional<ErrorInfo> lookupError(ErrCode code) noexcept {
+memory::Optional<ErrorInfo> lookupError(ErrCode code) noexcept {
     switch (code) {
     // Lexical
     case err::UnknownToken:
@@ -39,6 +39,10 @@ std::optional<ErrorInfo> lookupError(ErrCode code) noexcept {
     case err::ImportError:
         return ErrorInfo{code, 'E', "parse", "Import error",
                          "Check the module path and ensure the file exists"};
+    case err::TopLevelLetNotAllowed:
+        return ErrorInfo{code, 'E', "parse", "Top-level declaration",
+                         "Avoid overusing globals \u2014 prefer passing values via function parameters",
+                         "`let` bindings are for function/block scope only"};
 
     // Semantic
     case err::UndefinedIdent:
@@ -118,7 +122,7 @@ std::optional<ErrorInfo> lookupError(ErrCode code) noexcept {
                          "An unrecoverable error occurred \u2014 check the error context"};
 
     default:
-        return std::nullopt;
+        return nullptr;
     }
 }
 

@@ -83,6 +83,26 @@ auto ImportManager::find_file(const std::string &import_key, std::string_view so
                 return {};
             }
         }
+        // Try .h
+        {
+            auto p = abs.string() + ".h";
+            if (check(p)) {
+                for (auto &root : visible_roots_)
+                    if (path_under_root(fs::path(p), fs::path(root)))
+                        return p;
+                return {};
+            }
+        }
+        // Try .hpp
+        {
+            auto p = abs.string() + ".hpp";
+            if (check(p)) {
+                for (auto &root : visible_roots_)
+                    if (path_under_root(fs::path(p), fs::path(root)))
+                        return p;
+                return {};
+            }
+        }
         // Try /mod.zith
         {
             auto mod_p = (abs / "mod.zith").string();
@@ -112,12 +132,24 @@ auto ImportManager::find_file(const std::string &import_key, std::string_view so
         if (check(p))
             return p;
 
-        // 2. Directory with mod.zith entry
+        // 2. .h / .hpp
+        {
+            auto hp = base.string() + ".h";
+            if (check(hp))
+                return hp;
+        }
+        {
+            auto hpp = base.string() + ".hpp";
+            if (check(hpp))
+                return hpp;
+        }
+
+        // 3. Directory with mod.zith entry
         auto mod_p = (base / "mod.zith").string();
         if (check(mod_p))
             return mod_p;
 
-        // 3. Directory (no mod.zith) — already under this root since base is root-relative
+        // 4. Directory (no mod.zith) — already under this root since base is root-relative
         if (fs::is_directory(base))
             return base.string();
     }
@@ -127,10 +159,47 @@ auto ImportManager::find_file(const std::string &import_key, std::string_view so
 
 auto ImportManager::resolve_file(const std::string &full_path, const std::string &import_key,
                                  const std::string &ns, bool is_from, bool is_export,
-                                 const std::string &alias, int32_t import_depth)
+                                 const std::string &alias,
+                                 int32_t import_depth,
+                                 const memory::DynArray<ast::ImportSymbol> &symbols,
+                                 bool is_asset)
     -> memory::Result<size_t> {
     if (auto *existing = index_by_path_.get(import_key))
         return *existing;
+
+    // ── C/C++ header: don't tokenize, just register ───────────────
+    auto ext = fs::path(full_path).extension();
+    bool is_c_header = (ext == ".h" || ext == ".hpp");
+
+    if (is_c_header || is_asset) {
+        memory::DynArray<SymId> empty_pub{arena_};
+        memory::DynArray<SymId> empty_mod{arena_};
+        memory::DynArray<size_t> empty_re{arena_};
+        auto syms_ptr = arena_.make<SymbolTable>(arena_, &interner_);
+
+        size_t idx = files_.size();
+        files_.push(LoadedFile{
+            import_key,
+            ns,
+            is_from,
+            is_export,
+            alias,
+            import_depth,
+            memory::FileId(0),
+            std::move(*syms_ptr),
+            nullptr,
+            ast::ProgramNode{arena_},
+            std::move(empty_pub),
+            std::move(empty_mod),
+            std::move(empty_re),
+            memory::DynArray<ast::ImportSymbol>(arena_),
+            is_asset,
+            is_c_header,
+            full_path,
+        });
+        index_by_path_.insert(import_key, idx);
+        return idx;
+    }
 
     auto file_result = source_map_.loadFile(full_path);
     if (!file_result)
@@ -166,8 +235,10 @@ auto ImportManager::resolve_file(const std::string &full_path, const std::string
         if (auto *import = std::get_if<ast::ImportNode>(&decl)) {
             if (import->is_export) {
                 auto re_res =
-                    resolve(import->path, /*is_from=*/true,
-                            /*is_export=*/true, import->alias, import->import_depth, full_path);
+                    resolve(import->path, import->symbols,
+                            /*is_from=*/true,
+                            /*is_export=*/true, import->is_asset,
+                            import->alias, import->import_depth, full_path);
                 if (re_res) {
                     re_exported_files.push(re_res.value());
                 } else {
@@ -178,6 +249,10 @@ auto ImportManager::resolve_file(const std::string &full_path, const std::string
             }
         }
     }
+
+    memory::DynArray<ast::ImportSymbol> syms_copy{arena_};
+    for (auto &s : symbols)
+        syms_copy.push(s);
 
     size_t idx = files_.size();
     files_.push(LoadedFile{
@@ -194,6 +269,8 @@ auto ImportManager::resolve_file(const std::string &full_path, const std::string
         std::move(public_syms),
         std::move(module_syms),
         std::move(re_exported_files),
+        std::move(syms_copy),
+        false, false, {},
     });
     index_by_path_.insert(import_key, idx);
     return idx;
@@ -211,10 +288,18 @@ void ImportManager::collect_dir_files(const std::string &dir_path, const std::st
 
     for (auto &entry : fs::directory_iterator(dir)) {
         auto &p = entry.path();
-        if (entry.is_regular_file() && p.extension() == ".zith") {
+        auto ext = p.extension();
+        if (entry.is_regular_file() && (ext == ".zith" || ext == ".h" || ext == ".hpp")) {
             auto rel = fs::relative(p, fs::path(base_dir)).generic_string();
-            if (rel.size() >= 5)
-                rel = rel.substr(0, rel.size() - 5);
+            if (ext == ".zith") {
+                if (rel.size() >= 5)
+                    rel = rel.substr(0, rel.size() - 5);
+            } else {
+                // Keep .h/.hpp extension in the path
+                auto ext_str = ext.string();
+                if (rel.size() >= ext_str.size())
+                    rel = rel.substr(0, rel.size() - ext_str.size());
+            }
             out.push_back({p.string(), rel, current_depth});
         } else if (entry.is_directory()) {
             collect_dir_files(p.string(), base_dir, max_depth, current_depth + 1, out);
@@ -265,7 +350,8 @@ auto ImportManager::resolve_directory(const std::string &import_key, const std::
         }
 
         auto res =
-            resolve_file(entry.full_path, sub_key, ns, is_from, is_export, alias, import_depth);
+            resolve_file(entry.full_path, sub_key, ns, is_from, is_export, alias, import_depth,
+                         memory::DynArray<ast::ImportSymbol>(arena_), false);
         if (!res)
             return std::move(res.error());
 
@@ -277,8 +363,52 @@ auto ImportManager::resolve_directory(const std::string &import_key, const std::
     return first_idx;
 }
 
-auto ImportManager::resolve(const memory::DynArray<std::string_view> &path, bool is_from,
-                            bool is_export, std::string_view alias, int32_t import_depth,
+auto ImportManager::resolve_asset_file(const std::string &full_path,
+                                       const std::string &import_key,
+                                       const std::string &alias)
+    -> memory::Result<size_t> {
+    if (auto *existing = index_by_path_.get(import_key))
+        return *existing;
+
+    auto syms = SymbolTable(arena_, &interner_);
+    auto sym_id = syms.declare(alias, SymbolVisibility::Public, 0, SymKind::Asset,
+                               ast::kInvalidDecl, {}, kInvalidSym, {});
+
+    memory::DynArray<SymId> pub{arena_};
+    pub.push(sym_id);
+    memory::DynArray<SymId> mod{arena_};
+    memory::DynArray<size_t> re{arena_};
+    memory::DynArray<ast::ImportSymbol> empty_syms{arena_};
+
+    size_t idx = files_.size();
+    files_.push(LoadedFile{
+        import_key,
+        alias,  // ns = alias
+        true,   // is_from (so alias is injected unqualified)
+        false,  // is_export
+        alias,
+        1,
+        memory::FileId(0),
+        std::move(syms),
+        nullptr,
+        ast::ProgramNode{arena_},
+        std::move(pub),
+        std::move(mod),
+        std::move(re),
+        std::move(empty_syms),
+        true,  // is_asset
+        false, // is_c_header
+        full_path,
+    });
+    index_by_path_.insert(import_key, idx);
+    return idx;
+}
+
+auto ImportManager::resolve(const memory::DynArray<std::string_view> &path,
+                            const memory::DynArray<ast::ImportSymbol> &symbols,
+                            bool is_from,
+                            bool is_export, bool is_asset,
+                            std::string_view alias, int32_t import_depth,
                             std::string_view source_file) -> memory::Result<size_t> {
 
     auto import_key = join_path(path, '/');
@@ -293,6 +423,16 @@ auto ImportManager::resolve(const memory::DynArray<std::string_view> &path, bool
 
     resolving_.insert(import_key, char(1));
     ResolveGuard guard{resolving_, import_key};
+
+    // ── Asset file ─────────────────────────────────────────────────
+    if (is_asset) {
+        for (auto &root : asset_roots_) {
+            auto p = fs::path(root) / import_key;
+            if (fs::is_regular_file(p))
+                return resolve_asset_file(p.string(), import_key, std::string(alias));
+        }
+        return memory::Error{"could not resolve asset '" + import_key + "'"};
+    }
 
     auto file_path = find_file(import_key, source_file);
     if (!file_path) {
@@ -335,7 +475,7 @@ auto ImportManager::resolve(const memory::DynArray<std::string_view> &path, bool
     }();
 
     return resolve_file(*file_path, import_key, ns, is_from, is_export, std::string(alias),
-                        import_depth);
+                        import_depth, symbols, is_asset);
 }
 
 void ImportManager::mergeInto(SymbolTable &main_syms, int32_t from_depth) {
@@ -351,10 +491,29 @@ void ImportManager::mergeInto(SymbolTable &main_syms, int32_t from_depth) {
         sym_origins_[main_sid] = SymOrigin{file_idx, local_sid};
     };
 
+    std::unordered_set<std::string> from_namespaces;
+
     for (size_t fi = 0; fi < files_.size(); ++fi) {
         auto &file  = files_[fi];
         auto prefix = file.ns + ".";
         auto ls     = last_segment(file.import_key);
+
+        // ── Check from-namespace collision ─────────────────────────
+        if (file.is_from && !file.is_asset) {
+            auto ls_str = std::string(ls);
+            if (!from_namespaces.insert(ls_str).second) {
+                diags_.report(diagnostics::Severity::Error, diagnostics::err::DuplicateDecl,
+                              "from-namespace '" + ls_str + "' conflicts with another from-import", {});
+                continue;
+            }
+        }
+
+        // Build lookup map for selective imports: name -> ImportSymbol alias
+        std::unordered_map<std::string_view, std::string_view> selective_map;
+        bool selective = !file.import_symbols.empty();
+        for (auto &isym : file.import_symbols) {
+            selective_map[isym.name] = isym.alias;
+        }
 
         // ── Merge own symbols ──────────────────────────────────────
         auto merge_sym = [&](SymId sid, bool is_module, int32_t mod_depth) {
@@ -363,34 +522,74 @@ void ImportManager::mergeInto(SymbolTable &main_syms, int32_t from_depth) {
                 return;
             auto vis             = is_module ? SymbolVisibility::Module : SymbolVisibility::Public;
             auto depth           = is_module ? data.mod_depth : 0;
-            auto declare_or_diag = [&](std::string_view name, SymbolVisibility v, int32_t d,
-                                       SymId ls) {
-                if (main_syms.lookupInScope(name, kRootScope) != kInvalidSym) {
+
+            auto raw_name = interner_.lookup(data.name);
+
+            // Selective: check if this symbol is in the import list
+            if (selective) {
+                auto it = selective_map.find(raw_name);
+                if (it == selective_map.end())
+                    return; // not in selective list, skip
+                auto alias_name = it->second;
+
+                std::string_view declare_name;
+                if (!alias_name.empty())
+                    declare_name = arena_str(arena_, std::string(alias_name));
+                else
+                    declare_name = raw_name;
+
+                if (main_syms.lookupInScope(declare_name, kRootScope) != kInvalidSym) {
                     diags_.report(diagnostics::Severity::Error, diagnostics::err::DuplicateDecl,
-                                  "duplicate symbol '" + std::string(name) + "'", {});
+                                  "duplicate symbol '" + std::string(declare_name) + "'", {});
+                    return;
+                }
+                auto main_id = main_syms.declare(declare_name, vis, depth, data.kind,
+                                                  data.decl_id, data.span,
+                                                  data.target, data.doc_span);
+                record_origin(main_id, fi, sid);
+                return;
+            }
+
+            // Non-selective: default injection logic
+            auto declare_or_diag = [&](std::string_view name, SymbolVisibility v, int32_t d,
+                                       SymId local_sid) {
+                if (main_syms.lookupInScope(name, kRootScope) != kInvalidSym) {
+                    std::string msg = "duplicate symbol '" + std::string(name) + "'";
+                    if (file.is_from)
+                        msg += " — use '" + std::string(ls) + "." + std::string(name) + "' to disambiguate";
+                    diags_.report(diagnostics::Severity::Error, diagnostics::err::DuplicateDecl,
+                                  std::move(msg), {});
                     return;
                 }
                 auto main_id = main_syms.declare(name, v, d, data.kind, data.decl_id, data.span,
-                                                 data.target, data.doc_span);
-                record_origin(main_id, fi, ls);
+                                                  data.target, data.doc_span);
+                record_origin(main_id, fi, local_sid);
             };
             if (file.is_from) {
-                auto sym_name_s = std::string(interner_.lookup(data.name));
+                auto sym_name_s = std::string(raw_name);
                 declare_or_diag(arena_str(arena_, sym_name_s), vis, depth, sid);
                 auto qualified = std::string(ls) + "." + sym_name_s;
                 declare_or_diag(arena_str(arena_, qualified), vis, depth, sid);
             } else {
-                std::string qualified = prefix + std::string(interner_.lookup(data.name));
+                std::string qualified = prefix + std::string(raw_name);
                 declare_or_diag(arena_str(arena_, qualified), vis, depth, sid);
             }
         };
 
-        for (auto sid : file.public_syms)
-            merge_sym(sid, false, 0);
-        for (auto sid : file.module_syms)
-            merge_sym(sid, true, call_depth);
+        // For asset files: the single symbol is the alias itself
+        if (file.is_asset) {
+            for (auto sid : file.public_syms)
+                merge_sym(sid, false, 0);
+        } else {
+            for (auto sid : file.public_syms)
+                merge_sym(sid, false, 0);
+            for (auto sid : file.module_syms)
+                merge_sym(sid, true, call_depth);
+        }
 
         // ── Merge re-exported files ────────────────────────────────
+        // Aliases from selective imports are NOT re-exported;
+        // re-export only iterates over the referenced file's original symbols.
         std::unordered_set<size_t> visited;
         auto declare_re_export = [&](std::string_view name, SymbolVisibility v, int32_t d,
                                      SymKind kind, ast::DeclId decl_id, memory::Span span,
@@ -468,6 +667,10 @@ memory::Optional<ImportManager::SymOrigin> ImportManager::originOf(SymId main_sy
 
 void ImportManager::setVisibleRoots(std::vector<std::string> roots) {
     visible_roots_ = std::move(roots);
+}
+
+void ImportManager::setAssetRoots(std::vector<std::string> roots) {
+    asset_roots_ = std::move(roots);
 }
 
 } // namespace zith::symbols

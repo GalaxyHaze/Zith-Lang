@@ -13,7 +13,7 @@ struct ColorTheme {
     std::string_view line_no;
     std::string_view underline;
     std::string_view help_prefix;
-    std::string_view tip_prefix;
+    std::string_view note_prefix;
 };
 
 inline constexpr ColorTheme colorTheme = {
@@ -25,7 +25,7 @@ inline constexpr ColorTheme colorTheme = {
     .line_no          = "\033[36m",
     .underline        = "\033[32m",
     .help_prefix      = "\033[36m",
-    .tip_prefix       = "\033[32m",
+    .note_prefix      = "\033[32m",
 };
 
 } // namespace zith::diagnostics

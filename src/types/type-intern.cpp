@@ -325,6 +325,10 @@ TypeId TypeIntern::lookupNamedType(std::string_view name) const {
     return kErrorType;
 }
 
+void TypeIntern::registerTypeAlias(std::string_view name, TypeId target) {
+    named_types_[std::string(name)] = target;
+}
+
 TypeId TypeIntern::internSlice(TypeId elem) {
     return intern(TypeSlice{elem});
 }

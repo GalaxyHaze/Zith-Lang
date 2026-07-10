@@ -34,6 +34,11 @@ private:
     void emitInterfaceDecl(const ast::InterfaceDeclNode &node);
     void emitComponentDecl(const ast::ComponentDeclNode &node);
     void emitImport(const ast::ImportNode &node);
+    void emitTypeAlias(const ast::TypeAliasDeclNode &node);
+    void emitGlobalDecl(const ast::GlobalDeclNode &node);
+
+    // Generics
+    void emitGenericParams(const memory::DynArray<ast::GenericParam> &params);
 
     // Statements
     void visitStmt(ast::StmtId id);

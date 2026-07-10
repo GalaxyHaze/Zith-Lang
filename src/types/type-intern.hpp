@@ -51,6 +51,7 @@ public:
     TypeId internTypeVar();
     TypeId internUnknown();
     TypeId registerNamedType(std::string_view name, TypeKind kind);
+    void registerTypeAlias(std::string_view name, TypeId target);
     TypeId lookupNamedType(std::string_view name) const;
     TypeId internSlice(TypeId elem);
     TypeId internEnum(TypeId def_id);

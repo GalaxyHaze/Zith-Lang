@@ -125,39 +125,59 @@ DeclId AstBuilder::fnDecl(std::string_view name, memory::DynArray<std::string_vi
                               kInvalidTypeExpr, body, span});
 }
 
-DeclId AstBuilder::structDecl(std::string_view name, memory::DynArray<StructField> fields,
+DeclId AstBuilder::structDecl(std::string_view name, memory::DynArray<GenericParam> generic_params,
+                              memory::DynArray<StructField> fields,
+                              memory::DynArray<DeclId> methods,
+                              TypeExprId extends_parent, memory::Span span) {
+    memory::DynArray<TypeExprId> empty_traits{arena_};
+    return addDecl(StructDeclNode{name, std::move(generic_params), std::move(fields),
+                                  std::move(methods), extends_parent, std::move(empty_traits), span});
+}
+
+DeclId AstBuilder::enumDecl(std::string_view name, memory::DynArray<GenericParam> generic_params,
+                            memory::DynArray<EnumVariant> variants, memory::Span span) {
+    return addDecl(EnumDeclNode{name, std::move(generic_params), std::move(variants), span});
+}
+
+DeclId AstBuilder::unionDecl(std::string_view name, memory::DynArray<GenericParam> generic_params,
+                             memory::DynArray<UnionVariant> variants, memory::Span span) {
+    return addDecl(UnionDeclNode{name, std::move(generic_params), std::move(variants), span});
+}
+
+DeclId AstBuilder::componentDecl(std::string_view name, memory::DynArray<GenericParam> generic_params,
+                                 memory::DynArray<StructField> fields, memory::Span span) {
+    return addDecl(ComponentDeclNode{name, std::move(generic_params), std::move(fields),
+                                    memory::DynArray<ast::DeclId>(arena_), span});
+}
+
+DeclId AstBuilder::traitDecl(std::string_view name, memory::DynArray<GenericParam> generic_params,
+                             memory::DynArray<TraitMethod> methods, memory::Span span) {
+    return addDecl(TraitDeclNode{name, std::move(generic_params), std::move(methods), span});
+}
+
+DeclId AstBuilder::interfaceDecl(std::string_view name, memory::DynArray<GenericParam> generic_params,
+                                 memory::DynArray<TraitMethod> methods, memory::Span span) {
+    return addDecl(InterfaceDeclNode{name, std::move(generic_params), std::move(methods), span});
+}
+
+DeclId AstBuilder::importDecl(memory::DynArray<std::string_view> path,
+                              memory::DynArray<ImportSymbol> symbols,
+                              std::string_view alias,
+                              bool is_from, bool is_export, bool is_asset,
+                              int32_t import_depth,
                               memory::Span span) {
-    return addDecl(StructDeclNode{name, std::move(fields), span});
+    return addDecl(ImportNode{std::move(path), std::move(symbols), alias,
+                              is_from, is_export, is_asset, import_depth, span});
 }
 
-DeclId AstBuilder::enumDecl(std::string_view name, memory::DynArray<EnumVariant> variants,
-                            memory::Span span) {
-    return addDecl(EnumDeclNode{name, std::move(variants), span});
+DeclId AstBuilder::typeAliasDecl(std::string_view name, memory::DynArray<GenericParam> generic_params,
+                                  TypeExprId target_type, memory::Span span) {
+    return addDecl(TypeAliasDeclNode{name, std::move(generic_params), target_type, span});
 }
 
-DeclId AstBuilder::unionDecl(std::string_view name, memory::DynArray<UnionVariant> variants,
-                             memory::Span span) {
-    return addDecl(UnionDeclNode{name, std::move(variants), span});
-}
-
-DeclId AstBuilder::componentDecl(std::string_view name, memory::Span span) {
-    return addDecl(ComponentDeclNode{name, span});
-}
-
-DeclId AstBuilder::traitDecl(std::string_view name, memory::DynArray<TraitMethod> methods,
-                             memory::Span span) {
-    return addDecl(TraitDeclNode{name, std::move(methods), span});
-}
-
-DeclId AstBuilder::interfaceDecl(std::string_view name, memory::DynArray<TraitMethod> methods,
-                                 memory::Span span) {
-    return addDecl(InterfaceDeclNode{name, std::move(methods), span});
-}
-
-DeclId AstBuilder::importDecl(memory::DynArray<std::string_view> path, std::string_view alias,
-                              bool is_from, bool is_export, int32_t import_depth,
-                              memory::Span span) {
-    return addDecl(ImportNode{std::move(path), alias, is_from, is_export, import_depth, span});
+DeclId AstBuilder::globalDecl(std::string_view name, bool is_const,
+                              TypeExprId type_annot, ExprId init, memory::Span span) {
+    return addDecl(GlobalDeclNode{name, is_const, type_annot, init, span});
 }
 
 ExprId AstBuilder::unbody(memory::Span body_span, uint32_t token_start, uint32_t token_end) {

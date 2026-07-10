@@ -54,33 +54,37 @@ void FmtVisitor::visitDecl(ast::DeclId id) {
                    [&](const ast::InterfaceDeclNode &n) { emitInterfaceDecl(n); },
                    [&](const ast::ComponentDeclNode &n) { emitComponentDecl(n); },
                    [&](const ast::ImportNode &n) { emitImport(n); },
+                   [&](const ast::TypeAliasDeclNode &n) { emitTypeAlias(n); },
+                   [&](const ast::GlobalDeclNode &n) { emitGlobalDecl(n); },
                },
                node);
+}
+
+void FmtVisitor::emitGenericParams(const memory::DynArray<ast::GenericParam> &params) {
+    if (params.size() == 0)
+        return;
+    emit("<");
+    for (size_t i = 0; i < params.size(); i++) {
+        if (i > 0)
+            emit(", ");
+        emit(params[i].name);
+        if (params[i].bounds.size() > 0) {
+            emit(": ");
+            for (size_t j = 0; j < params[i].bounds.size(); j++) {
+                if (j > 0)
+                    emit(" + ");
+                emitType(params[i].bounds[j]);
+            }
+        }
+    }
+    emit(">");
 }
 
 void FmtVisitor::emitFnDecl(const ast::FnDeclNode &node) {
     indent();
     emit("fn ");
     emit(node.name);
-
-    // Generics (not populated by parser yet, but ready for future)
-    if (node.generic_params.size() > 0) {
-        emit("<");
-        for (size_t i = 0; i < node.generic_params.size(); i++) {
-            if (i > 0)
-                emit(", ");
-            emit(node.generic_params[i].name);
-            if (node.generic_params[i].bounds.size() > 0) {
-                emit(": ");
-                for (size_t j = 0; j < node.generic_params[i].bounds.size(); j++) {
-                    if (j > 0)
-                        emit(" + ");
-                    emitType(node.generic_params[i].bounds[j]);
-                }
-            }
-        }
-        emit(">");
-    }
+    emitGenericParams(node.generic_params);
 
     emit("(");
     emitCommaList(node.params, [&](const ast::FnParam &p) {
@@ -111,6 +115,7 @@ void FmtVisitor::emitStructDecl(const ast::StructDeclNode &node) {
     indent();
     emit("struct ");
     emit(node.name);
+    emitGenericParams(node.generic_params);
     if (node.fields.size() == 0) {
         emit(";");
         newline();
@@ -134,6 +139,7 @@ void FmtVisitor::emitEnumDecl(const ast::EnumDeclNode &node) {
     indent();
     emit("enum ");
     emit(node.name);
+    emitGenericParams(node.generic_params);
     if (node.variants.size() == 0) {
         emit(";");
         newline();
@@ -154,11 +160,8 @@ void FmtVisitor::emitEnumDecl(const ast::EnumDeclNode &node) {
                 });
                 emit(")");
             }
-            if (node.variants[i].discriminant >= 0) {
-                emit(" = ");
-                char buf[32];
-                std::snprintf(buf, sizeof(buf), "%lld", (long long)node.variants[i].discriminant);
-                emit(buf);
+            if (node.variants[i].discriminant != ast::kInvalidExpr) {
+                emit(" = ...");
             }
             emit(",");
             newline();
@@ -170,6 +173,7 @@ void FmtVisitor::emitUnionDecl(const ast::UnionDeclNode &node) {
     indent();
     emit("union ");
     emit(node.name);
+    emitGenericParams(node.generic_params);
     if (node.variants.size() == 0) {
         emit(";");
         newline();
@@ -192,6 +196,7 @@ void FmtVisitor::emitTraitDecl(const ast::TraitDeclNode &node) {
     indent();
     emit("trait ");
     emit(node.name);
+    emitGenericParams(node.generic_params);
     if (node.methods.size() == 0) {
         emit(";");
         newline();
@@ -214,6 +219,7 @@ void FmtVisitor::emitInterfaceDecl(const ast::InterfaceDeclNode &node) {
     indent();
     emit("interface ");
     emit(node.name);
+    emitGenericParams(node.generic_params);
     if (node.methods.size() == 0) {
         emit(";");
         newline();
@@ -236,31 +242,72 @@ void FmtVisitor::emitComponentDecl(const ast::ComponentDeclNode &node) {
     indent();
     emit("component ");
     emit(node.name);
+    emitGenericParams(node.generic_params);
     emit(";");
     newline();
 }
 
 void FmtVisitor::emitImport(const ast::ImportNode &node) {
     indent();
-    if (node.is_from) {
+    if (node.is_export)
+        emit("export ");
+    else if (node.is_from)
         emit("from ");
-        for (size_t i = 0; i < node.path.size(); i++) {
-            if (i > 0)
-                emit("::");
-            emit(node.path[i]);
-        }
-        emit(" import ");
-        emit(node.alias.empty() ? node.path.back() : node.alias);
-    } else {
+    else
         emit("import ");
-        for (size_t i = 0; i < node.path.size(); i++) {
+    for (size_t i = 0; i < node.path.size(); i++) {
+        if (i > 0)
+            emit("/");
+        emit(node.path[i]);
+    }
+    if (!node.symbols.empty()) {
+        emit(" {");
+        for (size_t i = 0; i < node.symbols.size(); i++) {
             if (i > 0)
-                emit("::");
-            emit(node.path[i]);
+                emit(",");
+            emit(" ");
+            emit(node.symbols[i].name);
+            if (!node.symbols[i].alias.empty()) {
+                emit(" as ");
+                emit(node.symbols[i].alias);
+            }
+        }
+        emit(" }");
+    }
+    if (node.is_from) {
+        if (!node.alias.empty()) {
+            emit(" as ");
+            emit(node.alias);
+        }
+    } else {
+        if (!node.alias.empty()) {
+            emit(" as ");
+            emit(node.alias);
         }
     }
-    if (node.is_export)
-        emit(" export");
+    newline();
+}
+
+void FmtVisitor::emitTypeAlias(const ast::TypeAliasDeclNode &node) {
+    indent();
+    emit("alias ");
+    emit(node.name);
+    emitGenericParams(node.generic_params);
+    emit(" = ");
+    emitType(node.target_type);
+    newline();
+}
+
+void FmtVisitor::emitGlobalDecl(const ast::GlobalDeclNode &node) {
+    indent();
+    emit(node.is_const ? "const " : "global ");
+    emit(node.name);
+    if (node.type_annot != ast::kInvalidTypeExpr) {
+        emit(": ");
+        emitType(node.type_annot);
+    }
+    emit(" = ");
+    visitExpr(node.init);
     emit(";");
     newline();
 }
@@ -594,6 +641,10 @@ void FmtVisitor::emitType(ast::TypeExprId id) {
                        }
                    },
                    [&](const ast::TypeInfer &) { emit("_"); },
+                   [&](const ast::TypeMut &n) {
+                       emit("mut ");
+                       emitType(n.inner);
+                   },
                    [&](const ast::TypeGenericParamRef &n) { emit(n.name); },
                },
                node);

@@ -190,6 +190,10 @@ TypeId TypeLower::lowerNode(const ast::TypeExprNode &node) {
                                "unknown generic parameter '" + std::string(n.name) + "'", {});
             return kErrorType;
         }
+
+        TypeId operator()(const ast::TypeMut &n) {
+            return self.lower(n.inner);
+        }
     };
 
     return std::visit(Visitor{*this, ast_}, node);

@@ -6,8 +6,25 @@ void DiagnosticEngine::report(Diagnostic diag) {
     diagnostics_.push(std::move(diag));
 }
 
+void DiagnosticEngine::reportError(uint32_t code, std::string msg, memory::Span span) {
+    report(Severity::Error, code, std::move(msg), span);
+}
+
+void DiagnosticEngine::reportError(uint32_t code, std::string msg, memory::Span span,
+                                   std::initializer_list<std::string> suggestions) {
+    report(Severity::Error, code, std::move(msg), span, suggestions);
+}
+
 void DiagnosticEngine::report(Severity sev, uint32_t code, std::string msg, memory::Span span) {
     diagnostics_.emplace(diagnostics_.arena(), sev, code, std::move(msg), span);
+}
+
+void DiagnosticEngine::report(Severity sev, uint32_t code, std::string msg, memory::Span span,
+                              std::initializer_list<std::string> suggestions) {
+    Diagnostic diag(diagnostics_.arena(), sev, code, std::move(msg), span);
+    for (auto &s : suggestions)
+        diag.suggestions.push(s);
+    diagnostics_.push(std::move(diag));
 }
 
 bool DiagnosticEngine::hasErrors() const noexcept {

@@ -12,7 +12,7 @@ struct ScanEntry {
     std::string_view name;
     memory::Span span;
     ast::ExprId body_node;
-    uint32_t param_token_start = 0;
+    uint32_t struct_header_start = 0;
 };
 
 struct ScanResult {

@@ -1,4 +1,7 @@
 #include "symbol-table.hpp"
+#include "ast/ast-builder.hpp"
+#include "ast/ast-nodes.hpp"
+#include "ast/type-expr.hpp"
 
 namespace zith::symbols {
 
@@ -141,11 +144,13 @@ static const char *symKindName(SymKind k) {
         return "union";
     case SymKind::Interface:
         return "interface";
+    case SymKind::Asset:
+        return "asset";
     }
     return "?";
 }
 
-void SymbolTable::dump(FILE *out) const {
+void SymbolTable::dump(FILE *out, ast::AstBuilder *bld) const {
     std::fprintf(out, "SymbolTable (%zu symbols, %zu scopes):\n", symbols_.size(), scopes_.size());
     for (ScopeId s = 0; s < static_cast<ScopeId>(scopes_.size()); ++s) {
         auto &scope = scopes_[s];
@@ -163,7 +168,36 @@ void SymbolTable::dump(FILE *out) const {
                          (int)sym_name.size(), sym_name.data());
             if (sym.visibility == SymbolVisibility::Module)
                 std::fprintf(out, " (depth=%d)", sym.mod_depth);
-            std::fprintf(out, " (%zu members)", sym.members.size());
+            switch (sym.kind) {
+            case SymKind::Fn:
+                std::fprintf(out, " (%zu arguments)", sym.members.size());
+                break;
+            case SymKind::Variable:
+                std::fprintf(out, " (primitivo)");
+                break;
+            case SymKind::Struct:
+            case SymKind::Enum:
+            case SymKind::Union: {
+                size_t methods = 0;
+                for (auto mid : sym.members)
+                    if (symbols_[mid].kind == SymKind::Fn) methods++;
+                size_t fields = 0;
+                if (bld && sym.decl_id != ast::kInvalidDecl) {
+                    auto &decl = bld->getDecl(sym.decl_id);
+                    if (auto *sn = std::get_if<ast::StructDeclNode>(&decl))
+                        fields = sn->fields.size();
+                    else if (auto *en = std::get_if<ast::EnumDeclNode>(&decl))
+                        fields = en->variants.size();
+                    else if (auto *un = std::get_if<ast::UnionDeclNode>(&decl))
+                        fields = un->variants.size();
+                }
+                std::fprintf(out, " (%zu fields & %zu methods)", fields, methods);
+                break;
+            }
+            default:
+                std::fprintf(out, " (%zu members)", sym.members.size());
+                break;
+            }
             std::fprintf(out, "\n");
         }
     }

@@ -195,6 +195,15 @@ void Lexer::processString() {
                 tokens.emplace(spanRange(before, now), TokenKind::LitVal);
                 return;
             }
+            // Line continuation: \ at end of line
+            if (*now == '\n' || *now == '\r') {
+                if (*now == '\r' && isOpen() && *(now + 1) == '\n')
+                    now++;
+                now++;
+                while (isOpen() && (*now == ' ' || *now == '\t' || *now == '\n' || *now == '\r'))
+                    now++;
+                continue;
+            }
             char esc = *now;
             if (esc != 'n' && esc != 't' && esc != 'r' && esc != '0' && esc != '\\' &&
                 esc != '"' && esc != '\'') {

@@ -19,7 +19,7 @@ enum class TokenKind : uint8_t {
     Interface,
     Typedef,
     Implement,
-    Fn, // fn, const fn, flowing fn. raw fn
+    Fn, // fn, async, flow
     Module,
     Extern,
     Macro, // macro, raw macro, tag macro

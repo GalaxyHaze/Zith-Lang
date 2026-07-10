@@ -8,20 +8,16 @@ namespace zith::parser::recovery {
 
 using SyncSet = std::initializer_list<lexer::TokenKind>;
 
-inline bool isSync(lexer::TokenKind kind) {
-    switch (kind) {
-    case lexer::TokenKind::End:
-    case lexer::TokenKind::Punctuation:
-        return true;
-    default:
-        return false;
-    }
-}
-
-inline void panic(lexer::TokenStream &stream, SyncSet sync_tokens) {
+inline void panic(lexer::TokenStream &stream, SyncSet sync_tokens = {}) {
     while (!stream.is_empty()) {
-        if (isSync(stream.peek().kind))
+        auto &t = stream.peek();
+        if (t.is_eof())
             return;
+        if (t.punc == ';' || t.punc == '}')
+            return;
+        for (auto k : sync_tokens)
+            if (t.kind == k)
+                return;
         stream.advance();
     }
 }

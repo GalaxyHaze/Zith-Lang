@@ -23,6 +23,7 @@ enum class NodeKind : uint8_t {
     TraitDecl,
     InterfaceDecl,
     Import,
+    GlobalDecl,
     Program
 };
 

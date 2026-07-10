@@ -10,6 +10,8 @@
 
 #include <cstdio>
 
+namespace zith::ast { class AstBuilder; }
+
 namespace zith::symbols {
 
 enum class SymKind : uint8_t {
@@ -23,6 +25,7 @@ enum class SymKind : uint8_t {
     Module,
     Component,
     Union,
+    Asset,
 };
 
 struct SymbolData {
@@ -97,7 +100,7 @@ public:
         return *interner_;
     }
 
-    void dump(FILE *out = stdout) const;
+    void dump(FILE *out = stdout, ast::AstBuilder *bld = nullptr) const;
 };
 
 } // namespace zith::symbols

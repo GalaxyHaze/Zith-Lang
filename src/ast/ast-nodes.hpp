@@ -139,25 +139,36 @@ struct FnDeclNode {
     memory::Span span{};
 };
 
+enum class FieldBind : uint8_t { Auto, Const, Let, Var, Global, Comptime };
+enum class FieldKind : uint8_t { Struct, Enum, Union, Component };
+
 struct StructField {
     std::string_view name;
-    TypeExprId type_expr = kInvalidTypeExpr;
+    TypeExprId type_expr        = kInvalidTypeExpr;
+    ExprId default_value        = kInvalidExpr;
+    FieldBind bind              = FieldBind::Auto;
+    FieldKind kind              = FieldKind::Struct;
 };
 
 struct StructDeclNode {
     std::string_view name;
+    memory::DynArray<GenericParam> generic_params;
     memory::DynArray<StructField> fields;
+    memory::DynArray<DeclId> methods;
+    TypeExprId extends_parent = kInvalidTypeExpr;
+    memory::DynArray<TypeExprId> traits;
     memory::Span span{};
 };
 
 struct EnumVariant {
     std::string_view name;
     memory::DynArray<StructField> fields;
-    int64_t discriminant = -1;
+    ExprId discriminant = kInvalidExpr;
 };
 
 struct EnumDeclNode {
     std::string_view name;
+    memory::DynArray<GenericParam> generic_params;
     memory::DynArray<EnumVariant> variants;
     memory::Span span{};
 };
@@ -169,12 +180,16 @@ struct UnionVariant {
 
 struct UnionDeclNode {
     std::string_view name;
+    memory::DynArray<GenericParam> generic_params;
     memory::DynArray<UnionVariant> variants;
     memory::Span span{};
 };
 
 struct ComponentDeclNode {
     std::string_view name;
+    memory::DynArray<GenericParam> generic_params;
+    memory::DynArray<StructField> fields;
+    memory::DynArray<ast::DeclId> methods;
     memory::Span span{};
 };
 
@@ -185,21 +200,45 @@ struct TraitMethod {
 
 struct TraitDeclNode {
     std::string_view name;
+    memory::DynArray<GenericParam> generic_params;
     memory::DynArray<TraitMethod> methods;
     memory::Span span{};
 };
 
 struct InterfaceDeclNode {
     std::string_view name;
+    memory::DynArray<GenericParam> generic_params;
     memory::DynArray<TraitMethod> methods;
     memory::Span span{};
 };
 
+struct GlobalDeclNode {
+    std::string_view name;
+    bool is_const;
+    TypeExprId type_annot = kInvalidTypeExpr;
+    ExprId init           = kInvalidExpr;
+    memory::Span span{};
+};
+
+struct TypeAliasDeclNode {
+    std::string_view name;
+    memory::DynArray<GenericParam> generic_params;
+    TypeExprId target_type = kInvalidTypeExpr;
+    memory::Span span{};
+};
+
+struct ImportSymbol {
+    std::string_view name;
+    std::string_view alias; // empty = no renaming
+};
+
 struct ImportNode {
     memory::DynArray<std::string_view> path;
+    memory::DynArray<ImportSymbol> symbols; // empty = import all
     std::string_view alias;
     bool is_from         = false;
     bool is_export       = false;
+    bool is_asset        = false;
     int32_t import_depth = 1;
     memory::Span span{};
 };
@@ -263,6 +302,7 @@ using ExprNode = std::variant<LitValue, IdentNode, BinaryNode, UnaryNode, CallNo
 using StmtNode = std::variant<LetNode, AssignNode, RetNode, ExprId>;
 
 using DeclNode = std::variant<FnDeclNode, StructDeclNode, EnumDeclNode, UnionDeclNode,
-                              ComponentDeclNode, TraitDeclNode, InterfaceDeclNode, ImportNode>;
+                              ComponentDeclNode, TraitDeclNode, InterfaceDeclNode, ImportNode,
+                              TypeAliasDeclNode, GlobalDeclNode>;
 
 } // namespace zith::ast

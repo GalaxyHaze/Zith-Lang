@@ -111,7 +111,7 @@ types::TypeId SemaPipeline::exprType(hir::HirExprId id) const {
 }
 
 bool SemaPipeline::run(const ast::ProgramNode &program) {
-    // Pass 0: register user-defined types (structs, enums, unions)
+    // Pass 0: register user-defined types (structs, enums, unions, aliases)
     for (auto decl_id : program.decls) {
         auto &decl = ctx_.builder().getDecl(decl_id);
         if (auto *sd = std::get_if<ast::StructDeclNode>(&decl))
@@ -120,6 +120,11 @@ bool SemaPipeline::run(const ast::ProgramNode &program) {
             ctx_.types().registerNamedType(ed->name, types::TypeKind::Enum);
         else if (auto *ud = std::get_if<ast::UnionDeclNode>(&decl))
             ctx_.types().registerNamedType(ud->name, types::TypeKind::Union);
+        else if (auto *ad = std::get_if<ast::TypeAliasDeclNode>(&decl)) {
+            types::TypeLower lower(ctx_.builder(), ctx_.types(), ctx_.diags(), ctx_.syms());
+            auto target = lower.lower(ad->target_type);
+            ctx_.types().registerTypeAlias(ad->name, target);
+        }
     }
 
     // First pass: register all fn declarations as HIR function stubs
