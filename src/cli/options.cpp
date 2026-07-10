@@ -392,9 +392,11 @@ void Cli::loadFlags() {
         opts.flags.lto(defaults.lto);
 
     // Try to find ZithFlags.toml
+#ifndef ZITH_IS_WASM
     fs::path flagsPath;
     if (!find_flags_file(flagsPath))
         return;
+#endif
 
     auto process = [&](const toml::table &tbl) {
         if (auto v = tbl["mode"].value<std::string>()) {
