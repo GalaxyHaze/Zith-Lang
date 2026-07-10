@@ -173,7 +173,7 @@ cmake -S . -B build
 cmake --build build -j
 ```
 
-Requires CMake 3.15+, a C++17 compiler (GCC/Clang/MSVC), and optionally LLVM for native backend support.
+Requires CMake 3.15+, a C++23 compiler (GCC/Clang/MSVC), and optionally LLVM for native backend support.
 
 **Verify:**
 ```bash
@@ -203,6 +203,7 @@ zithc --help
 
 | # | Topic | File |
 |---|-------|------|
+| 1 | [Introduction](docs/Zith-spec.md) | Overview, design philosophy, quick reference |
 | 2 | [Module System](docs/02-module-system.md) | `import`, `from`, `export`, visibility |
 | 3 | [Type System](docs/03-type-system.md) | Primitives, structs, enums, unions, generics |
 | 4 | [Traits & Interfaces](docs/04-traits-interfaces.md) | Nominal traits, structural interfaces, capabilities |
@@ -229,7 +230,7 @@ zithc --help
 ## Contributing
 
 - [Issue Tracker](https://github.com/GalaxyHaze/Zith/issues)
-- [Discussions](https://github.com/GalaxyHaze/Zith-discussions/discussions)
+- [Discussions](https://github.com/GalaxyHaze/Zith/discussions)
 
 See the [Build from Source](#build-from-source) section to get a local development environment set up.
 
