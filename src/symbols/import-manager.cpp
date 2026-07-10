@@ -6,7 +6,6 @@
 #include <cstring>
 #include <filesystem>
 #include <string>
-#include <unordered_map>
 #include <unordered_set>
 #include <vector>
 
@@ -510,7 +509,7 @@ void ImportManager::mergeInto(SymbolTable &main_syms, int32_t from_depth) {
         }
 
         // Build lookup map for selective imports: name -> ImportSymbol alias
-        std::unordered_map<std::string_view, std::string_view> selective_map;
+        memory::FlatMap<std::string_view, std::string_view> selective_map;
         bool selective = !file.import_symbols.empty();
         for (auto &isym : file.import_symbols) {
             selective_map[isym.name] = isym.alias;
@@ -528,10 +527,10 @@ void ImportManager::mergeInto(SymbolTable &main_syms, int32_t from_depth) {
 
             // Selective: check if this symbol is in the import list
             if (selective) {
-                auto it = selective_map.find(raw_name);
-                if (it == selective_map.end())
+                auto *alias_ptr = selective_map.get(raw_name);
+                if (!alias_ptr)
                     return; // not in selective list, skip
-                auto alias_name = it->second;
+                auto alias_name = *alias_ptr;
 
                 std::string_view declare_name;
                 if (!alias_name.empty())
