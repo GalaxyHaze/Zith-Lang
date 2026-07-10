@@ -5,12 +5,20 @@
 namespace zith::memory {
 
 std::string_view SourceLoc::getSlice() const {
+#ifdef ZITH_IS_WASM
+    return {file.data(), file.size()};
+#else
     return std::visit([](const auto &arg) -> std::string_view { return {arg.data(), arg.size()}; },
                       file);
+#endif
 }
 
 const char *SourceLoc::get() const {
+#ifdef ZITH_IS_WASM
+    return file.data();
+#else
     return std::visit([](const auto &arg) { return arg.data(); }, file);
+#endif
 }
 
 // Reconstrói o mapa de linhas. OBRIGATÓRIO chamar após carregar o content.
