@@ -40,7 +40,7 @@ target_include_directories(zithcLib PUBLIC src)
 
 if(ZITH_IS_WASM)
     target_compile_definitions(zithcLib PUBLIC ZITH_IS_WASM=1)
-    target_compile_definitions(tomlplusplus::tomlplusplus INTERFACE TOML_EXCEPTIONS=0)
+    target_compile_definitions(zithcLib PRIVATE TOML_EXCEPTIONS=0)
 endif()
 
 target_link_libraries(zithcLib PUBLIC
@@ -54,7 +54,7 @@ endif()
 
 target_compile_definitions(zithcLib PUBLIC ZITH_VERSION="${ZITH_VERSION}")
 
-if(ZITH_BUILD_CLI)
+if(ZITH_BUILD_CLI AND NOT ZITH_IS_WASM)
     add_executable(zithc src/cli/zithc-main.cpp)
     target_link_libraries(zithc PRIVATE zithcLib)
 endif()
@@ -75,7 +75,7 @@ if(BUILD_TESTING)
     add_zith_test(test-scan tests/test-scan.cpp)
 endif()
 
-if(ZITH_BUILD_CLI)
+if(ZITH_BUILD_CLI AND NOT ZITH_IS_WASM)
     install(TARGETS zithc RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 endif()
 

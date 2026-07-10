@@ -7,7 +7,6 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
-#include <ranges>
 #include <string_view>
 #include <toml++/toml.hpp>
 #include <type_traits>
@@ -235,11 +234,14 @@ void Cli::parseArgs(int argc, char **argv) {
             requireValue(i, "--include/-I");
             std::string_view arg = argv[++i];
 
-            for (auto token : arg | std::ranges::views::split(',')) {
-                std::string_view span(token); 
-                if (!span.empty()) {          
-                    opts.includeDirs.push(std::string(span));
-                }
+            std::string_view rest = arg;
+            while (!rest.empty()) {
+                auto pos = rest.find(',');
+                auto token = rest.substr(0, pos);
+                if (!token.empty())
+                    opts.includeDirs.push(std::string(token));
+                if (pos == std::string_view::npos) break;
+                rest = rest.substr(pos + 1);
             }
             continue;
         }
@@ -248,11 +250,14 @@ void Cli::parseArgs(int argc, char **argv) {
             requireValue(i, "--assets/-A");
             std::string_view arg = argv[++i];
 
-            for (auto token : arg | std::ranges::views::split(',')) {
-                std::string_view span(token);
-                if (!span.empty()) {
-                    opts.assetDirs.push(std::string(span));
-                }
+            std::string_view rest = arg;
+            while (!rest.empty()) {
+                auto pos = rest.find(',');
+                auto token = rest.substr(0, pos);
+                if (!token.empty())
+                    opts.assetDirs.push(std::string(token));
+                if (pos == std::string_view::npos) break;
+                rest = rest.substr(pos + 1);
             }
             continue;
         }
