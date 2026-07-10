@@ -453,6 +453,7 @@ void Cli::loadFlags() {
             opts.flags.lto(d.lto);
     };
 
+#ifndef ZITH_IS_WASM
 #if TOML_EXCEPTIONS
     try {
         process(toml::parse_file(flagsPath.string()));
@@ -464,6 +465,7 @@ void Cli::loadFlags() {
     if (!result)
         return;
     process(result);
+#endif
 #endif
 
     applyModeDefaults();
