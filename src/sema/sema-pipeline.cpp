@@ -92,9 +92,115 @@ types::TypeId defaultTypeForLit(ast::LitKind kind, types::TypeIntern &types) {
 SemaPipeline::SemaPipeline(symbols::SymbolTable &syms, types::TypeIntern &types,
                            diagnostics::DiagnosticEngine &diags, ast::AstBuilder &builder,
                            memory::Arena &hir_arena,
-                           const memory::DynArray<symbols::SymId> *resolved)
+                           const memory::DynArray<symbols::SymId> *resolved,
+                           symbols::ImportManager *import_mgr)
     : ctx_(syms, types, diags, builder), unifier_(types, diags, hir_arena), hir_arena_(hir_arena),
-      hir_(hir_arena), resolved_(resolved), hir_types_(hir_arena) {}
+      hir_(hir_arena), resolved_(resolved), import_mgr_(import_mgr), worklist_(hir_arena),
+      fn_syms_(hir_arena), active_builder_(&builder), hir_types_(hir_arena) {}
+
+ast::AstBuilder &SemaPipeline::builder() const {
+    return *active_builder_;
+}
+
+ast::AstBuilder *SemaPipeline::builderForSym(symbols::SymId fn_sym) {
+    if (import_mgr_) {
+        auto origin = import_mgr_->originOf(fn_sym);
+        if (origin)
+            return import_mgr_->get(origin->file_idx).builder;
+    }
+    return &ctx_.builder();
+}
+
+const symbols::SymbolTable *SemaPipeline::symsForSym(symbols::SymId fn_sym) {
+    if (import_mgr_) {
+        auto origin = import_mgr_->originOf(fn_sym);
+        if (origin)
+            return &import_mgr_->get(origin->file_idx).symbols;
+    }
+    return &ctx_.syms();
+}
+
+size_t SemaPipeline::hirIndexForSym(symbols::SymId fn_sym) const {
+    for (size_t i = 0; i < fn_syms_.size(); ++i)
+        if (fn_syms_[i] == fn_sym)
+            return i;
+    return static_cast<size_t>(-1);
+}
+
+void SemaPipeline::ensureStub(symbols::SymId fn_sym) {
+    if (hirIndexForSym(fn_sym) != static_cast<size_t>(-1))
+        return;
+    auto *source_syms = symsForSym(fn_sym);
+    auto *source_bld  = builderForSym(fn_sym);
+    if (!source_syms || !source_bld)
+        return;
+    auto local_sym = fn_sym;
+    if (import_mgr_) {
+        auto origin = import_mgr_->originOf(fn_sym);
+        if (origin)
+            local_sym = origin->local_sym;
+    }
+    const auto &data = source_syms->get(local_sym);
+    if (data.kind != symbols::SymKind::Fn || data.decl_id == ast::kInvalidDecl)
+        return;
+    auto *fn = std::get_if<ast::FnDeclNode>(&source_bld->getDecl(data.decl_id));
+    if (!fn)
+        return;
+
+    auto &hfn = hir_.addFn(data.name);
+    hfn.decl_id = data.decl_id;
+    types::TypeLower lower(*source_bld, ctx_.types(), ctx_.diags(), ctx_.syms());
+    for (const auto &param : fn->params)
+        hfn.params.push(lower.lower(param.type));
+    hfn.return_type = lower.lower(fn->return_type);
+    fn_syms_.push(fn_sym);
+}
+
+void SemaPipeline::ensureBodyLowered(symbols::SymId fn_sym) {
+    ensureStub(fn_sym);
+    auto idx = hirIndexForSym(fn_sym);
+    if (idx == static_cast<size_t>(-1))
+        return;
+    auto &hfn = hir_.getFn(idx);
+    if (!hfn.blocks.empty())
+        return;
+    auto *source_bld = builderForSym(fn_sym);
+    auto *source_syms = symsForSym(fn_sym);
+    if (!source_bld || !source_syms)
+        return;
+    auto local_sym = fn_sym;
+    if (import_mgr_) {
+        auto origin = import_mgr_->originOf(fn_sym);
+        if (origin)
+            local_sym = origin->local_sym;
+    }
+    const auto &data = source_syms->get(local_sym);
+    auto *fn = std::get_if<ast::FnDeclNode>(&source_bld->getDecl(data.decl_id));
+    if (!fn || fn->is_extern || fn->body == ast::kInvalidExpr)
+        return;
+
+    auto *previous_builder = active_builder_;
+    auto *previous_fn = current_fn_;
+    auto previous_ret = current_fn_ret_type_;
+    active_builder_ = source_bld;
+    current_fn_ = &hfn;
+    current_fn_ret_type_ = hfn.return_type;
+    auto scope = syms().enterScope();
+    syms().emplace(*source_syms, scope);
+    // Parameters are currently scanned at the source table root, so install the
+    // current function's bindings explicitly as well.
+    for (const auto &param : fn->params)
+        syms().declareInScope(scope, param.name);
+    auto &entry = hfn.blocks.emplace(hir_arena_);
+    entry.insts = memory::DynArray<hir::HirExprId>(hir_arena_);
+    auto body = visitExpr(fn->body);
+    if (body != hir::kInvalidHirExpr)
+        entry.insts.push(body);
+    syms().exitScope();
+    current_fn_ = previous_fn;
+    current_fn_ret_type_ = previous_ret;
+    active_builder_ = previous_builder;
+}
 
 hir::HirExprId SemaPipeline::addHirExpr(hir::HirExpr expr, types::TypeId type) {
     auto id = hir_.addExpr(std::move(expr));
@@ -127,46 +233,39 @@ bool SemaPipeline::run(const ast::ProgramNode &program) {
         }
     }
 
-    // First pass: register all fn declarations as HIR function stubs
+    // First pass: register stubs for functions declared in the main file only.
     for (auto decl_id : program.decls) {
         auto &decl = ctx_.builder().getDecl(decl_id);
         if (auto *fn = std::get_if<ast::FnDeclNode>(&decl)) {
-            hir_.addFn(ctx_.syms().interner().intern(fn->name));
-        }
-    }
-
-    // Second pass: visit each declaration body
-    size_t fn_idx = 0;
-    for (auto decl_id : program.decls) {
-        auto &decl = ctx_.builder().getDecl(decl_id);
-        if (auto *fn = std::get_if<ast::FnDeclNode>(&decl)) {
-            current_fn_          = &hir_.getFn(fn_idx);
-            current_fn_->decl_id = decl_id;
-            fn_idx++;
-
-            // Lower param types
-            types::TypeLower lower(ctx_.builder(), ctx_.types(), ctx_.diags(), ctx_.syms());
-            for (size_t i = 0; i < fn->params.size(); i++) {
-                auto lowered = lower.lower(fn->params[i].type);
-                current_fn_->params.push(lowered);
-            }
-            // Lower return type
-            current_fn_->return_type = lower.lower(fn->return_type);
-            current_fn_ret_type_     = current_fn_->return_type;
-
-            if (fn->body != ast::kInvalidExpr) {
-                // Create entry basic block
-                auto &entry_block = current_fn_->blocks.emplace(hir_arena_);
-                entry_block.insts = memory::DynArray<hir::HirExprId>(hir_arena_);
-
-                // Visit the body expression
-                auto body_hir = visitExpr(fn->body);
-                if (body_hir != hir::kInvalidHirExpr) {
-                    entry_block.insts.push(body_hir);
+            for (symbols::SymId sym = 0; sym < ctx_.syms().symbolCount(); ++sym) {
+                const auto &data = ctx_.syms().get(sym);
+                if (data.kind == symbols::SymKind::Fn && data.decl_id == decl_id &&
+                    (!import_mgr_ || !import_mgr_->originOf(sym))) {
+                    ensureStub(sym);
+                    break;
                 }
             }
         }
     }
+
+    // Second pass: visit each declaration body
+    for (auto decl_id : program.decls) {
+        auto &decl = ctx_.builder().getDecl(decl_id);
+        if (auto *fn = std::get_if<ast::FnDeclNode>(&decl)) {
+            for (symbols::SymId sym = 0; sym < ctx_.syms().symbolCount(); ++sym) {
+                const auto &data = ctx_.syms().get(sym);
+                if (data.kind == symbols::SymKind::Fn && data.decl_id == decl_id &&
+                    (!import_mgr_ || !import_mgr_->originOf(sym))) {
+                    ensureBodyLowered(sym);
+                    break;
+                }
+            }
+        }
+    }
+
+    // Imported bodies are discovered lazily from calls made while lowering.
+    for (size_t i = 0; i < worklist_.size(); ++i)
+        ensureBodyLowered(worklist_[i]);
 
     ctx_.diags().emit();
     return !ctx_.diags().hasErrors();
@@ -176,7 +275,7 @@ hir::HirExprId SemaPipeline::visitExpr(ast::ExprId id) {
     if (id == ast::kInvalidExpr)
         return hir::kInvalidHirExpr;
 
-    auto &node = ctx_.builder().getExpr(id);
+    auto &node = builder().getExpr(id);
     return std::visit(
         [this, id](auto &n) -> hir::HirExprId {
             using T = std::decay_t<decltype(n)>;
@@ -231,12 +330,18 @@ hir::HirExprId SemaPipeline::visitLiteral(const ast::LitValue &n) {
 
 hir::HirExprId SemaPipeline::visitIdent(const ast::IdentNode &n, ast::ExprId id) {
     symbols::SymId sym = symbols::kInvalidSym;
-    if (resolved_ && id != ast::kInvalidExpr && id < resolved_->size())
+    // Resolver entries belong exclusively to the main AstBuilder. Imported
+    // builders reuse ExprId values, so using this table while lowering one of
+    // them could resolve an unrelated main-file identifier.
+    if (active_builder_ == &ctx_.builder() && resolved_ && id != ast::kInvalidExpr &&
+        id < resolved_->size())
         sym = (*resolved_)[id];
     if (sym == symbols::kInvalidSym)
         sym = ctx_.syms().lookup(n.name);
     if (sym == symbols::kInvalidSym) {
-        if (!resolved_ || id >= resolved_->size() || (*resolved_)[id] != symbols::kInvalidSym)
+        const bool main_builder = active_builder_ == &ctx_.builder();
+        if (!main_builder || !resolved_ || id >= resolved_->size() ||
+            (*resolved_)[id] != symbols::kInvalidSym)
             ctx_.diags().report(Severity::Error, UndefinedIdent,
                                 std::string("undefined identifier '") + std::string(n.name) + "'",
                                 n.span);
@@ -325,7 +430,11 @@ hir::HirExprId SemaPipeline::visitCall(const ast::CallNode &n) {
             if (data.decl_id == ast::kInvalidDecl)
                 continue;
 
-            auto &decl    = ctx_.builder().getDecl(data.decl_id);
+            ensureStub(sym_id);
+            auto *bld = builderForSym(sym_id);
+            if (!bld)
+                continue;
+            auto &decl    = bld->getDecl(data.decl_id);
             auto *fn_decl = std::get_if<ast::FnDeclNode>(&decl);
             if (!fn_decl)
                 continue;
@@ -334,11 +443,11 @@ hir::HirExprId SemaPipeline::visitCall(const ast::CallNode &n) {
             if (fn_decl->params.size() != n.args.size())
                 continue;
 
-            // Find matching HirFunction and check param types
-            for (size_t fi = 0; fi < hir_.getFnCount(); fi++) {
+            // Match against the stub associated with this symbol. DeclIds are
+            // local to an AstBuilder and therefore are not globally unique.
+            auto fi = hirIndexForSym(sym_id);
+            if (fi != static_cast<size_t>(-1)) {
                 auto &hfn = hir_.getFn(fi);
-                if (hfn.decl_id != data.decl_id)
-                    continue;
 
                 bool match = true;
                 for (size_t i = 0; i < hfn.params.size(); i++) {
@@ -357,9 +466,10 @@ hir::HirExprId SemaPipeline::visitCall(const ast::CallNode &n) {
                     if (match_count == 1) {
                         resolved_fn = sym_id;
                         result_type = hfn.return_type;
+                        if (!fn_decl->is_extern && fn_decl->body != ast::kInvalidExpr)
+                            worklist_.push(sym_id);
                     }
                 }
-                break; // found the HirFunction for this decl
             }
         }
 
@@ -454,7 +564,7 @@ void SemaPipeline::visitStmt(ast::StmtId id) {
     if (id == ast::kInvalidStmt)
         return;
 
-    auto &node = ctx_.builder().getStmt(id);
+    auto &node = builder().getStmt(id);
 
     struct StmtVisitor {
         SemaPipeline &pipeline;
@@ -467,7 +577,7 @@ void SemaPipeline::visitStmt(ast::StmtId id) {
 
             // Check type annotation if present
             if (n.type_annot != ast::kInvalidTypeExpr) {
-                types::TypeLower lower(pipeline.ctx_.builder(), pipeline.ctx_.types(),
+                types::TypeLower lower(pipeline.builder(), pipeline.ctx_.types(),
                                        pipeline.ctx_.diags(), pipeline.ctx_.syms());
                 decl_type = lower.lower(n.type_annot);
             }

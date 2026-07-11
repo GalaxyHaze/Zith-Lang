@@ -292,7 +292,7 @@ void Cli::parseArgs(int argc, char **argv) {
         // --target
         if (std::strcmp(argv[i], "--target") == 0) {
             requireValue(i, "--target");
-            opts.targetTriple = this->stringPool.intern(argv[++i]);
+            opts.targetTriple = argv[++i];
             continue;
         }
 

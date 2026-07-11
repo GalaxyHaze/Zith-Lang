@@ -91,6 +91,11 @@ public:
     memory::DynArray<SymId> lookupAll(memory::InternedId name, memory::Arena &arena) const;
     memory::DynArray<SymId> lookupAll(std::string_view name, memory::Arena &arena) const;
 
+    // Copy local (non-root) bindings into an existing scope.  Imported files keep
+    // their globals at the root; this is intended for bindings belonging to a
+    // body being lowered in a temporary scope.
+    void emplace(const SymbolTable &other, ScopeId targetScope);
+
     SymbolData &get(SymId id);
     const SymbolData &get(SymId id) const;
     size_t symbolCount() const noexcept;

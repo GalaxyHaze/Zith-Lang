@@ -110,6 +110,16 @@ memory::DynArray<SymId> SymbolTable::lookupAll(memory::InternedId name, memory::
     return result;
 }
 
+void SymbolTable::emplace(const SymbolTable &other, ScopeId targetScope) {
+    for (ScopeId scope = kRootScope + 1; scope < other.scopeCount(); ++scope) {
+        for (auto sid : other.scopes_[scope].syms) {
+            const auto &data = other.get(sid);
+            declareInScope(targetScope, data.name, data.visibility, data.mod_depth, data.kind,
+                           data.decl_id, data.span, data.target, data.doc_span);
+        }
+    }
+}
+
 const SymbolData &SymbolTable::get(SymId id) const {
     return symbols_[id];
 }

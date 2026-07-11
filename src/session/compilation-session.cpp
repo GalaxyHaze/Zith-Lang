@@ -1,6 +1,9 @@
 #include "compilation-session.hpp"
 #include "ast/ast-printer.hpp"
 #include "cli/terminal.hpp"
+#ifdef ZITH_HAS_LLVM
+#include "codegen/codegen.hpp"
+#endif
 #include "comptime/solver.hpp"
 #include "diagnostics/error-codes.hpp"
 #include "formatter/fmt-visitor.hpp"
@@ -321,6 +324,36 @@ bool CompilationSession::importStage() {
 
     mImportMgr.mergeInto(mSyms);
 
+    // Imported declarations are parsed with independent AST builders. Register
+    // nominal types before aliases so aliases may refer to types in any loaded
+    // file.
+    for (size_t fi = 0; fi < mImportMgr.fileCount(); ++fi) {
+        const auto &file = mImportMgr.get(fi);
+        if (!file.builder)
+            continue;
+        for (auto decl_id : file.program.decls) {
+            const auto &decl = file.builder->getDecl(decl_id);
+            if (auto *sd = std::get_if<ast::StructDeclNode>(&decl))
+                mTypes.registerNamedType(sd->name, types::TypeKind::Struct);
+            else if (auto *ed = std::get_if<ast::EnumDeclNode>(&decl))
+                mTypes.registerNamedType(ed->name, types::TypeKind::Enum);
+            else if (auto *ud = std::get_if<ast::UnionDeclNode>(&decl))
+                mTypes.registerNamedType(ud->name, types::TypeKind::Union);
+        }
+    }
+    for (size_t fi = 0; fi < mImportMgr.fileCount(); ++fi) {
+        const auto &file = mImportMgr.get(fi);
+        if (!file.builder)
+            continue;
+        for (auto decl_id : file.program.decls) {
+            const auto &decl = file.builder->getDecl(decl_id);
+            if (auto *ad = std::get_if<ast::TypeAliasDeclNode>(&decl)) {
+                types::TypeLower lower(*file.builder, mTypes, mDiags, mSyms);
+                mTypes.registerTypeAlias(ad->name, lower.lower(ad->target_type));
+            }
+        }
+    }
+
     if (mOpts.get().flags.verbose()) {
         auto dt = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0)
                       .count();
@@ -387,7 +420,8 @@ bool CompilationSession::semaStage() {
         std::printf("---\n");
     }
 
-    sema::SemaPipeline pipeline(mSyms, mTypes, mDiags, mAstBuilder, mHirArena, &mResolvedSyms);
+    sema::SemaPipeline pipeline(mSyms, mTypes, mDiags, mAstBuilder, mHirArena, &mResolvedSyms,
+                                &mImportMgr);
     if (!pipeline.run(mProgram)) {
         mDiags.emit();
         return false;
@@ -431,11 +465,29 @@ bool CompilationSession::nraStage() {
 
 bool CompilationSession::codegenStage() {
     auto t0 = std::chrono::steady_clock::now();
+#ifdef ZITH_HAS_LLVM
+    codegen::CodeGenerator generator;
+    const bool print_ir = mOpts.get().flags.emitIr() ||
+                          mOpts.get().emitTarget == Options::EmitTarget::Ir;
+    if (!generator.lowerToLlvm(mHirModule, mTypes, *mInterner, mOpts.get().targetTriple,
+                               print_ir, mDiags))
+        return false;
     if (mOpts.get().flags.verbose()) {
         auto dt = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0)
                       .count();
-        writeOutput("  [codegen] \xe2\x80\x94 (stub)  (%5.1fms)\n", dt);
+        auto target = mOpts.get().targetTriple.empty() ? "host default"
+                                                        : mOpts.get().targetTriple.c_str();
+        writeOutput("  [codegen] LLVM target: %s  (%5.1fms)\n", target, dt);
     }
+#else
+    if (!mOpts.get().targetTriple.empty() || mOpts.get().flags.emitIr() ||
+        mOpts.get().emitTarget == Options::EmitTarget::Ir) {
+        mDiags.report(diagnostics::Severity::Error, diagnostics::err::InvalidIR,
+                      "LLVM code generation is unavailable in this build", {});
+        return false;
+    }
+    (void)t0;
+#endif
     return true;
 }
 

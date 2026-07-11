@@ -42,7 +42,9 @@ struct Options {
     enum class Color : uint8_t { Off, Auto, On };
     enum class EmitTarget : uint8_t { None, Ast, Hir, Ir, Asm, Obj, Bin };
 
-    memory::InternedId targetTriple;
+    // A target triple belongs to the compilation options, not to the CLI
+    // string interner. Compilation sessions have their own interner.
+    std::string targetTriple;
 
     // Bit-packed flags (std::bitset<24>):
     //  0-1:  optLevel      (2 bits, values 0-3)
