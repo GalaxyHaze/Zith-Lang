@@ -7,6 +7,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 option(ZITH_BUILD_CLI "Build the zithc CLI executable" ON)
 option(ZITH_BUILD_CAPI "Build the C ABI library" ON)
 option(ZITH_IS_WASM "Build for WebAssembly target" OFF)
+option(ZITH_HAS_LLVM "Enable LLVM codegen backend" ON)
 
 set(ZITH_VERSION "v0.0.1" CACHE STRING "Project version")
 
@@ -34,6 +35,11 @@ add_subdirectory(src/memory)
 file(GLOB_RECURSE ZITH_LIB_SOURCES src/*.cpp)
 list(REMOVE_ITEM ZITH_LIB_SOURCES "${CMAKE_SOURCE_DIR}/src/cli/zithc-main.cpp")
 
+if(NOT ZITH_HAS_LLVM OR ZITH_IS_WASM)
+    file(GLOB_RECURSE CODEGEN_SOURCES src/codegen/*.cpp)
+    list(REMOVE_ITEM ZITH_LIB_SOURCES ${CODEGEN_SOURCES})
+endif()
+
 add_library(zithcLib STATIC ${ZITH_LIB_SOURCES})
 
 target_include_directories(zithcLib PUBLIC src)
@@ -50,6 +56,23 @@ target_link_libraries(zithcLib PUBLIC
 
 if(NOT ZITH_IS_WASM)
     target_link_libraries(zithcLib PUBLIC mio)
+endif()
+
+if(ZITH_HAS_LLVM AND NOT ZITH_IS_WASM)
+    find_package(LLVM QUIET CONFIG)
+    if(LLVM_FOUND)
+        message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
+        message(STATUS "Using LLVMConfig.cmake in: ${LLVM_DIR}")
+
+        llvm_map_components_to_libnames(LLVM_LIBS core support irreader passes target)
+
+        target_link_libraries(zithcLib PUBLIC ${LLVM_LIBS})
+        target_include_directories(zithcLib PUBLIC ${LLVM_INCLUDE_DIRS})
+        target_compile_definitions(zithcLib PUBLIC ZITH_HAS_LLVM=1)
+    else()
+        message(WARNING "LLVM not found — disabling codegen backend")
+        set(ZITH_HAS_LLVM OFF CACHE BOOL "" FORCE)
+    endif()
 endif()
 
 target_compile_definitions(zithcLib PUBLIC ZITH_VERSION="${ZITH_VERSION}")
