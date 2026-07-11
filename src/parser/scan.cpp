@@ -110,6 +110,338 @@ static memory::DynArray<ast::GenericParam> tryParseGenericParams(Parser &parser,
     }
     return params;
 }
+
+// ── import path parsing ──────────────────────────────────────────────
+static void parseImportPath(lexer::TokenStream &tok, memory::DynArray<std::string_view> &path) {
+    while (!tok.is_empty() && !tok.peek().is_eof()) {
+        if (tok.peek().is(lexer::TokenKind::Identifier)) {
+            auto first = tok.lexeme();
+            const char *seg_start = first.data();
+            const char *seg_end   = first.data() + first.size();
+            tok.advance();
+            while (!tok.is_empty() && !tok.peek().is_eof() &&
+                   tok.peek().punc == '.') {
+                if (tok.peek(1).is(lexer::TokenKind::Punctuation) &&
+                    tok.peek(1).punc == '.')
+                    break;
+                tok.advance();
+                if (tok.peek().is(lexer::TokenKind::Identifier)) {
+                    auto ext = tok.lexeme();
+                    seg_end = ext.data() + ext.size();
+                    tok.advance();
+                } else {
+                    break;
+                }
+            }
+            path.push(std::string_view{seg_start, static_cast<size_t>(seg_end - seg_start)});
+        } else if (tok.peek().punc == '/') {
+            tok.advance();
+        } else if (tok.peek().is(lexer::TokenKind::Punctuation) &&
+                   tok.peek().punc == '.') {
+            if (tok.peek(1).is(lexer::TokenKind::Punctuation) &&
+                tok.peek(1).punc == '.') {
+                path.push(std::string_view{"..", 2});
+                tok.advance(2);
+            } else {
+                break;
+            }
+        } else {
+            break;
+        }
+    }
+}
+
+static int32_t parseImportDepth(lexer::TokenStream &tok, diagnostics::DiagnosticEngine &diag) {
+    if (tok.peek().punc == '(') {
+        tok.advance();
+        if (tok.peek().punc == '.') {
+            tok.advance();
+            tok.advance();
+            if (tok.peek().punc == ')')
+                tok.advance();
+            return -1;
+        } else if (tok.peek().is(lexer::TokenKind::LitVal)) {
+            auto n = tok.lexeme();
+            tok.advance();
+            char *end = nullptr;
+            long val  = std::strtol(n.data(), &end, 10);
+            if (end == n.data() || val <= 0 || val > INT32_MAX) {
+                diag.report(diagnostics::Severity::Error, diagnostics::err::InvalidImportDepth,
+                            "import depth must be a positive integer or '..'",
+                            tok.peek().span);
+                val = 1;
+            }
+            if (tok.peek().punc == ')')
+                tok.advance();
+            return static_cast<int32_t>(val);
+        } else {
+            diag.report(diagnostics::Severity::Error, diagnostics::err::InvalidImportDepth,
+                        "expected import depth: positive integer or '..'",
+                        tok.peek().span);
+            if (tok.peek().punc == ')')
+                tok.advance();
+            return 1;
+        }
+    }
+    return 1;
+}
+
+static memory::DynArray<ast::ImportSymbol> parseImportSymbols(
+    lexer::TokenStream &tok, memory::Arena &arena, diagnostics::DiagnosticEngine &diag) {
+    auto symbols = memory::DynArray<ast::ImportSymbol>{arena};
+    if (tok.peek().punc != '{')
+        return symbols;
+    tok.advance(); // consume '{'
+    while (!tok.is_empty() && !tok.peek().is_eof() && tok.peek().punc != '}') {
+        if (!tok.peek().is(lexer::TokenKind::Identifier)) {
+            diag.report(diagnostics::Severity::Error, diagnostics::err::ExpectedIdent,
+                        "expected symbol name in import list", tok.peek().span);
+            break;
+        }
+        auto name = tok.lexeme();
+        tok.advance();
+        std::string_view alias{};
+        if (tok.peek().is(lexer::TokenKind::As)) {
+            tok.advance();
+            if (tok.peek().is(lexer::TokenKind::Identifier)) {
+                alias = tok.lexeme();
+                tok.advance();
+            } else {
+                diag.report(diagnostics::Severity::Error, diagnostics::err::ExpectedIdent,
+                            "expected alias name after 'as'", tok.peek().span);
+            }
+        }
+        symbols.push({name, alias});
+        if (tok.peek().punc == ',')
+            tok.advance();
+    }
+    if (tok.peek().punc == '}')
+        tok.advance();
+    else
+        diag.report(diagnostics::Severity::Error, diagnostics::err::ExpectedExpr,
+                    "expected '}' to close import list", tok.peek().span);
+    return symbols;
+}
+
+static void scanImportDecl(Parser &parser, symbols::SymbolTable &syms,
+                           ast::ProgramNode &program, memory::Span kw_span,
+                           bool is_from, bool is_export) {
+    using namespace diagnostics::err;
+    auto &tok  = *parser.tok;
+    auto &bld  = *parser.bld;
+    auto &diag = *parser.diag;
+
+    memory::DynArray<std::string_view> path{bld.arena()};
+    parseImportPath(tok, path);
+
+    if (path.empty()) {
+        std::string kw = is_from ? "from" : is_export ? "export" : "import";
+        diag.report(diagnostics::Severity::Error, ImportError,
+                    "expected import path after '" + kw + "'", tok.peek().span);
+        return;
+    }
+
+    auto import_depth = parseImportDepth(tok, diag);
+    auto syms_list    = parseImportSymbols(tok, bld.arena(), diag);
+
+    bool is_asset = (is_from || is_export) && path[0] == "assets";
+
+    std::string_view alias{};
+    if (tok.peek().is(lexer::TokenKind::As)) {
+        tok.advance();
+        if (tok.peek().is(lexer::TokenKind::Identifier)) {
+            alias = tok.lexeme();
+            tok.advance();
+        }
+    }
+
+    if (is_asset && alias.empty())
+        diag.report(diagnostics::Severity::Error, ImportError,
+                    "assets import requires an alias using 'as'", kw_span);
+
+    auto decl = bld.importDecl(std::move(path), std::move(syms_list), alias,
+                               is_from, is_export, is_asset, import_depth, kw_span);
+    program.decls.push(decl);
+}
+
+// ── method scanning context ─────────────────────────────────────────
+struct MethodScanContext {
+    lexer::TokenStream &tok;
+    ast::AstBuilder &bld;
+    diagnostics::DiagnosticEngine &diag;
+    symbols::SymbolTable &syms;
+    Parser &parser;
+    symbols::SymbolVisibility current_vis;
+    int32_t current_mod_depth;
+    symbols::SymId struct_sym;
+    ast::DeclId decl;
+    ast::ProgramNode &program;
+    ScanResult &result;
+};
+
+static void scanMethod(MethodScanContext &ctx, bool must_have_body) {
+    using namespace diagnostics::err;
+    ctx.tok.advance(); // consume 'fn'
+
+    if (ctx.tok.peek().punc == '<')
+        scan_detail::skipBalanced(ctx.tok, '<', '>');
+
+    if (!ctx.tok.peek().is(lexer::TokenKind::Identifier)) {
+        ctx.diag.report(diagnostics::Severity::Error, ExpectedIdent,
+                    "expected method name", ctx.tok.peek().span);
+        ctx.tok.advance();
+        return;
+    }
+    auto mname_span = ctx.tok.peek().span;
+    auto mname      = ctx.tok.lexeme();
+    ctx.tok.advance();
+
+    if (ctx.tok.peek().punc != '(') {
+        ctx.diag.report(diagnostics::Severity::Error, ExpectedExpr,
+                    "expected '(' after method name", ctx.tok.peek().span);
+        return;
+    }
+    ctx.tok.advance();
+
+    auto typed_params = parseFnParams(ctx.parser);
+
+    ast::TypeExprId return_type = ast::kInvalidTypeExpr;
+    if (ctx.tok.peek().punc == ':') {
+        ctx.tok.advance();
+        return_type = ctx.parser.parseTypeExpr();
+    }
+
+    ast::ExprId mn_body_node = ast::kInvalidExpr;
+    uint32_t mn_body_start   = 0;
+    uint32_t mn_body_end     = 0;
+    memory::Span mn_span{};
+    if (ctx.tok.peek().punc == '{') {
+        mn_body_start = ctx.tok.offset;
+        mn_span       = ctx.tok.peek().span;
+        mn_body_end   = scan_detail::skipBody(ctx.tok);
+        mn_span       = {mn_span.file, mn_span.start, mn_body_end};
+        mn_body_node  = ctx.bld.unbody(mn_span, mn_body_start, mn_body_end);
+    } else if (ctx.tok.peek().punc == ';') {
+        if (must_have_body)
+            ctx.diag.report(diagnostics::Severity::Error, ExpectedExpr,
+                        "methods in component must have a body", ctx.tok.peek().span);
+        ctx.tok.advance();
+    } else {
+        ctx.diag.report(diagnostics::Severity::Error, ExpectedExpr,
+                    "expected '{' or ';' after method signature", ctx.tok.peek().span);
+    }
+
+    if (!scan_detail::reportIfDuplicate(ctx.syms, ctx.diag, mname, mname_span)) {
+        auto ms = ctx.syms.declare(mname, ctx.current_vis, ctx.current_mod_depth,
+                                       symbols::SymKind::Fn, ast::kInvalidDecl, mname_span);
+        for (auto &p : typed_params) {
+            auto ps = ctx.syms.declare(p.name, ctx.current_vis, ctx.current_mod_depth,
+                                           symbols::SymKind::Variable,
+                                           ast::kInvalidDecl, mname_span);
+            if (ms != symbols::kInvalidSym)
+                ctx.syms.get(ms).members.push(ps);
+        }
+        auto method_decl = ctx.bld.fnDecl(mname,
+            memory::DynArray<ast::GenericParam>{ctx.bld.arena()},
+            std::move(typed_params), return_type, mn_body_node, false, mname_span);
+        ctx.program.decls.push(method_decl);
+        if (ms != symbols::kInvalidSym)
+            ctx.syms.get(ms).decl_id = method_decl;
+        if (ctx.struct_sym != symbols::kInvalidSym)
+            ctx.syms.get(ctx.struct_sym).members.push(ms);
+        if (ctx.decl != ast::kInvalidDecl) {
+            auto &decl_node = ctx.bld.getDecl(ctx.decl);
+            if (auto *sn = std::get_if<ast::StructDeclNode>(&decl_node))
+                sn->methods.push(method_decl);
+            else if (auto *cn = std::get_if<ast::ComponentDeclNode>(&decl_node))
+                cn->methods.push(method_decl);
+        }
+        ctx.result.fns.push({mname, mn_span, mn_body_node, 0});
+    }
+}
+
+static void scanFieldItem(lexer::TokenStream &tok, diagnostics::DiagnosticEngine &diag,
+                          memory::FlatMap<std::string, char> &field_names,
+                          bool support_destructure) {
+    if (support_destructure) {
+        // skip field qualifiers
+        if (tok.peek().is(lexer::TokenKind::Variable) ||
+            tok.peek().is(lexer::TokenKind::Mutable) ||
+            tok.peek().is(lexer::TokenKind::Ownership)) {
+            while (tok.peek().is(lexer::TokenKind::Variable) ||
+                   tok.peek().is(lexer::TokenKind::Mutable) ||
+                   tok.peek().is(lexer::TokenKind::Ownership))
+                tok.advance();
+        }
+
+        // destructure: [a, b, c]: Type
+        if (tok.peek().punc == '[') {
+            tok.advance();
+            while (!tok.is_empty() && tok.peek().punc != ']') {
+                if (tok.peek().is(lexer::TokenKind::Identifier)) {
+                    auto fname = tok.lexeme();
+                    auto fspan = tok.peek().span;
+                    tok.advance();
+                    if (field_names.contains(std::string(fname)))
+                        diag.report(diagnostics::Severity::Error,
+                                    diagnostics::err::DuplicateDecl,
+                                    "duplicate field '" + std::string(fname) + "'",
+                                    fspan);
+                    else
+                        field_names.insert(std::string(fname), char(1));
+                } else {
+                    tok.advance();
+                }
+                if (tok.peek().punc == ',')
+                    tok.advance();
+            }
+            if (tok.peek().punc == ']')
+                tok.advance();
+            if (tok.peek().punc == ':')
+                tok.advance();
+            scan_detail::skipTypeExpr(tok);
+            if (tok.peek().punc == '=') {
+                tok.advance();
+                scan_detail::skipExpr(tok);
+            }
+            if (tok.peek().punc == ',')
+                tok.advance();
+            return;
+        }
+    }
+
+    // field: ident : Type = default ,
+    if (tok.peek().is(lexer::TokenKind::Identifier)) {
+        auto fname = tok.lexeme();
+        auto fspan = tok.peek().span;
+        tok.advance();
+        if (field_names.contains(std::string(fname)))
+            diag.report(diagnostics::Severity::Error,
+                        diagnostics::err::DuplicateDecl,
+                        "duplicate field '" + std::string(fname) + "'",
+                        fspan);
+        else
+            field_names.insert(std::string(fname), char(1));
+        if (tok.peek().punc == ':')
+            tok.advance();
+        scan_detail::skipTypeExpr(tok);
+        if (tok.peek().punc == '=') {
+            tok.advance();
+            scan_detail::skipExpr(tok);
+        }
+        if (tok.peek().punc == ',')
+            tok.advance();
+        return;
+    }
+
+    if (tok.peek().is(lexer::TokenKind::Annotation)) {
+        tok.advance();
+        return;
+    }
+
+    tok.advance();
+}
+
 ScanResult scan(Parser &parser, symbols::SymbolTable &syms) {
     using namespace diagnostics::err;
     auto &tok     = *parser.tok;
@@ -194,6 +526,7 @@ ScanResult scan(Parser &parser, symbols::SymbolTable &syms) {
             }
         }
         // ── fn declaration ─────────────────────────────────────────
+        bool is_extern = tok.peek().is(lexer::TokenKind::Extern);
         if (scan_detail::consumeFnModifiers(tok)) {
             tok.advance(); // consume 'fn'
 
@@ -255,6 +588,7 @@ ScanResult scan(Parser &parser, symbols::SymbolTable &syms) {
 
             auto decl = bld.fnDecl(name, std::move(generic_params),
                                    std::move(typed_params), return_type, body_node,
+                                   is_extern,
                                    scan_detail::spanFromOffset(name_span.start, name_span.end));
             program.decls.push(decl);
             if (fn_sym != symbols::kInvalidSym)
@@ -358,168 +692,16 @@ ScanResult scan(Parser &parser, symbols::SymbolTable &syms) {
                 uint32_t token_start = tok.offset;
                 body_span            = tok.peek().span;
 
-                // shared method handler for all body types
-                auto handleMethod = [&](bool must_have_body) {
-                    tok.advance(); // consume 'fn'
-
-                    if (tok.peek().punc == '<')
-                        scan_detail::skipBalanced(tok, '<', '>');
-
-                    if (!tok.peek().is(lexer::TokenKind::Identifier)) {
-                        diag.report(diagnostics::Severity::Error, ExpectedIdent,
-                                    "expected method name", tok.peek().span);
-                        tok.advance();
-                        return;
-                    }
-                    auto mname_span = tok.peek().span;
-                    auto mname      = tok.lexeme();
-                    tok.advance();
-
-                    if (tok.peek().punc != '(') {
-                        diag.report(diagnostics::Severity::Error, ExpectedExpr,
-                                    "expected '(' after method name", tok.peek().span);
-                        return;
-                    }
-                    tok.advance();
-
-                    auto typed_params = parseFnParams(parser);
-
-                    ast::TypeExprId return_type = ast::kInvalidTypeExpr;
-                    if (tok.peek().punc == ':') {
-                        tok.advance();
-                        return_type = parser.parseTypeExpr();
-                    }
-
-                    ast::ExprId mn_body_node = ast::kInvalidExpr;
-                    uint32_t mn_body_start   = 0;
-                    uint32_t mn_body_end     = 0;
-                    memory::Span mn_span{};
-                    if (tok.peek().punc == '{') {
-                        mn_body_start = tok.offset;
-                        mn_span       = tok.peek().span;
-                        mn_body_end   = scan_detail::skipBody(tok);
-                        mn_span       = {mn_span.file, mn_span.start, mn_body_end};
-                        mn_body_node  = bld.unbody(mn_span, mn_body_start, mn_body_end);
-                    } else if (tok.peek().punc == ';') {
-                        if (must_have_body)
-                            diag.report(diagnostics::Severity::Error, ExpectedExpr,
-                                        "methods in component must have a body", tok.peek().span);
-                        tok.advance();
-                    } else {
-                        diag.report(diagnostics::Severity::Error, ExpectedExpr,
-                                    "expected '{' or ';' after method signature", tok.peek().span);
-                    }
-
-                    if (!scan_detail::reportIfDuplicate(syms, diag, mname, mname_span)) {
-                        auto ms = syms.declare(mname, current_vis, current_mod_depth,
-                                               symbols::SymKind::Fn, ast::kInvalidDecl, mname_span);
-                        for (auto &p : typed_params) {
-                            auto ps = syms.declare(p.name, current_vis, current_mod_depth,
-                                                   symbols::SymKind::Variable,
-                                                   ast::kInvalidDecl, mname_span);
-                            if (ms != symbols::kInvalidSym)
-                                syms.get(ms).members.push(ps);
-                        }
-                        auto method_decl = bld.fnDecl(mname,
-                            memory::DynArray<ast::GenericParam>{bld.arena()},
-                            std::move(typed_params), return_type, mn_body_node, mname_span);
-                        program.decls.push(method_decl);
-                        if (ms != symbols::kInvalidSym)
-                            syms.get(ms).decl_id = method_decl;
-                        if (struct_sym != symbols::kInvalidSym)
-                            syms.get(struct_sym).members.push(ms);
-                        if (decl != ast::kInvalidDecl) {
-                            auto &decl_node = bld.getDecl(decl);
-                            if (auto *sn = std::get_if<ast::StructDeclNode>(&decl_node))
-                                sn->methods.push(method_decl);
-                            else if (auto *cn = std::get_if<ast::ComponentDeclNode>(&decl_node))
-                                cn->methods.push(method_decl);
-                        }
-                        result.fns.push({mname, mn_span, mn_body_node, 0});
-                    }
-                };
+                MethodScanContext ctx{tok, bld, diag, syms, parser, current_vis,
+                                      current_mod_depth, struct_sym, decl, program, result};
 
                 if (kw == "struct") {
                     memory::FlatMap<std::string, char> field_names;
                     scan_detail::scanBody(tok,
                         [&](lexer::TokenStream &tok) {
-                            // skip field qualifiers
-                            if (tok.peek().is(lexer::TokenKind::Variable) ||
-                                tok.peek().is(lexer::TokenKind::Mutable) ||
-                                tok.peek().is(lexer::TokenKind::Ownership)) {
-                                while (tok.peek().is(lexer::TokenKind::Variable) ||
-                                       tok.peek().is(lexer::TokenKind::Mutable) ||
-                                       tok.peek().is(lexer::TokenKind::Ownership))
-                                    tok.advance();
-                            }
-
-                            // destructure: [a, b, c]: Type
-                            if (tok.peek().punc == '[') {
-                                tok.advance();
-                                while (!tok.is_empty() && tok.peek().punc != ']') {
-                                    if (tok.peek().is(lexer::TokenKind::Identifier)) {
-                                        auto fname = tok.lexeme();
-                                        auto fspan = tok.peek().span;
-                                        tok.advance();
-                                        if (field_names.contains(std::string(fname)))
-                                            diag.report(diagnostics::Severity::Error,
-                                                        diagnostics::err::DuplicateDecl,
-                                                        "duplicate field '" + std::string(fname) + "'",
-                                                        fspan);
-                                        else
-                                            field_names.insert(std::string(fname), char(1));
-                                    } else {
-                                        tok.advance();
-                                    }
-                                    if (tok.peek().punc == ',')
-                                        tok.advance();
-                                }
-                                if (tok.peek().punc == ']')
-                                    tok.advance();
-                                if (tok.peek().punc == ':')
-                                    tok.advance();
-                                scan_detail::skipTypeExpr(tok);
-                                if (tok.peek().punc == '=') {
-                                    tok.advance();
-                                    scan_detail::skipExpr(tok);
-                                }
-                                if (tok.peek().punc == ',')
-                                    tok.advance();
-                                return;
-                            }
-
-                            // field: ident : Type = default ,
-                            if (tok.peek().is(lexer::TokenKind::Identifier)) {
-                                auto fname = tok.lexeme();
-                                auto fspan = tok.peek().span;
-                                tok.advance();
-                                if (field_names.contains(std::string(fname)))
-                                    diag.report(diagnostics::Severity::Error,
-                                                diagnostics::err::DuplicateDecl,
-                                                "duplicate field '" + std::string(fname) + "'",
-                                                fspan);
-                                else
-                                    field_names.insert(std::string(fname), char(1));
-                                if (tok.peek().punc == ':')
-                                    tok.advance();
-                                scan_detail::skipTypeExpr(tok);
-                                if (tok.peek().punc == '=') {
-                                    tok.advance();
-                                    scan_detail::skipExpr(tok);
-                                }
-                                if (tok.peek().punc == ',')
-                                    tok.advance();
-                                return;
-                            }
-
-                            if (tok.peek().is(lexer::TokenKind::Annotation)) {
-                                tok.advance();
-                                return;
-                            }
-
-                            tok.advance();
+                            scanFieldItem(tok, diag, field_names, true);
                         },
-                        [&](lexer::TokenStream&) { handleMethod(false); },
+                        [&ctx](lexer::TokenStream&) { scanMethod(ctx, false); },
                         token_start, body_span, bld, body_node);
 
                 } else if (kw == "enum") {
@@ -550,58 +732,26 @@ ScanResult scan(Parser &parser, symbols::SymbolTable &syms) {
                             if (tok.peek().punc == ',')
                                 tok.advance();
                         },
-                        [&](lexer::TokenStream&) { handleMethod(false); },
+                        [&ctx](lexer::TokenStream&) { scanMethod(ctx, false); },
                         token_start, body_span, bld, body_node);
 
                 } else if (kw == "union") {
                     scan_detail::scanBody(tok,
                         [&](lexer::TokenStream &tok) {
-                            if (tok.peek().is(lexer::TokenKind::Type)) {
-                                tok.advance();
-                            } else {
-                                tok.advance();
-                            }
+                            tok.advance();
                             if (tok.peek().punc == ',')
                                 tok.advance();
                         },
-                        [&](lexer::TokenStream&) { handleMethod(false); },
+                        [&ctx](lexer::TokenStream&) { scanMethod(ctx, false); },
                         token_start, body_span, bld, body_node);
 
                 } else if (kw == "component") {
                     memory::FlatMap<std::string, char> field_names;
                     scan_detail::scanBody(tok,
                         [&](lexer::TokenStream &tok) {
-                            if (tok.peek().is(lexer::TokenKind::Identifier)) {
-                                auto fname = tok.lexeme();
-                                auto fspan = tok.peek().span;
-                                tok.advance();
-                                if (field_names.contains(std::string(fname)))
-                                    diag.report(diagnostics::Severity::Error,
-                                                diagnostics::err::DuplicateDecl,
-                                                "duplicate field '" + std::string(fname) + "'",
-                                                fspan);
-                                else
-                                    field_names.insert(std::string(fname), char(1));
-                                if (tok.peek().punc == ':')
-                                    tok.advance();
-                                scan_detail::skipTypeExpr(tok);
-                                if (tok.peek().punc == '=') {
-                                    tok.advance();
-                                    scan_detail::skipExpr(tok);
-                                }
-                                if (tok.peek().punc == ',')
-                                    tok.advance();
-                                return;
-                            }
-
-                            if (tok.peek().is(lexer::TokenKind::Annotation)) {
-                                tok.advance();
-                                return;
-                            }
-
-                            tok.advance();
+                            scanFieldItem(tok, diag, field_names, false);
                         },
-                        [&](lexer::TokenStream&) { handleMethod(true); },
+                        [&ctx](lexer::TokenStream&) { scanMethod(ctx, true); },
                         token_start, body_span, bld, body_node);
                 }
             }
@@ -660,29 +810,22 @@ ScanResult scan(Parser &parser, symbols::SymbolTable &syms) {
                 uint32_t token_start = tok.offset;
                 body_span            = tok.peek().span;
 
-                tok.advance(); // consume '{'
-                uint32_t brace_depth = 1;
-                while (!tok.is_empty() && brace_depth > 0) {
-                    skipComments(tok);
-                    if (tok.peek().is_eof())
-                        break;
-                    if (tok.peek().punc == '}') {
-                        if (--brace_depth == 0) {
+                scan_detail::scanBody(tok,
+                    [&](lexer::TokenStream &tok) {
+                        if (tok.peek().is(lexer::TokenKind::Typedef)) {
                             tok.advance();
-                            break;
+                            while (!tok.is_empty() && !tok.peek().is_eof() && tok.peek().punc != ';')
+                                tok.advance();
+                            if (tok.peek().punc == ';')
+                                tok.advance();
+                            return;
                         }
                         tok.advance();
-                        continue;
-                    }
-
-                    // trait method: [async | flow | raw | const] fn name(...) : Type
-                    if (scan_detail::consumeFnModifiers(tok)) {
+                    },
+                    [&](lexer::TokenStream &tok) {
                         tok.advance(); // consume 'fn'
-
-                        // skip generic params
                         if (tok.peek().punc == '<')
                             scan_detail::skipBalanced(tok, '<', '>');
-
                         if (tok.peek().is(lexer::TokenKind::Identifier)) {
                             auto m_span = tok.peek().span;
                             auto mname  = tok.lexeme();
@@ -695,49 +838,20 @@ ScanResult scan(Parser &parser, symbols::SymbolTable &syms) {
                                     syms.get(ms).decl_id = decl;
                             }
                         }
-
-                        // skip params (...)
                         if (tok.peek().punc == '(')
                             scan_detail::skipBalanced(tok, '(', ')');
-
-                        // skip return type : TypeExpr
                         if (tok.peek().punc == ':') {
                             tok.advance();
                             scan_detail::skipTypeExpr(tok);
                         }
-
-                        // skip to ';' or default body
                         while (!tok.is_empty() && !tok.peek().is_eof()) {
-                            if (tok.peek().punc == ';') {
-                                tok.advance();
-                                break;
-                            }
-                            if (tok.peek().punc == '{') {
-                                scan_detail::skipBalanced(tok, '{', '}');
-                                break;
-                            }
-                            if (tok.peek().punc == '}')
-                                break;
+                            if (tok.peek().punc == ';') { tok.advance(); break; }
+                            if (tok.peek().punc == '{') { scan_detail::skipBalanced(tok, '{', '}'); break; }
+                            if (tok.peek().punc == '}') break;
                             tok.advance();
                         }
-                        continue;
-                    }
-
-                    // associated type: type Foo;
-                    if (tok.peek().is(lexer::TokenKind::Typedef)) {
-                        tok.advance();
-                        while (!tok.is_empty() && !tok.peek().is_eof() && tok.peek().punc != ';')
-                            tok.advance();
-                        if (tok.peek().punc == ';')
-                            tok.advance();
-                        continue;
-                    }
-
-                    tok.advance();
-                }
-
-                body_span = {body_span.file, body_span.start, tok.offset};
-                body_node = bld.unbody(body_span, token_start, tok.offset);
+                    },
+                    token_start, body_span, bld, body_node);
             }
 
             program.decls.push(decl);
@@ -818,168 +932,12 @@ ScanResult scan(Parser &parser, symbols::SymbolTable &syms) {
                 continue;
             }
 
-            auto parse_path = [&](memory::DynArray<std::string_view> &p) {
-                while (!tok.is_empty() && !tok.peek().is_eof()) {
-                    if (tok.peek().is(lexer::TokenKind::Identifier)) {
-                        auto first = tok.lexeme();
-                        const char *seg_start = first.data();
-                        const char *seg_end   = first.data() + first.size();
-                        tok.advance();
-                        // Consume .identifier as part of the same segment (file extension)
-                        while (!tok.is_empty() && !tok.peek().is_eof() &&
-                               tok.peek().punc == '.') {
-                            // '..' is parent path, not an extension
-                            if (tok.peek(1).is(lexer::TokenKind::Punctuation) &&
-                                tok.peek(1).punc == '.')
-                                break;
-                            tok.advance(); // consume '.'
-                            if (tok.peek().is(lexer::TokenKind::Identifier)) {
-                                auto ext = tok.lexeme();
-                                seg_end = ext.data() + ext.size();
-                                tok.advance();
-                            } else {
-                                break;
-                            }
-                        }
-                        p.push(std::string_view{seg_start, static_cast<size_t>(seg_end - seg_start)});
-                    } else if (tok.peek().punc == '/') {
-                        tok.advance();
-                    } else if (tok.peek().is(lexer::TokenKind::Punctuation) &&
-                               tok.peek().punc == '.') {
-                        if (tok.peek(1).is(lexer::TokenKind::Punctuation) &&
-                            tok.peek(1).punc == '.') {
-                            p.push(std::string_view{"..", 2});
-                            tok.advance(2);
-                        } else {
-                            break;
-                        }
-                    } else {
-                        break;
-                    }
-                }
-            };
-
-            auto parse_depth = [&]() -> int32_t {
-                if (tok.peek().punc == '(') {
-                    tok.advance();
-                    if (tok.peek().punc == '.') {
-                        tok.advance();
-                        tok.advance();
-                        if (tok.peek().punc == ')')
-                            tok.advance();
-                        return -1;
-                    } else if (tok.peek().is(lexer::TokenKind::LitVal)) {
-                        auto n = tok.lexeme();
-                        tok.advance();
-                        char *end = nullptr;
-                        long val  = std::strtol(n.data(), &end, 10);
-                        if (end == n.data() || val <= 0 || val > INT32_MAX) {
-                            diag.report(diagnostics::Severity::Error, InvalidImportDepth,
-                                        "import depth must be a positive integer or '..'",
-                                        tok.peek().span);
-                            val = 1;
-                        }
-                        if (tok.peek().punc == ')')
-                            tok.advance();
-                        return static_cast<int32_t>(val);
-                    } else {
-                        diag.report(diagnostics::Severity::Error, InvalidImportDepth,
-                                    "expected import depth: positive integer or '..'",
-                                    tok.peek().span);
-                        if (tok.peek().punc == ')')
-                            tok.advance();
-                        return 1;
-                    }
-                }
-                return 1;
-            };
-
-            auto parse_symbol_list = [&]() -> memory::DynArray<ast::ImportSymbol> {
-                auto symbols = memory::DynArray<ast::ImportSymbol>(bld.arena());
-                if (tok.peek().punc != '{')
-                    return symbols;
-                tok.advance(); // consume '{'
-                while (!tok.is_empty() && !tok.peek().is_eof() && tok.peek().punc != '}') {
-                    if (!tok.peek().is(lexer::TokenKind::Identifier)) {
-                        diag.report(diagnostics::Severity::Error, ExpectedIdent,
-                                    "expected symbol name in import list", tok.peek().span);
-                        break;
-                    }
-                    auto name = tok.lexeme();
-                    tok.advance();
-                    std::string_view alias{};
-                    if (tok.peek().is(lexer::TokenKind::As)) {
-                        tok.advance();
-                        if (tok.peek().is(lexer::TokenKind::Identifier)) {
-                            alias = tok.lexeme();
-                            tok.advance();
-                        } else {
-                            diag.report(diagnostics::Severity::Error, ExpectedIdent,
-                                        "expected alias name after 'as'", tok.peek().span);
-                        }
-                    }
-                    symbols.push({name, alias});
-                    if (tok.peek().punc == ',')
-                        tok.advance();
-                }
-                if (tok.peek().punc == '}')
-                    tok.advance();
-                else
-                    diag.report(diagnostics::Severity::Error, ExpectedExpr,
-                                "expected '}' to close import list", tok.peek().span);
-                return symbols;
-            };
-
-            if (kw == "from" || kw == "export") {
-                memory::DynArray<std::string_view> path{bld.arena()};
-                parse_path(path);
-                if (path.empty()) {
-                    diag.report(diagnostics::Severity::Error, ImportError,
-                                "expected import path after '" + std::string(kw) + "'",
-                                tok.peek().span);
-                } else {
-                    auto import_depth = parse_depth();
-                    auto symbols = parse_symbol_list();
-                    bool is_asset = !path.empty() && path[0] == "assets";
-                    std::string_view alias{};
-                    if (tok.peek().is(lexer::TokenKind::As)) {
-                        tok.advance();
-                        if (tok.peek().is(lexer::TokenKind::Identifier)) {
-                            alias = tok.lexeme();
-                            tok.advance();
-                        }
-                    }
-                    if (is_asset && alias.empty())
-                        diag.report(diagnostics::Severity::Error, ImportError,
-                                    "assets import requires an alias using 'as'", kw_span);
-                    auto decl = bld.importDecl(std::move(path), std::move(symbols), alias,
-                                               /*is_from=*/kw == "from", /*is_export=*/kw == "export",
-                                               is_asset, import_depth, kw_span);
-                    program.decls.push(decl);
-                }
-            } else if (kw == "import") {
-                memory::DynArray<std::string_view> path{bld.arena()};
-                parse_path(path);
-                if (path.empty()) {
-                    diag.report(diagnostics::Severity::Error, ImportError,
-                                "expected import path after 'import'", tok.peek().span);
-                } else {
-                    auto import_depth = parse_depth();
-                    auto symbols = parse_symbol_list();
-                    std::string_view alias{};
-                    if (tok.peek().is(lexer::TokenKind::As)) {
-                        tok.advance();
-                        if (tok.peek().is(lexer::TokenKind::Identifier)) {
-                            alias = tok.lexeme();
-                            tok.advance();
-                        }
-                    }
-                    auto decl =
-                        bld.importDecl(std::move(path), std::move(symbols), alias,
-                                       false, false, false, import_depth, kw_span);
-                    program.decls.push(decl);
-                }
-            }
+            if (kw == "from")
+                scanImportDecl(parser, syms, program, kw_span, true, false);
+            else if (kw == "export")
+                scanImportDecl(parser, syms, program, kw_span, false, true);
+            else
+                scanImportDecl(parser, syms, program, kw_span, false, false);
             resetVis();
             continue;
         }
@@ -996,7 +954,7 @@ ScanResult scan(Parser &parser, symbols::SymbolTable &syms) {
         recovery::panic(tok, {lexer::TokenKind::Fn, lexer::TokenKind::Struct,
                               lexer::TokenKind::Trait, lexer::TokenKind::Interface,
                               lexer::TokenKind::Implement, lexer::TokenKind::Module,
-                              lexer::TokenKind::Variable});
+                              lexer::TokenKind::Variable, lexer::TokenKind::Extern});
         if (tok.peek().punc == ';')
             tok.advance();
         resetVis();

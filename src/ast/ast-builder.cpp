@@ -111,9 +111,10 @@ StmtId AstBuilder::retStmt(ExprId value, memory::Span span) {
 
 DeclId AstBuilder::fnDecl(std::string_view name, memory::DynArray<GenericParam> generic_params,
                           memory::DynArray<FnParam> params, TypeExprId return_type, ExprId body,
-                          memory::Span span) {
+                          bool is_extern, memory::Span span) {
     return addDecl(
-        FnDeclNode{name, std::move(generic_params), std::move(params), return_type, body, span});
+        FnDeclNode{name, std::move(generic_params), std::move(params), return_type, body,
+                   is_extern, span});
 }
 
 DeclId AstBuilder::fnDecl(std::string_view name, memory::DynArray<std::string_view> param_names,
@@ -122,7 +123,7 @@ DeclId AstBuilder::fnDecl(std::string_view name, memory::DynArray<std::string_vi
     for (auto &pn : param_names)
         params.push({pn, kInvalidTypeExpr});
     return addDecl(FnDeclNode{name, memory::DynArray<GenericParam>{arena_}, std::move(params),
-                              kInvalidTypeExpr, body, span});
+                              kInvalidTypeExpr, body, false, span});
 }
 
 DeclId AstBuilder::structDecl(std::string_view name, memory::DynArray<GenericParam> generic_params,

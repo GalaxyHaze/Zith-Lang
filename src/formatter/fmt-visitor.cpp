@@ -82,6 +82,8 @@ void FmtVisitor::emitGenericParams(const memory::DynArray<ast::GenericParam> &pa
 
 void FmtVisitor::emitFnDecl(const ast::FnDeclNode &node) {
     indent();
+    if (node.is_extern)
+        emit("extern ");
     emit("fn ");
     emit(node.name);
     emitGenericParams(node.generic_params);

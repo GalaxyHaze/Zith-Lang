@@ -259,6 +259,38 @@ static void test_struct_method_body() {
     CHECK(r.scanResult.fns.size() >= 1, "at least 1 fn entry");
 }
 
+// ── Extern fn tests ──────────────────────────────────────────────
+
+static void test_extern_fn_basic() {
+    ScanTest t;
+    auto r = t.scan("extern fn write()");
+    CHECK(r.ok, "extern fn basic");
+    auto *fn = get_decl_of<ast::FnDeclNode>(*r.program, r.builder, "write");
+    CHECK(fn != nullptr, "extern fn node exists");
+    CHECK(fn->is_extern, "fn is marked extern");
+    CHECK(fn->body == ast::kInvalidExpr, "extern fn has no body");
+}
+
+static void test_extern_fn_with_params() {
+    ScanTest t;
+    auto r = t.scan("extern fn write(fd: i32, msg: *char, len: u64): i64");
+    CHECK(r.ok, "extern fn with params");
+    auto *fn = get_decl_of<ast::FnDeclNode>(*r.program, r.builder, "write");
+    CHECK(fn != nullptr, "extern fn node exists");
+    CHECK(fn->is_extern, "fn is marked extern");
+    CHECK_EQ(fn->params.size(), 3u, "3 params");
+}
+
+static void test_extern_fn_with_return() {
+    ScanTest t;
+    auto r = t.scan("extern fn getchar(): i32");
+    CHECK(r.ok, "extern fn with return type");
+    auto *fn = get_decl_of<ast::FnDeclNode>(*r.program, r.builder, "getchar");
+    CHECK(fn != nullptr, "extern fn node exists");
+    CHECK(fn->is_extern, "fn is marked extern");
+    CHECK(fn->return_type != ast::kInvalidTypeExpr, "has return type");
+}
+
 // ── Runner ─────────────────────────────────────────────────────────
 
 static void test_scan() {
@@ -287,6 +319,10 @@ static void test_scan() {
 
     test_struct_method();
     test_struct_method_body();
+
+    test_extern_fn_basic();
+    test_extern_fn_with_params();
+    test_extern_fn_with_return();
 }
 
 TEST_MAIN(scan)

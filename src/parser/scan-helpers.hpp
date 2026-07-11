@@ -203,6 +203,12 @@ inline bool consumeFnModifiers(lexer::TokenStream &tok) {
         return true;
     }
 
+    // extern fn
+    if (lex == "extern" && tok.peek(1).is(lexer::TokenKind::Fn)) {
+        tok.advance();
+        return true;
+    }
+
     return false;
 }
 

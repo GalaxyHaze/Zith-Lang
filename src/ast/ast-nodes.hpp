@@ -136,6 +136,7 @@ struct FnDeclNode {
     memory::DynArray<FnParam> params;
     TypeExprId return_type = kInvalidTypeExpr;
     ExprId body            = kInvalidExpr;
+    bool is_extern         = false;
     memory::Span span{};
 };
 

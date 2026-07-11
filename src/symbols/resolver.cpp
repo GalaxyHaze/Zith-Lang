@@ -3,7 +3,7 @@
 
 namespace zith::symbols {
 
-static std::string join_dot(const memory::DynArray<std::string_view> &path) {
+static std::string joinWith(const memory::DynArray<std::string_view> &path) {
     std::string result;
     for (size_t i = 0; i < path.size(); ++i) {
         if (i > 0)
@@ -23,7 +23,7 @@ void Resolver::resolveProgram(ast::ProgramNode &program) {
     for (auto decl_id : program.decls) {
         auto &decl = builder_.getDecl(decl_id);
         if (auto *import = std::get_if<ast::ImportNode>(&decl)) {
-            auto import_key = join_dot(import->path);
+            auto import_key = joinWith(import->path);
             if (!import_mgr_.isLoaded(import_key))
                 continue;
             if (!import->alias.empty()) {

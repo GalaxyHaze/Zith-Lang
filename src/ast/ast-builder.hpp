@@ -56,7 +56,8 @@ public:
 
     DeclId fnDecl(std::string_view name, memory::DynArray<GenericParam> generic_params,
                   memory::DynArray<FnParam> params, TypeExprId return_type = kInvalidTypeExpr,
-                  ExprId body = kInvalidExpr, memory::Span span = {});
+                  ExprId body = kInvalidExpr, bool is_extern = false,
+                  memory::Span span = {});
     DeclId fnDecl(std::string_view name, memory::DynArray<std::string_view> param_names,
                   ExprId body = kInvalidExpr, memory::Span span = {});
     DeclId structDecl(std::string_view name, memory::DynArray<GenericParam> generic_params,

@@ -389,7 +389,8 @@ void print_decl(DeclId id, const AstBuilder &bld, FILE *out, int depth) {
     auto &node = bld.getDecl(id);
     std::visit(overloaded{
                    [&](const FnDeclNode &n) {
-                       std::fprintf(out, "Fn(%.*s)\n", (int)n.name.size(), n.name.data());
+                       std::fprintf(out, "Fn(%s%.*s)\n", n.is_extern ? "extern " : "",
+                                    (int)n.name.size(), n.name.data());
                        if (n.params.size() > 0) {
                            print_indent(out, depth + 1);
                            std::fprintf(out, "params: ");

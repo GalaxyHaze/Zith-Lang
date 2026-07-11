@@ -28,12 +28,32 @@ const ImportManager::LoadedFile &ImportManager::get(size_t idx) const {
     return files_[idx];
 }
 
-static std::string join_path(const memory::DynArray<std::string_view> &path, char sep) {
+static std::string joinWith(const memory::DynArray<std::string_view> &path, char sep) {
     std::string result;
     for (size_t i = 0; i < path.size(); ++i) {
         if (i > 0)
             result += sep;
         result.append(path[i].data(), path[i].size());
+    }
+    return result;
+}
+
+static std::string computeNamespace(const memory::DynArray<std::string_view> &path,
+                                     std::string_view alias) {
+    if (!alias.empty())
+        return std::string(alias);
+    std::vector<std::string_view> parts;
+    for (auto &seg : path) {
+        if (seg == ".." && !parts.empty())
+            parts.pop_back();
+        else if (seg != ".." && seg != ".")
+            parts.push_back(seg);
+    }
+    std::string result;
+    for (size_t i = 0; i < parts.size(); ++i) {
+        if (i > 0)
+            result += '.';
+        result.append(parts[i].data(), parts[i].size());
     }
     return result;
 }
@@ -64,7 +84,16 @@ static bool path_under_root(const fs::path &p, const fs::path &root) {
 
 auto ImportManager::find_file(const std::string &import_key, std::string_view source_file) const
     -> memory::Optional<std::string> {
-    auto check = [](const fs::path &p) { return fs::is_regular_file(p); };
+    static const char *extensions[] = {".zith", ".h", ".hpp"};
+
+    auto check_file = [](const fs::path &p) { return fs::is_regular_file(p); };
+
+    auto under_visible_root = [&](const fs::path &p) -> bool {
+        for (auto &root : visible_roots_)
+            if (path_under_root(p, fs::path(root)))
+                return true;
+        return false;
+    };
 
     // ── Relative path (../ hatch) ──────────────────────────────────
     if (import_key.size() >= 2 && import_key[0] == '.' && import_key[1] == '.') {
@@ -73,53 +102,19 @@ auto ImportManager::find_file(const std::string &import_key, std::string_view so
         fs::path src(source_file);
         auto base = src.parent_path();
         auto abs  = fs::weakly_canonical(base / import_key);
-        // Try .zith
-        {
-            auto p = abs.string() + ".zith";
-            if (check(p)) {
-                for (auto &root : visible_roots_)
-                    if (path_under_root(fs::path(p), fs::path(root)))
-                        return p;
-                return {};
-            }
+
+        for (auto ext : extensions) {
+            auto p = abs.string() + ext;
+            if (check_file(p) && under_visible_root(p))
+                return p;
         }
-        // Try .h
-        {
-            auto p = abs.string() + ".h";
-            if (check(p)) {
-                for (auto &root : visible_roots_)
-                    if (path_under_root(fs::path(p), fs::path(root)))
-                        return p;
-                return {};
-            }
-        }
-        // Try .hpp
-        {
-            auto p = abs.string() + ".hpp";
-            if (check(p)) {
-                for (auto &root : visible_roots_)
-                    if (path_under_root(fs::path(p), fs::path(root)))
-                        return p;
-                return {};
-            }
-        }
-        // Try /mod.zith
         {
             auto mod_p = (abs / "mod.zith").string();
-            if (check(mod_p)) {
-                for (auto &root : visible_roots_)
-                    if (path_under_root(fs::path(mod_p), fs::path(root)))
-                        return mod_p;
-                return {};
-            }
+            if (check_file(mod_p) && under_visible_root(mod_p))
+                return mod_p;
         }
-        // Try as directory
-        if (fs::is_directory(abs)) {
-            for (auto &root : visible_roots_)
-                if (path_under_root(abs, fs::path(root)))
-                    return abs.string();
-            return {};
-        }
+        if (fs::is_directory(abs) && under_visible_root(abs))
+            return abs.string();
         return {};
     }
 
@@ -127,29 +122,16 @@ auto ImportManager::find_file(const std::string &import_key, std::string_view so
     for (auto &root : visible_roots_) {
         auto base = fs::path(root) / import_key;
 
-        // 1. Exact file match
-        auto p = base.string() + ".zith";
-        if (check(p))
-            return p;
-
-        // 2. .h / .hpp
-        {
-            auto hp = base.string() + ".h";
-            if (check(hp))
-                return hp;
+        for (auto ext : extensions) {
+            auto p = base.string() + ext;
+            if (check_file(p))
+                return p;
         }
         {
-            auto hpp = base.string() + ".hpp";
-            if (check(hpp))
-                return hpp;
+            auto mod_p = (base / "mod.zith").string();
+            if (check_file(mod_p))
+                return mod_p;
         }
-
-        // 3. Directory with mod.zith entry
-        auto mod_p = (base / "mod.zith").string();
-        if (check(mod_p))
-            return mod_p;
-
-        // 4. Directory (no mod.zith) — already under this root since base is root-relative
         if (fs::is_directory(base))
             return base.string();
     }
@@ -242,7 +224,7 @@ auto ImportManager::resolve_file(const std::string &full_path, const std::string
                 if (re_res) {
                     re_exported_files.push(re_res.value());
                 } else {
-                    auto key = join_path(import->path, '/');
+                    auto key = joinWith(import->path, '/');
                     diags_.report(diagnostics::Severity::Warning, diagnostics::err::ImportError,
                                   "re-export of '" + key + "' failed: " + re_res.error().msg, {});
                 }
@@ -411,7 +393,7 @@ auto ImportManager::resolve(const memory::DynArray<std::string_view> &path,
                             std::string_view alias, int32_t import_depth,
                             std::string_view source_file) -> memory::Result<size_t> {
 
-    auto import_key = join_path(path, '/');
+    auto import_key = joinWith(path, '/');
 
     // ── Dedup ───────────────────────────────────────────────────────
     if (auto *existing = index_by_path_.get(import_key))
@@ -455,28 +437,32 @@ auto ImportManager::resolve(const memory::DynArray<std::string_view> &path,
                                  std::string(alias), import_depth);
 
     // ── Single file resolution ─────────────────────────────────────
-    auto ns = [&]() -> std::string {
-        if (!alias.empty())
-            return std::string(alias);
-        std::vector<std::string_view> parts;
-        for (auto &seg : path) {
-            if (seg == ".." && !parts.empty())
-                parts.pop_back();
-            else if (seg != ".." && seg != ".")
-                parts.push_back(seg);
-        }
-        std::string result;
-        for (size_t i = 0; i < parts.size(); ++i) {
-            if (i > 0)
-                result += '.';
-            result.append(parts[i].data(), parts[i].size());
-        }
-        return result;
-    }();
+    auto ns = computeNamespace(path, alias);
 
     return resolve_file(*file_path, import_key, ns, is_from, is_export, std::string(alias),
                         import_depth, symbols, is_asset);
 }
+
+namespace {
+
+struct DeclNames {
+    std::string_view qualified;
+    std::string_view unqualified;
+};
+
+DeclNames makeDeclNames(memory::Arena &arena, std::string_view raw_name,
+                        std::string_view ls, std::string_view prefix, bool is_from) {
+    if (is_from) {
+        auto raw = std::string(raw_name);
+        return {
+            arena_str(arena, std::string(ls) + "." + raw),
+            arena_str(arena, raw),
+        };
+    }
+    return {arena_str(arena, std::string(prefix) + std::string(raw_name)), {}};
+}
+
+} // anonymous namespace
 
 void ImportManager::mergeInto(SymbolTable &main_syms, int32_t from_depth) {
     int32_t call_depth = from_depth + 1;
@@ -565,15 +551,11 @@ void ImportManager::mergeInto(SymbolTable &main_syms, int32_t from_depth) {
                                                   data.target, data.doc_span);
                 record_origin(main_id, fi, local_sid);
             };
-            if (file.is_from) {
-                auto sym_name_s = std::string(raw_name);
-                declare_or_diag(arena_str(arena_, sym_name_s), vis, depth, sid);
-                auto qualified = std::string(ls) + "." + sym_name_s;
-                declare_or_diag(arena_str(arena_, qualified), vis, depth, sid);
-            } else {
-                std::string qualified = prefix + std::string(raw_name);
-                declare_or_diag(arena_str(arena_, qualified), vis, depth, sid);
-            }
+
+            auto names = makeDeclNames(arena_, raw_name, ls, prefix, file.is_from);
+            declare_or_diag(names.qualified, vis, depth, sid);
+            if (!names.unqualified.empty())
+                declare_or_diag(names.unqualified, vis, depth, sid);
         };
 
         // For asset files: the single symbol is the alias itself
@@ -609,43 +591,27 @@ void ImportManager::mergeInto(SymbolTable &main_syms, int32_t from_depth) {
             for (auto sid : ref.public_syms) {
                 auto &data   = ref.symbols.get(sid);
                 auto sym_str = interner_.lookup(data.name);
-                auto name    = arena_str(arena_, std::string(sym_str));
-                if (file.is_from) {
-                    declare_re_export(name, SymbolVisibility::Public, 0, data.kind, data.decl_id,
-                                      data.span, data.target, data.doc_span, re_idx, sid);
-                    auto qualified =
-                        arena_str(arena_, std::string(ls) + "." + std::string(sym_str));
-                    declare_re_export(qualified, SymbolVisibility::Public, 0, data.kind,
+                auto names   = makeDeclNames(arena_, sym_str, ls, prefix, file.is_from);
+                declare_re_export(names.qualified, SymbolVisibility::Public, 0, data.kind,
+                                  data.decl_id, data.span, data.target, data.doc_span, re_idx, sid);
+                if (!names.unqualified.empty())
+                    declare_re_export(names.unqualified, SymbolVisibility::Public, 0, data.kind,
                                       data.decl_id, data.span, data.target, data.doc_span, re_idx,
                                       sid);
-                } else {
-                    auto qualified = arena_str(arena_, prefix + std::string(sym_str));
-                    declare_re_export(qualified, SymbolVisibility::Public, 0, data.kind,
-                                      data.decl_id, data.span, data.target, data.doc_span, re_idx,
-                                      sid);
-                }
             }
             for (auto sid : ref.module_syms) {
                 auto &data = ref.symbols.get(sid);
                 if (data.mod_depth >= 0 && call_depth != data.mod_depth)
                     continue;
                 auto sym_str = interner_.lookup(data.name);
-                auto name    = arena_str(arena_, std::string(sym_str));
-                if (file.is_from) {
-                    declare_re_export(name, SymbolVisibility::Module, data.mod_depth, data.kind,
-                                      data.decl_id, data.span, data.target, data.doc_span, re_idx,
-                                      sid);
-                    auto qualified =
-                        arena_str(arena_, std::string(ls) + "." + std::string(sym_str));
-                    declare_re_export(qualified, SymbolVisibility::Module, data.mod_depth,
-                                      data.kind, data.decl_id, data.span, data.target,
-                                      data.doc_span, re_idx, sid);
-                } else {
-                    auto qualified = arena_str(arena_, prefix + std::string(sym_str));
-                    declare_re_export(qualified, SymbolVisibility::Module, data.mod_depth,
-                                      data.kind, data.decl_id, data.span, data.target,
-                                      data.doc_span, re_idx, sid);
-                }
+                auto names   = makeDeclNames(arena_, sym_str, ls, prefix, file.is_from);
+                declare_re_export(names.qualified, SymbolVisibility::Module, data.mod_depth,
+                                  data.kind, data.decl_id, data.span, data.target, data.doc_span,
+                                  re_idx, sid);
+                if (!names.unqualified.empty())
+                    declare_re_export(names.unqualified, SymbolVisibility::Module, data.mod_depth,
+                                      data.kind, data.decl_id, data.span, data.target, data.doc_span,
+                                      re_idx, sid);
             }
             for (auto r : ref.re_exported_files)
                 self(self, r);
