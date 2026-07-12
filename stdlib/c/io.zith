@@ -1,7 +1,1 @@
-fn print(msg: string) {
-  println(msg);
-}
-
-fn printf(format: string, args: string) {
-  print(format);
-}
+extern fn puts(msg: *char)

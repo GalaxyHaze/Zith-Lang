@@ -3,6 +3,7 @@
 #include "cli/terminal.hpp"
 #include "cli/zith-flags.hpp"
 
+#include <algorithm>
 #include <cctype>
 #include <cstdio>
 #include <cstdlib>
@@ -75,6 +76,49 @@ template <class... Args> static bool compare(const char *a, Args &&...args) {
     return ((std::strcmp(a, args) == 0) || ...);
 }
 
+static size_t levenshteinDistance(const char *a, const char *b) {
+    size_t n = std::strlen(a);
+    size_t m = std::strlen(b);
+    if (n == 0) return m;
+    if (m == 0) return n;
+    std::vector<size_t> prev(m + 1);
+    std::vector<size_t> curr(m + 1);
+    for (size_t j = 0; j <= m; ++j)
+        prev[j] = j;
+    for (size_t i = 1; i <= n; ++i) {
+        curr[0] = i;
+        for (size_t j = 1; j <= m; ++j) {
+            size_t cost = (a[i - 1] == b[j - 1]) ? 0 : 1;
+            size_t a_val = prev[j] + 1;
+            size_t b_val = curr[j - 1] + 1;
+            size_t c_val = prev[j - 1] + cost;
+            curr[j] = (a_val < b_val) ? (a_val < c_val ? a_val : c_val) : (b_val < c_val ? b_val : c_val);
+        }
+        std::swap(prev, curr);
+    }
+    return prev[m];
+}
+
+static void suggestCommand(const char *arg, term::UsagePrinter &err) {
+    static const char *suggestCmds[] = {"build", "run",  "check",   "execute",
+                                         "test",  "fmt",  "docs",    "repl",    "create",
+                                         "clean", "deps", "version", "help",    nullptr};
+    const char *best = nullptr;
+    size_t best_dist = static_cast<size_t>(-1);
+    for (size_t i = 0; suggestCmds[i]; ++i) {
+        size_t d = levenshteinDistance(arg, suggestCmds[i]);
+        if (d < best_dist) {
+            best_dist = d;
+            best = suggestCmds[i];
+        }
+    }
+    if (best && best_dist <= (std::max(std::strlen(arg), std::strlen(best)) + 1) / 2) {
+        std::fprintf(stderr, "[error] unknown command '%s'\n", arg);
+        std::fprintf(stderr, "  help: did you mean '%s'?\n", best);
+        std::exit(1);
+    }
+}
+
 static bool isSubcommand(const char *arg) {
     static const char *cmds[] = {"build", "run",  "check",   "execute",
                                   "test",  "fmt",  "docs",    "repl",    "create",
@@ -137,6 +181,10 @@ void Cli::parseArgs(int argc, char **argv) {
             default:
                 continue;
             }
+
+        // Unknown command check: if it looks like a typo for a known command
+        if (opts.command == Options::Command::None && argv[i][0] != '-')
+            suggestCommand(argv[i], err);
 
         if (compare(argv[i], "-h", "--help")) {
             opts.command = Options::Command::Help;

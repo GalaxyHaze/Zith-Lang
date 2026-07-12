@@ -19,6 +19,7 @@ using diagnostics::err::NoMatchingFn;
 using diagnostics::err::TypeMismatch;
 using diagnostics::err::UndefinedIdent;
 using diagnostics::err::WrongArity;
+using diagnostics::err::WrongArity;
 
 hir::HirBinaryOp mapBinaryOp(ast::BinaryOp op) {
     switch (op) {
@@ -77,10 +78,10 @@ types::TypeId defaultTypeForLit(ast::LitKind kind, types::TypeIntern &types) {
         return types.internFloat(types::FloatWidth::F64);
     case LitKind::Bool:
         return types::kBoolType;
-    case LitKind::String:
-        return types::kErrorType; // string type TBD
     case LitKind::Char:
         return types::kCharType;
+    case LitKind::String:
+        return types.internPtr(types::kCharType);
     case LitKind::Nil:
         return types::kVoidType;
     }
@@ -90,11 +91,13 @@ types::TypeId defaultTypeForLit(ast::LitKind kind, types::TypeIntern &types) {
 } // anonymous namespace
 
 SemaPipeline::SemaPipeline(symbols::SymbolTable &syms, types::TypeIntern &types,
-                           diagnostics::DiagnosticEngine &diags, ast::AstBuilder &builder,
-                           memory::Arena &hir_arena,
-                           const memory::DynArray<symbols::SymId> *resolved)
+                          diagnostics::DiagnosticEngine &diags, ast::AstBuilder &builder,
+                          memory::Arena &hir_arena,
+                          const memory::DynArray<symbols::SymId> *resolved,
+                          symbols::ImportManager *import_mgr)
     : ctx_(syms, types, diags, builder), unifier_(types, diags, hir_arena), hir_arena_(hir_arena),
-      hir_(hir_arena), resolved_(resolved), hir_types_(hir_arena) {}
+      hir_(hir_arena), resolved_(resolved), hir_types_(hir_arena),
+      import_mgr_(import_mgr), worklist_(hir_arena), fn_lower_state_(hir_arena) {}
 
 hir::HirExprId SemaPipeline::addHirExpr(hir::HirExpr expr, types::TypeId type) {
     auto id = hir_.addExpr(std::move(expr));
@@ -153,6 +156,30 @@ bool SemaPipeline::run(const ast::ProgramNode &program) {
             // Lower return type
             current_fn_->return_type = lower.lower(fn->return_type);
             current_fn_ret_type_     = current_fn_->return_type;
+
+            if (fn->is_extern && fn->body == ast::kInvalidExpr) {
+                static constexpr struct { std::string_view name; int expected; } knownFns[] = {
+                    {"puts", 1}, {"write", 3}, {"malloc", 1}, {"free", 1},
+                    {"exit", 1}, {"read", 3}, {"open", 2}, {"close", 1},
+                    {"printf", -1}, {"fprintf", -1}, {"sprintf", -1},
+                    {"fopen", 2}, {"fclose", 1}, {"fflush", 1},
+                    {"getchar", 0}, {"putchar", 1},
+                };
+                for (auto &kf : knownFns) {
+                    if (fn->name == kf.name) {
+                        if (kf.expected != -1 &&
+                            static_cast<int>(fn->params.size()) != kf.expected) {
+                            ctx_.diags().report(
+                                Severity::Error, WrongArity,
+                                "extern function '" + std::string(fn->name) + "' expects " +
+                                std::to_string(kf.expected) + " parameters but " +
+                                std::to_string(fn->params.size()) + " were provided",
+                                fn->span);
+                        }
+                        break;
+                    }
+                }
+            }
 
             if (fn->body != ast::kInvalidExpr) {
                 // Create entry basic block
@@ -223,6 +250,18 @@ hir::HirExprId SemaPipeline::visitLiteral(const ast::LitValue &n) {
     case ast::LitKind::Bool:
         lit.b = (n.raw == "true");
         break;
+    case ast::LitKind::Char: {
+        auto raw = n.raw;
+        lit.i = raw.size() >= 3 && raw[0] == '\'' ? raw[1] : 0;
+        break;
+    }
+    case ast::LitKind::String: {
+        auto raw = n.raw;
+        if (raw.size() >= 2 && raw.front() == '"' && raw.back() == '"')
+            raw = raw.substr(1, raw.size() - 2);
+        lit.str_val = ctx_.syms().interner().intern(raw);
+        break;
+    }
     default:
         break;
     }
@@ -346,7 +385,7 @@ hir::HirExprId SemaPipeline::visitCall(const ast::CallNode &n) {
                         continue;
                     if (i >= arg_types.size() || arg_types[i] == types::kErrorType)
                         continue;
-                    if (!unifier_.isAssignable(hfn.params[i], arg_types[i])) {
+                    if (!unifier_.isCoercible(hfn.params[i], arg_types[i])) {
                         match = false;
                         break;
                     }
@@ -528,7 +567,7 @@ void SemaPipeline::visitStmt(ast::StmtId id) {
             ret.value   = val;
             auto hir_id = pipeline.hir_.addExpr(hir::HirExpr{ret});
             if (pipeline.current_fn_ && !pipeline.current_fn_->blocks.empty())
-                pipeline.current_fn_->blocks[0].insts.push(hir_id);
+                pipeline.current_fn_->blocks[0].terminator = hir_id;
         }
 
         void operator()(ast::ExprId expr_id) {

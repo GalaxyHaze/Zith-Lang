@@ -64,7 +64,7 @@ if(ZITH_HAS_LLVM AND NOT ZITH_IS_WASM)
         message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
         message(STATUS "Using LLVMConfig.cmake in: ${LLVM_DIR}")
 
-        llvm_map_components_to_libnames(LLVM_LIBS core support irreader passes target)
+        llvm_map_components_to_libnames(LLVM_LIBS core support irreader passes target X86CodeGen X86AsmParser X86Desc X86Info MC MCDisassembler MCParser AsmPrinter SelectionDAG GlobalISel)
 
         target_link_libraries(zithcLib PUBLIC ${LLVM_LIBS})
         target_include_directories(zithcLib PUBLIC ${LLVM_INCLUDE_DIRS})
