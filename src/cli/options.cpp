@@ -6,6 +6,11 @@
 #include <algorithm>
 #include <cctype>
 #include <cstdio>
+#ifdef _WIN32
+#include <io.h>
+#elif !defined(ZITH_IS_WASM)
+#include <unistd.h>
+#endif
 #include <cstdlib>
 #include <cstring>
 #include <string_view>
@@ -102,7 +107,7 @@ static size_t levenshteinDistance(const char *a, const char *b) {
 static void suggestCommand(const char *arg, term::UsagePrinter &err) {
     static const char *suggestCmds[] = {"build", "run",  "check",   "execute",
                                          "test",  "fmt",  "docs",    "repl",    "create",
-                                         "clean", "deps", "version", "help",    nullptr};
+                                         "clean", "deps", "help",    nullptr};
     const char *best = nullptr;
     size_t best_dist = static_cast<size_t>(-1);
     for (size_t i = 0; suggestCmds[i]; ++i) {
@@ -113,8 +118,11 @@ static void suggestCommand(const char *arg, term::UsagePrinter &err) {
         }
     }
     if (best && best_dist <= (std::max(std::strlen(arg), std::strlen(best)) + 1) / 2) {
-        std::fprintf(stderr, "[error] unknown command '%s'\n", arg);
-        std::fprintf(stderr, "  help: did you mean '%s'?\n", best);
+        bool color = isatty(fileno(stderr));
+        std::fprintf(stderr, "%s[error]%s unknown command '%s'\n",
+                     color ? "\033[31m" : "", color ? "\033[0m" : "", arg);
+        std::fprintf(stderr, "%s  help: did you mean '%s'?%s\n",
+                     color ? "\033[31m" : "", best, color ? "\033[0m" : "");
         std::exit(1);
     }
 }
@@ -122,7 +130,7 @@ static void suggestCommand(const char *arg, term::UsagePrinter &err) {
 static bool isSubcommand(const char *arg) {
     static const char *cmds[] = {"build", "run",  "check",   "execute",
                                   "test",  "fmt",  "docs",    "repl",    "create",
-                                  "clean", "deps", "version", "help",    nullptr};
+                                  "clean", "deps", "help",    nullptr};
     for (auto cmd : cmds) {
         if (cmd && compare(cmd, arg))
             return true;
@@ -154,8 +162,6 @@ static Command subcommandToEnum(const char *arg) {
         return Command::Clean;
     if (compare(arg, "deps"))
         return Command::Deps;
-    if (compare(arg, "version"))
-        return Command::Version;
     if (compare(arg, "help"))
         return Command::Help;
     return Command::None;
