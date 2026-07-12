@@ -52,7 +52,7 @@ class CompilationSession {
     parser::ScanResult mScanResult{mAstArena};
 
     std::string mOutputBuffer;
-    bool mBufferedOutput = false;
+    bool mBufferedOutput   = false;
     bool mAlwaysEmitObject = false;
     std::string mContentOverride;
 
@@ -69,9 +69,9 @@ class CompilationSession {
 public:
     CompilationSession(const Options &opts, std::string filePath);
 
-    CompilationSession(CompilationSession &&) = default;
-    CompilationSession &operator=(CompilationSession &&) = delete;
-    CompilationSession(const CompilationSession &) = delete;
+    CompilationSession(CompilationSession &&)                 = default;
+    CompilationSession &operator=(CompilationSession &&)      = delete;
+    CompilationSession(const CompilationSession &)            = delete;
     CompilationSession &operator=(const CompilationSession &) = delete;
 
     bool run();
@@ -112,7 +112,9 @@ public:
     std::string flushOutput();
     void emitDiagnostics();
     bool linkAndExec();
-    int childExitCode() const { return mChildExitCode; }
+    int childExitCode() const {
+        return mChildExitCode;
+    }
 
     const lexer::TokenStream &tokens() const {
         return mTokens;

@@ -42,6 +42,8 @@ public:
     const HirExpr &getExpr(HirExprId id) const;
     const HirFunction &getFn(size_t idx) const;
     size_t getFnCount() const;
+
+    void dump(FILE *out, const memory::StringInterner &interner) const;
 };
 
 } // namespace zith::hir

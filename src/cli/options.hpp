@@ -8,7 +8,7 @@
 #include "session/pipeline-plan.hpp"
 
 namespace zith::cli::commands {
-    int help(FILE *dest);
+int help(FILE *dest);
 }
 #include <bitset>
 #include <cstdint>
@@ -24,27 +24,18 @@ struct Options {
     memory::DynArray<std::string> includeDirs;
     memory::DynArray<std::string> assetDirs;
 
-    enum class Mode : uint8_t {
-        Custom,
-        Debug,
-        Develop,
-        Release,
-        Fast,
-        Small
-    };
+    enum class Mode : uint8_t { Custom, Debug, Develop, Release, Fast, Small };
 
-    enum class monoformLevel : uint8_t {
-        No,
-        Auto,
-        High,
-        Max
-    };
+    enum class monoformLevel : uint8_t { No, Auto, High, Max };
     enum class Color : uint8_t { Off, Auto, On };
     enum class EmitTarget : uint8_t { None, Ast, Hir, Ir, Asm, Obj, Bin };
 
     // A target triple belongs to the compilation options, not to the CLI
     // string interner. Compilation sessions have their own interner.
     std::string targetTriple;
+
+    // Sysroot for cross-compilation (passed to the linker as --sysroot)
+    std::string sysroot;
 
     // Bit-packed flags (std::bitset<24>):
     //  0-1:  optLevel      (2 bits, values 0-3)
@@ -80,68 +71,136 @@ struct Options {
                 b.set(pos + i, (val >> i) & 1);
         }
 
-        uint8_t optLevel() const       { return extractBits(bits, 0, 2); }
-        void optLevel(uint8_t v)       { insertBits(bits, 0, 2, v); }
+        uint8_t optLevel() const {
+            return extractBits(bits, 0, 2);
+        }
+        void optLevel(uint8_t v) {
+            insertBits(bits, 0, 2, v);
+        }
 
-        uint8_t debugLevel() const     { return extractBits(bits, 2, 2); }
-        void debugLevel(uint8_t v)     { insertBits(bits, 2, 2, v); }
+        uint8_t debugLevel() const {
+            return extractBits(bits, 2, 2);
+        }
+        void debugLevel(uint8_t v) {
+            insertBits(bits, 2, 2, v);
+        }
 
-        Color color() const            { return static_cast<Color>(extractBits(bits, 4, 2)); }
-        void color(Color v)            { insertBits(bits, 4, 2, static_cast<uint8_t>(v)); }
+        Color color() const {
+            return static_cast<Color>(extractBits(bits, 4, 2));
+        }
+        void color(Color v) {
+            insertBits(bits, 4, 2, static_cast<uint8_t>(v));
+        }
 
-        bool strict() const            { return bits.test(6); }
-        void strict(bool v)            { bits.set(6, v); }
+        bool strict() const {
+            return bits.test(6);
+        }
+        void strict(bool v) {
+            bits.set(6, v);
+        }
 
-        bool lto() const               { return bits.test(7); }
-        void lto(bool v)               { bits.set(7, v); }
+        bool lto() const {
+            return bits.test(7);
+        }
+        void lto(bool v) {
+            bits.set(7, v);
+        }
 
-        bool stripDebug() const        { return bits.test(8); }
-        void stripDebug(bool v)        { bits.set(8, v); }
+        bool stripDebug() const {
+            return bits.test(8);
+        }
+        void stripDebug(bool v) {
+            bits.set(8, v);
+        }
 
-        Mode mode() const              { return static_cast<Mode>(extractBits(bits, 9, 3)); }
-        void mode(Mode v)              { insertBits(bits, 9, 3, static_cast<uint8_t>(v)); }
+        Mode mode() const {
+            return static_cast<Mode>(extractBits(bits, 9, 3));
+        }
+        void mode(Mode v) {
+            insertBits(bits, 9, 3, static_cast<uint8_t>(v));
+        }
 
-        bool interpreted() const       { return bits.test(12); }
-        void interpreted(bool v)       { bits.set(12, v); }
+        bool interpreted() const {
+            return bits.test(12);
+        }
+        void interpreted(bool v) {
+            bits.set(12, v);
+        }
 
-        bool verbose() const           { return bits.test(13); }
-        void verbose(bool v)           { bits.set(13, v); }
+        bool verbose() const {
+            return bits.test(13);
+        }
+        void verbose(bool v) {
+            bits.set(13, v);
+        }
 
-        bool fmtCheck() const          { return bits.test(14); }
-        void fmtCheck(bool v)          { bits.set(14, v); }
+        bool fmtCheck() const {
+            return bits.test(14);
+        }
+        void fmtCheck(bool v) {
+            bits.set(14, v);
+        }
 
-        bool fmtInPlace() const        { return bits.test(15); }
-        void fmtInPlace(bool v)        { bits.set(15, v); }
+        bool fmtInPlace() const {
+            return bits.test(15);
+        }
+        void fmtInPlace(bool v) {
+            bits.set(15, v);
+        }
 
-        bool emitTokens() const        { return bits.test(16); }
-        void emitTokens(bool v)        { bits.set(16, v); }
+        bool emitTokens() const {
+            return bits.test(16);
+        }
+        void emitTokens(bool v) {
+            bits.set(16, v);
+        }
 
-        bool emitAst() const           { return bits.test(17); }
-        void emitAst(bool v)           { bits.set(17, v); }
+        bool emitAst() const {
+            return bits.test(17);
+        }
+        void emitAst(bool v) {
+            bits.set(17, v);
+        }
 
-        bool emitHir() const           { return bits.test(18); }
-        void emitHir(bool v)           { bits.set(18, v); }
+        bool emitHir() const {
+            return bits.test(18);
+        }
+        void emitHir(bool v) {
+            bits.set(18, v);
+        }
 
-        bool emitIr() const            { return bits.test(19); }
-        void emitIr(bool v)            { bits.set(19, v); }
+        bool emitIr() const {
+            return bits.test(19);
+        }
+        void emitIr(bool v) {
+            bits.set(19, v);
+        }
 
-        bool emitAsm() const           { return bits.test(20); }
-        void emitAsm(bool v)           { bits.set(20, v); }
+        bool emitAsm() const {
+            return bits.test(20);
+        }
+        void emitAsm(bool v) {
+            bits.set(20, v);
+        }
 
-        bool printTokens() const       { return bits.test(21); }
-        void printTokens(bool v)       { bits.set(21, v); }
+        bool printTokens() const {
+            return bits.test(21);
+        }
+        void printTokens(bool v) {
+            bits.set(21, v);
+        }
 
     } flags;
 
     // Tracks which mode-dependent fields were explicitly set by CLI
     // so loadFlags() doesn't overwrite them.
-    uint8_t cliFields = 0;
+    uint8_t cliFields                       = 0;
     static constexpr uint8_t kCliOptLevel   = 1 << 0;
     static constexpr uint8_t kCliDebugLevel = 1 << 1;
     static constexpr uint8_t kCliStripDebug = 1 << 2;
     static constexpr uint8_t kCliLto        = 1 << 3;
 
-    EmitTarget emitTarget = EmitTarget::None;
+    EmitTarget emitTarget      = EmitTarget::None;
     session::Stage targetStage = session::Stage::Cached;
 
     enum class Command {
@@ -164,7 +223,8 @@ struct Options {
     std::string subcommandStr; // string copy for command functions
 
     explicit Options(memory::Arena &allocator)
-        : includeDirs(allocator), inputFiles(allocator), assetDirs(allocator), flags(), targetTriple() {}
+        : includeDirs(allocator), inputFiles(allocator), assetDirs(allocator), flags(),
+          targetTriple(), sysroot() {}
 
     memory::StringInterner *stringPool = nullptr;
 
@@ -173,14 +233,9 @@ struct Options {
 
 struct Cli {
 
-    Cli() :
-    generalAllocator(),
-    opts(generalAllocator),
-    config(generalAllocator),
-    stringPool(generalAllocator),
-    out(stdout, false),
-    err(stderr, false)
-    {
+    Cli()
+        : generalAllocator(), opts(generalAllocator), config(generalAllocator),
+          stringPool(generalAllocator), out(stdout, false), err(stderr, false) {
         opts.stringPool = &stringPool;
         term::enableVirtual();
     }
@@ -207,7 +262,7 @@ struct Cli {
     term::UsagePrinter out;
     term::UsagePrinter err;
     std::pair<int, char **> args;
-    int current = 1;
+    int current      = 1;
     Session *session = nullptr;
 };
 

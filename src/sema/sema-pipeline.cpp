@@ -19,7 +19,6 @@ using diagnostics::err::NoMatchingFn;
 using diagnostics::err::TypeMismatch;
 using diagnostics::err::UndefinedIdent;
 using diagnostics::err::WrongArity;
-using diagnostics::err::WrongArity;
 
 hir::HirBinaryOp mapBinaryOp(ast::BinaryOp op) {
     switch (op) {
@@ -97,7 +96,21 @@ SemaPipeline::SemaPipeline(symbols::SymbolTable &syms, types::TypeIntern &types,
                            symbols::ImportManager *import_mgr)
     : ctx_(syms, types, diags, builder), unifier_(types, diags, hir_arena), hir_arena_(hir_arena),
       hir_(hir_arena), resolved_(resolved), import_mgr_(import_mgr), worklist_(hir_arena),
-      fn_syms_(hir_arena), active_builder_(&builder), hir_types_(hir_arena) {}
+      fn_syms_(hir_arena), active_builder_(&builder), hir_types_(hir_arena),
+      allowed_files_(hir_arena) {}
+
+bool SemaPipeline::isSymAccessible(symbols::SymId sym_id) const {
+    if (allowed_files_.empty())
+        return true;
+    auto origin = import_mgr_ ? import_mgr_->originOf(sym_id)
+                              : memory::Optional<symbols::ImportManager::SymOrigin>{};
+    if (!origin)
+        return true;
+    for (auto af : allowed_files_)
+        if (af == origin->file_idx)
+            return true;
+    return false;
+}
 
 ast::AstBuilder &SemaPipeline::builder() const {
     return *active_builder_;
@@ -148,7 +161,7 @@ void SemaPipeline::ensureStub(symbols::SymId fn_sym) {
     if (!fn)
         return;
 
-    auto &hfn = hir_.addFn(data.name);
+    auto &hfn   = hir_.addFn(data.name);
     hfn.decl_id = data.decl_id;
     types::TypeLower lower(*source_bld, ctx_.types(), ctx_.diags(), ctx_.syms());
     for (const auto &param : fn->params)
@@ -165,7 +178,7 @@ void SemaPipeline::ensureBodyLowered(symbols::SymId fn_sym) {
     auto &hfn = hir_.getFn(idx);
     if (!hfn.blocks.empty())
         return;
-    auto *source_bld = builderForSym(fn_sym);
+    auto *source_bld  = builderForSym(fn_sym);
     auto *source_syms = symsForSym(fn_sym);
     if (!source_bld || !source_syms)
         return;
@@ -176,29 +189,42 @@ void SemaPipeline::ensureBodyLowered(symbols::SymId fn_sym) {
             local_sym = origin->local_sym;
     }
     const auto &data = source_syms->get(local_sym);
-    auto *fn = std::get_if<ast::FnDeclNode>(&source_bld->getDecl(data.decl_id));
+    auto *fn         = std::get_if<ast::FnDeclNode>(&source_bld->getDecl(data.decl_id));
     if (!fn || fn->is_extern || fn->body == ast::kInvalidExpr)
         return;
 
+    auto previous_allowed = std::move(allowed_files_);
+    allowed_files_.clear();
+    if (import_mgr_) {
+        auto origin = import_mgr_->originOf(fn_sym);
+        if (origin) {
+            allowed_files_.push(origin->file_idx);
+            auto &file = import_mgr_->get(origin->file_idx);
+            for (auto dep : file.dep_files)
+                allowed_files_.push(dep);
+        }
+    }
+
     auto *previous_builder = active_builder_;
-    auto *previous_fn = current_fn_;
-    auto previous_ret = current_fn_ret_type_;
-    active_builder_ = source_bld;
-    current_fn_ = &hfn;
-    current_fn_ret_type_ = hfn.return_type;
-    auto scope = syms().enterScope();
+    auto *previous_fn      = current_fn_;
+    auto previous_ret      = current_fn_ret_type_;
+    active_builder_        = source_bld;
+    current_fn_            = &hfn;
+    current_fn_ret_type_   = hfn.return_type;
+    auto scope             = syms().enterScope();
     syms().emplace(*source_syms, scope);
     for (const auto &param : fn->params)
         syms().declareInScope(scope, param.name);
     auto &entry = hfn.blocks.emplace(hir_arena_);
     entry.insts = memory::DynArray<hir::HirExprId>(hir_arena_);
-    auto body = visitExpr(fn->body);
+    auto body   = visitExpr(fn->body);
     if (body != hir::kInvalidHirExpr)
         entry.insts.push(body);
     syms().exitScope();
-    current_fn_ = previous_fn;
+    current_fn_          = previous_fn;
     current_fn_ret_type_ = previous_ret;
-    active_builder_ = previous_builder;
+    active_builder_      = previous_builder;
+    allowed_files_       = std::move(previous_allowed);
 }
 
 hir::HirExprId SemaPipeline::addHirExpr(hir::HirExpr expr, types::TypeId type) {
@@ -247,19 +273,27 @@ bool SemaPipeline::run(const ast::ProgramNode &program) {
         }
     }
 
-    // Second pass: visit each declaration body
-    for (auto decl_id : program.decls) {
-        auto &decl = ctx_.builder().getDecl(decl_id);
-        if (auto *fn = std::get_if<ast::FnDeclNode>(&decl)) {
-            for (symbols::SymId sym = 0; sym < ctx_.syms().symbolCount(); ++sym) {
-                const auto &data = ctx_.syms().get(sym);
-                if (data.kind == symbols::SymKind::Fn && data.decl_id == decl_id &&
-                    (!import_mgr_ || !import_mgr_->originOf(sym))) {
-                    ensureBodyLowered(sym);
-                    break;
+    // Populate allowed_files_ for the main file's own declarations.
+    {
+        memory::DynArray<size_t> saved = std::move(allowed_files_);
+        if (import_mgr_) {
+            for (auto dep : import_mgr_->rootDeps())
+                allowed_files_.push(dep);
+        }
+        for (auto decl_id : program.decls) {
+            auto &decl = ctx_.builder().getDecl(decl_id);
+            if (auto *fn = std::get_if<ast::FnDeclNode>(&decl)) {
+                for (symbols::SymId sym = 0; sym < ctx_.syms().symbolCount(); ++sym) {
+                    const auto &data = ctx_.syms().get(sym);
+                    if (data.kind == symbols::SymKind::Fn && data.decl_id == decl_id &&
+                        (!import_mgr_ || !import_mgr_->originOf(sym))) {
+                        ensureBodyLowered(sym);
+                        break;
+                    }
                 }
             }
         }
+        allowed_files_ = std::move(saved);
     }
 
     // Imported bodies are discovered lazily from calls made while lowering.
@@ -323,7 +357,7 @@ hir::HirExprId SemaPipeline::visitLiteral(const ast::LitValue &n) {
         break;
     case ast::LitKind::Char: {
         auto raw = n.raw;
-        lit.i = raw.size() >= 3 && raw[0] == '\'' ? raw[1] : 0;
+        lit.i    = raw.size() >= 3 && raw[0] == '\'' ? raw[1] : 0;
         break;
     }
     case ast::LitKind::String: {
@@ -349,6 +383,11 @@ hir::HirExprId SemaPipeline::visitIdent(const ast::IdentNode &n, ast::ExprId id)
         sym = (*resolved_)[id];
     if (sym == symbols::kInvalidSym)
         sym = ctx_.syms().lookup(n.name);
+    if (sym != symbols::kInvalidSym && !isSymAccessible(sym)) {
+        ctx_.diags().report(diagnostics::Severity::Error, diagnostics::err::UndefinedIdent,
+                            "undefined identifier '" + std::string(n.name) + "'", n.span);
+        sym = symbols::kInvalidSym;
+    }
     if (sym == symbols::kInvalidSym) {
         const bool main_builder = active_builder_ == &ctx_.builder();
         if (!main_builder || !resolved_ || id >= resolved_->size() ||
@@ -437,6 +476,8 @@ hir::HirExprId SemaPipeline::visitCall(const ast::CallNode &n) {
             auto &data = syms().get(sym_id);
             if (data.kind != symbols::SymKind::Fn)
                 continue;
+            if (!isSymAccessible(sym_id))
+                continue;
             fn_candidate_count++;
             if (data.decl_id == ast::kInvalidDecl)
                 continue;
@@ -486,16 +527,18 @@ hir::HirExprId SemaPipeline::visitCall(const ast::CallNode &n) {
 
         if (match_count == 0 && fn_candidate_count > 0) {
             if (n.args.size() > 0) {
-                ctx_.diags().report(
-                    Severity::Error, NoMatchingFn,
-                    "no matching function for call to '" + std::string(syms().interner().lookup(callee_name)) + "'", n.span);
+                ctx_.diags().report(Severity::Error, NoMatchingFn,
+                                    "no matching function for call to '" +
+                                        std::string(syms().interner().lookup(callee_name)) + "'",
+                                    n.span);
             } else {
                 ctx_.diags().report(Severity::Error, WrongArity,
                                     "wrong number of arguments in call", n.span);
             }
         } else if (match_count > 1) {
             ctx_.diags().report(Severity::Error, AmbiguousCall,
-                                "ambiguous call '" + std::string(syms().interner().lookup(callee_name)) +
+                                "ambiguous call '" +
+                                    std::string(syms().interner().lookup(callee_name)) +
                                     "' — multiple functions match",
                                 n.span);
             resolved_fn = symbols::kInvalidSym;
@@ -506,7 +549,7 @@ hir::HirExprId SemaPipeline::visitCall(const ast::CallNode &n) {
     // Fallback: check callee as function type (fn pointers, etc.)
     if (resolved_fn == symbols::kInvalidSym && callee_type != types::kErrorType) {
         auto &fn_type = ctx_.types().lookup(callee_type);
-        auto fn_ptr = std::get_if<types::TypeFn>(&fn_type);
+        auto fn_ptr   = std::get_if<types::TypeFn>(&fn_type);
         if (fn_ptr) {
             if (hir_args.size() != fn_ptr->param_count) {
                 ctx_.diags().report(Severity::Error, WrongArity,

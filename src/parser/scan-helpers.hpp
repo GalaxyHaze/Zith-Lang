@@ -175,8 +175,8 @@ inline void skipExpr(lexer::TokenStream &tok) {
 }
 
 // Try to consume optional fn-kind modifier and position at the `fn` keyword.
-// Modifiers: async, flow (both TokenKind::Fn + lexeme), raw (TokenKind::Raw), const (TokenKind::Variable + lexeme).
-// Returns true if at `fn` ready for caller to advance past it.
+// Modifiers: async, flow (both TokenKind::Fn + lexeme), raw (TokenKind::Raw), const
+// (TokenKind::Variable + lexeme). Returns true if at `fn` ready for caller to advance past it.
 // Returns false if no fn/pattern found (stream unchanged).
 inline bool consumeFnModifiers(lexer::TokenStream &tok) {
     auto lex = tok.lexeme();
@@ -230,12 +230,10 @@ inline bool reportIfDuplicate(symbols::SymbolTable &syms, diagnostics::Diagnosti
 
 // Scan a top-level global/const declaration.
 // Expects `tok` positioned AFTER the `global`/`const` keyword.
-inline ast::DeclId scanGlobalOrConst(
-    Parser &parser, symbols::SymbolTable &syms,
-    memory::DynArray<ast::DeclId> &program_decls,
-    bool is_const, memory::Span kw_span,
-    symbols::SymbolVisibility vis, int32_t mod_depth,
-    memory::Span doc_span) {
+inline ast::DeclId scanGlobalOrConst(Parser &parser, symbols::SymbolTable &syms,
+                                     memory::DynArray<ast::DeclId> &program_decls, bool is_const,
+                                     memory::Span kw_span, symbols::SymbolVisibility vis,
+                                     int32_t mod_depth, memory::Span doc_span) {
     auto &tok  = *parser.tok;
     auto &bld  = *parser.bld;
     auto &diag = *parser.diag;
@@ -258,8 +256,8 @@ inline ast::DeclId scanGlobalOrConst(
     if (!parser.consume('=')) {
         diag.report(diagnostics::Severity::Error, diagnostics::err::ExpectedExpr,
                     "expected '=' and initializer", name_span);
-        while (!tok.is_empty() && !tok.peek().is_eof() &&
-               tok.peek().punc != ';' && tok.peek().punc != '}')
+        while (!tok.is_empty() && !tok.peek().is_eof() && tok.peek().punc != ';' &&
+               tok.peek().punc != '}')
             tok.advance();
         if (tok.peek().punc == ';')
             tok.advance();
@@ -274,8 +272,8 @@ inline ast::DeclId scanGlobalOrConst(
 
     auto decl = bld.globalDecl(name, is_const, type_annot, init,
                                spanFromOffset(kw_span.start, kw_span.end));
-    auto sym  = syms.declare(name, vis, mod_depth, symbols::SymKind::Variable,
-                             decl, name_span, symbols::kInvalidSym, doc_span);
+    auto sym  = syms.declare(name, vis, mod_depth, symbols::SymKind::Variable, decl, name_span,
+                             symbols::kInvalidSym, doc_span);
     if (sym != symbols::kInvalidSym)
         syms.get(sym).decl_id = decl;
     program_decls.push(decl);
@@ -288,8 +286,8 @@ inline ast::DeclId scanGlobalOrConst(
 // `must_have_body` controls whether methods require a `{...}` body.
 template <typename MemberFn, typename MethodFn>
 inline void scanBody(lexer::TokenStream &tok, MemberFn &&on_item, MethodFn &&on_method,
-                     uint32_t &token_start, memory::Span &body_span,
-                     ast::AstBuilder &bld, ast::ExprId &body_node) {
+                     uint32_t &token_start, memory::Span &body_span, ast::AstBuilder &bld,
+                     ast::ExprId &body_node) {
     tok.advance(); // consume '{'
     uint32_t brace_depth = 1;
     while (!tok.is_empty() && brace_depth > 0) {

@@ -28,8 +28,8 @@ ScopeId SymbolTable::currentScope() const noexcept {
     return current_;
 }
 
-SymId SymbolTable::declare(memory::InternedId name, SymbolVisibility vis, int32_t depth, SymKind kind,
-                           ast::DeclId decl_id, memory::Span span, SymId target,
+SymId SymbolTable::declare(memory::InternedId name, SymbolVisibility vis, int32_t depth,
+                           SymKind kind, ast::DeclId decl_id, memory::Span span, SymId target,
                            memory::Span doc_span) {
     SymId id = static_cast<SymId>(symbols_.size());
     symbols_.push(
@@ -64,9 +64,10 @@ SymId SymbolTable::declareInScope(ScopeId scope, std::string_view name, SymbolVi
 void SymbolTable::emplace(const SymbolTable &other) {
     for (size_t i = 0; i < other.symbols_.size(); i++) {
         auto &data = other.symbols_[i];
-        if (data.scope == kRootScope) continue;
-        declare(data.name, data.visibility, 0, data.kind,
-                data.decl_id, data.span, data.target, data.doc_span);
+        if (data.scope == kRootScope)
+            continue;
+        declare(data.name, data.visibility, 0, data.kind, data.decl_id, data.span, data.target,
+                data.doc_span);
     }
 }
 
@@ -106,7 +107,8 @@ memory::DynArray<SymId> SymbolTable::lookupAll(std::string_view name, memory::Ar
     return lookupAll(interner_->intern(name), arena);
 }
 
-memory::DynArray<SymId> SymbolTable::lookupAll(memory::InternedId name, memory::Arena &arena) const {
+memory::DynArray<SymId> SymbolTable::lookupAll(memory::InternedId name,
+                                               memory::Arena &arena) const {
     memory::DynArray<SymId> result{arena};
     ScopeId scope = current_;
     while (scope != kInvalidScope) {
@@ -178,10 +180,10 @@ void SymbolTable::dump(FILE *out, ast::AstBuilder *bld) const {
         else
             std::fprintf(out, "  Scope %u (parent %u)\n", s, scope.parent);
         for (auto sid : scope.syms) {
-            auto &sym = symbols_[sid];
-            auto vis  = sym.visibility == SymbolVisibility::Public   ? "pub"
-                        : sym.visibility == SymbolVisibility::Module ? "mod"
-                                                                     : "priv";
+            auto &sym     = symbols_[sid];
+            auto vis      = sym.visibility == SymbolVisibility::Public   ? "pub"
+                            : sym.visibility == SymbolVisibility::Module ? "mod"
+                                                                         : "priv";
             auto sym_name = interner_->lookup(sym.name);
             std::fprintf(out, "    [%u] %s %s %.*s", sid, vis, symKindName(sym.kind),
                          (int)sym_name.size(), sym_name.data());
@@ -199,7 +201,8 @@ void SymbolTable::dump(FILE *out, ast::AstBuilder *bld) const {
             case SymKind::Union: {
                 size_t methods = 0;
                 for (auto mid : sym.members)
-                    if (symbols_[mid].kind == SymKind::Fn) methods++;
+                    if (symbols_[mid].kind == SymKind::Fn)
+                        methods++;
                 size_t fields = 0;
                 if (bld && sym.decl_id != ast::kInvalidDecl) {
                     auto &decl = bld->getDecl(sym.decl_id);

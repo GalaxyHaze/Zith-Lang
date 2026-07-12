@@ -13,11 +13,11 @@ namespace zith::symbols {
 namespace fs = std::filesystem;
 
 ImportManager::ImportManager(memory::Arena &arena, memory::StringInterner &interner,
-                             memory::SourceMap &source_map,
-                             diagnostics::DiagnosticEngine &diags,
+                             memory::SourceMap &source_map, diagnostics::DiagnosticEngine &diags,
                              std::vector<std::string> visible_roots)
     : arena_(arena), interner_(interner), source_map_(source_map), diags_(diags),
-      visible_roots_(std::move(visible_roots)), files_(arena), sym_origins_(arena) {}
+      visible_roots_(std::move(visible_roots)), files_(arena), sym_origins_(arena),
+      root_deps_(arena) {}
 
 bool ImportManager::isLoaded(std::string_view path) const {
     auto key = std::string(path);
@@ -39,7 +39,7 @@ static std::string joinWith(const memory::DynArray<std::string_view> &path, char
 }
 
 static std::string computeNamespace(const memory::DynArray<std::string_view> &path,
-                                     std::string_view alias) {
+                                    std::string_view alias) {
     if (!alias.empty())
         return std::string(alias);
     std::vector<std::string_view> parts;
@@ -141,16 +141,14 @@ auto ImportManager::find_file(const std::string &import_key, std::string_view so
 
 auto ImportManager::resolve_file(const std::string &full_path, const std::string &import_key,
                                  const std::string &ns, bool is_from, bool is_export,
-                                 const std::string &alias,
-                                 int32_t import_depth,
-                                 const memory::DynArray<ast::ImportSymbol> &symbols,
-                                 bool is_asset)
+                                 const std::string &alias, int32_t import_depth,
+                                 const memory::DynArray<ast::ImportSymbol> &symbols, bool is_asset)
     -> memory::Result<size_t> {
     if (auto *existing = index_by_path_.get(import_key))
         return *existing;
 
     // ── C/C++ header: don't tokenize, just register ───────────────
-    auto ext = fs::path(full_path).extension();
+    auto ext         = fs::path(full_path).extension();
     bool is_c_header = (ext == ".h" || ext == ".hpp");
 
     if (is_c_header || is_asset) {
@@ -174,6 +172,7 @@ auto ImportManager::resolve_file(const std::string &full_path, const std::string
             std::move(empty_pub),
             std::move(empty_mod),
             std::move(empty_re),
+            memory::DynArray<size_t>(arena_),
             memory::DynArray<ast::ImportSymbol>(arena_),
             is_asset,
             is_c_header,
@@ -210,23 +209,36 @@ auto ImportManager::resolve_file(const std::string &full_path, const std::string
             module_syms.push(id);
     }
 
-    // ── Handle re-exports ──────────────────────────────────────────
+    // ── Handle re-exports and from-imports ─────────────────────────
     memory::DynArray<size_t> re_exported_files{arena_};
+    memory::DynArray<size_t> dep_files{arena_};
     for (auto decl_id : parser.program.decls) {
         auto &decl = builder->getDecl(decl_id);
         if (auto *import = std::get_if<ast::ImportNode>(&decl)) {
             if (import->is_export) {
-                auto re_res =
-                    resolve(import->path, import->symbols,
-                            /*is_from=*/true,
-                            /*is_export=*/true, import->is_asset,
-                            import->alias, import->import_depth, full_path);
+                auto re_res = resolve(import->path, import->symbols,
+                                      /*is_from=*/true,
+                                      /*is_export=*/true, import->is_asset, import->alias,
+                                      import->import_depth, full_path);
                 if (re_res) {
                     re_exported_files.push(re_res.value());
                 } else {
                     auto key = joinWith(import->path, '/');
                     diags_.report(diagnostics::Severity::Warning, diagnostics::err::ImportError,
                                   "re-export of '" + key + "' failed: " + re_res.error().msg, {});
+                }
+            } else if (import->is_from) {
+                auto dep_res = resolve(import->path, import->symbols,
+                                       /*is_from=*/true,
+                                       /*is_export=*/false, import->is_asset, import->alias,
+                                       import->import_depth, full_path);
+                if (dep_res) {
+                    dep_files.push(dep_res.value());
+                } else {
+                    auto key = joinWith(import->path, '/');
+                    diags_.report(diagnostics::Severity::Warning, diagnostics::err::ImportError,
+                                  "from-import of '" + key + "' failed: " + dep_res.error().msg,
+                                  {});
                 }
             }
         }
@@ -251,8 +263,11 @@ auto ImportManager::resolve_file(const std::string &full_path, const std::string
         std::move(public_syms),
         std::move(module_syms),
         std::move(re_exported_files),
+        std::move(dep_files),
         std::move(syms_copy),
-        false, false, {},
+        false,
+        false,
+        {},
     });
     index_by_path_.insert(import_key, idx);
     return idx;
@@ -269,7 +284,7 @@ void ImportManager::collect_dir_files(const std::string &dir_path, const std::st
         return;
 
     for (auto &entry : fs::directory_iterator(dir)) {
-        auto &p = entry.path();
+        auto &p  = entry.path();
         auto ext = p.extension();
         if (entry.is_regular_file() && (ext == ".zith" || ext == ".h" || ext == ".hpp")) {
             auto rel = fs::relative(p, fs::path(base_dir)).generic_string();
@@ -331,9 +346,8 @@ auto ImportManager::resolve_directory(const std::string &import_key, const std::
             }
         }
 
-        auto res =
-            resolve_file(entry.full_path, sub_key, ns, is_from, is_export, alias, import_depth,
-                         memory::DynArray<ast::ImportSymbol>(arena_), false);
+        auto res = resolve_file(entry.full_path, sub_key, ns, is_from, is_export, alias,
+                                import_depth, memory::DynArray<ast::ImportSymbol>(arena_), false);
         if (!res)
             return std::move(res.error());
 
@@ -345,14 +359,12 @@ auto ImportManager::resolve_directory(const std::string &import_key, const std::
     return first_idx;
 }
 
-auto ImportManager::resolve_asset_file(const std::string &full_path,
-                                       const std::string &import_key,
-                                       const std::string &alias)
-    -> memory::Result<size_t> {
+auto ImportManager::resolve_asset_file(const std::string &full_path, const std::string &import_key,
+                                       const std::string &alias) -> memory::Result<size_t> {
     if (auto *existing = index_by_path_.get(import_key))
         return *existing;
 
-    auto syms = SymbolTable(arena_, &interner_);
+    auto syms   = SymbolTable(arena_, &interner_);
     auto sym_id = syms.declare(alias, SymbolVisibility::Public, 0, SymKind::Asset,
                                ast::kInvalidDecl, {}, kInvalidSym, {});
 
@@ -365,9 +377,9 @@ auto ImportManager::resolve_asset_file(const std::string &full_path,
     size_t idx = files_.size();
     files_.push(LoadedFile{
         import_key,
-        alias,  // ns = alias
-        true,   // is_from (so alias is injected unqualified)
-        false,  // is_export
+        alias, // ns = alias
+        true,  // is_from (so alias is injected unqualified)
+        false, // is_export
         alias,
         1,
         memory::FileId(0),
@@ -377,6 +389,7 @@ auto ImportManager::resolve_asset_file(const std::string &full_path,
         std::move(pub),
         std::move(mod),
         std::move(re),
+        memory::DynArray<size_t>(arena_),
         std::move(empty_syms),
         true,  // is_asset
         false, // is_c_header
@@ -387,11 +400,10 @@ auto ImportManager::resolve_asset_file(const std::string &full_path,
 }
 
 auto ImportManager::resolve(const memory::DynArray<std::string_view> &path,
-                            const memory::DynArray<ast::ImportSymbol> &symbols,
-                            bool is_from,
-                            bool is_export, bool is_asset,
-                            std::string_view alias, int32_t import_depth,
-                            std::string_view source_file) -> memory::Result<size_t> {
+                            const memory::DynArray<ast::ImportSymbol> &symbols, bool is_from,
+                            bool is_export, bool is_asset, std::string_view alias,
+                            int32_t import_depth, std::string_view source_file)
+    -> memory::Result<size_t> {
 
     auto import_key = joinWith(path, '/');
 
@@ -450,8 +462,8 @@ struct DeclNames {
     std::string_view unqualified;
 };
 
-DeclNames makeDeclNames(memory::Arena &arena, std::string_view raw_name,
-                        std::string_view ls, std::string_view prefix, bool is_from) {
+DeclNames makeDeclNames(memory::Arena &arena, std::string_view raw_name, std::string_view ls,
+                        std::string_view prefix, bool is_from) {
     if (is_from) {
         auto raw = std::string(raw_name);
         return {
@@ -489,7 +501,8 @@ void ImportManager::mergeInto(SymbolTable &main_syms, int32_t from_depth) {
             auto ls_str = std::string(ls);
             if (!from_namespaces.insert(ls_str).second) {
                 diags_.report(diagnostics::Severity::Error, diagnostics::err::DuplicateDecl,
-                              "from-namespace '" + ls_str + "' conflicts with another from-import", {});
+                              "from-namespace '" + ls_str + "' conflicts with another from-import",
+                              {});
                 continue;
             }
         }
@@ -506,8 +519,8 @@ void ImportManager::mergeInto(SymbolTable &main_syms, int32_t from_depth) {
             auto &data = file.symbols.get(sid);
             if (is_module && data.mod_depth >= 0 && call_depth != data.mod_depth)
                 return;
-            auto vis             = is_module ? SymbolVisibility::Module : SymbolVisibility::Public;
-            auto depth           = is_module ? data.mod_depth : 0;
+            auto vis   = is_module ? SymbolVisibility::Module : SymbolVisibility::Public;
+            auto depth = is_module ? data.mod_depth : 0;
 
             auto raw_name = interner_.lookup(data.name);
 
@@ -529,9 +542,8 @@ void ImportManager::mergeInto(SymbolTable &main_syms, int32_t from_depth) {
                                   "duplicate symbol '" + std::string(declare_name) + "'", {});
                     return;
                 }
-                auto main_id = main_syms.declare(declare_name, vis, depth, data.kind,
-                                                  data.decl_id, data.span,
-                                                  data.target, data.doc_span);
+                auto main_id = main_syms.declare(declare_name, vis, depth, data.kind, data.decl_id,
+                                                 data.span, data.target, data.doc_span);
                 record_origin(main_id, fi, sid);
                 return;
             }
@@ -542,13 +554,14 @@ void ImportManager::mergeInto(SymbolTable &main_syms, int32_t from_depth) {
                 if (main_syms.lookupInScope(name, kRootScope) != kInvalidSym) {
                     std::string msg = "duplicate symbol '" + std::string(name) + "'";
                     if (file.is_from)
-                        msg += " — use '" + std::string(ls) + "." + std::string(name) + "' to disambiguate";
+                        msg += " — use '" + std::string(ls) + "." + std::string(name) +
+                               "' to disambiguate";
                     diags_.report(diagnostics::Severity::Error, diagnostics::err::DuplicateDecl,
                                   std::move(msg), {});
                     return;
                 }
                 auto main_id = main_syms.declare(name, v, d, data.kind, data.decl_id, data.span,
-                                                  data.target, data.doc_span);
+                                                 data.target, data.doc_span);
                 record_origin(main_id, fi, local_sid);
             };
 
@@ -610,8 +623,8 @@ void ImportManager::mergeInto(SymbolTable &main_syms, int32_t from_depth) {
                                   re_idx, sid);
                 if (!names.unqualified.empty())
                     declare_re_export(names.unqualified, SymbolVisibility::Module, data.mod_depth,
-                                      data.kind, data.decl_id, data.span, data.target, data.doc_span,
-                                      re_idx, sid);
+                                      data.kind, data.decl_id, data.span, data.target,
+                                      data.doc_span, re_idx, sid);
             }
             for (auto r : ref.re_exported_files)
                 self(self, r);

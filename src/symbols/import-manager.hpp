@@ -32,9 +32,10 @@ public:
         memory::DynArray<SymId> public_syms;
         memory::DynArray<SymId> module_syms;
         memory::DynArray<size_t> re_exported_files;
+        memory::DynArray<size_t> dep_files;
         memory::DynArray<ast::ImportSymbol> import_symbols;
-        bool is_asset      = false;
-        bool is_c_header   = false;
+        bool is_asset    = false;
+        bool is_c_header = false;
         std::string header_path;
     };
 
@@ -48,19 +49,26 @@ public:
                   std::vector<std::string> visible_roots = {});
 
     auto resolve(const memory::DynArray<std::string_view> &path,
-                 const memory::DynArray<ast::ImportSymbol> &symbols,
-                 bool is_from = false,
-                 bool is_export = false, bool is_asset = false,
-                 std::string_view alias = {}, int32_t import_depth = 1,
-                 std::string_view source_file = {}) -> memory::Result<size_t>;
+                 const memory::DynArray<ast::ImportSymbol> &symbols, bool is_from = false,
+                 bool is_export = false, bool is_asset = false, std::string_view alias = {},
+                 int32_t import_depth = 1, std::string_view source_file = {})
+        -> memory::Result<size_t>;
 
     void mergeInto(SymbolTable &main_syms, int32_t from_depth = 0);
 
     const LoadedFile &get(size_t idx) const;
-    size_t fileCount() const noexcept { return files_.size(); }
+    size_t fileCount() const noexcept {
+        return files_.size();
+    }
 
     bool isLoaded(std::string_view path) const;
     memory::Optional<SymOrigin> originOf(SymId main_sym) const;
+    void setRootDeps(memory::DynArray<size_t> deps) {
+        root_deps_ = std::move(deps);
+    }
+    const memory::DynArray<size_t> &rootDeps() const {
+        return root_deps_;
+    }
     void setVisibleRoots(std::vector<std::string> roots);
     void setAssetRoots(std::vector<std::string> roots);
 
@@ -89,15 +97,14 @@ private:
     memory::FlatMap<std::string, char> resolving_;
     memory::DynArray<LoadedFile> files_;
     memory::DynArray<SymOrigin> sym_origins_;
+    memory::DynArray<size_t> root_deps_;
 
     auto find_file(const std::string &import_key, std::string_view source_file) const
         -> memory::Optional<std::string>;
 
     auto resolve_file(const std::string &full_path, const std::string &import_key,
-                      const std::string &ns, bool is_from, bool is_export,
-                      const std::string &alias,
-                      int32_t import_depth,
-                      const memory::DynArray<ast::ImportSymbol> &symbols,
+                      const std::string &ns, bool is_from, bool is_export, const std::string &alias,
+                      int32_t import_depth, const memory::DynArray<ast::ImportSymbol> &symbols,
                       bool is_asset = false) -> memory::Result<size_t>;
 
     auto resolve_directory(const std::string &import_key, const std::string &dir_path,
@@ -106,8 +113,7 @@ private:
         -> memory::Result<size_t>;
 
     auto resolve_asset_file(const std::string &full_path, const std::string &import_key,
-                            const std::string &alias)
-        -> memory::Result<size_t>;
+                            const std::string &alias) -> memory::Result<size_t>;
 
     static void collect_dir_files(const std::string &dir_path, const std::string &base_dir,
                                   int max_depth, int current_depth, std::vector<DirEntry> &out);

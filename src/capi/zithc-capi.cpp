@@ -24,7 +24,8 @@ struct zithc_session {
     std::string last_error;
     std::string hover_result_;
 
-    zithc_session(const char *file_path) : arena(), pool(arena), opts(arena), session(opts, file_path) {
+    zithc_session(const char *file_path)
+        : arena(), pool(arena), opts(arena), session(opts, file_path) {
         session.setBuffered(true);
     }
     zithc_session(const char *uri, const char *content, size_t length)

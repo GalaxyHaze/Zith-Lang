@@ -1,4 +1,3 @@
-#include "test-common.hpp"
 #include "ast/ast-builder.hpp"
 #include "ast/type-expr.hpp"
 #include "diagnostics/diagnostic-engine.hpp"
@@ -8,6 +7,7 @@
 #include "memory/string-interner.hpp"
 #include "parser/parser.hpp"
 #include "symbols/symbol-table.hpp"
+#include "test-common.hpp"
 
 #include <cstdio>
 #include <string_view>
@@ -34,21 +34,22 @@ struct StructTest {
         auto addResult = sourceMap.addFile("test.zith", input);
         if (!addResult)
             return {nullptr, nullptr, false, 0};
-        auto fileId = addResult.value();
+        auto fileId      = addResult.value();
         auto tokenResult = lexer::tokenize(sourceMap, arena, fileId, diags);
         if (!tokenResult) {
             size_t errs = 0;
             for (auto &d : diags.all())
-                if (d.severity == diagnostics::Severity::Error) errs++;
+                if (d.severity == diagnostics::Severity::Error)
+                    errs++;
             return {nullptr, nullptr, false, errs};
         }
-        tokens = std::move(tokenResult.value());
+        tokens        = std::move(tokenResult.value());
         auto *builder = arena.make<ast::AstBuilder>(arena, interner);
-        auto *prog = arena.make<ast::ProgramNode>(arena);
+        auto *prog    = arena.make<ast::ProgramNode>(arena);
         symbols::SymbolTable syms(arena, &interner);
         parser::Parser parser(&tokens, builder, &diags);
         auto scanResult = parser::scan(parser, syms);
-        *prog = std::move(parser.program);
+        *prog           = std::move(parser.program);
 
         // Expand bodies
         parser.program = std::move(*prog);
@@ -57,17 +58,20 @@ struct StructTest {
 
         size_t errs = 0;
         for (auto &d : diags.all())
-            if (d.severity == diagnostics::Severity::Error) errs++;
+            if (d.severity == diagnostics::Severity::Error)
+                errs++;
         return {builder, prog, errs == 0, errs};
     }
 };
 
 static const ast::StructDeclNode *get_struct(const ast::ProgramNode &prog, ast::AstBuilder *bld) {
     for (auto id : prog.decls) {
-        if (id == ast::kInvalidDecl) continue;
+        if (id == ast::kInvalidDecl)
+            continue;
         auto &decl = bld->getDecl(id);
-        auto *s = std::get_if<ast::StructDeclNode>(&decl);
-        if (s) return s;
+        auto *s    = std::get_if<ast::StructDeclNode>(&decl);
+        if (s)
+            return s;
     }
     return nullptr;
 }
@@ -152,10 +156,14 @@ static void test_struct_extends() {
     if (s->name == "Bar") {
         s = nullptr;
         for (auto id : r.program->decls) {
-            if (id == ast::kInvalidDecl) continue;
+            if (id == ast::kInvalidDecl)
+                continue;
             auto &decl = r.builder->getDecl(id);
-            auto *s2 = std::get_if<ast::StructDeclNode>(&decl);
-            if (s2 && s2->name == "Foo") { s = s2; break; }
+            auto *s2   = std::get_if<ast::StructDeclNode>(&decl);
+            if (s2 && s2->name == "Foo") {
+                s = s2;
+                break;
+            }
         }
         CHECK(s != nullptr, "Foo struct found");
     }

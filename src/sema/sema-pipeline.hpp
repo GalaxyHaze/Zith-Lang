@@ -7,8 +7,8 @@
 #include "memory/dyn-array.hpp"
 #include "sema/sema-context.hpp"
 #include "sema/sema-result.hpp"
-#include "symbols/symbol-table.hpp"
 #include "symbols/import-manager.hpp"
+#include "symbols/symbol-table.hpp"
 #include "types/type-intern.hpp"
 #include "types/type-lower.hpp"
 #include "types/unify.hpp"
@@ -27,6 +27,7 @@ class SemaPipeline {
     memory::DynArray<symbols::SymId> worklist_;
     memory::DynArray<symbols::SymId> fn_syms_;
     ast::AstBuilder *active_builder_ = nullptr;
+    memory::DynArray<size_t> allowed_files_;
 
     hir::HirExprId addHirExpr(hir::HirExpr expr, types::TypeId type);
     types::TypeId current_fn_ret_type_ = types::kErrorType;
@@ -34,6 +35,7 @@ class SemaPipeline {
     ast::AstBuilder &builder() const;
     void ensureStub(symbols::SymId fn_sym);
     void ensureBodyLowered(symbols::SymId fn_sym);
+    bool isSymAccessible(symbols::SymId sym_id) const;
     ast::AstBuilder *builderForSym(symbols::SymId fn_sym);
     const symbols::SymbolTable *symsForSym(symbols::SymId fn_sym);
     size_t hirIndexForSym(symbols::SymId fn_sym) const;
@@ -56,7 +58,7 @@ public:
                  diagnostics::DiagnosticEngine &diags, ast::AstBuilder &builder,
                  memory::Arena &hir_arena,
                  const memory::DynArray<symbols::SymId> *resolved = nullptr,
-                 symbols::ImportManager *import_mgr = nullptr);
+                 symbols::ImportManager *import_mgr               = nullptr);
 
     symbols::SymbolTable &syms() noexcept {
         return ctx_.syms();

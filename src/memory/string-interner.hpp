@@ -25,9 +25,9 @@ struct StringInterner {
     std::string_view lookup(InternedId id) const;
 
 private:
-    Arena *allocator_ = nullptr;
+    Arena *allocator_                          = nullptr;
     FlatMap<std::string_view, InternedId> *map = nullptr;
-    memory::DynArray<std::string_view> *pool  = nullptr;
+    memory::DynArray<std::string_view> *pool   = nullptr;
     mutable std::shared_mutex rwMutex_;
 
     void init();

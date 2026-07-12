@@ -207,7 +207,7 @@ size_t TypeIntern::computeHash(const TypeData &data) {
         auto &p = std::get<TypePack>(data);
         h       = hashCombine(h, p.count);
         for (size_t i = 0; i < p.count; i++) {
-            h = hashCombine(h, p.members[i]);
+            h         = hashCombine(h, p.members[i]);
             auto name = interner_.lookup(p.names[i]);
             for (auto c : name)
                 h = hashCombine(h, static_cast<size_t>(c));

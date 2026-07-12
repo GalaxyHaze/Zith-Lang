@@ -35,8 +35,7 @@ llvm::Value *CodeGenEmit::emitExpr(hir::HirExprId id, const hir::HirModule &mod)
             else if constexpr (std::is_same_v<T, hir::HirVar>)
                 return emitVar(node);
             else if constexpr (std::is_same_v<T, hir::HirBranch> ||
-                               std::is_same_v<T, hir::HirJump> ||
-                               std::is_same_v<T, hir::HirPhi>)
+                               std::is_same_v<T, hir::HirJump> || std::is_same_v<T, hir::HirPhi>)
                 return nullptr;
             else
                 return nullptr;
@@ -49,7 +48,7 @@ llvm::Value *CodeGenEmit::emitBody(const hir::HirFunction &fn, const hir::HirMod
         return nullptr;
 
     llvm::Value *last = nullptr;
-    auto &entry = fn.blocks[0];
+    auto &entry       = fn.blocks[0];
     for (auto inst_id : entry.insts) {
         last = emitExpr(inst_id, mod);
     }
@@ -62,7 +61,7 @@ llvm::Value *CodeGenEmit::emitBody(const hir::HirFunction &fn, const hir::HirMod
 void CodeGenEmit::registerParams(const hir::HirFunction &fn, llvm::Function *llvmFn) {
     if (fn.decl_id == ast::kInvalidDecl)
         return;
-    auto &decl = astBuilder_.getDecl(fn.decl_id);
+    auto &decl   = astBuilder_.getDecl(fn.decl_id);
     auto *fnDecl = std::get_if<ast::FnDeclNode>(&decl);
     if (!fnDecl)
         return;
@@ -79,24 +78,21 @@ llvm::Value *CodeGenEmit::emitLiteral(const hir::HirLiteral &lit) {
     auto kind = types_.kindOf(lit.type);
     switch (kind) {
     case types::TypeKind::Int:
-        return llvm::ConstantInt::get(builder_.getContext(),
-                                      llvm::APInt(64, lit.i, true));
+        return llvm::ConstantInt::get(builder_.getContext(), llvm::APInt(64, lit.i, true));
     case types::TypeKind::Bool:
         return llvm::ConstantInt::get(builder_.getContext(), llvm::APInt(1, lit.b ? 1 : 0));
     case types::TypeKind::Float:
-        return llvm::ConstantFP::get(builder_.getContext(),
-                                     llvm::APFloat(lit.f));
+        return llvm::ConstantFP::get(builder_.getContext(), llvm::APFloat(lit.f));
     case types::TypeKind::Char:
         return llvm::ConstantInt::get(llvm::Type::getInt8Ty(builder_.getContext()), lit.i, true);
     case types::TypeKind::Ptr: {
         auto str_data = interner_.lookup(lit.str_val);
-        auto *str = llvm::ConstantDataArray::getString(builder_.getContext(),
-                                                       llvm::StringRef(str_data.data(), str_data.size()),
-                                                       true);
+        auto *str     = llvm::ConstantDataArray::getString(
+            builder_.getContext(), llvm::StringRef(str_data.data(), str_data.size()), true);
         auto *module = builder_.GetInsertBlock()->getParent()->getParent();
         auto *global = new llvm::GlobalVariable(*module, str->getType(), true,
                                                 llvm::GlobalValue::PrivateLinkage, str, ".str");
-        auto *zero = llvm::ConstantInt::get(llvm::Type::getInt32Ty(builder_.getContext()), 0);
+        auto *zero   = llvm::ConstantInt::get(llvm::Type::getInt32Ty(builder_.getContext()), 0);
         llvm::Value *indices[] = {zero, zero};
         return llvm::ConstantExpr::getInBoundsGetElementPtr(str->getType(), global, indices);
     }
@@ -166,7 +162,7 @@ llvm::Value *CodeGenEmit::emitUnary(const hir::HirUnary &un, const hir::HirModul
 
 llvm::Value *CodeGenEmit::emitCall(const hir::HirCall &call, const hir::HirModule &mod) {
     auto &callee_expr = mod.getExpr(call.callee);
-    auto *callee_fn = std::get_if<hir::HirLiteral>(&callee_expr);
+    auto *callee_fn   = std::get_if<hir::HirLiteral>(&callee_expr);
 
     llvm::Function *fn = nullptr;
     if (call.resolved_fn != symbols::kInvalidSym) {
@@ -191,7 +187,7 @@ llvm::Value *CodeGenEmit::emitCall(const hir::HirCall &call, const hir::HirModul
     if (call.resolved_fn != symbols::kInvalidSym) {
         auto &sym = syms_.get(call.resolved_fn);
         auto name = interner_.lookup(sym.name);
-        fn = module->getFunction(llvm::StringRef(name.data(), name.size()));
+        fn        = module->getFunction(llvm::StringRef(name.data(), name.size()));
     }
 
     if (!fn)
@@ -214,9 +210,9 @@ llvm::Value *CodeGenEmit::emitLet(const hir::HirLet &let, const hir::HirModule &
     if (!init)
         return nullptr;
 
-    auto name = interner_.lookup(let.name);
+    auto name      = interner_.lookup(let.name);
     auto *elemType = init->getType();
-    auto *alloca = builder_.CreateAlloca(elemType);
+    auto *alloca   = builder_.CreateAlloca(elemType);
     builder_.CreateStore(init, alloca);
     namedValues_[name] = {alloca, elemType, true};
     return alloca;
@@ -224,7 +220,7 @@ llvm::Value *CodeGenEmit::emitLet(const hir::HirLet &let, const hir::HirModule &
 
 llvm::Value *CodeGenEmit::emitVar(const hir::HirVar &var) {
     auto name = interner_.lookup(var.name);
-    auto *nv = namedValues_.get(name);
+    auto *nv  = namedValues_.get(name);
     if (nv) {
         if (nv->isAlloca)
             return builder_.CreateLoad(nv->elementType, nv->value);

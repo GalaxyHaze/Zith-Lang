@@ -21,7 +21,7 @@ int execute(const Options &opts) {
     }
 
     bool allPassed = true;
-    int exitCode = 0;
+    int exitCode   = 0;
     for (const auto &file : files) {
         session::CompilationSession session(opts, file);
         session.setBuffered(true);

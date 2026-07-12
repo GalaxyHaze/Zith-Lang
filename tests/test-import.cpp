@@ -1,4 +1,3 @@
-#include "test-common.hpp"
 #include "ast/ast-builder.hpp"
 #include "diagnostics/diagnostic-engine.hpp"
 #include "lexer/lexer.hpp"
@@ -7,6 +6,7 @@
 #include "memory/string-interner.hpp"
 #include "parser/parser.hpp"
 #include "symbols/symbol-table.hpp"
+#include "test-common.hpp"
 
 #include <cstdio>
 #include <string_view>
@@ -36,24 +36,26 @@ struct ImportTest {
         auto addResult = sourceMap.addFile("test.zith", input);
         if (!addResult)
             return {nullptr, nullptr, false, 0};
-        auto fileId = addResult.value();
+        auto fileId      = addResult.value();
         auto tokenResult = lexer::tokenize(sourceMap, arena, fileId, diags);
         if (!tokenResult) {
             size_t errs = 0;
             for (auto &d : diags.all())
-                if (d.severity == diagnostics::Severity::Error) errs++;
+                if (d.severity == diagnostics::Severity::Error)
+                    errs++;
             return {nullptr, nullptr, false, errs};
         }
         lexer::TokenStream tokens = std::move(tokenResult.value());
-        auto *builder = arena.make<ast::AstBuilder>(arena, interner);
-        auto *prog = arena.make<ast::ProgramNode>(arena);
+        auto *builder             = arena.make<ast::AstBuilder>(arena, interner);
+        auto *prog                = arena.make<ast::ProgramNode>(arena);
         symbols::SymbolTable syms(arena, &interner);
         parser::Parser parser(&tokens, builder, &diags);
         parser::scan(parser, syms);
-        *prog = std::move(parser.program);
+        *prog       = std::move(parser.program);
         size_t errs = 0;
         for (auto &d : diags.all())
-            if (d.severity == diagnostics::Severity::Error) errs++;
+            if (d.severity == diagnostics::Severity::Error)
+                errs++;
         return {builder, prog, errs == 0, errs};
     }
 };
@@ -63,18 +65,23 @@ struct ImportTest {
 static int count_decls(const ast::ProgramNode &prog) {
     int n = 0;
     for (auto id : prog.decls)
-        if (id != ast::kInvalidDecl) n++;
+        if (id != ast::kInvalidDecl)
+            n++;
     return n;
 }
 
-static const ast::ImportNode *get_import(const ast::ProgramNode &prog, ast::AstBuilder *bld, int idx) {
+static const ast::ImportNode *get_import(const ast::ProgramNode &prog, ast::AstBuilder *bld,
+                                         int idx) {
     int n = 0;
     for (auto id : prog.decls) {
-        if (id == ast::kInvalidDecl) continue;
+        if (id == ast::kInvalidDecl)
+            continue;
         auto &decl = bld->getDecl(id);
-        auto *imp = std::get_if<ast::ImportNode>(&decl);
-        if (!imp) continue;
-        if (n++ == idx) return imp;
+        auto *imp  = std::get_if<ast::ImportNode>(&decl);
+        if (!imp)
+            continue;
+        if (n++ == idx)
+            return imp;
     }
     return nullptr;
 }

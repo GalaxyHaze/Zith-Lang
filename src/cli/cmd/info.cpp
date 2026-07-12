@@ -76,12 +76,14 @@ int help(FILE *dest) {
     p.flag("    --check", "Check formatting without modifying");
     p.flag("-i, --in-place", "Format files in-place");
     p.flag("    --emit <ast|hir|ir|asm|obj|bin>", "Emit intermediate representation");
-    p.flag("    --target <TRIPLE>", "Target triple");
+    p.flag("    --target <TRIPLE>", "Target triple for cross-compilation");
+    p.flag("    --sysroot <DIR>", "Sysroot for cross-compilation linking");
     p.flag("    --emit-tokens", "Print and emit tokens");
     p.flag("    --emit-ast", "Emit AST");
     p.flag("    --emit-hir", "Emit HIR");
     p.flag("    --emit-ir", "Emit LLVM IR");
     p.flag("    --emit-asm", "Emit assembly");
+    p.flag("    --emit-all", "Emit tokens, AST, HIR, IR, and assembly");
     p.flag("    --interpreted", "Use bytecode path");
     p.flag("    --opt-level <0-3>", "Optimization level");
     p.flag("    --debug-level <0-3>", "Debug info level");

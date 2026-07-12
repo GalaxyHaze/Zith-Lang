@@ -27,12 +27,20 @@ class Lexer {
     diagnostics::DiagnosticEngine &diags;
     memory::DynArray<Token> tokens;
 
-    static bool isNum(char c) { return c >= '0' && c <= '9'; }
+    static bool isNum(char c) {
+        return c >= '0' && c <= '9';
+    }
     static bool isPunctuation(char c);
     static bool isOperator(char c);
-    bool isOpen() const { return now < end; }
-    char peek() const { return (now + 1 < end) ? now[1] : '\0'; }
-    char peek(size_t n) const { return (now + n < end) ? now[n] : '\0'; }
+    bool isOpen() const {
+        return now < end;
+    }
+    char peek() const {
+        return (now + 1 < end) ? now[1] : '\0';
+    }
+    char peek(size_t n) const {
+        return (now + n < end) ? now[n] : '\0';
+    }
     bool match(std::string_view must);
     void singleLineComment(bool isDoc);
     void multiLineComment(bool isDoc);
@@ -40,11 +48,11 @@ class Lexer {
     void processString();
     void processIdentifier();
 
-    memory::Span spanAt(const char *p) const noexcept { 
+    memory::Span spanAt(const char *p) const noexcept {
         auto off = static_cast<uint32_t>(p - start);
         return {gId, off, off + 1};
     }
-    memory::Span spanRange(const char *b, const char *e) const noexcept { 
+    memory::Span spanRange(const char *b, const char *e) const noexcept {
         return {gId, static_cast<uint32_t>(b - start), static_cast<uint32_t>(e - start)};
     }
 

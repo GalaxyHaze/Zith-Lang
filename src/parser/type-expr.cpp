@@ -26,26 +26,16 @@ struct BuiltinTypeEntry {
 };
 
 static constexpr BuiltinTypeEntry builtin_types[] = {
-    {"i8",      ast::BuiltinType::I8},
-    {"i16",     ast::BuiltinType::I16},
-    {"i32",     ast::BuiltinType::I32},
-    {"i64",     ast::BuiltinType::I64},
-    {"i128",    ast::BuiltinType::I128},
-    {"u8",      ast::BuiltinType::U8},
-    {"u16",     ast::BuiltinType::U16},
-    {"u32",     ast::BuiltinType::U32},
-    {"u64",     ast::BuiltinType::U64},
-    {"u128",    ast::BuiltinType::U128},
-    {"f32",     ast::BuiltinType::F32},
-    {"f64",     ast::BuiltinType::F64},
-    {"bool",    ast::BuiltinType::Bool},
-    {"char",    ast::BuiltinType::Char},
-    {"void",    ast::BuiltinType::Void},
-    {"never",   ast::BuiltinType::Never},
-    {"noreturn", ast::BuiltinType::Never},
-    {"invalid", ast::BuiltinType::Invalid},
-    {"unknown", ast::BuiltinType::Unknown},
-    {"opaque",  ast::BuiltinType::Opaque},
+    {"i8", ast::BuiltinType::I8},           {"i16", ast::BuiltinType::I16},
+    {"i32", ast::BuiltinType::I32},         {"i64", ast::BuiltinType::I64},
+    {"i128", ast::BuiltinType::I128},       {"u8", ast::BuiltinType::U8},
+    {"u16", ast::BuiltinType::U16},         {"u32", ast::BuiltinType::U32},
+    {"u64", ast::BuiltinType::U64},         {"u128", ast::BuiltinType::U128},
+    {"f32", ast::BuiltinType::F32},         {"f64", ast::BuiltinType::F64},
+    {"bool", ast::BuiltinType::Bool},       {"char", ast::BuiltinType::Char},
+    {"void", ast::BuiltinType::Void},       {"never", ast::BuiltinType::Never},
+    {"noreturn", ast::BuiltinType::Never},  {"invalid", ast::BuiltinType::Invalid},
+    {"unknown", ast::BuiltinType::Unknown}, {"opaque", ast::BuiltinType::Opaque},
 };
 
 bool matchBuiltinType(std::string_view name, ast::BuiltinType &out) {
@@ -238,7 +228,7 @@ ast::TypeExprId Parser::parseOrExpr() {
         if (check('!')) {
             advance();
             auto right = parsePrimaryType();
-            left = bld->addTypeExpr(ast::TypeFailable{left, right});
+            left       = bld->addTypeExpr(ast::TypeFailable{left, right});
             continue;
         }
 

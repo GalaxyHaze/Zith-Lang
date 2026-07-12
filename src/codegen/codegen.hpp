@@ -22,18 +22,26 @@ namespace zith::codegen {
 class CodeGen {
 public:
     CodeGen(const memory::StringInterner &interner, const symbols::SymbolTable &syms,
-            const types::TypeIntern &types, const ast::AstBuilder &astBuilder);
+            const types::TypeIntern &types, const ast::AstBuilder &astBuilder,
+            std::string_view targetTriple = {}, uint8_t optLevel = 0);
     ~CodeGen();
 
     void emit(const hir::HirModule &hirModule, std::string_view moduleName);
+    void optimize();
 
     bool emitObject(const std::string &outputPath);
+    bool emitAsm(const std::string &outputPath);
     llvm::Module *getModule();
     std::string printIR();
+    std::string printAsm();
 
 private:
     void emitFunction(const hir::HirFunction &fn, const hir::HirModule &mod);
     void emitExternFn(const hir::HirFunction &fn);
+
+    void ensureTargetInfo();
+    std::string effectiveTriple() const;
+    int llvmOptLevel() const;
 
     std::unique_ptr<llvm::LLVMContext> ctx_;
     std::unique_ptr<llvm::Module> module_;
@@ -41,6 +49,8 @@ private:
     const symbols::SymbolTable &syms_;
     const types::TypeIntern &types_;
     const ast::AstBuilder &astBuilder_;
+    std::string targetTriple_;
+    uint8_t optLevel_;
 };
 
 } // namespace zith::codegen

@@ -40,9 +40,13 @@ memory::Optional<ErrorInfo> lookupError(ErrCode code) noexcept {
         return ErrorInfo{code, 'E', "parse", "Import error",
                          "Check the module path and ensure the file exists"};
     case err::TopLevelLetNotAllowed:
-        return ErrorInfo{code, 'E', "parse", "Top-level declaration",
-                         "Avoid overusing globals \u2014 prefer passing values via function parameters",
-                         "`let` bindings are for function/block scope only"};
+        return ErrorInfo{
+            code,
+            'E',
+            "parse",
+            "Top-level declaration",
+            "Avoid overusing globals \u2014 prefer passing values via function parameters",
+            "`let` bindings are for function/block scope only"};
 
     // Semantic
     case err::UndefinedIdent:

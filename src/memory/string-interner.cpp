@@ -44,8 +44,9 @@ void StringInterner::init() {
     pool = allocator_->make<DynArray<std::string_view>>(*allocator_);
     map  = allocator_->make<FlatMap<std::string_view, InternedId>>();
     if (!pool || !map) {
-        std::fprintf(stderr,
-                "at: StringInterner, occured an internal error, due to: nullptr at allocator\n");
+        std::fprintf(
+            stderr,
+            "at: StringInterner, occured an internal error, due to: nullptr at allocator\n");
         std::abort();
     }
 }

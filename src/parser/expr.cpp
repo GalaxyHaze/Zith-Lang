@@ -22,30 +22,30 @@ struct IntrinsicEntry {
 };
 
 static constexpr IntrinsicEntry intrinsics[] = {
-    {"fields",      ast::IntrinsicKind::Fields,      1},
-    {"sizeOf",      ast::IntrinsicKind::SizeOf,      1},
-    {"alignOf",     ast::IntrinsicKind::AlignOf,     1},
-    {"hasTrait",    ast::IntrinsicKind::HasTrait,    2},
-    {"struct",      ast::IntrinsicKind::Struct,      0},
-    {"component",   ast::IntrinsicKind::Component,   0},
-    {"union",       ast::IntrinsicKind::Union,       0},
-    {"enum",        ast::IntrinsicKind::Enum,        0},
-    {"nullable",    ast::IntrinsicKind::Nullable,    0},
-    {"primitive",   ast::IntrinsicKind::Primitive,   0},
-    {"allocate",    ast::IntrinsicKind::Allocate,    2},
-    {"pack",        ast::IntrinsicKind::Pack,        0},
-    {"toStruct",    ast::IntrinsicKind::ToStruct,    1},
-    {"toPack",      ast::IntrinsicKind::ToPack,      2},
+    {"fields", ast::IntrinsicKind::Fields, 1},
+    {"sizeOf", ast::IntrinsicKind::SizeOf, 1},
+    {"alignOf", ast::IntrinsicKind::AlignOf, 1},
+    {"hasTrait", ast::IntrinsicKind::HasTrait, 2},
+    {"struct", ast::IntrinsicKind::Struct, 0},
+    {"component", ast::IntrinsicKind::Component, 0},
+    {"union", ast::IntrinsicKind::Union, 0},
+    {"enum", ast::IntrinsicKind::Enum, 0},
+    {"nullable", ast::IntrinsicKind::Nullable, 0},
+    {"primitive", ast::IntrinsicKind::Primitive, 0},
+    {"allocate", ast::IntrinsicKind::Allocate, 2},
+    {"pack", ast::IntrinsicKind::Pack, 0},
+    {"toStruct", ast::IntrinsicKind::ToStruct, 1},
+    {"toPack", ast::IntrinsicKind::ToPack, 2},
     {"appendField", ast::IntrinsicKind::AppendField, 2},
     {"removeField", ast::IntrinsicKind::RemoveField, 2},
-    {"appendMethod",ast::IntrinsicKind::AppendMethod,2},
-    {"file",        ast::IntrinsicKind::File,        0},
-    {"line",        ast::IntrinsicKind::Line,        0},
-    {"fnName",      ast::IntrinsicKind::FnName,      0},
-    {"location",    ast::IntrinsicKind::Location,    0},
-    {"ok",          ast::IntrinsicKind::Ok,          1},
-    {"err",         ast::IntrinsicKind::Err,         1},
-    {"offsetOf",    ast::IntrinsicKind::OffsetOf,    2},
+    {"appendMethod", ast::IntrinsicKind::AppendMethod, 2},
+    {"file", ast::IntrinsicKind::File, 0},
+    {"line", ast::IntrinsicKind::Line, 0},
+    {"fnName", ast::IntrinsicKind::FnName, 0},
+    {"location", ast::IntrinsicKind::Location, 0},
+    {"ok", ast::IntrinsicKind::Ok, 1},
+    {"err", ast::IntrinsicKind::Err, 1},
+    {"offsetOf", ast::IntrinsicKind::OffsetOf, 2},
 };
 
 const IntrinsicEntry *findIntrinsic(std::string_view name) {
@@ -194,7 +194,7 @@ ast::ExprId Parser::parsePrimary() {
             return ast::kInvalidExpr;
         }
 
-        auto kind                = intrinsic->kind;
+        auto kind = intrinsic->kind;
         memory::DynArray<ast::ExprId> args{bld->arena()};
         int expected = intrinsicArgCount(kind);
         if (expected > 0 && !eof() && !check(';') && !check('}') && !check(')') && !check(',')) {
@@ -232,8 +232,7 @@ ast::ExprId Parser::parsePrimary() {
         else if (lit.size() > 0 && lit[0] == '\'')
             kind = ast::LitKind::Char;
         else if (lit.find('.') != std::string_view::npos ||
-                 lit.find('e') != std::string_view::npos ||
-                 lit.find('E') != std::string_view::npos)
+                 lit.find('e') != std::string_view::npos || lit.find('E') != std::string_view::npos)
             kind = ast::LitKind::Float;
         return bld->litExpr(kind, lit, lit_span);
     }

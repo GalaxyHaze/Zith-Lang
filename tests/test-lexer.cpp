@@ -1,8 +1,8 @@
-#include "test-common.hpp"
 #include "diagnostics/diagnostic-engine.hpp"
 #include "lexer/lexer.hpp"
 #include "memory/arena.hpp"
 #include "memory/source-map.hpp"
+#include "test-common.hpp"
 
 #include <cstdio>
 #include <string_view>
@@ -29,7 +29,7 @@ struct LexerTest {
         if (!addResult)
             return {{}, false, 0};
         auto result = lexer::tokenize(sourceMap, arena, addResult.value(), diags);
-        bool ok = static_cast<bool>(result);
+        bool ok     = static_cast<bool>(result);
         size_t errs = 0;
         for (auto &d : diags.all()) {
             if (d.severity == diagnostics::Severity::Error)
@@ -248,7 +248,8 @@ static void test_keyword_fn() {
 
 static void test_keyword_all() {
     LexerTest t;
-    auto r = t.lex("if else for in match return break continue while struct trait fn let var const mut pub mod import use as");
+    auto r = t.lex("if else for in match return break continue while struct trait fn let var const "
+                   "mut pub mod import use as");
     CHECK(r.ok, "lex succeeds");
     CHECK_EQ(r.stream.src[0].kind, lexer::TokenKind::If, "if is If");
     CHECK_EQ(r.stream.src[1].kind, lexer::TokenKind::If, "else is If");

@@ -23,7 +23,7 @@ Printers initPrinters(const Options &opts) {
 
 void printCheckResults(const Printers &p, const std::vector<std::string> &files,
                        const std::vector<bool> &results, bool verbose) {
-    size_t passed = countPassed(results);
+    size_t passed  = countPassed(results);
     bool allPassed = (passed == files.size());
 
     if (verbose) {
@@ -121,14 +121,17 @@ size_t countPassed(const std::vector<bool> &results) {
 // ── check ──────────────────────────────────────────────────────────────────
 
 int check(const Options &opts) {
-    auto p = initPrinters(opts);
+    auto p     = initPrinters(opts);
     auto files = collectFiles(opts);
     if (files.empty()) {
         p.err.red("[error]");
         std::fprintf(stderr, " no input files and no ZithProject.toml found\n");
         return 1;
     }
-    auto results = runOnFiles(opts, files, session::Stage::TypeChecked);
+    auto stage = opts.targetStage;
+    if (stage == session::Stage::Cached)
+        stage = session::Stage::TypeChecked;
+    auto results = runOnFiles(opts, files, stage);
     printCheckResults(p, files, results, opts.flags.verbose());
     return countPassed(results) == files.size() ? 0 : 1;
 }
@@ -136,14 +139,14 @@ int check(const Options &opts) {
 // ── build ──────────────────────────────────────────────────────────────────
 
 int build(const Options &opts) {
-    auto p = initPrinters(opts);
+    auto p     = initPrinters(opts);
     auto files = collectFiles(opts);
     if (files.empty()) {
         p.err.red("[error]");
         std::fprintf(stderr, " no input files and no ZithProject.toml found\n");
         return 1;
     }
-    auto results = runOnFiles(opts, files, session::Stage::Cached);
+    auto results = runOnFiles(opts, files, opts.targetStage);
     printBuildResults(p, files, results, opts.flags.verbose());
     return countPassed(results) == files.size() ? 0 : 1;
 }

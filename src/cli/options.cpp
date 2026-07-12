@@ -29,12 +29,12 @@ struct ModeDefaults {
 
 // Custom, Debug, Develop, Release, Fast, Small
 static constexpr ModeDefaults modeDefaults[] = {
-    { 0, 2, false, false },  // Custom
-    { 0, 3, false, false },  // Debug
-    { 1, 2, false, false },  // Develop
-    { 2, 1, true,  false },  // Release
-    { 3, 0, true,  true  },  // Fast
-    { 2, 0, true,  true  },  // Small
+    {0, 2, false, false}, // Custom
+    {0, 3, false, false}, // Debug
+    {1, 2, false, false}, // Develop
+    {2, 1, true, false},  // Release
+    {3, 0, true, true},   // Fast
+    {2, 0, true, true},   // Small
 };
 
 static ModeDefaults getDefaults(Options::Mode mode) {
@@ -84,8 +84,10 @@ template <class... Args> static bool compare(const char *a, Args &&...args) {
 static size_t levenshteinDistance(const char *a, const char *b) {
     size_t n = std::strlen(a);
     size_t m = std::strlen(b);
-    if (n == 0) return m;
-    if (m == 0) return n;
+    if (n == 0)
+        return m;
+    if (m == 0)
+        return n;
     std::vector<size_t> prev(m + 1);
     std::vector<size_t> curr(m + 1);
     for (size_t j = 0; j <= m; ++j)
@@ -93,11 +95,12 @@ static size_t levenshteinDistance(const char *a, const char *b) {
     for (size_t i = 1; i <= n; ++i) {
         curr[0] = i;
         for (size_t j = 1; j <= m; ++j) {
-            size_t cost = (a[i - 1] == b[j - 1]) ? 0 : 1;
+            size_t cost  = (a[i - 1] == b[j - 1]) ? 0 : 1;
             size_t a_val = prev[j] + 1;
             size_t b_val = curr[j - 1] + 1;
             size_t c_val = prev[j - 1] + cost;
-            curr[j] = (a_val < b_val) ? (a_val < c_val ? a_val : c_val) : (b_val < c_val ? b_val : c_val);
+            curr[j] =
+                (a_val < b_val) ? (a_val < c_val ? a_val : c_val) : (b_val < c_val ? b_val : c_val);
         }
         std::swap(prev, curr);
     }
@@ -105,32 +108,31 @@ static size_t levenshteinDistance(const char *a, const char *b) {
 }
 
 static void suggestCommand(const char *arg, term::UsagePrinter &err) {
-    static const char *suggestCmds[] = {"build", "run",  "check",   "execute",
-                                         "test",  "fmt",  "docs",    "repl",    "create",
-                                         "clean", "deps", "help",    nullptr};
-    const char *best = nullptr;
-    size_t best_dist = static_cast<size_t>(-1);
+    static const char *suggestCmds[] = {"build", "run",  "check", "execute", "test",
+                                        "fmt",   "docs", "repl",  "create",  "clean",
+                                        "deps",  "help", nullptr};
+    const char *best                 = nullptr;
+    size_t best_dist                 = static_cast<size_t>(-1);
     for (size_t i = 0; suggestCmds[i]; ++i) {
         size_t d = levenshteinDistance(arg, suggestCmds[i]);
         if (d < best_dist) {
             best_dist = d;
-            best = suggestCmds[i];
+            best      = suggestCmds[i];
         }
     }
     if (best && best_dist <= (std::max(std::strlen(arg), std::strlen(best)) + 1) / 2) {
         bool color = isatty(fileno(stderr));
-        std::fprintf(stderr, "%s[error]%s unknown command '%s'\n",
-                     color ? "\033[31m" : "", color ? "\033[0m" : "", arg);
-        std::fprintf(stderr, "%s  help: did you mean '%s'?%s\n",
-                     color ? "\033[31m" : "", best, color ? "\033[0m" : "");
+        std::fprintf(stderr, "%s[error]%s unknown command '%s'\n", color ? "\033[31m" : "",
+                     color ? "\033[0m" : "", arg);
+        std::fprintf(stderr, "%s  help: did you mean '%s'?%s\n", color ? "\033[31m" : "", best,
+                     color ? "\033[0m" : "");
         std::exit(1);
     }
 }
 
 static bool isSubcommand(const char *arg) {
-    static const char *cmds[] = {"build", "run",  "check",   "execute",
-                                  "test",  "fmt",  "docs",    "repl",    "create",
-                                  "clean", "deps", "help",    nullptr};
+    static const char *cmds[] = {"build", "run",    "check", "execute", "test", "fmt",  "docs",
+                                 "repl",  "create", "clean", "deps",    "help", nullptr};
     for (auto cmd : cmds) {
         if (cmd && compare(cmd, arg))
             return true;
@@ -165,13 +167,13 @@ static Command subcommandToEnum(const char *arg) {
     if (compare(arg, "help"))
         return Command::Help;
     return Command::None;
-} 
+}
 #undef Command
 
 void Cli::parseArgs(int argc, char **argv) {
     this->args = std::make_pair(argc, argv);
 
-    for (int& i = this->current; i < argc; ++i) {
+    for (int &i = this->current; i < argc; ++i) {
         if (isSubcommand(argv[i]))
             // Consume next arg as subcommand_arg for commands that take one
             switch (this->opts.command = subcommandToEnum(argv[i])) {
@@ -223,6 +225,15 @@ void Cli::parseArgs(int argc, char **argv) {
         }
 
         if (compare(argv[i], "--emit-asm")) {
+            opts.flags.emitAsm(true);
+            continue;
+        }
+
+        if (compare(argv[i], "--emit-all")) {
+            opts.flags.emitTokens(true);
+            opts.flags.emitAst(true);
+            opts.flags.emitHir(true);
+            opts.flags.emitIr(true);
             opts.flags.emitAsm(true);
             continue;
         }
@@ -290,11 +301,12 @@ void Cli::parseArgs(int argc, char **argv) {
 
             std::string_view rest = arg;
             while (!rest.empty()) {
-                auto pos = rest.find(',');
+                auto pos   = rest.find(',');
                 auto token = rest.substr(0, pos);
                 if (!token.empty())
                     opts.includeDirs.push(std::string(token));
-                if (pos == std::string_view::npos) break;
+                if (pos == std::string_view::npos)
+                    break;
                 rest = rest.substr(pos + 1);
             }
             continue;
@@ -306,11 +318,12 @@ void Cli::parseArgs(int argc, char **argv) {
 
             std::string_view rest = arg;
             while (!rest.empty()) {
-                auto pos = rest.find(',');
+                auto pos   = rest.find(',');
                 auto token = rest.substr(0, pos);
                 if (!token.empty())
                     opts.assetDirs.push(std::string(token));
-                if (pos == std::string_view::npos) break;
+                if (pos == std::string_view::npos)
+                    break;
                 rest = rest.substr(pos + 1);
             }
             continue;
@@ -350,10 +363,17 @@ void Cli::parseArgs(int argc, char **argv) {
             continue;
         }
 
+        // --sysroot
+        if (std::strcmp(argv[i], "--sysroot") == 0) {
+            requireValue(i, "--sysroot");
+            opts.sysroot = argv[++i];
+            continue;
+        }
+
         // --opt-level
         if (std::strcmp(argv[i], "--opt-level") == 0) {
             requireValue(i, "--opt-level");
-            int val = std::atoi(argv[++i] );
+            int val = std::atoi(argv[++i]);
             if (val < 0 || val > 3) {
                 err.red("[error]");
                 std::fprintf(stderr, " --opt-level must be 0-3\n");
@@ -454,15 +474,21 @@ void Cli::loadFlags() {
 
     auto process = [&](const toml::table &tbl) {
         if (auto v = tbl["mode"].value<std::string>()) {
-            if (*v == "debug")       opts.flags.mode(Options::Mode::Debug);
-            else if (*v == "dev")    opts.flags.mode(Options::Mode::Develop);
-            else if (*v == "release")opts.flags.mode(Options::Mode::Release);
-            else if (*v == "fast")   opts.flags.mode(Options::Mode::Fast);
-            else if (*v == "small")  opts.flags.mode(Options::Mode::Small);
+            if (*v == "debug")
+                opts.flags.mode(Options::Mode::Debug);
+            else if (*v == "dev")
+                opts.flags.mode(Options::Mode::Develop);
+            else if (*v == "release")
+                opts.flags.mode(Options::Mode::Release);
+            else if (*v == "fast")
+                opts.flags.mode(Options::Mode::Fast);
+            else if (*v == "small")
+                opts.flags.mode(Options::Mode::Small);
         }
         if (auto v = tbl["opt_level"].value<int64_t>())
             if (*v >= 0 && *v <= 3)
-                opts.flags.optLevel(static_cast<uint8_t>(*v));
+                if (!(opts.cliFields & Options::kCliOptLevel))
+                    opts.flags.optLevel(static_cast<uint8_t>(*v));
         if (auto v = tbl["debug_level"].value<int64_t>())
             if (*v >= 0 && *v <= 3)
                 opts.flags.debugLevel(static_cast<uint8_t>(*v));
@@ -475,9 +501,12 @@ void Cli::loadFlags() {
         if (auto v = tbl["lto"].value<bool>())
             opts.flags.lto(*v);
         if (auto v = tbl["color"].value<std::string>()) {
-            if (*v == "auto")       opts.flags.color(Options::Color::Auto);
-            else if (*v == "on")    opts.flags.color(Options::Color::On);
-            else if (*v == "off")   opts.flags.color(Options::Color::Off);
+            if (*v == "auto")
+                opts.flags.color(Options::Color::Auto);
+            else if (*v == "on")
+                opts.flags.color(Options::Color::On);
+            else if (*v == "off")
+                opts.flags.color(Options::Color::Off);
         }
         if (auto arr = tbl["include_dirs"].as_array()) {
             for (auto &elem : *arr)
@@ -485,12 +514,18 @@ void Cli::loadFlags() {
                     opts.includeDirs.push(*s);
         }
         if (auto v = tbl["emit_target"].value<std::string>()) {
-            if (*v == "ast")        opts.emitTarget = Options::EmitTarget::Ast;
-            else if (*v == "hir")   opts.emitTarget = Options::EmitTarget::Hir;
-            else if (*v == "ir")    opts.emitTarget = Options::EmitTarget::Ir;
-            else if (*v == "asm")   opts.emitTarget = Options::EmitTarget::Asm;
-            else if (*v == "obj")   opts.emitTarget = Options::EmitTarget::Obj;
-            else if (*v == "bin")   opts.emitTarget = Options::EmitTarget::Bin;
+            if (*v == "ast")
+                opts.emitTarget = Options::EmitTarget::Ast;
+            else if (*v == "hir")
+                opts.emitTarget = Options::EmitTarget::Hir;
+            else if (*v == "ir")
+                opts.emitTarget = Options::EmitTarget::Ir;
+            else if (*v == "asm")
+                opts.emitTarget = Options::EmitTarget::Asm;
+            else if (*v == "obj")
+                opts.emitTarget = Options::EmitTarget::Obj;
+            else if (*v == "bin")
+                opts.emitTarget = Options::EmitTarget::Bin;
         }
     };
 
@@ -533,7 +568,7 @@ void Cli::loadProject() {
         auto tomlPath = search / "ZithProject.toml";
         if (fs::exists(tomlPath)) {
             config.projectRoot = fs::weakly_canonical(search).string();
-            auto process = [&](const toml::table &tbl) {
+            auto process       = [&](const toml::table &tbl) {
                 if (auto *build = tbl["build"].as_table()) {
                     if (auto v = build->get("entry"))
                         if (auto s = v->value<std::string>())
@@ -543,11 +578,16 @@ void Cli::loadProject() {
                             config.output = *s;
                     if (auto v = build->get("mode"))
                         if (auto s = v->value<std::string>()) {
-                            if (*s == "debug")       config.mode = "debug";
-                            else if (*s == "dev")    config.mode = "dev";
-                            else if (*s == "release")config.mode = "release";
-                            else if (*s == "fast")   config.mode = "fast";
-                            else if (*s == "small")  config.mode = "small";
+                            if (*s == "debug")
+                                config.mode = "debug";
+                            else if (*s == "dev")
+                                config.mode = "dev";
+                            else if (*s == "release")
+                                config.mode = "release";
+                            else if (*s == "fast")
+                                config.mode = "fast";
+                            else if (*s == "small")
+                                config.mode = "small";
                         }
                     if (auto v = build->get("opt_level"))
                         if (auto i = v->value<int>())

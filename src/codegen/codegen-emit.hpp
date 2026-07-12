@@ -5,8 +5,8 @@
 #include "hir/hir-expr.hpp"
 #include "hir/hir-module.hpp"
 #include "hir/hir-types.hpp"
-#include "memory/string-interner.hpp"
 #include "memory/flat-map.hpp"
+#include "memory/string-interner.hpp"
 #include "symbols/symbol-table.hpp"
 #include "types/type-intern.hpp"
 

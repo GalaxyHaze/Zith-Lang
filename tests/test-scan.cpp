@@ -1,4 +1,3 @@
-#include "test-common.hpp"
 #include "ast/ast-builder.hpp"
 #include "ast/type-expr.hpp"
 #include "diagnostics/diagnostic-engine.hpp"
@@ -9,6 +8,7 @@
 #include "memory/string-interner.hpp"
 #include "parser/parser.hpp"
 #include "symbols/symbol-table.hpp"
+#include "test-common.hpp"
 
 #include <cstdio>
 #include <string_view>
@@ -36,17 +36,18 @@ struct ScanTest {
         auto addResult = sourceMap.addFile("test.zith", input);
         if (!addResult)
             return {nullptr, nullptr, parser::ScanResult{arena}, false, 0};
-        auto fileId = addResult.value();
+        auto fileId      = addResult.value();
         auto tokenResult = lexer::tokenize(sourceMap, arena, fileId, diags);
         if (!tokenResult) {
             size_t errs = 0;
             for (auto &d : diags.all())
-                if (d.severity == diagnostics::Severity::Error) errs++;
+                if (d.severity == diagnostics::Severity::Error)
+                    errs++;
             return {nullptr, nullptr, parser::ScanResult{arena}, false, errs};
         }
-        tokens = std::move(tokenResult.value());
+        tokens        = std::move(tokenResult.value());
         auto *builder = arena.make<ast::AstBuilder>(arena, interner);
-        auto *prog = arena.make<ast::ProgramNode>(arena);
+        auto *prog    = arena.make<ast::ProgramNode>(arena);
         symbols::SymbolTable syms(arena, &interner);
         parser::Parser parser(&tokens, builder, &diags);
         auto scanResult = parser::scan(parser, syms);
@@ -55,7 +56,8 @@ struct ScanTest {
 
         size_t errs = 0;
         for (auto &d : diags.all())
-            if (d.severity == diagnostics::Severity::Error) errs++;
+            if (d.severity == diagnostics::Severity::Error)
+                errs++;
         return {builder, prog, std::move(scanResult), errs == 0, errs};
     }
 };
@@ -63,12 +65,15 @@ struct ScanTest {
 // ── Helpers ────────────────────────────────────────────────────────
 
 template <typename T>
-static const T *get_decl_of(const ast::ProgramNode &prog, ast::AstBuilder *bld, std::string_view name) {
+static const T *get_decl_of(const ast::ProgramNode &prog, ast::AstBuilder *bld,
+                            std::string_view name) {
     for (auto id : prog.decls) {
-        if (id == ast::kInvalidDecl) continue;
+        if (id == ast::kInvalidDecl)
+            continue;
         auto &decl = bld->getDecl(id);
-        auto *p = std::get_if<T>(&decl);
-        if (p && p->name == name) return p;
+        auto *p    = std::get_if<T>(&decl);
+        if (p && p->name == name)
+            return p;
     }
     return nullptr;
 }

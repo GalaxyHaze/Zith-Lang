@@ -41,9 +41,8 @@ CompilationSession::CompilationSession(const Options &options, std::string fileP
       mTypeArena(), mHirArena(), mScratchArena(), mDiags(mScratchArena),
       mInterner(std::make_unique<memory::StringInterner>(mAstArena)),
       mAstBuilder(mAstArena, *mInterner), mImportMgr(mSymArena, *mInterner, mSourceMap, mDiags),
-      mSyms(mSymArena, mInterner.get()),
-      mResolvedSyms(mSymArena), mTypes(mTypeArena, *mInterner), mHirModule(mHirArena),
-      mProjectConfig(mAstArena) {
+      mSyms(mSymArena, mInterner.get()), mResolvedSyms(mSymArena), mTypes(mTypeArena, *mInterner),
+      mHirModule(mHirArena), mProjectConfig(mAstArena) {
     mPlan.target = mOpts.get().targetStage;
     mDiags.setColor(term::useColor(mOpts));
     mDiags.setSourceMap(&mSourceMap);
@@ -78,7 +77,8 @@ CompilationSession::CompilationSession(const Options &options, std::string fileP
                     if (auto s = v->value<std::string>())
                         mProjectConfig.name = *s;
             }
-        } catch (...) {}
+        } catch (...) {
+        }
 #else
         auto result = toml::parse_file(toml_path.string());
         if (result) {
@@ -218,9 +218,8 @@ bool CompilationSession::lexStage() {
     }
 #endif
 
-    auto file_result = !mContentOverride.empty()
-                           ? mSourceMap.addFile(mFilePath, mContentOverride)
-                           : mSourceMap.loadFile(mFilePath);
+    auto file_result = !mContentOverride.empty() ? mSourceMap.addFile(mFilePath, mContentOverride)
+                                                 : mSourceMap.loadFile(mFilePath);
     if (!file_result) {
         writeOutput("%s[error]%s failed to load file '%s'\n", ansicolor("\033[31m"),
                     ansicolor("\033[0m"), mFilePath.c_str());
@@ -235,8 +234,11 @@ bool CompilationSession::lexStage() {
     }
     mTokens = token_result.value();
 
-    if (mOpts.get().flags.printTokens() || mOpts.get().flags.emitTokens())
+    if (mOpts.get().flags.printTokens() || mOpts.get().flags.emitTokens()) {
+        std::fputs("--- Tokens ---\n", stdout);
         lexer::printTokens(mTokens);
+        std::fputs("---\n", stdout);
+    }
 
     if (mOpts.get().flags.verbose()) {
         auto dt = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0)
@@ -335,20 +337,23 @@ bool CompilationSession::importStage() {
 
     auto source_dir = fs::path(mFilePath).parent_path().string();
 
+    memory::DynArray<size_t> root_deps(mSymArena);
     for (auto decl_id : mProgram.decls) {
         auto &decl = mAstBuilder.getDecl(decl_id);
         if (auto *import = std::get_if<ast::ImportNode>(&decl)) {
-            auto res = mImportMgr.resolve(import->path, import->symbols,
-                                            import->is_from, import->is_export, import->is_asset,
-                                            import->alias, import->import_depth, source_dir);
+            auto res = mImportMgr.resolve(import->path, import->symbols, import->is_from,
+                                          import->is_export, import->is_asset, import->alias,
+                                          import->import_depth, source_dir);
             if (!res) {
                 mDiags.report(diagnostics::Severity::Error, diagnostics::err::ImportError,
                               std::string(res.error().msg), import->span);
                 continue;
             }
+            root_deps.push(res.value());
         }
     }
 
+    mImportMgr.setRootDeps(std::move(root_deps));
     mImportMgr.mergeInto(mSyms);
 
     // Imported declarations are parsed with independent AST builders. Register
@@ -456,6 +461,12 @@ bool CompilationSession::semaStage() {
 
     mHirModule = pipeline.takeHir();
 
+    if (mOpts.get().flags.emitHir()) {
+        std::fputs("--- HIR ---\n", stdout);
+        mHirModule.dump(stdout, *mInterner);
+        std::fputs("---\n", stdout);
+    }
+
     if (mOpts.get().flags.verbose()) {
         auto dt = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0)
                       .count();
@@ -500,17 +511,27 @@ bool CompilationSession::codegenStage() {
 
 #ifdef ZITH_HAS_LLVM
     {
-        codegen::CodeGen cg(*mInterner, mSyms, mTypes, mAstBuilder);
+        codegen::CodeGen cg(*mInterner, mSyms, mTypes, mAstBuilder, mOpts.get().targetTriple,
+                            mOpts.get().flags.optLevel());
         cg.emit(mHirModule, mFilePath);
+        cg.optimize();
 
         if (mOpts.get().flags.emitIr()) {
             auto ir = cg.printIR();
             writeOutput("%s\n", ir.c_str());
         }
 
+        if (mOpts.get().flags.emitAsm()) {
+            auto asm_str = cg.printAsm();
+            if (asm_str.empty())
+                writeOutput("%s[error]%s failed to generate assembly\n", ansicolor("\033[31m"),
+                            ansicolor("\033[0m"));
+            else
+                writeOutput("%s\n", asm_str.c_str());
+        }
+
         auto emitTarget = mOpts.get().emitTarget;
-        if (mAlwaysEmitObject ||
-            emitTarget == Options::EmitTarget::Obj ||
+        if (mAlwaysEmitObject || emitTarget == Options::EmitTarget::Obj ||
             emitTarget == Options::EmitTarget::Bin) {
             std::string objPath = mOpts.get().outputFile;
             if (objPath.empty()) {
@@ -524,19 +545,19 @@ bool CompilationSession::codegenStage() {
                 objPath = objDir + "/" + fs::path(mFilePath).filename().string() + ".o";
             }
             if (!cg.emitObject(objPath)) {
-                writeOutput("%s[error]%s failed to emit object file\n",
-                            ansicolor("\033[31m"), ansicolor("\033[0m"));
+                writeOutput("%s[error]%s failed to emit object file\n", ansicolor("\033[31m"),
+                            ansicolor("\033[0m"));
                 return false;
             }
             mObjectPath = objPath;
         }
     }
 #else
-    if (mOpts.get().flags.emitIr() ||
+    if (mOpts.get().flags.emitIr() || mOpts.get().flags.emitAsm() ||
         mOpts.get().emitTarget == Options::EmitTarget::Obj ||
         mOpts.get().emitTarget == Options::EmitTarget::Bin) {
-        writeOutput("%s[error]%s LLVM not available in this build\n",
-                    ansicolor("\033[31m"), ansicolor("\033[0m"));
+        writeOutput("%s[error]%s LLVM not available in this build\n", ansicolor("\033[31m"),
+                    ansicolor("\033[0m"));
         return false;
     }
 #endif
@@ -596,13 +617,15 @@ bool CompilationSession::linkAndExec() {
 
     // Link with system C compiler
     std::string linkCmd = "/usr/bin/cc -o " + exePath + " " + mObjectPath;
+    if (!mOpts.get().sysroot.empty())
+        linkCmd += " --sysroot=" + mOpts.get().sysroot;
     if (mOpts.get().flags.verbose())
         writeOutput("  [link] %s\n", linkCmd.c_str());
 
     int linkResult = std::system(linkCmd.c_str());
     if (linkResult != 0) {
-        writeOutput("%s[error]%s linking failed (exit code %d)\n",
-                    ansicolor("\033[31m"), ansicolor("\033[0m"), linkResult);
+        writeOutput("%s[error]%s linking failed (exit code %d)\n", ansicolor("\033[31m"),
+                    ansicolor("\033[0m"), linkResult);
         return false;
     }
 
@@ -612,8 +635,8 @@ bool CompilationSession::linkAndExec() {
     // Execute the binary and propagate its exit code
     int execResult = std::system(exePath.c_str());
     if (execResult == -1) {
-        writeOutput("%s[error]%s failed to launch executable\n",
-                    ansicolor("\033[31m"), ansicolor("\033[0m"));
+        writeOutput("%s[error]%s failed to launch executable\n", ansicolor("\033[31m"),
+                    ansicolor("\033[0m"));
         return false;
     }
 
@@ -632,8 +655,8 @@ bool CompilationSession::linkAndExec() {
     return true;
 #else
     (void)mObjectPath;
-    writeOutput("%s[error]%s cannot execute on WASM target\n",
-                ansicolor("\033[31m"), ansicolor("\033[0m"));
+    writeOutput("%s[error]%s cannot execute on WASM target\n", ansicolor("\033[31m"),
+                ansicolor("\033[0m"));
     return false;
 #endif
 }

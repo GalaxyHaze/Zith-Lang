@@ -1,1 +1,1 @@
-extern fn puts(msg: *char)
+pub extern fn puts(msg: *char)

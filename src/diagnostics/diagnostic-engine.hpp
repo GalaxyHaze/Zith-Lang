@@ -52,9 +52,9 @@ public:
     void emitTo(std::string_view source_text) const;
 
 private:
-    void emitLabelLine(const char* label, std::string_view msg) const;
-    void emitOne(const Diagnostic& d, std::string_view source,
-                 const char* location_line, bool has_secondary_labels) const;
+    void emitLabelLine(const char *label, std::string_view msg) const;
+    void emitOne(const Diagnostic &d, std::string_view source, const char *location_line,
+                 bool has_secondary_labels) const;
 
 public:
     memory::DynArray<Diagnostic> &diagnostics() noexcept {

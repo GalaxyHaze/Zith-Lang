@@ -22,8 +22,8 @@ namespace zith::parser {
 // Parse fn/method parameters with real types (single-pass).
 // Advances past closing ')'.
 static memory::DynArray<ast::FnParam> parseFnParams(Parser &parser) {
-    auto &tok  = *parser.tok;
-    auto &diag = *parser.diag;
+    auto &tok   = *parser.tok;
+    auto &diag  = *parser.diag;
     auto result = memory::DynArray<ast::FnParam>{parser.bld->arena()};
 
     while (!tok.is_empty()) {
@@ -75,9 +75,10 @@ static memory::DynArray<ast::FnParam> parseFnParams(Parser &parser) {
     return result;
 }
 
-static memory::DynArray<ast::GenericParam> tryParseGenericParams(Parser &parser, memory::Arena &arena) {
-    auto &tok  = *parser.tok;
-    auto &diag = *parser.diag;
+static memory::DynArray<ast::GenericParam> tryParseGenericParams(Parser &parser,
+                                                                 memory::Arena &arena) {
+    auto &tok   = *parser.tok;
+    auto &diag  = *parser.diag;
     auto params = memory::DynArray<ast::GenericParam>(arena);
     if (!parser.consume('<'))
         return params;
@@ -115,19 +116,17 @@ static memory::DynArray<ast::GenericParam> tryParseGenericParams(Parser &parser,
 static void parseImportPath(lexer::TokenStream &tok, memory::DynArray<std::string_view> &path) {
     while (!tok.is_empty() && !tok.peek().is_eof()) {
         if (tok.peek().is(lexer::TokenKind::Identifier)) {
-            auto first = tok.lexeme();
+            auto first            = tok.lexeme();
             const char *seg_start = first.data();
             const char *seg_end   = first.data() + first.size();
             tok.advance();
-            while (!tok.is_empty() && !tok.peek().is_eof() &&
-                   tok.peek().punc == '.') {
-                if (tok.peek(1).is(lexer::TokenKind::Punctuation) &&
-                    tok.peek(1).punc == '.')
+            while (!tok.is_empty() && !tok.peek().is_eof() && tok.peek().punc == '.') {
+                if (tok.peek(1).is(lexer::TokenKind::Punctuation) && tok.peek(1).punc == '.')
                     break;
                 tok.advance();
                 if (tok.peek().is(lexer::TokenKind::Identifier)) {
                     auto ext = tok.lexeme();
-                    seg_end = ext.data() + ext.size();
+                    seg_end  = ext.data() + ext.size();
                     tok.advance();
                 } else {
                     break;
@@ -136,10 +135,8 @@ static void parseImportPath(lexer::TokenStream &tok, memory::DynArray<std::strin
             path.push(std::string_view{seg_start, static_cast<size_t>(seg_end - seg_start)});
         } else if (tok.peek().punc == '/') {
             tok.advance();
-        } else if (tok.peek().is(lexer::TokenKind::Punctuation) &&
-                   tok.peek().punc == '.') {
-            if (tok.peek(1).is(lexer::TokenKind::Punctuation) &&
-                tok.peek(1).punc == '.') {
+        } else if (tok.peek().is(lexer::TokenKind::Punctuation) && tok.peek().punc == '.') {
+            if (tok.peek(1).is(lexer::TokenKind::Punctuation) && tok.peek(1).punc == '.') {
                 path.push(std::string_view{"..", 2});
                 tok.advance(2);
             } else {
@@ -167,8 +164,7 @@ static int32_t parseImportDepth(lexer::TokenStream &tok, diagnostics::Diagnostic
             long val  = std::strtol(n.data(), &end, 10);
             if (end == n.data() || val <= 0 || val > INT32_MAX) {
                 diag.report(diagnostics::Severity::Error, diagnostics::err::InvalidImportDepth,
-                            "import depth must be a positive integer or '..'",
-                            tok.peek().span);
+                            "import depth must be a positive integer or '..'", tok.peek().span);
                 val = 1;
             }
             if (tok.peek().punc == ')')
@@ -176,8 +172,7 @@ static int32_t parseImportDepth(lexer::TokenStream &tok, diagnostics::Diagnostic
             return static_cast<int32_t>(val);
         } else {
             diag.report(diagnostics::Severity::Error, diagnostics::err::InvalidImportDepth,
-                        "expected import depth: positive integer or '..'",
-                        tok.peek().span);
+                        "expected import depth: positive integer or '..'", tok.peek().span);
             if (tok.peek().punc == ')')
                 tok.advance();
             return 1;
@@ -186,8 +181,9 @@ static int32_t parseImportDepth(lexer::TokenStream &tok, diagnostics::Diagnostic
     return 1;
 }
 
-static memory::DynArray<ast::ImportSymbol> parseImportSymbols(
-    lexer::TokenStream &tok, memory::Arena &arena, diagnostics::DiagnosticEngine &diag) {
+static memory::DynArray<ast::ImportSymbol> parseImportSymbols(lexer::TokenStream &tok,
+                                                              memory::Arena &arena,
+                                                              diagnostics::DiagnosticEngine &diag) {
     auto symbols = memory::DynArray<ast::ImportSymbol>{arena};
     if (tok.peek().punc != '{')
         return symbols;
@@ -223,9 +219,8 @@ static memory::DynArray<ast::ImportSymbol> parseImportSymbols(
     return symbols;
 }
 
-static void scanImportDecl(Parser &parser, symbols::SymbolTable &syms,
-                           ast::ProgramNode &program, memory::Span kw_span,
-                           bool is_from, bool is_export) {
+static void scanImportDecl(Parser &parser, symbols::SymbolTable &syms, ast::ProgramNode &program,
+                           memory::Span kw_span, bool is_from, bool is_export) {
     using namespace diagnostics::err;
     auto &tok  = *parser.tok;
     auto &bld  = *parser.bld;
@@ -259,8 +254,8 @@ static void scanImportDecl(Parser &parser, symbols::SymbolTable &syms,
         diag.report(diagnostics::Severity::Error, ImportError,
                     "assets import requires an alias using 'as'", kw_span);
 
-    auto decl = bld.importDecl(std::move(path), std::move(syms_list), alias,
-                               is_from, is_export, is_asset, import_depth, kw_span);
+    auto decl = bld.importDecl(std::move(path), std::move(syms_list), alias, is_from, is_export,
+                               is_asset, import_depth, kw_span);
     program.decls.push(decl);
 }
 
@@ -287,8 +282,8 @@ static void scanMethod(MethodScanContext &ctx, bool must_have_body) {
         scan_detail::skipBalanced(ctx.tok, '<', '>');
 
     if (!ctx.tok.peek().is(lexer::TokenKind::Identifier)) {
-        ctx.diag.report(diagnostics::Severity::Error, ExpectedIdent,
-                    "expected method name", ctx.tok.peek().span);
+        ctx.diag.report(diagnostics::Severity::Error, ExpectedIdent, "expected method name",
+                        ctx.tok.peek().span);
         ctx.tok.advance();
         return;
     }
@@ -298,7 +293,7 @@ static void scanMethod(MethodScanContext &ctx, bool must_have_body) {
 
     if (ctx.tok.peek().punc != '(') {
         ctx.diag.report(diagnostics::Severity::Error, ExpectedExpr,
-                    "expected '(' after method name", ctx.tok.peek().span);
+                        "expected '(' after method name", ctx.tok.peek().span);
         return;
     }
     ctx.tok.advance();
@@ -324,26 +319,25 @@ static void scanMethod(MethodScanContext &ctx, bool must_have_body) {
     } else if (ctx.tok.peek().punc == ';') {
         if (must_have_body)
             ctx.diag.report(diagnostics::Severity::Error, ExpectedExpr,
-                        "methods in component must have a body", ctx.tok.peek().span);
+                            "methods in component must have a body", ctx.tok.peek().span);
         ctx.tok.advance();
     } else {
         ctx.diag.report(diagnostics::Severity::Error, ExpectedExpr,
-                    "expected '{' or ';' after method signature", ctx.tok.peek().span);
+                        "expected '{' or ';' after method signature", ctx.tok.peek().span);
     }
 
     if (!scan_detail::reportIfDuplicate(ctx.syms, ctx.diag, mname, mname_span)) {
         auto ms = ctx.syms.declare(mname, ctx.current_vis, ctx.current_mod_depth,
-                                       symbols::SymKind::Fn, ast::kInvalidDecl, mname_span);
+                                   symbols::SymKind::Fn, ast::kInvalidDecl, mname_span);
         for (auto &p : typed_params) {
-            auto ps = ctx.syms.declare(p.name, ctx.current_vis, ctx.current_mod_depth,
-                                           symbols::SymKind::Variable,
-                                           ast::kInvalidDecl, mname_span);
+            auto ps = ctx.syms.declare(p.name, symbols::SymbolVisibility::Private, 0,
+                                       symbols::SymKind::Variable, ast::kInvalidDecl, mname_span);
             if (ms != symbols::kInvalidSym)
                 ctx.syms.get(ms).members.push(ps);
         }
-        auto method_decl = ctx.bld.fnDecl(mname,
-            memory::DynArray<ast::GenericParam>{ctx.bld.arena()},
-            std::move(typed_params), return_type, mn_body_node, false, mname_span);
+        auto method_decl =
+            ctx.bld.fnDecl(mname, memory::DynArray<ast::GenericParam>{ctx.bld.arena()},
+                           std::move(typed_params), return_type, mn_body_node, false, mname_span);
         ctx.program.decls.push(method_decl);
         if (ms != symbols::kInvalidSym)
             ctx.syms.get(ms).decl_id = method_decl;
@@ -365,8 +359,7 @@ static void scanFieldItem(lexer::TokenStream &tok, diagnostics::DiagnosticEngine
                           bool support_destructure) {
     if (support_destructure) {
         // skip field qualifiers
-        if (tok.peek().is(lexer::TokenKind::Variable) ||
-            tok.peek().is(lexer::TokenKind::Mutable) ||
+        if (tok.peek().is(lexer::TokenKind::Variable) || tok.peek().is(lexer::TokenKind::Mutable) ||
             tok.peek().is(lexer::TokenKind::Ownership)) {
             while (tok.peek().is(lexer::TokenKind::Variable) ||
                    tok.peek().is(lexer::TokenKind::Mutable) ||
@@ -383,10 +376,8 @@ static void scanFieldItem(lexer::TokenStream &tok, diagnostics::DiagnosticEngine
                     auto fspan = tok.peek().span;
                     tok.advance();
                     if (field_names.contains(std::string(fname)))
-                        diag.report(diagnostics::Severity::Error,
-                                    diagnostics::err::DuplicateDecl,
-                                    "duplicate field '" + std::string(fname) + "'",
-                                    fspan);
+                        diag.report(diagnostics::Severity::Error, diagnostics::err::DuplicateDecl,
+                                    "duplicate field '" + std::string(fname) + "'", fspan);
                     else
                         field_names.insert(std::string(fname), char(1));
                 } else {
@@ -416,10 +407,8 @@ static void scanFieldItem(lexer::TokenStream &tok, diagnostics::DiagnosticEngine
         auto fspan = tok.peek().span;
         tok.advance();
         if (field_names.contains(std::string(fname)))
-            diag.report(diagnostics::Severity::Error,
-                        diagnostics::err::DuplicateDecl,
-                        "duplicate field '" + std::string(fname) + "'",
-                        fspan);
+            diag.report(diagnostics::Severity::Error, diagnostics::err::DuplicateDecl,
+                        "duplicate field '" + std::string(fname) + "'", fspan);
         else
             field_names.insert(std::string(fname), char(1));
         if (tok.peek().punc == ':')
@@ -456,9 +445,9 @@ ScanResult scan(Parser &parser, symbols::SymbolTable &syms) {
     memory::Span lastDocSpan{};
 
     auto resetVis = [&]() {
-        current_vis = symbols::SymbolVisibility::Private;
+        current_vis       = symbols::SymbolVisibility::Private;
         current_mod_depth = 0;
-        lastDocSpan = {};
+        lastDocSpan       = {};
     };
 
     while (!tok.is_empty()) {
@@ -578,17 +567,15 @@ ScanResult scan(Parser &parser, symbols::SymbolTable &syms) {
                 syms.declare(name, current_vis, current_mod_depth, symbols::SymKind::Fn,
                              ast::kInvalidDecl, name_span, symbols::kInvalidSym, lastDocSpan);
             for (auto &p : typed_params) {
-                auto ps =
-                    syms.declare(p.name, current_vis, current_mod_depth,
-                                 symbols::SymKind::Variable, ast::kInvalidDecl, name_span);
+                auto ps = syms.declare(p.name, symbols::SymbolVisibility::Private, 0,
+                                       symbols::SymKind::Variable, ast::kInvalidDecl, name_span);
                 if (fn_sym != symbols::kInvalidSym)
                     syms.get(fn_sym).members.push(ps);
             }
             lastDocSpan = {};
 
-            auto decl = bld.fnDecl(name, std::move(generic_params),
-                                   std::move(typed_params), return_type, body_node,
-                                   is_extern,
+            auto decl = bld.fnDecl(name, std::move(generic_params), std::move(typed_params),
+                                   return_type, body_node, is_extern,
                                    scan_detail::spanFromOffset(name_span.start, name_span.end));
             program.decls.push(decl);
             if (fn_sym != symbols::kInvalidSym)
@@ -605,13 +592,13 @@ ScanResult scan(Parser &parser, symbols::SymbolTable &syms) {
             auto kw      = tok.lexeme();
             tok.advance();
             if (kw == "global" || kw == "const") {
-                scan_detail::scanGlobalOrConst(parser, syms, program.decls,
-                                               kw == "const", kw_span,
+                scan_detail::scanGlobalOrConst(parser, syms, program.decls, kw == "const", kw_span,
                                                current_vis, current_mod_depth, lastDocSpan);
             } else {
-                diag.report(diagnostics::Severity::Error, TopLevelLetNotAllowed,
-                            "You cant declare variables at top-level", kw_span,
-                            {"Use `global` (global variable) or `const` (comptime variable) instead"});
+                diag.report(
+                    diagnostics::Severity::Error, TopLevelLetNotAllowed,
+                    "You cant declare variables at top-level", kw_span,
+                    {"Use `global` (global variable) or `const` (comptime variable) instead"});
                 recovery::panic(tok);
                 if (tok.peek().punc == ';')
                     tok.advance();
@@ -643,9 +630,16 @@ ScanResult scan(Parser &parser, symbols::SymbolTable &syms) {
 
             // skip extends/traits tokens to reach '{' or ';'
             while (!tok.is_empty() && tok.peek().punc != '{' && tok.peek().punc != ';') {
-                if (tok.peek().is_eof()) break;
-                if (tok.peek().punc == '(') { scan_detail::skipBalanced(tok, '(', ')'); continue; }
-                if (tok.peek().punc == '<') { scan_detail::skipBalanced(tok, '<', '>'); continue; }
+                if (tok.peek().is_eof())
+                    break;
+                if (tok.peek().punc == '(') {
+                    scan_detail::skipBalanced(tok, '(', ')');
+                    continue;
+                }
+                if (tok.peek().punc == '<') {
+                    scan_detail::skipBalanced(tok, '<', '>');
+                    continue;
+                }
                 tok.advance();
             }
 
@@ -676,9 +670,9 @@ ScanResult scan(Parser &parser, symbols::SymbolTable &syms) {
                 decl = bld.unionDecl(name, std::move(generic_params),
                                      memory::DynArray<ast::UnionVariant>(bld.arena()), name_span);
             } else {
-                decl = bld.componentDecl(name, std::move(generic_params),
-                                         memory::DynArray<ast::StructField>(bld.arena()),
-                                         name_span);
+                decl =
+                    bld.componentDecl(name, std::move(generic_params),
+                                      memory::DynArray<ast::StructField>(bld.arena()), name_span);
             }
 
             // declare struct/union/enum symbol BEFORE body scan
@@ -692,29 +686,32 @@ ScanResult scan(Parser &parser, symbols::SymbolTable &syms) {
                 uint32_t token_start = tok.offset;
                 body_span            = tok.peek().span;
 
-                MethodScanContext ctx{tok, bld, diag, syms, parser, current_vis,
-                                      current_mod_depth, struct_sym, decl, program, result};
+                MethodScanContext ctx{
+                    tok,        bld,  diag,    syms,  parser, current_vis, current_mod_depth,
+                    struct_sym, decl, program, result};
 
                 if (kw == "struct") {
                     memory::FlatMap<std::string, char> field_names;
-                    scan_detail::scanBody(tok,
+                    scan_detail::scanBody(
+                        tok,
                         [&](lexer::TokenStream &tok) {
                             scanFieldItem(tok, diag, field_names, true);
                         },
-                        [&ctx](lexer::TokenStream&) { scanMethod(ctx, false); },
-                        token_start, body_span, bld, body_node);
+                        [&ctx](lexer::TokenStream &) { scanMethod(ctx, false); }, token_start,
+                        body_span, bld, body_node);
 
                 } else if (kw == "enum") {
-                    scan_detail::scanBody(tok,
+                    scan_detail::scanBody(
+                        tok,
                         [&](lexer::TokenStream &tok) {
                             if (tok.peek().is(lexer::TokenKind::Identifier)) {
                                 auto v_span = tok.peek().span;
                                 auto vname  = tok.lexeme();
                                 tok.advance();
                                 if (!scan_detail::reportIfDuplicate(syms, diag, vname, v_span)) {
-                                    auto vs = syms.declare(vname, symbols::SymbolVisibility::Private, 0,
-                                                           symbols::SymKind::Variable,
-                                                           ast::kInvalidDecl, v_span);
+                                    auto vs = syms.declare(
+                                        vname, symbols::SymbolVisibility::Private, 0,
+                                        symbols::SymKind::Variable, ast::kInvalidDecl, v_span);
                                     if (decl != ast::kInvalidDecl && vs != symbols::kInvalidSym)
                                         syms.get(vs).decl_id = decl;
                                 }
@@ -732,27 +729,29 @@ ScanResult scan(Parser &parser, symbols::SymbolTable &syms) {
                             if (tok.peek().punc == ',')
                                 tok.advance();
                         },
-                        [&ctx](lexer::TokenStream&) { scanMethod(ctx, false); },
-                        token_start, body_span, bld, body_node);
+                        [&ctx](lexer::TokenStream &) { scanMethod(ctx, false); }, token_start,
+                        body_span, bld, body_node);
 
                 } else if (kw == "union") {
-                    scan_detail::scanBody(tok,
+                    scan_detail::scanBody(
+                        tok,
                         [&](lexer::TokenStream &tok) {
                             tok.advance();
                             if (tok.peek().punc == ',')
                                 tok.advance();
                         },
-                        [&ctx](lexer::TokenStream&) { scanMethod(ctx, false); },
-                        token_start, body_span, bld, body_node);
+                        [&ctx](lexer::TokenStream &) { scanMethod(ctx, false); }, token_start,
+                        body_span, bld, body_node);
 
                 } else if (kw == "component") {
                     memory::FlatMap<std::string, char> field_names;
-                    scan_detail::scanBody(tok,
+                    scan_detail::scanBody(
+                        tok,
                         [&](lexer::TokenStream &tok) {
                             scanFieldItem(tok, diag, field_names, false);
                         },
-                        [&ctx](lexer::TokenStream&) { scanMethod(ctx, true); },
-                        token_start, body_span, bld, body_node);
+                        [&ctx](lexer::TokenStream &) { scanMethod(ctx, true); }, token_start,
+                        body_span, bld, body_node);
                 }
             }
 
@@ -794,13 +793,12 @@ ScanResult scan(Parser &parser, symbols::SymbolTable &syms) {
 
             symbols::SymKind sk =
                 (kw == "interface") ? symbols::SymKind::Interface : symbols::SymKind::Trait;
-            auto decl = (kw == "interface")
-                            ? bld.interfaceDecl(name, std::move(generic_params),
-                                                memory::DynArray<ast::TraitMethod>(bld.arena()),
-                                                name_span)
-                            : bld.traitDecl(name, std::move(generic_params),
-                                            memory::DynArray<ast::TraitMethod>(bld.arena()),
-                                            name_span);
+            auto decl =
+                (kw == "interface")
+                    ? bld.interfaceDecl(name, std::move(generic_params),
+                                        memory::DynArray<ast::TraitMethod>(bld.arena()), name_span)
+                    : bld.traitDecl(name, std::move(generic_params),
+                                    memory::DynArray<ast::TraitMethod>(bld.arena()), name_span);
 
             ast::ExprId body_node = ast::kInvalidExpr;
             memory::Span body_span{};
@@ -810,11 +808,13 @@ ScanResult scan(Parser &parser, symbols::SymbolTable &syms) {
                 uint32_t token_start = tok.offset;
                 body_span            = tok.peek().span;
 
-                scan_detail::scanBody(tok,
+                scan_detail::scanBody(
+                    tok,
                     [&](lexer::TokenStream &tok) {
                         if (tok.peek().is(lexer::TokenKind::Typedef)) {
                             tok.advance();
-                            while (!tok.is_empty() && !tok.peek().is_eof() && tok.peek().punc != ';')
+                            while (!tok.is_empty() && !tok.peek().is_eof() &&
+                                   tok.peek().punc != ';')
                                 tok.advance();
                             if (tok.peek().punc == ';')
                                 tok.advance();
@@ -845,9 +845,16 @@ ScanResult scan(Parser &parser, symbols::SymbolTable &syms) {
                             scan_detail::skipTypeExpr(tok);
                         }
                         while (!tok.is_empty() && !tok.peek().is_eof()) {
-                            if (tok.peek().punc == ';') { tok.advance(); break; }
-                            if (tok.peek().punc == '{') { scan_detail::skipBalanced(tok, '{', '}'); break; }
-                            if (tok.peek().punc == '}') break;
+                            if (tok.peek().punc == ';') {
+                                tok.advance();
+                                break;
+                            }
+                            if (tok.peek().punc == '{') {
+                                scan_detail::skipBalanced(tok, '{', '}');
+                                break;
+                            }
+                            if (tok.peek().punc == '}')
+                                break;
                             tok.advance();
                         }
                     },
@@ -897,8 +904,8 @@ ScanResult scan(Parser &parser, symbols::SymbolTable &syms) {
             // ── type alias: alias Name = TypeExpr ──────────────────
             if (kw == "alias") {
                 if (!tok.peek().is(lexer::TokenKind::Identifier)) {
-                    diag.report(diagnostics::Severity::Error, ExpectedIdent,
-                                "expected alias name", tok.peek().span);
+                    diag.report(diagnostics::Severity::Error, ExpectedIdent, "expected alias name",
+                                tok.peek().span);
                     resetVis();
                     continue;
                 }
@@ -921,12 +928,13 @@ ScanResult scan(Parser &parser, symbols::SymbolTable &syms) {
                 if (tok.peek().punc == ';')
                     tok.advance();
 
-                auto decl = bld.typeAliasDecl(name, std::move(generic_params), target_type, kw_span);
+                auto decl =
+                    bld.typeAliasDecl(name, std::move(generic_params), target_type, kw_span);
                 program.decls.push(decl);
 
-                auto alias_sym = syms.declare(name, current_vis, current_mod_depth,
-                                              symbols::SymKind::Alias, decl, name_span,
-                                              symbols::kInvalidSym, lastDocSpan);
+                auto alias_sym =
+                    syms.declare(name, current_vis, current_mod_depth, symbols::SymKind::Alias,
+                                 decl, name_span, symbols::kInvalidSym, lastDocSpan);
 
                 resetVis();
                 continue;

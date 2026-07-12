@@ -10,7 +10,9 @@
 
 #include <cstdio>
 
-namespace zith::ast { class AstBuilder; }
+namespace zith::ast {
+class AstBuilder;
+}
 
 namespace zith::symbols {
 

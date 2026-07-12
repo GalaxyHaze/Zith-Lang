@@ -6,8 +6,8 @@
 #include "parser/scan-helpers.hpp"
 
 #include <cstdlib>
-#include <string>
 #include <cstring>
+#include <string>
 
 namespace zith::parser {
 
@@ -79,9 +79,16 @@ void Parser::expandBodies(ScanResult &result) {
                 if (tok->peek().is(lexer::TokenKind::Identifier))
                     tok->advance();
                 while (!tok->is_empty() && !tok->peek().is_eof()) {
-                    if (tok->peek().punc == ';') { tok->advance(); break; }
-                    if (tok->peek().punc == '{') { scan_detail::skipBalanced(*tok, '{', '}'); break; }
-                    if (tok->peek().punc == '}') break;
+                    if (tok->peek().punc == ';') {
+                        tok->advance();
+                        break;
+                    }
+                    if (tok->peek().punc == '{') {
+                        scan_detail::skipBalanced(*tok, '{', '}');
+                        break;
+                    }
+                    if (tok->peek().punc == '}')
+                        break;
                     tok->advance();
                 }
                 continue;
@@ -92,12 +99,18 @@ void Parser::expandBodies(ScanResult &result) {
             while (tok->peek().is(lexer::TokenKind::Variable) ||
                    tok->peek().is(lexer::TokenKind::Mutable)) {
                 auto lex = tok->lexeme();
-                if (lex == "auto")     bind = ast::FieldBind::Auto;
-                if (lex == "const")    bind = ast::FieldBind::Const;
-                if (lex == "let")      bind = ast::FieldBind::Let;
-                if (lex == "var")      bind = ast::FieldBind::Var;
-                if (lex == "global")   bind = ast::FieldBind::Global;
-                if (lex == "comptime") bind = ast::FieldBind::Comptime;
+                if (lex == "auto")
+                    bind = ast::FieldBind::Auto;
+                if (lex == "const")
+                    bind = ast::FieldBind::Const;
+                if (lex == "let")
+                    bind = ast::FieldBind::Let;
+                if (lex == "var")
+                    bind = ast::FieldBind::Var;
+                if (lex == "global")
+                    bind = ast::FieldBind::Global;
+                if (lex == "comptime")
+                    bind = ast::FieldBind::Comptime;
                 tok->advance();
             }
 
@@ -117,7 +130,7 @@ void Parser::expandBodies(ScanResult &result) {
                 }
                 if (tok->peek().punc == ']')
                     tok->advance();
-                auto type_expr = parseOptTypeAnnotation();
+                auto type_expr          = parseOptTypeAnnotation();
                 ast::ExprId default_val = ast::kInvalidExpr;
                 if (tok->peek().punc == '=') {
                     tok->advance();
@@ -134,7 +147,7 @@ void Parser::expandBodies(ScanResult &result) {
             if (tok->peek().is(lexer::TokenKind::Identifier)) {
                 auto fname = tok->lexeme();
                 tok->advance();
-                auto type_expr = parseOptTypeAnnotation();
+                auto type_expr          = parseOptTypeAnnotation();
                 ast::ExprId default_val = ast::kInvalidExpr;
                 if (tok->peek().punc == '=') {
                     tok->advance();
@@ -147,8 +160,8 @@ void Parser::expandBodies(ScanResult &result) {
             }
 
             // unrecognized token — skip to next ',' or '}' for recovery
-            while (!tok->is_empty() && !tok->peek().is_eof() &&
-                   tok->peek().punc != ',' && tok->peek().punc != '}')
+            while (!tok->is_empty() && !tok->peek().is_eof() && tok->peek().punc != ',' &&
+                   tok->peek().punc != '}')
                 tok->advance();
             if (tok->peek().punc == ',')
                 tok->advance();
@@ -161,9 +174,9 @@ void Parser::expandBodies(ScanResult &result) {
             auto &decl = bld->getDecl(decl_id);
             if (auto *sn = std::get_if<ast::StructDeclNode>(&decl)) {
                 if (sn->name == entry.name && sn->fields.empty()) {
-                    sn->fields = std::move(fields);
+                    sn->fields         = std::move(fields);
                     sn->extends_parent = extends_parent;
-                    sn->traits = std::move(traits);
+                    sn->traits         = std::move(traits);
                     break;
                 }
             }
@@ -185,9 +198,16 @@ void Parser::expandBodies(ScanResult &result) {
                 if (tok->peek().is(lexer::TokenKind::Identifier))
                     tok->advance();
                 while (!tok->is_empty() && !tok->peek().is_eof()) {
-                    if (tok->peek().punc == ';') { tok->advance(); break; }
-                    if (tok->peek().punc == '{') { scan_detail::skipBalanced(*tok, '{', '}'); break; }
-                    if (tok->peek().punc == '}') break;
+                    if (tok->peek().punc == ';') {
+                        tok->advance();
+                        break;
+                    }
+                    if (tok->peek().punc == '{') {
+                        scan_detail::skipBalanced(*tok, '{', '}');
+                        break;
+                    }
+                    if (tok->peek().punc == '}')
+                        break;
                     tok->advance();
                 }
                 continue;
@@ -225,8 +245,8 @@ void Parser::expandBodies(ScanResult &result) {
                             auto fname = tok->lexeme();
                             tok->advance();
                             auto field_type = parseOptTypeAnnotation();
-                            fields.push({fname, field_type, ast::kInvalidExpr,
-                                         ast::FieldBind::Auto, ast::FieldKind::Enum});
+                            fields.push({fname, field_type, ast::kInvalidExpr, ast::FieldBind::Auto,
+                                         ast::FieldKind::Enum});
                         }
                         if (tok->peek().punc == ',')
                             tok->advance();
@@ -255,8 +275,8 @@ void Parser::expandBodies(ScanResult &result) {
             }
 
             // unrecognized token — skip to next ',' or '}'
-            while (!tok->is_empty() && !tok->peek().is_eof() &&
-                   tok->peek().punc != ',' && tok->peek().punc != '}')
+            while (!tok->is_empty() && !tok->peek().is_eof() && tok->peek().punc != ',' &&
+                   tok->peek().punc != '}')
                 tok->advance();
             if (tok->peek().punc == ',')
                 tok->advance();
@@ -291,9 +311,16 @@ void Parser::expandBodies(ScanResult &result) {
                 if (tok->peek().is(lexer::TokenKind::Identifier))
                     tok->advance();
                 while (!tok->is_empty() && !tok->peek().is_eof()) {
-                    if (tok->peek().punc == ';') { tok->advance(); break; }
-                    if (tok->peek().punc == '{') { scan_detail::skipBalanced(*tok, '{', '}'); break; }
-                    if (tok->peek().punc == '}') break;
+                    if (tok->peek().punc == ';') {
+                        tok->advance();
+                        break;
+                    }
+                    if (tok->peek().punc == '{') {
+                        scan_detail::skipBalanced(*tok, '{', '}');
+                        break;
+                    }
+                    if (tok->peek().punc == '}')
+                        break;
                     tok->advance();
                 }
                 continue;
@@ -303,13 +330,14 @@ void Parser::expandBodies(ScanResult &result) {
             if (tok->peek().is(lexer::TokenKind::Identifier)) {
                 auto fname = tok->lexeme();
                 tok->advance();
-                auto type_expr = parseOptTypeAnnotation();
+                auto type_expr          = parseOptTypeAnnotation();
                 ast::ExprId default_val = ast::kInvalidExpr;
                 if (tok->peek().punc == '=') {
                     tok->advance();
                     default_val = parseExpr();
                 }
-                fields.push({fname, type_expr, default_val, ast::FieldBind::Auto, ast::FieldKind::Component});
+                fields.push({fname, type_expr, default_val, ast::FieldBind::Auto,
+                             ast::FieldKind::Component});
                 if (tok->peek().punc == ',')
                     tok->advance();
                 continue;
@@ -322,8 +350,8 @@ void Parser::expandBodies(ScanResult &result) {
             }
 
             // unrecognized token — skip to next ',' or '}'
-            while (!tok->is_empty() && !tok->peek().is_eof() &&
-                   tok->peek().punc != ',' && tok->peek().punc != '}')
+            while (!tok->is_empty() && !tok->peek().is_eof() && tok->peek().punc != ',' &&
+                   tok->peek().punc != '}')
                 tok->advance();
             if (tok->peek().punc == ',')
                 tok->advance();
@@ -359,9 +387,16 @@ void Parser::expandBodies(ScanResult &result) {
                 if (tok->peek().is(lexer::TokenKind::Identifier))
                     tok->advance();
                 while (!tok->is_empty() && !tok->peek().is_eof()) {
-                    if (tok->peek().punc == ';') { tok->advance(); break; }
-                    if (tok->peek().punc == '{') { scan_detail::skipBalanced(*tok, '{', '}'); break; }
-                    if (tok->peek().punc == '}') break;
+                    if (tok->peek().punc == ';') {
+                        tok->advance();
+                        break;
+                    }
+                    if (tok->peek().punc == '{') {
+                        scan_detail::skipBalanced(*tok, '{', '}');
+                        break;
+                    }
+                    if (tok->peek().punc == '}')
+                        break;
                     tok->advance();
                 }
                 continue;
@@ -374,7 +409,7 @@ void Parser::expandBodies(ScanResult &result) {
                 tok->advance();
                 if (variant_names.contains(std::string(vname)))
                     diag->report(diagnostics::Severity::Error, diagnostics::err::DuplicateDecl,
-                                "duplicate union variant '" + std::string(vname) + "'", vspan);
+                                 "duplicate union variant '" + std::string(vname) + "'", vspan);
                 else
                     variant_names.insert(std::string(vname), char(1));
                 variants.push({vname, ast::kInvalidTypeExpr});
@@ -390,8 +425,8 @@ void Parser::expandBodies(ScanResult &result) {
             }
 
             // unrecognized token — skip to next ',' or '}'
-            while (!tok->is_empty() && !tok->peek().is_eof() &&
-                   tok->peek().punc != ',' && tok->peek().punc != '}')
+            while (!tok->is_empty() && !tok->peek().is_eof() && tok->peek().punc != ',' &&
+                   tok->peek().punc != '}')
                 tok->advance();
             if (tok->peek().punc == ',')
                 tok->advance();

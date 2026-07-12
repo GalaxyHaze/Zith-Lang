@@ -13,7 +13,7 @@ struct WordOpEntry {
 
 static constexpr WordOpEntry word_ops[] = {
     {"and", ast::BinaryOp::And, 3},
-    {"or",  ast::BinaryOp::Or,  2},
+    {"or", ast::BinaryOp::Or, 2},
     {"xor", ast::BinaryOp::Xor, 4},
 };
 

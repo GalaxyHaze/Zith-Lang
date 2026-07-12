@@ -50,4 +50,4 @@ bool useColor(const Options &opts) {
     return shouldUse(opts.flags.color(), stderr);
 }
 
-} // namespace zith::cli::term
+} // namespace zith::term

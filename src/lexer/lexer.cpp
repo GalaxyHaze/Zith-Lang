@@ -81,55 +81,54 @@ bool Lexer::match(std::string_view must) {
 }
 
 void Lexer::singleLineComment(bool isDoc = false) {
-    const auto before = now - (isDoc? 3:2);
+    const auto before = now - (isDoc ? 3 : 2);
     while (isOpen()) {
         if (*now == '\n') {
             break;
         }
         now++;
     }
-    tokens.emplace(spanRange(before, now), (isDoc? TokenKind::Docs : TokenKind::Comments));
+    tokens.emplace(spanRange(before, now), (isDoc ? TokenKind::Docs : TokenKind::Comments));
 }
 
 void Lexer::multiLineComment(bool isDoc = false) {
-    const auto before = now - (isDoc? 3:2);
+    const auto before = now - (isDoc ? 3 : 2);
     const char *delim = (isDoc) ? "/**" : "/*";
     while (isOpen()) {
         if (*now == '*' && peek() == '/') {
             now += 2;
-            tokens.emplace(spanRange(before, now), (isDoc? TokenKind::Docs : TokenKind::Comments));
+            tokens.emplace(spanRange(before, now), (isDoc ? TokenKind::Docs : TokenKind::Comments));
             return;
         }
         now++;
     }
     diags.report(diagnostics::Severity::Error, diagnostics::err::UnclosedComment,
-                  std::string("Unterminated block comment '") + delim + "'",
-                  spanRange(before, now));
+                 std::string("Unterminated block comment '") + delim + "'", spanRange(before, now));
 }
 
-bool isHexDigit(char c){
+bool isHexDigit(char c) {
     return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F');
 }
 
-void Lexer::processNumber(){
+void Lexer::processNumber() {
     const auto before = now;
 
-    if (*now == '0' && now + 1 < end){
+    if (*now == '0' && now + 1 < end) {
         char nxt = now[1];
 
-        //Hexadecimal 
+        // Hexadecimal
         if (nxt == 'x' || nxt == 'X') {
             now += 2;
             while (now < end && isHexDigit(*now))
                 now++;
             if (now == before + 2) {
                 diags.report(diagnostics::Severity::Error, diagnostics::err::InvalidIntLiteral,
-                              "Invalid hex literal: expected digits after '0x'", spanAt(before));
+                             "Invalid hex literal: expected digits after '0x'", spanAt(before));
             }
             tokens.emplace(spanRange(before, now), TokenKind::LitVal);
             return;
         }
-        //Octal
+        // Octal
         if (nxt == 'c' || nxt == 'C') {
             now += 2;
             while (now < end && *now >= '0' && *now <= '7')
@@ -137,26 +136,27 @@ void Lexer::processNumber(){
             if (now == before + 2) {
                 if (now < end && isNum(*now)) {
                     diags.report(diagnostics::Severity::Error, diagnostics::err::InvalidIntLiteral,
-                                  "Invalid octal digit in literal", spanAt(now));
+                                 "Invalid octal digit in literal", spanAt(now));
                 } else {
                     diags.report(diagnostics::Severity::Error, diagnostics::err::InvalidIntLiteral,
-                                  "Invalid octal literal: expected digits after '0c'", spanAt(before));
+                                 "Invalid octal literal: expected digits after '0c'",
+                                 spanAt(before));
                 }
             } else if (now < end && isNum(*now)) {
                 diags.report(diagnostics::Severity::Error, diagnostics::err::InvalidIntLiteral,
-                              "Invalid octal digit in literal", spanAt(now));
+                             "Invalid octal digit in literal", spanAt(now));
             }
             tokens.emplace(spanRange(before, now), TokenKind::LitVal);
             return;
         }
-        //Binary
+        // Binary
         if (nxt == 'b' || nxt == 'B') {
             now += 2;
             while (now < end && (*now == '0' || *now == '1'))
                 now++;
             if (now == before + 2) {
                 diags.report(diagnostics::Severity::Error, diagnostics::err::InvalidIntLiteral,
-                              "Invalid binary literal: expected digits after '0b'", spanAt(before));
+                             "Invalid binary literal: expected digits after '0b'", spanAt(before));
             }
             tokens.emplace(spanRange(before, now), TokenKind::LitVal);
             return;
@@ -190,8 +190,7 @@ void Lexer::processString() {
             now++;
             if (!isOpen()) {
                 diags.report(diagnostics::Severity::Error, diagnostics::err::InvalidEscape,
-                              "Unexpected end of file in escape sequence",
-                              spanAt(now - 1));
+                             "Unexpected end of file in escape sequence", spanAt(now - 1));
                 tokens.emplace(spanRange(before, now), TokenKind::LitVal);
                 return;
             }
@@ -205,11 +204,11 @@ void Lexer::processString() {
                 continue;
             }
             char esc = *now;
-            if (esc != 'n' && esc != 't' && esc != 'r' && esc != '0' && esc != '\\' &&
-                esc != '"' && esc != '\'') {
+            if (esc != 'n' && esc != 't' && esc != 'r' && esc != '0' && esc != '\\' && esc != '"' &&
+                esc != '\'') {
                 diags.report(diagnostics::Severity::Error, diagnostics::err::InvalidEscape,
-                              std::string("Invalid escape sequence '\\") + esc + "'",
-                              spanAt(now - 1));
+                             std::string("Invalid escape sequence '\\") + esc + "'",
+                             spanAt(now - 1));
             }
             now++;
         } else {
@@ -218,7 +217,7 @@ void Lexer::processString() {
     }
 
     diags.report(diagnostics::Severity::Error, diagnostics::err::UnclosedString,
-                  "Unterminated string literal", spanRange(before, now));
+                 "Unterminated string literal", spanRange(before, now));
 }
 
 void Lexer::processIdentifier() {
@@ -319,7 +318,7 @@ auto Lexer::run(std::variant<memory::FileId, std::pair<std::string_view, std::st
             now++;
             auto span = spanRange(before, now);
             diags.report(diagnostics::Severity::Error, diagnostics::err::UnknownToken,
-                          std::string("Unexpected character '") + *before + "'", span);
+                         std::string("Unexpected character '") + *before + "'", span);
             tokens.emplace(span, TokenKind::Unknown);
         }
     }
@@ -347,13 +346,13 @@ auto tokenize(memory::SourceMap &source_map, memory::Arena &arena, std::string_v
 
 const char *tokenKindName(TokenKind k) noexcept {
     static constexpr const char *names[] = {
-        "Identifier", "As",        "Using",     "Type",     "Struct",     "Raw",         "Must",
-        "Mutable",    "Trait",     "Interface", "Typedef",  "Implement",  "Fn",          "Module",
-        "Extern",     "Macro",     "Context",   "Variable", "Ownership",  "Yield",       "Label",
-        "Visibility", "If",        "For",       "In",       "Match",      "Control",
-        "Thread",     "Error",     "Drop",      "Require",  "Is",         "Word",        "Logical",
-        "Comparison", "Operators", "Comments",  "Docs",     "Annotation", "Punctuation", "LitVal",
-        "Unknown",    "End"};
+        "Identifier", "As",       "Using",     "Type",       "Struct",      "Raw",     "Must",
+        "Mutable",    "Trait",    "Interface", "Typedef",    "Implement",   "Fn",      "Module",
+        "Extern",     "Macro",    "Context",   "Variable",   "Ownership",   "Yield",   "Label",
+        "Visibility", "If",       "For",       "In",         "Match",       "Control", "Thread",
+        "Error",      "Drop",     "Require",   "Is",         "Word",        "Logical", "Comparison",
+        "Operators",  "Comments", "Docs",      "Annotation", "Punctuation", "LitVal",  "Unknown",
+        "End"};
     static_assert(std::size(names) == static_cast<size_t>(TokenKind::End) + 1,
                   "tokenKindName array must match TokenKind enum");
     size_t idx = static_cast<size_t>(k);

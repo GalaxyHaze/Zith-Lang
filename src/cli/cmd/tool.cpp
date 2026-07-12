@@ -72,7 +72,7 @@ int clean(const Options &opts) {
     // Determine project root from subcommand arg or current dir
     std::string projectRoot;
     if (!opts.subcommandStr.empty()) {
-        auto path = fs::weakly_canonical(fs::path(opts.subcommandStr));
+        auto path   = fs::weakly_canonical(fs::path(opts.subcommandStr));
         projectRoot = fs::is_directory(path) ? path.string() : path.parent_path().string();
     } else {
         projectRoot = fs::current_path().string();
@@ -80,7 +80,7 @@ int clean(const Options &opts) {
 
     // Compute build dir and cache dir
     std::string buildDir = findBuildDir(opts);
-    auto cacheDir = fs::path(projectRoot) / ".zith-cache";
+    auto cacheDir        = fs::path(projectRoot) / ".zith-cache";
 
     bool cleaned = false;
 

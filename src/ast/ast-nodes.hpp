@@ -145,10 +145,10 @@ enum class FieldKind : uint8_t { Struct, Enum, Union, Component };
 
 struct StructField {
     std::string_view name;
-    TypeExprId type_expr        = kInvalidTypeExpr;
-    ExprId default_value        = kInvalidExpr;
-    FieldBind bind              = FieldBind::Auto;
-    FieldKind kind              = FieldKind::Struct;
+    TypeExprId type_expr = kInvalidTypeExpr;
+    ExprId default_value = kInvalidExpr;
+    FieldBind bind       = FieldBind::Auto;
+    FieldKind kind       = FieldKind::Struct;
 };
 
 struct StructDeclNode {
@@ -296,14 +296,14 @@ struct MacroCallNode {
     memory::Span span{};
 };
 
-using ExprNode = std::variant<LitValue, IdentNode, BinaryNode, UnaryNode, CallNode, BlockNode,
-                              IfNode, WhileNode, FieldNode, IndexNode, RangeNode, UnbodyNode,
-                              IntrinsicNode, MacroCallNode>;
+using ExprNode =
+    std::variant<LitValue, IdentNode, BinaryNode, UnaryNode, CallNode, BlockNode, IfNode, WhileNode,
+                 FieldNode, IndexNode, RangeNode, UnbodyNode, IntrinsicNode, MacroCallNode>;
 
 using StmtNode = std::variant<LetNode, AssignNode, RetNode, ExprId>;
 
-using DeclNode = std::variant<FnDeclNode, StructDeclNode, EnumDeclNode, UnionDeclNode,
-                              ComponentDeclNode, TraitDeclNode, InterfaceDeclNode, ImportNode,
-                              TypeAliasDeclNode, GlobalDeclNode>;
+using DeclNode =
+    std::variant<FnDeclNode, StructDeclNode, EnumDeclNode, UnionDeclNode, ComponentDeclNode,
+                 TraitDeclNode, InterfaceDeclNode, ImportNode, TypeAliasDeclNode, GlobalDeclNode>;
 
 } // namespace zith::ast

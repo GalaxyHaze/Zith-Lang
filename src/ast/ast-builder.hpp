@@ -56,34 +56,28 @@ public:
 
     DeclId fnDecl(std::string_view name, memory::DynArray<GenericParam> generic_params,
                   memory::DynArray<FnParam> params, TypeExprId return_type = kInvalidTypeExpr,
-                  ExprId body = kInvalidExpr, bool is_extern = false,
-                  memory::Span span = {});
+                  ExprId body = kInvalidExpr, bool is_extern = false, memory::Span span = {});
     DeclId fnDecl(std::string_view name, memory::DynArray<std::string_view> param_names,
                   ExprId body = kInvalidExpr, memory::Span span = {});
     DeclId structDecl(std::string_view name, memory::DynArray<GenericParam> generic_params,
-                      memory::DynArray<StructField> fields,
-                      memory::DynArray<DeclId> methods,
-                      TypeExprId extends_parent = kInvalidTypeExpr,
-                      memory::Span span = {});
+                      memory::DynArray<StructField> fields, memory::DynArray<DeclId> methods,
+                      TypeExprId extends_parent = kInvalidTypeExpr, memory::Span span = {});
     DeclId enumDecl(std::string_view name, memory::DynArray<GenericParam> generic_params,
                     memory::DynArray<EnumVariant> variants, memory::Span span = {});
     DeclId unionDecl(std::string_view name, memory::DynArray<GenericParam> generic_params,
                      memory::DynArray<UnionVariant> variants, memory::Span span = {});
     DeclId componentDecl(std::string_view name, memory::DynArray<GenericParam> generic_params,
-                         memory::DynArray<StructField> fields,
-                         memory::Span span = {});
+                         memory::DynArray<StructField> fields, memory::Span span = {});
     DeclId traitDecl(std::string_view name, memory::DynArray<GenericParam> generic_params,
                      memory::DynArray<TraitMethod> methods, memory::Span span = {});
     DeclId interfaceDecl(std::string_view name, memory::DynArray<GenericParam> generic_params,
                          memory::DynArray<TraitMethod> methods, memory::Span span = {});
     DeclId importDecl(memory::DynArray<std::string_view> path,
-                      memory::DynArray<ImportSymbol> symbols,
-                      std::string_view alias = {},
+                      memory::DynArray<ImportSymbol> symbols, std::string_view alias = {},
                       bool is_from = false, bool is_export = false, bool is_asset = false,
-                      int32_t import_depth = 1,
-                      memory::Span span = {});
+                      int32_t import_depth = 1, memory::Span span = {});
     DeclId typeAliasDecl(std::string_view name, memory::DynArray<GenericParam> generic_params,
-                          TypeExprId target_type, memory::Span span = {});
+                         TypeExprId target_type, memory::Span span = {});
     DeclId globalDecl(std::string_view name, bool is_const,
                       TypeExprId type_annot = kInvalidTypeExpr, ExprId init = kInvalidExpr,
                       memory::Span span = {});
