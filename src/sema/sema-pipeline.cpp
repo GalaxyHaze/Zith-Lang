@@ -19,6 +19,7 @@ using diagnostics::err::NoMatchingFn;
 using diagnostics::err::TypeMismatch;
 using diagnostics::err::UndefinedIdent;
 using diagnostics::err::WrongArity;
+using diagnostics::err::WrongArity;
 
 hir::HirBinaryOp mapBinaryOp(ast::BinaryOp op) {
     switch (op) {
@@ -77,10 +78,10 @@ types::TypeId defaultTypeForLit(ast::LitKind kind, types::TypeIntern &types) {
         return types.internFloat(types::FloatWidth::F64);
     case LitKind::Bool:
         return types::kBoolType;
-    case LitKind::String:
-        return types::kErrorType; // string type TBD
     case LitKind::Char:
         return types::kCharType;
+    case LitKind::String:
+        return types.internPtr(types::kCharType);
     case LitKind::Nil:
         return types::kVoidType;
     }
@@ -187,8 +188,6 @@ void SemaPipeline::ensureBodyLowered(symbols::SymId fn_sym) {
     current_fn_ret_type_ = hfn.return_type;
     auto scope = syms().enterScope();
     syms().emplace(*source_syms, scope);
-    // Parameters are currently scanned at the source table root, so install the
-    // current function's bindings explicitly as well.
     for (const auto &param : fn->params)
         syms().declareInScope(scope, param.name);
     auto &entry = hfn.blocks.emplace(hir_arena_);
@@ -322,6 +321,18 @@ hir::HirExprId SemaPipeline::visitLiteral(const ast::LitValue &n) {
     case ast::LitKind::Bool:
         lit.b = (n.raw == "true");
         break;
+    case ast::LitKind::Char: {
+        auto raw = n.raw;
+        lit.i = raw.size() >= 3 && raw[0] == '\'' ? raw[1] : 0;
+        break;
+    }
+    case ast::LitKind::String: {
+        auto raw = n.raw;
+        if (raw.size() >= 2 && raw.front() == '"' && raw.back() == '"')
+            raw = raw.substr(1, raw.size() - 2);
+        lit.str_val = ctx_.syms().interner().intern(raw);
+        break;
+    }
     default:
         break;
     }
@@ -455,7 +466,7 @@ hir::HirExprId SemaPipeline::visitCall(const ast::CallNode &n) {
                         continue;
                     if (i >= arg_types.size() || arg_types[i] == types::kErrorType)
                         continue;
-                    if (!unifier_.isAssignable(hfn.params[i], arg_types[i])) {
+                    if (!unifier_.isCoercible(hfn.params[i], arg_types[i])) {
                         match = false;
                         break;
                     }
@@ -638,7 +649,7 @@ void SemaPipeline::visitStmt(ast::StmtId id) {
             ret.value   = val;
             auto hir_id = pipeline.hir_.addExpr(hir::HirExpr{ret});
             if (pipeline.current_fn_ && !pipeline.current_fn_->blocks.empty())
-                pipeline.current_fn_->blocks[0].insts.push(hir_id);
+                pipeline.current_fn_->blocks[0].terminator = hir_id;
         }
 
         void operator()(ast::ExprId expr_id) {

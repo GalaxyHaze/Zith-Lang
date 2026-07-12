@@ -177,7 +177,9 @@ struct Cli {
     generalAllocator(),
     opts(generalAllocator),
     config(generalAllocator),
-    stringPool(generalAllocator)
+    stringPool(generalAllocator),
+    out(stdout, false),
+    err(stderr, false)
     {
         opts.stringPool = &stringPool;
         term::enableVirtual();

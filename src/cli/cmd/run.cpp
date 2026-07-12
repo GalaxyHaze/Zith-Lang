@@ -20,22 +20,38 @@ int execute(const Options &opts) {
         return 1;
     }
 
-    auto results = runOnFiles(opts, files, session::Stage::Cached);
-    bool allPassed = (countPassed(results) == files.size());
+    bool allPassed = true;
+    int exitCode = 0;
+    for (const auto &file : files) {
+        session::CompilationSession session(opts, file);
+        session.setBuffered(true);
+        session.setAlwaysEmitObject(true);
+        bool ok = session.run();
+        session.emitDiagnostics();
+        std::fputs(session.flushOutput().c_str(), stderr);
 
-    if (opts.flags.verbose()) {
-        for (size_t i = 0; i < files.size(); i++) {
-            results[i] ? out.green("[ok]") : out.red("[error]");
-            std::printf(" %s\n", files[i].c_str());
+        if (!ok) {
+            allPassed = false;
+            continue;
+        }
+
+        if (!session.linkAndExec()) {
+            allPassed = false;
+        } else {
+            exitCode = session.childExitCode();
         }
     }
 
-    if (!allPassed)
-        return 1;
+    if (opts.flags.verbose()) {
+        if (allPassed)
+            out.green("[ok]");
+        else
+            out.red("[error]");
+        for (const auto &file : files)
+            std::printf(" %s\n", file.c_str());
+    }
 
-    err.yellow("[soon]");
-    std::fprintf(stderr, " execution not implemented yet\n");
-    return 1;
+    return allPassed ? exitCode : 1;
 }
 
 int run(const Options &opts) {

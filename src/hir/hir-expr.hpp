@@ -32,6 +32,7 @@ struct HirLiteral {
         int64_t i;
         double f;
         bool b;
+        memory::InternedId str_val;
     };
 };
 

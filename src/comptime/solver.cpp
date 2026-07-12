@@ -135,7 +135,22 @@ bool Solver::checkNumericBoundsInFn(hir::HirFunction &fn) {
 
 bool Solver::verifyGenericConstraints(hir::HirModule &hir) {
     for (size_t i = 0; i < hir.getFnCount(); i++) {
-        if (!checkNumericBoundsInFn(hir.getFn(i)))
+        auto &fn = hir.getFn(i);
+
+        // Skip functions without generic params — no constraints to verify
+        bool has_generics = typeHasGenericParam(fn.return_type, types_);
+        if (!has_generics) {
+            for (size_t j = 0; j < fn.params.size(); j++) {
+                if (typeHasGenericParam(fn.params[j], types_)) {
+                    has_generics = true;
+                    break;
+                }
+            }
+        }
+        if (!has_generics)
+            continue;
+
+        if (!checkNumericBoundsInFn(fn))
             return false;
     }
     return true;

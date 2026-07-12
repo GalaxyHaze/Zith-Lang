@@ -25,6 +25,8 @@ class CompilationSession {
     std::reference_wrapper<const Options> mOpts;
     std::string mFilePath;
     std::string mProjectRoot;
+    std::string mObjectPath;
+    int mChildExitCode = 0;
     ProjectConfig mProjectConfig;
     PipelinePlan mPlan;
 
@@ -51,6 +53,7 @@ class CompilationSession {
 
     std::string mOutputBuffer;
     bool mBufferedOutput = false;
+    bool mAlwaysEmitObject = false;
     std::string mContentOverride;
 
 #if defined(__GNUC__) || defined(__clang__)
@@ -103,8 +106,13 @@ public:
     void setContent(std::string content) {
         mContentOverride = std::move(content);
     }
+    void setAlwaysEmitObject(bool v) {
+        mAlwaysEmitObject = v;
+    }
     std::string flushOutput();
     void emitDiagnostics();
+    bool linkAndExec();
+    int childExitCode() const { return mChildExitCode; }
 
     const lexer::TokenStream &tokens() const {
         return mTokens;

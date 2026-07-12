@@ -14,8 +14,13 @@
 #include "sema/sema-pipeline.hpp"
 #include "symbols/resolver.hpp"
 
+#ifdef ZITH_HAS_LLVM
+#include "codegen/codegen.hpp"
+#endif
+
 #include <chrono>
 #include <cstdio>
+#include <cstdlib>
 #include <filesystem>
 #include <toml++/toml.hpp>
 #include <vector>
@@ -23,7 +28,9 @@
 #include <windows.h>
 #elif defined(__APPLE__)
 #include <mach-o/dyld.h>
+#include <sys/wait.h>
 #elif !defined(ZITH_IS_WASM)
+#include <sys/wait.h>
 #include <unistd.h>
 #endif
 
@@ -61,6 +68,16 @@ CompilationSession::CompilationSession(const Options &options, std::string fileP
                     if (auto s = v->value<std::string>())
                         mProjectConfig.output = *s;
             }
+            if (auto *paths = tbl["paths"].as_table()) {
+                if (auto v = paths->get("bin_dir"))
+                    if (auto s = v->value<std::string>())
+                        mProjectConfig.binDir = *s;
+            }
+            if (auto *proj = tbl["project"].as_table()) {
+                if (auto v = proj->get("name"))
+                    if (auto s = v->value<std::string>())
+                        mProjectConfig.name = *s;
+            }
         } catch (...) {}
 #else
         auto result = toml::parse_file(toml_path.string());
@@ -72,6 +89,16 @@ CompilationSession::CompilationSession(const Options &options, std::string fileP
                 if (auto v = build->get("output"))
                     if (auto s = v->value<std::string>())
                         mProjectConfig.output = *s;
+            }
+            if (auto *paths = result["paths"].as_table()) {
+                if (auto v = paths->get("bin_dir"))
+                    if (auto s = v->value<std::string>())
+                        mProjectConfig.binDir = *s;
+            }
+            if (auto *proj = result["project"].as_table()) {
+                if (auto v = proj->get("name"))
+                    if (auto s = v->value<std::string>())
+                        mProjectConfig.name = *s;
             }
         }
 #endif
@@ -465,30 +492,62 @@ bool CompilationSession::nraStage() {
 
 bool CompilationSession::codegenStage() {
     auto t0 = std::chrono::steady_clock::now();
-#ifdef ZITH_HAS_LLVM
-    codegen::CodeGenerator generator;
-    const bool print_ir = mOpts.get().flags.emitIr() ||
-                          mOpts.get().emitTarget == Options::EmitTarget::Ir;
-    if (!generator.lowerToLlvm(mHirModule, mTypes, *mInterner, mOpts.get().targetTriple,
-                               print_ir, mDiags))
+
+    if (mDiags.hasErrors()) {
+        mDiags.emit();
         return false;
+    }
+
+#ifdef ZITH_HAS_LLVM
+    {
+        codegen::CodeGen cg(*mInterner, mSyms, mTypes, mAstBuilder);
+        cg.emit(mHirModule, mFilePath);
+
+        if (mOpts.get().flags.emitIr()) {
+            auto ir = cg.printIR();
+            writeOutput("%s\n", ir.c_str());
+        }
+
+        auto emitTarget = mOpts.get().emitTarget;
+        if (mAlwaysEmitObject ||
+            emitTarget == Options::EmitTarget::Obj ||
+            emitTarget == Options::EmitTarget::Bin) {
+            std::string objPath = mOpts.get().outputFile;
+            if (objPath.empty()) {
+                namespace fs = std::filesystem;
+                std::string objDir;
+                if (!mProjectConfig.binDir.empty())
+                    objDir = (fs::path(mProjectRoot) / mProjectConfig.binDir).string();
+                else
+                    objDir = (fs::path(mProjectRoot) / "build").string();
+                fs::create_directories(objDir);
+                objPath = objDir + "/" + fs::path(mFilePath).filename().string() + ".o";
+            }
+            if (!cg.emitObject(objPath)) {
+                writeOutput("%s[error]%s failed to emit object file\n",
+                            ansicolor("\033[31m"), ansicolor("\033[0m"));
+                return false;
+            }
+            mObjectPath = objPath;
+        }
+    }
+#else
+    if (mOpts.get().flags.emitIr() ||
+        mOpts.get().emitTarget == Options::EmitTarget::Obj ||
+        mOpts.get().emitTarget == Options::EmitTarget::Bin) {
+        writeOutput("%s[error]%s LLVM not available in this build\n",
+                    ansicolor("\033[31m"), ansicolor("\033[0m"));
+        return false;
+    }
+#endif
+
     if (mOpts.get().flags.verbose()) {
         auto dt = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0)
                       .count();
-        auto target = mOpts.get().targetTriple.empty() ? "host default"
-                                                        : mOpts.get().targetTriple.c_str();
-        writeOutput("  [codegen] LLVM target: %s  (%5.1fms)\n", target, dt);
+        writeOutput("  [codegen] %5.1fms\n", dt);
     }
-#else
-    if (!mOpts.get().targetTriple.empty() || mOpts.get().flags.emitIr() ||
-        mOpts.get().emitTarget == Options::EmitTarget::Ir) {
-        mDiags.report(diagnostics::Severity::Error, diagnostics::err::InvalidIR,
-                      "LLVM code generation is unavailable in this build", {});
-        return false;
-    }
-    (void)t0;
-#endif
-    return true;
+
+    return !mDiags.hasErrors();
 }
 
 bool CompilationSession::cacheStage() {
@@ -499,6 +558,84 @@ bool CompilationSession::cacheStage() {
         writeOutput("  [cache] \xe2\x80\x94 (stub)  (%5.1fms)\n", dt);
     }
     return true;
+}
+
+bool CompilationSession::linkAndExec() {
+#ifndef ZITH_IS_WASM
+    if (mObjectPath.empty())
+        return false;
+
+    // Determine executable path
+    std::string exePath;
+    if (!mOpts.get().outputFile.empty() && mOpts.get().outputFile != mObjectPath) {
+        exePath = mOpts.get().outputFile;
+    } else {
+        namespace fs = std::filesystem;
+        // Determine binary name
+        std::string binName;
+        if (!mProjectConfig.name.empty())
+            binName = mProjectConfig.name;
+        else
+            binName = fs::path(mFilePath).stem().string();
+
+        // Compute output directory (same dir as object file)
+        std::string objDir;
+        if (!mProjectConfig.binDir.empty())
+            objDir = (fs::path(mProjectRoot) / mProjectConfig.binDir).string();
+        else
+            objDir = (fs::path(mProjectRoot) / "build").string();
+
+        exePath = objDir + "/" + binName;
+#ifdef _WIN32
+        exePath += ".exe";
+#endif
+    }
+
+    if (mOpts.get().flags.verbose())
+        writeOutput("  [link] %s -> %s\n", mObjectPath.c_str(), exePath.c_str());
+
+    // Link with system C compiler
+    std::string linkCmd = "/usr/bin/cc -o " + exePath + " " + mObjectPath;
+    if (mOpts.get().flags.verbose())
+        writeOutput("  [link] %s\n", linkCmd.c_str());
+
+    int linkResult = std::system(linkCmd.c_str());
+    if (linkResult != 0) {
+        writeOutput("%s[error]%s linking failed (exit code %d)\n",
+                    ansicolor("\033[31m"), ansicolor("\033[0m"), linkResult);
+        return false;
+    }
+
+    if (mOpts.get().flags.verbose())
+        writeOutput("  [exec] %s\n", exePath.c_str());
+
+    // Execute the binary and propagate its exit code
+    int execResult = std::system(exePath.c_str());
+    if (execResult == -1) {
+        writeOutput("%s[error]%s failed to launch executable\n",
+                    ansicolor("\033[31m"), ansicolor("\033[0m"));
+        return false;
+    }
+
+#ifdef _WIN32
+    mChildExitCode = execResult;
+#else
+    if (WIFEXITED(execResult)) {
+        mChildExitCode = WEXITSTATUS(execResult);
+    } else if (WIFSIGNALED(execResult)) {
+        mChildExitCode = 128 + WTERMSIG(execResult);
+    } else {
+        mChildExitCode = 1;
+    }
+#endif
+
+    return true;
+#else
+    (void)mObjectPath;
+    writeOutput("%s[error]%s cannot execute on WASM target\n",
+                ansicolor("\033[31m"), ansicolor("\033[0m"));
+    return false;
+#endif
 }
 
 std::string CompilationSession::fmtStage() {

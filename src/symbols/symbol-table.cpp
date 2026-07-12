@@ -61,6 +61,15 @@ SymId SymbolTable::declareInScope(ScopeId scope, std::string_view name, SymbolVi
                           doc_span);
 }
 
+void SymbolTable::emplace(const SymbolTable &other) {
+    for (size_t i = 0; i < other.symbols_.size(); i++) {
+        auto &data = other.symbols_[i];
+        if (data.scope == kRootScope) continue;
+        declare(data.name, data.visibility, 0, data.kind,
+                data.decl_id, data.span, data.target, data.doc_span);
+    }
+}
+
 SymbolData &SymbolTable::get(SymId id) {
     return symbols_[id];
 }

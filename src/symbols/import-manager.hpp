@@ -58,7 +58,7 @@ public:
 
     const LoadedFile &get(size_t idx) const;
     size_t fileCount() const noexcept { return files_.size(); }
-    //const LoadedFile &get(size_t idx) const;
+
     bool isLoaded(std::string_view path) const;
     memory::Optional<SymOrigin> originOf(SymId main_sym) const;
     void setVisibleRoots(std::vector<std::string> roots);

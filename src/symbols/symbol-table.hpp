@@ -70,6 +70,9 @@ public:
                   int32_t depth = 0, SymKind kind = SymKind::Variable,
                   ast::DeclId decl_id = ast::kInvalidDecl, memory::Span span = {},
                   SymId target = kInvalidSym, memory::Span doc_span = {});
+
+    /// Copy all non-root symbols from `other` into the current scope of `this`.
+    void emplace(const SymbolTable &other);
     SymId declare(std::string_view name, SymbolVisibility vis = SymbolVisibility::Private,
                   int32_t depth = 0, SymKind kind = SymKind::Variable,
                   ast::DeclId decl_id = ast::kInvalidDecl, memory::Span span = {},
