@@ -3,6 +3,7 @@
 #include "ast/ast-builder.hpp"
 #include "codegen-emit.hpp"
 #include "codegen-type.hpp"
+#include "diagnostics/diagnostic-engine.hpp"
 #include "hir/hir-module.hpp"
 #include "memory/string-interner.hpp"
 #include "symbols/symbol-table.hpp"
@@ -23,7 +24,8 @@ class CodeGen {
 public:
     CodeGen(const memory::StringInterner &interner, const symbols::SymbolTable &syms,
             const types::TypeIntern &types, const ast::AstBuilder &astBuilder,
-            std::string_view targetTriple = {}, uint8_t optLevel = 0);
+            std::string_view targetTriple = {}, uint8_t optLevel = 0,
+            diagnostics::DiagnosticEngine *diags = nullptr);
     ~CodeGen();
 
     void emit(const hir::HirModule &hirModule, std::string_view moduleName);
@@ -38,6 +40,8 @@ public:
 private:
     void emitFunction(const hir::HirFunction &fn, const hir::HirModule &mod);
     void emitExternFn(const hir::HirFunction &fn);
+    void llvmError(const std::string &msg);
+    bool verifyCurrentFunction(llvm::Function *llvmFn);
 
     void ensureTargetInfo();
     std::string effectiveTriple() const;
@@ -49,6 +53,7 @@ private:
     const symbols::SymbolTable &syms_;
     const types::TypeIntern &types_;
     const ast::AstBuilder &astBuilder_;
+    diagnostics::DiagnosticEngine *diags_;
     std::string targetTriple_;
     uint8_t optLevel_;
 };

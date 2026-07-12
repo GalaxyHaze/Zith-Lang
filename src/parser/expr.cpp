@@ -173,7 +173,7 @@ ast::ExprId Parser::parsePrimary() {
         skipComments(*tok);
         auto start_span = peek().span;
         if (!check(TokenKind::Identifier)) {
-            errorExpected("identifier after '@'");
+            errorExpected("identifier after '@'", diagnostics::err::ExpectedIdent);
             return ast::kInvalidExpr;
         }
         auto name = lexeme();

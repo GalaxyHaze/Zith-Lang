@@ -422,7 +422,7 @@ hir::HirExprId SemaPipeline::visitBinary(const ast::BinaryNode &n) {
     {
         types::TypeId rhs_type = exprType(rhs);
         if (result_type != types::kErrorType && rhs_type != types::kErrorType)
-            unifier_.unify(result_type, rhs_type);
+            unifier_.unify(result_type, rhs_type, n.span);
     }
 
     hir::HirBinary bin;
@@ -594,7 +594,7 @@ hir::HirExprId SemaPipeline::visitIf(const ast::IfNode &n) {
         if (else_expr != hir::kInvalidHirExpr) {
             auto else_type = exprType(else_expr);
             if (result_type != types::kErrorType && else_type != types::kErrorType)
-                unifier_.unify(result_type, else_type);
+                unifier_.unify(result_type, else_type, n.span);
         }
     }
 
@@ -648,7 +648,7 @@ void SemaPipeline::visitStmt(ast::StmtId id) {
             // If we have both annotation and init, unify them
             if (n.type_annot != ast::kInvalidTypeExpr && init != hir::kInvalidHirExpr) {
                 if (decl_type != types::kErrorType && init_type != types::kErrorType)
-                    pipeline.unifier_.unify(decl_type, init_type);
+                    pipeline.unifier_.unify(decl_type, init_type, n.span);
             }
 
             for (auto var_name : n.names) {
@@ -686,7 +686,7 @@ void SemaPipeline::visitStmt(ast::StmtId id) {
 
             // Check return type compatibility (skip if either is error sentinel)
             if (val_type != types::kErrorType && pipeline.current_fn_ret_type_ != types::kErrorType)
-                pipeline.unifier_.unify(val_type, pipeline.current_fn_ret_type_);
+                pipeline.unifier_.unify(val_type, pipeline.current_fn_ret_type_, n.span);
 
             hir::HirRet ret;
             ret.value   = val;

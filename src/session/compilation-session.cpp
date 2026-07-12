@@ -3,6 +3,7 @@
 #include "cli/terminal.hpp"
 #ifdef ZITH_HAS_LLVM
 #include "codegen/codegen.hpp"
+#include <llvm/TargetParser/Host.h>
 #endif
 #include "comptime/solver.hpp"
 #include "diagnostics/error-codes.hpp"
@@ -512,7 +513,7 @@ bool CompilationSession::codegenStage() {
 #ifdef ZITH_HAS_LLVM
     {
         codegen::CodeGen cg(*mInterner, mSyms, mTypes, mAstBuilder, mOpts.get().targetTriple,
-                            mOpts.get().flags.optLevel());
+                            mOpts.get().flags.optLevel(), &mDiags);
         cg.emit(mHirModule, mFilePath);
         cg.optimize();
 
@@ -536,11 +537,7 @@ bool CompilationSession::codegenStage() {
             std::string objPath = mOpts.get().outputFile;
             if (objPath.empty()) {
                 namespace fs = std::filesystem;
-                std::string objDir;
-                if (!mProjectConfig.binDir.empty())
-                    objDir = (fs::path(mProjectRoot) / mProjectConfig.binDir).string();
-                else
-                    objDir = (fs::path(mProjectRoot) / "build").string();
+                std::string objDir = (fs::path(mProjectRoot) / "cache").string();
                 fs::create_directories(objDir);
                 objPath = objDir + "/" + fs::path(mFilePath).filename().string() + ".o";
             }
@@ -573,10 +570,12 @@ bool CompilationSession::codegenStage() {
 
 bool CompilationSession::cacheStage() {
     auto t0 = std::chrono::steady_clock::now();
+    namespace fs = std::filesystem;
+    fs::create_directories(fs::path(mProjectRoot) / "cache");
     if (mOpts.get().flags.verbose()) {
         auto dt = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0)
                       .count();
-        writeOutput("  [cache] \xe2\x80\x94 (stub)  (%5.1fms)\n", dt);
+        writeOutput("  [cache] \xe2\x80\x94 ready  (%5.1fms)\n", dt);
     }
     return true;
 }
@@ -599,14 +598,22 @@ bool CompilationSession::linkAndExec() {
         else
             binName = fs::path(mFilePath).stem().string();
 
-        // Compute output directory (same dir as object file)
-        std::string objDir;
-        if (!mProjectConfig.binDir.empty())
-            objDir = (fs::path(mProjectRoot) / mProjectConfig.binDir).string();
-        else
-            objDir = (fs::path(mProjectRoot) / "build").string();
+        // Compute output directory
+        std::string exeDir = (fs::path(mProjectRoot) / "target").string();
+        // Cross-compilation: target/<triple>/ subdirectory
+        auto &triple = mOpts.get().targetTriple;
+        if (!triple.empty()) {
+#ifdef ZITH_HAS_LLVM
+            std::string hostTriple = llvm::sys::getDefaultTargetTriple();
+#else
+            std::string hostTriple;
+#endif
+            if (triple != hostTriple)
+                exeDir = (fs::path(mProjectRoot) / "target" / triple).string();
+        }
 
-        exePath = objDir + "/" + binName;
+        fs::create_directories(exeDir);
+        exePath = exeDir + "/" + binName;
 #ifdef _WIN32
         exePath += ".exe";
 #endif

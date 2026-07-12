@@ -71,12 +71,16 @@ void Parser::errorHere(std::string_view msg, diagnostics::ErrCode code) {
 void Parser::errorExpected(std::string_view expected) {
     std::string msg = "expected ";
     msg += expected;
+    msg += " but got ";
+    msg += lexer::tokenKindName(peek().kind);
     diag->report(Severity::Error, diagnostics::err::ExpectedExpr, std::move(msg), peek().span);
 }
 
 void Parser::errorExpected(std::string_view expected, diagnostics::ErrCode code) {
     std::string msg = "expected ";
     msg += expected;
+    msg += " but got ";
+    msg += lexer::tokenKindName(peek().kind);
     diag->report(Severity::Error, code, std::move(msg), peek().span);
 }
 
@@ -167,7 +171,8 @@ bool Parser::expectPunc(char c) {
         return true;
     std::string msg = "expected '";
     msg += c;
-    msg += "'";
+    msg += "' but got ";
+    msg += lexer::tokenKindName(peek().kind);
     errorHere(msg);
     return false;
 }
@@ -178,7 +183,9 @@ bool Parser::expectIdent(std::string_view &out) {
         advance();
         return true;
     }
-    errorHere("expected identifier");
+    std::string msg = "expected identifier but got ";
+    msg += lexer::tokenKindName(peek().kind);
+    errorHere(msg, diagnostics::err::ExpectedIdent);
     return false;
 }
 
@@ -188,7 +195,9 @@ std::string_view Parser::expectIdent() {
         advance();
         return name;
     }
-    errorHere("expected identifier");
+    std::string msg = "expected identifier but got ";
+    msg += lexer::tokenKindName(peek().kind);
+    errorHere(msg, diagnostics::err::ExpectedIdent);
     return {};
 }
 
@@ -267,7 +276,9 @@ ast::StmtId Parser::parseStmt() {
 
 ast::DeclId Parser::parseFnDecl() {
     if (!check(TokenKind::Identifier)) {
-        errorHere("expected function name");
+        std::string msg = "expected function name but got ";
+        msg += lexer::tokenKindName(peek().kind);
+        errorHere(msg, diagnostics::err::ExpectedIdent);
         return kInvalidDecl;
     }
     auto name_span = peek().span;
@@ -275,13 +286,15 @@ ast::DeclId Parser::parseFnDecl() {
     advance();
 
     if (!consume('(')) {
-        errorExpected("'(' after function name");
+        errorExpected("'(' after function name", diagnostics::err::UnclosedParen);
         return kInvalidDecl;
     }
 
     auto params = parseDelimited(*tok, bld->arena(), ')', [this]() -> std::string_view {
         if (!check(TokenKind::Identifier)) {
-            errorHere("expected parameter name");
+            std::string msg = "expected parameter name but got ";
+            msg += lexer::tokenKindName(peek().kind);
+            errorHere(msg, diagnostics::err::ExpectedIdent);
             advance();
             return {};
         }
@@ -304,7 +317,11 @@ ast::DeclId Parser::parseDecl() {
         return parseFnDecl();
     if (check(TokenKind::Struct))
         return kInvalidDecl; // handled during scan
-    errorHere("expected declaration");
+    {
+        std::string msg = "expected declaration but got ";
+        msg += lexer::tokenKindName(peek().kind);
+        errorHere(msg);
+    }
     advance();
     return kInvalidDecl;
 }

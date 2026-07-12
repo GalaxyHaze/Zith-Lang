@@ -2,7 +2,7 @@
 
 #include "ast/ast-builder.hpp"
 #include "ast/ast-nodes.hpp"
-
+#include "diagnostics/error-codes.hpp"
 
 
 #include <llvm/ADT/SmallString.h>
@@ -29,12 +29,32 @@ namespace zith::codegen {
 
 CodeGen::CodeGen(const memory::StringInterner &interner, const symbols::SymbolTable &syms,
                  const types::TypeIntern &types, const ast::AstBuilder &astBuilder,
-                 std::string_view targetTriple, uint8_t optLevel)
+                 std::string_view targetTriple, uint8_t optLevel,
+                 diagnostics::DiagnosticEngine *diags)
     : ctx_(std::make_unique<llvm::LLVMContext>()), interner_(interner), syms_(syms), types_(types),
-      astBuilder_(astBuilder), targetTriple_(targetTriple), optLevel_(optLevel) {
+      astBuilder_(astBuilder), diags_(diags), targetTriple_(targetTriple), optLevel_(optLevel) {
     llvm::InitializeNativeTarget();
     llvm::InitializeNativeTargetAsmPrinter();
     llvm::InitializeNativeTargetAsmParser();
+}
+
+void CodeGen::llvmError(const std::string &msg) {
+    if (diags_)
+        diags_->report(diagnostics::Severity::Error, diagnostics::err::InvalidIR, msg,
+                       memory::Span{});
+    else
+        llvm::errs() << msg << "\n";
+}
+
+bool CodeGen::verifyCurrentFunction(llvm::Function *llvmFn) {
+    std::string buf;
+    llvm::raw_string_ostream os(buf);
+    if (llvm::verifyFunction(*llvmFn, &os)) {
+        llvmError("IR verification failed for function '" +
+                  std::string(llvmFn->getName()) + "': " + buf);
+        return false;
+    }
+    return true;
 }
 
 std::string CodeGen::effectiveTriple() const {
@@ -164,7 +184,7 @@ void CodeGen::emitFunction(const hir::HirFunction &fn, const hir::HirModule &mod
             builder.CreateRetVoid();
     }
 
-    llvm::verifyFunction(*llvmFn);
+    verifyCurrentFunction(llvmFn);
 }
 
 llvm::Module *CodeGen::getModule() {
@@ -179,12 +199,18 @@ std::string CodeGen::printIR() {
 }
 
 static bool setupTargetMachine(llvm::Module *module, const std::string &tripleStr, int optLevel,
-                               std::unique_ptr<llvm::TargetMachine> &outTM) {
+                               std::unique_ptr<llvm::TargetMachine> &outTM,
+                               diagnostics::DiagnosticEngine *diags = nullptr) {
     std::string error;
     auto triple  = llvm::Triple(tripleStr);
     auto *target = llvm::TargetRegistry::lookupTarget(triple, error);
     if (!target) {
-        llvm::errs() << "Target lookup failed: " << error << "\n";
+        std::string msg = "target lookup failed: " + error;
+        if (diags)
+            diags->report(diagnostics::Severity::Error, diagnostics::err::InvalidIR, msg,
+                          memory::Span{});
+        else
+            llvm::errs() << msg << "\n";
         return false;
     }
 
@@ -193,7 +219,12 @@ static bool setupTargetMachine(llvm::Module *module, const std::string &tripleSt
                                             std::nullopt,
                                             static_cast<llvm::CodeGenOptLevel>(optLevel)));
     if (!outTM) {
-        llvm::errs() << "Failed to create TargetMachine\n";
+        std::string msg = "failed to create TargetMachine for " + tripleStr;
+        if (diags)
+            diags->report(diagnostics::Severity::Error, diagnostics::err::InvalidIR, msg,
+                          memory::Span{});
+        else
+            llvm::errs() << msg << "\n";
         return false;
     }
 
@@ -203,19 +234,19 @@ static bool setupTargetMachine(llvm::Module *module, const std::string &tripleSt
 
 bool CodeGen::emitObject(const std::string &outputPath) {
     std::unique_ptr<llvm::TargetMachine> tm;
-    if (!setupTargetMachine(module_.get(), effectiveTriple(), llvmOptLevel(), tm))
+    if (!setupTargetMachine(module_.get(), effectiveTriple(), llvmOptLevel(), tm, diags_))
         return false;
 
     std::error_code ec;
     llvm::raw_fd_ostream dest(outputPath, ec, llvm::sys::fs::OF_None);
     if (ec) {
-        llvm::errs() << "Failed to open output: " << ec.message() << "\n";
+        llvmError("failed to open object output '" + outputPath + "': " + ec.message());
         return false;
     }
 
     llvm::legacy::PassManager passManager;
     if (tm->addPassesToEmitFile(passManager, dest, nullptr, llvm::CodeGenFileType::ObjectFile)) {
-        llvm::errs() << "TargetMachine can't emit object file\n";
+        llvmError("TargetMachine cannot emit object file for this target");
         return false;
     }
 
@@ -227,19 +258,19 @@ bool CodeGen::emitObject(const std::string &outputPath) {
 
 bool CodeGen::emitAsm(const std::string &outputPath) {
     std::unique_ptr<llvm::TargetMachine> tm;
-    if (!setupTargetMachine(module_.get(), effectiveTriple(), llvmOptLevel(), tm))
+    if (!setupTargetMachine(module_.get(), effectiveTriple(), llvmOptLevel(), tm, diags_))
         return false;
 
     std::error_code ec;
     llvm::raw_fd_ostream dest(outputPath, ec, llvm::sys::fs::OF_None);
     if (ec) {
-        llvm::errs() << "Failed to open output: " << ec.message() << "\n";
+        llvmError("failed to open assembly output '" + outputPath + "': " + ec.message());
         return false;
     }
 
     llvm::legacy::PassManager passManager;
     if (tm->addPassesToEmitFile(passManager, dest, nullptr, llvm::CodeGenFileType::AssemblyFile)) {
-        llvm::errs() << "TargetMachine can't emit assembly file\n";
+        llvmError("TargetMachine cannot emit assembly file for this target");
         return false;
     }
 
@@ -251,14 +282,14 @@ bool CodeGen::emitAsm(const std::string &outputPath) {
 
 std::string CodeGen::printAsm() {
     std::unique_ptr<llvm::TargetMachine> tm;
-    if (!setupTargetMachine(module_.get(), effectiveTriple(), llvmOptLevel(), tm))
+    if (!setupTargetMachine(module_.get(), effectiveTriple(), llvmOptLevel(), tm, diags_))
         return "";
 
     llvm::SmallString<0> asm_buf;
     llvm::raw_svector_ostream ros(asm_buf);
     llvm::legacy::PassManager passManager;
     if (tm->addPassesToEmitFile(passManager, ros, nullptr, llvm::CodeGenFileType::AssemblyFile)) {
-        llvm::errs() << "TargetMachine can't emit assembly file\n";
+        llvmError("TargetMachine cannot emit assembly file for this target");
         return "";
     }
 

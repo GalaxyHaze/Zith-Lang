@@ -3,9 +3,11 @@
 #include "ast/ast-ids.hpp"
 #include "diagnostics/diagnostic-engine.hpp"
 #include "diagnostics/error-codes.hpp"
+#include "lexer/lexer.hpp"
 #include "lexer/token.hpp"
 #include "memory/arena.hpp"
 #include "memory/dyn-array.hpp"
+#include <string>
 #include "memory/span.hpp"
 #include "symbols/symbol-table.hpp"
 
@@ -240,8 +242,13 @@ inline ast::DeclId scanGlobalOrConst(Parser &parser, symbols::SymbolTable &syms,
 
     // name
     if (!tok.peek().is(lexer::TokenKind::Identifier)) {
-        diag.report(diagnostics::Severity::Error, diagnostics::err::ExpectedIdent,
-                    "expected variable name", tok.peek().span);
+        std::string msg = "expected variable name but got ";
+        if (tok.peek().kind == lexer::TokenKind::Punctuation)
+            msg += "'" + std::string(1, tok.peek().punc) + "'";
+        else
+            msg += lexer::tokenKindName(tok.peek().kind);
+        diag.report(diagnostics::Severity::Error, diagnostics::err::ExpectedIdent, std::move(msg),
+                    tok.peek().span);
         tok.advance();
         return ast::kInvalidDecl;
     }

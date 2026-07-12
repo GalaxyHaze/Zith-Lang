@@ -55,8 +55,13 @@ static memory::DynArray<ast::FnParam> parseFnParams(Parser &parser) {
         }
 
         if (!tok.peek().is(lexer::TokenKind::Identifier)) {
+            std::string msg = "expected parameter name but got ";
+            if (tok.peek().kind == lexer::TokenKind::Punctuation)
+                msg += "'" + std::string(1, tok.peek().punc) + "'";
+            else
+                msg += lexer::tokenKindName(tok.peek().kind);
             diag.report(diagnostics::Severity::Error, diagnostics::err::ExpectedIdent,
-                        "expected parameter name", tok.peek().span);
+                        std::move(msg), tok.peek().span);
             tok.advance();
             continue;
         }
@@ -85,12 +90,14 @@ static memory::DynArray<ast::GenericParam> tryParseGenericParams(Parser &parser,
     while (!tok.is_empty() && !tok.peek().is_eof()) {
         if (tok.peek().punc == '>') {
             diag.report(diagnostics::Severity::Error, diagnostics::err::ExpectedIdent,
-                        "expected generic parameter name", tok.peek().span);
+                        "expected generic parameter name before '>'", tok.peek().span);
             break;
         }
         if (!tok.peek().is(lexer::TokenKind::Identifier)) {
+            std::string msg = "expected generic parameter name but got ";
+            msg += lexer::tokenKindName(tok.peek().kind);
             diag.report(diagnostics::Severity::Error, diagnostics::err::ExpectedIdent,
-                        "expected generic parameter name", tok.peek().span);
+                        std::move(msg), tok.peek().span);
             break;
         }
         auto param_name = tok.lexeme();
@@ -105,8 +112,12 @@ static memory::DynArray<ast::GenericParam> tryParseGenericParams(Parser &parser,
             break;
     }
     if (!parser.consume('>')) {
-        diag.report(diagnostics::Severity::Error, diagnostics::err::ExpectedExpr,
-                    "expected '>' to close generic parameters", tok.peek().span);
+        {
+            std::string msg = "expected '>' to close generic parameters but got ";
+            msg += lexer::tokenKindName(tok.peek().kind);
+            diag.report(diagnostics::Severity::Error, diagnostics::err::ExpectedExpr,
+                        std::move(msg), tok.peek().span);
+        }
         recovery::panic(tok, {lexer::TokenKind::End});
     }
     return params;
@@ -190,8 +201,12 @@ static memory::DynArray<ast::ImportSymbol> parseImportSymbols(lexer::TokenStream
     tok.advance(); // consume '{'
     while (!tok.is_empty() && !tok.peek().is_eof() && tok.peek().punc != '}') {
         if (!tok.peek().is(lexer::TokenKind::Identifier)) {
+        {
+            std::string msg = "expected symbol name in import list but got ";
+            msg += lexer::tokenKindName(tok.peek().kind);
             diag.report(diagnostics::Severity::Error, diagnostics::err::ExpectedIdent,
-                        "expected symbol name in import list", tok.peek().span);
+                        std::move(msg), tok.peek().span);
+        }
             break;
         }
         auto name = tok.lexeme();
@@ -203,8 +218,10 @@ static memory::DynArray<ast::ImportSymbol> parseImportSymbols(lexer::TokenStream
                 alias = tok.lexeme();
                 tok.advance();
             } else {
+                std::string alias_msg = "expected alias name after 'as' but got ";
+                alias_msg += lexer::tokenKindName(tok.peek().kind);
                 diag.report(diagnostics::Severity::Error, diagnostics::err::ExpectedIdent,
-                            "expected alias name after 'as'", tok.peek().span);
+                            std::move(alias_msg), tok.peek().span);
             }
         }
         symbols.push({name, alias});
@@ -214,8 +231,12 @@ static memory::DynArray<ast::ImportSymbol> parseImportSymbols(lexer::TokenStream
     if (tok.peek().punc == '}')
         tok.advance();
     else
-        diag.report(diagnostics::Severity::Error, diagnostics::err::ExpectedExpr,
-                    "expected '}' to close import list", tok.peek().span);
+        {
+            std::string msg = "expected '}' to close import list but got ";
+            msg += lexer::tokenKindName(tok.peek().kind);
+            diag.report(diagnostics::Severity::Error, diagnostics::err::ExpectedExpr,
+                        std::move(msg), tok.peek().span);
+        }
     return symbols;
 }
 
@@ -282,7 +303,9 @@ static void scanMethod(MethodScanContext &ctx, bool must_have_body) {
         scan_detail::skipBalanced(ctx.tok, '<', '>');
 
     if (!ctx.tok.peek().is(lexer::TokenKind::Identifier)) {
-        ctx.diag.report(diagnostics::Severity::Error, ExpectedIdent, "expected method name",
+        std::string msg = "expected method name but got ";
+        msg += lexer::tokenKindName(ctx.tok.peek().kind);
+        ctx.diag.report(diagnostics::Severity::Error, ExpectedIdent, std::move(msg),
                         ctx.tok.peek().span);
         ctx.tok.advance();
         return;
@@ -292,8 +315,15 @@ static void scanMethod(MethodScanContext &ctx, bool must_have_body) {
     ctx.tok.advance();
 
     if (ctx.tok.peek().punc != '(') {
-        ctx.diag.report(diagnostics::Severity::Error, ExpectedExpr,
-                        "expected '(' after method name", ctx.tok.peek().span);
+        std::string msg = "expected '(' after method name but got ";
+        if (ctx.tok.peek().is(lexer::TokenKind::Punctuation))
+            msg += "'" + std::string(1, ctx.tok.peek().punc) + "'";
+        else if (ctx.tok.peek().is_eof())
+            msg += "end of file";
+        else
+            msg += lexer::tokenKindName(ctx.tok.peek().kind);
+        ctx.diag.report(diagnostics::Severity::Error, ExpectedExpr, std::move(msg),
+                        ctx.tok.peek().span);
         return;
     }
     ctx.tok.advance();
@@ -319,7 +349,8 @@ static void scanMethod(MethodScanContext &ctx, bool must_have_body) {
     } else if (ctx.tok.peek().punc == ';') {
         if (must_have_body)
             ctx.diag.report(diagnostics::Severity::Error, ExpectedExpr,
-                            "methods in component must have a body", ctx.tok.peek().span);
+                            "methods in component must have a body (got ';')",
+                            ctx.tok.peek().span);
         ctx.tok.advance();
     } else {
         ctx.diag.report(diagnostics::Severity::Error, ExpectedExpr,
@@ -520,7 +551,9 @@ ScanResult scan(Parser &parser, symbols::SymbolTable &syms) {
             tok.advance(); // consume 'fn'
 
             if (!tok.peek().is(lexer::TokenKind::Identifier)) {
-                diag.report(diagnostics::Severity::Error, ExpectedIdent, "expected function name",
+                std::string msg = "expected function name but got ";
+                msg += lexer::tokenKindName(tok.peek().kind);
+                diag.report(diagnostics::Severity::Error, ExpectedIdent, std::move(msg),
                             tok.peek().span);
                 tok.advance();
                 resetVis();
@@ -534,8 +567,15 @@ ScanResult scan(Parser &parser, symbols::SymbolTable &syms) {
             auto generic_params = tryParseGenericParams(parser, bld.arena());
 
             if (tok.peek().punc != '(') {
-                diag.report(diagnostics::Severity::Error, ExpectedExpr,
-                            "expected '(' after function name", tok.peek().span);
+                std::string msg = "expected '(' after function name but got ";
+                if (tok.peek().is(lexer::TokenKind::Punctuation))
+                    msg += "'" + std::string(1, tok.peek().punc) + "'";
+                else if (tok.peek().is_eof())
+                    msg += "end of file";
+                else
+                    msg += lexer::tokenKindName(tok.peek().kind);
+                diag.report(diagnostics::Severity::Error, ExpectedExpr, std::move(msg),
+                            tok.peek().span);
                 resetVis();
                 continue;
             }
@@ -613,8 +653,12 @@ ScanResult scan(Parser &parser, symbols::SymbolTable &syms) {
             tok.advance();
 
             if (!tok.peek().is(lexer::TokenKind::Identifier)) {
-                diag.report(diagnostics::Severity::Error, ExpectedIdent,
-                            "expected name after '" + std::string(kw) + "'", tok.peek().span);
+                {
+                    std::string msg = "expected name after '" + std::string(kw) + "' but got ";
+                    msg += lexer::tokenKindName(tok.peek().kind);
+                    diag.report(diagnostics::Severity::Error, ExpectedIdent, std::move(msg),
+                                tok.peek().span);
+                }
                 tok.advance();
                 resetVis();
                 continue;
@@ -778,8 +822,12 @@ ScanResult scan(Parser &parser, symbols::SymbolTable &syms) {
             tok.advance();
 
             if (!tok.peek().is(lexer::TokenKind::Identifier)) {
-                diag.report(diagnostics::Severity::Error, ExpectedIdent,
-                            "expected name after '" + std::string(kw) + "'", tok.peek().span);
+                {
+                    std::string msg = "expected name after '" + std::string(kw) + "' but got ";
+                    msg += lexer::tokenKindName(tok.peek().kind);
+                    diag.report(diagnostics::Severity::Error, ExpectedIdent, std::move(msg),
+                                tok.peek().span);
+                }
                 tok.advance();
                 resetVis();
                 continue;
@@ -904,7 +952,9 @@ ScanResult scan(Parser &parser, symbols::SymbolTable &syms) {
             // ── type alias: alias Name = TypeExpr ──────────────────
             if (kw == "alias") {
                 if (!tok.peek().is(lexer::TokenKind::Identifier)) {
-                    diag.report(diagnostics::Severity::Error, ExpectedIdent, "expected alias name",
+                    std::string msg = "expected alias name but got ";
+                    msg += lexer::tokenKindName(tok.peek().kind);
+                    diag.report(diagnostics::Severity::Error, ExpectedIdent, std::move(msg),
                                 tok.peek().span);
                     resetVis();
                     continue;
@@ -916,8 +966,10 @@ ScanResult scan(Parser &parser, symbols::SymbolTable &syms) {
                 auto generic_params = tryParseGenericParams(parser, bld.arena());
 
                 if (tok.peek().punc != '=') {
-                    diag.report(diagnostics::Severity::Error, ExpectedExpr,
-                                "expected '=' in type alias", tok.peek().span);
+                    std::string msg = "expected '=' in type alias but got ";
+                    msg += lexer::tokenKindName(tok.peek().kind);
+                    diag.report(diagnostics::Severity::Error, ExpectedExpr, std::move(msg),
+                                tok.peek().span);
                     resetVis();
                     continue;
                 }
@@ -957,8 +1009,16 @@ ScanResult scan(Parser &parser, symbols::SymbolTable &syms) {
         }
 
         // ── unknown token → skip to ; or next declaration ─────────
-        diag.report(diagnostics::Severity::Error, ExpectedExpr, "unexpected token",
-                    tok.peek().span);
+        {
+            auto &bad = tok.peek();
+            std::string msg = "unexpected ";
+            if (bad.kind == lexer::TokenKind::Punctuation)
+                msg += "'" + std::string(1, bad.punc) + "'";
+            else
+                msg += lexer::tokenKindName(bad.kind);
+            msg += " in declaration context";
+            diag.report(diagnostics::Severity::Error, ExpectedExpr, std::move(msg), bad.span);
+        }
         recovery::panic(tok, {lexer::TokenKind::Fn, lexer::TokenKind::Struct,
                               lexer::TokenKind::Trait, lexer::TokenKind::Interface,
                               lexer::TokenKind::Implement, lexer::TokenKind::Module,
