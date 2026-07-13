@@ -196,7 +196,7 @@ struct PerfectHash {
 
         if (id < 0)
             return TokenKind::Identifier;
-        return (TokenTable[id].first == sv) ? TokenTable[id].second : TokenKind::Identifier;
+        return (TokenTable[static_cast<size_t>(id)].first == sv) ? TokenTable[static_cast<size_t>(id)].second : TokenKind::Identifier;
     }
 };
 
@@ -230,7 +230,7 @@ constexpr bool allKeywordsPlaced() noexcept {
         const int16_t id  = g_hasher.table[slot];
         if (id < 0)
             return false;
-        if (TokenTable[id].first != TokenTable[i].first)
+        if (TokenTable[static_cast<size_t>(id)].first != TokenTable[i].first)
             return false;
     }
     return true;

@@ -42,10 +42,10 @@ struct SymbolData {
     SymId target = kInvalidSym;
     memory::DynArray<SymId> members;
 
-    SymbolData(memory::InternedId name, ScopeId scope, SymbolVisibility vis, int32_t depth,
+    SymbolData(memory::InternedId name_, ScopeId scope_, SymbolVisibility vis, int32_t depth,
                SymKind ikind, ast::DeclId did, memory::Span ispan, memory::Span idoc, SymId itarget,
                memory::Arena &arena)
-        : name(name), scope(scope), visibility(vis), mod_depth(depth), kind(ikind), decl_id(did),
+        : name(name_), scope(scope_), visibility(vis), mod_depth(depth), kind(ikind), decl_id(did),
           span(ispan), doc_span(idoc), target(itarget), members(arena) {}
 };
 
@@ -91,6 +91,9 @@ public:
                          memory::Span doc_span = {});
     SymId lookup(memory::InternedId name) const;
     SymId lookup(std::string_view name) const;
+    /// Look up `name` in the parent of the current scope (skip current level).
+    SymId lookupEscaped(std::string_view name) const;
+    SymId lookupEscaped(memory::InternedId name) const;
     SymId lookupInScope(memory::InternedId name, ScopeId scope) const;
     SymId lookupInScope(std::string_view name, ScopeId scope) const;
     memory::DynArray<SymId> lookupAll(memory::InternedId name, memory::Arena &arena) const;

@@ -107,7 +107,7 @@ static size_t levenshteinDistance(const char *a, const char *b) {
     return prev[m];
 }
 
-static void suggestCommand(const char *arg, term::UsagePrinter &err) {
+static void suggestCommand(const char *arg, term::UsagePrinter & /*err*/) {
     static const char *suggestCmds[] = {"build", "run",  "check", "execute", "test",
                                         "fmt",   "docs", "repl",  "create",  "clean",
                                         "deps",  "help", nullptr};
@@ -140,7 +140,7 @@ static bool isSubcommand(const char *arg) {
     return false;
 }
 
-#define Command Options::Command
+using Command = Options::Command;
 static Command subcommandToEnum(const char *arg) {
     if (compare(arg, "build"))
         return Command::Build;
@@ -168,7 +168,6 @@ static Command subcommandToEnum(const char *arg) {
         return Command::Help;
     return Command::None;
 }
-#undef Command
 
 void Cli::parseArgs(int argc, char **argv) {
     this->args = std::make_pair(argc, argv);
@@ -662,7 +661,6 @@ void Cli::loadProject() {
 }
 
 int Cli::dispatch() {
-    using Command = Options::Command;
     if (opts.inputFiles.empty() && !config.projectRoot.empty()) {
         switch (opts.command) {
         case Command::Build:

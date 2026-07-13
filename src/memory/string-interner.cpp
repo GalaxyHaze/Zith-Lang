@@ -18,7 +18,7 @@ StringInterner::StringInterner(Arena &arena) : allocator_(&arena) {
 }
 
 InternedId StringInterner::intern(std::string_view str) {
-    std::unique_lock lock(rwMutex_);
+    std::unique_lock<std::shared_mutex> lock(rwMutex_);
 
     auto *existing = map->get(str);
     if (existing)
@@ -33,7 +33,7 @@ InternedId StringInterner::intern(std::string_view str) {
 }
 
 std::string_view StringInterner::lookup(InternedId id) const {
-    std::shared_lock lock(rwMutex_);
+    std::shared_lock<std::shared_mutex> lock(rwMutex_);
 
     if (id >= pool->size())
         return {};

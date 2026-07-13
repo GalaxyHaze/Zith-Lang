@@ -17,7 +17,7 @@ namespace zith::lexer {
 
 class Lexer {
     memory::SourceMap &sourceMap;
-    memory::Arena &arena;
+    //memory::Arena &arena;
     memory::SourceLoc *file = nullptr;
     memory::FileId gId      = 0;
     const char *start       = nullptr;

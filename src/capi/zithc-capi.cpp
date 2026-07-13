@@ -199,8 +199,8 @@ zithc_diagnostic zithc_diag_get(zithc_session *session, size_t index) {
         if (start != std::string::npos && end != std::string::npos && end > start) {
             auto fn_name = d.message.substr(start + 1, end - start - 1);
             zith::memory::Arena tmp_arena;
-            auto all = session->session.symbolTable().lookupAll(fn_name, tmp_arena);
-            for (auto sym_id : all) {
+            auto syms = session->session.symbolTable().lookupAll(fn_name, tmp_arena);
+            for (auto sym_id : syms) {
                 auto &data = session->session.symbolTable().get(sym_id);
                 if (data.kind != zith::symbols::SymKind::Fn ||
                     data.decl_id == zith::ast::kInvalidDecl)

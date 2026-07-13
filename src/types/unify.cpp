@@ -89,13 +89,18 @@ bool Unifier::unify(TypeId a, TypeId b, memory::Span span) {
     auto &data_b = intern_.lookup(b);
 
     switch (kind_a) {
-    case TypeKind::Int:
-        if (std::get<TypeInt>(data_a).width != std::get<TypeInt>(data_b).width) {
-            diags_.report(diagnostics::Severity::Error, diagnostics::err::TypeMismatch,
-                          "type mismatch: integer width differs", span);
-            return false;
-        }
-        return true;
+    case TypeKind::Int: {
+        auto w_a = std::get<TypeInt>(data_a).width;
+        auto w_b = std::get<TypeInt>(data_b).width;
+        if (w_a == w_b)
+            return true;
+        // Integer literal (Literal width) adapts to any concrete width
+        if (w_a == IntWidth::Literal || w_b == IntWidth::Literal)
+            return true;
+        diags_.report(diagnostics::Severity::Error, diagnostics::err::TypeMismatch,
+                      "type mismatch: integer width differs", span);
+        return false;
+    }
     case TypeKind::Float:
         if (std::get<TypeFloat>(data_a).width != std::get<TypeFloat>(data_b).width) {
             diags_.report(diagnostics::Severity::Error, diagnostics::err::TypeMismatch,
@@ -257,8 +262,15 @@ bool Unifier::isAssignable(TypeId dst, TypeId src) const {
     auto &data_src = intern_.lookup(src);
 
     switch (kind_dst) {
-    case TypeKind::Int:
-        return std::get<TypeInt>(data_dst).width == std::get<TypeInt>(data_src).width;
+    case TypeKind::Int: {
+        auto w_dst = std::get<TypeInt>(data_dst).width;
+        auto w_src = std::get<TypeInt>(data_src).width;
+        if (w_dst == w_src)
+            return true;
+        if (w_dst == IntWidth::Literal || w_src == IntWidth::Literal)
+            return true;
+        return false;
+    }
     case TypeKind::Float:
         return std::get<TypeFloat>(data_dst).width == std::get<TypeFloat>(data_src).width;
     case TypeKind::Ptr: {
@@ -369,7 +381,9 @@ bool Unifier::isCoercible(TypeId dst, TypeId src) const {
     if (kind_dst == TypeKind::Int && kind_src == TypeKind::Int) {
         auto w_dst = std::get<TypeInt>(intern_.lookup(dst)).width;
         auto w_src = std::get<TypeInt>(intern_.lookup(src)).width;
-        auto to_u  = [](IntWidth w) -> uint8_t {
+        if (w_dst == IntWidth::Literal || w_src == IntWidth::Literal)
+            return true;
+        auto to_u = [](IntWidth w) -> uint8_t {
             switch (w) {
             case IntWidth::I8:
             case IntWidth::U8:
@@ -386,6 +400,8 @@ bool Unifier::isCoercible(TypeId dst, TypeId src) const {
             case IntWidth::I128:
             case IntWidth::U128:
                 return 128;
+            case IntWidth::Literal:
+                return 0;
             }
             return 0;
         };

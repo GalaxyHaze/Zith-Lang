@@ -10,8 +10,8 @@ namespace zith::memory {
 
 using InternedId = uint32_t;
 
-struct Arena;
-template <class T> struct DynArray;
+class Arena;
+template <class T> class DynArray;
 
 struct StringInterner {
     aSelf(StringInterner);

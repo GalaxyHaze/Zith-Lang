@@ -10,7 +10,19 @@
 
 namespace zith::types {
 
-enum class IntWidth : uint8_t { I8, I16, I32, I64, I128, U8, U16, U32, U64, U128 };
+enum class IntWidth : uint8_t {
+    I8,
+    I16,
+    I32,
+    I64,
+    I128,
+    U8,
+    U16,
+    U32,
+    U64,
+    U128,
+    Literal ///< sentinel for integer literals whose width is not yet fixed
+};
 enum class FloatWidth : uint8_t { F32, F64, F128 };
 
 enum class OwnershipKind : uint8_t { Default, Unique, Share, Lend, View, Belong };

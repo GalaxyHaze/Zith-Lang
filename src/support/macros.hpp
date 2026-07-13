@@ -4,7 +4,7 @@
 #define moveVar(var) std::move(other.var)
 #define moveInit(var) var(moveVar(var))
 #define moveExchange(var) std::exchange(other.var, nullptr)
-#define aSelf(type) using Self = type;
+#define aSelf(type) using Self = type
 #define allocaPtr(var) var = alloc<decltype(var)>(allocator)
 #define initializeAt(var, ...) std::construct_at(&var, __VA_ARGS__)
 

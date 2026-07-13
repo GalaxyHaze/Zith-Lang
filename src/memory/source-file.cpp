@@ -46,7 +46,7 @@ Loc SourceLoc::loc(const ByteOffset offset) const noexcept {
 
     // Procura a primeira linha que começa DEPOIS do offset
     auto it         = std::upper_bound(line_starts.begin(), line_starts.end(), offset);
-    size_t line_idx = std::distance(line_starts.begin(), it) - 1;
+    size_t line_idx = static_cast<size_t>(std::distance(line_starts.begin(), it)) - 1;
 
     ByteOffset line = static_cast<ByteOffset>(line_idx + 1);
     ByteOffset col  = offset - line_starts[line_idx] + 1;

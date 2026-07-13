@@ -19,8 +19,8 @@ struct SourceLoc {
     std::string path;
     memory::DynArray<ByteOffset> line_starts;
 
-    SourceLoc(FileVar file, std::string path, memory::Arena &arena)
-        : file(std::move(file)), path(std::move(path)), line_starts(arena) {}
+    SourceLoc(FileVar file_, std::string path_, memory::Arena &arena)
+        : file(std::move(file_)), path(std::move(path_)), line_starts(arena) {}
 
     std::string_view getSlice() const;
 

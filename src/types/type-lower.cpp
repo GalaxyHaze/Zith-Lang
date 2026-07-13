@@ -139,7 +139,7 @@ TypeId TypeLower::lowerNode(const ast::TypeExprNode &node) {
             auto inner     = self.lower(n.inner);
             bool has_error = n.error != ast::kInvalidTypeExpr && n.error != self.ast_.inferExpr();
             if (has_error) {
-                auto err = self.lower(n.error);
+                [[maybe_unused]] auto err = self.lower(n.error);
                 // Failable with explicit error type — store as pair
                 // For now: just store inner
                 return self.intern_.internFailable(inner);

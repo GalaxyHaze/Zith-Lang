@@ -223,8 +223,14 @@ struct Options {
     std::string subcommandStr; // string copy for command functions
 
     explicit Options(memory::Arena &allocator)
-        : includeDirs(allocator), inputFiles(allocator), assetDirs(allocator), flags(),
-          targetTriple(), sysroot() {}
+        : inputFiles(allocator),
+          outputFile(),         
+          includeDirs(allocator),
+          assetDirs(allocator),
+          targetTriple(),
+          sysroot(),             
+          flags() 
+    {}
 
     memory::StringInterner *stringPool = nullptr;
 

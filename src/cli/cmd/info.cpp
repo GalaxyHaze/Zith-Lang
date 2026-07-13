@@ -3,8 +3,10 @@
 
 #include <cstdio>
 
+#if !defined(__clang__)
 #define STRINGIFY_IMPL(x) #x
 #define STRINGIFY(x) STRINGIFY_IMPL(x)
+#endif
 
 namespace zith::cli::commands {
 

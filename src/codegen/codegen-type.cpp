@@ -25,6 +25,8 @@ static unsigned int widthToBits(types::IntWidth w) {
     case types::IntWidth::I128:
     case types::IntWidth::U128:
         return 128;
+    case types::IntWidth::Literal:
+        return 64; // resolved before codegen; fallback for safety
     }
     return 64;
 }

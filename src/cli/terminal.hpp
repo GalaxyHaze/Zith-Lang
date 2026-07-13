@@ -77,7 +77,7 @@ struct UsagePrinter {
     FILE *out    = nullptr;
     bool colorOn = false;
 
-    UsagePrinter(FILE *out, bool colorOn) : out(out), colorOn(colorOn) {}
+    UsagePrinter(FILE *out_, bool colorOn_) : out(out_), colorOn(colorOn_) {}
 
     UsagePrinter() = default;
 

@@ -128,6 +128,14 @@ public:
         size_ = 0;
     }
 
+    void pop_back() {
+        if (size_ == 0)
+            return;
+        if constexpr (!std::is_trivially_destructible_v<T>)
+            data_[size_ - 1].~T();
+        size_--;
+    }
+
     auto back() noexcept -> T & {
         if (size() == 0) {
             std::fprintf(stderr, "[error] attemp to use 'back' on DynArray siz 0");

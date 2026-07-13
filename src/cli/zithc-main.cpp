@@ -1,5 +1,4 @@
 #include "cli/options.hpp"
-// #include "options.hpp"
 
 int main(const int argc, char **argv) {
     zith::Cli programm;

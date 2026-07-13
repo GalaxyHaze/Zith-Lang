@@ -99,6 +99,25 @@ SymId SymbolTable::lookup(std::string_view name) const {
     return lookup(interner_->intern(name));
 }
 
+SymId SymbolTable::lookupEscaped(memory::InternedId name) const {
+    auto parent = scopes_[current_].parent;
+    if (parent == kInvalidScope)
+        return kInvalidSym;
+    ScopeId scope = parent;
+    while (scope != kInvalidScope) {
+        for (auto sid : scopes_[scope].syms) {
+            if (symbols_[sid].name == name)
+                return sid;
+        }
+        scope = scopes_[scope].parent;
+    }
+    return kInvalidSym;
+}
+
+SymId SymbolTable::lookupEscaped(std::string_view name) const {
+    return lookupEscaped(interner_->intern(name));
+}
+
 SymId SymbolTable::lookupInScope(std::string_view name, ScopeId scope) const {
     return lookupInScope(interner_->intern(name), scope);
 }
@@ -206,11 +225,11 @@ void SymbolTable::dump(FILE *out, ast::AstBuilder *bld) const {
                 size_t fields = 0;
                 if (bld && sym.decl_id != ast::kInvalidDecl) {
                     auto &decl = bld->getDecl(sym.decl_id);
-                    if (auto *sn = std::get_if<ast::StructDeclNode>(&decl))
+                    if (auto *sn = ast::asStruct(decl))
                         fields = sn->fields.size();
-                    else if (auto *en = std::get_if<ast::EnumDeclNode>(&decl))
+                    else if (auto *en = ast::asEnum(decl))
                         fields = en->variants.size();
-                    else if (auto *un = std::get_if<ast::UnionDeclNode>(&decl))
+                    else if (auto *un = ast::asUnion(decl))
                         fields = un->variants.size();
                 }
                 std::fprintf(out, " (%zu fields & %zu methods)", fields, methods);

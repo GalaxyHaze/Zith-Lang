@@ -4,7 +4,6 @@
 #include "ast/ast-nodes.hpp"
 #include "diagnostics/error-codes.hpp"
 
-
 #include <llvm/ADT/SmallString.h>
 #include <llvm/Analysis/LoopAnalysisManager.h>
 #include <llvm/IR/IRBuilder.h>
@@ -50,8 +49,8 @@ bool CodeGen::verifyCurrentFunction(llvm::Function *llvmFn) {
     std::string buf;
     llvm::raw_string_ostream os(buf);
     if (llvm::verifyFunction(*llvmFn, &os)) {
-        llvmError("IR verification failed for function '" +
-                  std::string(llvmFn->getName()) + "': " + buf);
+        llvmError("IR verification failed for function '" + std::string(llvmFn->getName()) +
+                  "': " + buf);
         return false;
     }
     return true;
@@ -69,7 +68,7 @@ void CodeGen::ensureTargetInfo() {
     module_->setTargetTriple(llvm::Triple(effectiveTriple()));
     // Create a throwaway TargetMachine just to get the correct data layout.
     std::string error;
-    auto triple = llvm::Triple(effectiveTriple());
+    auto triple  = llvm::Triple(effectiveTriple());
     auto *target = llvm::TargetRegistry::lookupTarget(triple, error);
     if (target) {
         llvm::TargetOptions options;
@@ -86,14 +85,14 @@ void CodeGen::optimize() {
         return;
 
     std::string error;
-    auto triple = llvm::Triple(effectiveTriple());
+    auto triple  = llvm::Triple(effectiveTriple());
     auto *target = llvm::TargetRegistry::lookupTarget(triple, error);
     std::unique_ptr<llvm::TargetMachine> tm;
     if (target) {
         llvm::TargetOptions options;
-        tm.reset(target->createTargetMachine(
-            triple, "generic", "", options, llvm::Reloc::PIC_, std::nullopt,
-            static_cast<llvm::CodeGenOptLevel>(llvmOptLevel())));
+        tm.reset(target->createTargetMachine(triple, "generic", "", options, llvm::Reloc::PIC_,
+                                             std::nullopt,
+                                             static_cast<llvm::CodeGenOptLevel>(llvmOptLevel())));
     }
 
     llvm::LoopAnalysisManager LAM;
@@ -107,10 +106,10 @@ void CodeGen::optimize() {
     pb.registerLoopAnalyses(LAM);
     pb.crossRegisterProxies(LAM, FAM, CGAM, MAM);
 
-    llvm::ModulePassManager mpm = pb.buildPerModuleDefaultPipeline(
-        optLevel_ >= 3 ? llvm::OptimizationLevel::O3 :
-        optLevel_ == 2 ? llvm::OptimizationLevel::O2 :
-                         llvm::OptimizationLevel::O1);
+    llvm::ModulePassManager mpm =
+        pb.buildPerModuleDefaultPipeline(optLevel_ >= 3   ? llvm::OptimizationLevel::O3
+                                         : optLevel_ == 2 ? llvm::OptimizationLevel::O2
+                                                          : llvm::OptimizationLevel::O1);
     mpm.run(*module_, MAM);
 
     llvm::ModulePassManager dce;
@@ -126,9 +125,7 @@ void CodeGen::emit(const hir::HirModule &hirModule, std::string_view moduleName)
     ensureTargetInfo();
 
     for (size_t i = 0; i < hirModule.getFnCount(); i++) {
-        auto &fn  = hirModule.getFn(i);
-        auto name = interner_.lookup(fn.name);
-
+        auto &fn       = hirModule.getFn(i);
         bool is_extern = fn.blocks.empty();
 
         if (is_extern) {
@@ -172,16 +169,34 @@ void CodeGen::emitFunction(const hir::HirFunction &fn, const hir::HirModule &mod
     if (fn.blocks.empty())
         return;
 
-    auto *entry = llvm::BasicBlock::Create(*ctx_, "entry", llvmFn);
-    llvm::IRBuilder<> builder(entry);
+    // Create LLVM basic blocks for all HIR blocks
+    std::vector<llvm::BasicBlock *> llvmBlocks;
+    llvmBlocks.reserve(fn.blocks.size());
+    for (size_t i = 0; i < fn.blocks.size(); i++) {
+        auto bbName = (i == 0) ? "entry" : ("bb" + std::to_string(i));
+        llvmBlocks.push_back(llvm::BasicBlock::Create(*ctx_, bbName, llvmFn));
+    }
+
+    auto *firstBB = llvmBlocks[0];
+    llvm::IRBuilder<> builder(firstBB);
 
     CodeGenEmit emit(builder, typeGen, interner_, syms_, types_, astBuilder_);
+    emit.setBlocks(&llvmBlocks);
     emit.registerParams(fn, llvmFn);
     emit.emitBody(fn, mod);
 
-    if (!builder.GetInsertBlock()->getTerminator()) {
-        if (retType->isVoidTy())
-            builder.CreateRetVoid();
+    // Add terminators to blocks that lack one
+    for (size_t i = 0; i < fn.blocks.size(); i++) {
+        if (fn.blocks[i].terminator == hir::kInvalidHirExpr) {
+            auto *bb = llvmBlocks[i];
+            if (!bb->getTerminator()) {
+                llvm::IRBuilder<> termBuilder(bb);
+                if (retType->isVoidTy())
+                    termBuilder.CreateRetVoid();
+                else
+                    termBuilder.CreateUnreachable();
+            }
+        }
     }
 
     verifyCurrentFunction(llvmFn);

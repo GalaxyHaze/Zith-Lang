@@ -24,7 +24,7 @@ namespace fs = std::filesystem;
 static bool isStdinTerminal() {
 #ifdef ZITH_IS_WASM
     return false;
-#elif _WIN32
+#elif defined(_WIN32)
     return _isatty(_fileno(stdin)) != 0;
 #else
     return isatty(fileno(stdin)) != 0;

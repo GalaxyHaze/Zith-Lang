@@ -70,7 +70,7 @@ bool Lexer::isOperator(char c) {
 }
 
 bool Lexer::match(std::string_view must) {
-    if (end - now < must.size())
+    if (static_cast<size_t>(end - now) < must.size())
         return false;
     std::string_view rest(now, static_cast<size_t>(end - now));
     if (rest.starts_with(must)) {
@@ -106,7 +106,7 @@ void Lexer::multiLineComment(bool isDoc = false) {
                  std::string("Unterminated block comment '") + delim + "'", spanRange(before, now));
 }
 
-bool isHexDigit(char c) {
+static bool isHexDigit(char c) {
     return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F');
 }
 
@@ -231,8 +231,8 @@ void Lexer::processIdentifier() {
 }
 
 Lexer::Lexer(memory::SourceMap &source_map, memory::Arena &arena,
-             diagnostics::DiagnosticEngine &diags)
-    : sourceMap(source_map), arena(arena), diags(diags), tokens(arena) {}
+             diagnostics::DiagnosticEngine &diags_)
+    : sourceMap(source_map), diags(diags_), tokens(arena) {}
 
 auto Lexer::run(std::variant<memory::FileId, std::pair<std::string_view, std::string>> input)
     -> memory::Result<TokenStream> {

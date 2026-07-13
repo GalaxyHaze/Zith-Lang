@@ -6,8 +6,8 @@
 namespace zith::hir {
 
 class HirVerifier {
-    const HirModule &module_;
-    diagnostics::DiagnosticEngine &diags_;
+    const HirModule &module_[[maybe_unused]];
+    diagnostics::DiagnosticEngine &diags_[[maybe_unused]];
 
 public:
     HirVerifier(const HirModule &module, diagnostics::DiagnosticEngine &diags);

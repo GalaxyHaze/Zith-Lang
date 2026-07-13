@@ -17,7 +17,7 @@ static bool shouldUse(const Options::Color color, FILE *stream) {
 #ifdef ZITH_IS_WASM
     (void)stream;
     return false;
-#elif _WIN32
+#elif defined(_WIN32)
     return _isatty(_fileno(stream)) != 0;
 #else
     return isatty(fileno(stream)) != 0;
@@ -36,7 +36,7 @@ Term init() {
 #ifdef ZITH_IS_WASM
     t.cerrOn = false;
     t.coutOn = false;
-#elif _WIN32
+#elif defined(_WIN32)
     t.cerrOn = _isatty(_fileno(stderr));
     t.coutOn = _isatty(_fileno(stdout));
 #else
