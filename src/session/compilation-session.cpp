@@ -12,6 +12,7 @@
 #include "memory/source-map.hpp"
 #include "parser/parser.hpp"
 #include "sema/heuristic-engine.hpp"
+#include "sema/hir-lower.hpp"
 #include "sema/sema-pipeline.hpp"
 #include "symbols/resolver.hpp"
 #include "types/type-lower.hpp"
@@ -148,35 +149,42 @@ bool CompilationSession::runTo(Stage target) {
         return false;
     mPlan.advance();
 
-    // Stage 5: Type checking + body expansion + HIR lowering
+    // Stage 5: Type checking + body expansion
     if (mPlan.shouldStop())
         return !mDiags.hasErrors();
     if (!semaStage())
         return false;
     mPlan.advance();
 
-    // Stage 6: Solver (generic instantiation, monomorphization)
+    // Stage 6: HIR lowering
+    if (mPlan.shouldStop())
+        return !mDiags.hasErrors();
+    if (!lowerStage())
+        return false;
+    mPlan.advance();
+
+    // Stage 7: Solver (generic instantiation, monomorphization)
     if (mPlan.shouldStop())
         return !mDiags.hasErrors();
     if (!solveStage())
         return false;
     mPlan.advance();
 
-    // Stage 7: NRA (Node Resource Analysis — ownership/borrowing)
+    // Stage 8: NRA (Node Resource Analysis — ownership/borrowing)
     if (mPlan.shouldStop())
         return !mDiags.hasErrors();
     if (!nraStage())
         return false;
     mPlan.advance();
 
-    // Stage 8: Codegen (LLVM IR emission)
+    // Stage 9: Codegen (LLVM IR emission)
     if (mPlan.shouldStop())
         return !mDiags.hasErrors();
     if (!codegenStage())
         return false;
     mPlan.advance();
 
-    // Stage 9: Cache output
+    // Stage 10: Cache output
     if (mPlan.shouldStop())
         return !mDiags.hasErrors();
     if (!cacheStage())
@@ -462,8 +470,33 @@ bool CompilationSession::semaStage() {
         return false;
     }
 
-    mHirModule = pipeline.takeHir();
     mTypedAst  = pipeline.takeTypedAst();
+
+    if (mOpts.get().flags.verbose()) {
+        auto dt = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0)
+                      .count();
+        writeOutput("  [sema] typed AST ready  (%5.1fms)\n", dt);
+    }
+
+    return !mDiags.hasErrors();
+}
+
+bool CompilationSession::lowerStage() {
+    auto t0 = std::chrono::steady_clock::now();
+
+    if (mDiags.hasErrors()) {
+        mDiags.emit();
+        return false;
+    }
+
+    sema::HirLower lower(mSyms, mTypes, mDiags, mAstBuilder, mHirArena, mTypedAst, &mResolvedSyms,
+                         &mImportMgr);
+    if (!lower.run(mProgram)) {
+        mDiags.emit();
+        return false;
+    }
+
+    mHirModule = lower.takeHir();
 
     if (mOpts.get().flags.emitHir()) {
         std::fputs("--- HIR ---\n", stdout);
@@ -474,7 +507,7 @@ bool CompilationSession::semaStage() {
     if (mOpts.get().flags.verbose()) {
         auto dt = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0)
                       .count();
-        writeOutput("  [sema] %zu fns lowered  (%5.1fms)\n", mHirModule.getFnCount(), dt);
+        writeOutput("  [lower] %zu fns lowered  (%5.1fms)\n", mHirModule.getFnCount(), dt);
     }
 
     return !mDiags.hasErrors();

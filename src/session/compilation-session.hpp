@@ -9,6 +9,7 @@
 #include "memory/source-map.hpp"
 #include "memory/string-interner.hpp"
 #include "parser/scan-result.hpp"
+#include "sema/hir-lower.hpp"
 #include "sema/typed-ast.hpp"
 #include "session/pipeline-plan.hpp"
 #include "symbols/import-manager.hpp"
@@ -163,6 +164,7 @@ private:
     bool importStage();
     bool resolveStage();
     bool semaStage();
+    bool lowerStage();
     bool solveStage();
     bool nraStage();
     bool codegenStage();

@@ -1,7 +1,6 @@
 #include "sema-pipeline.hpp"
 #include "ast/ast-node-utils.hpp"
 #include "diagnostics/error-codes.hpp"
-#include "symbols/symbol-id.hpp"
 #include "types/type-id.hpp"
 #include "types/type-lower.hpp"
 
@@ -12,64 +11,13 @@ namespace zith::sema {
 
 namespace {
 
-using ast::BinaryOp;
 using ast::LitKind;
-using ast::UnaryOp;
 using diagnostics::Severity;
 using diagnostics::err::AmbiguousCall;
 using diagnostics::err::NoMatchingFn;
 using diagnostics::err::TypeMismatch;
 using diagnostics::err::UndefinedIdent;
 using diagnostics::err::WrongArity;
-
-hir::HirBinaryOp mapBinaryOp(ast::BinaryOp op) {
-    switch (op) {
-    case BinaryOp::Add:
-        return hir::HirBinaryOp::Add;
-    case BinaryOp::Sub:
-        return hir::HirBinaryOp::Sub;
-    case BinaryOp::Mul:
-        return hir::HirBinaryOp::Mul;
-    case BinaryOp::Div:
-        return hir::HirBinaryOp::Div;
-    case BinaryOp::Rest:
-        return hir::HirBinaryOp::Rem;
-    case BinaryOp::Eq:
-        return hir::HirBinaryOp::Eq;
-    case BinaryOp::Ne:
-        return hir::HirBinaryOp::Ne;
-    case BinaryOp::Lt:
-        return hir::HirBinaryOp::Lt;
-    case BinaryOp::Le:
-        return hir::HirBinaryOp::Le;
-    case BinaryOp::Gt:
-        return hir::HirBinaryOp::Gt;
-    case BinaryOp::Ge:
-        return hir::HirBinaryOp::Ge;
-    case BinaryOp::And:
-        return hir::HirBinaryOp::And;
-    case BinaryOp::Or:
-        return hir::HirBinaryOp::Or;
-    case BinaryOp::Xor:
-        return hir::HirBinaryOp::Xor;
-    default:
-        return hir::HirBinaryOp::Add;
-    }
-}
-
-hir::HirUnaryOp mapUnaryOp(ast::UnaryOp op) {
-    switch (op) {
-    case UnaryOp::Neg:
-        return hir::HirUnaryOp::Neg;
-    case UnaryOp::Not:
-        return hir::HirUnaryOp::Not;
-    case UnaryOp::Ref:
-        return hir::HirUnaryOp::Ref;
-    case UnaryOp::Deref:
-        return hir::HirUnaryOp::Deref;
-    }
-    return hir::HirUnaryOp::Neg;
-}
 
 types::TypeId defaultTypeForLit(ast::LitKind kind, types::TypeIntern &types) {
     switch (kind) {
@@ -89,8 +37,7 @@ types::TypeId defaultTypeForLit(ast::LitKind kind, types::TypeIntern &types) {
     return types::kErrorType;
 }
 
-/// Return the bit width of an IntWidth (0 for Literal).
-static unsigned intWidthBits(types::IntWidth w) {
+unsigned intWidthBits(types::IntWidth w) {
     switch (w) {
     case types::IntWidth::I8:
     case types::IntWidth::U8:
@@ -113,17 +60,14 @@ static unsigned intWidthBits(types::IntWidth w) {
     return 0;
 }
 
-/// True if the IntWidth is a signed type (I8..I128).
-static bool isSignedWidth(types::IntWidth w) {
+bool isSignedWidth(types::IntWidth w) {
     return w >= types::IntWidth::I8 && w <= types::IntWidth::I128;
 }
 
-/// Check whether int64_t value fits in an integer of the given concrete width.
-/// Returns nullptr on success, or an error message on overflow.
-static const char *checkIntOverflow(int64_t value, types::IntWidth target) {
+const char *checkIntOverflow(int64_t value, types::IntWidth target) {
     unsigned bits = intWidthBits(target);
     if (bits == 0)
-        return nullptr; // Literal — unresolved
+        return nullptr;
     if (isSignedWidth(target)) {
         int64_t min = -(1LL << (bits - 1));
         int64_t max = (1LL << (bits - 1)) - 1;
@@ -137,35 +81,23 @@ static const char *checkIntOverflow(int64_t value, types::IntWidth target) {
     return nullptr;
 }
 
-/// If a HIR expression is a HirLiteral with a Literal (unresolved) integer width,
-/// set its type to the given concrete TypeId and return true.
-static bool resolveLiteralType(hir::HirModule &hir, hir::HirExprId id, types::TypeIntern &types,
-                               types::TypeId concreteType) {
-    auto &expr = hir.getExprMut(id);
-    if (hir::exprKind(expr) != hir::HirExprKind::Literal)
-        return false;
-    auto &lit = std::get<hir::HirLiteral>(expr);
-    auto kind = types.kindOf(lit.type);
-    if (kind != types::TypeKind::Int)
-        return false;
-    auto &int_t = std::get<types::TypeInt>(types.lookup(lit.type));
-    if (int_t.width != types::IntWidth::Literal)
-        return false;
-    lit.type = concreteType;
-    return true;
-}
-
-} // anonymous namespace
+} // namespace
 
 SemaPipeline::SemaPipeline(symbols::SymbolTable &syms, types::TypeIntern &types,
                            diagnostics::DiagnosticEngine &diags, ast::AstBuilder &builder,
-                           memory::Arena &hir_arena,
-                           const memory::DynArray<symbols::SymId> *resolved,
+                           memory::Arena &arena, const memory::DynArray<symbols::SymId> *resolved,
                            symbols::ImportManager *import_mgr)
-    : ctx_(syms, types, diags, builder), unifier_(types, diags, hir_arena), hir_arena_(hir_arena),
-      hir_(hir_arena), resolved_(resolved), hir_types_(hir_arena), typed_ast_(hir_arena),
-      import_mgr_(import_mgr), worklist_(hir_arena), fn_syms_(hir_arena), active_builder_(&builder),
-      allowed_files_(hir_arena), var_types_(hir_arena) {}
+    : ctx_(syms, types, diags, builder), unifier_(types, diags, arena), arena_(arena),
+      resolved_(resolved), typed_ast_(arena), import_mgr_(import_mgr), worklist_(arena),
+      active_builder_(&builder), allowed_files_(arena), var_types_(arena), checked_fns_(arena) {}
+
+types::TypeId SemaPipeline::astExprType(ast::ExprId id) const {
+    return typed_ast_.get(id);
+}
+
+ast::AstBuilder &SemaPipeline::builder() const {
+    return *active_builder_;
+}
 
 bool SemaPipeline::isSymAccessible(symbols::SymId sym_id) const {
     if (allowed_files_.empty())
@@ -178,10 +110,6 @@ bool SemaPipeline::isSymAccessible(symbols::SymId sym_id) const {
         if (af == origin->file_idx)
             return true;
     return false;
-}
-
-ast::AstBuilder &SemaPipeline::builder() const {
-    return *active_builder_;
 }
 
 ast::AstBuilder *SemaPipeline::builderForSym(symbols::SymId fn_sym) {
@@ -202,63 +130,123 @@ const symbols::SymbolTable *SemaPipeline::symsForSym(symbols::SymId fn_sym) {
     return &ctx_.syms();
 }
 
-size_t SemaPipeline::hirIndexForSym(symbols::SymId fn_sym) const {
-    for (size_t i = 0; i < fn_syms_.size(); ++i)
-        if (fn_syms_[i] == fn_sym)
-            return i;
-    return static_cast<size_t>(-1);
-}
-
-void SemaPipeline::ensureStub(symbols::SymId fn_sym) {
-    if (hirIndexForSym(fn_sym) != static_cast<size_t>(-1))
-        return;
-    auto *source_syms = symsForSym(fn_sym);
-    auto *source_bld  = builderForSym(fn_sym);
-    if (!source_syms || !source_bld)
-        return;
-    auto local_sym = fn_sym;
+symbols::SymId SemaPipeline::localSymFor(symbols::SymId fn_sym) const {
     if (import_mgr_) {
         auto origin = import_mgr_->originOf(fn_sym);
         if (origin)
-            local_sym = origin->local_sym;
+            return origin->local_sym;
     }
-    const auto &data = source_syms->get(local_sym);
+    return fn_sym;
+}
+
+const ast::FnDeclNode *SemaPipeline::fnDeclForSym(symbols::SymId fn_sym, ast::AstBuilder **source_bld,
+                                                  const symbols::SymbolTable **source_syms) {
+    auto *bld  = builderForSym(fn_sym);
+    auto *syms = symsForSym(fn_sym);
+    if (source_bld)
+        *source_bld = bld;
+    if (source_syms)
+        *source_syms = syms;
+    if (!bld || !syms)
+        return nullptr;
+
+    auto local_sym   = localSymFor(fn_sym);
+    const auto &data = syms->get(local_sym);
     if (data.kind != symbols::SymKind::Fn || data.decl_id == ast::kInvalidDecl)
-        return;
-    auto *fn = ast::asFn(source_bld->getDecl(data.decl_id));
-    if (!fn)
-        return;
-
-    auto &hfn   = hir_.addFn(data.name);
-    hfn.decl_id = data.decl_id;
-    types::TypeLower lower(*source_bld, ctx_.types(), ctx_.diags(), ctx_.syms());
-    for (const auto &param : fn->params)
-        hfn.params.push(lower.lower(param.type));
-    hfn.return_type = lower.lower(fn->return_type);
-    fn_syms_.push(fn_sym);
+        return nullptr;
+    return ast::asFn(bld->getDecl(data.decl_id));
 }
 
-void SemaPipeline::ensureBodyLowered(symbols::SymId fn_sym) {
-    ensureStub(fn_sym);
-    auto idx = hirIndexForSym(fn_sym);
-    if (idx == static_cast<size_t>(-1))
+types::TypeId SemaPipeline::lowerFnReturnType(symbols::SymId fn_sym) {
+    ast::AstBuilder *source_bld = nullptr;
+    auto *fn                    = fnDeclForSym(fn_sym, &source_bld, nullptr);
+    if (!fn || !source_bld)
+        return types::kErrorType;
+    types::TypeLower lower(*source_bld, ctx_.types(), ctx_.diags(), ctx_.syms());
+    return lower.lower(fn->return_type);
+}
+
+types::TypeId SemaPipeline::lowerFnParamType(symbols::SymId fn_sym, size_t index) {
+    ast::AstBuilder *source_bld = nullptr;
+    auto *fn                    = fnDeclForSym(fn_sym, &source_bld, nullptr);
+    if (!fn || !source_bld || index >= fn->params.size())
+        return types::kErrorType;
+    types::TypeLower lower(*source_bld, ctx_.types(), ctx_.diags(), ctx_.syms());
+    return lower.lower(fn->params[index].type);
+}
+
+void SemaPipeline::ensureVarTypeCapacity(symbols::SymId sym_id) {
+    if (sym_id >= var_types_.capacity())
+        var_types_.reserve(sym_id + 1);
+    while (var_types_.size() <= sym_id)
+        var_types_.push(types::kErrorType);
+}
+
+void SemaPipeline::ensureCheckedCapacity(symbols::SymId sym_id) {
+    if (sym_id >= checked_fns_.capacity())
+        checked_fns_.reserve(sym_id + 1);
+    while (checked_fns_.size() <= sym_id)
+        checked_fns_.push(0);
+}
+
+bool SemaPipeline::isBodyChecked(symbols::SymId sym_id) const {
+    return sym_id < checked_fns_.size() && checked_fns_[sym_id] != 0;
+}
+
+void SemaPipeline::markBodyChecked(symbols::SymId sym_id) {
+    ensureCheckedCapacity(sym_id);
+    checked_fns_[sym_id] = 1;
+}
+
+bool SemaPipeline::concretizeLiteralExpr(ast::ExprId id, types::TypeId concrete_type, memory::Span span) {
+    if (id == ast::kInvalidExpr || concrete_type == types::kErrorType)
+        return false;
+
+    auto &node = builder().getExpr(id);
+    if (ast::exprKind(node) != ast::ExprKind::Literal)
+        return false;
+    auto &lit = std::get<ast::LitValue>(node);
+    if (lit.kind != ast::LitKind::Int)
+        return false;
+
+    auto current_type = astExprType(id);
+    if (current_type == types::kErrorType || ctx_.types().kindOf(current_type) != types::TypeKind::Int)
+        return false;
+
+    auto &current_int = std::get<types::TypeInt>(ctx_.types().lookup(current_type));
+    if (current_int.width != types::IntWidth::Literal)
+        return false;
+
+    typed_ast_.set(id, concrete_type);
+
+    if (ctx_.types().kindOf(concrete_type) != types::TypeKind::Int)
+        return true;
+
+    auto &int_t = std::get<types::TypeInt>(ctx_.types().lookup(concrete_type));
+    auto value  = std::strtoll(std::string(lit.raw).data(), nullptr, 10);
+    if (auto *err = checkIntOverflow(value, int_t.width))
+        ctx_.diags().report(Severity::Error, TypeMismatch, err, span);
+    return true;
+}
+
+ast::ExprId SemaPipeline::implicitReturnExpr(ast::ExprId body_id) const {
+    if (body_id == ast::kInvalidExpr)
+        return ast::kInvalidExpr;
+    auto &node = builder().getExpr(body_id);
+    if (ast::exprKind(node) == ast::ExprKind::Block)
+        return std::get<ast::BlockNode>(node).trailing;
+    return body_id;
+}
+
+void SemaPipeline::ensureBodyChecked(symbols::SymId fn_sym) {
+    if (isBodyChecked(fn_sym))
         return;
-    auto &hfn = hir_.getFn(idx);
-    if (!hfn.blocks.empty())
-        return;
-    auto *source_bld  = builderForSym(fn_sym);
-    auto *source_syms = symsForSym(fn_sym);
-    if (!source_bld || !source_syms)
-        return;
-    auto local_sym = fn_sym;
-    if (import_mgr_) {
-        auto origin = import_mgr_->originOf(fn_sym);
-        if (origin)
-            local_sym = origin->local_sym;
-    }
-    const auto &data = source_syms->get(local_sym);
-    auto *fn         = ast::asFn(source_bld->getDecl(data.decl_id));
-    if (!fn || fn->is_extern || fn->body == ast::kInvalidExpr)
+    markBodyChecked(fn_sym);
+
+    ast::AstBuilder *source_bld            = nullptr;
+    const symbols::SymbolTable *source_syms = nullptr;
+    auto *fn                               = fnDeclForSym(fn_sym, &source_bld, &source_syms);
+    if (!fn || !source_bld || !source_syms || fn->is_extern || fn->body == ast::kInvalidExpr)
         return;
 
     auto previous_allowed = std::move(allowed_files_);
@@ -270,91 +258,50 @@ void SemaPipeline::ensureBodyLowered(symbols::SymId fn_sym) {
             auto &file = import_mgr_->get(origin->file_idx);
             for (auto dep : file.dep_files)
                 allowed_files_.push(dep);
+        } else {
+            for (auto dep : import_mgr_->rootDeps())
+                allowed_files_.push(dep);
         }
     }
 
     auto *previous_builder = active_builder_;
-    auto *previous_fn      = current_fn_;
     auto previous_ret      = current_fn_ret_type_;
     active_builder_        = source_bld;
-    current_fn_            = &hfn;
-    current_fn_ret_type_   = hfn.return_type;
-    auto scope             = syms().enterScope();
+    current_fn_ret_type_   = lowerFnReturnType(fn_sym);
+    labelMap_              = {};
+
+    auto scope = syms().enterScope();
     syms().emplace(*source_syms, scope);
-    for (const auto &param : fn->params)
-        syms().declareInScope(scope, param.name);
-    hfn.blocks.emplace(hir_arena_);
-    currentBlock_ = 0;
-    labelMap_.clear();
-    auto &entry = hfn.blocks[0];
-    entry.insts = memory::DynArray<hir::HirExprId>(hir_arena_);
-    auto body   = visitExpr(fn->body);
-    // If the function body has a trailing expression, no explicit return was
-    // created during lowering, and the function has a declared return type,
-    // turn the body value into a HirRet after unifying types.
-    if (body != hir::kInvalidHirExpr && entry.terminator == hir::kInvalidHirExpr) {
-        if (current_fn_ret_type_ != types::kErrorType) {
-            auto body_type = astExprType(fn->body);
-            if (body_type != types::kErrorType &&
-                unifier_.unify(body_type, current_fn_ret_type_, fn->span)) {
-                // Resolve literal type if needed and check overflow
-                types::TypeId concrete = current_fn_ret_type_;
-                {
-                    auto k = ctx_.types().kindOf(current_fn_ret_type_);
-                    if (k == types::TypeKind::Int) {
-                        auto &t =
-                            std::get<types::TypeInt>(ctx_.types().lookup(current_fn_ret_type_));
-                        if (t.width == types::IntWidth::Literal)
-                            concrete = body_type;
-                    }
-                }
-                if (resolveLiteralType(hir_, body, ctx_.types(), concrete)) {
-                    auto &expr  = hir_.getExpr(body);
-                    auto &lit   = std::get<hir::HirLiteral>(expr);
-                    auto &int_t = std::get<types::TypeInt>(ctx_.types().lookup(concrete));
-                    if (auto *err = checkIntOverflow(lit.i, int_t.width)) {
-                        ctx_.diags().report(Severity::Error, TypeMismatch, err, fn->span);
-                    }
-                }
+
+    types::TypeLower lower(*source_bld, ctx_.types(), ctx_.diags(), ctx_.syms());
+    for (const auto &param : fn->params) {
+        auto param_sym = syms().declareInScope(scope, param.name);
+        ensureVarTypeCapacity(param_sym);
+        var_types_[param_sym] = lower.lower(param.type);
+    }
+
+    auto body_type        = visitExpr(fn->body);
+    auto implicit_expr_id = implicitReturnExpr(fn->body);
+    if (implicit_expr_id != ast::kInvalidExpr && current_fn_ret_type_ != types::kErrorType &&
+        body_type != types::kErrorType) {
+        if (unifier_.unify(body_type, current_fn_ret_type_, fn->span)) {
+            types::TypeId concrete = current_fn_ret_type_;
+            if (ctx_.types().kindOf(current_fn_ret_type_) == types::TypeKind::Int) {
+                auto &type = std::get<types::TypeInt>(ctx_.types().lookup(current_fn_ret_type_));
+                if (type.width == types::IntWidth::Literal)
+                    concrete = body_type;
             }
-            hir::HirRet ret;
-            ret.value = body;
-            setTerminator(hir_.addExpr(hir::HirExpr{ret}));
-        } else {
-            // No return type annotation — push trailing expression as a
-            // regular instruction so its value is evaluated but discarded.
-            entry.insts.push(body);
+            concretizeLiteralExpr(implicit_expr_id, concrete, fn->span);
         }
     }
+
     syms().exitScope();
-    current_fn_          = previous_fn;
     current_fn_ret_type_ = previous_ret;
     active_builder_      = previous_builder;
     allowed_files_       = std::move(previous_allowed);
 }
 
-hir::HirExprId SemaPipeline::addHirExpr(hir::HirExpr expr, types::TypeId type,
-                                        ast::ExprId source_id) {
-    auto id = hir_.addExpr(std::move(expr));
-    while (id >= hir_types_.size())
-        hir_types_.push(types::kErrorType);
-    hir_types_[id] = type;
-    typed_ast_.set(source_id, type);
-    return id;
-}
-
-types::TypeId SemaPipeline::exprType(hir::HirExprId id) const {
-    if (id == hir::kInvalidHirExpr || id >= hir_types_.size())
-        return types::kErrorType;
-    return hir_types_[id];
-}
-
-types::TypeId SemaPipeline::astExprType(ast::ExprId id) const {
-    return typed_ast_.get(id);
-}
-
 bool SemaPipeline::run(const ast::ProgramNode &program) {
-    // Pass 0: register user-defined types (structs, enums, unions, aliases)
     for (auto decl_id : program.decls) {
         auto &decl = ctx_.builder().getDecl(decl_id);
         if (auto *sd = ast::asStruct(decl))
@@ -370,55 +317,29 @@ bool SemaPipeline::run(const ast::ProgramNode &program) {
         }
     }
 
-    // First pass: register stubs for functions declared in the main file only.
     for (auto decl_id : program.decls) {
         auto &decl = ctx_.builder().getDecl(decl_id);
-        if (ast::asFn(decl)) {
-            for (symbols::SymId sym = 0; sym < ctx_.syms().symbolCount(); ++sym) {
-                const auto &data = ctx_.syms().get(sym);
-                if (data.kind == symbols::SymKind::Fn && data.decl_id == decl_id &&
-                    (!import_mgr_ || !import_mgr_->originOf(sym))) {
-                    ensureStub(sym);
-                    break;
-                }
+        if (!ast::asFn(decl))
+            continue;
+        for (symbols::SymId sym = 0; sym < ctx_.syms().symbolCount(); ++sym) {
+            const auto &data = ctx_.syms().get(sym);
+            if (data.kind == symbols::SymKind::Fn && data.decl_id == decl_id &&
+                (!import_mgr_ || !import_mgr_->originOf(sym))) {
+                ensureBodyChecked(sym);
+                break;
             }
         }
     }
 
-    // Populate allowed_files_ for the main file's own declarations.
-    {
-        memory::DynArray<size_t> saved = std::move(allowed_files_);
-        if (import_mgr_) {
-            for (auto dep : import_mgr_->rootDeps())
-                allowed_files_.push(dep);
-        }
-        for (auto decl_id : program.decls) {
-            auto &decl = ctx_.builder().getDecl(decl_id);
-            if (ast::asFn(decl)) {
-                for (symbols::SymId sym = 0; sym < ctx_.syms().symbolCount(); ++sym) {
-                    const auto &data = ctx_.syms().get(sym);
-                    if (data.kind == symbols::SymKind::Fn && data.decl_id == decl_id &&
-                        (!import_mgr_ || !import_mgr_->originOf(sym))) {
-                        ensureBodyLowered(sym);
-                        break;
-                    }
-                }
-            }
-        }
-        allowed_files_ = std::move(saved);
-    }
-
-    // Imported bodies are discovered lazily from calls made while lowering.
     for (size_t i = 0; i < worklist_.size(); ++i)
-        ensureBodyLowered(worklist_[i]);
+        ensureBodyChecked(worklist_[i]);
 
-    ctx_.diags().emit();
     return !ctx_.diags().hasErrors();
 }
 
-hir::HirExprId SemaPipeline::visitExpr(ast::ExprId id) {
+types::TypeId SemaPipeline::visitExpr(ast::ExprId id) {
     if (id == ast::kInvalidExpr)
-        return hir::kInvalidHirExpr;
+        return types::kErrorType;
 
     auto &node = builder().getExpr(id);
     switch (ast::exprKind(node)) {
@@ -445,56 +366,27 @@ hir::HirExprId SemaPipeline::visitExpr(ast::ExprId id) {
     case ast::ExprKind::Intrinsic:
     case ast::ExprKind::MacroCall:
         typed_ast_.set(id, types::kErrorType);
-        return hir::kInvalidHirExpr;
+        return types::kErrorType;
     }
+
     typed_ast_.set(id, types::kErrorType);
-    return hir::kInvalidHirExpr;
+    return types::kErrorType;
 }
 
-hir::HirExprId SemaPipeline::visitLiteral(ast::ExprId id, const ast::LitValue &n) {
+types::TypeId SemaPipeline::visitLiteral(ast::ExprId id, const ast::LitValue &n) {
     auto default_type = defaultTypeForLit(n.kind, ctx_.types());
-    hir::HirLiteral lit{};
-    lit.type = default_type;
-    switch (n.kind) {
-    case ast::LitKind::Int:
-        lit.i = std::strtoll(std::string(n.raw).data(), nullptr, 10);
-        break;
-    case ast::LitKind::Float:
-        lit.f = std::strtod(std::string(n.raw).data(), nullptr);
-        break;
-    case ast::LitKind::Bool:
-        lit.b = (n.raw == "true");
-        break;
-    case ast::LitKind::Char: {
-        auto raw = n.raw;
-        lit.i    = raw.size() >= 3 && raw[0] == '\'' ? raw[1] : 0;
-        break;
-    }
-    case ast::LitKind::String: {
-        auto raw = n.raw;
-        if (raw.size() >= 2 && raw.front() == '"' && raw.back() == '"')
-            raw = raw.substr(1, raw.size() - 2);
-        lit.str_val = ctx_.syms().interner().intern(raw);
-        break;
-    }
-    default:
-        break;
-    }
-    return addHirExpr(hir::HirExpr{lit}, default_type, id);
+    typed_ast_.set(id, default_type);
+    return default_type;
 }
 
-hir::HirExprId SemaPipeline::visitIdent(const ast::IdentNode &n, ast::ExprId id) {
+types::TypeId SemaPipeline::visitIdent(const ast::IdentNode &n, ast::ExprId id) {
     symbols::SymId sym = symbols::kInvalidSym;
-    // Resolver entries belong exclusively to the main AstBuilder. Imported
-    // builders reuse ExprId values, so using this table while lowering one of
-    // them could resolve an unrelated main-file identifier.
-    if (active_builder_ == &ctx_.builder() && resolved_ && id != ast::kInvalidExpr &&
-        id < resolved_->size())
+    if (active_builder_ == &ctx_.builder() && resolved_ && id < resolved_->size())
         sym = (*resolved_)[id];
     if (sym == symbols::kInvalidSym)
         sym = ctx_.syms().lookup(n.name);
     if (sym != symbols::kInvalidSym && !isSymAccessible(sym)) {
-        ctx_.diags().report(diagnostics::Severity::Error, diagnostics::err::UndefinedIdent,
+        ctx_.diags().report(Severity::Error, UndefinedIdent,
                             "undefined identifier '" + std::string(n.name) + "'", n.span);
         sym = symbols::kInvalidSym;
     }
@@ -505,16 +397,11 @@ hir::HirExprId SemaPipeline::visitIdent(const ast::IdentNode &n, ast::ExprId id)
             ctx_.diags().report(Severity::Error, UndefinedIdent,
                                 std::string("undefined identifier '") + std::string(n.name) + "'",
                                 n.span);
-        return hir::kInvalidHirExpr;
+        typed_ast_.set(id, types::kErrorType);
+        return types::kErrorType;
     }
 
     auto &data = ctx_.syms().get(sym);
-
-    hir::HirVar var;
-    var.name    = ctx_.syms().interner().intern(n.name);
-    var.version = 0;
-
-    // Determine the expression type from the symbol
     types::TypeId ident_type = types::kErrorType;
     if (data.kind == symbols::SymKind::Fn) {
         ident_type = ctx_.types().internUnknown();
@@ -522,93 +409,66 @@ hir::HirExprId SemaPipeline::visitIdent(const ast::IdentNode &n, ast::ExprId id)
         ident_type = var_types_[sym];
     }
 
-    return addHirExpr(hir::HirExpr{var}, ident_type, id);
+    typed_ast_.set(id, ident_type);
+    return ident_type;
 }
 
-hir::HirExprId SemaPipeline::visitBinary(ast::ExprId id, const ast::BinaryNode &n) {
-    auto lhs = visitExpr(n.lhs);
-    auto rhs = visitExpr(n.rhs);
-    if (lhs == hir::kInvalidHirExpr || rhs == hir::kInvalidHirExpr)
-        return hir::kInvalidHirExpr;
-
-    types::TypeId result_type = astExprType(n.lhs);
-    types::TypeId rhs_type    = astExprType(n.rhs);
-    if (result_type != types::kErrorType && rhs_type != types::kErrorType) {
-        if (unifier_.unify(result_type, rhs_type, n.span)) {
-            // Determine the concrete type after unification: the non-Literal
-            // side gives us the concrete width, or fall back to result_type.
-            types::TypeId concrete = result_type;
-            {
-                auto k = ctx_.types().kindOf(result_type);
-                if (k == types::TypeKind::Int) {
-                    auto &t = std::get<types::TypeInt>(ctx_.types().lookup(result_type));
-                    if (t.width == types::IntWidth::Literal)
-                        concrete = rhs_type;
-                }
-            }
-            // Propagate concrete type to literal operands and check overflow
-            for (auto operand_id : {lhs, rhs}) {
-                if (resolveLiteralType(hir_, operand_id, ctx_.types(), concrete)) {
-                    auto &expr  = hir_.getExpr(operand_id);
-                    auto &lit   = std::get<hir::HirLiteral>(expr);
-                    auto &int_t = std::get<types::TypeInt>(ctx_.types().lookup(concrete));
-                    if (auto *err = checkIntOverflow(lit.i, int_t.width)) {
-                        ctx_.diags().report(Severity::Error, TypeMismatch, err, n.span);
-                        return hir::kInvalidHirExpr;
-                    }
-                }
-            }
-        }
+types::TypeId SemaPipeline::visitBinary(ast::ExprId id, const ast::BinaryNode &n) {
+    auto lhs_type = visitExpr(n.lhs);
+    auto rhs_type = visitExpr(n.rhs);
+    if (lhs_type == types::kErrorType || rhs_type == types::kErrorType) {
+        typed_ast_.set(id, types::kErrorType);
+        return types::kErrorType;
     }
 
-    hir::HirBinary bin;
-    bin.lhs = lhs;
-    bin.rhs = rhs;
-    bin.op  = mapBinaryOp(n.op);
-    return addHirExpr(hir::HirExpr{bin}, result_type, id);
-}
-
-hir::HirExprId SemaPipeline::visitUnary(ast::ExprId id, const ast::UnaryNode &n) {
-    auto operand = visitExpr(n.operand);
-    if (operand == hir::kInvalidHirExpr)
-        return hir::kInvalidHirExpr;
-
-    auto operand_type = astExprType(n.operand);
-
-    hir::HirUnary un;
-    un.op      = mapUnaryOp(n.op);
-    un.operand = operand;
-    return addHirExpr(hir::HirExpr{un}, operand_type, id);
-}
-
-hir::HirExprId SemaPipeline::visitCall(ast::ExprId id, const ast::CallNode &n) {
-    auto callee = visitExpr(n.callee);
-    if (callee == hir::kInvalidHirExpr)
-        return hir::kInvalidHirExpr;
-
-    auto callee_type = astExprType(n.callee);
-
-    memory::DynArray<hir::HirExprId> hir_args{hir_arena_};
-    memory::DynArray<types::TypeId> arg_types{hir_arena_};
-    for (auto arg : n.args) {
-        auto hir_arg = visitExpr(arg);
-        if (hir_arg != hir::kInvalidHirExpr) {
-            hir_args.push(hir_arg);
-            arg_types.push(astExprType(arg));
-        }
+    if (!unifier_.unify(lhs_type, rhs_type, n.span)) {
+        typed_ast_.set(id, types::kErrorType);
+        return types::kErrorType;
     }
+
+    types::TypeId result_type = lhs_type;
+    types::TypeId concrete    = result_type;
+    if (ctx_.types().kindOf(result_type) == types::TypeKind::Int) {
+        auto &type = std::get<types::TypeInt>(ctx_.types().lookup(result_type));
+        if (type.width == types::IntWidth::Literal)
+            concrete = rhs_type;
+    }
+
+    concretizeLiteralExpr(n.lhs, concrete, n.span);
+    concretizeLiteralExpr(n.rhs, concrete, n.span);
+    if (ctx_.types().kindOf(result_type) == types::TypeKind::Int) {
+        auto &type = std::get<types::TypeInt>(ctx_.types().lookup(result_type));
+        if (type.width == types::IntWidth::Literal)
+            result_type = concrete;
+    }
+
+    typed_ast_.set(id, result_type);
+    return result_type;
+}
+
+types::TypeId SemaPipeline::visitUnary(ast::ExprId id, const ast::UnaryNode &n) {
+    auto operand_type = visitExpr(n.operand);
+    typed_ast_.set(id, operand_type);
+    return operand_type;
+}
+
+types::TypeId SemaPipeline::visitCall(ast::ExprId id, const ast::CallNode &n) {
+    auto callee_type = visitExpr(n.callee);
+
+    memory::DynArray<types::TypeId> arg_types{arena_};
+    for (auto arg : n.args)
+        arg_types.push(visitExpr(arg));
 
     symbols::SymId resolved_fn = symbols::kInvalidSym;
     types::TypeId result_type  = types::kErrorType;
     size_t match_count         = 0;
 
-    // Overload resolution: if callee is an identifier (fn name)
-    const auto &callee_expr = hir_.getExpr(callee);
-    if (hir::exprKind(callee_expr) == hir::HirExprKind::Var) {
-        auto &var                 = std::get<hir::HirVar>(callee_expr);
-        auto callee_name          = var.name;
-        auto candidates           = syms().lookupAll(callee_name, hir_arena_);
+    auto &callee_expr = builder().getExpr(n.callee);
+    if (ast::exprKind(callee_expr) == ast::ExprKind::Identifier) {
+        auto callee_name          = std::get<ast::IdentNode>(callee_expr).name;
+        auto candidates           = syms().lookupAll(callee_name, arena_);
         size_t fn_candidate_count = 0;
+
         for (auto sym_id : candidates) {
             auto &data = syms().get(sym_id);
             if (data.kind != symbols::SymKind::Fn)
@@ -616,57 +476,39 @@ hir::HirExprId SemaPipeline::visitCall(ast::ExprId id, const ast::CallNode &n) {
             if (!isSymAccessible(sym_id))
                 continue;
             fn_candidate_count++;
-            if (data.decl_id == ast::kInvalidDecl)
+
+            auto *fn_decl = fnDeclForSym(sym_id, nullptr, nullptr);
+            if (!fn_decl || fn_decl->params.size() != n.args.size())
                 continue;
 
-            ensureStub(sym_id);
-            auto *bld = builderForSym(sym_id);
-            if (!bld)
-                continue;
-            auto &decl    = bld->getDecl(data.decl_id);
-            auto *fn_decl = ast::asFn(decl);
-            if (!fn_decl)
-                continue;
-
-            // Arity check
-            if (fn_decl->params.size() != n.args.size())
-                continue;
-
-            // Match against the stub associated with this symbol. DeclIds are
-            // local to an AstBuilder and therefore are not globally unique.
-            auto fi = hirIndexForSym(sym_id);
-            if (fi != static_cast<size_t>(-1)) {
-                auto &hfn = hir_.getFn(fi);
-
-                bool match = true;
-                for (size_t i = 0; i < hfn.params.size(); i++) {
-                    if (hfn.params[i] == types::kErrorType)
-                        continue;
-                    if (i >= arg_types.size() || arg_types[i] == types::kErrorType)
-                        continue;
-                    if (!unifier_.isCoercible(hfn.params[i], arg_types[i])) {
-                        match = false;
-                        break;
-                    }
+            bool match = true;
+            for (size_t i = 0; i < fn_decl->params.size(); ++i) {
+                auto param_type = lowerFnParamType(sym_id, i);
+                if (param_type == types::kErrorType || i >= arg_types.size() ||
+                    arg_types[i] == types::kErrorType)
+                    continue;
+                if (!unifier_.isCoercible(param_type, arg_types[i])) {
+                    match = false;
+                    break;
                 }
+            }
 
-                if (match) {
-                    match_count++;
-                    if (match_count == 1) {
-                        resolved_fn = sym_id;
-                        result_type = hfn.return_type;
-                        if (!fn_decl->is_extern && fn_decl->body != ast::kInvalidExpr)
-                            worklist_.push(sym_id);
-                    }
+            if (match) {
+                match_count++;
+                if (match_count == 1) {
+                    resolved_fn = sym_id;
+                    result_type = lowerFnReturnType(sym_id);
+                    if (!fn_decl->is_extern && fn_decl->body != ast::kInvalidExpr)
+                        worklist_.push(sym_id);
                 }
             }
         }
 
         if (match_count == 0 && fn_candidate_count > 0) {
-            if (n.args.size() > 0) {
+            if (!n.args.empty()) {
                 ctx_.diags().report(Severity::Error, NoMatchingFn,
                                     "no matching function for call to '" +
-                                        std::string(syms().interner().lookup(callee_name)) + "'",
+                                        std::string(callee_name) + "'",
                                     n.span);
             } else {
                 ctx_.diags().report(Severity::Error, WrongArity,
@@ -675,7 +517,7 @@ hir::HirExprId SemaPipeline::visitCall(ast::ExprId id, const ast::CallNode &n) {
         } else if (match_count > 1) {
             ctx_.diags().report(Severity::Error, AmbiguousCall,
                                 "ambiguous call '" +
-                                    std::string(syms().interner().lookup(callee_name)) +
+                                    std::string(callee_name) +
                                     "' — multiple functions match",
                                 n.span);
             resolved_fn = symbols::kInvalidSym;
@@ -683,226 +525,104 @@ hir::HirExprId SemaPipeline::visitCall(ast::ExprId id, const ast::CallNode &n) {
         }
     }
 
-    // Fallback: check callee as function type (fn pointers, etc.)
-    if (resolved_fn == symbols::kInvalidSym && callee_type != types::kErrorType) {
+    if (resolved_fn != symbols::kInvalidSym) {
+        auto *fn_decl = fnDeclForSym(resolved_fn, nullptr, nullptr);
+        if (fn_decl) {
+            for (size_t i = 0; i < fn_decl->params.size() && i < n.args.size(); ++i) {
+                auto param_type = lowerFnParamType(resolved_fn, i);
+                if (param_type != types::kErrorType && i < arg_types.size() &&
+                    arg_types[i] != types::kErrorType)
+                    concretizeLiteralExpr(n.args[i], param_type, n.span);
+            }
+        }
+    } else if (callee_type != types::kErrorType) {
         auto &fn_type = ctx_.types().lookup(callee_type);
         auto fn_ptr   = std::get_if<types::TypeFn>(&fn_type);
         if (fn_ptr) {
-            if (hir_args.size() != fn_ptr->param_count) {
+            if (arg_types.size() != fn_ptr->param_count) {
                 ctx_.diags().report(Severity::Error, WrongArity,
                                     "wrong number of arguments in call", {});
-            }
-            for (size_t i = 0; i < hir_args.size() && i < fn_ptr->param_count; i++) {
-                if (arg_types[i] != types::kErrorType)
-                    unifier_.unify(arg_types[i], fn_ptr->params[i], n.span);
-            }
-            result_type = fn_ptr->ret;
-        }
-    }
-
-    if (resolved_fn != symbols::kInvalidSym) {
-        auto fi = hirIndexForSym(resolved_fn);
-        if (fi != static_cast<size_t>(-1)) {
-            auto &hfn = hir_.getFn(fi);
-            for (size_t i = 0; i < hir_args.size() && i < hfn.params.size(); i++) {
-                if (arg_types[i] != types::kErrorType && hfn.params[i] != types::kErrorType)
-                    resolveLiteralType(hir_, hir_args[i], ctx_.types(), hfn.params[i]);
+            } else {
+                for (size_t i = 0; i < arg_types.size(); ++i) {
+                    if (arg_types[i] != types::kErrorType)
+                        unifier_.unify(arg_types[i], fn_ptr->params[i], n.span);
+                    concretizeLiteralExpr(n.args[i], fn_ptr->params[i], n.span);
+                }
+                result_type = fn_ptr->ret;
             }
         }
     }
 
-    hir::HirCall call{callee, std::move(hir_args)};
-    call.resolved_fn = resolved_fn;
-    return addHirExpr(hir::HirExpr{std::move(call)}, result_type, id);
+    typed_ast_.set(id, result_type);
+    return result_type;
 }
 
-hir::HirExprId SemaPipeline::visitBlock(ast::ExprId id, const ast::BlockNode &n) {
-    // Process statements, collecting the last expression as trailing
-    hir::HirExprId last = hir::kInvalidHirExpr;
-    for (auto stmt_id : n.stmts) {
+types::TypeId SemaPipeline::visitBlock(ast::ExprId id, const ast::BlockNode &n) {
+    for (auto stmt_id : n.stmts)
         visitStmt(stmt_id);
-    }
-    if (n.trailing != ast::kInvalidExpr) {
-        last = visitExpr(n.trailing);
-    }
-    // Return the trailing expression with its type
-    typed_ast_.set(id, astExprType(n.trailing));
-    return last;
+
+    types::TypeId result_type = types::kVoidType;
+    if (n.trailing != ast::kInvalidExpr)
+        result_type = visitExpr(n.trailing);
+
+    typed_ast_.set(id, result_type);
+    return result_type;
 }
 
-hir::HirExprId SemaPipeline::visitIf(ast::ExprId id, const ast::IfNode &n) {
-    auto origBlock = currentBlock_;
-    auto cond      = visitExpr(n.cond);
+types::TypeId SemaPipeline::visitIf(ast::ExprId id, const ast::IfNode &n) {
+    visitExpr(n.cond);
 
-    auto then_block = newBlock();
-    setCurrentBlock(then_block);
-    current_fn_->blocks[then_block].insts = memory::DynArray<hir::HirExprId>(hir_arena_);
-
-    // Visit then branch — may add a terminator (jump/return)
-    visitExpr(n.then_branch);
-    bool thenTerminated = current_fn_->blocks[then_block].terminator != hir::kInvalidHirExpr;
-
-    size_t else_target; // what the branch's else field points to
-
-    if (n.else_branch != ast::kInvalidExpr) {
-        auto else_block = newBlock();
-        setCurrentBlock(else_block);
-        current_fn_->blocks[else_block].insts = memory::DynArray<hir::HirExprId>(hir_arena_);
-        visitExpr(n.else_branch);
-        bool elseTerminated = current_fn_->blocks[else_block].terminator != hir::kInvalidHirExpr;
-
-        if (thenTerminated && elseTerminated) {
-            // Both terminated — no merge needed
-            size_t dead = newBlock();
-            setCurrentBlock(dead);
-            current_fn_->blocks[dead].insts = memory::DynArray<hir::HirExprId>(hir_arena_);
-            else_target                     = else_block;
-        } else if (thenTerminated) {
-            // Then terminated, else didn't — else needs to continue
-            else_target = else_block;
-            // current block stays in else_block, it continues naturally
-        } else if (elseTerminated) {
-            // Else terminated, then didn't — then jumps to else's continuation
-            auto merge = newBlock();
-            setCurrentBlock(then_block);
-            emitJump(merge);
-            setCurrentBlock(merge);
-            current_fn_->blocks[merge].insts = memory::DynArray<hir::HirExprId>(hir_arena_);
-            else_target                      = else_block;
-        } else {
-            // Neither terminated — both need to merge
-            auto merge = newBlock();
-            setCurrentBlock(then_block);
-            emitJump(merge);
-            setCurrentBlock(else_block);
-            emitJump(merge);
-            setCurrentBlock(merge);
-            current_fn_->blocks[merge].insts = memory::DynArray<hir::HirExprId>(hir_arena_);
-            else_target                      = else_block;
-        }
-    } else {
-        // No else — branch on false goes to continuation
-        if (thenTerminated) {
-            auto cont = newBlock();
-            setCurrentBlock(cont);
-            current_fn_->blocks[cont].insts = memory::DynArray<hir::HirExprId>(hir_arena_);
-            else_target                     = cont;
-        } else {
-            auto cont = newBlock();
-            setCurrentBlock(then_block);
-            emitJump(cont);
-            setCurrentBlock(cont);
-            current_fn_->blocks[cont].insts = memory::DynArray<hir::HirExprId>(hir_arena_);
-            else_target                     = cont;
-        }
+    auto then_type = visitExpr(n.then_branch);
+    if (n.else_branch == ast::kInvalidExpr) {
+        typed_ast_.set(id, types::kVoidType);
+        return types::kVoidType;
     }
 
-    // Set branch terminator on original block
-    hir::HirBranch branch;
-    branch.cond                               = cond;
-    branch.then_block                         = static_cast<hir::HirDeclId>(then_block);
-    branch.else_block                         = static_cast<hir::HirDeclId>(else_target);
-    current_fn_->blocks[origBlock].terminator = hir_.addExpr(hir::HirExpr{std::move(branch)});
+    auto else_type = visitExpr(n.else_branch);
+    if (then_type == types::kErrorType || else_type == types::kErrorType ||
+        !unifier_.unify(then_type, else_type, n.span)) {
+        typed_ast_.set(id, types::kErrorType);
+        return types::kErrorType;
+    }
 
-    typed_ast_.set(id, types::kErrorType);
-    return hir::kInvalidHirExpr;
+    types::TypeId result_type = then_type;
+    types::TypeId concrete    = result_type;
+    if (ctx_.types().kindOf(result_type) == types::TypeKind::Int) {
+        auto &type = std::get<types::TypeInt>(ctx_.types().lookup(result_type));
+        if (type.width == types::IntWidth::Literal)
+            concrete = else_type;
+    }
+
+    concretizeLiteralExpr(implicitReturnExpr(n.then_branch), concrete, n.span);
+    concretizeLiteralExpr(implicitReturnExpr(n.else_branch), concrete, n.span);
+    if (ctx_.types().kindOf(result_type) == types::TypeKind::Int) {
+        auto &type = std::get<types::TypeInt>(ctx_.types().lookup(result_type));
+        if (type.width == types::IntWidth::Literal)
+            result_type = concrete;
+    }
+
+    typed_ast_.set(id, result_type);
+    return result_type;
 }
 
-hir::HirExprId SemaPipeline::visitWhile(ast::ExprId id, const ast::WhileNode &n) {
-    auto header_block = newBlock();
-    auto body_block   = newBlock();
-    auto exit_block   = newBlock();
-
-    // Jump from current block to header
-    emitJump(header_block);
-
-    // Emit header block
-    setCurrentBlock(header_block);
-    current_fn_->blocks[header_block].insts = memory::DynArray<hir::HirExprId>(hir_arena_);
-    auto cond                               = visitExpr(n.cond);
-
-    hir::HirBranch branch;
-    branch.cond       = cond;
-    branch.then_block = static_cast<hir::HirDeclId>(body_block);
-    branch.else_block = static_cast<hir::HirDeclId>(exit_block);
-    setTerminator(hir_.addExpr(hir::HirExpr{std::move(branch)}));
-
-    // Emit body block
-    setCurrentBlock(body_block);
-    current_fn_->blocks[body_block].insts = memory::DynArray<hir::HirExprId>(hir_arena_);
+types::TypeId SemaPipeline::visitWhile(ast::ExprId id, const ast::WhileNode &n) {
+    visitExpr(n.cond);
     visitExpr(n.body);
-    // Jump back to header after body
-    if (current_fn_->blocks[body_block].terminator == hir::kInvalidHirExpr)
-        emitJump(header_block);
-
-    // Switch to exit block
-    setCurrentBlock(exit_block);
-    current_fn_->blocks[exit_block].insts = memory::DynArray<hir::HirExprId>(hir_arena_);
-    typed_ast_.set(id, types::kErrorType);
-    return hir::kInvalidHirExpr;
-}
-
-// ── block management ──
-
-size_t SemaPipeline::newBlock() {
-    auto idx = current_fn_->blocks.size();
-    current_fn_->blocks.emplace(hir_arena_);
-    return idx;
-}
-
-void SemaPipeline::setTerminator(hir::HirExprId term) {
-    current_fn_->blocks[currentBlock_].terminator = term;
-}
-
-void SemaPipeline::emitJump(size_t target) {
-    hir::HirJump jump;
-    jump.target = static_cast<hir::HirDeclId>(target);
-    setTerminator(hir_.addExpr(hir::HirExpr{std::move(jump)}));
+    typed_ast_.set(id, types::kVoidType);
+    return types::kVoidType;
 }
 
 void SemaPipeline::visitMarker(const ast::MarkerNode &n) {
-    auto prevBlock   = currentBlock_;
-    auto markerBlock = newBlock();
-    auto postBlock   = newBlock();
-
-    labelMap_.insert(n.name, markerBlock);
-
-    // Jump from prevBlock to postBlock (skip marker body during normal flow)
-    hir::HirJump jump;
-    jump.target                               = static_cast<hir::HirDeclId>(postBlock);
-    current_fn_->blocks[prevBlock].terminator = hir_.addExpr(hir::HirExpr{std::move(jump)});
-
-    // Emit marker body
-    setCurrentBlock(markerBlock);
-    current_fn_->blocks[markerBlock].insts = memory::DynArray<hir::HirExprId>(hir_arena_);
+    labelMap_.insert(n.name, labelMap_.size());
     for (auto stmt_id : n.body)
         visitStmt(stmt_id);
-
-    // If marker body didn't terminate, jump to postBlock
-    if (current_fn_->blocks[markerBlock].terminator == hir::kInvalidHirExpr) {
-        hir::HirJump endJump;
-        endJump.target = static_cast<hir::HirDeclId>(postBlock);
-        current_fn_->blocks[markerBlock].terminator =
-            hir_.addExpr(hir::HirExpr{std::move(endJump)});
-    }
-
-    // Continue in postBlock
-    setCurrentBlock(postBlock);
-    current_fn_->blocks[postBlock].insts = memory::DynArray<hir::HirExprId>(hir_arena_);
 }
 
 void SemaPipeline::visitGoto(const ast::GotoNode &n) {
-    auto *targetIdx = labelMap_.get(n.target);
-    if (!targetIdx) {
-        ctx_.diags().report(Severity::Error, diagnostics::err::UndefinedIdent,
+    if (!labelMap_.get(n.target)) {
+        ctx_.diags().report(Severity::Error, UndefinedIdent,
                             "undefined marker '" + std::string(n.target) + "'", n.span);
-        return;
     }
-    emitJump(*targetIdx);
-    // Subsequent code in this block is unreachable, create a new block
-    auto dead = newBlock();
-    setCurrentBlock(dead);
-    current_fn_->blocks[dead].insts = memory::DynArray<hir::HirExprId>(hir_arena_);
 }
 
 void SemaPipeline::visitStmt(ast::StmtId id) {
@@ -913,7 +633,6 @@ void SemaPipeline::visitStmt(ast::StmtId id) {
     switch (ast::stmtKind(node)) {
     case ast::StmtKind::Let: {
         const auto &n = std::get<ast::LetNode>(node);
-        auto sym_kind = symbols::SymKind::Variable;
 
         types::TypeId decl_type = types::kErrorType;
         if (n.type_annot != ast::kInvalidTypeExpr) {
@@ -921,33 +640,20 @@ void SemaPipeline::visitStmt(ast::StmtId id) {
             decl_type = lower.lower(n.type_annot);
         }
 
-        hir::HirExprId init     = hir::kInvalidHirExpr;
         types::TypeId init_type = types::kErrorType;
-        if (n.init != ast::kInvalidExpr) {
-            init = visitExpr(n.init);
-            if (init != hir::kInvalidHirExpr)
-                init_type = astExprType(n.init);
-        }
+        if (n.init != ast::kInvalidExpr)
+            init_type = visitExpr(n.init);
 
-        if (n.type_annot != ast::kInvalidTypeExpr && init != hir::kInvalidHirExpr) {
-            if (decl_type != types::kErrorType && init_type != types::kErrorType) {
-                if (unifier_.unify(decl_type, init_type, n.span)) {
-                    types::TypeId concrete = decl_type;
-                    auto kind              = ctx_.types().kindOf(decl_type);
-                    if (kind == types::TypeKind::Int) {
-                        auto &type = std::get<types::TypeInt>(ctx_.types().lookup(decl_type));
-                        if (type.width == types::IntWidth::Literal)
-                            concrete = init_type;
-                    }
-                    if (resolveLiteralType(hir_, init, ctx_.types(), concrete)) {
-                        auto &expr  = hir_.getExpr(init);
-                        auto &lit   = std::get<hir::HirLiteral>(expr);
-                        auto &int_t = std::get<types::TypeInt>(ctx_.types().lookup(concrete));
-                        if (auto *err = checkIntOverflow(lit.i, int_t.width))
-                            ctx_.diags().report(Severity::Error, TypeMismatch, err, n.span);
-                    }
-                }
+        if (n.type_annot != ast::kInvalidTypeExpr && n.init != ast::kInvalidExpr &&
+            decl_type != types::kErrorType && init_type != types::kErrorType &&
+            unifier_.unify(decl_type, init_type, n.span)) {
+            types::TypeId concrete = decl_type;
+            if (ctx_.types().kindOf(decl_type) == types::TypeKind::Int) {
+                auto &type = std::get<types::TypeInt>(ctx_.types().lookup(decl_type));
+                if (type.width == types::IntWidth::Literal)
+                    concrete = init_type;
             }
+            concretizeLiteralExpr(n.init, concrete, n.span);
         }
 
         types::TypeId var_type = init_type;
@@ -957,74 +663,38 @@ void SemaPipeline::visitStmt(ast::StmtId id) {
             var_type = init_type;
 
         for (auto var_name : n.names) {
-            auto sym_id = syms().declare(var_name, symbols::SymbolVisibility::Private, 0, sym_kind,
-                                         ast::kInvalidDecl, memory::Span{});
+            auto sym_id =
+                syms().declare(var_name, symbols::SymbolVisibility::Private, 0, symbols::SymKind::Variable,
+                               ast::kInvalidDecl, memory::Span{});
             if (sym_id != symbols::kInvalidSym) {
-                if (sym_id >= var_types_.size()) {
-                    if (sym_id >= var_types_.capacity())
-                        var_types_.reserve(sym_id + 1);
-                    while (var_types_.size() <= sym_id)
-                        var_types_.push(types::kErrorType);
-                }
+                ensureVarTypeCapacity(sym_id);
                 var_types_[sym_id] = var_type;
-            }
-
-            hir::HirLet hir_let;
-            hir_let.name = syms().interner().intern(var_name);
-            hir_let.type = var_type;
-            hir_let.init = init;
-
-            auto hir_id = addHirExpr(hir::HirExpr{hir_let}, init_type);
-            if (current_fn_ && !current_fn_->blocks.empty()) {
-                auto &cur = current_fn_->blocks[currentBlock()];
-                cur.insts.push(hir_id);
             }
         }
         break;
     }
     case ast::StmtKind::Assign: {
         const auto &n = std::get<ast::AssignNode>(node);
-        auto target = visitExpr(n.target);
-        auto value  = visitExpr(n.value);
-        (void)target;
-        (void)value;
+        visitExpr(n.target);
+        visitExpr(n.value);
         break;
     }
     case ast::StmtKind::Return: {
         const auto &n = std::get<ast::RetNode>(node);
-        hir::HirExprId val     = hir::kInvalidHirExpr;
-        types::TypeId val_type = types::kVoidType;
-        if (n.value != ast::kInvalidExpr) {
-            val = visitExpr(n.value);
-            if (val != hir::kInvalidHirExpr)
-                val_type = astExprType(n.value);
-        }
+        auto val_type = types::kVoidType;
+        if (n.value != ast::kInvalidExpr)
+            val_type = visitExpr(n.value);
 
-        if (val_type != types::kErrorType && current_fn_ret_type_ != types::kErrorType) {
-            if (unifier_.unify(val_type, current_fn_ret_type_, n.span)) {
-                types::TypeId concrete = current_fn_ret_type_;
-                auto kind              = ctx_.types().kindOf(current_fn_ret_type_);
-                if (kind == types::TypeKind::Int) {
-                    auto &type =
-                        std::get<types::TypeInt>(ctx_.types().lookup(current_fn_ret_type_));
-                    if (type.width == types::IntWidth::Literal)
-                        concrete = val_type;
-                }
-                if (resolveLiteralType(hir_, val, ctx_.types(), concrete)) {
-                    auto &expr  = hir_.getExpr(val);
-                    auto &lit   = std::get<hir::HirLiteral>(expr);
-                    auto &int_t = std::get<types::TypeInt>(ctx_.types().lookup(concrete));
-                    if (auto *err = checkIntOverflow(lit.i, int_t.width))
-                        ctx_.diags().report(Severity::Error, TypeMismatch, err, n.span);
-                }
+        if (val_type != types::kErrorType && current_fn_ret_type_ != types::kErrorType &&
+            unifier_.unify(val_type, current_fn_ret_type_, n.span)) {
+            types::TypeId concrete = current_fn_ret_type_;
+            if (ctx_.types().kindOf(current_fn_ret_type_) == types::TypeKind::Int) {
+                auto &type = std::get<types::TypeInt>(ctx_.types().lookup(current_fn_ret_type_));
+                if (type.width == types::IntWidth::Literal)
+                    concrete = val_type;
             }
+            concretizeLiteralExpr(n.value, concrete, n.span);
         }
-
-        hir::HirRet ret;
-        ret.value   = val;
-        auto hir_id = hir_.addExpr(hir::HirExpr{ret});
-        if (current_fn_ && !current_fn_->blocks.empty())
-            setTerminator(hir_id);
         break;
     }
     case ast::StmtKind::Goto:
@@ -1033,26 +703,10 @@ void SemaPipeline::visitStmt(ast::StmtId id) {
     case ast::StmtKind::Marker:
         visitMarker(std::get<ast::MarkerNode>(node));
         break;
-    case ast::StmtKind::Expr: {
-        auto expr_id = std::get<ast::ExprStmtNode>(node).expr;
-        auto result  = visitExpr(expr_id);
-        if (result != hir::kInvalidHirExpr && current_fn_ && !current_fn_->blocks.empty()) {
-            auto &cur = current_fn_->blocks[currentBlock()];
-            cur.insts.push(result);
-        }
+    case ast::StmtKind::Expr:
+        visitExpr(std::get<ast::ExprStmtNode>(node).expr);
         break;
     }
-    }
-}
-
-void SemaPipeline::visitDecl(const ast::FnDeclNode &n) {
-    // Already handled in run() — this is a placeholder for future use
-    (void)n;
-}
-
-types::TypeId SemaPipeline::inferExprType(ast::ExprId id) {
-    visitExpr(id);
-    return astExprType(id);
 }
 
 } // namespace zith::sema
