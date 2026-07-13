@@ -1,17 +1,9 @@
 #include "formatter/fmt-visitor.hpp"
+#include "common/overloaded.hpp"
 
 #include <cstdio>
 
 namespace zith::formatter {
-
-namespace {
-
-template <class... Ts> struct overloaded : Ts... {
-    using Ts::operator()...;
-};
-template <class... Ts> overloaded(Ts...) -> overloaded<Ts...>;
-
-} // anonymous namespace
 
 FmtVisitor::FmtVisitor(const ast::AstBuilder &builder, const ast::ProgramNode &program)
     : builder_(builder), program_(program) {}
@@ -45,7 +37,7 @@ void FmtVisitor::emit(std::string_view text) {
 
 void FmtVisitor::visitDecl(ast::DeclId id) {
     const auto &node = builder_.getDecl(id);
-    std::visit(overloaded{
+    std::visit(common::overloaded{
                    [&](const ast::FnDeclNode &n) { emitFnDecl(n); },
                    [&](const ast::StructDeclNode &n) { emitStructDecl(n); },
                    [&](const ast::EnumDeclNode &n) { emitEnumDecl(n); },
@@ -318,18 +310,43 @@ void FmtVisitor::emitGlobalDecl(const ast::GlobalDeclNode &node) {
 
 void FmtVisitor::visitStmt(ast::StmtId id) {
     const auto &node = builder_.getStmt(id);
-    std::visit(overloaded{
-                   [&](const ast::LetNode &n) { emitLet(n); },
-                   [&](const ast::AssignNode &n) { emitAssign(n); },
-                   [&](const ast::RetNode &n) { emitRet(n); },
-                   [&](ast::ExprId eid) {
-                       indent();
-                       visitExpr(eid);
-                       emit(";");
-                       newline();
-                   },
-               },
-               node);
+    switch (ast::stmtKind(node)) {
+    case ast::StmtKind::Let:
+        emitLet(std::get<ast::LetNode>(node));
+        break;
+    case ast::StmtKind::Assign:
+        emitAssign(std::get<ast::AssignNode>(node));
+        break;
+    case ast::StmtKind::Return:
+        emitRet(std::get<ast::RetNode>(node));
+        break;
+    case ast::StmtKind::Goto: {
+        const auto &n = std::get<ast::GotoNode>(node);
+        indent();
+        emit("jump ");
+        emit(n.target);
+        emit(";\n");
+        break;
+    }
+    case ast::StmtKind::Marker: {
+        const auto &n = std::get<ast::MarkerNode>(node);
+        indent();
+        emit("marker ");
+        emit(n.name);
+        emit(" {\n");
+        for (auto stmt_id : n.body)
+            visitStmt(stmt_id);
+        indent();
+        emit("}\n");
+        break;
+    }
+    case ast::StmtKind::Expr:
+        indent();
+        visitExpr(std::get<ast::ExprStmtNode>(node).expr);
+        emit(";");
+        newline();
+        break;
+    }
 }
 
 void FmtVisitor::emitLet(const ast::LetNode &node) {
@@ -380,39 +397,64 @@ void FmtVisitor::visitExpr(ast::ExprId id, int parent_prec) {
         return;
     }
     const auto &node = builder_.getExpr(id);
-    std::visit(overloaded{
-                   [&](const ast::LitValue &n) { emitLit(n); },
-                   [&](const ast::IdentNode &n) { emitIdent(n); },
-                   [&](const ast::BinaryNode &n) {
-                       int prec = binopPrecedence(n.op);
-                       bool need_paren =
-                           parent_prec > prec || (parent_prec == prec && !isLeftAssoc(n.op));
-                       if (need_paren)
-                           emit("(");
-                       emitBinary(n);
-                       if (need_paren)
-                           emit(")");
-                   },
-                   [&](const ast::UnaryNode &n) {
-                       int prec = 8;
-                       if (parent_prec > prec)
-                           emit("(");
-                       emitUnary(n);
-                       if (parent_prec > prec)
-                           emit(")");
-                   },
-                   [&](const ast::CallNode &n) { emitCall(n); },
-                   [&](const ast::BlockNode &n) { emitBlock(n); },
-                   [&](const ast::IfNode &n) { emitIf(n); },
-                   [&](const ast::WhileNode &n) { emitWhile(n); },
-                   [&](const ast::FieldNode &n) { emitField(n); },
-                   [&](const ast::IndexNode &n) { emitIndex(n); },
-                   [&](const ast::RangeNode &n) { emitRange(n); },
-                   [&](const ast::UnbodyNode &) {},
-                   [&](const ast::IntrinsicNode &n) { emitIntrinsic(n); },
-                   [&](const ast::MacroCallNode &n) { emitMacroCall(n); },
-               },
-               node);
+    switch (ast::exprKind(node)) {
+    case ast::ExprKind::Literal:
+        emitLit(std::get<ast::LitValue>(node));
+        break;
+    case ast::ExprKind::Identifier:
+        emitIdent(std::get<ast::IdentNode>(node));
+        break;
+    case ast::ExprKind::Binary: {
+        const auto &n = std::get<ast::BinaryNode>(node);
+        int prec      = binopPrecedence(n.op);
+        bool need_paren = parent_prec > prec || (parent_prec == prec && !isLeftAssoc(n.op));
+        if (need_paren)
+            emit("(");
+        emitBinary(n);
+        if (need_paren)
+            emit(")");
+        break;
+    }
+    case ast::ExprKind::Unary: {
+        const auto &n = std::get<ast::UnaryNode>(node);
+        int prec      = 8;
+        if (parent_prec > prec)
+            emit("(");
+        emitUnary(n);
+        if (parent_prec > prec)
+            emit(")");
+        break;
+    }
+    case ast::ExprKind::Call:
+        emitCall(std::get<ast::CallNode>(node));
+        break;
+    case ast::ExprKind::Block:
+        emitBlock(std::get<ast::BlockNode>(node));
+        break;
+    case ast::ExprKind::If:
+        emitIf(std::get<ast::IfNode>(node));
+        break;
+    case ast::ExprKind::While:
+        emitWhile(std::get<ast::WhileNode>(node));
+        break;
+    case ast::ExprKind::Field:
+        emitField(std::get<ast::FieldNode>(node));
+        break;
+    case ast::ExprKind::Index:
+        emitIndex(std::get<ast::IndexNode>(node));
+        break;
+    case ast::ExprKind::Range:
+        emitRange(std::get<ast::RangeNode>(node));
+        break;
+    case ast::ExprKind::Unbody:
+        break;
+    case ast::ExprKind::Intrinsic:
+        emitIntrinsic(std::get<ast::IntrinsicNode>(node));
+        break;
+    case ast::ExprKind::MacroCall:
+        emitMacroCall(std::get<ast::MacroCallNode>(node));
+        break;
+    }
 }
 
 void FmtVisitor::emitLit(const ast::LitValue &node) {
@@ -605,7 +647,7 @@ void FmtVisitor::emitType(ast::TypeExprId id) {
         return;
     }
     const auto &node = builder_.getTypeExpr(id);
-    std::visit(overloaded{
+    std::visit(common::overloaded{
                    [&](const ast::TypePath &n) {
                        for (size_t i = 0; i < n.segments.size(); i++) {
                            if (i > 0)

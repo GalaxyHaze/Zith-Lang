@@ -1,6 +1,7 @@
 #pragma once
 
 #include "ast/ast-nodes.hpp"
+#include "ast/ast-node-utils.hpp"
 #include "ast/type-expr.hpp"
 #include "memory/arena.hpp"
 #include "memory/dyn-array.hpp"
@@ -21,6 +22,7 @@ public:
 
     ExprId addExpr(ExprNode node);
     StmtId addStmt(StmtNode node);
+    StmtId addStmt(ExprId expr, memory::Span span = {});
     DeclId addDecl(DeclNode node);
 
     ExprNode &getExpr(ExprId id);
@@ -33,7 +35,7 @@ public:
 
     LitValue makeLit(LitKind kind, std::string_view raw, memory::Span span = {});
     ExprId litExpr(LitKind kind, std::string_view raw, memory::Span span = {});
-    ExprId ident(std::string_view name, memory::Span span = {});
+    ExprId ident(std::string_view name, memory::Span span = {}, bool scope_escape = false);
     ExprId binary(ExprId lhs, BinaryOp op, ExprId rhs, memory::Span span = {});
     ExprId unary(UnaryOp op, ExprId operand, memory::Span span = {});
     ExprId call(ExprId callee, memory::DynArray<ExprId> args, memory::Span span = {});
@@ -53,6 +55,8 @@ public:
                    memory::Span span = {});
     StmtId assign(ExprId target, ExprId value, memory::Span span = {});
     StmtId retStmt(ExprId value = kInvalidExpr, memory::Span span = {});
+    StmtId gotoStmt(std::string_view target, memory::Span span = {});
+    StmtId markerStmt(std::string_view name, memory::DynArray<StmtId> body, memory::Span span = {});
 
     DeclId fnDecl(std::string_view name, memory::DynArray<GenericParam> generic_params,
                   memory::DynArray<FnParam> params, TypeExprId return_type = kInvalidTypeExpr,

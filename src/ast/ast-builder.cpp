@@ -2,23 +2,145 @@
 
 namespace zith::ast {
 
+namespace {
+
+template <typename T> struct ExprTagFor;
+template <> struct ExprTagFor<LitValue> {
+    static constexpr ExprKind value = ExprKind::Literal;
+};
+template <> struct ExprTagFor<IdentNode> {
+    static constexpr ExprKind value = ExprKind::Identifier;
+};
+template <> struct ExprTagFor<BinaryNode> {
+    static constexpr ExprKind value = ExprKind::Binary;
+};
+template <> struct ExprTagFor<UnaryNode> {
+    static constexpr ExprKind value = ExprKind::Unary;
+};
+template <> struct ExprTagFor<CallNode> {
+    static constexpr ExprKind value = ExprKind::Call;
+};
+template <> struct ExprTagFor<BlockNode> {
+    static constexpr ExprKind value = ExprKind::Block;
+};
+template <> struct ExprTagFor<IfNode> {
+    static constexpr ExprKind value = ExprKind::If;
+};
+template <> struct ExprTagFor<WhileNode> {
+    static constexpr ExprKind value = ExprKind::While;
+};
+template <> struct ExprTagFor<FieldNode> {
+    static constexpr ExprKind value = ExprKind::Field;
+};
+template <> struct ExprTagFor<IndexNode> {
+    static constexpr ExprKind value = ExprKind::Index;
+};
+template <> struct ExprTagFor<RangeNode> {
+    static constexpr ExprKind value = ExprKind::Range;
+};
+template <> struct ExprTagFor<UnbodyNode> {
+    static constexpr ExprKind value = ExprKind::Unbody;
+};
+template <> struct ExprTagFor<IntrinsicNode> {
+    static constexpr ExprKind value = ExprKind::Intrinsic;
+};
+template <> struct ExprTagFor<MacroCallNode> {
+    static constexpr ExprKind value = ExprKind::MacroCall;
+};
+
+template <typename T> struct StmtTagFor;
+template <> struct StmtTagFor<LetNode> {
+    static constexpr StmtKind value = StmtKind::Let;
+};
+template <> struct StmtTagFor<AssignNode> {
+    static constexpr StmtKind value = StmtKind::Assign;
+};
+template <> struct StmtTagFor<RetNode> {
+    static constexpr StmtKind value = StmtKind::Return;
+};
+template <> struct StmtTagFor<GotoNode> {
+    static constexpr StmtKind value = StmtKind::Goto;
+};
+template <> struct StmtTagFor<MarkerNode> {
+    static constexpr StmtKind value = StmtKind::Marker;
+};
+template <> struct StmtTagFor<ExprStmtNode> {
+    static constexpr StmtKind value = StmtKind::Expr;
+};
+
+template <typename T> struct DeclTagFor;
+template <> struct DeclTagFor<FnDeclNode> {
+    static constexpr DeclKind value = DeclKind::Fn;
+};
+template <> struct DeclTagFor<StructDeclNode> {
+    static constexpr DeclKind value = DeclKind::Struct;
+};
+template <> struct DeclTagFor<EnumDeclNode> {
+    static constexpr DeclKind value = DeclKind::Enum;
+};
+template <> struct DeclTagFor<UnionDeclNode> {
+    static constexpr DeclKind value = DeclKind::Union;
+};
+template <> struct DeclTagFor<ComponentDeclNode> {
+    static constexpr DeclKind value = DeclKind::Component;
+};
+template <> struct DeclTagFor<TraitDeclNode> {
+    static constexpr DeclKind value = DeclKind::Trait;
+};
+template <> struct DeclTagFor<InterfaceDeclNode> {
+    static constexpr DeclKind value = DeclKind::Interface;
+};
+template <> struct DeclTagFor<ImportNode> {
+    static constexpr DeclKind value = DeclKind::Import;
+};
+template <> struct DeclTagFor<TypeAliasDeclNode> {
+    static constexpr DeclKind value = DeclKind::TypeAlias;
+};
+template <> struct DeclTagFor<GlobalDeclNode> {
+    static constexpr DeclKind value = DeclKind::Global;
+};
+
+void normalizeExprNode(ExprNode &node) {
+    std::visit([](auto &entry) { entry.tag = ExprTagFor<std::decay_t<decltype(entry)>>::value; },
+               node);
+}
+
+void normalizeStmtNode(StmtNode &node) {
+    std::visit([](auto &entry) { entry.tag = StmtTagFor<std::decay_t<decltype(entry)>>::value; },
+               node);
+}
+
+void normalizeDeclNode(DeclNode &node) {
+    std::visit([](auto &entry) { entry.tag = DeclTagFor<std::decay_t<decltype(entry)>>::value; },
+               node);
+}
+
+} // anonymous namespace
+
 AstBuilder::AstBuilder(memory::Arena &arena, memory::StringInterner &interner)
     : arena_(arena), interner_(interner), exprs_(arena), stmts_(arena), decls_(arena),
       type_exprs_(arena) {}
 
 ExprId AstBuilder::addExpr(ExprNode node) {
+    normalizeExprNode(node);
     ExprId id = static_cast<ExprId>(exprs_.size());
     exprs_.push(std::move(node));
     return id;
 }
 
 StmtId AstBuilder::addStmt(StmtNode node) {
+    normalizeStmtNode(node);
     StmtId id = static_cast<StmtId>(stmts_.size());
     stmts_.push(std::move(node));
     return id;
 }
 
+StmtId AstBuilder::addStmt(ExprId expr, memory::Span span) {
+    return addStmt(ExprStmtNode{expr, span});
+}
+
 DeclId AstBuilder::addDecl(DeclNode node) {
+    normalizeDeclNode(node);
     DeclId id = static_cast<DeclId>(decls_.size());
     decls_.push(std::move(node));
     return id;
@@ -44,31 +166,31 @@ const DeclNode &AstBuilder::getDecl(DeclId id) const {
 }
 
 LitValue AstBuilder::makeLit(LitKind kind, std::string_view raw, memory::Span span) {
-    return LitValue{kind, raw, span};
+    return LitValue{raw, span, kind};
 }
 
 ExprId AstBuilder::litExpr(LitKind kind, std::string_view raw, memory::Span span) {
     return addExpr(makeLit(kind, raw, span));
 }
 
-ExprId AstBuilder::ident(std::string_view name, memory::Span span) {
-    return addExpr(IdentNode{name, span});
+ExprId AstBuilder::ident(std::string_view name, memory::Span span, bool scope_escape) {
+    return addExpr(IdentNode{name, span, scope_escape});
 }
 
 ExprId AstBuilder::binary(ExprId lhs, BinaryOp op, ExprId rhs, memory::Span span) {
-    return addExpr(BinaryNode{lhs, rhs, op, span});
+    return addExpr(BinaryNode{span, lhs, rhs, op});
 }
 
 ExprId AstBuilder::unary(UnaryOp op, ExprId operand, memory::Span span) {
-    return addExpr(UnaryNode{operand, op, span});
+    return addExpr(UnaryNode{span, operand, op});
 }
 
 ExprId AstBuilder::call(ExprId callee, memory::DynArray<ExprId> args, memory::Span span) {
-    return addExpr(CallNode{callee, std::move(args), span});
+    return addExpr(CallNode{std::move(args), span, callee});
 }
 
 ExprId AstBuilder::field(ExprId object, std::string_view field_name, memory::Span span) {
-    return addExpr(FieldNode{object, field_name, span});
+    return addExpr(FieldNode{field_name, span, object});
 }
 
 ExprId AstBuilder::index(ExprId object, ExprId index, memory::Span span) {
@@ -93,13 +215,13 @@ ExprId AstBuilder::whileExpr(ExprId cond, ExprId body, memory::Span span) {
 
 StmtId AstBuilder::letStmt(memory::DynArray<std::string_view> names, bool mut,
                            TypeExprId type_annot, ExprId init, memory::Span span) {
-    return addStmt(LetNode{mut, type_annot, std::move(names), init, span});
+    return addStmt(LetNode{std::move(names), span, type_annot, init, mut});
 }
 
 StmtId AstBuilder::letStmt(std::string_view name, bool mut, ExprId init, memory::Span span) {
     memory::DynArray<std::string_view> names{arena_};
     names.push(name);
-    return addStmt(LetNode{mut, kInvalidTypeExpr, std::move(names), init, span});
+    return addStmt(LetNode{std::move(names), span, kInvalidTypeExpr, init, mut});
 }
 
 StmtId AstBuilder::assign(ExprId target, ExprId value, memory::Span span) {
@@ -108,6 +230,15 @@ StmtId AstBuilder::assign(ExprId target, ExprId value, memory::Span span) {
 
 StmtId AstBuilder::retStmt(ExprId value, memory::Span span) {
     return addStmt(RetNode{value, span});
+}
+
+StmtId AstBuilder::gotoStmt(std::string_view target, memory::Span span) {
+    return addStmt(GotoNode{target, span});
+}
+
+StmtId AstBuilder::markerStmt(std::string_view name, memory::DynArray<StmtId> body,
+                              memory::Span span) {
+    return addStmt(MarkerNode{name, std::move(body), span});
 }
 
 DeclId AstBuilder::fnDecl(std::string_view name, memory::DynArray<GenericParam> generic_params,
@@ -138,7 +269,7 @@ DeclId AstBuilder::structDecl(std::string_view name, memory::DynArray<GenericPar
 
 DeclId AstBuilder::enumDecl(std::string_view name, memory::DynArray<GenericParam> generic_params,
                             memory::DynArray<EnumVariant> variants, memory::Span span) {
-    return addDecl(EnumDeclNode{name, std::move(generic_params), std::move(variants), span});
+    return addDecl(EnumDeclNode{std::move(generic_params), std::move(variants), name, span});
 }
 
 DeclId AstBuilder::unionDecl(std::string_view name, memory::DynArray<GenericParam> generic_params,
@@ -168,8 +299,8 @@ DeclId AstBuilder::importDecl(memory::DynArray<std::string_view> path,
                               memory::DynArray<ImportSymbol> symbols, std::string_view alias,
                               bool is_from, bool is_export, bool is_asset, int32_t import_depth,
                               memory::Span span) {
-    return addDecl(ImportNode{std::move(path), std::move(symbols), alias, is_from, is_export,
-                              is_asset, import_depth, span});
+    return addDecl(ImportNode{std::move(path), std::move(symbols), alias, span, import_depth,
+                              is_from, is_export, is_asset});
 }
 
 DeclId AstBuilder::typeAliasDecl(std::string_view name,
@@ -180,7 +311,7 @@ DeclId AstBuilder::typeAliasDecl(std::string_view name,
 
 DeclId AstBuilder::globalDecl(std::string_view name, bool is_const, TypeExprId type_annot,
                               ExprId init, memory::Span span) {
-    return addDecl(GlobalDeclNode{name, is_const, type_annot, init, span});
+    return addDecl(GlobalDeclNode{name, span, is_const, type_annot, init});
 }
 
 ExprId AstBuilder::unbody(memory::Span body_span, uint32_t token_start, uint32_t token_end) {
@@ -232,15 +363,19 @@ memory::Span AstBuilder::exprSpan(ExprId id) const {
 
 memory::Span AstBuilder::stmtSpan(StmtId id) const {
     auto &stmt = stmts_[id];
-    switch (stmt.index()) {
-    case 0:
+    switch (stmtKind(stmt)) {
+    case StmtKind::Let:
         return std::get<ast::LetNode>(stmt).span;
-    case 1:
+    case StmtKind::Assign:
         return std::get<ast::AssignNode>(stmt).span;
-    case 2:
+    case StmtKind::Return:
         return std::get<ast::RetNode>(stmt).span;
-    case 3:
-        return exprSpan(std::get<ExprId>(stmt));
+    case StmtKind::Goto:
+        return std::get<ast::GotoNode>(stmt).span;
+    case StmtKind::Marker:
+        return std::get<ast::MarkerNode>(stmt).span;
+    case StmtKind::Expr:
+        return std::get<ast::ExprStmtNode>(stmt).span;
     }
     return {};
 }

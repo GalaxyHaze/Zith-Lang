@@ -19,8 +19,8 @@ struct Parser {
     diagnostics::DiagnosticEngine *diag;
     ast::ProgramNode program;
 
-    Parser(lexer::TokenStream *tok, ast::AstBuilder *bld, diagnostics::DiagnosticEngine *diag)
-        : tok(tok), bld(bld), diag(diag), program(bld->arena()) {}
+    Parser(lexer::TokenStream *tok_, ast::AstBuilder *bld_, diagnostics::DiagnosticEngine *diag_)
+        : tok(tok_), bld(bld_), diag(diag_), program(bld_->arena()) {}
 
     // ── Token helpers ────────────────────────────────────────────────
     std::string_view lexeme() const;

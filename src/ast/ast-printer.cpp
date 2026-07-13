@@ -1,13 +1,9 @@
 #include "ast/ast-printer.hpp"
+#include "common/overloaded.hpp"
 
 namespace zith::ast {
 
 namespace {
-
-template <class... Ts> struct overloaded : Ts... {
-    using Ts::operator()...;
-};
-template <class... Ts> overloaded(Ts...) -> overloaded<Ts...>;
 
 void print_indent(FILE *out, int depth) {
     for (int i = 0; i < depth; ++i)
@@ -82,7 +78,7 @@ void print_type_expr(TypeExprId id, const AstBuilder &bld, FILE *out) {
         return;
     }
     auto &node = bld.getTypeExpr(id);
-    std::visit(overloaded{
+    std::visit(common::overloaded{
                    [&](const TypePath &n) {
                        for (size_t i = 0; i < n.segments.size(); ++i) {
                            if (i > 0)
@@ -185,7 +181,7 @@ void print_stmt(StmtId id, const AstBuilder &bld, FILE *out, int depth);
 void print_expr(ExprId id, const AstBuilder &bld, FILE *out, int depth);
 
 void print_expr_node(const ExprNode &node, const AstBuilder &bld, FILE *out, int depth) {
-    std::visit(overloaded{
+    std::visit(common::overloaded{
                    [&](const LitValue &n) {
                        auto kind = [&]() -> const char * {
                            switch (n.kind) {
@@ -394,34 +390,51 @@ void print_stmt(StmtId id, const AstBuilder &bld, FILE *out, int depth) {
         return;
     }
     auto &node = bld.getStmt(id);
-    std::visit(overloaded{
-                   [&](const LetNode &n) {
-                       auto var_name = n.names.empty() ? std::string_view{} : n.names[0];
-                       std::fprintf(out, "Let(%.*s, mut=%s)\n", (int)var_name.size(),
-                                    var_name.data(), n.mut ? "true" : "false");
-                       if (n.init != kInvalidExpr) {
-                           print_indent(out, depth + 1);
-                           std::fprintf(out, "init: ");
-                           print_expr(n.init, bld, out, depth + 1);
-                       }
-                   },
-                   [&](const AssignNode &n) {
-                       std::fprintf(out, "Assign\n");
-                       print_indent(out, depth + 1);
-                       print_expr(n.target, bld, out, depth + 1);
-                       print_indent(out, depth + 1);
-                       print_expr(n.value, bld, out, depth + 1);
-                   },
-                   [&](const RetNode &n) {
-                       std::fprintf(out, "Return\n");
-                       if (n.value != kInvalidExpr) {
-                           print_indent(out, depth + 1);
-                           print_expr(n.value, bld, out, depth + 1);
-                       }
-                   },
-                   [&](ExprId expr_id) { print_expr(expr_id, bld, out, depth); },
-               },
-               node);
+    switch (stmtKind(node)) {
+    case StmtKind::Let: {
+        const auto &n = std::get<LetNode>(node);
+        auto var_name = n.names.empty() ? std::string_view{} : n.names[0];
+        std::fprintf(out, "Let(%.*s, mut=%s)\n", (int)var_name.size(), var_name.data(),
+                     n.mut ? "true" : "false");
+        if (n.init != kInvalidExpr) {
+            print_indent(out, depth + 1);
+            std::fprintf(out, "init: ");
+            print_expr(n.init, bld, out, depth + 1);
+        }
+        break;
+    }
+    case StmtKind::Assign: {
+        const auto &n = std::get<AssignNode>(node);
+        std::fprintf(out, "Assign\n");
+        print_indent(out, depth + 1);
+        print_expr(n.target, bld, out, depth + 1);
+        print_indent(out, depth + 1);
+        print_expr(n.value, bld, out, depth + 1);
+        break;
+    }
+    case StmtKind::Return: {
+        const auto &n = std::get<RetNode>(node);
+        std::fprintf(out, "Return\n");
+        if (n.value != kInvalidExpr) {
+            print_indent(out, depth + 1);
+            print_expr(n.value, bld, out, depth + 1);
+        }
+        break;
+    }
+    case StmtKind::Goto: {
+        const auto &n = std::get<GotoNode>(node);
+        std::fprintf(out, "Goto(%.*s)\n", (int)n.target.size(), n.target.data());
+        break;
+    }
+    case StmtKind::Marker: {
+        const auto &n = std::get<MarkerNode>(node);
+        std::fprintf(out, "Marker(%.*s)\n", (int)n.name.size(), n.name.data());
+        break;
+    }
+    case StmtKind::Expr:
+        print_expr(std::get<ExprStmtNode>(node).expr, bld, out, depth);
+        break;
+    }
 }
 
 void print_decl(DeclId id, const AstBuilder &bld, FILE *out, int depth) {
@@ -431,7 +444,7 @@ void print_decl(DeclId id, const AstBuilder &bld, FILE *out, int depth) {
     }
     auto &node = bld.getDecl(id);
     std::visit(
-        overloaded{
+        common::overloaded{
             [&](const FnDeclNode &n) {
                 std::fprintf(out, "Fn(%s%.*s)\n", n.is_extern ? "extern " : "", (int)n.name.size(),
                              n.name.data());
@@ -460,7 +473,7 @@ void print_decl(DeclId id, const AstBuilder &bld, FILE *out, int depth) {
                     print_indent(out, depth + 1);
                     std::fprintf(out, "extends\n");
                 }
-                for (auto &t : n.traits) {
+                for ([[maybe_unused]] auto &t : n.traits) {
                     print_indent(out, depth + 1);
                     std::fprintf(out, "trait\n");
                 }
@@ -644,7 +657,7 @@ void printAST(const ProgramNode &program, const AstBuilder &builder, FILE *out) 
     std::fprintf(out, "Program\n");
     for (auto decl : program.decls) {
         // skip FnDeclNodes that belong to a struct (printed inside the Struct node)
-        if (auto *fn = std::get_if<FnDeclNode>(&builder.getDecl(decl)))
+        if (std::get_if<FnDeclNode>(&builder.getDecl(decl)))
             if (isStructMethod(decl, builder, program))
                 continue;
         std::fprintf(out, "  ");

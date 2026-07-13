@@ -201,12 +201,12 @@ static memory::DynArray<ast::ImportSymbol> parseImportSymbols(lexer::TokenStream
     tok.advance(); // consume '{'
     while (!tok.is_empty() && !tok.peek().is_eof() && tok.peek().punc != '}') {
         if (!tok.peek().is(lexer::TokenKind::Identifier)) {
-        {
-            std::string msg = "expected symbol name in import list but got ";
-            msg += lexer::tokenKindName(tok.peek().kind);
-            diag.report(diagnostics::Severity::Error, diagnostics::err::ExpectedIdent,
-                        std::move(msg), tok.peek().span);
-        }
+            {
+                std::string msg = "expected symbol name in import list but got ";
+                msg += lexer::tokenKindName(tok.peek().kind);
+                diag.report(diagnostics::Severity::Error, diagnostics::err::ExpectedIdent,
+                            std::move(msg), tok.peek().span);
+            }
             break;
         }
         auto name = tok.lexeme();
@@ -230,17 +230,16 @@ static memory::DynArray<ast::ImportSymbol> parseImportSymbols(lexer::TokenStream
     }
     if (tok.peek().punc == '}')
         tok.advance();
-    else
-        {
-            std::string msg = "expected '}' to close import list but got ";
-            msg += lexer::tokenKindName(tok.peek().kind);
-            diag.report(diagnostics::Severity::Error, diagnostics::err::ExpectedExpr,
-                        std::move(msg), tok.peek().span);
-        }
+    else {
+        std::string msg = "expected '}' to close import list but got ";
+        msg += lexer::tokenKindName(tok.peek().kind);
+        diag.report(diagnostics::Severity::Error, diagnostics::err::ExpectedExpr, std::move(msg),
+                    tok.peek().span);
+    }
     return symbols;
 }
 
-static void scanImportDecl(Parser &parser, symbols::SymbolTable &syms, ast::ProgramNode &program,
+static void scanImportDecl(Parser &parser, symbols::SymbolTable & /*syms*/, ast::ProgramNode &program,
                            memory::Span kw_span, bool is_from, bool is_export) {
     using namespace diagnostics::err;
     auto &tok  = *parser.tok;
@@ -349,8 +348,7 @@ static void scanMethod(MethodScanContext &ctx, bool must_have_body) {
     } else if (ctx.tok.peek().punc == ';') {
         if (must_have_body)
             ctx.diag.report(diagnostics::Severity::Error, ExpectedExpr,
-                            "methods in component must have a body (got ';')",
-                            ctx.tok.peek().span);
+                            "methods in component must have a body (got ';')", ctx.tok.peek().span);
         ctx.tok.advance();
     } else {
         ctx.diag.report(diagnostics::Severity::Error, ExpectedExpr,
@@ -376,9 +374,9 @@ static void scanMethod(MethodScanContext &ctx, bool must_have_body) {
             ctx.syms.get(ctx.struct_sym).members.push(ms);
         if (ctx.decl != ast::kInvalidDecl) {
             auto &decl_node = ctx.bld.getDecl(ctx.decl);
-            if (auto *sn = std::get_if<ast::StructDeclNode>(&decl_node))
+            if (auto *sn = ast::asStruct(decl_node))
                 sn->methods.push(method_decl);
-            else if (auto *cn = std::get_if<ast::ComponentDeclNode>(&decl_node))
+            else if (auto *cn = ast::asComponent(decl_node))
                 cn->methods.push(method_decl);
         }
         ctx.result.fns.push({mname, mn_span, mn_body_node, 0});
@@ -738,7 +736,7 @@ ScanResult scan(Parser &parser, symbols::SymbolTable &syms) {
                     memory::FlatMap<std::string, char> field_names;
                     scan_detail::scanBody(
                         tok,
-                        [&](lexer::TokenStream &tok) {
+                        [&](lexer::TokenStream &) {
                             scanFieldItem(tok, diag, field_names, true);
                         },
                         [&ctx](lexer::TokenStream &) { scanMethod(ctx, false); }, token_start,
@@ -747,7 +745,7 @@ ScanResult scan(Parser &parser, symbols::SymbolTable &syms) {
                 } else if (kw == "enum") {
                     scan_detail::scanBody(
                         tok,
-                        [&](lexer::TokenStream &tok) {
+                        [&](lexer::TokenStream &) {
                             if (tok.peek().is(lexer::TokenKind::Identifier)) {
                                 auto v_span = tok.peek().span;
                                 auto vname  = tok.lexeme();
@@ -779,7 +777,7 @@ ScanResult scan(Parser &parser, symbols::SymbolTable &syms) {
                 } else if (kw == "union") {
                     scan_detail::scanBody(
                         tok,
-                        [&](lexer::TokenStream &tok) {
+                        [&](lexer::TokenStream &) {
                             tok.advance();
                             if (tok.peek().punc == ',')
                                 tok.advance();
@@ -791,7 +789,7 @@ ScanResult scan(Parser &parser, symbols::SymbolTable &syms) {
                     memory::FlatMap<std::string, char> field_names;
                     scan_detail::scanBody(
                         tok,
-                        [&](lexer::TokenStream &tok) {
+                        [&](lexer::TokenStream &) {
                             scanFieldItem(tok, diag, field_names, false);
                         },
                         [&ctx](lexer::TokenStream &) { scanMethod(ctx, true); }, token_start,
@@ -858,7 +856,7 @@ ScanResult scan(Parser &parser, symbols::SymbolTable &syms) {
 
                 scan_detail::scanBody(
                     tok,
-                    [&](lexer::TokenStream &tok) {
+                    [&](lexer::TokenStream &) {
                         if (tok.peek().is(lexer::TokenKind::Typedef)) {
                             tok.advance();
                             while (!tok.is_empty() && !tok.peek().is_eof() &&
@@ -870,7 +868,7 @@ ScanResult scan(Parser &parser, symbols::SymbolTable &syms) {
                         }
                         tok.advance();
                     },
-                    [&](lexer::TokenStream &tok) {
+                    [&](lexer::TokenStream &) {
                         tok.advance(); // consume 'fn'
                         if (tok.peek().punc == '<')
                             scan_detail::skipBalanced(tok, '<', '>');
@@ -984,9 +982,8 @@ ScanResult scan(Parser &parser, symbols::SymbolTable &syms) {
                     bld.typeAliasDecl(name, std::move(generic_params), target_type, kw_span);
                 program.decls.push(decl);
 
-                auto alias_sym =
-                    syms.declare(name, current_vis, current_mod_depth, symbols::SymKind::Alias,
-                                 decl, name_span, symbols::kInvalidSym, lastDocSpan);
+                syms.declare(name, current_vis, current_mod_depth, symbols::SymKind::Alias, decl,
+                             name_span, symbols::kInvalidSym, lastDocSpan);
 
                 resetVis();
                 continue;
@@ -1010,7 +1007,7 @@ ScanResult scan(Parser &parser, symbols::SymbolTable &syms) {
 
         // ── unknown token → skip to ; or next declaration ─────────
         {
-            auto &bad = tok.peek();
+            auto &bad       = tok.peek();
             std::string msg = "unexpected ";
             if (bad.kind == lexer::TokenKind::Punctuation)
                 msg += "'" + std::string(1, bad.punc) + "'";

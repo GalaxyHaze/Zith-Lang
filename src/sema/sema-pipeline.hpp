@@ -5,6 +5,7 @@
 #include "diagnostics/diagnostic-engine.hpp"
 #include "hir/hir-module.hpp"
 #include "memory/dyn-array.hpp"
+#include "memory/flat-map.hpp"
 #include "sema/sema-context.hpp"
 #include "sema/sema-result.hpp"
 #include "symbols/import-manager.hpp"
@@ -29,6 +30,8 @@ class SemaPipeline {
     ast::AstBuilder *active_builder_ = nullptr;
     memory::DynArray<size_t> allowed_files_;
 
+    memory::DynArray<types::TypeId> var_types_;
+
     hir::HirExprId addHirExpr(hir::HirExpr expr, types::TypeId type);
     types::TypeId current_fn_ret_type_ = types::kErrorType;
     types::TypeId exprType(hir::HirExprId id) const;
@@ -50,6 +53,23 @@ class SemaPipeline {
     hir::HirExprId visitIf(const ast::IfNode &n);
     hir::HirExprId visitWhile(const ast::WhileNode &n);
     void visitStmt(ast::StmtId id);
+
+    // ── block management ──
+    size_t currentBlock() const {
+        return currentBlock_;
+    }
+    void setCurrentBlock(size_t idx) {
+        currentBlock_ = idx;
+    }
+    size_t newBlock();
+    void setTerminator(hir::HirExprId term);
+    void visitMarker(const ast::MarkerNode &n);
+    void visitGoto(const ast::GotoNode &n);
+    hir::HirExprId emitBranch(ast::ExprId cond, size_t then_block, size_t else_block);
+    void emitJump(size_t target);
+
+    size_t currentBlock_ = 0;
+    memory::FlatMap<std::string_view, size_t> labelMap_;
     void visitDecl(const ast::FnDeclNode &n);
     types::TypeId inferExprType(ast::ExprId id);
 

@@ -4,7 +4,7 @@
 
 namespace zith::ast {
 
-enum class NodeKind : uint8_t {
+enum class ExprKind : uint8_t {
     Literal,
     Identifier,
     Binary,
@@ -12,19 +12,35 @@ enum class NodeKind : uint8_t {
     Call,
     Block,
     If,
+    While,
+    Field,
+    Index,
+    Range,
+    Unbody,
+    Intrinsic,
+    MacroCall,
+};
+
+enum class StmtKind : uint8_t {
     Let,
     Assign,
     Return,
-    FnDecl,
-    StructDecl,
-    EnumDecl,
-    UnionDecl,
-    ComponentDecl,
-    TraitDecl,
-    InterfaceDecl,
+    Goto,
+    Marker,
+    Expr,
+};
+
+enum class DeclKind : uint8_t {
+    Fn,
+    Struct,
+    Enum,
+    Union,
+    Component,
+    Trait,
+    Interface,
     Import,
-    GlobalDecl,
-    Program
+    TypeAlias,
+    Global,
 };
 
 using NodeId     = uint32_t;

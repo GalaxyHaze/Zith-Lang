@@ -81,10 +81,24 @@ ast::ExprId Parser::parsePrimary() {
         if (check('{')) {
             advance();
             then_branch = parseBlock();
+        } else if (!check(';') && !check('}') && !eof()) {
+            auto stmt  = parseStmt();
+            auto stmts = memory::DynArray<ast::StmtId>{bld->arena()};
+            stmts.push(stmt);
+            then_branch = bld->block(std::move(stmts));
         }
         ast::ExprId else_branch = ast::kInvalidExpr;
-        if (match("else"))
-            else_branch = parseExpr();
+        if (match("else")) {
+            if (check('{')) {
+                advance();
+                else_branch = parseBlock();
+            } else if (!check(';') && !check('}') && !eof()) {
+                auto stmt  = parseStmt();
+                auto stmts = memory::DynArray<ast::StmtId>{bld->arena()};
+                stmts.push(stmt);
+                else_branch = bld->block(std::move(stmts));
+            }
+        }
         return bld->ifExpr(cond, then_branch, else_branch, spanFrom(if_span));
     }
 
@@ -98,6 +112,8 @@ ast::ExprId Parser::parsePrimary() {
         if (check('{')) {
             advance();
             body = parseBlock();
+        } else if (!check(';') && !check('}') && !eof()) {
+            body = parseStmt();
         }
         return bld->whileExpr(cond, body, spanFrom(while_span));
     }
@@ -123,7 +139,8 @@ ast::ExprId Parser::parsePrimary() {
                     block.stmts.push(bld->letStmt(name, false, init_val));
                 }
             } else if (!check(';')) {
-                block.stmts.push(bld->addStmt(parseExpr()));
+                auto expr = parseExpr();
+                block.stmts.push(bld->addStmt(expr, bld->exprSpan(expr)));
             }
             consume(';');
 
@@ -157,12 +174,12 @@ ast::ExprId Parser::parsePrimary() {
                 bb.trailing = lb.trailing;
             }
             if (step != ast::kInvalidExpr)
-                bb.stmts.push(bld->addStmt(step));
+                bb.stmts.push(bld->addStmt(step, bld->exprSpan(step)));
 
             ast::ExprId while_cond =
                 cond != ast::kInvalidExpr ? cond : bld->litExpr(ast::LitKind::Bool, "true");
             auto while_expr = bld->whileExpr(while_cond, body_block);
-            block.stmts.push(bld->addStmt(while_expr));
+            block.stmts.push(bld->addStmt(while_expr, bld->exprSpan(while_expr)));
         }
 
         return desugar_block;
@@ -235,6 +252,17 @@ ast::ExprId Parser::parsePrimary() {
                  lit.find('e') != std::string_view::npos || lit.find('E') != std::string_view::npos)
             kind = ast::LitKind::Float;
         return bld->litExpr(kind, lit, lit_span);
+    }
+
+    // :: — scope escape (access outer scope)
+    if (peek().is(lexer::TokenKind::Punctuation) && peek().punc == ':' &&
+        peek(1).is(lexer::TokenKind::Punctuation) && peek(1).punc == ':' &&
+        (peek(2).is(TokenKind::Identifier) || peek(2).is(TokenKind::Type))) {
+        advance(2);
+        auto name = lexeme();
+        auto span = peek().span;
+        advance();
+        return bld->ident(name, span, true);
     }
 
     // identifiers — includes type keywords like i32, f64, etc.
@@ -391,15 +419,25 @@ ast::ExprId Parser::parseBlock() {
     auto start_span = peek().span;
     // '{' already consumed by advance() in caller
     memory::DynArray<ast::StmtId> stmts{bld->arena()};
+    ast::ExprId trailing = ast::kInvalidExpr;
     while (!eof() && !check('}')) {
         skipComments(*tok);
         if (check('}'))
             break;
         stmts.push(parseStmt());
     }
+    // If the last statement is an expression-statement, it's the trailing expression
+    if (!stmts.empty()) {
+        auto last_id    = stmts.back();
+        auto &last_node = bld->getStmt(last_id);
+        if (auto *expr_stmt = ast::asExprStmt(last_node)) {
+            trailing = expr_stmt->expr;
+            stmts.pop_back();
+        }
+    }
     if (check('}'))
         advance();
-    return bld->block(std::move(stmts), ast::kInvalidExpr, spanFrom(start_span));
+    return bld->block(std::move(stmts), trailing, spanFrom(start_span));
 }
 
 } // namespace zith::parser

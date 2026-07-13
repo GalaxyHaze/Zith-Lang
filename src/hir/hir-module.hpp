@@ -40,6 +40,7 @@ public:
     HirFunction &getFn(size_t idx);
 
     const HirExpr &getExpr(HirExprId id) const;
+    HirExpr &getExprMut(HirExprId id);
     const HirFunction &getFn(size_t idx) const;
     size_t getFnCount() const;
 

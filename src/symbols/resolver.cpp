@@ -1,4 +1,6 @@
 #include "resolver.hpp"
+#include "ast/ast-node-utils.hpp"
+#include "common/format.hpp"
 #include "diagnostics/error-codes.hpp"
 
 namespace zith::symbols {
@@ -22,7 +24,7 @@ void Resolver::resolveProgram(ast::ProgramNode &program) {
     // First pass: process import declarations (validate & register aliases)
     for (auto decl_id : program.decls) {
         auto &decl = builder_.getDecl(decl_id);
-        if (auto *import = std::get_if<ast::ImportNode>(&decl)) {
+        if (auto *import = ast::asImport(decl)) {
             auto import_key = joinWith(import->path);
             if (!import_mgr_.isLoaded(import_key))
                 continue;
@@ -38,49 +40,68 @@ void Resolver::resolveProgram(ast::ProgramNode &program) {
     // Second pass: resolve identifiers in all declaration bodies
     for (auto decl_id : program.decls) {
         auto &decl = builder_.getDecl(decl_id);
-        if (!std::get_if<ast::ImportNode>(&decl))
+        if (!ast::asImport(decl))
             resolveDecl(decl_id);
     }
 }
 
 void Resolver::resolveDecl(ast::DeclId id) {
     auto &decl = builder_.getDecl(id);
-    std::visit(
-        [&](auto &n) {
-            using T = std::decay_t<decltype(n)>;
-            if constexpr (std::is_same_v<T, ast::FnDeclNode>) {
-                auto fn_scope = syms_.enterScope();
-                for (auto &p : n.params)
-                    syms_.declareInScope(fn_scope, p.name);
-                if (n.body != ast::kInvalidExpr)
-                    resolveExpr(n.body);
-                syms_.exitScope();
-            }
-        },
-        decl);
+    switch (ast::declKind(decl)) {
+    case ast::DeclKind::Fn: {
+        const auto &n = std::get<ast::FnDeclNode>(decl);
+        auto fn_scope = syms_.enterScope();
+        for (auto &p : n.params)
+            syms_.declareInScope(fn_scope, p.name);
+        if (n.body != ast::kInvalidExpr)
+            resolveExpr(n.body);
+        syms_.exitScope();
+        break;
+    }
+    case ast::DeclKind::Struct:
+    case ast::DeclKind::Enum:
+    case ast::DeclKind::Union:
+    case ast::DeclKind::Component:
+    case ast::DeclKind::Trait:
+    case ast::DeclKind::Interface:
+    case ast::DeclKind::Import:
+    case ast::DeclKind::TypeAlias:
+    case ast::DeclKind::Global:
+        break;
+    }
 }
 
 void Resolver::resolveStmt(ast::StmtId id) {
     auto &node = builder_.getStmt(id);
-    struct StmtVisitor {
-        Resolver &r;
-        void operator()(const ast::LetNode &n) {
-            if (n.init != ast::kInvalidExpr)
-                r.resolveExpr(n.init);
-        }
-        void operator()(const ast::AssignNode &n) {
-            r.resolveExpr(n.target);
-            r.resolveExpr(n.value);
-        }
-        void operator()(const ast::RetNode &n) {
-            if (n.value != ast::kInvalidExpr)
-                r.resolveExpr(n.value);
-        }
-        void operator()(ast::ExprId expr_id) {
-            r.resolveExpr(expr_id);
-        }
-    };
-    std::visit(StmtVisitor{*this}, node);
+    switch (ast::stmtKind(node)) {
+    case ast::StmtKind::Let: {
+        const auto &n = std::get<ast::LetNode>(node);
+        if (n.init != ast::kInvalidExpr)
+            resolveExpr(n.init);
+        break;
+    }
+    case ast::StmtKind::Assign: {
+        const auto &n = std::get<ast::AssignNode>(node);
+        resolveExpr(n.target);
+        resolveExpr(n.value);
+        break;
+    }
+    case ast::StmtKind::Return: {
+        const auto &n = std::get<ast::RetNode>(node);
+        if (n.value != ast::kInvalidExpr)
+            resolveExpr(n.value);
+        break;
+    }
+    case ast::StmtKind::Goto:
+        break;
+    case ast::StmtKind::Marker:
+        for (auto stmt_id : std::get<ast::MarkerNode>(node).body)
+            resolveStmt(stmt_id);
+        break;
+    case ast::StmtKind::Expr:
+        resolveExpr(std::get<ast::ExprStmtNode>(node).expr);
+        break;
+    }
 }
 
 void Resolver::resolveExpr(ast::ExprId id) {
@@ -88,77 +109,89 @@ void Resolver::resolveExpr(ast::ExprId id) {
         return;
 
     auto &node = builder_.getExpr(id);
-
-    struct ExprVisitor {
-        Resolver &r;
-        ast::ExprId expr_id;
-
-        void operator()(const ast::IdentNode &n) {
-            auto sym = r.lookupQualified(n.name);
-            if (sym == kInvalidSym) {
-                auto dot = n.name.find('.');
-                // Qualified name failures already reported specific diagnostics
-                if (dot == std::string_view::npos) {
-                    r.diags_.report(diagnostics::Severity::Error, diagnostics::err::UndefinedIdent,
-                                    "undefined identifier '" + std::string(n.name) + "'", {});
-                }
+    switch (ast::exprKind(node)) {
+    case ast::ExprKind::Literal:
+    case ast::ExprKind::Unbody:
+        break;
+    case ast::ExprKind::Identifier: {
+        const auto &n = std::get<ast::IdentNode>(node);
+        SymId sym     = n.scope_escape ? syms_.lookupEscaped(n.name) : lookupQualified(n.name);
+        if (sym == kInvalidSym) {
+            auto dot = n.name.find('.');
+            if (dot == std::string_view::npos) {
+                diags_.report(diagnostics::Severity::Error, diagnostics::err::UndefinedIdent,
+                              common::format("undefined identifier '%.*s'",
+                                             static_cast<int>(n.name.size()), n.name.data()),
+                              {});
             }
-            r.setResolved(expr_id, sym);
         }
-        void operator()(const ast::BinaryNode &n) {
-            r.resolveExpr(n.lhs);
-            r.resolveExpr(n.rhs);
-        }
-        void operator()(const ast::UnaryNode &n) {
-            r.resolveExpr(n.operand);
-        }
-        void operator()(const ast::CallNode &n) {
-            r.resolveExpr(n.callee);
-            for (auto arg : n.args)
-                r.resolveExpr(arg);
-        }
-        void operator()(const ast::BlockNode &n) {
-            r.syms_.enterScope();
-            for (auto s : n.stmts)
-                r.resolveStmt(s);
-            if (n.trailing != ast::kInvalidExpr)
-                r.resolveExpr(n.trailing);
-            r.syms_.exitScope();
-        }
-        void operator()(const ast::IfNode &n) {
-            r.resolveExpr(n.cond);
-            r.resolveExpr(n.then_branch);
-            if (n.else_branch != ast::kInvalidExpr)
-                r.resolveExpr(n.else_branch);
-        }
-        void operator()(const ast::WhileNode &n) {
-            r.resolveExpr(n.cond);
-            r.resolveExpr(n.body);
-        }
-        void operator()(const ast::FieldNode &n) {
-            r.resolveExpr(n.object);
-        }
-        void operator()(const ast::IndexNode &n) {
-            r.resolveExpr(n.object);
-            r.resolveExpr(n.index);
-        }
-        void operator()(const ast::RangeNode &n) {
-            r.resolveExpr(n.lhs);
-            r.resolveExpr(n.rhs);
-        }
-        void operator()(const ast::LitValue &) {}
-        void operator()(const ast::UnbodyNode &) {}
-        void operator()(const ast::IntrinsicNode &n) {
-            for (auto arg : n.args)
-                r.resolveExpr(arg);
-        }
-        void operator()(const ast::MacroCallNode &n) {
-            for (auto arg : n.args)
-                r.resolveExpr(arg);
-        }
-    };
-
-    std::visit(ExprVisitor{*this, id}, node);
+        setResolved(id, sym);
+        break;
+    }
+    case ast::ExprKind::Binary: {
+        const auto &n = std::get<ast::BinaryNode>(node);
+        resolveExpr(n.lhs);
+        resolveExpr(n.rhs);
+        break;
+    }
+    case ast::ExprKind::Unary:
+        resolveExpr(std::get<ast::UnaryNode>(node).operand);
+        break;
+    case ast::ExprKind::Call: {
+        const auto &n = std::get<ast::CallNode>(node);
+        resolveExpr(n.callee);
+        for (auto arg : n.args)
+            resolveExpr(arg);
+        break;
+    }
+    case ast::ExprKind::Block: {
+        const auto &n = std::get<ast::BlockNode>(node);
+        syms_.enterScope();
+        for (auto stmt_id : n.stmts)
+            resolveStmt(stmt_id);
+        if (n.trailing != ast::kInvalidExpr)
+            resolveExpr(n.trailing);
+        syms_.exitScope();
+        break;
+    }
+    case ast::ExprKind::If: {
+        const auto &n = std::get<ast::IfNode>(node);
+        resolveExpr(n.cond);
+        resolveExpr(n.then_branch);
+        if (n.else_branch != ast::kInvalidExpr)
+            resolveExpr(n.else_branch);
+        break;
+    }
+    case ast::ExprKind::While: {
+        const auto &n = std::get<ast::WhileNode>(node);
+        resolveExpr(n.cond);
+        resolveExpr(n.body);
+        break;
+    }
+    case ast::ExprKind::Field:
+        resolveExpr(std::get<ast::FieldNode>(node).object);
+        break;
+    case ast::ExprKind::Index: {
+        const auto &n = std::get<ast::IndexNode>(node);
+        resolveExpr(n.object);
+        resolveExpr(n.index);
+        break;
+    }
+    case ast::ExprKind::Range: {
+        const auto &n = std::get<ast::RangeNode>(node);
+        resolveExpr(n.lhs);
+        resolveExpr(n.rhs);
+        break;
+    }
+    case ast::ExprKind::Intrinsic:
+        for (auto arg : std::get<ast::IntrinsicNode>(node).args)
+            resolveExpr(arg);
+        break;
+    case ast::ExprKind::MacroCall:
+        for (auto arg : std::get<ast::MacroCallNode>(node).args)
+            resolveExpr(arg);
+        break;
+    }
 }
 
 SymId Resolver::followAliases(SymId id) const {
@@ -182,7 +215,9 @@ SymId Resolver::lookupQualified(std::string_view name) {
     auto sym = lookupUnqualified(first);
     if (sym == kInvalidSym) {
         diags_.report(diagnostics::Severity::Error, diagnostics::err::UndefinedIdent,
-                      "undefined identifier '" + std::string(first) + "'", {});
+                      common::format("undefined identifier '%.*s'",
+                                     static_cast<int>(first.size()), first.data()),
+                      {});
         return kInvalidSym;
     }
 
@@ -192,10 +227,12 @@ SymId Resolver::lookupQualified(std::string_view name) {
 
     auto &data = syms_.get(sym);
     if (!isNamespaceLike(data.kind)) {
-        diags_.report(diagnostics::Severity::Error, diagnostics::err::NotNamespace,
-                      "'" + std::string(first) + "' is not a namespace, so '" + std::string(name) +
-                          "' is invalid",
-                      {});
+        diags_.report(
+            diagnostics::Severity::Error, diagnostics::err::NotNamespace,
+            common::format("'%.*s' is not a namespace, so '%.*s' is invalid",
+                           static_cast<int>(first.size()), first.data(),
+                           static_cast<int>(name.size()), name.data()),
+            {});
         return kInvalidSym;
     }
 
@@ -209,7 +246,10 @@ SymId Resolver::lookupQualified(std::string_view name) {
         auto found = syms_.lookupInScope(segment, scope);
         if (found == kInvalidSym) {
             diags_.report(diagnostics::Severity::Error, diagnostics::err::NoMember,
-                          "no member '" + std::string(segment) + "' in '" + prefix + "'", {});
+                          common::format("no member '%.*s' in '%s'",
+                                         static_cast<int>(segment.size()), segment.data(),
+                                         prefix.c_str()),
+                          {});
             return kInvalidSym;
         }
         found = followAliases(found);
@@ -219,11 +259,15 @@ SymId Resolver::lookupQualified(std::string_view name) {
             return found;
         auto &next_data = syms_.get(found);
         if (!isNamespaceLike(next_data.kind)) {
-            diags_.report(diagnostics::Severity::Error, diagnostics::err::NotNamespace,
-                          "'" + prefix + "." + std::string(segment) +
-                              "' is not a namespace, so the remainder of '" + std::string(name) +
-                              "' cannot be resolved",
-                          {});
+            auto current =
+                common::format("%s.%.*s", prefix.c_str(), static_cast<int>(segment.size()),
+                               segment.data());
+            diags_.report(
+                diagnostics::Severity::Error, diagnostics::err::NotNamespace,
+                common::format("'%s' is not a namespace, so the remainder of '%.*s' cannot be "
+                               "resolved",
+                               current.c_str(), static_cast<int>(name.size()), name.data()),
+                {});
             return kInvalidSym;
         }
         scope = next_data.scope;

@@ -38,12 +38,12 @@
 namespace zith::session {
 
 CompilationSession::CompilationSession(const Options &options, std::string filePath)
-    : mOpts(options), mFilePath(std::move(filePath)), mProjectRoot(), mAstArena(), mSymArena(),
-      mTypeArena(), mHirArena(), mScratchArena(), mDiags(mScratchArena),
-      mInterner(std::make_unique<memory::StringInterner>(mAstArena)),
-      mAstBuilder(mAstArena, *mInterner), mImportMgr(mSymArena, *mInterner, mSourceMap, mDiags),
-      mSyms(mSymArena, mInterner.get()), mResolvedSyms(mSymArena), mTypes(mTypeArena, *mInterner),
-      mHirModule(mHirArena), mProjectConfig(mAstArena) {
+    : mOpts(options), mFilePath(std::move(filePath)), mProjectRoot(), mProjectConfig(mAstArena), mScratchArena(),
+      mAstArena(), mSymArena(), mTypeArena(), mHirArena(),
+      mDiags(mScratchArena),
+      mInterner(std::make_unique<memory::StringInterner>(mAstArena)), mAstBuilder(mAstArena, *mInterner),
+      mImportMgr(mSymArena, *mInterner, mSourceMap, mDiags), mSyms(mSymArena, mInterner.get()), mResolvedSyms(mSymArena),
+      mTypes(mTypeArena, *mInterner), mHirModule(mHirArena) {
     mPlan.target = mOpts.get().targetStage;
     mDiags.setColor(term::useColor(mOpts));
     mDiags.setSourceMap(&mSourceMap);
@@ -215,7 +215,8 @@ bool CompilationSession::lexStage() {
         if (ec)
             writeOutput("[file] %s\n", mFilePath.c_str());
         else
-            writeOutput("[file] %s (%.1f KiB)\n", mFilePath.c_str(), fsize / 1024.0);
+            writeOutput("[file] %s (%.1f KiB)\n", mFilePath.c_str(),
+                        static_cast<double>(fsize) / 1024.0);
     }
 #endif
 
@@ -536,7 +537,7 @@ bool CompilationSession::codegenStage() {
             emitTarget == Options::EmitTarget::Bin) {
             std::string objPath = mOpts.get().outputFile;
             if (objPath.empty()) {
-                namespace fs = std::filesystem;
+                namespace fs       = std::filesystem;
                 std::string objDir = (fs::path(mProjectRoot) / "cache").string();
                 fs::create_directories(objDir);
                 objPath = objDir + "/" + fs::path(mFilePath).filename().string() + ".o";
@@ -569,7 +570,7 @@ bool CompilationSession::codegenStage() {
 }
 
 bool CompilationSession::cacheStage() {
-    auto t0 = std::chrono::steady_clock::now();
+    auto t0      = std::chrono::steady_clock::now();
     namespace fs = std::filesystem;
     fs::create_directories(fs::path(mProjectRoot) / "cache");
     if (mOpts.get().flags.verbose()) {
@@ -696,8 +697,8 @@ void CompilationSession::writeOutput(const char *fmt, ...) {
         va_end(args_copy);
         if (len > 0) {
             auto old = mOutputBuffer.size();
-            mOutputBuffer.resize(old + len);
-            std::vsnprintf(mOutputBuffer.data() + old, len + 1, fmt, args);
+            mOutputBuffer.resize(old + static_cast<size_t>(len));
+            std::vsnprintf(mOutputBuffer.data() + old, static_cast<size_t>(len) + 1, fmt, args);
         }
     } else {
         std::vfprintf(stderr, fmt, args);

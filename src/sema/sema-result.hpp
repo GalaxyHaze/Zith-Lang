@@ -1,6 +1,5 @@
 #pragma once
 
-#include "diagnostics/diagnostic-engine.hpp"
 #include "hir/hir-module.hpp"
 #include "symbols/symbol-table.hpp"
 
@@ -10,8 +9,8 @@ struct SemaResult {
     hir::HirModule hir;
     symbols::SymbolTable symbols;
 
-    SemaResult(hir::HirModule hir, symbols::SymbolTable symbols)
-        : hir(std::move(hir)), symbols(std::move(symbols)) {}
+    SemaResult(hir::HirModule hir_, symbols::SymbolTable symbols_)
+        : hir(std::move(hir_)), symbols(std::move(symbols_)) {}
 };
 
 } // namespace zith::sema

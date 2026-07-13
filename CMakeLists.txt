@@ -18,7 +18,7 @@ if(NOT ZITH_IS_WASM)
     FetchContent_Declare(
         mio
         GIT_REPOSITORY https://github.com/vimpunk/mio.git
-        GIT_TAG master
+        GIT_TAG 8b6b7d878c89e81614d05edca7936de41ccdd2da
     )
     FetchContent_MakeAvailable(mio)
 endif()
@@ -56,6 +56,8 @@ target_link_libraries(zithcLib PUBLIC
 
 if(NOT ZITH_IS_WASM)
     target_link_libraries(zithcLib PUBLIC mio)
+    get_target_property(_mio_includes mio INTERFACE_INCLUDE_DIRECTORIES)
+    target_include_directories(zithcLib SYSTEM PUBLIC ${_mio_includes})
 endif()
 
 if(ZITH_HAS_LLVM AND NOT ZITH_IS_WASM)
@@ -67,7 +69,7 @@ if(ZITH_HAS_LLVM AND NOT ZITH_IS_WASM)
         llvm_map_components_to_libnames(LLVM_LIBS core support irreader passes target X86CodeGen X86AsmParser X86Desc X86Info MC MCDisassembler MCParser AsmPrinter SelectionDAG GlobalISel)
 
         target_link_libraries(zithcLib PUBLIC ${LLVM_LIBS})
-        target_include_directories(zithcLib PUBLIC ${LLVM_INCLUDE_DIRS})
+        target_include_directories(zithcLib SYSTEM PUBLIC ${LLVM_INCLUDE_DIRS})
         target_compile_definitions(zithcLib PUBLIC ZITH_HAS_LLVM=1)
     else()
         message(WARNING "LLVM not found — disabling codegen backend")
@@ -123,4 +125,36 @@ if(CLANG_FORMAT_EXE)
     )
     add_custom_target(fmt COMMAND ${CLANG_FORMAT_EXE} -i ${ZITH_FORMAT_SOURCES})
     add_custom_target(fmt-check COMMAND ${CLANG_FORMAT_EXE} --dry-run --Werror ${ZITH_FORMAT_SOURCES})
+endif()
+
+# ── Compiler flags: -Werror -Weverything for Clang ────────────────────────
+
+if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+    set(ZITH_CLANG_WARNINGS
+        -Wall
+        -Werror
+        -Weverything
+        -Wno-switch-enum
+        -Wno-c++98-compat
+        -Wno-switch-default
+        -Wno-c++98-compat-pedantic
+        -Wno-reserved-module-identifier
+        -Wno-unsafe-buffer-usage
+        -Wno-padded
+        -Wno-unsafe-buffer-usage-in-libc-call
+        -Wno-old-style-cast
+        -Wno-format-nonliteral
+        -Wno-missing-field-initializers
+    )
+    target_compile_options(zithcLib PRIVATE ${ZITH_CLANG_WARNINGS})
+    if(TARGET zithc)
+        target_compile_options(zithc PRIVATE ${ZITH_CLANG_WARNINGS})
+    endif()
+    if(BUILD_TESTING)
+        foreach(TARGET test-lexer test-import test-alias test-struct test-scan)
+            if(TARGET ${TARGET})
+                target_compile_options(${TARGET} PRIVATE ${ZITH_CLANG_WARNINGS})
+            endif()
+        endforeach()
+    endif()
 endif()

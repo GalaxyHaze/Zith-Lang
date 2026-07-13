@@ -51,6 +51,16 @@ bool matchBuiltinType(std::string_view name, ast::BuiltinType &out) {
 } // anonymous namespace
 
 ast::TypeExprId Parser::parsePrimaryType() {
+    // ── raw opaque (void*) ───────────────────────────────────────────
+    if (match(TokenKind::Raw)) {
+        if (!match("opaque")) {
+            errorExpected("'opaque' after 'raw'", diagnostics::err::ExpectedIdent);
+            return bld->inferExpr();
+        }
+        auto opaque_expr = bld->builtinExpr(ast::BuiltinType::Opaque);
+        return bld->addTypeExpr(ast::TypePtrExpr{opaque_expr, false, ast::OwnershipKw::Default});
+    }
+
     // ── builtin types (i32, bool, void, …) ──────────────────────────
     if (check(TokenKind::Type)) {
         ast::BuiltinType bt;

@@ -1,5 +1,6 @@
 #include "codegen-emit.hpp"
 
+#include "ast/ast-node-utils.hpp"
 #include "types/type-kind.hpp"
 
 #include <llvm/IR/IRBuilder.h>
@@ -17,43 +18,51 @@ CodeGenEmit::CodeGenEmit(llvm::IRBuilderBase &builder, CodeGenType &typeGen,
 
 llvm::Value *CodeGenEmit::emitExpr(hir::HirExprId id, const hir::HirModule &mod) {
     auto &expr = mod.getExpr(id);
-    return std::visit(
-        [this, &mod](const auto &node) -> llvm::Value * {
-            using T = std::decay_t<decltype(node)>;
-            if constexpr (std::is_same_v<T, hir::HirLiteral>)
-                return emitLiteral(node);
-            else if constexpr (std::is_same_v<T, hir::HirBinary>)
-                return emitBinary(node, mod);
-            else if constexpr (std::is_same_v<T, hir::HirUnary>)
-                return emitUnary(node, mod);
-            else if constexpr (std::is_same_v<T, hir::HirCall>)
-                return emitCall(node, mod);
-            else if constexpr (std::is_same_v<T, hir::HirRet>)
-                return emitRet(node, mod);
-            else if constexpr (std::is_same_v<T, hir::HirLet>)
-                return emitLet(node, mod);
-            else if constexpr (std::is_same_v<T, hir::HirVar>)
-                return emitVar(node);
-            else if constexpr (std::is_same_v<T, hir::HirBranch> ||
-                               std::is_same_v<T, hir::HirJump> || std::is_same_v<T, hir::HirPhi>)
-                return nullptr;
-            else
-                return nullptr;
-        },
-        expr);
+    switch (hir::exprKind(expr)) {
+    case hir::HirExprKind::Literal:
+        return emitLiteral(std::get<hir::HirLiteral>(expr));
+    case hir::HirExprKind::Binary:
+        return emitBinary(std::get<hir::HirBinary>(expr), mod);
+    case hir::HirExprKind::Unary:
+        return emitUnary(std::get<hir::HirUnary>(expr), mod);
+    case hir::HirExprKind::Let:
+        return emitLet(std::get<hir::HirLet>(expr), mod);
+    case hir::HirExprKind::Var:
+        return emitVar(std::get<hir::HirVar>(expr));
+    case hir::HirExprKind::Call:
+        return emitCall(std::get<hir::HirCall>(expr), mod);
+    case hir::HirExprKind::Ret:
+        return emitRet(std::get<hir::HirRet>(expr), mod);
+    case hir::HirExprKind::Branch:
+        return emitBranch(std::get<hir::HirBranch>(expr), mod);
+    case hir::HirExprKind::Jump:
+        return emitJump(std::get<hir::HirJump>(expr), mod);
+    case hir::HirExprKind::Phi:
+        return nullptr;
+    }
+    return nullptr;
 }
 
 llvm::Value *CodeGenEmit::emitBody(const hir::HirFunction &fn, const hir::HirModule &mod) {
     if (fn.blocks.empty())
         return nullptr;
+    if (!blocks_ || blocks_->empty())
+        return nullptr;
 
     llvm::Value *last = nullptr;
-    auto &entry       = fn.blocks[0];
-    for (auto inst_id : entry.insts) {
-        last = emitExpr(inst_id, mod);
-    }
-    if (entry.terminator != hir::kInvalidHirExpr) {
-        emitExpr(entry.terminator, mod);
+    for (size_t i = 0; i < fn.blocks.size(); i++) {
+        auto &block  = fn.blocks[i];
+        auto *llvmBB = (*blocks_)[i];
+        // Move builder to this block if it's not already inserted
+        // (avoid moving if the block already has a terminator)
+        builder_.SetInsertPoint(llvmBB);
+
+        for (auto inst_id : block.insts) {
+            last = emitExpr(inst_id, mod);
+        }
+        if (block.terminator != hir::kInvalidHirExpr) {
+            emitExpr(block.terminator, mod);
+        }
     }
     return last;
 }
@@ -62,7 +71,7 @@ void CodeGenEmit::registerParams(const hir::HirFunction &fn, llvm::Function *llv
     if (fn.decl_id == ast::kInvalidDecl)
         return;
     auto &decl   = astBuilder_.getDecl(fn.decl_id);
-    auto *fnDecl = std::get_if<ast::FnDeclNode>(&decl);
+    auto *fnDecl = ast::asFn(decl);
     if (!fnDecl)
         return;
 
@@ -77,8 +86,37 @@ void CodeGenEmit::registerParams(const hir::HirFunction &fn, llvm::Function *llv
 llvm::Value *CodeGenEmit::emitLiteral(const hir::HirLiteral &lit) {
     auto kind = types_.kindOf(lit.type);
     switch (kind) {
-    case types::TypeKind::Int:
-        return llvm::ConstantInt::get(builder_.getContext(), llvm::APInt(64, lit.i, true));
+    case types::TypeKind::Int: {
+        auto &int_t   = std::get<types::TypeInt>(types_.lookup(lit.type));
+        unsigned bits = 64;
+        switch (int_t.width) {
+        case types::IntWidth::I8:
+        case types::IntWidth::U8:
+            bits = 8;
+            break;
+        case types::IntWidth::I16:
+        case types::IntWidth::U16:
+            bits = 16;
+            break;
+        case types::IntWidth::I32:
+        case types::IntWidth::U32:
+            bits = 32;
+            break;
+        case types::IntWidth::I64:
+        case types::IntWidth::U64:
+            bits = 64;
+            break;
+        case types::IntWidth::I128:
+        case types::IntWidth::U128:
+            bits = 128;
+            break;
+        case types::IntWidth::Literal:
+            bits = 64;
+            break;
+        }
+        bool is_signed = int_t.width >= types::IntWidth::I8 && int_t.width <= types::IntWidth::I128;
+        return llvm::ConstantInt::get(builder_.getContext(), llvm::APInt(bits, lit.i, is_signed));
+    }
     case types::TypeKind::Bool:
         return llvm::ConstantInt::get(builder_.getContext(), llvm::APInt(1, lit.b ? 1 : 0));
     case types::TypeKind::Float:
@@ -161,14 +199,7 @@ llvm::Value *CodeGenEmit::emitUnary(const hir::HirUnary &un, const hir::HirModul
 }
 
 llvm::Value *CodeGenEmit::emitCall(const hir::HirCall &call, const hir::HirModule &mod) {
-    auto &callee_expr = mod.getExpr(call.callee);
-    auto *callee_fn   = std::get_if<hir::HirLiteral>(&callee_expr);
-
     llvm::Function *fn = nullptr;
-    if (call.resolved_fn != symbols::kInvalidSym) {
-        auto &sym = syms_.get(call.resolved_fn);
-        auto name = interner_.lookup(sym.name);
-    }
 
     // For extern calls, resolve by finding the function in the module
     llvm::SmallVector<llvm::Value *, 8> args;
@@ -227,6 +258,25 @@ llvm::Value *CodeGenEmit::emitVar(const hir::HirVar &var) {
         return nv->value;
     }
     return nullptr;
+}
+
+llvm::Value *CodeGenEmit::emitJump(const hir::HirJump &jump, const hir::HirModule &mod) {
+    (void)mod;
+    if (!blocks_ || jump.target >= blocks_->size())
+        return nullptr;
+    auto *target = (*blocks_)[jump.target];
+    return builder_.CreateBr(target);
+}
+
+llvm::Value *CodeGenEmit::emitBranch(const hir::HirBranch &branch, const hir::HirModule &mod) {
+    if (!blocks_ || branch.then_block >= blocks_->size() || branch.else_block >= blocks_->size())
+        return nullptr;
+    auto *condVal = emitExpr(branch.cond, mod);
+    if (!condVal)
+        return nullptr;
+    auto *thenBB = (*blocks_)[branch.then_block];
+    auto *elseBB = (*blocks_)[branch.else_block];
+    return builder_.CreateCondBr(condVal, thenBB, elseBB);
 }
 
 } // namespace zith::codegen

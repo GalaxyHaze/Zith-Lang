@@ -11,6 +11,7 @@
 #include "types/type-intern.hpp"
 
 #include <string_view>
+#include <vector>
 
 namespace llvm {
 class IRBuilderBase;
@@ -34,6 +35,10 @@ public:
                 const memory::StringInterner &interner, const symbols::SymbolTable &syms,
                 const types::TypeIntern &types, const ast::AstBuilder &astBuilder);
 
+    void setBlocks(const std::vector<llvm::BasicBlock *> *blocks) {
+        blocks_ = blocks;
+    }
+
     llvm::Value *emitExpr(hir::HirExprId id, const hir::HirModule &mod);
     llvm::Value *emitBody(const hir::HirFunction &fn, const hir::HirModule &mod);
     void registerParams(const hir::HirFunction &fn, llvm::Function *llvmFn);
@@ -46,6 +51,8 @@ private:
     llvm::Value *emitRet(const hir::HirRet &ret, const hir::HirModule &mod);
     llvm::Value *emitLet(const hir::HirLet &let, const hir::HirModule &mod);
     llvm::Value *emitVar(const hir::HirVar &var);
+    llvm::Value *emitJump(const hir::HirJump &jump, const hir::HirModule &mod);
+    llvm::Value *emitBranch(const hir::HirBranch &branch, const hir::HirModule &mod);
 
     llvm::IRBuilderBase &builder_;
     CodeGenType &typeGen_;
@@ -54,6 +61,7 @@ private:
     const types::TypeIntern &types_;
     const ast::AstBuilder &astBuilder_;
     memory::FlatMap<std::string_view, NamedValue> namedValues_;
+    const std::vector<llvm::BasicBlock *> *blocks_ = nullptr;
 };
 
 } // namespace zith::codegen

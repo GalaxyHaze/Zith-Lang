@@ -7,7 +7,6 @@
 #include <cstdint>
 #include <string_view>
 #include <variant>
-#include <vector>
 
 namespace zith::ast {
 
@@ -35,57 +34,71 @@ enum class UnaryOp : uint8_t { Neg, Not, Ref, Deref };
 enum class LitKind : uint8_t { Int, Float, Bool, String, Char, Nil };
 
 struct LitValue {
-    LitKind kind;
     std::string_view raw;
     memory::Span span{};
+    LitKind kind;
+    int : 24;
+    ExprKind tag = ExprKind::Literal;
 };
 
 struct BinaryNode {
+    memory::Span span{};
     ExprId lhs;
     ExprId rhs;
     BinaryOp op;
-    memory::Span span{};
+    int : 24;
+    ExprKind tag = ExprKind::Binary;
 };
 
 struct UnaryNode {
+    memory::Span span{};
     ExprId operand;
     UnaryOp op;
-    memory::Span span{};
+    int : 24;
+    ExprKind tag = ExprKind::Unary;
 };
 
 struct CallNode {
-    ExprId callee;
     memory::DynArray<ExprId> args;
     memory::Span span{};
+    ExprId callee;
+    ExprKind tag = ExprKind::Call;
 };
 
 struct IdentNode {
     std::string_view name;
     memory::Span span{};
+    bool scope_escape = false;
+    int : 24;
+    ExprKind tag = ExprKind::Identifier;
 };
 
 struct FieldNode {
-    ExprId object;
     std::string_view field;
     memory::Span span{};
+    ExprId object;
+    ExprKind tag = ExprKind::Field;
 };
 
 struct IndexNode {
     ExprId object;
     ExprId index;
     memory::Span span{};
+    ExprKind tag = ExprKind::Index;
 };
 
 struct RangeNode {
     ExprId lhs;
     ExprId rhs;
     memory::Span span{};
+    ExprKind tag = ExprKind::Range;
 };
 
 struct BlockNode {
     memory::DynArray<StmtId> stmts;
     ExprId trailing = kInvalidExpr;
     memory::Span span{};
+    ExprKind tag = ExprKind::Block;
 };
 
 struct IfNode {
@@ -93,17 +106,20 @@ struct IfNode {
     ExprId then_branch;
     ExprId else_branch = kInvalidExpr;
     memory::Span span{};
+    ExprKind tag = ExprKind::If;
 };
 
 struct WhileNode {
     ExprId cond;
     ExprId body;
     memory::Span span{};
+    ExprKind tag = ExprKind::While;
 };
 
 struct FnParam {
     std::string_view name;
     TypeExprId type = kInvalidTypeExpr;
+    int: 32;
 };
 
 struct GenericParam {
@@ -112,22 +128,26 @@ struct GenericParam {
 };
 
 struct LetNode {
-    bool mut              = false;
-    TypeExprId type_annot = kInvalidTypeExpr;
     memory::DynArray<std::string_view> names;
-    ExprId init = kInvalidExpr;
     memory::Span span{};
+    TypeExprId type_annot = kInvalidTypeExpr;
+    ExprId init           = kInvalidExpr;
+    bool mut              = false;
+    int : 24;
+    StmtKind tag = StmtKind::Let;
 };
 
 struct AssignNode {
     ExprId target;
     ExprId value;
     memory::Span span{};
+    StmtKind tag = StmtKind::Assign;
 };
 
 struct RetNode {
     ExprId value = kInvalidExpr;
     memory::Span span{};
+    StmtKind tag = StmtKind::Return;
 };
 
 struct FnDeclNode {
@@ -138,6 +158,8 @@ struct FnDeclNode {
     ExprId body            = kInvalidExpr;
     bool is_extern         = false;
     memory::Span span{};
+    int: 24;
+    DeclKind tag = DeclKind::Fn;
 };
 
 enum class FieldBind : uint8_t { Auto, Const, Let, Var, Global, Comptime };
@@ -159,6 +181,7 @@ struct StructDeclNode {
     TypeExprId extends_parent = kInvalidTypeExpr;
     memory::DynArray<TypeExprId> traits;
     memory::Span span{};
+    DeclKind tag = DeclKind::Struct;
 };
 
 struct EnumVariant {
@@ -168,10 +191,12 @@ struct EnumVariant {
 };
 
 struct EnumDeclNode {
-    std::string_view name;
     memory::DynArray<GenericParam> generic_params;
     memory::DynArray<EnumVariant> variants;
+    std::string_view name;
     memory::Span span{};
+    int : 32;
+    DeclKind tag = DeclKind::Enum;
 };
 
 struct UnionVariant {
@@ -184,6 +209,8 @@ struct UnionDeclNode {
     memory::DynArray<GenericParam> generic_params;
     memory::DynArray<UnionVariant> variants;
     memory::Span span{};
+    int : 32;
+    DeclKind tag = DeclKind::Union;
 };
 
 struct ComponentDeclNode {
@@ -192,6 +219,8 @@ struct ComponentDeclNode {
     memory::DynArray<StructField> fields;
     memory::DynArray<ast::DeclId> methods;
     memory::Span span{};
+    int : 32;
+    DeclKind tag = DeclKind::Component;
 };
 
 struct TraitMethod {
@@ -204,6 +233,8 @@ struct TraitDeclNode {
     memory::DynArray<GenericParam> generic_params;
     memory::DynArray<TraitMethod> methods;
     memory::Span span{};
+    int : 32;
+    DeclKind tag = DeclKind::Trait;
 };
 
 struct InterfaceDeclNode {
@@ -211,14 +242,18 @@ struct InterfaceDeclNode {
     memory::DynArray<GenericParam> generic_params;
     memory::DynArray<TraitMethod> methods;
     memory::Span span{};
+    int : 32;
+    DeclKind tag = DeclKind::Interface;
 };
 
 struct GlobalDeclNode {
     std::string_view name;
+    memory::Span span{};
     bool is_const;
     TypeExprId type_annot = kInvalidTypeExpr;
     ExprId init           = kInvalidExpr;
-    memory::Span span{};
+    int : 24;
+    DeclKind tag = DeclKind::Global;
 };
 
 struct TypeAliasDeclNode {
@@ -226,6 +261,7 @@ struct TypeAliasDeclNode {
     memory::DynArray<GenericParam> generic_params;
     TypeExprId target_type = kInvalidTypeExpr;
     memory::Span span{};
+    DeclKind tag = DeclKind::TypeAlias;
 };
 
 struct ImportSymbol {
@@ -237,11 +273,14 @@ struct ImportNode {
     memory::DynArray<std::string_view> path;
     memory::DynArray<ImportSymbol> symbols; // empty = import all
     std::string_view alias;
+    memory::Span span{};
+    int32_t import_depth = 1;
     bool is_from         = false;
     bool is_export       = false;
     bool is_asset        = false;
-    int32_t import_depth = 1;
-    memory::Span span{};
+    int: 8;
+    int: 32;
+    DeclKind tag = DeclKind::Import;
 };
 
 struct UnbodyNode {
@@ -249,6 +288,7 @@ struct UnbodyNode {
     uint32_t token_start;
     uint32_t token_end;
     memory::Span span{};
+    ExprKind tag = ExprKind::Unbody;
 };
 
 struct ProgramNode {
@@ -288,19 +328,45 @@ struct IntrinsicNode {
     IntrinsicKind kind;
     memory::DynArray<ExprId> args;
     memory::Span span{};
+    int: 24;
+    ExprKind tag = ExprKind::Intrinsic;
 };
 
 struct MacroCallNode {
     std::string_view name;
     memory::DynArray<ExprId> args;
     memory::Span span{};
+    int: 32;
+    ExprKind tag = ExprKind::MacroCall;
 };
 
 using ExprNode =
     std::variant<LitValue, IdentNode, BinaryNode, UnaryNode, CallNode, BlockNode, IfNode, WhileNode,
                  FieldNode, IndexNode, RangeNode, UnbodyNode, IntrinsicNode, MacroCallNode>;
 
-using StmtNode = std::variant<LetNode, AssignNode, RetNode, ExprId>;
+struct GotoNode {
+    std::string_view target;
+    memory::Span span{};
+    int: 32;
+    StmtKind tag = StmtKind::Goto;
+};
+
+struct MarkerNode {
+    std::string_view name;
+    memory::DynArray<ast::StmtId> body;
+    memory::Span span{};
+    int: 32;
+    StmtKind tag = StmtKind::Marker;
+};
+
+struct ExprStmtNode {
+    ExprId expr = kInvalidExpr;
+    memory::Span span{};
+    StmtKind tag = StmtKind::Expr;
+};
+
+using StmtNode =
+    std::variant<LetNode, AssignNode, RetNode, GotoNode, MarkerNode, ExprStmtNode>;
 
 using DeclNode =
     std::variant<FnDeclNode, StructDeclNode, EnumDeclNode, UnionDeclNode, ComponentDeclNode,

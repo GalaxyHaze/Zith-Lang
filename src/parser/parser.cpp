@@ -218,6 +218,39 @@ memory::Span Parser::spanFrom(ast::ExprId lhs, ast::ExprId rhs) const {
 ast::StmtId Parser::parseStmt() {
     skipComments(*tok);
     auto ret_span = peek().span;
+
+    // marker <name> { ... }
+    if (match("marker")) {
+        auto marker_span = peek().span;
+        auto name        = lexeme();
+        advance();
+        if (check('{')) {
+            advance();
+            memory::DynArray<ast::StmtId> body{bld->arena()};
+            while (!eof() && !check('}')) {
+                skipComments(*tok);
+                if (check('}'))
+                    break;
+                body.push(parseStmt());
+            }
+            if (check('}'))
+                advance();
+            return bld->markerStmt(name, std::move(body), spanFrom(marker_span));
+        }
+        // If not followed by '{', treat as jump target (label:)
+        // fall through to expression parsing
+    }
+
+    // jump <target>
+    if (match("jump")) {
+        auto jump_span = peek().span;
+        auto target    = lexeme();
+        advance();
+        if (check(';'))
+            advance();
+        return bld->gotoStmt(target, spanFrom(jump_span));
+    }
+
     if (match("return")) {
         auto val = eof() || check('}') ? kInvalidExpr : parseExpr();
         if (!check(';'))
@@ -227,20 +260,18 @@ ast::StmtId Parser::parseStmt() {
         return bld->retStmt(val, spanFrom(ret_span));
     }
 
-    auto br_span = peek().span;
     if (match("break")) {
         if (check(';'))
             advance();
         auto nil = bld->litExpr(ast::LitKind::Nil, "null", peek().span);
-        return bld->addStmt(nil);
+        return bld->addStmt(nil, bld->exprSpan(nil));
     }
 
-    auto cont_span = peek().span;
     if (match("continue")) {
         if (check(';'))
             advance();
         auto nil = bld->litExpr(ast::LitKind::Nil, "null", peek().span);
-        return bld->addStmt(nil);
+        return bld->addStmt(nil, bld->exprSpan(nil));
     }
 
     if (consume(TokenKind::Variable)) {
@@ -269,7 +300,7 @@ ast::StmtId Parser::parseStmt() {
     if (check(';'))
         advance();
 
-    return bld->addStmt(expr);
+    return bld->addStmt(expr, bld->exprSpan(expr));
 }
 
 // ── declaration parsing ────────────────────────────────────────────────

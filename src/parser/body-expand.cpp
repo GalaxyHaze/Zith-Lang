@@ -1,5 +1,6 @@
 #include "parser.hpp"
 
+#include "ast/ast-node-utils.hpp"
 #include "diagnostics/error-codes.hpp"
 #include "lexer/lexer.hpp"
 #include "memory/flat-map.hpp"
@@ -172,7 +173,7 @@ void Parser::expandBodies(ScanResult &result) {
         // 4. write back to StructDeclNode
         for (auto &decl_id : program.decls) {
             auto &decl = bld->getDecl(decl_id);
-            if (auto *sn = std::get_if<ast::StructDeclNode>(&decl)) {
+            if (auto *sn = ast::asStruct(decl)) {
                 if (sn->name == entry.name && sn->fields.empty()) {
                     sn->fields         = std::move(fields);
                     sn->extends_parent = extends_parent;
@@ -287,7 +288,7 @@ void Parser::expandBodies(ScanResult &result) {
         // write back to EnumDeclNode
         for (auto &decl_id : program.decls) {
             auto &decl = bld->getDecl(decl_id);
-            if (auto *en = std::get_if<ast::EnumDeclNode>(&decl)) {
+            if (auto *en = ast::asEnum(decl)) {
                 if (en->name == entry.name && en->variants.empty()) {
                     en->variants = std::move(variants);
                     break;
@@ -362,7 +363,7 @@ void Parser::expandBodies(ScanResult &result) {
         // write back to ComponentDeclNode
         for (auto &decl_id : program.decls) {
             auto &decl = bld->getDecl(decl_id);
-            if (auto *cn = std::get_if<ast::ComponentDeclNode>(&decl)) {
+            if (auto *cn = ast::asComponent(decl)) {
                 if (cn->name == entry.name && cn->fields.empty()) {
                     cn->fields = std::move(fields);
                     break;
@@ -437,7 +438,7 @@ void Parser::expandBodies(ScanResult &result) {
         // write back to UnionDeclNode
         for (auto &decl_id : program.decls) {
             auto &decl = bld->getDecl(decl_id);
-            if (auto *un = std::get_if<ast::UnionDeclNode>(&decl)) {
+            if (auto *un = ast::asUnion(decl)) {
                 if (un->name == entry.name && un->variants.empty()) {
                     un->variants = std::move(variants);
                     break;

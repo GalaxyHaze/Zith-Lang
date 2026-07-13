@@ -7,9 +7,9 @@
 #include "lexer/token.hpp"
 #include "memory/arena.hpp"
 #include "memory/dyn-array.hpp"
-#include <string>
 #include "memory/span.hpp"
 #include "symbols/symbol-table.hpp"
+#include <string>
 
 #include <cstdint>
 #include <cstdlib>
