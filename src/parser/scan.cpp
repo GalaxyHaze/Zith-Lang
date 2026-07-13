@@ -1,13 +1,9 @@
-#include "lexer/keyword-table.hpp"
 #include "lexer/token.hpp"
 #include "memory/flat-map.hpp"
-#include "memory/optional.hpp"
 #include "parser.hpp"
 
 #include "diagnostics/error-codes.hpp"
 #include "lexer/lexer.hpp"
-#include "memory/source-map.hpp"
-#include "parser/operators.hpp"
 #include "parser/recovery.hpp"
 #include "parser/scan-helpers.hpp"
 #include "symbols/symbol-table.hpp"
@@ -386,78 +382,245 @@ static void scanMethod(MethodScanContext &ctx, bool must_have_body) {
 static void scanFieldItem(lexer::TokenStream &tok, diagnostics::DiagnosticEngine &diag,
                           memory::FlatMap<std::string, char> &field_names,
                           bool support_destructure) {
-    if (support_destructure) {
-        // skip field qualifiers
-        if (tok.peek().is(lexer::TokenKind::Variable) || tok.peek().is(lexer::TokenKind::Mutable) ||
-            tok.peek().is(lexer::TokenKind::Ownership)) {
-            while (tok.peek().is(lexer::TokenKind::Variable) ||
-                   tok.peek().is(lexer::TokenKind::Mutable) ||
-                   tok.peek().is(lexer::TokenKind::Ownership))
-                tok.advance();
-        }
-
-        // destructure: [a, b, c]: Type
-        if (tok.peek().punc == '[') {
-            tok.advance();
-            while (!tok.is_empty() && tok.peek().punc != ']') {
-                if (tok.peek().is(lexer::TokenKind::Identifier)) {
-                    auto fname = tok.lexeme();
-                    auto fspan = tok.peek().span;
-                    tok.advance();
-                    if (field_names.contains(std::string(fname)))
-                        diag.report(diagnostics::Severity::Error, diagnostics::err::DuplicateDecl,
-                                    "duplicate field '" + std::string(fname) + "'", fspan);
-                    else
-                        field_names.insert(std::string(fname), char(1));
-                } else {
-                    tok.advance();
-                }
-                if (tok.peek().punc == ',')
-                    tok.advance();
-            }
-            if (tok.peek().punc == ']')
-                tok.advance();
+    auto consumed = scan_detail::consumeFieldItem(
+        tok,
+        scan_detail::FieldItemOptions{
+            .support_destructure = support_destructure,
+            .skip_qualifiers     = support_destructure,
+            .parse_bind          = false,
+        },
+        [&]() {
             if (tok.peek().punc == ':')
                 tok.advance();
             scan_detail::skipTypeExpr(tok);
-            if (tok.peek().punc == '=') {
-                tok.advance();
-                scan_detail::skipExpr(tok);
-            }
-            if (tok.peek().punc == ',')
-                tok.advance();
-            return;
-        }
-    }
+            return false;
+        },
+        [&]() {
+            scan_detail::skipExpr(tok);
+            return false;
+        },
+        []() { return false; },
+        [&](std::string_view fname, memory::Span fspan, bool, bool, ast::FieldBind) {
+            if (field_names.contains(std::string(fname)))
+                diag.report(diagnostics::Severity::Error, diagnostics::err::DuplicateDecl,
+                            "duplicate field '" + std::string(fname) + "'", fspan);
+            else
+                field_names.insert(std::string(fname), char(1));
+        });
 
-    // field: ident : Type = default ,
-    if (tok.peek().is(lexer::TokenKind::Identifier)) {
-        auto fname = tok.lexeme();
-        auto fspan = tok.peek().span;
+    if (!consumed)
         tok.advance();
-        if (field_names.contains(std::string(fname)))
-            diag.report(diagnostics::Severity::Error, diagnostics::err::DuplicateDecl,
-                        "duplicate field '" + std::string(fname) + "'", fspan);
-        else
-            field_names.insert(std::string(fname), char(1));
-        if (tok.peek().punc == ':')
-            tok.advance();
-        scan_detail::skipTypeExpr(tok);
+}
+
+static void scanStructLikeFieldBody(lexer::TokenStream &tok, diagnostics::DiagnosticEngine &diag,
+                                    ast::AstBuilder &bld, ast::ExprId &body_node,
+                                    uint32_t &token_start, memory::Span &body_span,
+                                    MethodScanContext &ctx, bool support_destructure,
+                                    bool methods_must_have_body) {
+    memory::FlatMap<std::string, char> field_names;
+    scan_detail::scanBody(
+        tok, [&](lexer::TokenStream &) { scanFieldItem(tok, diag, field_names, support_destructure); },
+        [&](lexer::TokenStream &) { scanMethod(ctx, methods_must_have_body); }, token_start,
+        body_span, bld, body_node);
+}
+
+static void scanEnumVariantItem(lexer::TokenStream &tok, diagnostics::DiagnosticEngine &diag,
+                                symbols::SymbolTable &syms, ast::DeclId decl) {
+    if (tok.peek().is(lexer::TokenKind::Identifier)) {
+        auto v_span = tok.peek().span;
+        auto vname  = tok.lexeme();
+        tok.advance();
+        if (!scan_detail::reportIfDuplicate(syms, diag, vname, v_span)) {
+            auto vs = syms.declare(vname, symbols::SymbolVisibility::Private, 0,
+                                   symbols::SymKind::Variable, ast::kInvalidDecl, v_span);
+            if (decl != ast::kInvalidDecl && vs != symbols::kInvalidSym)
+                syms.get(vs).decl_id = decl;
+        }
+        if (tok.peek().punc == '(')
+            scan_detail::skipBalanced(tok, '(', ')');
+        if (tok.peek().punc == '{')
+            scan_detail::skipBalanced(tok, '{', '}');
         if (tok.peek().punc == '=') {
             tok.advance();
             scan_detail::skipExpr(tok);
         }
-        if (tok.peek().punc == ',')
-            tok.advance();
-        return;
-    }
-
-    if (tok.peek().is(lexer::TokenKind::Annotation)) {
+    } else {
         tok.advance();
-        return;
+    }
+    if (tok.peek().punc == ',')
+        tok.advance();
+}
+
+static void scanEnumBody(lexer::TokenStream &tok, diagnostics::DiagnosticEngine &diag,
+                         symbols::SymbolTable &syms, ast::DeclId decl, ast::AstBuilder &bld,
+                         ast::ExprId &body_node, uint32_t &token_start, memory::Span &body_span,
+                         MethodScanContext &ctx) {
+    scan_detail::scanBody(
+        tok, [&](lexer::TokenStream &) { scanEnumVariantItem(tok, diag, syms, decl); },
+        [&](lexer::TokenStream &) { scanMethod(ctx, false); }, token_start, body_span, bld,
+        body_node);
+}
+
+static void scanUnionBody(lexer::TokenStream &tok, ast::AstBuilder &bld, ast::ExprId &body_node,
+                          uint32_t &token_start, memory::Span &body_span, MethodScanContext &ctx) {
+    scan_detail::scanBody(
+        tok,
+        [&](lexer::TokenStream &) {
+            tok.advance();
+            if (tok.peek().punc == ',')
+                tok.advance();
+        },
+        [&](lexer::TokenStream &) { scanMethod(ctx, false); }, token_start, body_span, bld,
+        body_node);
+}
+
+enum class StructLikeKind : uint8_t {
+    Struct,
+    Enum,
+    Union,
+    Component,
+};
+
+static auto structLikeKindOf(std::string_view kw) -> StructLikeKind {
+    if (kw == "enum")
+        return StructLikeKind::Enum;
+    if (kw == "union")
+        return StructLikeKind::Union;
+    if (kw == "component")
+        return StructLikeKind::Component;
+    return StructLikeKind::Struct;
+}
+
+static auto symbolKindOf(StructLikeKind kind) -> symbols::SymKind {
+    switch (kind) {
+    case StructLikeKind::Struct:
+        return symbols::SymKind::Struct;
+    case StructLikeKind::Enum:
+        return symbols::SymKind::Enum;
+    case StructLikeKind::Union:
+        return symbols::SymKind::Union;
+    case StructLikeKind::Component:
+        return symbols::SymKind::Component;
+    }
+    return symbols::SymKind::Struct;
+}
+
+static auto createStructLikeDecl(ast::AstBuilder &bld, StructLikeKind kind, std::string_view name,
+                                 memory::DynArray<ast::GenericParam> generic_params,
+                                 memory::Span name_span) -> ast::DeclId {
+    switch (kind) {
+    case StructLikeKind::Struct:
+        return bld.structDecl(name, std::move(generic_params),
+                              memory::DynArray<ast::StructField>(bld.arena()),
+                              memory::DynArray<ast::DeclId>(bld.arena()), ast::kInvalidTypeExpr,
+                              name_span);
+    case StructLikeKind::Enum:
+        return bld.enumDecl(name, std::move(generic_params),
+                            memory::DynArray<ast::EnumVariant>(bld.arena()), name_span);
+    case StructLikeKind::Union:
+        return bld.unionDecl(name, std::move(generic_params),
+                             memory::DynArray<ast::UnionVariant>(bld.arena()), name_span);
+    case StructLikeKind::Component:
+        return bld.componentDecl(name, std::move(generic_params),
+                                 memory::DynArray<ast::StructField>(bld.arena()), name_span);
+    }
+    return ast::kInvalidDecl;
+}
+
+static void scanStructLikeBody(StructLikeKind kind, lexer::TokenStream &tok,
+                               diagnostics::DiagnosticEngine &diag, symbols::SymbolTable &syms,
+                               ast::AstBuilder &bld, ast::DeclId decl, ast::ExprId &body_node,
+                               uint32_t &token_start, memory::Span &body_span,
+                               MethodScanContext &ctx) {
+    switch (kind) {
+    case StructLikeKind::Struct:
+        scanStructLikeFieldBody(tok, diag, bld, body_node, token_start, body_span, ctx, true,
+                                false);
+        break;
+    case StructLikeKind::Enum:
+        scanEnumBody(tok, diag, syms, decl, bld, body_node, token_start, body_span, ctx);
+        break;
+    case StructLikeKind::Union:
+        scanUnionBody(tok, bld, body_node, token_start, body_span, ctx);
+        break;
+    case StructLikeKind::Component:
+        scanStructLikeFieldBody(tok, diag, bld, body_node, token_start, body_span, ctx, false,
+                                true);
+        break;
+    }
+}
+
+static void pushStructLikeEntry(ScanResult &result, StructLikeKind kind, std::string_view name,
+                                memory::Span body_span, ast::ExprId body_node,
+                                uint32_t struct_header_start) {
+    ScanEntry entry{name, body_span, body_node, struct_header_start};
+    switch (kind) {
+    case StructLikeKind::Struct:
+        result.structs.push(entry);
+        break;
+    case StructLikeKind::Enum:
+        result.enums.push(entry);
+        break;
+    case StructLikeKind::Union:
+        result.unions.push(entry);
+        break;
+    case StructLikeKind::Component:
+        result.components.push(entry);
+        break;
+    }
+}
+
+ast::DeclId scan_detail::scanGlobalOrConst(Parser &parser, symbols::SymbolTable &syms,
+                                           memory::DynArray<ast::DeclId> &program_decls,
+                                           bool is_const, memory::Span kw_span,
+                                           symbols::SymbolVisibility vis, int32_t mod_depth,
+                                           memory::Span doc_span) {
+    auto &tok  = *parser.tok;
+    auto &bld  = *parser.bld;
+    auto &diag = *parser.diag;
+
+    if (!tok.peek().is(lexer::TokenKind::Identifier)) {
+        std::string msg = "expected variable name but got ";
+        if (tok.peek().kind == lexer::TokenKind::Punctuation)
+            msg += "'" + std::string(1, tok.peek().punc) + "'";
+        else
+            msg += lexer::tokenKindName(tok.peek().kind);
+        diag.report(diagnostics::Severity::Error, diagnostics::err::ExpectedIdent, std::move(msg),
+                    tok.peek().span);
+        tok.advance();
+        return ast::kInvalidDecl;
     }
 
+    auto name_span = tok.peek().span;
+    auto name      = tok.lexeme();
     tok.advance();
+
+    auto type_annot = parser.parseOptTypeAnnotation();
+
+    if (!parser.consume('=')) {
+        diag.report(diagnostics::Severity::Error, diagnostics::err::ExpectedExpr,
+                    "expected '=' and initializer", name_span);
+        while (!tok.is_empty() && !tok.peek().is_eof() && tok.peek().punc != ';' &&
+               tok.peek().punc != '}')
+            tok.advance();
+        if (tok.peek().punc == ';')
+            tok.advance();
+        return ast::kInvalidDecl;
+    }
+    auto init = parser.parseExpr();
+
+    if (!parser.consume(';'))
+        diag.report(diagnostics::Severity::Error, diagnostics::err::ExpectedSemicolon,
+                    "expected ';' after declaration", tok.peek().span);
+
+    auto decl = bld.globalDecl(name, is_const, type_annot, init,
+                               scan_detail::spanFromOffset(kw_span.start, kw_span.end));
+    auto sym  = syms.declare(name, vis, mod_depth, symbols::SymKind::Variable, decl, name_span,
+                             symbols::kInvalidSym, doc_span);
+    if (sym != symbols::kInvalidSym)
+        syms.get(sym).decl_id = decl;
+    program_decls.push(decl);
+    return decl;
 }
 
 ScanResult scan(Parser &parser, symbols::SymbolTable &syms) {
@@ -667,6 +830,7 @@ ScanResult scan(Parser &parser, symbols::SymbolTable &syms) {
             tok.advance();
 
             auto generic_params = tryParseGenericParams(parser, bld.arena());
+            auto struct_like    = structLikeKindOf(kw);
 
             uint32_t struct_header_start = tok.offset;
 
@@ -685,42 +849,18 @@ ScanResult scan(Parser &parser, symbols::SymbolTable &syms) {
                 tok.advance();
             }
 
-            symbols::SymKind sk;
-            if (kw == "enum")
-                sk = symbols::SymKind::Enum;
-            else if (kw == "union")
-                sk = symbols::SymKind::Union;
-            else if (kw == "component")
-                sk = symbols::SymKind::Component;
-            else
-                sk = symbols::SymKind::Struct;
-
             auto decl             = ast::kInvalidDecl;
             ast::ExprId body_node = ast::kInvalidExpr;
             memory::Span body_span{};
 
-            // create appropriate AST node
-            if (kw == "struct") {
-                decl = bld.structDecl(name, std::move(generic_params),
-                                      memory::DynArray<ast::StructField>(bld.arena()),
-                                      memory::DynArray<ast::DeclId>(bld.arena()),
-                                      ast::kInvalidTypeExpr, name_span);
-            } else if (kw == "enum") {
-                decl = bld.enumDecl(name, std::move(generic_params),
-                                    memory::DynArray<ast::EnumVariant>(bld.arena()), name_span);
-            } else if (kw == "union") {
-                decl = bld.unionDecl(name, std::move(generic_params),
-                                     memory::DynArray<ast::UnionVariant>(bld.arena()), name_span);
-            } else {
-                decl =
-                    bld.componentDecl(name, std::move(generic_params),
-                                      memory::DynArray<ast::StructField>(bld.arena()), name_span);
-            }
+            decl = createStructLikeDecl(bld, struct_like, name, std::move(generic_params),
+                                        name_span);
 
             // declare struct/union/enum symbol BEFORE body scan
             symbols::SymId struct_sym = symbols::kInvalidSym;
             if (!scan_detail::reportIfDuplicate(syms, diag, name, name_span))
-                struct_sym = syms.declare(name, current_vis, current_mod_depth, sk, decl, name_span,
+                struct_sym = syms.declare(name, current_vis, current_mod_depth,
+                                          symbolKindOf(struct_like), decl, name_span,
                                           symbols::kInvalidSym, lastDocSpan);
 
             // ── scan body: register member names, skip implementations ──
@@ -732,83 +872,14 @@ ScanResult scan(Parser &parser, symbols::SymbolTable &syms) {
                     tok,        bld,  diag,    syms,  parser, current_vis, current_mod_depth,
                     struct_sym, decl, program, result};
 
-                if (kw == "struct") {
-                    memory::FlatMap<std::string, char> field_names;
-                    scan_detail::scanBody(
-                        tok,
-                        [&](lexer::TokenStream &) {
-                            scanFieldItem(tok, diag, field_names, true);
-                        },
-                        [&ctx](lexer::TokenStream &) { scanMethod(ctx, false); }, token_start,
-                        body_span, bld, body_node);
-
-                } else if (kw == "enum") {
-                    scan_detail::scanBody(
-                        tok,
-                        [&](lexer::TokenStream &) {
-                            if (tok.peek().is(lexer::TokenKind::Identifier)) {
-                                auto v_span = tok.peek().span;
-                                auto vname  = tok.lexeme();
-                                tok.advance();
-                                if (!scan_detail::reportIfDuplicate(syms, diag, vname, v_span)) {
-                                    auto vs = syms.declare(
-                                        vname, symbols::SymbolVisibility::Private, 0,
-                                        symbols::SymKind::Variable, ast::kInvalidDecl, v_span);
-                                    if (decl != ast::kInvalidDecl && vs != symbols::kInvalidSym)
-                                        syms.get(vs).decl_id = decl;
-                                }
-                                if (tok.peek().punc == '(')
-                                    scan_detail::skipBalanced(tok, '(', ')');
-                                if (tok.peek().punc == '{')
-                                    scan_detail::skipBalanced(tok, '{', '}');
-                                if (tok.peek().punc == '=') {
-                                    tok.advance();
-                                    scan_detail::skipExpr(tok);
-                                }
-                            } else {
-                                tok.advance();
-                            }
-                            if (tok.peek().punc == ',')
-                                tok.advance();
-                        },
-                        [&ctx](lexer::TokenStream &) { scanMethod(ctx, false); }, token_start,
-                        body_span, bld, body_node);
-
-                } else if (kw == "union") {
-                    scan_detail::scanBody(
-                        tok,
-                        [&](lexer::TokenStream &) {
-                            tok.advance();
-                            if (tok.peek().punc == ',')
-                                tok.advance();
-                        },
-                        [&ctx](lexer::TokenStream &) { scanMethod(ctx, false); }, token_start,
-                        body_span, bld, body_node);
-
-                } else if (kw == "component") {
-                    memory::FlatMap<std::string, char> field_names;
-                    scan_detail::scanBody(
-                        tok,
-                        [&](lexer::TokenStream &) {
-                            scanFieldItem(tok, diag, field_names, false);
-                        },
-                        [&ctx](lexer::TokenStream &) { scanMethod(ctx, true); }, token_start,
-                        body_span, bld, body_node);
-                }
+                scanStructLikeBody(struct_like, tok, diag, syms, bld, decl, body_node,
+                                   token_start, body_span, ctx);
             }
 
             program.decls.push(decl);
             lastDocSpan = {};
-
-            ScanEntry entry{name, body_span, body_node, struct_header_start};
-            if (kw == "struct")
-                result.structs.push(entry);
-            else if (kw == "enum")
-                result.enums.push(entry);
-            else if (kw == "union")
-                result.unions.push(entry);
-            else if (kw == "component")
-                result.components.push(entry);
+            pushStructLikeEntry(result, struct_like, name, body_span, body_node,
+                                struct_header_start);
 
             resetVis();
             continue;

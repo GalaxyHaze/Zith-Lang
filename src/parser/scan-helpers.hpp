@@ -1,9 +1,9 @@
 #pragma once
 
-#include "ast/ast-ids.hpp"
+#include "ast/ast-builder.hpp"
+#include "ast/ast-nodes.hpp"
 #include "diagnostics/diagnostic-engine.hpp"
 #include "diagnostics/error-codes.hpp"
-#include "lexer/lexer.hpp"
 #include "lexer/token.hpp"
 #include "memory/arena.hpp"
 #include "memory/dyn-array.hpp"
@@ -15,8 +15,12 @@
 #include <cstdlib>
 #include <string>
 #include <string_view>
+#include <utility>
+#include <vector>
 
 namespace zith::parser {
+
+struct Parser;
 
 // Skip Comments and Docs tokens — used throughout all parser passes
 inline void skipComments(lexer::TokenStream &tok) {
@@ -214,6 +218,118 @@ inline bool consumeFnModifiers(lexer::TokenStream &tok) {
     return false;
 }
 
+inline void skipMethodMember(lexer::TokenStream &tok) {
+    tok.advance(); // consume 'fn'
+    if (tok.peek().is(lexer::TokenKind::Identifier))
+        tok.advance();
+    while (!tok.is_empty() && !tok.peek().is_eof()) {
+        if (tok.peek().punc == ';') {
+            tok.advance();
+            break;
+        }
+        if (tok.peek().punc == '{') {
+            skipBalanced(tok, '{', '}');
+            break;
+        }
+        if (tok.peek().punc == '}')
+            break;
+        tok.advance();
+    }
+}
+
+struct FieldItemOptions {
+    bool support_destructure = false;
+    bool skip_qualifiers     = false;
+    bool parse_bind          = false;
+};
+
+template <typename ParseTypeFn, typename ParseDefaultFn, typename MissingDefaultFn,
+          typename OnFieldFn>
+inline bool consumeFieldItem(lexer::TokenStream &tok, const FieldItemOptions &options,
+                             ParseTypeFn &&parse_type, ParseDefaultFn &&parse_default,
+                             MissingDefaultFn &&missing_default, OnFieldFn &&on_field) {
+    auto bind = ast::FieldBind::Auto;
+
+    if (options.skip_qualifiers) {
+        while (tok.peek().is(lexer::TokenKind::Variable) ||
+               tok.peek().is(lexer::TokenKind::Mutable) ||
+               tok.peek().is(lexer::TokenKind::Ownership)) {
+            if (options.parse_bind && tok.peek().is(lexer::TokenKind::Variable)) {
+                auto lex = tok.lexeme();
+                if (lex == "auto")
+                    bind = ast::FieldBind::Auto;
+                else if (lex == "const")
+                    bind = ast::FieldBind::Const;
+                else if (lex == "let")
+                    bind = ast::FieldBind::Let;
+                else if (lex == "var")
+                    bind = ast::FieldBind::Var;
+                else if (lex == "global")
+                    bind = ast::FieldBind::Global;
+                else if (lex == "comptime")
+                    bind = ast::FieldBind::Comptime;
+            }
+            tok.advance();
+        }
+    }
+
+    if (options.support_destructure && tok.peek().punc == '[') {
+        tok.advance();
+        std::vector<std::pair<std::string_view, memory::Span>> names;
+        while (!tok.is_empty() && tok.peek().punc != ']') {
+            if (tok.peek().is(lexer::TokenKind::Identifier)) {
+                names.push_back({tok.lexeme(), tok.peek().span});
+                tok.advance();
+            } else {
+                tok.advance();
+            }
+            if (tok.peek().punc == ',')
+                tok.advance();
+        }
+        if (tok.peek().punc == ']')
+            tok.advance();
+
+        auto type_expr     = parse_type();
+        auto default_value = missing_default();
+        if (tok.peek().punc == '=') {
+            tok.advance();
+            default_value = parse_default();
+        }
+
+        for (auto &[name, name_span] : names)
+            on_field(name, name_span, type_expr, default_value, bind);
+
+        if (tok.peek().punc == ',')
+            tok.advance();
+        return true;
+    }
+
+    if (tok.peek().is(lexer::TokenKind::Identifier)) {
+        auto name          = tok.lexeme();
+        auto name_span     = tok.peek().span;
+        tok.advance();
+        auto type_expr     = parse_type();
+        auto default_value = missing_default();
+        if (tok.peek().punc == '=') {
+            tok.advance();
+            default_value = parse_default();
+        }
+
+        on_field(name, name_span, type_expr, default_value, bind);
+
+        if (tok.peek().punc == ',')
+            tok.advance();
+        return true;
+    }
+
+    if (tok.peek().is(lexer::TokenKind::Annotation)) {
+        tok.advance();
+        return true;
+    }
+
+    return false;
+}
+
 inline bool reportIfDuplicate(symbols::SymbolTable &syms, diagnostics::DiagnosticEngine &diag,
                               std::string_view name, memory::Span span,
                               symbols::SymId skip_id = symbols::kInvalidSym) {
@@ -232,60 +348,10 @@ inline bool reportIfDuplicate(symbols::SymbolTable &syms, diagnostics::Diagnosti
 
 // Scan a top-level global/const declaration.
 // Expects `tok` positioned AFTER the `global`/`const` keyword.
-inline ast::DeclId scanGlobalOrConst(Parser &parser, symbols::SymbolTable &syms,
-                                     memory::DynArray<ast::DeclId> &program_decls, bool is_const,
-                                     memory::Span kw_span, symbols::SymbolVisibility vis,
-                                     int32_t mod_depth, memory::Span doc_span) {
-    auto &tok  = *parser.tok;
-    auto &bld  = *parser.bld;
-    auto &diag = *parser.diag;
-
-    // name
-    if (!tok.peek().is(lexer::TokenKind::Identifier)) {
-        std::string msg = "expected variable name but got ";
-        if (tok.peek().kind == lexer::TokenKind::Punctuation)
-            msg += "'" + std::string(1, tok.peek().punc) + "'";
-        else
-            msg += lexer::tokenKindName(tok.peek().kind);
-        diag.report(diagnostics::Severity::Error, diagnostics::err::ExpectedIdent, std::move(msg),
-                    tok.peek().span);
-        tok.advance();
-        return ast::kInvalidDecl;
-    }
-    auto name_span = tok.peek().span;
-    auto name      = tok.lexeme();
-    tok.advance();
-
-    // optional : Type
-    auto type_annot = parser.parseOptTypeAnnotation();
-
-    // = Expr (required)
-    if (!parser.consume('=')) {
-        diag.report(diagnostics::Severity::Error, diagnostics::err::ExpectedExpr,
-                    "expected '=' and initializer", name_span);
-        while (!tok.is_empty() && !tok.peek().is_eof() && tok.peek().punc != ';' &&
-               tok.peek().punc != '}')
-            tok.advance();
-        if (tok.peek().punc == ';')
-            tok.advance();
-        return ast::kInvalidDecl;
-    }
-    auto init = parser.parseExpr();
-
-    // ;
-    if (!parser.consume(';'))
-        diag.report(diagnostics::Severity::Error, diagnostics::err::ExpectedSemicolon,
-                    "expected ';' after declaration", tok.peek().span);
-
-    auto decl = bld.globalDecl(name, is_const, type_annot, init,
-                               spanFromOffset(kw_span.start, kw_span.end));
-    auto sym  = syms.declare(name, vis, mod_depth, symbols::SymKind::Variable, decl, name_span,
-                             symbols::kInvalidSym, doc_span);
-    if (sym != symbols::kInvalidSym)
-        syms.get(sym).decl_id = decl;
-    program_decls.push(decl);
-    return decl;
-}
+ast::DeclId scanGlobalOrConst(Parser &parser, symbols::SymbolTable &syms,
+                              memory::DynArray<ast::DeclId> &program_decls, bool is_const,
+                              memory::Span kw_span, symbols::SymbolVisibility vis,
+                              int32_t mod_depth, memory::Span doc_span);
 
 // Unified body scanner — handles common infrastructure for struct/enum/union/component.
 // Manages brace_depth, skipComments, EOF, closing `}`, visibility, and methods.

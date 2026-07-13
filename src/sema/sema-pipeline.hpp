@@ -7,11 +7,10 @@
 #include "memory/dyn-array.hpp"
 #include "memory/flat-map.hpp"
 #include "sema/sema-context.hpp"
-#include "sema/sema-result.hpp"
+#include "sema/typed-ast.hpp"
 #include "symbols/import-manager.hpp"
 #include "symbols/symbol-table.hpp"
 #include "types/type-intern.hpp"
-#include "types/type-lower.hpp"
 #include "types/unify.hpp"
 
 namespace zith::sema {
@@ -24,6 +23,7 @@ class SemaPipeline {
     hir::HirFunction *current_fn_                     = nullptr;
     const memory::DynArray<symbols::SymId> *resolved_ = nullptr;
     memory::DynArray<types::TypeId> hir_types_;
+    TypedAst typed_ast_;
     symbols::ImportManager *import_mgr_ = nullptr;
     memory::DynArray<symbols::SymId> worklist_;
     memory::DynArray<symbols::SymId> fn_syms_;
@@ -32,9 +32,11 @@ class SemaPipeline {
 
     memory::DynArray<types::TypeId> var_types_;
 
-    hir::HirExprId addHirExpr(hir::HirExpr expr, types::TypeId type);
+    hir::HirExprId addHirExpr(hir::HirExpr expr, types::TypeId type,
+                              ast::ExprId source_id = ast::kInvalidExpr);
     types::TypeId current_fn_ret_type_ = types::kErrorType;
     types::TypeId exprType(hir::HirExprId id) const;
+    types::TypeId astExprType(ast::ExprId id) const;
     ast::AstBuilder &builder() const;
     void ensureStub(symbols::SymId fn_sym);
     void ensureBodyLowered(symbols::SymId fn_sym);
@@ -44,14 +46,14 @@ class SemaPipeline {
     size_t hirIndexForSym(symbols::SymId fn_sym) const;
 
     hir::HirExprId visitExpr(ast::ExprId id);
-    hir::HirExprId visitLiteral(const ast::LitValue &n);
+    hir::HirExprId visitLiteral(ast::ExprId id, const ast::LitValue &n);
     hir::HirExprId visitIdent(const ast::IdentNode &n, ast::ExprId id);
-    hir::HirExprId visitBinary(const ast::BinaryNode &n);
-    hir::HirExprId visitUnary(const ast::UnaryNode &n);
-    hir::HirExprId visitCall(const ast::CallNode &n);
-    hir::HirExprId visitBlock(const ast::BlockNode &n);
-    hir::HirExprId visitIf(const ast::IfNode &n);
-    hir::HirExprId visitWhile(const ast::WhileNode &n);
+    hir::HirExprId visitBinary(ast::ExprId id, const ast::BinaryNode &n);
+    hir::HirExprId visitUnary(ast::ExprId id, const ast::UnaryNode &n);
+    hir::HirExprId visitCall(ast::ExprId id, const ast::CallNode &n);
+    hir::HirExprId visitBlock(ast::ExprId id, const ast::BlockNode &n);
+    hir::HirExprId visitIf(ast::ExprId id, const ast::IfNode &n);
+    hir::HirExprId visitWhile(ast::ExprId id, const ast::WhileNode &n);
     void visitStmt(ast::StmtId id);
 
     // ── block management ──
@@ -87,8 +89,14 @@ public:
     hir::HirModule takeHir() {
         return std::move(hir_);
     }
+    TypedAst takeTypedAst() {
+        return std::move(typed_ast_);
+    }
     const hir::HirModule &hir() const {
         return hir_;
+    }
+    const TypedAst &typedAst() const {
+        return typed_ast_;
     }
 };
 

@@ -14,6 +14,7 @@
 #include "sema/heuristic-engine.hpp"
 #include "sema/sema-pipeline.hpp"
 #include "symbols/resolver.hpp"
+#include "types/type-lower.hpp"
 
 #ifdef ZITH_HAS_LLVM
 #include "codegen/codegen.hpp"
@@ -43,7 +44,7 @@ CompilationSession::CompilationSession(const Options &options, std::string fileP
       mDiags(mScratchArena),
       mInterner(std::make_unique<memory::StringInterner>(mAstArena)), mAstBuilder(mAstArena, *mInterner),
       mImportMgr(mSymArena, *mInterner, mSourceMap, mDiags), mSyms(mSymArena, mInterner.get()), mResolvedSyms(mSymArena),
-      mTypes(mTypeArena, *mInterner), mHirModule(mHirArena) {
+      mTypes(mTypeArena, *mInterner), mHirModule(mHirArena), mTypedAst(mHirArena) {
     mPlan.target = mOpts.get().targetStage;
     mDiags.setColor(term::useColor(mOpts));
     mDiags.setSourceMap(&mSourceMap);
@@ -462,6 +463,7 @@ bool CompilationSession::semaStage() {
     }
 
     mHirModule = pipeline.takeHir();
+    mTypedAst  = pipeline.takeTypedAst();
 
     if (mOpts.get().flags.emitHir()) {
         std::fputs("--- HIR ---\n", stdout);

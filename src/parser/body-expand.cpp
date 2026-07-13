@@ -2,7 +2,6 @@
 
 #include "ast/ast-node-utils.hpp"
 #include "diagnostics/error-codes.hpp"
-#include "lexer/lexer.hpp"
 #include "memory/flat-map.hpp"
 #include "parser/scan-helpers.hpp"
 
@@ -14,12 +13,181 @@ namespace zith::parser {
 
 using namespace diagnostics::err;
 
+namespace {
+
 static std::string_view arenaStr(memory::Arena &arena, const std::string &s) {
     auto *buf = static_cast<char *>(arena.alloc(s.size()));
     std::memcpy(buf, s.data(), s.size());
     return {buf, s.size()};
 }
 
+void skipToNextBodyItem(lexer::TokenStream &tok) {
+    while (!tok.is_empty() && !tok.peek().is_eof() && tok.peek().punc != ',' && tok.peek().punc != '}')
+        tok.advance();
+    if (tok.peek().punc == ',')
+        tok.advance();
+}
+
+template <typename ConsumeItemFn>
+void consumeBodyItems(Parser &parser, ConsumeItemFn &&consume_item) {
+    auto &tok = *parser.tok;
+    while (!tok.is_empty() && !tok.peek().is_eof() && tok.peek().punc != '}') {
+        if (scan_detail::consumeFnModifiers(tok)) {
+            scan_detail::skipMethodMember(tok);
+            continue;
+        }
+        if (consume_item())
+            continue;
+        skipToNextBodyItem(tok);
+    }
+    if (tok.peek().punc == '}')
+        tok.advance();
+}
+
+template <typename ApplyFn>
+void updateNamedDecl(ast::AstBuilder &builder, ast::ProgramNode &program, std::string_view name,
+                     ApplyFn &&apply) {
+    for (auto &decl_id : program.decls) {
+        auto &decl = builder.getDecl(decl_id);
+        if (apply(decl, name))
+            break;
+    }
+}
+
+template <typename PreItemFn>
+auto parseStructLikeFields(Parser &parser, ast::FieldKind kind,
+                           const scan_detail::FieldItemOptions &options,
+                           PreItemFn &&pre_item) -> memory::DynArray<ast::StructField> {
+    auto &tok = *parser.tok;
+    auto &bld = *parser.bld;
+
+    memory::DynArray<ast::StructField> fields{bld.arena()};
+    while (!tok.is_empty() && !tok.peek().is_eof() && tok.peek().punc != '}') {
+        if (pre_item())
+            continue;
+
+        if (scan_detail::consumeFnModifiers(tok)) {
+            scan_detail::skipMethodMember(tok);
+            continue;
+        }
+
+        if (scan_detail::consumeFieldItem(
+                tok, options, [&]() { return parser.parseOptTypeAnnotation(); },
+                [&]() { return parser.parseExpr(); }, []() { return ast::kInvalidExpr; },
+                [&](std::string_view fname, memory::Span, ast::TypeExprId type_expr,
+                    ast::ExprId default_val, ast::FieldBind bind) {
+                    auto effective_bind =
+                        (kind == ast::FieldKind::Component) ? ast::FieldBind::Auto : bind;
+                    fields.push({fname, type_expr, default_val, effective_bind, kind});
+                })) {
+            continue;
+        }
+
+        skipToNextBodyItem(tok);
+    }
+
+    if (tok.peek().punc == '}')
+        tok.advance();
+    return fields;
+}
+
+auto parseEnumVariantFields(Parser &parser) -> memory::DynArray<ast::StructField> {
+    auto &tok = *parser.tok;
+    auto &bld = *parser.bld;
+
+    memory::DynArray<ast::StructField> fields{bld.arena()};
+
+    if (tok.peek().punc == '(') {
+        tok.advance();
+        uint32_t idx = 0;
+        while (!tok.is_empty() && !tok.peek().is_eof() && tok.peek().punc != ')') {
+            auto field_type = parser.parseTypeExpr();
+            auto field_name = arenaStr(bld.arena(), "_" + std::to_string(idx++));
+            fields.push(
+                {field_name, field_type, ast::kInvalidExpr, ast::FieldBind::Auto, ast::FieldKind::Enum});
+            if (tok.peek().punc == ',')
+                tok.advance();
+        }
+        if (tok.peek().punc == ')')
+            tok.advance();
+    }
+
+    if (tok.peek().punc == '{') {
+        tok.advance();
+        while (!tok.is_empty() && !tok.peek().is_eof() && tok.peek().punc != '}') {
+            if (scan_detail::consumeFieldItem(
+                    tok, scan_detail::FieldItemOptions{},
+                    [&]() { return parser.parseOptTypeAnnotation(); },
+                    []() { return ast::kInvalidExpr; }, []() { return ast::kInvalidExpr; },
+                    [&](std::string_view fname, memory::Span, ast::TypeExprId type_expr,
+                        ast::ExprId, ast::FieldBind) {
+                        fields.push({fname, type_expr, ast::kInvalidExpr, ast::FieldBind::Auto,
+                                     ast::FieldKind::Enum});
+                    })) {
+                continue;
+            }
+
+            skipToNextBodyItem(tok);
+        }
+        if (tok.peek().punc == '}')
+            tok.advance();
+    }
+
+    return fields;
+}
+
+bool consumeEnumVariant(Parser &parser, memory::DynArray<ast::EnumVariant> &variants) {
+    auto &tok = *parser.tok;
+    if (tok.peek().is(lexer::TokenKind::Annotation)) {
+        tok.advance();
+        return true;
+    }
+    if (!tok.peek().is(lexer::TokenKind::Identifier))
+        return false;
+
+    auto vname = tok.lexeme();
+    tok.advance();
+
+    auto fields       = parseEnumVariantFields(parser);
+    auto discriminant = ast::kInvalidExpr;
+    if (tok.peek().punc == '=') {
+        tok.advance();
+        discriminant = parser.parseExpr();
+    }
+
+    variants.push({vname, std::move(fields), discriminant});
+    if (tok.peek().punc == ',')
+        tok.advance();
+    return true;
+}
+
+bool consumeUnionVariant(Parser &parser, diagnostics::DiagnosticEngine &diag,
+                         memory::FlatMap<std::string, char> &variant_names,
+                         memory::DynArray<ast::UnionVariant> &variants) {
+    auto &tok = *parser.tok;
+    if (tok.peek().is(lexer::TokenKind::Annotation)) {
+        tok.advance();
+        return true;
+    }
+    if (!tok.peek().is(lexer::TokenKind::Type))
+        return false;
+
+    auto vname = tok.lexeme();
+    auto vspan = tok.peek().span;
+    tok.advance();
+    if (variant_names.contains(std::string(vname))) {
+        diag.report(diagnostics::Severity::Error, diagnostics::err::DuplicateDecl,
+                    "duplicate union variant '" + std::string(vname) + "'", vspan);
+    } else {
+        variant_names.insert(std::string(vname), char(1));
+    }
+    variants.push({vname, ast::kInvalidTypeExpr});
+    if (tok.peek().punc == ',')
+        tok.advance();
+    return true;
+}
+
+} // namespace
 // ── expand bodies (second pass: seek + parse real bodies) ──────────────
 
 void Parser::expandBodies(ScanResult &result) {
@@ -62,126 +230,33 @@ void Parser::expandBodies(ScanResult &result) {
 
         // 3. body fields
         consume('{');
-        memory::DynArray<ast::StructField> fields{bld->arena()};
-        while (!tok->is_empty() && !tok->peek().is_eof() && tok->peek().punc != '}') {
-            // visibility
-            if (tok->peek().is(lexer::TokenKind::Visibility)) {
+        auto fields = parseStructLikeFields(
+            *this, ast::FieldKind::Struct,
+            scan_detail::FieldItemOptions{
+                .support_destructure = true,
+                .skip_qualifiers     = true,
+                .parse_bind          = true,
+            },
+            [&]() {
+                if (!tok->peek().is(lexer::TokenKind::Visibility))
+                    return false;
                 tok->advance();
                 if (tok->peek().punc == '(' && tok->lexeme() == "mod")
                     scan_detail::skipBalanced(*tok, '(', ')');
                 if (tok->peek().punc == ')')
                     tok->advance();
-                continue;
-            }
+                return true;
+            });
 
-            // method fn — skip to ';' or body
-            if (scan_detail::consumeFnModifiers(*tok)) {
-                tok->advance(); // consume 'fn'
-                if (tok->peek().is(lexer::TokenKind::Identifier))
-                    tok->advance();
-                while (!tok->is_empty() && !tok->peek().is_eof()) {
-                    if (tok->peek().punc == ';') {
-                        tok->advance();
-                        break;
-                    }
-                    if (tok->peek().punc == '{') {
-                        scan_detail::skipBalanced(*tok, '{', '}');
-                        break;
-                    }
-                    if (tok->peek().punc == '}')
-                        break;
-                    tok->advance();
-                }
-                continue;
-            }
-
-            // field qualifiers (bind + mut)
-            ast::FieldBind bind = ast::FieldBind::Auto;
-            while (tok->peek().is(lexer::TokenKind::Variable) ||
-                   tok->peek().is(lexer::TokenKind::Mutable)) {
-                auto lex = tok->lexeme();
-                if (lex == "auto")
-                    bind = ast::FieldBind::Auto;
-                if (lex == "const")
-                    bind = ast::FieldBind::Const;
-                if (lex == "let")
-                    bind = ast::FieldBind::Let;
-                if (lex == "var")
-                    bind = ast::FieldBind::Var;
-                if (lex == "global")
-                    bind = ast::FieldBind::Global;
-                if (lex == "comptime")
-                    bind = ast::FieldBind::Comptime;
-                tok->advance();
-            }
-
-            // destructure: [a, b, c]: Type
-            if (tok->peek().punc == '[') {
-                tok->advance();
-                memory::DynArray<std::string_view> names{bld->arena()};
-                while (!tok->is_empty() && tok->peek().punc != ']') {
-                    if (tok->peek().is(lexer::TokenKind::Identifier)) {
-                        names.push(tok->lexeme());
-                        tok->advance();
-                    } else {
-                        tok->advance();
-                    }
-                    if (tok->peek().punc == ',')
-                        tok->advance();
-                }
-                if (tok->peek().punc == ']')
-                    tok->advance();
-                auto type_expr          = parseOptTypeAnnotation();
-                ast::ExprId default_val = ast::kInvalidExpr;
-                if (tok->peek().punc == '=') {
-                    tok->advance();
-                    default_val = parseExpr();
-                }
-                for (auto &n : names)
-                    fields.push({n, type_expr, default_val, bind, ast::FieldKind::Struct});
-                if (tok->peek().punc == ',')
-                    tok->advance();
-                continue;
-            }
-
-            // field: ident : Type = default ,
-            if (tok->peek().is(lexer::TokenKind::Identifier)) {
-                auto fname = tok->lexeme();
-                tok->advance();
-                auto type_expr          = parseOptTypeAnnotation();
-                ast::ExprId default_val = ast::kInvalidExpr;
-                if (tok->peek().punc == '=') {
-                    tok->advance();
-                    default_val = parseExpr();
-                }
-                fields.push({fname, type_expr, default_val, bind, ast::FieldKind::Struct});
-                if (tok->peek().punc == ',')
-                    tok->advance();
-                continue;
-            }
-
-            // unrecognized token — skip to next ',' or '}' for recovery
-            while (!tok->is_empty() && !tok->peek().is_eof() && tok->peek().punc != ',' &&
-                   tok->peek().punc != '}')
-                tok->advance();
-            if (tok->peek().punc == ',')
-                tok->advance();
-        }
-        if (tok->peek().punc == '}')
-            tok->advance();
-
-        // 4. write back to StructDeclNode
-        for (auto &decl_id : program.decls) {
-            auto &decl = bld->getDecl(decl_id);
-            if (auto *sn = ast::asStruct(decl)) {
-                if (sn->name == entry.name && sn->fields.empty()) {
-                    sn->fields         = std::move(fields);
-                    sn->extends_parent = extends_parent;
-                    sn->traits         = std::move(traits);
-                    break;
-                }
-            }
-        }
+        updateNamedDecl(*bld, program, entry.name, [&](ast::DeclNode &decl, std::string_view name) {
+            auto *sn = ast::asStruct(decl);
+            if (!sn || sn->name != name || !sn->fields.empty())
+                return false;
+            sn->fields         = std::move(fields);
+            sn->extends_parent = extends_parent;
+            sn->traits         = std::move(traits);
+            return true;
+        });
     }
 
     for (auto &entry : result.enums) {
@@ -192,109 +267,15 @@ void Parser::expandBodies(ScanResult &result) {
         consume('{');
 
         memory::DynArray<ast::EnumVariant> variants{bld->arena()};
-        while (!tok->is_empty() && !tok->peek().is_eof() && tok->peek().punc != '}') {
-            // method fn — skip to ';' or body
-            if (scan_detail::consumeFnModifiers(*tok)) {
-                tok->advance(); // consume 'fn'
-                if (tok->peek().is(lexer::TokenKind::Identifier))
-                    tok->advance();
-                while (!tok->is_empty() && !tok->peek().is_eof()) {
-                    if (tok->peek().punc == ';') {
-                        tok->advance();
-                        break;
-                    }
-                    if (tok->peek().punc == '{') {
-                        scan_detail::skipBalanced(*tok, '{', '}');
-                        break;
-                    }
-                    if (tok->peek().punc == '}')
-                        break;
-                    tok->advance();
-                }
-                continue;
-            }
+        consumeBodyItems(*this, [&]() { return consumeEnumVariant(*this, variants); });
 
-            // variant: Identifier [(...) | {...}] [= expr]
-            if (tok->peek().is(lexer::TokenKind::Identifier)) {
-                auto vname = tok->lexeme();
-                tok->advance();
-
-                ast::ExprId discriminant = ast::kInvalidExpr;
-                memory::DynArray<ast::StructField> fields{bld->arena()};
-
-                // tuple variant: Variant(Type, Type)
-                if (tok->peek().punc == '(') {
-                    tok->advance();
-                    uint32_t idx = 0;
-                    while (!tok->is_empty() && !tok->peek().is_eof() && tok->peek().punc != ')') {
-                        auto field_type = parseTypeExpr();
-                        auto field_name = arenaStr(bld->arena(), "_" + std::to_string(idx++));
-                        fields.push({field_name, field_type, ast::kInvalidExpr,
-                                     ast::FieldBind::Auto, ast::FieldKind::Enum});
-                        if (tok->peek().punc == ',')
-                            tok->advance();
-                    }
-                    if (tok->peek().punc == ')')
-                        tok->advance();
-                }
-
-                // struct variant: Variant { name: Type, name: Type }
-                if (tok->peek().punc == '{') {
-                    tok->advance();
-                    while (!tok->is_empty() && !tok->peek().is_eof() && tok->peek().punc != '}') {
-                        if (tok->peek().is(lexer::TokenKind::Identifier)) {
-                            auto fname = tok->lexeme();
-                            tok->advance();
-                            auto field_type = parseOptTypeAnnotation();
-                            fields.push({fname, field_type, ast::kInvalidExpr, ast::FieldBind::Auto,
-                                         ast::FieldKind::Enum});
-                        }
-                        if (tok->peek().punc == ',')
-                            tok->advance();
-                    }
-                    if (tok->peek().punc == '}')
-                        tok->advance();
-                }
-
-                // discriminant: = expr
-                if (tok->peek().punc == '=') {
-                    tok->advance();
-                    discriminant = parseExpr();
-                }
-
-                variants.push({vname, std::move(fields), discriminant});
-
-                if (tok->peek().punc == ',')
-                    tok->advance();
-                continue;
-            }
-
-            // skip annotations
-            if (tok->peek().is(lexer::TokenKind::Annotation)) {
-                tok->advance();
-                continue;
-            }
-
-            // unrecognized token — skip to next ',' or '}'
-            while (!tok->is_empty() && !tok->peek().is_eof() && tok->peek().punc != ',' &&
-                   tok->peek().punc != '}')
-                tok->advance();
-            if (tok->peek().punc == ',')
-                tok->advance();
-        }
-        if (tok->peek().punc == '}')
-            tok->advance();
-
-        // write back to EnumDeclNode
-        for (auto &decl_id : program.decls) {
-            auto &decl = bld->getDecl(decl_id);
-            if (auto *en = ast::asEnum(decl)) {
-                if (en->name == entry.name && en->variants.empty()) {
-                    en->variants = std::move(variants);
-                    break;
-                }
-            }
-        }
+        updateNamedDecl(*bld, program, entry.name, [&](ast::DeclNode &decl, std::string_view name) {
+            auto *en = ast::asEnum(decl);
+            if (!en || en->name != name || !en->variants.empty())
+                return false;
+            en->variants = std::move(variants);
+            return true;
+        });
     }
 
     for (auto &entry : result.components) {
@@ -304,72 +285,16 @@ void Parser::expandBodies(ScanResult &result) {
         tok->offset = entry.struct_header_start;
         consume('{');
 
-        memory::DynArray<ast::StructField> fields{bld->arena()};
-        while (!tok->is_empty() && !tok->peek().is_eof() && tok->peek().punc != '}') {
-            // method fn — skip to ';' or body
-            if (scan_detail::consumeFnModifiers(*tok)) {
-                tok->advance(); // consume 'fn'
-                if (tok->peek().is(lexer::TokenKind::Identifier))
-                    tok->advance();
-                while (!tok->is_empty() && !tok->peek().is_eof()) {
-                    if (tok->peek().punc == ';') {
-                        tok->advance();
-                        break;
-                    }
-                    if (tok->peek().punc == '{') {
-                        scan_detail::skipBalanced(*tok, '{', '}');
-                        break;
-                    }
-                    if (tok->peek().punc == '}')
-                        break;
-                    tok->advance();
-                }
-                continue;
-            }
+        auto fields = parseStructLikeFields(*this, ast::FieldKind::Component,
+                                            scan_detail::FieldItemOptions{}, []() { return false; });
 
-            // field: ident : Type = default ,
-            if (tok->peek().is(lexer::TokenKind::Identifier)) {
-                auto fname = tok->lexeme();
-                tok->advance();
-                auto type_expr          = parseOptTypeAnnotation();
-                ast::ExprId default_val = ast::kInvalidExpr;
-                if (tok->peek().punc == '=') {
-                    tok->advance();
-                    default_val = parseExpr();
-                }
-                fields.push({fname, type_expr, default_val, ast::FieldBind::Auto,
-                             ast::FieldKind::Component});
-                if (tok->peek().punc == ',')
-                    tok->advance();
-                continue;
-            }
-
-            // skip annotations
-            if (tok->peek().is(lexer::TokenKind::Annotation)) {
-                tok->advance();
-                continue;
-            }
-
-            // unrecognized token — skip to next ',' or '}'
-            while (!tok->is_empty() && !tok->peek().is_eof() && tok->peek().punc != ',' &&
-                   tok->peek().punc != '}')
-                tok->advance();
-            if (tok->peek().punc == ',')
-                tok->advance();
-        }
-        if (tok->peek().punc == '}')
-            tok->advance();
-
-        // write back to ComponentDeclNode
-        for (auto &decl_id : program.decls) {
-            auto &decl = bld->getDecl(decl_id);
-            if (auto *cn = ast::asComponent(decl)) {
-                if (cn->name == entry.name && cn->fields.empty()) {
-                    cn->fields = std::move(fields);
-                    break;
-                }
-            }
-        }
+        updateNamedDecl(*bld, program, entry.name, [&](ast::DeclNode &decl, std::string_view name) {
+            auto *cn = ast::asComponent(decl);
+            if (!cn || cn->name != name || !cn->fields.empty())
+                return false;
+            cn->fields = std::move(fields);
+            return true;
+        });
     }
 
     for (auto &entry : result.unions) {
@@ -381,70 +306,15 @@ void Parser::expandBodies(ScanResult &result) {
 
         memory::DynArray<ast::UnionVariant> variants{bld->arena()};
         memory::FlatMap<std::string, char> variant_names;
-        while (!tok->is_empty() && !tok->peek().is_eof() && tok->peek().punc != '}') {
-            // method fn — skip to ';' or body
-            if (scan_detail::consumeFnModifiers(*tok)) {
-                tok->advance(); // consume 'fn'
-                if (tok->peek().is(lexer::TokenKind::Identifier))
-                    tok->advance();
-                while (!tok->is_empty() && !tok->peek().is_eof()) {
-                    if (tok->peek().punc == ';') {
-                        tok->advance();
-                        break;
-                    }
-                    if (tok->peek().punc == '{') {
-                        scan_detail::skipBalanced(*tok, '{', '}');
-                        break;
-                    }
-                    if (tok->peek().punc == '}')
-                        break;
-                    tok->advance();
-                }
-                continue;
-            }
+        consumeBodyItems(*this, [&]() { return consumeUnionVariant(*this, *diag, variant_names, variants); });
 
-            // unnamed variant: Type
-            if (tok->peek().is(lexer::TokenKind::Type)) {
-                auto vname = tok->lexeme();
-                auto vspan = tok->peek().span;
-                tok->advance();
-                if (variant_names.contains(std::string(vname)))
-                    diag->report(diagnostics::Severity::Error, diagnostics::err::DuplicateDecl,
-                                 "duplicate union variant '" + std::string(vname) + "'", vspan);
-                else
-                    variant_names.insert(std::string(vname), char(1));
-                variants.push({vname, ast::kInvalidTypeExpr});
-                if (tok->peek().punc == ',')
-                    tok->advance();
-                continue;
-            }
-
-            // skip annotations
-            if (tok->peek().is(lexer::TokenKind::Annotation)) {
-                tok->advance();
-                continue;
-            }
-
-            // unrecognized token — skip to next ',' or '}'
-            while (!tok->is_empty() && !tok->peek().is_eof() && tok->peek().punc != ',' &&
-                   tok->peek().punc != '}')
-                tok->advance();
-            if (tok->peek().punc == ',')
-                tok->advance();
-        }
-        if (tok->peek().punc == '}')
-            tok->advance();
-
-        // write back to UnionDeclNode
-        for (auto &decl_id : program.decls) {
-            auto &decl = bld->getDecl(decl_id);
-            if (auto *un = ast::asUnion(decl)) {
-                if (un->name == entry.name && un->variants.empty()) {
-                    un->variants = std::move(variants);
-                    break;
-                }
-            }
-        }
+        updateNamedDecl(*bld, program, entry.name, [&](ast::DeclNode &decl, std::string_view name) {
+            auto *un = ast::asUnion(decl);
+            if (!un || un->name != name || !un->variants.empty())
+                return false;
+            un->variants = std::move(variants);
+            return true;
+        });
     }
 
     // trait body expansion deferred — structure is already scanned

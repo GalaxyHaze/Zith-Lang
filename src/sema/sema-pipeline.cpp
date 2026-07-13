@@ -3,6 +3,7 @@
 #include "diagnostics/error-codes.hpp"
 #include "symbols/symbol-id.hpp"
 #include "types/type-id.hpp"
+#include "types/type-lower.hpp"
 
 #include <cstdlib>
 #include <string>
@@ -162,8 +163,8 @@ SemaPipeline::SemaPipeline(symbols::SymbolTable &syms, types::TypeIntern &types,
                            const memory::DynArray<symbols::SymId> *resolved,
                            symbols::ImportManager *import_mgr)
     : ctx_(syms, types, diags, builder), unifier_(types, diags, hir_arena), hir_arena_(hir_arena),
-      hir_(hir_arena), resolved_(resolved), hir_types_(hir_arena), import_mgr_(import_mgr),
-      worklist_(hir_arena), fn_syms_(hir_arena), active_builder_(&builder),
+      hir_(hir_arena), resolved_(resolved), hir_types_(hir_arena), typed_ast_(hir_arena),
+      import_mgr_(import_mgr), worklist_(hir_arena), fn_syms_(hir_arena), active_builder_(&builder),
       allowed_files_(hir_arena), var_types_(hir_arena) {}
 
 bool SemaPipeline::isSymAccessible(symbols::SymId sym_id) const {
@@ -293,7 +294,7 @@ void SemaPipeline::ensureBodyLowered(symbols::SymId fn_sym) {
     // turn the body value into a HirRet after unifying types.
     if (body != hir::kInvalidHirExpr && entry.terminator == hir::kInvalidHirExpr) {
         if (current_fn_ret_type_ != types::kErrorType) {
-            auto body_type = exprType(body);
+            auto body_type = astExprType(fn->body);
             if (body_type != types::kErrorType &&
                 unifier_.unify(body_type, current_fn_ret_type_, fn->span)) {
                 // Resolve literal type if needed and check overflow
@@ -332,11 +333,13 @@ void SemaPipeline::ensureBodyLowered(symbols::SymId fn_sym) {
     allowed_files_       = std::move(previous_allowed);
 }
 
-hir::HirExprId SemaPipeline::addHirExpr(hir::HirExpr expr, types::TypeId type) {
+hir::HirExprId SemaPipeline::addHirExpr(hir::HirExpr expr, types::TypeId type,
+                                        ast::ExprId source_id) {
     auto id = hir_.addExpr(std::move(expr));
     while (id >= hir_types_.size())
         hir_types_.push(types::kErrorType);
     hir_types_[id] = type;
+    typed_ast_.set(source_id, type);
     return id;
 }
 
@@ -344,6 +347,10 @@ types::TypeId SemaPipeline::exprType(hir::HirExprId id) const {
     if (id == hir::kInvalidHirExpr || id >= hir_types_.size())
         return types::kErrorType;
     return hir_types_[id];
+}
+
+types::TypeId SemaPipeline::astExprType(ast::ExprId id) const {
+    return typed_ast_.get(id);
 }
 
 bool SemaPipeline::run(const ast::ProgramNode &program) {
@@ -416,33 +423,35 @@ hir::HirExprId SemaPipeline::visitExpr(ast::ExprId id) {
     auto &node = builder().getExpr(id);
     switch (ast::exprKind(node)) {
     case ast::ExprKind::Literal:
-        return visitLiteral(std::get<ast::LitValue>(node));
+        return visitLiteral(id, std::get<ast::LitValue>(node));
     case ast::ExprKind::Identifier:
         return visitIdent(std::get<ast::IdentNode>(node), id);
     case ast::ExprKind::Binary:
-        return visitBinary(std::get<ast::BinaryNode>(node));
+        return visitBinary(id, std::get<ast::BinaryNode>(node));
     case ast::ExprKind::Unary:
-        return visitUnary(std::get<ast::UnaryNode>(node));
+        return visitUnary(id, std::get<ast::UnaryNode>(node));
     case ast::ExprKind::Call:
-        return visitCall(std::get<ast::CallNode>(node));
+        return visitCall(id, std::get<ast::CallNode>(node));
     case ast::ExprKind::Block:
-        return visitBlock(std::get<ast::BlockNode>(node));
+        return visitBlock(id, std::get<ast::BlockNode>(node));
     case ast::ExprKind::If:
-        return visitIf(std::get<ast::IfNode>(node));
+        return visitIf(id, std::get<ast::IfNode>(node));
     case ast::ExprKind::While:
-        return visitWhile(std::get<ast::WhileNode>(node));
+        return visitWhile(id, std::get<ast::WhileNode>(node));
     case ast::ExprKind::Field:
     case ast::ExprKind::Index:
     case ast::ExprKind::Range:
     case ast::ExprKind::Unbody:
     case ast::ExprKind::Intrinsic:
     case ast::ExprKind::MacroCall:
+        typed_ast_.set(id, types::kErrorType);
         return hir::kInvalidHirExpr;
     }
+    typed_ast_.set(id, types::kErrorType);
     return hir::kInvalidHirExpr;
 }
 
-hir::HirExprId SemaPipeline::visitLiteral(const ast::LitValue &n) {
+hir::HirExprId SemaPipeline::visitLiteral(ast::ExprId id, const ast::LitValue &n) {
     auto default_type = defaultTypeForLit(n.kind, ctx_.types());
     hir::HirLiteral lit{};
     lit.type = default_type;
@@ -471,7 +480,7 @@ hir::HirExprId SemaPipeline::visitLiteral(const ast::LitValue &n) {
     default:
         break;
     }
-    return addHirExpr(hir::HirExpr{lit}, default_type);
+    return addHirExpr(hir::HirExpr{lit}, default_type, id);
 }
 
 hir::HirExprId SemaPipeline::visitIdent(const ast::IdentNode &n, ast::ExprId id) {
@@ -513,17 +522,17 @@ hir::HirExprId SemaPipeline::visitIdent(const ast::IdentNode &n, ast::ExprId id)
         ident_type = var_types_[sym];
     }
 
-    return addHirExpr(hir::HirExpr{var}, ident_type);
+    return addHirExpr(hir::HirExpr{var}, ident_type, id);
 }
 
-hir::HirExprId SemaPipeline::visitBinary(const ast::BinaryNode &n) {
+hir::HirExprId SemaPipeline::visitBinary(ast::ExprId id, const ast::BinaryNode &n) {
     auto lhs = visitExpr(n.lhs);
     auto rhs = visitExpr(n.rhs);
     if (lhs == hir::kInvalidHirExpr || rhs == hir::kInvalidHirExpr)
         return hir::kInvalidHirExpr;
 
-    types::TypeId result_type = exprType(lhs);
-    types::TypeId rhs_type    = exprType(rhs);
+    types::TypeId result_type = astExprType(n.lhs);
+    types::TypeId rhs_type    = astExprType(n.rhs);
     if (result_type != types::kErrorType && rhs_type != types::kErrorType) {
         if (unifier_.unify(result_type, rhs_type, n.span)) {
             // Determine the concrete type after unification: the non-Literal
@@ -538,9 +547,9 @@ hir::HirExprId SemaPipeline::visitBinary(const ast::BinaryNode &n) {
                 }
             }
             // Propagate concrete type to literal operands and check overflow
-            for (auto id : {lhs, rhs}) {
-                if (resolveLiteralType(hir_, id, ctx_.types(), concrete)) {
-                    auto &expr  = hir_.getExpr(id);
+            for (auto operand_id : {lhs, rhs}) {
+                if (resolveLiteralType(hir_, operand_id, ctx_.types(), concrete)) {
+                    auto &expr  = hir_.getExpr(operand_id);
                     auto &lit   = std::get<hir::HirLiteral>(expr);
                     auto &int_t = std::get<types::TypeInt>(ctx_.types().lookup(concrete));
                     if (auto *err = checkIntOverflow(lit.i, int_t.width)) {
@@ -556,28 +565,28 @@ hir::HirExprId SemaPipeline::visitBinary(const ast::BinaryNode &n) {
     bin.lhs = lhs;
     bin.rhs = rhs;
     bin.op  = mapBinaryOp(n.op);
-    return addHirExpr(hir::HirExpr{bin}, result_type);
+    return addHirExpr(hir::HirExpr{bin}, result_type, id);
 }
 
-hir::HirExprId SemaPipeline::visitUnary(const ast::UnaryNode &n) {
+hir::HirExprId SemaPipeline::visitUnary(ast::ExprId id, const ast::UnaryNode &n) {
     auto operand = visitExpr(n.operand);
     if (operand == hir::kInvalidHirExpr)
         return hir::kInvalidHirExpr;
 
-    auto operand_type = exprType(operand);
+    auto operand_type = astExprType(n.operand);
 
     hir::HirUnary un;
     un.op      = mapUnaryOp(n.op);
     un.operand = operand;
-    return addHirExpr(hir::HirExpr{un}, operand_type);
+    return addHirExpr(hir::HirExpr{un}, operand_type, id);
 }
 
-hir::HirExprId SemaPipeline::visitCall(const ast::CallNode &n) {
+hir::HirExprId SemaPipeline::visitCall(ast::ExprId id, const ast::CallNode &n) {
     auto callee = visitExpr(n.callee);
     if (callee == hir::kInvalidHirExpr)
         return hir::kInvalidHirExpr;
 
-    auto callee_type = exprType(callee);
+    auto callee_type = astExprType(n.callee);
 
     memory::DynArray<hir::HirExprId> hir_args{hir_arena_};
     memory::DynArray<types::TypeId> arg_types{hir_arena_};
@@ -585,7 +594,7 @@ hir::HirExprId SemaPipeline::visitCall(const ast::CallNode &n) {
         auto hir_arg = visitExpr(arg);
         if (hir_arg != hir::kInvalidHirExpr) {
             hir_args.push(hir_arg);
-            arg_types.push(exprType(hir_arg));
+            arg_types.push(astExprType(arg));
         }
     }
 
@@ -704,10 +713,10 @@ hir::HirExprId SemaPipeline::visitCall(const ast::CallNode &n) {
 
     hir::HirCall call{callee, std::move(hir_args)};
     call.resolved_fn = resolved_fn;
-    return addHirExpr(hir::HirExpr{std::move(call)}, result_type);
+    return addHirExpr(hir::HirExpr{std::move(call)}, result_type, id);
 }
 
-hir::HirExprId SemaPipeline::visitBlock(const ast::BlockNode &n) {
+hir::HirExprId SemaPipeline::visitBlock(ast::ExprId id, const ast::BlockNode &n) {
     // Process statements, collecting the last expression as trailing
     hir::HirExprId last = hir::kInvalidHirExpr;
     for (auto stmt_id : n.stmts) {
@@ -717,10 +726,11 @@ hir::HirExprId SemaPipeline::visitBlock(const ast::BlockNode &n) {
         last = visitExpr(n.trailing);
     }
     // Return the trailing expression with its type
+    typed_ast_.set(id, astExprType(n.trailing));
     return last;
 }
 
-hir::HirExprId SemaPipeline::visitIf(const ast::IfNode &n) {
+hir::HirExprId SemaPipeline::visitIf(ast::ExprId id, const ast::IfNode &n) {
     auto origBlock = currentBlock_;
     auto cond      = visitExpr(n.cond);
 
@@ -794,10 +804,11 @@ hir::HirExprId SemaPipeline::visitIf(const ast::IfNode &n) {
     branch.else_block                         = static_cast<hir::HirDeclId>(else_target);
     current_fn_->blocks[origBlock].terminator = hir_.addExpr(hir::HirExpr{std::move(branch)});
 
+    typed_ast_.set(id, types::kErrorType);
     return hir::kInvalidHirExpr;
 }
 
-hir::HirExprId SemaPipeline::visitWhile(const ast::WhileNode &n) {
+hir::HirExprId SemaPipeline::visitWhile(ast::ExprId id, const ast::WhileNode &n) {
     auto header_block = newBlock();
     auto body_block   = newBlock();
     auto exit_block   = newBlock();
@@ -827,6 +838,7 @@ hir::HirExprId SemaPipeline::visitWhile(const ast::WhileNode &n) {
     // Switch to exit block
     setCurrentBlock(exit_block);
     current_fn_->blocks[exit_block].insts = memory::DynArray<hir::HirExprId>(hir_arena_);
+    typed_ast_.set(id, types::kErrorType);
     return hir::kInvalidHirExpr;
 }
 
@@ -914,7 +926,7 @@ void SemaPipeline::visitStmt(ast::StmtId id) {
         if (n.init != ast::kInvalidExpr) {
             init = visitExpr(n.init);
             if (init != hir::kInvalidHirExpr)
-                init_type = exprType(init);
+                init_type = astExprType(n.init);
         }
 
         if (n.type_annot != ast::kInvalidTypeExpr && init != hir::kInvalidHirExpr) {
@@ -985,7 +997,7 @@ void SemaPipeline::visitStmt(ast::StmtId id) {
         if (n.value != ast::kInvalidExpr) {
             val = visitExpr(n.value);
             if (val != hir::kInvalidHirExpr)
-                val_type = exprType(val);
+                val_type = astExprType(n.value);
         }
 
         if (val_type != types::kErrorType && current_fn_ret_type_ != types::kErrorType) {
@@ -1039,10 +1051,8 @@ void SemaPipeline::visitDecl(const ast::FnDeclNode &n) {
 }
 
 types::TypeId SemaPipeline::inferExprType(ast::ExprId id) {
-    auto hir_id = visitExpr(id);
-    if (hir_id == hir::kInvalidHirExpr)
-        return types::kErrorType;
-    return exprType(hir_id);
+    visitExpr(id);
+    return astExprType(id);
 }
 
 } // namespace zith::sema

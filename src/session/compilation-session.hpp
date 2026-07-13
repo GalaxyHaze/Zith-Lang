@@ -9,6 +9,7 @@
 #include "memory/source-map.hpp"
 #include "memory/string-interner.hpp"
 #include "parser/scan-result.hpp"
+#include "sema/typed-ast.hpp"
 #include "session/pipeline-plan.hpp"
 #include "symbols/import-manager.hpp"
 #include "symbols/symbol-table.hpp"
@@ -45,6 +46,7 @@ class CompilationSession {
     memory::DynArray<symbols::SymId> mResolvedSyms;
     types::TypeIntern mTypes;
     hir::HirModule mHirModule;
+    sema::TypedAst mTypedAst;
 
     memory::FileId mFileId = 0;
     lexer::TokenStream mTokens{};
@@ -142,6 +144,9 @@ public:
     }
     const types::TypeIntern &types() const {
         return mTypes;
+    }
+    const sema::TypedAst &typedAst() const {
+        return mTypedAst;
     }
     memory::StringInterner &interner() {
         return *mInterner;
