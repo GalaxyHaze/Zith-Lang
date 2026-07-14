@@ -127,3 +127,34 @@ h1 { max-width: 720px; margin: 0; font-size: clamp(2.35rem, 6vw, 5rem); line-hei
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; }
 @media (max-width: 800px) { .intro { align-items: flex-start; flex-direction: column; }.release-card { width: 100%; }.editor-wrap, #source-code { min-height: 360px; }.output-panel { min-height: 220px; } }
 @media (max-width: 520px) { .site-header, .site-footer, .playground-shell { width: 100%; }.site-header { min-height: 70px; }.site-header nav { gap: 14px; }.site-footer { padding: 17px 20px; align-items: flex-start; flex-direction: column; }.release-link { width: 100%; margin-left: 0; } }
+
+/*==================
+SCROLLBAR
+===================*/
+
+* {
+    scrollbar-width: thin;
+    scrollbar-color: #00ffff rgba(255, 255, 255, 0.05);
+}
+
+*::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+*::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 4px;
+}
+
+*::-webkit-scrollbar-thumb {
+    background: #00ffff;
+    border-radius: 4px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+}
+
+*::-webkit-scrollbar-thumb:hover,
+*::-webkit-scrollbar-thumb:active {
+    background-color: #ff6d1f;
+}

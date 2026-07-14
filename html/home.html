@@ -79,9 +79,11 @@
                     <p>News</p>
                 </div>
 
-                <div class="icon" onclick="openWindow('playground')">
-                    <img src="../media/Icons/Playground.svg">
-                    <p>Playground</p>
+                <div class="icon">
+                    <a href="../playground/">
+                        <img src="../media/Icons/Playground.svg" alt="">
+                        <p>Playground</p>
+                    </a>
                 </div>
 
             </div> 
@@ -178,23 +180,6 @@
                 </div>
             </div>
             <div class="content" id="newsContent"></div>
-        </div>
-
-        <div class="window hidden" id="playground">
-            <div class="titlebar">
-                <span>Playground.zith</span>
-                <div class="buttons">
-                    <button>-</button>
-                    <button onclick="toggleMaximize('playground')">o</button>
-                    <button onclick="closeWindow('playground')">x</button>
-                </div>
-            </div>
-            <div class="content">
-                <p><em>WASM backend required — coming soon.</em></p>
-                <hr>
-                <p>Write Zith code and run it in the browser once the WASM build is ready.</p>
-                <p>Requirements are tracked <a href="./documentation/D-dev-wasm-build.html" target="_blank">here</a>.</p>
-            </div>
         </div>
 
         <div class="window hidden" id="settings">

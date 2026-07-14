@@ -1,12 +1,17 @@
 const sidebar = document.getElementById("sidebar");
 const content = document.getElementById("content");
 const filebarPath = document.getElementById("filebarPath");
+const defaultPage = "./D-intro-overview.html";
+
+let treeModel = [];
+let flatPages = [];
+let pageMeta = new Map();
 
 (function loadMenu() {
     const cached = sessionStorage.getItem("tree_json");
     if (cached) {
         try {
-            renderMenu(JSON.parse(cached), sidebar);
+            initialiseNavigation(JSON.parse(cached));
             return;
         } catch (_) {}
     }
@@ -20,12 +25,24 @@ const filebarPath = document.getElementById("filebarPath");
             try {
                 sessionStorage.setItem("tree_json", JSON.stringify(menu));
             } catch (_) {}
-            renderMenu(menu, sidebar);
+            initialiseNavigation(menu);
         })
         .catch(() => {
             sidebar.innerHTML = "<p style='color:#ff6d1f;padding:8px'>Failed to load navigation</p>";
         });
 })();
+
+function initialiseNavigation(menu) {
+    treeModel = menu;
+    flatPages = [];
+    pageMeta = new Map();
+
+    buildPageIndex(treeModel);
+    renderMenu(treeModel, sidebar);
+
+    const page = getPageFromURL() || defaultPage;
+    loadPage(page, null, { replaceHistory: !getPageFromURL() });
+}
 
 function renderMenu(items, parent) {
     const ul = document.createElement("ul");
@@ -35,6 +52,7 @@ function renderMenu(items, parent) {
         const a = document.createElement("a");
         a.textContent = item.title;
         a.href = item.link || "#";
+        a.dataset.link = item.link || "#";
 
         if (item.title === "Home") {
             a.dataset.native = true;
@@ -52,9 +70,112 @@ function renderMenu(items, parent) {
     parent.appendChild(ul);
 }
 
+function buildPageIndex(items, trail = []) {
+    items.forEach(item => {
+        const nextTrail = item.title === "Home" ? trail : [...trail, item.title];
+
+        if (item.link && item.link !== "../home.html" && !pageMeta.has(item.link)) {
+            flatPages.push(item.link);
+            pageMeta.set(item.link, {
+                title: item.title,
+                trail: nextTrail
+            });
+        }
+
+        if (item.children) {
+            buildPageIndex(item.children, nextTrail);
+        }
+    });
+}
+
 function updateFilebar(path) {
+    const meta = pageMeta.get(path);
     const filename = path.split("/").pop() || "_";
-    filebarPath.textContent = filename;
+    filebarPath.textContent = meta ? meta.trail.join(" / ") : filename;
+}
+
+function setActiveLink(path) {
+    const links = sidebar.querySelectorAll("a[data-link]");
+    links.forEach(link => {
+        link.classList.toggle("is-active", link.dataset.link === path);
+    });
+}
+
+function getPagerLinks(path) {
+    const currentIndex = flatPages.indexOf(path);
+    if (currentIndex === -1) {
+        return { previous: null, next: null };
+    }
+
+    return {
+        previous: currentIndex > 0 ? flatPages[currentIndex - 1] : null,
+        next: currentIndex < flatPages.length - 1 ? flatPages[currentIndex + 1] : null
+    };
+}
+
+function createPagerLink(label, path, direction) {
+    if (!path) return null;
+
+    const link = document.createElement("a");
+    const meta = pageMeta.get(path);
+    const title = meta ? meta.title : path.split("/").pop();
+
+    link.href = path;
+    link.className = "doc-nav-link";
+    link.innerHTML = `<span class="doc-nav-label">${label}</span><strong>${title}</strong>`;
+
+    if (direction === "next") {
+        link.classList.add("doc-nav-link-next");
+    }
+
+    return link;
+}
+
+function injectPageNavigation(path) {
+    const meta = pageMeta.get(path);
+    if (!meta) return;
+
+    const existing = content.querySelector(".doc-shell");
+    if (!existing) {
+        const shell = document.createElement("div");
+        shell.className = "doc-shell";
+
+        while (content.firstChild) {
+            shell.appendChild(content.firstChild);
+        }
+
+        content.appendChild(shell);
+    }
+
+    const shell = content.querySelector(".doc-shell");
+    const existingHeader = shell.querySelector(".doc-page-header");
+    const existingNav = shell.querySelector(".doc-page-nav");
+
+    if (existingHeader) existingHeader.remove();
+    if (existingNav) existingNav.remove();
+
+    const header = document.createElement("div");
+    header.className = "doc-page-header";
+    header.innerHTML = `
+        <p class="doc-kicker">Documentation Flow</p>
+        <p class="doc-breadcrumb">${meta.trail.join(" / ")}</p>
+    `;
+    shell.prepend(header);
+
+    const { previous, next } = getPagerLinks(path);
+    if (!previous && !next) return;
+
+    const nav = document.createElement("nav");
+    nav.className = "doc-page-nav";
+    nav.setAttribute("aria-label", "Documentation pagination");
+
+    const previousLink = createPagerLink("Previous", previous, "previous");
+    const nextLink = createPagerLink("Next", next, "next");
+
+    if (previousLink) nav.appendChild(previousLink);
+    if (nextLink) nav.appendChild(nextLink);
+
+    shell.appendChild(nav);
 }
 
 let initialLoad = true;
@@ -66,20 +187,30 @@ function loadPage(path, anchor = null, opts = {}) {
             return res.text();
         })
         .then(html => {
+            const wasInitialLoad = initialLoad;
             content.innerHTML = html;
 
             updateFilebar(path);
+            setActiveLink(path);
+            injectPageNavigation(path);
 
             const filename = path.split("/").pop() || "_";
-            const titleMatch = html.match(/<h1>([^<]+)<\/h1>/);
-            const pageTitle = titleMatch ? titleMatch[1] : filename;
+            const titleMatch = html.match(/<h[12][^>]*>(.*?)<\/h[12]>/i);
+            const pageTitle = titleMatch
+                ? titleMatch[1].replace(/<[^>]+>/g, "").trim()
+                : filename;
             document.title = pageTitle + " — Zith Documentation";
 
-            const skipPush = opts.fromPop || initialLoad;
             if (initialLoad) {
                 initialLoad = false;
             }
-            if (!skipPush) {
+            if (opts.replaceHistory) {
+                history.replaceState(
+                    { path: path, anchor: anchor },
+                    "",
+                    "?page=" + path.replace("./", "")
+                );
+            } else if (!opts.fromPop && !wasInitialLoad) {
                 history.pushState(
                     { path: path, anchor: anchor },
                     "",
@@ -145,8 +276,5 @@ window.addEventListener("popstate", e => {
 });
 
 {
-    const page = getPageFromURL();
-    if (page) {
-        loadPage(page);
-    }
+    // Initial page load is triggered once the navigation tree is ready.
 }

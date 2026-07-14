@@ -458,3 +458,34 @@ code {
         gap: 6px;
     }
 }
+
+/*==================
+SCROLLBAR
+===================*/
+
+* {
+    scrollbar-width: thin;
+    scrollbar-color: #00ffff rgba(255, 255, 255, 0.05);
+}
+
+*::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+*::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 4px;
+}
+
+*::-webkit-scrollbar-thumb {
+    background: #00ffff;
+    border-radius: 4px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+}
+
+*::-webkit-scrollbar-thumb:hover,
+*::-webkit-scrollbar-thumb:active {
+    background-color: #ff6d1f;
+}
