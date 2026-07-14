@@ -7,9 +7,11 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <string_view>
+#if !defined(ZITH_IS_WASM)
 #include <mutex>
 #include <shared_mutex>
-#include <string_view>
+#endif
 
 namespace zith::memory {
 
@@ -18,7 +20,9 @@ StringInterner::StringInterner(Arena &arena) : allocator_(&arena) {
 }
 
 InternedId StringInterner::intern(std::string_view str) {
+    #if !defined(ZITH_IS_WASM)
     std::unique_lock<std::shared_mutex> lock(rwMutex_);
+#endif
 
     auto *existing = map->get(str);
     if (existing)
@@ -33,7 +37,9 @@ InternedId StringInterner::intern(std::string_view str) {
 }
 
 std::string_view StringInterner::lookup(InternedId id) const {
+    #if !defined(ZITH_IS_WASM)
     std::shared_lock<std::shared_mutex> lock(rwMutex_);
+#endif
 
     if (id >= pool->size())
         return {};

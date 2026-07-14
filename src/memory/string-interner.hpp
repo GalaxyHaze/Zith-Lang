@@ -3,7 +3,9 @@
 #include "memory/flat-map.hpp"
 #include "support/macros.hpp"
 #include <cstdint>
+#if !defined(ZITH_IS_WASM)
 #include <shared_mutex>
+#endif
 #include <string_view>
 
 namespace zith::memory {
@@ -28,7 +30,9 @@ private:
     Arena *allocator_                          = nullptr;
     FlatMap<std::string_view, InternedId> *map = nullptr;
     memory::DynArray<std::string_view> *pool   = nullptr;
+    #if !defined(ZITH_IS_WASM)
     mutable std::shared_mutex rwMutex_;
+#endif
 
     void init();
 };

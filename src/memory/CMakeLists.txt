@@ -8,3 +8,6 @@ target_include_directories(zith-core PUBLIC
 )
 
 target_compile_features(zith-core PUBLIC cxx_std_20)
+if(ZITH_IS_WASM)
+    target_compile_definitions(zith-core PUBLIC ZITH_IS_WASM=1)
+endif()

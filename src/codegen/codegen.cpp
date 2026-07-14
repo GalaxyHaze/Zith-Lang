@@ -32,9 +32,7 @@ CodeGen::CodeGen(const memory::StringInterner &interner, const symbols::SymbolTa
                  diagnostics::DiagnosticEngine *diags)
     : ctx_(std::make_unique<llvm::LLVMContext>()), interner_(interner), syms_(syms), types_(types),
       astBuilder_(astBuilder), diags_(diags), targetTriple_(targetTriple), optLevel_(optLevel) {
-    llvm::InitializeNativeTarget();
-    llvm::InitializeNativeTargetAsmPrinter();
-    llvm::InitializeNativeTargetAsmParser();
+    LLVMInitializeX86TargetInfo(); LLVMInitializeX86Target(); LLVMInitializeX86TargetMC(); LLVMInitializeX86AsmParser(); LLVMInitializeX86AsmPrinter(); LLVMInitializeWebAssemblyTargetInfo(); LLVMInitializeWebAssemblyTarget(); LLVMInitializeWebAssemblyTargetMC(); LLVMInitializeWebAssemblyAsmParser(); LLVMInitializeWebAssemblyAsmPrinter();
 }
 
 void CodeGen::llvmError(const std::string &msg) {

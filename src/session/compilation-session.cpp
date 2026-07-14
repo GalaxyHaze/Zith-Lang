@@ -605,6 +605,7 @@ bool CompilationSession::codegenStage() {
 }
 
 bool CompilationSession::cacheStage() {
+#ifndef ZITH_IS_WASM
     auto t0      = std::chrono::steady_clock::now();
     namespace fs = std::filesystem;
     fs::create_directories(fs::path(mProjectRoot) / "cache");
@@ -613,6 +614,7 @@ bool CompilationSession::cacheStage() {
                       .count();
         writeOutput("  [cache] \xe2\x80\x94 ready  (%5.1fms)\n", dt);
     }
+#endif
     return true;
 }
 
@@ -650,18 +652,39 @@ bool CompilationSession::linkAndExec() {
 
         fs::create_directories(exeDir);
         exePath = exeDir + "/" + binName;
+    }
+
+    auto &triple = mOpts.get().targetTriple;
+    bool isWasm = triple.find("wasm32") != std::string::npos || triple.find("wasm64") != std::string::npos;
+
+    if (isWasm && !mOpts.get().outputFile.empty() && mOpts.get().outputFile != mObjectPath) {
+        exePath = mOpts.get().outputFile;
+    } else if (isWasm) {
+        exePath += ".wasm";
+    } else {
 #ifdef _WIN32
-        exePath += ".exe";
+        if (mOpts.get().outputFile.empty() || mOpts.get().outputFile == mObjectPath)
+            exePath += ".exe";
 #endif
     }
 
     if (mOpts.get().flags.verbose())
         writeOutput("  [link] %s -> %s\n", mObjectPath.c_str(), exePath.c_str());
 
-    // Link with system C compiler
-    std::string linkCmd = "/usr/bin/cc -o " + exePath + " " + mObjectPath;
+    std::string linkCmd;
+    if (isWasm) {
+        bool isWasi = triple.find("wasi") != std::string::npos;
+        linkCmd = "wasm-ld ";
+        if (!isWasi)
+            linkCmd += "--no-entry --export-all ";
+        linkCmd += "-o " + exePath + " " + mObjectPath;
+    } else {
+        linkCmd = "/usr/bin/cc -o " + exePath + " " + mObjectPath;
+    }
+    
     if (!mOpts.get().sysroot.empty())
         linkCmd += " --sysroot=" + mOpts.get().sysroot;
+    
     if (mOpts.get().flags.verbose())
         writeOutput("  [link] %s\n", linkCmd.c_str());
 
@@ -674,6 +697,13 @@ bool CompilationSession::linkAndExec() {
 
     if (mOpts.get().flags.verbose())
         writeOutput("  [exec] %s\n", exePath.c_str());
+
+    if (isWasm) {
+        if (mOpts.get().flags.verbose())
+            writeOutput("  [exec] skipped (cannot natively execute WASM)\n");
+        mChildExitCode = 0;
+        return true;
+    }
 
     // Execute the binary and propagate its exit code
     int execResult = std::system(exePath.c_str());

@@ -1,5 +1,7 @@
-from std/io/console
+//from std/io/console
+
+extern fn puts(msg: *char)
 
 fn main(){
-    @println("Hello, world!");
+    puts("Hello, world!");
 }
