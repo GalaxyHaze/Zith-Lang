@@ -85,21 +85,48 @@ LAYOUT PRINCIPAL
 ===================*/
 
 .lateralBar {
-    width: 260px;
-    min-width: 260px;
+    order: -1;
+    width: 290px;
+    min-width: 290px;
 
     height: 100vh;
     overflow-y: auto;
 
-    padding: 20px;
+    padding: 58px 14px 24px;
 
-    background-color: var(--color-sidebar);
+    background:
+        linear-gradient(145deg, rgba(0, 255, 255, 0.08), transparent 34%),
+        var(--color-sidebar);
 
     box-sizing: border-box;
 
-    box-shadow: 
-        inset 0 10px 20px 0px var(--color-sidebar-shadow-1),
-        inset 15px 10px 20px 10px var(--color-sidebar-shadow-2);
+    border-right: 1px solid #555;
+    box-shadow:
+        inset -10px 0 24px rgba(0, 0, 0, 0.42),
+        inset 0 10px 20px 0 var(--color-sidebar-shadow-1);
+    position: relative;
+}
+
+.lateralBar::before {
+    content: "EXPLORER";
+    position: absolute;
+    top: 17px;
+    left: 18px;
+    color: var(--color-cyan);
+    font-size: 13px;
+    font-weight: bold;
+    letter-spacing: 0.16em;
+    text-shadow: var(--glow-cyan);
+}
+
+.lateralBar::after {
+    content: "zith-lang / docs";
+    position: absolute;
+    top: 35px;
+    left: 18px;
+    color: #aaaaaa;
+    font-size: 11px;
+    letter-spacing: 0.04em;
 }
 
 .main {
@@ -142,6 +169,29 @@ LAYOUT PRINCIPAL
 .filebar-path {
     color: var(--color-cyan);
     white-space: nowrap;
+}
+
+.helios-cta {
+    align-self: flex-start;
+    padding: 10px 16px;
+    border: 1px solid var(--color-orange);
+    background: rgba(0, 0, 0, 0.6);
+    color: var(--color-orange);
+    font-family: "Fira Code", monospace;
+    font-size: 16px;
+    font-weight: bold;
+    text-decoration: none;
+    text-shadow: var(--glow-orange);
+    transition: 0.15s;
+}
+
+.helios-cta:hover,
+.helios-cta:focus-visible {
+    background: var(--color-orange);
+    color: var(--color-bg);
+    text-shadow: none;
+    transform: translate(-2px, -2px);
+    box-shadow: 4px 4px 0 rgba(255, 109, 31, 0.4);
 }
 
 .bottom {
@@ -192,13 +242,13 @@ TREE
 .lateralBar ul {
     list-style: none;
     margin: 0;
-    padding-left: 18px;
+    padding-left: 16px;
     position: relative;
 }
 
 .lateralBar li {
     position: relative;
-    padding: 4px 0 4px 14px;
+    padding: 3px 0 3px 13px;
 }
 
 .lateralBar ul::before {
@@ -211,7 +261,7 @@ TREE
 
     width: 1px;
 
-    background: var(--color-vignette);
+    background: rgba(0, 255, 255, 0.22);
 }
 
 .lateralBar li::before {
@@ -224,7 +274,7 @@ TREE
     width: 10px;
     height: 1px;
 
-    background: var(--color-vignette);
+    background: rgba(0, 255, 255, 0.22);
 }
 
 .lateralBar > ul::before,
@@ -234,10 +284,11 @@ TREE
 
 .lateralBar a {
     text-decoration: none;
-    color: var(--color-txt);
+    color: #e0e0e0;
 
-    padding: 2px 6px;
-    border-radius: 6px;
+    padding: 5px 8px;
+    border-left: 2px solid transparent;
+    border-radius: 0 4px 4px 0;
 
     display: inline-block;
 
@@ -245,7 +296,10 @@ TREE
 }
 
 .lateralBar a:hover {
-    background: var(--color-hover);
+    color: var(--color-cyan);
+    border-left-color: var(--color-orange);
+    background: rgba(0, 255, 255, 0.1);
+    text-shadow: var(--glow-cyan);
 }
 
 /*==================
@@ -615,9 +669,12 @@ MOBILE
     }
 
     .lateralBar {
+        order: -1;
         width: 100%;
 
         max-height: 30vh;
+
+        padding: 58px 14px 18px;
 
         overflow-y: auto;
         flex-shrink: 0;

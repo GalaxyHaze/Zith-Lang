@@ -317,9 +317,13 @@ FAKE WINDOW
 
     position: absolute;
 
-    background-color: #444;
+    border: 1px solid #555;
+    border-left: 4px solid #E87F24;
+    background: #222;
 
-    box-shadow: 6px 6px 10px #000;
+    box-shadow:
+        10px 10px 0 rgba(0, 0, 255, 0.45),
+        0 0 32px rgba(0, 255, 255, 0.12);
 
     display: flex;
     flex-direction: column;
@@ -327,11 +331,19 @@ FAKE WINDOW
 }
 
 .window a{
-    color: #79eeff;
+    color: #00ffff;
+    text-decoration: none;
+    transition: color 0.15s, background-color 0.15s;
+}
+
+.window a:hover,
+.window a:focus-visible {
+    color: #FAF3E1;
+    background: rgba(0, 255, 255, 0.12);
 }
 
 .titlebar{
-    height: 32px;
+    height: 36px;
 
     background-color: #0000ff;
     color: #ffffff;
@@ -340,7 +352,7 @@ FAKE WINDOW
     align-items: center;
     justify-content: space-between;
 
-    padding: 0 10px;
+    padding: 0 8px 0 12px;
 
     cursor: move;
 
@@ -354,15 +366,55 @@ FAKE WINDOW
 .buttons button{
     width: 24px;
     height: 24px;
-    border: none;
+    border: 1px solid #a9a9a9;
     background-color: #dcdcdc;
+    color: #111;
     cursor: pointer;
+    font-family: inherit;
+    font-size: 13px;
+    line-height: 1;
+    transition: background-color 0.15s, color 0.15s;
+}
+.buttons button:hover{
+    background-color: #FAF3E1;
+}
+.buttons button:last-child:hover{
+    background-color: #E87F24;
+    color: #000;
 }
 
 .content{
     flex: 1;
     overflow: auto;
-    padding: 16px;
+    padding: 20px;
+    background: linear-gradient(135deg, rgba(0, 255, 255, 0.07), transparent 46%), #222;
+    color: #e0e0e0;
+}
+
+.content h2,
+.content h3 {
+    color: #FAF3E1;
+    margin-top: 0;
+}
+
+.content h2::before {
+    content: "> ";
+    color: #E87F24;
+}
+
+.content hr {
+    border: 0;
+    border-top: 1px solid #555;
+    margin: 16px 0;
+}
+
+.content::-webkit-scrollbar {
+    width: 10px;
+}
+
+.content::-webkit-scrollbar-thumb {
+    background: #555;
+    border: 2px solid #222;
 }
 
 .start-section {
@@ -372,7 +424,7 @@ FAKE WINDOW
     margin-bottom: 0;
 }
 .start-heading {
-    color: var(--color-orange, #E87F24);
+    color: #E87F24;
     font-size: 14px;
     font-weight: bold;
     margin: 0 0 6px 0;
@@ -381,16 +433,17 @@ FAKE WINDOW
 }
 .start-link {
     display: block;
-    color: #79eeff;
+    color: #00ffff;
     text-decoration: none;
     padding: 4px 8px;
     margin: 2px 0;
     font-size: 13px;
-    border-radius: 4px;
-    transition: background 0.15s;
+    border-left: 2px solid transparent;
+    transition: background 0.15s, border-color 0.15s;
 }
 .start-link:hover {
-    background: rgba(255,255,255,0.08);
+    background: rgba(0,255,255,0.12);
+    border-left-color: #E87F24;
 }
 
 .hidden{

@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#000000">
+
+    <title>Helios IDE | Zith-Lang</title>
+    <meta name="description" content="Helios is the official IDE for Zith: a focused, zero-configuration environment with compiler diagnostics, project tools, and language-aware editing.">
+    <link rel="canonical" href="https://zith-lang.org/helios/">
+    <link rel="icon" type="image/png" href="../media/Logos/logo.png">
+    <link rel="stylesheet" href="../css/helios.css">
+
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://zith-lang.org/helios/">
+    <meta property="og:title" content="Helios IDE | Zith-Lang">
+    <meta property="og:description" content="The official IDE for the Zith ecosystem.">
+    <meta property="og:image" content="https://zith-lang.org/media/Logos/social-share.svg">
+    <meta property="og:site_name" content="Zith-Lang">
+    <meta property="og:locale" content="en_US">
+
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Helios IDE | Zith-Lang">
+    <meta name="twitter:description" content="The official IDE for the Zith ecosystem.">
+    <meta name="twitter:image" content="https://zith-lang.org/media/Logos/social-share.svg">
+</head>
+<body>
+    <header class="site-header">
+        <a class="brand" href="../html/home.html" aria-label="Return to Zith home">
+            <img src="../media/Logos/logo.svg" alt="">
+            <span>.Zith</span>
+        </a>
+        <a class="back-link" href="../html/documentation/D-home.html">&lt; Documentation</a>
+    </header>
+
+    <main>
+        <section class="hero" aria-labelledby="helios-title">
+            <p class="eyebrow">// official_zith_ide</p>
+            <div class="hero-window">
+                <div class="titlebar">
+                    <span>helios.zith</span>
+                    <div class="window-controls" aria-hidden="true"><span>-</span><span>o</span><span>x</span></div>
+                </div>
+                <div class="hero-content">
+                    <p class="prompt">&gt; launch helios</p>
+                    <h1 id="helios-title">Helios</h1>
+                    <p class="hero-copy">The official IDE for Zith. Write, understand, and ship systems software in one focused environment.</p>
+                    <div class="hero-actions">
+                        <a class="button button-primary" href="https://github.com/GalaxyHaze/Zith-Studio/releases" target="_blank" rel="noopener noreferrer">Download Helios</a>
+                        <a class="button button-secondary" href="#compiler">Explore integration</a>
+                    </div>
+                </div>
+                <div class="statusbar"><span>main.zith</span><span>zith: ready</span><span>UTF-8</span></div>
+            </div>
+        </section>
+
+        <section class="section features" aria-labelledby="features-title">
+            <div class="section-heading">
+                <p class="eyebrow">// core_features</p>
+                <h2 id="features-title">A workspace that speaks Zith.</h2>
+                <p>Helios keeps the editor close to the language, so the path from source file to working program stays visible and direct.</p>
+            </div>
+            <div class="feature-grid">
+                <article class="feature-card">
+                    <span class="feature-index">01</span>
+                    <h3>Language-aware editing</h3>
+                    <p>Syntax highlighting, completions, symbol navigation, and hover information keep Zith code readable as projects grow.</p>
+                </article>
+                <article class="feature-card">
+                    <span class="feature-index">02</span>
+                    <h3>Diagnostics in context</h3>
+                    <p>Compiler errors and suggestions appear where you work, with source locations that take you directly to the problem.</p>
+                </article>
+                <article class="feature-card">
+                    <span class="feature-index">03</span>
+                    <h3>Project-first workflow</h3>
+                    <p>Open a Zith project, inspect its files, and use the same build, check, format, and run commands that power the CLI.</p>
+                </article>
+            </div>
+        </section>
+
+        <section class="section compiler-section" id="compiler" aria-labelledby="compiler-title">
+            <div class="compiler-copy">
+                <p class="eyebrow">// compiler_bridge</p>
+                <h2 id="compiler-title">Native integration with the Zith compiler.</h2>
+                <p>Helios is designed around the Zith toolchain rather than treating it as an afterthought. It uses the language server for editor intelligence and speaks the same project configuration as the compiler.</p>
+                <ul class="check-list">
+                    <li>Run <code>zith check</code> and inspect diagnostics without leaving the editor.</li>
+                    <li>Build, format, and run projects through the familiar Zith CLI workflow.</li>
+                    <li>Navigate symbols using compiler-backed language-server information.</li>
+                </ul>
+            </div>
+            <pre class="terminal" aria-label="Example Zith compiler session"><code><span class="terminal-muted">$</span> zith check
+<span class="terminal-ok">checking</span> app/main.zith
+<span class="terminal-ok">finished</span> dev profile in 0.12s
+
+<span class="terminal-muted">$</span> zith run
+<span class="terminal-output">Hello from Helios.</span></code></pre>
+        </section>
+
+        <section class="install" aria-labelledby="install-title">
+            <p class="eyebrow">// get_started</p>
+            <h2 id="install-title">Start building with Helios.</h2>
+            <p>Download the latest release, open a Zith project, and let the compiler guide the next step.</p>
+            <div class="hero-actions">
+                <a class="button button-primary" href="https://github.com/GalaxyHaze/Zith-Studio/releases" target="_blank" rel="noopener noreferrer">Download / Install</a>
+                <a class="button button-secondary" href="https://github.com/GalaxyHaze/Zith-Studio" target="_blank" rel="noopener noreferrer">View source</a>
+            </div>
+        </section>
+    </main>
+
+    <footer class="site-footer">
+        <span>Helios IDE</span>
+        <a href="../html/home.html">zith-lang.org</a>
+    </footer>
+
+    <div class="crt-overlay" aria-hidden="true"></div>
+</body>
+</html>

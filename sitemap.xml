@@ -5,4 +5,8 @@
         <loc>https://zith-lang.org/</loc>
         <priority>1.0</priority>
     </url>
+    <url>
+        <loc>https://zith-lang.org/helios/</loc>
+        <priority>0.8</priority>
+    </url>
 </urlset>
