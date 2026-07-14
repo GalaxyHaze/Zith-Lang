@@ -82,7 +82,7 @@ jobs:
               -DCMAKE_CXX_COMPILER=clang++
               -DCMAKE_LINKER=ld.lld
               -DZITH_ENABLE_FFI=OFF
-              -DZITH_ENABLE_LLVM=OFF
+              -DZITH_HAS_LLVM=OFF
 
           - os: ubuntu-latest
             target_name: zithc-linux-arm64
@@ -92,7 +92,7 @@ jobs:
               -DCMAKE_SYSTEM_NAME=Linux
               -DCMAKE_SYSTEM_PROCESSOR=aarch64
               -DZITH_ENABLE_FFI=OFF
-              -DZITH_ENABLE_LLVM=OFF
+              -DZITH_HAS_LLVM=OFF
 
           - os: macos-14
             target_name: zithc-macos-universal
@@ -111,7 +111,7 @@ jobs:
               -DCMAKE_C_COMPILER=clang-cl
               -DCMAKE_CXX_COMPILER=clang-cl
               -DZITH_ENABLE_FFI=OFF
-              -DZITH_ENABLE_LLVM=OFF
+              -DZITH_HAS_LLVM=OFF
 
           - os: windows-latest
             target_name: zithc-windows-arm64.exe
@@ -123,7 +123,7 @@ jobs:
               -DCMAKE_C_COMPILER_TARGET=aarch64-pc-windows-msvc
               -DCMAKE_CXX_COMPILER_TARGET=aarch64-pc-windows-msvc
               -DZITH_ENABLE_FFI=OFF
-              -DZITH_ENABLE_LLVM=OFF
+              -DZITH_HAS_LLVM=OFF
 
     steps:
       - uses: actions/checkout@v4
@@ -138,7 +138,7 @@ jobs:
         shell: bash
         run: |
           sudo apt-get update
-          sudo apt-get install -y ninja-build clang-18 lld-18 \
+          sudo apt-get install -y ninja-build clang-18 lld-18 llvm-18-dev \
             gcc-aarch64-linux-gnu g++-aarch64-linux-gnu \
             libc6-dev-arm64-cross libc6-arm64-cross \
             binutils-aarch64-linux-gnu
@@ -268,6 +268,7 @@ jobs:
             -DCMAKE_C_COMPILER="zig;cc;-target;${{ matrix.zig_target }}" \
             -DCMAKE_CXX_COMPILER="zig;c++;-target;${{ matrix.zig_target }}" \
             -DZITH_ENABLE_FFI=OFF \
+            -DZITH_HAS_LLVM=OFF \
             -DCMAKE_EXE_LINKER_FLAGS='-static -lc' \
             -DCMAKE_CXX_FLAGS='-fno-cxx-exceptions'
           cmake --build build --config Release
@@ -385,7 +386,7 @@ jobs:
         shell: bash
         run: |
           sudo apt-get update
-          sudo apt-get install -y ninja-build clang-18 lld-18 \
+          sudo apt-get install -y ninja-build clang-18 lld-18 llvm-18-dev \
             gcc-aarch64-linux-gnu g++-aarch64-linux-gnu \
             libc6-dev-arm64-cross libc6-arm64-cross \
             binutils-aarch64-linux-gnu

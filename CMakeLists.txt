@@ -41,11 +41,11 @@ FetchContent_MakeAvailable(tomlplusplus)
 
 add_subdirectory(src/memory)
 
-file(GLOB_RECURSE ZITH_LIB_SOURCES src/*.cpp)
+file(GLOB_RECURSE ZITH_LIB_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp")
 list(REMOVE_ITEM ZITH_LIB_SOURCES "${CMAKE_SOURCE_DIR}/src/cli/zithc-main.cpp")
 
 if(NOT ZITH_HAS_LLVM OR ZITH_IS_WASM)
-    file(GLOB_RECURSE CODEGEN_SOURCES src/codegen/*.cpp)
+    file(GLOB_RECURSE CODEGEN_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/src/codegen/*.cpp")
     list(REMOVE_ITEM ZITH_LIB_SOURCES ${CODEGEN_SOURCES})
 endif()
 
