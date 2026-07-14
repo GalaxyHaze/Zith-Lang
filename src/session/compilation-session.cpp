@@ -28,7 +28,7 @@
 #include <toml++/toml.hpp>
 #include <vector>
 #ifdef _WIN32
-#include <windows.h>
+#include <Windows.h>
 #elif defined(__APPLE__)
 #include <mach-o/dyld.h>
 #include <sys/wait.h>
@@ -40,12 +40,12 @@
 namespace zith::session {
 
 CompilationSession::CompilationSession(const Options &options, std::string filePath)
-    : mOpts(options), mFilePath(std::move(filePath)), mProjectRoot(), mProjectConfig(mAstArena), mScratchArena(),
-      mAstArena(), mSymArena(), mTypeArena(), mHirArena(),
-      mDiags(mScratchArena),
-      mInterner(std::make_unique<memory::StringInterner>(mAstArena)), mAstBuilder(mAstArena, *mInterner),
-      mImportMgr(mSymArena, *mInterner, mSourceMap, mDiags), mSyms(mSymArena, mInterner.get()), mResolvedSyms(mSymArena),
-      mTypes(mTypeArena, *mInterner), mHirModule(mHirArena), mTypedAst(mHirArena) {
+    : mOpts(options), mFilePath(std::move(filePath)), mProjectRoot(), mProjectConfig(mAstArena),
+      mScratchArena(), mAstArena(), mSymArena(), mTypeArena(), mHirArena(), mDiags(mScratchArena),
+      mInterner(std::make_unique<memory::StringInterner>(mAstArena)),
+      mAstBuilder(mAstArena, *mInterner), mImportMgr(mSymArena, *mInterner, mSourceMap, mDiags),
+      mSyms(mSymArena, mInterner.get()), mResolvedSyms(mSymArena), mTypes(mTypeArena, *mInterner),
+      mHirModule(mHirArena), mTypedAst(mHirArena) {
     mPlan.target = mOpts.get().targetStage;
     mDiags.setColor(term::useColor(mOpts));
     mDiags.setSourceMap(&mSourceMap);
@@ -273,7 +273,7 @@ bool CompilationSession::importStage() {
         fs::path exe_dir;
         char exe_buf[4096];
 #ifdef _WIN32
-        DWORD len = GetModuleFileNameA(NULL, exe_buf, sizeof(exe_buf));
+        DWORD len = GetModuleFileNameA(nullptr, exe_buf, sizeof(exe_buf));
         if (len != 0 && len != sizeof(exe_buf)) {
             exe_buf[len] = '\0';
             exe_dir      = fs::path(exe_buf).parent_path();
@@ -470,7 +470,7 @@ bool CompilationSession::semaStage() {
         return false;
     }
 
-    mTypedAst  = pipeline.takeTypedAst();
+    mTypedAst = pipeline.takeTypedAst();
 
     if (mOpts.get().flags.verbose()) {
         auto dt = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0)

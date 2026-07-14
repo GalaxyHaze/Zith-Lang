@@ -30,7 +30,7 @@ class HirLower {
     memory::DynArray<size_t> allowed_files_;
     memory::DynArray<types::TypeId> var_types_;
     types::TypeId current_fn_ret_type_ = types::kErrorType;
-    size_t currentBlock_ = 0;
+    size_t currentBlock_               = 0;
     memory::FlatMap<std::string_view, size_t> labelMap_;
 
     ast::AstBuilder &builder() const;

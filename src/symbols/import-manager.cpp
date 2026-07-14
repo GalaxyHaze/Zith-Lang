@@ -48,8 +48,7 @@ auto ImportManager::resolve_file(const std::string &full_path, const std::string
 
     if (is_c_header) {
         auto idx = registry_.add(loaded_file_factory::makeHeaderFile(
-            arena_, interner_, full_path, import_key, ns, is_from, is_export, alias,
-            import_depth));
+            arena_, interner_, full_path, import_key, ns, is_from, is_export, alias, import_depth));
         dep_graph_.remember(import_key, idx);
         return idx;
     }
@@ -78,17 +77,17 @@ auto ImportManager::resolve_file(const std::string &full_path, const std::string
                            child_is_asset, child_alias, child_import_depth, child_source_file);
         });
 
-    auto idx = registry_.add(loaded_file_factory::makeImportedFile(
-        arena_, import_key, ns, is_from, is_export, alias, import_depth,
-        LoadedModule{
-            file_id,
-            std::move(syms),
-            builder,
-            std::move(program),
-            std::move(public_syms),
-            std::move(module_syms),
-        },
-        std::move(deps), symbols));
+    auto idx = registry_.add(loaded_file_factory::makeImportedFile(arena_, import_key, ns, is_from,
+                                                                   is_export, alias, import_depth,
+                                                                   LoadedModule{
+                                                                       file_id,
+                                                                       std::move(syms),
+                                                                       builder,
+                                                                       std::move(program),
+                                                                       std::move(public_syms),
+                                                                       std::move(module_syms),
+                                                                   },
+                                                                   std::move(deps), symbols));
     dep_graph_.remember(import_key, idx);
     return idx;
 }
@@ -97,8 +96,8 @@ auto ImportManager::resolve_directory(const std::string &import_key, const std::
                                       const memory::DynArray<std::string_view> &path, bool is_from,
                                       bool is_export, const std::string &alias,
                                       int32_t import_depth) -> memory::Result<size_t> {
-    auto planned = import_resolver::planDirectoryImports(import_key, dir_path, path, alias,
-                                                         is_from, import_depth);
+    auto planned = import_resolver::planDirectoryImports(import_key, dir_path, path, alias, is_from,
+                                                         import_depth);
     if (!planned)
         return std::move(planned.error());
 
@@ -129,9 +128,8 @@ auto ImportManager::resolve_asset_file(const std::string &full_path, const std::
     if (auto *existing = dep_graph_.loadedIndex(import_key))
         return *existing;
 
-    auto idx =
-        registry_.add(loaded_file_factory::makeAssetFile(arena_, interner_, full_path, import_key,
-                                                         alias));
+    auto idx = registry_.add(
+        loaded_file_factory::makeAssetFile(arena_, interner_, full_path, import_key, alias));
     dep_graph_.remember(import_key, idx);
     return idx;
 }

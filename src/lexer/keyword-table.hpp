@@ -196,7 +196,9 @@ struct PerfectHash {
 
         if (id < 0)
             return TokenKind::Identifier;
-        return (TokenTable[static_cast<size_t>(id)].first == sv) ? TokenTable[static_cast<size_t>(id)].second : TokenKind::Identifier;
+        return (TokenTable[static_cast<size_t>(id)].first == sv)
+                   ? TokenTable[static_cast<size_t>(id)].second
+                   : TokenKind::Identifier;
     }
 };
 

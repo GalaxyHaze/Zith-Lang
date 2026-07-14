@@ -61,6 +61,7 @@ if(NOT ZITH_IS_WASM)
 endif()
 
 if(ZITH_HAS_LLVM AND NOT ZITH_IS_WASM)
+    find_package(ZLIB QUIET)
     find_package(LLVM QUIET CONFIG)
     if(LLVM_FOUND)
         message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
@@ -98,6 +99,7 @@ if(BUILD_TESTING)
     add_zith_test(test-alias tests/test-alias.cpp)
     add_zith_test(test-struct tests/test-struct.cpp)
     add_zith_test(test-scan tests/test-scan.cpp)
+    add_zith_test(test-sema tests/test-sema.cpp)
 endif()
 
 if(ZITH_BUILD_CLI AND NOT ZITH_IS_WASM)
@@ -126,7 +128,6 @@ if(CLANG_FORMAT_EXE)
     add_custom_target(fmt COMMAND ${CLANG_FORMAT_EXE} -i ${ZITH_FORMAT_SOURCES})
     add_custom_target(fmt-check COMMAND ${CLANG_FORMAT_EXE} --dry-run --Werror ${ZITH_FORMAT_SOURCES})
 endif()
-
 # ── Compiler flags: -Werror -Weverything for Clang ────────────────────────
 
 if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
@@ -134,6 +135,7 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
         -Wall
         -Werror
         -Weverything
+        -Wno-unknown-warning-option
         -Wno-switch-enum
         -Wno-c++98-compat
         -Wno-switch-default
@@ -151,7 +153,7 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
         target_compile_options(zithc PRIVATE ${ZITH_CLANG_WARNINGS})
     endif()
     if(BUILD_TESTING)
-        foreach(TARGET test-lexer test-import test-alias test-struct test-scan)
+        foreach(TARGET test-lexer test-import test-alias test-struct test-scan test-sema)
             if(TARGET ${TARGET})
                 target_compile_options(${TARGET} PRIVATE ${ZITH_CLANG_WARNINGS})
             endif()

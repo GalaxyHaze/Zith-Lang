@@ -97,8 +97,8 @@ HirLower::HirLower(symbols::SymbolTable &syms, types::TypeIntern &types,
                    symbols::ImportManager *import_mgr)
     : ctx_(syms, types, diags, builder), unifier_(types, diags, hir_arena), hir_arena_(hir_arena),
       hir_(hir_arena), typed_ast_(typed_ast), resolved_(resolved), import_mgr_(import_mgr),
-      worklist_(hir_arena), fn_syms_(hir_arena), active_builder_(&builder), allowed_files_(hir_arena),
-      var_types_(hir_arena) {}
+      worklist_(hir_arena), fn_syms_(hir_arena), active_builder_(&builder),
+      allowed_files_(hir_arena), var_types_(hir_arena) {}
 
 ast::AstBuilder &HirLower::builder() const {
     return *active_builder_;
@@ -132,8 +132,8 @@ size_t HirLower::hirIndexForSym(symbols::SymId fn_sym) const {
 bool HirLower::isSymAccessible(symbols::SymId sym_id) const {
     if (allowed_files_.empty())
         return true;
-    auto origin = import_mgr_ ? import_mgr_->originOf(sym_id)
-                              : memory::Optional<symbols::SymOrigin>{};
+    auto origin =
+        import_mgr_ ? import_mgr_->originOf(sym_id) : memory::Optional<symbols::SymOrigin>{};
     if (!origin)
         return true;
     for (auto af : allowed_files_)
@@ -482,8 +482,9 @@ hir::HirExprId HirLower::visitCall(ast::ExprId id, const ast::CallNode &n) {
                         auto *source_syms = symsForSym(sym_id);
                         if (source_syms) {
                             const auto &source_data = source_syms->get(local_sym);
-                            auto *fn_decl = ast::asFn(bld->getDecl(source_data.decl_id));
-                            if (fn_decl && !fn_decl->is_extern && fn_decl->body != ast::kInvalidExpr)
+                            auto *fn_decl           = ast::asFn(bld->getDecl(source_data.decl_id));
+                            if (fn_decl && !fn_decl->is_extern &&
+                                fn_decl->body != ast::kInvalidExpr)
                                 worklist_.push(sym_id);
                         }
                     }
@@ -495,7 +496,8 @@ hir::HirExprId HirLower::visitCall(ast::ExprId id, const ast::CallNode &n) {
             if (!n.args.empty()) {
                 ctx_.diags().report(Severity::Error, NoMatchingFn,
                                     "no matching function for call to '" +
-                                        std::string(ctx_.syms().interner().lookup(callee_name)) + "'",
+                                        std::string(ctx_.syms().interner().lookup(callee_name)) +
+                                        "'",
                                     n.span);
             } else {
                 ctx_.diags().report(Severity::Error, WrongArity,
@@ -515,8 +517,8 @@ hir::HirExprId HirLower::visitCall(ast::ExprId id, const ast::CallNode &n) {
         auto &fn_type = ctx_.types().lookup(callee_type);
         auto fn_ptr   = std::get_if<types::TypeFn>(&fn_type);
         if (fn_ptr && hir_args.size() != fn_ptr->param_count) {
-            ctx_.diags().report(Severity::Error, WrongArity,
-                                "wrong number of arguments in call", {});
+            ctx_.diags().report(Severity::Error, WrongArity, "wrong number of arguments in call",
+                                {});
         }
     }
 
@@ -701,7 +703,7 @@ void HirLower::visitStmt(ast::StmtId id) {
     auto &node = builder().getStmt(id);
     switch (ast::stmtKind(node)) {
     case ast::StmtKind::Let: {
-        const auto &n = std::get<ast::LetNode>(node);
+        const auto &n           = std::get<ast::LetNode>(node);
         hir::HirExprId init     = hir::kInvalidHirExpr;
         types::TypeId init_type = types::kErrorType;
         if (n.init != ast::kInvalidExpr) {
@@ -723,9 +725,9 @@ void HirLower::visitStmt(ast::StmtId id) {
             var_type = init_type;
 
         for (auto var_name : n.names) {
-            auto sym_id = ctx_.syms().declare(var_name, symbols::SymbolVisibility::Private, 0,
-                                              symbols::SymKind::Variable, ast::kInvalidDecl,
-                                              memory::Span{});
+            auto sym_id =
+                ctx_.syms().declare(var_name, symbols::SymbolVisibility::Private, 0,
+                                    symbols::SymKind::Variable, ast::kInvalidDecl, memory::Span{});
             if (sym_id != symbols::kInvalidSym) {
                 if (sym_id >= var_types_.size()) {
                     if (sym_id >= var_types_.capacity())
@@ -758,7 +760,7 @@ void HirLower::visitStmt(ast::StmtId id) {
         break;
     }
     case ast::StmtKind::Return: {
-        const auto &n = std::get<ast::RetNode>(node);
+        const auto &n      = std::get<ast::RetNode>(node);
         hir::HirExprId val = hir::kInvalidHirExpr;
         if (n.value != ast::kInvalidExpr)
             val = visitExpr(n.value);

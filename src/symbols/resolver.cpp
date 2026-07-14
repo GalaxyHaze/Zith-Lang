@@ -215,8 +215,8 @@ SymId Resolver::lookupQualified(std::string_view name) {
     auto sym = lookupUnqualified(first);
     if (sym == kInvalidSym) {
         diags_.report(diagnostics::Severity::Error, diagnostics::err::UndefinedIdent,
-                      common::format("undefined identifier '%.*s'",
-                                     static_cast<int>(first.size()), first.data()),
+                      common::format("undefined identifier '%.*s'", static_cast<int>(first.size()),
+                                     first.data()),
                       {});
         return kInvalidSym;
     }
@@ -227,12 +227,11 @@ SymId Resolver::lookupQualified(std::string_view name) {
 
     auto &data = syms_.get(sym);
     if (!isNamespaceLike(data.kind)) {
-        diags_.report(
-            diagnostics::Severity::Error, diagnostics::err::NotNamespace,
-            common::format("'%.*s' is not a namespace, so '%.*s' is invalid",
-                           static_cast<int>(first.size()), first.data(),
-                           static_cast<int>(name.size()), name.data()),
-            {});
+        diags_.report(diagnostics::Severity::Error, diagnostics::err::NotNamespace,
+                      common::format("'%.*s' is not a namespace, so '%.*s' is invalid",
+                                     static_cast<int>(first.size()), first.data(),
+                                     static_cast<int>(name.size()), name.data()),
+                      {});
         return kInvalidSym;
     }
 
@@ -259,9 +258,8 @@ SymId Resolver::lookupQualified(std::string_view name) {
             return found;
         auto &next_data = syms_.get(found);
         if (!isNamespaceLike(next_data.kind)) {
-            auto current =
-                common::format("%s.%.*s", prefix.c_str(), static_cast<int>(segment.size()),
-                               segment.data());
+            auto current = common::format("%s.%.*s", prefix.c_str(),
+                                          static_cast<int>(segment.size()), segment.data());
             diags_.report(
                 diagnostics::Severity::Error, diagnostics::err::NotNamespace,
                 common::format("'%s' is not a namespace, so the remainder of '%.*s' cannot be "

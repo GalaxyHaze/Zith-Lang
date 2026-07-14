@@ -9,8 +9,7 @@ namespace zith::symbols {
 class SymbolMerger {
 public:
     SymbolMerger(memory::Arena &arena, memory::StringInterner &interner,
-                 diagnostics::DiagnosticEngine &diags,
-                 const memory::DynArray<LoadedFile> &files,
+                 diagnostics::DiagnosticEngine &diags, const memory::DynArray<LoadedFile> &files,
                  memory::DynArray<SymOrigin> &sym_origins);
 
     void mergeInto(SymbolTable &main_syms, int32_t from_depth = 0);

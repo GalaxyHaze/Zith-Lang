@@ -405,8 +405,8 @@ void FmtVisitor::visitExpr(ast::ExprId id, int parent_prec) {
         emitIdent(std::get<ast::IdentNode>(node));
         break;
     case ast::ExprKind::Binary: {
-        const auto &n = std::get<ast::BinaryNode>(node);
-        int prec      = binopPrecedence(n.op);
+        const auto &n   = std::get<ast::BinaryNode>(node);
+        int prec        = binopPrecedence(n.op);
         bool need_paren = parent_prec > prec || (parent_prec == prec && !isLeftAssoc(n.op));
         if (need_paren)
             emit("(");

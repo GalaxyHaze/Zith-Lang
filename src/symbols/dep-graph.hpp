@@ -20,7 +20,7 @@ public:
         ResolveGuard(memory::FlatMap<std::string, char> *resolving, std::string key);
         ResolveGuard(ResolveGuard &&other) noexcept;
         auto operator=(ResolveGuard &&other) noexcept -> ResolveGuard &;
-        ResolveGuard(const ResolveGuard &) = delete;
+        ResolveGuard(const ResolveGuard &)                     = delete;
         auto operator=(const ResolveGuard &) -> ResolveGuard & = delete;
         ~ResolveGuard();
 
@@ -55,8 +55,8 @@ struct ModuleDependencies {
 
 using ResolveImportFn = std::function<memory::Result<size_t>(
     const memory::DynArray<std::string_view> &path,
-    const memory::DynArray<ast::ImportSymbol> &symbols, bool is_from, bool is_export,
-    bool is_asset, std::string_view alias, int32_t import_depth, std::string_view source_file)>;
+    const memory::DynArray<ast::ImportSymbol> &symbols, bool is_from, bool is_export, bool is_asset,
+    std::string_view alias, int32_t import_depth, std::string_view source_file)>;
 
 auto collectModuleDependencies(memory::Arena &arena, diagnostics::DiagnosticEngine &diags,
                                ast::AstBuilder &builder, const ast::ProgramNode &program,

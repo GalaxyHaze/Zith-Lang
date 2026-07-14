@@ -305,8 +305,8 @@ inline bool consumeFieldItem(lexer::TokenStream &tok, const FieldItemOptions &op
     }
 
     if (tok.peek().is(lexer::TokenKind::Identifier)) {
-        auto name          = tok.lexeme();
-        auto name_span     = tok.peek().span;
+        auto name      = tok.lexeme();
+        auto name_span = tok.peek().span;
         tok.advance();
         auto type_expr     = parse_type();
         auto default_value = missing_default();

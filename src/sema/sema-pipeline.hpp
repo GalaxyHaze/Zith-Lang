@@ -35,7 +35,8 @@ class SemaPipeline {
     ast::AstBuilder *builderForSym(symbols::SymId fn_sym);
     const symbols::SymbolTable *symsForSym(symbols::SymId fn_sym);
     symbols::SymId localSymFor(symbols::SymId fn_sym) const;
-    const ast::FnDeclNode *fnDeclForSym(symbols::SymId fn_sym, ast::AstBuilder **source_bld = nullptr,
+    const ast::FnDeclNode *fnDeclForSym(symbols::SymId fn_sym,
+                                        ast::AstBuilder **source_bld             = nullptr,
                                         const symbols::SymbolTable **source_syms = nullptr);
     types::TypeId lowerFnReturnType(symbols::SymId fn_sym);
     types::TypeId lowerFnParamType(symbols::SymId fn_sym, size_t index);

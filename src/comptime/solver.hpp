@@ -32,9 +32,9 @@ class Solver {
     types::TypeIntern &types_;
     ast::AstBuilder &ast_;
     ast::ProgramNode &program_;
-    symbols::SymbolTable &syms_[[maybe_unused]];
+    symbols::SymbolTable &syms_ [[maybe_unused]];
     diagnostics::DiagnosticEngine &diags_;
-    memory::Arena &hir_arena_[[maybe_unused]];
+    memory::Arena &hir_arena_ [[maybe_unused]];
 
     memory::DynArray<GenericFnInfo> generic_fns_;
     memory::DynArray<MonomorphEntry> monomorphs_;

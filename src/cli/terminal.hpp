@@ -9,7 +9,7 @@
 #ifndef NOMINMAX
 #define NOMINMAX
 #endif
-#include <windows.h>
+#include <Windows.h>
 #endif
 
 namespace zith {
@@ -62,7 +62,7 @@ inline void enableVirtual() {
 #ifdef _WIN32
     HANDLE handles[] = {GetStdHandle(STD_OUTPUT_HANDLE), GetStdHandle(STD_ERROR_HANDLE)};
     for (auto h : handles) {
-        if (h == INVALID_HANDLE_VALUE || h == NULL)
+        if (h == INVALID_HANDLE_VALUE || h == nullptr)
             continue;
         DWORD mode = 0;
         if (GetConsoleMode(h, &mode)) {

@@ -16,8 +16,8 @@ auto copyImportSymbols(memory::Arena &arena,
 } // namespace
 
 auto makeImportedFile(memory::Arena &arena, const std::string &import_key, const std::string &ns,
-                      bool is_from, bool is_export, const std::string &alias,
-                      int32_t import_depth, LoadedModule module, ModuleDependencies deps,
+                      bool is_from, bool is_export, const std::string &alias, int32_t import_depth,
+                      LoadedModule module, ModuleDependencies deps,
                       const memory::DynArray<ast::ImportSymbol> &import_symbols) -> LoadedFile {
     return LoadedFile{
         import_key,
@@ -43,8 +43,8 @@ auto makeImportedFile(memory::Arena &arena, const std::string &import_key, const
 
 auto makeHeaderFile(memory::Arena &arena, memory::StringInterner &interner,
                     const std::string &full_path, const std::string &import_key,
-                    const std::string &ns, bool is_from, bool is_export,
-                    const std::string &alias, int32_t import_depth) -> LoadedFile {
+                    const std::string &ns, bool is_from, bool is_export, const std::string &alias,
+                    int32_t import_depth) -> LoadedFile {
     memory::DynArray<SymId> empty_pub{arena};
     memory::DynArray<SymId> empty_mod{arena};
     memory::DynArray<size_t> empty_re{arena};
@@ -77,9 +77,8 @@ auto makeAssetFile(memory::Arena &arena, memory::StringInterner &interner,
                    const std::string &full_path, const std::string &import_key,
                    std::string_view alias) -> LoadedFile {
     auto symbols = SymbolTable(arena, &interner);
-    auto sym_id =
-        symbols.declare(alias, SymbolVisibility::Public, 0, SymKind::Asset, ast::kInvalidDecl, {},
-                        kInvalidSym, {});
+    auto sym_id  = symbols.declare(alias, SymbolVisibility::Public, 0, SymKind::Asset,
+                                   ast::kInvalidDecl, {}, kInvalidSym, {});
 
     memory::DynArray<SymId> public_syms{arena};
     public_syms.push(sym_id);

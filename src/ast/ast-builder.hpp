@@ -1,7 +1,7 @@
 #pragma once
 
-#include "ast/ast-nodes.hpp"
 #include "ast/ast-node-utils.hpp"
+#include "ast/ast-nodes.hpp"
 #include "ast/type-expr.hpp"
 #include "memory/arena.hpp"
 #include "memory/dyn-array.hpp"

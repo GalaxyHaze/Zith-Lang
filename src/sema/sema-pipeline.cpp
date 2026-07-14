@@ -102,8 +102,8 @@ ast::AstBuilder &SemaPipeline::builder() const {
 bool SemaPipeline::isSymAccessible(symbols::SymId sym_id) const {
     if (allowed_files_.empty())
         return true;
-    auto origin = import_mgr_ ? import_mgr_->originOf(sym_id)
-                              : memory::Optional<symbols::SymOrigin>{};
+    auto origin =
+        import_mgr_ ? import_mgr_->originOf(sym_id) : memory::Optional<symbols::SymOrigin>{};
     if (!origin)
         return true;
     for (auto af : allowed_files_)
@@ -139,7 +139,8 @@ symbols::SymId SemaPipeline::localSymFor(symbols::SymId fn_sym) const {
     return fn_sym;
 }
 
-const ast::FnDeclNode *SemaPipeline::fnDeclForSym(symbols::SymId fn_sym, ast::AstBuilder **source_bld,
+const ast::FnDeclNode *SemaPipeline::fnDeclForSym(symbols::SymId fn_sym,
+                                                  ast::AstBuilder **source_bld,
                                                   const symbols::SymbolTable **source_syms) {
     auto *bld  = builderForSym(fn_sym);
     auto *syms = symsForSym(fn_sym);
@@ -198,7 +199,8 @@ void SemaPipeline::markBodyChecked(symbols::SymId sym_id) {
     checked_fns_[sym_id] = 1;
 }
 
-bool SemaPipeline::concretizeLiteralExpr(ast::ExprId id, types::TypeId concrete_type, memory::Span span) {
+bool SemaPipeline::concretizeLiteralExpr(ast::ExprId id, types::TypeId concrete_type,
+                                         memory::Span span) {
     if (id == ast::kInvalidExpr || concrete_type == types::kErrorType)
         return false;
 
@@ -210,7 +212,8 @@ bool SemaPipeline::concretizeLiteralExpr(ast::ExprId id, types::TypeId concrete_
         return false;
 
     auto current_type = astExprType(id);
-    if (current_type == types::kErrorType || ctx_.types().kindOf(current_type) != types::TypeKind::Int)
+    if (current_type == types::kErrorType ||
+        ctx_.types().kindOf(current_type) != types::TypeKind::Int)
         return false;
 
     auto &current_int = std::get<types::TypeInt>(ctx_.types().lookup(current_type));
@@ -243,9 +246,9 @@ void SemaPipeline::ensureBodyChecked(symbols::SymId fn_sym) {
         return;
     markBodyChecked(fn_sym);
 
-    ast::AstBuilder *source_bld            = nullptr;
+    ast::AstBuilder *source_bld             = nullptr;
     const symbols::SymbolTable *source_syms = nullptr;
-    auto *fn                               = fnDeclForSym(fn_sym, &source_bld, &source_syms);
+    auto *fn                                = fnDeclForSym(fn_sym, &source_bld, &source_syms);
     if (!fn || !source_bld || !source_syms || fn->is_extern || fn->body == ast::kInvalidExpr)
         return;
 
@@ -401,7 +404,7 @@ types::TypeId SemaPipeline::visitIdent(const ast::IdentNode &n, ast::ExprId id) 
         return types::kErrorType;
     }
 
-    auto &data = ctx_.syms().get(sym);
+    auto &data               = ctx_.syms().get(sym);
     types::TypeId ident_type = types::kErrorType;
     if (data.kind == symbols::SymKind::Fn) {
         ident_type = ctx_.types().internUnknown();
@@ -506,18 +509,16 @@ types::TypeId SemaPipeline::visitCall(ast::ExprId id, const ast::CallNode &n) {
 
         if (match_count == 0 && fn_candidate_count > 0) {
             if (!n.args.empty()) {
-                ctx_.diags().report(Severity::Error, NoMatchingFn,
-                                    "no matching function for call to '" +
-                                        std::string(callee_name) + "'",
-                                    n.span);
+                ctx_.diags().report(
+                    Severity::Error, NoMatchingFn,
+                    "no matching function for call to '" + std::string(callee_name) + "'", n.span);
             } else {
                 ctx_.diags().report(Severity::Error, WrongArity,
                                     "wrong number of arguments in call", n.span);
             }
         } else if (match_count > 1) {
             ctx_.diags().report(Severity::Error, AmbiguousCall,
-                                "ambiguous call '" +
-                                    std::string(callee_name) +
+                                "ambiguous call '" + std::string(callee_name) +
                                     "' — multiple functions match",
                                 n.span);
             resolved_fn = symbols::kInvalidSym;
@@ -664,8 +665,8 @@ void SemaPipeline::visitStmt(ast::StmtId id) {
 
         for (auto var_name : n.names) {
             auto sym_id =
-                syms().declare(var_name, symbols::SymbolVisibility::Private, 0, symbols::SymKind::Variable,
-                               ast::kInvalidDecl, memory::Span{});
+                syms().declare(var_name, symbols::SymbolVisibility::Private, 0,
+                               symbols::SymKind::Variable, ast::kInvalidDecl, memory::Span{});
             if (sym_id != symbols::kInvalidSym) {
                 ensureVarTypeCapacity(sym_id);
                 var_types_[sym_id] = var_type;

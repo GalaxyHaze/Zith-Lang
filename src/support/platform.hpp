@@ -4,7 +4,7 @@
 
 #ifdef _WIN32
 #include <cstdlib>
-#include <windows.h>
+#include <Windows.h>
 #else
 #include <stdlib.h>
 #include <unistd.h>
@@ -26,7 +26,7 @@ inline char *mkdtemp(char *tmpl) {
             X[i] = chars[rand() % (sizeof(chars) - 1)];
         X[6] = '\0';
 
-        if (CreateDirectoryA(tmpl, NULL))
+        if (CreateDirectoryA(tmpl, nullptr))
             return tmpl;
 
         if (GetLastError() != ERROR_ALREADY_EXISTS)

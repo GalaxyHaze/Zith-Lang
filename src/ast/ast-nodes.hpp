@@ -119,7 +119,7 @@ struct WhileNode {
 struct FnParam {
     std::string_view name;
     TypeExprId type = kInvalidTypeExpr;
-    int: 32;
+    int : 32;
 };
 
 struct GenericParam {
@@ -158,7 +158,7 @@ struct FnDeclNode {
     ExprId body            = kInvalidExpr;
     bool is_extern         = false;
     memory::Span span{};
-    int: 24;
+    int : 24;
     DeclKind tag = DeclKind::Fn;
 };
 
@@ -278,8 +278,8 @@ struct ImportNode {
     bool is_from         = false;
     bool is_export       = false;
     bool is_asset        = false;
-    int: 8;
-    int: 32;
+    int : 8;
+    int : 32;
     DeclKind tag = DeclKind::Import;
 };
 
@@ -328,7 +328,7 @@ struct IntrinsicNode {
     IntrinsicKind kind;
     memory::DynArray<ExprId> args;
     memory::Span span{};
-    int: 24;
+    int : 24;
     ExprKind tag = ExprKind::Intrinsic;
 };
 
@@ -336,7 +336,7 @@ struct MacroCallNode {
     std::string_view name;
     memory::DynArray<ExprId> args;
     memory::Span span{};
-    int: 32;
+    int : 32;
     ExprKind tag = ExprKind::MacroCall;
 };
 
@@ -347,7 +347,7 @@ using ExprNode =
 struct GotoNode {
     std::string_view target;
     memory::Span span{};
-    int: 32;
+    int : 32;
     StmtKind tag = StmtKind::Goto;
 };
 
@@ -355,7 +355,7 @@ struct MarkerNode {
     std::string_view name;
     memory::DynArray<ast::StmtId> body;
     memory::Span span{};
-    int: 32;
+    int : 32;
     StmtKind tag = StmtKind::Marker;
 };
 
@@ -365,8 +365,7 @@ struct ExprStmtNode {
     StmtKind tag = StmtKind::Expr;
 };
 
-using StmtNode =
-    std::variant<LetNode, AssignNode, RetNode, GotoNode, MarkerNode, ExprStmtNode>;
+using StmtNode = std::variant<LetNode, AssignNode, RetNode, GotoNode, MarkerNode, ExprStmtNode>;
 
 using DeclNode =
     std::variant<FnDeclNode, StructDeclNode, EnumDeclNode, UnionDeclNode, ComponentDeclNode,

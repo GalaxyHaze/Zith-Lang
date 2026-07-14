@@ -121,8 +121,8 @@ void HirModule::dump(FILE *out, const memory::StringInterner &interner) const {
                 }
                 case HirExprKind::Branch: {
                     auto &branch = std::get<HirBranch>(expr);
-                    std::fprintf(out, "branch %%e%u -> bb%u : bb%u", branch.cond,
-                                 branch.then_block, branch.else_block);
+                    std::fprintf(out, "branch %%e%u -> bb%u : bb%u", branch.cond, branch.then_block,
+                                 branch.else_block);
                     break;
                 }
                 case HirExprKind::Phi:

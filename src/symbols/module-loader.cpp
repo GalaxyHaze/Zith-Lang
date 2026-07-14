@@ -6,8 +6,7 @@
 namespace zith::symbols {
 
 ModuleLoader::ModuleLoader(memory::Arena &arena, memory::StringInterner &interner,
-                           memory::SourceMap &source_map,
-                           diagnostics::DiagnosticEngine &diags)
+                           memory::SourceMap &source_map, diagnostics::DiagnosticEngine &diags)
     : arena_(arena), interner_(interner), source_map_(source_map), diags_(diags) {}
 
 auto ModuleLoader::load(const std::string &full_path) -> memory::Result<LoadedModule> {

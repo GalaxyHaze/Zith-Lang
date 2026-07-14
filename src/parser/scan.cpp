@@ -235,8 +235,9 @@ static memory::DynArray<ast::ImportSymbol> parseImportSymbols(lexer::TokenStream
     return symbols;
 }
 
-static void scanImportDecl(Parser &parser, symbols::SymbolTable & /*syms*/, ast::ProgramNode &program,
-                           memory::Span kw_span, bool is_from, bool is_export) {
+static void scanImportDecl(Parser &parser, symbols::SymbolTable & /*syms*/,
+                           ast::ProgramNode &program, memory::Span kw_span, bool is_from,
+                           bool is_export) {
     using namespace diagnostics::err;
     auto &tok  = *parser.tok;
     auto &bld  = *parser.bld;
@@ -419,7 +420,8 @@ static void scanStructLikeFieldBody(lexer::TokenStream &tok, diagnostics::Diagno
                                     bool methods_must_have_body) {
     memory::FlatMap<std::string, char> field_names;
     scan_detail::scanBody(
-        tok, [&](lexer::TokenStream &) { scanFieldItem(tok, diag, field_names, support_destructure); },
+        tok,
+        [&](lexer::TokenStream &) { scanFieldItem(tok, diag, field_names, support_destructure); },
         [&](lexer::TokenStream &) { scanMethod(ctx, methods_must_have_body); }, token_start,
         body_span, bld, body_node);
 }
@@ -510,10 +512,9 @@ static auto createStructLikeDecl(ast::AstBuilder &bld, StructLikeKind kind, std:
                                  memory::Span name_span) -> ast::DeclId {
     switch (kind) {
     case StructLikeKind::Struct:
-        return bld.structDecl(name, std::move(generic_params),
-                              memory::DynArray<ast::StructField>(bld.arena()),
-                              memory::DynArray<ast::DeclId>(bld.arena()), ast::kInvalidTypeExpr,
-                              name_span);
+        return bld.structDecl(
+            name, std::move(generic_params), memory::DynArray<ast::StructField>(bld.arena()),
+            memory::DynArray<ast::DeclId>(bld.arena()), ast::kInvalidTypeExpr, name_span);
     case StructLikeKind::Enum:
         return bld.enumDecl(name, std::move(generic_params),
                             memory::DynArray<ast::EnumVariant>(bld.arena()), name_span);
@@ -853,15 +854,15 @@ ScanResult scan(Parser &parser, symbols::SymbolTable &syms) {
             ast::ExprId body_node = ast::kInvalidExpr;
             memory::Span body_span{};
 
-            decl = createStructLikeDecl(bld, struct_like, name, std::move(generic_params),
-                                        name_span);
+            decl =
+                createStructLikeDecl(bld, struct_like, name, std::move(generic_params), name_span);
 
             // declare struct/union/enum symbol BEFORE body scan
             symbols::SymId struct_sym = symbols::kInvalidSym;
             if (!scan_detail::reportIfDuplicate(syms, diag, name, name_span))
-                struct_sym = syms.declare(name, current_vis, current_mod_depth,
-                                          symbolKindOf(struct_like), decl, name_span,
-                                          symbols::kInvalidSym, lastDocSpan);
+                struct_sym =
+                    syms.declare(name, current_vis, current_mod_depth, symbolKindOf(struct_like),
+                                 decl, name_span, symbols::kInvalidSym, lastDocSpan);
 
             // ── scan body: register member names, skip implementations ──
             if (tok.peek().punc == '{') {
@@ -872,8 +873,8 @@ ScanResult scan(Parser &parser, symbols::SymbolTable &syms) {
                     tok,        bld,  diag,    syms,  parser, current_vis, current_mod_depth,
                     struct_sym, decl, program, result};
 
-                scanStructLikeBody(struct_like, tok, diag, syms, bld, decl, body_node,
-                                   token_start, body_span, ctx);
+                scanStructLikeBody(struct_like, tok, diag, syms, bld, decl, body_node, token_start,
+                                   body_span, ctx);
             }
 
             program.decls.push(decl);

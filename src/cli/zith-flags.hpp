@@ -5,7 +5,7 @@
 #endif
 
 #ifdef _WIN32
-#include <windows.h>
+#include <Windows.h>
 #elif defined(__APPLE__)
 #include <mach-o/dyld.h>
 #elif !defined(ZITH_IS_WASM)
@@ -20,7 +20,7 @@ namespace {
 std::string getExecutableDir() {
 #ifdef _WIN32
     char buf[4096];
-    DWORD len = GetModuleFileNameA(NULL, buf, sizeof(buf));
+    DWORD len = GetModuleFileNameA(nullptr, buf, sizeof(buf));
     if (len == 0 || len == sizeof(buf))
         return {};
     return std::filesystem::path(buf).parent_path().string();

@@ -58,8 +58,7 @@ private:
 
     auto resolve_file(const std::string &full_path, const std::string &import_key,
                       const std::string &ns, bool is_from, bool is_export, const std::string &alias,
-                      int32_t import_depth,
-                      const memory::DynArray<ast::ImportSymbol> &symbols)
+                      int32_t import_depth, const memory::DynArray<ast::ImportSymbol> &symbols)
         -> memory::Result<size_t>;
 
     auto resolve_directory(const std::string &import_key, const std::string &dir_path,

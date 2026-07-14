@@ -84,15 +84,15 @@ auto collectModuleDependencies(memory::Arena &arena, diagnostics::DiagnosticEngi
     ModuleDependencies deps(arena);
 
     for (auto decl_id : program.decls) {
-        auto &decl       = builder.getDecl(decl_id);
-        auto *import     = ast::asImport(decl);
+        auto &decl   = builder.getDecl(decl_id);
+        auto *import = ast::asImport(decl);
         if (!import)
             continue;
 
         auto resolve = [&]() {
-            return resolve_import(import->path, import->symbols, import->is_from,
-                                  import->is_export, import->is_asset, import->alias,
-                                  import->import_depth, source_file);
+            return resolve_import(import->path, import->symbols, import->is_from, import->is_export,
+                                  import->is_asset, import->alias, import->import_depth,
+                                  source_file);
         };
 
         if (import->is_export) {

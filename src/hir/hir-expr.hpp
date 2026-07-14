@@ -75,7 +75,7 @@ struct HirCall {
     HirExprId callee;
     memory::DynArray<HirExprId> args;
     symbols::SymId resolved_fn = symbols::kInvalidSym;
-    HirExprKind tag = HirExprKind::Call;
+    HirExprKind tag            = HirExprKind::Call;
 };
 struct HirRet {
     HirExprId value;

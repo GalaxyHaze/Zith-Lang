@@ -118,9 +118,9 @@ void SymbolMerger::mergeInto(SymbolTable &main_syms, int32_t from_depth) {
                                        int32_t mod_depth, SymId local_sid) {
                 if (main_syms.lookupInScope(name, kRootScope) != kInvalidSym)
                     return;
-                auto main_id = main_syms.declare(name, visibility, mod_depth, data.kind,
-                                                 data.decl_id, data.span, data.target,
-                                                 data.doc_span);
+                auto main_id =
+                    main_syms.declare(name, visibility, mod_depth, data.kind, data.decl_id,
+                                      data.span, data.target, data.doc_span);
                 record_origin(main_id, fi, local_sid);
             };
 
@@ -147,9 +147,8 @@ void SymbolMerger::mergeInto(SymbolTable &main_syms, int32_t from_depth) {
                                      size_t re_export_file, SymId local_id) {
             if (main_syms.lookupInScope(name, kRootScope) != kInvalidSym)
                 return;
-            auto main_id =
-                main_syms.declare(name, visibility, mod_depth, kind, decl_id, span, target,
-                                  doc_span);
+            auto main_id = main_syms.declare(name, visibility, mod_depth, kind, decl_id, span,
+                                             target, doc_span);
             record_origin(main_id, re_export_file, local_id);
         };
         auto process_re_exports = [&](auto &self, size_t re_idx) -> void {
@@ -161,8 +160,7 @@ void SymbolMerger::mergeInto(SymbolTable &main_syms, int32_t from_depth) {
                 auto sym_str = interner_.lookup(data.name);
                 auto names   = makeDeclNames(arena_, sym_str, ls, prefix, file.is_from);
                 declare_re_export(names.qualified, SymbolVisibility::Public, 0, data.kind,
-                                  data.decl_id, data.span, data.target, data.doc_span, re_idx,
-                                  sid);
+                                  data.decl_id, data.span, data.target, data.doc_span, re_idx, sid);
                 if (!names.unqualified.empty())
                     declare_re_export(names.unqualified, SymbolVisibility::Public, 0, data.kind,
                                       data.decl_id, data.span, data.target, data.doc_span, re_idx,

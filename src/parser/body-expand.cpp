@@ -22,7 +22,8 @@ static std::string_view arenaStr(memory::Arena &arena, const std::string &s) {
 }
 
 void skipToNextBodyItem(lexer::TokenStream &tok) {
-    while (!tok.is_empty() && !tok.peek().is_eof() && tok.peek().punc != ',' && tok.peek().punc != '}')
+    while (!tok.is_empty() && !tok.peek().is_eof() && tok.peek().punc != ',' &&
+           tok.peek().punc != '}')
         tok.advance();
     if (tok.peek().punc == ',')
         tok.advance();
@@ -56,8 +57,8 @@ void updateNamedDecl(ast::AstBuilder &builder, ast::ProgramNode &program, std::s
 
 template <typename PreItemFn>
 auto parseStructLikeFields(Parser &parser, ast::FieldKind kind,
-                           const scan_detail::FieldItemOptions &options,
-                           PreItemFn &&pre_item) -> memory::DynArray<ast::StructField> {
+                           const scan_detail::FieldItemOptions &options, PreItemFn &&pre_item)
+    -> memory::DynArray<ast::StructField> {
     auto &tok = *parser.tok;
     auto &bld = *parser.bld;
 
@@ -103,8 +104,8 @@ auto parseEnumVariantFields(Parser &parser) -> memory::DynArray<ast::StructField
         while (!tok.is_empty() && !tok.peek().is_eof() && tok.peek().punc != ')') {
             auto field_type = parser.parseTypeExpr();
             auto field_name = arenaStr(bld.arena(), "_" + std::to_string(idx++));
-            fields.push(
-                {field_name, field_type, ast::kInvalidExpr, ast::FieldBind::Auto, ast::FieldKind::Enum});
+            fields.push({field_name, field_type, ast::kInvalidExpr, ast::FieldBind::Auto,
+                         ast::FieldKind::Enum});
             if (tok.peek().punc == ',')
                 tok.advance();
         }
@@ -230,23 +231,23 @@ void Parser::expandBodies(ScanResult &result) {
 
         // 3. body fields
         consume('{');
-        auto fields = parseStructLikeFields(
-            *this, ast::FieldKind::Struct,
-            scan_detail::FieldItemOptions{
-                .support_destructure = true,
-                .skip_qualifiers     = true,
-                .parse_bind          = true,
-            },
-            [&]() {
-                if (!tok->peek().is(lexer::TokenKind::Visibility))
-                    return false;
-                tok->advance();
-                if (tok->peek().punc == '(' && tok->lexeme() == "mod")
-                    scan_detail::skipBalanced(*tok, '(', ')');
-                if (tok->peek().punc == ')')
-                    tok->advance();
-                return true;
-            });
+        auto fields =
+            parseStructLikeFields(*this, ast::FieldKind::Struct,
+                                  scan_detail::FieldItemOptions{
+                                      .support_destructure = true,
+                                      .skip_qualifiers     = true,
+                                      .parse_bind          = true,
+                                  },
+                                  [&]() {
+                                      if (!tok->peek().is(lexer::TokenKind::Visibility))
+                                          return false;
+                                      tok->advance();
+                                      if (tok->peek().punc == '(' && tok->lexeme() == "mod")
+                                          scan_detail::skipBalanced(*tok, '(', ')');
+                                      if (tok->peek().punc == ')')
+                                          tok->advance();
+                                      return true;
+                                  });
 
         updateNamedDecl(*bld, program, entry.name, [&](ast::DeclNode &decl, std::string_view name) {
             auto *sn = ast::asStruct(decl);
@@ -285,8 +286,9 @@ void Parser::expandBodies(ScanResult &result) {
         tok->offset = entry.struct_header_start;
         consume('{');
 
-        auto fields = parseStructLikeFields(*this, ast::FieldKind::Component,
-                                            scan_detail::FieldItemOptions{}, []() { return false; });
+        auto fields =
+            parseStructLikeFields(*this, ast::FieldKind::Component, scan_detail::FieldItemOptions{},
+                                  []() { return false; });
 
         updateNamedDecl(*bld, program, entry.name, [&](ast::DeclNode &decl, std::string_view name) {
             auto *cn = ast::asComponent(decl);
@@ -306,7 +308,8 @@ void Parser::expandBodies(ScanResult &result) {
 
         memory::DynArray<ast::UnionVariant> variants{bld->arena()};
         memory::FlatMap<std::string, char> variant_names;
-        consumeBodyItems(*this, [&]() { return consumeUnionVariant(*this, *diag, variant_names, variants); });
+        consumeBodyItems(
+            *this, [&]() { return consumeUnionVariant(*this, *diag, variant_names, variants); });
 
         updateNamedDecl(*bld, program, entry.name, [&](ast::DeclNode &decl, std::string_view name) {
             auto *un = ast::asUnion(decl);
