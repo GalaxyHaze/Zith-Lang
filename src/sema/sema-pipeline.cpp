@@ -280,7 +280,6 @@ void SemaPipeline::ensureBodyChecked(symbols::SymId fn_sym) {
     labelMap_              = {};
 
     auto scope = syms().enterScope();
-    syms().emplace(*source_syms, scope);
 
     types::TypeLower lower(*source_bld, ctx_.types(), ctx_.diags(), ctx_.syms());
     for (const auto &param : fn->params) {
@@ -308,6 +307,11 @@ void SemaPipeline::ensureBodyChecked(symbols::SymId fn_sym) {
     current_fn_ret_type_ = previous_ret;
     active_builder_      = previous_builder;
     allowed_files_       = std::move(previous_allowed);
+}
+
+void SemaPipeline::warnNotImplemented(std::string_view feature, memory::Span span) {
+    ctx_.diags().report(diagnostics::Severity::Warning, diagnostics::err::NotImplemented,
+                        std::string(feature) + " is not implemented yet", span);
 }
 
 bool SemaPipeline::run(const ast::ProgramNode &program) {
@@ -369,11 +373,24 @@ types::TypeId SemaPipeline::visitExpr(ast::ExprId id) {
     case ast::ExprKind::While:
         return visitWhile(id, std::get<ast::WhileNode>(node));
     case ast::ExprKind::Field:
+        warnNotImplemented("field access", builder().exprSpan(id));
+        typed_ast_.set(id, types::kErrorType);
+        return types::kErrorType;
     case ast::ExprKind::Index:
+        warnNotImplemented("index access", builder().exprSpan(id));
+        typed_ast_.set(id, types::kErrorType);
+        return types::kErrorType;
     case ast::ExprKind::Range:
+        warnNotImplemented("range expressions", builder().exprSpan(id));
+        typed_ast_.set(id, types::kErrorType);
+        return types::kErrorType;
     case ast::ExprKind::Unbody:
     case ast::ExprKind::Intrinsic:
+        warnNotImplemented("compiler intrinsics in expressions", builder().exprSpan(id));
+        typed_ast_.set(id, types::kErrorType);
+        return types::kErrorType;
     case ast::ExprKind::MacroCall:
+        warnNotImplemented("macro calls in expressions", builder().exprSpan(id));
         typed_ast_.set(id, types::kErrorType);
         return types::kErrorType;
     }
@@ -457,8 +474,34 @@ types::TypeId SemaPipeline::visitBinary(ast::ExprId id, const ast::BinaryNode &n
 
 types::TypeId SemaPipeline::visitUnary(ast::ExprId id, const ast::UnaryNode &n) {
     auto operand_type = visitExpr(n.operand);
-    typed_ast_.set(id, operand_type);
-    return operand_type;
+    if (operand_type == types::kErrorType) {
+        typed_ast_.set(id, types::kErrorType);
+        return types::kErrorType;
+    }
+
+    auto result_type = operand_type;
+    switch (n.op) {
+    case ast::UnaryOp::Neg:
+    case ast::UnaryOp::Not:
+        break;
+    case ast::UnaryOp::Ref:
+        if (ast::exprKind(builder().getExpr(n.operand)) != ast::ExprKind::Identifier)
+            warnNotImplemented("references to non-identifiers", n.span);
+        result_type = ctx_.types().internPtr(operand_type);
+        break;
+    case ast::UnaryOp::Deref:
+        if (ctx_.types().kindOf(operand_type) != types::TypeKind::Ptr) {
+            ctx_.diags().report(Severity::Error, TypeMismatch,
+                                "cannot dereference a non-pointer value", n.span);
+            result_type = types::kErrorType;
+        } else {
+            result_type = std::get<types::TypePtr>(ctx_.types().lookup(operand_type)).pointee;
+        }
+        break;
+    }
+
+    typed_ast_.set(id, result_type);
+    return result_type;
 }
 
 types::TypeId SemaPipeline::visitCall(ast::ExprId id, const ast::CallNode &n) {

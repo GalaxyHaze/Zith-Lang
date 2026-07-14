@@ -51,6 +51,7 @@ private:
     llvm::Value *emitRet(const hir::HirRet &ret, const hir::HirModule &mod);
     llvm::Value *emitLet(const hir::HirLet &let, const hir::HirModule &mod);
     llvm::Value *emitVar(const hir::HirVar &var);
+    llvm::Value *emitVarAddr(const hir::HirVar &var);
     llvm::Value *emitJump(const hir::HirJump &jump, const hir::HirModule &mod);
     llvm::Value *emitBranch(const hir::HirBranch &branch, const hir::HirModule &mod);
 

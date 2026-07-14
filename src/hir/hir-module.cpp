@@ -73,7 +73,7 @@ void HirModule::dump(FILE *out, const memory::StringInterner &interner) const {
                 }
                 case HirExprKind::Unary: {
                     auto &un = std::get<HirUnary>(expr);
-                    std::fprintf(out, "unary op %%e%u", un.operand);
+                    std::fprintf(out, "unary %%t%u op %%e%u", un.type, un.operand);
                     break;
                 }
                 case HirExprKind::Let: {

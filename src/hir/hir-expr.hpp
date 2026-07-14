@@ -58,6 +58,7 @@ struct HirBinary {
 struct HirUnary {
     HirUnaryOp op;
     HirExprId operand;
+    HirTypeId type;
     HirExprKind tag = HirExprKind::Unary;
 };
 struct HirLet {

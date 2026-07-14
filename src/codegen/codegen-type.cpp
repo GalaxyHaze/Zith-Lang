@@ -61,7 +61,7 @@ llvm::Type *CodeGenType::lower(types::TypeId id) {
                     return llvm::Type::getDoubleTy(ctx_);
                 }
             } else if constexpr (std::is_same_v<T, types::TypePtr>) {
-                return llvm::PointerType::getUnqual(ctx_);
+                return llvm::PointerType::get(ctx_, 0);
             } else if constexpr (std::is_same_v<T, types::TypeArray>) {
                 auto *elem = lower(t.elem);
                 return llvm::ArrayType::get(elem, t.count);
@@ -76,12 +76,12 @@ llvm::Type *CodeGenType::lower(types::TypeId id) {
             } else if constexpr (std::is_same_v<T, types::TypeStruct> ||
                                  std::is_same_v<T, types::TypeEnum> ||
                                  std::is_same_v<T, types::TypeUnion>) {
-                return llvm::PointerType::getUnqual(ctx_);
+                return llvm::PointerType::get(ctx_, 0);
             } else if constexpr (std::is_same_v<T, types::TypeOptional> ||
                                  std::is_same_v<T, types::TypeFailable>) {
-                return llvm::PointerType::getUnqual(ctx_);
+                return llvm::PointerType::get(ctx_, 0);
             } else {
-                return llvm::PointerType::getUnqual(ctx_);
+                return llvm::PointerType::get(ctx_, 0);
             }
         },
         data);
@@ -89,10 +89,8 @@ llvm::Type *CodeGenType::lower(types::TypeId id) {
 
 llvm::Type *CodeGenType::lowerPtr(types::TypeId pointee, bool is_mut) {
     (void)is_mut;
-    auto *inner = lower(pointee);
-    if (inner->isVoidTy())
-        return llvm::PointerType::getUnqual(ctx_);
-    return llvm::PointerType::getUnqual(inner);
+    (void)pointee;
+    return llvm::PointerType::get(ctx_, 0);
 }
 
 } // namespace zith::codegen

@@ -221,7 +221,6 @@ void HirLower::ensureBodyLowered(symbols::SymId fn_sym) {
     current_fn_            = &hfn;
     current_fn_ret_type_   = hfn.return_type;
     auto scope             = ctx_.syms().enterScope();
-    ctx_.syms().emplace(*source_syms, scope);
     for (const auto &param : fn->params)
         ctx_.syms().declareInScope(scope, param.name);
     hfn.blocks.emplace(hir_arena_);
@@ -399,7 +398,7 @@ hir::HirExprId HirLower::visitBinary(ast::ExprId id, const ast::BinaryNode &n) {
     return addHirExpr(hir::HirExpr{bin});
 }
 
-hir::HirExprId HirLower::visitUnary(ast::ExprId, const ast::UnaryNode &n) {
+hir::HirExprId HirLower::visitUnary(ast::ExprId id, const ast::UnaryNode &n) {
     auto operand = visitExpr(n.operand);
     if (operand == hir::kInvalidHirExpr)
         return hir::kInvalidHirExpr;
@@ -407,6 +406,7 @@ hir::HirExprId HirLower::visitUnary(ast::ExprId, const ast::UnaryNode &n) {
     hir::HirUnary un;
     un.op      = mapUnaryOp(n.op);
     un.operand = operand;
+    un.type    = astExprType(id);
     return addHirExpr(hir::HirExpr{un});
 }
 

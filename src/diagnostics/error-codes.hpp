@@ -36,6 +36,7 @@ inline constexpr ErrCode const NotNamespace   = 2005;
 inline constexpr ErrCode const NoMember       = 2006;
 inline constexpr ErrCode const NoMatchingFn   = 2007;
 inline constexpr ErrCode const AmbiguousCall  = 2008;
+inline constexpr ErrCode const NotImplemented = 2009;
 
 // Types (3001-3999)
 inline constexpr ErrCode const TypeMismatch = 3001;

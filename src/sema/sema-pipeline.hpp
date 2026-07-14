@@ -47,6 +47,7 @@ class SemaPipeline {
     bool concretizeLiteralExpr(ast::ExprId id, types::TypeId concrete_type, memory::Span span);
     ast::ExprId implicitReturnExpr(ast::ExprId body_id) const;
     void ensureBodyChecked(symbols::SymId fn_sym);
+    void warnNotImplemented(std::string_view feature, memory::Span span);
 
     types::TypeId visitExpr(ast::ExprId id);
     types::TypeId visitLiteral(ast::ExprId id, const ast::LitValue &n);

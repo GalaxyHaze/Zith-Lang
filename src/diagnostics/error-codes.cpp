@@ -77,6 +77,9 @@ memory::Optional<ErrorInfo> lookupError(ErrCode code) noexcept {
         return ErrorInfo{
             code, 'E', "semantic", "Ambiguous call",
             "Multiple functions match the provided arguments. Add explicit type annotations"};
+    case err::NotImplemented:
+        return ErrorInfo{code, 'W', "semantic", "Feature not implemented",
+                         "This language feature is parsed, but the compiler does not implement it yet"};
 
     // Types
     case err::TypeMismatch:

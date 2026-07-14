@@ -20,9 +20,18 @@ struct SemaTest {
     struct Result {
         bool ok;
         size_t errorCount;
+        size_t warningCount;
         bool hasErrorCode(diagnostics::ErrCode code) const {
             for (const auto &d : diags.all()) {
                 if (d.severity == diagnostics::Severity::Error && d.code == code) {
+                    return true;
+                }
+            }
+            return false;
+        }
+        bool hasWarningCode(diagnostics::ErrCode code) const {
+            for (const auto &d : diags.all()) {
+                if (d.severity == diagnostics::Severity::Warning && d.code == code) {
                     return true;
                 }
             }
@@ -37,13 +46,17 @@ struct SemaTest {
         session.setContent(std::string(input));
         bool ok     = session.runTo(target);
         size_t errs = 0;
+        size_t warns = 0;
         for (const auto &d : session.diags().all()) {
             if (d.severity == diagnostics::Severity::Error) {
                 errs++;
                 std::printf("    [Diag] Code: %u, Message: %s\n", d.code, d.message.c_str());
+            } else if (d.severity == diagnostics::Severity::Warning) {
+                warns++;
+                std::printf("    [Warn] Code: %u, Message: %s\n", d.code, d.message.c_str());
             }
         }
-        return {ok && errs == 0, errs, session.diags()};
+        return {ok && errs == 0, errs, warns, session.diags()};
     }
 };
 
@@ -204,6 +217,38 @@ static void test_unary_op_ok() {
     CHECK(r.ok, "Unary negation compiles");
 }
 
+static void test_index_not_implemented_warning() {
+    SemaTest t;
+    auto r = t.run("fn main() {\n"
+                   "    var x: i32 = 0;\n"
+                   "    x[0];\n"
+                   "}\n");
+    CHECK(r.ok, "Index access currently warns instead of failing");
+    CHECK_EQ(r.warningCount, 1u, "Exactly one warning for index access");
+    CHECK(r.hasWarningCode(diagnostics::err::NotImplemented), "Reports NotImplemented warning");
+}
+
+static void test_field_not_implemented_warning() {
+    SemaTest t;
+    auto r = t.run("fn main() {\n"
+                   "    var x: i32 = 0;\n"
+                   "    x.value;\n"
+                   "}\n");
+    CHECK(r.ok, "Field access currently warns instead of failing");
+    CHECK_EQ(r.warningCount, 1u, "Exactly one warning for field access");
+    CHECK(r.hasWarningCode(diagnostics::err::NotImplemented), "Reports NotImplemented warning");
+}
+
+static void test_macro_not_implemented_warning() {
+    SemaTest t;
+    auto r = t.run("fn main() {\n"
+                   "    @foo();\n"
+                   "}\n");
+    CHECK(r.ok, "Macro calls currently warn instead of failing");
+    CHECK_EQ(r.warningCount, 1u, "Exactly one warning for macro call");
+    CHECK(r.hasWarningCode(diagnostics::err::NotImplemented), "Reports NotImplemented warning");
+}
+
 static void test_sema() {
     test_basic_unification();
     test_type_mismatch();
@@ -220,6 +265,9 @@ static void test_sema() {
     test_binary_op_type_error();
     test_while_loop_ok();
     test_unary_op_ok();
+    test_index_not_implemented_warning();
+    test_field_not_implemented_warning();
+    test_macro_not_implemented_warning();
 }
 
 TEST_MAIN(sema)

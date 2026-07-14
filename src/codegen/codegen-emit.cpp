@@ -75,11 +75,14 @@ void CodeGenEmit::registerParams(const hir::HirFunction &fn, llvm::Function *llv
     if (!fnDecl)
         return;
 
-    auto *argIt = llvmFn->arg_begin();
+    auto argIt = llvmFn->arg_begin();
     for (size_t i = 0; i < fnDecl->params.size() && argIt != llvmFn->arg_end(); i++, ++argIt) {
         auto paramName = fnDecl->params[i].name;
         argIt->setName(llvm::StringRef(paramName.data(), paramName.size()));
-        namedValues_[paramName] = {argIt, argIt->getType(), false};
+        auto *slot = builder_.CreateAlloca(argIt->getType(), nullptr,
+                                           llvm::StringRef(paramName.data(), paramName.size()));
+        builder_.CreateStore(&*argIt, slot);
+        namedValues_[paramName] = {slot, argIt->getType(), true};
     }
 }
 
@@ -115,14 +118,16 @@ llvm::Value *CodeGenEmit::emitLiteral(const hir::HirLiteral &lit) {
             break;
         }
         bool is_signed = int_t.width >= types::IntWidth::I8 && int_t.width <= types::IntWidth::I128;
-        return llvm::ConstantInt::get(builder_.getContext(), llvm::APInt(bits, lit.i, is_signed));
+        return llvm::ConstantInt::get(builder_.getContext(),
+                                      llvm::APInt(bits, static_cast<uint64_t>(lit.i), is_signed));
     }
     case types::TypeKind::Bool:
         return llvm::ConstantInt::get(builder_.getContext(), llvm::APInt(1, lit.b ? 1 : 0));
     case types::TypeKind::Float:
         return llvm::ConstantFP::get(builder_.getContext(), llvm::APFloat(lit.f));
     case types::TypeKind::Char:
-        return llvm::ConstantInt::get(llvm::Type::getInt8Ty(builder_.getContext()), lit.i, true);
+        return llvm::ConstantInt::get(llvm::Type::getInt8Ty(builder_.getContext()),
+                                      static_cast<uint64_t>(lit.i), true);
     case types::TypeKind::Ptr: {
         auto str_data = interner_.lookup(lit.str_val);
         auto *str     = llvm::ConstantDataArray::getString(
@@ -186,14 +191,25 @@ llvm::Value *CodeGenEmit::emitUnary(const hir::HirUnary &un, const hir::HirModul
 
     switch (un.op) {
     case hir::HirUnaryOp::Neg:
-        return builder_.CreateNeg(operand);
+        return operand->getType()->isFloatingPointTy() ? builder_.CreateFNeg(operand)
+                                                       : builder_.CreateNeg(operand);
     case hir::HirUnaryOp::Not:
         return builder_.CreateNot(operand);
     case hir::HirUnaryOp::BitNot:
         return builder_.CreateNot(operand);
-    case hir::HirUnaryOp::Ref:
+    case hir::HirUnaryOp::Ref: {
+        auto &operandExpr = mod.getExpr(un.operand);
+        if (hir::exprKind(operandExpr) == hir::HirExprKind::Var)
+            return emitVarAddr(std::get<hir::HirVar>(operandExpr));
+        if (hir::exprKind(operandExpr) == hir::HirExprKind::Unary) {
+            auto &inner = std::get<hir::HirUnary>(operandExpr);
+            if (inner.op == hir::HirUnaryOp::Deref)
+                return emitExpr(inner.operand, mod);
+        }
+        return nullptr;
+    }
     case hir::HirUnaryOp::Deref:
-        return operand;
+        return builder_.CreateLoad(typeGen_.lower(un.type), operand);
     }
     return nullptr;
 }
@@ -257,6 +273,14 @@ llvm::Value *CodeGenEmit::emitVar(const hir::HirVar &var) {
             return builder_.CreateLoad(nv->elementType, nv->value);
         return nv->value;
     }
+    return nullptr;
+}
+
+llvm::Value *CodeGenEmit::emitVarAddr(const hir::HirVar &var) {
+    auto name = interner_.lookup(var.name);
+    auto *nv  = namedValues_.get(name);
+    if (nv)
+        return nv->value;
     return nullptr;
 }
 
