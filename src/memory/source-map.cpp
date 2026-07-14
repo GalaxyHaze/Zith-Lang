@@ -60,6 +60,7 @@ bool SourceMap::isValid(FileId id) const noexcept {
 }
 
 auto SourceMap::loadFile(const std::string_view path, const bool write) -> Result<FileId> {
+    (void)path;
     (void)write;
 #ifdef ZITH_IS_WASM
     return Error{"loadFile not available in WASM; use addFile instead"};

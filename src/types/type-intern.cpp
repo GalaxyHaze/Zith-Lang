@@ -144,14 +144,14 @@ TypeIntern::TypeIntern(memory::Arena &arena, memory::StringInterner &interner)
 
 namespace {
 
-size_t hashCombine(size_t h, size_t v) {
+uint64_t hashCombine(uint64_t h, uint64_t v) {
     return (h ^ v) * 1099511628211ULL;
 }
 
 } // anonymous namespace
 
 size_t TypeIntern::computeHash(const TypeData &data) {
-    size_t h = 14695981039346656037ULL; // FNV offset basis
+    uint64_t h = 14695981039346656037ULL; // FNV offset basis
     h        = hashCombine(h, static_cast<size_t>(data.index()));
 
     switch (static_cast<TypeKind>(data.index())) {
@@ -238,7 +238,7 @@ size_t TypeIntern::computeHash(const TypeData &data) {
     default:
         break; // Error, Never, Void, Bool, Char, Opaque, Unknown — no fields
     }
-    return h;
+    return static_cast<size_t>(h);
 }
 
 TypeId TypeIntern::intern(TypeData data) {
