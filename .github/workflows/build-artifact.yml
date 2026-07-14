@@ -265,8 +265,10 @@ jobs:
             -DBUILD_TESTING=OFF \
             -DENABLE_WERROR=OFF \
             -DZITH_VERSION='${{ needs.create-release.outputs.tag || inputs.tag_name }}' \
-            -DCMAKE_C_COMPILER="zig;cc;-target;${{ matrix.zig_target }}" \
-            -DCMAKE_CXX_COMPILER="zig;c++;-target;${{ matrix.zig_target }}" \
+            -DCMAKE_C_COMPILER="zig;cc" \
+            -DCMAKE_CXX_COMPILER="zig;c++" \
+            -DCMAKE_C_COMPILER_TARGET="${{ matrix.zig_target }}" \
+            -DCMAKE_CXX_COMPILER_TARGET="${{ matrix.zig_target }}" \
             -DZITH_ENABLE_FFI=OFF \
             -DZITH_HAS_LLVM=OFF \
             -DCMAKE_EXE_LINKER_FLAGS='-static -lc' \

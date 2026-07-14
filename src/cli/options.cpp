@@ -566,6 +566,9 @@ void Cli::loadFlags() {
 }
 
 void Cli::loadProject() {
+#ifdef ZITH_IS_WASM
+    return;
+#else
     namespace fs = std::filesystem;
 
     fs::path search = fs::current_path();
@@ -664,6 +667,7 @@ void Cli::loadProject() {
             break;
         search = search.parent_path();
     }
+#endif
 }
 
 int Cli::dispatch() {

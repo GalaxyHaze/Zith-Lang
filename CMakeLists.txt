@@ -58,6 +58,10 @@ if(ZITH_IS_WASM)
     target_compile_definitions(zithcLib PRIVATE TOML_EXCEPTIONS=0)
 endif()
 
+if(CMAKE_CXX_FLAGS MATCHES "-fno-exceptions" OR CMAKE_CXX_FLAGS MATCHES "-fno-cxx-exceptions")
+    target_compile_definitions(zithcLib PRIVATE TOML_EXCEPTIONS=0)
+endif()
+
 target_link_libraries(zithcLib PUBLIC
     zith-core
     tomlplusplus::tomlplusplus
