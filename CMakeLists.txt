@@ -9,6 +9,15 @@ option(ZITH_BUILD_CAPI "Build the C ABI library" ON)
 option(ZITH_IS_WASM "Build for WebAssembly target" OFF)
 option(ZITH_HAS_LLVM "Enable LLVM codegen backend" ON)
 
+if(ZITH_HAS_LLVM AND NOT ZITH_IS_WASM)
+    find_package(ZLIB QUIET)
+    find_package(LLVM 18 QUIET CONFIG)
+    if(NOT LLVM_FOUND)
+        message(WARNING "LLVM 18+ not found — disabling codegen backend")
+        set(ZITH_HAS_LLVM OFF)
+    endif()
+endif()
+
 set(ZITH_VERSION "v0.0.1" CACHE STRING "Project version")
 
 include(GNUInstallDirs)
@@ -61,23 +70,11 @@ if(NOT ZITH_IS_WASM)
 endif()
 
 if(ZITH_HAS_LLVM AND NOT ZITH_IS_WASM)
-    find_package(ZLIB QUIET)
-    find_package(LLVM QUIET CONFIG)
-    if(LLVM_FOUND)
-        message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
-        message(STATUS "Using LLVMConfig.cmake in: ${LLVM_DIR}")
-
         llvm_map_components_to_libnames(LLVM_LIBS core support irreader passes target X86CodeGen X86AsmParser X86Desc X86Info MC MCDisassembler MCParser AsmPrinter SelectionDAG GlobalISel)
-
         target_link_libraries(zithcLib PUBLIC ${LLVM_LIBS})
         target_include_directories(zithcLib SYSTEM PUBLIC ${LLVM_INCLUDE_DIRS})
         target_compile_definitions(zithcLib PUBLIC ZITH_HAS_LLVM=1)
-    else()
-        message(WARNING "LLVM not found — disabling codegen backend")
-        set(ZITH_HAS_LLVM OFF CACHE BOOL "" FORCE)
     endif()
-endif()
-
 target_compile_definitions(zithcLib PUBLIC ZITH_VERSION="${ZITH_VERSION}")
 
 if(ZITH_BUILD_CLI AND NOT ZITH_IS_WASM)
@@ -136,6 +133,7 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
         -Werror
         -Weverything
         -Wno-unknown-warning-option
+        -Wno-disabled-macro-expansion
         -Wno-switch-enum
         -Wno-c++98-compat
         -Wno-switch-default

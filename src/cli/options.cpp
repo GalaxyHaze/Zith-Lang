@@ -121,7 +121,13 @@ static void suggestCommand(const char *arg, term::UsagePrinter & /*err*/) {
         }
     }
     if (best && best_dist <= (std::max(std::strlen(arg), std::strlen(best)) + 1) / 2) {
-        bool color = isatty(fileno(stderr));
+        #ifdef ZITH_IS_WASM
+        bool color = false;
+#elif defined(_WIN32)
+        bool color = _isatty(_fileno(stderr)) != 0;
+#else
+        bool color = isatty(fileno(stderr)) != 0;
+#endif
         std::fprintf(stderr, "%s[error]%s unknown command '%s'\n", color ? "\033[31m" : "",
                      color ? "\033[0m" : "", arg);
         std::fprintf(stderr, "%s  help: did you mean '%s'?%s\n", color ? "\033[31m" : "", best,
