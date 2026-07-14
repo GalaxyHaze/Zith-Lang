@@ -466,9 +466,10 @@ void print_decl(DeclId id, const AstBuilder &bld, FILE *out, int depth) {
             },
             [&](const StructDeclNode &n) {
                 std::fprintf(out, "Struct(%.*s)\n", (int)n.name.size(), n.name.data());
-                for (auto &gp : n.generic_params)
-                    print_indent(out, depth + 1),
-                        std::fprintf(out, "generic %.*s\n", (int)gp.name.size(), gp.name.data());
+                for (auto &gp : n.generic_params) {
+                    print_indent(out, depth + 1);
+                    std::fprintf(out, "generic %.*s\n", (int)gp.name.size(), gp.name.data());
+                }
                 if (n.extends_parent != kInvalidTypeExpr) {
                     print_indent(out, depth + 1);
                     std::fprintf(out, "extends\n");
@@ -538,9 +539,10 @@ void print_decl(DeclId id, const AstBuilder &bld, FILE *out, int depth) {
             },
             [&](const EnumDeclNode &n) {
                 std::fprintf(out, "Enum(%.*s)\n", (int)n.name.size(), n.name.data());
-                for (auto &gp : n.generic_params)
-                    print_indent(out, depth + 1),
-                        std::fprintf(out, "generic %.*s\n", (int)gp.name.size(), gp.name.data());
+                for (auto &gp : n.generic_params) {
+                    print_indent(out, depth + 1);
+                    std::fprintf(out, "generic %.*s\n", (int)gp.name.size(), gp.name.data());
+                }
                 for (auto &v : n.variants) {
                     print_indent(out, depth + 1);
                     std::fprintf(out, "variant %.*s\n", (int)v.name.size(), v.name.data());
@@ -548,9 +550,10 @@ void print_decl(DeclId id, const AstBuilder &bld, FILE *out, int depth) {
             },
             [&](const UnionDeclNode &n) {
                 std::fprintf(out, "Union(%.*s)\n", (int)n.name.size(), n.name.data());
-                for (auto &gp : n.generic_params)
-                    print_indent(out, depth + 1),
-                        std::fprintf(out, "generic %.*s\n", (int)gp.name.size(), gp.name.data());
+                for (auto &gp : n.generic_params) {
+                    print_indent(out, depth + 1);
+                    std::fprintf(out, "generic %.*s\n", (int)gp.name.size(), gp.name.data());
+                }
                 for (auto &v : n.variants) {
                     print_indent(out, depth + 1);
                     std::fprintf(out, "variant %.*s\n", (int)v.name.size(), v.name.data());
@@ -558,15 +561,17 @@ void print_decl(DeclId id, const AstBuilder &bld, FILE *out, int depth) {
             },
             [&](const ComponentDeclNode &n) {
                 std::fprintf(out, "Component(%.*s)\n", (int)n.name.size(), n.name.data());
-                for (auto &gp : n.generic_params)
-                    print_indent(out, depth + 1),
-                        std::fprintf(out, "generic %.*s\n", (int)gp.name.size(), gp.name.data());
+                for (auto &gp : n.generic_params) {
+                    print_indent(out, depth + 1);
+                    std::fprintf(out, "generic %.*s\n", (int)gp.name.size(), gp.name.data());
+                }
             },
             [&](const TraitDeclNode &n) {
                 std::fprintf(out, "Trait(%.*s)\n", (int)n.name.size(), n.name.data());
-                for (auto &gp : n.generic_params)
-                    print_indent(out, depth + 1),
-                        std::fprintf(out, "generic %.*s\n", (int)gp.name.size(), gp.name.data());
+                for (auto &gp : n.generic_params) {
+                    print_indent(out, depth + 1);
+                    std::fprintf(out, "generic %.*s\n", (int)gp.name.size(), gp.name.data());
+                }
                 for (auto &m : n.methods) {
                     print_indent(out, depth + 1);
                     std::fprintf(out, "method %.*s\n", (int)m.name.size(), m.name.data());
@@ -574,9 +579,10 @@ void print_decl(DeclId id, const AstBuilder &bld, FILE *out, int depth) {
             },
             [&](const InterfaceDeclNode &n) {
                 std::fprintf(out, "Interface(%.*s)\n", (int)n.name.size(), n.name.data());
-                for (auto &gp : n.generic_params)
-                    print_indent(out, depth + 1),
-                        std::fprintf(out, "generic %.*s\n", (int)gp.name.size(), gp.name.data());
+                for (auto &gp : n.generic_params) {
+                    print_indent(out, depth + 1);
+                    std::fprintf(out, "generic %.*s\n", (int)gp.name.size(), gp.name.data());
+                }
                 for (auto &m : n.methods) {
                     print_indent(out, depth + 1);
                     std::fprintf(out, "method %.*s\n", (int)m.name.size(), m.name.data());
@@ -619,9 +625,10 @@ void print_decl(DeclId id, const AstBuilder &bld, FILE *out, int depth) {
                     print_type_expr(n.target_type, bld, out);
                 }
                 std::fprintf(out, ")\n");
-                for (auto &gp : n.generic_params)
-                    print_indent(out, depth + 1),
-                        std::fprintf(out, "generic %.*s\n", (int)gp.name.size(), gp.name.data());
+                for (auto &gp : n.generic_params) {
+                    print_indent(out, depth + 1);
+                    std::fprintf(out, "generic %.*s\n", (int)gp.name.size(), gp.name.data());
+                }
             },
             [&](const GlobalDeclNode &n) {
                 std::fprintf(out, "%s %.*s", n.is_const ? "Const" : "Global", (int)n.name.size(),

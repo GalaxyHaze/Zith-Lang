@@ -477,7 +477,7 @@ void Cli::loadFlags() {
         return;
 #endif
 
-    auto process = [&](const toml::table &tbl) {
+    auto process [[maybe_unused]] = [&](const toml::table &tbl) {
         if (auto v = tbl["mode"].value<std::string>()) {
             if (*v == "debug")
                 opts.flags.mode(Options::Mode::Debug);
