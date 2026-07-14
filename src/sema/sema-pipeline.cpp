@@ -69,13 +69,19 @@ const char *checkIntOverflow(int64_t value, types::IntWidth target) {
     if (bits == 0)
         return nullptr;
     if (isSignedWidth(target)) {
-        int64_t min = -(1LL << (bits - 1));
-        int64_t max = (1LL << (bits - 1)) - 1;
+        if (bits >= 64)
+            return nullptr;
+        int64_t min = -(INT64_C(1) << (bits - 1));
+        int64_t max = (INT64_C(1) << (bits - 1)) - 1;
         if (value < min || value > max)
             return "value does not fit in the target integer type";
     } else {
+        if (value < 0)
+            return "value does not fit in the target unsigned integer type";
+        if (bits >= 64)
+            return nullptr;
         uint64_t max = (bits >= 64) ? ~0ULL : (1ULL << bits) - 1;
-        if (value < 0 || static_cast<uint64_t>(value) > max)
+        if (static_cast<uint64_t>(value) > max)
             return "value does not fit in the target unsigned integer type";
     }
     return nullptr;
