@@ -28,23 +28,15 @@
                 <h1 id="playground-title">Zith Playground</h1>
                 <p>Write a program, inspect the compiler build, and run it here when the published WebAssembly runtime exposes its browser interface.</p>
             </div>
-            <div class="release-card" aria-live="polite">
-                <span class="release-label">Compiler release</span>
-                <strong id="release-version">Connecting...</strong>
-                <span id="release-detail">Looking for the latest WASM build.</span>
-            </div>
+            
         </section>
 
         <section class="workspace" aria-label="Zith editor workspace">
-            <div class="workspace-top">
+            
                 <article class="panel editor-panel">
                     <div class="panel-titlebar">
                         <span class="title-with-dot">main.zith</span>
-                        <div class="buttons">
-                            <button aria-hidden="true">-</button>
-                            <button aria-hidden="true">[]</button>
-                            <button aria-hidden="true">x</button>
-                        </div>
+                        
                     </div>
                     <div class="editor-wrap">
                         <pre id="line-numbers" aria-hidden="true">1</pre>
@@ -54,40 +46,23 @@
                     </div>
                     <div class="editor-footer">
                         <span id="cursor-position">Ln 1, Col 1</span>
-                        <span>UTF-8 &nbsp; zith</span>
+                        <span><span id="runtime-status-compact">Compiler: Connecting...</span> &nbsp;|&nbsp; UTF-8 &nbsp; zith</span>
                     </div>
                 </article>
 
-                <aside class="side-stack">
-                    <article class="panel runtime-panel">
-                        <div class="panel-titlebar">
-                            <span class="title-with-dot">Runtime Info</span>
-                        </div>
-                        <div class="runtime-list">
-                            <div><span>Status</span><span id="runtime-status">Checking release</span></div>
-                            <div><span>Asset</span><span id="runtime-asset">-</span></div>
-                            <div><span>Module</span><span id="runtime-module">-</span></div>
-                        </div>
-                    </article>
-                    
-                    
                 
-                    <section class="actions" aria-label="Playground actions" style="display:flex; flex-direction:column; gap:12px; margin-top:0;">
-                        <button id="run-code" class="button button-primary" type="button" disabled>Run program</button>
-                        <button id="reset-code" class="button button-secondary" type="button">Reset example</button>
-                        <button id="copy-link" class="button button-secondary" type="button">Copy link</button>
-                        <a id="release-link" class="release-link" href="https://github.com/GalaxyHaze/Zith-Lang/releases/latest" target="_blank" rel="noopener noreferrer">View release -&gt;</a>
-                    </section>
-                </aside>
-            </div>
 
             <article class="panel output-panel">
                 <div class="panel-titlebar">
                     <span class="title-with-dot">Terminal Output</span>
-                    <button id="clear-output" class="icon-button" type="button" aria-label="Clear output">clear</button>
+                    </div>
+                <div class="terminal-container" id="terminal-container" aria-live="polite">
+                    <pre id="output" class="terminal-history"></pre>
+                    <div class="terminal-input-line">
+                        <span class="terminal-prompt">&gt;</span>
+                        <input type="text" id="terminal-input" autocomplete="off" spellcheck="false" aria-label="Terminal input" autofocus>
+                    </div>
                 </div>
-                <pre id="output" class="terminal" aria-live="polite"><span class="terminal-dim">$</span> zith playground
-<span class="terminal-dim">Waiting for the WebAssembly compiler...</span></pre>
             </article>
         </section>
 

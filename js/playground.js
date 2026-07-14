@@ -7,13 +7,13 @@ const editor = document.getElementById("source-code");
 const lineNumbers = document.getElementById("line-numbers");
 const cursorPosition = document.getElementById("cursor-position");
 const output = document.getElementById("output");
-const runButton = document.getElementById("run-code");
-const releaseVersion = document.getElementById("release-version");
-const releaseDetail = document.getElementById("release-detail");
-const releaseLink = document.getElementById("release-link");
-const runtimeStatus = document.getElementById("runtime-status");
-const runtimeAsset = document.getElementById("runtime-asset");
-const runtimeModule = document.getElementById("runtime-module");
+
+
+
+
+const runtimeStatusCompact = document.getElementById("runtime-status-compact");
+
+
 let runtime = null;
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
@@ -25,6 +25,7 @@ function escapeHtml(value) {
 function writeOutput(message, className = "") {
     const prefix = output.textContent.trim() ? "\n" : "";
     output.insertAdjacentHTML("beforeend", `${prefix}<span class="${className}">${escapeHtml(message)}</span>`);
+    document.getElementById("terminal-container").scrollTop = document.getElementById("terminal-container").scrollHeight;
     output.scrollTop = output.scrollHeight;
 }
 
@@ -135,32 +136,32 @@ function getWasmAsset(release) {
 
 async function loadRuntime() {
     try {
-        releaseVersion.textContent = "Local build";
-        releaseDetail.textContent = "Loading ./zith-playground.wasm...";
-        releaseLink.href = LOCAL_WASM_URL;
-        releaseLink.textContent = "Open local module";
-        runtimeAsset.textContent = "zith-playground.wasm";
+        
+        
+        
+        
+        
         writeOutput("Fetching local WebAssembly build...", "terminal-dim");
 
         const response = await fetch(LOCAL_WASM_URL);
         if (!response.ok) throw new Error(`Local module returned ${response.status}.`);
         const module = await WebAssembly.compile(await response.arrayBuffer());
         const exports = WebAssembly.Module.exports(module).map(entry => entry.name);
-        const requiredExports = ["memory", "zith_alloc", "zith_free", "zith_last_error_ptr", "zith_last_error_len", "zith_run_source"];
+        const requiredExports = ["memory", "zith_alloc", "zith_free", "zith_compile_source"];
         const missingExports = requiredExports.filter(name => !exports.includes(name));
         const nativeImports = WebAssembly.Module.imports(module).filter(entry => entry.module !== "zith");
-        runtimeModule.textContent = exports.join(", ");
+        
 
         if (missingExports.length) {
-            runtimeStatus.textContent = "ABI incomplete";
-            releaseDetail.textContent = `Missing exports: ${missingExports.join(", ")}.`;
+            runtimeStatusCompact.textContent = "Compiler: ABI Incomplete";
+            
             writeOutput(`The local build is missing: ${missingExports.join(", ")}.`, "terminal-error");
             return;
         }
 
         if (nativeImports.length) {
-            runtimeStatus.textContent = "Native runtime missing";
-            releaseDetail.textContent = `${nativeImports.length} C/C++ imports still need to be linked into the module.`;
+            runtimeStatusCompact.textContent = "Compiler: Native missing";
+            
             writeOutput(`The local build has ${nativeImports.length} unresolved native imports (first: ${nativeImports[0].module}.${nativeImports[0].name}).`, "terminal-warn");
             writeOutput("Link libc++, libc++abi, libc and compiler dependencies into the WASM binary before browser execution.", "terminal-dim");
             return;
@@ -174,15 +175,15 @@ async function loadRuntime() {
         };
         instance = await WebAssembly.instantiate(module, { zith: { host_write: hostWrite } });
         runtime = instance.exports;
-        runtimeStatus.textContent = "Ready";
-        releaseDetail.textContent = "Local browser runtime is ready.";
-        runButton.disabled = false;
+        runtimeStatusCompact.textContent = "Compiler: Ready (local)";
+        
+        
         writeOutput("Local browser runtime loaded.", "terminal-ok");
     } catch (error) {
         const message = error instanceof Error ? error.message : "Unknown loading error.";
-        releaseVersion.textContent = "Unavailable";
-        releaseDetail.textContent = "The local WASM build could not be loaded.";
-        runtimeStatus.textContent = "Load failed";
+        
+        
+        runtimeStatusCompact.textContent = "Compiler: Load Failed";
         writeOutput(`Could not load the local WASM build: ${message}`, "terminal-error");
     }
 }
@@ -191,48 +192,129 @@ editor.addEventListener("input", updateEditorMeta);
 editor.addEventListener("click", updateEditorMeta);
 editor.addEventListener("keyup", updateEditorMeta);
 editor.addEventListener("scroll", () => { lineNumbers.scrollTop = editor.scrollTop; });
-document.getElementById("clear-output").addEventListener("click", () => { output.textContent = ""; });
-document.getElementById("reset-code").addEventListener("click", () => { editor.value = DEFAULT_SOURCE; editor.focus(); updateEditorMeta(); });
-document.getElementById("copy-link").addEventListener("click", async () => {
-    const link = new URL(window.location.href);
-    link.hash = "code=" + encodeURIComponent(btoa(unescape(encodeURIComponent(editor.value))));
-    try { await navigator.clipboard.writeText(link.href); writeOutput("Share link copied to clipboard.", "terminal-ok"); }
-    catch (_) { writeOutput("Could not access the clipboard. Copy the page URL instead.", "terminal-warn"); }
+
+
+
+
+
+
+const terminalInput = document.getElementById("terminal-input");
+const commandHistory = [];
+let historyIndex = -1;
+
+terminalInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+        const cmd = terminalInput.value.trim();
+        terminalInput.value = "";
+        if (cmd) {
+            commandHistory.push(cmd);
+            historyIndex = commandHistory.length;
+            executeCommand(cmd);
+        }
+    } else if (e.key === "ArrowUp") {
+        if (historyIndex > 0) {
+            historyIndex--;
+            terminalInput.value = commandHistory[historyIndex];
+        }
+        e.preventDefault();
+    } else if (e.key === "ArrowDown") {
+        if (historyIndex < commandHistory.length - 1) {
+            historyIndex++;
+            terminalInput.value = commandHistory[historyIndex];
+        } else {
+            historyIndex = commandHistory.length;
+            terminalInput.value = "";
+        }
+        e.preventDefault();
+    }
 });
-runButton.addEventListener("click", () => {
-    if (!runtime) return;
+
+function executeCommand(cmd) {
+    writeOutput(`> ${cmd}`, "terminal-dim");
+    
+    if (cmd === "clear") {
+        output.textContent = "";
+        return;
+    }
+    
+    if (cmd === "help") {
+        writeOutput(`Available commands:
+  zithc run [--opt-level <0|1|2|3>] [--emit <tokens|ast|hir|ir|asm|all>]
+  zithc check [--opt-level <0|1|2|3>] [--emit <tokens|ast|hir|ir|asm|all>]
+  clear
+  help`, "terminal-ok");
+        return;
+    }
+
+    if (cmd.startsWith("zithc run") || cmd.startsWith("zithc check")) {
+        if (!runtime) {
+            writeOutput("Compiler not loaded.", "terminal-error");
+            return;
+        }
+        if (!runtime.zith_compile_source) {
+            writeOutput("Compiler ABI incompatible (missing zith_compile_source).", "terminal-error");
+            return;
+        }
+        
+        const mode = cmd.startsWith("zithc run") ? 1 : 0;
+        let optLevel = 0;
+        let emitMask = 0;
+        
+        const args = cmd.split(/\s+/);
+        for (let i = 2; i < args.length; i++) {
+            if (args[i] === "--opt-level" && i + 1 < args.length) {
+                optLevel = parseInt(args[i + 1], 10);
+                i++;
+            } else if (args[i] === "--emit" && i + 1 < args.length) {
+                const emits = args[i + 1].split(",");
+                for (const e of emits) {
+                    if (e === "tokens") emitMask |= 1;
+                    else if (e === "ast") emitMask |= 2;
+                    else if (e === "hir") emitMask |= 4;
+                    else if (e === "ir") emitMask |= 8;
+                    else if (e === "asm") emitMask |= 16;
+                    else if (e === "all") emitMask |= 31;
+                }
+                i++;
+            }
+        }
+        
+        runCompiler(mode, optLevel, emitMask);
+        return;
+    }
+    
+    writeOutput(`zithc: command not found: ${cmd.split(" ")[0]}`, "terminal-error");
+}
+
+function runCompiler(mode, optLevel, emitMask) {
     let pointer = 0;
     try {
-        const source = encoder.encode(editor.value);
+        const sourceText = editor.value;
+        const source = encoder.encode(sourceText);
         pointer = runtime.zith_alloc(source.length);
         if (!pointer) throw new Error("The WASM allocator returned a null pointer.");
         new Uint8Array(runtime.memory.buffer, pointer, source.length).set(source);
-        const result = runtime.zith_run_source(pointer, source.length);
+        
+        const result = runtime.zith_compile_source(pointer, source.length, mode, optLevel, emitMask);
         
         if (result === 0) {
-            writeOutput(`
-Program finished successfully. (Status: ${result})`, "terminal-ok");
-            return;
+            writeOutput(`Program finished successfully.`, "terminal-ok");
+        } else {
+            writeOutput(`Program finished with error. (Status: ${result})`, "terminal-error");
         }
-
-        const errorPointer = runtime.zith_last_error_ptr();
-        const errorLength = runtime.zith_last_error_len();
-        const errorText = errorLength > 0
-            ? decoder.decode(new Uint8Array(runtime.memory.buffer, errorPointer, errorLength))
-            : `Zith returned status ${result}.`;
-            
-        writeOutput(errorText, "terminal-error");
-        writeOutput(`
-Program finished with error. (Status: ${result})`, "terminal-error");
     } catch (error) {
         const message = error instanceof Error ? error.message : "Unknown runtime error.";
         writeOutput(`Execution failed: ${message}`, "terminal-error");
     } finally {
         if (pointer) runtime.zith_free(pointer, encoder.encode(editor.value).length);
     }
-});
+}
 
 const savedCode = new URLSearchParams(window.location.hash.slice(1)).get("code");
 if (savedCode) { try { editor.value = decodeURIComponent(escape(atob(savedCode))); } catch (_) { /* Ignore malformed share links. */ } }
 updateEditorMeta();
 loadRuntime();
+
+document.getElementById("terminal-container").addEventListener("click", () => {
+    document.getElementById("terminal-input").focus();
+});
