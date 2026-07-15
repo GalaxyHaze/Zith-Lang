@@ -37,15 +37,26 @@ cmake --build build -j
 Requires **CMake 3.15+** and a **C++23** compiler (GCC 13+, Clang 16+, or MSVC 19.35+).
 LLVM 18+ is optional — without it, codegen is disabled but `check` and HIR emission still work.
 
-**Hello, World:**
+**Hello, World:** ( is a place holder, until we can formalize macros correctly)
 
 ```zith
-extern fn puts(msg: *char);
+extern fn puts(msg: *char)
 
 fn main() {
     puts("Hello, World!");
 }
 ```
+
+then the canonical way would be:
+
+```zith
+from std/io/console
+
+fn main() {
+    @println("Hello, World!");
+}
+```
+
 
 ```bash
 ./build/zithc run examples/hello-world.zith
@@ -58,7 +69,7 @@ fn main() {
 **Type System**
 
 - Primitives: `u8`-`u128`, `i8`-`i128`, `f32`, `f64`, `bool`, `char`, `void`
-- Composite: `struct`, `component` (POD), `enum` (C-style, struct-backed, ADT), `union` (tagged)
+- Composite: `struct`, `component` (POD), `enum` (C-style, struct-backed, ADT), `union` (tagged & C-union hatch escape)
 - Generics, `type` aliases, and pattern matching with `when`
 
 **Memory Model (NRA)**
