@@ -38,8 +38,8 @@ public:
     std::string printAsm();
 
 private:
-    void emitFunction(const hir::HirFunction &fn, const hir::HirModule &mod);
-    void emitExternFn(const hir::HirFunction &fn);
+    llvm::Function *declareFn(const hir::HirFunction &fn);
+    void emitFnBody(const hir::HirFunction &fn, const hir::HirModule &mod);
     void llvmError(const std::string &msg);
     bool verifyCurrentFunction(llvm::Function *llvmFn);
 

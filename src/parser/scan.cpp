@@ -1071,6 +1071,146 @@ ScanResult scan(Parser &parser, symbols::SymbolTable &syms) {
             continue;
         }
 
+        // ── custom word declaration (prefix / suffix / infix / nop / context) ──
+        if (tok.peek().is(lexer::TokenKind::Word) || tok.peek().is(lexer::TokenKind::Context)) {
+            // auto kw_span = tok.peek().span;
+            auto kw = tok.lexeme();
+            if (kw == "prefix" || kw == "suffix" || kw == "infix" || kw == "nop" || kw == "context") {
+                tok.advance(); // consume kw
+
+                if (kw == "context") {
+                    if (!tok.peek().is(lexer::TokenKind::Identifier)) {
+                        diag.report(diagnostics::Severity::Error, ExpectedIdent, "expected context name", tok.peek().span);
+                        resetVis();
+                        continue;
+                    }
+                    auto name_span = tok.peek().span;
+                    auto name = tok.lexeme();
+                    tok.advance();
+
+                    ast::ExprId body_node = ast::kInvalidExpr;
+                    memory::Span body_span{};
+
+                    if (tok.peek().punc == '{') {
+                        uint32_t token_start = tok.offset;
+                        body_span = tok.peek().span;
+                        uint32_t token_end = scan_detail::skipBody(tok);
+                        body_span = {body_span.file, body_span.start, token_end};
+                        body_node = bld.unbody(body_span, token_start, token_end);
+                    } else {
+                        diag.report(diagnostics::Severity::Error, ExpectedExpr, "expected { after context name", tok.peek().span);
+                    }
+
+                    auto context_sym = syms.declare(name, current_vis, current_mod_depth, symbols::SymKind::Context,
+                                                     ast::kInvalidDecl, name_span, symbols::kInvalidSym, lastDocSpan);
+
+                    auto decl = bld.contextDecl(name, memory::DynArray<ast::DeclId>{bld.arena()}, body_node,
+                                                scan_detail::spanFromOffset(name_span.start, name_span.end));
+                    program.decls.push(decl);
+                    if (context_sym != symbols::kInvalidSym)
+                        syms.get(context_sym).decl_id = decl;
+
+                    result.contexts.push({name, body_span, body_node, 0});
+                    resetVis();
+                    continue;
+                }
+
+                // For words (prefix, suffix, infix, nop):
+                std::string_view name;
+                auto name_span = tok.peek().span;
+                if (tok.peek().is(lexer::TokenKind::Identifier) ||
+                    tok.peek().is(lexer::TokenKind::Word) ||
+                    tok.peek().is(lexer::TokenKind::Operators) ||
+                    tok.peek().is(lexer::TokenKind::Punctuation) ||
+                    tok.peek().is(lexer::TokenKind::Logical) ||
+                    tok.peek().is(lexer::TokenKind::Comparison)) {
+                    name = tok.lexeme();
+                    tok.advance();
+                } else {
+                    diag.report(diagnostics::Severity::Error, ExpectedIdent,
+                                "expected word name", tok.peek().span);
+                    resetVis();
+                    continue;
+                }
+
+                ast::ExprId body_node = ast::kInvalidExpr;
+                memory::Span body_span{};
+                memory::DynArray<std::string_view> params{bld.arena()};
+
+                if (kw == "nop") {
+                    if (tok.peek().punc == ';') {
+                        tok.advance();
+                    } else {
+                        diag.report(diagnostics::Severity::Error, ExpectedExpr, "expected ; after nop name", tok.peek().span);
+                    }
+                } else {
+                    if (tok.peek().punc != '(') {
+                        diag.report(diagnostics::Severity::Error, ExpectedExpr, "expected ( after word name", tok.peek().span);
+                        resetVis();
+                        continue;
+                    }
+                    tok.advance(); // consume (
+
+                    while (!tok.is_empty() && tok.peek().punc != ')') {
+                        if (tok.peek().is(lexer::TokenKind::Identifier) || tok.peek().is(lexer::TokenKind::Word)) {
+                            params.push(tok.lexeme());
+                            tok.advance();
+                        } else {
+                            diag.report(diagnostics::Severity::Error, ExpectedIdent, "expected parameter name", tok.peek().span);
+                            tok.advance();
+                        }
+                        if (tok.peek().punc == ',') {
+                            tok.advance();
+                        }
+                    }
+                    if (tok.peek().punc == ')') {
+                        tok.advance();
+                    } else {
+                        diag.report(diagnostics::Severity::Error, ExpectedExpr, "expected )", tok.peek().span);
+                    }
+
+                    if (kw == "prefix" && params.size() != 1) {
+                        diag.report(diagnostics::Severity::Error, ExpectedExpr, "prefix word must have exactly 1 parameter", name_span);
+                    } else if (kw == "suffix" && params.size() != 1) {
+                        diag.report(diagnostics::Severity::Error, ExpectedExpr, "suffix word must have exactly 1 parameter", name_span);
+                    } else if (kw == "infix" && params.size() != 2) {
+                        diag.report(diagnostics::Severity::Error, ExpectedExpr, "infix word must have exactly 2 parameters", name_span);
+                    }
+
+                    if (tok.peek().punc == '{') {
+                        uint32_t token_start = tok.offset;
+                        body_span = tok.peek().span;
+                        uint32_t token_end = scan_detail::skipBody(tok);
+                        body_span = {body_span.file, body_span.start, token_end};
+                        body_node = bld.unbody(body_span, token_start, token_end);
+                    } else {
+                        diag.report(diagnostics::Severity::Error, ExpectedExpr, "expected { before word body", tok.peek().span);
+                    }
+                }
+
+                auto word_sym = syms.declare(name, current_vis, current_mod_depth, symbols::SymKind::Word,
+                                             ast::kInvalidDecl, name_span, symbols::kInvalidSym, lastDocSpan);
+
+                ast::WordCategory category = ast::WordCategory::Nop;
+                if (kw == "prefix") category = ast::WordCategory::Prefix;
+                else if (kw == "suffix") category = ast::WordCategory::Suffix;
+                else if (kw == "infix") category = ast::WordCategory::Infix;
+
+                auto decl = bld.wordDecl(name, category, std::move(params), body_node,
+                                         scan_detail::spanFromOffset(name_span.start, name_span.end));
+                program.decls.push(decl);
+                if (word_sym != symbols::kInvalidSym)
+                    syms.get(word_sym).decl_id = decl;
+
+                if (body_node != ast::kInvalidExpr) {
+                    result.words.push({name, body_span, body_node, 0});
+                }
+
+                resetVis();
+                continue;
+            }
+        }
+
         // ── @annotation — skip ─────────────────────────────────────
         if (tok.peek().is(lexer::TokenKind::Annotation)) {
             tok.advance();

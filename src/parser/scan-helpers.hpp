@@ -104,6 +104,10 @@ inline const char *symKindName(symbols::SymKind k) {
         return "a union";
     case symbols::SymKind::Asset:
         return "an asset";
+    case symbols::SymKind::Word:
+        return "a word";
+    case symbols::SymKind::Context:
+        return "a context";
     }
     return "unknown";
 }

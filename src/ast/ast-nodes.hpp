@@ -26,10 +26,12 @@ enum class BinaryOp : uint8_t {
     Or,
     Xor,
     Shl,
-    Shr
+    Shr,
+    Is,
+    As
 };
 
-enum class UnaryOp : uint8_t { Neg, Not, Ref, Deref };
+enum class UnaryOp : uint8_t { Neg, Not, Ref, Deref, FallbackOpt, FallbackRes, PropagateOpt, PropagateRes };
 
 enum class LitKind : uint8_t { Int, Float, Bool, String, Char, Nil };
 
@@ -340,9 +342,66 @@ struct MacroCallNode {
     ExprKind tag = ExprKind::MacroCall;
 };
 
+struct OpMarker {
+    memory::Span span{};
+    ast::BinaryOp builtin_op = BinaryOp::Add;
+    std::string_view word_name;
+    uint8_t builtin_prec = 0;
+    bool is_word = false;
+};
+
+
+enum class WordCategory : uint8_t {
+    Nop,
+    Prefix,
+    Suffix,
+    Infix
+};
+
+struct WordDeclNode {
+    std::string_view name;
+    WordCategory category = WordCategory::Nop;
+    memory::DynArray<std::string_view> params;
+    ExprId body = kInvalidExpr;
+    memory::Span span{};
+    DeclKind tag = DeclKind::Word;
+};
+
+struct ContextDeclNode {
+    std::string_view name;
+    memory::DynArray<DeclId> decls;
+    ExprId body = kInvalidExpr;
+    memory::Span span{};
+    DeclKind tag = DeclKind::Context;
+};
+
+struct WordCallNode {
+    std::string_view word_name;
+    memory::DynArray<ExprId> args;
+    memory::Span span{};
+    ExprKind tag = ExprKind::WordCall;
+};
+
+struct UseNode {
+    std::string_view context_name;
+    memory::DynArray<std::string_view> words;
+    std::string_view alias_name;
+    std::string_view target_path;
+    ExprId block = kInvalidExpr;
+    memory::Span span{};
+    StmtKind tag = StmtKind::Use;
+};
+
+struct SeqNode {
+    memory::DynArray<ExprId> operands;
+    memory::DynArray<OpMarker> ops;
+    memory::Span span{};
+    ExprKind tag = ExprKind::Sequence;
+};
+
 using ExprNode =
     std::variant<LitValue, IdentNode, BinaryNode, UnaryNode, CallNode, BlockNode, IfNode, WhileNode,
-                 FieldNode, IndexNode, RangeNode, UnbodyNode, IntrinsicNode, MacroCallNode>;
+                 FieldNode, IndexNode, RangeNode, UnbodyNode, IntrinsicNode, MacroCallNode, SeqNode, WordCallNode>;
 
 struct GotoNode {
     std::string_view target;
@@ -365,10 +424,11 @@ struct ExprStmtNode {
     StmtKind tag = StmtKind::Expr;
 };
 
-using StmtNode = std::variant<LetNode, AssignNode, RetNode, GotoNode, MarkerNode, ExprStmtNode>;
+using StmtNode = std::variant<LetNode, AssignNode, RetNode, GotoNode, MarkerNode, ExprStmtNode, UseNode>;
 
 using DeclNode =
     std::variant<FnDeclNode, StructDeclNode, EnumDeclNode, UnionDeclNode, ComponentDeclNode,
-                 TraitDeclNode, InterfaceDeclNode, ImportNode, TypeAliasDeclNode, GlobalDeclNode>;
+                 TraitDeclNode, InterfaceDeclNode, ImportNode, TypeAliasDeclNode, GlobalDeclNode,
+                 WordDeclNode, ContextDeclNode>;
 
 } // namespace zith::ast

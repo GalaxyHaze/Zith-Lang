@@ -36,6 +36,8 @@ private:
     void emitImport(const ast::ImportNode &node);
     void emitTypeAlias(const ast::TypeAliasDeclNode &node);
     void emitGlobalDecl(const ast::GlobalDeclNode &node);
+    void emitWordDecl(const ast::WordDeclNode &node);
+    void emitContextDecl(const ast::ContextDeclNode &node);
 
     // Generics
     void emitGenericParams(const memory::DynArray<ast::GenericParam> &params);
@@ -45,6 +47,7 @@ private:
     void emitLet(const ast::LetNode &node);
     void emitAssign(const ast::AssignNode &node);
     void emitRet(const ast::RetNode &node);
+    void emitUse(const ast::UseNode &node);
 
     // Expressions
     void visitExpr(ast::ExprId id, int parent_prec = -1);
@@ -61,6 +64,8 @@ private:
     void emitRange(const ast::RangeNode &node);
     void emitIntrinsic(const ast::IntrinsicNode &node);
     void emitMacroCall(const ast::MacroCallNode &node);
+    void emitSequence(const ast::SeqNode &node, int parent_prec);
+    void emitWordCall(const ast::WordCallNode &node);
 
     // Type expressions
     void emitType(ast::TypeExprId id);

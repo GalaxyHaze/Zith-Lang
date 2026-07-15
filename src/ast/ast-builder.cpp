@@ -5,6 +5,8 @@ namespace zith::ast {
 namespace {
 
 template <typename T> struct ExprTagFor;
+template <typename T> struct StmtTagFor;
+template <typename T> struct DeclTagFor;
 template <> struct ExprTagFor<LitValue> {
     static constexpr ExprKind value = ExprKind::Literal;
 };
@@ -47,7 +49,22 @@ template <> struct ExprTagFor<IntrinsicNode> {
 template <> struct ExprTagFor<MacroCallNode> {
     static constexpr ExprKind value = ExprKind::MacroCall;
 };
+template <> struct ExprTagFor<SeqNode> {
+    static constexpr ExprKind value = ExprKind::Sequence;
+};
 
+template <> struct ExprTagFor<WordCallNode> {
+    static constexpr ExprKind value = ExprKind::WordCall;
+};
+template <> struct StmtTagFor<UseNode> {
+    static constexpr StmtKind value = StmtKind::Use;
+};
+template <> struct DeclTagFor<WordDeclNode> {
+    static constexpr DeclKind value = DeclKind::Word;
+};
+template <> struct DeclTagFor<ContextDeclNode> {
+    static constexpr DeclKind value = DeclKind::Context;
+};
 template <typename T> struct StmtTagFor;
 template <> struct StmtTagFor<LetNode> {
     static constexpr StmtKind value = StmtKind::Let;
@@ -327,6 +344,11 @@ ExprId AstBuilder::macroCall(std::string_view name, memory::DynArray<ExprId> arg
     return addExpr(MacroCallNode{name, std::move(args), span});
 }
 
+ExprId AstBuilder::seq(memory::DynArray<ExprId> operands, memory::DynArray<ast::OpMarker> ops,
+                       memory::Span span) {
+    return addExpr(SeqNode{std::move(operands), std::move(ops), span});
+}
+
 // ── Type expression helpers ─────────────────────────────────────────
 
 TypeExprId AstBuilder::addTypeExpr(TypeExprNode node) {
@@ -357,27 +379,24 @@ TypeExprId AstBuilder::inferExpr() {
     return addTypeExpr(TypeInfer{});
 }
 
+TypeExprId AstBuilder::dynExpr(TypeExprId inner) {
+    return addTypeExpr(TypeDyn{inner});
+}
+
+TypeExprId AstBuilder::unionExpr() {
+    return addTypeExpr(TypeUnion{});
+}
+
+TypeExprId AstBuilder::typeSpecialization(TypeExprId base, memory::DynArray<TypeExprId> args) {
+    return addTypeExpr(TypeSpecialization{base, std::move(args)});
+}
+
 memory::Span AstBuilder::exprSpan(ExprId id) const {
     return std::visit([](auto &node) { return node.span; }, exprs_[id]);
 }
 
 memory::Span AstBuilder::stmtSpan(StmtId id) const {
-    auto &stmt = stmts_[id];
-    switch (stmtKind(stmt)) {
-    case StmtKind::Let:
-        return std::get<ast::LetNode>(stmt).span;
-    case StmtKind::Assign:
-        return std::get<ast::AssignNode>(stmt).span;
-    case StmtKind::Return:
-        return std::get<ast::RetNode>(stmt).span;
-    case StmtKind::Goto:
-        return std::get<ast::GotoNode>(stmt).span;
-    case StmtKind::Marker:
-        return std::get<ast::MarkerNode>(stmt).span;
-    case StmtKind::Expr:
-        return std::get<ast::ExprStmtNode>(stmt).span;
-    }
-    return {};
+    return std::visit([](auto &node) { return node.span; }, stmts_[id]);
 }
 
 memory::Span AstBuilder::declSpan(DeclId id) const {
@@ -389,6 +408,27 @@ memory::Arena &AstBuilder::arena() {
 }
 memory::StringInterner &AstBuilder::interner() {
     return interner_;
+}
+
+
+ExprId AstBuilder::wordCall(std::string_view word_name, memory::DynArray<ExprId> args, memory::Span span) {
+    return addExpr(WordCallNode{word_name, std::move(args), span});
+}
+
+StmtId AstBuilder::useStmt(std::string_view context_name, memory::DynArray<std::string_view> words,
+                           std::string_view alias_name, std::string_view target_path, ExprId block,
+                           memory::Span span) {
+    return addStmt(UseNode{context_name, std::move(words), alias_name, target_path, block, span});
+}
+
+DeclId AstBuilder::wordDecl(std::string_view name, WordCategory category, memory::DynArray<std::string_view> params,
+                            ExprId body, memory::Span span) {
+    return addDecl(WordDeclNode{name, category, std::move(params), body, span});
+}
+
+DeclId AstBuilder::contextDecl(std::string_view name, memory::DynArray<DeclId> decls, ExprId body,
+                               memory::Span span) {
+    return addDecl(ContextDeclNode{name, std::move(decls), body, span});
 }
 
 } // namespace zith::ast

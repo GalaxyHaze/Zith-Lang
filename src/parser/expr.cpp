@@ -11,6 +11,7 @@
 
 namespace zith::parser {
 
+using diagnostics::Severity;
 using lexer::TokenKind;
 
 namespace {
@@ -121,7 +122,7 @@ ast::ExprId Parser::parsePrimary() {
     // 'for' expression — desugar into while
     if (match("for")) {
         auto desugar_block = bld->block(memory::DynArray<ast::StmtId>{bld->arena()});
-        auto &block        = std::get<ast::BlockNode>(bld->getExpr(desugar_block));
+        auto *block        = std::get_if<ast::BlockNode>(&bld->getExpr(desugar_block));
 
         if (check('(')) {
             advance();
@@ -136,11 +137,11 @@ ast::ExprId Parser::parsePrimary() {
                         advance();
                         init_val = parseExpr();
                     }
-                    block.stmts.push(bld->letStmt(name, false, init_val));
+                    block->stmts.push(bld->letStmt(name, false, init_val));
                 }
             } else if (!check(';')) {
                 auto expr = parseExpr();
-                block.stmts.push(bld->addStmt(expr, bld->exprSpan(expr)));
+                block->stmts.push(bld->addStmt(expr, bld->exprSpan(expr)));
             }
             consume(';');
 
@@ -166,20 +167,20 @@ ast::ExprId Parser::parsePrimary() {
             }
 
             auto body_block = bld->block(memory::DynArray<ast::StmtId>{bld->arena()});
-            auto &bb        = std::get<ast::BlockNode>(bld->getExpr(body_block));
+            auto *bb        = std::get_if<ast::BlockNode>(&bld->getExpr(body_block));
             if (loop_body != ast::kInvalidExpr) {
-                auto &lb = std::get<ast::BlockNode>(bld->getExpr(loop_body));
-                for (auto s : lb.stmts)
-                    bb.stmts.push(s);
-                bb.trailing = lb.trailing;
+                auto *lb = std::get_if<ast::BlockNode>(&bld->getExpr(loop_body));
+                for (auto s : lb->stmts)
+                    bb->stmts.push(s);
+                bb->trailing = lb->trailing;
             }
             if (step != ast::kInvalidExpr)
-                bb.stmts.push(bld->addStmt(step, bld->exprSpan(step)));
+                bb->stmts.push(bld->addStmt(step, bld->exprSpan(step)));
 
             ast::ExprId while_cond =
                 cond != ast::kInvalidExpr ? cond : bld->litExpr(ast::LitKind::Bool, "true");
             auto while_expr = bld->whileExpr(while_cond, body_block);
-            block.stmts.push(bld->addStmt(while_expr, bld->exprSpan(while_expr)));
+            block->stmts.push(bld->addStmt(while_expr, bld->exprSpan(while_expr)));
         }
 
         return desugar_block;
@@ -280,17 +281,26 @@ ast::ExprId Parser::parsePrimary() {
 ast::ExprId Parser::parsePrefix() {
     skipComments(*tok);
 
+    // Prefix ? — fallback operator
+    if (check('?')) {
+        auto op_span = peek().span;
+        advance();
+        auto operand = parsePrefix();
+        return bld->unary(ast::UnaryOp::FallbackOpt, operand, spanFrom(op_span));
+    }
+    // Prefix ! — fallback operator (not !=)
+    if (check('!') && peek(1).punc != '=') {
+        auto op_span = peek().span;
+        advance();
+        auto operand = parsePrefix();
+        return bld->unary(ast::UnaryOp::FallbackRes, operand, spanFrom(op_span));
+    }
+
     if (check('-')) {
         auto op_span = peek().span;
         advance();
         auto operand = parsePrefix();
         return bld->unary(ast::UnaryOp::Neg, operand, spanFrom(op_span));
-    }
-    if (check('!')) {
-        auto op_span = peek().span;
-        advance();
-        auto operand = parsePrefix();
-        return bld->unary(ast::UnaryOp::Not, operand, spanFrom(op_span));
     }
     auto not_span = peek().span;
     if (match("not")) {
@@ -316,6 +326,11 @@ ast::ExprId Parser::parsePrefix() {
 ast::ExprId Parser::parseExpr(int min_prec) {
     skipComments(*tok);
     auto lhs = parsePrefix();
+
+    // SeqNode collection for custom word operators (Word token kind)
+    memory::DynArray<ast::ExprId> seq_operands{bld->arena()};
+    memory::DynArray<ast::OpMarker> seq_ops{bld->arena()};
+    bool in_seq = false;
 
     while (true) {
         skipComments(*tok);
@@ -360,16 +375,22 @@ ast::ExprId Parser::parseExpr(int min_prec) {
             continue;
         }
 
-        // ── Postfix: unwrap ! ───────────────────────────────────
-        if (cur.is(lexer::TokenKind::Operators) && cur.punc == '!' &&
+        // ── Postfix: ?/! propagate ────────────────────────────────────
+        if (cur.is(lexer::TokenKind::Operators) && (cur.punc == '!' || cur.punc == '?') &&
             !peek(1).is(lexer::TokenKind::Operators)) {
             advance();
-            lhs = bld->unary(ast::UnaryOp::Deref, lhs,
+            auto op = (previous().punc == '!') ? ast::UnaryOp::PropagateRes
+                                               : ast::UnaryOp::PropagateOpt;
+            lhs = bld->unary(op, lhs,
                              memory::Span{lhs_span.file, lhs_span.start, previous().span.end});
             continue;
         }
 
-        // ── Word infix: and / or / xor ──────────────────────────
+        // ── Terminators ──────────────────────────────────────────────
+        if (check(';') || check(',') || check(')') || check(']') || check('}'))
+            break;
+
+        // ── Word infix: and / or / xor (Logical tokens) ─────────
         if (cur.is(lexer::TokenKind::Logical)) {
             auto word         = lexeme();
             uint8_t word_prec = operators::wordPrec(word);
@@ -378,6 +399,61 @@ ast::ExprId Parser::parseExpr(int min_prec) {
             advance();
             auto rhs = parseExpr(word_prec + 1);
             lhs      = bld->binary(lhs, operators::binaryOpForWord(word), rhs, spanFrom(lhs, rhs));
+            continue;
+        }
+
+        // ── Custom word operators (Word token: nop, etc.) ────────
+        if (cur.is(lexer::TokenKind::Word)) {
+            auto word    = lexeme();
+            uint8_t wp   = operators::wordPrec(word);
+            if (wp < min_prec)
+                break;
+
+            if (!in_seq) {
+                seq_operands.push(lhs);
+                in_seq = true;
+            }
+
+            // Adjacency error: two non-nop word ops adjacent
+            if (!seq_ops.empty() && seq_ops.back().is_word &&
+                seq_ops.back().word_name != "nop" && word != "nop") {
+                diag->report(Severity::Error, diagnostics::err::ExpectedExpr,
+                              std::string("ambiguous word operators; use parentheses: (a ")
+                                  .append(seq_ops.back().word_name)
+                                  .append(" b) ")
+                                  .append(word)
+                                  .append(" c or a ")
+                                  .append(seq_ops.back().word_name)
+                                  .append(" (b ")
+                                  .append(word)
+                                  .append(" c)"),
+                              memory::Span{lhs_span.file, lhs_span.start, peek().span.end});
+            }
+
+            seq_ops.push({memory::Span{lhs_span.file, lhs_span.start, peek().span.end}, ast::BinaryOp::Add,
+                          word, wp, true});
+            advance();
+            lhs = parseExpr(wp + 1);
+            continue;
+        }
+
+        // ── is / as (type check / cast) ──────────────────────────
+        if (cur.is(lexer::TokenKind::Is)) {
+            uint8_t prec = operators::logicalPrec();
+            if (prec < min_prec)
+                break;
+            advance();
+            auto rhs = parseExpr(prec + 1);
+            lhs      = bld->binary(lhs, ast::BinaryOp::Is, rhs, spanFrom(lhs, rhs));
+            continue;
+        }
+        if (cur.is(lexer::TokenKind::As)) {
+            uint8_t prec = operators::logicalPrec();
+            if (prec < min_prec)
+                break;
+            advance();
+            auto rhs = parseExpr(prec + 1);
+            lhs      = bld->binary(lhs, ast::BinaryOp::As, rhs, spanFrom(lhs, rhs));
             continue;
         }
 
@@ -408,6 +484,13 @@ ast::ExprId Parser::parseExpr(int min_prec) {
         lhs      = bld->binary(lhs, operators::binaryOpForChar(cur.punc), rhs, spanFrom(lhs, rhs));
     }
 
+    if (in_seq) {
+        seq_operands.push(lhs);
+        memory::Span seq_span = {};
+        if (!seq_operands.empty())
+            seq_span = bld->exprSpan(seq_operands[0]);
+        return bld->seq(std::move(seq_operands), std::move(seq_ops), seq_span);
+    }
     return lhs;
 }
 

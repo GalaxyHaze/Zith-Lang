@@ -1,4 +1,5 @@
 #include "type-intern.hpp"
+#include "common/overloaded.hpp"
 
 #include <cstring>
 
@@ -42,88 +43,53 @@ namespace {
 bool typeDataEqual(const TypeData &a, const TypeData &b) {
     if (a.index() != b.index())
         return false;
-    switch (static_cast<TypeKind>(a.index())) {
-    case TypeKind::Int:
-        return std::get<TypeInt>(a).width == std::get<TypeInt>(b).width;
-    case TypeKind::Float:
-        return std::get<TypeFloat>(a).width == std::get<TypeFloat>(b).width;
-    case TypeKind::Ptr: {
-        auto &pa = std::get<TypePtr>(a);
-        auto &pb = std::get<TypePtr>(b);
-        return pa.pointee == pb.pointee && pa.is_mut == pb.is_mut && pa.ownership == pb.ownership;
-    }
-    case TypeKind::Array: {
-        auto &aa = std::get<TypeArray>(a);
-        auto &bb = std::get<TypeArray>(b);
-        return aa.elem == bb.elem && aa.count == bb.count;
-    }
-    case TypeKind::Struct:
-        return std::get<TypeStruct>(a).def_id == std::get<TypeStruct>(b).def_id;
-    case TypeKind::Fn: {
-        auto &fa = std::get<TypeFn>(a);
-        auto &fb = std::get<TypeFn>(b);
-        if (fa.param_count != fb.param_count)
-            return false;
-        if (fa.ret != fb.ret)
-            return false;
-        for (size_t i = 0; i < fa.param_count; i++)
-            if (fa.params[i] != fb.params[i])
-                return false;
-        return true;
-    }
-    case TypeKind::TypeVar:
-        return std::get<TypeTypeVar>(a).id == std::get<TypeTypeVar>(b).id;
-    case TypeKind::Optional:
-        return std::get<TypeOptional>(a).inner == std::get<TypeOptional>(b).inner;
-    case TypeKind::Failable:
-        return std::get<TypeFailable>(a).inner == std::get<TypeFailable>(b).inner;
-    case TypeKind::Slice:
-        return std::get<TypeSlice>(a).elem == std::get<TypeSlice>(b).elem;
-    case TypeKind::Enum:
-        return std::get<TypeEnum>(a).def_id == std::get<TypeEnum>(b).def_id;
-    case TypeKind::Union:
-        return std::get<TypeUnion>(a).def_id == std::get<TypeUnion>(b).def_id;
-    case TypeKind::Pack: {
-        auto &pa = std::get<TypePack>(a);
-        auto &pb = std::get<TypePack>(b);
-        if (pa.count != pb.count)
-            return false;
-        for (size_t i = 0; i < pa.count; i++) {
-            if (pa.members[i] != pb.members[i])
-                return false;
-            if (pa.names[i] != pb.names[i])
-                return false;
-        }
-        return true;
-    }
-    case TypeKind::Sum: {
-        auto &sa = std::get<TypeSum>(a);
-        auto &sb = std::get<TypeSum>(b);
-        if (sa.count != sb.count)
-            return false;
-        for (size_t i = 0; i < sa.count; i++)
-            if (sa.members[i] != sb.members[i])
-                return false;
-        return true;
-    }
-    case TypeKind::GenericParam: {
-        auto &ga = std::get<TypeGenericParam>(a);
-        auto &gb = std::get<TypeGenericParam>(b);
-        return ga.decl_id == gb.decl_id && ga.param_index == gb.param_index;
-    }
-    case TypeKind::Incomplete: {
-        auto &ia = std::get<TypeIncomplete>(a);
-        auto &ib = std::get<TypeIncomplete>(b);
-        if (ia.base != ib.base || ia.arg_count != ib.arg_count)
-            return false;
-        for (size_t i = 0; i < ia.arg_count; i++)
-            if (ia.args[i] != ib.args[i])
-                return false;
-        return true;
-    }
-    default:
-        return true; // Error, Never, Void, Bool, Char, Opaque, Unknown — no fields
-    }
+    return visitType(a, b, common::overloaded{
+        [](const TypeInt &ai, const TypeInt &bi) { return ai.width == bi.width; },
+        [](const TypeFloat &af, const TypeFloat &bf) { return af.width == bf.width; },
+        [](const TypePtr &pa, const TypePtr &pb) {
+            return pa.pointee == pb.pointee && pa.is_mut == pb.is_mut && pa.ownership == pb.ownership;
+        },
+        [](const TypeArray &aa, const TypeArray &bb) { return aa.elem == bb.elem && aa.count == bb.count; },
+        [](const TypeStruct &sa, const TypeStruct &sb) { return sa.def_id == sb.def_id; },
+        [](const TypeFn &fa, const TypeFn &fb) {
+            if (fa.param_count != fb.param_count) return false;
+            if (fa.ret != fb.ret) return false;
+            for (size_t i = 0; i < fa.param_count; i++)
+                if (fa.params[i] != fb.params[i]) return false;
+            return true;
+        },
+        [](const TypeTypeVar &va, const TypeTypeVar &vb) { return va.id == vb.id; },
+        [](const TypeOptional &oa, const TypeOptional &ob) { return oa.inner == ob.inner; },
+        [](const TypeFailable &fa, const TypeFailable &fb) { return fa.inner == fb.inner; },
+        [](const TypeSlice &sa, const TypeSlice &sb) { return sa.elem == sb.elem; },
+        [](const TypeEnum &ea, const TypeEnum &eb) { return ea.def_id == eb.def_id; },
+        [](const TypeUnion &ua, const TypeUnion &ub) { return ua.def_id == ub.def_id; },
+        [](const TypePack &pa, const TypePack &pb) {
+            if (pa.count != pb.count) return false;
+            for (size_t i = 0; i < pa.count; i++) {
+                if (pa.members[i] != pb.members[i]) return false;
+                if (pa.names[i] != pb.names[i]) return false;
+            }
+            return true;
+        },
+        [](const TypeSum &sa, const TypeSum &sb) {
+            if (sa.count != sb.count) return false;
+            for (size_t i = 0; i < sa.count; i++)
+                if (sa.members[i] != sb.members[i]) return false;
+            return true;
+        },
+        [](const TypeGenericParam &ga, const TypeGenericParam &gb) {
+            return ga.decl_id == gb.decl_id && ga.param_index == gb.param_index;
+        },
+        [](const TypeIncomplete &ia, const TypeIncomplete &ib) {
+            if (ia.base != ib.base || ia.arg_count != ib.arg_count) return false;
+            for (size_t i = 0; i < ia.arg_count; i++)
+                if (ia.args[i] != ib.args[i]) return false;
+            return true;
+        },
+        // Error, Never, Void, Bool, Char, Opaque, Unknown, TypeVar, Enum, Union — no fields beyond the type itself
+        [](const auto &, const auto &) -> bool { return true; },
+    });
 }
 
 } // anonymous namespace
@@ -152,92 +118,60 @@ uint64_t hashCombine(uint64_t h, uint64_t v) {
 
 size_t TypeIntern::computeHash(const TypeData &data) {
     uint64_t h = 14695981039346656037ULL; // FNV offset basis
-    h        = hashCombine(h, static_cast<size_t>(data.index()));
+    h          = hashCombine(h, static_cast<size_t>(data.index()));
 
-    switch (static_cast<TypeKind>(data.index())) {
-    case TypeKind::Int:
-        h = hashCombine(h, static_cast<size_t>(std::get<TypeInt>(data).width));
-        break;
-    case TypeKind::Float:
-        h = hashCombine(h, static_cast<size_t>(std::get<TypeFloat>(data).width));
-        break;
-    case TypeKind::Ptr: {
-        auto &p = std::get<TypePtr>(data);
-        h       = hashCombine(h, p.pointee);
-        h       = hashCombine(h, static_cast<size_t>(p.is_mut));
-        h       = hashCombine(h, static_cast<size_t>(p.ownership));
-        break;
-    }
-    case TypeKind::Array: {
-        auto &a = std::get<TypeArray>(data);
-        h       = hashCombine(h, a.elem);
-        h       = hashCombine(h, a.count);
-        break;
-    }
-    case TypeKind::Struct:
-        h = hashCombine(h, std::get<TypeStruct>(data).def_id);
-        break;
-    case TypeKind::Fn: {
-        auto &f = std::get<TypeFn>(data);
-        h       = hashCombine(h, f.ret);
-        h       = hashCombine(h, f.param_count);
-        for (size_t i = 0; i < f.param_count; i++)
-            h = hashCombine(h, f.params[i]);
-        break;
-    }
-    case TypeKind::TypeVar:
-        h = hashCombine(h, std::get<TypeTypeVar>(data).id);
-        break;
-    case TypeKind::Optional:
-        h = hashCombine(h, std::get<TypeOptional>(data).inner);
-        break;
-    case TypeKind::Failable:
-        h = hashCombine(h, std::get<TypeFailable>(data).inner);
-        break;
-    case TypeKind::Slice:
-        h = hashCombine(h, std::get<TypeSlice>(data).elem);
-        break;
-    case TypeKind::Enum:
-        h = hashCombine(h, std::get<TypeEnum>(data).def_id);
-        break;
-    case TypeKind::Union:
-        h = hashCombine(h, std::get<TypeUnion>(data).def_id);
-        break;
-    case TypeKind::Pack: {
-        auto &p = std::get<TypePack>(data);
-        h       = hashCombine(h, p.count);
-        for (size_t i = 0; i < p.count; i++) {
-            h         = hashCombine(h, p.members[i]);
-            auto name = interner_.lookup(p.names[i]);
-            for (auto c : name)
-                h = hashCombine(h, static_cast<size_t>(c));
-        }
-        break;
-    }
-    case TypeKind::Sum: {
-        auto &s = std::get<TypeSum>(data);
-        h       = hashCombine(h, s.count);
-        for (size_t i = 0; i < s.count; i++)
-            h = hashCombine(h, s.members[i]);
-        break;
-    }
-    case TypeKind::GenericParam: {
-        auto &g = std::get<TypeGenericParam>(data);
-        h       = hashCombine(h, g.decl_id);
-        h       = hashCombine(h, g.param_index);
-        break;
-    }
-    case TypeKind::Incomplete: {
-        auto &i = std::get<TypeIncomplete>(data);
-        h       = hashCombine(h, i.base);
-        h       = hashCombine(h, i.arg_count);
-        for (size_t j = 0; j < i.arg_count; j++)
-            h = hashCombine(h, i.args[j]);
-        break;
-    }
-    default:
-        break; // Error, Never, Void, Bool, Char, Opaque, Unknown — no fields
-    }
+    visitType(data, common::overloaded{
+                      [&](const TypeInt &t) { h = hashCombine(h, static_cast<size_t>(t.width)); },
+                      [&](const TypeFloat &t) { h = hashCombine(h, static_cast<size_t>(t.width)); },
+                      [&](const TypePtr &p) {
+                          h = hashCombine(h, p.pointee);
+                          h = hashCombine(h, static_cast<size_t>(p.is_mut));
+                          h = hashCombine(h, static_cast<size_t>(p.ownership));
+                      },
+                      [&](const TypeArray &a) {
+                          h = hashCombine(h, a.elem);
+                          h = hashCombine(h, a.count);
+                      },
+                      [&](const TypeStruct &s) { h = hashCombine(h, s.def_id); },
+                      [&](const TypeFn &f) {
+                          h = hashCombine(h, f.ret);
+                          h = hashCombine(h, f.param_count);
+                          for (size_t i = 0; i < f.param_count; i++)
+                              h = hashCombine(h, f.params[i]);
+                      },
+                      [&](const TypeTypeVar &v) { h = hashCombine(h, v.id); },
+                      [&](const TypeOptional &o) { h = hashCombine(h, o.inner); },
+                      [&](const TypeFailable &f) { h = hashCombine(h, f.inner); },
+                      [&](const TypeSlice &s) { h = hashCombine(h, s.elem); },
+                      [&](const TypeEnum &e) { h = hashCombine(h, e.def_id); },
+                      [&](const TypeUnion &u) { h = hashCombine(h, u.def_id); },
+                      [&](const TypePack &p) {
+                          h = hashCombine(h, p.count);
+                          for (size_t i = 0; i < p.count; i++) {
+                              h = hashCombine(h, p.members[i]);
+                              auto name = interner_.lookup(p.names[i]);
+                              for (auto c : name)
+                                  h = hashCombine(h, static_cast<size_t>(c));
+                          }
+                      },
+                      [&](const TypeSum &s) {
+                          h = hashCombine(h, s.count);
+                          for (size_t i = 0; i < s.count; i++)
+                              h = hashCombine(h, s.members[i]);
+                      },
+                      [&](const TypeGenericParam &g) {
+                          h = hashCombine(h, g.decl_id);
+                          h = hashCombine(h, g.param_index);
+                      },
+                      [&](const TypeIncomplete &i) {
+                          h = hashCombine(h, i.base);
+                          h = hashCombine(h, i.arg_count);
+                          for (size_t j = 0; j < i.arg_count; j++)
+                              h = hashCombine(h, i.args[j]);
+                      },
+                      // Error, Never, Void, Bool, Char, Opaque, Unknown — no fields
+                      [](const auto &) {},
+                  });
     return static_cast<size_t>(h);
 }
 
@@ -387,8 +321,8 @@ void TypeIntern::addField(TypeId struct_type, std::string_view field_name, TypeI
 }
 
 const StructDef &TypeIntern::getStructDef(TypeId struct_type) const {
-    auto &td = std::get<TypeStruct>(types_[struct_type]);
-    return struct_defs_[td.def_id];
+    auto *td = std::get_if<TypeStruct>(&types_[struct_type]);
+    return struct_defs_[td->def_id];
 }
 
 StructDef &TypeIntern::getStructDef(TypeId struct_type) {

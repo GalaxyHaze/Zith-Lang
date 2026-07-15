@@ -191,7 +191,7 @@ bool consumeUnionVariant(Parser &parser, diagnostics::DiagnosticEngine &diag,
 } // namespace
 // ── expand bodies (second pass: seek + parse real bodies) ──────────────
 
-void Parser::expandBodies(ScanResult &result) {
+void Parser::expandBodies(ScanResult &result, symbols::SymbolTable &syms) {
     for (auto &entry : result.fns) {
         if (entry.body_node == ast::kInvalidExpr)
             continue;
@@ -200,8 +200,8 @@ void Parser::expandBodies(ScanResult &result) {
         // Only need to expand the body (UnbodyNode → BlockNode).
 
         // Position at body start
-        auto &unbody = std::get<ast::UnbodyNode>(bld->getExpr(entry.body_node));
-        tok->offset  = unbody.token_start;
+        auto *unbody = std::get_if<ast::UnbodyNode>(&bld->getExpr(entry.body_node));
+        tok->offset  = unbody->token_start;
 
         consume('{');
         auto body_id = parseBlock();
@@ -321,6 +321,120 @@ void Parser::expandBodies(ScanResult &result) {
     }
 
     // trait body expansion deferred — structure is already scanned
+    for (auto &entry : result.words) {
+        if (entry.body_node == ast::kInvalidExpr)
+            continue;
+
+        auto *unbody = std::get_if<ast::UnbodyNode>(&bld->getExpr(entry.body_node));
+        if (!unbody) continue;
+        tok->offset  = unbody->token_start;
+
+        consume('{');
+        auto body_id = parseBlock();
+
+        bld->getExpr(entry.body_node) = std::move(bld->getExpr(body_id));
+    }
+
+    for (auto &entry : result.contexts) {
+        if (entry.body_node == ast::kInvalidExpr)
+            continue;
+
+        auto *unbody = std::get_if<ast::UnbodyNode>(&bld->getExpr(entry.body_node));
+        if (!unbody) continue;
+        tok->offset  = unbody->token_start;
+
+        consume('{');
+
+        auto context_sym = syms.lookup(entry.name);
+        if (context_sym != symbols::kInvalidSym) {
+            auto &decl = bld->getDecl(syms.get(context_sym).decl_id);
+            if (auto *ctx_decl = std::get_if<ast::ContextDeclNode>(&decl)) {
+                while (!tok->is_empty() && tok->peek().punc != '}') {
+                    skipComments(*tok);
+                    if (tok->peek().punc == '}')
+                        break;
+
+                    if (tok->peek().is(lexer::TokenKind::Word)) {
+                        auto kw = tok->lexeme();
+                        if (kw == "prefix" || kw == "suffix" || kw == "infix" || kw == "nop") {
+                            tok->advance(); // consume kw
+
+                            std::string_view name;
+                            auto name_span = tok->peek().span;
+                            if (tok->peek().is(lexer::TokenKind::Identifier) ||
+                                tok->peek().is(lexer::TokenKind::Word) ||
+                                tok->peek().is(lexer::TokenKind::Operators) ||
+                                tok->peek().is(lexer::TokenKind::Punctuation) ||
+                                tok->peek().is(lexer::TokenKind::Logical) ||
+                                tok->peek().is(lexer::TokenKind::Comparison)) {
+                                name = tok->lexeme();
+                                tok->advance();
+                            } else {
+                                tok->advance();
+                                continue;
+                            }
+
+                            ast::ExprId body_node = ast::kInvalidExpr;
+                            memory::Span body_span{};
+                            memory::DynArray<std::string_view> params{bld->arena()};
+
+                            if (kw == "nop") {
+                                if (tok->peek().punc == ';') {
+                                    tok->advance();
+                                }
+                            } else {
+                                if (tok->peek().punc == '(') {
+                                    tok->advance();
+                                    while (!tok->is_empty() && tok->peek().punc != ')') {
+                                        if (tok->peek().is(lexer::TokenKind::Identifier) || tok->peek().is(lexer::TokenKind::Word)) {
+                                            params.push(tok->lexeme());
+                                            tok->advance();
+                                        } else {
+                                            tok->advance();
+                                        }
+                                        if (tok->peek().punc == ',') tok->advance();
+                                    }
+                                    if (tok->peek().punc == ')') tok->advance();
+                                }
+
+                                if (tok->peek().punc == '{') {
+                                    uint32_t t_start = tok->offset;
+                                    body_span = tok->peek().span;
+                                    uint32_t t_end = scan_detail::skipBody(*tok);
+                                    body_span = {body_span.file, body_span.start, t_end};
+                                    body_node = bld->unbody(body_span, t_start, t_end);
+
+                                    auto old_offset = tok->offset;
+                                    tok->offset = t_start;
+                                    consume('{');
+                                    auto nested_body = parseBlock();
+                                    bld->getExpr(body_node) = std::move(bld->getExpr(nested_body));
+                                    tok->offset = old_offset;
+                                }
+                            }
+
+                            auto word_sym = syms.declare(name, symbols::SymbolVisibility::Private, 0, symbols::SymKind::Word,
+                                                         ast::kInvalidDecl, name_span);
+
+                            ast::WordCategory category = ast::WordCategory::Nop;
+                            if (kw == "prefix") category = ast::WordCategory::Prefix;
+                            else if (kw == "suffix") category = ast::WordCategory::Suffix;
+                            else if (kw == "infix") category = ast::WordCategory::Infix;
+
+                            auto word_decl = bld->wordDecl(name, category, std::move(params), body_node,
+                                                     scan_detail::spanFromOffset(name_span.start, name_span.end));
+                            program.decls.push(word_decl);
+                            ctx_decl->decls.push(word_decl);
+                            if (word_sym != symbols::kInvalidSym)
+                                syms.get(word_sym).decl_id = word_decl;
+                        }
+                    } else {
+                        tok->advance();
+                    }
+                }
+            }
+        }
+    }
 }
 
 } // namespace zith::parser

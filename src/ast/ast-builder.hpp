@@ -38,6 +38,8 @@ public:
     ExprId ident(std::string_view name, memory::Span span = {}, bool scope_escape = false);
     ExprId binary(ExprId lhs, BinaryOp op, ExprId rhs, memory::Span span = {});
     ExprId unary(UnaryOp op, ExprId operand, memory::Span span = {});
+    ExprId seq(memory::DynArray<ExprId> operands, memory::DynArray<ast::OpMarker> ops,
+               memory::Span span = {});
     ExprId call(ExprId callee, memory::DynArray<ExprId> args, memory::Span span = {});
     ExprId field(ExprId object, std::string_view field_name, memory::Span span = {});
     ExprId index(ExprId object, ExprId index, memory::Span span = {});
@@ -86,6 +88,15 @@ public:
                       TypeExprId type_annot = kInvalidTypeExpr, ExprId init = kInvalidExpr,
                       memory::Span span = {});
 
+    ExprId wordCall(std::string_view word_name, memory::DynArray<ExprId> args, memory::Span span = {});
+    StmtId useStmt(std::string_view context_name, memory::DynArray<std::string_view> words,
+                   std::string_view alias_name, std::string_view target_path, ExprId block = kInvalidExpr,
+                   memory::Span span = {});
+    DeclId wordDecl(std::string_view name, WordCategory category, memory::DynArray<std::string_view> params,
+                    ExprId body = kInvalidExpr, memory::Span span = {});
+    DeclId contextDecl(std::string_view name, memory::DynArray<DeclId> decls, ExprId body = kInvalidExpr,
+                       memory::Span span = {});
+
     ExprId unbody(memory::Span body_span, uint32_t token_start, uint32_t token_end);
     ExprId intrinsic(IntrinsicKind kind, memory::DynArray<ExprId> args, memory::Span span = {});
     ExprId macroCall(std::string_view name, memory::DynArray<ExprId> args, memory::Span span = {});
@@ -97,6 +108,9 @@ public:
     TypeExprId builtinExpr(BuiltinType kind);
     TypeExprId pathExpr(memory::DynArray<std::string_view> segments, memory::Span span = {});
     TypeExprId inferExpr();
+    TypeExprId dynExpr(TypeExprId inner);
+    TypeExprId unionExpr();
+    TypeExprId typeSpecialization(TypeExprId base, memory::DynArray<TypeExprId> args);
 
     memory::Span exprSpan(ExprId id) const;
     memory::Span stmtSpan(StmtId id) const;

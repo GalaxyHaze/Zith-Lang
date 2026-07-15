@@ -8,29 +8,6 @@
 
 namespace zith::codegen {
 
-static unsigned int widthToBits(types::IntWidth w) {
-    switch (w) {
-    case types::IntWidth::I8:
-    case types::IntWidth::U8:
-        return 8;
-    case types::IntWidth::I16:
-    case types::IntWidth::U16:
-        return 16;
-    case types::IntWidth::I32:
-    case types::IntWidth::U32:
-        return 32;
-    case types::IntWidth::I64:
-    case types::IntWidth::U64:
-        return 64;
-    case types::IntWidth::I128:
-    case types::IntWidth::U128:
-        return 128;
-    case types::IntWidth::Literal:
-        return 64; // resolved before codegen; fallback for safety
-    }
-    return 64;
-}
-
 CodeGenType::CodeGenType(llvm::LLVMContext &ctx, const types::TypeIntern &types)
     : ctx_(ctx), types_(types) {}
 
@@ -50,7 +27,7 @@ llvm::Type *CodeGenType::lower(types::TypeId id) {
             } else if constexpr (std::is_same_v<T, types::TypeChar>) {
                 return llvm::Type::getInt8Ty(ctx_);
             } else if constexpr (std::is_same_v<T, types::TypeInt>) {
-                return llvm::Type::getIntNTy(ctx_, widthToBits(t.width));
+                return llvm::Type::getIntNTy(ctx_, types::intWidthBits(t.width));
             } else if constexpr (std::is_same_v<T, types::TypeFloat>) {
                 switch (t.width) {
                 case types::FloatWidth::F32:
@@ -88,8 +65,8 @@ llvm::Type *CodeGenType::lower(types::TypeId id) {
 }
 
 llvm::Type *CodeGenType::lowerPtr(types::TypeId pointee, bool is_mut) {
-    (void)is_mut;
     (void)pointee;
+    (void)is_mut;
     return llvm::PointerType::get(ctx_, 0);
 }
 

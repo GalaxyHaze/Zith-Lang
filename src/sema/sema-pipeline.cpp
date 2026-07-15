@@ -1,5 +1,6 @@
 #include "sema-pipeline.hpp"
 #include "ast/ast-node-utils.hpp"
+#include "common/overloaded.hpp"
 #include "diagnostics/error-codes.hpp"
 #include "types/type-id.hpp"
 #include "types/type-lower.hpp"
@@ -37,38 +38,11 @@ types::TypeId defaultTypeForLit(ast::LitKind kind, types::TypeIntern &types) {
     return types::kErrorType;
 }
 
-unsigned intWidthBits(types::IntWidth w) {
-    switch (w) {
-    case types::IntWidth::I8:
-    case types::IntWidth::U8:
-        return 8;
-    case types::IntWidth::I16:
-    case types::IntWidth::U16:
-        return 16;
-    case types::IntWidth::I32:
-    case types::IntWidth::U32:
-        return 32;
-    case types::IntWidth::I64:
-    case types::IntWidth::U64:
-        return 64;
-    case types::IntWidth::I128:
-    case types::IntWidth::U128:
-        return 128;
-    case types::IntWidth::Literal:
-        return 0;
-    }
-    return 0;
-}
-
-bool isSignedWidth(types::IntWidth w) {
-    return w >= types::IntWidth::I8 && w <= types::IntWidth::I128;
-}
-
 const char *checkIntOverflow(int64_t value, types::IntWidth target) {
-    unsigned bits = intWidthBits(target);
+    unsigned bits = types::intWidthBits(target);
     if (bits == 0)
         return nullptr;
-    if (isSignedWidth(target)) {
+    if (types::isSignedWidth(target)) {
         if (bits >= 64)
             return nullptr;
         int64_t min = -(INT64_C(1) << (bits - 1));
@@ -211,10 +185,8 @@ bool SemaPipeline::concretizeLiteralExpr(ast::ExprId id, types::TypeId concrete_
         return false;
 
     auto &node = builder().getExpr(id);
-    if (ast::exprKind(node) != ast::ExprKind::Literal)
-        return false;
-    auto &lit = std::get<ast::LitValue>(node);
-    if (lit.kind != ast::LitKind::Int)
+    auto *lit  = std::get_if<ast::LitValue>(&node);
+    if (!lit || lit->kind != ast::LitKind::Int)
         return false;
 
     auto current_type = astExprType(id);
@@ -222,8 +194,8 @@ bool SemaPipeline::concretizeLiteralExpr(ast::ExprId id, types::TypeId concrete_
         ctx_.types().kindOf(current_type) != types::TypeKind::Int)
         return false;
 
-    auto &current_int = std::get<types::TypeInt>(ctx_.types().lookup(current_type));
-    if (current_int.width != types::IntWidth::Literal)
+    auto *current_int = std::get_if<types::TypeInt>(&ctx_.types().lookup(current_type));
+    if (!current_int || current_int->width != types::IntWidth::Literal)
         return false;
 
     typed_ast_.set(id, concrete_type);
@@ -231,9 +203,9 @@ bool SemaPipeline::concretizeLiteralExpr(ast::ExprId id, types::TypeId concrete_
     if (ctx_.types().kindOf(concrete_type) != types::TypeKind::Int)
         return true;
 
-    auto &int_t = std::get<types::TypeInt>(ctx_.types().lookup(concrete_type));
-    auto value  = std::strtoll(std::string(lit.raw).data(), nullptr, 10);
-    if (auto *err = checkIntOverflow(value, int_t.width))
+    auto *int_t = std::get_if<types::TypeInt>(&ctx_.types().lookup(concrete_type));
+    auto value  = std::strtoll(std::string(lit->raw).data(), nullptr, 10);
+    if (auto *err = checkIntOverflow(value, int_t->width))
         ctx_.diags().report(Severity::Error, TypeMismatch, err, span);
     return true;
 }
@@ -242,8 +214,8 @@ ast::ExprId SemaPipeline::implicitReturnExpr(ast::ExprId body_id) const {
     if (body_id == ast::kInvalidExpr)
         return ast::kInvalidExpr;
     auto &node = builder().getExpr(body_id);
-    if (ast::exprKind(node) == ast::ExprKind::Block)
-        return std::get<ast::BlockNode>(node).trailing;
+    if (auto *block = std::get_if<ast::BlockNode>(&node))
+        return block->trailing;
     return body_id;
 }
 
@@ -295,8 +267,9 @@ void SemaPipeline::ensureBodyChecked(symbols::SymId fn_sym) {
         if (unifier_.unify(body_type, current_fn_ret_type_, fn->span)) {
             types::TypeId concrete = current_fn_ret_type_;
             if (ctx_.types().kindOf(current_fn_ret_type_) == types::TypeKind::Int) {
-                auto &type = std::get<types::TypeInt>(ctx_.types().lookup(current_fn_ret_type_));
-                if (type.width == types::IntWidth::Literal)
+                auto *type =
+                    std::get_if<types::TypeInt>(&ctx_.types().lookup(current_fn_ret_type_));
+                if (type && type->width == types::IntWidth::Literal)
                     concrete = body_type;
             }
             concretizeLiteralExpr(implicit_expr_id, concrete, fn->span);
@@ -314,20 +287,39 @@ void SemaPipeline::warnNotImplemented(std::string_view feature, memory::Span spa
                         std::string(feature) + " is not implemented yet", span);
 }
 
+void SemaPipeline::reportUnsupportedSyntax(std::string_view syntax, memory::Span span) {
+    ctx_.diags().report(diagnostics::Severity::Error, diagnostics::err::UnsupportedSyntax,
+                        std::string(syntax) + " is parsed but not supported yet", span);
+}
+
 bool SemaPipeline::run(const ast::ProgramNode &program) {
     for (auto decl_id : program.decls) {
         auto &decl = ctx_.builder().getDecl(decl_id);
-        if (auto *sd = ast::asStruct(decl))
-            ctx_.types().registerNamedType(sd->name, types::TypeKind::Struct);
-        else if (auto *ed = ast::asEnum(decl))
-            ctx_.types().registerNamedType(ed->name, types::TypeKind::Enum);
-        else if (auto *ud = ast::asUnion(decl))
-            ctx_.types().registerNamedType(ud->name, types::TypeKind::Union);
-        else if (auto *ad = ast::asTypeAlias(decl)) {
-            types::TypeLower lower(ctx_.builder(), ctx_.types(), ctx_.diags(), ctx_.syms());
-            auto target = lower.lower(ad->target_type);
-            ctx_.types().registerTypeAlias(ad->name, target);
-        }
+        std::visit(common::overloaded{
+                       [&](const ast::StructDeclNode &n) {
+                           ctx_.types().registerNamedType(n.name, types::TypeKind::Struct);
+                       },
+                       [&](const ast::EnumDeclNode &n) {
+                           ctx_.types().registerNamedType(n.name, types::TypeKind::Enum);
+                       },
+                       [&](const ast::UnionDeclNode &n) {
+                           ctx_.types().registerNamedType(n.name, types::TypeKind::Union);
+                       },
+                       [&](const ast::TypeAliasDeclNode &n) {
+                           types::TypeLower lower(ctx_.builder(), ctx_.types(), ctx_.diags(),
+                                                  ctx_.syms());
+                           auto target = lower.lower(n.target_type);
+                           ctx_.types().registerTypeAlias(n.name, target);
+                       },
+                       [&](const ast::WordDeclNode &n) {
+                           reportUnsupportedSyntax("word declarations", n.span);
+                       },
+                       [&](const ast::ContextDeclNode &n) {
+                           reportUnsupportedSyntax("context declarations", n.span);
+                       },
+                       [](const auto &) {},
+                   },
+                   decl);
     }
 
     for (auto decl_id : program.decls) {
@@ -355,48 +347,58 @@ types::TypeId SemaPipeline::visitExpr(ast::ExprId id) {
         return types::kErrorType;
 
     auto &node = builder().getExpr(id);
-    switch (ast::exprKind(node)) {
-    case ast::ExprKind::Literal:
-        return visitLiteral(id, std::get<ast::LitValue>(node));
-    case ast::ExprKind::Identifier:
-        return visitIdent(std::get<ast::IdentNode>(node), id);
-    case ast::ExprKind::Binary:
-        return visitBinary(id, std::get<ast::BinaryNode>(node));
-    case ast::ExprKind::Unary:
-        return visitUnary(id, std::get<ast::UnaryNode>(node));
-    case ast::ExprKind::Call:
-        return visitCall(id, std::get<ast::CallNode>(node));
-    case ast::ExprKind::Block:
-        return visitBlock(id, std::get<ast::BlockNode>(node));
-    case ast::ExprKind::If:
-        return visitIf(id, std::get<ast::IfNode>(node));
-    case ast::ExprKind::While:
-        return visitWhile(id, std::get<ast::WhileNode>(node));
-    case ast::ExprKind::Field:
-        warnNotImplemented("field access", builder().exprSpan(id));
-        typed_ast_.set(id, types::kErrorType);
-        return types::kErrorType;
-    case ast::ExprKind::Index:
-        warnNotImplemented("index access", builder().exprSpan(id));
-        typed_ast_.set(id, types::kErrorType);
-        return types::kErrorType;
-    case ast::ExprKind::Range:
-        warnNotImplemented("range expressions", builder().exprSpan(id));
-        typed_ast_.set(id, types::kErrorType);
-        return types::kErrorType;
-    case ast::ExprKind::Unbody:
-    case ast::ExprKind::Intrinsic:
-        warnNotImplemented("compiler intrinsics in expressions", builder().exprSpan(id));
-        typed_ast_.set(id, types::kErrorType);
-        return types::kErrorType;
-    case ast::ExprKind::MacroCall:
-        warnNotImplemented("macro calls in expressions", builder().exprSpan(id));
-        typed_ast_.set(id, types::kErrorType);
-        return types::kErrorType;
-    }
-
-    typed_ast_.set(id, types::kErrorType);
-    return types::kErrorType;
+    return std::visit(
+        common::overloaded{
+            [&](const ast::LitValue &n) { return visitLiteral(id, n); },
+            [&](const ast::IdentNode &n) { return visitIdent(n, id); },
+            [&](const ast::BinaryNode &n) { return visitBinary(id, n); },
+            [&](const ast::UnaryNode &n) { return visitUnary(id, n); },
+            [&](const ast::CallNode &n) { return visitCall(id, n); },
+            [&](const ast::BlockNode &n) { return visitBlock(id, n); },
+            [&](const ast::IfNode &n) { return visitIf(id, n); },
+            [&](const ast::WhileNode &n) { return visitWhile(id, n); },
+            [&](const ast::FieldNode &) {
+                warnNotImplemented("field access", builder().exprSpan(id));
+                typed_ast_.set(id, types::kErrorType);
+                return types::kErrorType;
+            },
+            [&](const ast::IndexNode &) {
+                warnNotImplemented("index access", builder().exprSpan(id));
+                typed_ast_.set(id, types::kErrorType);
+                return types::kErrorType;
+            },
+            [&](const ast::RangeNode &) {
+                warnNotImplemented("range expressions", builder().exprSpan(id));
+                typed_ast_.set(id, types::kErrorType);
+                return types::kErrorType;
+            },
+            [&](const ast::UnbodyNode &) {
+                warnNotImplemented("compiler intrinsics in expressions", builder().exprSpan(id));
+                typed_ast_.set(id, types::kErrorType);
+                return types::kErrorType;
+            },
+            [&](const ast::IntrinsicNode &) {
+                warnNotImplemented("compiler intrinsics in expressions", builder().exprSpan(id));
+                typed_ast_.set(id, types::kErrorType);
+                return types::kErrorType;
+            },
+            [&](const ast::MacroCallNode &) {
+                warnNotImplemented("macro calls in expressions", builder().exprSpan(id));
+                typed_ast_.set(id, types::kErrorType);
+                return types::kErrorType;
+            },
+            [&](const ast::SeqNode &) {
+                reportUnsupportedSyntax("word operator sequences", builder().exprSpan(id));
+                typed_ast_.set(id, types::kErrorType);
+                return types::kErrorType;
+            },
+            [&](const ast::WordCallNode &) {
+                reportUnsupportedSyntax("word calls", builder().exprSpan(id));
+                typed_ast_.set(id, types::kErrorType);
+                return types::kErrorType;
+            },
+        },
+        node);
 }
 
 types::TypeId SemaPipeline::visitLiteral(ast::ExprId id, const ast::LitValue &n) {
@@ -440,6 +442,13 @@ types::TypeId SemaPipeline::visitIdent(const ast::IdentNode &n, ast::ExprId id) 
 }
 
 types::TypeId SemaPipeline::visitBinary(ast::ExprId id, const ast::BinaryNode &n) {
+    if (n.op == ast::BinaryOp::Is || n.op == ast::BinaryOp::As) {
+        reportUnsupportedSyntax(n.op == ast::BinaryOp::Is ? "'is' expressions" : "'as' expressions",
+                                n.span);
+        typed_ast_.set(id, types::kErrorType);
+        return types::kErrorType;
+    }
+
     auto lhs_type = visitExpr(n.lhs);
     auto rhs_type = visitExpr(n.rhs);
     if (lhs_type == types::kErrorType || rhs_type == types::kErrorType) {
@@ -455,16 +464,16 @@ types::TypeId SemaPipeline::visitBinary(ast::ExprId id, const ast::BinaryNode &n
     types::TypeId result_type = lhs_type;
     types::TypeId concrete    = result_type;
     if (ctx_.types().kindOf(result_type) == types::TypeKind::Int) {
-        auto &type = std::get<types::TypeInt>(ctx_.types().lookup(result_type));
-        if (type.width == types::IntWidth::Literal)
+        auto *type = std::get_if<types::TypeInt>(&ctx_.types().lookup(result_type));
+        if (type && type->width == types::IntWidth::Literal)
             concrete = rhs_type;
     }
 
     concretizeLiteralExpr(n.lhs, concrete, n.span);
     concretizeLiteralExpr(n.rhs, concrete, n.span);
     if (ctx_.types().kindOf(result_type) == types::TypeKind::Int) {
-        auto &type = std::get<types::TypeInt>(ctx_.types().lookup(result_type));
-        if (type.width == types::IntWidth::Literal)
+        auto *type = std::get_if<types::TypeInt>(&ctx_.types().lookup(result_type));
+        if (type && type->width == types::IntWidth::Literal)
             result_type = concrete;
     }
 
@@ -473,6 +482,18 @@ types::TypeId SemaPipeline::visitBinary(ast::ExprId id, const ast::BinaryNode &n
 }
 
 types::TypeId SemaPipeline::visitUnary(ast::ExprId id, const ast::UnaryNode &n) {
+    switch (n.op) {
+    case ast::UnaryOp::FallbackOpt:
+    case ast::UnaryOp::FallbackRes:
+    case ast::UnaryOp::PropagateOpt:
+    case ast::UnaryOp::PropagateRes:
+        reportUnsupportedSyntax("fallback and propagation operators", n.span);
+        typed_ast_.set(id, types::kErrorType);
+        return types::kErrorType;
+    default:
+        break;
+    }
+
     auto operand_type = visitExpr(n.operand);
     if (operand_type == types::kErrorType) {
         typed_ast_.set(id, types::kErrorType);
@@ -495,8 +516,14 @@ types::TypeId SemaPipeline::visitUnary(ast::ExprId id, const ast::UnaryNode &n) 
                                 "cannot dereference a non-pointer value", n.span);
             result_type = types::kErrorType;
         } else {
-            result_type = std::get<types::TypePtr>(ctx_.types().lookup(operand_type)).pointee;
+            auto *ptr   = std::get_if<types::TypePtr>(&ctx_.types().lookup(operand_type));
+            result_type = ptr ? ptr->pointee : types::kErrorType;
         }
+        break;
+    case ast::UnaryOp::FallbackOpt:
+    case ast::UnaryOp::FallbackRes:
+    case ast::UnaryOp::PropagateOpt:
+    case ast::UnaryOp::PropagateRes:
         break;
     }
 
@@ -516,8 +543,10 @@ types::TypeId SemaPipeline::visitCall(ast::ExprId id, const ast::CallNode &n) {
     size_t match_count         = 0;
 
     auto &callee_expr = builder().getExpr(n.callee);
-    if (ast::exprKind(callee_expr) == ast::ExprKind::Identifier) {
-        auto callee_name          = std::get<ast::IdentNode>(callee_expr).name;
+    std::string_view callee_name;
+    if (auto *ident = std::get_if<ast::IdentNode>(&callee_expr))
+        callee_name = ident->name;
+    if (!callee_name.empty()) {
         auto candidates           = syms().lookupAll(callee_name, arena_);
         size_t fn_candidate_count = 0;
 
@@ -638,16 +667,16 @@ types::TypeId SemaPipeline::visitIf(ast::ExprId id, const ast::IfNode &n) {
     types::TypeId result_type = then_type;
     types::TypeId concrete    = result_type;
     if (ctx_.types().kindOf(result_type) == types::TypeKind::Int) {
-        auto &type = std::get<types::TypeInt>(ctx_.types().lookup(result_type));
-        if (type.width == types::IntWidth::Literal)
+        auto *type = std::get_if<types::TypeInt>(&ctx_.types().lookup(result_type));
+        if (type && type->width == types::IntWidth::Literal)
             concrete = else_type;
     }
 
     concretizeLiteralExpr(implicitReturnExpr(n.then_branch), concrete, n.span);
     concretizeLiteralExpr(implicitReturnExpr(n.else_branch), concrete, n.span);
     if (ctx_.types().kindOf(result_type) == types::TypeKind::Int) {
-        auto &type = std::get<types::TypeInt>(ctx_.types().lookup(result_type));
-        if (type.width == types::IntWidth::Literal)
+        auto *type = std::get_if<types::TypeInt>(&ctx_.types().lookup(result_type));
+        if (type && type->width == types::IntWidth::Literal)
             result_type = concrete;
     }
 
@@ -680,83 +709,74 @@ void SemaPipeline::visitStmt(ast::StmtId id) {
         return;
 
     auto &node = builder().getStmt(id);
-    switch (ast::stmtKind(node)) {
-    case ast::StmtKind::Let: {
-        const auto &n = std::get<ast::LetNode>(node);
+    std::visit(
+        common::overloaded{
+            [&](const ast::LetNode &n) {
+                types::TypeId decl_type = types::kErrorType;
+                if (n.type_annot != ast::kInvalidTypeExpr) {
+                    types::TypeLower lower(builder(), ctx_.types(), ctx_.diags(), ctx_.syms());
+                    decl_type = lower.lower(n.type_annot);
+                }
 
-        types::TypeId decl_type = types::kErrorType;
-        if (n.type_annot != ast::kInvalidTypeExpr) {
-            types::TypeLower lower(builder(), ctx_.types(), ctx_.diags(), ctx_.syms());
-            decl_type = lower.lower(n.type_annot);
-        }
+                types::TypeId init_type = types::kErrorType;
+                if (n.init != ast::kInvalidExpr)
+                    init_type = visitExpr(n.init);
 
-        types::TypeId init_type = types::kErrorType;
-        if (n.init != ast::kInvalidExpr)
-            init_type = visitExpr(n.init);
+                if (n.type_annot != ast::kInvalidTypeExpr && n.init != ast::kInvalidExpr &&
+                    decl_type != types::kErrorType && init_type != types::kErrorType &&
+                    unifier_.unify(decl_type, init_type, n.span)) {
+                    types::TypeId concrete = decl_type;
+                    if (ctx_.types().kindOf(decl_type) == types::TypeKind::Int) {
+                        auto *type = std::get_if<types::TypeInt>(&ctx_.types().lookup(decl_type));
+                        if (type && type->width == types::IntWidth::Literal)
+                            concrete = init_type;
+                    }
+                    concretizeLiteralExpr(n.init, concrete, n.span);
+                }
 
-        if (n.type_annot != ast::kInvalidTypeExpr && n.init != ast::kInvalidExpr &&
-            decl_type != types::kErrorType && init_type != types::kErrorType &&
-            unifier_.unify(decl_type, init_type, n.span)) {
-            types::TypeId concrete = decl_type;
-            if (ctx_.types().kindOf(decl_type) == types::TypeKind::Int) {
-                auto &type = std::get<types::TypeInt>(ctx_.types().lookup(decl_type));
-                if (type.width == types::IntWidth::Literal)
-                    concrete = init_type;
-            }
-            concretizeLiteralExpr(n.init, concrete, n.span);
-        }
+                types::TypeId var_type = init_type;
+                if (n.type_annot != ast::kInvalidTypeExpr && decl_type != types::kErrorType)
+                    var_type = decl_type;
+                else if (init_type != types::kErrorType)
+                    var_type = init_type;
 
-        types::TypeId var_type = init_type;
-        if (n.type_annot != ast::kInvalidTypeExpr && decl_type != types::kErrorType)
-            var_type = decl_type;
-        else if (init_type != types::kErrorType)
-            var_type = init_type;
+                for (auto var_name : n.names) {
+                    auto sym_id = syms().declare(var_name, symbols::SymbolVisibility::Private, 0,
+                                                 symbols::SymKind::Variable, ast::kInvalidDecl,
+                                                 memory::Span{});
+                    if (sym_id != symbols::kInvalidSym) {
+                        ensureVarTypeCapacity(sym_id);
+                        var_types_[sym_id] = var_type;
+                    }
+                }
+            },
+            [&](const ast::AssignNode &n) {
+                visitExpr(n.target);
+                visitExpr(n.value);
+            },
+            [&](const ast::RetNode &n) {
+                auto val_type = types::kVoidType;
+                if (n.value != ast::kInvalidExpr)
+                    val_type = visitExpr(n.value);
 
-        for (auto var_name : n.names) {
-            auto sym_id =
-                syms().declare(var_name, symbols::SymbolVisibility::Private, 0,
-                               symbols::SymKind::Variable, ast::kInvalidDecl, memory::Span{});
-            if (sym_id != symbols::kInvalidSym) {
-                ensureVarTypeCapacity(sym_id);
-                var_types_[sym_id] = var_type;
-            }
-        }
-        break;
-    }
-    case ast::StmtKind::Assign: {
-        const auto &n = std::get<ast::AssignNode>(node);
-        visitExpr(n.target);
-        visitExpr(n.value);
-        break;
-    }
-    case ast::StmtKind::Return: {
-        const auto &n = std::get<ast::RetNode>(node);
-        auto val_type = types::kVoidType;
-        if (n.value != ast::kInvalidExpr)
-            val_type = visitExpr(n.value);
-
-        if (val_type != types::kErrorType && current_fn_ret_type_ != types::kErrorType &&
-            unifier_.unify(val_type, current_fn_ret_type_, n.span)) {
-            types::TypeId concrete = current_fn_ret_type_;
-            if (ctx_.types().kindOf(current_fn_ret_type_) == types::TypeKind::Int) {
-                auto &type = std::get<types::TypeInt>(ctx_.types().lookup(current_fn_ret_type_));
-                if (type.width == types::IntWidth::Literal)
-                    concrete = val_type;
-            }
-            concretizeLiteralExpr(n.value, concrete, n.span);
-        }
-        break;
-    }
-    case ast::StmtKind::Goto:
-        visitGoto(std::get<ast::GotoNode>(node));
-        break;
-    case ast::StmtKind::Marker:
-        visitMarker(std::get<ast::MarkerNode>(node));
-        break;
-    case ast::StmtKind::Expr:
-        visitExpr(std::get<ast::ExprStmtNode>(node).expr);
-        break;
-    }
+                if (val_type != types::kErrorType && current_fn_ret_type_ != types::kErrorType &&
+                    unifier_.unify(val_type, current_fn_ret_type_, n.span)) {
+                    types::TypeId concrete = current_fn_ret_type_;
+                    if (ctx_.types().kindOf(current_fn_ret_type_) == types::TypeKind::Int) {
+                        auto *type =
+                            std::get_if<types::TypeInt>(&ctx_.types().lookup(current_fn_ret_type_));
+                        if (type && type->width == types::IntWidth::Literal)
+                            concrete = val_type;
+                    }
+                    concretizeLiteralExpr(n.value, concrete, n.span);
+                }
+            },
+            [&](const ast::GotoNode &n) { visitGoto(n); },
+            [&](const ast::MarkerNode &n) { visitMarker(n); },
+            [&](const ast::ExprStmtNode &n) { visitExpr(n.expr); },
+            [&](const ast::UseNode &n) { reportUnsupportedSyntax("use statements", n.span); },
+        },
+        node);
 }
 
 } // namespace zith::sema

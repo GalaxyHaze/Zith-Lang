@@ -1,5 +1,6 @@
 #include "sema/hir-lower.hpp"
 #include "ast/ast-node-utils.hpp"
+#include "common/overloaded.hpp"
 #include "diagnostics/error-codes.hpp"
 #include "symbols/symbol-id.hpp"
 #include "types/type-id.hpp"
@@ -51,8 +52,13 @@ hir::HirBinaryOp mapBinaryOp(ast::BinaryOp op) {
         return hir::HirBinaryOp::Or;
     case BinaryOp::Xor:
         return hir::HirBinaryOp::Xor;
-    default:
-        return hir::HirBinaryOp::Add;
+    case BinaryOp::Is:
+    case BinaryOp::As:
+        // Semantic analysis rejects these before lowering.
+        std::abort();
+    case BinaryOp::Shl:
+    case BinaryOp::Shr:
+        return hir::HirBinaryOp::Add; // not implemented yet
     }
 }
 
@@ -66,6 +72,12 @@ hir::HirUnaryOp mapUnaryOp(ast::UnaryOp op) {
         return hir::HirUnaryOp::Ref;
     case UnaryOp::Deref:
         return hir::HirUnaryOp::Deref;
+    case UnaryOp::FallbackOpt:
+    case UnaryOp::FallbackRes:
+    case UnaryOp::PropagateOpt:
+    case UnaryOp::PropagateRes:
+        // Semantic analysis rejects these before lowering.
+        std::abort();
     }
     return hir::HirUnaryOp::Neg;
 }
@@ -293,32 +305,26 @@ hir::HirExprId HirLower::visitExpr(ast::ExprId id) {
         return hir::kInvalidHirExpr;
 
     auto &node = builder().getExpr(id);
-    switch (ast::exprKind(node)) {
-    case ast::ExprKind::Literal:
-        return visitLiteral(id, std::get<ast::LitValue>(node));
-    case ast::ExprKind::Identifier:
-        return visitIdent(std::get<ast::IdentNode>(node), id);
-    case ast::ExprKind::Binary:
-        return visitBinary(id, std::get<ast::BinaryNode>(node));
-    case ast::ExprKind::Unary:
-        return visitUnary(id, std::get<ast::UnaryNode>(node));
-    case ast::ExprKind::Call:
-        return visitCall(id, std::get<ast::CallNode>(node));
-    case ast::ExprKind::Block:
-        return visitBlock(std::get<ast::BlockNode>(node));
-    case ast::ExprKind::If:
-        return visitIf(std::get<ast::IfNode>(node));
-    case ast::ExprKind::While:
-        return visitWhile(std::get<ast::WhileNode>(node));
-    case ast::ExprKind::Field:
-    case ast::ExprKind::Index:
-    case ast::ExprKind::Range:
-    case ast::ExprKind::Unbody:
-    case ast::ExprKind::Intrinsic:
-    case ast::ExprKind::MacroCall:
-        return hir::kInvalidHirExpr;
-    }
-    return hir::kInvalidHirExpr;
+    return std::visit(
+        common::overloaded{
+            [&](const ast::LitValue &n) { return visitLiteral(id, n); },
+            [&](const ast::IdentNode &n) { return visitIdent(n, id); },
+            [&](const ast::BinaryNode &n) { return visitBinary(id, n); },
+            [&](const ast::UnaryNode &n) { return visitUnary(id, n); },
+            [&](const ast::CallNode &n) { return visitCall(id, n); },
+            [&](const ast::BlockNode &n) { return visitBlock(n); },
+            [&](const ast::IfNode &n) { return visitIf(n); },
+            [&](const ast::WhileNode &n) { return visitWhile(n); },
+            [](const ast::FieldNode &) -> hir::HirExprId { return hir::kInvalidHirExpr; },
+            [](const ast::IndexNode &) -> hir::HirExprId { return hir::kInvalidHirExpr; },
+            [](const ast::RangeNode &) -> hir::HirExprId { return hir::kInvalidHirExpr; },
+            [](const ast::UnbodyNode &) -> hir::HirExprId { return hir::kInvalidHirExpr; },
+            [](const ast::IntrinsicNode &) -> hir::HirExprId { return hir::kInvalidHirExpr; },
+            [](const ast::MacroCallNode &) -> hir::HirExprId { return hir::kInvalidHirExpr; },
+            [](const ast::SeqNode &) -> hir::HirExprId { return hir::kInvalidHirExpr; },
+            [](const ast::WordCallNode &) -> hir::HirExprId { return hir::kInvalidHirExpr; },
+        },
+        node);
 }
 
 hir::HirExprId HirLower::visitLiteral(ast::ExprId id, const ast::LitValue &n) {
@@ -391,10 +397,10 @@ hir::HirExprId HirLower::visitBinary(ast::ExprId id, const ast::BinaryNode &n) {
         return hir::kInvalidHirExpr;
 
     hir::HirBinary bin;
-    bin.lhs = lhs;
-    bin.rhs = rhs;
-    bin.op  = mapBinaryOp(n.op);
-    (void)id;
+    bin.lhs  = lhs;
+    bin.rhs  = rhs;
+    bin.op   = mapBinaryOp(n.op);
+    bin.type = astExprType(id);
     return addHirExpr(hir::HirExpr{bin});
 }
 
@@ -431,9 +437,8 @@ hir::HirExprId HirLower::visitCall(ast::ExprId id, const ast::CallNode &n) {
     size_t match_count         = 0;
 
     const auto &callee_expr = hir_.getExpr(callee);
-    if (hir::exprKind(callee_expr) == hir::HirExprKind::Var) {
-        auto &var                 = std::get<hir::HirVar>(callee_expr);
-        auto callee_name          = var.name;
+    if (auto *var = std::get_if<hir::HirVar>(&callee_expr)) {
+        auto callee_name          = var->name;
         auto candidates           = ctx_.syms().lookupAll(callee_name, hir_arena_);
         size_t fn_candidate_count = 0;
         for (auto sym_id : candidates) {
@@ -701,93 +706,84 @@ void HirLower::visitStmt(ast::StmtId id) {
         return;
 
     auto &node = builder().getStmt(id);
-    switch (ast::stmtKind(node)) {
-    case ast::StmtKind::Let: {
-        const auto &n           = std::get<ast::LetNode>(node);
-        hir::HirExprId init     = hir::kInvalidHirExpr;
-        types::TypeId init_type = types::kErrorType;
-        if (n.init != ast::kInvalidExpr) {
-            init = visitExpr(n.init);
-            if (init != hir::kInvalidHirExpr)
-                init_type = astExprType(n.init);
-        }
-
-        types::TypeId decl_type = types::kErrorType;
-        if (n.type_annot != ast::kInvalidTypeExpr) {
-            types::TypeLower lower(builder(), ctx_.types(), ctx_.diags(), ctx_.syms());
-            decl_type = lower.lower(n.type_annot);
-        }
-
-        types::TypeId var_type = init_type;
-        if (n.type_annot != ast::kInvalidTypeExpr && decl_type != types::kErrorType)
-            var_type = decl_type;
-        else if (init_type != types::kErrorType)
-            var_type = init_type;
-
-        for (auto var_name : n.names) {
-            auto sym_id =
-                ctx_.syms().declare(var_name, symbols::SymbolVisibility::Private, 0,
-                                    symbols::SymKind::Variable, ast::kInvalidDecl, memory::Span{});
-            if (sym_id != symbols::kInvalidSym) {
-                if (sym_id >= var_types_.size()) {
-                    if (sym_id >= var_types_.capacity())
-                        var_types_.reserve(sym_id + 1);
-                    while (var_types_.size() <= sym_id)
-                        var_types_.push(types::kErrorType);
+    std::visit(
+        common::overloaded{
+            [&](const ast::LetNode &n) {
+                hir::HirExprId init     = hir::kInvalidHirExpr;
+                types::TypeId init_type = types::kErrorType;
+                if (n.init != ast::kInvalidExpr) {
+                    init = visitExpr(n.init);
+                    if (init != hir::kInvalidHirExpr)
+                        init_type = astExprType(n.init);
                 }
-                var_types_[sym_id] = var_type;
-            }
 
-            hir::HirLet hir_let;
-            hir_let.name = ctx_.syms().interner().intern(var_name);
-            hir_let.type = var_type;
-            hir_let.init = init;
+                types::TypeId decl_type = types::kErrorType;
+                if (n.type_annot != ast::kInvalidTypeExpr) {
+                    types::TypeLower lower(builder(), ctx_.types(), ctx_.diags(), ctx_.syms());
+                    decl_type = lower.lower(n.type_annot);
+                }
 
-            auto hir_id = addHirExpr(hir::HirExpr{hir_let});
-            if (current_fn_ && !current_fn_->blocks.empty()) {
-                auto &cur = current_fn_->blocks[currentBlock()];
-                cur.insts.push(hir_id);
-            }
-        }
-        break;
-    }
-    case ast::StmtKind::Assign: {
-        const auto &n = std::get<ast::AssignNode>(node);
-        auto target   = visitExpr(n.target);
-        auto value    = visitExpr(n.value);
-        (void)target;
-        (void)value;
-        break;
-    }
-    case ast::StmtKind::Return: {
-        const auto &n      = std::get<ast::RetNode>(node);
-        hir::HirExprId val = hir::kInvalidHirExpr;
-        if (n.value != ast::kInvalidExpr)
-            val = visitExpr(n.value);
+                types::TypeId var_type = init_type;
+                if (n.type_annot != ast::kInvalidTypeExpr && decl_type != types::kErrorType)
+                    var_type = decl_type;
+                else if (init_type != types::kErrorType)
+                    var_type = init_type;
 
-        hir::HirRet ret;
-        ret.value   = val;
-        auto hir_id = hir_.addExpr(hir::HirExpr{ret});
-        if (current_fn_ && !current_fn_->blocks.empty())
-            setTerminator(hir_id);
-        break;
-    }
-    case ast::StmtKind::Goto:
-        visitGoto(std::get<ast::GotoNode>(node));
-        break;
-    case ast::StmtKind::Marker:
-        visitMarker(std::get<ast::MarkerNode>(node));
-        break;
-    case ast::StmtKind::Expr: {
-        auto expr_id = std::get<ast::ExprStmtNode>(node).expr;
-        auto result  = visitExpr(expr_id);
-        if (result != hir::kInvalidHirExpr && current_fn_ && !current_fn_->blocks.empty()) {
-            auto &cur = current_fn_->blocks[currentBlock()];
-            cur.insts.push(result);
-        }
-        break;
-    }
-    }
+                for (auto var_name : n.names) {
+                    auto sym_id = ctx_.syms().declare(var_name, symbols::SymbolVisibility::Private,
+                                                      0, symbols::SymKind::Variable,
+                                                      ast::kInvalidDecl, memory::Span{});
+                    if (sym_id != symbols::kInvalidSym) {
+                        if (sym_id >= var_types_.size()) {
+                            if (sym_id >= var_types_.capacity())
+                                var_types_.reserve(sym_id + 1);
+                            while (var_types_.size() <= sym_id)
+                                var_types_.push(types::kErrorType);
+                        }
+                        var_types_[sym_id] = var_type;
+                    }
+
+                    hir::HirLet hir_let;
+                    hir_let.name = ctx_.syms().interner().intern(var_name);
+                    hir_let.type = var_type;
+                    hir_let.init = init;
+
+                    auto hir_id = addHirExpr(hir::HirExpr{hir_let});
+                    if (current_fn_ && !current_fn_->blocks.empty()) {
+                        auto &cur = current_fn_->blocks[currentBlock()];
+                        cur.insts.push(hir_id);
+                    }
+                }
+            },
+            [&](const ast::AssignNode &n) {
+                auto target = visitExpr(n.target);
+                auto value  = visitExpr(n.value);
+                (void)target;
+                (void)value;
+            },
+            [&](const ast::RetNode &n) {
+                hir::HirExprId val = hir::kInvalidHirExpr;
+                if (n.value != ast::kInvalidExpr)
+                    val = visitExpr(n.value);
+
+                hir::HirRet ret;
+                ret.value   = val;
+                auto hir_id = hir_.addExpr(hir::HirExpr{ret});
+                if (current_fn_ && !current_fn_->blocks.empty())
+                    setTerminator(hir_id);
+            },
+            [&](const ast::GotoNode &n) { visitGoto(n); },
+            [&](const ast::MarkerNode &n) { visitMarker(n); },
+            [&](const ast::ExprStmtNode &n) {
+                auto result = visitExpr(n.expr);
+                if (result != hir::kInvalidHirExpr && current_fn_ && !current_fn_->blocks.empty()) {
+                    auto &cur = current_fn_->blocks[currentBlock()];
+                    cur.insts.push(result);
+                }
+            },
+            [](const ast::UseNode &) {},
+        },
+        node);
 }
 
 } // namespace zith::sema

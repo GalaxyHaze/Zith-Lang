@@ -53,7 +53,7 @@ struct StructTest {
 
         // Expand bodies
         parser.program = std::move(*prog);
-        parser.expandBodies(scanResult);
+        parser.expandBodies(scanResult, syms);
         *prog = std::move(parser.program);
 
         size_t errs = 0;

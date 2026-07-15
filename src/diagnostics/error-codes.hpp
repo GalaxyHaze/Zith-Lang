@@ -28,15 +28,16 @@ inline constexpr ErrCode const ImportError           = 1006;
 inline constexpr ErrCode const TopLevelLetNotAllowed = 1007;
 
 // Semantic (2001-2999)
-inline constexpr ErrCode const UndefinedIdent = 2001;
-inline constexpr ErrCode const DuplicateDecl  = 2002;
-inline constexpr ErrCode const WrongArity     = 2003;
-inline constexpr ErrCode const UnusedDecl     = 2004;
-inline constexpr ErrCode const NotNamespace   = 2005;
-inline constexpr ErrCode const NoMember       = 2006;
-inline constexpr ErrCode const NoMatchingFn   = 2007;
-inline constexpr ErrCode const AmbiguousCall  = 2008;
-inline constexpr ErrCode const NotImplemented = 2009;
+inline constexpr ErrCode const UndefinedIdent    = 2001;
+inline constexpr ErrCode const DuplicateDecl     = 2002;
+inline constexpr ErrCode const WrongArity        = 2003;
+inline constexpr ErrCode const UnusedDecl        = 2004;
+inline constexpr ErrCode const NotNamespace      = 2005;
+inline constexpr ErrCode const NoMember          = 2006;
+inline constexpr ErrCode const NoMatchingFn      = 2007;
+inline constexpr ErrCode const AmbiguousCall     = 2008;
+inline constexpr ErrCode const NotImplemented    = 2009;
+inline constexpr ErrCode const UnsupportedSyntax = 2010;
 
 // Types (3001-3999)
 inline constexpr ErrCode const TypeMismatch = 3001;

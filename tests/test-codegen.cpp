@@ -119,6 +119,32 @@ static void test_deref_ref_expression_chain() {
     CHECK_EQ(r.exitCode, 12, "Immediate deref-ref chain preserves the value");
 }
 
+static void test_unsigned_comparison() {
+    CodegenTest t;
+    auto r = t.run("codegen-unsigned-cmp.zith",
+                   "fn main(): i32 {\n"
+                   "    var x: u32 = 4294967295;\n"
+                   "    var y: u32 = 1;\n"
+                   "    if (x > y) { return 1; }\n"
+                   "    return 0;\n"
+                   "}\n");
+    CHECK(r.ok, "Unsigned comparison compiles and runs");
+    CHECK_EQ(r.exitCode, 1, "4294967295u32 > 1u32 (unsigned comparison must use UGT not SGT)");
+}
+
+static void test_forward_reference() {
+    CodegenTest t;
+    auto r = t.run("codegen-forward-ref.zith",
+                   "fn main(): i32 {\n"
+                   "    return helper();\n"
+                   "}\n"
+                   "fn helper(): i32 {\n"
+                   "    return 42;\n"
+                   "}\n");
+    CHECK(r.ok, "Forward reference compiles and runs");
+    CHECK_EQ(r.exitCode, 42, "Function defined after main is resolved");
+}
+
 static void test_codegen() {
     test_return_literal();
     test_ref_deref_local();
@@ -126,6 +152,8 @@ static void test_codegen() {
     test_pointer_parameter_call();
     test_double_pointer_roundtrip();
     test_deref_ref_expression_chain();
+    test_unsigned_comparison();
+    test_forward_reference();
 }
 
 TEST_MAIN(codegen)

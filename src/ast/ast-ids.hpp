@@ -19,6 +19,8 @@ enum class ExprKind : uint8_t {
     Unbody,
     Intrinsic,
     MacroCall,
+    Sequence,
+    WordCall,
 };
 
 enum class StmtKind : uint8_t {
@@ -28,6 +30,7 @@ enum class StmtKind : uint8_t {
     Goto,
     Marker,
     Expr,
+    Use,
 };
 
 enum class DeclKind : uint8_t {
@@ -41,6 +44,8 @@ enum class DeclKind : uint8_t {
     Import,
     TypeAlias,
     Global,
+    Word,
+    Context,
 };
 
 using NodeId     = uint32_t;

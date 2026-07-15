@@ -50,6 +50,7 @@ bool Parser::isAtStartOfStmt() const {
     case lexer::TokenKind::Control:
     case lexer::TokenKind::If:
     case lexer::TokenKind::For:
+    case lexer::TokenKind::Using:
     case lexer::TokenKind::Identifier:
     case lexer::TokenKind::LitVal:
     case lexer::TokenKind::Punctuation:
@@ -219,6 +220,51 @@ ast::StmtId Parser::parseStmt() {
     skipComments(*tok);
     auto ret_span = peek().span;
 
+    if (consume(TokenKind::Using)) {
+        auto use_span = previous().span;
+        if (!check(TokenKind::Identifier)) {
+            errorExpected("context or word name", diagnostics::err::ExpectedIdent);
+            return ast::kInvalidStmt;
+        }
+
+        auto first_segment = lexeme();
+        auto path_start    = peek().span;
+        advance();
+
+        bool is_path = false;
+        while (consume('.')) {
+            is_path = true;
+            if (!check(TokenKind::Identifier)) {
+                errorExpected("identifier after '.'", diagnostics::err::ExpectedIdent);
+                break;
+            }
+            advance();
+        }
+
+        std::string_view target_path;
+        std::string_view context_name = first_segment;
+        if (is_path) {
+            auto path_end = previous().span.end;
+            target_path   = {tok->file_base + path_start.start, path_end - path_start.start};
+            context_name  = {};
+        }
+
+        std::string_view alias_name;
+        if (consume(TokenKind::As))
+            alias_name = expectIdent();
+
+        ast::ExprId block = ast::kInvalidExpr;
+        if (check('{')) {
+            advance();
+            block = parseBlock();
+        } else if (check(';')) {
+            advance();
+        }
+
+        return bld->useStmt(context_name, memory::DynArray<std::string_view>{bld->arena()},
+                            alias_name, target_path, block, spanFrom(use_span));
+    }
+
     // marker <name> { ... }
     if (match("marker")) {
         auto marker_span = peek().span;
@@ -296,6 +342,18 @@ ast::StmtId Parser::parseStmt() {
         if (check(';'))
             advance();
         return bld->assign(expr, rhs, spanFrom(assign_span));
+    }
+    // Trailing ?/! propagate acts as ; — no semicolon needed
+    if (!check(';')) {
+        auto &node = bld->getExpr(expr);
+        if (auto *unary = std::get_if<ast::UnaryNode>(&node)) {
+            if (unary->op == ast::UnaryOp::PropagateOpt ||
+                unary->op == ast::UnaryOp::PropagateRes) {
+                if (check(';'))
+                    advance();
+                return bld->addStmt(expr, bld->exprSpan(expr));
+            }
+        }
     }
     if (check(';'))
         advance();
@@ -377,7 +435,7 @@ ProgramResult parseProgram(lexer::TokenStream tokens, ast::AstBuilder &builder,
     symbols::SymbolTable syms(arena, &builder.interner());
     Parser p(&tokens, &builder, &diags);
     auto result = scan(p, syms);
-    p.expandBodies(result);
+    p.expandBodies(result, syms);
     return std::move(p.program);
 }
 

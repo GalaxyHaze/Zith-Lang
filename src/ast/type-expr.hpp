@@ -99,8 +99,22 @@ struct TypeMut {
     TypeExprId inner;
 };
 
+struct TypeDyn {
+    TypeExprId inner;
+};
+
+struct TypeUnion {
+    // union type hint — compiler creates implicit union from context
+};
+
+struct TypeSpecialization {
+    TypeExprId base; // kInvalidTypeExpr when standalone (<Args> hint)
+    memory::DynArray<TypeExprId> args;
+};
+
 using TypeExprNode =
     std::variant<TypePath, TypeBuiltin, TypePtrExpr, TypeSlice, TypeArray, TypeFnExpr, TypeOptional,
-                 TypeFailable, TypeApp, TypePack, TypeSum, TypeInfer, TypeGenericParamRef, TypeMut>;
+                 TypeFailable, TypeApp, TypePack, TypeSum, TypeInfer, TypeGenericParamRef, TypeMut,
+                 TypeDyn, TypeUnion, TypeSpecialization>;
 
 } // namespace zith::ast

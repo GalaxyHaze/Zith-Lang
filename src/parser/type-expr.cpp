@@ -2,6 +2,7 @@
 
 #include "diagnostics/error-codes.hpp"
 #include "parser/operators.hpp"
+#include "parser/scan-helpers.hpp"
 
 #include <array>
 #include <cstdlib>
@@ -117,6 +118,18 @@ ast::TypeExprId Parser::parsePrimaryType() {
         }
     }
 
+    // ── dyn: dynamic dispatch type ───────────────────────────────
+    if (check(TokenKind::Trait) && lexeme() == "dyn") {
+        advance();
+        return bld->dynExpr(parsePrimaryType());
+    }
+
+    // ── union type hint ────────────────────────────────────────────
+    if (check(TokenKind::Struct) && lexeme() == "union") {
+        advance();
+        return bld->unionExpr();
+    }
+
     // ── optional type: ?T ───────────────────────────────────────────
     if (consume('?')) {
         auto inner = parsePrimaryType();
@@ -199,6 +212,15 @@ ast::TypeExprId Parser::parsePrimaryType() {
     if (consume('_'))
         return bld->inferExpr();
 
+    // ── partial specialization hint: <T1, T2> (no base) ─────────
+    if (check('<')) {
+        advance();
+        auto args = parseDelimited(*tok, bld->arena(), '>', [this] { return parseTypeExpr(); });
+        if (check('>'))
+            advance();
+        return bld->typeSpecialization(bld->inferExpr(), std::move(args));
+    }
+
     // ── identifier / path: Vec, std.vec.Vec ────────────────────────
     if (check(TokenKind::Identifier)) {
         auto id_span = peek().span;
@@ -223,7 +245,16 @@ ast::TypeExprId Parser::parsePrimaryType() {
                 break;
             }
         }
-        return bld->pathExpr(std::move(segments), path_span);
+        auto base = bld->pathExpr(std::move(segments), path_span);
+        // Generic specialization: Base<Args>
+        if (check('<')) {
+            advance();
+            auto args = parseDelimited(*tok, bld->arena(), '>', [this] { return parseTypeExpr(); });
+            if (check('>'))
+                advance();
+            return bld->typeSpecialization(base, std::move(args));
+        }
+        return base;
     }
 
     errorExpected("type expression");

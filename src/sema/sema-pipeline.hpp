@@ -48,12 +48,14 @@ class SemaPipeline {
     ast::ExprId implicitReturnExpr(ast::ExprId body_id) const;
     void ensureBodyChecked(symbols::SymId fn_sym);
     void warnNotImplemented(std::string_view feature, memory::Span span);
+    void reportUnsupportedSyntax(std::string_view syntax, memory::Span span);
 
     types::TypeId visitExpr(ast::ExprId id);
     types::TypeId visitLiteral(ast::ExprId id, const ast::LitValue &n);
     types::TypeId visitIdent(const ast::IdentNode &n, ast::ExprId id);
     types::TypeId visitBinary(ast::ExprId id, const ast::BinaryNode &n);
     types::TypeId visitUnary(ast::ExprId id, const ast::UnaryNode &n);
+    types::TypeId visitSequence(ast::ExprId id);
     types::TypeId visitCall(ast::ExprId id, const ast::CallNode &n);
     types::TypeId visitBlock(ast::ExprId id, const ast::BlockNode &n);
     types::TypeId visitIf(ast::ExprId id, const ast::IfNode &n);

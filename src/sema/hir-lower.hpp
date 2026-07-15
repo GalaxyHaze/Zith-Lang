@@ -47,6 +47,7 @@ class HirLower {
     hir::HirExprId visitIdent(const ast::IdentNode &n, ast::ExprId id);
     hir::HirExprId visitBinary(ast::ExprId id, const ast::BinaryNode &n);
     hir::HirExprId visitUnary(ast::ExprId id, const ast::UnaryNode &n);
+    hir::HirExprId visitSequence(ast::ExprId id);
     hir::HirExprId visitCall(ast::ExprId id, const ast::CallNode &n);
     hir::HirExprId visitBlock(const ast::BlockNode &n);
     hir::HirExprId visitIf(const ast::IfNode &n);

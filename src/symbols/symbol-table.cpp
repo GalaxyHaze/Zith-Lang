@@ -186,6 +186,10 @@ static const char *symKindName(SymKind k) {
         return "interface";
     case SymKind::Asset:
         return "asset";
+    case SymKind::Word:
+        return "word";
+    case SymKind::Context:
+        return "context";
     }
     return "?";
 }

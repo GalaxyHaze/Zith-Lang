@@ -194,6 +194,25 @@ TypeId TypeLower::lowerNode(const ast::TypeExprNode &node) {
         TypeId operator()(const ast::TypeMut &n) {
             return self.lower(n.inner);
         }
+
+        TypeId operator()(const ast::TypeDyn &) {
+            // TODO: lower to proper dynamic dispatch type
+            return self.intern_.internUnknown();
+        }
+
+        TypeId operator()(const ast::TypeUnion &) {
+            // TODO: lower to proper union type
+            return self.intern_.internUnknown();
+        }
+
+        TypeId operator()(const ast::TypeSpecialization &n) {
+            auto base = self.lower(n.base);
+            memory::DynArray<TypeId> args{ast.arena()};
+            for (auto a : n.args)
+                args.push(self.lower(a));
+            return self.intern_.internIncomplete(
+                base, std::span<const TypeId>{args.data(), args.size()});
+        }
     };
 
     return std::visit(Visitor{*this, ast_}, node);

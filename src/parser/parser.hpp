@@ -80,7 +80,7 @@ struct Parser {
     void skipUntil(std::initializer_list<lexer::TokenKind> sync_tokens);
 
     // ── Body expansion ───────────────────────────────────────────────
-    void expandBodies(ScanResult &result);
+    void expandBodies(ScanResult &result, symbols::SymbolTable &syms);
 
     memory::Span spanFrom(memory::Span start) const;
     memory::Span spanFrom(ast::ExprId lhs, ast::ExprId rhs) const;

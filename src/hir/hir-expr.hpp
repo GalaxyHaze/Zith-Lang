@@ -53,6 +53,7 @@ struct HirBinary {
     HirExprId lhs;
     HirExprId rhs;
     HirBinaryOp op;
+    HirTypeId type = types::kInvalidType;
     HirExprKind tag = HirExprKind::Binary;
 };
 struct HirUnary {
@@ -102,6 +103,16 @@ using HirExpr = std::variant<HirLiteral, HirBinary, HirUnary, HirLet, HirVar, Hi
 
 inline HirExprKind exprKind(const HirExpr &expr) {
     return std::visit([](const auto &entry) { return entry.tag; }, expr);
+}
+
+template <typename Visitor>
+decltype(auto) visitExpr(const HirExpr &expr, Visitor &&vis) {
+    return std::visit(std::forward<Visitor>(vis), expr);
+}
+
+template <typename Visitor>
+decltype(auto) visitExpr(HirExpr &expr, Visitor &&vis) {
+    return std::visit(std::forward<Visitor>(vis), expr);
 }
 
 } // namespace zith::hir

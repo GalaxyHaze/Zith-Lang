@@ -48,6 +48,10 @@ htmlcov/
 .DS_Store
 Thumbs.db
 
+# Merge / patch artifacts
+*.orig
+*.rej
+
 # Archives
 *.zip
 *.gz

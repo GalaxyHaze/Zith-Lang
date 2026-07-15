@@ -1,4 +1,5 @@
 #include "solver.hpp"
+#include "common/overloaded.hpp"
 
 #include "diagnostics/error-codes.hpp"
 #include "types/type-kind.hpp"
@@ -17,18 +18,18 @@ bool typeHasGenericParam(types::TypeId t, types::TypeIntern &types) {
     if (kind == types::TypeKind::GenericParam)
         return true;
     if (kind == types::TypeKind::Incomplete) {
-        auto &inc = std::get<types::TypeIncomplete>(types.lookup(t));
-        for (size_t i = 0; i < inc.arg_count; i++) {
-            if (typeHasGenericParam(inc.args[i], types))
+        auto *inc = std::get_if<types::TypeIncomplete>(&types.lookup(t));
+        for (size_t i = 0; i < inc->arg_count; i++) {
+            if (typeHasGenericParam(inc->args[i], types))
                 return true;
         }
     }
     if (kind == types::TypeKind::Fn) {
-        auto &fn = std::get<types::TypeFn>(types.lookup(t));
-        if (typeHasGenericParam(fn.ret, types))
+        auto *fn = std::get_if<types::TypeFn>(&types.lookup(t));
+        if (typeHasGenericParam(fn->ret, types))
             return true;
-        for (size_t i = 0; i < fn.param_count; i++) {
-            if (typeHasGenericParam(fn.params[i], types))
+        for (size_t i = 0; i < fn->param_count; i++) {
+            if (typeHasGenericParam(fn->params[i], types))
                 return true;
         }
     }
@@ -99,20 +100,20 @@ bool Solver::checkNumericBounds(types::TypeId t) {
     }
 
     if (kind == types::TypeKind::Incomplete) {
-        auto &inc = std::get<types::TypeIncomplete>(types_.lookup(t));
-        for (size_t i = 0; i < inc.arg_count; i++) {
-            if (!checkNumericBounds(inc.args[i]))
+        auto *inc = std::get_if<types::TypeIncomplete>(&types_.lookup(t));
+        for (size_t i = 0; i < inc->arg_count; i++) {
+            if (!checkNumericBounds(inc->args[i]))
                 return false;
         }
         return true;
     }
 
     if (kind == types::TypeKind::Fn) {
-        auto &fn = std::get<types::TypeFn>(types_.lookup(t));
-        if (!checkNumericBounds(fn.ret))
+        auto *fn = std::get_if<types::TypeFn>(&types_.lookup(t));
+        if (!checkNumericBounds(fn->ret))
             return false;
-        for (size_t i = 0; i < fn.param_count; i++) {
-            if (!checkNumericBounds(fn.params[i]))
+        for (size_t i = 0; i < fn->param_count; i++) {
+            if (!checkNumericBounds(fn->params[i]))
                 return false;
         }
         return true;
@@ -169,9 +170,9 @@ bool Solver::resolveIncompleteInFn(hir::HirFunction &fn) {
 bool Solver::resolveIncompleteType(types::TypeId &t) {
     auto kind = types_.kindOf(t);
     if (kind == types::TypeKind::Incomplete) {
-        auto &inc = std::get<types::TypeIncomplete>(types_.lookup(t));
-        for (size_t i = 0; i < inc.arg_count; i++) {
-            if (!resolveIncompleteType(const_cast<types::TypeId &>(inc.args[i])))
+        auto *inc = std::get_if<types::TypeIncomplete>(&types_.lookup(t));
+        for (size_t i = 0; i < inc->arg_count; i++) {
+            if (!resolveIncompleteType(const_cast<types::TypeId &>(inc->args[i])))
                 return false;
         }
     }

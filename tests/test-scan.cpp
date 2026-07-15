@@ -51,7 +51,7 @@ struct ScanTest {
         symbols::SymbolTable syms(arena, &interner);
         parser::Parser parser(&tokens, builder, &diags);
         auto scanResult = parser::scan(parser, syms);
-        parser.expandBodies(scanResult);
+        parser.expandBodies(scanResult, syms);
         *prog = std::move(parser.program);
 
         size_t errs = 0;
@@ -296,6 +296,24 @@ static void test_extern_fn_with_return() {
     CHECK(fn->return_type != ast::kInvalidTypeExpr, "has return type");
 }
 
+static void test_word_declaration() {
+    ScanTest t;
+    auto r = t.scan("nop SELECT;");
+    CHECK(r.ok, "word declaration scans");
+    auto *word = get_decl_of<ast::WordDeclNode>(*r.program, r.builder, "SELECT");
+    CHECK(word != nullptr, "word node exists");
+    CHECK(word && word->category == ast::WordCategory::Nop, "word category is preserved");
+}
+
+static void test_context_declaration() {
+    ScanTest t;
+    auto r = t.scan("context SQL { nop SELECT; }");
+    CHECK(r.ok, "context declaration scans");
+    auto *context = get_decl_of<ast::ContextDeclNode>(*r.program, r.builder, "SQL");
+    CHECK(context != nullptr, "context node exists");
+    CHECK(context && context->decls.size() == 1, "context retains nested word declaration");
+}
+
 // ── Runner ─────────────────────────────────────────────────────────
 
 static void test_scan() {
@@ -328,6 +346,8 @@ static void test_scan() {
     test_extern_fn_basic();
     test_extern_fn_with_params();
     test_extern_fn_with_return();
+    test_word_declaration();
+    test_context_declaration();
 }
 
 TEST_MAIN(scan)

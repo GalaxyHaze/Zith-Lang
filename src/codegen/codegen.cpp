@@ -122,50 +122,45 @@ void CodeGen::emit(const hir::HirModule &hirModule, std::string_view moduleName)
                                              *ctx_);
     ensureTargetInfo();
 
+    // First pass: declare all functions (so forward references resolve)
+    for (size_t i = 0; i < hirModule.getFnCount(); i++)
+        declareFn(hirModule.getFn(i));
+
+    // Second pass: emit bodies for non-extern functions
     for (size_t i = 0; i < hirModule.getFnCount(); i++) {
-        auto &fn       = hirModule.getFn(i);
-        bool is_extern = fn.blocks.empty();
-
-        if (is_extern) {
-            emitExternFn(fn);
-        } else {
-            emitFunction(fn, hirModule);
-        }
+        auto &fn = hirModule.getFn(i);
+        if (!fn.blocks.empty())
+            emitFnBody(fn, hirModule);
     }
 }
 
-void CodeGen::emitExternFn(const hir::HirFunction &fn) {
+llvm::Function *CodeGen::declareFn(const hir::HirFunction &fn) {
     auto name = interner_.lookup(fn.name);
 
     CodeGenType typeGen(*ctx_, types_);
     llvm::SmallVector<llvm::Type *, 8> paramTypes;
-    for (auto param_type : fn.params) {
+    for (auto param_type : fn.params)
         paramTypes.push_back(typeGen.lower(param_type));
-    }
     auto *retType = typeGen.lower(fn.return_type);
 
     auto *fnType = llvm::FunctionType::get(retType, paramTypes, false);
     auto *llvmFn = llvm::Function::Create(fnType, llvm::Function::ExternalLinkage,
                                           llvm::StringRef(name.data(), name.size()), module_.get());
-    llvmFn->setDoesNotThrow();
-}
-
-void CodeGen::emitFunction(const hir::HirFunction &fn, const hir::HirModule &mod) {
-    auto name = interner_.lookup(fn.name);
-
-    CodeGenType typeGen(*ctx_, types_);
-    llvm::SmallVector<llvm::Type *, 8> paramTypes;
-    for (auto param_type : fn.params) {
-        paramTypes.push_back(typeGen.lower(param_type));
-    }
-    auto *retType = typeGen.lower(fn.return_type);
-
-    auto *fnType = llvm::FunctionType::get(retType, paramTypes, false);
-    auto *llvmFn = llvm::Function::Create(fnType, llvm::Function::ExternalLinkage,
-                                          llvm::StringRef(name.data(), name.size()), module_.get());
-
     if (fn.blocks.empty())
+        llvmFn->setDoesNotThrow();
+    return llvmFn;
+}
+
+void CodeGen::emitFnBody(const hir::HirFunction &fn, const hir::HirModule &mod) {
+    auto name    = interner_.lookup(fn.name);
+    auto *llvmFn = module_->getFunction(llvm::StringRef(name.data(), name.size()));
+    if (!llvmFn) {
+        llvmError("function '" + std::string(name) + "' not found during body emission");
         return;
+    }
+
+    CodeGenType typeGen(*ctx_, types_);
+    auto *retType = typeGen.lower(fn.return_type);
 
     // Create LLVM basic blocks for all HIR blocks
     std::vector<llvm::BasicBlock *> llvmBlocks;

@@ -24,7 +24,7 @@ auto ModuleLoader::load(const std::string &full_path) -> memory::Result<LoadedMo
     SymbolTable symbols(arena_, &interner_);
     parser::Parser parser(&tokens, builder, &diags_);
     auto scan_result = parser::scan(parser, symbols);
-    parser.expandBodies(scan_result);
+    parser.expandBodies(scan_result, symbols);
 
     memory::DynArray<SymId> public_syms{arena_};
     memory::DynArray<SymId> module_syms{arena_};

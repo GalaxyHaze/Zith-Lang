@@ -451,7 +451,7 @@ bool CompilationSession::semaStage() {
     {
         parser::Parser parser(&mTokens, &mAstBuilder, &mDiags);
         parser.program = std::move(mProgram);
-        parser.expandBodies(mScanResult);
+        parser.expandBodies(mScanResult, mSyms);
         mProgram = std::move(parser.program);
     }
 
@@ -743,7 +743,7 @@ std::string CompilationSession::fmtStage() {
     {
         parser::Parser parser(&mTokens, &mAstBuilder, &mDiags);
         parser.program = std::move(mProgram);
-        parser.expandBodies(mScanResult);
+        parser.expandBodies(mScanResult, mSyms);
         mProgram = std::move(parser.program);
     }
 

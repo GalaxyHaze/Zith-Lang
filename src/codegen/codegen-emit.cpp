@@ -1,4 +1,5 @@
 #include "codegen-emit.hpp"
+#include "common/overloaded.hpp"
 
 #include "ast/ast-node-utils.hpp"
 #include "types/type-kind.hpp"
@@ -18,29 +19,21 @@ CodeGenEmit::CodeGenEmit(llvm::IRBuilderBase &builder, CodeGenType &typeGen,
 
 llvm::Value *CodeGenEmit::emitExpr(hir::HirExprId id, const hir::HirModule &mod) {
     auto &expr = mod.getExpr(id);
-    switch (hir::exprKind(expr)) {
-    case hir::HirExprKind::Literal:
-        return emitLiteral(std::get<hir::HirLiteral>(expr));
-    case hir::HirExprKind::Binary:
-        return emitBinary(std::get<hir::HirBinary>(expr), mod);
-    case hir::HirExprKind::Unary:
-        return emitUnary(std::get<hir::HirUnary>(expr), mod);
-    case hir::HirExprKind::Let:
-        return emitLet(std::get<hir::HirLet>(expr), mod);
-    case hir::HirExprKind::Var:
-        return emitVar(std::get<hir::HirVar>(expr));
-    case hir::HirExprKind::Call:
-        return emitCall(std::get<hir::HirCall>(expr), mod);
-    case hir::HirExprKind::Ret:
-        return emitRet(std::get<hir::HirRet>(expr), mod);
-    case hir::HirExprKind::Branch:
-        return emitBranch(std::get<hir::HirBranch>(expr), mod);
-    case hir::HirExprKind::Jump:
-        return emitJump(std::get<hir::HirJump>(expr), mod);
-    case hir::HirExprKind::Phi:
-        return nullptr;
-    }
-    return nullptr;
+    return hir::visitExpr(expr, common::overloaded{
+        [&](const hir::HirLiteral &lit) { return emitLiteral(lit); },
+        [&](const hir::HirBinary &bin) { return emitBinary(bin, mod); },
+        [&](const hir::HirUnary &un) { return emitUnary(un, mod); },
+        [&](const hir::HirLet &let) { return emitLet(let, mod); },
+        [&](const hir::HirVar &var) { return emitVar(var); },
+        [&](const hir::HirCall &call) { return emitCall(call, mod); },
+        [&](const hir::HirRet &ret) { return emitRet(ret, mod); },
+        [&](const hir::HirBranch &branch) { return emitBranch(branch, mod); },
+        [&](const hir::HirJump &jump) { return emitJump(jump, mod); },
+        [](const hir::HirPhi &) -> llvm::Value * {
+            llvm::errs() << "FATAL: HirPhi not supported in memory-variable codegen model\n";
+            std::abort();
+        },
+    });
 }
 
 llvm::Value *CodeGenEmit::emitBody(const hir::HirFunction &fn, const hir::HirModule &mod) {
@@ -87,61 +80,63 @@ void CodeGenEmit::registerParams(const hir::HirFunction &fn, llvm::Function *llv
 }
 
 llvm::Value *CodeGenEmit::emitLiteral(const hir::HirLiteral &lit) {
-    auto kind = types_.kindOf(lit.type);
-    switch (kind) {
-    case types::TypeKind::Int: {
-        auto &int_t   = std::get<types::TypeInt>(types_.lookup(lit.type));
-        unsigned bits = 64;
-        switch (int_t.width) {
-        case types::IntWidth::I8:
-        case types::IntWidth::U8:
-            bits = 8;
-            break;
-        case types::IntWidth::I16:
-        case types::IntWidth::U16:
-            bits = 16;
-            break;
-        case types::IntWidth::I32:
-        case types::IntWidth::U32:
-            bits = 32;
-            break;
-        case types::IntWidth::I64:
-        case types::IntWidth::U64:
-            bits = 64;
-            break;
-        case types::IntWidth::I128:
-        case types::IntWidth::U128:
-            bits = 128;
-            break;
-        case types::IntWidth::Literal:
-            bits = 64;
-            break;
-        }
-        bool is_signed = int_t.width >= types::IntWidth::I8 && int_t.width <= types::IntWidth::I128;
-        return llvm::ConstantInt::get(builder_.getContext(),
-                                      llvm::APInt(bits, static_cast<uint64_t>(lit.i), is_signed));
-    }
-    case types::TypeKind::Bool:
-        return llvm::ConstantInt::get(builder_.getContext(), llvm::APInt(1, lit.b ? 1 : 0));
-    case types::TypeKind::Float:
-        return llvm::ConstantFP::get(builder_.getContext(), llvm::APFloat(lit.f));
-    case types::TypeKind::Char:
-        return llvm::ConstantInt::get(llvm::Type::getInt8Ty(builder_.getContext()),
-                                      static_cast<uint64_t>(lit.i), true);
-    case types::TypeKind::Ptr: {
-        auto str_data = interner_.lookup(lit.str_val);
-        auto *str     = llvm::ConstantDataArray::getString(
-            builder_.getContext(), llvm::StringRef(str_data.data(), str_data.size()), true);
-        auto *module = builder_.GetInsertBlock()->getParent()->getParent();
-        auto *global = new llvm::GlobalVariable(*module, str->getType(), true,
-                                                llvm::GlobalValue::PrivateLinkage, str, ".str");
-        auto *zero   = llvm::ConstantInt::get(llvm::Type::getInt32Ty(builder_.getContext()), 0);
-        llvm::Value *indices[] = {zero, zero};
-        return llvm::ConstantExpr::getInBoundsGetElementPtr(str->getType(), global, indices);
-    }
-    default:
-        return llvm::Constant::getNullValue(llvm::Type::getVoidTy(builder_.getContext()));
-    }
+    return types::visitType(types_.lookup(lit.type), common::overloaded{
+        [&](const types::TypeInt &int_t) -> llvm::Value * {
+            unsigned bits = 64;
+            switch (int_t.width) {
+            case types::IntWidth::I8:
+            case types::IntWidth::U8:
+                bits = 8;
+                break;
+            case types::IntWidth::I16:
+            case types::IntWidth::U16:
+                bits = 16;
+                break;
+            case types::IntWidth::I32:
+            case types::IntWidth::U32:
+                bits = 32;
+                break;
+            case types::IntWidth::I64:
+            case types::IntWidth::U64:
+                bits = 64;
+                break;
+            case types::IntWidth::I128:
+            case types::IntWidth::U128:
+                bits = 128;
+                break;
+            case types::IntWidth::Literal:
+                bits = 64;
+                break;
+            }
+            bool is_signed = types::isSignedWidth(int_t.width);
+            return llvm::ConstantInt::get(builder_.getContext(),
+                                          llvm::APInt(bits, static_cast<uint64_t>(lit.i), is_signed));
+        },
+        [&](const types::TypeBool &) -> llvm::Value * {
+            return llvm::ConstantInt::get(builder_.getContext(), llvm::APInt(1, lit.b ? 1 : 0));
+        },
+        [&](const types::TypeFloat &) -> llvm::Value * {
+            return llvm::ConstantFP::get(builder_.getContext(), llvm::APFloat(lit.f));
+        },
+        [&](const types::TypeChar &) -> llvm::Value * {
+            return llvm::ConstantInt::get(llvm::Type::getInt8Ty(builder_.getContext()),
+                                          static_cast<uint64_t>(lit.i), true);
+        },
+        [&](const types::TypePtr &) -> llvm::Value * {
+            auto str_data = interner_.lookup(lit.str_val);
+            auto *str     = llvm::ConstantDataArray::getString(
+                builder_.getContext(), llvm::StringRef(str_data.data(), str_data.size()), true);
+            auto *module = builder_.GetInsertBlock()->getParent()->getParent();
+            auto *global = new llvm::GlobalVariable(*module, str->getType(), true,
+                                                    llvm::GlobalValue::PrivateLinkage, str, ".str");
+            auto *zero   = llvm::ConstantInt::get(llvm::Type::getInt32Ty(builder_.getContext()), 0);
+            llvm::Value *indices[] = {zero, zero};
+            return llvm::ConstantExpr::getInBoundsGetElementPtr(str->getType(), global, indices);
+        },
+        [&](const auto &) -> llvm::Value * {
+            return llvm::Constant::getNullValue(llvm::Type::getVoidTy(builder_.getContext()));
+        },
+    });
 }
 
 llvm::Value *CodeGenEmit::emitBinary(const hir::HirBinary &bin, const hir::HirModule &mod) {
@@ -151,6 +146,16 @@ llvm::Value *CodeGenEmit::emitBinary(const hir::HirBinary &bin, const hir::HirMo
         return nullptr;
 
     bool isFloat = lhs->getType()->isFloatingPointTy();
+    bool isUnsigned = false;
+    if (bin.type != types::kInvalidType) {
+        auto &ty = types_.lookup(bin.type);
+        types::visitType(ty, common::overloaded{
+            [&](const types::TypeInt &i) {
+                isUnsigned = !types::isSignedWidth(i.width);
+            },
+            [&](const auto &) {},
+        });
+    }
     switch (bin.op) {
     case hir::HirBinaryOp::Add:
         return isFloat ? builder_.CreateFAdd(lhs, rhs) : builder_.CreateAdd(lhs, rhs);
@@ -159,21 +164,33 @@ llvm::Value *CodeGenEmit::emitBinary(const hir::HirBinary &bin, const hir::HirMo
     case hir::HirBinaryOp::Mul:
         return isFloat ? builder_.CreateFMul(lhs, rhs) : builder_.CreateMul(lhs, rhs);
     case hir::HirBinaryOp::Div:
-        return isFloat ? builder_.CreateFDiv(lhs, rhs) : builder_.CreateSDiv(lhs, rhs);
+        if (isFloat) return builder_.CreateFDiv(lhs, rhs);
+        if (isUnsigned) return builder_.CreateUDiv(lhs, rhs);
+        return builder_.CreateSDiv(lhs, rhs);
     case hir::HirBinaryOp::Rem:
-        return isFloat ? builder_.CreateFRem(lhs, rhs) : builder_.CreateSRem(lhs, rhs);
+        if (isFloat) return builder_.CreateFRem(lhs, rhs);
+        if (isUnsigned) return builder_.CreateURem(lhs, rhs);
+        return builder_.CreateSRem(lhs, rhs);
     case hir::HirBinaryOp::Eq:
         return isFloat ? builder_.CreateFCmpOEQ(lhs, rhs) : builder_.CreateICmpEQ(lhs, rhs);
     case hir::HirBinaryOp::Ne:
         return isFloat ? builder_.CreateFCmpONE(lhs, rhs) : builder_.CreateICmpNE(lhs, rhs);
     case hir::HirBinaryOp::Lt:
-        return isFloat ? builder_.CreateFCmpOLT(lhs, rhs) : builder_.CreateICmpSLT(lhs, rhs);
+        if (isFloat) return builder_.CreateFCmpOLT(lhs, rhs);
+        if (isUnsigned) return builder_.CreateICmpULT(lhs, rhs);
+        return builder_.CreateICmpSLT(lhs, rhs);
     case hir::HirBinaryOp::Le:
-        return isFloat ? builder_.CreateFCmpOLE(lhs, rhs) : builder_.CreateICmpSLE(lhs, rhs);
+        if (isFloat) return builder_.CreateFCmpOLE(lhs, rhs);
+        if (isUnsigned) return builder_.CreateICmpULE(lhs, rhs);
+        return builder_.CreateICmpSLE(lhs, rhs);
     case hir::HirBinaryOp::Gt:
-        return isFloat ? builder_.CreateFCmpOGT(lhs, rhs) : builder_.CreateICmpSGT(lhs, rhs);
+        if (isFloat) return builder_.CreateFCmpOGT(lhs, rhs);
+        if (isUnsigned) return builder_.CreateICmpUGT(lhs, rhs);
+        return builder_.CreateICmpSGT(lhs, rhs);
     case hir::HirBinaryOp::Ge:
-        return isFloat ? builder_.CreateFCmpOGE(lhs, rhs) : builder_.CreateICmpSGE(lhs, rhs);
+        if (isFloat) return builder_.CreateFCmpOGE(lhs, rhs);
+        if (isUnsigned) return builder_.CreateICmpUGE(lhs, rhs);
+        return builder_.CreateICmpSGE(lhs, rhs);
     case hir::HirBinaryOp::And:
         return builder_.CreateAnd(lhs, rhs);
     case hir::HirBinaryOp::Or:
@@ -199,12 +216,11 @@ llvm::Value *CodeGenEmit::emitUnary(const hir::HirUnary &un, const hir::HirModul
         return builder_.CreateNot(operand);
     case hir::HirUnaryOp::Ref: {
         auto &operandExpr = mod.getExpr(un.operand);
-        if (hir::exprKind(operandExpr) == hir::HirExprKind::Var)
-            return emitVarAddr(std::get<hir::HirVar>(operandExpr));
-        if (hir::exprKind(operandExpr) == hir::HirExprKind::Unary) {
-            auto &inner = std::get<hir::HirUnary>(operandExpr);
-            if (inner.op == hir::HirUnaryOp::Deref)
-                return emitExpr(inner.operand, mod);
+        if (auto *var = std::get_if<hir::HirVar>(&operandExpr))
+            return emitVarAddr(*var);
+        if (auto *unary = std::get_if<hir::HirUnary>(&operandExpr)) {
+            if (unary->op == hir::HirUnaryOp::Deref)
+                return emitExpr(unary->operand, mod);
         }
         return nullptr;
     }
@@ -237,8 +253,11 @@ llvm::Value *CodeGenEmit::emitCall(const hir::HirCall &call, const hir::HirModul
         fn        = module->getFunction(llvm::StringRef(name.data(), name.size()));
     }
 
-    if (!fn)
+    if (!fn) {
+        llvm::errs() << "ERROR: emitCall failed to resolve callee (resolved_fn="
+                     << call.resolved_fn << ")\n";
         return nullptr;
+    }
 
     return builder_.CreateCall(fn, args);
 }

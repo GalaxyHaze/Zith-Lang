@@ -28,6 +28,8 @@ enum class SymKind : uint8_t {
     Component,
     Union,
     Asset,
+    Word,
+    Context,
 };
 
 struct SymbolData {

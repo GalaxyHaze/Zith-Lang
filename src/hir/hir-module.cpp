@@ -1,4 +1,5 @@
 #include "hir-module.hpp"
+#include "common/overloaded.hpp"
 
 #include <cstdio>
 
@@ -57,106 +58,81 @@ void HirModule::dump(FILE *out, const memory::StringInterner &interner) const {
             for (auto inst_id : block.insts) {
                 std::fprintf(out, "  %%e%u = ", inst_id);
                 auto &expr = exprs_[inst_id];
-                switch (exprKind(expr)) {
-                case HirExprKind::Literal: {
-                    auto &lit = std::get<HirLiteral>(expr);
-                    if (lit.type == static_cast<HirTypeId>(-1))
-                        std::fprintf(out, "literal<?>");
-                    else
-                        std::fprintf(out, "literal %%t%u", lit.type);
-                    break;
-                }
-                case HirExprKind::Binary: {
-                    auto &bin = std::get<HirBinary>(expr);
-                    std::fprintf(out, "binary %%e%u op %%e%u", bin.lhs, bin.rhs);
-                    break;
-                }
-                case HirExprKind::Unary: {
-                    auto &un = std::get<HirUnary>(expr);
-                    std::fprintf(out, "unary %%t%u op %%e%u", un.type, un.operand);
-                    break;
-                }
-                case HirExprKind::Let: {
-                    auto &let = std::get<HirLet>(expr);
-                    auto n    = interner.lookup(let.name);
-                    std::fprintf(out, "let %.*s", (int)n.size(), n.data());
-                    break;
-                }
-                case HirExprKind::Var: {
-                    auto &var = std::get<HirVar>(expr);
-                    auto n    = interner.lookup(var.name);
-                    std::fprintf(out, "var %.*s#%u", (int)n.size(), n.data(), var.version);
-                    break;
-                }
-                case HirExprKind::Call: {
-                    auto &call   = std::get<HirCall>(expr);
-                    auto &callee = exprs_[call.callee];
-                    if (exprKind(callee) == HirExprKind::Var) {
-                        auto &var = std::get<HirVar>(callee);
-                        auto n    = interner.lookup(var.name);
-                        std::fprintf(out, "call %.*s(", (int)n.size(), n.data());
-                    } else {
-                        std::fprintf(out, "call %%e%u(", call.callee);
-                    }
-                    for (size_t ai = 0; ai < call.args.size(); ++ai) {
-                        if (ai > 0)
-                            std::fprintf(out, ", ");
-                        std::fprintf(out, "%%e%u", call.args[ai]);
-                    }
-                    std::fprintf(out, ")");
-                    break;
-                }
-                case HirExprKind::Ret: {
-                    auto &ret = std::get<HirRet>(expr);
-                    if (ret.value == kInvalidHirExpr)
-                        std::fprintf(out, "ret void");
-                    else
-                        std::fprintf(out, "ret %%e%u", ret.value);
-                    break;
-                }
-                case HirExprKind::Jump: {
-                    auto &jump = std::get<HirJump>(expr);
-                    std::fprintf(out, "jump bb%u", jump.target);
-                    break;
-                }
-                case HirExprKind::Branch: {
-                    auto &branch = std::get<HirBranch>(expr);
-                    std::fprintf(out, "branch %%e%u -> bb%u : bb%u", branch.cond, branch.then_block,
-                                 branch.else_block);
-                    break;
-                }
-                case HirExprKind::Phi:
-                    std::fprintf(out, "<expr>");
-                    break;
-                }
+                hir::visitExpr(expr, common::overloaded{
+                    [&](const HirLiteral &lit) {
+                        if (lit.type == static_cast<HirTypeId>(-1))
+                            std::fprintf(out, "literal<?>");
+                        else
+                            std::fprintf(out, "literal %%t%u", lit.type);
+                    },
+                    [&](const HirBinary &bin) {
+                        std::fprintf(out, "binary %%e%u op %%e%u", bin.lhs, bin.rhs);
+                    },
+                    [&](const HirUnary &un) {
+                        std::fprintf(out, "unary %%t%u op %%e%u", un.type, un.operand);
+                    },
+                    [&](const HirLet &let) {
+                        auto n = interner.lookup(let.name);
+                        std::fprintf(out, "let %.*s", (int)n.size(), n.data());
+                    },
+                    [&](const HirVar &var) {
+                        auto n = interner.lookup(var.name);
+                        std::fprintf(out, "var %.*s#%u", (int)n.size(), n.data(), var.version);
+                    },
+                    [&](const HirCall &call) {
+                        auto &callee = exprs_[call.callee];
+                        if (auto *calleeVar = std::get_if<HirVar>(&callee)) {
+                            auto n = interner.lookup(calleeVar->name);
+                            std::fprintf(out, "call %.*s(", (int)n.size(), n.data());
+                        } else {
+                            std::fprintf(out, "call %%e%u(", call.callee);
+                        }
+                        for (size_t ai = 0; ai < call.args.size(); ++ai) {
+                            if (ai > 0)
+                                std::fprintf(out, ", ");
+                            std::fprintf(out, "%%e%u", call.args[ai]);
+                        }
+                        std::fprintf(out, ")");
+                    },
+                    [&](const HirRet &ret) {
+                        if (ret.value == kInvalidHirExpr)
+                            std::fprintf(out, "ret void");
+                        else
+                            std::fprintf(out, "ret %%e%u", ret.value);
+                    },
+                    [&](const HirJump &jump) {
+                        std::fprintf(out, "jump bb%u", jump.target);
+                    },
+                    [&](const HirBranch &branch) {
+                        std::fprintf(out, "branch %%e%u -> bb%u : bb%u", branch.cond,
+                                     branch.then_block, branch.else_block);
+                    },
+                    [&](const HirPhi &) {
+                        std::fprintf(out, "<expr>");
+                    },
+                });
                 std::fprintf(out, "\n");
             }
             if (block.terminator != kInvalidHirExpr) {
                 auto &term = exprs_[block.terminator];
-                switch (exprKind(term)) {
-                case HirExprKind::Ret: {
-                    auto &ret = std::get<HirRet>(term);
-                    if (ret.value == kInvalidHirExpr)
-                        std::fprintf(out, "  ret void\n");
-                    else
-                        std::fprintf(out, "  ret %%e%u\n", ret.value);
-                    break;
-                }
-                case HirExprKind::Jump: {
-                    auto &jump = std::get<HirJump>(term);
-                    std::fprintf(out, "  jump bb%u\n", jump.target);
-                    break;
-                }
-                case HirExprKind::Branch: {
-                    auto &branch = std::get<HirBranch>(term);
-                    std::fprintf(out, "  branch %%e%u -> bb%u : bb%u\n", branch.cond,
-                                 branch.then_block, branch.else_block);
-                    break;
-                }
-                default:
-                    std::fprintf(out, "  terminal %%e%u\n", block.terminator);
-                    break;
-                }
+                hir::visitExpr(term, common::overloaded{
+                    [&](const HirRet &ret) {
+                        if (ret.value == kInvalidHirExpr)
+                            std::fprintf(out, "  ret void\n");
+                        else
+                            std::fprintf(out, "  ret %%e%u\n", ret.value);
+                    },
+                    [&](const HirJump &jump) {
+                        std::fprintf(out, "  jump bb%u\n", jump.target);
+                    },
+                    [&](const HirBranch &branch) {
+                        std::fprintf(out, "  branch %%e%u -> bb%u : bb%u\n", branch.cond,
+                                     branch.then_block, branch.else_block);
+                    },
+                    [&](const auto &) {
+                        std::fprintf(out, "  terminal %%e%u\n", block.terminator);
+                    },
+                });
             }
         }
         std::fprintf(out, "}\n\n");

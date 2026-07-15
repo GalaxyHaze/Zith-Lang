@@ -27,6 +27,33 @@ enum class FloatWidth : uint8_t { F32, F64, F128 };
 
 enum class OwnershipKind : uint8_t { Default, Unique, Share, Lend, View, Belong };
 
+inline unsigned intWidthBits(IntWidth w) {
+    switch (w) {
+    case IntWidth::I8:
+    case IntWidth::U8:
+        return 8;
+    case IntWidth::I16:
+    case IntWidth::U16:
+        return 16;
+    case IntWidth::I32:
+    case IntWidth::U32:
+        return 32;
+    case IntWidth::I64:
+    case IntWidth::U64:
+        return 64;
+    case IntWidth::I128:
+    case IntWidth::U128:
+        return 128;
+    case IntWidth::Literal:
+        return 0;
+    }
+    return 0;
+}
+
+inline bool isSignedWidth(IntWidth w) {
+    return w >= IntWidth::I8 && w <= IntWidth::I128;
+}
+
 struct TypeError {};
 struct TypeNever {};
 struct TypeVoid {};
@@ -126,5 +153,20 @@ enum class TypeKind : uint8_t {
     GenericParam,
     Incomplete,
 };
+
+template <typename Visitor>
+decltype(auto) visitType(const TypeData &data, Visitor &&vis) {
+    return std::visit(std::forward<Visitor>(vis), data);
+}
+
+template <typename Visitor>
+decltype(auto) visitType(TypeData &data, Visitor &&vis) {
+    return std::visit(std::forward<Visitor>(vis), data);
+}
+
+template <typename Visitor>
+decltype(auto) visitType(const TypeData &a, const TypeData &b, Visitor &&vis) {
+    return std::visit(std::forward<Visitor>(vis), a, b);
+}
 
 } // namespace zith::types
