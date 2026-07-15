@@ -3,7 +3,7 @@
 <p>By default, Zith uses static dispatch — the compiler knows the exact implementation at compile time. Zero overhead.</p>
 <p>Use <code>dyn</code> for dynamic dispatch. At the call site you get polymorphism; the compiler and LLVM can often optimize away the indirection, making it zero-cost in practice.</p>
 <h3>14.2 <code>dyn</code> as a Type Hint</h3>
-<p>Like <code>union</code> (see <a href="03-type-system.md#36-union">§3.6</a>), <code>dyn</code> works as a <strong>type hint</strong>. When the compiler can't deduce the concrete type, you write <code>dyn</code> to tell it you want dynamic behavior:</p>
+<p>Like <code>union</code> (see <a href="./D-spec-type-system.html#36-union">§3.6</a>), <code>dyn</code> works as a <strong>type hint</strong>. When the compiler can't deduce the concrete type, you write <code>dyn</code> to tell it you want dynamic behavior:</p>
 <pre><code class="language-zith">let x: dyn = 5;
 if (x is i32) x += 32;   // smart-cast inside the branch
 
@@ -49,7 +49,7 @@ let dynList: dyn [];
 fn modify(shape: lend dyn Drawable) {
     shape.scale(2.0);
 }</code></pre>
-<p><code>dyn</code> does <strong>not</strong> work with <code>interface</code> (see <a href="04-traits-interfaces.md#43-capabilities">§4.3</a>) — only traits. Interfaces are structural and don't carry a vtable.</p>
+<p><code>dyn</code> does <strong>not</strong> work with <code>interface</code> (see <a href="./D-spec-traits-interfaces.html#43-capabilities">§4.3</a>) — only traits. Interfaces are structural and don't carry a vtable.</p>
 <p>When you write a type that could be <code>dyn</code> or <code>opaque</code>, prefer <code>dyn</code> — it's short and clearer. Reserve <code>opaque</code> for cases where you specifically need <code>raw opaque</code> (untagged <code>void*</code>, C interop).</p>
 <h3>14.4 <code>dyn</code> vs Generics</h3>
 <table>
@@ -93,4 +93,4 @@ fn logDyn(val: dyn Printable) { val.print(); }</code></pre>
 </ul>
 <p>If you try to use a non-object-safe trait with <code>dyn</code>, the compiler rejects it.</p>
 <hr>
-<p><em><a href="D-language-spec-core-topics.html">Zith Language Specification</a> — Draft v0.9</em></p>
+<p><em><a href="./D-spec-overview.html">Zith Language Specification</a> — Draft v0.9</em></p>

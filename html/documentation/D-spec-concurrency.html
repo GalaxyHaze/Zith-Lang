@@ -1,4 +1,5 @@
 <h2>10. Concurrency & Threads</h2>
+<blockquote><p><strong>Implementation status:</strong> <code>spawn</code>, <code>await</code>, and <code>#wont_remain</code> are <strong>spec-only</strong>. No compiler support exists yet. See <a href="./D-spec-impl-status.html">impl-status.md</a>.</p></blockquote>
 <h3>10.1 Spawning</h3>
 <pre><code class="language-zith">// Default thread type
 let handle = spawn worker_fn(data);
@@ -47,4 +48,4 @@ global cfg: Config;
 await cfg;
 @println(cfg.host);</code></pre>
 <hr>
-<p><em><a href="D-language-spec-core-topics.html">Zith Language Specification</a> — Draft v0.9</em></p>
+<p><em><a href="./D-spec-overview.html">Zith Language Specification</a> — Draft v0.9</em></p>

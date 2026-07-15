@@ -1,4 +1,5 @@
 <h2>17. Contexts</h2>
+<blockquote><p><strong>Implementation status:</strong> <code>context</code> declarations and <code>use</code> activation are <strong>blocked (E2010)</strong>. Parsed; rejected at sema. See <a href="./D-spec-impl-status.html">impl-status.md</a>.</p></blockquote>
 <p>A context bundles macros, constants, words, and other declarations into a reusable package. You can apply it to a single block or activate it globally — only one context may be active at a time in a given scope.</p>
 <pre><code class="language-zith">// Scoped: macros and words active only inside this block
 use SQL {
@@ -11,4 +12,4 @@ use SQL;</code></pre>
 <h3>Best Practice</h3>
 <p>Define your macros and words inside context blocks rather than leaving them globally active. Think of it as a lightweight namespace for DSLs — keeps the rest of your code clean.</p>
 <hr>
-<p><em><a href="D-language-spec-core-topics.html">Zith Language Specification</a> — Draft v0.9</em></p>
+<p><em><a href="./D-spec-overview.html">Zith Language Specification</a> — Draft v0.9</em></p>

@@ -55,7 +55,7 @@
 </table>
 <h4>Strings & Origin Tracking</h4>
 <p><code>char</code> is a UTF-8 code unit. <code>string</code> is a built-in library type backed by <code>[]char</code> with UTF-8 encoding.</p>
-<p>NRA tracks the <strong>origin</strong> of every string node — <code>literal</code>, <code>allocator</code>, or <code>local</code> (see <a href="07-memory-model.md#71-what-nra-tracks">§7.1</a> for the complete set):</p>
+<p>NRA tracks the <strong>origin</strong> of every string node — <code>literal</code>, <code>allocator</code>, or <code>local</code> (see <a href="./D-spec-memory-model.html#71-what-nra-tracks">§7.1</a> for the complete set):</p>
 <pre><code class="language-zith">// []char implicitly casts to string, zero-cost (literal origin)
 let s: string = "hello";
 
@@ -160,7 +160,7 @@ let x: union = when (flag) {
     B = 3.14,
     C = true,
 };</code></pre>
-<blockquote><p>Without an explicit <code>union</code> type hint, the compiler cannot deduce a union — it must be stated explicitly.  <code>dyn</code> works the same way as a type hint — see <a href="14-polymorphism.md#142-dyn-as-a-type-hint">§14.2</a>.</p></blockquote>
+<blockquote><p>Without an explicit <code>union</code> type hint, the compiler cannot deduce a union — it must be stated explicitly.  <code>dyn</code> works the same way as a type hint — see <a href="./D-spec-polymorphism.html#142-dyn-as-a-type-hint">§14.2</a>.</p></blockquote>
 <p><code>raw union</code> is an untagged C-style union, valid only inside <code>raw</code> contexts. Accessing the wrong variant is undefined behavior.</p>
 <h4>ADT-style (Named Variants)</h4>
 <p>Unions can also have named variants, similar to Rust enums:</p>
@@ -259,4 +259,4 @@ when (point) {
 <pre><code class="language-zith">let n: i32 = 42;
 let f = n as f64;</code></pre>
 <hr>
-<p><em><a href="D-language-spec-core-topics.html">Zith Language Specification</a> — Draft v0.9</em></p>
+<p><em><a href="./D-spec-overview.html">Zith Language Specification</a> — Draft v0.9</em></p>

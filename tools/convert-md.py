@@ -72,6 +72,8 @@ OLD_TO_NEW = {
     "reference/stdlib.md":            "D-reference-stdlib.html",
 
     # Spec files
+    "Zith-spec.md":                   "D-spec-overview.html",
+    "impl-status.md":                 "D-spec-impl-status.html",
     "Zith-spec-overview.md":          "D-spec-overview.html",
     "02-module-system.md":            "D-spec-module-system.html",
     "03-type-system.md":              "D-spec-type-system.html",

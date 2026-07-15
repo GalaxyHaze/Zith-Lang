@@ -1,4 +1,5 @@
 <h2>16. Words (Custom Operators)</h2>
+<blockquote><p><strong>Implementation status:</strong> <code>word</code> / <code>context</code> declarations and word calls are <strong>blocked (E2010)</strong>. The parser accepts them; the semantic pass rejects them before HIR. See <a href="./D-spec-impl-status.html">impl-status.md</a> for details.</p></blockquote>
 <p>Words let you define custom operators from identifiers. Each word has a fixed position — <strong>prefix</strong>, <strong>infix</strong>, or <strong>suffix</strong> — with language-defined precedence.</p>
 <ul>
   <li>You must activate a word with <code>use</code>, even if you already imported its module.</li>
@@ -78,4 +79,4 @@ operator* (SELECT, list) { ... }</code></pre>
 </ul>
 <blockquote><p>Words let you pass keywords, words, and macros as arguments.</p></blockquote>
 <hr>
-<p><em><a href="D-language-spec-core-topics.html">Zith Language Specification</a> — Draft v0.9</em></p>
+<p><em><a href="./D-spec-overview.html">Zith Language Specification</a> — Draft v0.9</em></p>

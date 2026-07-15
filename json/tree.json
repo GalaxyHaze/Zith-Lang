@@ -41,6 +41,7 @@
         "link": "./D-spec-overview.html",
         "children": [
           { "title": "Overview", "link": "./D-spec-overview.html" },
+          { "title": "Implementation Status", "link": "./D-spec-impl-status.html" },
           { "title": "Module System", "link": "./D-spec-module-system.html" },
           { "title": "Type System", "link": "./D-spec-type-system.html" },
           { "title": "Traits & Interfaces", "link": "./D-spec-traits-interfaces.html" },

@@ -1,4 +1,5 @@
 <h2>11. Comptime</h2>
+<blockquote><p><strong>Implementation status:</strong> <code>comptime</code> blocks and reflection intrinsics are <strong>spec-only</strong>. <code>const</code> bindings parse correctly but are not evaluated at compile time yet. See <a href="./D-spec-impl-status.html">impl-status.md</a>.</p></blockquote>
 <p>Comptime covers compile-time computation: reflection, type manipulation, and <code>const</code> blocks.</p>
 <h3>11.1 Comptime Bindings</h3>
 <pre><code class="language-zith">const counter: mut = 0;
@@ -62,4 +63,4 @@ type Celsius = i32;
 @appendField Celsius, x: i32;  // COMPILE ERROR: type is 'done' (primitive)</code></pre>
 <blockquote><p>A type built via <code>@struct</code> is "done" the moment it is returned or instantiated. Until then, <code>@appendField</code>, <code>@removeField</code>, and <code>@appendMethod</code> are available. Passing the type to a generic function also counts as "done."  A type created with <code>type</code> (e.g. <code>type Celsius = i32</code>) is a primitive alias — it has no fields to modify and is always immutable. You can still add methods via <code>implement</code>, but you cannot <code>@appendField</code> or <code>@removeField</code>.</p></blockquote>
 <hr>
-<p><em><a href="D-language-spec-core-topics.html">Zith Language Specification</a> — Draft v0.9</em></p>
+<p><em><a href="./D-spec-overview.html">Zith Language Specification</a> — Draft v0.9</em></p>
