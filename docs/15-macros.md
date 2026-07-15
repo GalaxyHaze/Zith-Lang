@@ -1,5 +1,9 @@
 ## 15. Macros
 
+> **Implementation status:** Macro declarations parse; `@macro` call sites emit warning W2009
+> (`NotImplemented`) and the call is dropped. Tag macros are **spec-only**.
+> See [impl-status.md](impl-status.md).
+
 | Type | Description |
 |---|---|
 | Normal (scoped) | Hygienic — symbols do not leak into the call site's scope. Requires the `@` prefix at the call site. |

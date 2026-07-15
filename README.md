@@ -1,170 +1,176 @@
 # Zith
 
-![Build](https://github.com/GalaxyHaze/Zith/actions/workflows/ci.yml/badge.svg)
-![License](https://img.shields.io/github/license/GalaxyHaze/Zith)
-![Version](https://img.shields.io/github/v/release/GalaxyHaze/Zith)
+[![Build](https://github.com/GalaxyHaze/Zith/actions/workflows/ci.yml/badge.svg)](https://github.com/GalaxyHaze/Zith/actions)
+[![License](https://img.shields.io/github/license/GalaxyHaze/Zith)](./license)
+[![Version](https://img.shields.io/github/v/release/GalaxyHaze/Zith)](https://github.com/GalaxyHaze/Zith/releases)
+[![Discord](https://img.shields.io/badge/Discord-Join-5865F2?logo=discord&logoColor=white)](https://discord.gg/a7h4cpWHg4)
 
-A statically typed, compiled, general-purpose language with compile-time ownership tracking and zero-cost abstractions.
+> **Status: Early development.** Core types, functions, control flow, and LLVM codegen work.
+> Several features listed below are designed and parsed but not yet semantically active.
+> See the [Implementation Status](#implementation-status) table for the exact picture.
 
-**Status:** Active development — not production-ready.
-You can follow us in [Discord](https://discord.gg/a7h4cpWHg4)
- if you want to colaborate or see the progress
+A statically typed, compiled, general-purpose language. Zith proves memory safety at compile time
+through **Node Resource Analysis (NRA)** — no garbage collector, no borrow checker, no runtime
+overhead. The syntax stays clean; the compiler does the hard work.
 
 ---
 
 ## What Makes Zith Different
 
-Zith uses **Node Resource Analysis (NRA)** — a compile-time pass that enforces ownership, borrowing, and memory safety without a borrow checker or garbage collector. No lifetime annotations, no runtime pauses, no hidden cost. The compiler proves your memory is safe before the program runs, and the syntax stays clean.
+NRA tracks ownership, lending, and aliasing through five qualifiers — `lend`, `view`, `unique`,
+`share`, and `belong` — without requiring lifetime annotations. Beyond memory safety, Zith ships a
+large toolbox for domain-specific work: custom operators (`word`), scoped DSLs (`context`), structured
+goto (`flow fn` / `marker` / `dock`), and first-class compile-time computation.
 
 ---
 
 ## Quick Start
 
 ```bash
-zithc new hello-world
-cd hello-world
-zithc run
+git clone https://github.com/GalaxyHaze/Zith.git
+cd Zith
+cmake -S . -B build
+cmake --build build -j
+./build/zithc --help
 ```
 
+Requires **CMake 3.15+** and a **C++23** compiler (GCC 13+, Clang 16+, or MSVC 19.35+).
+LLVM 18+ is optional — without it, codegen is disabled but `check` and HIR emission still work.
+
+**Hello, World:**
+
 ```zith
-from std/io/console;
+extern fn puts(msg: *char);
 
 fn main() {
-    @println("Hello, World!");
+    puts("Hello, World!");
 }
+```
+
+```bash
+./build/zithc run examples/hello-world.zith
 ```
 
 ---
 
-## Examples
+## Language Overview
 
-### Ownership + Chain Flow
+**Type System**
 
-`lend` gives exclusive temporary mutation. `view` gives read-only access. The `->` operator pipes data left-to-right, and `!` propagates errors out of the chain automatically.
+- Primitives: `u8`-`u128`, `i8`-`i128`, `f32`, `f64`, `bool`, `char`, `void`
+- Composite: `struct`, `component` (POD), `enum` (C-style, struct-backed, ADT), `union` (tagged)
+- Generics, `type` aliases, and pattern matching with `when`
 
-```zith
-fn scale(p: lend Point, factor: f32) {
-    p.x *= factor;
-    p.y *= factor;
-}
+**Memory Model (NRA)**
 
-fn process(data: view Config) -> Response! {
-    getData()
-        -> parse(..)!
-        -> scale(.., 2.0)
-        -> save(..)!
-}
-```
+- `lend` — exclusive mutable borrow for the call
+- `view` — read-only borrow
+- `unique` — sole owner; value is consumed on assignment
+- `share` — reference-counted, safe across scopes
+- `belong` — declares that a field owns its pointee
 
-### C Interop
+**Functions**
 
-Include a C header and all functions become available immediately. No bindings to write, no FFI layer to maintain.
+- `fn` — regular function
+- `const fn` — resolved entirely at compile time
+- `flow fn` — structured goto with `marker` / `dock` / `jump` (no spaghetti, compiler-verified)
+- `async fn` / `yield` — suspend/resume (parsed; semantic layer in progress)
+- `raw fn` — opt out of NRA for C-interop
 
-```zith
-import "openssl/ssl.h";
+**Control Flow**
 
-let ctx = SSL_CTX_new(method);   // all C functions available as raw fn
-```
+- `if` / `when` (pattern matching) / `for`
+- `->` chain-flow operator for left-to-right pipelines
 
-### Flow Functions
+**Error Handling**
 
-Structured goto with compile-time verification. Markers define jump targets, docks invoke them — the compiler ensures correctness.
+- `?T` optional, `T!` result — zero-cost, return-based
+- `or` fallback chains, `fail` blocks, `with` / `catch`, `throw`
+- `must` (debug panic) / `raw` (always unchecked)
 
-```zith
-flow fn run(data: Stream): void {
-    marker Process(chunk: Chunk, count: i32) {
-        transform(chunk);
-    }
+**Extensibility (Experimental)**
 
-    for ( i = 0, item in data ) {
-        dock { jump Process(item, i); }
-        i += 1;
-    }
-}
-```
+- `word` — define custom infix, prefix, or suffix operators
+- `context` — bundle words and macros into an activatable DSL scope
+- `use` — bring a context or word into scope
 
 ---
 
-## Language Highlights
+## Implementation Status
 
-### Memory & Ownership
+| Feature | Status | Notes |
+|---|---|---|
+| Lexer / parser | **Working** | Full grammar including experimental syntax |
+| Formatter (`zithc fmt`) | **Working** | Preserves all AST nodes including experimental |
+| Type checking | **Working** | Structs, enums, generics, function calls |
+| LLVM codegen | **Working** | x86-64 and WebAssembly targets |
+| `fn`, `const fn`, `flow fn` | **Working** | |
+| `struct`, `enum`, `union`, `component` | **Working** | |
+| Primitive arithmetic and comparisons | **Working** | Including unsigned ops |
+| `if` / `when` / `for` | **Working** | |
+| `->` chain operator | **Working** | |
+| Module imports (`import`, `from`, `export`) | **Working** | |
+| `alias`, `type` | **Working** | |
+| C interop (`extern fn`, `import ".h"`) | **Working** | |
+| Field access (`.field`) | Semantic warning | Parses, HIR lowering not yet complete |
+| Index access (`a[i]`) | Semantic warning | Parses, HIR lowering not yet complete |
+| `is` / `as` | **Blocked (E2010)** | Parsed; sema rejects before HIR |
+| `?` / `!` propagation / fallback | **Blocked (E2010)** | Parsed; sema rejects before HIR |
+| `word` / `context` / `use` | **Blocked (E2010)** | Parsed; sema rejects before HIR |
+| `macro` / `@macro` calls | Semantic warning | Parses; expansion not implemented |
+| `async fn` / `yield` / `spawn` / `await` | Spec only | No compiler support yet |
+| NRA pass | Spec only | Pipeline stub exists; analysis not implemented |
+| `comptime` blocks | Spec only | No evaluation yet |
+| `zithc test` / `zithc repl` / `zithc deps` | Stub | Returns "not implemented" |
 
-- **NRA** — compile-time ownership tracking without a borrow checker
-- `unique`, `share`, `view`, `lend`, `belong` — zero-cost memory modifiers
+> **E2010 (UnsupportedSyntax):** the compiler accepts these constructs syntactically but emits a
+> hard semantic error if they appear in code. They will be unlocked as their HIR representation
+> and type semantics are fully defined.
 
-### Type System
+---
 
-- `struct`, `component` (POD), `enum` (C-style, struct-backed, ADT), `union` (tagged)
-- Traits (nominal) vs interfaces (structural)
-- Capabilities — `Copy`, `Arithmetic`, `Error`, `Share`, `Trust`, and more
+## CLI Reference
 
-### Control Flow
+| Command | Description | Status |
+|---|---|---|
+| `zithc build` | Compile to native binary | Working |
+| `zithc run` | Compile and execute | Working |
+| `zithc check` | Type-check without emitting | Working |
+| `zithc fmt` | Format source files | Working |
+| `zithc create <name>` | Scaffold a new project | Working |
+| `zithc clean` | Remove build artifacts | Working |
+| `zithc execute <file>` | Run a pre-compiled binary | Working |
+| `zithc test` | Run project tests | Stub |
+| `zithc repl` | Interactive REPL | Stub |
+| `zithc deps` | Dependency management | Stub |
 
-- `when` — pattern matching with ranges, types, and destructuring
-- `flow fn` / `marker` / `dock` / `jump` — structured goto with compile-time verification
-- `->` — chain flow operator for left-to-right pipelines
+**Useful flags:** `--emit-ast`, `--emit-hir`, `--emit-ir`, `--emit-asm`, `-m release`, `--include <stdlib-path>`
 
-### Error Handling
+---
 
-- `?T` (optional) / `T!` (result) — zero-cost, return-based
-- `or` — fallback chains: `!load() or backup() or default`
-- `fail` blocks — scoped error recovery
+## Compilation Pipeline
 
-### Compile-Time
+```
+Source -> Lex -> Scan -> Import -> Resolve -> TypeCheck -> Solve -> NRA -> HIR -> Codegen -> Cache
+```
 
-- `comptime` — compile-time bindings and `const` blocks
-- `const fn` — functions forced to resolve at compile time
-- Reflection via `@` intrinsics
-
-### Extensibility
-
-- Words — custom operators (prefix, infix, suffix)
-- Contexts — scoped DSL injection
-- Macros — hygienic, raw, and tag macros
-
-### Interop & Platform
-
-- C interop — automatic `.h` binding, manual semantic annotation
-- ZIR — portable intermediate format
-- Multi-target — VM execution or native compilation via LLVM
+| Stage | Description |
+|---|---|
+| `Lex` | Tokenize source |
+| `Scan` | Register top-level declarations |
+| `Import` | Resolve module imports |
+| `Resolve` | Bind names to symbols |
+| `TypeCheck` | Infer and check types (sema) |
+| `Solve` | Generic instantiation, monomorphization |
+| `NRA` | Node Resource Analysis — ownership pass (stub) |
+| `HIR` | Lower typed AST to High-level IR |
+| `Codegen` | Emit LLVM IR -> native or WASM binary |
 
 ---
 
 ## Install
 
-### Package Managers
-
-**Scoop:**
-```powershell
-scoop bucket add zithc https://github.com/GalaxyHaze/Zith.git
-scoop install zithc
-```
-
-**Homebrew:**
-```bash
-brew tap galaxyhaze/zithc
-brew install zithc
-```
-
-### Install Scripts
-
-**Linux / macOS:**
-```bash
-curl -fsSL https://raw.githubusercontent.com/GalaxyHaze/Zith/main/scripts/install.sh | bash
-```
-Pass `--musl` for a statically linked musl build, or a version tag (e.g. `v0.0.1`).
-
-**Windows (PowerShell):**
-```powershell
-irm https://raw.githubusercontent.com/GalaxyHaze/Zith/main/scripts/install.ps1 | iex
-```
-
-**WebAssembly:**
-```bash
-curl -fsSL https://raw.githubusercontent.com/GalaxyHaze/Zith/main/scripts/install-wasm.sh | bash
-```
-
-### Build from Source
+**Build from source** (recommended until stable release):
 
 ```bash
 git clone https://github.com/GalaxyHaze/Zith.git
@@ -173,66 +179,64 @@ cmake -S . -B build
 cmake --build build -j
 ```
 
-Requires CMake 3.15+, a C++23 compiler (GCC/Clang/MSVC), and optionally LLVM for native backend support.
-
-**Verify:**
-```bash
-zithc --help
+**Scoop (Windows):**
+```powershell
+scoop bucket add zithc https://github.com/GalaxyHaze/Zith.git
+scoop install zithc
 ```
 
----
-
-## CLI Commands
-
-| Command | Description |
-|---------|-------------|
-| `zithc build` | Build the project |
-| `zithc build -m release` | Release build |
-| `zithc check` | Syntax and type checking without compilation |
-| `zithc execute <file.zbc>` | Run a compiled bytecode file |
-| `zithc run` | Build and run in one command |
+**Homebrew (macOS/Linux):**
+```bash
+brew tap galaxyhaze/zithc
+brew install zithc
+```
 
 ---
 
 ## Documentation
 
-- [Language Specification](docs/Zith-spec.md) — overview, quick reference, and appendix
-- [Full docs](https://zith-lang.org)
+| Document | Purpose |
+|---|---|
+| [Language Spec](docs/Zith-spec.md) | Overview, design goals, quick reference, appendix |
+| [Full Spec](docs/Zith-spec-full.md) | All chapters in one file |
+| [CHANGELOG](CHANGELOG.md) | What changed and what is planned |
+| [CONTRIBUTING](CONTRIBUTING.md) | Build instructions, code style, pipeline overview |
 
-### Spec Sections
+### Spec Chapters
 
 | # | Topic | File |
-|---|-------|------|
-| 1 | [Introduction](docs/Zith-spec.md) | Overview, design philosophy, quick reference |
-| 2 | [Module System](docs/02-module-system.md) | `import`, `from`, `export`, visibility |
-| 3 | [Type System](docs/03-type-system.md) | Primitives, structs, enums, unions, generics |
-| 4 | [Traits & Interfaces](docs/04-traits-interfaces.md) | Nominal traits, structural interfaces, capabilities |
-| 5 | [Functions](docs/05-functions.md) | `fn`, `const fn`, `async fn`, `flow fn`, `raw fn` |
-| 6 | [Mutability & Bindings](docs/06-mutability-bindings.md) | `let`, `var`, `global`, `const`, deep mutability |
-| 7 | [Memory Model (NRA)](docs/07-memory-model.md) | Ownership, modifiers, the four rules |
-| 8 | [Error Handling](docs/08-error-handling.md) | `?T`, `T!`, `with`/`catch`, `fail` blocks |
-| 9 | [Control Flow](docs/09-control-flow.md) | `if`, `when`, `for`, `->`, markers, docks |
-| 10 | [Concurrency](docs/10-concurrency.md) | `spawn`, `await`, thread safety |
-| 11 | [Comptime](docs/11-comptime.md) | `const`, reflection, intrinsics |
-| 12 | [Assets](docs/12-assets.md) | Compile-time asset processing |
-| 13 | [Raw & Unsafe](docs/13-raw-unsafe.md) | `raw`, `unsafe`, `Trust` |
-| 14 | [Polymorphism](docs/14-polymorphism.md) | `dyn`, static vs dynamic dispatch |
-| 15 | [Macros](docs/15-macros.md) | Scoped, raw, tag macros |
-| 16 | [Words](docs/16-words.md) | Custom operators |
-| 17 | [Contexts](docs/17-contexts.md) | DSL bundling, scoped activation |
-| 18 | [C Interop](docs/18-c-interop.md) | `.h` import, `extern 'C'` |
-| 19 | [Project Config](docs/19-project-config.md) | `ZithProject.toml`, `ZithFlags` |
-| 20 | [Standard Library](docs/20-standard-library.md) | `std`, `soon`, `c` namespaces |
-| 21 | [Best Practices](docs/21-best-practices.md) | Ownership patterns, naming conventions |
+|---|---|---|
+| 1 | Overview & Design Philosophy | [Zith-spec.md](docs/Zith-spec.md) |
+| 2 | Module System | [02-module-system.md](docs/02-module-system.md) |
+| 3 | Type System | [03-type-system.md](docs/03-type-system.md) |
+| 4 | Traits, Interfaces & Capabilities | [04-traits-interfaces.md](docs/04-traits-interfaces.md) |
+| 5 | Functions | [05-functions.md](docs/05-functions.md) |
+| 6 | Mutability & Bindings | [06-mutability-bindings.md](docs/06-mutability-bindings.md) |
+| 7 | Memory Model (NRA) | [07-memory-model.md](docs/07-memory-model.md) |
+| 8 | Error Handling | [08-error-handling.md](docs/08-error-handling.md) |
+| 9 | Control Flow | [09-control-flow.md](docs/09-control-flow.md) |
+| 10 | Concurrency | [10-concurrency.md](docs/10-concurrency.md) |
+| 11 | Comptime | [11-comptime.md](docs/11-comptime.md) |
+| 12 | Assets | [12-assets.md](docs/12-assets.md) |
+| 13 | Raw & Unsafe | [13-raw-unsafe.md](docs/13-raw-unsafe.md) |
+| 14 | Polymorphism | [14-polymorphism.md](docs/14-polymorphism.md) |
+| 15 | Macros | [15-macros.md](docs/15-macros.md) |
+| 16 | Words (Custom Operators) | [16-words.md](docs/16-words.md) |
+| 17 | Contexts | [17-contexts.md](docs/17-contexts.md) |
+| 18 | C Interop | [18-c-interop.md](docs/18-c-interop.md) |
+| 19 | Project Configuration | [19-project-config.md](docs/19-project-config.md) |
+| 20 | Standard Library | [20-standard-library.md](docs/20-standard-library.md) |
+| 21 | Best Practices | [21-best-practices.md](docs/21-best-practices.md) |
 
 ---
 
 ## Contributing
 
+See [CONTRIBUTING.md](CONTRIBUTING.md) for build instructions and code style.
+
+- [Discord](https://discord.gg/a7h4cpWHg4) — progress updates and collaboration
 - [Issue Tracker](https://github.com/GalaxyHaze/Zith/issues)
 - [Discussions](https://github.com/GalaxyHaze/Zith/discussions)
-
-See the [Build from Source](#build-from-source) section to get a local development environment set up.
 
 ---
 

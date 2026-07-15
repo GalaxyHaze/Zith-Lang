@@ -7,7 +7,7 @@ cmake -B build
 cmake --build build
 ```
 
-Requires C++20, CMake 3.20+, and LLVM (for codegen).
+Requires C++23, CMake 3.20+, and LLVM (for codegen).
 
 ## Project structure
 
@@ -47,3 +47,7 @@ Source → Lex → Scan → Import → Resolve → Sema → Solve → NRA → HI
 ```
 
 Each stage is a method on `CompilationSession` in `src/session/`.
+
+## Implementation Status
+
+See [docs/impl-status.md](docs/impl-status.md) for the current state of every language feature and CLI command.

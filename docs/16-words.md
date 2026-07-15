@@ -1,5 +1,9 @@
 ## 16. Words (Custom Operators)
 
+> **Implementation status:** `word` / `context` declarations and word calls are **blocked (E2010)**.
+> The parser accepts them; the semantic pass rejects them before HIR.
+> See [impl-status.md](impl-status.md) for details.
+
 Words let you define custom operators from identifiers. Each word has a fixed position — **prefix**, **infix**, or **suffix** — with language-defined precedence.
 
 - You must activate a word with `use`, even if you already imported its module.

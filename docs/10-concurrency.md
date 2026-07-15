@@ -1,5 +1,8 @@
 ## 10. Concurrency & Threads
 
+> **Implementation status:** `spawn`, `await`, and `#wont_remain` are **spec-only**.
+> No compiler support exists yet. See [impl-status.md](impl-status.md).
+
 ### 10.1 Spawning
 
 ```zith

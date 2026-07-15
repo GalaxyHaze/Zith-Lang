@@ -9,7 +9,9 @@ Zith gives you full control with a minimal & clean syntax — you don't have to 
 
 Beyond memory safety, Zith has a general-purpose core with a much larger toolbox: markers, contexts (DSLs), words (custom operators), comptime. You choose when to use them. Zith also follows the **Rule of Three**: "if a function needs more than three specialized tools, something went wrong."
 
-This document is a draft of language specification, currently v0.9. It serves three audiences: developers learning Zith for the first time, contributors working on the `zithc` compiler, and tooling authors building editors, linters, or other infrastructure around the language.
+This document is a draft of the language specification, currently v0.9.
+Not every feature described here is implemented in the compiler.
+For the exact picture of what works today, see [Implementation Status](impl-status.md). It serves three audiences: developers learning Zith for the first time, contributors working on the `zithc` compiler, and tooling authors building editors, linters, or other infrastructure around the language.
 
 ### Notation used in this document
 
