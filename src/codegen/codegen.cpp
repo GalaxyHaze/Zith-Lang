@@ -6,6 +6,7 @@
 
 #include <llvm/ADT/SmallString.h>
 #include <llvm/Analysis/LoopAnalysisManager.h>
+#include <llvm/Config/llvm-config.h>
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/LegacyPassManager.h>
@@ -63,11 +64,16 @@ int CodeGen::llvmOptLevel() const {
 }
 
 void CodeGen::ensureTargetInfo() {
-    module_->setTargetTriple(llvm::Triple(effectiveTriple()));
+    auto tripleStr = effectiveTriple();
+    auto triple    = llvm::Triple(tripleStr);
+#if LLVM_VERSION_MAJOR >= 19
+    module_->setTargetTriple(triple);
+#else
+    module_->setTargetTriple(tripleStr);
+#endif
     // Create a throwaway TargetMachine just to get the correct data layout.
     std::string error;
-    auto triple  = llvm::Triple(effectiveTriple());
-    auto *target = llvm::TargetRegistry::lookupTarget(triple, error);
+    auto *target = llvm::TargetRegistry::lookupTarget(tripleStr, error);
     if (target) {
         llvm::TargetOptions options;
         auto tm = std::unique_ptr<llvm::TargetMachine>(target->createTargetMachine(
@@ -83,8 +89,9 @@ void CodeGen::optimize() {
         return;
 
     std::string error;
-    auto triple  = llvm::Triple(effectiveTriple());
-    auto *target = llvm::TargetRegistry::lookupTarget(triple, error);
+    auto tripleStr = effectiveTriple();
+    auto triple    = llvm::Triple(tripleStr);
+    auto *target   = llvm::TargetRegistry::lookupTarget(tripleStr, error);
     std::unique_ptr<llvm::TargetMachine> tm;
     if (target) {
         llvm::TargetOptions options;
@@ -211,7 +218,7 @@ static bool setupTargetMachine(llvm::Module *module, const std::string &tripleSt
                                diagnostics::DiagnosticEngine *diags = nullptr) {
     std::string error;
     auto triple  = llvm::Triple(tripleStr);
-    auto *target = llvm::TargetRegistry::lookupTarget(triple, error);
+    auto *target = llvm::TargetRegistry::lookupTarget(tripleStr, error);
     if (!target) {
         std::string msg = "target lookup failed: " + error;
         if (diags)
