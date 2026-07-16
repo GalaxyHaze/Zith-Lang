@@ -502,6 +502,7 @@ void FrontendContext::invalidatePath(const std::string_view path) {
 }
 
 std::vector<std::string> FrontendContext::visibleRootsFor(const std::string_view root_path) const {
+    (void)root_path;
     std::vector<std::string> roots;
     roots.reserve(config_.stdlibRoots.size() + config_.includeRoots.size() + 2U);
     roots.insert(roots.end(), config_.stdlibRoots.begin(), config_.stdlibRoots.end());
