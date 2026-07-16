@@ -78,6 +78,25 @@ public:
         return current_ ? (current_->size - offset_) : 0;
     }
 
+    /// Total usable data capacity across all allocated blocks (excludes Block header overhead).
+    [[nodiscard]] size_t allocatedBytes() const noexcept {
+        size_t total = 0;
+        for (const Block *b = head_; b; b = b->next)
+            total += b->size;
+        return total;
+    }
+
+    /// Bytes actually written: full prior blocks plus the current write offset.
+    [[nodiscard]] size_t usedBytes() const noexcept {
+        if (!head_)
+            return 0;
+        size_t total = 0;
+        for (const Block *b = head_; b != current_; b = b->next)
+            total += b->size;
+        total += offset_;
+        return total;
+    }
+
     void clear() noexcept {
         auto *block = head_;
         while (block) {

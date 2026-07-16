@@ -39,13 +39,14 @@
 
 namespace zith::session {
 
-CompilationSession::CompilationSession(const Options &options, std::string filePath)
+CompilationSession::CompilationSession(const Options &options, std::string filePath,
+                                       std::shared_ptr<FrontendContext> frontend_context)
     : mOpts(options), mFilePath(std::move(filePath)), mProjectRoot(), mProjectConfig(mAstArena),
       mScratchArena(), mAstArena(), mSymArena(), mTypeArena(), mHirArena(), mDiags(mScratchArena),
       mInterner(std::make_unique<memory::StringInterner>(mAstArena)),
       mAstBuilder(mAstArena, *mInterner), mImportMgr(mSymArena, *mInterner, mSourceMap, mDiags),
       mSyms(mSymArena, mInterner.get()), mResolvedSyms(mSymArena), mTypes(mTypeArena, *mInterner),
-      mHirModule(mHirArena), mTypedAst(mHirArena) {
+      mHirModule(mHirArena), mTypedAst(mHirArena), mFrontendContext(std::move(frontend_context)) {
     mPlan.target = mOpts.get().targetStage;
     mDiags.setColor(term::useColor(mOpts));
     mDiags.setSourceMap(&mSourceMap);
@@ -229,6 +230,19 @@ bool CompilationSession::lexStage() {
     }
 #endif
 
+    if (mFrontendContext && !mSnapshot) {
+        auto snapshot = mContentOverride.empty()
+                            ? mFrontendContext->analyzeFile(mFilePath)
+                            : mFrontendContext->analyzeText(mFilePath, mContentOverride);
+        if (!snapshot) {
+            writeOutput("%s[error]%s failed to build frontend snapshot for '%s': %s\n",
+                        ansicolor("\033[31m"), ansicolor("\033[0m"), mFilePath.c_str(),
+                        snapshot.error().msg.c_str());
+            return false;
+        }
+        mSnapshot = std::move(snapshot.value());
+    }
+
     auto file_result = !mContentOverride.empty() ? mSourceMap.addFile(mFilePath, mContentOverride)
                                                  : mSourceMap.loadFile(mFilePath);
     if (!file_result) {
@@ -251,10 +265,10 @@ bool CompilationSession::lexStage() {
         std::fputs("---\n", stdout);
     }
 
+    auto lexDt = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+    mStageDurations[static_cast<size_t>(StageIndex::Lex)] = lexDt;
     if (mOpts.get().flags.verbose()) {
-        auto dt = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0)
-                      .count();
-        writeOutput("  [lex] %6u tokens  (%5.1fms)\n", mTokens.len, dt);
+        writeOutput("  [lex] %6u tokens  (%5.1fms)\n", mTokens.len, lexDt);
     }
 
     return true;
@@ -397,10 +411,10 @@ bool CompilationSession::importStage() {
         }
     }
 
+    auto importDt = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+    mStageDurations[static_cast<size_t>(StageIndex::Import)] = importDt;
     if (mOpts.get().flags.verbose()) {
-        auto dt = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0)
-                      .count();
-        writeOutput("  [import] %zu symbols  (%5.1fms)\n", mSyms.symbolCount(), dt);
+        writeOutput("  [import] %zu symbols  (%5.1fms)\n", mSyms.symbolCount(), importDt);
     }
 
     return true;
@@ -413,10 +427,10 @@ bool CompilationSession::resolveStage() {
     resolver.resolveProgram(mProgram);
     mResolvedSyms = resolver.takeResolvedTable();
 
+    auto resolveDt = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+    mStageDurations[static_cast<size_t>(StageIndex::Resolve)] = resolveDt;
     if (mOpts.get().flags.verbose()) {
-        auto dt = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0)
-                      .count();
-        writeOutput("  [resolve] %5.1fms\n", dt);
+        writeOutput("  [resolve] %5.1fms\n", resolveDt);
     }
 
     return !mDiags.hasErrors();
@@ -427,16 +441,18 @@ bool CompilationSession::scanStage() {
     parser::Parser parser(&mTokens, &mAstBuilder, &mDiags);
     mScanResult = parser::scan(parser, mSyms);
     mProgram    = std::move(parser.program);
-    if (mDiags.hasErrors()) {
+    // Resilient: record partial scan results and emit diagnostics regardless of errors.
+    // Subsequent stages gate themselves on hasErrors(); we do not abort here so that
+    // partial ASTs are available for better diagnostics and symbol collection.
+    auto scanDt = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+    mStageDurations[static_cast<size_t>(StageIndex::Scan)] = scanDt;
+    if (mDiags.hasErrors())
         mDiags.emit();
-        return false;
-    }
     if (mOpts.get().flags.verbose()) {
-        auto dt = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0)
-                      .count();
-        writeOutput("  [scan] %6zu top-level decls  (%5.1fms)\n", mProgram.decls.size(), dt);
+        writeOutput("  [scan] %6zu top-level decls  (%5.1fms, %zu errors)\n",
+                    mProgram.decls.size(), scanDt, mDiags.errorCount());
     }
-    return true;
+    return true; // always succeed so caller can collect symbols from valid decls
 }
 
 bool CompilationSession::semaStage() {
@@ -472,10 +488,10 @@ bool CompilationSession::semaStage() {
 
     mTypedAst = pipeline.takeTypedAst();
 
+    auto semaDt = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+    mStageDurations[static_cast<size_t>(StageIndex::Sema)] = semaDt;
     if (mOpts.get().flags.verbose()) {
-        auto dt = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0)
-                      .count();
-        writeOutput("  [sema] typed AST ready  (%5.1fms)\n", dt);
+        writeOutput("  [sema] typed AST ready  (%5.1fms)\n", semaDt);
     }
 
     return !mDiags.hasErrors();
@@ -504,10 +520,10 @@ bool CompilationSession::lowerStage() {
         std::fputs("---\n", stdout);
     }
 
+    auto lowerDt = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+    mStageDurations[static_cast<size_t>(StageIndex::Lower)] = lowerDt;
     if (mOpts.get().flags.verbose()) {
-        auto dt = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0)
-                      .count();
-        writeOutput("  [lower] %zu fns lowered  (%5.1fms)\n", mHirModule.getFnCount(), dt);
+        writeOutput("  [lower] %zu fns lowered  (%5.1fms)\n", mHirModule.getFnCount(), lowerDt);
     }
 
     return !mDiags.hasErrors();
@@ -520,20 +536,20 @@ bool CompilationSession::solveStage() {
         mDiags.emit();
         return false;
     }
+    auto solveDt = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+    mStageDurations[static_cast<size_t>(StageIndex::Solve)] = solveDt;
     if (mOpts.get().flags.verbose()) {
-        auto dt = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0)
-                      .count();
-        writeOutput("  [solve] \xe2\x80\x94 (stub)  (%5.1fms)\n", dt);
+        writeOutput("  [solve] \xe2\x80\x94 (stub)  (%5.1fms)\n", solveDt);
     }
     return true;
 }
 
 bool CompilationSession::nraStage() {
     auto t0 = std::chrono::steady_clock::now();
+    auto nraDt = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+    mStageDurations[static_cast<size_t>(StageIndex::Nra)] = nraDt;
     if (mOpts.get().flags.verbose()) {
-        auto dt = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0)
-                      .count();
-        writeOutput("  [nra] \xe2\x80\x94 (stub)  (%5.1fms)\n", dt);
+        writeOutput("  [nra] \xe2\x80\x94 (stub)  (%5.1fms)\n", nraDt);
     }
     return true;
 }
@@ -595,10 +611,10 @@ bool CompilationSession::codegenStage() {
     }
 #endif
 
+    auto codegenDt = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+    mStageDurations[static_cast<size_t>(StageIndex::Codegen)] = codegenDt;
     if (mOpts.get().flags.verbose()) {
-        auto dt = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0)
-                      .count();
-        writeOutput("  [codegen] %5.1fms\n", dt);
+        writeOutput("  [codegen] %5.1fms\n", codegenDt);
     }
 
     return !mDiags.hasErrors();
@@ -609,13 +625,33 @@ bool CompilationSession::cacheStage() {
     auto t0      = std::chrono::steady_clock::now();
     namespace fs = std::filesystem;
     fs::create_directories(fs::path(mProjectRoot) / "cache");
+    auto cacheDt = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+    mStageDurations[static_cast<size_t>(StageIndex::Cache)] = cacheDt;
     if (mOpts.get().flags.verbose()) {
-        auto dt = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0)
-                      .count();
-        writeOutput("  [cache] \xe2\x80\x94 ready  (%5.1fms)\n", dt);
+        writeOutput("  [cache] \xe2\x80\x94 ready  (%5.1fms)\n", cacheDt);
     }
 #endif
     return true;
+}
+
+std::unordered_map<std::string, double> CompilationSession::getStageDurationsMs() const {
+    static constexpr const char *names[] = {
+        "lex", "scan", "import", "resolve", "sema", "lower", "solve", "nra", "codegen", "cache",
+    };
+    std::unordered_map<std::string, double> result;
+    for (size_t i = 0; i < static_cast<size_t>(StageIndex::Count); ++i)
+        result[names[i]] = mStageDurations[i];
+    return result;
+}
+
+ArenaMemoryUsage CompilationSession::getArenaMemoryUsage() const {
+    return {
+        mScratchArena.allocatedBytes(),
+        mAstArena.allocatedBytes(),
+        mSymArena.allocatedBytes(),
+        mTypeArena.allocatedBytes(),
+        mHirArena.allocatedBytes(),
+    };
 }
 
 bool CompilationSession::linkAndExec() {

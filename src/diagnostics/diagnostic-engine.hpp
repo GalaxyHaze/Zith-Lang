@@ -62,6 +62,7 @@ public:
     }
 
     [[nodiscard]] bool hasErrors() const noexcept;
+    [[nodiscard]] size_t errorCount() const noexcept;
     [[nodiscard]] std::span<const Diagnostic> all() const noexcept;
     void clear();
 };

@@ -3,6 +3,7 @@
 #include "ast/ast-ids.hpp"
 #include "memory/arena.hpp"
 #include "memory/dyn-array.hpp"
+#include "memory/flat-map.hpp"
 #include "memory/span.hpp"
 #include "memory/string-interner.hpp"
 #include "symbols/symbol-id.hpp"
@@ -53,7 +54,10 @@ struct SymbolData {
 
 struct Scope {
     ScopeId parent = kInvalidScope;
+    /// Ordered list preserves declaration order for dumps and deterministic diagnostics.
     memory::DynArray<SymId> syms;
+    /// O(1) lookup by interned name within this scope only.
+    memory::FlatMap<memory::InternedId, SymId> index;
 };
 
 class SymbolTable {

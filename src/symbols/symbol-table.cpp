@@ -5,15 +5,23 @@
 
 namespace zith::symbols {
 
+namespace {
+
+[[nodiscard]] bool isValidScopeId(const memory::DynArray<Scope> &scopes, ScopeId scope) {
+    return scope != kInvalidScope && scope < static_cast<ScopeId>(scopes.size());
+}
+
+} // namespace
+
 SymbolTable::SymbolTable(memory::Arena &arena, memory::StringInterner *interner)
     : arena_(&arena), interner_(interner), scopes_(arena), symbols_(arena) {
-    scopes_.emplace(Scope{kInvalidScope, memory::DynArray<SymId>(arena)});
+    scopes_.emplace(Scope{kInvalidScope, memory::DynArray<SymId>(arena), {}});
     current_ = kRootScope;
 }
 
 ScopeId SymbolTable::enterScope() {
     ScopeId id = static_cast<ScopeId>(scopes_.size());
-    scopes_.emplace(Scope{current_, memory::DynArray<SymId>(*arena_)});
+    scopes_.emplace(Scope{current_, memory::DynArray<SymId>(*arena_), {}});
     current_ = id;
     return id;
 }
@@ -35,16 +43,23 @@ SymId SymbolTable::declare(memory::InternedId name, SymbolVisibility vis, int32_
     symbols_.push(
         SymbolData{name, current_, vis, depth, kind, decl_id, span, doc_span, target, *arena_});
     scopes_[current_].syms.push(id);
+    // Keep index in sync; later declarations with the same name overwrite the entry,
+    // preserving the "last one wins" shadowing behaviour of the old linear scan.
+    scopes_[current_].index.insert(name, id);
     return id;
 }
 
 SymId SymbolTable::declareInScope(ScopeId scope, memory::InternedId name, SymbolVisibility vis,
                                   int32_t depth, SymKind kind, ast::DeclId decl_id,
                                   memory::Span span, SymId target, memory::Span doc_span) {
+    if (!isValidScopeId(scopes_, scope))
+        return kInvalidSym;
+
     SymId id = static_cast<SymId>(symbols_.size());
     symbols_.push(
         SymbolData{name, scope, vis, depth, kind, decl_id, span, doc_span, target, *arena_});
     scopes_[scope].syms.push(id);
+    scopes_[scope].index.insert(name, id);
     return id;
 }
 
@@ -77,22 +92,21 @@ SymbolData &SymbolTable::get(SymId id) {
 
 SymId SymbolTable::lookup(memory::InternedId name) const {
     ScopeId scope = current_;
-    while (scope != kInvalidScope) {
-        for (auto sid : scopes_[scope].syms) {
-            if (symbols_[sid].name == name)
-                return sid;
-        }
+    while (isValidScopeId(scopes_, scope)) {
+        const auto *entry = scopes_[scope].index.get(name);
+        if (entry)
+            return *entry;
         scope = scopes_[scope].parent;
     }
     return kInvalidSym;
 }
 
 SymId SymbolTable::lookupInScope(memory::InternedId name, ScopeId scope) const {
-    for (auto sid : scopes_[scope].syms) {
-        if (symbols_[sid].name == name)
-            return sid;
-    }
-    return kInvalidSym;
+    if (!isValidScopeId(scopes_, scope))
+        return kInvalidSym;
+
+    const auto *entry = scopes_[scope].index.get(name);
+    return entry ? *entry : kInvalidSym;
 }
 
 SymId SymbolTable::lookup(std::string_view name) const {
@@ -100,15 +114,17 @@ SymId SymbolTable::lookup(std::string_view name) const {
 }
 
 SymId SymbolTable::lookupEscaped(memory::InternedId name) const {
+    if (!isValidScopeId(scopes_, current_))
+        return kInvalidSym;
+
     auto parent = scopes_[current_].parent;
-    if (parent == kInvalidScope)
+    if (!isValidScopeId(scopes_, parent))
         return kInvalidSym;
     ScopeId scope = parent;
-    while (scope != kInvalidScope) {
-        for (auto sid : scopes_[scope].syms) {
-            if (symbols_[sid].name == name)
-                return sid;
-        }
+    while (isValidScopeId(scopes_, scope)) {
+        const auto *entry = scopes_[scope].index.get(name);
+        if (entry)
+            return *entry;
         scope = scopes_[scope].parent;
     }
     return kInvalidSym;

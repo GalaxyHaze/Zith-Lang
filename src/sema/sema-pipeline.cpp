@@ -397,6 +397,11 @@ types::TypeId SemaPipeline::visitExpr(ast::ExprId id) {
                 typed_ast_.set(id, types::kErrorType);
                 return types::kErrorType;
             },
+            [&](const ast::ErrorExprNode &) {
+                // Error recovery node — propagate kErrorType silently.
+                typed_ast_.set(id, types::kErrorType);
+                return types::kErrorType;
+            },
         },
         node);
 }
@@ -775,6 +780,7 @@ void SemaPipeline::visitStmt(ast::StmtId id) {
             [&](const ast::MarkerNode &n) { visitMarker(n); },
             [&](const ast::ExprStmtNode &n) { visitExpr(n.expr); },
             [&](const ast::UseNode &n) { reportUnsupportedSyntax("use statements", n.span); },
+            [&](const ast::ErrorStmtNode &) { /* silently ignore error-recovery statement */ },
         },
         node);
 }

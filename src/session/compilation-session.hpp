@@ -11,17 +11,44 @@
 #include "parser/scan-result.hpp"
 #include "sema/hir-lower.hpp"
 #include "sema/typed-ast.hpp"
+#include "session/frontend-context.hpp"
 #include "session/pipeline-plan.hpp"
 #include "symbols/import-manager.hpp"
 #include "symbols/symbol-table.hpp"
 #include "types/type-intern.hpp"
 
+#include <array>
 #include <cstdarg>
 #include <functional>
 #include <memory>
 #include <string>
+#include <unordered_map>
 
 namespace zith::session {
+
+/// Per-stage index used for timing telemetry.
+enum class StageIndex : uint8_t {
+    Lex,
+    Scan,
+    Import,
+    Resolve,
+    Sema,
+    Lower,
+    Solve,
+    Nra,
+    Codegen,
+    Cache,
+    Count,
+};
+
+/// Snapshot of arena capacity and usage across the five compiler arenas.
+struct ArenaMemoryUsage {
+    size_t scratchAllocatedBytes = 0;
+    size_t astAllocatedBytes     = 0;
+    size_t symbolAllocatedBytes  = 0;
+    size_t typeAllocatedBytes    = 0;
+    size_t hirAllocatedBytes     = 0;
+};
 
 class CompilationSession {
     std::reference_wrapper<const Options> mOpts;
@@ -58,6 +85,10 @@ class CompilationSession {
     bool mBufferedOutput   = false;
     bool mAlwaysEmitObject = false;
     std::string mContentOverride;
+    std::shared_ptr<FrontendContext> mFrontendContext;
+    std::shared_ptr<const CompilationSnapshot> mSnapshot;
+    // Per-stage wall-clock durations in milliseconds; 0.0 = stage not executed.
+    std::array<double, static_cast<size_t>(StageIndex::Count)> mStageDurations{};
 
 #if defined(__GNUC__) || defined(__clang__)
     void writeOutput(const char *fmt, ...) __attribute__((format(printf, 2, 3)));
@@ -70,7 +101,10 @@ class CompilationSession {
     }
 
 public:
-    CompilationSession(const Options &opts, std::string filePath);
+    /// `frontend_context` is optional so existing CLI/C API callers keep the
+    /// session-local behavior.  LSP callers share one context per workspace.
+    CompilationSession(const Options &opts, std::string filePath,
+                       std::shared_ptr<FrontendContext> frontend_context = {});
 
     CompilationSession(CompilationSession &&)                 = default;
     CompilationSession &operator=(CompilationSession &&)      = delete;
@@ -97,6 +131,9 @@ public:
     }
     const memory::SourceMap &sourceMap() const {
         return mSourceMap;
+    }
+    [[nodiscard]] const std::shared_ptr<const CompilationSnapshot> &snapshot() const noexcept {
+        return mSnapshot;
     }
     memory::FileId fileId() const {
         return mFileId;
@@ -154,6 +191,13 @@ public:
     }
 
     std::string fmtStage();
+
+    /// Return a map from stage-name -> milliseconds for each executed stage.
+    /// Stages not yet executed return 0.0.
+    std::unordered_map<std::string, double> getStageDurationsMs() const;
+
+    /// Return current arena capacity across all five compiler arenas.
+    ArenaMemoryUsage getArenaMemoryUsage() const;
 
 private:
     void setTarget(Stage s) {

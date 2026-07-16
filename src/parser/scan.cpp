@@ -643,9 +643,19 @@ ScanResult scan(Parser &parser, symbols::SymbolTable &syms) {
         lastDocSpan       = {};
     };
 
+    // Per-file error limit: suppress further scan errors beyond this threshold.
+    static constexpr size_t kMaxScanErrors = 100;
+
     while (!tok.is_empty()) {
         if (tok.peek().is_eof())
             break;
+
+        // Check error budget; if exceeded emit a suppression note and stop scanning.
+        if (diag.errorCount() >= kMaxScanErrors) {
+            diag.report(diagnostics::Severity::Note, diagnostics::err::ExpectedExpr,
+                        "too many errors (scan stopped after 100 syntax errors)", tok.peek().span);
+            break;
+        }
 
         // ── capture doc comments ───────────────────────────────────
         if (tok.peek().is(lexer::TokenKind::Docs)) {
@@ -821,7 +831,18 @@ ScanResult scan(Parser &parser, symbols::SymbolTable &syms) {
                     diag.report(diagnostics::Severity::Error, ExpectedIdent, std::move(msg),
                                 tok.peek().span);
                 }
-                tok.advance();
+                // Recover the malformed declaration as a whole so the next
+                // top-level declaration can still be collected deterministically.
+                if (tok.peek().punc == '{') {
+                    scan_detail::skipBalanced(tok, '{', '}');
+                } else if (!tok.peek().is_eof()) {
+                    tok.advance();
+                }
+                recovery::panic(tok, {lexer::TokenKind::Fn, lexer::TokenKind::Struct,
+                                      lexer::TokenKind::Trait, lexer::TokenKind::Interface,
+                                      lexer::TokenKind::Implement, lexer::TokenKind::Module,
+                                      lexer::TokenKind::Variable, lexer::TokenKind::Extern,
+                                      lexer::TokenKind::Word, lexer::TokenKind::Context});
                 resetVis();
                 continue;
             }

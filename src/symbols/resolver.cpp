@@ -97,6 +97,7 @@ void Resolver::resolveStmt(ast::StmtId id) {
                        if (n.block != ast::kInvalidExpr)
                            resolveExpr(n.block);
                    },
+                   [](const ast::ErrorStmtNode &) {},
                },
                node);
 }
@@ -175,6 +176,7 @@ void Resolver::resolveExpr(ast::ExprId id) {
                         for (auto arg : n.args)
                             resolveExpr(arg);
                     },
+                    [](const ast::ErrorExprNode &) {},
                 },
                 node);
 }

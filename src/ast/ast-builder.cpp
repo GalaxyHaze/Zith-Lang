@@ -56,14 +56,23 @@ template <> struct ExprTagFor<SeqNode> {
 template <> struct ExprTagFor<WordCallNode> {
     static constexpr ExprKind value = ExprKind::WordCall;
 };
+template <> struct ExprTagFor<ErrorExprNode> {
+    static constexpr ExprKind value = ExprKind::Error;
+};
 template <> struct StmtTagFor<UseNode> {
     static constexpr StmtKind value = StmtKind::Use;
+};
+template <> struct StmtTagFor<ErrorStmtNode> {
+    static constexpr StmtKind value = StmtKind::Error;
 };
 template <> struct DeclTagFor<WordDeclNode> {
     static constexpr DeclKind value = DeclKind::Word;
 };
 template <> struct DeclTagFor<ContextDeclNode> {
     static constexpr DeclKind value = DeclKind::Context;
+};
+template <> struct DeclTagFor<ErrorDeclNode> {
+    static constexpr DeclKind value = DeclKind::Error;
 };
 template <typename T> struct StmtTagFor;
 template <> struct StmtTagFor<LetNode> {
@@ -333,6 +342,18 @@ DeclId AstBuilder::globalDecl(std::string_view name, bool is_const, TypeExprId t
 
 ExprId AstBuilder::unbody(memory::Span body_span, uint32_t token_start, uint32_t token_end) {
     return addExpr(UnbodyNode{body_span, token_start, token_end});
+}
+
+ExprId AstBuilder::errorExpr(memory::Span span) {
+    return addExpr(ErrorExprNode{span});
+}
+
+StmtId AstBuilder::errorStmt(memory::Span span) {
+    return addStmt(ErrorStmtNode{span});
+}
+
+DeclId AstBuilder::errorDecl(memory::Span span) {
+    return addDecl(ErrorDeclNode{span});
 }
 
 ExprId AstBuilder::intrinsic(IntrinsicKind kind, memory::DynArray<ExprId> args, memory::Span span) {

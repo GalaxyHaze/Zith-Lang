@@ -50,6 +50,7 @@ void FmtVisitor::visitDecl(ast::DeclId id) {
                    [&](const ast::GlobalDeclNode &n) { emitGlobalDecl(n); },
                    [&](const ast::WordDeclNode &n) { emitWordDecl(n); },
                    [&](const ast::ContextDeclNode &n) { emitContextDecl(n); },
+                   [&](const ast::ErrorDeclNode &) { /* skip error nodes in formatter */ },
                },
                node);
 }
@@ -387,6 +388,7 @@ void FmtVisitor::visitStmt(ast::StmtId id) {
                        emit(";");
                        newline();
                    },
+                   [&](const ast::ErrorStmtNode &) { /* skip error nodes in formatter */ },
                },
                node);
 }
@@ -498,6 +500,7 @@ void FmtVisitor::visitExpr(ast::ExprId id, int parent_prec) {
                    [&](const ast::MacroCallNode &n) { emitMacroCall(n); },
                    [&](const ast::SeqNode &n) { emitSequence(n, parent_prec); },
                    [&](const ast::WordCallNode &n) { emitWordCall(n); },
+                   [&](const ast::ErrorExprNode &) { /* skip error nodes in formatter */ },
                },
                node);
 }

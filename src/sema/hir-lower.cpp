@@ -323,6 +323,7 @@ hir::HirExprId HirLower::visitExpr(ast::ExprId id) {
             [](const ast::MacroCallNode &) -> hir::HirExprId { return hir::kInvalidHirExpr; },
             [](const ast::SeqNode &) -> hir::HirExprId { return hir::kInvalidHirExpr; },
             [](const ast::WordCallNode &) -> hir::HirExprId { return hir::kInvalidHirExpr; },
+            [](const ast::ErrorExprNode &) -> hir::HirExprId { return hir::kInvalidHirExpr; },
         },
         node);
 }
@@ -782,6 +783,7 @@ void HirLower::visitStmt(ast::StmtId id) {
                 }
             },
             [](const ast::UseNode &) {},
+            [](const ast::ErrorStmtNode &) {},
         },
         node);
 }

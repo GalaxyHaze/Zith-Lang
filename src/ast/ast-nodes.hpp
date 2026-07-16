@@ -399,9 +399,16 @@ struct SeqNode {
     ExprKind tag = ExprKind::Sequence;
 };
 
+/// Created by the parser's error-recovery path; sema suppresses cascades from this node.
+struct ErrorExprNode {
+    memory::Span span{};
+    ExprKind tag = ExprKind::Error;
+};
+
 using ExprNode =
     std::variant<LitValue, IdentNode, BinaryNode, UnaryNode, CallNode, BlockNode, IfNode, WhileNode,
-                 FieldNode, IndexNode, RangeNode, UnbodyNode, IntrinsicNode, MacroCallNode, SeqNode, WordCallNode>;
+                 FieldNode, IndexNode, RangeNode, UnbodyNode, IntrinsicNode, MacroCallNode, SeqNode,
+                 WordCallNode, ErrorExprNode>;
 
 struct GotoNode {
     std::string_view target;
@@ -424,11 +431,23 @@ struct ExprStmtNode {
     StmtKind tag = StmtKind::Expr;
 };
 
-using StmtNode = std::variant<LetNode, AssignNode, RetNode, GotoNode, MarkerNode, ExprStmtNode, UseNode>;
+/// Created by the parser's error-recovery path at statement level.
+struct ErrorStmtNode {
+    memory::Span span{};
+    StmtKind tag = StmtKind::Error;
+};
+
+using StmtNode = std::variant<LetNode, AssignNode, RetNode, GotoNode, MarkerNode, ExprStmtNode, UseNode, ErrorStmtNode>;
+
+/// Created by the parser's error-recovery path at declaration level.
+struct ErrorDeclNode {
+    memory::Span span{};
+    DeclKind tag = DeclKind::Error;
+};
 
 using DeclNode =
     std::variant<FnDeclNode, StructDeclNode, EnumDeclNode, UnionDeclNode, ComponentDeclNode,
                  TraitDeclNode, InterfaceDeclNode, ImportNode, TypeAliasDeclNode, GlobalDeclNode,
-                 WordDeclNode, ContextDeclNode>;
+                 WordDeclNode, ContextDeclNode, ErrorDeclNode>;
 
 } // namespace zith::ast

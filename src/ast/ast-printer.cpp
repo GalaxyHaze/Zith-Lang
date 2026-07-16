@@ -429,6 +429,9 @@ void print_expr_node(const ExprNode &node, const AstBuilder &bld, FILE *out, int
                             print_expr(arg, bld, out, depth + 1);
                         }
                     },
+                    [&](const ErrorExprNode &) {
+                        std::fprintf(out, "<error-expr>\n");
+                    },
                 },
                 node);
 }
@@ -495,6 +498,9 @@ void print_stmt(StmtId id, const AstBuilder &bld, FILE *out, int depth) {
                            print_indent(out, depth + 1);
                            print_expr(n.block, bld, out, depth + 1);
                        }
+                   },
+                   [&](const ErrorStmtNode &) {
+                       std::fprintf(out, "<error-stmt>\n");
                    },
                },
                node);
@@ -731,6 +737,9 @@ void print_decl(DeclId id, const AstBuilder &bld, FILE *out, int depth) {
                     print_expr(n.init, bld, out, 0);
                 }
                 std::fprintf(out, "\n");
+            },
+            [&](const ErrorDeclNode &) {
+                std::fprintf(out, "<error-decl>\n");
             },
         },
         node);

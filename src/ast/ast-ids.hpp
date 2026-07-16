@@ -21,6 +21,7 @@ enum class ExprKind : uint8_t {
     MacroCall,
     Sequence,
     WordCall,
+    Error, ///< Produced during error recovery; sema treats its type as kErrorType.
 };
 
 enum class StmtKind : uint8_t {
@@ -31,6 +32,7 @@ enum class StmtKind : uint8_t {
     Marker,
     Expr,
     Use,
+    Error, ///< Statement-level error recovery placeholder.
 };
 
 enum class DeclKind : uint8_t {
@@ -46,6 +48,7 @@ enum class DeclKind : uint8_t {
     Global,
     Word,
     Context,
+    Error, ///< Declaration-level error recovery placeholder.
 };
 
 using NodeId     = uint32_t;

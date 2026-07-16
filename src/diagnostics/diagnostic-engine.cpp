@@ -34,6 +34,14 @@ bool DiagnosticEngine::hasErrors() const noexcept {
     return false;
 }
 
+size_t DiagnosticEngine::errorCount() const noexcept {
+    size_t count = 0;
+    for (auto &d : diagnostics_)
+        if (d.isError())
+            ++count;
+    return count;
+}
+
 std::span<const Diagnostic> DiagnosticEngine::all() const noexcept {
     return {diagnostics_.data(), diagnostics_.size()};
 }
