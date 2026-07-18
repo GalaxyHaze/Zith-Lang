@@ -24,6 +24,7 @@ brew install zithc</code></pre>
 #     ZithProject.toml
 #     src/main.zith
 #     (and other folders that will be explained later)</code></pre>
+<a href="./spec/D-spec-project-config.html">Project Configuration</a>
 
 <h2>Step 3: Write Your First Program</h2>
 <p>Open <code>src/main.zith</code>. You will see the auto-generated template:</p>
@@ -39,7 +40,7 @@ fn main() {
 <ul>
   <li><code>from std/io/console</code>: Imports the console functions (like <code>@println</code> and <code>input</code>) from the standard library.</li>
   <li><code>//</code>: Denotes a single-line comment.</li>
-  <li><code>@</code>: Denotes a macro call. If you are wondering what macros are, check out the <a href="./D-spec-macros.html">Macros specification</a>. For now, think of it as compiler magic!</li>
+  <li><code>@</code>: Denotes a macro call. If you are wondering what macros are, check out the <a href="./spec/D-spec-macros.html">Macros specification</a>. For now, think of it as compiler magic!</li>
   <li><code>fn main()</code>: The entry point where your program starts executing. Every compilable application must have exactly one <code>main</code> function.</li>
 </ul>
 
@@ -64,8 +65,8 @@ fn main() {
 <pre><code class="language-bash">zithc run hello-world
 
 # Or compile and execute as separate steps:
-zithc build
-zithc execute</code></pre>
+zithc build hello-wolrd
+zithc execute hello-world</code></pre>
 
 <p><strong>Expected output:</strong></p>
 <pre><code>Hello, Zith!
@@ -197,9 +198,12 @@ fn main() {
 
 <h2>What's Next?</h2>
 <ul>
-  <li><a href="./D-intro-why-zith.html">Why Zith?</a>  Understand why to choose Zith.</li>
-  <li><a href="./D-language-overview.html">Language Guide</a>  Explore language features.</li>
-  <li><a href="./D-cli.html">CLI Reference</a>  Master all native tools.</li>
+  <li><a href="./intro/D-intro-why-zith.html">Why Zith?</a>  Understand why to choose Zith.</li>
+  <li><a href="./language/D-language-overview.html">Language Guide</a>  Explore language features.</li>
+  <li><a href="./cli/D-cli.html">CLI Reference</a>  Master all native tools.</li>
 </ul>
 <hr>
-<p><strong>Need help?</strong> Visit our <a href="./D-faq-overview.html">FAQ</a> or join the discussion on <a href="https://github.com/GalaxyHaze/Zith-discussions/discussions">GitHub</a>.</p>
+<p><strong>Need help?</strong> Visit our <a href="./faq/D-faq-overview.html">FAQ</a> or join the discussion on <a href="https://github.com/GalaxyHaze/Zith-discussions/discussions">GitHub</a>.</p>
+<footer>
+  <p>Assigned by: <a href="mailto:aboveHaze@example.com">Haze</a></p>
+</footer>
