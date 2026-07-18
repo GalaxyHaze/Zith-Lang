@@ -742,6 +742,7 @@ MOBILE
         height: 100dvh;
         overflow-x: hidden;
         font-size: clamp(14px, 2.5vw, 18px);
+        touch-action: manipulation;
     }
 
     .lateralBar {
@@ -768,24 +769,23 @@ MOBILE
     }
 
     .top {
-        flex-shrink: 0;
+        flex-shrink: 1;
         padding: 10px;
+        max-height: 20vh;
+        overflow: hidden;
     }
 
-    .bottom{
-        flex-shrink: 0;
+    .bottom {
         flex: 1;
+        min-height: 0;
     }
 
     .info {
-        padding: 20px;
-        font-size: clamp(13px, 2.2vw, 16px);
+        display: none;
     }
 
     .logo {
-        font-size: 10px;
-        max-width: 100%;
-        overflow-x: auto;
+        display: none;
     }
 
     .doc-page-nav {
@@ -857,15 +857,6 @@ MOBILE
         padding: 8px 12px;
     }
 
-    .info {
-        padding: 14px;
-        font-size: clamp(12px, 2.8vw, 14px);
-    }
-
-    .logo {
-        font-size: 8px;
-    }
-
     .bottom {
         padding: 14px;
         padding-bottom: 32px;
@@ -934,19 +925,6 @@ MOBILE
     .helios-cta {
         font-size: 11px;
         padding: 6px 10px;
-    }
-
-    .info {
-        padding: 10px;
-        font-size: 12px;
-    }
-
-    .info br {
-        display: none;
-    }
-
-    .logo {
-        font-size: 6px;
     }
 
     .bottom {
