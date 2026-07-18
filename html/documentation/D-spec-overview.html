@@ -1,6 +1,12 @@
 <h1>ZITH Language Specification</h1>
 <p><strong>Draft v0.9 — 2026</strong></p>
 <blockquote><p>Zith is a statically typed systems programming language with a small, composable core and a large toolbox for domain-specific work. It proves memory safety at compile time without a garbage collector or borrow checker.</p></blockquote>
+
+<div class="callout callout-info">
+  <p><strong>What this section covers:</strong> Formal, precise rules governing Zith — syntax grammar, type system constraints, borrow-checker semantics, compiler internals, and edge cases.</p>
+  <p><strong>Looking for practical usage?</strong> See the <a href="./D-language-overview.html">Language Guide</a> for tutorials, examples, and patterns.</p>
+</div>
+
 <h2>Introduction</h2>
 <p>Zith gives you full control with a minimal & clean syntax — you don't have to choose between verbose but safe or readable but slow. Its memory model, Node Resource Analysis (NRA), proves ownership and lifetime safety using five keywords: <code>lend</code>, <code>view</code>, <code>unique</code>, <code>share</code>, and <code>belong</code> — plus a <code>default</code> (no keyword) modifier.</p>
 <p>Beyond memory safety, Zith has a general-purpose core with a much larger toolbox: markers, contexts (DSLs), words (custom operators), comptime. You choose when to use them. Zith also follows the <strong>Rule of Three</strong>: "if a function needs more than three specialized tools, something went wrong."</p>
