@@ -1,7 +1,7 @@
 const sidebar = document.getElementById("sidebar");
 const content = document.getElementById("content");
 const filebarPath = document.getElementById("filebarPath");
-const defaultPage = "./intro/D-intro-overview.html";
+const defaultPage = "./intro/D-overview.html";
 
 let treeModel = [];
 let flatPages = [];
