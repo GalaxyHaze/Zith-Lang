@@ -58,8 +58,12 @@ inline uint8_t wordPrec(std::string_view w) {
     return 0;
 }
 
-inline uint8_t logicalPrec() { return 5; }  // is / as
-inline uint8_t chainPrec() { return 1; }     // -> chain flow (deferred)
+inline uint8_t logicalPrec() {
+    return 5;
+} // is / as
+inline uint8_t chainPrec() {
+    return 1;
+} // -> chain flow (deferred)
 
 inline bool tryCompoundOp(const lexer::Token &first, const lexer::Token &second,
                           ast::BinaryOp &out_op) {

@@ -265,7 +265,8 @@ bool CompilationSession::lexStage() {
         std::fputs("---\n", stdout);
     }
 
-    auto lexDt = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+    auto lexDt =
+        std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
     mStageDurations[static_cast<size_t>(StageIndex::Lex)] = lexDt;
     if (mOpts.get().flags.verbose()) {
         writeOutput("  [lex] %6u tokens  (%5.1fms)\n", mTokens.len, lexDt);
@@ -411,7 +412,8 @@ bool CompilationSession::importStage() {
         }
     }
 
-    auto importDt = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+    auto importDt =
+        std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
     mStageDurations[static_cast<size_t>(StageIndex::Import)] = importDt;
     if (mOpts.get().flags.verbose()) {
         writeOutput("  [import] %zu symbols  (%5.1fms)\n", mSyms.symbolCount(), importDt);
@@ -427,7 +429,8 @@ bool CompilationSession::resolveStage() {
     resolver.resolveProgram(mProgram);
     mResolvedSyms = resolver.takeResolvedTable();
 
-    auto resolveDt = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+    auto resolveDt =
+        std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
     mStageDurations[static_cast<size_t>(StageIndex::Resolve)] = resolveDt;
     if (mOpts.get().flags.verbose()) {
         writeOutput("  [resolve] %5.1fms\n", resolveDt);
@@ -444,13 +447,14 @@ bool CompilationSession::scanStage() {
     // Resilient: record partial scan results and emit diagnostics regardless of errors.
     // Subsequent stages gate themselves on hasErrors(); we do not abort here so that
     // partial ASTs are available for better diagnostics and symbol collection.
-    auto scanDt = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+    auto scanDt =
+        std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
     mStageDurations[static_cast<size_t>(StageIndex::Scan)] = scanDt;
     if (mDiags.hasErrors())
         mDiags.emit();
     if (mOpts.get().flags.verbose()) {
-        writeOutput("  [scan] %6zu top-level decls  (%5.1fms, %zu errors)\n",
-                    mProgram.decls.size(), scanDt, mDiags.errorCount());
+        writeOutput("  [scan] %6zu top-level decls  (%5.1fms, %zu errors)\n", mProgram.decls.size(),
+                    scanDt, mDiags.errorCount());
     }
     return true; // always succeed so caller can collect symbols from valid decls
 }
@@ -463,12 +467,17 @@ bool CompilationSession::semaStage() {
         return false;
     }
 
-    // Expand unbody nodes into real AST before type-checking
+    // Expand unbody nodes before type-checking, then rewrite module-alias member
+    // accesses without adding resolver-only local bindings to the symbol table.
     {
         parser::Parser parser(&mTokens, &mAstBuilder, &mDiags);
         parser.program = std::move(mProgram);
         parser.expandBodies(mScanResult, mSyms);
         mProgram = std::move(parser.program);
+    }
+    {
+        symbols::Resolver resolver(mSyms, mImportMgr, mAstBuilder, mDiags);
+        resolver.resolveImportMembers(mProgram);
     }
 
     if (mOpts.get().flags.emitAst()) {
@@ -488,7 +497,8 @@ bool CompilationSession::semaStage() {
 
     mTypedAst = pipeline.takeTypedAst();
 
-    auto semaDt = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+    auto semaDt =
+        std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
     mStageDurations[static_cast<size_t>(StageIndex::Sema)] = semaDt;
     if (mOpts.get().flags.verbose()) {
         writeOutput("  [sema] typed AST ready  (%5.1fms)\n", semaDt);
@@ -520,7 +530,8 @@ bool CompilationSession::lowerStage() {
         std::fputs("---\n", stdout);
     }
 
-    auto lowerDt = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+    auto lowerDt =
+        std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
     mStageDurations[static_cast<size_t>(StageIndex::Lower)] = lowerDt;
     if (mOpts.get().flags.verbose()) {
         writeOutput("  [lower] %zu fns lowered  (%5.1fms)\n", mHirModule.getFnCount(), lowerDt);
@@ -536,7 +547,8 @@ bool CompilationSession::solveStage() {
         mDiags.emit();
         return false;
     }
-    auto solveDt = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+    auto solveDt =
+        std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
     mStageDurations[static_cast<size_t>(StageIndex::Solve)] = solveDt;
     if (mOpts.get().flags.verbose()) {
         writeOutput("  [solve] \xe2\x80\x94 (stub)  (%5.1fms)\n", solveDt);
@@ -546,7 +558,8 @@ bool CompilationSession::solveStage() {
 
 bool CompilationSession::nraStage() {
     auto t0 = std::chrono::steady_clock::now();
-    auto nraDt = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+    auto nraDt =
+        std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
     mStageDurations[static_cast<size_t>(StageIndex::Nra)] = nraDt;
     if (mOpts.get().flags.verbose()) {
         writeOutput("  [nra] \xe2\x80\x94 (stub)  (%5.1fms)\n", nraDt);
@@ -564,7 +577,7 @@ bool CompilationSession::codegenStage() {
 
 #ifdef ZITH_HAS_LLVM
     {
-        codegen::CodeGen cg(*mInterner, mSyms, mTypes, mAstBuilder, mOpts.get().targetTriple,
+        codegen::CodeGen cg(*mInterner, mSyms, mTypes, mOpts.get().targetTriple,
                             mOpts.get().flags.optLevel(), &mDiags);
         cg.emit(mHirModule, mFilePath);
         cg.optimize();
@@ -611,7 +624,8 @@ bool CompilationSession::codegenStage() {
     }
 #endif
 
-    auto codegenDt = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+    auto codegenDt =
+        std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
     mStageDurations[static_cast<size_t>(StageIndex::Codegen)] = codegenDt;
     if (mOpts.get().flags.verbose()) {
         writeOutput("  [codegen] %5.1fms\n", codegenDt);
@@ -625,7 +639,8 @@ bool CompilationSession::cacheStage() {
     auto t0      = std::chrono::steady_clock::now();
     namespace fs = std::filesystem;
     fs::create_directories(fs::path(mProjectRoot) / "cache");
-    auto cacheDt = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+    auto cacheDt =
+        std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
     mStageDurations[static_cast<size_t>(StageIndex::Cache)] = cacheDt;
     if (mOpts.get().flags.verbose()) {
         writeOutput("  [cache] \xe2\x80\x94 ready  (%5.1fms)\n", cacheDt);
@@ -646,11 +661,8 @@ std::unordered_map<std::string, double> CompilationSession::getStageDurationsMs(
 
 ArenaMemoryUsage CompilationSession::getArenaMemoryUsage() const {
     return {
-        mScratchArena.allocatedBytes(),
-        mAstArena.allocatedBytes(),
-        mSymArena.allocatedBytes(),
-        mTypeArena.allocatedBytes(),
-        mHirArena.allocatedBytes(),
+        mScratchArena.allocatedBytes(), mAstArena.allocatedBytes(), mSymArena.allocatedBytes(),
+        mTypeArena.allocatedBytes(),    mHirArena.allocatedBytes(),
     };
 }
 
@@ -691,7 +703,8 @@ bool CompilationSession::linkAndExec() {
     }
 
     auto &triple = mOpts.get().targetTriple;
-    bool isWasm = triple.find("wasm32") != std::string::npos || triple.find("wasm64") != std::string::npos;
+    bool isWasm =
+        triple.find("wasm32") != std::string::npos || triple.find("wasm64") != std::string::npos;
 
     if (isWasm && !mOpts.get().outputFile.empty() && mOpts.get().outputFile != mObjectPath) {
         exePath = mOpts.get().outputFile;
@@ -710,17 +723,17 @@ bool CompilationSession::linkAndExec() {
     std::string linkCmd;
     if (isWasm) {
         bool isWasi = triple.find("wasi") != std::string::npos;
-        linkCmd = "wasm-ld ";
+        linkCmd     = "wasm-ld ";
         if (!isWasi)
             linkCmd += "--no-entry --export-all ";
         linkCmd += "-o " + exePath + " " + mObjectPath;
     } else {
         linkCmd = "/usr/bin/cc -o " + exePath + " " + mObjectPath;
     }
-    
+
     if (!mOpts.get().sysroot.empty())
         linkCmd += " --sysroot=" + mOpts.get().sysroot;
-    
+
     if (mOpts.get().flags.verbose())
         writeOutput("  [link] %s\n", linkCmd.c_str());
 

@@ -61,6 +61,9 @@ private:
     void emitWhile(const ast::WhileNode &node);
     void emitField(const ast::FieldNode &node);
     void emitIndex(const ast::IndexNode &node);
+    void emitStructLiteral(const ast::StructLiteralNode &node);
+    void emitArrayLiteral(const ast::ArrayLiteralNode &node);
+    void emitEnumValue(const ast::EnumValueNode &node);
     void emitRange(const ast::RangeNode &node);
     void emitIntrinsic(const ast::IntrinsicNode &node);
     void emitMacroCall(const ast::MacroCallNode &node);

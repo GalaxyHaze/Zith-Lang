@@ -28,12 +28,20 @@
 namespace zith::codegen {
 
 CodeGen::CodeGen(const memory::StringInterner &interner, const symbols::SymbolTable &syms,
-                 const types::TypeIntern &types, const ast::AstBuilder &astBuilder,
-                 std::string_view targetTriple, uint8_t optLevel,
+                 const types::TypeIntern &types, std::string_view targetTriple, uint8_t optLevel,
                  diagnostics::DiagnosticEngine *diags)
     : ctx_(std::make_unique<llvm::LLVMContext>()), interner_(interner), syms_(syms), types_(types),
-      astBuilder_(astBuilder), diags_(diags), targetTriple_(targetTriple), optLevel_(optLevel) {
-    LLVMInitializeX86TargetInfo(); LLVMInitializeX86Target(); LLVMInitializeX86TargetMC(); LLVMInitializeX86AsmParser(); LLVMInitializeX86AsmPrinter(); LLVMInitializeWebAssemblyTargetInfo(); LLVMInitializeWebAssemblyTarget(); LLVMInitializeWebAssemblyTargetMC(); LLVMInitializeWebAssemblyAsmParser(); LLVMInitializeWebAssemblyAsmPrinter();
+      diags_(diags), targetTriple_(targetTriple), optLevel_(optLevel) {
+    LLVMInitializeX86TargetInfo();
+    LLVMInitializeX86Target();
+    LLVMInitializeX86TargetMC();
+    LLVMInitializeX86AsmParser();
+    LLVMInitializeX86AsmPrinter();
+    LLVMInitializeWebAssemblyTargetInfo();
+    LLVMInitializeWebAssemblyTarget();
+    LLVMInitializeWebAssemblyTargetMC();
+    LLVMInitializeWebAssemblyAsmParser();
+    LLVMInitializeWebAssemblyAsmPrinter();
 }
 
 void CodeGen::llvmError(const std::string &msg) {
@@ -144,7 +152,7 @@ void CodeGen::emit(const hir::HirModule &hirModule, std::string_view moduleName)
 llvm::Function *CodeGen::declareFn(const hir::HirFunction &fn) {
     auto name = interner_.lookup(fn.name);
 
-    CodeGenType typeGen(*ctx_, types_);
+    CodeGenType typeGen(*ctx_, types_, &module_->getDataLayout());
     llvm::SmallVector<llvm::Type *, 8> paramTypes;
     for (auto param_type : fn.params)
         paramTypes.push_back(typeGen.lower(param_type));
@@ -166,7 +174,7 @@ void CodeGen::emitFnBody(const hir::HirFunction &fn, const hir::HirModule &mod) 
         return;
     }
 
-    CodeGenType typeGen(*ctx_, types_);
+    CodeGenType typeGen(*ctx_, types_, &module_->getDataLayout());
     auto *retType = typeGen.lower(fn.return_type);
 
     // Create LLVM basic blocks for all HIR blocks
@@ -180,7 +188,7 @@ void CodeGen::emitFnBody(const hir::HirFunction &fn, const hir::HirModule &mod) 
     auto *firstBB = llvmBlocks[0];
     llvm::IRBuilder<> builder(firstBB);
 
-    CodeGenEmit emit(builder, typeGen, interner_, syms_, types_, astBuilder_);
+    CodeGenEmit emit(builder, typeGen, interner_, syms_, types_);
     emit.setBlocks(&llvmBlocks);
     emit.registerParams(fn, llvmFn);
     emit.emitBody(fn, mod);

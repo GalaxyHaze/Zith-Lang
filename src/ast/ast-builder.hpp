@@ -43,6 +43,11 @@ public:
     ExprId call(ExprId callee, memory::DynArray<ExprId> args, memory::Span span = {});
     ExprId field(ExprId object, std::string_view field_name, memory::Span span = {});
     ExprId index(ExprId object, ExprId index, memory::Span span = {});
+    ExprId structLiteral(std::string_view type_name, memory::DynArray<StructFieldInit> fields,
+                         memory::Span span = {});
+    ExprId arrayLiteral(memory::DynArray<ExprId> elements, memory::Span span = {});
+    ExprId enumValue(std::string_view enum_name, std::string_view variant_name,
+                     memory::Span span = {});
     ExprId range(ExprId lhs, ExprId rhs, memory::Span span = {});
     ExprId block(memory::DynArray<StmtId> stmts, ExprId trailing = kInvalidExpr,
                  memory::Span span = {});
@@ -69,9 +74,11 @@ public:
                       memory::DynArray<StructField> fields, memory::DynArray<DeclId> methods,
                       TypeExprId extends_parent = kInvalidTypeExpr, memory::Span span = {});
     DeclId enumDecl(std::string_view name, memory::DynArray<GenericParam> generic_params,
-                    memory::DynArray<EnumVariant> variants, memory::Span span = {});
+                    memory::DynArray<EnumVariant> variants,
+                    TypeExprId underlying_type = kInvalidTypeExpr, memory::Span span = {});
     DeclId unionDecl(std::string_view name, memory::DynArray<GenericParam> generic_params,
-                     memory::DynArray<UnionVariant> variants, memory::Span span = {});
+                     memory::DynArray<UnionVariant> variants, bool is_raw = false,
+                     memory::Span span = {});
     DeclId componentDecl(std::string_view name, memory::DynArray<GenericParam> generic_params,
                          memory::DynArray<StructField> fields, memory::Span span = {});
     DeclId traitDecl(std::string_view name, memory::DynArray<GenericParam> generic_params,
@@ -88,14 +95,16 @@ public:
                       TypeExprId type_annot = kInvalidTypeExpr, ExprId init = kInvalidExpr,
                       memory::Span span = {});
 
-    ExprId wordCall(std::string_view word_name, memory::DynArray<ExprId> args, memory::Span span = {});
+    ExprId wordCall(std::string_view word_name, memory::DynArray<ExprId> args,
+                    memory::Span span = {});
     StmtId useStmt(std::string_view context_name, memory::DynArray<std::string_view> words,
-                   std::string_view alias_name, std::string_view target_path, ExprId block = kInvalidExpr,
-                   memory::Span span = {});
-    DeclId wordDecl(std::string_view name, WordCategory category, memory::DynArray<std::string_view> params,
-                    ExprId body = kInvalidExpr, memory::Span span = {});
-    DeclId contextDecl(std::string_view name, memory::DynArray<DeclId> decls, ExprId body = kInvalidExpr,
-                       memory::Span span = {});
+                   std::string_view alias_name, std::string_view target_path,
+                   ExprId block = kInvalidExpr, memory::Span span = {});
+    DeclId wordDecl(std::string_view name, WordCategory category,
+                    memory::DynArray<std::string_view> params, ExprId body = kInvalidExpr,
+                    memory::Span span = {});
+    DeclId contextDecl(std::string_view name, memory::DynArray<DeclId> decls,
+                       ExprId body = kInvalidExpr, memory::Span span = {});
 
     ExprId unbody(memory::Span body_span, uint32_t token_start, uint32_t token_end);
     ExprId errorExpr(memory::Span span = {});

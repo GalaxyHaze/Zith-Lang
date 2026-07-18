@@ -182,12 +182,20 @@ ast::TypeExprId Parser::parsePrimaryType() {
             advance();
             return bld->addTypeExpr(ast::TypeSlice{parsePrimaryType()});
         }
+        uint32_t count_val = 0;
+        if (peek().is(lexer::TokenKind::LitVal)) {
+            auto lex = lexeme();
+            try {
+                count_val = static_cast<uint32_t>(std::stoul(std::string(lex)));
+            } catch (...) {
+            }
+        }
         auto count_expr = bld->inferExpr();
         while (!peek().is_eof() && !check(']'))
             advance();
         if (check(']'))
             advance();
-        return bld->addTypeExpr(ast::TypeArray{parsePrimaryType(), count_expr});
+        return bld->addTypeExpr(ast::TypeArray{parsePrimaryType(), count_expr, count_val});
     }
 
     // ── fn type: fn(T): U ─────────────────────────────────────────

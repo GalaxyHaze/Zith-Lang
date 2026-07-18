@@ -3,8 +3,8 @@
 #include <cstring>
 
 #ifdef _WIN32
-#include <cstdlib>
 #include <Windows.h>
+#include <cstdlib>
 #else
 #include <stdlib.h>
 #include <unistd.h>

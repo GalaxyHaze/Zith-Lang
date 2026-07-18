@@ -31,7 +31,16 @@ enum class BinaryOp : uint8_t {
     As
 };
 
-enum class UnaryOp : uint8_t { Neg, Not, Ref, Deref, FallbackOpt, FallbackRes, PropagateOpt, PropagateRes };
+enum class UnaryOp : uint8_t {
+    Neg,
+    Not,
+    Ref,
+    Deref,
+    FallbackOpt,
+    FallbackRes,
+    PropagateOpt,
+    PropagateRes
+};
 
 enum class LitKind : uint8_t { Int, Float, Bool, String, Char, Nil };
 
@@ -87,6 +96,34 @@ struct IndexNode {
     ExprId index;
     memory::Span span{};
     ExprKind tag = ExprKind::Index;
+};
+
+struct StructFieldInit {
+    std::string_view name;
+    ExprId value; // kInvalidExpr for `_`
+};
+
+/// Aggregate construction: `Point{1, 2}` or `Point{x: 1, y: _}`.
+struct StructLiteralNode {
+    std::string_view type_name;
+    memory::DynArray<StructFieldInit> fields;
+    memory::Span span{};
+    ExprKind tag = ExprKind::StructLiteral;
+};
+
+/// Array literal: `[1, 2, 3]`
+struct ArrayLiteralNode {
+    memory::DynArray<ExprId> elements;
+    memory::Span span{};
+    ExprKind tag = ExprKind::ArrayLiteral;
+};
+
+/// An enum variant constant, produced by `Color.Red`.
+struct EnumValueNode {
+    std::string_view enum_name;
+    std::string_view variant_name;
+    memory::Span span{};
+    ExprKind tag = ExprKind::EnumValue;
 };
 
 struct RangeNode {
@@ -196,6 +233,7 @@ struct EnumDeclNode {
     memory::DynArray<GenericParam> generic_params;
     memory::DynArray<EnumVariant> variants;
     std::string_view name;
+    TypeExprId underlying_type = kInvalidTypeExpr;
     memory::Span span{};
     int : 32;
     DeclKind tag = DeclKind::Enum;
@@ -211,6 +249,7 @@ struct UnionDeclNode {
     memory::DynArray<GenericParam> generic_params;
     memory::DynArray<UnionVariant> variants;
     memory::Span span{};
+    bool is_raw = false;
     int : 32;
     DeclKind tag = DeclKind::Union;
 };
@@ -347,16 +386,10 @@ struct OpMarker {
     ast::BinaryOp builtin_op = BinaryOp::Add;
     std::string_view word_name;
     uint8_t builtin_prec = 0;
-    bool is_word = false;
+    bool is_word         = false;
 };
 
-
-enum class WordCategory : uint8_t {
-    Nop,
-    Prefix,
-    Suffix,
-    Infix
-};
+enum class WordCategory : uint8_t { Nop, Prefix, Suffix, Infix };
 
 struct WordDeclNode {
     std::string_view name;
@@ -405,10 +438,10 @@ struct ErrorExprNode {
     ExprKind tag = ExprKind::Error;
 };
 
-using ExprNode =
-    std::variant<LitValue, IdentNode, BinaryNode, UnaryNode, CallNode, BlockNode, IfNode, WhileNode,
-                 FieldNode, IndexNode, RangeNode, UnbodyNode, IntrinsicNode, MacroCallNode, SeqNode,
-                 WordCallNode, ErrorExprNode>;
+using ExprNode = std::variant<LitValue, IdentNode, BinaryNode, UnaryNode, CallNode, BlockNode,
+                              IfNode, WhileNode, FieldNode, IndexNode, StructLiteralNode,
+                              ArrayLiteralNode, EnumValueNode, RangeNode, UnbodyNode, IntrinsicNode,
+                              MacroCallNode, SeqNode, WordCallNode, ErrorExprNode>;
 
 struct GotoNode {
     std::string_view target;
@@ -437,7 +470,8 @@ struct ErrorStmtNode {
     StmtKind tag = StmtKind::Error;
 };
 
-using StmtNode = std::variant<LetNode, AssignNode, RetNode, GotoNode, MarkerNode, ExprStmtNode, UseNode, ErrorStmtNode>;
+using StmtNode = std::variant<LetNode, AssignNode, RetNode, GotoNode, MarkerNode, ExprStmtNode,
+                              UseNode, ErrorStmtNode>;
 
 /// Created by the parser's error-recovery path at declaration level.
 struct ErrorDeclNode {

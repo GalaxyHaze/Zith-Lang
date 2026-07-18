@@ -118,8 +118,7 @@ TypeId TypeLower::lowerNode(const ast::TypeExprNode &node) {
         }
 
         TypeId operator()(const ast::TypeArray &n) {
-            // count is currently a placeholder TypeExprId — skip for now
-            return self.intern_.internArray(self.lower(n.elem), 0);
+            return self.intern_.internArray(self.lower(n.elem), n.count_val);
         }
 
         TypeId operator()(const ast::TypeFnExpr &n) {
@@ -210,8 +209,8 @@ TypeId TypeLower::lowerNode(const ast::TypeExprNode &node) {
             memory::DynArray<TypeId> args{ast.arena()};
             for (auto a : n.args)
                 args.push(self.lower(a));
-            return self.intern_.internIncomplete(
-                base, std::span<const TypeId>{args.data(), args.size()});
+            return self.intern_.internIncomplete(base,
+                                                 std::span<const TypeId>{args.data(), args.size()});
         }
     };
 

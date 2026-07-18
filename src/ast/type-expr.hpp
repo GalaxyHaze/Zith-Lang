@@ -55,6 +55,7 @@ struct TypeSlice {
 struct TypeArray {
     TypeExprId elem;
     TypeExprId count;
+    uint32_t count_val = 0;
 };
 
 struct TypeFnExpr {

@@ -191,7 +191,8 @@ bool consumeUnionVariant(Parser &parser, diagnostics::DiagnosticEngine &diag,
 } // namespace
 // ── expand bodies (second pass: seek + parse real bodies) ──────────────
 
-void Parser::expandBodies(ScanResult &result, symbols::SymbolTable &syms) {
+void Parser::expandBodies(ScanResult &result, symbols::SymbolTable &syms_ref) {
+    this->syms = &syms_ref;
     for (auto &entry : result.fns) {
         if (entry.body_node == ast::kInvalidExpr)
             continue;
@@ -326,8 +327,9 @@ void Parser::expandBodies(ScanResult &result, symbols::SymbolTable &syms) {
             continue;
 
         auto *unbody = std::get_if<ast::UnbodyNode>(&bld->getExpr(entry.body_node));
-        if (!unbody) continue;
-        tok->offset  = unbody->token_start;
+        if (!unbody)
+            continue;
+        tok->offset = unbody->token_start;
 
         consume('{');
         auto body_id = parseBlock();
@@ -340,14 +342,15 @@ void Parser::expandBodies(ScanResult &result, symbols::SymbolTable &syms) {
             continue;
 
         auto *unbody = std::get_if<ast::UnbodyNode>(&bld->getExpr(entry.body_node));
-        if (!unbody) continue;
-        tok->offset  = unbody->token_start;
+        if (!unbody)
+            continue;
+        tok->offset = unbody->token_start;
 
         consume('{');
 
-        auto context_sym = syms.lookup(entry.name);
+        auto context_sym = syms_ref.lookup(entry.name);
         if (context_sym != symbols::kInvalidSym) {
-            auto &decl = bld->getDecl(syms.get(context_sym).decl_id);
+            auto &decl = bld->getDecl(syms_ref.get(context_sym).decl_id);
             if (auto *ctx_decl = std::get_if<ast::ContextDeclNode>(&decl)) {
                 while (!tok->is_empty() && tok->peek().punc != '}') {
                     skipComments(*tok);
@@ -386,47 +389,55 @@ void Parser::expandBodies(ScanResult &result, symbols::SymbolTable &syms) {
                                 if (tok->peek().punc == '(') {
                                     tok->advance();
                                     while (!tok->is_empty() && tok->peek().punc != ')') {
-                                        if (tok->peek().is(lexer::TokenKind::Identifier) || tok->peek().is(lexer::TokenKind::Word)) {
+                                        if (tok->peek().is(lexer::TokenKind::Identifier) ||
+                                            tok->peek().is(lexer::TokenKind::Word)) {
                                             params.push(tok->lexeme());
                                             tok->advance();
                                         } else {
                                             tok->advance();
                                         }
-                                        if (tok->peek().punc == ',') tok->advance();
+                                        if (tok->peek().punc == ',')
+                                            tok->advance();
                                     }
-                                    if (tok->peek().punc == ')') tok->advance();
+                                    if (tok->peek().punc == ')')
+                                        tok->advance();
                                 }
 
                                 if (tok->peek().punc == '{') {
                                     uint32_t t_start = tok->offset;
-                                    body_span = tok->peek().span;
-                                    uint32_t t_end = scan_detail::skipBody(*tok);
-                                    body_span = {body_span.file, body_span.start, t_end};
-                                    body_node = bld->unbody(body_span, t_start, t_end);
+                                    body_span        = tok->peek().span;
+                                    uint32_t t_end   = scan_detail::skipBody(*tok);
+                                    body_span        = {body_span.file, body_span.start, t_end};
+                                    body_node        = bld->unbody(body_span, t_start, t_end);
 
                                     auto old_offset = tok->offset;
-                                    tok->offset = t_start;
+                                    tok->offset     = t_start;
                                     consume('{');
-                                    auto nested_body = parseBlock();
+                                    auto nested_body        = parseBlock();
                                     bld->getExpr(body_node) = std::move(bld->getExpr(nested_body));
-                                    tok->offset = old_offset;
+                                    tok->offset             = old_offset;
                                 }
                             }
 
-                            auto word_sym = syms.declare(name, symbols::SymbolVisibility::Private, 0, symbols::SymKind::Word,
-                                                         ast::kInvalidDecl, name_span);
+                            auto word_sym = syms_ref.declare(
+                                name, symbols::SymbolVisibility::Private, 0, symbols::SymKind::Word,
+                                ast::kInvalidDecl, name_span);
 
                             ast::WordCategory category = ast::WordCategory::Nop;
-                            if (kw == "prefix") category = ast::WordCategory::Prefix;
-                            else if (kw == "suffix") category = ast::WordCategory::Suffix;
-                            else if (kw == "infix") category = ast::WordCategory::Infix;
+                            if (kw == "prefix")
+                                category = ast::WordCategory::Prefix;
+                            else if (kw == "suffix")
+                                category = ast::WordCategory::Suffix;
+                            else if (kw == "infix")
+                                category = ast::WordCategory::Infix;
 
-                            auto word_decl = bld->wordDecl(name, category, std::move(params), body_node,
-                                                     scan_detail::spanFromOffset(name_span.start, name_span.end));
+                            auto word_decl = bld->wordDecl(
+                                name, category, std::move(params), body_node,
+                                scan_detail::spanFromOffset(name_span.start, name_span.end));
                             program.decls.push(word_decl);
                             ctx_decl->decls.push(word_decl);
                             if (word_sym != symbols::kInvalidSym)
-                                syms.get(word_sym).decl_id = word_decl;
+                                syms_ref.get(word_sym).decl_id = word_decl;
                         }
                     } else {
                         tok->advance();

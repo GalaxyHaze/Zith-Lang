@@ -186,6 +186,9 @@ public:
     const sema::TypedAst &typedAst() const {
         return mTypedAst;
     }
+    const hir::HirModule &hirModule() const {
+        return mHirModule;
+    }
     memory::StringInterner &interner() {
         return *mInterner;
     }

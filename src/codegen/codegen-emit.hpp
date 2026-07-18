@@ -1,6 +1,5 @@
 #pragma once
 
-#include "ast/ast-builder.hpp"
 #include "codegen-type.hpp"
 #include "hir/hir-expr.hpp"
 #include "hir/hir-module.hpp"
@@ -33,7 +32,7 @@ class CodeGenEmit {
 public:
     CodeGenEmit(llvm::IRBuilderBase &builder, CodeGenType &typeGen,
                 const memory::StringInterner &interner, const symbols::SymbolTable &syms,
-                const types::TypeIntern &types, const ast::AstBuilder &astBuilder);
+                const types::TypeIntern &types);
 
     void setBlocks(const std::vector<llvm::BasicBlock *> *blocks) {
         blocks_ = blocks;
@@ -53,6 +52,9 @@ private:
     llvm::Value *emitVar(const hir::HirVar &var);
     llvm::Value *emitVarAddr(const hir::HirVar &var);
     llvm::Value *emitJump(const hir::HirJump &jump, const hir::HirModule &mod);
+    llvm::Value *emitIndexAddr(const hir::HirIndex &idx, const hir::HirModule &mod);
+    llvm::Value *emitFieldAddr(const hir::HirField &field, const hir::HirModule &mod);
+    llvm::Value *emitLValueAddr(hir::HirExprId target_id, const hir::HirModule &mod);
     llvm::Value *emitBranch(const hir::HirBranch &branch, const hir::HirModule &mod);
 
     llvm::IRBuilderBase &builder_;
@@ -60,7 +62,6 @@ private:
     const memory::StringInterner &interner_;
     const symbols::SymbolTable &syms_;
     const types::TypeIntern &types_;
-    const ast::AstBuilder &astBuilder_;
     memory::FlatMap<std::string_view, NamedValue> namedValues_;
     const std::vector<llvm::BasicBlock *> *blocks_ = nullptr;
 };

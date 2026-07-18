@@ -1,7 +1,6 @@
 #include "codegen-emit.hpp"
 #include "common/overloaded.hpp"
 
-#include "ast/ast-node-utils.hpp"
 #include "types/type-kind.hpp"
 
 #include <llvm/IR/IRBuilder.h>
@@ -13,9 +12,8 @@ namespace zith::codegen {
 
 CodeGenEmit::CodeGenEmit(llvm::IRBuilderBase &builder, CodeGenType &typeGen,
                          const memory::StringInterner &interner, const symbols::SymbolTable &syms,
-                         const types::TypeIntern &types, const ast::AstBuilder &astBuilder)
-    : builder_(builder), typeGen_(typeGen), interner_(interner), syms_(syms), types_(types),
-      astBuilder_(astBuilder) {}
+                         const types::TypeIntern &types)
+    : builder_(builder), typeGen_(typeGen), interner_(interner), syms_(syms), types_(types) {}
 
 llvm::Value *CodeGenEmit::emitExpr(hir::HirExprId id, const hir::HirModule &mod) {
     auto &expr = mod.getExpr(id);
@@ -107,16 +105,9 @@ llvm::Value *CodeGenEmit::emitBody(const hir::HirFunction &fn, const hir::HirMod
 }
 
 void CodeGenEmit::registerParams(const hir::HirFunction &fn, llvm::Function *llvmFn) {
-    if (fn.decl_id == ast::kInvalidDecl)
-        return;
-    auto &decl   = astBuilder_.getDecl(fn.decl_id);
-    auto *fnDecl = ast::asFn(decl);
-    if (!fnDecl)
-        return;
-
     auto argIt = llvmFn->arg_begin();
-    for (size_t i = 0; i < fnDecl->params.size() && argIt != llvmFn->arg_end(); i++, ++argIt) {
-        auto paramName = fnDecl->params[i].name;
+    for (size_t i = 0; i < fn.param_names.size() && argIt != llvmFn->arg_end(); i++, ++argIt) {
+        auto paramName = interner_.lookup(fn.param_names[i]);
         argIt->setName(llvm::StringRef(paramName.data(), paramName.size()));
         auto *slot = builder_.CreateAlloca(argIt->getType(), nullptr,
                                            llvm::StringRef(paramName.data(), paramName.size()));

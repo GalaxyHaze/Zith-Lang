@@ -229,15 +229,15 @@ static void test_unary_op_ok() {
     CHECK(r.ok, "Unary negation compiles");
 }
 
-static void test_index_not_implemented_warning() {
+static void test_index_validation() {
     SemaTest t;
     auto r = t.run("fn main() {\n"
                    "    var x: i32 = 0;\n"
                    "    x[0];\n"
                    "}\n");
-    CHECK(r.ok, "Index access currently warns instead of failing");
-    CHECK_EQ(r.warningCount, 1u, "Exactly one warning for index access");
-    CHECK(r.hasWarningCode(diagnostics::err::NotImplemented), "Reports NotImplemented warning");
+    CHECK(!r.ok, "Index access on non-indexable type fails semantic analysis");
+    CHECK_EQ(r.errorCount, 1u, "Exactly one error for invalid index access");
+    CHECK(r.hasErrorCode(diagnostics::err::TypeMismatch), "Reports TypeMismatch error");
 }
 
 static void test_field_not_implemented_warning() {
@@ -246,9 +246,10 @@ static void test_field_not_implemented_warning() {
                    "    var x: i32 = 0;\n"
                    "    x.value;\n"
                    "}\n");
-    CHECK(r.ok, "Field access currently warns instead of failing");
-    CHECK_EQ(r.warningCount, 1u, "Exactly one warning for field access");
-    CHECK(r.hasWarningCode(diagnostics::err::NotImplemented), "Reports NotImplemented warning");
+    CHECK(!r.ok, "Field access on a non-struct fails semantic analysis");
+    CHECK_EQ(r.errorCount, 1u, "Exactly one error for invalid field access");
+    CHECK(r.hasErrorCode(diagnostics::err::TypeMismatch),
+          "Reports TypeMismatch for invalid field access");
 }
 
 static void test_macro_not_implemented_warning() {
@@ -353,6 +354,94 @@ static void test_unsupported_syntax_does_not_reach_hir() {
     check_unsupported_syntax(t.run("fn main() { 1 is Missing; }\n", session::Stage::HirLowered));
 }
 
+static void test_offsetof_intrinsic_ok() {
+    SemaTest t;
+    auto r = t.run("struct Pair { left: i32, right: i32 }\n"
+                   "fn main(): i32 {\n"
+                   "    return @offsetOf(Pair, right);\n"
+                   "}\n");
+    CHECK(r.ok, "@offsetOf on a struct field type-checks");
+}
+
+static void test_offsetof_non_struct_fails() {
+    SemaTest t;
+    auto r = t.run("fn main(): i32 {\n"
+                   "    return @offsetOf(i32, value);\n"
+                   "}\n");
+    CHECK(!r.ok, "@offsetOf rejects non-struct types");
+    CHECK(r.hasErrorCode(diagnostics::err::TypeMismatch), "Reports TypeMismatch for non-struct");
+}
+
+static void test_offsetof_unknown_field_fails() {
+    SemaTest t;
+    auto r = t.run("struct Pair { left: i32, right: i32 }\n"
+                   "fn main(): i32 {\n"
+                   "    return @offsetOf(Pair, middle);\n"
+                   "}\n");
+    CHECK(!r.ok, "@offsetOf rejects unknown fields");
+    CHECK(r.hasErrorCode(diagnostics::err::NoMember), "Reports NoMember for unknown field");
+}
+
+static void test_named_struct_literal_ok() {
+    SemaTest t;
+    auto r = t.run("struct Pair { left: i32, right: i32 }\n"
+                   "fn main() {\n"
+                   "    var pair: Pair = Pair{right: 4, left: 3};\n"
+                   "}\n");
+    CHECK(r.ok, "Named struct literals type-check");
+}
+
+static void test_named_struct_literal_duplicate_field_fails() {
+    SemaTest t;
+    auto r = t.run("struct Pair { left: i32, right: i32 }\n"
+                   "fn main() {\n"
+                   "    var pair: Pair = Pair{left: 1, left: 2};\n"
+                   "}\n");
+    CHECK(!r.ok, "Duplicate named struct literal fields fail");
+    CHECK(r.hasErrorCode(diagnostics::err::TypeMismatch),
+          "Reports TypeMismatch for duplicate named field");
+}
+
+static void test_named_struct_literal_unknown_field_fails() {
+    SemaTest t;
+    auto r = t.run("struct Pair { left: i32, right: i32 }\n"
+                   "fn main() {\n"
+                   "    var pair: Pair = Pair{left: 1, middle: 2};\n"
+                   "}\n");
+    CHECK(!r.ok, "Unknown named struct literal fields fail");
+    CHECK(r.hasErrorCode(diagnostics::err::NoMember), "Reports NoMember for unknown field");
+}
+
+static void test_named_struct_literal_mixed_form_fails() {
+    SemaTest t;
+    auto r = t.run("struct Pair { left: i32, right: i32 }\n"
+                   "fn main() {\n"
+                   "    var pair: Pair = Pair{1, right: 2};\n"
+                   "}\n");
+    CHECK(!r.ok, "Mixing positional and named struct literal fields fails");
+    CHECK(r.hasErrorCode(diagnostics::err::TypeMismatch), "Reports TypeMismatch for mixed form");
+}
+
+static void test_named_struct_literal_placeholder_without_default_fails() {
+    SemaTest t;
+    auto r = t.run("struct Pair { left: i32, right: i32 }\n"
+                   "fn main() {\n"
+                   "    var pair: Pair = Pair{left: _, right: 2};\n"
+                   "}\n");
+    CHECK(!r.ok, "Using '_' without a field default fails");
+    CHECK(r.hasErrorCode(diagnostics::err::TypeMismatch),
+          "Reports TypeMismatch for missing default");
+}
+
+static void test_struct_field_default_type_mismatch_fails() {
+    SemaTest t;
+    auto r = t.run("struct Pair { left: i32 = true, right: i32 }\n"
+                   "fn main() {}\n");
+    CHECK(!r.ok, "Struct field defaults must match the field type");
+    CHECK(r.hasErrorCode(diagnostics::err::TypeMismatch),
+          "Reports TypeMismatch for invalid field default");
+}
+
 static void test_sema() {
     test_basic_unification();
     test_type_mismatch();
@@ -369,7 +458,7 @@ static void test_sema() {
     test_binary_op_type_error();
     test_while_loop_ok();
     test_unary_op_ok();
-    test_index_not_implemented_warning();
+    test_index_validation();
     test_field_not_implemented_warning();
     test_macro_not_implemented_warning();
     test_is_and_as_are_rejected();
@@ -379,6 +468,15 @@ static void test_sema() {
     test_word_and_context_declarations_are_rejected();
     test_word_call_ast_is_rejected();
     test_unsupported_syntax_does_not_reach_hir();
+    test_offsetof_intrinsic_ok();
+    test_offsetof_non_struct_fails();
+    test_offsetof_unknown_field_fails();
+    test_named_struct_literal_ok();
+    test_named_struct_literal_duplicate_field_fails();
+    test_named_struct_literal_unknown_field_fails();
+    test_named_struct_literal_mixed_form_fails();
+    test_named_struct_literal_placeholder_without_default_fails();
+    test_struct_field_default_type_mismatch_fails();
 }
 
 TEST_MAIN(sema)

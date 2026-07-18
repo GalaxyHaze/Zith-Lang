@@ -186,8 +186,10 @@ void HirLower::ensureStub(symbols::SymId fn_sym) {
     auto &hfn   = hir_.addFn(data.name);
     hfn.decl_id = data.decl_id;
     types::TypeLower lower(*source_bld, ctx_.types(), ctx_.diags(), ctx_.syms());
-    for (const auto &param : fn->params)
+    for (const auto &param : fn->params) {
         hfn.params.push(lower.lower(param.type));
+        hfn.param_names.push(ctx_.syms().interner().intern(param.name));
+    }
     hfn.return_type = lower.lower(fn->return_type);
     fn_syms_.push(fn_sym);
 }
@@ -242,13 +244,21 @@ void HirLower::ensureBodyLowered(symbols::SymId fn_sym) {
     auto &entry = hfn.blocks[0];
     entry.insts = memory::DynArray<hir::HirExprId>(hir_arena_);
     auto body   = visitExpr(fn->body);
-    if (body != hir::kInvalidHirExpr && entry.terminator == hir::kInvalidHirExpr) {
-        if (current_fn_ret_type_ != types::kErrorType) {
-            hir::HirRet ret;
-            ret.value = body;
-            setTerminator(hir_.addExpr(hir::HirExpr{ret}));
+    if (entry.terminator == hir::kInvalidHirExpr) {
+        hir::HirRet ret;
+        if (current_fn_ret_type_ != types::kErrorType &&
+            ctx_.types().kindOf(current_fn_ret_type_) != types::TypeKind::Void) {
+            if (body != hir::kInvalidHirExpr)
+                ret.value = body;
+            else
+                ret.value = hir::kInvalidHirExpr;
         } else {
-            entry.insts.push(body);
+            ret.value = hir::kInvalidHirExpr;
+        }
+        if (current_fn_ret_type_ == types::kErrorType ||
+            ctx_.types().kindOf(current_fn_ret_type_) == types::TypeKind::Void ||
+            body != hir::kInvalidHirExpr) {
+            setTerminator(hir_.addExpr(hir::HirExpr{ret}));
         }
     }
     ctx_.syms().exitScope();

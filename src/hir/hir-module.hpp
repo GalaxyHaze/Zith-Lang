@@ -19,11 +19,12 @@ struct HirBasicBlock {
 struct HirFunction {
     memory::InternedId name;
     memory::DynArray<HirTypeId> params;
+    memory::DynArray<memory::InternedId> param_names;
     HirTypeId return_type;
     ast::DeclId decl_id = ast::kInvalidDecl;
     memory::DynArray<HirBasicBlock> blocks;
 
-    explicit HirFunction(memory::Arena &arena) : params(arena), blocks(arena) {}
+    explicit HirFunction(memory::Arena &arena) : params(arena), param_names(arena), blocks(arena) {}
 };
 
 class HirModule {

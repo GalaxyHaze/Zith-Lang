@@ -206,8 +206,8 @@ static void test_lookup_in_scope_uses_flatmap() {
     memory::StringInterner interner(arena);
     symbols::SymbolTable syms(arena, &interner);
 
-    auto id = syms.declare("thing", symbols::SymbolVisibility::Private, 0,
-                           symbols::SymKind::Fn, ast::kInvalidDecl);
+    auto id = syms.declare("thing", symbols::SymbolVisibility::Private, 0, symbols::SymKind::Fn,
+                           ast::kInvalidDecl);
     auto root_scope = syms.currentScope();
     CHECK(syms.lookupInScope("thing", root_scope) == id, "lookupInScope finds thing in root");
     CHECK(syms.lookupInScope("thing", static_cast<zith::symbols::ScopeId>(999)) ==

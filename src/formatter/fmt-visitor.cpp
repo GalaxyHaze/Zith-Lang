@@ -494,6 +494,9 @@ void FmtVisitor::visitExpr(ast::ExprId id, int parent_prec) {
                    [&](const ast::WhileNode &n) { emitWhile(n); },
                    [&](const ast::FieldNode &n) { emitField(n); },
                    [&](const ast::IndexNode &n) { emitIndex(n); },
+                   [&](const ast::StructLiteralNode &n) { emitStructLiteral(n); },
+                   [&](const ast::ArrayLiteralNode &n) { emitArrayLiteral(n); },
+                   [&](const ast::EnumValueNode &n) { emitEnumValue(n); },
                    [&](const ast::RangeNode &n) { emitRange(n); },
                    [](const ast::UnbodyNode &) {},
                    [&](const ast::IntrinsicNode &n) { emitIntrinsic(n); },
@@ -588,6 +591,35 @@ void FmtVisitor::emitIndex(const ast::IndexNode &node) {
     emit("[");
     visitExpr(node.index);
     emit("]");
+}
+
+void FmtVisitor::emitStructLiteral(const ast::StructLiteralNode &node) {
+    emit(node.type_name);
+    emit("{");
+    emitCommaList(node.fields, [this](const ast::StructFieldInit &field) {
+        if (!field.name.empty()) {
+            emit(field.name);
+            emit(": ");
+            if (field.value == ast::kInvalidExpr)
+                emit("_");
+            else
+                visitExpr(field.value);
+        } else {
+            visitExpr(field.value);
+        }
+    });
+    emit("}");
+}
+
+void FmtVisitor::emitArrayLiteral(const ast::ArrayLiteralNode &node) {
+    emit("[");
+    emitCommaList(node.elements, [this](ast::ExprId value) { visitExpr(value); });
+    emit("]");
+}
+void FmtVisitor::emitEnumValue(const ast::EnumValueNode &node) {
+    emit(node.enum_name);
+    emit(".");
+    emit(node.variant_name);
 }
 
 void FmtVisitor::emitRange(const ast::RangeNode &node) {

@@ -349,7 +349,7 @@ ModuleCache::getOrBuild(const CacheKey &cache_key, SourceCatalog::SourcePtr sour
         in_flight_.emplace(in_flight, InFlight{shared, epoch});
     }
 
-    (void)executor.submit([this, bucket, in_flight, worker_source = std::move(source), epoch,
+    (void)executor.submit([this, bucket, in_flight, worker_source = source, epoch,
                            worker_promise = std::move(promise),
                            worker_build   = std::move(build)]() mutable {
         auto artifact = worker_build();
@@ -797,11 +797,10 @@ FrontendContext::analyze(SourceCatalog::SourcePtr root_source) {
         futures.reserve(batch.size());
         for (const auto &item : batch) {
             auto source = item.source;
-            futures.emplace_back(item.key,
-                                 cache_.getOrBuild(cache_key_, source, executor_,
-                                                   [this, worker_source = std::move(source)]() {
-                                                       return buildModule(worker_source);
-                                                   }));
+            futures.emplace_back(item.key, cache_.getOrBuild(cache_key_, source, executor_,
+                                                             [this, worker_source = source]() {
+                                                                 return buildModule(worker_source);
+                                                             }));
         }
 
         for (auto &[key, future] : futures) {

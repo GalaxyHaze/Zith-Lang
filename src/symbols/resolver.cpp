@@ -46,16 +46,29 @@ void Resolver::resolveProgram(ast::ProgramNode &program) {
     }
 }
 
+void Resolver::resolveImportMembers(ast::ProgramNode &program) {
+    aliases_only_ = true;
+    for (auto decl_id : program.decls) {
+        auto &decl = builder_.getDecl(decl_id);
+        if (!ast::asImport(decl))
+            resolveDecl(decl_id);
+    }
+    aliases_only_ = false;
+}
+
 void Resolver::resolveDecl(ast::DeclId id) {
     auto &decl = builder_.getDecl(id);
     std::visit(common::overloaded{
                    [&](const ast::FnDeclNode &n) {
-                       auto fn_scope = syms_.enterScope();
-                       for (auto &p : n.params)
-                           syms_.declareInScope(fn_scope, p.name);
+                       if (!aliases_only_) {
+                           auto fn_scope = syms_.enterScope();
+                           for (auto &p : n.params)
+                               syms_.declareInScope(fn_scope, p.name);
+                       }
                        if (n.body != ast::kInvalidExpr)
                            resolveExpr(n.body);
-                       syms_.exitScope();
+                       if (!aliases_only_)
+                           syms_.exitScope();
                    },
                    [&](const ast::WordDeclNode &n) {
                        if (n.body != ast::kInvalidExpr)
@@ -107,18 +120,35 @@ void Resolver::resolveExpr(ast::ExprId id) {
         return;
 
     auto &node = builder_.getExpr(id);
+    if (auto *field = std::get_if<ast::FieldNode>(&node)) {
+        const auto &object = builder_.getExpr(field->object);
+        if (const auto *ident = std::get_if<ast::IdentNode>(&object)) {
+            auto qualified = std::string(ident->name) + "." + std::string(field->field);
+            auto sym       = lookupUnqualified(qualified);
+            if (sym != kInvalidSym) {
+                auto name = syms_.interner().lookup(syms_.get(sym).name);
+                node      = ast::IdentNode{name, field->span, false};
+                setResolved(id, sym);
+                return;
+            }
+        }
+    }
     std::visit(common::overloaded{
                    [](const ast::LitValue &) {},
                    [](const ast::UnbodyNode &) {},
                    [&](const ast::IdentNode &n) {
-                       SymId sym = n.scope_escape ? syms_.lookupEscaped(n.name) : lookupQualified(n.name);
+                       if (aliases_only_)
+                           return;
+                       SymId sym =
+                           n.scope_escape ? syms_.lookupEscaped(n.name) : lookupQualified(n.name);
                        if (sym == kInvalidSym) {
                            auto dot = n.name.find('.');
                            if (dot == std::string_view::npos) {
-                               diags_.report(diagnostics::Severity::Error, diagnostics::err::UndefinedIdent,
-                                             common::format("undefined identifier '%.*s'",
-                                                            static_cast<int>(n.name.size()), n.name.data()),
-                                             {});
+                               diags_.report(
+                                   diagnostics::Severity::Error, diagnostics::err::UndefinedIdent,
+                                   common::format("undefined identifier '%.*s'",
+                                                  static_cast<int>(n.name.size()), n.name.data()),
+                                   {});
                            }
                        }
                        setResolved(id, sym);
@@ -134,12 +164,14 @@ void Resolver::resolveExpr(ast::ExprId id) {
                            resolveExpr(arg);
                    },
                    [&](const ast::BlockNode &n) {
-                       syms_.enterScope();
+                       if (!aliases_only_)
+                           syms_.enterScope();
                        for (auto stmt_id : n.stmts)
                            resolveStmt(stmt_id);
                        if (n.trailing != ast::kInvalidExpr)
                            resolveExpr(n.trailing);
-                       syms_.exitScope();
+                       if (!aliases_only_)
+                           syms_.exitScope();
                    },
                    [&](const ast::IfNode &n) {
                        resolveExpr(n.cond);
@@ -156,29 +188,49 @@ void Resolver::resolveExpr(ast::ExprId id) {
                        resolveExpr(n.object);
                        resolveExpr(n.index);
                    },
+                   [&](const ast::StructLiteralNode &n) {
+                       for (const auto &field : n.fields) {
+                           if (field.value != ast::kInvalidExpr)
+                               resolveExpr(field.value);
+                       }
+                   },
+                   [&](const ast::ArrayLiteralNode &n) {
+                       for (auto elem : n.elements)
+                           resolveExpr(elem);
+                   },
+                   [](const ast::EnumValueNode &) {},
                    [&](const ast::RangeNode &n) {
                        resolveExpr(n.lhs);
                        resolveExpr(n.rhs);
                    },
                    [&](const ast::IntrinsicNode &n) {
+                       switch (n.kind) {
+                       case ast::IntrinsicKind::Fields:
+                       case ast::IntrinsicKind::SizeOf:
+                       case ast::IntrinsicKind::AlignOf:
+                       case ast::IntrinsicKind::OffsetOf:
+                           break;
+                       default:
+                           for (auto arg : n.args)
+                               resolveExpr(arg);
+                           break;
+                       }
+                   },
+                   [&](const ast::MacroCallNode &n) {
                        for (auto arg : n.args)
                            resolveExpr(arg);
                    },
-                    [&](const ast::MacroCallNode &n) {
-                        for (auto arg : n.args)
-                            resolveExpr(arg);
-                    },
-                    [&](const ast::SeqNode &n) {
-                        for (auto op : n.operands)
-                            resolveExpr(op);
-                    },
-                    [&](const ast::WordCallNode &n) {
-                        for (auto arg : n.args)
-                            resolveExpr(arg);
-                    },
-                    [](const ast::ErrorExprNode &) {},
-                },
-                node);
+                   [&](const ast::SeqNode &n) {
+                       for (auto op : n.operands)
+                           resolveExpr(op);
+                   },
+                   [&](const ast::WordCallNode &n) {
+                       for (auto arg : n.args)
+                           resolveExpr(arg);
+                   },
+                   [](const ast::ErrorExprNode &) {},
+               },
+               node);
 }
 
 SymId Resolver::followAliases(SymId id) const {

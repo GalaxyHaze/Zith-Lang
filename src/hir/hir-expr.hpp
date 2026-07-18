@@ -26,9 +26,32 @@ enum class HirExprKind : uint8_t {
     Branch,
     Jump,
     Phi,
+    Assign,
+    Index,
+    Field,
+    StructLiteral,
+    ArrayLiteral,
+    EnumValue,
 };
 
-enum class HirBinaryOp : uint8_t { Add, Sub, Mul, Div, Rem, Eq, Ne, Lt, Le, Gt, Ge, And, Or, Xor };
+enum class HirBinaryOp : uint8_t {
+    Add,
+    Sub,
+    Mul,
+    Div,
+    Rem,
+    Eq,
+    Ne,
+    Lt,
+    Le,
+    Gt,
+    Ge,
+    And,
+    Or,
+    Xor,
+    Shl,
+    Shr
+};
 
 enum class HirUnaryOp : uint8_t {
     Neg,
@@ -53,7 +76,7 @@ struct HirBinary {
     HirExprId lhs;
     HirExprId rhs;
     HirBinaryOp op;
-    HirTypeId type = types::kInvalidType;
+    HirTypeId type  = types::kInvalidType;
     HirExprKind tag = HirExprKind::Binary;
 };
 struct HirUnary {
@@ -98,20 +121,62 @@ struct HirPhi {
     HirExprKind tag = HirExprKind::Phi;
 };
 
+struct HirAssign {
+    HirExprId target;
+    HirExprId value;
+    HirExprKind tag = HirExprKind::Assign;
+};
+
+struct HirIndex {
+    HirExprId object;
+    HirExprId index;
+    HirTypeId type;
+    HirTypeId obj_type;
+    bool is_array   = false;
+    HirExprKind tag = HirExprKind::Index;
+};
+
+struct HirField {
+    HirExprId object;
+    uint32_t index;
+    HirTypeId type;
+    HirTypeId object_type;
+    HirExprKind tag = HirExprKind::Field;
+};
+
+struct HirStructLiteral {
+    memory::DynArray<HirExprId> values;
+    HirTypeId type;
+    HirExprKind tag = HirExprKind::StructLiteral;
+    explicit HirStructLiteral(memory::Arena &arena) : values(arena) {}
+};
+
+struct HirArrayLiteral {
+    memory::DynArray<HirExprId> elements;
+    HirTypeId type;
+    HirExprKind tag = HirExprKind::ArrayLiteral;
+    explicit HirArrayLiteral(memory::Arena &arena) : elements(arena) {}
+};
+
+struct HirEnumValue {
+    int64_t value;
+    HirTypeId type;
+    HirExprKind tag = HirExprKind::EnumValue;
+};
+
 using HirExpr = std::variant<HirLiteral, HirBinary, HirUnary, HirLet, HirVar, HirCall, HirRet,
-                             HirBranch, HirJump, HirPhi>;
+                             HirBranch, HirJump, HirPhi, HirAssign, HirIndex, HirField,
+                             HirStructLiteral, HirArrayLiteral, HirEnumValue>;
 
 inline HirExprKind exprKind(const HirExpr &expr) {
     return std::visit([](const auto &entry) { return entry.tag; }, expr);
 }
 
-template <typename Visitor>
-decltype(auto) visitExpr(const HirExpr &expr, Visitor &&vis) {
+template <typename Visitor> decltype(auto) visitExpr(const HirExpr &expr, Visitor &&vis) {
     return std::visit(std::forward<Visitor>(vis), expr);
 }
 
-template <typename Visitor>
-decltype(auto) visitExpr(HirExpr &expr, Visitor &&vis) {
+template <typename Visitor> decltype(auto) visitExpr(HirExpr &expr, Visitor &&vis) {
     return std::visit(std::forward<Visitor>(vis), expr);
 }
 

@@ -20,7 +20,7 @@ StringInterner::StringInterner(Arena &arena) : allocator_(&arena) {
 }
 
 InternedId StringInterner::intern(std::string_view str) {
-    #if !defined(ZITH_IS_WASM)
+#if !defined(ZITH_IS_WASM)
     std::unique_lock<std::shared_mutex> lock(rwMutex_);
 #endif
 
@@ -37,7 +37,7 @@ InternedId StringInterner::intern(std::string_view str) {
 }
 
 std::string_view StringInterner::lookup(InternedId id) const {
-    #if !defined(ZITH_IS_WASM)
+#if !defined(ZITH_IS_WASM)
     std::shared_lock<std::shared_mutex> lock(rwMutex_);
 #endif
 

@@ -45,6 +45,11 @@ static ModeDefaults getDefaults(Options::Mode mode) {
 }
 
 void Options::deriveTargetStage() {
+    if (command == Command::Run || command == Command::Execute) {
+        targetStage = session::Stage::Cached;
+        return;
+    }
+
     // emitAst is handled inside semaStage (body expansion + print) — no short-circuit
     if (flags.emitHir())
         targetStage = session::Stage::HirLowered;
@@ -121,7 +126,7 @@ static void suggestCommand(const char *arg, term::UsagePrinter & /*err*/) {
         }
     }
     if (best && best_dist <= (std::max(std::strlen(arg), std::strlen(best)) + 1) / 2) {
-        #ifdef ZITH_IS_WASM
+#ifdef ZITH_IS_WASM
         bool color = false;
 #elif defined(_WIN32)
         bool color = _isatty(_fileno(stderr)) != 0;
@@ -712,6 +717,8 @@ int Cli::dispatch() {
         return cli::commands::clean(opts);
     case Command::Deps:
         return cli::commands::deps(opts);
+    case Command::Completion:
+        return cli::commands::completion(opts);
     }
     return 1;
 }

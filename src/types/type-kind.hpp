@@ -154,13 +154,11 @@ enum class TypeKind : uint8_t {
     Incomplete,
 };
 
-template <typename Visitor>
-decltype(auto) visitType(const TypeData &data, Visitor &&vis) {
+template <typename Visitor> decltype(auto) visitType(const TypeData &data, Visitor &&vis) {
     return std::visit(std::forward<Visitor>(vis), data);
 }
 
-template <typename Visitor>
-decltype(auto) visitType(TypeData &data, Visitor &&vis) {
+template <typename Visitor> decltype(auto) visitType(TypeData &data, Visitor &&vis) {
     return std::visit(std::forward<Visitor>(vis), data);
 }
 

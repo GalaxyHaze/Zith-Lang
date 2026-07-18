@@ -36,11 +36,16 @@ struct zithc_session {
     }
 };
 
-static_assert(static_cast<int>(zith::diagnostics::Severity::Note) == ZITHC_SEVERITY_NOTE, "severity enum mismatch");
-static_assert(static_cast<int>(zith::session::Stage::Source) == ZITHC_STAGE_SOURCE, "stage enum mismatch");
-static_assert(static_cast<int>(zith::session::Stage::NraResolved) == ZITHC_STAGE_NRA_RESOLVED, "stage enum mismatch");
-static_assert(static_cast<int>(zith::session::Stage::CodegenReady) == ZITHC_STAGE_CODEGEN_READY, "stage enum mismatch");
-static_assert(static_cast<int>(zith::session::Stage::Cached) == ZITHC_STAGE_CACHED, "stage enum mismatch");
+static_assert(static_cast<int>(zith::diagnostics::Severity::Note) == ZITHC_SEVERITY_NOTE,
+              "severity enum mismatch");
+static_assert(static_cast<int>(zith::session::Stage::Source) == ZITHC_STAGE_SOURCE,
+              "stage enum mismatch");
+static_assert(static_cast<int>(zith::session::Stage::NraResolved) == ZITHC_STAGE_NRA_RESOLVED,
+              "stage enum mismatch");
+static_assert(static_cast<int>(zith::session::Stage::CodegenReady) == ZITHC_STAGE_CODEGEN_READY,
+              "stage enum mismatch");
+static_assert(static_cast<int>(zith::session::Stage::Cached) == ZITHC_STAGE_CACHED,
+              "stage enum mismatch");
 
 namespace {
 
@@ -153,11 +158,13 @@ void zithc_session_add_include_dir(zithc_session *session, const char *dir) {
 }
 
 void zithc_session_set_opt_level(zithc_session *session, uint8_t level) {
-    if (session) session->opts.flags.optLevel(level);
+    if (session)
+        session->opts.flags.optLevel(level);
 }
 
 void zithc_session_set_mode(zithc_session *session, uint8_t mode) {
-    if (session) session->opts.flags.mode(static_cast<zith::Options::Mode>(mode));
+    if (session)
+        session->opts.flags.mode(static_cast<zith::Options::Mode>(mode));
 }
 
 void zithc_session_set_emit_flags(zithc_session *session, bool ast, bool hir, bool ir, bool asm_) {
@@ -170,7 +177,8 @@ void zithc_session_set_emit_flags(zithc_session *session, bool ast, bool hir, bo
 }
 
 void zithc_session_set_target(zithc_session *session, int stage) {
-    if (session) session->opts.targetStage = static_cast<zith::session::Stage>(stage);
+    if (session)
+        session->opts.targetStage = static_cast<zith::session::Stage>(stage);
 }
 
 bool zithc_run(zithc_session *session) {
@@ -417,7 +425,6 @@ const char *zithc_run_to_json(zithc_session *session, int stage) {
     session->last_error = std::move(json);
     return session->last_error.c_str();
 }
-
 
 const char *zithc_session_flush_output(zithc_session *session) {
     if (!session)

@@ -12,6 +12,8 @@
 #include "types/type-intern.hpp"
 #include "types/unify.hpp"
 
+#include <string>
+
 namespace zith::sema {
 
 class SemaPipeline {
@@ -28,6 +30,7 @@ class SemaPipeline {
     memory::DynArray<uint8_t> checked_fns_;
     types::TypeId current_fn_ret_type_ = types::kErrorType;
     memory::FlatMap<std::string_view, size_t> labelMap_;
+    std::string target_triple_;
 
     types::TypeId astExprType(ast::ExprId id) const;
     ast::AstBuilder &builder() const;
@@ -45,6 +48,11 @@ class SemaPipeline {
     bool isBodyChecked(symbols::SymId sym_id) const;
     void markBodyChecked(symbols::SymId sym_id);
     bool concretizeLiteralExpr(ast::ExprId id, types::TypeId concrete_type, memory::Span span);
+    types::TypeId lowerIntrinsicType(ast::ExprId id, memory::Span span);
+    bool materializeLayoutIntrinsic(ast::ExprId id, ast::IntrinsicNode &node);
+    const ast::StructDeclNode *structDeclForType(types::TypeId type,
+                                                 ast::AstBuilder **source_bld = nullptr);
+    bool normalizeStructLiteral(ast::ExprId id, ast::StructLiteralNode &node, types::TypeId type);
     ast::ExprId implicitReturnExpr(ast::ExprId body_id) const;
     void ensureBodyChecked(symbols::SymId fn_sym);
     void warnNotImplemented(std::string_view feature, memory::Span span);
@@ -68,7 +76,7 @@ public:
     SemaPipeline(symbols::SymbolTable &syms, types::TypeIntern &types,
                  diagnostics::DiagnosticEngine &diags, ast::AstBuilder &builder,
                  memory::Arena &arena, const memory::DynArray<symbols::SymId> *resolved = nullptr,
-                 symbols::ImportManager *import_mgr = nullptr);
+                 symbols::ImportManager *import_mgr = nullptr, std::string_view target_triple = {});
 
     symbols::SymbolTable &syms() noexcept {
         return ctx_.syms();

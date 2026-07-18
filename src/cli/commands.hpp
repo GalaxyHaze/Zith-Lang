@@ -15,6 +15,7 @@ int repl(const Options &opts);
 int create(const Options &opts);
 int clean(const Options &opts);
 int deps(const Options &opts);
+int completion(const Options &opts);
 int version();
 int help(FILE *dest = stdout);
 

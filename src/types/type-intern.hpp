@@ -21,15 +21,32 @@ struct StructDef {
     memory::DynArray<StructField> fields;
 };
 
+struct EnumVariantDef {
+    memory::InternedId name;
+    int64_t discriminant;
+};
+
+struct EnumDef {
+    memory::InternedId name;
+    TypeId underlying;
+    memory::DynArray<EnumVariantDef> variants;
+};
+
+struct UnionDef {
+    memory::InternedId name;
+    bool is_raw;
+    memory::DynArray<TypeId> members;
+};
+
 class TypeIntern {
     memory::Arena &arena_;
     memory::StringInterner &interner_;
     memory::DynArray<TypeData> types_;
     memory::DynArray<size_t> hashes_;
     memory::DynArray<StructDef> struct_defs_;
+    memory::DynArray<EnumDef> enum_defs_;
+    memory::DynArray<UnionDef> union_defs_;
     std::unordered_map<std::string, TypeId> named_types_;
-    uint32_t next_enum_def_id_  = 0;
-    uint32_t next_union_def_id_ = 0;
 
     size_t computeHash(const TypeData &data);
 
@@ -71,11 +88,26 @@ public:
     const StructField &getField(TypeId struct_type, size_t index) const;
     bool hasField(TypeId struct_type, std::string_view name);
     TypeId fieldType(TypeId struct_type, std::string_view name);
+    size_t fieldIndex(TypeId struct_type, std::string_view name) const;
+
+    TypeId defineEnum(std::string_view name, TypeId underlying);
+    void addEnumVariant(TypeId enum_type, std::string_view name, int64_t discriminant);
+    const EnumDef &getEnumDef(TypeId enum_type) const;
+    EnumDef &getEnumDef(TypeId enum_type);
+    bool enumValue(TypeId enum_type, std::string_view name, int64_t &value) const;
+
+    TypeId defineUnion(std::string_view name, bool is_raw);
+    void addUnionMember(TypeId union_type, TypeId member);
+    const UnionDef &getUnionDef(TypeId union_type) const;
+    UnionDef &getUnionDef(TypeId union_type);
 
     // ── Query ────────────────────────────────────────────────────
     const TypeData &lookup(TypeId id) const;
     TypeKind kindOf(TypeId id) const;
     size_t count() const noexcept;
+    const memory::StringInterner &interner() const noexcept {
+        return interner_;
+    }
 };
 
 } // namespace zith::types

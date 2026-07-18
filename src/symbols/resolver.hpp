@@ -13,12 +13,14 @@ class Resolver {
     ast::AstBuilder &builder_;
     diagnostics::DiagnosticEngine &diags_;
     memory::DynArray<SymId> resolved_;
+    bool aliases_only_ = false;
 
 public:
     Resolver(SymbolTable &syms, ImportManager &import_mgr, ast::AstBuilder &builder,
              diagnostics::DiagnosticEngine &diags);
 
     void resolveProgram(ast::ProgramNode &program);
+    void resolveImportMembers(ast::ProgramNode &program);
 
     SymId resolvedSym(ast::ExprId id) const;
     bool hasResolvedSym(ast::ExprId id) const;

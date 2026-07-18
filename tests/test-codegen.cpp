@@ -1,5 +1,6 @@
 #include "cli/options.hpp"
 #include "codegen/codegen-type.hpp"
+#include "hir/hir-expr.hpp"
 #include "memory/arena.hpp"
 #include "session/compilation-session.hpp"
 #include "test-common.hpp"
@@ -251,6 +252,107 @@ static void test_named_struct_literal_and_defaults_runtime() {
     CHECK_EQ(r.exitCode, 12, "Named literals reorder fields and materialize defaults");
 }
 
+static size_t countOccurrences(const std::string &text, std::string_view needle) {
+    size_t count = 0;
+    size_t start = 0;
+    while ((start = text.find(needle, start)) != std::string::npos) {
+        ++count;
+        start += needle.size();
+    }
+    return count;
+}
+
+static void test_trailing_void_call_is_emitted_once() {
+    memory::Arena arena;
+    Options opts(arena);
+    opts.flags.emitIr(true);
+
+    session::CompilationSession session(opts, "/tmp/codegen-trailing-void-call.zith");
+    session.setBuffered(true);
+    session.setAlwaysEmitObject(true);
+    session.setContent("extern fn putchar(c: i32): i32\n"
+                       "fn signal() {\n"
+                       "    putchar(65)\n"
+                       "}\n"
+                       "fn main(): i32 {\n"
+                       "    signal();\n"
+                       "    return 0;\n"
+                       "}\n");
+
+    CHECK(session.run(), "Trailing void call reaches code generation");
+
+    size_t hir_calls = 0;
+    const auto &hir  = session.hirModule();
+    for (size_t i = 0; i < hir.getFnCount(); ++i) {
+        const auto &fn = hir.getFn(i);
+        if (session.interner().lookup(fn.name) != "signal")
+            continue;
+        for (const auto &block : fn.blocks) {
+            for (auto inst : block.insts) {
+                if (std::get_if<hir::HirCall>(&hir.getExpr(inst)))
+                    ++hir_calls;
+            }
+        }
+    }
+    CHECK_EQ(hir_calls, 1u, "Trailing call appears once in HIR instructions");
+
+    auto output = session.flushOutput();
+    CHECK_EQ(countOccurrences(output, "call i32 @putchar"), 1u,
+             "Trailing call appears once in LLVM IR");
+    CHECK(session.linkAndExec(), "Trailing void call links and executes");
+    CHECK_EQ(session.childExitCode(), 0, "Trailing void call returns normally");
+}
+
+static void test_from_console_lowers_println_body() {
+    CodegenTest t;
+    t.opts.flags.emitIr(true);
+    auto r = t.run("codegen-from-console.zith", "from std/io/console\n"
+                                                "fn main(): i32 {\n"
+                                                "    println(\"from import\");\n"
+                                                "    return 0;\n"
+                                                "}\n");
+    CHECK(r.ok, "from std/io/console compiles and runs");
+    CHECK(r.output.find("define void @println") != std::string::npos,
+          "Imported println body is emitted into LLVM IR");
+    CHECK(r.output.find("call i32 @puts") != std::string::npos,
+          "Imported println body calls puts in LLVM IR");
+}
+
+static void test_console_alias_resolves_member_without_global_import() {
+    CodegenTest aliased;
+    auto ok = aliased.run("codegen-console-alias.zith", "import std/io/console as console\n"
+                                                        "fn main(): i32 {\n"
+                                                        "    console.println(\"alias import\");\n"
+                                                        "    return 0;\n"
+                                                        "}\n");
+    CHECK(ok.ok, "console.println resolves through an import alias");
+
+    CodegenTest unqualified;
+    auto missing =
+        unqualified.run("codegen-console-alias-missing.zith", "import std/io/console as console\n"
+                                                              "fn main() {\n"
+                                                              "    println(\"not global\");\n"
+                                                              "}\n");
+    CHECK(!missing.ok, "Alias import does not expose println globally");
+    CHECK(missing.errorCount > 0, "Unqualified println reports a diagnostic");
+}
+
+static void test_run_emit_hir_still_executes() {
+    CodegenTest t;
+    t.opts.command = Options::Command::Run;
+    t.opts.flags.emitHir(true);
+    t.opts.deriveTargetStage();
+
+    CHECK_EQ(t.opts.targetStage, session::Stage::Cached,
+             "run --emit-hir keeps the pipeline target at code generation");
+
+    auto r = t.run("codegen-run-emit-hir.zith", "fn main(): i32 {\n"
+                                                "    return 29;\n"
+                                                "}\n");
+    CHECK(r.ok, "run --emit-hir still produces and runs an executable");
+    CHECK_EQ(r.exitCode, 29, "run --emit-hir preserves program exit status");
+}
+
 static void test_layout_api_matches_llvm() {
     memory::Arena arena;
     memory::StringInterner interner(arena);
@@ -337,6 +439,14 @@ static void test_codegen() {
     test_offsetof_and_alignof_runtime();
     printf("Running test_named_struct_literal_and_defaults_runtime\n");
     test_named_struct_literal_and_defaults_runtime();
+    printf("Running test_trailing_void_call_is_emitted_once\n");
+    test_trailing_void_call_is_emitted_once();
+    printf("Running test_from_console_lowers_println_body\n");
+    test_from_console_lowers_println_body();
+    printf("Running test_console_alias_resolves_member_without_global_import\n");
+    test_console_alias_resolves_member_without_global_import();
+    printf("Running test_run_emit_hir_still_executes\n");
+    test_run_emit_hir_still_executes();
     printf("Running test_layout_api_matches_llvm\n");
     test_layout_api_matches_llvm();
 }

@@ -217,7 +217,8 @@ struct Options {
         Clean,
         Deps,
         Version,
-        Help
+        Help,
+        Completion
     } command = Command::None;
     memory::InternedId subcommandArg;
     std::string subcommandStr; // string copy for command functions

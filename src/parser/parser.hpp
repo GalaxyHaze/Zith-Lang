@@ -18,6 +18,7 @@ struct Parser {
     ast::AstBuilder *bld;
     diagnostics::DiagnosticEngine *diag;
     ast::ProgramNode program;
+    symbols::SymbolTable *syms = nullptr;
 
     Parser(lexer::TokenStream *tok_, ast::AstBuilder *bld_, diagnostics::DiagnosticEngine *diag_)
         : tok(tok_), bld(bld_), diag(diag_), program(bld_->arena()) {}

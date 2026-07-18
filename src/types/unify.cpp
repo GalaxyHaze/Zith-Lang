@@ -89,132 +89,141 @@ bool Unifier::unify(TypeId a, TypeId b, memory::Span span) {
     auto &data_a = intern_.lookup(a);
     auto &data_b = intern_.lookup(b);
 
-    return visitType(data_a, data_b, common::overloaded{
-        [&](const TypeInt &ai, const TypeInt &bi) -> bool {
-            if (ai.width == bi.width) return true;
-            if (ai.width == IntWidth::Literal || bi.width == IntWidth::Literal) return true;
-            diags_.report(diagnostics::Severity::Error, diagnostics::err::TypeMismatch,
-                          "type mismatch: integer width differs", span);
-            return false;
-        },
-        [&](const TypeFloat &af, const TypeFloat &bf) -> bool {
-            if (af.width != bf.width) {
+    return visitType(
+        data_a, data_b,
+        common::overloaded{
+            [&](const TypeInt &ai, const TypeInt &bi) -> bool {
+                if (ai.width == bi.width)
+                    return true;
+                if (ai.width == IntWidth::Literal || bi.width == IntWidth::Literal)
+                    return true;
                 diags_.report(diagnostics::Severity::Error, diagnostics::err::TypeMismatch,
-                              "type mismatch: float width differs", span);
+                              "type mismatch: integer width differs", span);
                 return false;
-            }
-            return true;
-        },
-        [&](const TypePtr &pa, const TypePtr &pb) -> bool {
-            if (pa.is_mut != pb.is_mut) {
-                diags_.report(diagnostics::Severity::Error, diagnostics::err::TypeMismatch,
-                              "type mismatch: mutability differs", span);
-                return false;
-            }
-            if (pa.ownership != pb.ownership) {
-                diags_.report(diagnostics::Severity::Error, diagnostics::err::TypeMismatch,
-                              "type mismatch: ownership qualifier differs", span);
-                return false;
-            }
-            return unify(pa.pointee, pb.pointee, span);
-        },
-        [&](const TypeArray &aa, const TypeArray &ab) -> bool {
-            if (aa.count != ab.count) {
-                diags_.report(diagnostics::Severity::Error, diagnostics::err::TypeMismatch,
-                              "type mismatch: array length differs", span);
-                return false;
-            }
-            return unify(aa.elem, ab.elem, span);
-        },
-        [&](const TypeStruct &sa, const TypeStruct &sb) -> bool {
-            if (sa.def_id != sb.def_id) {
-                diags_.report(diagnostics::Severity::Error, diagnostics::err::TypeMismatch,
-                              "type mismatch: different struct types", span);
-                return false;
-            }
-            return true;
-        },
-        [&](const TypeFn &fa, const TypeFn &fb) -> bool {
-            if (fa.param_count != fb.param_count) {
-                diags_.report(diagnostics::Severity::Error, diagnostics::err::TypeMismatch,
-                              "type mismatch: function parameter count differs", span);
-                return false;
-            }
-            if (!unify(fa.ret, fb.ret, span)) return false;
-            for (size_t i = 0; i < fa.param_count; i++) {
-                if (!unify(fa.params[i], fb.params[i], span)) return false;
-            }
-            return true;
-        },
-        [&](const TypeOptional &oa, const TypeOptional &ob) -> bool {
-            return unify(oa.inner, ob.inner, span);
-        },
-        [&](const TypeFailable &fa, const TypeFailable &fb) -> bool {
-            return unify(fa.inner, fb.inner, span);
-        },
-        [&](const TypeSlice &sa, const TypeSlice &sb) -> bool {
-            return unify(sa.elem, sb.elem, span);
-        },
-        [&](const TypeEnum &ea, const TypeEnum &eb) -> bool {
-            if (ea.def_id != eb.def_id) {
-                diags_.report(diagnostics::Severity::Error, diagnostics::err::TypeMismatch,
-                              "type mismatch: different enum types", span);
-                return false;
-            }
-            return true;
-        },
-        [&](const TypeUnion &ua, const TypeUnion &ub) -> bool {
-            if (ua.def_id != ub.def_id) {
-                diags_.report(diagnostics::Severity::Error, diagnostics::err::TypeMismatch,
-                              "type mismatch: different union types", span);
-                return false;
-            }
-            return true;
-        },
-        [&](const TypePack &pa, const TypePack &pb) -> bool {
-            if (pa.count != pb.count) {
-                diags_.report(diagnostics::Severity::Error, diagnostics::err::TypeMismatch,
-                              "type mismatch: pack member count differs", span);
-                return false;
-            }
-            for (size_t i = 0; i < pa.count; i++) {
-                if (!unify(pa.members[i], pb.members[i], span)) return false;
-            }
-            return true;
-        },
-        [&](const TypeSum &sa, const TypeSum &sb) -> bool {
-            if (sa.count != sb.count) {
-                diags_.report(diagnostics::Severity::Error, diagnostics::err::TypeMismatch,
-                              "type mismatch: sum member count differs", span);
-                return false;
-            }
-            for (size_t i = 0; i < sa.count; i++) {
-                if (!unify(sa.members[i], sb.members[i], span)) return false;
-            }
-            return true;
-        },
-        [&](const TypeGenericParam &ga, const TypeGenericParam &gb) -> bool {
-            if (ga.decl_id != gb.decl_id || ga.param_index != gb.param_index) {
-                diags_.report(diagnostics::Severity::Error, diagnostics::err::TypeMismatch,
-                              "type mismatch: different generic parameters", span);
-                return false;
-            }
-            return true;
-        },
-        [&](const TypeIncomplete &ia, const TypeIncomplete &ib) -> bool {
-            if (ia.base != ib.base || ia.arg_count != ib.arg_count) {
-                diags_.report(diagnostics::Severity::Error, diagnostics::err::TypeMismatch,
-                              "type mismatch: incomplete type structure differs", span);
-                return false;
-            }
-            for (size_t i = 0; i < ia.arg_count; i++) {
-                if (!unify(ia.args[i], ib.args[i], span)) return false;
-            }
-            return true;
-        },
-        // Bool, Char, Error, Never, Void, Opaque, Unknown, TypeVar — same kind means equal
-        [](const auto &, const auto &) -> bool { return true; },
-    });
+            },
+            [&](const TypeFloat &af, const TypeFloat &bf) -> bool {
+                if (af.width != bf.width) {
+                    diags_.report(diagnostics::Severity::Error, diagnostics::err::TypeMismatch,
+                                  "type mismatch: float width differs", span);
+                    return false;
+                }
+                return true;
+            },
+            [&](const TypePtr &pa, const TypePtr &pb) -> bool {
+                if (pa.is_mut != pb.is_mut) {
+                    diags_.report(diagnostics::Severity::Error, diagnostics::err::TypeMismatch,
+                                  "type mismatch: mutability differs", span);
+                    return false;
+                }
+                if (pa.ownership != pb.ownership) {
+                    diags_.report(diagnostics::Severity::Error, diagnostics::err::TypeMismatch,
+                                  "type mismatch: ownership qualifier differs", span);
+                    return false;
+                }
+                return unify(pa.pointee, pb.pointee, span);
+            },
+            [&](const TypeArray &aa, const TypeArray &ab) -> bool {
+                if (aa.count != ab.count) {
+                    diags_.report(diagnostics::Severity::Error, diagnostics::err::TypeMismatch,
+                                  "type mismatch: array length differs", span);
+                    return false;
+                }
+                return unify(aa.elem, ab.elem, span);
+            },
+            [&](const TypeStruct &sa, const TypeStruct &sb) -> bool {
+                if (sa.def_id != sb.def_id) {
+                    diags_.report(diagnostics::Severity::Error, diagnostics::err::TypeMismatch,
+                                  "type mismatch: different struct types", span);
+                    return false;
+                }
+                return true;
+            },
+            [&](const TypeFn &fa, const TypeFn &fb) -> bool {
+                if (fa.param_count != fb.param_count) {
+                    diags_.report(diagnostics::Severity::Error, diagnostics::err::TypeMismatch,
+                                  "type mismatch: function parameter count differs", span);
+                    return false;
+                }
+                if (!unify(fa.ret, fb.ret, span))
+                    return false;
+                for (size_t i = 0; i < fa.param_count; i++) {
+                    if (!unify(fa.params[i], fb.params[i], span))
+                        return false;
+                }
+                return true;
+            },
+            [&](const TypeOptional &oa, const TypeOptional &ob) -> bool {
+                return unify(oa.inner, ob.inner, span);
+            },
+            [&](const TypeFailable &fa, const TypeFailable &fb) -> bool {
+                return unify(fa.inner, fb.inner, span);
+            },
+            [&](const TypeSlice &sa, const TypeSlice &sb) -> bool {
+                return unify(sa.elem, sb.elem, span);
+            },
+            [&](const TypeEnum &ea, const TypeEnum &eb) -> bool {
+                if (ea.def_id != eb.def_id) {
+                    diags_.report(diagnostics::Severity::Error, diagnostics::err::TypeMismatch,
+                                  "type mismatch: different enum types", span);
+                    return false;
+                }
+                return true;
+            },
+            [&](const TypeUnion &ua, const TypeUnion &ub) -> bool {
+                if (ua.def_id != ub.def_id) {
+                    diags_.report(diagnostics::Severity::Error, diagnostics::err::TypeMismatch,
+                                  "type mismatch: different union types", span);
+                    return false;
+                }
+                return true;
+            },
+            [&](const TypePack &pa, const TypePack &pb) -> bool {
+                if (pa.count != pb.count) {
+                    diags_.report(diagnostics::Severity::Error, diagnostics::err::TypeMismatch,
+                                  "type mismatch: pack member count differs", span);
+                    return false;
+                }
+                for (size_t i = 0; i < pa.count; i++) {
+                    if (!unify(pa.members[i], pb.members[i], span))
+                        return false;
+                }
+                return true;
+            },
+            [&](const TypeSum &sa, const TypeSum &sb) -> bool {
+                if (sa.count != sb.count) {
+                    diags_.report(diagnostics::Severity::Error, diagnostics::err::TypeMismatch,
+                                  "type mismatch: sum member count differs", span);
+                    return false;
+                }
+                for (size_t i = 0; i < sa.count; i++) {
+                    if (!unify(sa.members[i], sb.members[i], span))
+                        return false;
+                }
+                return true;
+            },
+            [&](const TypeGenericParam &ga, const TypeGenericParam &gb) -> bool {
+                if (ga.decl_id != gb.decl_id || ga.param_index != gb.param_index) {
+                    diags_.report(diagnostics::Severity::Error, diagnostics::err::TypeMismatch,
+                                  "type mismatch: different generic parameters", span);
+                    return false;
+                }
+                return true;
+            },
+            [&](const TypeIncomplete &ia, const TypeIncomplete &ib) -> bool {
+                if (ia.base != ib.base || ia.arg_count != ib.arg_count) {
+                    diags_.report(diagnostics::Severity::Error, diagnostics::err::TypeMismatch,
+                                  "type mismatch: incomplete type structure differs", span);
+                    return false;
+                }
+                for (size_t i = 0; i < ia.arg_count; i++) {
+                    if (!unify(ia.args[i], ib.args[i], span))
+                        return false;
+                }
+                return true;
+            },
+            // Bool, Char, Error, Never, Void, Opaque, Unknown, TypeVar — same kind means equal
+            [](const auto &, const auto &) -> bool { return true; },
+        });
 }
 
 bool Unifier::isAssignable(TypeId dst, TypeId src) const {
@@ -243,74 +252,86 @@ bool Unifier::isAssignable(TypeId dst, TypeId src) const {
     auto &data_dst = intern_.lookup(dst);
     auto &data_src = intern_.lookup(src);
 
-    return visitType(data_dst, data_src, common::overloaded{
-        [&](const TypeInt &di, const TypeInt &si) -> bool {
-            if (di.width == si.width) return true;
-            if (di.width == IntWidth::Literal || si.width == IntWidth::Literal) return true;
-            return false;
-        },
-        [&](const TypeFloat &df, const TypeFloat &sf) -> bool {
-            return df.width == sf.width;
-        },
-        [&](const TypePtr &pd, const TypePtr &ps) -> bool {
-            if (pd.ownership != ps.ownership) return false;
-            if (pd.is_mut && !ps.is_mut) return false;
-            return isAssignable(pd.pointee, ps.pointee);
-        },
-        [&](const TypeArray &ad, const TypeArray &as) -> bool {
-            if (ad.count != as.count && ad.count != 0 && as.count != 0) return false;
-            return isAssignable(ad.elem, as.elem);
-        },
-        [&](const TypeStruct &sd, const TypeStruct &ss) -> bool {
-            return sd.def_id == ss.def_id;
-        },
-        [&](const TypeFn &fd, const TypeFn &fs) -> bool {
-            if (fd.param_count != fs.param_count) return false;
-            if (!isAssignable(fd.ret, fs.ret)) return false;
-            for (size_t i = 0; i < fd.param_count; i++)
-                if (!isAssignable(fd.params[i], fs.params[i])) return false;
-            return true;
-        },
-        [&](const TypeOptional &od, const TypeOptional &os) -> bool {
-            return isAssignable(od.inner, os.inner);
-        },
-        [&](const TypeFailable &fd, const TypeFailable &fs) -> bool {
-            return isAssignable(fd.inner, fs.inner);
-        },
-        [&](const TypeSlice &sd, const TypeSlice &ss) -> bool {
-            return isAssignable(sd.elem, ss.elem);
-        },
-        [&](const TypeEnum &ed, const TypeEnum &es) -> bool {
-            return ed.def_id == es.def_id;
-        },
-        [&](const TypeUnion &ud, const TypeUnion &us) -> bool {
-            return ud.def_id == us.def_id;
-        },
-        [&](const TypePack &pd, const TypePack &ps) -> bool {
-            if (pd.count != ps.count) return false;
-            for (size_t i = 0; i < pd.count; i++)
-                if (!isAssignable(pd.members[i], ps.members[i])) return false;
-            return true;
-        },
-        [&](const TypeSum &sd, const TypeSum &ss) -> bool {
-            if (sd.count != ss.count) return false;
-            for (size_t i = 0; i < sd.count; i++)
-                if (!isAssignable(sd.members[i], ss.members[i])) return false;
-            return true;
-        },
-        [&](const TypeGenericParam &gd, const TypeGenericParam &gs) -> bool {
-            return gd.decl_id == gs.decl_id && gd.param_index == gs.param_index;
-        },
-        [&](const TypeIncomplete &idd, const TypeIncomplete &iss) -> bool {
-            if (idd.base != iss.base || idd.arg_count != iss.arg_count) return false;
-            for (size_t i = 0; i < idd.arg_count; i++)
-                if (!isAssignable(idd.args[i], iss.args[i])) return false;
-            return true;
-        },
-        [](const TypeUnknown &, const TypeUnknown &) -> bool { return true; },
-        [](const TypeNever &, const TypeNever &) -> bool { return true; },
-        [](const auto &, const auto &) -> bool { return false; },
-    });
+    return visitType(
+        data_dst, data_src,
+        common::overloaded{
+            [&](const TypeInt &di, const TypeInt &si) -> bool {
+                if (di.width == si.width)
+                    return true;
+                if (di.width == IntWidth::Literal || si.width == IntWidth::Literal)
+                    return true;
+                return false;
+            },
+            [&](const TypeFloat &df, const TypeFloat &sf) -> bool { return df.width == sf.width; },
+            [&](const TypePtr &pd, const TypePtr &ps) -> bool {
+                if (pd.ownership != ps.ownership)
+                    return false;
+                if (pd.is_mut && !ps.is_mut)
+                    return false;
+                return isAssignable(pd.pointee, ps.pointee);
+            },
+            [&](const TypeArray &ad, const TypeArray &as) -> bool {
+                if (ad.count != as.count && ad.count != 0 && as.count != 0)
+                    return false;
+                return isAssignable(ad.elem, as.elem);
+            },
+            [&](const TypeStruct &sd, const TypeStruct &ss) -> bool {
+                return sd.def_id == ss.def_id;
+            },
+            [&](const TypeFn &fd, const TypeFn &fs) -> bool {
+                if (fd.param_count != fs.param_count)
+                    return false;
+                if (!isAssignable(fd.ret, fs.ret))
+                    return false;
+                for (size_t i = 0; i < fd.param_count; i++)
+                    if (!isAssignable(fd.params[i], fs.params[i]))
+                        return false;
+                return true;
+            },
+            [&](const TypeOptional &od, const TypeOptional &os) -> bool {
+                return isAssignable(od.inner, os.inner);
+            },
+            [&](const TypeFailable &fd, const TypeFailable &fs) -> bool {
+                return isAssignable(fd.inner, fs.inner);
+            },
+            [&](const TypeSlice &sd, const TypeSlice &ss) -> bool {
+                return isAssignable(sd.elem, ss.elem);
+            },
+            [&](const TypeEnum &ed, const TypeEnum &es) -> bool { return ed.def_id == es.def_id; },
+            [&](const TypeUnion &ud, const TypeUnion &us) -> bool {
+                return ud.def_id == us.def_id;
+            },
+            [&](const TypePack &pd, const TypePack &ps) -> bool {
+                if (pd.count != ps.count)
+                    return false;
+                for (size_t i = 0; i < pd.count; i++)
+                    if (!isAssignable(pd.members[i], ps.members[i]))
+                        return false;
+                return true;
+            },
+            [&](const TypeSum &sd, const TypeSum &ss) -> bool {
+                if (sd.count != ss.count)
+                    return false;
+                for (size_t i = 0; i < sd.count; i++)
+                    if (!isAssignable(sd.members[i], ss.members[i]))
+                        return false;
+                return true;
+            },
+            [&](const TypeGenericParam &gd, const TypeGenericParam &gs) -> bool {
+                return gd.decl_id == gs.decl_id && gd.param_index == gs.param_index;
+            },
+            [&](const TypeIncomplete &idd, const TypeIncomplete &iss) -> bool {
+                if (idd.base != iss.base || idd.arg_count != iss.arg_count)
+                    return false;
+                for (size_t i = 0; i < idd.arg_count; i++)
+                    if (!isAssignable(idd.args[i], iss.args[i]))
+                        return false;
+                return true;
+            },
+            [](const TypeUnknown &, const TypeUnknown &) -> bool { return true; },
+            [](const TypeNever &, const TypeNever &) -> bool { return true; },
+            [](const auto &, const auto &) -> bool { return false; },
+        });
 }
 
 bool Unifier::isCoercible(TypeId dst, TypeId src) const {
@@ -329,8 +350,8 @@ bool Unifier::isCoercible(TypeId dst, TypeId src) const {
     }
 
     if (kind_dst == TypeKind::Int && kind_src == TypeKind::Int) {
-        auto *d = std::get_if<TypeInt>(&intern_.lookup(dst));
-        auto *s = std::get_if<TypeInt>(&intern_.lookup(src));
+        auto *d    = std::get_if<TypeInt>(&intern_.lookup(dst));
+        auto *s    = std::get_if<TypeInt>(&intern_.lookup(src));
         auto w_dst = d->width;
         auto w_src = s->width;
         if (w_dst == IntWidth::Literal || w_src == IntWidth::Literal)
@@ -361,8 +382,8 @@ bool Unifier::isCoercible(TypeId dst, TypeId src) const {
     }
 
     if (kind_dst == TypeKind::Float && kind_src == TypeKind::Float) {
-        auto *d = std::get_if<TypeFloat>(&intern_.lookup(dst));
-        auto *s = std::get_if<TypeFloat>(&intern_.lookup(src));
+        auto *d    = std::get_if<TypeFloat>(&intern_.lookup(dst));
+        auto *s    = std::get_if<TypeFloat>(&intern_.lookup(src));
         auto w_dst = d->width;
         auto w_src = s->width;
         return w_dst >= w_src;

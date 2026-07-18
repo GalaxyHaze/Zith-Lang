@@ -197,16 +197,17 @@ ast::ExprId Parser::parsePrimary() {
         auto name = lexeme();
         advance();
 
-        // Macro call: @name(args)
+        auto *intrinsic = findIntrinsic(name);
         if (check('(')) {
             advance();
             auto args = parseDelimited(*tok, bld->arena(), ')', [this] { return parseExpr(); });
             consume(')');
+            if (intrinsic)
+                return bld->intrinsic(intrinsic->kind, std::move(args), spanFrom(start_span));
             return bld->macroCall(name, std::move(args), spanFrom(start_span));
         }
 
         // Intrinsic: @name or @name arg1, arg2
-        auto *intrinsic = findIntrinsic(name);
         if (!intrinsic) {
             errorExpected("known intrinsic or '@' macro with parentheses");
             return ast::kInvalidExpr;
@@ -353,14 +354,68 @@ ast::ExprId Parser::parseExpr(int min_prec) {
             continue;
         }
 
+        // ── Struct literal: Type{value, ...} or Type{x: 1, ...} ─────────────
+        if (cur.is(lexer::TokenKind::Punctuation) && cur.punc == '{') {
+            auto *type_name = std::get_if<ast::IdentNode>(&bld->getExpr(lhs));
+            if (!type_name)
+                break;
+            advance();
+
+            memory::DynArray<ast::StructFieldInit> fields{bld->arena()};
+            if (!tok->is_empty() && tok->peek().punc != '}') {
+                do {
+                    if (tok->peek().punc == '}')
+                        break;
+
+                    if (tok->peek().is(lexer::TokenKind::Identifier) && tok->peek(1).punc == ':') {
+                        // Nominal
+                        auto field_name = lexeme();
+                        advance(); // ident
+                        advance(); // :
+                        ast::ExprId val = ast::kInvalidExpr;
+                        if (tok->peek().is(lexer::TokenKind::Identifier) && lexeme() == "_") {
+                            advance();
+                        } else {
+                            val = parseExpr();
+                        }
+                        fields.push({field_name, val});
+                    } else {
+                        // Positional
+                        auto val = parseExpr();
+                        fields.push({"", val});
+                    }
+                } while (consume(','));
+            }
+            consume('}');
+            lhs = bld->structLiteral(
+                type_name->name, std::move(fields),
+                memory::Span{lhs_span.file, lhs_span.start, previous().span.end});
+            continue;
+        }
+
         // ── Postfix: .field ──────────────────────────────────────────
         if (cur.is(lexer::TokenKind::Punctuation) && cur.punc == '.') {
             advance();
             auto field_span = peek().span;
             auto field_name = lexeme();
             advance();
-            lhs = bld->field(lhs, field_name,
-                             memory::Span{lhs_span.file, lhs_span.start, field_span.end});
+            auto *ident          = std::get_if<ast::IdentNode>(&bld->getExpr(lhs));
+            bool is_enum_variant = false;
+            if (ident && syms) {
+                auto sym_id = syms->lookup(ident->name);
+                if (sym_id != symbols::kInvalidSym) {
+                    if (syms->get(sym_id).kind == symbols::SymKind::Enum) {
+                        is_enum_variant = true;
+                    }
+                }
+            }
+            if (is_enum_variant) {
+                lhs = bld->enumValue(ident->name, field_name,
+                                     memory::Span{lhs_span.file, lhs_span.start, field_span.end});
+            } else {
+                lhs = bld->field(lhs, field_name,
+                                 memory::Span{lhs_span.file, lhs_span.start, field_span.end});
+            }
             continue;
         }
 
@@ -379,8 +434,8 @@ ast::ExprId Parser::parseExpr(int min_prec) {
         if (cur.is(lexer::TokenKind::Operators) && (cur.punc == '!' || cur.punc == '?') &&
             !peek(1).is(lexer::TokenKind::Operators)) {
             advance();
-            auto op = (previous().punc == '!') ? ast::UnaryOp::PropagateRes
-                                               : ast::UnaryOp::PropagateOpt;
+            auto op =
+                (previous().punc == '!') ? ast::UnaryOp::PropagateRes : ast::UnaryOp::PropagateOpt;
             lhs = bld->unary(op, lhs,
                              memory::Span{lhs_span.file, lhs_span.start, previous().span.end});
             continue;
@@ -404,34 +459,36 @@ ast::ExprId Parser::parseExpr(int min_prec) {
 
         // ── Custom word operators (Word token: nop, etc.) ────────
         if (cur.is(lexer::TokenKind::Word)) {
-            auto word    = lexeme();
-            uint8_t wp   = operators::wordPrec(word);
+            auto word  = lexeme();
+            uint8_t wp = operators::wordPrec(word);
             if (wp < min_prec)
                 break;
 
             if (!in_seq) {
                 seq_operands.push(lhs);
                 in_seq = true;
+            } else {
+                seq_operands.push(lhs);
             }
 
             // Adjacency error: two non-nop word ops adjacent
-            if (!seq_ops.empty() && seq_ops.back().is_word &&
-                seq_ops.back().word_name != "nop" && word != "nop") {
+            if (!seq_ops.empty() && seq_ops.back().is_word && seq_ops.back().word_name != "nop" &&
+                word != "nop") {
                 diag->report(Severity::Error, diagnostics::err::ExpectedExpr,
-                              std::string("ambiguous word operators; use parentheses: (a ")
-                                  .append(seq_ops.back().word_name)
-                                  .append(" b) ")
-                                  .append(word)
-                                  .append(" c or a ")
-                                  .append(seq_ops.back().word_name)
-                                  .append(" (b ")
-                                  .append(word)
-                                  .append(" c)"),
-                              memory::Span{lhs_span.file, lhs_span.start, peek().span.end});
+                             std::string("ambiguous word operators; use parentheses: (a ")
+                                 .append(seq_ops.back().word_name)
+                                 .append(" b) ")
+                                 .append(word)
+                                 .append(" c or a ")
+                                 .append(seq_ops.back().word_name)
+                                 .append(" (b ")
+                                 .append(word)
+                                 .append(" c)"),
+                             memory::Span{lhs_span.file, lhs_span.start, peek().span.end});
             }
 
-            seq_ops.push({memory::Span{lhs_span.file, lhs_span.start, peek().span.end}, ast::BinaryOp::Add,
-                          word, wp, true});
+            seq_ops.push({memory::Span{lhs_span.file, lhs_span.start, peek().span.end},
+                          ast::BinaryOp::Add, word, wp, true});
             advance();
             lhs = parseExpr(wp + 1);
             continue;

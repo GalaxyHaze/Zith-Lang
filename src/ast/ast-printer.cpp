@@ -170,270 +170,301 @@ void print_type_expr(TypeExprId id, const AstBuilder &bld, FILE *out) {
                        std::fprintf(out, "mut ");
                        print_type_expr(n.inner, bld, out);
                    },
-                    [&](const TypeGenericParamRef &n) {
-                        std::fprintf(out, "%.*s", (int)n.name.size(), n.name.data());
-                    },
-                    [&](const TypeDyn &n) {
-                        std::fprintf(out, "dyn ");
-                        print_type_expr(n.inner, bld, out);
-                    },
-                    [&](const TypeUnion &) { std::fprintf(out, "union"); },
-                    [&](const TypeSpecialization &n) {
-                        if (n.base != kInvalidTypeExpr) {
-                            print_type_expr(n.base, bld, out);
-                        }
-                        std::fprintf(out, "<");
-                        for (size_t i = 0; i < n.args.size(); ++i) {
-                            if (i > 0)
-                                std::fprintf(out, ", ");
-                            print_type_expr(n.args[i], bld, out);
-                        }
-                        std::fprintf(out, ">");
-                    },
-                },
-                node);
+                   [&](const TypeGenericParamRef &n) {
+                       std::fprintf(out, "%.*s", (int)n.name.size(), n.name.data());
+                   },
+                   [&](const TypeDyn &n) {
+                       std::fprintf(out, "dyn ");
+                       print_type_expr(n.inner, bld, out);
+                   },
+                   [&](const TypeUnion &) { std::fprintf(out, "union"); },
+                   [&](const TypeSpecialization &n) {
+                       if (n.base != kInvalidTypeExpr) {
+                           print_type_expr(n.base, bld, out);
+                       }
+                       std::fprintf(out, "<");
+                       for (size_t i = 0; i < n.args.size(); ++i) {
+                           if (i > 0)
+                               std::fprintf(out, ", ");
+                           print_type_expr(n.args[i], bld, out);
+                       }
+                       std::fprintf(out, ">");
+                   },
+               },
+               node);
 }
 
 void print_stmt(StmtId id, const AstBuilder &bld, FILE *out, int depth);
 void print_expr(ExprId id, const AstBuilder &bld, FILE *out, int depth);
 
 void print_expr_node(const ExprNode &node, const AstBuilder &bld, FILE *out, int depth) {
-    std::visit(common::overloaded{
-                   [&](const LitValue &n) {
-                       auto kind = [&]() -> const char * {
-                           switch (n.kind) {
-                           case LitKind::Int:
-                               return "Int";
-                           case LitKind::Float: {
-                               auto sv = n.raw;
-                               if (sv.size() >= 3 && sv.substr(sv.size() - 3) == "f32")
-                                   return "Flt";
-                               return "Dbl";
-                           }
-                           case LitKind::Bool:
-                               return "Bool";
-                           case LitKind::String:
-                               return "Str";
-                           case LitKind::Char:
-                               return "Char";
-                           case LitKind::Nil:
-                               return "Nil";
-                           }
-                           return "?";
-                       }();
-                       std::fprintf(out, "LitValue(%s, \"%.*s\", span=%u..%u)\n", kind,
-                                    (int)n.raw.size(), n.raw.data(), n.span.start, n.span.end);
-                   },
-                   [&](const IdentNode &n) {
-                       std::fprintf(out, "Ident(%.*s)\n", (int)n.name.size(), n.name.data());
-                   },
-                   [&](const BinaryNode &n) {
-                       const char *op = nullptr;
-                       switch (n.op) {
-                       case BinaryOp::Add:
-                           op = "+";
-                           break;
-                       case BinaryOp::Sub:
-                           op = "-";
-                           break;
-                       case BinaryOp::Mul:
-                           op = "*";
-                           break;
-                       case BinaryOp::Div:
-                           op = "/";
-                           break;
-                       case BinaryOp::Rest:
-                           op = "%";
-                           break;
-                       case BinaryOp::Eq:
-                           op = "==";
-                           break;
-                       case BinaryOp::Ne:
-                           op = "!=";
-                           break;
-                       case BinaryOp::Lt:
-                           op = "<";
-                           break;
-                       case BinaryOp::Le:
-                           op = "<=";
-                           break;
-                       case BinaryOp::Gt:
-                           op = ">";
-                           break;
-                       case BinaryOp::Ge:
-                           op = ">=";
-                           break;
-                       case BinaryOp::And:
-                           op = "and";
-                           break;
-                       case BinaryOp::Or:
-                           op = "or";
-                           break;
-                       case BinaryOp::Xor:
-                           op = "^";
-                           break;
-                       case BinaryOp::Shl:
-                           op = "<<";
-                           break;
-                        case BinaryOp::Shr:
-                            op = ">>";
-                            break;
-                        case BinaryOp::Is:
-                            op = "is";
-                            break;
-                        case BinaryOp::As:
-                            op = "as";
-                            break;
+    std::visit(
+        common::overloaded{
+            [&](const LitValue &n) {
+                auto kind = [&]() -> const char * {
+                    switch (n.kind) {
+                    case LitKind::Int:
+                        return "Int";
+                    case LitKind::Float: {
+                        auto sv = n.raw;
+                        if (sv.size() >= 3 && sv.substr(sv.size() - 3) == "f32")
+                            return "Flt";
+                        return "Dbl";
+                    }
+                    case LitKind::Bool:
+                        return "Bool";
+                    case LitKind::String:
+                        return "Str";
+                    case LitKind::Char:
+                        return "Char";
+                    case LitKind::Nil:
+                        return "Nil";
+                    }
+                    return "?";
+                }();
+                std::fprintf(out, "LitValue(%s, \"%.*s\", span=%u..%u)\n", kind, (int)n.raw.size(),
+                             n.raw.data(), n.span.start, n.span.end);
+            },
+            [&](const IdentNode &n) {
+                std::fprintf(out, "Ident(%.*s)\n", (int)n.name.size(), n.name.data());
+            },
+            [&](const BinaryNode &n) {
+                const char *op = nullptr;
+                switch (n.op) {
+                case BinaryOp::Add:
+                    op = "+";
+                    break;
+                case BinaryOp::Sub:
+                    op = "-";
+                    break;
+                case BinaryOp::Mul:
+                    op = "*";
+                    break;
+                case BinaryOp::Div:
+                    op = "/";
+                    break;
+                case BinaryOp::Rest:
+                    op = "%";
+                    break;
+                case BinaryOp::Eq:
+                    op = "==";
+                    break;
+                case BinaryOp::Ne:
+                    op = "!=";
+                    break;
+                case BinaryOp::Lt:
+                    op = "<";
+                    break;
+                case BinaryOp::Le:
+                    op = "<=";
+                    break;
+                case BinaryOp::Gt:
+                    op = ">";
+                    break;
+                case BinaryOp::Ge:
+                    op = ">=";
+                    break;
+                case BinaryOp::And:
+                    op = "and";
+                    break;
+                case BinaryOp::Or:
+                    op = "or";
+                    break;
+                case BinaryOp::Xor:
+                    op = "^";
+                    break;
+                case BinaryOp::Shl:
+                    op = "<<";
+                    break;
+                case BinaryOp::Shr:
+                    op = ">>";
+                    break;
+                case BinaryOp::Is:
+                    op = "is";
+                    break;
+                case BinaryOp::As:
+                    op = "as";
+                    break;
+                }
+                std::fprintf(out, "Binary(%s)\n", op);
+                print_indent(out, depth + 1);
+                print_expr(n.lhs, bld, out, depth + 1);
+                print_indent(out, depth + 1);
+                print_expr(n.rhs, bld, out, depth + 1);
+            },
+            [&](const UnaryNode &n) {
+                const char *op = nullptr;
+                switch (n.op) {
+                case UnaryOp::Neg:
+                    op = "-";
+                    break;
+                case UnaryOp::Not:
+                    op = "not";
+                    break;
+                case UnaryOp::Ref:
+                    op = "&";
+                    break;
+                case UnaryOp::Deref:
+                    op = "*";
+                    break;
+                case UnaryOp::FallbackOpt:
+                    op = "?";
+                    break;
+                case UnaryOp::FallbackRes:
+                    op = "!";
+                    break;
+                case UnaryOp::PropagateOpt:
+                    op = "?post";
+                    break;
+                case UnaryOp::PropagateRes:
+                    op = "!post";
+                    break;
+                }
+                std::fprintf(out, "Unary(%s)\n", op);
+                print_indent(out, depth + 1);
+                print_expr(n.operand, bld, out, depth + 1);
+            },
+            [&](const CallNode &n) {
+                std::fprintf(out, "Call\n");
+                print_indent(out, depth + 1);
+                std::fprintf(out, "callee: ");
+                print_expr(n.callee, bld, out, depth + 1);
+                for (auto arg : n.args) {
+                    print_indent(out, depth + 1);
+                    std::fprintf(out, "arg: ");
+                    print_expr(arg, bld, out, depth + 1);
+                }
+            },
+            [&](const BlockNode &n) {
+                std::fprintf(out, "Block\n");
+                for (auto s : n.stmts) {
+                    print_indent(out, depth + 1);
+                    print_stmt(s, bld, out, depth + 1);
+                }
+                if (n.trailing != kInvalidExpr) {
+                    print_indent(out, depth + 1);
+                    std::fprintf(out, "trailing: ");
+                    print_expr(n.trailing, bld, out, depth + 1);
+                }
+            },
+            [&](const IfNode &n) {
+                std::fprintf(out, "If\n");
+                print_indent(out, depth + 1);
+                std::fprintf(out, "cond: ");
+                print_expr(n.cond, bld, out, depth + 1);
+                print_indent(out, depth + 1);
+                std::fprintf(out, "then: ");
+                print_expr(n.then_branch, bld, out, depth + 1);
+                if (n.else_branch != kInvalidExpr) {
+                    print_indent(out, depth + 1);
+                    std::fprintf(out, "else: ");
+                    print_expr(n.else_branch, bld, out, depth + 1);
+                }
+            },
+            [&](const WhileNode &n) {
+                std::fprintf(out, "While\n");
+                print_indent(out, depth + 1);
+                std::fprintf(out, "cond: ");
+                print_expr(n.cond, bld, out, depth + 1);
+                print_indent(out, depth + 1);
+                std::fprintf(out, "body: ");
+                print_expr(n.body, bld, out, depth + 1);
+            },
+            [&](const FieldNode &n) {
+                std::fprintf(out, "Field(%.*s)\n", (int)n.field.size(), n.field.data());
+                print_indent(out, depth + 1);
+                print_expr(n.object, bld, out, depth + 1);
+            },
+            [&](const IndexNode &n) {
+                std::fprintf(out, "Index\n");
+                print_indent(out, depth + 1);
+                print_expr(n.object, bld, out, depth + 1);
+                print_indent(out, depth + 1);
+                print_expr(n.index, bld, out, depth + 1);
+            },
+            [&](const StructLiteralNode &n) {
+                std::fprintf(out, "StructLiteral(%.*s)\n", static_cast<int>(n.type_name.size()),
+                             n.type_name.data());
+                for (const auto &field : n.fields) {
+                    print_indent(out, depth + 1);
+                    if (!field.name.empty()) {
+                        if (field.value == kInvalidExpr) {
+                            std::fprintf(out, "FieldInit %.*s: _\n",
+                                         static_cast<int>(field.name.size()), field.name.data());
+                        } else {
+                            std::fprintf(out, "FieldInit %.*s:\n",
+                                         static_cast<int>(field.name.size()), field.name.data());
+                            print_indent(out, depth + 2);
+                            print_expr(field.value, bld, out, depth + 2);
                         }
-                        std::fprintf(out, "Binary(%s)\n", op);
-                       print_indent(out, depth + 1);
-                       print_expr(n.lhs, bld, out, depth + 1);
-                       print_indent(out, depth + 1);
-                       print_expr(n.rhs, bld, out, depth + 1);
-                   },
-                    [&](const UnaryNode &n) {
-                        const char *op = nullptr;
-                        switch (n.op) {
-                        case UnaryOp::Neg:
-                            op = "-";
-                            break;
-                        case UnaryOp::Not:
-                            op = "not";
-                            break;
-                        case UnaryOp::Ref:
-                            op = "&";
-                            break;
-                        case UnaryOp::Deref:
-                            op = "*";
-                            break;
-                        case UnaryOp::FallbackOpt:
-                            op = "?";
-                            break;
-                        case UnaryOp::FallbackRes:
-                            op = "!";
-                            break;
-                        case UnaryOp::PropagateOpt:
-                            op = "?post";
-                            break;
-                        case UnaryOp::PropagateRes:
-                            op = "!post";
-                            break;
+                    } else {
+                        print_expr(field.value, bld, out, depth + 1);
+                    }
+                }
+            },
+            [&](const ArrayLiteralNode &n) {
+                std::fprintf(out, "ArrayLiteral\n");
+                for (auto elem : n.elements) {
+                    print_indent(out, depth + 1);
+                    print_expr(elem, bld, out, depth + 1);
+                }
+            },
+            [&](const EnumValueNode &n) {
+                std::fprintf(out, "EnumValue(%.*s.%.*s)\n", static_cast<int>(n.enum_name.size()),
+                             n.enum_name.data(), static_cast<int>(n.variant_name.size()),
+                             n.variant_name.data());
+            },
+            [&](const RangeNode &n) {
+                std::fprintf(out, "Range\n");
+                print_indent(out, depth + 1);
+                print_expr(n.lhs, bld, out, depth + 1);
+                print_indent(out, depth + 1);
+                print_expr(n.rhs, bld, out, depth + 1);
+            },
+            [&](const UnbodyNode &n) {
+                std::fprintf(out, "Unbody(spans [%u..%u], tokens [%u..%u])\n", n.body_span.start,
+                             n.body_span.end, n.token_start, n.token_end);
+            },
+            [&](const IntrinsicNode &n) {
+                std::fprintf(out, "Intrinsic(%d)\n", static_cast<int>(n.kind));
+                for (auto arg : n.args) {
+                    print_indent(out, depth + 1);
+                    print_expr(arg, bld, out, depth + 1);
+                }
+            },
+            [&](const MacroCallNode &n) {
+                std::fprintf(out, "MacroCall(%.*s)\n", (int)n.name.size(), n.name.data());
+                for (auto arg : n.args) {
+                    print_indent(out, depth + 1);
+                    print_expr(arg, bld, out, depth + 1);
+                }
+            },
+            [&](const SeqNode &n) {
+                std::fprintf(out, "Seq\n");
+                for (size_t i = 0; i < n.operands.size(); ++i) {
+                    print_indent(out, depth + 1);
+                    print_expr(n.operands[i], bld, out, depth + 1);
+                    if (i < n.ops.size()) {
+                        auto &op = n.ops[i];
+                        if (op.is_word) {
+                            std::fprintf(out, "  word(%.*s)\n", (int)op.word_name.size(),
+                                         op.word_name.data());
+                        } else {
+                            std::fprintf(out, "  op(%d)\n", static_cast<int>(op.builtin_op));
                         }
-                        std::fprintf(out, "Unary(%s)\n", op);
-                       print_indent(out, depth + 1);
-                       print_expr(n.operand, bld, out, depth + 1);
-                   },
-                   [&](const CallNode &n) {
-                       std::fprintf(out, "Call\n");
-                       print_indent(out, depth + 1);
-                       std::fprintf(out, "callee: ");
-                       print_expr(n.callee, bld, out, depth + 1);
-                       for (auto arg : n.args) {
-                           print_indent(out, depth + 1);
-                           std::fprintf(out, "arg: ");
-                           print_expr(arg, bld, out, depth + 1);
-                       }
-                   },
-                   [&](const BlockNode &n) {
-                       std::fprintf(out, "Block\n");
-                       for (auto s : n.stmts) {
-                           print_indent(out, depth + 1);
-                           print_stmt(s, bld, out, depth + 1);
-                       }
-                       if (n.trailing != kInvalidExpr) {
-                           print_indent(out, depth + 1);
-                           std::fprintf(out, "trailing: ");
-                           print_expr(n.trailing, bld, out, depth + 1);
-                       }
-                   },
-                   [&](const IfNode &n) {
-                       std::fprintf(out, "If\n");
-                       print_indent(out, depth + 1);
-                       std::fprintf(out, "cond: ");
-                       print_expr(n.cond, bld, out, depth + 1);
-                       print_indent(out, depth + 1);
-                       std::fprintf(out, "then: ");
-                       print_expr(n.then_branch, bld, out, depth + 1);
-                       if (n.else_branch != kInvalidExpr) {
-                           print_indent(out, depth + 1);
-                           std::fprintf(out, "else: ");
-                           print_expr(n.else_branch, bld, out, depth + 1);
-                       }
-                   },
-                   [&](const WhileNode &n) {
-                       std::fprintf(out, "While\n");
-                       print_indent(out, depth + 1);
-                       std::fprintf(out, "cond: ");
-                       print_expr(n.cond, bld, out, depth + 1);
-                       print_indent(out, depth + 1);
-                       std::fprintf(out, "body: ");
-                       print_expr(n.body, bld, out, depth + 1);
-                   },
-                   [&](const FieldNode &n) {
-                       std::fprintf(out, "Field(%.*s)\n", (int)n.field.size(), n.field.data());
-                       print_indent(out, depth + 1);
-                       print_expr(n.object, bld, out, depth + 1);
-                   },
-                   [&](const IndexNode &n) {
-                       std::fprintf(out, "Index\n");
-                       print_indent(out, depth + 1);
-                       print_expr(n.object, bld, out, depth + 1);
-                       print_indent(out, depth + 1);
-                       print_expr(n.index, bld, out, depth + 1);
-                   },
-                   [&](const RangeNode &n) {
-                       std::fprintf(out, "Range\n");
-                       print_indent(out, depth + 1);
-                       print_expr(n.lhs, bld, out, depth + 1);
-                       print_indent(out, depth + 1);
-                       print_expr(n.rhs, bld, out, depth + 1);
-                   },
-                   [&](const UnbodyNode &n) {
-                       std::fprintf(out, "Unbody(spans [%u..%u], tokens [%u..%u])\n",
-                                    n.body_span.start, n.body_span.end, n.token_start, n.token_end);
-                   },
-                   [&](const IntrinsicNode &n) {
-                       std::fprintf(out, "Intrinsic(%d)\n", static_cast<int>(n.kind));
-                       for (auto arg : n.args) {
-                           print_indent(out, depth + 1);
-                           print_expr(arg, bld, out, depth + 1);
-                       }
-                   },
-                    [&](const MacroCallNode &n) {
-                        std::fprintf(out, "MacroCall(%.*s)\n", (int)n.name.size(), n.name.data());
-                        for (auto arg : n.args) {
-                            print_indent(out, depth + 1);
-                            print_expr(arg, bld, out, depth + 1);
-                        }
-                    },
-                    [&](const SeqNode &n) {
-                        std::fprintf(out, "Seq\n");
-                        for (size_t i = 0; i < n.operands.size(); ++i) {
-                            print_indent(out, depth + 1);
-                            print_expr(n.operands[i], bld, out, depth + 1);
-                            if (i < n.ops.size()) {
-                                auto &op = n.ops[i];
-                                if (op.is_word) {
-                                    std::fprintf(out, "  word(%.*s)\n", (int)op.word_name.size(),
-                                                 op.word_name.data());
-                                } else {
-                                    std::fprintf(out, "  op(%d)\n", static_cast<int>(op.builtin_op));
-                                }
-                            }
-                        }
-                    },
-                    [&](const WordCallNode &n) {
-                        std::fprintf(out, "WordCall(%.*s)\n", (int)n.word_name.size(), n.word_name.data());
-                        for (auto arg : n.args) {
-                            print_indent(out, depth + 1);
-                            print_expr(arg, bld, out, depth + 1);
-                        }
-                    },
-                    [&](const ErrorExprNode &) {
-                        std::fprintf(out, "<error-expr>\n");
-                    },
-                },
-                node);
+                    }
+                }
+            },
+            [&](const WordCallNode &n) {
+                std::fprintf(out, "WordCall(%.*s)\n", (int)n.word_name.size(), n.word_name.data());
+                for (auto arg : n.args) {
+                    print_indent(out, depth + 1);
+                    print_expr(arg, bld, out, depth + 1);
+                }
+            },
+            [&](const ErrorExprNode &) { std::fprintf(out, "<error-expr>\n"); },
+        },
+        node);
 }
 
 void print_expr(ExprId id, const AstBuilder &bld, FILE *out, int depth) {
@@ -454,8 +485,8 @@ void print_stmt(StmtId id, const AstBuilder &bld, FILE *out, int depth) {
     std::visit(common::overloaded{
                    [&](const LetNode &n) {
                        auto var_name = n.names.empty() ? std::string_view{} : n.names[0];
-                       std::fprintf(out, "Let(%.*s, mut=%s)\n", (int)var_name.size(), var_name.data(),
-                                    n.mut ? "true" : "false");
+                       std::fprintf(out, "Let(%.*s, mut=%s)\n", (int)var_name.size(),
+                                    var_name.data(), n.mut ? "true" : "false");
                        if (n.init != kInvalidExpr) {
                            print_indent(out, depth + 1);
                            std::fprintf(out, "init: ");
@@ -482,9 +513,7 @@ void print_stmt(StmtId id, const AstBuilder &bld, FILE *out, int depth) {
                    [&](const MarkerNode &n) {
                        std::fprintf(out, "Marker(%.*s)\n", (int)n.name.size(), n.name.data());
                    },
-                   [&](const ExprStmtNode &n) {
-                       print_expr(n.expr, bld, out, depth);
-                   },
+                   [&](const ExprStmtNode &n) { print_expr(n.expr, bld, out, depth); },
                    [&](const UseNode &n) {
                        std::fprintf(out, "Use(context=%.*s, alias=%.*s, target=%.*s)\n",
                                     (int)n.context_name.size(), n.context_name.data(),
@@ -499,9 +528,7 @@ void print_stmt(StmtId id, const AstBuilder &bld, FILE *out, int depth) {
                            print_expr(n.block, bld, out, depth + 1);
                        }
                    },
-                   [&](const ErrorStmtNode &) {
-                       std::fprintf(out, "<error-stmt>\n");
-                   },
+                   [&](const ErrorStmtNode &) { std::fprintf(out, "<error-stmt>\n"); },
                },
                node);
 }
@@ -535,10 +562,14 @@ void print_decl(DeclId id, const AstBuilder &bld, FILE *out, int depth) {
             },
             [&](const WordDeclNode &n) {
                 const char *cat_str = "Nop";
-                if (n.category == WordCategory::Prefix) cat_str = "Prefix";
-                else if (n.category == WordCategory::Suffix) cat_str = "Suffix";
-                else if (n.category == WordCategory::Infix) cat_str = "Infix";
-                std::fprintf(out, "WordDecl(%.*s, category=%s)\n", (int)n.name.size(), n.name.data(), cat_str);
+                if (n.category == WordCategory::Prefix)
+                    cat_str = "Prefix";
+                else if (n.category == WordCategory::Suffix)
+                    cat_str = "Suffix";
+                else if (n.category == WordCategory::Infix)
+                    cat_str = "Infix";
+                std::fprintf(out, "WordDecl(%.*s, category=%s)\n", (int)n.name.size(),
+                             n.name.data(), cat_str);
                 for (auto p : n.params) {
                     print_indent(out, depth + 1);
                     std::fprintf(out, "param: %.*s\n", (int)p.size(), p.data());
@@ -738,9 +769,7 @@ void print_decl(DeclId id, const AstBuilder &bld, FILE *out, int depth) {
                 }
                 std::fprintf(out, "\n");
             },
-            [&](const ErrorDeclNode &) {
-                std::fprintf(out, "<error-decl>\n");
-            },
+            [&](const ErrorDeclNode &) { std::fprintf(out, "<error-decl>\n"); },
         },
         node);
 }

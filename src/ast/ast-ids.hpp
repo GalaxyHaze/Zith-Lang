@@ -21,6 +21,9 @@ enum class ExprKind : uint8_t {
     MacroCall,
     Sequence,
     WordCall,
+    StructLiteral,
+    ArrayLiteral,
+    EnumValue,
     Error, ///< Produced during error recovery; sema treats its type as kErrorType.
 };
 

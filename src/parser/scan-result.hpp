@@ -26,8 +26,8 @@ struct ScanResult {
     memory::DynArray<ScanEntry> contexts;
 
     explicit ScanResult(memory::Arena &arena)
-        : fns(arena), structs(arena), unions(arena), enums(arena), components(arena),
-          traits(arena), words(arena), contexts(arena) {}
+        : fns(arena), structs(arena), unions(arena), enums(arena), components(arena), traits(arena),
+          words(arena), contexts(arena) {}
 };
 
 } // namespace zith::parser

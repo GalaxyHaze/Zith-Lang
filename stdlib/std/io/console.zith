@@ -1,5 +1,5 @@
 from c/io
 
-pub fn println(msg: *char){
+pub fn println(msg: *char) {
     puts(msg);
 }

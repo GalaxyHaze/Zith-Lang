@@ -30,7 +30,7 @@ private:
     Arena *allocator_                          = nullptr;
     FlatMap<std::string_view, InternedId> *map = nullptr;
     memory::DynArray<std::string_view> *pool   = nullptr;
-    #if !defined(ZITH_IS_WASM)
+#if !defined(ZITH_IS_WASM)
     mutable std::shared_mutex rwMutex_;
 #endif
 

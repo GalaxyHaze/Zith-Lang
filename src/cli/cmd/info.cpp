@@ -64,6 +64,8 @@ int help(FILE *dest) {
     std::fprintf(dest, "             Start interactive REPL\n");
     p.green("  clean");
     std::fprintf(dest, "            Clean build artifacts\n");
+    p.green("  completion <SHELL>");
+    std::fprintf(dest, " Generate shell completion scripts (bash|zsh|fish)\n");
     p.green("  -h, --help");
     std::fprintf(dest, "   Show this help message\n");
     p.green("      --version");

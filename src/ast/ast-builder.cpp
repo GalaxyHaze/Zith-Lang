@@ -37,6 +37,15 @@ template <> struct ExprTagFor<FieldNode> {
 template <> struct ExprTagFor<IndexNode> {
     static constexpr ExprKind value = ExprKind::Index;
 };
+template <> struct ExprTagFor<StructLiteralNode> {
+    static constexpr ExprKind value = ExprKind::StructLiteral;
+};
+template <> struct ExprTagFor<ArrayLiteralNode> {
+    static constexpr ExprKind value = ExprKind::ArrayLiteral;
+};
+template <> struct ExprTagFor<EnumValueNode> {
+    static constexpr ExprKind value = ExprKind::EnumValue;
+};
 template <> struct ExprTagFor<RangeNode> {
     static constexpr ExprKind value = ExprKind::Range;
 };
@@ -223,6 +232,20 @@ ExprId AstBuilder::index(ExprId object, ExprId index, memory::Span span) {
     return addExpr(IndexNode{object, index, span});
 }
 
+ExprId AstBuilder::structLiteral(std::string_view type_name,
+                                 memory::DynArray<StructFieldInit> fields, memory::Span span) {
+    return addExpr(StructLiteralNode{type_name, std::move(fields), span});
+}
+
+ExprId AstBuilder::arrayLiteral(memory::DynArray<ExprId> elements, memory::Span span) {
+    return addExpr(ArrayLiteralNode{std::move(elements), span});
+}
+
+ExprId AstBuilder::enumValue(std::string_view enum_name, std::string_view variant_name,
+                             memory::Span span) {
+    return addExpr(EnumValueNode{enum_name, variant_name, span});
+}
+
 ExprId AstBuilder::range(ExprId lhs, ExprId rhs, memory::Span span) {
     return addExpr(RangeNode{lhs, rhs, span});
 }
@@ -294,13 +317,17 @@ DeclId AstBuilder::structDecl(std::string_view name, memory::DynArray<GenericPar
 }
 
 DeclId AstBuilder::enumDecl(std::string_view name, memory::DynArray<GenericParam> generic_params,
-                            memory::DynArray<EnumVariant> variants, memory::Span span) {
-    return addDecl(EnumDeclNode{std::move(generic_params), std::move(variants), name, span});
+                            memory::DynArray<EnumVariant> variants, TypeExprId underlying_type,
+                            memory::Span span) {
+    return addDecl(
+        EnumDeclNode{std::move(generic_params), std::move(variants), name, underlying_type, span});
 }
 
 DeclId AstBuilder::unionDecl(std::string_view name, memory::DynArray<GenericParam> generic_params,
-                             memory::DynArray<UnionVariant> variants, memory::Span span) {
-    return addDecl(UnionDeclNode{name, std::move(generic_params), std::move(variants), span});
+                             memory::DynArray<UnionVariant> variants, bool is_raw,
+                             memory::Span span) {
+    return addDecl(
+        UnionDeclNode{name, std::move(generic_params), std::move(variants), span, is_raw});
 }
 
 DeclId AstBuilder::componentDecl(std::string_view name,
@@ -431,8 +458,8 @@ memory::StringInterner &AstBuilder::interner() {
     return interner_;
 }
 
-
-ExprId AstBuilder::wordCall(std::string_view word_name, memory::DynArray<ExprId> args, memory::Span span) {
+ExprId AstBuilder::wordCall(std::string_view word_name, memory::DynArray<ExprId> args,
+                            memory::Span span) {
     return addExpr(WordCallNode{word_name, std::move(args), span});
 }
 
@@ -442,8 +469,9 @@ StmtId AstBuilder::useStmt(std::string_view context_name, memory::DynArray<std::
     return addStmt(UseNode{context_name, std::move(words), alias_name, target_path, block, span});
 }
 
-DeclId AstBuilder::wordDecl(std::string_view name, WordCategory category, memory::DynArray<std::string_view> params,
-                            ExprId body, memory::Span span) {
+DeclId AstBuilder::wordDecl(std::string_view name, WordCategory category,
+                            memory::DynArray<std::string_view> params, ExprId body,
+                            memory::Span span) {
     return addDecl(WordDeclNode{name, category, std::move(params), body, span});
 }
 
