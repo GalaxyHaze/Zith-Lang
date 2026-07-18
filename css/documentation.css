@@ -22,32 +22,28 @@ VARS
     --crt-noise-opacity: 0.05;
     --crt-vignette-opacity: 0.6;
     --crt-flicker-animation: flicker 1s infinite;
-    --text-glow-alpha: 0.5;
+    --text-glow-alpha: 0.35;
 
     --glow-white:
-        0 0 10px rgba(255,255,255,var(--text-glow-alpha)),
-        0 0 40px rgba(255,255,255,var(--text-glow-alpha));
+        0 0 4px rgba(255,255,255,var(--text-glow-alpha)),
+        0 0 12px rgba(255,255,255,var(--text-glow-alpha));
     
     --glow-cyan:
-        0 0 5px rgba(0,255,255,var(--text-glow-alpha)),
-        0 0 15px rgba(0,255,255,var(--text-glow-alpha)),
-        0 0 40px rgba(0,255,255,var(--text-glow-alpha)),
-        0 0 80px rgba(0,255,255,var(--text-glow-alpha));
+        0 0 3px rgba(0,255,255,var(--text-glow-alpha)),
+        0 0 10px rgba(0,255,255,var(--text-glow-alpha)),
+        0 0 25px rgba(0,255,255,0.15);
 
     --glow-orange:
         0 0 2px rgba(255,109,31,var(--text-glow-alpha)),
-        0 0 5px rgba(255,109,31,var(--text-glow-alpha)),
-        0 0 10px rgba(255,109,31,var(--text-glow-alpha)),
-        0 0 40px rgba(255,109,31,var(--text-glow-alpha));
+        0 0 8px rgba(255,109,31,var(--text-glow-alpha)),
+        0 0 20px rgba(255,109,31,0.15);
     --glow-warning:
         0 0 2px rgba(251,255,31,var(--text-glow-alpha)),
-        0 0 5px rgba(255,109,31,var(--text-glow-alpha)),
-        0 0 10px rgba(255,109,31,var(--text-glow-alpha)),
-        0 0 40px rgba(255,109,31,var(--text-glow-alpha));
+        0 0 8px rgba(255,109,31,var(--text-glow-alpha)),
+        0 0 20px rgba(255,109,31,0.15);
     --glow-owner:
         0 0 2px rgba(255,85,0,var(--text-glow-alpha)),
-        0 0 5px rgba(255,85,0,var(--text-glow-alpha)),
-        0 0 10px rgba(255,85,0,var(--text-glow-alpha));
+        0 0 6px rgba(255,85,0,var(--text-glow-alpha));
 
 }
 
@@ -61,7 +57,7 @@ html, body {
     margin: 0;
     padding: 0;
 
-    min-height: 100vh;
+    min-height: 100dvh;
     background: var(--color-bg);
     color: var(--color-txt);
 }
@@ -89,7 +85,7 @@ LAYOUT PRINCIPAL
     width: 290px;
     min-width: 290px;
 
-    height: 100vh;
+    height: 100dvh;
     overflow-y: auto;
 
     padding: 58px 14px 24px;
@@ -135,7 +131,7 @@ LAYOUT PRINCIPAL
     display: flex;
     flex-direction: column;
 
-    height: 100vh;
+    height: 100dvh;
     overflow: hidden;
 }
 
@@ -239,7 +235,7 @@ COMPONENTS
 
 /*=================
 TREE
-==================*/
+===================*/
 
 .lateralBar ul {
     list-style: none;
@@ -314,7 +310,7 @@ TREE
 
 /*==================
 GEAR / SETTINGS
-==================*/
+===================*/
 
 .gear {
     position: fixed;
@@ -425,7 +421,7 @@ GEAR / SETTINGS
 
 /*==================
 CALLOUT BOXES
-==================*/
+===================*/
 
 .callout {
     border-left: 4px solid;
@@ -448,45 +444,45 @@ CALLOUT BOXES
 }
 .callout-warning {
     border-color: var(--color-orange);
-    text-shadow: var(--glow-warning);
+    text-shadow: 0 0 4px rgba(251,255,31,0.25), 0 0 10px rgba(255,109,31,0.15);
 }
 .callout-caution {
     border-color: var(--color-yellow);
-    text-shadow: var(--glow-warning);
+    text-shadow: 0 0 4px rgba(251,255,31,0.25), 0 0 10px rgba(255,109,31,0.15);
 }
 .callout-info {
     border-color: var(--color-cyan);
-    text-shadow: var(--glow-cyan);
+    text-shadow: 0 0 4px rgba(0,255,255,0.25), 0 0 12px rgba(0,255,255,0.12);
 }
 .callout-tip {
     border-color: #00ff88;
     text-shadow:
-        0 0 5px rgba(0,255,136,var(--text-glow-alpha)),
-        0 0 15px rgba(0,255,136,var(--text-glow-alpha));
+        0 0 4px rgba(0,255,136,0.25),
+        0 0 12px rgba(0,255,136,0.12);
 }
 .callout-danger {
     border-color: #ff3333;
     text-shadow:
-        0 0 5px rgba(255,51,51,var(--text-glow-alpha)),
-        0 0 15px rgba(255,51,51,var(--text-glow-alpha));
+        0 0 4px rgba(255,51,51,0.25),
+        0 0 12px rgba(255,51,51,0.12);
 }
 
 /*==================
 EFEITOS
-==================*/
+===================*/
 
 .main {
     font-family: 'VT323';
     
-    text-shadow: var(--glow-white);
+    text-shadow: 0 0 3px rgba(255,255,255,0.2);
 }
 
 .main .logo {
-    text-shadow: var(--glow-cyan);
+    text-shadow: 0 0 6px rgba(0,255,255,0.3), 0 0 18px rgba(0,255,255,0.15);
 }
 
 .main a {
-    text-shadow: var(--glow-orange);
+    text-shadow: 0 0 4px rgba(255,109,31,0.3);
 }
 
 .main h1 {
@@ -649,11 +645,11 @@ EFEITOS
 .versionAdded,
 .lastUpdate,
 .outdated {
-    text-shadow: var(--glow-warning);
+    text-shadow: 0 0 4px rgba(251,255,31,0.25), 0 0 10px rgba(255,109,31,0.15);
 }
 
 .owner{
-    text-shadow: var(--glow-owner);
+    text-shadow: 0 0 4px rgba(255,85,0,0.3);
 }
 
 
@@ -744,20 +740,24 @@ MOBILE
     body {
         flex-direction: column;
         height: 100dvh;
-        overflow: hidden;
-        font-size: 34px;
+        overflow-x: hidden;
+        font-size: clamp(14px, 2.5vw, 18px);
     }
 
     .lateralBar {
         order: -1;
         width: 100%;
 
-        max-height: 30vh;
+        max-height: 40vh;
 
         padding: 58px 14px 18px;
 
         overflow-y: auto;
         flex-shrink: 0;
+    }
+
+    .lateralBar a {
+        padding: 7px 10px;
     }
 
     .main {
@@ -779,11 +779,13 @@ MOBILE
 
     .info {
         padding: 20px;
-        font-size: 32px;
+        font-size: clamp(13px, 2.2vw, 16px);
     }
 
     .logo {
-        font-size: 14px;
+        font-size: 10px;
+        max-width: 100%;
+        overflow-x: auto;
     }
 
     .doc-page-nav {
@@ -796,11 +798,260 @@ MOBILE
     }
 
     .gear {
-        width: 75px;
-        height: 75px;
+        width: 56px;
+        height: 56px;
     }
     .gear img {
-        height: 50px;
+        height: 36px;
+    }
+
+    .window#settings {
+        top: auto;
+        right: 16px;
+        bottom: 80px;
+        width: min(400px, 90vw);
+    }
+}
+
+@media (max-width: 768px) {
+
+    body {
+        font-size: clamp(13px, 3vw, 16px);
+    }
+
+    .lateralBar {
+        max-height: 35vh;
+        padding: 48px 10px 14px;
+    }
+
+    .lateralBar::before {
+        font-size: 11px;
+        top: 12px;
+        left: 12px;
+    }
+
+    .lateralBar::after {
+        font-size: 9px;
+        top: 28px;
+        left: 12px;
+    }
+
+    .lateralBar a {
+        padding: 6px 8px;
+        font-size: 0.9em;
+    }
+
+    .top {
+        padding: 8px;
+        gap: 8px 12px;
+    }
+
+    .filebar {
+        font-size: 13px;
+        padding: 8px 12px;
+        min-width: 0;
+    }
+
+    .helios-cta {
+        font-size: 13px;
+        padding: 8px 12px;
+    }
+
+    .info {
+        padding: 14px;
+        font-size: clamp(12px, 2.8vw, 14px);
+    }
+
+    .logo {
+        font-size: 8px;
+    }
+
+    .bottom {
+        padding: 14px;
+        padding-bottom: 32px;
+    }
+
+    .doc-shell {
+        width: 100%;
+    }
+
+    .doc-page-header {
+        padding: 10px 12px;
+    }
+
+    .main pre {
+        padding: 10px 12px;
+        font-size: 0.85em;
+    }
+
+    .main table {
+        display: block;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .doc-nav-link {
+        min-height: 64px;
+        padding: 10px 12px;
+    }
+
+    .gear {
+        width: 48px;
+        height: 48px;
+    }
+    .gear img {
+        height: 30px;
+    }
+}
+
+@media (max-width: 480px) {
+
+    body {
+        font-size: clamp(12px, 3.5vw, 15px);
+    }
+
+    .lateralBar {
+        max-height: 30vh;
+        padding: 42px 8px 10px;
+    }
+
+    .lateralBar a {
+        padding: 8px 8px;
+        font-size: 0.85em;
+    }
+
+    .top {
+        padding: 6px;
+        gap: 6px 8px;
+    }
+
+    .filebar {
+        font-size: 11px;
+        padding: 6px 10px;
+        border-left-width: 3px;
+    }
+
+    .helios-cta {
+        font-size: 11px;
+        padding: 6px 10px;
+    }
+
+    .info {
+        padding: 10px;
+        font-size: 12px;
+    }
+
+    .info br {
+        display: none;
+    }
+
+    .logo {
+        font-size: 6px;
+    }
+
+    .bottom {
+        padding: 10px;
+        padding-bottom: 28px;
+    }
+
+    .doc-page-header {
+        padding: 8px 10px;
+        margin-bottom: 12px;
+    }
+
+    .doc-kicker {
+        font-size: 0.8em;
+    }
+
+    .doc-breadcrumb {
+        font-size: 0.9em;
+    }
+
+    .main pre {
+        padding: 8px 10px;
+        font-size: 0.8em;
+        border-radius: 3px;
+    }
+
+    .main code {
+        font-size: 0.85em;
+    }
+
+    .main pre code {
+        font-size: 0.8em;
+    }
+
+    .main h1 {
+        font-size: 1.4em;
+    }
+
+    .main h2 {
+        font-size: 1.2em;
+    }
+
+    .main p, .main li {
+        line-height: 1.4;
+    }
+
+    .main th, .main td {
+        padding: 6px 8px;
+        font-size: 0.85em;
+    }
+
+    .doc-page-nav {
+        gap: 8px;
+        margin-top: 20px;
+    }
+
+    .doc-nav-link {
+        min-height: 56px;
+        padding: 8px 10px;
+    }
+
+    .doc-nav-label {
+        font-size: 0.75em;
+    }
+
+    .window#settings {
+        bottom: 64px;
+        right: 8px;
+        width: min(320px, 88vw);
+    }
+
+    .gear {
+        width: 44px;
+        height: 44px;
+        bottom: 10px;
+        right: 10px;
+    }
+    .gear img {
+        height: 26px;
+    }
+}
+
+@media (hover: none) and (pointer: coarse) {
+    .lateralBar a:hover {
+        color: #e0e0e0;
+        border-left-color: transparent;
+        background: transparent;
+        text-shadow: none;
+    }
+
+    .lateralBar a.is-active {
+        color: var(--color-bg);
+        background: linear-gradient(90deg, var(--color-orange), #ff9a57);
+        border-left-color: #fff2cf;
+        text-shadow: none;
+    }
+
+    .doc-nav-link:hover,
+    .doc-nav-link:focus-visible {
+        transform: none;
+    }
+
+    .helios-cta:hover,
+    .helios-cta:focus-visible {
+        transform: none;
     }
 }
 
