@@ -82,7 +82,7 @@ FILES = [
     ("project/01-overview.md",         "D-project-overview.html"),
 
     # quickstart/
-    ("quickstart/01-hello-world.md",   "D-quickstart-hello-world.html"),
+    ("quickstart/01-hello-world.md",   "D-quickstart.html"),
 
     # reference/
     ("reference/stdlib.md",            "D-reference-stdlib.html"),

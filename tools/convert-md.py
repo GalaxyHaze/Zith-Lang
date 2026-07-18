@@ -68,7 +68,7 @@ OLD_TO_NEW = {
     "language/types.md":              "D-language-types.html",
     "language/variables.md":          "D-language-variables.html",
     "project/01-overview.md":         "D-project-overview.html",
-    "quickstart/01-hello-world.md":   "D-quickstart-hello-world.html",
+    "quickstart/01-hello-world.md":   "D-quickstart.html",
     "reference/stdlib.md":            "D-reference-stdlib.html",
 
     # Spec files
