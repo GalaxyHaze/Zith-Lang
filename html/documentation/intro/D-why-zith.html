@@ -7,8 +7,8 @@ Compiled, statically typed, and memory-safe by default,
 with low-level control when you need it and high-level ergonomics when you don't.</strong></p2>
 
 <h2>1. A very rich Type System</h2>
-<p>Structs, enums, components, unions, generics, You also have interfaces & traits. also see 
-<a href="../language/D-types.html">Type System</a> & <a href="../language/D-traits-interfaces">Traits & Interfaces</a></p>
+<p>Structs, enums, components, unions, generics, optionals, result & You also have interfaces & traits. also check
+<a href="../language/D-types.html">Type System</a> & <a href="../language/D-traits-interfaces">spec: Traits & Interfaces</a></p>
 
 <pre><code class="language-zith">struct Point { [x, y, z]: f32 }
 
@@ -17,39 +17,69 @@ fn dot(a: view Point, b: view Point): f32 {
 }</code></pre>
 
 <p>Unions are runtime tagged. <code>dyn</code> gives dynamic type erasure with compile-time safety. <code>is</code> narrows both, letting you operate on the concrete type inside each branch:</p>
-
 <pre><code class="language-zith">union Value { i32, f64, string }
 
-fn handle(v: dyn Value) {
+fn handle(v: Value) {
     if (v is i32) {
         v += 32;            // v is i32 here
     } else (v is f64) {
         @println("{v:.2}"); // v is f64 here
     }
-}</code></pre>
+    else {
+      @println("is a string! {v}"); // v is a string here
+    }
+}
 
-<p>No manual type switches. No unsafe downcasts. The compiler tracks the type through every branch.</p>
+fn dynamic(v: dyn){
+    if (v is string){
+      @println("V is a string, with value {v}");
+    } else (v is Point){
+      @println("V is a Point struct");
+    }
+    else{
+      @println("V is still 'opaque' maybe anything!");
+    }
+}
+</code></pre>
 
-<h2>2. Data Flows Forward</h2>
+<div class="callout callout-info">
+  <p><strong>&#8505; </strong> Note on <code>dyn</code></p>
+  <ol>
+    <li>dyn is a 'type hint' which guides the compiller to pick the best solution</li>
+    <li>dyn alone in variable declarations deduces <code>opaque</code></li>
+    <li>with Traits, it deduces a Trait Object, which you can see more on: 
+      <a href="../spec/D-traits-interfaces.html">Traits & Interfaces</a></li>
+  </ol>
+</div>
+
+<p>Not needed manual pattern match. No unsafe downcasts or neither performance penalties!
+  The compiler tracks the type through every branch.</p>
+
+<h2>2. Data Flow</h2>
 <p>The <code>-&gt;</code> operator pipes values left to right. <code>..</code> refers to the previous value. See <a href="../language/D-control-flow.html">Control Flow</a>.</p>
 
 <pre><code class="language-zith">getData() -> process(..) -> validate(..) -> save(..);</code></pre>
 
-<p>Inline blocks and comma sub-chains keep side-effects local without breaking the flow.</p>
+<p2>Inline blocks and comma sub-chains keep side-effects local without breaking the flow.</p2>
+
+<p2>You can also 'tag' each value to later use it on the chain, and call it by name</p2>
+<pre><code class="language-zith">raw:getData() -> processed:process(raw) -> data:validate(processed) -> save(data);</code></pre>
+
 
 <h2>3. Errors Are Just Values</h2>
-<p>No exceptions. No try/catch. <code>?T</code> for optionals, <code>T!</code> for results. Propagate with <code>?</code> or <code>!</code>. Recover with <code>or</code>. See <a href="../language/D-errors.html">Error Handling</a>.</p>
+<p>No exceptions. No traditional try/catch. <code>?T</code> for optionals, <code>T!</code> for results. Propagate with <code>?</code> or <code>!</code>. 
+  Recover with <code>or</code>. also see <a href="../language/D-errors.html">Error Handling</a>.</p>
 
 <pre><code class="language-zith">fn loadConfig(path: string): Config! {
-    let file = File.open(path)!
+    let file = fs.open(path)!
     let data = file.read()!
-    parse(data)!
+    parse(data)! 
 }
 
 let name = ?user.name or "guest";
 let data = !primary() or backup() or defaultData;</code></pre>
 
-<p><code>with</code> bundles multiple fallible calls, <code>catch</code> handles any failure:</p>
+<p><code>with</code> bundles multiple fallible calls, <code>catch</code> handles any failure on initialization:</p>
 
 <pre><code class="language-zith">with (connectDb(), user: getUser(id)) {
     process(user);
@@ -57,7 +87,17 @@ let data = !primary() or backup() or defaultData;</code></pre>
     log(err);
 }</code></pre>
 
-<h2>4. The Combo — Chain + Error Handling</h2>
+<div class="callout callout-info">
+  <p><strong>&#8505; </strong><code>with</code>
+  is by default 'short-circuit' which means the catch will trigger on first failure</p>
+  <ol>
+    <li>you can opt-in <code>eager with</code> which will try they all</li>
+    <li><code>catch</code> in short-circuit mode needs one argument, which usually is called 'err'</li>
+    <li><code>catch</code> in eager-mode do not need arguments, and can see all the 'required' resources, and manually check which one fails</li>
+  </ol>
+</div>
+
+<h2>4. Where Zith shines</h2>
 <p>This is where Zith pulls ahead of most systems languages. Chain flow and error propagation together:</p>
 
 <pre><code class="language-zith">readFile("config.toml")
@@ -77,13 +117,15 @@ if validated, err := validate(decoded); err == nil {
 }
 return err</code></pre>
 
-<p>The Zith version does the same thing — read, decode, validate, apply — without a single <code>if err != nil</code>. The <code>!</code> propagates errors out; <code>?</code> continues on null; the chain keeps the data moving forward.</p>
+<p>The Zith version does the exactly same thing 
+  read, decode, validate, apply. without a single <code>if err != nil</code>.
+   The <code>!</code> propagates errors, <code>?</code> propagates null, the chain keeps the data moving forward.</p>
 
 <p>Recovery stays on the same line:</p>
 
 <pre><code class="language-zith">readFile("config.toml") ->
     { decode(..)! -> validate(..)? -> apply(..) }
-    or fallbackConfig();   // any failure -> use default</code></pre>
+    or fallbackConfig();   // any failure  use default</code></pre>
 
 <p>Or with <code>fail</code> blocks for contextual error handling:</p>
 
@@ -93,10 +135,10 @@ return err</code></pre>
         -> validate(..)!
 } fail loadConfig(err) {
     if (err is NotFound) { continue(defaultConfig()); }
-    throw Error{ context: "load failed", cause: err };
+    throw ContextualError{ context: "load failed", cause: err };
 }</code></pre>
 
-<p>A real-world example — processing a request pipeline:</p>
+<p>A quick example, processing a request pipeline:</p>
 
 <pre><code class="language-zith">parseRequest(raw)!
     -> authenticate(..)!
@@ -105,11 +147,37 @@ return err</code></pre>
     -> marshal(..)
     -> send(..);</code></pre>
 
-<p>In Go this is ~30 lines of <code>if err != nil</code>. In Zith it is one.</p>
+<p>while on Go 
+  <pre><code>    //same logic
+    req, err := parseRequest(raw)
+    if err != nil {
+        return nil, fmt.Errorf("critical parse error: %w", err)
+    }
 
-<h2>5. How Does This Stay Safe?</h2>
+    user, err := authenticate(req)
+    if err != nil {
+        return nil, fmt.Errorf("authentication failed: %w", err)
+    }
+
+    if err := validate(req, user); err != nil {
+        return nil, err 
+    }
+
+    data, err := queryDb(req, user)
+    if err != nil {
+        return nil, fmt.Errorf("database failure: %w", err)
+    }
+
+    payload := marshal(data)
+    send(payload)
+    return payload, nil</code></pre>
+    In Zith is 6 lines, Go's 14 lines.</p>
+
+<h2>5. How does is it Safe?</h2>
 <p><strong><a href="../language/D-ownership.html">Node Resource Analysis (NRA).</a></strong></p>
-<p>No borrow checker. No garbage collector. No reference counting. The compiler statically tracks every value's ownership, lifetime, and aliasing — and catches misuse before the program runs.</p>
+<p>Is a differnt approach of 'borrow-checker'. No garbage collector. No reference counting. 
+  The compiler statically tracks every value's ownership, lifetime, and aliasing 
+  and catches misuse before the program runs.</p>
 
 <pre><code class="language-zith">var a = Point { x: 1.0, y: 2.0 };
 let b = a;       // b owns the data; a is now dead
@@ -125,11 +193,11 @@ a = Point{3, 4}; // fine: reassignment creates a new node</code></pre>
   </tr>
   <tr>
     <td><code>lend</code></td>
-    <td>Exclusive mutable borrow</td>
+    <td>Exclusive non-storable mutable borrow</td>
   </tr>
   <tr>
     <td><code>view</code></td>
-    <td>Read-only borrow (many can coexist)</td>
+    <td>Read-only borrow many can coexist</td>
   </tr>
 </table>
 
@@ -139,19 +207,19 @@ fn length(p: view Point): f32 {
     sqrt(p.x * p.x + p.y * p.y)
 }</code></pre>
 
-<p>For advanced ownership: <code>unique</code> (single owner), <code>share</code> (multiple mutable names), <code>belong</code> (part-of relationship for back-pointers).</p>
+<p>For advanced ownership: <code>unique</code> (single owner 'reference'), <code>share</code> (multiple mutable names), <code>belong</code> (part-of relationship for back-pointers, trees & etc...),
+but don't worry! <code>lend</code> & <code>view</code> covers 90% use cases, so you don't need to learn them for now.</p>
+<p>Safe by design. Zero runtime overhead.</p>
 
-<p>Safe by default. Zero runtime overhead. No ceremony.</p>
+<h2>6. Low-Level Control</h2>
+<p>C interop is first-class, include headers directly, call C's functions. See <a href="../language/D-ownership.html">Raw &amp; Unsafe</a>.</p>
 
-<h2>6. Low-Level Control, Not Low-Level Ceremony</h2>
-<p>C interop is first-class — include headers directly, call functions immediately. See <a href="../language/D-ownership.html">Raw &amp; Unsafe</a>.</p>
-
-<pre><code class="language-zith">import "openssl/ssl.h";
+<pre><code class="language-zith">import openssl/ssl.h;
 SSL_CTX_new(method);</code></pre>
 
 <p>When you need to bypass safety, <code>raw fn</code> and <code>unsafe</code> blocks are explicit and scoped:</p>
 
-<pre><code class="language-zith">raw fn readRegister(addr: opaque): u32 {
+<pre><code class="language-zith">raw fn readRegister(addr: raw opaque): u32 {
     unsafe {
         let ptr = addr as *u32;
         *ptr
@@ -165,7 +233,7 @@ SSL_CTX_new(method);</code></pre>
     raw fn write(self, offset: u64, val: u32) {}
 }
 
-fn safe_copy(src: view MMIONode, dst: lend MMIONode) {
+fn safeCopy(src: view MMIONode, dst: lend MMIONode) {
     let v = src.read(0x00);
     dst.write(0x00, v);
 }</code></pre>
