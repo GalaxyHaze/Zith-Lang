@@ -143,6 +143,13 @@ LAYOUT PRINCIPAL
     gap: 12px 20px;
 }
 
+.header-meta {
+    display: flex;
+    align-items: flex-start;
+    gap: 20px;
+    flex: 1 1 100%;
+}
+
 .filebar {
     display: flex;
     align-items: center;
@@ -782,11 +789,11 @@ MOBILE
         min-height: 0;
     }
 
-    .info {
+    .header-meta .info {
         display: none;
     }
 
-    .logo {
+    .header-meta .logo {
         display: none;
     }
 
