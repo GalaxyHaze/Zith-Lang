@@ -44,6 +44,9 @@ class HirLower {
     void ensureBodyLowered(symbols::SymId fn_sym);
     hir::HirExprId visitExpr(ast::ExprId id);
     hir::HirExprId visitLiteral(ast::ExprId id, const ast::LitValue &n);
+    hir::HirExprId visitStructLiteral(ast::ExprId id, const ast::StructLiteralNode &n);
+    hir::HirExprId visitArrayLiteral(ast::ExprId id, const ast::ArrayLiteralNode &n);
+    hir::HirExprId visitEnumValue(ast::ExprId id, const ast::EnumValueNode &n);
     hir::HirExprId visitIdent(const ast::IdentNode &n, ast::ExprId id);
     hir::HirExprId visitBinary(ast::ExprId id, const ast::BinaryNode &n);
     hir::HirExprId visitUnary(ast::ExprId id, const ast::UnaryNode &n);

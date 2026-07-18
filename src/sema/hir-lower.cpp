@@ -57,8 +57,9 @@ hir::HirBinaryOp mapBinaryOp(ast::BinaryOp op) {
         // Semantic analysis rejects these before lowering.
         std::abort();
     case BinaryOp::Shl:
+        return hir::HirBinaryOp::Shl;
     case BinaryOp::Shr:
-        return hir::HirBinaryOp::Add; // not implemented yet
+        return hir::HirBinaryOp::Shr;
     }
 }
 
@@ -315,8 +316,37 @@ hir::HirExprId HirLower::visitExpr(ast::ExprId id) {
             [&](const ast::BlockNode &n) { return visitBlock(n); },
             [&](const ast::IfNode &n) { return visitIf(n); },
             [&](const ast::WhileNode &n) { return visitWhile(n); },
-            [](const ast::FieldNode &) -> hir::HirExprId { return hir::kInvalidHirExpr; },
-            [](const ast::IndexNode &) -> hir::HirExprId { return hir::kInvalidHirExpr; },
+            [&](const ast::FieldNode &n) -> hir::HirExprId {
+                auto object = visitExpr(n.object);
+                if (object == hir::kInvalidHirExpr)
+                    return hir::kInvalidHirExpr;
+                auto object_type = typed_ast_.get(n.object);
+                auto index       = ctx_.types().fieldIndex(object_type, n.field);
+                if (index == static_cast<size_t>(-1))
+                    return hir::kInvalidHirExpr;
+                hir::HirField field;
+                field.object      = object;
+                field.index       = static_cast<uint32_t>(index);
+                field.type        = typed_ast_.get(id);
+                field.object_type = object_type;
+                return addHirExpr(field);
+            },
+            [&](const ast::IndexNode &n) -> hir::HirExprId {
+                auto object = visitExpr(n.object);
+                auto index  = visitExpr(n.index);
+                if (object == hir::kInvalidHirExpr || index == hir::kInvalidHirExpr)
+                    return hir::kInvalidHirExpr;
+                hir::HirIndex idx;
+                idx.object   = object;
+                idx.index    = index;
+                idx.type     = typed_ast_.get(id);
+                idx.obj_type = typed_ast_.get(n.object);
+                idx.is_array = (ctx_.types().kindOf(idx.obj_type) == types::TypeKind::Array);
+                return addHirExpr(idx);
+            },
+            [&](const ast::StructLiteralNode &n) { return visitStructLiteral(id, n); },
+            [&](const ast::ArrayLiteralNode &n) { return visitArrayLiteral(id, n); },
+            [&](const ast::EnumValueNode &n) { return visitEnumValue(id, n); },
             [](const ast::RangeNode &) -> hir::HirExprId { return hir::kInvalidHirExpr; },
             [](const ast::UnbodyNode &) -> hir::HirExprId { return hir::kInvalidHirExpr; },
             [](const ast::IntrinsicNode &) -> hir::HirExprId { return hir::kInvalidHirExpr; },
@@ -538,8 +568,15 @@ hir::HirExprId HirLower::visitBlock(const ast::BlockNode &n) {
     hir::HirExprId last = hir::kInvalidHirExpr;
     for (auto stmt_id : n.stmts)
         visitStmt(stmt_id);
-    if (n.trailing != ast::kInvalidExpr)
+    if (n.trailing != ast::kInvalidExpr) {
         last = visitExpr(n.trailing);
+        if (current_fn_ && !current_fn_->blocks.empty() && last != hir::kInvalidHirExpr) {
+            if (ctx_.types().kindOf(current_fn_ret_type_) == types::TypeKind::Void ||
+                current_fn_ret_type_ == types::kErrorType) {
+                current_fn_->blocks[currentBlock()].insts.push(last);
+            }
+        }
+    }
     return last;
 }
 
@@ -759,8 +796,14 @@ void HirLower::visitStmt(ast::StmtId id) {
             [&](const ast::AssignNode &n) {
                 auto target = visitExpr(n.target);
                 auto value  = visitExpr(n.value);
-                (void)target;
-                (void)value;
+                hir::HirAssign assign;
+                assign.target = target;
+                assign.value  = value;
+                auto hir_id   = addHirExpr(hir::HirExpr{assign});
+                if (current_fn_ && !current_fn_->blocks.empty()) {
+                    auto &cur = current_fn_->blocks[currentBlock()];
+                    cur.insts.push(hir_id);
+                }
             },
             [&](const ast::RetNode &n) {
                 hir::HirExprId val = hir::kInvalidHirExpr;
@@ -788,4 +831,38 @@ void HirLower::visitStmt(ast::StmtId id) {
         node);
 }
 
+hir::HirExprId HirLower::visitStructLiteral(ast::ExprId id, const ast::StructLiteralNode &n) {
+    hir::HirStructLiteral lit(hir_arena_);
+    lit.type = astExprType(id);
+    for (const auto &field : n.fields) {
+        if (field.value != ast::kInvalidExpr)
+            lit.values.push(visitExpr(field.value));
+    }
+    return addHirExpr(std::move(lit));
+}
+
+hir::HirExprId HirLower::visitArrayLiteral(ast::ExprId id, const ast::ArrayLiteralNode &n) {
+    hir::HirArrayLiteral lit(hir_arena_);
+    lit.type = astExprType(id);
+    for (auto elem : n.elements) {
+        lit.elements.push(visitExpr(elem));
+    }
+    return addHirExpr(std::move(lit));
+}
+
+hir::HirExprId HirLower::visitEnumValue(ast::ExprId id, const ast::EnumValueNode &n) {
+    auto type       = astExprType(id);
+    const auto &def = ctx_.types().getEnumDef(type);
+    int64_t val     = 0;
+    for (const auto &v : def.variants) {
+        if (ctx_.types().interner().lookup(v.name) == n.variant_name) {
+            val = v.discriminant;
+            break;
+        }
+    }
+    hir::HirEnumValue lit;
+    lit.type  = type;
+    lit.value = val;
+    return addHirExpr(std::move(lit));
+}
 } // namespace zith::sema

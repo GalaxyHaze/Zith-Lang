@@ -63,10 +63,12 @@ link here for status information so it does not need to be maintained in multipl
 
 | Feature | Status | Notes |
 |---|---|---|
-| Field access (`.field`) | **Warn only** | W2009; HIR drops the node silently |
-| Index access (`a[i]`) | **Warn only** | W2009; HIR drops the node silently |
+| Field access (`.field`) | **Working** | Struct field reads/writes lower through HIR and LLVM |
+| Index access (`a[i]`) | **Working** | Arrays, pointers, and indexed struct access lower through HIR and LLVM |
+| Struct literals | Working | Positional and named forms work; named literals support explicit `_` defaults. Methods remain out of scope |
+| Layout intrinsics (`@sizeOf`, `@alignOf`, `@offsetOf`) | Working | Backed by LLVM `DataLayout`; `@offsetOf` uses ABI layout offsets. |
 | Range expressions | **Warn only** | W2009 |
-| `@intrinsic` calls | **Warn only** | W2009 |
+| Other `@intrinsic` calls | **Warn only** | W2009 |
 | Macro calls (`@macro`) | **Warn only** | W2009; no expansion |
 | Generics (complex constraints) | Partial | Simple `<T>` works; `T: Trait or Other` constraints not fully enforced |
 | `dyn` dispatch | Partial | Type annotation parsed; vtable lowering not complete |
