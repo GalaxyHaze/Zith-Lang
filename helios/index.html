@@ -144,5 +144,49 @@
     </footer>
 
     <div class="crt-overlay" aria-hidden="true"></div>
+    <div class="gear" onclick="openWindow('settings')">
+        <img src="../media/Icons/Gear.svg" alt="Settings">
+    </div>
+    <div class="window hidden" id="settings">
+        <div class="titlebar">
+            <span>settings.ini</span>
+            <div class="buttons">
+                <button>-</button>
+                <button onclick="toggleMaximize('settings')">o</button>
+                <button onclick="closeWindow('settings')">x</button>
+            </div>
+        </div>
+        <div class="content">
+            <div class="settings-group" data-group="scanlines">
+                <h2>Scanlines</h2>
+                <div class="settings-options">
+                    <button data-setting="scanlines" data-level="0">Off</button>
+                    <button data-setting="scanlines" data-level="1">Low</button>
+                    <button data-setting="scanlines" data-level="2">High</button>
+                </div>
+                <p class="settings-status">Current: Low</p>
+            </div>
+            <div class="settings-group" data-group="glow">
+                <h2>Glow</h2>
+                <div class="settings-options">
+                    <button data-setting="glow" data-level="0">Off</button>
+                    <button data-setting="glow" data-level="1">Low</button>
+                    <button data-setting="glow" data-level="2">High</button>
+                </div>
+                <p class="settings-status">Current: Low</p>
+            </div>
+            <div class="settings-group" data-group="noise">
+                <h2>Noise</h2>
+                <div class="settings-options">
+                    <button data-setting="noise" data-level="0">Off</button>
+                    <button data-setting="noise" data-level="1">Low</button>
+                    <button data-setting="noise" data-level="2">High</button>
+                </div>
+                <p class="settings-status">Current: Low</p>
+            </div>
+        </div>
+    </div>
+    <script src="../js/settings.js"></script>
+    <script src="../js/windows.js"></script>
 </body>
 </html>

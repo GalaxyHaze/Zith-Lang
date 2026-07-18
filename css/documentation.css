@@ -473,6 +473,7 @@ EFEITOS
 
 .main {
     font-family: 'VT323';
+    font-size: 20px;
     
     text-shadow: 0 0 3px rgba(255,255,255,0.2);
 }
@@ -741,7 +742,7 @@ MOBILE
         flex-direction: column;
         height: 100dvh;
         overflow-x: hidden;
-        font-size: clamp(14px, 2.5vw, 18px);
+        font-size: clamp(16px, 3vw, 22px);
         touch-action: manipulation;
     }
 
@@ -766,6 +767,7 @@ MOBILE
         min-height: 0;
         height: auto;
         overflow-y: auto;
+        font-size: clamp(16px, 3vw, 22px);
     }
 
     .top {
@@ -816,7 +818,11 @@ MOBILE
 @media (max-width: 768px) {
 
     body {
-        font-size: clamp(13px, 3vw, 16px);
+        font-size: clamp(15px, 3.5vw, 20px);
+    }
+
+    .main {
+        font-size: clamp(15px, 3.5vw, 20px);
     }
 
     .lateralBar {
@@ -898,7 +904,11 @@ MOBILE
 @media (max-width: 480px) {
 
     body {
-        font-size: clamp(12px, 3.5vw, 15px);
+        font-size: clamp(14px, 4vw, 18px);
+    }
+
+    .main {
+        font-size: clamp(14px, 4vw, 18px);
     }
 
     .lateralBar {

@@ -7,12 +7,12 @@ BASE
 }
 
 :root {
-    --crt-scanline-alpha: 0.2;
+    --crt-scanline-alpha: 0.15;
     --crt-noise-opacity: 0.05;
     --icon-shadow-opacity: 0.3;
     --crt-vignette-opacity: 0.6;
     --crt-flicker-animation: none;
-    --text-glow-alpha: 0.5;
+    --text-glow-alpha: 0.35;
 }
 
 html, body{
