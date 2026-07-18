@@ -194,6 +194,10 @@ function loadPage(path, anchor = null, opts = {}) {
             setActiveLink(path);
             injectPageNavigation(path);
 
+            if (window.Prism) {
+                Prism.highlightAllUnder(content);
+            }
+
             const filename = path.split("/").pop() || "_";
             const titleMatch = html.match(/<h[12][^>]*>(.*?)<\/h[12]>/i);
             const pageTitle = titleMatch

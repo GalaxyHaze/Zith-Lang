@@ -23,6 +23,8 @@
         <meta name="twitter:title" content="Zith-Lang Documentation">
         <meta name="twitter:description" content="Official documentation for the Zith programming language.">
         <meta name="twitter:image" content="https://zith-lang.org/media/Logos/social-share.svg">
+
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css">
     </head>
     <body>
         <div class="main">
@@ -120,6 +122,26 @@
                     window.location.href = "../home.html";
                 }
             });
+        </script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-json.min.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-rust.min.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-c.min.js"></script>
+        <script>
+        Prism.languages.zith = {
+            'comment': [
+                { pattern: /\/\/.*/, greedy: true },
+                { pattern: /\/\*[\s\S]*?\*\//, greedy: true }
+            ],
+            'string': { pattern: /"(?:\\.|[^"\\])*"/, greedy: true },
+            'keyword': /\b(fn|let|var|if|else|return|struct|component|entity|scene|use|pub|mod|impl|trait|type|match|loop|while|for|break|continue|as|in|ref|view|lend|mut|const|static|unsafe|raw|new|drop|self)\b/,
+            'type': /\b(i8|i16|i32|i64|u8|u16|u32|u64|f32|f64|bool|char|str|void|string|usize)\b/,
+            'number': /\b\d+\.?\d*\b/,
+            'function': /\b[a-zA-Z_]\w*(?=\s*\()/,
+            'operator': /[+\-*/%=!<>&|^~?:]+|\.\./,
+            'punctuation': /[{}[\];(),.]/
+        };
         </script>
         <script src="../../../js/loadTree.js"></script>
         <script src="../../../js/windows.js"></script>

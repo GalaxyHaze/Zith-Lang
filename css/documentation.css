@@ -594,6 +594,26 @@ EFEITOS
     font-size: 0.85em;
     line-height: 1.5;
 }
+
+/* Prism.js overrides to match CRT theme */
+.main pre[class*="language-"],
+.main code[class*="language-"] {
+    font-family: "Fira Code", monospace;
+    text-shadow: none;
+}
+.main pre[class*="language-"] {
+    background: rgba(0, 0, 0, 0.4);
+    border: 1px solid #444;
+    border-radius: 4px;
+    margin: 12px 0;
+    padding: 12px 16px;
+    overflow-x: auto;
+}
+.main code[class*="language-"] {
+    background: none;
+    padding: 0;
+    border: none;
+}
 .main hr {
     border: none;
     border-top: 1px solid #555;
