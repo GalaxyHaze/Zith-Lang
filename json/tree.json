@@ -31,16 +31,16 @@
           { "title": "Errors", "link": "./D-language-errors.html" },
           { "title": "Contexts", "link": "./D-language-contexts.html" },
           { "title": "Concurrency", "link": "./D-language-concurrency.html" },
-          { "title": "ECS", "link": "./D-language-ecs.html" },
+          { "title": "ECS & Scenes", "link": "./D-language-ecs.html" },
           { "title": "Intrinsics", "link": "./D-language-intrinsics.html" },
-          { "title": "Packs", "link": "./D-language-packs.html" }
+          { "title": "Packs", "link": "./D-language-packs.html" },
+          { "title": "Best Practices", "link": "./D-spec-best-practices.html" }
         ]
       },
       {
         "title": "Specification",
         "link": "./D-spec-overview.html",
         "children": [
-          { "title": "Overview", "link": "./D-spec-overview.html" },
           { "title": "Implementation Status", "link": "./D-spec-impl-status.html" },
           { "title": "Module System", "link": "./D-spec-module-system.html" },
           { "title": "Type System", "link": "./D-spec-type-system.html" },
@@ -60,8 +60,7 @@
           { "title": "Contexts", "link": "./D-spec-contexts.html" },
           { "title": "C Interop", "link": "./D-spec-c-interop.html" },
           { "title": "Project Config", "link": "./D-spec-project-config.html" },
-          { "title": "Standard Library", "link": "./D-spec-standard-library.html" },
-          { "title": "Best Practices", "link": "./D-spec-best-practices.html" }
+          { "title": "Standard Library", "link": "./D-spec-standard-library.html" }
         ]
       },
       {
@@ -112,6 +111,10 @@
           { "title": "Contributing", "link": "./D-community-contributing.html" },
           { "title": "Code of Conduct", "link": "./D-community-code-of-conduct.html" }
         ]
+      },
+      {
+        "title": "Roadmap",
+        "link": "./D-roadmap.html"
       },
       {
         "title": "Project",
