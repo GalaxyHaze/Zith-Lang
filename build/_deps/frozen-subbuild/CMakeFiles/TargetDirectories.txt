@@ -1,3 +1,0 @@
-/home/diogo/Zith/build/_deps/frozen-subbuild/CMakeFiles/frozen-populate.dir
-/home/diogo/Zith/build/_deps/frozen-subbuild/CMakeFiles/edit_cache.dir
-/home/diogo/Zith/build/_deps/frozen-subbuild/CMakeFiles/rebuild_cache.dir
