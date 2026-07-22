@@ -4,7 +4,7 @@ events:
   -
     kind: "find-v1"
     backtrace:
-      - "/home/linuxbrew/.linuxbrew/share/cmake/Modules/CMakeDetermineSystem.cmake:12 (find_program)"
+      - "/usr/share/cmake-4.2/Modules/CMakeDetermineSystem.cmake:12 (find_program)"
       - "CMakeLists.txt:16 (project)"
     mode: "program"
     variable: "CMAKE_UNAME"
@@ -20,10 +20,6 @@ events:
     names:
       - "uname"
     candidate_directories:
-      - "/home/diogo/.opencode/bin/"
-      - "/home/linuxbrew/.linuxbrew/bin/"
-      - "/home/linuxbrew/.linuxbrew/sbin/"
-      - "/home/diogo/.nvm/versions/node/v20.20.2/bin/"
       - "/home/diogo/.cargo/bin/"
       - "/home/diogo/.npm-global/bin/"
       - "/home/diogo/.bun/bin/"
@@ -38,10 +34,6 @@ events:
       - "/home/diogo/.lmstudio/bin/"
       - "/home/diogo/.local/bin/"
     searched_directories:
-      - "/home/diogo/.opencode/bin/uname"
-      - "/home/linuxbrew/.linuxbrew/bin/uname"
-      - "/home/linuxbrew/.linuxbrew/sbin/uname"
-      - "/home/diogo/.nvm/versions/node/v20.20.2/bin/uname"
       - "/home/diogo/.cargo/bin/uname"
       - "/home/diogo/.npm-global/bin/uname"
       - "/home/diogo/.bun/bin/uname"
@@ -50,10 +42,6 @@ events:
     found: "/usr/bin/uname"
     search_context:
       ENV{PATH}:
-        - "/home/diogo/.opencode/bin"
-        - "/home/linuxbrew/.linuxbrew/bin"
-        - "/home/linuxbrew/.linuxbrew/sbin"
-        - "/home/diogo/.nvm/versions/node/v20.20.2/bin"
         - "/home/diogo/.cargo/bin"
         - "/home/diogo/.npm-global/bin"
         - "/home/diogo/.bun/bin"
@@ -67,12 +55,10 @@ events:
         - "/usr/lib/jvm/default-jre/bin"
         - "/home/diogo/.lmstudio/bin"
         - "/home/diogo/.local/bin"
-        - "/home/diogo/.lmstudio/bin"
-        - "/home/diogo/.local/bin"
   -
     kind: "message-v1"
     backtrace:
-      - "/home/linuxbrew/.linuxbrew/share/cmake/Modules/CMakeDetermineSystem.cmake:218 (message)"
+      - "/usr/share/cmake-4.2/Modules/CMakeDetermineSystem.cmake:212 (message)"
       - "CMakeLists.txt:16 (project)"
     message: |
       The system is: Linux - 6.18.38_1 - x86_64

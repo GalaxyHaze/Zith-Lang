@@ -14,7 +14,7 @@ CostDataFile:
 Site: Lenovo
 
 # Build name is osname-revision-compiler, i.e. Linux-2.4.2-2smp-c++
-BuildName: Linux-c++
+BuildName: Linux-clang++
 
 # Subprojects
 LabelsForSubprojects: 
@@ -27,8 +27,8 @@ SubmitInactivityTimeout:
 NightlyStartTime: 00:00:00 EDT
 
 # Commands for the build/test/submit cycle
-ConfigureCommand: "/home/linuxbrew/.linuxbrew/bin/cmake" "/home/diogo/Zith/build/_deps/frozen-src"
-MakeCommand: /home/linuxbrew/.linuxbrew/bin/cmake --build . --config "${CTEST_CONFIGURATION_TYPE}"
+ConfigureCommand: "/usr/bin/cmake" "/home/diogo/Zith/build/_deps/frozen-src"
+MakeCommand: /usr/bin/cmake --build . --config "${CTEST_CONFIGURATION_TYPE}"
 DefaultCTestConfigurationType: Release
 
 # version control
@@ -63,8 +63,8 @@ UpdateOptions:
 UpdateType: git
 
 # Compiler info
-Compiler: /usr/bin/c++
-CompilerVersion: 14.2.1
+Compiler: /usr/bin/clang++
+CompilerVersion: 21.1.7
 
 # Dynamic analysis (MemCheck)
 PurifyCommand: 
@@ -107,8 +107,3 @@ CurlOptions:
 # specify behavior for retrying the submission
 CTestSubmitRetryDelay: 5
 CTestSubmitRetryCount: 3
-
-# Invoke each test with environment variables configuring tool's collection.
-CTestTestCoverageTool: 
-CTestTestCoverageMergeExecutable: 
-CTestTestCoverageDataExecutable: 

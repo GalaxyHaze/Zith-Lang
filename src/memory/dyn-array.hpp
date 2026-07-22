@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <cstdio>
 #include <cstdlib>
+#include <span>
 #include <type_traits>
 #include <utility>
 
@@ -152,7 +153,9 @@ public:
     }
 
     auto operator[](size_t index) -> T & {
-        return data_[index];
+        auto slice = std::span(data_, size_);
+        if (index >= 0 && index < size_)
+        return slice[index];
     }
     auto operator[](size_t index) const -> const T & {
         return data_[index];

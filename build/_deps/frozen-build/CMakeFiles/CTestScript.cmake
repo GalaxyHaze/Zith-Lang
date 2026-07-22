@@ -2,7 +2,7 @@
 # If you choose not to use CMake, this file may be hand configured, by
 # filling in the required variables.
 
-cmake_minimum_required(VERSION 4.4.0)
+cmake_minimum_required(VERSION 4.2.2)
 
 # CTest Start Step
 set(CTEST_SOURCE_DIRECTORY "/home/diogo/Zith/build/_deps/frozen-src")
@@ -37,7 +37,7 @@ set(CTEST_P4_UPDATE_CUSTOM "")
 set(CTEST_P4_UPDATE_OPTIONS "")
 
 # CTest Configure Step
-set(CTEST_CMAKE_GENERATOR "Unix Makefiles")
+set(CTEST_CMAKE_GENERATOR "Ninja")
 set(CTEST_LABELS_FOR_SUBPROJECTS "")
 
 # CTest Build Step
@@ -48,7 +48,6 @@ set(CTEST_USE_LAUNCHERS "")
 set(CTEST_RESOURCE_SPEC_FILE "")
 set(CTEST_TEST_LOAD "")
 set(CTEST_TEST_TIMEOUT "1500")
-set(CTEST_TEST_COVERAGE_TOOL ""
 
 # CTest Coverage Step
 set(CTEST_COVERAGE_COMMAND "/usr/bin/gcov")
@@ -63,7 +62,7 @@ set(CTEST_MEMORYCHECK_SUPPRESSIONS_FILE "")
 
 # CTest Submit Step
 set(CTEST_SITE "Lenovo")
-set(CTEST_BUILD_NAME "Linux-c++")
+set(CTEST_BUILD_NAME "Linux-clang++")
 set(CTEST_SUBMIT_URL "http://")
 set(CTEST_SUBMIT_INACTIVITY_TIMEOUT "")
 set(CTEST_TLS_VERIFY "")
