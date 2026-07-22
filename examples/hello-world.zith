@@ -1,7 +1,0 @@
-//from std/io/console
-
-extern fn puts(msg: *char)
-
-fn main(){
-    puts("Hello, world!");
-}

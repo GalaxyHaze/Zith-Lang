@@ -1,0 +1,2 @@
+/usr/bin/ar qc libzith-core.a "CMakeFiles/zith-core.dir/arena.cpp.o" "CMakeFiles/zith-core.dir/string-interner.cpp.o"
+/usr/bin/ranlib libzith-core.a
