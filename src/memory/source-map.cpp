@@ -1,8 +1,8 @@
 #include "source-map.hpp"
 
-#include "memory/result.hpp"
+#include "common/result.hpp"
 #include "memory/source-file.hpp"
-#include "memory/span.hpp"
+#include "common/span.hpp"
 
 #ifndef ZITH_IS_WASM
 #include <system_error>

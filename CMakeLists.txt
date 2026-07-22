@@ -10,6 +10,15 @@ option(ZITH_IS_WASM "Build for WebAssembly target" OFF)
 include(GNUInstallDirs)
 include(FetchContent)
 
+if(NOT ZITH_IS_WASM)
+    FetchContent_Declare(
+        mio
+        GIT_REPOSITORY https://github.com/vimpunk/mio.git
+        GIT_TAG 8b6b7d878c89e81614d05edca7936de41ccdd2da
+    )
+    FetchContent_MakeAvailable(mio)
+endif()
+
 FetchContent_Declare(
     frozen
     GIT_REPOSITORY https://github.com/serge-sans-paille/frozen.git
@@ -17,29 +26,52 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(frozen)
 
-add_subdirectory(src/memory)
+FetchContent_Declare(
+    tomlplusplus
+    GIT_REPOSITORY https://github.com/marzer/tomlplusplus.git
+    GIT_TAG v3.4.0
+)
+FetchContent_MakeAvailable(tomlplusplus)
 
-target_compile_definitions(zith-core PUBLIC ZITH_VERSION="v0.2.0-procedural")
+file(GLOB_RECURSE ZITH_LIB_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp")
+list(REMOVE_ITEM ZITH_LIB_SOURCES "${CMAKE_SOURCE_DIR}/src/cli/zithc-main.cpp")
 
-if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-    target_compile_options(zith-core PRIVATE
-        -Wall
-        -Werror
-        -Weverything
-        -Wno-unknown-warning-option
-        -Wno-c++98-compat
-        -Wno-c++98-compat-pedantic
-        -Wno-padded
-        -Wno-missing-field-initializers
-        -Wno-disabled-macro-expansion
-    )
+add_library(zithcLib STATIC ${ZITH_LIB_SOURCES})
+
+target_include_directories(zithcLib PUBLIC src)
+
+target_link_libraries(zithcLib PUBLIC frozen::frozen tomlplusplus::tomlplusplus)
+
+if(NOT ZITH_IS_WASM)
+    target_link_libraries(zithcLib PUBLIC mio)
 endif()
 
-if(CMAKE_CXX_COMPILER_ID MATCHES "GNU")
-    target_compile_options(zith-core PRIVATE
+target_compile_definitions(zithcLib PUBLIC ZITH_VERSION="v0.2.0-procedural")
+
+target_compile_features(zithcLib PUBLIC cxx_std_23)
+
+if(ZITH_IS_WASM)
+    target_compile_definitions(zithcLib PUBLIC ZITH_IS_WASM=1)
+endif()
+
+if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+    target_compile_options(zithcLib PRIVATE
         -Wall
         -Werror
         -Wpedantic
         -Wextra
     )
 endif()
+
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU")
+    target_compile_options(zithcLib PRIVATE
+        -Wall
+        -Werror
+        -Wpedantic
+        -Wextra
+    )
+endif()
+
+add_executable(zithc src/cli/zithc-main.cpp)
+
+target_link_libraries(zithc PRIVATE zithcLib)

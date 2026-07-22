@@ -1,7 +1,7 @@
 #include "memory/string-interner.hpp"
 #include "memory/arena.hpp"
 #include "memory/dyn-array.hpp"
-#include "memory/flat-map.hpp"
+#include "common/flat-map.hpp"
 #include "support/macros.hpp"
 
 #include <cstdio>

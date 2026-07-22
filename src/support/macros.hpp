@@ -1,6 +1,5 @@
 #pragma once
 #include <type_traits>
-#include <utility>
 #define moveVar(var) std::move(other.var)
 #define moveInit(var) var(moveVar(var))
 #define moveExchange(var) std::exchange(other.var, nullptr)

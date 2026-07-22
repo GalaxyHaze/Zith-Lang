@@ -4,27 +4,28 @@
 #include <cstddef>
 #include <cstdio>
 #include <cstdlib>
-#include <span>
 #include <type_traits>
 #include <utility>
 
 namespace zith::memory {
 
+class Arena;
+
 template <typename T> class DynArray {
-    Arena *arena_    = nullptr;
-    T *data_         = nullptr;
-    size_t size_     = 0;
-    size_t capacity_ = 0;
+    Arena *arena    = nullptr;
+    T *data         = nullptr;
+    size_t len     = 0;
+    size_t cap = 0;
 
 public:
-    explicit DynArray(Arena &arena) noexcept : arena_(&arena) {}
+    explicit DynArray(Arena &arena) noexcept : arena(&arena) {}
 
     ~DynArray() noexcept {
-        if (!data_)
+        if (!data)
             return;
         if constexpr (!std::is_trivially_destructible_v<T>) {
-            for (size_t i = 0; i < size_; i++) {
-                data_[i].~T();
+            for (size_t i = 0; i < len; i++) {
+                data[i].~T();
             }
         }
     }
@@ -33,108 +34,108 @@ public:
     auto operator=(const DynArray &) = delete;
 
     DynArray(DynArray &&other) noexcept
-        : arena_(other.arena_), data_(other.data_), size_(other.size_), capacity_(other.capacity_) {
-        other.data_     = nullptr;
-        other.size_     = 0;
-        other.capacity_ = 0;
+        : arena(other.arena), data(other.data), len(other.len), cap(other.cap) {
+        other.data     = nullptr;
+        other.len     = 0;
+        other.cap = 0;
     }
 
     auto operator=(DynArray &&other) noexcept -> DynArray & {
         if (this != &other) {
             if constexpr (!std::is_trivially_destructible_v<T>) {
-                for (size_t i = 0; i < size_; i++) {
-                    data_[i].~T();
+                for (size_t i = 0; i < len; i++) {
+                    data[i].~T();
                 }
             }
-            arena_          = other.arena_;
-            data_           = other.data_;
-            size_           = other.size_;
-            capacity_       = other.capacity_;
-            other.data_     = nullptr;
-            other.size_     = 0;
-            other.capacity_ = 0;
+            arena          = other.arena;
+            data           = other.data;
+            len           = other.len;
+            cap       = other.cap;
+            other.data     = nullptr;
+            other.len     = 0;
+            other.cap = 0;
         }
         return *this;
     }
 
     void push(const T &value) {
-        if (size_ >= capacity_) {
+        if (len >= cap) {
             grow_();
         }
-        ::new (&data_[size_]) T(value);
-        size_++;
+        ::new (&data[len]) T(value);
+        len++;
     }
 
     void push(T &&value) {
-        if (size_ >= capacity_) {
+        if (len >= cap) {
             grow_();
         }
-        ::new (&data_[size_]) T(std::move(value));
-        size_++;
+        ::new (&data[len]) T(std::move(value));
+        len++;
     }
 
     template <typename... Args> auto &emplace(Args &&...args) {
-        if (size_ >= capacity_) {
+        if (len >= cap) {
             grow_();
         }
-        auto *ptr = ::new (&data_[size_]) T(std::forward<Args>(args)...);
-        size_++;
+        auto *ptr = ::new (&data[len]) T(std::forward<Args>(args)...);
+        len++;
         return *ptr;
     }
 
     void reserve(size_t new_cap) {
-        if (new_cap <= capacity_)
+        if (new_cap <= cap)
             return;
 
-        size_t old_bytes = capacity_ * sizeof(T);
+        size_t old_bytes = cap * sizeof(T);
         size_t new_bytes = new_cap * sizeof(T);
         size_t extra     = new_bytes - old_bytes;
 
-        auto *data_end = reinterpret_cast<char *>(data_) + old_bytes;
-        if (data_end == arena_->ptr() && arena_->remaining() >= extra) {
-            (void)arena_->alloc(extra, alignof(T));
-            capacity_ = new_cap;
+        auto *dataend = reinterpret_cast<char *>(data) + old_bytes;
+        if (dataend == arena->ptr() && arena->remaining() >= extra) {
+            (void)arena->alloc(extra, alignof(T));
+            cap = new_cap;
             return;
         }
 
-        auto *new_data = static_cast<T *>(arena_->alloc(new_bytes, alignof(T)));
+        auto *new_data = static_cast<T *>(arena->alloc(new_bytes, alignof(T)));
 
-        if (data_) {
-            for (size_t i = 0; i < size_; i++) {
-                ::new (&new_data[i]) T(std::move(data_[i]));
-                data_[i].~T();
+        if (data) {
+            for (size_t i = 0; i < len; i++) {
+                ::new (&new_data[i]) T(std::move(data[i]));
+                data[i].~T();
             }
         }
 
-        data_     = new_data;
-        capacity_ = new_cap;
+        data     = new_data;
+        cap = new_cap;
     }
 
     [[nodiscard]] auto size() const noexcept -> size_t {
-        return size_;
+        return len;
     }
     [[nodiscard]] auto capacity() const noexcept -> size_t {
-        return capacity_;
+        return cap;
     }
     [[nodiscard]] auto empty() const noexcept -> bool {
-        return size_ == 0;
+        return len == 0;
     }
 
     void clear() noexcept {
         if constexpr (!std::is_trivially_destructible_v<T>) {
-            for (size_t i = 0; i < size_; i++) {
-                data_[i].~T();
+            for (size_t i = 0; i < len; i++) {
+                data[i].~T();
             }
         }
-        size_ = 0;
+        len = 0;
     }
 
     void pop_back() {
-        if (size_ == 0)
+        if (len == 0)
             return;
         if constexpr (!std::is_trivially_destructible_v<T>)
-            data_[size_ - 1].~T();
-        size_--;
+            data[len - 1].~T();
+        len--;
     }
 
     auto back() noexcept -> T & {
@@ -142,52 +143,58 @@ public:
             std::fprintf(stderr, "[error] attemp to use 'back' on DynArray siz 0");
             std::abort();
         }
-        return data_[size_ - 1];
+        return data[len - 1];
     }
     auto back() const noexcept -> const T & {
         if (size() == 0) {
             std::fprintf(stderr, "[error] attemp to use 'back' on DynArray siz 0");
             std::abort();
         }
-        return data_[size_ - 1];
+        return data[len - 1];
     }
 
     auto operator[](size_t index) -> T & {
-        auto slice = std::span(data_, size_);
-        if (index >= 0 && index < size_)
-        return slice[index];
+        if (index >= len) {
+            std::fprintf(stderr, "[error] DynArray index out of bounds");
+            std::abort();
+        }
+        return data[index];
     }
     auto operator[](size_t index) const -> const T & {
-        return data_[index];
+        if (index >= len) {
+            std::fprintf(stderr, "[error] DynArray index out of bounds");
+            std::abort();
+        }
+        return data[index];
     }
 
     auto begin() noexcept -> T * {
-        return data_;
+        return data;
     }
     auto end() noexcept -> T * {
-        return data_ + size_;
+        return data + len;
     }
     auto begin() const noexcept -> const T * {
-        return data_;
+        return data;
     }
     auto end() const noexcept -> const T * {
-        return data_ + size_;
+        return data + len;
     }
 
-    auto data() noexcept -> T * {
-        return data_;
+    auto getData() noexcept -> T * {
+        return data;
     }
-    auto data() const noexcept -> const T * {
-        return data_;
+    auto getData() const noexcept -> const T * {
+        return data;
     }
 
-    auto arena() noexcept -> Arena & {
-        return *arena_;
+    auto getArena() noexcept -> Arena & {
+        return *arena;
     }
 
 private:
     void grow_() {
-        size_t new_cap = capacity_ == 0 ? 4 : capacity_ * 2;
+        size_t new_cap = cap == 0 ? 4 : cap * 2;
         reserve(new_cap);
     }
 };

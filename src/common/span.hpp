@@ -1,5 +1,5 @@
 #pragma once
-#include "memory/result.hpp"
+#include "common/result.hpp"
 #include <algorithm> // Necessário para std::min e std::max
 #include <cstddef>
 #include <cstdint>

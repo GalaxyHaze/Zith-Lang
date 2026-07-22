@@ -1,10 +1,10 @@
 #pragma once
 #include "memory/arena.hpp"
-#include "memory/flat-map.hpp"
-#include "memory/optional.hpp"
-#include "memory/result.hpp"
+#include "common/flat-map.hpp"
+#include "common/optional.hpp"
+#include "common/result.hpp"
 #include "memory/source-file.hpp"
-#include "span.hpp"
+#include "common/span.hpp"
 
 #include <functional>
 #include <string>

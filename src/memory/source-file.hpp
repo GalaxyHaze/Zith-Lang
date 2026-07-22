@@ -1,7 +1,7 @@
 #pragma once
 #include "memory/arena.hpp"
 #include "memory/dyn-array.hpp"
-#include "span.hpp"
+#include "common/span.hpp"
 
 #ifndef ZITH_IS_WASM
 #include "mio/mmap.hpp"

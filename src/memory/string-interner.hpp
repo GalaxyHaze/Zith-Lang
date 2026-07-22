@@ -1,6 +1,6 @@
 #pragma once
 #include "memory/arena.hpp"
-#include "memory/flat-map.hpp"
+#include "common/flat-map.hpp"
 #include "support/macros.hpp"
 #include <cstdint>
 #if !defined(ZITH_IS_WASM)
