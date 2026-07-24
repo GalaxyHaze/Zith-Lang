@@ -23,8 +23,9 @@ std::string findBuildDir(const Options &opts) {
     std::string projectRoot;
 
     // If a file/dir was specified, use its parent
-    if (!opts.subcommandStr.empty()) {
-        auto path = fs::weakly_canonical(fs::path(opts.subcommandStr));
+    auto subArg = opts.stringPool->lookup(opts.subcommandArg);
+    if (opts.subcommandArg != Options::kNoArg && !subArg.empty()) {
+        auto path = fs::weakly_canonical(fs::path(subArg));
         if (fs::is_directory(path))
             projectRoot = path.string();
         else
@@ -71,8 +72,9 @@ int clean(const Options &opts) {
 
     // Determine project root from subcommand arg or current dir
     std::string projectRoot;
-    if (!opts.subcommandStr.empty()) {
-        auto path   = fs::weakly_canonical(fs::path(opts.subcommandStr));
+    auto subArg = opts.stringPool->lookup(opts.subcommandArg);
+    if (opts.subcommandArg != Options::kNoArg && !subArg.empty()) {
+        auto path   = fs::weakly_canonical(fs::path(subArg));
         projectRoot = fs::is_directory(path) ? path.string() : path.parent_path().string();
     } else {
         projectRoot = fs::current_path().string();
@@ -111,7 +113,8 @@ int deps(const Options &opts) {
     term::UsagePrinter err{stderr, TERM.cerrOn};
     err.yellow("[soon]");
     std::fprintf(stderr, " deps not implemented yet\n");
-    if (opts.subcommandStr.empty()) {
+    auto subArg = opts.stringPool->lookup(opts.subcommandArg);
+    if (opts.subcommandArg == Options::kNoArg || subArg.empty()) {
         std::fprintf(stderr,
                      "usage: zithc deps (list|add|remove|publish|unpublish|update) [args]\n");
     }

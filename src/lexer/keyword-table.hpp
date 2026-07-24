@@ -28,106 +28,118 @@ constexpr uint64_t mix64(uint64_t x) {
 
 static constexpr auto TokenTable = std::to_array<std::pair<std::string_view, TokenKind>>({
 
-    {"i8", TokenKind::Type},
-    {"i16", TokenKind::Type},
-    {"i32", TokenKind::Type},
-    {"i64", TokenKind::Type},
-    {"i128", TokenKind::Type},
+    // Types → Keyword
+    {"i8",      Keyword{KwType{}}},
+    {"i16",     Keyword{KwType{}}},
+    {"i32",     Keyword{KwType{}}},
+    {"i64",     Keyword{KwType{}}},
+    {"i128",    Keyword{KwType{}}},
 
-    {"u8", TokenKind::Type},
-    {"u16", TokenKind::Type},
-    {"u32", TokenKind::Type},
-    {"u64", TokenKind::Type},
-    {"u128", TokenKind::Type},
+    {"u8",      Keyword{KwType{}}},
+    {"u16",     Keyword{KwType{}}},
+    {"u32",     Keyword{KwType{}}},
+    {"u64",     Keyword{KwType{}}},
+    {"u128",    Keyword{KwType{}}},
 
-    {"f32", TokenKind::Type},
-    {"f64", TokenKind::Type},
+    {"f32",     Keyword{KwType{}}},
+    {"f64",     Keyword{KwType{}}},
 
-    {"bool", TokenKind::Type},
-    {"char", TokenKind::Type},
-    {"void", TokenKind::Type},
-    {"invalid", TokenKind::Type},
-    {"unknown", TokenKind::Type},
-    {"null", TokenKind::LitVal},
-    {"true", TokenKind::LitVal},
-    {"false", TokenKind::LitVal},
+    {"bool",    Keyword{KwType{}}},
+    {"char",    Keyword{KwType{}}},
+    {"void",    Keyword{KwType{}}},
+    {"invalid", Keyword{KwType{}}},
+    {"unknown", Keyword{KwType{}}},
+    {"never",   Keyword{KwType{}}},
 
-    {"type", TokenKind::Typedef},
-    {"struct", TokenKind::Struct},
-    {"component", TokenKind::Struct},
-    {"enum", TokenKind::Struct},
-    {"raw", TokenKind::Raw},
-    {"unsafe", TokenKind::Raw},
-    {"union", TokenKind::Struct},
-    {"trait", TokenKind::Trait},
-    {"interface", TokenKind::Interface},
-    {"extends", TokenKind::Trait},
-    {"dyn", TokenKind::Trait},
-    {"implement", TokenKind::Implement},
-    {"fn", TokenKind::Fn},
-    {"import", TokenKind::Module},
-    {"use", TokenKind::Using},
-    {"context", TokenKind::Context},
-    {"macro", TokenKind::Macro},
-    {"export", TokenKind::Module},
-    {"extern", TokenKind::Extern},
-    {"from", TokenKind::Module},
-    {"alias", TokenKind::Module},
-    {"as", TokenKind::As},
+    // Literals
+    {"null",  Literal{LitSub::Null}},
+    {"true",  Literal{LitSub::Bool}},
+    {"false", Literal{LitSub::Bool}},
 
-    {"let", TokenKind::Variable},
-    {"var", TokenKind::Variable},
-    {"auto", TokenKind::Variable},
-    {"const", TokenKind::Variable},
-    {"mut", TokenKind::Mutable},
-    {"global", TokenKind::Variable},
-    {"lend", TokenKind::Ownership},
-    {"share", TokenKind::Ownership},
-    {"view", TokenKind::Ownership},
-    {"unique", TokenKind::Ownership},
-    {"belong", TokenKind::Ownership},
-    {"yield", TokenKind::Yield},
-    {"async", TokenKind::Fn},
-    {"flow", TokenKind::Fn},
-    {"dock", TokenKind::Label},
-    {"never", TokenKind::Type},
+    // Declaration
+    {"type",      Declaration{DeclSub::Typedef}},
+    {"struct",    Declaration{DeclSub::Struct}},
+    {"component", Declaration{DeclSub::Struct}},
+    {"enum",      Declaration{DeclSub::Enum}},
+    {"union",     Declaration{DeclSub::Union}},
+    {"macro",     Declaration{DeclSub::Macro}},
 
-    {"pub", TokenKind::Visibility},
-    {"mod", TokenKind::Visibility},
+    {"let",    Declaration{DeclSub::Let}},
+    {"var",    Declaration{DeclSub::Var}},
+    {"auto",   Declaration{DeclSub::Auto}},
+    {"const",  Declaration{DeclSub::Const}},
+    {"global", Declaration{DeclSub::Global}},
 
-    {"if", TokenKind::If},
-    {"else", TokenKind::If},
-    {"for", TokenKind::For},
-    {"in", TokenKind::In},
-    {"when", TokenKind::Match},
-    {"match", TokenKind::Match},
-    {"return", TokenKind::Control},
-    {"break", TokenKind::Control},
-    {"continue", TokenKind::Control},
-    {"jump", TokenKind::Control},
-    {"while", TokenKind::Control},
-    {"marker", TokenKind::Label},
+    {"word", Declaration{DeclSub::Word}},
 
-    {"spawn", TokenKind::Thread},
-    {"await", TokenKind::Thread},
+    // Fn
+    {"fn",    Fn{FnSub::Default}},
+    {"flow",  Fn{FnSub::Flow}},
 
-    {"with", TokenKind::Error},
-    {"catch", TokenKind::Error},
-    {"must", TokenKind::Must},
-    {"throw", TokenKind::Error},
-    {"fail", TokenKind::Error},
-    {"drop", TokenKind::Drop},
+    // Interface
+    {"trait",     Interface{IfaceSub::Trait}},
+    {"interface", Interface{IfaceSub::Interface}},
+    {"implement", Interface{IfaceSub::Implement}},
+    {"extends",   Interface{IfaceSub::Extends}},
+    {"dyn",       Interface{IfaceSub::Dyn}},
 
-    {"require", TokenKind::Require},
-    {"is", TokenKind::Is},
-    {"prefix", TokenKind::Word},
-    {"suffix", TokenKind::Word},
-    {"infix", TokenKind::Word},
-    {"nop", TokenKind::Word},
-    {"and", TokenKind::Logical},
-    {"or", TokenKind::Logical},
-    {"not", TokenKind::Logical},
-    {"xor", TokenKind::Logical}});
+    // Block
+    {"marker",  Block{BlkSub::Marker}},
+    {"drop",    Block{BlkSub::Drop}},
+    {"dock",    Block{BlkSub::Dock}},
+    {"fail",   Block{BlkSub::Fail}},
+    {"with",   Block{BlkSub::With}},
+    {"catch",  Block{BlkSub::Catch}},
+    {"context", Block{BlkSub::Context}},
+    {"use",    Block{BlkSub::Use}},
+
+    // Keyword
+    {"as",     Keyword{KwAs{}}},
+    {"raw",    Keyword{KwRaw{}}},
+    {"unsafe", Keyword{KwRaw{}}},
+    {"must",   Keyword{KwMust{}}},
+    {"mut",    Keyword{KwMutable{}}},
+    {"import", Keyword{KwImport{}}},
+    {"export", Keyword{KwExport{}}},
+    {"from",   Keyword{KwFrom{}}},
+    {"alias",  Keyword{KwAlias{}}},
+    {"pub",    Keyword{KwVisibility{}}},
+    {"mod",    Keyword{KwVisibility{}}},
+    {"if",     Keyword{KwIf{}}},
+    {"else",   Keyword{KwIf{}}},
+    {"for",    Keyword{KwFor{}}},
+    {"in",     Keyword{KwIn{}}},
+    {"when",   Keyword{KwWhen{}}},
+    {"return", Keyword{KwControl{}}},
+    {"break",  Keyword{KwControl{}}},
+    {"continue", Keyword{KwControl{}}},
+    {"jump",   Keyword{KwControl{}}},
+    {"while",  Keyword{KwControl{}}},
+    {"throw",  Keyword{KwThrow{}}},
+    {"require", Keyword{KwRequire{}}},
+    {"is",     Keyword{KwIs{}}},
+    {"spawn",  Keyword{KwSpawn{}}},
+    {"await",  Keyword{KwAwait{}}},
+    {"prefix", Keyword{KwWord{}}},
+    {"suffix", Keyword{KwWord{}}},
+    {"infix",  Keyword{KwWord{}}},
+    {"nop",    Keyword{KwWord{}}},
+    {"and",    Keyword{KwLogical{}}},
+    {"or",     Keyword{KwLogical{}}},
+    {"not",    Keyword{KwLogical{}}},
+    {"xor",    Keyword{KwLogical{}}},
+
+    // Ownership
+    {"lend",   Keyword{Ownership{Ownership::Sub::Lend}}},
+    {"share",  Keyword{Ownership{Ownership::Sub::Share}}},
+    {"view",   Keyword{Ownership{Ownership::Sub::View}}},
+    {"unique", Keyword{Ownership{Ownership::Sub::Unique}}},
+    {"belong", Keyword{Ownership{Ownership::Sub::Belong}}},
+
+    // Module keywords
+    {"module", Keyword{KwModule{}}},
+    {"using",  Keyword{KwUsing{}}},
+});
 
 static constexpr size_t N           = TokenTable.size();
 static constexpr size_t BucketCount = 128;
@@ -187,7 +199,7 @@ struct PerfectHash {
 
     [[nodiscard]] constexpr TokenKind lookup(std::string_view sv) const {
         if (sv.empty())
-            return TokenKind::Identifier;
+            return Identifier{};
 
         const uint64_t h = hash64(sv);
         const size_t b   = h % BucketCount;
@@ -195,10 +207,10 @@ struct PerfectHash {
         const int16_t id = table[idx];
 
         if (id < 0)
-            return TokenKind::Identifier;
+            return Identifier{};
         return (TokenTable[static_cast<size_t>(id)].first == sv)
                    ? TokenTable[static_cast<size_t>(id)].second
-                   : TokenKind::Identifier;
+                   : Identifier{};
     }
 };
 

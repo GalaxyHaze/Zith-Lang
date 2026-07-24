@@ -1,81 +1,163 @@
 #pragma once
+#include "common/token-utils.hpp"
 #include "common/span.hpp"
 
 #include <cstdint>
 #include <string_view>
+#include <variant>
 
 namespace zith::lexer {
 
-enum class TokenKind : uint8_t {
-    Identifier,
-    As, // as
-    Using,
-    Type,
-    Struct,
-    Raw,
-    Must,
-    Mutable,
-    Trait,
-    Interface,
-    Typedef,
-    Implement,
-    Fn, // fn, async, flow
-    Module,
-    Extern,
-    Macro, // macro, raw macro, tag macro
-    Context,
-    Variable,
-    Ownership, //
-    Yield,
-    Label,
-    Visibility,
-    If,
-    For,
-    In,
-    Match,
-    Control,
-    Thread,
-    Error,
-    Drop,
-    Require,
-    Is,
-    Word,
-    Logical,
-    Comparison,
-    Operators,
-    Comments,
-    Docs,
-    Annotation,
-    Punctuation,
-    LitVal,
-    Unknown,
-    End
+// ── Sub-enums ────────────────────────────────────────────────────────────────
+
+enum class DeclSub : uint8_t {
+    Let, Var, Global, Const, Auto,
+    Struct, Enum, Union, Component,
+    Typedef, Macro, Word
 };
+
+enum class LitSub : uint8_t {
+    Null, Bool, Decimal, Hex, Oct, Bin, Float, String, Char
+};
+
+enum class FnSub : uint8_t {
+    Default, Raw, Const, Extern, Flow
+};
+
+enum class IfaceSub : uint8_t {
+    Trait, Interface, Implement, Extends, Dyn
+};
+
+enum class BlkSub : uint8_t {
+    Marker, Drop, Dock, Fail, With, Catch, Context, Use
+};
+
+// ── KwSub (variant, because Ownership has nested data) ───────────────────────
+
+#define ZITH_TAG(NAME)                                                             \
+    struct NAME {                                                                  \
+        constexpr auto operator==(const NAME &) const noexcept -> bool = default; \
+    };
+
+ZITH_TAG(KwAs)
+ZITH_TAG(KwUsing)
+ZITH_TAG(KwRaw)
+ZITH_TAG(KwMust)
+ZITH_TAG(KwMutable)
+ZITH_TAG(KwIf)
+ZITH_TAG(KwFor)
+ZITH_TAG(KwIn)
+ZITH_TAG(KwWhen)
+ZITH_TAG(KwControl)
+ZITH_TAG(KwRequire)
+ZITH_TAG(KwIs)
+ZITH_TAG(KwWord)
+ZITH_TAG(KwLogical)
+ZITH_TAG(KwModule)
+ZITH_TAG(KwImport)
+ZITH_TAG(KwExport)
+ZITH_TAG(KwFrom)
+ZITH_TAG(KwAlias)
+ZITH_TAG(KwType)
+ZITH_TAG(KwSpawn)
+ZITH_TAG(KwAwait)
+ZITH_TAG(KwThrow)
+ZITH_TAG(KwVisibility)
+
+#undef ZITH_TAG
+
+struct Ownership {
+    enum class Sub : uint8_t { Lend, Share, View, Unique, Belong };
+    Sub sub;
+    constexpr auto operator==(const Ownership &) const noexcept -> bool = default;
+};
+
+using KwSub = std::variant<
+    KwAs, KwUsing, KwRaw, KwMust, KwMutable, KwVisibility,
+    KwIf, KwFor, KwIn, KwWhen, KwControl,
+    KwRequire, KwIs, KwWord, KwLogical,
+    KwModule, KwImport, KwExport, KwFrom, KwAlias,
+    KwType, KwSpawn, KwAwait, KwThrow,
+    Ownership
+>;
+
+// ── Top-level token categories ───────────────────────────────────────────────
+
+struct Identifier {
+    constexpr auto operator==(const Identifier &) const noexcept -> bool = default;
+};
+
+struct Declaration {
+    DeclSub sub;
+    constexpr auto operator==(const Declaration &) const noexcept -> bool = default;
+};
+
+struct Keyword {
+    KwSub sub;
+    constexpr auto operator==(const Keyword &) const noexcept -> bool = default;
+};
+
+struct Literal {
+    LitSub sub;
+    constexpr auto operator==(const Literal &) const noexcept -> bool = default;
+};
+
+struct Punc {
+    char c;
+    constexpr auto operator==(const Punc &) const noexcept -> bool = default;
+};
+
+struct Operator {
+    char c;
+    constexpr auto operator==(const Operator &) const noexcept -> bool = default;
+};
+
+struct Fn {
+    FnSub sub;
+    constexpr auto operator==(const Fn &) const noexcept -> bool = default;
+};
+
+struct Interface {
+    IfaceSub sub;
+    constexpr auto operator==(const Interface &) const noexcept -> bool = default;
+};
+
+struct Block {
+    BlkSub sub;
+    constexpr auto operator==(const Block &) const noexcept -> bool = default;
+};
+
+struct Comments {
+    constexpr auto operator==(const Comments &) const noexcept -> bool = default;
+};
+
+struct Annotation {
+    constexpr auto operator==(const Annotation &) const noexcept -> bool = default;
+};
+
+struct Unknown {
+    constexpr auto operator==(const Unknown &) const noexcept -> bool = default;
+};
+
+struct End {
+    constexpr auto operator==(const End &) const noexcept -> bool = default;
+};
+
+using TokenKind = std::variant<
+    Identifier, Declaration, Keyword, Literal, Punc, Operator,
+    Fn, Interface, Block, Comments, Annotation, Unknown, End
+>;
+
+// ── Token ────────────────────────────────────────────────────────────────────
 
 struct Token {
-    // lexeme
-    zith::memory::Span span;
-    // type of token
+    memory::Span span;
     TokenKind kind;
-    // single char for Punctuation/Operators (0 otherwise)
-    char punc = 0;
-
-    constexpr Token() noexcept : span{}, kind{TokenKind::Unknown}, punc{0} {}
-    constexpr Token(zith::memory::Span span_, TokenKind kind_, char punc_ = 0) noexcept
-        : span(span_), kind(kind_), punc(punc_) {}
-
-    [[nodiscard]] constexpr bool is(TokenKind k) const noexcept {
-        return kind == k;
-    }
-    [[nodiscard]] constexpr bool is_not(TokenKind k) const noexcept {
-        return kind != k;
-    }
-    [[nodiscard]] constexpr bool is_eof() const noexcept {
-        return kind == TokenKind::End;
-    }
 };
 
-inline constexpr Token kEndToken{{}, TokenKind::End};
+inline constexpr Token kEndToken{{}, End{}};
+
+// ── TokenStream ──────────────────────────────────────────────────────────────
 
 struct TokenStream {
     Token *src            = nullptr;
@@ -90,49 +172,49 @@ struct TokenStream {
         return lexeme(peek());
     }
 
-    // Retorna o token atual sem avançar o ponteiro (Lookahead)
     [[nodiscard]] constexpr auto peek() const noexcept -> const Token & {
-        if (len == 0 || offset >= len) [[unlikely]] {
+        if (len == 0 || offset >= len) [[unlikely]]
             return kEndToken;
-        }
         return src[offset];
     }
 
-    // Retorna um token à frente baseado em uma distância (Lookahead arbitrário: peek(1),
-    // peek(2))
     [[nodiscard]] constexpr auto peek(uint32_t lookahead) const noexcept -> const Token & {
         uint32_t target = offset + lookahead;
-        if (len == 0 || target >= len) [[unlikely]] {
+        if (len == 0 || target >= len) [[unlikely]]
             return kEndToken;
-        }
         return src[target];
     }
 
-    // Avança o fluxo em 1 token
     constexpr void advance() noexcept {
-        if (offset < len) [[likely]] {
+        if (offset < len) [[likely]]
             offset++;
-        }
     }
 
-    // Avança o fluxo em N tokens
     constexpr void advance(uint32_t n) noexcept {
         offset = (offset + n > len) ? len : offset + n;
     }
 
-    // Verifica se o token atual é do tipo esperado e o avança.
-    // Caso contrário, não faz nada e retorna falso (Útil para branching no parser)
-    constexpr bool match(TokenKind kind) noexcept {
-        if (peek().is(kind)) {
+    template <typename T>
+    constexpr bool match() noexcept {
+        if (std::holds_alternative<T>(peek().kind)) {
             advance();
             return true;
         }
         return false;
     }
 
-    // Verifica se chegamos ao fim dos tokens válidos
+    template <typename T, typename F>
+    constexpr bool match(F pred) noexcept {
+        if (auto *p = std::get_if<T>(&peek().kind); p && pred(*p)) {
+            advance();
+            return true;
+        }
+        return false;
+    }
+
     [[nodiscard]] constexpr bool is_empty() const noexcept {
-        return offset >= len || peek().is_eof();
+        return offset >= len || std::holds_alternative<End>(peek().kind);
     }
 };
+
 } // namespace zith::lexer

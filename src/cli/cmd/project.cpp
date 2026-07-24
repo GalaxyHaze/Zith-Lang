@@ -12,9 +12,9 @@ int create(const Options &opts) {
     auto TERM = term::init(opts);
     term::UsagePrinter out{stdout, TERM.coutOn};
     term::UsagePrinter err{stderr, TERM.cerrOn};
-    const std::string &name = opts.subcommandStr;
+    auto name = opts.stringPool->lookup(opts.subcommandArg);
 
-    if (name.empty()) {
+    if (opts.subcommandArg == Options::kNoArg || name.empty()) {
         err.red("[error]");
         std::fprintf(stderr, " project name required\n");
         return 1;

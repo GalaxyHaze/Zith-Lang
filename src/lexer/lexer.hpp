@@ -42,8 +42,8 @@ class Lexer {
         return (now + n < end) ? now[n] : '\0';
     }
     bool match(std::string_view must);
-    void singleLineComment(bool isDoc);
-    void multiLineComment(bool isDoc);
+    void singleLineComment(bool isDoc = false);
+    void multiLineComment(bool isDoc = false);
     void processNumber();
     void processString();
     void processIdentifier();

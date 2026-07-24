@@ -5,9 +5,9 @@
 namespace zith::cli::commands {
 
 int completion(const Options &opts) {
-    const std::string &shell = opts.subcommandStr;
+    auto shell = opts.stringPool->lookup(opts.subcommandArg);
 
-    if (shell.empty()) {
+    if (opts.subcommandArg == Options::kNoArg || shell.empty()) {
         std::fprintf(stderr,
                      "Error: shell name required. Supported shells are: bash, zsh, fish.\n");
         return 1;
@@ -192,8 +192,8 @@ complete -c zithc -s v -l verbose -d "Verbose output"
         return 0;
     }
 
-    std::fprintf(stderr, "Error: Unknown shell '%s'. Supported shells are: bash, zsh, fish.\n",
-                 shell.c_str());
+    std::fprintf(stderr, "Error: Unknown shell '%.*s'. Supported shells are: bash, zsh, fish.\n",
+                 static_cast<int>(shell.size()), shell.data());
     return 1;
 }
 

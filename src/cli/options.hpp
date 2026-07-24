@@ -19,10 +19,10 @@ namespace zith {
 struct Session;
 
 struct Options {
-    memory::DynArray<std::string> inputFiles;
-    std::string outputFile;
-    memory::DynArray<std::string> includeDirs;
-    memory::DynArray<std::string> assetDirs;
+    memory::DynArray<memory::InternedId> inputFiles;
+    memory::InternedId outputFile;
+    memory::DynArray<memory::InternedId> includeDirs;
+    memory::DynArray<memory::InternedId> assetDirs;
 
     enum class Mode : uint8_t { Custom, Debug, Develop, Release, Fast, Small };
 
@@ -221,11 +221,12 @@ struct Options {
         Completion
     } command = Command::None;
     memory::InternedId subcommandArg;
-    std::string subcommandStr; // string copy for command functions
+
+    static constexpr memory::InternedId kNoArg = static_cast<memory::InternedId>(-1);
 
     explicit Options(memory::Arena &allocator)
         : inputFiles(allocator), outputFile(), includeDirs(allocator), assetDirs(allocator),
-          targetTriple(), sysroot(), flags() {}
+          targetTriple(), sysroot(), flags(), subcommandArg(kNoArg) {}
 
     memory::StringInterner *stringPool = nullptr;
 
@@ -238,6 +239,7 @@ struct Cli {
         : generalAllocator(), opts(generalAllocator), config(generalAllocator),
           stringPool(generalAllocator), out(stdout, false), err(stderr, false) {
         opts.stringPool = &stringPool;
+        config.stringPool = &stringPool;
         term::enableVirtual();
     }
 
@@ -246,15 +248,7 @@ struct Cli {
     void loadProject();
     int dispatch();
 
-    void requireValue(int i, const char *flag) {
-        if (i + 1 >= args.first) {
-            err.red("[error]");
-            err.red(flag);
-            err.red(" requires a value\n");
-            cli::commands::help(stderr);
-            std::exit(1);
-        }
-    }
+    void requireValue(int i, const char *flag);
 
     memory::Arena generalAllocator;
     Options opts;

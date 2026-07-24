@@ -180,6 +180,16 @@ static Command subcommandToEnum(const char *arg) {
     return Command::None;
 }
 
+void Cli::requireValue(int i, const char *flag) {
+    if (i + 1 >= args.first) {
+        err.red("[error]");
+        err.red(flag);
+        err.red(" requires a value\n");
+        cli::commands::help(stderr);
+        std::exit(1);
+    }
+}
+
 void Cli::parseArgs(int argc, char **argv) {
     this->args = std::make_pair(argc, argv);
 
@@ -192,7 +202,6 @@ void Cli::parseArgs(int argc, char **argv) {
             case Options::Command::Deps:
                 if (i + 1 < argc && argv[i + 1][0] != '-') {
                     this->opts.subcommandArg = this->stringPool.intern(argv[i + 1]);
-                    this->opts.subcommandStr = argv[i + 1];
                     ++i;
                 }
                 continue;
@@ -301,7 +310,7 @@ void Cli::parseArgs(int argc, char **argv) {
 
         if (compare(argv[i], "-o", "--output")) {
             requireValue(i, "--output/-o");
-            opts.outputFile = argv[++i];
+            opts.outputFile = opts.stringPool->intern(argv[++i]);
             continue;
         }
 
@@ -314,7 +323,7 @@ void Cli::parseArgs(int argc, char **argv) {
                 auto pos   = rest.find(',');
                 auto token = rest.substr(0, pos);
                 if (!token.empty())
-                    opts.includeDirs.push(std::string(token));
+                    opts.includeDirs.push(opts.stringPool->intern(token));
                 if (pos == std::string_view::npos)
                     break;
                 rest = rest.substr(pos + 1);
@@ -331,7 +340,7 @@ void Cli::parseArgs(int argc, char **argv) {
                 auto pos   = rest.find(',');
                 auto token = rest.substr(0, pos);
                 if (!token.empty())
-                    opts.assetDirs.push(std::string(token));
+                    opts.assetDirs.push(opts.stringPool->intern(token));
                 if (pos == std::string_view::npos)
                     break;
                 rest = rest.substr(pos + 1);
@@ -442,7 +451,7 @@ void Cli::parseArgs(int argc, char **argv) {
 
         // "-" is a positional arg meaning stdin, not a flag
         if (std::strcmp(argv[i], "-") == 0) {
-            opts.inputFiles.push(std::string("-"));
+            opts.inputFiles.push(opts.stringPool->intern("-"));
             continue;
         }
 
@@ -455,7 +464,7 @@ void Cli::parseArgs(int argc, char **argv) {
         }
 
         // Positional: input file
-        opts.inputFiles.push(std::string(argv[i]));
+        opts.inputFiles.push(opts.stringPool->intern(argv[i]));
     }
 
     opts.deriveTargetStage();
@@ -521,7 +530,7 @@ void Cli::loadFlags() {
         if (auto arr = tbl["include_dirs"].as_array()) {
             for (auto &elem : *arr)
                 if (auto s = elem.value<std::string>())
-                    opts.includeDirs.push(*s);
+                    opts.includeDirs.push(opts.stringPool->intern(*s));
         }
         if (auto v = tbl["emit_target"].value<std::string>()) {
             if (*v == "ast")
@@ -580,27 +589,27 @@ void Cli::loadProject() {
     while (true) {
         auto tomlPath = search / "ZithProject.toml";
         if (fs::exists(tomlPath)) {
-            config.projectRoot = fs::weakly_canonical(search).string();
+            config.projectRoot = config.stringPool->intern(fs::weakly_canonical(search).string());
             auto process       = [&](const toml::table &tbl) {
                 if (auto *build = tbl["build"].as_table()) {
                     if (auto v = build->get("entry"))
                         if (auto s = v->value<std::string>())
-                            config.entry = *s;
+                            config.entry = config.stringPool->intern(*s);
                     if (auto v = build->get("output"))
                         if (auto s = v->value<std::string>())
-                            config.output = *s;
+                            config.output = config.stringPool->intern(*s);
                     if (auto v = build->get("mode"))
                         if (auto s = v->value<std::string>()) {
                             if (*s == "debug")
-                                config.mode = "debug";
+                                config.mode = config.stringPool->intern("debug");
                             else if (*s == "dev")
-                                config.mode = "dev";
+                                config.mode = config.stringPool->intern("dev");
                             else if (*s == "release")
-                                config.mode = "release";
+                                config.mode = config.stringPool->intern("release");
                             else if (*s == "fast")
-                                config.mode = "fast";
+                                config.mode = config.stringPool->intern("fast");
                             else if (*s == "small")
-                                config.mode = "small";
+                                config.mode = config.stringPool->intern("small");
                         }
                     if (auto v = build->get("opt_level"))
                         if (auto i = v->value<int>())
@@ -611,46 +620,46 @@ void Cli::loadProject() {
                         if (auto *arr = src->as_array()) {
                             for (auto &elem : *arr)
                                 if (auto s = elem.value<std::string>())
-                                    config.srcDirs.push(*s);
+                                    config.srcDirs.push(config.stringPool->intern(*s));
                         } else if (auto s = src->value<std::string>()) {
-                            config.srcDirs.push(*s);
+                            config.srcDirs.push(config.stringPool->intern(*s));
                         }
                     }
                     if (auto v = paths->get("bin_dir"))
                         if (auto s = v->value<std::string>())
-                            config.binDir = *s;
+                            config.binDir = config.stringPool->intern(*s);
                     if (auto v = paths->get("mod_dir"))
                         if (auto s = v->value<std::string>())
-                            config.modDir = *s;
+                            config.modDir = config.stringPool->intern(*s);
                     if (auto v = paths->get("docs_dir"))
                         if (auto s = v->value<std::string>())
-                            config.docsDir = *s;
+                            config.docsDir = config.stringPool->intern(*s);
                     if (auto v = paths->get("test_dir"))
                         if (auto s = v->value<std::string>())
-                            config.testDir = *s;
+                            config.testDir = config.stringPool->intern(*s);
                     if (auto v = paths->get("asset_dir"))
                         if (auto s = v->value<std::string>())
-                            config.assetDir = *s;
+                            config.assetDir = config.stringPool->intern(*s);
                 }
                 if (auto *proj = tbl["project"].as_table()) {
                     if (auto v = proj->get("name"))
                         if (auto s = v->value<std::string>())
-                            config.name = *s;
+                            config.name = config.stringPool->intern(*s);
                     if (auto v = proj->get("version"))
                         if (auto s = v->value<std::string>())
-                            config.version = *s;
+                            config.version = config.stringPool->intern(*s);
                     if (auto v = proj->get("description"))
                         if (auto s = v->value<std::string>())
-                            config.description = *s;
+                            config.description = config.stringPool->intern(*s);
                     if (auto v = proj->get("authors"))
                         if (auto s = v->value<std::string>())
-                            config.authors = *s;
+                            config.authors = config.stringPool->intern(*s);
                     if (auto v = proj->get("license"))
                         if (auto s = v->value<std::string>())
-                            config.license = *s;
+                            config.license = config.stringPool->intern(*s);
                     if (auto v = proj->get("homepage"))
                         if (auto s = v->value<std::string>())
-                            config.homepage = *s;
+                            config.homepage = config.stringPool->intern(*s);
                 }
             };
 
@@ -676,7 +685,7 @@ void Cli::loadProject() {
 }
 
 int Cli::dispatch() {
-    if (opts.inputFiles.empty() && !config.projectRoot.empty()) {
+    if (opts.inputFiles.empty() && config.projectRoot != ProjectConfig::kUnset) {
         switch (opts.command) {
         case Command::Build:
         case Command::Check:

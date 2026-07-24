@@ -1,34 +1,39 @@
 #pragma once
 
 #include "memory/dyn-array.hpp"
+#include "memory/string-interner.hpp"
 #include <string>
 
 namespace zith {
 
 struct ProjectConfig {
+    static constexpr memory::InternedId kUnset = static_cast<memory::InternedId>(-1);
+
     // [build]
-    std::string entry;
-    std::string output;
-    std::string mode;
+    memory::InternedId entry  = kUnset;
+    memory::InternedId output = kUnset;
+    memory::InternedId mode   = kUnset;
     int opt_level = 0;
 
     // [paths]
-    memory::DynArray<std::string> srcDirs;
-    std::string binDir;
-    std::string modDir;
-    std::string docsDir;
-    std::string testDir;
-    std::string assetDir;
+    memory::DynArray<memory::InternedId> srcDirs;
+    memory::InternedId binDir    = kUnset;
+    memory::InternedId modDir    = kUnset;
+    memory::InternedId docsDir   = kUnset;
+    memory::InternedId testDir   = kUnset;
+    memory::InternedId assetDir  = kUnset;
 
-    std::string projectRoot; // directory containing ZithProject.toml
+    memory::InternedId projectRoot = kUnset; // directory containing ZithProject.toml
 
     // [project]
-    std::string name;
-    std::string version;
-    std::string description;
-    std::string authors;
-    std::string license;
-    std::string homepage;
+    memory::InternedId name        = kUnset;
+    memory::InternedId version     = kUnset;
+    memory::InternedId description = kUnset;
+    memory::InternedId authors     = kUnset;
+    memory::InternedId license     = kUnset;
+    memory::InternedId homepage    = kUnset;
+
+    memory::StringInterner *stringPool = nullptr;
 
     explicit ProjectConfig(memory::Arena &arena) : srcDirs(arena) {}
 };
