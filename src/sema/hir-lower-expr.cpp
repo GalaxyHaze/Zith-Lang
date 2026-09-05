@@ -122,6 +122,10 @@ hir::HirExprId HirLowerModern::lowerExpr(frontend::ExprId id) {
         return lowerIf(expr, type);
     case frontend::ExprKind::When:
         return lowerWhen(expr, type);
+    case frontend::ExprKind::WhenGuard:
+        // `when` guards are lowered contextually by lowerWhenCondition, never
+        // as standalone values.
+        return hir::kInvalidHirExpr;
     case frontend::ExprKind::Range:
         // A literal range has a value type only in a `when` pattern or as the
         // RHS of `in`; both are lowered by their surrounding expression.

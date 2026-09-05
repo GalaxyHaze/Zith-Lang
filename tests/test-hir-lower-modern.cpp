@@ -2489,6 +2489,30 @@ void test_state_value_dock_lowers_to_indirect_tailcc_call() {
     CHECK(call->usesTailCC, "state value dock keeps LLVM tailcc");
 }
 
+void test_when_guards_lower_contextually_without_diagnostics() {
+    Workspace workspace;
+    workspace.writeFile("main.zith", "fn classify(n: i32): i32 {\n"
+                                     "    return when (n) {\n"
+                                     "        (0) 1,\n"
+                                     "        (1..3) 2,\n"
+                                     "        (n > 100) 3,\n"
+                                     "        (_) 4,\n"
+                                     "    };\n"
+                                     "}\n");
+
+    memory::Arena arena;
+    Options options(arena);
+    auto session = makeSession(workspace, arena, options, "main.zith");
+
+    CHECK(session.runTo(session::Stage::HirLowered),
+          "when with literal, range, and boolean guards lowers to HIR");
+    CHECK(!session.hasErrors(), "when guard lowering reports no diagnostics");
+
+    const auto &hir  = session.hirModule();
+    const auto *fn   = findFunction(hir, session.interner(), "classify");
+    CHECK(fn != nullptr, "classify is present in HIR");
+}
+
 } // namespace
 
 static void test_hir_lower_modern() {
@@ -2556,6 +2580,7 @@ static void test_hir_lower_modern() {
     test_optional_for_in_lowers_without_union_nodes();
     test_nested_optional_for_in_loop_variable_is_optional();
     test_state_value_dock_lowers_to_indirect_tailcc_call();
+    test_when_guards_lower_contextually_without_diagnostics();
     test_anonymous_pack_literal_lowers_to_hir();
 }
 
