@@ -1,0 +1,140 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://zith-lang.dev/schemas/lsp-ide-api.schema.json",
+  "title": "Zith IDE API Contract",
+  "description": "Stable C++ surface used by IDE-facing components such as zith-lsp.",
+  "type": "object",
+  "default": {
+    "apiVersion": "1.0",
+    "workspace": {},
+    "documents": {}
+  },
+  "required": [
+    "apiVersion",
+    "workspace",
+    "documents"
+  ],
+  "properties": {
+    "apiVersion": {
+      "const": "1.0",
+      "description": "The only supported version for this contract revision."
+    },
+    "workspace": {
+      "type": "object",
+      "description": "Workspace lifecycle and analysis ownership. The C++ implementation MUST own its shared frontend context and MUST NOT expose compiler AST, TypedMap, or CompilationSession pointers.",
+      "required": [
+        "open",
+        "close",
+        "analyzeRevision"
+      ],
+      "properties": {
+        "open": {
+          "type": "object",
+          "description": "Open a workspace root path.",
+          "required": [
+            "root"
+          ],
+          "properties": {
+            "root": {
+              "type": "string",
+              "description": "Absolute workspace root path."
+            }
+          }
+        },
+        "close": {
+          "type": "object",
+          "description": "Close a workspace root and invalidate its snapshots."
+        },
+        "analyzeRevision": {
+          "type": "object",
+          "description": "Analyze an immutable document revision and return best-effort results tagged with the analyzed revision.",
+          "required": [
+            "documentUri",
+            "text",
+            "revision"
+          ],
+          "properties": {
+            "documentUri": {
+              "type": "string",
+              "description": "Stable document URI."
+            },
+            "text": {
+              "type": "string",
+              "description": "Full in-memory text for the revision."
+            },
+            "revision": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Monotonically increasing document revision."
+            }
+          }
+        }
+      }
+    },
+    "documents": {
+      "type": "object",
+      "description": "Open document lifecycle. Each document has an immutable snapshot per revision.",
+      "required": [
+        "open",
+        "change",
+        "close"
+      ],
+      "properties": {
+        "open": {
+          "type": "object",
+          "description": "Open a document with its initial in-memory content.",
+          "required": [
+            "uri",
+            "text",
+            "version"
+          ],
+          "properties": {
+            "uri": {
+              "type": "string"
+            },
+            "text": {
+              "type": "string"
+            },
+            "version": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        },
+        "change": {
+          "type": "object",
+          "description": "Replace an open document's content. No external consumer may observe partial edits.",
+          "required": [
+            "uri",
+            "text",
+            "version"
+          ],
+          "properties": {
+            "uri": {
+              "type": "string"
+            },
+            "text": {
+              "type": "string"
+            },
+            "version": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        },
+        "close": {
+          "type": "object",
+          "description": "Close a document and release its snapshots.",
+          "required": [
+            "uri"
+          ],
+          "properties": {
+            "uri": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    }
+  }
+}
