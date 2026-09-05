@@ -65,6 +65,8 @@ private:
     [[nodiscard]] bool isKeywordToken(std::string_view word) const noexcept;
     [[nodiscard]] bool isVisibilityPrefix() const noexcept;
     [[nodiscard]] std::optional<FunctionKind> functionKindPrefix();
+    [[nodiscard]] bool isRangeDotAt(uint32_t offset) const noexcept;
+    [[nodiscard]] bool isRangeOpenAt(uint32_t offset) const noexcept;
     [[nodiscard]] ExprId parseAttributeValue();
     [[nodiscard]] ExprId parsePostfix(ExprId result, uint32_t start);
 
@@ -124,6 +126,7 @@ private:
     ScopeId current_scope_;
     bool declaration_is_nominal_        = false;
     bool range_mode_                    = false;
+    bool no_range_literal_              = false;
     bool suppress_struct_literal_       = false;
     uint32_t statementCountLocals_      = 1;
     bool expecting_function_body_scope_ = false;

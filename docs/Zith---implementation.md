@@ -405,6 +405,30 @@ optional (`HirMakeNone`/tag field para optionals de valor, igualdade a `null` pa
 ponteiro) e extrai o payload com `HirField`/load. O protocolo legacy tagged union
 `next(self): { T, End }` continua aceite durante a migração, emitindo `HirUnionCheck`/`HirUnionCast`.
 
+### Range literal, `in` e `Contains`
+
+O frontend representa `lo..hi`, `lo>..hi`, `lo..<hi` e `lo>..<hi` como
+`ExprKind::Range` com dois operandos e as flags `openAtLo`/`openAtHi`. Os
+bounds ficam brutos no AST e no HIR; o lowering não pré-computa `lo + 1` ou
+`hi - 1`.
+
+`in` é um operador binário normal de precedência de comparação. O sema
+resolves o RHS por ordem:
+
+- Um `ExprKind::Range`: tipos iguais em `inferContains`, sem método chamado.
+  O HIR baixa para `(value > lo or value >= lo) and (value < hi or value <=
+  hi)` conforme `openAtLo`/`openAtHi`.
+- Um tipo com método `contains(self, value): bool`: `inferContains` grava a
+  chamada em `TypedMap::containsCall` e o HIR emite `contains(rhs_addr, value)`,
+  passando o receiver por endereço e o valor por valor.
+
+`TypedMap::forInRangeLiteral` marca os `ForIn` sobre ranges inteiros. O
+`lowerForIn` usa um contador de passo `1`, guarda `lo`/`hi` em slots e aplica
+as comparações abertas/fechadas no header e no passo inicial de bound aberto.
+Ranges float passam pelo sema como valores `in`/`Contains`, mas são rejeitados
+em `for (x in float_range)` com um diagnóstico único. O `Iterator` existente
+com o caminho `next` permanece intocado para tipos não-range.
+
 Funções com retorno não-void usam análise de terminação por caminhos: um corpo pode terminar
 sem `return` apenas quando o último valor do bloco tem o tipo certo ou quando todos os caminhos
 terminam (valores finais, `if`/`else` completo, `when` com default, `jump`, loops infinitos sem

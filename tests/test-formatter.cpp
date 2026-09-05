@@ -249,6 +249,34 @@ static void test_compilation_session_fmt_uses_frontend_snapshot() {
     CHECK(session.snapshot() != nullptr, "fmt stage builds a modern frontend snapshot");
 }
 
+static void test_formatter_range_literal_round_trip() {
+    const std::string source = "fn main(x: i32): bool {\n"
+                               "    if (x in 1..<4) { return true; }\n"
+                               "    if (x in 1>..5) { return true; }\n"
+                               "    if (x in 1>..<5) { return true; }\n"
+                               "    return x in 1..4;\n"
+                               "}\n";
+    auto snapshot            = frontend::parse(source);
+    CHECK(snapshot.diagnostics().empty(), "range and 'in' formatter source parses cleanly");
+
+    formatter::FmtVisitor formatter(snapshot);
+    formatter.format();
+    const std::string &output = formatter.result();
+
+    CHECK(output.find("x in 1..<4") != std::string::npos, "openAtHi survives formatter output");
+    CHECK(output.find("x in 1>..5") != std::string::npos, "openAtLo survives formatter output");
+    CHECK(output.find("x in 1>..<5") != std::string::npos,
+          "openAtLo and openAtHi survive formatter output");
+    CHECK(output.find("x in 1..4") != std::string::npos,
+          "closed ranges remain closed after formatting");
+
+    auto reparsed = frontend::parse(output);
+    CHECK(reparsed.diagnostics().empty(), "formatted range source re-parses cleanly");
+    formatter::FmtVisitor second(reparsed);
+    second.format();
+    CHECK_EQ(second.result(), output, "range formatting is idempotent");
+}
+
 static void test_formatter_memory_qualifier_round_trip() {
     // Every qualifier must survive `zithc fmt`; losing one would silently change
     // ownership and mutability.
@@ -573,6 +601,7 @@ static void test_formatter() {
     test_formatter_bare_opaque_round_trip();
     test_compilation_session_fmt_uses_frontend_snapshot();
     test_formatter_defer_round_trip();
+    test_formatter_range_literal_round_trip();
 }
 
 TEST_MAIN(formatter)

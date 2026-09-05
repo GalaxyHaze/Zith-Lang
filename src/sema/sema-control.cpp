@@ -744,6 +744,63 @@ TypeId PerModuleSema::inferForIn(frontend::ExprId id) {
     }
     active_loop_labels_.push_back(expr.label);
 
+    const auto &iterable_node = expr.operands[0].value <= snapshot.expressions().size()
+                                    ? snapshot.expressions()[expr.operands[0].value - 1U]
+                                    : frontend::Expression{};
+    if (iterable_node.kind == frontend::ExprKind::Range) {
+        if (typeOfExpr(id)) {
+            active_loop_labels_.pop_back();
+            return void_type;
+        }
+        if (iterable_node.operands.size() != 2U) {
+            active_loop_labels_.pop_back();
+            return void_type;
+        }
+        const TypeId lo = inferExpr(iterable_node.operands[0]);
+        const TypeId hi = inferExpr(iterable_node.operands[1]);
+        if (lo == error_type || hi == error_type) {
+            active_loop_labels_.pop_back();
+            return void_type;
+        }
+        if (!sameType(lo, hi) && !adaptNumericLiteral(iterable_node.operands[1], lo)) {
+            report(expr.span, "range iterator bounds must have the same type",
+                   diagnostics::err::TypeMismatch);
+            active_loop_labels_.pop_back();
+            return void_type;
+        }
+        const TypeId bound_resolved = resolve(type_table.stripQualifiers(lo));
+        if (type_table.integer(bound_resolved) == nullptr) {
+            if (expr.forInBinding) {
+                setLocalType(expr.forInBinding, bound_resolved);
+                preinitializedLocals_.insert(expr.forInBinding.value);
+            }
+            report(expr.span,
+                   "only integer ranges are iterable; float ranges are valid only with 'in' / "
+                   "'Contains'",
+                   diagnostics::err::TypeMismatch);
+            active_loop_labels_.pop_back();
+            return void_type;
+        }
+        const TypeId element_type = bound_resolved;
+        if (expr.forInBinding) {
+            const TypeId ann = lowerTypeExpr(expr.cast_type);
+            if (ann && !sameType(ann, element_type)) {
+                report(expr.span,
+                       "range iterator element type does not match loop variable annotation",
+                       diagnostics::err::TypeMismatch);
+                setLocalType(expr.forInBinding, element_type);
+            } else {
+                setLocalType(expr.forInBinding, ann ? ann : element_type);
+            }
+            preinitializedLocals_.insert(expr.forInBinding.value);
+        }
+        typed_map.forInRangeLiteral.insert(id.value);
+        setExprType(id, void_type);
+        (void)inferExpr(expr.operands[1]);
+        active_loop_labels_.pop_back();
+        return void_type;
+    }
+
     const TypeId iterable_type = inferExpr(expr.operands[0]);
     if (!iterable_type || type_table.kindOf(resolve(iterable_type)) == TypeKind::Error) {
         active_loop_labels_.pop_back();

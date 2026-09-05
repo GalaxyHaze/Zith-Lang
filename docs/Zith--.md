@@ -397,6 +397,46 @@ mais baixa que a comparação: `a or b and c` parsa como `a or (b and c)`, e
 `a and b or c` como `(a and b) or c`. `and`/`or` exigem operandos `bool`;
 `xor` aceita `bool` ou dois inteiros do mesmo tipo.
 
+### `in` e ranges
+
+`in` é um operador binário normal que devolve `bool`. O RHS resolve o
+protocolo `Contains` duck-typed `contains(self, value): bool`; qualquer tipo
+com esse método pode ser testado com `value in rhs`. Um literal de range é
+um RHS válido sem método adicional e baixa diretamente para as comparações
+dos bounds.
+
+Um range literal guarda os bounds brutos e a condição de cada bound:
+
+| Sintaxe | Semântica | AST |
+| --- | --- | --- |
+| `lo..hi` | `[lo, hi]` | `closed, closed` |
+| `lo>..hi` | `(lo, hi]` | `openAtLo` |
+| `lo..<hi` | `[lo, hi)` | `openAtHi` |
+| `lo>..<hi` | `(lo, hi)` | `openAtLo`, `openAtHi` |
+
+```zith
+fn main(x: f64): bool {
+    if (x in 0.0>..<1.0) { return true; }
+    return x in 2..<4;
+}
+```
+
+Ranges float são válidos apenas em `in`/`Contains`; iterar um range float
+com `for` é rejeitado porque a iteração de range literal só é definida para
+inteiros, com passo implícito `1`.
+
+```zith
+fn main(): i32 {
+    var total: i32 = 0;
+    for (i in 0>..<10) { total = total + i; }
+    return total;
+}
+```
+
+`Iterator` é o protocolo `next(self): ?T` usado por `for (x in iterable)`
+sobre valores definidos pelo utilizador e continua separado de
+`Contains`.
+
 Em posição de condição, `not expr` sem parêntesis extra é aceite em `if`, `while`, nas três cláusulas do `for (init), (cond), (step)` e em `for (cond)`. A forma canónica dos exemplos e testes é `if not (cond)`; `not cond` e `not (cond)` continuam aceites por compatibilidade. O parser fecha a cláusula depois do operando, por isso também não deixa o parêntesis de fecho pendurado: `for (var i = 0), (not done), (i += 1) { ... }` e `for (var i = 0), (not (done)), ...` são equivalentes.
 
 Uma condição opcional é implícita: qualquer expressão de tipo `?T` é verdadeira quando
@@ -650,7 +690,6 @@ avaliadas juntas, por ordem de afinidade com o núcleo:
 | Feature | Razão | Dependência mais provável |
 | --- | --- | --- |
 | `drop` funcional | limpeza de recursos ao sair do binding/escopo (não só keyword) | NRA/ownership residual + HIR |
-| `for (x in range)` literal | `0..n` é sintaxe comum que o `when` já usa | `Range`/iterator |
 | `dyn Trait` | dispatch dinâmico nominal já está no `main`; falta superfície completa de spec (`view dyn`, slices dyn, etc.) | spec semantics |
 | `requires`/`extends` explícitos | já aparecem na spec de traits | implementação de constraints |
 

@@ -396,23 +396,23 @@ hir::HirExprId HirLowerModern::lowerWhenCondition(frontend::ExprId condition,
                 if (lower_bound == hir::kInvalidHirExpr || upper_bound == hir::kInvalidHirExpr)
                     return hir::kInvalidHirExpr;
 
-                hir::HirBinary ge;
-                ge.lhs           = subject;
-                ge.rhs           = lower_bound;
-                ge.op            = hir::HirBinaryOp::Ge;
-                ge.type          = types::kBoolType;
-                const auto ge_id = addExpr(std::move(ge));
+                hir::HirBinary low;
+                low.lhs  = subject;
+                low.rhs  = lower_bound;
+                low.op   = island_node.openAtLo ? hir::HirBinaryOp::Gt : hir::HirBinaryOp::Ge;
+                low.type = types::kBoolType;
+                const auto low_id = addExpr(std::move(low));
 
-                hir::HirBinary le;
-                le.lhs           = subject;
-                le.rhs           = upper_bound;
-                le.op            = hir::HirBinaryOp::Le;
-                le.type          = types::kBoolType;
-                const auto le_id = addExpr(std::move(le));
+                hir::HirBinary high;
+                high.lhs  = subject;
+                high.rhs  = upper_bound;
+                high.op   = island_node.openAtHi ? hir::HirBinaryOp::Lt : hir::HirBinaryOp::Le;
+                high.type = types::kBoolType;
+                const auto high_id = addExpr(std::move(high));
 
                 hir::HirBinary conjunction;
-                conjunction.lhs  = ge_id;
-                conjunction.rhs  = le_id;
+                conjunction.lhs  = low_id;
+                conjunction.rhs  = high_id;
                 conjunction.op   = hir::HirBinaryOp::And;
                 conjunction.type = types::kBoolType;
                 return addExpr(std::move(conjunction));
@@ -496,23 +496,23 @@ hir::HirExprId HirLowerModern::lowerWhenCondition(frontend::ExprId condition,
         if (lower_bound == hir::kInvalidHirExpr || upper_bound == hir::kInvalidHirExpr)
             return hir::kInvalidHirExpr;
 
-        hir::HirBinary ge;
-        ge.lhs           = subject;
-        ge.rhs           = lower_bound;
-        ge.op            = hir::HirBinaryOp::Ge;
-        ge.type          = types::kBoolType;
-        const auto ge_id = addExpr(std::move(ge));
+        hir::HirBinary low;
+        low.lhs           = subject;
+        low.rhs           = lower_bound;
+        low.op            = node.openAtLo ? hir::HirBinaryOp::Gt : hir::HirBinaryOp::Ge;
+        low.type          = types::kBoolType;
+        const auto low_id = addExpr(std::move(low));
 
-        hir::HirBinary le;
-        le.lhs           = subject;
-        le.rhs           = upper_bound;
-        le.op            = hir::HirBinaryOp::Le;
-        le.type          = types::kBoolType;
-        const auto le_id = addExpr(std::move(le));
+        hir::HirBinary high;
+        high.lhs           = subject;
+        high.rhs           = upper_bound;
+        high.op            = node.openAtHi ? hir::HirBinaryOp::Lt : hir::HirBinaryOp::Le;
+        high.type          = types::kBoolType;
+        const auto high_id = addExpr(std::move(high));
 
         hir::HirBinary conjunction;
-        conjunction.lhs  = ge_id;
-        conjunction.rhs  = le_id;
+        conjunction.lhs  = low_id;
+        conjunction.rhs  = high_id;
         conjunction.op   = hir::HirBinaryOp::And;
         conjunction.type = types::kBoolType;
         return addExpr(std::move(conjunction));
@@ -631,6 +631,126 @@ hir::HirExprId HirLowerModern::lowerFor(const frontend::Expression &expr) {
 hir::HirExprId HirLowerModern::lowerForIn(const frontend::Expression &expr) {
     if (expr.operands.size() < 2U)
         return hir::kInvalidHirExpr;
+
+    if (current_types_ != nullptr && current_types_->forInRangeLiteral.contains(expr.id.value)) {
+        if (expr.operands[0].value > current_module_->frontend->expressions().size())
+            return hir::kInvalidHirExpr;
+        const auto &range = current_module_->frontend->expressions()[expr.operands[0].value - 1U];
+        if (range.kind != frontend::ExprKind::Range || range.operands.size() != 2U ||
+            !expr.forInBinding)
+            return hir::kInvalidHirExpr;
+
+        const auto loop_type = typeOfLocal(expr.forInBinding);
+        if (loop_type == types::kErrorType)
+            return hir::kInvalidHirExpr;
+        const auto lower = lowerExpr(range.operands[0]);
+        const auto upper = lowerExpr(range.operands[1]);
+        if (lower == hir::kInvalidHirExpr || upper == hir::kInvalidHirExpr)
+            return hir::kInvalidHirExpr;
+
+        const auto header_block  = newBlock();
+        const auto body_block    = newBlock();
+        const auto step_block    = newBlock();
+        const auto exit_block    = newBlock();
+        const auto bound_lo_slot = next_slot_++;
+        const auto bound_hi_slot = next_slot_++;
+        const auto counter_slot  = next_slot_++;
+
+        // Set up the counter before the first test. Bounds stay raw; the
+        // comparison flags determine whether the first/last values are in
+        // the range.
+        current_fn_->blocks[current_block_].insts.push(emitSlotAlloca(bound_lo_slot, loop_type));
+        current_fn_->blocks[current_block_].insts.push(emitSlotStore(bound_lo_slot, lower));
+        current_fn_->blocks[current_block_].insts.push(emitSlotAlloca(bound_hi_slot, loop_type));
+        current_fn_->blocks[current_block_].insts.push(emitSlotStore(bound_hi_slot, upper));
+        current_fn_->blocks[current_block_].insts.push(emitSlotAlloca(counter_slot, loop_type));
+        current_fn_->blocks[current_block_].insts.push(
+            emitSlotStore(counter_slot, emitSlotLoad(bound_lo_slot, loop_type)));
+        if (range.openAtLo) {
+            hir::HirLiteral one_literal;
+            one_literal.type = loop_type;
+            one_literal.i    = 1;
+            hir::HirBinary seed;
+            seed.lhs          = emitSlotLoad(counter_slot, loop_type);
+            seed.rhs          = addExpr(std::move(one_literal));
+            seed.op           = hir::HirBinaryOp::Add;
+            seed.type         = loop_type;
+            seed.operand_type = loop_type;
+            current_fn_->blocks[current_block_].insts.push(
+                emitSlotStore(counter_slot, addExpr(std::move(seed))));
+        }
+        emitJump(header_block);
+
+        setCurrentBlock(header_block);
+        current_fn_->blocks[header_block].insts = memory::DynArray<hir::HirExprId>(arena_);
+        const auto counter                      = emitSlotLoad(counter_slot, loop_type);
+        hir::HirBinary low;
+        low.lhs           = counter;
+        low.rhs           = emitSlotLoad(bound_lo_slot, loop_type);
+        low.op            = range.openAtLo ? hir::HirBinaryOp::Gt : hir::HirBinaryOp::Ge;
+        low.type          = types::kBoolType;
+        const auto low_id = addExpr(std::move(low));
+        hir::HirBinary high;
+        high.lhs           = counter;
+        high.rhs           = emitSlotLoad(bound_hi_slot, loop_type);
+        high.op            = range.openAtHi ? hir::HirBinaryOp::Lt : hir::HirBinaryOp::Le;
+        high.type          = types::kBoolType;
+        const auto high_id = addExpr(std::move(high));
+        hir::HirBinary cond;
+        cond.lhs           = low_id;
+        cond.rhs           = high_id;
+        cond.op            = hir::HirBinaryOp::And;
+        cond.type          = types::kBoolType;
+        const auto cond_id = addExpr(std::move(cond));
+        hir::HirBranch branch;
+        branch.cond       = cond_id;
+        branch.then_block = static_cast<hir::HirDeclId>(body_block);
+        branch.else_block = static_cast<hir::HirDeclId>(exit_block);
+        setTerminator(addExpr(std::move(branch)));
+
+        setCurrentBlock(body_block);
+        current_fn_->blocks[body_block].insts = memory::DynArray<hir::HirExprId>(arena_);
+        const auto loop_slot                  = localSlot(expr.forInBinding);
+        current_fn_->blocks[body_block].insts.push(emitSlotAlloca(loop_slot, loop_type));
+        current_fn_->blocks[body_block].insts.push(
+            emitSlotStore(loop_slot, emitSlotLoad(counter_slot, loop_type)));
+
+        loop_stack_.push_back({step_block, exit_block, expr.label, 0U});
+        const frontend::StmtId saved_for_in_stmt = current_for_in_binding_stmt_;
+        current_for_in_binding_stmt_             = expr.forInBindingStmt;
+        current_for_in_binding_local_            = expr.forInBinding;
+        cleanup_stack_.push_back(CleanupFrame(arena_));
+        loop_stack_.back().cleanup_depth = cleanup_stack_.size() - 1U;
+        (void)lowerExpr(expr.operands[1]);
+        emitCleanupFrom(cleanup_stack_.size() - 1U);
+        cleanup_stack_.pop_back();
+        current_for_in_binding_stmt_  = saved_for_in_stmt;
+        current_for_in_binding_local_ = {};
+        if (current_fn_->blocks[current_block_].terminator == hir::kInvalidHirExpr)
+            emitJump(step_block);
+        loop_stack_.pop_back();
+
+        setCurrentBlock(step_block);
+        current_fn_->blocks[step_block].insts = memory::DynArray<hir::HirExprId>(arena_);
+        hir::HirLiteral one_literal;
+        one_literal.type = loop_type;
+        one_literal.i    = 1;
+        const auto one   = addExpr(std::move(one_literal));
+        hir::HirBinary inc;
+        inc.lhs          = emitSlotLoad(counter_slot, loop_type);
+        inc.rhs          = one;
+        inc.op           = hir::HirBinaryOp::Add;
+        inc.type         = loop_type;
+        inc.operand_type = loop_type;
+        current_fn_->blocks[step_block].insts.push(
+            emitSlotStore(counter_slot, addExpr(std::move(inc))));
+        if (current_fn_->blocks[step_block].terminator == hir::kInvalidHirExpr)
+            emitJump(header_block);
+
+        setCurrentBlock(exit_block);
+        current_fn_->blocks[exit_block].insts = memory::DynArray<hir::HirExprId>(arena_);
+        return hir::kInvalidHirExpr;
+    }
 
     // The `next` method and the two union member indexes were validated by
     // sema. If any is missing this lowering ran before a successful sema pass.

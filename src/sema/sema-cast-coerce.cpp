@@ -274,12 +274,10 @@ TypeId PerModuleSema::inferRange(frontend::ExprId id) {
     const TypeId hi = inferExpr(expr.operands[1]);
     if (lo == error_type || hi == error_type)
         return error_type;
-    if (!sameType(lo, hi)) {
-        if (!adaptNumericLiteral(expr.operands[1], lo)) {
-            report(expr.span, "range pattern bounds must have the same type",
-                   diagnostics::err::TypeMismatch);
-            return error_type;
-        }
+    if (!sameType(lo, hi) && !adaptNumericLiteral(expr.operands[1], lo)) {
+        report(expr.span, "range pattern bounds must have the same type",
+               diagnostics::err::TypeMismatch);
+        return error_type;
     }
     return bool_type;
 }

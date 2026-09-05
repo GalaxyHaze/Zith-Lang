@@ -893,6 +893,115 @@ static void test_raw_index_slice_expression() {
     CHECK(raw_index, "raw index retains the raw marker");
 }
 
+static void test_range_literal_and_in_operator() {
+    auto snapshot = frontend::parse("fn main(x: i32): bool {\n"
+                                    "    if (x in 1..<4) { return true; }\n"
+                                    "    if (x in 1>..5) { return true; }\n"
+                                    "    if (x in 1>..<5) { return true; }\n"
+                                    "    return x in 1..4;\n"
+                                    "}\n");
+    CHECK(snapshot.diagnostics().empty(),
+          "all four range literals and 'in' parse without diagnostics");
+
+    const frontend::Expression *in_node     = nullptr;
+    const frontend::Expression *first_range = nullptr;
+    unsigned range_count                    = 0;
+    unsigned in_count                       = 0;
+    bool saw_open_only_hi                   = false;
+    bool saw_open_only_lo                   = false;
+    bool saw_open_both                      = false;
+    bool saw_closed                         = false;
+    for (const auto &expression : snapshot.expressions()) {
+        if (expression.kind == frontend::ExprKind::Binary && expression.text == "in") {
+            in_count++;
+            in_node = &expression;
+        } else if (expression.kind == frontend::ExprKind::Range) {
+            range_count++;
+            if (first_range == nullptr)
+                first_range = &expression;
+        }
+    }
+    CHECK_EQ(range_count, 4u, "all four range spellings lower to ExprKind::Range");
+    for (const auto &expression : snapshot.expressions()) {
+        if (expression.kind != frontend::ExprKind::Range)
+            continue;
+        if (expression.openAtLo && expression.openAtHi)
+            saw_open_both = true;
+        else if (expression.openAtLo)
+            saw_open_only_lo = true;
+        else if (expression.openAtHi)
+            saw_open_only_hi = true;
+        else
+            saw_closed = true;
+    }
+    CHECK(in_node != nullptr, "'in' lowers to a binary expression");
+    CHECK(saw_closed, "a range with plain '..' keeps both bounds closed");
+    CHECK(saw_open_only_lo, "a range with '>..' records openAtLo");
+    CHECK(saw_open_only_hi, "a range with '..<' records openAtHi");
+    CHECK(saw_open_both, "a range with '>..<' records both open flags");
+    if (in_node != nullptr)
+        CHECK_EQ(in_node->operands.size(), 2u, "'in' keeps value and RHS operands");
+    if (first_range != nullptr)
+        CHECK_EQ(first_range->operands.size(), 2u, "Range literal keeps lo and hi operands");
+
+    auto closed =
+        frontend::parse("fn in_range(x: i32): bool { return x in 1..<4 or x in 4>..<9; }\n");
+    CHECK(closed.diagnostics().empty(),
+          "compound boolean expressions containing 'in' parse cleanly");
+    in_count = 0;
+    for (const auto &expression : closed.expressions())
+        in_count += expression.kind == frontend::ExprKind::Binary && expression.text == "in";
+    CHECK_EQ(in_count, 2u, "each 'in' is a normal binary operator");
+
+    auto when = frontend::parse("fn main(x: i32): i32 {\n"
+                                "    return when (x in 1..<9) {\n"
+                                "        (true) 7,\n"
+                                "        (_) 0\n"
+                                "    };\n"
+                                "}\n");
+    CHECK(when.diagnostics().empty(), "when subject may directly be an 'in' condition");
+    bool when_has_bool_subject = false;
+    for (const auto &expression : when.expressions()) {
+        if (expression.kind == frontend::ExprKind::When && !expression.operands.empty() &&
+            expression.operands[0].value <= when.expressions().size()) {
+            const auto &subject = when.expressions()[expression.operands[0].value - 1u];
+            when_has_bool_subject =
+                subject.kind == frontend::ExprKind::Binary && subject.text == "in";
+        }
+    }
+    CHECK(when_has_bool_subject, "when subject 'x in range' remains a binary expression");
+
+    auto slice = frontend::parse("fn main(): []i32 {\n"
+                                 "    var values: [4]i32 = [0, 1, 2, 3];\n"
+                                 "    return values[1..<3];\n"
+                                 "}\n");
+    CHECK(!slice.diagnostics().empty(), "open bounds are not valid slice syntax");
+}
+
+static void test_for_in_range_parsing() {
+    auto snapshot = frontend::parse("fn main(): i32 {\n"
+                                    "    var total: i32 = 0;\n"
+                                    "    for (i in 0>..<5) { total = total + i; }\n"
+                                    "    return total;\n"
+                                    "}\n");
+    CHECK(snapshot.diagnostics().empty(), "for-in over a range literal parses without diagnostics");
+
+    const frontend::Expression *for_in = nullptr;
+    bool saw_range                     = false;
+    for (const auto &expression : snapshot.expressions()) {
+        if (expression.kind == frontend::ExprKind::ForIn)
+            for_in = &expression;
+        if (expression.kind == frontend::ExprKind::Range)
+            saw_range = expression.openAtLo && expression.openAtHi;
+    }
+    CHECK(for_in != nullptr, "range for-in lowers to ExprKind::ForIn");
+    CHECK(saw_range, "the iterable operand of for-in is the parsed open Range");
+    if (for_in != nullptr) {
+        CHECK(for_in->forInBinding, "for-in keeps a synthetic local binding");
+        CHECK_EQ(for_in->operands.size(), 2u, "for-in keeps iterable and body operands");
+    }
+}
+
 static void test_unary_and_nested_expressions() {
     auto snapshot = frontend::parse("fn calc(x: i32): i32 {\n"
                                     "    return -x;\n"
@@ -1366,6 +1475,8 @@ static void test_frontend() {
     test_when_no_arrow_syntax();
     test_when_guard_islands();
     test_raw_index_slice_expression();
+    test_range_literal_and_in_operator();
+    test_for_in_range_parsing();
     test_function_kinds();
     test_function_kind_combinations_are_rejected();
     test_function_kind_methods_propagate();

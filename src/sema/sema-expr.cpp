@@ -352,7 +352,9 @@ TypeId PerModuleSema::inferBinary(frontend::ExprId id) {
     if (expr.operands.size() < 2)
         return error_type;
     TypeId result;
-    TypeId left  = inferExpr(expr.operands[0]);
+    TypeId left = inferExpr(expr.operands[0]);
+    if (expr.text == "in")
+        return inferContains(expr.id, expr.operands[0], expr.operands[1], expr.span);
     TypeId right = inferExpr(expr.operands[1]);
     // A numeric literal on either side takes the other side's type.
     if (!sameType(left, right)) {
@@ -419,6 +421,89 @@ TypeId PerModuleSema::inferBinary(frontend::ExprId id) {
         result = error_type;
     }
     return result;
+}
+
+TypeId PerModuleSema::inferContains(frontend::ExprId binary_id, frontend::ExprId value,
+                                    frontend::ExprId rhs, frontend::TextSpan span) {
+    if (!value || !rhs)
+        return error_type;
+    if (rhs.value <= snapshot.expressions().size()) {
+        const auto &rhs_node = snapshot.expressions()[rhs.value - 1U];
+        if (rhs_node.kind == frontend::ExprKind::Range) {
+            if (rhs_node.operands.size() != 2U)
+                return error_type;
+            const TypeId lo = inferExpr(rhs_node.operands[0]);
+            const TypeId hi = inferExpr(rhs_node.operands[1]);
+            if (lo == error_type || hi == error_type)
+                return error_type;
+            if (!sameType(lo, hi) && !adaptNumericLiteral(rhs_node.operands[1], lo)) {
+                report(span, "range bounds must have the same type",
+                       diagnostics::err::TypeMismatch);
+                return error_type;
+            }
+            const TypeId value_type = inferExpr(value);
+            const TypeId bound      = resolve(type_table.stripQualifiers(lo));
+            if (!sameType(value_type, bound) && !adaptNumericLiteral(value, bound)) {
+                report(span, "'in' value type does not match the range bound type",
+                       diagnostics::err::TypeMismatch);
+                return error_type;
+            }
+            typed_map.containsCall.erase(binary_id.value);
+            return bool_type;
+        }
+    }
+    const TypeId rhs_type = inferExpr(rhs);
+    if (!rhs_type || type_table.kindOf(resolve(rhs_type)) == TypeKind::Error)
+        return error_type;
+
+    TypeId pointee = resolve(type_table.stripQualifiers(rhs_type));
+    if (type_table.kindOf(pointee) == TypeKind::Pointer) {
+        if (const auto *ptr = type_table.pointer(pointee))
+            pointee = resolve(type_table.stripQualifiers(ptr->pointee));
+    } else if (type_table.kindOf(pointee) == TypeKind::Optional) {
+        if (const auto *opt = type_table.optional(pointee)) {
+            pointee = resolve(type_table.stripQualifiers(opt->inner));
+        }
+    }
+
+    const auto methods = findMethodsForOwner(ownerNameOf(pointee), "contains");
+    const frontend::Declaration *contains_decl = nullptr;
+    session::ModuleKey contains_module;
+    for (const auto &method : methods) {
+        if (method.decl == nullptr || method.decl->parameters.size() < 2U ||
+            method.decl->parameters[0].name != "self")
+            continue;
+        contains_decl   = method.decl;
+        contains_module = method.module;
+        break;
+    }
+    if (contains_decl == nullptr)
+        report(span, "'in' requires a range RHS or a type with 'contains(self, value): bool'",
+               diagnostics::err::TypeMismatch);
+    else {
+        const PerModuleSema *contains_sema =
+            owner != nullptr ? owner->findModuleSema(contains_module) : nullptr;
+        const TypeId fn_type = contains_sema != nullptr
+                                   ? contains_sema->typeOfDecl(contains_decl->id)
+                                   : typeOfDecl(contains_decl->id);
+        const auto *fn       = type_table.function(fn_type);
+        if (fn == nullptr || fn->params.size() < 2U)
+            return error_type;
+
+        const TypeId value_type = inferExpr(value);
+        if (!coerceValue(value, fn->params[1], value_type))
+            report(span, "'in' value type does not match the 'contains' parameter",
+                   diagnostics::err::TypeMismatch);
+        if (!sameType(resolve(fn->result), bool_type)) {
+            report(span, "Contains method 'contains' must return bool",
+                   diagnostics::err::TypeMismatch);
+            return error_type;
+        }
+        typed_map.containsCall.insert(binary_id.value,
+                                      TypedMap::ContainsCall{contains_module, contains_decl->id});
+        return bool_type;
+    }
+    return error_type;
 }
 
 } // namespace zith::sema::modern

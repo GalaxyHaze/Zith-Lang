@@ -171,7 +171,7 @@ ExprId AstLowerer::parseWhen() {
     expression.scope = current_scope_;
     if (punctuation(index_, '('))
         ++index_;
-    expression.operands.push_back(parseExpression()); // subject
+    expression.operands.push_back(parseConditionExpression()); // subject
     if (punctuation(index_, ')'))
         ++index_;
     else
@@ -383,8 +383,19 @@ ExprId AstLowerer::parseFor() {
                 return addExpression(std::move(expression));
             }
             init_stmt = addStatement(std::move(stmt));
-        } else if (!punctuation(index_, ',') && !punctuation(index_, ')')) {
-            init_expr = parseConditionExpression();
+        } else if (!punctuation(index_, ',') && !punctuation(index_, ')') &&
+                   !isKeywordToken("in")) {
+            if (snapshot_.tokens_[index_].kind == TokenKind::Identifier &&
+                index_ + 1U < token_count_ &&
+                snapshot_.tokens_[index_ + 1U].kind == TokenKind::Keyword &&
+                text(index_ + 1U) == "in") {
+                // `for (name in iterable)` is the iterator form; the name is
+                // synthesized below as a loop binding, so do not parse it as
+                // an expression (which would treat `in` as a binary operator).
+                init_expr = parsePrimary();
+            } else {
+                init_expr = parseConditionExpression();
+            }
         }
 
         // Flat 3-clause form: `for (init, cond, step)`.  The first comma

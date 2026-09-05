@@ -556,7 +556,7 @@ ExprId AstLowerer::parsePostfix(ExprId result, uint32_t start) {
            isOperatorToken("->") || isKeywordToken("as") || isGenericApplication()) {
         // Dot field access: expr.field
         if (punctuation(index_, '.')) {
-            if (range_mode_ && punctuation(index_ + 1U, '.'))
+            if (punctuation(index_ + 1U, '.'))
                 break; // leave `lo..hi` for the when-case range pattern
             ++index_;
             if (index_ < token_count_ && (snapshot_.tokens_[index_].kind == TokenKind::Identifier ||
@@ -732,9 +732,12 @@ ExprId AstLowerer::parsePostfix(ExprId result, uint32_t start) {
             const uint32_t index_start = start;
             ++index_;
             const bool saved_range_mode = range_mode_;
+            const bool saved_no_range   = no_range_literal_;
             range_mode_                 = true;
+            no_range_literal_           = true;
             const ExprId lower          = parseExpression();
             range_mode_                 = saved_range_mode;
+            no_range_literal_           = saved_no_range;
             Expression indexing;
             indexing.kind  = ExprKind::Index;
             indexing.scope = current_scope_;
@@ -826,6 +829,8 @@ int AstLowerer::precedence(std::string_view op) noexcept {
         return 4;
     if (op == "==" || op == "!=" || op == "<" || op == ">" || op == "<=" || op == ">=")
         return 5;
+    if (op == "in")
+        return 5;
     if (op == "|.")
         return 6;
     if (op == "^.")
@@ -842,6 +847,17 @@ int AstLowerer::precedence(std::string_view op) noexcept {
 }
 bool AstLowerer::isAssignmentOp(std::string_view op) noexcept {
     return op == "=" || compoundBaseOp(op) != std::string_view{};
+}
+
+bool AstLowerer::isRangeDotAt(uint32_t offset) const noexcept {
+    const uint32_t i = index_ + offset;
+    return i + 1U < token_count_ && punctuation(i, '.') && punctuation(i + 1U, '.');
+}
+
+bool AstLowerer::isRangeOpenAt(uint32_t offset) const noexcept {
+    const uint32_t i = index_ + offset;
+    return i + 2U < token_count_ && snapshot_.tokens_[i].kind == TokenKind::Operator &&
+           text(i) == ">" && punctuation(i + 1U, '.') && punctuation(i + 2U, '.');
 }
 
 /// For a compound assignment, the base operator it desugars to. Empty for
@@ -980,6 +996,27 @@ ExprId AstLowerer::parseExpression(int minimum_precedence) {
     }
 
     while (index_ < token_count_) {
+        const bool range_open_lo = isRangeOpenAt(0);
+        if ((isRangeDotAt(0) || range_open_lo) && !no_range_literal_) {
+            Expression range_expr;
+            range_expr.kind  = ExprKind::Range;
+            range_expr.scope = current_scope_;
+            range_expr.operands.push_back(left);
+            if (range_open_lo) {
+                range_expr.openAtLo = true;
+                index_ += 3U; // `>..`
+            } else {
+                index_ += 2U; // `..`
+            }
+            if (isOperatorToken("<")) {
+                range_expr.openAtHi = true;
+                ++index_;
+            }
+            range_expr.operands.push_back(parseExpression(kUnaryPrecedence));
+            range_expr.span = range(start, index_);
+            left            = addExpression(std::move(range_expr));
+            continue;
+        }
         // `x is null` and tagged-union `x is Type` sit at comparison precedence.
         if (isKeywordToken("is")) {
             if (5 < minimum_precedence)
@@ -1005,9 +1042,9 @@ ExprId AstLowerer::parseExpression(int minimum_precedence) {
             left         = addExpression(std::move(is_expr));
             continue;
         }
-        const bool is_keyword_operator =
-            snapshot_.tokens_[index_].kind == TokenKind::Keyword &&
-            (text(index_) == "and" || text(index_) == "or" || text(index_) == "xor");
+        const bool is_keyword_operator = snapshot_.tokens_[index_].kind == TokenKind::Keyword &&
+                                         (text(index_) == "and" || text(index_) == "or" ||
+                                          text(index_) == "xor" || text(index_) == "in");
         if (snapshot_.tokens_[index_].kind != TokenKind::Operator && !is_keyword_operator)
             break;
         const auto op = text(index_);

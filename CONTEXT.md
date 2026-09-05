@@ -92,6 +92,31 @@ _Avoid_: secondary pattern, multi-pattern, following guard
 The mandatory comma between when cases, omitted for the final case.
 _Avoid_: arrow delimiter, comma terminator, case delimiter
 
+## Ranges, `Contains` e `Iterator`
+
+**Range**:
+A literal expression `lo..hi` producing an interval between two raw bounds.
+The AST/HIR keep `lo` and `hi` unchanged and store `openAtLo`/`openAtHi`
+instead of adjusting the bounds.
+_Avoid_: slice range, pattern shorthand, adjusted interval
+
+**Range Bound**:
+One of the two endpoints carried by a `Range`. A bound is closed by default;
+`>` before `..` opens the lower bound and `<` after `..` opens the upper bound.
+_Avoid_: offset bound, low+1 bound, high-1 bound
+
+**Contains**:
+The duck-typed protocol resolved by `value in rhs`: `contains(self, value): bool`.
+It is independent of iteration and accepts any RHS type with that method,
+including literal ranges.
+_Avoid_: membership operator overload, range checking method, iterator method
+
+**Iterator**:
+The loop protocol resolved by `for (x in iterable)`: `next(self): ?T`.
+It is deliberately separate from `Contains`; literal integer ranges are lowered
+directly with an implicit step of `1` and float ranges are rejected for loops.
+_Avoid_: Contains, membership protocol, range iteration via contains
+
 ## Standard Library
 
 **Formatable**:

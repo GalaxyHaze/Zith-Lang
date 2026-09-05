@@ -123,6 +123,8 @@ hir::HirExprId HirLowerModern::lowerExpr(frontend::ExprId id) {
     case frontend::ExprKind::When:
         return lowerWhen(expr, type);
     case frontend::ExprKind::Range:
+        // A literal range has a value type only in a `when` pattern or as the
+        // RHS of `in`; both are lowered by their surrounding expression.
         return hir::kInvalidHirExpr;
     case frontend::ExprKind::While:
         return lowerWhile(expr);
@@ -453,6 +455,90 @@ hir::HirExprId HirLowerModern::lowerBinary(const frontend::Expression &expr,
                                            const types::TypeId type) {
     if (expr.operands.size() != 2U)
         return hir::kInvalidHirExpr;
+    if (expr.text == "in") {
+        const auto value = lowerExpr(expr.operands[0]);
+        if (value == hir::kInvalidHirExpr)
+            return hir::kInvalidHirExpr;
+
+        const auto *contains =
+            current_types_ != nullptr ? current_types_->containsCall.get(expr.id.value) : nullptr;
+        if (contains != nullptr && contains->decl) {
+            const auto *module_artifact = snapshot_.findModule(contains->module);
+            const auto *decl =
+                module_artifact != nullptr ? findDecl(*module_artifact, contains->decl) : nullptr;
+            if (module_artifact == nullptr || decl == nullptr)
+                return hir::kInvalidHirExpr;
+            const auto *contains_sema = sema_.findModuleSema(contains->module);
+            const sema::modern::TypeId fn_type =
+                contains_sema != nullptr
+                    ? contains_sema->typeOfDeclInModule(contains_sema->module, contains->decl)
+                    : sema::modern::TypeId{};
+            const auto *fn = sema_.typeTable().function(fn_type);
+            if (fn == nullptr || fn->params.size() < 2U)
+                return hir::kInvalidHirExpr;
+            const auto key = internFunctionKey(interner_, module_artifact->key, contains->decl);
+            const auto *function_index = function_index_by_key_.get(key);
+            if (function_index == nullptr)
+                return hir::kInvalidHirExpr;
+
+            memory::DynArray<hir::HirExprId> args(arena_);
+            memory::DynArray<types::TypeId> arg_types(arena_);
+            const auto rhs = lowerExpr(expr.operands[1]);
+            if (rhs == hir::kInvalidHirExpr)
+                return hir::kInvalidHirExpr;
+            const auto self_sema  = fn->params[0];
+            const auto value_sema = fn->params[1];
+            const auto rhs_sema   = semaTypeOfExpr(expr.operands[1]);
+            const auto rhs_slot   = next_slot_++;
+            const auto rhs_type   = lowerType(sema_.typeTable().stripQualifiers(rhs_sema));
+            current_fn_->blocks[current_block_].insts.push(emitSlotAlloca(rhs_slot, rhs_type));
+            current_fn_->blocks[current_block_].insts.push(emitSlotStore(rhs_slot, rhs));
+            const bool self_is_pointer =
+                sema_.typeTable().kindOf(sema_.typeTable().stripQualifiers(self_sema)) ==
+                sema::modern::TypeKind::Pointer;
+            args.push(self_is_pointer ? rhs : addExpr(hir::HirSlotAddr{rhs_slot, rhs_type}));
+            arg_types.push(lowerType(self_sema));
+            args.push(lowerCoerceToTarget(lowerType(value_sema), expr.operands[0], value));
+            arg_types.push(lowerType(value_sema));
+
+            hir::HirCall call{hir::kInvalidHirExpr, std::move(args), std::move(arg_types)};
+            call.resolved_fn = functions_[*function_index].sym_id;
+            return addExpr(std::move(call));
+        }
+
+        if (!expr.operands[1] || current_module_ == nullptr ||
+            current_module_->frontend == nullptr ||
+            expr.operands[1].value > current_module_->frontend->expressions().size())
+            return hir::kInvalidHirExpr;
+        const auto &rhs_node =
+            current_module_->frontend->expressions()[expr.operands[1].value - 1U];
+        if (rhs_node.kind != frontend::ExprKind::Range || rhs_node.operands.size() != 2U)
+            return hir::kInvalidHirExpr;
+        const auto lower = lowerExpr(rhs_node.operands[0]);
+        const auto upper = lowerExpr(rhs_node.operands[1]);
+        if (lower == hir::kInvalidHirExpr || upper == hir::kInvalidHirExpr)
+            return hir::kInvalidHirExpr;
+        const auto lower_op = rhs_node.openAtLo ? hir::HirBinaryOp::Gt : hir::HirBinaryOp::Ge;
+        const auto upper_op = rhs_node.openAtHi ? hir::HirBinaryOp::Lt : hir::HirBinaryOp::Le;
+        hir::HirBinary low;
+        low.lhs           = value;
+        low.rhs           = lower;
+        low.op            = lower_op;
+        low.type          = types::kBoolType;
+        const auto low_id = addExpr(std::move(low));
+        hir::HirBinary high;
+        high.lhs           = value;
+        high.rhs           = upper;
+        high.op            = upper_op;
+        high.type          = types::kBoolType;
+        const auto high_id = addExpr(std::move(high));
+        hir::HirBinary conjunction;
+        conjunction.lhs  = low_id;
+        conjunction.rhs  = high_id;
+        conjunction.op   = hir::HirBinaryOp::And;
+        conjunction.type = types::kBoolType;
+        return addExpr(std::move(conjunction));
+    }
     const auto lhs = lowerExpr(expr.operands[0]);
     const auto rhs = lowerExpr(expr.operands[1]);
     if (lhs == hir::kInvalidHirExpr || rhs == hir::kInvalidHirExpr)

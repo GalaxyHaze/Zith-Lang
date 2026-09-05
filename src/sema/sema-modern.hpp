@@ -42,6 +42,9 @@ struct TypedMap {
     memory::FlatMap<uint32_t, TypeId> exprTypes;
     memory::FlatMap<uint32_t, TypeId> declTypes;
     memory::FlatMap<uint32_t, TypeId> localTypes;
+    /// ForIn expressions over literal integer ranges. HIR lowering uses this
+    /// to emit a step-1 counting loop instead of calling `next`.
+    memory::FlatSet<uint32_t> forInRangeLiteral;
     /// Iterator data resolved for a `ForIn` expression, keyed by the expression
     /// id. HIR lowering uses these to emit the `next` call and union extraction
     /// without re-resolving the receiver type.
@@ -50,6 +53,14 @@ struct TypedMap {
         frontend::DeclId decl;
     };
     memory::FlatMap<uint32_t, ForInNext> forInNext;
+    /// `contains` method resolved for an `x in rhs` binary, keyed by the
+    /// binary expression id. When missing, lowering handles the RHS as a
+    /// literal range using the open/closed bound flags.
+    struct ContainsCall {
+        session::ModuleKey module;
+        frontend::DeclId decl;
+    };
+    memory::FlatMap<uint32_t, ContainsCall> containsCall;
     memory::FlatMap<uint32_t, uint32_t> forInElementIndex;
     memory::FlatMap<uint32_t, uint32_t> forInEndIndex;
     memory::FlatMap<uint32_t, TypeId> forInUnionType;
@@ -70,9 +81,9 @@ struct TypedMap {
     memory::FlatMap<uint32_t, TypeId> dynSourceTypes;
 
     explicit TypedMap(memory::Arena &)
-        : exprTypes(), declTypes(), localTypes(), forInNext(), forInElementIndex(), forInEndIndex(),
-          forInUnionType(), forInOptionalType(), traitQualifiedReceiverBase(), opaqueSourceTypes(),
-          dynSourceTypes() {}
+        : exprTypes(), declTypes(), localTypes(), forInRangeLiteral(), forInNext(), containsCall(),
+          forInElementIndex(), forInEndIndex(), forInUnionType(), forInOptionalType(),
+          traitQualifiedReceiverBase(), opaqueSourceTypes(), dynSourceTypes() {}
 };
 
 class SemaPipeline;
@@ -306,6 +317,11 @@ private:
     TypeId inferName(frontend::ExprId id, std::string_view text);
     TypeId inferUnary(frontend::ExprId id);
     TypeId inferBinary(frontend::ExprId id);
+    /// Resolves `x in rhs` through the `Contains` duck-typed protocol
+    /// `contains(self, value): bool`. A literal integer/float range is valid
+    /// without a user-defined method; the HIR lowers it to bound comparisons.
+    TypeId inferContains(frontend::ExprId binary_id, frontend::ExprId value, frontend::ExprId rhs,
+                         frontend::TextSpan span);
     TypeId inferCall(frontend::ExprId id);
     /// Resolves a generic parameter name bound in the current declaration.
     /// Used to identify `T.method(...)` static trait calls over a generic

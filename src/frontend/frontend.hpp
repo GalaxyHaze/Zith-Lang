@@ -165,7 +165,11 @@ enum class ExprKind : uint8_t {
     PackLiteral,
     /// `when (subject) { (cond) ~> body, (_) ~> default }` — match is a synonym.
     When,
-    /// A range pattern `lo..hi`, valid only inside a `when` case condition.
+    /// A range value or pattern `lo..hi`: operands = [lo, hi]. The range
+    /// keeps the literal bounds and records whether each side was written
+    /// open (`lo>..hi`, `lo..<hi`, `lo>..<hi`). A stand-alone range is a
+    /// lhs for `in`/`Contains` when not used as a `when` pattern; `for-in`
+    /// lowers only integer ranges.
     Range,
     /// `_` as a struct-literal field value: `Pair{left: _, right: 2}`.
     Placeholder,
@@ -322,6 +326,10 @@ struct Expression {
     /// allow an explicit unchecked read of a binding that has not yet been
     /// initialized.
     bool isRawName = false;
+    /// True when a Range literal excludes its lower bound (`lo>..hi`).
+    bool openAtLo = false;
+    /// True when a Range literal excludes its upper bound (`lo..<hi`).
+    bool openAtHi = false;
     /// True when `expansion` is the result of a `raw` macro (the expansion
     /// statements splice directly without a wrapping Block scope).
     bool expansionIsRaw = false;

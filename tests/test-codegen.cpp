@@ -895,6 +895,80 @@ static void test_nested_optional_for_in_runtime() {
     CHECK_EQ(r.exitCode, 42, "??T exposes null elements without treating them as end");
 }
 
+static void test_integer_range_for_runtime() {
+    CodegenTest t;
+    auto r =
+        t.run("codegen-integer-range-for.zith", "fn main(): i32 {\n"
+                                                "    var total: i32 = 0;\n"
+                                                "    for (i in 0..<5) { total = total + i; }\n"
+                                                "    if (total != 10) { return 1; }\n"
+                                                "    total = 0;\n"
+                                                "    for (i in 0>..5) { total = total + i; }\n"
+                                                "    if (total != 15) { return 2; }\n"
+                                                "    total = 0;\n"
+                                                "    for (i in 1>..<5) { total = total + i; }\n"
+                                                "    if (total != 9) { return 3; }\n"
+                                                "    total = 0;\n"
+                                                "    for (i in 1..4) { total = total + i; }\n"
+                                                "    if (total != 10) { return 4; }\n"
+                                                "    return 0;\n"
+                                                "}\n");
+    CHECK(r.ok, "integer literal ranges compile, link, and execute in for-in");
+    CHECK_EQ(r.exitCode, 0, "all four range bound forms iterate the expected integer values");
+}
+
+static void test_range_in_operator_and_when_runtime() {
+    CodegenTest t;
+    auto r = t.run("codegen-range-in.zith", "fn main(): i32 {\n"
+                                            "    var total: i32 = 0;\n"
+                                            "    if (3 in 1..<4) { total = total + 100; }\n"
+                                            "    if (5 in 1>..5) { total = total + 1000; }\n"
+                                            "    if (9 in 1..10) { total = total + 10000; }\n"
+                                            "    if (0 in 0>..<10) { return 1; }\n"
+                                            "    if (total != 11100) { return 3; }\n"
+                                            "    let when_value = when (5 in 1..<9) {\n"
+                                            "        (true) 7,\n"
+                                            "        (_) 0\n"
+                                            "    };\n"
+                                            "    if (when_value != 7) { return 2; }\n"
+                                            "    return 0;\n"
+                                            "}\n");
+    CHECK(r.ok, "'in' over ranges and when (x in range) compile, link, and execute");
+    CHECK_EQ(r.exitCode, 0, "'in' applies open/closed bound flags without pre-adjusting bounds");
+}
+
+static void test_user_contains_runtime() {
+    CodegenTest t;
+    auto r = t.run("codegen-user-contains.zith",
+                   "struct Set {\n"
+                   "    a: i32,\n"
+                   "    b: i32,\n"
+                   "    c: i32,\n"
+                   "    fn contains(self, value: i32): bool {\n"
+                   "        return (value == self->a) or (value == self->b) or\n"
+                   "               (value == self->c);\n"
+                   "    }\n"
+                   "}\n"
+                   "fn main(): i32 {\n"
+                   "    let s: Set = Set { a: 7, b: 8, c: 9 };\n"
+                   "    if (8 in s) { return 42; }\n"
+                   "    return 0;\n"
+                   "}\n");
+    CHECK(r.ok, "Any type with a contains(self, value): bool method satisfies 'in'");
+    CHECK_EQ(r.exitCode, 42, "generic Contains resolves and lowers the user method");
+}
+
+static void test_float_range_for_is_rejected() {
+    CodegenTest t;
+    auto r =
+        t.run("codegen-float-range-for.zith", "fn main(): i32 {\n"
+                                              "    var total: i32 = 0;\n"
+                                              "    for (x in 0.0>..<10.0) { total = total + 1; }\n"
+                                              "    return total;\n"
+                                              "}\n");
+    CHECK(!r.ok && r.errorCount > 0, "float ranges are rejected in for-in");
+}
+
 static void test_imported_counter_runtime() {
     CodegenTest t;
     auto r = t.run("codegen-imported-counter.zith",
@@ -2811,6 +2885,14 @@ static void test_codegen() {
     test_labeled_loop_controls_runtime();
     test_for_in_runtime();
     test_nested_optional_for_in_runtime();
+    printf("Running test_integer_range_for_runtime\n");
+    test_integer_range_for_runtime();
+    printf("Running test_range_in_operator_and_when_runtime\n");
+    test_range_in_operator_and_when_runtime();
+    printf("Running test_user_contains_runtime\n");
+    test_user_contains_runtime();
+    printf("Running test_float_range_for_is_rejected\n");
+    test_float_range_for_is_rejected();
     test_imported_counter_runtime();
     printf("Running test_named_struct_literal_and_defaults_runtime\n");
     test_named_struct_literal_and_defaults_runtime();

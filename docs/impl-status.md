@@ -107,7 +107,8 @@ Implementation work that is incomplete or needs review is tracked in
 | `as` cast | **Working** | Dedicated `ExprKind::Cast` -> `HirCast` -> LLVM conversion. Numeric pairs plus `raw opaque` <-> `*T` (`classifyCast`); pointer-to-pointer between concrete pointees, integer/pointer mixes and user-defined casts stay rejected. Tagged-union member extraction outside a narrowed/checked context requires `raw`; raw-union member casts remain free. No numeric narrowing overflow check |
 | `is null` | **Working** | Dedicated `ExprKind::IsNull`. Requires an optional operand; `?*T` uses the nullptr niche, `?T` reads the discriminant |
 | `is <type>` | **Working (tagged unions + opaque)** | Tagged-union member tests lower to a runtime tag check; inside `if`/`when` they narrow the tested local to the member type. `opaque is T` compares the bare opaque typeId and returns `bool` |
-| range `1..5` | **Check only** | Parsed as binary `..`; no dedicated sema |
+| range `1..5`, `1>..5`, `1..<5`, `1>..<5` | **Working** | Dedicated `ExprKind::Range` with raw bounds and open-at-lo/hi flags. `in` lowers ranges and any `contains(self, value): bool` method; `for (x in int_range)` iterates with implicit step `1`. Float ranges are valid with `in` and rejected in `for` |
+| `in` (`value in rhs`) | **Working** | Binary operator returning `bool`; resolves literal ranges and the `Contains` protocol without changing the existing `Iterator` protocol |
 | struct literal `Foo { x: 1, y: 2 }` | **Working** | Struct literal with named fields via `{}` syntax. Inaccessible private/mod fields are rejected except in the file that declares the struct |
 | `@sizeOf`, `@offsetOf`, `@alignOf` | **Working** | `@` parses in expression position. `@sizeOf(T)` accepts any complete type and types as `u64`; `@offsetOf(S, field)` and `@alignOf(S)` are struct-only and type as `i32`. `@sizeOf(void)` reports `E3001` ("requires a complete type") |
 | `@canonicalType` | **Working** | Returns a stable `u128` derived from module namespace, canonical field order, and type name; lowers to `HirCanonicalType` and is serialized through the artifact cache. |
@@ -232,11 +233,10 @@ Recorded deliberately; each item is a follow-up, not an unknown.
 | Unchecked `?*T` -> `*T` coercion | Every C pointer is `?*T`, but without flow-sensitive narrowing it is accepted unchecked where `*T` is expected. Isolated in `PerModuleSema::allowsUncheckedNullablePointer`; delete it when pointer narrowing after `is null` lands |
 | No flow-sensitive narrowing after `is null` | `p->field` on a `?*T` requires NonNull proof from `if (p is null) { } else { p->field }` or `for (not (p is null))`. Error code `E3005` |
 | `is` outside `null`/tagged-union contexts | Non-union `is Type` remains unsupported and reports a dedicated diagnostic |
-| Ranges and range syntax in `for (x in 0..4)` | The iterator protocol supports user types with `next(self) -> ?T` (and `??T` for optional elements); literal range syntax is future work |
 | User-defined casts | To be added as a new branch in `classifyCast` |
 | No C struct-by-value ABI | `struct` parameters/results import as named foreign types, but there is no verified ABI and no Zith-visible layout, so constructing/passing records to C remains unsupported |
 | Bare `opaque` is module-local | The deterministic typeId is stable for the same concrete type inside one module, but imported/cached opaque values are rejected with `E2010` because a cross-module registry is not implemented yet |
-| `..` lexes per character | Its `precedence()` is -1 and the when-case range pattern depends on the two `.` tokens. Every other multi-char operator is munched longest-first as one token and wired through the parser, sema and formatter |
+| `..` lexes per character | Its `precedence()` is -1 and range/slice syntax depends on the two `.` tokens. Range literals now have a dedicated `ExprKind::Range`; slicing remains a separate postfix form |
 | `++` / `--` | Not implemented; no increment/decrement operators exist |
 | Ownership proof still happens after premature lowering in places | The stable order is `sema -> comptime/solve -> NTA/NRA -> HIR`; residual facts are now attached before final lowering, while some paths still need the full NRA proof before emitting their final form |
 

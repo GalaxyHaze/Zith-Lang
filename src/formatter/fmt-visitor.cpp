@@ -1094,7 +1094,11 @@ void FmtVisitor::visitExpr(const frontend::ExprId id, const int parent_prec) {
             break;
         }
         visitExpr(expr->operands[0]);
+        if (expr->openAtLo)
+            emit(">");
         emit("..");
+        if (expr->openAtHi)
+            emit("<");
         visitExpr(expr->operands[1]);
         break;
     case frontend::ExprKind::Cast:
