@@ -7,12 +7,14 @@
   "default": {
     "apiVersion": "1.0",
     "workspace": {},
-    "documents": {}
+    "documents": {},
+    "features": {}
   },
   "required": [
     "apiVersion",
     "workspace",
-    "documents"
+    "documents",
+    "features"
   ],
   "properties": {
     "apiVersion": {
@@ -133,6 +135,114 @@
               "type": "string"
             }
           }
+        }
+      }
+    },
+    "features": {
+      "type": "object",
+      "description": "IDE feature capability status for zith::ide v1.0. Planned features are not announced by the LSP in v1.0.",
+      "required": [
+        "diagnostics",
+        "completion",
+        "completionResolve",
+        "hover",
+        "signatureHelp",
+        "definition",
+        "references",
+        "documentSymbols",
+        "workspaceSymbols",
+        "semanticTokensFull",
+        "semanticTokensDelta",
+        "inlayHints",
+        "highlights",
+        "prepareRename",
+        "rename",
+        "formatting",
+        "folding",
+        "codeActions",
+        "commands",
+        "configuration"
+      ],
+      "properties": {
+        "diagnostics": {
+          "const": "stable",
+          "description": "Diagnostics reported for the analyzed revision."
+        },
+        "completion": {
+          "const": "stable",
+          "description": "Completion items, including member completion filtered by static visibility."
+        },
+        "completionResolve": {
+          "const": "stable",
+          "description": "Completion item resolve/detail requests."
+        },
+        "hover": {
+          "const": "stable",
+          "description": "Hover content."
+        },
+        "signatureHelp": {
+          "const": "stable",
+          "description": "Signature help."
+        },
+        "definition": {
+          "const": "stable",
+          "description": "Go-to-definition locations."
+        },
+        "references": {
+          "const": "stable",
+          "description": "Reference locations."
+        },
+        "documentSymbols": {
+          "const": "stable",
+          "description": "Symbols within the open document."
+        },
+        "workspaceSymbols": {
+          "const": "stable",
+          "description": "Symbols across the workspace."
+        },
+        "semanticTokensFull": {
+          "const": "stable",
+          "description": "Full semantic token encoding."
+        },
+        "semanticTokensDelta": {
+          "const": "experimental",
+          "description": "Delta semantic tokens under cancellation."
+        },
+        "inlayHints": {
+          "const": "stable",
+          "description": "Inlay hints."
+        },
+        "highlights": {
+          "const": "stable",
+          "description": "Document highlights."
+        },
+        "prepareRename": {
+          "const": "stable",
+          "description": "Rename qualification."
+        },
+        "rename": {
+          "const": "stable",
+          "description": "Rename edits."
+        },
+        "formatting": {
+          "const": "stable",
+          "description": "Document formatting."
+        },
+        "folding": {
+          "const": "stable",
+          "description": "Folding ranges."
+        },
+        "codeActions": {
+          "const": "stable",
+          "description": "Code actions and commands."
+        },
+        "commands": {
+          "const": "experimental",
+          "description": "Workspace commands exposed by the facade."
+        },
+        "configuration": {
+          "const": "planned",
+          "description": "Runtime configuration subscriptions beyond static initialization options."
         }
       }
     }

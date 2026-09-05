@@ -80,6 +80,7 @@ module-level visibility rules are omitted.
 The following features are experimental in this contract:
 
 - semantic token delta under cancellation
+- workspace commands beyond the current static set
 - cross-file did-change-watched-files indexing details
 
 The following features are planned and not announced by the LSP in v1.0:
