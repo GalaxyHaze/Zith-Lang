@@ -264,46 +264,6 @@ std::vector<CompletionItem> collectCompletionItems(const session::CompilationSes
     return result;
 }
 
-std::vector<SemanticToken> collectSemanticTokens(const session::CompilationSession &session) {
-    std::vector<SemanticToken> result;
-    const auto &snapshot = session.snapshot();
-    if (!snapshot) {
-        return result;
-    }
-    const auto file_id = session.fileId();
-    for (const auto &module : snapshot->modules()) {
-        if (!module || module->fileId != file_id || !module->frontend) {
-            continue;
-        }
-        const auto &frontend = *module->frontend;
-        uint32_t last_line = 0;
-        uint32_t last_start = 0;
-        for (const auto &token : frontend.tokens()) {
-            if (token.kind == frontend::TokenKind::End) {
-                break;
-            }
-            const auto range = rangeFromSource(frontend.source(), file_id,
-                                               token.span.start, token.span.end);
-            SemanticToken semantic;
-            semantic.deltaLine = range.start.line - last_line;
-            if (semantic.deltaLine == 0) {
-                semantic.deltaStart = range.start.character - last_start;
-            } else {
-                semantic.deltaStart = range.start.character;
-            }
-            semantic.length = token.span.size();
-            semantic.tokenType =
-                token.kind == frontend::TokenKind::Keyword ? 7 : 0;
-            semantic.tokenModifiers = 0;
-            result.push_back(semantic);
-            last_line = range.start.line;
-            last_start = range.start.character;
-        }
-        break;
-    }
-    return result;
-}
-
 SignatureHelp collectSignatureHelp(const session::CompilationSession &,
                                    const frontend::FrontendSnapshot &frontend,
                                    const std::string &source, uint32_t line,
@@ -528,17 +488,6 @@ const frontend::Statement *localBindingAtOffset(
 const session::ModuleArtifact *moduleFor(
     const session::CompilationSnapshot &snapshot, std::string_view key) {
     return snapshot.findModule(key);
-}
-
-const frontend::Declaration *declarationFor(
-    const session::CompilationSnapshot &snapshot, std::string_view module_key,
-    frontend::DeclId id) {
-    const auto *module = snapshot.findModule(module_key);
-    if (module == nullptr || !module->frontend || !id ||
-        id.value > module->frontend->declarations().size()) {
-        return nullptr;
-    }
-    return &module->frontend->declarations()[id.value - 1U];
 }
 
 bool sameSpan(const memory::Span &a, const memory::Span &b) noexcept {
