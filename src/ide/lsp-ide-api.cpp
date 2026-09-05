@@ -1444,6 +1444,7 @@ DocumentSnapshot Workspace::openDocument(std::string uri, std::string filePath,
     snapshot.version = version;
     snapshot.revision = 1;
     impl_->documents_[snapshot.uri] = snapshot;
+    impl_->frontend_context_->setOverlay(snapshot.filePath, snapshot.text);
     return snapshot;
 }
 
@@ -1457,11 +1458,18 @@ DocumentSnapshot Workspace::changeDocument(const std::string &uri,
     existing->second.text = text;
     existing->second.version = version;
     ++existing->second.revision;
+    impl_->frontend_context_->setOverlay(existing->second.filePath,
+                                         existing->second.text);
     return existing->second;
 }
 
 void Workspace::closeDocument(const std::string &uri) noexcept {
-    impl_->documents_.erase(uri);
+    const auto existing = impl_->documents_.find(uri);
+    if (existing == impl_->documents_.end()) {
+        return;
+    }
+    impl_->frontend_context_->removeOverlay(existing->second.filePath);
+    impl_->documents_.erase(existing);
 }
 
 std::optional<DocumentSnapshot> Workspace::snapshotFor(const std::string &uri) const {
