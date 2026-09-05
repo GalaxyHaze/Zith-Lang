@@ -213,7 +213,8 @@ public:
 
     DocumentSnapshot openDocument(std::string uri, std::string filePath,
                                   std::string text, int64_t version);
-    DocumentSnapshot changeDocument(std::string uri, std::string text,
+    DocumentSnapshot changeDocument(const std::string &uri,
+                                    const std::string &text,
                                     int64_t version);
     void closeDocument(const std::string &uri) noexcept;
     std::optional<DocumentSnapshot> snapshotFor(const std::string &uri) const;
