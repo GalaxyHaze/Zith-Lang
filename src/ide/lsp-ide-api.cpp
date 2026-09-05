@@ -58,9 +58,9 @@ Severity toIdeSeverity(diagnostics::Severity severity) {
     case diagnostics::Severity::Bug:
         return Severity::Bug;
     case diagnostics::Severity::Error:
-    default:
         return Severity::Error;
     }
+    return Severity::Error;
 }
 
 std::vector<Diagnostic> collectDiagnostics(const session::CompilationSession &session,
