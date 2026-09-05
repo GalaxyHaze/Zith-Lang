@@ -658,6 +658,7 @@ def print_result(status: bool, result: dict[str, Any] | None, home: Path) -> Non
     print(f"reset_week: {format_reset(usage.get('reset_week_sec'))}")
     print(f"credits: {format_credits(raw)}")
     print(f"active_email: {auth.get('email') or '-'}")
+    state = load_state(home)
     tracked = len(state.get("accounts", {}))
     print(f"tracked_accounts: {tracked}")
     print(f"state: {state_path(home)}")
@@ -948,8 +949,7 @@ def cmd_accounts(args: list[str], home: Path) -> int:
         print("no accounts known")
         return 0
 
-    print(f"tracking: {len(emails)} account(s)")
-    print("email | state | 5h | week | reset_5h | reset_week | last_seen")
+    rows: list[tuple[str, str, str, str, str, str, str]] = []
     for email in sorted(emails, key=lambda item: (item != active_email, item.lower())):
         entry = accounts.get(email)
         snapshot = None
@@ -979,7 +979,18 @@ def cmd_accounts(args: list[str], home: Path) -> int:
             snap_week = format_percent(_coerce_float(snapshot.get("used_week_pct")))
             snap_reset5 = format_reset(_coerce_float(snapshot.get("reset_5h_sec")))
             snap_resetw = format_reset(_coerce_float(snapshot.get("reset_week_sec")))
-        print(f"{email} | {status} | {snap_5h} | {snap_week} | {snap_reset5} | {snap_resetw} | {last_seen}")
+        rows.append((email, status, snap_5h, snap_week, snap_reset5, snap_resetw, last_seen))
+
+    def _pad(values: tuple[str, ...]) -> list[str]:
+        width = [max(len(row[index]) for row in rows) for index in range(7)]
+        return [value.ljust(width[index]) for index, value in enumerate(values)]
+
+    print(f"tracking: {len(rows)} account(s)")
+    headers = _pad(("EMAIL", "STATE", "5H", "WEEK", "RESET 5H", "RESET WEEK", "LAST SEEN"))
+    print("  ".join(headers))
+    print("  ".join("-" * len(value) for value in headers))
+    for row in rows:
+        print("  ".join(_pad(row)))
     return 0
 
 
