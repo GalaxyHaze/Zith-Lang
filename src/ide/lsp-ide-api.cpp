@@ -191,7 +191,6 @@ std::string displayedFunctionName(const frontend::Declaration &decl) {
     case frontend::FunctionKind::State:
         return "state " + decl.name;
     case frontend::FunctionKind::Standard:
-    default:
         return decl.name;
     }
 }
@@ -305,7 +304,7 @@ std::vector<SemanticToken> collectSemanticTokens(const session::CompilationSessi
     return result;
 }
 
-SignatureHelp collectSignatureHelp(const session::CompilationSession &session,
+SignatureHelp collectSignatureHelp(const session::CompilationSession &,
                                    const frontend::FrontendSnapshot &frontend,
                                    const std::string &source, uint32_t line,
                                    uint32_t character) {
@@ -1419,8 +1418,8 @@ std::vector<SemanticToken> collectSymbolAwareTokens(
             semantic.length = token.span.size();
             const std::string_view text(
                 frontend.source().data() + token.span.start, token.span.size());
-            semantic.tokenType =
-                semanticTokenType(session, token, text);
+            semantic.tokenType = static_cast<uint32_t>(
+                semanticTokenType(session, token, text));
             semantic.tokenModifiers = 0;
             result.push_back(semantic);
             last_line = range.start.line;
