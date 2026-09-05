@@ -236,14 +236,6 @@ std::string sourceFromSnapshot(
     return fallback;
 }
 
-WorkspaceConfig defaultConfigFor(const std::string &workspace_root,
-                                 const std::string &stdlib_path) {
-    WorkspaceConfig config;
-    config.workspaceRoot = workspace_root;
-    config.stdlibPath = stdlib_path;
-    return config;
-}
-
 } // namespace
 
 struct Workspace::Impl {
