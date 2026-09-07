@@ -127,7 +127,10 @@ FrontendContext::analyze(SourceCatalog::SourcePtr root_source) {
                 if (!resolved.found) {
                     const auto import_name =
                         request.isHeader ? request.headerPath : request.importKey();
-                    edge.error = "could not resolve import '" + import_name + "'";
+                    edge.error = resolved.consideredPlatformVariants
+                                     ? "could not resolve import '" + import_name +
+                                           "'; missing generic module or matching platform variant"
+                                     : "could not resolve import '" + import_name + "'";
                     diagnostics.push_back(makeImportDiagnostic(*module, request, edge.error));
                     import_graph.push_back(std::move(edge));
                     continue;
