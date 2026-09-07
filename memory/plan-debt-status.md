@@ -1,0 +1,233 @@
+# Plan, Debt and Status Curation
+
+This note records the contract used when curating Zith-- plans, the
+implementation-debt inventory, and the status document. It also records the
+relationships that are easy to get wrong when editing these files.
+
+The authoritative status is `docs/impl-status.md`; plans and debt annotations
+must cite it instead of restating a guessed status. `docs/roadmap.md` and the
+active directories under `docs/plans/` are planning surfaces.
+`docs/implementation-debt.md` is the engineering inventory for gaps and
+repeated patterns.
+
+This note exists because plan curation is not the same as feature
+implementation. A plan may contain an old wave description that looks
+future-facing even though the feature row in the status document says
+`Working`. A debt entry may also look like an open task when it actually
+records an intentional product boundary. The curator's job is to keep those
+three surfaces mutually consistent without silently changing compiler
+behavior.
+
+The worktree for this task is `agent5` and the scope is docs/memory only.
+Changes to source files are out of scope except for a stale reference that
+must be fixed. Language semantics stay defined by `docs/Zith--.md` and
+`docs/impl-status.md`.
+
+## Current Plan Inventory
+
+The active plan homes are:
+
+- `docs/plans/0.7.0/`: current Zith-- iteration scope and retired-step index.
+- `docs/plans/defer-drop.md`: `drop` roadmap, extending shipped `defer`.
+- `docs/plans/monolith-splits.md`: source-reorganization order.
+- `docs/plans/platform-imports.md`: target-based import resolution design.
+- `docs/roadmap.md`: stable feature IDs and wave narrative.
+
+The archived plan homes are:
+
+- `docs/plans/archive/0.7.0-zith/`: full-Zith comptime, introspection, type
+  construction, capabilities, and NRA planning.
+- `docs/plans/archive/traits-interfaces-*.old.md`: prior trait/interface step
+  notes.
+- `docs/plans/archive/parse-input-cast.old.md`: shipped `ParseInput` step.
+
+Completed active steps should move to `docs/plans/archive/`. The retired-step
+index under `docs/plans/0.7.0/README.md` should name the archived file so
+future curators do not resurrect the plan by accident.
+
+## Feature Status Rules
+
+`Working` in `impl-status.md` means the feature is accepted by parser and sema
+and lowers through HIR to LLVM codegen. `Parse skipped`, `Spec only`,
+`Parse-level in progress`, and `Stub` are real non-working statuses and must
+not be overwritten in plans unless the implementation in `impl-status.md`
+changed first.
+
+Several roadmap rows looked stale because the feature table still described
+old waves. For example `when`/`match`, `for` variants,
+`state`/`dock`/`jump`, and tagged-union or opaque `is <type>` narrowing are
+`Working` in the status document. The roadmap now records the current status
+and points Wave 02/Wave 03 text to `impl-status.md` instead of repeating an
+old acceptance checklist.
+
+The roadmap still uses feature IDs F-01 through F-42. The row-level status is
+a short hand for what is current. The Wave narrative is a forward-looking
+explanation. They can disagree when a wave was partially completed, so both
+must be checked before editing. A row marked `Working` cannot remain described
+as pending in the same wave section without an explicit reason such as
+full-Zith remainder.
+
+## Status Map Used In This Audit
+
+The map below records the statuses consulted from `docs/impl-status.md`. It is
+not a substitute for the status document; it is a durable decision record for
+why specific roadmap rows were updated.
+
+| ID | Roadmap status after curation |
+|---|---|
+| F-01 | Working |
+| F-02 | Working, synonym for `when` |
+| F-03 | Working |
+| F-04 | Working |
+| F-05 | Parse-level in progress |
+| F-06 | Working for tagged unions and opaque |
+| F-07 | Working |
+| F-08 | Working |
+| F-09 | Parse error |
+| F-10 | Working for layout intrinsics |
+| F-11 | Spec only, full-Zith |
+| F-12 | Partial: declared type works, propagation does not |
+| F-13 | Working for optional extraction |
+| F-14 | In progress, residual facts implemented |
+| F-15 | Spec only, full-Zith |
+| F-16 | Spec only, full-Zith |
+| F-17 | Spec only, full-Zith |
+| F-18 | Spec only |
+| F-19 | Spec only |
+| F-20 | Spec only |
+| F-21 | Parse skipped |
+| F-22 | Parse skipped |
+| F-23 | Parse skipped |
+| F-24 | Parse reported and rejected in Zith-- |
+| F-25 | Spec only |
+| F-26 | Spec only |
+| F-27 | Spec only |
+| F-28 | Spec only |
+| F-29 | Working |
+| F-30 | Spec only |
+| F-31 | Partial: tagged unions and narrowing work |
+| F-32 | Working for common C, debt remains |
+| F-33 | Working |
+| F-34 | Working |
+| F-35 | Working |
+| F-36 | Working |
+| F-40 | Working |
+| F-41 | Planned for Zith-- |
+| F-42 | Planned for Zith-- |
+
+The F-10 row is nuanced. `@sizeOf`, `@offsetOf`, `@alignOf`, `@lengthOf`,
+`@ptrOf`, and `@canonicalType` are implemented. The generic `@intrinsic`
+surface referenced by the older spec name is not, so the row says the layout
+intrinsics are working and leaves the full-Zith remainder explicit.
+
+The F-12 and F-13 rows are similarly split. `T!` is a declared type that
+lowers through HIR per `impl-status.md`, but `!` propagation is not
+implemented. `raw` optional extraction is working even though the spec's
+larger `unsafe` and raw-block hierarchy is not part of Zith--.
+
+## Full-Zith Boundaries
+
+Comptime evaluation, reflection/type mutation, capabilities, full NRA,
+`fail`/`with`/`catch`/`throw`, words/contexts/use semantics, `::`, assets, and
+the stdlib/runtime APIs remain non-Zith-- work unless the product split
+changes. The archived `docs/plans/archive/0.7.0-zith/` tree is intentionally
+not active.
+
+A surface can be partially implemented in Zith-- and still have a separate
+full-Zith remainder. `T!` is a good example: the declared type lowers through
+HIR, but `!` propagation and the `fail` family remain full-Zith.
+
+Tag macros are another boundary case. `impl-status.md` says tag macro calls
+are parsed and then rejected with `E2010` in the Zith-- pipeline. This is not
+an unported full-Zith feature that should remain in an active wave checklist
+without qualification. The roadmap now labels it as parsed/rejected in Zith--
+and full-Zith semantics as out of core.
+
+The dynamic dispatch row in the older spec-only list was also ambiguous. Zith--
+supports `dyn Trait` and `dyn Interface` method dispatch through fat pointers
+and vtables. The spec-only entry in `impl-status.md` refers to the broader spec
+surface, and `Zith--.md` documents the method-only public surface. Roadmap text
+kept the working `dyn` status rather than treating all `dyn` material as
+absent.
+
+## Implemented Steps and Debt
+
+`ParseInput` and `InputLine.cast<T>` are shipped for `bool`, `f32`, `f64`,
+`i32`, and `u32`. The completed step was moved to
+`docs/plans/archive/parse-input-cast.old.md`. `*char` parsing is intentionally
+not part of that contract; strings remain available through the `text()`
+adapter. Debt entry 8 now labels that as non-debt.
+
+Real debt entries must name the implemented-but-incomplete part and a blocking
+reference. Intentional design decisions go into the non-debt table. The debt
+file does not replace `impl-status.md`; it is the issue tracker for follow-up
+work.
+
+The audit also tightened the debt classification. `ParseInput` entry 8 was
+headlined "deferred" even though the primitives were implemented. The headline
+now says the feature is implemented and `*char` is out of scope. Missing
+`*char` parsing is intentional because `InputLine.text()` already exposes
+strings. That change closes the contradiction between the old headline and the
+status row.
+
+Other debt entries remain real and were left unchanged:
+
+- `type Name = T` is partial because construction and field access syntax are
+  missing.
+- The object cache works but `.zirl` is neither produced nor consumed.
+- NRA is partial because the full alive/dead/lent proof is missing.
+- Bare `opaque` cannot be rehydrated across cache/module boundaries.
+- C interop covers common C but struct-by-value ABI and several import forms
+  are not verified or imported.
+- Numeric narrowing casts do not check overflow.
+- `for (cond)` is still printed as `while` by the formatter.
+- `++` and `--` do not exist.
+- `..` is lexed character by character.
+
+## Audit Methodology
+
+The practical order used for this task is:
+
+1. Read `TASK.md` and confirm the worktree identity from `agent-id`.
+2. Read the active plan files and the current status document.
+3. Compare each roadmap feature ID against `impl-status.md` and `Zith--.md`.
+4. For stale roadmap rows, update the row instead of removing the feature ID.
+5. For shipped steps, move the plan to `docs/plans/archive/`.
+6. Update debt entries only when the status document supports the new wording.
+7. Run the exact verification commands from `TASK.md`.
+8. Review the diff for dead links, contradictory status text, and unintended
+   edits before requesting a merge.
+
+Do not update `impl-status.md` just to make a plan read better. The status
+document is verified against compiler behavior and baseline. Only update it
+when a status is demonstrably stale, and then verify the new status with a
+standalone source file and the relevant focused test.
+
+Do not remove a feature ID from the roadmap merely because it is implemented.
+Feature IDs are stable references for commits, tests, and PR descriptions.
+Implemented rows should keep the ID and change the status.
+
+Use the grep checks from the task as preliminary evidence only. They find
+status labels and pending words, but they do not prove that roadmap prose is
+consistent. Read the surrounding wave text after the grep because stale
+narrative can survive when the row-level status was already updated.
+
+## Documentation Hygiene
+
+- Update `docs/impl-status.md` only when the compiler behavior is demonstrably
+  stale; do not edit it just to make roadmap prose easier.
+- When a step ships, move its active plan to `docs/plans/archive/` and
+  reference it from `docs/plans/0.7.0/README.md` in the retired-steps section.
+- When a roadmap status changes, keep the Wave/01 narrative in sync; stale wave
+  prose is a common source of contradictory guidance.
+- When debt wording changes from "deferred" to "implemented with out-of-scope
+  remainder", update the folder link and the `impl-status.md` line it cites.
+- If a status check fails because an implementation changed, do not classify
+  the feature as working from memory. Run the compiler or focused test and
+  record the result before editing the status row.
+- If a plan mentions a file that no longer exists in `docs/plans/`, point the
+  link at the archived `.old.md` or remove the stale reference.
+- Prefer small, discrete docs commits. A plan curation change should not hide
+  a language-semantics edit.
+- Keep memory files focused and within the project's line convention; split a
+  growing note instead of letting it exceed the limit.

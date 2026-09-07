@@ -7,19 +7,19 @@
 
 | ID   | Feature | Spec Chapter | Status (Wave 01) |
 |---|---|---|---|
-| F-01 | `when` pattern matching | 3, 9 | WIP (not committed) |
-| F-02 | `match` expression | 9 | Parse error |
-| F-03 | `for` iterator (`in`) and 3-clause | 9 | Parse error |
+| F-01 | `when` pattern matching | 3, 9 | Working |
+| F-02 | `match` expression | 9 | Working (`when` synonym) |
+| F-03 | `for` iterator (`in`) and 3-clause | 9 | Working |
 | F-04 | `state` machine / `dock` / `jump` | 9 | Working (musttail transitions) |
 | F-05 | `const fn` | 5, 11 | Parse-level in progress |
-| F-06 | `is <type>` type narrowing | 3 | Parse error |
+| F-06 | `is <type>` type narrowing | 3 | Working (tagged unions + opaque; non-union narrowing remains in debt) |
 | F-07 | `dyn Trait` dynamic dispatch | 14 | Working (`dyn Interface` also dispatches through vtables) |
 | F-08 | `@macro` calls | 15 | Working |
 | F-09 | Word call and sequence expressions | 16 | Parse error |
-| F-10 | `@sizeOf`, `@intrinsic` expressions | 11 | Parse error |
+| F-10 | `@sizeOf`, `@intrinsic` expressions | 11 | Working (layout intrinsics); generic `@intrinsic` remains full-Zith |
 | F-11 | `fail` / `with` / `catch` / `throw` / `must` | 8 | Spec only |
-| F-12 | `T!` failable propagation (`!` postfix) | 8 | Spec only |
-| F-13 | `raw` unwrap operator | 13 | Spec only |
+| F-12 | `T!` failable propagation (`!` postfix) | 8 | Partial: declared `T!` lowers through HIR; `!` propagation remains full-Zith |
+| F-13 | `raw` unwrap operator | 13 | Working for optional extraction; `unsafe`/raw-block surface remains full-Zith |
 | F-14 | NRA/NTA ownership proof before stable HIR (`lend`, `view`, `unique`, `share`, `belong`) | 7 | In progress (residual-fact contract implemented in Wave 05; full rule diagnostics remain) |
 | F-15 | `comptime` blocks | 11 | Spec only |
 | F-16 | `const fn` compile-time evaluation | 11 | Spec only |
@@ -30,14 +30,14 @@
 | F-21 | `context` block semantics | 17 | Parse skipped |
 | F-22 | `use` statement semantics | 2, 17 | Parse skipped |
 | F-23 | `prefix` / `suffix` / `infix` / `nop` semantics | 16 | Parse skipped |
-| F-24 | Tag macros (`<Tag>`) | 15 | Working |
+| F-24 | Tag macros (`<Tag>`) | 15 | Parse reported / rejected in Zith--; full-Zith semantics out of core |
 | F-25 | Assets (`ZithProject.toml` asset paths) | 12 | Spec only |
 | F-26 | `::` scope resolution | 2 | Spec only (normal/raw macro scope diversification is complete; `::` remains a separate wave) |
 | F-27 | Binding destructuring (`[]`) and pack literals | 6 | Spec only |
 | F-28 | `@pack` / `@toStruct` / `@toPack` | 11 | Spec only |
 | F-29 | Generic trait and interface constraints (`T: Trait`, `T: Interface`) | 4 | Working; interface bounds expose interface fields and methods |
 | F-30 | Standard library (beyond io) | 20 | Spec only |
-| F-31 | `union` runtime semantics | 3 | Spec only |
+| F-31 | `union` runtime semantics | 3 | Partial: tagged unions and `is` narrowing work; remaining union surface is tracked in debt |
 | F-32 | C header import completion (macros, variadics, callbacks) | 18 | Working (common C); macros/globals/bitfields remain |
 | F-33 | Function overloading (selection by arity and parameter types) | 5 | Working |
 | F-36 | Variadic slices (`[...]T` homogeneous tail parameters) | 5 | Working |
@@ -50,58 +50,45 @@
 ## Dependency Graph
 
 ```
-F-01 (when) ─────────────────────────────┐
-F-02 (match)                              │
-F-03 (for iter/3-clause)                  │
-F-04 (dock)                               │
-F-05 (const fn parse)                     │
-F-06 (is <type>)                          │
-F-07 (dyn Trait)                          ├─ needs F-01
-F-09 (word call/seq)                      │
-F-10 (sizeOf/intrinsic)                   │
-F-08 (@macro)                             │
-                                          │
-F-11 (fail/with/catch)                    ├─ needs T! types ✓
-F-12 (failable propagation)               │
-F-13 (raw unwrap)                         │
-                                          │
+F-01-F-04, F-06, F-08, F-10 layout, F-13, F-29,
+F-32 common C, F-33, F-34, F-35, F-36, F-40 ──── done (see impl-status.md)
+
+F-05 (const fn parse) ─────────────────────┐
+F-11 (fail/with/catch)                     ├─ needs T! propagation
+F-12 (failable propagation)                │
+F-14 (NRA/NTA full proof)                  │
+F-15-F-17, F-20, F-28 ────────────────── full-Zith only
 F-21 (context semantics) ──┬── F-22 (use) ├─ needs words
 F-23 (word semantics) ─────┘              │
-F-24 (tag macros)                         │
-                                          │
-F-15 (comptime blocks) ───┬─ F-16 (const fn eval) ── needs F-05
-F-17 (reflection) ────────┤
-F-28 (pack ops) ──────────┘
+F-24 (tag macros) ─────────────────────── Zith-- rejects E2010
+F-25 (assets), F-30, F-31 ─────────────── remaining spec/debt work
+F-18/F-19, F-27, F-26, F-09 ────────────── full-Zith/spec-only
+F-41 (`drop`) ──────────────────────────── next Zith-- feature
+F-42 (platform imports) ────────────────── planned resolver-only work
                                           │
 F-34 (qualifier parse/types) ── F-14 (NRA/NTA) ── stable HIR contract
 F-33 (overloading)                        ┼─ done (name resolution + linkage names)
 F-42 (platform imports)                   ┼─ resolver-only; independent of comptime
-                                          │
-F-30 (stdlib) ─────────────┬─ F-18 (runtime tasks/coroutines)
-                           ├─ F-19 (runtime threads/channels)
-F-14 (NRA/NTA) ────────────┘
-                           └─ F-20 (shared-resource facts for runtime concurrency APIs)
-F-25 (assets) ───────────────────────────────────│
-F-31 (union runtime) ────────────────────────────│
-F-32 (C interop completion) ─────────────────────│
 ```
 
 ## Wave Groupings
 
 ### Wave 02 — Pattern Matching & Control Flow Completion
-F-01 (`when` — finish WIP integration), F-02 (`match`), F-03 (`for` iterator/3-clause), F-04 (`dock`), F-05 (`const fn` parse), F-06 (`is <type>`).
-
-Dependencies: none outside the wave.  Max parallelism: 2 agents (F-01/F-02 shared AST; F-03/F-04 independent).
+The Wave 02 surface is implemented in Zith--: F-01 (`when`), F-02 (`match`),
+F-03 (`for` iterator/3-clause), F-04 (`dock`), and F-06 (`is <type>`).
+F-05 (`const fn`) remains parse-level only; compile-time evaluation is a
+full-Zith feature and stays outside the Zith-- core.
 
 ### Wave 03 — Error Handling
-F-11 (`fail`/`with`/`catch`/`throw`/`must`), F-12 (`T!` propagation), F-13 (`raw` unwrap).
-
-Dependencies: `?T` and `T!` types already working.  Max parallelism: 2 agents.
+F-13 (`raw` optional extraction) is working. F-12 is partial: `T!` declarations
+lower through HIR, but `!` propagation is not implemented. F-11
+(`fail`/`with`/`catch`/`throw`/`must` assertion) remains full-Zith-only.
 
 ### Wave 04 — Comptime
-F-10 (`@sizeOf`/`@intrinsic` parse), F-15 (`comptime` blocks), F-16 (`const fn` evaluation), F-17 (reflection intrinsics), F-28 (pack ops).
-
-Dependencies: needs F-05 (`const fn` parsed).  Max parallelism: 2 agents (comptime evaluator + reflection intrinsics).
+F-10 layout intrinsics (`@sizeOf`, `@offsetOf`, `@alignOf`, `@lengthOf`,
+`@ptrOf`, `@canonicalType`) are working in Zith--. F-15 (`comptime` blocks),
+F-16 (`const fn` evaluation), F-17 (reflection intrinsics), and F-28 (pack ops)
+remain archived full-Zith features.
 
 ### Wave 05 — NRA Ownership Analysis
 F-14 (`lend`/`view`/`unique`/`share`/`belong` analysis pass), F-27 (destructuring).
@@ -122,7 +109,13 @@ F-29 (trait constraints `T: Trait`) is covered by generic constraints.
 F-07 now has codegen coverage for nominal traits; interfaces use the same HIR/codegen path.
 
 ### Wave 07 — Macros, Words & Contexts
-F-08 (`@macro` calls) and F-24 (tag macros) are implemented. Normal macros keep hygiene for template bindings and resolve other names through the call-site scope; raw macros splice literally into the call-site scope with module/global fallback. Remaining work in this wave: F-09 (word call/sequence expressions), F-21 (context semantics), F-22 (`use` semantics), F-23 (word decl semantics), F-26 (`::` scope resolution).
+F-08 (`@macro` calls) is implemented. Normal macros keep hygiene for template
+bindings and resolve other names through the call-site scope; raw macros splice
+literally into the call-site scope with module/global fallback. Tag macros
+(F-24) are parsed but rejected with `E2010` in Zith--, so they are not part of
+the working core. Remaining work in this wave: F-09 (word call/sequence
+expressions), F-21 (context semantics), F-22 (`use` semantics), F-23 (word decl
+semantics), and F-26 (`::` scope resolution).
 
 Dependencies: the macro expander is complete; word/context semantics still need F-09 words parsed first.
 
@@ -134,7 +127,10 @@ Dependencies: F-30 (`stdlib`) plus F-14 (pre-HIR ownership proof). No frontend s
 work is planned here. Max parallelism: 2 agents (runtime surface + ownership integration).
 
 ### Wave 09 — Assets & Stdlib
-F-25 (assets), F-30 (stdlib), F-31 (union runtime semantics), F-32 (C interop completion).
+F-32 (C interop) is working for common C; the remaining macros/globals/bitfields
+are debt. F-31 is partial: tagged unions and `is` narrowing are implemented.
+F-25 (assets) and F-30 (stdlib beyond the shipped io/alloc surface) remain
+full-Zith/spec-only work.
 
 Max parallelism: 2 agents (assets + stdlib).
 
@@ -161,4 +157,5 @@ Infrastructure: ZIRL sections, cache hydration, CLI commands (`test`, `deps`, `d
 
 - Feature IDs are stable and should be referenced in commit messages, test names, and PR descriptions.
 - The dependency graph encodes the minimum build order; waves can overlap when dependencies are acyclic.
-- The WIP `when` (F-01) is the first item of Wave 02 and remains uncommitted through Wave 01.
+- F-01 through F-04 and F-06 are implemented in Zith-- and verified in
+  `docs/impl-status.md`; do not treat them as pending roadmap work.

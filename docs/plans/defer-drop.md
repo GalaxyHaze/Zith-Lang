@@ -29,7 +29,7 @@ ownership cleanup is implemented:
 | `defer expr;` / `defer { ... }` | Working; reverse-order block cleanup |
 | `defer` in `state` bodies | Working; cleanup runs before `jump` |
 | `drop` keyword | Reserved only; no parser branch consumes it yet |
-| `docs/impl-status.md` | `defer` recorded as `Working`; `drop` remains `Spec only` until implementation lands |
+| `docs/impl-status.md` | `defer` recorded as `Working`; `drop` remains `Planned (Zith--)` until implementation lands |
 
 ## Minimal Semantics
 

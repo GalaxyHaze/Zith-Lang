@@ -1,6 +1,6 @@
 # Zith Implementation Debt
 
-> Last updated: 2026-09-04.
+> Last updated: 2026-09-07.
 
 Documento de gestão da dívida de implementação. Distingue propositadamente:
 
@@ -25,7 +25,7 @@ engenharia para rever e gerir.
 
 ---
 
-## Dívidas de features implementadas mas incompletas
+## Dívidas reais (features implementadas mas incompletas e código com risco)
 
 ### 1. `type Name = T` é nominal mas sem sintaxe completa
 
@@ -33,7 +33,7 @@ engenharia para rever e gerir.
   intercambiável com `T`.
 - Incompleto: não existe sintaxe explícita de construção e acesso. Existem casts
   de wrapper/unwrapper (`T as Name` / `Name as T`), mas a superfície é posta como
-  `Partial` em [impl-status.md](/home/diogo/Zith/docs/impl-status.md:79).
+  `Partial` em [impl-status.md](/home/diogo/Zith/docs/impl-status.md:84).
 - Decisão em aberto: definir sintaxe de construção/acesso ou declarar a forma
   atual suficiente para `Zith--`.
 
@@ -43,7 +43,7 @@ engenharia para rever e gerir.
   produzido nem consumido.
 - Risco: estado completo do artefacto não é persistido numa representação estável;
   invalidações e round-trips dependem do array de object files.
-- Referência: [impl-status.md](/home/diogo/Zith/docs/impl-status.md:41).
+- Referência: [impl-status.md](/home/diogo/Zith/docs/impl-status.md:44).
 
 ### 3. NRA está parcial
 
@@ -51,7 +51,7 @@ engenharia para rever e gerir.
   do lowering final.
 - Faltas reais: o state machine completo alive/dead/lent e a prova de quatro
   regras não existem; não há todos os diagnósticos de ownership previstos.
-- Referência: [impl-status.md](/home/diogo/Zith/docs/impl-status.md:38).
+- Referência: [impl-status.md](/home/diogo/Zith/docs/impl-status.md:41).
 
 ### 4. Bare `opaque` não pode ser re-hidratado no cache/cross-module
 
@@ -69,9 +69,9 @@ engenharia para rever e gerir.
   `va_list` e function pointers; macros object-like escalares são importadas.
 - Dívida real: struct-by-value ABI não é verificado; bitfields, packed/anonymous
   records, flexible arrays, globals e strings não são importados.
-- Referência: [impl-status.md](/home/diogo/Zith/docs/impl-status.md:146).
+- Referência: [impl-status.md](/home/diogo/Zith/docs/impl-status.md:153).
 
-### 6. Outras incompletudes já registadas
+### 6. Outras incompletudes registadas
 
 - Literal ranges (`1..4`) e range syntax continuam sem sema dedicada.
 - `is <type>` fora de unions/opaque não existe.
@@ -83,8 +83,9 @@ engenharia para rever e gerir.
 - Formatter reimprime `for (cond)` como `while`.
 - `..` é lexado caractere a caractere.
 
-Estas entradas são detalhadas em [impl-status.md](/home/diogo/Zith/docs/impl-status.md) na secção
-`Known Debt` e devem ser movidas/consolidadas aqui quando forem tratadas.
+Estas entradas detalham o estado real e as referências de bloqueio; são as
+mesmas lacunas da secção `Known Debt` de [impl-status.md](/home/diogo/Zith/docs/impl-status.md)
+e devem ser consolidadas aqui quando forem tratadas.
 
 ### 7. Falhas conhecidas em `test-codegen`
 
@@ -101,15 +102,19 @@ As seis falhas conhecidas de 2026-09-01 foram resolvidas:
 - `ownership-advanced.zith` executa com exit `16`, conforme esperado pelo
   exemplo.
 
-### 8. `ParseInput` / `InputLine.cast<T>` ficou adiado
+### 8. `ParseInput` / `InputLine.cast<T>` está implementado, com `*char` fora de âmbito
 
 - Estado: `ParseInput` e `InputLine.cast<T>` estão implementados em
   `std/io/console` para `bool`, `f32`, `f64`, `i32` e `u32`. A chamada
   `T.parse(self)` resolve através do bound da trait após monomorfização e
   `line.cast<NonParsable>()` reporta `E3009`.
-- Dívida residual: `*char` não é implementado; parsing de outros primitivos
-  pode ser adicionado aos mesmos `implement ... as ParseInput` quando for
-  necessário.
+- Não-dívida: `*char` fica intencionalmente fora do contrato actual; strings
+  continuam disponíveis pelo adapter `text()` do `InputLine`. Adicionar
+  parsing de outros primitivos é uma extensão opcional aos mesmos
+  `implement ... as ParseInput`, não uma lacuna do contrato actual.
+- Referência de estado: [impl-status.md](/home/diogo/Zith/docs/impl-status.md:45)
+  na linha `Stdlib I/O` e o plano completo em
+  [parse-input-cast.md](plans/archive/parse-input-cast.old.md).
 
 ---
 

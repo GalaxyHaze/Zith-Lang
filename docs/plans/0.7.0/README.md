@@ -30,3 +30,11 @@ in `Zith--` and documented under `docs/impl-status.md`.
 The older full-Zith plan is intentionally archived. Comptime evaluation,
 reflection, type mutation and activated capabilities remain Zith (full-spec)
 features, not `Zith--` candidates.
+
+## Retired Steps
+
+- `docs/plans/archive/parse-input-cast.old.md`: `ParseInput` and
+  `InputLine.cast<T>` are shipped; no active implementation steps remain.
+
+Active plans must not repeat implemented wave work. Status lives in
+`docs/impl-status.md`; roadmap statuses and debt annotations point back to it.
