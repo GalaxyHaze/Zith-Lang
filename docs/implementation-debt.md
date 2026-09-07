@@ -20,11 +20,12 @@ engenharia para rever e gerir.
 
 - Os installers de release substituem o conteúdo de `<prefix>/share/zith/stdlib`
   antes de extrair, para evitar ficheiros stdlib antigos após um upgrade.
-- O manifest `.github/scoop/bucket/zithc.json` ainda está fixo em `v0.6.2` e
-  aponta para `GalaxyHaze/Zith-Lang`; o workflow `update-package.yml` já usa
-  `${{ github.repository }}` e deve regenerar URLs/hashes no próximo release.
-  Os hashes atuais não foram relativos ao novo repo e por isso não foram
-  inventados nesta rama.
+- O manifest `.github/scoop/bucket/zithc.json` aponta para
+  `GalaxyHaze/Zith` versão `0.6.3`, mas os quatro hashes ficaram como
+  placeholders vazios. O workflow `update-package.yml` já usa
+  `${{ github.repository }}` e deve regenerar URLs/hashes no próximo release;
+  hashes não foram inventados nesta rama porque a auditoria correu sem acesso
+  a artefactos publicados.
 - Os shims Scoop executam `zithc` a partir de `~\scoop\shims`, fora do prefixo
   da app; a descoberta automática por caminho do exe só é garantida para
   invocação direta do binário real. O workaround documentado é `ZITH_STDLIB`
@@ -377,16 +378,3 @@ quando houver um release tag real.
    como parte da quebra mecânica.
 4. Consolidar as entradas duplicadas de `Known Debt` de `docs/impl-status.md`
    para este ficheiro quando forem tratadas.
-
-### 9. Scoop manifest de `v0.6.3` sem hashes verificados
-
-- Estado: `.github/scoop/bucket/zithc.json` aponta para `GalaxyHaze/Zith` e
-  `v0.6.3`, mas os quatro hashes dos assets Windows ficaram como placeholders
-  `""`. A task de auditoria correu sem rede e sem artefactos locais para
-  validar os SHA256 do release.
-- Riscos: um bucket público não deve publicar o manifest até o
-  `update-package.yml` regenerar os hashes reais. Instalações via Scoop vão
-  falhar ou bloquear com hashes vazios.
-- Acção: executar o workflow `Update Packages Manifest` para um tag
-  `v0.6.3`/posterior, ou preencher manualmente os hashes a partir dos assets
-  publicados antes de incluir o manifest num bucket.

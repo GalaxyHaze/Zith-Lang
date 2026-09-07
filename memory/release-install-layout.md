@@ -35,18 +35,16 @@ under it.
 | `<binary_dir>/../share/zith/stdlib` | installed release layout |
 | `<binary_dir>/../stdlib` | dev/build layout |
 
-`CMakeLists.txt` installs the stdlib to `${CMAKE_INSTALL_LIBDIR}/zith/stdlib`,
-which is the source-install layout. The release installer uses the discovery
-root because published binaries are downloaded directly rather than installed
-by CMake.
+`CMakeLists.txt` installs the stdlib to
+`${CMAKE_INSTALL_DATADIR}/zith/stdlib`, which for a conventional prefix is
+`share/zith/stdlib`, the same root the release installer uses. The release
+installer uses the discovery root directly because published binaries are
+downloaded rather than installed by CMake.
 
-For a conventional Unix prefix, `CMAKE_INSTALL_LIBDIR` defaults to `lib`, so
-`/usr/local/lib/zith/stdlib` does not match the release installer's discovery
-root (`/usr/local/share/zith/stdlib`). The installed binary lives in
-`/usr/local/bin`, so `<binary_dir>/../share/zith/stdlib` resolves to the
-installer path. The source install rule and the release installer intentionally
-use different roots; `findStdlibRoots()` does not search
-`${CMAKE_INSTALL_LIBDIR}/zith/stdlib`.
+For a conventional Unix prefix, `CMAKE_INSTALL_DATADIR` defaults to `share`,
+so the binary at `/usr/local/bin` and stdlib at
+`/usr/local/share/zith/stdlib` match the discovery root
+`<binary_dir>/../share/zith/stdlib`.
 
 ## Installer Fixes
 
