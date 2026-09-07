@@ -247,16 +247,19 @@ bool HirLowerModern::lowerStatement(frontend::StmtId id, hir::HirExprId &last_va
                           "state target has no function type: '" + statement.label + "'", {});
             return false;
         }
+        const VariadicCallPlan *jump_plan =
+            current_types_ != nullptr ? current_types_->variadicStmtPlans.get(statement.id.value)
+                                      : nullptr;
         const bool target_is_slice =
-            target_fn->params.size() > 0 && target->parameters.back().isVariadicSlice;
+            jump_plan != nullptr
+                ? jump_plan->isVariadicSlice
+                : (target_fn->params.size() > 0 && target->parameters.back().isVariadicSlice);
         const size_t slice_index =
-            target_is_slice ? target_fn->params.size() - 1U : target_fn->params.size();
-        const bool explicit_slice_arg =
-            target_is_slice && statement.arguments.size() == slice_index + 1U &&
-            !statement.arguments.empty() &&
-            (types_.kindOf(typeOfExpr(statement.arguments.back())) == types::TypeKind::Slice ||
-             types_.kindOf(typeOfExpr(statement.arguments.back())) == types::TypeKind::Array);
-        const bool auto_collect_tail = target_is_slice && !explicit_slice_arg;
+            target_is_slice && jump_plan != nullptr
+                ? jump_plan->sliceParam
+                : (target_is_slice ? target_fn->params.size() - 1U : target_fn->params.size());
+        const bool explicit_slice_arg = jump_plan != nullptr && jump_plan->explicitSliceArg;
+        const bool auto_collect_tail  = jump_plan != nullptr && jump_plan->autoCollectTail;
 
         // Sema already rejected arity/type mismatches before HIR lowering.
         // Lower only the arguments that exist; a variadic slice tail is packed

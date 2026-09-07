@@ -275,6 +275,14 @@ TypeId PerModuleSema::inferCall(frontend::ExprId id) {
                     if (!decl && binding.target.localSymbol)
                         decl = frontend::DeclId{binding.target.localSymbol.value};
                     setResolvedCallTarget(callee.id, target, decl);
+                    const VariadicCallPlan chosen_plan = makeVariadicCallPlan(
+                        expr.span, expr.operands, chosen->fn, chosen->variadicSlice,
+                        chosen->variadicSlice ? chosen->fn->params.size() - 1U
+                                              : chosen->fn->params.size());
+                    typed_map.variadicCallPlans.insert(expr.id.value, chosen_plan);
+                    if (chosen_plan.autoCollectTail)
+                        (void)checkVariadicTail(expr.span, expr.operands, chosen->fn,
+                                                chosen_plan.sliceParam, true);
                     return chosen->fn->result;
                 }
                 if (reported)
@@ -299,15 +307,11 @@ TypeId PerModuleSema::inferCall(frontend::ExprId id) {
     size_t fixed_arg_count = is_variadic ? fn->params.size() : 0;
     size_t slice_index =
         is_variadic_slice ? variadicSliceParam(resolved_callee, fn) : fn->params.size();
-    const bool explicit_slice_arg = [&]() {
-        if (!is_variadic_slice || arg_count != slice_index + 1U || expr.operands.size() < 2U)
-            return false;
-        (void)inferExpr(expr.operands.back());
-        return variadicFinalArgIsExplicitSlice(fn->params[slice_index], expr.operands, slice_index);
-    }();
-    const bool auto_collected_tail =
-        is_variadic_slice &&
-        (arg_count > slice_index + 1U || (arg_count == slice_index + 1U && !explicit_slice_arg));
+    const VariadicCallPlan plan =
+        makeVariadicCallPlan(expr.span, expr.operands, fn, is_variadic_slice, slice_index);
+    const bool explicit_slice_arg  = plan.explicitSliceArg;
+    const bool auto_collected_tail = plan.autoCollectTail;
+    typed_map.variadicCallPlans.insert(expr.id.value, plan);
     if (is_variadic_slice) {
         // The slice parameter is not auto-collected when the caller passes an
         // explicit slice as the final argument. That keeps `fn f(xs: [...]T)`
@@ -439,8 +443,11 @@ TypeId PerModuleSema::inferCall(frontend::ExprId id) {
                    diagnostics::err::GenericExplosion);
             return error_type;
         }
-        const TypeId instance_type = instantiations->substituteFunction(*fn, args);
-        const auto *instance_fn    = type_table.function(instance_type);
+        const TypeId instance_type           = instantiations->substituteFunction(*fn, args);
+        const auto *instance_fn              = type_table.function(instance_type);
+        const VariadicCallPlan instance_plan = makeVariadicCallPlan(
+            expr.span, expr.operands, instance_fn, is_variadic_slice, slice_index);
+        typed_map.variadicCallPlans.insert(expr.id.value, instance_plan);
         std::vector<std::pair<frontend::ExprId, types::OwnershipKind>> seen_roots;
         const size_t checked_params = is_variadic_slice ? slice_index : fn->params.size();
         for (size_t index = 0;
@@ -463,8 +470,9 @@ TypeId PerModuleSema::inferCall(frontend::ExprId id) {
                                           diagnostics::err::NoMatchingFn);
             }
         }
-        if (auto_collected_tail && instance_fn != nullptr) {
-            (void)checkVariadicTail(expr.span, expr.operands, instance_fn, slice_index, true);
+        if (instance_plan.autoCollectTail && instance_fn != nullptr) {
+            (void)checkVariadicTail(expr.span, expr.operands, instance_fn, instance_plan.sliceParam,
+                                    true);
         }
         setExprType(callee.id, instance_type);
         setResolvedCallTarget(callee.id, target_module, decl_id);
@@ -515,6 +523,32 @@ size_t PerModuleSema::variadicSliceParam(const session::ResolvedName *binding,
     if (binding == nullptr || fn == nullptr || fn->params.empty() || !binding->isVariadicSlice)
         return fn != nullptr ? fn->params.size() : 0U;
     return fn->params.size() - 1U;
+}
+VariadicCallPlan PerModuleSema::makeVariadicCallPlan(frontend::TextSpan span,
+                                                     const std::vector<frontend::ExprId> &args,
+                                                     const FunctionType *signature,
+                                                     bool variadic_slice,
+                                                     size_t fixed_explicit_args,
+                                                     bool has_callee_prefix) {
+    VariadicCallPlan plan;
+    plan.span = span;
+    if (signature == nullptr)
+        return plan;
+    plan.sliceParam = signature->params.size();
+    if (!variadic_slice || signature->params.empty())
+        return plan;
+    const size_t slice_index   = signature->params.size() - 1U;
+    plan.sliceParam            = slice_index;
+    plan.sliceType             = signature->params[slice_index];
+    plan.isVariadicSlice       = true;
+    const size_t expected_args = fixed_explicit_args + (has_callee_prefix ? 2U : 1U);
+    if (args.size() == expected_args && !args.empty())
+        (void)inferExpr(args.back());
+    plan.explicitSliceArg =
+        args.size() == expected_args && !args.empty() &&
+        variadicFinalArgIsExplicitSlice(signature->params[slice_index], args.back());
+    plan.autoCollectTail = !plan.explicitSliceArg;
+    return plan;
 }
 TypeId PerModuleSema::checkVariadicTail(frontend::TextSpan span,
                                         const std::vector<frontend::ExprId> &args,

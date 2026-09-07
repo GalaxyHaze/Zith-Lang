@@ -99,8 +99,7 @@ hir::HirExprId HirLowerModern::lowerCall(const frontend::Expression &expr) {
         // lowering of an instantiated body the base is no longer a generic
         // parameter, so derive the concrete owner from the generic argument.
         std::string concrete_owner;
-        if (callee_expr.kind == frontend::ExprKind::Field &&
-            !callee_expr.operands.empty()) {
+        if (callee_expr.kind == frontend::ExprKind::Field && !callee_expr.operands.empty()) {
             const auto &base =
                 current_module_->frontend->expressions()[callee_expr.operands[0].value - 1U];
             if (base.kind == frontend::ExprKind::Name && current_instance_ != nullptr &&
@@ -137,7 +136,7 @@ hir::HirExprId HirLowerModern::lowerCall(const frontend::Expression &expr) {
             // requirement, but the executable target is the concrete
             // `implement Owner as Trait` method for the instantiated `T`.
             const std::string owner_name = concrete_owner;
-            const auto findConcrete = [&](const session::ModuleArtifact &module,
+            const auto findConcrete      = [&](const session::ModuleArtifact &module,
                                           const frontend::Declaration **out) {
                 for (const auto &candidate : module.frontend->declarations()) {
                     if (candidate.kind != frontend::DeclKind::Function ||
@@ -151,7 +150,7 @@ hir::HirExprId HirLowerModern::lowerCall(const frontend::Expression &expr) {
                     const size_t declared_fixed = candidate.parameters.size();
                     const size_t min_fixed      = candidate.parameters.empty() ? 0U : [&]() {
                         size_t count = candidate_has_receiver ? candidate.parameters.size() - 1U
-                                                                   : candidate.parameters.size();
+                                                                        : candidate.parameters.size();
                         for (size_t index = candidate.parameters.size(); index > 0U; --index) {
                             const auto &parameter = candidate.parameters[index - 1U];
                             if (!parameter.defaultValue)
@@ -305,18 +304,14 @@ hir::HirExprId HirLowerModern::lowerCall(const frontend::Expression &expr) {
             dyncall.result_type  = lowerType(fn->result);
             dyncall.fn_type      = lowered_fn;
 
-            const size_t dyn_slice_param =
-                !method_decl->parameters.empty() && method_decl->parameters.back().isVariadicSlice
-                    ? fn->params.size() - 1U
-                    : fn->params.size();
-            const bool dyn_explicit_slice =
-                dyn_slice_param < fn->params.size() &&
-                expr.operands.size() == dyn_slice_param + 1U && !expr.operands.empty() &&
-                (types_.kindOf(typeOfExpr(expr.operands.back())) == types::TypeKind::Slice ||
-                 types_.kindOf(typeOfExpr(expr.operands.back())) == types::TypeKind::Array);
-            const bool dyn_collect_tail =
-                dyn_slice_param < fn->params.size() && !dyn_explicit_slice;
-            bool dyn_tail_lowered = false;
+            const VariadicCallPlan *dyn_plan =
+                current_types_ != nullptr ? current_types_->variadicCallPlans.get(expr.id.value)
+                                          : nullptr;
+            const size_t dyn_slice_param = dyn_plan != nullptr && dyn_plan->isVariadicSlice
+                                               ? dyn_plan->sliceParam
+                                               : fn->params.size();
+            const bool dyn_collect_tail  = dyn_plan != nullptr && dyn_plan->autoCollectTail;
+            bool dyn_tail_lowered        = false;
             for (size_t index = 1; index < expr.operands.size(); ++index) {
                 const size_t call_index = has_receiver ? index : index - 1U;
                 if (dyn_collect_tail && call_index >= dyn_slice_param) {
@@ -440,23 +435,22 @@ hir::HirExprId HirLowerModern::lowerCall(const frontend::Expression &expr) {
         // Sema retypes the receiver expression to `*Owner` when the method
         // declares an explicit pointer `self`, but the source value may still
         // be a plain owner. Keep the decision based on the actual lvalue type.
-        const auto *base_resolved       = findResolvedExpr(base_id);
-        const types::TypeId base_storage_ty =
-            base_resolved != nullptr && base_resolved->local
-                ? typeOfLocal(base_resolved->local)
-                : base_hir_ty;
+        const auto *base_resolved           = findResolvedExpr(base_id);
+        const types::TypeId base_storage_ty = base_resolved != nullptr && base_resolved->local
+                                                  ? typeOfLocal(base_resolved->local)
+                                                  : base_hir_ty;
         // Sema narrows the expression type to the optional payload inside a
         // guarded branch, but the local still stores the whole `?T` aggregate.
         // Use the stored type so optional aggregate receivers keep lowering
         // through the payload-field path instead of as a plain value.
         const auto *storage_optional =
             base_resolved != nullptr && base_resolved->local
-                ? sema_.typeTable().optional(sema_.typeTable().stripQualifiers(
-                      semaTypeOfLocal(base_resolved->local)))
+                ? sema_.typeTable().optional(
+                      sema_.typeTable().stripQualifiers(semaTypeOfLocal(base_resolved->local)))
                 : sema_.typeTable().optional(base_sema_resolved);
-        const auto *base_optional = storage_optional != nullptr ? storage_optional
-                                                               : sema_.typeTable().optional(
-                                                                     base_sema_resolved);
+        const auto *base_optional = storage_optional != nullptr
+                                        ? storage_optional
+                                        : sema_.typeTable().optional(base_sema_resolved);
         const bool base_optional_aggregate =
             base_optional != nullptr &&
             sema_.typeTable().kindOf(sema_.typeTable().stripQualifiers(base_optional->inner)) !=
@@ -557,32 +551,12 @@ hir::HirExprId HirLowerModern::lowerCall(const frontend::Expression &expr) {
         }
     }
 
-    // A single trailing slice is an explicit `[]T` argument, not one element
-    // to auto-collect. The frontend marks it with the same type as the slice
-    // parameter, so the check mirrors sema's `explicit_slice_arg` decision.
-    const bool explicit_slice_arg =
-        slice_param != ~static_cast<size_t>(0) && expr.operands.size() > 1 && [&]() {
-            const size_t last_index = expr.operands.size() - 1U;
-            const size_t last_call  = is_receiver_method ? last_index : last_index - 1U;
-            if (last_call != slice_param)
-                return false;
-            const auto last_type = typeOfExpr(expr.operands.back());
-            const bool is_concrete_last_slice =
-                types_.kindOf(last_type) == types::TypeKind::Slice ||
-                types_.kindOf(last_type) == types::TypeKind::Array;
-            const sema::modern::TypeId slice_sema = callee_fn->params[slice_param];
-            const auto *slice                     = sema_.typeTable().slice(
-                sema_.typeTable().stripQualifiers(sema_.typeTable().canonical(slice_sema)));
-            const bool slice_is_dyn =
-                slice != nullptr &&
-                sema_.typeTable().kindOf(slice->element) == sema::modern::TypeKind::Dyn;
-            const auto *last_slice = std::get_if<types::TypeSlice>(&types_.lookup(last_type));
-            const bool last_is_already_dyn =
-                last_slice != nullptr && types_.kindOf(last_slice->elem) == types::TypeKind::Dyn;
-            return is_concrete_last_slice && (!slice_is_dyn || last_is_already_dyn);
-        }();
-    const bool collect_tail = slice_param != ~static_cast<size_t>(0) && !explicit_slice_arg;
-    bool tail_lowered       = false;
+    const VariadicCallPlan *call_plan =
+        current_types_ != nullptr ? current_types_->variadicCallPlans.get(expr.id.value) : nullptr;
+    const bool collect_tail = call_plan != nullptr && call_plan->autoCollectTail;
+    if (call_plan != nullptr && call_plan->isVariadicSlice)
+        slice_param = call_plan->sliceParam;
+    bool tail_lowered = false;
 
     for (size_t index = 1; index < expr.operands.size(); ++index) {
         const size_t call_index          = is_receiver_method ? index : index - 1U;

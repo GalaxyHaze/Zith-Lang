@@ -1966,6 +1966,176 @@ static void test_variadic_slice_runtime() {
     CHECK_EQ(r.exitCode, 6, "auto-collected tail values are materialized and summed at runtime");
 }
 
+static void test_variadic_slice_explicit_vs_auto_runtime() {
+    ModernFileCodegenTest t;
+    t.write("main.zith", "extern fn make_values(): []i32\n"
+                         "fn sum(rest: [...]i32): i32 {\n"
+                         "    return raw rest[0] + raw rest[1];\n"
+                         "}\n"
+                         "fn main(): i32 {\n"
+                         "    return sum(make_values()) * 10 + sum(3, 4);\n"
+                         "}\n");
+
+    const auto c_path   = (t.root / "values.c").string();
+    const auto lib_path = (t.root / "libzithvalues.a").string();
+    const auto obj_path = (t.root / "values.o").string();
+    {
+        std::ofstream c_source(c_path, std::ios::binary | std::ios::trunc);
+        c_source << "#include <stdint.h>\n"
+                    "typedef struct { int32_t *ptr; int64_t len; } Slice;\n"
+                    "static int32_t data[2] = {1, 2};\n"
+                    "Slice make_values(void) { Slice s = {data, 2}; return s; }\n";
+    }
+    const auto compile = "cc -c " + c_path + " -o " + obj_path + " 2>/dev/null";
+    const auto archive = "ar rcs " + lib_path + " " + obj_path + " 2>/dev/null";
+    if (std::system(compile.c_str()) != 0 || std::system(archive.c_str()) != 0) {
+        std::printf("  SKIP: no C toolchain for the explicit-vs-auto variadic runtime test\n");
+        return;
+    }
+
+    t.opts.libraryDirs.push(t.root.string());
+    t.opts.libraries.push("zithvalues");
+    auto r = t.run();
+    CHECK(r.ok, "explicit and auto-collected variadic slices compile, link and run");
+    CHECK_EQ(r.exitCode, 37, "explicit slice sum (3) and auto-collected sum (7) are combined");
+}
+
+static void test_variadic_slice_method_runtime() {
+    ModernFileCodegenTest t;
+    t.write("main.zith", "struct Agg {\n"
+                         "    total: i32,\n"
+                         "    fn add(self, rest: [...]i32): i32 {\n"
+                         "        return self.total + raw rest[0] + raw rest[1];\n"
+                         "    }\n"
+                         "}\n"
+                         "extern fn make_values(): []i32\n"
+                         "fn main(): i32 {\n"
+                         "    let a1: Agg = Agg { total: 100 };\n"
+                         "    let a2: Agg = Agg { total: 100 };\n"
+                         "    return a1.add(make_values()) - a2.add(1, 2);\n"
+                         "}\n");
+
+    const auto c_path   = (t.root / "values-method.c").string();
+    const auto lib_path = (t.root / "libzithvaluesmethod.a").string();
+    const auto obj_path = (t.root / "values-method.o").string();
+    {
+        std::ofstream c_source(c_path, std::ios::binary | std::ios::trunc);
+        c_source << "#include <stdint.h>\n"
+                    "typedef struct { int32_t *ptr; int64_t len; } Slice;\n"
+                    "static int32_t data[2] = {1, 2};\n"
+                    "Slice make_values(void) { Slice s = {data, 2}; return s; }\n";
+    }
+    const auto compile = "cc -c " + c_path + " -o " + obj_path + " 2>/dev/null";
+    const auto archive = "ar rcs " + lib_path + " " + obj_path + " 2>/dev/null";
+    if (std::system(compile.c_str()) != 0 || std::system(archive.c_str()) != 0) {
+        std::printf("  SKIP: no C toolchain for the method variadic runtime test\n");
+        return;
+    }
+
+    t.opts.libraryDirs.push(t.root.string());
+    t.opts.libraries.push("zithvaluesmethod");
+    auto r = t.run();
+    CHECK(r.ok, "method explicit and auto-collected variadic tails compile, link and run");
+    CHECK_EQ(r.exitCode, 0, "method slice sums cancel in the explicit-vs-auto comparison");
+}
+
+static void test_variadic_slice_dyn_runtime() {
+    ModernFileCodegenTest t;
+    t.write("main.zith", "trait Value {\n"
+                         "    fn value(self): i32 { return 0; }\n"
+                         "}\n"
+                         "struct Box {\n"
+                         "    n: i32,\n"
+                         "    fn value(self): i32 { return self.n; }\n"
+                         "}\n"
+                         "implement Box as Value {\n"
+                         "    fn value(self): i32 { return self.n; }\n"
+                         "}\n"
+                         "fn first(rest: [...]dyn Value): i32 {\n"
+                         "    let a: dyn Value = raw rest[0];\n"
+                         "    return a.value();\n"
+                         "}\n"
+                         "fn second(rest: [...]dyn Value): i32 {\n"
+                         "    let b: dyn Value = raw rest[1];\n"
+                         "    return b.value();\n"
+                         "}\n"
+                         "fn main(): i32 {\n"
+                         "    let a: dyn Value = Box { n: 5 };\n"
+                         "    let b: dyn Value = Box { n: 7 };\n"
+                         "    let ds: []dyn Value = [a, b];\n"
+                         "    return first(a, b) * 10 + second(ds);\n"
+                         "}\n");
+
+    auto r = t.run();
+    CHECK(r.ok, "dyn auto-collected and explicit variadic tails compile, link and run");
+    CHECK_EQ(r.exitCode, 57, "dyn auto-collect selects 5 and explicit []dyn selects 7");
+}
+
+static void test_variadic_slice_state_runtime_forms() {
+    ModernFileCodegenTest t;
+    t.write("main.zith", "state Start(rest: [...]i32): i32 {\n"
+                         "    if (@lengthOf(rest) == 0) {\n"
+                         "        return 10;\n"
+                         "    }\n"
+                         "    return raw rest[0];\n"
+                         "}\n"
+                         "extern fn make_values(): []i32\n"
+                         "fn main(): i32 {\n"
+                         "    return dock Start(make_values());\n"
+                         "}\n");
+
+    const auto c_path   = (t.root / "values-state.c").string();
+    const auto lib_path = (t.root / "libzithvaluesstate.a").string();
+    const auto obj_path = (t.root / "values-state.o").string();
+    {
+        std::ofstream c_source(c_path, std::ios::binary | std::ios::trunc);
+        c_source << "#include <stdint.h>\n"
+                    "typedef struct { int32_t *ptr; int64_t len; } Slice;\n"
+                    "static int32_t data[1] = {7};\n"
+                    "Slice make_values(void) { Slice s = {data, 1}; return s; }\n";
+    }
+    const auto compile = "cc -c " + c_path + " -o " + obj_path + " 2>/dev/null";
+    const auto archive = "ar rcs " + lib_path + " " + obj_path + " 2>/dev/null";
+    if (std::system(compile.c_str()) != 0 || std::system(archive.c_str()) != 0) {
+        std::printf("  SKIP: no C toolchain for the state variadic runtime test\n");
+        return;
+    }
+
+    t.opts.libraryDirs.push(t.root.string());
+    t.opts.libraries.push("zithvaluesstate");
+    auto r = t.run();
+    CHECK(r.ok, "state explicit variadic tail runs");
+    CHECK_EQ(r.exitCode, 7, "state explicit slice returns its first element");
+
+    ModernFileCodegenTest auto_collect;
+    auto_collect.write("main.zith", "state Start(rest: [...]i32): i32 {\n"
+                                    "    if (@lengthOf(rest) == 0) {\n"
+                                    "        return 10;\n"
+                                    "    }\n"
+                                    "    return raw rest[0];\n"
+                                    "}\n"
+                                    "fn main(): i32 {\n"
+                                    "    return dock Start(7);\n"
+                                    "}\n");
+    r = auto_collect.run();
+    CHECK(r.ok, "state auto-collected variadic tail runs");
+    CHECK_EQ(r.exitCode, 7, "state auto-collected slice returns its first element");
+
+    ModernFileCodegenTest empty;
+    empty.write("main.zith", "state Start(rest: [...]i32): i32 {\n"
+                             "    if (@lengthOf(rest) == 0) {\n"
+                             "        return 10;\n"
+                             "    }\n"
+                             "    return raw rest[0];\n"
+                             "}\n"
+                             "fn main(): i32 {\n"
+                             "    return dock Start();\n"
+                             "}\n");
+    r = empty.run();
+    CHECK(r.ok, "state empty variadic tail runs");
+    CHECK_EQ(r.exitCode, 10, "state empty tail returns the empty-slice branch");
+}
+
 static void test_variadic_slice_state_runtime() {
     ModernFileCodegenTest t;
     t.write("main.zith", "state Start(n: i32, rest: [...]i32): i32 {\n"
@@ -3075,6 +3245,14 @@ static void test_codegen() {
     test_mutable_slice_from_c();
     printf("Running test_variadic_slice_runtime\n");
     test_variadic_slice_runtime();
+    printf("Running test_variadic_slice_explicit_vs_auto_runtime\n");
+    test_variadic_slice_explicit_vs_auto_runtime();
+    printf("Running test_variadic_slice_method_runtime\n");
+    test_variadic_slice_method_runtime();
+    printf("Running test_variadic_slice_dyn_runtime\n");
+    test_variadic_slice_dyn_runtime();
+    printf("Running test_variadic_slice_state_runtime_forms\n");
+    test_variadic_slice_state_runtime_forms();
     printf("Running test_variadic_slice_state_runtime\n");
     test_variadic_slice_state_runtime();
 }
