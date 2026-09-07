@@ -52,6 +52,7 @@
       "$StdlibRoot = Split-Path $dir -Parent",
       "$StdlibDir = Join-Path $StdlibRoot 'share\\zith\\stdlib'",
       "New-Item -ItemType Directory -Path $StdlibDir -Force | Out-Null",
+      "Get-ChildItem $StdlibDir -Force | Remove-Item -Recurse -Force",
       "Expand-Archive -Path \"$dir\\zithc-stdlib-*.zip\" -DestinationPath $StdlibDir -Force",
       "Remove-Item \"$dir\\zithc-stdlib-*.zip\" -Force"
     ]

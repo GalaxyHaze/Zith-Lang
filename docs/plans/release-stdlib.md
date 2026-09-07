@@ -12,6 +12,8 @@ This plan records how the released stdlib archives map to the compiler's
 The release archives created by `.github/workflows/build-artifact.yml` contain
 the contents of `stdlib/` without an enclosing `stdlib/` directory. Tar
 and zip assets are therefore extracted directly into the destination root.
+Each installer clears the existing destination before extracting, so older
+versions do not leave stale stdlib files behind.
 
 ## Per-Platform Mapping
 

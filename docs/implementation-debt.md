@@ -1,6 +1,6 @@
 # Zith Implementation Debt
 
-> Last updated: 2026-09-07.
+> Last updated: 2026-09-07 (release/installer CI follow-ups).
 
 Documento de gestão da dívida de implementação. Distingue propositadamente:
 
@@ -18,6 +18,8 @@ engenharia para rever e gerir.
 
 ## Release stdlib / installer follow-ups
 
+- Os installers de release substituem o conteúdo de `<prefix>/share/zith/stdlib`
+  antes de extrair, para evitar ficheiros stdlib antigos após um upgrade.
 - O manifest `.github/scoop/bucket/zithc.json` ainda está fixo em `v0.6.2` e
   aponta para `GalaxyHaze/Zith-Lang`; o workflow `update-package.yml` já usa
   `${{ github.repository }}` e deve regenerar URLs/hashes no próximo release.
@@ -32,6 +34,27 @@ engenharia para rever e gerir.
   `scripts/install.sh` dependem do runtime ser testado em Windows real; até
   esse teste estar em CI, ficam verificados por sintaxe e pela análise estática
   do código.
+- Em `.github/workflows/build-artifact.yml` o job Windows ARM64 usa
+  `msvc_arch: amd64_arm64`, pelo que o step "Setup Zig (for Windows arm64
+  cross-compile)" está morto (`if: ... msvc_arch == ''`). O target atual usa
+  clang-cl/LLVM para ARM64; o dead step deve ser removido ou a estratégia deve
+  ser resolvida antes de confiar num segundo fallback Zig.
+- O CI regular (`ci.yml`) só corre nativo em `ubuntu-latest`. Não valida os
+  installers `install.ps1`/`install.sh`, o layout Scoop, os artifacts de release
+  contra `findStdlibRoots()`, nem executa um smoke test de stdlib após instalar.
+  A validação efetiva desses caminhos fica residualmente sem cobertura
+  automática até haver um job Windows/macOS ou um teste de instalação em
+  diretório temporário.
+- O workflow `create-new-release.yml` aponta para
+  `raw.githubusercontent.com/${{ github.repository }}/master/...`, mas a branch
+  atual do repositório é `main`. Os comandos de instalação publicados num
+  release podem apontar para uma branch inexistente/antiga até o script ser
+  corrigido para `main`.
+- O bucket Scoop e o dispatch Homebrew são actualizados por
+  `update-package.yml`; as falhas desse fluxo não são visíveis em PRs deste
+  repo e dependem de `RELEASE_PAT`/do tap externo. A regeneração de hashes e o
+  teste de `scoop install` só podem ser confirmados fora desta rama ou num
+  follow-up manual.
 
 ---
 
