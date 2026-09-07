@@ -354,3 +354,16 @@ quando houver um release tag real.
    como parte da quebra mecânica.
 4. Consolidar as entradas duplicadas de `Known Debt` de `docs/impl-status.md`
    para este ficheiro quando forem tratadas.
+
+### 9. Scoop manifest de `v0.6.3` sem hashes verificados
+
+- Estado: `.github/scoop/bucket/zithc.json` aponta para `GalaxyHaze/Zith` e
+  `v0.6.3`, mas os quatro hashes dos assets Windows ficaram como placeholders
+  `""`. A task de auditoria correu sem rede e sem artefactos locais para
+  validar os SHA256 do release.
+- Riscos: um bucket público não deve publicar o manifest até o
+  `update-package.yml` regenerar os hashes reais. Instalações via Scoop vão
+  falhar ou bloquear com hashes vazios.
+- Acção: executar o workflow `Update Packages Manifest` para um tag
+  `v0.6.3`/posterior, ou preencher manualmente os hashes a partir dos assets
+  publicados antes de incluir o manifest num bucket.

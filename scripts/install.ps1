@@ -3,9 +3,6 @@ param(
 )
 
 $Repo = "GalaxyHaze/Zith"
-$IsMusl = $false
-# Simple arg parse: check for --musl in args
-if ($args -contains "--musl") { $IsMusl = $true }
 
 if ([string]::IsNullOrWhiteSpace($Version)) {
     Write-Host "No version specified. Fetching latest version..."
@@ -31,10 +28,7 @@ if ($Arch -match "ARM" -or $env:PROCESSOR_ARCHITECTURE -match "ARM64") {
     $IsArm64 = $true
 }
 
-if ($IsMusl) {
-    if ($IsArm64) { $FileName = "zithc-windows-arm64-musl.exe" }
-    else          { $FileName = "zithc-windows-amd64-musl.exe" }
-} elseif ($IsArm64) {
+if ($IsArm64) {
     $FileName = "zithc-windows-arm64.exe"
 } else {
     $FileName = "zithc-windows-amd64.exe"
@@ -85,6 +79,7 @@ try {
         if (-not (Test-Path $StdlibDir)) {
             New-Item -ItemType Directory -Path $StdlibDir -Force | Out-Null
         }
+        Get-ChildItem -Path $StdlibDir -Force | Remove-Item -Recurse -Force
         Expand-Archive -Path "$env:TEMP\zithc-stdlib.zip" -DestinationPath $StdlibDir -Force
         Remove-Item -Path "$env:TEMP\zithc-stdlib.zip" -Force
         Write-Host "Standard library installed to $StdlibDir" -ForegroundColor Green
