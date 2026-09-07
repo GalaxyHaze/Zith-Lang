@@ -40,6 +40,6 @@ class Zithc < Formula
   test do
     assert_predicate bin/"zithc", :exist?
     assert_predicate share/"zith/stdlib", :directory?
-    assert_match(/#{version}/, shell_output("#{bin}/zithc --info"))
+    assert_match(/#{version}/, shell_output("#{bin}/zithc info"))
   end
 end
