@@ -29,6 +29,7 @@ MANIFEST = REPO / ".awt" / "manifest.md"
 REQUESTS = REPO / ".awt" / "requests"
 TASKS = REPO / ".awt" / "tasks"
 STATUS = REPO / ".awt" / "scheduler-status.json"
+EVENTS = REPO / ".awt" / "events"
 
 AGENT_RE = re.compile(r"^##\s+(?P<agent>agent\d+)\s+-\s+(?P<title>.*)$")
 
@@ -46,6 +47,7 @@ class AgentState:
     done_tasks: list[str] = field(default_factory=list)
     active_task: str | None = None
     plan: dict[str, object] = field(default_factory=dict)
+    seen_requests: dict[str, str] = field(default_factory=dict)
 
 
 def log(message: str) -> None:
@@ -145,6 +147,9 @@ def load_state() -> dict[str, AgentState]:
             done_tasks=[str(x) for x in done] if isinstance(done, list) else [],
             active_task=value.get("active_task"),
             plan=value.get("plan", {}) if isinstance(value.get("plan"), dict) else {},
+            seen_requests=value.get("seen_requests", {})
+            if isinstance(value.get("seen_requests"), dict)
+            else {},
         )
     return states
 
@@ -156,6 +161,7 @@ def save_state(states: dict[str, AgentState]) -> None:
             "done_tasks": state.done_tasks,
             "active_task": state.active_task,
             "plan": state.plan,
+            "seen_requests": state.seen_requests,
         }
         for agent, state in sorted(states.items())
     }
@@ -184,6 +190,23 @@ def current_task(states: dict[str, AgentState], plan: AgentPlan) -> str | None:
 
 def merge_requested(agent: str) -> bool:
     return (REQUESTS / f"{agent}.md").is_file()
+
+
+def request_head(agent: str) -> str:
+    req = REQUESTS / f"{agent}.md"
+    if not req.is_file():
+        return ""
+    for line in req.read_text(encoding="utf-8", errors="replace").splitlines():
+        if line.startswith("- head:"):
+            return line.split(":", 1)[1].strip()
+    return ""
+
+
+def record_event(agent: str, message: str) -> None:
+    EVENTS.mkdir(parents=True, exist_ok=True)
+    with (EVENTS / f"{agent}.log").open("a", encoding="utf-8") as handle:
+        handle.write(f"{time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())} {message}\n")
+    log(f"{agent}: {message}")
 
 
 def write_task_file(agent: str, content: str) -> None:
@@ -266,10 +289,11 @@ def write_pending(agent: str, plan: AgentPlan, task: str, index: int, total: int
                 "",
                 "## End Of Task",
                 "",
-                "When this item is complete, request merge. The master scheduler will",
-                "review and either advance this worktree to the next task or write",
-                "If the scheduler writes `# Status` with `end` below it, stop",
-                "and do not request further work.",
+                "After requesting merge, do NOT finish this session. Return to the",
+                "listening loop: re-read `{TASK_PATH}` whenever the master advances the",
+                "worktree. Continue executing new tasks as they appear and request",
+                "merge again after each one. Stop only when `TASK.md` contains a",
+                "`# Status` section with `end` below it.",
                 "",
             ]
         )
@@ -350,10 +374,11 @@ def reconcile(states: dict[str, AgentState], plans: list[AgentPlan], *, merge: b
         agent = plan.agent
         state = states.setdefault(agent, AgentState())
         active = clean_task_title(state.active_task or "")
-        if not active:
-            continue
         if merge_requested(agent):
-            log(f"{agent}: merge request seen")
+            head = request_head(agent)
+            if state.seen_requests.get(agent) != head:
+                record_event(agent, "finished current task and requested merge")
+                state.seen_requests[agent] = head
             if merge:
                 merge_agent(agent)
                 merged = (REPO / ".awt" / "merged" / "agents.log").is_file() and agent in (
@@ -362,10 +387,14 @@ def reconcile(states: dict[str, AgentState], plans: list[AgentPlan], *, merge: b
                 if not merged and not (REQUESTS / f"{agent}.md").exists():
                     merged = True
                 if merged:
-                    state.done_tasks.append(state.active_task)
+                    if active and clean_task_title(active) not in {
+                        clean_task_title(x) for x in state.done_tasks
+                    }:
+                        state.done_tasks.append(state.active_task)
+                    record_event(agent, "merged into main by master")
                     advance_agent(agent, states, plan)
                 else:
-                    log(f"{agent}: merge did not complete; keeping task active")
+                    record_event(agent, "merge did not complete; keeping task active")
             else:
                 review_agent(agent)
     save_state(states)
@@ -387,6 +416,22 @@ def status_text(states: dict[str, AgentState], plans: list[AgentPlan]) -> str:
                 ]
             )
         )
+    return "\n".join(lines)
+
+
+def watch_banner(states: dict[str, AgentState], plans: list[AgentPlan]) -> str:
+    lines = ["agent,status"]
+    for plan in plans:
+        state = states.get(plan.agent, AgentState())
+        active = clean_task_title(state.active_task or plan_brief(plan))
+        done = state.done_tasks
+        if merge_requested(plan.agent):
+            status = "merge requested"
+        elif active and clean_task_title(active) in {clean_task_title(x) for x in done}:
+            status = "awaiting next task"
+        else:
+            status = f"active: {active}"
+        lines.append(f"{plan.agent},{status}")
     return "\n".join(lines)
 
 
@@ -548,11 +593,23 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.watch:
         log(f"watching {REQUESTS} every {args.interval}s; Ctrl-C to stop")
+        if args.json:
+            print(
+                json.dumps(
+                    {
+                        "machine": machine_name(),
+                        "initial": watch_banner(states, plans),
+                    },
+                    indent=2,
+                    sort_keys=True,
+                )
+            )
+        else:
+            print(watch_banner(states, plans))
         try:
             while True:
                 states = load_state()
                 reconcile(states, plans, merge=args.merge)
-                print(status_text(states, plans))
                 if all(
                     clean_task_title(states.get(plan.agent, AgentState()).active_task or "")
                     in {

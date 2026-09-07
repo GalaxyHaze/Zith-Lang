@@ -24,7 +24,8 @@ struct FnvParameters {
     uint64_t prime;
 };
 
-[[nodiscard]] uint64_t hashText(std::string_view text, FnvParameters parameters) noexcept {
+[[nodiscard]] static uint64_t hashText(std::string_view text,
+                                       FnvParameters parameters) noexcept {
     uint64_t hash = parameters.offset;
     for (const char character : text) {
         hash ^= static_cast<unsigned char>(character);
@@ -33,7 +34,7 @@ struct FnvParameters {
     return hash;
 }
 
-[[nodiscard]] std::string stableRoot(std::string_view path) {
+[[nodiscard]] static std::string stableRoot(std::string_view path) {
     if (path.empty())
         return {};
     return SourceCatalog::canonicalPath(path);

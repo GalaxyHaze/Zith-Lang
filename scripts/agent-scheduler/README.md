@@ -29,6 +29,14 @@ back:
 cp scripts/agent-scheduler/manifest.example.md .awt/manifest.md
 ```
 
+## Watch Output
+
+At startup, `--watch` prints one compact line per agent so you can see the
+initial state. After that, it prints only per-agent events when a new merge
+request appears. Each event is also appended to
+`.awt/events/<agent>.log`, so the terminal is not flooded with a full status
+table on every poll.
+
 ## Start
 
 Write the initial `TASK.md` files and clear any scheduler state:
@@ -53,9 +61,12 @@ dispatching the next task. Without `--merge`, the scheduler only reviews.
 - `.awt/scheduler-status.json`: local scheduler state, reset with
   `--reset-queue`.
 - `.awt/requests/<agent>.md`: signal that an agent finished and requested merge.
+- `.awt/events/<agent>.log`: per-agent log of new merge requests and merge
+  outcomes written by the scheduler.
 - `.awt/<agent>/TASK.md`: current task file written into each agent worktree.
 - `# Status\nend\n` in a fresh scheduler write is the stop marker; the agent
-  should not request further work.
+  returns to the listening loop at the end of each task, re-reads `TASK.md`,
+  and only stops or stops requesting work when it sees the stop marker.
 
 ## Useful Checks
 

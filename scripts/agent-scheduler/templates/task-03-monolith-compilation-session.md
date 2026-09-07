@@ -58,5 +58,7 @@ cd {REPO}/.awt/{AGENT}
 
 ## End Of Task
 
-When complete, request merge and wait for the scheduler to advance or write
-a `# Status` marker with `end` below it.
+After requesting merge, do NOT finish this session. Return to the listening
+loop: re-read `TASK.md` whenever the scheduler advances this worktree. Execute
+each new task as it appears and request merge again after completing it. Stop
+only when `TASK.md` contains a `# Status` section with `end` below it.
