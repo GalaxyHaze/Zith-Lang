@@ -172,11 +172,13 @@ status row.
 
 Other debt entries remain real and were left unchanged:
 
+- Bare `opaque` cross-module/cache hydration is closed by the canonical tags
+  and `opaque -> opaque` sema no-op; pack/dyn + `opaque` remains separate.
+
 - `type Name = T` is partial because construction and field access syntax are
   missing.
 - The object cache works but `.zirl` is neither produced nor consumed.
 - NRA is partial because the full alive/dead/lent proof is missing.
-- Bare `opaque` cannot be rehydrated across cache/module boundaries.
 - C interop covers common C but struct-by-value ABI and several import forms
   are not verified or imported.
 - Numeric narrowing casts do not check overflow.
