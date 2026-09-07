@@ -463,6 +463,172 @@ void test_workspace_header_shadows_system_header() {
     CHECK(shadowed, "a workspace-local header shadows the system one");
 }
 
+void test_platform_import_resolution_order() {
+    Workspace workspace;
+    workspace.write("main.zith", "from platform\nfn main() { }\n");
+    workspace.write("platform.x86_64.linux.zith", "pub fn exact() { }\n");
+    workspace.write("platform.x86_64.zith", "pub fn arch_only() { }\n");
+    workspace.write("platform.linux.zith", "pub fn os_only() { }\n");
+    workspace.write("platform.zith", "pub fn generic() { }\n");
+
+    auto config         = workspace.config(1);
+    config.targetTriple = "x86_64-unknown-linux-gnu";
+    FrontendContext context(std::move(config));
+    auto result = context.analyzeFile(workspace.path("main.zith"));
+    CHECK(result.isOk(), "platform import analysis succeeds");
+    if (!result)
+        return;
+
+    bool saw_exact = false;
+    for (const auto &edge : result.value()->importGraph()) {
+        for (const auto &target : edge.targets)
+            saw_exact |= target ==
+                         SourceCatalog::canonicalPath(workspace.path("platform.x86_64.linux.zith"));
+    }
+    CHECK(saw_exact, "exact arch.os variant wins over generic import");
+    CHECK(!result.value()->hasErrors(), "resolved platform import has no diagnostics");
+}
+
+void test_platform_import_arch_only() {
+    Workspace workspace;
+    workspace.write("main.zith", "from platform\nfn main() { }\n");
+    workspace.write("platform.x86_64.zith", "pub fn arch_only() { }\n");
+    workspace.write("platform.linux.zith", "pub fn os_only() { }\n");
+    workspace.write("platform.zith", "pub fn generic() { }\n");
+
+    auto config         = workspace.config(1);
+    config.targetTriple = "x86_64-unknown-linux-gnu";
+    FrontendContext context(std::move(config));
+    auto result = context.analyzeFile(workspace.path("main.zith"));
+    CHECK(result.isOk(), "arch-only platform import analysis succeeds");
+    if (!result)
+        return;
+
+    bool saw_arch = false;
+    bool saw_os   = false;
+    for (const auto &edge : result.value()->importGraph()) {
+        for (const auto &target : edge.targets) {
+            saw_arch |=
+                target == SourceCatalog::canonicalPath(workspace.path("platform.x86_64.zith"));
+            saw_os |= target == SourceCatalog::canonicalPath(workspace.path("platform.linux.zith"));
+        }
+    }
+    CHECK(saw_arch, "arch-only variant wins when exact arch.os is absent");
+    CHECK(!saw_os, "os-only variant does not outrank arch-only");
+}
+
+void test_platform_import_os_only() {
+    Workspace workspace;
+    workspace.write("main.zith", "from platform\nfn main() { }\n");
+    workspace.write("platform.linux.zith", "pub fn os_only() { }\n");
+    workspace.write("platform.zith", "pub fn generic() { }\n");
+
+    auto config         = workspace.config(1);
+    config.targetTriple = "x86_64-unknown-linux-gnu";
+    FrontendContext context(std::move(config));
+    auto result = context.analyzeFile(workspace.path("main.zith"));
+    CHECK(result.isOk(), "os-only platform import analysis succeeds");
+    if (!result)
+        return;
+
+    bool saw_os = false;
+    for (const auto &edge : result.value()->importGraph()) {
+        for (const auto &target : edge.targets)
+            saw_os |= target == SourceCatalog::canonicalPath(workspace.path("platform.linux.zith"));
+    }
+    CHECK(saw_os, "os-only variant wins when arch variants are absent");
+}
+
+void test_platform_import_generic_fallback() {
+    Workspace workspace;
+    workspace.write("main.zith", "from platform\nfn main() { }\n");
+    workspace.write("platform.zith", "pub fn generic() { }\n");
+
+    auto config         = workspace.config(1);
+    config.targetTriple = "aarch64-unknown-darwin";
+    FrontendContext context(std::move(config));
+    auto result = context.analyzeFile(workspace.path("main.zith"));
+    CHECK(result.isOk(), "generic platform import analysis succeeds");
+    if (!result)
+        return;
+
+    bool saw_generic = false;
+    for (const auto &edge : result.value()->importGraph()) {
+        for (const auto &target : edge.targets)
+            saw_generic |= target == SourceCatalog::canonicalPath(workspace.path("platform.zith"));
+    }
+    CHECK(saw_generic, "generic module is chosen when no variant matches");
+}
+
+void test_platform_import_missing_diagnostic() {
+    Workspace workspace;
+    workspace.write("main.zith", "from platform\nfn main() { }\n");
+
+    auto config         = workspace.config(1);
+    config.targetTriple = "x86_64-unknown-linux-gnu";
+    FrontendContext context(std::move(config));
+    auto result = context.analyzeFile(workspace.path("main.zith"));
+    CHECK(result.isOk(), "missing platform import still produces a snapshot");
+    if (!result)
+        return;
+
+    bool saw_actionable = false;
+    for (const auto &diagnostic : result.value()->diagnostics()) {
+        saw_actionable |=
+            diagnostic.message.find("missing generic module or matching platform variant") !=
+            std::string::npos;
+    }
+    CHECK(saw_actionable, "missing import mentions generic and platform variants");
+}
+
+void test_platform_import_cache_key_separation() {
+    Workspace workspace;
+    workspace.write("main.zith", "from platform\n"
+                                 "fn main(): i32 { platform_fn() }\n");
+    workspace.write("platform.x86_64.linux.zith", "pub fn platform_fn(): i32 { 11 }\n");
+    workspace.write("platform.aarch64.darwin.zith", "pub fn platform_fn(): i32 { 22 }\n");
+    workspace.write("platform.zith", "pub fn platform_fn(): i32 { 33 }\n");
+
+    auto linux_config          = workspace.config(1);
+    linux_config.targetTriple  = "x86_64-unknown-linux-gnu";
+    auto darwin_config         = workspace.config(1);
+    darwin_config.targetTriple = "aarch64-apple-darwin";
+
+    FrontendContext linux_context(std::move(linux_config));
+    auto linux_result = linux_context.analyzeFile(workspace.path("main.zith"));
+    CHECK(linux_result.isOk(), "linux-target platform import analysis succeeds");
+    if (!linux_result)
+        return;
+
+    FrontendContext darwin_context(std::move(darwin_config));
+    auto darwin_result = darwin_context.analyzeFile(workspace.path("main.zith"));
+    CHECK(darwin_result.isOk(), "darwin-target platform import analysis succeeds");
+    if (!darwin_result)
+        return;
+
+    const auto linux_first_metrics  = linux_context.metrics().cache;
+    const auto darwin_first_metrics = darwin_context.metrics().cache;
+    (void)linux_context.analyzeFile(workspace.path("main.zith"));
+    (void)darwin_context.analyzeFile(workspace.path("main.zith"));
+    CHECK(linux_context.metrics().cache.hits > linux_first_metrics.hits,
+          "linux context reuses its own target cache entries");
+    CHECK(darwin_context.metrics().cache.hits > darwin_first_metrics.hits,
+          "darwin context reuses its own target cache entries");
+
+    bool saw_linux  = false;
+    bool saw_darwin = false;
+    for (const auto &edge : linux_result.value()->importGraph())
+        for (const auto &target : edge.targets)
+            saw_linux |= target ==
+                         SourceCatalog::canonicalPath(workspace.path("platform.x86_64.linux.zith"));
+    for (const auto &edge : darwin_result.value()->importGraph())
+        for (const auto &target : edge.targets)
+            saw_darwin |= target == SourceCatalog::canonicalPath(
+                                        workspace.path("platform.aarch64.darwin.zith"));
+    CHECK(saw_linux, "linux target resolves the linux platform variant");
+    CHECK(saw_darwin, "darwin target resolves the darwin platform variant");
+}
+
 void test_syntax_errors_reach_the_diagnostic_engine() {
     Workspace workspace;
     workspace.write("main.zith", "fn f( {\n");
@@ -500,6 +666,12 @@ static void test_frontend_context() {
     test_syntax_errors_reach_the_diagnostic_engine();
     test_system_include_roots();
     test_workspace_header_shadows_system_header();
+    test_platform_import_resolution_order();
+    test_platform_import_arch_only();
+    test_platform_import_os_only();
+    test_platform_import_generic_fallback();
+    test_platform_import_missing_diagnostic();
+    test_platform_import_cache_key_separation();
 }
 
 TEST_MAIN(frontend_context)

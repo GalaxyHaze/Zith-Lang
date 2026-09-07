@@ -10,9 +10,9 @@ This directory is the planning home for the current `Zith--` iteration:
 
 - `drop` as deterministic scope cleanup, extending the already-shipped
   `defer` path. See `docs/plans/defer-drop.md`.
+- Platform-specific imports (`foo.<arch>.<os>.zith`) are implemented in the
+  import resolver. See `docs/plans/platform-imports.md`.
 - Monolith splits as infrastructure work. See `docs/plans/monolith-splits.md`.
-- Platform-specific imports (`foo.<arch>.<os>.zith`) as module system work.
-  See `docs/plans/platform-imports.md`.
 - Feature hardening and debt closure from `docs/implementation-debt.md`.
 
 Traits, generics, conformance and generic constraints are already implemented

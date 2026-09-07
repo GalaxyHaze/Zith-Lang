@@ -626,6 +626,34 @@ raw macro dbg(x) { @println(x) }
 tag macro Box(content) { <content/> }
 ```
 
+## Imports Platform-Specific
+
+`import foo` continua a ser a única sintaxe de importação de módulos Zith.
+Quando o resolver encontra uma importação Zith, depois do candidato literal e
+antes do fallback genérico `foo.zith`, tenta variantes derivadas do target
+activo na mesma ordem do plano:
+
+```text
+foo.<arch>.<os>.zith
+foo.<arch>.zith
+foo.<os>.zith
+foo.zith
+```
+
+O target activo usa o triple normalizado e nomes canónicos de `llvm::Triple`
+(por exemplo `x86_64`, `aarch64`, `linux`, `darwin`, `windows`); aliases como
+`amd64`, `arm64` ou `macos` não são mapeados em v1. Sem LLVM não há variantes
+de plataforma. Só o último segmento de um path composto varia, `foo/mod.zith`
+continua como diretório de módulo, e paths explícitos, headers C, assets e
+literais não são afectados. Se nenhuma variante nem `foo.zith` existir, a importação reporta
+`could not resolve import 'foo'; missing generic module or matching platform
+variant`.
+
+`export foo` re-exporta o ficheiro de plataforma resolvido para o target
+actual; o artifact, spans e cache apontam para o ficheiro seleccionado.
+O cache continua separado por target, porque `CacheKey` já inclui
+`targetTriple`.
+
 ## Restrições Removidas
 
 | Sintaxe/feature | Motivo | Comportamento |

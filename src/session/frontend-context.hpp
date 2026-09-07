@@ -530,8 +530,9 @@ private:
 
     struct ResolvedImport {
         std::vector<ModuleKey> modules;
-        ImportTargetKind targetKind = ImportTargetKind::Zith;
-        bool found                  = false;
+        ImportTargetKind targetKind     = ImportTargetKind::Zith;
+        bool found                      = false;
+        bool consideredPlatformVariants = false;
     };
 
     [[nodiscard]] memory::Result<SourceCatalog::SourcePtr> sourceForPath(std::string_view path);

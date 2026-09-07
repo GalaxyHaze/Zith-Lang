@@ -337,6 +337,35 @@ directamente como `void*`: o lowering marca `HirOpaqueCast.returns_ptr`, e o cod
 bitcast do payload sem load. Isto permite comparar os ponteiros reais armazenados numa bare
 `opaque` sem confundir o aggregate tagged com um ponteiro LLVM.
 
+## Import Resolution and Platform Variants
+
+`FrontendContext::resolveImport` mantém os caminhos literais para headers e
+assets. Para importações Zith, cada search root é visitado pela mesma ordem do
+plano:
+
+1. Candidato literal.
+2. `foo.<arch>.<os>.zith`.
+3. `foo.<arch>.zith`.
+4. `foo.<os>.zith`.
+5. `foo.zith`.
+6. `foo/mod.zith`.
+
+`targetComponents` extrai `arch` e `os` do `config_.targetTriple` com
+`llvm::Triple`; sem LLVM a função devolve componentes vazios e não são geradas
+variantes. `platformVariantSuffixes` constrói os sufixos por essa ordem e o
+resolver só varia o último segmento do path. Quando não há ficheiro resolvido
+numa importação Zith, `ResolvedImport::consideredPlatformVariants` torna o
+diagnóstico mais accionável:
+
+```text
+could not resolve import 'foo'; missing generic module or matching platform variant
+```
+
+O artifact resolvido, spans e cache usam o path final (`foo.<arch>.<os>.zith`
+quando vence uma variante), nunca o nome lógico da importação. O `CacheKey`
+continua a incluir `targetTriple`, por isso contextos com targets diferentes
+separam os artifacts mesmo quando o ficheiro genérico é igual.
+
 ## Cache e ZIRL
 
 A versão de formato ZIRL passa para 13. O Code section serializa:
@@ -453,6 +482,11 @@ Os seguintes testes cobrem a iteração:
 - `test-sema`: overload/generic com parâmetros lend/view e mismatch de tipo que continua a reportar `E2007` sem mascarar `E4005`.
 - `test-hir-lower-modern`: parâmetro livre `lend` baixa para ponteiro e call passa endereço do binding.
 - `test-codegen`: parâmetro livre `lend` muta o binding do chamador; `view` lê sem escrever.
+- `test-frontend-context`: ordem de resolução de platform imports, arch-only,
+  os-only, fallback genérico, diagnóstico de missing e separação de cache por
+  target.
+- `test-frontend-modern-pipeline`: `export foo` re-exporta o ficheiro
+  platform-specific resolvido.
 
 Para regressões, usar a suíte completa:
 

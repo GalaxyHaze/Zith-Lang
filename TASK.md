@@ -1,0 +1,67 @@
+# agent1: Platform-specific imports (`foo.<arch>.<os>.zith`)
+
+## Goal
+
+Implement Zith-- platform-specific imports according to
+`docs/plans/platform-imports.md`. The compiler main is always the Zith--
+subset; do not start full-spec Zith features.
+
+## Context
+
+- Plan: platform imports and module resolution.
+- Worktree: /home/diogo/Zith/.awt/agent1 (branch awt/agent1).
+- Primary files: `src/session/frontend-context.{hpp,cpp}`,
+  `tests/test-frontend-context.cpp`, and `tests/test-frontend-modern-pipeline.cpp`.
+- The resolver candidates are `foo.<arch>.<os>.zith`, `foo.<arch>.zith`,
+  `foo.<os>.zith`, then `foo.zith`.
+- Cache keys already include `targetTriple`; keep generic-vs-variant behavior
+  deterministic and LLVM-independent where possible.
+
+## Scope
+
+1. Add a target-component helper for arch/os, or reuse existing target fields
+   from `FrontendConfig` when sufficient.
+2. Modify `FrontendContext::resolveImport()` so literal imports still work and
+   platform variants are considered before the generic fallback.
+3. Add failure diagnostics that mention the missing generic or platform
+   variants when no candidate exists.
+4. Add tests for exact arch.os, arch-only, os-only, generic fallback, missing
+   all variants, and target-specific cache separation.
+5. Update `docs/plans/0.7.0/README.md`, `docs/roadmap.md`,
+   `docs/Zith--.md`, `docs/Zith---implementation.md`, `docs/impl-status.md`,
+   and `memory/platform-imports.md` as behavior allows.
+
+Out of scope:
+
+- New import syntax, macro/conditional syntax, comptime, or vendor/env variants.
+- Editing `src/session/compilation-session.cpp` in a way that changes the
+  scheduler-owned split.
+
+## Acceptance Criteria
+
+- Candidate order matches the plan exactly.
+- Generic fallback remains mandatory; no variant can replace the absence of
+  `foo.zith`.
+- No parser or sema behavior changes outside import resolution.
+- Target-specific import tests pass and diagnostics are actionable.
+
+## Verification
+
+```bash
+cmake --build /home/diogo/Zith/build -j4
+ctest --test-dir /home/diogo/Zith/build -R 'frontend' --output-on-failure
+ctest --test-dir /home/diogo/Zith/build --output-on-failure
+```
+
+After success:
+
+```bash
+cd /home/diogo/Zith/.awt/agent1
+/home/diogo/.byteask/skills/agent-worktrees/scripts/awt checkin /home/diogo/Zith "agent1: Platform-specific imports (`foo.<arch>.<os>.zith`)"
+/home/diogo/.byteask/skills/agent-worktrees/scripts/awt request-merge /home/diogo/Zith "agent1: Platform-specific imports (`foo.<arch>.<os>.zith`)"
+```
+
+## End Of Task
+
+When complete, request merge and wait for the scheduler to advance or write
+a `# Status` marker with `end` below it.

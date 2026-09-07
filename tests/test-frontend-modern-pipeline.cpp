@@ -123,6 +123,37 @@ void test_pipeline_multifile_module_dependency() {
           "HIR module includes functions from both the root and its dependency");
 }
 
+void test_pipeline_export_platform_import() {
+    Workspace workspace;
+    workspace.write("entry.zith", "export platform\n");
+    workspace.write("main.zith", "from entry\n"
+                                 "fn main(): i32 { platform.platform_value() }\n");
+    workspace.write("platform.x86_64.linux.zith", "pub fn platform_value(): i32 { 7 }\n");
+
+    memory::Arena arena;
+    Options options(arena);
+    options.targetStage  = session::Stage::HirLowered;
+    options.targetTriple = "x86_64-unknown-linux-gnu";
+
+    session::CompilationSession session(options, (workspace.root / "main.zith").string());
+    session.setBuffered(true);
+    CHECK(session.runTo(session::Stage::HirLowered),
+          "modern pipeline re-exports the target-specific platform module");
+    if (!session.snapshot())
+        return;
+
+    bool saw_platform_variant = false;
+    for (const auto &edge : session.snapshot()->importGraph()) {
+        if (edge.request.isExport) {
+            for (const auto &target : edge.targets)
+                saw_platform_variant |=
+                    target == session::SourceCatalog::canonicalPath(
+                                  (workspace.root / "platform.x86_64.linux.zith").string());
+        }
+    }
+    CHECK(saw_platform_variant, "export edge points at the resolved platform-specific module");
+}
+
 void test_pipeline_while_loop_lowers() {
     Workspace workspace;
     workspace.write("main.zith", "fn main(): i32 {\n"
@@ -844,6 +875,7 @@ static void test_frontend_modern_pipeline() {
     test_shared_context_reuses_frontend_cache();
     test_pipeline_error_surfaces_diagnostic();
     test_pipeline_multifile_module_dependency();
+    test_pipeline_export_platform_import();
     test_pipeline_while_loop_lowers();
     test_pipeline_if_else_lowers();
     test_c_header_import_lowers_external_function();

@@ -45,7 +45,7 @@
 | F-35 | Trait and interface bodies as real declarations | 4 | Working; interface bodies accept single/grouped fields and declaration-only method requirements |
 | F-40 | Scope-guard `defer` statements | 9, Zith-- | Working |
 | F-41 | Deterministic `drop` cleanup hooks | 9, Zith-- | Planned for Zith--; depends on F-40 |
-| F-42 | Platform-specific imports (`foo.<arch>.<os>.zith`) | 2, Zith-- | Planned for Zith--; design in `docs/plans/platform-imports.md` |
+| F-42 | Platform-specific imports (`foo.<arch>.<os>.zith`) | 2, Zith-- | Working; resolver checks `arch.os`, `arch`, `os`, then generic `foo.zith` |
 
 ## Dependency Graph
 
@@ -75,7 +75,7 @@ F-28 (pack ops) ──────────┘
                                           │
 F-34 (qualifier parse/types) ── F-14 (NRA/NTA) ── stable HIR contract
 F-33 (overloading)                        ┼─ done (name resolution + linkage names)
-F-42 (platform imports)                   ┼─ resolver-only; independent of comptime
+F-42 (platform imports)                   ┼─ done (resolver-only; independent of comptime)
                                           │
 F-30 (stdlib) ─────────────┬─ F-18 (runtime tasks/coroutines)
                            ├─ F-19 (runtime threads/channels)
@@ -150,8 +150,9 @@ and block-lowering paths.
 
 ## Wave 01 (Current Zith--)
 
-Zith--: `drop` (F-41) as the deterministic scope-cleanup completion, then
-platform imports (F-42) as resolver work, then monolith splits and debt closure.
+Zith--: platform imports (F-42) are implemented as resolver work; `drop`
+(F-41) remains the deterministic scope-cleanup completion, followed by
+monolith splits and debt closure.
 Comptime/introspection/type construction remain full-Zith features and are
 archived under `docs/plans/archive/0.7.0-zith/`.
 
