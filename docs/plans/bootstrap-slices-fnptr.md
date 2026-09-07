@@ -1,5 +1,9 @@
 # Function values and C-runtime slices
 
+> Status: implemented in Zith--. This bootstrap work is complete and kept here
+> as a maintenance note; it is not an active Zith-- plan. Tests and docs
+> already cover the shipped function-pointer and runtime-slice behavior.
+
 ## Summary
 
 This bootstrap step makes `fn(params): R` usable as a first-class value type and

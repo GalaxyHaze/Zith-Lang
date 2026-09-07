@@ -7,17 +7,45 @@ behaviour. The split targets large files that concentrate unrelated pipeline
 stages, not language features. Each extraction must be mechanical, keep the
 public APIs stable, and land with the same focused tests passing.
 
-## Scope
+## Completed Splits
+
+### `src/session/frontend-context.cpp`
+
+The frontend-context monolith was split by responsibility and merged. The
+pipeline entry point remains in `src/session/frontend-context.cpp` at
+315 lines. The extracted translation units and current line counts are:
+
+| Translation unit | Lines | Responsibility |
+|---|---|---|
+| `src/session/frontend-context.cpp` | 315 | public parsing/frontend orchestration entry point |
+| `src/session/frontend-module-analysis.cpp` | 412 | module analysis state and discovery |
+| `src/session/frontend-module-cache.cpp` | 275 | module cache bookkeeping |
+| `src/session/frontend-source-catalog.cpp` | 196 | source catalog and fingerprinting helpers |
+| `src/session/frontend-symbol-resolution.cpp` | 764 | import requests and symbol/module resolution |
+
+### `src/session/compilation-session.cpp`
+
+The compilation-session monolith was split by responsibility and merged.
+`CompilationSession` orchestration remains in
+`src/session/compilation-session.cpp` at 871 lines. The extracted units and
+current line counts are:
+
+| Translation unit | Lines | Responsibility |
+|---|---|---|
+| `src/session/compilation-session.cpp` | 871 | pipeline stage orchestration and session glue |
+| `src/session/native-link.cpp` | 421 | native link/run helpers |
+| `src/session/persistent-cache.cpp` | 721 | persistent/object cache helpers |
+| `src/session/pipeline-plan.cpp` | 13 | planned pipeline stage contract |
+
+## Remaining Candidates
 
 Current priority files, based on `docs/implementation-debt.md`:
 
 | File | Lines | Candidate split |
 |---|---|---|
-| `src/session/frontend-context.cpp` | ~1789 | cache/module executor, module analysis, symbol resolution |
-| `src/session/compilation-session.cpp` | ~1985 | pipeline stages, link/exec, cache |
-| `src/codegen/codegen-emit.cpp` | ~1206 | emission by area (params, expr, control flow) |
-| `src/sema/hir-lower-expr.cpp` | ~2140 | secondary candidates below 1000 lines |
-| `src/frontend/frontend-expr.cpp` | ~1077 | secondary candidates below 1000 lines |
+| `src/codegen/codegen-emit.cpp` | 1264 | emission by area (params, expr, control flow) |
+| `src/sema/hir-lower-expr.cpp` | 2357 | secondary candidate; revisit if it still exceeds ~1000 lines after the codegen split |
+| `src/frontend/frontend-expr.cpp` | 1115 | secondary candidate; revisit only if it still exceeds ~1000 lines after higher-priority work |
 
 Earlier work already split `frontend.cpp` into AST/CST lowering,
 frontend types, expressions, statements and declarations; `sema-modern.cpp`
@@ -39,20 +67,15 @@ units; and HIR lowering into types/expr/call/block/stmt/util units.
 
 ## Order
 
-1. `src/session/frontend-context.cpp`: split module cache/executor,
-   module-analysis state, and symbol/import resolution. The file currently
-   mixes fingerprinting, source catalogs, module discovery, import requests,
-   cache bookkeeping and scoped symbol compilation.
-2. `src/session/compilation-session.cpp`: keep `CompilationSession` orchestration
-   and extract object-cache, native link/run, and CLI-facing helpers.
-3. `src/codegen/codegen-emit.cpp`: split emission by expression types, calls,
-   statements/blocks and aggregate helpers.
-4. Revisit `src/sema/hir-lower-expr.cpp` and `src/frontend/frontend-expr.cpp`
-   only if they still exceed ~1000 lines after the first passes.
+`frontend-context.cpp` and `compilation-session.cpp` are merged. The next
+candidate is:
 
-Recommended first merge: one behavior-preserving extraction from
-`frontend-context.cpp`. It is independent from the `drop` feature work, so it
-can also be used as a low-risk task while `drop` is being designed.
+1. `src/codegen/codegen-emit.cpp`: split emission by expression types, calls,
+   statements/blocks and aggregate helpers.
+2. Revisit `src/sema/hir-lower-expr.cpp` only if it still exceeds ~1000 lines
+   after the codegen split.
+3. Revisit `src/frontend/frontend-expr.cpp` only if it remains a clear
+   single-responsibility bottleneck; it is currently a secondary candidate.
 
 ## Success Criteria
 

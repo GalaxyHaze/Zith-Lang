@@ -2,6 +2,10 @@
 
 Objective: move Zith native builds from host-provided TinyCC/libclang/toolchain assumptions to a standalone `zithc` distribution with embedded LLD, a clean toolchain backend interface, a Zith-owned C binder, validated C ABI, and a WASM header bundle, without changing the Zith language surface.
 
+> Status: active Zith infrastructure work, not a Zith-- language feature. It
+> tracks the native toolchain, C companion compilation, and C header ABI
+> surface; the Zith language subset is not changed by the plan.
+
 Preconditions:
 
 - Working directory: `/home/diogo/Zith`.

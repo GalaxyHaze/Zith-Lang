@@ -38,7 +38,7 @@
 | F-29 | Generic trait and interface constraints (`T: Trait`, `T: Interface`) | 4 | Working; interface bounds expose interface fields and methods |
 | F-30 | Standard library (beyond io) | 20 | Spec only |
 | F-31 | `union` runtime semantics | 3 | Partial: tagged unions and `is` narrowing work; remaining union surface is tracked in debt |
-| F-32 | C header import completion (macros, variadics, callbacks) | 18 | Working (common C); macros/globals/bitfields remain |
+| F-32 | C header import completion (macros, variadics, callbacks) | 18 | Working (validated C); simple records by value are imported only after layout validation; advanced macros/globals/bitfields remain debt |
 | F-33 | Function overloading (selection by arity and parameter types) | 5 | Working |
 | F-36 | Variadic slices (`[...]T` homogeneous tail parameters) | 5 | Working |
 | F-34 | Memory qualifier parsing and typing (`mut`, `lend`, `view`, `unique`, `share`, `belong`) | 7 | Working |
@@ -51,7 +51,7 @@
 
 ```
 F-01-F-04, F-06, F-08, F-10 layout, F-13, F-29,
-F-32 common C, F-33, F-34, F-35, F-36, F-40 ──── done (see impl-status.md)
+F-32 validated C, F-33, F-34, F-35, F-36, F-40 ──── done (see impl-status.md)
 
 F-05 (const fn parse) ─────────────────────┐
 F-11 (fail/with/catch)                     ├─ needs T! propagation
@@ -132,8 +132,9 @@ Dependencies: F-30 (`stdlib`) plus F-14 (pre-HIR ownership proof). No frontend s
 work is planned here. Max parallelism: 2 agents (runtime surface + ownership integration).
 
 ### Wave 09 — Assets & Stdlib
-F-32 (C interop) is working for common C; the remaining macros/globals/bitfields
-are debt. F-31 is partial: tagged unions and `is` narrowing are implemented.
+F-32 (C interop) is working for validated common C plus simple records whose
+layout libclang proves; the remaining macros/globals/bitfields are debt. F-31
+is partial: tagged unions and `is` narrowing are implemented.
 F-25 (assets) and F-30 (stdlib beyond the shipped io/alloc surface) remain
 full-Zith/spec-only work.
 

@@ -53,29 +53,43 @@ engenharia para rever e gerir.
   regras não existem; não há todos os diagnósticos de ownership previstos.
 - Referência: [impl-status.md](/home/diogo/Zith/docs/impl-status.md:41).
 
-### 4. Bare `opaque` não pode ser re-hidratado no cache/cross-module
+### 4. Bare `opaque` usa hydration estável mas ainda depende de canonização consistente
 
-- Estado atual: `opaque` funciona dentro de um módulo, funciona importado de
-  outro módulo sem cache, e o cache hidrata `canonical_mappings` para manter o
-  tag estável entre sessões. `coerceValue` trata `opaque -> opaque` como um
-  no-op de sema, evitando o `E3001` quando o cast de origem e o tipo de retorno
-  são internados por semas diferentes do mesmo snapshot.
-- Dívida remanescente: `opaque` ainda é apenas uma view sem copy heap, vtable ou
-  dynamic calls; pack/dyn + `opaque` continua a ser uma lacuna separada.
-- Pontos relevantes: [sema-cast-coerce.cpp](/home/diogo/Zith/src/sema/sema-cast-coerce.cpp) e
-  [sema-zith.cpp](/home/diogo/Zith/src/sema/sema-zith.cpp).
+- Estado atual: o typeId canónico é derivado do namespace do módulo, ordem
+  canónica de fields e nome do tipo; tags project-local são
+  serializadas no artefacto e re-hidratadas entre sessões de cache. O `E2010`
+  só é reportado quando o tag canónico de um artefacto hidratado não bate com
+  a atribuição nova da sessão.
+- Dívida real: a estabilidade hidratada depende da canonização de todos os
+  tipos importados/cacheados e da regra de canonical field order; mudar essa
+  regra invalida tags antigos. Falta um registry mais explícito de typeIds
+  cross-module que suporte evolução da canonização sem quebrar caches.
+- `coerceValue` trata `opaque -> opaque` como no-op de sema, pelo que casts
+  vindos de módulos importados não são rejeitados como erro de re-tagging.
+- Referência: hydration e erro de instabilidade em
+  [sema-cast-coerce.cpp](/home/diogo/Zith/src/sema/sema-cast-coerce.cpp),
+  hydration em
+  [compilation-session.cpp](/home/diogo/Zith/src/session/compilation-session.cpp:503)
+  e testes em
+  [test-hir-lower-modern.cpp](/home/diogo/Zith/tests/test-hir-lower-modern.cpp:1106).
 
-### 5. C interop é `Working (common C)`, não ABI completa
+### 5. C interop é `Working (validated C)`, não ABI completa
 
 - Estado atual: libclang cobre C comum, variadics, parâmetros array-decayed,
-  `va_list` e function pointers; macros object-like escalares são importadas.
-- Dívida real: struct-by-value ABI não é verificado; bitfields, packed/anonymous
-  records, flexible arrays, globals e strings não são importados.
+  `va_list` e function pointers; object-like scalar macros são importadas como
+  constantes.
+- Dívida real: struct-by-value ABI é limitado a records simples cuja
+  layout/alignment libclang prova para o target configurado; scalars, pointers
+  e nested records verificados são suportados. Bitfields, packed/anonymous
+  records, flexible arrays, globals, strings, function-like macros,
+  `long double` e `__int128` não são importados.
 - Referência: [impl-status.md](/home/diogo/Zith/docs/impl-status.md:153).
 
 ### 6. Outras incompletudes registadas
 
-- Literal ranges (`1..4`) e range syntax continuam sem sema dedicada.
+- Literal ranges fazem `ExprKind::Range` e baixam a sema/control flow; falta
+  ainda, como dívida residual, o tratamento completo de todas as formas
+  `1..5`, `1>..5`, `1..<5`, `1>..<5` nas fronteiras do loop e do slicing.
 - `is <type>` fora de unions/opaque não existe.
 - Narrowing após `is null` / `not (is null)` para aggregate optionals (`?T`
   com payload não-pointer) extrai o campo 0 no then/else correto; `?*T -> *T`
@@ -116,22 +130,42 @@ As seis falhas conhecidas de 2026-09-01 foram resolvidas:
   `implement ... as ParseInput`, não uma lacuna do contrato actual.
 - Referência de estado: [impl-status.md](/home/diogo/Zith/docs/impl-status.md:45)
   na linha `Stdlib I/O` e o plano completo em
-  [parse-input-cast.md](plans/archive/parse-input-cast.old.md).
+  [parse-input-cast.old.md](/home/diogo/Zith/docs/plans/archive/parse-input-cast.old.md).
 
 ---
 
 ## Dívida de estrutura: monolitos
 
-Os ficheiros abaixo concentram demasiado pipeline por ficheiro. A prioridade é
-quebrá-los por responsabilidade sem alterar comportamento.
+Os ficheiros abaixo ainda concentram demasiado pipeline por ficheiro. Já foram
+concluídos, e estão fora da lista activa, os splits de
+`src/session/frontend-context.cpp` e `src/session/compilation-session.cpp`.
 
 | Ficheiro | Linhas atuais | Quebra proposta |
 |---|---|---|
-| `src/session/compilation-session.cpp` | ~1985 | separar pipeline de stages, cache e link/exec |
-| `src/session/frontend-context.cpp` | ~1789 | separar cache/module executor, análise de módulos e resolução de símbolos |
-| `src/codegen/codegen-emit.cpp` | ~1206 | separar emissão por área (params, expr, control flow) |
-| `src/sema/hir-lower-expr.cpp` | ~2140 | candidates secundários ainda acima de 1000 linhas |
-| `src/frontend/frontend-expr.cpp` | ~1077 | candidates secundários ainda acima de 1000 linhas |
+| `src/codegen/codegen-emit.cpp` | 1264 | separar emissão por área (params, expr, control flow) |
+| `src/sema/hir-lower-expr.cpp` | 2357 | candidato secundário ainda acima de 1000 linhas |
+| `src/frontend/frontend-expr.cpp` | 1115 | candidato secundário ainda acima de 1000 linhas |
+
+Estado da quebra de `frontend-context.cpp` (concluída):
+
+- `frontend-context.cpp`: entrada pública de parsing/frontend ou
+  orchestration (315 linhas).
+- `frontend-module-analysis.cpp`: análise e discovery de módulos
+  (412 linhas).
+- `frontend-module-cache.cpp`: bookkeeping do module cache (275 linhas).
+- `frontend-source-catalog.cpp`: source catalog e helpers de fingerprinting
+  (196 linhas).
+- `frontend-symbol-resolution.cpp`: import requests e resolução de
+  símbolos/módulos (764 linhas).
+
+Estado da quebra de `compilation-session.cpp` (concluída):
+
+- `compilation-session.cpp`: orquestração dos stages do pipeline e glue da
+  sessão (871 linhas).
+- `native-link.cpp`: helpers de native link/run (421 linhas).
+- `persistent-cache.cpp`: helpers de cache persistente/object cache
+  (721 linhas).
+- `pipeline-plan.cpp`: contrato dos stages planeados (13 linhas).
 
 Estado da quebra de `frontend.cpp`:
 
@@ -174,13 +208,11 @@ Estado da quebra de `sema-modern.cpp`:
 
 Próxima fronteira:
 
-- separar `frontend-context.cpp`: `ContentFingerprint`, `SourceCatalog`,
-  `ImportRequest`/`ModuleCache` e resolução de módulos são agrupáveis por
-  responsabilidade.
-- separar `compilation-session.cpp`: stages do pipeline ficam em
-  `session/compilation-session.cpp`; link/exec/cache podem sair para TUs
-  dedicadas.
-- emitir `codegen-emit.cpp` em áreas menores quando for prioridade.
+- separar `codegen-emit.cpp` em áreas menores quando for prioridade.
+- revisitar `hir-lower-expr.cpp` se continuar acima de ~1000 linhas após o
+  split de codegen.
+- revisitar `frontend-expr.cpp` apenas se continuar a ser um bottleneck claro
+  de responsabilidade única.
 
 Para o HIR lowering, a fronteira candidata foi já executada:
 
@@ -233,17 +265,17 @@ Vários pontos de `src/session/compilation-session.cpp` repetem o padrão de
 Acção recomendada: helper única `mergeStrings(config, options, field, append)`
 para evitar erros de ordem e duplicação.
 
-### Erro de `opaque` duplicado vindo de casts `opaque -> opaque`
+### Erro de instabilidade de tags `opaque`
 
-Um cast explícito `T as opaque` resultava em `TypeKind::Opaque`, mas o retorno
-declarado como `opaque` podia ser um `TypeId` diferente internado pelo
-`PerModuleSema` do módulo importado; o `sameType` não unificava ambos e o
-fallback emitia `E3001`.
+O `E2010` para tags canónicas instáveis é emitido numa única mensagem em
+[compilation-session.cpp](/home/diogo/Zith/src/session/compilation-session.cpp:503)
+durante a hydration do cache. A mensagem pede ao utilizador para invalidar o
+cache quando a canonização divergir.
 
-Estado resolvido: `coerceValue` aceita explicitamente `opaque -> opaque` antes
-do caminho genérico, porque o re-tagging é inválido apenas para valores
-concretos/opacos mistos. O `typeId` já é canónico através de
-`TypeIntern::canonicalTag`, portanto não é fabricado um tag local novo.
+Risco residual: existem vários ramos que criam/validam tags `opaque` e a
+consistência entre a canonização nova e a persistida depende da mesma regra
+usada no lowering em [hir-lower-expr.cpp](/home/diogo/Zith/src/sema/hir-lower-expr.cpp:786).
+Uma mudança da canonical field order deve atualizar o registry/cache em conjunto.
 
 ### Split inicial por script deixou includes colados e métodos órfãos
 
@@ -268,8 +300,9 @@ ou RTTI.
 ## Próximos passos para rever
 
 1. A quebra de HIR, de `sema-modern.cpp` e de `frontend.cpp` está feita; a
-   próxima prioridade é `frontend-context.cpp`, `compilation-session.cpp` ou
-   `codegen-emit.cpp`, conforme o risco da área.
+   quebra de `frontend-context.cpp` e `compilation-session.cpp` também está
+   feita; a próxima prioridade é `codegen-emit.cpp`, com
+   `hir-lower-expr.cpp` como candidato secundário.
    O contrato de execução para estes splits está em `docs/plans/monolith-splits.md`.
 2. Em cada extracção, compilar `zithcLib` e correr os testes da área afectada;
    `ctest --test-dir build --output-on-failure` para regressões gerais.

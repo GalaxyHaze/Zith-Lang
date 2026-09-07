@@ -1,4 +1,17 @@
-# Platform-Specific Imports Roadmap
+# Archived: Platform-Specific Imports
+
+> Status: implemented in Zith--. This step is archived because the work no
+> longer belongs in active plans. The compiler status is recorded in
+> `docs/impl-status.md` and `docs/roadmap.md`; this document keeps the
+> implementation contract and verification history for future maintenance.
+
+## Outdated Implementation Sketch
+
+The implementation sketch below references the old pre-split
+`src/session/frontend-context.cpp`. The platform-import resolver still lives
+in the session frontend layer, but the relevant code moved into
+`src/session/frontend-symbol-resolution.cpp` during the frontend monolith
+split. Follow the current source tree if touching this area.
 
 ## Objective
 
@@ -124,6 +137,13 @@ After implementation, also update:
 - `docs/Zith--.md`
 - `docs/Zith---implementation.md`
 - `docs/impl-status.md`
+
+## Completion History
+
+Platform imports shipped in the Zith-- iteration. `docs/impl-status.md` now
+records the `Import resolution` row as `Working` with the exact candidate
+order, `docs/roadmap.md` records F-42 as `Working`, and
+`docs/Zith---implementation.md` lists the platform-import focused tests.
 
 ## Verification
 
