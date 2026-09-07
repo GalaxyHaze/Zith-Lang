@@ -534,6 +534,13 @@ bool PerModuleSema::adaptNumericLiteral(frontend::ExprId value, TypeId target) {
     return true;
 }
 bool PerModuleSema::coerceValue(frontend::ExprId value, TypeId target, TypeId source) {
+    // Re-tagging an opaque value is a no-op at run time: the underlying
+    // { *void, u32 } payload already carries the tag from the module that
+    // created it. Both module-local interns of bare `opaque` must unify, so
+    // this must be checked before the generic sameType/fallback path.
+    if (value && source && type_table.kindOf(resolve(target)) == TypeKind::Opaque &&
+        type_table.kindOf(resolve(source)) == TypeKind::Opaque)
+        return true;
     // Any concrete value can be erased into bare `opaque`. The original source
     // type is recorded because HIR/codegen must know which concrete tag and
     // payload layout the opaque value stores.

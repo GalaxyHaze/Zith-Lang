@@ -55,13 +55,15 @@ engenharia para rever e gerir.
 
 ### 4. Bare `opaque` não pode ser re-hidratado no cache/cross-module
 
-- Estado atual: `opaque` funciona dentro de um módulo; o typeId é determinístico
-  mas module-local.
-- Dívida: valores `opaque` importados ou vindo de cache são rejeitados com
-  `E2010`; falta um registry de typeIds cross-module ou uma forma de
-  canonicalizar os tags no artefacto cacheado.
-- Pontos de bloqueio: [compilation-session.cpp](/home/diogo/Zith/src/session/compilation-session.cpp:628) e
-  [hir-lower-expr.cpp](/home/diogo/Zith/src/sema/hir-lower-expr.cpp:708).
+- Estado atual: `opaque` funciona dentro de um módulo, funciona importado de
+  outro módulo sem cache, e o cache hidrata `canonical_mappings` para manter o
+  tag estável entre sessões. `coerceValue` trata `opaque -> opaque` como um
+  no-op de sema, evitando o `E3001` quando o cast de origem e o tipo de retorno
+  são internados por semas diferentes do mesmo snapshot.
+- Dívida remanescente: `opaque` ainda é apenas uma view sem copy heap, vtable ou
+  dynamic calls; pack/dyn + `opaque` continua a ser uma lacuna separada.
+- Pontos relevantes: [sema-cast-coerce.cpp](/home/diogo/Zith/src/sema/sema-cast-coerce.cpp) e
+  [sema-zith.cpp](/home/diogo/Zith/src/sema/sema-zith.cpp).
 
 ### 5. C interop é `Working (common C)`, não ABI completa
 
@@ -231,13 +233,17 @@ Vários pontos de `src/session/compilation-session.cpp` repetem o padrão de
 Acção recomendada: helper única `mergeStrings(config, options, field, append)`
 para evitar erros de ordem e duplicação.
 
-### Erro de `opaque` duplicado
+### Erro de `opaque` duplicado vindo de casts `opaque -> opaque`
 
-A mensagem de `E2010` para `opaque` module-local está duplicada pelo menos em
-[compilation-session.cpp](/home/diogo/Zith/src/session/compilation-session.cpp:628) e em dois
-ramos de [hir-lower-expr.cpp](/home/diogo/Zith/src/sema/hir-lower-expr.cpp:708).
+Um cast explícito `T as opaque` resultava em `TypeKind::Opaque`, mas o retorno
+declarado como `opaque` podia ser um `TypeId` diferente internado pelo
+`PerModuleSema` do módulo importado; o `sameType` não unificava ambos e o
+fallback emitia `E3001`.
 
-Acção recomendada: diagnostic helper único ou uma constante partilhada com span.
+Estado resolvido: `coerceValue` aceita explicitamente `opaque -> opaque` antes
+do caminho genérico, porque o re-tagging é inválido apenas para valores
+concretos/opacos mistos. O `typeId` já é canónico através de
+`TypeIntern::canonicalTag`, portanto não é fabricado um tag local novo.
 
 ### Split inicial por script deixou includes colados e métodos órfãos
 

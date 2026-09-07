@@ -2508,9 +2508,54 @@ void test_when_guards_lower_contextually_without_diagnostics() {
           "when with literal, range, and boolean guards lowers to HIR");
     CHECK(!session.hasErrors(), "when guard lowering reports no diagnostics");
 
-    const auto &hir  = session.hirModule();
-    const auto *fn   = findFunction(hir, session.interner(), "classify");
+    const auto &hir = session.hirModule();
+    const auto *fn  = findFunction(hir, session.interner(), "classify");
     CHECK(fn != nullptr, "classify is present in HIR");
+}
+
+void test_imported_bare_opaque_cross_module() {
+    IsolatedWorkspace workspace;
+    workspace.writeFile("dep.zith", "pub fn dep_make(): opaque { 42 as opaque }\n");
+    workspace.writeFile("main.zith", "from dep\n"
+                                     "\n"
+                                     "fn consume(v: opaque): ?i32 { v as i32 }\n"
+                                     "fn check(v: opaque): bool { v is i32 }\n"
+                                     "fn main(): ?i32 {\n"
+                                     "    let o = dep_make();\n"
+                                     "    if (check(o)) { consume(o) } else { null }\n"
+                                     "}\n");
+
+    memory::Arena arena;
+    Options options(arena);
+    session::CompilationSession session(options, (workspace.root / "main.zith").string());
+    session.setBuffered(true);
+    CHECK(session.runTo(session::Stage::HirLowered),
+          "importing a module that returns bare opaque lowers across module boundaries");
+    CHECK(!session.hasErrors(), "imported bare opaque cross-module use reports no diagnostics");
+
+    const auto &hir   = session.hirModule();
+    bool sawMake      = false;
+    bool sawCheck     = false;
+    bool sawExtract   = false;
+    uint32_t makeTag  = 0;
+    uint32_t checkTag = 0;
+    for (size_t id = 0; id < hir.exprCount(); ++id) {
+        const auto &expr = hir.getExpr(static_cast<hir::HirExprId>(id));
+        if (const auto *make = std::get_if<hir::HirMakeOpaque>(&expr)) {
+            sawMake = true;
+            makeTag = make->type_id;
+        }
+        if (const auto *check = std::get_if<hir::HirOpaqueCheck>(&expr)) {
+            sawCheck = true;
+            checkTag = check->type_id;
+        }
+        if (std::get_if<hir::HirMakeSome>(&expr) != nullptr)
+            sawExtract = true;
+    }
+    CHECK(sawMake && sawCheck && sawExtract,
+          "imported bare opaque make/check and checked extraction lower to HIR");
+    CHECK(makeTag != 0u && makeTag == checkTag,
+          "imported bare opaque operations keep a stable canonical tag");
 }
 
 } // namespace
@@ -2527,6 +2572,7 @@ static void test_hir_lower_modern() {
     test_opaque_canonical_tags_persist_across_sessions();
     test_imported_type_canonical_id_persists_across_sessions();
     test_imported_type_canonical_id_uses_defining_module();
+    test_imported_bare_opaque_cross_module();
     test_extern_variadic_lower_to_hir();
     test_bindings_lower_to_slots();
     test_if_else_lowers_to_branch_and_merge();
