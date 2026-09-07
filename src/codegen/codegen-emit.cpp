@@ -872,6 +872,25 @@ llvm::Value *CodeGenEmit::emitCall(const hir::HirCall &call, const hir::HirModul
             param_types.push_back(typeGen_.lower(lowered->params[index]));
         fn_type = llvm::FunctionType::get(typeGen_.lower(lowered->ret), param_types, false);
     }
+    // Only C-header imports use the validated ABI shape in their declaration.
+    // Plain declarations of local/mutual-recursive functions keep the native
+    // HIR signature and must not be coerced here.
+    bool is_extern_call = fn != nullptr && fn->isDeclaration();
+    if (is_extern_call && call.resolved_fn != symbols::kInvalidSym) {
+        is_extern_call = false;
+        for (size_t i = 0; i < mod.getFnCount(); ++i) {
+            if (mod.getFn(i).sym_id == call.resolved_fn && mod.getFn(i).isForeignC) {
+                is_extern_call = true;
+                break;
+            }
+        }
+    }
+    for (size_t index = 0; index < args.size() && is_extern_call; ++index) {
+        const auto arg_type =
+            index < call.argument_types.size() ? call.argument_types[index] : types::kInvalidType;
+        if (arg_type != types::kInvalidType)
+            args[index] = typeGen_.abiCoerceArgument(builder_, args[index], arg_type);
+    }
     if (fn_type->isVarArg()) {
         const auto fixed_count = fn_type->getNumParams();
         for (size_t index = fixed_count; index < args.size(); ++index) {
@@ -912,6 +931,18 @@ llvm::Value *CodeGenEmit::emitCall(const hir::HirCall &call, const hir::HirModul
     auto *llvm_call = builder_.CreateCall(fn, args);
     if (tailcc)
         llvm_call->setCallingConv(llvm::CallingConv::Tail);
+    if (is_extern_call) {
+        const hir::HirFunction *hir_fn = nullptr;
+        for (size_t i = 0; i < mod.getFnCount(); ++i) {
+            if (mod.getFn(i).sym_id == call.resolved_fn) {
+                hir_fn = &mod.getFn(i);
+                break;
+            }
+        }
+        if (hir_fn == nullptr)
+            return nullptr;
+        return typeGen_.abiRestoreResult(builder_, llvm_call, hir_fn->return_type);
+    }
     return llvm_call;
 }
 

@@ -65,6 +65,12 @@ struct CompactStructDef {
     uint32_t name_id = 0;
     std::vector<uint32_t> field_name_ids;
     std::vector<uint32_t> field_type_ids;
+    // Validated C-record ABI. Only foreign records populated through the C
+    // binder set these flags; native Zith structs keep aggregate ABI.
+    bool hasForeignLayout      = false;
+    bool foreignAbiIsSingleI64 = false;
+    uint64_t foreignSizeBytes  = 0;
+    uint64_t foreignAlignBytes = 0;
 };
 
 struct CompactEnumVariant {
@@ -264,6 +270,7 @@ struct CompactFunction {
     std::vector<CompactExpr> exprs;
     uint32_t instance_index         = ~uint32_t{0};
     bool is_extern                  = false;
+    bool is_foreign_c               = false;
     bool is_variadic                = false;
     bool is_state                   = false;
     bool uses_tailcc                = false;

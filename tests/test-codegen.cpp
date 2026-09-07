@@ -664,18 +664,16 @@ static void test_when_pattern_alternatives_runtime() {
 
 static void test_when_default_must_be_last() {
     CodegenTest t;
-    auto r = t.run("codegen-when-default-last.zith",
-                   "fn classify(n: i32): i32 {\n"
-                   "    return when (n) {\n"
-                   "        (_) 10,\n"
-                   "        (1) 20\n"
-                   "    }\n"
-                   "}\n"
-                   "fn main(): i32 {\n"
-                   "    return 0;\n"
-                   "}\n");
-    CHECK(!r.ok && r.errorCount > 0,
-          "a default when case must still be the final case");
+    auto r = t.run("codegen-when-default-last.zith", "fn classify(n: i32): i32 {\n"
+                                                     "    return when (n) {\n"
+                                                     "        (_) 10,\n"
+                                                     "        (1) 20\n"
+                                                     "    }\n"
+                                                     "}\n"
+                                                     "fn main(): i32 {\n"
+                                                     "    return 0;\n"
+                                                     "}\n");
+    CHECK(!r.ok && r.errorCount > 0, "a default when case must still be the final case");
 }
 
 static void test_tagged_union_pointer_is_type_runtime() {
@@ -2703,6 +2701,38 @@ static void test_import_stdio_runs() {
 #endif
 }
 
+static void test_validated_c_struct_by_value_runs() {
+#ifdef ZITH_ENABLE_C_INTEROP
+    ModernFileCodegenTest t;
+    t.opts.flags.emitIr(true);
+    t.opts.cSourceDirs.push("c");
+    t.write("c/records.c", "#include <stdint.h>\n"
+                           "struct Point { int x, y; };\n"
+                           "int c_classify(struct Point p) { return p.x + p.y; }\n"
+                           "struct Point make_point(int x, int y) {\n"
+                           "    struct Point p = { x, y };\n"
+                           "    return p;\n"
+                           "}\n"
+                           "struct Inner { int v; };\n"
+                           "struct Outer { struct Inner inner; double d; };\n"
+                           "double c_outer_x(struct Outer o) { return o.inner.v; }\n");
+    t.write("main.zith", "import \"records.h\"\n"
+                         "fn main(): i32 {\n"
+                         "    let p = make_point(2, 3);\n"
+                         "    let sum: i32 = c_classify(p);\n"
+                         "    if (sum != 5) { return 1; }\n"
+                         "    return 0;\n"
+                         "}\n");
+    t.write("records.h", "struct Point { int x, y; };\n"
+                         "int c_classify(struct Point p);\n"
+                         "struct Point make_point(int x, int y);\n");
+
+    auto r = t.run();
+    CHECK(r.ok, "validated simple record by-value functions compile, link, and run");
+    CHECK_EQ(r.exitCode, 0, "the C stub returns the sum read from the passed struct");
+#endif
+}
+
 /// `malloc` -> `as ?*i32` -> store/load -> `free`: both pointer casts are representation
 /// preserving (LLVM pointers are opaque), so no conversion instruction may appear, and the
 /// pointer must reach `free` directly.
@@ -3012,6 +3042,8 @@ static void test_codegen() {
     test_child_output_survives_nonzero_exit();
     printf("Running test_import_stdio_runs\n");
     test_import_stdio_runs();
+    printf("Running test_validated_c_struct_by_value_runs\n");
+    test_validated_c_struct_by_value_runs();
     printf("Running test_c_pointer_is_null_uses_niche_comparison\n");
     test_c_pointer_cast_roundtrip_emits_no_conversion();
     test_c_pointer_is_null_uses_niche_comparison();

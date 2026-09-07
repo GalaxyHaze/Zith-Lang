@@ -1,11 +1,11 @@
 #include "sema/hir-lower-modern.hpp"
 
+#include "cinterop/c-header.hpp"
 #include "common/overloaded.hpp"
 #include "diagnostics/error-codes.hpp"
 #include "sema/hir-lower-utils.hpp"
 #include "sema/nra-facts.hpp"
 #include "sema/op-mapping.hpp"
-#include "support/debug-print.hpp"
 #include "support/int-literal.hpp"
 
 #include "types/type-kind.hpp"
@@ -27,8 +27,39 @@ HirLowerModern::HirLowerModern(memory::Arena &arena, diagnostics::DiagnosticEngi
       cache_store_(cache_store) {}
 
 bool HirLowerModern::run() {
+    registerForeignRecords();
     return predeclareGlobalConsts() && predeclareFunctions() && lowerFunctionBodies() &&
            !diags_.hasErrors();
+}
+
+void HirLowerModern::registerForeignRecords() {
+    for (const auto &header : snapshot_.cHeaders()) {
+        if (header == nullptr)
+            continue;
+        std::vector<const cinterop::Type *> pending;
+        const auto queue = [&](const cinterop::Type &type) {
+            if (type.kind == cinterop::TypeKind::Record)
+                pending.push_back(&type);
+        };
+        for (const auto &function : header->functions) {
+            queue(function.result);
+            for (const auto &parameter : function.parameters)
+                queue(parameter);
+        }
+        while (!pending.empty()) {
+            const auto *record = pending.back();
+            pending.pop_back();
+            if (record == nullptr || record->kind != cinterop::TypeKind::Record)
+                continue;
+            const auto key = interner_.intern(record->name);
+            if (foreign_record_types_.get(key) == nullptr)
+                foreign_record_types_.insert(key, record);
+            for (const auto &field : record->recordFields) {
+                if (field.type != nullptr && field.type->kind == cinterop::TypeKind::Record)
+                    pending.push_back(field.type.get());
+            }
+        }
+    }
 }
 
 bool HirLowerModern::predeclareGlobalConsts() {
@@ -233,6 +264,7 @@ bool HirLowerModern::predeclareFunctions() {
             continue;
         for (const auto &foreign : header->functions) {
             auto &hir_fn       = hir_.addFn(interner_.intern(foreign.linkageName));
+            hir_fn.isForeignC  = true;
             hir_fn.sym_id      = static_cast<symbols::SymId>(functions_.size() + next_sym_id_);
             hir_fn.return_type = lowerForeignType(foreign.result);
             hir_fn.isVariadic  = foreign.isVariadic;

@@ -46,7 +46,194 @@ bool isCompilerPredefined(std::string_view name) {
     return false;
 }
 
-bool lowerType(const CXType source, Type &result, std::string &unsupported) {
+bool isUnsupportedScalarKind(const CXType type) {
+    switch (clang_getCanonicalType(type).kind) {
+    case CXType_Float16:
+    case CXType_Float128:
+    case CXType_LongDouble:
+    case CXType_Int128:
+    case CXType_UInt128:
+        return true;
+    default:
+        return false;
+    }
+}
+
+bool recordHasForbiddenLayoutAttribute(const CXCursor record) {
+    // libclang exposes attribute spellings such as `packed` and `aligned` as
+    // child cursors of the record declaration.
+    bool has_attribute = false;
+    clang_visitChildren(
+        record,
+        [](CXCursor cursor, CXCursor, CXClientData data) -> CXChildVisitResult {
+            const auto kind = clang_getCursorKind(cursor);
+            if (kind == CXCursor_PackedAttr || kind == CXCursor_AlignedAttr) {
+                *static_cast<bool *>(data) = true;
+                return CXChildVisit_Break;
+            }
+            return CXChildVisit_Continue;
+        },
+        &has_attribute);
+    return has_attribute;
+}
+
+bool lowerTypeImpl(const CXType source, Type &result, std::string &unsupported,
+                   bool validate_record_values, bool allow_nested_record);
+
+std::string recordName(const CXType source) {
+    const CXCursor declaration = clang_getTypeDeclaration(source);
+    const auto cursor_name     = takeString(clang_getCursorSpelling(declaration));
+    if (!cursor_name.empty())
+        return cursor_name;
+    return takeString(clang_getTypeSpelling(source));
+}
+
+bool recordFieldIsSingleI32(const Type &type) {
+    if (type.kind == TypeKind::Integer && type.bits == 32U)
+        return true;
+    return type.kind == TypeKind::Record && type.abiIsSingleI32;
+}
+
+bool recordFieldIsSingleI64(const Type &type) {
+    if (type.kind == TypeKind::Integer && type.bits == 64U)
+        return true;
+    if (type.kind == TypeKind::Pointer)
+        return true;
+    return type.kind == TypeKind::Record && type.abiIsSingleI64;
+}
+
+bool lowerRecordLayout(const CXType source, Type &result, std::string &unsupported,
+                       bool require_by_value_abi) {
+    const CXType record_type = clang_getCanonicalType(source);
+    result.kind              = TypeKind::Record;
+    result.name              = recordName(source);
+    const auto size          = clang_Type_getSizeOf(record_type);
+    const auto align         = clang_Type_getAlignOf(record_type);
+    if (size <= 0 || align <= 0) {
+        unsupported = "incomplete or non-constant record layout '" + result.name + "'";
+        return false;
+    }
+
+    const CXCursor decl_cursor = clang_getTypeDeclaration(record_type);
+    if (clang_Cursor_isAnonymousRecordDecl(decl_cursor) != 0) {
+        unsupported = "anonymous record '" + result.name + "'";
+        return false;
+    }
+    if (recordHasForbiddenLayoutAttribute(decl_cursor)) {
+        unsupported = "record '" + result.name + "' uses packing, alignment, or anonymous layout";
+        return false;
+    }
+
+    struct FieldState {
+        Type &result;
+        std::string &unsupported;
+        bool valid = true;
+    };
+    FieldState state{result, unsupported};
+
+    const auto visitor = [](CXCursor cursor, CXClientData data) -> CXVisitorResult {
+        auto *field_state = static_cast<FieldState *>(data);
+        if (!field_state->valid)
+            return CXVisit_Break;
+        if (clang_Cursor_isBitField(cursor) != 0) {
+            field_state->unsupported = "bitfield in record '" + field_state->result.name + "'";
+            field_state->valid       = false;
+            return CXVisit_Break;
+        }
+        const std::string field_name = takeString(clang_getCursorSpelling(cursor));
+        if (field_name.empty()) {
+            field_state->unsupported =
+                "anonymous field in record '" + field_state->result.name + "'";
+            field_state->valid = false;
+            return CXVisit_Break;
+        }
+        const CXType field_type = clang_getCursorType(cursor);
+        if (isUnsupportedScalarKind(field_type)) {
+            field_state->unsupported = "edge-case scalar field '" + field_name + "' in record '" +
+                                       field_state->result.name + "'";
+            field_state->valid = false;
+            return CXVisit_Break;
+        }
+        if (clang_getCanonicalType(field_type).kind == CXType_ConstantArray) {
+            field_state->unsupported =
+                "array field '" + field_name + "' in record '" + field_state->result.name + "'";
+            field_state->valid = false;
+            return CXVisit_Break;
+        }
+
+        const auto field_offset = clang_Cursor_getOffsetOfField(cursor);
+        if (field_offset < 0) {
+            field_state->unsupported = "field layout unavailable for '" + field_state->result.name +
+                                       "." + field_name + "'";
+            field_state->valid = false;
+            return CXVisit_Break;
+        }
+
+        Type lowered;
+        if (!lowerTypeImpl(field_type, lowered, field_state->unsupported, true, true)) {
+            field_state->unsupported = "unsupported field '" + field_name + "' in record '" +
+                                       field_state->result.name + "': " + field_state->unsupported;
+            field_state->valid = false;
+            return CXVisit_Break;
+        }
+        if (lowered.kind == TypeKind::Record && !lowered.hasVerifiedLayout) {
+            field_state->unsupported = "record field '" + field_name + "' in record '" +
+                                       field_state->result.name + "' has no verified ABI";
+            field_state->valid = false;
+            return CXVisit_Break;
+        }
+        RecordField field;
+        field.name       = field_name;
+        field.type       = std::make_shared<Type>(std::move(lowered));
+        field.offsetBits = static_cast<uint64_t>(field_offset);
+        field_state->result.recordFields.push_back(std::move(field));
+        return CXVisit_Continue;
+    };
+
+    clang_Type_visitFields(record_type, visitor, &state);
+    if (!state.valid)
+        return false;
+    if (result.recordFields.empty()) {
+        unsupported = "record '" + result.name + "' has no direct fields";
+        return false;
+    }
+
+    result.sizeBytes      = static_cast<uint64_t>(size);
+    result.alignBytes     = static_cast<uint64_t>(align);
+    result.abiIsSingleI32 = size == 4 && align == 4 && result.recordFields.size() == 1U &&
+                            result.recordFields[0].offsetBits == 0U &&
+                            recordFieldIsSingleI32(*result.recordFields[0].type);
+    // The first supported public value ABI: one 64-bit integer/pointer member,
+    // or two adjacent 32-bit integer/one-i32-record members, fit the single
+    // 64-bit integer slot used by Clang on both x86-64 and AArch64 Linux.
+    // Keep this classifier explicit instead of inferring ABI from size alone,
+    // so a future record that does not lower to i64 is never accepted.
+    const bool one_i64_field = result.recordFields.size() == 1U &&
+                               result.recordFields[0].offsetBits == 0U &&
+                               recordFieldIsSingleI64(*result.recordFields[0].type);
+    const bool two_i32_fields = result.recordFields.size() == 2U &&
+                                result.recordFields[0].offsetBits == 0U &&
+                                result.recordFields[1].offsetBits == 32U &&
+                                recordFieldIsSingleI32(*result.recordFields[0].type) &&
+                                recordFieldIsSingleI32(*result.recordFields[1].type);
+    result.abiIsSingleI64 =
+        size == 8 && align > 0 &&
+        (static_cast<uint64_t>(align) == 4U || static_cast<uint64_t>(align) == 8U) &&
+        (one_i64_field || two_i32_fields);
+    if (!result.abiIsSingleI64) {
+        if (require_by_value_abi) {
+            unsupported = "record '" + result.name +
+                          "' passes or returns a simple value shape that codegen cannot "
+                          "prove on this target";
+            return false;
+        }
+    }
+    result.hasVerifiedLayout = true;
+    return true;
+}
+
+bool lowerTypeImpl(const CXType source, Type &result, std::string &unsupported,
+                   const bool validate_record_values, const bool allow_nested_record) {
     const CXType type = clang_getCanonicalType(source);
     result.isConst    = clang_isConstQualifiedType(source) != 0;
     switch (type.kind) {
@@ -107,16 +294,20 @@ bool lowerType(const CXType source, Type &result, std::string &unsupported) {
             return true;
         }
         Type pointee;
-        if (!lowerType(pointee_type, pointee, unsupported))
+        const bool validate_pointee = pointee_canonical.kind != CXType_Record;
+        if (!lowerTypeImpl(pointee_type, pointee, unsupported, validate_pointee, false))
             return false;
         result.kind    = TypeKind::Pointer;
         result.pointee = std::make_shared<Type>(std::move(pointee));
         return true;
     }
     case CXType_Record:
-        result.kind = TypeKind::Record;
-        result.name = takeString(clang_getTypeSpelling(source));
-        return true;
+        if (!validate_record_values) {
+            result.kind = TypeKind::Record;
+            result.name = recordName(source);
+            return true;
+        }
+        return lowerRecordLayout(source, result, unsupported, !allow_nested_record);
     case CXType_Enum:
         result.kind = TypeKind::Enum;
         result.name = takeString(clang_getTypeSpelling(source));
@@ -125,6 +316,10 @@ bool lowerType(const CXType source, Type &result, std::string &unsupported) {
         unsupported = takeString(clang_getTypeSpelling(source));
         return false;
     }
+}
+
+bool lowerType(const CXType source, Type &result, std::string &unsupported) {
+    return lowerTypeImpl(source, result, unsupported, true, false);
 }
 
 struct ParseState {

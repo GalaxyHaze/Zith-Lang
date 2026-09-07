@@ -449,6 +449,31 @@ void TypeIntern::setDefiningModule(TypeId type, std::string_view module) {
     }
 }
 
+void TypeIntern::setForeignLayout(TypeId struct_type, const uint64_t size_bytes,
+                                  const uint64_t align_bytes, const bool single_i64_abi) {
+    auto &def                 = getStructDef(struct_type);
+    def.hasForeignLayout      = true;
+    def.foreignAbiIsSingleI64 = single_i64_abi;
+    def.foreignSizeBytes      = size_bytes;
+    def.foreignAlignBytes     = align_bytes;
+}
+
+bool TypeIntern::hasForeignLayout(TypeId struct_type) const {
+    return getStructDef(struct_type).hasForeignLayout;
+}
+
+bool TypeIntern::foreignAbiIsSingleI64(TypeId struct_type) const {
+    return getStructDef(struct_type).foreignAbiIsSingleI64;
+}
+
+uint64_t TypeIntern::foreignSizeBytes(TypeId struct_type) const {
+    return getStructDef(struct_type).foreignSizeBytes;
+}
+
+uint64_t TypeIntern::foreignAlignBytes(TypeId struct_type) const {
+    return getStructDef(struct_type).foreignAlignBytes;
+}
+
 std::string_view TypeIntern::definingModuleOf(TypeId type) const {
     switch (kindOf(type)) {
     case TypeKind::Struct: {

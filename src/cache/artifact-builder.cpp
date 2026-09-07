@@ -657,6 +657,7 @@ Artifact ArtifactBuilder::build(std::string_view canonical_path, std::string_vie
         cfn.name                   = std::string(interner_.lookup(fn.name));
         cfn.name_id                = internString(interner_.lookup(fn.name));
         cfn.is_extern              = fn.blocks.empty();
+        cfn.is_foreign_c           = fn.isForeignC;
         cfn.is_variadic            = fn.isVariadic;
         cfn.is_state               = fn.isState;
         cfn.uses_tailcc            = fn.usesTailCC;
@@ -765,9 +766,13 @@ Artifact ArtifactBuilder::build(std::string_view canonical_path, std::string_vie
         if (sd == nullptr)
             continue;
         CompactStructDef cdef;
-        const auto name = interner_.lookup(sd->name);
-        cdef.name       = std::string(name);
-        cdef.name_id    = internString(name);
+        const auto name            = interner_.lookup(sd->name);
+        cdef.name                  = std::string(name);
+        cdef.name_id               = internString(name);
+        cdef.hasForeignLayout      = sd->hasForeignLayout;
+        cdef.foreignAbiIsSingleI64 = sd->foreignAbiIsSingleI64;
+        cdef.foreignSizeBytes      = sd->foreignSizeBytes;
+        cdef.foreignAlignBytes     = sd->foreignAlignBytes;
         for (const auto &field : sd->fields) {
             cdef.field_name_ids.push_back(internString(interner_.lookup(field.name)));
             cdef.field_type_ids.push_back(internType(field.type));

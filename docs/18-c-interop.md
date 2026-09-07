@@ -3,8 +3,10 @@
 > **Implementation status:** `extern fn` bindings are **working** on all targets. Native libclang
 > C header import is **working** for common libc-style declarations (including variadic functions,
 > array-decayed parameters, `va_list`, and function-pointer parameters). Object-like macros that
-> expand to an exact scalar literal are imported as constants and verified through the CLI. Function-like macros,
-> strings, globals, bitfields, and complex layouts remain **unimported**. See
+> expand to an exact scalar literal are imported as constants and verified through the CLI. Simple
+> records passed/returned **by value** are imported only after libclang verifies their layout for
+> the configured target triple. Function-like macros, strings, globals, bitfields, packed or
+> anonymous records, flexible arrays, and other unverified layouts remain **unimported**. See
 > [impl-status.md](impl-status.md).
 
 Zith supports manual `extern fn` bindings on every target. Native builds which find libclang also
@@ -114,7 +116,7 @@ Plain C `char` parameters and results import as Zith `char`.
 | `T[N]`, `char[20]` (parameters) | Pointer to `T` / opaque pointer after C array decay |
 | `va_list` | The decayed `struct __va_list_tag *` pointer carried by the function type |
 | `int (*)(...)` (parameters) | Opaque pointer; callable through an existing C pointer value |
-| simple records and enums | Named foreign type |
+| simple records and enums | Named foreign type; simple records additionally carry verified layout and fields |
 
 Because a C pointer imports as `?*T` (see
 [8.1.1](08-error-handling.md#811-c-pointers-are-t)), reinterpreting one is written `as ?*T`;
@@ -133,9 +135,28 @@ fn main(): i32 {
 }
 ```
 
-Records passed or returned **by value** import as named foreign types but have no verified ABI;
-constructing or reading their fields from Zith is not supported yet (see Known Debt in
-[impl-status.md](impl-status.md)).
+Simple records passed or returned **by value** import only when libclang proves their layout for
+the configured target triple and sysroot. The supported field subset is scalar types, plain C
+pointers, and nested simple records that also pass validation. The binder records each field's
+name, offset, and type plus the record's total size and alignment, and the lowerer materialises
+the same fields as a Zith struct so the LLVM structural type matches the C ABI.
+
+Records are rejected when any of these conditions apply:
+
+```text
+bitfields
+explicit packing or alignment attributes
+anonymous records or anonymous fields
+flexible array members
+`long double`
+`__int128`
+not directly addressable target layout (incomplete or non-constant size)
+```
+
+An unsupported record used as a fixed by-value parameter or return type is skipped with an
+explicit reason in `skippedFunctions`; it never reaches codegen with an unverified layout.
+Pointers to records continue to import as opaque nullable pointers without requiring a record
+layout, because no value ABI needs to be proven for a pointer.
 
 The project may configure C parsing and linking in `ZithProject.toml`:
 

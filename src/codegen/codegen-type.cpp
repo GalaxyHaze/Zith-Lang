@@ -4,6 +4,7 @@
 
 #include <llvm/IR/DataLayout.h>
 #include <llvm/IR/DerivedTypes.h>
+#include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/Type.h>
 #include <llvm/MC/TargetRegistry.h>
@@ -183,6 +184,38 @@ llvm::Type *CodeGenType::lowerPtr(types::TypeId pointee, bool is_mut) {
     (void)pointee;
     (void)is_mut;
     return llvm::PointerType::get(ctx_, 0);
+}
+
+llvm::Type *CodeGenType::abiLower(types::TypeId id) {
+    if (types_.kindOf(id) == types::TypeKind::Struct && types_.hasForeignLayout(id)) {
+        if (types_.foreignAbiIsSingleI64(id))
+            return llvm::Type::getInt64Ty(ctx_);
+        // No other public C record ABI shape is proven yet. Keep the storage
+        // type so a caller cannot silently emit an unverified ABI.
+    }
+    return lower(id);
+}
+
+llvm::Value *CodeGenType::abiCoerceArgument(llvm::IRBuilderBase &builder, llvm::Value *value,
+                                            const types::TypeId type) {
+    if (types_.kindOf(type) != types::TypeKind::Struct || !types_.hasForeignLayout(type) ||
+        !types_.foreignAbiIsSingleI64(type))
+        return value;
+    auto *storage = builder.CreateAlloca(lower(type));
+    builder.CreateStore(value, storage);
+    auto *data = builder.CreateBitCast(storage, llvm::PointerType::get(builder.getContext(), 0));
+    return builder.CreateLoad(llvm::Type::getInt64Ty(builder.getContext()), data);
+}
+
+llvm::Value *CodeGenType::abiRestoreResult(llvm::IRBuilderBase &builder, llvm::Value *value,
+                                           const types::TypeId type) {
+    if (types_.kindOf(type) != types::TypeKind::Struct || !types_.hasForeignLayout(type) ||
+        !types_.foreignAbiIsSingleI64(type))
+        return value;
+    auto *storage = builder.CreateAlloca(lower(type));
+    builder.CreateStore(
+        value, builder.CreateBitCast(storage, llvm::PointerType::get(builder.getContext(), 0)));
+    return builder.CreateLoad(lower(type), storage);
 }
 
 uint64_t CodeGenType::sizeOf(types::TypeId id) const {

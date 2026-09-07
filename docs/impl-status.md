@@ -150,7 +150,7 @@ Implementation work that is incomplete or needs review is tracked in
 | `alias` | **Working** | |
 | `pub`, `mod` | **Working** | |
 | `mod(..)`, `mod(N)` | **Working** | Module-depth visibility is applied to declarations and to struct fields; `mod(..)` is unlimited and `mod(N)` allows N directory levels below the owner |
-| C header imports | **Working (common C)** | libclang only; variadic functions, array-decayed parameters, `va_list`, and function-pointer parameters supported. Object-like scalar macros are imported as constants and verified through the CLI. Single unsupported decls/macros are skipped and recorded in `skippedFunctions`; function-like macros, strings, globals, bitfields, packed/anonymous records and flexible arrays remain unimported. Struct-by-value ABI is not verified |
+| C header imports | **Working (validated C)** | libclang only; variadic functions, array-decayed parameters, `va_list`, and function-pointer parameters supported. Object-like scalar macros are imported as constants and verified through the CLI. Simple records passed/returned by value are imported only after libclang proves their layout for the configured target triple; scalar, pointer, and nested validated-record fields are supported. Function-like macros, strings, globals, bitfields, packed/anonymous records, flexible arrays, `long double`, and `__int128` remain unimported with explicit skips |
 
 ---
 
@@ -234,7 +234,7 @@ Recorded deliberately; each item is a follow-up, not an unknown.
 | No flow-sensitive narrowing after `is null` | `p->field` on a `?*T` requires NonNull proof from `if (p is null) { } else { p->field }` or `for (not (p is null))`. Error code `E3005` |
 | `is` outside `null`/tagged-union contexts | Non-union `is Type` remains unsupported and reports a dedicated diagnostic |
 | User-defined casts | To be added as a new branch in `classifyCast` |
-| No C struct-by-value ABI | `struct` parameters/results import as named foreign types, but there is no verified ABI and no Zith-visible layout, so constructing/passing records to C remains unsupported |
+| C struct-by-value ABI limited to verified simple records | `struct` parameters/results are imported only when libclang proves layout/alignment for scalars, plain pointers, and nested verified records on the target used by the parse. Unverified records are skipped before lowering |
 | Bare `opaque` is module-local | The deterministic typeId is stable for the same concrete type inside one module, but imported/cached opaque values are rejected with `E2010` because a cross-module registry is not implemented yet |
 | `..` lexes per character | Its `precedence()` is -1 and range/slice syntax depends on the two `.` tokens. Range literals now have a dedicated `ExprKind::Range`; slicing remains a separate postfix form |
 | `++` / `--` | Not implemented; no increment/decrement operators exist |
