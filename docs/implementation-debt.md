@@ -291,6 +291,34 @@ default member initializers para ids, tipos, flags e scalar values; os nodes com
 arena. O padrão mantém a construção agregada usada pelos lowers, sem exceções
 ou RTTI.
 
+### Contrato Homebrew depende de um tap externo não verificável localmente
+
+O workflow [update-package.yml](/home/diogo/Zith/.github/workflows/update-package.yml:144)
+resolve a tag e calcula o sha256 do archive GitHub em
+`https://github.com/GalaxyHaze/Zith/archive/refs/tags/v${version}.tar.gz`, depois
+dispara `repository_dispatch` para `GalaxyHaze/homebrew-zithc`. A fórmula
+recomendada fica documentada em
+[zithc.rb](/home/diogo/Zith/.github/homebrew/zithc.rb): build a partir do source
+tag com `-DZITH_HAS_LLVM=OFF -DZITH_ENABLE_FFI=OFF`, e stdlib instalada em
+`share/zith/stdlib`, o caminho já lido por
+[stdlib-discovery.cpp](/home/diogo/Zith/src/support/stdlib-discovery.cpp:107).
+
+Risco residual e validação em aberto:
+
+- Não há fonte local para o conteúdo/fórmulas de `GalaxyHaze/homebrew-zithc`;
+  sem rede não é possível confirmar se o tap está desatualizado, apontando para
+  um owner antigo (`GalaxyHaze/homebrew-zith`) ou se realmente possui a fórmula
+  esperada.
+- O release atual não publica um binário macOS estável usado pela fórmula; a
+  escolha defensável é build-from-source do archive de tag, sem inventar hash.
+- O dispatch usa `github.repository_owner`, portanto o tap é `GalaxyHaze`
+  quando este repo o usar como remote; o local `Zith-Lang` nos manifests Scoop
+  é uma divergência externa que deve ser corrigida no tap/release automation.
+
+Acção recomendada: validar o tap com acesso de rede, verificar se a fórmula
+aceita o payload `new-release` e substituir os placeholders de versão/sha256
+quando houver um release tag real.
+
 ---
 
 ## Próximos passos para rever
