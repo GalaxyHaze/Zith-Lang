@@ -81,8 +81,6 @@ jobs:
               -DCMAKE_C_COMPILER=clang
               -DCMAKE_CXX_COMPILER=clang++
               -DCMAKE_LINKER=ld.lld
-              -DZITH_ENABLE_FFI=OFF
-              -DZITH_HAS_LLVM=OFF
 
           - os: ubuntu-latest
             target_name: zithc-linux-arm64
@@ -91,7 +89,6 @@ jobs:
               -DCMAKE_CXX_COMPILER=aarch64-linux-gnu-g++
               -DCMAKE_SYSTEM_NAME=Linux
               -DCMAKE_SYSTEM_PROCESSOR=aarch64
-              -DZITH_ENABLE_FFI=OFF
               -DZITH_HAS_LLVM=OFF
 
           - os: macos-14
@@ -102,7 +99,7 @@ jobs:
               -DCMAKE_OSX_ARCHITECTURES="x86_64;arm64"
               -DCMAKE_AR=$(xcrun -f ar)
               -DCMAKE_RANLIB=$(xcrun -f ranlib)
-              -DZITH_ENABLE_FFI=OFF
+              -DZITH_HAS_LLVM=OFF
 
           - os: windows-latest
             target_name: zithc-windows-amd64.exe
@@ -110,8 +107,6 @@ jobs:
             cmake_flags: >-
               -DCMAKE_C_COMPILER=clang-cl
               -DCMAKE_CXX_COMPILER=clang-cl
-              -DZITH_ENABLE_FFI=OFF
-              -DZITH_HAS_LLVM=OFF
 
           - os: windows-latest
             target_name: zithc-windows-arm64.exe
@@ -122,7 +117,6 @@ jobs:
               -DCMAKE_SYSTEM_PROCESSOR=ARM64
               -DCMAKE_C_COMPILER_TARGET=aarch64-pc-windows-msvc
               -DCMAKE_CXX_COMPILER_TARGET=aarch64-pc-windows-msvc
-              -DZITH_ENABLE_FFI=OFF
               -DZITH_HAS_LLVM=OFF
 
     steps:
@@ -277,7 +271,6 @@ jobs:
             -DCMAKE_CXX_COMPILER="zig;c++" \
             -DCMAKE_C_COMPILER_TARGET="${{ matrix.zig_target }}" \
             -DCMAKE_CXX_COMPILER_TARGET="${{ matrix.zig_target }}" \
-            -DZITH_ENABLE_FFI=OFF \
             -DZITH_HAS_LLVM=OFF \
             -DCMAKE_EXE_LINKER_FLAGS='-static -lc' \
             -DCMAKE_CXX_FLAGS='-fno-cxx-exceptions'
@@ -355,7 +348,7 @@ jobs:
               -DCMAKE_OSX_ARCHITECTURES="x86_64;arm64"
               -DCMAKE_AR=$(xcrun -f ar)
               -DCMAKE_RANLIB=$(xcrun -f ranlib)
-              -DZITH_ENABLE_FFI=OFF
+              -DZITH_HAS_LLVM=OFF
 
           - os: windows-latest
             target_name: windows-amd64.exe
@@ -363,7 +356,6 @@ jobs:
             cmake_flags: >-
               -DCMAKE_C_COMPILER=clang-cl
               -DCMAKE_CXX_COMPILER=clang-cl
-              -DZITH_ENABLE_FFI=OFF
 
           - os: windows-latest
             target_name: windows-arm64.exe
@@ -374,7 +366,7 @@ jobs:
               -DCMAKE_SYSTEM_PROCESSOR=ARM64
               -DCMAKE_C_COMPILER_TARGET=aarch64-pc-windows-msvc
               -DCMAKE_CXX_COMPILER_TARGET=aarch64-pc-windows-msvc
-              -DZITH_ENABLE_FFI=OFF
+              -DZITH_HAS_LLVM=OFF
 
     steps:
       - name: Verify zith-lsp remote access
