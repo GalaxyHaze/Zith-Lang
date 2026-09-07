@@ -3,9 +3,6 @@ param(
 )
 
 $Repo = "GalaxyHaze/Zith"
-$IsMusl = $false
-# Simple arg parse: check for --musl in args
-if ($args -contains "--musl") { $IsMusl = $true }
 
 if ([string]::IsNullOrWhiteSpace($Version)) {
     Write-Host "No version specified. Fetching latest version..."
@@ -31,10 +28,7 @@ if ($Arch -match "ARM" -or $env:PROCESSOR_ARCHITECTURE -match "ARM64") {
     $IsArm64 = $true
 }
 
-if ($IsMusl) {
-    if ($IsArm64) { $FileName = "zithc-windows-arm64-musl.exe" }
-    else          { $FileName = "zithc-windows-amd64-musl.exe" }
-} elseif ($IsArm64) {
+if ($IsArm64) {
     $FileName = "zithc-windows-arm64.exe"
 } else {
     $FileName = "zithc-windows-amd64.exe"
@@ -63,9 +57,10 @@ try {
     Copy-Item -Path $TempPath -Destination "$InstallDir\zithc.exe" -Force
     Remove-Item -Path $TempPath -Force
 
-    # Download and extract stdlib
+    # Place stdlib where findStdlibRoots() looks for the installed layout:
+    # <binary_dir>/../share/zith/stdlib.
     $StdlibUrl = "https://github.com/$Repo/releases/download/$Version/zithc-stdlib-$Version.zip"
-    $StdlibDir = "$InstallDir\stdlib"
+    $StdlibDir = "$env:LOCALAPPDATA\Microsoft\share\zith\stdlib"
     Write-Host "Downloading stdlib..." -ForegroundColor Cyan
     try {
         Invoke-WebRequest -Uri $StdlibUrl -OutFile "$env:TEMP\zithc-stdlib.zip" -UseBasicParsing
