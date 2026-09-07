@@ -42,7 +42,9 @@ if ($IsMusl) {
 
 $DownloadUrl = "https://github.com/$Repo/releases/download/$Version/$FileName"
 $TempPath = "$env:TEMP\zithc-installer.exe"
-$InstallDir = "$env:LOCALAPPDATA\Microsoft\WindowsApps"
+$ZithRoot = Join-Path $env:LOCALAPPDATA "Zith"
+$InstallDir = Join-Path $ZithRoot "bin"
+$StdlibDir = Join-Path $ZithRoot "share\zith\stdlib"
 
 Write-Host "Downloading from $DownloadUrl..." -ForegroundColor Cyan
 
@@ -63,9 +65,20 @@ try {
     Copy-Item -Path $TempPath -Destination "$InstallDir\zithc.exe" -Force
     Remove-Item -Path $TempPath -Force
 
+    $UserPath = [Environment]::GetEnvironmentVariable('Path', 'User')
+    $InstallPathEntry = $InstallDir.TrimEnd('\')
+    if (($UserPath -split ';') -notcontains $InstallPathEntry) {
+        if ([string]::IsNullOrWhiteSpace($UserPath)) {
+            $NewUserPath = $InstallPathEntry
+        } else {
+            $NewUserPath = $UserPath.TrimEnd(';') + ';' + $InstallPathEntry
+        }
+        [Environment]::SetEnvironmentVariable('Path', $NewUserPath, 'User')
+        Write-Host "Added $InstallDir to your user PATH." -ForegroundColor Green
+    }
+
     # Download and extract stdlib
     $StdlibUrl = "https://github.com/$Repo/releases/download/$Version/zithc-stdlib-$Version.zip"
-    $StdlibDir = "$InstallDir\stdlib"
     Write-Host "Downloading stdlib..." -ForegroundColor Cyan
     try {
         Invoke-WebRequest -Uri $StdlibUrl -OutFile "$env:TEMP\zithc-stdlib.zip" -UseBasicParsing

@@ -408,7 +408,7 @@ if(ZITH_BUILD_CAPI)
 endif()
 
 install(DIRECTORY stdlib/
-    DESTINATION ${CMAKE_INSTALL_LIBDIR}/zith/stdlib
+    DESTINATION ${CMAKE_INSTALL_DATADIR}/zith/stdlib
     FILES_MATCHING PATTERN "*.zith"
 )
 

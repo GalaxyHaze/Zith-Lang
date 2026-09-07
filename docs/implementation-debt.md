@@ -16,6 +16,25 @@ engenharia para rever e gerir.
 
 ---
 
+## Release stdlib / installer follow-ups
+
+- O manifest `.github/scoop/bucket/zithc.json` ainda está fixo em `v0.6.2` e
+  aponta para `GalaxyHaze/Zith-Lang`; o workflow `update-package.yml` já usa
+  `${{ github.repository }}` e deve regenerar URLs/hashes no próximo release.
+  Os hashes atuais não foram relativos ao novo repo e por isso não foram
+  inventados nesta rama.
+- Os shims Scoop executam `zithc` a partir de `~\scoop\shims`, fora do prefixo
+  da app; a descoberta automática por caminho do exe só é garantida para
+  invocação direta do binário real. O workaround documentado é `ZITH_STDLIB`
+  ou `--include`.
+- O novo layout de `scripts/install.ps1` (`%LOCALAPPDATA%\Zith\bin` +
+  `%LOCALAPPDATA%\Zith\share\zith\stdlib`) e o novo ramo MSYS/MinGW/Cygwin de
+  `scripts/install.sh` dependem do runtime ser testado em Windows real; até
+  esse teste estar em CI, ficam verificados por sintaxe e pela análise estática
+  do código.
+
+---
+
 ## Não-dívidas (decisões de design)
 
 | Item | Decisão |

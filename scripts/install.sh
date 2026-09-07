@@ -91,17 +91,21 @@ chmod +x "$TMP_FILE"
 
 case "$OS" in
     MINGW*|MSYS*|CYGWIN*)
-        cp "$TMP_FILE" "./$OUTPUT_NAME"
-        echo "Download complete: ./$OUTPUT_NAME"
+        PREFIX="${ZITH_PREFIX:-$HOME/.local}"
+        BIN_DIR="$PREFIX/bin"
+        STDLIB_DIR="$PREFIX/share/zith/stdlib"
+        mkdir -p "$BIN_DIR" "$STDLIB_DIR"
+        cp "$TMP_FILE" "$BIN_DIR/$OUTPUT_NAME"
+        echo "Download complete: $BIN_DIR/$OUTPUT_NAME"
         STDLIB_URL="https://github.com/$REPO/releases/download/$VERSION/zithc-stdlib-$VERSION.zip"
         echo "Downloading stdlib..."
         if curl -fsSL "$STDLIB_URL" -o "$TMP_DIR/zithc-stdlib.zip"; then
-            unzip -o "$TMP_DIR/zithc-stdlib.zip" -d "./stdlib"
-            echo "Standard library extracted to ./stdlib"
+            unzip -o "$TMP_DIR/zithc-stdlib.zip" -d "$STDLIB_DIR"
+            echo "Standard library extracted to $STDLIB_DIR"
         else
             echo "Warning: Failed to download stdlib." >&2
         fi
-        echo "Please move '$OUTPUT_NAME' to a folder in your PATH."
+        echo "Please add $BIN_DIR to your PATH."
         ;;
     *)
         echo "Installing Zith to /usr/local/bin/..."
