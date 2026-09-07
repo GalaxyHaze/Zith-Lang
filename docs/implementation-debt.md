@@ -18,6 +18,8 @@ engenharia para rever e gerir.
 
 ## Release stdlib / installer follow-ups
 
+- Os installers de release substituem o conteúdo de `<prefix>/share/zith/stdlib`
+  antes de extrair, para evitar ficheiros stdlib antigos após um upgrade.
 - O manifest `.github/scoop/bucket/zithc.json` ainda está fixo em `v0.6.2` e
   aponta para `GalaxyHaze/Zith-Lang`; o workflow `update-package.yml` já usa
   `${{ github.repository }}` e deve regenerar URLs/hashes no próximo release.
@@ -32,6 +34,11 @@ engenharia para rever e gerir.
   `scripts/install.sh` dependem do runtime ser testado em Windows real; até
   esse teste estar em CI, ficam verificados por sintaxe e pela análise estática
   do código.
+- Em `.github/workflows/build-artifact.yml` o job Windows ARM64 usa
+  `msvc_arch: amd64_arm64`, pelo que o step "Setup Zig (for Windows arm64
+  cross-compile)" está morto (`if: ... msvc_arch == ''`). O target atual usa
+  clang-cl/LLVM para ARM64; o dead step deve ser removido ou a estratégia deve
+  ser resolvida antes de confiar num segundo fallback Zig.
 
 ---
 

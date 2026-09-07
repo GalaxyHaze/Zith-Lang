@@ -85,6 +85,7 @@ try {
         if (-not (Test-Path $StdlibDir)) {
             New-Item -ItemType Directory -Path $StdlibDir -Force | Out-Null
         }
+        Get-ChildItem -Path $StdlibDir -Force | Remove-Item -Recurse -Force
         Expand-Archive -Path "$env:TEMP\zithc-stdlib.zip" -DestinationPath $StdlibDir -Force
         Remove-Item -Path "$env:TEMP\zithc-stdlib.zip" -Force
         Write-Host "Standard library installed to $StdlibDir" -ForegroundColor Green

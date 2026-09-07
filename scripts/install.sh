@@ -100,6 +100,8 @@ case "$OS" in
         STDLIB_URL="https://github.com/$REPO/releases/download/$VERSION/zithc-stdlib-$VERSION.zip"
         echo "Downloading stdlib..."
         if curl -fsSL "$STDLIB_URL" -o "$TMP_DIR/zithc-stdlib.zip"; then
+            rm -rf "$STDLIB_DIR"
+            mkdir -p "$STDLIB_DIR"
             unzip -o "$TMP_DIR/zithc-stdlib.zip" -d "$STDLIB_DIR"
             echo "Standard library extracted to $STDLIB_DIR"
         else
@@ -114,6 +116,7 @@ case "$OS" in
             STDLIB_DIR="/usr/local/share/zith/stdlib"
             echo "Downloading stdlib..."
             if curl -fsSL "$STDLIB_URL" -o "$TMP_DIR/zithc-stdlib.tar.gz"; then
+                sudo rm -rf "$STDLIB_DIR"
                 sudo mkdir -p "$STDLIB_DIR"
                 sudo tar xzf "$TMP_DIR/zithc-stdlib.tar.gz" -C "$STDLIB_DIR"
                 echo "Standard library installed to $STDLIB_DIR"
