@@ -4,52 +4,47 @@
 > out of scope. This manifest is consumed by
 > `scripts/agent-scheduler/scheduler.py`.
 
-## agent1 - Platform imports
+## agent1 - Monolith: codegen-emit
 
 Plan
-- Platform-specific imports (`foo.<arch>.<os>.zith`)
-
-Task files
-- scripts/agent-scheduler/templates/task-01-platform-imports.md
-
-Dependencies: none. Keep `src/session/frontend-context.cpp` edits isolated from
-agent2's compilation-session split.
-
-## agent2 - Monolith: frontend-context
-
-Plan
-- Split src/session/frontend-context.cpp by responsibility
-
-Task files
-- scripts/agent-scheduler/templates/task-02-monolith-frontend-context.md
-
-Dependencies: none for this first monolith unit. Do not touch platform-import
-ownership of the same resolver file without coordinating through the master.
-
-## agent3 - Monolith: compilation-session
-
-Plan
-- Split src/session/compilation-session.cpp by responsibility
 - Split src/codegen/codegen-emit.cpp by responsibility
 
 Task files
-- scripts/agent-scheduler/templates/task-03-monolith-compilation-session.md
-- scripts/agent-scheduler/templates/task-04-monolith-codegen.md
+- scripts/agent-scheduler/templates/task-07-monolith-codegen.md
 
-Dependencies: none. This agent completes the compilation-session split first,
-then the codegen split in the same worktree. Keep both files isolated from
-agent1/agent2.
+Dependencies: none. Keep the codegen split isolated from sema/cache work.
 
-## agent4 - C ABI struct-by-value
+## agent2 - Debt: variadic tail plan
 
 Plan
-- Validated simple-record C struct-by-value ABI
+- Centralize variadic-slice tail decisions in sema
 
 Task files
-- scripts/agent-scheduler/templates/task-05-c-abi-struct-by-value.md
+- scripts/agent-scheduler/templates/task-08-variadic-call-plan.md
 
-Dependencies: none for the C binder task; it may require codegen awareness but
-must not wait on the codegen monolith split.
+Dependencies: none. Do not split files owned by agent1 or agent3.
+
+## agent3 - Debt: HIR initializers
+
+Plan
+- Give HIR expression nodes complete default initialization
+
+Task files
+- scripts/agent-scheduler/templates/task-09-hir-initializers.md
+
+Dependencies: none. Keep changes to `src/hir/hir-expr.hpp` and builder call
+sites that initialize the new defaults.
+
+## agent4 - Debt: opaque cache hydration
+
+Plan
+- Rehydrate and import bare opaque tags across cache/module boundaries
+
+Task files
+- scripts/agent-scheduler/templates/task-10-opaque-cache-hydration.md
+
+Dependencies: none. It may touch `persistent-cache.cpp` and lowering, but must
+not take the monolith-split work from other agents.
 
 ## agent5 - Plan and debt curation
 
@@ -57,6 +52,6 @@ Plan
 - Curate Zith-- plans and debt annotations
 
 Task files
-- scripts/agent-scheduler/templates/task-06-curate-plans-debts.md
+- scripts/agent-scheduler/templates/task-11-curate-plans-debts.md
 
 Dependencies: docs-only; can run in parallel with agent1-4.

@@ -63,12 +63,8 @@ F-23 (word semantics) ─────┘              │
 F-24 (tag macros) ─────────────────────── Zith-- rejects E2010
 F-25 (assets), F-30, F-31 ─────────────── remaining spec/debt work
 F-18/F-19, F-27, F-26, F-09 ────────────── full-Zith/spec-only
-F-41 (`drop`) ──────────────────────────── next Zith-- feature
-F-42 (platform imports) ────────────────── planned resolver-only work
-                                          │
 F-34 (qualifier parse/types) ── F-14 (NRA/NTA) ── stable HIR contract
 F-33 (overloading)                        ┼─ done (name resolution + linkage names)
-<<<<<<< HEAD
 F-42 (platform imports)                   ┼─ done (resolver-only; independent of comptime)
                                           │
 F-30 (stdlib) ─────────────┬─ F-18 (runtime tasks/coroutines)
@@ -78,9 +74,6 @@ F-14 (NRA/NTA) ────────────┘
 F-25 (assets) ───────────────────────────────────│
 F-31 (union runtime) ────────────────────────────│
 F-32 (C interop completion) ─────────────────────│
-=======
-F-42 (platform imports)                   ┼─ resolver-only; independent of comptime
->>>>>>> awt/agent5
 ```
 
 ## Wave Groupings
