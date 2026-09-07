@@ -21,6 +21,15 @@ for arg in "$@"; do
     esac
 done
 
+normalize_version() {
+    # GitHub asset names use the leading "v", but older releases may be stored
+    # with a bare version. Keep the canonical release URL form when possible.
+    case "$VERSION" in
+        v*) ;; # already canonical
+        *) VERSION="v$VERSION" ;;
+    esac
+}
+
 detect_latest_version() {
     # Try authenticated request first (spares rate limit), fall back to unauthenticated
     API_URL="https://api.github.com/repos/$REPO/releases/latest"
@@ -39,6 +48,7 @@ detect_latest_version() {
 
 if [ -n "$VERSION" ]; then
     echo "Installing requested version: $VERSION"
+    normalize_version
 else
     echo "No version specified. Fetching latest version..."
     detect_latest_version
@@ -100,7 +110,9 @@ case "$OS" in
         STDLIB_URL="https://github.com/$REPO/releases/download/$VERSION/zithc-stdlib-$VERSION.zip"
         echo "Downloading stdlib..."
         if curl -fsSL "$STDLIB_URL" -o "$TMP_DIR/zithc-stdlib.zip"; then
-            unzip -o "$TMP_DIR/zithc-stdlib.zip" -d "$STDLIB_DIR"
+            rm -rf "$STDLIB_DIR"
+            mkdir -p "${STDLIB_DIR%/*}"
+            unzip -q "$TMP_DIR/zithc-stdlib.zip" -d "$STDLIB_DIR"
             echo "Standard library extracted to $STDLIB_DIR"
         else
             echo "Warning: Failed to download stdlib." >&2
@@ -114,7 +126,8 @@ case "$OS" in
             STDLIB_DIR="/usr/local/share/zith/stdlib"
             echo "Downloading stdlib..."
             if curl -fsSL "$STDLIB_URL" -o "$TMP_DIR/zithc-stdlib.tar.gz"; then
-                sudo mkdir -p "$STDLIB_DIR"
+                sudo rm -rf "$STDLIB_DIR"
+                sudo mkdir -p "${STDLIB_DIR%/*}"
                 sudo tar xzf "$TMP_DIR/zithc-stdlib.tar.gz" -C "$STDLIB_DIR"
                 echo "Standard library installed to $STDLIB_DIR"
             else
