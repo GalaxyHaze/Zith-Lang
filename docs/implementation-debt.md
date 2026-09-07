@@ -206,17 +206,13 @@ ver os novos `.cpp`.
 
 ## Dívida de duplicação e padrões repetitivos
 
-### Duplicação de variadic tail logic
+### Duplicação de variadic tail logic (resolvida)
 
-A lógica de `explicit_slice_arg` vs `auto_collect_tail` aparece repetida entre
-`src/sema/sema-modern.cpp` (linhas ~2585, ~3245, ~3403, ~5577, ~5676) e
-`src/sema/hir-lower-call.cpp` (linhas ~205, ~420 e ~505). O lowering reimplementa a
-decisão de sema com regras ligeiramente locais, o que cria risco de divergência
-quando o comportamento de calls variadic muda.
-
-Acção recomendada: centralizar a decisão em sema (por exemplo um `VariadicCallPlan`)
-guardado no snapshot ou no nó typed do call, e o lowering consumir apenas esse
-plano.
+A decisão de `explicit_slice_arg` vs `auto_collect_tail` é produzida em sema
+através de `VariadicCallPlan` e consumida mecanicamente pelo HIR lowering.
+Os call sites que usavam regras locais para re-derivar a decisão foram
+substituídos por leitura dos planos guardados em `TypedMap` para calls,
+`dyn` calls, métodos e transições `state`/`jump`.
 
 ### Concatenação ProjectConfig + Options
 

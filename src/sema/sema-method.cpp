@@ -246,8 +246,8 @@ TypeId PerModuleSema::inferMethodCall(const frontend::Expression &call,
         const bool has_receiver =
             !method_decl->parameters.empty() && method_decl->parameters.front().name == "self";
         const size_t provided_args = call.operands.size() - 1U;
-        static_bound_call = static_bound_call && trait_requirement && has_receiver && fn != nullptr &&
-                            provided_args >= 1U &&
+        static_bound_call          = static_bound_call && trait_requirement && has_receiver &&
+                            fn != nullptr && provided_args >= 1U &&
                             type_table.kindOf(pointee) == TypeKind::GenericParam;
         const TypeId substituted = [&]() {
             if (!static_bound_call)
@@ -272,15 +272,11 @@ TypeId PerModuleSema::inferMethodCall(const frontend::Expression &call,
                                                : sub_fn->params.size() - (has_receiver ? 1U : 0U);
         const size_t checked_explicit_args =
             explicit_receiver_arg ? provided_args - 1U : provided_args;
-        const bool explicit_slice_arg = [&]() {
-            if (!target_is_slice || provided_args != fixed_explicit_args + 1U ||
-                call.operands.empty())
-                return false;
-            (void)inferExpr(call.operands.back());
-            return variadicFinalArgIsExplicitSlice(sub_fn->params[slice_param_index], call.operands,
-                                                   fixed_explicit_args);
-        }();
-        const bool auto_collected_tail = target_is_slice && !explicit_slice_arg;
+        const VariadicCallPlan plan    = makeVariadicCallPlan(call.span, call.operands, sub_fn,
+                                                              target_is_slice, fixed_explicit_args);
+        const bool explicit_slice_arg  = plan.explicitSliceArg;
+        const bool auto_collected_tail = plan.autoCollectTail;
+        typed_map.variadicCallPlans.insert(call.id.value, plan);
         const bool defaults_cover =
             provided_args < fixed_explicit_args &&
             missingArgsHaveDefaults(*method_decl, provided_args, has_receiver ? 1U : 0U,
@@ -448,14 +444,11 @@ TypeId PerModuleSema::inferDynMethodCall(const frontend::Expression &call,
     const size_t fixed_explicit_args = target_is_slice
                                            ? slice_param_index - (has_receiver ? 1U : 0U)
                                            : fn->params.size() - (has_receiver ? 1U : 0U);
-    const bool explicit_slice_arg    = [&]() {
-        if (!target_is_slice || provided_args != fixed_explicit_args + 1U || call.operands.empty())
-            return false;
-        (void)inferExpr(call.operands.back());
-        return variadicFinalArgIsExplicitSlice(fn->params[slice_param_index], call.operands,
-                                                  fixed_explicit_args);
-    }();
-    const bool auto_collected_tail = target_is_slice && !explicit_slice_arg;
+    const VariadicCallPlan plan =
+        makeVariadicCallPlan(call.span, call.operands, fn, target_is_slice, fixed_explicit_args);
+    const bool explicit_slice_arg  = plan.explicitSliceArg;
+    const bool auto_collected_tail = plan.autoCollectTail;
+    typed_map.variadicCallPlans.insert(call.id.value, plan);
     const bool defaults_cover =
         provided_args < fixed_explicit_args &&
         missingArgsHaveDefaults(*method_decl, provided_args, has_receiver ? 1U : 0U,
@@ -769,16 +762,11 @@ TypeId PerModuleSema::resolveStructMethodCall(const frontend::Expression &call,
         const size_t generic_fixed_explicit =
             generic_decl_is_slice ? generic_slice_param_index - (has_receiver_entry ? 1U : 0U)
                                   : generic_slice_param_index - (has_receiver_entry ? 1U : 0U);
-        const bool generic_explicit_slice = [&]() {
-            if (!generic_decl_is_slice || provided_args != generic_fixed_explicit + 1U ||
-                call.operands.empty())
-                return false;
-            (void)inferExpr(call.operands.back());
-            return variadicFinalArgIsExplicitSlice(
-                generic_method_fn->params[generic_slice_param_index], call.operands,
-                generic_fixed_explicit);
-        }();
-        const bool generic_auto_collect = generic_decl_is_slice && !generic_explicit_slice;
+        const VariadicCallPlan generic_plan =
+            makeVariadicCallPlan(call.span, call.operands, generic_method_fn, generic_decl_is_slice,
+                                 generic_fixed_explicit);
+        const bool generic_explicit_slice = generic_plan.explicitSliceArg;
+        const bool generic_auto_collect   = generic_plan.autoCollectTail;
         const bool defaults_cover =
             provided_args < generic_fixed_explicit &&
             missingArgsHaveDefaults(*method_decl, provided_args, has_receiver_entry ? 1U : 0U,
@@ -999,12 +987,14 @@ TypeId PerModuleSema::resolveStructMethodCall(const frontend::Expression &call,
                 instantiations->substituteFunction(*method_fn, inferred_args);
             setExprType(callee.id, instance_type);
             setResolvedCallTarget(callee.id, method_module, method_decl->id);
+            const auto *instance_fn_for_plan = type_table.function(instance_type);
+            const VariadicCallPlan instance_plan =
+                makeVariadicCallPlan(call.span, call.operands, instance_fn_for_plan,
+                                     generic_decl_is_slice, generic_fixed_explicit);
+            typed_map.variadicCallPlans.insert(call.id.value, instance_plan);
             std::vector<std::pair<frontend::ExprId, types::OwnershipKind>> seen_roots;
             const auto *instance_fn = type_table.function(instance_type);
             if (instance_fn != nullptr) {
-                const size_t instance_slice_param_index = generic_decl_is_slice
-                                                              ? instance_fn->params.size() - 1U
-                                                              : instance_fn->params.size();
                 for (size_t explicit_index = 0U; explicit_index < generic_fixed_explicit;
                      ++explicit_index) {
                     const size_t param_index =
@@ -1015,9 +1005,9 @@ TypeId PerModuleSema::resolveStructMethodCall(const frontend::Expression &call,
                                                      instance_fn->params[param_index], seen_roots,
                                                      call.span, true);
                 }
-                if (generic_auto_collect && generic_decl_is_slice)
+                if (instance_plan.autoCollectTail && generic_decl_is_slice)
                     (void)checkVariadicTailArgs(call.span, call.operands,
-                                                instance_fn->params[instance_slice_param_index],
+                                                instance_fn->params[instance_plan.sliceParam],
                                                 generic_fixed_explicit + 1U, true);
             }
             return instance_fn != nullptr ? instance_fn->result : error_type;
@@ -1113,18 +1103,11 @@ TypeId PerModuleSema::resolveStructMethodCall(const frontend::Expression &call,
     const size_t method_fixed_explicit = method_is_vslice
                                              ? method_slice_param_index - (has_receiver ? 1U : 0U)
                                              : method_slice_param_index - (has_receiver ? 1U : 0U);
-    const bool method_explicit_slice   = [&]() {
-        if (!method_is_vslice || provided_args != method_fixed_explicit + 1U ||
-            call.operands.empty())
-            return false;
-        (void)inferExpr(call.operands.back());
-        const TypeId method_slice_sema = method_sema != nullptr && method_fn_for_slice != nullptr
-                                               ? method_fn_for_slice->params[method_slice_param_index]
-                                               : kInvalidTypeId;
-        return variadicFinalArgIsExplicitSlice(method_slice_sema, call.operands,
-                                                 method_fixed_explicit);
-    }();
-    const bool method_auto_collect = method_is_vslice && !method_explicit_slice;
+    const VariadicCallPlan plan        = makeVariadicCallPlan(
+        call.span, call.operands, method_fn_for_slice, method_is_vslice, method_fixed_explicit);
+    const bool method_explicit_slice = plan.explicitSliceArg;
+    const bool method_auto_collect   = plan.autoCollectTail;
+    typed_map.variadicCallPlans.insert(call.id.value, plan);
     const bool defaults_cover =
         provided_args < method_fixed_explicit &&
         missingArgsHaveDefaults(*method_decl, provided_args, has_receiver ? 1U : 0U,

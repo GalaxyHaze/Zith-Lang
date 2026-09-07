@@ -76,14 +76,11 @@ void PerModuleSema::inferDockCall(frontend::ExprId id) {
                     !defaults_cover) {
                     report(expr.span, "dock call arity mismatch", diagnostics::err::NoMatchingFn);
                 }
-                const bool explicit_slice_arg =
-                    target_is_slice && expr.operands.size() - 1U == slice_index + 1U &&
-                    type_table.slice(resolve(inferExpr(expr.operands[slice_index + 1U]))) !=
-                        nullptr;
-                const bool auto_collected =
-                    target_is_slice &&
-                    (expr.operands.size() - 1U > slice_index + 1U ||
-                     (expr.operands.size() - 1U == slice_index + 1U && !explicit_slice_arg));
+                const VariadicCallPlan plan   = makeVariadicCallPlan(expr.span, expr.operands, fn,
+                                                                     target_is_slice, slice_index);
+                const bool explicit_slice_arg = plan.explicitSliceArg;
+                const bool auto_collected     = plan.autoCollectTail;
+                typed_map.variadicCallPlans.insert(expr.id.value, plan);
                 if (target_is_slice && expr.operands.size() - 1U < slice_index &&
                     !(target != nullptr &&
                       missingArgsHaveDefaults(*target, expr.operands.size() - 1U, 0U,
@@ -116,8 +113,9 @@ void PerModuleSema::inferDockCall(frontend::ExprId id) {
                             }
                         }
                     }
-                    if (auto_collected)
-                        (void)checkVariadicTail(expr.span, expr.operands, fn, slice_index, true);
+                    if (plan.autoCollectTail)
+                        (void)checkVariadicTail(expr.span, expr.operands, fn, plan.sliceParam,
+                                                true);
                 }
                 setExprType(expr.operands[0], target_type);
                 if (direct_state && target != nullptr)
@@ -173,12 +171,11 @@ void PerModuleSema::inferJump(const frontend::Statement &stmt) {
         report(stmt.span, "state transition arity mismatch", diagnostics::err::NoMatchingFn);
         return;
     }
-    const bool explicit_slice_arg =
-        target_is_slice && stmt.arguments.size() == slice_index + 1U &&
-        type_table.slice(resolve(inferExpr(stmt.arguments[slice_index]))) != nullptr;
-    const bool auto_collected =
-        target_is_slice && (stmt.arguments.size() > slice_index + 1U ||
-                            (stmt.arguments.size() == slice_index + 1U && !explicit_slice_arg));
+    const VariadicCallPlan plan =
+        makeVariadicCallPlan(stmt.span, stmt.arguments, fn, target_is_slice, slice_index, false);
+    const bool explicit_slice_arg = plan.explicitSliceArg;
+    const bool auto_collected     = plan.autoCollectTail;
+    typed_map.variadicStmtPlans.insert(stmt.id.value, plan);
     if (target_is_slice && stmt.arguments.size() < slice_index &&
         !missingArgsHaveDefaults(*target, stmt.arguments.size(), 0U, slice_index)) {
         report(stmt.span, "state transition arity mismatch", diagnostics::err::NoMatchingFn);
@@ -206,8 +203,8 @@ void PerModuleSema::inferJump(const frontend::Statement &stmt) {
             }
         }
     }
-    if (auto_collected)
-        (void)checkVariadicTail(stmt.span, stmt.arguments, fn, slice_index, true);
+    if (plan.autoCollectTail)
+        (void)checkVariadicTail(stmt.span, stmt.arguments, fn, plan.sliceParam, true);
 }
 void PerModuleSema::checkReturnStatement(const frontend::Statement &stmt) {
     if (!stmt.expression) {
@@ -220,8 +217,7 @@ void PerModuleSema::checkReturnStatement(const frontend::Statement &stmt) {
         return;
     }
     const TypeId value = inferExpr(stmt.expression);
-    if (stmt.expression &&
-        stmt.expression.value <= snapshot.expressions().size() &&
+    if (stmt.expression && stmt.expression.value <= snapshot.expressions().size() &&
         snapshot.expressions()[stmt.expression.value - 1U].kind == frontend::ExprKind::Index) {
         // Returning `p[0]` returns the pointee value, not the local pointer.
     } else if (pointerAliasEscapesScope(stmt.expression)) {
@@ -237,8 +233,7 @@ void PerModuleSema::checkReturnStatement(const frontend::Statement &stmt) {
     }
     // A slice converted to `*char` is an explicit escape and must be checked
     // after the coercion has recorded the aliased expression.
-    if (stmt.expression &&
-        stmt.expression.value <= snapshot.expressions().size() &&
+    if (stmt.expression && stmt.expression.value <= snapshot.expressions().size() &&
         snapshot.expressions()[stmt.expression.value - 1U].kind == frontend::ExprKind::Index) {
         // A successfully coerced pointee value still does not escape the pointer.
     } else if (pointerAliasEscapesScope(stmt.expression)) {
@@ -253,9 +248,8 @@ TypeId PerModuleSema::inferReturn(frontend::ExprId id) {
         !coerceValue(expr.operands[0], currentReturnType_, value)) {
         reportCoercionFailure(expr.span, currentReturnType_, value,
                               "return type does not match declared return type");
-    } else if (!expr.operands.empty() &&
-               snapshot.expressions()[expr.operands[0].value - 1U].kind ==
-                   frontend::ExprKind::Index) {
+    } else if (!expr.operands.empty() && snapshot.expressions()[expr.operands[0].value - 1U].kind ==
+                                             frontend::ExprKind::Index) {
         // `return p[0]` returns the pointee value, not the local pointer.
     } else if (!expr.operands.empty() && pointerAliasEscapesScope(expr.operands[0])) {
         report(expr.span, "pointer to local storage cannot escape the current scope",

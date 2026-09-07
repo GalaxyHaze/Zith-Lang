@@ -296,16 +296,12 @@ bool PerModuleSema::coercesTo(TypeId target, TypeId source) const noexcept {
     return result;
 }
 bool PerModuleSema::variadicFinalArgIsExplicitSlice(TypeId slice_type,
-                                                    const std::vector<frontend::ExprId> &args,
-                                                    size_t fixed_explicit_args) const {
-    // `args` is the full call operand vector: `args[0]` is the callee or
-    // receiver expression, and the arguments that can be collected begin at
-    // `fixed_explicit_args + 1`.
-    if (args.size() != fixed_explicit_args + 2U)
-        return false;
+                                                    frontend::ExprId last_arg) const {
     // Prefer already-inferred types: `args.back()` may be a later expression
     // in the same call, so re-inferring it here can regress typed_map state.
-    const TypeId last_type = typeOfExpr(args.back());
+    if (!last_arg)
+        return false;
+    const TypeId last_type = typeOfExpr(last_arg);
     if (!last_type)
         return false;
     const TypeId last = resolve(last_type);

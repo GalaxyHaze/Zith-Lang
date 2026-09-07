@@ -25,6 +25,26 @@ struct RelatedSpan {
     std::string message;
 };
 
+/// Sema's decision for a `[...]T` variadic tail. HIR lowering consumes this
+/// plan instead of re-deriving whether the last argument is an explicit slice
+/// or a sequence of elements that must be auto-collected.
+struct VariadicCallPlan {
+    /// Index of the variadic slice parameter in the *concrete/substituted*
+    /// callee signature, or `fn->params.size()`. For non-variadic calls this
+    /// is the count itself, which lowering already treats as an absent tail.
+    size_t sliceParam = ~static_cast<size_t>(0);
+    /// Resolved slice parameter type. kInvalidTypeId when the call is not a
+    /// variadic-slice call.
+    TypeId sliceType      = kInvalidTypeId;
+    bool isVariadicSlice  = false;
+    bool explicitSliceArg = false;
+    /// True when the call lowers the tail into a temporary slice. An explicit
+    /// slice argument, or a non-variadic call, keeps this false.
+    bool autoCollectTail = false;
+    /// Source span used to report lowering problems for this call/tail.
+    frontend::TextSpan span{};
+};
+
 struct Diagnostic {
     frontend::TextSpan primary_span{};
     std::string message;
@@ -79,11 +99,18 @@ struct TypedMap {
     /// Concrete type erased by an implicit `T -> dyn Trait` coercion whose
     /// lowered payload differs from the dyn value itself.
     memory::FlatMap<uint32_t, TypeId> dynSourceTypes;
+    /// Variadic-slice lowering decisions produced by sema for calls, keyed by
+    /// the call expression id.
+    memory::FlatMap<uint32_t, VariadicCallPlan> variadicCallPlans;
+    /// Variadic-slice lowering decisions produced by sema for `jump`
+    /// statements, keyed by statement id.
+    memory::FlatMap<uint32_t, VariadicCallPlan> variadicStmtPlans;
 
     explicit TypedMap(memory::Arena &)
         : exprTypes(), declTypes(), localTypes(), forInRangeLiteral(), forInNext(), containsCall(),
           forInElementIndex(), forInEndIndex(), forInUnionType(), forInOptionalType(),
-          traitQualifiedReceiverBase(), opaqueSourceTypes(), dynSourceTypes() {}
+          traitQualifiedReceiverBase(), opaqueSourceTypes(), dynSourceTypes(), variadicCallPlans(),
+          variadicStmtPlans() {}
 };
 
 class SemaPipeline;
@@ -242,8 +269,7 @@ private:
     /// slice element is a `dyn Trait`, because the value must be erased before
     /// it can be stored in the tail array.
     [[nodiscard]] bool variadicFinalArgIsExplicitSlice(TypeId slice_type,
-                                                       const std::vector<frontend::ExprId> &args,
-                                                       size_t fixed_explicit_args) const;
+                                                       frontend::ExprId last_arg) const;
 
     /// Validates and retypes the `[...]T` tail around the inferred element type.
     /// Returns the slice parameter type when all tail arguments fit. `span` is
@@ -252,6 +278,17 @@ private:
                                            const std::vector<frontend::ExprId> &args,
                                            const FunctionType *fn, size_t slice_index,
                                            bool allow_literals);
+
+    /// Computes the variadic-slice decision for one call-like expression or
+    /// state transition. `args` is the full call operand vector for a
+    /// function/method/dock call, or `stmt.arguments` for a jump.
+    /// `fixed_explicit_args` is the number of fixed user arguments before the
+    /// [...]T tail and `signature` must already be the
+    /// concrete/substituted function signature.
+    [[nodiscard]] VariadicCallPlan
+    makeVariadicCallPlan(frontend::TextSpan span, const std::vector<frontend::ExprId> &args,
+                         const FunctionType *signature, bool variadic_slice,
+                         size_t fixed_explicit_args, bool has_callee_prefix = true);
 
     /// Validates the `[...]T` tail arguments after the first explicit index
     /// in `args`. The element type comes from `slice_type`, so method paths

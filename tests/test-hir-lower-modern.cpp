@@ -2340,6 +2340,154 @@ void test_variadic_slice_state_lowers_to_hir() {
     CHECK(jump_collects, "jump auto-collects its variadic slice into a temporary");
 }
 
+void test_variadic_slice_explicit_vs_auto_free_function() {
+    Workspace workspace;
+    workspace.writeFile("main.zith", "fn sum(rest: [...]i32): i32 {\n"
+                                     "    return raw rest[0] + raw rest[1];\n"
+                                     "}\n"
+                                     "extern fn values(): []i32\n"
+                                     "fn main(): i32 {\n"
+                                     "    return sum(values()) + sum(1, 2);\n"
+                                     "}\n");
+
+    memory::Arena arena;
+    Options options(arena);
+    auto session = makeSession(workspace, arena, options, "main.zith");
+
+    CHECK(session.runTo(session::Stage::HirLowered),
+          "explicit and auto-collected variadic slices lower to HIR");
+
+    const auto &hir  = session.hirModule();
+    const auto *main = findFunction(hir, session.interner(), "main");
+    CHECK(main != nullptr, "main is present after explicit and auto-collected variadic calls");
+    if (main == nullptr)
+        return;
+
+    size_t array_literal_count = 0;
+    for (size_t index = 0; index < hir.exprCount(); ++index) {
+        if (std::holds_alternative<hir::HirArrayLiteral>(
+                hir.getExpr(static_cast<hir::HirExprId>(index))))
+            ++array_literal_count;
+    }
+    CHECK_EQ(array_literal_count, 1u,
+             "only the auto-collected call materializes a temporary array");
+}
+
+void test_variadic_slice_explicit_vs_auto_method() {
+    Workspace workspace;
+    workspace.writeFile("main.zith", "struct Agg {\n"
+                                     "    total: i32,\n"
+                                     "    fn add(self, rest: [...]i32): i32 {\n"
+                                     "        return self.total + raw rest[0] + raw rest[1];\n"
+                                     "    }\n"
+                                     "}\n"
+                                     "fn slice1(): []i32 {\n"
+                                     "    var values: [2]i32 = [1, 2];\n"
+                                     "    return raw values[0..2];\n"
+                                     "}\n"
+                                     "fn main(): i32 {\n"
+                                     "    let s: []i32 = slice1();\n"
+                                     "    let a1: Agg = Agg { total: 100 };\n"
+                                     "    let a2: Agg = Agg { total: 100 };\n"
+                                     "    return a1.add(s) - a2.add(1, 2);\n"
+                                     "}\n");
+
+    memory::Arena arena;
+    Options options(arena);
+    auto session = makeSession(workspace, arena, options, "main.zith");
+
+    CHECK(session.runTo(session::Stage::HirLowered),
+          "explicit and auto-collected method variadic tails lower to HIR");
+
+    const auto &hir = session.hirModule();
+    CHECK(countExprKind(hir, hir::HirExprKind::MakeSlice) >= 1u,
+          "auto-collected method tail lowers to a slice temporary");
+
+    const auto *add = findFunction(hir, session.interner(), "add");
+    CHECK(add != nullptr, "method with a variadic slice tail is present in HIR");
+    if (add != nullptr)
+        CHECK_EQ(add->variadicSliceParam, 1u,
+                 "method records the variadic slice parameter after self");
+}
+
+void test_variadic_slice_dyn_tail_is_sema_decided() {
+    Workspace workspace;
+    workspace.writeFile("main.zith", "trait Value {\n"
+                                     "    fn value(self): i32 { return 0; }\n"
+                                     "}\n"
+                                     "struct Box {\n"
+                                     "    n: i32,\n"
+                                     "    fn value(self): i32 { return self.n; }\n"
+                                     "}\n"
+                                     "implement Box as Value {\n"
+                                     "    fn value(self): i32 { return self.n; }\n"
+                                     "}\n"
+                                     "fn total(rest: [...]dyn Value): i32 {\n"
+                                     "    let a: dyn Value = raw rest[0];\n"
+                                     "    return a.value();\n"
+                                     "}\n"
+                                     "fn collect(a: dyn Value, b: dyn Value): i32 {\n"
+                                     "    return total(a, b);\n"
+                                     "}\n"
+                                     "fn take(ds: []dyn Value): i32 {\n"
+                                     "    return total(ds);\n"
+                                     "}\n"
+                                     "fn main(): i32 {\n"
+                                     "    let a: dyn Value = Box { n: 5 };\n"
+                                     "    let b: dyn Value = Box { n: 7 };\n"
+                                     "    let ds: []dyn Value = [a, b];\n"
+                                     "    return take(ds) - collect(a, b);\n"
+                                     "}\n");
+
+    memory::Arena arena;
+    Options options(arena);
+    auto session = makeSession(workspace, arena, options, "main.zith");
+
+    CHECK(session.runTo(session::Stage::HirLowered),
+          "dyn variadic slice tails follow the sema plan");
+
+    const auto &hir = session.hirModule();
+    CHECK(countExprKind(hir, hir::HirExprKind::MakeSlice) >= 1u,
+          "auto-collected dyn tail materializes a temporary []dyn slice");
+}
+
+void test_variadic_slice_explicit_vs_auto_state() {
+    Workspace workspace;
+    workspace.writeFile("main.zith",
+                        "state Start(rest: [...]i32): i32 {\n"
+                        "    if (@lengthOf(rest) == 0) {\n"
+                        "        return 0;\n"
+                        "    }\n"
+                        "    return raw rest[0];\n"
+                        "}\n"
+                        "extern fn values(): []i32\n"
+                        "fn main(): i32 {\n"
+                        "    return dock Start(values()) + dock Start(1) + dock Start();\n"
+                        "}\n");
+
+    memory::Arena arena;
+    Options options(arena);
+    auto session = makeSession(workspace, arena, options, "main.zith");
+
+    CHECK(session.runTo(session::Stage::HirLowered),
+          "explicit, auto-collected, and empty state variadic tails lower to HIR");
+
+    const auto &hir  = session.hirModule();
+    const auto *main = findFunction(hir, session.interner(), "main");
+    CHECK(main != nullptr, "main is present after state variadic tail calls");
+    if (main == nullptr)
+        return;
+
+    size_t array_literal_count = 0;
+    for (size_t index = 0; index < hir.exprCount(); ++index) {
+        if (std::holds_alternative<hir::HirArrayLiteral>(
+                hir.getExpr(static_cast<hir::HirExprId>(index))))
+            ++array_literal_count;
+    }
+    CHECK_EQ(array_literal_count, 2u,
+             "auto-collected and empty state tails materialize temporary arrays");
+}
+
 void test_optional_for_in_lowers_without_union_nodes() {
     Workspace workspace;
     workspace.writeFile("main.zith", "struct Range {\n"
@@ -2508,8 +2656,8 @@ void test_when_guards_lower_contextually_without_diagnostics() {
           "when with literal, range, and boolean guards lowers to HIR");
     CHECK(!session.hasErrors(), "when guard lowering reports no diagnostics");
 
-    const auto &hir  = session.hirModule();
-    const auto *fn   = findFunction(hir, session.interner(), "classify");
+    const auto &hir = session.hirModule();
+    const auto *fn  = findFunction(hir, session.interner(), "classify");
     CHECK(fn != nullptr, "classify is present in HIR");
 }
 
@@ -2577,6 +2725,10 @@ static void test_hir_lower_modern() {
     test_state_without_return_type_lowers_to_hir();
     test_variadic_slice_lowers_to_hir();
     test_variadic_slice_state_lowers_to_hir();
+    test_variadic_slice_explicit_vs_auto_free_function();
+    test_variadic_slice_explicit_vs_auto_method();
+    test_variadic_slice_dyn_tail_is_sema_decided();
+    test_variadic_slice_explicit_vs_auto_state();
     test_optional_for_in_lowers_without_union_nodes();
     test_nested_optional_for_in_loop_variable_is_optional();
     test_state_value_dock_lowers_to_indirect_tailcc_call();
