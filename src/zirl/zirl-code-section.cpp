@@ -81,6 +81,7 @@ bool encodeCode(const cache::Artifact &artifact, ByteWriter &w) {
     for (const auto &fn : artifact.functions) {
         w.writeU32(fn.name_id);
         w.writeU8(fn.is_extern ? 1 : 0);
+        w.writeU8(fn.is_foreign_c ? 1 : 0);
         w.writeU8(fn.is_variadic ? 1 : 0);
         w.writeU8(fn.is_state ? 1 : 0);
         w.writeU8(fn.uses_tailcc ? 1 : 0);
@@ -144,19 +145,20 @@ bool decodeCode(ByteReader &r, cache::Artifact &out) {
         return false;
     out.functions.resize(n);
     for (auto &fn : out.functions) {
-        uint8_t ext = 0, a = 0, b = 0, c = 0;
-        if (!r.readU32(fn.name_id) || !r.readU8(ext) || !r.readU8(a) || !r.readU8(b) ||
-            !r.readU8(c) || !r.readU32(fn.return_type_id) ||
+        uint8_t ext = 0, foreign = 0, a = 0, b = 0, c = 0;
+        if (!r.readU32(fn.name_id) || !r.readU8(ext) || !r.readU8(foreign) || !r.readU8(a) ||
+            !r.readU8(b) || !r.readU8(c) || !r.readU32(fn.return_type_id) ||
             !r.readU32(fn.machine_return_type_id) || !r.readU32(fn.machine_id) ||
             !r.readU32(fn.instance_index) || !r.readU32(fn.variadic_slice_param))
             return false;
         if (fn.name_id < out.strings.size())
             fn.name = out.strings[fn.name_id];
-        fn.is_extern   = ext != 0;
-        fn.is_variadic = a != 0;
-        fn.is_state    = b != 0;
-        fn.uses_tailcc = c != 0;
-        uint32_t k     = 0;
+        fn.is_extern    = ext != 0;
+        fn.is_foreign_c = foreign != 0;
+        fn.is_variadic  = a != 0;
+        fn.is_state     = b != 0;
+        fn.uses_tailcc  = c != 0;
+        uint32_t k      = 0;
         if (!r.readU32(k))
             return false;
         if (!r.canReadU32Count(k))

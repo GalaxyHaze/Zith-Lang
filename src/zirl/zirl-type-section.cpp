@@ -71,6 +71,10 @@ bool encodeTypes(const cache::Artifact &artifact, ByteWriter &w) {
     for (const auto &s : artifact.struct_defs) {
         w.writeBlob(s.name);
         w.writeU32(s.name_id);
+        w.writeU8(s.hasForeignLayout ? 1 : 0);
+        w.writeU8(s.foreignAbiIsSingleI64 ? 1 : 0);
+        w.writeU64(s.foreignSizeBytes);
+        w.writeU64(s.foreignAlignBytes);
         w.writeU32(static_cast<uint32_t>(s.field_name_ids.size()));
         for (auto id : s.field_name_ids)
             w.writeU32(id);
@@ -140,9 +144,14 @@ bool decodeTypes(ByteReader &r, cache::Artifact &out) {
     for (auto &s : out.struct_defs) {
         if (!r.readBlob(s.name))
             return false;
-        uint32_t k = 0;
-        if (!r.readU32(s.name_id) || !r.readU32(k))
+        uint32_t k      = 0;
+        uint8_t foreign = 0;
+        uint8_t single  = 0;
+        if (!r.readU32(s.name_id) || !r.readU8(foreign) || !r.readU8(single) ||
+            !r.readU64(s.foreignSizeBytes) || !r.readU64(s.foreignAlignBytes) || !r.readU32(k))
             return false;
+        s.hasForeignLayout      = foreign != 0;
+        s.foreignAbiIsSingleI64 = single != 0;
         if (!r.canReadU32Count(k))
             return false;
         s.field_name_ids.resize(k);

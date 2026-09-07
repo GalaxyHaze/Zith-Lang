@@ -9,6 +9,14 @@ namespace zith::cinterop {
 
 enum class TypeKind : uint8_t { Void, Bool, Integer, Float, Pointer, Record, Enum };
 
+struct Type;
+
+struct RecordField {
+    std::string name;
+    std::shared_ptr<Type> type;
+    uint64_t offsetBits = 0;
+};
+
 struct Type {
     TypeKind kind = TypeKind::Void;
     uint8_t bits  = 0;
@@ -18,6 +26,21 @@ struct Type {
     bool isChar = false;
     std::string name;
     std::shared_ptr<const Type> pointee;
+    /// Validated record ABI.  Only populated when libclang proved the layout for
+    /// the target named in `ParseOptions::targetTriple`.
+    std::vector<RecordField> recordFields;
+    uint64_t sizeBytes     = 0;
+    uint64_t alignBytes    = 0;
+    bool hasVerifiedLayout = false;
+    /// Public ABI shape proven for the parse target. Only records that lower
+    /// to a single 64-bit integer (e.g. `struct Point { int x, y; }` on
+    /// x86-64/aarch64 Linux, or a one-pointer wrapper) are marked; anything
+    /// else is skipped by value.
+    bool abiIsSingleI64 = false;
+    /// Nested-only shape used while validating a larger record. A one-field
+    /// `int` record has a layout but cannot yet be passed to C by value unless
+    /// the outer record classifies it as one of two 32-bit slots.
+    bool abiIsSingleI32 = false;
 };
 
 struct Function {

@@ -173,7 +173,22 @@ private:
 
     types::TypeId lowerType(sema::modern::TypeId type);
     sema::modern::TypeId lowerTypeExprConcrete(frontend::TypeExprId id);
+    /// Snapshot of the first verified C record layout seen for a record name.
+    /// Keyed by the record name so `lowerType` can materialise fields for a
+    /// named sema placeholder that carries no record metadata itself.
+    memory::FlatMap<memory::InternedId, const cinterop::Type *> foreign_record_types_;
+    /// Registers every record named by imported C functions before body lowering
+    /// so locals with a record type lower to the same struct shape as the HIR
+    /// signature of the C function.
+    void registerForeignRecords();
+    /// Returns the first verified C record `Type` registered for `name`.
+    [[nodiscard]] const cinterop::Type *foreignRecordForName(std::string_view name) const noexcept;
+    /// Copies fields from a verified C record into the lowered struct type.
+    void fillForeignStruct(types::TypeId lowered, const cinterop::Type &record);
     types::TypeId lowerForeignType(const cinterop::Type &type);
+    /// Lower a C pointer pointee. Records become named structs without requiring
+    /// by-value layout metadata; pointer ABI does not need a record layout.
+    types::TypeId lowerForeignPointee(const cinterop::Type &type);
     types::TypeId typeOfExpr(frontend::ExprId id);
     types::TypeId typeOfLocal(frontend::LocalId id);
     sema::modern::TypeId semaTypeOfLocal(frontend::LocalId id);

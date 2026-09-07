@@ -1537,6 +1537,9 @@ void CompilationSession::hydrateFromArtifact(const cache::Artifact &art) {
     for (size_t si = 0; si < art.struct_defs.size(); ++si) {
         const auto &s  = art.struct_defs[si];
         const auto tid = struct_tids[si];
+        if (s.hasForeignLayout)
+            mTypes.setForeignLayout(tid, s.foreignSizeBytes, s.foreignAlignBytes,
+                                    s.foreignAbiIsSingleI64);
         for (size_t fi = 0; fi < s.field_name_ids.size() && fi < s.field_type_ids.size(); ++fi) {
             const auto &name = art.strings[s.field_name_ids[fi]];
             mTypes.addField(tid, name, compactType(s.field_type_ids[fi]));
@@ -1942,6 +1945,7 @@ void CompilationSession::hydrateFromArtifact(const cache::Artifact &art) {
                                               : cfn.name;
         auto &fn                        = mHirModule.addFn(mInterner->intern(cfn_name));
         fn.return_type                  = compactType(cfn.return_type_id);
+        fn.isForeignC                   = cfn.is_foreign_c;
         fn.isVariadic                   = cfn.is_variadic;
         fn.isState                      = cfn.is_state;
         fn.usesTailCC                   = cfn.uses_tailcc;

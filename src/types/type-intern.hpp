@@ -23,6 +23,12 @@ struct StructDef {
     memory::InternedId name;
     memory::DynArray<StructField> fields;
     std::string_view defining_module;
+    /// Validated C-record byte layout, populated only for foreign records whose
+    /// libclang layout and public ABI shape were proven on the parse target.
+    bool hasForeignLayout      = false;
+    bool foreignAbiIsSingleI64 = false;
+    uint64_t foreignSizeBytes  = 0;
+    uint64_t foreignAlignBytes = 0;
 };
 
 struct EnumVariantDef {
@@ -116,6 +122,15 @@ public:
     /// Records the module that declares a named type. Non-empty first write wins.
     void setDefiningModule(TypeId type, std::string_view module);
     [[nodiscard]] std::string_view definingModuleOf(TypeId type) const;
+    /// Marks a named struct as a validated C-by-value record. The caller must
+    /// pass the libclang-verified byte size/alignment and the public ABI shape
+    ///; non-foreign structs keep the native aggregate ABI.
+    void setForeignLayout(TypeId struct_type, uint64_t size_bytes, uint64_t align_bytes,
+                          bool single_i64_abi);
+    [[nodiscard]] bool hasForeignLayout(TypeId struct_type) const;
+    [[nodiscard]] bool foreignAbiIsSingleI64(TypeId struct_type) const;
+    [[nodiscard]] uint64_t foreignSizeBytes(TypeId struct_type) const;
+    [[nodiscard]] uint64_t foreignAlignBytes(TypeId struct_type) const;
 
     const StructDef &getStructDef(TypeId struct_type) const;
     StructDef &getStructDef(TypeId struct_type);

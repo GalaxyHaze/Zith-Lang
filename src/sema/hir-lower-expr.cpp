@@ -500,7 +500,15 @@ hir::HirExprId HirLowerModern::lowerBinary(const frontend::Expression &expr,
             const bool self_is_pointer =
                 sema_.typeTable().kindOf(sema_.typeTable().stripQualifiers(self_sema)) ==
                 sema::modern::TypeKind::Pointer;
-            args.push(self_is_pointer ? rhs : addExpr(hir::HirSlotAddr{rhs_slot, rhs_type}));
+            const bool rhs_is_pointer =
+                sema_.typeTable().kindOf(sema_.typeTable().stripQualifiers(rhs_sema)) ==
+                sema::modern::TypeKind::Pointer;
+            // An implicit `self` lowers to `*Owner`, so the receiver must be the
+            // address of the RHS aggregate. A receiver whose RHS is already a
+            // pointer (or an explicit value receiver) is passed by value.
+            args.push(self_is_pointer && !rhs_is_pointer
+                          ? addExpr(hir::HirSlotAddr{rhs_slot, rhs_type})
+                          : rhs);
             arg_types.push(lowerType(self_sema));
             args.push(lowerCoerceToTarget(lowerType(value_sema), expr.operands[0], value));
             arg_types.push(lowerType(value_sema));

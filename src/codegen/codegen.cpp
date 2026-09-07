@@ -367,8 +367,10 @@ llvm::Function *CodeGen::declareFn(const hir::HirFunction &fn) {
     CodeGenType typeGen(*ctx_, types_, &module_->getDataLayout());
     llvm::SmallVector<llvm::Type *, 8> paramTypes;
     for (auto param_type : fn.params)
-        paramTypes.push_back(typeGen.lower(param_type));
-    auto *retType = typeGen.lower(fn.return_type);
+        paramTypes.push_back(fn.blocks.empty() ? typeGen.abiLower(param_type)
+                                               : typeGen.lower(param_type));
+    auto *retType =
+        fn.blocks.empty() ? typeGen.abiLower(fn.return_type) : typeGen.lower(fn.return_type);
 
     auto *fnType = llvm::FunctionType::get(retType, paramTypes, fn.isVariadic);
     auto *llvmFn = llvm::Function::Create(fnType, llvm::Function::ExternalLinkage,

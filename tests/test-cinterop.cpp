@@ -288,6 +288,115 @@ void test_struct_and_enum() {
         }
     }
 
+    // 7a. Simple records passed/returned by value are validated for both ABI targets.
+    for (const auto *triple : {"x86_64-unknown-linux-gnu", "aarch64-unknown-linux-gnu"}) {
+        ParseOptions opts;
+        opts.targetTriple = triple;
+        const auto art    = parseHeaderFromContent("validated_records.h",
+                                                   "struct Point { int x, y; };\n"
+                                                      "int classify(struct Point p);\n"
+                                                      "struct Point get_point(void);\n"
+                                                      "struct Inner { int v; };\n"
+                                                      "struct Outer { struct Inner inner; int extra; };\n"
+                                                      "int classify_outer(struct Outer o);\n"
+                                                      "struct Outer get_outer(void);\n",
+                                                   opts);
+        const std::string simple_no_diag =
+            std::string("simple record parse has no diagnostics: ") + triple;
+        CHECK_EQ(art->diagnostics.size(), 0u, simple_no_diag.c_str());
+        if (const auto *f = findFunction(*art, "classify")) {
+            const std::string classify_param =
+                std::string("classify keeps its by-value parameter: ") + triple;
+            CHECK_EQ(f->parameters.size(), 1u, classify_param.c_str());
+            if (!f->parameters.empty()) {
+                const auto &point = f->parameters[0];
+                const std::string point_verified =
+                    std::string("classify's Point layout is verified: ") + triple;
+                const std::string point_size  = std::string("Point is 8 bytes: ") + triple;
+                const std::string point_align = std::string("Point aligns to 4: ") + triple;
+                const std::string point_fields =
+                    std::string("Point has two validated fields: ") + triple;
+                CHECK(point.hasVerifiedLayout, point_verified.c_str());
+                CHECK_EQ(point.sizeBytes, 8u, point_size.c_str());
+                CHECK_EQ(point.alignBytes, 4u, point_align.c_str());
+                CHECK_EQ(point.recordFields.size(), 2u, point_fields.c_str());
+            }
+        } else {
+            const std::string classify_imports = std::string("classify imports on ") + triple;
+            CHECK(false, classify_imports.c_str());
+        }
+        if (const auto *f = findFunction(*art, "get_point")) {
+            const std::string result_verified =
+                std::string("get_point's Point result layout is verified: ") + triple;
+            const std::string result_fields =
+                std::string("returned Point has two validated fields: ") + triple;
+            CHECK(f->result.hasVerifiedLayout, result_verified.c_str());
+            CHECK_EQ(f->result.recordFields.size(), 2u, result_fields.c_str());
+        } else {
+            const std::string get_point_imports = std::string("get_point imports on ") + triple;
+            CHECK(false, get_point_imports.c_str());
+        }
+        if (const auto *f = findFunction(*art, "classify_outer")) {
+            const std::string outer_verified =
+                std::string("nested Outer layout is verified: ") + triple;
+            CHECK(f->parameters.size() == 1u && f->parameters[0].hasVerifiedLayout,
+                  outer_verified.c_str());
+        } else {
+            const std::string outer_imports = std::string("classify_outer imports on ") + triple;
+            CHECK(false, outer_imports.c_str());
+        }
+    }
+
+    // 7b. Unsupported record layouts produce explicit skips instead of imports.
+    for (const auto *triple : {"x86_64-unknown-linux-gnu", "aarch64-unknown-linux-gnu"}) {
+        ParseOptions opts;
+        opts.targetTriple = triple;
+        const auto art =
+            parseHeaderFromContent("unsupported_records.h",
+                                   "struct Bits { unsigned int a : 4; unsigned int b : 4; };\n"
+                                   "int with_bits(struct Bits b);\n"
+                                   "struct Packed { int x; } __attribute__((packed));\n"
+                                   "int with_packed(struct Packed p);\n"
+                                   "struct Anonymous { struct { int x; }; };\n"
+                                   "int with_anonymous(struct Anonymous a);\n"
+                                   "struct Flexible { int count; int data[]; };\n"
+                                   "int with_flexible(struct Flexible f);\n"
+                                   "struct Wide { long double value; };\n"
+                                   "int with_wide(struct Wide w);\n"
+                                   "struct Int128 { __int128 value; };\n"
+                                   "int with_int128(struct Int128 i);\n",
+                                   opts);
+        const std::string bits_skip = std::string("bitfield record function is skipped: ") + triple;
+        const std::string packed_skip = std::string("packed record function is skipped: ") + triple;
+        const std::string anonymous_skip =
+            std::string("anonymous record function is skipped: ") + triple;
+        const std::string flexible_skip =
+            std::string("flexible array record function is skipped: ") + triple;
+        const std::string wide_skip =
+            std::string("long double record function is skipped: ") + triple;
+        const std::string int128_skip =
+            std::string("__int128 record function is skipped: ") + triple;
+        CHECK(findFunction(*art, "with_bits") == nullptr, bits_skip.c_str());
+        CHECK(findFunction(*art, "with_packed") == nullptr, packed_skip.c_str());
+        CHECK(findFunction(*art, "with_anonymous") == nullptr, anonymous_skip.c_str());
+        CHECK(findFunction(*art, "with_flexible") == nullptr, flexible_skip.c_str());
+        CHECK(findFunction(*art, "with_wide") == nullptr, wide_skip.c_str());
+        CHECK(findFunction(*art, "with_int128") == nullptr, int128_skip.c_str());
+
+        int explicit_skips = 0;
+        for (const auto &skipped : art->skippedFunctions) {
+            if (skipped.find("with_bits") != std::string::npos ||
+                skipped.find("with_packed") != std::string::npos ||
+                skipped.find("with_anonymous") != std::string::npos ||
+                skipped.find("with_flexible") != std::string::npos ||
+                skipped.find("with_wide") != std::string::npos ||
+                skipped.find("with_int128") != std::string::npos)
+                explicit_skips++;
+        }
+        const std::string skips_all = std::string("every unsupported record has a skip: ") + triple;
+        CHECK_EQ(explicit_skips, 6, skips_all.c_str());
+    }
+
     // 8. enum Color
     {
         const auto art = parseHeaderFromContent("enum_color.h", "enum Color { R, G, B };\n"

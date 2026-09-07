@@ -3,6 +3,7 @@
 #include "cache/cache.hpp"
 #include "cinterop/c-header.hpp"
 #include "common/overloaded.hpp"
+#include "diagnostics/error-codes.hpp"
 #include "sema/hir-lower-utils.hpp"
 #include "sema/op-mapping.hpp"
 #include "types/type-kind.hpp"
@@ -344,24 +345,36 @@ types::TypeId HirLowerModern::lowerType(sema::modern::TypeId type) {
     }
     case TypeKind::Struct: {
         const auto *structure = sema_.typeTable().struct_type(type);
-        if (structure == nullptr) {
-            lowered = types::kErrorType;
+        if (structure != nullptr) {
+            // Register the name (done by the named-type not found path).
+            lowered = types_.registerNamedType(structure->name, types::TypeKind::Struct);
+            types_.setDefiningModule(lowered, sema_.typeTable().definingModule(type));
+            // Register the name (done above) before lowering field types so self-referential
+            // structs (`next: *Node`) terminate. Fields are copied once, on first lowering.
+            if (types_.fieldCount(lowered) == 0U && structure->fields.size() != 0U) {
+                lowered_types_.insert(type.intern_seq, lowered);
+                for (size_t index = 0; index < structure->fields.size(); ++index) {
+                    const auto field_name = index < structure->field_names.size()
+                                                ? structure->field_names[index]
+                                                : std::string_view{};
+                    types_.addField(lowered, field_name, lowerType(structure->fields[index]));
+                }
+            }
             break;
         }
-        // Register the name (done by the named-type not found path).
-        lowered = types_.registerNamedType(structure->name, types::TypeKind::Struct);
-        types_.setDefiningModule(lowered, sema_.typeTable().definingModule(type));
-        // Register the name (done above) before lowering field types so self-referential
-        // structs (`next: *Node`) terminate. Fields are copied once, on first lowering.
-        if (types_.fieldCount(lowered) == 0U && structure->fields.size() != 0U) {
-            lowered_types_.insert(type.intern_seq, lowered);
-            for (size_t index = 0; index < structure->fields.size(); ++index) {
-                const auto field_name = index < structure->field_names.size()
-                                            ? structure->field_names[index]
-                                            : std::string_view{};
-                types_.addField(lowered, field_name, lowerType(structure->fields[index]));
+        const std::string_view name = sema_.typeTable().namedTypeName(type);
+        if (const auto *foreign = foreignRecordForName(name); foreign != nullptr) {
+            lowered = types_.registerNamedType(name, types::TypeKind::Struct);
+            types_.setDefiningModule(lowered, sema_.typeTable().definingModule(type));
+            if (types_.fieldCount(lowered) == 0U && foreign->hasVerifiedLayout) {
+                lowered_types_.insert(type.intern_seq, lowered);
+                types_.setForeignLayout(lowered, foreign->sizeBytes, foreign->alignBytes,
+                                        foreign->abiIsSingleI64);
+                fillForeignStruct(lowered, *foreign);
             }
+            break;
         }
+        lowered = types::kErrorType;
         break;
     }
     case TypeKind::Enum: {
@@ -557,15 +570,54 @@ types::TypeId HirLowerModern::lowerForeignType(const cinterop::Type &type) {
         // Mirrors `PerModuleSema::lowerForeignType`: a C pointer is `?*T`, which the
         // niche layout emits as the bare pointer.
         const types::TypeId pointee =
-            type.pointee ? lowerForeignType(*type.pointee) : types::kErrorType;
+            type.pointee ? lowerForeignPointee(*type.pointee) : types::kErrorType;
         return types_.internOptional(types_.internPtr(pointee));
     }
-    case cinterop::TypeKind::Record:
-        return types_.registerNamedType(type.name, types::TypeKind::Struct);
+    case cinterop::TypeKind::Record: {
+        if (!type.hasVerifiedLayout) {
+            diags_.reportError(diagnostics::err::InvalidIR,
+                               "unsupported C ABI: record '" + type.name +
+                                   "' is used by value without a verified layout",
+                               {});
+            return types::kErrorType;
+        }
+        const types::TypeId lowered = types_.registerNamedType(type.name, types::TypeKind::Struct);
+        if (types_.kindOf(lowered) == types::TypeKind::Struct && types_.fieldCount(lowered) == 0U &&
+            type.hasVerifiedLayout) {
+            types_.setForeignLayout(lowered, type.sizeBytes, type.alignBytes, type.abiIsSingleI64);
+            fillForeignStruct(lowered, type);
+        }
+        return lowered;
+    }
     case cinterop::TypeKind::Enum:
         return types_.registerNamedType(type.name, types::TypeKind::Enum);
     }
     return types::kErrorType;
+}
+
+const cinterop::Type *HirLowerModern::foreignRecordForName(std::string_view name) const noexcept {
+    const auto *cached = foreign_record_types_.get(interner_.intern(name));
+    return cached != nullptr ? *cached : nullptr;
+}
+
+void HirLowerModern::fillForeignStruct(types::TypeId lowered, const cinterop::Type &record) {
+    for (const auto &field : record.recordFields) {
+        if (field.type == nullptr)
+            continue;
+        const types::TypeId field_type = lowerForeignType(*field.type);
+        if (field_type == types::kErrorType)
+            continue;
+        types_.addField(lowered, field.name, field_type);
+    }
+}
+
+types::TypeId HirLowerModern::lowerForeignPointee(const cinterop::Type &type) {
+    if (type.kind == cinterop::TypeKind::Record) {
+        // A pointer to a C record has a bare pointer ABI even when the record
+        // layout itself is not needed by the caller.
+        return types_.registerNamedType(type.name, types::TypeKind::Struct);
+    }
+    return lowerForeignType(type);
 }
 
 types::TypeId HirLowerModern::typeOfExpr(frontend::ExprId id) {
