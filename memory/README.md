@@ -38,6 +38,8 @@ contracts, decisions, and gotchas that are not discoverable from the source alon
 - [tests-and-defer-codegen.md](tests-and-defer-codegen.md): test binary
   locations, `defer` codegen notes, and the known modern-file alias codegen
   failure outside the defer work.
+- [plan-debt-status.md](plan-debt-status.md): plan/debt/status curation
+  contract, the current feature status map, and the docs audit method.
 - [flat-containers-cache.md](flat-containers-cache.md): FlatMap/FlatSet API
   contracts, hot-map migrations, cache/CLI `--no-cache`, and validation checks
   landed during the consolidation pass.
