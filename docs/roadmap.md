@@ -44,7 +44,8 @@
 | F-34 | Memory qualifier parsing and typing (`mut`, `lend`, `view`, `unique`, `share`, `belong`) | 7 | Working |
 | F-35 | Trait and interface bodies as real declarations | 4 | Working; interface bodies accept single/grouped fields and declaration-only method requirements |
 | F-40 | Scope-guard `defer` statements | 9, Zith-- | Working |
-| F-41 | Deterministic `drop` cleanup hooks | 9, Zith-- | Spec only; depends on F-40 |
+| F-41 | Deterministic `drop` cleanup hooks | 9, Zith-- | Planned for Zith--; depends on F-40 |
+| F-42 | Platform-specific imports (`foo.<arch>.<os>.zith`) | 2, Zith-- | Planned for Zith--; design in `docs/plans/platform-imports.md` |
 
 ## Dependency Graph
 
@@ -74,6 +75,7 @@ F-28 (pack ops) ──────────┘
                                           │
 F-34 (qualifier parse/types) ── F-14 (NRA/NTA) ── stable HIR contract
 F-33 (overloading)                        ┼─ done (name resolution + linkage names)
+F-42 (platform imports)                   ┼─ resolver-only; independent of comptime
                                           │
 F-30 (stdlib) ─────────────┬─ F-18 (runtime tasks/coroutines)
                            ├─ F-19 (runtime threads/channels)
@@ -146,9 +148,14 @@ the deterministic owner method plus ownership checks. Max parallelism: 1 agent,
 because F-41 is a natural extension of F-40 and both touch the same statement
 and block-lowering paths.
 
-## Wave 01 (Current)
+## Wave 01 (Current Zith--)
 
-Infrastructure: ZIRL sections, cache hydration, CLI commands (`test`, `deps`, `docs`), diagnostics quality, roadmap, and infra tests.  No language-chain changes.  See [impl-status.md](impl-status.md) and [docs/plans/0.7.0/README.md](0.7.0/README.md).
+Zith--: `drop` (F-41) as the deterministic scope-cleanup completion, then
+platform imports (F-42) as resolver work, then monolith splits and debt closure.
+Comptime/introspection/type construction remain full-Zith features and are
+archived under `docs/plans/archive/0.7.0-zith/`.
+
+Infrastructure: ZIRL sections, cache hydration, CLI commands (`test`, `deps`, `docs`), diagnostics quality, roadmap, and infra tests.  See [impl-status.md](impl-status.md), [docs/plans/0.7.0/README.md](0.7.0/README.md), and [docs/plans/monolith-splits.md](plans/monolith-splits.md).
 
 ## Notes
 

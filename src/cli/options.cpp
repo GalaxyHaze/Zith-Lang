@@ -510,7 +510,9 @@ void Cli::parseArgs(int argc, char **argv) {
 }
 
 void Cli::loadFlags() {
+#ifndef ZITH_IS_WASM
     namespace fs = std::filesystem;
+#endif
 
     // Apply mode defaults first (but don't overwrite CLI-set values)
     auto defaults = getDefaults(opts.flags.mode());

@@ -128,7 +128,7 @@ Implementation work that is incomplete or needs review is tracked in
 | `state` / `jump` | **Working** | `state Name(params): ReturnType` declares a state with the machine return type; `jump Next(args)` terminates the current block and validates arity/types against the target's own parameters before a direct `musttail tailcc` transfer |
 | `dock` | **Working** | `dock State(args)` is a `tailcc` call expression that returns the machine's final `state` return value; the old `dock { ... }` block form is rejected |
 | `defer expr;` scope guards | **Working** | `defer expr;` and `defer { ... }` register cleanup on the nearest lexical block and run in reverse registration order on normal exit, `return`, `break`, `continue`, and `state` `jump`. A defer may capture same-block bindings declared later; exits before initializing a captured binding are rejected. The deferred body is cleanup-only and rejects `return`/`break`/`continue`/`jump` |
-| `drop` cleanup hooks | **Spec only** | Reserved keyword only, no parser branch consumes it. Candidate for the next iteration (F-41) after `defer` |
+| `drop` cleanup hooks | **Planned (Zith--)** | Reserved keyword only, no parser branch consumes it yet. F-41 is the next Zith-- cleanup feature after `defer`; plan and scope split live in `docs/plans/defer-drop.md` |
 
 ### Words, Contexts, Macros
 

@@ -269,6 +269,7 @@ nodes HIR, mantendo a política do projeto de não usar excepções/RTTI.
 1. A quebra de HIR, de `sema-modern.cpp` e de `frontend.cpp` está feita; a
    próxima prioridade é `frontend-context.cpp`, `compilation-session.cpp` ou
    `codegen-emit.cpp`, conforme o risco da área.
+   O contrato de execução para estes splits está em `docs/plans/monolith-splits.md`.
 2. Em cada extracção, compilar `zithcLib` e correr os testes da área afectada;
    `ctest --test-dir build --output-on-failure` para regressões gerais.
 3. Casos de incompletude que precisam de decisão de produto (sintaxe de `type`,

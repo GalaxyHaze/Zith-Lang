@@ -20,14 +20,16 @@ in this iteration; `drop` remains a reserved keyword and a roadmap candidate.
 
 The `main` target remains `Zith--` as defined by `docs/Zith--.md`. `defer` is
 now part of `Zith--` with parser, sema, HIR, codegen, and test coverage.
-`drop` remains outside the subset until ownership cleanup is implemented:
+`drop` is planned for the next `Zith--` iteration so the scope-cleanup contract
+becomes complete for resource types. It remains outside the subset until
+ownership cleanup is implemented:
 
 | Surface | Status |
 | --- | --- |
 | `defer expr;` / `defer { ... }` | Working; reverse-order block cleanup |
 | `defer` in `state` bodies | Working; cleanup runs before `jump` |
-| `drop` keyword | Reserved only; no parser branch consumes it |
-| `docs/impl-status.md` | `defer` recorded as `Working`; `drop` remains `Spec only` |
+| `drop` keyword | Reserved only; no parser branch consumes it yet |
+| `docs/impl-status.md` | `defer` recorded as `Working`; `drop` remains `Spec only` until implementation lands |
 
 ## Minimal Semantics
 

@@ -1,10 +1,14 @@
-# Comptime, Generics, Traits & Capabilities 0.7.0
+# Archived: Comptime, Generics, Traits & Capabilities 0.7.0
 
-This note records the durable planning contract for Zith 0.7.0: what the release
-covers, where the step-by-step implementation guides live, and which design
-decisions are locked. It is not a replacement for the detailed step files in
-`docs/plans/0.7.0/`; it is the short version a future session should read before
-picking a step.
+This note records the archived planning contract for the full-Zith 0.7.0
+proposal: what the proposal covered, where the detailed guides moved, and which
+design decisions were locked while it was active.
+
+The current compiler product split keeps comptime/introspection/type
+construction/capabilities in the full Zith spec. The `Zith--` active plan now
+lives in `docs/plans/0.7.0/`, and the detailed full-Zith steps were moved to
+`docs/plans/archive/0.7.0-zith/`. Do not treat the archived steps as active
+`Zith--` work.
 
 ## Locked Scope
 
@@ -60,7 +64,7 @@ Follow the dependency order in that README; the important dependencies are:
 
 ## Diagnostic Reservation
 
-The full diagnostic list is in `docs/plans/0.7.0/README.md`. The reserved ranges
+The full diagnostic list is in `docs/plans/archive/0.7.0-zith/README.md`. The reserved ranges
 are semantic `2021-2029` (traits/interfaces/capabilities), generic
 `3009-3012`, and comptime `6001-6006`. Parallel sessions must take codes only
 from the step that owns them.

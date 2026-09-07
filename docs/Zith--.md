@@ -653,9 +653,10 @@ O move de receiver é lógico e conservador: invalida usos no sema sem alterar A
 ## Divisão do Roadmap
 
 A metáfora de gestão é a seguinte: `Zith--` é o subconjunto que o `main` consegue
-compilar hoje; `docs/roadmap.md` e `docs/plans/0.7.0/` mapeiam a próxima iteração.
-Cada feature candidata só entra no documento do `Zith--` depois de terminar no
-pipeline real, porque o `main` não é um modo opt-in.
+compilar hoje; `docs/roadmap.md`, `docs/plans/0.7.0/` e
+`docs/plans/defer-drop.md` mapeiam a próxima iteração. Cada feature candidata só
+entra no documento do `Zith--` depois de terminar no pipeline real, porque o
+`main` não é um modo opt-in.
 
 ### Já implementado e provado no `main`
 
@@ -689,14 +690,11 @@ avaliadas juntas, por ordem de afinidade com o núcleo:
 
 | Feature | Razão | Dependência mais provável |
 | --- | --- | --- |
-| `drop` funcional | limpeza de recursos ao sair do binding/escopo (não só keyword) | NRA/ownership residual + HIR |
-| `dyn Trait` | dispatch dinâmico nominal já está no `main`; falta superfície completa de spec (`view dyn`, slices dyn, etc.) | spec semantics |
-| `requires`/`extends` explícitos | já aparecem na spec de traits | implementação de constraints |
+| `drop` funcional | limpeza determinística de recursos ao sair do binding/escopo, reutilizando o cleanup de `defer` | ownership residual + HIR |
 
-A prioridade recomendada é `drop` a seguir, reutilizando a infraestrutura de
-escopo de `defer` já implementada, o que fica mais fácil de provar contra a
-NRA. Ver `docs/plans/defer-drop.md` para a proposta completa e
-`docs/09-control-flow.md` para a semântica de escopo.
+A prioridade recomendada é `drop`, reutilizando a infraestrutura de escopo de
+`defer` já implementada. Ver `docs/plans/defer-drop.md` para a proposta
+completa e `docs/09-control-flow.md` para a semântica de escopo.
 
 ### Fora do núcleo até prova em contrário
 
