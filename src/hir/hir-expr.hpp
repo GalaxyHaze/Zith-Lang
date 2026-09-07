@@ -84,43 +84,43 @@ enum class HirUnaryOp : uint8_t {
 };
 
 struct HirLiteral {
-    HirTypeId type;
     union {
-        int64_t i;
+        int64_t i = 0;
         double f;
         bool b;
         memory::InternedId str_val;
     };
+    HirTypeId type  = types::kInvalidType;
     HirExprKind tag = HirExprKind::Literal;
 };
 
 struct HirBinary {
-    HirExprId lhs;
-    HirExprId rhs;
-    HirBinaryOp op;
+    HirExprId lhs          = kInvalidHirExpr;
+    HirExprId rhs          = kInvalidHirExpr;
+    HirBinaryOp op         = HirBinaryOp::Invalid;
     HirTypeId type         = types::kInvalidType;
     HirTypeId operand_type = types::kInvalidType;
     HirExprKind tag        = HirExprKind::Binary;
 };
 struct HirUnary {
-    HirUnaryOp op;
-    HirExprId operand;
-    HirTypeId type;
-    HirExprKind tag = HirExprKind::Unary;
+    HirUnaryOp op     = HirUnaryOp::Neg;
+    HirExprId operand = kInvalidHirExpr;
+    HirTypeId type    = types::kInvalidType;
+    HirExprKind tag   = HirExprKind::Unary;
 };
 struct HirLet {
-    memory::InternedId name;
-    HirTypeId type;
-    HirExprId init;
-    HirExprKind tag = HirExprKind::Let;
+    memory::InternedId name = 0;
+    HirTypeId type          = types::kInvalidType;
+    HirExprId init          = kInvalidHirExpr;
+    HirExprKind tag         = HirExprKind::Let;
 };
 struct HirVar {
-    memory::InternedId name;
-    uint32_t version;
-    HirExprKind tag = HirExprKind::Var;
+    memory::InternedId name = 0;
+    uint32_t version        = 0;
+    HirExprKind tag         = HirExprKind::Var;
 };
 struct HirCall {
-    HirExprId callee;
+    HirExprId callee = kInvalidHirExpr;
     memory::DynArray<HirExprId> args;
     /// Type ids for `args`, kept for ABI promotion rules such as C variadic calls.
     memory::DynArray<types::TypeId> argument_types;
@@ -146,14 +146,14 @@ struct HirRet {
     HirExprKind tag = HirExprKind::Ret;
 };
 struct HirBranch {
-    HirExprId cond;
-    HirDeclId then_block;
-    HirDeclId else_block;
-    HirExprKind tag = HirExprKind::Branch;
+    HirExprId cond       = kInvalidHirExpr;
+    HirDeclId then_block = kInvalidHirExpr;
+    HirDeclId else_block = kInvalidHirExpr;
+    HirExprKind tag      = HirExprKind::Branch;
 };
 struct HirJump {
-    HirDeclId target;
-    HirExprKind tag = HirExprKind::Jump;
+    HirDeclId target = kInvalidHirExpr;
+    HirExprKind tag  = HirExprKind::Jump;
 };
 struct HirPhi {
     memory::DynArray<HirExprId> incoming;
@@ -163,45 +163,45 @@ struct HirPhi {
 };
 
 struct HirAssign {
-    HirExprId target;
-    HirExprId value;
-    HirExprKind tag = HirExprKind::Assign;
+    HirExprId target = kInvalidHirExpr;
+    HirExprId value  = kInvalidHirExpr;
+    HirExprKind tag  = HirExprKind::Assign;
 };
 
 struct HirIndex {
-    HirExprId object;
-    HirExprId index;
-    HirTypeId type;
-    HirTypeId obj_type;
-    bool is_array   = false;
-    HirExprKind tag = HirExprKind::Index;
+    HirExprId object   = kInvalidHirExpr;
+    HirExprId index    = kInvalidHirExpr;
+    HirTypeId type     = types::kInvalidType;
+    HirTypeId obj_type = types::kInvalidType;
+    bool is_array      = false;
+    HirExprKind tag    = HirExprKind::Index;
 };
 
 struct HirField {
-    HirExprId object;
-    uint32_t index;
-    HirTypeId type;
-    HirTypeId object_type;
-    HirExprKind tag = HirExprKind::Field;
+    HirExprId object      = kInvalidHirExpr;
+    uint32_t index        = 0;
+    HirTypeId type        = types::kInvalidType;
+    HirTypeId object_type = types::kInvalidType;
+    HirExprKind tag       = HirExprKind::Field;
 };
 
 struct HirStructLiteral {
     memory::DynArray<HirExprId> values;
-    HirTypeId type;
+    HirTypeId type  = types::kInvalidType;
     HirExprKind tag = HirExprKind::StructLiteral;
     explicit HirStructLiteral(memory::Arena &arena) : values(arena) {}
 };
 
 struct HirArrayLiteral {
     memory::DynArray<HirExprId> elements;
-    HirTypeId type;
+    HirTypeId type  = types::kInvalidType;
     HirExprKind tag = HirExprKind::ArrayLiteral;
     explicit HirArrayLiteral(memory::Arena &arena) : elements(arena) {}
 };
 
 struct HirEnumValue {
-    int64_t value;
-    HirTypeId type;
+    int64_t value   = 0;
+    HirTypeId type  = types::kInvalidType;
     HirExprKind tag = HirExprKind::EnumValue;
 };
 
@@ -211,45 +211,45 @@ using HirSlotId                            = uint32_t;
 inline constexpr HirSlotId kInvalidHirSlot = ~HirSlotId{0};
 
 struct HirSlotAlloca {
-    HirSlotId slot;
-    HirTypeId type;
+    HirSlotId slot  = kInvalidHirSlot;
+    HirTypeId type  = types::kInvalidType;
     HirExprKind tag = HirExprKind::SlotAlloca;
 };
 
 struct HirSlotStore {
-    HirSlotId slot;
-    HirExprId value;
+    HirSlotId slot  = kInvalidHirSlot;
+    HirExprId value = kInvalidHirExpr;
     HirExprKind tag = HirExprKind::SlotStore;
 };
 
 struct HirSlotLoad {
-    HirSlotId slot;
-    HirTypeId type;
+    HirSlotId slot  = kInvalidHirSlot;
+    HirTypeId type  = types::kInvalidType;
     HirExprKind tag = HirExprKind::SlotLoad;
 };
 
 struct HirSlotAddr {
-    HirSlotId slot;
-    HirTypeId type;
+    HirSlotId slot  = kInvalidHirSlot;
+    HirTypeId type  = types::kInvalidType;
     HirExprKind tag = HirExprKind::SlotAddr;
 };
 
 struct HirMakeNone {
-    HirTypeId type;
+    HirTypeId type  = types::kInvalidType;
     HirExprKind tag = HirExprKind::MakeNone;
 };
 
 /// Numeric conversion produced by the `as` operator.
 struct HirCast {
-    HirExprId value;
-    HirTypeId from;
-    HirTypeId to;
+    HirExprId value = kInvalidHirExpr;
+    HirTypeId from  = types::kInvalidType;
+    HirTypeId to    = types::kInvalidType;
     HirExprKind tag = HirExprKind::Cast;
 };
 
 struct HirMakeSome {
-    HirExprId value;
-    HirTypeId type;
+    HirExprId value = kInvalidHirExpr;
+    HirTypeId type  = types::kInvalidType;
     HirExprKind tag = HirExprKind::MakeSome;
 };
 
@@ -272,9 +272,9 @@ struct HirMakeSlice {
 /// Reinterpret the bytes of a value through the given union type. Unlike a
 /// numeric `as`, this stores into union storage and never converts the value.
 struct HirUnionCast {
-    HirExprId value;
-    HirTypeId from;
-    HirTypeId to;
+    HirExprId value = kInvalidHirExpr;
+    HirTypeId from  = types::kInvalidType;
+    HirTypeId to    = types::kInvalidType;
     /// Member index when `to` is a tagged union member, otherwise ~0U.
     uint32_t member_index = ~0U;
     /// When extracting from a tagged union, verify the stored tag before reading.
@@ -284,7 +284,7 @@ struct HirUnionCast {
 /// Tagged-union member test (`x is Member`). Materialised as a separate HIR
 /// node so the checked member type and the tested value stay explicit.
 struct HirUnionCheck {
-    HirExprId value;
+    HirExprId value       = kInvalidHirExpr;
     HirTypeId union_type  = types::kInvalidType;
     uint32_t member_index = ~0U;
     HirExprKind tag       = HirExprKind::UnionCheck;
@@ -294,7 +294,7 @@ struct HirUnionCheck {
 /// at codegen; value intrinsics project from their slice/array operand.
 struct HirLayoutIntrinsic {
     enum class Which : uint8_t { OffsetOf, AlignOf, SizeOf, LengthOf, PtrOf };
-    Which which;
+    Which which            = Which::SizeOf;
     HirTypeId type         = types::kInvalidType;
     uint32_t field_index   = ~0U;                  // OffsetOf only
     HirExprId operand      = hir::kInvalidHirExpr; // LengthOf / PtrOf only
@@ -323,9 +323,9 @@ struct HirCleanup {
 
 /// Load of a module-scoped `const` global.
 struct HirGlobalConstLoad {
-    memory::InternedId name;
-    HirTypeId type  = types::kInvalidType;
-    HirExprKind tag = HirExprKind::GlobalConstLoad;
+    memory::InternedId name = 0;
+    HirTypeId type          = types::kInvalidType;
+    HirExprKind tag         = HirExprKind::GlobalConstLoad;
 };
 
 /// Materialises a `dyn Trait` fat pointer from a concrete aggregate value.

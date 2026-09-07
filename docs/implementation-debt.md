@@ -251,21 +251,11 @@ confirmar que está no ficheiro com a responsabilidade certa.
 
 ### HIR nodes sem initializers completos
 
-`cpp_check` reportou vários `uninitMemberVarNoCtor` em `src/hir/hir-expr.hpp` a
-partir da linha 86. A maioria é fixada pela ordem de preenchimento em
-`hir-lower-modern.cpp` antes de `addExpr`, mas o padrão é frágil: basta mover um
-agregado para outra TU ou adicionar um builder que omita um campo para obter valor
-indeterminado.
-
-Normas aplicáveis:
-
-- AUTOSAR `A8-5-0`: toda a memória deve ser inicializada antes de ser lida.
-- MISRA C++ `8-5-1`: todas as variáveis devem ter valor definido antes de uso.
-- C++ Core Guidelines `C.41`: um construtor deve criar um objecto totalmente
-  inicializado.
-
-Acção recomendada: dar default member initializers ou construtores dedicados aos
-nodes HIR, mantendo a política do projeto de não usar excepções/RTTI.
+Estado resolvido: todos os `HirExpr` alternatives em `src/hir/hir-expr.hpp` têm
+default member initializers para ids, tipos, flags e scalar values; os nodes com
+`memory::DynArray` continuam a depender dos construtores dedicados que recebem a
+arena. O padrão mantém a construção agregada usada pelos lowers, sem exceções
+ou RTTI.
 
 ---
 
