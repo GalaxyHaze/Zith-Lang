@@ -43,6 +43,9 @@ contracts, decisions, and gotchas that are not discoverable from the source alon
 - [flat-containers-cache.md](flat-containers-cache.md): FlatMap/FlatSet API
   contracts, hot-map migrations, cache/CLI `--no-cache`, and validation checks
   landed during the consolidation pass.
+- [release-install-layout.md](release-install-layout.md): release artifact
+  conventions for `scripts/install.sh`, stdlib discovery paths, and the
+  installer fixes landed during the packaging audit.
 - [discord-mcp.md](discord-mcp.md): ByteAsk Discord MCP server registration,
   the stdio-only limitation of the v1.0.0 release JAR, and the env-var/token
   requirements to run it.
