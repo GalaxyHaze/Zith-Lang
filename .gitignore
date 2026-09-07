@@ -48,6 +48,10 @@ _deps/
 # Scripts
 notify.sh
 
+# Agent worktree scheduler control files
+/TASK.md
+/agent-id
+
 # Environment
 .env
 .env.local
