@@ -3,6 +3,11 @@
 
 #include "diagnostics/error-codes.hpp"
 
+#ifdef ZITH_HAS_LLVM
+#include "llvm/TargetParser/Host.h"
+#include "llvm/TargetParser/Triple.h"
+#endif
+
 #include <algorithm>
 #include <chrono>
 #include <filesystem>
@@ -16,6 +21,41 @@ namespace zith::session {
 namespace {
 
 namespace fs = std::filesystem;
+
+struct TargetComponents {
+    std::optional<std::string> arch;
+    std::optional<std::string> os;
+};
+
+[[nodiscard]] TargetComponents targetComponents(const std::string &target_triple) {
+#ifdef ZITH_HAS_LLVM
+    const std::string effective =
+        target_triple.empty() ? llvm::sys::getDefaultTargetTriple() : target_triple;
+    const auto triple    = llvm::Triple(effective);
+    const auto arch_name = triple.getArchName().str();
+    const auto os_name   = triple.getOSName().str();
+    TargetComponents result;
+    if (!arch_name.empty() && arch_name != "unknown")
+        result.arch = arch_name;
+    if (!os_name.empty() && os_name != "unknown")
+        result.os = os_name;
+    return result;
+#else
+    (void)target_triple;
+    return {};
+#endif
+}
+
+[[nodiscard]] std::vector<std::string> platformVariantSuffixes(const TargetComponents &components) {
+    std::vector<std::string> suffixes;
+    if (components.arch && components.os)
+        suffixes.emplace_back("." + *components.arch + "." + *components.os);
+    if (components.arch)
+        suffixes.emplace_back("." + *components.arch);
+    if (components.os)
+        suffixes.emplace_back("." + *components.os);
+    return suffixes;
+}
 
 [[maybe_unused]] [[nodiscard]] bool isZithFile(const fs::path &path) {
     return path.extension() == ".zith";
@@ -209,32 +249,65 @@ FrontendContext::resolveImport(const ModuleArtifact &artifact, const ImportReque
         return {{}, ImportTargetKind::Asset, false};
     }
 
-    std::vector<fs::path> candidates;
-    const fs::path import_path(request.isHeader ? request.headerPath : request.importKey());
-    candidates.push_back(fs::path(artifact.key).parent_path() / import_path);
-    for (const auto &root : visible_roots)
-        candidates.push_back(fs::path(root) / import_path);
-
+    const auto components = targetComponents(config_.targetTriple);
+    const auto suffixes   = platformVariantSuffixes(components);
     std::optional<fs::path> imported;
-    for (const auto &candidate : candidates) {
+    const fs::path import_path(request.isHeader ? request.headerPath : request.importKey());
+    std::vector<fs::path> variant_paths;
+    bool considered_platform_variants = false;
+    if (!request.isHeader && !request.path.empty()) {
+        for (const auto &suffix : suffixes) {
+            const auto &last = request.path.back();
+            auto variant     = import_path;
+            variant          = variant.parent_path() / fs::path(last + suffix + ".zith");
+            variant_paths.push_back(variant);
+            considered_platform_variants = true;
+        }
+    }
+
+    std::vector<fs::path> search_roots{fs::path(artifact.key).parent_path()};
+    for (const auto &root : visible_roots)
+        search_roots.push_back(fs::path(root));
+    for (const auto &root : search_roots) {
         std::error_code error;
-        if (fs::exists(candidate, error)) {
-            imported = candidate;
-            break;
-        }
-        const auto zith_file = candidate.string() + ".zith";
-        if (fs::exists(zith_file, error)) {
-            imported = fs::path(zith_file);
-            break;
-        }
-        const auto module_file = candidate / "mod.zith";
-        if (fs::exists(module_file, error)) {
-            imported = module_file;
-            break;
+        if (request.isHeader) {
+            const auto header = root / import_path;
+            if (fs::is_regular_file(header, error)) {
+                imported = header;
+                break;
+            }
+        } else {
+            const auto literal = root / import_path;
+            if (fs::exists(literal, error)) {
+                imported = literal;
+                break;
+            }
+            for (const auto &variant : variant_paths) {
+                const auto candidate = root / variant;
+                error.clear();
+                if (fs::is_regular_file(candidate, error)) {
+                    imported = candidate;
+                    break;
+                }
+            }
+            if (imported)
+                break;
+            error.clear();
+            const auto generic = root / (import_path.string() + ".zith");
+            if (fs::is_regular_file(generic, error)) {
+                imported = generic;
+                break;
+            }
+            error.clear();
+            const auto module_file = root / import_path / "mod.zith";
+            if (fs::is_regular_file(module_file, error)) {
+                imported = module_file;
+                break;
+            }
         }
     }
     if (!imported)
-        return {};
+        return {{}, ImportTargetKind::Zith, false, considered_platform_variants};
     const fs::path resolved(*imported);
     if (!isWithinRoots(resolved, visible_roots))
         return {};
