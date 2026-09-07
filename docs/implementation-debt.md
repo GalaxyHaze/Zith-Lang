@@ -1,6 +1,6 @@
 # Zith Implementation Debt
 
-> Last updated: 2026-09-07.
+> Last updated: 2026-09-07 (release/installer CI follow-ups).
 
 Documento de gestão da dívida de implementação. Distingue propositadamente:
 
@@ -39,6 +39,22 @@ engenharia para rever e gerir.
   cross-compile)" está morto (`if: ... msvc_arch == ''`). O target atual usa
   clang-cl/LLVM para ARM64; o dead step deve ser removido ou a estratégia deve
   ser resolvida antes de confiar num segundo fallback Zig.
+- O CI regular (`ci.yml`) só corre nativo em `ubuntu-latest`. Não valida os
+  installers `install.ps1`/`install.sh`, o layout Scoop, os artifacts de release
+  contra `findStdlibRoots()`, nem executa um smoke test de stdlib após instalar.
+  A validação efetiva desses caminhos fica residualmente sem cobertura
+  automática até haver um job Windows/macOS ou um teste de instalação em
+  diretório temporário.
+- O workflow `create-new-release.yml` aponta para
+  `raw.githubusercontent.com/${{ github.repository }}/master/...`, mas a branch
+  atual do repositório é `main`. Os comandos de instalação publicados num
+  release podem apontar para uma branch inexistente/antiga até o script ser
+  corrigido para `main`.
+- O bucket Scoop e o dispatch Homebrew são actualizados por
+  `update-package.yml`; as falhas desse fluxo não são visíveis em PRs deste
+  repo e dependem de `RELEASE_PAT`/do tap externo. A regeneração de hashes e o
+  teste de `scoop install` só podem ser confirmados fora desta rama ou num
+  follow-up manual.
 
 ---
 
