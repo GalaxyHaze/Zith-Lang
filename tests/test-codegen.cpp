@@ -2995,7 +2995,7 @@ static void test_invalid_ir_refuses_object_emission() {
     auto &fn       = hir.addFn(interner.intern("broken"));
     fn.return_type = types.internInt(types::IntWidth::I32);
     const auto bad_literal =
-        hir.addExpr(hir::HirLiteral{types::kErrorType, {}, hir::HirExprKind::Literal});
+        hir.addExpr(hir::HirLiteral{{}, types::kErrorType, hir::HirExprKind::Literal});
     auto &block      = fn.blocks.emplace(arena);
     block.terminator = hir.addExpr(hir::HirRet{bad_literal});
 

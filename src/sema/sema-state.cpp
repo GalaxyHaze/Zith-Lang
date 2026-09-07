@@ -76,10 +76,9 @@ void PerModuleSema::inferDockCall(frontend::ExprId id) {
                     !defaults_cover) {
                     report(expr.span, "dock call arity mismatch", diagnostics::err::NoMatchingFn);
                 }
-                const VariadicCallPlan plan   = makeVariadicCallPlan(expr.span, expr.operands, fn,
-                                                                     target_is_slice, slice_index);
-                const bool explicit_slice_arg = plan.explicitSliceArg;
-                const bool auto_collected     = plan.autoCollectTail;
+                const VariadicCallPlan plan = makeVariadicCallPlan(expr.span, expr.operands, fn,
+                                                                   target_is_slice, slice_index);
+                const bool auto_collected   = plan.autoCollectTail;
                 typed_map.variadicCallPlans.insert(expr.id.value, plan);
                 if (target_is_slice && expr.operands.size() - 1U < slice_index &&
                     !(target != nullptr &&
@@ -173,8 +172,7 @@ void PerModuleSema::inferJump(const frontend::Statement &stmt) {
     }
     const VariadicCallPlan plan =
         makeVariadicCallPlan(stmt.span, stmt.arguments, fn, target_is_slice, slice_index, false);
-    const bool explicit_slice_arg = plan.explicitSliceArg;
-    const bool auto_collected     = plan.autoCollectTail;
+    const bool auto_collected = plan.autoCollectTail;
     typed_map.variadicStmtPlans.insert(stmt.id.value, plan);
     if (target_is_slice && stmt.arguments.size() < slice_index &&
         !missingArgsHaveDefaults(*target, stmt.arguments.size(), 0U, slice_index)) {
