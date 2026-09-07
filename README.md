@@ -1,33 +1,36 @@
-#Zith
+# Zith
 
 [![Build](https://github.com/GalaxyHaze/Zith/actions/workflows/ci.yml/badge.svg)](https://github.com/GalaxyHaze/Zith/actions)
 [![License](https://img.shields.io/github/license/GalaxyHaze/Zith)](./license)
 [![Version](https://img.shields.io/github/v/release/GalaxyHaze/Zith)](https://github.com/GalaxyHaze/Zith/releases)
 [![Discord](https://img.shields.io/badge/Discord-Join-5865F2?logo=discord&logoColor=white)](https://discord.gg/a7h4cpWHg4)
 
-> **Status: Early development.** Core types, functions, control flow, and LLVM codegen work.
-> Several features listed below are designed and parsed but not yet semantically active.
-> See the [Implementation Status](#implementation-status) table for the exact picture.
+> **Status: early development.** The compiler is a working Zith-- subset: lexing/parsing,
+> type checking, generics, HIR, LLVM codegen, a growing stdlib, and an executing CLI pipeline are
+> implemented. Some spec-level language features are still unsupported or partial. See
+> [docs/impl-status.md](docs/impl-status.md) for the verified status of every feature.
 
-A statically typed, compiled, general-purpose language. Zith proves memory safety at compile time
-through **Node Resource Analysis (NRA)** — no garbage collector, no borrow checker, no runtime
-overhead. The syntax stays clean; the compiler does the hard work.
+A statically typed, compiled, system language. 'Zith' proves memory safety at compile time
+through **Node Resource Analysis (NRA)** no garbage collector, no traditional borrow checker or annotation, no runtime
+overhead. The syntax stays clean and the compiler does the hard work.
 
 The current `main` compiles **Zith--**, a simplified subset documented in
-[`docs/Zith--.md`](docs/Zith--.md). The subset keeps the existing type system and normal/raw
-macros, while restricting bindings to `let`, `var` and `const` and removing `global`, `mut`,
-`unique`/`share`/`belong`, `const fn` and tag macros. Implementation rules live in
+[`docs/Zith--.md`](docs/Zith--.md). The subset keeps the existing type system and, instead of
+**comptime**, provides normal/raw **macros** (Zith-- only). Binding semantics, pointer/borrow
+rules, generics, `dyn`, enum/union templates, `defer`, and other supported behavior are
+documented in
 [`docs/Zith---implementation.md`](docs/Zith---implementation.md).
 
 ---
 
 ## What Makes Zith Different
 
-NRA tracks ownership, lending, and aliasing through five qualifiers — `lend`, `view`, `unique`,
-`share`, and `belong` — without requiring lifetime annotations. Beyond memory safety, Zith ships a
-large toolbox for domain-specific work: custom operators (`word`), scoped DSLs (`context`), structured
-goto (`flow fn` / `marker` / `dock` / `jump`), compile-time function syntax, and
-runtime-driven concurrency APIs that do not require special syntax.
+'Zith' is designed around memory safety without lifetime annotations or a garbage collector. The
+current main implements a simplified ownership core: `lend`/`view` borrow slices, logical moves
+from `&x`, pointer-escape checks, and NRA residual facts before HIR; the full NRA is planned for
+future Zith. Zith aims to be an expressive and clear language, with specialized tools for
+domain-specific work. **Zith--** already demonstrates that direction with generics,
+traits/interfaces, `dyn` dispatch, `state` machines and rich control flow.
 
 ---
 
@@ -41,32 +44,42 @@ cmake --build build -j
 ./build/zithc --help
 ```
 
-Requires **CMake 3.15+** and a **C++23** compiler (GCC 13+, Clang 16+, or MSVC 19.35+).
-LLVM 18+ is optional — without it, codegen is disabled but `check` and HIR emission still work.
+Requires **CMake 3.20+**, a **C++23** compiler, and LLVM 18+ for the codegen backend. LLVM is
+optional: without it, `check` and HIR emission still work, but native codegen is disabled.
 
-**Hello, World:** ( is a place holder, until we can formalize macros correctly)
+**Hello, World** with the C stdio interop surface:
 
 ```zith
 import "stdio.h"
 
-fn main() {
+fn main(){
     printf("Hello, World!");
 }
 ```
 
-then the canonical way would be:
+The canonical stdlib console API:
 
 ```zith
 from std/io/console
 
-fn main() {
-    @println("Hello, World!");
+fn main(){
+    println("Hello, World!");
 }
 ```
 
+Run either with:
 
 ```bash
-./build/zithc run examples/hello-world.zith
+./build/zithc run examples/test-import-console.zith
+```
+
+The suites under `examples/` cover the working Zith-- surface, including bindings, generics,
+optionals, macros, ownership, dyn interfaces, loops, `when`, `state`/`defer`, variadic slices,
+and C interop:
+
+```bash
+./build/zithc check examples/optionals-simple.zith
+./build/zithc run examples/state-defer-simple.zith
 ```
 
 ---
@@ -76,41 +89,47 @@ fn main() {
 **Type System**
 
 - Primitives: `u8`-`u128`, `i8`-`i128`, `f32`, `f64`, `bool`, `char`, `void`
-- Composite: `struct`, `component` (POD), `enum` (C-style, struct-backed, ADT), `union` (tagged & C-union hatch escape)
+- Composite: `struct`, `component` (POD), `enum`/`union` (including generic enum/union templates)
 - Generics, nominal `type`, transparent `alias`, and pattern matching with `when`
 
 **Memory Model (NRA)**
 
 - `lend` — exclusive mutable borrow for the call
 - `view` — read-only borrow
-- `unique` — sole owner; value is consumed on assignment
-- `share` — reference-counted, safe across scopes
-- `belong` — declares that a field owns its pointee
+- Logical move semantics for `&x` and for `self`/`var self` method calls
+- Pointer-escape checks for address-of and `@ptrOf(local)`
+- NRA residual facts before HIR; the full NRA proof is planned for Zith
 
 **Functions**
 
 - `fn` — regular function
+//a bit useless rigth now, since everything is a gray state
 - `raw fn` — opt out of NRA for C-interop
 - `extern fn` — fixed C ABI linkage
-- `const fn` — compile-time function syntax (parse-level; evaluation is future work)
-- `flow fn` — structured goto with `marker` / `dock` / `jump`; advanced marker semantics are future work
+- Generic functions with explicit or inferred type arguments
+- Function values `fn(...): R`
+- `state` machines with `dock` / `jump` (direct `tailcc` transitions)
+- `const fn` — planned for Zith; compile-time evaluation is not implemented
 
 **Control Flow**
 
-- `if` / `when` (pattern matching) / `for`
-- `->` chain-flow operator for left-to-right pipelines
+- `if` / `else` / `else (cond)`
+- `when` for pattern matching, including guards, ranges, and narrowing
+- `for` in conditional, infinite, 3-clause, and iterator form
+- `break` / `continue` with labels, and `defer` scope guards
+- `->` pointer arrow access (`p->field`)
 
 **Error Handling**
 
-- `?T` optional, `T!` result — zero-cost, return-based
-- `or` fallback chains, `fail` blocks, `with` / `catch`, `throw`
-- `must` (debug panic) / `raw` (always unchecked)
+- `?T` optional values with implicit condition tests and `?` propagation where valid (Zith-- only)
+- `is null`, `must`, and `raw` optional extraction (Zith-- only)
+- `fail` / `with` / `catch` / `throw` are planned for Zith and not implemented yet
 
-**Extensibility (Experimental)**
+**Extensibility and C Interop**
 
-- `word` — define custom infix, prefix, or suffix operators
-- `context` — bundle words and macros into an activatable DSL scope
-- `use` — bring a context or word into scope
+- `macro` / `raw macro` declarations and `@name(...)` calls (Zith-- only)
+- Validated C header imports through libclang
+- `tag` (formerly `tag macro`), `word`, `context`, and `use` are planned for Zith
 
 ---
 
@@ -118,33 +137,33 @@ fn main() {
 
 | Feature | Status | Notes |
 |---|---|---|
-| Lexer / parser | **Working** | Full grammar including experimental syntax |
-| Formatter (`zithc fmt`) | **Working** | Preserves all AST nodes including experimental |
-| Type checking | **Working** | Structs, enums, generics, function calls |
+| Lexer / parser | **Working** | Hand-written lexer and recursive-descent parser |
+| Formatter (`zithc fmt`) | **Working** | Round-trip stable across the expression AST |
+| Type checking and name resolution | **Working** | Imports, generics, traits/interfaces, all expression nodes |
+| Generic instantiation | **Working** | Generic functions, structs, aliases, enum/union templates, implement blocks |
+| HIR lowering | **Working** | Covers the working Zith-- feature set |
 | LLVM codegen | **Working** | x86-64 and WebAssembly targets |
 | `fn`, `raw fn`, `extern fn` | **Working** | `extern fn` is C-ABI-only |
-| `const fn`, `flow fn` | **Working / Partial** | `const fn` evaluation and advanced flow markers are future work |
-| `struct`, `enum`, `union`, `component` | **Working** | |
-| Primitive arithmetic and comparisons | **Working** | Including unsigned ops |
-| `if` / `when` / `for` | **Working** | |
-| `->` chain operator | **Working** | |
-| Module imports (`import`, `from`, `export`) | **Working** | |
-| `alias`, `type` | **Working** | |
-| C interop (`extern fn`, `import ".h"`) | **Partial** | Manual `extern fn` works everywhere; `.h` imports require native libclang and support a restricted C ABI surface |
-| Field access (`.field`) | Semantic warning | Parses, HIR lowering not yet complete |
-| Index access (`a[i]`) | Semantic warning | Parses, HIR lowering not yet complete |
-| `is` / `as` | **Blocked (E2010)** | Parsed; sema rejects before HIR |
-| `?` / `!` propagation / fallback | **Blocked (E2010)** | Parsed; sema rejects before HIR |
-| `word` / `context` / `use` | **Blocked (E2010)** | Parsed; sema rejects before HIR |
-| `macro` / `@macro` calls | Semantic warning | Parses; expansion not implemented |
-| Core concurrency syntax (`async fn`, `yield`, `spawn`, `await`) | Not part of the core language contract | Concurrency is being documented as stdlib/runtime APIs instead of frontend syntax |
-| NRA pass | Spec only | Pipeline stub exists; analysis not implemented |
-| `comptime` blocks | Spec only | No evaluation yet |
-| `zithc test` / `zithc repl` / `zithc deps` | Stub | Returns "not implemented" |
-
-> **E2010 (UnsupportedSyntax):** the compiler accepts these constructs syntactically but emits a
-> hard semantic error if they appear in code. They will be unlocked as their HIR representation
-> and type semantics are fully defined.
+| `state`, `dock`, `jump` | **Working** | Direct `tailcc` transitions |
+| `struct`, `enum`, `union`, `component` | **Working** | Includes generic enum/union templates with methods and conformance |
+| `trait`, `interface`, `implement` | **Working** | Nominal and structural conformances; `dyn` method dispatch |
+| Primitive arithmetic and comparisons | **Working** | Includes bitwise operations, ranges, `in`, and compound assignment |
+| `when` / `match` / `for` / labels / `defer` | **Working** | |
+| Module imports (`import`, `from`, `export`) | **Working** | Includes platform-specific imports and visibility controls |
+| `alias`, `type` | **Working / Partial** | `alias` works; nominal `type` needs explicit value construction/access syntax |
+| C interop | **Working** | Manual `extern fn` plus validated C header imports through libclang |
+| `macro` / `raw macro` / `@name(...)` | **Working (Zith-- only)** | Normal and raw macros with call-site scope handling |
+| Field access, index, deref, address-of | **Working** | Optional bounds checks on array/slice indexing; `raw` skips checks |
+| `?T` (Zith-- only) | **Working** | Optional values, `?` propagation where valid, `is null`, `must`, and `raw` extraction |
+| `is` / `as` | **Working** | Casting for numeric pairs and raw pointers; tagged-union/opaque narrowing |
+| `tag` (formerly `tag macro`) | Planned for Zith | Rejected in Zith--; planned under the shorter `tag` name |
+| `word` / `context` / `use` | Planned for Zith | No working semantics in Zith-- |
+| `const fn`, `comptime` | Planned for Zith | Compile-time evaluation is not implemented in Zith-- |
+| Full NRA proof | Planned for Zith | Zith-- currently implements `lend`/`view` slices, logical moves, and escape checks |
+| Core concurrency syntax (`async fn`, `yield`, `spawn`, `await`) | Not part of the core language contract | Concurrency is documented as stdlib/runtime APIs instead of frontend syntax |
+The single source of truth with per-feature verification notes is
+[docs/impl-status.md](docs/impl-status.md). Feature IDs, waves, and current roadmap details are in
+[docs/roadmap.md](docs/roadmap.md).
 
 ---
 
@@ -172,11 +191,13 @@ The ABI, return codes, `mode`, `emit_mask`, and buffer accessors are documented 
 | `zithc create <name>` | Scaffold a new project | Working |
 | `zithc clean` | Remove build artifacts | Working |
 | `zithc execute <file>` | Run a pre-compiled binary | Working |
-| `zithc test` | Run project tests | Stub |
-| `zithc repl` | Interactive REPL | Stub |
-| `zithc deps` | Dependency management | Stub |
+| `zithc test <path>` | Discover and run test files under a path | Working |
+| `zithc repl` | Interactive REPL | 'Zith' only |
+| `zithc deps list` | List declared dependencies | Working |
+| `zithc deps add` / `deps remove` | Dependency management | Stub |
+| `zithc docs` | Generate documentation from source | Working |
 
-**Useful flags:** `--emit-ast`, `--emit-hir`, `--emit-ir`, `--emit-asm`, `-m release`, `--include <stdlib-path>`
+**Useful flags:** `--emit-ast`, `--emit-hir`, `--emit-ir`, `--emit-asm`, `-m release`, `--include <stdlib-path>`, `--cache-stats`
 
 ---
 
@@ -211,6 +232,23 @@ cmake -S . -B build
 cmake --build build -j
 ```
 
+**Release installer (Linux/macOS):**
+```bash
+curl -fsSL https://raw.githubusercontent.com/GalaxyHaze/Zith/main/scripts/install.sh | bash
+# Optional: install a specific version or the musl-linked Linux binary
+curl -fsSL https://raw.githubusercontent.com/GalaxyHaze/Zith/main/scripts/install.sh | bash -s -- v1.0.0
+curl -fsSL https://raw.githubusercontent.com/GalaxyHaze/Zith/main/scripts/install.sh | bash -s -- --musl
+```
+
+**Release installer (Windows PowerShell):**
+```powershell
+irm https://raw.githubusercontent.com/GalaxyHaze/Zith/main/scripts/install.ps1 | iex
+```
+Optional version pin:
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/install.ps1 -Version v1.0.0
+```
+
 **Scoop (Windows):**
 ```powershell
 scoop bucket add zithc https://github.com/GalaxyHaze/Zith.git
@@ -237,12 +275,15 @@ is intended for local automation and is not a versioned public API.
 
 ## ASCII Highlighting
 
-The standalone script `scripts/zith-ascii.py` renders Zith source with visible ASCII markers when
+The standalone script `scripts/zith-ascii.py` renders Zith source with visible highlighting when
 no plugin highlighter is available. It accepts a file, stdin, or an inline `--string`, and supports
-`markdown`, `tag`, `prefix`, `compact`, `ansi`, and `plain` styles.
+`markdown`, `prefix`, `compact`, `ansi`, `tag`, and `plain` styles. `ansi` wraps the output in a
+` ```ansi ` block so it renders when pasted into Discord. The `ansi` palette uses only Discord-safe
+ANSI colors (`30`-`37`). `tag` prints the same code content as plain `[0;35m...`-style markers for
+non-rendering displays.
 
 ```bash
-scripts/zith-ascii.py examples/hello-world.zith
+scripts/zith-ascii.py examples/bindings-simple.zith
 scripts/zith-ascii.py --style tag --string 'fn main() { printf("oi"); }'
 ```
 
@@ -260,6 +301,9 @@ brew install zithc
 |---|---|
 | [Language Spec](docs/Zith-spec.md) | Overview, design goals, quick reference, appendix |
 | [Full Spec](docs/Zith-spec-full.md) | All chapters in one file |
+| [Implementation Status](docs/impl-status.md) | Verified status of every feature stage and CLI command |
+| [Roadmap](docs/roadmap.md) | Feature IDs, dependency graph, and implementation waves |
+| [Zith--](docs/Zith--.md) | Current compiler subset specification |
 | [CHANGELOG](CHANGELOG.md) | What changed and what is planned |
 | [CONTRIBUTING](CONTRIBUTING.md) | Build instructions, code style, pipeline overview |
 

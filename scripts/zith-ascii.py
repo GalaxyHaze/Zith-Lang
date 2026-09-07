@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Render Zith source as a visible ASCII-highlighted version.
+"""Render Zith source as a visible highlighted version.
 
 The compiler has its own terminal colors, but many places that display code
-(markdown viewers, tickets, plain text editors) have no Zith highlighter.
-This script tokensizes Zith source and re-emits it with ASCII markers so the
-category of each token is visible without color.
+(markdown viewers, tickets, Discord) have no Zith highlighter. This script
+tokensizes Zith source and re-emits it with markup or ANSI codes so the
+category of each token is visible.
 
 Usage:
     python3 scripts/zith-ascii.py --string 'fn main() { printf("hi"); }'
@@ -394,31 +394,6 @@ def render(token: Token, style: str) -> str:
         if token.kind == KIND_PUNCTUATION:
             return text
 
-    if style == "tag":
-        if token.kind == KIND_KEYWORD:
-            return f"<k>{text}</k>"
-        if token.kind == KIND_TYPE:
-            return f"<t>{text}</t>"
-        if token.kind == KIND_LITERAL:
-            return f"<l>{text}</l>"
-        if token.kind == KIND_STRING:
-            return f"<s>{text}</s>"
-        if token.kind == KIND_NUMBER:
-            return f"<n>{text}</n>"
-        if token.kind == KIND_COMMENT:
-            return f"<c>{text}</c>"
-        if token.kind == KIND_DOC:
-            return f"<d>{text}</d>"
-        if token.kind == KIND_ANNOTATION:
-            return f"<a>{text}</a>"
-        if token.kind == KIND_ATTRIBUTE:
-            return f"<r>{text}</r>"
-        if token.kind == KIND_OPERATOR:
-            return f"<o>{text}</o>"
-        if token.kind == KIND_PUNCTUATION:
-            return f"<p>{text}</p>"
-        return text
-
     if style == "prefix":
         labels = {
             KIND_KEYWORD: "k",
@@ -445,20 +420,53 @@ def render(token: Token, style: str) -> str:
 
     if style == "ansi":
         codes = {
-            KIND_KEYWORD: "\033[1;35m",
-            KIND_TYPE: "\033[1;34m",
-            KIND_LITERAL: "\033[33m",
-            KIND_STRING: "\033[32m",
-            KIND_NUMBER: "\033[33m",
-            KIND_COMMENT: "\033[2;90m",
-            KIND_DOC: "\033[2;96m",
-            KIND_ANNOTATION: "\033[1;33m",
-            KIND_ATTRIBUTE: "\033[1;33m",
-            KIND_OPERATOR: "\033[1;37m",
+            KIND_KEYWORD: "\033[0;35m",
+            KIND_TYPE: "\033[0;34m",
+            KIND_LITERAL: "\033[0;33m",
+            KIND_STRING: "\033[0;32m",
+            KIND_NUMBER: "\033[0;33m",
+            KIND_COMMENT: "\033[0;30m",
+            KIND_DOC: "\033[0;36m",
+            KIND_ANNOTATION: "\033[0;33m",
+            KIND_ATTRIBUTE: "\033[0;33m",
+            KIND_OPERATOR: "\033[0;37m",
             KIND_PUNCTUATION: "",
         }
         code = codes.get(token.kind, "")
         return f"{code}{text}\033[0m" if code else text
+
+    if style == "escaped-ansi":
+        codes = {
+            KIND_KEYWORD: "\\033[0;35m",
+            KIND_TYPE: "\\033[0;34m",
+            KIND_LITERAL: "\\033[0;33m",
+            KIND_STRING: "\\033[0;32m",
+            KIND_NUMBER: "\\033[0;33m",
+            KIND_COMMENT: "\\033[0;30m",
+            KIND_DOC: "\\033[0;36m",
+            KIND_ANNOTATION: "\\033[0;33m",
+            KIND_ATTRIBUTE: "\\033[0;33m",
+            KIND_OPERATOR: "\\033[0;37m",
+            KIND_PUNCTUATION: "",
+        }
+        code = codes.get(token.kind, "")
+        return f"{code}{text}\\033[0m" if code else text
+
+    if style == "tag":
+        code = {
+            KIND_KEYWORD: "[0;35m",
+            KIND_TYPE: "[0;34m",
+            KIND_LITERAL: "[0;33m",
+            KIND_STRING: "[0;32m",
+            KIND_NUMBER: "[0;33m",
+            KIND_COMMENT: "[0;30m",
+            KIND_DOC: "[0;36m",
+            KIND_ANNOTATION: "[0;33m",
+            KIND_ATTRIBUTE: "[0;33m",
+            KIND_OPERATOR: "[0;37m",
+            KIND_PUNCTUATION: "",
+        }.get(token.kind, "")
+        return f"{code}{text}[0m" if code else text
 
     raise ValueError(f"unknown style: {style}")
 
@@ -474,7 +482,14 @@ def highlight(source: str, style: str) -> str:
         cursor = token.end
     if cursor < len(source):
         out.append(source[cursor:])
-    return "".join(out)
+    result = "".join(out)
+    if style == "ansi":
+        return f"```ansi\n{result}\n```"
+    if style == "escaped-ansi":
+        return result
+    if style == "tag":
+        return result
+    return result
 
 
 def read_input(args: argparse.Namespace) -> list[tuple[str, str]]:
@@ -507,7 +522,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--style",
-        choices=("markdown", "tag", "prefix", "compact", "ansi", "plain"),
+        choices=("markdown", "tag", "prefix", "compact", "ansi", "escaped-ansi", "plain"),
         default="markdown",
         help="output style (default: markdown)",
     )
