@@ -11,7 +11,8 @@ This directory is the planning home for the current `Zith--` iteration:
 - `drop` as deterministic scope cleanup, extending the already-shipped
   `defer` path. See `docs/plans/defer-drop.md`.
 - Platform-specific imports (`foo.<arch>.<os>.zith`) are implemented in the
-  import resolver. See `docs/plans/platform-imports.md`.
+  import resolver and archived. See
+  `docs/plans/archive/platform-imports.old.md`.
 - Monolith splits as infrastructure work. See `docs/plans/monolith-splits.md`.
 - Feature hardening and debt closure from `docs/implementation-debt.md`.
 
@@ -33,6 +34,9 @@ features, not `Zith--` candidates.
 
 ## Retired Steps
 
+- `docs/plans/archive/platform-imports.old.md`: platform imports
+  (`foo.<arch>.<os>.zith`) are implemented in Zith--; no active
+  implementation steps remain.
 - `docs/plans/archive/parse-input-cast.old.md`: `ParseInput` and
   `InputLine.cast<T>` are shipped; no active implementation steps remain.
 

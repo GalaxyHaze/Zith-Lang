@@ -19,14 +19,14 @@ contracts, decisions, and gotchas that are not discoverable from the source alon
 - [comptime-generics-traits.md](comptime-generics-traits.md): archived
   full-Zith 0.7.0 comptime/traits/capability planning; the active `Zith--`
   plan now points to `docs/plans/`.
-- [monolith-splits.md](monolith-splits.md): behavior-preserving split order
-  and contract for large compiler TUs.
+- [monolith-splits.md](monolith-splits.md): completed frontend/session split
+  layout and the remaining large compiler TUs.
 - [nra-hir-boundary.md](nra-hir-boundary.md): stable ownership/HIR boundary and
   the pitfalls that keep the pre-HIR NRA contract intact.
 - [nra-design.md](nra-design.md): future `Zith` NRA design decisions and link to
   the full `docs/nra-spec.md` contract.
-- [platform-imports.md](platform-imports.md): planned `Zith--` module resolution
-  for `foo.<arch>.<os>.zith` variants plus cache/target decisions.
+- [platform-imports.md](platform-imports.md): implemented `Zith--` platform
+  variants for `foo.<arch>.<os>.zith` plus cache/target decisions.
 - [build-c-compile.md](build-c-compile.md): companion `.c` discovery/link flow,
   current backend selection rules, and the Clang `-Weverything` gotchas hit
   while landing the feature.

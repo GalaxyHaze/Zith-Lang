@@ -30,8 +30,11 @@ The active plan homes are:
 - `docs/plans/0.7.0/`: current Zith-- iteration scope and retired-step index.
 - `docs/plans/defer-drop.md`: `drop` roadmap, extending shipped `defer`.
 - `docs/plans/monolith-splits.md`: source-reorganization order.
-- `docs/plans/platform-imports.md`: target-based import resolution design.
+- `docs/plans/archive/platform-imports.old.md`: archived implementation
+  contract for platform imports.
 - `docs/roadmap.md`: stable feature IDs and wave narrative.
+- `docs/plans/standalone-c-toolchain.md` / `docs/plans/tiny-c-backend.md`:
+  active Zith infrastructure work for the native C toolchain.
 
 The archived plan homes are:
 
@@ -40,6 +43,11 @@ The archived plan homes are:
 - `docs/plans/archive/traits-interfaces-*.old.md`: prior trait/interface step
   notes.
 - `docs/plans/archive/parse-input-cast.old.md`: shipped `ParseInput` step.
+- `docs/plans/archive/platform-imports.old.md`: shipped platform-import step.
+- `docs/plans/bootstrap-slices-fnptr.md`: shipped bootstrap step; kept as a
+  maintenance note, not an active plan.
+- `docs/plans/branch-protocol.md`: full-Zith design for `Branch`/`fork`/`merge`;
+  not a Zith-- deliverable.
 
 Completed active steps should move to `docs/plans/archive/`. The retired-step
 index under `docs/plans/0.7.0/README.md` should name the archived file so
@@ -66,6 +74,25 @@ explanation. They can disagree when a wave was partially completed, so both
 must be checked before editing. A row marked `Working` cannot remain described
 as pending in the same wave section without an explicit reason such as
 full-Zith remainder.
+
+## Completed Since Last Audit
+
+Platform imports (F-42) shipped and the roadmap row is `Working`. The active
+plan was moved to `docs/plans/archive/platform-imports.old.md` and the 0.7.0
+README now lists it under Retired Steps.
+
+C header imports progressed from the historical `Working (common C)` wording
+to `Working (validated C)`. Simple records passed/returned by value are
+imported only after libclang proves layout/alignment for the configured target; scalar,
+pointer, and nested validated-record fields are supported. Unverified records
+are skipped, and function-like macros, strings, globals, bitfields,
+packed/anonymous records, flexible arrays, `long double`, and `__int128`
+remain unimported.
+
+The `src/session/frontend-context.cpp` and `src/session/compilation-session.cpp`
+monolith splits are merged. `docs/plans/monolith-splits.md` now records the
+completed translation units and keeps `codegen-emit.cpp` and
+`hir-lower-expr.cpp` as candidates.
 
 ## Status Map Used In This Audit
 
@@ -106,14 +133,14 @@ why specific roadmap rows were updated.
 | F-29 | Working |
 | F-30 | Spec only |
 | F-31 | Partial: tagged unions and narrowing work |
-| F-32 | Working for common C, debt remains |
+| F-32 | Working for validated C, debt remains |
 | F-33 | Working |
 | F-34 | Working |
 | F-35 | Working |
 | F-36 | Working |
 | F-40 | Working |
 | F-41 | Planned for Zith-- |
-| F-42 | Planned for Zith-- |
+| F-42 | Working |
 
 The F-10 row is nuanced. `@sizeOf`, `@offsetOf`, `@alignOf`, `@lengthOf`,
 `@ptrOf`, and `@canonicalType` are implemented. The generic `@intrinsic`
@@ -136,6 +163,10 @@ not active.
 A surface can be partially implemented in Zith-- and still have a separate
 full-Zith remainder. `T!` is a good example: the declared type lowers through
 HIR, but `!` propagation and the `fail` family remain full-Zith.
+
+The C toolchain plans are a separate axis. They are active infrastructure work
+for Zith-- builds, but they are not Zith-- language features and must not be
+confused with the full-Zith archived tree.
 
 Tag macros are another boundary case. `impl-status.md` says tag macro calls
 are parsed and then rejected with `E2010` in the Zith-- pipeline. This is not
@@ -176,9 +207,11 @@ Other debt entries remain real and were left unchanged:
   missing.
 - The object cache works but `.zirl` is neither produced nor consumed.
 - NRA is partial because the full alive/dead/lent proof is missing.
-- Bare `opaque` cannot be rehydrated across cache/module boundaries.
-- C interop covers common C but struct-by-value ABI and several import forms
-  are not verified or imported.
+- Bare `opaque` has stable cache-hydrated tags but the canonicalization rule
+  can still invalidate old artifacts if changed; a more explicit cross-module
+  registry remains a follow-up.
+- C interop covers validated C but struct-by-value ABI is limited to simple
+  records whose layout is proven; several import forms remain unported.
 - Numeric narrowing casts do not check overflow.
 - `for (cond)` is still printed as `while` by the formatter.
 - `++` and `--` do not exist.
@@ -195,8 +228,8 @@ The practical order used for this task is:
 5. For shipped steps, move the plan to `docs/plans/archive/`.
 6. Update debt entries only when the status document supports the new wording.
 7. Run the exact verification commands from `TASK.md`.
-8. Review the diff for dead links, contradictory status text, and unintended
-   edits before requesting a merge.
+8. Review the diff for dead links, contradictory status text, old line counts
+   for completed splits, and unintended edits before requesting a merge.
 
 Do not update `impl-status.md` just to make a plan read better. The status
 document is verified against compiler behavior and baseline. Only update it
@@ -222,6 +255,9 @@ narrative can survive when the row-level status was already updated.
   prose is a common source of contradictory guidance.
 - When debt wording changes from "deferred" to "implemented with out-of-scope
   remainder", update the folder link and the `impl-status.md` line it cites.
+- When a completed split changes the file layout, update `monolith-splits.md`
+  and `implementation-debt.md` with the new TUs/counts; do not leave old
+  ~1789/~1985 numbers as if they were current.
 - If a status check fails because an implementation changed, do not classify
   the feature as working from memory. Run the compiler or focused test and
   record the result before editing the status row.

@@ -5,6 +5,11 @@
 Draft design for the core `Branch` capability, `fork`, and `merge`. This document
 specifies the intended language contract; implementation is not started.
 
+> This is full-Zith planning, not a Zith-- deliverable. Zith-- keeps explicit
+> threads/runtime APIs out of core syntax until the runtime/stdlib surface and
+> full ownership proof are defined. See `docs/roadmap.md` F-18/F-19/F-20 and the
+> archived `docs/plans/archive/0.7.0-zith/` material.
+
 ## Goal
 
 Zith keeps `state` machines as the deterministic control-flow mechanism and

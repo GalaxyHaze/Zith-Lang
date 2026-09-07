@@ -7,7 +7,11 @@ Implemented: `import foo` resolves platform variants such as
 generic `foo.zith` as a required fallback. The feature belongs in the module
 resolver, not in comptime, macros, or a new conditional statement.
 
-Full design: `docs/plans/platform-imports.md`.
+Full design archive: `docs/plans/archive/platform-imports.old.md`.
+
+Active status is `Working` in `docs/impl-status.md` and F-42 in
+`docs/roadmap.md`. This note supersedes the older "planned" wording; the
+implementation contract and tests moved to the archived plan.
 
 ## Current Ground Truth
 
@@ -15,6 +19,10 @@ Full design: `docs/plans/platform-imports.md`.
 variants, the generic `path.zith`, and `path/mod.zith` per search root.
 `--target` reaches `FrontendConfig::targetTriple` and participates in
 `CacheKey::identity()`, so the module cache remains separated per target.
+
+The resolver code moved with the frontend monolith split. The current home is
+`src/session/frontend-symbol-resolution.cpp`; do not point future edits at the
+old pre-split `frontend-context.cpp` implementation sketch.
 
 ## Decisions Locked In
 

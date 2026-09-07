@@ -4,6 +4,10 @@ Goal: build a small Zith-owned C object emitter for companion `*.c` sources and 
 
 Status: planned, not started.
 
+> This plan is Zith infrastructure work, not a Zith-- language feature. It is
+> active only for the standalone native toolchain track in
+> `docs/plans/standalone-c-toolchain.md`.
+
 ## Target Scope
 
 First supported native targets:
