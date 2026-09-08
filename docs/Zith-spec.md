@@ -17,8 +17,8 @@ For the exact picture of what works today, see [Implementation Status](impl-stat
 
 | Symbol | Meaning |
 |---|---|
-| `?T` | Optional type — `T` or `null` ([§8.1](08-error-handling.md#81-failable-types)) |
-| `T!` | Result type — `T` or an error ([§8.1](08-error-handling.md#81-failable-types)) |
+| `?T` | Optional type — `T` or `null`, also a Zith-- type ([§8.1](08-error-handling.md#81-failable-types)) |
+| `T!` | Result type — `T` or an error, full Zith only ([§8.1](08-error-handling.md#81-failable-types)) |
 | `?` / `!` (postfix) | Unwrap an optional / result, propagating or falling back ([§8.3](08-error-handling.md#83-propagation--fallback)) |
 | `@name` | Compiler intrinsic or macro invocation ([§11.3](11-comptime.md#113-reflection), [§15](15-macros.md)) |
 | `#name` | Variable or field attribute, e.g. `#thread_local` or `#volatile` |
@@ -40,7 +40,7 @@ The compiler is a copilot: it gives you the tools, and you build the systems.
 | Everyday | Domain-specific |
 |---|---|
 | `struct`, `fn`, `lend`, `view`, `trait`, `interface` | `state`, `dock`, `jump` — for Games, State Machine, OS & embedded |
-| `?T`, `T!`, `or` | `context`, `word` — for DSLs and APIs |
+| `?T`, `or` | `context`, `word` — for DSLs and APIs |
 | `when`, `for`, `->` | runtime/stdlib concurrency APIs — for parallel work without special syntax |
 
 ### 1.3 Design Goals
@@ -109,7 +109,7 @@ source -> lex -> scan -> resolve(import/symbols) -> sema -> comptime/solve -> NT
 | 12 | [Assets](12-assets.md) | `12-assets.md` | Compile-time asset processing, `ZithProject.toml` |
 | 13 | [Raw & Unsafe](13-raw-unsafe.md) | `13-raw-unsafe.md` | `raw`, `unsafe`, `Trust` capability |
 | 14 | [Polymorphism](14-polymorphism.md) | `14-polymorphism.md` | `dyn`, static vs dynamic dispatch, object safety |
-| 15 | [Macros](15-macros.md) | `15-macros.md` | Scoped, raw, tag macros, `@` prefix, call-site scope behaviour |
+| 15 | [Macros](15-macros.md) | `15-macros.md` | Normal and raw macros (Zith--), `tag` (full Zith), `@` prefix, call-site scope behaviour |
 | 16 | [Words](16-words.md) | `16-words.md` | Custom operators, `operator`, `token`, precedence |
 | 17 | [Contexts](17-contexts.md) | `17-contexts.md` | DSL bundling, scoped activation |
 | 18 | [C Interop](18-c-interop.md) | `18-c-interop.md` | `.h` import, manual binding, `extern 'C'` |
@@ -151,7 +151,7 @@ source -> lex -> scan -> resolve(import/symbols) -> sema -> comptime/solve -> NT
 | `->` / `..` | Chain | Chain flow / placeholder for the previous value. Left-to-right. |
 | `,` (in a chain) | Chain | Sub-chain — applies but does not advance the main chain value. |
 | `operator` / `token` | Words | Custom operator definition / token word definition. Must be defined inside a `context`. |
-| `?T` / `T!` | Errors | Optional / Result types. May be stacked. |
+| `?T` / `T!` | Errors | Optional / Result types. `?T` is also a Zith-- type; `T!` is full Zith only. May be stacked. |
 | `?` / `!` (postfix) | Errors | Propagate Option / Result. No semicolon. Propagate out of chains. |
 | `or` | Errors / Loops / Types | Fallback / collapse an optional loop return / type constraint separator. |
 | `must` | Errors | Panic in debug; guided removal in release. |

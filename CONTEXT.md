@@ -117,6 +117,31 @@ It is deliberately separate from `Contains`; literal integer ranges are lowered
 directly with an implicit step of `1` and float ranges are rejected for loops.
 _Avoid_: Contains, membership protocol, range iteration via contains
 
+## Runtime And Backends
+
+**Interpreter HIR**:
+The in-process executor that runs Zith programs from the typed HIR without lowering
+to a native object/executable. It is the portable execution path when LLVM is not
+available and the baseline for future bytecode or comptime execution.
+_Avoid_: runtime VM, HIR evaluator, fallback executor
+
+**Runtime FFI handler**:
+The internal table mapping a linkage name of an `extern fn` to a Zith-owned host
+implementation, replacing host libc in portable/browser execution.
+_Avoid_: C FFI, libc shim, native handler table
+
+**Playground runtime**:
+The single WASM module export (`zith_run_hir`/run path) that executes programs in the
+browser by invoking the interpreter over the module compiled by the same artifact.
+_Avoid_: separate VM module, compiler-only WASM, playground backend
+
+**Host runtime error**:
+The separate runtime failure channel for program execution (extern missing, panic,
+division by zero) that is distinct from compiler diagnostics and from the program exit
+status. Reuses `host_write` for output, but does not reuse `zith_last_error` as the only
+error surface.
+_Avoid_: compiler error, child exit status, runtime diagnostic
+
 ## Standard Library
 
 **Formatable**:
@@ -146,6 +171,89 @@ _Avoid_: destructor, drop, free method
 **Primitive erasure**:
 Erasing a primitive value to a `dyn Trait` fat pointer so it can be handled through the same dynamic-dispatch surface as structs.
 _Avoid_: boxing, wrapping, vtbl primitive
+
+## Zith Proof Kernel (ZPK)
+
+**Zith Proof Kernel (ZPK)**:
+The umbrella contract for the four future Zith proof sub-systems NIA, RRA, MRA and NRA.
+`ZPK` is not one pass; it names the coordinated set and their shared facts.
+_Avoid_: safety module, proof model, compiler analyzers
+
+**NIA**:
+Numeric Interval Analysis, the ZPK sub-system that collects and proves numeric facts, ranges, versions, control-flow joins and function headers.
+_Avoid_: NTA, numeric analysis, facts module
+
+**RRA**:
+Region Relationship Analysis, the ZPK sub-system that proves geometry for slices, arrays, region ranges, pool slots and allocation blocks.
+_Avoid_: geometry pass, region checker
+
+**MRA**:
+Memory Region Analysis, the ZPK sub-system that declares and controls static region, heap and pool shapes, permissions, stream typing and allocator provenance.
+_Avoid_: memory map, address checker, allocator runtime
+
+**NRA**:
+Node Resource Analysis, the ZPK sub-system that proves ownership, lifetime, borrow and escape facts for resources.
+_Avoid_: borrow checker, ownership checker
+
+**Region**:
+A static MRA declaration of contiguous memory with a known or symbolic shape, used for hardware, arenas and scratch memory.
+_Avoid_: memory area, mmap, heap
+
+**Heap**:
+A separate MRA keyword for a dynamic allocation domain. The base may be `unknown` at compile time and the total size is `dynamic`; allocated blocks carry their own length.
+_Avoid_: region, arena, malloc domain
+
+**Pool**:
+A static MRA declaration for a fixed-count typed region. `P`, `T`, and `N` derive `size`, `stride`, `alignment`, and slot facts; the declaration should not repeat derivable fields.
+_Avoid_: typed region, block allocator region, object arena
+
+**Block<R>**:
+An allocation result carrying a region-provenance pointer and a byte length: `Block<R> { ptr: Ptr<R>, len: u64 }`.
+_Avoid_: pointer with size, memory block, raw allocation
+
+**Ptr<R>**:
+A pointer object whose provenance is a comptime MRA region, heap, or pool named `R`.
+_Avoid_: raw pointer, tagged pointer, region pointer
+
+**Slot access**:
+The MRA access to a fixed-count `pool P(T, N)` through `@poolSlot(P, index)`. The compiler derives `index < count` from the declaration, so RRA can prove `Disjoint(slot(k1), slot(k2))` when NIA proves `k1 != k2`.
+_Avoid_: pool indexing, raw slot arithmetic, block slot
+
+**Region access result**:
+`@regionAt` may return `Ptr<R>` for a unique element or `Block<R>`/slice for an interval. A `Ptr` is the identity of one element; a `Block`/slice is an interval of elements/bytes.
+_Avoid_: pointer, access span, region value
+
+**Init**:
+The single-site MRA transition that resolves a region/heap/pool with `base: unknown` to a runtime address and records its domain size; it is performed by `@regionInit(region, addr, size)`.
+_Avoid_: constructor, setup, initialize permission
+
+**Region access**:
+The MRA expression that reads or writes a region through `@regionAt(region, offset)`. Typed streams follow their declared element type; untyped streams behave as raw byte streams.
+_Avoid_: pointer arithmetic, raw cast, device access
+
+**Bump no-op free**:
+The bump allocator contract where `free(block)` does not reclaim the block. NRA treats the block as valid until region reset/scope end, not as freed.
+_Avoid_: bump free, arena free, individual deallocation
+
+**Contract intrinsic**:
+One of `@assume`, `@ensure`, or `@maybe`: a ZPK-level construct that lets programmers and allocator implementations declare proof boundaries without blurring subsystem responsibilities.
+_Avoid_: assertion, compiler hint, proof pragma
+
+**Assume**:
+The trusted-premise intrinsic `@assume(cond)`. Unless the current environment already proves `cond` false, installs `cond` as `True` in that scope; a known contradiction is a diagnostic. It is an audit-marked escape hatch, not a verified assertion.
+_Avoid_: verify, assertion, assume if proved
+
+**Ensure**:
+The caller-side contract intrinsic `@ensure(cond)`. A function/capability declares that any caller must satisfy `cond` before the call; ZPK checks or derives the caller premise and records it as a contract fact.
+_Avoid_: postcondition, guarantee, verifier promise
+
+**Maybe gate**:
+The intrinsic `@maybe(cond)`, valid only when the current analysis state for `cond` is exactly `Maybe`. `Unknown`, `True`, and `False` are rejected; the caller can consume the fuzzy fact conservatively.
+_Avoid_: fallback predicate, optional condition, unknown check
+
+**Cached premise header**:
+The collected, cached contract facts for a function or capability. Normal callers verify these premises at the call site instead of reanalyzing the callee; each ZPK sub-system checks only the premises in its own domain.
+_Avoid_: function annotation, inline contract, global proof cache
 
 ## Opaque Identity
 

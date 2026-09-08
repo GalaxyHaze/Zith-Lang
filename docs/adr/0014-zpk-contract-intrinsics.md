@@ -1,0 +1,5 @@
+# ZPK Contract Intrinsics
+
+ZPK exposes three contract intrinsics so proof authority stays with each subsystem while allocators can declare their own rules. `@assume(cond)` installs `cond` as a trusted premise and is `True` in that scope unless the environment already proves `cond` false; a known contradiction is a diagnostic. `@ensure(cond)` is a caller-side contract that callers must satisfy before invoking the function/capability. `@maybe(cond)` requires the analysis state to be exactly `Maybe`; `True`, `False`, and `Unknown` are rejected. MRA supplies region/block/permission facts only; allocator rules such as no-overlap or free-list policy are expressed through these contracts and resolved by the responsible sub-system (NIA, RRA, NRA, or MRA).
+
+The program collects premises into cached headers. Callers verify the cached premises at the call site, so callee bodies are not reanalyzed for normal calls. Each sub-system still applies only its own portion of the header: NIA checks numeric premises, RRA checks geometry, MRA checks region/block/permission shape, and NRA checks ownership/lifetime/escape.

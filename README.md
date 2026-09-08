@@ -123,13 +123,14 @@ and C interop:
 
 - `?T` optional values with implicit condition tests and `?` propagation where valid (Zith-- only)
 - `is null`, `must`, and `raw` optional extraction (Zith-- only)
-- `fail` / `with` / `catch` / `throw` are planned for Zith and not implemented yet
+- `T!` result types, `fail` / `with` / `catch` / `throw` are planned for Zith and not implemented in Zith--
 
 **Extensibility and C Interop**
 
 - `macro` / `raw macro` declarations and `@name(...)` calls (Zith-- only)
+- `tag` (formerly `tag macro`) is the full-Zith item form; it is not a Zith-- macro
 - Validated C header imports through libclang
-- `tag` (formerly `tag macro`), `word`, `context`, and `use` are planned for Zith
+- `word`, `context`, and `use` are planned for Zith
 
 ---
 
@@ -155,6 +156,7 @@ and C interop:
 | `macro` / `raw macro` / `@name(...)` | **Working (Zith-- only)** | Normal and raw macros with call-site scope handling |
 | Field access, index, deref, address-of | **Working** | Optional bounds checks on array/slice indexing; `raw` skips checks |
 | `?T` (Zith-- only) | **Working** | Optional values, `?` propagation where valid, `is null`, `must`, and `raw` extraction |
+| `T!` (result) | Planned for Zith | Zith-- does not provide failable result types |
 | `is` / `as` | **Working** | Casting for numeric pairs and raw pointers; tagged-union/opaque narrowing |
 | `tag` (formerly `tag macro`) | Planned for Zith | Rejected in Zith--; planned under the shorter `tag` name |
 | `word` / `context` / `use` | Planned for Zith | No working semantics in Zith-- |

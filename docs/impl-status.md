@@ -70,7 +70,7 @@ Implementation work that is incomplete or needs review is tracked in
 | `i8`–`i128`, `u8`–`u128` | **Working** | Arithmetic between matching widths only; no implicit promotion |
 | `f32`, `f64` | **Working** | Same-width arithmetic only |
 | `?T` (optional) | **Working** | `null → ?T` and `T → ?T` coercions, including nested `??T` accepting `?T` or bare `T`; `?` postfix propagation with operand/return validation. Generic inference uses the optional coercion as a fallback, so `fn wrap<T>(x: ?T): ?T` accepts `wrap(3)` and infers `T = i32`. Any `?T` expression is implicitly boolean in conditions (`if (x)` means `x != null`). `null` is rejected for non-optional `*T` |
-| `T!` (failable) | **Working** | Declared type; lowered through HIR |
+| `T!` (result) | **Spec only** | Full-Zith result/error type; not part of the Zith-- type surface |
 | `*T` (pointer) | **Working** | Non-nullable pointer object: `null` requires `?*T`. `*p` deref, `&x` addr-of, and `->` arrow all work. `&x` is a logical move (`E4001` on later reads, direct rebind revives) and `&x`/`@ptrOf(local)` may not escape their storage scope (`E4008`). `*void` is rejected (use `raw opaque`). Pointers imported from C are `?*T`, checked with `is null`; a `?*T` is still accepted unchecked where `*T` is expected |
 | `raw opaque` | **Working** | Dedicated `TypeExprKind::Opaque`, lowered to pointer-to-void (untagged C-style `void*`). Castable to and from any `*T` via `as`; `raw opaque as T` reinterprets without a tag check |
 | `opaque` | **Working** | Bare opaque is a tagged open union stored as `{ *void, u32 }` (typeId) and is always a view. `T as opaque` spills the concrete value to a stable local; `opaque is T` compares the tagged typeId; `opaque as T` returns `?T` (extraction in a call or other non-optional result is handled as a checked optional). Values exported and imported across modules retain the declaring module's canonical tag, and cached artifacts hydrate `canonical_mappings` so the tag stays stable across sessions. This iteration has no heap copy, vtable or dynamic calls |
@@ -138,7 +138,7 @@ Implementation work that is incomplete or needs review is tracked in
 | `context` declarations | **Parse skipped** | Body skipped |
 | `use` statements | **Parse skipped** | Body skipped |
 | `macro` / `raw macro` declarations and `@name(...)` calls | **Working** | Normal macros rename template-local bindings hygienically and resolve other template names through the call-site scope (globals/imports visible when not shadowed). `raw macro` splices literally into the call-site scope and names resolve there before module/global fallback. Templates are not analysed as code; resolution is keyed by node id |
-| `tag macro` calls | **Parse reported / rejected** | `<Section ...> ... </Section>` and named attributes parse, but the declaration is rejected in the Zith-- pipeline with `E2010`; use normal or `raw macro` |
+| `tag` calls (formerly `tag macro`) | **Parse reported / full Zith** | `<Section ...> ... </Section>` and named attributes parse, but the declaration is rejected in the Zith-- pipeline with `E2010`; `tag` is a full-Zith item, not a Zith-- macro. Use normal or `raw macro` in Zith-- |
 | word call expressions | **Parse error** | No parser support |
 | word sequence expressions | **Parse error** | No parser support |
 

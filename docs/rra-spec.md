@@ -19,8 +19,15 @@ Overlaps(a, b)
 Unknown(a, b)
 ```
 
+For dynamic heaps, RRA distinguishes *domain* overlap from *access* overlap.
+Two heap domains are `Overlap` unless `@regionInit` proves otherwise. A single
+`Block<H>` or `Ptr<H>` access can still be proven `Disjoint` against another
+access when NIA/RRA prove their concrete ranges do not touch.
+
 RRA consumes numeric facts from NIA and shape facts from MRA, then publishes
 geometric facts for NRA and HIR/codegen.
+
+RRA is one of the four `Zith Proof Kernel` (ZPK) sub-systems.
 
 ## 2. Inputs
 
@@ -30,7 +37,7 @@ RRA receives:
 |---|---|
 | Types | `base`, `len`, element type for arrays/slices. |
 | NIA | Numeric bounds for indices, offsets, and lengths. |
-| MRA | Static memory regions and their address ranges. |
+| MRA | Static regions, heaps, and pools plus their address/shape facts. |
 
 For a slice expression `array[lo..hi]`, RRA records:
 
@@ -85,9 +92,12 @@ ownership handling.
 
 RRA also acts as the bridge to MRA:
 
-- MRA describes the static region (`VGA.base`, `VGA.len`, permissions).
+- MRA describes the static region/heap/pool (`VGA.base`, `Scratch.size`,
+  `OsHeap` provenance, `NodePool` slot shape, permissions).
 - NIA proves the requested access range.
 - RRA proves the access is contained by the region.
+- For `heap OsHeap`, RRA proves bounds against the returned block, not a
+  static heap size.
 - NRA supplies the ownership/escape context if the operation uses a pointer.
 - Codegen emits the raw operation after the proof passes.
 
@@ -119,3 +129,35 @@ model extends the same idea to index nodes and raw region accesses.
 | Ownership/lifetime | NRA |
 | Region permissions and stream typing | MRA |
 | Runtime region lookup | none, regions are static |
+
+## 8. Allocator Region Geometry
+
+Allocator results carry a comptime region provenance such as `Ptr<Scratch>` or
+`Ptr<OsHeap>`. RRA uses that provenance instead of treating raw storage as an
+arbitrary address:
+
+| Pointer | Geometry |
+|---|---|
+| `Ptr<Scratch>` | Range `base + offset .. base + offset + len` against `Scratch`. |
+| `Block<OsHeap>` | Range `block.ptr .. block.ptr + len`; heap size is dynamic. |
+| `Ptr<NodePool>` | Slot inequality gives `Disjoint(slot(k1), slot(k2))`. |
+
+RRA does not decide whether a block is owned, still alive, or correctly freed.
+Those are NRA decisions.
+
+### Access-Level Disjointness
+
+The guard-line allows one dynamic domain to be active at a time. Even when two
+heap domains are not proven globally disjoint, individual accesses can be
+compared:
+
+```text
+let a: Ptr<HeapA> = @regionAt(HeapA, 0..8);
+let b: Ptr<HeapB> = @regionAt(HeapB, 100..108);
+
+RRA:  Disjoint(a, b) if NIA proves the concrete ranges do not intersect
+```
+
+If the ranges cannot be proven disjoint and both heaps are active, NRA treats
+the access conservatively. This keeps the theory honest without pretending
+that dynamic heaps are globally disjoint by construction.

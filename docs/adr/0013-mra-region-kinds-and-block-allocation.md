@@ -1,0 +1,5 @@
+# MRA Region Kinds And Block Allocation
+
+MRA splits its static memory declarations into the separate keywords `region`, `heap`, and `pool`, and all allocator results use `Block<R>` so dynamic heaps carry their own length. A `pool` derives its full shape from `P(T, N)`: `size = N * @sizeOf(T)`, `stride = @sizeOf(T)`, `alignment = @alignOf(T)`, and slot facts `slot(k) = base + k * stride`; `@poolSlot` uses the declared `count` to validate `index < N`. `base` may be `unknown`; `@regionInit(region, addr, size)` is the single-site intrinsic that resolves the runtime address and records the domain size, and every region-provenance pointer is created through MRA intrinsics such as `@poolSlot` or `@regionAt`, not manual address arithmetic.
+
+Region access is stream-aware: `@regionAt(region, offset)` follows the declared `stream` type; an untyped stream is a byte access. A singleton access returns `Ptr<R>`; an interval returns `Block<R>` or a slice. `free` remains part of the `Allocator` capability, but a bump allocator implements it as a no-op and NRA treats the block as valid until region reset/scope end, not as freed.

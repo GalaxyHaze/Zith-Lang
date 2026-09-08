@@ -18,7 +18,7 @@
 | F-09 | Word call and sequence expressions | 16 | Parse error |
 | F-10 | `@sizeOf`, `@intrinsic` expressions | 11 | Working (layout intrinsics); generic `@intrinsic` remains full-Zith |
 | F-11 | `fail` / `with` / `catch` / `throw` / `must` | 8 | Spec only |
-| F-12 | `T!` failable propagation (`!` postfix) | 8 | Partial: declared `T!` lowers through HIR; `!` propagation remains full-Zith |
+| F-12 | `T!` failable propagation (`!` postfix) | 8 | Full Zith only: `T!` and `!` propagation remain outside Zith-- |
 | F-13 | `raw` unwrap operator | 13 | Working for optional extraction; `unsafe`/raw-block surface remains full-Zith |
 | F-14 | NRA/NTA ownership proof before stable HIR (`lend`, `view`, `unique`, `share`, `belong`) | 7 | In progress (residual-fact contract implemented in Wave 05; full rule diagnostics remain) |
 | F-15 | `comptime` blocks | 11 | Spec only |
@@ -30,7 +30,7 @@
 | F-21 | `context` block semantics | 17 | Parse skipped |
 | F-22 | `use` statement semantics | 2, 17 | Parse skipped |
 | F-23 | `prefix` / `suffix` / `infix` / `nop` semantics | 16 | Parse skipped |
-| F-24 | Tag macros (`<Tag>`) | 15 | Parse reported / rejected in Zith--; full-Zith semantics out of core |
+| F-24 | `tag` items (`<Tag>`, formerly `tag macro`) | 15 | Full Zith only; Zith-- parses the call form and rejects the declaration with `E2010` |
 | F-25 | Assets (`ZithProject.toml` asset paths) | 12 | Spec only |
 | F-26 | `::` scope resolution | 2 | Spec only (normal/raw macro scope diversification is complete; `::` remains a separate wave) |
 | F-27 | Binding destructuring (`[]`) and pack literals | 6 | Spec only |
@@ -54,13 +54,13 @@ F-01-F-04, F-06, F-08, F-10 layout, F-13, F-29,
 F-32 validated C, F-33, F-34, F-35, F-36, F-40 ──── done (see impl-status.md)
 
 F-05 (const fn parse) ─────────────────────┐
-F-11 (fail/with/catch)                     ├─ needs T! propagation
+F-11 (fail/with/catch)                     ├─ needs T! propagation (full Zith)
 F-12 (failable propagation)                │
 F-14 (NRA/NTA full proof)                  │
 F-15-F-17, F-20, F-28 ────────────────── full-Zith only
 F-21 (context semantics) ──┬── F-22 (use) ├─ needs words
 F-23 (word semantics) ─────┘              │
-F-24 (tag macros) ─────────────────────── Zith-- rejects E2010
+F-24 (`tag`) ────────────────────────────── full Zith only; Zith-- rejects E2010
 F-25 (assets), F-30, F-31 ─────────────── remaining spec/debt work
 F-18/F-19, F-27, F-26, F-09 ────────────── full-Zith/spec-only
 F-34 (qualifier parse/types) ── F-14 (NRA/NTA) ── stable HIR contract
@@ -85,8 +85,8 @@ F-05 (`const fn`) remains parse-level only; compile-time evaluation is a
 full-Zith feature and stays outside the Zith-- core.
 
 ### Wave 03 — Error Handling
-F-13 (`raw` optional extraction) is working. F-12 is partial: `T!` declarations
-lower through HIR, but `!` propagation is not implemented. F-11
+F-13 (`raw` optional extraction) is working. F-12 is full-Zith only: `T!`
+declarations and `!` propagation are outside Zith--. F-11
 (`fail`/`with`/`catch`/`throw`/`must` assertion) remains full-Zith-only.
 
 ### Wave 04 — Comptime
@@ -116,9 +116,10 @@ F-07 now has codegen coverage for nominal traits; interfaces use the same HIR/co
 ### Wave 07 — Macros, Words & Contexts
 F-08 (`@macro` calls) is implemented. Normal macros keep hygiene for template
 bindings and resolve other names through the call-site scope; raw macros splice
-literally into the call-site scope with module/global fallback. Tag macros
-(F-24) are parsed but rejected with `E2010` in Zith--, so they are not part of
-the working core. Remaining work in this wave: F-09 (word call/sequence
+literally into the call-site scope with module/global fallback. F-24 (`tag`,
+formerly `tag macro`) is full Zith only; Zith-- parses the call form and
+rejects the declaration with `E2010`, so it is not part of the working core.
+Remaining work in this wave: F-09 (word call/sequence
 expressions), F-21 (context semantics), F-22 (`use` semantics), F-23 (word decl
 semantics), and F-26 (`::` scope resolution).
 

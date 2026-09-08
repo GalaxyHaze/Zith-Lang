@@ -1,17 +1,20 @@
 ## 15. Macros
 
 > **Implementation status:** `@macro` and `raw macro` calls are implemented and expand through
-> sema/HIR. Tag macros (`<Tag>`) are implemented for statement-position expansion with named
-> attributes; they do not produce a value.
+> sema/HIR. `tag` (`<Tag>`) is a full-Zith feature; Zith-- parses the call form and rejects the
+> declaration with `E2010`, so it is not part of the working subset.
 > See [impl-status.md](impl-status.md).
 
 | Type | Description |
 |---|---|
 | Normal (scoped) | Hygienic for bindings introduced by the macro, but template names are resolved from the call-site scope, so globals and imports remain visible when not shadowed. Requires the `@` prefix at the call site. |
 | Raw macro | Inserts code literally at the call site; not hygienic. Names resolve in the call-site scope first and fall back to globals/imports. Also requires the `@` prefix. |
-| Tag macro | HTML-like syntax. Tag attributes must be `name: value` pairs and are available as `attributes.name` in the body. Content between tags is parsed as statements and passed as one `body` argument. Uses `<>` syntax — no `@` prefix. |
+| `tag` (formerly `tag macro`) | Full Zith only. HTML-like syntax. Tag attributes must be `name: value` pairs and are available as `attributes.name` in the body. Content between tags is parsed as statements and passed as one `body` argument. Uses `<>` syntax — no `@` prefix. |
 
 > Best practice: define macros inside a `context` block ([§17](17-contexts.md)) rather than activating them globally.
+
+> **Zith-- distinction:** normal `macro` and `raw macro` are the only macro forms in Zith--.
+> `tag` is a full-Zith feature and the legacy `tag macro` spelling is rejected with `E2010`.
 
 - Macros accept a special first parameter named `attributes` (with no meta-type) to receive
   call-site attributes. `@closure|k: 1|(...)` and `<Box k: 1> ... </Box>` both expose the values
@@ -28,7 +31,7 @@ raw macro swap(a: identifier, b: identifier) {
 macro closure(attributes, body1: block) { body1; }
 @closure|k: 1|({ ... })
 
-// Tag macro — attributes come from the tag syntax
+// Tag — attributes come from the tag syntax (full Zith only)
 <Section title: "Overview"> body </Section>
 
 // Macro parameter meta-types: identifier, expr, condition, block, body
@@ -67,19 +70,21 @@ process(data);
 save(file);
 ```
 
-Tag macros are the one exception — they use `<>` syntax and never take the `@` prefix:
+`tag` items are the one exception — they use `<>` syntax and never take the `@` prefix:
 
 ```zith
 <Section title: "Overview"> content </Section>
 ```
 
-### 15.2 Tag Macro Declarations
+### 15.2 `tag` Declarations
 
-`tag macro` is a macro declaration that is invoked with HTML-like syntax. The
-macro body is a template; only the tokens cloned at a call site are compiled:
+`tag` declares a full-Zith item invoked with HTML-like syntax, distinct from the
+Zith-- macro forms. In the full spec it is written `tag`, not `tag macro`. The
+template rule is the same as macros: only the tokens cloned at a call site are
+compiled:
 
 ```zith
-tag macro Section(attributes, content: body) {
+tag Section(attributes, content: body) {
     let title = attributes.title;
     content
 }
@@ -91,7 +96,9 @@ tag macro Section(attributes, content: body) {
 
 Attributes are optional and must be named `attributes` as the first parameter.
 Every attribute is `name: value` (no `=` form) and is substituted wherever the
-body uses `attributes.name`. Tag macros cannot be used as expressions.
+body uses `attributes.name`. `tag` items cannot be used as expressions. Zith--
+rejects `tag macro` before lowering and keeps `<Tag> ... </Tag>` as a tag call
+that is not part of the supported Zith-- surface.
 
 ---
 

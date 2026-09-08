@@ -13,7 +13,9 @@ Esta iteração mantém os tipos e features existentes, mas restringe bindings, 
 - `var` para bindings locais mutáveis e rebindáveis.
 - `const` para globals reais, consts locais e campos struct, de storage estático no topo quando aplicável.
 - `lend`/`view` continuam como ownership residual; `unique`, `share` e `belong` ficam fora.
-- Macros normais e `raw macro` continuam ativas; tag macros ficam fora.
+- `?T` continua activo como o único tipo de valor ausente/nulável.
+- `T!`/result failable fica fora; erros continuam no escopo da espec full Zith.
+- Macros normais e `raw macro` continuam activas e são exclusivas do Zith--; `tag` (antigo `tag macro`) fica como item full Zith.
 
 As restrições devem ser aplicadas pela própria toolchain, não apenas documentadas.
 
@@ -613,7 +615,7 @@ depois de um teste `value is *char`.
 
 ## Macros
 
-Macros normais e `raw macro` continuam ativas. Tag macros são rejeitadas com diagnóstico claro:
+Macros normais e `raw macro` continuam activas no Zith-- e são as únicas formas de macro. `tag` é um item da linguagem full Zith (o antigo `tag macro`); o Zith-- rejeita a forma legada com diagnóstico claro:
 
 ```zith
 // Aceite
@@ -622,7 +624,10 @@ macro add(a, b) { a + b }
 // Aceite
 raw macro dbg(x) { @println(x) }
 
-// Rejeitado no Zith--
+// Full Zith: `tag` (não `tag macro`)
+tag Box(content) { <content/> }
+
+// Rejeitado no Zith--: forma legada de `tag`
 tag macro Box(content) { <content/> }
 ```
 
@@ -662,7 +667,7 @@ O cache continua separado por target, porque `CacheKey` já inclui
 | `mut` como qualificador | bindings usam `var` | `E2010` |
 | `const fn` | funções comuns continuam caber no subconjunto | `E2010` |
 | `unique`/`share`/`belong` | ownership fora desta iteração | `E2010` |
-| Tag macros | só permanecem macros normais/raw | `E2010` |
+| `tag` / `tag macro` | `tag` é full Zith; Zith-- aceita apenas macros normais/raw | `E2010` |
 | Atribuição a `let`/`const` | imutabilidade | `E2010` |
 | Escrita de campo/arrow/index por raiz `let`/`const` | imutabilidade propaga a compósitos | `E2010` |
 | Atribuição a campo `const` | storage const | `E2010` |

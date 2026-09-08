@@ -17,8 +17,8 @@ For the exact picture of what works today, see [Implementation Status](impl-stat
 
 | Symbol | Meaning |
 |---|---|
-| `?T` | Optional type — `T` or `null` ([§8.1](08-error-handling.md#81-failable-types)) |
-| `T!` | Result type — `T` or an error ([§8.1](08-error-handling.md#81-failable-types)) |
+| `?T` | Optional type — `T` or `null`, also a Zith-- type ([§8.1](08-error-handling.md#81-failable-types)) |
+| `T!` | Result type — `T` or an error, full Zith only ([§8.1](08-error-handling.md#81-failable-types)) |
 | `?` / `!` (postfix) | Unwrap an optional / result, propagating or falling back ([§8.3](08-error-handling.md#83-propagation--fallback)) |
 | `@name` | Compiler intrinsic or macro invocation ([§11.3](11-comptime.md#113-reflection), [§15](15-macros.md)) |
 | `#name` | Variable or field attribute, e.g. `#thread_local` or `#volatile` |
@@ -69,7 +69,7 @@ The compiler is a copilot: it gives you the tools, and you build the systems.
 | Everyday | Domain-specific |
 |---|---|
 | `struct`, `fn`, `lend`, `view`, `trait`, `interface` | `state`, `dock`, `jump` — for Games, State Machine, OS & embedded |
-| `?T`, `T!`, `or` | `context`, `word` — for DSLs and APIs |
+| `?T`, `or` | `context`, `word` — for DSLs and APIs |
 | `when`, `for`, `->` | runtime/stdlib concurrency APIs — for parallel work without special syntax |
 
 ### 1.3 Design Goals
@@ -1661,11 +1661,15 @@ If you try to use a non-object-safe trait with `dyn`, the compiler rejects it.
 |---|---|
 | Normal (scoped) | Hygienic for bindings introduced by the macro, but template names are resolved from the call-site scope, so globals and imports remain visible when not shadowed. Requires the `@` prefix at the call site. |
 | Raw macro | Inserts code literally at the call site; not hygienic. Names resolve in the call-site scope first and fall back to globals/imports. Also requires the `@` prefix. |
-| Tag macro | HTML-like syntax. Tag attributes (e.g. `id=5`) are available as `attributes` when the macro is the first argument; content between tags forms the remaining arguments. Uses `<>` syntax — no `@` prefix. |
+| `tag` (formerly `tag macro`) | HTML-like syntax. Tag attributes (e.g. `id=5`) are available as `attributes` when the item is the first argument; content between tags forms the remaining arguments. Uses `<>` syntax — no `@` prefix. `tag` is full Zith only; it is not a Zith-- macro. |
 
 > Best practice: define macros inside a `context` block ([§17](17-contexts.md)) rather than activating them globally.
 
-- They all have special arguments that can manipulate the AST. Default and raw macros accept attributes via `[capture]` syntax; tag macros receive attributes as `attributes`.
+- They all have special arguments that can manipulate the AST. Default and raw macros accept attributes via `[capture]` syntax; `tag` items receive attributes as `attributes`.
+
+> **Zith-- distinction:** normal `macro` and `raw macro` are the only macro forms in Zith--, the
+> subset compiled by `main`. `tag` is a full-Zith feature; Zith-- rejects the legacy `tag macro`
+> spelling with `E2010`. See [Zith--](Zith--.md).
 
 ```zith
 macro log(msg: expr) { @println("[LOG] ", msg); }
@@ -1677,7 +1681,7 @@ raw macro swap(a: identifier, b: identifier) {
 // Default/raw macro with capture attribute
 @closure[capture](){ ... }
 
-// Tag macro — attributes come from the tag syntax
+// Tag — attributes come from the tag syntax (full Zith only)
 <Section title="Overview"> body </Section>
 <cool id=5, name="name"> content </cool>
 
@@ -1717,7 +1721,7 @@ process(data);
 save(file);
 ```
 
-Tag macros are the one exception — they use `<>` syntax and never take the `@` prefix:
+`tag` items are the one exception — they use `<>` syntax and never take the `@` prefix:
 
 ```zith
 <div class="container"> content </div>
@@ -2073,7 +2077,7 @@ The Rule of Three keeps code readable. Zith gives you many tools — you don't h
 | `->` / `..` | Chain | Chain flow / placeholder for the previous value. Left-to-right. |
 | `,` (in a chain) | Chain | Sub-chain — applies but does not advance the main chain value. |
 | `operator` / `token` | Words | Custom operator definition / token word definition ([§16](16-words.md)). Must be defined inside a `context` — global operator overloading is prohibited. |
-| `?T` / `T!` | Errors | Optional / Result types. May be stacked. |
+| `?T` / `T!` | Errors | Optional / Result types. `?T` is also a Zith-- type; `T!` is full Zith only. May be stacked. |
 | `?` / `!` (postfix) | Errors | Propagate Option / Result. No semicolon. Propagate out of chains. |
 | `or` | Errors / Loops / Types | Fallback / collapse an optional loop return / type constraint separator. |
 | `must` | Errors | Panic in debug; guided removal in release. |

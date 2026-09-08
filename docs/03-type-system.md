@@ -1,7 +1,8 @@
 ## 3. Type System
 
-> **Implementation status:** Primitive types, structs, enums, unions, `?T`, `T!`, `[N]T`, `[]T`,
-> pointers, type aliases, `implement`, and generics (`<T>`) are all **working**. `as` casting is
+> **Implementation status:** Primitive types, structs, enums, unions, `?T`, `[N]T`, `[]T`,
+> pointers, type aliases, `implement`, and generics (`<T>`) are all **working**. `T!` is a
+> full-Zith type outside the working Zith-- surface. `as` casting is
 > **working** for numeric conversions only, and is required: there are no implicit conversions
 > between numeric types (a numeric *literal* still adapts to its annotated type). Pointers are
 > non-nullable — `null` requires `?*T` — and `*void` is rejected in favour of `raw opaque`.

@@ -5,6 +5,8 @@ This document is the source of truth for the future Zith Node Resource Analysis
 compiler behavior. `docs/impl-status.md` continues to describe what the current
 toolchain implements.
 
+NRA is one of the four `Zith Proof Kernel` (ZPK) sub-systems.
+
 ## 1. Scope
 
 NRA proves ownership and lifetime safety before the final HIR is formed. The
@@ -205,6 +207,27 @@ destruction and the allocation/origin is still valid.
 capability, but `unique` and `share` do not necessarily allocate: their storage
 may come from the stack or from a temporary.
 
+In the future Zith model, an `Allocator` is parameterized by a comptime MRA
+region/heap/pool:
+
+```text
+capability Allocator(R):
+    fn alloc(self, size: u64, align: u64): Ptr<R>!
+    fn free(self, mem: Ptr<R>, size: u64, align: u64): unit!
+    fn realloc(self, old: Ptr<R>, old_size: u64, old_align: u64,
+               new_size: u64, new_align: u64): Ptr<R>!
+```
+
+`Ptr<R>` carries allocation provenance. NRA uses that provenance to reject
+`free`/`release` from a different allocator and to decide whether a block is
+`alive`, `dead`, or still anchored. MRA provides the region identity and
+permissions; it does not prove which block is owned.
+
+Dynamic heaps are allowed. `heap OsHeap` has `size: dynamic`; the useful bounds
+are recorded on `Block<OsHeap> { ptr: Ptr<OsHeap>, len: u64 }`. NRA still
+verifies ownership/lifetime for those blocks without MRA pretending that the
+heap has a static total size.
+
 ## 10. MultiShare And Fork
 
 `MultiShare<T>` is both a capability and a compiler-provided wrapper/type.
@@ -240,7 +263,7 @@ threading edge case to be checked explicitly.
 The following parts need separate focused documents before implementation:
 
 - explicit `extern fn` effect-header attributes;
-- custom `Allocator` details and storage semantics;
+- custom `Allocator` details, region parameterization, and storage semantics;
 - full diagnostic catalog and accepted/rejected examples;
 - precise interaction of `fail`, `defer`, `drop`, and storage free for every
   control-flow case;

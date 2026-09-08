@@ -1,9 +1,9 @@
 ## 8. Error Handling
 
-> **Implementation status:** `?T` and `T!` types are **working**. `?` postfix propagation is
-> **working** with full operand and return-type validation. `null → ?T` and `T → ?T` coercions are
-> **working**. Optional extraction with `must` (runtime panic on `null`) and `raw` (unchecked) is
-> **working**. `fail`, `with`, `catch`, `throw`, and prefix `?`/`!` fallback are **spec-only**.
+> **Implementation status:** `?T` is **working in Zith--** with `?` postfix propagation, full
+> operand and return-type validation, `null → ?T` and `T → ?T` coercions, and optional extraction
+> via `must`/`raw`. `T!` and the `!` propagation family are full-Zith only; `fail`, `with`,
+> `catch`, `throw`, and prefix `?`/`!` fallback are **spec-only**.
 > See [impl-status.md](impl-status.md).
 
 
@@ -13,16 +13,19 @@ Error handling in Zith is fully static and return-based — there are no excepti
 
 | Syntax | Meaning | Propagated by |
 |---|---|---|
-| `?T` | Optional — `T` or `null`. | `?` (postfix) |
-| `T!` | Result — `T` or an error. Equivalent to a `Result<T, E>` where `E` implements `Error`. The compiler infers an anonymous error union when multiple error types are possible. | `!` (postfix) |
+| `?T` | Optional — `T` or `null`. Also the Zith-- optional type. | `?` (postfix) |
+| `T!` | Result — `T` or an error. Full Zith only; equivalent to a `Result<T, E>` where `E` implements `Error`. The compiler infers an anonymous error union when multiple error types are possible. | `!` (postfix) |
 
-Failable types may be stacked, and the notation reads linearly:
+In full Zith, failable types may be stacked, and the notation reads linearly:
 
 ```zith
 ?*?(?i32 ! IoError)
 ```
 
 Read left to right, outer to inner: an *optional* **pointer** to an *optional* **Result**, where the Result's success type is `?i32` and its error type is `IoError`.
+
+> **Zith-- boundary:** `?T` is part of Zith--. `T!` is a full-Zith type; Zith-- rejects failable
+> syntax and leaves error propagation to the full spec.
 
 ### 8.1.1 C pointers are `?*T`
 
