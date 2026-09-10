@@ -233,12 +233,12 @@ heap has a static total size.
 `MultiShare<T>` is both a capability and a compiler-provided wrapper/type.
 Every type has a default conformance; specific types may override it.
 
-- `MultiShare` is only meaningful around `fork`.
+- `MultiShare` is only meaningful around a thread fork.
 - Outside a fork with `forkCount == 0`, it is an invisible transport layer.
-- `fork(share value)` creates `MultiShare<T>` with `forkCount = 1` and moves
-  the payload out of the parent scope.
+- `backend fork Entry(share value)` creates `MultiShare<T>` with `forkCount = 1`
+  and moves the payload out of the parent scope.
 - While `forkCount != 0`, the parent cannot read or write the original binding.
-- `merge` restores the parent binding and returns `T`/`share T`, not
+- `merge` restores the parent binding and returns the entry result type, not
   `MultiShare<T>`.
 - Without `merge`, the resource remains with the fork.
 - When `forkCount == 1`, stack payloads are rejected. The compiler requires a

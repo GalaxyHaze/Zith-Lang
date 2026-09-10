@@ -130,6 +130,26 @@ The internal table mapping a linkage name of an `extern fn` to a Zith-owned host
 implementation, replacing host libc in portable/browser execution.
 _Avoid_: C FFI, libc shim, native handler table
 
+**Thread fork**:
+The full-Zith core syntax `backend fork Entry(args)` that creates a thread through a backend object such as `pThread` and returns the backend's concrete `Thread<T>` handle.
+_Avoid_: Thread capability, spawn keyword, ForkHandle
+
+**Thread merge**:
+The core keyword `merge handle` that blocks, consumes a `Thread<T>` handle once, and returns the entry result type declared by the fork.
+_Avoid_: join, wait, release handle
+
+**Thread spawn**:
+The stdlib shorthand `spawn Entry(args)` that uses the active thread backend from a context; it is not core syntactic sugar in the compiler.
+_Avoid_: core spawn keyword, runtime.spawn method
+
+**Thread backend**:
+The runtime capability/object that implements `ThreadBackend` and produces concrete thread handles for `fork`/`merge`, for example `pThread`.
+_Avoid_: Branch capability, thread allocator, fork factory
+
+**Thread handle**:
+An owned, single-consumer value satisfying the `Thread<T>` protocol. `merge` consumes it exactly once; backend concrete handles may expose extra methods such as `detach`.
+_Avoid_: ForkHandle, task, future
+
 **Playground runtime**:
 The single WASM module export (`zith_run_hir`/run path) that executes programs in the
 browser by invoking the interpreter over the module compiled by the same artifact.

@@ -106,7 +106,7 @@ Capabilities are special traits that feed the compiler more information, unlocki
 | `Allocator` | To provide custom allocators |
 | `Generator` | Allows creating runtime-defined resumable or streaming protocols without introducing a dedicated core function kind. |
 | `Share` | Required for `global: share` and crossing thread boundaries |
-| `Branch` | Enables explicit `fork`/`merge` of a shared value to/from a thread |
+| `ThreadBackend` | Provides a concrete thread handle for explicit `fork`/`merge`, e.g. `pThread` |
 | `Lent` | Enables `global: unique`, a runtime-checked exclusive borrow. `global` bindings cannot be moved — `Lent` manages thread-safe distribution. Also allows `lend` parameters. |
 | `Trust` | A trait extending `Trust` may contain `raw fn` methods callable from safe contexts. |
 | `Unique` | Marks a singleton type. It cannot be instantiated — the type name itself acts as the instance. All fields must implement `Share` (thread-safe). A `unique Local` variant is a singleton thread-local. |
@@ -168,20 +168,22 @@ struct LocalOnly { data: i32 }
 // global bad: share LocalOnly = ...;  -- COMPILE ERROR: lacks Share
 ```
 
-#### `Branch` — Thread Fork/Merge
+#### `ThreadBackend` — Thread Fork/Merge
 
-`Branch` is the capability behind explicit thread fork/merge. It is designed
-for types that can hand a `share` value to one thread and collect the result
-after the thread completes:
+`ThreadBackend` is the runtime side of explicit thread fork/merge. A backend
+object such as `pThread` creates a concrete `Thread<T>` handle; `merge` then
+blocks and consumes that handle once:
 
 ```zith
-let handle = fork Worker(share state);
-let result = merge handle;
+let t: PThreadHandle<i32> = pThread fork Update(share state, n);
+let result: i32 = merge t;
 ```
 
-There is no `await`, future, or resumable task in this protocol. `merge` is
-blocking and consumes the handle once, restoring ownership of the shared value.
-See [the branch protocol plan](https://github.com/GalaxyHaze/Zith/blob/main/docs/plans/branch-protocol.md)
+`fork` is a core keyword that names the entry action and the backend object;
+`spawn Entry(args)` is a stdlib shorthand for the active backend. There is no
+`await`, future, or resumable task in this protocol. The returned value is
+exactly the result type declared by the entry action, including failable types
+when the action can fail. See [the branch protocol plan](plans/branch-protocol.md)
 for the full design.
 
 ### 4.5 Operator Overloading

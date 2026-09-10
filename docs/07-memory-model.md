@@ -85,11 +85,12 @@ escape and does not create pointer-object aliasing.
 
 > In practice, most code only needs `lend` and `view`.
 
-`share` nodes may participate in the `Branch` protocol. When a shared value is
-handed to a thread through `fork`, NRA tracks a `forkCount`: zero means the
-source owns the node, one means a thread branch is pending, and more than one is
-rejected. `merge` consumes the `ForkHandle` and returns the node to the source.
-See [the branch protocol plan](https://github.com/GalaxyHaze/Zith/blob/main/docs/plans/branch-protocol.md).
+`share` nodes may participate in the thread protocol. When a shared value is
+handed to a thread through `backend fork Entry(share value)`, NRA tracks a
+`forkCount`: zero means the source owns the node, one means a thread branch is
+pending, and more than one is rejected. `merge` consumes the thread handle and
+returns the entry result; it does not reclaim the `share` value. See [the branch
+protocol plan](plans/branch-protocol.md).
 
 #### Implicit Mutability
 

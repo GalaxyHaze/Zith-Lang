@@ -5,46 +5,60 @@
 > expected to arrive through `stdlib` and runtime APIs built from ordinary functions, types, and
 > NRA-checked resource rules. See [impl-status.md](impl-status.md).
 
+> **Full-Zith draft:** the branch protocol below is a design draft, not implemented syntax. It is
+> tracked in [docs/plans/branch-protocol.md](plans/branch-protocol.md).
+
 ### 10.1 Core-Language Position
 
-Zith's core language does not define concurrency-specific statements, operators, or function kinds.
-There are no dedicated HIR nodes for tasks, threads, `await`, or coroutine suspension. The compiler
-understands only:
+Zith's core language defines `fork`/`merge` as explicit thread statements, but
+does not define `async`, coroutines, schedulers, or a concurrency function kind.
+There are no dedicated HIR nodes for `await` or coroutine suspension. The
+compiler understands only:
 
 - ordinary declarations and calls;
+- the `fork` and `merge` thread protocol;
 - library-defined handle, channel, task, or executor types;
 - traits/capabilities used to describe what those types guarantee;
-- NRA facts about sharing, lending, capture, escape, and ownership across those calls.
+- NRA facts about sharing, lending, capture, escape, and ownership across those
+  calls.
 
 ### 10.2 Runtime Surface
 
-The standard library or an alternate runtime may expose APIs such as thread spawners, executors,
-message queues, join handles, or resumable tasks. Those APIs are library surface, not syntax:
+The standard library or an alternate runtime may expose APIs such as thread
+spawners, executors, message queues, join handles, or resumable tasks. `spawn`
+is a stdlib shorthand for an implicit fork and is activated through a context;
+the core protocol itself is explicit:
 
 ```zith
-let handle = runtime.spawn(workerFn, sharedData);
-runtime.join(handle);
+use threading.pthread;
 
-let task: Task<Response!> = runtime.schedule(fetchRequest);
-let response = runtime.blockOn(task);
+let handle = pThread fork Worker(share state);
+let result = merge handle;
+
+let shorthand = spawn Worker(share state);   // active backend
+let out = merge shorthand;
 ```
 
-API names above are illustrative. The compiler does not reserve them.
+API names above are illustrative. Scheduling helpers are not reserved; `fork`,
+`merge`, and the `Thread<T>` handle contract are the stable language surface.
 
 ### 10.3 Thread Fork/Merge
 
-The explicit thread protocol is `fork`/`merge`, backed by the `Branch`
-capability. There are no coroutines, `await`, or implicit schedulers:
+The explicit thread protocol uses `fork`/`merge` as core keywords, with runtime
+backends as ordinary objects. There are no coroutines, `await`, or implicit
+schedulers in the core language:
 
 ```zith
-let handle = fork Worker(share state);
-let result = merge handle;
+let t: PThreadHandle<i32> = pThread fork Update(share state, n);
+let result: i32 = merge t;
 ```
 
-`fork` hands a shared value to a thread and returns a `ForkHandle<T>`; `merge`
-blocks, consumes the handle, and restores ownership of the recollected value.
-NRA tracks the fork as an ownership transition and rejects unbalanced forks.
-See [the branch protocol plan](https://github.com/GalaxyHaze/Zith/blob/main/docs/plans/branch-protocol.md).
+`fork` hands an entry action to a backend object and returns the backend's
+concrete handle (`Thread<T>` minimum). `merge` blocks, consumes the handle once,
+and returns exactly the result type declared by the entry. `spawn Entry(args)`
+is a stdlib shorthand that uses the active thread backend; it is not a core
+keyword. NRA tracks the fork as an ownership transition and rejects unbalanced
+forks. See [the branch protocol plan](plans/branch-protocol.md).
 
 ### 10.4 What the Compiler Proves
 

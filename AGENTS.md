@@ -275,6 +275,12 @@ Use the default triage label vocabulary. See `docs/agents/triage-labels.md`.
 
 Single-context domain docs layout. See `docs/agents/domain.md`.
 
+### Writing style
+
+Three genres cover the project's prose: spec, docs, and log. Use the genre
+definitions and shared rules (no emojis, no em dashes, no semicolon as
+period) in `docs/writing-style.md` when writing or reviewing any of them.
+
 ## Memory & Knowledge Management (memsearch)
 
 This project also uses **memsearch** for semantic memory search across

@@ -585,6 +585,7 @@ Capabilities are special traits that feed the compiler more information, unlocki
 | `Allocator` | To provide custom allocators |
 | `Generator` | Allows creating runtime-defined resumable or streaming protocols without introducing a dedicated core function kind. |
 | `Share` | Required for `global: share` and crossing thread boundaries |
+| `ThreadBackend` | Provides a concrete thread handle for explicit `fork`/`merge`, e.g. `pThread` |
 | `Lent` | Enables `global: unique`, a runtime-checked exclusive borrow. `global` bindings cannot be moved — `Lent` manages thread-safe distribution. Also allows `lend` parameters. |
 | `Trust` | A trait extending `Trust` may contain `raw fn` methods callable from safe contexts. |
 | `Unique` | Marks a singleton type. It cannot be instantiated — the type name itself acts as the instance. All fields must implement `Share` (thread-safe). A `unique Local` variant is a singleton thread-local. |
@@ -645,6 +646,24 @@ global counter: share Atomic<i32> = 0;
 struct LocalOnly { data: i32 }
 // global bad: share LocalOnly = ...;  -- COMPILE ERROR: lacks Share
 ```
+
+#### `ThreadBackend` — Thread Fork/Merge
+
+`ThreadBackend` is the runtime side of explicit thread fork/merge. A backend
+object such as `pThread` creates a concrete `Thread<T>` handle; `merge` then
+blocks and consumes that handle once:
+
+```zith
+let t: PThreadHandle<i32> = pThread fork Update(share state, n);
+let result: i32 = merge t;
+```
+
+`fork` is a core keyword that names the entry action and the backend object;
+`spawn Entry(args)` is a stdlib shorthand for the active backend. There is no
+`await`, future, or resumable task in this protocol. The returned value is
+exactly the result type declared by the entry action, including failable types
+when the action can fail. See [the branch protocol plan](plans/branch-protocol.md)
+for the full design.
 
 ### 4.5 Operator Overloading
 
@@ -726,16 +745,17 @@ Macro calls use the `@` prefix — `@println`, `@log`, `@serialize` — while or
 
 ```zith
 // Runtime task types are ordinary library types.
-// The core language has no `async fn`, `yield`, `spawn`, or `await` syntax.
+// Thread protocols use fork/merge; Task-style scheduling is stdlib surface.
 fn fetch(url: string): Task<Response!> {
     return runtime.schedule(url);
 }
 ```
 
-Concurrency is modeled by `stdlib` or runtime APIs, not by dedicated syntax or a special function
-kind. A library may expose `Task<T>`, `Generator<T>`, channels, executors, or thread handles, but
-the compiler only sees ordinary declarations, calls, traits/capabilities, and the NRA facts needed
-to validate resource usage around them.
+Concurrency is modeled by `fork`/`merge` plus `stdlib`/runtime APIs, not by a
+function kind such as `async fn`. A library may expose `Task<T>`, `Generator<T>`,
+channels, executors, or thread handles, but the compiler only sees ordinary
+declarations, calls, traits/capabilities, and the NRA facts needed to validate
+resource usage around them.
 
 ## 6. Mutability & Bindings
 
@@ -1309,11 +1329,13 @@ arbitrary-target support.
 
 ### 10.1 Core-Language Position
 
-Zith's core language does not define concurrency-specific statements, operators, or function kinds.
-There are no dedicated HIR nodes for tasks, threads, `await`, or coroutine suspension. The compiler
-understands only:
+Zith's core language defines `fork`/`merge` as the explicit thread statements,
+but does not define `async`, coroutines, schedulers, or function kinds for
+concurrency. There are no dedicated HIR nodes for `await` or coroutine
+suspension. The compiler understands only:
 
 - ordinary declarations and calls;
+- the `fork` and `merge` thread protocol;
 - library-defined handle, channel, task, or executor types;
 - traits/capabilities used to describe what those types guarantee;
 - NRA facts about sharing, lending, capture, escape, and ownership across those calls.
@@ -1321,19 +1343,44 @@ understands only:
 ### 10.2 Runtime Surface
 
 The standard library or an alternate runtime may expose APIs such as thread spawners, executors,
-message queues, join handles, or resumable tasks. Those APIs are library surface, not syntax:
+message queues, join handles, or resumable tasks. `spawn` is a stdlib shorthand
+for an implicit fork and is activated through a context; the core protocol itself
+is explicit:
 
 ```zith
-let handle = runtime.spawn(workerFn, sharedData);
-runtime.join(handle);
+use threading.pthread;
 
-let task: Task<Response!> = runtime.schedule(fetchRequest);
-let response = runtime.blockOn(task);
+let handle = pThread fork Worker(share state);
+let result = merge handle;
+
+let shorthand = spawn Worker(share state);   // active backend
+let out = merge shorthand;
 ```
 
-API names above are illustrative. The compiler does not reserve them.
+API names above are illustrative. The compiler does not reserve scheduling
+helpers; `fork`, `merge`, and the `Thread<T>` handle contract are the stable
+language surface. See [10.3](10-concurrency.md#103-thread-forkmerge) for the
+full-thread example.
 
-### 10.3 What the Compiler Proves
+### 10.3 Thread Fork/Merge
+
+The explicit thread protocol uses `fork`/`merge` as core keywords, with runtime
+backends as ordinary objects. There are no coroutines, `await`, or implicit
+schedulers in the core language:
+
+```zith
+let t: PThreadHandle<i32> = pThread fork Worker(share state, n);
+let result: i32 = merge t;
+```
+
+`fork` hands an entry action to a backend object and returns the backend's
+concrete handle (`Thread<T>` minimum). `merge` blocks, consumes the handle once,
+and returns exactly the result type declared by the entry. `spawn Entry(args)`
+is a stdlib shorthand that uses the active thread backend; it is not a core
+keyword. NRA tracks the fork as an ownership transition and rejects unbalanced
+forks.
+
+### 10.4 What the Compiler Proves
 
 Concurrency-related safety is enforced through the same pre-HIR ownership proof used everywhere
 else:
@@ -2072,8 +2119,10 @@ The Rule of Three keeps code readable. Zith gives you many tools — you don't h
 | `trait` / `interface` / `extends` / `requires` / `dyn` | OOP | Nominal traits, structural interfaces, extension, constraints, dynamic dispatch. |
 | `Copy` / `Functor` / `Arithmetic` / `Error` | Capabilities | Operator and behavior capabilities. |
 | `Null` / `Fail` | Capabilities | Negative — activate only in proven-invalid states. |
-| `Allocator` / `Generator` / `Share` / `Lent` / `Trust` / `Unique` | Capabilities | Memory, runtime protocol, and safety capabilities. |
+| `Allocator` / `Generator` / `Share` / `Lent` / `Trust` / `Unique` / `ThreadBackend` | Capabilities | Memory, runtime protocol, and safety capabilities. Runtime thread backends produce a concrete `Thread<T>` handle for `fork`/`merge`. |
 | `state` / `dock` / `jump` | State machines | `state` declarations, a state entry call, and terminating transitions. |
+| `fork` / `merge` | Threads | Core full-Zith syntax: create a thread through a backend object and consume its handle once. |
+| `spawn` | Threads | Stdlib shorthand for an implicit fork; not a core keyword. |
 | `->` / `..` | Chain | Chain flow / placeholder for the previous value. Left-to-right. |
 | `,` (in a chain) | Chain | Sub-chain — applies but does not advance the main chain value. |
 | `operator` / `token` | Words | Custom operator definition / token word definition ([§16](16-words.md)). Must be defined inside a `context` — global operator overloading is prohibited. |

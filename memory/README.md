@@ -46,6 +46,9 @@ contracts, decisions, and gotchas that are not discoverable from the source alon
 - [release-install-layout.md](release-install-layout.md): release artifact
   conventions for `scripts/install.sh`, stdlib discovery paths, and the
   installer fixes landed during the packaging audit.
+- [branch-protocol-draft.md](branch-protocol-draft.md): full-Zith thread-model
+  draft summary (`pThread fork`, `merge`, stdlib `spawn`); avoids treating
+  `Branch` as a capability and keeps Zith-- out of core syntax.
 - [discord-mcp.md](discord-mcp.md): ByteAsk Discord MCP server registration,
   the stdio-only limitation of the v1.0.0 release JAR, and the env-var/token
   requirements to run it.

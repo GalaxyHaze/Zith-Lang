@@ -175,7 +175,8 @@ Implementation work that is incomplete or needs review is tracked in
 |---|---|---|
 | `async fn` | **Parse skipped** | Legacy parser affordance only. Concurrency is being documented as `stdlib`/runtime APIs, not a function kind |
 | `yield` | Reserved token | Not a core statement |
-| `spawn`, `await` | Reserved tokens | Not core operators or statements; no frontend/HIR contract depends on them |
+| `fork`, `merge`, `spawn` | Spec only (full Zith) | Draft thread protocol; no frontend/HIR contract exists yet. See docs/plans/branch-protocol.md |
+| `await` | Reserved token | Not a core statement |
 
 ---
 

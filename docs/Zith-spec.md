@@ -148,6 +148,8 @@ source -> lex -> scan -> resolve(import/symbols) -> sema -> comptime/solve -> NT
 | `Null` / `Fail` | Capabilities | Negative — activate only in proven-invalid states. |
 | `Allocator` / `Generator` / `Share` / `Lent` / `Trust` / `Unique` | Capabilities | Memory, runtime protocol, and safety capabilities. |
 | `state` / `dock` / `jump` | State machines | `state` declarations, a state entry call, and terminating transitions. |
+| `fork` / `merge` | Threads | Core full-Zith syntax: create a thread through a backend object and consume its handle once. |
+| `spawn` | Threads | Stdlib shorthand for an implicit fork; not a core keyword. |
 | `->` / `..` | Chain | Chain flow / placeholder for the previous value. Left-to-right. |
 | `,` (in a chain) | Chain | Sub-chain — applies but does not advance the main chain value. |
 | `operator` / `token` | Words | Custom operator definition / token word definition. Must be defined inside a `context`. |

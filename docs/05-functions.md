@@ -78,16 +78,17 @@ full rule.
 
 ```zith
 // The compiler treats runtime task types like any other library type.
-// There is no `async fn`, `yield`, `spawn`, or `await` syntax in the core language.
+// Thread protocols use fork/merge; Task-style scheduling is stdlib surface.
 fn fetch(url: string): Task<Response!> {
     return runtime.schedule(url);
 }
 ```
 
-Concurrency is modeled by `stdlib` or runtime APIs, not by dedicated syntax or a special function
-kind. A library may expose `Task<T>`, `Generator<T>`, channels, executors, or thread handles, but
-the compiler only sees ordinary declarations, calls, traits/capabilities, and the NRA facts needed
-to validate resource usage around them.
+Concurrency is modeled by `fork`/`merge` plus `stdlib`/runtime APIs, not by a
+function kind such as `async fn`. A library may expose `Task<T>`, `Generator<T>`,
+channels, executors, or thread handles, but the compiler only sees ordinary
+declarations, calls, traits/capabilities, and the NRA facts needed to validate
+resource usage around them.
 
 ### 5.4 Overloading
 
