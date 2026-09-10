@@ -4,13 +4,21 @@ The active drawing is `docs/plans/abi/execution-ir.md`. It defines one small
 execution IR that can serve both the HIR interpreter and a future tiny
 backend.
 
-Status: drawing. No promises, no ADR, no conforming tests yet.
+Status: promising next. The drawing decisions are settled. Promises are the
+next artifact.
 
 ## Current Scope
 
 - Portable execution without LLVM through `--interpreted`.
-- An IR shaped for a simple VM first and a tiny backend later.
-- No optimizer, no full Zith-- surface, no WASM-specific runtime.
+- One execution IR contract and two consumers.
+- Two interpreters: the simpler HIR interpreter first, the execution IR VM
+  later.
+- IR shape is register-based.
+- Ordinary functions and a small extern C subset in the first slice.
+- The HIR interpreter keeps checks internally. The execution IR uses explicit
+  traps.
+- `src/ir/` and `src/interp/`, and a standalone hello-world ABI test first.
+- The IR stores metadata only. Implementation details stay independent.
 
 ## Lifecycle Position
 
