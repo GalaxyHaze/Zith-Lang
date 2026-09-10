@@ -1,20 +1,23 @@
 # Execution IR And Interpreter Contract
 
-Status: promising
+Status: signed
+
+Signed by `docs/adr/0018-execution-ir-interpreter-contract.md`.
 
 Size: system, first slice is a single unit.
 
 ## Problem
 
-Zith needs a portable execution path that does not depend on LLVM and an IR
-that a future tiny backend can consume. The repository currently documents an
-Interpreter HIR as the portable path, but there is no executable interpreter
-under `src/` and no explicit contract for the IR that a VM would run.
+Zith needs two portable execution paths and an IR that a future tiny backend
+can consume. The repository currently documents an Interpreter HIR as the
+portable path, but there is no executable interpreter under `src/` and no
+explicit contract for the IR that a VM would run.
 
-The goal is one small execution IR with two consumers in mind: a simple HIR
-interpreter for `--interpreted` and a tiny backend emitter later. The ideas
-share the same contract surface and stay in one drawing until the split is
-justified.
+The HIR interpreter is the simple path and is selected explicitly by
+`--interpreted`. The execution IR contract has two consumers in mind: the
+later IR VM and a future tiny backend. The IR VM is the default runtime
+execution path when LLVM or native codegen is not used. The idea keeps both
+contracts in one drawing until the implementation split is justified.
 
 ## Non-Goals
 
@@ -22,29 +25,32 @@ justified.
 - No optimizer or SSA lowering in the first slice.
 - No full Zith-- surface in the first slice.
 - No WASM-specific runtime work beyond reusing the existing playground path.
-- No new CLI user surface beyond accepting and executing `--interpreted`.
+- No new long-term CLI flag for the IR VM. The IR VM is selected by runtime
+  availability, while `--interpreted` remains the explicit HIR path.
 - No struct layout contract until the layout rows and target ABI are named.
 
 ## Decisions
 
 These decisions are settled. Each one has a named reversal below because the
-next lifecycle step is promising, not another drawing.
+plan is now signed and a later change must make a new drawing.
 
 1. **One execution IR contract, two consumers**.
 
-   Chosen: a single execution IR contract serves the HIR interpreter and the
-   future tiny backend. The contract splits only if the two consumers disagree
+   Chosen: a single execution IR contract serves the IR VM and the future tiny
+   backend. The HIR interpreter consumes HIR and is a separate runtime
+   contract. The execution IR splits only if the VM and tiny backend disagree
    on IR shape.
 
-   Reversal: the tiny backend proves that the interpreter-target IR cannot be
-   lowered without losing required semantics.
+   Reversal: the tiny backend proves that the VM-target IR cannot be lowered
+   without losing required semantics.
 
 2. **Two interpreters**.
 
    Chosen: the project will have two runtime paths. The HIR interpreter is
-   simpler and comes first. It serves WASM and builds without LLVM. The
-   execution IR interpreter is the later, more optimized VM that also becomes
-   the tiny backend input.
+   simpler and comes first. It serves explicit `--interpreted` execution,
+   WASM, and builds without LLVM. The execution IR interpreter is the later,
+   more optimized VM. It is the default runtime execution path when LLVM or
+   native codegen is not used, and it also becomes the tiny backend input.
 
    Reversal: the HIR interpreter stays usable but the IR path becomes the only
    portable path.
@@ -60,9 +66,9 @@ next lifecycle step is promising, not another drawing.
 
 4. **Call ABI v1: ordinary functions and a small extern subset**.
 
-   Chosen: the first interpreter supports ordinary functions and a minimal set
-   of common `extern fn` stubs. `state`, `dyn`, `opaque`, and variadic slices
-   are separate promises later.
+   Chosen: the first runnable slice for either runtime supports ordinary
+   functions and a minimal set of common `extern fn` stubs. `state`, `dyn`,
+   `opaque`, and variadic slices are separate promises later.
 
    Reversal: a hello-world test needs one of those surfaces to run. That
    surface moves into the first slice instead.
@@ -89,8 +95,9 @@ next lifecycle step is promising, not another drawing.
 7. **Repository layout: `src/ir/` and `src/interp/`**.
 
    Chosen: the execution IR lives in `src/ir/`, the interpreters live under
-   `src/interp/`, and `--interpreted` executes this path. `src/vm/` is
-   avoided as a separate runtime vocabulary.
+   `src/interp/`, and `--interpreted` selects only the HIR interpreter. The
+   IR/VM is the default runtime execution path when LLVM or native codegen is
+   not used. `src/vm/` is avoided as a separate runtime vocabulary.
 
    Reversal: the interpreter and the compiler need the IR types in a shared
    frontend location. The source layout moves without changing the contract.
@@ -98,8 +105,9 @@ next lifecycle step is promising, not another drawing.
 8. **First conforming seam: standalone hello-world test**.
 
    Chosen: the first ABI test is a standalone test under `tests/` that lowers a
-   small HIR module, translates or interprets it, and runs a hello-world
-   program. WASM playground reuse comes after the host path works.
+   small HIR module, runs the HIR interpreter, and verifies a hello-world
+   program. WASM playground reuse and the IR/VM seam come after the host HIR
+   path works.
 
    Reversal: the standalone host path cannot prove WASM behavior. A WASM test
    joins the first slice instead.
@@ -116,18 +124,19 @@ next lifecycle step is promising, not another drawing.
 
 ## Next Step
 
-Compute the first promises from the settled decisions. The immediately
-promising areas are the one-contract surface, the HIR-first delivery order,
-the register-based IR model, the minimal extern set, the check model, the
-`src/ir/` + `src/interp/` layout, and the standalone hello-world seam.
+Run the next lifecycle slice after the signed promises in
+`docs/adr/0018-execution-ir-interpreter-contract.md`. The first conforming
+test is the standalone hello-world seam for `ABI-EXEC-09`, followed by the
+IR/VM execution path when the first HIR contract proves out.
 
 ## Technical Facts
 
 The repository has an executable CLI but no execution path for `--interpreted`.
 `cli/cmd/run.cpp` calls `CompilationSession::run()` and then
 `linkAndExecDirect()`, so the flag is parsed but does not select an
-interpreter. The WASM playground exports `zith_run_source`, but it only runs
-the compiler stages up to HIR and does not execute the program.
+interpreter. The execution IR and IR/VM path are not implemented yet. The
+WASM playground exports `zith_run_source`, but it only runs the compiler
+stages up to HIR and does not execute the program.
 
 The compiler already produces an in-memory `hir::HirModule` before codegen.
 HIR contains explicit slots (`HirSlotAlloca`, `HirSlotStore`, `HirSlotLoad`,
@@ -142,23 +151,25 @@ The WASM playground has one stable host import: `zith.host_write(stream, ptr,
 len)`. The minimal host runtime can target that seam directly and does not
 need a full libc in the first slice.
 
-## Promises (Draft)
+## Promises (Signed)
 
-These promises are not signed. They are proposed for review. Signing happens
-only after the promise ids, seams, layout rows, and reversals are accepted.
+These promises are signed by
+`docs/adr/0018-execution-ir-interpreter-contract.md`.
 
 ### ABI-EXEC-01
 
 ```text
 id: ABI-EXEC-01
 contract: Execution IR contract
-rule: The repository defines one execution IR contract in src/ir/ that both
-runtime consumers share, and no second IR format enters the first slice.
+rule: The repository defines one execution IR contract in src/ir/ that the
+IR VM and the future tiny backend share, and no second IR format enters the
+first slice. The HIR interpreter consumes HIR and does not define execution
+IR layout.
 seam: tests/test-abi-execution.cpp and source review of src/ir/
 layout: none
 fields: none
-reverse: A tiny backend consumer proves it cannot share the interpreter IR
-without losing required semantics.
+reverse: A tiny backend consumer proves it cannot share the VM IR without
+losing required semantics.
 ```
 
 ### ABI-EXEC-02
@@ -168,7 +179,7 @@ id: ABI-EXEC-02
 contract: HIR interpreter
 rule: `zithc --interpreted` on a host build lowers a program to `HirModule`
 and executes it with the HIR interpreter without invoking LLVM codegen or a
-linked native binary.
+linked native binary. The flag does not select the execution IR path.
 seam: tests/test-abi-execution.cpp
 layout: none
 fields: none
@@ -255,14 +266,15 @@ stable, and the runtime grows beyond the declared subset.
 id: ABI-EXEC-08
 contract: CLI and repository layout
 rule: The execution IR lives under src/ir/, the interpreters live under
-src/interp/, and `--interpreted` selects the interpreter execution path.
-src/vm/ is not introduced for the runtime.
+src/interp/, `--interpreted` selects the HIR interpreter, and the IR/VM is
+the default execution path when LLVM or native codegen is not used. src/vm/
+is not introduced for the runtime.
 seam: source layout review and tests/test-abi-execution.cpp
 layout: none
 fields: none
-reverse: The IR and interpreter types must live in a shared frontend location
-before the runtime can be consumed, and the layout changes without a contract
-revision.
+reverse: The CLI keeps `--interpreted` but routes it to the IR/VM, or a
+no-LLVM default still links a native binary instead of selecting the IR/VM
+path.
 ```
 
 ### ABI-EXEC-09
@@ -272,7 +284,8 @@ id: ABI-EXEC-09
 contract: Hello-world conforming seam
 rule: A standalone test under tests/ lowers a small Zith-- source file, runs
 the HIR interpreter, and verifies the program output and exit status. WASM
-playground reuse is a later integration, not the first seam.
+playground reuse and the IR/VM seam are later integrations, not the first
+seam.
 seam: tests/test-abi-execution.cpp
 layout: none
 fields: none
