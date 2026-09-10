@@ -102,15 +102,15 @@ plan is now signed and a later change must make a new drawing.
    Reversal: the interpreter and the compiler need the IR types in a shared
    frontend location. The source layout moves without changing the contract.
 
-8. **First conforming seam: standalone hello-world test**.
+8. **First conforming seams: hello-world tests**.
 
-   Chosen: the first ABI test is a standalone test under `tests/` that lowers a
-   small HIR module, runs the HIR interpreter, and verifies a hello-world
-   program. WASM playground reuse and the IR/VM seam come after the host HIR
-   path works.
+   Chosen: the first ABI tests are standalone tests under `tests/`. They lower
+   a small HIR module and verify a hello-world program through the HIR
+   interpreter (`ABI-EXEC-09`) and through the execution IR VM (`ABI-EXEC-11`).
+   WASM playground reuse remains a later integration.
 
-   Reversal: the standalone host path cannot prove WASM behavior. A WASM test
-   joins the first slice instead.
+   Reversal: the standalone host paths cannot prove WASM behavior. A WASM test
+   joins a later slice instead.
 
 9. **IR stores metadata only**.
 
@@ -125,18 +125,16 @@ plan is now signed and a later change must make a new drawing.
 ## Next Step
 
 Run the next lifecycle slice after the signed promises in
-`docs/adr/0018-execution-ir-interpreter-contract.md`. The first conforming
-test is the standalone hello-world seam for `ABI-EXEC-09`, followed by the
-IR/VM execution path when the first HIR contract proves out.
+`docs/adr/0018-execution-ir-interpreter-contract.md`. The HIR interpreter
+and the execution IR VM hello-world seams are implemented. The next slice
+expands the IR/VM support surface or wires the WASM playground runtime.
 
 ## Technical Facts
 
-The repository has an executable CLI but no execution path for `--interpreted`.
-`cli/cmd/run.cpp` calls `CompilationSession::run()` and then
-`linkAndExecDirect()`, so the flag is parsed but does not select an
-interpreter. The execution IR and IR/VM path are not implemented yet. The
-WASM playground exports `zith_run_source`, but it only runs the compiler
-stages up to HIR and does not execute the program.
+The CLI routes `--interpreted` through the HIR interpreter and, on builds
+without LLVM or native codegen, routes plain `run`/`execute` through the
+execution IR VM. The WASM playground exports `zith_run_source`, but it only
+runs the compiler stages up to HIR and does not execute the program.
 
 The compiler already produces an in-memory `hir::HirModule` before codegen.
 HIR contains explicit slots (`HirSlotAlloca`, `HirSlotStore`, `HirSlotLoad`,

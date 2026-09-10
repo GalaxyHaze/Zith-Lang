@@ -36,8 +36,8 @@ linking a native binary.
 ## Lifecycle Position
 
 The plan follows `docs/specs/abi-lifecycle.md`. The next transition is
-conforming: write the first contract test, then implement the HIR interpreter
-against it.
+conforming: validate the no-LLVM CLI path against a real no-LLVM build, then
+expand the IR/VM surface or wire the WASM playground runtime.
 
 When the idea changes, update `docs/plans/abi/execution-ir.md` before touching
 tests or source. This file exists so a later session can find the live pointer
