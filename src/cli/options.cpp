@@ -45,14 +45,23 @@ static ModeDefaults getDefaults(Options::Mode mode) {
 }
 
 void Options::deriveTargetStage() {
+#if defined(ZITH_HAS_LLVM) && !defined(ZITH_IS_WASM)
     // Run/Execute need a binary; Build needs at least an object file, so all
     // three go through codegen unless an explicit --emit target says otherwise.
+#else
+    // Without native codegen, Run/Execute go through the portable execution
+    // IR VM. Build and --emit targets keep their usual stopping points.
+#endif
     if (flags.interpreted() && command == Command::Run) {
         targetStage = session::Stage::HirLowered;
         return;
     }
     if (command == Command::Run || command == Command::Execute) {
+#if defined(ZITH_HAS_LLVM) && !defined(ZITH_IS_WASM)
         targetStage = session::Stage::Cached;
+#else
+        targetStage = session::Stage::HirLowered;
+#endif
         return;
     }
     if (command == Command::Build && emitTarget == EmitTarget::None && !flags.emitHir() &&

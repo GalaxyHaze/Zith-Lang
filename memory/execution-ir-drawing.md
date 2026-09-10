@@ -4,7 +4,7 @@ The active contract is `docs/plans/abi/execution-ir.md`. It defines one small
 execution IR that can serve the IR VM and a future tiny backend, plus a
 separate simpler HIR interpreter for explicit `--interpreted` execution.
 
-Status: signed. `ABI-EXEC-01` through `ABI-EXEC-10` are accepted by
+Status: signed. `ABI-EXEC-01` through `ABI-EXEC-11` are accepted by
 `docs/adr/0018-execution-ir-interpreter-contract.md`.
 
 ## Current Scope
@@ -26,9 +26,12 @@ Status: signed. `ABI-EXEC-01` through `ABI-EXEC-10` are accepted by
 
 The first conforming slice is now implemented: `tests/test-abi-execution.cpp`
 covers `ABI-EXEC-09`, and `src/interp/hir-interpreter.cpp` backs the
-`--interpreted` path from `src/cli/cmd/run.cpp`. The next slice is the IR/VM
-execution path; it becomes the default portable runtime when LLVM or native
-codegen is not used.
+`--interpreted` path from `src/cli/cmd/run.cpp`. The IR/VM slice is
+implemented: `src/ir/hir-to-ir.*` lowers HIR to the execution IR and
+`src/interp/ir-vm.*` runs the IR; `tests/test-abi-execution.cpp` covers
+`ABI-EXEC-11`. On builds without LLVM or native codegen, the CLI defaults
+`run`/`execute` to `HirLowered` and executes through the IR VM instead of
+linking a native binary.
 
 ## Lifecycle Position
 

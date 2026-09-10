@@ -1,5 +1,7 @@
 #include "cli/options.hpp"
 #include "interp/hir-interpreter.hpp"
+#include "interp/ir-vm.hpp"
+#include "ir/hir-to-ir.hpp"
 #include "session/compilation-session.hpp"
 #include "test-common.hpp"
 
@@ -88,6 +90,56 @@ void test_abi_exec_02_cli_interpreted() {
 #endif
 }
 
+void test_abi_exec_11_execution_ir_hello_world() {
+    const fs::path root = fs::temp_directory_path() / "zith-abi-execution-ir-tests";
+    fs::remove_all(root);
+    fs::create_directories(root);
+
+    const fs::path source = root / "main.zith";
+    {
+        std::ofstream output(source, std::ios::binary | std::ios::trunc);
+        output << "extern fn puts(msg: *char)\n"
+                  "\n"
+                  "fn add(a: i32, b: i32): i32 {\n"
+                  "    a + b\n"
+                  "}\n"
+                  "\n"
+                  "fn main(): i32 {\n"
+                  "    var sum: i32 = add(2, 3);\n"
+                  "    puts(\"hello\");\n"
+                  "    sum\n"
+                  "}\n";
+    }
+
+    memory::Arena arena;
+    Options options(arena);
+    options.targetStage = session::Stage::HirLowered;
+
+    session::CompilationSession session(options, source.string());
+    session.setBuffered(true);
+    CHECK(session.runTo(session::Stage::HirLowered),
+          "execution IR source lowers through the modern pipeline");
+
+    memory::Arena irArena;
+    ir::Module module(irArena);
+    const auto lowered =
+        ir::lowerModule(session.hirModule(), session.interner(), session.types(), irArena, module);
+    CHECK(lowered.ok, "HIR lowers into the execution IR module");
+    CHECK(module.functions.size() > 0, "execution IR contains function rows");
+
+    interp::IrVm vm(irArena);
+    const auto result = vm.runMain(module);
+    CHECK(result.status == interp::IrVmStatus::Ok, "execution IR VM runs the hello-world program");
+    CHECK_EQ(result.output, std::string("hello\n"), "execution IR VM output matches puts");
+    CHECK_EQ(result.exitCode, 5, "execution IR VM exit code matches the computed sum");
+}
+
+void test_abi_execution() {
+    test_abi_exec_09_hello_world();
+    test_abi_exec_02_cli_interpreted();
+    test_abi_exec_11_execution_ir_hello_world();
+}
+
 } // namespace
 
-TEST_MAIN(abi_exec_09_hello_world)
+TEST_MAIN(abi_execution)

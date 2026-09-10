@@ -10,7 +10,7 @@ The source of truth is `docs/plans/abi/execution-ir.md`.
 
 Status: accepted
 
-Promises accepted: `ABI-EXEC-01` through `ABI-EXEC-10`.
+Promises accepted: `ABI-EXEC-01` through `ABI-EXEC-11`.
 
 ## Runtime Distinction
 

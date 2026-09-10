@@ -307,3 +307,18 @@ fields: none
 reverse: An IR consumer needs binary-instruction layout before it can read
 the IR, and layout rows become part of the signed contract.
 ```
+
+### ABI-EXEC-11
+
+```text
+id: ABI-EXEC-11
+contract: IR/VM hello-world seam
+rule: A standalone test under tests/ lowers a small Zith-- source file to the
+execution IR and runs it with the IR VM, verifying program output and exit
+status. The HIR interpreter is not used on this path.
+seam: tests/test-abi-execution.cpp
+layout: none
+fields: none
+reverse: The IR VM needs HIR-level checks or a second interpreter to reproduce
+the hello-world behavior, and the explicit-trap contract is not sufficient.
+```

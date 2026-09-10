@@ -1,6 +1,8 @@
 #include "cli/commands.hpp"
 #include "cli/terminal.hpp"
 #include "interp/hir-interpreter.hpp"
+#include "interp/ir-vm.hpp"
+#include "ir/hir-to-ir.hpp"
 #include "session/compilation-session.hpp"
 #include "session/pipeline-plan.hpp"
 
@@ -11,6 +13,12 @@
 namespace zith::cli::commands {
 
 int execute(const Options &opts) {
+#if defined(ZITH_HAS_LLVM) && !defined(ZITH_IS_WASM)
+    const bool useIrVm = false;
+#else
+    const bool useIrVm = true;
+#endif
+
     auto TERM = term::init(opts);
     term::UsagePrinter err{stderr, TERM.cerrOn};
 
@@ -43,6 +51,32 @@ int execute(const Options &opts) {
             if (result.status != interp::HirInterpStatus::Ok) {
                 if (result.message.empty())
                     result.message = "HIR interpreter could not execute the program";
+                err.red("[error]");
+                std::fprintf(stderr, " %s\n", result.message.c_str());
+                allPassed = false;
+                continue;
+            }
+            std::fputs(result.output.c_str(), stdout);
+            std::fflush(stdout);
+            exitCode = static_cast<int>(result.exitCode);
+            continue;
+        }
+
+        if (useIrVm) {
+            memory::Arena irArena;
+            ir::Module module(irArena);
+            const auto lowered = ir::lowerModule(session.hirModule(), session.interner(),
+                                                 session.types(), irArena, module);
+            if (!lowered.ok) {
+                err.red("[error]");
+                std::fprintf(stderr, " %s\n", lowered.message.c_str());
+                allPassed = false;
+                continue;
+            }
+
+            interp::IrVm vm(irArena);
+            const auto result = vm.runMain(module);
+            if (result.status != interp::IrVmStatus::Ok) {
                 err.red("[error]");
                 std::fprintf(stderr, " %s\n", result.message.c_str());
                 allPassed = false;
