@@ -5,7 +5,7 @@
 This document is the single source of truth for what the compiler supports today. Status reflects
 actual compiler behaviour at baseline `a5f3716`. Each feature was verified by running
 `build/zithc check` against a standalone test file, with source inspection where a status depends
-on internal structure; status reflects actual compiler behaviour, not spec intent.
+on internal structure. Status reflects actual compiler behaviour, not spec intent.
 
 Implementation work that is incomplete or needs review is tracked in
 [implementation-debt.md](implementation-debt.md).
@@ -225,7 +225,7 @@ on internal structure (pipeline boundaries, linkage naming, diagnostic ranges).
 
 ## Known Debt
 
-Recorded deliberately; each item is a follow-up, not an unknown.
+Recorded deliberately. Each item is a follow-up, not an unknown.
 
 | Item | Notes |
 |---|---|

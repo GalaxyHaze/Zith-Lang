@@ -2,12 +2,12 @@
 
 > **Implementation status:** `?T` is **working in Zith--** with `?` postfix propagation, full
 > operand and return-type validation, `null → ?T` and `T → ?T` coercions, and optional extraction
-> via `must`/`raw`. `T!` and the `!` propagation family are full-Zith only; `fail`, `with`,
+> via `must`/`raw`. `T!` and the `!` propagation family are full-Zith only. `fail`, `with`,
 > `catch`, `throw`, and prefix `?`/`!` fallback are **spec-only**.
 > See [impl-status.md](impl-status.md).
 
 
-Error handling in Zith is fully static and return-based — there are no exceptions, and no semicolon is required after `?` or `!`.
+Error handling in Zith is fully static and return-based. There are no exceptions, and no semicolon is required after `?` or `!`.
 
 ### 8.1 Failable Types
 
@@ -24,7 +24,7 @@ In full Zith, failable types may be stacked, and the notation reads linearly:
 
 Read left to right, outer to inner: an *optional* **pointer** to an *optional* **Result**, where the Result's success type is `?i32` and its error type is `IoError`.
 
-> **Zith-- boundary:** `?T` is part of Zith--. `T!` is a full-Zith type; Zith-- rejects failable
+> **Zith-- boundary:** `?T` is part of Zith--. `T!` is a full-Zith type. Zith-- rejects failable
 > syntax and leaves error propagation to the full spec.
 
 ### 8.1.1 C pointers are `?*T`
@@ -58,7 +58,7 @@ let bad  = malloc(64) as *i32;    // E3003: use 'as ?*T'
 
 In the other direction no cast is needed at all: any pointer, nullable or not, is accepted
 where a C `void*` (`raw opaque`) is expected, so `free(cell)` and `free(&local)` both compile.
-That coercion is one-way; going from `raw opaque` back to a concrete `?*T` still requires `as`.
+That coercion is one-way. Going from `raw opaque` back to a concrete `?*T` still requires `as`.
 
 > **Temporary:** flow-sensitive narrowing after `is null` is not implemented yet, so a `?*T`
 > from C is currently accepted unchecked wherever a `*T` is expected. This allowance lives in
@@ -98,8 +98,8 @@ readFile("data.bin") -> parse(..)! -> validate(..)? -> process(..)
 
 Accessing a failable type's inner value requires one of four operators: `?`, `!`, `raw`, or `must`.
 
-- **`?`** unwraps an Optional — returns `T` or `null`.
-- **`!`** unwraps a Result — returns `T` or an error.
+- **`?`** unwraps an Optional, returning `T` or `null`.
+- **`!`** unwraps a Result, returning `T` or an error.
 
 #### Prefix vs Postfix
 
@@ -171,16 +171,16 @@ loadConfigure {
 }
 ```
 
-> **Name linking:** an external `fail` block's name must match the block it guards. When there is only one failable block in scope, the name can be omitted. A nameless `fail` guards the current scope directly — the compiler passes the error the same way.
+> **Name linking:** an external `fail` block's name must match the block it guards. When there is only one failable block in scope, the name can be omitted. A nameless `fail` guards the current scope directly. The compiler passes the error the same way.
 
 Inside a `fail` block, the parameter receives the error directly. You have four options:
 
-- `continue(value)` — resume after the block with a replacement value.
-- `return value;` — exit the enclosing function.
-- `throw value;` — propagate a new error (requires the `Error` capability).
-- Fall through — the original error propagates unchanged.
+- `continue(value)`, to resume after the block with a replacement value.
+- `return value;`, to exit the enclosing function.
+- `throw value;`, to propagate a new error (requires the `Error` capability).
+- Fall through, so the original error propagates unchanged.
 
-Use `@ok` to extract the success type from the failure node — useful when `continue` needs to return a value of a different type than the error:
+Use `@ok` to extract the success type from the failure node. This helps when `continue` needs to return a value of a different type than the error:
 
 ```zith
 fail (err) {

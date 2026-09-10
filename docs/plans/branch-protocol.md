@@ -72,7 +72,7 @@ Initial design:
   `ThreadBackend` from a context; it lowers to the same fork semantics.
 
 Entry results use the normal Zith failable types. A thread creates and waits
-without speaking about whether the action produced an error; if the action can
+without speaking about whether the action produced an error. If the action can
 fail, its signature is `...: T!` and `merge t` yields `T!`.
 
 ## Example
@@ -93,7 +93,7 @@ let also = merge shorthand;
 
 `fork` does not change the `forkCount` policy for `share` values. A live handle
 at scope exit is an ownership error. A backend may provide `detach(self)` as a
-method that consumes the handle; it still counts as an unmerged fork because the
+method that consumes the handle. It still counts as an unmerged fork because the
 result and shared resource remain with the detached branch.
 
 - Detached threads are opt-in through the concrete backend handle.

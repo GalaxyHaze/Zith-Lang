@@ -57,7 +57,7 @@ fn process() {
 }
 ```
 
-The Rule of Three keeps code readable. Zith gives you many tools — you don't have to use them all at once.
+The Rule of Three keeps code readable. Zith gives you many tools. You don't have to use them all at once.
 
 ### 21.7 Naming Conventions
 

@@ -46,7 +46,7 @@ Invalid parameters are reported before any session is created, so callers must c
 ## `mode`
 
 The playground accepts only `0` for check and `1` for run. Broad compiler modes such as Debug,
-Release, Fast, and Small are not part of the browser ABI; they are native CLI options.
+Release, Fast, and Small are not part of the browser ABI. They are native CLI options.
 
 ## `opt_level`
 
@@ -76,7 +76,7 @@ severity: message
 
 The line remains valid until the next `zith_compile_source` or `zith_run_source` call. An `index`
 greater than or equal to `zith_error_count()` returns `0`. This stable line format is intended for
-the playground; structured JSON diagnostics will be added by a future LSP-facing API.
+the playground. Structured JSON diagnostics will be added by a future LSP-facing API.
 
 ## JavaScript Buffer Helpers
 

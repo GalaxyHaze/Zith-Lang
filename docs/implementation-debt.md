@@ -7,11 +7,11 @@ Documento de gestão da dívida de implementação. Distingue propositadamente:
 - **Dívidas reais**: funcionalidade que foi implementada de forma incompleta, com
   limitação conhecida que não é a intenção de design, ou código que repete lógica
   e dificulta manutenção.
-- **Não-dívidas**: decisões de design intencionais para `Zith--`; manter o
+- **Não-dívidas**: decisões de design intencionais para `Zith--`. Manter o
   comportamento atual, mesmo que pareça incompleto comparado com o spec maior do
   Zith.
 
-Este ficheiro não substitui `docs/impl-status.md`; é o inventário de trabalho de
+Este ficheiro não substitui `docs/impl-status.md`. É o inventário de trabalho de
 engenharia para rever e gerir.
 
 ---
@@ -23,11 +23,11 @@ engenharia para rever e gerir.
 - O manifest `.github/scoop/bucket/zithc.json` aponta para
   `GalaxyHaze/Zith` versão `0.6.3`, mas os quatro hashes ficaram como
   placeholders vazios. O workflow `update-package.yml` já usa
-  `${{ github.repository }}` e deve regenerar URLs/hashes no próximo release;
-  hashes não foram inventados nesta rama porque a auditoria correu sem acesso
+  `${{ github.repository }}` e deve regenerar URLs/hashes no próximo release.
+  Hashes não foram inventados nesta rama porque a auditoria correu sem acesso
   a artefactos publicados.
 - Os shims Scoop executam `zithc` a partir de `~\scoop\shims`, fora do prefixo
-  da app; a descoberta automática por caminho do exe só é garantida para
+  da app. A descoberta automática por caminho do exe só é garantida para
   invocação direta do binário real. O workaround documentado é `ZITH_STDLIB`
   ou `--include`.
 - O novo layout de `scripts/install.ps1` (`%LOCALAPPDATA%\Zith\bin` +
@@ -38,7 +38,7 @@ engenharia para rever e gerir.
 - Em `.github/workflows/build-artifact.yml` o job Windows ARM64 usa
   `msvc_arch: amd64_arm64`, pelo que o step "Setup Zig (for Windows arm64
   cross-compile)" está morto (`if: ... msvc_arch == ''`). O target atual usa
-  clang-cl/LLVM para ARM64; o dead step deve ser removido ou a estratégia deve
+  clang-cl/LLVM para ARM64. O dead step deve ser removido ou a estratégia deve
   ser resolvida antes de confiar num segundo fallback Zig.
 - O CI regular (`ci.yml`) só corre nativo em `ubuntu-latest`. Não valida os
   installers `install.ps1`/`install.sh`, o layout Scoop, os artifacts de release
@@ -52,7 +52,7 @@ engenharia para rever e gerir.
   release podem apontar para uma branch inexistente/antiga até o script ser
   corrigido para `main`.
 - O bucket Scoop e o dispatch Homebrew são actualizados por
-  `update-package.yml`; as falhas desse fluxo não são visíveis em PRs deste
+  `update-package.yml`. As falhas desse fluxo não são visíveis em PRs deste
   repo e dependem de `RELEASE_PAT`/do tap externo. A regeneração de hashes e o
   teste de `scoop install` só podem ser confirmados fora desta rama ou num
   follow-up manual.
@@ -82,10 +82,10 @@ engenharia para rever e gerir.
 
 ### 2. Cache ainda não usa `.zirl`
 
-- Estado atual: o object cache funciona e realiza hits; o formato `.zirl` não é
+- Estado atual: o object cache funciona e realiza hits. O formato `.zirl` não é
   produzido nem consumido.
-- Risco: estado completo do artefacto não é persistido numa representação estável;
-  invalidações e round-trips dependem do array de object files.
+- Risco: estado completo do artefacto não é persistido numa representação estável.
+  Invalidações e round-trips dependem do array de object files.
 - Referência: [impl-status.md](/home/diogo/Zith/docs/impl-status.md:44).
 
 ### 3. NRA está parcial
@@ -93,18 +93,18 @@ engenharia para rever e gerir.
 - Estado atual: facts residuais e call annotations existem e são consumidos antes
   do lowering final.
 - Faltas reais: o state machine completo alive/dead/lent e a prova de quatro
-  regras não existem; não há todos os diagnósticos de ownership previstos.
+  regras não existem. Não há todos os diagnósticos de ownership previstos.
 - Referência: [impl-status.md](/home/diogo/Zith/docs/impl-status.md:41).
 
 ### 4. Bare `opaque` usa hydration estável mas ainda depende de canonização consistente
 
 - Estado atual: o typeId canónico é derivado do namespace do módulo, ordem
-  canónica de fields e nome do tipo; tags project-local são
+  canónica de fields e nome do tipo. Tags project-local são
   serializadas no artefacto e re-hidratadas entre sessões de cache. O `E2010`
   só é reportado quando o tag canónico de um artefacto hidratado não bate com
   a atribuição nova da sessão.
 - Dívida real: a estabilidade hidratada depende da canonização de todos os
-  tipos importados/cacheados e da regra de canonical field order; mudar essa
+  tipos importados/cacheados e da regra de canonical field order. Mudar essa
   regra invalida tags antigos. Falta um registry mais explícito de typeIds
   cross-module que suporte evolução da canonização sem quebrar caches.
 - `coerceValue` trata `opaque -> opaque` como no-op de sema, pelo que casts
@@ -119,10 +119,10 @@ engenharia para rever e gerir.
 ### 5. C interop é `Working (validated C)`, não ABI completa
 
 - Estado atual: libclang cobre C comum, variadics, parâmetros array-decayed,
-  `va_list` e function pointers; object-like scalar macros são importadas como
+  `va_list` e function pointers. Object-like scalar macros são importadas como
   constantes.
 - Dívida real: struct-by-value ABI é limitado a records simples cuja
-  layout/alignment libclang prova para o target configurado; scalars, pointers
+  layout/alignment libclang prova para o target configurado. Scalars, pointers
   e nested records verificados são suportados. Bitfields, packed/anonymous
   records, flexible arrays, globals, strings, function-like macros,
   `long double` e `__int128` não são importados.
@@ -142,7 +142,7 @@ engenharia para rever e gerir.
 - Formatter reimprime `for (cond)` como `while`.
 - `..` é lexado caractere a caractere.
 
-Estas entradas detalham o estado real e as referências de bloqueio; são as
+Estas entradas detalham o estado real e as referências de bloqueio. São as
 mesmas lacunas da secção `Known Debt` de [impl-status.md](/home/diogo/Zith/docs/impl-status.md)
 e devem ser consolidadas aqui quando forem tratadas.
 
@@ -167,7 +167,7 @@ As seis falhas conhecidas de 2026-09-01 foram resolvidas:
   `std/io/console` para `bool`, `f32`, `f64`, `i32` e `u32`. A chamada
   `T.parse(self)` resolve através do bound da trait após monomorfização e
   `line.cast<NonParsable>()` reporta `E3009`.
-- Não-dívida: `*char` fica intencionalmente fora do contrato actual; strings
+- Não-dívida: `*char` fica intencionalmente fora do contrato actual. Strings
   continuam disponíveis pelo adapter `text()` do `InputLine`. Adicionar
   parsing de outros primitivos é uma extensão opcional aos mesmos
   `implement ... as ParseInput`, não uma lacuna do contrato actual.
@@ -275,7 +275,7 @@ Para o HIR lowering, a fronteira candidata foi já executada:
   `internFunctionKey`, `moduleNamespace`, `mapHirOwnership`,
   `mapHirEscape`).
 
-O glob de `src/*.cpp` no CMake recolhe os novos ficheiros automaticamente; depois
+O glob de `src/*.cpp` no CMake recolhe os novos ficheiros automaticamente. Depois
 de criar ficheiros, é preciso reconfigurar (`cmake -S . -B build`) para o glob
 ver os novos `.cpp`.
 
@@ -322,14 +322,14 @@ Estado resolvido: includes colados foram partidos, `isOpaquePointerCast` foi
 restaurado em `sema-cast-coerce.cpp`, e os helpers de interface/resolução de
 `sema-modern.cpp` foram movidos para `sema-type.cpp`.
 
-Risco residual: o split foi mecânico; a estrutura dos ficheiros é razoável, mas
+Risco residual: o split foi mecânico. A estrutura dos ficheiros é razoável, mas
 a localização de cada método deve ser revista quando se mexer na área para
 confirmar que está no ficheiro com a responsabilidade certa.
 
 ### HIR nodes sem initializers completos
 
 Estado resolvido: todos os `HirExpr` alternatives em `src/hir/hir-expr.hpp` têm
-default member initializers para ids, tipos, flags e scalar values; os nodes com
+default member initializers para ids, tipos, flags e scalar values. Os nodes com
 `memory::DynArray` continuam a depender dos construtores dedicados que recebem a
 arena. O padrão mantém a construção agregada usada pelos lowers, sem exceções
 ou RTTI.
@@ -348,14 +348,14 @@ tag com `-DZITH_HAS_LLVM=OFF -DZITH_ENABLE_FFI=OFF`, e stdlib instalada em
 
 Risco residual e validação em aberto:
 
-- Não há fonte local para o conteúdo/fórmulas de `GalaxyHaze/homebrew-zithc`;
-  sem rede não é possível confirmar se o tap está desatualizado, apontando para
+- Não há fonte local para o conteúdo/fórmulas de `GalaxyHaze/homebrew-zithc`.
+  Sem rede não é possível confirmar se o tap está desatualizado, apontando para
   um owner antigo (`GalaxyHaze/homebrew-zith`) ou se realmente possui a fórmula
   esperada.
-- O release atual não publica um binário macOS estável usado pela fórmula; a
+- O release atual não publica um binário macOS estável usado pela fórmula. A
   escolha defensável é build-from-source do archive de tag, sem inventar hash.
 - O dispatch usa `github.repository_owner`, portanto o tap é `GalaxyHaze`
-  quando este repo o usar como remote; o local `Zith-Lang` nos manifests Scoop
+  quando este repo o usar como remote. O local `Zith-Lang` nos manifests Scoop
   é uma divergência externa que deve ser corrigida no tap/release automation.
 
 Acção recomendada: validar o tap com acesso de rede, verificar se a fórmula
@@ -366,13 +366,13 @@ quando houver um release tag real.
 
 ## Próximos passos para rever
 
-1. A quebra de HIR, de `sema-modern.cpp` e de `frontend.cpp` está feita; a
+1. A quebra de HIR, de `sema-modern.cpp` e de `frontend.cpp` está feita. A
    quebra de `frontend-context.cpp` e `compilation-session.cpp` também está
    feita; a próxima prioridade é `codegen-emit.cpp`, com
    `hir-lower-expr.cpp` como candidato secundário.
    O contrato de execução para estes splits está em `docs/plans/monolith-splits.md`.
-2. Em cada extracção, compilar `zithcLib` e correr os testes da área afectada;
-   `ctest --test-dir build --output-on-failure` para regressões gerais.
+2. Em cada extracção, compilar `zithcLib` e correr os testes da área afectada.
+   Use `ctest --test-dir build --output-on-failure` para regressões gerais.
 3. Casos de incompletude que precisam de decisão de produto (sintaxe de `type`,
    slices literais, `is <type>`) devem ser tratados como issues separados, não
    como parte da quebra mecânica.

@@ -1,7 +1,7 @@
 ## 15. Macros
 
 > **Implementation status:** `@macro` and `raw macro` calls are implemented and expand through
-> sema/HIR. `tag` (`<Tag>`) is a full-Zith feature; Zith-- parses the call form and rejects the
+> sema/HIR. `tag` (`<Tag>`) is a full-Zith feature. Zith-- parses the call form and rejects the
 > declaration with `E2010`, so it is not part of the working subset.
 > See [impl-status.md](impl-status.md).
 
@@ -51,7 +51,7 @@ the enclosing scopes, then the module/global scope. Splice statements remain in
 the call-site block and can see names declared before or after the call in that
 block.
 
-The `::` scope-resolution operator remains a separate roadmap item; this
+The `::` scope-resolution operator remains a separate roadmap item. This
 chapter describes only the default and raw macro resolution behaviour.
 
 ### 15.1 The `@` Prefix Rule
@@ -70,7 +70,7 @@ process(data);
 save(file);
 ```
 
-`tag` items are the one exception — they use `<>` syntax and never take the `@` prefix:
+`tag` items are the one exception. They use `<>` syntax and never take the `@` prefix:
 
 ```zith
 <Section title: "Overview"> content </Section>

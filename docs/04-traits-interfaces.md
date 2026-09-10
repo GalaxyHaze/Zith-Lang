@@ -6,7 +6,7 @@
 > bounds. Interfaces are structural: a concrete struct satisfies an interface automatically when
 > every declared field exists with the required type and every declared method requirement has a
 > compatible signature. Using an interface as a generic bound exposes the interface fields and
-> methods to the generic body. Trait defaults are resolved for concrete owners during sema; `dyn
+> methods to the generic body. Trait defaults are resolved for concrete owners during sema, `dyn
 > Trait`, dynamic dispatch, `requires`/`extends` as explicit constraints, and per-owner
 > default-method HIR generation remain spec-only or pending. `Self` in implementations and trait
 > defaults resolves to the implementing type.
@@ -60,7 +60,7 @@ JsonSerializable.print(self);
 
 ### 4.3 Interfaces
 
-Interfaces are structural — if it quacks, it's a duck. Any type that has the required fields and
+Interfaces are structural. If it quacks, it's a duck. Any type that has the required fields and
 compatible method signatures satisfies the interface automatically, without an explicit
 `implement` declaration. Interfaces accept declaration-only method requirements and both single
 and grouped field forms. You can also add `requires` to interfaces.
@@ -171,7 +171,7 @@ struct LocalOnly { data: i32 }
 #### `ThreadBackend` — Thread Fork/Merge
 
 `ThreadBackend` is the runtime side of explicit thread fork/merge. A backend
-object such as `pThread` creates a concrete `Thread<T>` handle; `merge` then
+object such as `pThread` creates a concrete `Thread<T>` handle, `merge` then
 blocks and consumes that handle once:
 
 ```zith
@@ -179,7 +179,7 @@ let t: PThreadHandle<i32> = pThread fork Update(share state, n);
 let result: i32 = merge t;
 ```
 
-`fork` is a core keyword that names the entry action and the backend object;
+`fork` is a core keyword that names the entry action and the backend object,
 `spawn Entry(args)` is a stdlib shorthand for the active backend. There is no
 `await`, future, or resumable task in this protocol. The returned value is
 exactly the result type declared by the entry action, including failable types
@@ -188,7 +188,7 @@ for the full design.
 
 ### 4.5 Operator Overloading
 
-Operator overloading is capability-based and strict — you implement only the operators you need:
+Operator overloading is capability-based and strict. You implement only the operators you need:
 
 ```zith
 implement Vec3 as Arithmetic {

@@ -30,7 +30,7 @@ snapshot contains the in-memory document text and the version supplied by the
 consumer. Saving a document MUST NOT invalidate a newer in-memory revision when
 the consumer already applied it to the same `DocumentSnapshot`.
 
-Cancellation is cooperative. A request may check a cancellation token; once
+Cancellation is cooperative. A request may check a cancellation token. Once
 cancelled it returns an abandoned result rather than publishing partial data.
 `Workspace` keeps the frontend context owned by the facade. Pointers to AST
 nodes, `frontend::FrontendSnapshot`, `sema::modern::TypedMap`, or

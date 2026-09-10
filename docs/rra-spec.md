@@ -2,7 +2,7 @@
 
 This document is a future-design spec for Region Relationship Analysis (RRA).
 RRA is the geometric layer between NIA, NRA, and MRA. It answers questions
-about memory ranges and element regions; it does not update ownership state
+about memory ranges and element regions. It does not update ownership state
 and does not validate raw hardware permissions.
 
 ## 1. Scope
@@ -69,7 +69,7 @@ disjoint_access := RRA proves region(a) does not intersect region(b)
 
 ## 4. Ownership Boundary
 
-RRA is not a borrow checker. It tells NRA whether two accessed regions touch;
+RRA is not a borrow checker. It tells NRA whether two accessed regions touch.
 NRA decides whether `lend`, `view`, or conflicting calls are legal.
 
 Example:

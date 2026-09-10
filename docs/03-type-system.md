@@ -5,7 +5,7 @@
 > full-Zith type outside the working Zith-- surface. `as` casting is
 > **working** for numeric conversions only, and is required: there are no implicit conversions
 > between numeric types (a numeric *literal* still adapts to its annotated type). Pointers are
-> non-nullable — `null` requires `?*T` — and `*void` is rejected in favour of `raw opaque`.
+> non-nullable, so `null` requires `?*T`, and `*void` is rejected in favour of `raw opaque`.
 > `is` is limited to `(val is null)` on an optional; union narrowing, `when` pattern matching,
 > and NRA ownership modifiers (`lend`, `view`, etc.) are **spec-only**. `dyn Trait`/`dyn Interface`
 > dispatch is **working** for methods in Zith--.
@@ -35,7 +35,7 @@
 
 `char` is a UTF-8 code unit. `string` is a built-in library type backed by `[]char` with UTF-8 encoding.
 
-NRA tracks the **origin** of every string node — `literal`, `allocator`, or `local` (see [§7.1](07-memory-model.md#71-what-nra-tracks) for the complete set):
+NRA tracks the **origin** of every string node, which is `literal`, `allocator`, or `local` (see [§7.1](07-memory-model.md#71-what-nra-tracks) for the complete set):
 
 ```zith
 // []char implicitly casts to string, zero-cost (literal origin)
@@ -150,7 +150,7 @@ implement []u8 as ByteLen {
 
 `implement` owners are limited to primitives, `?T`, `[]T`, and named types in this iteration. Pointer and fixed-array owners (`*T`, `[N]T`) are rejected.
 
-Components define method bodies inline — they cannot use `implement`:
+Components define method bodies inline, so they cannot use `implement`:
 
 ```zith
 component Vec2 {
@@ -184,14 +184,14 @@ component Vec2 {
 
 A component must satisfy all of the following constraints:
 
-- Every field is a primitive, another component, or an array/slice of either — no structs, unions, or non-integer enums.
+- Every field is a primitive, another component, or an array/slice of either. There are no structs, unions, or non-integer enums.
 - No trait declarations (`component Name: Traits` is not allowed).
 - Inline functions are permitted but restricted to pure transformations:
   - No side effects (I/O, allocation, global mutation).
   - Only arithmetic, comparisons, and field access.
-  - Must return a value — `void` is not allowed.
+  - Must return a value, so `void` is not allowed.
 - Copying is always bitwise (memcpy-safe).
-- Layout is C-compatible — no vtable, no fat pointers.
+- Layout is C-compatible, so there are no vtables or fat pointers.
 - No self-referential fields (`?unique Self`, `?belong Self`).
 
 ### 3.6 Union
@@ -212,9 +212,9 @@ let x: union = when (flag) {
 };
 ```
 
-> Without an explicit `union` type hint, the compiler cannot deduce a union — it must be stated explicitly.
+> Without an explicit `union` type hint, the compiler cannot deduce a union. It must be stated explicitly.
 >
-> `dyn` works the same way as a type hint — see [§14.2](14-polymorphism.md#142-dyn-as-a-type-hint).
+> `dyn` works the same way as a type hint. See [§14.2](14-polymorphism.md#142-dyn-as-a-type-hint).
 
 `raw union` is an untagged C-style union, valid only inside `raw` contexts. Accessing the wrong variant is undefined behavior.
 
@@ -254,7 +254,7 @@ enum Constants: union {
 
 ### 3.7 Union Narrowing (`is`) & Flow Typing
 
-The `is` operator narrows a union within a branch. Branches are isolated — moves inside one branch don't affect others. After the block completes, the type **widens back** to the full union. The underlying tag does not revert — the value stays `i32` internally — but the type system treats it as the full union again.
+The `is` operator narrows a union within a branch. Branches are isolated. Moves inside one branch don't affect others. After the block completes, the type **widens back** to the full union. The underlying tag does not revert. The value stays `i32` internally, but the type system treats it as the full union again.
 
 When you write a conditional as an expression and not every branch returns a value, the missing branches return `null`. The result becomes `?T`:
 

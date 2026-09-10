@@ -1,7 +1,7 @@
 ## 10. Concurrency & Runtime APIs
 
 > **Implementation status:** concurrency is not a core syntax feature. The compiler does not model
-> `async fn`, `yield`, `spawn`, or `await` as language constructs; any future concurrency support is
+> `async fn`, `yield`, `spawn`, or `await` as language constructs. Any future concurrency support is
 > expected to arrive through `stdlib` and runtime APIs built from ordinary functions, types, and
 > NRA-checked resource rules. See [impl-status.md](impl-status.md).
 
@@ -15,10 +15,10 @@ does not define `async`, coroutines, schedulers, or a concurrency function kind.
 There are no dedicated HIR nodes for `await` or coroutine suspension. The
 compiler understands only:
 
-- ordinary declarations and calls;
-- the `fork` and `merge` thread protocol;
-- library-defined handle, channel, task, or executor types;
-- traits/capabilities used to describe what those types guarantee;
+- ordinary declarations and calls
+- the `fork` and `merge` thread protocol
+- library-defined handle, channel, task, or executor types
+- traits/capabilities used to describe what those types guarantee
 - NRA facts about sharing, lending, capture, escape, and ownership across those
   calls.
 
@@ -26,7 +26,7 @@ compiler understands only:
 
 The standard library or an alternate runtime may expose APIs such as thread
 spawners, executors, message queues, join handles, or resumable tasks. `spawn`
-is a stdlib shorthand for an implicit fork and is activated through a context;
+is a stdlib shorthand for an implicit fork and is activated through a context.
 the core protocol itself is explicit:
 
 ```zith
@@ -39,7 +39,7 @@ let shorthand = spawn Worker(share state);   // active backend
 let out = merge shorthand;
 ```
 
-API names above are illustrative. Scheduling helpers are not reserved; `fork`,
+API names above are illustrative. Scheduling helpers are not reserved. `fork`,
 `merge`, and the `Thread<T>` handle contract are the stable language surface.
 
 ### 10.3 Thread Fork/Merge
@@ -56,7 +56,7 @@ let result: i32 = merge t;
 `fork` hands an entry action to a backend object and returns the backend's
 concrete handle (`Thread<T>` minimum). `merge` blocks, consumes the handle once,
 and returns exactly the result type declared by the entry. `spawn Entry(args)`
-is a stdlib shorthand that uses the active thread backend; it is not a core
+is a stdlib shorthand that uses the active thread backend. It is not a core
 keyword. NRA tracks the fork as an ownership transition and rejects unbalanced
 forks. See [the branch protocol plan](plans/branch-protocol.md).
 
@@ -65,9 +65,9 @@ forks. See [the branch protocol plan](plans/branch-protocol.md).
 Concurrency-related safety is enforced through the same pre-HIR ownership proof used everywhere
 else:
 
-- whether a call duplicates a resource illegally;
-- whether a borrowed or `belong` value escapes;
-- whether narrowing facts or branch facts justify later lowering decisions;
+- whether a call duplicates a resource illegally
+- whether a borrowed or `belong` value escapes
+- whether narrowing facts or branch facts justify later lowering decisions
 - whether shared/runtime-managed resources are passed only through the capabilities and wrapper types
   that define the contract.
 

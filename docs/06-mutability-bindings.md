@@ -1,13 +1,13 @@
 ## 6. Mutability & Bindings
 
 > **Implementation status:** `let`, `var`, `const`, and `global` bindings are **working**. Binding
-> destructuring with `[ ]` and pack literals are **spec-only** — no parser or sema support.
+> destructuring with `[ ]` and pack literals are **spec-only**, with no parser or sema support.
 > NRA ownership modifiers (`lend`, `view`, `unique`, `share`, `belong`) are **spec-only**.
 > See [impl-status.md](impl-status.md).
 
 ### 6.1 Deep Mutability Model
 
-Zith uses deep mutability: a modifier on a binding flows into every nested field. Fields inside a struct inherit the mutability of the instance that holds them — no per-field `mut` annotation needed.
+Zith uses deep mutability: a modifier on a binding flows into every nested field. Fields inside a struct inherit the mutability of the instance that holds them. No per-field `mut` annotation is needed.
 
 ### 6.2 Binding Keywords
 
@@ -68,7 +68,7 @@ let r = for ([acc, i]: i32), (i in 0..n) {
         } or 0;
 ```
 
-> Packs are like anonymous structs — the compiler extracts fields by order and passes them as function arguments. They have a concrete layout determined at compile time. They are primarily used for destructuring and as loop accumulators.
+> Packs are like anonymous structs. The compiler extracts fields by order and passes them as function arguments. They have a concrete layout determined at compile time. They are primarily used for destructuring and as loop accumulators.
 
 ---
 

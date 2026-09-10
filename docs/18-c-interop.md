@@ -33,14 +33,14 @@ implement Window {
 ```
 
 The right-hand identifier must be a plain identifier. The compiler emits only an
-external C symbol declaration; it does not create a Zith body. This lets a normal
+external C symbol declaration. It does not create a Zith body. This lets a normal
 `c/` module expose opaque SDL handles as Zith structs and attach thin methods to
 them without relying on the C header importer or generating C shims.
 
 ### 18.1 Automatic Binding via `.h`
 
 Native builds with libclang can import a `.h` file. The importer exposes supported external C
-functions directly, preserving their variadic status; it does not generate Zith source.
+functions directly, preserving their variadic status. It does not generate Zith source.
 
 ```zith
 import "mylib.h";
@@ -50,17 +50,17 @@ my_function();
 ```
 
 Only C ABI headers are accepted. `.hpp` files report that C++ headers are unsupported. Object-like
-macros whose replacement is exactly one scalar literal are imported as constants; function-like
+macros whose replacement is exactly one scalar literal are imported as constants. Function-like
 and string macros, globals, bitfields, packed or anonymous records, flexible arrays, and other
 non-representable layouts are not imported. A single unsupported declaration or macro is skipped
-rather than failing the whole header; the importer records the reason in `skippedFunctions` so the
+rather than failing the whole header. The importer records the reason in `skippedFunctions` so the
 rest of the file stays available. Use manual `extern fn` for APIs outside this surface and for all
 builds without libclang, including WASM and cross builds.
 
 ### 18.1.1 Object-Like Macro Constants
 
 An object-like macro defined in the imported header expands to a single scalar literal and becomes
-a module constant. The value comes from the macro replacement token itself; there is no external C
+a module constant. The value comes from the macro replacement token itself. There is no external C
 evaluation. Zith imports `true`/`false` as `bool`, `'x'` as `char`, unsuffixed integers as `i32`,
 unsuffixed floats as `f64`, and the known suffixes `i8`/`i16`/`i32`/`i64`/`u8`/`u16`/`u32`/`u64`
 /`isize`/`usize` or `f`/`F` float suffixes when the value fits the target type.
@@ -81,7 +81,7 @@ that expand to expressions, strings, or unsupported values are skipped, not impo
 ### 18.1.2 Variadic C Functions
 
 Variadic declarations use `...` as the final token of an `extern fn` parameter list. The fixed
-parameters are type-checked normally; the variadic tail accepts any number of arguments and
+parameters are type-checked normally. The variadic tail accepts any number of arguments and
 reaches the native ABI as a variadic call.
 
 ```zith
@@ -119,7 +119,7 @@ Plain C `char` parameters and results import as Zith `char`.
 | simple records and enums | Named foreign type; simple records additionally carry verified layout and fields |
 
 Because a C pointer imports as `?*T` (see
-[8.1.1](08-error-handling.md#811-c-pointers-are-t)), reinterpreting one is written `as ?*T`;
+[8.1.1](08-error-handling.md#811-c-pointers-are-t)), reinterpreting one is written `as ?*T`.
 `as *T` is rejected with `E3003` so the null case cannot be dropped silently. Passing a pointer
 the other way needs no cast: any `*T` or `?*T` is accepted for a C `void*` parameter.
 
@@ -154,7 +154,7 @@ not directly addressable target layout (incomplete or non-constant size)
 ```
 
 An unsupported record used as a fixed by-value parameter or return type is skipped with an
-explicit reason in `skippedFunctions`; it never reaches codegen with an unverified layout.
+explicit reason in `skippedFunctions`. It never reaches codegen with an unverified layout.
 Pointers to records continue to import as opaque nullable pointers without requiring a record
 layout, because no value ABI needs to be proven for a pointer.
 
@@ -171,7 +171,7 @@ defines = ["MYLIB_FEATURE=1"]
 
 `c_source_dirs` is scanned recursively for `*.c` files and compiles each one into
 `cache/c-obj/<target>/...` before the native link step. Only roots declared there or through the
-repeatable `--c-source-dir <DIR>` flag participate in C compilation; `-I` does not imply source
+repeatable `--c-source-dir <DIR>` flag participate in C compilation. `-I` does not imply source
 discovery.
 
 `-I`, `-D`, `-L`, `-l`, and `--c-source-dir` add command-line values after project values.
@@ -198,7 +198,7 @@ import "stdint.h";
 
 These directories are searched **last**. Stdlib roots, `-I` roots, the workspace root, and the
 importing file's own directory all take precedence, so a project-local `stdint.h` shadows the
-system one. Pass `--no-system-includes` to disable the behaviour entirely; imports then resolve
+system one. Pass `--no-system-includes` to disable the behaviour entirely. Imports then resolve
 only from explicitly configured roots. The discovered directories are part of the artifact cache
 key, so changing them does not reuse stale cached modules.
 

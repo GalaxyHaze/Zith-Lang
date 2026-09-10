@@ -151,7 +151,7 @@ fn main(): i32 {
 Sem a qualificação, `p.pick()` continua ambíguo quando o nome não é resolvido por um método concreto do owner. É esta a forma suportada; `Trait.method(p)` ainda não é aceite.
 
 `dyn Trait` e `dyn Interface` também são suportados no `main`, com uma superfície pública de
-**somente métodos**. O fat pointer carrega o data pointer e a vtable do trait/interface; os slots
+**somente métodos**. O fat pointer carrega o data pointer e a vtable do trait/interface. Os slots
 da vtable apontam para as implementações concretas (ou defaults do trait, quando aplicável).
 Campos de interface são usados para conformance e continuam acessíveis em tipos concretos ou
 em bounds genéricos, mas nunca através de um valor `dyn`:
@@ -229,7 +229,7 @@ inline.
 
 O último parâmetro de uma função ou método pode ser um variadic slice `[...]T`. Em
 `Zith--`, a chamada recolhe todos os argumentos finais homogéneos a partir desse ponto
-para um slice temporário; não há varargs de C com tail heterogéneo:
+para um slice temporário. Não há varargs de C com tail heterogéneo:
 
 ```zith
 fn sum(rest: [...]i32): i32 {
@@ -246,7 +246,7 @@ fn main(): i32 {
 ```
 
 O `[...]T` só é permitido na última posição. Os argumentos antes dele são parâmetros
-fixos normais; uma chamada com menos argumentos do que esses parâmetros reporta erro.
+fixos normais. Uma chamada com menos argumentos do que esses parâmetros reporta erro.
 Uma chamada pode também passar como último argumento um `[]T` ou `[N]T` já existente:
 nesse caso o valor não é recolhido elemento a elemento e o array coerce para o slice
 parâmetro. O tail vazio é aceite.
@@ -270,7 +270,7 @@ Overloads com arity fixa continuam a preferir a assinatura exata sobre o variadi
 ## Inferência genérica com `?T`
 
 Um parâmetro que declara um optional com um tipo genérico participa nas coerções opcionais
-normais durante a inferência. O compilador tenta primeiro o matching estrutural exacto; se o
+normais durante a inferência. O compilador tenta primeiro o matching estrutural exacto. Se o
 parâmetro é `?T` e o argumento é um valor não-optional, a inferência trata o argumento como
 se já estivesse envolvido no optional e liga `T` ao tipo do argumento. A mesma regra aplica-se
 a camadas mais fundas, desde que o inner seja generic:
@@ -289,7 +289,7 @@ fn main(): i32 {
 }
 ```
 
-A inferência só usa esta coerção para opcionais; outras conversões implícitas não propagam
+A inferência só usa esta coerção para opcionais. Outras conversões implícitas não propagam
 ligacões genéricas nesta iteração.
 
 Um accesso como `a.x` quando `a: dyn Area` e `Area` declara `x` é rejeitado com `E3001`
@@ -485,7 +485,7 @@ exit labelado cobre todos os blocos entre o ponto atual e o alvo.
 `defer expr;` e `defer { ... }` registam cleanup no bloco lexical mais próximo,
 em reverse order de registo, e correm no fallthrough e em `return`, `break`,
 `continue` e `jump`. Um `defer` pode capturar bindings declarados mais tarde no
-mesmo bloco; o sema tipa o corpo adiado depois de conhecer os bindings diretos
+mesmo bloco. O sema tipa o corpo adiado depois de conhecer os bindings diretos
 do bloco e o HIR emite o cleanup depois de criar os slots. Se um exit antes da
 inicialização do binding capturado puder fazer o cleanup correr sem esse valor,
 o compilador rejeita com `defer may run before captured binding '<name>' is
@@ -539,16 +539,16 @@ struct Box {
 
 Fields privados ou `mod` continuam a ser acessíveis dentro do ficheiro que declara o struct,
 incluindo métodos desse tipo e funções livres nesse ficheiro. Em struct literals, qualquer field
-que não seja acessível a partir do módulo atual é rejeitado; o mesmo diagnóstico é emitido para
+que não seja acessível a partir do módulo atual é rejeitado. O mesmo diagnóstico é emitido para
 field access por `.` ou `->`. Fields privados não deixam de existir no layout, mas não podem ser
 mencionados em literais cross-module. Satisfação estrutural de interfaces compara os fields
 visíveis a partir do módulo onde a interface é avaliada e exige também method requirements
-compatíveis; campos privados continuam disponíveis para satisfação quando o type e a interface
+compatíveis. Campos privados continuam disponíveis para satisfação quando o type e a interface
 vivem no mesmo ficheiro.
 
 Para `let`/`var`, um tipo é não-trivial quando não é primitivo escalar (`iN`/`uN`/`fN`, `bool`, `char`, `void`). Tipos não-triviais sem inicializador são rejeitados:
 
-Um binding local sem inicializador pode ser escrito antes da primeira escrita;
+Um binding local sem inicializador pode ser escrito antes da primeira escrita.
 nesta iteração, qualquer leitura normal antes dessa primeira escrita é rejeitada
 com `binding '<name>' is used before it is initialized`. A leitura fuga explícita
 é `raw <name>`: preserva o tipo do binding e assume responsabilidade pelo valor
@@ -572,7 +572,7 @@ let ready: bool;
 
 Em toda a documentação, NRA é a análise completa de referências/ownership do Zith
 (Reference Analysis). O `main` compila o Zith--, que implementa uma versão parcial e
-simplificada dessa análise; quando o texto precisar de nomear esse subconjunto, usa
+simplificada dessa análise. Quando o texto precisar de nomear esse subconjunto, usa
 `Reference Analysis (simplified)`.
 
 ## Opaque tagged
@@ -655,7 +655,7 @@ literais não são afectados. Se nenhuma variante nem `foo.zith` existir, a impo
 variant`.
 
 `export foo` re-exporta o ficheiro de plataforma resolvido para o target
-actual; o artifact, spans e cache apontam para o ficheiro seleccionado.
+actual. O artifact, spans e cache apontam para o ficheiro seleccionado.
 O cache continua separado por target, porque `CacheKey` já inclui
 `targetTriple`.
 
@@ -697,13 +697,13 @@ entra no documento do `Zith--` depois de terminar no pipeline real, porque o
   monomorfização antes de HIR.
 - `when`/`match`, `for`, `state`/`dock`/`jump`, `->`, slices, arrays, opcionais,
   pointers e o protocolo de iterador canonico `next(self): ?T` (`??T` para elementos opcionais).
-- Funções não-void não podem cair sem valor; um corpo só termina implicitamente quando um valor
+- Funções não-void não podem cair sem valor. Um corpo só termina implicitamente quando um valor
   final tem o tipo certo ou todos os caminhos terminam (`return`, `jump`, `if`/`else` completo,
   `when` com default ou loop infinito sem `break` directo).
 - `state(params): ret` é um tipo de valor para referências a states reais; `let S: state(i32): i32 =
   Machine; dock S(args);` é aceite com as verificações de assinatura do state.
 - Qualificadores `lend`/`view` parseados e tipados; anotações `lend x`/`view x`
-  em argumentos de call, exclusividade por call e lowering para ponteiros;
+  em argumentos de call, exclusividade por call e lowering para ponteiros.
   `unique`/`share`/`belong` são rejeitados; `view` bloqueia escrita; receiver move é lógico.
 - `defer expr;` e `defer { ... }` como cleanup reverse-order do bloco lexical;
   `state` sem return type explicito é `void`.

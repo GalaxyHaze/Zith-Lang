@@ -5,7 +5,7 @@ treats static hardware/virtual memory regions as first-class, array-like
 regions with permissions and optional typed streams.
 
 MRA is one of the four `Zith Proof Kernel` (ZPK) sub-systems. It defines and
-controls memory regions; it does not prove ownership, lifetime, or borrow
+controls memory regions. It does not prove ownership, lifetime, or borrow
 correctness.
 
 ## 1. Scope
@@ -55,7 +55,7 @@ pool NodePool(Node, 64):
 ```
 
 `base` is either a constant address or `unknown`. `unknown` means the compiler
-will not know the final address at static analysis time; the region identity
+will not know the final address at static analysis time. The region identity
 and shape remain static, while the actual address is resolved by `init`.
 
 `size` is constant/symbolic for `region` and `dynamic` for `heap`. A `pool`
@@ -105,7 +105,7 @@ fn initScratch() {
 
 `@regionInit` resolves the runtime base once and records the domain size so RRA
 can prove a block is contained by the heap/region. Allocator policy such as
-bump, free-list, or bitset is not MRA state; it lives in the allocator
+bump, free-list, or bitset is not MRA state. It lives in the allocator
 implementation.
 
 Until the state model is formalized, overlapping regions with different
@@ -309,7 +309,7 @@ and is not part of the full Zith contract.
 
 The MRA boundary is proof metadata, not executable allocator state. The
 allocator itself may keep a runtime cursor, bitset, free-list, or heap
-metadata. MRA records only what was proven about the region; it does not move
+metadata. MRA records only what was proven about the region. It does not move
 blocks between `Used`/`Free`.
 
 ### Pool Allocator
@@ -377,7 +377,7 @@ accesses from another dynamic heap are rejected unless the access itself is
 proven disjoint. This avoids having to prove global heap non-overlap before
 every allocation.
 
-MRA does not implement the guard-line; NRA enforces the active-domain policy
+MRA does not implement the guard-line. NRA enforces the active-domain policy
 and RRA proves per-access geometry.
 
 ### Facts By Kind

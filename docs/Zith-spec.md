@@ -1,5 +1,5 @@
 # ZITH Language Specification
-**Draft v0.9 — 2026**
+**Draft v0.9: 2026**
 
 > Zith is a statically typed systems programming language with a small, composable core and a large toolbox for domain-specific work. It proves memory safety at compile time without a garbage collector or borrow checker.
 
@@ -34,7 +34,7 @@ If you are looking for just a 'new' language, clone or 'normal', so Zith is not 
 
 ### 1.2 Our Philosophy
 
-Zith aims to be small and stable at its core — covering everyday needs — while offering a large kit that helps in specific domains where most languages need a lot of tricks to work.
+Zith aims to be small and stable at its core, covering everyday needs, while offering a large kit that helps in specific domains where most languages need a lot of tricks to work.
 The compiler is a copilot: it gives you the tools, and you build the systems.
 
 | Everyday | Domain-specific |
@@ -50,7 +50,7 @@ The compiler is a copilot: it gives you the tools, and you build the systems.
 - Composable behavior through traits, capabilities, and interfaces.
 - Static, zero-overhead error handling with rich recovery semantics.
 - Compile-time computation (`comptime`) as a first-class feature.
-- Low-level control — state functions and musttail state transitions — without sacrificing safety in everyday code.
+- Low-level control, such as state functions and musttail state transitions, without sacrificing safety in everyday code.
 - Extensibility through words and macros, ideally scoped inside contexts rather than polluting the global namespace.
 
 ### 1.4 Context-Bound Extensibility (Best Practice)

@@ -1,9 +1,9 @@
 ## 17. Contexts
 
-> **Implementation status:** `context` declarations and `use` activation are **parse skipped** —
+> **Implementation status:** `context` declarations and `use` activation are **parse skipped**.
 > declarations parse but bodies are dropped. No semantic support. See [impl-status.md](impl-status.md).
 
-A context bundles macros, constants, words, and other declarations into a reusable package. You can apply it to a single block or activate it globally — only one context may be active at a time in a given scope.
+A context bundles macros, constants, words, and other declarations into a reusable package. You can apply it to a single block or activate it globally. Only one context may be active at a time in a given scope.
 
 ```zith
 // Scoped: macros and words active only inside this block
@@ -19,7 +19,7 @@ You can attach a context to any named block in Zith.
 
 ### Best Practice
 
-Define your macros and words inside context blocks rather than leaving them globally active. Think of it as a lightweight namespace for DSLs — keeps the rest of your code clean.
+Define your macros and words inside context blocks rather than leaving them globally active. Think of it as a lightweight namespace for DSLs. It keeps the rest of your code clean.
 
 ---
 

@@ -17,9 +17,9 @@ from LLVM or HIR.
 The core contract deliberately keeps a small state machine:
 
 - `alive`: the resource is ready for normal read and use.
-- `dead`: the resource has been moved away or locked; it can only be replaced
+- `dead`: the resource has been moved away or locked. It can only be replaced
   by a new binding, reassignment, or explicit restore.
-- `lent`: the resource is temporarily borrowed; the owner cannot use it until
+- `lent`: the resource is temporarily borrowed. The owner cannot use it until
   the borrow ends.
 
 `lend`, `view`, `unique`, `share`, `belong`, and `MultiShare` are permissions,
@@ -48,24 +48,24 @@ For each argument the header records:
 For each argument the header records enough origin information for the NRA to
 apply effects correctly:
 
-- root local;
-- field path;
-- temporary;
-- literal;
-- call result;
+- root local
+- field path
+- temporary
+- literal
+- call result
 - heap/allocator provenance.
 
 `argEffects` and `argOrigins` are stored together. Origin is not user syntax in
-this design; it is derived compiler metadata.
+this design. It is derived compiler metadata.
 
 ### 2.3 Return Provenance
 
 The header records how the return value relates to owned resources:
 
-- `returnsArgument(i)`;
-- `returnsNewOwned`;
-- `returnsBorrow(i)`;
-- `returnsView(i)`.
+- `returnsArgument(i)`
+- `returnsNewOwned`
+- `returnsBorrow(i)`
+- `returnsView(i)`
 
 Calls whose return can branch between several provenances use the conservative
 union of the possible return facts.
@@ -146,7 +146,7 @@ conflicting access in one call is an ownership error.
 
 Passing the same resource as several `view` arguments is allowed and emits a
 warning. It is rejected only by the policy that makes the exclusive-access rule
-uniform; it is not evidence of unsafety by itself.
+uniform. It is not evidence of unsafety by itself.
 
 ## 7. Move Semantics
 
@@ -168,7 +168,7 @@ return the original resource or replace the whole struct/binding.
 
 If a `view` anchors an old resource, `x = newValue` does not delete the old
 resource immediately. The old resource stays alive as long as the anchor lives.
-The anchor only delays lifetime; it does not add destruction capabilities.
+The anchor only delays lifetime. It does not add destruction capabilities.
 
 ### 7.4 Raw And Dead State
 
@@ -221,9 +221,9 @@ capability Allocator(R):
 `Ptr<R>` carries allocation provenance. NRA uses that provenance to reject
 `free`/`release` from a different allocator and to decide whether a block is
 `alive`, `dead`, or still anchored. MRA provides the region identity and
-permissions; it does not prove which block is owned.
+permissions. It does not prove which block is owned.
 
-Dynamic heaps are allowed. `heap OsHeap` has `size: dynamic`; the useful bounds
+Dynamic heaps are allowed. `heap OsHeap` has `size: dynamic`. The useful bounds
 are recorded on `Block<OsHeap> { ptr: Ptr<OsHeap>, len: u64 }`. NRA still
 verifies ownership/lifetime for those blocks without MRA pretending that the
 heap has a static total size.
@@ -231,7 +231,7 @@ heap has a static total size.
 ## 10. MultiShare And Fork
 
 `MultiShare<T>` is both a capability and a compiler-provided wrapper/type.
-Every type has a default conformance; specific types may override it.
+Every type has a default conformance. Specific types may override it.
 
 - `MultiShare` is only meaningful around a thread fork.
 - Outside a fork with `forkCount == 0`, it is an invisible transport layer.
@@ -262,9 +262,9 @@ threading edge case to be checked explicitly.
 
 The following parts need separate focused documents before implementation:
 
-- explicit `extern fn` effect-header attributes;
-- custom `Allocator` details, region parameterization, and storage semantics;
-- full diagnostic catalog and accepted/rejected examples;
+- explicit `extern fn` effect-header attributes
+- custom `Allocator` details, region parameterization, and storage semantics
+- full diagnostic catalog and accepted/rejected examples
 - precise interaction of `fail`, `defer`, `drop`, and storage free for every
   control-flow case;
 - `belong` lifetime rules for field destruction and parent replacement.

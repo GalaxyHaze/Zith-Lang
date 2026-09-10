@@ -29,7 +29,7 @@ NRA watches every value in your program and classifies it into one of three stat
 | `dead` | Moved away — you cannot read it, only reassign |
 | `lent` | Temporarily borrowed — exclusive while the borrow lasts |
 
-It also tracks the **origin** of each node — where the value came from:
+It also tracks the **origin** of each node, which says where the value came from:
 
 | Origin | Example |
 |---|---|
@@ -44,7 +44,7 @@ an argument, and whether a `belong` or borrowed value escapes its legal region.
 
 ### 7.2 Move Semantics
 
-Moving `a` to `b` redirects the name `b` to `a`'s node. The name `a` is considered **dead** / **invalid** and cannot be read — only reassigned:
+Moving `a` to `b` redirects the name `b` to `a`'s node. The name `a` is considered **dead** / **invalid** and cannot be read, only reassigned:
 
 ```zith
 var a = Point { x: 1.0, y: 2.0 };
@@ -62,7 +62,7 @@ In effect, if `a` is never reassigned, it is as though `a` never existed and `b`
 In the `Zith--` subset, `*T` is a non-nullable pointer object and `?*T` is the same object
 nullable. `p.x`, `p->x` and `*p` remain valid accesses. `&x` performs a logical move of the
 binding: reads of `x` after it report `E4001 UseAfterMove`, while a direct assignment to `x`
-revives a new local version. There is no SSA/phi infrastructure; the version is a per-binding
+revives a new local version. There is no SSA/phi infrastructure. The version is a per-binding
 counter used by sema.
 
 Pointers derived from `&x` or `@ptrOf(local)` are escaping values in this iteration. Returning
@@ -81,7 +81,7 @@ escape and does not create pointer-object aliasing.
 | `share` | Multiple names, same node, statically validated — no ref-counting. Mutable. | Compile-time-proven sharing |
 | `belong` | Part-of relationship. Node lifetime tied to its parent; cannot be stored independently. Can be passed as `lend`. | Back-pointers, hierarchies |
 
-> `unique` provides compile-time single-owner guarantees for local bindings. In a `global` context, `unique` becomes runtime-checked — the compiler enforces exclusive access at program startup. `global` bindings cannot be moved; the `Lent` capability manages thread-safe distribution.
+> `unique` provides compile-time single-owner guarantees for local bindings. In a `global` context, `unique` becomes runtime-checked. The compiler enforces exclusive access at program startup. `global` bindings cannot be moved, and the `Lent` capability manages thread-safe distribution.
 
 > In practice, most code only needs `lend` and `view`.
 
@@ -89,7 +89,7 @@ escape and does not create pointer-object aliasing.
 handed to a thread through `backend fork Entry(share value)`, NRA tracks a
 `forkCount`: zero means the source owns the node, one means a thread branch is
 pending, and more than one is rejected. `merge` consumes the thread handle and
-returns the entry result; it does not reclaim the `share` value. See [the branch
+returns the entry result. It does not reclaim the `share` value. See [the branch
 protocol plan](plans/branch-protocol.md).
 
 #### Implicit Mutability
@@ -109,15 +109,15 @@ Each memory modifier carries an implicit content mutability level:
 
 ### 7.4 The Four NRA Rules
 
-**Rule 1 — Argument Exclusivity.** In any call expression, each argument must refer to a distinct node, without exception:
+**Rule 1: Argument Exclusivity.** In any call expression, each argument must refer to a distinct node, without exception:
 - Duplicating a `default` / `unique` / `lend` argument → **ownership error**.
 - Duplicating a `share` / `view` argument → **logic error** (passing the same resource twice is almost certainly a bug).
 
-**Rule 2 — No Dead Node Access.** A symbol cannot be read while its node is `dead`.
+**Rule 2: No Dead Node Access.** A symbol cannot be read while its node is `dead`.
 
-**Rule 3 — No Escaping `belong`.** A `belong` node cannot be stored anywhere whose lifetime exceeds any node in its dependency vector. At every use, all of its parents must be `alive`.
+**Rule 3: No Escaping `belong`.** A `belong` node cannot be stored anywhere whose lifetime exceeds any node in its dependency vector. At every use, all of its parents must be `alive`.
 
-**Rule 4 — `lend` Behavioral Promise.** A `lend` value cannot be stored, moved, or captured. It may be passed as a call argument or returned — in the latter case, passing the promise on to the caller.
+**Rule 4: `lend` Behavioral Promise.** A `lend` value cannot be stored, moved, or captured. It may be passed as a call argument or returned, in which case it passes the promise on to the caller.
 
 > For details on how NRA resolves nodes and validates these rules, see [§7.9](#79-how-nra-resolves-nodes).
 
@@ -152,9 +152,9 @@ fn getParent(self: view Node): lend Node { self.parent }
 The main NRA proof runs before the final HIR is formed. That boundary exists so the analysis still
 sees:
 
-- binding identity and resource graphs;
-- the difference between `default`, `view`, `lend`, `unique`, `share`, and `belong`;
-- branch facts, narrowing facts, and return-path equivalence;
+- binding identity and resource graphs
+- the difference between `default`, `view`, `lend`, `unique`, `share`, and `belong`
+- branch facts, narrowing facts, and return-path equivalence
 - call, capture, and escape structure before lowering erases it.
 
 The final HIR is therefore not the place where ownership is re-proven. It receives a typed,
@@ -165,14 +165,14 @@ lowering, cache serialization, and backend hints.
 
 NRA may materialize limited internal canonicalizations after it has proven the ownership contract,
 but those rewrites do not change a public signature or observable ABI. For example, forwarding a
-proven move internally or removing a temporary introduced only to preserve ownership is valid;
+proven move internally or removing a temporary introduced only to preserve ownership is valid,
 redefining an exported function's calling convention is not.
 
 Residual facts that may survive into HIR include:
 
-- consumed vs. non-consumed value state when lowering depends on it;
-- non-null or otherwise narrowed facts that affect control-flow lowering;
-- borrow, capture, or escape decisions that codegen and caching must preserve;
+- consumed vs. non-consumed value state when lowering depends on it
+- non-null or otherwise narrowed facts that affect control-flow lowering
+- borrow, capture, or escape decisions that codegen and caching must preserve
 - internal calling-convention details only when they stay behind a stable boundary.
 
 LLVM is not the source of truth for ownership. At most it receives hints already decided by NRA,
@@ -212,7 +212,7 @@ relevant.
 When you access a node, NRA checks:
 
 1. The node itself is `alive` (not `dead`).
-2. Every node in its **dependency vector** — the fields or resources it belongs to or references — is also valid.
+2. Every node in its **dependency vector**, which includes the fields or resources it belongs to or references, is also valid.
 
 If a node is `dead` (say, after a move), NRA records where and why. You get an error pointing right at the violation.
 

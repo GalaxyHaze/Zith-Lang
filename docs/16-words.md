@@ -1,11 +1,11 @@
 ## 16. Words (Custom Operators)
 
 > **Implementation status:** `prefix`, `suffix`, `infix`, and `nop` declarations are **parse
-> skipped** — the declaration is accepted but the body is dropped via `skipDelimited`. Word call
+> skipped**. The declaration is accepted but the body is dropped via `skipDelimited`. Word call
 > expressions are a **parse error**. No semantic or HIR support.
 > See [impl-status.md](impl-status.md).
 
-Words let you define custom operators from identifiers. Each word has a fixed position — **prefix**, **infix**, or **suffix** — with language-defined precedence.
+Words let you define custom operators from identifiers. Each word has a fixed position, which is **prefix**, **infix**, or **suffix**, with language-defined precedence.
 
 - You must activate a word with `use`, even if you already imported its module.
 - Two words with the same name in the same scope: compile error.
@@ -52,7 +52,7 @@ let value = input CHECK;
 
 #### Token Words
 
-Token words have low precedence and do nothing alone. They serve as named arguments for macros and other words — e.g., SQL keywords:
+Token words have low precedence and do nothing alone. They serve as named arguments for macros and other words, e.g., SQL keywords:
 
 ```zith
 token SELECT;

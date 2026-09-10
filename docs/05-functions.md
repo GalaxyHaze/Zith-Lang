@@ -3,7 +3,7 @@
 > **Implementation status:** `fn`, `state`, `raw fn`, and `extern fn` are **working**. `const fn`
 > is **parse-level in progress**: it parses as a function declaration, but compile-time
 > evaluation is not implemented yet. Overloading
-> ([§5.4](#54-overloading)) is **working**. Concurrency is no longer a core function kind; any
+> ([§5.4](#54-overloading)) is **working**. Concurrency is no longer a core function kind. Any
 > runtime async/task model is expressed through ordinary library types and calls. See
 > [impl-status.md](impl-status.md).
 
@@ -11,7 +11,7 @@
 
 Non-void functions may use an implicit return only when every possible path produces a value or
 otherwise terminates. A final expression with the declared type and complete `if`/`else` or
-`when` bodies are accepted; falling off the end of an `if` without `else`, a `when` without a
+`when` bodies are accepted. Falling off the end of an `if` without `else`, a `when` without a
 default, or an empty body is a diagnostic, not an implicit `null`.
 
 ```zith
@@ -62,7 +62,7 @@ implement Window {
 ```
 
 The Zith name keeps normal module, overload, and receiver semantics. The right-hand
-identifier is used as the C ABI linker symbol; the compiler emits an external
+identifier is used as the C ABI linker symbol. The compiler emits an external
 declaration with that name and never generates a body. This form is not allowed on
 `const fn`, `state`, trait requirements, or interface requirements.
 
@@ -70,7 +70,7 @@ declaration with that name and never generates a body. This form is not allowed 
 > `extern raw fn`, or similar spelling. `raw fn` and `extern fn` are separate concerns: `raw fn`
 > opts out of NRA, while `extern fn` selects the C ABI.
 
-Macro calls use the `@` prefix — `@println`, `@log`, `@serialize` — while ordinary function calls
+Macro calls use the `@` prefix, such as `@println`, `@log`, and `@serialize`, while ordinary function calls
 use a bare name, such as `console.write`, `process`, or `save`. See [§15](15-macros.md) for the
 full rule.
 
@@ -108,7 +108,7 @@ fn main(): i32 {
 }
 ```
 
-Methods overload the same way; the implicit `self` parameter participates in the signature.
+Methods overload the same way. The implicit `self` parameter participates in the signature.
 
 ```zith
 implement Point {
@@ -125,9 +125,9 @@ Rules:
   same signature, and therefore `E2002`.
 - A function name may not collide with a non-function binding of the same name (`E2002`).
 - `extern fn` cannot be overloaded: it carries a fixed C linkage name.
-- `extern fn` may declare variadic parameters with `...`; no other function kind may do so.
+- `extern fn` may declare variadic parameters with `...`. No other function kind may do so.
 - `fn f = extern CSymbol` may be overloaded: each overload may select a distinct C symbol.
-- A call with no candidate that accepts the arguments is `E2007`; a call accepted by more than one
+- A call with no candidate that accepts the arguments is `E2007`. A call accepted by more than one
   candidate is `E2008`. There is no ranking of conversion quality, so any tie is an error rather
   than a silent choice.
 - Name resolution does not merge candidates across scopes. The nearest scope declaring the name

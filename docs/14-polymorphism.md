@@ -8,9 +8,9 @@
 
 ### 14.1 Static vs Dynamic Dispatch
 
-By default, Zith uses static dispatch — the compiler knows the exact implementation at compile time. Zero overhead.
+By default, Zith uses static dispatch. The compiler knows the exact implementation at compile time, so dispatch costs zero overhead.
 
-Use `dyn` for dynamic dispatch. At the call site you get polymorphism; the compiler and LLVM can often optimize away the indirection, making it zero-cost in practice.
+Use `dyn` for dynamic dispatch. At the call site you get polymorphism. The compiler and LLVM can often optimize away the indirection, making it zero-cost in practice.
 
 ### 14.2 `dyn` as a Type Hint
 
@@ -30,11 +30,11 @@ let dynList: dyn [];
 // in terms of performance, is union + ptr indirection, still fast
 ```
 
-Inside a smart-cast branch (`is`), the type narrows to the concrete type. Mutations inside the branch affect the inner value; outside, assigning to the variable changes what the `dyn` points to (if `var`).
+Inside a smart-cast branch (`is`), the type narrows to the concrete type. Mutations inside the branch affect the inner value. Outside, assigning to the variable changes what the `dyn` points to (if `var`).
 
 ### 14.3 `dyn` Traits
 
-`dyn Trait` is a `view` by default — a read-only, non-owning reference with a vtable. That means `view dyn` is redundant.
+`dyn Trait` is a `view` by default, which is a read-only, non-owning reference with a vtable. That means `view dyn` is redundant.
 
 All other memory modifiers work with `dyn`:
 
@@ -58,7 +58,7 @@ fn modify(shape: lend dyn Drawable) {
 
 Zith-- supports dynamic dispatch for both nominal traits and structural interfaces.
 Vtables are generated per `(trait/interface, concrete type)` pairing. For a nominal
-trait, `implement Owner as Trait` methods (or trait defaults) fill the slots; for an
+trait, `implement Owner as Trait` methods (or trait defaults) fill the slots. For an
 interface, the concrete owner methods fill the slots.
 
 The Zith-- `main` now supports `dyn Interface`, with one deliberate difference
@@ -66,9 +66,9 @@ from the future spec beyond this file: the public surface exposes only methods.
 The fat pointer carries a concrete data pointer plus a vtable whose slots point
 to the concrete owner methods. Interface fields are used for conformance and
 are still readable through concrete types or generic bounds, but not through a
-`dyn Interface` value; `a.x` is rejected with `error[E3001]`.
+`dyn Interface` value. `a.x` is rejected with `error[E3001]`.
 
-When you write a type that could be `dyn` or `opaque`, prefer `dyn` — it's short and clearer. Reserve `opaque` for cases where you specifically need `raw opaque` (untagged `void*`, C interop).
+When you write a type that could be `dyn` or `opaque`, prefer `dyn`, because it is short and clearer. Reserve `opaque` for cases where you specifically need `raw opaque` (untagged `void*`, C interop).
 
 ### 14.4 `dyn` vs Generics
 

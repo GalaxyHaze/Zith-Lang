@@ -3,7 +3,7 @@
 > **Implementation status:** Assets are **spec-only**. The `asset` import keyword parses but the
 > compiler does not validate or embed external files. See [impl-status.md](impl-status.md).
 
-Assets are external files — JSON, images, other data — that the compiler validates and makes available at compile time.
+Assets are external files, such as JSON, images, and other data, that the compiler validates and makes available at compile time.
 
 ### 12.1 Configuration
 

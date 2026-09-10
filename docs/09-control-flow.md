@@ -2,20 +2,20 @@
 
 > **Implementation status:** `if`/`else`, `break`, `continue`, `return`, and loop labels are **working**.
 > `for` is the canonical loop: `for { ... }`, `for (cond) { ... }`, the comma-based 3-clause form,
-> and duck-typed `for (x in iterable)` are **working**; labels can target any of these forms and
+> and duck-typed `for (x in iterable)` are **working**. Labels can target any of these forms and
 > loop bodies can lower to the same CFG machinery as the
 > old `while`. `while` still works but emits a deprecation warning (`W1008`) pointing at
 > `for (cond) { }`. The literal range forms (`0..4`) are not implemented yet. `when` pattern
 > matching is **working**, including equality, boolean, guard islands, range, pattern
 > alternatives, and tagged-union type-narrowing arms. Cases are comma-separated and the
-> canonical form writes the body immediately after the condition islands; the legacy `~>`
+> canonical form writes the body immediately after the condition islands. The legacy `~>`
 > marker still compiles but emits `W1008`. `state` declarations, `dock` calls, and `jump`
-> terminating transfers are **working** and compile to direct LLVM `musttail` calls; the old
+> terminating transfers are **working** and compile to direct LLVM `musttail` calls. The old
 > `flow fn`/`marker`/TLS-blob model is removed. See [impl-status.md](impl-status.md).
 
 ### 9.1 Syntax Rules
 
-Parentheses `()` are mandatory on every control structure's condition except function calls. Logical operators use English keywords; bitwise operators use standard symbols followed by `.`:
+Parentheses `()` are mandatory on every control structure's condition except function calls. Logical operators use English keywords. Bitwise operators use standard symbols followed by `.`:
 
 ```zith
 if (x > 0 and y < 10) { ... }
@@ -23,7 +23,7 @@ if isTrue() and (x > 5) { ... }
 let mask = a &. b |. c ^. d;
 ```
 
-Boolean negation is written as `not`; `!` is not accepted as a prefix unary
+Boolean negation is written as `not`. `!` is not accepted as a prefix unary
 operator in this iteration and remains reserved for a future postfix form:
 
 ```zith
@@ -44,7 +44,7 @@ let r = for ([acc, i]: i32), (i in 0..n) { acc *= i + 1 } or 0;
 
 Labels use `name: for ...` / `name: while ...` and are stored on the loop
 expression. `break name;` and `continue name;` target that loop. Without a
-label they target the innermost active loop; an unknown or duplicate active
+label they target the innermost active loop. An unknown or duplicate active
 label is rejected by semantic analysis. Labeled exits run cleanup for every
 loop between the current innermost loop and the target:
 
@@ -57,9 +57,9 @@ outer: for (...) {                               // labeled loop
 }
 ```
 
-> If the loop body may never run, its return value is deduced as optional — unless `or` collapses it to a non-optional value.
+> If the loop body may never run, its return value is deduced as optional, unless `or` collapses it to a non-optional value.
 
-> The init/cond/step form accepts comma-separated, parenthesized expressions — `for (i = 0), (i < 10), (i += 1)` — or the flat alternative, `for (i = 0, i < 10, i += 1)`. The iterator form expects a value whose type exposes `next(self)`. The canonical `next` returns `?T`: `null` is the iteration end and `Some(element)` is a loop value. For iterators that need to yield optional elements, `next(self): ??T` binds the loop variable as `?T`, so a `null` element is a valid iteration value and only the outer `None` ends the loop. `for` calls `next` once per iteration, exits when the result is the outer `None`, and otherwise binds the inner payload as the loop variable.
+> The init/cond/step form accepts comma-separated, parenthesized expressions, such as `for (i = 0), (i < 10), (i += 1)`, or the flat alternative `for (i = 0, i < 10, i += 1)`. The iterator form expects a value whose type exposes `next(self)`. The canonical `next` returns `?T`: `null` is the iteration end and `Some(element)` is a loop value. For iterators that need to yield optional elements, `next(self): ??T` binds the loop variable as `?T`, so a `null` element is a valid iteration value and only the outer `None` ends the loop. `for` calls `next` once per iteration, exits when the result is the outer `None`, and otherwise binds the inner payload as the loop variable.
 
 ```zith
 struct Range {
@@ -115,14 +115,14 @@ foo(), ( f1(..) -> f2() ) -> f3(..);
          foo                    foo
 ```
 
-> Comma sub-chains are useful for side effects — logging, validation — without disrupting the main data flow.
+> Comma sub-chains are useful for side effects, such as logging or validation, without disrupting the main data flow.
 
 ### 9.4 `state` Functions & State Machines
 
 A `state` function declares one state in a machine. `dock` starts a machine and evaluates to
-its eventual return value; `jump` terminates the current state and tail-calls the next state.
+its eventual return value. `jump` terminates the current state and tail-calls the next state.
 Every state in one machine shares the same return type, while parameter lists may differ
-between states. The return type drives machine grouping; each transition validates arity and
+between states. The return type drives machine grouping. Each transition validates arity and
 argument types against its individual target. LLVM `tailcc` plus `musttail` lets transitions
 between different signatures still compile to direct, stackless calls.
 
@@ -172,7 +172,7 @@ fn main(): i32 {
 ### 9.5 Scope Cleanup (`defer` / `drop`)
 
 `defer expr;` and `defer { ... }` are implemented in the `Zith--` subset.
-`defer expr;` registers one cleanup expression; `defer { ... }` registers the
+`defer expr;` registers one cleanup expression. `defer { ... }` registers the
 whole body as a cleanup-only block that does not produce a value. Statements in
 a deferred body run in written order, while separate `defer` statements run in
 reverse registration order when their nearest lexical block exits.
@@ -196,7 +196,7 @@ fn main(): i32 {
 - Expressions run when the block exits, in reverse registration order.
 - They run on normal fallthrough and across `return`, `break`, `continue`, and
   `state` `jump` transitions.
-- `return value;` evaluates the value first; deferred bodies run immediately
+- `return value;` evaluates the value first. Deferred bodies run immediately
   before the terminator.
 - A `defer` body may not itself contain `return`, `break`, `continue`, or
   `jump`.

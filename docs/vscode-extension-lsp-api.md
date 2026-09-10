@@ -33,11 +33,11 @@ zith-lsp
 
 A extensão VS Code deve:
 
-- lançar o binário com `stdin` e `stdout` separados, nunca com PTY;
-- usar `vscode-languageclient` com `transport: 0` (stdio);
-- associar o servidor ao idioma `zith` e a esquemas `file`;
-- configurar o stdlib com `initializationOptions.stdlibPath`;
-- aguardar `client.start()` antes de expor comandos LSP.
+- lançar o binário com `stdin` e `stdout` separados, nunca com PTY
+- usar `vscode-languageclient` com `transport: 0` (stdio)
+- associar o servidor ao idioma `zith` e a esquemas `file`
+- configurar o stdlib com `initializationOptions.stdlibPath`
+- aguardar `client.start()` antes de expor comandos LSP
 
 ### 1.2 Framing e limites
 
@@ -50,7 +50,7 @@ Content-Length: <bytes UTF-8>\r\n
 ```
 
 Mensagens de entrada estão limitadas a 64 MiB. JSON inválido é registado em
-`stderr` e ignorado; o servidor não responde com `-32700`. Cabeçalhos
+`stderr` e ignorado. O servidor não responde com `-32700`. Cabeçalhos
 desconhecidos são ignorados.
 
 A extensão não precisa de implementar o framing porque
@@ -170,7 +170,7 @@ registados manualmente.
 
 O servidor tem `textDocumentSync.change: 2`, portanto mudanças incrementais são
 suportadas. O `vscode-languageclient` converte edições do editor em mudanças
-com `range`; não é necessário fazer essa conversão na extensão.
+com `range`. Não é necessário fazer essa conversão na extensão.
 
 ### 2.2 Pedidos de análise
 
@@ -240,7 +240,7 @@ Comportamento importante:
 - `zith.check`, `zith.fmt` e `zith.prepareRun` usam o buffer aberto quando
   existir.
 - `zith.compile` foi removido e não deve ser enviado.
-- `zith.run` não bloqueia. O resultado contém `taskId`; processo e output são
+- `zith.run` não bloqueia. O resultado contém `taskId`. Processo e output são
   notificações.
 
 ### 3.2 Notificações do servidor para a IDE
@@ -293,13 +293,13 @@ ativo.
 
 O ficheiro `zith-extension/vs-code/extension.js` já tem:
 
-- inicialização do `LanguageClient` com `transport: 0`;
-- `documentSelector` para `zith`;
-- `outputChannel` `Zith LSP`;
-- política de reinício após crash (3 reinícios em 60 s);
-- download/instalação do binário `zith-lsp` e do stdlib;
-- fallback para binário de build local;
-- tratamento de `zith/requestSaveAll`;
+- inicialização do `LanguageClient` com `transport: 0`
+- `documentSelector` para `zith`
+- `outputChannel` `Zith LSP`
+- política de reinício após crash (3 reinícios em 60 s)
+- download/instalação do binário `zith-lsp` e do stdlib
+- fallback para binário de build local
+- tratamento de `zith/requestSaveAll`
 - comandos VS Code `zith.build`, `zith.check`, `zith.run`, `zith.clean`,
   `zith.fmt`, `zith.repl`, `zith.restartLsp` e `zith.downloadLsp`;
 - validação de ficheiro ativo e projeto `ZithProject.toml`.
@@ -310,17 +310,17 @@ A extensão atual não liga ainda, de forma explícita, aos seguintes pontos da
 API:
 
 - `initializationOptions.zith.frontend` com `enabled`, `warmupStdlib`,
-  `maxWorkers` e `statusNotifications`;
-- `zith/frontendStatus` na barra de estado;
-- `zith/codegenStatus` com aviso `codegenAvailable: false`;
-- notificações `zith/processOutput` e `zith/processExit` para `zith.run`;
-- progresso `window/workDoneProgress/create` e `$/progress`;
-- `zith.prepareRun` e `zith.stop` através de comandos VS Code;
-- cancelamento explícito de pedidos obsoletos;
+  `maxWorkers` e `statusNotifications`
+- `zith/frontendStatus` na barra de estado
+- `zith/codegenStatus` com aviso `codegenAvailable: false`
+- notificações `zith/processOutput` e `zith/processExit` para `zith.run`
+- progresso `window/workDoneProgress/create` e `$/progress`
+- `zith.prepareRun` e `zith.stop` através de comandos VS Code
+- cancelamento explícito de pedidos obsoletos
 - `initializationOptions.zith.performance.metrics` para configuração de
-  depuração;
-- remoção do comando `zith.compile`, uma vez que o servidor já não o anuncia;
-- `codegenAvailable` nas respostas de `zith.build` e `zith.run`.
+  depuração
+- remoção do comando `zith.compile`, uma vez que o servidor já não o anuncia
+- `codegenAvailable` nas respostas de `zith.build` e `zith.run`
 
 ## 5. Lista de implementacao
 

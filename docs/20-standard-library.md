@@ -6,10 +6,10 @@
 > the checked/shipped surface yet. All other standard library content is **spec-only**.
 > See [impl-status.md](impl-status.md).
 
-`std`/`soon` remain documentation-only in this iteration; no existing module is being rewritten.
+`std`/`soon` remain documentation-only in this iteration. No existing module is being rewritten.
 The documented convention uses resource types with `init`/`destroy`, read-only methods with
 `view`, and mutating methods with `lend`. `defer` runs `destroy(self: lend Self)` on resource
-cleanup; `drop` remains outside the `Zith--` subset.
+cleanup. `drop` remains outside the `Zith--` subset.
 
 ### 20.1 Three-Part Structure
 
@@ -36,7 +36,7 @@ fn eprint(msg: []char): void;
 
 The console module also provides `input()` as the owning line-input
 constructor. `InputLine` owns its buffer and exposes `text`, `len`, `good`,
-`cast<T>`, and `destroy`; callers must destroy the line after use.
+`cast<T>`, and `destroy`. Callers must destroy the line after use.
 
 `ParseInput` is the parsing contract implemented by the primitive numeric and
 boolean types shipped with the standard library:
@@ -55,7 +55,7 @@ let n = line.cast<i32>();
 ```
 
 `i32`, `bool`, `f32`, `f64`, and `u32` implement `ParseInput` in the current
-stdlib surface; `*char` parsing remains out of scope.
+stdlib surface. `*char` parsing remains out of scope.
 
 ```zith
 @println("hello");
@@ -65,7 +65,7 @@ stdlib surface; `*char` parsing remains out of scope.
 
 Raw storage primitives and a default heap allocator. The trait methods use
 `self` read-only receivers because the current compiler invalidates a concrete
-receiver after a trait method call in the same scope; the `dyn Allocator`
+receiver after a trait method call in the same scope. The `dyn Allocator`
 free functions are the supported repeatable call path.
 
 ```zith
@@ -84,8 +84,8 @@ pub fn reallocate(self: dyn Allocator, old: raw opaque, old_size: u64,
                   old_align: u64, new_size: u64, new_align: u64): ?raw opaque;
 ```
 
-`allocate` returns `null` when the underlying `malloc`/`realloc` call fails;
-the caller owns the storage and must pass the same `size`/`align` to
+`allocate` returns `null` when the underlying `malloc`/`realloc` call fails.
+The caller owns the storage and must pass the same `size`/`align` to
 `deallocate`. The larger `InPlace`/`new`/`delete`/`make`/`release` contract is
 recorded in [ADR 0010](adr/0010-allocator-inplace-drop.md). A draft module at
 `stdlib/std/new.zith` carries the target trait and helper signatures, but it is

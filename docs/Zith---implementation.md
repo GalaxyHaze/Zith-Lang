@@ -111,7 +111,7 @@ antes de ler/escrever o campo. `self->field` continua no caminho legacy e produz
 ficheiro do struct; `mod`/`mod(N)`/`mod(..)` segue a mesma regra de profundidade de módulo usada
 para declarations. Esta regra é consultada por `inferField`, `inferArrow` e por ambos os caminhos
 de struct literal (genérico e concreto). Num literal, um field invisível é rejeitado com o mesmo
-diagnóstico de accessor privado e não é contado como field necessário; fields privados não
+diagnóstico de accessor privado e não é contado como field necessário. Fields privados não
 participam na inferência de argumentos genéricos a partir de literais.
 
 `PerModuleSema` mantém `movedLocals_`, um dead-state lógico por corpo de função. Ao chamar um
@@ -125,13 +125,13 @@ e o comportamento pós-chamada de funções livres continuam como antes.
 
 O mesmo dead-state cobre o address-of `&x`: `inferUnary` regista o operand como movido
 logicamente e a assinatura do pointer resultante fica num alias local por binding. Não há pass
-SSA nem phi nodes; um contador/versão por nome dentro do corpo da função é consultado em
+SSA nem phi nodes. Um contador/versão por nome dentro do corpo da função é consultado em
 `inferName`/`inferAssign`/`checkMovedRoot`. Atribuir directamente ao nome revive a versão nova;
 escritas através do pointer não revivem o binding original. `raw` sobre index/deref continua a
 ser o escape unchecked e não cria aliasing object. `pointerAliasEscapesScope` rastreia aliases
 locais de pointer object, e usos que saiam do scope (return, struct/array/global/defer,
 aggregados persistentes) reportam `E4008 PointerEscapesScope`. Calls por valor de argumento
-pointer são tratados como borrows temporários; pointers devolvidos por calls não são marcados
+pointer são tratados como borrows temporários. Pointers devolvidos por calls não são marcados
 como aliases de storage local.
 
 `@lengthOf`/`@ptrOf` são intrinsics de valor no mesmo `ExprKind::LayoutIntrinsic`. Sema tipa
@@ -152,7 +152,7 @@ equivale a `@ptrOf` e é marcada como escaping por `E4008` quando escapa ao stor
 
 `@canonicalType(T)` segue o caminho de `LayoutIntrinsic` no frontend, mas o sema tipa a
 expressão como `u128`. `HirLowerModern::canonicalTypeId` deriva o id estável a partir do
-namespace do módulo que define o tipo, do tipo e dos campos ordenados por tamanho;
+namespace do módulo que define o tipo, do tipo e dos campos ordenados por tamanho.
 `lowerLayoutIntrinsic` materializa `HirCanonicalType`. Codegen emite o valor como constante
 `i128` e o cache persiste os dois `uint64_t` do id.
 
@@ -384,7 +384,7 @@ O parser marca `Parameter.isVariadicSlice` quando o último parâmetro usa `[...
 propaga o flag para `ResolvedName.isVariadicSlice` e `HirFunction.variadicSliceParam`.
 O sema trata `[...]T` como um parâmetro de slice normal, mas aceita:
 
-- zero argumentos no tail;
+- zero argumentos no tail
 - um último argumento `[]T`/`[N]T` explícito, sem recolha elemento a elemento;
 - qualquer quantidade de argumentos homogéneos desde `slice_index` até ao fim, recolhidos
   em `checkVariadicTailArgs`/`checkVariadicTail` pelo elemento do slice param.
@@ -401,7 +401,7 @@ outer shape, `GenericInstantiationPass` faz uma probe só para opcionais: retira
 opcionais do parâmetro, unifica o `T` resultante contra o argumento real e comita as ligações
 se não houver conflito. Isto permite `fn wrap<T>(x: ?T): ?T` aceitar `wrap(3)` e `fn
 nested<T>(x: ??T): ?T` aceitar `nested(5)` ou `nested(maybe)` com `maybe: ?i32`. A probe é
-restrita a coerções opcionais; outras coerções implícitas (arrays para slices, pointers para
+restrita a coerções opcionais. Outras coerções implícitas (arrays para slices, pointers para
 `void`, `dyn`/`opaque`) continuam exactas nesta iteração.
 
 No HIR, `HirLowerModern::lowerCall` detecta o variadic slice no callee e baixa o tail para

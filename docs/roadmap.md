@@ -111,11 +111,11 @@ F-33 (function overloading) and F-34 (memory qualifier parsing and typing) are i
 F-07 (`dyn Trait`) and the same vtable lowering used by `dyn Interface` are **working**.
 F-29 (trait constraints `T: Trait`) is covered by generic constraints.
 
-F-07 now has codegen coverage for nominal traits; interfaces use the same HIR/codegen path.
+F-07 now has codegen coverage for nominal traits. Interfaces use the same HIR/codegen path.
 
 ### Wave 07 — Macros, Words & Contexts
 F-08 (`@macro` calls) is implemented. Normal macros keep hygiene for template
-bindings and resolve other names through the call-site scope; raw macros splice
+bindings and resolve other names through the call-site scope. Raw macros splice
 literally into the call-site scope with module/global fallback. F-24 (`tag`,
 formerly `tag macro`) is full Zith only; Zith-- parses the call form and
 rejects the declaration with `E2010`, so it is not part of the working core.
@@ -123,7 +123,7 @@ Remaining work in this wave: F-09 (word call/sequence
 expressions), F-21 (context semantics), F-22 (`use` semantics), F-23 (word decl
 semantics), and F-26 (`::` scope resolution).
 
-Dependencies: the macro expander is complete; word/context semantics still need F-09 words parsed first.
+Dependencies: the macro expander is complete. Word/context semantics still need F-09 words parsed first.
 
 ### Wave 08 — Runtime Concurrency Surface
 F-18 (runtime task/coroutine APIs), F-19 (runtime thread/channel APIs), F-20 (NRA facts needed by
@@ -164,6 +164,6 @@ Infrastructure: ZIRL sections, cache hydration, CLI commands (`test`, `deps`, `d
 ## Notes
 
 - Feature IDs are stable and should be referenced in commit messages, test names, and PR descriptions.
-- The dependency graph encodes the minimum build order; waves can overlap when dependencies are acyclic.
+- The dependency graph encodes the minimum build order. Waves can overlap when dependencies are acyclic.
 - F-01 through F-04 and F-06 are implemented in Zith-- and verified in
   `docs/impl-status.md`; do not treat them as pending roadmap work.
