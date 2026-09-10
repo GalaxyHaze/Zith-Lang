@@ -74,6 +74,12 @@ _Avoid_: importer, resolver, module loader
 The per-module mapping from expression nodes and bindings to concrete declarations, imports, and foreign C header entries.
 _Avoid_: symbol table, binding table
 
+**ALIN**:
+The alignment between an idea's extracted actions and its plan header and
+body, used when turning ideas into feature plans. Header scope and body
+promises must move together.
+_Avoid_: backlog notes, orphan tasks, extract-then-forget
+
 ## Pattern Matching
 
 **When case**:
@@ -118,6 +124,12 @@ directly with an implicit step of `1` and float ranges are rejected for loops.
 _Avoid_: Contains, membership protocol, range iteration via contains
 
 ## Runtime And Backends
+
+**ABI lifecycle**:
+The four-state contract model for externally visible surfaces: drawing,
+promising, signing, and conforming. A plan is a drawing until promises are
+computed, an ADR signs those promises, and tests prove them.
+_Avoid_: formal process, design review, PDF documentation
 
 **Interpreter HIR**:
 The in-process executor that runs Zith programs from the typed HIR without lowering

@@ -52,3 +52,7 @@ contracts, decisions, and gotchas that are not discoverable from the source alon
 - [discord-mcp.md](discord-mcp.md): ByteAsk Discord MCP server registration,
   the stdio-only limitation of the v1.0.0 release JAR, and the env-var/token
   requirements to run it.
+- [idea-lifecycle.md](idea-lifecycle.md): file-backed idea lifecycle, ABI
+  state map, and the struct-layout unit used for conforming contracts.
+- [execution-ir-drawing.md](execution-ir-drawing.md): current drawing status
+  and pointer for the execution IR/interpreter contract.

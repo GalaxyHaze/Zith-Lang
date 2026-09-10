@@ -35,6 +35,8 @@ The active plan homes are:
 - `docs/roadmap.md`: stable feature IDs and wave narrative.
 - `docs/plans/standalone-c-toolchain.md` / `docs/plans/tiny-c-backend.md`:
   active Zith infrastructure work for the native C toolchain.
+- `docs/plans/idea-lifecycle-small-scope.md` / `docs/specs/abi-lifecycle.md`:
+  small-scope lifecycle setup for ideas, ABI promises, and conforming tests.
 
 The archived plan homes are:
 
