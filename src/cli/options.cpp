@@ -47,6 +47,10 @@ static ModeDefaults getDefaults(Options::Mode mode) {
 void Options::deriveTargetStage() {
     // Run/Execute need a binary; Build needs at least an object file, so all
     // three go through codegen unless an explicit --emit target says otherwise.
+    if (flags.interpreted() && command == Command::Run) {
+        targetStage = session::Stage::HirLowered;
+        return;
+    }
     if (command == Command::Run || command == Command::Execute) {
         targetStage = session::Stage::Cached;
         return;

@@ -1,5 +1,6 @@
 #include "cli/commands.hpp"
 #include "cli/terminal.hpp"
+#include "interp/hir-interpreter.hpp"
 #include "session/compilation-session.hpp"
 #include "session/pipeline-plan.hpp"
 
@@ -32,6 +33,24 @@ int execute(const Options &opts) {
 
         if (!ok) {
             allPassed = false;
+            continue;
+        }
+
+        if (opts.flags.interpreted()) {
+            interp::HirInterpreter interpreter(session.hirModule(), session.interner(),
+                                               session.types());
+            auto result = interpreter.runMain();
+            if (result.status != interp::HirInterpStatus::Ok) {
+                if (result.message.empty())
+                    result.message = "HIR interpreter could not execute the program";
+                err.red("[error]");
+                std::fprintf(stderr, " %s\n", result.message.c_str());
+                allPassed = false;
+                continue;
+            }
+            std::fputs(result.output.c_str(), stdout);
+            std::fflush(stdout);
+            exitCode = static_cast<int>(result.exitCode);
             continue;
         }
 
