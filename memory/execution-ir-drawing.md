@@ -24,9 +24,11 @@ Status: signed. `ABI-EXEC-01` through `ABI-EXEC-10` are accepted by
 
 ## Next Transition
 
-The first conforming test is `tests/test-abi-execution.cpp` for `ABI-EXEC-09`.
-It must carry the signed promise id. No broader implementation starts until
-that test exists and is red against the missing HIR interpreter.
+The first conforming slice is now implemented: `tests/test-abi-execution.cpp`
+covers `ABI-EXEC-09`, and `src/interp/hir-interpreter.cpp` backs the
+`--interpreted` path from `src/cli/cmd/run.cpp`. The next slice is the IR/VM
+execution path; it becomes the default portable runtime when LLVM or native
+codegen is not used.
 
 ## Lifecycle Position
 
