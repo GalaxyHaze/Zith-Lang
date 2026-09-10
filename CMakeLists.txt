@@ -381,6 +381,12 @@ if(BUILD_TESTING AND NOT ZITH_IS_WASM)
     add_zith_test(test-variadic tests/test-variadic.cpp)
     add_zith_test(test-compound-assign tests/test-compound-assign.cpp)
     add_zith_test(test-wasm-contract tests/test-wasm-contract.cpp)
+    add_zith_test(test-abi-execution tests/test-abi-execution.cpp)
+    if(TARGET zithc)
+        target_compile_definitions(test-abi-execution PRIVATE
+            ZITHC_BINARY="$<TARGET_FILE:zithc>")
+        add_dependencies(test-abi-execution zithc)
+    endif()
     if(ZITH_HAS_LLVM)
         add_zith_test(test-codegen tests/test-codegen.cpp)
         # The example suite drives the real CLI, so it needs codegen and a linker.
