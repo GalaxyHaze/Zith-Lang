@@ -44,6 +44,7 @@ Implementation work that is incomplete or needs review is tracked in
 | Cache | Partial | Object caching works; `.zirl` format not yet used |
 | Stdlib I/O | **Working** | `print`/`println`/`input`, `Formatable`, `ParseInput`, and `InputLine.cast<T>` type-check and lower; runtime parsing verification is manual for now |
 | Stdlib allocation | **Working** | `std/alloc` ships `Allocator`, `HeapAllocator`, and `allocate`/`deallocate`/`reallocate` over `dyn Allocator`. `stdlib/std/new.zith` is a proposed API draft for `InPlace` and generic `new`/`delete`/`make`/`release`; it is not part of the checked stdlib surface until generic return-only inference and opaque pack dispatch are supported |
+| Stdlib collections | **Working (u64 only)** | `std/collections/hash_map_u64` ships a concrete `u64 -> u64` open-addressed map with `reserve`, `put`, `contains`, `get`, `len`, and `destroy`. `std/collections/hash_map` is a proposed generic `HashMap<K, V>` draft that fails `zithc check` because nested generic struct reification and trait-bound propagation through generic fields are not implemented yet |
 
 ---
 

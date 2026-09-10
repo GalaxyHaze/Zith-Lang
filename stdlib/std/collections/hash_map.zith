@@ -1,0 +1,150 @@
+import "stdlib.h"
+
+/// Proposed owning hash-map API for the standard library.
+///
+/// This module is a draft and is not part of the checked stdlib surface yet.
+/// Zith-- can type-check `Hashable` bounds and primitive implementations, but
+/// nested generic structs still need compiler work before `Entry<K, V>` is
+/// reified correctly inside `HashMap<K, V>` and trait bounds propagate through
+/// those fields. Keep this public API as the target once those gaps close.
+pub struct HashMap<K, V> {
+    count: u64 = 0,
+    capacity: u64 = 0,
+    table: ?*Entry<K, V> = null,
+    head: u64 = 0,
+}
+
+/// One open-addressed slot owned by a `HashMap`.
+pub struct Entry<K, V> {
+    key: K,
+    value: V,
+    occupied: bool = false,
+    next: u64 = 0,
+}
+
+/// Hashing contract for `HashMap` keys.
+pub trait Hashable {
+    fn hash(self): u64;
+}
+
+implement i32 as Hashable {
+    fn hash(self): u64 {
+        return self as u64;
+    }
+}
+
+implement i64 as Hashable {
+    fn hash(self): u64 {
+        return self as u64;
+    }
+}
+
+implement u32 as Hashable {
+    fn hash(self): u64 {
+        return self as u64;
+    }
+}
+
+implement u64 as Hashable {
+    fn hash(self): u64 {
+        return self as u64;
+    }
+}
+
+implement char as Hashable {
+    fn hash(self): u64 {
+        return self as u64;
+    }
+}
+
+/// Allocates the backing array for `capacity` entries. Returns `null` on
+/// allocation failure and leaves the map untouched.
+pub fn reserve<K, V>(var self: lend HashMap<K, V>, capacity: u64): bool {
+    if (capacity == 0u64 and self->table is null) {
+        return true;
+    }
+    let mem: ?raw opaque = calloc(capacity, @sizeOf(Entry<K, V>));
+    if (mem is null) {
+        return false;
+    }
+    let table: ?*Entry<K, V> = mem as ?*Entry<K, V>;
+    if (table is null) {
+        free(mem);
+        return false;
+    }
+    free(self->table);
+    self->table = table;
+    self->capacity = capacity;
+    self->count = 0u64;
+    self->head = 0u64;
+    return true;
+}
+
+pub fn init<K, V>(var self: lend HashMap<K, V>): bool {
+    return reserve<K, V>(lend self, 64u64);
+}
+
+pub fn destroy<K, V>(var self: lend HashMap<K, V>) {
+    free(self->table);
+    self->table = null;
+    self->capacity = 0u64;
+    self->count = 0u64;
+    self->head = 0u64;
+}
+
+pub fn len<K, V>(self: view HashMap<K, V>): u64 {
+    return self->count;
+}
+
+pub fn contains<K: Hashable, V>(self: view HashMap<K, V>, key: K): bool {
+    if (self->table is null or self->count == 0u64) {
+        return false;
+    }
+    var entries: []Entry<K, V> = raw self->table[0u64..self->capacity];
+    var index = self->head;
+    for (index != 0u64) {
+        let current = raw entries[index - 1u64];
+        if (current.occupied and current.key.hash() == key.hash() and current.key == key) {
+            return true;
+        }
+        index = current.next;
+    }
+    return false;
+}
+
+pub fn get<K: Hashable, V>(self: view HashMap<K, V>, key: K): ?V {
+    if (self->table is null or self->count == 0u64) {
+        return null;
+    }
+    var entries: []Entry<K, V> = raw self->table[0u64..self->capacity];
+    var index = self->head;
+    for (index != 0u64) {
+        let current = raw entries[index - 1u64];
+        if (current.occupied and current.key.hash() == key.hash() and current.key == key) {
+            return current.value;
+        }
+        index = current.next;
+    }
+    return null;
+}
+
+pub fn put<K: Hashable, V>(var self: lend HashMap<K, V>, key: K, value: V): bool {
+    if (self->table is null) {
+        if not(init<K, V>(lend self)) {
+            return false;
+        }
+    }
+    if (not contains<K, V>(view self, key)) {
+        if (self->count >= self->capacity) {
+            return false;
+        }
+        var entries: []Entry<K, V> = raw self->table[0u64..self->capacity];
+        let index = self->count + 1u64;
+        entries[index - 1u64] = Entry<K, V> {
+            key, value, true, self->head,
+        };
+        self->head = index;
+        self->count = self->count + 1u64;
+    }
+    return true;
+}

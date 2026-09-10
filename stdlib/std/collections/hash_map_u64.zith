@@ -1,0 +1,102 @@
+import "stdlib.h"
+
+/// Concrete u64-to-u64 hash map for the current Zith-- stdlib.
+///
+/// The generic `HashMap<K, V>` target is documented separately as a draft
+/// because nested generic struct reification and trait-bound propagation
+/// through generic fields still need compiler work.
+pub struct Entry {
+    pub key: u64,
+    pub value: u64,
+    pub occupied: bool = false,
+    pub next: u64 = 0,
+}
+
+pub struct HashMap {
+    pub count: u64 = 0,
+    pub capacity: u64 = 0,
+    pub table: ?*Entry = null,
+    pub head: u64 = 0,
+}
+
+pub fn reserve(var self: lend HashMap, capacity: u64): bool {
+    let mem: ?raw opaque = calloc(capacity, @sizeOf(Entry));
+    if (mem is null) {
+        return false;
+    }
+    let table: ?*Entry = mem as ?*Entry;
+    if (table is null) {
+        free(mem);
+        return false;
+    }
+    free(self->table);
+    self->table = table;
+    self->capacity = capacity;
+    self->count = 0u64;
+    self->head = 0u64;
+    return true;
+}
+
+pub fn destroy(var self: lend HashMap) {
+    free(self->table);
+    self->table = null;
+    self->capacity = 0u64;
+    self->count = 0u64;
+    self->head = 0u64;
+}
+
+pub fn contains(self: view HashMap, key: u64): bool {
+    if (self->table is null or self->count == 0u64) {
+        return false;
+    }
+    var entries: []Entry = raw self->table[0u64..self->capacity];
+    var index = self->head;
+    for (index != 0u64) {
+        let current = raw entries[index - 1u64];
+        if (current.occupied and current.key == key) {
+            return true;
+        }
+        index = current.next;
+    }
+    return false;
+}
+
+pub fn get(self: view HashMap, key: u64): ?u64 {
+    if (self->table is null or self->count == 0u64) {
+        return null;
+    }
+    var entries: []Entry = raw self->table[0u64..self->capacity];
+    var index = self->head;
+    for (index != 0u64) {
+        let current = raw entries[index - 1u64];
+        if (current.occupied and current.key == key) {
+            return current.value;
+        }
+        index = current.next;
+    }
+    return null;
+}
+
+pub fn len(self: view HashMap): u64 {
+    return self->count;
+}
+
+pub fn put(var self: lend HashMap, key: u64, value: u64): bool {
+    if (self->table is null) {
+        if not(reserve(lend self, 64u64)) {
+            return false;
+        }
+    }
+    if (contains(view self, key)) {
+        return true;
+    }
+    if (self->count >= self->capacity) {
+        return false;
+    }
+    var entries: []Entry = raw self->table[0u64..self->capacity];
+    let index = self->count + 1u64;
+    entries[index - 1u64] = Entry { key, value, true, self->head };
+    self->head = index;
+    self->count = self->count + 1u64;
+    return true;
+}

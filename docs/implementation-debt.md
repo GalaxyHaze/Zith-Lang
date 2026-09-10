@@ -175,6 +175,80 @@ As seis falhas conhecidas de 2026-09-01 foram resolvidas:
   na linha `Stdlib I/O` e o plano completo em
   [parse-input-cast.old.md](/home/diogo/Zith/docs/plans/archive/parse-input-cast.old.md).
 
+### 9. Generics ainda não suportam structs genéricas de primeira classe para stdlib
+
+O `HashMap<K, V>` genérico está bloqueado por lacunas reais do passo de
+monomorfização e pela propagação de bounds em declarações genéricas. A versão
+`u64 -> u64` já funciona
+(`stdlib/std/collections/hash_map_u64.zith`), mas a API genérica
+(`stdlib/std/collections/hash_map.zith`) está marcada como draft porque não
+`zithc check`.
+
+Falhas verificadas a 2026-09-10:
+- Reificação de struct aninhado corrupta: `?*Entry<K, V>` dentro de
+  `HashMap<K, V>` é reificado como `?*Entry<T, T>`. O nome do struct
+  reificado é calculado a partir dos fields em
+  [generic-instantiate.cpp](/home/diogo/Zith/src/comptime/generic-instantiate.cpp:53),
+  e o type é internado com esse nome em
+  [generic-instantiate.cpp](/home/diogo/Zith/src/comptime/generic-instantiate.cpp:626).
+  Probe isolado: `Entry<K, V>` + `HashMap<K, V>` com `?*Entry<K, V>`
+  reporta `field access on non-struct type having type '?*Entry<T,T>'`.
+- Chamadas genéricas dentro de funções genéricas podem falhar com
+  `E3011 cannot infer generic argument` mesmo com argumentos explícitos.
+  Probe isolado: `fn put<K: Hashable>(self: lend Entry<K>)` chamando
+  `contains(view self)` reporta `E3011`.
+- Resolver `K: Hashable` através de um campo `Entry<K>` não funciona quando a
+  chamada é feita numa função genérica com bound `K: Hashable`. O mesmo probe
+  que reporta `E3011` deixa de encontrar o método da trait e reporta `E3001`
+  se a chamada for feita directamente sobre `self->key`.
+
+Curadoria adicional já feita, sem falhas:
+- `fn identity<T>(x: T): T`, inferência e monomorfização básica.
+- `retain<T>(a, b)` com `a == b` genérico (igualdade funciona para o caso
+  simples).
+- `fn inner<T>(x: T)` chamando `identity<T>(x)` com call-site explícito.
+- `struct Pair<T, U>` + `struct Outer<K, V> { value: Internal<K, V> }` simples.
+- `fn getValue<T>(self: view Holder<T>): ?T { return self->value; }`.
+- `fn useKey<T: Hashable>` com `self->key.hash()` quando o método é chamado a
+  partir de `main` com um tipo concreto.
+
+O que precisa de mudar para desbloquear o `HashMap<K, V>`:
+1. Em `GenericInstantiationPass`, aplicar a substituição de type args ao nome
+   canónico do struct de forma recursiva. O nome de `Entry<K, V>` deve ser
+   derivado dos campos after substitution, não dos fields que ainda contêm
+   `GenericParam` antes da substituição.
+2. Fazer o tipo reificado de `Entry<K, V>` usar `K`/`V` concretos nos slots do
+   `HashMap<K, V>` (o `concreteStructName` actual mistura a origem do
+   `GenericParam` com os args e produz `Entry<T,T>`).
+3. Ao resolver um método genérico numa função genérica, aplicar o mesmo
+   argumento `K` ao callee/instanciação. `contains<K: Hashable>(view self)`
+   deve ser unificado com o tipo concreto do parâmetro `self`, não falhar por
+   não inferir `K`.
+4. Propagar bounds de `K` para o valor extraído de um campo generic
+   (`self->key.hash()` deve resolver `K: Hashable` quando o método receptor
+   tem o bound). Este passo já funciona no caso directo chamado de `main`,
+   mas falha quando o bound passa por uma chamada genérica intermédia.
+
+Critérios de aceitação:
+- `zithc check stdlib/std/collections/hash_map.zith` passa sem `E2006`,
+  `E3001`, `E3003`, `E3011`, `E3009`.
+- `examples/hash-map-u64.zith` continua a passar.
+- Os probes de curia acima (basic, nested-struct, entry-table, trait-field,
+  return-optional, equality, nested-generic, generic-call-in-function,
+  constraint-propagation) têm resultados esperados documentados no teste de
+  generics mono, quando forem promovidos a `tests/`.
+- A versão `u64 -> u64` continua a ser a única superfície shipped até ao
+  passo 1/2 estar completo.
+
+Ações recomendadas depois desta entrada:
+- Promover os probes de `/tmp/zith-generic-probes/` para
+  `tests/test-generics-mono.cpp` ou `tests/test-generic-hashmap.cpp` e registar
+  com `add_zith_test`.
+- Fazer uma passada de curadoria maior nas declarações genéricas usadas pela
+  stdlib: `string.zith`, `alloc.zith`, `DynArray` planned, `HashMap<K, V>`.
+- Atualizar `docs/impl-status.md` na linha de `Generic instantiation` quando o
+  passo 1/2 ficar verde.
+
 ---
 
 ## Dívida de estrutura: monolitos

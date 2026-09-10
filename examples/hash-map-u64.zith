@@ -1,0 +1,26 @@
+import std/collections/hash_map_u64 as hm
+
+fn main(): i32 {
+    var map = hm.HashMap { count: 0u64, capacity: 0u64, table: null, head: 0u64 };
+    if not(hm.HashMap.reserve(lend map, 4u64)) {
+        return 1;
+    }
+    if not(hm.HashMap.put(lend map, 1u64, 42u64)) {
+        return 2;
+    }
+    if not(hm.HashMap.contains(view map, 1u64)) {
+        return 3;
+    }
+    if (hm.HashMap.contains(view map, 2u64)) {
+        return 4;
+    }
+    let value = hm.HashMap.get(view map, 1u64);
+    if (value is null or raw value != 42u64) {
+        return 5;
+    }
+    if (hm.HashMap.len(view map) != 1u64) {
+        return 6;
+    }
+    hm.HashMap.destroy(lend map);
+    return 0;
+}

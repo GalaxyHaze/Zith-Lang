@@ -2,8 +2,10 @@
 
 > **Implementation status:** `stdlib/c/io.zith`, `stdlib/std/io/console.zith`, and
 > `stdlib/std/alloc.zith` are the shipped modules. `puts`, `println`, and raw allocator
-> primitives work. `stdlib/std/new.zith` is a proposed API draft and is not part of
-> the checked/shipped surface yet. All other standard library content is **spec-only**.
+> primitives work. `stdlib/std/collections/hash_map_u64.zith` ships a concrete
+> `u64 -> u64` hash map. `stdlib/std/new.zith` and
+> `stdlib/std/collections/hash_map.zith` are proposed API drafts and are not part
+> of the checked/shipped surface yet. All other standard library content is **spec-only**.
 > See [impl-status.md](impl-status.md).
 
 `std`/`soon` remain documentation-only in this iteration. No existing module is being rewritten.
@@ -121,6 +123,32 @@ struct DynArray<T> {
     fn get(self, index: u64): ?T;
 }
 ```
+
+#### `std/collections/hash_map_u64` (concrete)
+
+The shipped concrete map stores `u64` keys and `u64` values. It uses an
+open-addressed linked chain and owns its backing storage with `calloc`/`free`.
+Callers must call `destroy` after use.
+
+```zith
+import std/collections/hash_map_u64 as hm;
+
+var map = hm.HashMap { count: 0u64, capacity: 0u64, table: null, head: 0u64 };
+if not(hm.HashMap.reserve(lend map, 64u64)) { /* allocation failed */ }
+hm.HashMap.put(lend map, 1u64, 42u64);
+let value = hm.HashMap.get(view map, 1u64); // ?u64
+hm.HashMap.destroy(lend map);
+```
+
+#### `std/collections/hash_map` (proposed draft)
+
+`HashMap<K, V>`, `Entry<K, V>`, and `Hashable` are the target API for a generic
+map, but the module is intentionally not wired into CTest. Zith-- currently
+reifies nested generic structs incorrectly (`?*Entry<K, V>` appears as
+`?*Entry<T, T>` inside `HashMap<K, V>`) and does not propagate trait bounds
+through generic fields, so `current.key.hash()` and `current.key == key` do not
+type-check for generic `K`. Follow the `u64 -> u64` module for a working
+implementation until those generic-instantiation gaps are fixed.
 
 #### `std/fs`
 ```zith
