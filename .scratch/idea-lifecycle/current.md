@@ -4,6 +4,7 @@ Active idea: Execution IR And Interpreter Contract.
 
 Plan: `docs/plans/abi/execution-ir.md`.
 
-Lifecycle state: drawing decisions settled, transition to promising next.
+Lifecycle state: promising. Draft promises ABI-EXEC-01 through ABI-EXEC-10
+are in the plan.
 
-Next transition: compute promises with ids, seams, layout rows, and reversals.
+Next transition: review and sign the draft promises in an ADR.

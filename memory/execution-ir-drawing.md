@@ -4,8 +4,8 @@ The active drawing is `docs/plans/abi/execution-ir.md`. It defines one small
 execution IR that can serve both the HIR interpreter and a future tiny
 backend.
 
-Status: promising next. The drawing decisions are settled. Promises are the
-next artifact.
+Status: promising. Draft promises `ABI-EXEC-01` through `ABI-EXEC-10` exist
+in the drawing. They are not signed.
 
 ## Current Scope
 
@@ -19,6 +19,12 @@ next artifact.
   traps.
 - `src/ir/` and `src/interp/`, and a standalone hello-world ABI test first.
 - The IR stores metadata only. Implementation details stay independent.
+
+## Next Transition
+
+Review the draft promises, then sign them in an ADR. The first conforming test
+must carry a signed promise id, so no test source is written before signing
+unless the review changes a promise.
 
 ## Lifecycle Position
 

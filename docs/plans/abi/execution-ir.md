@@ -1,6 +1,6 @@
 # Execution IR And Interpreter Contract
 
-Status: drawing
+Status: promising
 
 Size: system, first slice is a single unit.
 
@@ -120,3 +120,177 @@ Compute the first promises from the settled decisions. The immediately
 promising areas are the one-contract surface, the HIR-first delivery order,
 the register-based IR model, the minimal extern set, the check model, the
 `src/ir/` + `src/interp/` layout, and the standalone hello-world seam.
+
+## Technical Facts
+
+The repository has an executable CLI but no execution path for `--interpreted`.
+`cli/cmd/run.cpp` calls `CompilationSession::run()` and then
+`linkAndExecDirect()`, so the flag is parsed but does not select an
+interpreter. The WASM playground exports `zith_run_source`, but it only runs
+the compiler stages up to HIR and does not execute the program.
+
+The compiler already produces an in-memory `hir::HirModule` before codegen.
+HIR contains explicit slots (`HirSlotAlloca`, `HirSlotStore`, `HirSlotLoad`,
+`HirSlotAddr`), calls (`HirCall`), branches, jumps, and terminators. This is
+the ingestion seam for a HIR interpreter.
+
+ZIRL persists HIR bodies in a cache artifact and already supports hydration
+back into `HirModule`. A cache-backed interpreter can consume the same HIR
+that codegen consumes today.
+
+The WASM playground has one stable host import: `zith.host_write(stream, ptr,
+len)`. The minimal host runtime can target that seam directly and does not
+need a full libc in the first slice.
+
+## Promises (Draft)
+
+These promises are not signed. They are proposed for review. Signing happens
+only after the promise ids, seams, layout rows, and reversals are accepted.
+
+### ABI-EXEC-01
+
+```text
+id: ABI-EXEC-01
+contract: Execution IR contract
+rule: The repository defines one execution IR contract in src/ir/ that both
+runtime consumers share, and no second IR format enters the first slice.
+seam: tests/test-abi-execution.cpp and source review of src/ir/
+layout: none
+fields: none
+reverse: A tiny backend consumer proves it cannot share the interpreter IR
+without losing required semantics.
+```
+
+### ABI-EXEC-02
+
+```text
+id: ABI-EXEC-02
+contract: HIR interpreter
+rule: `zithc --interpreted` on a host build lowers a program to `HirModule`
+and executes it with the HIR interpreter without invoking LLVM codegen or a
+linked native binary.
+seam: tests/test-abi-execution.cpp
+layout: none
+fields: none
+reverse: The CLI becomes non-LLVM capable but still links a native executable
+before executing the interpreter path.
+```
+
+### ABI-EXEC-03
+
+```text
+id: ABI-EXEC-03
+contract: HIR interpreter, ordinary functions
+rule: The HIR interpreter executes functions with bodies, parameters, local
+slots, calls, branches, jumps, and returns for the Zith-- subset used by the
+hello-world test.
+seam: tests/test-abi-execution.cpp
+layout: none
+fields: none
+reverse: A required Zith-- feature forces the interpreter to rely on LLVM
+semantics that are not present in HIR.
+```
+
+### ABI-EXEC-04
+
+```text
+id: ABI-EXEC-04
+contract: HIR interpreter, minimal extern set
+rule: The HIR interpreter resolves a minimal set of extern linkage names
+through the Runtime FFI handler table, and returns a trap when a linkage name
+has no handler.
+seam: tests/test-abi-execution.cpp
+layout: none
+fields: none
+reverse: A hello-world program needs a libc function outside the minimal set
+before the interpreter can show end-to-end output.
+```
+
+### ABI-EXEC-05
+
+```text
+id: ABI-EXEC-05
+contract: Execution IR shape
+rule: The execution IR contract is register-based. Instructions address named
+registers and do not encode stack-machine or slot-only semantics in v1.
+seam: source review of src/ir/ plus a later IR interpreter test
+layout: none
+fields: none
+reverse: Register lifetime analysis makes the first IR interpreter slice too
+expensive, and the project chooses slots before registers.
+```
+
+### ABI-EXEC-06
+
+```text
+id: ABI-EXEC-06
+contract: Checks and traps
+rule: The HIR interpreter keeps runtime checks inside the interpreter, and the
+execution IR expresses runtime checks as explicit trap instructions in its
+contract.
+seam: tests/test-abi-execution.cpp and source review of src/ir/
+layout: none
+fields: none
+reverse: The two runtime paths adopt different observable failure behavior for
+the same source program.
+```
+
+### ABI-EXEC-07
+
+```text
+id: ABI-EXEC-07
+contract: Minimal host runtime
+rule: The first interpreter supports a minimal C-compatible runtime surface
+for WASM and no-LLVM host builds, and does not require a complete libc.
+seam: tests/test-abi-execution.cpp and src/wasm/playground.cpp
+layout: none
+fields: none
+reverse: A common extern call proves that the minimal surface cannot stay
+stable, and the runtime grows beyond the declared subset.
+```
+
+### ABI-EXEC-08
+
+```text
+id: ABI-EXEC-08
+contract: CLI and repository layout
+rule: The execution IR lives under src/ir/, the interpreters live under
+src/interp/, and `--interpreted` selects the interpreter execution path.
+src/vm/ is not introduced for the runtime.
+seam: source layout review and tests/test-abi-execution.cpp
+layout: none
+fields: none
+reverse: The IR and interpreter types must live in a shared frontend location
+before the runtime can be consumed, and the layout changes without a contract
+revision.
+```
+
+### ABI-EXEC-09
+
+```text
+id: ABI-EXEC-09
+contract: Hello-world conforming seam
+rule: A standalone test under tests/ lowers a small Zith-- source file, runs
+the HIR interpreter, and verifies the program output and exit status. WASM
+playground reuse is a later integration, not the first seam.
+seam: tests/test-abi-execution.cpp
+layout: none
+fields: none
+reverse: The standalone host path cannot reproduce WASM behavior, and a WASM
+test becomes the first conforming seam.
+```
+
+### ABI-EXEC-10
+
+```text
+id: ABI-EXEC-10
+contract: IR metadata contract
+rule: The IR stores metadata and contract information for consumers, and the
+implementation behind each interpreter or tiny backend stays independent.
+No binary instruction layout is promised in this slice.
+seam: source review of src/ir/ and the later IR interpreter
+layout: none
+fields: none
+reverse: An IR consumer needs binary-instruction layout before it can read
+the IR, and layout rows become part of the signed contract.
+```
