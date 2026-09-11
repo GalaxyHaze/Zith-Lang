@@ -150,7 +150,7 @@ Implementation work that is incomplete or needs review is tracked in
 | `alias` | **Working** | |
 | `pub`, `mod` | **Working** | |
 | `mod(..)`, `mod(N)` | **Working** | Module-depth visibility is applied to declarations and to struct fields; `mod(..)` is unlimited and `mod(N)` allows N directory levels below the owner |
-| C header imports | **Working (validated C)** | libclang only; variadic functions, array-decayed parameters, `va_list`, and function-pointer parameters supported. Object-like scalar macros are imported as constants and verified through the CLI. Simple records passed/returned by value are imported only after libclang proves their layout for the configured target triple; scalar, pointer, and nested validated-record fields are supported. Function-like macros, strings, globals, bitfields, packed/anonymous records, flexible arrays, `long double`, and `__int128` remain unimported with explicit skips |
+| C header imports | **Working (validated C)** | libclang only; variadic functions, array-decayed parameters, `va_list`, and function-pointer parameters supported. Object-like scalar macros are imported as constants and verified through the CLI. Simple records passed/returned by value are imported only after libclang proves their layout for the configured target triple; scalar, pointer, nested validated-record, two-adjacent-i32, and two-adjacent-i64 fields are supported. Function-like macros, strings, globals, bitfields, packed/anonymous records, flexible arrays, mixed-width records, `long double`, and `__int128` remain unimported with explicit skips |
 
 ---
 
@@ -234,7 +234,7 @@ Recorded deliberately; each item is a follow-up, not an unknown.
 | No flow-sensitive narrowing after `is null` | `p->field` on a `?*T` requires NonNull proof from `if (p is null) { } else { p->field }` or `for (not (p is null))`. Error code `E3005` |
 | `is` outside `null`/tagged-union contexts | Non-union `is Type` remains unsupported and reports a dedicated diagnostic |
 | User-defined casts | To be added as a new branch in `classifyCast` |
-| C struct-by-value ABI limited to verified simple records | `struct` parameters/results are imported only when libclang proves layout/alignment for scalars, plain pointers, and nested verified records on the target used by the parse. Unverified records are skipped before lowering |
+| C struct-by-value ABI limited to verified simple records | `struct` parameters/results are imported only when libclang proves layout/alignment for scalars, plain pointers, nested verified records, and two adjacent 64-bit fields on the target used by the parse. Clang passes/returns that pair as two 64-bit scalars on x86-64 and AArch64 Linux; mixed-width or edge-case records are skipped before lowering |
 | Imported/cached bare `opaque` values | Bare `opaque` values exported from module A and consumed in module B are accepted; the canonical tagged typeId is recorded when the value is erased and restored from cached artifacts. There is no cross-module registry object, but canonical tags are deterministic and persisted by the existing `canonical_mappings` path |
 | `..` lexes per character | Its `precedence()` is -1 and range/slice syntax depends on the two `.` tokens. Range literals now have a dedicated `ExprKind::Range`; slicing remains a separate postfix form |
 | `++` / `--` | Not implemented; no increment/decrement operators exist |

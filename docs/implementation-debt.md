@@ -80,9 +80,12 @@ engenharia para rever e gerir.
   constantes.
 - Dívida real: struct-by-value ABI é limitado a records simples cuja
   layout/alignment libclang prova para o target configurado; scalars, pointers
-  e nested records verificados são suportados. Bitfields, packed/anonymous
-  records, flexible arrays, globals, strings, function-like macros,
-  `long double` e `__int128` não são importados.
+  e nested records verificados são suportados; além do slot i64 (scalar
+  64-bit/pointer ou dois i32 adjacentes), um record com dois campos 64-bit
+  adjacentes também é validado por valor como dois registos 64-bit, que é o
+  shape que Clang usa no x86-64 e AArch64 Linux. Bitfields, packed/anonymous
+  records, flexible arrays, mixed-width records, globals, strings,
+  function-like macros, `long double` e `__int128` não são importados.
 - Referência: [impl-status.md](/home/diogo/Zith/docs/impl-status.md:153).
 
 ### 6. Outras incompletudes registadas
