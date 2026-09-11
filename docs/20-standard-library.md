@@ -3,10 +3,13 @@
 > **Implementation status:** `stdlib/c/io.zith`, `stdlib/std/io/console.zith`, and
 > `stdlib/std/alloc.zith` are the shipped modules. `puts`, `println`, and raw allocator
 > primitives work. `stdlib/std/collections/hash_map_u64.zith` ships a concrete
-> `u64 -> u64` hash map. `stdlib/std/new.zith` and
-> `stdlib/std/collections/hash_map.zith` are proposed API drafts and are not part
-> of the checked/shipped surface yet. All other standard library content is **spec-only**.
-> See [impl-status.md](impl-status.md).
+> `u64 -> u64` hash map and `stdlib/std/collections/hash_map.zith` is a checked
+> generic `HashMap<K, V>` module. `stdlib/std/new.zith` is a draft that now
+> passes `zithc check`; the `InPlace` trait shape and an imported conforming
+> `implement Box as InPlace` are covered by `tests/test-generic-hashmap.cpp`.
+> The generic `new`/`delete`/`make`/`release` helpers are not usable yet, so the
+> module is still marked proposed. All other standard
+> library content is **spec-only**. See [impl-status.md](impl-status.md).
 
 `std`/`soon` remain documentation-only in this iteration. No existing module is being rewritten.
 The documented convention uses resource types with `init`/`destroy`, read-only methods with
@@ -92,7 +95,9 @@ The caller owns the storage and must pass the same `size`/`align` to
 recorded in [ADR 0010](adr/0010-allocator-inplace-drop.md). A draft module at
 `stdlib/std/new.zith` carries the target trait and helper signatures, but it is
 marked proposed because the compiler cannot yet instantiate generics that only
-appear in the return type or dispatch opaque packs during construction.
+appear in the return type or dispatch opaque packs during construction. The
+`InPlace` trait itself is checked and covered by a conforming type in
+`tests/test-generic-hashmap.cpp`.
 
 #### `std/new` (proposed draft)
 
@@ -110,8 +115,10 @@ pub fn release<T: InPlace>(allocator: dyn Allocator, ptr: *T);
 ```
 
 This module is intentionally not wired into `test-examples` until the
-compiler supports the API. It stays as the single stdlib location for the ADR
-contract so the larger ownership/allocator work has a concrete target.
+generic helper API is usable. `examples/inplace-simple.zith` demonstrates the
+`InPlace` shape with a local trait and `dyn Allocator`; the module stays as the
+single stdlib location for the ADR contract so the larger ownership/allocator
+work has a concrete target.
 
 #### `std/collections/DynArray`
 
@@ -140,15 +147,15 @@ let value = hm.HashMap.get(view map, 1u64); // ?u64
 hm.HashMap.destroy(lend map);
 ```
 
-#### `std/collections/hash_map` (proposed draft)
+#### `std/collections/hash_map` (checked generic)
 
-`HashMap<K, V>`, `Entry<K, V>`, and `Hashable` are the target API for a generic
-map, but the module is intentionally not wired into CTest. Zith-- currently
-reifies nested generic structs incorrectly (`?*Entry<K, V>` appears as
-`?*Entry<T, T>` inside `HashMap<K, V>`) and does not propagate trait bounds
-through generic fields, so `current.key.hash()` and `current.key == key` do not
-type-check for generic `K`. Follow the `u64 -> u64` module for a working
-implementation until those generic-instantiation gaps are fixed.
+`HashMap<K, V>`, `Entry<K, V>`, and `Hashable` form the generic checked map
+module. Concrete generic instances are reified with their type arguments
+stored as structural metadata on `StructType`, so nested `Entry<K, V>` slots
+keep the correct `K`/`V` mapping and `current.key.hash()` resolves through the
+`K: Hashable` bound. The module passes `zithc check` and is covered by
+`tests/test-generic-hashmap.cpp`. For a concrete shipped runtime example,
+prefer the `u64 -> u64` module above.
 
 #### `std/fs`
 ```zith

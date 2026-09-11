@@ -1,0 +1,31 @@
+// Exercises: the `InPlace` construction/cleanup trait with `dyn Allocator`.
+// Expected exit code: 42
+
+from std/alloc
+
+trait InPlace {
+    fn inplace(var self, allocator: dyn Allocator, args: opaque): bool {
+        return true;
+    }
+    fn clean(var self, allocator: dyn Allocator) {}
+}
+
+struct Box {
+    value: i64,
+}
+
+implement Box as InPlace {}
+
+fn main(): i32 {
+    var box = Box { value: 42 };
+    let heap = HeapAllocator {};
+    if not box.InPlace.inplace(heap, 0 as opaque) {
+        return 1;
+    }
+    if (box.value == 42) {
+        box.InPlace.clean(heap);
+        return 42;
+    }
+    box.InPlace.clean(heap);
+    return 2;
+}

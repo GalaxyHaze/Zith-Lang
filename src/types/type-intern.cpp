@@ -408,7 +408,8 @@ TypeId TypeIntern::defineStruct(std::string_view name) {
         return *existing;
 
     TypeId def_id = static_cast<TypeId>(struct_defs_.size());
-    struct_defs_.push(StructDef{id, memory::DynArray<StructField>(arena_), {}});
+    struct_defs_.push(
+        StructDef{id, memory::DynArray<StructField>(arena_), memory::DynArray<TypeId>(arena_), {}});
     auto type = intern(TypeStruct{def_id});
     named_types_.insert(id, type);
     return type;
@@ -417,6 +418,15 @@ TypeId TypeIntern::defineStruct(std::string_view name) {
 void TypeIntern::addField(TypeId struct_type, std::string_view field_name, TypeId field_type) {
     auto &def = getStructDef(struct_type);
     def.fields.push(StructField{interner_.intern(field_name), field_type});
+}
+
+void TypeIntern::setTypeArgs(TypeId struct_type, std::span<const TypeId> args) {
+    auto &def = getStructDef(struct_type);
+    if (args.empty())
+        return;
+    def.args.clear();
+    for (const TypeId arg : args)
+        def.args.push(arg);
 }
 
 void TypeIntern::setDefiningModule(TypeId type, std::string_view module) {

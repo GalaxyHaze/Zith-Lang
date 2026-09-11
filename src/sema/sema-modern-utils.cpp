@@ -46,6 +46,12 @@ bool looksChar(std::string_view text) {
     const bool from_integer = from == TypeKind::Integer || from == TypeKind::Char;
     const bool to_integer   = to == TypeKind::Integer || to == TypeKind::Char;
     const bool from_enum    = from == TypeKind::Enum;
+    if (to == TypeKind::GenericParam && (from_integer || from_enum))
+        return CastKind::IntToInt;
+    if (from == TypeKind::GenericParam && to_integer)
+        return CastKind::IntToInt;
+    if (from == TypeKind::GenericParam && to == TypeKind::Float)
+        return CastKind::IntToFloat;
     if (from == to && from == TypeKind::Float)
         return CastKind::FloatToFloat;
     if ((from_integer || from_enum) && to_integer)

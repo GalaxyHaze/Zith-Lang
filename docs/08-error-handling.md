@@ -24,8 +24,8 @@ In full Zith, failable types may be stacked, and the notation reads linearly:
 
 Read left to right, outer to inner: an *optional* **pointer** to an *optional* **Result**, where the Result's success type is `?i32` and its error type is `IoError`.
 
-> **Zith-- boundary:** `?T` is part of Zith--. `T!` is a full-Zith type. Zith-- rejects failable
-> syntax and leaves error propagation to the full spec.
+> **Zith-- boundary:** `?T` is part of Zith--. `T!` is a full-Zith type, and the Zith-- pipeline
+> has no failable-result syntax; error propagation remains in the full spec.
 
 ### 8.1.1 C pointers are `?*T`
 

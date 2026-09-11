@@ -18,10 +18,9 @@ records an intentional product boundary. The curator's job is to keep those
 three surfaces mutually consistent without silently changing compiler
 behavior.
 
-The worktree for this task is `agent5` and the scope is docs/memory only.
-Changes to source files are out of scope except for a stale reference that
-must be fixed. Language semantics stay defined by `docs/Zith--.md` and
-`docs/impl-status.md`.
+Language semantics stay defined by `docs/Zith--.md` and
+`docs/impl-status.md`. Memory notes should keep short decision records and
+point at those files instead of restating full specifications.
 
 ## Current Plan Inventory
 
@@ -207,7 +206,6 @@ Other debt entries remain real and were left unchanged:
 
 - Bare `opaque` cross-module/cache hydration is closed by the canonical tags
   and `opaque -> opaque` sema no-op; pack/dyn + `opaque` remains separate.
-
 - `type Name = T` is partial because construction and field access syntax are
   missing.
 - The object cache works but `.zirl` is neither produced nor consumed.
@@ -221,6 +219,8 @@ Other debt entries remain real and were left unchanged:
 - `for (cond)` is still printed as `while` by the formatter.
 - `++` and `--` do not exist.
 - `..` is lexed character by character.
+- Imported trait/interface conformance works in temp workdirs but is unstable
+  for qualified trait calls in populated workdirs (`implementation-debt.md` 10).
 
 ## Audit Methodology
 

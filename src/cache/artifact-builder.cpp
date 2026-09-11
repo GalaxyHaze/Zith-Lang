@@ -777,6 +777,8 @@ Artifact ArtifactBuilder::build(std::string_view canonical_path, std::string_vie
             cdef.field_name_ids.push_back(internString(interner_.lookup(field.name)));
             cdef.field_type_ids.push_back(internType(field.type));
         }
+        for (const auto &arg : sd->args)
+            cdef.type_arg_ids.push_back(internType(arg));
         art.struct_defs.push_back(std::move(cdef));
     }
     for (size_t def_id = 0; def_id < types_.enumDefCount(); ++def_id) {

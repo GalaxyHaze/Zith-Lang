@@ -255,6 +255,13 @@ void CompilationSession::hydrateFromArtifact(const cache::Artifact &art) {
         if (s.hasForeignLayout)
             mTypes.setForeignLayout(tid, s.foreignSizeBytes, s.foreignAlignBytes,
                                     s.foreignAbiIsSingleI64);
+        if (!s.type_arg_ids.empty()) {
+            std::vector<types::TypeId> args;
+            args.reserve(s.type_arg_ids.size());
+            for (const auto arg_id : s.type_arg_ids)
+                args.push_back(compactType(arg_id));
+            mTypes.setTypeArgs(tid, args);
+        }
         for (size_t fi = 0; fi < s.field_name_ids.size() && fi < s.field_type_ids.size(); ++fi) {
             const auto &name = art.strings[s.field_name_ids[fi]];
             mTypes.addField(tid, name, compactType(s.field_type_ids[fi]));

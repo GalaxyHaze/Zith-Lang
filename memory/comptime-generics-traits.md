@@ -1,14 +1,17 @@
-# Archived: Comptime, Generics, Traits & Capabilities 0.7.0
+# Comptime, Generics, Traits & Capabilities Context
 
-This note records the archived planning contract for the full-Zith 0.7.0
-proposal: what the proposal covered, where the detailed guides moved, and which
-design decisions were locked while it was active.
+Short contextual pointer for the full-Zith 0.7.0 proposal. The detailed
+planning and implementation guides now live in
+`docs/plans/archive/0.7.0-zith/`; this note only keeps the boundaries that are
+easy to confuse when editing the active plan.
 
 The current compiler product split keeps comptime/introspection/type
 construction/capabilities in the full Zith spec. The `Zith--` active plan now
 lives in `docs/plans/0.7.0/`, and the detailed full-Zith steps were moved to
-`docs/plans/archive/0.7.0-zith/`. Do not treat the archived steps as active
-`Zith--` work.
+`docs/plans/archive/0.7.0-zith/`. The traits, interfaces, generic constraints
+and monomorphization pieces that were described as future in this note are
+implemented in Zith-- today; see `docs/impl-status.md` before calling any of
+them pending.
 
 ## Locked Scope
 
@@ -28,7 +31,7 @@ lives in `docs/plans/0.7.0/`, and the detailed full-Zith steps were moved to
 - `Copy` is not a capability. Implicit bitwise copy is a type-system property,
   not a trait.
 
-## Architecture Facts
+## Durable Architecture Facts
 
 `GenericInstantiationPass` in `src/comptime/generic-instantiate.*` runs in
 `semaStage()` before `nraStage()` and monomorphizes generic functions, structs,
@@ -41,41 +44,5 @@ Cached artifacts store an `InstantiationRecord` summary plus per-HIR-function
 `instance_index`; cold and warm builds reproduce the same monomorphized HIR.
 The cache `Store` must be created only after `FrontendContext` exists because
 the warm-key identity depends on it.
-
-The parser skips trait/interface bodies with `skipDelimited`, stores generic
-constraints only as `TypeExprId constraint` on `GenericParam`, and
-`lowerImplementBlock` discards the trait name after consuming it. Sema has
-`TraitType`, `internTrait`, `lookupNamed`, and an owner-based method path, but no
-conformance table yet.
-
-## Step Files
-
-Each step is a self-contained implementation guide under `docs/plans/0.7.0/`.
-Follow the dependency order in that README; the important dependencies are:
-
-1. Trait and interface bodies (parser, formatter, cache) must exist before
-   `requires`/`extends` or conformance checking.
-2. Conformance must exist before constraints, introspection and capability
-   shape validation.
-3. Generic monomorphization must exist before constraint enforcement at calls.
-4. Monomorphization and conformance must exist before the comptime interned
-   type-values that delegate back to them.
-5. Capability base must exist after conformance but is intentionally behavior-free.
-
-## Diagnostic Reservation
-
-The full diagnostic list is in `docs/plans/archive/0.7.0-zith/README.md`. The reserved ranges
-are semantic `2021-2029` (traits/interfaces/capabilities), generic
-`3009-3012`, and comptime `6001-6006`. Parallel sessions must take codes only
-from the step that owns them.
-
-## Extension Recipe For Capabilities
-
-To activate a capability later, one future session must add the method signature
-set to the registry, then wire the single documented hook in the corresponding
-step file: binary operator resolution for `Arithmetic`, `a[i]` resolution for
-`Index`, `for (x in xs)` for `Iterator`, and `in` in condition position for
-`Range`. With `for`, `in` means iteration; with `if`, it means membership.
-
-`Null` and `Fail` are negative capabilities and are blocked on NRA proof; they are
-registry entries only until then.
+See the archived step files under `docs/plans/archive/0.7.0-zith/` for the
+original dependency order and capability extension details.

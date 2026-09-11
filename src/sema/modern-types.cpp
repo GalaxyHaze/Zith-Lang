@@ -118,7 +118,8 @@ TypeId TypeTable::internStateFunction(memory::DynArray<TypeId> &params, TypeId r
 
 TypeId TypeTable::internStruct(std::string_view name, memory::DynArray<TypeId> &fields,
                                memory::DynArray<std::string_view> *field_names,
-                               memory::DynArray<FieldMeta> *field_meta) {
+                               memory::DynArray<FieldMeta> *field_meta,
+                               const std::vector<TypeId> *struct_args) {
     auto &entry         = pushEntry(EntryKind::Struct);
     entry.reported_kind = TypeKind::Struct;
     entry.name_view     = persistString(name);
@@ -135,8 +136,13 @@ TypeId TypeTable::internStruct(std::string_view name, memory::DynArray<TypeId> &
         for (auto &meta : *field_meta)
             meta_storage.push(meta);
     }
-    entry.struct_ty =
-        arena_->make<StructType>(StructType{entry.name_view, storage, name_storage, meta_storage});
+    auto &args_storage = makeStorage();
+    if (struct_args != nullptr)
+        for (const auto arg : *struct_args)
+            args_storage.push(arg);
+    entry.struct_args = &args_storage;
+    entry.struct_ty   = arena_->make<StructType>(
+        StructType{entry.name_view, storage, name_storage, meta_storage, args_storage});
     entry.storage      = &storage;
     entry.name_storage = &name_storage;
     entry.meta_storage = &meta_storage;
@@ -657,6 +663,25 @@ std::string TypeTable::ConformanceTable::baseName(std::string_view name) noexcep
 TypeId TypeTable::lookupNamed(std::string_view name) const noexcept {
     const auto *value = named_registry_.get(name);
     return value ? *value : kInvalidTypeId;
+}
+
+TypeId TypeTable::lookupReifiedStruct(std::string_view name,
+                                      const std::vector<TypeId> &args) const noexcept {
+    const auto *value = named_registry_.get(name);
+    if (value == nullptr)
+        return kInvalidTypeId;
+    const auto *entry = findEntry(*value);
+    if (entry == nullptr || entry->kind != EntryKind::Struct || entry->struct_ty == nullptr)
+        return *value;
+    if (entry->struct_args == nullptr || entry->struct_args->size() != args.size())
+        return kInvalidTypeId;
+    for (size_t index = 0; index < args.size(); ++index) {
+        const TypeId candidate = (*entry->struct_args)[index];
+        if (candidate != args[index] && candidate != canonical(args[index]) &&
+            canonical(candidate) != canonical(args[index]))
+            return kInvalidTypeId;
+    }
+    return *value;
 }
 
 std::string_view TypeTable::namedTypeName(TypeId id) const noexcept {

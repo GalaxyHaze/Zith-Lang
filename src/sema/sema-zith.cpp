@@ -424,7 +424,22 @@ bool PerModuleSema::sameType(TypeId a, TypeId b) const noexcept {
         // Nominal identity: a forward-declared placeholder and the completed struct share a name.
         const auto *sa = type_table.struct_type(resolved_a);
         const auto *sb = type_table.struct_type(resolved_b);
-        return sa != nullptr && sb != nullptr && sa->name == sb->name;
+        if (sa == nullptr || sb == nullptr)
+            return false;
+        const auto base = [](std::string_view name) {
+            if (const size_t angle = name.find('<'); angle != std::string_view::npos)
+                return name.substr(0, angle);
+            return name;
+        };
+        if (base(sa->name) != base(sb->name))
+            return false;
+        if (!sa->args.empty() && sa->args.size() == sb->args.size()) {
+            for (size_t index = 0; index < sa->args.size(); ++index) {
+                if (!sameType(sa->args[index], sb->args[index]))
+                    return false;
+            }
+        }
+        return true;
     }
     if (ka == TypeKind::Enum) {
         const auto *ea = type_table.enum_type(resolved_a);

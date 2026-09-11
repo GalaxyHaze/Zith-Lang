@@ -5,9 +5,9 @@
 > and duck-typed `for (x in iterable)` are **working**. Labels can target any of these forms and
 > loop bodies can lower to the same CFG machinery as the
 > old `while`. `while` still works but emits a deprecation warning (`W1008`) pointing at
-> `for (cond) { }`. The literal range forms (`0..4`) are not implemented yet. `when` pattern
-> matching is **working**, including equality, boolean, guard islands, range, pattern
-> alternatives, and tagged-union type-narrowing arms. Cases are comma-separated and the
+> `for (cond) { }`. Literal ranges (`0..4`, open bounds) and `when` pattern
+> matching are **working**, including equality, boolean, guard islands, range, and
+> pattern alternatives. Cases are comma-separated and the
 > canonical form writes the body immediately after the condition islands. The legacy `~>`
 > marker still compiles but emits `W1008`. `state` declarations, `dock` calls, and `jump`
 > terminating transfers are **working** and compile to direct LLVM `musttail` calls. The old

@@ -99,7 +99,7 @@ int help(FILE *dest) {
     p.flag("    --emit-ir", "Emit LLVM IR");
     p.flag("    --emit-asm", "Emit assembly");
     p.flag("    --emit-all", "Emit tokens, AST, HIR, IR, and assembly");
-    p.flag("    --interpreted", "Use bytecode path");
+    p.flag("    --interpreted", "Execute through the HIR interpreter");
     p.flag("    --opt-level <0-3>", "Optimization level");
     p.flag("    --debug-level <0-3>", "Debug info level");
     p.flag("-s, --strict", "Apply stricter rules");

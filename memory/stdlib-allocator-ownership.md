@@ -42,19 +42,22 @@ directory module. Removing the empty directory and clearing the stale
 The full proposal in `docs/adr/0010-allocator-inplace-drop.md` separates:
 
 - `Allocator`: storage primitives `alloc`/`free`/`realloc` with `?raw opaque`.
-- `InPlace`: object construction/cleanup hooks for allocator-based values.
+- `InPlace`: object construction/cleanup hooks for allocator-based values. The
+  trait now passes `zithc check`, and an imported `implement Box as InPlace`
+  with qualified trait calls is covered by `tests/test-generic-hashmap.cpp`.
 - `new<T>`/`delete<T>` and `make<T>`/`release<T>`: heap and generic allocator
   convenience pairs. `stdlib/std/new.zith` carries the target trait and helper
-  signatures as a proposed draft, but it is not registered in `test-examples`
-  because the compiler cannot check it yet.
+  signatures as a proposed draft because the helpers still cannot be
+  instantiated.
 - `W10xx DiscardedValue` and `W11xx DiscardedOwner`: future compiler warnings;
   no codegen changes are shipped in the first stdlib-only step.
 
 ## `std/new.zith` Compiler Gaps
 
 The API draft in `stdlib/std/new.zith` exists as the single source for the
-`InPlace`/`new`/`delete`/`make`/`release` contract, but `zithc check` cannot
-accept it yet. Confirmed blockers:
+`InPlace`/`new`/`delete`/`make`/`release` contract. The module and the
+`InPlace` trait itself now pass `zithc check`; the helper generics remain
+blocked. Confirmed blockers:
 
 - Generic inference only unifies function parameters, not results. A helper
   such as `fn new<T>(args: opaque): ?*T` fails with `E3011 cannot infer
@@ -64,10 +67,10 @@ accept it yet. Confirmed blockers:
 - Opaque pack values cannot be destructured/field-accessed in the current
   subset, so `args as |cap: u64|` compiles for matching but assigning
   `self.cap = raw tuple` fails with `E3001 expected 'i32', has type 'pack'`.
-- `implement` of an imported trait is unstable when the module also imports
-  `std/alloc`; keeping `new.zith` outside the checked/tested surface avoids
-  locking users into an importing module that currently contaminates symbol
-  resolution with unrelated `alloc.zith` diagnostics.
+- An imported `InPlace` trait works in temporary workdirs, but qualified trait
+  calls on a conforming type are unreliable inside `examples/` and other
+  populated workdirs. `examples/inplace-simple.zith` therefore demonstrates the
+  same contract with a local trait and `dyn Allocator`.
 - `@alignOf` only accepts structs in the current subset, so heap
   `new<T>`/`make<T>` cannot query alignment for primitive-layout `T` without
   compiler work.

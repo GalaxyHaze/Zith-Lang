@@ -6,7 +6,7 @@
 > same binding cannot be borrowed twice in one call. `view` writes are rejected with `E4004`.
 > Residual NRA facts are accumulated and attached before HIR, and LLVM emits `readonly` for views
 > plus `nocapture` for borrows. The full alive/dead/lent state machine and the complete four-rule
-> proof of [§7.4](#74-the-four-nra-rules) are still **spec-only** (F-14). Pointer types (`*T`),
+> proof of [§7.4](#74-the-four-nra-rules) are still full-Zith/spec-only (F-14). Pointer types (`*T`),
 > `*p` dereference, and `&x` address-of are **working**. `&x` is a logical move in Zith--:
 > the pointed binding is dead until directly reassigned, and pointers derived from `&x` or
 > `@ptrOf(local)` are pointer objects that must not escape to longer-lived storage.

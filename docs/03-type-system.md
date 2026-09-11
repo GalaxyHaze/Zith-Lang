@@ -6,9 +6,9 @@
 > **working** for numeric conversions only, and is required: there are no implicit conversions
 > between numeric types (a numeric *literal* still adapts to its annotated type). Pointers are
 > non-nullable, so `null` requires `?*T`, and `*void` is rejected in favour of `raw opaque`.
-> `is` is limited to `(val is null)` on an optional; union narrowing, `when` pattern matching,
-> and NRA ownership modifiers (`lend`, `view`, etc.) are **spec-only**. `dyn Trait`/`dyn Interface`
-> dispatch is **working** for methods in Zith--.
+> `is <type>` narrowing works for tagged unions and opaque, and `when` pattern matching is
+> working. Full NRA ownership modifiers (`unique`, `share`, `belong`) remain
+> full-Zith/spec-only; `dyn Trait`/`dyn Interface` method dispatch is **working** in Zith--.
 > See [impl-status.md](impl-status.md).
 
 ### 3.1 Primitive Types

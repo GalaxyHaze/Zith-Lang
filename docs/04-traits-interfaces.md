@@ -6,10 +6,11 @@
 > bounds. Interfaces are structural: a concrete struct satisfies an interface automatically when
 > every declared field exists with the required type and every declared method requirement has a
 > compatible signature. Using an interface as a generic bound exposes the interface fields and
-> methods to the generic body. Trait defaults are resolved for concrete owners during sema, `dyn
-> Trait`, dynamic dispatch, `requires`/`extends` as explicit constraints, and per-owner
-> default-method HIR generation remain spec-only or pending. `Self` in implementations and trait
-> defaults resolves to the implementing type.
+> methods to the generic body. Trait defaults are resolved for concrete owners during sema,
+> method-only `dyn` dispatch through fat pointers/vtables is working, and `requires`/`extends`,
+> interface fields on `dyn`, and per-owner default-method HIR generation remain full-Zith/spec-only
+> or pending. `Self` in implementations and trait defaults resolves to the implementing type.
+> See [impl-status.md](impl-status.md).
 
 The `implement` owner may be a primitive, `?T`, or `[]T` in addition to a named struct/enum:
 

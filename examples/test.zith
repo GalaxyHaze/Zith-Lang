@@ -1,38 +1,10 @@
-// Exercises the stdlib I/O contract: positional formatting, the literal `\#`
-// escape, user-formatable structs, and line input.
-// Expected exit code: 0
+extern fn puts(msg: *char)
 
-from std/io/console
-from std/io/format
-
-struct Point {
-    [x, y]: u32,
-
-    fn format(self, dest: lend FormatBuffer): IoError {
-        dest.appendRaw("(", 1);
-        dest.appendU32(self.x);
-        dest.appendRaw(", ", 2);
-        dest.appendU32(self.y);
-        dest.appendRaw(")", 1);
-        return IoError.Ok;
+fn main(): i32{
+    puts("hello world");
+    var i = 1;
+    for (v in 00..5){
+        i *= v;
     }
-}
-
-implement Point as Formatable {
-    fn format(self, dest: lend FormatBuffer): IoError {
-        dest.appendRaw("Point#", 6);
-        self.format(lend dest);
-        return IoError.Ok;
-    }
-}
-
-fn main(): i32 {
-    println("point: #  hash: \#", Point { x: 3, y: 4 });
-    print("insert number: ");
-    let line = input();
-    let num = line.cast<i32>();
-    if not(num is null) {
-        println("read: #", num);
-    }
-    return 0;
+    return i;
 }

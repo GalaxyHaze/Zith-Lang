@@ -39,6 +39,7 @@ constexpr Example kExamples[] = {
     {"generics-simple.zith", 42, false},
     {"generics-advanced.zith", 82, false},
     {"hash-map-u64.zith", 0, false},
+    {"inplace-simple.zith", 42, false},
     {"loops-simple.zith", 12, false},
     {"loops-advanced.zith", 10, false},
     {"macros-simple.zith", 42, false},

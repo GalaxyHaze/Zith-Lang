@@ -364,6 +364,10 @@ private:
     /// Used to identify `T.method(...)` static trait calls over a generic
     /// parameter during method-call inferencing.
     [[nodiscard]] TypeId genericParamTypeByName(std::string_view name) const;
+    /// Renders a type argument with the source-level generic parameter name
+    /// when the argument is still an unsubstituted `K`/`V` parameter. Concrete
+    /// arguments use the ordinary type spelling.
+    [[nodiscard]] std::string typeArgumentName(TypeId arg) const;
     /// Try to resolve a Field/Arrow callee as a method call.
     /// Returns the result type, or kInvalidTypeId (with a diagnostic)
     /// when the field is not a method.

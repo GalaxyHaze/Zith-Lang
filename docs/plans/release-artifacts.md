@@ -1,6 +1,8 @@
-# Release Artifact Matrix
+# Release Artifact Matrix (archived audit)
 
-> Status: audit snapshot for `.github/workflows/build-artifact.yml`.
+> Status: archived audit snapshot. It is not an active feature plan. Keep it
+> only as history for the release/installer audit; current release behavior
+> should be read from `.github/workflows/` and `docs/implementation-debt.md`.
 
 This document records the intended release artifact contract and the flags
 each target should use in the build-artifact workflow. Native `zithc` x86-64

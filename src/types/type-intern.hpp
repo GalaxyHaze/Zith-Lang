@@ -8,6 +8,7 @@
 #include "types/type-kind.hpp"
 
 #include <map>
+#include <span>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -22,6 +23,7 @@ struct StructField {
 struct StructDef {
     memory::InternedId name;
     memory::DynArray<StructField> fields;
+    memory::DynArray<TypeId> args;
     std::string_view defining_module;
     /// Validated C-record byte layout, populated only for foreign records whose
     /// libclang layout and public ABI shape were proven on the parse target.
@@ -119,6 +121,8 @@ public:
     // ── Struct definition helpers ─────────────────────────────────
     TypeId defineStruct(std::string_view name);
     void addField(TypeId struct_type, std::string_view field_name, TypeId field_type);
+    /// Records the concrete generic arguments carried by a reified struct.
+    void setTypeArgs(TypeId struct_type, std::span<const TypeId> args);
     /// Records the module that declares a named type. Non-empty first write wins.
     void setDefiningModule(TypeId type, std::string_view module);
     [[nodiscard]] std::string_view definingModuleOf(TypeId type) const;

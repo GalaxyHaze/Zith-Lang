@@ -349,6 +349,13 @@ types::TypeId HirLowerModern::lowerType(sema::modern::TypeId type) {
             // Register the name (done by the named-type not found path).
             lowered = types_.registerNamedType(structure->name, types::TypeKind::Struct);
             types_.setDefiningModule(lowered, sema_.typeTable().definingModule(type));
+            if (!structure->args.empty()) {
+                memory::DynArray<types::TypeId> lowered_args(arena_);
+                lowered_args.reserve(structure->args.size());
+                for (const auto arg : structure->args)
+                    lowered_args.push(lowerType(arg));
+                types_.setTypeArgs(lowered, lowered_args);
+            }
             // Register the name (done above) before lowering field types so self-referential
             // structs (`next: *Node`) terminate. Fields are copied once, on first lowering.
             if (types_.fieldCount(lowered) == 0U && structure->fields.size() != 0U) {

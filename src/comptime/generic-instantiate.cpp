@@ -1,5 +1,4 @@
 #include "comptime/generic-instantiate.hpp"
-
 #include <functional>
 #include <limits>
 #include <string>
@@ -52,22 +51,15 @@ std::string_view baseTypeName(std::string_view name) noexcept {
 
 std::string concreteStructName(std::string_view base,
                                const memory::DynArray<sema::modern::TypeId> &fields,
-                               const std::vector<sema::modern::TypeId> &args,
                                const sema::modern::TypeTable &type_table) {
     std::string result(base);
     result += "<";
     bool first = true;
-    for (const auto field : fields) {
+    for (const auto substituted : fields) {
         if (!first)
             result += ",";
-        first                = false;
-        uint32_t origin_decl = 0;
-        uint32_t origin_idx  = 0;
-        type_table.genericParamOrigin(type_table.stripQualifiers(field), &origin_decl, &origin_idx);
-        if (origin_decl != 0 && origin_idx < args.size())
-            result += type_table.typeToString(args[origin_idx]);
-        else
-            result += type_table.typeToString(field);
+        first = false;
+        result += type_table.typeToString(substituted);
     }
     if (fields.empty()) {
         result += "?";
@@ -188,10 +180,18 @@ GenericInstantiationPass::resolveTypes(const size_t degree, const uint32_t decl_
             if (pointee_qual != nullptr &&
                 (pointee_qual->ownership == types::OwnershipKind::Lend ||
                  pointee_qual->ownership == types::OwnershipKind::View)) {
-                if (type_table_.kindOf(arg) == sema::modern::TypeKind::Pointer) {
+                if (type_table_.kindOf(type_table_.stripQualifiers(arg)) ==
+                    sema::modern::TypeKind::Pointer) {
                     if (const auto *arg_ptr = type_table_.pointer(type_table_.stripQualifiers(arg));
                         arg_ptr != nullptr)
                         arg = type_table_.stripQualifiers(arg_ptr->pointee);
+                } else {
+                    // `view self` and `lend self` are lowered to a borrow
+                    // pointer in the declared ABI, but expression inference
+                    // keeps the pointee type for the argument (`Entry<K>`
+                    // rather than `*view Entry<K>`). Unify directly with that
+                    // pointee so a generic callee can bind its own `K` to the
+                    // caller's `K`.
                 }
                 param = ptr->pointee;
             }
@@ -340,8 +340,17 @@ GenericInstantiationPass::resolveTypes(const size_t degree, const uint32_t decl_
                             if (ps != nullptr && as_ != nullptr &&
                                 baseTypeName(ps->name) == baseTypeName(as_->name) &&
                                 ps->fields.size() == as_->fields.size()) {
-                                for (size_t i = 0; i < ps->fields.size(); ++i)
-                                    probe_self(probe_self, ps->fields[i], as_->fields[i]);
+                                // Generic structs carry their concrete arguments
+                                // as metadata. Prefer those over field scans so
+                                // `Entry<K>` from different callers keeps its own
+                                // K binding while still mapping by index.
+                                if (ps->args.size() == as_->args.size() && !ps->args.empty()) {
+                                    for (size_t i = 0; i < ps->args.size(); ++i)
+                                        probe_self(probe_self, ps->args[i], as_->args[i]);
+                                } else {
+                                    for (size_t i = 0; i < ps->fields.size(); ++i)
+                                        probe_self(probe_self, ps->fields[i], as_->fields[i]);
+                                }
                             } else {
                                 probe_failed = true;
                             }
@@ -462,8 +471,13 @@ GenericInstantiationPass::resolveTypes(const size_t degree, const uint32_t decl_
             if (ps != nullptr && as_ != nullptr &&
                 baseTypeName(ps->name) == baseTypeName(as_->name) &&
                 ps->fields.size() == as_->fields.size()) {
-                for (size_t i = 0; i < ps->fields.size(); ++i)
-                    self(self, ps->fields[i], as_->fields[i]);
+                if (ps->args.size() == as_->args.size() && !ps->args.empty()) {
+                    for (size_t i = 0; i < ps->args.size(); ++i)
+                        self(self, ps->args[i], as_->args[i]);
+                } else {
+                    for (size_t i = 0; i < ps->fields.size(); ++i)
+                        self(self, ps->fields[i], as_->fields[i]);
+                }
             } else {
                 if (strict)
                     failed = true;
@@ -622,10 +636,6 @@ GenericInstantiationPass::substituteType(const sema::modern::TypeId type,
     }
     case sema::modern::TypeKind::Struct: {
         if (const auto *st = type_table_.struct_type(resolved)) {
-            const std::string_view base = baseTypeName(st->name);
-            const std::string concrete  = concreteStructName(base, st->fields, args, type_table_);
-            if (const sema::modern::TypeId existing = type_table_.lookupNamed(concrete))
-                return existing;
             auto &fields = type_table_.makeTypeStorage();
             auto &meta   = type_table_.makeFieldMetaStorage();
             for (const auto field : st->fields)
@@ -636,8 +646,13 @@ GenericInstantiationPass::substituteType(const sema::modern::TypeId type,
                                                       st->field_meta[field_index].modDepth,
                                                       st->field_meta[field_index].owner});
             }
+            const std::string_view base = baseTypeName(st->name);
+            const std::string concrete  = concreteTypeName(base, args, type_table_);
+            if (const sema::modern::TypeId existing =
+                    type_table_.lookupReifiedStruct(concrete, args))
+                return existing;
             const sema::modern::TypeId reified =
-                type_table_.internStruct(concrete, fields, &st->field_names, &meta);
+                type_table_.internStruct(concrete, fields, &st->field_names, &meta, &args);
             type_table_.setDefiningModule(reified, type_table_.definingModule(resolved));
             type_table_.registerNamed(concrete, reified);
             return reified;
@@ -667,7 +682,7 @@ GenericInstantiationPass::substituteType(const sema::modern::TypeId type,
     case sema::modern::TypeKind::Union: {
         if (const auto *ut = type_table_.union_type(resolved)) {
             const std::string concrete =
-                concreteStructName(baseTypeName(ut->name), ut->members, args, type_table_);
+                concreteStructName(baseTypeName(ut->name), ut->members, type_table_);
             if (const sema::modern::TypeId existing = type_table_.lookupNamed(concrete))
                 return existing;
             auto &members = type_table_.makeTypeStorage();

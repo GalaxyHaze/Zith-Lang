@@ -156,16 +156,21 @@ and C interop:
 | `macro` / `raw macro` / `@name(...)` | **Working (Zith-- only)** | Normal and raw macros with call-site scope handling |
 | Field access, index, deref, address-of | **Working** | Optional bounds checks on array/slice indexing; `raw` skips checks |
 | `?T` (Zith-- only) | **Working** | Optional values, `?` propagation where valid, `is null`, `must`, and `raw` extraction |
-| `T!` (result) | Planned for Zith | Zith-- does not provide failable result types |
+| `T!` (result) | Planned for Zith | Full Zith surface only; not implemented by the Zith-- compiler |
 | `is` / `as` | **Working** | Casting for numeric pairs and raw pointers; tagged-union/opaque narrowing |
 | `tag` (formerly `tag macro`) | Planned for Zith | Rejected in Zith--; planned under the shorter `tag` name |
 | `word` / `context` / `use` | Planned for Zith | No working semantics in Zith-- |
-| `const fn`, `comptime` | Planned for Zith | Compile-time evaluation is not implemented in Zith-- |
+| `const fn` | Parse-level in progress | Parsed in the Zith-- pipeline; compile-time evaluation remains full-Zith/spec-only |
+| `comptime` | Planned for Zith | No Zith-- compile-time evaluation surface yet |
 | Full NRA proof | Planned for Zith | Zith-- currently implements `lend`/`view` slices, logical moves, and escape checks |
 | Core concurrency syntax (`async fn`, `yield`, `spawn`, `await`) | Not part of the core language contract | Concurrency is documented as stdlib/runtime APIs instead of frontend syntax |
 The single source of truth with per-feature verification notes is
 [docs/impl-status.md](docs/impl-status.md). Feature IDs, waves, and current roadmap details are in
 [docs/roadmap.md](docs/roadmap.md).
+
+This README summarizes the headline surface and is not a secondary source of
+truth; consult `docs/impl-status.md` for exact feature, pipeline, CLI, and debt
+status.
 
 ---
 
@@ -216,8 +221,8 @@ Source -> Lex -> Scan -> Import -> Resolve -> TypeCheck -> Comptime/Solve -> NTA
 | `Import` | Resolve module imports |
 | `Resolve` | Bind names to symbols |
 | `TypeCheck` | Infer and check types (sema) |
-| `Comptime/Solve` | Reserved for generic instantiation and the solved semantic view (planned for 0.7.0 step-04); macro expansion runs earlier in frontend |
-| `NTA/NRA` | Fact accumulation plus Node Resource Analysis — the target pre-HIR ownership phase (still a stub) |
+| `Comptime/Solve` | Generic instantiation and trait/conformance monomorphization run before NRA/HIR; macro expansion runs earlier in frontend |
+| `NTA/NRA` | Residual ownership facts are accumulated before HIR; the full Zith ownership proof remains incomplete |
 | `HIR` | Lower the typed, desugared program while attaching residual ownership facts |
 | `Codegen` | Emit LLVM IR -> native or WASM binary |
 

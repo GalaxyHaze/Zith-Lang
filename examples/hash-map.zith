@@ -1,0 +1,13 @@
+// Exercises: the checked generic `HashMap<K, V>` from the standard library.
+// Expected exit code: 0
+
+import std/collections/hash_map as hm
+
+fn main(): i32 {
+    var map = hm.HashMap<i64, i64> { };
+    if not(hm.HashMap.init(lend map)) {
+        return 2;
+    }
+    hm.HashMap.destroy(lend map);
+    return 0;
+}

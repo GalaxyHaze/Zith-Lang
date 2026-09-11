@@ -490,6 +490,21 @@ bool PerModuleSema::satisfiesConformance(TypeId type, TypeId trait_or_interface)
     const TypeId target   = resolve(trait_or_interface);
     if (!concrete || !target)
         return false;
+    // A generic parameter constrained by a trait satisfies that trait for the
+    // purposes of nested generic calls. This keeps `fn f<K: Hashable>(...)`
+    // callable by `fn g<K: Hashable>(...)` before K is instantiated.
+    uint32_t generic_decl = 0;
+    uint32_t generic_idx  = 0;
+    type_table.genericParamOrigin(concrete, &generic_decl, &generic_idx);
+    if (generic_decl != 0U) {
+        const auto *caller_bounds = genericParams_.get(generic_decl);
+        if (caller_bounds != nullptr && generic_idx < caller_bounds->size()) {
+            for (const TypeId caller_bound : (*caller_bounds)[generic_idx].bounds) {
+                if (resolve(caller_bound) == target)
+                    return true;
+            }
+        }
+    }
     if (type_table.conformanceTable().satisfies(concrete, target))
         return true;
 
@@ -659,6 +674,15 @@ TypeId PerModuleSema::genericParamTypeByName(std::string_view name) const {
     }
     return kInvalidTypeId;
 }
+std::string PerModuleSema::typeArgumentName(TypeId arg) const {
+    uint32_t decl_id   = 0;
+    uint32_t param_idx = 0;
+    type_table.genericParamOrigin(arg, &decl_id, &param_idx);
+    const auto *found = genericParams_.get(decl_id);
+    if (found != nullptr && param_idx < found->size())
+        return (*found)[param_idx].name;
+    return type_table.typeToString(arg);
+}
 bool PerModuleSema::isGenericTypeParamName(std::string_view name, uint32_t decl_id) const noexcept {
     if (name.empty() || decl_id == 0U)
         return false;
@@ -822,7 +846,10 @@ TypeId PerModuleSema::resolveStructMethodCall(const frontend::Expression &call,
             if (const auto *owner_ut = type_table.union_type(pointee)) {
                 inherited_args.assign(owner_ut->members.begin(), owner_ut->members.end());
             } else if (const auto *owner_st = type_table.struct_type(pointee)) {
-                inherited_args.assign(owner_st->fields.begin(), owner_st->fields.end());
+                if (!owner_st->args.empty())
+                    inherited_args.assign(owner_st->args.begin(), owner_st->args.end());
+                else
+                    inherited_args.assign(owner_st->fields.begin(), owner_st->fields.end());
             } else if (const auto *owner_et = type_table.enum_type(pointee)) {
                 const char *begin = owner_et->name.data();
                 const char *end   = begin + owner_et->name.size();

@@ -7,8 +7,11 @@ contracts, decisions, and gotchas that are not discoverable from the source alon
 ## Conventions
 
 - Create one file per topic or area under `memory/`.
-- Keep each file within 300 lines, preferably 200-300 lines.
-- Split overgrown topics into more focused files and link them from here.
+- Keep each file as short as useful. Operational notes do not need 200 lines
+  unless they carry a real playbook; long design narratives belong in `docs/`.
+- Prefer one source of truth per contract: when `docs/` already owns the
+  contract, `memory/` records only the non-obvious implementation facts and
+  links to `docs/`.
 - Read the relevant file before working on that area.
 - Update notes when the repository behavior changes.
 - Invalidate or rewrite entries that are outdated instead of leaving
@@ -16,11 +19,14 @@ contracts, decisions, and gotchas that are not discoverable from the source alon
 
 ## Index
 
-- [comptime-generics-traits.md](comptime-generics-traits.md): archived
-  full-Zith 0.7.0 comptime/traits/capability planning; the active `Zith--`
-  plan now points to `docs/plans/`.
+- [audit-cleaning.md](audit-cleaning.md): current repo-hygiene audit state,
+  deferred WIP, and the cleaning queue.
+- [comptime-generics-traits.md](comptime-generics-traits.md): full-Zith 0.7.0
+  comptime/traits/capability context; details live in
+  `docs/plans/archive/0.7.0-zith/` and this note now points there.
 - [monolith-splits.md](monolith-splits.md): completed frontend/session split
-  layout and the remaining large compiler TUs.
+  layout and the remaining large compiler TUs. See
+  `docs/plans/monolith-splits.md` for the execution contract.
 - [nra-hir-boundary.md](nra-hir-boundary.md): stable ownership/HIR boundary and
   the pitfalls that keep the pre-HIR NRA contract intact.
 - [nra-design.md](nra-design.md): future `Zith` NRA design decisions and link to

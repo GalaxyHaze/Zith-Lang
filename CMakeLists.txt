@@ -210,6 +210,12 @@ add_subdirectory(src/memory)
 
 file(GLOB_RECURSE ZITH_LIB_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp")
 list(REMOVE_ITEM ZITH_LIB_SOURCES "${CMAKE_SOURCE_DIR}/src/cli/zithc-main.cpp")
+# ir/exec-ir.hpp, ir/hir-to-ir.*, and interp/ir-vm.* are an active, unfinished
+# interpreter slice. Keep them out of the library glob until the WIP is
+# integrated; test-abi-execution compiles the slice directly and owns the
+# opt-in target below.
+list(REMOVE_ITEM ZITH_LIB_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/src/ir/hir-to-ir.cpp")
+list(REMOVE_ITEM ZITH_LIB_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/src/interp/ir-vm.cpp")
 
 if(ZITH_IS_WASM)
     file(GLOB_RECURSE CLI_CMD_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/src/cli/cmd/*.cpp")
@@ -368,6 +374,7 @@ if(BUILD_TESTING AND NOT ZITH_IS_WASM)
     add_zith_test(test-ide-api tests/test-ide-api.cpp)
     add_zith_test(test-generics-mono tests/test-generics-mono.cpp)
     add_zith_test(test-enum-union-generics tests/test-enum-union-generics.cpp)
+    add_zith_test(test-generic-hashmap tests/test-generic-hashmap.cpp)
     add_zith_test(test-cinterop tests/test-cinterop.cpp)
     add_zith_test(test-c-compile tests/test-c-compile.cpp)
     add_zith_test(test-optional-slice tests/test-optional-slice.cpp)
@@ -381,7 +388,14 @@ if(BUILD_TESTING AND NOT ZITH_IS_WASM)
     add_zith_test(test-variadic tests/test-variadic.cpp)
     add_zith_test(test-compound-assign tests/test-compound-assign.cpp)
     add_zith_test(test-wasm-contract tests/test-wasm-contract.cpp)
-    add_zith_test(test-abi-execution tests/test-abi-execution.cpp)
+    add_executable(test-abi-execution tests/test-abi-execution.cpp
+        src/ir/hir-to-ir.cpp
+        src/interp/ir-vm.cpp
+    )
+    target_compile_definitions(test-abi-execution PRIVATE
+        ZITH_STDLIB_DIR="${CMAKE_CURRENT_SOURCE_DIR}/stdlib")
+    target_link_libraries(test-abi-execution PRIVATE zithcLib)
+    add_test(NAME test-abi-execution COMMAND test-abi-execution)
     if(TARGET zithc)
         target_compile_definitions(test-abi-execution PRIVATE
             ZITHC_BINARY="$<TARGET_FILE:zithc>")

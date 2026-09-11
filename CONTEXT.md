@@ -204,6 +204,20 @@ _Avoid_: destructor, drop, free method
 Erasing a primitive value to a `dyn Trait` fat pointer so it can be handled through the same dynamic-dispatch surface as structs.
 _Avoid_: boxing, wrapping, vtbl primitive
 
+## Generics
+
+**Reified generic type**:
+A concrete `Name<A, B>` type produced from a generic declaration by substituting each generic parameter with a concrete type argument. It owns a substituted layout and a concrete type name.
+_Avoid_: instantiated template, monomorphized symbol, concrete template type
+
+**Concrete type argument**:
+A concrete type bound to one generic parameter of a reified generic type. `StructType` stores these arguments for method resolution and cache round-trips.
+_Avoid_: generic slot, field-inferred parameter, runtime type argument
+
+**Generic bound source**:
+The declaration-level parameter binding that owns a bound such as `K: Hashable`. It stays authoritative even when the bound is reached through a generic field.
+_Avoid_: bound metadata on a concrete type, field-derived bound, receiver-derived trait
+
 ## Zith Proof Kernel (ZPK)
 
 **Zith Proof Kernel (ZPK)**:

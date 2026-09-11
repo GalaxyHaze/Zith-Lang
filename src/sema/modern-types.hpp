@@ -9,6 +9,7 @@
 #include <cstdint>
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace zith::sema::modern {
 
@@ -101,6 +102,7 @@ struct StructType {
     memory::DynArray<TypeId> &fields;
     memory::DynArray<std::string_view> &field_names;
     memory::DynArray<FieldMeta> &field_meta;
+    memory::DynArray<TypeId> &args;
 };
 struct EnumType {
     std::string_view name;
@@ -203,7 +205,8 @@ public:
     [[nodiscard]] TypeId internStateFunction(memory::DynArray<TypeId> &params, TypeId result);
     [[nodiscard]] TypeId internStruct(std::string_view name, memory::DynArray<TypeId> &fields,
                                       memory::DynArray<std::string_view> *field_names = nullptr,
-                                      memory::DynArray<FieldMeta> *field_meta         = nullptr);
+                                      memory::DynArray<FieldMeta> *field_meta         = nullptr,
+                                      const std::vector<TypeId> *struct_args          = nullptr);
     [[nodiscard]] int fieldIndex(TypeId struct_type, std::string_view name) const noexcept;
     [[nodiscard]] TypeId internEnum(std::string_view name, TypeId underlying,
                                     memory::DynArray<std::string_view> &variant_names,
@@ -270,6 +273,12 @@ public:
     /// completed type registered under the same name. Idempotent for every other type.
     [[nodiscard]] TypeId canonical(TypeId id) const noexcept;
     [[nodiscard]] TypeId lookupNamed(std::string_view name) const noexcept;
+    /// Looks up a previously registered generic struct by its concrete type
+    /// arguments. The name alone is not enough while generic method bodies are
+    /// being checked, because `Entry<K>` from two different methods can share
+    /// the spelling but refer to different `GenericParam` arguments.
+    [[nodiscard]] TypeId lookupReifiedStruct(std::string_view name,
+                                             const std::vector<TypeId> &args) const noexcept;
     /// Returns the registered name backing `id` (for named aliases/nominals/structs).
     [[nodiscard]] std::string_view namedTypeName(TypeId id) const noexcept;
     [[nodiscard]] TypeId findOrCreateNamed(std::string_view name, TypeKind kind);
@@ -352,6 +361,7 @@ private:
         memory::DynArray<std::string_view> *name_storage = nullptr;
         memory::DynArray<FieldMeta> *meta_storage        = nullptr;
         memory::DynArray<int64_t> *disc_storage          = nullptr;
+        memory::DynArray<TypeId> *struct_args            = nullptr;
         TypeId underlying                                = kInvalidTypeId;
         std::string_view defining_module;
     };

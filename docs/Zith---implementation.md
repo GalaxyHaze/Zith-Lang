@@ -184,6 +184,18 @@ base, e `implement Enum<T>`/`implement Union<T>` herdam params e registam
 conformance como em `implement Struct<T>`. `HirLowerModern::lowerType` usa o type id
 concreto, e discriminantes de enum genérico descem do tipo sema actual em vez do template.
 
+Structs genéricas concretas têm identidade estrutural e nomeada: a reificação
+central em `GenericInstantiationPass::substituteType` deriva o nome do tipo a
+partir dos type args concretos e guarda esses args no `StructType` como
+metadados. A resolução de métodos usa `StructType.args` no lugar de scans aos
+fields ou parsing do nome, o que mantém `Entry<K, V>` correto dentro de
+`HashMap<K, V>` e resolve `contains<K, V>(view self)` dentro de funções
+genéricas sem `E3011`. `GenericBinding` continua a ser a fonte de verdade para
+bounds, pelo que `current.key.hash()` com `K: Hashable` atravessa fields
+genéricos. O cache serializa os type args em `CompactStructDef` para que a
+identidade do tipo sobreviva à hidratação entre sessões. Os testes dedicados
+estão em `tests/test-generic-hashmap.cpp`.
+
 Discriminantes de enum são avaliados em `lowerDeclarationTypes`, não como literais fixos.
 O evaluator percorre recursivamente literais inteiros, unários `-`/`~`, binários aritméticos,
 bitwise `&.`/`|.`/`^.`, shifts e comparações, variantes anteriores do enum e referências a
@@ -475,6 +487,9 @@ Os seguintes testes cobrem a iteração:
 - `test-enum-union-generics`: métodos inline em enums/unions genéricos, reificação,
   `implement E<T>`/`implement U<T,U>`, `dyn` de instâncias concretas, aridade/`Self`
   e raw casts lowered post-instantiation.
+- `test-generic-hashmap`: `HashMap<K, V>` checked via `zithc check`, struct
+  reificação com type args concretos, propagação de bounds e round-trip de
+  cache para structs genéricas.
 - `test-codegen`: execução runtime de um const global e de uma maquina de estados com `musttail tailcc`, incluindo parâmetros divergentes.
 - `test-cache`/`test-zirl-sections`: pool de expressões, globals e state machine metadata persistidos.
 - `test-memory-qualifiers`: lend/view aceites; anotações de call `E4005`/`E4007`, exclusividade por call e views read-only; unique/share/belong e mut rejeitados.

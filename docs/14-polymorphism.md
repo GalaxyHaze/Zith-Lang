@@ -1,9 +1,10 @@
 ## 14. Runtime: Polymorphism & Dynamic Behaviour
 
 > **Implementation status:** Static dispatch via generics and `implement T as Trait {}` is
-> **working**. `dyn Trait` and `dyn Interface` dispatch are **working in Zith--**: concrete
+> **working**. `dyn Trait` and `dyn Interface` method dispatch are **working in Zith--**: concrete
 > values are coerced to a fat pointer (data pointer plus a method vtable), and calls on the
-> `dyn` value are lowered through that vtable.
+> `dyn` value are lowered through that vtable. Interface fields remain available on concrete
+> types and generic bounds, not on `dyn` values.
 > See [impl-status.md](impl-status.md).
 
 ### 14.1 Static vs Dynamic Dispatch

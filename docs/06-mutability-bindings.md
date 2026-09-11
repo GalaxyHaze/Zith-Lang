@@ -2,7 +2,8 @@
 
 > **Implementation status:** `let`, `var`, `const`, and `global` bindings are **working**. Binding
 > destructuring with `[ ]` and pack literals are **spec-only**, with no parser or sema support.
-> NRA ownership modifiers (`lend`, `view`, `unique`, `share`, `belong`) are **spec-only**.
+> `lend` and `view` are implemented as the Zith-- call-annotation slice; `unique`, `share`,
+> `belong`, and the full NRA state machine remain full-Zith/spec-only.
 > See [impl-status.md](impl-status.md).
 
 ### 6.1 Deep Mutability Model

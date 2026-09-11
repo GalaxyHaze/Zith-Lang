@@ -1,6 +1,11 @@
 # ZITH Language Specification
 **Draft v0.9: 2026**
 
+> Reference document for the full Zith language surface, including features
+> that are outside the Zith-- subset compiled by `main`. The active compiler
+> contract is `docs/Zith--.md`; per-feature implementation status is
+> `docs/impl-status.md`.
+
 > Zith is a statically typed systems programming language with a small, composable core and a large toolbox for domain-specific work. It proves memory safety at compile time without a garbage collector or borrow checker.
 
 ## Introduction

@@ -4,7 +4,12 @@ The active contract is `docs/plans/abi/execution-ir.md`. It defines one small
 execution IR that can serve the IR VM and a future tiny backend, plus a
 separate simpler HIR interpreter for explicit `--interpreted` execution.
 
-Status: signed. `ABI-EXEC-01` through `ABI-EXEC-11` are accepted by
+The IR VM slice (`src/ir/exec-ir.hpp`, `src/ir/hir-to-ir.*`, and
+`src/interp/ir-vm.*`) is active WIP. It is tracked but not integrated into the
+library build in this cleaning pass; `tests/test-abi-execution.cpp` still
+compiles the slice directly.
+
+Status: signed. `ABI-EXEC-01` through `ABI-EXEC-10` are accepted by
 `docs/adr/0018-execution-ir-interpreter-contract.md`.
 
 ## Current Scope
@@ -22,22 +27,20 @@ Status: signed. `ABI-EXEC-01` through `ABI-EXEC-11` are accepted by
 - A standalone hello-world ABI test is the first conforming seam.
 - The IR stores metadata only. Implementation details stay independent.
 
-## Next Transition
+## Current State
 
 The first conforming slice is now implemented: `tests/test-abi-execution.cpp`
 covers `ABI-EXEC-09`, and `src/interp/hir-interpreter.cpp` backs the
-`--interpreted` path from `src/cli/cmd/run.cpp`. The IR/VM slice is
-implemented: `src/ir/hir-to-ir.*` lowers HIR to the execution IR and
-`src/interp/ir-vm.*` runs the IR; `tests/test-abi-execution.cpp` covers
-`ABI-EXEC-11`. On builds without LLVM or native codegen, the CLI defaults
-`run`/`execute` to `HirLowered` and executes through the IR VM instead of
-linking a native binary.
+`--interpreted` path from `src/cli/cmd/run.cpp`. The IR/VM slice is being
+drafted in `src/ir/hir-to-ir.*` plus `src/interp/ir-vm.*`. It is not wired to
+the CLI or library build yet. The CLI default on builds without LLVM or native
+codegen is out of scope for this memory note until the IR VM is integrated.
 
 ## Lifecycle Position
 
-The plan follows `docs/specs/abi-lifecycle.md`. The next transition is
-conforming: validate the no-LLVM CLI path against a real no-LLVM build, then
-expand the IR/VM surface or wire the WASM playground runtime.
+The plan follows `docs/specs/abi-lifecycle.md`. The next transition is to
+finish the IR/VM draft, integrate it into CMake and tests, and only then
+update the plan/ADR if the IR VM becomes the no-LLVM default.
 
 When the idea changes, update `docs/plans/abi/execution-ir.md` before touching
 tests or source. This file exists so a later session can find the live pointer

@@ -1,4 +1,8 @@
-# Release Stdlib Layout and Discovery
+# Release Stdlib Layout (archived audit)
+
+> Status: archived audit snapshot. It is not an active feature plan. Keep it
+> only as history for the release/installer audit; current release behavior
+> should be read from `.github/workflows/` and `docs/implementation-debt.md`.
 
 This plan records how the released stdlib archives map to the compiler's
 `findStdlibRoots()` roots on each supported install path.

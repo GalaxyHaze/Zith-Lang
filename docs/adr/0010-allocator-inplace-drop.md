@@ -36,10 +36,11 @@ The shipped `stdlib/std/alloc.zith` currently implements the `Allocator` raw
 storage surface plus `HeapAllocator` and the free-function bridge
 `allocate`/`deallocate`/`reallocate` over `dyn Allocator`. A draft
 `stdlib/std/new.zith` contains `InPlace`, `new<T>`/`delete<T>`, and
-`make<T>`/`release<T>` as the target contract, but it is marked proposed and
-is not part of the checked stdlib surface. The compiler cannot yet instantiate
-generic helpers that mention `T` only in the return type, and opaque pack
-fields cannot be extracted/destructured for in-place construction.
+`make<T>`/`release<T>` as the target contract. The module and the `InPlace`
+trait pass `zithc check` and are covered by `tests/test-generic-hashmap.cpp`,
+but the module remains marked proposed because the compiler cannot yet
+instantiate generic helpers that mention `T` only in the return type, and
+opaque pack fields cannot be extracted/destructured for in-place construction.
 
 `make`/`release` are free generic functions rather than methods of the
 `Allocator` trait. `Allocator` only owns allocation storage primitives and

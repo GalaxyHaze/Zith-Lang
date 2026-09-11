@@ -224,9 +224,9 @@ plan that still says `common C` without the validated-record nuance is stale.
 
 ## Memory File Rules
 
-This memory file must stay between 200 and 300 lines. If the split history or
-counts grow, move raw tables into `docs/plans/monolith-splits.md` and keep the
-operational decisions here. Do not duplicate the full execution contract.
+Memory files are short operational notes. If table content grows, move raw
+tables into `docs/plans/monolith-splits.md` and keep the operational decisions
+here. Do not duplicate the full execution contract.
 
 When a remaining candidate is split, update:
 

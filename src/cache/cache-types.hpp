@@ -65,6 +65,7 @@ struct CompactStructDef {
     uint32_t name_id = 0;
     std::vector<uint32_t> field_name_ids;
     std::vector<uint32_t> field_type_ids;
+    std::vector<uint32_t> type_arg_ids;
     // Validated C-record ABI. Only foreign records populated through the C
     // binder set these flags; native Zith structs keep aggregate ABI.
     bool hasForeignLayout      = false;

@@ -437,10 +437,10 @@ TypeId PerModuleSema::instantiateTypeExpr(frontend::TextSpan span, std::string_v
     for (size_t i = 0; i < args.size(); ++i) {
         if (i != 0)
             concrete_name += ",";
-        concrete_name += type_table.typeToString(args[i]);
+        concrete_name += typeArgumentName(args[i]);
     }
     concrete_name += ">";
-    if (const TypeId existing = type_table.lookupNamed(concrete_name))
+    if (const TypeId existing = type_table.lookupReifiedStruct(concrete_name, args))
         return existing;
 
     switch (template_decl->kind) {
@@ -465,7 +465,7 @@ TypeId PerModuleSema::instantiateTypeExpr(frontend::TextSpan span, std::string_v
             fld_names.push(std::string_view(buf, param.name.size()));
         }
         activeTemplateArgs_ = std::move(saved_active);
-        TypeId st = type_table.internStruct(concrete_name, fields, &fld_names, &field_meta);
+        TypeId st = type_table.internStruct(concrete_name, fields, &fld_names, &field_meta, &args);
         type_table.setDefiningModule(st, type_table.definingModule(type_table.lookupNamed(name)));
         type_table.registerNamed(concrete_name, st);
         return st;
@@ -561,12 +561,12 @@ TypeId PerModuleSema::instantiateStructFromArgs(frontend::TextSpan span,
     for (size_t i = 0; i < args.size(); ++i) {
         if (i != 0)
             concrete_name += ",";
-        concrete_name += type_table.typeToString(args[i]);
+        concrete_name += typeArgumentName(args[i]);
     }
     if (args.empty())
         concrete_name += "?";
     concrete_name += ">";
-    if (const TypeId existing = type_table.lookupNamed(concrete_name))
+    if (const TypeId existing = type_table.lookupReifiedStruct(concrete_name, args))
         return existing;
 
     auto &fields                                   = type_table.makeTypeStorage();
@@ -590,7 +590,8 @@ TypeId PerModuleSema::instantiateStructFromArgs(frontend::TextSpan span,
     }
     activeTemplateArgs_ = saved_active;
 
-    const TypeId st = type_table.internStruct(concrete_name, fields, &field_names, &field_meta);
+    const TypeId st =
+        type_table.internStruct(concrete_name, fields, &field_names, &field_meta, &args);
     const std::string_view defining_module =
         type_table.definingModule(type_table.lookupNamed(template_decl.name));
     type_table.setDefiningModule(st, defining_module);

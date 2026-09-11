@@ -565,6 +565,20 @@ bool PerModuleSema::coerceValue(frontend::ExprId value, TypeId target, TypeId so
         }
         if (const auto *pointer = type_table.pointer(cursor); pointer != nullptr)
             target = type_table.stripQualifiers(pointer->pointee);
+        if (isBorrowParamType(source)) {
+            TypeId source_cursor = source;
+            for (unsigned guard = 0; guard < 8U; ++guard) {
+                source_cursor = type_table.canonical(source_cursor);
+                if (const auto *qualified = type_table.qualified(source_cursor);
+                    qualified != nullptr) {
+                    source_cursor = qualified->inner;
+                    continue;
+                }
+                break;
+            }
+            if (const auto *pointer = type_table.pointer(source_cursor); pointer != nullptr)
+                source = type_table.stripQualifiers(pointer->pointee);
+        }
     }
     // An annotated array literal may coerce per element. The array itself is
     // retyped to the annotation only when every operand accepts the target
