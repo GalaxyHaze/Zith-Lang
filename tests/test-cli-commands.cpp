@@ -1,5 +1,6 @@
 #include "cli/commands.hpp"
 #include "cli/options.hpp"
+#include "session/project-options-merge.hpp"
 #include "test-common.hpp"
 
 #include <cstring>
@@ -141,6 +142,82 @@ static void test_system_includes_flag() {
     CHECK(!disabled.opts.systemIncludes, "--no-system-includes clears system includes");
 }
 
+// ── ProjectConfig + Options merge helper ──────────────────────────
+
+static void test_merge_strings_order_and_append() {
+    memory::Arena arena;
+    ProjectConfig config(arena);
+    Options opts(arena);
+
+    config.includeDirs.push("config/include");
+    config.cSourceDirs.push("config/csrc");
+    config.defines.push("CONFIG_DEFINE");
+    config.libraryDirs.push("config/lib");
+    config.libraries.push("config-lib");
+
+    opts.includeDirs.push("cli/include");
+    opts.cSourceDirs.push("cli/csrc");
+    opts.defines.push("CLI_DEFINE");
+    opts.libraryDirs.push("cli/lib");
+    opts.libraries.push("cli-lib");
+
+    std::vector<std::string> includeDirs;
+    session::mergeStrings(config, opts, "includeDirs", includeDirs);
+    CHECK(includeDirs.size() == 2, "includeDirs merge concatenates both sources");
+    CHECK(includeDirs[0] == "config/include", "includeDirs keeps config order first");
+    CHECK(includeDirs[1] == "cli/include", "includeDirs keeps CLI order second");
+
+    std::vector<std::string> cSourceDirs;
+    session::mergeStrings(config, opts, "cSourceDirs", cSourceDirs);
+    CHECK(cSourceDirs.size() == 2 && cSourceDirs[0] == "config/csrc" &&
+              cSourceDirs[1] == "cli/csrc",
+          "cSourceDirs merge keeps config then CLI order");
+
+    std::vector<std::string> defines;
+    session::mergeStrings(config, opts, "defines", defines);
+    CHECK(defines.size() == 2 && defines[0] == "CONFIG_DEFINE" && defines[1] == "CLI_DEFINE",
+          "defines merge keeps config then CLI order");
+
+    std::vector<std::string> libraryDirs;
+    session::mergeStrings(config, opts, "libraryDirs", libraryDirs);
+    CHECK(libraryDirs.size() == 2 && libraryDirs[0] == "config/lib" && libraryDirs[1] == "cli/lib",
+          "libraryDirs merge keeps config then CLI order");
+
+    std::vector<std::string> libraries;
+    session::mergeStrings(config, opts, "libraries", libraries);
+    CHECK(libraries.size() == 2 && libraries[0] == "config-lib" && libraries[1] == "cli-lib",
+          "libraries merge keeps config then CLI order");
+
+    std::vector<std::string> second;
+    second.push_back("existing");
+    session::mergeStrings(config, opts, "defines", second, /*append=*/false);
+    CHECK(second.size() == 2 && second[0] == "CONFIG_DEFINE" && second[1] == "CLI_DEFINE",
+          "mergeStrings append=false clears the existing output first");
+}
+
+static void test_merge_strings_source_filter() {
+    memory::Arena arena;
+    ProjectConfig config(arena);
+    Options opts(arena);
+
+    config.includeDirs.push("config/include");
+    opts.cSourceDirs.push("cli/csrc");
+
+    std::vector<std::pair<bool, std::string>> merged;
+    session::mergeStrings(
+        config, opts, "includeDirs",
+        [&](const std::string &value, const bool fromCli) { merged.emplace_back(fromCli, value); });
+    CHECK(merged.size() == 1 && !merged[0].first && merged[0].second == "config/include",
+          "source-filter appender sees only the requested includeDirs");
+
+    merged.clear();
+    session::mergeStrings(
+        config, opts, "cSourceDirs",
+        [&](const std::string &value, const bool fromCli) { merged.emplace_back(fromCli, value); });
+    CHECK(merged.size() == 1 && merged[0].first && merged[0].second == "cli/csrc",
+          "source-filter appender sees only the requested cSourceDirs");
+}
+
 // ── All test aggregation ──────────────────────────────────────────
 
 static void test_cli_commands() {
@@ -152,6 +229,8 @@ static void test_cli_commands() {
     test_command_names_match_contract();
     test_llvm_version_information();
     test_system_includes_flag();
+    test_merge_strings_order_and_append();
+    test_merge_strings_source_filter();
 }
 
 } // namespace

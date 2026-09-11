@@ -341,16 +341,13 @@ substituídos por leitura dos planos guardados em `TypedMap` para calls,
 
 ### Concatenação ProjectConfig + Options
 
-Vários pontos de `src/session/compilation-session.cpp` repetem o padrão de
-`dynArr.insert(end, mProjectConfig.X...)` + `mOpts.get().X...`:
-
-- `includeDirs`: linhas ~353 e ~996.
-- `cSourceDirs`: linha ~958.
-- `defines`: linhas ~358 e ~1011.
-- `libraryDirs` e `libraries`: linhas ~1142 e ~1151.
-
-Acção recomendada: helper única `mergeStrings(config, options, field, append)`
-para evitar erros de ordem e duplicação.
+As concatenações de `ProjectConfig` + `Options` passaram a usar o helper
+`session::mergeStrings` em `src/session/project-options-merge.hpp`. O helper
+mantém a precedência atual de project config primeiro e CLI options segundo,
+aceita um flag `append`, e suporta um appender opcional para call sites que
+normalizam caminhos antes de inserir no destino. Os call sites cobertos são
+`includeDirs`, `cSourceDirs`, `defines`, `libraryDirs` e `libraries` em
+`src/session/compilation-session.cpp` e `src/session/native-link.cpp`.
 
 ### Erro de instabilidade de tags `opaque`
 

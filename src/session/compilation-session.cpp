@@ -1,5 +1,6 @@
 #include "compilation-session.hpp"
 #include "cli/terminal.hpp"
+#include "session/project-options-merge.hpp"
 #ifdef ZITH_HAS_LLVM
 #include "codegen/codegen.hpp"
 #include <llvm/TargetParser/Host.h>
@@ -219,15 +220,16 @@ void CompilationSession::ensureFrontendContext() {
 
     config.useSystemIncludeRoots = mOpts.get().systemIncludes;
 
-    for (const auto &dir : mProjectConfig.includeDirs)
-        config.includeRoots.push_back(
-            (std::filesystem::path(mProjectRoot) / dir).lexically_normal().string());
-    for (const auto &dir : mOpts.get().includeDirs)
-        config.includeRoots.push_back(dir);
-    for (const auto &define : mProjectConfig.defines)
-        config.cDefines.push_back(define);
-    for (const auto &define : mOpts.get().defines)
-        config.cDefines.push_back(define);
+    mergeStrings(mProjectConfig, mOpts.get(), "includeDirs",
+                 [&](const std::string &dir, const bool fromCli) {
+                     if (fromCli) {
+                         config.includeRoots.push_back(dir);
+                         return;
+                     }
+                     config.includeRoots.push_back(
+                         (std::filesystem::path(mProjectRoot) / dir).lexically_normal().string());
+                 });
+    mergeStrings(mProjectConfig, mOpts.get(), "defines", config.cDefines);
     for (const auto &dir : mOpts.get().assetDirs)
         config.assetRoots.push_back(dir);
     if (!mProjectConfig.assetDir.empty())
