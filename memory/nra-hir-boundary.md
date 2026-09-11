@@ -55,11 +55,21 @@ Solved, NraResolved, HirLowered, CodegenReady, Cached
   `HirYield` node exists in the current tree. Programs without ownership must produce empty residual
   attribute tables.
 
+The deterministic use-after-move slice currently implemented is `&local` and `@ptrOf(local)`:
+`NraFacts::walkExpr` marks the resolved local as `knownAlive = false` when it sees those forms,
+and `HirLowerModern::localSlot` publishes that as `HirConsumedState::Consumed`. Sema still owns the
+`E4001` diagnostic; lowering only carries the residual fact. Receiver-by-value moves, call-site
+move facts, and branch-sensitive alive/dead state are still outside this slice because the compact
+`walkExpr` order is not branch/SSA aware.
+
 ## Known Pitfalls
 
 - **Implicit return**: the implicit return value lives in the last `Expression` statement of the
   function body, not in `body.operands`. Treating the body node as `Return` or trusting empty
   `operands` misses forwarding facts and return equivalence.
+- **Use-after-move facts are sema-side first**: `NraFacts` must not invent new diagnostics or move
+  state. It echoes the logical moves already represented by `PerModuleSema::movedLocals_` into
+  residual slot facts; otherwise the pass and sema can disagree about what a clean program contains.
 - **Field/Arrow ownership**: for `Field` and `Arrow`, resolve ownership in this order: direct local
   first, then the `exprTypes` qualified type, then the qualified field type stored on the root
   local's struct type. For `Arrow`, descend through the pointee before looking up the field type.

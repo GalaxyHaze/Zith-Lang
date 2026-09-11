@@ -118,6 +118,7 @@ private:
     void analyzeCall(const frontend::Expression &call);
     void analyzeReturn(const frontend::Expression &ret);
     void walkExpr(frontend::ExprId id);
+    void walkAssign(const frontend::Expression &assign);
     void walkStatement(frontend::StmtId id);
     void walkFunction(const frontend::Declaration &decl);
     void walkBody(const frontend::Expression &body);

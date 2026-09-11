@@ -48,9 +48,14 @@ engenharia para rever e gerir.
 ### 3. NRA está parcial
 
 - Estado atual: facts residuais e call annotations existem e são consumidos antes
-  do lowering final.
+  do lowering final. A fatia de use-after-move está resolvida: `&local` e
+  `@ptrOf(local)` marcam o slot como `knownAlive = false`, o sema continua a
+  reportar `E4001` por leituras posteriores e o lowering publica o slot como
+  `HirConsumedState::Consumed` sem nodes de move no HIR.
 - Faltas reais: o state machine completo alive/dead/lent e a prova de quatro
   regras não existem; não há todos os diagnósticos de ownership previstos.
+  Moves de receivers por valor por chamadas/métodos e a propagação de
+  obsolescência entre branches ainda dependem da máquina completa.
 - Referência: [impl-status.md](/home/diogo/Zith/docs/impl-status.md:41).
 
 ### 4. Bare `opaque` usa hydration estável mas ainda depende de canonização consistente

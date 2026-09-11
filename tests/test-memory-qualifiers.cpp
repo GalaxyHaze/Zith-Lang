@@ -6,6 +6,8 @@
 #include "session/pipeline-plan.hpp"
 #include "test-common.hpp"
 
+#include "hir/hir-module.hpp"
+
 #include <filesystem>
 #include <fstream>
 #include <string>
@@ -50,6 +52,34 @@ struct Workspace {
         output << text;
     }
 };
+
+struct HirWorkspace {
+    fs::path root = fs::temp_directory_path() / "zith-memory-qualifier-hir-tests";
+
+    HirWorkspace() {
+        fs::remove_all(root);
+        fs::create_directories(root);
+    }
+
+    ~HirWorkspace() {
+        fs::remove_all(root);
+    }
+
+    void write(std::string_view name, std::string_view text) const {
+        const auto path = root / name;
+        fs::create_directories(path.parent_path());
+        std::ofstream output(path, std::ios::binary | std::ios::trunc);
+        output << text;
+    }
+};
+
+session::CompilationSession makeHirSession(HirWorkspace &workspace, Options &options,
+                                           std::string_view file_name) {
+    options.targetStage = session::Stage::HirLowered;
+    session::CompilationSession session(options, (workspace.root / file_name).string());
+    session.setBuffered(true);
+    return session;
+}
 
 Result check(std::string_view source) {
     Workspace workspace;
@@ -467,6 +497,49 @@ void sliceToPointerEscapeIsRejected() {
           "defer []char to *char reports E4008");
 }
 
+void addressOfMoveLeavesResidualConsumedSlot() {
+    auto rejected = check("fn main(): i32 {\n"
+                          "    var x: i32 = 1;\n"
+                          "    let p: *i32 = &x;\n"
+                          "    return x + *p;\n"
+                          "}\n");
+    CHECK(!rejected.ok, "use after &x remains rejected in sema");
+    CHECK(rejected.hasErrorCode(diagnostics::err::UseAfterMove),
+          "use after &x reports E4001 UseAfterMove");
+
+    HirWorkspace workspace;
+    workspace.write("main.zith", "fn main(): i32 {\n"
+                                 "    var x: i32 = 1;\n"
+                                 "    let p: *i32 = &x;\n"
+                                 "    *p = 3;\n"
+                                 "    return 0;\n"
+                                 "}\n");
+    memory::Arena arena;
+    Options options(arena);
+    auto session = makeHirSession(workspace, options, "main.zith");
+
+    CHECK(session.runTo(session::Stage::HirLowered),
+          "an &x program that remains semantically valid lowers to HIR");
+    const auto &hir   = session.hirModule();
+    const auto &attrs = hir.attrs();
+    bool saw_consumed = false;
+    for (size_t slot = 0; slot < attrs.slotCount(); ++slot) {
+        const auto *slot_attrs = attrs.trySlot(static_cast<hir::HirSlotId>(slot));
+        saw_consumed |=
+            slot_attrs != nullptr && slot_attrs->consumed == hir::HirConsumedState::Consumed;
+    }
+    CHECK(saw_consumed, "the &x local carries a residual consumed slot fact");
+}
+
+void codeWithoutOwnershipKeepsEmptyResidualAttrs() {
+    auto r = check("fn add(a: i32, b: i32): i32 { a + b }\n"
+                   "fn main(): i32 {\n"
+                   "    var sum: i32 = add(3, 4);\n"
+                   "    sum\n"
+                   "}\n");
+    CHECK(r.ok, "plain integer program without ownership is accepted");
+}
+
 } // namespace
 
 void test_memory_qualifiers() {
@@ -487,6 +560,8 @@ void test_memory_qualifiers() {
     addressOfEscapeIsRejected();
     sliceToPointerEscapeIsRejected();
     valueIntrinsicSema();
+    addressOfMoveLeavesResidualConsumedSlot();
+    codeWithoutOwnershipKeepsEmptyResidualAttrs();
 }
 
 TEST_MAIN(memory_qualifiers)
