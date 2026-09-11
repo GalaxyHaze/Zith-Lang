@@ -3,12 +3,15 @@
 #include "cache/artifact-builder.hpp"
 #include "cache/cache-paths.hpp"
 #include "common/ast-ids.hpp"
+#include "diagnostics/error-codes.hpp"
 #include "memory/flat-set.hpp"
 #include "types/type-kind.hpp"
 
 #include <filesystem>
 #include <fstream>
+#include <iomanip>
 #include <memory>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -35,6 +38,32 @@ bool CompilationSession::tryLoadPersistentCache() {
     if (!mHydratedEntry) {
         if (mOpts.get().flags.verbose())
             writeOutput("  [cache] miss for %s\n", mCanonicalPath.c_str());
+        return false;
+    }
+
+    // Validate the persisted canonical tag mappings before treating the entry
+    // as hydrated.  A canonical id that now resolves to a different tag is a
+    // cache-evolution divergence, not a normal miss: report the exact id and
+    // the deterministic recovery command instead of only asking for a generic
+    // cache invalidation.
+    for (const auto &mapping : mHydratedEntry->artifact.canonical_mappings) {
+        const types::TypeCanonicalId canonical_id{mapping.hi, mapping.lo};
+        const uint32_t expected = mCacheStore->assignCanonicalId(canonical_id);
+        const auto divergence =
+            mCacheStore->checkCanonicalMapping(canonical_id, mapping.runtime_id);
+        if (expected == mapping.runtime_id && !divergence.field_order_changed)
+            continue;
+
+        std::ostringstream message;
+        message << "cached canonical opaque tag is unstable for canonical id 0x" << std::hex
+                << std::setfill('0') << std::setw(16) << canonical_id.hi << ':' << std::setw(16)
+                << canonical_id.lo << std::dec;
+        if (divergence.current_tag != 0U)
+            message << " (artifact " << mapping.runtime_id << ", registry "
+                    << divergence.current_tag << ')';
+        message << "; deterministic recovery: " << divergence.recovery_command;
+        mDiags.reportError(diagnostics::err::UnsupportedSyntax, message.str(), memory::Span{});
+        mHydratedEntry.reset();
         return false;
     }
 

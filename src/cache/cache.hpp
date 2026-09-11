@@ -26,6 +26,18 @@ struct StoreMetrics {
     size_t evictions = 0;
 };
 
+/// Describes a persisted canonical opaque mapping that the current registry
+/// cannot reproduce.  Callers use this to produce an actionable, deterministic
+/// cache-evolution diagnostic instead of a generic invalidation notice.
+struct CanonicalDivergence {
+    types::TypeCanonicalId canonical_id;
+    uint32_t persisted_tag   = 0;
+    uint32_t current_tag     = 0;
+    bool field_order_changed = false;
+    bool registry_conflicts  = false;
+    std::string recovery_command;
+};
+
 struct CanonicalIdLess {
     [[nodiscard]] bool operator()(const types::TypeCanonicalId &a,
                                   const types::TypeCanonicalId &b) const noexcept {
@@ -43,6 +55,17 @@ public:
     /// stable tag when the id is seen for the first time and persisting it to
     /// `<cacheRoot>/canonical-any`.
     uint32_t assignCanonicalId(const types::TypeCanonicalId &canonical_id);
+
+    /// Returns the currently assigned canonical tag, without assigning a new
+    /// id when the canonical is not present.  Used by hydration checks.
+    [[nodiscard]] std::optional<uint32_t>
+    lookupCanonicalId(const types::TypeCanonicalId &canonical_id) const;
+
+    /// Checks whether a persisted mapping still matches the project registry.
+    /// When it does not, the divergence carries the current/persisted ids so a
+    /// hydration diagnostic can identify the exact canonical type.
+    [[nodiscard]] CanonicalDivergence
+    checkCanonicalMapping(const types::TypeCanonicalId &canonical_id, uint32_t persisted_tag) const;
 
     // Try to load and validate the artifact for `canonical_path` whose source
     // fingerprint is `fp`.  Returns the artifact on a full hit, or std::nullopt

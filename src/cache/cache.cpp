@@ -62,6 +62,34 @@ uint32_t Store::assignCanonicalId(const types::TypeCanonicalId &canonical_id) {
     return tag;
 }
 
+std::optional<uint32_t> Store::lookupCanonicalId(const types::TypeCanonicalId &canonical_id) const {
+    std::lock_guard<std::mutex> lock(canonical_mutex_);
+    const auto existing = canonical_registry_.find(canonical_id);
+    if (existing == canonical_registry_.end())
+        return std::nullopt;
+    return existing->second;
+}
+
+CanonicalDivergence Store::checkCanonicalMapping(const types::TypeCanonicalId &canonical_id,
+                                                 uint32_t persisted_tag) const {
+    std::lock_guard<std::mutex> lock(canonical_mutex_);
+    CanonicalDivergence divergence;
+    divergence.canonical_id  = canonical_id;
+    divergence.persisted_tag = persisted_tag;
+    const auto current       = canonical_registry_.find(canonical_id);
+    if (current != canonical_registry_.end())
+        divergence.current_tag = current->second;
+    const auto tag_owner           = canonical_by_tag_.find(persisted_tag);
+    divergence.field_order_changed = persisted_tag != 0U && tag_owner != canonical_by_tag_.end() &&
+                                     tag_owner->second != canonical_id;
+    divergence.registry_conflicts =
+        divergence.current_tag != 0U &&
+        (divergence.current_tag != persisted_tag || divergence.field_order_changed);
+    divergence.recovery_command =
+        "delete " + root_ + "/canonical-any and the cached .zirl artifacts, then rebuild";
+    return divergence;
+}
+
 std::string Store::artifactPath(std::string_view canonical_path) const {
     std::ostringstream oss;
     oss << root_ << "/modules/" << std::hex << pathHash(canonical_path) << ".zirl";

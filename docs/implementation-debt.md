@@ -90,22 +90,31 @@ engenharia para rever e gerir.
 ### 4. Bare `opaque` usa hydration estável mas ainda depende de canonização consistente
 
 - Estado atual: o typeId canónico é derivado do namespace do módulo, ordem
-  canónica de fields e nome do tipo. Tags project-local são
-  serializadas no artefacto e re-hidratadas entre sessões de cache. O `E2010`
-  só é reportado quando o tag canónico de um artefacto hidratado não bate com
-  a atribuição nova da sessão.
-- Dívida real: a estabilidade hidratada depende da canonização de todos os
-  tipos importados/cacheados e da regra de canonical field order. Mudar essa
-  regra invalida tags antigos. Falta um registry mais explícito de typeIds
-  cross-module que suporte evolução da canonização sem quebrar caches.
+  canónica de fields e nome do tipo. O registry é o contract explícito de
+  `canonical-any`: cada canonical id project-local recebe um runtime tag único
+  numa cold build, o mapping é persistido e os artefactos serializam a mesma
+  tabela em `canonical_mappings`. Na hydration warm, a tabela é validada contra
+  o registry antes de re-hidratar `TypeIntern`; quando diverge, o `E2010`
+  identifica a canonical id exacta e recomenda apagar `canonical-any` e os
+  artefactos `.zirl`, depois reconstruir.
+- Regra de evolução escolhida: mudanças de canonical field order alteram o
+  canonical id e por isso não são re-mapeadas automaticamente. Uma build com
+  canonização nova continua determinística, mas qualquer artefacto com um tag
+  persistido antigo é rejeitado com o caminho de recuperação acima em vez de
+  ser silenciosamente re-tagado. Sem mudança de canonical id, cold build,
+  hydration warm, imports e valores `opaque` reutilizam o mesmo runtime tag.
+- Dívida real: continua sem existir um registry object no runtime do programa;
+  o contract é project-local no compiler/cache. A detecção de divergência
+  distingue um tag antigo desconhecido de um tag reutilizado por outro
+  canonical id, mas ainda não categoriza qual field concretamente mudou.
 - `coerceValue` trata `opaque -> opaque` como no-op de sema, pelo que casts
   vindos de módulos importados não são rejeitados como erro de re-tagging.
 - Referência: hydration e erro de instabilidade em
   [sema-cast-coerce.cpp](/home/diogo/Zith/src/sema/sema-cast-coerce.cpp),
   hydration em
-  [compilation-session.cpp](/home/diogo/Zith/src/session/compilation-session.cpp:503)
+  [persistent-cache.cpp](/home/diogo/Zith/src/session/persistent-cache.cpp:34)
   e testes em
-  [test-hir-lower-modern.cpp](/home/diogo/Zith/tests/test-hir-lower-modern.cpp:1106).
+  [test-cache.cpp](/home/diogo/Zith/tests/test-cache.cpp:347).
 
 ### 5. C interop é `Working (validated C)`, não ABI completa
 
@@ -354,10 +363,11 @@ para evitar erros de ordem e duplicação.
 
 ### Erro de instabilidade de tags `opaque`
 
-O `E2010` para tags canónicas instáveis é emitido numa única mensagem em
-[compilation-session.cpp](/home/diogo/Zith/src/session/compilation-session.cpp:503)
-durante a hydration do cache. A mensagem pede ao utilizador para invalidar o
-cache quando a canonização divergir.
+O `E2010` para tags canónicas instáveis é emitido durante a hydration do cache
+em [persistent-cache.cpp](/home/diogo/Zith/src/session/persistent-cache.cpp:34).
+A mensagem identifica a canonical id exacta e recomenda o comando
+determinístico de apagar `canonical-any` e os artefactos `.zirl`, depois
+reconstruir.
 
 Risco residual: existem vários ramos que criam/validam tags `opaque` e a
 consistência entre a canonização nova e a persistida depende da mesma regra

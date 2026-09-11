@@ -78,6 +78,16 @@ The CLI now exposes `--no-cache` to skip persistent `.zith-cache` reads and
 writes for an invocation. In-memory frontend memoization still applies within
 the session.
 
+The bare `opaque` registry contract is the project-local `canonical-any` file
+under the persistent cache root. `Store::assignCanonicalId` assigns and
+persists a unique runtime tag per canonical type id on cold builds; artifacts
+also serialize `canonical_mappings`, and warm hydration validates that table
+against the reopened registry. A canonical field-order change yields a new
+canonical id, so stale persisted tags are rejected with an actionable E2010
+that identifies the canonical id and recommends deleting `canonical-any` plus
+the cached `.zirl` artifacts, then rebuilding. Do not silently re-tag persisted
+runtime ids when canonization evolves.
+
 `Store` gained `dropInvalid`, which removes a bad artifact and manifest entry
 after validation failure. This prevents repeated parsing/checking of the same
 corrupt artifact during the session.

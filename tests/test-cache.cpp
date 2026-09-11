@@ -1,8 +1,10 @@
 #include "cache/artifact-builder.hpp"
 #include "cache/cache.hpp"
+#include "cli/options.hpp"
 #include "hir/hir-expr.hpp"
 #include "memory/arena.hpp"
 #include "memory/string-interner.hpp"
+#include "session/compilation-session.hpp"
 #include "session/frontend-context.hpp"
 #include "symbols/symbol-table.hpp"
 #include "test-common.hpp"
@@ -14,7 +16,9 @@
 #include <algorithm>
 #include <filesystem>
 #include <fstream>
+#include <iomanip>
 #include <iterator>
+#include <sstream>
 #include <string>
 
 using namespace zith;
@@ -24,6 +28,26 @@ using namespace zith::zirl;
 namespace {
 
 namespace fs = std::filesystem;
+
+struct CacheWorkspace {
+    fs::path root = fs::temp_directory_path() / "zith-cache-session-tests";
+
+    CacheWorkspace() {
+        fs::remove_all(root);
+        fs::create_directories(root);
+    }
+
+    ~CacheWorkspace() {
+        fs::remove_all(root);
+    }
+
+    void writeFile(const fs::path &relative_path, std::string_view contents) const {
+        const auto destination = root / relative_path;
+        fs::create_directories(destination.parent_path());
+        std::ofstream output(destination, std::ios::binary | std::ios::trunc);
+        output << contents;
+    }
+};
 
 // ── Helper: build a minimal artifact ──────────────────────────────
 Artifact makeMinimalArtifact(std::string_view path, std::string_view name,
@@ -347,6 +371,106 @@ static void test_canonical_registry_persists_stable_tags() {
           "canonical registry stores the first mapping");
 
     fs::remove_all(root);
+}
+
+static void test_canonical_registry_reports_actionable_divergence() {
+    auto root = fs::temp_directory_path() / "zith-cache-test-canonical-divergence";
+    fs::remove_all(root);
+    fs::create_directories(root);
+
+    session::CacheKey key;
+    key.compilerVersion = "test";
+
+    types::TypeCanonicalId canonical{0x1111111122222222ULL, 0x3333333344444444ULL};
+    const uint32_t persisted_tag = 0xCAFEBABEu;
+
+    Store store(root.string(), key);
+    CHECK(!store.lookupCanonicalId(canonical).has_value(),
+          "cold registry has no mapping for the simulated persisted artifact");
+
+    const auto unknown = store.checkCanonicalMapping(canonical, persisted_tag);
+    CHECK_EQ(unknown.current_tag, 0u, "unknown canonical reports no silently-assigned current tag");
+    CHECK(!unknown.field_order_changed,
+          "unknown canonical is not misclassified as a field-order change");
+    CHECK(unknown.recovery_command.find("canonical-any") != std::string::npos &&
+              unknown.recovery_command.find("rebuild") != std::string::npos,
+          "divergence includes a deterministic cache-evolution recovery command");
+
+    const uint32_t current_tag = store.assignCanonicalId(canonical);
+    CHECK(current_tag != 0u && current_tag != persisted_tag,
+          "simulated persisted tag diverges from the fresh registry assignment");
+    const auto diverged = store.checkCanonicalMapping(canonical, persisted_tag);
+    CHECK_EQ(diverged.current_tag, current_tag, "divergence carries the current registry tag");
+    CHECK(diverged.persisted_tag == persisted_tag && diverged.canonical_id == canonical,
+          "divergence carries the exact persisted mapping");
+    CHECK(!diverged.field_order_changed,
+          "a missing old canonical is not assumed to be a field reorder");
+
+    types::TypeCanonicalId other{0xAABBAABBAABBAABBULL, 0xCCDDCCDDCCDDCCDDULL};
+    const uint32_t other_tag = store.assignCanonicalId(other);
+    CHECK(other_tag != 0u, "second canonical receives a project-local tag");
+    const auto reorder = store.checkCanonicalMapping(canonical, other_tag);
+    CHECK(reorder.field_order_changed,
+          "a persisted tag owned by a different canonical is a reorder signal");
+
+    Store reopened(root.string(), key);
+    const auto after_reopen = reopened.checkCanonicalMapping(canonical, persisted_tag);
+    CHECK_EQ(after_reopen.current_tag, current_tag,
+             "persisted registry reports the same divergence after reopening");
+
+    fs::remove_all(root);
+}
+
+static void test_bare_opaque_canonical_divergence_rejects_hydration() {
+    CacheWorkspace workspace;
+    workspace.writeFile("main.zith", "fn make(): opaque { 42u32 }\n"
+                                     "fn main(): i32 { 0 }\n");
+
+    memory::Arena first_arena;
+    Options first_options(first_arena);
+    first_options.noCache     = false;
+    first_options.targetStage = session::Stage::Cached;
+    session::CompilationSession first(first_options, (workspace.root / "main.zith").string());
+    first.setBuffered(true);
+    CHECK(first.run(), "cold opaque session writes the persistent cache");
+
+    const auto registry_path = workspace.root / ".zith-cache" / "canonical-any";
+    std::ifstream input(registry_path, std::ios::binary);
+    CHECK(input.is_open(), "cold opaque session writes the project-local canonical registry");
+    std::string line;
+    std::getline(input, line);
+    std::ofstream divergent(registry_path, std::ios::binary | std::ios::trunc);
+    const auto first_colon = line.find(':');
+    const auto last_colon  = line.rfind(':');
+    if (first_colon != std::string::npos && last_colon != std::string::npos &&
+        first_colon != last_colon) {
+        std::istringstream tag_stream(line.substr(last_colon + 1));
+        uint32_t old_tag = 0;
+        tag_stream >> old_tag;
+        divergent << line.substr(0, last_colon + 1) << (old_tag + 1U) << '\n';
+    } else {
+        divergent << "0000000000000000:0000000000000000:0\n";
+    }
+    divergent.close();
+
+    memory::Arena second_arena;
+    Options second_options(second_arena);
+    second_options.noCache     = false;
+    second_options.targetStage = session::Stage::HirLowered;
+    session::CompilationSession second(second_options, (workspace.root / "main.zith").string());
+    second.setBuffered(true);
+    CHECK(!second.runTo(session::Stage::HirLowered),
+          "divergent canonical state rejects warm hydration");
+    CHECK(second.hasErrors(), "divergent canonical state records an error");
+    bool saw_deterministic_recovery = false;
+    for (const auto &diag : second.diags().all()) {
+        if (diag.message.find("canonical id 0x") == std::string::npos)
+            continue;
+        saw_deterministic_recovery = diag.message.find(".zirl") != std::string::npos &&
+                                     diag.message.find("rebuild") != std::string::npos;
+    }
+    CHECK(saw_deterministic_recovery,
+          "hydration divergence diagnostic names the canonical id and recovery path");
 }
 
 static void test_variadic_slice_param_round_trip() {
@@ -1305,6 +1429,8 @@ static void test_cache() {
     test_store_hit_miss();
     test_store_invalidation();
     test_canonical_registry_persists_stable_tags();
+    test_canonical_registry_reports_actionable_divergence();
+    test_bare_opaque_canonical_divergence_rejects_hydration();
     test_zero_abi_dependency_skips_validation();
     test_dep_abi_validation();
     test_manifest_load_skips_malformed_record();
