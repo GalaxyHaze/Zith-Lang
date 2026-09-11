@@ -2,6 +2,7 @@
 
 #include "cc/driver.hpp"
 #include "memory/flat-set.hpp"
+#include "session/project-options-merge.hpp"
 
 #ifdef ZITH_HAS_LLVM
 #include <llvm/TargetParser/Host.h>
@@ -143,11 +144,7 @@ bool CompilationSession::prepareNativeLinkInputs() {
     namespace fs = std::filesystem;
 
     std::vector<std::string> configuredRoots;
-    configuredRoots.reserve(mProjectConfig.cSourceDirs.size() + mOpts.get().cSourceDirs.size());
-    for (const auto &root : mProjectConfig.cSourceDirs)
-        configuredRoots.push_back(root);
-    for (const auto &root : mOpts.get().cSourceDirs)
-        configuredRoots.push_back(root);
+    mergeStrings(mProjectConfig, mOpts.get(), "cSourceDirs", configuredRoots);
     if (configuredRoots.empty())
         return true;
 
@@ -181,26 +178,16 @@ bool CompilationSession::prepareNativeLinkInputs() {
         return true;
 
     std::vector<std::string> includeDirs;
-    includeDirs.reserve(mProjectConfig.includeDirs.size() + mOpts.get().includeDirs.size());
-    for (const auto &dir : mProjectConfig.includeDirs) {
-        fs::path path(dir);
-        if (path.is_relative())
-            path = fs::path(mProjectRoot) / path;
-        includeDirs.push_back(path.lexically_normal().string());
-    }
-    for (const auto &dir : mOpts.get().includeDirs) {
-        fs::path path(dir);
-        if (path.is_relative())
-            path = fs::path(mProjectRoot) / path;
-        includeDirs.push_back(path.lexically_normal().string());
-    }
+    mergeStrings(mProjectConfig, mOpts.get(), "includeDirs",
+                 [&](const std::string &dir, const bool) {
+                     fs::path path(dir);
+                     if (path.is_relative())
+                         path = fs::path(mProjectRoot) / path;
+                     includeDirs.push_back(path.lexically_normal().string());
+                 });
 
     std::vector<std::string> defines;
-    defines.reserve(mProjectConfig.defines.size() + mOpts.get().defines.size());
-    for (const auto &define : mProjectConfig.defines)
-        defines.push_back(define);
-    for (const auto &define : mOpts.get().defines)
-        defines.push_back(define);
+    mergeStrings(mProjectConfig, mOpts.get(), "defines", defines);
 
     std::string targetKey = mOpts.get().targetTriple;
     if (targetKey.empty()) {
@@ -327,19 +314,14 @@ bool CompilationSession::performLink(std::string &exePath, bool &isWasm) {
         request.extraObjectPaths  = mExtraObjectPaths;
         request.verbose           = mOpts.get().flags.verbose();
 
-        for (const auto &directory : mProjectConfig.libraryDirs)
-            request.libraryDirs.push_back(
-                (std::filesystem::path(mProjectRoot) / directory).lexically_normal().string());
-        for (const auto &directory : mOpts.get().libraryDirs) {
-            std::filesystem::path path(directory);
-            if (path.is_relative())
-                path = std::filesystem::path(mProjectRoot) / path;
-            request.libraryDirs.push_back(path.lexically_normal().string());
-        }
-        for (const auto &library : mProjectConfig.libraries)
-            request.libraries.push_back(library);
-        for (const auto &library : mOpts.get().libraries)
-            request.libraries.push_back(library);
+        mergeStrings(mProjectConfig, mOpts.get(), "libraryDirs",
+                     [&](const std::string &directory, const bool) {
+                         std::filesystem::path path(directory);
+                         if (path.is_relative())
+                             path = std::filesystem::path(mProjectRoot) / path;
+                         request.libraryDirs.push_back(path.lexically_normal().string());
+                     });
+        mergeStrings(mProjectConfig, mOpts.get(), "libraries", request.libraries);
 
         const auto linkResult = cc::linkNative(request);
         if (mOpts.get().flags.verbose() && !linkResult.commandDisplay.empty())
