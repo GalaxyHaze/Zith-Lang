@@ -65,20 +65,11 @@ engenharia para rever e gerir.
 |---|---|
 | `const fn` | Não é pretendido em `Zith--`. O parser aceita `FunctionKind::Const`, mas o pipeline rejeita `const fn` com `UnsupportedSyntax` em [frontend-decl.cpp](/home/diogo/Zith/src/frontend/frontend-decl.cpp:406). Não documentar como dívida. |
 | `dyn Interface` sem acesso a fields | O design expõe apenas métodos em `dyn`; fields ficam disponíveis em tipos concretos e bounds genéricos. `a.x on dyn Interface` com `E3001` é comportamento pretendido, não debt. |
+| `type Name = T` cast-based | Em `Zith--`, `type Name = T` é nominal e o contrato explícito usa casts: `T as Name` constrói e `Name as T` extrai o campo subjacente. `Name` não é intercambiável com `T`; `alias Name = T` continua transparente. Sintaxe dedicada de construção/acesso é follow-up opcional, não é dívida activa. |
 
 ---
 
 ## Dívidas reais (features implementadas mas incompletas e código com risco)
-
-### 1. `type Name = T` é nominal mas sem sintaxe completa
-
-- Estado atual: `type Name = T` cria um wrapper nominal de um campo; não é
-  intercambiável com `T`.
-- Incompleto: não existe sintaxe explícita de construção e acesso. Existem casts
-  de wrapper/unwrapper (`T as Name` / `Name as T`), mas a superfície é posta como
-  `Partial` em [impl-status.md](/home/diogo/Zith/docs/impl-status.md:84).
-- Decisão em aberto: definir sintaxe de construção/acesso ou declarar a forma
-  atual suficiente para `Zith--`.
 
 ### 2. Cache ainda não usa `.zirl`
 

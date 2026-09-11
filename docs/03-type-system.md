@@ -3,7 +3,7 @@
 > **Implementation status:** Primitive types, structs, enums, unions, `?T`, `[N]T`, `[]T`,
 > pointers, type aliases, `implement`, and generics (`<T>`) are all **working**. `T!` is a
 > full-Zith type outside the working Zith-- surface. `as` casting is
-> **working** for numeric conversions only, and is required: there are no implicit conversions
+> **working** for numeric and nominal-wrapper conversions, and is required: there are no implicit conversions
 > between numeric types (a numeric *literal* still adapts to its annotated type). Pointers are
 > non-nullable, so `null` requires `?*T`, and `*void` is rejected in favour of `raw opaque`.
 > `is <type>` narrowing works for tagged unions and opaque, and `when` pattern matching is
@@ -347,6 +347,35 @@ when (point) {
 let n: i32 = 42;
 let f = n as f64;
 ```
+
+### 3.10.1 Nominal Types (`type Name = T`)
+
+`type Name = T` declares a nominal one-field wrapper. In Zith-- the wrapper is
+not interchangeable with `T`; construction and extraction are explicit `as`
+casts:
+
+```zith
+type UserId = i32
+alias Number = i32
+
+fn makeId(n: i32): UserId { return n as UserId; }
+fn readId(id: UserId): i32 { return id as i32; }
+
+fn main(): i32 {
+    let id: UserId = makeId(7);
+    return readId(id) + (id as i32);
+}
+```
+
+Contract:
+
+- `T as Name` is explicit nominal construction.
+- `Name as T` is explicit extraction of the underlying value.
+- A value of `Name` does not unify with its underlying `T` and vice versa; use
+  the corresponding `as` cast when the boundary is intentional.
+- `alias Name = T` remains transparent, so `Name` and `T` unify without casts.
+- There is no nominal field-access syntax in Zith--; a nominal value is a
+  distinct type, not a struct literal.
 
 ---
 

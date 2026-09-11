@@ -206,8 +206,6 @@ Other debt entries remain real and were left unchanged:
 
 - Bare `opaque` cross-module/cache hydration is closed by the canonical tags
   and `opaque -> opaque` sema no-op; pack/dyn + `opaque` remains separate.
-- `type Name = T` is partial because construction and field access syntax are
-  missing.
 - The object cache works but `.zirl` is neither produced nor consumed.
 - NRA is partial because the full alive/dead/lent proof is missing.
 - Bare `opaque` has stable cache-hydrated tags but the canonicalization rule
@@ -221,6 +219,10 @@ Other debt entries remain real and were left unchanged:
 - `..` is lexed character by character.
 - Imported trait/interface conformance works in temp workdirs but is unstable
   for qualified trait calls in populated workdirs (`implementation-debt.md` 10).
+
+The nominal `type` entry is no longer a debt: Zith-- documents the cast-based
+contract (`T as Name` / `Name as T`) and keeps `alias` transparent. A dedicated
+construction/access syntax remains optional future work.
 
 ## Audit Methodology
 

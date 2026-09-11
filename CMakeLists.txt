@@ -387,6 +387,7 @@ if(BUILD_TESTING AND NOT ZITH_IS_WASM)
     add_zith_test(test-op-mapping tests/test-op-mapping.cpp)
     add_zith_test(test-variadic tests/test-variadic.cpp)
     add_zith_test(test-compound-assign tests/test-compound-assign.cpp)
+    add_zith_test(test-nominal-type-debt tests/test-nominal-type-debt.cpp)
     add_zith_test(test-wasm-contract tests/test-wasm-contract.cpp)
     add_executable(test-abi-execution tests/test-abi-execution.cpp
         src/ir/hir-to-ir.cpp
