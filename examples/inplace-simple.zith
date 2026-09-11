@@ -19,7 +19,7 @@ implement Box as InPlace {}
 fn main(): i32 {
     var box = Box { value: 42 };
     let heap = HeapAllocator {};
-    if not box.InPlace.inplace(heap, 0 as opaque) {
+    if not box.inplace(heap, 0) {
         return 1;
     }
     if (box.value == 42) {
