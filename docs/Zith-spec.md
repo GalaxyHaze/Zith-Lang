@@ -10,7 +10,7 @@
 
 ## Introduction
 
-Zith gives you full control with a minimal & clean syntax — you don't have to choose between verbose but safe or readable but slow. Its memory model, Node Resource Analysis (NRA), proves ownership and lifetime safety using five keywords: `lend`, `view`, `unique`, `share`, and `belong` — plus a `default` (no keyword) modifier.
+Zith gives you full control with a minimal & clean syntax — you don't have to choose between verbose but safe or readable but slow. Its memory model, Node Resource Analysis (NRA), proves ownership and lifetime safety using five keywords: `lend`, `view`, `own`, `share`, and `belong` — plus a `default` (no keyword) modifier.
 
 Beyond memory safety, Zith has a general-purpose core with a much larger toolbox: state machines, contexts (DSLs), words (custom operators), comptime. You choose when to use them. Zith also follows the **Rule of Three**: "if a function needs more than three specialized tools, something went wrong."
 
@@ -24,7 +24,8 @@ For the exact picture of what works today, see [Implementation Status](impl-stat
 |---|---|
 | `?T` | Optional type — `T` or `null`, also a Zith-- type ([§8.1](08-error-handling.md#81-failable-types)) |
 | `T!` | Result type — `T` or an error, full Zith only ([§8.1](08-error-handling.md#81-failable-types)) |
-| `?` / `!` (postfix) | Unwrap an optional / result, propagating or falling back ([§8.3](08-error-handling.md#83-propagation--fallback)) |
+| `try` | Errors | Short-circuit a single expression; optional fallback via `or` ([§8.3](08-error-handling.md#83-try-propagation-and-fallback)) |
+| `?` / `!` (postfix) | Errors | Propagate an optional / result out of the current scope ([§8.3](08-error-handling.md#83-try-propagation-and-fallback)) |
 | `@name` | Compiler intrinsic or macro invocation ([§11.3](11-comptime.md#113-reflection), [§15](15-macros.md)) |
 | `#name` | Variable or field attribute, e.g. `#thread_local` or `#volatile` |
 | `::` | Scope resolution — reach past a shadowed name ([§2.3](02-module-system.md#23-namespace-access--scope-resolution)) |
@@ -106,7 +107,7 @@ source -> lex -> scan -> resolve(import/symbols) -> sema -> comptime/solve -> NT
 | 4 | [Traits, Interfaces & Capabilities](04-traits-interfaces.md) | `04-traits-interfaces.md` | Nominal traits, structural interfaces, capabilities, operator overloading |
 | 5 | [Functions](05-functions.md) | `05-functions.md` | `fn`, `const fn`, `state`, `raw fn`, `extern fn`, return types |
 | 6 | [Mutability & Bindings](06-mutability-bindings.md) | `06-mutability-bindings.md` | `let`, `var`, `global`, `const`, deep mutability, destructuring |
-| 7 | [Memory Model (NRA)](07-memory-model.md) | `07-memory-model.md` | Ownership, `lend`/`view`/`unique`/`share`/`belong`, the four rules |
+| 7 | [Memory Model (NRA)](07-memory-model.md) | `07-memory-model.md` | Ownership, `lend`/`view`/`own`/`share`/`belong`, the four rules |
 | 8 | [Error Handling](08-error-handling.md) | `08-error-handling.md` | `?T`, `T!`, `with`/`catch`, `fail` blocks, `throw` |
 | 9 | [Control Flow](09-control-flow.md) | `09-control-flow.md` | `if`, `when`, `for`, `->`, `state`, docks, jumps |
 | 10 | [Concurrency & Runtime APIs](10-concurrency.md) | `10-concurrency.md` | stdlib/runtime concurrency surface, resource safety, no core syntax |
@@ -146,7 +147,7 @@ source -> lex -> scan -> resolve(import/symbols) -> sema -> comptime/solve -> NT
 | `\| \|` | Types | Pack — named tuple / variadic / closure capture group. |
 | `pub` / `mod` / `mod(..)` / `mod(N)` | Visibility | Public / module-local, with optional depth. |
 | `let` / `var` / `global` / `const` | Bindings | Immutable / mutable / static storage / compile-time constant. |
-| `default` / `lend` / `view` / `unique` / `share` / `belong` | Memory | NRA memory modifiers — `default` is implicit when no keyword is written. |
+| `default` / `lend` / `view` / `own` / `share` / `belong` | Memory | NRA memory modifiers — `default` is implicit when no keyword is written. |
 | `fn` / `const fn` / `state` / `raw fn` / `extern fn` | Functions | Five exclusive function kinds; cannot be combined. |
 | `trait` / `interface` / `extends` / `requires` / `dyn` | OOP | Nominal traits, structural interfaces, extension, constraints, dynamic dispatch. |
 | `Copy` / `Functor` / `Arithmetic` / `Error` | Capabilities | Operator and behavior capabilities. |
@@ -159,7 +160,8 @@ source -> lex -> scan -> resolve(import/symbols) -> sema -> comptime/solve -> NT
 | `,` (in a chain) | Chain | Sub-chain — applies but does not advance the main chain value. |
 | `operator` / `token` | Words | Custom operator definition / token word definition. Must be defined inside a `context`. |
 | `?T` / `T!` | Errors | Optional / Result types. `?T` is also a Zith-- type; `T!` is full Zith only. May be stacked. |
-| `?` / `!` (postfix) | Errors | Propagate Option / Result. No semicolon. Propagate out of chains. |
+| `try` | Errors | Short-circuit a single expression; unwrap with an optional `or` fallback. Does not trigger `fail`. |
+| `?` / `!` (postfix) | Errors | Propagate Option / Result. No semicolon. Propagate out of chains. Only `!` (and `throw`) trigger `fail`. |
 | `or` | Errors / Loops / Types | Fallback / collapse an optional loop return / type constraint separator. |
 | `must` | Errors | Panic in debug; guided removal in release. |
 | `raw` | Errors / Raw | Always unchecked, in both debug and release. Compiler warns in release. |

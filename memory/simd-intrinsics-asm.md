@@ -57,3 +57,66 @@ tipos vetoriais depois.
   SIMD reais em cima desse modelo.
 5. Não usar `asm!`/`__asm__` antes de existir uma necessidade concreta de
   instruções sem intrinsic LLVM estável.
+
+## Decisão 2026-09-14 - Machine intrinsics e `unsafe asm`
+
+Design stress-tested para full Zith (fora do Zith-- atual). O caminho da nota
+original mantém-se para SIMD; esta secção fixa a camada genérica de acesso a
+instruções nativas.
+
+## Catálogo portável
+
+- A superfície é um catálogo canónico pequeno de builtins `@nome()`.
+- Começa com `@fence()`, `@pause()`, `@timeStamp()` e `@byteSwap<T>(v)`.
+- Cada builtin tem um contrato semântico; um mapeamento só vale se cumprir a
+  mesma promessa, não se for apenas “instrução parecida”.
+- Atomics, `Atomic<T>` e `#volatile` ficam fora deste desenho por agora.
+
+## Segurança e localização no pipeline
+
+- Todos os builtins de máquina são `unsafe`.
+- Instruções únicas de CPU não entram em `@x86.*`/`@arm.*`; vão para
+  `unsafe asm {}`.
+- Existe um node HIR próprio novo, tipo `HirMachineBuiltin`, com nome canónico
+  e contrato. O código atual só tem `HirLayoutIntrinsic`/`HirCanonicalType` e
+  ainda não usa `llvm::InlineAsm`.
+- O sema valida tipos e availability do builtin contra o `targetTriple`, antes
+  da lowering, para que `zithc check`/LSP falhem sem LLVM. O codegen só emite.
+- Se a target não tem equivalente com a mesma promessa, diagnóstico de erro com
+  o contrato violado e a alternativa `unsafe asm`.
+
+## Mapeamento alvo
+
+- `@fence` -> x86 `mfence`, AArch64 `dmb ish`.
+- `@pause` -> x86 `pause`, AArch64 `yield`.
+- `@timeStamp` -> x86 `rdtsc`, AArch64 `cntvct_el0`.
+- `@byteSwap<T>` -> LLVM bswap/rev.
+- WASM: recusa `@fence`, `@pause` e `@timeStamp` por agora; `@byteSwap<T>` fica
+  universal.
+
+## `unsafe asm`
+
+- Full Zith only.
+- Forma: `unsafe asm { template, inputs, outputs, clobbers }`.
+- Não há mapeamento implícito de nomes Zith dentro do template; entradas e
+  saídas são explícitas e ligadas a variáveis/registos.
+- O dialecto continua em config (`asm = "x86_64_intel"`).
+
+## Deltas por plataforma
+
+- Pequenas diferenças usam `@OS`/`@arch` em full Zith, por exemplo
+  `const API_CODE = when (@OS) { ("linux") 455600, ("windows") 7 }`.
+- Constantes: delta é o valor; funções: delta troca o corpo todo e a assinatura
+  é validada contra o generic; declarações novas vivem em módulos platform.
+- Apenas a versão final mesclada é sema/codegened.
+- Sem arm nem `(_)`, a `when (@OS)` falha. `(_)` é permitido se fizer sentido.
+- Imports por plataforma mantêm a ordem atual
+  `foo.<arch>.<os>.zith`, `foo.<arch>.zith`, `foo.<os>.zith`, `foo.zith`;
+  não há merge automático entre variante e generic.
+
+## Suporte documentado
+
+- Criar `docs/machine-intrinsics.md` como matriz por target (x86-64, AArch64,
+  WASM), com contrato, instrução emitida, testes e alternativa asm.
+- `std.arch` é definido uma única vez com nomes e contratos; a seleção por
+  target fica no compilador, não em duplicações por ficheiro platform.

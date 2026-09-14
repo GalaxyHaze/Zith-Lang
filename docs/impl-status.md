@@ -41,7 +41,7 @@ Implementation work that is incomplete or needs review is tracked in
 | NRA / Reference Analysis | **In progress** | NRA is the full Zith reference/ownership analysis. Zith-- implements a partial simplified version: residual facts are accumulated and consumed before final lowering, while the full alive/dead/lent state machine and four-rule proof remain to be completed. Internal names such as `NraFacts` and `nraStage` keep the historical NRA spelling |
 | HIR lowering | **Working** | Covers all working features; residual ownership facts attach to side tables without introducing ownership HIR nodes |
 | LLVM codegen | **Working** | x86-64 and WebAssembly targets |
-| Cache | Partial | Object caching works; `.zirl` format not yet used |
+| Cache | **Working** | Object and artifact caching persist/load `.zirl` files, validate canonical mappings, and hydrate cached artifacts |
 | Stdlib I/O | **Working** | `print`/`println`/`input`, `Formatable`, `ParseInput`, and `InputLine.cast<T>` type-check and lower; runtime parsing verification is manual for now |
 | Stdlib allocation | **Working** | `std/alloc` ships `Allocator`, `HeapAllocator`, and `allocate`/`deallocate`/`reallocate` over `dyn Allocator`. `stdlib/std/new.zith` passes `zithc check`; `InPlace` imports, conformance, and qualified trait calls are covered by `tests/test-generic-hashmap.cpp`. The generic `new`/`delete`/`make`/`release` helpers remain proposed until return-only inference and opaque pack dispatch are supported |
 | Stdlib collections | **Working** | `std/collections/hash_map_u64` ships a concrete `u64 -> u64` open-addressed map with `reserve`, `put`, `contains`, `get`, `len`, and `destroy`. `std/collections/hash_map` ships a checked generic `HashMap<K, V>`, `Entry<K, V>`, and `Hashable` module that passes `zithc check` and is covered by `tests/test-generic-hashmap.cpp` |
@@ -84,7 +84,7 @@ Implementation work that is incomplete or needs review is tracked in
 | `implement T as Trait {}` | **Working** | Records a verified nominal conformance edge and resolves calls to concrete trait defaults. The canonical syntax is `implement T as Trait`; the legacy `for Trait` spelling remains parsed |
 | `type` | **Working (Zith-- cast-based)** | `type Name = T` creates a nominal one-field wrapper distinct from `T`; `T as Name` constructs it and `Name as T` extracts the underlying value. `alias` stays transparent |
 | `alias` | **Working** | Transparent alias: `alias Name = T` re-exports the same type |
-| memory qualifiers (`mut`, `lend`, `view`, `unique`, `share`, `belong`) | **Working (lend/view slice)** | `lend T`/`view T` parameters lower to pointers and require call-site annotations for `default` bindings (`E4005`); invalid call annotations are rejected (`E4007`); same-binding conflicts in one call are rejected; `view` writes report `E4004`; LLVM adds `readonly` for `view` and `nocapture` for `lend`/`view`. `unique`/`share`/`belong`/`mut` as type prefixes remain rejected or legacy-only. NRA residual facts are attached before HIR (F-34, partial F-14) |
+| memory qualifiers (`mut`, `lend`, `view`, `own`, `share`, `belong`) | **Working (lend/view slice)** | `lend T`/`view T` parameters lower to pointers and require call-site annotations for `default` bindings (`E4005`); invalid call annotations are rejected (`E4007`); same-binding conflicts in one call are rejected; `view` writes report `E4004`; LLVM adds `readonly` for `view` and `nocapture` for `lend`/`view`. `own`/`share`/`belong`/`mut` as type prefixes remain rejected or legacy-only. NRA residual facts are attached before HIR (F-34, partial F-14) |
 
 ### Expressions
 
@@ -162,7 +162,7 @@ Implementation work that is incomplete or needs review is tracked in
 | NRA ownership analysis (full alive/dead/lent state machine and four-rule proof; the call-annotation borrow slice is implemented) | [07-memory-model.md](07-memory-model.md) |
 | `comptime` evaluation | [11-comptime.md](11-comptime.md) |
 | `const fn` evaluation | [11-comptime.md](11-comptime.md) |
-| `fail` / `with` / `catch` / `must(cond)` assertion / `throw` | [08-error-handling.md](08-error-handling.md) |
+| `try` / `try ... or` / `fail` / `with` / `catch` / `must(cond)` assertion / `throw` | [08-error-handling.md](08-error-handling.md) |
 | Assets (`ZithProject.toml` asset paths) | [12-assets.md](12-assets.md) |
 | `.zirl` binary format | [01-overview (§1.5)](Zith-spec.md) |
 | `@appendField`, `@removeField`, `@appendMethod` | [11-comptime.md](11-comptime.md) |
@@ -230,15 +230,14 @@ Recorded deliberately. Each item is a follow-up, not an unknown.
 
 | Item | Notes |
 |---|---|
-| Formatter re-prints `for (cond)` as `while` | `for` reuses `ExprKind::While`; a distinct node is needed to round-trip the spelling |
+| Formatter re-prints `for (cond)` as `while` | `for (cond)` desugars to `ExprKind::While`; the formatter prints `while (...)`, so the spelling is not round-trip faithful |
 | No overflow check on narrowing conversions | Neither `as` nor numeric-literal adaptation validates that the value fits the target |
-| Unchecked `?*T` -> `*T` coercion | Every C pointer is `?*T`, but without flow-sensitive narrowing it is accepted unchecked where `*T` is expected. Isolated in `PerModuleSema::allowsUncheckedNullablePointer`; delete it when pointer narrowing after `is null` lands |
-| No flow-sensitive narrowing after `is null` | `p->field` on a `?*T` requires NonNull proof from `if (p is null) { } else { p->field }` or `for (not (p is null))`. Error code `E3005` |
+| Unchecked `?*T` -> `*T` coercion and missing pointer narrowing | Every C pointer is `?*T`; `is null` narrows aggregate optional payloads, but pointer arrow/index/deref still accepts `?*T` without a NonNull proof. `E3005` is registered but not emitted. Isolated in `PerModuleSema::allowsUncheckedNullablePointer`/`inferArrow`; delete those paths when flow-sensitive pointer narrowing lands |
 | `is` outside `null`/tagged-union contexts | Non-union `is Type` remains unsupported and reports a dedicated diagnostic |
 | User-defined casts | To be added as a new branch in `classifyCast` |
 | C struct-by-value ABI limited to verified simple records | `struct` parameters/results are imported only when libclang proves layout/alignment for scalars, plain pointers, and nested verified records on the target used by the parse. Unverified records are skipped before lowering |
 | Imported/cached bare `opaque` values | Bare `opaque` values exported from module A and consumed in module B are accepted; the canonical tagged typeId is recorded when the value is erased and restored from cached artifacts. The project-local `canonical-any` registry is the explicit cross-module contract: cold builds assign a unique tag, warm/imported hydration validates `canonical_mappings`, and a canonical field-order change rejects stale artifacts with a deterministic delete-and-rebuild diagnostic instead of silently retagging |
-| `..` lexes per character | Its `precedence()` is -1 and range/slice syntax depends on the two `.` tokens. Range literals now have a dedicated `ExprKind::Range`; slicing remains a separate postfix form |
+| `..` lexes per character | Its `precedence()` is -1 and range/slice syntax depends on the two `.` tokens |
 | `++` / `--` | Not implemented; no increment/decrement operators exist |
 | Ownership proof still happens after premature lowering in places | The stable order is `sema -> comptime/solve -> NTA/NRA -> HIR`; residual facts are now attached before final lowering, while some paths still need the full NRA proof before emitting their final form |
 

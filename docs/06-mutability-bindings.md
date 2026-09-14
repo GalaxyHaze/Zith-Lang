@@ -2,7 +2,7 @@
 
 > **Implementation status:** `let`, `var`, `const`, and `global` bindings are **working**. Binding
 > destructuring with `[ ]` and pack literals are **spec-only**, with no parser or sema support.
-> `lend` and `view` are implemented as the Zith-- call-annotation slice; `unique`, `share`,
+> `lend` and `view` are implemented as the Zith-- call-annotation slice; `own`, `share`,
 > `belong`, and the full NRA state machine remain full-Zith/spec-only.
 > See [impl-status.md](impl-status.md).
 
@@ -27,9 +27,9 @@ Zith uses deep mutability: a modifier on a binding flows into every nested field
 let x: mut Point;      // cannot reassign x; Point's fields are mutable (mut)
 var y: Point;          // can reassign y; Point's fields are immutable (default, no mut)
 
-// lend, unique, share, belong → imply mut
+// lend, own, share, belong → imply mut
 fn update(p: lend Point) { p.x += 1; }  // p is mutable (lend implies mut)
-let r: unique Resource = acquire();     // r's fields are mutable (unique implies mut)
+let r: own Resource = acquire();     // r's fields are mutable (own implies mut)
 
 // view → implies immutable
 fn read(c: view Config) { ... }         // c is read-only (view implies immutable)

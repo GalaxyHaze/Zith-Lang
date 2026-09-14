@@ -22,7 +22,7 @@ The core contract deliberately keeps a small state machine:
 - `lent`: the resource is temporarily borrowed. The owner cannot use it until
   the borrow ends.
 
-`lend`, `view`, `unique`, `share`, `belong`, and `MultiShare` are permissions,
+`lend`, `view`, `own`, `share`, `belong`, and `MultiShare` are permissions,
 ownership groups, anchors, or transport wrappers. They are not extra states in
 the proof state machine.
 
@@ -131,7 +131,7 @@ The spec fixes the semantic edges, not the data structure.
 | `default` | Owned by the binding. Lifetime follows the resource graph. |
 | `lend` | Exclusive mutable temporary borrow. The owner cannot use the resource while it is lent. |
 | `view` | Read-only anchor. A view never owns, never destroys, and never promotes stack storage to heap. |
-| `unique` | Logical ownership of an address/slot. Moving a unique value marks the source binding dead. |
+| `own` | Logical ownership of an address/slot. It is the former surface name `unique`. Moving an own value marks the source binding dead. |
 | `share` | Owner group. Several static owners may coexist; cleanup happens when the last owner edge ends. |
 | `belong` | Child/parent lifetime edge. It cannot escape its parent and can be passed as `lend`. |
 
@@ -158,7 +158,7 @@ are resourceful move with the struct and keep the same provenance.
 
 ### 7.2 Logical Move
 
-Taking a `unique` field or a reference/`view` to a slot creates a logical move
+Taking an `own` field or a reference/`view` to a slot creates a logical move
 of that address. The original name may become `dead` for that slot even when
 other fields are still usable. Replacing the slot without returning the taken
 resource would overwrite another resource and is an error. The owner must
@@ -204,7 +204,7 @@ they do not change resource identity. Storage is freed after the NRA proves
 destruction and the allocation/origin is still valid.
 
 `Allocator` is a capability. The compiler understands allocation through this
-capability, but `unique` and `share` do not necessarily allocate: their storage
+capability, but `own` and `share` do not necessarily allocate: their storage
 may come from the stack or from a temporary.
 
 In the future Zith model, an `Allocator` is parameterized by a comptime MRA

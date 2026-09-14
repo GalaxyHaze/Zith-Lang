@@ -77,11 +77,15 @@ escape and does not create pointer-object aliasing.
 | `default` | Owned. Lifetime follows the binding. | Variables, struct fields |
 | `lend` | Exclusive mutable temporary. Cannot be stored, moved, or captured — but **can be returned**, passing the promise to the caller. `belong` fields can also be passed as `lend`. | Passing mutable references to functions |
 | `view` | Read-only, non-owning reference. Many views may coexist. | Inspecting without ownership |
-| `unique` | Single-owner guarantee — only one name in the graph. | Ownership-transfer patterns |
+| `own` | Single-owner guarantee — only one name in the graph. | Ownership-transfer patterns |
 | `share` | Multiple names, same node, statically validated — no ref-counting. Mutable. | Compile-time-proven sharing |
 | `belong` | Part-of relationship. Node lifetime tied to its parent; cannot be stored independently. Can be passed as `lend`. | Back-pointers, hierarchies |
 
-> `unique` provides compile-time single-owner guarantees for local bindings. In a `global` context, `unique` becomes runtime-checked. The compiler enforces exclusive access at program startup. `global` bindings cannot be moved, and the `Lent` capability manages thread-safe distribution.
+> `own` provides compile-time single-owner guarantees for local bindings. In a `global` context, `own` becomes runtime-checked. The compiler enforces exclusive access at program startup. `global` bindings cannot be moved, and the `Lent` capability manages thread-safe distribution.
+
+`own T` is the full-Zith surface name for the former `unique T`. The NRA
+semantic stays a mutable single-owner handle. A stack-backed handle may not
+escape its storage scope.
 
 > In practice, most code only needs `lend` and `view`.
 
@@ -99,7 +103,7 @@ Each memory modifier carries an implicit content mutability level:
 | Modifier | Implies | Example |
 |---|---|---|
 | `lend` | Mutable | `fn update(p: lend Point) { p.x += 1; }` — `p` is mutable |
-| `unique` | Mutable | `let r: unique Resource = ...;` — `r`'s fields are mutable |
+| `own` | Mutable | `let r: own Resource = ...;` — `r`'s fields are mutable |
 | `share` | Mutable | `global counter: share i32 = 0;` — mutable across threads |
 | `belong` | Mutable | `parent: ?belong Self` — mutable back-pointer |
 | `view` | Immutable | `fn read(c: view Config) { ... }` — `c` is read-only |
@@ -107,10 +111,34 @@ Each memory modifier carries an implicit content mutability level:
 
 `default` is the only modifier where mutability is explicitly controlled via the `mut` keyword. All others carry their mutability semantics implicitly.
 
+### 7.3.1 Re-binding With `:=`
+
+`=` assigns values; `:=` re-binds the reference or ownership slot itself. This
+is the operator for retargeting an existing `own`, `share`, `lend`, `belong`,
+or `view` link, and for installing an owner into a slot that is awaiting one.
+Plain `=` is allowed only when the target is alive and the operation is a value
+copy or a value store.
+
+```zith
+var slot: own Buffer = acquireBuffer();  // OK: initialization uses `=`
+slot := acquireBuffer();      // ERROR: first owner is still live
+let slot2 = &slot;            // slot2 owns the storage; slot is dead
+slot := acquireBuffer();      // OK: install into the dead slot
+```
+
+`:=` never overwrites a live owner. For `lend`, the source node must be alive
+when the borrow starts and the previous borrow must end before the new one
+starts. For `belong`, the new parent must still satisfy the normal escape and
+parent-alive rules. For `view` and `share`, it only changes which node the
+link points at; it does not create or remove ownership.
+
+This is full-Zith surface. `Zith--` keeps its current reassignment rules and
+does not introduce `:=`.
+
 ### 7.4 The Four NRA Rules
 
 **Rule 1: Argument Exclusivity.** In any call expression, each argument must refer to a distinct node, without exception:
-- Duplicating a `default` / `unique` / `lend` argument → **ownership error**.
+- Duplicating a `default` / `own` / `lend` argument → **ownership error**.
 - Duplicating a `share` / `view` argument → **logic error** (passing the same resource twice is almost certainly a bug).
 
 **Rule 2: No Dead Node Access.** A symbol cannot be read while its node is `dead`.
@@ -134,12 +162,12 @@ scale(lend pt, 2.0);
 fn center_of(p: view Point): f64 { (p.x + p.y) / 2.0 }
 center_of(view pt);   // no caller mutation
 
-// share/belong remain spec-only in Zith--
+// share/belong/own remain spec-only in Zith--
 
 // belong -- back-pointer cannot outlive its parent
 struct Tree<T> {
     data:     T,
-    children: []unique Self,
+    children: []own Self,
     parent:   ?belong Self,
 }
 
@@ -153,7 +181,7 @@ The main NRA proof runs before the final HIR is formed. That boundary exists so 
 sees:
 
 - binding identity and resource graphs
-- the difference between `default`, `view`, `lend`, `unique`, `share`, and `belong`
+- the difference between `default`, `view`, `lend`, `own`, `share`, and `belong`
 - branch facts, narrowing facts, and return-path equivalence
 - call, capture, and escape structure before lowering erases it.
 
@@ -184,18 +212,18 @@ temporaries and stores.
 ```zith
 struct Node<T> {
     data: T,
-    next: ?unique Self,
+    next: ?own Self,
     prev: ?belong Self,
 }
 
 implement Node<T> {
     fn append(self: lend Self, data: T) {
-        self.next = unique Node { data, next: null, prev: belong self };
+        self.next := own Node { data, next: null, prev: belong self };
     }
 }
 ```
 
-- Freeing the head frees the entire chain, since `next` forms a `unique` ownership chain.
+- Freeing the head frees the entire chain, since `next` forms an `own` ownership chain.
 - NRA guarantees `prev` (`belong`) never outlives its owner.
 - `belong` fields may be passed as `lend` to functions.
 

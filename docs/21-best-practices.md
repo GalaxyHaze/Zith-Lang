@@ -6,7 +6,7 @@
 
 ### 21.1 Ownership Patterns
 
-- **Resources shall be `unique`:** `let resource: unique = Resource.new();`
+- **Resources shall be `own`:** `let resource: own = Resource.new();`
 - **Use `share` for intentional multiple owners:** implement `Share` and `Clone` explicitly.
 - **Use `view` for reading:** `fn process(config: view Config)`
 - **Use `lend` for temporary mutation:** `fn update(state: lend GameState)`
@@ -14,8 +14,8 @@
 
 ### 21.2 Optional & Failable Patterns
 
-- **Prefer `?...or` for optionals:** `let name = ?user.name or "guest";`
-- **Prefer `!...or` for failables:** `let config = !loadPrimary() or loadBackup() or defaultConfig();`
+- **Prefer `try ... or` for optionals:** `let name = try user.name or "guest";`
+- **Prefer `try ... or` for failables:** `let config = try loadPrimary() or loadBackup() or defaultConfig();`
 - **Reserve `must` for initialization:** `const API_KEY = must env("API_KEY");`
 
 ### 21.3 Context Patterns

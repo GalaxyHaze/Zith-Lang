@@ -71,13 +71,14 @@ engenharia para rever e gerir.
 
 ## Dívidas reais (features implementadas mas incompletas e código com risco)
 
-### 2. Cache ainda não usa `.zirl`
+### 2. Cache `.zirl` (resolvida)
 
-- Estado atual: o object cache funciona e realiza hits. O formato `.zirl` não é
-  produzido nem consumido.
-- Risco: estado completo do artefacto não é persistido numa representação estável.
-  Invalidações e round-trips dependem do array de object files.
-- Referência: [impl-status.md](/home/diogo/Zith/docs/impl-status.md:44).
+Resolved: o cache persiste e lê artefactos `.zirl` em
+`src/cache/cache.cpp` (`Store::store` escreve com `zirl::Writer`; load/hydration
+usam `zirl::Reader`), e o registry `canonical-any` é serializado/validado.
+`tests/test-cache.cpp` cobre round-trips, hydration e divergência canónica.
+O ficheiro `impl-status.md` foi atualizado de `Cache | Partial` para
+`Cache | Working`.
 
 ### 3. NRA está parcial
 
@@ -130,21 +131,41 @@ engenharia para rever e gerir.
 
 ### 6. Outras incompletudes registadas
 
-- Literal ranges fazem `ExprKind::Range` e baixam a sema/control flow; falta
-  ainda, como dívida residual, o tratamento completo de todas as formas
-  `1..5`, `1>..5`, `1..<5`, `1>..<5` nas fronteiras do loop e do slicing.
+- Literal range forms `1..5`, `1>..5`, `1..<5` e `1>..<5` já baixam para
+  `ExprKind::Range`, são formatters round-trip-stable e cobertos por
+  `tests/test-formatter.cpp` e `tests/test-codegen.cpp`. A dívida residual
+  restante é o tratamento completo de todas as formas de slicing entre
+  fronteiras abertas/fechadas; o formatter e os testes de `for`/`in` já
+  passam.
 - `is <type>` fora de unions/opaque não existe.
 - Narrowing após `is null` / `not (is null)` para aggregate optionals (`?T`
-  com payload não-pointer) extrai o campo 0 no then/else correto; `?*T -> *T`
-  unchecked permanece para C pointers.
+  com payload não-pointer) extrai o campo 0 no then/else correto e `?*T -> *T`
+  permanece unchecked: `inferArrow`/`inferIndex` e
+  `allowsUncheckedNullablePointer` não exigem prova NonNull para pointers
+  (`E3005` apenas registado, não emitido).
 - Casts numéricos estreitantes não verificam overflow.
 - `++` / `--` não existem.
-- Formatter reimprime `for (cond)` como `while`.
+- Formatter reimprime `for (cond)` como `while` (`ExprKind::While` no
+  round-trip).
 - `..` é lexado caractere a caractere.
 
-Estas entradas detalham o estado real e as referências de bloqueio. São as
-mesmas lacunas da secção `Known Debt` de [impl-status.md](/home/diogo/Zith/docs/impl-status.md)
-e devem ser consolidadas aqui quando forem tratadas.
+Estas entradas detalham o estado real e as referências de bloqueio. A secção
+`Known Debt` de [impl-status.md](/home/diogo/Zith/docs/impl-status.md) foi
+consolidada neste ficheiro; as entradas duplicadas foram removidas de
+`impl-status.md`. As dívidas partilhadas restantes são listadas abaixo com
+nota de estado:
+
+- No overflow check on narrowing conversions.
+- Unchecked nullable-pointer coercion e falta de flow-sensitive pointer
+  narrowing após `is null` (E3005 registado, não emitido).
+- `is` outside `null`/tagged-union contexts.
+- User-defined casts (novo branch em `classifyCast`).
+- C struct-by-value ABI limited to verified simple records.
+- Imported/cached bare `opaque` values: registry project-local, sem registry
+  object em runtime e sem categorização do field que mudou.
+- `..` lexes per character.
+- `++` / `--` não existem.
+- Ownership proof still happens after premature lowering in places.
 
 ### 7. Falhas conhecidas em `test-codegen`
 
@@ -238,13 +259,22 @@ trait importado para que o comportamento real fique coberto.
 
 Os ficheiros abaixo ainda concentram demasiado pipeline por ficheiro. Já foram
 concluídos, e estão fora da lista activa, os splits de
-`src/session/frontend-context.cpp` e `src/session/compilation-session.cpp`.
+`src/session/frontend-context.cpp`, `src/session/compilation-session.cpp` e
+`src/codegen/codegen-emit.cpp`.
 
 | Ficheiro | Linhas atuais | Quebra proposta |
 |---|---|---|
-| `src/codegen/codegen-emit.cpp` | 1264 | separar emissão por área (params, expr, control flow) |
 | `src/sema/hir-lower-expr.cpp` | 2357 | candidato secundário ainda acima de 1000 linhas |
 | `src/frontend/frontend-expr.cpp` | 1115 | candidato secundário ainda acima de 1000 linhas |
+
+Estado da quebra de `codegen-emit.cpp` (concluída):
+
+- `codegen-emit.cpp`: classe e orquestração (9 linhas).
+- `codegen-emit-expr.cpp`: emissão de expressões (984 linhas).
+- `codegen-emit-stmt.cpp`: emissão de statements/control flow (163 linhas).
+- `codegen-emit-agg.cpp`: emissão de agregados (133 linhas).
+
+`tests/test-codegen` corre com `396 passed, 0 failed` no estado atual.
 
 Estado da quebra de `frontend-context.cpp` (concluída):
 
@@ -308,9 +338,8 @@ Estado da quebra de `sema-modern.cpp`:
 
 Próxima fronteira:
 
-- separar `codegen-emit.cpp` em áreas menores quando for prioridade.
 - revisitar `hir-lower-expr.cpp` se continuar acima de ~1000 linhas após o
-  split de codegen.
+  split de codegen concluído.
 - revisitar `frontend-expr.cpp` apenas se continuar a ser um bottleneck claro
   de responsabilidade única.
 
@@ -421,15 +450,16 @@ quando houver um release tag real.
 
 ## Próximos passos para rever
 
-1. A quebra de HIR, de `sema-modern.cpp` e de `frontend.cpp` está feita. A
-   quebra de `frontend-context.cpp` e `compilation-session.cpp` também está
-   feita; a próxima prioridade é `codegen-emit.cpp`, com
-   `hir-lower-expr.cpp` como candidato secundário.
+1. A quebra de HIR, de `sema-modern.cpp`, de `frontend.cpp`, de
+   `frontend-context.cpp`, de `compilation-session.cpp` e de
+   `codegen-emit.cpp` está feita. Os candidatos ativos restantes são
+   `hir-lower-expr.cpp` e `frontend-expr.cpp`.
    O contrato de execução para estes splits está em `docs/plans/monolith-splits.md`.
 2. Em cada extracção, compilar `zithcLib` e correr os testes da área afectada.
    Use `ctest --test-dir build --output-on-failure` para regressões gerais.
 3. Casos de incompletude que precisam de decisão de produto (sintaxe de `type`,
    slices literais, `is <type>`) devem ser tratados como issues separados, não
    como parte da quebra mecânica.
-4. Consolidar as entradas duplicadas de `Known Debt` de `docs/impl-status.md`
-   para este ficheiro quando forem tratadas.
+4. Remover entradas `Known Debt` de `docs/impl-status.md` apenas quando a
+   dívida correspondente for realmente resolvida; neste passo a consolidação
+   uniu as listas sem alterar o comportamento do compilador.

@@ -10,7 +10,7 @@
 
 ## Introduction
 
-Zith gives you full control with a minimal & clean syntax — you don't have to choose between verbose but safe or readable but slow. Its memory model, Node Resource Analysis (NRA), proves ownership and lifetime safety using five keywords: `lend`, `view`, `unique`, `share`, and `belong` — plus a `default` (no keyword) modifier.
+Zith gives you full control with a minimal & clean syntax — you don't have to choose between verbose but safe or readable but slow. Its memory model, Node Resource Analysis (NRA), proves ownership and lifetime safety using five keywords: `lend`, `view`, `own`, `share`, and `belong` — plus a `default` (no keyword) modifier.
 
 Beyond memory safety, Zith has a general-purpose core with a much larger toolbox: state machines, contexts (DSLs), words (custom operators), comptime. You choose when to use them. Zith also follows the **Rule of Three**: "if a function needs more than three specialized tools, something went wrong."
 
@@ -24,7 +24,8 @@ For the exact picture of what works today, see [Implementation Status](impl-stat
 |---|---|
 | `?T` | Optional type — `T` or `null`, also a Zith-- type ([§8.1](08-error-handling.md#81-failable-types)) |
 | `T!` | Result type — `T` or an error, full Zith only ([§8.1](08-error-handling.md#81-failable-types)) |
-| `?` / `!` (postfix) | Unwrap an optional / result, propagating or falling back ([§8.3](08-error-handling.md#83-propagation--fallback)) |
+| `try` | Errors | Short-circuit a single expression; optional fallback via `or` ([§8.3](08-error-handling.md#83-try-propagation-and-fallback)) |
+| `?` / `!` (postfix) | Errors | Propagate an optional / result out of the current scope ([§8.3](08-error-handling.md#83-try-propagation-and-fallback)) |
 | `@name` | Compiler intrinsic or macro invocation ([§11.3](11-comptime.md#113-reflection), [§15](15-macros.md)) |
 | `#name` | Variable or field attribute, e.g. `#thread_local` or `#volatile` |
 | `::` | Scope resolution — reach past a shadowed name ([§2.3](02-module-system.md#23-namespace-access--scope-resolution)) |
@@ -290,7 +291,7 @@ struct Pair<T, U> { first: T, second: U }
 struct Node<T> {
     data: T,
     //Self = Node<T>
-    next: ?unique Self,   // owns next; null at tail
+    next: ?own Self,   // owns next; null at tail
     prev: ?belong Self,   // back-ref; lifetime tied to parent; null at head
 }
 ```
@@ -303,7 +304,7 @@ Structs, enums, and unions can declare methods without bodies in the type defini
 // Struct — declares methods, no body
 struct Node<T> {
     data: T,
-    next: ?unique Self,
+    next: ?own Self,
     prev: ?belong Self,
     fn isHead(self): bool;   // declared, no body
     fn isTail(self): bool;   // declared, no body
@@ -365,7 +366,7 @@ A component must satisfy all of the following constraints:
   - Must return a value — `void` is not allowed.
 - Copying is always bitwise (memcpy-safe).
 - Layout is C-compatible — no vtable, no fat pointers.
-- No self-referential fields (`?unique Self`, `?belong Self`).
+- No self-referential fields (`?own Self`, `?belong Self`).
 
 ### 3.6 Union
 
@@ -591,9 +592,9 @@ Capabilities are special traits that feed the compiler more information, unlocki
 | `Generator` | Allows creating runtime-defined resumable or streaming protocols without introducing a dedicated core function kind. |
 | `Share` | Required for `global: share` and crossing thread boundaries |
 | `ThreadBackend` | Provides a concrete thread handle for explicit `fork`/`merge`, e.g. `pThread` |
-| `Lent` | Enables `global: unique`, a runtime-checked exclusive borrow. `global` bindings cannot be moved — `Lent` manages thread-safe distribution. Also allows `lend` parameters. |
+| `Lent` | Enables `global: own`, a runtime-checked exclusive borrow. `global` bindings cannot be moved — `Lent` manages thread-safe distribution. Also allows `lend` parameters. |
 | `Trust` | A trait extending `Trust` may contain `raw fn` methods callable from safe contexts. |
-| `Unique` | Marks a singleton type. It cannot be instantiated — the type name itself acts as the instance. All fields must implement `Share` (thread-safe). A `unique Local` variant is a singleton thread-local. |
+| `Unique` | Marks a singleton type. It cannot be instantiated — the type name itself acts as the instance. All fields must implement `Share` (thread-safe). An `own Local` variant is a singleton thread-local. |
 
 #### `Null` & `Fail` — Negative Capabilities
 
@@ -785,9 +786,9 @@ Zith uses deep mutability: a modifier on a binding flows into every nested field
 let x: mut Point;      // cannot reassign x; Point's fields are mutable (mut)
 var y: Point;          // can reassign y; Point's fields are immutable (default, no mut)
 
-// lend, unique, share, belong → imply mut
+// lend, own, share, belong → imply mut
 fn update(p: lend Point) { p.x += 1; }  // p is mutable (lend implies mut)
-let r: unique Resource = acquire();     // r's fields are mutable (unique implies mut)
+let r: own Resource = acquire();     // r's fields are mutable (own implies mut)
 
 // view → implies immutable
 fn read(c: view Config) { ... }         // c is read-only (view implies immutable)
@@ -885,11 +886,34 @@ In effect, if `a` is never reassigned, it is as though `a` never existed and `b`
 | `default` | Owned. Lifetime follows the binding. | Variables, struct fields |
 | `lend` | Exclusive mutable temporary. Cannot be stored, moved, or captured — but **can be returned**, passing the promise to the caller. `belong` fields can also be passed as `lend`. | Passing mutable references to functions |
 | `view` | Read-only, non-owning reference. Many views may coexist. | Inspecting without ownership |
-| `unique` | Single-owner guarantee — only one name in the graph. | Ownership-transfer patterns |
+| `own` | Single-owner guarantee — only one name in the graph. | Ownership-transfer patterns |
 | `share` | Multiple names, same node, statically validated — no ref-counting. Mutable. | Compile-time-proven sharing |
 | `belong` | Part-of relationship. Node lifetime tied to its parent; cannot be stored independently. Can be passed as `lend`. | Back-pointers, hierarchies |
 
-> `unique` provides compile-time single-owner guarantees for local bindings. In a `global` context, `unique` becomes runtime-checked — the compiler enforces exclusive access at program startup. `global` bindings cannot be moved; the `Lent` capability manages thread-safe distribution.
+### 7.3.1 Re-binding With `:=`
+
+`=` assigns values; `:=` re-binds the reference or ownership slot itself. It
+retargets an existing `own`, `share`, `lend`, `belong`, or `view` link, and it
+installs an owner into a slot that is awaiting one.
+
+```zith
+var slot: own Buffer = acquireBuffer();  // OK: initialization uses `=`
+slot := acquireBuffer();      // ERROR: first owner is still live
+let slot2 = &slot;            // slot2 owns the storage; slot is dead
+slot := acquireBuffer();      // OK: install into the dead slot
+```
+
+`:=` never overwrites a live owner. For `lend`, the source node must be alive
+when the borrow starts and the previous borrow must end before the new one
+starts. For `belong`, the new parent must still satisfy the normal escape and
+parent-alive rules. For `view` and `share`, it only changes which node the
+link points at; it does not create or remove ownership.
+
+`own T` is the full-Zith surface name for the former `unique T`. The NRA
+semantic stays a mutable single-owner handle. A stack-backed handle may not
+escape its storage scope.
+
+> `own` provides compile-time single-owner guarantees for local bindings. In a `global` context, `own` becomes runtime-checked — the compiler enforces exclusive access at program startup. `global` bindings cannot be moved; the `Lent` capability manages thread-safe distribution.
 
 > In practice, most code only needs `lend` and `view`.
 
@@ -900,7 +924,7 @@ Each memory modifier carries an implicit content mutability level:
 | Modifier | Implies | Example |
 |---|---|---|
 | `lend` | Mutable | `fn update(p: lend Point) { p.x += 1; }` — `p` is mutable |
-| `unique` | Mutable | `let r: unique Resource = ...;` — `r`'s fields are mutable |
+| `own` | Mutable | `let r: own Resource = ...;` — `r`'s fields are mutable |
 | `share` | Mutable | `global counter: share i32 = 0;` — mutable across threads |
 | `belong` | Mutable | `parent: ?belong Self` — mutable back-pointer |
 | `view` | Immutable | `fn read(c: view Config) { ... }` — `c` is read-only |
@@ -911,7 +935,7 @@ Each memory modifier carries an implicit content mutability level:
 ### 7.4 The Four NRA Rules
 
 **Rule 1 — Argument Exclusivity.** In any call expression, each argument must refer to a distinct node, without exception:
-- Duplicating a `default` / `unique` / `lend` argument → **ownership error**.
+- Duplicating a `default` / `own` / `lend` argument → **ownership error**.
 - Duplicating a `share` / `view` argument → **logic error** (passing the same resource twice is almost certainly a bug).
 
 **Rule 2 — No Dead Node Access.** A symbol cannot be read while its node is `dead`.
@@ -942,7 +966,7 @@ let b: share Config = a;   // both point to the same node
 // belong -- back-pointer cannot outlive its parent
 struct Tree<T> {
     data:     T,
-    children: []unique Self,
+    children: []own Self,
     parent:   ?belong Self,
 }
 
@@ -956,7 +980,7 @@ The main NRA proof runs before the final HIR is formed. That boundary exists so 
 sees:
 
 - binding identity and resource graphs;
-- the difference between `default`, `view`, `lend`, `unique`, `share`, and `belong`;
+- the difference between `default`, `view`, `lend`, `own`, `share`, and `belong`;
 - branch facts, narrowing facts, and return-path equivalence;
 - call, capture, and escape structure before lowering erases it.
 
@@ -987,18 +1011,18 @@ temporaries and stores.
 ```zith
 struct Node<T> {
     data: T,
-    next: ?unique Self,
+    next: ?own Self,
     prev: ?belong Self,
 }
 
 implement Node<T> {
     fn append(self: lend Self, data: T) {
-        self.next = unique Node { data, next: null, prev: belong self };
+        self.next := own Node { data, next: null, prev: belong self };
     }
 }
 ```
 
-- Freeing the head frees the entire chain, since `next` forms a `unique` ownership chain.
+- Freeing the head frees the entire chain, since `next` forms an `own` ownership chain.
 - NRA guarantees `prev` (`belong`) never outlives its owner.
 - `belong` fields may be passed as `lend` to functions.
 
@@ -1071,7 +1095,7 @@ let c2 = raw cfg;    // always unchecked; compiler always warns
 
 `must` also doubles as an assertion: `must(cond)` panics with file and line info if `cond` is false (debug only). In release, the compiler guides you to replace it with proper error handling.
 
-### 8.3 Propagation & Fallback
+### 8.3 `try`, Propagation, and Fallback
 
 ```zith
 fn readConfig(path: string): Config! {
@@ -1080,43 +1104,52 @@ fn readConfig(path: string): Config! {
     parse(data)!
 }
 
-let name = ?user.name or "guest";
-let data = !primary() or backup() or default;
+let name = try user.name or "guest";
+let data = try primary() or backup() or default;
 
 // Propagation inside a chain
 readFile("data.bin") -> parse(..)! -> validate(..)? -> process(..)
 ```
 
-Accessing a failable type's inner value requires one of four operators: `?`, `!`, `raw`, or `must`.
+Accessing a failable type's inner value requires one of `try`, `!`, `raw`, or `must`.
 
-- **`?`** unwraps an Optional — returns `T` or `null`.
-- **`!`** unwraps a Result — returns `T` or an error.
+- **`try`** short-circuits only the enclosed expression and keeps the failure as a local value.
+- **`!`** unwraps and propagates a failure out of the enclosing scope.
+- **`raw`** unwraps without checking the failure.
+- **`must`** unwraps and asserts that the value is valid.
 
-#### Prefix vs Postfix
+#### `try` and `or`
 
-`?` and `!` serve two distinct roles depending on position:
-
-| Position | Role | Rule |
-|---|---|---|
-| **Prefix** (start of expression) | Fallback | Only **one** `?` or `!` per expression. Must be followed by `or` to provide the fallback value. |
-| **Postfix** (end of a chain segment) | Propagation | **Multiple** allowed. Propagates the error/null out of the chain, skipping the remaining calls. |
+`try` guards a single expression. It stops the expression at the first failure and does not
+route that failure to a `fail` scope guard. It is the local fallback form; the fix is `try expr`
+with no prefix `?`/`!`.
 
 ```zith
-// Prefix — one per expression, must use 'or' for fallback
-let x = ?opt or default;           // valid
-let x = !result or fallback;       // valid
-let x = ?opt or default or backup; // valid — chain of fallbacks
+// Local fallback; the failure is consumed in this expression
+let x = try opt or default;
+let x = try opt or default or backup; // valid — chain of fallbacks
 
-// Postfix — multiple allowed in a chain
-let x = ?y or default.data()?fn()?process()?
-//       ^prefix                                        ^postfix (propagation)
-
-// Invalid — two prefixes in one expression
-let x = ?y.?data.?fn();   // invalid
-let x = ?opt?;            // invalid — '?' cannot follow another '?'
+// Short-circuit with a failure value: a, foo(), or c() may stop the chain
+let value = try a.foo().c();
 ```
 
-You can chain with `or` until it finds an Integral result (short-circuit).
+`try expr` has a union type (`T | failures`); the result is either an integral `T` or the
+failure that stopped the expression. `try expr or fallback` collapses that result to `T`.
+`or` is short-circuiting and evaluates only until an integral result is found.
+
+#### Postfix `!`
+
+Postfix `!` propagates a failure out of the current scope. Unlike `try`, this is the path
+that can activate a surrounding `fail` block. Postfix `?` keeps the existing optional
+propagation role for `?T`.
+
+```zith
+// Postfix — propagates from the failing segment to the enclosing scope
+let x = y.data()!fn()!process()!
+```
+
+Prefix `?`/`!` fallback forms are removed from the language surface; `try ... or` is their
+replacement.
 
 ### 8.4 `with` / `catch`
 
@@ -1142,7 +1175,10 @@ eager with (a: fetchA(), b: fetchB()) {
 
 ### 8.5 `fail` Blocks
 
-A `fail` block runs when an error would otherwise escape its associated scope. It can follow a named block (external) or sit inside a block as a scope guard (nameless):
+A `fail` block runs when an error would otherwise escape its associated scope. It is a scope
+listener, not an expression-level fallback. Only `!` propagation and `throw` activate it;
+`try` keeps failures local and does not reach `fail`. A `fail` block can follow a named block
+(external) or sit inside a block as a scope guard (nameless):
 
 ```zith
 // External fail
@@ -1164,7 +1200,9 @@ loadConfigure {
 
 > **Name linking:** an external `fail` block's name must match the block it guards. When there is only one failable block in scope, the name can be omitted. A nameless `fail` guards the current scope directly — the compiler passes the error the same way.
 
-Inside a `fail` block, the parameter receives the error directly. You have four options:
+Inside a `fail` block, the parameter receives the error directly. This is the difference
+from `try ... or`: `try` discards or collapses the failure, while `fail` has the original
+error available for logging, transformation, or conditional recovery. You have four options:
 
 - `continue(value)` — resume after the block with a replacement value.
 - `return value;` — exit the enclosing function.
@@ -1661,7 +1699,7 @@ All other memory modifiers work with `dyn`:
 | `view dyn` | Redundant — `dyn` is already a view |
 | `share dyn` | Multiple names, same dynamic value |
 | `lend dyn` | Exclusive mutable borrow of a dynamic value |
-| `unique dyn` | Single-owner dynamic value |
+| `own dyn` | Single-owner dynamic value |
 
 ```zith
 fn draw_all(items: dyn []Drawable) {
@@ -1905,8 +1943,8 @@ Override or supplement auto-generated bindings to attach Zith-specific semantics
 ```zith
 // Equivalent declarations — malloc is a C function (no namespace)
 // bindToC is subject to Zith namespace rules
-fn bindToC = extern 'C' malloc(size: u64): unique opaque;
-extern 'C' malloc(size: u64): unique opaque;   // same thing, no namespace alias
+fn bindToC = extern 'C' malloc(size: u64): own opaque;
+extern 'C' malloc(size: u64): own opaque;   // same thing, no namespace alias
 ```
 
 ### 18.3 External (No Header)
@@ -2030,7 +2068,7 @@ fn write(self: lend File, data: []u8): void!;
 
 ### 21.1 Ownership Patterns
 
-- **Resources shall be `unique`:** `let resource: unique = Resource.new();`
+- **Resources shall be `own`:** `let resource: own = Resource.new();`
 - **Use `share` for intentional multiple owners:** implement `Share` and `Clone` explicitly.
 - **Use `view` for reading:** `fn process(config: view Config)`
 - **Use `lend` for temporary mutation:** `fn update(state: lend GameState)`
@@ -2038,8 +2076,8 @@ fn write(self: lend File, data: []u8): void!;
 
 ### 21.2 Optional & Failable Patterns
 
-- **Prefer `?...or` for optionals:** `let name = ?user.name or "guest";`
-- **Prefer `!...or` for failables:** `let config = !loadPrimary() or loadBackup() or defaultConfig();`
+- **Prefer `try ... or` for optionals:** `let name = try user.name or "guest";`
+- **Prefer `try ... or` for failables:** `let config = try loadPrimary() or loadBackup() or defaultConfig();`
 - **Reserve `must` for initialization:** `const API_KEY = must env("API_KEY");`
 
 ### 21.3 Context Patterns
@@ -2119,7 +2157,7 @@ The Rule of Three keeps code readable. Zith gives you many tools — you don't h
 | `\| \|` | Types | Pack — named tuple / variadic / closure capture group. |
 | `pub` / `mod` / `mod(..)` / `mod(N)` | Visibility | Public / module-local, with optional depth. |
 | `let` / `var` / `global` / `const` | Bindings | Immutable / mutable / static storage / compile-time constant. |
-| `default` / `lend` / `view` / `unique` / `share` / `belong` | Memory | NRA memory modifiers — `default` is implicit when no keyword is written ([§7](07-memory-model.md)). |
+| `default` / `lend` / `view` / `own` / `share` / `belong` | Memory | NRA memory modifiers — `default` is implicit when no keyword is written ([§7](07-memory-model.md)). |
 | `fn` / `const fn` / `state` / `raw fn` / `extern fn` | Functions | Five exclusive function kinds; cannot be combined. |
 | `trait` / `interface` / `extends` / `requires` / `dyn` | OOP | Nominal traits, structural interfaces, extension, constraints, dynamic dispatch. |
 | `Copy` / `Functor` / `Arithmetic` / `Error` | Capabilities | Operator and behavior capabilities. |
@@ -2132,6 +2170,7 @@ The Rule of Three keeps code readable. Zith gives you many tools — you don't h
 | `,` (in a chain) | Chain | Sub-chain — applies but does not advance the main chain value. |
 | `operator` / `token` | Words | Custom operator definition / token word definition ([§16](16-words.md)). Must be defined inside a `context` — global operator overloading is prohibited. |
 | `?T` / `T!` | Errors | Optional / Result types. `?T` is also a Zith-- type; `T!` is full Zith only. May be stacked. |
+| `try` | Errors | Short-circuit a single expression; unwrap with an optional `or` fallback. Does not trigger `fail`. |
 | `?` / `!` (postfix) | Errors | Propagate Option / Result. No semicolon. Propagate out of chains. |
 | `or` | Errors / Loops / Types | Fallback / collapse an optional loop return / type constraint separator. |
 | `must` | Errors | Panic in debug; guided removal in release. |

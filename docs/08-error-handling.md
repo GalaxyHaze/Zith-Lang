@@ -3,7 +3,7 @@
 > **Implementation status:** `?T` is **working in Zith--** with `?` postfix propagation, full
 > operand and return-type validation, `null → ?T` and `T → ?T` coercions, and optional extraction
 > via `must`/`raw`. `T!` and the `!` propagation family are full-Zith only. `fail`, `with`,
-> `catch`, `throw`, and prefix `?`/`!` fallback are **spec-only**.
+> `catch`, `throw`, `try`, and `try ... or` fallback are **spec-only**.
 > See [impl-status.md](impl-status.md).
 
 
@@ -80,7 +80,7 @@ let c2 = raw cfg;    // always unchecked; compiler always warns
 
 `must` also doubles as an assertion: `must(cond)` panics with file and line info if `cond` is false (debug only). In release, the compiler guides you to replace it with proper error handling.
 
-### 8.3 Propagation & Fallback
+### 8.3 `try`, Propagation, and Fallback
 
 ```zith
 fn readConfig(path: string): Config! {
@@ -89,43 +89,52 @@ fn readConfig(path: string): Config! {
     parse(data)!
 }
 
-let name = ?user.name or "guest";
-let data = !primary() or backup() or default;
+let name = try user.name or "guest";
+let data = try primary() or backup() or default;
 
 // Propagation inside a chain
 readFile("data.bin") -> parse(..)! -> validate(..)? -> process(..)
 ```
 
-Accessing a failable type's inner value requires one of four operators: `?`, `!`, `raw`, or `must`.
+Accessing a failable type's inner value requires one of `try`, `!`, `raw`, or `must`.
 
-- **`?`** unwraps an Optional, returning `T` or `null`.
-- **`!`** unwraps a Result, returning `T` or an error.
+- **`try`** short-circuits only the enclosed expression and keeps the failure as a local value.
+- **`!`** unwraps and propagates a failure out of the enclosing scope.
+- **`raw`** unwraps without checking the failure.
+- **`must`** unwraps and asserts that the value is valid.
 
-#### Prefix vs Postfix
+#### `try` and `or`
 
-`?` and `!` serve two distinct roles depending on position:
-
-| Position | Role | Rule |
-|---|---|---|
-| **Prefix** (start of expression) | Fallback | Only **one** `?` or `!` per expression. Must be followed by `or` to provide the fallback value. |
-| **Postfix** (end of a chain segment) | Propagation | **Multiple** allowed. Propagates the error/null out of the chain, skipping the remaining calls. |
+`try` guards a single expression. It stops the expression at the first failure and does not
+route that failure to a `fail` scope guard. It is the local fallback form; the fix is `try expr`
+with no prefix `?`/`!`.
 
 ```zith
-// Prefix — one per expression, must use 'or' for fallback
-let x = ?opt or default;           // valid
-let x = !result or fallback;       // valid
-let x = ?opt or default or backup; // valid — chain of fallbacks
+// Local fallback; the failure is consumed in this expression
+let x = try opt or default;
+let x = try opt or default or backup; // valid — chain of fallbacks
 
-// Postfix — multiple allowed in a chain
-let x = ?y or default.data()?fn()?process()?
-//       ^prefix                                        ^postfix (propagation)
-
-// Invalid — two prefixes in one expression
-let x = ?y.?data.?fn();   // invalid
-let x = ?opt?;            // invalid — '?' cannot follow another '?'
+// Short-circuit with a failure value: a, foo(), or c() may stop the chain
+let value = try a.foo().c();
 ```
 
-You can chain with `or` until it finds an Integral result (short-circuit).
+`try expr` has a union type (`T | failures`); the result is either an integral `T` or the
+failure that stopped the expression. `try expr or fallback` collapses that result to `T`.
+`or` is short-circuiting and evaluates only until an integral result is found.
+
+#### Postfix `!`
+
+Postfix `!` propagates a failure out of the current scope. Unlike `try`, this is the path
+that can activate a surrounding `fail` block. Postfix `?` keeps the existing optional
+propagation role for `?T`.
+
+```zith
+// Postfix — propagates from the failing segment to the enclosing scope
+let x = y.data()!fn()!process()!
+```
+
+Prefix `?`/`!` fallback forms are removed from the language surface; `try ... or` is their
+replacement.
 
 ### 8.4 `with` / `catch`
 
@@ -151,7 +160,10 @@ eager with (a: fetchA(), b: fetchB()) {
 
 ### 8.5 `fail` Blocks
 
-A `fail` block runs when an error would otherwise escape its associated scope. It can follow a named block (external) or sit inside a block as a scope guard (nameless):
+A `fail` block runs when an error would otherwise escape its associated scope. It is a scope
+listener, not an expression-level fallback. Only `!` propagation and `throw` activate it;
+`try` keeps failures local and does not reach `fail`. A `fail` block can follow a named block
+(external) or sit inside a block as a scope guard (nameless):
 
 ```zith
 // External fail
@@ -173,7 +185,9 @@ loadConfigure {
 
 > **Name linking:** an external `fail` block's name must match the block it guards. When there is only one failable block in scope, the name can be omitted. A nameless `fail` guards the current scope directly. The compiler passes the error the same way.
 
-Inside a `fail` block, the parameter receives the error directly. You have four options:
+Inside a `fail` block, the parameter receives the error directly. This is the difference
+from `try ... or`: `try` discards or collapses the failure, while `fail` has the original
+error available for logging, transformation, or conditional recovery. You have four options:
 
 - `continue(value)`, to resume after the block with a replacement value.
 - `return value;`, to exit the enclosing function.

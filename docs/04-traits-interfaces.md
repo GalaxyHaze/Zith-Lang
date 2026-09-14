@@ -108,9 +108,9 @@ Capabilities are special traits that feed the compiler more information, unlocki
 | `Generator` | Allows creating runtime-defined resumable or streaming protocols without introducing a dedicated core function kind. |
 | `Share` | Required for `global: share` and crossing thread boundaries |
 | `ThreadBackend` | Provides a concrete thread handle for explicit `fork`/`merge`, e.g. `pThread` |
-| `Lent` | Enables `global: unique`, a runtime-checked exclusive borrow. `global` bindings cannot be moved — `Lent` manages thread-safe distribution. Also allows `lend` parameters. |
+| `Lent` | Enables `global: own`, a runtime-checked exclusive borrow. `global` bindings cannot be moved — `Lent` manages thread-safe distribution. Also allows `lend` parameters. |
 | `Trust` | A trait extending `Trust` may contain `raw fn` methods callable from safe contexts. |
-| `Unique` | Marks a singleton type. It cannot be instantiated — the type name itself acts as the instance. All fields must implement `Share` (thread-safe). A `unique Local` variant is a singleton thread-local. |
+| `Unique` | Marks a singleton type. It cannot be instantiated — the type name itself acts as the instance. All fields must implement `Share` (thread-safe). An `own Local` variant is a singleton thread-local. |
 
 #### `Null` & `Fail` — Negative Capabilities
 

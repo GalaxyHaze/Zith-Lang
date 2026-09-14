@@ -218,6 +218,10 @@ _Avoid_: generic slot, field-inferred parameter, runtime type argument
 The declaration-level parameter binding that owns a bound such as `K: Hashable`. It stays authoritative even when the bound is reached through a generic field.
 _Avoid_: bound metadata on a concrete type, field-derived bound, receiver-derived trait
 
+**Imported generic instantiation**:
+The resolution path that reifies a generic declaration reached through a module alias, using the declaring module's template as the source of truth and producing the same reified type and method metadata as a local instantiation.
+_Avoid_: cross-module monomorphization, qualified template lookup, imported template special case
+
 ## Zith Proof Kernel (ZPK)
 
 **Zith Proof Kernel (ZPK)**:

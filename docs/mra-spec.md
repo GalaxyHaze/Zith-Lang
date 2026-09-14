@@ -197,16 +197,24 @@ cannot statically know its exact address unless `@regionInit` receives a
 constant/proven address. Two dynamic regions may be backed by overlapping
 physical memory, which breaks RRA disjointness across heaps.
 
-This remains an open problem except for the conservative rule already present:
-while the spec is immature, overlapping regions with different initialization
-states are rejected. For dynamic heaps, the following strategies are candidates:
+Overlap is resolved through three layers, in order:
 
-- Require the programmer to declare disjoint domain namespaces and treat each
-  `heap` as an opaque provenance domain, even when physical overlaps exist.
-- Require `@regionInit` results to be RRA-provable disjoint after initialization.
-- Reject two `heap` values whose `@regionInit` calls cannot be proven disjoint.
+- **Static:** `region`/`pool` declarations with constant or symbolic shape are
+  the canonical reference. Two static regions that overlap are rejected
+  without a runtime probe.
+- **Fresh:** memory from a fresh OS/runtime source (`mmap`, a fresh arena, a
+  new backing allocation) is accepted as disjoint by construction. The OS/runtime
+  already guarantees it does not overlap prior process memory. `raw` state may
+  lie and is outside this guarantee.
+- **Slices:** when several dynamic regions are carved out of the same parent
+  backing range, NIA/RRA prove containment and disjoint subranges at the single
+  slice/carve point. Fresh origin bypasses this proof; same-parent slices
+  require it.
 
-The overlap rule will be resolved before the MRA implementation starts.
+Anything that does not fall into one of the three layers falls back to the
+conservative rule: MRA treats the ranges as `Overlap` until a creation point
+proves otherwise. The proof burden is never per access; it is settled when the
+region is declared or carved.
 
 ## 8. Allocators Over MRA
 

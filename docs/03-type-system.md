@@ -7,7 +7,7 @@
 > between numeric types (a numeric *literal* still adapts to its annotated type). Pointers are
 > non-nullable, so `null` requires `?*T`, and `*void` is rejected in favour of `raw opaque`.
 > `is <type>` narrowing works for tagged unions and opaque, and `when` pattern matching is
-> working. Full NRA ownership modifiers (`unique`, `share`, `belong`) remain
+> working. Full NRA ownership modifiers (`own`, `share`, `belong`) remain
 > full-Zith/spec-only; `dyn Trait`/`dyn Interface` method dispatch is **working** in Zith--.
 > See [impl-status.md](impl-status.md).
 
@@ -89,7 +89,7 @@ struct Pair<T, U> { first: T, second: U }
 struct Node<T> {
     data: T,
     //Self = Node<T>
-    next: ?unique Self,   // owns next; null at tail
+    next: ?own Self,   // owns next; null at tail
     prev: ?belong Self,   // back-ref; lifetime tied to parent; null at head
 }
 ```
@@ -102,7 +102,7 @@ Structs, enums, and unions can declare methods without bodies in the type defini
 // Struct — declares methods, no body
 struct Node<T> {
     data: T,
-    next: ?unique Self,
+    next: ?own Self,
     prev: ?belong Self,
     fn isHead(self): bool;   // declared, no body
     fn isTail(self): bool;   // declared, no body
@@ -192,7 +192,7 @@ A component must satisfy all of the following constraints:
   - Must return a value, so `void` is not allowed.
 - Copying is always bitwise (memcpy-safe).
 - Layout is C-compatible, so there are no vtables or fat pointers.
-- No self-referential fields (`?unique Self`, `?belong Self`).
+- No self-referential fields (`?own Self`, `?belong Self`).
 
 ### 3.6 Union
 

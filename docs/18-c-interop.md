@@ -212,8 +212,8 @@ Override or supplement auto-generated bindings to attach Zith-specific semantics
 ```zith
 // Equivalent declarations — malloc is a C function (no namespace)
 // bindToC is subject to Zith namespace rules
-fn bindToC = extern 'C' malloc(size: u64): unique opaque;
-extern 'C' malloc(size: u64): unique opaque;   // same thing, no namespace alias
+fn bindToC = extern 'C' malloc(size: u64): own opaque;
+extern 'C' malloc(size: u64): own opaque;   // same thing, no namespace alias
 ```
 
 ### 18.3 External (No Header)

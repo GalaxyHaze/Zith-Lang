@@ -20,7 +20,7 @@
 | F-11 | `fail` / `with` / `catch` / `throw` / `must` | 8 | Spec only |
 | F-12 | `T!` failable propagation (`!` postfix) | 8 | Full Zith only: `T!` and `!` propagation remain outside Zith-- |
 | F-13 | `raw` unwrap operator | 13 | Working for optional extraction; `unsafe`/raw-block surface remains full-Zith |
-| F-14 | NRA/NTA ownership proof before stable HIR (`lend`, `view`, `unique`, `share`, `belong`) | 7 | In progress (residual-fact contract implemented in Wave 05; full rule diagnostics remain) |
+| F-14 | NRA/NTA ownership proof before stable HIR (`lend`, `view`, `own`, `share`, `belong`) | 7 | In progress (residual-fact contract implemented in Wave 05; full rule diagnostics remain) |
 | F-15 | `comptime` blocks | 11 | Spec only |
 | F-16 | `const fn` compile-time evaluation | 11 | Spec only |
 | F-17 | Reflection intrinsics (`@fields`, `@hasTrait`, `@appendField`, ...) | 11 | Spec only |
@@ -41,7 +41,7 @@
 | F-32 | C header import completion (macros, variadics, callbacks) | 18 | Working (validated C); simple records by value are imported only after layout validation; advanced macros/globals/bitfields remain debt |
 | F-33 | Function overloading (selection by arity and parameter types) | 5 | Working |
 | F-36 | Variadic slices (`[...]T` homogeneous tail parameters) | 5 | Working |
-| F-34 | Memory qualifier parsing and typing (`mut`, `lend`, `view`, `unique`, `share`, `belong`) | 7 | Working |
+| F-34 | Memory qualifier parsing and typing (`mut`, `lend`, `view`, `own`, `share`, `belong`) | 7 | Working |
 | F-35 | Trait and interface bodies as real declarations | 4 | Working; interface bodies accept single/grouped fields and declaration-only method requirements |
 | F-40 | Scope-guard `defer` statements | 9, Zith-- | Working |
 | F-41 | Deterministic `drop` cleanup hooks | 9, Zith-- | Planned for Zith--; depends on F-40 |
@@ -96,7 +96,7 @@ F-16 (`const fn` evaluation), F-17 (reflection intrinsics), and F-28 (pack ops)
 remain archived full-Zith features.
 
 ### Wave 05 — NRA Ownership Analysis
-F-14 (`lend`/`view`/`unique`/`share`/`belong` analysis pass), F-27 (destructuring).
+F-14 (`lend`/`view`/`own`/`share`/`belong` analysis pass), F-27 (destructuring).
 
 The stable HIR boundary is now structural: NTA/NRA facts are accumulated before final lowering and
 HIR carries only residual side-table facts. Remaining work is the alive/dead/lent state machine,

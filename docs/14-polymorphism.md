@@ -44,7 +44,7 @@ All other memory modifiers work with `dyn`:
 | `view dyn` | Redundant — `dyn` is already a view |
 | `share dyn` | Multiple names, same dynamic value |
 | `lend dyn` | Exclusive mutable borrow of a dynamic value |
-| `unique dyn` | Single-owner dynamic value |
+| `own dyn` | Single-owner dynamic value |
 
 ```zith
 fn draw_all(items: dyn []Drawable) {
