@@ -101,7 +101,29 @@ void NraFacts::walkExpr(frontend::ExprId id) {
     const auto *expression = expr(id);
     if (expression == nullptr)
         return;
-    if (expression->kind == frontend::ExprKind::Call) {
+    if (expression->kind == frontend::ExprKind::Unary && expression->text == "&") {
+        // Address-of logically moves the storage into the pointer value. Sema
+        // already reports later reads as E4001; NRA records the same fact as a
+        // residual consumed slot without inventing HIR move nodes.
+        if (!expression->operands.empty()) {
+            const frontend::LocalId local = localOfName(*expr(expression->operands[0]));
+            if (local) {
+                auto &fact      = local_facts_[local.value];
+                fact.knownAlive = false;
+            }
+        }
+    } else if (expression->kind == frontend::ExprKind::LayoutIntrinsic &&
+               expression->text == "ptrOf") {
+        // @ptrOf(local) is the address form used by the no-LLVM path. It shares
+        // the same logical-move contract as `&`.
+        if (!expression->operands.empty()) {
+            const frontend::LocalId local = localOfName(*expr(expression->operands[0]));
+            if (local) {
+                auto &fact      = local_facts_[local.value];
+                fact.knownAlive = false;
+            }
+        }
+    } else if (expression->kind == frontend::ExprKind::Call) {
         analyzeCall(*expression);
     } else if (expression->kind == frontend::ExprKind::Return) {
         analyzeReturn(*expression);
@@ -215,6 +237,9 @@ void NraFacts::walkStatement(frontend::StmtId id) {
     const auto &statement = current_module_->frontend->statements()[id.value - 1U];
     if (statement.expression) {
         applyCurrentNarrowing();
+        const auto *expression = expr(statement.expression);
+        if (expression != nullptr && expression->kind == frontend::ExprKind::Assign)
+            walkAssign(*expression);
         walkExpr(statement.expression);
     }
     if (statement.binding.initializer)
@@ -230,6 +255,20 @@ void NraFacts::walkStatement(frontend::StmtId id) {
         }
         local_facts_.insert(statement.binding.id.value, fact);
     }
+}
+
+void NraFacts::walkAssign(const frontend::Expression &assign) {
+    if (assign.operands.size() < 2U)
+        return;
+    const frontend::LocalId root = localOfName(*expr(assign.operands[0]));
+    if (!root)
+        return;
+    const TypeId root_type =
+        current_typed_ != nullptr ? *current_typed_->localTypes.get(root.value) : kInvalidTypeId;
+    if (root_type && sema_.typeTable().kindOf(sema_.typeTable().stripQualifiers(root_type)) ==
+                         sema::modern::TypeKind::Pointer)
+        return;
+    local_facts_[root.value].knownAlive = true;
 }
 
 void NraFacts::walkFunction(const frontend::Declaration &decl) {
