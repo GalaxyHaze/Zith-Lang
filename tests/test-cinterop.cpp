@@ -292,15 +292,19 @@ void test_struct_and_enum() {
     for (const auto *triple : {"x86_64-unknown-linux-gnu", "aarch64-unknown-linux-gnu"}) {
         ParseOptions opts;
         opts.targetTriple = triple;
-        const auto art    = parseHeaderFromContent("validated_records.h",
-                                                   "struct Point { int x, y; };\n"
-                                                      "int classify(struct Point p);\n"
-                                                      "struct Point get_point(void);\n"
-                                                      "struct Inner { int v; };\n"
-                                                      "struct Outer { struct Inner inner; int extra; };\n"
-                                                      "int classify_outer(struct Outer o);\n"
-                                                      "struct Outer get_outer(void);\n",
-                                                   opts);
+        const auto art =
+            parseHeaderFromContent("validated_records.h",
+                                   "struct Point { int x, y; };\n"
+                                   "int classify(struct Point p);\n"
+                                   "struct Point get_point(void);\n"
+                                   "struct Inner { int v; };\n"
+                                   "struct Outer { struct Inner inner; int extra; };\n"
+                                   "int classify_outer(struct Outer o);\n"
+                                   "struct Outer get_outer(void);\n"
+                                   "struct Pair64 { long long lo, hi; };\n"
+                                   "int sum_pair64(struct Pair64 p);\n"
+                                   "struct Pair64 make_pair64(long long lo, long long hi);\n",
+                                   opts);
         const std::string simple_no_diag =
             std::string("simple record parse has no diagnostics: ") + triple;
         CHECK_EQ(art->diagnostics.size(), 0u, simple_no_diag.c_str());
@@ -345,6 +349,44 @@ void test_struct_and_enum() {
             const std::string outer_imports = std::string("classify_outer imports on ") + triple;
             CHECK(false, outer_imports.c_str());
         }
+        if (const auto *f = findFunction(*art, "sum_pair64")) {
+            const std::string pair64_param =
+                std::string("sum_pair64 keeps its by-value Pair64 parameter: ") + triple;
+            CHECK_EQ(f->parameters.size(), 1u, pair64_param.c_str());
+            if (!f->parameters.empty()) {
+                const auto &pair = f->parameters[0];
+                const std::string pair64_verified =
+                    std::string("Pair64 layout is verified: ") + triple;
+                const std::string pair64_size  = std::string("Pair64 is 16 bytes: ") + triple;
+                const std::string pair64_align = std::string("Pair64 aligns to 8: ") + triple;
+                const std::string pair64_fields =
+                    std::string("Pair64 has two validated fields: ") + triple;
+                const std::string pair64_offsets =
+                    std::string("Pair64 fields are adjacent at 0 and 64 bits: ") + triple;
+                CHECK(pair.hasVerifiedLayout, pair64_verified.c_str());
+                CHECK_EQ(pair.sizeBytes, 16u, pair64_size.c_str());
+                CHECK_EQ(pair.alignBytes, 8u, pair64_align.c_str());
+                CHECK_EQ(pair.recordFields.size(), 2u, pair64_fields.c_str());
+                if (pair.recordFields.size() == 2U) {
+                    CHECK_EQ(pair.recordFields[0].offsetBits, 0u, pair64_offsets.c_str());
+                    CHECK_EQ(pair.recordFields[1].offsetBits, 64u, pair64_offsets.c_str());
+                }
+            }
+        } else {
+            const std::string pair64_imports = std::string("sum_pair64 imports on ") + triple;
+            CHECK(false, pair64_imports.c_str());
+        }
+        if (const auto *f = findFunction(*art, "make_pair64")) {
+            const std::string pair64_result =
+                std::string("make_pair64 result has the validated Pair64 layout: ") + triple;
+            CHECK(f->result.hasVerifiedLayout && f->result.sizeBytes == 16u &&
+                      f->result.alignBytes == 8u && f->result.recordFields.size() == 2U,
+                  pair64_result.c_str());
+        } else {
+            const std::string pair64_result_imports =
+                std::string("make_pair64 imports on ") + triple;
+            CHECK(false, pair64_result_imports.c_str());
+        }
     }
 
     // 7b. Unsupported record layouts produce explicit skips instead of imports.
@@ -364,7 +406,9 @@ void test_struct_and_enum() {
                                    "struct Wide { long double value; };\n"
                                    "int with_wide(struct Wide w);\n"
                                    "struct Int128 { __int128 value; };\n"
-                                   "int with_int128(struct Int128 i);\n",
+                                   "int with_int128(struct Int128 i);\n"
+                                   "struct Mixed { long long lo; int mid; int hi; };\n"
+                                   "int with_mixed(struct Mixed m);\n",
                                    opts);
         const std::string bits_skip = std::string("bitfield record function is skipped: ") + triple;
         const std::string packed_skip = std::string("packed record function is skipped: ") + triple;
@@ -376,12 +420,15 @@ void test_struct_and_enum() {
             std::string("long double record function is skipped: ") + triple;
         const std::string int128_skip =
             std::string("__int128 record function is skipped: ") + triple;
+        const std::string mixed_skip =
+            std::string("mixed 64/32 record function is skipped: ") + triple;
         CHECK(findFunction(*art, "with_bits") == nullptr, bits_skip.c_str());
         CHECK(findFunction(*art, "with_packed") == nullptr, packed_skip.c_str());
         CHECK(findFunction(*art, "with_anonymous") == nullptr, anonymous_skip.c_str());
         CHECK(findFunction(*art, "with_flexible") == nullptr, flexible_skip.c_str());
         CHECK(findFunction(*art, "with_wide") == nullptr, wide_skip.c_str());
         CHECK(findFunction(*art, "with_int128") == nullptr, int128_skip.c_str());
+        CHECK(findFunction(*art, "with_mixed") == nullptr, mixed_skip.c_str());
 
         int explicit_skips = 0;
         for (const auto &skipped : art->skippedFunctions) {
@@ -390,11 +437,12 @@ void test_struct_and_enum() {
                 skipped.find("with_anonymous") != std::string::npos ||
                 skipped.find("with_flexible") != std::string::npos ||
                 skipped.find("with_wide") != std::string::npos ||
-                skipped.find("with_int128") != std::string::npos)
+                skipped.find("with_int128") != std::string::npos ||
+                skipped.find("with_mixed") != std::string::npos)
                 explicit_skips++;
         }
         const std::string skips_all = std::string("every unsupported record has a skip: ") + triple;
-        CHECK_EQ(explicit_skips, 6, skips_all.c_str());
+        CHECK_EQ(explicit_skips, 7, skips_all.c_str());
     }
 
     // 8. enum Color

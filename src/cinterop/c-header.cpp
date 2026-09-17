@@ -220,7 +220,19 @@ bool lowerRecordLayout(const CXType source, Type &result, std::string &unsupport
         size == 8 && align > 0 &&
         (static_cast<uint64_t>(align) == 4U || static_cast<uint64_t>(align) == 8U) &&
         (one_i64_field || two_i32_fields);
-    if (!result.abiIsSingleI64) {
+    // Two adjacent 64-bit integer/pointer fields are also proven by value on
+    // x86-64 and AArch64 Linux.  Clang passes/returns this shape as two 64-bit
+    // scalars (`{ i64, i64 }` on x86-64, `[2 x i64]` on AArch64), so codegen
+    // keeps the aggregate storage type instead of trying to pack it into one
+    // `__int128` register.
+    const bool two_i64_fields = result.recordFields.size() == 2U &&
+                                result.recordFields[0].offsetBits == 0U &&
+                                result.recordFields[1].offsetBits == 64U &&
+                                recordFieldIsSingleI64(*result.recordFields[0].type) &&
+                                recordFieldIsSingleI64(*result.recordFields[1].type);
+    const bool two_i64_value_abi =
+        size == 16 && static_cast<uint64_t>(align) == 8U && two_i64_fields;
+    if (!result.abiIsSingleI64 && !two_i64_value_abi) {
         if (require_by_value_abi) {
             unsupported = "record '" + result.name +
                           "' passes or returns a simple value shape that codegen cannot "

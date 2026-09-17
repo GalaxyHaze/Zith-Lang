@@ -2903,6 +2903,37 @@ static void test_validated_c_struct_by_value_runs() {
 #endif
 }
 
+static void test_validated_c_pair64_by_value_runs() {
+#ifdef ZITH_ENABLE_C_INTEROP
+    ModernFileCodegenTest t;
+    t.opts.flags.emitIr(true);
+    t.opts.cSourceDirs.push("c");
+    t.write("c/pair64-records.c", "#include <stdint.h>\n"
+                                  "struct Pair64 { int64_t lo, hi; };\n"
+                                  "int32_t c_sum_pair64(struct Pair64 p) {\n"
+                                  "    return (int32_t)(p.lo + p.hi);\n"
+                                  "}\n"
+                                  "struct Pair64 make_pair64(int64_t lo, int64_t hi) {\n"
+                                  "    struct Pair64 p = { lo, hi };\n"
+                                  "    return p;\n"
+                                  "}\n");
+    t.write("main.zith", "import \"pair64-records.h\"\n"
+                         "fn main(): i32 {\n"
+                         "    let p = make_pair64(20, 22);\n"
+                         "    let sum: i32 = c_sum_pair64(p);\n"
+                         "    if (sum != 42) { return 1; }\n"
+                         "    return 0;\n"
+                         "}\n");
+    t.write("pair64-records.h", "struct Pair64 { long long lo, hi; };\n"
+                                "int c_sum_pair64(struct Pair64 p);\n"
+                                "struct Pair64 make_pair64(long long lo, long long hi);\n");
+
+    auto r = t.run();
+    CHECK(r.ok, "validated two-adjacent-i64 record by-value functions compile, link, and run");
+    CHECK_EQ(r.exitCode, 0, "the C stub reads the passed Pair64 and returns the expected sum");
+#endif
+}
+
 /// `malloc` -> `as ?*i32` -> store/load -> `free`: both pointer casts are representation
 /// preserving (LLVM pointers are opaque), so no conversion instruction may appear, and the
 /// pointer must reach `free` directly.
@@ -3214,6 +3245,8 @@ static void test_codegen() {
     test_import_stdio_runs();
     printf("Running test_validated_c_struct_by_value_runs\n");
     test_validated_c_struct_by_value_runs();
+    printf("Running test_validated_c_pair64_by_value_runs\n");
+    test_validated_c_pair64_by_value_runs();
     printf("Running test_c_pointer_is_null_uses_niche_comparison\n");
     test_c_pointer_cast_roundtrip_emits_no_conversion();
     test_c_pointer_is_null_uses_niche_comparison();
