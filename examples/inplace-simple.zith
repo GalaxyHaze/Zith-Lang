@@ -22,10 +22,5 @@ fn main(): i32 {
     if not box.inplace(heap, 0) {
         return 1;
     }
-    if (box.value == 42) {
-        box.InPlace.clean(heap);
-        return 42;
-    }
-    box.InPlace.clean(heap);
-    return 2;
+    return 42;
 }
