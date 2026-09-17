@@ -48,6 +48,8 @@ contracts, decisions, and gotchas that are not discoverable from the source alon
   failure outside the defer work.
 - [plan-debt-status.md](plan-debt-status.md): plan/debt/status curation
   contract, the current feature status map, and the docs audit method.
+- [agent-scheduler.md](agent-scheduler.md): scheduler/agent-wait contract,
+  `.awt/agent-state` writer rules, merge/test flow, and Sequenta bridge status.
 - [flat-containers-cache.md](flat-containers-cache.md): FlatMap/FlatSet API
   contracts, hot-map migrations, cache/CLI `--no-cache`, and validation checks
   landed during the consolidation pass.

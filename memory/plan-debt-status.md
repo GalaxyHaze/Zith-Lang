@@ -91,9 +91,10 @@ packed/anonymous records, flexible arrays, `long double`, and `__int128`
 remain unimported.
 
 The `src/session/frontend-context.cpp` and `src/session/compilation-session.cpp`
-monolith splits are merged. `docs/plans/monolith-splits.md` now records the
-completed translation units and keeps `codegen-emit.cpp` and
-`hir-lower-expr.cpp` as candidates.
+monolith splits are merged, and the `src/codegen/codegen-emit.cpp` monolith is
+also split. `docs/plans/monolith-splits.md` now records the completed
+translation units; `hir-lower-expr.cpp` and `frontend-expr.cpp` remain
+secondary candidates.
 
 ## Status Map Used In This Audit
 
@@ -195,18 +196,18 @@ reference. Intentional design decisions go into the non-debt table. The debt
 file does not replace `impl-status.md`; it is the issue tracker for follow-up
 work.
 
-The audit also tightened the debt classification. `ParseInput` entry 8 was
+The audit in 2026-09-07 tightened the debt classification. `ParseInput` entry 8 was
 headlined "deferred" even though the primitives were implemented. The headline
 now says the feature is implemented and `*char` is out of scope. Missing
 `*char` parsing is intentional because `InputLine.text()` already exposes
 strings. That change closes the contradiction between the old headline and the
 status row.
 
-Other debt entries remain real and were left unchanged:
+After that audit, cache `.zirl` was resolved in commit `e43bdf7` (2026-09-14).
+The current debt list below reflects that resolution:
 
 - Bare `opaque` cross-module/cache hydration is closed by the canonical tags
   and `opaque -> opaque` sema no-op; pack/dyn + `opaque` remains separate.
-- The object cache works but `.zirl` is neither produced nor consumed.
 - NRA is partial because the full alive/dead/lent proof is missing.
 - Bare `opaque` has stable cache-hydrated tags but the canonicalization rule
   can still invalidate old artifacts if changed; a more explicit cross-module

@@ -342,6 +342,105 @@ ExprId AstLowerer::parsePrimary() {
                 qualified_name += std::string(text(probe + 1U));
                 probe += 2U;
             }
+            // `std.counter.Counter<i32>{ ... }` parses as a generic struct
+            // literal, not as a generic call over the last dotted segment.
+            if (probe < token_count_ && isOperatorTokenAt(probe, "<")) {
+                int depth = 0;
+                bool balanced = true;
+                for (uint32_t i = probe; i < token_count_; ++i) {
+                    const auto &token = snapshot_.tokens_[i];
+                    if (token.kind != TokenKind::Operator)
+                        continue;
+                    if (text(i) == "<")
+                        ++depth;
+                    else if (text(i) == ">") {
+                        --depth;
+                        if (depth == 0) {
+                            if (i + 1U >= token_count_ ||
+                                snapshot_.tokens_[i + 1U].kind != TokenKind::Punctuation ||
+                                text(i + 1U) != "{")
+                                balanced = false;
+                            break;
+                        }
+                    }
+                }
+                if (balanced) {
+                    index_ = probe;
+                    Expression struct_lit;
+                    struct_lit.kind       = ExprKind::StructLiteral;
+                    struct_lit.scope      = current_scope_;
+                    struct_lit.text       = std::move(qualified_name);
+                    struct_lit.genericArgs.clear();
+                    ++index_; // '<'
+                    while (index_ < token_count_ && !isOperatorTokenAt(index_, ">")) {
+                        struct_lit.genericArgs.push_back(parseType());
+                        if (!punctuation(index_, ','))
+                            break;
+                        ++index_;
+                    }
+                    if (isOperatorTokenAt(index_, ">"))
+                        ++index_;
+                    if (punctuation(index_, '{'))
+                        ++index_;
+                    bool saw_named      = false;
+                    bool saw_positional = false;
+                    const auto parseFieldValue = [&]() -> ExprId {
+                        if (index_ < token_count_ && text(index_) == "_" &&
+                            snapshot_.tokens_[index_].kind == TokenKind::Identifier) {
+                            Expression placeholder;
+                            placeholder.kind  = ExprKind::Placeholder;
+                            placeholder.text  = "_";
+                            placeholder.scope = current_scope_;
+                            placeholder.span  = tokenSpan(index_++);
+                            return addExpression(std::move(placeholder));
+                        }
+                        return parseExpression();
+                    };
+                    while (index_ < token_count_ && !punctuation(index_, '}')) {
+                        if (punctuation(index_, ',')) {
+                            ++index_;
+                            continue;
+                        }
+                        const bool is_named =
+                            (snapshot_.tokens_[index_].kind == TokenKind::Identifier ||
+                             snapshot_.tokens_[index_].kind == TokenKind::Keyword) &&
+                            punctuation(index_ + 1U, ':');
+                        if (is_named) {
+                            if (saw_positional) {
+                                snapshot_.diagnostics_.push_back(
+                                    {range(start, index_),
+                                     "cannot mix positional and named struct literal fields",
+                                     false, diagnostics::err::TypeMismatch});
+                            }
+                            saw_named                    = true;
+                            const std::string field_name = std::string(text(index_++));
+                            ++index_; // ':'
+                            struct_lit.field_names.push_back(field_name);
+                            struct_lit.operands.push_back(parseFieldValue());
+                        } else {
+                            if (saw_named) {
+                                snapshot_.diagnostics_.push_back(
+                                    {range(start, index_),
+                                     "cannot mix positional and named struct literal fields",
+                                     false, diagnostics::err::TypeMismatch});
+                            }
+                            saw_positional = true;
+                            struct_lit.operands.push_back(parseExpression());
+                        }
+                        if (punctuation(index_, ','))
+                            ++index_;
+                        else if (!punctuation(index_, '}'))
+                            break;
+                    }
+                    if (punctuation(index_, '}'))
+                        ++index_;
+                    else
+                        snapshot_.diagnostics_.push_back(
+                            {range(start, index_), "expected '}' after struct literal fields"});
+                    struct_lit.span = range(start, index_);
+                    return parsePostfix(addExpression(std::move(struct_lit)), start);
+                }
+            }
             ends_at_brace = punctuation(probe, '{');
             if (ends_at_brace && qualified_name != expression.text) {
                 index_ = probe;
@@ -492,6 +591,10 @@ ExprId AstLowerer::parsePrimary() {
 bool AstLowerer::isOperatorToken(std::string_view op) const noexcept {
     return index_ < token_count_ && snapshot_.tokens_[index_].kind == TokenKind::Operator &&
            text(index_) == op;
+}
+bool AstLowerer::isOperatorTokenAt(uint32_t index, std::string_view op) const noexcept {
+    return index < token_count_ && snapshot_.tokens_[index].kind == TokenKind::Operator &&
+           text(index) == op;
 }
 
 /// True when the current `<` opens a generic application `name<A, B>(...)`
@@ -666,9 +769,10 @@ ExprId AstLowerer::parsePostfix(ExprId result, uint32_t start) {
             if (generic_struct_literal) {
                 // Generic struct literal: `Pair<i32, f64>{ left: 1, right: 2.0 }`
                 // keeps the generic type arguments on a StructLiteral node.
-                const std::string struct_name = result.value <= snapshot_.expressions_.size()
-                                                    ? snapshot_.expressions_[result.value - 1U].text
-                                                    : std::string{};
+                const std::string struct_name =
+                    result.value <= snapshot_.expressions_.size()
+                        ? snapshot_.expressions_[result.value - 1U].text
+                        : std::string{};
                 Expression struct_lit;
                 struct_lit.kind             = ExprKind::StructLiteral;
                 struct_lit.scope            = current_scope_;

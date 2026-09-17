@@ -455,6 +455,12 @@ bool CompilationSession::lexStage() {
                         static_cast<int>(decl.kind), static_cast<int>(decl.visibility),
                         decl.span.start, decl.span.end, decl.ownerName.empty() ? "" : ", owner=",
                         decl.ownerName.empty() ? "" : decl.ownerName.c_str());
+            for (const auto &expr : root->frontend->expressions()) {
+                writeOutput("  expr kind=%d text='%s' generic=%zu operands=%zu field_names=%zu\n",
+                            static_cast<int>(expr.kind), expr.text.c_str(),
+                            expr.genericArgs.size(), expr.operands.size(),
+                            expr.field_names.size());
+            }
             if (decl.kind == frontend::DeclKind::Trait) {
                 for (const auto &member : root->frontend->declarations()) {
                     if (member.kind != frontend::DeclKind::Function ||

@@ -6,12 +6,12 @@ small and updated as each queue item is finished.
 
 ## Active WIP (do not touch)
 
-- `src/ir/exec-ir.hpp` and `src/interp/ir-vm.{hpp,cpp}` are untracked WIP for
-  the execution IR VM. They are intentionally not committed, not added to the
-  build, and not removed by the cleaning pass.
+- `src/ir/exec-ir.hpp`, `src/interp/ir-vm.{hpp,cpp}`, and the
+  `src/interp/hir-interpreter.cpp` path are committed. The IR VM slice is
+  still excluded from the `zithcLib` library glob, so do not promote it into
+  the library build without a conforming test update.
 - `docs/plans/abi/execution-ir.md` remains signed around the HIR interpreter.
-  The IR VM plan/ADR should be updated only after the WIP compiles and has a
-  conforming test.
+  Keep the IR VM plan/ADR aligned with the committed slice state.
 
 ## Finished In This Pass
 
@@ -19,11 +19,11 @@ small and updated as each queue item is finished.
   "bytecode path".
 - `docs/09-control-flow.md` no longer says literal range forms are not
   implemented.
-- `memory/execution-ir-drawing.md` now reflects the signed contract, the WIP
-  files, and that the CLI is not wired to the IR VM.
-- `CMakeLists.txt` removes `src/interp/ir-vm.cpp` from the source glob so
-  reconfigure/build stays green while keeping the WIP files on disk; the same
-  exclusion covers `src/ir/hir-to-ir.cpp`.
+- `memory/execution-ir-drawing.md` now reflects the signed contract and the
+  committed IR VM slice.
+- `CMakeLists.txt` removes `src/interp/ir-vm.cpp` and `src/ir/hir-to-ir.cpp`
+  from the source glob; the IR VM slice is compiled directly by
+  `test-abi-execution`.
 - `memory/plan-debt-status.md` no longer references the stale `agent5`
   worktree, and `memory/monolith-splits.md` follows the short-note convention
   instead of the old 200-300 line rule.
@@ -44,8 +44,8 @@ Current audit findings that are still open:
   ones that are only snapshots.
 - Update README pipeline text and CLI tables so they do not contradict
   `docs/impl-status.md`.
-- Finish the codegen monolith tracking only after the IR VM WIP is resolved,
-  to avoid mixing unrelated changes.
+- Finish codegen monolith tracking only when the IR VM slice is promoted into
+  the library build, to avoid mixing unrelated changes.
 
 ## Verification
 

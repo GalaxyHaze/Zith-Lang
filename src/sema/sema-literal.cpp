@@ -9,6 +9,10 @@ TypeId PerModuleSema::resolveGenericStructLiteral(frontend::TextSpan span,
                                                   const frontend::Declaration &template_decl,
                                                   const bool named,
                                                   std::vector<TypeId> explicit_args) {
+    const session::ModuleKey saved_imported_template_module = importedTemplateModule_;
+    std::fprintf(stderr, "[probe] resolveGenericStructLiteral text='%s' generic=%zu imported=%s\n",
+                 template_decl.name.c_str(), expr.genericArgs.size(),
+                 importedTemplateModule_.c_str());
     const size_t field_count = template_decl.parameters.size();
     std::vector<TypeId> template_field_types;
     template_field_types.reserve(field_count);
@@ -23,6 +27,7 @@ TypeId PerModuleSema::resolveGenericStructLiteral(frontend::TextSpan span,
         }
         currentDeclId_       = saved_decl_id;
         currentFunctionKind_ = saved_kind;
+        importedTemplateModule_ = saved_imported_template_module;
     }
 
     std::vector<bool> seen(field_count, false);
@@ -80,7 +85,10 @@ TypeId PerModuleSema::resolveGenericStructLiteral(frontend::TextSpan span,
         const bool visible_template_field =
             template_st != nullptr && fieldVisible(*template_st, static_cast<size_t>(decl_idx));
         if (operand.kind == frontend::ExprKind::Placeholder) {
-            if (!findFieldDefault(template_decl.name, static_cast<size_t>(decl_idx))) {
+            const bool has_default = static_cast<bool>(
+                findFieldDefault(template_decl.name, static_cast<size_t>(decl_idx)));
+            importedTemplateModule_ = saved_imported_template_module;
+            if (!has_default) {
                 report(expr.span,
                        "field '" + template_decl.parameters[static_cast<size_t>(decl_idx)].name +
                            "' has no default value for '_'",
@@ -166,7 +174,11 @@ TypeId PerModuleSema::resolveGenericStructLiteral(frontend::TextSpan span,
     }
 
     for (size_t i = 0; i < field_count; ++i) {
-        if (seen[i] || findFieldDefault(template_decl.name, i) || !fieldVisible(*st, i))
+        const bool has_default =
+            seen[i] || static_cast<bool>(findFieldDefault(template_decl.name, i)) ||
+            !fieldVisible(*st, i);
+        importedTemplateModule_ = saved_imported_template_module;
+        if (has_default)
             continue;
         report(expr.span,
                "missing field '" + template_decl.parameters[i].name +
@@ -183,20 +195,24 @@ TypeId PerModuleSema::inferStructLiteral(frontend::ExprId id) {
     const StructType *st         = nullptr;
     bool from_generic_args       = false;
     const bool qualified_literal = struct_name.find('.') != std::string::npos;
+    const session::ModuleKey saved_imported_template_module = importedTemplateModule_;
     if (qualified_literal) {
         const auto *resolved_literal = findResolvedExpr(id);
         if (resolved_literal == nullptr ||
             resolved_literal->kind != session::ResolutionKind::Import) {
+            importedTemplateModule_ = saved_imported_template_module;
             report(expr.span,
                    "qualified struct literal '" + struct_name +
                        "' does not resolve to an imported type",
                    diagnostics::err::UndefinedIdent);
             return error_type;
         }
+        importedTemplateModule_ = resolved_literal->target.module;
         struct_tid = typeOfResolvedName(id);
         if (!struct_tid || type_table.kindOf(resolve(struct_tid)) == TypeKind::Union) {
             const auto *union_data =
                 struct_tid ? type_table.union_type(resolve(struct_tid)) : nullptr;
+            importedTemplateModule_ = saved_imported_template_module;
             if (union_data != nullptr)
                 return inferUnionLiteral(id, struct_tid, *union_data);
             report(expr.span, "unknown struct type '" + struct_name + "'",
@@ -208,16 +224,25 @@ TypeId PerModuleSema::inferStructLiteral(frontend::ExprId id) {
         from_generic_args = false;
     }
     if (!expr.genericArgs.empty()) {
-        from_generic_args         = true;
-        const TypeId instantiated = instantiateTypeExpr(expr.span, expr.text, expr.genericArgs);
+        from_generic_args = true;
+        std::fprintf(stderr, "[probe] inferStructLiteral generic path text='%s' module=%s\n",
+                     struct_name.c_str(), importedTemplateModule_.c_str());
+        const std::string_view name =
+            qualified_literal
+                ? std::string_view(struct_name).substr(struct_name.rfind('.') + 1U)
+                : std::string_view(struct_name);
+        const TypeId instantiated = instantiateTypeExpr(expr.span, name, expr.genericArgs);
         if (!instantiated) {
+            importedTemplateModule_ = saved_imported_template_module;
             return error_type;
         }
         const TypeId instantiated_resolved = type_table.stripQualifiers(instantiated);
         if (const auto *union_data = type_table.union_type(instantiated_resolved)) {
+            importedTemplateModule_ = saved_imported_template_module;
             return inferUnionLiteral(id, instantiated, *union_data);
         }
         if (type_table.struct_type(instantiated_resolved) == nullptr) {
+            importedTemplateModule_ = saved_imported_template_module;
             report(expr.span, "'" + expr.text + "' is not a generic struct type",
                    diagnostics::err::TypeMismatch);
             return error_type;
@@ -227,9 +252,12 @@ TypeId PerModuleSema::inferStructLiteral(frontend::ExprId id) {
         st         = type_table.struct_type(resolved);
     }
     if (!from_generic_args && !qualified_literal) {
+        std::fprintf(stderr, "[probe] inferStructLiteral local-generic path text='%s' module=%s\n",
+                     struct_name.c_str(), importedTemplateModule_.c_str());
         for (const auto &decl : snapshot.declarations()) {
             if (decl.kind == frontend::DeclKind::Struct && decl.name == expr.text &&
                 !decl.genericParams.empty()) {
+                importedTemplateModule_ = saved_imported_template_module;
                 return resolveGenericStructLiteral(expr.span, expr, decl, !expr.field_names.empty(),
                                                    {});
             }
@@ -244,6 +272,7 @@ TypeId PerModuleSema::inferStructLiteral(frontend::ExprId id) {
     if (!from_generic_args && !qualified_literal) {
         struct_tid = type_table.lookupNamed(struct_name);
         if (!struct_tid) {
+            importedTemplateModule_ = saved_imported_template_module;
             report(expr.span, "unknown struct type '" + struct_name + "'",
                    diagnostics::err::UndefinedIdent);
             return error_type;
@@ -252,6 +281,7 @@ TypeId PerModuleSema::inferStructLiteral(frontend::ExprId id) {
         st       = type_table.struct_type(resolved);
     }
     if (st == nullptr) {
+        importedTemplateModule_ = saved_imported_template_module;
         report(expr.span, "'" + struct_name + "' is not a struct type");
         return error_type;
     }
@@ -307,6 +337,7 @@ TypeId PerModuleSema::inferStructLiteral(frontend::ExprId id) {
         }
         const TypeId value_type = inferExpr(expr.operands[i]);
         if (!coerceValue(expr.operands[i], decl_type, value_type)) {
+            importedTemplateModule_ = saved_imported_template_module;
             reportCoercionFailure(expr.span, decl_type, value_type,
                                   "struct literal field type mismatch for '" +
                                       (named ? expr.field_names[i] : fieldName(decl_idx)) + "'");
@@ -320,11 +351,13 @@ TypeId PerModuleSema::inferStructLiteral(frontend::ExprId id) {
     for (size_t i = 0; i < field_count; ++i) {
         if (seen[i] || findFieldDefault(expr.text, i))
             continue;
+        importedTemplateModule_ = saved_imported_template_module;
         report(expr.span,
                "missing field '" + fieldName(static_cast<int>(i)) +
                    "' in struct literal; add a value or a field default",
                diagnostics::err::TypeMismatch);
     }
+    importedTemplateModule_ = saved_imported_template_module;
     return TypeId{resolved.intern_seq};
 }
 TypeId PerModuleSema::inferPackLiteral(frontend::ExprId id) {
@@ -410,8 +443,22 @@ TypeId PerModuleSema::inferArrayLiteral(frontend::ExprId id) {
 }
 frontend::ExprId PerModuleSema::findFieldDefault(std::string_view struct_name,
                                                  size_t field_index) const noexcept {
-    for (const auto &decl : snapshot.declarations()) {
-        if (decl.kind != frontend::DeclKind::Struct || decl.name != struct_name)
+    const std::string_view name = [&]() {
+        const size_t dot = struct_name.rfind('.');
+        return dot == std::string_view::npos ? struct_name
+                                             : struct_name.substr(dot + 1U);
+    }();
+    const auto &snap =
+        importedTemplateModule_.empty()
+            ? snapshot
+            : (owner != nullptr && owner->findModuleSema(importedTemplateModule_) != nullptr
+                   ? owner->findModuleSema(importedTemplateModule_)->snapshot
+                   : snapshot);
+    std::fprintf(stderr, "[probe] findFieldDefault name='%.*s' import=%s idx=%zu\n",
+                 static_cast<int>(struct_name.size()), struct_name.data(),
+                 importedTemplateModule_.c_str(), field_index);
+    for (const auto &decl : snap.declarations()) {
+        if (decl.kind != frontend::DeclKind::Struct || decl.name != name)
             continue;
         if (field_index < decl.parameters.size())
             return decl.parameters[field_index].defaultValue;

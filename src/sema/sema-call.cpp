@@ -222,10 +222,18 @@ TypeId PerModuleSema::inferCall(frontend::ExprId id) {
     // first: `obj.method(args)` rewrites to a direct call with an implicit
     // `&obj` (or `obj` when already a pointer) as the first argument.
     const auto &callee = snapshot.expressions()[expr.operands[0].value - 1U];
+    std::fprintf(stderr,
+                 "[probe] inferCall callee kind=%d text='%s' operands=%zu generic=%zu node=%u\n",
+                 static_cast<int>(callee.kind), callee.text.c_str(), callee.operands.size(),
+                 callee.genericArgs.size(), expr.id.value);
     if ((callee.kind == frontend::ExprKind::Field || callee.kind == frontend::ExprKind::Arrow) &&
         !callee.operands.empty()) {
+        std::fprintf(stderr, "[probe] inferCall trying method for callee '%s'\n",
+                     callee.text.c_str());
         if (const TypeId mt = inferMethodCall(expr, callee))
             return mt;
+        std::fprintf(stderr, "[probe] inferCall method failed for callee '%s'\n",
+                     callee.text.c_str());
     }
 
     // An overload set: several `fn` declarations share the callee's name in the

@@ -380,7 +380,8 @@ separam os artifacts mesmo quando o ficheiro genérico é igual.
 
 ## Cache e ZIRL
 
-A versão de formato ZIRL passa para 13. O Code section serializa:
+A versão de formato ZIRL está em 16 (`kFormatVersion` em
+`src/zirl/zirl-header.hpp`). O Code section serializa:
 
 - `Artifact.exprs` como pool de expressões ao nível do módulo.
 - `Artifact.globals` como `CompactGlobalConst` com name, type e init.

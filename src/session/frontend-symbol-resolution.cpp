@@ -617,11 +617,24 @@ FrontendContext::buildResolutions(const std::vector<ModuleArtifactPtr> &modules,
                     return false;
                 };
                 bool found = bindSymbol(member_node);
-                // `make` in `string.string.make()` is a method on the imported
-                // type at the first inner segment, not a public symbol of the
-                // module itself. Bind that segment so method resolution can
-                // still see the imported receiver type.
-                if (!found && chain.size() > 1U) {
+                // `make` in `string.string.make()` and `init` in
+                // `package.Type.init()` are methods on the imported type at an
+                // inner segment, not public free symbols of the module. When
+                // the outermost symbol is an owner-local method, bind the type
+                // segment so method resolution sees the imported receiver.
+                const bool member_is_method =
+                    found && target_artifact->frontend != nullptr &&
+                    [&]() {
+                        for (const auto &decl : target_artifact->frontend->declarations()) {
+                            if (decl.kind == frontend::DeclKind::Function &&
+                                decl.name == member_node.text && !decl.ownerName.empty() &&
+                                decl.parameters.size() >= 1U &&
+                                decl.parameters.front().name == "self")
+                                return true;
+                        }
+                        return false;
+                    }();
+                if ((!found || member_is_method) && chain.size() > 1U) {
                     for (size_t index = chain.size() - 1U; index > 0U; --index) {
                         if (bindSymbol(*chain[index]))
                             break;

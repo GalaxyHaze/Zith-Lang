@@ -1,6 +1,6 @@
 # Zith Implementation Debt
 
-> Last updated: 2026-09-11 (trait/interface import conformance debt).
+> Last updated: 2026-09-17 (cache/ZIRL, monolith split and IR VM curation).
 
 Documento de gestão da dívida de implementação. Distingue propositadamente:
 
@@ -273,7 +273,7 @@ concluídos, e estão fora da lista activa, os splits de
 | Ficheiro | Linhas atuais | Quebra proposta |
 |---|---|---|
 | `src/sema/hir-lower-expr.cpp` | 2357 | candidato secundário ainda acima de 1000 linhas |
-| `src/frontend/frontend-expr.cpp` | 1115 | candidato secundário ainda acima de 1000 linhas |
+| `src/frontend/frontend-expr.cpp` | 1219 | candidato secundário ainda acima de 1000 linhas |
 
 Estado da quebra de `codegen-emit.cpp` (concluída):
 
@@ -294,12 +294,12 @@ Estado da quebra de `frontend-context.cpp` (concluída):
 - `frontend-source-catalog.cpp`: source catalog e helpers de fingerprinting
   (196 linhas).
 - `frontend-symbol-resolution.cpp`: import requests e resolução de
-  símbolos/módulos (764 linhas).
+  símbolos/módulos (777 linhas).
 
 Estado da quebra de `compilation-session.cpp` (concluída):
 
 - `compilation-session.cpp`: orquestração dos stages do pipeline e glue da
-  sessão (871 linhas).
+  sessão (879 linhas).
 - `native-link.cpp`: helpers de native link/run (421 linhas).
 - `persistent-cache.cpp`: helpers de cache persistente/object cache
   (721 linhas).

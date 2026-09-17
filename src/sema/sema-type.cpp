@@ -399,6 +399,11 @@ TypeId PerModuleSema::lowerForeignConstantType(const cinterop::Constant &constan
 }
 TypeId PerModuleSema::instantiateTypeExpr(frontend::TextSpan span, std::string_view name,
                                           const std::vector<frontend::TypeExprId> &arguments) {
+    if (!importedTemplateModule_.empty() && importedTemplateModule_ != module &&
+        owner != nullptr) {
+        if (PerModuleSema *declaring_sema = owner->findModuleSema(importedTemplateModule_))
+            return declaring_sema->instantiateTypeExpr(span, name, arguments);
+    }
     if (name == "Self") {
         report(span, "'Self' cannot be used with generic type arguments",
                diagnostics::err::UndefinedIdent);
@@ -569,26 +574,37 @@ TypeId PerModuleSema::instantiateStructFromArgs(frontend::TextSpan span,
     if (const TypeId existing = type_table.lookupReifiedStruct(concrete_name, args))
         return existing;
 
-    auto &fields                                   = type_table.makeTypeStorage();
-    auto &field_names                              = type_table.makeStringStorage();
-    auto &field_meta                               = type_table.makeFieldMetaStorage();
-    const std::vector<GenericBinding> saved_active = std::move(activeTemplateArgs_);
-    activeTemplateArgs_.clear();
+    auto &fields      = type_table.makeTypeStorage();
+    auto &field_names = type_table.makeStringStorage();
+    auto &field_meta  = type_table.makeFieldMetaStorage();
+    PerModuleSema *field_sema = this;
+    if (!importedTemplateModule_.empty() && importedTemplateModule_ != module &&
+        owner != nullptr) {
+        if (PerModuleSema *declaring_sema = owner->findModuleSema(importedTemplateModule_))
+            field_sema = declaring_sema;
+    }
+    const bool imported_body       = field_sema != this;
+    auto &active_storage = imported_body ? field_sema->activeTemplateArgs_ : activeTemplateArgs_;
+    const std::vector<GenericBinding> saved_active = std::move(active_storage);
+    active_storage.clear();
     for (size_t i = 0; i < template_decl.genericParams.size(); ++i) {
         GenericBinding active_binding;
         active_binding.name = template_decl.genericParams[i].name;
         active_binding.type = args[i];
-        activeTemplateArgs_.push_back(std::move(active_binding));
+        active_storage.push_back(std::move(active_binding));
     }
     for (const auto &param : template_decl.parameters) {
-        const TypeId field_type = lowerTypeExpr(param.type);
+        const TypeId field_type =
+            imported_body ? field_sema->lowerTypeExpr(param.type) : lowerTypeExpr(param.type);
         fields.push(field_type ? field_type : error_type);
         field_meta.push(FieldMeta{param.visibility, param.modDepth, module});
-        char *buf = static_cast<char *>(arena.alloc(param.name.size(), 1));
+        char *buf = static_cast<char *>(field_sema->arena.alloc(param.name.size(), 1));
         std::memcpy(buf, param.name.data(), param.name.size());
         field_names.push(std::string_view(buf, param.name.size()));
     }
-    activeTemplateArgs_ = saved_active;
+    active_storage.clear();
+    for (auto &binding : saved_active)
+        active_storage.push_back(std::move(binding));
 
     const TypeId st =
         type_table.internStruct(concrete_name, fields, &field_names, &field_meta, &args);
@@ -624,6 +640,18 @@ TypeId PerModuleSema::lowerBareTypeExpr(const frontend::TypeExpression &type) {
                 if (symbol.name == symbol_name && symbol.kind == frontend::DeclKind::Struct) {
                     if (const TypeId named = type_table.lookupNamed(symbol.name))
                         return named;
+                }
+            }
+            if (!type.arguments.empty()) {
+                for (const auto &symbol : artifact->snapshot.declarations()) {
+                    if (symbol.name != symbol_name || symbol.genericParams.empty())
+                        continue;
+                    if (symbol.kind == frontend::DeclKind::Struct ||
+                        symbol.kind == frontend::DeclKind::Enum ||
+                        symbol.kind == frontend::DeclKind::Union) {
+                        return const_cast<PerModuleSema *>(artifact)
+                            ->instantiateTypeExpr(type.span, symbol_name, type.arguments);
+                    }
                 }
             }
             report(type.span,

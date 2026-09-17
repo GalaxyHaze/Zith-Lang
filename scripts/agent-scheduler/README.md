@@ -55,18 +55,45 @@ python3 scripts/agent-scheduler/scheduler.py --require-clean --watch --merge
 `--merge` reviews with `awt review` and then merges with `awt merge` before
 dispatching the next task. Without `--merge`, the scheduler only reviews.
 
+## Agent Wait
+
+Each agent runs `agent-wait.sh` after requesting merge. It is the concrete
+listening loop:
+
+```bash
+/home/diogo/Zith/scripts/agent-scheduler/agent-wait.sh /home/diogo/Zith agent1
+```
+
+The script watches `task-sequence:` in the worktree `TASK.md`. When the
+scheduler writes a new sequence or the `end` marker, it prints the new content
+and exits 0. The agent then reads the printed content: continue with the next
+task or stop on `end`.
+
+The script does not write `.awt/requests/` or `.awt/agent-state/`. The
+scheduler is the single writer for agent lifecycle state.
+
 ## Queue And State
 
 - `.awt/manifest.md`: agent sections with `Plan` bullets and `Task files`.
-- `.awt/scheduler-status.json`: local scheduler state, reset with
-  `--reset-queue`.
-- `.awt/requests/<agent>.md`: signal that an agent finished and requested merge.
+- `.awt/agent-state/<agent>.json`: authoritative per-agent lifecycle state
+  (`running`, `waiting`, `blocked`, `ended`), written only by the scheduler.
+- `.awt/scheduler-status.json`: compatibility mirror of scheduler state, reset
+  with `--reset-queue`.
+- `.awt/requests/<agent>.md`: signal that an agent finished and requested
+  merge; consumed by `awt merge`.
 - `.awt/events/<agent>.log`: per-agent log of new merge requests and merge
   outcomes written by the scheduler.
 - `.awt/<agent>/TASK.md`: current task file written into each agent worktree.
-- `# Status\nend\n` in a fresh scheduler write is the stop marker; the agent
-  returns to the listening loop at the end of each task, re-reads `TASK.md`,
-  and only stops or stops requesting work when it sees the stop marker.
+- `task-sequence: N` at the top of `TASK.md` lets `agent-wait.sh` detect an
+  advance even when the task body is identical to a previous dispatch.
+- `# Status\nend\n` in a scheduler write is the terminal marker.
+- `.awt/debts/<agent>.md`: debt reports collected into `.awt/debts-pending.md`
+  and `.awt/board.md` at shutdown for human review.
+
+Merge handling runs a review, agent worktree build/ctest, merge, consolidated
+build/ctest, and only then advances the agent. A post-merge failure marks
+that agent `blocked` with `failed_head`, `failed_stage`, and `merged_head`;
+other agents continue.
 
 ## Useful Checks
 
@@ -77,7 +104,8 @@ python3 scripts/agent-scheduler/scheduler.py --check --json
 
 ## Safety
 
-- `--reset-queue` only removes scheduler state and local `.awt/requests` files,
-  not worktrees or branches.
+- `--reset-queue` removes `.awt/scheduler-status.json`, `.awt/agent-state/`,
+  and local `.awt/requests` files, not worktrees, branches, or completed merge
+  records.
 - `--require-clean` refuses to start when the master has uncommitted changes.
 - Scheduler never calls `awt cleanup`; cleanup is a separate deliberate action.

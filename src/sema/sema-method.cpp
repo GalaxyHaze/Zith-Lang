@@ -109,12 +109,30 @@ TypeId PerModuleSema::inferMethodCall(const frontend::Expression &call,
     }
 
     const TypeId base_type = inferExpr(receiver_id);
-    if (!base_type || type_table.kindOf(base_type) == TypeKind::Error)
+    std::fprintf(stderr,
+                 "[probe] inferMethodCall pre receiver=%u base_id=%u base='%s' kind=%d text='%s'\n",
+                 receiver_id.value,
+                 base_type ? base_type.intern_seq : 0U,
+                 base_type ? type_table.typeToString(base_type).c_str() : "<invalid>",
+                 static_cast<int>(base_type ? type_table.kindOf(base_type) : TypeKind::Error),
+                 callee.text.c_str());
+    if (!base_type || type_table.kindOf(base_type) == TypeKind::Error) {
+        std::fprintf(stderr, "[probe] inferMethodCall invalid receiver\n");
         return kInvalidTypeId;
+    }
+    std::fprintf(stderr,
+                 "[probe] inferMethodCall receiver=%u base='%s' basekind=%d text='%s' "
+                 "argc_generic=%zu\n",
+                 receiver_id.value, type_table.typeToString(base_type).c_str(),
+                 static_cast<int>(type_table.kindOf(base_type)), callee.text.c_str(),
+                 call.genericArgs.size());
 
     // Unwrap pointer/optional to find the struct name. `resolve` also strips
     // memory qualifiers, so `p: lend Point` still finds Point's methods.
     TypeId pointee  = resolve(base_type);
+    std::fprintf(stderr, "[probe] inferMethodCall pointee='%s' struct=%d\n",
+                 type_table.typeToString(pointee).c_str(),
+                 type_table.struct_type(pointee) != nullptr);
     bool is_pointer = false;
     if (type_table.kindOf(pointee) == TypeKind::Pointer) {
         if (!findMethodsForOwner(ownerNameOf(pointee), callee.text).empty()) {
@@ -832,12 +850,24 @@ TypeId PerModuleSema::resolveStructMethodCall(const frontend::Expression &call,
         // enums with positional C-style variants retain only discriminants, so
         // the concrete receiver name is the source of truth for their args.
         const frontend::Declaration *owner_template = nullptr;
-        for (const auto &candidate : snapshot.declarations()) {
-            if (candidate.name == ownerNameOf(pointee) && !candidate.genericParams.empty()) {
-                owner_template = &candidate;
-                break;
+        const auto owner_name = ownerNameOf(pointee);
+        std::fprintf(stderr,
+                     "[probe] method generic owner='%s' pointee='%s' generic_decl_degree=%zu "
+                     "call_generic=%zu\n",
+                     owner_name.c_str(), type_table.typeToString(pointee).c_str(),
+                     method_decl->genericParams.size(), call.genericArgs.size());
+        const auto findOwnerTemplate =
+            [&](const frontend::FrontendSnapshot &snap) -> const frontend::Declaration * {
+            for (const auto &candidate : snap.declarations()) {
+                if (candidate.name == owner_name && !candidate.genericParams.empty())
+                    return &candidate;
             }
-        }
+            return nullptr;
+        };
+        if (const auto *candidate = findOwnerTemplate(snapshot))
+            owner_template = candidate;
+        else if (method_module != module && method_sema != nullptr)
+            owner_template = findOwnerTemplate(method_sema->snapshot);
         const size_t call_generic_degree = method_decl->genericParams.size();
         const size_t owner_generic_count =
             owner_template != nullptr ? owner_template->genericParams.size() : call_generic_degree;

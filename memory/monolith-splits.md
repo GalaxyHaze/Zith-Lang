@@ -16,10 +16,10 @@ Two large session monoliths are merged:
   persistent/object cache, pipeline-plan, and a smaller session orchestration
   unit.
 
-The remaining primary candidate is `src/codegen/codegen-emit.cpp`.
-`src/sema/hir-lower-expr.cpp` and `src/frontend/frontend-expr.cpp` are
-secondary candidates that should not be scheduled until the codegen split is
-finished and the remaining counts are rechecked.
+`src/codegen/codegen-emit.cpp` is already split into `codegen-emit-expr.cpp`,
+`codegen-emit-stmt.cpp`, and `codegen-emit-agg.cpp`; it is not a remaining
+candidate. `src/sema/hir-lower-expr.cpp` and
+`src/frontend/frontend-expr.cpp` remain secondary candidates.
 
 ## Completed frontend-context Split
 
@@ -32,7 +32,7 @@ The public frontend/session glue remains in
 | `frontend-module-analysis.cpp` | 412 | module analysis state and discovery |
 | `frontend-module-cache.cpp` | 275 | module cache bookkeeping |
 | `frontend-source-catalog.cpp` | 196 | source catalog and fingerprinting helpers |
-| `frontend-symbol-resolution.cpp` | 764 | import requests and symbol/module resolution |
+| `frontend-symbol-resolution.cpp` | 777 | import requests and symbol/module resolution |
 
 The old ~1789-line count is intentionally mentioned only as history to signal
 that the file was a monolith. When updating debt or plan line counts, re-run
@@ -71,7 +71,7 @@ stale plan that still points at the old file should be corrected to
 
 | Translation unit | Lines | Responsibility |
 |---|---|---|
-| `compilation-session.cpp` | 871 | pipeline stage orchestration and session glue |
+| `compilation-session.cpp` | 879 | pipeline stage orchestration and session glue |
 | `native-link.cpp` | 421 | native link/run helpers |
 | `persistent-cache.cpp` | 721 | persistent/object cache helpers |
 | `pipeline-plan.cpp` | 13 | planned pipeline stage contract |
@@ -100,27 +100,33 @@ There was also an intermediate `pipeline-plan` file in the historical start of
 the compilation-session split. The current 13-line file is the final planned
 stage contract; do not restore a larger copy as part of a later refactor.
 
+## Completed codegen-emit Split
+
+The codegen monolith was split by responsibility and merged. The class and
+orchestration remain in `src/codegen/codegen-emit.cpp` at 9 lines; expression
+emission lives in `codegen-emit-expr.cpp`, statement/control-flow emission in
+`codegen-emit-stmt.cpp`, and aggregate helpers in `codegen-emit-agg.cpp`.
+
 ## Remaining Candidates
 
 Current counts from the worktree used for this task:
 
 | File | Lines | Candidate split |
 |---|---|---|
-| `src/codegen/codegen-emit.cpp` | 1264 | emission by area (params, expr, control flow) |
 | `src/sema/hir-lower-expr.cpp` | 2357 | secondary candidate; revisit if it still exceeds ~1000 lines |
-| `src/frontend/frontend-expr.cpp` | 1115 | secondary candidate; revisit only if it remains a clear bottleneck |
+| `src/frontend/frontend-expr.cpp` | 1219 | secondary candidate; revisit only if it remains a clear bottleneck |
 
-The primary next merge should be one behavior-preserving extraction from
-`codegen-emit.cpp`. It is independent from `drop` feature work and from the
-archived full-Zith plans.
+The remaining candidate set is secondary. A future merge should extract a
+narrow responsibility from `hir-lower-expr.cpp` or `frontend-expr.cpp` only
+when the boundary is mechanical. It is independent from `drop` feature work
+and from the archived full-Zith plans.
 
 ### Secondary Candidate Guidance
 
 `hir-lower-expr.cpp` is the largest remaining TU, but it is not automatically a
 good split target. The file concentrates expression lowering, which is a
-cohesive responsibility even though it is long. Only schedule it after the
-codegen split and only when a cleaner boundary exists for a
-mechanically-safe extraction.
+cohesive responsibility even though it is long. Only schedule it when a
+cleaner boundary exists for a mechanically-safe extraction.
 
 `frontend-expr.cpp` is similar. It owns expression parsing and precedence and
 was already split out of `frontend.cpp`; splitting it again should wait for a
@@ -140,9 +146,9 @@ The completed splits used names that match the responsibility, not a generic
 - `native-link.cpp` and `persistent-cache.cpp` instead of session-dependent
   helpers.
 
-This naming convention makes the next extraction consistent: if codegen-emit
-is split, use names such as `codegen-params.cpp`, `codegen-expr.cpp`, or
-`codegen-control.cpp` only when each unit has a narrow responsibility.
+This naming convention makes the next extraction consistent: use names such as
+`codegen-params.cpp`, `codegen-expr.cpp`, or `codegen-control.cpp` only when
+each unit has a narrow responsibility.
 
 ## Non-Goals
 

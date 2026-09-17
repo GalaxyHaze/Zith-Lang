@@ -21,21 +21,29 @@ pipeline entry point remains in `src/session/frontend-context.cpp` at
 | `src/session/frontend-module-analysis.cpp` | 412 | module analysis state and discovery |
 | `src/session/frontend-module-cache.cpp` | 275 | module cache bookkeeping |
 | `src/session/frontend-source-catalog.cpp` | 196 | source catalog and fingerprinting helpers |
-| `src/session/frontend-symbol-resolution.cpp` | 764 | import requests and symbol/module resolution |
+| `src/session/frontend-symbol-resolution.cpp` | 777 | import requests and symbol/module resolution |
 
 ### `src/session/compilation-session.cpp`
 
 The compilation-session monolith was split by responsibility and merged.
 `CompilationSession` orchestration remains in
-`src/session/compilation-session.cpp` at 871 lines. The extracted units and
+`src/session/compilation-session.cpp` at 879 lines. The extracted units and
 current line counts are:
 
 | Translation unit | Lines | Responsibility |
 |---|---|---|
-| `src/session/compilation-session.cpp` | 871 | pipeline stage orchestration and session glue |
+| `src/session/compilation-session.cpp` | 879 | pipeline stage orchestration and session glue |
 | `src/session/native-link.cpp` | 421 | native link/run helpers |
 | `src/session/persistent-cache.cpp` | 721 | persistent/object cache helpers |
 | `src/session/pipeline-plan.cpp` | 13 | planned pipeline stage contract |
+
+### `src/codegen/codegen-emit.cpp`
+
+The codegen monolith was split by responsibility and merged. The class and
+orchestration remain in `src/codegen/codegen-emit.cpp` at 9 lines; expression
+emission, statement/control-flow emission, and aggregate helpers moved to
+`codegen-emit-expr.cpp`, `codegen-emit-stmt.cpp`, and `codegen-emit-agg.cpp`
+respectively.
 
 ## Remaining Candidates
 
@@ -43,9 +51,8 @@ Current priority files, based on `docs/implementation-debt.md`:
 
 | File | Lines | Candidate split |
 |---|---|---|
-| `src/codegen/codegen-emit.cpp` | 1264 | emission by area (params, expr, control flow) |
-| `src/sema/hir-lower-expr.cpp` | 2357 | secondary candidate; revisit if it still exceeds ~1000 lines after the codegen split |
-| `src/frontend/frontend-expr.cpp` | 1115 | secondary candidate; revisit only if it still exceeds ~1000 lines after higher-priority work |
+| `src/sema/hir-lower-expr.cpp` | 2357 | secondary candidate; revisit if it still exceeds ~1000 lines |
+| `src/frontend/frontend-expr.cpp` | 1219 | secondary candidate; revisit only if it remains a clear single-responsibility bottleneck |
 
 Earlier work already split `frontend.cpp` into AST/CST lowering,
 frontend types, expressions, statements and declarations; `sema-modern.cpp`
@@ -67,14 +74,12 @@ units; and HIR lowering into types/expr/call/block/stmt/util units.
 
 ## Order
 
-`frontend-context.cpp` and `compilation-session.cpp` are merged. The next
-candidate is:
+`frontend-context.cpp`, `compilation-session.cpp`, and `codegen-emit.cpp` are
+merged. The next candidates are:
 
-1. `src/codegen/codegen-emit.cpp`: split emission by expression types, calls,
-   statements/blocks and aggregate helpers.
-2. Revisit `src/sema/hir-lower-expr.cpp` only if it still exceeds ~1000 lines
+1. Revisit `src/sema/hir-lower-expr.cpp` only if it still exceeds ~1000 lines
    after the codegen split.
-3. Revisit `src/frontend/frontend-expr.cpp` only if it remains a clear
+2. Revisit `src/frontend/frontend-expr.cpp` only if it remains a clear
    single-responsibility bottleneck; it is currently a secondary candidate.
 
 ## Success Criteria

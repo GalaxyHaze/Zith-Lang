@@ -61,6 +61,7 @@ private:
     [[nodiscard]] ExprId parseCallArgument();
     [[nodiscard]] ExprId parsePrimary();
     [[nodiscard]] bool isOperatorToken(std::string_view op) const noexcept;
+    [[nodiscard]] bool isOperatorTokenAt(uint32_t index, std::string_view op) const noexcept;
     [[nodiscard]] bool isGenericApplication() const noexcept;
     [[nodiscard]] bool isKeywordToken(std::string_view word) const noexcept;
     [[nodiscard]] bool isVisibilityPrefix() const noexcept;

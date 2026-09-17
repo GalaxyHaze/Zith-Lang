@@ -30,6 +30,10 @@ REQUESTS = REPO / ".awt" / "requests"
 TASKS = REPO / ".awt" / "tasks"
 STATUS = REPO / ".awt" / "scheduler-status.json"
 EVENTS = REPO / ".awt" / "events"
+AGENT_STATE = REPO / ".awt" / "agent-state"
+DEBTS = REPO / ".awt" / "debts"
+DEBTS_PENDING = REPO / ".awt" / "debts-pending.md"
+BOARD = REPO / ".awt" / "board.md"
 
 AGENT_RE = re.compile(r"^##\s+(?P<agent>agent\d+)\s+-\s+(?P<title>.*)$")
 
@@ -48,6 +52,13 @@ class AgentState:
     active_task: str | None = None
     plan: dict[str, object] = field(default_factory=dict)
     seen_requests: dict[str, str] = field(default_factory=dict)
+    task_sequence: int = 0
+    agent_status: str | None = None
+    blocked_reason: str | None = None
+    failed_stage: str | None = None
+    failed_head: str | None = None
+    merged_head: str | None = None
+    acted_on: bool = False
 
 
 def log(message: str) -> None:
@@ -150,6 +161,13 @@ def load_state() -> dict[str, AgentState]:
             seen_requests=value.get("seen_requests", {})
             if isinstance(value.get("seen_requests"), dict)
             else {},
+            task_sequence=int(value.get("task_sequence", 0) or 0),
+            agent_status=value.get("agent_status"),
+            blocked_reason=value.get("blocked_reason"),
+            failed_stage=value.get("failed_stage"),
+            failed_head=value.get("failed_head"),
+            merged_head=value.get("merged_head"),
+            acted_on=bool(value.get("acted_on", False)),
         )
     return states
 
@@ -162,10 +180,28 @@ def save_state(states: dict[str, AgentState]) -> None:
             "active_task": state.active_task,
             "plan": state.plan,
             "seen_requests": state.seen_requests,
+            "task_sequence": state.task_sequence,
+            "agent_status": state.agent_status,
+            "blocked_reason": state.blocked_reason,
+            "failed_stage": state.failed_stage,
+            "failed_head": state.failed_head,
+            "merged_head": state.merged_head,
+            "acted_on": state.acted_on,
         }
         for agent, state in sorted(states.items())
     }
     STATUS.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+
+
+def merge_scheduler_state(states: dict[str, AgentState]) -> None:
+    """Move queue metadata from the legacy status file into agent-state files.
+
+    `scheduler-status.json` remains on disk for backwards compatibility, but
+    the scheduler now treats `.awt/agent-state/<agent>.json` as authoritative.
+    """
+
+    for agent, state in states.items():
+        save_agent_state(agent, state)
 
 
 def plan_brief(plan: AgentPlan) -> str:
@@ -209,6 +245,10 @@ def record_event(agent: str, message: str) -> None:
     log(f"{agent}: {message}")
 
 
+def marker_content(agent: str, sequence: int) -> str:
+    return f"task-sequence: {sequence}\n"
+
+
 def write_task_file(agent: str, content: str) -> None:
     task_path = REPO / ".awt" / agent / "TASK.md"
     task_path.parent.mkdir(parents=True, exist_ok=True)
@@ -216,15 +256,21 @@ def write_task_file(agent: str, content: str) -> None:
     log(f"wrote task file for {agent}: {task_path}")
 
 
-def write_end(agent: str) -> None:
+def write_end(agent: str, state: AgentState) -> None:
+    sequence = state.task_sequence + 1
+    state.task_sequence = sequence
     write_task_file(
         agent,
-        f"# {agent}: end\n\n## Status\n\nend\n\n## Message\n\nAll assigned tasks are complete or the master stopped this agent.\n",
+        marker_content(agent, sequence)
+        + f"# {agent}: end\n\n## Status\n\nend\n\n## Message\n\nAll assigned tasks are complete or the master stopped this agent.\n",
     )
 
 
-def write_pending(agent: str, plan: AgentPlan, task: str, index: int, total: int) -> None:
+def write_pending(agent: str, state: AgentState, plan: AgentPlan, task: str, index: int, total: int) -> None:
     task_path = REPO / ".awt" / agent / "TASK.md"
+    sequence = state.task_sequence + 1
+    state.task_sequence = sequence
+    marker = marker_content(agent, sequence)
     if index < len(plan.task_files):
         raw_source = plan.task_files[index].lstrip("-*").strip()
         source = Path(raw_source)
@@ -243,7 +289,7 @@ def write_pending(agent: str, plan: AgentPlan, task: str, index: int, total: int
             }
             for token, value in replacements.items():
                 content = content.replace(token, value)
-            write_task_file(agent, content)
+            write_task_file(agent, marker + content)
             log(f"dispatched task file {source} for {agent}")
             return
     content = "\n".join(
@@ -308,7 +354,7 @@ def write_pending(agent: str, plan: AgentPlan, task: str, index: int, total: int
     }
     for token, value in replacements.items():
         content = content.replace(token, value)
-    write_task_file(agent, content)
+    write_task_file(agent, marker + content)
 
 
 def review_agent(agent: str) -> None:
@@ -320,25 +366,160 @@ def review_agent(agent: str) -> None:
 
 
 def merge_agent(agent: str) -> None:
-    review_agent(agent)
     log(f"merging {agent}")
     result = run([str(AWT), "merge", str(REPO), agent], check=False)
     if result.returncode != 0:
         log(f"merge failed for {agent}: {result.stderr.strip()}")
 
 
+def run_tests(command: list[str] | None = None, *, cwd: Path | None = None) -> tuple[bool, str]:
+    try:
+        if command:
+            result = run(command, check=False)
+            if result.returncode != 0:
+                return False, result.stderr.strip() or result.stdout.strip() or "command failed"
+            return True, result.stdout.strip()
+    except OSError as exc:
+        return False, str(exc)
+
+    if cwd is not None:
+        build = cwd / "build"
+        if not build.is_dir():
+            return False, f"no build directory at {build}; cannot run consolidated tests"
+        result = run(["cmake", "--build", str(build), "-j4"], check=False)
+        if result.returncode != 0:
+            return False, result.stderr.strip() or result.stdout.strip() or "build failed"
+        result = run(["ctest", "--test-dir", str(build), "--output-on-failure"], check=False)
+        if result.returncode != 0:
+            return False, result.stderr.strip() or result.stdout.strip() or "ctest failed"
+        return True, result.stdout.strip()
+
+    return True, "no tests configured"
+
+
+def load_agent_state() -> dict[str, AgentState]:
+    states: dict[str, AgentState] = {}
+    if not AGENT_STATE.is_dir():
+        return states
+    for path in sorted(AGENT_STATE.glob("*.json")):
+        agent = path.stem
+        try:
+            raw = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        if not isinstance(raw, dict):
+            continue
+        states[agent] = AgentState(
+            done_tasks=[str(x) for x in raw.get("done_tasks", [])]
+            if isinstance(raw.get("done_tasks"), list)
+            else [],
+            active_task=raw.get("active_task"),
+            plan=raw.get("plan", {}) if isinstance(raw.get("plan"), dict) else {},
+            seen_requests=raw.get("seen_requests", {})
+            if isinstance(raw.get("seen_requests"), dict)
+            else {},
+            task_sequence=int(raw.get("task_sequence", 0) or 0),
+            agent_status=raw.get("agent_status"),
+            blocked_reason=raw.get("blocked_reason"),
+            failed_stage=raw.get("failed_stage"),
+            failed_head=raw.get("failed_head"),
+            merged_head=raw.get("merged_head"),
+            acted_on=bool(raw.get("acted_on", False)),
+        )
+    return states
+
+
+def save_agent_state(agent: str, state: AgentState) -> None:
+    AGENT_STATE.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "done_tasks": state.done_tasks,
+        "active_task": state.active_task,
+        "plan": state.plan,
+        "seen_requests": state.seen_requests,
+        "task_sequence": state.task_sequence,
+        "agent_status": state.agent_status,
+        "blocked_reason": state.blocked_reason,
+        "failed_stage": state.failed_stage,
+        "failed_head": state.failed_head,
+        "merged_head": state.merged_head,
+        "acted_on": state.acted_on,
+    }
+    (AGENT_STATE / f"{agent}.json").write_text(
+        json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+
+
+def collect_debts() -> list[str]:
+    if not DEBTS.is_dir():
+        return []
+    return sorted(str(path) for path in DEBTS.glob("*.md"))
+
+
+def collect_board(states: dict[str, AgentState], plans: list[AgentPlan]) -> None:
+    lines = ["# Agent Scheduler Board", ""]
+    for plan in plans:
+        state = states.get(plan.agent, AgentState())
+        active = clean_task_title(state.active_task or plan_brief(plan))
+        status = state.agent_status or ("ended" if current_task(states, plan) is None else "running")
+        lines.append(f"## {plan.agent}")
+        lines.append(f"- current: {active}")
+        lines.append(f"- status: {status}")
+        if state.agent_status == "blocked":
+            lines.append(f"- blocked_reason: {state.blocked_reason or ''}")
+            lines.append(f"- failed_stage: {state.failed_stage or ''}")
+            lines.append(f"- failed_head: {state.failed_head or ''}")
+            lines.append(f"- merged_head: {state.merged_head or ''}")
+        lines.append("")
+    debts = collect_debts()
+    if debts:
+        lines.append("## Debt Reports")
+        lines.extend(f"- {path}" for path in debts)
+        lines.append("")
+    lines.append("## Pending Debt Review")
+    lines.append("See `.awt/debts-pending.md`; copy to docs/implementation-debt.md after human review.")
+    BOARD.parent.mkdir(parents=True, exist_ok=True)
+    BOARD.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    if debts:
+        DEBTS_PENDING.parent.mkdir(parents=True, exist_ok=True)
+        pending = ["# Pending Debt Review", ""]
+        for path in debts:
+            pending.append(f"## {path}")
+            txt = Path(path).read_text(encoding="utf-8", errors="replace")
+            pending.append(txt.rstrip())
+            pending.append("")
+        DEBTS_PENDING.write_text("\n".join(pending) + "\n", encoding="utf-8")
+    log("wrote .awt/board.md")
+
+
 def advance_agent(agent: str, states: dict[str, AgentState], plan: AgentPlan) -> None:
     state = states.setdefault(agent, AgentState())
     task = current_task(states, plan)
+    previous_active = clean_task_title(state.active_task or "")
+    done_ids = {clean_task_title(x) for x in state.done_tasks}
+    task_ids = {clean_task_title(x) for x in plan.tasks}
     state.active_task = None
     if task is None:
-        write_end(agent)
+        if plan.tasks and (
+            previous_active not in task_ids
+            or previous_active not in done_ids
+        ):
+            state.agent_status = "blocked"
+            state.blocked_reason = "manifest_exhausted_without_done"
+            save_agent_state(agent, state)
+            log(f"{agent}: manifest exhausted without finishing {previous_active!r}; blocked")
+            return
+        state.agent_status = "ended"
+        write_end(agent, state)
+        state.plan["current"] = None
+        save_agent_state(agent, state)
         log(f"{agent}: no pending task; wrote end")
         return
     state.active_task = task
-    write_pending(agent, plan, task, plan.tasks.index(task), len(plan.tasks))
+    state.agent_status = "running"
+    write_pending(agent, state, plan, task, plan.tasks.index(task), len(plan.tasks))
     if state.plan.get("current") != clean_task_title(task):
         state.plan["current"] = clean_task_title(task)
+    save_agent_state(agent, state)
     log(f"{agent}: dispatched '{task}'")
 
 
@@ -346,8 +527,22 @@ def setup_queue(states: dict[str, AgentState], plans: list[AgentPlan]) -> None:
     for plan in plans:
         if plan.agent not in states:
             states[plan.agent] = AgentState()
-        if not states[plan.agent].active_task:
+        current = current_task(states, plan)
+        if current is None and plan.tasks:
+            state = states[plan.agent]
+            previous_active = clean_task_title(state.active_task or "")
+            done_ids = {clean_task_title(x) for x in state.done_tasks}
+            if previous_active and previous_active not in done_ids:
+                state.agent_status = "blocked"
+                state.blocked_reason = "manifest_exhausted_without_done"
+                save_agent_state(plan.agent, state)
+                log(f"{plan.agent}: manifest exhausted without finishing {previous_active!r}; blocked")
+            elif not state.active_task:
+                advance_agent(plan.agent, states, plan)
+        elif not states[plan.agent].active_task:
             advance_agent(plan.agent, states, plan)
+    for plan in plans:
+        save_agent_state(plan.agent, states[plan.agent])
     save_state(states)
     log(f"queue ready for {len(plans)} agents")
 
@@ -380,6 +575,47 @@ def reconcile(states: dict[str, AgentState], plans: list[AgentPlan], *, merge: b
                 record_event(agent, "finished current task and requested merge")
                 state.seen_requests[agent] = head
             if merge:
+                if state.agent_status == "blocked":
+                    record_event(agent, "already blocked; not retrying automatically")
+                    continue
+                review_agent(agent)
+                worktree = REPO / ".awt" / agent
+                process = run(
+                    [
+                        "cmake",
+                        "--build",
+                        str(worktree / "build"),
+                        "-j4",
+                    ],
+                    check=False,
+                )
+                if process.returncode != 0:
+                    state.agent_status = "blocked"
+                    state.blocked_reason = "agent build failed before merge"
+                    state.failed_stage = "build"
+                    state.failed_head = head
+                    save_agent_state(agent, state)
+                    record_event(
+                        agent,
+                        f"agent build failed before merge; blocked: {process.stderr.strip()}",
+                    )
+                    continue
+                process = run(
+                    ["ctest", "--test-dir", str(worktree / "build"), "--output-on-failure"],
+                    check=False,
+                )
+                if process.returncode != 0:
+                    state.agent_status = "blocked"
+                    state.blocked_reason = "agent ctest failed before merge"
+                    state.failed_stage = "ctest"
+                    state.failed_head = head
+                    save_agent_state(agent, state)
+                    record_event(
+                        agent,
+                        f"agent ctest failed before merge; blocked: {process.stderr.strip()}",
+                    )
+                    continue
+                log(f"{agent}: worktree tests passed")
                 merge_agent(agent)
                 merged = (REPO / ".awt" / "merged" / "agents.log").is_file() and agent in (
                     REPO / ".awt" / "merged" / "agents.log"
@@ -390,14 +626,34 @@ def reconcile(states: dict[str, AgentState], plans: list[AgentPlan], *, merge: b
                     if active and clean_task_title(active) not in {
                         clean_task_title(x) for x in state.done_tasks
                     }:
-                        state.done_tasks.append(state.active_task)
-                    record_event(agent, "merged into main by master")
-                    advance_agent(agent, states, plan)
+                        state.done_tasks.append(active)
+                    merged_head = head
+                    ok, evidence = run_tests(cwd=REPO)
+                    if ok:
+                        record_event(agent, "merged into main by master; integration tests passed")
+                        advance_agent(agent, states, plan)
+                    else:
+                        state.agent_status = "blocked"
+                        state.blocked_reason = "integration tests failed after merge"
+                        state.failed_stage = "ctest" if "ctest" in evidence else "build"
+                        state.failed_head = head
+                        state.merged_head = merged_head
+                        state.acted_on = False
+                        save_agent_state(agent, state)
+                        record_event(agent, f"integration tests failed; blocked: {evidence}")
                 else:
                     record_event(agent, "merge did not complete; keeping task active")
             else:
                 review_agent(agent)
-    save_state(states)
+            if state.agent_status is None:
+                state.agent_status = "waiting"
+            save_agent_state(agent, state)
+            save_state(states)
+        else:
+            if state.agent_status is None:
+                state.agent_status = "waiting"
+            save_agent_state(agent, state)
+            save_state(states)
 
 
 def status_text(states: dict[str, AgentState], plans: list[AgentPlan]) -> str:
@@ -501,18 +757,30 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         action="store_true",
         help="refuse setup/watch until master git worktree is clean",
     )
+    parser.add_argument(
+        "--max-wait",
+        type=int,
+        default=600,
+        metavar="SECONDS",
+        help="stop waiting for a new event after this many seconds (default 600)",
+    )
     return parser.parse_args(argv)
 
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(sys.argv[1:] if argv is None else argv)
-    global REPO, MANIFEST, REQUESTS, TASKS, STATUS
+    global REPO, MANIFEST, REQUESTS, TASKS, STATUS, EVENTS, AGENT_STATE, DEBTS, DEBTS_PENDING, BOARD
     if args.repo:
         REPO = Path(args.repo).resolve()
         MANIFEST = REPO / ".awt" / "manifest.md"
         REQUESTS = REPO / ".awt" / "requests"
         TASKS = REPO / ".awt" / "tasks"
         STATUS = REPO / ".awt" / "scheduler-status.json"
+        EVENTS = REPO / ".awt" / "events"
+        AGENT_STATE = REPO / ".awt" / "agent-state"
+        DEBTS = REPO / ".awt" / "debts"
+        DEBTS_PENDING = REPO / ".awt" / "debts-pending.md"
+        BOARD = REPO / ".awt" / "board.md"
     if args.manifest:
         MANIFEST = Path(args.manifest).resolve()
     if not shutil.which("git"):
@@ -523,9 +791,14 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     if args.clear_agent:
-        states = load_state()
+        states = load_agent_state()
         states.pop(args.clear_agent, None)
-        save_state(states)
+        state_file = AGENT_STATE / f"{args.clear_agent}.json"
+        if state_file.is_file():
+            state_file.unlink()
+        legacy_states = load_state()
+        legacy_states.pop(args.clear_agent, None)
+        save_state(legacy_states)
         clear_local_agent(args.clear_agent)
         log(f"cleared scheduler state for {args.clear_agent}")
         return 0
@@ -535,6 +808,8 @@ def main(argv: list[str] | None = None) -> int:
             STATUS.unlink()
         for path in REQUESTS.glob("*.md"):
             path.unlink()
+        if AGENT_STATE.is_dir():
+            shutil.rmtree(AGENT_STATE)
         log("reset local scheduler queue and pending merge-request files")
         return 0
 
@@ -558,7 +833,13 @@ def main(argv: list[str] | None = None) -> int:
             log(f"error: no manifest section for {args.agent}")
             return 2
 
-    states = load_state()
+    states = load_agent_state()
+    legacy = load_state()
+    for agent, state in legacy.items():
+        if agent not in states:
+            states[agent] = state
+    if legacy:
+        merge_scheduler_state(states)
     if args.check:
         if args.json:
             print(
@@ -593,6 +874,7 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.watch:
         log(f"watching {REQUESTS} every {args.interval}s; Ctrl-C to stop")
+        last_event = time.monotonic()
         if args.json:
             print(
                 json.dumps(
@@ -608,19 +890,43 @@ def main(argv: list[str] | None = None) -> int:
             print(watch_banner(states, plans))
         try:
             while True:
-                states = load_state()
+                before_status = {
+                    plan.agent: (
+                        states.get(plan.agent, AgentState()).active_task,
+                        states.get(plan.agent, AgentState()).agent_status,
+                    )
+                    for plan in plans
+                }
+                before_requests = {plan.agent for plan in plans if merge_requested(plan.agent)}
+                states = load_agent_state()
                 reconcile(states, plans, merge=args.merge)
+                after_requests = {plan.agent for plan in plans if merge_requested(plan.agent)}
+                after_status = {
+                    plan.agent: (
+                        states.get(plan.agent, AgentState()).active_task,
+                        states.get(plan.agent, AgentState()).agent_status,
+                    )
+                    for plan in plans
+                }
+                if before_requests != after_requests or before_status != after_status:
+                    last_event = time.monotonic()
                 if all(
-                    clean_task_title(states.get(plan.agent, AgentState()).active_task or "")
-                    in {
-                        clean_task_title(x)
-                        for x in states.get(plan.agent, AgentState()).done_tasks
-                    }
-                    or current_task(states, plan) is None
+                    states.get(plan.agent, AgentState()).agent_status in {"ended", "blocked"}
                     for plan in plans
                 ):
-                    log("all agents done")
+                    if any(
+                        states.get(plan.agent, AgentState()).agent_status == "blocked"
+                        for plan in plans
+                    ):
+                        log("all agents ended or blocked; blocked agents need manual attention")
+                    else:
+                        log("all agents done")
+                    collect_board(states, plans)
                     return 0
+                if args.max_wait > 0 and time.monotonic() - last_event >= args.max_wait:
+                    log("no scheduler event for the max-wait period; leaving state for manual audit")
+                    collect_board(states, plans)
+                    return 1
                 time.sleep(args.interval)
         except KeyboardInterrupt:
             log("stopped by user")

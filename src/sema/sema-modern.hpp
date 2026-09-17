@@ -652,6 +652,10 @@ private:
     frontend::ExprId findFieldDefault(std::string_view struct_name,
                                       size_t field_index) const noexcept;
 
+    /// Module whose generic declarations are being reified while lowering an
+    /// imported template body. Empty when lowering a local template.
+    session::ModuleKey importedTemplateModule_ = {};
+
     TypeId typeOfDeclInModule(session::ModuleKey module, frontend::DeclId id) const noexcept;
     /// Declaration selected by a resolved name, including imported declarations.
     [[nodiscard]] const frontend::Declaration *
