@@ -107,7 +107,7 @@ Implementation work that is incomplete or needs review is tracked in
 | index `a[i]` | **Working** | On arrays, slices, pointers; array/slice reads return `?T` with bounds checks. `raw a[i]` skips bounds handling and returns `T` |
 | `?` postfix propagation | **Working** | Requires optional operand in an optional-returning function. `?T` conditions are implicit (`if (x)`), so `x?` is propagation only and is rejected in condition position unless the enclosing function propagates |
 | `must` / `raw` optional extraction | **Working** | `must x` extracts a `?T` payload and terminates with runtime panic `R10003` on `null`; `raw x` extracts the payload without a null check. `is null` remains the only flow-narrowing mechanism |
-| `as` cast | **Working** | Dedicated `ExprKind::Cast` -> `HirCast` -> LLVM conversion. Numeric pairs plus `raw opaque` <-> `*T` (`classifyCast`); pointer-to-pointer between concrete pointees, integer/pointer mixes and user-defined casts stay rejected. Tagged-union member extraction outside a narrowed/checked context requires `raw`; raw-union member casts remain free. No numeric narrowing overflow check |
+| `as` cast | **Working** | Dedicated `ExprKind::Cast` -> `HirCast` -> LLVM conversion. Numeric pairs plus `raw opaque` <-> `*T` (`classifyCast`); pointer-to-pointer between concrete pointees, integer/pointer mixes and user-defined casts stay rejected. Tagged-union member extraction outside a narrowed/checked context requires `raw`; raw-union member casts remain free. Narrowing literal, `-` literal and integer-const operands are checked at compile time; variable operands and float-to-int still lack runtime checks |
 | `is null` | **Working** | Dedicated `ExprKind::IsNull`. Requires an optional operand; `?*T` uses the nullptr niche, `?T` reads the discriminant |
 | `is <type>` | **Working (tagged unions + opaque)** | Tagged-union member tests lower to a runtime tag check; inside `if`/`when` they narrow the tested local to the member type. `opaque is T` compares the bare opaque typeId and returns `bool` |
 | range `1..5`, `1>..5`, `1..<5`, `1>..<5` | **Working** | Dedicated `ExprKind::Range` with raw bounds and open-at-lo/hi flags. `in` lowers ranges and any `contains(self, value): bool` method; `for (x in int_range)` iterates with implicit step `1`. Float ranges are valid with `in` and rejected in `for`. Boundary semantics are documented and covered, including empty ranges and single-value closed ranges |
@@ -232,7 +232,7 @@ Recorded deliberately. Each item is a follow-up, not an unknown.
 
 | Item | Notes |
 |---|---|
-| No overflow check on narrowing conversions | Neither `as` nor numeric-literal adaptation validates that the value fits the target |
+| Non-literal narrowing conversions need runtime checks | Compile-time `as` checks cover literal, `-` literal and integer-const operands; variable operands and numeric-literal adaptation remain unchecked |
 | Unchecked `?*T` -> `*T` coercion and missing pointer narrowing | Every C pointer is `?*T`; `is null` narrows aggregate optional payloads, but pointer arrow/index/deref still accepts `?*T` without a NonNull proof. `E3005` is registered but not emitted. Isolated in `PerModuleSema::allowsUncheckedNullablePointer`/`inferArrow`; delete those paths when flow-sensitive pointer narrowing lands |
 | `is` outside `null`/tagged-union contexts | Non-union `is Type` remains unsupported and reports a dedicated diagnostic |
 | User-defined casts | To be added as a new branch in `classifyCast` |

@@ -153,10 +153,9 @@ O ficheiro `impl-status.md` foi atualizado de `Cache | Partial` para
   permanece unchecked: `inferArrow`/`inferIndex` e
   `allowsUncheckedNullablePointer` não exigem prova NonNull para pointers
   (`E3005` apenas registado, não emitido).
-- Casts numéricos estreitantes não verificam overflow.
-- Formatter round-trip de `for (cond)` e `for { }` preserva a grafia `for`;
-  `Expression` guarda a origem em `isForSpelling`/`forNoCondition` e `while`
-  continua a emitir `W1008`.
+- Casts numéricos estreitantes com literal, `-` literal ou constante inteira
+  são verificados em compile time; operands variáveis e adaptação implícita de
+  literais ainda não verificam overflow em runtime.
 
 Estas entradas detalham o estado real e as referências de bloqueio. A secção
 `Known Debt` de [impl-status.md](/home/diogo/Zith/docs/impl-status.md) foi

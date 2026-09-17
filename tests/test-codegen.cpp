@@ -1358,6 +1358,121 @@ static void test_numeric_cast_codegen() {
     CHECK(r.output.find("fptosi") != std::string::npos, "f64 -> i32 emits fptosi");
 }
 
+static void test_narrowing_numeric_cast_literal_diagnostics() {
+    ModernFileCodegenTest t;
+
+    t.write("accepted.zith", "fn main(): i32 {\n"
+                             "    let a: i8 = 100 as i8;\n"
+                             "    let b: u8 = 255 as u8;\n"
+                             "    let c: i8 = (-128) as i8;\n"
+                             "    let d: i8 = (-100) as i8;\n"
+                             "    let e: i16 = 128 as i16;\n"
+                             "    let f: u8 = 0 as u8;\n"
+                             "    let g: u8 = 0xFF as u8;\n"
+                             "    return (a as i32) + (b as i32) + (c as i32) + (d as i32) +\n"
+                             "           (e as i32) + (f as i32) + (g as i32);\n"
+                             "}\n");
+    auto r = t.run("accepted.zith");
+    CHECK(r.usedModern, "narrowing literal casts use the modern frontend pipeline");
+    CHECK(r.ok, "in-range narrowing literal casts compile and execute");
+    CHECK_EQ(r.exitCode, 254, "in-range literal casts and widening casts preserve each value");
+
+    t.write("unsigned-overflow.zith", "fn main(): i32 {\n"
+                                      "    let _: u8 = 256 as u8;\n"
+                                      "    return 0;\n"
+                                      "}\n");
+    auto bad_u8 = t.run("unsigned-overflow.zith");
+    CHECK(!bad_u8.ok && bad_u8.errorCount > 0,
+          "256 as u8 reports a compile-time overflow diagnostic");
+
+    t.write("signed-overflow.zith", "fn main(): i32 {\n"
+                                    "    let _: i8 = 128 as i8;\n"
+                                    "    return 0;\n"
+                                    "}\n");
+    auto bad_i8 = t.run("signed-overflow.zith");
+    CHECK(!bad_i8.ok && bad_i8.errorCount > 0,
+          "128 as i8 reports a compile-time overflow diagnostic");
+
+    t.write("negative-overflow.zith", "fn main(): i32 {\n"
+                                      "    let _: i8 = -129 as i8;\n"
+                                      "    return 0;\n"
+                                      "}\n");
+    auto bad_i8_neg = t.run("negative-overflow.zith");
+    CHECK(!bad_i8_neg.ok && bad_i8_neg.errorCount > 0,
+          "-129 as i8 reports a compile-time overflow diagnostic");
+
+    t.write("i16-overflow.zith", "fn main(): i32 {\n"
+                                 "    let _: i16 = 100000 as i16;\n"
+                                 "    return 0;\n"
+                                 "}\n");
+    auto bad_i16 = t.run("i16-overflow.zith");
+    CHECK(!bad_i16.ok && bad_i16.errorCount > 0,
+          "100000 as i16 reports a compile-time overflow diagnostic");
+
+    t.write("signed-literal-to-unsigned.zith", "fn main(): i32 {\n"
+                                               "    let _: u8 = (-1) as u8;\n"
+                                               "    return 0;\n"
+                                               "}\n");
+    auto bad_sign = t.run("signed-literal-to-unsigned.zith");
+    CHECK(!bad_sign.ok && bad_sign.errorCount > 0,
+          "negative literal to u8 reports a compile-time overflow diagnostic");
+
+    t.write("raw-overflow.zith", "fn main(): i32 {\n"
+                                 "    let _: i8 = raw 256 as i8;\n"
+                                 "    return 0;\n"
+                                 "}\n");
+    auto raw = t.run("raw-overflow.zith");
+    CHECK(raw.ok || raw.errorCount == 1,
+          "raw narrowing casts intentionally bypass the compile-time overflow diagnostic");
+}
+
+static void test_narrowing_numeric_cast_const_diagnostics() {
+    ModernFileCodegenTest t;
+
+    t.write("const-accepted.zith", "const GOOD: i32 = 100;\n"
+                                   "fn main(): i32 {\n"
+                                   "    let _: i8 = GOOD as i8;\n"
+                                   "    return 0;\n"
+                                   "}\n");
+    auto r = t.run("const-accepted.zith");
+    CHECK(r.usedModern, "in-range constant narrowing casts use the modern pipeline");
+    CHECK(r.ok, "in-range constant narrowing casts compile and execute");
+
+    t.write("const-overflow.zith", "const TOO_LARGE: i32 = 128;\n"
+                                   "fn main(): i32 {\n"
+                                   "    let _: i8 = TOO_LARGE as i8;\n"
+                                   "    return 0;\n"
+                                   "}\n");
+    auto bad = t.run("const-overflow.zith");
+    CHECK(!bad.ok && bad.errorCount > 0,
+          "constant 128 as i8 reports a compile-time overflow diagnostic");
+
+    t.write("const-negative-accepted.zith", "const NEG: i32 = 200;\n"
+                                            "fn main(): i32 {\n"
+                                            "    let _: u8 = NEG as u8;\n"
+                                            "    return 0;\n"
+                                            "}\n");
+    auto neg = t.run("const-negative-accepted.zith");
+    CHECK(neg.ok, "in-range unsigned constant narrowing casts stay valid");
+
+    t.write("enum-cast-accepted.zith", "enum Byte: u8 { Small = 7 }\n"
+                                       "fn main(): i32 {\n"
+                                       "    let _: i8 = Byte.Small as i8;\n"
+                                       "    return 0;\n"
+                                       "}\n");
+    auto enum_ok = t.run("enum-cast-accepted.zith");
+    CHECK(enum_ok.ok, "narrowing enum discriminants to a compatible width stay valid");
+
+    t.write("runtime-cast-stays-valid.zith", "fn main(): i32 {\n"
+                                             "    var v: i32 = 128;\n"
+                                             "    let _: i8 = v as i8;\n"
+                                             "    return 0;\n"
+                                             "}\n");
+    auto runtime = t.run("runtime-cast-stays-valid.zith");
+    CHECK(runtime.ok,
+          "runtime narrowing casts remain allowed and are left for later overflow checks");
+}
+
 static void test_state_machine_loop_executes() {
     ModernFileCodegenTest t;
     t.write("main.zith", "state Loop(n: i32): i32 {\n"
@@ -3171,6 +3286,10 @@ static void test_codegen() {
     test_f32_literal_stores_in_32_width();
     printf("Running test_numeric_cast_codegen\n");
     test_numeric_cast_codegen();
+    printf("Running test_narrowing_numeric_cast_literal_diagnostics\n");
+    test_narrowing_numeric_cast_literal_diagnostics();
+    printf("Running test_narrowing_numeric_cast_const_diagnostics\n");
+    test_narrowing_numeric_cast_const_diagnostics();
     printf("Running test_state_machine_loop_executes\n");
     test_state_machine_loop_executes();
     printf("Running test_state_tail_calls_emit_musttail\n");

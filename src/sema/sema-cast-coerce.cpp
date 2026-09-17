@@ -6,6 +6,70 @@
 
 namespace zith::sema::modern {
 
+struct CastOverflowProbe {
+    const PerModuleSema &sema;
+
+    /// True when `value` is a literal, unary `-` literal, or a constant whose
+    /// integer value is known and can be range-checked before lowering.
+    bool known(frontend::ExprId value, std::int64_t &out) const noexcept {
+        if (!value || value.value > sema.snapshot.expressions().size())
+            return false;
+        const auto &expr = sema.snapshot.expressions()[value.value - 1U];
+        if (expr.kind == frontend::ExprKind::Name && sema.isConstantExpression(value)) {
+            const auto *resolved = sema.findResolvedExpr(value);
+            if (resolved != nullptr && resolved->bindingKind == frontend::BindingKind::Const) {
+                if (resolved->declaration &&
+                    resolved->declaration.value <= sema.snapshot.declarations().size()) {
+                    const auto &decl =
+                        sema.snapshot.declarations()[resolved->declaration.value - 1U];
+                    return known(decl.initializer, out);
+                }
+                for (const auto &statement : sema.snapshot.statements()) {
+                    if (statement.kind == frontend::StmtKind::Binding &&
+                        statement.binding.id == resolved->local)
+                        return known(statement.binding.initializer, out);
+                }
+            }
+        }
+        // `constantIntegerValue` already decodes plain literals and `-literal`.
+        return sema.constantIntegerValue(value, out);
+    }
+};
+
+namespace {
+
+/// Determines whether a constant/literal integer lower to `target` without
+/// losing its value. Same-width sign changes stay permitted because they keep
+/// the bit pattern; narrowing only checks the source value's range.
+bool constantIntegerFits(const IntegerType &source, const IntegerType &target,
+                         std::int64_t value) noexcept {
+    const bool same_width_and_sign =
+        source.bits == target.bits && source.isSigned == target.isSigned;
+    if (same_width_and_sign)
+        return true;
+
+    if (target.isSigned) {
+        const std::int64_t min = [&]() {
+            if (target.bits >= 64)
+                return std::numeric_limits<std::int64_t>::min();
+            const unsigned width = target.bits;
+            return -((std::int64_t{1} << (width - 1U)) - 1) - 1;
+        }();
+        const std::int64_t max = target.bits < 64 ? (std::int64_t{1} << (target.bits - 1U)) - 1
+                                                  : std::numeric_limits<std::int64_t>::max();
+        return value >= min && value <= max;
+    }
+
+    if (source.isSigned && value < 0)
+        return false;
+    if (target.bits >= 64)
+        return true;
+    const std::uint64_t max = (std::uint64_t{1} << target.bits) - 1U;
+    return static_cast<std::uint64_t>(value) <= max;
+}
+
+} // namespace
+
 TypeId PerModuleSema::pointerBase(TypeId type) const noexcept {
     const TypeId resolved = resolve(type);
     TypeId base           = kInvalidTypeId;
@@ -167,6 +231,23 @@ TypeId PerModuleSema::inferCast(frontend::ExprId id) {
         }
         CastKind kind =
             classifyCast(type_table.kindOf(from_resolved), type_table.kindOf(to_resolved));
+        if (kind == CastKind::IntToInt && !expr.is_raw) {
+            const auto *from_integer = type_table.integer(from_resolved);
+            const auto *to_integer   = type_table.integer(to_resolved);
+            if (from_integer != nullptr && to_integer != nullptr && from_integer->bits != 0 &&
+                to_integer->bits < from_integer->bits) {
+                std::int64_t constant_value = 0;
+                if (CastOverflowProbe{*this}.known(expr.operands[0], constant_value) &&
+                    !constantIntegerFits(*from_integer, *to_integer, constant_value)) {
+                    report(expr.span,
+                           "value " + std::to_string(constant_value) +
+                               " does not fit in target type '" +
+                               type_table.typeToString(to_resolved) + "'",
+                           diagnostics::err::InvalidCast);
+                    return error_type;
+                }
+            }
+        }
         // `raw opaque as *T` and `*T as raw opaque` are the two supported pointer casts.
         // Pointer-to-pointer between two concrete pointee types stays invalid, as does any
         // integer/pointer mix, so `as` never silently reinterprets an address.

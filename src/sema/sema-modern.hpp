@@ -164,6 +164,8 @@ struct PerModuleSema {
     memory::Span toMemorySpan(frontend::TextSpan span) const noexcept;
 
 private:
+    friend struct CastOverflowProbe;
+
     void registerPrimitiveTypes();
     TypeId registerPrimitive(std::string_view name, TypeKind kind, uint8_t bits, bool is_signed);
     void registerNamedTypes();
