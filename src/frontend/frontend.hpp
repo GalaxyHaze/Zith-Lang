@@ -137,7 +137,8 @@ enum class ExprKind : uint8_t {
     Call,
     Block,
     If,
-    /// `for { }` (infinite) and `for (cond) { }` (conditional).
+    /// `for { }` (infinite), `for (cond) { }` (conditional) and legacy
+    /// `while`. `isForSpelling` records whether the source used `for`.
     While,
     /// 3-clause `for (init, cond, step) { body }`: operands are [cond, body, step];
     /// `init` is desugared into a preceding statement of the enclosing block.
@@ -322,6 +323,12 @@ struct Expression {
     /// True when conditional sugar was written as `optional x` instead of the
     /// postfix `x?`. The formatter preserves the original spelling.
     bool isOptionalKeyword = false;
+    /// True when a While-kind expression was parsed from `for` (including
+    /// `for { ... }`) instead of from the deprecated `while` keyword.
+    bool isForSpelling = false;
+    /// True for `for { ... }`, where operand[0] is a synthetic `true` literal
+    /// that the formatter must spell as a bare loop head.
+    bool forNoCondition = false;
     /// True when a Name expression was written as `raw x`. Sema uses this to
     /// allow an explicit unchecked read of a binding that has not yet been
     /// initialized.

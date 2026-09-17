@@ -309,8 +309,9 @@ void AstLowerer::applyLoopLabel(ExprId id, std::string_view label) {
 ExprId AstLowerer::parseFor() {
     const uint32_t start = index_++;
     Expression expression;
-    expression.kind  = ExprKind::While;
-    expression.scope = current_scope_;
+    expression.kind          = ExprKind::While;
+    expression.isForSpelling = true;
+    expression.scope         = current_scope_;
 
     if (index_ < token_count_ && snapshot_.tokens_[index_].kind == TokenKind::Identifier &&
         punctuation(index_ + 1U, ':')) {
@@ -320,6 +321,7 @@ ExprId AstLowerer::parseFor() {
 
     if (punctuation(index_, '{')) {
         // `for { ... }` desugars to `while (true) { ... }`.
+        expression.forNoCondition = true;
         Expression always;
         always.kind  = ExprKind::Literal;
         always.text  = "true";

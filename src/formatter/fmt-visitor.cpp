@@ -900,10 +900,22 @@ void FmtVisitor::visitExpr(const frontend::ExprId id, const int parent_prec) {
             emit(expr->label);
             emit(": ");
         }
-        emit("while (");
-        visitExpr(expr->operands[0]);
-        emit(") ");
-        visitExpr(expr->operands[1]);
+        if (expr->isForSpelling) {
+            emit("for ");
+            if (expr->forNoCondition) {
+                visitExpr(expr->operands[1]);
+            } else {
+                emit("(");
+                visitExpr(expr->operands[0]);
+                emit(") ");
+                visitExpr(expr->operands[1]);
+            }
+        } else {
+            emit("while (");
+            visitExpr(expr->operands[0]);
+            emit(") ");
+            visitExpr(expr->operands[1]);
+        }
         break;
     case frontend::ExprKind::For:
         // init was desugared into a preceding statement, so the head prints as

@@ -132,6 +132,68 @@ static void test_formatter_break_continue() {
     CHECK(output.find("continue outer;\n") != std::string::npos, "keeps labeled continue");
 }
 
+static void test_formatter_for_loop_spelling_round_trip() {
+    const char *sources[] = {
+        "fn run(cond: bool): i32 {\n"
+        "    for (cond) { break; }\n"
+        "    return 0;\n"
+        "}\n",
+        "fn run(): i32 {\n"
+        "    for { break; }\n"
+        "    return 0;\n"
+        "}\n",
+        "fn run(cond: bool): i32 {\n"
+        "    outer: for (cond) { break outer; }\n"
+        "    return 0;\n"
+        "}\n",
+        "fn run(maybe: ?i32): i32 {\n"
+        "    for (maybe) { break; }\n"
+        "    return 0;\n"
+        "}\n",
+    };
+
+    for (const char *source : sources) {
+        auto snapshot = frontend::parse(source);
+        CHECK(snapshot.diagnostics().empty(), "'for' loop formatter source parses cleanly");
+
+        formatter::FmtVisitor formatter(snapshot);
+        formatter.format();
+        const std::string &output = formatter.result();
+        CHECK(output.find("while") == std::string::npos,
+              "source 'for' loops never re-print as deprecated 'while'");
+
+        auto reparsed = frontend::parse(output);
+        CHECK(reparsed.diagnostics().empty(), "formatted 'for' source re-parses cleanly");
+        formatter::FmtVisitor second(reparsed);
+        second.format();
+        CHECK_EQ(second.result(), output, "'for' head formatting is idempotent");
+    }
+
+    auto conditional = frontend::parse(sources[0]);
+    formatter::FmtVisitor formatter(conditional);
+    formatter.format();
+    CHECK(formatter.result().find("for (cond) {") != std::string::npos,
+          "conditional 'for' keeps its parenthesized head");
+
+    auto infinite = frontend::parse(sources[1]);
+    formatter::FmtVisitor infinite_formatter(infinite);
+    infinite_formatter.format();
+    CHECK(infinite_formatter.result().find("for {\n") != std::string::npos,
+          "infinite 'for' prints without a synthetic 'true' condition");
+
+    auto labeled = frontend::parse(sources[2]);
+    formatter::FmtVisitor labeled_formatter(labeled);
+    labeled_formatter.format();
+    CHECK(labeled_formatter.result().find("outer: for (cond) {") != std::string::npos,
+          "labeled 'for' keeps its label and head spelling");
+
+    auto optional_condition = frontend::parse(sources[3]);
+    formatter::FmtVisitor optional_formatter(optional_condition);
+    optional_formatter.format();
+    CHECK(optional_formatter.result().find("for (maybe) {") != std::string::npos,
+          "implicit optional condition keeps its 'for' head");
+}
+
 static void test_formatter_empty_file_produces_newline() {
     const std::string source = "\n";
     auto snapshot            = frontend::parse(source);
@@ -581,6 +643,7 @@ static void test_formatter() {
     test_formatter_nested_if_else();
     test_formatter_normalizes_simple_import();
     test_formatter_break_continue();
+    test_formatter_for_loop_spelling_round_trip();
     test_formatter_empty_file_produces_newline();
     test_formatter_multiple_top_level_decls_with_comments();
     test_formatter_parse_error_produces_empty();

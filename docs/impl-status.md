@@ -230,7 +230,6 @@ Recorded deliberately. Each item is a follow-up, not an unknown.
 
 | Item | Notes |
 |---|---|
-| Formatter re-prints `for (cond)` as `while` | `for (cond)` desugars to `ExprKind::While`; the formatter prints `while (...)`, so the spelling is not round-trip faithful |
 | No overflow check on narrowing conversions | Neither `as` nor numeric-literal adaptation validates that the value fits the target |
 | Unchecked `?*T` -> `*T` coercion and missing pointer narrowing | Every C pointer is `?*T`; `is null` narrows aggregate optional payloads, but pointer arrow/index/deref still accepts `?*T` without a NonNull proof. `E3005` is registered but not emitted. Isolated in `PerModuleSema::allowsUncheckedNullablePointer`/`inferArrow`; delete those paths when flow-sensitive pointer narrowing lands |
 | `is` outside `null`/tagged-union contexts | Non-union `is Type` remains unsupported and reports a dedicated diagnostic |

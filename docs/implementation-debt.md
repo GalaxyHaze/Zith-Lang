@@ -153,8 +153,9 @@ O ficheiro `impl-status.md` foi atualizado de `Cache | Partial` para
   (`E3005` apenas registado, não emitido).
 - Casts numéricos estreitantes não verificam overflow.
 - `++` / `--` não existem.
-- Formatter reimprime `for (cond)` como `while` (`ExprKind::While` no
-  round-trip).
+- Formatter round-trip de `for (cond)` e `for { }` preserva a grafia `for`;
+  `Expression` guarda a origem em `isForSpelling`/`forNoCondition` e `while`
+  continua a emitir `W1008`.
 - `..` é lexado caractere a caractere.
 
 Estas entradas detalham o estado real e as referências de bloqueio. A secção
