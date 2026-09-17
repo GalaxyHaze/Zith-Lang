@@ -245,21 +245,23 @@ Ações de follow-up recomendadas:
 
 ### 10. Traits/interfaces importadas têm conformance instável em workdirs populados
 
-Estado atual: um trait importado (ex.: `InPlace` em `stdlib/std/new.zith`) é
-validado e funciona em workdirs temporários; `tests/test-generic-hashmap.cpp`
-cobre `implement Box as InPlace` e calls qualificados `box.InPlace.*`.
+Estado atual: a causa raiz da instabilidade foi removida. A resolução de
+declarações, tipos e métodos importados passou a ser feita através das
+imports/bindings visíveis do módulo atual (`Import` e `ModuleAlias`) em vez de
+percorrer todos os módulos carregados. `tests/test-interface-satisfaction.cpp`
+agora cobre qualified calls sobre `InPlace` importado de `std/new` num workdir
+populado com `import std/alloc` e vários módulos não relacionados.
 
-Dívida real: qualified trait calls sobre um tipo conforme ficam instáveis dentro
-de `examples/` e outros workdirs populados, onde a importação convive com mais
-módulos/símbolos. Em vez de demonstrar o contrato com o trait importado,
-`examples/inplace-simple.zith` reimplementa o mesmo trait localmente e usa
-`dyn Allocator`, o que esconde o defeito e reduz a cobertura do caminho real.
+Dívida real restante: trait defaults e requisitos de `dyn Trait` ainda são
+procurados em todos os módulos carregados quando o trait não está no módulo
+atual. Isso já não escolhe o trait errado para o caminho aqui reproduzido, mas
+deve ser estreitado para resolver como os restantes padrões de método quando
+houver uma definição exata de quais defaults estão visíveis a partir do módulo
+de chamada.
 
-Ação recomendada: construir um reprodutor determinístico com um workdir
-populado (vários módulos em `examples/` ou `stdlib/`) e eliminar a dependência
-da ordem/estado de resolução de símbolos. Depois de corrigir o resolver, atualizar
-`memory/stdlib-allocator-ownership.md` e considerar mudar o exemplo para usar o
-trait importado para que o comportamento real fique coberto.
+Ação futura: quando o alcance de trait defaults for formalizado, repetir a
+mesma passada e remover os restantes scans globais. O exemplo pode então migrar
+de um trait local para o trait importado sem sacrificar a cobertura.
 
 ---
 

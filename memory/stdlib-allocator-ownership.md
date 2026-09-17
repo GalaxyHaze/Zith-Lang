@@ -67,10 +67,15 @@ blocked. Confirmed blockers:
 - Opaque pack values cannot be destructured/field-accessed in the current
   subset, so `args as |cap: u64|` compiles for matching but assigning
   `self.cap = raw tuple` fails with `E3001 expected 'i32', has type 'pack'`.
-- An imported `InPlace` trait works in temporary workdirs, but qualified trait
-  calls on a conforming type are unreliable inside `examples/` and other
-  populated workdirs. `examples/inplace-simple.zith` therefore demonstrates the
-  same contract with a local trait and `dyn Allocator`.
+- The order-dependent global snapshot scans that made imported trait
+  conformance unstable in populated workdirs are gone. Sema now resolves
+  imported traits, type names, and owner methods through the current module's
+  import bindings and namespace aliases; `tests/test-interface-satisfaction.cpp`
+  covers populated-workdir qualified calls with `from std/new`, `import std/alloc`,
+  and several unrelated modules. Trait-default collection and dyn method lookup
+  still scan all loaded modules where the default/requirement was defined, so a
+  future compatibility change to method-scope resolution can narrow those scans
+  further.
 - `@alignOf` only accepts structs in the current subset, so heap
   `new<T>`/`make<T>` cannot query alignment for primitive-layout `T` without
   compiler work.

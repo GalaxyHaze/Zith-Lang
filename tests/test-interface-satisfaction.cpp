@@ -76,6 +76,50 @@ struct SessionRunner {
     }
 };
 
+bool writeFile(const std::filesystem::path &path, std::string_view text) {
+    std::filesystem::create_directories(path.parent_path());
+    std::ofstream output(path, std::ios::binary | std::ios::trunc);
+    output << text;
+    return output.good();
+}
+
+SessionRunner::Result runProjectWithStdlib(const std::filesystem::path &root,
+                                           std::string_view entry, std::string_view text) {
+    memory::Arena arena;
+    Options opts(arena);
+    opts.targetStage = session::Stage::TypeChecked;
+#ifdef ZITH_STDLIB_DIR
+    opts.includeDirs.push(ZITH_STDLIB_DIR);
+#endif
+
+    std::filesystem::create_directories((root / entry).parent_path());
+    std::ofstream output(root / entry, std::ios::binary | std::ios::trunc);
+    output << text;
+    output.close();
+
+    session::FrontendConfig config;
+    config.workspaceRoot      = root.string();
+    config.maxFrontendWorkers = 1;
+    config.compilerVersion    = "test";
+    for (const auto &dir : opts.includeDirs)
+        config.includeRoots.push_back(dir);
+    auto context = std::make_shared<session::FrontendContext>(config);
+    session::CompilationSession session(opts, (root / entry).string(), std::move(context));
+    session.setBuffered(true);
+
+    SessionRunner::Result result;
+    result.ok = session.runTo(session::Stage::TypeChecked);
+    for (const auto &diag : session.diags().all()) {
+        result.diags.push_back({static_cast<diagnostics::ErrCode>(diag.code), diag.message});
+        if (diag.severity == diagnostics::Severity::Error) {
+            std::printf("    [InterfaceSatDiag] Code: %u, Message: %s\n", diag.code,
+                        diag.message.c_str());
+        }
+    }
+    result.ok = result.ok && session.diags().errorCount() == 0;
+    return result;
+}
+
 void test_structural_satisfaction() {
     SessionRunner t;
     auto r = t.run("interface Positioned { [x, y]: f32 }\n"
@@ -201,6 +245,53 @@ void test_qualified_interface_method_selection() {
           "interface-qualified calls do not report E2008");
 }
 
+void test_imported_trait_qualified_call_in_populated_workdir() {
+    const std::filesystem::path root =
+        std::filesystem::temp_directory_path() / "zith-interface-populated-tests";
+    std::filesystem::remove_all(root);
+    std::filesystem::create_directories(root);
+
+    CHECK(writeFile(root / "libs/alpha.zith",
+                    "pub trait AlphaDisplay { fn alphaName(self): i32; }\n"
+                    "pub trait InPlace {}\n"
+                    "pub fn alpha(): i32 { return 10; }\n"),
+          "write populated alpha module");
+    CHECK(writeFile(root / "libs/beta.zith", "pub trait BetaDisplay { fn betaName(self): i32; }\n"
+                                             "pub fn beta(): i32 { return 20; }\n"),
+          "write populated beta module");
+    CHECK(writeFile(root / "libs/gamma.zith",
+                    "pub trait GammaDisplay { fn gammaName(self): i32; }\n"
+                    "pub fn gamma(): i32 { return 30; }\n"),
+          "write populated gamma module");
+    const auto result = runProjectWithStdlib(
+        root, "main.zith",
+        "import libs/alpha as alpha\n"
+        "import libs/beta as beta\n"
+        "import libs/gamma as gamma\n"
+        "from std/new\n"
+        "import std/alloc\n"
+        "\n"
+        "struct Box { value: i64 }\n"
+        "\n"
+        "implement Box as InPlace {\n"
+        "    fn inplace(var self, allocator: dyn Allocator, args: opaque): bool {\n"
+        "        return true;\n"
+        "    }\n"
+        "    fn clean(var self, allocator: dyn Allocator) {}\n"
+        "}\n"
+        "\n"
+        "fn main(): i32 {\n"
+        "    var box = Box { value: 42 };\n"
+        "    let heap = HeapAllocator {};\n"
+        "    if not box.InPlace.inplace(heap, 0 as opaque) { return 1; }\n"
+        "    box.InPlace.clean(heap);\n"
+        "    return 42;\n"
+        "}\n");
+    CHECK(result.ok, "imported trait qualified calls are stable in a populated workdir");
+
+    std::filesystem::remove_all(root);
+}
+
 void test_interface_satisfaction() {
     test_structural_satisfaction();
     test_interface_bound_accepts_conforming_struct();
@@ -210,6 +301,7 @@ void test_interface_satisfaction() {
     test_missing_method();
     test_method_signature_mismatch();
     test_qualified_interface_method_selection();
+    test_imported_trait_qualified_call_in_populated_workdir();
 }
 
 } // namespace

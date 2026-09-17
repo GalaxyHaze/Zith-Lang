@@ -8,23 +8,59 @@ namespace zith::sema::modern {
 
 const frontend::Declaration *PerModuleSema::findDeclNamed(std::string_view name,
                                                           frontend::DeclKind kind) const {
-    const auto findIn =
-        [&](const frontend::FrontendSnapshot &snap) -> const frontend::Declaration * {
-        for (const auto &decl : snap.declarations()) {
-            if (decl.kind == kind && decl.name == name)
-                return &decl;
+    return findDeclNamed(name, kind, nullptr);
+}
+
+const frontend::Declaration *PerModuleSema::findDeclNamed(std::string_view name,
+                                                          frontend::DeclKind kind,
+                                                          session::ModuleKey *out_module) const {
+    if (out_module != nullptr)
+        *out_module = {};
+    for (const auto &decl : snapshot.declarations()) {
+        if (decl.kind == kind && decl.name == name) {
+            if (out_module != nullptr)
+                *out_module = module;
+            return &decl;
         }
-        return nullptr;
-    };
-    if (const auto *found = findIn(snapshot))
-        return found;
+    }
+    // Resolve the name in this module's import table first. `lookupBinding`
+    // walks the lexical chain and returns only the binding visible here, so a
+    // same-named trait in an unrelated module cannot be picked up based on
+    // module iteration order.
+    const auto *binding =
+        session::lookupBinding(resolution, name, frontend::ScopeId{}, snapshot.scopes());
+    if (binding != nullptr && binding->kind == session::ResolutionKind::Import) {
+        const auto *target =
+            owner != nullptr ? owner->findModuleSema(binding->target.module) : nullptr;
+        if (target != nullptr) {
+            for (const auto &decl : target->snapshot.declarations()) {
+                if (decl.kind == kind && decl.name == name) {
+                    if (out_module != nullptr)
+                        *out_module = binding->target.module;
+                    return &decl;
+                }
+            }
+        }
+    }
+    // Namespace imports such as `import std/alloc` bind the first path
+    // segment (`std`) rather than each public symbol. Sema sees the target
+    // module through that alias, so `Allocator` remains resolvable without
+    // falling back to scanning every loaded module.
     if (owner != nullptr) {
-        for (const auto &artifact_ptr : owner->modules()) {
-            const auto &artifact = *artifact_ptr;
-            if (artifact.frontend == nullptr || artifact.key == module)
+        for (const auto &alias : resolution.bindings) {
+            if (alias.scope || alias.kind != session::ResolutionKind::ModuleAlias ||
+                alias.target.module.empty() || alias.modulePath.empty())
                 continue;
-            if (const auto *found = findIn(*artifact.frontend))
-                return found;
+            const auto *target = owner->findModuleSema(alias.target.module);
+            if (target == nullptr)
+                continue;
+            for (const auto &decl : target->snapshot.declarations()) {
+                if (decl.kind == kind && decl.name == name) {
+                    if (out_module != nullptr)
+                        *out_module = alias.target.module;
+                    return &decl;
+                }
+            }
         }
     }
     return nullptr;
@@ -58,6 +94,99 @@ bool PerModuleSema::isInterfaceType(TypeId type) const {
     const auto *trait_ty  = type_table.trait(resolved);
     return trait_ty != nullptr &&
            findDeclNamed(trait_ty->name, frontend::DeclKind::Interface) != nullptr;
+}
+
+TypeId PerModuleSema::resolvedTypeName(std::string_view name) const {
+    for (const auto &decl : snapshot.declarations()) {
+        if (decl.kind != frontend::DeclKind::Trait && decl.kind != frontend::DeclKind::Interface &&
+            decl.name == name) {
+            const TypeId local = typeOfDecl(decl.id);
+            if (local)
+                return local;
+        }
+    }
+    const auto *binding =
+        session::lookupBinding(resolution, name, frontend::ScopeId{}, snapshot.scopes());
+    if (binding != nullptr && binding->kind == session::ResolutionKind::Import &&
+        !binding->target.module.empty() && owner != nullptr) {
+        const auto *target = owner->findModuleSema(binding->target.module);
+        if (target != nullptr) {
+            for (const auto &decl : target->snapshot.declarations()) {
+                if (decl.kind != frontend::DeclKind::Trait &&
+                    decl.kind != frontend::DeclKind::Interface && decl.name == name) {
+                    const TypeId imported = target->typeOfDecl(decl.id);
+                    if (imported)
+                        return imported;
+                }
+            }
+        }
+    }
+    if (owner != nullptr) {
+        for (const auto &alias : resolution.bindings) {
+            if (alias.scope || alias.kind != session::ResolutionKind::ModuleAlias ||
+                alias.target.module.empty())
+                continue;
+            const auto *target = owner->findModuleSema(alias.target.module);
+            if (target == nullptr)
+                continue;
+            for (const auto &decl : target->snapshot.declarations()) {
+                if (decl.kind == frontend::DeclKind::Trait ||
+                    decl.kind == frontend::DeclKind::Interface || decl.name != name)
+                    continue;
+                const TypeId result = target->typeOfDecl(decl.id);
+                if (result)
+                    return result;
+            }
+        }
+    }
+    return type_table.lookupNamed(name);
+}
+
+TypeId PerModuleSema::resolvedTraitType(std::string_view name) const {
+    for (const auto &decl : snapshot.declarations()) {
+        if ((decl.kind == frontend::DeclKind::Trait ||
+             decl.kind == frontend::DeclKind::Interface) &&
+            decl.name == name &&
+            type_table.kindOf(type_table.lookupNamed(decl.name)) == TypeKind::Trait)
+            return type_table.lookupNamed(decl.name);
+    }
+    const auto *binding =
+        session::lookupBinding(resolution, name, frontend::ScopeId{}, snapshot.scopes());
+    if (owner != nullptr) {
+        const auto findInTarget = [&](session::ModuleKey target_module) -> TypeId {
+            const auto *target = owner->findModuleSema(target_module);
+            if (target == nullptr)
+                return kInvalidTypeId;
+            for (const auto &decl : target->snapshot.declarations()) {
+                if (decl.kind != frontend::DeclKind::Trait &&
+                    decl.kind != frontend::DeclKind::Interface)
+                    continue;
+                if (decl.name != name)
+                    continue;
+                const TypeId result = type_table.lookupNamed(decl.name);
+                if (result && type_table.kindOf(result) == TypeKind::Trait)
+                    return result;
+            }
+            return kInvalidTypeId;
+        };
+        if (binding != nullptr && binding->kind == session::ResolutionKind::Import &&
+            !binding->target.module.empty()) {
+            const TypeId imported = findInTarget(binding->target.module);
+            if (imported)
+                return imported;
+        }
+        if (binding == nullptr || binding->kind == session::ResolutionKind::ModuleAlias) {
+            for (const auto &alias : resolution.bindings) {
+                if (alias.scope || alias.kind != session::ResolutionKind::ModuleAlias ||
+                    alias.target.module.empty() || alias.modulePath.empty())
+                    continue;
+                const TypeId namespaced = findInTarget(alias.target.module);
+                if (namespaced)
+                    return namespaced;
+            }
+        }
+    }
+    return type_table.lookupNamed(name);
 }
 
 TypeId PerModuleSema::lowerTypeExprConst(frontend::TypeExprId id) const {
@@ -722,7 +851,7 @@ TypeId PerModuleSema::lowerBareTypeExpr(const frontend::TypeExpression &type) {
         // make every misspelled or unregistered type silently compatible with
         // anything. Before giving up, resolve a bare `from` import so a
         // consumer can name a struct, trait, or alias from the imported module.
-        if (const TypeId named = type_table.lookupNamed(type.name))
+        if (const TypeId named = resolvedTypeName(type.name))
             return named;
         if (const auto *resolved = findResolvedBinding(type.name, currentScopeForType(type));
             resolved != nullptr && resolved->kind == session::ResolutionKind::Import) {
@@ -800,35 +929,49 @@ TypeId PerModuleSema::lowerBareTypeExpr(const frontend::TypeExpression &type) {
     case frontend::TypeExprKind::Dyn: {
         if (type.arguments.empty())
             return error_type;
-        const TypeId target = resolve(lowerTypeExpr(type.arguments[0]));
-        const auto *tr      = type_table.trait(target);
+        TypeId target                       = kInvalidTypeId;
+        const frontend::TypeExprId inner_id = type.arguments[0];
+        if (inner_id && inner_id.value <= snapshot.typeExpressions().size()) {
+            const auto &inner_expr = snapshot.typeExpressions()[inner_id.value - 1U];
+            if (inner_expr.kind == frontend::TypeExprKind::Name && inner_expr.segments.empty()) {
+                const TypeId resolved = resolvedTraitType(inner_expr.name);
+                target                = resolved ? resolved : lowerTypeExpr(inner_id);
+            } else {
+                target = lowerTypeExpr(inner_id);
+            }
+        } else {
+            target = error_type;
+        }
+        target         = resolve(target);
+        const auto *tr = type_table.trait(target);
         if (tr == nullptr) {
             report(type.span, "'dyn' target must be a trait or interface",
                    diagnostics::err::TypeMismatch);
             return error_type;
         }
-        const frontend::Declaration *decl = findDeclNamed(
-            tr->name, findDeclNamed(tr->name, frontend::DeclKind::Interface) != nullptr
-                          ? frontend::DeclKind::Interface
-                          : frontend::DeclKind::Trait);
-        const bool is_iface = findDeclNamed(tr->name, frontend::DeclKind::Interface) != nullptr;
-        size_t methods      = 0;
-        if (decl != nullptr) {
-            for (const auto &candidate : snapshot.declarations()) {
+        session::ModuleKey trait_module{};
+        const frontend::Declaration *decl =
+            findDeclNamed(tr->name,
+                          findDeclNamed(tr->name, frontend::DeclKind::Interface) != nullptr
+                              ? frontend::DeclKind::Interface
+                              : frontend::DeclKind::Trait,
+                          &trait_module);
+        const bool is_iface     = findDeclNamed(tr->name, frontend::DeclKind::Interface) != nullptr;
+        size_t methods          = 0;
+        const auto countMethods = [&](const frontend::FrontendSnapshot &snap) {
+            for (const auto &candidate : snap.declarations()) {
                 if (candidate.kind == frontend::DeclKind::Function &&
                     candidate.ownerName == tr->name && candidate.name != "self")
                     ++methods;
             }
-            if (owner != nullptr) {
-                for (const auto &artifact : owner->modules()) {
-                    if (artifact->frontend == nullptr || artifact->key == module)
-                        continue;
-                    for (const auto &candidate : artifact->frontend->declarations()) {
-                        if (candidate.kind == frontend::DeclKind::Function &&
-                            candidate.ownerName == tr->name)
-                            ++methods;
-                    }
-                }
+        };
+        if (decl != nullptr && !trait_module.empty()) {
+            if (trait_module == module) {
+                countMethods(snapshot);
+            } else if (owner != nullptr) {
+                const auto *trait_sema = owner->findModuleSema(trait_module);
+                if (trait_sema != nullptr)
+                    countMethods(trait_sema->snapshot);
             }
         }
         if (methods == 0) {

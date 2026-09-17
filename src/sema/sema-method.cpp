@@ -34,22 +34,60 @@ PerModuleSema::findMethodsForOwner(std::string_view owner_name,
             methods.push_back(ResolvedMethod{module, &decl, decl.traitName, is_trait_method});
         }
     }
-    if (owner != nullptr) {
-        for (const auto &artifact_ptr : owner->modules()) {
-            const auto &artifact = *artifact_ptr;
-            if (artifact.key == module || artifact.frontend == nullptr)
+    if (owner == nullptr) {
+        return methods;
+    }
+    // Only add methods from modules whose decls are visibly imported by this
+    // module. Scanning every loaded module lets an unrelated same-named trait
+    // or impl leak in based on module iteration order. The defining trait
+    // module is reachable through the concrete receiver's implementations, so
+    // qualified trait calls still find its methods without global scanning.
+    for (const auto &binding : resolution.bindings) {
+        if (binding.scope || binding.name.empty() ||
+            binding.kind != session::ResolutionKind::Import || binding.target.module.empty())
+            continue;
+        const auto *sema = owner->findModuleSema(binding.target.module);
+        if (sema == nullptr)
+            continue;
+        for (const auto &decl : sema->snapshot.declarations()) {
+            if (!matches(decl))
                 continue;
-            for (const auto &decl : artifact.frontend->declarations()) {
-                if (matches(decl)) {
-                    const bool is_trait_method = !decl.ownerName.empty() &&
-                                                 !decl.traitName.empty() &&
-                                                 decl.ownerName == decl.traitName;
-                    methods.push_back(
-                        ResolvedMethod{artifact.key, &decl, decl.traitName, is_trait_method});
-                }
-            }
+            const bool is_trait_method = !decl.ownerName.empty() && !decl.traitName.empty() &&
+                                         decl.ownerName == decl.traitName;
+            methods.push_back(
+                ResolvedMethod{binding.target.module, &decl, decl.traitName, is_trait_method});
         }
     }
+    // `import std/alloc` binds the first path segment as a namespace alias,
+    // so methods exported from the target module are visible even though no
+    // individual symbol binding exists for their owner/method names.
+    for (const auto &alias : resolution.bindings) {
+        if (alias.scope || alias.kind != session::ResolutionKind::ModuleAlias ||
+            alias.target.module.empty() || alias.modulePath.empty())
+            continue;
+        const auto *sema = owner->findModuleSema(alias.target.module);
+        if (sema == nullptr)
+            continue;
+        for (const auto &decl : sema->snapshot.declarations()) {
+            if (!matches(decl))
+                continue;
+            const bool is_trait_method = !decl.ownerName.empty() && !decl.traitName.empty() &&
+                                         decl.ownerName == decl.traitName;
+            methods.push_back(
+                ResolvedMethod{alias.target.module, &decl, decl.traitName, is_trait_method});
+        }
+    }
+    // Deduplicate by declaration id: a method can be both an imported type's
+    // member and a trait-default/requirement declaration.
+    std::vector<ResolvedMethod> dedup;
+    for (const auto &method : methods) {
+        const bool seen = std::any_of(dedup.begin(), dedup.end(), [&](const ResolvedMethod &other) {
+            return other.decl != nullptr && other.decl->id == method.decl->id;
+        });
+        if (!seen)
+            dedup.push_back(method);
+    }
+    methods = std::move(dedup);
 
     // Trait defaults are exposed on every owner that satisfies their trait.
     // They are collected after owner methods so local/impl methods dominate
@@ -71,7 +109,7 @@ PerModuleSema::findMethodsForOwner(std::string_view owner_name,
     if (owner != nullptr) {
         for (const auto &artifact_ptr : owner->modules()) {
             const auto &artifact = *artifact_ptr;
-            if (artifact.frontend == nullptr || artifact.key == module)
+            if (artifact.key == module || artifact.frontend == nullptr)
                 continue;
             addTraitDefaults(*artifact.frontend, artifact.key);
         }
@@ -95,7 +133,7 @@ TypeId PerModuleSema::inferMethodCall(const frontend::Expression &call,
             const TypeKind pointee_kind = type_table.kindOf(pointee);
             if (pointee && (pointee_kind == TypeKind::Struct || pointee_kind == TypeKind::Enum ||
                             pointee_kind == TypeKind::Union)) {
-                const TypeId trait_type = type_table.lookupNamed(outer.text);
+                const TypeId trait_type = resolvedTraitType(outer.text);
                 if (trait_type && type_table.kindOf(trait_type) == TypeKind::Trait &&
                     satisfiesConformance(pointee, trait_type)) {
                     qualifying_trait = outer.text;
@@ -379,7 +417,7 @@ TypeId PerModuleSema::inferMethodCall(const frontend::Expression &call,
             name.resize(angle);
         return name;
     }();
-    const TypeId trait_type     = type_table.lookupNamed(trait_name);
+    const TypeId trait_type     = resolvedTraitType(trait_name);
     const bool interface_target = trait_type && isInterfaceType(trait_type);
     std::vector<ResolvedMethod> qualified;
     for (const auto &method : findMethodsForOwner(owner_name, callee.text)) {
@@ -430,12 +468,29 @@ TypeId PerModuleSema::inferDynMethodCall(const frontend::Expression &call,
     if (findMethod(snapshot, module, &method_decl, &method_module)) {
         // already set below through the general local-first path.
     } else if (owner != nullptr) {
-        for (const auto &artifact_ptr : owner->modules()) {
-            const auto &artifact = *artifact_ptr;
-            if (artifact.frontend == nullptr || artifact.key == module)
+        // Trait methods are only visible here through the current module's
+        // import bindings or namespace aliases. Scanning every loaded module
+        // lets same-named traits from unrelated packages change which dyn
+        // method HIR lowers, so stay within the visible module set.
+        const auto scanModule = [&](session::ModuleKey target_module) {
+            if (method_decl != nullptr)
+                return;
+            const auto *sema = owner->findModuleSema(target_module);
+            if (sema == nullptr)
+                return;
+            findMethod(sema->snapshot, target_module, &method_decl, &method_module);
+        };
+        for (const auto &binding : resolution.bindings) {
+            if (binding.scope || binding.name.empty() ||
+                binding.kind != session::ResolutionKind::Import || binding.target.module.empty())
                 continue;
-            if (findMethod(*artifact.frontend, artifact.key, &method_decl, &method_module))
-                break;
+            scanModule(binding.target.module);
+        }
+        for (const auto &alias : resolution.bindings) {
+            if (alias.scope || alias.kind != session::ResolutionKind::ModuleAlias ||
+                alias.target.module.empty())
+                continue;
+            scanModule(alias.target.module);
         }
     }
     if (method_decl == nullptr) {

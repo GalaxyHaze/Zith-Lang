@@ -509,8 +509,8 @@ private:
         bool isTraitMethod = false;
     };
     /// All methods named `method_name` on `owner_name`, searching the current
-    /// module first (preserving existing overload behavior) and then every
-    /// other available module in deterministic snapshot order.
+    /// module first and then only methods reachable through the current
+    /// module's import bindings.
     std::vector<ResolvedMethod> findMethodsForOwner(std::string_view owner_name,
                                                     std::string_view method_name) const;
     /// Canonical owner name for a lowered struct type, excluding template
@@ -554,12 +554,25 @@ private:
     /// Populates `implementOwnerTypes_` from the parsed implement records.
     void prepareImplementOwners();
     /// Finds the first declaration of `name` with `kind` in the current module
-    /// or any module reachable through the compilation session.
+    /// or through the module's visible import bindings. When `out_module` is
+    /// non-null it receives the module that declared this name, so callers can
+    /// inspect the defining snapshot instead of rescanning every loaded module.
     [[nodiscard]] const frontend::Declaration *findDeclNamed(std::string_view name,
                                                              frontend::DeclKind kind) const;
+    [[nodiscard]] const frontend::Declaration *findDeclNamed(std::string_view name,
+                                                             frontend::DeclKind kind,
+                                                             session::ModuleKey *out_module) const;
     /// True when `type` refers to an `interface` declaration (structural form,
     /// not a nominal trait).
     [[nodiscard]] bool isInterfaceType(TypeId type) const;
+    /// Resolves a bare trait spelling through the current module's local
+    /// declarations and import bindings instead of the global name registry.
+    [[nodiscard]] TypeId resolvedTraitType(std::string_view name) const;
+    /// Resolves a bare type spelling through the current module's visible
+    /// declarations, `from`/selector imports, and namespace aliases. Type
+    /// names are stored globally across modules, so this exists to keep type
+    /// lookup stable when multiple modules define a same-named type.
+    [[nodiscard]] TypeId resolvedTypeName(std::string_view name) const;
     /// Const introspection for interface field types. Interface fields are
     /// named primitives/structs and are already lowered during declaration
     /// type preparation, so lookup is enough here.

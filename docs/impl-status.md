@@ -43,7 +43,7 @@ Implementation work that is incomplete or needs review is tracked in
 | LLVM codegen | **Working** | x86-64 and WebAssembly targets |
 | Cache | **Working** | Object and artifact caching persist/load `.zirl` files, validate canonical mappings, and hydrate cached artifacts |
 | Stdlib I/O | **Working** | `print`/`println`/`input`, `Formatable`, `ParseInput`, and `InputLine.cast<T>` type-check and lower; runtime parsing verification is manual for now |
-| Stdlib allocation | **Working** | `std/alloc` ships `Allocator`, `HeapAllocator`, and `allocate`/`deallocate`/`reallocate` over `dyn Allocator`. `stdlib/std/new.zith` passes `zithc check`; `InPlace` imports, conformance, and qualified trait calls are covered by `tests/test-generic-hashmap.cpp`. The generic `new`/`delete`/`make`/`release` helpers remain proposed until return-only inference and opaque pack dispatch are supported |
+| Stdlib allocation | **Working** | `std/alloc` ships `Allocator`, `HeapAllocator`, and `allocate`/`deallocate`/`reallocate` over `dyn Allocator`. `stdlib/std/new.zith` passes `zithc check`; imported `InPlace` conformance and qualified trait calls are deterministically covered by `tests/test-interface-satisfaction.cpp` and `tests/test-generic-hashmap.cpp`. The generic `new`/`delete`/`make`/`release` helpers remain proposed until return-only inference and opaque pack dispatch are supported |
 | Stdlib collections | **Working** | `std/collections/hash_map_u64` ships a concrete `u64 -> u64` open-addressed map with `reserve`, `put`, `contains`, `get`, `len`, and `destroy`. `std/collections/hash_map` ships a checked generic `HashMap<K, V>`, `Entry<K, V>`, and `Hashable` module that passes `zithc check` and is covered by `tests/test-generic-hashmap.cpp` |
 
 ---
