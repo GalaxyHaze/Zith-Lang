@@ -126,6 +126,25 @@ void test_slice_and_array_indexing() {
                    "indexing a non-indexable type is rejected");
 }
 
+void test_range_boundaries_and_empty_ranges() {
+    expectAccepted("fn f(): i32 {\n"
+                   "    var total: i32 = 0;\n"
+                   "    for (i in 5..5) { total = total + 1; }\n"
+                   "    for (i in 5>..5) { total = total + 1; }\n"
+                   "    for (i in 5..<5) { total = total + 1; }\n"
+                   "    for (i in 5>..<5) { total = total + 1; }\n"
+                   "    if (5 in 5..5) { return 1; }\n"
+                   "    if (5 in 5>..5) { return 2; }\n"
+                   "    if (5 in 5..<5) { return 3; }\n"
+                   "    if (5 in 5>..<5) { return 4; }\n"
+                   "    if (7 in 6>..<8) { return 5; }\n"
+                   "    return total;\n"
+                   "}\n",
+                   "empty and open/closed range boundary semantics are accepted");
+    expectRejected("fn f(): bool { return 3 in 1..<4.0; }\n",
+                   "range bounds must have the same type", "mixed-type range bounds are rejected");
+}
+
 } // namespace
 
 static void test_optional_slice() {
@@ -134,6 +153,7 @@ static void test_optional_slice() {
     test_optional_propagation_operator();
     test_optional_across_calls();
     test_slice_and_array_indexing();
+    test_range_boundaries_and_empty_ranges();
 }
 
 TEST_MAIN(optional_slice)

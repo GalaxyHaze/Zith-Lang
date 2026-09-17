@@ -139,12 +139,14 @@ O ficheiro `impl-status.md` foi atualizado de `Cache | Partial` para
 
 ### 6. Outras incompletudes registadas
 
-- Literal range forms `1..5`, `1>..5`, `1..<5` e `1>..<5` já baixam para
-  `ExprKind::Range`, são formatters round-trip-stable e cobertos por
-  `tests/test-formatter.cpp` e `tests/test-codegen.cpp`. A dívida residual
-  restante é o tratamento completo de todas as formas de slicing entre
-  fronteiras abertas/fechadas; o formatter e os testes de `for`/`in` já
-  passam.
+- Literal range forms `1..5`, `1>..5`, `1..<5` e `1>..<5` baixam para
+  `ExprKind::Range` com bounds brutos e flags `openAtLo`/`openAtHi`; as quatro
+  grafias são provadas em `test-codegen.cpp`, `test-frontend.cpp`,
+  `test-formatter.cpp` e agora com ranges vazios e de fronteira única em
+  `tests/test-optional-slice.cpp`. `1..5` é `[lo, hi]`, `1>..5` é `(lo, hi]`,
+  `1..<5` é `[lo, hi)`, `1>..<5` é `(lo, hi)`; ranges reversed/empty não
+  iteram e `in` devolve falso para `[x, x)`/`(x, x]`/`(x, x)` e verdadeiro
+  para `[x, x]`. Não falta dívida ativa nesta área de range literal.
 - `is <type>` fora de unions/opaque não existe.
 - Narrowing após `is null` / `not (is null)` para aggregate optionals (`?T`
   com payload não-pointer) extrai o campo 0 no then/else correto e `?*T -> *T`
