@@ -579,16 +579,7 @@ def reconcile(states: dict[str, AgentState], plans: list[AgentPlan], *, merge: b
                     record_event(agent, "already blocked; not retrying automatically")
                     continue
                 review_agent(agent)
-                worktree = REPO / ".awt" / agent
-                process = run(
-                    [
-                        "cmake",
-                        "--build",
-                        str(worktree / "build"),
-                        "-j4",
-                    ],
-                    check=False,
-                )
+                process = run(["cmake", "--build", str(REPO / "build"), "-j4"], check=False)
                 if process.returncode != 0:
                     state.agent_status = "blocked"
                     state.blocked_reason = "agent build failed before merge"
@@ -601,7 +592,7 @@ def reconcile(states: dict[str, AgentState], plans: list[AgentPlan], *, merge: b
                     )
                     continue
                 process = run(
-                    ["ctest", "--test-dir", str(worktree / "build"), "--output-on-failure"],
+                    ["ctest", "--test-dir", str(REPO / "build"), "--output-on-failure"],
                     check=False,
                 )
                 if process.returncode != 0:
