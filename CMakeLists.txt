@@ -216,6 +216,10 @@ list(REMOVE_ITEM ZITH_LIB_SOURCES "${CMAKE_SOURCE_DIR}/src/cli/zithc-main.cpp")
 # opt-in target below.
 list(REMOVE_ITEM ZITH_LIB_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/src/ir/hir-to-ir.cpp")
 list(REMOVE_ITEM ZITH_LIB_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/src/interp/ir-vm.cpp")
+# VM v2 is a separate runtime contract. It is compiled by its harness test
+# until pipeline integration promotes it into the library build.
+list(REMOVE_ITEM ZITH_LIB_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/src/vm/vm-memory.cpp")
+list(REMOVE_ITEM ZITH_LIB_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/src/vm/vm-v2.cpp")
 
 if(ZITH_IS_WASM)
     file(GLOB_RECURSE CLI_CMD_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/src/cli/cmd/*.cpp")
@@ -402,6 +406,14 @@ if(BUILD_TESTING AND NOT ZITH_IS_WASM)
             ZITHC_BINARY="$<TARGET_FILE:zithc>")
         add_dependencies(test-abi-execution zithc)
     endif()
+    add_executable(test-vm-v2 tests/test-vm-v2.cpp
+        src/vm/vm-memory.cpp
+        src/vm/vm-v2.cpp
+    )
+    target_compile_definitions(test-vm-v2 PRIVATE
+        ZITH_STDLIB_DIR="${CMAKE_CURRENT_SOURCE_DIR}/stdlib")
+    target_link_libraries(test-vm-v2 PRIVATE zithcLib)
+    add_test(NAME test-vm-v2 COMMAND test-vm-v2)
     if(ZITH_HAS_LLVM)
         add_zith_test(test-codegen tests/test-codegen.cpp)
         # The example suite drives the real CLI, so it needs codegen and a linker.
