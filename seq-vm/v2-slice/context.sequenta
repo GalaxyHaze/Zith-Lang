@@ -1,0 +1,98 @@
+[1]
+task: v2-slice::vmV2Shape
+status: done
+desc: Alargar o IR v2 para um núcleo linear e tipado verificável
+impl:
+  - confirmar opcodes e registos existentes em src/vm/typed-ir.hpp
+  - adicionar tipos/opcodes necessários para chamadas, memória e FFI sem SSA
+  - manter registos tipados e instruções de tamanho fixo
+  - adicionar testes que criam módulos v2 manualmente e verificam o shape
+tests:
+  | id    | dado                              | quando                          | então                                |
+  | V1-T1 | typed-ir.hpp existente             | compilar test-vm-v2              | build passa sem alterar v1            |
+  | V1-T2 | módulo v2 manual com aritmética    | correr VM v2                     | resultado tipado e exit code correto |
+  | V1-T3 | instrução com registo inválido     | correr VM v2                     | trap explícito                       |
+
+[2]
+task: v2-slice::vmV2FnRef
+status: done
+desc: Representar fn/extern fn como referências indexadas na tabela do módulo
+impl:
+  - adicionar no IR v2 referências a funções/externs por índice
+  - suportar chamadas diretas e indiretas através da tabela
+  - testes de call fn, call extern e call indireto via indice
+tests:
+  | id    | dado                                  | quando                    | então                              |
+  | V2-T1 | função normal registada no módulo      | CallFn por índice          | chama e retorna valor              |
+  | V2-T2 | extern fn registada no módulo          | CallExtern por índice      | chama handler FFI                  |
+  | V2-T3 | função valor tipado referenciada        | call indireto por índice   | usa o destino correto              |
+
+[3]
+task: v2-slice::vmV2Memory
+status: done
+desc: Primitivas de memória linear e alocação para a VM
+impl:
+  - usar LinearMemory com offsets guest e limites
+  - testar AllocBytes/MallocBytes, load/store, FieldPtr, slices e memcpy
+  - manter traps para offsets inválidos e OOM
+tests:
+  | id    | dado                              | quando                      | então                          |
+  | V3-T1 | offset dentro da memória          | store/load bytes            | dados corretos                 |
+  | V3-T2 | offset fora da memória            | acesso                       | trap                          |
+  | V3-T3 | alocação bump e heap              | AllocBytes e MallocBytes    | offsets válidos e distintos    |
+  | V3-T4 | cópia de região                   | MemCopy                      | bytes copiados                 |
+
+[4]
+task: v2-slice::vmV2Ffi
+status: done
+desc: Handler FFI pequeno e validado sobre a memória linear
+impl:
+  - criar tabela de handlers para malloc, free, putchar, snprintf scoped
+  - suportar apenas %u, %d, %g no primeiro slice
+  - trap para extern desconhecido
+tests:
+  | id    | dado                       | quando            | então                        |
+  | V4-T1 | malloc com tamanho válido  | chamar extern     | offset válido na memória     |
+  | V4-T2 | free com offset válido     | chamar extern     | não faz trap e pode reutilizar|
+  | V4-T3 | snprintf %u/%d/%g          | formato básico    | output correto               |
+  | V4-T4 | extern não registado       | chamar            | RunStatus::Trap              |
+
+[5]
+task: v2-slice::vmV2HelloStdlib
+status: done
+desc: Primeira execução end-to-end de println via VM v2
+impl:
+  - compilar programa from std/io/console com println
+  - fazer lowering HIR -> IR v2 para o subset de funções/dados
+  - executar via VM v2 e comparar output/exit code com rota nativa
+tests:
+  | id    | dado                           | quando                | então                        |
+  | V5-T1 | programa println simples        | correr por VM v2      | output e exit code esperados |
+  | V5-T2 | programa com ligação à stdlib   | correr por VM v2      | carga de módulo completo      |
+
+[6]
+task: v2-slice::vmV2HelloExtern
+status: done
+desc: Execução end-to-end de extern fn via VM v2
+impl:
+  - programa manual com extern fn putchar/printf mini subset
+  - passar por HIR -> IR v2 e VM v2
+  - comparar comportamento com rota nativa
+tests:
+  | id    | dado                             | quando              | então                     |
+  | V6-T1 | extern fn putchar                | correr por VM v2    | output esperado           |
+  | V6-T2 | extern fn com snprintf min subset | correr por VM v2    | output/exit code esperado |
+
+[7]
+task: v2-slice::vmV2Integration
+status: done
+desc: Promover VM v2 ao library build e fechar o ABI lifecycle
+impl:
+  - mover src/vm/* para o zithcLib quando as slices anteriores passarem
+  - ligar CLI sem-LLVM/WASM ao VM v2 conforme decisão
+  - atualizar docs/plans/vm-v2.md e ADR para conforming
+tests:
+  | id    | dado                          | quando              | então                     |
+  | V7-T1 | todos os testes VM v2         | ctest test-vm-v2    | pass                        |
+  | V7-T2 | CLI sem LLVM                  | run hello-world     | executa via VM v2          |
+  | V7-T3 | correr test-abi-execution     | ctest               | continua a passar (v1 intacto)|

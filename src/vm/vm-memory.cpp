@@ -68,6 +68,8 @@ auto LinearMemory::allocBytes(std::size_t count, std::size_t alignment) -> std::
         count = 1;
     if (alignment == 0)
         alignment = 1;
+    if (bump_ < heap_)
+        bump_ = heap_;
 
     const std::size_t aligned = alignUp(bump_, alignment);
     if (count > std::numeric_limits<std::size_t>::max() - aligned)
@@ -87,6 +89,15 @@ auto LinearMemory::mallocBytes(std::size_t count, std::size_t alignment) -> std:
         count = 1;
     if (alignment == 0)
         alignment = 1;
+    for (std::size_t i = 0; i < freeBlocks_.size(); ++i) {
+        if (freeBlocks_[i].second >= count) {
+            const std::size_t offset = freeBlocks_[i].first;
+            freeBlocks_.erase(freeBlocks_.begin() + static_cast<std::ptrdiff_t>(i));
+            return offset;
+        }
+    }
+    if (heap_ < bump_)
+        heap_ = bump_;
 
     const std::size_t aligned = alignUp(heap_, alignment);
     if (count > std::numeric_limits<std::size_t>::max() - aligned)
@@ -98,7 +109,26 @@ auto LinearMemory::mallocBytes(std::size_t count, std::size_t alignment) -> std:
         return std::numeric_limits<std::size_t>::max();
 
     heap_ = end;
+    freeBlocks_.push_back({aligned, count});
     return aligned;
+}
+
+auto LinearMemory::freeBytes(std::size_t offset) -> bool {
+    for (std::size_t i = 0; i < freeBlocks_.size(); ++i) {
+        if (freeBlocks_[i].first == offset) {
+            if (offset < heap_)
+                heap_ = offset;
+            freeBlocks_.erase(freeBlocks_.begin() + static_cast<std::ptrdiff_t>(i));
+            return true;
+        }
+    }
+    return false;
+}
+
+auto LinearMemory::writeString(std::size_t offset, std::string_view text) -> bool {
+    std::vector<uint8_t> bytes(text.begin(), text.end());
+    bytes.push_back(0);
+    return write(offset, bytes);
 }
 
 } // namespace zith::vm

@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <span>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 namespace zith::vm {
@@ -30,11 +31,14 @@ public:
 
     [[nodiscard]] auto allocBytes(std::size_t count, std::size_t alignment) -> std::size_t;
     [[nodiscard]] auto mallocBytes(std::size_t count, std::size_t alignment) -> std::size_t;
+    auto freeBytes(std::size_t offset) -> bool;
+    auto writeString(std::size_t offset, std::string_view text) -> bool;
 
 private:
     std::vector<uint8_t> bytes_;
     std::size_t bump_ = 0;
     std::size_t heap_ = 0;
+    std::vector<std::pair<std::size_t, std::size_t>> freeBlocks_;
 };
 
 } // namespace zith::vm

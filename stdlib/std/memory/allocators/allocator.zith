@@ -1,0 +1,31 @@
+from std/memory/in-place
+
+pub trait Allocator {
+    fn alloc(self, size: u64, align: u64): ?raw opaque;
+    fn free(self, mem: raw opaque, size: u64, align: u64);
+    fn realloc(self, old: raw opaque, old_size: u64, old_align: u64,
+               new_size: u64, new_align: u64): ?raw opaque;
+
+    /// Layout-specific convenience pair. Implementations may override either
+    /// method once object construction and layout intrinsics are available.
+    fn make<T: InPlace>(self, args: opaque): ?*T {
+        return null;
+    }
+    fn release<T: InPlace>(self, obj: *T) {}
+}
+
+// Repeatable call path for concrete allocators and dyn receivers. Direct
+// trait-method calls on a concrete receiver are still limited by the current
+// receiver ownership rules.
+pub fn allocate(self: dyn Allocator, size: u64, align: u64): ?raw opaque {
+    return self.alloc(size, align);
+}
+
+pub fn deallocate(self: dyn Allocator, mem: raw opaque, size: u64, align: u64) {
+    self.free(mem, size, align);
+}
+
+pub fn reallocate(self: dyn Allocator, old: raw opaque, old_size: u64, old_align: u64,
+                  new_size: u64, new_align: u64): ?raw opaque {
+    return self.realloc(old, old_size, old_align, new_size, new_align);
+}

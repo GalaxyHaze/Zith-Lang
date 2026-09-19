@@ -105,10 +105,22 @@ void PerModuleSema::checkZithDeclarations() {
     // frontend can still represent cross-module implementations before imports
     // are resolved. Unknown targets are not nominal traits or interfaces.
     for (const auto &record : snapshot.implementRecords()) {
-        if (findDeclNamed(record.traitName, frontend::DeclKind::Trait) == nullptr &&
-            findDeclNamed(record.traitName, frontend::DeclKind::Interface) == nullptr) {
+        frontend::DeclKind trait_kind = frontend::DeclKind::Error;
+        const frontend::Declaration *trait =
+            findDeclNamed(record.traitName, frontend::DeclKind::Trait, nullptr);
+        if (trait != nullptr) {
+            trait_kind = frontend::DeclKind::Trait;
+        } else {
+            trait = findDeclNamed(record.traitName, frontend::DeclKind::Interface, nullptr);
+            if (trait != nullptr)
+                trait_kind = frontend::DeclKind::Interface;
+        }
+        if (trait == nullptr) {
             report(record.span, "'" + record.traitName + "' is not a declared trait or interface",
                    diagnostics::err::NotATrait);
+        } else if (trait_kind == frontend::DeclKind::Interface) {
+            report(record.span, "interfaces are structural and cannot be implemented explicitly",
+                   diagnostics::err::InterfaceMethodNotAllowed);
         }
     }
 

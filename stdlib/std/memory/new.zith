@@ -1,0 +1,7 @@
+from std/memory/in-place
+from std/memory/allocators/heap
+
+/// Convenience heap pair. The exact instantiation paths are still limited by
+/// return-only generic inference and opaque pack dispatch in Zith--.
+pub fn new<T: InPlace>(args: opaque): ?*T;
+pub fn delete<T: InPlace>(ptr: *T);

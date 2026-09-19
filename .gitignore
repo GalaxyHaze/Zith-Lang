@@ -24,6 +24,7 @@ core.*
 build/
 build-debug/
 build-wasm/
+build-nollvm/
 dist/
 target/
 cmake-build-*/

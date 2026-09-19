@@ -1,11 +1,13 @@
 # Stdlib Allocator and Ownership Contract
 
-The stdlib-only allocator surface lives in `stdlib/std/alloc.zith`. The
-current compiler supports trait-based dynamic dispatch through `dyn Allocator`
-free-function helpers, but concrete trait method calls still invalidate the
-receiver after a `self`/`var self` call. The module deliberately keeps the
-first shipped allocation surface small and request-scoped: raw storage
-primitives, a heap allocator, and free functions that go through `dyn`.
+The target stdlib-only allocator surface is `stdlib/std/memory*`. The strict
+module graph is `in-place` -> `allocator` -> `heap` and `new` depends on
+`in-place` plus `heap`. The original `stdlib/std/alloc.zith` and
+`stdlib/std/new.zith` remain as legacy compatibility modules. The compiler
+supports trait-based dynamic dispatch through `dyn Allocator` free-function
+helpers, but concrete trait method calls still invalidate the receiver after a
+`self`/`var self` call. The surface keeps raw storage primitives, a heap
+allocator, and free functions that go through `dyn`.
 
 ## Compiler Constraints That Shaped the API
 
@@ -26,38 +28,43 @@ fn allocate(self: dyn Allocator, size: u64, align: u64): ?raw opaque {
 
 Calling `h.alloc(...)` twice on a concrete `HeapAllocator` in the same scope
 currently fails with `E4001` even with read-only trait receivers. Users should
-go through `std.alloc.allocate` and `std.alloc.deallocate` for now.
+go through `std.memory.allocate` and `std.memory.deallocate` for now.
 
 ## Module Resolution Quirk
 
-`std/alloc` failed with `E2001 unknown struct type` while `std/alloc3` with
+The legacy `std/alloc` failed with `E2001 unknown struct type` while `std/alloc3` with
 identical content imported correctly. The empty directory
 `stdlib/std/alloc/` was the cause: the resolver treated the import as a
 directory module. Removing the empty directory and clearing the stale
 `.zith-cache` directories restored `from std/alloc` and
 `import std/alloc as a`.
 
+`export` paths in a facade may share a namespace prefix (`export std/a` plus
+`export std/b`). The frontend now injects each target's public symbols and
+deduplicates the qualified namespace alias, so `from std/memory` exposes the
+leaf contracts without a spurious `E2002 duplicate binding`.
+
 ## Design Intent
 
-The full proposal in `docs/adr/0010-allocator-inplace-drop.md` separates:
+The target proposal in `docs/adr/0010-allocator-inplace-drop.md` separates:
 
 - `Allocator`: storage primitives `alloc`/`free`/`realloc` with `?raw opaque`.
 - `InPlace`: object construction/cleanup hooks for allocator-based values. The
-  trait now passes `zithc check`, and an imported `implement Box as InPlace`
-  with qualified trait calls is covered by `tests/test-generic-hashmap.cpp`.
+  trait does not name an allocator, so the module graph stays DAG-shaped. An
+  imported `implement Box as InPlace` with qualified trait calls is covered by
+  `tests/test-generic-hashmap.cpp`.
 - `new<T>`/`delete<T>` and `make<T>`/`release<T>`: heap and generic allocator
-  convenience pairs. `stdlib/std/new.zith` carries the target trait and helper
+  convenience pairs. `stdlib/std/memory/new.zith` carries the target helper
   signatures as a proposed draft because the helpers still cannot be
-  instantiated.
+  instantiated. `stdlib/std/new.zith` remains as compatibility.
 - `W10xx DiscardedValue` and `W11xx DiscardedOwner`: future compiler warnings;
   no codegen changes are shipped in the first stdlib-only step.
 
-## `std/new.zith` Compiler Gaps
+## `std/memory/new.zith` Compiler Gaps
 
-The API draft in `stdlib/std/new.zith` exists as the single source for the
-`InPlace`/`new`/`delete`/`make`/`release` contract. The module and the
-`InPlace` trait itself now pass `zithc check`; the helper generics remain
-blocked. Confirmed blockers:
+The API draft in `stdlib/std/memory/new.zith` is the target single source for
+the `InPlace`/`new`/`delete` contract. The module and the `InPlace` trait itself
+now pass `zithc check`; the helper generics remain blocked. Confirmed blockers:
 
 - Generic inference only unifies function parameters, not results. A helper
   such as `fn new<T>(args: opaque): ?*T` fails with `E3011 cannot infer
@@ -71,10 +78,10 @@ blocked. Confirmed blockers:
   conformance unstable in populated workdirs are gone. Sema now resolves
   imported traits, type names, and owner methods through the current module's
   import bindings and namespace aliases; `tests/test-interface-satisfaction.cpp`
-  covers populated-workdir qualified calls with `from std/new`, `import std/alloc`,
-  and several unrelated modules. Trait-default collection and dyn method lookup
-  still scan all loaded modules where the default/requirement was defined, so a
-  future compatibility change to method-scope resolution can narrow those scans
+  covers populated-workdir qualified calls with `from std/memory` and several
+  unrelated modules. Trait-default collection and dyn method lookup still scan
+  all loaded modules where the default/requirement was defined, so a future
+  compatibility change to method-scope resolution can narrow those scans
   further.
 - `@alignOf` only accepts structs in the current subset, so heap
   `new<T>`/`make<T>` cannot query alignment for primitive-layout `T` without

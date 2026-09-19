@@ -1,0 +1,3 @@
+# module: v2-host
+
+provide: typed-ir, vm-v2, linear-memory, runtime-ffi

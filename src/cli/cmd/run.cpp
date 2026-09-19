@@ -5,6 +5,8 @@
 #include "ir/hir-to-ir.hpp"
 #include "session/compilation-session.hpp"
 #include "session/pipeline-plan.hpp"
+#include "vm/hir-to-vm.hpp"
+#include "vm/vm-v2.hpp"
 
 #include <cstdio>
 #include <future>
@@ -63,10 +65,10 @@ int execute(const Options &opts) {
         }
 
         if (useIrVm) {
-            memory::Arena irArena;
-            ir::Module module(irArena);
-            const auto lowered = ir::lowerModule(session.hirModule(), session.interner(),
-                                                 session.types(), irArena, module);
+            memory::Arena vmArena;
+            vm::Module module(vmArena);
+            const auto lowered = vm::lowerModule(session.hirModule(), session.interner(),
+                                                 session.types(), vmArena, module);
             if (!lowered.ok) {
                 err.red("[error]");
                 std::fprintf(stderr, " %s\n", lowered.message.c_str());
@@ -74,11 +76,13 @@ int execute(const Options &opts) {
                 continue;
             }
 
-            interp::IrVm vm(irArena);
+            vm::Vm vm;
             const auto result = vm.runMain(module);
-            if (result.status != interp::IrVmStatus::Ok) {
+            if (result.status != vm::RunStatus::Ok) {
                 err.red("[error]");
-                std::fprintf(stderr, " %s\n", result.message.c_str());
+                std::fprintf(stderr, " %s\n",
+                             result.message.empty() ? "VM v2 could not execute the program"
+                                                    : result.message.c_str());
                 allPassed = false;
                 continue;
             }

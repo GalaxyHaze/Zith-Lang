@@ -84,10 +84,50 @@ void AstLowerer::parseImportPath(ImportDecl &import) {
     while (index_ < token_count_) {
         const auto segment = text(index_);
         const auto kind    = snapshot_.tokens_[index_].kind;
-        if (kind == TokenKind::Identifier) {
-            import.path.emplace_back(segment);
-            import.pathSpans.push_back(tokenSpan(index_++));
+        const auto keyword_is_kebab_part =
+            kind == TokenKind::Keyword && index_ + 1U < token_count_ &&
+            snapshot_.tokens_[index_ + 1U].kind == TokenKind::Operator &&
+            text(index_ + 1U) == "-" &&
+            snapshot_.tokens_[index_].span.end == snapshot_.tokens_[index_ + 1U].span.start;
+        const auto is_path_segment =
+            kind == TokenKind::Identifier ||
+            keyword_is_kebab_part;
+        if (is_path_segment) {
+            const bool kebab_continuation =
+                !import.path.empty() && index_ >= 1U &&
+                snapshot_.tokens_[index_ - 1U].kind == TokenKind::Operator &&
+                text(index_ - 1U) == "-" &&
+                snapshot_.tokens_[index_ - 1U].span.end == snapshot_.tokens_[index_].span.start &&
+                snapshot_.tokens_[index_].leadingTriviaCount == 0U &&
+                import.pathSpans.back().end == snapshot_.tokens_[index_ - 1U].span.start;
+            if (kebab_continuation) {
+                import.path.back().append("-");
+                import.path.back().append(segment);
+                import.pathSpans.back().end = snapshot_.tokens_[index_].span.end;
+            } else {
+                if (!expect_segment)
+                    break;
+                import.path.emplace_back(segment);
+                import.pathSpans.push_back(tokenSpan(index_));
+            }
+            ++index_;
             expect_segment = false;
+            continue;
+        }
+        // A hyphen binds to the preceding and following identifier segments in
+        // an import path (kebab-case module names), but only when it is
+        // adjacent to both. Outside imports it remains the subtraction token.
+        if (kind == TokenKind::Operator && segment == "-" && !expect_segment &&
+            index_ >= 1U && index_ + 1U < token_count_ &&
+            (snapshot_.tokens_[index_ - 1U].kind == TokenKind::Identifier ||
+             snapshot_.tokens_[index_ - 1U].kind == TokenKind::Keyword) &&
+            (snapshot_.tokens_[index_ + 1U].kind == TokenKind::Identifier ||
+             snapshot_.tokens_[index_ + 1U].kind == TokenKind::Keyword) &&
+            snapshot_.tokens_[index_].leadingTriviaCount == 0U &&
+            snapshot_.tokens_[index_ + 1U].leadingTriviaCount == 0U &&
+            snapshot_.tokens_[index_ - 1U].span.end == snapshot_.tokens_[index_].span.start &&
+            snapshot_.tokens_[index_].span.end == snapshot_.tokens_[index_ + 1U].span.start) {
+            ++index_;
             continue;
         }
         if (segment == "." || segment == "/") {

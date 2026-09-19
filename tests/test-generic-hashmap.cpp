@@ -153,25 +153,21 @@ void test_hashmap_stdlib_checks() {
 
 void test_inplace_trait_passes_check() {
     SessionRunner t;
-    const bool ok = t.run("from std/new\n"
-                          "from std/alloc\n"
+    const bool ok = t.run("from std/memory\n"
                           "\n"
                           "struct Box { value: i64 }\n"
                           "\n"
                           "implement Box as InPlace {\n"
-                          "    fn inplace(var self, allocator: dyn Allocator, args: opaque): "
-                          "bool {\n"
-                          "        let data = allocate(allocator, @sizeOf(i64), 1u64);\n"
-                          "        return not (data is null);\n"
+                          "    fn inplace(var self, args: opaque): bool {\n"
+                          "        return true;\n"
                           "    }\n"
-                          "    fn clean(var self, allocator: dyn Allocator) {}\n"
+                          "    fn clean(var self) {}\n"
                           "}\n"
                           "\n"
                           "fn main(): i32 {\n"
                           "    var box = Box { value: 7 };\n"
-                          "    let heap = HeapAllocator {};\n"
-                          "    if not box.InPlace.inplace(heap, 0 as opaque) { return 1; }\n"
-                          "    box.InPlace.clean(heap);\n"
+                          "    if not box.InPlace.inplace(0 as opaque) { return 1; }\n"
+                          "    box.InPlace.clean();\n"
                           "    return 0;\n"
                           "}\n");
     CHECK(ok, "stdlib InPlace imports, Box conforms, and the trait calls type-check");

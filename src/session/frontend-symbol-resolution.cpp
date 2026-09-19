@@ -306,6 +306,7 @@ FrontendContext::buildResolutions(const std::vector<ModuleArtifactPtr> &modules,
             }
         }
 
+        memory::FlatSet<std::string> export_root_aliases;
         for (const auto *edge_ptr : effective_edges) {
             const auto &edge = *edge_ptr;
             if (!edge.error.empty())
@@ -405,7 +406,8 @@ FrontendContext::buildResolutions(const std::vector<ModuleArtifactPtr> &modules,
                 }
                 continue;
             }
-            if (edge.request.isFrom) {
+            const bool inject_symbols = edge.request.isFrom || edge.request.isExport;
+            if (inject_symbols) {
                 for (const auto &target : edge.targets) {
                     const auto *target_artifact = module_by_key.get(target);
                     if (!target_artifact)
@@ -427,11 +429,30 @@ FrontendContext::buildResolutions(const std::vector<ModuleArtifactPtr> &modules,
                         add_binding(std::move(imported), frontend::ScopeId{});
                     }
                 }
-            } else if (edge.request.alias.empty() && !default_name.empty()) {
+            }
+            if (!edge.request.isFrom && edge.request.alias.empty() &&
+                !default_name.empty() && !edge.request.isExport) {
                 // `import Path` is a namespace binding for the full dotted
                 // path (`std.counter.Counter`), never a bare last-segment
                 // injection (`Counter`). Consumers therefore cannot reach
                 // symbols until the path is written.
+                ResolvedName alias;
+                alias.name       = default_name;
+                alias.kind       = ResolutionKind::ModuleAlias;
+                alias.span       = edge.request.pathSpan;
+                alias.target     = {edge.targets.empty() ? ModuleKey{} : edge.targets.front(), {}};
+                alias.modulePath = edge.request.path;
+                add_binding(std::move(alias), frontend::ScopeId{});
+            } else if (!edge.request.isFrom && edge.request.alias.empty() &&
+                       !default_name.empty()) {
+                // `export Path` exposes qualified access plus the public
+                // symbols of the dependency. Multiple exports may share a
+                // namespace prefix, so keep the first root alias and skip the
+                // duplicates.
+                const bool first_export_alias =
+                    export_root_aliases.insert(std::string(default_name));
+                if (!first_export_alias)
+                    continue;
                 ResolvedName alias;
                 alias.name       = default_name;
                 alias.kind       = ResolutionKind::ModuleAlias;

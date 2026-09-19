@@ -590,7 +590,7 @@ void PerModuleSema::checkImplementBlocks() {
             (static_cast<uint64_t>(std::hash<std::string_view>{}(record.owner)) << 32U) ^
             static_cast<uint32_t>(std::hash<std::string_view>{}(record.traitName));
         const frontend::Declaration *trait =
-            findDeclNamed(record.traitName, frontend::DeclKind::Trait);
+            findDeclNamed(record.traitName, frontend::DeclKind::Trait, nullptr);
         if (trait == nullptr)
             trait = findDeclNamed(record.traitName, frontend::DeclKind::Interface);
         auto &group = groups[key];

@@ -1,0 +1,22 @@
+import "stdlib.h"
+
+from std/memory/allocators/allocator
+
+pub struct HeapAllocator {}
+
+// Concrete trait-method calls currently invalidate the receiver in the same
+// scope (`E4001`), so repeatable consumers should go through the `dyn`
+// free-function bridge below. The implementation methods themselves stay
+// concrete because `self` is the only receiver used inside each body.
+implement HeapAllocator as Allocator {
+    pub fn alloc(self, size: u64, align: u64): ?raw opaque {
+        return malloc(size) as ?raw opaque;
+    }
+    pub fn free(self, mem: raw opaque, size: u64, align: u64) {
+        free(mem);
+    }
+    pub fn realloc(self, old: raw opaque, old_size: u64, old_align: u64,
+                   new_size: u64, new_align: u64): ?raw opaque {
+        return realloc(old, new_size) as ?raw opaque;
+    }
+}

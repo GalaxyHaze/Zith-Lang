@@ -1,0 +1,6 @@
+// Layer facade for the memory contracts. Re-exports keep the dependency graph
+// DAG-shaped and give consumers a single entry point.
+export std/memory/in-place
+export std/memory/allocators/allocator
+export std/memory/allocators/heap
+export std/memory/new

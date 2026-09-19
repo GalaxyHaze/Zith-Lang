@@ -1,0 +1,8 @@
+pub trait InPlace {
+    /// Construct `self` inside caller-provided storage. `args` is an opaque
+    /// pack supplied by `Allocator.make` or `new`.
+    fn inplace(var self, args: opaque): bool;
+
+    /// Release object-owned resources without freeing the storage block.
+    fn clean(var self) {}
+}

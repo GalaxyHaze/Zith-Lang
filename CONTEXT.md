@@ -125,6 +125,36 @@ _Avoid_: Contains, membership protocol, range iteration via contains
 
 ## Runtime And Backends
 
+**IR v2**:
+The typed register execution IR used by the portable VM. It represents
+Zith-- programs in a linear, assembly-like form with typed registers, calls,
+branches, and traps.
+_Avoid_: LLVM IR, bytecode, typed assembly, execution IR v1
+
+**IR v2 VM**:
+The C++ runtime that executes `IR v2` modules over a linear guest memory.
+It is separate from the signed execution IR v1/`src/interp` path and is the
+no-LLVM/WASM CLI runtime for the host Hello World slice.
+_Avoid_: VM runtime, bytecode VM, v2 VM, execution engine
+
+**IR v2 function reference**:
+The VM representation of a `fn` or `extern fn` value as a typed register
+holding an index into the module function/extern table, instead of a raw
+host or guest pointer.
+_Avoid_: function pointer, C ABI pointer, code address
+
+**VM FFI subset**:
+The small `extern fn` handler surface implemented by the VM, currently
+covering host output and memory allocation (`puts`, `putchar`, `malloc`,
+`free`, scoped `snprintf`, `strlen`, `memcpy`).
+_Avoid_: libc shim, C FFI, native FFI, foreign function table
+
+**Portable runtime target**:
+The goal that real Zith-- entry examples (`from std/io/console` and manual
+`extern fn printf`) run through the VM with observable output, traps, and
+exit code matching the native path, without full libc or WASM packaging.
+_Avoid_: browser runtime, playground runtime, full executable target
+
 **ABI lifecycle**:
 The four-state contract model for externally visible surfaces: drawing,
 promising, signing, and conforming. A plan is a drawing until promises are
@@ -175,6 +205,86 @@ error surface.
 _Avoid_: compiler error, child exit status, runtime diagnostic
 
 ## Standard Library
+
+**Standard library namespace**:
+The import root that groups distributable library modules. `std` is the stable surface, `soon` is experimental, and `c` is the raw C FFI layer.
+_Avoid_: stdlib root, package namespace, core library
+
+**Stable library module**:
+A module under `std/` that promises backward compatibility and can only change through the ABI lifecycle.
+_Avoid_: core module, stable API, guaranteed module
+
+**Experimental library module**:
+A module under `soon/` that users may import for prototyping; its API may change or disappear before promotion to `std`.
+_Avoid_: unstable std, beta module, preview API
+
+**C binding module**:
+A module under `c/` that maps a foreign C surface to Zith declarations without promising Zith-owned semantics. It is the raw FFI layer, not a safe wrapper.
+_Avoid_: C wrapper, libc module, binding header
+
+**Library module**:
+The unit of standard library delivery: a relocatable `.zith` module under `std/`, `soon/`, or `c/` that owns its public types, traits, and functions.
+_Avoid_: library unit, std package, module package
+
+**Library domain**:
+A coherent cluster of library modules built on the same contract, such as `io`, `collections`, `alloc`, or `fs`. The domain owns shared cross-module terms; each module owns its implementation.
+_Avoid_: module group, feature area, std package
+
+**Library contract**:
+The trait/API surface a library module promises to consumers, for example formatting, parsing, hashing, or allocation. A `std` library contract is stable; a `soon` contract is provisional.
+_Avoid_: interface, capability set, behavior contract
+
+**Primitive trait**:
+A stdlib contract implemented for primitives, `?T`, or `[]T`, such as `Hashable`, `ParseInput`, or `Formatable`, so built-in values participate in the same traits as structs.
+_Avoid_: primitive interface, builtin capability, intrinsic trait
+
+**Resource**:
+A value that owns storage or another runtime handle and requires an explicit cleanup path. In the current stdlib that path is `destroy(self: lend Self)`; the target path is `InPlace.clean` through `new`/`delete` or `make`/`release`.
+_Avoid_: owner-managed type, handle, object
+
+**Resource owner**:
+The single scope that holds a resource and must call its cleanup path. Passing a resource by `view` or `lend` does not transfer cleanup responsibility.
+_Avoid_: caller, responsible scope, lifetime owner
+
+**Cleanup path**:
+The explicit consuming operation that releases a resource. The current default is `destroy`; the target convention is the `new`/`delete` and `make`/`release` pairs.
+_Avoid_: destructor, drop, teardown method
+
+**Storage block**:
+The untyped byte region returned by an `Allocator` primitive. A storage block becomes typed only when `InPlace` construction or a collection reserves it for a concrete layout.
+_Avoid_: raw allocation, memory chunk, buffer memory
+
+**Allocator**:
+The stdlib trait for raw storage: `alloc`, `free`, and `realloc`. It knows size and alignment, not object layout or construction.
+_Avoid_: memory manager, heap wrapper, object allocator
+
+**InPlace**:
+The stdlib construction/cleanup trait used with an allocator-provided block: `inplace` builds the object into reserved storage and `clean` releases object-owned resources without freeing the block. It deliberately does not name `Allocator`, so the memory module graph stays a DAG.
+_Avoid_: allocator-aware constructor, placement new, lifecycle trait
+
+**Collection**:
+A library type that owns storage, stores values under a stable lookup or enumeration contract, and exposes explicit capacity, count, and mutation operations.
+_Avoid_: container, data structure, buffer
+
+**Uniform collection API**:
+The repeated stdlib collection shape: owned storage, explicit `len`/`capacity`, `contains`, `get`, mutation with `lend`, and consuming cleanup. It keeps collection users on one ownership model.
+_Avoid_: standard container interface, collection protocol, common container
+
+**Erasure support**:
+The stdlib requirement that values can flow through a `dyn Trait` fat pointer. `Primitive erasure` covers primitives; broader support decides whether types like `string` can join homogeneous variadic tails.
+_Avoid_: runtime type support, reflection requirement, polymorphism support
+
+**Failable surface**:
+The way a library module reports host/runtime failure without `T!` propagation, such as `IoError` in I/O. It is a named result contract, not an exception or error union.
+_Avoid_: error union, failable result, throwing API
+
+**Request-scoped allocation**:
+The shipped allocation model where a raw block is tied to the request/function that allocated it and must be freed by the same owner with the same `size`/`align`. It deliberately avoids global heap discovery.
+_Avoid_: function-local allocation, temporary allocation, one-shot buffer
+
+**Boxed resource**:
+A resource created through `new`/`delete` or `make`/`release`, so the block, allocator, and cleanup are explicit at the call site. It is distinct from stack resources cleaned directly with `destroy`.
+_Avoid_: heap object, allocated value, box
 
 **Formatable**:
 The trait implemented by values that can be rendered through `print`/`println`.

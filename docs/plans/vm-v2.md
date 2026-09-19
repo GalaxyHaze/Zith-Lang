@@ -1,10 +1,13 @@
 # VM v2: Typed Execution IR And Linear Memory Runtime
 
-Status: planning
+Status: conforming (host)
 
 This is the contract for a second runtime path, kept separate from the
-existing `src/ir` + `src/interp` execution IR v1 so the shipped
-`Zith--` fallback is not destabilized.
+existing `src/ir` + `src/interp` execution IR v1 so the shipped `Zith--`
+fallback is not destabilized. The signed ADR is
+`docs/adr/0021-vm-v2-portable-execution.md`; the host slice is conforming and
+the sources now live in `zithcLib`, but the browser/WASM packaging is still
+later work.
 
 ## Goals
 
@@ -19,9 +22,11 @@ existing `src/ir` + `src/interp` execution IR v1 so the shipped
 
 - No changes to the current execution IR v1 (`src/ir`, `src/interp`) in this
   slice.
-- No ZIRL format change: ZIRL continues to store HIR, and v2 IR is a lowering
-  target produced by the compiler later.
-- No browser/WASM packaging in the first milestone.
+The VM v2 lowering lives in `src/vm/hir-to-vm.*` and is wired into the CLI
+only on no-LLVM/WASM builds for now. LLVM builds keep the native path, so the
+host runtime change does not affect the shipped codegen backend.
+
+- No browser/WASM packaging in this milestone.
 - No full language surface: state machines, dyn dispatch, opaque and variadic
   slices are later slices.
 - No comptime pipeline yet: build-time functions are a separate workload on
@@ -76,15 +81,35 @@ The initial host VM supports:
 - `puts(ptr)` writes a C string and newline.
 - `putchar(ch)` writes one byte.
 - `malloc(size)` returns an offset into linear memory.
+- `free(ptr)` releases a heap slot.
+- `snprintf(buf, size, fmt, u/d)` writes the small scoped formats.
+- `strlen(ptr)` and `memcpy` support the console path.
 
 Missing externs trap with `RunStatus::Trap`; OOM and invalid memory accesses
 also trap with a clear status.
 
 ## Acceptance
 
-- `tests/test-vm-v2.cpp` builds and passes without LLVM.
+- `tests/test-vm-v2.cpp` builds and passes without LLVM and through the
+  library build.
 - The harness runs a manual typed IR main that allocates arena bytes, stores a
   string, calls `malloc`, calls `puts`, computes a value and returns it.
 - The same test asserts output, exit code and explicit trap/missing-main
   statuses.
-- The existing `test-abi-execution` and execution IR v1 tests remain unchanged.
+- The existing `test-abi-execution` and execution IR v1 tests remain passing.
+- A no-LLVM CLI build runs a Hello World through VM v2.
+
+## Promises (signed)
+
+- `VMV2-01`: IR v2 is linear and typed; no SSA/optimizer shape in the first
+  slice.
+- `VMV2-02`: `fn` and `extern fn` use indexed module references, not raw C
+  function pointers.
+- `VMV2-03`: allocators stay above VM primitives; `std/alloc`/`HeapAllocator`
+  run through `AllocBytes`/`MallocBytes`/`malloc`.
+- `VMV2-04`: VM FFI is a validated small subset (`malloc`, `free`,
+  `putchar`, scoped `snprintf`); unsupported externs trap.
+- `VMV2-05`: first end-to-end acceptance runs both console and manual
+  `extern fn` Hello World paths and compares observable output/exit code.
+- `VMV2-06`: VM v2 stays separate from execution IR v1, but the host slice is
+  promoted into `zithcLib` and selected as the no-LLVM/WASM CLI runtime.

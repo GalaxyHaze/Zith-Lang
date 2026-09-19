@@ -14,8 +14,8 @@ Status: proposed
 
 ```zith
 trait InPlace {
-    fn inplace(var self, allocator: dyn Allocator, args: opaque): bool;
-    fn clean(var self, allocator: dyn Allocator) {}
+    fn inplace(var self, args: opaque): bool;
+    fn clean(var self) {}
 }
 
 trait Allocator {
@@ -23,31 +23,32 @@ trait Allocator {
     fn free(self, mem: raw opaque, size: u64, align: u64);
     fn realloc(self, old: raw opaque, old_size: u64, old_align: u64,
                new_size: u64, new_align: u64): ?raw opaque;
+
+    fn make<T: InPlace>(self, args: opaque): ?*T { return null; }
+    fn release<T: InPlace>(self, obj: *T) {}
 }
 
 fn new<T: InPlace>(args: opaque): ?*T;
 fn delete<T: InPlace>(ptr: *T);
-
-fn make<T: InPlace>(allocator: dyn Allocator, args: opaque): ?*T;
-fn release<T: InPlace>(allocator: dyn Allocator, ptr: *T);
 ```
 
 The shipped `stdlib/std/alloc.zith` currently implements the `Allocator` raw
 storage surface plus `HeapAllocator` and the free-function bridge
-`allocate`/`deallocate`/`reallocate` over `dyn Allocator`. A draft
-`stdlib/std/new.zith` contains `InPlace`, `new<T>`/`delete<T>`, and
-`make<T>`/`release<T>` as the target contract. The module and the `InPlace`
-trait pass `zithc check` and are covered by `tests/test-generic-hashmap.cpp`,
-but the module remains marked proposed because the compiler cannot yet
-instantiate generic helpers that mention `T` only in the return type, and
-opaque pack fields cannot be extracted/destructured for in-place construction.
+`allocate`/`deallocate`/`reallocate` over `dyn Allocator`. The target
+`std/memory` DAG moves `Allocator` to `allocators/allocator`, `HeapAllocator`
+to `allocators/heap`, and keeps `new`/`delete` in `new`. The facade
+re-exports `in-place`, `allocator`, `heap`, and `new`. `stdlib/std/new.zith`
+remains as legacy compatibility. The target modules pass `zithc check` and are
+covered by `tests/test-generic-hashmap.cpp`, but the helper surface remains
+marked proposed because the compiler cannot yet instantiate generic helpers
+that mention `T` only in the return type, and opaque pack fields cannot be
+extracted/destructured for in-place construction.
 
-`make`/`release` are free generic functions rather than methods of the
-`Allocator` trait. `Allocator` only owns allocation storage primitives and
-does not need to know the layout of every `T`. `make<T>` reserves the layout
-for `T`, calls `T.inplace`, and returns `?*T`; `release<T>` calls `T.clean`
-and then asks the allocator to free the block. This also keeps custom
-allocators implementable with a small, non-generic trait surface.
+`make`/`release` are default methods of the `Allocator` trait. They keep the
+convenient pair next to the allocator that owns the block: `make<T>` reserves
+the layout for `T`, calls `T.inplace`, and returns `?*T`; `release<T>` calls
+`T.clean` and then asks the allocator to free the block. Custom allocators
+can override both when their layout or block metadata differs.
 
 `new<T>` is sugar over a default heap allocator: it allocates the size and
 alignment from the compiler-provided layout query for `T`, calls `T.inplace`,
@@ -82,22 +83,24 @@ struct Buffer {
 }
 
 implement Buffer as InPlace {
-    fn inplace(var self, allocator: dyn Allocator, args: opaque): bool {
-        let tuple = args as |cap: u64, fallback: u8|;
+    fn inplace(var self, args: opaque): bool {
+        let tuple = args as |bytes: ?*u8, len: u64|;
         if (tuple is null) {
             return false;
         }
-        let data = allocate(allocator, cap, @alignOf(u8));
-        if (data is null) {
-            return false;
-        }
-        self.bytes = data;
+        self.bytes = tuple.bytes;
+        self.len = tuple.len;
         return true;
+    }
+
+    fn clean(var self) {
+        // The block itself is released by `delete`/`release`; object-owned
+        // resources, when present, are released here.
     }
 }
 
 fn main(): i32 {
-    let buffer = new<Buffer>(|1024, 0 as u8|);
+    let buffer = new<Buffer>(|null, 0u64|);
     if (buffer is null) {
         return 1;
     }
@@ -153,8 +156,8 @@ cleanup call is correct.
 2. Shipped: implement `HeapAllocator` and the `dyn Allocator` free-function
    bridge (`allocate`/`deallocate`/`reallocate`).
 3. Teach generic inference to use return types so `new<T>`/`make<T>` can be
-   instantiated from `?*T`; then enable `stdlib/std/new.zith` in the checked
-   stdlib surface.
+   instantiated from `?*T`; then enable `stdlib/std/memory/new.zith` in the
+   checked stdlib surface.
 4. Implement opaque pack matching/destructuring for `make` argument dispatch
    and define the "no matching method" path as `null`.
 5. Add `W10xx DiscardedValue` and `W11xx DiscardedOwner` in sema.

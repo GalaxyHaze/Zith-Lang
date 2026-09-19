@@ -1,0 +1,206 @@
+{
+  "version": 1,
+  "current_module": "v2-slice",
+  "current_task": "v2-slice::vmV2Integration",
+  "status": "done",
+  "worker": null,
+  "updated_at": "2026-09-19T17:18:25Z",
+  "trace_summary": [
+    {
+      "task": "v2-slice::vmV2Shape",
+      "from": "planned",
+      "to": "stub",
+      "worker": null,
+      "at": "2026-09-19T15:49:07Z"
+    },
+    {
+      "task": "v2-slice::vmV2Shape",
+      "from": "stub",
+      "to": "work",
+      "worker": null,
+      "at": "2026-09-19T15:50:52Z"
+    },
+    {
+      "task": "v2-slice::vmV2Shape",
+      "from": "work",
+      "to": "test",
+      "worker": null,
+      "at": "2026-09-19T15:57:21Z"
+    },
+    {
+      "task": "v2-slice::vmV2Shape",
+      "status": "done",
+      "worker": null,
+      "at": "2026-09-19T15:57:21Z",
+      "cmd": "ctest --test-dir build -R test-vm-v2 --output-on-failure"
+    },
+    {
+      "task": "v2-slice::vmV2FnRef",
+      "from": "planned",
+      "to": "stub",
+      "worker": null,
+      "at": "2026-09-19T16:07:02Z"
+    },
+    {
+      "task": "v2-slice::vmV2FnRef",
+      "from": "stub",
+      "to": "work",
+      "worker": null,
+      "at": "2026-09-19T16:07:02Z"
+    },
+    {
+      "task": "v2-slice::vmV2FnRef",
+      "from": "work",
+      "to": "test",
+      "worker": null,
+      "at": "2026-09-19T16:12:21Z"
+    },
+    {
+      "task": "v2-slice::vmV2FnRef",
+      "status": "done",
+      "worker": null,
+      "at": "2026-09-19T16:12:21Z",
+      "cmd": "ctest --test-dir build -R test-vm-v2 --output-on-failure"
+    },
+    {
+      "task": "v2-slice::vmV2Memory",
+      "from": "planned",
+      "to": "stub",
+      "worker": null,
+      "at": "2026-09-19T16:18:12Z"
+    },
+    {
+      "task": "v2-slice::vmV2Memory",
+      "from": "stub",
+      "to": "work",
+      "worker": null,
+      "at": "2026-09-19T16:18:12Z"
+    },
+    {
+      "task": "v2-slice::vmV2Memory",
+      "from": "work",
+      "to": "test",
+      "worker": null,
+      "at": "2026-09-19T16:18:12Z"
+    },
+    {
+      "task": "v2-slice::vmV2Memory",
+      "status": "done",
+      "worker": null,
+      "at": "2026-09-19T16:18:12Z",
+      "cmd": "ctest --test-dir build -R test-vm-v2 --output-on-failure"
+    },
+    {
+      "task": "v2-slice::vmV2Ffi",
+      "from": "planned",
+      "to": "stub",
+      "worker": null,
+      "at": "2026-09-19T16:26:49Z"
+    },
+    {
+      "task": "v2-slice::vmV2Ffi",
+      "from": "stub",
+      "to": "work",
+      "worker": null,
+      "at": "2026-09-19T16:26:54Z"
+    },
+    {
+      "task": "v2-slice::vmV2Ffi",
+      "from": "work",
+      "to": "test",
+      "worker": null,
+      "at": "2026-09-19T16:26:57Z"
+    },
+    {
+      "task": "v2-slice::vmV2Ffi",
+      "status": "done",
+      "worker": null,
+      "at": "2026-09-19T16:27:01Z",
+      "cmd": "ctest --test-dir build -R test-vm-v2 --output-on-failure"
+    },
+    {
+      "task": "v2-slice::vmV2HelloStdlib",
+      "from": "planned",
+      "to": "stub",
+      "worker": null,
+      "at": "2026-09-19T16:35:02Z"
+    },
+    {
+      "task": "v2-slice::vmV2HelloStdlib",
+      "from": "stub",
+      "to": "work",
+      "worker": null,
+      "at": "2026-09-19T16:35:07Z"
+    },
+    {
+      "task": "v2-slice::vmV2HelloStdlib",
+      "from": "work",
+      "to": "test",
+      "worker": null,
+      "at": "2026-09-19T16:44:08Z"
+    },
+    {
+      "task": "v2-slice::vmV2HelloStdlib",
+      "status": "done",
+      "worker": null,
+      "at": "2026-09-19T16:44:08Z",
+      "cmd": "ctest --test-dir build -R test-vm-v2 --output-on-failure"
+    },
+    {
+      "task": "v2-slice::vmV2HelloExtern",
+      "from": "planned",
+      "to": "stub",
+      "worker": null,
+      "at": "2026-09-19T16:44:25Z"
+    },
+    {
+      "task": "v2-slice::vmV2HelloExtern",
+      "from": "stub",
+      "to": "work",
+      "worker": null,
+      "at": "2026-09-19T16:44:25Z"
+    },
+    {
+      "task": "v2-slice::vmV2HelloExtern",
+      "from": "work",
+      "to": "test",
+      "worker": null,
+      "at": "2026-09-19T16:58:04Z"
+    },
+    {
+      "task": "v2-slice::vmV2HelloExtern",
+      "status": "done",
+      "worker": null,
+      "at": "2026-09-19T16:58:04Z",
+      "cmd": "ctest --test-dir ../build -R test-vm-v2 --output-on-failure"
+    },
+    {
+      "task": "v2-slice::vmV2Integration",
+      "from": "planned",
+      "to": "stub",
+      "worker": null,
+      "at": "2026-09-19T17:09:48Z"
+    },
+    {
+      "task": "v2-slice::vmV2Integration",
+      "from": "stub",
+      "to": "work",
+      "worker": null,
+      "at": "2026-09-19T17:09:48Z"
+    },
+    {
+      "task": "v2-slice::vmV2Integration",
+      "from": "work",
+      "to": "test",
+      "worker": null,
+      "at": "2026-09-19T17:18:20Z"
+    },
+    {
+      "task": "v2-slice::vmV2Integration",
+      "status": "done",
+      "worker": null,
+      "at": "2026-09-19T17:18:25Z",
+      "cmd": "ctest --test-dir /home/diogo/Zith/build -R 'test-vm-v2|test-abi-execution' --output-on-failure"
+    }
+  ]
+}

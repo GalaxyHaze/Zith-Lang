@@ -252,8 +252,8 @@ Estado atual: a causa raiz da instabilidade foi removida. A resolução de
 declarações, tipos e métodos importados passou a ser feita através das
 imports/bindings visíveis do módulo atual (`Import` e `ModuleAlias`) em vez de
 percorrer todos os módulos carregados. `tests/test-interface-satisfaction.cpp`
-agora cobre qualified calls sobre `InPlace` importado de `std/new` num workdir
-populado com `import std/alloc` e vários módulos não relacionados.
+agora cobre qualified calls sobre `InPlace` importado de `std/memory` num workdir
+populado com vários módulos não relacionados.
 
 Dívida real restante: trait defaults e requisitos de `dyn Trait` ainda são
 procurados em todos os módulos carregados quando o trait não está no módulo
@@ -267,6 +267,25 @@ mesma passada e remover os restantes scans globais. O exemplo pode então migrar
 de um trait local para o trait importado sem sacrificar a cobertura.
 
 ---
+
+### 11. `export` de facades com prefixo partilhado
+
+Estado atual: `export` re-injecta os símbolos públicos de cada alvo e mantém
+apenas um alias de namespace por prefixo quando a mesma fachada reexporta mais
+de um módulo com raiz comum (`export std/a` + `export std/b`). O caso de uso
+real é `stdlib/std/memory.zith`, que reexporta `in-place`, `allocator`, `heap`
+e `new` a partir de `from std/memory`.
+
+Dívida real restante: um consumidor com `import std/memory` vê o namespace
+qualificado a partir do primeiro export deduplicado, mas não deriva aliases
+intermédios para todos os subcaminhos. Para caminhos totalmente qualificados
+com fanout, o modelo de `ModuleAlias` precisa de representar namespaces como
+nós, não apenas o primeiro segmento de cada import.
+
+Ação futura: adicionar um mapa de namespaces por prefixo no `FrontendContext`
+ou representar cada segmento de import como um alias independente, e cobrir
+`std.memory.in-place.InPlace` e `std.memory.allocators.heap.HeapAllocator` com
+testes de pipeline.
 
 ## Dívida de estrutura: monolitos
 

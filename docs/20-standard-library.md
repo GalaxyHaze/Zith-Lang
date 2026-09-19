@@ -1,15 +1,15 @@
 ## 20. Standard Library
 
 > **Implementation status:** `stdlib/c/io.zith`, `stdlib/std/io/console.zith`, and
-> `stdlib/std/alloc.zith` are the shipped modules. `puts`, `println`, and raw allocator
+> the `std/memory` DAG are the shipped modules. `puts`, `println`, and raw allocator
 > primitives work. `stdlib/std/collections/hash_map_u64.zith` ships a concrete
 > `u64 -> u64` hash map and `stdlib/std/collections/hash_map.zith` is a checked
-> generic `HashMap<K, V>` module. `stdlib/std/new.zith` is a draft that now
-> passes `zithc check`; the `InPlace` trait shape and an imported conforming
+> generic `HashMap<K, V>` module. The `std/memory` layer DAG and the imported conforming
 > `implement Box as InPlace` are covered by `tests/test-generic-hashmap.cpp`.
 > The generic `new`/`delete`/`make`/`release` helpers are not usable yet, so the
-> module is still marked proposed. All other standard
-> library content is **spec-only**. See [impl-status.md](impl-status.md).
+> surface is still marked proposed. `std/alloc` and `std/new` remain as legacy
+> compatibility modules. All other standard library content is **spec-only**.
+> See [impl-status.md](impl-status.md).
 
 `std`/`soon` remain documentation-only in this iteration. No existing module is being rewritten.
 The documented convention uses resource types with `init`/`destroy`, read-only methods with
@@ -93,32 +93,45 @@ pub fn reallocate(self: dyn Allocator, old: raw opaque, old_size: u64,
 The caller owns the storage and must pass the same `size`/`align` to
 `deallocate`. The larger `InPlace`/`new`/`delete`/`make`/`release` contract is
 recorded in [ADR 0010](adr/0010-allocator-inplace-drop.md). A draft module at
-`stdlib/std/new.zith` carries the target trait and helper signatures, but it is
-marked proposed because the compiler cannot yet instantiate generics that only
-appear in the return type or dispatch opaque packs during construction. The
-`InPlace` trait itself is checked and covered by a conforming type in
+`stdlib/std/memory/new.zith` carries the target helper signatures, and
+`stdlib/std/new.zith` remains as legacy compatibility. The helpers are marked
+proposed because the compiler cannot yet instantiate generics that only appear
+in the return type or dispatch opaque packs during construction. The `InPlace`
+trait itself is checked and covered by a conforming type in
 `tests/test-generic-hashmap.cpp`.
 
-#### `std/new` (proposed draft)
+#### `std/memory` (target DAG)
 
 ```zith
 pub trait InPlace {
-    fn inplace(var self, allocator: dyn Allocator, args: opaque): bool;
-    fn clean(var self, allocator: dyn Allocator) {}
+    fn inplace(var self, args: opaque): bool;
+    fn clean(var self) {}
 }
 
 pub fn new<T: InPlace>(args: opaque): ?*T;
 pub fn delete<T: InPlace>(ptr: *T);
-
-pub fn make<T: InPlace>(allocator: dyn Allocator, args: opaque): ?*T;
-pub fn release<T: InPlace>(allocator: dyn Allocator, ptr: *T);
 ```
 
-This module is intentionally not wired into `test-examples` until the
-generic helper API is usable. `examples/inplace-simple.zith` demonstrates the
-`InPlace` shape with a local trait and `dyn Allocator`; the module stays as the
-single stdlib location for the ADR contract so the larger ownership/allocator
-work has a concrete target.
+`make`/`release` live on `Allocator` as default methods so the convenient
+pair follows the allocator model: `allocator.make<T>(args)` and
+`allocator.release<T>(ptr)`. They are declared as defaults until layout
+queries and opaque pack dispatch are usable inside trait methods. The module
+is intentionally not wired into `test-examples` until the generic helper API
+is usable; `examples/inplace-simple.zith` continues to demonstrate the local
+`InPlace` shape.
+
+The layer DAG is kept strict: `in-place` defines `InPlace` only,
+`allocators/allocator` depends on `in-place` and owns `Allocator`,
+`allocators/heap` implements `HeapAllocator`, and `new` depends on `in-place`
+plus `allocators/heap` without naming `make`/`release`. `std/memory`
+re-exports the same-level contracts, including `Allocator`, `HeapAllocator`,
+the raw free-function bridge, and `new`/`delete`, so callers can use one stable
+import root (`from std/memory`).
+
+`export` paths that share a namespace prefix (for example the `std/...` roots
+inside the facade) are deduplicated into one qualified namespace; the public
+symbols of every export are injected independently. This keeps a facade usable
+even when it re-exports more than one module under the same top-level segment.
 
 #### `std/collections/DynArray`
 

@@ -1,0 +1,29 @@
+# module: v2-slice
+
+1. vmV2Shape() -> void
+   use: v2-host::typed-ir, v2-host::vm-v2
+   depends_on:
+
+2. vmV2FnRef() -> void
+   use: v2-host::typed-ir, v2-host::vm-v2
+   depends_on: v2-slice::vmV2Shape
+
+3. vmV2Memory() -> void
+   use: v2-host::typed-ir, v2-host::vm-v2, v2-host::linear-memory
+   depends_on: v2-slice::vmV2Shape
+
+4. vmV2Ffi() -> void
+   use: v2-host::typed-ir, v2-host::vm-v2, v2-host::runtime-ffi
+   depends_on:
+
+5. vmV2HelloStdlib() -> void
+   use: v2-host::typed-ir, v2-host::vm-v2, v2-host::runtime-ffi
+   depends_on: v2-slice::vmV2Memory, v2-slice::vmV2Ffi
+
+6. vmV2HelloExtern() -> void
+   use: v2-host::typed-ir, v2-host::vm-v2, v2-host::runtime-ffi
+   depends_on: v2-slice::vmV2Memory, v2-slice::vmV2Ffi
+
+7. vmV2Integration() -> void
+   use: v2-host::vm-v2, v2-host::runtime-ffi, v2-host::typed-ir
+   depends_on: v2-slice::vmV2HelloStdlib, v2-slice::vmV2HelloExtern

@@ -42,7 +42,7 @@ auto statusText(RunStatus status) -> std::string_view {
     case RunStatus::Oom:
         return "out of linear memory";
     }
-    return "unknown";
+    return "unknown status";
 }
 
 auto getReg(const std::vector<int64_t> &regs, uint16_t index) -> int64_t {
@@ -63,6 +63,125 @@ auto findFunction(const Module &module, std::string_view name) -> const Function
         if (fn.name == name)
             return &fn;
     return nullptr;
+}
+
+auto missingRegister(const Function &fn, uint16_t index, bool pair) -> bool {
+    const uint32_t count = static_cast<uint32_t>(fn.regCount);
+    return index >= count || (pair && static_cast<uint32_t>(index) + 1 >= count);
+}
+
+auto invalidJumpTarget(const Function &fn, const Instr &instr) -> bool {
+    return instr.imm >= fn.body.size();
+}
+
+/// Return false when the module does not satisfy v2's invariant that every
+/// operand names a register/label that exists. This is a static shape check,
+/// so invalid guest IR reports Trap before any memory or I/O side effects.
+auto validateFunctionShape(const Function &fn) -> bool {
+    for (std::size_t pc = 0; pc < fn.body.size(); ++pc) {
+        const auto &instr  = fn.body[pc];
+        const uint16_t dst = instr.a;
+        const uint16_t lhs = instr.b;
+        const uint16_t rhs = instr.c;
+
+        if (instr.op > Op::Trap)
+            return false;
+        switch (instr.op) {
+        case Op::LoadConstI32:
+        case Op::LoadConstI64:
+        case Op::LoadConstF32:
+        case Op::LoadConstF64:
+        case Op::LoadString:
+        case Op::LoadFnRef:
+        case Op::LoadExternRef:
+        case Op::AllocBytes:
+        case Op::MallocBytes:
+            if (missingRegister(fn, dst, false))
+                return false;
+            if (instr.op == Op::AllocBytes || instr.op == Op::MallocBytes) {
+                if (missingRegister(fn, lhs, false) || missingRegister(fn, rhs, false))
+                    return false;
+            }
+            break;
+        case Op::StoreBytes:
+            if (missingRegister(fn, dst, false))
+                return false;
+            break;
+        case Op::LoadBytes:
+            if (missingRegister(fn, dst, false) || missingRegister(fn, lhs, false) ||
+                missingRegister(fn, rhs, false))
+                return false;
+            break;
+        case Op::FieldPtr:
+            if (missingRegister(fn, dst, false) || missingRegister(fn, lhs, false))
+                return false;
+            break;
+        case Op::MakeSlice:
+            if (missingRegister(fn, dst, true) || missingRegister(fn, lhs, false) ||
+                missingRegister(fn, rhs, false))
+                return false;
+            break;
+        case Op::SlicePtr:
+        case Op::SliceLen:
+            if (missingRegister(fn, dst, false) || missingRegister(fn, lhs, true))
+                return false;
+            break;
+        case Op::MemCopy:
+            if (missingRegister(fn, dst, false) || missingRegister(fn, lhs, false) ||
+                missingRegister(fn, rhs, false))
+                return false;
+            break;
+        case Op::Add:
+        case Op::Sub:
+        case Op::Mul:
+        case Op::Div:
+        case Op::Rem:
+        case Op::Neg:
+        case Op::Not:
+        case Op::Eq:
+        case Op::Ne:
+        case Op::Lt:
+        case Op::Le:
+        case Op::Gt:
+        case Op::Ge:
+            if (missingRegister(fn, dst, false) || missingRegister(fn, lhs, false) ||
+                missingRegister(fn, rhs, false))
+                return false;
+            break;
+        case Op::CallExtern:
+            if (missingRegister(fn, dst, false) || missingRegister(fn, lhs, false) ||
+                missingRegister(fn, rhs, false) || missingRegister(fn, instr.d, false) ||
+                missingRegister(fn, instr.e, false))
+                return false;
+            break;
+        case Op::CallFn:
+            if (missingRegister(fn, dst, false) || missingRegister(fn, lhs, false) ||
+                missingRegister(fn, rhs, false))
+                return false;
+            break;
+        case Op::CallExternRef:
+        case Op::CallFnRef:
+            if (missingRegister(fn, dst, false) || missingRegister(fn, lhs, false) ||
+                missingRegister(fn, rhs, false) || missingRegister(fn, instr.imm, false))
+                return false;
+            break;
+        case Op::Ret:
+            if (missingRegister(fn, dst, false))
+                return false;
+            break;
+        case Op::Branch:
+            if (missingRegister(fn, lhs, false) || invalidJumpTarget(fn, instr))
+                return false;
+            break;
+        case Op::Jump:
+            if (invalidJumpTarget(fn, instr))
+                return false;
+            break;
+        case Op::Trap:
+            break;
+        }
+    }
+    return true;
 }
 
 auto runFunction(RunState &state, const Function &fn, std::vector<int64_t> &regs)
@@ -102,6 +221,20 @@ auto runFunction(RunState &state, const Function &fn, std::vector<int64_t> &regs
             if (instr.imm >= state.stringAddresses.size())
                 return {false, 0};
             if (!setReg(regs, dst, static_cast<int64_t>(state.stringAddresses[instr.imm])))
+                return {false, 0};
+            pc++;
+            break;
+        case Op::LoadFnRef:
+            if (instr.imm >= state.module->functions.size())
+                return {false, 0};
+            if (!setReg(regs, dst, instr.imm))
+                return {false, 0};
+            pc++;
+            break;
+        case Op::LoadExternRef:
+            if (instr.imm >= state.module->externs.size())
+                return {false, 0};
+            if (!setReg(regs, dst, instr.imm))
                 return {false, 0};
             pc++;
             break;
@@ -257,6 +390,8 @@ auto runFunction(RunState &state, const Function &fn, std::vector<int64_t> &regs
             const std::string_view name = state.module->externs[instr.imm];
             const int64_t arg0          = getReg(regs, lhs);
             const int64_t arg1          = getReg(regs, rhs);
+            const int64_t arg2          = getReg(regs, instr.d);
+            const int64_t arg3          = getReg(regs, instr.e);
             int64_t result              = 0;
             if (name == "puts") {
                 const std::string_view text = state.memory->cstring(static_cast<std::size_t>(arg0));
@@ -269,6 +404,97 @@ auto runFunction(RunState &state, const Function &fn, std::vector<int64_t> &regs
             } else if (name == "malloc") {
                 result = static_cast<int64_t>(
                     state.memory->mallocBytes(static_cast<std::size_t>(arg0), 1));
+            } else if (name == "free") {
+                if (arg0 != 0)
+                    state.memory->freeBytes(static_cast<std::size_t>(arg0));
+            } else if (name == "snprintf") {
+                const std::string_view text = state.memory->cstring(static_cast<std::size_t>(arg2));
+                if (text.empty())
+                    return {false, 0};
+                std::string formatted;
+                if (text.find("%u") != std::string_view::npos)
+                    formatted = std::to_string(static_cast<unsigned long>(arg3));
+                else if (text.find("%d") != std::string_view::npos)
+                    formatted = std::to_string(arg3);
+                else if (text.find("%g") != std::string_view::npos) {
+                    double value = 0;
+                    std::memcpy(&value, &arg3, sizeof(value));
+                    formatted = std::to_string(value);
+                } else
+                    formatted = std::string(text);
+                if (arg1 <= 0)
+                    return {false, 0};
+                if (formatted.size() >= static_cast<std::size_t>(arg1))
+                    formatted.resize(static_cast<std::size_t>(arg1) - 1);
+                state.memory->writeString(static_cast<std::size_t>(arg0), formatted);
+                result = static_cast<int64_t>(formatted.size());
+            } else if (name == "strlen") {
+                const std::string_view text = state.memory->cstring(static_cast<std::size_t>(arg0));
+                result                      = static_cast<int64_t>(text.size());
+            } else if (name == "memcpy") {
+                if (!state.memory->copy(static_cast<std::size_t>(arg0),
+                                        static_cast<std::size_t>(arg1),
+                                        static_cast<std::size_t>(arg2)))
+                    return {false, 0};
+                result = arg0;
+            } else {
+                return {false, 0};
+            }
+            if (!setReg(regs, dst, result))
+                return {false, 0};
+            pc++;
+            break;
+        }
+        case Op::CallExternRef: {
+            const int64_t ref = getReg(regs, lhs);
+            if (ref < 0 || static_cast<std::size_t>(ref) >= state.module->externs.size())
+                return {false, 0};
+            const std::string_view name = state.module->externs[static_cast<std::size_t>(ref)];
+            const int64_t arg0          = getReg(regs, rhs);
+            const int64_t arg1          = getReg(regs, instr.imm);
+            const int64_t arg2          = getReg(regs, instr.d);
+            const int64_t arg3          = getReg(regs, instr.e);
+            int64_t result              = 0;
+            if (name == "puts") {
+                const std::string_view text = state.memory->cstring(static_cast<std::size_t>(arg0));
+                if (text.empty())
+                    return {false, 0};
+                state.output.append(text.data(), text.size());
+                state.output.push_back('\n');
+            } else if (name == "putchar") {
+                state.output.push_back(static_cast<char>(arg0));
+            } else if (name == "malloc") {
+                result = static_cast<int64_t>(
+                    state.memory->mallocBytes(static_cast<std::size_t>(arg0), 1));
+            } else if (name == "free") {
+                if (arg0 != 0)
+                    state.memory->freeBytes(static_cast<std::size_t>(arg0));
+            } else if (name == "snprintf") {
+                const std::string_view text = state.memory->cstring(static_cast<std::size_t>(arg2));
+                if (text.empty())
+                    return {false, 0};
+                std::string formatted;
+                if (text.find("%u") != std::string_view::npos)
+                    formatted = std::to_string(static_cast<unsigned long>(arg3));
+                else if (text.find("%d") != std::string_view::npos)
+                    formatted = std::to_string(arg3);
+                else if (text.find("%g") != std::string_view::npos)
+                    formatted = std::to_string(arg3);
+                else
+                    formatted = std::string(text);
+                if (arg1 > 0 && arg3 >= 0)
+                    formatted.resize(static_cast<std::size_t>(arg1));
+                state.memory->writeString(static_cast<std::size_t>(arg0), formatted);
+                result = static_cast<int64_t>(formatted.size());
+            } else if (name == "strlen") {
+                const std::string_view text = state.memory->cstring(static_cast<std::size_t>(arg0));
+                result                      = static_cast<int64_t>(text.size());
+            } else if (name == "memcpy") {
+                if (!state.memory->copy(static_cast<std::size_t>(arg0),
+                                        static_cast<std::size_t>(arg1),
+                                        static_cast<std::size_t>(arg2)))
+                    return {false, 0};
+                result = arg0;
             } else {
                 return {false, 0};
             }
@@ -286,6 +512,24 @@ auto runFunction(RunState &state, const Function &fn, std::vector<int64_t> &regs
                 calleeRegs[0] = getReg(regs, lhs);
             if (callee->paramCount > 1)
                 calleeRegs[1] = getReg(regs, rhs);
+            const auto [ok, ret] = runFunction(state, *callee, calleeRegs);
+            if (!ok)
+                return {false, 0};
+            if (!setReg(regs, dst, ret))
+                return {false, 0};
+            pc++;
+            break;
+        }
+        case Op::CallFnRef: {
+            const int64_t ref = getReg(regs, lhs);
+            if (ref < 0 || static_cast<std::size_t>(ref) >= state.module->functions.size())
+                return {false, 0};
+            const auto *callee = &state.module->functions[static_cast<std::size_t>(ref)];
+            std::vector<int64_t> calleeRegs(callee->regCount, 0);
+            if (callee->paramCount > 0)
+                calleeRegs[0] = getReg(regs, rhs);
+            if (callee->paramCount > 1)
+                calleeRegs[1] = getReg(regs, instr.imm);
             const auto [ok, ret] = runFunction(state, *callee, calleeRegs);
             if (!ok)
                 return {false, 0};
@@ -324,6 +568,13 @@ auto Vm::runMain(const Module &module) -> RunResult {
         result.status  = RunStatus::MissingMain;
         result.message = "the typed IR has no main function";
         return result;
+    }
+    for (const auto &fn : module.functions) {
+        if (!validateFunctionShape(fn)) {
+            result.status  = RunStatus::Trap;
+            result.message = "invalid typed IR shape";
+            return result;
+        }
     }
 
     RunState state;

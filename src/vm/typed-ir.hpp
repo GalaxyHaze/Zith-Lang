@@ -16,6 +16,8 @@ enum class ValueType : uint8_t {
     F64,
     Ptr,
     Slice,
+    FnRef,
+    ExternRef,
     Void,
 };
 
@@ -26,6 +28,8 @@ enum class Op : uint8_t {
     LoadConstF32,
     LoadConstF64,
     LoadString,
+    LoadFnRef,
+    LoadExternRef,
     AllocBytes,
     MallocBytes,
     StoreBytes,
@@ -49,21 +53,26 @@ enum class Op : uint8_t {
     Gt,
     Ge,
     CallFn,
+    CallFnRef,
     CallExtern,
+    CallExternRef,
     Ret,
     Branch,
     Jump,
     Trap,
 };
 
-/// One v2 instruction row. `a/b/c` hold register or immediate indices exactly
-/// as the opcode requires; `imm` holds a table index or jump target.
+/// One v2 instruction row. `a/b/c/d/e` hold register or immediate indices
+/// exactly as the opcode requires; `imm` holds a table index, jump target,
+/// or a second indirect-call argument.
 struct Instr {
     Op op        = Op::Trap;
     uint16_t a   = 0;
     uint16_t b   = 0;
     uint16_t c   = 0;
     uint16_t imm = 0;
+    uint16_t d   = 0;
+    uint16_t e   = 0;
 
     /// `0` is a valid guest offset, so allocation failures are distinguished
     /// separately by the readers of `LinearMemory`.
@@ -79,6 +88,25 @@ struct Instr {
 
     [[nodiscard]] static auto withImm(Op value, uint16_t dst, uint16_t tableIndex) -> Instr {
         return Instr{value, dst, 0, 0, tableIndex};
+    }
+
+    [[nodiscard]] static auto callRef(Op value, uint16_t dst, uint16_t fnRef, uint16_t arg0,
+                                      uint16_t arg1) -> Instr {
+        return Instr{value, dst, fnRef, arg0, arg1};
+    }
+
+    [[nodiscard]] static auto callExtern(Op value, uint16_t dst, uint16_t arg0, uint16_t arg1,
+                                         uint16_t tableIndex, uint16_t arg2 = 0, uint16_t arg3 = 0)
+        -> Instr {
+        Instr row;
+        row.op  = value;
+        row.a   = dst;
+        row.b   = arg0;
+        row.c   = arg1;
+        row.d   = arg2;
+        row.e   = arg3;
+        row.imm = tableIndex;
+        return row;
     }
 };
 

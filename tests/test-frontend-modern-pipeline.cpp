@@ -154,6 +154,25 @@ void test_pipeline_export_platform_import() {
     CHECK(saw_platform_variant, "export edge points at the resolved platform-specific module");
 }
 
+void test_pipeline_export_shared_prefix() {
+    Workspace workspace;
+    workspace.write("lib/one.zith", "pub fn one(): i32 { return 1; }\n");
+    workspace.write("lib/two.zith", "pub fn two(): i32 { return 2; }\n");
+    workspace.write("facade.zith", "export lib/one\n"
+                                   "export lib/two\n");
+    workspace.write("main.zith", "from facade\n"
+                                 "fn main(): i32 { one() + two() }\n");
+
+    memory::Arena arena;
+    Options options(arena);
+    options.targetStage = session::Stage::HirLowered;
+
+    session::CompilationSession session(options, (workspace.root / "main.zith").string());
+    session.setBuffered(true);
+    CHECK(session.runTo(session::Stage::HirLowered),
+          "facade exports both modules that share a namespace prefix");
+}
+
 void test_pipeline_while_loop_lowers() {
     Workspace workspace;
     workspace.write("main.zith", "fn main(): i32 {\n"
@@ -876,6 +895,7 @@ static void test_frontend_modern_pipeline() {
     test_pipeline_error_surfaces_diagnostic();
     test_pipeline_multifile_module_dependency();
     test_pipeline_export_platform_import();
+    test_pipeline_export_shared_prefix();
     test_pipeline_while_loop_lowers();
     test_pipeline_if_else_lowers();
     test_c_header_import_lowers_external_function();
