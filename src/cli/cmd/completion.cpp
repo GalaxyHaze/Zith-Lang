@@ -24,7 +24,7 @@ _zithc() {
 
     cmds="build run execute check fmt create deps test docs repl clean completion"
 
-    opts="-h --help --version -m --mode -o --output -I --include --c-source-dir -L -l -D -A --assets --check -i --in-place --emit --target --sysroot --no-system-includes --no-cache --emit-tokens --emit-ast --emit-hir --emit-ir --emit-asm --emit-all --interpreted --opt-level --debug-level -s --strict --lto --strip-debug -c --color -v --verbose"
+    opts="-h --help --version -m --mode -o --output -I --include --c-source-dir -L -l -D -A --assets --check -i --in-place --emit --target --sysroot --no-system-includes --no-cache --emit-tokens --emit-ast --emit-hir --emit-ir --emit-asm --emit-all --interpreted --opt-level --debug-level -s --strict --lto --strip-debug -c --color -v --verbose --debug-sema"
 
     # Specific option completions
     case "$prev" in
@@ -95,7 +95,7 @@ _zithc() {
 
     cmds="build run execute check fmt create deps test docs repl clean completion"
 
-    opts="-h --help --version -m --mode -o --output -I --include --c-source-dir -L -l -D -A --assets --check -i --in-place --emit --target --sysroot --no-system-includes --no-cache --emit-tokens --emit-ast --emit-hir --emit-ir --emit-asm --emit-all --interpreted --opt-level --debug-level -s --strict --lto --strip-debug -c --color -v --verbose"
+    opts="-h --help --version -m --mode -o --output -I --include --c-source-dir -L -l -D -A --assets --check -i --in-place --emit --target --sysroot --no-system-includes --no-cache --emit-tokens --emit-ast --emit-hir --emit-ir --emit-asm --emit-all --interpreted --opt-level --debug-level -s --strict --lto --strip-debug -c --color -v --verbose --debug-sema"
 
     case "$prev" in
         -m|--mode)
@@ -191,6 +191,7 @@ complete -c zithc -l lto -d "Enable LTO"
 complete -c zithc -l strip-debug -d "Strip debug symbols"
 complete -c zithc -s c -l color -r -f -a "auto on off" -d "Color output"
 complete -c zithc -s v -l verbose -d "Verbose output"
+complete -c zithc -l debug-sema -d "Print semantic analysis probes"
 )###");
         return 0;
     }

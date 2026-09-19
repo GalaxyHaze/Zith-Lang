@@ -123,6 +123,12 @@ namespace {
         return "MacroCall";
     case ExprKind::WhenGuard:
         return "WhenGuard";
+    case ExprKind::Pipe:
+        return "Pipe";
+    case ExprKind::PipeDo:
+        return "PipeDo";
+    case ExprKind::PipeCurrent:
+        return "PipeCurrent";
     case ExprKind::Error:
         return "Error";
     }

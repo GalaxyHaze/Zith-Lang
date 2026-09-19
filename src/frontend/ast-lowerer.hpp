@@ -133,6 +133,9 @@ private:
     ScopeId current_function_body_scope_;
     bool current_local_parent_is_state_ = false;
     std::string current_local_parent_name_;
+    /// True only while parsing the RHS of a `|>` / `do` stage, where a
+    /// leading `..` is the explicit current-value placeholder.
+    bool in_pipe_stage_ = false;
 };
 
 } // namespace zith::frontend

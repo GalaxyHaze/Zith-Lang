@@ -695,8 +695,9 @@ entra no documento do `Zith--` depois de terminar no pipeline real, porque o
 
 - Funções, bindings `let`/`var`/`const`, structs, enums, unions, génericos e
   monomorfização antes de HIR.
-- `when`/`match`, `for`, `state`/`dock`/`jump`, `->`, slices, arrays, opcionais,
-  pointers e o protocolo de iterador canonico `next(self): ?T` (`??T` para elementos opcionais).
+- `when`/`match`, `for`, `state`/`dock`/`jump`, pipelines `|>`/`do` com `..`
+  explícito, slices, arrays, opcionais, pointers e o protocolo de iterador
+  canonico `next(self): ?T` (`??T` para elementos opcionais).
 - Funções não-void não podem cair sem valor. Um corpo só termina implicitamente quando um valor
   final tem o tipo certo ou todos os caminhos terminam (`return`, `jump`, `if`/`else` completo,
   `when` com default ou loop infinito sem `break` directo).

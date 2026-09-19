@@ -57,6 +57,7 @@ namespace {
         "spawn",   "await",  "with",   "catch",   "must",      "throw",    "fail",      "drop",
         "require", "is",     "prefix", "suffix",  "infix",     "nop",      "and",       "or",
         "not",     "xor",    "tag",    "defer",   "opaque",    "optional",
+        "do",
     };
     return std::any_of(std::begin(keywords), std::end(keywords),
                        [&](const std::string_view keyword) { return word == keyword; });
@@ -197,7 +198,7 @@ void lex(FrontendSnapshot &snapshot) {
             static constexpr std::string_view kThreeChar[] = {"<<=", ">>="};
             static constexpr std::string_view kTwoChar[]   = {
                 "==", "!=", "<=", ">=", "->", "~>", "<<", ">>", "+=", "-=", "*=",
-                "/=", "%=", "&=", "|=", "^=", "&.", "|.", "^.", "&&", "||", "??"};
+                "/=", "%=", "&=", "|=", "^=", "&.", "|.", "^.", "&&", "||", "??", "|>"};
             bool munched = false;
             if (start + 3U <= source.size()) {
                 const std::string_view triple = source.substr(start, 3);

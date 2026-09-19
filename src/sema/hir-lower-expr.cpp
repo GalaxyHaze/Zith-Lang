@@ -110,6 +110,11 @@ hir::HirExprId HirLowerModern::lowerExpr(frontend::ExprId id) {
         return lowerUnary(expr, type);
     case frontend::ExprKind::Binary:
         return lowerBinary(expr, type);
+    case frontend::ExprKind::Pipe:
+    case frontend::ExprKind::PipeDo:
+        return lowerPipe(expr, type);
+    case frontend::ExprKind::PipeCurrent:
+        return lowerPipeCurrent(expr);
     case frontend::ExprKind::Call:
         return lowerCall(expr);
     case frontend::ExprKind::DockCall:
@@ -563,6 +568,82 @@ hir::HirExprId HirLowerModern::lowerBinary(const frontend::Expression &expr,
     binary.type         = type;
     binary.operand_type = typeOfExpr(expr.operands[0]);
     return addExpr(std::move(binary));
+}
+
+frontend::ExprId HirLowerModern::findPipeCurrent(frontend::ExprId stage) const noexcept {
+    if (!stage || current_module_ == nullptr ||
+        stage.value > current_module_->frontend->expressions().size())
+        return {};
+    const auto &expr = current_module_->frontend->expressions()[stage.value - 1U];
+    if (expr.kind == frontend::ExprKind::PipeCurrent)
+        return stage;
+    for (const auto operand : expr.operands) {
+        if (const frontend::ExprId found = findPipeCurrent(operand))
+            return found;
+    }
+    return {};
+}
+
+hir::HirExprId HirLowerModern::lowerPipeCurrent(const frontend::Expression &expr) {
+    if (pipe_current_slot_ == hir::kInvalidHirSlot)
+        return hir::kInvalidHirExpr;
+    return addExpr(hir::HirPipeCurrent{pipe_current_slot_, typeOfExpr(expr.id)});
+}
+
+hir::HirExprId HirLowerModern::lowerPipe(const frontend::Expression &expr,
+                                         const types::TypeId type) {
+    if (expr.operands.size() != 2U)
+        return hir::kInvalidHirExpr;
+
+    const auto source = lowerExpr(expr.operands[0]);
+    if (source == hir::kInvalidHirExpr)
+        return hir::kInvalidHirExpr;
+
+    const auto source_type   = lowerType(semaTypeOfExpr(expr.operands[0]));
+    const auto slot          = next_slot_++;
+    const auto saved_slot    = pipe_current_slot_;
+    pipe_current_slot_       = slot;
+    current_fn_->blocks[current_block_].insts.push(emitSlotAlloca(slot, source_type));
+    current_fn_->blocks[current_block_].insts.push(emitSlotStore(slot, source));
+    const auto stage = lowerExpr(expr.operands[1]);
+    pipe_current_slot_ = saved_slot;
+    auto effective_stage = stage;
+    if (effective_stage == hir::kInvalidHirExpr &&
+        expr.kind == frontend::ExprKind::PipeDo &&
+        expr.operands[1].value <= current_module_->frontend->expressions().size()) {
+        const auto &stage_expr =
+            current_module_->frontend->expressions()[expr.operands[1].value - 1U];
+        if (stage_expr.kind == frontend::ExprKind::Block) {
+            // A `do { ... }` effect stage has no value; keep an empty cleanup
+            // node so ordering stays visible in HIR and codegen still reloads
+            // the pipeline slot.
+            hir::HirCleanup cleanup(arena_);
+            effective_stage = addExpr(std::move(cleanup));
+        }
+    }
+    if (effective_stage == hir::kInvalidHirExpr)
+        return hir::kInvalidHirExpr;
+
+    if (expr.kind == frontend::ExprKind::Pipe) {
+    hir::HirPipe pipe;
+    pipe.source_slot = slot;
+    pipe.source_type = source_type;
+    pipe.stage       = effective_stage;
+    pipe.type        = type;
+    pipe.is_effect   = false;
+    return addExpr(std::move(pipe));
+    }
+
+    // `do` keeps the pipeline result at the source slot. The stage is part of
+    // a HIR instruction stream only to keep codegen ordering deterministic and
+    // visible in HIR tests.
+    hir::HirPipe pipe;
+    pipe.source_slot = slot;
+    pipe.source_type = source_type;
+    pipe.stage       = effective_stage;
+    pipe.type        = type;
+    pipe.is_effect   = true;
+    return addExpr(std::move(pipe));
 }
 
 hir::HirExprId HirLowerModern::lowerAssign(const frontend::Expression &expr,

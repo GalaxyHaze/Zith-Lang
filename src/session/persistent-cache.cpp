@@ -678,6 +678,33 @@ void CompilationSession::hydrateFromArtifact(const cache::Artifact &art) {
             expr                   = std::move(canonical);
             break;
         }
+        case cache::CompactExprKind::Pipe: {
+            hir::HirPipe pipe;
+            pipe.source_slot = ce.ref_b;
+            pipe.source_type = compactType(ce.ref_e);
+            pipe.stage       = ce.ref_a;
+            pipe.type        = compactType(ce.type_id);
+            pipe.is_effect   = false;
+            expr             = std::move(pipe);
+            break;
+        }
+        case cache::CompactExprKind::PipeDo: {
+            hir::HirPipe pipe;
+            pipe.source_slot = ce.ref_b;
+            pipe.source_type = compactType(ce.ref_e);
+            pipe.stage       = ce.ref_a;
+            pipe.type        = compactType(ce.type_id);
+            pipe.is_effect   = true;
+            expr             = std::move(pipe);
+            break;
+        }
+        case cache::CompactExprKind::PipeCurrent: {
+            hir::HirPipeCurrent current;
+            current.slot = ce.ref_a;
+            current.type = compactType(ce.type_id);
+            expr         = std::move(current);
+            break;
+        }
         }
         mHirModule.addExpr(std::move(expr));
     }

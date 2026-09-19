@@ -50,8 +50,18 @@ ExprId AstLowerer::parsePrimary() {
         return {};
 
     const uint32_t start = index_;
+    if (in_pipe_stage_ && punctuation(index_, '.') && punctuation(index_ + 1U, '.')) {
+        index_ += 2U;
+        Expression current;
+        current.kind  = ExprKind::PipeCurrent;
+        current.text  = "..";
+        current.scope = current_scope_;
+        current.span  = range(start, index_);
+        return parsePostfix(addExpression(std::move(current)), start);
+    }
     if (punctuation(index_, '{'))
         return parseBlock();
+
 
     // `dock State(args)` is a primary call expression whose result is the
     // state machine's eventual return value.
@@ -818,6 +828,8 @@ ExprId AstLowerer::parsePostfix(ExprId result, uint32_t start) {
     return result;
 }
 int AstLowerer::precedence(std::string_view op) noexcept {
+    if (op == "|>")
+        return 0;
     if (isAssignmentOp(op))
         return 1;
     if (op == "or")
@@ -1014,6 +1026,26 @@ ExprId AstLowerer::parseExpression(int minimum_precedence) {
             range_expr.operands.push_back(parseExpression(kUnaryPrecedence));
             range_expr.span = range(start, index_);
             left            = addExpression(std::move(range_expr));
+            continue;
+        }
+        // `|>` and `do` are the canonical chain operators. Both are left
+        // associative and sit below assignment; the stage is parsed with a
+        // higher minimum so the next chain stage stays at this level.
+        const bool is_pipe      = isOperatorToken("|>");
+        const bool is_do_stage  = isKeywordToken("do");
+        if ((is_pipe || is_do_stage) && 0 >= minimum_precedence) {
+            ++index_;
+            Expression chain;
+            chain.kind  = is_pipe ? ExprKind::Pipe : ExprKind::PipeDo;
+            chain.text  = is_pipe ? "|>" : "do";
+            chain.scope = current_scope_;
+            chain.operands.push_back(left);
+            const bool saved_pipe_stage  = in_pipe_stage_;
+            in_pipe_stage_               = true;
+            chain.operands.push_back(parseExpression(1));
+            in_pipe_stage_               = saved_pipe_stage;
+            chain.span = range(start, index_);
+            left       = addExpression(std::move(chain));
             continue;
         }
         // `x is null` and tagged-union `x is Type` sit at comparison precedence.

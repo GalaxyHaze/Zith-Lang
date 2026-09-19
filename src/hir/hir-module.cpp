@@ -456,6 +456,23 @@ std::string HirModule::toString(const memory::StringInterner &interner) const {
                                        buffer += "runtime_panic R";
                                        buffer += std::to_string(p.code);
                                    },
+                                   [&](const HirPipe &pipe) {
+                                       if (pipe.is_effect)
+                                           buffer += "pipe_do stage %e";
+                                       else
+                                           buffer += "pipe %e";
+                                       buffer += std::to_string(pipe.stage);
+                                       buffer += " : %t";
+                                       buffer += std::to_string(pipe.type);
+                                       buffer += " from s";
+                                       buffer += std::to_string(pipe.source_slot);
+                                   },
+                                   [&](const HirPipeCurrent &current) {
+                                       buffer += "pipe_current s";
+                                       buffer += std::to_string(current.slot);
+                                       buffer += " : %t";
+                                       buffer += std::to_string(current.type);
+                                   },
                                });
                 buffer += "\n";
             }

@@ -278,6 +278,11 @@ void Cli::parseArgs(int argc, char **argv) {
             continue;
         }
 
+        if (std::strcmp(argv[i], "--debug-sema") == 0) {
+            opts.flags.debugSema(true);
+            continue;
+        }
+
         if (compare(argv[i], "--strict", "-s")) {
             opts.flags.strict(true);
             continue;

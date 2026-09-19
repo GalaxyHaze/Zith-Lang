@@ -107,6 +107,7 @@ int help(FILE *dest) {
     p.flag("    --strip-debug", "Strip debug symbols");
     p.flag("-c, --color <auto|on|off>", "Color output [default: auto]");
     p.flag("-v, --verbose", "Verbose output");
+    p.flag("    --debug-sema", "Print semantic analysis probes");
     std::fprintf(dest, "\n");
     p.section("EXAMPLES:");
     std::fprintf(dest, "    zithc build\n"

@@ -76,7 +76,7 @@ The compiler is a copilot: it gives you the tools, and you build the systems.
 |---|---|
 | `struct`, `fn`, `lend`, `view`, `trait`, `interface` | `state`, `dock`, `jump` — for Games, State Machine, OS & embedded |
 | `?T`, `or` | `context`, `word` — for DSLs and APIs |
-| `when`, `for`, `->` | runtime/stdlib concurrency APIs — for parallel work without special syntax |
+| `when`, `for`, `|>`/`do` | runtime/stdlib concurrency APIs — for parallel work without special syntax |
 
 ### 1.3 Design Goals
 
@@ -1263,36 +1263,38 @@ and `Some(element)` is bound to the loop variable. Iterators that yield optional
 
 > The init/cond/step form accepts comma-separated, parenthesized expressions — `for (i = 0), (i < 10), (i += 1)` — or the flat alternative, `for (i = 0, i < 10, i += 1)`.
 
-### 9.3 Chain Flow (`->`)
+### 9.3 Pipeline (`|>` and `do`)
 
-The `->` operator pipes output left to right. The previous value is available as `..`, and tags capture values for later use. `!` and `?` propagate out of the chain normally. Precedence is left-to-right and lower than function calls.
+Pipelines are explicitly threaded. Each stage reads the current value through
+`..`; there is no automatic injection of the value as an argument, no tag
+capture, and no `?`/`!` propagation out of the chain. `x |> f(..)` is
+equivalent to `f(x)` except that the source is materialized once before the
+stage runs. A stage must reference the current value exactly once, and `..` is
+valid only inside a pipeline stage.
+
+`|>` replaces the chain value with the stage result. `do` runs a side-effect
+stage and keeps the chain value unchanged, so `x do f(..)` returns `x`. `do` is
+not a standalone statement. Both operators are left-associative and have lower
+precedence than function calls.
 
 ```zith
-getData() -> process(..) -> save(..);
+getData() |> process(..) |> save(..);
 
 getData()
-    -> raw:    parse(..)
-    -> parsed: validate(..)!       // ! propagates out of the chain
-    -> connectDb()
-    -> save(parsed);
+    |> parse(..)
+    |> validate(..)
+    |> save(..);
 
-// Inline block
+// Inline side-effect: observe the current value without advancing the chain.
 readFile("data.bin")
-    -> { let h = parse_header(..); validate(h)! }
-    -> process_body(..);
+    do log(..)
+    |> process_body(..);
 
-// Comma sub-chain -- f1 and f2 receive foo's value but do NOT advance the chain
-foo(), f1(..), f2(..) -> f3(..);
-
-// Parenthesized sub-chain -- this one does advance inside the sub-chain
-// But don't affect the main chain
-foo(), ( f1(..) -> f2() ) -> f3(..);
-         ^                      ^
-         |                      |
-         foo                    foo
+// A block effect stage can bind locals, but must not transfer control.
+readFile("data.bin")
+    do { let h = parse_header(..); validate(h); }
+    |> process_body(..);
 ```
-
-> Comma sub-chains are useful for side effects — logging, validation — without disrupting the main data flow.
 
 ### 9.4 `state` Functions & State Machines
 

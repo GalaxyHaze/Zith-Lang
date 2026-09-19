@@ -10,9 +10,8 @@ TypeId PerModuleSema::resolveGenericStructLiteral(frontend::TextSpan span,
                                                   const bool named,
                                                   std::vector<TypeId> explicit_args) {
     const session::ModuleKey saved_imported_template_module = importedTemplateModule_;
-    std::fprintf(stderr, "[probe] resolveGenericStructLiteral text='%s' generic=%zu imported=%s\n",
-                 template_decl.name.c_str(), expr.genericArgs.size(),
-                 importedTemplateModule_.c_str());
+    semaProbe("[probe] resolveGenericStructLiteral text='%s' generic=%zu imported=%s\n",
+              template_decl.name.c_str(), expr.genericArgs.size(), importedTemplateModule_.c_str());
     const size_t field_count = template_decl.parameters.size();
     std::vector<TypeId> template_field_types;
     template_field_types.reserve(field_count);
@@ -25,8 +24,8 @@ TypeId PerModuleSema::resolveGenericStructLiteral(frontend::TextSpan span,
             const TypeId lowered = lowerTypeExpr(param.type);
             template_field_types.push_back(lowered ? lowered : error_type);
         }
-        currentDeclId_       = saved_decl_id;
-        currentFunctionKind_ = saved_kind;
+        currentDeclId_          = saved_decl_id;
+        currentFunctionKind_    = saved_kind;
         importedTemplateModule_ = saved_imported_template_module;
     }
 
@@ -174,9 +173,9 @@ TypeId PerModuleSema::resolveGenericStructLiteral(frontend::TextSpan span,
     }
 
     for (size_t i = 0; i < field_count; ++i) {
-        const bool has_default =
-            seen[i] || static_cast<bool>(findFieldDefault(template_decl.name, i)) ||
-            !fieldVisible(*st, i);
+        const bool has_default  = seen[i] ||
+                                  static_cast<bool>(findFieldDefault(template_decl.name, i)) ||
+                                  !fieldVisible(*st, i);
         importedTemplateModule_ = saved_imported_template_module;
         if (has_default)
             continue;
@@ -208,7 +207,7 @@ TypeId PerModuleSema::inferStructLiteral(frontend::ExprId id) {
             return error_type;
         }
         importedTemplateModule_ = resolved_literal->target.module;
-        struct_tid = typeOfResolvedName(id);
+        struct_tid              = typeOfResolvedName(id);
         if (!struct_tid || type_table.kindOf(resolve(struct_tid)) == TypeKind::Union) {
             const auto *union_data =
                 struct_tid ? type_table.union_type(resolve(struct_tid)) : nullptr;
@@ -225,12 +224,11 @@ TypeId PerModuleSema::inferStructLiteral(frontend::ExprId id) {
     }
     if (!expr.genericArgs.empty()) {
         from_generic_args = true;
-        std::fprintf(stderr, "[probe] inferStructLiteral generic path text='%s' module=%s\n",
-                     struct_name.c_str(), importedTemplateModule_.c_str());
+        semaProbe("[probe] inferStructLiteral generic path text='%s' module=%s\n",
+                  struct_name.c_str(), importedTemplateModule_.c_str());
         const std::string_view name =
-            qualified_literal
-                ? std::string_view(struct_name).substr(struct_name.rfind('.') + 1U)
-                : std::string_view(struct_name);
+            qualified_literal ? std::string_view(struct_name).substr(struct_name.rfind('.') + 1U)
+                              : std::string_view(struct_name);
         const TypeId instantiated = instantiateTypeExpr(expr.span, name, expr.genericArgs);
         if (!instantiated) {
             importedTemplateModule_ = saved_imported_template_module;
@@ -252,8 +250,8 @@ TypeId PerModuleSema::inferStructLiteral(frontend::ExprId id) {
         st         = type_table.struct_type(resolved);
     }
     if (!from_generic_args && !qualified_literal) {
-        std::fprintf(stderr, "[probe] inferStructLiteral local-generic path text='%s' module=%s\n",
-                     struct_name.c_str(), importedTemplateModule_.c_str());
+        semaProbe("[probe] inferStructLiteral local-generic path text='%s' module=%s\n",
+                  struct_name.c_str(), importedTemplateModule_.c_str());
         for (const auto &decl : snapshot.declarations()) {
             if (decl.kind == frontend::DeclKind::Struct && decl.name == expr.text &&
                 !decl.genericParams.empty()) {
@@ -445,8 +443,7 @@ frontend::ExprId PerModuleSema::findFieldDefault(std::string_view struct_name,
                                                  size_t field_index) const noexcept {
     const std::string_view name = [&]() {
         const size_t dot = struct_name.rfind('.');
-        return dot == std::string_view::npos ? struct_name
-                                             : struct_name.substr(dot + 1U);
+        return dot == std::string_view::npos ? struct_name : struct_name.substr(dot + 1U);
     }();
     const auto &snap =
         importedTemplateModule_.empty()
@@ -454,9 +451,9 @@ frontend::ExprId PerModuleSema::findFieldDefault(std::string_view struct_name,
             : (owner != nullptr && owner->findModuleSema(importedTemplateModule_) != nullptr
                    ? owner->findModuleSema(importedTemplateModule_)->snapshot
                    : snapshot);
-    std::fprintf(stderr, "[probe] findFieldDefault name='%.*s' import=%s idx=%zu\n",
-                 static_cast<int>(struct_name.size()), struct_name.data(),
-                 importedTemplateModule_.c_str(), field_index);
+    semaProbe("[probe] findFieldDefault name='%.*s' import=%s idx=%zu\n",
+              static_cast<int>(struct_name.size()), struct_name.data(),
+              importedTemplateModule_.c_str(), field_index);
     for (const auto &decl : snap.declarations()) {
         if (decl.kind != frontend::DeclKind::Struct || decl.name != name)
             continue;

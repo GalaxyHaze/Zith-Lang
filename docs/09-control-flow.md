@@ -86,36 +86,39 @@ fn main() {
 The tagged-union `{ T, End }` protocol remains accepted during migration, but the optional
 protocol is canonical and should be used for new iterators.
 
-### 9.3 Chain Flow (`->`)
+### 9.3 Pipeline (`|>` and `do`)
 
-The `->` operator pipes output left to right. The previous value is available as `..`, and tags capture values for later use. `!` and `?` propagate out of the chain normally. Precedence is left-to-right and lower than function calls.
+Pipelines are C-style and explicitly threaded. Each stage reads the current
+value through `..`; there is no automatic injection, implicit argument, or
+tag/`?`/`!` propagation. `x |> f(..)` is equivalent to `f(x)` except that the
+source value is materialized once before the stage runs. The stage must
+reference the current value exactly once and `..` is valid only inside a
+pipeline stage.
+
+`|>` replaces the chain value with the stage result. `do` performs a
+side-effect stage and keeps the chain value unchanged, so `x do f(..)` returns
+`x`. `do` is only a chain operator, not a standalone statement. Both operators
+are left-associative and have lower precedence than calls; do not use `->` for
+this role.
 
 ```zith
-getData() -> process(..) -> save(..);
+getData() |> process(..) |> save(..);
 
 getData()
-    -> raw:    parse(..)
-    -> parsed: validate(..)!       // ! propagates out of the chain
-    -> connectDb()
-    -> save(parsed);
+    |> parse(..)
+    |> validate(..)
+    |> save(..);
 
-// Inline block
+// Inline side-effect: log the current value without advancing the chain.
 readFile("data.bin")
-    -> { let h = parse_header(..); validate(h)! }
-    -> process_body(..);
+    do log(..)
+    |> process_body(..);
 
-// Comma sub-chain -- f1 and f2 receive foo's value but do NOT advance the chain
-foo(), f1(..), f2(..) -> f3(..);
-
-// Parenthesized sub-chain -- this one does advance inside the sub-chain
-// But don't affect the main chain
-foo(), ( f1(..) -> f2() ) -> f3(..);
-         ^                      ^
-         |                      |
-         foo                    foo
+// A block effect stage can bind locals, but must not transfer control.
+readFile("data.bin")
+    do { let header = parse_header(..); validate(header); }
+    |> process_body(..);
 ```
-
-> Comma sub-chains are useful for side effects, such as logging or validation, without disrupting the main data flow.
 
 ### 9.4 `state` Functions & State Machines
 

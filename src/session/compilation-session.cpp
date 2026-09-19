@@ -457,9 +457,8 @@ bool CompilationSession::lexStage() {
                         decl.ownerName.empty() ? "" : decl.ownerName.c_str());
             for (const auto &expr : root->frontend->expressions()) {
                 writeOutput("  expr kind=%d text='%s' generic=%zu operands=%zu field_names=%zu\n",
-                            static_cast<int>(expr.kind), expr.text.c_str(),
-                            expr.genericArgs.size(), expr.operands.size(),
-                            expr.field_names.size());
+                            static_cast<int>(expr.kind), expr.text.c_str(), expr.genericArgs.size(),
+                            expr.operands.size(), expr.field_names.size());
             }
             if (decl.kind == frontend::DeclKind::Trait) {
                 for (const auto &member : root->frontend->declarations()) {
@@ -601,8 +600,8 @@ bool CompilationSession::semaStage() {
         forwardSnapshotDiagnostics();
         return false;
     }
-    mModernSemaPipeline =
-        std::make_unique<sema::modern::SemaPipeline>(mScratchArena, mDiags, *mSnapshot);
+    mModernSemaPipeline = std::make_unique<sema::modern::SemaPipeline>(
+        mScratchArena, mDiags, *mSnapshot, mOpts.get().flags.debugSema());
     mGenericInstantiations = std::make_unique<comptime::GenericInstantiationPass>(
         *mSnapshot, mModernSemaPipeline->typeTable());
     mModernSemaPipeline->setInstantiations(mGenericInstantiations.get());

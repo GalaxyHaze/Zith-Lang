@@ -6,6 +6,8 @@
 #include "support/int-literal.hpp"
 
 #include <algorithm>
+#include <cstdarg>
+#include <cstdio>
 #include <cstring>
 #include <functional>
 
@@ -104,10 +106,19 @@ void PerModuleSema::reportNote(frontend::TextSpan span, std::string message) {
                         static_cast<uint32_t>(0));
 }
 
+void PerModuleSema::semaProbe(const char *fmt, ...) const {
+    if (!debugSema)
+        return;
+    std::va_list args;
+    va_start(args, fmt);
+    std::vfprintf(stderr, fmt, args);
+    va_end(args);
+}
+
 SemaPipeline::SemaPipeline(memory::Arena &arena, diagnostics::DiagnosticEngine &diags,
-                           const session::CompilationSnapshot &snapshot)
+                           const session::CompilationSnapshot &snapshot, bool debugSema)
     : arena_(arena), diags_(diags), snapshot_(snapshot), type_table_(arena), typed_maps_(),
-      modules_(arena), has_errors_(false) {}
+      modules_(arena), has_errors_(false), debugSema_(debugSema) {}
 
 bool SemaPipeline::run() {
     for (const auto &artifact_ptr : snapshot_.modules()) {
@@ -120,6 +131,7 @@ bool SemaPipeline::run() {
         auto *sema =
             arena_.make<PerModuleSema>(artifact.key, *artifact.frontend, *resolution, type_table_,
                                        typed_map, arena_, artifact.fileId, this);
+        sema->debugSema      = debugSema_;
         sema->instantiations = instantiation_pass_;
         modules_.push(sema);
     }

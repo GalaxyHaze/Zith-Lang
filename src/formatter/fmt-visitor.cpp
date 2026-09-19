@@ -194,6 +194,9 @@ int FmtVisitor::exprPrecedence(const frontend::Expression &expr) const noexcept 
         return 1;
     case frontend::ExprKind::Binary:
         return binaryPrecedence(expr.text);
+    case frontend::ExprKind::Pipe:
+    case frontend::ExprKind::PipeDo:
+        return 1;
     case frontend::ExprKind::Unary:
         return 12;
     case frontend::ExprKind::WhenGuard:
@@ -822,6 +825,19 @@ void FmtVisitor::visitExpr(const frontend::ExprId id, const int parent_prec) {
         visitExpr(value, current_prec);
         break;
     }
+    case frontend::ExprKind::Pipe:
+    case frontend::ExprKind::PipeDo: {
+        if (expr->operands.size() != 2U) {
+            emitOriginal(expr->span);
+            break;
+        }
+        visitExpr(expr->operands[0], current_prec);
+        emit(" ");
+        emit(expr->text);
+        emit(" ");
+        visitExpr(expr->operands[1], current_prec + 1);
+        break;
+    }
     case frontend::ExprKind::Call:
     case frontend::ExprKind::DockCall:
         if (expr->operands.empty()) {
@@ -1141,6 +1157,9 @@ void FmtVisitor::visitExpr(const frontend::ExprId id, const int parent_prec) {
         break;
     case frontend::ExprKind::Placeholder:
         emit("_");
+        break;
+    case frontend::ExprKind::PipeCurrent:
+        emit("..");
         break;
     case frontend::ExprKind::LayoutIntrinsic:
         emitOriginal(expr->span);

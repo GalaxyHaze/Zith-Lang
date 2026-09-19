@@ -53,6 +53,11 @@ enum class HirExprKind : uint8_t {
     OpaqueCast,
     OpaqueCheck,
     RuntimePanic,
+    /// `source |> stage(..)` or `source do stage(..)`. The source is
+    /// explicitly referenced by `HirPipeCurrent` inside `stage`; no automatic
+    /// value propagation is performed.
+    Pipe,
+    PipeCurrent,
 };
 
 enum class HirBinaryOp : uint8_t {
@@ -410,6 +415,26 @@ struct HirCanonicalType {
     HirExprKind tag = HirExprKind::CanonicalType;
 };
 
+/// One stage of a `|>` / `do` pipeline. `source` is materialized into a slot
+/// before `stage` is evaluated; `stage` reads the current value only through
+/// `HirPipeCurrent`.
+struct HirPipe {
+    HirSlotId source_slot = kInvalidHirSlot;
+    HirTypeId source_type = types::kInvalidType;
+    HirExprId stage       = kInvalidHirExpr;
+    HirTypeId type        = types::kInvalidType;
+    bool is_effect        = false;
+    HirExprKind tag       = HirExprKind::Pipe;
+};
+
+/// Synthetic `..` placeholder lowered inside a `|>` / `do` stage. `slot`
+/// refers to the current pipeline slot and `type` is the current stage type.
+struct HirPipeCurrent {
+    HirSlotId slot = kInvalidHirSlot;
+    HirTypeId type = types::kInvalidType;
+    HirExprKind tag = HirExprKind::PipeCurrent;
+};
+
 using HirExpr =
     std::variant<HirLiteral, HirBinary, HirUnary, HirLet, HirVar, HirCall, HirRet, HirBranch,
                  HirJump, HirPhi, HirAssign, HirIndex, HirField, HirStructLiteral, HirArrayLiteral,
@@ -417,7 +442,7 @@ using HirExpr =
                  HirMakeSome, HirMakeSlice, HirCast, HirUnionCast, HirUnionCheck,
                  HirLayoutIntrinsic, HirStateTailCall, HirCleanup, HirGlobalConstLoad, HirMakeDyn,
                  HirDynCall, HirMakeOpaque, HirOpaqueCast, HirOpaqueCheck, HirRuntimePanic,
-                 HirCanonicalType>;
+                 HirCanonicalType, HirPipe, HirPipeCurrent>;
 
 inline HirExprKind exprKind(const HirExpr &expr) {
     return std::visit([](const auto &entry) { return entry.tag; }, expr);

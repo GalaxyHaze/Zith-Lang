@@ -440,6 +440,25 @@ são emitidos primeiro. O cleanup final é `HirExprKind::Cleanup` em reverse ord
 antes de `ret`, branches de `break`/`continue` e `HirStateTailCall`. `state`
 sem return type declarado é tratado como `void` e nunca tem tipo inferido do corpo.
 
+## Pipelines `|>` e `do`
+
+O frontend baixa `x |> stage` para `ExprKind::Pipe` e `x do stage` para
+`ExprKind::PipeDo`; dentro de um stage o `..` é `ExprKind::PipeCurrent`. O
+stage é explicitamente threaded: `x |> f(..)` equivale a `f(x)` com `x`
+materializado uma vez, e `x do f(..)` executa o stage como efeito mas mantém a
+chain em `x`. Não há injeção implícita de argumentos nem propagação automática
+de `?`/`!`/tags.
+
+`PerModuleSema::inferPipe` guarda o tipo da source, infera o stage com um
+contexto `PipeCurrent`, exige exatamente um `..` no stage e rejeita `..` fora
+desse contexto. `do { ... }` é cleanup-only: não produz um valor e não pode
+transferir controlo com `return`/`break`/`continue`/`jump`. O lowering
+`HirLowerModern::lowerPipe` materializa a source num slot, baixa o stage com
+`HirPipeCurrent` para esse slot e emite `HirPipe`. `do` com um bloco sem valor
+usa um `HirCleanup` vazio como stage sintetizado para que o efeito e a ordem
+continuem visíveis no HIR e no codegen; codegen executa o stage e depois volta
+a ler o slot para preservar o valor da chain.
+
 For-in usa o protocolo canonico `next(self): ?T`: `null` é o fim da iteração e `Some(T)` é um
 elemento. `next(self): ??T` suporta iteradores com elementos opcionais; o loop variable é `?T`
 e só o `None` exterior termina. O HIR chama `next` no header, ramifica por um branch sobre o

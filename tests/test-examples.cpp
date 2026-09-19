@@ -95,7 +95,7 @@ int runExample(const fs::path &workdir, const char *name) {
     const std::string command = std::string("cd \"") + workdir.string() + "\" && \"" +
                                 ZITHC_BINARY + "\" --include \"" + ZITH_STDLIB_DIR + "\" run \"" +
                                 staged + "\"";
-    const int status = std::system(command.c_str());
+    const int status          = std::system(command.c_str());
     if (status < 0) {
         return -1;
     }
@@ -131,8 +131,8 @@ void test_run_separates_program_stdout_from_compiler_logs() {
                                 ZITHC_BINARY + "\" --include \"" + ZITH_STDLIB_DIR +
                                 "\" run --emit-hir \"" + source.string() + "\" > \"" +
                                 outPath.string() + "\" 2> \"" + errPath.string() + "\"";
-    const int status   = std::system(command.c_str());
-    const int exitCode = (status & 0x7F) == 0 ? ((status >> 8) & 0xFF) : -1;
+    const int status          = std::system(command.c_str());
+    const int exitCode        = (status & 0x7F) == 0 ? ((status >> 8) & 0xFF) : -1;
     CHECK_EQ(exitCode, 21, "run --emit-hir exits with the program's status");
 
     const std::string out = readFile(outPath);
@@ -142,6 +142,51 @@ void test_run_separates_program_stdout_from_compiler_logs() {
     CHECK(err.find("--- HIR ---") != std::string::npos, "the HIR dump lands on stderr");
     CHECK(err.find("program-stdout=5") == std::string::npos,
           "stderr does not duplicate the program's output");
+
+    fs::remove(outPath, ec);
+    fs::remove(errPath, ec);
+    fs::remove(source, ec);
+}
+
+void test_debug_sema_probes() {
+    const fs::path workdir = fs::path(ZITH_EXAMPLES_WORKDIR);
+    std::error_code ec;
+    fs::create_directories(workdir, ec);
+
+    const fs::path source = workdir / "debug-sema-probes.zith";
+    {
+        std::ofstream out(source, std::ios::binary);
+        out << "fn add(x: i32, y: i32): i32 {\n"
+               "    return x + y;\n"
+               "}\n"
+               "fn main(): i32 {\n"
+               "    return add(1, 2);\n"
+               "}\n";
+    }
+
+    const fs::path outPath = workdir / "debug-sema-probes.stdout";
+    const fs::path errPath = workdir / "debug-sema-probes.stderr";
+    const auto runWithFlag = [&](bool debugSema) {
+        fs::remove_all(workdir / "cache", ec);
+        fs::remove_all(workdir / "target", ec);
+        fs::remove_all(workdir / ".zith-cache", ec);
+        const std::string flag    = debugSema ? " --debug-sema" : "";
+        const std::string command = std::string("cd \"") + workdir.string() + "\" && \"" +
+                                    ZITHC_BINARY + "\" --include \"" + ZITH_STDLIB_DIR + "\" run" +
+                                    flag + " \"" + source.string() + "\" > \"" + outPath.string() +
+                                    "\" 2> \"" + errPath.string() + "\"";
+        const int status          = std::system(command.c_str());
+        return (status & 0x7F) == 0 ? ((status >> 8) & 0xFF) : -1;
+    };
+
+    CHECK_EQ(runWithFlag(false), 3, "sema probes off does not change run exit code");
+    CHECK(readFile(errPath).find("[probe]") == std::string::npos,
+          "stderr has no sema probes by default");
+
+    CHECK_EQ(runWithFlag(true), 3, "sema probes on does not change run exit code");
+    const std::string err = readFile(errPath);
+    CHECK(err.find("[probe] inferCall") != std::string::npos,
+          "--debug-sema prints inferCall probes on stderr");
 
     fs::remove(outPath, ec);
     fs::remove(errPath, ec);
@@ -163,6 +208,7 @@ void test_examples() {
     }
 
     test_run_separates_program_stdout_from_compiler_logs();
+    test_debug_sema_probes();
 }
 
 } // namespace

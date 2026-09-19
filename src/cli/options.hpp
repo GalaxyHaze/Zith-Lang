@@ -68,6 +68,7 @@ struct Options {
     //  20:   emitAsm       (1 bit)
     //  21:   printTokens   (1 bit)
     //  22:   cacheStats    (1 bit)
+    //  23:   debugSema     (1 bit)
     struct {
         std::bitset<24> bits{};
 
@@ -207,6 +208,13 @@ struct Options {
         }
         void cacheStats(bool v) {
             bits.set(22, v);
+        }
+
+        bool debugSema() const {
+            return bits.test(23);
+        }
+        void debugSema(bool v) {
+            bits.set(23, v);
         }
     } flags;
 

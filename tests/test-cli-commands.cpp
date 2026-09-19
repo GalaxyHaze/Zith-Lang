@@ -26,6 +26,8 @@ static void test_options_defaults() {
 
     // include dirs start empty
     CHECK(opts.includeDirs.empty(), "default includeDirs is empty");
+
+    CHECK(!opts.flags.debugSema(), "debug-sema defaults to disabled");
 }
 
 static void test_options_command_enum() {
@@ -142,6 +144,22 @@ static void test_system_includes_flag() {
     CHECK(!disabled.opts.systemIncludes, "--no-system-includes clears system includes");
 }
 
+static void test_debug_sema_flag() {
+    memory::Arena arena;
+    Options opts(arena);
+    CHECK(!opts.flags.debugSema(), "debug-sema is off by default");
+
+    char program[] = "zithc";
+    char command[] = "check";
+    char input[]   = "main.zith";
+    char flag[]    = "--debug-sema";
+    char *argv[]   = {program, command, flag, input};
+
+    Cli cli;
+    cli.parseArgs(4, argv);
+    CHECK(cli.opts.flags.debugSema(), "--debug-sema enables the sema probe flag");
+}
+
 // ── ProjectConfig + Options merge helper ──────────────────────────
 
 static void test_merge_strings_order_and_append() {
@@ -229,6 +247,7 @@ static void test_cli_commands() {
     test_command_names_match_contract();
     test_llvm_version_information();
     test_system_includes_flag();
+    test_debug_sema_flag();
     test_merge_strings_order_and_append();
     test_merge_strings_source_filter();
 }

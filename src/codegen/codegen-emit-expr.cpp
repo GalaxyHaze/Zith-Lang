@@ -43,6 +43,26 @@ llvm::Value *CodeGenEmit::emitExpr(hir::HirExprId id, const hir::HirModule &mod)
             [&](const hir::HirOpaqueCast &cast) { return emitOpaqueCast(cast, mod); },
             [&](const hir::HirOpaqueCheck &check) { return emitOpaqueCheck(check, mod); },
             [&](const hir::HirRuntimePanic &panic) { return emitRuntimePanic(panic); },
+            [&](const hir::HirPipe &pipe) -> llvm::Value * {
+                auto *stage  = emitExpr(pipe.stage, mod);
+                if (pipe.is_effect && stage != nullptr) {
+                    if (pipe.source_slot >= slots_.size())
+                        return nullptr;
+                    llvm::Value *slot_addr = slots_[pipe.source_slot];
+                    if (slot_addr == nullptr)
+                        return nullptr;
+                    return builder_.CreateLoad(typeGen_.lower(pipe.source_type), slot_addr);
+                }
+                return stage;
+            },
+            [&](const hir::HirPipeCurrent &current) -> llvm::Value * {
+                if (current.slot >= slots_.size())
+                    return nullptr;
+                llvm::Value *slot_addr = slots_[current.slot];
+                if (slot_addr == nullptr)
+                    return nullptr;
+                return builder_.CreateLoad(typeGen_.lower(current.type), slot_addr);
+            },
             [&](const hir::HirRet &ret) { return emitRet(ret, mod); },
             [&](const hir::HirStateTailCall &tail) { return emitStateTailCall(tail, mod); },
             [&](const hir::HirCleanup &cleanup) { return emitCleanup(cleanup, mod); },

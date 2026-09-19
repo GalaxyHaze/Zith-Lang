@@ -2661,6 +2661,105 @@ void test_when_guards_lower_contextually_without_diagnostics() {
     CHECK(fn != nullptr, "classify is present in HIR");
 }
 
+void test_pipe_lowers_to_hir_pipeline_nodes() {
+    Workspace workspace;
+    workspace.writeFile("main.zith", "fn addOne(x: i32): i32 { x + 1 }\n"
+                                     "fn main(): i32 {\n"
+                                     "    10 |> addOne(..) do addOne(..) |> addOne(..)\n"
+                                     "}\n");
+
+    memory::Arena arena;
+    Options options(arena);
+    auto session = makeSession(workspace, arena, options, "main.zith");
+
+    CHECK(session.runTo(session::Stage::HirLowered),
+          "pipeline expression lowers through sema and HIR");
+    CHECK(!session.hasErrors(), "pipeline lowering reports no diagnostics");
+    const auto &hir = session.hirModule();
+    CHECK(countExprKind(hir, hir::HirExprKind::Pipe) >= 2u,
+          "pipeline stages lower to HirPipe");
+    CHECK(countExprKind(hir, hir::HirExprKind::PipeCurrent) >= 2u,
+          "'..' placeholders lower to HirPipeCurrent reads");
+}
+
+void test_pipe_block_effect_stage_lowers() {
+    Workspace workspace;
+    workspace.writeFile(
+        "main.zith", "fn addOne(x: i32): i32 { x + 1 }\n"
+                    "fn double(x: i32): i32 { x * 2 }\n"
+                    "fn main(): i32 {\n"
+                    "    10 |> addOne(..) do { let ignored = double(..); } |> double(..)\n"
+                    "}\n");
+
+    memory::Arena arena;
+    Options options(arena);
+    auto session = makeSession(workspace, arena, options, "main.zith");
+
+    CHECK(session.runTo(session::Stage::HirLowered),
+          "do block stage lowers through sema and HIR");
+    CHECK(!session.hasErrors(), "do block stage reports no diagnostics");
+}
+
+namespace {
+
+void checkPipeDiagnostic(std::string_view source, std::string_view expected_message) {
+    Workspace workspace;
+    workspace.writeFile("main.zith", source);
+
+    memory::Arena arena;
+    Options options(arena);
+    auto session = makeSession(workspace, arena, options, "main.zith");
+
+    CHECK(!session.runTo(session::Stage::HirLowered),
+          "invalid pipeline stage must fail the lowering stage");
+    CHECK(session.hasErrors(), "invalid pipeline stage reports diagnostics");
+
+    bool found = false;
+    for (const auto &diagnostic : session.diags().all()) {
+        if (diagnostic.message.find(expected_message) != std::string::npos) {
+            found = true;
+            break;
+        }
+    }
+    CHECK(found, "expected pipeline diagnostic is present");
+}
+
+} // namespace
+
+void test_pipe_rejects_missing_placeholder() {
+    checkPipeDiagnostic(
+        "fn addOne(x: i32): i32 { x + 1 }\n"
+        "fn main(): i32 { 10 |> addOne(0) }\n",
+        "pipeline stage must reference the current value exactly once with '..'");
+}
+
+void test_pipe_rejects_multiple_placeholders() {
+    checkPipeDiagnostic(
+        "fn add(x: i32, y: i32): i32 { x + y }\n"
+        "fn main(): i32 { 10 |> add(.., ..) }\n",
+        "a pipeline stage may use '..' only once");
+}
+
+void test_pipe_rejects_placeholder_outside_stage() {
+    checkPipeDiagnostic(
+        "fn main(): i32 { .. }\n",
+        "expected an expression");
+}
+
+void test_pipe_block_rejects_missing_placeholder() {
+    checkPipeDiagnostic(
+        "fn addOne(x: i32): i32 { x + 1 }\n"
+        "fn main(): i32 { 10 do { let ignored = addOne(1); } }\n",
+        "pipeline stage must reference the current value exactly once with '..'");
+}
+
+void test_pipe_block_rejects_control_flow() {
+    checkPipeDiagnostic(
+        "fn addOne(x: i32): i32 { x + 1 }\n"
+        "fn main(): i32 { 10 do { return addOne(..); } }\n",
+        "'do { ... }' cannot transfer control out of the effect stage");
+}
+
 void test_imported_bare_opaque_cross_module() {
     IsolatedWorkspace workspace;
     workspace.writeFile("dep.zith", "pub fn dep_make(): opaque { 42 as opaque }\n");
@@ -2779,6 +2878,13 @@ static void test_hir_lower_modern() {
     test_nested_optional_for_in_loop_variable_is_optional();
     test_state_value_dock_lowers_to_indirect_tailcc_call();
     test_when_guards_lower_contextually_without_diagnostics();
+    test_pipe_lowers_to_hir_pipeline_nodes();
+    test_pipe_block_effect_stage_lowers();
+    test_pipe_rejects_missing_placeholder();
+    test_pipe_rejects_multiple_placeholders();
+    test_pipe_rejects_placeholder_outside_stage();
+    test_pipe_block_rejects_missing_placeholder();
+    test_pipe_block_rejects_control_flow();
     test_anonymous_pack_literal_lowers_to_hir();
 }
 

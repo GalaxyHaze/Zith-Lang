@@ -114,6 +114,10 @@ private:
     uint32_t current_state_machine_id_                = 0;
     size_t current_block_                             = 0;
     hir::HirSlotId next_slot_                         = 0;
+    /// Current pipeline slot while lowering a `|>` / `do` stage. Restored
+    /// after the stage so a `..` at the wrong nesting level is rejected by
+    /// sema instead of leaking into unrelated expressions.
+    hir::HirSlotId pipe_current_slot_ = hir::kInvalidHirSlot;
     std::vector<hir::HirSlotId> local_slots_;
     symbols::SymId next_sym_id_ = 1;
 
@@ -219,6 +223,11 @@ private:
     hir::HirExprId lowerLValueAddr(frontend::ExprId id);
     hir::HirExprId lowerUnary(const frontend::Expression &expr, types::TypeId type);
     hir::HirExprId lowerBinary(const frontend::Expression &expr, types::TypeId type);
+    hir::HirExprId lowerPipe(const frontend::Expression &expr, types::TypeId type);
+    hir::HirExprId lowerPipeCurrent(const frontend::Expression &expr);
+    /// Returns the frontend id of the single `..` placeholder within `stage`,
+    /// or zero when none is present.
+    [[nodiscard]] frontend::ExprId findPipeCurrent(frontend::ExprId stage) const noexcept;
     hir::HirExprId lowerCall(const frontend::Expression &expr);
     /// Lowers `defaultId` in the module that declared the callee/parameter.
     /// Default expressions live in the declaring module's frontend snapshot

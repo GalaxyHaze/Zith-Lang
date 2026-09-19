@@ -519,6 +519,19 @@ CompactExpr ArtifactBuilder::convertExpr(hir::HirExprId id) {
                            out.type_id = internType(canonical.type);
                            out.ints    = {canonical.canonical_id.hi, canonical.canonical_id.lo};
                        },
+                       [&](const hir::HirPipe &pipe) {
+                           out.kind     = pipe.is_effect ? CompactExprKind::PipeDo
+                                                         : CompactExprKind::Pipe;
+                           out.ref_a    = pipe.stage;
+                           out.ref_b    = pipe.source_slot;
+                           out.type_id  = internType(pipe.type);
+                           out.ref_e    = internType(pipe.source_type);
+                       },
+                       [&](const hir::HirPipeCurrent &current) {
+                           out.kind    = CompactExprKind::PipeCurrent;
+                           out.ref_a   = current.slot;
+                           out.type_id = internType(current.type);
+                       },
                    });
     return out;
 }

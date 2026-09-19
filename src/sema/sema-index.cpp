@@ -213,14 +213,14 @@ TypeId PerModuleSema::inferField(frontend::ExprId id) {
     const auto &expr = snapshot.expressions()[id.value - 1U];
     if (expr.operands.empty())
         return error_type;
-    std::fprintf(stderr, "[probe] inferField id=%u text='%s' op=%u\n", id.value, expr.text.c_str(),
-                 expr.operands.empty() ? 0U : expr.operands[0].value);
+    semaProbe("[probe] inferField id=%u text='%s' op=%u\n", id.value, expr.text.c_str(),
+              expr.operands.empty() ? 0U : expr.operands[0].value);
     const auto *own_resolved = findResolvedExpr(id);
-    std::fprintf(stderr, "[probe] inferField resolved=%d kind=%d text='%s' target='%s'\n",
-                 own_resolved != nullptr,
-                 own_resolved != nullptr ? static_cast<int>(own_resolved->kind) : -1,
-                 own_resolved != nullptr ? own_resolved->name.c_str() : "",
-                 own_resolved != nullptr ? own_resolved->target.module.c_str() : "");
+    semaProbe("[probe] inferField resolved=%d kind=%d text='%s' target='%s'\n",
+              own_resolved != nullptr,
+              own_resolved != nullptr ? static_cast<int>(own_resolved->kind) : -1,
+              own_resolved != nullptr ? own_resolved->name.c_str() : "",
+              own_resolved != nullptr ? own_resolved->target.module.c_str() : "");
     // Fully-qualified module paths (`std.io.console.println`, `std.counter.Counter`)
     // keep intermediate Field nodes whose base ultimately binds to a module alias.
     // Those nodes are namespaces, not value fields: sema must not diagnose them as

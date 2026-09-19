@@ -214,6 +214,9 @@ enum class CompactExprKind : uint8_t {
     OpaqueCheck,
     RuntimePanic,
     CanonicalType,
+    Pipe,
+    PipeDo,
+    PipeCurrent,
 };
 
 enum class CompactBinaryOp : uint8_t {

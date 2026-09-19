@@ -228,6 +228,30 @@ static bool hasErrorCode(const frontend::FrontendSnapshot &snapshot, uint32_t co
     return false;
 }
 
+static void test_pipe_operators_parse_as_chain() {
+    auto snapshot = frontend::parse("fn addOne(x: i32): i32 { x + 1 }\n"
+                                    "fn main(): i32 {\n"
+                                    "    let out = 10 |> addOne(..);\n"
+                                    "    out |> addOne(..) do addOne(..) |> addOne(..)\n"
+                                    "}\n");
+
+    CHECK(snapshot.diagnostics().empty(), "pipe syntax lowers without recovery diagnostics");
+    std::size_t pipes    = 0;
+    std::size_t effects  = 0;
+    std::size_t currents = 0;
+    for (const auto &expression : snapshot.expressions()) {
+        if (expression.kind == frontend::ExprKind::Pipe)
+            ++pipes;
+        else if (expression.kind == frontend::ExprKind::PipeDo)
+            ++effects;
+        else if (expression.kind == frontend::ExprKind::PipeCurrent)
+            ++currents;
+    }
+    CHECK_EQ(pipes, 3u, "three '|>' nodes are lowered");
+    CHECK_EQ(effects, 1u, "one 'do' node is lowered");
+    CHECK_EQ(currents, 4u, "each stage contributes its explicit '..' placeholder");
+}
+
 static void test_return_expression_requires_semicolon() {
     auto with_value = frontend::parse("fn f(): i32 {\n"
                                       "    return 5;\n"
@@ -1443,6 +1467,7 @@ static void test_frontend() {
     test_recovery_creates_error_nodes();
     test_function_body_ast();
     test_control_flow_and_scopes();
+    test_pipe_operators_parse_as_chain();
     test_state_and_dock_jump_syntax();
     test_old_state_machine_syntax_is_rejected();
     test_while_is_deprecated();

@@ -64,6 +64,13 @@ TypeId PerModuleSema::inferExpr(frontend::ExprId id) {
     case frontend::ExprKind::Binary:
         result = inferBinary(id);
         break;
+    case frontend::ExprKind::Pipe:
+    case frontend::ExprKind::PipeDo:
+        result = inferPipe(id);
+        break;
+    case frontend::ExprKind::PipeCurrent:
+        result = inferPipeCurrent(id);
+        break;
     case frontend::ExprKind::Call:
         result = inferCall(id);
         break;
@@ -421,6 +428,75 @@ TypeId PerModuleSema::inferBinary(frontend::ExprId id) {
         result = error_type;
     }
     return result;
+}
+
+static std::size_t pipeCurrentCount(frontend::ExprId id,
+                                    const frontend::FrontendSnapshot &snapshot) {
+    if (!id || id.value > snapshot.expressions().size())
+        return 0;
+    const auto &expr = snapshot.expressions()[id.value - 1U];
+    if (expr.kind == frontend::ExprKind::PipeCurrent)
+        return 1;
+    std::size_t count = 0;
+    for (const auto operand : expr.operands)
+        count += pipeCurrentCount(operand, snapshot);
+    for (const auto stmt_id : expr.statements) {
+        if (!stmt_id || stmt_id.value > snapshot.statements().size())
+            continue;
+        const auto &stmt = snapshot.statements()[stmt_id.value - 1U];
+        if (stmt.expression)
+            count += pipeCurrentCount(stmt.expression, snapshot);
+        if (stmt.kind == frontend::StmtKind::Binding && stmt.binding.initializer)
+            count += pipeCurrentCount(stmt.binding.initializer, snapshot);
+    }
+    return count;
+}
+
+TypeId PerModuleSema::inferPipe(frontend::ExprId id) {
+    const auto &expr = snapshot.expressions()[id.value - 1U];
+    if (expr.operands.size() != 2U)
+        return error_type;
+
+    const TypeId source = inferExpr(expr.operands[0]);
+    const auto current  = pipeCurrentType_;
+    pipeCurrentType_    = source;
+    const TypeId stage_type = inferExpr(expr.operands[1]);
+    pipeCurrentType_        = current;
+
+    const std::size_t current_count = pipeCurrentCount(expr.operands[1], snapshot);
+    if (current_count == 0U) {
+        report(expr.span,
+               "pipeline stage must reference the current value exactly once with '..'",
+               diagnostics::err::ExpectedExpr);
+        return error_type;
+    }
+    if (current_count > 1U) {
+        report(expr.span, "a pipeline stage may use '..' only once",
+               diagnostics::err::UnsupportedSyntax);
+        return error_type;
+    }
+    if (expr.kind == frontend::ExprKind::PipeDo) {
+        const auto &stage = snapshot.expressions()[expr.operands[1].value - 1U];
+        if (stage.kind == frontend::ExprKind::Block && deferBodyHasControlFlow(expr.operands[1])) {
+            report(stage.span,
+                   "'do { ... }' cannot transfer control out of the effect stage",
+                   diagnostics::err::UnsupportedSyntax);
+        }
+        return source;
+    }
+    return stage_type;
+}
+
+TypeId PerModuleSema::inferPipeCurrent(frontend::ExprId id) {
+    if (pipeCurrentType_ == kInvalidTypeId) {
+        if (id && id.value <= snapshot.expressions().size()) {
+            const auto &expr = snapshot.expressions()[id.value - 1U];
+            report(expr.span, "'..' is only valid inside a '|>' or 'do' pipeline stage",
+                   diagnostics::err::UnsupportedSyntax);
+        }
+        return error_type;
+    }
+    return pipeCurrentType_;
 }
 
 TypeId PerModuleSema::inferContains(frontend::ExprId binary_id, frontend::ExprId value,

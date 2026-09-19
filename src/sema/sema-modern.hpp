@@ -125,6 +125,7 @@ struct PerModuleSema {
     memory::Arena &arena;
     memory::DynArray<Diagnostic> diagnostics;
     SemaPipeline *owner = nullptr;
+    bool debugSema      = false;
 
     TypeId error_type;
     TypeId invalid_type;
@@ -157,6 +158,7 @@ struct PerModuleSema {
 
     void report(frontend::TextSpan span, std::string message, uint32_t code = 0);
     void reportNote(frontend::TextSpan span, std::string message);
+    void semaProbe(const char *fmt, ...) const;
 
     std::string_view sourceText(frontend::TextSpan span) const noexcept;
     memory::Span toMemorySpan(frontend::TextSpan span) const noexcept;
@@ -252,6 +254,10 @@ private:
     /// Labels of loops currently being inferred. A non-empty label must be
     /// unique among active loops so it can name a `break`/`continue` target.
     std::vector<std::string> active_loop_labels_;
+    /// Type of the current value consumed by `..` inside an active `|>` /
+    /// `do` stage. Invalid while no stage is being inferred. Set only around
+    /// the stage RHS, so a `..` outside a chain is rejected.
+    TypeId pipeCurrentType_ = kInvalidTypeId;
 
     /// Whether the resolved binding's function accepts a trailing variadic tail.
     [[nodiscard]] static bool bindingIsVariadic(const session::ResolvedName &binding) noexcept;
@@ -354,6 +360,12 @@ private:
     TypeId inferName(frontend::ExprId id, std::string_view text);
     TypeId inferUnary(frontend::ExprId id);
     TypeId inferBinary(frontend::ExprId id);
+    /// Infers a `|>` / `do` stage. The source is evaluated once into the
+    /// active pipe current value; `..` is the only placeholder and there is
+    /// no automatic propagation into the stage.
+    TypeId inferPipe(frontend::ExprId id);
+    /// Infers the `..` placeholder of the enclosing `|>` / `do` stage.
+    TypeId inferPipeCurrent(frontend::ExprId id);
     /// Resolves `x in rhs` through the `Contains` duck-typed protocol
     /// `contains(self, value): bool`. A literal integer/float range is valid
     /// without a user-defined method; the HIR lowers it to bound comparisons.
@@ -694,7 +706,7 @@ private:
 class SemaPipeline {
 public:
     SemaPipeline(memory::Arena &arena, diagnostics::DiagnosticEngine &diags,
-                 const session::CompilationSnapshot &snapshot);
+                 const session::CompilationSnapshot &snapshot, bool debugSema = false);
 
     bool run();
     bool hasErrors() const noexcept;
@@ -724,6 +736,9 @@ public:
     /// True when `id` resolves to a borrow parameter (`*lend T` / `*view T`).
     [[nodiscard]] bool isBorrowParameter(session::ModuleKey module,
                                          frontend::ExprId id) const noexcept;
+    [[nodiscard]] bool debugSema() const noexcept {
+        return debugSema_;
+    }
     TypedMap &typedMap(session::ModuleKey module) noexcept;
 
 private:
@@ -735,6 +750,7 @@ private:
     memory::DynArray<PerModuleSema *> modules_;
     bool has_errors_                                        = false;
     comptime::GenericInstantiationPass *instantiation_pass_ = nullptr;
+    bool debugSema_                                         = false;
 };
 
 } // namespace zith::sema::modern
