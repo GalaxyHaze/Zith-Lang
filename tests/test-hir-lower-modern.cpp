@@ -2746,11 +2746,52 @@ void test_pipe_rejects_placeholder_outside_stage() {
         "expected an expression");
 }
 
-void test_pipe_block_rejects_missing_placeholder() {
+void test_pipe_block_accepts_effect_without_current() {
+    Workspace workspace;
+    workspace.writeFile("main.zith",
+                        "fn addOne(x: i32): i32 { x + 1 }\n"
+                        "fn main(): i32 {\n"
+                        "    10 do { let ignored = addOne(1); }\n"
+                        "}\n");
+
+    memory::Arena arena;
+    Options options(arena);
+    auto session = makeSession(workspace, arena, options, "main.zith");
+
+    CHECK(session.runTo(session::Stage::HirLowered),
+          "'do' without '..' lowers as an effect stage");
+    CHECK(!session.hasErrors(), "'do' without '..' reports no diagnostics");
+}
+
+void test_pipe_do_rejects_multiple_placeholders() {
     checkPipeDiagnostic(
-        "fn addOne(x: i32): i32 { x + 1 }\n"
-        "fn main(): i32 { 10 do { let ignored = addOne(1); } }\n",
-        "pipeline stage must reference the current value exactly once with '..'");
+        "fn add(x: i32, y: i32): i32 { x + y }\n"
+        "fn main(): i32 { 10 do add(.., ..) }\n",
+        "a 'do' stage may use '..' at most once");
+}
+
+void test_pipe_variadic_slice_current_lowers() {
+    Workspace workspace;
+    workspace.writeFile("main.zith", "fn sum(rest: [...]i32): i32 { 0 }\n"
+                                     "fn main(): i32 {\n"
+                                     "    10 |> sum(..)\n"
+                                     "}\n");
+
+    memory::Arena arena;
+    Options options(arena);
+    auto session = makeSession(workspace, arena, options, "main.zith");
+
+    CHECK(session.runTo(session::Stage::HirLowered),
+          "pipeline current as a variadic slice tail lowers to HIR");
+    CHECK(!session.hasErrors(), "pipeline variadic slice reports no diagnostics");
+
+    const auto &hir = session.hirModule();
+    CHECK(countExprKind(hir, hir::HirExprKind::Pipe) >= 1u,
+          "pipeline stage lowers to HirPipe");
+    CHECK(countExprKind(hir, hir::HirExprKind::PipeCurrent) >= 1u,
+          "'..' lowers to HirPipeCurrent");
+    CHECK(countExprKind(hir, hir::HirExprKind::MakeSlice) >= 1u,
+          "variadic tail auto-collection lowers to HirMakeSlice");
 }
 
 void test_pipe_block_rejects_control_flow() {
@@ -2883,7 +2924,9 @@ static void test_hir_lower_modern() {
     test_pipe_rejects_missing_placeholder();
     test_pipe_rejects_multiple_placeholders();
     test_pipe_rejects_placeholder_outside_stage();
-    test_pipe_block_rejects_missing_placeholder();
+    test_pipe_block_accepts_effect_without_current();
+    test_pipe_do_rejects_multiple_placeholders();
+    test_pipe_variadic_slice_current_lowers();
     test_pipe_block_rejects_control_flow();
     test_anonymous_pack_literal_lowers_to_hir();
 }

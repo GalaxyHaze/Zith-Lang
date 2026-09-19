@@ -464,15 +464,28 @@ TypeId PerModuleSema::inferPipe(frontend::ExprId id) {
     pipeCurrentType_        = current;
 
     const std::size_t current_count = pipeCurrentCount(expr.operands[1], snapshot);
-    if (current_count == 0U) {
-        report(expr.span,
-               "pipeline stage must reference the current value exactly once with '..'",
-               diagnostics::err::ExpectedExpr);
-        return error_type;
-    }
-    if (current_count > 1U) {
-        report(expr.span, "a pipeline stage may use '..' only once",
-               diagnostics::err::UnsupportedSyntax);
+    switch (expr.kind) {
+    case frontend::ExprKind::Pipe:
+        if (current_count == 0U) {
+            report(expr.span,
+                   "pipeline stage must reference the current value exactly once with '..'",
+                   diagnostics::err::ExpectedExpr);
+            return error_type;
+        }
+        if (current_count > 1U) {
+            report(expr.span, "a pipeline stage may use '..' only once",
+                   diagnostics::err::UnsupportedSyntax);
+            return error_type;
+        }
+        break;
+    case frontend::ExprKind::PipeDo:
+        if (current_count > 1U) {
+            report(expr.span, "a 'do' stage may use '..' at most once",
+                   diagnostics::err::UnsupportedSyntax);
+            return error_type;
+        }
+        break;
+    default:
         return error_type;
     }
     if (expr.kind == frontend::ExprKind::PipeDo) {

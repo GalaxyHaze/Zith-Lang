@@ -102,7 +102,7 @@ Implementation work that is incomplete or needs review is tracked in
 | dereference `*p` | **Working** | Pointer dereference via unary `*` |
 | address-of `&x` | **Working** | Address-of via unary `&` |
 | `p->field` | **Working** | Arrow access on struct pointers |
-| `|>` / `do` pipeline | **Working** | Explicit `..` only; no automatic injection or `?`/`!`/tag propagation. `do` keeps the chain value, `|>` replaces it |
+| `|>` / `do` pipeline | **Working** | `|>` requires exactly one explicit `..`; `do` accepts zero or one `..`, keeps the chain value and may run effects without it. No automatic injection or `?`/`!`/tag propagation; `|>` replaces the chain value |
 | index `a[i]` | **Working** | On arrays, slices, pointers; array/slice reads return `?T` with bounds checks. `raw a[i]` skips bounds handling and returns `T` |
 | `?` postfix propagation | **Working** | Requires optional operand in an optional-returning function. `?T` conditions are implicit (`if (x)`), so `x?` is propagation only and is rejected in condition position unless the enclosing function propagates |
 | `must` / `raw` optional extraction | **Working** | `must x` extracts a `?T` payload and terminates with runtime panic `R10003` on `null`; `raw x` extracts the payload without a null check. `is null` remains the only flow-narrowing mechanism |

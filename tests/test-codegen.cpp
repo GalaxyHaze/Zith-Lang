@@ -1966,6 +1966,20 @@ static void test_variadic_slice_runtime() {
     CHECK_EQ(r.exitCode, 6, "auto-collected tail values are materialized and summed at runtime");
 }
 
+static void test_pipe_variadic_slice_runtime() {
+    ModernFileCodegenTest t;
+    t.write("main.zith", "fn sum(rest: [...]i32): i32 {\n"
+                         "    return raw rest[0] + raw rest[1] + raw rest[2];\n"
+                         "}\n"
+                         "fn main(): i32 {\n"
+                         "    10 |> sum(.., 20, 30)\n"
+                         "}\n");
+
+    auto r = t.run();
+    CHECK(r.ok, "pipeline current as a variadic slice element compiles, links and runs");
+    CHECK_EQ(r.exitCode, 60, "pipeline current is auto-collected into the variadic slice");
+}
+
 static void test_variadic_slice_explicit_vs_auto_runtime() {
     ModernFileCodegenTest t;
     t.write("main.zith", "extern fn make_values(): []i32\n"
@@ -3278,6 +3292,8 @@ static void test_codegen() {
     test_mutable_slice_from_c();
     printf("Running test_variadic_slice_runtime\n");
     test_variadic_slice_runtime();
+    printf("Running test_pipe_variadic_slice_runtime\n");
+    test_pipe_variadic_slice_runtime();
     printf("Running test_variadic_slice_explicit_vs_auto_runtime\n");
     test_variadic_slice_explicit_vs_auto_runtime();
     printf("Running test_variadic_slice_method_runtime\n");

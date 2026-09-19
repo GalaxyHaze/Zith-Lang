@@ -1269,8 +1269,11 @@ Pipelines are explicitly threaded. Each stage reads the current value through
 `..`; there is no automatic injection of the value as an argument, no tag
 capture, and no `?`/`!` propagation out of the chain. `x |> f(..)` is
 equivalent to `f(x)` except that the source is materialized once before the
-stage runs. A stage must reference the current value exactly once, and `..` is
-valid only inside a pipeline stage.
+stage runs. A `|>` stage must reference the current value exactly once.
+
+`do` is a side-effect stage: it may use `..` zero or one times, keeps the chain
+value unchanged, and is valid only as a chain operator. `..` is valid only
+inside a pipeline stage.
 
 `|>` replaces the chain value with the stage result. `do` runs a side-effect
 stage and keeps the chain value unchanged, so `x do f(..)` returns `x`. `do` is

@@ -267,6 +267,10 @@ Trait`/`dyn Interface` e funções genéricas. Num parâmetro genérico, `[...]T
 a partir do primeiro elemento do tail, ou do tipo do slice/array explícito.
 Overloads com arity fixa continuam a preferir a assinatura exata sobre o variadic slice.
 
+Dentro de um pipeline, `..` pode aparecer como argumento do tail: `x |>
+f(..)` passa `x` como elemento auto-coletado do slice. `do` também aceita
+`..` como argumento opcional, mas pode executar efeitos sem o usar.
+
 ## Inferência genérica com `?T`
 
 Um parâmetro que declara um optional com um tipo genérico participa nas coerções opcionais

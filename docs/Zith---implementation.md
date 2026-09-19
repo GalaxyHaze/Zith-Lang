@@ -450,9 +450,10 @@ chain em `x`. Não há injeção implícita de argumentos nem propagação autom
 de `?`/`!`/tags.
 
 `PerModuleSema::inferPipe` guarda o tipo da source, infera o stage com um
-contexto `PipeCurrent`, exige exatamente um `..` no stage e rejeita `..` fora
-desse contexto. `do { ... }` é cleanup-only: não produz um valor e não pode
-transferir controlo com `return`/`break`/`continue`/`jump`. O lowering
+contexto `PipeCurrent` e rejeita `..` fora desse contexto. `|>` exige
+exatamente um `..`; `do` aceita zero ou um `..`. `do { ... }` é cleanup-only:
+não produz um valor e não pode transferir controlo com `return`/`break`/
+`continue`/`jump`. O lowering
 `HirLowerModern::lowerPipe` materializa a source num slot, baixa o stage com
 `HirPipeCurrent` para esse slot e emite `HirPipe`. `do` com um bloco sem valor
 usa um `HirCleanup` vazio como stage sintetizado para que o efeito e a ordem
