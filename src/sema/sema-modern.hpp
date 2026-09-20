@@ -113,8 +113,8 @@ struct TypedMap {
     explicit TypedMap(memory::Arena &)
         : exprTypes(), declTypes(), localTypes(), forInRangeLiteral(), forInNext(), containsCall(),
           forInElementIndex(), forInEndIndex(), forInUnionType(), forInOptionalType(),
-          traitQualifiedReceiverBase(), opaqueSourceTypes(), dynSourceTypes(), variadicCallPlans(),
-          variadicStmtPlans(), provenNonNullExprs() {}
+          traitQualifiedReceiverBase(), opaqueSourceTypes(), dynSourceTypes(),
+          provenNonNullExprs(), variadicCallPlans(), variadicStmtPlans() {}
 };
 
 class SemaPipeline;
