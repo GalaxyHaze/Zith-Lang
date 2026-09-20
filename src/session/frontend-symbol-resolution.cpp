@@ -92,8 +92,16 @@ const ResolvedName *lookupModuleAliasForPath(const ModuleResolution &resolution,
                                              const std::vector<std::string> &path) noexcept {
     const ResolvedName *result = nullptr;
     const auto matches         = [&](const ResolvedName &candidate) {
-        if (candidate.kind != ResolutionKind::ModuleAlias ||
-            candidate.modulePath.size() > path.size())
+        if (candidate.kind != ResolutionKind::ModuleAlias)
+            return false;
+        // Explicit aliases (`import Path as name`) bind under the alias; the
+        // module path is the imported declaration's path and does not appear
+        // in the expression namespace. Namespace exports and plain imports
+        // share the first module path segment with their binding name, so they
+        // must still match the remaining path segments.
+        if (candidate.name != candidate.modulePath.front())
+            return true;
+        if (candidate.modulePath.size() > path.size())
             return false;
         for (size_t index = 0; index < candidate.modulePath.size(); ++index) {
             if (candidate.modulePath[index] != path[index])
