@@ -298,6 +298,10 @@ _Avoid_: Printable, displayable, serializer
 The backing object supplied to `Formatable.format(self, dest)` so a value can append its rendered text.
 _Avoid_: string builder, write buffer, output stream
 
+**TextSink**:
+The intended sink contract for formatting, with capacity, length, append and text lookups through a mutable dynamic receiver (`lend dyn TextSink`). Blocked in the current compiler, so `FormatBuffer` is the practical sink until mutable dyn receivers work.
+_Avoid_: output stream, writer, string builder
+
 **InputLine**:
 The wrapper returned by `input()`. It owns the read buffer, exposes the trimmed line through methods, and supports `cast<T>`.
 _Avoid_: input string, result line, readline result

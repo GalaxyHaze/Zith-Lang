@@ -71,3 +71,5 @@ contracts, decisions, and gotchas that are not discoverable from the source alon
   pattern for variadic `Formatable` values.
 - [stdlib-io-result.md](stdlib-io-result.md): proposed `Result<T, E>` surface
   and the current compiler blockers for generic `Ok`/`Err` helpers.
+- [lsp-vscode-folding.md](lsp-vscode-folding.md): LSP/VS Code brace folding
+  flow, local VSIX rebuild loop, and read-only sandbox gotchas.

@@ -45,14 +45,31 @@ emission, statement/control-flow emission, and aggregate helpers moved to
 `codegen-emit-expr.cpp`, `codegen-emit-stmt.cpp`, and `codegen-emit-agg.cpp`
 respectively.
 
+### `src/sema/hir-lower-expr.cpp`
+
+The HIR expression lowering monolith was split by responsibility and merged.
+The public dispatcher remains in `src/sema/hir-lower-expr.cpp` at 121 lines.
+Value lowering, access lowering, and aggregate lowering moved to dedicated
+translation units:
+
+| Translation unit | Lines | Responsibility |
+|---|---|---|
+| `src/sema/hir-lower-expr.cpp` | 121 | `lowerExpr` dispatcher and public glue |
+| `src/sema/hir-lower-expr-value.cpp` | 1668 | value lowering, coercions, literals, names, casts, pipelines, optional payloads |
+| `src/sema/hir-lower-expr-access.cpp` | 379 | lvalue/address, index, slice range, field, and arrow lowering |
+| `src/sema/hir-lower-expr-agg.cpp` | 311 | enum variant, struct, pack, array, and field default lowering |
+
+### `src/frontend/frontend-expr.cpp`
+
+The frontend expression parser was split by responsibility and merged. The
+expression dispatcher and call argument parsing remain in
+`src/frontend/frontend-expr.cpp` at 325 lines; primary/postfix parsing moved to
+`src/frontend/frontend-expr-primary.cpp` and operator/precedence helpers moved
+to `src/frontend/frontend-expr-operator.cpp`.
+
 ## Remaining Candidates
 
-Current priority files, based on `docs/implementation-debt.md`:
-
-| File | Lines | Candidate split |
-|---|---|---|
-| `src/sema/hir-lower-expr.cpp` | 2357 | secondary candidate; revisit if it still exceeds ~1000 lines |
-| `src/frontend/frontend-expr.cpp` | 1219 | secondary candidate; revisit only if it remains a clear single-responsibility bottleneck |
+No file in the active monolith list remains above the working threshold.
 
 Earlier work already split `frontend.cpp` into AST/CST lowering,
 frontend types, expressions, statements and declarations; `sema-modern.cpp`
@@ -74,13 +91,9 @@ units; and HIR lowering into types/expr/call/block/stmt/util units.
 
 ## Order
 
-`frontend-context.cpp`, `compilation-session.cpp`, and `codegen-emit.cpp` are
-merged. The next candidates are:
-
-1. Revisit `src/sema/hir-lower-expr.cpp` only if it still exceeds ~1000 lines
-   after the codegen split.
-2. Revisit `src/frontend/frontend-expr.cpp` only if it remains a clear
-   single-responsibility bottleneck; it is currently a secondary candidate.
+`frontend-context.cpp`, `compilation-session.cpp`, `codegen-emit.cpp`,
+`hir-lower-expr.cpp`, and `frontend-expr.cpp` are merged. No remaining
+candidate is active.
 
 ## Success Criteria
 

@@ -2,7 +2,7 @@
 
 ## Status
 
-Proposed.
+Accepted as scoped implementation; module split deferred.
 
 ## Context
 
@@ -10,56 +10,59 @@ Proposed.
 `print`/`println`/formatting. The stdlib needs clearer seams: reading from a
 console should not depend on the format contract, writing should make
 formatting reusable by user types, and current examples/tests must not break.
+The compiler currently blocks the full split in two ways: qualified facade
+re-export cannot preserve `std.io.console.*`, and variadic forwarding between
+stdlib functions is rejected.
 
 The existing `Formatable` trait and `#`-placeholder runtime format are the
 stable parts of the current console path. `FormatBuffer` owns heap storage and
 is reused by `print`/`println`. The proposed change adds a sink abstraction so
 formatting can write into `FormatBuffer` or a caller-provided fixed slice.
+The intended abstraction is `TextSink`, but it is not usable yet because the
+compiler blocks mutable `dyn`/`lend` receivers.
 
 ## Decision
 
-Split `console` into `consoleIn` and `consoleOut`, keeping `console` as a
-compatibility facade that re-exports both sides.
+Keep the split scoped and deferred to the compiler-facade debt. In this
+iteration, `format.zith` owns `Formatable`, `FormatBuffer`, `FormatResult`,
+`IoError`, and the owned free `format`. `console.zith` remains the real module
+for `InputLine`, `ParseInput`, `input()`, and the existing `print`/`println`.
+The future split into `consoleIn`/`consoleOut` plus a qualified facade is
+recorded in `docs/implementation-debt.md` and `memory/stdlib-io-format.md`.
 
-`format.zith` owns `Formatable`, `TextSink`, `Result<T, E>`, primitive format
-implementations, and two free `format` overloads:
+The adopted owned result replaces a speculative `Result<T, E>` plan because
+tuple returns are unsupported and generic `Ok`/`Err` helper inference is
+blocked:
 
 ```zith
 pub trait Formatable {
-    fn format(self, dest: lend dyn TextSink): IoError;
+    fn format(self, dest: lend FormatBuffer): IoError;
 }
 
-pub trait TextSink {
-    fn capacity(self): u64;
-    fn length(self): u64;
-    fn append(self: lend dyn TextSink, chars: []char): IoError;
-    fn text(self): []char;
+// Intended once mutable dyn receivers work:
+// pub trait TextSink {
+//     fn append(self: lend dyn TextSink, chars: []char): IoError;
+// }
+// pub trait Formatable {
+//     fn format(self, dest: lend dyn TextSink): IoError;
+// }
+
+pub struct FormatResult {
+    buffer: FormatBuffer,
+    status: IoError,
 }
 
-pub fn format(sink: dyn TextSink, msg: []char, values: [...]dyn Formatable): Result<(), IoError>;
-pub fn format(msg: []char, values: [...]dyn Formatable): Result<FormatBuffer, IoError>;
+pub fn format(msg: []char, values: [...]dyn Formatable): FormatResult;
 ```
 
-The sink overload uses `IoError` because `Result<void, E>` is not yet
-validated. The owning overload uses `Result<FormatBuffer, IoError>`; the first
-version owns storage through the default heap, and a future
+The owning version owns storage through the default heap for now; a future
 `format_with(allocator, ...)` will accept an explicit allocator.
-
-`consoleIn` owns `InputLine`, `ParseInput`, and `input()` without depending on
-`format`. `consoleOut` exposes `print`/`println` and depends on `format`.
-both names are re-exported by the `console` facade so existing
-`std/io/console.print`/`std/io/console.println` consumers continue to work.
-
-The receiver qualifiers on `TextSink` are provisional: a probe showed that
-`self: view Self`/`self: lend Self` in trait requirements does not currently
-match an implementation, so simple receivers are used first and qualified
-receivers will be revisited after compiler support is proven.
 
 ## Consequences
 
-Current console examples and tests keep compiling through the facade.
-`Formatable` becomes independent of `FormatBuffer`, letting user types format
-into any supported sink. The new API is blocked on the recorded compiler
-facts: generic `Ok`/`Err` union helpers and qualified trait receivers need
-future compiler work.
-
+Current console examples and tests keep compiling with their old HIR names.
+`format` is available through `from std/io/format`; qualified facade access via
+`std.io.console.*` is a documented compiler debt. The new API is blocked on the
+recorded compiler facts: generic `Ok`/`Err` union helpers, qualified trait
+receivers, mutable `dyn`/`lend` sink receivers, tuple returns, variadic
+forwarding, and facade namespace segments.

@@ -17,9 +17,9 @@ Two large session monoliths are merged:
   unit.
 
 `src/codegen/codegen-emit.cpp` is already split into `codegen-emit-expr.cpp`,
-`codegen-emit-stmt.cpp`, and `codegen-emit-agg.cpp`; it is not a remaining
-candidate. `src/sema/hir-lower-expr.cpp` and
-`src/frontend/frontend-expr.cpp` remain secondary candidates.
+`codegen-emit-stmt.cpp`, and `codegen-emit-agg.cpp`. `src/sema/hir-lower-expr.cpp`
+and `src/frontend/frontend-expr.cpp` are also split; no source-level candidate
+remains active in this list.
 
 ## Completed frontend-context Split
 
@@ -107,31 +107,21 @@ orchestration remain in `src/codegen/codegen-emit.cpp` at 9 lines; expression
 emission lives in `codegen-emit-expr.cpp`, statement/control-flow emission in
 `codegen-emit-stmt.cpp`, and aggregate helpers in `codegen-emit-agg.cpp`.
 
-## Remaining Candidates
+## Completed frontend-expr Split
 
-Current counts from the worktree used for this task:
+The frontend expression parser was split by responsibility and merged. The
+expression dispatcher and call argument parsing remain in
+`src/frontend/frontend-expr.cpp`; primary/postfix parsing moved to
+`src/frontend/frontend-expr-primary.cpp`, and operator/precedence helpers moved
+to `src/frontend/frontend-expr-operator.cpp`.
 
-| File | Lines | Candidate split |
-|---|---|---|
-| `src/sema/hir-lower-expr.cpp` | 2357 | secondary candidate; revisit if it still exceeds ~1000 lines |
-| `src/frontend/frontend-expr.cpp` | 1219 | secondary candidate; revisit only if it remains a clear bottleneck |
+## Completed hir-lower-expr Split
 
-The remaining candidate set is secondary. A future merge should extract a
-narrow responsibility from `hir-lower-expr.cpp` or `frontend-expr.cpp` only
-when the boundary is mechanical. It is independent from `drop` feature work
-and from the archived full-Zith plans.
-
-### Secondary Candidate Guidance
-
-`hir-lower-expr.cpp` is the largest remaining TU, but it is not automatically a
-good split target. The file concentrates expression lowering, which is a
-cohesive responsibility even though it is long. Only schedule it when a
-cleaner boundary exists for a mechanically-safe extraction.
-
-`frontend-expr.cpp` is similar. It owns expression parsing and precedence and
-was already split out of `frontend.cpp`; splitting it again should wait for a
-specific responsibility (for example call arguments or postfix chains) that
-can be extracted without introducing shared parser state.
+The HIR expression lowering monolith was split by responsibility and merged.
+The public dispatcher remains in `src/sema/hir-lower-expr.cpp`; value lowering,
+access lowering, and aggregate lowering moved to
+`hir-lower-expr-value.cpp`, `hir-lower-expr-access.cpp`, and
+`hir-lower-expr-agg.cpp` respectively.
 
 ## Choice of TU Names
 
@@ -146,9 +136,8 @@ The completed splits used names that match the responsibility, not a generic
 - `native-link.cpp` and `persistent-cache.cpp` instead of session-dependent
   helpers.
 
-This naming convention makes the next extraction consistent: use names such as
-`codegen-params.cpp`, `codegen-expr.cpp`, or `codegen-control.cpp` only when
-each unit has a narrow responsibility.
+This naming convention should stay consistent in future extractions: choose a
+name that matches the extracted responsibility, not a generic helper unit.
 
 ## Non-Goals
 
@@ -198,8 +187,9 @@ This is a Zith infrastructure track and does not depend on the Zith vs
 
 Do not confuse monolith-split work with debt entries that reference the same
 files. For example, `compilation-session.cpp` and `hir-lower-expr.cpp` appear
-in the bare-`opaque` debt because they own the diagnostics, not because the
-monolith split will fix that deficit.
+in the bare-`opaque` debt because they own the diagnostics. The monolith split
+does not change that deficit; the diagnostic reference now points to the
+dispatcher, not to a large expression-lowering body.
 
 Similarly, the C struct-by-value debt is not a monolith-split work item. It is
 a validated-surface question: `impl-status.md` marks C header imports
@@ -240,6 +230,8 @@ When a remaining candidate is split, update:
 - The debt table in `docs/implementation-debt.md`.
 - The status summary and remaining-candidate table in this file.
 - `memory/README.md` only if the file's role changes.
+
+No candidate is active in this file now.
 
 ## Verification Checklist
 

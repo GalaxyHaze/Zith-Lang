@@ -283,17 +283,34 @@ ou representar cada segmento de import como um alias independente, e cobrir
 `std.memory.in-place.InPlace` e `std.memory.allocators.heap.HeapAllocator` com
 testes de pipeline.
 
+### 12. Receivers `dyn`/`lend` mutáveis para sinks
+
+Estado atual: o contrato alvo de formatação é `TextSink`, com ligação de
+destino por empréstimo dinâmico (`lend dyn TextSink`), mas o compilador ainda
+bloqueia a escrita através desse caminho. `dyn TextSink` com um método mutável
+`append(var self, ...)` compila, mas o data pointer aponta para um spill/cópia
+em vez do valor original, pelo que as mutações não chegam ao caller. Receptores
+`lend dyn TextSink` falham com `E3001`/`E2007`; `self: lend Self` e `self: lend
+dyn TextSink` em traits também falham.
+
+Por isso `stdlib/std/io/format.zith` usa `FormatBuffer` como sink real na
+primeira versão. A intent `TextSink` fica registada em
+`docs/adr/0022-stdlib-io-format-split.md`, `memory/stdlib-io-format.md` e
+`CONTEXT.md`.
+
+Ação futura: reparar `lend dyn` como receiver e fazer `emitMakeDyn` apontar
+para o lvalue original quando a fonte é addressable, em vez de spillar valores
+para uma nova `alloca`. Depois disso, migrar `Formatable.format(self, dest)` e
+as helpers de append de `lend FormatBuffer` para `lend dyn TextSink`, cobrindo
+também `[]char`/buffers fixos.
+
 ## Dívida de estrutura: monolitos
 
-Os ficheiros abaixo ainda concentram demasiado pipeline por ficheiro. Já foram
-concluídos, e estão fora da lista activa, os splits de
-`src/session/frontend-context.cpp`, `src/session/compilation-session.cpp` e
-`src/codegen/codegen-emit.cpp`.
-
-| Ficheiro | Linhas atuais | Quebra proposta |
-|---|---|---|
-| `src/sema/hir-lower-expr.cpp` | 2357 | candidato secundário ainda acima de 1000 linhas |
-| `src/frontend/frontend-expr.cpp` | 1219 | candidato secundário ainda acima de 1000 linhas |
+Os splits mecânicos de pipeline por ficheiro foram concluídos e estão fora da
+lista activa:
+`src/session/frontend-context.cpp`, `src/session/compilation-session.cpp`,
+`src/codegen/codegen-emit.cpp`, `src/sema/hir-lower-expr.cpp` e
+`src/frontend/frontend-expr.cpp`.
 
 Estado da quebra de `codegen-emit.cpp` (concluída):
 
@@ -333,7 +350,7 @@ Estado da quebra de `frontend.cpp`:
   `skipMacroInvocation()` (~667 linhas).
 - `frontend-types.cpp`: `parseType`, `isIntrinsicName` (~325 linhas).
 - `frontend-expr.cpp`: call args, primary, postfix, expression/binary expression
-  precedence e associativity (~1077 linhas).
+  precedence e associativity (~1077 linhas; atual split em baixo).
 - `frontend-stmt.cpp`: blocks, if/when, loops, condition, tag macro e statements
   (~1027 linhas).
 - `frontend-decl.cpp`: imports, macros, implement, `lowerDeclaration`, campos de
@@ -364,22 +381,28 @@ Estado da quebra de `sema-modern.cpp`:
 - `sema-zith.cpp`: const semantics, Zith-- checks e unificação.
 - Helpers partilhados em `sema-modern-utils.{hpp,cpp}`.
 
-Próxima fronteira:
+Estado da quebra de `frontend-expr.cpp` (concluída):
 
-- revisitar `hir-lower-expr.cpp` se continuar acima de ~1000 linhas após o
-  split de codegen concluído.
-- revisitar `frontend-expr.cpp` apenas se continuar a ser um bottleneck claro
-  de responsabilidade única.
+- `frontend-expr.cpp`: `parseCallArgument`, `parseExpression` e dispatcher
+  (325 linhas).
+- `frontend-expr-primary.cpp`: `parsePrimary`, `parsePostfix` e
+  `parseAttributeValue` (742 linhas).
+- `frontend-expr-operator.cpp`: helpers de operador, precedência,
+  `functionKindPrefix` e predicates de ranges (141 linhas).
 
-Para o HIR lowering, a fronteira candidata foi já executada:
+Estado da quebra de `hir-lower-expr.cpp` (concluída):
 
 - `hir-lower-modern.hpp` continua a classe principal e o estado partilhado.
 - `hir-lower-types.cpp`: `lowerType`, `lowerTypeExprConcrete`, `lowerForeignType`,
   `lowerTypeSize`, `lowerTypeAlign`, `lowerTagType`, `taggedMemberIndex`,
   `stableConcreteTypeId`.
-- `hir-lower-expr.cpp`: `lowerExpr`, literals, nomes, unary/binary, field/arrow,
-  index, slice, literal aggregates, casts, intrinsics, coercions e optional
-  payloads.
+- `hir-lower-expr.cpp`: dispatcher `lowerExpr` e glue pública (121 linhas).
+- `hir-lower-expr-value.cpp`: value lowering, coercions, literals, nomes, casts,
+  pipelines e optional payloads (1668 linhas).
+- `hir-lower-expr-access.cpp`: `lowerLValueAddr`, `lowerIndex`, `lowerSliceRange`,
+  `lowerField` e `lowerArrow` (379 linhas).
+- `hir-lower-expr-agg.cpp`: `enumVariantValue`, `lowerStructLiteral`,
+  `lowerPackLiteral`, `lowerArrayLiteral` e `lowerFieldDefault` (311 linhas).
 - `hir-lower-call.cpp`: forms de call não-dyn e dyn, default args, variadic slice
   tail, `dyn` dispatch e tail calls.
 - `hir-lower-block.cpp`: `lowerBlock`, `defer`, `if`, `when`, loops e condicoes.
@@ -425,7 +448,7 @@ reconstruir.
 
 Risco residual: existem vários ramos que criam/validam tags `opaque` e a
 consistência entre a canonização nova e a persistida depende da mesma regra
-usada no lowering em [hir-lower-expr.cpp](/home/diogo/Zith/src/sema/hir-lower-expr.cpp:786).
+usada no lowering em [hir-lower-expr-value.cpp](/home/diogo/Zith/src/sema/hir-lower-expr-value.cpp:786).
 Uma mudança da canonical field order deve atualizar o registry/cache em conjunto.
 
 ### Split inicial por script deixou includes colados e métodos órfãos
@@ -479,10 +502,10 @@ quando houver um release tag real.
 ## Próximos passos para rever
 
 1. A quebra de HIR, de `sema-modern.cpp`, de `frontend.cpp`, de
-   `frontend-context.cpp`, de `compilation-session.cpp` e de
-   `codegen-emit.cpp` está feita. Os candidatos ativos restantes são
-   `hir-lower-expr.cpp` e `frontend-expr.cpp`.
-   O contrato de execução para estes splits está em `docs/plans/monolith-splits.md`.
+   `frontend-context.cpp`, de `compilation-session.cpp`, de `codegen-emit.cpp`,
+   de `frontend-expr.cpp` e de `hir-lower-expr.cpp` está feita. Não há
+   candidatos ativos na lista de monolitos. O contrato de execução para estes
+   splits está em `docs/plans/monolith-splits.md`.
 2. Em cada extracção, compilar `zithcLib` e correr os testes da área afectada.
    Use `ctest --test-dir build --output-on-failure` para regressões gerais.
 3. Casos de incompletude que precisam de decisão de produto (sintaxe de `type`,

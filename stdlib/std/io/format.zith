@@ -16,6 +16,26 @@ pub enum IoError {
     fWrite = 2,
 }
 
+/// Owned formatting result. The combined return replaces a speculative
+/// `Result<T, E>` before generic union helpers and tuple returns are usable.
+pub struct FormatResult {
+    buffer: FormatBuffer,
+    status: IoError,
+
+    fn text(self: view FormatResult): view []char {
+        return self.buffer.text();
+    }
+
+    fn error(self: view FormatResult): IoError {
+        return self.status;
+    }
+
+    fn destroy(var self) {
+        destroyBuffer(lend self.buffer);
+        self.status = IoError.Ok;
+    }
+}
+
 /// Reusable byte buffer used by `print` and `println`. It owns its heap
 /// storage and must be destroyed with `destroyBuffer` or `destroy`.
 pub struct FormatBuffer {
@@ -58,6 +78,77 @@ pub struct FormatBuffer {
 
 pub fn emptyFormatBuffer(): FormatBuffer {
     return FormatBuffer {};
+}
+
+fn formatNext(value: dyn Formatable, buffer: lend FormatBuffer): IoError {
+    return value.format(lend buffer);
+}
+
+pub fn format(dest: lend FormatBuffer, msg: []char, values: [...]dyn Formatable): IoError {
+    var index: u64 = 0;
+    var next: u64 = 0;
+    let length = @lengthOf(msg);
+    var status = IoError.Ok;
+    for (index < length) {
+        let ch = raw msg[index];
+        if (ch == '#') {
+            if (index + 1 < length and raw msg[index + 1] == '\x1f') {
+                status = appendCharBuffer(lend dest, '#');
+                index = index + 2;
+                continue;
+            }
+            if (next < @lengthOf(values)) {
+                status = formatNext(raw values[next], lend dest);
+            } else {
+                status = appendRawBuffer(lend dest, "{absent}", 8);
+            }
+            next = next + 1;
+            index = index + 1;
+            continue;
+        }
+        if (ch == '\x1f') {
+            status = appendCharBuffer(lend dest, '#');
+            index = index + 1;
+            continue;
+        }
+        status = appendCharBuffer(lend dest, ch);
+        index = index + 1;
+    }
+    return status;
+}
+
+pub fn format(msg: []char, values: [...]dyn Formatable): FormatResult {
+    var buffer = emptyFormatBuffer();
+    var index: u64 = 0;
+    var next: u64 = 0;
+    let length = @lengthOf(msg);
+    var status = IoError.Ok;
+    for (index < length) {
+        let ch = raw msg[index];
+        if (ch == '#') {
+            if (index + 1 < length and raw msg[index + 1] == '\x1f') {
+                status = appendCharBuffer(lend buffer, '#');
+                index = index + 2;
+                continue;
+            }
+            if (next < @lengthOf(values)) {
+                status = formatNext(raw values[next], lend buffer);
+            } else {
+                status = appendRawBuffer(lend buffer, "{absent}", 8);
+            }
+            next = next + 1;
+            index = index + 1;
+            continue;
+        }
+        if (ch == '\x1f') {
+            status = appendCharBuffer(lend buffer, '#');
+            index = index + 1;
+            continue;
+        }
+        status = appendCharBuffer(lend buffer, ch);
+        index = index + 1;
+    }
+    return FormatResult { buffer, status };
 }
 
 pub fn ensureBuffer(self: lend FormatBuffer, extra: u64): IoError {

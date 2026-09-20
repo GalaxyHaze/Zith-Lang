@@ -3,7 +3,7 @@
 This note records the proposed `Result<T, E>` surface for stdlib I/O and the
 compiler facts that currently block convenient generic `Ok`/`Err` helpers.
 It is deliberately separate from `memory/stdlib-io-format.md`, which records
-the `format`/`TextSink` design.
+the `format`/`FormatBuffer` design.
 
 ## Current Compiler Facts
 
@@ -52,15 +52,34 @@ fn main(): i32 {
 version. There is no validated `()` generic argument and `null` to `void`
 would be speculative. The sink overload returns `IoError` instead.
 
+## Adopted Surface
+
+The first stdlib I/O version does not use a generic union for `format`.
+`FormatResult` is a plain struct that keeps the owned `FormatBuffer` and an
+`IoError` status together:
+
+```zith
+pub struct FormatResult {
+    buffer: FormatBuffer,
+    status: IoError,
+}
+```
+
+`format(msg, values)` returns `FormatResult`. Callers use `result.error()`,
+`result.text()`, and `result.destroy()`. Tuple returns and variadic forwarding
+are not supported, which are the concrete reasons the original
+`Result<FormatBuffer, IoError>` tuple-like plan was replaced.
+
 ## Design Decision
 
-The first stdlib I/O version uses direct union construction:
+Generic unions remain valid for concrete instantiations and direct union
+construction plus `raw as` extraction:
 
 ```zith
 Result<FormatBuffer, IoError>{ buffer }
 Result<FormatBuffer, IoError>{ IoError.fWrite }
 ```
 
-with minimal read helpers (`isOk`, `isErr`, `value`/`error`) and `raw as` for
-extraction. Convenient `Ok`/`Err` helpers remain a future compiler work item,
-not part of this stdlib change.
+Those helpers can be introduced when generic union helper inference works.
+Convenient `Ok`/`Err` helpers remain a future compiler work item, not part of
+this stdlib change.

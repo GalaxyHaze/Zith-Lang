@@ -189,6 +189,34 @@ void test_generic_union_direct_construction_blocked() {
     CHECK(r.ok, "direct generic union construction plus raw cast works");
 }
 
+void test_io_format_returns_owned_result() {
+    SessionRunner t;
+    auto r = t.run("from std/io/format\n"
+                   "fn main(): i32 {\n"
+                   "    let result = format(\"n=#\", 7);\n"
+                   "    let status = result.error();\n"
+                   "    var text = result.text();\n"
+                   "    result.destroy();\n"
+                   "    if (status != IoError.Ok) { return 1; }\n"
+                   "    return (@lengthOf(text) as i32) - 2;\n"
+                   "}\n");
+    CHECK(r.ok, "owned format result is usable through std/io/format");
+}
+
+void test_io_format_into_existing_buffer() {
+    SessionRunner t;
+    auto r = t.run("from std/io/format\n"
+                   "fn main(): i32 {\n"
+                   "    var buffer = emptyFormatBuffer();\n"
+                   "    let status = format(lend buffer, \"n=#\", 7);\n"
+                   "    var text = buffer.text();\n"
+                   "    buffer.destroy();\n"
+                   "    if (status != IoError.Ok) { return 1; }\n"
+                   "    return (@lengthOf(text) as i32) - 2;\n"
+                   "}\n");
+    CHECK(r.ok, "format can append into an existing FormatBuffer");
+}
+
 } // namespace
 
 int main() {
@@ -201,6 +229,8 @@ int main() {
     test_variadic_dyn_formatable_uses_bridge();
     test_generic_union_result_helper_blocked();
     test_generic_union_direct_construction_blocked();
+    test_io_format_returns_owned_result();
+    test_io_format_into_existing_buffer();
     std::printf("\nResults: %d passed, %d failed\n", g_test_passed, g_test_failed);
     return g_test_failed > 0 ? 1 : 0;
 }
