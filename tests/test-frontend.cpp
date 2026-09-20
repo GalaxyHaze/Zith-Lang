@@ -185,6 +185,26 @@ static void test_state_and_dock_jump_syntax() {
     CHECK(binding_uses_dock, "dock is valid in expression position");
 }
 
+static void test_explicit_discard_statement() {
+    auto snapshot = frontend::parse("fn main(): i32 {\n"
+                                    "    make();\n"
+                                    "    _ = make();\n"
+                                    "    return 0;\n"
+                                    "}\n");
+    CHECK(snapshot.diagnostics().empty(),
+          "call statement and explicit discard both parse without diagnostics");
+    bool saw_call_statement = false;
+    bool saw_discard        = false;
+    for (const auto &statement : snapshot.statements()) {
+        if (statement.kind == frontend::StmtKind::Expression)
+            saw_call_statement = true;
+        else if (statement.kind == frontend::StmtKind::Discard)
+            saw_discard = true;
+    }
+    CHECK(saw_call_statement, "plain call statement remains StmtKind::Expression");
+    CHECK(saw_discard, "`_ = make();` lowers to StmtKind::Discard");
+}
+
 static void test_old_state_machine_syntax_is_rejected() {
     auto old_flow = frontend::parse("flow fn main(): i32 { return 0; }\n");
     CHECK(!old_flow.diagnostics().empty(), "flow fn syntax is rejected");
@@ -1491,6 +1511,7 @@ static void test_frontend() {
     test_control_flow_and_scopes();
     test_pipe_operators_parse_as_chain();
     test_state_and_dock_jump_syntax();
+    test_explicit_discard_statement();
     test_old_state_machine_syntax_is_rejected();
     test_while_is_deprecated();
     test_return_expression_requires_semicolon();

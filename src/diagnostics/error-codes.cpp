@@ -91,6 +91,9 @@ memory::Optional<ErrorInfo> lookupError(ErrCode code) noexcept {
     case err::UnsupportedSyntax:
         return ErrorInfo{code, 'E', "semantic", "Unsupported syntax",
                          "This syntax is parsed, but does not have defined semantic behavior yet"};
+    case err::DiscardedResult:
+        return ErrorInfo{code, 'E', "semantic", "Discarded call result",
+                         "Use `_ = call();` to explicitly discard a non-void call result"};
 
     // Macro
     case err::MacroUnknown:

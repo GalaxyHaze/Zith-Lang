@@ -40,6 +40,7 @@ inline constexpr ErrCode const NoMatchingFn      = 2007;
 inline constexpr ErrCode const AmbiguousCall     = 2008;
 inline constexpr ErrCode const NotImplemented    = 2009;
 inline constexpr ErrCode const UnsupportedSyntax = 2010;
+inline constexpr ErrCode const DiscardedResult   = 2026;
 
 // Macro (2011-2020)
 inline constexpr ErrCode const MacroUnknown                 = 2011;

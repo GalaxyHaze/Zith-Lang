@@ -31,7 +31,7 @@ void test_abi_exec_09_hello_world() {
               "\n"
               "fn main(): i32 {\n"
               "    var sum: i32 = add(2, 3);\n"
-              "    puts(\"hello\");\n"
+              "    _ = puts(\"hello\");\n"
               "    sum\n"
               "}\n";
     output.close();
@@ -65,7 +65,7 @@ void test_abi_exec_02_cli_interpreted() {
         std::ofstream output(source, std::ios::binary | std::ios::trunc);
         output << "extern fn puts(msg: *char)\n"
                   "fn main(): i32 {\n"
-                  "    puts(\"cli-interpreted\");\n"
+                  "    _ = puts(\"cli-interpreted\");\n"
                   "    9\n"
                   "}\n";
     }
@@ -106,7 +106,7 @@ void test_abi_exec_11_execution_ir_hello_world() {
                   "\n"
                   "fn main(): i32 {\n"
                   "    var sum: i32 = add(2, 3);\n"
-                  "    puts(\"hello\");\n"
+                  "    _ = puts(\"hello\");\n"
                   "    sum\n"
                   "}\n";
     }

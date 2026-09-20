@@ -252,7 +252,7 @@ fn writeBuffer(msg: []char, newline: bool, values: [...]dyn Formatable): IoError
         var index: u64 = 0;
         let length = @lengthOf(text);
         for (index < length) {
-            putchar((raw text[index]) as i32);
+            _ = putchar((raw text[index]) as i32);
             index = index + 1;
         }
     }

@@ -138,7 +138,7 @@ void test_interface_bound_accepts_conforming_struct() {
                    "fn moveTo<T: Positioned>(p: T): f32 { return 0.0; }\n"
                    "fn main(): i32 {\n"
                    "    let p = Point{ x: 1.0, y: 2.0 };\n"
-                   "    moveTo<Point>(p);\n"
+                   "    _ = moveTo<Point>(p);\n"
                    "    return 1;\n"
                    "}\n");
     CHECK(r.ok, "struct satisfying an interface bound type-checks");
@@ -150,7 +150,7 @@ void test_missing_field() {
                    "struct A { x: f32 }\n"
                    "fn moveTo<T: Positioned>(p: T): f32 { return 0.0; }\n"
                    "fn main(): i32 {\n"
-                   "    moveTo<A>(A{ x: 1.0 });\n"
+                   "    _ = moveTo<A>(A{ x: 1.0 });\n"
                    "    return 1;\n"
                    "}\n");
     CHECK(!r.ok, "missing interface field fails");
@@ -182,7 +182,7 @@ void test_method_satisfaction() {
                    "fn distance<T: Positioned>(p: T): f32 { return p.x + p.getX(); }\n"
                    "fn main(): i32 {\n"
                    "    let p = Point{ x: 2.0 };\n"
-                   "    distance<Point>(p);\n"
+                   "    _ = distance<Point>(p);\n"
                    "    return 1;\n"
                    "}\n");
     CHECK(r.ok, "a type with matching interface fields and methods satisfies the bound");
@@ -197,7 +197,7 @@ void test_missing_method() {
                    "struct Point { x: f32 }\n"
                    "fn distance<T: Positioned>(p: T): f32 { return 0.0; }\n"
                    "fn main(): i32 {\n"
-                   "    distance<Point>(Point{ x: 1.0 });\n"
+                   "    _ = distance<Point>(Point{ x: 1.0 });\n"
                    "    return 1;\n"
                    "}\n");
     CHECK(!r.ok, "a type missing an interface method fails the bound");
@@ -216,7 +216,7 @@ void test_method_signature_mismatch() {
                    "}\n"
                    "fn distance<T: Positioned>(p: T): f32 { return 0.0; }\n"
                    "fn main(): i32 {\n"
-                   "    distance<Point>(Point{ x: 1.0 });\n"
+                   "    _ = distance<Point>(Point{ x: 1.0 });\n"
                    "    return 1;\n"
                    "}\n");
     CHECK(!r.ok, "a type with an incompatible interface method fails the bound");

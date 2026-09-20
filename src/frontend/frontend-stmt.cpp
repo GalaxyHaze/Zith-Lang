@@ -1067,6 +1067,14 @@ std::vector<StmtId> AstLowerer::parseStatements() {
             ++index_;
     } else if (isTagMacroOpen()) {
         statement.expression = parseTagMacroCall();
+    } else if (word == "_" && isOperatorAt(1U, "=")) {
+        statement.kind = StmtKind::Discard;
+        index_ += 2U; // consume `_` and `=`
+        statement.expression = parseExpression();
+        if (!punctuation(index_, ';'))
+            snapshot_.diagnostics_.push_back({range(start, index_),
+                                              "discard expression must end with ';'", false,
+                                              diagnostics::err::ExpectedSemicolon});
     } else {
         statement.expression = parseExpression();
         // Word-operator sequences such as `1 nop 2` are not implemented yet.

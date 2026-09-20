@@ -151,10 +151,31 @@ bool PerModuleSema::statementAlwaysTerminates(const frontend::Statement &stmt) c
         return true;
     case frontend::StmtKind::Expression:
         return stmt.expression && exprAlwaysTerminates(stmt.expression);
+    case frontend::StmtKind::Discard:
+        return false;
     default:
         return false;
     }
 }
+
+void PerModuleSema::checkExpressionStatement(const frontend::Statement &stmt,
+                                             bool produces_block_value) {
+    if (!stmt.expression || stmt.expression.value > snapshot.expressions().size())
+        return;
+    const auto &expr = snapshot.expressions()[stmt.expression.value - 1U];
+    if (stmt.kind == frontend::StmtKind::Discard)
+        return;
+    if (produces_block_value)
+        return;
+    if (expr.kind != frontend::ExprKind::Call && expr.kind != frontend::ExprKind::DockCall)
+        return;
+    const TypeId call_type = resolve(typeOfExpr(stmt.expression));
+    if (call_type != void_type && call_type != error_type) {
+        report(stmt.span, "call result must be used or discarded with `_ = call();`",
+               diagnostics::err::DiscardedResult);
+    }
+}
+
 bool PerModuleSema::conditionIsAlwaysLiteralTrue(frontend::ExprId id) const noexcept {
     if (!id || id.value > snapshot.expressions().size())
         return false;
@@ -267,8 +288,13 @@ TypeId PerModuleSema::inferBlock(frontend::ExprId id) {
                 continue;
             if (terminated_by_state_transfer)
                 break;
-            if (stmt.kind == frontend::StmtKind::Expression && stmt.expression) {
+            if (stmt.kind == frontend::StmtKind::Discard && stmt.expression) {
+                (void)inferExpr(stmt.expression);
+                last = void_type;
+            } else if (stmt.kind == frontend::StmtKind::Expression && stmt.expression) {
                 last = inferExpr(stmt.expression);
+                checkExpressionStatement(stmt, !expr.statements.empty() &&
+                                                   stmt_id == expr.statements.back());
             } else if (stmt.kind == frontend::StmtKind::Defer) {
                 pending_defers.push_back(stmt_id);
                 last = void_type;
@@ -354,8 +380,13 @@ TypeId PerModuleSema::inferBlock(frontend::ExprId id) {
         const auto &stmt = snapshot.statements()[stmt_id.value - 1U];
         if (snapshot.isMacroTemplateStmt(stmt.id))
             continue;
-        if (stmt.kind == frontend::StmtKind::Expression && stmt.expression) {
+        if (stmt.kind == frontend::StmtKind::Discard && stmt.expression) {
+            (void)inferExpr(stmt.expression);
+            last = void_type;
+        } else if (stmt.kind == frontend::StmtKind::Expression && stmt.expression) {
             last = inferExpr(stmt.expression);
+            checkExpressionStatement(stmt,
+                                     !expr.statements.empty() && stmt_id == expr.statements.back());
         } else if (stmt.kind == frontend::StmtKind::Defer) {
             pending_defers.push_back(stmt_id);
             last = void_type;

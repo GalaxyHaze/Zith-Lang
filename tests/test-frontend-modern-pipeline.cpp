@@ -102,6 +102,53 @@ void test_pipeline_error_surfaces_diagnostic() {
           "failed pipeline still materializes the frontend snapshot");
 }
 
+void test_pipeline_discard_non_void_call_result() {
+    Workspace workspace;
+    workspace.write("bad.zith", "fn make(): i32 { return 1; }\n"
+                                "fn main(): i32 {\n"
+                                "    make();\n"
+                                "    return 0;\n"
+                                "}\n");
+    workspace.write("good.zith", "fn make(): i32 { return 1; }\n"
+                                 "fn main(): i32 {\n"
+                                 "    _ = make();\n"
+                                 "    _ = make();\n"
+                                 "    return 0;\n"
+                                 "}\n");
+    workspace.write("assigned.zith", "fn make(): i32 { return 1; }\n"
+                                     "fn main(): i32 {\n"
+                                     "    let value: i32 = make();\n"
+                                     "    return value;\n"
+                                     "}\n");
+
+    memory::Arena arena;
+    Options options(arena);
+    options.targetStage = session::Stage::HirLowered;
+
+    session::CompilationSession bad(options, (workspace.root / "bad.zith").string());
+    bad.setBuffered(true);
+    CHECK(!bad.runTo(session::Stage::HirLowered),
+          "non-void call expression statement fails sema");
+
+    bool saw_discarded_result = false;
+    for (const auto &diagnostic : bad.diags().all()) {
+        if (diagnostic.code == diagnostics::err::DiscardedResult)
+            saw_discarded_result = true;
+    }
+    CHECK(saw_discarded_result,
+          "plain non-void call statement reports DiscardedResult");
+
+    session::CompilationSession good(options, (workspace.root / "good.zith").string());
+    good.setBuffered(true);
+    CHECK(good.runTo(session::Stage::HirLowered),
+          "explicit `_ = call();` discard lowers through the pipeline");
+
+    session::CompilationSession assigned(options, (workspace.root / "assigned.zith").string());
+    assigned.setBuffered(true);
+    CHECK(assigned.runTo(session::Stage::HirLowered),
+          "call result used in a binding initializer remains legal");
+}
+
 void test_pipeline_multifile_module_dependency() {
     Workspace workspace;
     workspace.write("math.zith", "pub fn add(a: i32, b: i32): i32 { a + b }\n");
@@ -893,6 +940,7 @@ static void test_frontend_modern_pipeline() {
     test_default_session_uses_modern_pipeline();
     test_shared_context_reuses_frontend_cache();
     test_pipeline_error_surfaces_diagnostic();
+    test_pipeline_discard_non_void_call_result();
     test_pipeline_multifile_module_dependency();
     test_pipeline_export_platform_import();
     test_pipeline_export_shared_prefix();

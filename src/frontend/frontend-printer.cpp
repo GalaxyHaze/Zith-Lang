@@ -191,6 +191,9 @@ void printExpression(ExprId id, const std::vector<Expression> &expressions,
         case StmtKind::Expression:
             std::fputs("Expression", stdout);
             break;
+        case StmtKind::Discard:
+            std::fputs("Discard", stdout);
+            break;
         case StmtKind::Binding:
             std::printf("Binding '%s'", stmt.binding.name.c_str());
             break;

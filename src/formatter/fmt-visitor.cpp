@@ -745,6 +745,15 @@ void FmtVisitor::visitStmt(const frontend::StmtId id) {
             emitOriginal(stmt->span);
         }
         break;
+    case frontend::StmtKind::Discard:
+        if (!stmt->expression) {
+            emitOriginal(stmt->span);
+            break;
+        }
+        emit("_ = ");
+        visitExpr(stmt->expression);
+        emit(";");
+        break;
     case frontend::StmtKind::Error:
         emitOriginal(stmt->span);
         break;

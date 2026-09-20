@@ -391,6 +391,7 @@ private:
     /// normally and rejects statements that would transfer control away from
     /// the deferred block.
     void checkDeferStatement(const frontend::Statement &stmt);
+    void checkExpressionStatement(const frontend::Statement &stmt, bool produces_block_value);
     /// Validates that a deferred body only reads same-block bindings that are
     /// initialized before every exit path from that block.
     void checkDeferCaptures(const frontend::Statement &stmt, const frontend::Expression &block);

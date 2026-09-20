@@ -281,7 +281,7 @@ void test_extern_variadic_lower_to_hir() {
     Workspace workspace;
     workspace.writeFile("main.zith", "extern fn printf(fmt: *char, ...): i32\n"
                                      "fn main() {\n"
-                                     "    printf(\"n=%d\\n\", 7);\n"
+                                     "    _ = printf(\"n=%d\\n\", 7);\n"
                                      "}\n");
 
     memory::Arena arena;
@@ -669,7 +669,7 @@ void test_c_pointers_lower_to_optional_pointer() {
                                      "char *c_dup(const char *text);\n");
     workspace.writeFile("main.zith", "import \"fixture.h\"\n"
                                      "fn main(): i32 {\n"
-                                     "    c_dup(\"x\");\n"
+                                     "    _ = c_dup(\"x\");\n"
                                      "    return 0;\n"
                                      "}\n");
 
@@ -1666,7 +1666,7 @@ void test_generic_function_lowers_to_concrete_instances() {
     Workspace workspace;
     workspace.writeFile("main.zith", "fn identity<T>(x: T): T { return x; }\n"
                                      "fn main(): i32 {\n"
-                                     "    identity<i32>(7);\n"
+                                     "    _ = identity<i32>(7);\n"
                                      "    return identity(9);\n"
                                      "}\n");
 
@@ -2023,8 +2023,8 @@ void test_generic_instance_deduplication() {
     Workspace workspace;
     workspace.writeFile("main.zith", "fn same<T>(x: T): T { x }\n"
                                      "fn main(): i32 {\n"
-                                     "    same<i32>(1);\n"
-                                     "    same(2);\n"
+                                     "    _ = same<i32>(1);\n"
+                                     "    _ = same(2);\n"
                                      "    return 0;\n"
                                      "}\n");
 
@@ -2098,9 +2098,9 @@ void test_is_type_pointer_lowers_union_check_and_keeps_terminators() {
                                      "fn main(): i32 {\n"
                                      "    let f = Foo{\"hello\"};\n"
                                      "    if (f is *char) {\n"
-                                     "        printf(\"%s\", f);\n"
+                                     "        _ = printf(\"%s\", f);\n"
                                      "    } else {\n"
-                                     "        printf(\"abu\\n\");\n"
+                                     "        _ = printf(\"abu\\n\");\n"
                                      "    }\n"
                                      "    return 0;\n"
                                      "}\n");
@@ -2136,8 +2136,8 @@ void test_distinct_generic_instances_have_distinct_symbols() {
     Workspace workspace;
     workspace.writeFile("main.zith", "fn pick<T>(x: T): T { x }\n"
                                      "fn main(): i32 {\n"
-                                     "    pick<i32>(1);\n"
-                                     "    pick<f64>(1.5);\n"
+                                     "    _ = pick<i32>(1);\n"
+                                     "    _ = pick<f64>(1.5);\n"
                                      "    return 0;\n"
                                      "}\n");
 
@@ -2176,7 +2176,7 @@ void test_defer_lowers_to_cleanup_nodes() {
                                      "fn main(): i32 {\n"
                                      "    defer putchar(66);\n"
                                      "    defer putchar(65);\n"
-                                     "    putchar(48);\n"
+                                     "    _ = putchar(48);\n"
                                      "    return 0;\n"
                                      "}\n");
 

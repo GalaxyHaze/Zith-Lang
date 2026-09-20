@@ -99,7 +99,7 @@ void externVariadicAcceptsTailArguments() {
     Workspace workspace;
     workspace.write("main.zith", "extern fn printf(fmt: *char, ...): i32\n"
                                  "fn main(): i32 {\n"
-                                 "    printf(\"n=%d\\n\", 7, 1.5);\n"
+                                 "    _ = printf(\"n=%d\\n\", 7, 1.5);\n"
                                  "    return 0;\n"
                                  "}\n");
     auto r = check(workspace);
@@ -110,7 +110,7 @@ void externVariadicRequiresFixedArguments() {
     Workspace workspace;
     workspace.write("main.zith", "extern fn printf(fmt: *char, ...): i32\n"
                                  "fn main(): i32 {\n"
-                                 "    printf();\n"
+                                 "    _ = printf();\n"
                                  "    return 0;\n"
                                  "}\n");
     auto r = check(workspace);

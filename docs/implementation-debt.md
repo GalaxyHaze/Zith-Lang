@@ -172,6 +172,9 @@ nota de estado:
 - Imported/cached bare `opaque` values: registry project-local, sem registry
   object em runtime e sem categorização do field que mudou.
 - Ownership proof still happens after premature lowering in places.
+- Expression statements whose root is a non-void call require explicit
+  `_ = expr;` (`E2026`); the existing Zith-- docs now call this default
+  behavior, not an attribute.
 
 ### 7. Falhas conhecidas em `test-codegen`
 

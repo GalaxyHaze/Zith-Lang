@@ -39,7 +39,7 @@ void test_ide_api() {
                                "  let doubled = counter.bump(2);\n"
                                "  let color = Color.Red;\n"
                                "  let matched = pick(color);\n"
-                               "  helper(doubled);\n"
+                               "  _ = helper(doubled);\n"
                                "  return dock Worker();\n"
                                "}\n",
                                1);

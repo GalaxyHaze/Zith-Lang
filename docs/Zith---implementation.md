@@ -38,6 +38,15 @@ valor. Quando `return` tem uma expressão, o parser exige `;` depois de
 `parseExpression()` e reporta `E1002 ExpectedSemicolon` sem consumir mais
 tokens.
 
+`_ = expr;` baixa para `StmtKind::Discard` no parser quando o token inicial é
+`_` seguido de `=`; o parser consome o par e exige `;` após a expressão. O sema
+continua a inferir a expressão descartada mas não a devolve como valor do bloco.
+Em `inferBlock`, uma expression statement cujo AST root é `Call`/`DockCall` com
+tipo não-void/não-error e que não é o resultado final do bloco reporta
+`E2026 DiscardedResult`; `StmtKind::Discard` é a única forma explícita de
+aceitar esse tipo. O HIR baixa `StmtKind::Discard` como a chamada executada,
+sem a tornar no valor implícito do bloco.
+
 `parseIf()` aceita um `else` simples, `else if (cond) { body }` e a forma
 preferida `else (cond) { body }`. Ambos os caminhos encadeados usam o mesmo
 `ExprKind::If` com operandos `[cond, then, else-cond-or-inner-if, else-body]`;

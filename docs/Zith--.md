@@ -706,6 +706,10 @@ entra no documento do `Zith--` depois de terminar no pipeline real, porque o
 - Funções não-void não podem cair sem valor. Um corpo só termina implicitamente quando um valor
   final tem o tipo certo ou todos os caminhos terminam (`return`, `jump`, `if`/`else` completo,
   `when` com default ou loop infinito sem `break` directo).
+- Resultados de call não-void usados como expression statement são considerados
+  consumidos-de-outra-forma ou descartados; a única forma explícita de os descartar
+  é `_ = expr;`. Assignment/return/argument/condition/binding usos continuam a
+  consumir o valor, e calls `void` continuam legais como statement.
 - `state(params): ret` é um tipo de valor para referências a states reais; `let S: state(i32): i32 =
   Machine; dock S(args);` é aceite com as verificações de assinatura do state.
 - Qualificadores `lend`/`view` parseados e tipados; anotações `lend x`/`view x`

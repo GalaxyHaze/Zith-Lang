@@ -513,7 +513,7 @@ void test_vm_v2_hello_stdlib_import_println() {
         output << "from std/io/console\n"
                   "\n"
                   "fn main(): i32 {\n"
-                  "    println(\"hello v2\");\n"
+                  "    _ = println(\"hello v2\");\n"
                   "    return 0;\n"
                   "}\n";
     }
@@ -557,7 +557,7 @@ void test_vm_v2_functions_with_stdlib() {
                   "}\n"
                   "\n"
                   "fn main(): i32 {\n"
-                  "    println(\"sum\");\n"
+                  "    _ = println(\"sum\");\n"
                   "    add(2, 3)\n"
                   "}\n";
     }
@@ -597,7 +597,7 @@ void test_vm_v2_extern_putchar() {
         output << "extern fn putchar(c: char): i32\n"
                   "\n"
                   "fn main(): i32 {\n"
-                  "    putchar('A');\n"
+                  "    _ = putchar('A');\n"
                   "    0\n"
                   "}\n";
     }
@@ -638,8 +638,8 @@ void test_vm_v2_extern_snprintf_subset() {
                   "\n"
                   "fn main(): i32 {\n"
                   "    var buf: *char = malloc(32) as *char;\n"
-                  "    snprintf(buf, 32, \"%u\", 42);\n"
-                  "    putchar(raw buf[0]);\n"
+                  "    _ = snprintf(buf, 32, \"%u\", 42);\n"
+                  "    _ = putchar(raw buf[0]);\n"
                   "    0\n"
                   "}\n";
     }

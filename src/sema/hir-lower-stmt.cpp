@@ -33,6 +33,26 @@ bool HirLowerModern::lowerStatement(frontend::StmtId id, hir::HirExprId &last_va
             }
         }
         return true;
+    case frontend::StmtKind::Discard:
+        if (statement.expression &&
+            statement.expression.value <= current_module_->frontend->expressions().size()) {
+            const auto discarded = lowerExpr(statement.expression);
+            if (discarded == hir::kInvalidHirExpr &&
+                typeOfExpr(statement.expression) != types::kVoidType &&
+                typeOfExpr(statement.expression) != types::kErrorType && !diags_.hasErrors()) {
+                diags_.report(diagnostics::Severity::Error, diagnostics::err::InvalidIR,
+                              "discarded expression could not be lowered", memory::Span{});
+                return false;
+            }
+            if (discarded != hir::kInvalidHirExpr) {
+                if (defer_body_sink_ != nullptr)
+                    defer_body_sink_->push(discarded);
+                else
+                    current_fn_->blocks[current_block_].insts.push(discarded);
+            }
+            last_value = hir::kInvalidHirExpr;
+        }
+        return true;
     case frontend::StmtKind::Declaration:
         // Local states have already been predeclared and are not executed.
         return true;

@@ -582,7 +582,7 @@ static void test_slice_string_intrinsics_runtime() {
                          "    if (@lengthOf(slice) != 3) { return 1; }\n"
                          "    if (raw @ptrOf(slice)[1] != 20) { return 2; }\n"
                          "    if (@lengthOf(\"zith\") != 4) { return 3; }\n"
-                         "    printf(\"%s\\n\", @ptrOf(\"zith\"));\n"
+                         "    _ = printf(\"%s\\n\", @ptrOf(\"zith\"));\n"
                          "    return 0;\n"
                          "}\n");
 
@@ -687,10 +687,10 @@ static void test_tagged_union_pointer_is_type_runtime() {
                          "fn main(): i32 {\n"
                          "    let f = Foo{\"hello\"};\n"
                          "    if (f is *char) {\n"
-                         "        printf(\"union string: %s\\n\", f);\n"
+                         "        _ = printf(\"union string: %s\\n\", f);\n"
                          "        return 0;\n"
                          "    }\n"
-                         "    printf(\"abu\\n\");\n"
+                         "    _ = printf(\"abu\\n\");\n"
                          "    return 2;\n"
                          "}\n");
 
@@ -752,7 +752,7 @@ static void test_when_narrowing_runtime() {
                          "fn main(): i32 {\n"
                          "    let v = Value{\"ok\"};\n"
                          "    when (v) {\n"
-                         "        (v is *char) { printf(\"%s\\n\", v); return 7; },\n"
+                         "        (v is *char) { _ = printf(\"%s\\n\", v); return 7; },\n"
                          "        (_) { return 1; }\n"
                          "    }\n"
                          "    return 2;\n"
@@ -1092,7 +1092,7 @@ static void test_from_console_lowers_println_body() {
     t.opts.flags.emitIr(true);
     auto r = t.run("codegen-from-console.zith", "from std/io/console\n"
                                                 "fn main(): i32 {\n"
-                                                "    println(\"from import\");\n"
+                                                "    _ = println(\"from import\");\n"
                                                 "    return 0;\n"
                                                 "}\n");
     CHECK(r.ok, "from std/io/console compiles and runs");
@@ -1108,7 +1108,7 @@ static void test_console_alias_resolves_member_without_global_import() {
     aliased.opts.flags.emitIr(true);
     auto ok = aliased.run("codegen-console-alias.zith", "import std/io/console as console\n"
                                                         "fn main(): i32 {\n"
-                                                        "    console.println(\"alias import\");\n"
+                                                        "    _ = console.println(\"alias import\");\n"
                                                         "    return 0;\n"
                                                         "}\n");
     CHECK(ok.ok, "console.println resolves through an import alias");
@@ -1120,7 +1120,7 @@ static void test_console_alias_resolves_member_without_global_import() {
     auto missing =
         unqualified.run("codegen-console-alias-missing.zith", "import std/io/console as console\n"
                                                               "fn main() {\n"
-                                                              "    println(\"not global\");\n"
+                                                              "    _ = println(\"not global\");\n"
                                                               "}\n");
     CHECK(!missing.ok, "Alias import does not expose println globally");
     CHECK(missing.errorCount > 0, "Unqualified println reports a diagnostic");
@@ -1646,7 +1646,7 @@ static void test_defer_reverse_order_before_return() {
                                                  "fn main(): i32 {\n"
                                                  "    defer putchar(66);\n"
                                                  "    defer putchar(65);\n"
-                                                 "    putchar(48);\n"
+                                                 "    _ = putchar(48);\n"
                                                  "    return 0;\n"
                                                  "}\n");
     CHECK(r.ok, "defer expressions compile, link and run");
@@ -1657,8 +1657,8 @@ static void test_defer_block_runs_on_normal_exit() {
     CodegenTest t;
     auto r = t.run("codegen-defer-block.zith", "extern fn putchar(c: i32): i32\n"
                                                "fn main() {\n"
-                                               "    defer { putchar(66); putchar(65); }\n"
-                                               "    putchar(48);\n"
+                                               "    defer { _ = putchar(66); _ = putchar(65); }\n"
+                                               "    _ = putchar(48);\n"
                                                "}\n");
     CHECK(r.ok, "defer block compiles, links and runs");
     CHECK_EQ(r.output, "0BA", "defer block body executes in written order on block exit");
@@ -1670,7 +1670,7 @@ static void test_defer_in_if_and_loop() {
                                                   "fn main() {\n"
                                                   "    if (true) {\n"
                                                   "        defer putchar(66);\n"
-                                                  "        putchar(48);\n"
+                                                  "        _ = putchar(48);\n"
                                                   "    }\n"
                                                   "    putchar(90);\n"
                                                   "}\n");
@@ -1681,7 +1681,7 @@ static void test_defer_in_if_and_loop() {
                                                       "fn main() {\n"
                                                       "    for (true) {\n"
                                                       "        defer putchar(66);\n"
-                                                      "        putchar(65);\n"
+                                                      "        _ = putchar(65);\n"
                                                       "        break;\n"
                                                       "    }\n"
                                                       "    putchar(90);\n"
@@ -1696,7 +1696,7 @@ static void test_defer_in_state_before_jump() {
                                                "state Done() { return; }\n"
                                                "state Start() {\n"
                                                "    defer putchar(66);\n"
-                                               "    putchar(65);\n"
+                                               "    _ = putchar(65);\n"
                                                "    jump Done();\n"
                                                "}\n"
                                                "fn main() {\n"
@@ -2088,7 +2088,7 @@ static void test_mutable_slice_from_c() {
                          "extern fn slice_set(s: *[]i32, i: i64, v: i32): i32\n"
                          "fn main(): i32 {\n"
                          "    var s: []i32 = make_slice();\n"
-                         "    slice_set(&s, 1, 10);\n"
+                         "    _ = slice_set(&s, 1, 10);\n"
                          "    return raw s[1];\n"
                          "}\n");
 
@@ -2731,7 +2731,7 @@ static void test_extern_variadic_call_runs() {
     t.opts.flags.emitIr(true);
     t.write("main.zith", "extern fn printf(fmt: *char, ...): i32\n"
                          "fn main(): i32 {\n"
-                         "    printf(\"n=%d\\n\", 7);\n"
+                         "    _ = printf(\"n=%d\\n\", 7);\n"
                          "    return 0;\n"
                          "}\n");
 
@@ -2871,7 +2871,7 @@ static void test_c_default_arguments_and_string_escapes() {
         t.write("main.zith", "extern fn printf(fmt: *char, ...): i32\n"
                              "fn main(): i32 {\n"
                              "    let f: f32 = 1.5;\n"
-                             "    printf(\"%f\", f);\n"
+                             "    _ = printf(\"%f\", f);\n"
                              "    return 0;\n"
                              "}\n");
 
@@ -2885,7 +2885,7 @@ static void test_c_default_arguments_and_string_escapes() {
         CodegenTest t;
         auto r = t.run("codegen-escapes-char.zith", "extern fn printf(fmt: *char, ...): i32\n"
                                                     "fn main(): i32 {\n"
-                                                    "    printf(\"v=%d\\n[%f]%c\", 42, 1.5, 'B');\n"
+                                                    "    _ = printf(\"v=%d\\n[%f]%c\", 42, 1.5, 'B');\n"
                                                     "    return 0;\n"
                                                     "}\n");
         CHECK(r.ok, "escaped strings, char literal args and promoted variadic args run");
@@ -2898,8 +2898,8 @@ static void test_dollar_escape_hatch_runtime() {
     CodegenTest t;
     auto r = t.run("codegen-dollar-escape.zith", "extern fn printf(fmt: *char, ...): i32\n"
                                                  "fn main(): i32 {\n"
-                                                 "    printf(\"cost=\\#5\\n\");\n"
-                                                 "    printf(\"%c\\n\", '\\#');\n"
+                                                 "    _ = printf(\"cost=\\#5\\n\");\n"
+                                                 "    _ = printf(\"%c\\n\", '\\#');\n"
                                                  "    return 0;\n"
                                                  "}\n");
     CHECK(r.ok, "the hash escape hatch compiles");
@@ -2916,7 +2916,7 @@ static void test_child_output_is_separate_from_compiler_output() {
     session.setAlwaysEmitObject(true);
     session.setContent("extern fn printf(fmt: *char, ...): i32\n"
                        "fn main(): i32 {\n"
-                       "    printf(\"child-says=%d\\n\", 3);\n"
+                       "    _ = printf(\"child-says=%d\\n\", 3);\n"
                        "    return 0;\n"
                        "}\n");
 
@@ -2942,7 +2942,7 @@ static void test_direct_exec_inherits_parent_stdout() {
     session.setAlwaysEmitObject(true);
     session.setContent("extern fn printf(fmt: *char, ...): i32\n"
                        "fn main(): i32 {\n"
-                       "    printf(\"direct-says=%d\\n\", 7);\n"
+                       "    _ = printf(\"direct-says=%d\\n\", 7);\n"
                        "    return 12;\n"
                        "}\n");
 
@@ -2984,7 +2984,7 @@ static void test_child_output_survives_nonzero_exit() {
     CodegenTest t;
     auto r = t.run("codegen-child-output-nonzero.zith", "extern fn printf(fmt: *char, ...): i32\n"
                                                         "fn main(): i32 {\n"
-                                                        "    printf(\"before-failure\\n\");\n"
+                                                        "    _ = printf(\"before-failure\\n\");\n"
                                                         "    return -1;\n"
                                                         "}\n");
     CHECK(r.ok, "a program returning -1 still compiles, links and runs");
@@ -2999,7 +2999,7 @@ static void test_import_stdio_runs() {
     t.opts.flags.emitIr(true);
     t.write("main.zith", "import \"stdio.h\"\n"
                          "fn main(): i32 {\n"
-                         "    printf(\"v=%d\\n\", 42);\n"
+                         "    _ = printf(\"v=%d\\n\", 42);\n"
                          "    return 0;\n"
                          "}\n");
 
@@ -3025,7 +3025,7 @@ static void test_import_stdio_runs() {
     CodegenTest plain;
     auto run = plain.run("codegen-import-stdio.zith", "import \"stdio.h\"\n"
                                                       "fn main(): i32 {\n"
-                                                      "    printf(\"v=%d\\n\", 42);\n"
+                                                      "    _ = printf(\"v=%d\\n\", 42);\n"
                                                       "    return 0;\n"
                                                       "}\n");
     CHECK(run.ok, "stdio.h import compiles and executes without IR output enabled");
@@ -3110,7 +3110,7 @@ static void test_c_pointer_cast_roundtrip_emits_no_conversion() {
                          "    let cell: ?*i32 = malloc(64) as ?*i32;\n"
                          "    let slot: *i32 = cell;\n"
                          "    *slot = 42;\n"
-                         "    printf(\"v=%d\\n\", *slot);\n"
+                         "    _ = printf(\"v=%d\\n\", *slot);\n"
                          "    free(cell);\n"
                          "    return 0;\n"
                          "}\n");
@@ -3144,7 +3144,7 @@ static void test_c_pointer_is_null_uses_niche_comparison() {
                          "    if (f is null) {\n"
                          "        return 0;\n"
                          "    }\n"
-                         "    fclose(f);\n"
+                         "    _ = fclose(f);\n"
                          "    return 1;\n"
                          "}\n");
 

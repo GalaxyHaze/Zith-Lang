@@ -132,7 +132,7 @@ void test_cast_does_not_consume_line() {
                    "fn main(): i32 {\n"
                    "    let line = input();\n"
                    "    let status = parseDemo(view line);\n"
-                   "    line.destroy();\n"
+                   "    _ = line.destroy();\n"
                    "    return status;\n"
                    "}\n",
                    session::Stage::HirLowered);
@@ -160,7 +160,7 @@ void test_println_with_i32_lowers_to_hir() {
     SessionRunner t;
     auto r = t.run("from std/io/console\n"
                    "fn main(): i32 {\n"
-                   "    println(\"n=%#\", 7);\n"
+                   "    _ = println(\"n=%#\", 7);\n"
                    "    return 0;\n"
                    "}\n",
                    session::Stage::HirLowered);

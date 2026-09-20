@@ -307,9 +307,9 @@ void callSiteAcceptedAnnotationsAndTemporaries() {
                            "fn read(p: view P): i32 { p.x }\n"
                            "fn main(): i32 {\n"
                            "    var q: P = P { x: 1 };\n"
-                           "    update(lend q);\n"
-                           "    read(view q);\n"
-                           "    read(P { x: 3 });\n"
+                           "    _ = update(lend q);\n"
+                           "    _ = read(view q);\n"
+                           "    _ = read(P { x: 3 });\n"
                            "    return read(view q) + update(lend q);\n"
                            "}\n");
     CHECK(annotated.ok, "accepts correct lend/view annotations and temporary rvalues");

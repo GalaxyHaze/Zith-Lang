@@ -120,7 +120,7 @@ void test_run_separates_program_stdout_from_compiler_logs() {
         std::ofstream out(source, std::ios::binary);
         out << "extern fn printf(fmt: *char, ...): i32\n"
                "fn main(): i32 {\n"
-               "    printf(\"program-stdout=%d\\n\", 5);\n"
+               "    _ = printf(\"program-stdout=%d\\n\", 5);\n"
                "    return 21;\n"
                "}\n";
     }

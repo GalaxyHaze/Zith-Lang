@@ -202,6 +202,8 @@ enum class StmtKind : uint8_t {
     Error,
     Expression,
     Binding,
+    /// `_ = expr;` explicitly discards the expression result.
+    Discard,
     /// `defer expr;` or `defer { ... }`: the expression/block body runs when the
     /// enclosing block exits. Sema/HIR execute it at cleanup, not at the point
     /// where it is registered.
