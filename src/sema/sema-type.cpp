@@ -75,8 +75,10 @@ session::ModuleKey
 PerModuleSema::resolveQualifiedPath(const frontend::TypeExpression &type) const noexcept {
     if (type.segments.size() < 2U)
         return {};
-    const auto *binding = findResolvedBinding(type.segments.front(), currentScopeForType(type));
-    if (binding == nullptr || binding->kind != session::ResolutionKind::ModuleAlias)
+    const auto *binding = session::lookupModuleAliasForPath(
+        resolution, type.segments.front(), currentScopeForType(type), snapshot.scopes(),
+        type.segments);
+    if (binding == nullptr)
         return {};
     return binding->target.module;
 }

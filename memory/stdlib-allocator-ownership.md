@@ -40,9 +40,11 @@ directory module. Removing the empty directory and clearing the stale
 `import std/alloc as a`.
 
 `export` paths in a facade may share a namespace prefix (`export std/a` plus
-`export std/b`). The frontend now injects each target's public symbols and
-deduplicates the qualified namespace alias, so `from std/memory` exposes the
-leaf contracts without a spurious `E2002 duplicate binding`.
+`export std/b`). The frontend injects each target's public symbols and keeps an
+independent `ModuleAlias` for every exported namespace prefix, so `from
+std/memory` exposes the leaf contracts and `import std/memory` can resolve each
+fanout path such as `std.memory.in-place.InPlace` without a spurious `E2002
+duplicate binding`.
 
 ## Design Intent
 

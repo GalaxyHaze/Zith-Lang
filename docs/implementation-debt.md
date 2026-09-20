@@ -270,22 +270,21 @@ de um trait local para o trait importado sem sacrificar a cobertura.
 
 ### 11. `export` de facades com prefixo partilhado
 
-Estado atual: `export` re-injecta os símbolos públicos de cada alvo e mantém
-apenas um alias de namespace por prefixo quando a mesma fachada reexporta mais
-de um módulo com raiz comum (`export std/a` + `export std/b`). O caso de uso
-real é `stdlib/std/memory.zith`, que reexporta `in-place`, `allocator`, `heap`
-e `new` a partir de `from std/memory`.
+Estado atual: `export` re-injecta os símbolos públicos de cada alvo e
+representa cada prefixo de namespace exportado como um `ModuleAlias`
+independente com o mesmo nome de raiz. O caso de uso real é
+`stdlib/std/memory.zith`, que reexporta `in-place`, `allocator`, `heap` e
+`new` a partir de `from std/memory`.
 
-Dívida real restante: um consumidor com `import std/memory` vê o namespace
-qualificado a partir do primeiro export deduplicado, mas não deriva aliases
-intermédios para todos os subcaminhos. Para caminhos totalmente qualificados
-com fanout, o modelo de `ModuleAlias` precisa de representar namespaces como
-nós, não apenas o primeiro segmento de cada import.
+O consumidor com `import std/memory` mantém aliases para cada subcaminho
+exportado; `lookupModuleAliasForPath` escolhe o alias mais longo cujo
+`modulePath` é prefixo do caminho qualificado. Assim
+`std.memory.in-place.InPlace` e `std.memory.allocators.heap.HeapAllocator`
+resolvem para os módulos reais de cada export. O teste de frontend e o
+lowering até HIR cobrem o fanout em estados limpos e cached.
 
-Ação futura: adicionar um mapa de namespaces por prefixo no `FrontendContext`
-ou representar cada segmento de import como um alias independente, e cobrir
-`std.memory.in-place.InPlace` e `std.memory.allocators.heap.HeapAllocator` com
-testes de pipeline.
+Ficou resolvida a dívida original desta secção; não há limitação conhecida no
+modelo para prefixos totalmente qualificados.
 
 ### 12. Receivers `dyn`/`lend` mutáveis para sinks
 

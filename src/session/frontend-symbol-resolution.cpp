@@ -86,6 +86,41 @@ const ResolvedName *lookupBinding(const ModuleResolution &resolution, std::strin
     return result;
 }
 
+const ResolvedName *lookupModuleAliasForPath(const ModuleResolution &resolution,
+                                             std::string_view root, frontend::ScopeId from,
+                                             const std::vector<frontend::Scope> &scopes,
+                                             const std::vector<std::string> &path) noexcept {
+    const ResolvedName *result = nullptr;
+    const auto matches         = [&](const ResolvedName &candidate) {
+        if (candidate.kind != ResolutionKind::ModuleAlias ||
+            candidate.modulePath.size() > path.size())
+            return false;
+        for (size_t index = 0; index < candidate.modulePath.size(); ++index) {
+            if (candidate.modulePath[index] != path[index])
+                return false;
+        }
+        return true;
+    };
+    for (frontend::ScopeId current = from;;) {
+        bool shadowed = false;
+        for (const auto &candidate : resolution.bindings) {
+            if (candidate.scope != current || candidate.name != root)
+                continue;
+            shadowed = true;
+            if (candidate.kind == ResolutionKind::ModuleAlias && matches(candidate) &&
+                (result == nullptr || candidate.modulePath.size() > result->modulePath.size()))
+                result = &candidate;
+        }
+        if (shadowed)
+            return result != nullptr && matches(*result) ? result : nullptr;
+        if (!current)
+            return nullptr;
+        if (current.value > scopes.size())
+            return nullptr;
+        current = scopes[current.value - 1U].parent;
+    }
+}
+
 std::vector<const ResolvedName *> lookupOverloads(const ModuleResolution &resolution,
                                                   std::string_view name, frontend::ScopeId from,
                                                   const std::vector<frontend::Scope> &scopes) {
@@ -165,6 +200,13 @@ FrontendContext::buildResolutions(const std::vector<ModuleArtifactPtr> &modules,
                     existing.signature != binding.signature) {
                     continue;
                 }
+                const bool same_module_root =
+                    existing.kind == ResolutionKind::ModuleAlias &&
+                    binding.kind == ResolutionKind::ModuleAlias && !existing.modulePath.empty() &&
+                    !binding.modulePath.empty() &&
+                    existing.modulePath.front() == binding.modulePath.front();
+                if (same_module_root)
+                    continue;
                 diagnostics.push_back({diagnostics::Severity::Error,
                                        diagnostics::err::DuplicateDecl,
                                        "duplicate binding '" + binding.name + "' in this scope",
@@ -306,7 +348,6 @@ FrontendContext::buildResolutions(const std::vector<ModuleArtifactPtr> &modules,
             }
         }
 
-        memory::FlatSet<std::string> export_root_aliases;
         for (const auto *edge_ptr : effective_edges) {
             const auto &edge = *edge_ptr;
             if (!edge.error.empty())
@@ -446,20 +487,35 @@ FrontendContext::buildResolutions(const std::vector<ModuleArtifactPtr> &modules,
             } else if (!edge.request.isFrom && edge.request.alias.empty() &&
                        !default_name.empty()) {
                 // `export Path` exposes qualified access plus the public
-                // symbols of the dependency. Multiple exports may share a
-                // namespace prefix, so keep the first root alias and skip the
-                // duplicates.
-                const bool first_export_alias =
-                    export_root_aliases.insert(std::string(default_name));
-                if (!first_export_alias)
-                    continue;
-                ResolvedName alias;
-                alias.name       = default_name;
-                alias.kind       = ResolutionKind::ModuleAlias;
-                alias.span       = edge.request.pathSpan;
-                alias.target     = {edge.targets.empty() ? ModuleKey{} : edge.targets.front(), {}};
-                alias.modulePath = edge.request.path;
-                add_binding(std::move(alias), frontend::ScopeId{});
+                // symbols of the dependency. Represent every namespace
+                // segment independently so `std.memory.in-place.InPlace` and
+                // `std.memory.allocators.heap.HeapAllocator` resolve through
+                // the same facade even though their paths fan out below the
+                // common `std.memory` prefix.
+                for (size_t prefix_size = 1; prefix_size <= edge.request.path.size();
+                     ++prefix_size) {
+                    std::vector<std::string> prefix(edge.request.path.begin(),
+                                                    edge.request.path.begin() +
+                                                        static_cast<std::ptrdiff_t>(prefix_size));
+                    bool duplicate = false;
+                    for (const auto &existing : resolution.bindings) {
+                        if (existing.scope || existing.kind != ResolutionKind::ModuleAlias ||
+                            existing.name != default_name || existing.modulePath != prefix)
+                            continue;
+                        duplicate = true;
+                        break;
+                    }
+                    if (duplicate)
+                        continue;
+                    ResolvedName alias;
+                    alias.name       = default_name;
+                    alias.kind       = ResolutionKind::ModuleAlias;
+                    alias.span       = edge.request.pathSpan;
+                    alias.target     = {edge.targets.empty() ? ModuleKey{} : edge.targets.front(),
+                                        {}};
+                    alias.modulePath = std::move(prefix);
+                    add_binding(std::move(alias), frontend::ScopeId{});
+                }
             }
         }
 
@@ -482,10 +538,6 @@ FrontendContext::buildResolutions(const std::vector<ModuleArtifactPtr> &modules,
                 // the concrete declaration from its module.
                 const auto dot       = expression.text.find('.');
                 const auto root_name = std::string_view(expression.text).substr(0, dot);
-                const auto *alias    = lookupBinding(resolution, root_name, expression.scope,
-                                                     module->frontend->scopes());
-                if (alias == nullptr || alias->kind != ResolutionKind::ModuleAlias)
-                    continue;
                 std::vector<std::string> segments;
                 size_t cursor = 0;
                 while (cursor < expression.text.size()) {
@@ -496,6 +548,10 @@ FrontendContext::buildResolutions(const std::vector<ModuleArtifactPtr> &modules,
                         break;
                     cursor = next + 1U;
                 }
+                const auto *alias = lookupModuleAliasForPath(
+                    resolution, root_name, expression.scope, module->frontend->scopes(), segments);
+                if (alias == nullptr)
+                    continue;
                 const auto target    = alias->target.module;
                 const auto *artifact = module_by_key.get(target);
                 if (!artifact || segments.size() < 2U)
@@ -592,9 +648,15 @@ FrontendContext::buildResolutions(const std::vector<ModuleArtifactPtr> &modules,
                 if (chain.empty() || cursor->kind != frontend::ExprKind::Name)
                     continue;
                 const frontend::Expression &root = *cursor;
-                const auto *alias =
-                    lookupBinding(resolution, root.text, root.scope, module->frontend->scopes());
-                if (alias == nullptr || alias->kind != ResolutionKind::ModuleAlias)
+                std::vector<std::string> namespace_path{root.text};
+                if (chain.size() > 1U) {
+                    for (size_t index = chain.size() - 1U; index > 0U; --index)
+                        namespace_path.push_back(chain[index]->text);
+                }
+                const auto *alias = lookupModuleAliasForPath(
+                    resolution, root.text, root.scope, module->frontend->scopes(),
+                    namespace_path);
+                if (alias == nullptr)
                     continue;
                 const auto full_path     = alias->modulePath;
                 const auto target_module = alias->target.module;

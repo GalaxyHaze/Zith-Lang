@@ -269,6 +269,77 @@ void test_default_import_exposes_full_path_namespace() {
     CHECK(!has_imported_symbol, "default import does not inject symbols into the caller scope");
 }
 
+void test_export_shared_prefix_fans_out_to_every_submodule() {
+    Workspace workspace;
+    workspace.write("p/facade.zith", "export p/t1\n"
+                                     "export p/t2\n");
+    workspace.write("p/t1.zith", "pub struct TypeA { pub x: i32 }\n");
+    workspace.write("p/t2.zith", "pub struct TypeB { pub y: i32 }\n");
+    workspace.write("main.zith", "import p/facade\n"
+                                 "fn main(): i32 {\n"
+                                 "    let a: p.t1.TypeA = p.t1.TypeA { x: 1 };\n"
+                                 "    let b: p.t2.TypeB = p.t2.TypeB { y: 2 };\n"
+                                 "    a.x + b.y\n"
+                                 "}\n");
+
+    FrontendContext context(workspace.config(1));
+    auto result = context.analyzeFile(workspace.path("main.zith"));
+    CHECK(result.isOk(), "facade export analysis succeeds");
+    if (!result)
+        return;
+    CHECK(!result.value()->hasErrors(), "shared-prefix facade has no frontend diagnostics");
+
+    const auto &snapshot = *result.value();
+    const auto *resolution =
+        snapshot.findResolution(SourceCatalog::canonicalPath(workspace.path("main.zith")));
+    CHECK(resolution != nullptr, "root module has a resolution table");
+    if (resolution == nullptr)
+        return;
+
+    bool has_short_alias = false;
+    bool has_deep_alias  = false;
+    for (const auto &binding : resolution->bindings) {
+        if (binding.kind != ResolutionKind::ModuleAlias || binding.modulePath.empty() ||
+            binding.modulePath.front() != "p")
+            continue;
+        if (binding.modulePath == std::vector<std::string>{"p", "t1"})
+            has_short_alias = true;
+        if (binding.modulePath == std::vector<std::string>{"p", "t2"})
+            has_deep_alias = true;
+    }
+    CHECK(has_short_alias, "facade keeps a per-fanout alias for the first subtree");
+    CHECK(has_deep_alias, "facade keeps a per-fanout alias for the second subtree");
+
+    for (const auto &binding : resolution->bindings) {
+        if (binding.kind != ResolutionKind::ModuleAlias || binding.name != "p")
+            continue;
+        const auto t1_key = SourceCatalog::canonicalPath(workspace.path("p/t1.zith"));
+        const auto t2_key = SourceCatalog::canonicalPath(workspace.path("p/t2.zith"));
+        if (binding.modulePath == std::vector<std::string>{"p", "t1"})
+            CHECK_EQ(binding.target.module, t1_key, "first fanout alias targets its own module");
+        if (binding.modulePath == std::vector<std::string>{"p", "t2"})
+            CHECK_EQ(binding.target.module, t2_key, "second fanout alias targets its own module");
+    }
+
+    const auto cached = context.analyzeFile(workspace.path("main.zith"));
+    CHECK(cached.isOk(), "repeated facade analysis succeeds from the populated cache");
+    if (cached)
+        CHECK(!cached.value()->hasErrors(),
+              "shared-prefix facade still resolves after cache reuse");
+
+    memory::Arena arena;
+    Options options(arena);
+    options.includeDirs.push(workspace.root.string());
+    options.targetStage  = Stage::HirLowered;
+    auto session_context = std::make_shared<FrontendContext>(workspace.config(1));
+    CompilationSession session(options, workspace.path("main.zith"), std::move(session_context));
+    session.setBuffered(true);
+    CHECK(session.runTo(Stage::HirLowered),
+          "shared-prefix facade type expressions and struct literals lower to HIR");
+    CHECK(session.diags().errorCount() == 0,
+          "shared-prefix facade has no sema/lowering diagnostics");
+}
+
 void test_session_materializes_dependency_overlays() {
     Workspace workspace;
     workspace.write("main.zith", "from dep\nfn main() { overlay_fn() }\n");
@@ -670,6 +741,7 @@ static void test_frontend_context() {
     test_partial_artifact_cycle_and_session_snapshot();
     test_import_graph_and_resolution_table();
     test_default_import_exposes_full_path_namespace();
+    test_export_shared_prefix_fans_out_to_every_submodule();
     test_session_materializes_dependency_overlays();
     test_parameter_names_are_scoped_per_function();
     test_local_bindings_are_scoped();

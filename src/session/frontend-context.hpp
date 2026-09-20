@@ -343,6 +343,15 @@ struct ModuleResolution {
 lookupBinding(const ModuleResolution &resolution, std::string_view name, frontend::ScopeId from,
               const std::vector<frontend::Scope> &scopes) noexcept;
 
+/// Finds the namespace alias whose module path is a prefix of `path`.  When a
+/// facade exports several modules below one root (`std.memory.in-place` and
+/// `std.memory.allocators.heap`), multiple `ModuleAlias` bindings share that
+/// root and the caller must pick the longest matching one.
+[[nodiscard]] const ResolvedName *
+lookupModuleAliasForPath(const ModuleResolution &resolution, std::string_view root,
+                         frontend::ScopeId from, const std::vector<frontend::Scope> &scopes,
+                         const std::vector<std::string> &path) noexcept;
+
 /// Every binding of `name` in the nearest enclosing scope that declares it.  The
 /// search never mixes scopes: the closest scope holding the name wins and shadows
 /// the outer ones, so an inner declaration hides an outer overload set entirely.
