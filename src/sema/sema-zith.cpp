@@ -172,6 +172,14 @@ void PerModuleSema::checkZithDeclarations() {
         TypeId local_type = typeOfLocal(binding.id);
         if (!local_type)
             continue;
+        const bool is_for_in_binding = std::find(for_in_bindings.begin(), for_in_bindings.end(),
+                                                 binding.id) != for_in_bindings.end();
+        if (!binding.initializer && !binding.type && !is_for_in_binding &&
+            type_table.kindOf(resolve(local_type)) == TypeKind::Invalid) {
+            report(binding.span, "binding requires a type annotation or an initializer",
+                   diagnostics::err::CannotInfer);
+            continue;
+        }
         const TypeId stripped = type_table.stripQualifiers(local_type);
         const TypeKind kind   = stripped ? type_table.kindOf(stripped) : TypeKind::Error;
         const bool non_trivial =
@@ -181,8 +189,6 @@ void PerModuleSema::checkZithDeclarations() {
             kind == TypeKind::Incomplete || kind == TypeKind::Nominal || kind == TypeKind::Alias ||
             kind == TypeKind::Function || kind == TypeKind::Failable || kind == TypeKind::Pack ||
             kind == TypeKind::Trait || kind == TypeKind::Sum || kind == TypeKind::TypeVar;
-        const bool is_for_in_binding = std::find(for_in_bindings.begin(), for_in_bindings.end(),
-                                                 binding.id) != for_in_bindings.end();
         if (!binding.initializer && !is_for_in_binding &&
             (binding.bindingKind == frontend::BindingKind::Let ||
              binding.bindingKind == frontend::BindingKind::Var) &&

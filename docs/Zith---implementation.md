@@ -45,8 +45,11 @@ Em `inferBlock`, uma expression statement cujo AST root é `Call`/`DockCall` com
 tipo não-void/não-error reporta `E2026 DiscardedResult`, exceto quando a
 expressão é o valor final de uma função não-void; uma function void continua a
 exigir `StmtKind::Discard`. `StmtKind::Discard` é a única forma explícita de
-aceitar esse tipo. O HIR baixa `StmtKind::Discard` como a chamada executada, sem
-a tornar no valor implícito do bloco.
+aceitar esse tipo. Em `checkReturnsAndCalls`, uma função void que termina com
+uma expression statement que produz valor e cuja raiz não é `Assign`, `Call` nem
+`DockCall` também reporta `E2026 DiscardedResult`. O HIR baixa
+`StmtKind::Discard` como a chamada executada, sem a tornar no valor implícito do
+bloco.
 
 `parseIf()` aceita um `else` simples, `else if (cond) { body }` e a forma
 preferida `else (cond) { body }`. Ambos os caminhos encadeados usam o mesmo

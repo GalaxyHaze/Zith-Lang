@@ -710,6 +710,9 @@ entra no documento do `Zith--` depois de terminar no pipeline real, porque o
   consumidos-de-outra-forma ou descartados; a única forma explícita de os descartar
   é `_ = expr;`. Assignment/return/argument/condition/binding usos continuam a
   consumir o valor, e calls `void` continuam legais como statement.
+- Uma função `void` não pode terminar com uma expression statement que produza
+  valor e não seja assignment, call ou dock call; deve usar `_ = expr;` ou
+  declarar um tipo de retorno.
 - `state(params): ret` é um tipo de valor para referências a states reais; `let S: state(i32): i32 =
   Machine; dock S(args);` é aceite com as verificações de assinatura do state.
 - Qualificadores `lend`/`view` parseados e tipados; anotações `lend x`/`view x`

@@ -185,6 +185,55 @@ void test_imported_console_void_main_discard_regression() {
           "DiscardedResult");
 }
 
+void test_untyped_uninitialized_binding_is_rejected() {
+    Workspace workspace;
+    workspace.write("bad.zith", "fn main() {\n"
+                                "    let error;\n"
+                                "}\n");
+
+    memory::Arena arena;
+    Options options(arena);
+    options.targetStage = session::Stage::HirLowered;
+
+    session::CompilationSession session(options, (workspace.root / "bad.zith").string());
+    session.setBuffered(true);
+    CHECK(!session.runTo(session::Stage::HirLowered),
+          "untyped uninitialized binding fails before HIR lowering");
+
+    bool saw_cannot_infer = false;
+    for (const auto &diagnostic : session.diags().all()) {
+        if (diagnostic.code == diagnostics::err::CannotInfer)
+            saw_cannot_infer = true;
+    }
+    CHECK(saw_cannot_infer, "untyped uninitialized binding reports CannotInfer");
+}
+
+void test_void_function_rejects_value_tail() {
+    Workspace workspace;
+    workspace.write("bad.zith", "fn foo() {\n"
+                                "    5\n"
+                                "}\n"
+                                "fn main() {\n"
+                                "    return;\n"
+                                "}\n");
+
+    memory::Arena arena;
+    Options options(arena);
+    options.targetStage = session::Stage::HirLowered;
+
+    session::CompilationSession session(options, (workspace.root / "bad.zith").string());
+    session.setBuffered(true);
+    CHECK(!session.runTo(session::Stage::HirLowered),
+          "void function with a trailing non-void value fails sema");
+
+    bool saw_discarded_result = false;
+    for (const auto &diagnostic : session.diags().all()) {
+        if (diagnostic.code == diagnostics::err::DiscardedResult)
+            saw_discarded_result = true;
+    }
+    CHECK(saw_discarded_result, "void function trailing non-void value reports DiscardedResult");
+}
+
 void test_pipeline_multifile_module_dependency() {
     Workspace workspace;
     workspace.write("math.zith", "pub fn add(a: i32, b: i32): i32 { a + b }\n");
@@ -978,6 +1027,8 @@ static void test_frontend_modern_pipeline() {
     test_pipeline_error_surfaces_diagnostic();
     test_pipeline_discard_non_void_call_result();
     test_imported_console_void_main_discard_regression();
+    test_untyped_uninitialized_binding_is_rejected();
+    test_void_function_rejects_value_tail();
     test_pipeline_multifile_module_dependency();
     test_pipeline_export_platform_import();
     test_pipeline_export_shared_prefix();

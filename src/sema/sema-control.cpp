@@ -125,6 +125,29 @@ void PerModuleSema::checkReturnsAndCalls() {
                                           ret_type, body_type,
                                           "function body type does not match declared return type");
                 }
+            } else if (!sameType(body_type, void_type) && ret_type == void_type) {
+                const auto &body_expr     = snapshot.expressions()[decl.body.value - 1U];
+                bool has_side_effect_tail = false;
+                if (!body_expr.statements.empty()) {
+                    const frontend::StmtId tail_id = body_expr.statements.back();
+                    if (tail_id && tail_id.value <= snapshot.statements().size()) {
+                        const auto &tail = snapshot.statements()[tail_id.value - 1U];
+                        if (tail.kind == frontend::StmtKind::Expression && tail.expression &&
+                            tail.expression.value <= snapshot.expressions().size()) {
+                            const auto tail_kind =
+                                snapshot.expressions()[tail.expression.value - 1U].kind;
+                            has_side_effect_tail = tail_kind == frontend::ExprKind::Assign ||
+                                                   tail_kind == frontend::ExprKind::Call ||
+                                                   tail_kind == frontend::ExprKind::DockCall;
+                        }
+                    }
+                }
+                if (!has_side_effect_tail) {
+                    report(snapshot.expressions()[decl.body.value - 1U].span,
+                           "void function body cannot discard a value; add a return type or use "
+                           "`_ = expression;`",
+                           diagnostics::err::DiscardedResult);
+                }
             } else if (sameType(body_type, void_type) && !exprAlwaysTerminates(decl.body) &&
                        ret_type != void_type && ret_type != error_type) {
                 reportCoercionFailure(
@@ -170,7 +193,7 @@ void PerModuleSema::checkExpressionStatement(const frontend::Statement &stmt,
     if (expr.kind != frontend::ExprKind::Call && expr.kind != frontend::ExprKind::DockCall)
         return;
     const TypeId call_type = resolve(typeOfExpr(stmt.expression));
-    if (call_type != void_type && call_type != error_type) {
+    if (call_type != void_type && call_type != error_type && !produces_block_value) {
         report(stmt.span, "call result must be used or discarded with `_ = call();`",
                diagnostics::err::DiscardedResult);
     }

@@ -20,25 +20,25 @@ implement string {
     pub fn init(str: *char): ?Self {
         let len = strlen(str)
         var data: ?*char = malloc(len + 1) as ?*char
-        if (data is null) { return null }
+        if (data is null) { return null; }
         strcpy(data, str)
         string { data, len }
     }
 
     pub fn get(self: view string): view []char {
-        return raw self.data[0u64..self.length]
+        raw self.data[0u64..self.length]
     }
 
     pub fn ptr(self: view string): ?*char {
-        return self.data
+        self.data
     }
 
     pub fn len(self: view string): u64 {
-        return self.length
+        self.length
     }
 
     pub fn empty(self: view string): bool {
-        return self.length == 0
+        self.length == 0
     }
 
     pub fn iter(self: view string): stringIterator {
@@ -47,22 +47,22 @@ implement string {
 
     pub fn at(self: view string, index: u64): ?char {
         let chars = self.get()
-        if (index >= self.length) { return null }
-        return chars[index]
+        if (index >= self.length) { return null; }
+        chars[index]
     }
 
     pub fn slice(self: view string, start: u64, end: u64): view []char {
-        return raw self.data[start..end]
+        raw self.data[start..end]
     }
 
     pub fn equalsCString(self: view string, other: *char): bool {
-        return strcmp(self.data, other) == 0
+        strcmp(self.data, other) == 0
     }
 
     pub fn startsWith(self: view string, other: *char): bool {
         let plen = strlen(other)
         if (plen > self.length) { return false }
-        return memcmp(self.data, other, plen) == 0
+        memcmp(self.data, other, plen) == 0
     }
 
     pub fn concat(self: view string, other: *char): ?Self {
@@ -85,10 +85,10 @@ implement string {
 implement stringIterator {
     pub fn next(var self): stringCharStep {
         if (self.index >= self.length) {
-            return stringCharStep { End {} }
+            return stringCharStep { End {} };
         }
         let c = self.data[self.index]
         self.index = self.index + 1
-        return stringCharStep { c }
+        stringCharStep { c };
     }
 }
