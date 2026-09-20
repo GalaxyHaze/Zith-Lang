@@ -99,6 +99,10 @@ struct TypedMap {
     /// Concrete type erased by an implicit `T -> dyn Trait` coercion whose
     /// lowered payload differs from the dyn value itself.
     memory::FlatMap<uint32_t, TypeId> dynSourceTypes;
+    /// Nullable-pointer expressions proven non-null by the enclosing
+    /// control-flow narrowing, keyed by `frontend::LocalId`. Deref, arrow,
+    /// index, and nullable-pointer coercion consume this proof.
+    memory::FlatSet<uint32_t> provenNonNullExprs;
     /// Variadic-slice lowering decisions produced by sema for calls, keyed by
     /// the call expression id.
     memory::FlatMap<uint32_t, VariadicCallPlan> variadicCallPlans;
@@ -110,7 +114,7 @@ struct TypedMap {
         : exprTypes(), declTypes(), localTypes(), forInRangeLiteral(), forInNext(), containsCall(),
           forInElementIndex(), forInEndIndex(), forInUnionType(), forInOptionalType(),
           traitQualifiedReceiverBase(), opaqueSourceTypes(), dynSourceTypes(), variadicCallPlans(),
-          variadicStmtPlans() {}
+          variadicStmtPlans(), provenNonNullExprs() {}
 };
 
 class SemaPipeline;
@@ -496,6 +500,15 @@ private:
     [[nodiscard]] TypeId pointerBase(TypeId type) const noexcept;
     /// True for `?*T`: an `Optional` whose inner type is a pointer.
     [[nodiscard]] bool isNullablePointer(TypeId type) const noexcept;
+    /// True when a nullable-pointer expression was narrowed by the enclosing
+    /// control-flow check, so `*T` expects it may be used directly.
+    [[nodiscard]] bool exprHasNonNullPointerProof(frontend::ExprId id) const noexcept;
+    /// Local proven non-null by a `not (x is null)` condition, if the
+    /// condition directly names a local and the local is a nullable pointer.
+    [[nodiscard]] frontend::LocalId
+    nonNullPointerLocalFromCondition(frontend::ExprId condition) const noexcept;
+    /// Reports `NullDerefUnproven` for an unchecked nullable-pointer coercion.
+    [[nodiscard]] bool reportUnprovenNullablePointer(frontend::TextSpan span, TypeId target);
     /// True for `*void` and `?*void`, the two spellings a C `void*` can take.
     [[nodiscard]] bool isVoidPointer(TypeId type) const noexcept;
     TypeId inferIsNull(frontend::ExprId id);
@@ -654,9 +667,9 @@ private:
     bool sameType(TypeId a, TypeId b) const noexcept;
     /// True when a value of `source` is acceptable where `target` is expected,
     /// including the implicit `T -> ?T` and `null -> ?T` coercions.
-    /// TEMPORARY allowance for `?*T` where `*T` is expected; see the definition. Kept as a
-    /// named predicate so the next iteration (flow-sensitive narrowing after `is null`) has
-    /// exactly one place to remove.
+    /// `?*T` is acceptable where `*T` is expected at the type level only when
+    /// it was narrowed/proven non-null; the expression-level proof is checked
+    /// in `coerceValue`.
     bool allowsUncheckedNullablePointer(TypeId target, TypeId source) const noexcept;
     bool coercesTo(TypeId target, TypeId source) const noexcept;
     TypeId resolve(TypeId t) const noexcept;

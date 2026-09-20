@@ -60,10 +60,11 @@ In the other direction no cast is needed at all: any pointer, nullable or not, i
 where a C `void*` (`raw opaque`) is expected, so `free(cell)` and `free(&local)` both compile.
 That coercion is one-way. Going from `raw opaque` back to a concrete `?*T` still requires `as`.
 
-> **Temporary:** flow-sensitive narrowing after `is null` is not implemented yet, so a `?*T`
-> from C is currently accepted unchecked wherever a `*T` is expected. This allowance lives in
-> a single predicate (`PerModuleSema::allowsUncheckedNullablePointer`) and will be removed once
-> narrowing (and/or `must`/`raw`) lands, at which point unchecked use becomes a diagnostic.
+`?*T` narrows to `*T` only inside a branch proven by `is null`/`not (is null)`
+(including the stdlib style `if (p is null) { return ...; }`, whose early return
+keeps the proof for code after the `if`). An unchecked use in deref, arrow, index,
+or coercion expects `*T` and reports `E3005 NullDerefUnproven`; `raw` remains the
+explicit opt-out for unchecked pointer reads.
 
 ### 8.2 `must` vs. `raw`
 

@@ -67,6 +67,24 @@ TypeId PerModuleSema::inferIndex(frontend::ExprId id) {
             if (const auto *pointer = type_table.pointer(resolved_object))
                 result = pointer->pointee;
             break;
+        case TypeKind::Optional: {
+            const auto *opt = type_table.optional(resolved_object);
+            if (opt != nullptr && type_table.kindOf(resolve(opt->inner)) == TypeKind::Pointer) {
+                if (const auto *pointer = type_table.pointer(resolve(opt->inner))) {
+                    if (!expr.is_raw && !exprHasNonNullPointerProof(expr.operands[0])) {
+                        report(expr.span,
+                               "cannot index a possibly-null pointer; narrow it after 'is null' "
+                               "or use 'raw' to bypass the check",
+                               diagnostics::err::NullDerefUnproven);
+                        break;
+                    }
+                    result = pointer->pointee;
+                }
+            } else {
+                report(expr.span, "type is not indexable", diagnostics::err::TypeMismatch);
+            }
+            break;
+        }
         case TypeKind::Pack: {
             if (const auto *pack = type_table.pack(resolved_object)) {
                 int64_t index_value = 0;
@@ -401,11 +419,20 @@ TypeId PerModuleSema::inferArrow(frontend::ExprId id) {
         return error_type;
     TypeId ptr_type = inferExpr(expr.operands[0]);
     TypeId resolved = resolve(ptr_type);
-    // `?*T` is accepted here: the niche representation is the bare pointer. Flow-sensitive
-    // narrowing after `is null` is not implemented yet, so this is unchecked.
     if (type_table.kindOf(resolved) == TypeKind::Optional) {
-        if (const auto *opt = type_table.optional(resolved))
-            resolved = resolve(opt->inner);
+        const auto *opt = type_table.optional(resolved);
+        if (opt == nullptr || type_table.kindOf(resolve(opt->inner)) != TypeKind::Pointer) {
+            report(expr.span, "'->' requires a pointer operand", diagnostics::err::TypeMismatch);
+            return error_type;
+        }
+        if (!exprHasNonNullPointerProof(expr.operands[0])) {
+            report(expr.span,
+                   "cannot traverse a possibly-null pointer; narrow it after 'is null' or use "
+                   "'raw' to bypass the check",
+                   diagnostics::err::NullDerefUnproven);
+            return error_type;
+        }
+        resolved = resolve(opt->inner);
     }
     if (type_table.kindOf(resolved) != TypeKind::Pointer) {
         report(expr.span, "'->' requires a pointer operand", diagnostics::err::TypeMismatch);

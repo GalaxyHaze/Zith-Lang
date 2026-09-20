@@ -91,6 +91,43 @@ bool PerModuleSema::isNullablePointer(TypeId type) const noexcept {
     return type_table.kindOf(resolved) == TypeKind::Optional &&
            static_cast<bool>(pointerBase(resolved));
 }
+bool PerModuleSema::exprHasNonNullPointerProof(frontend::ExprId id) const noexcept {
+    if (!id)
+        return false;
+    const auto *resolved = findResolvedExpr(id);
+    if (resolved == nullptr || !resolved->local)
+        return false;
+    return typed_map.provenNonNullExprs.contains(resolved->local.value);
+}
+frontend::LocalId
+PerModuleSema::nonNullPointerLocalFromCondition(frontend::ExprId condition) const noexcept {
+    if (!condition || condition.value > snapshot.expressions().size())
+        return {};
+    const auto &node = snapshot.expressions()[condition.value - 1U];
+    if (node.kind != frontend::ExprKind::Unary || node.text != "not" || node.operands.empty() ||
+        node.operands[0].value > snapshot.expressions().size())
+        return {};
+    const auto &inner = snapshot.expressions()[node.operands[0].value - 1U];
+    if (inner.kind != frontend::ExprKind::IsNull || inner.operands.empty() ||
+        inner.operands[0].value > snapshot.expressions().size())
+        return {};
+    const auto *resolved = findResolvedExpr(inner.operands[0]);
+    if (resolved == nullptr || !resolved->local)
+        return {};
+    const TypeId local_type = resolve(typeOfLocal(resolved->local));
+    return isNullablePointer(local_type) ? resolved->local : frontend::LocalId{};
+}
+bool PerModuleSema::reportUnprovenNullablePointer(frontend::TextSpan span, TypeId target) {
+    std::string message = "cannot pass a possibly-null pointer where '" +
+                          type_table.typeToString(target) +
+                          "' is expected; narrow it after 'is null' or 'not (is null)', or use "
+                          "'raw' to bypass the check";
+    const std::string_view text = sourceText(span);
+    if (!text.empty())
+        message += " (near '" + std::string(text) + "')";
+    report(span, std::move(message), diagnostics::err::NullDerefUnproven);
+    return false;
+}
 bool PerModuleSema::isVoidPointer(TypeId type) const noexcept {
     const TypeId ptr = pointerBase(type);
     if (!ptr)
@@ -690,6 +727,15 @@ bool PerModuleSema::coerceValue(frontend::ExprId value, TypeId target, TypeId so
     }
     if (coercesTo(target, source)) {
         primeDynImplementations(target, source);
+        // `?*T -> *T` is representation-preserving, but only after the
+        // enclosing branch proved the pointer is non-null. `raw`, `must`, and
+        // explicit optional extraction remain the opts-out for unchecked reads.
+        if (value && isNullablePointer(source) &&
+            type_table.kindOf(resolve(target)) == TypeKind::Pointer &&
+            !isVoidPointer(resolve(target)) && !exprHasNonNullPointerProof(value)) {
+            const auto &value_expr = snapshot.expressions()[value.value - 1U];
+            return reportUnprovenNullablePointer(value_expr.span, target);
+        }
         // Record the optional target on a `null` literal so lowering can emit None directly.
         if (resolve(source) == null_type &&
             type_table.kindOf(resolve(target)) == TypeKind::Optional) {

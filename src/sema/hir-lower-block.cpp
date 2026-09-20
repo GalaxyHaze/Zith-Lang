@@ -183,12 +183,15 @@ hir::HirExprId HirLowerModern::lowerIf(const frontend::Expression &expr, const t
         const sema::modern::TypeId local_sema = semaTypeOfLocal(resolved->local);
         const auto *optional =
             sema_.typeTable().optional(sema_.typeTable().stripQualifiers(local_sema));
-        if (optional == nullptr || sema_.typeTable().kindOf(sema_.typeTable().stripQualifiers(
-                                       optional->inner)) == TypeKind::Pointer)
+        if (optional == nullptr)
             return;
-        narrowed_local            = resolved->local;
-        narrowed_type             = lowerType(sema_.typeTable().stripQualifiers(optional->inner));
-        narrowed_optional_payload = true;
+        const auto inner_sema = sema_.typeTable().stripQualifiers(optional->inner);
+        narrowed_local        = resolved->local;
+        narrowed_type         = lowerType(inner_sema);
+        // `?*T` uses the pointer niche: the slot stores a bare pointer, so
+        // reads in the guarded branch can load it directly as `*T`. Aggregate
+        // `?T` keeps a payload field and needs field extraction instead.
+        narrowed_optional_payload = sema_.typeTable().kindOf(inner_sema) != TypeKind::Pointer;
     };
     if (condition.kind == frontend::ExprKind::IsNull && !condition.operands.empty()) {
         makeOptionalNarrowing(condition.operands[0]);
@@ -848,7 +851,7 @@ hir::HirExprId HirLowerModern::lowerForIn(const frontend::Expression &expr) {
         } else {
             const auto loaded = addExpr(hir::HirSlotLoad{next_slot, next_type});
             cond_expr         = addExpr(hir::HirBinary{loaded, addExpr(hir::HirMakeNone{next_type}),
-                                               hir::HirBinaryOp::Eq, types::kBoolType});
+                                                       hir::HirBinaryOp::Eq, types::kBoolType});
         }
     } else {
         const uint32_t end_index = *end_index_ptr;

@@ -36,6 +36,7 @@ struct Workspace {
 struct CheckResult {
     bool ok = false;
     std::string messages;
+    bool hasNullDeref = false;
 };
 
 /// Runs the modern file-based pipeline up to type checking.
@@ -56,6 +57,8 @@ CheckResult check(std::string_view source) {
             continue;
         result.messages += diagnostic.message;
         result.messages += "\n";
+        if (diagnostic.code == diagnostics::err::NullDerefUnproven)
+            result.hasNullDeref = true;
     }
     return result;
 }
@@ -70,6 +73,16 @@ void expectAccepted(std::string_view source, const char *message) {
 void expectRejected(std::string_view source, std::string_view expected, const char *message) {
     const auto result = check(source);
     const bool failed = !result.ok && result.messages.find(expected) != std::string::npos;
+    if (!failed)
+        std::printf("    diagnostics: %s", result.messages.c_str());
+    CHECK(failed, message);
+}
+
+void expectNullDerefRejected(std::string_view source, std::string_view expected,
+                             const char *message) {
+    const auto result = check(source);
+    const bool failed =
+        result.hasNullDeref && !result.ok && result.messages.find(expected) != std::string::npos;
     if (!failed)
         std::printf("    diagnostics: %s", result.messages.c_str());
     CHECK(failed, message);
@@ -116,6 +129,8 @@ void test_optional_across_calls() {
 
 void test_slice_and_array_indexing() {
     expectAccepted("fn f(s: []i32): i32 { return raw s[0]; }\n", "a slice can be indexed");
+    expectAccepted("fn f(p: ?*i32): i32 { return raw p[0]; }\n",
+                   "a raw index bypasses the nullable-pointer proof");
     expectAccepted("fn f(a: [4]i32): i32 { return raw a[2]; }\n",
                    "a fixed-size array can be indexed");
     expectAccepted("fn f(s: []i32): i32 { let t: []i32 = s\n    return raw t[1]; }\n",
@@ -145,6 +160,60 @@ void test_range_boundaries_and_empty_ranges() {
                    "range bounds must have the same type", "mixed-type range bounds are rejected");
 }
 
+void test_nullable_pointer_narrowing() {
+    expectAccepted("struct S { value: i32 }\n"
+                   "fn deref(p: ?*i32): i32 {\n"
+                   "    if (p is null) { return 0; } else { return *p; }\n"
+                   "}\n",
+                   "an optional pointer can be dereferenced in the else branch of 'is null'");
+    expectAccepted("fn early_return(p: ?*i32): i32 {\n"
+                   "    if (p is null) { return 0; }\n"
+                   "    return *p;\n"
+                   "}\n",
+                   "an early-return 'is null' check keeps the pointer proven");
+    expectAccepted("fn deref(p: ?*i32): i32 {\n"
+                   "    if not (p is null) { return *p; }\n"
+                   "    return 0;\n"
+                   "}\n",
+                   "an optional pointer can be dereferenced after 'not (is null)'");
+    expectAccepted("struct S { value: i32 }\n"
+                   "fn arrow(p: ?*S): i32 {\n"
+                   "    if not (p is null) { return p->value; }\n"
+                   "    return 0;\n"
+                   "}\n",
+                   "an optional pointer can be traversed after 'not (is null)'");
+    expectAccepted("fn index(p: ?*i32): i32 {\n"
+                   "    if not (p is null) { return p[0]; }\n"
+                   "    return 0;\n"
+                   "}\n",
+                   "an optional pointer can be indexed after 'not (is null)'");
+    expectAccepted("fn read(p: *i32): i32 { return *p; }\n"
+                   "fn call(p: ?*i32): i32 {\n"
+                   "    if not (p is null) { return read(p); }\n"
+                   "    return 0;\n"
+                   "}\n",
+                   "a proven optional pointer coerces to a non-null pointer parameter");
+    expectAccepted("fn aggregate(x: ?[2]i32): i32 {\n"
+                   "    if (x is null) { return 0; } else { return raw x[0]; }\n"
+                   "}\n",
+                   "aggregate optional payloads keep narrowing after 'is null'");
+
+    expectNullDerefRejected("fn f(p: ?*i32): i32 { return *p; }\n",
+                            "cannot dereference a possibly-null pointer",
+                            "an unproven optional pointer dereference is rejected");
+    expectNullDerefRejected("struct S { value: i32 }\n"
+                            "fn f(p: ?*S): i32 { return p->value; }\n",
+                            "cannot traverse a possibly-null pointer",
+                            "an unproven optional pointer arrow access is rejected");
+    expectNullDerefRejected("fn f(p: ?*i32): i32 { return p[0]; }\n",
+                            "cannot index a possibly-null pointer",
+                            "an unproven optional pointer index is rejected");
+    expectNullDerefRejected("fn read(p: *i32): i32 { return *p; }\n"
+                            "fn f(p: ?*i32): i32 { return read(p); }\n",
+                            "cannot pass a possibly-null pointer",
+                            "an unproven optional pointer coercion is rejected");
+}
+
 } // namespace
 
 static void test_optional_slice() {
@@ -154,6 +223,7 @@ static void test_optional_slice() {
     test_optional_across_calls();
     test_slice_and_array_indexing();
     test_range_boundaries_and_empty_ranges();
+    test_nullable_pointer_narrowing();
 }
 
 TEST_MAIN(optional_slice)

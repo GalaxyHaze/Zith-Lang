@@ -598,6 +598,7 @@ TypeId PerModuleSema::inferIf(frontend::ExprId id) {
     TypeId narrowed_type         = kInvalidTypeId;
     bool narrow_then             = false;
     bool narrowed_opaque_payload = false;
+    bool narrowed_optional       = false;
     if (condition.kind == frontend::ExprKind::IsType && !condition.operands.empty() &&
         condition.cast_type) {
         const auto *resolved = findResolvedExpr(condition.operands[0]);
@@ -624,6 +625,7 @@ TypeId PerModuleSema::inferIf(frontend::ExprId id) {
                 narrowed_local      = resolved->local;
                 original_local_type = typeOfLocal(narrowed_local);
                 narrowed_type       = type_table.stripQualifiers(opt->inner);
+                narrowed_optional   = true;
                 // `x is null` proves the payload type in the `else` branch.
             }
         }
@@ -639,13 +641,19 @@ TypeId PerModuleSema::inferIf(frontend::ExprId id) {
                     original_local_type = typeOfLocal(narrowed_local);
                     narrowed_type       = type_table.stripQualifiers(opt->inner);
                     narrow_then         = true;
+                    narrowed_optional   = true;
                 }
             }
         }
     }
 
+    const bool narrowed_proof_was_present =
+        narrowed_local && typed_map.provenNonNullExprs.contains(narrowed_local.value);
+
     if (narrowed_local && narrowed_type && narrow_then) {
         setLocalType(narrowed_local, narrowed_type);
+        if (narrowed_optional)
+            typed_map.provenNonNullExprs.insert(narrowed_local.value);
         if (narrowed_opaque_payload) {
             // Standalone Name expressions are inferred later by the sweep
             // without the `if` flow context. Pre-type them so `let x: T =
@@ -667,8 +675,12 @@ TypeId PerModuleSema::inferIf(frontend::ExprId id) {
     TypeId then_type = inferExpr(expr.operands[1]);
     if (narrowed_local && narrowed_type)
         setLocalType(narrowed_local, original_local_type);
+    if (narrowed_local && narrowed_optional)
+        typed_map.provenNonNullExprs.erase(narrowed_local.value);
     if (narrowed_local && narrowed_type && !narrow_then)
         setLocalType(narrowed_local, narrowed_type);
+    if (narrowed_local && narrowed_optional && !narrow_then)
+        typed_map.provenNonNullExprs.insert(narrowed_local.value);
     TypeId else_cond_type = void_type;
     TypeId else_type      = void_type;
     if (expr.operands.size() >= 3U)
@@ -681,6 +693,25 @@ TypeId PerModuleSema::inferIf(frontend::ExprId id) {
     if (narrowed_local && narrowed_type) {
         setLocalType(narrowed_local, original_local_type);
     }
+    if (narrowed_local && narrowed_optional) {
+        if (narrowed_proof_was_present)
+            typed_map.provenNonNullExprs.insert(narrowed_local.value);
+        else
+            typed_map.provenNonNullExprs.erase(narrowed_local.value);
+    }
+    // Flow-sensitive narrowing survives an `if` when the branch that could
+    // take the opposite nullability fact terminates unconditionally. The
+    // stdlib idiom `if (p is null) { return ...; }` is therefore safe for the
+    // statements after the `if` without inventing a new opt-out operator.
+    const bool keep_non_null_proof =
+        narrowed_local && narrowed_optional &&
+        (condition.kind == frontend::ExprKind::IsNull
+             ? exprAlwaysTerminates(expr.operands[1])
+             : expr.operands.size() >= 3U && expr.operands[2] &&
+                   exprAlwaysTerminates(expr.operands.size() > 3U ? expr.operands[3]
+                                                                  : expr.operands[2]));
+    if (keep_non_null_proof)
+        typed_map.provenNonNullExprs.insert(narrowed_local.value);
     // An `if` without `else` is a statement even when its body has a value; only
     // an `if/else` expression can produce a value for the surrounding expression.
     const frontend::ExprId else_value =
@@ -705,8 +736,14 @@ TypeId PerModuleSema::inferWhile(frontend::ExprId id) {
         (void)inferCondition(expr.operands[0], "loop condition must be boolean", expr.span);
     }
     // The body must be inferred too, otherwise locals declared inside the loop never get a type.
+    const auto narrowed_local = nonNullPointerLocalFromCondition(
+        expr.operands.empty() ? frontend::ExprId{} : expr.operands[0]);
+    if (narrowed_local)
+        typed_map.provenNonNullExprs.insert(narrowed_local.value);
     if (expr.operands.size() >= 2U)
         (void)inferExpr(expr.operands[1]);
+    if (narrowed_local)
+        typed_map.provenNonNullExprs.erase(narrowed_local.value);
     active_loop_labels_.pop_back();
     return void_type;
 }
@@ -724,10 +761,16 @@ TypeId PerModuleSema::inferFor(frontend::ExprId id) {
     if (!expr.operands.empty()) {
         (void)inferCondition(expr.operands[0], "loop condition must be boolean", expr.span);
     }
+    const auto narrowed_local = nonNullPointerLocalFromCondition(
+        expr.operands.empty() ? frontend::ExprId{} : expr.operands[0]);
+    if (narrowed_local)
+        typed_map.provenNonNullExprs.insert(narrowed_local.value);
     if (expr.operands.size() >= 2U && expr.operands[1])
         (void)inferExpr(expr.operands[1]);
     if (expr.operands.size() >= 3U && expr.operands[2])
         (void)inferExpr(expr.operands[2]);
+    if (narrowed_local)
+        typed_map.provenNonNullExprs.erase(narrowed_local.value);
     active_loop_labels_.pop_back();
     return void_type;
 }
