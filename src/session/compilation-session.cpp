@@ -22,6 +22,7 @@
 #include <cstdarg>
 #include <cstdio>
 #include <cstdlib>
+#include <algorithm>
 #include <filesystem>
 #include <toml++/toml.hpp>
 #include <vector>
@@ -399,7 +400,15 @@ bool CompilationSession::lexStage() {
     }
 
     // Materialize all module sources into SourceMap.
-    for (const auto &module : mSnapshot->modules()) {
+    std::vector<const session::ModuleArtifact *> ordered_modules;
+    ordered_modules.reserve(mSnapshot->modules().size());
+    for (const auto &module : mSnapshot->modules())
+        ordered_modules.push_back(module.get());
+    std::sort(ordered_modules.begin(), ordered_modules.end(),
+              [](const session::ModuleArtifact *left, const session::ModuleArtifact *right) {
+                  return left->fileId < right->fileId;
+              });
+    for (const auto *module : ordered_modules) {
         const auto materialized = mSourceMap.addFile(module->key, module->source->text);
         if (!materialized) {
             writeOutput("%s[error]%s failed to materialize frontend source '%s'\n",

@@ -42,10 +42,11 @@ tokens.
 `_` seguido de `=`; o parser consome o par e exige `;` após a expressão. O sema
 continua a inferir a expressão descartada mas não a devolve como valor do bloco.
 Em `inferBlock`, uma expression statement cujo AST root é `Call`/`DockCall` com
-tipo não-void/não-error e que não é o resultado final do bloco reporta
-`E2026 DiscardedResult`; `StmtKind::Discard` é a única forma explícita de
-aceitar esse tipo. O HIR baixa `StmtKind::Discard` como a chamada executada,
-sem a tornar no valor implícito do bloco.
+tipo não-void/não-error reporta `E2026 DiscardedResult`, exceto quando a
+expressão é o valor final de uma função não-void; uma function void continua a
+exigir `StmtKind::Discard`. `StmtKind::Discard` é a única forma explícita de
+aceitar esse tipo. O HIR baixa `StmtKind::Discard` como a chamada executada, sem
+a tornar no valor implícito do bloco.
 
 `parseIf()` aceita um `else` simples, `else if (cond) { body }` e a forma
 preferida `else (cond) { body }`. Ambos os caminhos encadeados usam o mesmo

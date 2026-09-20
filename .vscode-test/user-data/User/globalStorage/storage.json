@@ -1,0 +1,27 @@
+{
+    "telemetry.sqmId": "",
+    "telemetry.machineId": "4c09421f2c3068d4fd70082e7be78632fdfcf7b51f70a3e4b70ea51c681c930d",
+    "telemetry.devDeviceId": "3528b9fe-6ff7-4dac-8528-8951acb137a1",
+    "backupWorkspaces": {
+        "workspaces": [],
+        "folders": [],
+        "emptyWindows": []
+    },
+    "windowControlHeight": 35,
+    "theme": "vs-dark",
+    "themeBackground": "#11111b",
+    "windowSplash": {
+        "zoomLevel": 0,
+        "baseTheme": "vs-dark",
+        "colorInfo": {
+            "foreground": "#cccccc",
+            "background": "#11111b",
+            "editorBackground": "#11111b",
+            "titleBarBackground": "#3c3c3c",
+            "activityBarBackground": "#333333",
+            "sideBarBackground": "#252526",
+            "statusBarBackground": "#007acc",
+            "statusBarNoFolderBackground": "#68217a"
+        }
+    }
+}

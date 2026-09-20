@@ -293,8 +293,21 @@ TypeId PerModuleSema::inferBlock(frontend::ExprId id) {
                 last = void_type;
             } else if (stmt.kind == frontend::StmtKind::Expression && stmt.expression) {
                 last = inferExpr(stmt.expression);
-                checkExpressionStatement(stmt, !expr.statements.empty() &&
-                                                   stmt_id == expr.statements.back());
+                // `_ = call()` remains mandatory inside a void function body
+                // even when the call is lexically last: the expression is a
+                // statement, not the function's return value.
+                const bool final_expr =
+                    !expr.statements.empty() && stmt_id == expr.statements.back();
+                const bool function_tail_has_value =
+                    final_expr && currentDeclId_ != 0U &&
+                    currentDeclId_ <= snapshot.declarations().size() &&
+                    snapshot.declarations()[currentDeclId_ - 1U].body == id &&
+                    snapshot.declarations()[currentDeclId_ - 1U].kind ==
+                        frontend::DeclKind::Function;
+                const bool block_produces_value =
+                    function_tail_has_value && !inStateBody_ &&
+                    currentReturnType_ != void_type;
+                checkExpressionStatement(stmt, block_produces_value);
             } else if (stmt.kind == frontend::StmtKind::Defer) {
                 pending_defers.push_back(stmt_id);
                 last = void_type;
@@ -385,8 +398,21 @@ TypeId PerModuleSema::inferBlock(frontend::ExprId id) {
             last = void_type;
         } else if (stmt.kind == frontend::StmtKind::Expression && stmt.expression) {
             last = inferExpr(stmt.expression);
-            checkExpressionStatement(stmt,
-                                     !expr.statements.empty() && stmt_id == expr.statements.back());
+            // Blocks used as values may return their final expression; a
+            // statement inside a void context must still be discarded
+            // explicitly.
+            const bool final_expr =
+                !expr.statements.empty() && stmt_id == expr.statements.back();
+            const bool function_tail_has_value =
+                final_expr && currentDeclId_ != 0U &&
+                currentDeclId_ <= snapshot.declarations().size() &&
+                snapshot.declarations()[currentDeclId_ - 1U].body == id &&
+                snapshot.declarations()[currentDeclId_ - 1U].kind ==
+                    frontend::DeclKind::Function;
+            const bool block_produces_value =
+                function_tail_has_value && !inStateBody_ &&
+                currentReturnType_ != void_type;
+            checkExpressionStatement(stmt, block_produces_value);
         } else if (stmt.kind == frontend::StmtKind::Defer) {
             pending_defers.push_back(stmt_id);
             last = void_type;

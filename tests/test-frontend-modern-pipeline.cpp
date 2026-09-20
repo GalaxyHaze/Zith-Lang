@@ -149,6 +149,42 @@ void test_pipeline_discard_non_void_call_result() {
           "call result used in a binding initializer remains legal");
 }
 
+void test_imported_console_void_main_discard_regression() {
+    Workspace workspace;
+    workspace.write("main.zith", "from std/io/console\n"
+                                 "fn main() {\n"
+                                 "    println(\"Hello World!\");\n"
+                                 "}\n");
+
+    session::FrontendConfig config;
+    config.workspaceRoot      = workspace.root.string();
+    config.maxFrontendWorkers = 1;
+    config.compilerVersion    = "test";
+#ifdef ZITH_STDLIB_DIR
+    config.includeRoots.push_back(ZITH_STDLIB_DIR);
+#endif
+    auto context = std::make_shared<session::FrontendContext>(config);
+
+    memory::Arena arena;
+    Options options(arena);
+    options.targetStage = session::Stage::HirLowered;
+
+    session::CompilationSession session(options, (workspace.root / "main.zith").string(),
+                                        context);
+    session.setBuffered(true);
+    CHECK(!session.runTo(session::Stage::HirLowered),
+          "imported non-void call used as the last statement of a void main fails sema");
+
+    bool saw_discarded_result = false;
+    for (const auto &diagnostic : session.diags().all()) {
+        if (diagnostic.code == diagnostics::err::DiscardedResult)
+            saw_discarded_result = true;
+    }
+    CHECK(saw_discarded_result,
+          "imported non-void call used as the last statement of a void main reports "
+          "DiscardedResult");
+}
+
 void test_pipeline_multifile_module_dependency() {
     Workspace workspace;
     workspace.write("math.zith", "pub fn add(a: i32, b: i32): i32 { a + b }\n");
@@ -941,6 +977,7 @@ static void test_frontend_modern_pipeline() {
     test_shared_context_reuses_frontend_cache();
     test_pipeline_error_surfaces_diagnostic();
     test_pipeline_discard_non_void_call_result();
+    test_imported_console_void_main_discard_regression();
     test_pipeline_multifile_module_dependency();
     test_pipeline_export_platform_import();
     test_pipeline_export_shared_prefix();

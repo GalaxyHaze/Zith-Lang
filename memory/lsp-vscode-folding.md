@@ -42,3 +42,9 @@ The feature does not need an explicit extension-side folding provider.
   `smoke-done` marker and `exthost.log` before treating the run as failed.
 - The standalone `zith-lsp` tests point at `build/zith-lsp`, so they can run
   without VS Code and are the fastest way to validate folding ranges.
+
+## LSP shutdown / restart (2026-09-20)
+
+`zith-lsp` processes `zith.check/build/run/fmt` in `BuildExecutor`. Before the fix, receiving `exit` set `running_ = false` and then `LspServer::run()` joined the build worker; with a large file the client's 2s stop timeout fired first, the VS Code client disposed the connection and rejected pending requests with `Pending response rejected since connection got disposed`. Restart then left commands looking inert while the old server finished or was SIGKILLed.
+
+Fix: `LspServer::dispatch` on `exit` now calls `process_runner_.shutdownNow()` and `std::_Exit(EXIT_SUCCESS)` immediately. The extension also checks `lspClient.isRunning()` before calling `stop()`, so `zith.restartLsp` does not try to stop a dead client.

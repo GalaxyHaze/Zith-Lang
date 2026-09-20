@@ -162,7 +162,7 @@ pub fn ensureBuffer(self: lend FormatBuffer, extra: u64): IoError {
         return IoError.fAllocation;
     }
     if (self.length > 0 and not (self.data is null)) {
-        memcpy(next, self.data, self.length);
+        _ = memcpy(next, self.data, self.length);
     }
     free(self.data);
     self.data = next;
