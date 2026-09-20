@@ -270,6 +270,39 @@ static void test_pointer_index() {
     CHECK_EQ(r.exitCode, 42, "p[0] returns the correct value");
 }
 
+static void test_optional_pointer_narrowing_runtime() {
+    ModernFileCodegenTest t;
+    t.write("main.zith", "struct S { value: i32 }\n"
+                         "fn read(p: *i32): i32 { return *p; }\n"
+                         "fn arrow(p: ?*S): i32 {\n"
+                         "    for (not (p is null)) { return p->value; }\n"
+                         "    return 0;\n"
+                         "}\n"
+                         "fn index(p: ?*i32): i32 {\n"
+                         "    if not (p is null) { return p[0]; }\n"
+                         "    return 0;\n"
+                         "}\n"
+                         "fn deref(p: ?*i32): i32 {\n"
+                         "    if not (p is null) { return read(p); }\n"
+                         "    return 0;\n"
+                         "}\n"
+                         "fn main(): i32 {\n"
+                         "    var value: i32 = 19;\n"
+                         "    var s: S = S { value: 23 };\n"
+                         "    let p: ?*i32 = &value;\n"
+                         "    let q: ?*S = &s;\n"
+                         "    if (deref(p) != 19) { return 1; }\n"
+                         "    if (index(p) != 19) { return 2; }\n"
+                         "    if (arrow(q) != 23) { return 3; }\n"
+                         "    return 0;\n"
+                         "}\n");
+
+    auto r = t.run();
+    CHECK(r.usedModern, "optional pointer narrowing uses the modern codegen pipeline");
+    CHECK(r.ok, "nullable pointer deref, arrow, index and coercion compile, link and run");
+    CHECK_EQ(r.exitCode, 0, "proven nullable pointer reads return the pointed values");
+}
+
 static void test_shifts() {
     CodegenTest t;
     auto r = t.run("codegen-shifts.zith", "fn arithmetic(): i32 {\n"
@@ -3108,6 +3141,7 @@ static void test_c_pointer_cast_roundtrip_emits_no_conversion() {
                          "import \"stdlib.h\"\n"
                          "fn main(): i32 {\n"
                          "    let cell: ?*i32 = malloc(64) as ?*i32;\n"
+                         "    if (cell is null) { return 1; }\n"
                          "    let slot: *i32 = cell;\n"
                          "    *slot = 42;\n"
                          "    _ = printf(\"v=%d\\n\", *slot);\n"
@@ -3242,6 +3276,8 @@ static void test_codegen() {
     test_forward_reference();
     printf("Running test_pointer_index\n");
     test_pointer_index();
+    printf("Running test_optional_pointer_narrowing_runtime\n");
+    test_optional_pointer_narrowing_runtime();
     printf("Running test_array_variable_indexing\n");
     test_array_variable_indexing();
     printf("Running test_shifts\n");

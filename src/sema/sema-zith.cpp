@@ -202,18 +202,11 @@ void PerModuleSema::checkConstFieldAssignments() {
     }
 }
 bool PerModuleSema::allowsUncheckedNullablePointer(TypeId target, TypeId source) const noexcept {
-    // TEMPORARY: every C pointer is `?*T`, but flow-sensitive narrowing after `is null`
-    // does not exist yet, so a nullable pointer is accepted wherever `*T` is expected.
-    // This is the single removal point: once narrowing (and/or `must`/`raw`) lands, delete
-    // this predicate and unchecked use becomes a diagnostic. See docs/08-error-handling.md.
-    if (type_table.kindOf(resolve(target)) != TypeKind::Pointer)
-        return false;
-    const TypeId resolved_source = resolve(source);
-    if (type_table.kindOf(resolved_source) != TypeKind::Optional)
-        return false;
-    const auto *opt = type_table.optional(resolved_source);
-    return opt != nullptr && type_table.kindOf(resolve(opt->inner)) == TypeKind::Pointer &&
-           sameType(target, opt->inner);
+    // Type-level probes still need to know that `?*T` can be narrowed to the
+    // checked pointer target; the expression-level proof lives in `coerceValue`.
+    return isNullablePointer(resolve(source)) &&
+           type_table.kindOf(resolve(target)) == TypeKind::Pointer &&
+           sameType(target, pointerBase(resolve(source)));
 }
 bool PerModuleSema::coercesTo(TypeId target, TypeId source) const noexcept {
     bool result = false;
@@ -284,8 +277,8 @@ bool PerModuleSema::coercesTo(TypeId target, TypeId source) const noexcept {
             const auto *ptr   = type_table.pointer(resolved_target);
             const auto *slice = type_table.slice(resolved_source);
             result            = ptr != nullptr && slice != nullptr &&
-                     sameType(type_table.stripQualifiers(ptr->pointee), char_type) &&
-                     sameType(type_table.stripQualifiers(slice->element), char_type);
+                                sameType(type_table.stripQualifiers(ptr->pointee), char_type) &&
+                                sameType(type_table.stripQualifiers(slice->element), char_type);
         }
         // A positional pack literal coerces to a named pack when member types
         // and arity match. Sema keeps the literal's empty name list so the

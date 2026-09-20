@@ -149,13 +149,15 @@ O ficheiro `impl-status.md` foi atualizado de `Cache | Partial` para
   diagnóstico direcionado antes de HIR/codegen.
 - `is <type>` fora de unions/opaque não existe.
 - Narrowing após `is null` / `not (is null)` para aggregate optionals (`?T`
-  com payload não-pointer) extrai o campo 0 no then/else correto e `?*T -> *T`
-  permanece unchecked: `inferArrow`/`inferIndex` e
-  `allowsUncheckedNullablePointer` não exigem prova NonNull para pointers
-  (`E3005` apenas registado, não emitido).
-- Casts numéricos estreitantes com literal, `-` literal ou constante inteira
-  são verificados em compile time; operands variáveis e adaptação implícita de
-  literais ainda não verificam overflow em runtime.
+  com payload não-pointer) extrai o campo 0 no then/else correto. Para
+  pointers (`?*T -> *T`) o mesmo controlo de fluxo prova non-null e usa deref,
+  arrow, index e coerção; uso sem prova reporta `E3005` e `raw`/`must` são os
+  opt-outs explícitos.
+- Casts numéricos estreitantes não verificam overflow.
+- `++` / `--` não existem.
+- Formatter reimprime `for (cond)` como `while` (`ExprKind::While` no
+  round-trip).
+- `..` é lexado caractere a caractere.
 
 Estas entradas detalham o estado real e as referências de bloqueio. A secção
 `Known Debt` de [impl-status.md](/home/diogo/Zith/docs/impl-status.md) foi
@@ -164,8 +166,8 @@ consolidada neste ficheiro; as entradas duplicadas foram removidas de
 nota de estado:
 
 - No overflow check on narrowing conversions.
-- Unchecked nullable-pointer coercion e falta de flow-sensitive pointer
-  narrowing após `is null` (E3005 registado, não emitido).
+- Unchecked nullable-pointer coercion foi removida: a prova flow-sensitive
+  após `is null` existe, e usos sem prova reportam `E3005`.
 - `is` outside `null`/tagged-union contexts.
 - User-defined casts (novo branch em `classifyCast`).
 - C struct-by-value ABI limited to verified simple records.

@@ -349,7 +349,25 @@ TypeId PerModuleSema::inferUnary(frontend::ExprId id) {
     } else if (expr.text == "*") {
         // Dereference: operand must be a pointer
         TypeId resolved = resolve(operand);
-        if (type_table.kindOf(resolved) != TypeKind::Pointer) {
+        if (type_table.kindOf(resolved) == TypeKind::Optional) {
+            const auto *opt = type_table.optional(resolved);
+            if (opt != nullptr && type_table.kindOf(resolve(opt->inner)) == TypeKind::Pointer &&
+                exprHasNonNullPointerProof(expr.operands[0])) {
+                const auto *ptr = type_table.pointer(resolve(opt->inner));
+                result          = ptr ? ptr->pointee : error_type;
+            } else if (opt != nullptr &&
+                       type_table.kindOf(resolve(opt->inner)) == TypeKind::Pointer) {
+                report(expr.span,
+                       "cannot dereference a possibly-null pointer; narrow it after 'is null' or "
+                       "use 'raw' to bypass the check",
+                       diagnostics::err::NullDerefUnproven);
+                result = error_type;
+            } else {
+                report(expr.span, "unary '*' expects a pointer operand",
+                       diagnostics::err::TypeMismatch);
+                result = error_type;
+            }
+        } else if (type_table.kindOf(resolved) != TypeKind::Pointer) {
             report(expr.span, "unary '*' expects a pointer operand",
                    diagnostics::err::TypeMismatch);
             result = error_type;
