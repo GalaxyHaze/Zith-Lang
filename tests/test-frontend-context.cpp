@@ -150,8 +150,21 @@ void test_partial_artifact_cycle_and_session_snapshot() {
     auto context = std::make_shared<FrontendContext>(workspace.config(2));
     auto cycle   = context->analyzeFile(workspace.path("a.zith"));
     CHECK(cycle.isOk(), "cycle analysis returns a partial snapshot");
-    if (cycle)
+    if (cycle) {
         CHECK(cycle.value()->hasErrors(), "cycle diagnostic is recorded in snapshot");
+        bool saw_cycle = false;
+        for (const auto &diag : cycle.value()->diagnostics()) {
+            if (diag.code == diagnostics::err::CircularImport &&
+                diag.message.find("/tmp/zith-frontend-context-tests/a.zith -> "
+                                  "/tmp/zith-frontend-context-tests/b.zith -> "
+                                  "/tmp/zith-frontend-context-tests/a.zith") !=
+                    std::string::npos) {
+                saw_cycle = true;
+                break;
+            }
+        }
+        CHECK(saw_cycle, "cycle diagnostic names the complete import path");
+    }
 
     auto bad = context->analyzeText(workspace.path("broken.zith"), "fn broken( {\n");
     CHECK(bad.isOk(), "syntax failure still produces a cacheable partial artifact");

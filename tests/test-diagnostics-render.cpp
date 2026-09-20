@@ -28,6 +28,11 @@ static void test_existing_codes_preserved() {
     auto e1006 = lookupError(1006u);
     CHECK(e1006, "E1006 (ImportError) is registered");
 
+    auto e1009 = lookupError(1009u);
+    CHECK(e1009, "E1009 CircularImport is registered");
+    CHECK_EQ(e1009->prefix, 'E', "E1009 has error prefix");
+    CHECK_EQ(std::string(e1009->title), "Circular import", "E1009 title correct");
+
     auto e3003 = lookupError(3003u);
     CHECK(e3003, "E3003 InvalidCast is registered");
     CHECK_EQ(std::string(e3003->category), "types", "E3003 category matches");

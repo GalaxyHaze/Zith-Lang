@@ -51,6 +51,9 @@ memory::Optional<ErrorInfo> lookupError(ErrCode code) noexcept {
     case err::DeprecatedSyntax:
         return ErrorInfo{code, 'W', "parse", "Deprecated syntax",
                          "Use the replacement form shown in the message"};
+    case err::CircularImport:
+        return ErrorInfo{code, 'E', "import", "Circular import",
+                         "Remove one module from the cycle so the dependency graph stays a DAG"};
 
     // Semantic
     case err::UndefinedIdent:

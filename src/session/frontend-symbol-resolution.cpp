@@ -762,8 +762,9 @@ void FrontendContext::appendCycleDiagnostics(
                         break;
                     }
                 }
-                diagnostics.push_back({diagnostics::Severity::Error, diagnostics::err::ImportError,
-                                       message.str(), (*module)->fileId, span.start, span.end});
+                diagnostics.push_back({diagnostics::Severity::Error,
+                                       diagnostics::err::CircularImport, message.str(),
+                                       (*module)->fileId, span.start, span.end});
             }
         }
         stack.pop_back();

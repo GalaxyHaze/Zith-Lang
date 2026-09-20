@@ -66,3 +66,8 @@ contracts, decisions, and gotchas that are not discoverable from the source alon
   state map, and the struct-layout unit used for conforming contracts.
 - [execution-ir-drawing.md](execution-ir-drawing.md): current drawing status
   and pointer for the execution IR/interpreter contract.
+- [stdlib-io-format.md](stdlib-io-format.md): proposed `std/io/consoleIn`/
+  `consoleOut` format design, `TextSink`/`dyn` probe facts, and target access
+  pattern for variadic `Formatable` values.
+- [stdlib-io-result.md](stdlib-io-result.md): proposed `Result<T, E>` surface
+  and the current compiler blockers for generic `Ok`/`Err` helpers.
