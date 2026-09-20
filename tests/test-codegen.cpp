@@ -43,6 +43,7 @@ struct CodegenTest {
         size_t errorCount = 0;
         int exitCode      = 0;
         std::string output;
+        std::vector<std::string> messages;
     };
 
     Result run(std::string_view file_name, std::string_view input) {
@@ -54,9 +55,11 @@ struct CodegenTest {
 
         bool ok     = session.run();
         size_t errs = 0;
+        std::vector<std::string> messages;
         for (const auto &d : session.diags().all()) {
             if (d.severity == diagnostics::Severity::Error) {
                 errs++;
+                messages.push_back(d.message);
                 std::printf("    [Diag] Code: %u, Message: %s\n", d.code, d.message.c_str());
             }
         }
@@ -66,7 +69,8 @@ struct CodegenTest {
 
         std::string output = session.flushOutput();
         output += session.takeChildOutput();
-        return {ok && errs == 0, errs, session.childExitCode(), std::move(output)};
+        return {ok && errs == 0, errs, session.childExitCode(), std::move(output),
+                std::move(messages)};
     }
 };
 
@@ -965,6 +969,36 @@ static void test_float_range_for_is_rejected() {
                                               "    return total;\n"
                                               "}\n");
     CHECK(!r.ok && r.errorCount > 0, "float ranges are rejected in for-in");
+}
+
+static void test_bodyless_range_for_is_rejected() {
+    CodegenTest t;
+    const std::string_view cases[] = {
+        "for (1..5){}",
+        "for (1>..5){}",
+        "for (1..<5){}",
+        "for (1>..<5){}",
+    };
+    for (const auto case_body : cases) {
+        auto r = t.run("codegen-bodyless-range.zith", "fn main(): i32 {\n"
+                                                      "    " +
+                                                          std::string(case_body) +
+                                                          "\n"
+                                                          "    return 0;\n"
+                                                          "}\n");
+        CHECK(!r.ok && r.errorCount > 0, "bodyless literal ranges are rejected in for-in");
+    }
+
+    const auto r                 = t.run("codegen-bodyless-range.zith", "fn main(): i32 {\n"
+                                                                        "    for (1..5){}\n"
+                                                                        "    return 0;\n"
+                                                                        "}\n");
+    bool found_target_diagnostic = false;
+    for (const auto &diag : r.messages)
+        found_target_diagnostic =
+            found_target_diagnostic ||
+            diag.find("literal range is not a boolean condition") != std::string::npos;
+    CHECK(found_target_diagnostic, "bodyless range rejection names the missing condition");
 }
 
 static void test_imported_counter_runtime() {
@@ -3253,6 +3287,7 @@ static void test_codegen() {
     test_user_contains_runtime();
     printf("Running test_float_range_for_is_rejected\n");
     test_float_range_for_is_rejected();
+    test_bodyless_range_for_is_rejected();
     test_imported_counter_runtime();
     printf("Running test_named_struct_literal_and_defaults_runtime\n");
     test_named_struct_literal_and_defaults_runtime();

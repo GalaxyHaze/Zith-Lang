@@ -233,6 +233,7 @@ Recorded deliberately. Each item is a follow-up, not an unknown.
 | Item | Notes |
 |---|---|
 | Non-literal narrowing conversions need runtime checks | Compile-time `as` checks cover literal, `-` literal and integer-const operands; variable operands and numeric-literal adaptation remain unchecked |
+| Bodyless `for (literal..literal){}` | Rejected in sema before HIR/codegen with a targeted diagnostic; a literal range is not a boolean condition and requires `in` or a loop binding |
 | Unchecked `?*T` -> `*T` coercion and missing pointer narrowing | Every C pointer is `?*T`; `is null` narrows aggregate optional payloads, but pointer arrow/index/deref still accepts `?*T` without a NonNull proof. `E3005` is registered but not emitted. Isolated in `PerModuleSema::allowsUncheckedNullablePointer`/`inferArrow`; delete those paths when flow-sensitive pointer narrowing lands |
 | `is` outside `null`/tagged-union contexts | Non-union `is Type` remains unsupported and reports a dedicated diagnostic |
 | User-defined casts | To be added as a new branch in `classifyCast` |

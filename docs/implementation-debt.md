@@ -138,7 +138,6 @@ O ficheiro `impl-status.md` foi atualizado de `Cache | Partial` para
 - Referência: [impl-status.md](/home/diogo/Zith/docs/impl-status.md:153).
 
 ### 6. Outras incompletudes registadas
-
 - Literal range forms `1..5`, `1>..5`, `1..<5` e `1>..<5` baixam para
   `ExprKind::Range` com bounds brutos e flags `openAtLo`/`openAtHi`; as quatro
   grafias são provadas em `test-codegen.cpp`, `test-frontend.cpp`,
@@ -146,7 +145,8 @@ O ficheiro `impl-status.md` foi atualizado de `Cache | Partial` para
   `tests/test-optional-slice.cpp`. `1..5` é `[lo, hi]`, `1>..5` é `(lo, hi]`,
   `1..<5` é `[lo, hi)`, `1>..<5` é `(lo, hi)`; ranges reversed/empty não
   iteram e `in` devolve falso para `[x, x)`/`(x, x]`/`(x, x)` e verdadeiro
-  para `[x, x]`. Não falta dívida ativa nesta área de range literal.
+  para `[x, x]`. Um `for` literal-range sem binding é rejeitado em sema com
+  diagnóstico direcionado antes de HIR/codegen.
 - `is <type>` fora de unions/opaque não existe.
 - Narrowing após `is null` / `not (is null)` para aggregate optionals (`?T`
   com payload não-pointer) extrai o campo 0 no then/else correto e `?*T -> *T`

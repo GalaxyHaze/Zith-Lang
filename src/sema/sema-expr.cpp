@@ -159,6 +159,14 @@ TypeId PerModuleSema::inferCondition(frontend::ExprId id, std::string_view messa
     if (!id)
         return error_type;
     const TypeId source = inferExpr(id);
+    if (id.value <= snapshot.expressions().size() &&
+        snapshot.expressions()[id.value - 1U].kind == frontend::ExprKind::Range) {
+        report(span,
+               "a literal range is not a boolean condition; write 'x in range' or a loop "
+               "variable, e.g. 'for (x in 1..5)'",
+               diagnostics::err::TypeMismatch);
+        return error_type;
+    }
     if (sameType(source, bool_type))
         return source;
     if (type_table.optional(resolve(source)) != nullptr)
