@@ -63,6 +63,8 @@ enum class TokenKind : uint8_t {
     Literal,
     Operator,
     Punctuation,
+    /// `..` (range/slice/pipe-current) and `...` (variadic tail/C varargs).
+    Dots,
     Unknown,
     End,
 };

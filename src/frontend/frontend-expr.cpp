@@ -50,8 +50,9 @@ ExprId AstLowerer::parsePrimary() {
         return {};
 
     const uint32_t start = index_;
-    if (in_pipe_stage_ && punctuation(index_, '.') && punctuation(index_ + 1U, '.')) {
-        index_ += 2U;
+    if (in_pipe_stage_ && snapshot_.tokens_[index_].kind == TokenKind::Dots &&
+        text(index_) == "..") {
+        ++index_;
         Expression current;
         current.kind  = ExprKind::PipeCurrent;
         current.text  = "..";
@@ -565,7 +566,8 @@ ExprId AstLowerer::parsePostfix(ExprId result, uint32_t start) {
            isOperatorToken("->") || isKeywordToken("as") || isGenericApplication()) {
         // Dot field access: expr.field
         if (punctuation(index_, '.')) {
-            if (punctuation(index_ + 1U, '.'))
+            if (snapshot_.tokens_[index_ + 1U].kind == TokenKind::Dots &&
+                text(index_ + 1U) == "..")
                 break; // leave `lo..hi` for the when-case range pattern
             ++index_;
             if (index_ < token_count_ && (snapshot_.tokens_[index_].kind == TokenKind::Identifier ||
@@ -753,7 +755,8 @@ ExprId AstLowerer::parsePostfix(ExprId result, uint32_t start) {
             indexing.operands.push_back(result);
             indexing.operands.push_back(lower);
             if (!punctuation(index_, ']')) {
-                if (punctuation(index_, '.') && punctuation(index_ + 1U, '.')) {
+                if (snapshot_.tokens_[index_].kind == TokenKind::Dots &&
+                    text(index_) == "..") {
                     // `expr[lo..hi]` is an array/slice view, not a plain index.
                     Expression slicing;
                     slicing.kind  = ExprKind::SliceRange;
@@ -761,7 +764,7 @@ ExprId AstLowerer::parsePostfix(ExprId result, uint32_t start) {
                     slicing.scope = current_scope_;
                     slicing.operands.push_back(result);
                     slicing.operands.push_back(lower);
-                    index_ += 2; // consume `..`
+                    ++index_; // consume `..`
                     slicing.operands.push_back(parseExpression());
                     if (!punctuation(index_, ']'))
                         snapshot_.diagnostics_.push_back(
@@ -862,13 +865,15 @@ bool AstLowerer::isAssignmentOp(std::string_view op) noexcept {
 
 bool AstLowerer::isRangeDotAt(uint32_t offset) const noexcept {
     const uint32_t i = index_ + offset;
-    return i + 1U < token_count_ && punctuation(i, '.') && punctuation(i + 1U, '.');
+    return i < token_count_ && snapshot_.tokens_[i].kind == TokenKind::Dots &&
+           text(i) == "..";
 }
 
 bool AstLowerer::isRangeOpenAt(uint32_t offset) const noexcept {
     const uint32_t i = index_ + offset;
-    return i + 2U < token_count_ && snapshot_.tokens_[i].kind == TokenKind::Operator &&
-           text(i) == ">" && punctuation(i + 1U, '.') && punctuation(i + 2U, '.');
+    return i + 1U < token_count_ && snapshot_.tokens_[i].kind == TokenKind::Operator &&
+           text(i) == ">" && snapshot_.tokens_[i + 1U].kind == TokenKind::Dots &&
+           text(i + 1U) == "..";
 }
 
 /// For a compound assignment, the base operator it desugars to. Empty for
@@ -916,6 +921,23 @@ ExprId AstLowerer::parseExpression(int minimum_precedence) {
             {range(start, index_),
              "fallback and propagation operators are not supported in this version", false,
              diagnostics::err::UnsupportedSyntax});
+        return addExpression(std::move(error_expr));
+    }
+    if (snapshot_.tokens_[index_].kind == TokenKind::Operator &&
+        (text(index_) == "++" || text(index_) == "--")) {
+        const std::string_view spelling = text(index_);
+        ++index_;
+        (void)parseExpression(kUnaryPrecedence); // consume the operand
+        Expression error_expr;
+        error_expr.kind  = ExprKind::Error;
+        error_expr.text  = std::string(spelling);
+        error_expr.scope = current_scope_;
+        error_expr.span  = range(start, index_);
+        snapshot_.diagnostics_.push_back(
+            {error_expr.span,
+             "'" + std::string(spelling) +
+                 "' is not a Zith operator; use explicit assignment to an updated value",
+             false, diagnostics::err::UnsupportedSyntax});
         return addExpression(std::move(error_expr));
     }
     if (isKeywordToken("raw")) {
@@ -1015,9 +1037,9 @@ ExprId AstLowerer::parseExpression(int minimum_precedence) {
             range_expr.operands.push_back(left);
             if (range_open_lo) {
                 range_expr.openAtLo = true;
-                index_ += 3U; // `>..`
+                index_ += 2U; // `>` and `..` are two tokens
             } else {
-                index_ += 2U; // `..`
+                ++index_; // `..` is one Dots token
             }
             if (isOperatorToken("<")) {
                 range_expr.openAtHi = true;
@@ -1078,7 +1100,23 @@ ExprId AstLowerer::parseExpression(int minimum_precedence) {
                                           text(index_) == "xor" || text(index_) == "in");
         if (snapshot_.tokens_[index_].kind != TokenKind::Operator && !is_keyword_operator)
             break;
-        const auto op = text(index_);
+        const std::string_view op = text(index_);
+        if (op == "++" || op == "--") {
+            const std::string spelling(op);
+            ++index_;
+            Expression error_expr;
+            error_expr.kind  = ExprKind::Error;
+            error_expr.text  = spelling;
+            error_expr.scope = current_scope_;
+            error_expr.span  = range(start, index_);
+            snapshot_.diagnostics_.push_back(
+                {error_expr.span,
+                 "'" + spelling +
+                     "' is not a Zith operator; use explicit assignment to an updated value",
+                 false, diagnostics::err::UnsupportedSyntax});
+            left = addExpression(std::move(error_expr));
+            continue;
+        }
         // `&&` / `||` are lexed only to be rejected here: Zith spells them `and` / `or`.
         if (op == "&&" || op == "||") {
             const std::string spelling(op);

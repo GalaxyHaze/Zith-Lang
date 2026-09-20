@@ -30,7 +30,7 @@ Implementation work that is incomplete or needs review is tracked in
 
 | Stage | Status | Notes |
 |---|---|---|
-| Lexer | **Working** | Hand-written, character-at-a-time. Longest-first maximal munch for all multi-char operators. `&&` and `||` are rejected with a dedicated error pointing to `and` / `or` |
+| Lexer | **Working** | Hand-written, character-at-a-time. Longest-first maximal munch for all multi-char operators. `..` and `...` lex as one `Dots` token, distinguished by lexeme. `&&`, `||`, `++` and `--` are rejected with a dedicated error |
 | Parser | **Working** | Recursive-descent. Function decls, expressions, imports. |
 | Formatter | **Working** | Round-trip stable for all 17 `ExprKind` nodes including `Index`, `OptionalProp`, `Field`, `Arrow`, `StructLiteral`, and `WhenGuard` |
 | Import resolution | **Working** | `import path`, `import path as name`, `from path`, `export path`, and selectors; platform variants are resolved as `foo.<arch>.<os>.zith`, `foo.<arch>.zith`, `foo.<os>.zith`, then generic `foo.zith`; qualified access works in expressions, types, constructors and methods. `export` injects the target's public symbols and keeps one qualified namespace alias when several exports share a prefix |
@@ -98,6 +98,7 @@ Implementation work that is incomplete or needs review is tracked in
 | assignment `=` | **Working** | Right-associative, yields a value |
 | compound assignment `+=` `-=` `*=` `/=` `%=` `<<=` `>>=` `&=` `|=` `^=` | **Working** | Desugared in the parser to `Assign(Binary(base))`, so they yield a value like `=` and inherit its coercion and `view` checks. The bitwise compounds drop the `.` of their base spelling. No new HIR node |
 | `&&`, `||` | **Parse error** | Lexed as single tokens purely to report a dedicated error pointing at `and` / `or`; exactly one diagnostic, no cascade |
+| `++`, `--` | **Parse error** | Lexed as single tokens purely to reject increment/decrement; the diagnostic points to explicit assignment. Prefix and postfix forms both report `E2010` |
 | field access `x.field` | **Working** | Dot access on struct values. Struct fields are private by default; `pub name: T` opens a field, and `mod`/`mod(N)`/`mod(..)` apply the existing module-depth rule. Invisible fields are rejected for access and in cross-module struct literals |
 | dereference `*p` | **Working** | Pointer dereference via unary `*` |
 | address-of `&x` | **Working** | Address-of via unary `&` |
@@ -237,8 +238,8 @@ Recorded deliberately. Each item is a follow-up, not an unknown.
 | User-defined casts | To be added as a new branch in `classifyCast` |
 | C struct-by-value ABI limited to verified simple records | `struct` parameters/results are imported only when libclang proves layout/alignment for scalars, plain pointers, nested verified records, and two adjacent 64-bit fields on the target used by the parse. Clang passes/returns that pair as two 64-bit scalars on x86-64 and AArch64 Linux; mixed-width or edge-case records are skipped before lowering |
 | Imported/cached bare `opaque` values | Bare `opaque` values exported from module A and consumed in module B are accepted; the canonical tagged typeId is recorded when the value is erased and restored from cached artifacts. There is no cross-module registry object, but canonical tags are deterministic and persisted by the existing `canonical_mappings` path |
-| `..` lexes per character | Its `precedence()` is -1 and range/slice syntax depends on the two `.` tokens. Range literals now have a dedicated `ExprKind::Range`; slicing remains a separate postfix form |
-| `++` / `--` | Not implemented; no increment/decrement operators exist |
+| `..` / `...` | Intentionally one `Dots` token; `..` is the range/pipe/import token and `...` is the variadic marker. Not a debt |
+| `++` / `--` | Intentionally rejected in Zith--; update values with explicit assignment. Not a debt |
 | Ownership proof still happens after premature lowering in places | The stable order is `sema -> comptime/solve -> NTA/NRA -> HIR`; residual facts are now attached before final lowering, while some paths still need the full NRA proof before emitting their final form |
 
 *When a feature moves from one status to another, update this table and re-verify.*

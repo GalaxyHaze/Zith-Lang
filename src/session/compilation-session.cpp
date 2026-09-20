@@ -440,6 +440,7 @@ bool CompilationSession::lexStage() {
                         : tok.kind == frontend::TokenKind::Literal     ? "literal"
                         : tok.kind == frontend::TokenKind::Operator    ? "operator"
                         : tok.kind == frontend::TokenKind::Punctuation ? "punctuation"
+                        : tok.kind == frontend::TokenKind::Dots         ? "dots"
                         : tok.kind == frontend::TokenKind::End         ? "end"
                                                                        : "unknown",
                         static_cast<int>(text.size()), text.data());

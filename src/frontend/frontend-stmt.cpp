@@ -211,10 +211,11 @@ ExprId AstLowerer::parseWhen() {
                             {range(index_, index_ + 1U),
                              "expected '(' before when case condition island"});
                     ExprId island = parseExpression();
-                    if (!punctuation(index_, ')') && punctuation(index_, '.') &&
-                        punctuation(index_ + 1U, '.')) {
+                    if (!punctuation(index_, ')') &&
+                        snapshot_.tokens_[index_].kind == TokenKind::Dots &&
+                        text(index_) == "..") {
                         const auto lower_span = snapshot_.expressions_[island.value - 1U].span;
-                        index_ += 2; // `..`
+                        ++index_; // `..`
                         Expression range;
                         range.kind  = ExprKind::Range;
                         range.text  = "..";

@@ -368,6 +368,27 @@ static void test_multi_char_operators_are_single_tokens() {
     }
 }
 
+static void test_dots_lex_as_one_token() {
+    auto range = frontend::parse("fn main(): i32 {\n"
+                                 "    for (i in 0..<3) { }\n"
+                                 "    return 0;\n"
+                                 "}\n");
+    bool saw_two_dots = false;
+    for (const auto &token : range.tokens()) {
+        if (token.kind == frontend::TokenKind::Dots && tokenText(range, token) == "..")
+            saw_two_dots = true;
+    }
+    CHECK(saw_two_dots, "'..' lexes as a single Dots token");
+
+    auto variadic = frontend::parse("extern fn printf(fmt: *char, ...): i32;\n");
+    bool saw_three_dots = false;
+    for (const auto &token : variadic.tokens()) {
+        if (token.kind == frontend::TokenKind::Dots && tokenText(variadic, token) == "...")
+            saw_three_dots = true;
+    }
+    CHECK(saw_three_dots, "'...' lexes as a single Dots token covering both lexemes");
+}
+
 static void test_binary_comparison_expression() {
     auto snapshot = frontend::parse("fn cmp(a: i32, b: i32): bool {\n"
                                     "    return a == b;\n"
@@ -1463,6 +1484,7 @@ static void test_external_symbol_aliases() {
 static void test_frontend() {
     test_lossless_trivia_and_spans();
     test_keywords_and_module_ast();
+    test_dots_lex_as_one_token();
     test_bare_opaque_type_expression();
     test_recovery_creates_error_nodes();
     test_function_body_ast();

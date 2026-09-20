@@ -111,6 +111,10 @@ One of the two endpoints carried by a `Range`. A bound is closed by default;
 `>` before `..` opens the lower bound and `<` after `..` opens the upper bound.
 _Avoid_: offset bound, low+1 bound, high-1 bound
 
+**Dots token**:
+The frontend token spelling `Dots`, emitted for both `..` and `...` and distinguished by lexeme. It covers ranges, pipe placeholders, relative imports, `mod(..)`, and variadic slices without special-casing two or three separate dot characters.
+_Avoid_: dot punctuation, two-dot marker, three-dot token
+
 **Contains**:
 The duck-typed protocol resolved by `value in rhs`: `contains(self, value): bool`.
 It is independent of iteration and accepts any RHS type with that method,

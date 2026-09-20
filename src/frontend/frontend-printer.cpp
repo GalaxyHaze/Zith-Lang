@@ -19,6 +19,8 @@ namespace {
         return "Operator";
     case TokenKind::Punctuation:
         return "Punctuation";
+    case TokenKind::Dots:
+        return "Dots";
     case TokenKind::Unknown:
         return "Unknown";
     case TokenKind::End:

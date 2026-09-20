@@ -59,6 +59,8 @@ binário com precedências 3, 2 e 4, em paralelo com `FmtVisitor::binaryPreceden
 `if (a and not b)` e `if (a or b)` consomem apenas a condição e voltam ao
 `)/,/{` esperado pelo chamador.
 
+O lexer agrupa `..` e `...` num único `TokenKind::Dots`, distinguindo-os pelo lexeme. O range literal, o placeholder de pipeline, os imports relativos, a profundidade `mod(..)` e os variadic slices consomem esse token em vez de dois pontos separados. `++` e `--` são lexados e rejeitados com `E2010 UnsupportedSyntax`; a mensagem pede atribuição explícita ao valor atualizado.
+
 ## Sema
 
 `checkZithDeclarations` roda dentro de `checkExpressions` e verifica:

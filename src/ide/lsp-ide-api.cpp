@@ -1331,7 +1331,10 @@ int semanticTokenType(const session::CompilationSession &session,
     if (token.kind == K::Literal) {
         return 5;
     }
-    return token.kind == K::Operator || token.kind == K::Punctuation ? 5 : 3;
+    return token.kind == K::Operator || token.kind == K::Punctuation ||
+                   token.kind == K::Dots
+               ? 5
+               : 3;
 }
 
 std::vector<SemanticToken> collectSymbolAwareTokens(

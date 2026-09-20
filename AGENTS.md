@@ -281,6 +281,10 @@ Three genres cover the project's prose: spec, docs, and log. Use the genre
 definitions and shared rules (no emojis, no em dashes, no semicolon as
 period) in `docs/writing-style.md` when writing or reviewing any of them.
 
+### Sequenta
+
+Before starting any work that is a linear sequence of agent task steps, ask the user whether to use Sequenta. If the user approves, read `/home/diogo/.byteask/skills/sequentia/SKILL.md` and use `/home/diogo/.byteask/skills/sequentia/scripts/sequenta` for state transitions and verification. Do not create Sequenta module files or `.sequenta` state without user approval.
+
 ## Memory & Knowledge Management (memsearch)
 
 This project also uses **memsearch** for semantic memory search across

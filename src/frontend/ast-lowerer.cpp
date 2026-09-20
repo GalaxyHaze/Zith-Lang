@@ -185,20 +185,13 @@ void lex(FrontendSnapshot &snapshot) {
             continue;
         }
 
-        if (source.substr(position).starts_with("...")) {
-            position += 3;
-            snapshot.tokens_.push_back(
-                Token{TokenKind::Punctuation, TextSpan{start, position}, triviaStart,
-                      static_cast<uint32_t>(snapshot.trivia_.size()) - triviaStart});
-            continue;
-        }
-
         ++position;
         if (isOperator(source[start])) {
             static constexpr std::string_view kThreeChar[] = {"<<=", ">>="};
             static constexpr std::string_view kTwoChar[]   = {
                 "==", "!=", "<=", ">=", "->", "~>", "<<", ">>", "+=", "-=", "*=",
-                "/=", "%=", "&=", "|=", "^=", "&.", "|.", "^.", "&&", "||", "??", "|>"};
+                "/=", "%=", "&=", "|=", "^=", "&.", "|.", "^.", "&&", "||", "??",
+                "|>", "++", "--"};
             bool munched = false;
             if (start + 3U <= source.size()) {
                 const std::string_view triple = source.substr(start, 3);
@@ -228,6 +221,14 @@ void lex(FrontendSnapshot &snapshot) {
                 Token{TokenKind::Operator, TextSpan{start, position}, triviaStart,
                       static_cast<uint32_t>(snapshot.trivia_.size()) - triviaStart});
         } else if (isPunctuation(source[start])) {
+            if (source[start] == '.' && position < source.size() && source[position] == '.') {
+                while (position < source.size() && source[position] == '.')
+                    ++position;
+                snapshot.tokens_.push_back(
+                    Token{TokenKind::Dots, TextSpan{start, position}, triviaStart,
+                          static_cast<uint32_t>(snapshot.trivia_.size()) - triviaStart});
+                continue;
+            }
             snapshot.tokens_.push_back(
                 Token{TokenKind::Punctuation, TextSpan{start, position}, triviaStart,
                       static_cast<uint32_t>(snapshot.trivia_.size()) - triviaStart});

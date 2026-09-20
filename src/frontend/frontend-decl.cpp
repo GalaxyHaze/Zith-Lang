@@ -130,12 +130,10 @@ void AstLowerer::parseImportPath(ImportDecl &import) {
             ++index_;
             continue;
         }
-        if (segment == "." || segment == "/") {
-            if (segment == "." && expect_segment && index_ + 1U < token_count_ &&
-                text(index_ + 1U) == ".") {
+        if (segment == ".." || segment == "." || segment == "/") {
+            if (segment == ".." && expect_segment) {
                 import.path.emplace_back("..");
-                import.pathSpans.push_back(range(index_, index_ + 2U));
-                index_ += 2U;
+                import.pathSpans.push_back(tokenSpan(index_++));
                 expect_segment = false;
                 continue;
             }
@@ -156,10 +154,9 @@ void AstLowerer::parseImportDepth(ImportDecl &import) {
     if (!punctuation(index_, '('))
         return;
     const uint32_t depth_start = index_++;
-    if (index_ < token_count_ && text(index_) == "." && index_ + 1U < token_count_ &&
-        text(index_ + 1U) == ".") {
+    if (index_ < token_count_ && text(index_) == "..") {
         import.depth = -1;
-        index_ += 2U;
+        ++index_;
     } else if (index_ < token_count_ && snapshot_.tokens_[index_].kind == TokenKind::Literal) {
         std::int64_t depth = 1;
         if (support::parseIntegerLiteral(text(index_), depth) != support::IntLiteralStatus::Ok ||
@@ -757,10 +754,10 @@ bool AstLowerer::parseStructField(std::vector<Parameter> &out) {
         ++index_;
         if (field_visibility == Visibility::Module && punctuation(index_, '(')) {
             const uint32_t depth_start = index_++;
-            if (punctuation(index_, '.') && punctuation(index_ + 1U, '.') &&
-                punctuation(index_ + 2U, ')')) {
+            if (snapshot_.tokens_[index_].kind == TokenKind::Dots &&
+                text(index_) == ".." && punctuation(index_ + 1U, ')')) {
                 field_mod_depth = -1;
-                index_ += 3;
+                index_ += 2;
             } else {
                 std::int64_t depth = 0;
                 if (snapshot_.tokens_[index_].kind == TokenKind::Literal &&

@@ -311,6 +311,30 @@ void logicalAndInIntContextNoLongerMiscompiles() {
           "'a && b' reports UnsupportedSyntax rather than silently dropping the rhs");
 }
 
+void incrementAndDecrementAreRejected() {
+    auto inc = check("fn main(): i32 {\n"
+                     "    var x: i32 = 1;\n"
+                     "    x++;\n"
+                     "    return x;\n"
+                     "}\n");
+    CHECK(!inc.ok, "'x++' is rejected");
+    CHECK(inc.hasErrorCode(diagnostics::err::UnsupportedSyntax),
+          "'x++' reports UnsupportedSyntax");
+    CHECK(inc.hasMessage("'++' is not a Zith operator"),
+          "increment points at the explicit assignment spelling");
+
+    auto dec = check("fn main(): i32 {\n"
+                     "    var x: i32 = 1;\n"
+                     "    x--;\n"
+                     "    return x;\n"
+                     "}\n");
+    CHECK(!dec.ok, "'x--' is rejected");
+    CHECK(dec.hasErrorCode(diagnostics::err::UnsupportedSyntax),
+          "'x--' reports UnsupportedSyntax");
+    CHECK(dec.hasMessage("'--' is not a Zith operator"),
+          "decrement points at the explicit assignment spelling");
+}
+
 // ── `raw opaque` ─────────────────────────────────────────────
 
 void rawOpaqueParsesAsItsOwnTypeKind() {
@@ -369,6 +393,7 @@ void test_compound_assign() {
     logicalAndIsRejected();
     logicalOrIsRejected();
     logicalAndInIntContextNoLongerMiscompiles();
+    incrementAndDecrementAreRejected();
     rawOpaqueParsesAsItsOwnTypeKind();
     rawOpaqueCastsBothWays();
     concretePointerCastIsStillRejected();

@@ -680,6 +680,7 @@ O cache continua separado por target, porque `CacheKey` já inclui
 | Discriminante de enum não constante | variante precisa de valor constante inteiro | `E3001` |
 | `!` prefixo | negação usa `not`; `!` fica reservado a postfix | parse error |
 | `break label;`/`continue label;` sem label ativo | alvo inexistente ou ambíguo | `E2010` |
+| `++` / `--` | sem operadores de incremento/decremento; atualizar com atribuição explícita | `E2010` |
 
 ## Não É Desta Iteração
 
