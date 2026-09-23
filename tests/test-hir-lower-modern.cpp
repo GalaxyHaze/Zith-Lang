@@ -2172,7 +2172,7 @@ void test_distinct_generic_instances_have_distinct_symbols() {
 
 void test_defer_lowers_to_cleanup_nodes() {
     Workspace workspace;
-    workspace.writeFile("main.zith", "extern fn putchar(c: i32): i32\n"
+    workspace.writeFile("main.zith", "#[discardable] extern fn putchar(c: i32): i32\n"
                                      "fn main(): i32 {\n"
                                      "    defer putchar(66);\n"
                                      "    defer putchar(65);\n"

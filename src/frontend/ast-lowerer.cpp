@@ -39,7 +39,7 @@ namespace {
 }
 
 [[nodiscard]] bool isPunctuation(char character) {
-    constexpr std::string_view punctuation = "()[]{}:;,.@`";
+    constexpr std::string_view punctuation = "()[]{}:;,.@`#";
     return punctuation.find(character) != std::string_view::npos;
 }
 
@@ -434,27 +434,76 @@ bool AstLowerer::ownershipKeyword(std::string_view word, OwnershipKind &out) noe
     return true;
 }
 
+std::vector<Attribute> AstLowerer::parseAttributes() {
+    std::vector<Attribute> result;
+    while (index_ < token_count_ && punctuation(index_, '#')) {
+        const uint32_t hash_start = index_;
+        ++index_; // consume '#'
+        if (!punctuation(index_, '[')) {
+            snapshot_.diagnostics_.push_back(
+                {tokenSpan(hash_start), "expected '[' after '#'", false,
+                 diagnostics::err::ExpectedExpr});
+            return result;
+        }
+        ++index_; // consume '['
+        while (index_ < token_count_ && !punctuation(index_, ']')) {
+            if (punctuation(index_, ',')) {
+                ++index_;
+                continue;
+            }
+            const auto token_kind = snapshot_.tokens_[index_].kind;
+            if (token_kind == TokenKind::Identifier ||
+                (token_kind == TokenKind::Keyword && !isKeywordToken("mod"))) {
+                Attribute attribute;
+                attribute.kind = AttributeKind::Unknown;
+                attribute.text = std::string(text(index_));
+                attribute.span = tokenSpan(index_);
+                result.push_back(std::move(attribute));
+                ++index_;
+                continue;
+            }
+            snapshot_.diagnostics_.push_back(
+                {tokenSpan(index_), "expected attribute name", false,
+                 diagnostics::err::ExpectedExpr});
+            ++index_;
+        }
+        if (index_ < token_count_ && punctuation(index_, ']'))
+            ++index_;
+        else
+            snapshot_.diagnostics_.push_back(
+                {tokenSpan(hash_start), "expected ']' after attribute list", false,
+                 diagnostics::err::ExpectedExpr});
+    }
+    return result;
+}
+
 void AstLowerer::run() {
     root_scope_           = addScope({}, {0, static_cast<uint32_t>(snapshot_.source_.size())});
     current_scope_        = root_scope_;
     Visibility visibility = Visibility::Private;
+    std::vector<Attribute> pending_attributes;
     // Set by a preceding `extern` keyword; consumed by the next declaration.
     bool is_extern = false;
     // Start index of the current run of unexpected top-level tokens; the run is
     // coalesced into a single diagnostic.  token_count_ means "no active run".
     uint32_t bad_run_start = token_count_;
+
+    const auto flushBadRun = [&]() {
+        if (bad_run_start == token_count_)
+            return;
+        snapshot_.diagnostics_.push_back({range(bad_run_start, index_),
+                                          "unexpected token at top level", false,
+                                          diagnostics::err::UnsupportedSyntax});
+        bad_run_start = token_count_;
+    };
+
     while (index_ < token_count_) {
         const uint32_t start = index_;
+        if (pending_attributes.empty())
+            pending_attributes = parseAttributes();
+        if (!pending_attributes.empty())
+            flushBadRun();
         const auto word      = text(index_);
-
-        const auto flushBadRun = [&]() {
-            if (bad_run_start == token_count_)
-                return;
-            snapshot_.diagnostics_.push_back({range(bad_run_start, index_),
-                                              "unexpected token at top level", false,
-                                              diagnostics::err::UnsupportedSyntax});
-            bad_run_start = token_count_;
-        };
 
         if (word == "pub") {
             flushBadRun();
@@ -471,7 +520,8 @@ void AstLowerer::run() {
 
         if (word == "export" || word == "from" || word == "import") {
             flushBadRun();
-            lowerImport(start, visibility);
+            lowerImport(start, visibility, pending_attributes);
+            pending_attributes.clear();
             visibility = Visibility::Private;
             continue;
         }
@@ -490,8 +540,9 @@ void AstLowerer::run() {
             if (function_kind == FunctionKind::Standard && is_extern)
                 function_kind = FunctionKind::Extern;
             lowerDeclaration(start, DeclKind::Function, visibility, {}, {}, is_extern,
-                             function_kind);
+                             function_kind, {}, false, false, {}, {}, pending_attributes);
             declaration_is_nominal_ = false;
+            pending_attributes.clear();
             visibility              = Visibility::Private;
             is_extern               = false;
             continue;
@@ -500,8 +551,9 @@ void AstLowerer::run() {
         if (word == "state") {
             flushBadRun();
             lowerDeclaration(start, DeclKind::Function, visibility, {}, {}, is_extern,
-                             FunctionKind::State);
+                             FunctionKind::State, {}, false, false, {}, {}, pending_attributes);
             declaration_is_nominal_ = false;
+            pending_attributes.clear();
             visibility              = Visibility::Private;
             is_extern               = false;
             continue;
@@ -515,8 +567,10 @@ void AstLowerer::run() {
                  diagnostics::err::UnsupportedSyntax});
             ++index_;
             lowerDeclaration(start, DeclKind::Function, visibility, {}, {}, is_extern,
-                             FunctionKind::Standard);
+                             FunctionKind::Standard, {}, false, false, {}, {},
+                             pending_attributes);
             visibility = Visibility::Private;
+            pending_attributes.clear();
             is_extern  = false;
             continue;
         }
@@ -532,8 +586,9 @@ void AstLowerer::run() {
                 ++index_;
             ++index_;
             lowerDeclaration(start, DeclKind::Function, visibility, {}, {}, is_extern,
-                             FunctionKind::Standard);
+                             FunctionKind::Standard, {}, false, false, {}, {}, pending_attributes);
             declaration_is_nominal_ = false;
+            pending_attributes.clear();
             visibility              = Visibility::Private;
             is_extern               = false;
             continue;
@@ -545,8 +600,9 @@ void AstLowerer::run() {
             flushBadRun();
             ++index_; // consume 'raw'
             lowerDeclaration(start, DeclKind::Union, visibility, {}, {}, false,
-                             FunctionKind::Standard, {}, true);
+                             FunctionKind::Standard, {}, true, false, {}, {}, pending_attributes);
             visibility = Visibility::Private;
+            pending_attributes.clear();
             continue;
         }
 
@@ -554,8 +610,10 @@ void AstLowerer::run() {
         if (kind) {
             flushBadRun();
             declaration_is_nominal_ = word == "type";
-            lowerDeclaration(start, *kind, visibility, {}, {}, is_extern);
+            lowerDeclaration(start, *kind, visibility, {}, {}, is_extern, FunctionKind::Standard,
+                             {}, false, false, {}, {}, pending_attributes);
             declaration_is_nominal_ = false;
+            pending_attributes.clear();
             visibility              = Visibility::Private;
             is_extern               = false;
             continue;
@@ -565,8 +623,9 @@ void AstLowerer::run() {
         if (word == "raw" && index_ + 1 < token_count_ && text(index_ + 1) == "macro") {
             flushBadRun();
             ++index_; // consume 'raw'
-            lowerMacroDeclaration(start, visibility, true, false);
+            lowerMacroDeclaration(start, visibility, true, false, pending_attributes);
             visibility = Visibility::Private;
+            pending_attributes.clear();
             continue;
         }
 
@@ -575,8 +634,9 @@ void AstLowerer::run() {
         if (word == "tag" && index_ + 1 < token_count_ && text(index_ + 1) == "macro") {
             flushBadRun();
             ++index_; // consume 'tag'
-            lowerMacroDeclaration(start, visibility, false, true);
+            lowerMacroDeclaration(start, visibility, false, true, pending_attributes);
             visibility = Visibility::Private;
+            pending_attributes.clear();
             continue;
         }
 
@@ -589,8 +649,9 @@ void AstLowerer::run() {
                  "Zith--: 'global' is not supported; use `const NAME: T = value`", false,
                  diagnostics::err::UnsupportedSyntax});
             lowerDeclaration(start, DeclKind::Variable, visibility, {}, {}, is_extern,
-                             FunctionKind::Standard, {}, false, true);
+                             FunctionKind::Standard, {}, false, true, {}, {}, pending_attributes);
             visibility = Visibility::Private;
+            pending_attributes.clear();
             is_extern  = false;
             continue;
         }
@@ -598,13 +659,21 @@ void AstLowerer::run() {
         // `macro` declaration: `macro name(...) { body }`.
         if (word == "macro") {
             flushBadRun();
-            lowerMacroDeclaration(start, visibility, false, false);
+            lowerMacroDeclaration(start, visibility, false, false, pending_attributes);
             visibility = Visibility::Private;
+            pending_attributes.clear();
             continue;
         }
 
         if (word == "extern" || word == "use" || word == "unsafe" || word == ";") {
             flushBadRun();
+            if (!pending_attributes.empty()) {
+                snapshot_.diagnostics_.push_back(
+                    {pending_attributes.front().span,
+                     "attributes are not applicable to this top-level construct", true,
+                     diagnostics::err::UnsupportedSyntax});
+                pending_attributes.clear();
+            }
             if (word == "extern" && !functionKindPrefix())
                 is_extern = true;
             ++index_;
@@ -615,8 +684,9 @@ void AstLowerer::run() {
         // bodies and trait implementations.
         if (word == "implement" || word == "impl") {
             flushBadRun();
-            lowerImplementBlock(start, visibility);
+            lowerImplementBlock(start, visibility, pending_attributes);
             visibility = Visibility::Private;
+            pending_attributes.clear();
             continue;
         }
 
@@ -625,6 +695,7 @@ void AstLowerer::run() {
         if (word == "@" && index_ + 1 < token_count_ &&
             snapshot_.tokens_[index_ + 1].kind == TokenKind::Identifier) {
             flushBadRun();
+            pending_attributes.clear();
             skipMacroInvocation();
             continue;
         }
@@ -632,6 +703,8 @@ void AstLowerer::run() {
         // Unexpected top-level token: start (or extend) the coalesced run.
         if (bad_run_start == token_count_)
             bad_run_start = start;
+        if (!pending_attributes.empty())
+            pending_attributes.clear();
         ++index_;
     }
     if (bad_run_start != token_count_)

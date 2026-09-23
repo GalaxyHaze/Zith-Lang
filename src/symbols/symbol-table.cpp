@@ -35,10 +35,11 @@ ScopeId SymbolTable::currentScope() const noexcept {
 
 SymId SymbolTable::declare(memory::InternedId name, SymbolVisibility vis, int32_t depth,
                            SymKind kind, ast::DeclId decl_id, memory::Span span, SymId target,
-                           memory::Span doc_span) {
+                           memory::Span doc_span, bool discardable) {
     SymId id = static_cast<SymId>(symbols_.size());
     symbols_.push(
-        SymbolData{name, current_, vis, depth, kind, decl_id, span, doc_span, target, *arena_});
+        SymbolData{name, current_, vis, depth, kind, decl_id, span, doc_span, target, *arena_,
+                   discardable});
     scopes_[current_].syms.push(id);
     // Keep index in sync; later declarations with the same name overwrite the entry,
     // preserving the "last one wins" shadowing behaviour of the old linear scan.
@@ -48,13 +49,15 @@ SymId SymbolTable::declare(memory::InternedId name, SymbolVisibility vis, int32_
 
 SymId SymbolTable::declareInScope(ScopeId scope, memory::InternedId name, SymbolVisibility vis,
                                   int32_t depth, SymKind kind, ast::DeclId decl_id,
-                                  memory::Span span, SymId target, memory::Span doc_span) {
+                                  memory::Span span, SymId target, memory::Span doc_span,
+                                  bool discardable) {
     if (!isValidScopeId(scopes_, scope))
         return kInvalidSym;
 
     SymId id = static_cast<SymId>(symbols_.size());
     symbols_.push(
-        SymbolData{name, scope, vis, depth, kind, decl_id, span, doc_span, target, *arena_});
+        SymbolData{name, scope, vis, depth, kind, decl_id, span, doc_span, target, *arena_,
+                   discardable});
     scopes_[scope].syms.push(id);
     scopes_[scope].index.insert(name, id);
     return id;
@@ -62,15 +65,17 @@ SymId SymbolTable::declareInScope(ScopeId scope, memory::InternedId name, Symbol
 
 SymId SymbolTable::declare(std::string_view name, SymbolVisibility vis, int32_t depth, SymKind kind,
                            ast::DeclId decl_id, memory::Span span, SymId target,
-                           memory::Span doc_span) {
-    return declare(interner_->intern(name), vis, depth, kind, decl_id, span, target, doc_span);
+                           memory::Span doc_span, bool discardable) {
+    return declare(interner_->intern(name), vis, depth, kind, decl_id, span, target, doc_span,
+                   discardable);
 }
 
 SymId SymbolTable::declareInScope(ScopeId scope, std::string_view name, SymbolVisibility vis,
                                   int32_t depth, SymKind kind, ast::DeclId decl_id,
-                                  memory::Span span, SymId target, memory::Span doc_span) {
+                                  memory::Span span, SymId target, memory::Span doc_span,
+                                  bool discardable) {
     return declareInScope(scope, interner_->intern(name), vis, depth, kind, decl_id, span, target,
-                          doc_span);
+                          doc_span, discardable);
 }
 
 void SymbolTable::emplace(const SymbolTable &other) {
@@ -79,7 +84,7 @@ void SymbolTable::emplace(const SymbolTable &other) {
         if (data.scope == kRootScope)
             continue;
         declare(data.name, data.visibility, 0, data.kind, data.decl_id, data.span, data.target,
-                data.doc_span);
+                data.doc_span, data.discardable);
     }
 }
 
@@ -158,7 +163,7 @@ void SymbolTable::emplace(const SymbolTable &other, ScopeId targetScope) {
         for (auto sid : other.scopes_[scope].syms) {
             const auto &data = other.get(sid);
             declareInScope(targetScope, data.name, data.visibility, data.mod_depth, data.kind,
-                           data.decl_id, data.span, data.target, data.doc_span);
+                           data.decl_id, data.span, data.target, data.doc_span, data.discardable);
         }
     }
 }

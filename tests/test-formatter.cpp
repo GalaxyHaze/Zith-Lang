@@ -58,6 +58,28 @@ static void test_formatter_normalizes_extern_and_unary() {
     CHECK_EQ(formatter.result(), expected, "formats extern declarations without body");
 }
 
+static void test_formatter_attributes() {
+    const std::string source = "#[discardable] fn make(): i32 {\n"
+                               "    1\n"
+                               "}\n"
+                               "fn main() {\n"
+                               "    #[volatile] let reg: i32 = 0;\n"
+                               "}\n";
+    auto snapshot            = frontend::parse(source);
+    formatter::FmtVisitor formatter(snapshot);
+    formatter.format();
+    const std::string expected = "#[discardable]\n"
+                                 "fn make(): i32 {\n"
+                                 "    1;\n"
+                                 "}\n"
+                                 "\n"
+                                 "fn main() {\n"
+                                 "    #[volatile]\n"
+                                 "    let reg: i32 = 0;\n"
+                                 "}\n";
+    CHECK_EQ(formatter.result(), expected, "formats source attributes");
+}
+
 static void test_formatter_normalizes_pointer_types() {
     const std::string source = "fn  write(ptr:*i32,val:i32){\n"
                                "    ptr = -val;\n"
@@ -639,6 +661,7 @@ static void test_formatter_defer_round_trip() {
 static void test_formatter() {
     test_formatter_normalizes_supported_snapshot_nodes();
     test_formatter_normalizes_extern_and_unary();
+    test_formatter_attributes();
     test_formatter_normalizes_pointer_types();
     test_formatter_nested_if_else();
     test_formatter_normalizes_simple_import();

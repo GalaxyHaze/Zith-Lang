@@ -94,7 +94,11 @@ void NraFacts::collectFunctionFact() {
 }
 
 void NraFacts::collectNarrowing(const frontend::FrontendSnapshot &frontend) {
-    (void)frontend;
+    for (const auto &statement : frontend.statements()) {
+        for (const auto &attr : statement.binding.attributes)
+            if (attr.kind == frontend::AttributeKind::Volatile && statement.binding.id)
+                volatile_locals_.insert(statement.binding.id.value, true);
+    }
 }
 
 void NraFacts::walkExpr(frontend::ExprId id) {
@@ -107,7 +111,7 @@ void NraFacts::walkExpr(frontend::ExprId id) {
         // residual consumed slot without inventing HIR move nodes.
         if (!expression->operands.empty()) {
             const frontend::LocalId local = localOfName(*expr(expression->operands[0]));
-            if (local) {
+            if (local && !localIsVolatile(local)) {
                 auto &fact      = local_facts_[local.value];
                 fact.knownAlive = false;
             }
@@ -118,7 +122,7 @@ void NraFacts::walkExpr(frontend::ExprId id) {
         // the same logical-move contract as `&`.
         if (!expression->operands.empty()) {
             const frontend::LocalId local = localOfName(*expr(expression->operands[0]));
-            if (local) {
+            if (local && !localIsVolatile(local)) {
                 auto &fact      = local_facts_[local.value];
                 fact.knownAlive = false;
             }
@@ -162,8 +166,10 @@ void NraFacts::walkExpr(frontend::ExprId id) {
         if (root_expr != nullptr) {
             const frontend::LocalId local = localOfName(*root_expr);
             if (local) {
-                auto &narrowed         = narrowing_facts_[local.value];
-                narrowed.isNullChecked = true;
+                if (!localIsVolatile(local)) {
+                    auto &narrowed         = narrowing_facts_[local.value];
+                    narrowed.isNullChecked = true;
+                }
             }
         }
         walkExpr(expression->operands[0]);
@@ -189,11 +195,13 @@ void NraFacts::walkConditionExpression(frontend::ExprId id,
             return;
         const frontend::LocalId local = localOfName(*root_expr);
         if (local) {
-            auto &narrowed = narrowing_facts_[local.value];
-            if (!negative)
-                narrowed.knownNull = true;
-            if (negative)
-                narrowed.nonNull = true;
+            if (!localIsVolatile(local)) {
+                auto &narrowed = narrowing_facts_[local.value];
+                if (!negative)
+                    narrowed.knownNull = true;
+                if (negative)
+                    narrowed.nonNull = true;
+            }
         }
         return;
     }
@@ -220,7 +228,7 @@ void NraFacts::applyCurrentNarrowing() {
                 const auto *root_expr = expr(inner->operands[0]);
                 const frontend::LocalId narrowed =
                     root_expr != nullptr ? localOfName(*root_expr) : frontend::LocalId{};
-                if (narrowed) {
+                if (narrowed && !localIsVolatile(narrowed)) {
                     auto &fact                               = local_facts_[narrowed.value];
                     fact.nonNull                             = true;
                     narrowing_facts_[narrowed.value].nonNull = true;
@@ -245,6 +253,8 @@ void NraFacts::walkStatement(frontend::StmtId id) {
     if (statement.binding.initializer)
         walkExpr(statement.binding.initializer);
     if (statement.binding.id) {
+        if (volatile_locals_.get(statement.binding.id.value) != nullptr)
+            return;
         NraLocalFact fact;
         const auto *type = current_typed_ != nullptr
                                ? current_typed_->localTypes.get(statement.binding.id.value)
@@ -262,6 +272,8 @@ void NraFacts::walkAssign(const frontend::Expression &assign) {
         return;
     const frontend::LocalId root = localOfName(*expr(assign.operands[0]));
     if (!root)
+        return;
+    if (localIsVolatile(root))
         return;
     const TypeId root_type =
         current_typed_ != nullptr ? *current_typed_->localTypes.get(root.value) : kInvalidTypeId;

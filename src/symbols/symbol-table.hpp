@@ -44,12 +44,13 @@ struct SymbolData {
     memory::Span doc_span{};
     SymId target = kInvalidSym;
     memory::DynArray<SymId> members;
+    bool discardable = false;
 
     SymbolData(memory::InternedId name_, ScopeId scope_, SymbolVisibility vis, int32_t depth,
                SymKind ikind, ast::DeclId did, memory::Span ispan, memory::Span idoc, SymId itarget,
-               memory::Arena &arena)
+               memory::Arena &arena, bool discardable_ = false)
         : name(name_), scope(scope_), visibility(vis), mod_depth(depth), kind(ikind), decl_id(did),
-          span(ispan), doc_span(idoc), target(itarget), members(arena) {}
+          span(ispan), doc_span(idoc), target(itarget), members(arena), discardable(discardable_) {}
 };
 
 struct Scope {
@@ -77,24 +78,26 @@ public:
     SymId declare(memory::InternedId name, SymbolVisibility vis = SymbolVisibility::Private,
                   int32_t depth = 0, SymKind kind = SymKind::Variable,
                   ast::DeclId decl_id = ast::kInvalidDecl, memory::Span span = {},
-                  SymId target = kInvalidSym, memory::Span doc_span = {});
+                  SymId target = kInvalidSym, memory::Span doc_span = {},
+                  bool discardable = false);
 
     /// Copy all non-root symbols from `other` into the current scope of `this`.
     void emplace(const SymbolTable &other);
     SymId declare(std::string_view name, SymbolVisibility vis = SymbolVisibility::Private,
                   int32_t depth = 0, SymKind kind = SymKind::Variable,
                   ast::DeclId decl_id = ast::kInvalidDecl, memory::Span span = {},
-                  SymId target = kInvalidSym, memory::Span doc_span = {});
+                  SymId target = kInvalidSym, memory::Span doc_span = {},
+                  bool discardable = false);
     SymId declareInScope(ScopeId scope, memory::InternedId name,
                          SymbolVisibility vis = SymbolVisibility::Private, int32_t depth = 0,
                          SymKind kind = SymKind::Variable, ast::DeclId decl_id = ast::kInvalidDecl,
                          memory::Span span = {}, SymId target = kInvalidSym,
-                         memory::Span doc_span = {});
+                         memory::Span doc_span = {}, bool discardable = false);
     SymId declareInScope(ScopeId scope, std::string_view name,
                          SymbolVisibility vis = SymbolVisibility::Private, int32_t depth = 0,
                          SymKind kind = SymKind::Variable, ast::DeclId decl_id = ast::kInvalidDecl,
                          memory::Span span = {}, SymId target = kInvalidSym,
-                         memory::Span doc_span = {});
+                         memory::Span doc_span = {}, bool discardable = false);
     SymId lookup(memory::InternedId name) const;
     SymId lookup(std::string_view name) const;
     /// Look up `name` in the parent of the current scope (skip current level).

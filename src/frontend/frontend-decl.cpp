@@ -1,6 +1,7 @@
 #include "frontend/ast-lowerer.hpp"
 
 #include "diagnostics/error-codes.hpp"
+#include "frontend/attribute-classify.hpp"
 #include "support/int-literal.hpp"
 
 #include <algorithm>
@@ -13,11 +14,15 @@
 
 namespace zith::frontend {
 
-void AstLowerer::lowerImport(uint32_t start, Visibility visibility) {
+void AstLowerer::lowerImport(uint32_t start, Visibility visibility,
+                             const std::vector<Attribute> &attributes) {
     Declaration declaration;
     declaration.id         = DeclId{static_cast<uint32_t>(snapshot_.declarations_.size() + 1U)};
     declaration.kind       = DeclKind::Import;
     declaration.visibility = visibility;
+    declaration.attributes = attributes;
+    for (auto &attr : declaration.attributes)
+        classifyAttribute(attr, AttributeTarget::Other, snapshot_.diagnostics_);
     declaration.import.isExport = text(index_) == "export";
     declaration.import.isFrom   = text(index_) == "from";
     ++index_;
@@ -216,13 +221,17 @@ void AstLowerer::parseImportSelectors(ImportDecl &import) {
         snapshot_.diagnostics_.push_back({import.pathSpan, "expected '}' after import selectors"});
 }
 void AstLowerer::lowerMacroDeclaration(uint32_t start, Visibility visibility, bool isRaw,
-                                       const bool isTag) {
+                                       const bool isTag,
+                                       const std::vector<Attribute> &attributes) {
     ++index_; // consume `macro`
     Declaration declaration;
     declaration.kind       = DeclKind::Macro;
     declaration.visibility = visibility;
     declaration.isRawMacro = isRaw;
     declaration.isTagMacro = isTag;
+    declaration.attributes = attributes;
+    for (auto &attr : declaration.attributes)
+        classifyAttribute(attr, AttributeTarget::Other, snapshot_.diagnostics_);
     if (isTag) {
         snapshot_.diagnostics_.push_back(
             {tokenSpan(start), "Zith--: tag macros are not supported; use a normal or raw macro",
@@ -312,7 +321,13 @@ void AstLowerer::lowerMacroDeclaration(uint32_t start, Visibility visibility, bo
     declaration.id   = DeclId{static_cast<uint32_t>(snapshot_.declarations_.size() + 1U)};
     snapshot_.declarations_.push_back(std::move(declaration));
 }
-void AstLowerer::lowerImplementBlock(const uint32_t start, const Visibility visibility) {
+void AstLowerer::lowerImplementBlock(const uint32_t start, const Visibility visibility,
+                                     const std::vector<Attribute> &attributes) {
+    if (!attributes.empty()) {
+        snapshot_.diagnostics_.push_back(
+            {attributes.front().span, "attributes are not applicable to an implement block",
+             true, diagnostics::err::UnsupportedSyntax});
+    }
     ++index_; // consume `implement` or `impl`
 
     const TypeExprId owner_type = parseType();
@@ -401,10 +416,12 @@ void AstLowerer::lowerImplementBlock(const uint32_t start, const Visibility visi
             ++index_;
             continue;
         }
+        const auto method_attributes = parseAttributes();
         if (const auto function_kind = functionKindPrefix()) {
             const auto method_start = index_;
             lowerDeclaration(method_start, DeclKind::Function, method_visibility, owner_name,
-                             trait_name, false, *function_kind, ownerGenericParams);
+                             trait_name, false, *function_kind, ownerGenericParams, false, false,
+                             {}, {}, method_attributes);
             method_visibility = visibility;
             continue;
         }
@@ -421,9 +438,10 @@ void AstLowerer::lowerImplementBlock(const uint32_t start, const Visibility visi
 DeclId AstLowerer::lowerDeclaration(uint32_t start, DeclKind kind, Visibility visibility,
                                     std::string ownerName, std::string traitName, bool isExtern,
                                     FunctionKind functionKind,
-                                    const std::vector<GenericParam> &inheritedParams,
+    const std::vector<GenericParam> &inheritedParams,
                                     bool isRawUnion, bool suppressTopLevelBindingCheck,
-                                    ScopeId parentScope, const std::string &parentName) {
+                                    ScopeId parentScope, const std::string &parentName,
+                                    const std::vector<Attribute> &attributes) {
     Declaration declaration;
     declaration.id            = DeclId{static_cast<uint32_t>(snapshot_.declarations_.size() + 1U)};
     declaration.kind          = kind;
@@ -436,6 +454,11 @@ DeclId AstLowerer::lowerDeclaration(uint32_t start, DeclKind kind, Visibility vi
     declaration.isNominalType = declaration_is_nominal_;
     declaration.parentScope   = parentScope;
     declaration.parentName    = parentName;
+    declaration.attributes    = attributes;
+    for (auto &attr : declaration.attributes)
+        classifyAttribute(attr, kind == DeclKind::Function ? AttributeTarget::Function
+                                                           : AttributeTarget::Other,
+                          snapshot_.diagnostics_);
     if (kind == DeclKind::Variable)
         declaration.bindingKind = BindingKind::Let;
     if (kind == DeclKind::Function && functionKind == FunctionKind::Extern)
@@ -643,12 +666,14 @@ DeclId AstLowerer::lowerDeclaration(uint32_t start, DeclKind kind, Visibility vi
                 ++index_;
                 continue;
             }
+            const auto method_attributes = parseAttributes();
             if (const auto function_kind = functionKindPrefix()) {
                 const auto method_start = index_;
                 const auto method_id    = lowerDeclaration(
                     method_start, DeclKind::Function, Visibility::Private, declaration.name,
                     kind == DeclKind::Interface ? declaration.name : std::string{}, false,
-                    *function_kind, declaration.genericParams);
+                    *function_kind, declaration.genericParams, false, false, {}, {},
+                    method_attributes);
                 if (kind == DeclKind::Interface && method_id &&
                     method_id.value <= snapshot_.declarations_.size()) {
                     const auto &method = snapshot_.declarations_[method_id.value - 1U];
@@ -710,11 +735,13 @@ DeclId AstLowerer::lowerDeclaration(uint32_t start, DeclKind kind, Visibility vi
                 ++index_;
                 continue;
             }
+            const auto method_attributes = parseAttributes();
             if (const auto function_kind = functionKindPrefix()) {
                 const auto method_start = index_;
                 lowerDeclaration(method_start, DeclKind::Function, Visibility::Private,
                                  declaration.name, declaration.name, false, *function_kind,
-                                 declaration.genericParams);
+                                 declaration.genericParams, false, false, {}, {},
+                                 method_attributes);
                 continue;
             }
             snapshot_.diagnostics_.push_back(

@@ -206,6 +206,8 @@ bool HirLowerModern::predeclareFunctions() {
             hir_fn.fnSpan     = memory::Span{0, decl.span.start, decl.span.end};
             hir_fn.isVariadic = decl.isVariadic;
             hir_fn.isState    = decl.functionKind == frontend::FunctionKind::State;
+            if (decl.discardable())
+                hir_.attrs().fn(hir_.getFnCount() - 1U).discardable = true;
             if (!decl.parameters.empty() && decl.parameters.back().isVariadicSlice)
                 hir_fn.variadicSliceParam = decl.parameters.size() - 1U;
 
@@ -305,6 +307,8 @@ void HirLowerModern::predeclareInstantiation(session::ModuleKey module_key,
     hir_fn.fnSpan     = memory::Span{0, decl->span.start, decl->span.end};
     hir_fn.isVariadic = decl->isVariadic;
     hir_fn.isState    = decl->functionKind == frontend::FunctionKind::State;
+    if (decl->discardable())
+        hir_.attrs().fn(hir_.getFnCount() - 1U).discardable = true;
     if (!decl->parameters.empty() && decl->parameters.back().isVariadicSlice)
         hir_fn.variadicSliceParam = decl->parameters.size() - 1U;
 
@@ -552,6 +556,8 @@ hir::HirSlotId HirLowerModern::localSlot(frontend::LocalId id) {
         local_slots_.resize(id.value + 1U, hir::kInvalidHirSlot);
     if (local_slots_[id.value] == hir::kInvalidHirSlot) {
         local_slots_[id.value] = next_slot_++;
+        if (nra_ != nullptr && nra_->localIsVolatile(id))
+            hir_.attrs().slot(local_slots_[id.value]).volatileSlot = true;
         if (nra_ != nullptr) {
             const auto *fact = nra_->localFact(id);
             if (fact != nullptr && fact->hasResidual()) {

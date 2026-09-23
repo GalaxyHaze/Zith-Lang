@@ -1,0 +1,184 @@
+[1]
+task: sequenta-attributes::lexHash
+status: done
+desc: Lexer classifies `#` as punctuation.
+impl:
+  - Abrir /home/diogo/Zith/src/frontend/ast-lowerer.cpp
+  - Adicionar `#` a isPunctuation
+  - Correr comando de build do Step 1
+tests:
+  | id  | dado                        | quando                | então                                |
+  | A-1 | fonte com `#`               | lexar                 | `#` é punctuation e não dá unknown token |
+
+[2]
+task: sequenta-attributes::addAttributeAst
+status: done
+desc: AST carries ordered attributes on declarations, bindings and statements.
+impl:
+  - Adicionar AttributeKind e Attribute em frontend.hpp
+  - Adicionar attributes a Declaration, Binding e Statement
+  - Correr build do Step 2
+tests:
+  | id  | dado                  | quando            | então                              |
+  | A-2 | build                 | compilar zithc    | compilador aceita novos campos AST |
+
+[3]
+task: sequenta-attributes::parseTopLevelAttributes
+status: done
+desc: Top-level parser consumes attribute groups before visibility and declarations.
+impl:
+  - Adicionar parseAttributes a AstLowerer
+  - Ligar pending_attributes no run
+  - Aceitar atributos em lowerImport e lowerDeclaration
+  - Correr build e smoke do Step 3
+tests:
+  | id  | dado                        | quando                   | então                             |
+  | A-3 | `#[discardable] fn f();`    | parsear                  | sem diagnostics de parsing        |
+
+[4]
+task: sequenta-attributes::parseStatementAttributes
+status: done
+desc: Local bindings accept volatile before let/var/const and for variables.
+impl:
+  - Adicionar parseAttributes em parseStatements e parseFor
+  - Copiar atributos para binding e pack elements
+  - Correr build do Step 4
+tests:
+  | id  | dado                      | quando                  | então                                  |
+  | A-4 | `#[volatile] let x`       | parsear                 | binding tem attribute Volatile         |
+
+[5]
+task: sequenta-attributes::propagateSymbols
+status: done
+desc: discardable propagates through frontend, resolution and SymbolData.
+impl:
+  - Adicionar helper Declaration::discardable
+  - Adicionar discardable a LocalSymbolInfo, ResolvedName e SymbolData
+  - Materializar e hidratar SymbolData
+  - Correr build do Step 5, 5b e 5c
+tests:
+  | id  | dado                    | quando           | então                              |
+  | A-5 | decl with discardable   | resolver         | ResolvedName/SymbolData tem true   |
+
+[6]
+task: sequenta-attributes::classifyAttributeTargets
+status: done
+desc: Unknown and non-applicable attributes warn with distinct error codes.
+impl:
+  - Adicionar UnknownAttribute e AttributeNotApplicable
+  - Criar applyAttributeTarget
+  - Classificar por alvo em declarações e bindings
+  - Correr build do Step 6
+tests:
+  | id  | dado                          | quando                 | então                                |
+  | A-6 | atributo inválido             | compilar               | warning com código separado          |
+
+[7]
+task: sequenta-attributes::semaDiscardable
+status: done
+desc: Expression statements allow calls to discardable callees.
+impl:
+  - Implementar calleeIsDiscardable
+  - Chamar antes de DiscardedResult
+  - Correr target test-sema do Step 7
+tests:
+  | id  | dado                          | quando       | então                           |
+  | A-7 | `make();` discardable         | sema         | sem erro DiscardedResult        |
+
+[8]
+task: sequenta-attributes::hirDiscardable
+status: done
+desc: HIR function and function attrs store discardable.
+impl:
+  - Adicionar discardable a HirFunction e HirFnAttrs
+  - Preencher a partir de Declaration attributes
+  - Correr build do Step 8
+tests:
+  | id  | dado                  | quando       | então                             |
+  | A-8 | discardable fn        | lower HIR    | HirFnAttrs.discardable é true     |
+
+[9]
+task: sequenta-attributes::persistDiscardable
+status: done
+desc: discardable survives cache/ZIRL and affects the public ABI hash.
+impl:
+  - Adicionar discardable a DeclRecord, CompactFunction e HirFnAttrsRecord
+  - Ajustar ArtifactBuilder e ZIRL codec
+  - Bump kFormatVersion para 17
+  - Correr build e smoke de cache do Step 9
+tests:
+  | id  | dado                | quando        | então                                |
+  | A-9 | artifact roundtrip | rehidratar    | discardable fica preservado          |
+
+[10]
+task: sequenta-attributes::nraVolatile
+status: done
+desc: NRA records no facts and no narrowing for volatile local slots.
+impl:
+  - Implementar localIsVolatile
+  - Ignorar bindings volatile em NraLocalFact
+  - Evitar narrowing residual
+  - Correr build do Step 10
+tests:
+  | id  | dado                     | quando             | então                            |
+  | A-10| binding volatile         | walk NRA           | não acumula factos/narrowing     |
+
+[11]
+task: sequenta-attributes::codegenVolatile
+status: done
+desc: Codegen emits volatile LLVM loads and stores for volatile slots.
+impl:
+  - Adicionar HirSlotAttrs.volatileSlot
+  - Marcar slots em hir-lower-stmt
+  - Usar overload volatile em codegen-emit-expr
+  - Correr build do Step 11
+tests:
+  | id  | dado                | quando              | então                          |
+  | A-11| slot volatile      | emitir LLVM         | load/store são volatile        |
+
+[12]
+task: sequenta-attributes::formatAttributes
+status: done
+desc: Formatter and reconstruct preserve attribute text and order.
+impl:
+  - Adicionar emitAttributes em fmt-visitor
+  - Chamar em funções, variáveis e bindings
+  - Correr test-formatter do Step 12
+tests:
+  | id  | dado                     | quando        | então                            |
+  | A-12| `#[discardable] fn`      | formatar/reconstruct | texto e ordem preservados |
+
+[13]
+task: sequenta-attributes::addTests
+status: done
+desc: Tests cover frontend, pipeline, cache/ZIRL and formatter.
+impl:
+  - Adicionar testes aos cinco ficheiros de teste
+  - Correr suites do Step 13
+tests:
+  | id  | dado              | quando        | então                            |
+  | A-13| suites relevantes| correr testes | 5 suites passam sem falhas novas |
+
+[14]
+task: sequenta-attributes::updateDocs
+status: done
+desc: User and implementation docs document attributes MVP.
+impl:
+  - Atualizar docs/Zith--.md
+  - Atualizar docs/Zith---implementation.md
+  - Verificar com rg do Step 14
+tests:
+  | id  | dado            | quando    | então                            |
+  | A-14| docs atualizadas| rg        | keywords aparecem nas duas docs  |
+
+[15]
+task: sequenta-attributes::finalVerification
+status: done
+desc: Full build and CTest pass except known pre-existing failure.
+impl:
+  - Correr cmake --build build -j4
+  - Correr ctest --test-dir build
+  - Confirmar falha pre-existing opaca nos relatórios
+tests:
+  | id  | dado           | quando    | então                             |
+  | A-15| build global  | ctest     | 0 falhas novas exceto pre-existing |

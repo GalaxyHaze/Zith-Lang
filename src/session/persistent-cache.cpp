@@ -139,7 +139,7 @@ void CompilationSession::hydrateFromArtifact(const cache::Artifact &art) {
     for (const auto &decl : art.decls) {
         decl_sym_ids.push_back(mSyms.declare(decl.name, decl.visibility, decl.mod_depth,
                                              static_cast<symbols::SymKind>(decl.kind),
-                                             ast::kInvalidDecl, {}, {}, {}));
+                                             ast::kInvalidDecl, {}, {}, {}, decl.discardable));
     }
 
     for (size_t di = 0; di < art.decls.size(); ++di) {
@@ -733,6 +733,8 @@ void CompilationSession::hydrateFromArtifact(const cache::Artifact &art) {
         fn.machineReturnType  = cfn.machine_return_type_id != 0
                                     ? compactType(cfn.machine_return_type_id)
                                     : fn.return_type;
+        if (cfn.discardable)
+            mHirModule.attrs().fn(fi).discardable = true;
         fn.sym_id             = next_sym++;
         for (size_t pi = 0; pi < cfn.param_type_ids.size() && pi < cfn.param_name_ids.size();
              ++pi) {
@@ -764,6 +766,7 @@ void CompilationSession::hydrateFromArtifact(const cache::Artifact &art) {
         attrs.ownership = static_cast<hir::HirOwnership>(slot.ownership);
         attrs.consumed  = static_cast<hir::HirConsumedState>(slot.consumed);
         attrs.nonNull   = slot.nonNull;
+        attrs.volatileSlot = slot.volatileSlot;
     }
     for (const auto &call : art.attrs_calls) {
         auto &attrs      = mHirModule.attrs().call(call.expr_id);
@@ -778,6 +781,7 @@ void CompilationSession::hydrateFromArtifact(const cache::Artifact &art) {
         attrs.noAlias        = fn_attrs.noAlias;
         attrs.readOnly       = fn_attrs.readOnly;
         attrs.noCapture      = fn_attrs.noCapture;
+        attrs.discardable    = fn_attrs.discardable;
     }
 }
 

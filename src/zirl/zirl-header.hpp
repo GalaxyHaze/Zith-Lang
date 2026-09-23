@@ -44,7 +44,7 @@ inline constexpr uint32_t kMagic = 0x5A49524Cu; // "ZIRL"
 /// opaque values can restore a stable project-local runtime tag.
 /// Version 16: canonical type ids use the defining module, not the consumer
 /// module, so `at-canonicalType(T)` agrees across module boundaries.
-inline constexpr uint32_t kFormatVersion = 16;
+inline constexpr uint32_t kFormatVersion = 17;
 inline constexpr uint8_t kEndianLittle   = 1;
 
 enum class SectionId : uint8_t {

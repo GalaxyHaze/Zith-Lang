@@ -200,6 +200,7 @@ void addAttrs(Artifact &art) {
     slot.ownership = static_cast<uint8_t>(hir::HirOwnership::Unique);
     slot.consumed  = static_cast<uint8_t>(hir::HirConsumedState::NonConsumed);
     slot.nonNull   = true;
+    slot.volatileSlot = true;
     art.attrs_slots.push_back(slot);
 
     HirCallAttrsRecord call;
@@ -213,6 +214,7 @@ void addAttrs(Artifact &art) {
     fn.return_consumed = 1;
     fn.nonNull         = true;
     fn.noAlias         = true;
+    fn.discardable     = true;
     art.attrs_fns.push_back(fn);
 }
 
@@ -400,6 +402,10 @@ static void test_attrs_section_round_trip() {
     CHECK_EQ(decoded.attrs_fns.size(), 1u, "fn attrs preserved");
     if (decoded.attrs_calls.size() == 1u)
         CHECK_EQ(decoded.attrs_calls[0].arg_escapes.size(), 2u, "call escape count preserved");
+    if (decoded.attrs_slots.size() == 1u)
+        CHECK(decoded.attrs_slots[0].volatileSlot, "volatile slot flag preserved");
+    if (decoded.attrs_fns.size() == 1u)
+        CHECK(decoded.attrs_fns[0].discardable, "discardable fn flag preserved");
 }
 
 static void test_instantiation_section_round_trip() {

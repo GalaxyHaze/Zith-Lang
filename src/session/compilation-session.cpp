@@ -257,7 +257,8 @@ bool CompilationSession::materializeFrontendSymbols() {
                 continue;
             }
             mSyms.declare(decl.name, mapFrontendVisibility(decl.visibility), 0,
-                          mapFrontendDeclKind(decl.kind), ast::kInvalidDecl, {});
+                          mapFrontendDeclKind(decl.kind), ast::kInvalidDecl, {}, {}, {},
+                          decl.discardable());
         }
     }
     return true;

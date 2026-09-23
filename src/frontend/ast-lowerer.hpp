@@ -65,6 +65,7 @@ private:
     [[nodiscard]] bool isKeywordToken(std::string_view word) const noexcept;
     [[nodiscard]] bool isVisibilityPrefix() const noexcept;
     [[nodiscard]] std::optional<FunctionKind> functionKindPrefix();
+    [[nodiscard]] std::vector<Attribute> parseAttributes();
     [[nodiscard]] bool isRangeDotAt(uint32_t offset) const noexcept;
     [[nodiscard]] bool isRangeOpenAt(uint32_t offset) const noexcept;
     [[nodiscard]] ExprId parseAttributeValue();
@@ -99,19 +100,23 @@ private:
     [[nodiscard]] ExprId parseTagMacroCall();
     [[nodiscard]] std::vector<StmtId> parseStatements();
 
-    void lowerImport(uint32_t start, Visibility visibility);
+    void lowerImport(uint32_t start, Visibility visibility,
+                     const std::vector<Attribute> &attributes);
     void parseImportPath(ImportDecl &import);
     void parseImportDepth(ImportDecl &import);
     void parseImportSelectors(ImportDecl &import);
-    void lowerMacroDeclaration(uint32_t start, Visibility visibility, bool isRaw, bool isTag);
-    void lowerImplementBlock(uint32_t start, Visibility visibility);
+    void lowerMacroDeclaration(uint32_t start, Visibility visibility, bool isRaw, bool isTag,
+                               const std::vector<Attribute> &attributes);
+    void lowerImplementBlock(uint32_t start, Visibility visibility,
+                             const std::vector<Attribute> &attributes);
     DeclId lowerDeclaration(uint32_t start, DeclKind kind, Visibility visibility,
                             std::string ownerName = {}, std::string traitName = {},
                             bool isExtern             = false,
                             FunctionKind functionKind = FunctionKind::Standard,
                             const std::vector<GenericParam> &inheritedParams = {},
                             bool isRawUnion = false, bool suppressTopLevelBindingCheck = false,
-                            ScopeId parentScope = {}, const std::string &parentName = {});
+                            ScopeId parentScope = {}, const std::string &parentName = {},
+                            const std::vector<Attribute> &attributes = {});
 
     bool parseStructField(std::vector<Parameter> &out);
     bool parseInterfaceField(std::vector<Parameter> &out);

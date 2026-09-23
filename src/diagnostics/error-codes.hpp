@@ -59,6 +59,8 @@ inline constexpr ErrCode const NotATrait                    = 2023;
 inline constexpr ErrCode const InterfaceNotSatisfied        = 2024;
 inline constexpr ErrCode const InterfaceMethodNotAllowed    = 2025;
 inline constexpr ErrCode const DuplicateImplementation      = 2027;
+inline constexpr ErrCode const UnknownAttribute             = 2028;
+inline constexpr ErrCode const AttributeNotApplicable       = 2029;
 
 // Types (3001-3999)
 inline constexpr ErrCode const TypeMismatch           = 3001;

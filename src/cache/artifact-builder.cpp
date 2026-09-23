@@ -546,9 +546,11 @@ uint64_t ArtifactBuilder::computePublicAbiHash() const {
             continue;
         const auto name = interner_.lookup(sym.name);
         primary << name << '\x1f' << static_cast<int>(sym.kind) << '\x1f'
-                << static_cast<int>(sym.visibility) << '\x1f' << sym.mod_depth << '\n';
+                << static_cast<int>(sym.visibility) << '\x1f' << sym.mod_depth << '\x1f'
+                << (sym.discardable ? 1 : 0) << '\n';
         secondary << static_cast<int>(sym.mod_depth) << '\x1f' << static_cast<int>(sym.visibility)
-                  << '\x1f' << static_cast<int>(sym.kind) << '\x1f' << name << '\n';
+                  << '\x1f' << static_cast<int>(sym.kind) << '\x1f' << name << '\x1f'
+                  << (sym.discardable ? 1 : 0) << '\n';
     }
     const uint32_t hi = zith::zirl::fnv1a32(primary.str());
     const uint32_t lo = zith::zirl::fnv1a32(secondary.str());
@@ -674,6 +676,8 @@ Artifact ArtifactBuilder::build(std::string_view canonical_path, std::string_vie
         cfn.is_variadic            = fn.isVariadic;
         cfn.is_state               = fn.isState;
         cfn.uses_tailcc            = fn.usesTailCC;
+        if (const auto *attrs = hir_.attrs().tryFn(fi))
+            cfn.discardable = attrs->discardable;
         cfn.variadic_slice_param   = fn.variadicSliceParam <= ~uint32_t{0}
                                          ? static_cast<uint32_t>(fn.variadicSliceParam)
                                          : ~uint32_t{0};
@@ -744,6 +748,7 @@ Artifact ArtifactBuilder::build(std::string_view canonical_path, std::string_vie
         rec.ownership = static_cast<uint8_t>(attrs->ownership);
         rec.consumed  = static_cast<uint8_t>(attrs->consumed);
         rec.nonNull   = attrs->nonNull;
+        rec.volatileSlot = attrs->volatileSlot;
         art.attrs_slots.push_back(std::move(rec));
     }
     for (hir::HirExprId call_id = 0; call_id < hir_.exprCount(); ++call_id) {
@@ -768,6 +773,7 @@ Artifact ArtifactBuilder::build(std::string_view canonical_path, std::string_vie
         rec.noAlias         = attrs->noAlias;
         rec.readOnly        = attrs->readOnly;
         rec.noCapture       = attrs->noCapture;
+        rec.discardable     = attrs->discardable;
         art.attrs_fns.push_back(std::move(rec));
     }
 

@@ -400,7 +400,8 @@ ModuleArtifactPtr FrontendContext::buildModule(
                                declaration.externalSymbol,
                                declaration.isVariadic,
                                !declaration.parameters.empty() &&
-                                   declaration.parameters.back().isVariadicSlice};
+                                   declaration.parameters.back().isVariadicSlice,
+                               declaration.discardable()};
         if (symbol.visibility == frontend::Visibility::Public)
             artifact->publicSymbols.push_back(std::move(symbol));
         else

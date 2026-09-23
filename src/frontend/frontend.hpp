@@ -114,6 +114,17 @@ enum class DeclKind : uint8_t {
 /// Storage and rebinding semantics of a `let`/`var`/`const` binding.
 enum class BindingKind : uint8_t { Let, Var, Const };
 
+/// Source attributes written as `#[name]` or `#[a, b]`.
+enum class AttributeKind : uint8_t { Unknown, Discardable, Volatile };
+
+enum class AttributeTarget : uint8_t { Function, Variable, Other };
+
+struct Attribute {
+    AttributeKind kind = AttributeKind::Unknown;
+    std::string text;
+    TextSpan span;
+};
+
 /// Parse-level function kind for `fn`, `const fn`, `raw fn`, `extern fn`, and
 /// `state`.  All five share `DeclKind::Function`; this metadata is retained for
 /// frontend tooling and formatter output.
@@ -281,6 +292,7 @@ struct Binding {
     TextSpan span;
     TypeExprId type;
     ExprId initializer;
+    std::vector<Attribute> attributes;
 };
 
 struct Statement {
@@ -296,6 +308,7 @@ struct Statement {
     std::string label;
     /// Arguments written after `jump target(args);`.
     std::vector<ExprId> arguments;
+    std::vector<Attribute> attributes;
 };
 
 struct Expression {
@@ -465,6 +478,12 @@ struct Declaration {
     bool isNominalType = false;
     /// Binding kind for `DeclKind::Variable`: the source keyword was `let`, `var`, or `const`.
     BindingKind bindingKind = BindingKind::Const;
+    [[nodiscard]] bool discardable() const noexcept {
+        for (const auto &attr : attributes)
+            if (attr.kind == AttributeKind::Discardable)
+                return true;
+        return false;
+    }
     /// True when declared with `raw union`: untagged C-style union storage.
     bool isRawUnion = false;
     /// Non-empty only for methods lowered from `implement Type as Trait`: the
@@ -489,6 +508,7 @@ struct Declaration {
     /// to qualify HIR linkage names so identical state names in different
     /// functions stay distinct.
     std::string parentName;
+    std::vector<Attribute> attributes;
 };
 
 /// A source-level trait implementation block. Independent of the nested method

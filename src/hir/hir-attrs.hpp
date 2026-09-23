@@ -40,10 +40,11 @@ struct HirSlotAttrs {
     HirOwnership ownership    = HirOwnership::Default;
     HirConsumedState consumed = HirConsumedState::Unknown;
     bool nonNull              = false;
+    bool volatileSlot         = false;
 
     [[nodiscard]] constexpr bool hasResidualFacts() const noexcept {
         return ownership != HirOwnership::Default || consumed != HirConsumedState::Unknown ||
-               nonNull;
+               nonNull || volatileSlot;
     }
 };
 
@@ -74,10 +75,11 @@ struct HirFnAttrs {
     bool noAlias                    = false;
     bool readOnly                   = false;
     bool noCapture                  = false;
+    bool discardable                = false;
 
     [[nodiscard]] constexpr bool hasResidualFacts() const noexcept {
         return returnConsumed != HirConsumedState::Unknown || nonNull || noAlias || readOnly ||
-               noCapture;
+               noCapture || discardable;
     }
 };
 

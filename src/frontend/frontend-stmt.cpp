@@ -1,6 +1,7 @@
 #include "frontend/ast-lowerer.hpp"
 
 #include "diagnostics/error-codes.hpp"
+#include "frontend/attribute-classify.hpp"
 
 #include <algorithm>
 #include <limits>
@@ -336,6 +337,7 @@ ExprId AstLowerer::parseFor() {
     } else if (punctuation(index_, '(')) {
         ++index_;
         const uint32_t clause_start = index_;
+        const auto loop_attrs       = parseAttributes();
         StmtId init_stmt;
         ExprId init_expr;
         const bool has_var = index_ < token_count_ && text(index_) == "var";
@@ -351,6 +353,9 @@ ExprId AstLowerer::parseFor() {
             Statement stmt;
             stmt.kind                = StmtKind::Binding;
             stmt.binding.bindingKind = has_var ? BindingKind::Var : BindingKind::Let;
+            stmt.binding.attributes  = loop_attrs;
+            for (auto &attr : stmt.binding.attributes)
+                classifyAttribute(attr, AttributeTarget::Variable, snapshot_.diagnostics_);
             stmt.binding.id          = LocalId{statementCountLocals_++};
             stmt.binding.name        = std::string(text(index_));
             stmt.binding.span        = tokenSpan(index_++);
@@ -516,6 +521,7 @@ ExprId AstLowerer::parseFor() {
             Statement binding;
             binding.kind                = StmtKind::Binding;
             binding.binding.bindingKind = BindingKind::Let;
+            binding.binding.attributes  = loop_attrs;
             binding.binding.id          = local;
             binding.binding.name        = for_in.text;
             binding.binding.span        = init_stmt
@@ -806,6 +812,7 @@ std::vector<StmtId> AstLowerer::parseStatements() {
     if (index_ >= token_count_)
         return {addStatement(std::move(statement))};
 
+    const auto statement_attrs = parseAttributes();
     const auto word = text(index_);
     // Loop labels are statement attributes, so `outer: for ...` is parsed
     // here rather than as a `name :` expression. `parseFor()` returns an
@@ -832,6 +839,10 @@ std::vector<StmtId> AstLowerer::parseStatements() {
     if (word == "let" || word == "var" || word == "const") {
         statement.kind                = StmtKind::Binding;
         statement.binding.bindingKind = bindingKind(word);
+        statement.binding.attributes  = statement_attrs;
+        statement.attributes          = statement_attrs;
+        for (auto &attr : statement.binding.attributes)
+            classifyAttribute(attr, AttributeTarget::Variable, snapshot_.diagnostics_);
         ++index_;
         if (punctuation(index_, '[')) {
             // `let [x, y] = pack;` desugars to a temporary pack binding
@@ -885,6 +896,7 @@ std::vector<StmtId> AstLowerer::parseStatements() {
             Statement pack_stmt;
             pack_stmt.kind                = StmtKind::Binding;
             pack_stmt.binding.bindingKind = statement.binding.bindingKind;
+            pack_stmt.binding.attributes  = statement_attrs;
             pack_stmt.binding.id          = LocalId{statementCountLocals_++};
             pack_stmt.binding.name        = "__pack" + std::to_string(pack_stmt.binding.id.value);
             pack_stmt.binding.span        = range(start, index_);
@@ -918,6 +930,7 @@ std::vector<StmtId> AstLowerer::parseStatements() {
                 Statement element_stmt;
                 element_stmt.kind                = StmtKind::Binding;
                 element_stmt.binding.bindingKind = statement.binding.bindingKind;
+                element_stmt.binding.attributes  = statement_attrs;
                 element_stmt.binding.id          = LocalId{statementCountLocals_++};
                 element_stmt.binding.name        = names[element];
                 element_stmt.binding.span        = range(start, index_);

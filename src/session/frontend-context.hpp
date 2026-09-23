@@ -245,6 +245,7 @@ struct LocalSymbolInfo {
     bool isVariadic = false;
     /// True when the function's final parameter is written `[...]T`.
     bool isVariadicSlice = false;
+    bool discardable = false;
 };
 
 struct ModuleTimings {
@@ -323,6 +324,7 @@ struct ResolvedName {
     /// `["std", "counter"]` for `import std/counter`. Empty for aliases that
     /// name a single-symbol import or for non-module resolutions.
     std::vector<std::string> modulePath;
+    bool discardable = false;
 };
 
 struct ModuleResolution {

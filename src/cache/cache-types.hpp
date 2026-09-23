@@ -143,6 +143,7 @@ struct DeclRecord {
     std::vector<uint32_t> field_type_ids;
     std::vector<uint32_t> method_decl_indices; // methods, as decl indices
     bool is_extern = false;
+    bool discardable = false;
 };
 
 // Generic parameter with optional bounds (compact type ids).
@@ -281,6 +282,7 @@ struct CompactFunction {
     uint32_t machine_id             = 0;
     uint32_t machine_return_type_id = 0;
     uint32_t variadic_slice_param   = ~uint32_t{0};
+    bool discardable                = false;
 };
 
 struct CompactGlobalConst {
@@ -299,6 +301,7 @@ struct HirSlotAttrsRecord {
     uint8_t ownership = 0;
     uint8_t consumed  = 0;
     bool nonNull      = false;
+    bool volatileSlot = false;
 };
 
 struct HirCallAttrsRecord {
@@ -314,6 +317,7 @@ struct HirFnAttrsRecord {
     bool noAlias            = false;
     bool readOnly           = false;
     bool noCapture          = false;
+    bool discardable        = false;
 };
 
 // Monomorphized instances produced by the comptime pass. The HIR bodies already

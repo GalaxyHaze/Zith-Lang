@@ -149,6 +149,54 @@ void test_pipeline_discard_non_void_call_result() {
           "call result used in a binding initializer remains legal");
 }
 
+void test_pipeline_discardable_attribute_allows_call() {
+    Workspace workspace;
+    workspace.write("main.zith", "#[discardable] fn make(): i32 { return 1; }\n"
+                                 "fn main(): i32 {\n"
+                                 "    make();\n"
+                                 "    return 0;\n"
+                                 "}\n");
+
+    memory::Arena arena;
+    Options options(arena);
+    options.targetStage = session::Stage::HirLowered;
+
+    session::CompilationSession session(options, (workspace.root / "main.zith").string());
+    session.setBuffered(true);
+    CHECK(session.runTo(session::Stage::HirLowered),
+          "discardable call expression statement lowers through the pipeline");
+    CHECK(session.hirModule().attrs().fnCount() >= 1,
+          "HIR carries function attribute side tables");
+}
+
+void test_pipeline_unknown_attribute_warns_and_targets_are_checked() {
+    Workspace workspace;
+    workspace.write("main.zith", "#[unknown] fn f(): i32 { return 1; }\n"
+                                 "#[discardable] struct Bad { value: i32 }\n"
+                                 "fn main(): i32 { return f(); }\n");
+
+    memory::Arena arena;
+    Options options(arena);
+    options.targetStage = session::Stage::HirLowered;
+
+    session::CompilationSession session(options, (workspace.root / "main.zith").string());
+    session.setBuffered(true);
+    CHECK(session.runTo(session::Stage::HirLowered),
+          "unknown and misplaced attributes are warnings, not hard failures");
+    CHECK(session.snapshot() != nullptr,
+          "warning diagnostics still materialize the frontend snapshot");
+    bool saw_unknown = false;
+    bool saw_misplaced = false;
+    for (const auto &diagnostic : session.diags().all()) {
+        if (diagnostic.code == diagnostics::err::UnknownAttribute)
+            saw_unknown = true;
+        if (diagnostic.code == diagnostics::err::AttributeNotApplicable)
+            saw_misplaced = true;
+    }
+    CHECK(saw_unknown, "unknown attribute reports UnknownAttribute");
+    CHECK(saw_misplaced, "misplaced known attribute reports AttributeNotApplicable");
+}
+
 void test_imported_console_void_main_discard_regression() {
     Workspace workspace;
     workspace.write("main.zith", "from std/io/console\n"
@@ -1093,6 +1141,8 @@ static void test_frontend_modern_pipeline() {
     test_shared_context_reuses_frontend_cache();
     test_pipeline_error_surfaces_diagnostic();
     test_pipeline_discard_non_void_call_result();
+    test_pipeline_discardable_attribute_allows_call();
+    test_pipeline_unknown_attribute_warns_and_targets_are_checked();
     test_imported_console_void_main_discard_regression();
     test_untyped_uninitialized_binding_is_rejected();
     test_typed_uninitialized_binding_with_later_assignment_lowers();

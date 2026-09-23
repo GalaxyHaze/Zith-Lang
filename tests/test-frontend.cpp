@@ -2,6 +2,7 @@
 #include "frontend/frontend.hpp"
 #include "test-common.hpp"
 
+#include <algorithm>
 #include <string>
 #include <string_view>
 
@@ -203,6 +204,28 @@ static void test_explicit_discard_statement() {
     }
     CHECK(saw_call_statement, "plain call statement remains StmtKind::Expression");
     CHECK(saw_discard, "`_ = make();` lowers to StmtKind::Discard");
+}
+
+static void test_attributes_parse_and_classify() {
+    auto snapshot = frontend::parse("#[discardable] #[volatile] fn make(): i32 {\n"
+                                    "    #[volatile] let reg: i32 = 0;\n"
+                                    "    return reg;\n"
+                                    "}\n");
+    bool saw_misplaced = false;
+    for (const auto &diagnostic : snapshot.diagnostics()) {
+        if (diagnostic.code == diagnostics::err::AttributeNotApplicable)
+            saw_misplaced = true;
+    }
+    CHECK(saw_misplaced, "attribute source reports the misplaced volatile fn warning");
+    const auto decl_it = std::find_if(snapshot.declarations().begin(),
+                                      snapshot.declarations().end(), [](const auto &decl) {
+                                          return decl.kind == frontend::DeclKind::Function;
+                                      });
+    CHECK(decl_it != snapshot.declarations().end(), "attribute fn exists");
+    if (decl_it != snapshot.declarations().end()) {
+        CHECK(decl_it->attributes.size() == 2u, "fn carries both attributes");
+        CHECK(decl_it->discardable(), "fn is discardable after classification");
+    }
 }
 
 static void test_old_state_machine_syntax_is_rejected() {
@@ -1532,6 +1555,7 @@ static void test_frontend() {
     test_zith_removed_bindings_and_qualifiers();
     test_type_alias_and_struct_enum_union();
     test_unary_and_nested_expressions();
+    test_attributes_parse_and_classify();
     test_multiple_top_level_decls_with_visibility();
     test_import_form_with_depth_and_export();
     test_error_diagnostic_span_preserved();

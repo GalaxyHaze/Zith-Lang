@@ -260,6 +260,19 @@ void FmtVisitor::emitDeclPrefix(const frontend::TextSpan span) {
     }
 }
 
+void FmtVisitor::emitAttributes(const frontend::Attribute *attributes, std::size_t count) {
+    if (count == 0U)
+        return;
+    emit("#[");
+    for (std::size_t index = 0; index < count; ++index) {
+        if (index != 0U)
+            emit(", ");
+        emit(attributes[index].text);
+    }
+    emit("]");
+    newline();
+}
+
 void FmtVisitor::emitOriginal(const frontend::TextSpan span) {
     appendRaw(sourceText(span));
 }
@@ -419,6 +432,7 @@ void FmtVisitor::emitFunctionDecl(const frontend::Declaration &decl) {
     }
 
     emitDeclPrefix(decl.span);
+    emitAttributes(decl.attributes.data(), decl.attributes.size());
     switch (decl.functionKind) {
     case frontend::FunctionKind::Const:
         emit("const ");
@@ -491,6 +505,7 @@ void FmtVisitor::emitVariableDecl(const frontend::Declaration &decl) {
     }
 
     emitDeclPrefix(decl.span);
+    emitAttributes(decl.attributes.data(), decl.attributes.size());
     emit(tokenText(firstTokenIndex(decl.span)));
     emit(" ");
     emit(decl.name);
@@ -666,8 +681,18 @@ void FmtVisitor::visitStmt(const frontend::StmtId id) {
 
     switch (stmt->kind) {
     case frontend::StmtKind::Binding:
-        emit(tokenText(first));
-        emit(" ");
+        emitAttributes(stmt->binding.attributes.data(), stmt->binding.attributes.size());
+        switch (stmt->binding.bindingKind) {
+        case frontend::BindingKind::Let:
+            emit("let ");
+            break;
+        case frontend::BindingKind::Var:
+            emit("var ");
+            break;
+        case frontend::BindingKind::Const:
+            emit("const ");
+            break;
+        }
         emit(stmt->binding.name);
         if (stmt->binding.type) {
             emit(": ");

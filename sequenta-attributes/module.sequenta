@@ -1,0 +1,31 @@
+# module: sequenta-attributes
+
+1. lexHash() -> void
+
+2. addAttributeAst() -> void
+
+3. parseTopLevelAttributes() -> void
+
+4. parseStatementAttributes() -> void
+
+5. propagateSymbols() -> void
+
+6. classifyAttributeTargets() -> void
+
+7. semaDiscardable() -> void
+
+8. hirDiscardable() -> void
+
+9. persistDiscardable() -> void
+
+10. nraVolatile() -> void
+
+11. codegenVolatile() -> void
+
+12. formatAttributes() -> void
+
+13. addTests() -> void
+
+14. updateDocs() -> void
+
+15. finalVerification() -> void

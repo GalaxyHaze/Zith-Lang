@@ -477,6 +477,7 @@ static void test_variadic_slice_param_round_trip() {
     auto original                              = makeMinimalArtifact("/test/variadic.zith", "main");
     original.functions[0].is_variadic          = true;
     original.functions[0].variadic_slice_param = 1;
+    original.functions[0].discardable          = true;
 
     ByteWriter writer;
     (void)Writer::write(original, writer);
@@ -489,6 +490,7 @@ static void test_variadic_slice_param_round_trip() {
     CHECK(decoded->functions[0].is_variadic, "variadic flag survives round-trip");
     CHECK_EQ(decoded->functions[0].variadic_slice_param, 1u,
              "variadic slice parameter survives round-trip");
+    CHECK(decoded->functions[0].discardable, "discardable flag survives round-trip");
 }
 
 static void test_zero_abi_dependency_skips_validation() {
@@ -606,7 +608,7 @@ static void test_format_version_bump() {
     (void)Writer::write(art, writer);
 
     std::string bytes(reinterpret_cast<const char *>(writer.ptr()), writer.size());
-    CHECK_EQ(kFormatVersion, 16u, "zirl format version is bumped");
+    CHECK_EQ(kFormatVersion, 17u, "zirl format version is bumped");
 
     // Simulate an old reader by treating the version field as v3.
     bytes[4]        = 3;

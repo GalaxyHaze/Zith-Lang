@@ -9,7 +9,7 @@ bool encodeAttrs(const cache::Artifact &artifact, ByteWriter &w) {
         w.writeU8(slot.ownership);
         w.writeU8(slot.consumed);
         w.writeU8(slot.nonNull ? 1 : 0);
-        w.writeU8(0); // reserved
+        w.writeU8(slot.volatileSlot ? 1 : 0);
     }
 
     w.writeU32(static_cast<uint32_t>(artifact.attrs_calls.size()));
@@ -29,7 +29,7 @@ bool encodeAttrs(const cache::Artifact &artifact, ByteWriter &w) {
         w.writeU8(fn.noAlias ? 1 : 0);
         w.writeU8(fn.readOnly ? 1 : 0);
         w.writeU8(fn.noCapture ? 1 : 0);
-        w.writeU8(0);
+        w.writeU8(fn.discardable ? 1 : 0);
         w.writeU8(0);
         w.writeU8(0);
     }
@@ -51,6 +51,7 @@ bool decodeAttrs(ByteReader &r, cache::Artifact &out) {
         slot.ownership = a;
         slot.consumed  = b;
         slot.nonNull   = c != 0;
+        slot.volatileSlot = reserved != 0;
     }
 
     if (!r.readU32(n))
@@ -87,6 +88,7 @@ bool decodeAttrs(ByteReader &r, cache::Artifact &out) {
         fn.noAlias         = c != 0;
         fn.readOnly        = d != 0;
         fn.noCapture       = e != 0;
+        fn.discardable     = f != 0;
     }
     return true;
 }

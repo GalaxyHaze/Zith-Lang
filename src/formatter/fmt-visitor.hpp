@@ -55,6 +55,7 @@ private:
     void blankLine();
     void emitLeadingComments(std::size_t token_index);
     void emitDeclPrefix(frontend::TextSpan span);
+    void emitAttributes(const frontend::Attribute *attributes, std::size_t count);
 
     void emitImportDecl(const frontend::Declaration &decl);
     void emitFunctionDecl(const frontend::Declaration &decl);

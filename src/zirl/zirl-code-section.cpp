@@ -85,6 +85,7 @@ bool encodeCode(const cache::Artifact &artifact, ByteWriter &w) {
         w.writeU8(fn.is_variadic ? 1 : 0);
         w.writeU8(fn.is_state ? 1 : 0);
         w.writeU8(fn.uses_tailcc ? 1 : 0);
+        w.writeU8(fn.discardable ? 1 : 0);
         w.writeU32(fn.return_type_id);
         w.writeU32(fn.machine_return_type_id);
         w.writeU32(fn.machine_id);
@@ -145,9 +146,9 @@ bool decodeCode(ByteReader &r, cache::Artifact &out) {
         return false;
     out.functions.resize(n);
     for (auto &fn : out.functions) {
-        uint8_t ext = 0, foreign = 0, a = 0, b = 0, c = 0;
+        uint8_t ext = 0, foreign = 0, a = 0, b = 0, c = 0, d = 0;
         if (!r.readU32(fn.name_id) || !r.readU8(ext) || !r.readU8(foreign) || !r.readU8(a) ||
-            !r.readU8(b) || !r.readU8(c) || !r.readU32(fn.return_type_id) ||
+            !r.readU8(b) || !r.readU8(c) || !r.readU8(d) || !r.readU32(fn.return_type_id) ||
             !r.readU32(fn.machine_return_type_id) || !r.readU32(fn.machine_id) ||
             !r.readU32(fn.instance_index) || !r.readU32(fn.variadic_slice_param))
             return false;
@@ -158,6 +159,7 @@ bool decodeCode(ByteReader &r, cache::Artifact &out) {
         fn.is_variadic  = a != 0;
         fn.is_state     = b != 0;
         fn.uses_tailcc  = c != 0;
+        fn.discardable  = d != 0;
         uint32_t k      = 0;
         if (!r.readU32(k))
             return false;

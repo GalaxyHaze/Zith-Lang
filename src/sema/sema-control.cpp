@@ -139,6 +139,11 @@ void PerModuleSema::checkReturnsAndCalls() {
                             has_side_effect_tail = tail_kind == frontend::ExprKind::Assign ||
                                                    tail_kind == frontend::ExprKind::Call ||
                                                    tail_kind == frontend::ExprKind::DockCall;
+                            if (tail_kind == frontend::ExprKind::Call ||
+                                tail_kind == frontend::ExprKind::DockCall) {
+                                if (calleeIsDiscardable(tail.expression))
+                                    has_side_effect_tail = true;
+                            }
                         }
                     }
                 }
@@ -192,11 +197,26 @@ void PerModuleSema::checkExpressionStatement(const frontend::Statement &stmt,
         return;
     if (expr.kind != frontend::ExprKind::Call && expr.kind != frontend::ExprKind::DockCall)
         return;
+    if (calleeIsDiscardable(stmt.expression))
+        return;
     const TypeId call_type = resolve(typeOfExpr(stmt.expression));
     if (call_type != void_type && call_type != error_type && !produces_block_value) {
         report(stmt.span, "call result must be used or discarded with `_ = call();`",
                diagnostics::err::DiscardedResult);
     }
+}
+
+bool PerModuleSema::calleeIsDiscardable(frontend::ExprId call_id) const noexcept {
+    if (!call_id || call_id.value > snapshot.expressions().size())
+        return false;
+    const auto &call_expr = snapshot.expressions()[call_id.value - 1U];
+    if (call_expr.operands.empty())
+        return false;
+    const auto callee_id = call_expr.operands[0];
+    if (!callee_id || callee_id.value > snapshot.expressions().size())
+        return false;
+    const auto *resolved = findResolvedExpr(callee_id);
+    return resolved != nullptr && resolved->discardable;
 }
 
 bool PerModuleSema::conditionIsAlwaysLiteralTrue(frontend::ExprId id) const noexcept {

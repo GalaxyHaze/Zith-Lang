@@ -16,6 +16,7 @@ Esta iteração mantém os tipos e features existentes, mas restringe bindings, 
 - `?T` continua activo como o único tipo de valor ausente/nulável.
 - `T!`/result failable fica fora; erros continuam no escopo da espec full Zith.
 - Macros normais e `raw macro` continuam activas e são exclusivas do Zith--; `tag` (antigo `tag macro`) fica como item full Zith.
+- Atributos `#[...]` ficam activos no MVP restrito a `discardable` em funções e `volatile` em variáveis/bindings.
 
 As restrições devem ser aplicadas pela própria toolchain, não apenas documentadas.
 
@@ -704,7 +705,7 @@ entra no documento do `Zith--` depois de terminar no pipeline real, porque o
   `when` com default ou loop infinito sem `break` directo).
 - Resultados de call não-void usados como expression statement são considerados
   consumidos-de-outra-forma ou descartados; a única forma explícita de os descartar
-  é `_ = expr;`. Assignment/return/argument/condition/binding usos continuam a
+  é `_ = expr;` ou um callee `#[discardable]`. Assignment/return/argument/condition/binding usos continuam a
   consumir o valor, e calls `void` continuam legais como statement.
 - Uma função `void` não pode terminar com uma expression statement que produza
   valor e não seja assignment, call ou dock call; deve usar `_ = expr;` ou

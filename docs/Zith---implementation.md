@@ -42,7 +42,8 @@ tokens.
 `_` seguido de `=`; o parser consome o par e exige `;` após a expressão. O sema
 continua a inferir a expressão descartada mas não a devolve como valor do bloco.
 Em `inferBlock`, uma expression statement cujo AST root é `Call`/`DockCall` com
-tipo não-void/não-error reporta `E2026 DiscardedResult`, exceto quando a
+tipo não-void/não-error reporta `E2026 DiscardedResult`, exceto quando o callee
+é `#[discardable]` ou quando a
 expressão é o valor final de uma função não-void; uma function void continua a
 exigir `StmtKind::Discard`. `StmtKind::Discard` é a única forma explícita de
 aceitar esse tipo. Em `checkReturnsAndCalls`, uma função void que termina com
@@ -73,6 +74,25 @@ binário com precedências 3, 2 e 4, em paralelo com `FmtVisitor::binaryPreceden
 `)/,/{` esperado pelo chamador.
 
 O lexer agrupa `..` e `...` num único `TokenKind::Dots`, distinguindo-os pelo lexeme. O range literal, o placeholder de pipeline, os imports relativos, a profundidade `mod(..)` e os variadic slices consomem esse token em vez de dois pontos separados. `++` e `--` são lexados e rejeitados com `E2010 UnsupportedSyntax`; a mensagem pede atribuição explícita ao valor atualizado.
+
+## Atributos
+
+O frontend parseia grupos `#[name, ...]` antes de visibilidade/declarações
+top-level, métodos, e bindings locais. `AttributeKind` é resolvido por
+`classifyAttribute`: `discardable` aplica-se a funções e `volatile` a
+variáveis/bindings; atributos desconhecidos emitem `W2028 UnknownAttribute` e
+atributos conhecidos em local ilegal emitem `W2029 AttributeNotApplicable`.
+
+`discardable` propaga de `Declaration` para resolução e `SymbolData`, e o
+lowering regista `HirFnAttrs.discardable`. Sema omite `E2026 DiscardedResult`
+quando o callee resolvido tem o atributo, inclusive cross-module.
+
+`volatile` assinala slots como `HirSlotAttrs.volatileSlot`. NRA não acumula
+factos de ownership/narrowing para esses locais; codegen emite loads e stores
+LLVM volatile para o slot. O cache serializa `discardable` e `volatileSlot` no
+Code/attrs sections e a ABI hash inclui `SymbolData.discardable`. O formatter
+reemite grupos `#[name, ...]` antes da declaração/binding e preserva a ordem
+original.
 
 ## Sema
 
@@ -395,13 +415,15 @@ separam os artifacts mesmo quando o ficheiro genérico é igual.
 
 ## Cache e ZIRL
 
-A versão de formato ZIRL está em 16 (`kFormatVersion` em
+A versão de formato ZIRL está em 17 (`kFormatVersion` em
 `src/zirl/zirl-header.hpp`). O Code section serializa:
 
 - `Artifact.exprs` como pool de expressões ao nível do módulo.
 - `Artifact.globals` como `CompactGlobalConst` com name, type e init.
 - `HirFunction` com `isState`/`machineId`/`machineReturnType`/`usesTailCC` para declaracoes `state`.
 - `HirFunction.variadicSliceParam` como `CompactFunction.variadic_slice_param`.
+- `CompactFunction.discardable` para declarações `#[discardable]`.
+- `HirSlotAttrsRecord.volatileSlot` para slots `#[volatile]`.
 - `HirStateTailCall` como expressao de terminacao com `musttail tailcc` direto.
 
 Isso mantém os ids de HIR estáveis entre módulos vazios de funções, const globals, loads por `HirGlobalConstLoad` e transitions `state`. Maquinas `state` agrupam por retorno canonico e permitem listas de parametros diferentes entre estados; codegen declara e chama essas funcoes com LLVM `tailcc` e sem contexto/`alloca` adicional.

@@ -148,7 +148,7 @@ static void test_return_literal() {
 
 static void test_void_main_implicit_return_exits_zero() {
     CodegenTest t;
-    auto r = t.run("codegen-void-main.zith", "extern fn putchar(c: i32): i32\n"
+    auto r = t.run("codegen-void-main.zith", "#[discardable] extern fn putchar(c: i32): i32\n"
                                              "fn main() {\n"
                                              "    putchar(65);\n"
                                              "}\n");
@@ -1087,7 +1087,7 @@ static void test_trailing_void_call_is_emitted_once() {
     session::CompilationSession session(opts, "/tmp/codegen-trailing-void-call.zith");
     session.setBuffered(true);
     session.setAlwaysEmitObject(true);
-    session.setContent("extern fn putchar(c: i32): i32\n"
+    session.setContent("#[discardable] extern fn putchar(c: i32): i32\n"
                        "fn signal() {\n"
                        "    putchar(65)\n"
                        "}\n"
@@ -1675,7 +1675,7 @@ static void test_local_state_machine_executes() {
 
 static void test_defer_reverse_order_before_return() {
     CodegenTest t;
-    auto r = t.run("codegen-defer-reverse.zith", "extern fn putchar(c: i32): i32\n"
+    auto r = t.run("codegen-defer-reverse.zith", "#[discardable] extern fn putchar(c: i32): i32\n"
                                                  "fn main(): i32 {\n"
                                                  "    defer putchar(66);\n"
                                                  "    defer putchar(65);\n"
@@ -1688,7 +1688,7 @@ static void test_defer_reverse_order_before_return() {
 
 static void test_defer_block_runs_on_normal_exit() {
     CodegenTest t;
-    auto r = t.run("codegen-defer-block.zith", "extern fn putchar(c: i32): i32\n"
+    auto r = t.run("codegen-defer-block.zith", "#[discardable] extern fn putchar(c: i32): i32\n"
                                                "fn main() {\n"
                                                "    defer { _ = putchar(66); _ = putchar(65); }\n"
                                                "    _ = putchar(48);\n"
@@ -1699,7 +1699,7 @@ static void test_defer_block_runs_on_normal_exit() {
 
 static void test_defer_in_if_and_loop() {
     CodegenTest t;
-    auto if_test = t.run("codegen-defer-if.zith", "extern fn putchar(c: i32): i32\n"
+    auto if_test = t.run("codegen-defer-if.zith", "#[discardable] extern fn putchar(c: i32): i32\n"
                                                   "fn main() {\n"
                                                   "    if (true) {\n"
                                                   "        defer putchar(66);\n"
@@ -1710,7 +1710,7 @@ static void test_defer_in_if_and_loop() {
     CHECK(if_test.ok, "defer inside if compiles, links and runs");
     CHECK_EQ(if_test.output, "0BZ", "defer runs when the innermost if block exits");
 
-    auto loop_test = t.run("codegen-defer-loop.zith", "extern fn putchar(c: i32): i32\n"
+    auto loop_test = t.run("codegen-defer-loop.zith", "#[discardable] extern fn putchar(c: i32): i32\n"
                                                       "fn main() {\n"
                                                       "    for (true) {\n"
                                                       "        defer putchar(66);\n"
@@ -1725,7 +1725,7 @@ static void test_defer_in_if_and_loop() {
 
 static void test_defer_in_state_before_jump() {
     CodegenTest t;
-    auto r = t.run("codegen-defer-state.zith", "extern fn putchar(c: i32): i32\n"
+    auto r = t.run("codegen-defer-state.zith", "#[discardable] extern fn putchar(c: i32): i32\n"
                                                "state Done() { return; }\n"
                                                "state Start() {\n"
                                                "    defer putchar(66);\n"

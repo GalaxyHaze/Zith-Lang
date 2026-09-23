@@ -251,6 +251,7 @@ FrontendContext::buildResolutions(const std::vector<ModuleArtifactPtr> &modules,
                 decl_binding.isVariadic      = declaration.isVariadic;
                 decl_binding.isVariadicSlice = !declaration.parameters.empty() &&
                                                declaration.parameters.back().isVariadicSlice;
+                decl_binding.discardable     = declaration.discardable();
                 if (declaration.kind == frontend::DeclKind::Variable)
                     decl_binding.bindingKind = declaration.bindingKind;
                 if (declaration.kind == frontend::DeclKind::Function) {
@@ -304,6 +305,7 @@ FrontendContext::buildResolutions(const std::vector<ModuleArtifactPtr> &modules,
             local_state.isVariadic     = declaration.isVariadic;
             local_state.isVariadicSlice =
                 !declaration.parameters.empty() && declaration.parameters.back().isVariadicSlice;
+            local_state.discardable = declaration.discardable();
             local_state.signature = frontend::functionSignature(*module->frontend, declaration);
             add_binding(std::move(local_state), declaration.parentScope);
             if (declaration.body &&
@@ -438,6 +440,7 @@ FrontendContext::buildResolutions(const std::vector<ModuleArtifactPtr> &modules,
                             imported.externalSymbol  = symbol.externalSymbol;
                             imported.isVariadic      = symbol.isVariadic;
                             imported.isVariadicSlice = symbol.isVariadicSlice;
+                            imported.discardable     = symbol.discardable;
                             add_binding(std::move(imported), frontend::ScopeId{});
                             found = true;
                             break;
@@ -475,6 +478,7 @@ FrontendContext::buildResolutions(const std::vector<ModuleArtifactPtr> &modules,
                         imported.externalSymbol  = symbol.externalSymbol;
                         imported.isVariadic      = symbol.isVariadic;
                         imported.isVariadicSlice = symbol.isVariadicSlice;
+                        imported.discardable     = symbol.discardable;
                         add_binding(std::move(imported), frontend::ScopeId{});
                     }
                 }
@@ -580,6 +584,7 @@ FrontendContext::buildResolutions(const std::vector<ModuleArtifactPtr> &modules,
                     member.externalSymbol  = symbol.externalSymbol;
                     member.isVariadic      = symbol.isVariadic;
                     member.isVariadicSlice = symbol.isVariadicSlice;
+                    member.discardable     = symbol.discardable;
                     member.modulePath      = segments;
                     resolution.expressions.push_back(std::move(member));
                     found = true;
@@ -701,6 +706,7 @@ FrontendContext::buildResolutions(const std::vector<ModuleArtifactPtr> &modules,
                         member.externalSymbol  = symbol.externalSymbol;
                         member.isVariadic      = symbol.isVariadic;
                         member.isVariadicSlice = symbol.isVariadicSlice;
+                        member.discardable     = symbol.discardable;
                         member.modulePath      = full_path;
                         resolution.expressions.push_back(std::move(member));
                         return true;

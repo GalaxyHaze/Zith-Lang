@@ -1,0 +1,472 @@
+{
+  "version": 1,
+  "current_module": "sequenta-attributes",
+  "current_task": "sequenta-attributes::finalVerification",
+  "status": "done",
+  "worker": null,
+  "updated_at": "2026-09-23T18:34:47Z",
+  "trace_summary": [
+    {
+      "task": "sequenta-attributes::lexHash",
+      "from": "planned",
+      "to": "stub",
+      "worker": null,
+      "at": "2026-09-23T17:46:25Z"
+    },
+    {
+      "task": "sequenta-attributes::lexHash",
+      "from": "stub",
+      "to": "work",
+      "worker": null,
+      "at": "2026-09-23T17:46:25Z"
+    },
+    {
+      "task": "sequenta-attributes::lexHash",
+      "from": "work",
+      "to": "test",
+      "worker": null,
+      "at": "2026-09-23T17:46:46Z"
+    },
+    {
+      "task": "sequenta-attributes::lexHash",
+      "status": "done",
+      "worker": null,
+      "at": "2026-09-23T17:46:50Z",
+      "ok": true
+    },
+    {
+      "task": "sequenta-attributes::addAttributeAst",
+      "from": "planned",
+      "to": "stub",
+      "worker": null,
+      "at": "2026-09-23T17:46:58Z"
+    },
+    {
+      "task": "sequenta-attributes::addAttributeAst",
+      "from": "stub",
+      "to": "work",
+      "worker": null,
+      "at": "2026-09-23T17:46:58Z"
+    },
+    {
+      "task": "sequenta-attributes::addAttributeAst",
+      "from": "work",
+      "to": "test",
+      "worker": null,
+      "at": "2026-09-23T17:48:13Z"
+    },
+    {
+      "task": "sequenta-attributes::addAttributeAst",
+      "status": "done",
+      "worker": null,
+      "at": "2026-09-23T17:48:14Z",
+      "ok": true
+    },
+    {
+      "task": "sequenta-attributes::parseTopLevelAttributes",
+      "from": "planned",
+      "to": "stub",
+      "worker": null,
+      "at": "2026-09-23T17:48:23Z"
+    },
+    {
+      "task": "sequenta-attributes::parseTopLevelAttributes",
+      "from": "stub",
+      "to": "work",
+      "worker": null,
+      "at": "2026-09-23T17:48:23Z"
+    },
+    {
+      "task": "sequenta-attributes::parseTopLevelAttributes",
+      "from": "work",
+      "to": "test",
+      "worker": null,
+      "at": "2026-09-23T17:49:51Z"
+    },
+    {
+      "task": "sequenta-attributes::parseTopLevelAttributes",
+      "status": "done",
+      "worker": null,
+      "at": "2026-09-23T17:49:51Z",
+      "cmd": "/home/diogo/Zith/build/zithc --include stdlib check /tmp/attr-smoke.zith"
+    },
+    {
+      "task": "sequenta-attributes::parseStatementAttributes",
+      "from": "planned",
+      "to": "stub",
+      "worker": null,
+      "at": "2026-09-23T17:49:56Z"
+    },
+    {
+      "task": "sequenta-attributes::parseStatementAttributes",
+      "from": "stub",
+      "to": "work",
+      "worker": null,
+      "at": "2026-09-23T17:49:56Z"
+    },
+    {
+      "task": "sequenta-attributes::parseStatementAttributes",
+      "from": "work",
+      "to": "test",
+      "worker": null,
+      "at": "2026-09-23T17:50:42Z"
+    },
+    {
+      "task": "sequenta-attributes::parseStatementAttributes",
+      "status": "done",
+      "worker": null,
+      "at": "2026-09-23T17:50:42Z",
+      "cmd": "/home/diogo/Zith/build/zithc --include stdlib check /tmp/attr-stmt.zith"
+    },
+    {
+      "task": "sequenta-attributes::propagateSymbols",
+      "from": "planned",
+      "to": "stub",
+      "worker": null,
+      "at": "2026-09-23T17:50:48Z"
+    },
+    {
+      "task": "sequenta-attributes::propagateSymbols",
+      "from": "stub",
+      "to": "work",
+      "worker": null,
+      "at": "2026-09-23T17:50:48Z"
+    },
+    {
+      "task": "sequenta-attributes::propagateSymbols",
+      "from": "work",
+      "to": "test",
+      "worker": null,
+      "at": "2026-09-23T17:54:07Z"
+    },
+    {
+      "task": "sequenta-attributes::propagateSymbols",
+      "status": "done",
+      "worker": null,
+      "at": "2026-09-23T17:54:07Z",
+      "ok": true
+    },
+    {
+      "task": "sequenta-attributes::classifyAttributeTargets",
+      "from": "planned",
+      "to": "stub",
+      "worker": null,
+      "at": "2026-09-23T17:54:14Z"
+    },
+    {
+      "task": "sequenta-attributes::classifyAttributeTargets",
+      "from": "stub",
+      "to": "work",
+      "worker": null,
+      "at": "2026-09-23T17:54:14Z"
+    },
+    {
+      "task": "sequenta-attributes::classifyAttributeTargets",
+      "from": "work",
+      "to": "test",
+      "worker": null,
+      "at": "2026-09-23T17:57:38Z"
+    },
+    {
+      "task": "sequenta-attributes::classifyAttributeTargets",
+      "status": "done",
+      "worker": null,
+      "at": "2026-09-23T17:57:38Z",
+      "cmd": "true"
+    },
+    {
+      "task": "sequenta-attributes::semaDiscardable",
+      "from": "planned",
+      "to": "stub",
+      "worker": null,
+      "at": "2026-09-23T17:57:45Z"
+    },
+    {
+      "task": "sequenta-attributes::semaDiscardable",
+      "from": "stub",
+      "to": "work",
+      "worker": null,
+      "at": "2026-09-23T17:57:46Z"
+    },
+    {
+      "task": "sequenta-attributes::semaDiscardable",
+      "from": "work",
+      "to": "test",
+      "worker": null,
+      "at": "2026-09-23T18:00:09Z"
+    },
+    {
+      "task": "sequenta-attributes::semaDiscardable",
+      "status": "done",
+      "worker": null,
+      "at": "2026-09-23T18:00:14Z",
+      "cmd": "/home/diogo/Zith/build/zithc --include stdlib check /tmp/attr-discard.zith"
+    },
+    {
+      "task": "sequenta-attributes::hirDiscardable",
+      "from": "planned",
+      "to": "stub",
+      "worker": null,
+      "at": "2026-09-23T18:15:20Z"
+    },
+    {
+      "task": "sequenta-attributes::hirDiscardable",
+      "from": "stub",
+      "to": "work",
+      "worker": null,
+      "at": "2026-09-23T18:15:20Z"
+    },
+    {
+      "task": "sequenta-attributes::hirDiscardable",
+      "from": "work",
+      "to": "test",
+      "worker": null,
+      "at": "2026-09-23T18:15:20Z"
+    },
+    {
+      "task": "sequenta-attributes::hirDiscardable",
+      "status": "done",
+      "worker": null,
+      "at": "2026-09-23T18:15:20Z",
+      "cmd": "/bin/bash -lc \"cd /home/diogo/Zith && cmake --build build -j4 --target zithc 2>&1 | tail -8\""
+    },
+    {
+      "task": "sequenta-attributes::persistDiscardable",
+      "from": "planned",
+      "to": "stub",
+      "worker": null,
+      "at": "2026-09-23T18:15:30Z"
+    },
+    {
+      "task": "sequenta-attributes::persistDiscardable",
+      "from": "stub",
+      "to": "work",
+      "worker": null,
+      "at": "2026-09-23T18:15:30Z"
+    },
+    {
+      "task": "sequenta-attributes::persistDiscardable",
+      "from": "work",
+      "to": "test",
+      "worker": null,
+      "at": "2026-09-23T18:15:47Z"
+    },
+    {
+      "task": "sequenta-attributes::persistDiscardable",
+      "from": "test",
+      "to": "error",
+      "worker": null,
+      "at": "2026-09-23T18:15:47Z"
+    },
+    {
+      "task": "sequenta-attributes::persistDiscardable",
+      "from": "error",
+      "to": "work",
+      "worker": null,
+      "at": "2026-09-23T18:15:55Z"
+    },
+    {
+      "task": "sequenta-attributes::persistDiscardable",
+      "from": "work",
+      "to": "test",
+      "worker": null,
+      "at": "2026-09-23T18:15:55Z"
+    },
+    {
+      "task": "sequenta-attributes::persistDiscardable",
+      "status": "done",
+      "worker": null,
+      "at": "2026-09-23T18:15:55Z",
+      "cmd": "/bin/bash -lc \"cd /home/diogo/Zith && ./build/test-cache && ./build/test-zirl-sections\""
+    },
+    {
+      "task": "sequenta-attributes::nraVolatile",
+      "from": "planned",
+      "to": "stub",
+      "worker": null,
+      "at": "2026-09-23T18:16:04Z"
+    },
+    {
+      "task": "sequenta-attributes::nraVolatile",
+      "from": "stub",
+      "to": "work",
+      "worker": null,
+      "at": "2026-09-23T18:16:04Z"
+    },
+    {
+      "task": "sequenta-attributes::nraVolatile",
+      "from": "work",
+      "to": "test",
+      "worker": null,
+      "at": "2026-09-23T18:16:04Z"
+    },
+    {
+      "task": "sequenta-attributes::nraVolatile",
+      "status": "done",
+      "worker": null,
+      "at": "2026-09-23T18:16:04Z",
+      "cmd": "/bin/bash -lc \"cd /home/diogo/Zith && cmake --build build -j4 --target zithc 2>&1 | tail -8\""
+    },
+    {
+      "task": "sequenta-attributes::codegenVolatile",
+      "from": "planned",
+      "to": "stub",
+      "worker": null,
+      "at": "2026-09-23T18:16:12Z"
+    },
+    {
+      "task": "sequenta-attributes::codegenVolatile",
+      "from": "stub",
+      "to": "work",
+      "worker": null,
+      "at": "2026-09-23T18:16:12Z"
+    },
+    {
+      "task": "sequenta-attributes::codegenVolatile",
+      "from": "work",
+      "to": "test",
+      "worker": null,
+      "at": "2026-09-23T18:16:12Z"
+    },
+    {
+      "task": "sequenta-attributes::codegenVolatile",
+      "status": "done",
+      "worker": null,
+      "at": "2026-09-23T18:16:12Z",
+      "cmd": "/bin/bash -lc \"cd /home/diogo/Zith && cmake --build build -j4 --target zithc 2>&1 | tail -8\""
+    },
+    {
+      "task": "sequenta-attributes::formatAttributes",
+      "from": "planned",
+      "to": "stub",
+      "worker": null,
+      "at": "2026-09-23T18:16:20Z"
+    },
+    {
+      "task": "sequenta-attributes::formatAttributes",
+      "from": "stub",
+      "to": "work",
+      "worker": null,
+      "at": "2026-09-23T18:16:20Z"
+    },
+    {
+      "task": "sequenta-attributes::formatAttributes",
+      "from": "work",
+      "to": "test",
+      "worker": null,
+      "at": "2026-09-23T18:16:20Z"
+    },
+    {
+      "task": "sequenta-attributes::formatAttributes",
+      "from": "test",
+      "to": "error",
+      "worker": null,
+      "at": "2026-09-23T18:16:20Z"
+    },
+    {
+      "task": "sequenta-attributes::formatAttributes",
+      "from": "error",
+      "to": "work",
+      "worker": null,
+      "at": "2026-09-23T18:21:11Z"
+    },
+    {
+      "task": "sequenta-attributes::formatAttributes",
+      "from": "work",
+      "to": "test",
+      "worker": null,
+      "at": "2026-09-23T18:21:11Z"
+    },
+    {
+      "task": "sequenta-attributes::formatAttributes",
+      "status": "done",
+      "worker": null,
+      "at": "2026-09-23T18:21:11Z",
+      "cmd": "/bin/bash -lc \"cd /home/diogo/Zith && ./build/test-formatter\""
+    },
+    {
+      "task": "sequenta-attributes::addTests",
+      "from": "planned",
+      "to": "stub",
+      "worker": null,
+      "at": "2026-09-23T18:21:21Z"
+    },
+    {
+      "task": "sequenta-attributes::addTests",
+      "from": "stub",
+      "to": "work",
+      "worker": null,
+      "at": "2026-09-23T18:21:22Z"
+    },
+    {
+      "task": "sequenta-attributes::addTests",
+      "from": "work",
+      "to": "test",
+      "worker": null,
+      "at": "2026-09-23T18:23:56Z"
+    },
+    {
+      "task": "sequenta-attributes::addTests",
+      "status": "done",
+      "worker": null,
+      "at": "2026-09-23T18:23:56Z",
+      "cmd": "/bin/bash -lc \"cd /home/diogo/Zith && ./build/test-frontend && ./build/test-frontend-modern-pipeline && ./build/test-cache && ./build/test-zirl-sections && ./build/test-formatter\""
+    },
+    {
+      "task": "sequenta-attributes::updateDocs",
+      "from": "planned",
+      "to": "stub",
+      "worker": null,
+      "at": "2026-09-23T18:24:07Z"
+    },
+    {
+      "task": "sequenta-attributes::updateDocs",
+      "from": "stub",
+      "to": "work",
+      "worker": null,
+      "at": "2026-09-23T18:24:07Z"
+    },
+    {
+      "task": "sequenta-attributes::updateDocs",
+      "from": "work",
+      "to": "test",
+      "worker": null,
+      "at": "2026-09-23T18:24:42Z"
+    },
+    {
+      "task": "sequenta-attributes::updateDocs",
+      "status": "done",
+      "worker": null,
+      "at": "2026-09-23T18:24:42Z",
+      "cmd": "/bin/bash -lc \"cd /home/diogo/Zith && rg -q discardable docs/Zith--.md docs/Zith---implementation.md && rg -q volatile docs/Zith--.md docs/Zith---implementation.md && rg -q Atributos docs/Zith---implementation.md\""
+    },
+    {
+      "task": "sequenta-attributes::finalVerification",
+      "from": "planned",
+      "to": "stub",
+      "worker": null,
+      "at": "2026-09-23T18:24:52Z"
+    },
+    {
+      "task": "sequenta-attributes::finalVerification",
+      "from": "stub",
+      "to": "work",
+      "worker": null,
+      "at": "2026-09-23T18:24:52Z"
+    },
+    {
+      "task": "sequenta-attributes::finalVerification",
+      "from": "work",
+      "to": "test",
+      "worker": null,
+      "at": "2026-09-23T18:34:29Z"
+    },
+    {
+      "task": "sequenta-attributes::finalVerification",
+      "status": "done",
+      "worker": null,
+      "at": "2026-09-23T18:34:47Z",
+      "cmd": "/bin/bash -lc \"cd /home/diogo/Zith && cmake --build build -j4 2>&1 | tail -5 && ctest --test-dir build --output-on-failure 2>&1 | tail -20\""
+    }
+  ]
+}

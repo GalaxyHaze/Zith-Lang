@@ -391,6 +391,7 @@ private:
     /// when the field is not a method.
     TypeId inferMethodCall(const frontend::Expression &call, const frontend::Expression &callee);
     TypeId inferBlock(frontend::ExprId id);
+    [[nodiscard]] bool calleeIsDiscardable(frontend::ExprId call_id) const noexcept;
     /// Validates a `defer expr;` / `defer { ... }` statement: infers the body
     /// normally and rejects statements that would transfer control away from
     /// the deferred block.

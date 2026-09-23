@@ -594,7 +594,7 @@ void test_vm_v2_extern_putchar() {
     const auto source = root / "main.zith";
     {
         std::ofstream output(source, std::ios::binary | std::ios::trunc);
-        output << "extern fn putchar(c: char): i32\n"
+        output << "#[discardable] extern fn putchar(c: char): i32\n"
                   "\n"
                   "fn main(): i32 {\n"
                   "    _ = putchar('A');\n"
@@ -634,7 +634,7 @@ void test_vm_v2_extern_snprintf_subset() {
         std::ofstream output(source, std::ios::binary | std::ios::trunc);
         output << "extern fn malloc(size: u64): raw opaque\n"
                   "extern fn snprintf(buf: *char, size: u64, fmt: *char, value: u32): i32\n"
-                  "extern fn putchar(c: char): i32\n"
+                  "#[discardable] extern fn putchar(c: char): i32\n"
                   "\n"
                   "fn main(): i32 {\n"
                   "    var buf: *char = malloc(32) as *char;\n"

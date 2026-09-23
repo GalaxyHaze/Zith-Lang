@@ -129,6 +129,8 @@ llvm::Value *CodeGenEmit::emitExpr(hir::HirExprId id, const hir::HirModule &mod)
             [&](const hir::HirSlotStore &s) -> llvm::Value * {
                 if (s.slot >= slots_.size())
                     return nullptr;
+                const auto *slotAttrs = mod.attrs().trySlot(s.slot);
+                const bool volatileSlot = slotAttrs != nullptr && slotAttrs->volatileSlot;
                 const auto &val_expr       = mod.getExpr(s.value);
                 const auto *union_cast     = std::get_if<hir::HirUnionCast>(&val_expr);
                 llvm::Value *union_storage = nullptr;
@@ -177,13 +179,15 @@ llvm::Value *CodeGenEmit::emitExpr(hir::HirExprId id, const hir::HirModule &mod)
                     }
                     return val;
                 }
-                builder_.CreateStore(val, slots_[s.slot]);
+                builder_.CreateStore(val, slots_[s.slot], volatileSlot);
                 return val;
             },
             [&](const hir::HirSlotLoad &s) -> llvm::Value * {
                 if (s.slot >= slots_.size())
                     return nullptr;
-                return builder_.CreateLoad(typeGen_.lower(s.type), slots_[s.slot]);
+                const auto *slotAttrs = mod.attrs().trySlot(s.slot);
+                const bool volatileSlot = slotAttrs != nullptr && slotAttrs->volatileSlot;
+                return builder_.CreateLoad(typeGen_.lower(s.type), slots_[s.slot], volatileSlot);
             },
             [&](const hir::HirSlotAddr &s) -> llvm::Value * {
                 if (s.slot >= slots_.size())
