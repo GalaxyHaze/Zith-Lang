@@ -260,10 +260,12 @@ fn writeBuffer(msg: []char, newline: bool, values: [...]dyn Formatable): IoError
     return status;
 }
 
+#[discardable]
 pub fn print(msg: []char, values: [...]dyn Formatable): IoError {
     return writeBuffer(msg, false, values);
 }
 
+#[discardable]
 pub fn println(msg: []char, values: [...]dyn Formatable): IoError {
     return writeBuffer(msg, true, values);
 }
