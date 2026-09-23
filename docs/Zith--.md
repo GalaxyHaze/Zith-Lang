@@ -550,22 +550,19 @@ visíveis a partir do módulo onde a interface é avaliada e exige também metho
 compatíveis. Campos privados continuam disponíveis para satisfação quando o type e a interface
 vivem no mesmo ficheiro.
 
-Para `let`/`var`, um tipo é não-trivial quando não é primitivo escalar (`iN`/`uN`/`fN`, `bool`, `char`, `void`). Tipos não-triviais sem inicializador são rejeitados:
-
 Um binding local sem inicializador pode ser escrito antes da primeira escrita.
-nesta iteração, qualquer leitura normal antes dessa primeira escrita é rejeitada
+Nesta iteração, qualquer leitura normal antes dessa primeira escrita é rejeitada
 com `binding '<name>' is used before it is initialized`. A leitura fuga explícita
 é `raw <name>`: preserva o tipo do binding e assume responsabilidade pelo valor
 lido, sem alterar layout não inicializado.
 
 ```zith
-// Rejeitados:
+// Aceites, desde que uma escrita ocorra antes de qualquer leitura normal:
 let p: *i32;
 var s: []i32;
 let o: ?i32;
 var st: Point;
 
-// Aceites em locais:
 var n: i32;
 let ready: bool;
 ```
@@ -676,7 +673,6 @@ O cache continua separado por target, porque `CacheKey` já inclui
 | Escrita de campo/arrow/index por raiz `let`/`const` | imutabilidade propaga a compósitos | `E2010` |
 | Atribuição a campo `const` | storage const | `E2010` |
 | `const` sem inicializador | constante precisa de valor | `E2010` |
-| `let`/`var` não-triviais sem inicializador | evita valor não inicializado | `E2010` |
 | Discriminante de enum não constante | variante precisa de valor constante inteiro | `E3001` |
 | `!` prefixo | negação usa `not`; `!` fica reservado a postfix | parse error |
 | `break label;`/`continue label;` sem label ativo | alvo inexistente ou ambíguo | `E2010` |

@@ -130,8 +130,6 @@ void PerModuleSema::checkZithDeclarations() {
         TypeId declared = typeOfDecl(decl.id);
         if (!declared)
             declared = error_type;
-        const TypeId stripped = type_table.stripQualifiers(declared);
-        const TypeKind kind   = stripped ? type_table.kindOf(stripped) : TypeKind::Error;
         if (decl.bindingKind == frontend::BindingKind::Const) {
             if (!decl.initializer) {
                 report(decl.span, "Zith--: const declaration requires an initializer",
@@ -141,11 +139,6 @@ void PerModuleSema::checkZithDeclarations() {
                        "Zith--: const initializer must be a constant expression",
                        diagnostics::err::UnsupportedSyntax);
             }
-        } else if (decl.declaredType && kind != TypeKind::Integer && kind != TypeKind::Float &&
-                   kind != TypeKind::Bool && kind != TypeKind::Char && kind != TypeKind::Void &&
-                   !decl.initializer) {
-            report(decl.span, "Zith--: non-trivial let/var declaration requires an initializer",
-                   diagnostics::err::UnsupportedSyntax);
         }
     }
 
@@ -179,22 +172,6 @@ void PerModuleSema::checkZithDeclarations() {
             report(binding.span, "binding requires a type annotation or an initializer",
                    diagnostics::err::CannotInfer);
             continue;
-        }
-        const TypeId stripped = type_table.stripQualifiers(local_type);
-        const TypeKind kind   = stripped ? type_table.kindOf(stripped) : TypeKind::Error;
-        const bool non_trivial =
-            kind == TypeKind::Pointer || kind == TypeKind::Array || kind == TypeKind::Slice ||
-            kind == TypeKind::Optional || kind == TypeKind::Struct || kind == TypeKind::Union ||
-            kind == TypeKind::Enum || kind == TypeKind::String || kind == TypeKind::GenericParam ||
-            kind == TypeKind::Incomplete || kind == TypeKind::Nominal || kind == TypeKind::Alias ||
-            kind == TypeKind::Function || kind == TypeKind::Failable || kind == TypeKind::Pack ||
-            kind == TypeKind::Trait || kind == TypeKind::Sum || kind == TypeKind::TypeVar;
-        if (!binding.initializer && !is_for_in_binding &&
-            (binding.bindingKind == frontend::BindingKind::Let ||
-             binding.bindingKind == frontend::BindingKind::Var) &&
-            non_trivial) {
-            report(binding.span, "Zith--: non-trivial let/var binding requires an initializer",
-                   diagnostics::err::UnsupportedSyntax);
         }
     }
 }

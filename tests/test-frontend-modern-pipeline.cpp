@@ -208,6 +208,73 @@ void test_untyped_uninitialized_binding_is_rejected() {
     CHECK(saw_cannot_infer, "untyped uninitialized binding reports CannotInfer");
 }
 
+void test_typed_uninitialized_binding_with_later_assignment_lowers() {
+    Workspace workspace;
+    workspace.write("main.zith", "struct Foo {\n"
+                                 "    x: i32\n"
+                                 "}\n"
+                                 "fn main() {\n"
+                                 "    let value: Foo;\n"
+                                 "    value = Foo { x: 1 };\n"
+                                 "}\n");
+
+    memory::Arena arena;
+    Options options(arena);
+    options.targetStage = session::Stage::HirLowered;
+
+    session::CompilationSession session(options, (workspace.root / "main.zith").string());
+    session.setBuffered(true);
+    CHECK(session.runTo(session::Stage::HirLowered),
+          "typed binding without an initializer lowers when assigned before use");
+}
+
+void test_typed_uninitialized_unused_binding_lowers() {
+    Workspace workspace;
+    workspace.write("main.zith", "struct Foo {\n"
+                                 "    x: i32\n"
+                                 "}\n"
+                                 "fn main() {\n"
+                                 "    let value: Foo;\n"
+                                 "}\n");
+
+    memory::Arena arena;
+    Options options(arena);
+    options.targetStage = session::Stage::HirLowered;
+
+    session::CompilationSession session(options, (workspace.root / "main.zith").string());
+    session.setBuffered(true);
+    CHECK(session.runTo(session::Stage::HirLowered),
+          "typed binding without an initializer is legal when it is never read");
+}
+
+void test_typed_uninitialized_binding_use_before_assignment_fails() {
+    Workspace workspace;
+    workspace.write("bad.zith", "struct Foo {\n"
+                                "    x: i32\n"
+                                "}\n"
+                                "fn main() {\n"
+                                "    let value: Foo;\n"
+                                "    _ = value;\n"
+                                "}\n");
+
+    memory::Arena arena;
+    Options options(arena);
+    options.targetStage = session::Stage::HirLowered;
+
+    session::CompilationSession session(options, (workspace.root / "bad.zith").string());
+    session.setBuffered(true);
+    CHECK(!session.runTo(session::Stage::HirLowered),
+          "typed binding read before assignment fails sema");
+
+    bool saw_use_before_initialized = false;
+    for (const auto &diagnostic : session.diags().all()) {
+        if (diagnostic.message.find("used before it is initialized") != std::string::npos)
+            saw_use_before_initialized = true;
+    }
+    CHECK(saw_use_before_initialized,
+          "typed binding read before assignment reports the initialization error");
+}
+
 void test_void_function_rejects_value_tail() {
     Workspace workspace;
     workspace.write("bad.zith", "fn foo() {\n"
@@ -1028,6 +1095,9 @@ static void test_frontend_modern_pipeline() {
     test_pipeline_discard_non_void_call_result();
     test_imported_console_void_main_discard_regression();
     test_untyped_uninitialized_binding_is_rejected();
+    test_typed_uninitialized_binding_with_later_assignment_lowers();
+    test_typed_uninitialized_unused_binding_lowers();
+    test_typed_uninitialized_binding_use_before_assignment_fails();
     test_void_function_rejects_value_tail();
     test_pipeline_multifile_module_dependency();
     test_pipeline_export_platform_import();
