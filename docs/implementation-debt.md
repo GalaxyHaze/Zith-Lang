@@ -283,8 +283,77 @@ exportado; `lookupModuleAliasForPath` escolhe o alias mais longo cujo
 resolvem para os módulos reais de cada export. O teste de frontend e o
 lowering até HIR cobrem o fanout em estados limpos e cached.
 
-Ficou resolvida a dívida original desta secção; não há limitação conhecida no
-modelo para prefixos totalmente qualificados.
+Ficou resolvida a dívida original de fanout com prefixo partilhado, mas a
+revisão CLI encontrou os dois limites seguintes no mesmo caminho de `export
+path`.
+
+### 11a. `export path` não expõe tipos qualificados via facade `std/memory`
+
+O re-export de símbolos funciona para funções, aliases de módulo e structs
+numa facade local, mas falha quando o consumidor importa `std/memory` e tenta
+referenciar um tipo pelo caminho qualificado da facade:
+
+```zith
+import std/memory
+
+fn main(): i32 {
+    let a: ?std.memory.allocators.heap.HeapAllocator = null;
+    if (a is null) {
+        return 0;
+    }
+    return 1;
+}
+```
+
+O compilador reporta:
+
+```text
+error[E2001]: qualified type 'std.memory.allocators.heap.HeapAllocator' names no public type in its module
+```
+
+O mesmo caminho direto sem a facade funciona:
+
+```zith
+import std/memory/allocators/heap
+let a: ?std.memory.allocators.heap.HeapAllocator = null;
+```
+
+Este é um caso de `export path` re-exportando dependências, não apenas um
+problema de módulos com hífen. O resolver cria os `ModuleAlias` corretos para o
+path qualificado, mas `lowerBareTypeExpr` ainda procura o tipo no módulo do
+alias usando apenas `lookupNamed`, sem aplicar o mesmo caminho de resolução de
+tipos importados usado para módulos diretos.
+
+Ação futura: fazer `lowerBareTypeExpr` resolver `std.memory.*` através do alvo
+do `ModuleAlias` e adicionar um teste de pipeline com `import std/memory` e
+`std.memory.allocators.heap.HeapAllocator`.
+
+### 11b. `export path` e path com segmento kebab-case em tipos qualificados
+
+Reprodutor com o caminho documentado para o módulo real:
+
+```zith
+import std/memory
+let a: ?std.memory.in-place.InPlace = null;
+```
+
+O parser interpreta o `-` do path qualificado como operador:
+
+```text
+error[E2001]: qualified type 'std.memory.in' names no public type in its module
+error[E2001]: unknown identifier 'place'
+```
+
+Na importação (`import std/memory/in-place`) o hífen é tratado como parte do
+segmento pelo parser de import/s, mas o mesmo tratamento não existe em
+`TypeExpression.segments` quando o caminho é escrito no código. Isto impede o
+uso qualificado canónico de `std.memory.in-place.InPlace` documentado em
+`memory/stdlib-allocator-ownership.md` e `docs/implementation-debt.md` secção
+11.
+
+Ação futura: normalizar os segmentos de `TypeExpression` para aceitar path
+com segmento kebab-case no corpo do código, ou decidir uma alternativa
+canónica (`in_place`) e atualizar todas as referências de docs/tests.
 
 ### 12. Receivers `dyn`/`lend` mutáveis para sinks
 
