@@ -355,10 +355,20 @@ auto lowerOperand(LowerState &state, hir::HirExprId id) -> std::uint16_t {
                     op = Op::Ge;
                     break;
                 case hir::HirBinaryOp::And:
+                    op = Op::BitAnd;
+                    break;
                 case hir::HirBinaryOp::Or:
+                    op = Op::BitOr;
+                    break;
                 case hir::HirBinaryOp::Xor:
+                    op = Op::BitXor;
+                    break;
                 case hir::HirBinaryOp::Shl:
+                    op = Op::Shl;
+                    break;
                 case hir::HirBinaryOp::Shr:
+                    op = Op::Shr;
+                    break;
                 case hir::HirBinaryOp::Invalid:
                     op = Op::Trap;
                     break;
@@ -381,6 +391,8 @@ auto lowerOperand(LowerState &state, hir::HirExprId id) -> std::uint16_t {
                     op = Op::Neg;
                 else if (un.op == hir::HirUnaryOp::Not)
                     op = Op::Not;
+                else if (un.op == hir::HirUnaryOp::BitNot)
+                    op = Op::BitNot;
                 if (op == Op::Trap) {
                     state.result->ok      = false;
                     state.result->message = "unsupported HIR unary operator in v2 lowering";

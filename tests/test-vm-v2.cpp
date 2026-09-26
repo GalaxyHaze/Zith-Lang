@@ -826,6 +826,46 @@ void test_vm_v2_hello_stdlib_import_print() {
 }
 #endif // ZITH_ENABLE_C_INTEROP
 
+void test_vm_v2_bitwise_and_shifts() {
+    const auto root = std::filesystem::temp_directory_path() / "zith-vm-v2-bitwise-tests";
+    std::filesystem::remove_all(root);
+    std::filesystem::create_directories(root);
+
+    const auto source = root / "main.zith";
+    {
+        std::ofstream output(source, std::ios::binary | std::ios::trunc);
+        output << "fn main(): i32 {\n"
+                  "    let a = 5 &. 3;\n"     // 1
+                  "    let b = 4 |. 2;\n"     // 6
+                  "    let c = 7 ^. 3;\n"     // 4
+                  "    let d = 1 << 3;\n"    // 8
+                  "    let e = 16 >> 2;\n"   // 4
+                  "    let f = ~0 &. 15;\n"    // 15
+                  "    a + b + c + d + e + f\n" // 1 + 6 + 4 + 8 + 4 + 15 = 38
+                  "}\n";
+    }
+
+    memory::Arena arena;
+    Options options(arena);
+    options.targetStage = session::Stage::HirLowered;
+
+    session::CompilationSession session(options, source.string());
+    session.setBuffered(true);
+    CHECK(session.runTo(session::Stage::HirLowered),
+          "bitwise source lowers through the modern pipeline");
+
+    memory::Arena vmArena;
+    vm::Module module(vmArena);
+    const auto lowered = vm::lowerModule(session.hirModule(), session.interner(), session.types(),
+                                         vmArena, module);
+    CHECK(lowered.ok, "HIR with bitwise operators lowers into v2");
+
+    vm::Vm vm;
+    const auto result = vm.runMain(module);
+    CHECK(result.status == vm::RunStatus::Ok, "v2 VM runs bitwise and shift operators");
+    CHECK_EQ(result.exitCode, 38, "v2 VM computes correct bitwise result");
+}
+
 void test_vm_v2() {
     test_vm_v2_malloc_string();
     test_vm_v2_linear_memory_trap();
@@ -857,6 +897,7 @@ void test_vm_v2() {
     test_vm_v2_extern_putchar();
     test_vm_v2_extern_snprintf_subset();
     test_vm_v2_call_range_multi_args();
+    test_vm_v2_bitwise_and_shifts();
 }
 
 } // namespace

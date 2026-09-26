@@ -134,7 +134,8 @@ fn main(): i32 {
 `;
 
 const unsupportedSource = `fn main() {
-    _ = 1 << 1;
+    let x = 10;
+    _ = *(&x);
 }
 `;
 
@@ -182,8 +183,21 @@ fn main(): i32 {
   const unsupportedHir = compileSource(unsupportedSource);
   const unsupportedStatus = runHir(unsupportedHir);
   assertEqual(unsupportedStatus, 5, "unsupported construct returns 5");
-  assertEqual(stderrChunks.join(""), "unsupported HIR binary operator in v2 lowering\n",
+  assertEqual(stderrChunks.join(""), "unsupported HIR unary operator in v2 lowering\n",
               "unsupported message is reported");
+
+  stdoutChunks.length = 0;
+  stderrChunks.length = 0;
+  const bitwiseSource = writeString(`fn main(): i32 {
+    let a = 5 &. 3;
+    let b = 1 << 3;
+    let c = 16 >> 2;
+    a + b + c
+}
+`);
+  assertEqual(instance.exports.zith_run_source(bitwiseSource.ptr, bitwiseSource.len), 0,
+              "bitwise operations execute through WASM VM v2");
+  assertEqual(instance.exports.zith_exit_code(), 13n, "bitwise operations exit code (1+8+4=13)");
 
   stdoutChunks.length = 0;
   stderrChunks.length = 0;

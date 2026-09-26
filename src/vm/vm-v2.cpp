@@ -136,8 +136,14 @@ auto validateFunctionShape(const Function &fn) -> bool {
         case Op::Mul:
         case Op::Div:
         case Op::Rem:
+        case Op::BitAnd:
+        case Op::BitOr:
+        case Op::BitXor:
+        case Op::Shl:
+        case Op::Shr:
         case Op::Neg:
         case Op::Not:
+        case Op::BitNot:
         case Op::Eq:
         case Op::Ne:
         case Op::Lt:
@@ -327,7 +333,12 @@ auto runFunction(RunState &state, const Function &fn, std::vector<int64_t> &regs
         case Op::Sub:
         case Op::Mul:
         case Op::Div:
-        case Op::Rem: {
+        case Op::Rem:
+        case Op::BitAnd:
+        case Op::BitOr:
+        case Op::BitXor:
+        case Op::Shl:
+        case Op::Shr: {
             const int64_t left  = getReg(regs, lhs);
             const int64_t right = getReg(regs, rhs);
             int64_t result      = 0;
@@ -339,8 +350,18 @@ auto runFunction(RunState &state, const Function &fn, std::vector<int64_t> &regs
                 result = left + right;
             } else if (instr.op == Op::Sub) {
                 result = left - right;
-            } else {
+            } else if (instr.op == Op::Mul) {
                 result = left * right;
+            } else if (instr.op == Op::BitAnd) {
+                result = left & right;
+            } else if (instr.op == Op::BitOr) {
+                result = left | right;
+            } else if (instr.op == Op::BitXor) {
+                result = left ^ right;
+            } else if (instr.op == Op::Shl) {
+                result = left << (right & 63);
+            } else {
+                result = left >> (right & 63);
             }
             if (!setReg(regs, dst, result))
                 return {false, 0};
@@ -354,6 +375,11 @@ auto runFunction(RunState &state, const Function &fn, std::vector<int64_t> &regs
             break;
         case Op::Not:
             if (!setReg(regs, dst, getReg(regs, lhs) == 0 ? 1 : 0))
+                return {false, 0};
+            pc++;
+            break;
+        case Op::BitNot:
+            if (!setReg(regs, dst, ~getReg(regs, lhs)))
                 return {false, 0};
             pc++;
             break;

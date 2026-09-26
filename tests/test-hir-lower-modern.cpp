@@ -2810,7 +2810,7 @@ void test_imported_bare_opaque_cross_module() {
                                      "fn check(v: opaque): bool { v is i32 }\n"
                                      "fn main(): ?i32 {\n"
                                      "    let o = dep_make();\n"
-                                     "    if (check(o)) { consume(o) } else { null }\n"
+                                     "    if (check(o)) { return consume(o); } else { return null; }\n"
                                      "}\n");
 
     memory::Arena arena;
