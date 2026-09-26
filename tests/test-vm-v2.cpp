@@ -448,6 +448,37 @@ void test_vm_v2_ffi_malloc_free_reuse() {
     CHECK_EQ(result.exitCode, 0, "free reuses the same heap slot");
 }
 
+void test_vm_v2_ffi_realloc_preserves_data() {
+    memory::Arena arena;
+    vm::Module module(arena);
+
+    module.externs.push(std::string_view("malloc"));
+    module.externs.push(std::string_view("realloc"));
+    module.externs.push(std::string_view("free"));
+
+    auto &main      = module.functions.emplace(arena);
+    main.name       = "main";
+    main.paramCount = 0;
+    main.returnType = vm::ValueType::I32;
+    main.regCount   = 8;
+    main.body.push(vm::Instr::withImm(vm::Op::LoadConstI64, 0, 8));
+    main.body.push(vm::Instr::callExtern(vm::Op::CallExtern, 1, 0, 0, 0));
+    main.body.push(vm::Instr::callExtern(vm::Op::CallExtern, 2, 0, 0, 0));
+    main.body.push(vm::Instr::callExtern(vm::Op::CallExtern, 3, 2, 0, 2));
+    main.body.push(vm::Instr::withImm(vm::Op::LoadConstI64, 4, 42));
+    main.body.push(vm::Instr::simple(vm::Op::StoreI64, 1, 4));
+    main.body.push(vm::Instr::withImm(vm::Op::LoadConstI64, 5, 16));
+    main.body.push(vm::Instr::callExtern(vm::Op::CallExtern, 6, 1, 5, 1));
+    main.body.push(vm::Instr::simple(vm::Op::LoadI64, 7, 6));
+    main.body.push(vm::Instr::callExtern(vm::Op::CallExtern, 3, 6, 0, 2));
+    main.body.push(vm::Instr{vm::Op::Ret, 7, 0, 0, 0});
+
+    vm::Vm vm;
+    const auto result = vm.runMain(module);
+    CHECK(result.status == vm::RunStatus::Ok, "realloc FFI succeeds");
+    CHECK_EQ(result.exitCode, 42, "realloc preserves data and reuses the freed block");
+}
+
 void test_vm_v2_ffi_putchar_unknown_trap() {
     memory::Arena arena;
     vm::Module module(arena);
@@ -1007,6 +1038,7 @@ void test_vm_v2() {
     test_vm_v2_slice_pair();
     test_vm_v2_mem_copy_bytes();
     test_vm_v2_ffi_malloc_free_reuse();
+    test_vm_v2_ffi_realloc_preserves_data();
     test_vm_v2_ffi_putchar_unknown_trap();
     test_vm_v2_ffi_memcpy_and_strlen();
     test_vm_v2_ffi_snprintf();

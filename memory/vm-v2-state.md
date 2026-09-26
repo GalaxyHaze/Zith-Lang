@@ -23,9 +23,10 @@ The first end-to-end slice covers the two Hello World paths:
 - `from std/io/console` then `println(...)`.
 - Manual `extern fn putchar/printf`/standard `stdio.h` usage.
 
-The VM FFI subset must cover at least `malloc`, `free`, `putchar`, and the
-`snprintf` formats the stdlib actually uses (`%u`, `%d`, `%g`). A later slice
-can add `realloc`, `memcpy`, `strlen`, and `printf` variadic surface.
+The VM FFI subset covers `malloc`, `free`, `putchar`, the `snprintf` formats
+the stdlib actually uses (`%u`, `%d`, `%g`), `realloc`, `memcpy`, `strlen`, and
+the `printf` variadic surface. `realloc` preserves the live allocation
+contents and uses the allocator's explicit allocated/free block tracking.
 
 Useful quick checks:
 

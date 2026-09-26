@@ -32,14 +32,19 @@ public:
 
     [[nodiscard]] auto allocBytes(std::size_t count, std::size_t alignment) -> std::size_t;
     [[nodiscard]] auto mallocBytes(std::size_t count, std::size_t alignment) -> std::size_t;
+    [[nodiscard]] auto reallocBytes(std::size_t offset, std::size_t count,
+                                    std::size_t alignment) -> std::size_t;
     auto freeBytes(std::size_t offset) -> bool;
     auto writeString(std::size_t offset, std::string_view text) -> bool;
 
 private:
+    auto coalesceFreeBlocks() -> void;
+
     std::vector<uint8_t> bytes_;
     std::size_t bump_ = 0;
     std::size_t heap_ = 0;
     std::vector<std::pair<std::size_t, std::size_t>> freeBlocks_;
+    std::vector<std::pair<std::size_t, std::size_t>> allocatedBlocks_;
 };
 
 } // namespace zith::vm

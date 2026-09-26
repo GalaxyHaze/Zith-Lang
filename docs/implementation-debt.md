@@ -158,6 +158,10 @@ O ficheiro `impl-status.md` foi atualizado de `Cache | Partial` para
 - Formatter reimprime `for (cond)` como `while` (`ExprKind::While` no
   round-trip).
 - `..` é lexado caractere a caractere.
+- `realloc` no runtime VM v2/WASM foi resolvido: o allocator separa blocos
+  alocados de blocos livres, preserva dados ao crescer/mover, suporta shrink e
+  trata o offset zero como endereço válido. A cobertura está em
+  `test-vm-v2` e no harness WASM.
 
 Estas entradas detalham o estado real e as referências de bloqueio. A secção
 `Known Debt` de [impl-status.md](/home/diogo/Zith/docs/impl-status.md) foi

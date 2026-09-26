@@ -263,6 +263,24 @@ fn main() {
   assertEqual(stdoutChunks.join(""), "Hello World!",
               "WASM variadic printf writes the complete message");
 
+  stdoutChunks.length = 0;
+  stderrChunks.length = 0;
+  const reallocSource = writeString(`extern fn malloc(size: u64): *char
+extern fn realloc(ptr: *char, size: u64): *char
+extern fn free(ptr: *char)
+
+fn main(): i32 {
+    var ptr: *char = malloc(8);
+    ptr = realloc(ptr, 16);
+    free(ptr);
+    0
+}
+`);
+  assertEqual(instance.exports.zith_run_source(reallocSource.ptr, reallocSource.len), 0,
+              "realloc executes through the playground WASM ABI");
+  assertEqual(instance.exports.zith_exit_code(), 0n,
+              "realloc program returns successfully in WASM");
+
   const outOfBoundsText = `fn main(): i32 {
     let values: [2]i32 = [10, 20];
     let index: i32 = 2;

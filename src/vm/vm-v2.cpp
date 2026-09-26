@@ -572,8 +572,10 @@ auto runFunction(RunState &state, const Function &fn, std::vector<int64_t> &regs
                 result = static_cast<int64_t>(
                     state.memory->mallocBytes(static_cast<std::size_t>(arg0), 1));
             } else if (name == "free") {
-                if (arg0 != 0)
-                    state.memory->freeBytes(static_cast<std::size_t>(arg0));
+                state.memory->freeBytes(static_cast<std::size_t>(arg0));
+            } else if (name == "realloc") {
+                result = static_cast<int64_t>(state.memory->reallocBytes(
+                    static_cast<std::size_t>(arg0), static_cast<std::size_t>(arg1), 1));
             } else if (name == "snprintf") {
                 const std::string_view text = state.memory->cstring(static_cast<std::size_t>(arg2));
                 if (text.empty())

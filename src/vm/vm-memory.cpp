@@ -98,7 +98,11 @@ auto LinearMemory::mallocBytes(std::size_t count, std::size_t alignment) -> std:
     for (std::size_t i = 0; i < freeBlocks_.size(); ++i) {
         if (freeBlocks_[i].second >= count) {
             const std::size_t offset = freeBlocks_[i].first;
+            const std::size_t available = freeBlocks_[i].second;
             freeBlocks_.erase(freeBlocks_.begin() + static_cast<std::ptrdiff_t>(i));
+            if (available > count)
+                freeBlocks_.push_back({offset + count, available - count});
+            allocatedBlocks_.push_back({offset, count});
             return offset;
         }
     }
@@ -115,20 +119,79 @@ auto LinearMemory::mallocBytes(std::size_t count, std::size_t alignment) -> std:
         return std::numeric_limits<std::size_t>::max();
 
     heap_ = end;
-    freeBlocks_.push_back({aligned, count});
+    allocatedBlocks_.push_back({aligned, count});
     return aligned;
 }
 
-auto LinearMemory::freeBytes(std::size_t offset) -> bool {
-    for (std::size_t i = 0; i < freeBlocks_.size(); ++i) {
-        if (freeBlocks_[i].first == offset) {
-            if (offset < heap_)
-                heap_ = offset;
-            freeBlocks_.erase(freeBlocks_.begin() + static_cast<std::ptrdiff_t>(i));
-            return true;
+auto LinearMemory::reallocBytes(std::size_t offset, std::size_t count, std::size_t alignment)
+    -> std::size_t {
+    for (std::size_t i = 0; i < allocatedBlocks_.size(); ++i) {
+        if (allocatedBlocks_[i].first != offset)
+            continue;
+        const std::size_t oldCount = allocatedBlocks_[i].second;
+        if (count == 0) {
+            (void)freeBytes(offset);
+            return 0;
         }
+        if (count <= oldCount) {
+            if (count < oldCount)
+                freeBlocks_.push_back({offset + count, oldCount - count});
+            allocatedBlocks_[i].second = count;
+            coalesceFreeBlocks();
+            return offset;
+        }
+
+        const std::size_t extra = count - oldCount;
+        for (std::size_t freeIndex = 0; freeIndex < freeBlocks_.size(); ++freeIndex) {
+            const auto [freeOffset, freeCount] = freeBlocks_[freeIndex];
+            if (freeOffset != offset + oldCount || freeCount < extra)
+                continue;
+            freeBlocks_.erase(freeBlocks_.begin() + static_cast<std::ptrdiff_t>(freeIndex));
+            if (freeCount > extra)
+                freeBlocks_.push_back({freeOffset + extra, freeCount - extra});
+            allocatedBlocks_[i].second = count;
+            return offset;
+        }
+
+        const std::size_t replacement = mallocBytes(count, alignment);
+        if (replacement == std::numeric_limits<std::size_t>::max())
+            return replacement;
+        if (!copy(replacement, offset, oldCount)) {
+            (void)freeBytes(replacement);
+            return std::numeric_limits<std::size_t>::max();
+        }
+        (void)freeBytes(offset);
+        return replacement;
+    }
+    if (offset == 0)
+        return count == 0 ? 0 : mallocBytes(count, alignment);
+    return std::numeric_limits<std::size_t>::max();
+}
+
+auto LinearMemory::freeBytes(std::size_t offset) -> bool {
+    for (std::size_t i = 0; i < allocatedBlocks_.size(); ++i) {
+        if (allocatedBlocks_[i].first != offset)
+            continue;
+        freeBlocks_.push_back(allocatedBlocks_[i]);
+        allocatedBlocks_.erase(allocatedBlocks_.begin() + static_cast<std::ptrdiff_t>(i));
+        coalesceFreeBlocks();
+        return true;
     }
     return false;
+}
+
+auto LinearMemory::coalesceFreeBlocks() -> void {
+    std::sort(freeBlocks_.begin(), freeBlocks_.end());
+    std::vector<std::pair<std::size_t, std::size_t>> merged;
+    merged.reserve(freeBlocks_.size());
+    for (const auto block : freeBlocks_) {
+        if (!merged.empty() && merged.back().first + merged.back().second == block.first) {
+            merged.back().second += block.second;
+        } else {
+            merged.push_back(block);
+        }
+    }
+    freeBlocks_ = std::move(merged);
 }
 
 auto LinearMemory::writeString(std::size_t offset, std::string_view text) -> bool {

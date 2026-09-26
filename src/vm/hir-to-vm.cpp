@@ -288,8 +288,8 @@ auto lowerCall(LowerState &state, const hir::HirCall &call) -> std::uint16_t {
         }
         if (name == "main" || hirFn.blocks.empty() || hirFn.decl_id == ast::kInvalidDecl) {
             if (name == "puts" || name == "putchar" || name == "malloc" || name == "free" ||
-                name == "printf" || name == "snprintf" || name == "strlen" ||
-                name == "memcpy") {
+                name == "realloc" || name == "printf" || name == "snprintf" ||
+                name == "strlen" || name == "memcpy") {
                 if ((name == "printf" || name == "snprintf") && hirFn.isVariadic) {
                     const std::size_t fixedCount = name == "printf" ? 1U : 3U;
                     if (call.args.size() < fixedCount) {
