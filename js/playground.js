@@ -60,13 +60,20 @@ function buildImportObject(module, instanceRef, writeOutput) {
         writeOutput(decoder.decode(bytes), stream === 2 ? "terminal-error" : "terminal-ok");
     };
 
-    const syscallStubs = {
-        __syscall_getcwd: () => -1,
-        __syscall_readlinkat: () => -1,
-        __syscall_unlinkat: () => -1,
-        __syscall_rmdir: () => -1
-    };
+    const syscallNames = new Set(
+        imports
+            .filter(entry => entry.module === "env" && entry.kind === "function")
+            .map(entry => entry.name)
+    );
+    const syscallStubs = Object.fromEntries(
+        [...syscallNames].map(name => [name, () => -1])
+    );
 
+    const wasiStubNames = new Set(
+        imports
+            .filter(entry => entry.module === "wasi_snapshot_preview1" && entry.kind === "function")
+            .map(entry => entry.name)
+    );
     const wasiStubs = {
         clock_time_get: (clockId, precision, timePointer) => {
             if (!instanceRef.instance) return 8;
@@ -112,6 +119,9 @@ function buildImportObject(module, instanceRef, writeOutput) {
         random_get: () => 8,
         proc_exit: () => { throw new Error("WebAssembly compiler exited."); }
     };
+    for (const name of wasiStubNames) {
+        if (name !== "clock_time_get" && name !== "fd_write") wasiStubs[name] = () => 8;
+    }
 
     if (usedModules.has("zith")) importObject.zith = { host_write: hostWrite };
     if (usedModules.has("wasi_snapshot_preview1")) importObject.wasi_snapshot_preview1 = wasiStubs;
