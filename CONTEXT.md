@@ -197,9 +197,34 @@ An owned, single-consumer value satisfying the `Thread<T>` protocol. `merge` con
 _Avoid_: ForkHandle, task, future
 
 **Playground runtime**:
-The single WASM module export (`zith_run_hir`/run path) that executes programs in the
-browser by invoking the interpreter over the module compiled by the same artifact.
-_Avoid_: separate VM module, compiler-only WASM, playground backend
+The browser-facing WASM module that checks Zith source, prepares HIR, and
+executes it through the VM v2 IR with the same language and standard-library
+surface as the native portable runtime. `run` is an execution operation;
+`build` prepares compiler artifacts for later cache reuse.
+_Avoid_: separate VM module, compiler-only WASM, HIR interpreter playground
+
+**Stdlib pack**:
+A versioned distribution artifact generated from the canonical `stdlib/` tree
+for a target such as the browser WASM playground. It carries the standard
+library sources and compatibility metadata; it is not a second hand-maintained
+standard library.
+_Avoid_: embedded stdlib copy, browser-only stdlib, virtual stdlib fork
+
+**WASM HIR flat**:
+The versioned, stateless binary representation of the lowered `HirModule`
+produced by `zith_emit_hir`. It is self-contained: strings, types, functions,
+and expressions can be reconstructed without the original source or compiler
+session. Its layout is intentionally compatible with a future artifact cache
+so cached HIR can be reused without a new lowering pass.
+_Avoid_: ZIRL blob, cache bytecode, source snapshot, textual HIR dump
+
+**WASM execution ABI**:
+The exported contract with status codes `0` ok, `1` compile fail, `2` invalid
+parameter, `3` runtime trap, `4` out of memory, and `5` unsupported construct,
+including the high-level `zith_run_source` operation that compiles and
+executes. `zith_emit_hir` and `zith_execute_hir` remain separate operations
+for later cache integration.
+_Avoid_: compile-once-run-once ABI, playground status enum, compiler diagnostics
 
 **Host runtime error**:
 The separate runtime failure channel for program execution (extern missing, panic,
@@ -362,6 +387,26 @@ _Avoid_: memory map, address checker, allocator runtime
 **NRA**:
 Node Resource Analysis, the ZPK sub-system that proves ownership, lifetime, borrow and escape facts for resources.
 _Avoid_: borrow checker, ownership checker
+
+**AggregateNode**:
+The NRA resource graph node for a whole value that owns or tracks storage. It is a container of per-field nodes and owns the aggregate-level move, borrow and escape edges; individual fields appear as child nodes only when they carry ownership-relevant metadata.
+_Avoid_: bigNode, large node, container node
+
+**FieldNode**:
+An NRA resource graph child node created only for a field with ownership significance (`lend`, `view`, `own`, `belong`, pointer or resource type). A plain scalar field does not become a node.
+_Avoid_: field record, member node, smallNode
+
+**Resource identity**:
+The stable NRA identity of a resource, independent of the binding/symbol that currently names it. Moving `q = p` rebinds the name `q` to the existing resource node and leaves `p` dead; it does not copy or recreate the resource graph.
+_Avoid_: variable identity, symbol identity, value identity
+
+**Aggregate move**:
+Moving an entire aggregate requires every ownership-relevant FieldNode to be alive at the move point. The move itself only re-targets the symbol to the AggregateNode and marks the old symbol dead.
+_Avoid_: struct copy, container move, whole-value transfer
+
+**Partial field move**:
+Moving one field out of an aggregate consumes only that FieldNode and leaves sibling FieldNodes alive; a subsequent whole-aggregate move is then rejected until the consumed FieldNode is restored.
+_Avoid_: field extraction, partial copy, member move
 
 **Region**:
 A static MRA declaration of contiguous memory with a known or symbolic shape, used for hardware, arenas and scratch memory.
