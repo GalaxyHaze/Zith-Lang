@@ -141,23 +141,26 @@ auto lowerLiteral(LowerState &state, const hir::HirLiteral &lit) -> std::uint16_
 
 auto lowerStringSlicePointer(LowerState &state, const hir::HirMakeSlice &slice)
     -> std::uint16_t {
-    if (slice.is_pointer) {
-        const auto obj = lowerOperand(state, slice.object);
-        return obj;
-    }
-
     const auto &objExpr = state.hir.getExpr(slice.object);
     const auto *lit     = std::get_if<hir::HirLiteral>(&objExpr);
-    if (lit == nullptr || state.types.kindOf(lit->type) != types::TypeKind::Ptr)
-        return kUnassignedReg;
+    if (lit != nullptr) {
+        const auto text = state.interner.lookup(lit->str_val);
+        if (!text.empty()) {
+            const auto kind = state.types.kindOf(lit->type);
+            if (slice.is_pointer || kind == types::TypeKind::Ptr ||
+                kind == types::TypeKind::String) {
+                const auto index = findOrAddString(state.out, text, state.result);
+                const auto reg   = newReg(state, lit->type);
+                emit(state, Instr::withImm(Op::LoadString, reg, index));
+                return reg;
+            }
+        }
+    }
 
-    const auto text = state.interner.lookup(lit->str_val);
-    if (text.empty())
-        return kUnassignedReg;
-    const auto index = findOrAddString(state.out, text, state.result);
-    const auto reg   = newReg(state, lit->type);
-    emit(state, Instr::withImm(Op::LoadString, reg, index));
-    return reg;
+    if (slice.is_pointer)
+        return lowerOperand(state, slice.object);
+
+    return kUnassignedReg;
 }
 
 auto lowerCall(LowerState &state, const hir::HirCall &call) -> std::uint16_t {

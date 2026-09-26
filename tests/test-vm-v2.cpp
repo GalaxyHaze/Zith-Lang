@@ -2,6 +2,7 @@
 
 #include "cli/options.hpp"
 #include "session/compilation-session.hpp"
+#include "wasm/abi-hir.hpp"
 #include "vm/hir-to-vm.hpp"
 #include "vm/typed-ir.hpp"
 #include "vm/vm-v2.hpp"
@@ -542,6 +543,85 @@ void test_vm_v2_hello_stdlib_import_println() {
     CHECK_EQ(result.exitCode, 0, "v2 VM keeps the main exit code");
 }
 
+void test_vm_v2_hello_virtual_stdlib() {
+    const auto root = std::filesystem::temp_directory_path() / "zith-vm-v2-virtual-tests";
+    std::filesystem::remove_all(root);
+    std::filesystem::create_directories(root / "std" / "io");
+
+    const std::string_view console = R"(pub trait Formatable {
+    fn format(self, dest: lend FormatBuffer): IoError;
+}
+
+pub extern fn puts(msg: *char): i32
+
+pub enum IoError {
+    Ok = 0,
+}
+
+pub struct FormatBuffer {
+    data: ?*char = null,
+    capacity: u64 = 0,
+    length: u64 = 0,
+}
+
+#[discardable]
+pub fn println(msg: []char, values: [...]dyn Formatable): IoError {
+    if (@lengthOf(msg) > 0) {
+        _ = puts(@ptrOf(msg));
+    }
+    return IoError.Ok;
+}
+)";
+    {
+        std::ofstream output(root / "std" / "io" / "console.zith",
+                             std::ios::binary | std::ios::trunc);
+        output << console;
+    }
+    const auto source = root / "main.zith";
+    {
+        std::ofstream output(source, std::ios::binary | std::ios::trunc);
+        output << "from std/io/console\n"
+                  "\n"
+                  "fn main() {\n"
+                  "    _ = println(\"Hello, WASM!\");\n"
+                  "}\n";
+    }
+
+    memory::Arena arena;
+    Options options(arena);
+    options.includeDirs.push(root.string());
+    options.targetStage = session::Stage::HirLowered;
+
+    session::CompilationSession session(options, source.string());
+    session.setBuffered(true);
+    CHECK(session.runTo(session::Stage::HirLowered),
+          "virtual stdlib println source lowers through the modern pipeline");
+
+    const auto encoded = zith::wasm::encodeHir(session);
+    CHECK(encoded.ok, "virtual stdlib HIR encodes");
+    zith::wasm::DecodedHir decoded;
+    CHECK(encoded.ok && zith::wasm::decodeHir(encoded.blob.bytes, decoded),
+          "flat virtual stdlib HIR decodes");
+    CHECK_EQ(decoded.types.count(), session.types().count(), "flat HIR keeps type count");
+    CHECK_EQ(decoded.module.exprCount(), session.hirModule().exprCount(),
+             "flat HIR keeps expression count");
+
+    memory::Arena vmArena;
+    vm::Module module(vmArena);
+    const auto lowered = vm::lowerModule(decoded.module, decoded.interner, decoded.types, vmArena,
+                                         module);
+    CHECK(lowered.ok, "virtual stdlib HIR lowers into the v2 module");
+    if (!lowered.ok)
+        std::fprintf(stderr, "lower message: %s\n", lowered.message.c_str());
+    if (lowered.ok) {
+        vm::Vm vm;
+        const auto result = vm.runMain(module);
+        CHECK(result.status == vm::RunStatus::Ok, "v2 VM runs the virtual stdlib println program");
+        CHECK_EQ(result.output, std::string("Hello, WASM!\n"),
+                 "v2 VM prints through the virtual stdlib");
+    }
+}
+
 void test_vm_v2_functions_with_stdlib() {
     const auto root = std::filesystem::temp_directory_path() / "zith-vm-v2-tests";
     std::filesystem::remove_all(root);
@@ -690,6 +770,7 @@ void test_vm_v2() {
     test_vm_v2_ffi_snprintf();
 #ifdef ZITH_ENABLE_C_INTEROP
     test_vm_v2_hello_stdlib_import_println();
+    test_vm_v2_hello_virtual_stdlib();
     test_vm_v2_functions_with_stdlib();
 #endif // ZITH_ENABLE_C_INTEROP
     test_vm_v2_extern_putchar();

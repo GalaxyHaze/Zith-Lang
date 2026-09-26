@@ -197,7 +197,7 @@ void test_pipeline_unknown_attribute_warns_and_targets_are_checked() {
     CHECK(saw_misplaced, "misplaced known attribute reports AttributeNotApplicable");
 }
 
-void test_imported_console_void_main_discard_regression() {
+void test_imported_console_void_main_discardable() {
     Workspace workspace;
     workspace.write("main.zith", "from std/io/console\n"
                                  "fn main() {\n"
@@ -220,17 +220,8 @@ void test_imported_console_void_main_discard_regression() {
     session::CompilationSession session(options, (workspace.root / "main.zith").string(),
                                         context);
     session.setBuffered(true);
-    CHECK(!session.runTo(session::Stage::HirLowered),
-          "imported non-void call used as the last statement of a void main fails sema");
-
-    bool saw_discarded_result = false;
-    for (const auto &diagnostic : session.diags().all()) {
-        if (diagnostic.code == diagnostics::err::DiscardedResult)
-            saw_discarded_result = true;
-    }
-    CHECK(saw_discarded_result,
-          "imported non-void call used as the last statement of a void main reports "
-          "DiscardedResult");
+    CHECK(session.runTo(session::Stage::HirLowered),
+          "discardable imported println used as the last statement of a void main lowers");
 }
 
 void test_untyped_uninitialized_binding_is_rejected() {
@@ -1143,7 +1134,7 @@ static void test_frontend_modern_pipeline() {
     test_pipeline_discard_non_void_call_result();
     test_pipeline_discardable_attribute_allows_call();
     test_pipeline_unknown_attribute_warns_and_targets_are_checked();
-    test_imported_console_void_main_discard_regression();
+    test_imported_console_void_main_discardable();
     test_untyped_uninitialized_binding_is_rejected();
     test_typed_uninitialized_binding_with_later_assignment_lowers();
     test_typed_uninitialized_unused_binding_lowers();

@@ -235,6 +235,11 @@ TypeId TypeIntern::intern(TypeData data) {
     return id;
 }
 
+void TypeIntern::appendPositional(TypeData data) {
+    hashes_.push(computeHash(data));
+    types_.push(std::move(data));
+}
+
 TypeId TypeIntern::internInt(IntWidth w) {
     return intern(TypeInt{w});
 }

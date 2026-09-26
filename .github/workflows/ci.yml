@@ -41,6 +41,13 @@ jobs:
 
   cross-builds:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - name: web
+            wasm_test: false
+          - name: wasm-runtime
+            wasm_test: true
     steps:
       - uses: actions/checkout@v4
         with:
@@ -86,3 +93,7 @@ jobs:
             -DCMAKE_CROSSCOMPILING=ON \
             -DZITH_IS_WASM=ON
           cmake --build build-wasm -j$(nproc)
+
+      - name: Test WASM runtime ABI
+        if: matrix.wasm_test
+        run: node tests/test-wasm-runtime.mjs build-wasm/zith-playground.wasm

@@ -525,6 +525,11 @@ public:
     void removeOverlay(std::string_view path);
     void invalidatePath(std::string_view path);
 
+    /// Inject a virtual source file. Used by the WASM compact-stdlib overlay;
+    /// the host implementation keeps this dark so include roots stay the only
+    /// user-visible source mechanism.
+    void registerVirtualSource(std::string path, std::string text);
+
     /// Prebuild configured stdlib roots before accepting analysis requests.
     /// Callers such as an LSP initialize handler own the one-time policy.
     [[nodiscard]] memory::Result<bool> initializeStdlib();
@@ -546,7 +551,8 @@ private:
         bool consideredPlatformVariants = false;
     };
 
-    [[nodiscard]] memory::Result<SourceCatalog::SourcePtr> sourceForPath(std::string_view path);
+    [[nodiscard]] memory::Result<SourceCatalog::SourcePtr>
+    sourceForPath(std::string_view path) const;
     [[nodiscard]] memory::Result<std::shared_ptr<const CompilationSnapshot>>
     analyze(SourceCatalog::SourcePtr root_source);
     static std::vector<frontend::ImportedMacroRecord>
@@ -581,6 +587,7 @@ private:
     ModuleExecutor executor_;
     mutable std::shared_mutex overlay_mutex_;
     memory::FlatMap<std::string, std::string> overlays_;
+    memory::FlatMap<std::string, std::string> virtual_sources_;
     memory::FlatMap<std::string, std::shared_ptr<const cinterop::CHeaderArtifact>>
         c_headers_by_path_;
     mutable std::mutex c_headers_mutex_;

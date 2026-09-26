@@ -27,6 +27,7 @@ struct TargetComponents {
     std::optional<std::string> os;
 };
 
+#ifdef ZITH_HAS_LLVM
 [[nodiscard]] TargetComponents targetComponents(const std::string &target_triple) {
 #ifdef ZITH_HAS_LLVM
     const std::string effective =
@@ -45,7 +46,9 @@ struct TargetComponents {
     return {};
 #endif
 }
+#endif
 
+#ifdef ZITH_HAS_LLVM
 [[nodiscard]] std::vector<std::string> platformVariantSuffixes(const TargetComponents &components) {
     std::vector<std::string> suffixes;
     if (components.arch && components.os)
@@ -56,6 +59,7 @@ struct TargetComponents {
         suffixes.emplace_back("." + *components.os);
     return suffixes;
 }
+#endif
 
 [[maybe_unused]] [[nodiscard]] bool isZithFile(const fs::path &path) {
     return path.extension() == ".zith";
@@ -222,9 +226,23 @@ FrontendContext::ResolvedImport
 FrontendContext::resolveImport(const ModuleArtifact &artifact, const ImportRequest &request,
                                const std::vector<std::string> &visible_roots) const {
 #ifdef ZITH_IS_WASM
-    (void)artifact;
-    (void)request;
-    (void)visible_roots;
+    if (request.isAsset || request.isHeader) {
+        (void)artifact;
+        (void)visible_roots;
+        return {};
+    }
+    const std::string import_path = request.importKey();
+    const std::vector<std::string> candidates = {
+        import_path + ".zith",
+        import_path + "/mod.zith",
+    };
+    for (const auto &root : visible_roots) {
+        for (const auto &candidate : candidates) {
+            const auto path = root + "/" + candidate;
+            if (sourceForPath(path))
+                return {{path}, ImportTargetKind::Zith, true};
+        }
+    }
     return {};
 #else
     if (request.isAsset) {
@@ -249,8 +267,12 @@ FrontendContext::resolveImport(const ModuleArtifact &artifact, const ImportReque
         return {{}, ImportTargetKind::Asset, false};
     }
 
+#ifdef ZITH_HAS_LLVM
     const auto components = targetComponents(config_.targetTriple);
     const auto suffixes   = platformVariantSuffixes(components);
+#else
+    const std::vector<std::string> suffixes;
+#endif
     std::optional<fs::path> imported;
     const fs::path import_path(request.isHeader ? request.headerPath : request.importKey());
     std::vector<fs::path> variant_paths;

@@ -210,14 +210,8 @@ add_subdirectory(src/memory)
 
 file(GLOB_RECURSE ZITH_LIB_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp")
 list(REMOVE_ITEM ZITH_LIB_SOURCES "${CMAKE_SOURCE_DIR}/src/cli/zithc-main.cpp")
-# ir/exec-ir.hpp, ir/hir-to-ir.*, and interp/ir-vm.* are an active, unfinished
-# interpreter slice. Keep them out of the library glob until the WIP is
-# integrated; test-abi-execution compiles the slice directly and owns the
-# opt-in target below.
-list(REMOVE_ITEM ZITH_LIB_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/src/ir/hir-to-ir.cpp")
-list(REMOVE_ITEM ZITH_LIB_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/src/interp/ir-vm.cpp")
-# VM v2 is promoted into the library build so the CLI can run the same
-# portable runtime path without LLVM and the harness test links it from here.
+list(REMOVE_ITEM ZITH_LIB_SOURCES "${CMAKE_SOURCE_DIR}/src/wasm/playground.cpp")
+list(APPEND ZITH_LIB_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/src/wasm/abi-hir.cpp")
 
 if(ZITH_IS_WASM)
     file(GLOB_RECURSE CLI_CMD_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/src/cli/cmd/*.cpp")
@@ -225,6 +219,7 @@ if(ZITH_IS_WASM)
     list(REMOVE_ITEM ZITH_LIB_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/src/wasm/playground.cpp")
 else()
     file(GLOB_RECURSE WASM_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/src/wasm/*.cpp")
+    list(REMOVE_ITEM WASM_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/src/wasm/abi-hir.cpp")
     list(REMOVE_ITEM ZITH_LIB_SOURCES ${WASM_SOURCES})
 endif()
 
@@ -252,7 +247,7 @@ if(ZITH_IS_WASM)
     add_executable(zith-playground src/wasm/playground.cpp src/wasm/wasi-stubs.cpp)
     target_link_libraries(zith-playground PRIVATE zithcLib)
     set_target_properties(zith-playground PROPERTIES OUTPUT_NAME zith-playground SUFFIX ".wasm")
-    target_link_options(zith-playground PRIVATE -Wl,--no-entry -Wl,--export=zith_alloc -Wl,--export=zith_free -Wl,--export=zith_run_source -Wl,--export=zith_compile_source -Wl,--export=zith_last_error_ptr -Wl,--export=zith_last_error_len -Wl,--export=zith_last_output_ptr -Wl,--export=zith_last_output_len -Wl,--export=zith_error_count -Wl,--export=zith_error_at -Wl,--export=zith_compiler_version_ptr -Wl,--export=zith_compiler_version_len )
+    target_link_options(zith-playground PRIVATE -Wl,--no-entry -Wl,--export=zith_alloc -Wl,--export=zith_free -Wl,--export=zith_run_source -Wl,--export=zith_compile_source -Wl,--export=zith_emit_hir -Wl,--export=zith_execute_hir -Wl,--export=zith_last_buffer_ptr -Wl,--export=zith_last_buffer_len -Wl,--export=zith_exit_code -Wl,--export=zith_last_error_ptr -Wl,--export=zith_last_error_len -Wl,--export=zith_last_output_ptr -Wl,--export=zith_last_output_len -Wl,--export=zith_error_count -Wl,--export=zith_error_at -Wl,--export=zith_compiler_version_ptr -Wl,--export=zith_compiler_version_len )
     target_compile_options(zith-playground PRIVATE -Wno-unknown-attributes -Wno-missing-prototypes)
 endif()
 
@@ -392,19 +387,7 @@ if(BUILD_TESTING AND NOT ZITH_IS_WASM)
     add_zith_test(test-compound-assign tests/test-compound-assign.cpp)
     add_zith_test(test-nominal-type-debt tests/test-nominal-type-debt.cpp)
     add_zith_test(test-wasm-contract tests/test-wasm-contract.cpp)
-    add_executable(test-abi-execution tests/test-abi-execution.cpp
-        src/ir/hir-to-ir.cpp
-        src/interp/ir-vm.cpp
-    )
-    target_compile_definitions(test-abi-execution PRIVATE
-        ZITH_STDLIB_DIR="${CMAKE_CURRENT_SOURCE_DIR}/stdlib")
-    target_link_libraries(test-abi-execution PRIVATE zithcLib)
-    add_test(NAME test-abi-execution COMMAND test-abi-execution)
-    if(TARGET zithc)
-        target_compile_definitions(test-abi-execution PRIVATE
-            ZITHC_BINARY="$<TARGET_FILE:zithc>")
-        add_dependencies(test-abi-execution zithc)
-    endif()
+    add_zith_test(test-abi-execution tests/test-abi-execution.cpp)
     add_executable(test-vm-v2 tests/test-vm-v2.cpp)
     target_compile_definitions(test-vm-v2 PRIVATE
         ZITH_STDLIB_DIR="${CMAKE_CURRENT_SOURCE_DIR}/stdlib")

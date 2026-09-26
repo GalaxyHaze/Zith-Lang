@@ -149,6 +149,10 @@ public:
     [[nodiscard]] const std::shared_ptr<const CompilationSnapshot> &snapshot() const noexcept {
         return mSnapshot;
     }
+    void registerFrontendVirtualSource(std::string path, std::string text) {
+        ensureFrontendContext();
+        mFrontendContext->registerVirtualSource(std::move(path), std::move(text));
+    }
     memory::FileId fileId() const {
         return mFileId;
     }
@@ -205,7 +209,10 @@ public:
     [[nodiscard]] const sema::modern::SemaPipeline *semaPipeline() const noexcept {
         return mModernSemaPipeline.get();
     }
-    memory::StringInterner &interner() {
+    memory::StringInterner &interner() noexcept {
+        return *mInterner;
+    }
+    [[nodiscard]] const memory::StringInterner &interner() const noexcept {
         return *mInterner;
     }
 

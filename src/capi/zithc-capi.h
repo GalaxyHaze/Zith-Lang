@@ -55,6 +55,8 @@ zithc_session *zithc_session_create_from_buffer(const char *uri, const char *con
 void zithc_session_destroy(zithc_session *session);
 
 void zithc_session_add_include_dir(zithc_session *session, const char *dir);
+void zithc_session_register_virtual_source(zithc_session *session, const char *path,
+                                           const char *text);
 
 void zithc_session_set_opt_level(zithc_session *session, uint8_t level);
 void zithc_session_set_mode(zithc_session *session, uint8_t mode);
@@ -77,6 +79,10 @@ const char *zithc_run_to_json(zithc_session *session, int stage);
 zithc_position zithc_offset_to_position(zithc_session *session, uint32_t offset);
 const char *zithc_session_flush_output(zithc_session *session);
 const char *zithc_last_error(zithc_session *session);
+
+// Internal extension used only by the WASM playground. It is not part of the
+// public ABI contract for host embedders.
+void *zithc_session_compiler_context(zithc_session *session);
 
 #ifdef __cplusplus
 }

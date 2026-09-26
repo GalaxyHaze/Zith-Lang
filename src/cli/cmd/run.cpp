@@ -1,8 +1,6 @@
 #include "cli/commands.hpp"
 #include "cli/terminal.hpp"
 #include "interp/hir-interpreter.hpp"
-#include "interp/ir-vm.hpp"
-#include "ir/hir-to-ir.hpp"
 #include "session/compilation-session.hpp"
 #include "session/pipeline-plan.hpp"
 #include "vm/hir-to-vm.hpp"

@@ -26,14 +26,27 @@ FrontendMetrics FrontendContext::metrics() const {
 }
 
 memory::Result<SourceCatalog::SourcePtr>
-FrontendContext::sourceForPath(const std::string_view path) {
+FrontendContext::sourceForPath(const std::string_view path) const {
     const auto canonical = SourceCatalog::canonicalPath(path);
     {
         std::shared_lock<std::shared_mutex> lock(overlay_mutex_);
         if (const auto *overlay = overlays_.get(canonical))
             return catalog_->registerSource(canonical, *overlay);
     }
+    {
+        std::shared_lock<std::shared_mutex> lock(overlay_mutex_);
+        if (const auto *virtual_source = virtual_sources_.get(canonical))
+            return catalog_->registerSource(canonical, *virtual_source);
+    }
     return catalog_->loadFile(canonical);
+}
+
+void FrontendContext::registerVirtualSource(std::string path, std::string text) {
+    const auto canonical = SourceCatalog::canonicalPath(path);
+    {
+        std::unique_lock<std::shared_mutex> lock(overlay_mutex_);
+        virtual_sources_[canonical] = std::move(text);
+    }
 }
 
 memory::Result<std::shared_ptr<const CompilationSnapshot>>

@@ -678,9 +678,9 @@ Artifact ArtifactBuilder::build(std::string_view canonical_path, std::string_vie
         cfn.uses_tailcc            = fn.usesTailCC;
         if (const auto *attrs = hir_.attrs().tryFn(fi))
             cfn.discardable = attrs->discardable;
-        cfn.variadic_slice_param   = fn.variadicSliceParam <= ~uint32_t{0}
-                                         ? static_cast<uint32_t>(fn.variadicSliceParam)
-                                         : ~uint32_t{0};
+        cfn.variadic_slice_param   = fn.variadicSliceParam == ~static_cast<size_t>(0)
+                                         ? ~uint32_t{0}
+                                         : static_cast<uint32_t>(fn.variadicSliceParam);
         cfn.machine_id             = fn.machineId;
         cfn.machine_return_type_id = fn.machineReturnType != types::kInvalidType
                                          ? internType(fn.machineReturnType)

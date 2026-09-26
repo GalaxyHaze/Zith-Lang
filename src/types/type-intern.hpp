@@ -76,6 +76,10 @@ public:
 
     // ── Intern existing TypeData ─────────────────────────────────
     TypeId intern(TypeData data);
+    /// Rebuild a table row without deduplication. Used by the flat HIR decoder
+    /// so positional type ids survive an encode/decode round-trip: `intern`
+    /// would collapse structurally equal rows and shift every later id.
+    void appendPositional(TypeData data);
 
     // ── Convenience intern helpers ───────────────────────────────
     TypeId internInt(IntWidth w);

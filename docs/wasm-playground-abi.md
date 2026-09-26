@@ -8,6 +8,10 @@ The module is a standalone Emscripten build with no entry function. JavaScript p
 `zith.host_write` import; the `wasi_snapshot_preview1.fd_write` stub forwards writes to that same
 host callback so compiler and program streams can be rendered without a filesystem.
 
+Since VM v2 was promoted, the playground can compile a source buffer once into a flat HIR blob and
+then execute that blob with the portable VM. The flat HIR format is versioned and self-contained;
+it is defined by `src/wasm/abi-hir.*` and is independent of the `.zirl` cache format.
+
 ## Exports
 
 | Export | Signature | Purpose |
@@ -16,6 +20,11 @@ host callback so compiler and program streams can be rendered without a filesyst
 | `zith_free` | `(ptr: i32, size: i32) -> ()` | Free a buffer returned by `zith_alloc`. |
 | `zith_compile_source` | `(ptr, len, mode, opt_level, emit_mask: i32) -> i32` | Check and emit compiler stages up to HIR. |
 | `zith_run_source` | `(ptr: i32, len: i32) -> i32` | Alias of compile in run mode: check plus HIR output. Does not execute the program. |
+| `zith_emit_hir` | `(ptr: i32, len: i32) -> i32` | Compile source to a flat HIR blob and expose it through `zith_last_buffer_ptr/len`. |
+| `zith_execute_hir` | `(ptr: i32, len: i32) -> i32` | Decode a flat HIR blob, lower it into VM v2 IR, and run it. |
+| `zith_last_buffer_ptr` | `() -> i32` | Pointer to the flat HIR blob produced by the last `zith_emit_hir` call. |
+| `zith_last_buffer_len` | `() -> i32` | Byte length of the flat HIR blob. |
+| `zith_exit_code` | `() -> i64` | Guest `main` exit code from the last VM v2 run. |
 | `zith_last_error_ptr` | `() -> i32` | Pointer to the accumulated error text from the last call. |
 | `zith_last_error_len` | `() -> i32` | Byte length of the last error buffer. |
 | `zith_last_output_ptr` | `() -> i32` | Pointer to compiler emission output from the last call. |
@@ -39,6 +48,13 @@ host callback so compiler and program streams can be rendered without a filesyst
 | `0` | Success: source was checked and staged output was produced. |
 | `1` | Compilation failure: diagnostics were rendered, and `last_error` is non-empty. |
 | `2` | Invalid parameter: the call did not enter the compiler pipeline, and `last_error` is non-empty. |
+| `3` | VM v2 runtime trap or missing guest `main`. |
+| `4` | VM v2 ran out of linear memory or guest memory capacity. |
+| `5` | The flat HIR uses a construct outside the current VM v2 lowering slice. |
+
+`zith_emit_hir` returns `1` when the source fails HIR lowering, `2` for an invalid buffer, and
+`0` when a blob is available. `zith_execute_hir` returns `1` for malformed flat HIR, `5` when
+lowering rejects the program, and `3`/`4` for runtime failures.
 
 Invalid parameters are reported before any session is created, so callers must check
 `zith_last_error_ptr/len` instead of treating non-zero status as a compiler diagnostic.

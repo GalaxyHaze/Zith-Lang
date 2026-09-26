@@ -25,6 +25,14 @@ struct StringInterner {
 
     InternedId intern(std::string_view str);
     std::string_view lookup(InternedId id) const;
+    [[nodiscard]] std::size_t poolSize() const noexcept;
+    /// Internal implementation used by `intern` and `copyString` after the
+    /// caller has taken the mutex.
+    InternedId pushCopy(std::string_view str);
+    /// Copies a previously interned string into this interner and returns the
+    /// new id. Used by flat HIR decoding to rebuild positional string pools
+    /// before `TypeIntern` has been constructed.
+    InternedId copyString(std::string_view str);
 
 private:
     Arena *allocator_                          = nullptr;

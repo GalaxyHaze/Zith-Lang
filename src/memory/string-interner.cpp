@@ -28,6 +28,17 @@ InternedId StringInterner::intern(std::string_view str) {
     if (existing)
         return *existing;
 
+    return pushCopy(str);
+}
+
+InternedId StringInterner::copyString(std::string_view str) {
+#if !defined(ZITH_IS_WASM)
+    std::unique_lock<std::shared_mutex> lock(rwMutex_);
+#endif
+    return pushCopy(str);
+}
+
+InternedId StringInterner::pushCopy(std::string_view str) {
     auto *copy = static_cast<char *>(allocator_->alloc(str.size(), 1));
     std::memcpy(copy, str.data(), str.length());
     InternedId id = static_cast<InternedId>(pool->size());
@@ -44,6 +55,10 @@ std::string_view StringInterner::lookup(InternedId id) const {
     if (id >= pool->size())
         return {};
     return (*pool)[id];
+}
+
+std::size_t StringInterner::poolSize() const noexcept {
+    return pool ? static_cast<std::size_t>(pool->size()) : 0;
 }
 
 void StringInterner::init() {

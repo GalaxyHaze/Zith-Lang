@@ -168,6 +168,12 @@ void zithc_session_add_include_dir(zithc_session *session, const char *dir) {
         session->opts.includeDirs.push(std::string(dir));
 }
 
+void zithc_session_register_virtual_source(zithc_session *session, const char *path,
+                                           const char *text) {
+    if (session && path && text)
+        session->session.registerFrontendVirtualSource(path, text);
+}
+
 void zithc_session_set_opt_level(zithc_session *session, uint8_t level) {
     if (session)
         session->opts.flags.optLevel(level);
@@ -474,5 +480,11 @@ const char *zithc_session_flush_output(zithc_session *session) {
         return "";
     session->output_result_ = session->session.flushOutput();
     return session->output_result_.c_str();
+}
+
+void *zithc_session_compiler_context(zithc_session *session) {
+    if (!session)
+        return nullptr;
+    return &session->session;
 }
 } // extern "C"
