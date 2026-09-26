@@ -106,6 +106,27 @@ void test_vm_v2_loop_and_store() {
     CHECK_EQ(result.exitCode, 10, "loop increments a register to its bound");
 }
 
+void test_vm_v2_branch2() {
+    memory::Arena arena;
+    vm::Module module(arena);
+
+    auto &main      = module.functions.emplace(arena);
+    main.name       = "main";
+    main.returnType = vm::ValueType::I32;
+    main.regCount   = 2;
+    main.body.push(vm::Instr::withImm(vm::Op::LoadConstI32, 0, 1));
+    main.body.push(vm::Instr{vm::Op::Branch2, 0, 0, 0, 4, 2});
+    main.body.push(vm::Instr::withImm(vm::Op::LoadConstI32, 1, 99));
+    main.body.push(vm::Instr{vm::Op::Jump, 0, 0, 0, 5});
+    main.body.push(vm::Instr::withImm(vm::Op::LoadConstI32, 1, 77));
+    main.body.push(vm::Instr{vm::Op::Ret, 1, 0, 0, 0});
+
+    vm::Vm vm;
+    auto result = vm.runMain(module);
+    CHECK(result.status == vm::RunStatus::Ok, "typed VM runs explicit two-way branch");
+    CHECK_EQ(result.exitCode, 77, "Branch2 selects the true target");
+}
+
 void test_vm_v2_invalid_memory_offset() {
     memory::Arena arena;
     vm::Module module(arena);
@@ -713,13 +734,15 @@ void test_vm_v2_extern_snprintf_subset() {
     {
         std::ofstream output(source, std::ios::binary | std::ios::trunc);
         output << "extern fn malloc(size: u64): raw opaque\n"
-                  "extern fn snprintf(buf: *char, size: u64, fmt: *char, value: u32): i32\n"
-                  "#[discardable] extern fn putchar(c: char): i32\n"
+                  "extern fn snprintf(buf: *char, size: u64, fmt: *char, ...): i32\n"
+                  "extern fn printf(msg: *char, ...): i32\n"
+                  "extern fn puts(msg: *char): i32\n"
                   "\n"
                   "fn main(): i32 {\n"
-                  "    var buf: *char = malloc(32) as *char;\n"
-                  "    _ = snprintf(buf, 32, \"%u\", 42);\n"
-                  "    _ = putchar(raw buf[0]);\n"
+                  "    var buf: *char = malloc(64) as *char;\n"
+                  "    _ = snprintf(buf, 64, \"%u %u %u %u %u\", 1, 2, 3, 4, 5);\n"
+                  "    _ = puts(buf);\n"
+                  "    _ = printf(\"Hello World!\");\n"
                   "    0\n"
                   "}\n";
     }
@@ -742,7 +765,8 @@ void test_vm_v2_extern_snprintf_subset() {
     vm::Vm vm;
     const auto result = vm.runMain(module);
     CHECK(result.status == vm::RunStatus::Ok, "v2 VM runs the extern snprintf program");
-    CHECK_EQ(result.output, std::string("4"), "v2 VM formats and reads the host buffer");
+    CHECK_EQ(result.output, std::string("1 2 3 4 5\nHello World!"),
+             "v2 VM formats variadic ranges and writes printf output");
     CHECK_EQ(result.exitCode, 0, "v2 VM keeps the main exit code");
 }
 
@@ -866,11 +890,109 @@ void test_vm_v2_bitwise_and_shifts() {
     CHECK_EQ(result.exitCode, 38, "v2 VM computes correct bitwise result");
 }
 
+void test_vm_v2_hir_control_flow_and_dynamic_array_index() {
+    const auto root = std::filesystem::temp_directory_path() / "zith-vm-v2-cfg-array-tests";
+    std::filesystem::remove_all(root);
+    std::filesystem::create_directories(root);
+
+    const auto source = root / "main.zith";
+    {
+        std::ofstream output(source, std::ios::binary | std::ios::trunc);
+        output << "fn main(): i32 {\n"
+                  "    let values: [3]i32 = [10, 20, 30];\n"
+                  "    let index: i32 = 1;\n"
+                  "    var count: i32 = 0;\n"
+                  "    while (count < 2) {\n"
+                  "        count = count + 1;\n"
+                  "    }\n"
+                  "    if (count == 2) {\n"
+                  "        return raw values[index];\n"
+                  "    }\n"
+                  "    0\n"
+                  "}\n";
+    }
+
+    memory::Arena arena;
+    Options options(arena);
+    options.targetStage = session::Stage::HirLowered;
+
+    session::CompilationSession session(options, source.string());
+    session.setBuffered(true);
+    CHECK(session.runTo(session::Stage::HirLowered),
+          "control flow and array source lower through the modern pipeline");
+
+    memory::Arena vmArena;
+    vm::Module module(vmArena);
+    const auto lowered = vm::lowerModule(session.hirModule(), session.interner(), session.types(),
+                                         vmArena, module);
+    CHECK(lowered.ok, "HIR control flow and array index lower into v2");
+
+    vm::Vm vm;
+    const auto result = vm.runMain(module);
+    CHECK(result.status == vm::RunStatus::Ok, "v2 VM executes lowered control flow and index");
+    CHECK_EQ(result.exitCode, 20, "dynamic array index returns the selected element");
+}
+
+void test_vm_v2_dynamic_array_index_traps() {
+    const auto root = std::filesystem::temp_directory_path() / "zith-vm-v2-array-trap-tests";
+    std::filesystem::remove_all(root);
+    std::filesystem::create_directories(root);
+
+    const auto source = root / "main.zith";
+    {
+        std::ofstream output(source, std::ios::binary | std::ios::trunc);
+        output << "fn main(): i32 {\n"
+                  "    let values: [2]i32 = [10, 20];\n"
+                  "    let index: i32 = 2;\n"
+                  "    raw values[index]\n"
+                  "}\n";
+    }
+
+    memory::Arena arena;
+    Options options(arena);
+    options.targetStage = session::Stage::HirLowered;
+
+    session::CompilationSession session(options, source.string());
+    session.setBuffered(true);
+    CHECK(session.runTo(session::Stage::HirLowered), "out-of-bounds array source lowers to HIR");
+
+    memory::Arena vmArena;
+    vm::Module module(vmArena);
+    const auto lowered = vm::lowerModule(session.hirModule(), session.interner(), session.types(),
+                                         vmArena, module);
+    CHECK(lowered.ok, "out-of-bounds array index lowers into v2");
+
+    vm::Vm vm;
+    const auto result = vm.runMain(module);
+    CHECK(result.status == vm::RunStatus::Trap, "dynamic array index traps out of bounds");
+
+    memory::Arena negativeArena;
+    vm::Module negativeModule(negativeArena);
+    auto &negativeMain      = negativeModule.functions.emplace(negativeArena);
+    negativeMain.name       = "main";
+    negativeMain.returnType = vm::ValueType::I32;
+    negativeMain.regCount   = 5;
+    negativeMain.body.push(vm::Instr::withImm(vm::Op::LoadConstI64, 1, 8));
+    negativeMain.body.push(vm::Instr::withImm(vm::Op::LoadConstI64, 2, 1));
+    negativeMain.body.push(vm::Instr::simple(vm::Op::AllocBytes, 0, 1, 2));
+    negativeMain.body.push(vm::Instr::withImm(vm::Op::LoadConstI64, 3, 0));
+    negativeMain.body.push(vm::Instr::withImm(vm::Op::LoadConstI64, 4, 1));
+    negativeMain.body.push(vm::Instr::simple(vm::Op::Sub, 1, 3, 4));
+    negativeMain.body.push(vm::Instr{vm::Op::IndexLoad, 3, 0, 1, 8, 2});
+    negativeMain.body.push(vm::Instr{vm::Op::Ret, 3, 0, 0, 0});
+
+    vm::Vm negativeVm;
+    const auto negativeResult = negativeVm.runMain(negativeModule);
+    CHECK(negativeResult.status == vm::RunStatus::Trap,
+          "dynamic array index traps on a negative index");
+}
+
 void test_vm_v2() {
     test_vm_v2_malloc_string();
     test_vm_v2_linear_memory_trap();
     test_vm_v2_missing_main();
     test_vm_v2_loop_and_store();
+    test_vm_v2_branch2();
     test_vm_v2_invalid_memory_offset();
     test_vm_v2_invalid_register_trap();
     test_vm_v2_invalid_opcode_shape_trap();
@@ -898,6 +1020,8 @@ void test_vm_v2() {
     test_vm_v2_extern_snprintf_subset();
     test_vm_v2_call_range_multi_args();
     test_vm_v2_bitwise_and_shifts();
+    test_vm_v2_hir_control_flow_and_dynamic_array_index();
+    test_vm_v2_dynamic_array_index_traps();
 }
 
 } // namespace

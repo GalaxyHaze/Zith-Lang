@@ -30,10 +30,14 @@ enum class Op : uint8_t {
     LoadString,
     LoadFnRef,
     LoadExternRef,
+    Move,
     AllocBytes,
     MallocBytes,
     StoreBytes,
+    StoreI64,
     LoadBytes,
+    LoadI64,
+    IndexLoad,
     FieldPtr,
     MakeSlice,
     SlicePtr,
@@ -62,9 +66,11 @@ enum class Op : uint8_t {
     CallRange,
     CallFnRef,
     CallExtern,
+    CallExternRange,
     CallExternRef,
     Ret,
     Branch,
+    Branch2,
     Jump,
     Trap,
 };
@@ -124,6 +130,17 @@ struct Instr {
         row.b   = argBase;
         row.c   = argCount;
         row.imm = fnIndex;
+        return row;
+    }
+
+    [[nodiscard]] static auto callExternRange(uint16_t dst, uint16_t argBase, uint16_t argCount,
+                                              uint16_t externIndex) -> Instr {
+        Instr row;
+        row.op  = Op::CallExternRange;
+        row.a   = dst;
+        row.b   = argBase;
+        row.c   = argCount;
+        row.imm = externIndex;
         return row;
     }
 };

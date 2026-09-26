@@ -6,7 +6,9 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <limits>
 #include <string_view>
+#include <vector>
 
 namespace zith::vm {
 namespace {
@@ -110,6 +112,52 @@ auto newReg(LowerState &state, types::TypeId type) -> std::uint16_t {
 }
 
 auto lowerOperand(LowerState &state, hir::HirExprId id) -> std::uint16_t;
+
+auto arrayElementSize(const types::TypeIntern &types, types::TypeId type) -> std::size_t {
+    const auto *array = std::get_if<types::TypeArray>(&types.lookup(type));
+    if (array == nullptr)
+        return 0;
+    switch (types.kindOf(array->elem)) {
+    case types::TypeKind::Int:
+    case types::TypeKind::Bool:
+    case types::TypeKind::Char:
+    case types::TypeKind::Ptr:
+    case types::TypeKind::String:
+        return sizeof(std::int64_t);
+    default:
+        return 0;
+    }
+}
+
+auto lowerArrayLiteral(LowerState &state, const hir::HirArrayLiteral &literal)
+    -> std::uint16_t {
+    const auto *array      = std::get_if<types::TypeArray>(&state.types.lookup(literal.type));
+    const auto elementSize = arrayElementSize(state.types, literal.type);
+    if (array == nullptr || elementSize == 0 || literal.elements.size() != array->count ||
+        array->count > std::numeric_limits<std::size_t>::max() / elementSize ||
+        array->count * elementSize > 0xFFFFU) {
+        return kUnassignedReg;
+    }
+
+    const auto count = newTypedReg(state, ValueType::I64);
+    const auto align = newTypedReg(state, ValueType::I64);
+    emit(state, Instr::withImm(Op::LoadConstI64, count,
+                               static_cast<std::uint16_t>(array->count * elementSize)));
+    emit(state, Instr::withImm(Op::LoadConstI64, align, 8));
+    const auto base = newTypedReg(state, ValueType::Ptr);
+    emit(state, Instr::simple(Op::AllocBytes, base, count, align));
+
+    for (std::size_t i = 0; i < literal.elements.size(); ++i) {
+        const auto value = lowerOperand(state, literal.elements[i]);
+        if (value == kUnassignedReg)
+            return kUnassignedReg;
+        const auto address = newTypedReg(state, ValueType::Ptr);
+        emit(state,
+             Instr{Op::FieldPtr, address, base, 0, static_cast<std::uint16_t>(i * elementSize)});
+        emit(state, Instr::simple(Op::StoreI64, address, value));
+    }
+    return base;
+}
 
 auto lowerLiteral(LowerState &state, const hir::HirLiteral &lit) -> std::uint16_t {
     const auto reg = newReg(state, lit.type);
@@ -240,7 +288,34 @@ auto lowerCall(LowerState &state, const hir::HirCall &call) -> std::uint16_t {
         }
         if (name == "main" || hirFn.blocks.empty() || hirFn.decl_id == ast::kInvalidDecl) {
             if (name == "puts" || name == "putchar" || name == "malloc" || name == "free" ||
-                name == "snprintf" || name == "strlen" || name == "memcpy") {
+                name == "printf" || name == "snprintf" || name == "strlen" ||
+                name == "memcpy") {
+                if ((name == "printf" || name == "snprintf") && hirFn.isVariadic) {
+                    const std::size_t fixedCount = name == "printf" ? 1U : 3U;
+                    if (call.args.size() < fixedCount) {
+                        state.result->ok      = false;
+                        state.result->message = "variadic call has too few fixed arguments";
+                        return kUnassignedReg;
+                    }
+                    const auto argBase = u16(state.fn->regTypes.size(), state.result);
+                    const auto argCount = u16(call.args.size(), state.result);
+                    if (!state.result->ok)
+                        return kUnassignedReg;
+                    for (std::size_t i = 0; i < call.args.size(); ++i)
+                        state.fn->regTypes.push(ValueType::I64);
+                    state.fn->regCount = static_cast<std::uint16_t>(state.fn->regTypes.size());
+                    for (std::size_t i = 0; i < call.args.size(); ++i) {
+                        const auto value = lowerOperand(state, call.args[i]);
+                        if (value == kUnassignedReg)
+                            return kUnassignedReg;
+                        emit(state, Instr::simple(Op::Move,
+                                                  static_cast<std::uint16_t>(argBase + i), value));
+                    }
+                    const auto externIndex = findOrAddExtern(state.out, name, state.result);
+                    const auto resultReg   = newReg(state, call.fn_type);
+                    emit(state, Instr::callExternRange(resultReg, argBase, argCount, externIndex));
+                    return resultReg;
+                }
                 if (call.args.size() > 4)
                     return kUnassignedReg;
                 const std::uint16_t arg0 =
@@ -409,9 +484,7 @@ auto lowerOperand(LowerState &state, hir::HirExprId id) -> std::uint16_t {
                     state.fn->regTypes.push(ValueType::I64);
                     state.fn->regCount = static_cast<std::uint16_t>(state.fn->regTypes.size());
                 }
-                return state.slotRegs[load.slot] != kUnassignedReg
-                           ? state.slotRegs[load.slot]
-                           : static_cast<std::uint16_t>(load.slot);
+                return static_cast<std::uint16_t>(load.slot);
             },
             [&](const hir::HirSlotAddr &addr) -> std::uint16_t {
                 while (state.fn->regTypes.size() <= addr.slot) {
@@ -430,6 +503,26 @@ auto lowerOperand(LowerState &state, hir::HirExprId id) -> std::uint16_t {
                 const auto object = lowerOperand(state, index.object);
                 if (object == kUnassignedReg)
                     return kUnassignedReg;
+                if (index.is_array) {
+                    const auto *array =
+                        std::get_if<types::TypeArray>(&state.types.lookup(index.obj_type));
+                    const auto elementSize = arrayElementSize(state.types, index.obj_type);
+                    if (array == nullptr || elementSize == 0 || array->count > 0xFFFFU ||
+                        elementSize > 0xFFFFU) {
+                        state.result->ok      = false;
+                        state.result->message = "unsupported array index in v2 lowering";
+                        return kUnassignedReg;
+                    }
+                    const auto indexReg = lowerOperand(state, index.index);
+                    if (indexReg == kUnassignedReg)
+                        return kUnassignedReg;
+                    const auto dst = newReg(state, index.type);
+                    emit(state,
+                         Instr{Op::IndexLoad, dst, object, indexReg,
+                               static_cast<std::uint16_t>(elementSize),
+                               static_cast<std::uint16_t>(array->count)});
+                    return dst;
+                }
                 const auto &indexExpr = state.hir.getExpr(index.index);
                 const auto *indexLit  = std::get_if<hir::HirLiteral>(&indexExpr);
                 if (indexLit == nullptr) {
@@ -461,6 +554,9 @@ auto lowerOperand(LowerState &state, hir::HirExprId id) -> std::uint16_t {
                 (void)lo;
                 (void)hi;
                 return kUnassignedReg;
+            },
+            [&](const hir::HirArrayLiteral &literal) {
+                return lowerArrayLiteral(state, literal);
             },
             [&](const hir::HirCall &call) { return lowerCall(state, call); },
             [](const auto &) -> std::uint16_t { return kUnassignedReg; },
@@ -501,7 +597,17 @@ auto lowerModule(const hir::HirModule &hir, const memory::StringInterner &intern
         while (fn.regTypes.size() < fn.regCount)
             fn.regTypes.push(ValueType::I64);
 
-        for (const auto &block : hirFn.blocks) {
+        struct PendingTarget {
+            std::size_t pc = 0;
+            hir::HirDeclId block = hir::kInvalidHirExpr;
+            bool falseBranch = false;
+        };
+        std::vector<std::size_t> blockPcs(hirFn.blocks.size(), fn.body.size());
+        std::vector<PendingTarget> pendingTargets;
+
+        for (std::size_t blockIndex = 0; blockIndex < hirFn.blocks.size(); ++blockIndex) {
+            const auto &block = hirFn.blocks[blockIndex];
+            blockPcs[blockIndex] = fn.body.size();
             for (const auto instId : block.insts) {
                 const auto &expr = hir.getExpr(instId);
                 if (std::holds_alternative<hir::HirSlotAlloca>(expr)) {
@@ -516,16 +622,15 @@ auto lowerModule(const hir::HirModule &hir, const memory::StringInterner &intern
                         fn.regTypes.push(ValueType::Ptr);
                         fn.regCount = static_cast<std::uint16_t>(fn.regTypes.size());
                     }
-                    const auto &valueExpr = hir.getExpr(store.value);
-                    const bool aggregate =
-                        std::holds_alternative<hir::HirArrayLiteral>(valueExpr) ||
-                        std::holds_alternative<hir::HirStructLiteral>(valueExpr) ||
-                        std::holds_alternative<hir::HirMakeSlice>(valueExpr) ||
-                        std::holds_alternative<hir::HirSlotAddr>(valueExpr);
-                    if (!aggregate) {
-                        const auto value = lowerOperand(state, store.value);
-                        if (value != kUnassignedReg)
-                            state.slotRegs[store.slot] = value;
+                    const auto value = lowerOperand(state, store.value);
+                    if (value != kUnassignedReg) {
+                        while (fn.regTypes.size() <= store.slot) {
+                            fn.regTypes.push(ValueType::I64);
+                            fn.regCount = static_cast<std::uint16_t>(fn.regTypes.size());
+                        }
+                        if (store.slot != value)
+                            emit(state, Instr::simple(Op::Move, static_cast<std::uint16_t>(store.slot),
+                                                      value));
                     }
                 } else {
                     (void)lowerOperand(state, instId);
@@ -545,7 +650,39 @@ auto lowerModule(const hir::HirModule &hir, const memory::StringInterner &intern
                     return result;
                 }
                 emit(state, Instr{Op::Ret, static_cast<std::uint16_t>(value), 0, 0, 0});
+            } else if (const auto *jump = std::get_if<hir::HirJump>(&terminator)) {
+                if (jump->target >= hirFn.blocks.size()) {
+                    result.ok      = false;
+                    result.message = "invalid HIR jump target in v2 lowering";
+                    return result;
+                }
+                pendingTargets.push_back({fn.body.size(), jump->target, false});
+                emit(state, Instr{Op::Jump, 0, 0, 0, 0});
+            } else if (const auto *branch = std::get_if<hir::HirBranch>(&terminator)) {
+                const auto cond = lowerOperand(state, branch->cond);
+                if (cond == kUnassignedReg || branch->then_block >= hirFn.blocks.size() ||
+                    branch->else_block >= hirFn.blocks.size()) {
+                    result.ok      = false;
+                    result.message = "invalid HIR branch in v2 lowering";
+                    return result;
+                }
+                pendingTargets.push_back({fn.body.size(), branch->then_block, false});
+                pendingTargets.push_back({fn.body.size(), branch->else_block, true});
+                emit(state, Instr{Op::Branch2, 0, cond, 0, 0, 0});
             }
+        }
+
+        for (const auto &pending : pendingTargets) {
+            if (pending.block >= blockPcs.size() || blockPcs[pending.block] >= fn.body.size()) {
+                result.ok      = false;
+                result.message = "unresolved HIR block target in v2 lowering";
+                return result;
+            }
+            auto &instruction = fn.body[pending.pc];
+            if (pending.falseBranch)
+                instruction.d = u16(blockPcs[pending.block], &result);
+            else
+                instruction.imm = u16(blockPcs[pending.block], &result);
         }
     }
 

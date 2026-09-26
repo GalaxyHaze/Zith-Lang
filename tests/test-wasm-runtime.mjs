@@ -95,7 +95,7 @@ function readBuffer(ptr, len) {
 
 function assertEqual(actual, expected, message) {
   if (actual !== expected) {
-    throw new Error(`${message}: expected ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}`);
+    throw new Error(`${message}: expected ${String(expected)}, got ${String(actual)}`);
   }
 }
 
@@ -198,6 +198,80 @@ fn main(): i32 {
   assertEqual(instance.exports.zith_run_source(bitwiseSource.ptr, bitwiseSource.len), 0,
               "bitwise operations execute through WASM VM v2");
   assertEqual(instance.exports.zith_exit_code(), 13n, "bitwise operations exit code (1+8+4=13)");
+
+  stdoutChunks.length = 0;
+  stderrChunks.length = 0;
+  const controlArrayText = `fn main(): i32 {
+    let values: [3]i32 = [10, 20, 30];
+    let index: i32 = 1;
+    if (index == 1) {
+        return raw values[index];
+    }
+    0
+}
+`;
+  const controlArrayHir = compileSource(controlArrayText);
+  assertEqual(runHir(controlArrayHir), 0,
+              "control flow and dynamic array index execute through WASM VM v2");
+  assertEqual(instance.exports.zith_exit_code(), 20n,
+              "dynamic array index returns the selected element in WASM");
+
+  stdoutChunks.length = 0;
+  stderrChunks.length = 0;
+  const controlFlowSource = `fn main(): i32 {
+    var x = 0;
+    for (i in 0..100) {
+        x += i;
+    }
+    x;
+}
+`;
+  const controlFlowBuffer = writeString(controlFlowSource);
+  assertEqual(instance.exports.zith_run_source(controlFlowBuffer.ptr, controlFlowBuffer.len), 0,
+              "for loop executes through the playground WASM ABI");
+  assertEqual(instance.exports.zith_exit_code(), 5050n,
+              "for loop sums the range 0..100");
+
+  stdoutChunks.length = 0;
+  stderrChunks.length = 0;
+  const variadicSource = writeString(`extern fn malloc(size: u64): raw opaque
+extern fn snprintf(buf: *char, size: u64, fmt: *char, ...): i32
+extern fn puts(msg: *char): i32
+
+fn main(): i32 {
+    var buf: *char = malloc(64) as *char;
+    _ = snprintf(buf, 64, "%u %u %u %u %u", 1, 2, 3, 4, 5);
+    _ = puts(buf);
+    0
+}
+`);
+  assertEqual(instance.exports.zith_run_source(variadicSource.ptr, variadicSource.len), 0,
+              "variadic snprintf executes through the playground WASM ABI");
+  assertEqual(stdoutChunks.join(""), "1 2 3 4 5\n",
+              "WASM variadic snprintf preserves the complete argument range");
+
+  stdoutChunks.length = 0;
+  stderrChunks.length = 0;
+  const printfSource = writeString(`extern fn printf(msg: *char, ...)
+
+fn main() {
+    printf("Hello World!");
+}
+`);
+  assertEqual(instance.exports.zith_run_source(printfSource.ptr, printfSource.len), 0,
+              "variadic printf executes through the playground WASM ABI");
+  assertEqual(stdoutChunks.join(""), "Hello World!",
+              "WASM variadic printf writes the complete message");
+
+  const outOfBoundsText = `fn main(): i32 {
+    let values: [2]i32 = [10, 20];
+    let index: i32 = 2;
+    raw values[index]
+}
+`;
+  const outOfBoundsHir = compileSource(outOfBoundsText);
+  assertEqual(runHir(outOfBoundsHir), 3,
+              "dynamic array index traps out of bounds in WASM");
 
   stdoutChunks.length = 0;
   stderrChunks.length = 0;
