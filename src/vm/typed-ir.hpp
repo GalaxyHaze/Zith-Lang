@@ -53,6 +53,7 @@ enum class Op : uint8_t {
     Gt,
     Ge,
     CallFn,
+    CallRange,
     CallFnRef,
     CallExtern,
     CallExternRef,
@@ -106,6 +107,17 @@ struct Instr {
         row.d   = arg2;
         row.e   = arg3;
         row.imm = tableIndex;
+        return row;
+    }
+
+    [[nodiscard]] static auto callRange(uint16_t dst, uint16_t argBase, uint16_t argCount,
+                                        uint16_t fnIndex) -> Instr {
+        Instr row;
+        row.op  = Op::CallRange;
+        row.a   = dst;
+        row.b   = argBase;
+        row.c   = argCount;
+        row.imm = fnIndex;
         return row;
     }
 };

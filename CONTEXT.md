@@ -233,6 +233,24 @@ status. Reuses `host_write` for output, but does not reuse `zith_last_error` as 
 error surface.
 _Avoid_: compiler error, child exit status, runtime diagnostic
 
+**CallRange**:
+The register-window calling convention in IR v2 where the caller places argument values in a
+contiguous block of local registers `[start_reg .. start_reg + count - 1]`. The VM copies this
+range directly into parameter registers `0..count - 1` of the callee frame upon `Op::CallRange`.
+_Avoid_: fixed 2-arg call, stack-spilled call frame, vararg table
+
+**VM v2 hybrid dispatch**:
+The two-tier call resolution mechanism in the VM v2 lowering pass: calls to well-known standard
+library routines (such as `print` and `println`) match fast VM intrinsics or extern handlers first;
+unmatched routines fall back to compiling and executing the canonical Zith standard library code.
+_Avoid_: hardcoded stdlib skip, pure intrinsic runtime, interpreter-only bypass
+
+**Exact-length stdout stream**:
+Standard output emission in the VM v2 runtime (via `write_stdout`) that writes an exact byte
+length from guest memory to the host terminal, supporting arbitrary non-null-terminated string
+slices without injecting newlines.
+_Avoid_: null-terminated stdout, puts-only output, line-buffered terminal dump
+
 ## Standard Library
 
 **Standard library namespace**:
@@ -407,6 +425,22 @@ _Avoid_: struct copy, container move, whole-value transfer
 **Partial field move**:
 Moving one field out of an aggregate consumes only that FieldNode and leaves sibling FieldNodes alive; a subsequent whole-aggregate move is then rejected until the consumed FieldNode is restored.
 _Avoid_: field extraction, partial copy, member move
+
+**Lazy view**:
+The default view policy in NRA: creating or invalidating a view does not immediately block writes or moves. The compiler reports an error when code later accesses a view whose target resource identity is no longer valid.
+_Avoid_: non-blocking borrow, weak view, deferred borrow
+
+**Strict view**:
+An optional NRA policy in which a view keeps its target access-valid for the duration of the view and conflicting writes or moves are rejected at the point they would invalidate it.
+_Avoid_: eager view, hard view
+
+**Execution flow**:
+A control-flow lineage used by NRA to distinguish ordinary sequential execution from an explicitly forked execution branch. Read/write coexistence is allowed within one flow; a thread fork creates a new flow and requires ownership/share rules to prevent conflicting cross-flow access.
+_Avoid_: thread context, runtime flow, execution path
+
+**Node provenance**:
+The resource-identity relation carried by a returned value or field. A result may identify an existing node directly, including a specific FieldNode, rather than merely recording the argument position from which it originated.
+_Avoid_: return alias metadata, return source, argument provenance
 
 **Region**:
 A static MRA declaration of contiguous memory with a known or symbolic shape, used for hardware, arenas and scratch memory.

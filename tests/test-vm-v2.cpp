@@ -746,6 +746,86 @@ void test_vm_v2_extern_snprintf_subset() {
     CHECK_EQ(result.exitCode, 0, "v2 VM keeps the main exit code");
 }
 
+void test_vm_v2_call_range_multi_args() {
+    const auto root = std::filesystem::temp_directory_path() / "zith-vm-v2-call-range-tests";
+    std::filesystem::remove_all(root);
+    std::filesystem::create_directories(root);
+
+    const auto source = root / "main.zith";
+    {
+        std::ofstream output(source, std::ios::binary | std::ios::trunc);
+        output << "fn add4(a: i32, b: i32, c: i32, d: i32): i32 {\n"
+                  "    a + b + c + d\n"
+                  "}\n"
+                  "\n"
+                  "fn main(): i32 {\n"
+                  "    add4(10, 20, 30, 40)\n"
+                  "}\n";
+    }
+
+    memory::Arena arena;
+    Options options(arena);
+    options.targetStage = session::Stage::HirLowered;
+
+    session::CompilationSession session(options, source.string());
+    session.setBuffered(true);
+    CHECK(session.runTo(session::Stage::HirLowered),
+          "multi-arg function source lowers through the modern pipeline");
+
+    memory::Arena vmArena;
+    vm::Module module(vmArena);
+    const auto lowered = vm::lowerModule(session.hirModule(), session.interner(), session.types(),
+                                         vmArena, module);
+    CHECK(lowered.ok, "HIR with 4-arg function lowers into v2");
+
+    vm::Vm vm;
+    const auto result = vm.runMain(module);
+    CHECK(result.status == vm::RunStatus::Ok, "v2 VM runs 4-arg function call");
+    CHECK_EQ(result.exitCode, 100, "v2 VM returns computed sum across 4 arguments");
+}
+
+#ifdef ZITH_ENABLE_C_INTEROP
+void test_vm_v2_hello_stdlib_import_print() {
+    const auto root = std::filesystem::temp_directory_path() / "zith-vm-v2-print-tests";
+    std::filesystem::remove_all(root);
+    std::filesystem::create_directories(root);
+
+    const auto source = root / "main.zith";
+    {
+        std::ofstream output(source, std::ios::binary | std::ios::trunc);
+        output << "from std/io/console\n"
+                  "\n"
+                  "fn main(): i32 {\n"
+                  "    print(\"hello \");\n"
+                  "    print(\"world\");\n"
+                  "    0\n"
+                  "}\n";
+    }
+
+    memory::Arena arena;
+    Options options(arena);
+    options.targetStage = session::Stage::HirLowered;
+    options.includeDirs.push("stdlib");
+
+    session::CompilationSession session(options, source.string());
+    session.setBuffered(true);
+    CHECK(session.runTo(session::Stage::HirLowered),
+          "print source lowers through the modern pipeline");
+
+    memory::Arena vmArena;
+    vm::Module module(vmArena);
+    const auto lowered = vm::lowerModule(session.hirModule(), session.interner(), session.types(),
+                                         vmArena, module);
+    CHECK(lowered.ok, "HIR with stdlib print lowers into v2");
+
+    vm::Vm vm;
+    const auto result = vm.runMain(module);
+    CHECK(result.status == vm::RunStatus::Ok, "v2 VM runs the stdlib print program");
+    CHECK_EQ(result.output, std::string("hello world"), "v2 VM prints continuous text without newline");
+    CHECK_EQ(result.exitCode, 0, "v2 VM keeps the main exit code for print");
+}
+#endif // ZITH_ENABLE_C_INTEROP
+
 void test_vm_v2() {
     test_vm_v2_malloc_string();
     test_vm_v2_linear_memory_trap();
@@ -770,11 +850,13 @@ void test_vm_v2() {
     test_vm_v2_ffi_snprintf();
 #ifdef ZITH_ENABLE_C_INTEROP
     test_vm_v2_hello_stdlib_import_println();
+    test_vm_v2_hello_stdlib_import_print();
     test_vm_v2_hello_virtual_stdlib();
     test_vm_v2_functions_with_stdlib();
 #endif // ZITH_ENABLE_C_INTEROP
     test_vm_v2_extern_putchar();
     test_vm_v2_extern_snprintf_subset();
+    test_vm_v2_call_range_multi_args();
 }
 
 } // namespace

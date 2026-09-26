@@ -99,10 +99,14 @@ auto valueTypeOf(const types::TypeIntern &types, types::TypeId type) -> ValueTyp
     }
 }
 
-auto newReg(LowerState &state, types::TypeId type) -> std::uint16_t {
+auto newTypedReg(LowerState &state, ValueType vt) -> std::uint16_t {
     const auto reg = static_cast<std::uint16_t>(state.fn->regCount++);
-    state.fn->regTypes.push(valueTypeOf(state.types, type));
+    state.fn->regTypes.push(vt);
     return reg;
+}
+
+auto newReg(LowerState &state, types::TypeId type) -> std::uint16_t {
+    return newTypedReg(state, valueTypeOf(state.types, type));
 }
 
 auto lowerOperand(LowerState &state, hir::HirExprId id) -> std::uint16_t;
@@ -163,6 +167,32 @@ auto lowerStringSlicePointer(LowerState &state, const hir::HirMakeSlice &slice)
     return kUnassignedReg;
 }
 
+auto lowerStringSlicePointerAndLength(LowerState &state, const hir::HirMakeSlice &slice,
+                                      std::uint16_t &outLength) -> std::uint16_t {
+    const auto &objExpr = state.hir.getExpr(slice.object);
+    const auto *lit     = std::get_if<hir::HirLiteral>(&objExpr);
+    if (lit != nullptr) {
+        const auto text = state.interner.lookup(lit->str_val);
+        if (!text.empty()) {
+            const auto kind = state.types.kindOf(lit->type);
+            if (slice.is_pointer || kind == types::TypeKind::Ptr ||
+                kind == types::TypeKind::String) {
+                const auto index = findOrAddString(state.out, text, state.result);
+                const auto reg   = newReg(state, lit->type);
+                emit(state, Instr::withImm(Op::LoadString, reg, index));
+
+                const auto lenReg = newTypedReg(state, ValueType::I64);
+                emit(state, Instr::withImm(Op::LoadConstI64, lenReg,
+                                           static_cast<std::uint16_t>(text.size())));
+                outLength = lenReg;
+                return reg;
+            }
+        }
+    }
+    outLength = kUnassignedReg;
+    return kUnassignedReg;
+}
+
 auto lowerCall(LowerState &state, const hir::HirCall &call) -> std::uint16_t {
     if (call.resolved_fn == symbols::kInvalidSym) {
         state.result->ok      = false;
@@ -176,7 +206,9 @@ auto lowerCall(LowerState &state, const hir::HirCall &call) -> std::uint16_t {
             continue;
         const auto linkage = state.interner.lookup(hirFn.name);
         const auto name    = sourceName(linkage);
-        if (startsWith(linkage, "std.io.console.println")) {
+        const bool is_println = startsWith(linkage, "std.io.console.println");
+        const bool is_print   = startsWith(linkage, "std.io.console.print");
+        if (is_println || is_print) {
             if (call.args.empty())
                 return newReg(state, types::kVoidType);
             const auto &argExpr = state.hir.getExpr(call.args[0]);
@@ -186,10 +218,22 @@ auto lowerCall(LowerState &state, const hir::HirCall &call) -> std::uint16_t {
                 if (ptr != kUnassignedReg) {
                     while (state.fn->regTypes.size() < 5)
                         state.fn->regTypes.push(ValueType::I64);
-                    const auto externIndex = findOrAddExtern(state.out, "puts", state.result);
-                    const auto scratch     = newReg(state, types::kVoidType);
-                    emit(state, Instr::callExtern(Op::CallExtern, scratch, ptr, 0, externIndex));
-                    return scratch;
+                    if (is_println) {
+                        const auto externIndex = findOrAddExtern(state.out, "puts", state.result);
+                        const auto scratch     = newReg(state, types::kVoidType);
+                        emit(state, Instr::callExtern(Op::CallExtern, scratch, ptr, 0, externIndex));
+                        return scratch;
+                    }
+                    std::uint16_t len = kUnassignedReg;
+                    (void)lowerStringSlicePointerAndLength(state, *slice, len);
+                    if (len != kUnassignedReg) {
+                        const auto externIndex =
+                            findOrAddExtern(state.out, "write_stdout", state.result);
+                        const auto scratch = newReg(state, types::kVoidType);
+                        emit(state, Instr::callExtern(Op::CallExtern, scratch, ptr, len,
+                                                      externIndex));
+                        return scratch;
+                    }
                 }
             }
             continue;
@@ -221,19 +265,24 @@ auto lowerCall(LowerState &state, const hir::HirCall &call) -> std::uint16_t {
             continue;
         for (std::size_t candidate = 0; candidate < state.out.functions.size(); ++candidate) {
             if (state.out.functions[candidate].name == name) {
-                if (call.args.size() > 2)
-                    return kUnassignedReg;
-                const std::uint16_t arg0 =
-                    call.args.size() > 0 ? lowerOperand(state, call.args[0]) : 0;
-                const std::uint16_t arg1 =
-                    call.args.size() > 1 ? lowerOperand(state, call.args[1]) : 0;
                 const auto fnIndex = u16(candidate, state.result);
-                while (state.fn->regTypes.size() < 4) {
-                    state.fn->regTypes.push(ValueType::I64);
+                const std::uint16_t argCount = static_cast<std::uint16_t>(call.args.size());
+                std::uint16_t argBase = 0;
+                if (argCount > 0) {
+                    argBase = static_cast<std::uint16_t>(state.fn->regTypes.size());
+                    for (std::size_t i = 0; i < argCount; ++i)
+                        state.fn->regTypes.push(ValueType::I64);
                     state.fn->regCount = static_cast<std::uint16_t>(state.fn->regTypes.size());
+                    for (std::size_t i = 0; i < argCount; ++i) {
+                        const auto val = lowerOperand(state, call.args[i]);
+                        if (val == kUnassignedReg)
+                            return kUnassignedReg;
+                        emit(state, Instr::simple(Op::Add, static_cast<std::uint16_t>(argBase + i),
+                                                  val, 0));
+                    }
                 }
                 const auto reg = newReg(state, call.fn_type);
-                emit(state, Instr{Op::CallFn, reg, arg0, arg1, fnIndex});
+                emit(state, Instr::callRange(reg, argBase, argCount, fnIndex));
                 return reg;
             }
         }

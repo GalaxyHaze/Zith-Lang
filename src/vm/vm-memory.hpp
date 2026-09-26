@@ -25,6 +25,7 @@ public:
 
     [[nodiscard]] auto read(std::size_t offset, std::size_t count) const -> std::vector<uint8_t>;
     [[nodiscard]] auto cstring(std::size_t offset) const -> std::string_view;
+    [[nodiscard]] auto stringView(std::size_t offset, std::size_t count) const -> std::string_view;
 
     auto write(std::size_t offset, std::span<const std::uint8_t> data) -> bool;
     auto copy(std::size_t dstOffset, std::size_t srcOffset, std::size_t count) -> bool;

@@ -159,6 +159,15 @@ auto validateFunctionShape(const Function &fn) -> bool {
                 missingRegister(fn, rhs, false))
                 return false;
             break;
+        case Op::CallRange:
+            if (missingRegister(fn, dst, false))
+                return false;
+            if (instr.c > 0) {
+                if (missingRegister(fn, instr.b, false) ||
+                    missingRegister(fn, static_cast<uint16_t>(instr.b + instr.c - 1), false))
+                    return false;
+            }
+            break;
         case Op::CallExternRef:
         case Op::CallFnRef:
             if (missingRegister(fn, dst, false) || missingRegister(fn, lhs, false) ||
@@ -401,6 +410,12 @@ auto runFunction(RunState &state, const Function &fn, std::vector<int64_t> &regs
                 state.output.push_back('\n');
             } else if (name == "putchar") {
                 state.output.push_back(static_cast<char>(arg0));
+            } else if (name == "write_stdout") {
+                if (arg1 > 0) {
+                    const std::string_view text = state.memory->stringView(
+                        static_cast<std::size_t>(arg0), static_cast<std::size_t>(arg1));
+                    state.output.append(text.data(), text.size());
+                }
             } else if (name == "malloc") {
                 result = static_cast<int64_t>(
                     state.memory->mallocBytes(static_cast<std::size_t>(arg0), 1));
@@ -463,6 +478,12 @@ auto runFunction(RunState &state, const Function &fn, std::vector<int64_t> &regs
                 state.output.push_back('\n');
             } else if (name == "putchar") {
                 state.output.push_back(static_cast<char>(arg0));
+            } else if (name == "write_stdout") {
+                if (arg1 > 0) {
+                    const std::string_view text = state.memory->stringView(
+                        static_cast<std::size_t>(arg0), static_cast<std::size_t>(arg1));
+                    state.output.append(text.data(), text.size());
+                }
             } else if (name == "malloc") {
                 result = static_cast<int64_t>(
                     state.memory->mallocBytes(static_cast<std::size_t>(arg0), 1));
@@ -512,6 +533,23 @@ auto runFunction(RunState &state, const Function &fn, std::vector<int64_t> &regs
                 calleeRegs[0] = getReg(regs, lhs);
             if (callee->paramCount > 1)
                 calleeRegs[1] = getReg(regs, rhs);
+            const auto [ok, ret] = runFunction(state, *callee, calleeRegs);
+            if (!ok)
+                return {false, 0};
+            if (!setReg(regs, dst, ret))
+                return {false, 0};
+            pc++;
+            break;
+        }
+        case Op::CallRange: {
+            if (instr.imm >= state.module->functions.size())
+                return {false, 0};
+            const auto *callee = &state.module->functions[instr.imm];
+            std::vector<int64_t> calleeRegs(callee->regCount, 0);
+            const std::size_t count = std::min<std::size_t>(instr.c, callee->paramCount);
+            for (std::size_t i = 0; i < count; ++i) {
+                calleeRegs[i] = getReg(regs, static_cast<uint16_t>(instr.b + i));
+            }
             const auto [ok, ret] = runFunction(state, *callee, calleeRegs);
             if (!ok)
                 return {false, 0};

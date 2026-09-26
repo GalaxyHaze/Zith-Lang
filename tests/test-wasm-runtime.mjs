@@ -160,6 +160,25 @@ async function main() {
 
   stdoutChunks.length = 0;
   stderrChunks.length = 0;
+  const printSource = writeString(`from std/io/console
+
+fn add4(a: i32, b: i32, c: i32, d: i32): i32 {
+    a + b + c + d
+}
+
+fn main(): i32 {
+    print("one-");
+    print("two");
+    add4(1, 2, 3, 4)
+}
+`);
+  assertEqual(instance.exports.zith_run_source(printSource.ptr, printSource.len), 0,
+              "print and 4-arg function execute through VM v2");
+  assertEqual(stdoutChunks.join(""), "one-two", "print outputs continuous text without newline");
+  assertEqual(instance.exports.zith_exit_code(), 10n, "add4 computes 10 as main exit code");
+
+  stdoutChunks.length = 0;
+  stderrChunks.length = 0;
   const unsupportedHir = compileSource(unsupportedSource);
   const unsupportedStatus = runHir(unsupportedHir);
   assertEqual(unsupportedStatus, 5, "unsupported construct returns 5");

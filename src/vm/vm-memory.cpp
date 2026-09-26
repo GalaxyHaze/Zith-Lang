@@ -46,6 +46,12 @@ auto LinearMemory::cstring(std::size_t offset) const -> std::string_view {
                             static_cast<std::size_t>(end - begin));
 }
 
+auto LinearMemory::stringView(std::size_t offset, std::size_t count) const -> std::string_view {
+    if (offset > bytes_.size() || count > bytes_.size() - offset)
+        return {};
+    return std::string_view(reinterpret_cast<const char *>(bytes_.data() + offset), count);
+}
+
 auto LinearMemory::write(std::size_t offset, std::span<const std::uint8_t> data) -> bool {
     if (offset > bytes_.size() || data.size() > bytes_.size() - offset)
         return false;
