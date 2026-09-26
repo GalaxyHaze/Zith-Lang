@@ -1,4 +1,5 @@
 const WASM_URL = new URL("../playground/zith-playground.wasm", location.href);
+const STDLIB_PACK_URL = new URL("../playground/zith-stdlib.pack", location.href);
 const RUNTIME_MANIFEST_URL = new URL("../playground/runtime.json", location.href);
 const DEFAULT_SOURCE = `fn main() {
 }`;
@@ -38,15 +39,19 @@ function updateEditorMeta() {
     cursorPosition.textContent = `Ln ${line}, Col ${column}`;
 }
 
-async function readVersionManifest() {
-    try {
-        const response = await fetch(RUNTIME_MANIFEST_URL);
-        if (!response.ok) return null;
-        const manifest = await response.json();
-        return typeof manifest.version === "string" ? manifest.version : null;
-    } catch (_) {
-        return null;
+async function readRuntimeManifest() {
+    const response = await fetch(RUNTIME_MANIFEST_URL);
+    if (!response.ok) throw new Error(`Runtime manifest returned ${response.status}.`);
+    const manifest = await response.json();
+    if (manifest.abi !== 2 || manifest.stdlib !== "zith-stdlib.pack") {
+        throw new Error("Runtime manifest has an incompatible ABI or stdlib asset.");
     }
+    return manifest;
+}
+
+async function sha256Hex(bytes) {
+    const digest = await crypto.subtle.digest("SHA-256", bytes);
+    return [...new Uint8Array(digest)].map(byte => byte.toString(16).padStart(2, "0")).join("");
 }
 
 function buildImportObject(module, instanceRef, writeOutput) {
@@ -134,11 +139,29 @@ async function loadRuntime() {
         runtimeStatusCompact.textContent = "Compiler: Loading…";
         writeOutput("Fetching local WebAssembly build…", "terminal-dim");
 
+        const manifest = await readRuntimeManifest();
         const wasmResponse = await fetch(WASM_URL);
         if (!wasmResponse.ok) throw new Error(`Local module returned ${wasmResponse.status}.`);
-        const module = await WebAssembly.compile(await wasmResponse.arrayBuffer());
+        const stdlibResponse = await fetch(STDLIB_PACK_URL);
+        if (!stdlibResponse.ok) throw new Error(`Local stdlib pack returned ${stdlibResponse.status}.`);
+        const wasmBytes = await wasmResponse.arrayBuffer();
+        const stdlibBytes = await stdlibResponse.arrayBuffer();
+        if (manifest.wasm_sha256 && await sha256Hex(wasmBytes) !== manifest.wasm_sha256) {
+            throw new Error("WASM SHA-256 does not match the runtime manifest.");
+        }
+        if (manifest.stdlib_sha256 && await sha256Hex(stdlibBytes) !== manifest.stdlib_sha256) {
+            throw new Error("Stdlib pack SHA-256 does not match the runtime manifest.");
+        }
+        const module = await WebAssembly.compile(wasmBytes);
         const exports = WebAssembly.Module.exports(module).map(entry => entry.name);
-        const requiredExports = ["memory", "zith_alloc", "zith_free", "zith_compile_source"];
+        const requiredExports = [
+            "memory",
+            "zith_alloc",
+            "zith_free",
+            "zith_compile_source",
+            "zith_run_source",
+            "zith_register_stdlib_pack",
+        ];
         const missingExports = requiredExports.filter(name => !exports.includes(name));
 
         if (missingExports.length) {
@@ -151,9 +174,15 @@ async function loadRuntime() {
         const importObject = buildImportObject(module, instanceRef, writeOutput);
         const instance = await WebAssembly.instantiate(module, importObject);
         instanceRef.instance = instance;
+        const stdlibPack = new Uint8Array(stdlibBytes);
+        const packPointer = instance.exports.zith_alloc(stdlibPack.length);
+        if (!packPointer) throw new Error("The WASM allocator returned a null stdlib pack pointer.");
+        new Uint8Array(instance.exports.memory.buffer, packPointer, stdlibPack.length).set(stdlibPack);
+        const packStatus = instance.exports.zith_register_stdlib_pack(packPointer, stdlibPack.length);
+        instance.exports.zith_free(packPointer, stdlibPack.length);
+        if (packStatus !== 0) throw new Error(readLastErrorFrom(instance.exports));
 
-        const version = await readVersionManifest();
-        const displayVersion = version ? `release ${version}` : "local";
+        const displayVersion = manifest.version ? `release ${manifest.version}` : "local";
         runtime = instance.exports;
         runtimeStatusCompact.textContent = `Compiler: Ready (${displayVersion})`;
         writeOutput(`WebAssembly compiler ready (${displayVersion}).`, "terminal-ok");
@@ -228,8 +257,8 @@ function executeCommand(cmd) {
             writeOutput("Compiler not loaded.", "terminal-error");
             return;
         }
-        if (!runtime.zith_compile_source) {
-            writeOutput("Compiler ABI incompatible (missing zith_compile_source).", "terminal-error");
+        if (!runtime.zith_compile_source || !runtime.zith_run_source) {
+            writeOutput("Compiler ABI incompatible (missing compile/run exports).", "terminal-error");
             return;
         }
 
@@ -287,16 +316,19 @@ function runCompiler(mode, optLevel, emitMask, subcommand) {
         if (!pointer) throw new Error("The WASM allocator returned a null pointer.");
         new Uint8Array(runtime.memory.buffer, pointer, source.length).set(source);
 
-        const result = runtime.zith_compile_source(pointer, source.length, mode, optLevel, emitMask);
+        const result = subcommand === "run"
+            ? runtime.zith_run_source(pointer, source.length)
+            : runtime.zith_compile_source(pointer, source.length, mode, optLevel, emitMask);
         const lastError = readLastError();
 
         if (result === 0) {
             if (subcommand === "check") {
                 writeOutput("check passed", "terminal-ok");
             } else if (subcommand === "build") {
-                writeOutput("build complete (browser WASM simulator stops after HIR)", "terminal-ok");
+                writeOutput("build prepared (HIR artifact ready for cache integration)", "terminal-ok");
             } else {
-                writeOutput("compiled successfully (browser WASM does not execute program output)", "terminal-ok");
+                const exitCode = runtime.zith_exit_code ? runtime.zith_exit_code() : 0;
+                writeOutput(`run completed (exit code ${exitCode})`, "terminal-ok");
             }
         } else {
             if (lastError) writeOutput(lastError, "terminal-error");
@@ -317,11 +349,15 @@ function runCompiler(mode, optLevel, emitMask, subcommand) {
 }
 
 function readLastError() {
-    if (!runtime || !runtime.zith_last_error_ptr || !runtime.zith_last_error_len) return "";
-    const pointer = runtime.zith_last_error_ptr();
-    const length = runtime.zith_last_error_len();
+    return readLastErrorFrom(runtime);
+}
+
+function readLastErrorFrom(exports) {
+    if (!exports || !exports.zith_last_error_ptr || !exports.zith_last_error_len) return "";
+    const pointer = exports.zith_last_error_ptr();
+    const length = exports.zith_last_error_len();
     if (!pointer || !length) return "";
-    return decoder.decode(new Uint8Array(runtime.memory.buffer, pointer, length));
+    return decoder.decode(new Uint8Array(exports.memory.buffer, pointer, length));
 }
 
 const savedCode = new URLSearchParams(window.location.hash.slice(1)).get("code");
