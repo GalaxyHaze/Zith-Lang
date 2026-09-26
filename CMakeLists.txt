@@ -247,7 +247,7 @@ if(ZITH_IS_WASM)
     add_executable(zith-playground src/wasm/playground.cpp src/wasm/wasi-stubs.cpp)
     target_link_libraries(zith-playground PRIVATE zithcLib)
     set_target_properties(zith-playground PROPERTIES OUTPUT_NAME zith-playground SUFFIX ".wasm")
-    target_link_options(zith-playground PRIVATE -Wl,--no-entry -Wl,--export=zith_alloc -Wl,--export=zith_free -Wl,--export=zith_run_source -Wl,--export=zith_compile_source -Wl,--export=zith_emit_hir -Wl,--export=zith_execute_hir -Wl,--export=zith_last_buffer_ptr -Wl,--export=zith_last_buffer_len -Wl,--export=zith_exit_code -Wl,--export=zith_last_error_ptr -Wl,--export=zith_last_error_len -Wl,--export=zith_last_output_ptr -Wl,--export=zith_last_output_len -Wl,--export=zith_error_count -Wl,--export=zith_error_at -Wl,--export=zith_compiler_version_ptr -Wl,--export=zith_compiler_version_len )
+    target_link_options(zith-playground PRIVATE -Wl,--no-entry -sALLOW_MEMORY_GROWTH=1 -sINITIAL_MEMORY=134217728 -sMAXIMUM_MEMORY=268435456 -sSTACK_SIZE=16777216 -Wl,--export=zith_alloc -Wl,--export=zith_free -Wl,--export=zith_run_source -Wl,--export=zith_compile_source -Wl,--export=zith_emit_hir -Wl,--export=zith_execute_hir -Wl,--export=zith_register_stdlib_pack -Wl,--export=zith_last_buffer_ptr -Wl,--export=zith_last_buffer_len -Wl,--export=zith_exit_code -Wl,--export=zith_last_error_ptr -Wl,--export=zith_last_error_len -Wl,--export=zith_last_output_ptr -Wl,--export=zith_last_output_len -Wl,--export=zith_error_count -Wl,--export=zith_error_at -Wl,--export=zith_compiler_version_ptr -Wl,--export=zith_compiler_version_len )
     target_compile_options(zith-playground PRIVATE -Wno-unknown-attributes -Wno-missing-prototypes)
 endif()
 

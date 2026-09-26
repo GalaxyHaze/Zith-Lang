@@ -479,7 +479,8 @@ auto lowerModule(const hir::HirModule &hir, const memory::StringInterner &intern
                                        : lowerOperand(state, ret->value);
                 if (value == kUnassignedReg) {
                     result.ok      = false;
-                    result.message = "unsupported return value in v2 lowering";
+                    result.message = "unsupported return value in v2 lowering for " +
+                                     std::string(linkage);
                     return result;
                 }
                 emit(state, Instr{Op::Ret, static_cast<std::uint16_t>(value), 0, 0, 0});

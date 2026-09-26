@@ -1,5 +1,8 @@
 #include <cstring>
+#include <cstdint>
 #include <string>
+#include <string_view>
+#include <utility>
 #include <vector>
 
 #include "capi/zithc-capi.h"
@@ -21,31 +24,24 @@ static std::string last_output;
 static std::string last_blob;
 static std::vector<std::string> rendered_errors;
 static int64_t last_exit_code = 0;
+static std::vector<std::pair<std::string, std::string>> stdlib_sources;
 
 #ifdef ZITH_IS_WASM
-constexpr const char *kWasmConsoleModule = R"(pub trait Formatable {
-    fn format(self, dest: lend FormatBuffer): IoError;
-}
+constexpr const char *kWasmStdioHeader = R"(#[discardable] pub extern fn getchar(): i32
+#[discardable] pub extern fn putchar(c: i32): i32
+#[discardable] pub extern fn sscanf(input: ?*char, format: *char, ...): i32
+#[discardable] pub extern fn strncmp(left: ?*char, right: ?*char, count: u64): i32
+)";
 
-pub extern fn puts(msg: *char): i32
+constexpr const char *kWasmStdlibHeader = R"(#[discardable] pub extern fn malloc(size: u64): raw opaque
+#[discardable] pub extern fn calloc(count: u64, size: u64): raw opaque
+#[discardable] pub extern fn realloc(ptr: raw opaque, size: u64): raw opaque
+#[discardable] pub extern fn free(ptr: raw opaque)
+)";
 
-pub enum IoError {
-    Ok = 0,
-}
-
-pub struct FormatBuffer {
-    data: ?*char = null,
-    capacity: u64 = 0,
-    length: u64 = 0,
-}
-
-#[discardable]
-pub fn println(msg: []char, values: [...]dyn Formatable): IoError {
-    if (@lengthOf(msg) > 0) {
-        _ = puts(@ptrOf(msg));
-    }
-    return IoError.Ok;
-}
+constexpr const char *kWasmStringHeader = R"(#[discardable] pub extern fn strlen(value: ?*char): u64
+#[discardable] pub extern fn memcpy(destination: ?*char, source: ?*char, size: u64): raw opaque
+#[discardable] pub extern fn snprintf(destination: *char, size: u64, format: *char, ...): i32
 )";
 #endif
 
@@ -114,6 +110,8 @@ constexpr int kPlaygroundStatusInvalidParam  = 2;
 constexpr int kPlaygroundStatusTrap          = 3;
 constexpr int kPlaygroundStatusOom           = 4;
 constexpr int kPlaygroundStatusUnsupported   = 5;
+constexpr std::string_view kStdlibPackMagic  = "ZSTDLIB2";
+constexpr uint32_t kStdlibPackAbi            = 2;
 
 constexpr bool isPlaygroundMode(int mode) {
     return mode == 0 || mode == 1;
@@ -151,6 +149,86 @@ void setErrorMessage(const std::string &message) {
     if (last_error.empty() || last_error.back() != '\n')
         last_error.push_back('\n');
     host_write(2, last_error.data(), last_error.size());
+}
+
+uint32_t readU32(const uint8_t *data, size_t size, size_t &offset, bool &ok) {
+    if (offset > size || size - offset < 4U) {
+        ok = false;
+        return 0;
+    }
+    const uint32_t value = static_cast<uint32_t>(data[offset]) |
+                           (static_cast<uint32_t>(data[offset + 1U]) << 8U) |
+                           (static_cast<uint32_t>(data[offset + 2U]) << 16U) |
+                           (static_cast<uint32_t>(data[offset + 3U]) << 24U);
+    offset += 4U;
+    return value;
+}
+
+bool isSafeStdlibPath(std::string_view path) {
+    if (path.empty() || path.front() == '/' || path.find('\\') != std::string_view::npos)
+        return false;
+    size_t start = 0;
+    while (start < path.size()) {
+        const size_t end = path.find('/', start);
+        const auto component = path.substr(start, end == std::string_view::npos
+                                                   ? path.size() - start
+                                                   : end - start);
+        if (component.empty() || component == "." || component == "..")
+            return false;
+        start = end == std::string_view::npos ? path.size() : end + 1U;
+    }
+    return true;
+}
+
+bool registerStdlibPack(const char *ptr, int len) {
+    stdlib_sources.clear();
+    if (!ptr || len < static_cast<int>(kStdlibPackMagic.size() + 8U))
+        return false;
+
+    const auto *data = reinterpret_cast<const uint8_t *>(ptr);
+    const size_t size = static_cast<size_t>(len);
+    if (std::string_view(reinterpret_cast<const char *>(data), kStdlibPackMagic.size()) !=
+        kStdlibPackMagic)
+        return false;
+
+    size_t offset = kStdlibPackMagic.size();
+    bool ok = true;
+    const uint32_t abi = readU32(data, size, offset, ok);
+    const uint32_t count = readU32(data, size, offset, ok);
+    if (!ok || abi != kStdlibPackAbi || count > 10000U)
+        return false;
+
+    stdlib_sources.reserve(count);
+    for (uint32_t index = 0; index < count; ++index) {
+        const uint32_t path_len = readU32(data, size, offset, ok);
+        const uint32_t text_len = readU32(data, size, offset, ok);
+        if (!ok || path_len == 0U || path_len > size || text_len > size ||
+            offset > size - path_len || offset + path_len > size - text_len)
+            return false;
+        std::string path(reinterpret_cast<const char *>(data + offset), path_len);
+        offset += path_len;
+        std::string text(reinterpret_cast<const char *>(data + offset), text_len);
+        offset += text_len;
+        if (!isSafeStdlibPath(path))
+            return false;
+        for (const auto &[registered_path, registered_text] : stdlib_sources)
+            if (registered_path == path)
+                return false;
+        stdlib_sources.emplace_back(std::move(path), std::move(text));
+    }
+    return offset == size;
+}
+
+void registerStdlibSources(zithc_session *session) {
+    for (const auto &[path, text] : stdlib_sources) {
+        const std::string virtual_path = "stdlib/" + path;
+        zithc_session_register_virtual_source(session, virtual_path.c_str(), text.c_str());
+    }
+#ifdef ZITH_IS_WASM
+    zithc_session_register_virtual_source(session, "stdlib/stdio.h.zith", kWasmStdioHeader);
+    zithc_session_register_virtual_source(session, "stdlib/stdlib.h.zith", kWasmStdlibHeader);
+    zithc_session_register_virtual_source(session, "stdlib/string.h.zith", kWasmStringHeader);
+#endif
 }
 
 int runStatusToPlaygroundStatus(zith::vm::RunStatus status) {
@@ -198,10 +276,7 @@ int runPlayground(const char *ptr, int len, bool is_compile, int mode = 0, int o
     zithc_session_set_emit_flags(session, emit_mask & 2, emit_mask & 4, emit_mask & 8,
                                  emit_mask & 16);
     zithc_session_add_include_dir(session, "stdlib");
-#ifdef ZITH_IS_WASM
-    zithc_session_register_virtual_source(session, "stdlib/std/io/console.zith",
-                                          kWasmConsoleModule);
-#endif
+    registerStdlibSources(session);
 
     // The browser build has no LLVM backend, so emission stops at HIR lowering.
     const bool ok = zithc_run_to(session, ZITHC_STAGE_HIR_LOWERED);
@@ -231,6 +306,9 @@ int runPlayground(const char *ptr, int len, bool is_compile, int mode = 0, int o
 
 } // namespace
 
+extern "C" int zith_emit_hir(const char *ptr, int len);
+extern "C" int zith_execute_hir(const char *ptr, int len);
+
 extern "C" __attribute__((export_name("zith_compile_source"))) int
 zith_compile_source(const char *ptr, int len, int mode, int opt_level, int emit_mask) {
     return runPlayground(ptr, len, true, mode, opt_level, emit_mask);
@@ -238,8 +316,24 @@ zith_compile_source(const char *ptr, int len, int mode, int opt_level, int emit_
 
 extern "C" __attribute__((export_name("zith_run_source"))) int zith_run_source(const char *ptr,
                                                                                int len) {
-    // Run is documented as check + HIR emission; the browser does not execute the program.
-    return runPlayground(ptr, len, false, 1, 0, 0);
+    const int compile_status = zith_emit_hir(ptr, len);
+    if (compile_status != kPlaygroundStatusOk)
+        return compile_status;
+    return zith_execute_hir(last_blob.data(), static_cast<int>(last_blob.size()));
+}
+
+extern "C" __attribute__((export_name("zith_register_stdlib_pack"))) int
+zith_register_stdlib_pack(const char *ptr, int len) {
+    last_error.clear();
+    last_output.clear();
+    last_blob.clear();
+    rendered_errors.clear();
+    last_exit_code = 0;
+    if (!registerStdlibPack(ptr, len)) {
+        setErrorMessage("invalid stdlib pack");
+        return kPlaygroundStatusInvalidParam;
+    }
+    return kPlaygroundStatusOk;
 }
 
 extern "C" __attribute__((export_name("zith_emit_hir"))) int zith_emit_hir(const char *ptr,
@@ -265,8 +359,7 @@ extern "C" __attribute__((export_name("zith_emit_hir"))) int zith_emit_hir(const
     zithc_session_set_mode(session, 1);
     zithc_session_set_opt_level(session, 0);
     zithc_session_add_include_dir(session, "stdlib");
-    zithc_session_register_virtual_source(session, "stdlib/std/io/console.zith",
-                                          kWasmConsoleModule);
+    registerStdlibSources(session);
     const bool ok = zithc_run_to(session, ZITHC_STAGE_HIR_LOWERED);
 
     const char *buffered_out = zithc_session_flush_output(session);

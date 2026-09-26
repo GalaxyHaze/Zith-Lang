@@ -137,6 +137,8 @@ FrontendContext::analyze(SourceCatalog::SourcePtr root_source) {
                 edge.request    = request;
                 edge.targets    = resolved.modules;
                 edge.targetKind = resolved.targetKind;
+                if (resolved.targetKind == ImportTargetKind::Zith && request.isHeader)
+                    edge.request.isFrom = true;
                 if (!resolved.found) {
                     const auto import_name =
                         request.isHeader ? request.headerPath : request.importKey();

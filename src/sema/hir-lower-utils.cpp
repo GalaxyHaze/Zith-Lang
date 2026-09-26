@@ -79,6 +79,15 @@ std::string moduleNamespace(std::string_view module_key, const session::CacheKey
     // vtable/string symbols that depend on it) is stable.
     if (module_key == "stdlib/std/io/console.zith")
         return "std.io.console";
+    if (module_key.starts_with("stdlib/")) {
+        std::string relative = std::string(module_key.substr(7));
+        if (relative.size() > 5U && relative.compare(relative.size() - 5U, 5U, ".zith") == 0)
+            relative.erase(relative.size() - 5U);
+        for (auto &character : relative)
+            if (character == '/' || character == '\\')
+                character = '.';
+        return relative;
+    }
     std::string best_relative;
     size_t best_root_length = 0;
     const auto consider     = [&](const std::string &root) {

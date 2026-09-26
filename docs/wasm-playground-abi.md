@@ -1,16 +1,16 @@
 # WASM Playground ABI
 
 This document describes the stable ABI exported by `zith-playground.wasm` for the browser
-playground. The playground performs lexing, type checking, and HIR lowering. It does not execute
-the submitted program in the browser and does not include LLVM codegen.
+playground. The playground performs lexing, type checking, HIR lowering, and execution through
+the portable VM v2. It does not include LLVM codegen.
 
 The module is a standalone Emscripten build with no entry function. JavaScript provides the
 `zith.host_write` import; the `wasi_snapshot_preview1.fd_write` stub forwards writes to that same
 host callback so compiler and program streams can be rendered without a filesystem.
 
-Since VM v2 was promoted, the playground can compile a source buffer once into a flat HIR blob and
-then execute that blob with the portable VM. The flat HIR format is versioned and self-contained;
-it is defined by `src/wasm/abi-hir.*` and is independent of the `.zirl` cache format.
+The playground can compile a source buffer once into a flat HIR blob and then execute that blob
+with the portable VM. The flat HIR format is versioned and self-contained; it is defined by
+`src/wasm/abi-hir.*` and is independent of the `.zirl` cache format.
 
 ## Exports
 
@@ -18,8 +18,9 @@ it is defined by `src/wasm/abi-hir.*` and is independent of the `.zirl` cache fo
 |---|---|---|
 | `zith_alloc` | `(size: i32) -> i32` | Allocate a byte buffer readable by the module. |
 | `zith_free` | `(ptr: i32, size: i32) -> ()` | Free a buffer returned by `zith_alloc`. |
+| `zith_register_stdlib_pack` | `(ptr: i32, len: i32) -> i32` | Validate and register the host-delivered canonical stdlib pack. Must be called before compilation. |
 | `zith_compile_source` | `(ptr, len, mode, opt_level, emit_mask: i32) -> i32` | Check and emit compiler stages up to HIR. |
-| `zith_run_source` | `(ptr: i32, len: i32) -> i32` | Alias of compile in run mode: check plus HIR output. Does not execute the program. |
+| `zith_run_source` | `(ptr: i32, len: i32) -> i32` | Compile the source to HIR, execute it through VM v2, forward output, and expose its exit code. |
 | `zith_emit_hir` | `(ptr: i32, len: i32) -> i32` | Compile source to a flat HIR blob and expose it through `zith_last_buffer_ptr/len`. |
 | `zith_execute_hir` | `(ptr: i32, len: i32) -> i32` | Decode a flat HIR blob, lower it into VM v2 IR, and run it. |
 | `zith_last_buffer_ptr` | `() -> i32` | Pointer to the flat HIR blob produced by the last `zith_emit_hir` call. |
@@ -52,9 +53,12 @@ it is defined by `src/wasm/abi-hir.*` and is independent of the `.zirl` cache fo
 | `4` | VM v2 ran out of linear memory or guest memory capacity. |
 | `5` | The flat HIR uses a construct outside the current VM v2 lowering slice. |
 
-`zith_emit_hir` returns `1` when the source fails HIR lowering, `2` for an invalid buffer, and
-`0` when a blob is available. `zith_execute_hir` returns `1` for malformed flat HIR, `5` when
-lowering rejects the program, and `3`/`4` for runtime failures.
+`zith_register_stdlib_pack` returns `2` for a malformed pack and clears the previously registered
+pack before attempting registration. `zith_emit_hir` returns `1` when the source fails HIR
+lowering, `2` for an invalid buffer, and `0` when a blob is available. `zith_execute_hir` returns
+`1` for malformed flat HIR, `5` when lowering rejects the program, and `3`/`4` for runtime
+failures. `zith_run_source` combines the emit and execute operations and uses the same status
+codes.
 
 Invalid parameters are reported before any session is created, so callers must check
 `zith_last_error_ptr/len` instead of treating non-zero status as a compiler diagnostic.
@@ -93,6 +97,31 @@ severity: message
 The line remains valid until the next `zith_compile_source` or `zith_run_source` call. An `index`
 greater than or equal to `zith_error_count()` returns `0`. This stable line format is intended for
 the playground. Structured JSON diagnostics will be added by a future LSP-facing API.
+
+## Standard Library Pack
+
+The browser host downloads the pack separately from the WASM module and registers it through
+`zith_register_stdlib_pack`. The pack is generated from the repository's canonical `stdlib/`
+directory by `scripts/package-stdlib.py`; no source files are embedded into the WASM module.
+
+The current format is deliberately small and deterministic:
+
+```text
+bytes[8]  magic = "ZSTDLIB2"
+u32       little-endian ABI version (`2`)
+u32       little-endian entry count
+repeat entry count times:
+  u32     little-endian UTF-8 path length
+  u32     little-endian source byte length
+  bytes   UTF-8 relative path
+  bytes   Zith source
+```
+
+Paths are sorted by their POSIX relative path. The runtime validates the magic, ABI version,
+entry count, safe relative paths, duplicate paths, length bounds, and exact end-of-buffer before
+exposing entries as virtual sources under `stdlib/`. The WASM-only `stdio.h`, `stdlib.h`, and
+`string.h` bindings are added as small virtual headers because the browser has no native include
+filesystem; the regular Zith stdlib remains the canonical implementation.
 
 ## JavaScript Buffer Helpers
 

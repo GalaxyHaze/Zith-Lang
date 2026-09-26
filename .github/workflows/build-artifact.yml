@@ -550,12 +550,16 @@ jobs:
         shell: bash
         run: cmake --build build-wasm --config Release
 
+      - name: Package browser stdlib
+        shell: bash
+        run: python3 scripts/package-stdlib.py stdlib build-wasm/zith-stdlib.pack
+
       - name: Prepare artifact
         shell: bash
         run: |
           mkdir -p artifacts wasm-staging
           [ -d build-wasm/bin ] && cp build-wasm/bin/* wasm-staging/ || true
-          find build-wasm -maxdepth 1 -type f \( -name '*.wasm' -o -name '*.js' -o -name '*.html' \) -exec cp {} wasm-staging/ \;
+          find build-wasm -maxdepth 1 -type f \( -name '*.wasm' -o -name '*.js' -o -name '*.html' -o -name '*.pack' \) -exec cp {} wasm-staging/ \;
           find build-wasm/src -type f -name '*.a' -exec cp {} wasm-staging/ \;
           if [ -z "$(ls wasm-staging)" ]; then echo "No WASM artifacts found"; exit 1; fi
           cd wasm-staging && zip -r ../artifacts/zithc-wasm.zip . && cd ..
@@ -589,9 +593,13 @@ jobs:
           gh release download "${{ steps.tag.outputs.tag }}" \
             --repo "${{ github.repository }}" \
             --pattern "zithc-wasm.zip"
-          unzip -o -d wasm-sync zithc-wasm.zip zith-playground.wasm
+          unzip -o -d wasm-sync zithc-wasm.zip zith-playground.wasm zith-stdlib.pack
           test -s wasm-sync/zith-playground.wasm
-          printf '{"version":"v%s"}\n' "${{ steps.tag.outputs.version }}" > wasm-sync/runtime.json
+          test -s wasm-sync/zith-stdlib.pack
+          WASM_SHA=$(sha256sum wasm-sync/zith-playground.wasm | cut -d' ' -f1)
+          STDLIB_SHA=$(sha256sum wasm-sync/zith-stdlib.pack | cut -d' ' -f1)
+          printf '{"version":"v%s","abi":2,"stdlib":"zith-stdlib.pack","wasm_sha256":"%s","stdlib_sha256":"%s"}\n' \
+            "${{ steps.tag.outputs.version }}" "$WASM_SHA" "$STDLIB_SHA" > wasm-sync/runtime.json
           ls -l wasm-sync/
         env:
           GH_TOKEN: ${{ secrets.RELEASE_PAT }}
@@ -607,10 +615,11 @@ jobs:
           cd site
           mkdir -p playground
           cp ../wasm-sync/zith-playground.wasm playground/zith-playground.wasm
+          cp ../wasm-sync/zith-stdlib.pack playground/zith-stdlib.pack
           cp ../wasm-sync/runtime.json playground/runtime.json
 
-          if ! git diff --quiet -- playground/zith-playground.wasm playground/runtime.json; then
-            git add playground/zith-playground.wasm playground/runtime.json
+          if ! git diff --quiet -- playground/zith-playground.wasm playground/zith-stdlib.pack playground/runtime.json; then
+            git add playground/zith-playground.wasm playground/zith-stdlib.pack playground/runtime.json
             git commit -m "chore: sync playground wasm v${{ steps.tag.outputs.version }}"
             git push origin gh-pages
           else

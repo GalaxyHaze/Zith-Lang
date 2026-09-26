@@ -227,8 +227,17 @@ FrontendContext::resolveImport(const ModuleArtifact &artifact, const ImportReque
                                const std::vector<std::string> &visible_roots) const {
 #ifdef ZITH_IS_WASM
     if (request.isAsset || request.isHeader) {
-        (void)artifact;
-        (void)visible_roots;
+        if (request.isAsset) {
+            (void)artifact;
+            (void)visible_roots;
+            return {};
+        }
+        const std::string header_path = request.headerPath + ".zith";
+        for (const auto &root : visible_roots) {
+            const auto path = root + "/" + header_path;
+            if (sourceForPath(path))
+                return {{path}, ImportTargetKind::Zith, true};
+        }
         return {};
     }
     const std::string import_path = request.importKey();

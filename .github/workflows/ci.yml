@@ -93,7 +93,8 @@ jobs:
             -DCMAKE_CROSSCOMPILING=ON \
             -DZITH_IS_WASM=ON
           cmake --build build-wasm -j$(nproc)
+          python3 scripts/package-stdlib.py stdlib build-wasm/zith-stdlib.pack
 
       - name: Test WASM runtime ABI
         if: matrix.wasm_test
-        run: node tests/test-wasm-runtime.mjs build-wasm/zith-playground.wasm
+        run: node tests/test-wasm-runtime.mjs build-wasm/zith-playground.wasm build-wasm/zith-stdlib.pack
