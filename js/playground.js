@@ -1,7 +1,10 @@
 const WASM_URL = new URL("../playground/zith-playground.wasm", location.href);
 const STDLIB_PACK_URL = new URL("../playground/zith-stdlib.pack", location.href);
 const RUNTIME_MANIFEST_URL = new URL("../playground/runtime.json", location.href);
-const DEFAULT_SOURCE = `fn main() {
+const DEFAULT_SOURCE = `from std/io/console
+
+fn main() {
+    _ = println("Hello, World!");
 }`;
 
 const editor = document.getElementById("source-code");
