@@ -260,6 +260,12 @@ jobs:
           zig version
           test "$(zig version)" = "$ZIG_VER"
 
+      - name: Install musl build dependencies
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zlib1g-dev libzstd-dev
+
       - name: Build
         shell: bash
         run: |
@@ -677,7 +683,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: GalaxyHaze/zith-lsp
-          ref: main
+          ref: f09b56d0b093a2df114bfae819f4a92d1a62d375
           token: ${{ secrets.RELEASE_PAT }}
           path: lsp
 

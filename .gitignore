@@ -36,6 +36,7 @@ _deps/
 # Logs and temp files
 *.log
 *.tmp
+*.ses
 *.swp
 *.swo
 

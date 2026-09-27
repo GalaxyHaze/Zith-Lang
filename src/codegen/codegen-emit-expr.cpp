@@ -962,8 +962,12 @@ llvm::Value *CodeGenEmit::emitRuntimePanic(const hir::HirRuntimePanic &panic) {
             llvm::GlobalValue::InternalLinkage, "__zith_runtime_panic", module_);
         auto *entry = llvm::BasicBlock::Create(builder_.getContext(), "entry", panic_fn);
         llvm::IRBuilder<> body_builder(entry);
+#if LLVM_VERSION_MAJOR >= 19
         body_builder.CreateCall(
             llvm::Intrinsic::getOrInsertDeclaration(module_, llvm::Intrinsic::trap));
+#else
+        body_builder.CreateCall(llvm::Intrinsic::getDeclaration(module_, llvm::Intrinsic::trap));
+#endif
         body_builder.CreateUnreachable();
     }
     builder_.CreateCall(panic_fn, llvm::ConstantInt::get(

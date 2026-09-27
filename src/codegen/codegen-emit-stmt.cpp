@@ -102,8 +102,7 @@ void CodeGenEmit::registerParams(const hir::HirFunction &fn, llvm::Function *llv
             // with a residual qualifier; applying readonly/nocapture there is an
             // LLVM type error.
             if (borrow_attr && is_pointer) {
-                argIt->addAttr(llvm::Attribute::getWithCaptureInfo(argIt->getContext(),
-                                                                   llvm::CaptureInfo::none()));
+                argIt->addAttr(llvm::Attribute::get(argIt->getContext(), "nocapture"));
                 if (slotAttrs->ownership == hir::HirOwnership::View)
                     argIt->addAttr(llvm::Attribute::ReadOnly);
             }
