@@ -2,7 +2,13 @@ param(
     [string]$Version = ""
 )
 
-$Repo = "GalaxyHaze/Zith"
+$Repo = if ([string]::IsNullOrWhiteSpace($env:ZITH_REPOSITORY)) {
+    "GalaxyHaze/Zith-Lang"
+} else {
+    $env:ZITH_REPOSITORY
+}
+$InstallRootOverride = $env:ZITH_INSTALL_ROOT
+$ReleaseBaseUrl = $env:ZITH_RELEASE_BASE_URL
 
 if ([string]::IsNullOrWhiteSpace($Version)) {
     Write-Host "No version specified. Fetching latest version..."
@@ -16,6 +22,16 @@ if ([string]::IsNullOrWhiteSpace($Version)) {
     }
 } else {
     Write-Host "Installing requested version: $Version" -ForegroundColor Yellow
+}
+
+if (-not $Version.StartsWith("v")) {
+    $Version = "v$Version"
+}
+
+if ([string]::IsNullOrWhiteSpace($ReleaseBaseUrl)) {
+    $ReleaseBaseUrl = "https://github.com/$Repo/releases/download/$Version"
+} else {
+    $ReleaseBaseUrl = $ReleaseBaseUrl.TrimEnd("/")
 }
 
 # Detect OS and architecture
@@ -34,9 +50,13 @@ if ($IsArm64) {
     $FileName = "zithc-windows-amd64.exe"
 }
 
-$DownloadUrl = "https://github.com/$Repo/releases/download/$Version/$FileName"
+$DownloadUrl = "$ReleaseBaseUrl/$FileName"
 $TempPath = "$env:TEMP\zithc-installer.exe"
-$ZithRoot = Join-Path $env:LOCALAPPDATA "Zith"
+$ZithRoot = if ([string]::IsNullOrWhiteSpace($InstallRootOverride)) {
+    Join-Path $env:LOCALAPPDATA "Zith"
+} else {
+    $InstallRootOverride
+}
 $InstallDir = Join-Path $ZithRoot "bin"
 $StdlibDir = Join-Path $ZithRoot "share\zith\stdlib"
 
@@ -52,6 +72,21 @@ try {
 Write-Host "Installing Zith to $InstallDir..."
 
 try {
+    # Stage and validate the stdlib before changing the installed compiler.
+    $StdlibArchivePath = "$env:TEMP\zithc-stdlib.zip"
+    $StdlibStage = Join-Path $env:TEMP "zithc-stdlib-stage-$PID"
+    $StdlibUrl = "$ReleaseBaseUrl/zithc-stdlib-$Version.zip"
+    Write-Host "Downloading stdlib..." -ForegroundColor Cyan
+    Invoke-WebRequest -Uri $StdlibUrl -OutFile $StdlibArchivePath -UseBasicParsing
+    if (Test-Path $StdlibStage) {
+        Remove-Item -Path $StdlibStage -Recurse -Force
+    }
+    New-Item -ItemType Directory -Path $StdlibStage -Force | Out-Null
+    Expand-Archive -Path $StdlibArchivePath -DestinationPath $StdlibStage -Force
+    if (-not (Test-Path (Join-Path $StdlibStage "std\io\console.zith"))) {
+        throw "downloaded stdlib is missing std\io\console.zith"
+    }
+
     if (-not (Test-Path $InstallDir)) {
         New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
     }
@@ -71,21 +106,14 @@ try {
         Write-Host "Added $InstallDir to your user PATH." -ForegroundColor Green
     }
 
-    # Download and extract stdlib
-    $StdlibUrl = "https://github.com/$Repo/releases/download/$Version/zithc-stdlib-$Version.zip"
-    Write-Host "Downloading stdlib..." -ForegroundColor Cyan
-    try {
-        Invoke-WebRequest -Uri $StdlibUrl -OutFile "$env:TEMP\zithc-stdlib.zip" -UseBasicParsing
-        if (-not (Test-Path $StdlibDir)) {
-            New-Item -ItemType Directory -Path $StdlibDir -Force | Out-Null
-        }
-        Get-ChildItem -Path $StdlibDir -Force | Remove-Item -Recurse -Force
-        Expand-Archive -Path "$env:TEMP\zithc-stdlib.zip" -DestinationPath $StdlibDir -Force
-        Remove-Item -Path "$env:TEMP\zithc-stdlib.zip" -Force
-        Write-Host "Standard library installed to $StdlibDir" -ForegroundColor Green
-    } catch {
-        Write-Warning "Failed to download stdlib. The compiler may not find standard library files."
+    if (Test-Path $StdlibDir) {
+        Remove-Item -Path $StdlibDir -Recurse -Force
     }
+    $StdlibParent = Split-Path -Parent $StdlibDir
+    New-Item -ItemType Directory -Path $StdlibParent -Force | Out-Null
+    Move-Item -Path $StdlibStage -Destination $StdlibDir -Force
+    Remove-Item -Path $StdlibArchivePath -Force
+    Write-Host "Standard library installed to $StdlibDir" -ForegroundColor Green
 
     Write-Host "--------------------------------------------------"
     Write-Host "Installation Complete!" -ForegroundColor Green

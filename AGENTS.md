@@ -30,7 +30,10 @@ ctest --test-dir build --output-on-failure
 
 Use `./build/zithc --help` to inspect the local CLI. A useful compiler smoke
 test is `./build/zithc --include stdlib check examples/hello-world.zith`.
-LLVM is optional: CMake disables native code generation when it is unavailable.
+LLVM remains optional for parser/sema-only local builds, but every native
+release artifact and the native CI jobs must configure `ZITH_REQUIRE_LLVM=ON`
+with LLVM 18+; those release paths fail instead of publishing a sema-only
+compiler.
 Use `cmake --build build --target fmt` to format sources, or
 `cmake --build build --target fmt-check` to verify formatting without edits.
 

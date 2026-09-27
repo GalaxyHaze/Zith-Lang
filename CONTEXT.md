@@ -422,6 +422,14 @@ _Avoid_: variable identity, symbol identity, value identity
 Moving an entire aggregate requires every ownership-relevant FieldNode to be alive at the move point. The move itself only re-targets the symbol to the AggregateNode and marks the old symbol dead.
 _Avoid_: struct copy, container move, whole-value transfer
 
+**Physical move**:
+The relocation of a resource between struct fields or compatible value slots. The source becomes uninitialized and only the destination remains valid; the source can be restored with `=`.
+_Avoid_: shallow copy, bit copy, value relocation
+
+**Logical move**:
+The transfer or consumption of a storage identity, address, or ownership edge through an ownership-qualified binding. The old symbol cannot be restored by writing through it; `:=` creates a new aggregate/resource identity.
+_Avoid_: address move, ownership move, slot move
+
 **Partial field move**:
 Moving one field out of an aggregate consumes only that FieldNode and leaves sibling FieldNodes alive; a subsequent whole-aggregate move is then rejected until the consumed FieldNode is restored.
 _Avoid_: field extraction, partial copy, member move
@@ -437,6 +445,22 @@ _Avoid_: eager view, hard view
 **Execution flow**:
 A control-flow lineage used by NRA to distinguish ordinary sequential execution from an explicitly forked execution branch. Read/write coexistence is allowed within one flow; a thread fork creates a new flow and requires ownership/share rules to prevent conflicting cross-flow access.
 _Avoid_: thread context, runtime flow, execution path
+
+**Bounded flow**:
+An execution flow whose lifetime is scoped by its parent and whose resources can be joined or merged before the parent scope ends.
+_Avoid_: normal thread, scoped task
+
+**Unbounded flow**:
+An execution flow that may outlive its parent. Borrowed resources crossing into it require an explicit revocable contract.
+_Avoid_: detached ownership, background task
+
+**Revokable**:
+A capability wrapper for a `view` or `lend` resource that may be invalidated by its parent flow. Direct proxy operations can yield `Nil`; `acquire()` creates a scoped guard with normal access until release.
+_Avoid_: revocable pointer, nullable borrow, cancellable reference
+
+**Waiter**:
+The minimal synchronization contract passed to a thread flow. It exposes `wait()`; the thread implementation decides whether waiting means joining, merging, or waiting for revocation completion.
+_Avoid_: thread handle, future, join token
 
 **Node provenance**:
 The resource-identity relation carried by a returned value or field. A result may identify an existing node directly, including a specific FieldNode, rather than merely recording the argument position from which it originated.

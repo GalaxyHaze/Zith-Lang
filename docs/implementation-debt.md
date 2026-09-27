@@ -1,6 +1,6 @@
 # Zith Implementation Debt
 
-> Last updated: 2026-09-17 (cache/ZIRL, monolith split and IR VM curation).
+> Last updated: 2026-09-26 (release, CI and distribution contract audit).
 
 Documento de gestão da dívida de implementação. Distingue propositadamente:
 
@@ -20,42 +20,112 @@ engenharia para rever e gerir.
 
 - Os installers de release substituem o conteúdo de `<prefix>/share/zith/stdlib`
   antes de extrair, para evitar ficheiros stdlib antigos após um upgrade.
-- O manifest `.github/scoop/bucket/zithc.json` aponta para
-  `GalaxyHaze/Zith` versão `0.6.3`, mas os quatro hashes ficaram como
-  placeholders vazios. O workflow `update-package.yml` já usa
-  `${{ github.repository }}` e deve regenerar URLs/hashes no próximo release.
-  Hashes não foram inventados nesta rama porque a auditoria correu sem acesso
-  a artefactos publicados.
+- Os smoke tests dos installers usam agora `examples/loops-simple.zith`, que
+  exercita o compilador sem depender de libclang/C-header interop. A presença
+  de `std/io/console.zith` continua a ser validada separadamente para cobrir
+  descoberta e empacotamento da stdlib.
+- O manifest `.github/scoop/bucket/zithc.json` foi regenerado para a release
+  publicada `v0.6.3.2` do repositório canónico `GalaxyHaze/Zith-Lang`: os dois
+  binários Windows e o ZIP da stdlib têm agora os quatro SHA-256 verificados
+  contra os digests da release. O job `update-distribution` de
+  `build-artifact.yml` repete esse cálculo automaticamente para cada release e
+  valida o manifest em modo estrito. `update-package.yml` ficou apenas como
+  reparação manual para releases antigas.
 - Os shims Scoop executam `zithc` a partir de `~\scoop\shims`, fora do prefixo
-  da app. A descoberta automática por caminho do exe só é garantida para
-  invocação direta do binário real. O workaround documentado é `ZITH_STDLIB`
-  ou `--include`.
+  da app. O binário Windows resolve o caminho do módulo real com
+  `GetModuleFileNameW`, e o smoke Scoop agora executa um `check` com
+  `std/io/console` através do shim. `ZITH_STDLIB` e `--include` continuam
+  disponíveis como overrides explícitos.
 - O novo layout de `scripts/install.ps1` (`%LOCALAPPDATA%\Zith\bin` +
-  `%LOCALAPPDATA%\Zith\share\zith\stdlib`) e o novo ramo MSYS/MinGW/Cygwin de
-  `scripts/install.sh` dependem do runtime ser testado em Windows real; até
-  esse teste estar em CI, ficam verificados por sintaxe e pela análise estática
-  do código.
-- Em `.github/workflows/build-artifact.yml` o job Windows ARM64 usa
-  `msvc_arch: amd64_arm64`, pelo que o step "Setup Zig (for Windows arm64
-  cross-compile)" está morto (`if: ... msvc_arch == ''`). O target atual usa
-  clang-cl/LLVM para ARM64. O dead step deve ser removido ou a estratégia deve
-  ser resolvida antes de confiar num segundo fallback Zig.
-- O CI regular (`ci.yml`) só corre nativo em `ubuntu-latest`. Não valida os
-  installers `install.ps1`/`install.sh`, o layout Scoop, os artifacts de release
-  contra `findStdlibRoots()`, nem executa um smoke test de stdlib após instalar.
-  A validação efetiva desses caminhos fica residualmente sem cobertura
-  automática até haver um job Windows/macOS ou um teste de instalação em
-  diretório temporário.
-- O workflow `create-new-release.yml` aponta para
-  `raw.githubusercontent.com/${{ github.repository }}/master/...`, mas a branch
-  atual do repositório é `main`. Os comandos de instalação publicados num
-  release podem apontar para uma branch inexistente/antiga até o script ser
-  corrigido para `main`.
-- O bucket Scoop e o dispatch Homebrew são actualizados por
-  `update-package.yml`. As falhas desse fluxo não são visíveis em PRs deste
-  repo e dependem de `RELEASE_PAT`/do tap externo. A regeneração de hashes e o
-  teste de `scoop install` só podem ser confirmados fora desta rama ou num
-  follow-up manual.
+  `%LOCALAPPDATA%\Zith\share\zith\stdlib`) e o ramo MSYS/MinGW/Cygwin de
+  `scripts/install.sh` têm agora smoke tests no `build-artifact`. Os installers
+  também aceitam `ZITH_INSTALL_ROOT` e `ZITH_RELEASE_BASE_URL`, permitindo testar
+  uma instalação isolada sem privilégios administrativos. O teste local Unix
+  confirmou a descoberta automática da stdlib a partir do layout instalado.
+  O repositório padrão dos três installers é agora
+  `GalaxyHaze/Zith-Lang`, que é o destino canónico do rename; forks podem
+  definir `ZITH_REPOSITORY` sem editar os scripts.
+  Continua pendente a primeira execução real da matriz Windows, incluindo ARM.
+- Em `.github/workflows/build-artifact.yml` os targets ARM64 usam runners
+  nativos e pedem LLVM explicitamente; CMake falha se LLVM 18+ não estiver
+  disponível, em vez de publicar um compilador sem codegen. Os quatro jobs
+  Windows fornecem também o `LLVM_DIR` do pacote Chocolatey, porque o layout
+  CMake do LLVM não pode depender apenas do `PATH` do runner.
+- O CI regular (`ci.yml`) exige agora LLVM 18+ nos builds nativos Debug/Release.
+  O `build-artifact` adicionou smoke tests de `install.sh`, `install.ps1` e
+  Scoop, além da validação estrutural do manifest. O CI WASM continua a
+  executar o runtime ABI. A cobertura de runners ARM e a instalação Scoop
+  permanecem dependentes de uma execução de release real.
+- O workflow `create-new-release.yml` publica os comandos de instalação a partir
+  de `raw.githubusercontent.com/${{ github.repository }}/main/...`, alinhado
+  com a branch atual. O mesmo workflow agora expõe a versão normalizada
+  (`v` removido do input) como output do job de tag e usa esse output ao chamar
+  `build-artifact`, evitando tags inválidas como `vv1.2.3` quando o operador
+  fornece a versão com prefixo `v`.
+- O bucket Scoop e a fórmula Homebrew são actualizados no job
+  `update-distribution` de `build-artifact.yml`; ambos dependem de
+  `RELEASE_PAT` e do tap externo. O Homebrew recebe a fórmula completa através
+  da Contents API, protegida pelo SHA do ficheiro remoto, em vez de depender de
+  um workflow remoto que só substitua texto parcial. O smoke de `scoop install`
+  corre depois da atualização automática do manifest, usando o conteúdo de
+  `main`. Os contratos estáticos de Scoop/Homebrew usam o identificador
+  canónico `GalaxyHaze/Zith-Lang`. Os workflows usam `github.repository`, que o
+  GitHub resolve para esse nome após o rename de `GalaxyHaze/Zith`.
+- A fórmula Homebrew passa explicitamente o diretório CMake de
+  `Formula["llvm"].opt_lib`, pois LLVM é keg-only e não deve ser descoberto por
+  acaso através do `PATH`. A fórmula exige LLVM e essa dependência é agora
+  verificável pelo contrato offline.
+- O job `validate-release-assets` bloqueia a atualização de distribuição até
+  todos os binários nativos, variantes musl, LSP, WASM e os dois formatos da
+  stdlib existirem na mesma release. Assim, uma release parcial não pode
+  produzir metadados Scoop/Homebrew aparentemente válidos nem sincronizar uma
+  versão incompleta para o playground.
+- A validação de assets deixou de ser o único gate de publicação: `update-distribution`
+  e `sync-playground-wasm` esperam também os smoke tests dos installers Unix,
+  Windows e WASM. O smoke Scoop continua depois do update do manifest, porque
+  depende precisamente dos hashes/URLs que esse job gera.
+- `create-new-release.yml` mantém a release como draft durante toda a construção.
+  O job `publish-release` só remove o draft depois de assets, installers,
+  metadados de distribuição, Scoop e sincronização do playground WASM passarem.
+  Uma falha intermédia deixa uma release draft diagnosticável em vez de expor
+  uma release incompleta.
+- `scripts/validate-release-contract.py` verifica cada job nativo
+  (`build-main`, `build-musl` e `build-lsp`) individualmente, exigindo
+  `ZITH_HAS_LLVM=ON` e `ZITH_REQUIRE_LLVM=ON`, e confirma que o job WASM fica
+  fora desse requisito. O SHA do archive Homebrew é calculado a partir de um
+  download local com `curl --fail --retry`, não de uma pipeline que possa
+  mascarar uma resposta truncada.
+- `scripts/test-release-contract.py` executa os dois geradores contra assets
+  temporários e confirma os quatro hashes Scoop, a versão/URL/SHA Homebrew e a
+  validação estrita do manifest. O CI corre este teste sem acesso à rede.
+- `scripts/verify-llvm-build.py` lê o `CMakeCache.txt` gerado e impede que um
+  job publique um artefacto sem o backend LLVM efetivamente configurado. A
+  versão detectada é persistida por CMake e precisa de ser 18 ou superior.
+- Os builds musl deixaram de resolver a versão mais recente do Zig em tempo de
+  execução. O workflow fixa Zig `0.13.0`, confirma que o executável descarregado
+  reporta essa versão e verifica no `CMakeCache.txt` que o triple configurado
+  coincide com cada target musl da matriz. O teste offline cobre tanto a
+  aceitação do target correto como a rejeição de um target diferente.
+- O gate `validate-release-assets` também abre `zithc-wasm.zip` e exige
+  `zith-playground.wasm` e `zith-stdlib.pack` não vazios antes de atualizar
+  Scoop, Homebrew ou o playground. Essa regra vive agora em
+  `scripts/validate-release-assets.py` e é exercitada pelo teste offline do
+  contrato, evitando que a lista de assets do workflow e a validação do bundle
+  WASM evoluam separadamente.
+- `scripts/install-wasm.sh` aceita `ZITH_RELEASE_BASE_URL`, limpa o diretório
+  anterior durante upgrades e falha se o bundle não trouxer o WASM ou o pack
+  stdlib. O `build-artifact` executa agora um smoke test desse instalador.
+- `update-package.yml` continua disponível apenas para reparar releases antigas,
+  mas agora reutiliza `update-scoop-manifest.py` e
+  `update-homebrew-formula.py`, com o mesmo cálculo fail-fast de SHA do fluxo
+  automático. Os dois manifests são commitados juntos, e o workflow partilha
+  com `build-artifact` um grupo de concorrência que serializa os pushes para
+  `main`.
+- `install.sh` e `install.ps1` fazem download e validação da stdlib em staging
+  antes de substituir o binário ou a stdlib anterior. O caminho Unix foi
+  testado para sucesso e falha sem deixar uma instalação parcial; a validação
+  sintática/execução PowerShell permanece coberta pelo runner Windows, pois
+  `pwsh` não está instalado no ambiente local.
 
 ---
 
@@ -154,7 +224,6 @@ O ficheiro `impl-status.md` foi atualizado de `Cache | Partial` para
   arrow, index e coerção; uso sem prova reporta `E3005` e `raw`/`must` são os
   opt-outs explícitos.
 - Casts numéricos estreitantes não verificam overflow.
-- `++` / `--` não existem.
 - Formatter reimprime `for (cond)` como `while` (`ExprKind::While` no
   round-trip).
 - `..` é lexado caractere a caractere.
@@ -547,31 +616,36 @@ ou RTTI.
 
 ### Contrato Homebrew depende de um tap externo não verificável localmente
 
-O workflow [update-package.yml](/home/diogo/Zith/.github/workflows/update-package.yml:144)
-resolve a tag e calcula o sha256 do archive GitHub em
-`https://github.com/GalaxyHaze/Zith/archive/refs/tags/v${version}.tar.gz`, depois
-dispara `repository_dispatch` para `GalaxyHaze/homebrew-zithc`. A fórmula
-recomendada fica documentada em
+O job [update-distribution](/home/diogo/Zith/.github/workflows/build-artifact.yml:309)
+resolve a tag, calcula os hashes dos assets Windows/stdlib e calcula o sha256
+do archive GitHub em
+`https://github.com/GalaxyHaze/Zith-Lang/archive/refs/tags/v${version}.tar.gz`, depois
+faz `PUT` da fórmula completa em `GalaxyHaze/homebrew-zithc` através da Contents
+API. A fórmula recomendada fica documentada em
 [zithc.rb](/home/diogo/Zith/.github/homebrew/zithc.rb): build a partir do source
-tag com `-DZITH_HAS_LLVM=OFF -DZITH_ENABLE_FFI=OFF`, e stdlib instalada em
+tag com `-DZITH_HAS_LLVM=ON -DZITH_REQUIRE_LLVM=ON`, e stdlib instalada em
 `share/zith/stdlib`, o caminho já lido por
 [stdlib-discovery.cpp](/home/diogo/Zith/src/support/stdlib-discovery.cpp:107).
 
+O archive e o SHA da release `v0.6.3.2` foram verificados localmente. O
+workflow futuro recalcula esse SHA a partir do archive da tag e envia os mesmos
+dados no dispatch.
+
 Risco residual e validação em aberto:
 
-- Não há fonte local para o conteúdo/fórmulas de `GalaxyHaze/homebrew-zithc`.
-  Sem rede não é possível confirmar se o tap está desatualizado, apontando para
-  um owner antigo (`GalaxyHaze/homebrew-zith`) ou se realmente possui a fórmula
-  esperada.
+- A fórmula atualmente publicada ainda não exige LLVM nem instala a stdlib no
+  layout esperado. O `build-artifact` agora substitui a fórmula inteira na
+  release seguinte, mas a convergência inicial e o build Homebrew real do tap
+  continuam pendentes até uma execução autenticada do fluxo.
 - O release atual não publica um binário macOS estável usado pela fórmula. A
   escolha defensável é build-from-source do archive de tag, sem inventar hash.
-- O dispatch usa `github.repository_owner`, portanto o tap é `GalaxyHaze`
-  quando este repo o usar como remote. O local `Zith-Lang` nos manifests Scoop
-  é uma divergência externa que deve ser corrigida no tap/release automation.
+- A atualização usa `github.repository_owner`, portanto o tap é `GalaxyHaze`
+  quando este repo o usar como remote. O workflow remoto antigo pode continuar
+  no tap para compatibilidade, mas já não é a fonte de sincronização.
 
-Acção recomendada: validar o tap com acesso de rede, verificar se a fórmula
-aceita o payload `new-release` e substituir os placeholders de versão/sha256
-quando houver um release tag real.
+Acção recomendada: atualizar o tap externo para a fórmula LLVM-enabled desta
+rama e confirmar o build Homebrew numa release real. Essa alteração fica fora
+da work-tree deste repositório.
 
 ---
 

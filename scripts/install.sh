@@ -1,10 +1,12 @@
 #!/bin/bash
-set -e
+set -euo pipefail
 
-REPO="GalaxyHaze/Zith"
+REPO="${ZITH_REPOSITORY:-GalaxyHaze/Zith-Lang}"
 VERSION=""
 USE_MUSL=false
 OUTPUT_NAME="zithc"
+INSTALL_ROOT="${ZITH_INSTALL_ROOT:-}"
+RELEASE_BASE_URL="${ZITH_RELEASE_BASE_URL:-}"
 
 usage() {
     echo "Usage: $0 [--musl] [<version>]"
@@ -30,13 +32,24 @@ normalize_version() {
     esac
 }
 
+release_base_url() {
+    if [ -n "$RELEASE_BASE_URL" ]; then
+        printf '%s\n' "${RELEASE_BASE_URL%/}"
+    else
+        printf 'https://github.com/%s/releases/download/%s\n' "$REPO" "$VERSION"
+    fi
+}
+
 detect_latest_version() {
     # Try authenticated request first (spares rate limit), fall back to unauthenticated
     API_URL="https://api.github.com/repos/$REPO/releases/latest"
-    if [ -n "$GITHUB_TOKEN" ]; then
-        VERSION=$(curl -sH "Authorization: token $GITHUB_TOKEN" "$API_URL" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
+    if [ -n "${GITHUB_TOKEN:-}" ]; then
+        VERSION=$(curl --fail --silent --show-error \
+            -H "Authorization: token $GITHUB_TOKEN" "$API_URL" |
+            grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
     else
-        VERSION=$(curl -s "$API_URL" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
+        VERSION=$(curl --fail --silent --show-error "$API_URL" |
+            grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
     fi
 
     if [ -z "$VERSION" ]; then
@@ -76,7 +89,11 @@ case "$OS" in
         fi
         ;;
     Darwin*)
-        FILE_NAME="zithc-macos-universal"
+        case "$ARCH" in
+            arm64|aarch64) FILE_NAME="zithc-macos-arm64" ;;
+            x86_64|amd64) FILE_NAME="zithc-macos-amd64" ;;
+            *) echo "Architecture not supported on macOS: $ARCH" >&2; exit 1 ;;
+        esac
         ;;
     MINGW*|MSYS*|CYGWIN*)
         FILE_NAME="zithc-windows-amd64.exe"
@@ -85,7 +102,7 @@ case "$OS" in
     *) echo "OS not supported: $OS" >&2; exit 1 ;;
 esac
 
-DOWNLOAD_URL="https://github.com/$REPO/releases/download/$VERSION/$FILE_NAME"
+DOWNLOAD_URL="$(release_base_url)/$FILE_NAME"
 TMP_DIR=$(mktemp -d)
 trap 'rm -rf "$TMP_DIR"' EXIT
 TMP_FILE="$TMP_DIR/$OUTPUT_NAME"
@@ -101,42 +118,66 @@ chmod +x "$TMP_FILE"
 
 case "$OS" in
     MINGW*|MSYS*|CYGWIN*)
-        PREFIX="${ZITH_PREFIX:-$HOME/.local}"
+        PREFIX="${INSTALL_ROOT:-${ZITH_PREFIX:-$HOME/.local}}"
         BIN_DIR="$PREFIX/bin"
         STDLIB_DIR="$PREFIX/share/zith/stdlib"
-        mkdir -p "$BIN_DIR" "$STDLIB_DIR"
-        cp "$TMP_FILE" "$BIN_DIR/$OUTPUT_NAME"
-        echo "Download complete: $BIN_DIR/$OUTPUT_NAME"
-        STDLIB_URL="https://github.com/$REPO/releases/download/$VERSION/zithc-stdlib-$VERSION.zip"
+        STDLIB_STAGE="$TMP_DIR/stdlib"
+        mkdir -p "$BIN_DIR" "${STDLIB_DIR%/*}" "$STDLIB_STAGE"
+        STDLIB_URL="$(release_base_url)/zithc-stdlib-$VERSION.zip"
         echo "Downloading stdlib..."
-        if curl -fsSL "$STDLIB_URL" -o "$TMP_DIR/zithc-stdlib.zip"; then
-            rm -rf "$STDLIB_DIR"
-            mkdir -p "${STDLIB_DIR%/*}"
-            unzip -q "$TMP_DIR/zithc-stdlib.zip" -d "$STDLIB_DIR"
-            echo "Standard library extracted to $STDLIB_DIR"
-        else
-            echo "Warning: Failed to download stdlib." >&2
+        if ! curl -fsSL "$STDLIB_URL" -o "$TMP_DIR/zithc-stdlib.zip"; then
+            echo "Error: Failed to download standard library." >&2
+            exit 1
         fi
+        unzip -q "$TMP_DIR/zithc-stdlib.zip" -d "$STDLIB_STAGE"
+        test -f "$STDLIB_STAGE/std/io/console.zith"
+        cp "$TMP_FILE" "$BIN_DIR/$OUTPUT_NAME"
+        rm -rf "$STDLIB_DIR"
+        mv "$STDLIB_STAGE" "$STDLIB_DIR"
+        echo "Download complete: $BIN_DIR/$OUTPUT_NAME"
+        echo "Standard library extracted to $STDLIB_DIR"
         echo "Please add $BIN_DIR to your PATH."
         ;;
     *)
-        echo "Installing Zith to /usr/local/bin/..."
-        if sudo mv "$TMP_FILE" /usr/local/bin/zithc; then
-            STDLIB_URL="https://github.com/$REPO/releases/download/$VERSION/zithc-stdlib-$VERSION.tar.gz"
-            STDLIB_DIR="/usr/local/share/zith/stdlib"
-            echo "Downloading stdlib..."
-            if curl -fsSL "$STDLIB_URL" -o "$TMP_DIR/zithc-stdlib.tar.gz"; then
-                sudo rm -rf "$STDLIB_DIR"
-                sudo mkdir -p "${STDLIB_DIR%/*}"
-                sudo tar xzf "$TMP_DIR/zithc-stdlib.tar.gz" -C "$STDLIB_DIR"
-                echo "Standard library installed to $STDLIB_DIR"
-            else
-                echo "Warning: Failed to download stdlib." >&2
+        if [ -n "$INSTALL_ROOT" ]; then
+            BIN_DIR="$INSTALL_ROOT/bin"
+            STDLIB_DIR="$INSTALL_ROOT/share/zith/stdlib"
+            STDLIB_STAGE="$TMP_DIR/stdlib"
+            mkdir -p "$BIN_DIR" "${STDLIB_DIR%/*}" "$STDLIB_STAGE"
+            STDLIB_URL="$(release_base_url)/zithc-stdlib-$VERSION.tar.gz"
+            if ! curl -fsSL "$STDLIB_URL" -o "$TMP_DIR/zithc-stdlib.tar.gz"; then
+                echo "Error: Failed to download standard library." >&2
+                exit 1
             fi
-            echo "Installation complete! Run 'zithc --help' to get started."
+            tar xzf "$TMP_DIR/zithc-stdlib.tar.gz" -C "$STDLIB_STAGE"
+            test -f "$STDLIB_STAGE/std/io/console.zith"
+            mv "$TMP_FILE" "$BIN_DIR/zithc"
+            rm -rf "$STDLIB_DIR"
+            mv "$STDLIB_STAGE" "$STDLIB_DIR"
+            echo "Standard library installed to $STDLIB_DIR"
+            echo "Installation complete: $BIN_DIR/zithc"
         else
-            echo "Installation failed. Check sudo permissions or try manually moving the file." >&2
-            exit 1
+            echo "Installing Zith to /usr/local/bin/..."
+            STDLIB_URL="$(release_base_url)/zithc-stdlib-$VERSION.tar.gz"
+            STDLIB_DIR="/usr/local/share/zith/stdlib"
+            STDLIB_STAGE="$TMP_DIR/stdlib"
+            mkdir -p "$STDLIB_STAGE"
+            echo "Downloading stdlib..."
+            if ! curl -fsSL "$STDLIB_URL" -o "$TMP_DIR/zithc-stdlib.tar.gz"; then
+                echo "Error: Failed to download standard library." >&2
+                exit 1
+            fi
+            tar xzf "$TMP_DIR/zithc-stdlib.tar.gz" -C "$STDLIB_STAGE"
+            test -f "$STDLIB_STAGE/std/io/console.zith"
+            if ! sudo mv "$TMP_FILE" /usr/local/bin/zithc; then
+                echo "Installation failed. Check sudo permissions or try manually moving the file." >&2
+                exit 1
+            fi
+            sudo rm -rf "$STDLIB_DIR"
+            sudo mkdir -p "${STDLIB_DIR%/*}"
+            sudo mv "$STDLIB_STAGE" "$STDLIB_DIR"
+            echo "Standard library installed to $STDLIB_DIR"
+            echo "Installation complete! Run 'zithc --help' to get started."
         fi
         ;;
 esac

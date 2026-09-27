@@ -34,6 +34,7 @@ permissions:
 
 env:
   CMAKE_VERSION: '3.28.x'
+  ZIG_VERSION: '0.13.0'
 
 jobs:
   create-release:
@@ -47,6 +48,10 @@ jobs:
         shell: bash
         run: |
           TAG="${{ inputs.tag_name || github.event.inputs.tag_name || github.ref_name }}"
+          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(\.[0-9]+)?$ ]]; then
+            echo "::error::Invalid release tag '$TAG'. Expected vMAJOR.MINOR.PATCH[.REVISION]."
+            exit 1
+          fi
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
 
           DRAFT="true"
@@ -56,13 +61,14 @@ jobs:
             if [ "${{ github.event.inputs.draft }}" = "true" ]; then DRAFT="true"; else DRAFT="false"; fi
           fi
           echo "draft=$DRAFT" >> "$GITHUB_OUTPUT"
+          echo "create_draft=true" >> "$GITHUB_OUTPUT"
 
       - name: Create release
         if: github.event_name != 'workflow_call'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.meta.outputs.tag }}
-          draft: ${{ steps.meta.outputs.draft }}
+          draft: ${{ steps.meta.outputs.create_draft }}
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -82,24 +88,30 @@ jobs:
               -DCMAKE_CXX_COMPILER=clang++
               -DCMAKE_LINKER=ld.lld
 
-          - os: ubuntu-latest
+          - os: ubuntu-24.04-arm
             target_name: zithc-linux-arm64
             cmake_flags: >-
-              -DCMAKE_C_COMPILER=aarch64-linux-gnu-gcc
-              -DCMAKE_CXX_COMPILER=aarch64-linux-gnu-g++
-              -DCMAKE_SYSTEM_NAME=Linux
-              -DCMAKE_SYSTEM_PROCESSOR=aarch64
-              -DZITH_HAS_LLVM=OFF
+              -DCMAKE_C_COMPILER=clang
+              -DCMAKE_CXX_COMPILER=clang++
+              -DCMAKE_LINKER=ld.lld
 
           - os: macos-14
-            target_name: zithc-macos-universal
+            target_name: zithc-macos-arm64
             cmake_flags: >-
               -DCMAKE_C_COMPILER=$(xcrun -f clang)
               -DCMAKE_CXX_COMPILER=$(xcrun -f clang++)
-              -DCMAKE_OSX_ARCHITECTURES="x86_64;arm64"
               -DCMAKE_AR=$(xcrun -f ar)
               -DCMAKE_RANLIB=$(xcrun -f ranlib)
-              -DZITH_HAS_LLVM=OFF
+              -DLLVM_DIR=$(brew --prefix llvm)/lib/cmake/llvm
+
+          - os: macos-15-intel
+            target_name: zithc-macos-amd64
+            cmake_flags: >-
+              -DCMAKE_C_COMPILER=$(xcrun -f clang)
+              -DCMAKE_CXX_COMPILER=$(xcrun -f clang++)
+              -DCMAKE_AR=$(xcrun -f ar)
+              -DCMAKE_RANLIB=$(xcrun -f ranlib)
+              -DLLVM_DIR=$(brew --prefix llvm)/lib/cmake/llvm
 
           - os: windows-latest
             target_name: zithc-windows-amd64.exe
@@ -107,17 +119,15 @@ jobs:
             cmake_flags: >-
               -DCMAKE_C_COMPILER=clang-cl
               -DCMAKE_CXX_COMPILER=clang-cl
+              -DLLVM_DIR="C:/Program Files/LLVM/lib/cmake/llvm"
 
-          - os: windows-latest
+          - os: windows-11-arm
             target_name: zithc-windows-arm64.exe
-            msvc_arch: amd64_arm64
+            msvc_arch: arm64
             cmake_flags: >-
               -DCMAKE_C_COMPILER=clang-cl
               -DCMAKE_CXX_COMPILER=clang-cl
-              -DCMAKE_SYSTEM_PROCESSOR=ARM64
-              -DCMAKE_C_COMPILER_TARGET=aarch64-pc-windows-msvc
-              -DCMAKE_CXX_COMPILER_TARGET=aarch64-pc-windows-msvc
-              -DZITH_HAS_LLVM=OFF
+              -DLLVM_DIR="C:/Program Files/LLVM/lib/cmake/llvm"
 
     steps:
       - uses: actions/checkout@v4
@@ -135,10 +145,7 @@ jobs:
         shell: bash
         run: |
           sudo apt-get update
-          sudo apt-get install -y ninja-build clang-18 lld-18 llvm-18-dev \
-            gcc-aarch64-linux-gnu g++-aarch64-linux-gnu \
-            libc6-dev-arm64-cross libc6-arm64-cross \
-            binutils-aarch64-linux-gnu
+          sudo apt-get install -y ninja-build clang-18 lld-18 llvm-18-dev
           sudo ln -sf /usr/bin/clang-18 /usr/bin/clang
           sudo ln -sf /usr/bin/clang++-18 /usr/bin/clang++
           sudo ln -sf /usr/bin/ld.lld-18 /usr/bin/ld.lld
@@ -147,7 +154,7 @@ jobs:
         if: runner.os == 'macOS'
         shell: bash
         run: |
-          brew install ninja
+          brew install llvm ninja
 
       - name: Install Windows dependencies
         if: runner.os == 'Windows'
@@ -164,18 +171,6 @@ jobs:
         uses: ilammy/msvc-dev-cmd@v1
         with:
           arch: ${{ matrix.msvc_arch }}
-
-      - name: Setup Zig (for Windows arm64 cross-compile)
-        if: runner.os == 'Windows' && matrix.msvc_arch == ''
-        shell: bash
-        run: |
-          ZIG_VER=$(curl -sL https://ziglang.org/download/index.json \
-            | python3 -c "import sys,json; d=json.load(sys.stdin); v=[k for k in d if k[0].isdigit()]; v.sort(); print(v[-1])")
-          curl -sL "https://ziglang.org/download/$ZIG_VER/zig-windows-x86_64-$ZIG_VER.zip" \
-            -o /tmp/zig.zip
-          unzip -q /tmp/zig.zip -d /opt
-          echo "/opt/zig-windows-x86_64-$ZIG_VER" >> "$GITHUB_PATH"
-          zig version
 
       - name: Verify Clang
         shell: bash
@@ -195,8 +190,14 @@ jobs:
             -DBUILD_TESTING=OFF \
             -DZITH_ENABLE_STRICT_WARNINGS=OFF \
             -DZITH_ENABLE_C_COMPILE=OFF \
+            -DZITH_HAS_LLVM=ON \
+            -DZITH_REQUIRE_LLVM=ON \
             -DZITH_VERSION=${{ needs.create-release.outputs.tag || inputs.tag_name }} \
             ${{ matrix.cmake_flags }}
+
+      - name: Verify LLVM configuration
+        shell: bash
+        run: python3 scripts/verify-llvm-build.py --build-dir build
 
       - name: Clean stale macOS archives (prevent corruption)
         if: runner.os == 'macOS'
@@ -251,12 +252,13 @@ jobs:
       - name: Setup Zig
         shell: bash
         run: |
-          ZIG_VER=$(curl -sL https://ziglang.org/download/index.json \
-            | python3 -c "import sys,json; d=json.load(sys.stdin); v=[k for k in d if k[0].isdigit()]; v.sort(); print(v[-1])")
-          curl -sL "https://ziglang.org/download/$ZIG_VER/zig-linux-x86_64-$ZIG_VER.tar.xz" \
+          ZIG_VER="${ZIG_VERSION}"
+          curl --fail --silent --show-error --location --retry 3 --retry-all-errors \
+            "https://ziglang.org/download/$ZIG_VER/zig-linux-x86_64-$ZIG_VER.tar.xz" \
             | sudo tar xJ -C /opt
           sudo ln -sf /opt/zig-linux-x86_64-$ZIG_VER/zig /usr/local/bin/zig
           zig version
+          test "$(zig version)" = "$ZIG_VER"
 
       - name: Build
         shell: bash
@@ -271,9 +273,13 @@ jobs:
             -DCMAKE_CXX_COMPILER="zig;c++" \
             -DCMAKE_C_COMPILER_TARGET="${{ matrix.zig_target }}" \
             -DCMAKE_CXX_COMPILER_TARGET="${{ matrix.zig_target }}" \
-            -DZITH_HAS_LLVM=OFF \
+            -DZITH_HAS_LLVM=ON \
+            -DZITH_REQUIRE_LLVM=ON \
             -DCMAKE_EXE_LINKER_FLAGS='-static -lc' \
             -DCMAKE_CXX_FLAGS='-fno-cxx-exceptions'
+          python3 scripts/verify-llvm-build.py \
+            --build-dir build \
+            --expected-target "${{ matrix.zig_target }}"
           cmake --build build --config Release
           mkdir -p artifacts
           cp build/zithc artifacts/${{ matrix.target_name }}
@@ -316,6 +322,283 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+  validate-release-assets:
+    needs: [create-release, build-main, build-musl, package-stdlib, build-lsp, build-wasm]
+    name: Validate release assets
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout release sources
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.create-release.outputs.tag }}
+          fetch-depth: 1
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Download all expected release assets
+        shell: bash
+        run: |
+          TAG="${{ needs.create-release.outputs.tag || inputs.tag_name || github.ref_name }}"
+          mkdir -p release-assets
+          gh release download "$TAG" \
+            --repo "${{ github.repository }}" \
+            --pattern "zithc-linux-amd64" \
+            --pattern "zithc-linux-arm64" \
+            --pattern "zithc-linux-amd64-musl" \
+            --pattern "zithc-linux-arm64-musl" \
+            --pattern "zithc-macos-amd64" \
+            --pattern "zithc-macos-arm64" \
+            --pattern "zithc-windows-amd64.exe" \
+            --pattern "zithc-windows-arm64.exe" \
+            --pattern "zithc-stdlib-${TAG}.tar.gz" \
+            --pattern "zithc-stdlib-${TAG}.zip" \
+            --pattern "zithc-wasm.zip" \
+            --pattern "zith-lsp-linux-amd64" \
+            --pattern "zith-lsp-linux-arm64" \
+            --pattern "zith-lsp-macos-amd64" \
+            --pattern "zith-lsp-macos-arm64" \
+            --pattern "zith-lsp-windows-amd64.exe" \
+            --pattern "zith-lsp-windows-arm64.exe" \
+            --dir release-assets
+
+          python3 scripts/validate-release-assets.py \
+            --release-dir release-assets \
+            --tag "$TAG"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  update-distribution:
+    needs:
+      [
+        create-release,
+        validate-release-assets,
+        smoke-installers-unix,
+        smoke-installer-windows,
+        smoke-installer-wasm,
+      ]
+    name: Update release distribution metadata
+    runs-on: ubuntu-latest
+    concurrency:
+      group: zith-distribution-metadata
+      cancel-in-progress: false
+    permissions:
+      contents: write
+    steps:
+      - name: Resolve release tag
+        id: tag
+        shell: bash
+        run: |
+          TAG="${{ needs.create-release.outputs.tag || inputs.tag_name || github.ref_name }}"
+          VERSION="${TAG#v}"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Download Windows release assets
+        shell: bash
+        run: |
+          test -n "${RELEASE_PAT}"
+          mkdir -p release-bins
+          gh release download "${{ steps.tag.outputs.tag }}" \
+            --repo "${{ github.repository }}" \
+            --pattern "zithc-windows-amd64.exe" \
+            --pattern "zithc-windows-arm64.exe" \
+            --pattern "zithc-stdlib-${{ steps.tag.outputs.tag }}.zip" \
+            --dir release-bins
+          test -s "release-bins/zithc-windows-amd64.exe"
+          test -s "release-bins/zithc-windows-arm64.exe"
+          test -s "release-bins/zithc-stdlib-${{ steps.tag.outputs.tag }}.zip"
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_PAT }}
+          RELEASE_PAT: ${{ secrets.RELEASE_PAT }}
+
+      - name: Checkout main for distribution metadata
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+          token: ${{ secrets.RELEASE_PAT }}
+
+      - name: Update Scoop manifest
+        shell: bash
+        run: |
+          python3 scripts/update-scoop-manifest.py \
+            --manifest .github/scoop/bucket/zithc.json \
+            --release-dir "$GITHUB_WORKSPACE/release-bins" \
+            --repository "${{ github.repository }}" \
+            --version "${{ steps.tag.outputs.version }}"
+          python3 scripts/validate-release-contract.py \
+            --manifest .github/scoop/bucket/zithc.json \
+            --workflow-dir .github/workflows
+
+      - name: Compute Homebrew source metadata
+        id: homebrew
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="${{ steps.tag.outputs.version }}"
+          URL="https://github.com/${{ github.repository }}/archive/refs/tags/v${VERSION}.tar.gz"
+          curl --fail --silent --show-error --location --retry 3 --retry-all-errors \
+            --output source-archive.tar.gz "$URL"
+          SHA=$(sha256sum source-archive.tar.gz | cut -d' ' -f1)
+          test "${#SHA}" -eq 64
+          python3 scripts/update-homebrew-formula.py \
+            --formula .github/homebrew/zithc.rb \
+            --repository "${{ github.repository }}" \
+            --version "$VERSION" \
+            --sha256 "$SHA"
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+          echo "sha256=$SHA" >> "$GITHUB_OUTPUT"
+
+      - name: Commit distribution metadata
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add .github/scoop/bucket/zithc.json .github/homebrew/zithc.rb
+          if git diff --staged --quiet; then
+            echo "Distribution metadata already matches the release"
+          else
+            git commit -m "chore: update distribution metadata to ${{ steps.tag.outputs.tag }}"
+            git push origin HEAD:main
+          fi
+
+      - name: Sync Homebrew tap formula
+        shell: bash
+        run: |
+          set -euo pipefail
+          FORMULA_B64=$(base64 --wrap=0 .github/homebrew/zithc.rb)
+          REMOTE_SHA=$(gh api \
+            "repos/${{ github.repository_owner }}/homebrew-zithc/contents/Formula/zithc.rb" \
+            --jq '.sha')
+          test -n "$REMOTE_SHA"
+          gh api --method PUT \
+            "repos/${{ github.repository_owner }}/homebrew-zithc/contents/Formula/zithc.rb" \
+            -f message="chore: update formula to v${{ steps.tag.outputs.version }}" \
+            -f branch=main \
+            -f sha="$REMOTE_SHA" \
+            -f content="$FORMULA_B64" \
+            --jq '.commit.sha'
+        env:
+          GH_TOKEN: ${{ secrets.RELEASE_PAT }}
+
+  smoke-installers-unix:
+    needs: [create-release, validate-release-assets]
+    name: Smoke installer (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-14]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.create-release.outputs.tag }}
+          fetch-depth: 1
+
+      - name: Install released compiler and stdlib
+        shell: bash
+        env:
+          ZITH_INSTALL_ROOT: ${{ runner.temp }}/zith-install
+          ZITH_RELEASE_BASE_URL: https://github.com/${{ github.repository }}/releases/download/${{ needs.create-release.outputs.tag }}
+        run: |
+          bash scripts/install.sh "${{ needs.create-release.outputs.tag }}"
+          test -x "$ZITH_INSTALL_ROOT/bin/zithc"
+          test -f "$ZITH_INSTALL_ROOT/share/zith/stdlib/std/io/console.zith"
+
+      - name: Check program through installed compiler
+        shell: bash
+        env:
+          ZITH_INSTALL_ROOT: ${{ runner.temp }}/zith-install
+        run: |
+          "$ZITH_INSTALL_ROOT/bin/zithc" --help >/dev/null
+          "$ZITH_INSTALL_ROOT/bin/zithc" check examples/loops-simple.zith
+
+  smoke-installer-windows:
+    needs: [create-release, validate-release-assets]
+    name: Smoke installer (Windows)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.create-release.outputs.tag }}
+          fetch-depth: 1
+
+      - name: Install released compiler and stdlib
+        shell: pwsh
+        env:
+          ZITH_INSTALL_ROOT: ${{ runner.temp }}\zith-install
+          ZITH_RELEASE_BASE_URL: https://github.com/${{ github.repository }}/releases/download/${{ needs.create-release.outputs.tag }}
+        run: |
+          pwsh -NoProfile -File .\scripts\install.ps1 -Version "${{ needs.create-release.outputs.tag }}"
+          if (-not (Test-Path "$env:ZITH_INSTALL_ROOT\bin\zithc.exe")) {
+            throw "installed compiler was not found"
+          }
+          if (-not (Test-Path "$env:ZITH_INSTALL_ROOT\share\zith\stdlib\std\io\console.zith")) {
+            throw "installed stdlib was not found"
+          }
+
+      - name: Check program through installed compiler
+        shell: pwsh
+        env:
+          ZITH_INSTALL_ROOT: ${{ runner.temp }}\zith-install
+        run: |
+          & "$env:ZITH_INSTALL_ROOT\bin\zithc.exe" --help | Out-Null
+          & "$env:ZITH_INSTALL_ROOT\bin\zithc.exe" check examples\loops-simple.zith
+          if ($LASTEXITCODE -ne 0) {
+            throw "installed compiler failed the language smoke test"
+          }
+
+  smoke-installer-wasm:
+    needs: [create-release, validate-release-assets]
+    name: Smoke installer (WASM)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.create-release.outputs.tag }}
+          fetch-depth: 1
+
+      - name: Install released WASM bundle
+        shell: bash
+        env:
+          ZITH_WASM_DIR: ${{ runner.temp }}/zith-wasm-install
+          ZITH_RELEASE_BASE_URL: https://github.com/${{ github.repository }}/releases/download/${{ needs.create-release.outputs.tag }}
+        run: |
+          bash scripts/install-wasm.sh "${{ needs.create-release.outputs.tag }}"
+          test -s "$ZITH_WASM_DIR/zith-playground.wasm"
+          test -s "$ZITH_WASM_DIR/zith-stdlib.pack"
+
+  smoke-scoop:
+    needs: [create-release, update-distribution]
+    name: Smoke Scoop manifest
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 1
+          token: ${{ secrets.RELEASE_PAT }}
+
+      - name: Validate Scoop is available
+        shell: pwsh
+        run: scoop --version
+
+      - name: Install and run Scoop package
+        shell: pwsh
+        run: |
+          $bucket = Join-Path $env:GITHUB_WORKSPACE ".github\scoop"
+          scoop bucket add zith-local $bucket
+          scoop install zithc
+          zithc --help | Out-Null
+          if ($LASTEXITCODE -ne 0) {
+            throw "Scoop-installed compiler failed to start"
+          }
+          zithc check examples\loops-simple.zith
+          if ($LASTEXITCODE -ne 0) {
+            throw "Scoop-installed compiler failed the language smoke test"
+          }
+
   build-lsp:
     needs: create-release
     name: Build zith-lsp-${{ matrix.target_name }}
@@ -331,24 +614,30 @@ jobs:
               -DCMAKE_CXX_COMPILER=clang++
               -DCMAKE_LINKER=ld.lld
 
-          - os: ubuntu-latest
+          - os: ubuntu-24.04-arm
             target_name: linux-arm64
             cmake_flags: >-
-              -DCMAKE_C_COMPILER=aarch64-linux-gnu-gcc
-              -DCMAKE_CXX_COMPILER=aarch64-linux-gnu-g++
-              -DCMAKE_SYSTEM_NAME=Linux
-              -DCMAKE_SYSTEM_PROCESSOR=aarch64
-              -DZITH_HAS_LLVM=OFF
+              -DCMAKE_C_COMPILER=clang
+              -DCMAKE_CXX_COMPILER=clang++
+              -DCMAKE_LINKER=ld.lld
 
           - os: macos-14
-            target_name: macos-universal
+            target_name: macos-arm64
             cmake_flags: >-
               -DCMAKE_C_COMPILER=$(xcrun -f clang)
               -DCMAKE_CXX_COMPILER=$(xcrun -f clang++)
-              -DCMAKE_OSX_ARCHITECTURES="x86_64;arm64"
               -DCMAKE_AR=$(xcrun -f ar)
               -DCMAKE_RANLIB=$(xcrun -f ranlib)
-              -DZITH_HAS_LLVM=OFF
+              -DLLVM_DIR=$(brew --prefix llvm)/lib/cmake/llvm
+
+          - os: macos-15-intel
+            target_name: macos-amd64
+            cmake_flags: >-
+              -DCMAKE_C_COMPILER=$(xcrun -f clang)
+              -DCMAKE_CXX_COMPILER=$(xcrun -f clang++)
+              -DCMAKE_AR=$(xcrun -f ar)
+              -DCMAKE_RANLIB=$(xcrun -f ranlib)
+              -DLLVM_DIR=$(brew --prefix llvm)/lib/cmake/llvm
 
           - os: windows-latest
             target_name: windows-amd64.exe
@@ -356,17 +645,15 @@ jobs:
             cmake_flags: >-
               -DCMAKE_C_COMPILER=clang-cl
               -DCMAKE_CXX_COMPILER=clang-cl
+              -DLLVM_DIR="C:/Program Files/LLVM/lib/cmake/llvm"
 
-          - os: windows-latest
+          - os: windows-11-arm
             target_name: windows-arm64.exe
-            msvc_arch: amd64_arm64
+            msvc_arch: arm64
             cmake_flags: >-
               -DCMAKE_C_COMPILER=clang-cl
               -DCMAKE_CXX_COMPILER=clang-cl
-              -DCMAKE_SYSTEM_PROCESSOR=ARM64
-              -DCMAKE_C_COMPILER_TARGET=aarch64-pc-windows-msvc
-              -DCMAKE_CXX_COMPILER_TARGET=aarch64-pc-windows-msvc
-              -DZITH_HAS_LLVM=OFF
+              -DLLVM_DIR="C:/Program Files/LLVM/lib/cmake/llvm"
 
     steps:
       - name: Verify zith-lsp remote access
@@ -412,9 +699,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y ninja-build clang-18 lld-18 llvm-18-dev \
-            gcc-aarch64-linux-gnu g++-aarch64-linux-gnu \
-            libc6-dev-arm64-cross libc6-arm64-cross \
-            binutils-aarch64-linux-gnu zlib1g-dev libzstd-dev \
+            zlib1g-dev libzstd-dev \
             libcurl4-openssl-dev libffi-dev libedit-dev libxml2-dev
           sudo ln -sf /usr/bin/clang-18 /usr/bin/clang
           sudo ln -sf /usr/bin/clang++-18 /usr/bin/clang++
@@ -424,7 +709,7 @@ jobs:
         if: runner.os == 'macOS'
         shell: bash
         run: |
-          brew install ninja
+          brew install llvm ninja
 
       - name: Install Windows dependencies
         if: runner.os == 'Windows'
@@ -442,18 +727,6 @@ jobs:
         with:
           arch: ${{ matrix.msvc_arch }}
 
-      - name: Setup Zig (for Windows arm64 cross-compile)
-        if: runner.os == 'Windows' && matrix.msvc_arch == ''
-        shell: bash
-        run: |
-          ZIG_VER=$(curl -sL https://ziglang.org/download/index.json \
-            | python3 -c "import sys,json; d=json.load(sys.stdin); v=[k for k in d if k[0].isdigit()]; v.sort(); print(v[-1])")
-          curl -sL "https://ziglang.org/download/$ZIG_VER/zig-windows-x86_64-$ZIG_VER.zip" \
-            -o /tmp/zig.zip
-          unzip -q /tmp/zig.zip -d /opt
-          echo "/opt/zig-windows-x86_64-$ZIG_VER" >> "$GITHUB_PATH"
-          zig version
-
       - name: Clean stale build artifacts
         shell: bash
         working-directory: lsp
@@ -470,7 +743,14 @@ jobs:
             -DZITH_ENABLE_STRICT_WARNINGS=OFF \
             -DBUILD_TESTING=OFF \
             -DZITH_ENABLE_C_COMPILE=OFF \
+            -DZITH_HAS_LLVM=ON \
+            -DZITH_REQUIRE_LLVM=ON \
             ${{ matrix.cmake_flags }}
+
+      - name: Verify LLVM configuration
+        shell: bash
+        working-directory: lsp
+        run: python3 "${GITHUB_WORKSPACE}/zithc-src/scripts/verify-llvm-build.py" --build-dir build
 
       - name: Build zith-lsp
         shell: bash
@@ -574,7 +854,14 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   sync-playground-wasm:
-    needs: [create-release, build-wasm]
+    needs:
+      [
+        create-release,
+        validate-release-assets,
+        smoke-installers-unix,
+        smoke-installer-windows,
+        smoke-installer-wasm,
+      ]
     name: Sync playground WebAssembly
     runs-on: ubuntu-latest
     permissions:
@@ -627,3 +914,21 @@ jobs:
           fi
         env:
           RELEASE_PAT: ${{ secrets.RELEASE_PAT }}
+
+  publish-release:
+    needs: [create-release, sync-playground-wasm, smoke-scoop]
+    if: needs.create-release.outputs.draft == 'false'
+    name: Publish verified release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Publish release after all gates
+        shell: bash
+        run: |
+          gh release edit "${{ needs.create-release.outputs.tag }}" \
+            --repo "${{ github.repository }}" \
+            --draft=false \
+            --prerelease=false
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

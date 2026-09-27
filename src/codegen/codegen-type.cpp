@@ -28,6 +28,11 @@ void initializeCodeGenTargets() {
         LLVMInitializeX86TargetMC();
         LLVMInitializeX86AsmParser();
         LLVMInitializeX86AsmPrinter();
+        LLVMInitializeAArch64TargetInfo();
+        LLVMInitializeAArch64Target();
+        LLVMInitializeAArch64TargetMC();
+        LLVMInitializeAArch64AsmParser();
+        LLVMInitializeAArch64AsmPrinter();
         LLVMInitializeWebAssemblyTargetInfo();
         LLVMInitializeWebAssemblyTarget();
         LLVMInitializeWebAssemblyTargetMC();

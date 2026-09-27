@@ -10,6 +10,9 @@ on:
   pull_request:
     branches: [main]
 
+env:
+  ZIG_VERSION: '0.13.0'
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -27,13 +30,23 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y cmake g++ pkg-config
+          sudo apt-get install -y cmake clang-18 lld-18 llvm-18-dev \
+            libclang-18-dev pkg-config
 
       - name: Configure
-        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
+        run: |
+          cmake -S . -B build \
+            -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+            -DCMAKE_C_COMPILER=clang-18 \
+            -DCMAKE_CXX_COMPILER=clang++-18 \
+            -DZITH_HAS_LLVM=ON \
+            -DZITH_REQUIRE_LLVM=ON
 
       - name: Build
         run: cmake --build build -j$(nproc)
+
+      - name: Verify LLVM configuration
+        run: python3 scripts/verify-llvm-build.py --build-dir build
 
       - name: Test
         working-directory: build
@@ -55,11 +68,19 @@ jobs:
           submodules: true
           token: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Install LLVM dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build clang-18 lld-18 llvm-18-dev
+
       - name: Setup Zig
         run: |
-          ZIG_VER="0.13.0"
-          curl -sL "https://ziglang.org/download/$ZIG_VER/zig-linux-x86_64-$ZIG_VER.tar.xz" | tar -xJ -C /tmp
+          ZIG_VER="${ZIG_VERSION}"
+          curl --fail --silent --show-error --location --retry 3 --retry-all-errors \
+            "https://ziglang.org/download/$ZIG_VER/zig-linux-x86_64-$ZIG_VER.tar.xz" \
+            | tar -xJ -C /tmp
           echo "/tmp/zig-linux-x86_64-$ZIG_VER" >> $GITHUB_PATH
+          test "$(/tmp/zig-linux-x86_64-$ZIG_VER/zig version)" = "$ZIG_VER"
 
       - name: Setup Emscripten
         uses: emscripten-core/setup-emsdk@v16
@@ -80,9 +101,13 @@ jobs:
             -DCMAKE_C_COMPILER_TARGET="x86_64-linux-musl" \
             -DCMAKE_CXX_COMPILER_TARGET="x86_64-linux-musl" \
             -DZITH_ENABLE_FFI=OFF \
-            -DZITH_HAS_LLVM=OFF \
+            -DZITH_HAS_LLVM=ON \
+            -DZITH_REQUIRE_LLVM=ON \
             -DCMAKE_EXE_LINKER_FLAGS='-static -lc' \
             -DCMAKE_CXX_FLAGS='-fno-cxx-exceptions'
+          python3 scripts/verify-llvm-build.py \
+            --build-dir build-musl \
+            --expected-target x86_64-linux-musl
           cmake --build build-musl -j$(nproc)
 
       - name: Configure and Build WebAssembly
@@ -98,3 +123,13 @@ jobs:
       - name: Test WASM runtime ABI
         if: matrix.wasm_test
         run: node tests/test-wasm-runtime.mjs build-wasm/zith-playground.wasm build-wasm/zith-stdlib.pack
+
+      - name: Validate release contracts
+        run: >-
+          python3 scripts/validate-release-contract.py
+          --manifest .github/scoop/bucket/zithc.json
+          --workflow-dir .github/workflows
+          --allow-empty-hashes
+
+      - name: Test release metadata generators
+        run: python3 scripts/test-release-contract.py

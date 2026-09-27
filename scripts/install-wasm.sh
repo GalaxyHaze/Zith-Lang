@@ -1,9 +1,10 @@
 #!/bin/bash
-set -e
+set -euo pipefail
 
-REPO="GalaxyHaze/Zith"
+REPO="${ZITH_REPOSITORY:-GalaxyHaze/Zith-Lang}"
 VERSION=""
 INSTALL_DIR="${ZITH_WASM_DIR:-$HOME/.zithc-wasm}"
+RELEASE_BASE_URL="${ZITH_RELEASE_BASE_URL:-}"
 
 usage() {
     echo "Usage: $0 [<version>] [--dir <path>]"
@@ -25,12 +26,14 @@ if [ -n "$VERSION" ]; then
 else
     echo "No version specified. Fetching latest version..."
 
-    if [ -n "$GITHUB_TOKEN" ]; then
-        VERSION=$(curl -sH "Authorization: token $GITHUB_TOKEN" \
+    if [ -n "${GITHUB_TOKEN:-}" ]; then
+        VERSION=$(curl --fail --silent --show-error \
+            -H "Authorization: token $GITHUB_TOKEN" \
             "https://api.github.com/repos/$REPO/releases/latest" \
             | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
     else
-        VERSION=$(curl -s "https://api.github.com/repos/$REPO/releases/latest" \
+        VERSION=$(curl --fail --silent --show-error \
+            "https://api.github.com/repos/$REPO/releases/latest" \
             | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
     fi
 
@@ -42,7 +45,18 @@ else
     echo "Latest version found: $VERSION"
 fi
 
-DOWNLOAD_URL="https://github.com/$REPO/releases/download/$VERSION/zithc-wasm.zip"
+case "$VERSION" in
+    v*) ;;
+    *) VERSION="v$VERSION" ;;
+esac
+
+if [ -n "$RELEASE_BASE_URL" ]; then
+    RELEASE_BASE_URL="${RELEASE_BASE_URL%/}"
+else
+    RELEASE_BASE_URL="https://github.com/$REPO/releases/download/$VERSION"
+fi
+
+DOWNLOAD_URL="$RELEASE_BASE_URL/zithc-wasm.zip"
 TMP_DIR=$(mktemp -d)
 trap 'rm -rf "$TMP_DIR"' EXIT
 
@@ -50,8 +64,11 @@ echo "Downloading $DOWNLOAD_URL..."
 curl -fsSL "$DOWNLOAD_URL" -o "$TMP_DIR/zithc-wasm.zip"
 
 echo "Extracting to $INSTALL_DIR..."
+rm -rf "$INSTALL_DIR"
 mkdir -p "$INSTALL_DIR"
 unzip -o "$TMP_DIR/zithc-wasm.zip" -d "$INSTALL_DIR"
+test -s "$INSTALL_DIR/zith-playground.wasm"
+test -s "$INSTALL_DIR/zith-stdlib.pack"
 
 echo ""
 echo "Zith WebAssembly v${VERSION#v} installed to $INSTALL_DIR"

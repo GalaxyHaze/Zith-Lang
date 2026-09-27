@@ -9,6 +9,7 @@ option(ZITH_BUILD_CAPI "Build the C ABI library" ON)
 option(ZITH_BUILD_BENCHMARKS "Build local benchmark executables" OFF)
 option(ZITH_IS_WASM "Build for WebAssembly target" OFF)
 option(ZITH_HAS_LLVM "Enable LLVM codegen backend" ON)
+option(ZITH_REQUIRE_LLVM "Fail configuration when LLVM codegen cannot be enabled" OFF)
 option(ZITH_ENABLE_STRICT_WARNINGS "Strict Clang warning set for development" ON)
 option(ZITH_ENABLE_C_COMPILE "Enable recursive .c compilation for ffi.c_source_dirs / --c-source-dir" ON)
 set(ZITH_TCC_ROOT "" CACHE PATH "Optional root containing libtcc headers and libraries")
@@ -40,12 +41,31 @@ if(ZITH_HAS_LLVM AND NOT ZITH_IS_WASM)
     endif()
     find_package(LLVM CONFIG QUIET)
     if(NOT LLVM_FOUND)
+        if(ZITH_REQUIRE_LLVM)
+            message(FATAL_ERROR "LLVM 18+ is required but was not found")
+        endif()
         message(WARNING "LLVM 18+ not found — disabling codegen backend")
         set(ZITH_HAS_LLVM OFF)
     elseif(LLVM_PACKAGE_VERSION VERSION_LESS 18)
-        message(WARNING "LLVM ${LLVM_PACKAGE_VERSION} found, but LLVM 18+ is required — disabling codegen backend")
+        if(ZITH_REQUIRE_LLVM)
+            message(FATAL_ERROR
+                "LLVM ${LLVM_PACKAGE_VERSION} found, but LLVM 18+ is required")
+        endif()
+        message(WARNING
+            "LLVM ${LLVM_PACKAGE_VERSION} found, but LLVM 18+ is required — "
+            "disabling codegen backend")
         set(ZITH_HAS_LLVM OFF)
+    else()
+        set(ZITH_DETECTED_LLVM_VERSION "${LLVM_PACKAGE_VERSION}" CACHE INTERNAL
+            "LLVM version detected for the Zith codegen backend" FORCE)
     endif()
+endif()
+
+if(ZITH_REQUIRE_LLVM AND ZITH_IS_WASM)
+    message(FATAL_ERROR "ZITH_REQUIRE_LLVM is not supported for ZITH_IS_WASM")
+endif()
+if(ZITH_REQUIRE_LLVM AND NOT ZITH_HAS_LLVM)
+    message(FATAL_ERROR "ZITH_REQUIRE_LLVM requires ZITH_HAS_LLVM=ON")
 endif()
 
 set(ZITH_C_INTEROP_AVAILABLE OFF)
@@ -278,6 +298,10 @@ if(ZITH_HAS_LLVM AND NOT ZITH_IS_WASM)
             X86AsmParser
             X86Desc
             X86Info
+            AArch64CodeGen
+            AArch64AsmParser
+            AArch64Desc
+            AArch64Info
             MC
             MCDisassembler
             MCParser

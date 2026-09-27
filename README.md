@@ -1,8 +1,8 @@
 # Zith
 
-[![Build](https://github.com/GalaxyHaze/Zith/actions/workflows/ci.yml/badge.svg)](https://github.com/GalaxyHaze/Zith/actions)
-[![License](https://img.shields.io/github/license/GalaxyHaze/Zith)](./license)
-[![Version](https://img.shields.io/github/v/release/GalaxyHaze/Zith)](https://github.com/GalaxyHaze/Zith/releases)
+[![Build](https://github.com/GalaxyHaze/Zith-Lang/actions/workflows/ci.yml/badge.svg)](https://github.com/GalaxyHaze/Zith-Lang/actions)
+[![License](https://img.shields.io/github/license/GalaxyHaze/Zith-Lang)](./license)
+[![Version](https://img.shields.io/github/v/release/GalaxyHaze/Zith-Lang)](https://github.com/GalaxyHaze/Zith-Lang/releases)
 [![Discord](https://img.shields.io/badge/Discord-Join-5865F2?logo=discord&logoColor=white)](https://discord.gg/a7h4cpWHg4)
 
 > **Status: early development.** The compiler is a working Zith-- subset: lexing/parsing,
@@ -37,8 +37,8 @@ traits/interfaces, `dyn` dispatch, `state` machines and rich control flow.
 ## Quick Start
 
 ```bash
-git clone https://github.com/GalaxyHaze/Zith.git
-cd Zith
+git clone https://github.com/GalaxyHaze/Zith-Lang.git
+cd Zith-Lang
 cmake -S . -B build
 cmake --build build -j
 ./build/zithc --help
@@ -233,23 +233,23 @@ Source -> Lex -> Scan -> Import -> Resolve -> TypeCheck -> Comptime/Solve -> NTA
 **Build from source** (recommended until stable release):
 
 ```bash
-git clone https://github.com/GalaxyHaze/Zith.git
-cd Zith
+git clone https://github.com/GalaxyHaze/Zith-Lang.git
+cd Zith-Lang
 cmake -S . -B build
 cmake --build build -j
 ```
 
 **Release installer (Linux/macOS):**
 ```bash
-curl -fsSL https://raw.githubusercontent.com/GalaxyHaze/Zith/main/scripts/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/GalaxyHaze/Zith-Lang/main/scripts/install.sh | bash
 # Optional: install a specific version or the musl-linked Linux binary
-curl -fsSL https://raw.githubusercontent.com/GalaxyHaze/Zith/main/scripts/install.sh | bash -s -- v1.0.0
-curl -fsSL https://raw.githubusercontent.com/GalaxyHaze/Zith/main/scripts/install.sh | bash -s -- --musl
+curl -fsSL https://raw.githubusercontent.com/GalaxyHaze/Zith-Lang/main/scripts/install.sh | bash -s -- v1.0.0
+curl -fsSL https://raw.githubusercontent.com/GalaxyHaze/Zith-Lang/main/scripts/install.sh | bash -s -- --musl
 ```
 
 **Release installer (Windows PowerShell):**
 ```powershell
-irm https://raw.githubusercontent.com/GalaxyHaze/Zith/main/scripts/install.ps1 | iex
+irm https://raw.githubusercontent.com/GalaxyHaze/Zith-Lang/main/scripts/install.ps1 | iex
 ```
 Optional version pin:
 ```powershell
@@ -258,7 +258,7 @@ powershell -ExecutionPolicy Bypass -File scripts/install.ps1 -Version v1.0.0
 
 **Scoop (Windows):**
 ```powershell
-scoop bucket add zithc https://github.com/GalaxyHaze/Zith.git
+scoop bucket add zithc https://github.com/GalaxyHaze/Zith-Lang.git
 scoop install zithc
 ```
 
@@ -347,8 +347,8 @@ brew install zithc
 See [CONTRIBUTING.md](CONTRIBUTING.md) for build instructions and code style.
 
 - [Discord](https://discord.gg/a7h4cpWHg4) — progress updates and collaboration
-- [Issue Tracker](https://github.com/GalaxyHaze/Zith/issues)
-- [Discussions](https://github.com/GalaxyHaze/Zith/discussions)
+- [Issue Tracker](https://github.com/GalaxyHaze/Zith-Lang/issues)
+- [Discussions](https://github.com/GalaxyHaze/Zith-Lang/discussions)
 
 ---
 
