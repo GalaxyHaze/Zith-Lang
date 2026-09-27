@@ -3,24 +3,24 @@ VARS
 ===================*/
 
 :root {
-    --color-bg: #000;
-    --color-txt: #fff;
+    --color-bg: #08090b;
+    --color-txt: #e7e9ec;
 
-    --color-sidebar: rgb(58, 58, 58);
-    --color-sidebar-shadow-1: rgba(64, 64, 64, 0.6);
-    --color-sidebar-shadow-2: rgb(46, 46, 46);
+    --color-sidebar: #111419;
+    --color-sidebar-shadow-1: rgba(82, 228, 232, 0.08);
+    --color-sidebar-shadow-2: #08090b;
 
-    --color-cyan: #00ffff;
-    --color-orange: #ff6d1f;
-    --color-yellow: #fbff1f;
-    --color-tree-line: rgba(255, 255, 255, 0.2);
-    --color-hover: rgba(255, 255, 255, 0.08);
+    --color-cyan: #52e4e8;
+    --color-orange: #e87f24;
+    --color-yellow: #ffd166;
+    --color-tree-line: rgba(82, 228, 232, 0.18);
+    --color-hover: rgba(255, 255, 255, 0.06);
     --color-vignette: rgba(0, 0, 0, 0.6);
     --crt-scanline-alpha: 0.15;
     --crt-noise-opacity: 0.05;
     --crt-vignette-opacity: 0.6;
     --crt-flicker-animation: flicker 1s infinite;
-    --text-glow-alpha: 0.35;
+    --text-glow-alpha: 0.18;
 
     --glow-white:
         0 0 4px rgba(255,255,255,var(--text-glow-alpha)),
@@ -59,6 +59,9 @@ html, body {
 body {
     display: flex;
     overflow: hidden;
+    background:
+        radial-gradient(circle at 80% 0%, rgba(232, 127, 36, 0.06), transparent 28%),
+        var(--color-bg);
 }
 
 body.docs-sidebar-collapsed .lateralBar {
@@ -83,8 +86,8 @@ body.docs-sidebar-collapsed .lateralBar ul {
     align-items: center;
     gap: 8px;
     padding: 7px 10px;
-    background: rgba(0, 0, 0, 0.72);
-    border: 1px solid #555;
+    background: rgba(8, 9, 11, 0.92);
+    border: 1px solid #30353d;
     border-radius: 5px;
     color: var(--color-cyan);
     font-family: "Fira Code", monospace;
@@ -120,8 +123,8 @@ LAYOUT PRINCIPAL
 
 .lateralBar {
     order: -1;
-    width: 290px;
-    min-width: 290px;
+    width: 272px;
+    min-width: 272px;
 
     height: 100dvh;
     overflow-y: auto;
@@ -134,7 +137,7 @@ LAYOUT PRINCIPAL
 
     box-sizing: border-box;
 
-    border-right: 1px solid #555;
+    border-right: 1px solid #30353d;
     box-shadow:
         inset -10px 0 24px rgba(0, 0, 0, 0.42),
         inset 0 10px 20px 0 var(--color-sidebar-shadow-1);
@@ -174,11 +177,17 @@ LAYOUT PRINCIPAL
 }
 
 .top {
-    padding: 20px;
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    padding: 18px 24px;
     box-sizing: border-box;
     display: flex;
     flex-wrap: wrap;
     gap: 12px 20px;
+    background: rgba(8, 9, 11, 0.9);
+    border-bottom: 1px solid #242a31;
+    backdrop-filter: blur(12px);
 }
 
 .header-meta {
@@ -192,10 +201,10 @@ LAYOUT PRINCIPAL
     display: flex;
     align-items: center;
     gap: 10px;
-    padding: 10px 16px;
-    background: rgba(0, 0, 0, 0.6);
-    border: 1px solid #444;
-    border-left: 4px solid var(--color-orange);
+    padding: 10px 14px;
+    background: rgba(18, 20, 24, 0.9);
+    border: 1px solid #30353d;
+    border-top: 2px solid var(--color-orange);
     font-family: "Fira Code", monospace;
     font-size: 16px;
     color: #aaa;
@@ -218,7 +227,7 @@ LAYOUT PRINCIPAL
     align-self: flex-start;
     padding: 10px 16px;
     border: 1px solid var(--color-orange);
-    background: rgba(0, 0, 0, 0.6);
+    background: rgba(18, 20, 24, 0.9);
     color: var(--color-orange);
     font-family: "Fira Code", monospace;
     font-size: 16px;
@@ -240,9 +249,9 @@ LAYOUT PRINCIPAL
 .bottom {
     flex: 1;
     overflow: auto;
-    padding: 20px;
+    padding: 24px;
     padding-top: 0;
-    padding-bottom: 40px;
+    padding-bottom: 56px;
 }
 
 .info {
@@ -316,9 +325,9 @@ TREE
 
 .lateralBar a {
     text-decoration: none;
-    color: #e0e0e0;
+    color: #aeb6c0;
 
-    padding: 5px 8px;
+    padding: 6px 9px;
     border-left: 2px solid transparent;
     border-radius: 0 4px 4px 0;
 
@@ -330,14 +339,14 @@ TREE
 .lateralBar a:hover {
     color: var(--color-cyan);
     border-left-color: var(--color-orange);
-    background: rgba(0, 255, 255, 0.1);
+    background: rgba(82, 228, 232, 0.08);
     text-shadow: var(--glow-cyan);
 }
 
 .lateralBar a.is-active {
-    color: var(--color-bg);
-    background: linear-gradient(90deg, var(--color-orange), #ff9a57);
-    border-left-color: #fff2cf;
+    color: #faf3e1;
+    background: rgba(232, 127, 36, 0.14);
+    border-left-color: var(--color-orange);
     text-shadow: none;
     box-shadow: 0 0 18px rgba(255, 109, 31, 0.25);
 }
@@ -357,7 +366,8 @@ GEAR / SETTINGS
     justify-content: center;
     width: 40px;
     height: 40px;
-    background: #222;
+    background: #15181e;
+    border: 1px solid #30353d;
     border-radius: 6px;
 }
 .gear img {
@@ -413,15 +423,16 @@ GEAR / SETTINGS
     right: 60px;
     z-index: 100000;
     will-change: transform;
-    border: 2px solid #000;
-    background-color: #333;
-    box-shadow: 6px 6px 10px #000;
+    border: 1px solid #30353d;
+    background-color: #15181e;
+    box-shadow: 0 18px 48px rgba(0, 0, 0, 0.45);
     display: flex;
     flex-direction: column;
 }
 .window#settings .titlebar {
     height: 32px;
-    background-color: #0000ff;
+    background-color: #101216;
+    border-bottom: 1px solid #30353d;
     color: #ffffff;
     display: flex;
     align-items: center;
@@ -507,9 +518,9 @@ EFEITOS
 
 .main {
     font-family: 'VT323';
-    font-size: 20px;
+    font-size: 19px;
     
-    text-shadow: 0 0 3px rgba(255,255,255,0.2);
+    text-shadow: 0 0 2px rgba(255,255,255,0.12);
 }
 
 .main .logo {
@@ -522,11 +533,14 @@ EFEITOS
 
 .main h1 {
     color: #FAF3E1;
-    margin: 0 0 8px 0;
+    margin: 0 0 12px 0;
+    font-size: clamp(2rem, 4vw, 3rem);
+    letter-spacing: 0.01em;
 }
 .main h2 {
     color: #FAF3E1;
-    margin: 24px 0 8px 0;
+    margin: 32px 0 10px 0;
+    letter-spacing: 0.01em;
 }
 .main h3 {
     color: #FAF3E1;
@@ -538,22 +552,23 @@ EFEITOS
 }
 .main p {
     margin: 8px 0;
-    line-height: 1.5;
-    color: #e0e0e0;
+    line-height: 1.55;
+    color: #c7cdd4;
 }
 
 .doc-shell {
-    width: min(980px, 100%);
+    width: min(1040px, 100%);
+    margin: 0 auto;
 }
 
 .doc-page-header {
-    margin-bottom: 18px;
-    padding: 14px 18px;
-    border: 1px solid rgba(255, 255, 255, 0.14);
-    border-left: 4px solid var(--color-cyan);
+    margin-bottom: 22px;
+    padding: 16px 20px;
+    border: 1px solid #30353d;
+    border-top: 2px solid var(--color-cyan);
     background:
-        linear-gradient(90deg, rgba(0, 255, 255, 0.08), transparent 45%),
-        rgba(255, 255, 255, 0.03);
+        linear-gradient(90deg, rgba(82, 228, 232, 0.08), transparent 45%),
+        rgba(18, 20, 24, 0.82);
 }
 
 .doc-kicker,
@@ -563,14 +578,14 @@ EFEITOS
 
 .doc-kicker {
     color: var(--color-orange);
-    font-size: 0.9em;
+    font-size: 0.78em;
     letter-spacing: 0.12em;
     text-transform: uppercase;
 }
 
 .doc-breadcrumb {
     color: var(--color-cyan);
-    font-size: 1.05em;
+    font-size: 1em;
 }
 .main ul, .main ol {
     margin: 8px 0;
@@ -584,33 +599,34 @@ EFEITOS
     border-collapse: collapse;
     margin: 12px 0;
     width: 100%;
-    color: #e0e0e0;
+    color: #c7cdd4;
 }
 .main th, .main td {
-    border: 1px solid #555;
-    padding: 8px 12px;
+    border: 1px solid #30353d;
+    padding: 9px 12px;
     text-align: left;
 }
 .main th {
-    background: rgba(255,255,255,0.08);
+    background: rgba(82, 228, 232, 0.08);
     color: #FAF3E1;
 }
 .main td {
-    background: rgba(0,0,0,0.2);
+    background: rgba(18, 20, 24, 0.62);
 }
 .main pre {
     margin: 12px 0;
     padding: 12px 16px;
-    background: rgba(0,0,0,0.4);
-    border: 1px solid #444;
-    border-radius: 4px;
+    background: #101216;
+    border: 1px solid #30353d;
+    border-left: 3px solid var(--color-orange);
+    border-radius: 0;
     overflow-x: auto;
 }
 .main code {
     font-family: "Fira Code", monospace;
     font-size: 0.9em;
     color: #f8f8f2;
-    background: rgba(255,255,255,0.08);
+    background: rgba(82, 228, 232, 0.08);
     padding: 1px 5px;
     border-radius: 3px;
 }
@@ -629,9 +645,10 @@ EFEITOS
     text-shadow: none;
 }
 .main pre[class*="language-"] {
-    background: rgba(0, 0, 0, 0.4);
-    border: 1px solid #444;
-    border-radius: 4px;
+    background: #101216;
+    border: 1px solid #30353d;
+    border-left: 3px solid var(--color-orange);
+    border-radius: 0;
     margin: 12px 0;
     padding: 12px 16px;
     overflow-x: auto;
@@ -643,15 +660,15 @@ EFEITOS
 }
 .main hr {
     border: none;
-    border-top: 1px solid #555;
+    border-top: 1px solid #30353d;
     margin: 24px 0;
 }
 .main blockquote {
     margin: 12px 0;
     padding: 8px 16px;
-    border-left: 4px solid #888;
-    background: rgba(255,255,255,0.03);
-    color: #ccc;
+    border-left: 3px solid var(--color-cyan);
+    background: rgba(82, 228, 232, 0.06);
+    color: #c7cdd4;
 }
 .main img {
     max-width: 100%;
@@ -1070,9 +1087,9 @@ MOBILE
     }
 
     .lateralBar a.is-active {
-        color: var(--color-bg);
-        background: linear-gradient(90deg, var(--color-orange), #ff9a57);
-        border-left-color: #fff2cf;
+        color: #faf3e1;
+        background: rgba(232, 127, 36, 0.14);
+        border-left-color: var(--color-orange);
         text-shadow: none;
     }
 
