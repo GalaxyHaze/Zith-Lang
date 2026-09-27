@@ -119,6 +119,7 @@ jobs:
             cmake_flags: >-
               -DCMAKE_C_COMPILER=clang-cl
               -DCMAKE_CXX_COMPILER=clang-cl
+              -DCMAKE_PREFIX_PATH="C:/Program Files/LLVM"
               -DLLVM_DIR="C:/Program Files/LLVM/lib/cmake/llvm"
 
           - os: windows-11-arm
@@ -127,7 +128,10 @@ jobs:
             cmake_flags: >-
               -DCMAKE_C_COMPILER=clang-cl
               -DCMAKE_CXX_COMPILER=clang-cl
+              -DCMAKE_PREFIX_PATH="C:/Program Files/LLVM"
               -DLLVM_DIR="C:/Program Files/LLVM/lib/cmake/llvm"
+              -DCMAKE_C_COMPILER_TARGET=arm64-pc-windows-msvc
+              -DCMAKE_CXX_COMPILER_TARGET=arm64-pc-windows-msvc
 
     steps:
       - uses: actions/checkout@v4
@@ -165,6 +169,17 @@ jobs:
         if: runner.os == 'Windows'
         shell: bash
         run: echo "C:/Program Files/LLVM/bin" >> "$GITHUB_PATH"
+
+      - name: Locate LLVM CMake package
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          LLVM_CMAKE_DIR="$(llvm-config --cmakedir 2>/dev/null || true)"
+          if [ -z "$LLVM_CMAKE_DIR" ] || [ ! -f "$LLVM_CMAKE_DIR/LLVMConfig.cmake" ]; then
+            LLVM_CMAKE_DIR="C:/Program Files/LLVM/lib/cmake/llvm"
+          fi
+          test -f "$LLVM_CMAKE_DIR/LLVMConfig.cmake"
+          echo "LLVM_DIR=$LLVM_CMAKE_DIR" >> "$GITHUB_ENV"
 
       - name: Setup MSVC environment
         if: runner.os == 'Windows' && matrix.msvc_arch != ''
@@ -651,6 +666,7 @@ jobs:
             cmake_flags: >-
               -DCMAKE_C_COMPILER=clang-cl
               -DCMAKE_CXX_COMPILER=clang-cl
+              -DCMAKE_PREFIX_PATH="C:/Program Files/LLVM"
               -DLLVM_DIR="C:/Program Files/LLVM/lib/cmake/llvm"
 
           - os: windows-11-arm
@@ -659,7 +675,10 @@ jobs:
             cmake_flags: >-
               -DCMAKE_C_COMPILER=clang-cl
               -DCMAKE_CXX_COMPILER=clang-cl
+              -DCMAKE_PREFIX_PATH="C:/Program Files/LLVM"
               -DLLVM_DIR="C:/Program Files/LLVM/lib/cmake/llvm"
+              -DCMAKE_C_COMPILER_TARGET=arm64-pc-windows-msvc
+              -DCMAKE_CXX_COMPILER_TARGET=arm64-pc-windows-msvc
 
     steps:
       - name: Verify zith-lsp remote access
@@ -726,6 +745,17 @@ jobs:
         if: runner.os == 'Windows'
         shell: bash
         run: echo "C:/Program Files/LLVM/bin" >> "$GITHUB_PATH"
+
+      - name: Locate LLVM CMake package
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          LLVM_CMAKE_DIR="$(llvm-config --cmakedir 2>/dev/null || true)"
+          if [ -z "$LLVM_CMAKE_DIR" ] || [ ! -f "$LLVM_CMAKE_DIR/LLVMConfig.cmake" ]; then
+            LLVM_CMAKE_DIR="C:/Program Files/LLVM/lib/cmake/llvm"
+          fi
+          test -f "$LLVM_CMAKE_DIR/LLVMConfig.cmake"
+          echo "LLVM_DIR=$LLVM_CMAKE_DIR" >> "$GITHUB_ENV"
 
       - name: Setup MSVC environment
         if: runner.os == 'Windows' && matrix.msvc_arch != ''

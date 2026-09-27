@@ -132,7 +132,7 @@ void CodeGen::ensureTargetInfo() {
 #endif
     // Create a throwaway TargetMachine just to get the correct data layout.
     std::string error;
-    auto *target = llvm::TargetRegistry::lookupTarget(triple, error);
+    auto *target = llvm::TargetRegistry::lookupTarget(tripleStr, error);
     if (target) {
         llvm::TargetOptions options;
 #if LLVM_VERSION_MAJOR >= 19
@@ -156,7 +156,7 @@ void CodeGen::optimize() {
     std::string error;
     auto tripleStr = effectiveTriple();
     auto triple    = llvm::Triple(tripleStr);
-    auto *target   = llvm::TargetRegistry::lookupTarget(triple, error);
+    auto *target   = llvm::TargetRegistry::lookupTarget(tripleStr, error);
     std::unique_ptr<llvm::TargetMachine> tm;
     if (target) {
         llvm::TargetOptions options;
@@ -461,7 +461,7 @@ static bool setupTargetMachine(llvm::Module *module, const std::string &tripleSt
                                diagnostics::DiagnosticEngine *diags = nullptr) {
     std::string error;
     auto triple  = llvm::Triple(tripleStr);
-    auto *target = llvm::TargetRegistry::lookupTarget(triple, error);
+    auto *target = llvm::TargetRegistry::lookupTarget(tripleStr, error);
     if (!target) {
         std::string msg = "target lookup failed: " + error;
         if (diags)
