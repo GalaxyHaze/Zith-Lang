@@ -174,9 +174,13 @@ jobs:
         if: runner.os == 'Windows'
         shell: bash
         run: |
-          LLVM_CMAKE_DIR="$(llvm-config --cmakedir 2>/dev/null || true)"
-          if [ -z "$LLVM_CMAKE_DIR" ] || [ ! -f "$LLVM_CMAKE_DIR/LLVMConfig.cmake" ]; then
-            LLVM_CMAKE_DIR="C:/Program Files/LLVM/lib/cmake/llvm"
+          LLVM_CMAKE_DIR="$(find \
+            'C:/Program Files/LLVM' \
+            'C:/Program Files (x86)/LLVM' \
+            'C:/Program Files/Microsoft Visual Studio' \
+            -type f -name LLVMConfig.cmake -print -quit 2>/dev/null | xargs -r dirname)"
+          if [ -z "$LLVM_CMAKE_DIR" ]; then
+            LLVM_CMAKE_DIR="$(llvm-config --cmakedir 2>/dev/null || true)"
           fi
           test -f "$LLVM_CMAKE_DIR/LLVMConfig.cmake"
           echo "LLVM_DIR=$LLVM_CMAKE_DIR" >> "$GITHUB_ENV"
@@ -750,9 +754,13 @@ jobs:
         if: runner.os == 'Windows'
         shell: bash
         run: |
-          LLVM_CMAKE_DIR="$(llvm-config --cmakedir 2>/dev/null || true)"
-          if [ -z "$LLVM_CMAKE_DIR" ] || [ ! -f "$LLVM_CMAKE_DIR/LLVMConfig.cmake" ]; then
-            LLVM_CMAKE_DIR="C:/Program Files/LLVM/lib/cmake/llvm"
+          LLVM_CMAKE_DIR="$(find \
+            'C:/Program Files/LLVM' \
+            'C:/Program Files (x86)/LLVM' \
+            'C:/Program Files/Microsoft Visual Studio' \
+            -type f -name LLVMConfig.cmake -print -quit 2>/dev/null | xargs -r dirname)"
+          if [ -z "$LLVM_CMAKE_DIR" ]; then
+            LLVM_CMAKE_DIR="$(llvm-config --cmakedir 2>/dev/null || true)"
           fi
           test -f "$LLVM_CMAKE_DIR/LLVMConfig.cmake"
           echo "LLVM_DIR=$LLVM_CMAKE_DIR" >> "$GITHUB_ENV"

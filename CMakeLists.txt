@@ -25,7 +25,7 @@ option(ZITH_ENABLE_C_INTEROP "Enable automatic C header bindings through libclan
 
 if(ZITH_HAS_LLVM AND NOT ZITH_IS_WASM)
     find_package(ZLIB QUIET)
-    if(CMAKE_CROSSCOMPILING AND CMAKE_CXX_COMPILER_TARGET MATCHES "musl")
+    if(CMAKE_CXX_COMPILER_TARGET MATCHES "musl")
         # The release musl build uses the host LLVM package with Zig. LLVM's
         # exported targets still name compression libraries even when the
         # selected compiler components do not reference them.
@@ -44,6 +44,9 @@ if(ZITH_HAS_LLVM AND NOT ZITH_IS_WASM)
         message(STATUS "LLVM_DIR '${LLVM_DIR}' has no LLVMConfig.cmake; falling back to llvm-config")
         unset(LLVM_DIR CACHE)
         unset(LLVM_DIR)
+    endif()
+    if(NOT DEFINED LLVM_DIR AND DEFINED ENV{LLVM_DIR})
+        set(LLVM_DIR "$ENV{LLVM_DIR}" CACHE PATH "LLVM Directory" FORCE)
     endif()
     if(NOT DEFINED LLVM_DIR AND NOT DEFINED ENV{LLVM_DIR})
         find_program(LLVM_CONFIG_EXE NAMES llvm-config llvm-config-21 llvm-config-20 llvm-config-19 llvm-config-18 llvm-config-17)

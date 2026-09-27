@@ -262,7 +262,11 @@ std::optional<llvm::DataLayout> makeTargetDataLayout(const std::string_view targ
         target_triple.empty() ? llvm::sys::getDefaultTargetTriple() : std::string(target_triple);
     const auto triple = llvm::Triple(triple_str);
     std::string error;
+#if LLVM_VERSION_MAJOR >= 23
+    auto *target = llvm::TargetRegistry::lookupTarget(triple, error);
+#else
     auto *target = llvm::TargetRegistry::lookupTarget(triple_str, error);
+#endif
     if (!target)
         return std::nullopt;
 
