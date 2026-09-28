@@ -161,8 +161,13 @@ jobs:
         run: |
           brew install llvm ninja
 
-      - name: Install Windows dependencies
-        if: runner.os == 'Windows' && matrix.llvm_asset == 'win64'
+      - name: Install Windows build tools
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: choco install ninja -y
+
+      - name: Legacy LLVM installer (disabled)
+        if: false
         shell: pwsh
         run: |
           choco install ninja -y
@@ -186,7 +191,7 @@ jobs:
           }
 
       - name: Install Windows ARM64 dependencies
-        if: runner.os == 'Windows' && matrix.llvm_asset == 'woa64'
+        if: false
         shell: pwsh
         run: |
           choco install ninja -y
@@ -202,7 +207,41 @@ jobs:
             throw "LLVM ARM64 installer failed with exit code $($process.ExitCode)"
           }
 
-      - name: Add Chocolatey LLVM to PATH
+      - name: Install Windows LLVM development archive
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $llvmVersion = '20.1.8'
+          $llvmArch = switch ('${{ matrix.llvm_asset }}') {
+            'win64' { 'x86_64' }
+            'woa64' { 'aarch64' }
+            default { throw "Unsupported LLVM Windows asset: ${{ matrix.llvm_asset }}" }
+          }
+          $assetName = "clang+llvm-$llvmVersion-$llvmArch-pc-windows-msvc.tar.xz"
+          $archive = Join-Path $env:RUNNER_TEMP $assetName
+          $releaseTag = 'llvm' + 'org' + [char]45 + $llvmVersion
+          $assetUri = "https://github.com/llvm/llvm-project/releases/download/$releaseTag/$assetName"
+          Invoke-WebRequest -Uri $assetUri -OutFile $archive
+
+          $llvmRoot = 'C:\Program Files\LLVM'
+          Remove-Item -LiteralPath $llvmRoot -Recurse -Force -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Path $llvmRoot -Force | Out-Null
+          tar.exe -xf $archive -C $llvmRoot --strip-components=1
+          if ($LASTEXITCODE -ne 0) {
+            throw "Failed to extract LLVM archive: $assetName"
+          }
+          if (-not (Test-Path (Join-Path $llvmRoot 'bin\clang-cl.exe'))) {
+            throw "LLVM archive did not contain clang-cl.exe: $assetName"
+          }
+          if (-not (Test-Path (Join-Path $llvmRoot 'lib\cmake\llvm\LLVMConfig.cmake'))) {
+            throw "LLVM archive did not contain LLVMConfig.cmake: $assetName"
+          }
+          $clangVersion = & (Join-Path $llvmRoot 'bin\clang-cl.exe') --version
+          if ($clangVersion -notmatch 'clang version 20\.') {
+            throw "Expected Clang 20 from LLVM archive; got: $clangVersion"
+          }
+
+      - name: Add LLVM to PATH
         if: runner.os == 'Windows'
         shell: bash
         run: echo "C:/Program Files/LLVM/bin" >> "$GITHUB_PATH"
@@ -359,7 +398,7 @@ jobs:
             alpine:3.22 \
             sh -euc '
               apk add --no-cache build-base cmake ninja python3 \
-                clang20 llvm20-dev llvm20-static lld20
+                clang20 llvm20-dev llvm20-static llvm20-gtest lld20
 
               compiler_target="$(clang-20 --print-target-triple)"
               case "$ZITH_TARGET_ARCH:$compiler_target" in
@@ -828,8 +867,13 @@ jobs:
         run: |
           brew install llvm ninja
 
-      - name: Install Windows dependencies
-        if: runner.os == 'Windows' && matrix.llvm_asset == 'win64'
+      - name: Install Windows build tools
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: choco install ninja -y
+
+      - name: Legacy LLVM installer (disabled)
+        if: false
         shell: pwsh
         run: |
           choco install ninja -y
@@ -845,7 +889,7 @@ jobs:
           }
 
       - name: Install Windows ARM64 dependencies
-        if: runner.os == 'Windows' && matrix.llvm_asset == 'woa64'
+        if: false
         shell: pwsh
         run: |
           choco install ninja -y
@@ -861,7 +905,41 @@ jobs:
             throw "LLVM ARM64 installer failed with exit code $($process.ExitCode)"
           }
 
-      - name: Add Chocolatey LLVM to PATH
+      - name: Install Windows LLVM development archive
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $llvmVersion = '20.1.8'
+          $llvmArch = switch ('${{ matrix.llvm_asset }}') {
+            'win64' { 'x86_64' }
+            'woa64' { 'aarch64' }
+            default { throw "Unsupported LLVM Windows asset: ${{ matrix.llvm_asset }}" }
+          }
+          $assetName = "clang+llvm-$llvmVersion-$llvmArch-pc-windows-msvc.tar.xz"
+          $archive = Join-Path $env:RUNNER_TEMP $assetName
+          $releaseTag = 'llvm' + 'org' + [char]45 + $llvmVersion
+          $assetUri = "https://github.com/llvm/llvm-project/releases/download/$releaseTag/$assetName"
+          Invoke-WebRequest -Uri $assetUri -OutFile $archive
+
+          $llvmRoot = 'C:\Program Files\LLVM'
+          Remove-Item -LiteralPath $llvmRoot -Recurse -Force -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Path $llvmRoot -Force | Out-Null
+          tar.exe -xf $archive -C $llvmRoot --strip-components=1
+          if ($LASTEXITCODE -ne 0) {
+            throw "Failed to extract LLVM archive: $assetName"
+          }
+          if (-not (Test-Path (Join-Path $llvmRoot 'bin\clang-cl.exe'))) {
+            throw "LLVM archive did not contain clang-cl.exe: $assetName"
+          }
+          if (-not (Test-Path (Join-Path $llvmRoot 'lib\cmake\llvm\LLVMConfig.cmake'))) {
+            throw "LLVM archive did not contain LLVMConfig.cmake: $assetName"
+          }
+          $clangVersion = & (Join-Path $llvmRoot 'bin\clang-cl.exe') --version
+          if ($clangVersion -notmatch 'clang version 20\.') {
+            throw "Expected Clang 20 from LLVM archive; got: $clangVersion"
+          }
+
+      - name: Add LLVM to PATH
         if: runner.os == 'Windows'
         shell: bash
         run: echo "C:/Program Files/LLVM/bin" >> "$GITHUB_PATH"

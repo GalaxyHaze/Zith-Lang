@@ -165,6 +165,18 @@ def validate_workflows(workflow_dir: Path) -> None:
         fail(f"{artifact_workflow} does not provide LLVM_DIR for all Windows targets")
     if "-DZITH_HAS_LLVM=OFF" in artifact_text:
         fail(f"{artifact_workflow} disables LLVM for a release artifact")
+    if artifact_text.count("Install Windows LLVM development archive") != 2:
+        fail(f"{artifact_workflow} does not install Windows LLVM development archives")
+    if "clang+llvm-$llvmVersion-$llvmArch-pc-windows-msvc.tar.xz" not in artifact_text:
+        fail(f"{artifact_workflow} does not select complete Windows LLVM archives")
+    if artifact_text.count("$llvmVersion = '20.1.8'") < 2:
+        fail(f"{artifact_workflow} does not pin the Windows LLVM archive version")
+    if artifact_text.count("LLVM archive did not contain LLVMConfig.cmake") < 2:
+        fail(f"{artifact_workflow} does not verify the Windows LLVM CMake package")
+    if artifact_text.count("name: Legacy LLVM installer (disabled)\n        if: false") != 2:
+        fail(f"{artifact_workflow} does not disable the incomplete LLVM 18 installers")
+    if artifact_text.count("name: Install Windows ARM64 dependencies\n        if: false") != 2:
+        fail(f"{artifact_workflow} does not disable the incomplete LLVM 18 ARM64 installers")
     def job_section(text: str, job: str) -> str:
         start = text.find(f"\n  {job}:")
         if start < 0:
@@ -190,7 +202,7 @@ def validate_workflows(workflow_dir: Path) -> None:
         fail(f"{artifact_workflow} does not build musl artifacts in Alpine")
     if "apk add --no-cache" not in musl_section:
         fail(f"{artifact_workflow} does not install Alpine build dependencies")
-    for package in ("clang20", "llvm20-dev", "llvm20-static", "lld20"):
+    for package in ("clang20", "llvm20-dev", "llvm20-static", "llvm20-gtest", "lld20"):
         if package not in musl_section:
             fail(f"{artifact_workflow} does not install {package} for musl builds")
     for platform in ("linux/amd64", "linux/arm64"):
@@ -206,8 +218,16 @@ def validate_workflows(workflow_dir: Path) -> None:
         section = job_section(artifact_text, job)
         if "llvm_asset: win64" not in section or "llvm_asset: woa64" not in section:
             fail(f"{artifact_workflow} does not select Windows LLVM assets per architecture in {job}")
-        if "Install Windows ARM64 dependencies" not in section:
-            fail(f"{artifact_workflow} does not install native Windows ARM64 LLVM in {job}")
+        if "Install Windows build tools" not in section:
+            fail(f"{artifact_workflow} does not install Windows build tools in {job}")
+        if "Install Windows LLVM development archive" not in section:
+            fail(f"{artifact_workflow} does not install a Windows LLVM development archive in {job}")
+        if "tar.exe -xf $archive" not in section:
+            fail(f"{artifact_workflow} does not extract the Windows LLVM archive in {job}")
+        if "Remove-Item -LiteralPath $llvmRoot" not in section:
+            fail(f"{artifact_workflow} does not clear stale LLVM files in {job}")
+        if "Expected Clang 20" not in section:
+            fail(f"{artifact_workflow} does not verify the Windows Clang version in {job}")
         if "Expose DIA SDK at LLVM's configured path" not in section:
             fail(f"{artifact_workflow} does not expose the DIA SDK to LLVM in {job}")
         if "VSINSTALLDIR" not in section or "diaguids.lib" not in section:

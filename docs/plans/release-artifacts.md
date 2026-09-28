@@ -21,6 +21,12 @@ amd64 assets instead of a cross-linked universal binary.
 | `windows-latest` | `zithc-windows-amd64.exe` | ON (fixed) | removed (legacy) | OFF | OFF | `zithc.exe` |
 | `windows-11-arm` | `zithc-windows-arm64.exe` | ON (required) | removed (legacy) | OFF | OFF | `zithc.exe` |
 
+Windows release jobs use only the LLVM 20.1.8 MSVC development archive for x64
+or ARM64. It provides the compiler, CMake package, and libraries needed to
+build Zith with the current MSVC STL. The workflow clears the install directory
+before extraction to prevent stale files from another LLVM version from mixing
+with the archive.
+
 ## Musl `zithc` Matrix
 
 | Runner | target_name | `ZITH_HAS_LLVM` | `ZITH_ENABLE_FFI` | `ZITH_ENABLE_C_COMPILE` | `ZITH_IS_WASM` | Artifact |
@@ -29,10 +35,11 @@ amd64 assets instead of a cross-linked universal binary.
 | `ubuntu-24.04-arm` with Alpine 3.22 (`linux/arm64`) | `zithc-linux-arm64-musl` | ON (required) | removed (legacy) | OFF | OFF | `zithc` |
 
 The musl jobs build inside native Alpine containers and install Alpine's
-target-matched Clang 20 and static LLVM 20 packages. They verify the compiler's
-reported musl target and require LLVM, so they fail rather than publish a
-sema-only compiler. A successful release run is still required to confirm both
-Alpine builds end to end.
+target-matched Clang 20 and static LLVM 20 packages, including the separate
+`llvm20-gtest` archive package required by LLVM's exported CMake targets. They
+verify the compiler's reported musl target and require LLVM, so they fail
+rather than publish a sema-only compiler. A successful release run is still
+required to confirm both Alpine builds end to end.
 
 ## LSP and Wasm Matrices
 
@@ -67,9 +74,9 @@ and codegen capability do not diverge between release targets.
 - `CodeGen` now initializes the AArch64 target in addition to x86 and
   WebAssembly. The native ARM release jobs still need one real execution to
   prove that the hosted LLVM installation and target machine link correctly.
-- The Windows ARM runner and the Alpine musl jobs still need one successful
-  release execution to confirm the native LLVM installers, DIA SDK path, and
-  target-matched static LLVM libraries end to end. Configuration now fails
+- The Windows runners and the Alpine musl jobs still need one successful
+  release execution to confirm the LLVM development archives, DIA SDK path,
+  and target-matched static LLVM libraries end to end. Configuration now fails
   instead of silently disabling LLVM.
 - Release smoke jobs now exercise the Unix and Windows installers and the Scoop
   manifest. The external tap still needs the first authenticated formula sync
