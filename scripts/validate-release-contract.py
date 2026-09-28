@@ -204,6 +204,15 @@ def validate_workflows(workflow_dir: Path) -> None:
         not in arm64_llvm_section
     ):
         fail(f"{artifact_workflow} does not fetch pinned LLVM sources on an ARM64 cache miss")
+    for marker in (
+        "$cmakeCompilerPath = $clangCl -replace '\\\\', '/'",
+        "$cmakeInstallPath = $installRoot -replace '\\\\', '/'",
+        '"-DCMAKE_C_COMPILER=$cmakeCompilerPath"',
+        '"-DCMAKE_CXX_COMPILER=$cmakeCompilerPath"',
+        '"-DCMAKE_INSTALL_PREFIX=$cmakeInstallPath"',
+    ):
+        if marker not in arm64_llvm_section:
+            fail(f"{artifact_workflow} does not normalize Windows paths passed to CMake: {marker}")
 
     for job in ("build-main", "build-musl", "build-lsp"):
         section = job_section(artifact_text, job)

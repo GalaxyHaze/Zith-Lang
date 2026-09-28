@@ -138,11 +138,14 @@ jobs:
         run: |
           $llvmRoot = Join-Path $env:RUNNER_TEMP 'llvm-arm64-host'
           $installRoot = Join-Path $env:RUNNER_TEMP 'llvm-arm64-20.1.8-full'
+          $clangCl = Join-Path $llvmRoot 'bin\clang-cl.exe'
+          $cmakeCompilerPath = $clangCl -replace '\\', '/'
+          $cmakeInstallPath = $installRoot -replace '\\', '/'
           cmake -S llvm-project/llvm -B llvm-build -G Ninja `
             -DCMAKE_BUILD_TYPE=Release `
-            "-DCMAKE_C_COMPILER=$llvmRoot\bin\clang-cl.exe" `
-            "-DCMAKE_CXX_COMPILER=$llvmRoot\bin\clang-cl.exe" `
-            "-DCMAKE_INSTALL_PREFIX=$installRoot" `
+            "-DCMAKE_C_COMPILER=$cmakeCompilerPath" `
+            "-DCMAKE_CXX_COMPILER=$cmakeCompilerPath" `
+            "-DCMAKE_INSTALL_PREFIX=$cmakeInstallPath" `
             '-DLLVM_TARGETS_TO_BUILD=AArch64;X86;WebAssembly' `
             -DLLVM_BUILD_TOOLS=OFF `
             -DLLVM_BUILD_UTILS=OFF `
