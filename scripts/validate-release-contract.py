@@ -177,6 +177,7 @@ def validate_workflows(workflow_dir: Path) -> None:
         fail(f"{artifact_workflow} does not disable the incomplete LLVM 18 installers")
     if artifact_text.count("name: Install Windows ARM64 dependencies\n        if: false") != 2:
         fail(f"{artifact_workflow} does not disable the incomplete LLVM 18 ARM64 installers")
+
     def job_section(text: str, job: str) -> str:
         start = text.find(f"\n  {job}:")
         if start < 0:
@@ -184,6 +185,25 @@ def validate_workflows(workflow_dir: Path) -> None:
         next_match = re.search(r"\n  [A-Za-z0-9_-]+:\n", text[start + 1 :])
         end = start + 1 + next_match.start() if next_match else len(text)
         return text[start:end]
+
+    arm64_llvm_section = job_section(artifact_text, "build-windows-arm64-llvm")
+    if "LLVM_TARGETS_TO_BUILD=AArch64;X86;WebAssembly" not in arm64_llvm_section:
+        fail(f"{artifact_workflow} does not build all LLVM codegen targets for Windows ARM64")
+    for marker in (
+        "LLVMX86CodeGen.lib",
+        "LLVMAArch64CodeGen.lib",
+        "LLVMWebAssemblyCodeGen.lib",
+        "actions/cache@v4",
+        "actions/upload-artifact@v4",
+    ):
+        if marker not in arm64_llvm_section:
+            fail(f"{artifact_workflow} Windows ARM64 LLVM job is missing {marker}")
+    if (
+        "git clone --depth 1 --branch $llvmTag "
+        "https://github.com/llvm/llvm-project.git llvm-project"
+        not in arm64_llvm_section
+    ):
+        fail(f"{artifact_workflow} does not fetch pinned LLVM sources on an ARM64 cache miss")
 
     for job in ("build-main", "build-musl", "build-lsp"):
         section = job_section(artifact_text, job)
@@ -223,6 +243,8 @@ def validate_workflows(workflow_dir: Path) -> None:
         fail(f"{artifact_workflow} retains the removed Zig musl toolchain")
     for job in ("build-main", "build-lsp"):
         section = job_section(artifact_text, job)
+        if "needs: [create-release, build-windows-arm64-llvm]" not in section:
+            fail(f"{artifact_workflow} does not gate {job} on full-backend LLVM")
         if "llvm_asset: win64" not in section or "llvm_asset: woa64" not in section:
             fail(f"{artifact_workflow} does not select Windows LLVM assets per architecture in {job}")
         if "Install Windows build tools" not in section:
@@ -237,10 +259,19 @@ def validate_workflows(workflow_dir: Path) -> None:
             fail(f"{artifact_workflow} does not verify the Windows Clang version in {job}")
         if "Select-Object -First 1" not in section:
             fail(f"{artifact_workflow} does not isolate Clang version output in {job}")
+        if "Download full-backend LLVM package" not in section:
+            fail(f"{artifact_workflow} does not download full-backend LLVM in {job}")
+        if "LLVMWebAssemblyCodeGen.lib" not in section:
+            fail(f"{artifact_workflow} does not verify the Windows ARM64 WebAssembly backend in {job}")
         if "Expose DIA SDK at LLVM's configured path" not in section:
             fail(f"{artifact_workflow} does not expose the DIA SDK to LLVM in {job}")
-        if "VSINSTALLDIR" not in section or "diaguids.lib" not in section:
-            fail(f"{artifact_workflow} does not locate the active Visual Studio DIA SDK in {job}")
+        if (
+            "VSINSTALLDIR" not in section
+            or "diaguids.lib" not in section
+            or "Select-String -Pattern $pattern" not in section
+            or "C:\\Program Files\\Microsoft Visual Studio\\2022\\Enterprise" in section
+        ):
+            fail(f"{artifact_workflow} does not resolve the LLVM DIA SDK path dynamically in {job}")
     publish_section = job_section(artifact_text, "publish-release")
     if "if: needs.create-release.outputs.draft == 'false'" not in publish_section:
         fail(f"{artifact_workflow} does not gate final publication on draft mode")

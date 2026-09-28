@@ -72,8 +72,135 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+  build-windows-arm64-llvm:
+    name: Build LLVM 20.1.8 (Windows ARM64, all codegen targets)
+    runs-on: windows-11-arm
+    timeout-minutes: 240
+    env:
+      LLVM_VERSION: '20.1.8'
+    steps:
+      - name: Setup CMake
+        uses: jwlawson/actions-setup-cmake@v2
+        with:
+          cmake-version: ${{ env.CMAKE_VERSION }}
+
+      - name: Install Ninja
+        shell: pwsh
+        run: choco install ninja -y
+
+      - name: Install LLVM ARM64 host compiler
+        shell: pwsh
+        run: |
+          $llvmVersion = '20.1.8'
+          $assetName = "clang+llvm-$llvmVersion-aarch64-pc-windows-msvc.tar.xz"
+          $archive = Join-Path $env:RUNNER_TEMP $assetName
+          $releaseTag = 'llvm' + 'org' + [char]45 + $llvmVersion
+          $assetUri = "https://github.com/llvm/llvm-project/releases/download/$releaseTag/$assetName"
+          Invoke-WebRequest -Uri $assetUri -OutFile $archive
+
+          $llvmRoot = Join-Path $env:RUNNER_TEMP 'llvm-arm64-host'
+          New-Item -ItemType Directory -Path $llvmRoot -Force | Out-Null
+          tar.exe -xf $archive -C $llvmRoot --strip-components=1
+          if ($LASTEXITCODE -ne 0) {
+            throw "Failed to extract LLVM host compiler: $assetName"
+          }
+          $clangCl = Join-Path $llvmRoot 'bin\clang-cl.exe'
+          if (-not (Test-Path $clangCl)) {
+            throw "LLVM ARM64 archive did not contain clang-cl.exe: $assetName"
+          }
+          $clangVersion = & $clangCl --version | Select-Object -First 1
+          if ($clangVersion -notmatch '^clang version 20\.') {
+            throw "Expected Clang 20 from LLVM archive; got: $clangVersion"
+          }
+
+      - name: Setup MSVC environment
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: arm64
+
+      - name: Restore full-backend LLVM package
+        id: llvm-cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}\llvm-arm64-20.1.8-full
+          key: llvm-windows-arm64-20.1.8-aarch64-x86-webassembly-v1
+
+      - name: Checkout pinned LLVM sources
+        if: steps.llvm-cache.outputs.cache-hit != 'true'
+        shell: pwsh
+        run: |
+          $llvmTag = 'llvmorg' + [char]45 + $env:LLVM_VERSION
+          git clone --depth 1 --branch $llvmTag https://github.com/llvm/llvm-project.git llvm-project
+
+      - name: Build LLVM with all compiler codegen targets
+        if: steps.llvm-cache.outputs.cache-hit != 'true'
+        shell: pwsh
+        run: |
+          $llvmRoot = Join-Path $env:RUNNER_TEMP 'llvm-arm64-host'
+          $installRoot = Join-Path $env:RUNNER_TEMP 'llvm-arm64-20.1.8-full'
+          cmake -S llvm-project/llvm -B llvm-build -G Ninja `
+            -DCMAKE_BUILD_TYPE=Release `
+            "-DCMAKE_C_COMPILER=$llvmRoot\bin\clang-cl.exe" `
+            "-DCMAKE_CXX_COMPILER=$llvmRoot\bin\clang-cl.exe" `
+            "-DCMAKE_INSTALL_PREFIX=$installRoot" `
+            '-DLLVM_TARGETS_TO_BUILD=AArch64;X86;WebAssembly' `
+            -DLLVM_BUILD_TOOLS=OFF `
+            -DLLVM_BUILD_UTILS=OFF `
+            -DLLVM_BUILD_TESTS=OFF `
+            -DLLVM_BUILD_EXAMPLES=OFF `
+            -DLLVM_BUILD_BENCHMARKS=OFF `
+            -DLLVM_BUILD_DOCS=OFF `
+            -DLLVM_INCLUDE_TESTS=OFF `
+            -DLLVM_INCLUDE_EXAMPLES=OFF `
+            -DLLVM_INCLUDE_BENCHMARKS=OFF `
+            -DLLVM_ENABLE_BINDINGS=OFF `
+            -DLLVM_ENABLE_LIBEDIT=OFF `
+            -DLLVM_ENABLE_LIBXML2=OFF `
+            -DLLVM_ENABLE_RTTI=OFF `
+            -DLLVM_ENABLE_TERMINFO=OFF `
+            -DLLVM_ENABLE_ZLIB=OFF `
+            -DLLVM_ENABLE_ZSTD=OFF `
+            -DLLVM_BUILD_LLVM_DYLIB=OFF `
+            -DLLVM_LINK_LLVM_DYLIB=OFF
+          if ($LASTEXITCODE -ne 0) {
+            throw "LLVM ARM64 CMake configuration failed with exit code $LASTEXITCODE"
+          }
+
+          cmake --build llvm-build --target install --parallel 4
+          if ($LASTEXITCODE -ne 0) {
+            throw "LLVM ARM64 build/install failed with exit code $LASTEXITCODE"
+          }
+
+      - name: Verify full-backend LLVM package
+        shell: pwsh
+        run: |
+          $llvmRoot = Join-Path $env:RUNNER_TEMP 'llvm-arm64-20.1.8-full'
+          $requiredLibraries = @(
+            'LLVMX86CodeGen.lib',
+            'LLVMAArch64CodeGen.lib',
+            'LLVMWebAssemblyCodeGen.lib'
+          )
+          foreach ($library in $requiredLibraries) {
+            $path = Join-Path $llvmRoot "lib\$library"
+            if (-not (Test-Path $path)) {
+              throw "Full-backend LLVM package is missing $path"
+            }
+          }
+          if (-not (Test-Path (Join-Path $llvmRoot 'lib\cmake\llvm\LLVMConfig.cmake'))) {
+            throw 'Full-backend LLVM package is missing LLVMConfig.cmake'
+          }
+
+      - name: Upload full-backend LLVM package
+        uses: actions/upload-artifact@v4
+        with:
+          name: llvm-windows-arm64-full-backends
+          path: ${{ runner.temp }}\llvm-arm64-20.1.8-full
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 1
+
   build-main:
-    needs: create-release
+    needs: [create-release, build-windows-arm64-llvm]
     name: Build ${{ matrix.target_name }}
     runs-on: ${{ matrix.os }}
     strategy:
@@ -242,6 +369,31 @@ jobs:
             throw "Expected Clang 20 from LLVM archive; got: $clangVersion"
           }
 
+      - name: Download full-backend LLVM package
+        if: matrix.os == 'windows-11-arm'
+        uses: actions/download-artifact@v4
+        with:
+          name: llvm-windows-arm64-full-backends
+          path: ${{ runner.temp }}\llvm-arm64-full
+
+      - name: Merge full-backend LLVM package
+        if: matrix.os == 'windows-11-arm'
+        shell: pwsh
+        run: |
+          $source = Join-Path $env:RUNNER_TEMP 'llvm-arm64-full'
+          $destination = 'C:\Program Files\LLVM'
+          Copy-Item -Path (Join-Path $source '*') -Destination $destination -Recurse -Force
+          foreach ($library in @(
+            'LLVMX86CodeGen.lib',
+            'LLVMAArch64CodeGen.lib',
+            'LLVMWebAssemblyCodeGen.lib'
+          )) {
+            $path = Join-Path $destination "lib\$library"
+            if (-not (Test-Path $path)) {
+              throw "Merged LLVM package is missing $path"
+            }
+          }
+
       - name: Add LLVM to PATH
         if: runner.os == 'Windows'
         shell: bash
@@ -298,13 +450,26 @@ jobs:
             throw "DIA SDK library was not found at $source"
           }
 
-          $destination = "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\DIA SDK\lib\$arch\diaguids.lib"
-          if (-not (Test-Path $destination)) {
+          $pattern = '(?i)[A-Za-z]:[/\\][^"]*?diaguids\.lib'
+          $diaDestinations = @(
+            Get-ChildItem -LiteralPath $env:LLVM_DIR -Filter '*.cmake' -File -Recurse |
+              Select-String -Pattern $pattern |
+              ForEach-Object {
+                foreach ($match in $_.Matches) {
+                  $match.Value -replace '/', '\'
+                }
+              }
+          ) | Sort-Object -Unique
+          if ($diaDestinations.Count -eq 0) {
+            throw "LLVM CMake exports did not contain a DIA SDK library path under $env:LLVM_DIR"
+          }
+
+          foreach ($destination in $diaDestinations) {
             $destinationDir = Split-Path -Parent $destination
             New-Item -ItemType Directory -Path $destinationDir -Force | Out-Null
-            Copy-Item -Path $source -Destination $destination
+            Copy-Item -LiteralPath $source -Destination $destination -Force
+            Write-Host "LLVM DIA SDK library: $source -> $destination"
           }
-          Write-Host "LLVM DIA SDK library: $source -> $destination"
 
       - name: Verify Clang
         shell: bash
@@ -751,7 +916,7 @@ jobs:
           }
 
   build-lsp:
-    needs: create-release
+    needs: [create-release, build-windows-arm64-llvm]
     name: Build zith-lsp-${{ matrix.target_name }}
     runs-on: ${{ matrix.os }}
     strategy:
@@ -941,6 +1106,31 @@ jobs:
             throw "Expected Clang 20 from LLVM archive; got: $clangVersion"
           }
 
+      - name: Download full-backend LLVM package
+        if: matrix.os == 'windows-11-arm'
+        uses: actions/download-artifact@v4
+        with:
+          name: llvm-windows-arm64-full-backends
+          path: ${{ runner.temp }}\llvm-arm64-full
+
+      - name: Merge full-backend LLVM package
+        if: matrix.os == 'windows-11-arm'
+        shell: pwsh
+        run: |
+          $source = Join-Path $env:RUNNER_TEMP 'llvm-arm64-full'
+          $destination = 'C:\Program Files\LLVM'
+          Copy-Item -Path (Join-Path $source '*') -Destination $destination -Recurse -Force
+          foreach ($library in @(
+            'LLVMX86CodeGen.lib',
+            'LLVMAArch64CodeGen.lib',
+            'LLVMWebAssemblyCodeGen.lib'
+          )) {
+            $path = Join-Path $destination "lib\$library"
+            if (-not (Test-Path $path)) {
+              throw "Merged LLVM package is missing $path"
+            }
+          }
+
       - name: Add LLVM to PATH
         if: runner.os == 'Windows'
         shell: bash
@@ -997,13 +1187,26 @@ jobs:
             throw "DIA SDK library was not found at $source"
           }
 
-          $destination = "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\DIA SDK\lib\$arch\diaguids.lib"
-          if (-not (Test-Path $destination)) {
+          $pattern = '(?i)[A-Za-z]:[/\\][^"]*?diaguids\.lib'
+          $diaDestinations = @(
+            Get-ChildItem -LiteralPath $env:LLVM_DIR -Filter '*.cmake' -File -Recurse |
+              Select-String -Pattern $pattern |
+              ForEach-Object {
+                foreach ($match in $_.Matches) {
+                  $match.Value -replace '/', '\'
+                }
+              }
+          ) | Sort-Object -Unique
+          if ($diaDestinations.Count -eq 0) {
+            throw "LLVM CMake exports did not contain a DIA SDK library path under $env:LLVM_DIR"
+          }
+
+          foreach ($destination in $diaDestinations) {
             $destinationDir = Split-Path -Parent $destination
             New-Item -ItemType Directory -Path $destinationDir -Force | Out-Null
-            Copy-Item -Path $source -Destination $destination
+            Copy-Item -LiteralPath $source -Destination $destination -Force
+            Write-Host "LLVM DIA SDK library: $source -> $destination"
           }
-          Write-Host "LLVM DIA SDK library: $source -> $destination"
 
       - name: Clean stale build artifacts
         shell: bash

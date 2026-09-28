@@ -271,7 +271,7 @@ std::optional<llvm::DataLayout> makeTargetDataLayout(const std::string_view targ
         return std::nullopt;
 
     llvm::TargetOptions options;
-#if LLVM_VERSION_MAJOR >= 19
+#if LLVM_VERSION_MAJOR >= 21
     auto machine = std::unique_ptr<llvm::TargetMachine>(
         target->createTargetMachine(triple, "generic", "", options, llvm::Reloc::PIC_, std::nullopt,
                                     llvm::CodeGenOptLevel::None));

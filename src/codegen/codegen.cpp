@@ -125,7 +125,7 @@ int CodeGen::llvmOptLevel() const {
 void CodeGen::ensureTargetInfo() {
     auto tripleStr = effectiveTriple();
     auto triple    = llvm::Triple(tripleStr);
-#if LLVM_VERSION_MAJOR >= 19
+#if LLVM_VERSION_MAJOR >= 21
     module_->setTargetTriple(triple);
 #else
     module_->setTargetTriple(tripleStr);
@@ -139,7 +139,7 @@ void CodeGen::ensureTargetInfo() {
 #endif
     if (target) {
         llvm::TargetOptions options;
-#if LLVM_VERSION_MAJOR >= 19
+#if LLVM_VERSION_MAJOR >= 21
         auto tm = std::unique_ptr<llvm::TargetMachine>(target->createTargetMachine(
             triple, "generic", "", options, llvm::Reloc::PIC_, std::nullopt,
             static_cast<llvm::CodeGenOptLevel>(llvmOptLevel())));
@@ -161,14 +161,14 @@ void CodeGen::optimize() {
     auto tripleStr = effectiveTriple();
     auto triple    = llvm::Triple(tripleStr);
 #if LLVM_VERSION_MAJOR >= 23
-    auto *target   = llvm::TargetRegistry::lookupTarget(triple, error);
+    auto *target = llvm::TargetRegistry::lookupTarget(triple, error);
 #else
-    auto *target   = llvm::TargetRegistry::lookupTarget(tripleStr, error);
+    auto *target = llvm::TargetRegistry::lookupTarget(tripleStr, error);
 #endif
     std::unique_ptr<llvm::TargetMachine> tm;
     if (target) {
         llvm::TargetOptions options;
-#if LLVM_VERSION_MAJOR >= 19
+#if LLVM_VERSION_MAJOR >= 21
         tm.reset(target->createTargetMachine(triple, "generic", "", options, llvm::Reloc::PIC_,
                                              std::nullopt,
                                              static_cast<llvm::CodeGenOptLevel>(llvmOptLevel())));
@@ -468,7 +468,7 @@ static bool setupTargetMachine(llvm::Module *module, const std::string &tripleSt
                                std::unique_ptr<llvm::TargetMachine> &outTM,
                                diagnostics::DiagnosticEngine *diags = nullptr) {
     std::string error;
-    auto triple  = llvm::Triple(tripleStr);
+    auto triple = llvm::Triple(tripleStr);
 #if LLVM_VERSION_MAJOR >= 23
     auto *target = llvm::TargetRegistry::lookupTarget(triple, error);
 #else
@@ -485,7 +485,7 @@ static bool setupTargetMachine(llvm::Module *module, const std::string &tripleSt
     }
 
     llvm::TargetOptions options;
-#if LLVM_VERSION_MAJOR >= 19
+#if LLVM_VERSION_MAJOR >= 21
     outTM.reset(target->createTargetMachine(triple, "generic", "", options, llvm::Reloc::PIC_,
                                             std::nullopt,
                                             static_cast<llvm::CodeGenOptLevel>(optLevel)));
