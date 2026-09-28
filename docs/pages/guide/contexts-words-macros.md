@@ -8,7 +8,8 @@ kind: editorial
 ---
 # Contexts, Words & Macros
 
-Normal and `raw macro` work. Tag macros parse, but are rejected in the `Zith--` pipeline. Contexts and words do not yet.
+Normal macros and `raw macro` are the metaprogramming features available in
+Zith--. Contexts, words, and tag macros belong to the full Zith design.
 
 ## Macros
 
@@ -27,6 +28,22 @@ fn use_macro(v: i32): i32 {
 A normal macro is hygienic: bindings introduced by the template are renamed, so they cannot capture or be captured by names at the call site. Every other name in the template resolves through the call-site scope, with globals and imports visible when they are not shadowed. A macro body is not analysed as code before expansion; resolution is keyed by node identity, not by source text.
 
 `raw macro` opts out of hygiene. Its body splices literally into the call site, and names resolve there first and only then fall back to the module and global scope. Use it when the macro is meant to touch the caller's bindings.
+
+```zith
+raw macro increment(name: identifier) {
+    name = name + 1;
+}
+
+fn main(): i32 {
+    var count: i32 = 0;
+    @increment(count);
+    count
+}
+```
+
+Prefer a normal macro unless the macro must deliberately access or modify a
+binding from the call site. A `raw macro` is powerful because it gives up the
+normal hygiene boundary.
 
 ## Tag macros
 

@@ -3,7 +3,7 @@
 <blockquote><p><strong>Note:</strong> Best practices in this chapter describe the intended programming model. Many underlying features (NRA, <code>dyn</code>, <code>comptime</code>, <code>when</code>) are <strong>spec-only</strong>. Verify feature availability in <a href="./reference/D-implementation-status.html">impl-status.md</a> before applying a pattern.</p></blockquote>
 <h3 id="211-ownership-patterns">21.1 Ownership Patterns</h3>
 <ul>
-  <li><strong>Resources shall be <code>unique</code>:</strong> <code>let resource: unique = Resource.new();</code></li>
+  <li><strong>Resources shall be <code>own</code>:</strong> <code>let resource: own = Resource.new();</code></li>
   <li><strong>Use <code>share</code> for intentional multiple owners:</strong> implement <code>Share</code> and <code>Clone</code> explicitly.</li>
   <li><strong>Use <code>view</code> for reading:</strong> <code>fn process(config: view Config)</code></li>
   <li><strong>Use <code>lend</code> for temporary mutation:</strong> <code>fn update(state: lend GameState)</code></li>
@@ -11,8 +11,8 @@
 </ul>
 <h3 id="212-optional--failable-patterns">21.2 Optional &amp; Failable Patterns</h3>
 <ul>
-  <li><strong>Prefer <code>?...or</code> for optionals:</strong> <code>let name = ?user.name or "guest";</code></li>
-  <li><strong>Prefer <code>!...or</code> for failables:</strong> <code>let config = !loadPrimary() or loadBackup() or defaultConfig();</code></li>
+  <li><strong>Prefer <code>try ... or</code> for optionals:</strong> <code>let name = try user.name or "guest";</code></li>
+  <li><strong>Prefer <code>try ... or</code> for failables:</strong> <code>let config = try loadPrimary() or loadBackup() or defaultConfig();</code></li>
   <li><strong>Reserve <code>must</code> for initialization:</strong> <code>const API_KEY = must env("API_KEY");</code></li>
 </ul>
 <h3 id="213-context-patterns">21.3 Context Patterns</h3>
@@ -49,7 +49,7 @@ fn process() {
     risky()!                   // inline error handling
     // Prefer: move the context/word usage to a wrapper function
 }</code></pre>
-<p>The Rule of Three keeps code readable. Zith gives you many tools — you don't have to use them all at once.</p>
+<p>The Rule of Three keeps code readable. Zith gives you many tools. You don't have to use them all at once.</p>
 <h3 id="217-naming-conventions">21.7 Naming Conventions</h3>
 <table>
   <thead>

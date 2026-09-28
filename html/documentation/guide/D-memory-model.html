@@ -1,12 +1,39 @@
 <div class="callout callout-warning"><p><strong>Draft / Experimental:</strong> Zith documentation describes a language under active development. Check <a href="./reference/D-implementation-status.html">Implementation Status</a> before relying on a feature.</p></div>
 <h1 id="memory-model">Memory Model</h1>
-<p>The specification defines Node Resource Analysis (NRA) and the memory qualifiers <code>mut</code>, <code>lend</code>, <code>view</code>, <code>unique</code>, <code>share</code>, and <code>belong</code>. <code>Zith--</code> implements a simplified reference-analysis slice around <code>lend</code> and <code>view</code>; the full NRA proof is not finished.</p>
-<h2 id="what-exists">What exists</h2>
-<p><code>lend T</code> and <code>view T</code> parameters lower to pointers. A <code>default</code> binding passed to a <code>lend</code>/<code>view</code> parameter requires <code>lend x</code> or <code>view x</code> at the call site; omitting it or passing the wrong annotation reports <code>E4005</code>. The same binding cannot be lent twice or used as both <code>lend</code> and <code>view</code> in one call. Writing through a <code>view</code> binding reports <code>E4004</code>; writing through <code>lend</code> is allowed. LLVM emits <code>nocapture</code> for borrows and <code>readonly</code> for views.</p>
+<p>The language separates ordinary values from references into existing storage. The full Zith design uses Node Resource Analysis (NRA) and the qualifiers <code>mut</code>, <code>lend</code>, <code>view</code>, <code>unique</code>, <code>share</code>, and <code>belong</code>. Zith-- currently implements the smaller <code>lend</code>/<code>view</code> slice.</p>
+<h2 id="borrowing-with-lend-and-view">Borrowing with <code>lend</code> and <code>view</code></h2>
+<p><code>lend T</code> and <code>view T</code> parameters lower to pointers. A <code>default</code> binding passed to a <code>lend</code> or <code>view</code> parameter requires <code>lend x</code> or <code>view x</code> at the call site. Omitting the annotation or using the wrong mode reports <code>E4005</code>. The same binding cannot be lent twice or used as both <code>lend</code> and <code>view</code> in one call.</p>
+<p>Use <code>view</code> when the callee only needs to read:</p>
 <pre><code class="language-zith">fn peek(value: view i32): i32 {
     value
 }</code></pre>
-<p>The pipeline boundary that ownership proof needs is also in place. The stable order is <code>sema -&gt; comptime/solve -&gt; NTA/NRA -&gt; HIR</code>: semantic facts are accumulated and consumed before final lowering, and residual ownership facts attach to side tables rather than introducing ownership nodes into HIR.</p>
+<p>Use <code>lend</code> when the callee may write through the reference:</p>
+<pre><code class="language-zith">struct Counter {
+    value: i32,
+}
+
+fn increment(counter: lend Counter) {
+    counter.value = counter.value + 1;
+}</code></pre>
+<p>Bindings with the default ownership mode need an explicit annotation at the call site:</p>
+<pre><code class="language-zith">var counter = Counter { value: 0 };
+increment(lend counter);</code></pre>
+<p>The annotation states the borrow mode at the boundary. It does not transfer ownership into the callee.</p>
+<h2 id="pointers-and-address-taking">Pointers and address-taking</h2>
+<p><code><em>T</code> is a non-nullable pointer object. <code>?</em>T</code> is its nullable form. Taking an address creates a pointer to the local storage:</p>
+<pre><code class="language-zith">fn readPoint(): i32 {
+    var value: i32 = 10;
+    let pointer: *i32 = &amp;value;
+    *pointer
+}</code></pre>
+<p>The compiler tracks local pointer aliases and rejects pointers that escape their valid scope. Returning a pointer to a local, storing it in a persistent aggregate, or placing it in a global is not a substitute for allocating storage.</p>
+<h2 id="view-is-read-only"><code>view</code> is read-only</h2>
+<p>A <code>view</code> parameter can read its referent but cannot write through it:</p>
+<pre><code class="language-zith">fn readOnly(counter: view Counter): i32 {
+    counter.value
+}</code></pre>
+<p>Writing through a <code>view</code> is rejected. Use <code>lend</code> when the function needs write access. LLVM emits <code>nocapture</code> for borrows and <code>readonly</code> for views.</p>
 <h2 id="what-is-missing">What is missing</h2>
-<p>The alive/dead/lent state machine and the rest of the ownership diagnostics (<code>E4002</code> borrow conflict, <code>E4003</code> double borrow) are not implemented. <code>E4001</code> is emitted for logical receiver moves after calls that consume a method receiver. <code>unique</code>, <code>share</code>, <code>belong</code>, and <code>mut</code> are rejected with <code>E2010</code> in this subset.</p>
-<p>Read the <a href="./reference/D-memory-model.html">Memory Model reference</a> for the design and <a href="./reference/D-implementation-status.html">Implementation Status</a> for the boundary.</p>
+<p>The alive/dead/lent state machine and the rest of the ownership diagnostics (<code>E4002</code> borrow conflict and <code>E4003</code> double borrow) are not implemented. <code>E4001</code> is emitted for logical receiver moves after calls that consume a method receiver. <code>unique</code>, <code>share</code>, <code>belong</code>, and <code>mut</code> are rejected with <code>E2010</code> in this subset.</p>
+<p>The ownership pipeline boundary is in place. The stable order is <code>sema -&gt; comptime/solve -&gt; NTA/NRA -&gt; HIR</code>. Semantic facts are accumulated and consumed before final lowering, and residual ownership facts attach to side tables instead of introducing ownership nodes into HIR.</p>
+<p>Read the <a href="./reference/D-memory-model.html">Memory Model reference</a> for the full design and <a href="./reference/D-implementation-status.html">Implementation Status</a> for the current boundary.</p>

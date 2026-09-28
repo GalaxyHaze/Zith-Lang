@@ -1,0 +1,42 @@
+<div class="callout callout-warning"><p><strong>Draft / Experimental:</strong> Zith documentation describes a language under active development. Check <a href="./reference/D-implementation-status.html">Implementation Status</a> before relying on a feature.</p></div>
+<h1 id="zith-overview">Zith Overview</h1>
+<p>Zith is the full language design. It documents the language model that the project is moving toward, while <code>Zith--</code> is the subset currently built by the main compiler.</p>
+<h2 id="which-documentation-should-you-read">Which documentation should you read?</h2>
+<p>Read the <a href="./zith--/D-overview.html">Zith-- documentation</a> when you are writing code for <code>zithc</code>. It describes the syntax and behaviour that the current compiler can verify.</p>
+<p>Read the <a href="./reference/D-specification.html">Zith Language Reference</a> when you are designing a new language feature, studying the intended semantics, or comparing the implemented subset with the larger language.</p>
+<p>The full reference is not a promise that every feature is available in the current compiler. The <a href="./reference/D-implementation-status.html">Implementation Status</a> page records the boundary between the two.</p>
+<h2 id="how-the-split-works">How the split works</h2>
+<p>The website uses two layers:</p>
+<table>
+  <thead>
+    <tr>
+      <th>Layer</th>
+      <th>Audience</th>
+      <th>Source of truth</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Zith--</td>
+      <td>People writing programs today</td>
+      <td><code>docs/Zith--.md</code> and the practical guide</td>
+    </tr>
+    <tr>
+      <td>Zith</td>
+      <td>Language design and future features</td>
+      <td><code>docs/Zith-spec-full.md</code> and its chapters</td>
+    </tr>
+  </tbody>
+</table>
+<p>The full specification may describe a feature in detail even when Zith-- only parses it, rejects it with a diagnostic, or does not implement it at all. Each practical page calls out that boundary instead of presenting planned behaviour as if it were available.</p>
+<h2 id="a-stable-way-to-learn-the-language">A stable way to learn the language</h2>
+<ol>
+  <li>Start with the <a href="./zith--/D-overview.html">Zith-- overview</a>.</li>
+  <li>Follow the <a href="./guide/D-overview.html">Language Guide</a> for task-oriented examples.</li>
+  <li>Check <a href="./reference/D-implementation-status.html">Implementation Status</a> before</li>
+</ol>
+<p>using a feature marked experimental.</p>
+<ol>
+  <li>Use the formal <a href="./reference/D-specification.html">Zith reference</a> for exact</li>
+</ol>
+<p>contracts and future language design.</p>

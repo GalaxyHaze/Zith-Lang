@@ -13,7 +13,21 @@ enum Direction { North, South, East, West }</code></pre>
     let handle: *Point = &amp;moved;
     handle-&gt;x
 }</code></pre>
-<p>Arrays (<code>[N]T</code>), slices (<code>[]T</code>), and pointers (<code>*T</code>) are working, and indexing with <code>a[i]</code> lowers through HIR to code generation on all three.</p>
+<p>Arrays (<code>[N]T</code>), slices (<code>[]T</code>), pointers (<code>*T</code>), and packs are working. Array and slice indexing uses <code>a[i]</code>. Pack indexing uses a compile-time integer position.</p>
+<h2 id="packs-the-tuple-like-type">Packs, the tuple-like type</h2>
+<p>Zith calls its tuple-like aggregate a <strong>pack</strong>. A pack can hold values with different types and preserves their order:</p>
+<pre><code class="language-zith">let point = | 10, 20, &#x27;x&#x27; |;
+
+let x: i32 = point[0];
+let y: i32 = point[1];
+let marker: char = point[2];</code></pre>
+<p>Use binding destructuring when each position needs a local name:</p>
+<pre><code class="language-zith">let [x, y, marker] = point;</code></pre>
+<p>Pack positions are known at compile time. A pack is not a homogeneous array, so use <code>[N]T</code> or <code>[]T</code> when the program needs runtime indexing over values of one type. Named pack types can describe the member types and names explicitly:</p>
+<pre><code class="language-zith">fn sample(): |x: i32, y: i32, marker: char| {
+    |x: 10, y: 20, marker: &#x27;x&#x27;|
+}</code></pre>
+<p>Packs are useful for returning several heterogeneous values, destructuring those values at the call site, and carrying multiple values through a loop accumulator. The current implementation supports positional literals, compile-time indexing, and <code>[a, b, c]</code> binding destructuring. It does not provide tuple methods or runtime variable indexing.</p>
 <h2 id="pointers-and-opaque-handles">Pointers and opaque handles</h2>
 <p><code><em>T</code> is non-nullable: assigning <code>null</code> requires the optional pointer <code>?</em>T</code>. <code><em>void</code> is rejected; use <code>raw opaque</code> for an untyped handle. A <code>raw opaque</code> casts to and from any <code></em>T</code> with <code>as</code>, which is how you hold a pointer whose pointee type you do not want to name.</p>
 <pre><code class="language-zith">fn erase(p: *i32): raw opaque {

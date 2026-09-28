@@ -1,4 +1,15 @@
 <div class="callout callout-warning"><p><strong>Draft / Experimental:</strong> Zith documentation describes a language under active development. Check <a href="./reference/D-implementation-status.html">Implementation Status</a> before relying on a feature.</p></div>
 <h1 id="why-zith">Why Zith</h1>
-<p>Zith explores a systems-language design that combines a small everyday core with explicit tools for domain-specific work. The design includes modules, typed functions, algebraic data types, traits, C interop, compile-time facilities, and a planned ownership model.</p>
-<p>The distinction matters: the <a href="./reference/D-specification.html">Specification</a> describes the intended language, the <a href="./reference/D-zith-subset.html">Zith-- reference</a> is the implemented subset compiled by <code>main</code>, and <a href="./reference/D-implementation-status.html">Implementation Status</a> records feature-by-feature what <code>zithc</code> can compile today.</p>
+<p>Zith explores a systems-language design that combines a small everyday core with explicit tools for domain-specific work. The working compiler already gives you typed functions, algebraic data types, modules, traits, C interop, generic instantiation, and LLVM or WebAssembly lowering.</p>
+<h2 id="why-the-split-matters">Why the split matters</h2>
+<p>Zith keeps the language design ahead of the compiler without pretending that planned features are already stable. The <a href="./zith--/D-overview.html">Zith-- documentation</a> teaches the subset that <code>zithc</code> can compile today. The <a href="./zith/D-overview.html">Zith reference</a> describes the larger language model. <a href="./reference/D-implementation-status.html">Implementation Status</a> records the boundary feature by feature.</p>
+<h2 id="a-practical-starting-point">A practical starting point</h2>
+<p>Use Zith-- when you want:</p>
+<ul>
+  <li>explicit types and predictable conversions;</li>
+  <li>low-level access through pointers, <code>raw opaque</code>, and C interop;</li>
+  <li>generic data structures without a separate runtime type system;</li>
+  <li>traits and interfaces for shared behaviour;</li>
+  <li>a compiler pipeline that can target native code or WebAssembly.</li>
+</ul>
+<p>Start with the <a href="./getting-started/D-quick-start.html">Quick Start</a>, then read the <a href="./guide/D-overview.html">Zith-- Language Guide</a>. Move to the full specification when you need to understand a feature that the current subset does not expose.</p>

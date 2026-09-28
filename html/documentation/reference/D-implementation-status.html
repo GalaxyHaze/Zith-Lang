@@ -1,7 +1,8 @@
 <div class="callout callout-warning"><p><strong>Draft / Experimental:</strong> Zith documentation describes a language under active development. Check <a href="./reference/D-implementation-status.html">Implementation Status</a> before relying on a feature.</p></div>
 <h1 id="zith-implementation-status">Zith Implementation Status</h1>
-<blockquote><p>Last updated: 2026-08-28.</p></blockquote>
-<p>This document is the single source of truth for what the compiler supports today. Status reflects actual compiler behaviour at baseline <code>a5f3716</code>. Each feature was verified by running <code>build/zithc check</code> against a standalone test file, with source inspection where a status depends on internal structure; status reflects actual compiler behaviour, not spec intent.</p>
+<blockquote><p>Last updated: 2026-09-04.</p></blockquote>
+<p>This document is the single source of truth for what the compiler supports today. Status reflects actual compiler behaviour at baseline <code>a5f3716</code>. Each feature was verified by running <code>build/zithc check</code> against a standalone test file, with source inspection where a status depends on internal structure. Status reflects actual compiler behaviour, not spec intent.</p>
+<p>Implementation work that is incomplete or needs review is tracked in <a href="./reference/D-implementation-status.html">implementation-debt.md</a>.</p>
 <hr>
 <h2 id="status-legend">Status Legend</h2>
 <table>
@@ -56,9 +57,9 @@
     <tr>
       <td>Lexer</td>
       <td><strong>Working</strong></td>
-      <td>Hand-written, character-at-a-time. Longest-first maximal munch for all multi-char operators. <code>&amp;&amp;</code> and `</td>
+      <td>Hand-written, character-at-a-time. Longest-first maximal munch for all multi-char operators. <code>..</code> and <code>...</code> lex as one <code>Dots</code> token, distinguished by lexeme. <code>&amp;&amp;</code>, `</td>
       <td></td>
-      <td><code> are rejected with a dedicated error pointing to </code>and<code> / </code>or`</td>
+      <td><code>, </code>++<code> and </code>--` are rejected with a dedicated error</td>
     </tr>
     <tr>
       <td>Parser</td>
@@ -68,12 +69,12 @@
     <tr>
       <td>Formatter</td>
       <td><strong>Working</strong></td>
-      <td>Round-trip stable for all 16 <code>ExprKind</code> nodes including <code>Index</code>, <code>OptionalProp</code>, <code>Field</code>, <code>Arrow</code>, and <code>StructLiteral</code></td>
+      <td>Round-trip stable for all 17 <code>ExprKind</code> nodes including <code>Index</code>, <code>OptionalProp</code>, <code>Field</code>, <code>Arrow</code>, <code>StructLiteral</code>, and <code>WhenGuard</code></td>
     </tr>
     <tr>
       <td>Import resolution</td>
       <td><strong>Working</strong></td>
-      <td><code>import path</code>, <code>import path as name</code>, <code>from path</code>, <code>export path</code>, and selectors; qualified access works in expressions, types, constructors and methods</td>
+      <td><code>import path</code>, <code>import path as name</code>, <code>from path</code>, <code>export path</code>, and selectors; platform variants are resolved as <code>foo.&lt;arch&gt;.&lt;os&gt;.zith</code>, <code>foo.&lt;arch&gt;.zith</code>, <code>foo.&lt;os&gt;.zith</code>, then generic <code>foo.zith</code>; qualified access works in expressions, types, constructors and methods. <code>export</code> injects the target's public symbols and creates one qualified namespace alias per exported prefix so shared-prefix facades fan out to every submodule</td>
     </tr>
     <tr>
       <td>Name resolution</td>
@@ -87,8 +88,8 @@
     </tr>
     <tr>
       <td>Generic instantiation</td>
-      <td><strong>Working (step 04/05)</strong></td>
-      <td>Generic <code>fn</code>, <code>struct</code>, <code>alias</code>, <code>enum</code>, <code>union</code>, and <code>implement</code> blocks are monomorphized before HIR. Calls and named types resolve concrete instances. Enum/union templates accept inline <code>fn</code> methods and generic <code>implement as Trait</code> blocks alongside their positional variants/members. Generic inference considers implicit optional coercions, so <code>?T</code>/<code>??T</code> parameters can infer <code>T</code> from a bare or partially-optional argument while non-optional parameters remain exact. <code>T: A + B</code> bounds are parsed, stored, and enforced at generic call sites; trait-bound method calls type-check through the declared trait method</td>
+      <td><strong>Working</strong></td>
+      <td>Generic <code>fn</code>, <code>struct</code>, <code>alias</code>, <code>enum</code>, <code>union</code>, and <code>implement</code> blocks are monomorphized before HIR. Calls and named types resolve concrete instances; reified structs keep concrete type arguments as structural metadata, so nested generics such as <code>Entry&lt;K, V&gt;</code> inside <code>HashMap&lt;K, V&gt;</code> keep the correct slots. Enum/union templates accept inline <code>fn</code> methods and generic <code>implement as Trait</code> blocks alongside their positional variants/members. Generic inference considers implicit optional coercions, so <code>?T</code>/<code>??T</code> parameters can infer <code>T</code> from a bare or partially-optional argument while non-optional parameters remain exact. <code>T: A + B</code> bounds are parsed, stored, and enforced at generic call sites; trait-bound method calls type-check through the declared trait method while <code>GenericBinding</code> remains the source of truth for bounds</td>
     </tr>
     <tr>
       <td>Comptime / Solve</td>
@@ -98,7 +99,7 @@
     <tr>
       <td>NRA / Reference Analysis</td>
       <td><strong>In progress</strong></td>
-      <td>NRA is the full Zith reference/ownership analysis. Zith-- implements a partial simplified version: residual facts are accumulated and consumed before final lowering, while the full alive/dead/lent state machine and four-rule proof remain to be completed. Internal names such as <code>NraFacts</code> and <code>nraStage</code> keep the historical NRA spelling</td>
+      <td>NRA is the full Zith reference/ownership analysis. Zith-- implements a partial simplified version: residual facts are accumulated and consumed before final lowering. The <code>&amp;local</code>/<code>@ptrOf(local)</code> use-after-move slice now marks moved slots as consumed in <code>HirAttrs</code> without HIR ownership nodes; the full alive/dead/lent state machine and four-rule proof remain to be completed. Internal names such as <code>NraFacts</code> and <code>nraStage</code> keep the historical NRA spelling</td>
     </tr>
     <tr>
       <td>HIR lowering</td>
@@ -112,8 +113,23 @@
     </tr>
     <tr>
       <td>Cache</td>
-      <td>Partial</td>
-      <td>Object caching works; <code>.zirl</code> format not yet used</td>
+      <td><strong>Working</strong></td>
+      <td>Object and artifact caching persist/load <code>.zirl</code> files, validate canonical mappings, and hydrate cached artifacts</td>
+    </tr>
+    <tr>
+      <td>Stdlib I/O</td>
+      <td><strong>Working</strong></td>
+      <td><code>print</code>/<code>println</code>/<code>input</code>, <code>Formatable</code>, <code>ParseInput</code>, and <code>InputLine.cast&lt;T&gt;</code> type-check and lower; runtime parsing verification is manual for now</td>
+    </tr>
+    <tr>
+      <td>Stdlib allocation</td>
+      <td><strong>Working</strong></td>
+      <td><code>std/memory</code> ships the strict DAG with <code>in-place</code>, <code>allocator</code>, <code>heap</code>, and <code>new</code>; imported <code>InPlace</code> conformance and qualified trait calls are deterministically covered by <code>tests/test-interface-satisfaction.cpp</code> and <code>tests/test-generic-hashmap.cpp</code>. <code>std/alloc</code> remains as a legacy compatibility module. The generic <code>new</code>/<code>delete</code>/<code>make</code>/<code>release</code> helpers remain proposed until return-only inference and opaque pack dispatch are supported</td>
+    </tr>
+    <tr>
+      <td>Stdlib collections</td>
+      <td><strong>Working</strong></td>
+      <td><code>std/collections/hash_map_u64</code> ships a concrete <code>u64 -&gt; u64</code> open-addressed map with <code>reserve</code>, <code>put</code>, <code>contains</code>, <code>get</code>, <code>len</code>, and <code>destroy</code>. <code>std/collections/hash_map</code> ships a checked generic <code>HashMap&lt;K, V&gt;</code>, <code>Entry&lt;K, V&gt;</code>, and <code>Hashable</code> module that passes <code>zithc check</code> and is covered by <code>tests/test-generic-hashmap.cpp</code></td>
     </tr>
   </tbody>
 </table>
@@ -133,6 +149,11 @@
       <td><code>fn</code></td>
       <td><strong>Working</strong></td>
       <td>Parameters, return type, body. The return type is written <code>fn f(x: T): R</code> or <code>fn f(x: T) -&gt; R</code>; both spellings parse. Overloading by parameter count and types (F-33); linkage names are qualified as <code>&lt;module&gt;.&lt;Owner&gt;.&lt;name&gt;(&lt;params&gt;)</code>, except <code>extern fn</code> and <code>main</code></td>
+    </tr>
+    <tr>
+      <td>Call-result statements</td>
+      <td><strong>Working</strong></td>
+      <td>Non-void call/dock results used as expression statements must be consumed or explicitly discarded with <code>_ = expr;</code> (<code>E2026</code>). Void calls and value-producing uses (binding, assignment, return, argument, condition, binary operand, field/index operand, method dispatch) remain legal</td>
     </tr>
     <tr>
       <td>generic parameter lists <code>&lt;T, U&gt;</code></td>
@@ -202,14 +223,14 @@
       <td><code>null → ?T</code> and <code>T → ?T</code> coercions, including nested <code>??T</code> accepting <code>?T</code> or bare <code>T</code>; <code>?</code> postfix propagation with operand/return validation. Generic inference uses the optional coercion as a fallback, so <code>fn wrap&lt;T&gt;(x: ?T): ?T</code> accepts <code>wrap(3)</code> and infers <code>T = i32</code>. Any <code>?T</code> expression is implicitly boolean in conditions (<code>if (x)</code> means <code>x != null</code>). <code>null</code> is rejected for non-optional <code>*T</code></td>
     </tr>
     <tr>
-      <td><code>T!</code> (failable)</td>
-      <td><strong>Working</strong></td>
-      <td>Declared type; lowered through HIR</td>
+      <td><code>T!</code> (result)</td>
+      <td><strong>Spec only</strong></td>
+      <td>Full-Zith result/error type; not part of the Zith-- type surface</td>
     </tr>
     <tr>
       <td><code>*T</code> (pointer)</td>
       <td><strong>Working</strong></td>
-      <td>Non-nullable pointer object: <code>null</code> requires <code>?<em>T</code>. <code></em>p</code> deref, <code>&amp;x</code> addr-of, and <code>-&gt;</code> arrow all work. <code>&amp;x</code> is a logical move (<code>E4001</code> on later reads, direct rebind revives) and <code>&amp;x</code>/<code>@ptrOf(local)</code> may not escape their storage scope (<code>E4008</code>). <code><em>void</code> is rejected (use <code>raw opaque</code>). Pointers imported from C are <code>?</em>T</code>, checked with <code>is null</code>; a <code>?<em>T</code> is still accepted unchecked where <code></em>T</code> is expected</td>
+      <td>Non-nullable pointer object: <code>null</code> requires <code>?<em>T</code>. <code></em>p</code> deref, <code>&amp;x</code> addr-of, and <code>-&gt;</code> arrow all work. <code>&amp;x</code> is a logical move (<code>E4001</code> on later reads, direct rebind revives) and <code>&amp;x</code>/<code>@ptrOf(local)</code> may not escape their storage scope (<code>E4008</code>). <code><em>void</code> is rejected (use <code>raw opaque</code>). Pointers imported from C are <code>?</em>T</code>, narrowed by <code>is null</code>/<code>not (is null)</code>; deref, arrow, index, and coercions expect proof and report <code>E3005</code> otherwise</td>
     </tr>
     <tr>
       <td><code>raw opaque</code></td>
@@ -219,12 +240,19 @@
     <tr>
       <td><code>opaque</code></td>
       <td><strong>Working</strong></td>
-      <td>Bare opaque is a tagged open union stored as <code>{ *void, u32 }</code> (typeId) and is always a view. <code>T as opaque</code> spills the concrete value to a stable local; <code>opaque is T</code> compares the module-local typeId; <code>opaque as T</code> returns <code>?T</code> (extraction in a call or other non-optional result is handled as a checked optional). This iteration has no heap copy, vtable or dynamic calls, and bare <code>opaque</code> typeIds are module-local only</td>
+      <td>Bare opaque is a tagged open union stored as <code>{ *void, u32 }</code> (typeId) and is always a view. <code>T as opaque</code> spills the concrete value to a stable local; <code>opaque is T</code> compares the tagged typeId; <code>opaque as T</code> returns <code>?T</code> (extraction in a call or other non-optional result is handled as a checked optional). Values exported and imported across modules retain the declaring module's canonical tag, and cached artifacts hydrate <code>canonical_mappings</code> so the tag stays stable across sessions. This iteration has no heap copy, vtable or dynamic calls</td>
     </tr>
     <tr>
       <td><code>[N]T</code> (array), <code>[]T</code> (slice)</td>
       <td><strong>Working</strong></td>
       <td>Arrays coerce to slices as zero-copy views; <code>a[lo..hi]</code> and <code>a[i]</code> return optionals with static/dynamic bounds checks. <code>raw a[lo..hi]</code>/<code>raw a[i]</code> emit unchecked views/indexing</td>
+    </tr>
+    <tr>
+      <td>`</td>
+      <td>T, U</td>
+      <td>` (pack)</td>
+      <td><strong>Working</strong></td>
+      <td>Heterogeneous pack literals, named pack types, positional compile-time indexing, and <code>[a, b]</code> binding destructuring lower as concrete aggregates. Packs can coerce positionally to named pack types with matching arity and member types</td>
     </tr>
     <tr>
       <td><code>[...]T</code> (variadic slice)</td>
@@ -258,8 +286,8 @@
     </tr>
     <tr>
       <td><code>type</code></td>
-      <td><strong>Partial</strong></td>
-      <td><code>type Name = T</code> creates a nominal one-field wrapper and is not interchangeable with <code>T</code>; construction/field access still need an explicit value syntax</td>
+      <td><strong>Working (Zith-- cast-based)</strong></td>
+      <td><code>type Name = T</code> creates a nominal one-field wrapper distinct from <code>T</code>; <code>T as Name</code> constructs it and <code>Name as T</code> extracts the underlying value. <code>alias</code> stays transparent</td>
     </tr>
     <tr>
       <td><code>alias</code></td>
@@ -267,9 +295,9 @@
       <td>Transparent alias: <code>alias Name = T</code> re-exports the same type</td>
     </tr>
     <tr>
-      <td>memory qualifiers (<code>mut</code>, <code>lend</code>, <code>view</code>, <code>unique</code>, <code>share</code>, <code>belong</code>)</td>
+      <td>memory qualifiers (<code>mut</code>, <code>lend</code>, <code>view</code>, <code>own</code>, <code>share</code>, <code>belong</code>)</td>
       <td><strong>Working (lend/view slice)</strong></td>
-      <td><code>lend T</code>/<code>view T</code> parameters lower to pointers and require call-site annotations for <code>default</code> bindings (<code>E4005</code>); invalid call annotations are rejected (<code>E4007</code>); same-binding conflicts in one call are rejected; <code>view</code> writes report <code>E4004</code>; LLVM adds <code>readonly</code> for <code>view</code> and <code>nocapture</code> for <code>lend</code>/<code>view</code>. <code>unique</code>/<code>share</code>/<code>belong</code>/<code>mut</code> as type prefixes remain rejected or legacy-only. NRA residual facts are attached before HIR (F-34, partial F-14)</td>
+      <td><code>lend T</code>/<code>view T</code> parameters lower to pointers and require call-site annotations for <code>default</code> bindings (<code>E4005</code>); invalid call annotations are rejected (<code>E4007</code>); same-binding conflicts in one call are rejected; <code>view</code> writes report <code>E4004</code>; LLVM adds <code>readonly</code> for <code>view</code> and <code>nocapture</code> for <code>lend</code>/<code>view</code>. <code>own</code>/<code>share</code>/<code>belong</code>/<code>mut</code> as type prefixes remain rejected or legacy-only. NRA residual facts are attached before HIR (F-34, partial F-14)</td>
     </tr>
   </tbody>
 </table>
@@ -328,6 +356,11 @@
       <td>Lexed as single tokens purely to report a dedicated error pointing at <code>and</code> / <code>or</code>; exactly one diagnostic, no cascade</td>
     </tr>
     <tr>
+      <td><code>++</code>, <code>--</code></td>
+      <td><strong>Parse error</strong></td>
+      <td>Lexed as single tokens purely to reject increment/decrement; the diagnostic points to explicit assignment. Prefix and postfix forms both report <code>E2010</code></td>
+    </tr>
+    <tr>
       <td>field access <code>x.field</code></td>
       <td><strong>Working</strong></td>
       <td>Dot access on struct values. Struct fields are private by default; <code>pub name: T</code> opens a field, and <code>mod</code>/<code>mod(N)</code>/<code>mod(..)</code> apply the existing module-depth rule. Invisible fields are rejected for access and in cross-module struct literals</td>
@@ -343,9 +376,17 @@
       <td>Address-of via unary <code>&amp;</code></td>
     </tr>
     <tr>
-      <td><code>-&gt;</code> chain operator</td>
+      <td><code>p-&gt;field</code></td>
       <td><strong>Working</strong></td>
-      <td>Arrow access on struct pointers (<code>p-&gt;field</code>)</td>
+      <td>Arrow access on struct pointers</td>
+    </tr>
+    <tr>
+      <td>`</td>
+      <td>&gt;<code> / </code>do` pipeline</td>
+      <td><strong>Working</strong></td>
+      <td>`</td>
+      <td>&gt;<code> requires exactly one explicit </code>..<code>; </code>do<code> accepts zero or one </code>..<code>, keeps the chain value and may run effects without it. No automatic injection or </code>?<code>/</code>!<code>/tag propagation; </code></td>
+      <td>&gt;` replaces the chain value</td>
     </tr>
     <tr>
       <td>index <code>a[i]</code></td>
@@ -365,7 +406,7 @@
     <tr>
       <td><code>as</code> cast</td>
       <td><strong>Working</strong></td>
-      <td>Dedicated <code>ExprKind::Cast</code> -&gt; <code>HirCast</code> -&gt; LLVM conversion. Numeric pairs plus <code>raw opaque</code> &lt;-&gt; <code>*T</code> (<code>classifyCast</code>); pointer-to-pointer between concrete pointees, integer/pointer mixes and user-defined casts stay rejected. Tagged-union member extraction outside a narrowed/checked context requires <code>raw</code>; raw-union member casts remain free. No numeric narrowing overflow check</td>
+      <td>Dedicated <code>ExprKind::Cast</code> -&gt; <code>HirCast</code> -&gt; LLVM conversion. Numeric pairs plus <code>raw opaque</code> &lt;-&gt; <code>*T</code> (<code>classifyCast</code>); pointer-to-pointer between concrete pointees, integer/pointer mixes and user-defined casts stay rejected. Tagged-union member extraction outside a narrowed/checked context requires <code>raw</code>; raw-union member casts remain free. Narrowing literal, <code>-</code> literal and integer-const operands are checked at compile time; variable operands and float-to-int still lack runtime checks</td>
     </tr>
     <tr>
       <td><code>is null</code></td>
@@ -378,9 +419,14 @@
       <td>Tagged-union member tests lower to a runtime tag check; inside <code>if</code>/<code>when</code> they narrow the tested local to the member type. <code>opaque is T</code> compares the bare opaque typeId and returns <code>bool</code></td>
     </tr>
     <tr>
-      <td>range <code>1..5</code></td>
-      <td><strong>Check only</strong></td>
-      <td>Parsed as binary <code>..</code>; no dedicated sema</td>
+      <td>range <code>1..5</code>, <code>1&gt;..5</code>, <code>1..&lt;5</code>, <code>1&gt;..&lt;5</code></td>
+      <td><strong>Working</strong></td>
+      <td>Dedicated <code>ExprKind::Range</code> with raw bounds and open-at-lo/hi flags. <code>in</code> lowers ranges and any <code>contains(self, value): bool</code> method; <code>for (x in int_range)</code> iterates with implicit step <code>1</code>. Float ranges are valid with <code>in</code> and rejected in <code>for</code>. Boundary semantics are documented and covered, including empty ranges and single-value closed ranges</td>
+    </tr>
+    <tr>
+      <td><code>in</code> (<code>value in rhs</code>)</td>
+      <td><strong>Working</strong></td>
+      <td>Binary operator returning <code>bool</code>; resolves literal ranges and the <code>Contains</code> protocol without changing the existing <code>Iterator</code> protocol</td>
     </tr>
     <tr>
       <td>struct literal <code>Foo { x: 1, y: 2 }</code></td>
@@ -391,6 +437,11 @@
       <td><code>@sizeOf</code>, <code>@offsetOf</code>, <code>@alignOf</code></td>
       <td><strong>Working</strong></td>
       <td><code>@</code> parses in expression position. <code>@sizeOf(T)</code> accepts any complete type and types as <code>u64</code>; <code>@offsetOf(S, field)</code> and <code>@alignOf(S)</code> are struct-only and type as <code>i32</code>. <code>@sizeOf(void)</code> reports <code>E3001</code> ("requires a complete type")</td>
+    </tr>
+    <tr>
+      <td><code>@canonicalType</code></td>
+      <td><strong>Working</strong></td>
+      <td>Returns a stable <code>u128</code> derived from module namespace, canonical field order, and type name; lowers to <code>HirCanonicalType</code> and is serialized through the artifact cache.</td>
     </tr>
   </tbody>
 </table>
@@ -442,7 +493,7 @@
     <tr>
       <td><code>when</code> / <code>match</code> pattern match</td>
       <td><strong>Working</strong></td>
-      <td>Arms are written <code>(pattern) ~&gt; body</code>, comma-separated; <code>match</code> is a parser synonym for <code>when</code>. Equality, boolean and range (<code>1..3</code>) patterns lower through HIR to codegen. An <code>(f is Member)</code> arm narrows <code>f</code> for that arm's body. <code>(_)</code> is the default arm and must come last; a value-producing <code>when</code> without a default reports non-exhaustive. Covered by runtime tests</td>
+      <td>Arms are written <code>(pattern) body</code>, comma-separated; optional later islands are boolean guards (<code>(pattern) and (guard) body</code>). <code>match</code> is a parser synonym for <code>when</code>. Equality, boolean and range (<code>1..3</code>) patterns lower through HIR to codegen, and the first island may combine non-boolean patterns with <code>and</code>/<code>or</code>/<code>xor</code>. An <code>(f is Member)</code> arm narrows <code>f</code> for that arm's body. <code>(_)</code> must be the sole island of the last arm; a value-producing <code>when</code> without a default reports non-exhaustive. Legacy <code>~&gt;</code> stays accepted but emits <code>W1008</code>. Covered by runtime tests</td>
     </tr>
     <tr>
       <td><code>state</code> / <code>jump</code></td>
@@ -461,8 +512,8 @@
     </tr>
     <tr>
       <td><code>drop</code> cleanup hooks</td>
-      <td><strong>Spec only</strong></td>
-      <td>Reserved keyword only, no parser branch consumes it. Candidate for the next iteration (F-41) after <code>defer</code></td>
+      <td><strong>Planned (Zith--)</strong></td>
+      <td>Reserved keyword only, no parser branch consumes it yet. F-41 is the next Zith-- cleanup feature after <code>defer</code>; plan and scope split live in <code>docs/plans/defer-drop.md</code></td>
     </tr>
   </tbody>
 </table>
@@ -497,9 +548,9 @@
       <td>Normal macros rename template-local bindings hygienically and resolve other template names through the call-site scope (globals/imports visible when not shadowed). <code>raw macro</code> splices literally into the call-site scope and names resolve there before module/global fallback. Templates are not analysed as code; resolution is keyed by node id</td>
     </tr>
     <tr>
-      <td><code>tag macro</code> calls</td>
-      <td><strong>Parse reported / rejected</strong></td>
-      <td><code>&lt;Section ...&gt; ... &lt;/Section&gt;</code> and named attributes parse, but the declaration is rejected in the Zith-- pipeline with <code>E2010</code>; use normal or <code>raw macro</code></td>
+      <td><code>tag</code> calls (formerly <code>tag macro</code>)</td>
+      <td><strong>Parse reported / full Zith</strong></td>
+      <td><code>&lt;Section ...&gt; ... &lt;/Section&gt;</code> and named attributes parse, but the declaration is rejected in the Zith-- pipeline with <code>E2010</code>; <code>tag</code> is a full-Zith item, not a Zith-- macro. Use normal or <code>raw macro</code> in Zith--</td>
     </tr>
     <tr>
       <td>word call expressions</td>
@@ -529,6 +580,11 @@
       <td><code>import path</code> exposes only the full dotted namespace (<code>std.io.console.println</code>), <code>import path as name</code> exposes <code>name.symbol</code>, <code>from path</code> injects public symbols, and <code>export path</code> re-exports the namespace plus public symbols</td>
     </tr>
     <tr>
+      <td><code>c/...</code> supported runtime surface</td>
+      <td><strong>Working / Partial</strong></td>
+      <td><code>c/io</code>, <code>c/stdlib</code>, and <code>c/string</code> provide the common declarations used by the shipped stdlib; native LLVM, no-LLVM VM, and WASM backend resolution remains target-specific</td>
+    </tr>
+    <tr>
       <td><code>alias</code></td>
       <td><strong>Working</strong></td>
       <td></td>
@@ -545,8 +601,8 @@
     </tr>
     <tr>
       <td>C header imports</td>
-      <td><strong>Working (common C)</strong></td>
-      <td>libclang only; variadic functions, array-decayed parameters, <code>va_list</code>, and function-pointer parameters supported. Object-like scalar macros are imported as constants and verified through the CLI. Single unsupported decls/macros are skipped and recorded in <code>skippedFunctions</code>; function-like macros, strings, globals, bitfields, packed/anonymous records and flexible arrays remain unimported. Struct-by-value ABI is not verified</td>
+      <td><strong>Working (validated C)</strong></td>
+      <td>libclang only; variadic functions, array-decayed parameters, <code>va_list</code>, and function-pointer parameters supported. Object-like scalar macros are imported as constants and verified through the CLI. Simple records passed/returned by value are imported only after libclang proves their layout for the configured target triple; scalar, pointer, nested validated-record, two-adjacent-i32, and two-adjacent-i64 fields are supported. Function-like macros, strings, globals, bitfields, packed/anonymous records, flexible arrays, mixed-width records, <code>long double</code>, and <code>__int128</code> remain unimported with explicit skips</td>
     </tr>
   </tbody>
 </table>
@@ -573,7 +629,7 @@
       <td><a href="./reference/D-comptime.html">11-comptime.md</a></td>
     </tr>
     <tr>
-      <td><code>fail</code> / <code>with</code> / <code>catch</code> / <code>must(cond)</code> assertion / <code>throw</code></td>
+      <td><code>try</code> / <code>try ... or</code> / <code>fail</code> / <code>with</code> / <code>catch</code> / <code>must(cond)</code> assertion / <code>throw</code></td>
       <td><a href="./reference/D-error-handling.html">08-error-handling.md</a></td>
     </tr>
     <tr>
@@ -616,9 +672,14 @@
       <td>Not a core statement</td>
     </tr>
     <tr>
-      <td><code>spawn</code>, <code>await</code></td>
-      <td>Reserved tokens</td>
-      <td>Not core operators or statements; no frontend/HIR contract depends on them</td>
+      <td><code>fork</code>, <code>merge</code>, <code>spawn</code></td>
+      <td>Spec only (full Zith)</td>
+      <td>Draft thread protocol; no frontend/HIR contract exists yet. See docs/plans/branch-protocol.md</td>
+    </tr>
+    <tr>
+      <td><code>await</code></td>
+      <td>Reserved token</td>
+      <td>Not a core statement</td>
     </tr>
   </tbody>
 </table>
@@ -713,9 +774,9 @@
       <td><code>E0001</code> UnknownToken, <code>E0002</code> UnclosedString, <code>E0003</code> InvalidEscape, <code>E0004</code> InvalidIntLiteral, <code>E0005</code> UnclosedComment</td>
     </tr>
     <tr>
-      <td>1001-1008</td>
-      <td>Parse</td>
-      <td><code>E1001</code> ExpectedExpr, <code>E1002</code> ExpectedSemicolon, <code>E1003</code> UnclosedParen, <code>E1004</code> ExpectedIdent, <code>E1005</code> InvalidImportDepth, <code>E1006</code> ImportError, <code>E1007</code> TopLevelLetNotAllowed, <code>W1008</code> DeprecatedSyntax (<code>while</code> -&gt; <code>for (cond)</code>; <code>else if</code> -&gt; <code>else (cond)</code>)</td>
+      <td>1001-1009</td>
+      <td>Import/parse</td>
+      <td><code>E1001</code> ExpectedExpr, <code>E1002</code> ExpectedSemicolon, <code>E1003</code> UnclosedParen, <code>E1004</code> ExpectedIdent, <code>E1005</code> InvalidImportDepth, <code>E1006</code> ImportError, <code>E1007</code> TopLevelLetNotAllowed, <code>W1008</code> DeprecatedSyntax (<code>while</code> -&gt; <code>for (cond)</code>; <code>else if</code> -&gt; <code>else (cond)</code>; <code>~&gt;</code> in <code>when</code> arms), <code>E1009</code> CircularImport</td>
     </tr>
     <tr>
       <td>2001-2010</td>
@@ -754,7 +815,7 @@
 <p>All statuses above were verified against the binary built from commit <code>a5f3716</code>, by running <code>zithc check</code> on standalone files per feature and by inspecting the source where a status depends on internal structure (pipeline boundaries, linkage naming, diagnostic ranges).</p>
 <hr>
 <h2 id="known-debt">Known Debt</h2>
-<p>Recorded deliberately; each item is a follow-up, not an unknown.</p>
+<p>Recorded deliberately. Each item is a follow-up, not an unknown.</p>
 <table>
   <thead>
     <tr>
@@ -764,48 +825,44 @@
   </thead>
   <tbody>
     <tr>
+      <td>Non-literal narrowing conversions need runtime checks</td>
+      <td>Compile-time <code>as</code> checks cover literal, <code>-</code> literal and integer-const operands; variable operands and numeric-literal adaptation remain unchecked</td>
+    </tr>
+    <tr>
+      <td>Bodyless <code>for (literal..literal){}</code></td>
+      <td>Rejected in sema before HIR/codegen with a targeted diagnostic; a literal range is not a boolean condition and requires <code>in</code> or a loop binding</td>
+    </tr>
+    <tr>
+      <td><code>?*T</code> pointer narrowing is local-only</td>
+      <td>Non-null proof currently follows a nullable-pointer local through <code>is null</code>/<code>not (is null)</code> branches and early-return checks; derived field/index/arrow expressions and cross-function proofs are not yet tracked</td>
+    </tr>
+    <tr>
       <td>Formatter re-prints <code>for (cond)</code> as <code>while</code></td>
-      <td><code>for</code> reuses <code>ExprKind::While</code>; a distinct node is needed to round-trip the spelling</td>
-    </tr>
-    <tr>
-      <td>No overflow check on narrowing conversions</td>
-      <td>Neither <code>as</code> nor numeric-literal adaptation validates that the value fits the target</td>
-    </tr>
-    <tr>
-      <td>Unchecked <code>?<em>T</code> -&gt; <code></em>T</code> coercion</td>
-      <td>Every C pointer is <code>?<em>T</code>, but without flow-sensitive narrowing it is accepted unchecked where <code></em>T</code> is expected. Isolated in <code>PerModuleSema::allowsUncheckedNullablePointer</code>; delete it when pointer narrowing after <code>is null</code> lands</td>
-    </tr>
-    <tr>
-      <td>No flow-sensitive narrowing after <code>is null</code></td>
-      <td><code>p-&gt;field</code> on a <code>?*T</code> requires NonNull proof from <code>if (p is null) { } else { p-&gt;field }</code> or <code>for (not (p is null))</code>. Error code <code>E3005</code></td>
+      <td><code>for (cond)</code> desugars to <code>ExprKind::While</code>; the formatter prints <code>while (...)</code>, so the spelling is not round-trip faithful</td>
     </tr>
     <tr>
       <td><code>is</code> outside <code>null</code>/tagged-union contexts</td>
       <td>Non-union <code>is Type</code> remains unsupported and reports a dedicated diagnostic</td>
     </tr>
     <tr>
-      <td>Ranges and range syntax in <code>for (x in 0..4)</code></td>
-      <td>The iterator protocol supports user types with <code>next(self) -&gt; ?T</code> (and <code>??T</code> for optional elements); literal range syntax is future work</td>
-    </tr>
-    <tr>
       <td>User-defined casts</td>
       <td>To be added as a new branch in <code>classifyCast</code></td>
     </tr>
     <tr>
-      <td>No C struct-by-value ABI</td>
-      <td><code>struct</code> parameters/results import as named foreign types, but there is no verified ABI and no Zith-visible layout, so constructing/passing records to C remains unsupported</td>
+      <td>C struct-by-value ABI limited to verified simple records</td>
+      <td><code>struct</code> parameters/results are imported only when libclang proves layout/alignment for scalars, plain pointers, nested verified records, and two adjacent 64-bit fields on the target used by the parse. Clang passes/returns that pair as two 64-bit scalars on x86-64 and AArch64 Linux; mixed-width or edge-case records are skipped before lowering</td>
     </tr>
     <tr>
-      <td>Bare <code>opaque</code> is module-local</td>
-      <td>The deterministic typeId is stable for the same concrete type inside one module, but imported/cached opaque values are rejected with <code>E2010</code> because a cross-module registry is not implemented yet</td>
+      <td>Imported/cached bare <code>opaque</code> values</td>
+      <td>Bare <code>opaque</code> values exported from module A and consumed in module B are accepted; the canonical tagged typeId is recorded when the value is erased and restored from cached artifacts. There is no cross-module registry object, but canonical tags are deterministic and persisted by the existing <code>canonical_mappings</code> path</td>
     </tr>
     <tr>
-      <td><code>..</code> lexes per character</td>
-      <td>Its <code>precedence()</code> is -1 and the when-case range pattern depends on the two <code>.</code> tokens. Every other multi-char operator is munched longest-first as one token and wired through the parser, sema and formatter</td>
+      <td><code>..</code> / <code>...</code></td>
+      <td>Intentionally one <code>Dots</code> token; <code>..</code> is the range/pipe/import token and <code>...</code> is the variadic marker. Not a debt</td>
     </tr>
     <tr>
       <td><code>++</code> / <code>--</code></td>
-      <td>Not implemented; no increment/decrement operators exist</td>
+      <td>Intentionally rejected in Zith--; update values with explicit assignment. Not a debt</td>
     </tr>
     <tr>
       <td>Ownership proof still happens after premature lowering in places</td>

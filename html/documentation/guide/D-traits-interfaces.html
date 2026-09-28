@@ -1,9 +1,23 @@
-<div class="callout callout-warning"><p><strong>Draft / Experimental:</strong> Zith documentation describes a language under active development. Check 
-<a href="./reference/D-implementation-status.html">Implementation Status</a> before relying on a feature.</p></div>
-
+<div class="callout callout-warning"><p><strong>Draft / Experimental:</strong> Zith documentation describes a language under active development. Check <a href="./reference/D-implementation-status.html">Implementation Status</a> before relying on a feature.</p></div>
 <h1 id="traits--interfaces">Traits &amp; Interfaces</h1>
-<p>Traits and interfaces declare behavior contracts; implementation blocks attach methods and trait implementations to a type.</p>
+<p>Traits and interfaces declare behaviour contracts. Implementation blocks attach methods and trait implementations to a type.</p>
 <pre><code class="language-zith">trait Printable {
     fn print(self);
 }</code></pre>
-<p>Declarations parse and resolve, while advanced dispatch and capability semantics have implementation limits. Consult <a href="./reference/D-implementation-status.html">Implementation Status</a> and the <a href="./reference/D-traits-interfaces.html">Traits &amp; Interfaces reference</a>.</p>
+<p>Use a trait when conformance is part of the type's contract:</p>
+<pre><code class="language-zith">struct Point {
+    x: i32,
+    y: i32,
+}
+
+implement Point as Printable {
+    fn print(self) {
+        // Formatting is omitted from this small example.
+    }
+}</code></pre>
+<p>Use an interface when a type only needs to expose a structural set of fields and methods. Generic bounds can name either form:</p>
+<pre><code class="language-zith">fn show&lt;T: Printable&gt;(value: T) {
+    value.print();
+}</code></pre>
+<p><code>dyn Trait</code> and <code>dyn Interface</code> support method dispatch through a runtime vtable. Interface fields are available for conformance and generic bounds, but they are not exposed through a <code>dyn Interface</code> value.</p>
+<p>The current subset supports declarations, conformance, generic bounds, and method dispatch. Capability semantics and some advanced full-Zith forms remain outside Zith--. Consult <a href="./reference/D-implementation-status.html">Implementation Status</a> and the <a href="./reference/D-traits-interfaces.html">Traits &amp; Interfaces reference</a>.</p>

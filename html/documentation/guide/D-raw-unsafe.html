@@ -1,4 +1,68 @@
 <div class="callout callout-warning"><p><strong>Draft / Experimental:</strong> Zith documentation describes a language under active development. Check <a href="./reference/D-implementation-status.html">Implementation Status</a> before relying on a feature.</p></div>
 <h1 id="raw--unsafe">Raw &amp; Unsafe</h1>
-<p><code>raw</code> and <code>unsafe</code> express operations outside ordinary safety guarantees. The specification has stricter rules for raw contexts, pointer access, and the <code>Trust</code> capability.</p>
-<p>Use raw code only at a small, audited FFI or platform boundary. The <a href="./reference/D-raw-unsafe.html">Raw &amp; Unsafe reference</a> is the canonical source; the planned ownership guarantees depend on NRA, which is not yet implemented.</p>
+<p><code>raw</code> makes one unchecked operation explicit. Use it at a small, audited boundary where the program has a guarantee that the compiler cannot prove. The current compiler implements several <code>raw</code> expressions and <code>raw fn</code>. The larger <code>unsafe</code> hierarchy belongs to full Zith and is not available as a general Zith-- programming model.</p>
+<h2 id="extract-an-optional-value">Extract an optional value</h2>
+<p>An optional value must normally be checked before its payload is used:</p>
+<pre><code class="language-zith">fn valueOrZero(value: ?i32): i32 {
+    if (value) {
+        return value;
+    }
+
+    return 0;
+}</code></pre>
+<p>After an explicit check, <code>raw</code> can extract the payload without another runtime check:</p>
+<pre><code class="language-zith">fn valueAfterCheck(value: ?i32): i32 {
+    if (!value) {
+        return 0;
+    }
+
+    return raw value;
+}</code></pre>
+<p><code>raw value</code> does not make <code>null</code> valid. If the condition is wrong, the result is invalid. The caller has taken responsibility for the guarantee.</p>
+<h2 id="read-an-intentionally-uninitialized-binding">Read an intentionally uninitialized binding</h2>
+<p>The normal language rejects a read before the first assignment:</p>
+<pre><code class="language-zith">fn invalidRead(): i32 {
+    let value: i32;
+    return value;
+}</code></pre>
+<p><code>raw</code> makes the escape explicit:</p>
+<pre><code class="language-zith">fn externalStorage(): i32 {
+    let value: i32;
+    return raw value;
+}</code></pre>
+<p>This does not initialize <code>value</code> or provide a default. Use it only when the storage has been initialized by an external mechanism that the compiler cannot see.</p>
+<h2 id="bypass-a-known-union-or-opaque-check">Bypass a known union or opaque check</h2>
+<p>Tagged values use a checked cast when the code does not know which member is present:</p>
+<pre><code class="language-zith">fn asInteger(value: opaque): ?i32 {
+    value as i32
+}</code></pre>
+<p>The unchecked form is appropriate only after a separate invariant has been established:</p>
+<pre><code class="language-zith">fn knownInteger(value: raw opaque): i32 {
+    raw value as i32
+}</code></pre>
+<p>The same pattern applies to a union member:</p>
+<pre><code class="language-zith">fn knownMember(value: Any&lt;i32, f64&gt;): i32 {
+    raw value as i32
+}</code></pre>
+<p>The cast does not inspect the stored type. A wrong assumption produces an invalid result.</p>
+<h2 id="use-raw-access-for-slices-and-pointers">Use raw access for slices and pointers</h2>
+<p><code>raw</code> is also useful when a low-level API needs an explicit unchecked access:</p>
+<pre><code class="language-zith">fn first(values: [3]i32): i32 {
+    raw values[0]
+}
+
+fn asSlice(values: [3]i32): []i32 {
+    raw values[0..3]
+}</code></pre>
+<p><code>raw</code> does not repair an invalid index or make a dangling pointer valid. A runtime trap can still occur when the operation cannot be executed.</p>
+<h2 id="raw-fn-is-a-separate-choice"><code>raw fn</code> is a separate choice</h2>
+<p>An expression-level <code>raw</code> applies to one operation:</p>
+<pre><code class="language-zith">return raw value;</code></pre>
+<p><code>raw fn</code> marks a whole function as a low-level boundary:</p>
+<pre><code class="language-zith">raw fn readByte(buffer: *u8, index: u64): u8 {
+    buffer[index]
+}</code></pre>
+<p>Use <code>raw fn</code> for a small FFI or platform adapter. Keep validation in the safe caller whenever possible, and keep the unchecked implementation isolated.</p>
+<h2 id="when-not-to-use-it">When not to use it</h2>
+<p>Do not use <code>raw</code> only to silence a diagnostic. Prefer a checked branch when the condition can be expressed normally. If the guarantee cannot be written down in a comment or test, the operation is not ready to become raw.</p>
+<p><code>unsafe</code> blocks, raw unions, and the <code>Trust</code> capability are described in the <a href="./reference/D-raw-unsafe.html">full Raw &amp; Unsafe reference</a>. They are design material outside the current Zith-- subset.</p>

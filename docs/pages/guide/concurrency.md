@@ -8,8 +8,18 @@ kind: editorial
 ---
 # Concurrency
 
-There is no async or thread model in HIR today, and concurrency is not planned as a function kind. The direction is `stdlib` and runtime APIs instead.
+Zith-- does not currently provide threads, async execution, or a concurrency
+runtime in HIR. The current direction is to expose concurrency through library
+and runtime APIs instead of making it a function kind.
 
-`async fn` is legacy reserved syntax: the parser accepts the declaration and skips its body entirely, with no async lowering and no HIR contract behind it. `yield`, `spawn`, and `await` are reserved tokens, not core operators or statements. Treat all four as historical parser affordances rather than a preview of the concurrency design.
+`async fn` is legacy reserved syntax. The parser accepts the declaration and
+skips its body, but there is no async lowering or HIR contract behind it.
+`yield`, `spawn`, and `await` are reserved tokens, not working statements.
 
-Use the [Concurrency reference](doc:reference-10-concurrency) to understand the intended model and [Implementation Status](doc:reference-implementation-status) to track delivery.
+Do not use these tokens as a preview of the current runtime. Keep concurrent
+code at an application or library boundary until the runtime contract is
+defined.
+
+Use the [Zith concurrency reference](doc:reference-10-concurrency) to
+understand the intended model and [Implementation Status](doc:reference-implementation-status)
+to track delivery.

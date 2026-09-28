@@ -68,6 +68,12 @@ SPEC_CHAPTERS = [
 
 SUBSET_CHAPTER = ("Zith--.md", "Zith--")
 
+IMPORTED_LINK_ALIASES = {
+    "implementation-debt.md": "reference/D-implementation-status.html",
+    "plans/branch-protocol.md": "reference/D-concurrency.html",
+    "adr/0010-allocator-inplace-drop.md": "reference/D-standard-library.html",
+}
+
 LEGACY_ANCHORS = {
     ("04-traits-interfaces.md", "44-capabilities--built-in-reference"): ("43-capabilities",),
     ("02-module-system.md", "23-namespace-access--scope-resolution"): (),
@@ -178,6 +184,9 @@ def inline(text: str, page: Page, outputs: dict[str, str], source_map: dict[str,
         resolved = (page.source.parent / file_part).resolve()
         if resolved in source_map:
             href = relative_href(page.output, source_map[resolved])
+            return f'<a href="{href}{sep}{anchor if sep else ""}">{label}</a>'
+        if page.kind == "spec" and file_part in IMPORTED_LINK_ALIASES:
+            href = relative_href(page.output, IMPORTED_LINK_ALIASES[file_part])
             return f'<a href="{href}{sep}{anchor if sep else ""}">{label}</a>'
         return f'<a href="{html.escape(target, quote=True)}">{label}</a>'
 
@@ -337,9 +346,10 @@ def build_tree() -> list[dict]:
         ("Concurrency", "guide-concurrency"), ("C Interop", "guide-c-interop"),
         ("Raw & Unsafe", "guide-raw-unsafe"),
     ]
-    reference = [("Implementation Status", "reference-implementation-status")]
-    reference.append(("Zith--", "reference-zith-subset"))
-    reference += [(title, "reference-" + filename[:-3]) for filename, title in SPEC_CHAPTERS]
+    zith_reference = [("Specification", "reference-specification"),
+                      ("Implementation Status", "reference-implementation-status")]
+    zith_reference += [(title, "reference-" + filename[:-3])
+                       for filename, title in SPEC_CHAPTERS]
     cli = [(f"zithc {command}", f"cli-{command}") for command in
            ("build", "run", "check", "fmt", "create", "clean", "execute", "test", "deps", "docs")]
     return [{
@@ -349,9 +359,18 @@ def build_tree() -> list[dict]:
                 nav_item("Installation", "getting-started-installation"),
                 nav_item("Why Zith", "getting-started-why-zith"),
             ]),
-            nav_item("Language Guide", "guide-overview", [nav_item(title, page_id) for title, page_id in guide]),
-            nav_item("Language Reference", "reference-specification",
-                     [nav_item(title, page_id) for title, page_id in reference]),
+            nav_item("Zith--", "zith-subset-overview", [
+                nav_item("Overview", "zith-subset-overview"),
+                nav_item("Language Guide", "guide-overview",
+                         [nav_item(title, page_id) for title, page_id in guide]),
+                nav_item("Reference", "zith-subset-reference"),
+            ]),
+            nav_item("Zith", "zith-overview", [
+                nav_item("Overview", "zith-overview"),
+                nav_item("Language Reference",
+                         "reference-specification",
+                         [nav_item(title, page_id) for title, page_id in zith_reference]),
+            ]),
             nav_item("CLI Reference", "cli-overview", [nav_item(title, page_id) for title, page_id in cli]),
             nav_item("Project", "project-overview"),
             nav_item("FAQ", "faq-overview"),

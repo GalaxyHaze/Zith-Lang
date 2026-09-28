@@ -10,7 +10,11 @@ kind: editorial
 
 ## Is Zith stable?
 
-No. Zith language documentation is draft and experimental. The `main` compiler builds the `Zith--` subset documented in the [Zith-- reference](doc:reference-zith-subset); the [Implementation Status](doc:reference-implementation-status) page separates working compiler functionality from check-only, parse-skipped, parse-error, stub, and specification-only features.
+No. Zith language documentation is draft and experimental. The `main` compiler
+builds the `Zith--` subset documented in the [English Zith-- reference](doc:zith-subset-reference).
+The [Implementation Status](doc:reference-implementation-status) page separates
+working compiler functionality from check-only, parse-skipped, parse-error,
+stub, and specification-only features.
 
 ## What actually compiles today?
 

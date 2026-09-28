@@ -1,6 +1,6 @@
 <div class="callout callout-warning"><p><strong>Draft / Experimental:</strong> Zith documentation describes a language under active development. Check <a href="./reference/D-implementation-status.html">Implementation Status</a> before relying on a feature.</p></div>
 <h1 id="contexts-words--macros">Contexts, Words &amp; Macros</h1>
-<p>Normal and <code>raw macro</code> work. Tag macros parse, but are rejected in the <code>Zith--</code> pipeline. Contexts and words do not yet.</p>
+<p>Normal macros and <code>raw macro</code> are the metaprogramming features available in Zith--. Contexts, words, and tag macros belong to the full Zith design.</p>
 <h2 id="macros">Macros</h2>
 <p>Declare a macro with <code>macro name(param: meta_type) { body }</code> and call it with the <code>@</code> prefix. Parameter meta-types are <code>identifier</code>, <code>expr</code>, <code>condition</code>, <code>block</code>, and <code>body</code>.</p>
 <pre><code class="language-zith">macro twice(v: expr) {
@@ -12,6 +12,16 @@ fn use_macro(v: i32): i32 {
 }</code></pre>
 <p>A normal macro is hygienic: bindings introduced by the template are renamed, so they cannot capture or be captured by names at the call site. Every other name in the template resolves through the call-site scope, with globals and imports visible when they are not shadowed. A macro body is not analysed as code before expansion; resolution is keyed by node identity, not by source text.</p>
 <p><code>raw macro</code> opts out of hygiene. Its body splices literally into the call site, and names resolve there first and only then fall back to the module and global scope. Use it when the macro is meant to touch the caller's bindings.</p>
+<pre><code class="language-zith">raw macro increment(name: identifier) {
+    name = name + 1;
+}
+
+fn main(): i32 {
+    var count: i32 = 0;
+    @increment(count);
+    count
+}</code></pre>
+<p>Prefer a normal macro unless the macro must deliberately access or modify a binding from the call site. A <code>raw macro</code> is powerful because it gives up the normal hygiene boundary.</p>
 <h2 id="tag-macros">Tag macros</h2>
 <p>A <code>tag macro</code> is invoked with an HTML-like statement form. It takes a <code>body</code> parameter and, optionally, the special <code>attributes</code> parameter, which exposes named attributes as <code>attributes.name</code>. The declaration itself is reported with <code>E2010</code> in <code>Zith--</code>, so the form is still useful only as future specification material here.</p>
 <pre><code class="language-zith">tag macro RunTwice(attributes, body: body) {

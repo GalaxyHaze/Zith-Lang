@@ -1,8 +1,8 @@
 <div class="callout callout-warning"><p><strong>Draft / Experimental:</strong> Zith documentation describes a language under active development. Check <a href="./reference/D-implementation-status.html">Implementation Status</a> before relying on a feature.</p></div>
 <h1 id="6-mutability--bindings">6. Mutability &amp; Bindings</h1>
-<blockquote><p><strong>Implementation status:</strong> <code>let</code>, <code>var</code>, <code>const</code>, and <code>global</code> bindings are <strong>working</strong>. Binding destructuring with <code>[ ]</code> and pack literals are <strong>spec-only</strong> — no parser or sema support. NRA ownership modifiers (<code>lend</code>, <code>view</code>, <code>unique</code>, <code>share</code>, <code>belong</code>) are <strong>spec-only</strong>. See <a href="./reference/D-implementation-status.html">impl-status.md</a>.</p></blockquote>
+<blockquote><p><strong>Implementation status:</strong> <code>let</code>, <code>var</code>, and <code>const</code> bindings are <strong>working</strong>. Pack literals, positional indexing, and binding destructuring with <code>[ ]</code> are working in Zith--. The full mutability model remains partly spec-only. <code>lend</code> and <code>view</code> are implemented as the Zith-- call-annotation slice; <code>own</code>, <code>share</code>, <code>belong</code>, and the full NRA state machine remain full-Zith/spec-only. See <a href="./reference/D-implementation-status.html">impl-status.md</a>.</p></blockquote>
 <h3 id="61-deep-mutability-model">6.1 Deep Mutability Model</h3>
-<p>Zith uses deep mutability: a modifier on a binding flows into every nested field. Fields inside a struct inherit the mutability of the instance that holds them — no per-field <code>mut</code> annotation needed.</p>
+<p>Zith uses deep mutability: a modifier on a binding flows into every nested field. Fields inside a struct inherit the mutability of the instance that holds them. No per-field <code>mut</code> annotation is needed.</p>
 <h3 id="62-binding-keywords">6.2 Binding Keywords</h3>
 <table>
   <thead>
@@ -40,9 +40,9 @@
 let x: mut Point;      // cannot reassign x; Point&#x27;s fields are mutable (mut)
 var y: Point;          // can reassign y; Point&#x27;s fields are immutable (default, no mut)
 
-// lend, unique, share, belong → imply mut
+// lend, own, share, belong → imply mut
 fn update(p: lend Point) { p.x += 1; }  // p is mutable (lend implies mut)
-let r: unique Resource = acquire();     // r&#x27;s fields are mutable (unique implies mut)
+let r: own Resource = acquire();     // r&#x27;s fields are mutable (own implies mut)
 
 // view → implies immutable
 fn read(c: view Config) { ... }         // c is read-only (view implies immutable)
@@ -60,17 +60,27 @@ let r = for ([acc, i]: i32), (i in 0..n) {
             acc *= i + 1
         } or 0;</code></pre>
 <h3 id="64-pack-literals">6.4 Pack Literals</h3>
-<p>Packs group heterogeneous values into a lightweight tuple-like structure. They are declared with <code>| |</code> and can be destructured with <code>[ ]</code>:</p>
-<pre><code class="language-zith">// Pack literal
-let p = | 5, 4, &#x27;c&#x27; |;
+<p>Packs group heterogeneous values into a tuple-like aggregate. Zith calls this construct a <strong>pack</strong>, not a tuple. A pack literal uses <code>| |</code> and keeps its member order and member types:</p>
+<pre><code class="language-zith">let p = | 5, 4, &#x27;c&#x27; |;       // pack&lt;i32, i32, char&gt;
 
-// Destructure
 let [a, b, c] = p;
 
-// Used in for loops with type annotation
-let r = for ([acc, i]: i32), (i in 0..n) {
-            acc *= i + 1
-        } or 0;</code></pre>
-<blockquote><p>Packs are like anonymous structs — the compiler extracts fields by order and passes them as function arguments. They have a concrete layout determined at compile time. They are primarily used for destructuring and as loop accumulators.</p></blockquote>
+let first: i32 = p[0];
+let letter: char = p[2];</code></pre>
+<p>Packs are heterogeneous. Each position can have a different type, and the compiler knows the number, order, and concrete layout of the members at compile time. Indexes must be compile-time integer positions, because a pack does not represent a homogeneous runtime array.</p>
+<p>Use destructuring when the positions need names in the current scope:</p>
+<pre><code class="language-zith">fn split(): |i32, char| {
+    |42, &#x27;x&#x27;|
+}
+
+fn main(): i32 {
+    let [number, symbol] = split();
+    number
+}</code></pre>
+<p>Use a pack as a loop accumulator when a loop needs to carry more than one value. The accumulator annotation describes the pack members:</p>
+<pre><code class="language-zith">let result = for ([acc, i]: i32), (i in 0..n) {
+    acc *= i + 1
+} or 0;</code></pre>
+<p>Packs are also valid as values in aggregate contexts, including <code>enum:union</code> variants. They are not anonymous functions, and they do not provide named fields unless a named pack type supplies those fields.</p>
 <hr>
 <p><em><a href="./reference/D-specification.html">Zith Language Specification</a> — Draft v0.9</em></p>

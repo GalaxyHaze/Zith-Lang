@@ -1,12 +1,12 @@
 <div class="callout callout-warning"><p><strong>Draft / Experimental:</strong> Zith documentation describes a language under active development. Check <a href="./reference/D-implementation-status.html">Implementation Status</a> before relying on a feature.</p></div>
 <h1 id="9-control-flow">9. Control Flow</h1>
-<blockquote><p><strong>Implementation status:</strong> <code>if</code>/<code>else</code>, <code>break</code>, <code>continue</code>, <code>return</code>, and loop labels are <strong>working</strong>. <code>for</code> is the canonical loop: <code>for { ... }</code>, <code>for (cond) { ... }</code>, the comma-based 3-clause form, and duck-typed <code>for (x in iterable)</code> are <strong>working</strong>; labels can target any of these forms and loop bodies can lower to the same CFG machinery as the old <code>while</code>. <code>while</code> still works but emits a deprecation warning (<code>W1008</code>) pointing at <code>for (cond) { }</code>. The literal range forms (<code>0..4</code>) are not implemented yet. <code>when</code> pattern matching is <strong>working</strong>, including equality, boolean, range, and tagged-union type-narrowing arms. <code>state</code> declarations, <code>dock</code> calls, and <code>jump</code> terminating transfers are <strong>working</strong> and compile to direct LLVM <code>musttail</code> calls; the old <code>flow fn</code>/<code>marker</code>/TLS-blob model is removed. See <a href="./reference/D-implementation-status.html">impl-status.md</a>.</p></blockquote>
+<blockquote><p><strong>Implementation status:</strong> <code>if</code>/<code>else</code>, <code>break</code>, <code>continue</code>, <code>return</code>, and loop labels are <strong>working</strong>. <code>for</code> is the canonical loop: <code>for { ... }</code>, <code>for (cond) { ... }</code>, the comma-based 3-clause form, and duck-typed <code>for (x in iterable)</code> are <strong>working</strong>. Labels can target any of these forms and loop bodies can lower to the same CFG machinery as the old <code>while</code>. <code>while</code> still works but emits a deprecation warning (<code>W1008</code>) pointing at <code>for (cond) { }</code>. Literal ranges (<code>0..4</code>, open bounds) and <code>when</code> pattern matching are <strong>working</strong>, including equality, boolean, guard islands, range, and pattern alternatives. Cases are comma-separated and the canonical form writes the body immediately after the condition islands. The legacy <code>~&gt;</code> marker still compiles but emits <code>W1008</code>. <code>state</code> declarations, <code>dock</code> calls, and <code>jump</code> terminating transfers are <strong>working</strong> and compile to direct LLVM <code>musttail</code> calls. The old <code>flow fn</code>/<code>marker</code>/TLS-blob model is removed. See <a href="./reference/D-implementation-status.html">impl-status.md</a>.</p></blockquote>
 <h3 id="91-syntax-rules">9.1 Syntax Rules</h3>
-<p>Parentheses <code>()</code> are mandatory on every control structure's condition except function calls. Logical operators use English keywords; bitwise operators use standard symbols followed by <code>.</code>:</p>
+<p>Parentheses <code>()</code> are mandatory on every control structure's condition except function calls. Logical operators use English keywords. Bitwise operators use standard symbols followed by <code>.</code>:</p>
 <pre><code class="language-zith">if (x &gt; 0 and y &lt; 10) { ... }
 if isTrue() and (x &gt; 5) { ... }
 let mask = a &amp;. b |. c ^. d;</code></pre>
-<p>Boolean negation is written as <code>not</code>; <code>!</code> is not accepted as a prefix unary operator in this iteration and remains reserved for a future postfix form:</p>
+<p>Boolean negation is written as <code>not</code>. <code>!</code> is not accepted as a prefix unary operator in this iteration and remains reserved for a future postfix form:</p>
 <pre><code class="language-zith">if (not (x &gt; 0)) { ... }</code></pre>
 <h3 id="92-for">9.2 <code>for</code></h3>
 <pre><code class="language-zith">for { ... }                                     // infinite
@@ -16,15 +16,15 @@ for (v in range(0, 100)) { @println(v); }       // over a generator
 
 // Destructured group with fallback
 let r = for ([acc, i]: i32), (i in 0..n) { acc *= i + 1 } or 0;</code></pre>
-<p>Labels use <code>name: for ...</code> / <code>name: while ...</code> and are stored on the loop expression. <code>break name;</code> and <code>continue name;</code> target that loop. Without a label they target the innermost active loop; an unknown or duplicate active label is rejected by semantic analysis. Labeled exits run cleanup for every loop between the current innermost loop and the target:</p>
+<p>Labels use <code>name: for ...</code> / <code>name: while ...</code> and are stored on the loop expression. <code>break name;</code> and <code>continue name;</code> target that loop. Without a label they target the innermost active loop. An unknown or duplicate active label is rejected by semantic analysis. Labeled exits run cleanup for every loop between the current innermost loop and the target:</p>
 <pre><code class="language-zith">outer: for (...) {                               // labeled loop
     for (...) {
         break outer;                             // exits the outer loop
         continue outer;                          // continues the outer loop
     }
 }</code></pre>
-<blockquote><p>If the loop body may never run, its return value is deduced as optional — unless <code>or</code> collapses it to a non-optional value.</p></blockquote>
-<blockquote><p>The init/cond/step form accepts comma-separated, parenthesized expressions — <code>for (i = 0), (i &lt; 10), (i += 1)</code> — or the flat alternative, <code>for (i = 0, i &lt; 10, i += 1)</code>. The iterator form expects a value whose type exposes <code>next(self)</code>. The canonical <code>next</code> returns <code>?T</code>: <code>null</code> is the iteration end and <code>Some(element)</code> is a loop value. For iterators that need to yield optional elements, <code>next(self): ??T</code> binds the loop variable as <code>?T</code>, so a <code>null</code> element is a valid iteration value and only the outer <code>None</code> ends the loop. <code>for</code> calls <code>next</code> once per iteration, exits when the result is the outer <code>None</code>, and otherwise binds the inner payload as the loop variable.</p></blockquote>
+<blockquote><p>If the loop body may never run, its return value is deduced as optional, unless <code>or</code> collapses it to a non-optional value.</p></blockquote>
+<blockquote><p>The init/cond/step form accepts comma-separated, parenthesized expressions, such as <code>for (i = 0), (i &lt; 10), (i += 1)</code>, or the flat alternative <code>for (i = 0, i &lt; 10, i += 1)</code>. The iterator form expects a value whose type exposes <code>next(self)</code>. The canonical <code>next</code> returns <code>?T</code>: <code>null</code> is the iteration end and <code>Some(element)</code> is a loop value. For iterators that need to yield optional elements, <code>next(self): ??T</code> binds the loop variable as <code>?T</code>, so a <code>null</code> element is a valid iteration value and only the outer <code>None</code> ends the loop. <code>for</code> calls <code>next</code> once per iteration, exits when the result is the outer <code>None</code>, and otherwise binds the inner payload as the loop variable.</p></blockquote>
 <pre><code class="language-zith">struct Range {
     current: i32,
     limit: i32,
@@ -45,34 +45,29 @@ fn main() {
     }
 }</code></pre>
 <p>The tagged-union <code>{ T, End }</code> protocol remains accepted during migration, but the optional protocol is canonical and should be used for new iterators.</p>
-<h3 id="93-chain-flow">9.3 Chain Flow (<code>-&gt;</code>)</h3>
-<p>The <code>-&gt;</code> operator pipes output left to right. The previous value is available as <code>..</code>, and tags capture values for later use. <code>!</code> and <code>?</code> propagate out of the chain normally. Precedence is left-to-right and lower than function calls.</p>
-<pre><code class="language-zith">getData() -&gt; process(..) -&gt; save(..);
+<h3 id="93-pipeline--and-do">9.3 Pipeline (<code>|&gt;</code> and <code>do</code>)</h3>
+<p>Pipelines are C-style and explicitly threaded. Each stage reads the current value through <code>..</code>; there is no automatic injection, implicit argument, or tag/<code>?</code>/<code>!</code> propagation. <code>x |&gt; f(..)</code> is equivalent to <code>f(x)</code> except that the source value is materialized once before the stage runs. A <code>|&gt;</code> stage must reference the current value exactly once.</p>
+<p><code>do</code> is a side-effect stage: it may use <code>..</code> zero or one times, keeps the chain value unchanged, and is valid only as a chain operator. <code>..</code> is valid only inside a pipeline stage.</p>
+<p><code>|&gt;</code> replaces the chain value with the stage result. <code>do</code> performs a side-effect stage and keeps the chain value unchanged, so <code>x do f(..)</code> returns <code>x</code>. <code>do</code> is only a chain operator, not a standalone statement. Both operators are left-associative and have lower precedence than calls; do not use <code>-&gt;</code> for this role.</p>
+<pre><code class="language-zith">getData() |&gt; process(..) |&gt; save(..);
 
 getData()
-    -&gt; raw:    parse(..)
-    -&gt; parsed: validate(..)!       // ! propagates out of the chain
-    -&gt; connectDb()
-    -&gt; save(parsed);
+    |&gt; parse(..)
+    |&gt; validate(..)
+    |&gt; save(..);
 
-// Inline block
+// Inline side-effect: log the current value without advancing the chain.
 readFile(&quot;data.bin&quot;)
-    -&gt; { let h = parse_header(..); validate(h)! }
-    -&gt; process_body(..);
+    do log(..)
+    |&gt; process_body(..);
 
-// Comma sub-chain -- f1 and f2 receive foo&#x27;s value but do NOT advance the chain
-foo(), f1(..), f2(..) -&gt; f3(..);
-
-// Parenthesized sub-chain -- this one does advance inside the sub-chain
-// But don&#x27;t affect the main chain
-foo(), ( f1(..) -&gt; f2() ) -&gt; f3(..);
-         ^                      ^
-         |                      |
-         foo                    foo</code></pre>
-<blockquote><p>Comma sub-chains are useful for side effects — logging, validation — without disrupting the main data flow.</p></blockquote>
+// A block effect stage can bind locals, but must not transfer control.
+readFile(&quot;data.bin&quot;)
+    do { let header = parse_header(..); validate(header); }
+    |&gt; process_body(..);</code></pre>
 <h3 id="94-state-functions--state-machines">9.4 <code>state</code> Functions &amp; State Machines</h3>
 <span id="94-state-functions-and-state-machines" aria-hidden="true"></span>
-<p>A <code>state</code> function declares one state in a machine. <code>dock</code> starts a machine and evaluates to its eventual return value; <code>jump</code> terminates the current state and tail-calls the next state. Every state in one machine shares the same return type, while parameter lists may differ between states. The return type drives machine grouping; each transition validates arity and argument types against its individual target. LLVM <code>tailcc</code> plus <code>musttail</code> lets transitions between different signatures still compile to direct, stackless calls.</p>
+<p>A <code>state</code> function declares one state in a machine. <code>dock</code> starts a machine and evaluates to its eventual return value. <code>jump</code> terminates the current state and tail-calls the next state. Every state in one machine shares the same return type, while parameter lists may differ between states. The return type drives machine grouping. Each transition validates arity and argument types against its individual target. LLVM <code>tailcc</code> plus <code>musttail</code> lets transitions between different signatures still compile to direct, stackless calls.</p>
 <ul>
   <li><strong><code>state</code></strong>: <code>state Name(params): ReturnType { ... }</code>. Each state is a normal function body</li>
 </ul>
@@ -114,7 +109,7 @@ fn main(): i32 {
     return dock S(42);
 }</code></pre>
 <h3 id="95-scope-cleanup-defer--drop">9.5 Scope Cleanup (<code>defer</code> / <code>drop</code>)</h3>
-<p><code>defer expr;</code> and <code>defer { ... }</code> are implemented in the <code>Zith--</code> subset. <code>defer expr;</code> registers one cleanup expression; <code>defer { ... }</code> registers the whole body as a cleanup-only block that does not produce a value. Statements in a deferred body run in written order, while separate <code>defer</code> statements run in reverse registration order when their nearest lexical block exits.</p>
+<p><code>defer expr;</code> and <code>defer { ... }</code> are implemented in the <code>Zith--</code> subset. <code>defer expr;</code> registers one cleanup expression. <code>defer { ... }</code> registers the whole body as a cleanup-only block that does not produce a value. Statements in a deferred body run in written order, while separate <code>defer</code> statements run in reverse registration order when their nearest lexical block exits.</p>
 <p>A <code>defer</code> may capture bindings declared later in the same lexical block. The sema defers typing of the deferred body until the block's direct bindings are known, and lowering emits deferred cleanup after those slots are created. If a <code>return</code>, <code>break</code>, <code>continue</code>, <code>jump</code>, or nested control-flow exit before the binding can leave the block while the capture is still uninitialized, the compiler rejects it:</p>
 <pre><code class="language-zith">fn main(): i32 {
     defer cleanup(v);   // ok when `v` is initialized before every exit
@@ -128,7 +123,7 @@ fn main(): i32 {
 </ul>
 <p><code>state</code> <code>jump</code> transitions.</p>
 <ul>
-  <li><code>return value;</code> evaluates the value first; deferred bodies run immediately</li>
+  <li><code>return value;</code> evaluates the value first. Deferred bodies run immediately</li>
 </ul>
 <p>before the terminator.</p>
 <ul>

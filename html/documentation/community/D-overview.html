@@ -1,4 +1,21 @@
 <div class="callout callout-warning"><p><strong>Draft / Experimental:</strong> Zith documentation describes a language under active development. Check <a href="./reference/D-implementation-status.html">Implementation Status</a> before relying on a feature.</p></div>
 <h1 id="community">Community</h1>
-<p>Use the Zith issue tracker for compiler bugs and language discussions. Report the compiler version, command line, source sample, expected behavior, and actual diagnostics.</p>
-<p>Documentation contributions should distinguish specification text from observed implementation behavior. The specification belongs in <code>../Zith/docs</code>; site editorial content belongs in this repository's <code>docs/pages</code>.</p>
+<p>Use the Zith issue tracker for compiler bugs and language discussions. Report the compiler version, command line, source sample, expected behaviour, and actual diagnostics.</p>
+<h2 id="reporting-a-compiler-issue">Reporting a compiler issue</h2>
+<p>Include the smallest source file that reproduces the problem:</p>
+<pre><code class="language-text">zithc --version
+zithc check --include stdlib repro.zith</code></pre>
+<p>Then describe:</p>
+<ul>
+  <li>what the compiler accepted or rejected;</li>
+  <li>what behaviour you expected;</li>
+  <li>the complete diagnostic, including its error code;</li>
+  <li>whether the issue appears with <code>check</code>, <code>build</code>, <code>run</code>, or a generated</li>
+</ul>
+<p>target.</p>
+<p>Avoid attaching a whole project when a short declaration or expression is enough. A focused reproducer is easier to test against parser, sema, HIR, and codegen changes.</p>
+<h2 id="contributing-documentation">Contributing documentation</h2>
+<p>Documentation contributions should distinguish specification text from observed implementation behaviour. The specification belongs in <code>../Zith/docs</code>; site editorial content belongs in this repository's <code>docs/pages</code>.</p>
+<p>Write practical pages in English, lead with the task a reader wants to complete, and mark unsupported or partial features explicitly. Do not turn an implementation note into a language guarantee.</p>
+<h2 id="where-to-discuss-a-change">Where to discuss a change</h2>
+<p>Use the issue tracker for reproducible bugs and proposed language changes. Use the project chat for questions that need discussion before they become a specification or implementation issue. Include links to the relevant <code>Zith--</code> guide or Zith reference page when the terminology may be ambiguous.</p>

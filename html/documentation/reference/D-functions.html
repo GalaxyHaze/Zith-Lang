@@ -1,8 +1,8 @@
 <div class="callout callout-warning"><p><strong>Draft / Experimental:</strong> Zith documentation describes a language under active development. Check <a href="./reference/D-implementation-status.html">Implementation Status</a> before relying on a feature.</p></div>
 <h1 id="5-functions">5. Functions</h1>
-<blockquote><p><strong>Implementation status:</strong> <code>fn</code>, <code>state</code>, <code>raw fn</code>, and <code>extern fn</code> are <strong>working</strong>. <code>const fn</code> is <strong>parse-level in progress</strong>: it parses as a function declaration, but compile-time evaluation is not implemented yet. Overloading (<a href="#54-overloading">§5.4</a>) is <strong>working</strong>. Concurrency is no longer a core function kind; any runtime async/task model is expressed through ordinary library types and calls. See <a href="./reference/D-implementation-status.html">impl-status.md</a>.</p></blockquote>
+<blockquote><p><strong>Implementation status:</strong> <code>fn</code>, <code>state</code>, <code>raw fn</code>, and <code>extern fn</code> are <strong>working</strong>. <code>const fn</code> is <strong>parse-level in progress</strong>: it parses as a function declaration, but compile-time evaluation remains full-Zith/spec-only. Overloading (<a href="#54-overloading">§5.4</a>) is <strong>working</strong>. Concurrency is no longer a core function kind. Any runtime async/task model is expressed through ordinary library types and calls. See <a href="./reference/D-implementation-status.html">impl-status.md</a>.</p></blockquote>
 <h3 id="51-return-types--implicit-returns">5.1 Return Types &amp; Implicit Returns</h3>
-<p>Non-void functions may use an implicit return only when every possible path produces a value or otherwise terminates. A final expression with the declared type and complete <code>if</code>/<code>else</code> or <code>when</code> bodies are accepted; falling off the end of an <code>if</code> without <code>else</code>, a <code>when</code> without a default, or an empty body is a diagnostic, not an implicit <code>null</code>.</p>
+<p>Non-void functions may use an implicit return only when every possible path produces a value or otherwise terminates. A final expression with the declared type and complete <code>if</code>/<code>else</code> or <code>when</code> bodies are accepted. Falling off the end of an <code>if</code> without <code>else</code>, a <code>when</code> without a default, or an empty body is a diagnostic, not an implicit <code>null</code>.</p>
 <pre><code class="language-zith">fn add(a: i32, b: i32): i32 { a + b }   // explicit type, implicit return
 fn add(a: i32, b: i32)      { a + b }   // inferred type
 
@@ -57,16 +57,16 @@ fn pick(flag: bool): i32 {
 <pre><code class="language-zith">implement Window {
     pub fn destroy(self: lend Window): void = extern SDL_DestroyWindow;
 }</code></pre>
-<p>The Zith name keeps normal module, overload, and receiver semantics. The right-hand identifier is used as the C ABI linker symbol; the compiler emits an external declaration with that name and never generates a body. This form is not allowed on <code>const fn</code>, <code>state</code>, trait requirements, or interface requirements.</p>
+<p>The Zith name keeps normal module, overload, and receiver semantics. The right-hand identifier is used as the C ABI linker symbol. The compiler emits an external declaration with that name and never generates a body. This form is not allowed on <code>const fn</code>, <code>state</code>, trait requirements, or interface requirements.</p>
 <blockquote><p>The five function kinds are exclusive and cannot be combined: there is no <code>raw const fn</code>, <code>extern raw fn</code>, or similar spelling. <code>raw fn</code> and <code>extern fn</code> are separate concerns: <code>raw fn</code> opts out of NRA, while <code>extern fn</code> selects the C ABI.</p></blockquote>
-<p>Macro calls use the <code>@</code> prefix — <code>@println</code>, <code>@log</code>, <code>@serialize</code> — while ordinary function calls use a bare name, such as <code>console.write</code>, <code>process</code>, or <code>save</code>. See <a href="./reference/D-macros.html">§15</a> for the full rule.</p>
+<p>Macro calls use the <code>@</code> prefix, such as <code>@println</code>, <code>@log</code>, and <code>@serialize</code>, while ordinary function calls use a bare name, such as <code>console.write</code>, <code>process</code>, or <code>save</code>. See <a href="./reference/D-macros.html">§15</a> for the full rule.</p>
 <h3 id="53-runtime-tasks-coroutines-and-concurrency-apis">5.3 Runtime Tasks, Coroutines, and Concurrency APIs</h3>
 <pre><code class="language-zith">// The compiler treats runtime task types like any other library type.
-// There is no `async fn`, `yield`, `spawn`, or `await` syntax in the core language.
+// Thread protocols use fork/merge; Task-style scheduling is stdlib surface.
 fn fetch(url: string): Task&lt;Response!&gt; {
     return runtime.schedule(url);
 }</code></pre>
-<p>Concurrency is modeled by <code>stdlib</code> or runtime APIs, not by dedicated syntax or a special function kind. A library may expose <code>Task&lt;T&gt;</code>, <code>Generator&lt;T&gt;</code>, channels, executors, or thread handles, but the compiler only sees ordinary declarations, calls, traits/capabilities, and the NRA facts needed to validate resource usage around them.</p>
+<p>Concurrency is modeled by <code>fork</code>/<code>merge</code> plus <code>stdlib</code>/runtime APIs, not by a function kind such as <code>async fn</code>. A library may expose <code>Task&lt;T&gt;</code>, <code>Generator&lt;T&gt;</code>, channels, executors, or thread handles, but the compiler only sees ordinary declarations, calls, traits/capabilities, and the NRA facts needed to validate resource usage around them.</p>
 <h3 id="54-overloading">5.4 Overloading</h3>
 <p>Several functions in one scope may share a name as long as their parameter lists differ, either in count or in parameter types. The call site selects the declaration whose parameters accept the given arguments.</p>
 <pre><code class="language-zith">fn add(a: i32, b: i32): i32 { a + b }
@@ -78,7 +78,7 @@ fn main(): i32 {
     let f: f64 = add(1.0, 2.0);    // add(f64,f64)
     return add(i, 3, 4);           // add(i32,i32,i32)
 }</code></pre>
-<p>Methods overload the same way; the implicit <code>self</code> parameter participates in the signature.</p>
+<p>Methods overload the same way. The implicit <code>self</code> parameter participates in the signature.</p>
 <pre><code class="language-zith">implement Point {
     fn shifted(self): Point { ... }
     fn shifted(self, by: i32): Point { ... }
@@ -95,9 +95,9 @@ fn main(): i32 {
 <ul>
   <li>A function name may not collide with a non-function binding of the same name (<code>E2002</code>).</li>
   <li><code>extern fn</code> cannot be overloaded: it carries a fixed C linkage name.</li>
-  <li><code>extern fn</code> may declare variadic parameters with <code>...</code>; no other function kind may do so.</li>
+  <li><code>extern fn</code> may declare variadic parameters with <code>...</code>. No other function kind may do so.</li>
   <li><code>fn f = extern CSymbol</code> may be overloaded: each overload may select a distinct C symbol.</li>
-  <li>A call with no candidate that accepts the arguments is <code>E2007</code>; a call accepted by more than one</li>
+  <li>A call with no candidate that accepts the arguments is <code>E2007</code>. A call accepted by more than one</li>
 </ul>
 <p>candidate is <code>E2008</code>. There is no ranking of conversion quality, so any tie is an error rather than a silent choice.</p>
 <ul>

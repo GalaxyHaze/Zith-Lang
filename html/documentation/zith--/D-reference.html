@@ -1,0 +1,50 @@
+<div class="callout callout-warning"><p><strong>Draft / Experimental:</strong> Zith documentation describes a language under active development. Check <a href="./reference/D-implementation-status.html">Implementation Status</a> before relying on a feature.</p></div>
+<h1 id="zith---reference">Zith-- Reference</h1>
+<p>This is the English reference entry point for the language subset compiled by the current <code>main</code> compiler. It describes the public surface that the Zith-- guide teaches. The <a href="./reference/D-implementation-status.html">Implementation Status</a> page remains authoritative when a feature is partial.</p>
+<h2 id="declarations-and-functions">Declarations and functions</h2>
+<p>Functions use a colon before the return type:</p>
+<pre><code class="language-zith">fn add(left: i32, right: i32): i32 {
+    left + right
+}</code></pre>
+<p>Function declarations also accept the arrow spelling <code>-&gt; ReturnType</code>, but the colon form is the canonical spelling in this reference. Function types use the colon form only: <code>fn(parameters): ReturnType</code>.</p>
+<p>Function types are first-class values and lower to C-compatible function pointers:</p>
+<pre><code class="language-zith">fn double(value: i32): i32 {
+    value * 2
+}
+
+extern fn apply(operation: fn(i32): i32, value: i32): i32
+
+fn main(): i32 {
+    var operation: fn(i32): i32 = double;
+    apply(operation, 21)
+}</code></pre>
+<p>Function references, function-type parameters, and calls through those values are implemented. Anonymous functions and closures are not implemented yet. Use a named function and pass its function value instead.</p>
+<h2 id="packs-and-tuples">Packs and tuples</h2>
+<p>Zith calls its tuple-like aggregate a <strong>pack</strong>. Packs are heterogeneous values with a fixed member order:</p>
+<pre><code class="language-zith">let response = | 200, &quot;ok&quot;, true |;
+
+let status: i32 = response[0];
+let message: []char = response[1];
+let accepted: bool = response[2];</code></pre>
+<p>Destructure a pack into local bindings with <code>[ ... ]</code>:</p>
+<pre><code class="language-zith">let [status, message, accepted] = response;</code></pre>
+<p>Pack indexes must be compile-time integer positions. Use an array or slice for homogeneous data that needs runtime indexing. Named pack types can describe the member names and types explicitly:</p>
+<pre><code class="language-zith">fn response(): |status: i32, message: []char, accepted: bool| {
+    |status: 200, message: &quot;ok&quot;, accepted: true|
+}</code></pre>
+<p>Packs are implemented in Zith-- as concrete aggregates. The current subset supports pack literals, named pack types, positional indexing, and binding destructuring. Tuple methods, runtime pack indexing, and tuple-specific library conventions are not part of the subset.</p>
+<h2 id="working-language-surface">Working language surface</h2>
+<p>Zith-- currently includes:</p>
+<ul>
+  <li><code>let</code>, <code>var</code>, and <code>const</code> bindings.</li>
+  <li>structs, enums, unions, arrays, slices, packs, pointers, and <code>?T</code> optionals.</li>
+  <li><code>if</code>, <code>for</code>, <code>when</code>, <code>defer</code>, and <code>state</code>/<code>dock</code>/<code>jump</code>.</li>
+  <li>modules, aliases, visibility, generic declarations, and overloads.</li>
+  <li>traits, interfaces, <code>dyn</code> method dispatch, and <code>implement</code> blocks.</li>
+  <li>normal macros and <code>raw macro</code>.</li>
+  <li><code>extern fn</code>, C header imports, and <code>raw opaque</code>.</li>
+  <li><code>lend</code> and <code>view</code> ownership annotations.</li>
+</ul>
+<h2 id="deliberately-outside-zith">Deliberately outside Zith--</h2>
+<p>The full Zith design also describes comptime evaluation, the complete NRA ownership model, contexts, words, tag macros, anonymous functions, closures, and the stronger <code>unsafe</code> hierarchy. Those topics belong to the <a href="./zith/D-overview.html">Zith reference</a> until the implementation status says otherwise.</p>
+<p>For task-oriented explanations, continue with the <a href="./guide/D-overview.html">Zith-- Language Guide</a>. For the formal source chapters, use the <a href="./reference/D-specification.html">full Zith specification</a>.</p>

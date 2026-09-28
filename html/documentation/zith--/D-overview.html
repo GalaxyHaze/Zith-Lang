@@ -1,0 +1,40 @@
+<div class="callout callout-warning"><p><strong>Draft / Experimental:</strong> Zith documentation describes a language under active development. Check <a href="./reference/D-implementation-status.html">Implementation Status</a> before relying on a feature.</p></div>
+<h1 id="zith---overview">Zith-- Overview</h1>
+<p>Zith-- is the language subset built by the <code>main</code> compiler and shipped through <code>zithc</code>. Use this section when you want to write a program that the current compiler can check, lower, and, when LLVM is available, build.</p>
+<h2 id="what-works-today">What works today</h2>
+<p>The working subset includes:</p>
+<ul>
+  <li>typed functions, structs, enums, unions, arrays, slices, pointers, and</li>
+</ul>
+<p>optionals;</p>
+<ul>
+  <li><code>let</code>, <code>var</code>, and <code>const</code> bindings;</li>
+  <li><code>if</code>, <code>for</code>, <code>when</code>, <code>defer</code>, and state-machine control flow;</li>
+  <li>modules, aliases, visibility, generic functions and types;</li>
+  <li>nominal traits, structural interfaces, and method dispatch through <code>dyn</code>;</li>
+  <li>normal macros and <code>raw macro</code>;</li>
+  <li><code>extern fn</code>, C header imports, and <code>raw opaque</code> handles;</li>
+  <li><code>lend</code> and <code>view</code> parameters with call-site ownership annotations;</li>
+  <li>HIR lowering, cache serialization, LLVM code generation, and WebAssembly</li>
+</ul>
+<p>execution.</p>
+<p>The <a href="./reference/D-implementation-status.html">Implementation Status</a> page is the source of truth when a feature has a partial implementation or a known restriction.</p>
+<h2 id="what-is-different-from-full-zith">What is different from full Zith</h2>
+<p>The larger Zith specification describes features that are not all available in Zith--. Comptime evaluation, the complete NRA ownership proof, contexts, words, tag macros, the full <code>unsafe</code> hierarchy, and the broader error model remain outside the current subset.</p>
+<p>The compiler reports unsupported syntax instead of silently accepting a feature with different semantics. Read the <a href="./zith/D-overview.html">Zith reference</a> when you need the intended design, and return here before using it in a program.</p>
+<h2 id="a-small-program">A small program</h2>
+<pre><code class="language-zith">struct Point {
+    x: i32,
+    y: i32,
+}
+
+fn distanceOnX(left: Point, right: Point): i32 {
+    right.x - left.x
+}
+
+fn main(): i32 {
+    let origin = Point { x: 0, y: 10 };
+    let target = Point { x: 42, y: 10 };
+    distanceOnX(origin, target)
+}</code></pre>
+<p>Continue with the <a href="./guide/D-overview.html">Zith-- Language Guide</a>, or use the <a href="./zith--/D-reference.html">English Zith-- reference</a> for the subset contract.</p>

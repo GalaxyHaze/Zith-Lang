@@ -1,7 +1,15 @@
 <div class="callout callout-warning"><p><strong>Draft / Experimental:</strong> Zith documentation describes a language under active development. Check <a href="./reference/D-implementation-status.html">Implementation Status</a> before relying on a feature.</p></div>
 <h1 id="18-c-interop">18. C Interop</h1>
-<blockquote><p><strong>Implementation status:</strong> <code>extern fn</code> bindings are <strong>working</strong> on all targets. Native libclang C header import is <strong>working</strong> for common libc-style declarations (including variadic functions, array-decayed parameters, <code>va_list</code>, and function-pointer parameters). Object-like macros that expand to an exact scalar literal are imported as constants and verified through the CLI. Function-like macros, strings, globals, bitfields, and complex layouts remain <strong>unimported</strong>. See <a href="./reference/D-implementation-status.html">impl-status.md</a>.</p></blockquote>
+<blockquote><p><strong>Implementation status:</strong> <code>extern fn</code> bindings are <strong>working</strong> on all targets. Native libclang C header import is <strong>working</strong> for common libc-style declarations (including variadic functions, array-decayed parameters, <code>va_list</code>, and function-pointer parameters). Object-like macros that expand to an exact scalar literal are imported as constants and verified through the CLI. Simple records passed/returned <strong>by value</strong> are imported only after libclang verifies their layout for the configured target triple. Function-like macros, strings, globals, bitfields, packed or anonymous records, flexible arrays, and other unverified layouts remain <strong>unimported</strong>. See <a href="./reference/D-implementation-status.html">impl-status.md</a>.</p></blockquote>
 <p>Zith supports manual <code>extern fn</code> bindings on every target. Native builds which find libclang also support a restricted, automatic C-header import path.</p>
+<h3 id="180-supported-c-surface">18.0 Supported <code>c</code> Surface</h3>
+<p>The shipped <code>c/...</code> modules provide common C-shaped functions used by the standard library and supported by the selected compiler/runtime backend. They are declarations of a Zith ABI contract, not literal inclusion of a host header.</p>
+<pre><code class="language-zith">from c/io
+from c/stdlib
+from c/string</code></pre>
+<p>The backend may implement the same declaration through the native libc, a VM intrinsic, or a WASM host/runtime import. This keeps common operations usable without libclang and without host headers in no-LLVM and WASM builds.</p>
+<p>The <code>c</code> surface is intentionally small and validated. Add a function there only when Zith can define its ABI and behavior across the supported targets. Platform-specific functions and third-party APIs should remain in a dedicated module or use an explicit header import.</p>
+<p>Functions such as <code>putchar</code>, <code>puts</code>, <code>printf</code>-style output helpers, and other side-effecting calls may be marked <code>#[discardable]</code> when their status return is normally ignored by callers. The attribute suppresses the discarded-result diagnostic; it does not change the C ABI or remove the call.</p>
 <p>For Zith-style binders that need normal module, overload, and method semantics, keep the full Zith signature on the left and put the C linker symbol on the right:</p>
 <pre><code class="language-zith">struct Window {}
 
@@ -12,16 +20,16 @@ pub fn destroy(self: lend Window): void = extern SDL_DestroyWindow;</code></pre>
 <pre><code class="language-zith">implement Window {
     pub fn destroy(self: lend Window): void = extern SDL_DestroyWindow;
 }</code></pre>
-<p>The right-hand identifier must be a plain identifier. The compiler emits only an external C symbol declaration; it does not create a Zith body. This lets a normal <code>c/</code> module expose opaque SDL handles as Zith structs and attach thin methods to them without relying on the C header importer or generating C shims.</p>
+<p>The right-hand identifier must be a plain identifier. The compiler emits only an external C symbol declaration. It does not create a Zith body. This lets a normal <code>c/</code> module expose opaque SDL handles as Zith structs and attach thin methods to them without relying on the C header importer or generating C shims.</p>
 <h3 id="181-automatic-binding-via-h">18.1 Automatic Binding via <code>.h</code></h3>
-<p>Native builds with libclang can import a <code>.h</code> file. The importer exposes supported external C functions directly, preserving their variadic status; it does not generate Zith source.</p>
+<p>Native builds with libclang can import a <code>.h</code> file. The importer exposes supported external C functions directly, preserving their variadic status. It does not generate Zith source.</p>
 <pre><code class="language-zith">import &quot;mylib.h&quot;;
 
 // Supported functions from mylib.h are available by their C linkage name.
 my_function();</code></pre>
-<p>Only C ABI headers are accepted. <code>.hpp</code> files report that C++ headers are unsupported. Object-like macros whose replacement is exactly one scalar literal are imported as constants; function-like and string macros, globals, bitfields, packed or anonymous records, flexible arrays, and other non-representable layouts are not imported. A single unsupported declaration or macro is skipped rather than failing the whole header; the importer records the reason in <code>skippedFunctions</code> so the rest of the file stays available. Use manual <code>extern fn</code> for APIs outside this surface and for all builds without libclang, including WASM and cross builds.</p>
+<p>Only C ABI headers are accepted. <code>.hpp</code> files report that C++ headers are unsupported. Object-like macros whose replacement is exactly one scalar literal are imported as constants. Function-like and string macros, globals, bitfields, packed or anonymous records, flexible arrays, and other non-representable layouts are not imported. A single unsupported declaration or macro is skipped rather than failing the whole header. The importer records the reason in <code>skippedFunctions</code> so the rest of the file stays available. Prefer <code>c/...</code> for common APIs and use manual <code>extern fn</code> or header imports for APIs outside that surface and for external libraries.</p>
 <h3 id="1811-object-like-macro-constants">18.1.1 Object-Like Macro Constants</h3>
-<p>An object-like macro defined in the imported header expands to a single scalar literal and becomes a module constant. The value comes from the macro replacement token itself; there is no external C evaluation. Zith imports <code>true</code>/<code>false</code> as <code>bool</code>, <code>'x'</code> as <code>char</code>, unsuffixed integers as <code>i32</code>, unsuffixed floats as <code>f64</code>, and the known suffixes <code>i8</code>/<code>i16</code>/<code>i32</code>/<code>i64</code>/<code>u8</code>/<code>u16</code>/<code>u32</code>/<code>u64</code> /<code>isize</code>/<code>usize</code> or <code>f</code>/<code>F</code> float suffixes when the value fits the target type.</p>
+<p>An object-like macro defined in the imported header expands to a single scalar literal and becomes a module constant. The value comes from the macro replacement token itself. There is no external C evaluation. Zith imports <code>true</code>/<code>false</code> as <code>bool</code>, <code>'x'</code> as <code>char</code>, unsuffixed integers as <code>i32</code>, unsuffixed floats as <code>f64</code>, and the known suffixes <code>i8</code>/<code>i16</code>/<code>i32</code>/<code>i64</code>/<code>u8</code>/<code>u16</code>/<code>u32</code>/<code>u64</code> /<code>isize</code>/<code>usize</code> or <code>f</code>/<code>F</code> float suffixes when the value fits the target type.</p>
 <pre><code class="language-zith">import &quot;constants.h&quot;;
 
 fn main(): i32 {
@@ -31,7 +39,7 @@ fn main(): i32 {
 }</code></pre>
 <p>Colliding with any symbol already visible in the module is a duplicate declaration error. Macros that expand to expressions, strings, or unsupported values are skipped, not imported.</p>
 <h3 id="1812-variadic-c-functions">18.1.2 Variadic C Functions</h3>
-<p>Variadic declarations use <code>...</code> as the final token of an <code>extern fn</code> parameter list. The fixed parameters are type-checked normally; the variadic tail accepts any number of arguments and reaches the native ABI as a variadic call.</p>
+<p>Variadic declarations use <code>...</code> as the final token of an <code>extern fn</code> parameter list. The fixed parameters are type-checked normally. The variadic tail accepts any number of arguments and reaches the native ABI as a variadic call.</p>
 <pre><code class="language-zith">extern fn printf(fmt: *char, ...): i32
 
 fn main(): i32 {
@@ -72,11 +80,11 @@ fn main(): i32 {
     </tr>
     <tr>
       <td>simple records and enums</td>
-      <td>Named foreign type</td>
+      <td>Named foreign type; simple records additionally carry verified layout and fields</td>
     </tr>
   </tbody>
 </table>
-<p>Because a C pointer imports as <code>?<em>T</code> (see <a href="./reference/D-error-handling.html#811-c-pointers-are-t">8.1.1</a>), reinterpreting one is written <code>as ?</em>T</code>; <code>as <em>T</code> is rejected with <code>E3003</code> so the null case cannot be dropped silently. Passing a pointer the other way needs no cast: any <code></em>T</code> or <code>?<em>T</code> is accepted for a C <code>void</em></code> parameter.</p>
+<p>Because a C pointer imports as <code>?<em>T</code> (see <a href="./reference/D-error-handling.html#811-c-pointers-are-t">8.1.1</a>), reinterpreting one is written <code>as ?</em>T</code>. <code>as <em>T</code> is rejected with <code>E3003</code> so the null case cannot be dropped silently. Passing a pointer the other way needs no cast: any <code></em>T</code> or <code>?<em>T</code> is accepted for a C <code>void</em></code> parameter.</p>
 <pre><code class="language-zith">import &quot;stdlib.h&quot;
 
 fn main(): i32 {
@@ -86,7 +94,16 @@ fn main(): i32 {
     free(&amp;local);                           // *i32  -&gt; void*, no cast
     return 0;
 }</code></pre>
-<p>Records passed or returned <strong>by value</strong> import as named foreign types but have no verified ABI; constructing or reading their fields from Zith is not supported yet (see Known Debt in <a href="./reference/D-implementation-status.html">impl-status.md</a>).</p>
+<p>Simple records passed or returned <strong>by value</strong> import only when libclang proves their layout for the configured target triple and sysroot. The supported field subset is scalar types, plain C pointers, and nested simple records that also pass validation. The binder records each field's name, offset, and type plus the record's total size and alignment, and the lowerer materialises the same fields as a Zith struct so the LLVM structural type matches the C ABI.</p>
+<p>Records are rejected when any of these conditions apply:</p>
+<pre><code class="language-text">bitfields
+explicit packing or alignment attributes
+anonymous records or anonymous fields
+flexible array members
+`long double`
+`__int128`
+not directly addressable target layout (incomplete or non-constant size)</code></pre>
+<p>An unsupported record used as a fixed by-value parameter or return type is skipped with an explicit reason in <code>skippedFunctions</code>. It never reaches codegen with an unverified layout. Pointers to records continue to import as opaque nullable pointers without requiring a record layout, because no value ABI needs to be proven for a pointer.</p>
 <p>The project may configure C parsing and linking in <code>ZithProject.toml</code>:</p>
 <pre><code class="language-toml">[ffi]
 include_dirs = [&quot;vendor/include&quot;]
@@ -94,20 +111,20 @@ c_source_dirs = [&quot;vendor/c&quot;, &quot;src/native&quot;]
 library_dirs = [&quot;vendor/lib&quot;]
 libraries = [&quot;mylib&quot;]
 defines = [&quot;MYLIB_FEATURE=1&quot;]</code></pre>
-<p><code>c_source_dirs</code> is scanned recursively for <code>*.c</code> files and compiles each one into <code>cache/c-obj/&lt;target&gt;/...</code> before the native link step. Only roots declared there or through the repeatable <code>--c-source-dir &lt;DIR&gt;</code> flag participate in C compilation; <code>-I</code> does not imply source discovery.</p>
+<p><code>c_source_dirs</code> is scanned recursively for <code>*.c</code> files and compiles each one into <code>cache/c-obj/&lt;target&gt;/...</code> before the native link step. Only roots declared there or through the repeatable <code>--c-source-dir &lt;DIR&gt;</code> flag participate in C compilation. <code>-I</code> does not imply source discovery.</p>
 <p><code>-I</code>, <code>-D</code>, <code>-L</code>, <code>-l</code>, and <code>--c-source-dir</code> add command-line values after project values. Library names are validated and linked without passing a shell command string.</p>
 <p>Native builds compile <code>*.c</code> through embedded <code>libtcc</code> when it is available. CMake first looks for an existing <code>libtcc.h</code>/<code>libtcc.a</code>, including the <code>ZITH_TCC_ROOT</code> prefix. When none is found and <code>ZITH_TCC_FETCH</code> is enabled, the configuration fetches and builds TinyCC 0.9.27 for the local host as a static, PIC library. Disable fetching with <code>-DZITH_TCC_FETCH=OFF</code> to keep using the external C compiler driver.</p>
 <h4 id="system-c-headers">System C headers</h4>
 <p>System C headers resolve without any <code>-I</code> flag. On startup the compiler probes libclang once per <code>(target triple, sysroot)</code> pair to discover the toolchain's default include directories, so <code>import "stdint.h"</code> works out of the box. The clang resource directory (containing compiler-built headers such as <code>stddef.h</code>) is found during CMake configuration from the LLVM package and pushed both to the probe and to every header parse. Builds without libclang fall back to <code>/usr/include</code> and <code>/usr/local/include</code> when they exist.</p>
 <pre><code class="language-zith">import &quot;stdint.h&quot;;</code></pre>
-<p>These directories are searched <strong>last</strong>. Stdlib roots, <code>-I</code> roots, the workspace root, and the importing file's own directory all take precedence, so a project-local <code>stdint.h</code> shadows the system one. Pass <code>--no-system-includes</code> to disable the behaviour entirely; imports then resolve only from explicitly configured roots. The discovered directories are part of the artifact cache key, so changing them does not reuse stale cached modules.</p>
+<p>These directories are searched <strong>last</strong>. Stdlib roots, <code>-I</code> roots, the workspace root, and the importing file's own directory all take precedence, so a project-local <code>stdint.h</code> shadows the system one. Pass <code>--no-system-includes</code> to disable the behaviour entirely. Imports then resolve only from explicitly configured roots. The discovered directories are part of the artifact cache key, so changing them does not reuse stale cached modules.</p>
 <p>Only C spellings with a <code>.h</code> extension resolve this way. Extensionless C++ names such as <code>cstdint</code> are not supported.</p>
 <h3 id="182-manual-binding-with-semantic-annotation">18.2 Manual Binding with Semantic Annotation</h3>
 <p>Override or supplement auto-generated bindings to attach Zith-specific semantics:</p>
 <pre><code class="language-zith">// Equivalent declarations — malloc is a C function (no namespace)
 // bindToC is subject to Zith namespace rules
-fn bindToC = extern &#x27;C&#x27; malloc(size: u64): unique opaque;
-extern &#x27;C&#x27; malloc(size: u64): unique opaque;   // same thing, no namespace alias</code></pre>
+fn bindToC = extern &#x27;C&#x27; malloc(size: u64): own opaque;
+extern &#x27;C&#x27; malloc(size: u64): own opaque;   // same thing, no namespace alias</code></pre>
 <h3 id="183-external-no-header">18.3 External (No Header)</h3>
 <p>For assembly routines, headerless libraries, or code deliberately outside the project:</p>
 <pre><code class="language-zith">// The linker resolves this; the compiler has no information about the function

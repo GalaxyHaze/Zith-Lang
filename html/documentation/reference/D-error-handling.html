@@ -1,7 +1,7 @@
 <div class="callout callout-warning"><p><strong>Draft / Experimental:</strong> Zith documentation describes a language under active development. Check <a href="./reference/D-implementation-status.html">Implementation Status</a> before relying on a feature.</p></div>
 <h1 id="8-error-handling">8. Error Handling</h1>
-<blockquote><p><strong>Implementation status:</strong> <code>?T</code> and <code>T!</code> types are <strong>working</strong>. <code>?</code> postfix propagation is <strong>working</strong> with full operand and return-type validation. <code>null → ?T</code> and <code>T → ?T</code> coercions are <strong>working</strong>. Optional extraction with <code>must</code> (runtime panic on <code>null</code>) and <code>raw</code> (unchecked) is <strong>working</strong>. <code>fail</code>, <code>with</code>, <code>catch</code>, <code>throw</code>, and prefix <code>?</code>/<code>!</code> fallback are <strong>spec-only</strong>. See <a href="./reference/D-implementation-status.html">impl-status.md</a>.</p></blockquote>
-<p>Error handling in Zith is fully static and return-based — there are no exceptions, and no semicolon is required after <code>?</code> or <code>!</code>.</p>
+<blockquote><p><strong>Implementation status:</strong> <code>?T</code> is <strong>working in Zith--</strong> with <code>?</code> postfix propagation, full operand and return-type validation, <code>null → ?T</code> and <code>T → ?T</code> coercions, and optional extraction via <code>must</code>/<code>raw</code>. <code>T!</code> and the <code>!</code> propagation family are full-Zith only. <code>fail</code>, <code>with</code>, <code>catch</code>, <code>throw</code>, <code>try</code>, and <code>try ... or</code> fallback are <strong>spec-only</strong>. See <a href="./reference/D-implementation-status.html">impl-status.md</a>.</p></blockquote>
+<p>Error handling in Zith is fully static and return-based. There are no exceptions, and no semicolon is required after <code>?</code> or <code>!</code>.</p>
 <h3 id="81-failable-types">8.1 Failable Types</h3>
 <table>
   <thead>
@@ -14,19 +14,20 @@
   <tbody>
     <tr>
       <td><code>?T</code></td>
-      <td>Optional — <code>T</code> or <code>null</code>.</td>
+      <td>Optional — <code>T</code> or <code>null</code>. Also the Zith-- optional type.</td>
       <td><code>?</code> (postfix)</td>
     </tr>
     <tr>
       <td><code>T!</code></td>
-      <td>Result — <code>T</code> or an error. Equivalent to a <code>Result&lt;T, E&gt;</code> where <code>E</code> implements <code>Error</code>. The compiler infers an anonymous error union when multiple error types are possible.</td>
+      <td>Result — <code>T</code> or an error. Full Zith only; equivalent to a <code>Result&lt;T, E&gt;</code> where <code>E</code> implements <code>Error</code>. The compiler infers an anonymous error union when multiple error types are possible.</td>
       <td><code>!</code> (postfix)</td>
     </tr>
   </tbody>
 </table>
-<p>Failable types may be stacked, and the notation reads linearly:</p>
+<p>In full Zith, failable types may be stacked, and the notation reads linearly:</p>
 <pre><code class="language-zith">?*?(?i32 ! IoError)</code></pre>
 <p>Read left to right, outer to inner: an <em>optional</em> <strong>pointer</strong> to an <em>optional</em> <strong>Result</strong>, where the Result's success type is <code>?i32</code> and its error type is <code>IoError</code>.</p>
+<blockquote><p><strong>Zith-- boundary:</strong> <code>?T</code> is part of Zith--. <code>T!</code> is a full-Zith type, and the Zith-- pipeline has no failable-result syntax; error propagation remains in the full spec.</p></blockquote>
 <h3 id="811-c-pointers-are-t">8.1.1 C pointers are <code>?*T</code></h3>
 <p>Every pointer imported from a C header is typed <code>?<em>T</code>, not <code></em>T</code>: a C pointer is nullable, and <code>?*T</code> uses the nullptr niche, so the layout is exactly the bare pointer. <code>is null</code> is the canonical way to check one:</p>
 <pre><code class="language-zith">import &quot;stdio.h&quot;
@@ -41,8 +42,8 @@ if (f is null) {
 
 let cell = malloc(64) as ?*i32;   // ok: cell is ?*i32
 let bad  = malloc(64) as *i32;    // E3003: use &#x27;as ?*T&#x27;</code></pre>
-<p>In the other direction no cast is needed at all: any pointer, nullable or not, is accepted where a C <code>void<em></code> (<code>raw opaque</code>) is expected, so <code>free(cell)</code> and <code>free(&amp;local)</code> both compile. That coercion is one-way; going from <code>raw opaque</code> back to a concrete <code>?</em>T</code> still requires <code>as</code>.</p>
-<blockquote><p><strong>Temporary:</strong> flow-sensitive narrowing after <code>is null</code> is not implemented yet, so a <code>?<em>T</code> from C is currently accepted unchecked wherever a <code></em>T</code> is expected. This allowance lives in a single predicate (<code>PerModuleSema::allowsUncheckedNullablePointer</code>) and will be removed once narrowing (and/or <code>must</code>/<code>raw</code>) lands, at which point unchecked use becomes a diagnostic.</p></blockquote>
+<p>In the other direction no cast is needed at all: any pointer, nullable or not, is accepted where a C <code>void<em></code> (<code>raw opaque</code>) is expected, so <code>free(cell)</code> and <code>free(&amp;local)</code> both compile. That coercion is one-way. Going from <code>raw opaque</code> back to a concrete <code>?</em>T</code> still requires <code>as</code>.</p>
+<p><code>?<em>T</code> narrows to <code></em>T</code> only inside a branch proven by <code>is null</code>/<code>not (is null)</code> (including the stdlib style <code>if (p is null) { return ...; }</code>, whose early return keeps the proof for code after the <code>if</code>). An unchecked use in deref, arrow, index, or coercion expects <code>*T</code> and reports <code>E3005 NullDerefUnproven</code>; <code>raw</code> remains the explicit opt-out for unchecked pointer reads.</p>
 <h3 id="82-must-vs-raw">8.2 <code>must</code> vs. <code>raw</code></h3>
 <table>
   <thead>
@@ -69,59 +70,39 @@ let bad  = malloc(64) as *i32;    // E3003: use &#x27;as ?*T&#x27;</code></pre>
 let c1 = must cfg;   // panics in debug; compiler warns/guides in release
 let c2 = raw cfg;    // always unchecked; compiler always warns</code></pre>
 <p><code>must</code> also doubles as an assertion: <code>must(cond)</code> panics with file and line info if <code>cond</code> is false (debug only). In release, the compiler guides you to replace it with proper error handling.</p>
-<h3 id="83-propagation--fallback">8.3 Propagation &amp; Fallback</h3>
+<h3 id="83-try-propagation-and-fallback">8.3 <code>try</code>, Propagation, and Fallback</h3>
 <pre><code class="language-zith">fn readConfig(path: string): Config! {
     let file = File.open(path)!
     let data = file.read()!
     parse(data)!
 }
 
-let name = ?user.name or &quot;guest&quot;;
-let data = !primary() or backup() or default;
+let name = try user.name or &quot;guest&quot;;
+let data = try primary() or backup() or default;
 
 // Propagation inside a chain
 readFile(&quot;data.bin&quot;) -&gt; parse(..)! -&gt; validate(..)? -&gt; process(..)</code></pre>
-<p>Accessing a failable type's inner value requires one of four operators: <code>?</code>, <code>!</code>, <code>raw</code>, or <code>must</code>.</p>
+<p>Accessing a failable type's inner value requires one of <code>try</code>, <code>!</code>, <code>raw</code>, or <code>must</code>.</p>
 <ul>
-  <li><strong><code>?</code></strong> unwraps an Optional — returns <code>T</code> or <code>null</code>.</li>
-  <li><strong><code>!</code></strong> unwraps a Result — returns <code>T</code> or an error.</li>
+  <li><strong><code>try</code></strong> short-circuits only the enclosed expression and keeps the failure as a local value.</li>
+  <li><strong><code>!</code></strong> unwraps and propagates a failure out of the enclosing scope.</li>
+  <li><strong><code>raw</code></strong> unwraps without checking the failure.</li>
+  <li><strong><code>must</code></strong> unwraps and asserts that the value is valid.</li>
 </ul>
-<h4 id="prefix-vs-postfix">Prefix vs Postfix</h4>
-<p><code>?</code> and <code>!</code> serve two distinct roles depending on position:</p>
-<table>
-  <thead>
-    <tr>
-      <th>Position</th>
-      <th>Role</th>
-      <th>Rule</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <td><strong>Prefix</strong> (start of expression)</td>
-      <td>Fallback</td>
-      <td>Only <strong>one</strong> <code>?</code> or <code>!</code> per expression. Must be followed by <code>or</code> to provide the fallback value.</td>
-    </tr>
-    <tr>
-      <td><strong>Postfix</strong> (end of a chain segment)</td>
-      <td>Propagation</td>
-      <td><strong>Multiple</strong> allowed. Propagates the error/null out of the chain, skipping the remaining calls.</td>
-    </tr>
-  </tbody>
-</table>
-<pre><code class="language-zith">// Prefix — one per expression, must use &#x27;or&#x27; for fallback
-let x = ?opt or default;           // valid
-let x = !result or fallback;       // valid
-let x = ?opt or default or backup; // valid — chain of fallbacks
+<h4 id="try-and-or"><code>try</code> and <code>or</code></h4>
+<p><code>try</code> guards a single expression. It stops the expression at the first failure and does not route that failure to a <code>fail</code> scope guard. It is the local fallback form; the fix is <code>try expr</code> with no prefix <code>?</code>/<code>!</code>.</p>
+<pre><code class="language-zith">// Local fallback; the failure is consumed in this expression
+let x = try opt or default;
+let x = try opt or default or backup; // valid — chain of fallbacks
 
-// Postfix — multiple allowed in a chain
-let x = ?y or default.data()?fn()?process()?
-//       ^prefix                                        ^postfix (propagation)
-
-// Invalid — two prefixes in one expression
-let x = ?y.?data.?fn();   // invalid
-let x = ?opt?;            // invalid — &#x27;?&#x27; cannot follow another &#x27;?&#x27;</code></pre>
-<p>You can chain with <code>or</code> until it finds an Integral result (short-circuit).</p>
+// Short-circuit with a failure value: a, foo(), or c() may stop the chain
+let value = try a.foo().c();</code></pre>
+<p><code>try expr</code> has a union type (<code>T | failures</code>); the result is either an integral <code>T</code> or the failure that stopped the expression. <code>try expr or fallback</code> collapses that result to <code>T</code>. <code>or</code> is short-circuiting and evaluates only until an integral result is found.</p>
+<h4 id="postfix">Postfix <code>!</code></h4>
+<p>Postfix <code>!</code> propagates a failure out of the current scope. Unlike <code>try</code>, this is the path that can activate a surrounding <code>fail</code> block. Postfix <code>?</code> keeps the existing optional propagation role for <code>?T</code>.</p>
+<pre><code class="language-zith">// Postfix — propagates from the failing segment to the enclosing scope
+let x = y.data()!fn()!process()!</code></pre>
+<p>Prefix <code>?</code>/<code>!</code> fallback forms are removed from the language surface; <code>try ... or</code> is their replacement.</p>
 <h3 id="84-with--catch">8.4 <code>with</code> / <code>catch</code></h3>
 <table>
   <thead>
@@ -153,7 +134,7 @@ eager with (a: fetchA(), b: fetchB()) {
 } catch { log(a, b); }</code></pre>
 <blockquote><p>In <code>eager with</code>, all expressions are evaluated before <code>catch</code>. The named bindings (<code>a</code>, <code>b</code>) remain in scope inside <code>catch</code> so you can inspect which ones failed. In short-circuit <code>with</code>, only the failing expression is known, so <code>catch</code> receives a single error parameter.</p></blockquote>
 <h3 id="85-fail-blocks">8.5 <code>fail</code> Blocks</h3>
-<p>A <code>fail</code> block runs when an error would otherwise escape its associated scope. It can follow a named block (external) or sit inside a block as a scope guard (nameless):</p>
+<p>A <code>fail</code> block runs when an error would otherwise escape its associated scope. It is a scope listener, not an expression-level fallback. Only <code>!</code> propagation and <code>throw</code> activate it; <code>try</code> keeps failures local and does not reach <code>fail</code>. A <code>fail</code> block can follow a named block (external) or sit inside a block as a scope guard (nameless):</p>
 <pre><code class="language-zith">// External fail
 loadConfigure {
     let raw = readFile(&quot;config.json&quot;)!
@@ -169,15 +150,15 @@ loadConfigure {
     risky()!
     another()!
 }</code></pre>
-<blockquote><p><strong>Name linking:</strong> an external <code>fail</code> block's name must match the block it guards. When there is only one failable block in scope, the name can be omitted. A nameless <code>fail</code> guards the current scope directly — the compiler passes the error the same way.</p></blockquote>
-<p>Inside a <code>fail</code> block, the parameter receives the error directly. You have four options:</p>
+<blockquote><p><strong>Name linking:</strong> an external <code>fail</code> block's name must match the block it guards. When there is only one failable block in scope, the name can be omitted. A nameless <code>fail</code> guards the current scope directly. The compiler passes the error the same way.</p></blockquote>
+<p>Inside a <code>fail</code> block, the parameter receives the error directly. This is the difference from <code>try ... or</code>: <code>try</code> discards or collapses the failure, while <code>fail</code> has the original error available for logging, transformation, or conditional recovery. You have four options:</p>
 <ul>
-  <li><code>continue(value)</code> — resume after the block with a replacement value.</li>
-  <li><code>return value;</code> — exit the enclosing function.</li>
-  <li><code>throw value;</code> — propagate a new error (requires the <code>Error</code> capability).</li>
-  <li>Fall through — the original error propagates unchanged.</li>
+  <li><code>continue(value)</code>, to resume after the block with a replacement value.</li>
+  <li><code>return value;</code>, to exit the enclosing function.</li>
+  <li><code>throw value;</code>, to propagate a new error (requires the <code>Error</code> capability).</li>
+  <li>Fall through, so the original error propagates unchanged.</li>
 </ul>
-<p>Use <code>@ok</code> to extract the success type from the failure node — useful when <code>continue</code> needs to return a value of a different type than the error:</p>
+<p>Use <code>@ok</code> to extract the success type from the failure node. This helps when <code>continue</code> needs to return a value of a different type than the error:</p>
 <pre><code class="language-zith">fail (err) {
     continue(@ok err);   // extract success value from the failure node
 }</code></pre>

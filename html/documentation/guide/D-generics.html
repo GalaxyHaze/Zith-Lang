@@ -10,4 +10,17 @@ fn identity&lt;T&gt;(value: T): T {
     value
 }</code></pre>
 <p>Both declarations compile, and <code>identity&lt;i32&gt;(42)</code> plus inference <code>identity(42)</code> type-check and lower.</p>
-<p>Constraints of the form <code>T: A + B</code> are parsed, stored, and enforced at generic call sites; an argument that does not satisfy a trait bound reports <code>E3009</code>, and an interface bound reports <code>E2024</code>. Interface bounds expose their fields and methods to the generic body. The complete syntax is in the <a href="./reference/D-type-system.html">Type System reference</a>; the boundary is in <a href="./reference/D-implementation-status.html">Implementation Status</a>.</p>
+<h2 id="add-a-bound">Add a bound</h2>
+<p>Use <code>T: Trait</code> when the generic body needs a method or contract:</p>
+<pre><code class="language-zith">fn printAll&lt;T: Printable&gt;(value: T): T {
+    value.print();
+    value
+}</code></pre>
+<p>Multiple bounds use <code>+</code>:</p>
+<pre><code class="language-zith">fn useBoth&lt;T: Readable + Writable&gt;(value: T) {
+    value.read();
+    value.write();
+}</code></pre>
+<p>Interface bounds expose their declared fields and methods inside the generic body. A call with an argument that does not satisfy a trait bound reports <code>E3009</code>; an argument that does not satisfy an interface bound reports <code>E2024</code>.</p>
+<p>Generic declarations are monomorphized before HIR. This means the compiler checks each instantiated body and can lower it without a general-purpose runtime generic representation.</p>
+<p>The complete syntax is in the <a href="./reference/D-type-system.html">Type System reference</a>; the boundary is in <a href="./reference/D-implementation-status.html">Implementation Status</a>.</p>

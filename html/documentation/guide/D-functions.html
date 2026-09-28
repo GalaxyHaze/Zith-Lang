@@ -1,23 +1,41 @@
 <div class="callout callout-warning"><p><strong>Draft / Experimental:</strong> Zith documentation describes a language under active development. Check <a href="./reference/D-implementation-status.html">Implementation Status</a> before relying on a feature.</p></div>
 <h1 id="functions">Functions</h1>
-<p>Declare a function with <code>fn</code>, typed parameters, and an optional return annotation. A final expression can provide the return value. The return type is written either <code>: R</code> or <code>-&gt; R</code>; both spellings parse.</p>
+<p>Declare a function with <code>fn</code>, typed parameters, and an optional return annotation. A final expression can provide the return value. Zith-- accepts both <code>: ReturnType</code> and <code>-&gt; ReturnType</code> for function declarations, although the colon form is the canonical spelling used in this guide.</p>
 <pre><code class="language-zith">fn multiply(a: i32, b: i32): i32 {
     a * b
 }
 
-fn square(a: i32) -&gt; i32 {
+fn square(a: i32): i32 {
     a * a
+}
+
+fn cube(a: i32) -&gt; i32 {
+    a * a * a
 }</code></pre>
 <h2 id="overloading">Overloading</h2>
-<p>Functions overload on parameter count and on parameter types. Overload resolution picks the matching declaration at the call site; an unresolvable call reports <code>E2007</code>, and an equally good pair reports <code>E2008</code>.</p>
-<pre><code class="language-zith">fn area(w: i32) -&gt; i32 {
+<p>Functions overload on parameter count and on parameter types. Overload resolution picks the matching declaration at the call site. An unresolvable call reports <code>E2007</code>, and an equally good pair reports <code>E2008</code>.</p>
+<pre><code class="language-zith">fn area(w: i32): i32 {
     w * w
 }
 
-fn area(w: i32, h: i32) -&gt; i32 {
+fn area(w: i32, h: i32): i32 {
     w * h
 }</code></pre>
 <p>Because overloads share a source name, linkage names are qualified as <code>&lt;module&gt;.&lt;Owner&gt;.&lt;name&gt;(&lt;params&gt;)</code>. The two exceptions are <code>extern fn</code> and <code>main</code>, which keep their plain C-visible names.</p>
+<h2 id="function-values-and-function-pointers">Function values and function pointers</h2>
+<p>Function types use the colon spelling:</p>
+<pre><code class="language-zith">fn double(value: i32): i32 {
+    value * 2
+}
+
+extern fn apply(operation: fn(i32): i32, value: i32): i32
+
+fn main(): i32 {
+    var operation: fn(i32): i32 = double;
+    apply(operation, 21)
+}</code></pre>
+<p>Function references, parameters with a function type, and calls through those values are implemented. They lower to C-compatible function pointers, which makes them useful for callbacks and C interop.</p>
+<p>Anonymous functions and closures are not implemented in Zith--. They are a later language direction. For now, define a named function and pass its function value.</p>
 <h2 id="function-kinds">Function kinds</h2>
-<p><code>fn</code>, <code>raw fn</code>, and <code>extern fn</code> parse and lower through HIR to code generation. <code>state</code> is a separate function kind for stackless state machines with <code>dock</code> and <code>jump</code>. <code>const fn</code> is rejected with <code>E2010</code>, and the old <code>flow fn</code> syntax is rejected; <code>const</code> is a binding keyword, not a function qualifier.</p>
+<p><code>fn</code>, <code>raw fn</code>, and <code>extern fn</code> parse and lower through HIR to code generation. <code>state</code> is a separate function kind for stackless state machines with <code>dock</code> and <code>jump</code>. <code>const fn</code> is rejected with <code>E2010</code>, and the old <code>flow fn</code> syntax is rejected. <code>const</code> is a binding keyword, not a function qualifier.</p>
 <p>See <a href="./reference/D-implementation-status.html">Implementation Status</a> before relying on the other forms, and <a href="./guide/D-concurrency.html">Concurrency</a> for the status of the legacy <code>async fn</code> spelling.</p>

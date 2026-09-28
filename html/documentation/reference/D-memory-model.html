@@ -1,6 +1,6 @@
 <div class="callout callout-warning"><p><strong>Draft / Experimental:</strong> Zith documentation describes a language under active development. Check <a href="./reference/D-implementation-status.html">Implementation Status</a> before relying on a feature.</p></div>
 <h1 id="7-memory-model-nra">7. Memory Model (NRA)</h1>
-<blockquote><p><strong>Implementation status:</strong> the <code>lend</code>/<code>view</code> call-annotation slice is implemented: <code>lend T</code> and <code>view T</code> parameters lower to real pointers, call arguments for <code>default</code> bindings require <code>lend x</code>/<code>view x</code> (or report <code>E4005</code>), invalid call annotations are rejected (<code>E4007</code>), and the same binding cannot be borrowed twice in one call. <code>view</code> writes are rejected with <code>E4004</code>. Residual NRA facts are accumulated and attached before HIR, and LLVM emits <code>readonly</code> for views plus <code>nocapture</code> for borrows. The full alive/dead/lent state machine and the complete four-rule proof of <a href="#74-the-four-nra-rules">§7.4</a> are still <strong>spec-only</strong> (F-14). Pointer types (<code><em>T</code>), <code></em>p</code> dereference, and <code>&amp;x</code> address-of are <strong>working</strong>. <code>&amp;x</code> is a logical move in Zith--: the pointed binding is dead until directly reassigned, and pointers derived from <code>&amp;x</code> or <code>@ptrOf(local)</code> are pointer objects that must not escape to longer-lived storage. See <a href="./reference/D-implementation-status.html">impl-status.md</a>.</p></blockquote>
+<blockquote><p><strong>Implementation status:</strong> the <code>lend</code>/<code>view</code> call-annotation slice is implemented: <code>lend T</code> and <code>view T</code> parameters lower to real pointers, call arguments for <code>default</code> bindings require <code>lend x</code>/<code>view x</code> (or report <code>E4005</code>), invalid call annotations are rejected (<code>E4007</code>), and the same binding cannot be borrowed twice in one call. <code>view</code> writes are rejected with <code>E4004</code>. Residual NRA facts are accumulated and attached before HIR, and LLVM emits <code>readonly</code> for views plus <code>nocapture</code> for borrows. The full alive/dead/lent state machine and the complete four-rule proof of <a href="#74-the-four-nra-rules">§7.4</a> are still full-Zith/spec-only (F-14). Pointer types (<code><em>T</code>), <code></em>p</code> dereference, and <code>&amp;x</code> address-of are <strong>working</strong>. <code>&amp;x</code> is a logical move in Zith--: the pointed binding is dead until directly reassigned, and pointers derived from <code>&amp;x</code> or <code>@ptrOf(local)</code> are pointer objects that must not escape to longer-lived storage. See <a href="./reference/D-implementation-status.html">impl-status.md</a>.</p></blockquote>
 <h3 id="71-what-nra-tracks">7.1 What NRA Tracks</h3>
 <p>The ownership system is split conceptually into two layers:</p>
 <ul>
@@ -34,7 +34,7 @@
     </tr>
   </tbody>
 </table>
-<p>It also tracks the <strong>origin</strong> of each node — where the value came from:</p>
+<p>It also tracks the <strong>origin</strong> of each node, which says where the value came from:</p>
 <table>
   <thead>
     <tr>
@@ -63,7 +63,7 @@
 </table>
 <p>With these two axes (state + origin), NRA enforces the rules in <a href="#74-the-four-nra-rules">§7.4</a>. NTA also records aliasing, branch-local facts, whether a return value is the same node received as an argument, and whether a <code>belong</code> or borrowed value escapes its legal region.</p>
 <h3 id="72-move-semantics">7.2 Move Semantics</h3>
-<p>Moving <code>a</code> to <code>b</code> redirects the name <code>b</code> to <code>a</code>'s node. The name <code>a</code> is considered <strong>dead</strong> / <strong>invalid</strong> and cannot be read — only reassigned:</p>
+<p>Moving <code>a</code> to <code>b</code> redirects the name <code>b</code> to <code>a</code>'s node. The name <code>a</code> is considered <strong>dead</strong> / <strong>invalid</strong> and cannot be read, only reassigned:</p>
 <pre><code class="language-zith">var a = Point { x: 1.0, y: 2.0 };
 let b = a;                          // b -&gt; a&#x27;s node; a becomes dead
 // println(a.x);                    -- COMPILE ERROR: a is dead
@@ -72,7 +72,7 @@ let b = a;                          // b -&gt; a&#x27;s node; a becomes dead
 a = Point { x: 3.0, y: 4.0 };      // OK: reassignment creates a new node for a</code></pre>
 <p>In effect, if <code>a</code> is never reassigned, it is as though <code>a</code> never existed and <code>b</code> has held <code>Point { x: 1.0, y: 2.0 }</code> all along.</p>
 <h3 id="721-pointer-objects-in-zith">7.2.1 Pointer Objects in Zith--</h3>
-<p>In the <code>Zith--</code> subset, <code><em>T</code> is a non-nullable pointer object and <code>?</em>T</code> is the same object nullable. <code>p.x</code>, <code>p-&gt;x</code> and <code>*p</code> remain valid accesses. <code>&amp;x</code> performs a logical move of the binding: reads of <code>x</code> after it report <code>E4001 UseAfterMove</code>, while a direct assignment to <code>x</code> revives a new local version. There is no SSA/phi infrastructure; the version is a per-binding counter used by sema.</p>
+<p>In the <code>Zith--</code> subset, <code><em>T</code> is a non-nullable pointer object and <code>?</em>T</code> is the same object nullable. <code>p.x</code>, <code>p-&gt;x</code> and <code>*p</code> remain valid accesses. <code>&amp;x</code> performs a logical move of the binding: reads of <code>x</code> after it report <code>E4001 UseAfterMove</code>, while a direct assignment to <code>x</code> revives a new local version. There is no SSA/phi infrastructure. The version is a per-binding counter used by sema.</p>
 <p>Pointers derived from <code>&amp;x</code> or <code>@ptrOf(local)</code> are escaping values in this iteration. Returning one, storing it in a struct/array/global/deferred aggregate, or otherwise letting it outlive the storage scope reports <code>E4008 PointerEscapesScope</code>. <code>raw</code> index/deref remains the unchecked escape and does not create pointer-object aliasing.</p>
 <h3 id="73-memory-modifiers">7.3 Memory Modifiers</h3>
 <table>
@@ -100,7 +100,7 @@ a = Point { x: 3.0, y: 4.0 };      // OK: reassignment creates a new node for a<
       <td>Inspecting without ownership</td>
     </tr>
     <tr>
-      <td><code>unique</code></td>
+      <td><code>own</code></td>
       <td>Single-owner guarantee — only one name in the graph.</td>
       <td>Ownership-transfer patterns</td>
     </tr>
@@ -116,9 +116,10 @@ a = Point { x: 3.0, y: 4.0 };      // OK: reassignment creates a new node for a<
     </tr>
   </tbody>
 </table>
-<blockquote><p><code>unique</code> provides compile-time single-owner guarantees for local bindings. In a <code>global</code> context, <code>unique</code> becomes runtime-checked — the compiler enforces exclusive access at program startup. <code>global</code> bindings cannot be moved; the <code>Lent</code> capability manages thread-safe distribution.</p></blockquote>
+<blockquote><p><code>own</code> provides compile-time single-owner guarantees for local bindings. In a <code>global</code> context, <code>own</code> becomes runtime-checked. The compiler enforces exclusive access at program startup. <code>global</code> bindings cannot be moved, and the <code>Lent</code> capability manages thread-safe distribution.</p></blockquote>
+<p><code>own T</code> is the full-Zith surface name for the former <code>unique T</code>. The NRA semantic stays a mutable single-owner handle. A stack-backed handle may not escape its storage scope.</p>
 <blockquote><p>In practice, most code only needs <code>lend</code> and <code>view</code>.</p></blockquote>
-<p><code>share</code> nodes may participate in the <code>Branch</code> protocol. When a shared value is handed to a thread through <code>fork</code>, NRA tracks a <code>forkCount</code>: zero means the source owns the node, one means a thread branch is pending, and more than one is rejected. <code>merge</code> consumes the <code>ForkHandle</code> and returns the node to the source. See <a href="https://github.com/GalaxyHaze/Zith/blob/main/docs/plans/branch-protocol.md">the branch protocol plan</a>.</p>
+<p><code>share</code> nodes may participate in the thread protocol. When a shared value is handed to a thread through <code>backend fork Entry(share value)</code>, NRA tracks a <code>forkCount</code>: zero means the source owns the node, one means a thread branch is pending, and more than one is rejected. <code>merge</code> consumes the thread handle and returns the entry result. It does not reclaim the <code>share</code> value. See <a href="./reference/D-concurrency.html">the branch protocol plan</a>.</p>
 <h4 id="implicit-mutability">Implicit Mutability</h4>
 <p>Each memory modifier carries an implicit content mutability level:</p>
 <table>
@@ -136,9 +137,9 @@ a = Point { x: 3.0, y: 4.0 };      // OK: reassignment creates a new node for a<
       <td><code>fn update(p: lend Point) { p.x += 1; }</code> — <code>p</code> is mutable</td>
     </tr>
     <tr>
-      <td><code>unique</code></td>
+      <td><code>own</code></td>
       <td>Mutable</td>
-      <td><code>let r: unique Resource = ...;</code> — <code>r</code>'s fields are mutable</td>
+      <td><code>let r: own Resource = ...;</code> — <code>r</code>'s fields are mutable</td>
     </tr>
     <tr>
       <td><code>share</code></td>
@@ -163,15 +164,23 @@ a = Point { x: 3.0, y: 4.0 };      // OK: reassignment creates a new node for a<
   </tbody>
 </table>
 <p><code>default</code> is the only modifier where mutability is explicitly controlled via the <code>mut</code> keyword. All others carry their mutability semantics implicitly.</p>
+<h3 id="731-re-binding-with">7.3.1 Re-binding With <code>:=</code></h3>
+<p><code>=</code> assigns values; <code>:=</code> re-binds the reference or ownership slot itself. This is the operator for retargeting an existing <code>own</code>, <code>share</code>, <code>lend</code>, <code>belong</code>, or <code>view</code> link, and for installing an owner into a slot that is awaiting one. Plain <code>=</code> is allowed only when the target is alive and the operation is a value copy or a value store.</p>
+<pre><code class="language-zith">var slot: own Buffer = acquireBuffer();  // OK: initialization uses `=`
+slot := acquireBuffer();      // ERROR: first owner is still live
+let slot2 = &amp;slot;            // slot2 owns the storage; slot is dead
+slot := acquireBuffer();      // OK: install into the dead slot</code></pre>
+<p><code>:=</code> never overwrites a live owner. For <code>lend</code>, the source node must be alive when the borrow starts and the previous borrow must end before the new one starts. For <code>belong</code>, the new parent must still satisfy the normal escape and parent-alive rules. For <code>view</code> and <code>share</code>, it only changes which node the link points at; it does not create or remove ownership.</p>
+<p>This is full-Zith surface. <code>Zith--</code> keeps its current reassignment rules and does not introduce <code>:=</code>.</p>
 <h3 id="74-the-four-nra-rules">7.4 The Four NRA Rules</h3>
-<p><strong>Rule 1 — Argument Exclusivity.</strong> In any call expression, each argument must refer to a distinct node, without exception:</p>
+<p><strong>Rule 1: Argument Exclusivity.</strong> In any call expression, each argument must refer to a distinct node, without exception:</p>
 <ul>
-  <li>Duplicating a <code>default</code> / <code>unique</code> / <code>lend</code> argument → <strong>ownership error</strong>.</li>
+  <li>Duplicating a <code>default</code> / <code>own</code> / <code>lend</code> argument → <strong>ownership error</strong>.</li>
   <li>Duplicating a <code>share</code> / <code>view</code> argument → <strong>logic error</strong> (passing the same resource twice is almost certainly a bug).</li>
 </ul>
-<p><strong>Rule 2 — No Dead Node Access.</strong> A symbol cannot be read while its node is <code>dead</code>.</p>
-<p><strong>Rule 3 — No Escaping <code>belong</code>.</strong> A <code>belong</code> node cannot be stored anywhere whose lifetime exceeds any node in its dependency vector. At every use, all of its parents must be <code>alive</code>.</p>
-<p><strong>Rule 4 — <code>lend</code> Behavioral Promise.</strong> A <code>lend</code> value cannot be stored, moved, or captured. It may be passed as a call argument or returned — in the latter case, passing the promise on to the caller.</p>
+<p><strong>Rule 2: No Dead Node Access.</strong> A symbol cannot be read while its node is <code>dead</code>.</p>
+<p><strong>Rule 3: No Escaping <code>belong</code>.</strong> A <code>belong</code> node cannot be stored anywhere whose lifetime exceeds any node in its dependency vector. At every use, all of its parents must be <code>alive</code>.</p>
+<p><strong>Rule 4: <code>lend</code> Behavioral Promise.</strong> A <code>lend</code> value cannot be stored, moved, or captured. It may be passed as a call argument or returned, in which case it passes the promise on to the caller.</p>
 <blockquote><p>For details on how NRA resolves nodes and validates these rules, see <a href="#79-how-nra-resolves-nodes">§7.9</a>.</p></blockquote>
 <h3 id="75-nra-in-practice">7.5 NRA in Practice</h3>
 <pre><code class="language-zith">// lend -- exclusive temporary borrow
@@ -184,12 +193,12 @@ scale(lend pt, 2.0);
 fn center_of(p: view Point): f64 { (p.x + p.y) / 2.0 }
 center_of(view pt);   // no caller mutation
 
-// share/belong remain spec-only in Zith--
+// share/belong/own remain spec-only in Zith--
 
 // belong -- back-pointer cannot outlive its parent
 struct Tree&lt;T&gt; {
     data:     T,
-    children: []unique Self,
+    children: []own Self,
     parent:   ?belong Self,
 }
 
@@ -198,36 +207,36 @@ fn getParent(self: view Node): lend Node { self.parent }</code></pre>
 <h3 id="76-boundary-before-hir">7.6 Boundary Before HIR</h3>
 <p>The main NRA proof runs before the final HIR is formed. That boundary exists so the analysis still sees:</p>
 <ul>
-  <li>binding identity and resource graphs;</li>
-  <li>the difference between <code>default</code>, <code>view</code>, <code>lend</code>, <code>unique</code>, <code>share</code>, and <code>belong</code>;</li>
-  <li>branch facts, narrowing facts, and return-path equivalence;</li>
+  <li>binding identity and resource graphs</li>
+  <li>the difference between <code>default</code>, <code>view</code>, <code>lend</code>, <code>own</code>, <code>share</code>, and <code>belong</code></li>
+  <li>branch facts, narrowing facts, and return-path equivalence</li>
   <li>call, capture, and escape structure before lowering erases it.</li>
 </ul>
 <p>The final HIR is therefore not the place where ownership is re-proven. It receives a typed, desugared, NRA-validated view of the program plus only the residual facts that still matter for lowering, cache serialization, and backend hints.</p>
 <h3 id="77-residual-facts-and-internal-canonicalization">7.7 Residual Facts and Internal Canonicalization</h3>
-<p>NRA may materialize limited internal canonicalizations after it has proven the ownership contract, but those rewrites do not change a public signature or observable ABI. For example, forwarding a proven move internally or removing a temporary introduced only to preserve ownership is valid; redefining an exported function's calling convention is not.</p>
+<p>NRA may materialize limited internal canonicalizations after it has proven the ownership contract, but those rewrites do not change a public signature or observable ABI. For example, forwarding a proven move internally or removing a temporary introduced only to preserve ownership is valid, redefining an exported function's calling convention is not.</p>
 <p>Residual facts that may survive into HIR include:</p>
 <ul>
-  <li>consumed vs. non-consumed value state when lowering depends on it;</li>
-  <li>non-null or otherwise narrowed facts that affect control-flow lowering;</li>
-  <li>borrow, capture, or escape decisions that codegen and caching must preserve;</li>
+  <li>consumed vs. non-consumed value state when lowering depends on it</li>
+  <li>non-null or otherwise narrowed facts that affect control-flow lowering</li>
+  <li>borrow, capture, or escape decisions that codegen and caching must preserve</li>
   <li>internal calling-convention details only when they stay behind a stable boundary.</li>
 </ul>
 <p>LLVM is not the source of truth for ownership. At most it receives hints already decided by NRA, such as <code>nonnull</code>, <code>noalias</code>, <code>readonly</code>, <code>nocapture</code>, or opportunities to remove redundant temporaries and stores.</p>
 <h3 id="78-self-referential-types">7.8 Self-Referential Types</h3>
 <pre><code class="language-zith">struct Node&lt;T&gt; {
     data: T,
-    next: ?unique Self,
+    next: ?own Self,
     prev: ?belong Self,
 }
 
 implement Node&lt;T&gt; {
     fn append(self: lend Self, data: T) {
-        self.next = unique Node { data, next: null, prev: belong self };
+        self.next := own Node { data, next: null, prev: belong self };
     }
 }</code></pre>
 <ul>
-  <li>Freeing the head frees the entire chain, since <code>next</code> forms a <code>unique</code> ownership chain.</li>
+  <li>Freeing the head frees the entire chain, since <code>next</code> forms an <code>own</code> ownership chain.</li>
   <li>NRA guarantees <code>prev</code> (<code>belong</code>) never outlives its owner.</li>
   <li><code>belong</code> fields may be passed as <code>lend</code> to functions.</li>
 </ul>
@@ -238,7 +247,7 @@ implement Node&lt;T&gt; {
 <p>When you access a node, NRA checks:</p>
 <ol>
   <li>The node itself is <code>alive</code> (not <code>dead</code>).</li>
-  <li>Every node in its <strong>dependency vector</strong> — the fields or resources it belongs to or references — is also valid.</li>
+  <li>Every node in its <strong>dependency vector</strong>, which includes the fields or resources it belongs to or references, is also valid.</li>
 </ol>
 <p>If a node is <code>dead</code> (say, after a move), NRA records where and why. You get an error pointing right at the violation.</p>
 <h4 id="function-evaluation">Function Evaluation</h4>

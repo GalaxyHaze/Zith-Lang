@@ -1,5 +1,12 @@
 <div class="callout callout-warning"><p><strong>Draft / Experimental:</strong> Zith documentation describes a language under active development. Check <a href="./reference/D-implementation-status.html">Implementation Status</a> before relying on a feature.</p></div>
 <h1 id="zithc-docs"><code>zithc docs</code></h1>
-<p>Generate documentation from Zith source.</p>
+<p>Generate documentation from comments attached to Zith declarations.</p>
 <pre><code class="language-bash">zithc docs src/main.zith</code></pre>
 <p>The command requires input files; invoking it with nothing to read reports "no input files". Doc comments (<code>///</code> and <code>/** */</code>) attached to declarations are the input, so document declarations at their definition site.</p>
+<h2 id="document-a-module">Document a module</h2>
+<p>Keep the source file in the input list and place the comment immediately before the declaration it describes:</p>
+<pre><code class="language-zith">/// Adds two signed integers.
+fn add(left: i32, right: i32): i32 {
+    left + right
+}</code></pre>
+<p>Pass every source file that contributes public declarations. The command does not infer a whole project from a directory, and it does not replace the project's language reference.</p>

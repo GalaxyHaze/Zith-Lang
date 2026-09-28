@@ -1,7 +1,17 @@
 <div class="callout callout-warning"><p><strong>Draft / Experimental:</strong> Zith documentation describes a language under active development. Check <a href="./reference/D-implementation-status.html">Implementation Status</a> before relying on a feature.</p></div>
-<h1 id="language-guide">Language Guide</h1>
-<p>This guide is the practical entry point to Zith. The <code>main</code> compiler builds the <code>Zith--</code> subset documented in the <a href="./reference/D-zith-subset.html">Zith-- reference</a>; Zith-spec remains the larger specification ahead of implementation.</p>
-<h2 id="start-with-working-features">Start with working features</h2>
-<p>Read <a href="./guide/D-syntax.html">Syntax</a>, <a href="./guide/D-bindings.html">Bindings</a>, <a href="./guide/D-types.html">Types</a>, <a href="./guide/D-functions.html">Functions</a>, and <a href="./guide/D-control-flow.html">Control Flow</a> first. These topics cover working <code>Zith--</code> functionality.</p>
-<h2 id="check-experimental-features">Check experimental features</h2>
-<p><a href="./guide/D-memory-model.html">Memory Model</a>, <a href="./guide/D-errors.html">Errors</a>, <a href="./guide/D-comptime.html">Comptime</a>, <a href="./guide/D-contexts-words-macros.html">Contexts, Words &amp; Macros</a>, and <a href="./guide/D-concurrency.html">Concurrency</a> include specification material that is not fully implemented. Each page points to the current status.</p>
+<h1 id="zith---language-guide">Zith-- Language Guide</h1>
+<p>This guide is the practical entry point to Zith--. The <code>main</code> compiler builds the subset documented in the <a href="./zith--/D-reference.html">English Zith-- reference</a>. the larger language design is separated into the <a href="./zith/D-overview.html">Zith reference</a>.</p>
+<h2 id="learn-the-working-language">Learn the working language</h2>
+<p>Read these pages in order when learning the core:</p>
+<ul>
+  <li><a href="./guide/D-syntax.html">Syntax</a> for expressions, operators, and literals.</li>
+  <li><a href="./guide/D-bindings.html">Bindings</a> for <code>let</code>, <code>var</code>, and <code>const</code>.</li>
+  <li><a href="./guide/D-types.html">Types</a> for structs, pointers, slices, and <code>dyn</code>.</li>
+  <li><a href="./guide/D-functions.html">Functions</a> for declarations, overloads, and <code>raw fn</code>.</li>
+  <li><a href="./guide/D-control-flow.html">Control Flow</a> for branches, loops, and <code>when</code>.</li>
+  <li><a href="./guide/D-modules.html">Modules</a> for imports and visibility.</li>
+</ul>
+<p>Then continue with <a href="./guide/D-generics.html">Generics</a>, <a href="./guide/D-traits-interfaces.html">Traits &amp; Interfaces</a>, and <a href="./guide/D-c-interop.html">C Interop</a>.</p>
+<h2 id="read-boundaries-before-using-advanced-features">Read boundaries before using advanced features</h2>
+<p><a href="./guide/D-memory-model.html">Memory Model</a>, <a href="./guide/D-errors.html">Errors</a>, <a href="./guide/D-comptime.html">Comptime</a>, <a href="./guide/D-contexts-words-macros.html">Contexts, Words &amp; Macros</a>, <a href="./guide/D-concurrency.html">Concurrency</a>, and <a href="./guide/D-raw-unsafe.html">Raw &amp; Unsafe</a> include features with explicit implementation boundaries. Each page separates what works in Zith-- from what remains full-Zith design material.</p>
+<p>When an example needs a feature that is not implemented, the page links to the formal reference instead of presenting that example as runnable code.</p>

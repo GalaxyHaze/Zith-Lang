@@ -1,6 +1,6 @@
 <div class="callout callout-warning"><p><strong>Draft / Experimental:</strong> Zith documentation describes a language under active development. Check <a href="./reference/D-implementation-status.html">Implementation Status</a> before relying on a feature.</p></div>
 <h1 id="4-traits-interfaces--capabilities">4. Traits, Interfaces &amp; Capabilities</h1>
-<blockquote><p><strong>Implementation status:</strong> <code>trait</code>, <code>interface</code>, and <code>implement T as Trait {}</code> declarations are <strong>working</strong> (parsed, resolved, and type-checked). Trait conformance is nominal: an implementation is validated against every required method and the conformance edge is recorded for generic bounds. Interfaces are structural: a concrete struct satisfies an interface automatically when every declared field exists with the required type and every declared method requirement has a compatible signature. Using an interface as a generic bound exposes the interface fields and methods to the generic body. Trait defaults are resolved for concrete owners during sema; <code>dyn Trait</code>, dynamic dispatch, <code>requires</code>/<code>extends</code> as explicit constraints, and per-owner default-method HIR generation remain spec-only or pending. <code>Self</code> in implementations and trait defaults resolves to the implementing type.</p></blockquote>
+<blockquote><p><strong>Implementation status:</strong> <code>trait</code>, <code>interface</code>, and <code>implement T as Trait {}</code> declarations are <strong>working</strong> (parsed, resolved, and type-checked). Trait conformance is nominal: an implementation is validated against every required method and the conformance edge is recorded for generic bounds. Interfaces are structural: a concrete struct satisfies an interface automatically when every declared field exists with the required type and every declared method requirement has a compatible signature. Using an interface as a generic bound exposes the interface fields and methods to the generic body. Trait defaults are resolved for concrete owners during sema, method-only <code>dyn</code> dispatch through fat pointers/vtables is working, and <code>requires</code>/<code>extends</code>, interface fields on <code>dyn</code>, and per-owner default-method HIR generation remain full-Zith/spec-only or pending. <code>Self</code> in implementations and trait defaults resolves to the implementing type. See <a href="./reference/D-implementation-status.html">impl-status.md</a>.</p></blockquote>
 <p>The <code>implement</code> owner may be a primitive, <code>?T</code>, or <code>[]T</code> in addition to a named struct/enum:</p>
 <pre><code class="language-zith">trait Describe {
     fn describe(self): i32;
@@ -65,7 +65,7 @@ trait JsonSerializable {
 Printable.print(self);
 JsonSerializable.print(self);</code></pre>
 <h3 id="43-interfaces">4.3 Interfaces</h3>
-<p>Interfaces are structural — if it quacks, it's a duck. Any type that has the required fields and compatible method signatures satisfies the interface automatically, without an explicit <code>implement</code> declaration. Interfaces accept declaration-only method requirements and both single and grouped field forms. You can also add <code>requires</code> to interfaces.</p>
+<p>Interfaces are structural. If it quacks, it's a duck. Any type that has the required fields and compatible method signatures satisfies the interface automatically, without an explicit <code>implement</code> declaration. Interfaces accept declaration-only method requirements and both single and grouped field forms. You can also add <code>requires</code> to interfaces.</p>
 <pre><code class="language-zith">// will only accept structs and reject components
 requires @isStruct
 interface iPositioned {
@@ -137,12 +137,12 @@ fn distance2&lt;T: iPositioned&gt;(p: T): f32 { p.length2() }</code></pre>
       <td>Required for <code>global: share</code> and crossing thread boundaries</td>
     </tr>
     <tr>
-      <td><code>Branch</code></td>
-      <td>Enables explicit <code>fork</code>/<code>merge</code> of a shared value to/from a thread</td>
+      <td><code>ThreadBackend</code></td>
+      <td>Provides a concrete thread handle for explicit <code>fork</code>/<code>merge</code>, e.g. <code>pThread</code></td>
     </tr>
     <tr>
       <td><code>Lent</code></td>
-      <td>Enables <code>global: unique</code>, a runtime-checked exclusive borrow. <code>global</code> bindings cannot be moved — <code>Lent</code> manages thread-safe distribution. Also allows <code>lend</code> parameters.</td>
+      <td>Enables <code>global: own</code>, a runtime-checked exclusive borrow. <code>global</code> bindings cannot be moved — <code>Lent</code> manages thread-safe distribution. Also allows <code>lend</code> parameters.</td>
     </tr>
     <tr>
       <td><code>Trust</code></td>
@@ -150,7 +150,7 @@ fn distance2&lt;T: iPositioned&gt;(p: T): f32 { p.length2() }</code></pre>
     </tr>
     <tr>
       <td><code>Unique</code></td>
-      <td>Marks a singleton type. It cannot be instantiated — the type name itself acts as the instance. All fields must implement <code>Share</code> (thread-safe). A <code>unique Local</code> variant is a singleton thread-local.</td>
+      <td>Marks a singleton type. It cannot be instantiated — the type name itself acts as the instance. All fields must implement <code>Share</code> (thread-safe). An <code>own Local</code> variant is a singleton thread-local.</td>
     </tr>
   </tbody>
 </table>
@@ -193,13 +193,13 @@ global counter: share Atomic&lt;i32&gt; = 0;
 // Without the Share capability, cross-thread access is a compile error
 struct LocalOnly { data: i32 }
 // global bad: share LocalOnly = ...;  -- COMPILE ERROR: lacks Share</code></pre>
-<h4 id="branch--thread-forkmerge"><code>Branch</code> — Thread Fork/Merge</h4>
-<p><code>Branch</code> is the capability behind explicit thread fork/merge. It is designed for types that can hand a <code>share</code> value to one thread and collect the result after the thread completes:</p>
-<pre><code class="language-zith">let handle = fork Worker(share state);
-let result = merge handle;</code></pre>
-<p>There is no <code>await</code>, future, or resumable task in this protocol. <code>merge</code> is blocking and consumes the handle once, restoring ownership of the shared value. See <a href="https://github.com/GalaxyHaze/Zith/blob/main/docs/plans/branch-protocol.md">the branch protocol plan</a> for the full design.</p>
+<h4 id="threadbackend--thread-forkmerge"><code>ThreadBackend</code> — Thread Fork/Merge</h4>
+<p><code>ThreadBackend</code> is the runtime side of explicit thread fork/merge. A backend object such as <code>pThread</code> creates a concrete <code>Thread&lt;T&gt;</code> handle, <code>merge</code> then blocks and consumes that handle once:</p>
+<pre><code class="language-zith">let t: PThreadHandle&lt;i32&gt; = pThread fork Update(share state, n);
+let result: i32 = merge t;</code></pre>
+<p><code>fork</code> is a core keyword that names the entry action and the backend object, <code>spawn Entry(args)</code> is a stdlib shorthand for the active backend. There is no <code>await</code>, future, or resumable task in this protocol. The returned value is exactly the result type declared by the entry action, including failable types when the action can fail. See <a href="./reference/D-concurrency.html">the branch protocol plan</a> for the full design.</p>
 <h3 id="45-operator-overloading">4.5 Operator Overloading</h3>
-<p>Operator overloading is capability-based and strict — you implement only the operators you need:</p>
+<p>Operator overloading is capability-based and strict. You implement only the operators you need:</p>
 <pre><code class="language-zith">implement Vec3 as Arithmetic {
     fn +(self, other: Self): Self { ... }
     fn -(self, other: Self): Self { ... }

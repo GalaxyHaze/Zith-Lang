@@ -20,4 +20,18 @@ Be aware that `const` currently means immutable, not compile-time evaluated. The
 
 Parameters are immutable by default. `var p: T` makes a parameter mutable; `var self` allows in-place mutation of receiver fields.
 
+## Destructure a pack
+
+Packs are Zith's tuple-like aggregates. Use `| ... |` to create one and
+`[ ... ]` to bind its members by position:
+
+```zith
+let measurement = | 42, 3.5f, 'C' |;
+let [value, scale, unit] = measurement;
+```
+
+The pattern must match the pack's member count. Use `pack[index]` when one
+position is needed without binding the others. The index must be a compile-time
+integer.
+
 Destructuring and the full mutability model are specified in the [Bindings reference](doc:reference-06-mutability-bindings).

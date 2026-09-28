@@ -29,7 +29,44 @@ fn shift(origin: Point): i32 {
 }
 ```
 
-Arrays (`[N]T`), slices (`[]T`), and pointers (`*T`) are working, and indexing with `a[i]` lowers through HIR to code generation on all three.
+Arrays (`[N]T`), slices (`[]T`), pointers (`*T`), and packs are working.
+Array and slice indexing uses `a[i]`. Pack indexing uses a compile-time
+integer position.
+
+## Packs, the tuple-like type
+
+Zith calls its tuple-like aggregate a **pack**. A pack can hold values with
+different types and preserves their order:
+
+```zith
+let point = | 10, 20, 'x' |;
+
+let x: i32 = point[0];
+let y: i32 = point[1];
+let marker: char = point[2];
+```
+
+Use binding destructuring when each position needs a local name:
+
+```zith
+let [x, y, marker] = point;
+```
+
+Pack positions are known at compile time. A pack is not a homogeneous array,
+so use `[N]T` or `[]T` when the program needs runtime indexing over values of
+one type. Named pack types can describe the member types and names explicitly:
+
+```zith
+fn sample(): |x: i32, y: i32, marker: char| {
+    |x: 10, y: 20, marker: 'x'|
+}
+```
+
+Packs are useful for returning several heterogeneous values, destructuring
+those values at the call site, and carrying multiple values through a loop
+accumulator. The current implementation supports positional literals,
+compile-time indexing, and `[a, b, c]` binding destructuring. It does not
+provide tuple methods or runtime variable indexing.
 
 ## Pointers and opaque handles
 

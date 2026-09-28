@@ -1,7 +1,7 @@
 <div class="callout callout-warning"><p><strong>Draft / Experimental:</strong> Zith documentation describes a language under active development. Check <a href="./reference/D-implementation-status.html">Implementation Status</a> before relying on a feature.</p></div>
 <h1 id="20-standard-library">20. Standard Library</h1>
-<blockquote><p><strong>Implementation status:</strong> <code>stdlib/c/io.zith</code> and <code>stdlib/std/io/console.zith</code> are the only shipped modules. <code>puts</code> and <code>println</code> work. All other standard library content is <strong>spec-only</strong>. See <a href="./reference/D-implementation-status.html">impl-status.md</a>.</p></blockquote>
-<p><code>std</code>/<code>soon</code> remain documentation-only in this iteration; no existing module is being rewritten. The documented convention uses resource types with <code>init</code>/<code>destroy</code>, read-only methods with <code>view</code>, and mutating methods with <code>lend</code>. <code>defer</code> runs <code>destroy(self: lend Self)</code> on resource cleanup; <code>drop</code> remains outside the <code>Zith--</code> subset.</p>
+<blockquote><p><strong>Implementation status:</strong> <code>stdlib/c/io.zith</code>, <code>stdlib/c/stdlib.zith</code>, <code>stdlib/c/string.zith</code>, <code>stdlib/std/io/console.zith</code>, and the <code>std/memory</code> DAG are the shipped modules. <code>puts</code>, <code>println</code>, and raw allocator primitives work. <code>stdlib/std/collections/hash_map_u64.zith</code> ships a concrete <code>u64 -&gt; u64</code> hash map and <code>stdlib/std/collections/hash_map.zith</code> is a checked generic <code>HashMap&lt;K, V&gt;</code> module. The <code>std/memory</code> layer DAG and the imported conforming <code>implement Box as InPlace</code> are covered by <code>tests/test-generic-hashmap.cpp</code>. The generic <code>new</code>/<code>delete</code>/<code>make</code>/<code>release</code> helpers are not usable yet, so the surface is still marked proposed. <code>std/alloc</code> and <code>std/new</code> remain as legacy compatibility modules. All other standard library content is <strong>spec-only</strong>. See <a href="./reference/D-implementation-status.html">impl-status.md</a>.</p></blockquote>
+<p><code>std</code>/<code>soon</code> remain documentation-only in this iteration, except for the shipped modules listed above. The common C bindings used by those modules live under <code>c/</code> rather than importing host headers directly. The documented convention uses resource types with <code>init</code>/<code>destroy</code>, read-only methods with <code>view</code>, and mutating methods with <code>lend</code>. <code>defer</code> runs <code>destroy(self: lend Self)</code> on resource cleanup. <code>drop</code> remains outside the <code>Zith--</code> subset.</p>
 <h3 id="201-three-part-structure">20.1 Three-Part Structure</h3>
 <table>
   <thead>
@@ -24,20 +24,66 @@
     </tr>
     <tr>
       <td><code>c</code></td>
-      <td>Direct C FFI bindings</td>
-      <td>You need to call C APIs</td>
+      <td>Supported C/runtime surface</td>
+      <td>You need common low-level or system APIs</td>
     </tr>
   </tbody>
 </table>
 <pre><code class="language-zith">import std;
 import soon;   // use with caution — API may shift
-import c;       // raw C bindings</code></pre>
+import c;       // supported C/runtime surface</code></pre>
+<p>The <code>c</code> namespace is not a request to parse a host header. It is the stable low-level surface maintained by the compiler/runtime. Its declarations may map to libc on a native LLVM target, to VM intrinsics on the no-LLVM backend, or to host/runtime imports on WASM. The source API stays the same while the selected backend chooses the concrete implementation.</p>
+<p>Use <code>c/...</code> for common C-shaped facilities that Zith supports across targets:</p>
+<pre><code class="language-zith">from c/io
+from c/stdlib
+
+fn main() {
+    puts(&quot;hello&quot;);
+    let memory = malloc(64);
+    free(memory);
+}</code></pre>
+<p>Use <code>import "file.h"</code> for a target-specific declaration set, a platform API, or an external C library that is not part of the supported <code>c</code> surface. Header imports remain an interop escape hatch, not the mechanism used to bootstrap the standard library.</p>
 <h3 id="202-core-modules">20.2 Core Modules</h3>
 <h4 id="stdioconsole"><code>std/io/console</code></h4>
 <pre><code class="language-zith">fn println(msg: []char): void;
 fn print(msg: []char): void;
 fn eprint(msg: []char): void;</code></pre>
+<p>The console module also provides <code>input()</code> as the owning line-input constructor. <code>InputLine</code> owns its buffer and exposes <code>text</code>, <code>len</code>, <code>good</code>, <code>cast&lt;T&gt;</code>, and <code>destroy</code>. Callers must destroy the line after use.</p>
+<p><code>ParseInput</code> is the parsing contract implemented by the primitive numeric and boolean types shipped with the standard library:</p>
+<pre><code class="language-zith">pub trait ParseInput {
+    fn parse(self: view InputLine): ?Self;
+}</code></pre>
+<p><code>InputLine.cast&lt;T: ParseInput&gt;</code> returns <code>?T</code> without destroying the line. Passing <code>view line</code> preserves the owner for later use:</p>
+<pre><code class="language-zith">let n = line.cast&lt;i32&gt;();</code></pre>
+<p><code>i32</code>, <code>bool</code>, <code>f32</code>, <code>f64</code>, and <code>u32</code> implement <code>ParseInput</code> in the current stdlib surface. <code>*char</code> parsing remains out of scope.</p>
 <pre><code class="language-zith">@println(&quot;hello&quot;);</code></pre>
+<h4 id="stdalloc"><code>std/alloc</code></h4>
+<p>Raw storage primitives and a default heap allocator. The trait methods use <code>self</code> read-only receivers because the current compiler invalidates a concrete receiver after a trait method call in the same scope. The <code>dyn Allocator</code> free functions are the supported repeatable call path.</p>
+<pre><code class="language-zith">pub trait Allocator {
+    fn alloc(self, size: u64, align: u64): ?raw opaque;
+    fn free(self, mem: raw opaque, size: u64, align: u64);
+    fn realloc(self, old: raw opaque, old_size: u64, old_align: u64,
+               new_size: u64, new_align: u64): ?raw opaque;
+}
+
+pub struct HeapAllocator {}
+
+pub fn allocate(self: dyn Allocator, size: u64, align: u64): ?raw opaque;
+pub fn deallocate(self: dyn Allocator, mem: raw opaque, size: u64, align: u64);
+pub fn reallocate(self: dyn Allocator, old: raw opaque, old_size: u64,
+                  old_align: u64, new_size: u64, new_align: u64): ?raw opaque;</code></pre>
+<p><code>allocate</code> returns <code>null</code> when the underlying <code>malloc</code>/<code>realloc</code> call fails. The caller owns the storage and must pass the same <code>size</code>/<code>align</code> to <code>deallocate</code>. The larger <code>InPlace</code>/<code>new</code>/<code>delete</code>/<code>make</code>/<code>release</code> contract is recorded in <a href="./reference/D-standard-library.html">ADR 0010</a>. A draft module at <code>stdlib/std/memory/new.zith</code> carries the target helper signatures, and <code>stdlib/std/new.zith</code> remains as legacy compatibility. The helpers are marked proposed because the compiler cannot yet instantiate generics that only appear in the return type or dispatch opaque packs during construction. The <code>InPlace</code> trait itself is checked and covered by a conforming type in <code>tests/test-generic-hashmap.cpp</code>.</p>
+<h4 id="stdmemory-target-dag"><code>std/memory</code> (target DAG)</h4>
+<pre><code class="language-zith">pub trait InPlace {
+    fn inplace(var self, args: opaque): bool;
+    fn clean(var self) {}
+}
+
+pub fn new&lt;T: InPlace&gt;(args: opaque): ?*T;
+pub fn delete&lt;T: InPlace&gt;(ptr: *T);</code></pre>
+<p><code>make</code>/<code>release</code> live on <code>Allocator</code> as default methods so the convenient pair follows the allocator model: <code>allocator.make&lt;T&gt;(args)</code> and <code>allocator.release&lt;T&gt;(ptr)</code>. They are declared as defaults until layout queries and opaque pack dispatch are usable inside trait methods. The module is intentionally not wired into <code>test-examples</code> until the generic helper API is usable; <code>examples/inplace-simple.zith</code> continues to demonstrate the local <code>InPlace</code> shape.</p>
+<p>The layer DAG is kept strict: <code>in-place</code> defines <code>InPlace</code> only, <code>allocators/allocator</code> depends on <code>in-place</code> and owns <code>Allocator</code>, <code>allocators/heap</code> implements <code>HeapAllocator</code>, and <code>new</code> depends on <code>in-place</code> plus <code>allocators/heap</code> without naming <code>make</code>/<code>release</code>. <code>std/memory</code> re-exports the same-level contracts, including <code>Allocator</code>, <code>HeapAllocator</code>, the raw free-function bridge, and <code>new</code>/<code>delete</code>, so callers can use one stable import root (<code>from std/memory</code>).</p>
+<p><code>export</code> paths that share a namespace prefix (for example the <code>std/...</code> roots inside the facade) are deduplicated into one qualified namespace; the public symbols of every export are injected independently. This keeps a facade usable even when it re-exports more than one module under the same top-level segment.</p>
 <h4 id="stdcollectionsdynarray"><code>std/collections/DynArray</code></h4>
 <pre><code class="language-zith">struct DynArray&lt;T&gt; {
     fn push(self: lend, val: T);
@@ -45,6 +91,17 @@ fn eprint(msg: []char): void;</code></pre>
     fn len(self): u64;
     fn get(self, index: u64): ?T;
 }</code></pre>
+<h4 id="stdcollectionshashmapu64-concrete"><code>std/collections/hash_map_u64</code> (concrete)</h4>
+<p>The shipped concrete map stores <code>u64</code> keys and <code>u64</code> values. It uses an open-addressed linked chain and owns its backing storage with <code>calloc</code>/<code>free</code>. Callers must call <code>destroy</code> after use.</p>
+<pre><code class="language-zith">import std/collections/hash_map_u64 as hm;
+
+var map = hm.HashMap { count: 0u64, capacity: 0u64, table: null, head: 0u64 };
+if not(hm.HashMap.reserve(lend map, 64u64)) { /* allocation failed */ }
+hm.HashMap.put(lend map, 1u64, 42u64);
+let value = hm.HashMap.get(view map, 1u64); // ?u64
+hm.HashMap.destroy(lend map);</code></pre>
+<h4 id="stdcollectionshashmap-checked-generic"><code>std/collections/hash_map</code> (checked generic)</h4>
+<p><code>HashMap&lt;K, V&gt;</code>, <code>Entry&lt;K, V&gt;</code>, and <code>Hashable</code> form the generic checked map module. Concrete generic instances are reified with their type arguments stored as structural metadata on <code>StructType</code>, so nested <code>Entry&lt;K, V&gt;</code> slots keep the correct <code>K</code>/<code>V</code> mapping and <code>current.key.hash()</code> resolves through the <code>K: Hashable</code> bound. The module passes <code>zithc check</code> and is covered by <code>tests/test-generic-hashmap.cpp</code>. For a concrete shipped runtime example, prefer the <code>u64 -&gt; u64</code> module above.</p>
 <h4 id="stdfs"><code>std/fs</code></h4>
 <pre><code class="language-zith">struct File { ... }
 
