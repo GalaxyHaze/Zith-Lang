@@ -579,7 +579,8 @@ jobs:
             alpine:3.22 \
             sh -euc '
               apk add --no-cache build-base cmake ninja python3 git \
-                clang20 llvm20-dev llvm20-static llvm20-gtest lld20 zlib-static
+                clang20 llvm20-dev llvm20-static llvm20-gtest lld20 \
+                zlib-static zstd-static
 
               compiler_target="$(clang-20 --print-target-triple)"
               case "$ZITH_TARGET_ARCH:$compiler_target" in
