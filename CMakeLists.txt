@@ -374,9 +374,9 @@ if(ZITH_HAS_LLVM AND NOT ZITH_IS_WASM)
             list(APPEND LLVM_LIBS ${LLVM_LLD_LIBS})
         endif()
         target_link_libraries(zithcLib PUBLIC ${LLVM_LIBS})
-        if(CMAKE_CXX_COMPILER_TARGET MATCHES "musl")
-            # The musl LLVM package's static Support library uses zstd but
-            # does not propagate that system dependency through its CMake targets.
+        if(CMAKE_CXX_COMPILER_TARGET MATCHES "musl" AND zstd_FOUND)
+            # The musl LLVM package's static Support library may use zstd
+            # without propagating that system dependency through its CMake targets.
             target_link_libraries(zithcLib PUBLIC zstd)
         endif()
     endif()
