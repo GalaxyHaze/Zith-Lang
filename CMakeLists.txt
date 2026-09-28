@@ -354,13 +354,17 @@ if(ZITH_HAS_LLVM AND NOT ZITH_IS_WASM)
             llvm_map_components_to_libnames(
                 LLVM_LLD_LIBS
                 option
+                lto
                 ARMCodeGen
+                ARMAsmParser
                 ARMDesc
                 ARMInfo
                 BPFCodeGen
+                BPFAsmParser
                 BPFDesc
                 BPFInfo
                 RISCVCodeGen
+                RISCVAsmParser
                 RISCVDesc
                 RISCVInfo
                 NVPTXCodeGen
