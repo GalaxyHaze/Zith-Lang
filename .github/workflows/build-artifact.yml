@@ -660,7 +660,7 @@ jobs:
     name: Validate release assets
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
     steps:
       - name: Checkout release sources
         uses: actions/checkout@v4
