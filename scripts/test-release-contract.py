@@ -69,7 +69,7 @@ def main() -> int:
                     "ZITH_HAS_LLVM:BOOL=ON",
                     "ZITH_REQUIRE_LLVM:BOOL=ON",
                     "ZITH_DETECTED_LLVM_VERSION:INTERNAL=18.1.8",
-                    "CMAKE_CXX_COMPILER_TARGET:STRING=x86_64-linux-musl",
+                    "CMAKE_CXX_COMPILER_TARGET:STRING=x86_64-alpine-linux-musl",
                 )
             )
             + "\n",
@@ -80,7 +80,7 @@ def main() -> int:
             "--build-dir",
             str(build_dir),
             "--expected-target",
-            "x86_64-linux-musl",
+            "x86_64-alpine-linux-musl",
         )
         mismatch = subprocess.run(
             [
@@ -89,7 +89,7 @@ def main() -> int:
                 "--build-dir",
                 str(build_dir),
                 "--expected-target",
-                "aarch64-linux-musl",
+                "aarch64-alpine-linux-musl",
             ],
             cwd=ROOT,
             env={**os.environ, "PYTHONPATH": str(SCRIPTS)},
@@ -97,7 +97,7 @@ def main() -> int:
             capture_output=True,
             text=True,
         )
-        if mismatch.returncode == 0 or "expected 'aarch64-linux-musl'" not in (
+        if mismatch.returncode == 0 or "expected 'aarch64-alpine-linux-musl'" not in (
             mismatch.stdout + mismatch.stderr
         ):
             raise AssertionError("LLVM target verification accepted a mismatched target")

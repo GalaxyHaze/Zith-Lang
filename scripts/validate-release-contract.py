@@ -36,7 +36,6 @@ RELEASE_ASSETS = (
     "zith-lsp-windows-amd64.exe",
     "zith-lsp-windows-arm64.exe",
 )
-PINNED_ZIG_VERSION = "0.13.0"
 
 
 def fail(message: str) -> None:
@@ -182,13 +181,42 @@ def validate_workflows(workflow_dir: Path) -> None:
             fail(f"{artifact_workflow} does not require LLVM in {job}")
         if "verify-llvm-build.py" not in section:
             fail(f"{artifact_workflow} does not verify LLVM in {job}")
+    for job in ("build-main", "build-musl", "package-stdlib", "build-lsp", "build-wasm"):
+        section = job_section(artifact_text, job)
+        if "uses: softprops/action-gh-release@v2" in section and "draft: true" not in section:
+            fail(f"{artifact_workflow} may publish assets before gates pass in {job}")
     musl_section = job_section(artifact_text, "build-musl")
-    if f"ZIG_VERSION: '{PINNED_ZIG_VERSION}'" not in artifact_text:
-        fail(f"{artifact_workflow} does not pin Zig {PINNED_ZIG_VERSION}")
-    if "download/index.json" in musl_section:
-        fail(f"{artifact_workflow} resolves Zig from a moving latest-version index")
-    if '--expected-target "${{ matrix.zig_target }}"' not in musl_section:
-        fail(f"{artifact_workflow} does not verify each musl target triple")
+    if "alpine:3.22" not in musl_section:
+        fail(f"{artifact_workflow} does not build musl artifacts in Alpine")
+    if "apk add --no-cache" not in musl_section:
+        fail(f"{artifact_workflow} does not install Alpine build dependencies")
+    for package in ("clang20", "llvm20-dev", "llvm20-static", "lld20"):
+        if package not in musl_section:
+            fail(f"{artifact_workflow} does not install {package} for musl builds")
+    for platform in ("linux/amd64", "linux/arm64"):
+        if f"container_platform: {platform}" not in musl_section:
+            fail(f"{artifact_workflow} does not build musl for {platform}")
+    if "clang-20 --print-target-triple" not in musl_section:
+        fail(f"{artifact_workflow} does not detect the Alpine compiler target")
+    if '--expected-target "$compiler_target"' not in musl_section:
+        fail(f"{artifact_workflow} does not verify the Alpine compiler target")
+    if "zig_target" in musl_section or "ZIG_VERSION" in artifact_text:
+        fail(f"{artifact_workflow} retains the removed Zig musl toolchain")
+    for job in ("build-main", "build-lsp"):
+        section = job_section(artifact_text, job)
+        if "llvm_asset: win64" not in section or "llvm_asset: woa64" not in section:
+            fail(f"{artifact_workflow} does not select Windows LLVM assets per architecture in {job}")
+        if "Install Windows ARM64 dependencies" not in section:
+            fail(f"{artifact_workflow} does not install native Windows ARM64 LLVM in {job}")
+        if "Expose DIA SDK at LLVM's configured path" not in section:
+            fail(f"{artifact_workflow} does not expose the DIA SDK to LLVM in {job}")
+        if "VSINSTALLDIR" not in section or "diaguids.lib" not in section:
+            fail(f"{artifact_workflow} does not locate the active Visual Studio DIA SDK in {job}")
+    publish_section = job_section(artifact_text, "publish-release")
+    if "if: needs.create-release.outputs.draft == 'false'" not in publish_section:
+        fail(f"{artifact_workflow} does not gate final publication on draft mode")
+    if "--draft=false" not in publish_section:
+        fail(f"{artifact_workflow} does not publish only after the release gates")
     wasm_section = job_section(artifact_text, "build-wasm")
     if "-DZITH_IS_WASM=ON" not in wasm_section:
         fail(f"{artifact_workflow} does not configure the WASM release job")

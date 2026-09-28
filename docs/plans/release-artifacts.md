@@ -25,12 +25,14 @@ amd64 assets instead of a cross-linked universal binary.
 
 | Runner | target_name | `ZITH_HAS_LLVM` | `ZITH_ENABLE_FFI` | `ZITH_ENABLE_C_COMPILE` | `ZITH_IS_WASM` | Artifact |
 | --- | --- | --- | --- | --- | --- | --- |
-| `ubuntu-latest` | `zithc-linux-amd64-musl` | ON (required) | removed (legacy) | OFF | OFF | `zithc` |
-| `ubuntu-latest` | `zithc-linux-arm64-musl` | ON (required) | removed (legacy) | OFF | OFF | `zithc` |
+| `ubuntu-latest` with Alpine 3.22 (`linux/amd64`) | `zithc-linux-amd64-musl` | ON (required) | removed (legacy) | OFF | OFF | `zithc` |
+| `ubuntu-24.04-arm` with Alpine 3.22 (`linux/arm64`) | `zithc-linux-arm64-musl` | ON (required) | removed (legacy) | OFF | OFF | `zithc` |
 
-The musl jobs also request LLVM and fail if it cannot be found. The first
-release run must verify that the Zig musl toolchain can link target-compatible
-LLVM libraries; it must not silently publish a sema-only compiler.
+The musl jobs build inside native Alpine containers and install Alpine's
+target-matched Clang 20 and static LLVM 20 packages. They verify the compiler's
+reported musl target and require LLVM, so they fail rather than publish a
+sema-only compiler. A successful release run is still required to confirm both
+Alpine builds end to end.
 
 ## LSP and Wasm Matrices
 
@@ -65,9 +67,10 @@ and codegen capability do not diverge between release targets.
 - `CodeGen` now initializes the AArch64 target in addition to x86 and
   WebAssembly. The native ARM release jobs still need one real execution to
   prove that the hosted LLVM installation and target machine link correctly.
-- The Windows ARM runner and the musl jobs need one real release execution to
-  confirm that the hosted toolchains and target-compatible LLVM libraries are
-  available. Configuration now fails instead of silently disabling LLVM.
+- The Windows ARM runner and the Alpine musl jobs still need one successful
+  release execution to confirm the native LLVM installers, DIA SDK path, and
+  target-matched static LLVM libraries end to end. Configuration now fails
+  instead of silently disabling LLVM.
 - Release smoke jobs now exercise the Unix and Windows installers and the Scoop
   manifest. The external tap still needs the first authenticated formula sync
   and a real Homebrew build in `GalaxyHaze/homebrew-zithc`.

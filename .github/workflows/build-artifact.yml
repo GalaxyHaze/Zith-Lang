@@ -34,7 +34,6 @@ permissions:
 
 env:
   CMAKE_VERSION: '3.28.x'
-  ZIG_VERSION: '0.13.0'
 
 jobs:
   create-release:
@@ -116,6 +115,7 @@ jobs:
           - os: windows-latest
             target_name: zithc-windows-amd64.exe
             msvc_arch: amd64
+            llvm_asset: win64
             cmake_flags: >-
               -DCMAKE_C_COMPILER=clang-cl
               -DCMAKE_CXX_COMPILER=clang-cl
@@ -125,6 +125,7 @@ jobs:
           - os: windows-11-arm
             target_name: zithc-windows-arm64.exe
             msvc_arch: arm64
+            llvm_asset: woa64
             cmake_flags: >-
               -DCMAKE_C_COMPILER=clang-cl
               -DCMAKE_CXX_COMPILER=clang-cl
@@ -161,19 +162,44 @@ jobs:
           brew install llvm ninja
 
       - name: Install Windows dependencies
-        if: runner.os == 'Windows'
+        if: runner.os == 'Windows' && matrix.llvm_asset == 'win64'
         shell: pwsh
         run: |
           choco install ninja -y
           $llvmVersion = '18.1.8'
-          $installer = Join-Path $env:RUNNER_TEMP "LLVM-$llvmVersion-win64.exe"
+          $llvmAsset = '${{ matrix.llvm_asset }}'
+          $installer = Join-Path $env:RUNNER_TEMP "LLVM-$llvmVersion-$llvmAsset.exe"
+          if ($llvmAsset -eq 'win64') {
           Invoke-WebRequest `
             -Uri "https://github.com/llvm/llvm-project/releases/download/llvmorg-$llvmVersion/LLVM-$llvmVersion-win64.exe" `
             -OutFile $installer
+          } else {
+            $releaseTag = 'llvm' + 'org' + [char]45 + $llvmVersion
+            $assetName = "LLVM-$llvmVersion-$llvmAsset.exe"
+            $installerUri = "https://github.com/llvm/llvm-project/releases/download/$releaseTag/$assetName"
+            Invoke-WebRequest -Uri $installerUri -OutFile $installer
+          }
           $process = Start-Process -FilePath $installer `
             -ArgumentList '/S', '/D=C:\Program Files\LLVM' -Wait -PassThru -NoNewWindow
           if ($process.ExitCode -ne 0) {
             throw "LLVM installer failed with exit code $($process.ExitCode)"
+          }
+
+      - name: Install Windows ARM64 dependencies
+        if: runner.os == 'Windows' && matrix.llvm_asset == 'woa64'
+        shell: pwsh
+        run: |
+          choco install ninja -y
+          $llvmVersion = '18.1.8'
+          $releaseTag = 'llvm' + 'org' + [char]45 + $llvmVersion
+          $assetName = "LLVM-$llvmVersion-woa64.exe"
+          $installer = Join-Path $env:RUNNER_TEMP $assetName
+          $installerUri = "https://github.com/llvm/llvm-project/releases/download/$releaseTag/$assetName"
+          Invoke-WebRequest -Uri $installerUri -OutFile $installer
+          $process = Start-Process -FilePath $installer `
+            -ArgumentList '/S', '/D=C:\Program Files\LLVM' -Wait -PassThru -NoNewWindow
+          if ($process.ExitCode -ne 0) {
+            throw "LLVM ARM64 installer failed with exit code $($process.ExitCode)"
           }
 
       - name: Add Chocolatey LLVM to PATH
@@ -221,6 +247,24 @@ jobs:
         uses: ilammy/msvc-dev-cmd@v1
         with:
           arch: ${{ matrix.msvc_arch }}
+
+      - name: Expose DIA SDK at LLVM's configured path
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $arch = '${{ matrix.msvc_arch }}'
+          $source = Join-Path $env:VSINSTALLDIR "DIA SDK\lib\$arch\diaguids.lib"
+          if (-not (Test-Path $source)) {
+            throw "DIA SDK library was not found at $source"
+          }
+
+          $destination = "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\DIA SDK\lib\$arch\diaguids.lib"
+          if (-not (Test-Path $destination)) {
+            $destinationDir = Split-Path -Parent $destination
+            New-Item -ItemType Directory -Path $destinationDir -Force | Out-Null
+            Copy-Item -Path $source -Destination $destination
+          }
+          Write-Host "LLVM DIA SDK library: $source -> $destination"
 
       - name: Verify Clang
         shell: bash
@@ -275,23 +319,27 @@ jobs:
         with:
           tag_name: ${{ needs.create-release.outputs.tag || inputs.tag_name }}
           files: artifacts/${{ matrix.target_name }}
-          draft: ${{ needs.create-release.outputs.draft || inputs.draft }}
+          draft: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   build-musl:
     needs: create-release
     name: Build ${{ matrix.target_name }}
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         include:
-          - target_name: zithc-linux-amd64-musl
-            zig_target: x86_64-linux-musl
+          - os: ubuntu-latest
+            target_name: zithc-linux-amd64-musl
+            container_platform: linux/amd64
+            target_arch: x86_64
 
-          - target_name: zithc-linux-arm64-musl
-            zig_target: aarch64-linux-musl
+          - os: ubuntu-24.04-arm
+            target_name: zithc-linux-arm64-musl
+            container_platform: linux/arm64
+            target_arch: aarch64
 
     steps:
       - uses: actions/checkout@v4
@@ -299,53 +347,60 @@ jobs:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Setup Zig
-        shell: bash
-        run: |
-          ZIG_VER="${ZIG_VERSION}"
-          curl --fail --silent --show-error --location --retry 3 --retry-all-errors \
-            "https://ziglang.org/download/$ZIG_VER/zig-linux-x86_64-$ZIG_VER.tar.xz" \
-            | sudo tar xJ -C /opt
-          sudo ln -sf /opt/zig-linux-x86_64-$ZIG_VER/zig /usr/local/bin/zig
-          zig version
-          test "$(zig version)" = "$ZIG_VER"
-
-      - name: Install musl build dependencies
-        shell: bash
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y zlib1g-dev libzstd-dev
-
       - name: Build
         shell: bash
         run: |
-          cmake -S . -B build -G Ninja \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DBUILD_TESTING=OFF \
-            -DZITH_ENABLE_STRICT_WARNINGS=OFF \
-            -DZITH_ENABLE_C_COMPILE=OFF \
-            -DZITH_VERSION='${{ needs.create-release.outputs.tag || inputs.tag_name }}' \
-            -DCMAKE_C_COMPILER="zig;cc" \
-            -DCMAKE_CXX_COMPILER="zig;c++" \
-            -DCMAKE_C_COMPILER_TARGET="${{ matrix.zig_target }}" \
-            -DCMAKE_CXX_COMPILER_TARGET="${{ matrix.zig_target }}" \
-            -DZITH_HAS_LLVM=ON \
-            -DZITH_REQUIRE_LLVM=ON \
-            -DCMAKE_EXE_LINKER_FLAGS='-static -lc' \
-            -DCMAKE_CXX_FLAGS='-fno-cxx-exceptions'
-          python3 scripts/verify-llvm-build.py \
-            --build-dir build \
-            --expected-target "${{ matrix.zig_target }}"
-          cmake --build build --config Release
-          mkdir -p artifacts
-          cp build/zithc artifacts/${{ matrix.target_name }}
+          docker run --rm \
+            --platform "${{ matrix.container_platform }}" \
+            --env "ZITH_VERSION=${{ needs.create-release.outputs.tag || inputs.tag_name }}" \
+            --env "ZITH_TARGET_ARCH=${{ matrix.target_arch }}" \
+            --volume "$GITHUB_WORKSPACE:/workspace" \
+            --workdir /workspace \
+            alpine:3.22 \
+            sh -euc '
+              apk add --no-cache build-base cmake ninja python3 \
+                clang20 llvm20-dev llvm20-static lld20
+
+              compiler_target="$(clang-20 --print-target-triple)"
+              case "$ZITH_TARGET_ARCH:$compiler_target" in
+                x86_64:x86_64*musl*|aarch64:aarch64*musl*) ;;
+                *)
+                  echo "Unexpected musl compiler target: $compiler_target" >&2
+                  exit 1
+                  ;;
+              esac
+
+              cmake -S . -B build -G Ninja \
+                -DCMAKE_BUILD_TYPE=Release \
+                -DBUILD_TESTING=OFF \
+                -DZITH_ENABLE_STRICT_WARNINGS=OFF \
+                -DZITH_ENABLE_C_COMPILE=OFF \
+                -DZITH_ENABLE_C_INTEROP=OFF \
+                -DZITH_VERSION="$ZITH_VERSION" \
+                -DCMAKE_C_COMPILER=clang-20 \
+                -DCMAKE_CXX_COMPILER=clang++-20 \
+                -DCMAKE_C_COMPILER_TARGET="$compiler_target" \
+                -DCMAKE_CXX_COMPILER_TARGET="$compiler_target" \
+                -DLLVM_DIR="$(llvm-config-20 --cmakedir)" \
+                -DZITH_HAS_LLVM=ON \
+                -DZITH_REQUIRE_LLVM=ON \
+                -DCMAKE_EXE_LINKER_FLAGS="-static -lc" \
+                -DCMAKE_CXX_FLAGS="-fno-cxx-exceptions"
+
+              python3 scripts/verify-llvm-build.py \
+                --build-dir build \
+                --expected-target "$compiler_target"
+              cmake --build build --config Release
+              mkdir -p artifacts
+              cp build/zithc "artifacts/${{ matrix.target_name }}"
+            '
 
       - name: Upload release asset
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.create-release.outputs.tag || inputs.tag_name }}
           files: artifacts/${{ matrix.target_name }}
-          draft: ${{ needs.create-release.outputs.draft || inputs.draft }}
+          draft: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -374,7 +429,7 @@ jobs:
         with:
           tag_name: ${{ needs.create-release.outputs.tag || inputs.tag_name }}
           files: artifacts/zithc-stdlib-*
-          draft: ${{ needs.create-release.outputs.draft || inputs.draft }}
+          draft: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -698,6 +753,7 @@ jobs:
           - os: windows-latest
             target_name: windows-amd64.exe
             msvc_arch: amd64
+            llvm_asset: win64
             cmake_flags: >-
               -DCMAKE_C_COMPILER=clang-cl
               -DCMAKE_CXX_COMPILER=clang-cl
@@ -707,6 +763,7 @@ jobs:
           - os: windows-11-arm
             target_name: windows-arm64.exe
             msvc_arch: arm64
+            llvm_asset: woa64
             cmake_flags: >-
               -DCMAKE_C_COMPILER=clang-cl
               -DCMAKE_CXX_COMPILER=clang-cl
@@ -772,7 +829,7 @@ jobs:
           brew install llvm ninja
 
       - name: Install Windows dependencies
-        if: runner.os == 'Windows'
+        if: runner.os == 'Windows' && matrix.llvm_asset == 'win64'
         shell: pwsh
         run: |
           choco install ninja -y
@@ -785,6 +842,23 @@ jobs:
             -ArgumentList '/S', '/D=C:\Program Files\LLVM' -Wait -PassThru -NoNewWindow
           if ($process.ExitCode -ne 0) {
             throw "LLVM installer failed with exit code $($process.ExitCode)"
+          }
+
+      - name: Install Windows ARM64 dependencies
+        if: runner.os == 'Windows' && matrix.llvm_asset == 'woa64'
+        shell: pwsh
+        run: |
+          choco install ninja -y
+          $llvmVersion = '18.1.8'
+          $releaseTag = 'llvm' + 'org' + [char]45 + $llvmVersion
+          $assetName = "LLVM-$llvmVersion-woa64.exe"
+          $installer = Join-Path $env:RUNNER_TEMP $assetName
+          $installerUri = "https://github.com/llvm/llvm-project/releases/download/$releaseTag/$assetName"
+          Invoke-WebRequest -Uri $installerUri -OutFile $installer
+          $process = Start-Process -FilePath $installer `
+            -ArgumentList '/S', '/D=C:\Program Files\LLVM' -Wait -PassThru -NoNewWindow
+          if ($process.ExitCode -ne 0) {
+            throw "LLVM ARM64 installer failed with exit code $($process.ExitCode)"
           }
 
       - name: Add Chocolatey LLVM to PATH
@@ -832,6 +906,24 @@ jobs:
         uses: ilammy/msvc-dev-cmd@v1
         with:
           arch: ${{ matrix.msvc_arch }}
+
+      - name: Expose DIA SDK at LLVM's configured path
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $arch = '${{ matrix.msvc_arch }}'
+          $source = Join-Path $env:VSINSTALLDIR "DIA SDK\lib\$arch\diaguids.lib"
+          if (-not (Test-Path $source)) {
+            throw "DIA SDK library was not found at $source"
+          }
+
+          $destination = "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\DIA SDK\lib\$arch\diaguids.lib"
+          if (-not (Test-Path $destination)) {
+            $destinationDir = Split-Path -Parent $destination
+            New-Item -ItemType Directory -Path $destinationDir -Force | Out-Null
+            Copy-Item -Path $source -Destination $destination
+          }
+          Write-Host "LLVM DIA SDK library: $source -> $destination"
 
       - name: Clean stale build artifacts
         shell: bash
@@ -887,7 +979,7 @@ jobs:
         with:
           tag_name: ${{ needs.create-release.outputs.tag || inputs.tag_name }}
           files: artifacts/zith-lsp-*
-          draft: ${{ needs.create-release.outputs.draft || inputs.draft }}
+          draft: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -955,7 +1047,7 @@ jobs:
         with:
           tag_name: ${{ needs.create-release.outputs.tag || inputs.tag_name }}
           files: artifacts/zithc-wasm.zip
-          draft: ${{ needs.create-release.outputs.draft || inputs.draft }}
+          draft: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
