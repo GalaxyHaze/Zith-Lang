@@ -468,6 +468,16 @@ jobs:
           }
 
           foreach ($destination in $diaDestinations) {
+            $sourcePath = [System.IO.Path]::GetFullPath($source)
+            $destinationPath = [System.IO.Path]::GetFullPath($destination)
+            if ($sourcePath.Equals(
+                $destinationPath,
+                [System.StringComparison]::OrdinalIgnoreCase
+              )) {
+              Write-Host "LLVM DIA SDK library already at configured path: $sourcePath"
+              continue
+            }
+
             $destinationDir = Split-Path -Parent $destination
             New-Item -ItemType Directory -Path $destinationDir -Force | Out-Null
             Copy-Item -LiteralPath $source -Destination $destination -Force
@@ -968,6 +978,7 @@ jobs:
             cmake_flags: >-
               -DCMAKE_C_COMPILER=clang-cl
               -DCMAKE_CXX_COMPILER=clang-cl
+              -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded
               -DCMAKE_PREFIX_PATH="C:/Program Files/LLVM"
               -DLLVM_DIR="C:/Program Files/LLVM/lib/cmake/llvm"
 
@@ -1208,6 +1219,16 @@ jobs:
           }
 
           foreach ($destination in $diaDestinations) {
+            $sourcePath = [System.IO.Path]::GetFullPath($source)
+            $destinationPath = [System.IO.Path]::GetFullPath($destination)
+            if ($sourcePath.Equals(
+                $destinationPath,
+                [System.StringComparison]::OrdinalIgnoreCase
+              )) {
+              Write-Host "LLVM DIA SDK library already at configured path: $sourcePath"
+              continue
+            }
+
             $destinationDir = Split-Path -Parent $destination
             New-Item -ItemType Directory -Path $destinationDir -Force | Out-Null
             Copy-Item -LiteralPath $source -Destination $destination -Force

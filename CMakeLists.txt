@@ -350,6 +350,25 @@ if(ZITH_HAS_LLVM AND NOT ZITH_IS_WASM)
             WebAssemblyDesc
             WebAssemblyInfo
         )
+        if(ZITH_LLD_AVAILABLE)
+            llvm_map_components_to_libnames(
+                LLVM_LLD_LIBS
+                option
+                ARMCodeGen
+                ARMDesc
+                ARMInfo
+                BPFCodeGen
+                BPFDesc
+                BPFInfo
+                RISCVCodeGen
+                RISCVDesc
+                RISCVInfo
+                NVPTXCodeGen
+                NVPTXDesc
+                NVPTXInfo
+            )
+            list(APPEND LLVM_LIBS ${LLVM_LLD_LIBS})
+        endif()
         target_link_libraries(zithcLib PUBLIC ${LLVM_LIBS})
     endif()
     target_include_directories(zithcLib SYSTEM PUBLIC ${LLVM_INCLUDE_DIRS})
