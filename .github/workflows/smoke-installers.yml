@@ -63,7 +63,7 @@ jobs:
           test -x "$ZITH_INSTALL_ROOT/bin/zithc"
           test -f "$ZITH_INSTALL_ROOT/share/zith/stdlib/std/io/console.zith"
         env:
-          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ secrets.RELEASE_PAT }}
           ZITH_INSTALL_ROOT: ${{ runner.temp }}/zith-install
           ZITH_RELEASE_TAG: ${{ inputs.release_tag }}
 
@@ -89,7 +89,7 @@ jobs:
       - name: Install released compiler and stdlib
         shell: pwsh
         env:
-          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ secrets.RELEASE_PAT }}
           ZITH_INSTALL_ROOT: ${{ runner.temp }}\zith-install
           ZITH_RELEASE_TAG: ${{ inputs.release_tag }}
         run: |
@@ -126,7 +126,7 @@ jobs:
       - name: Install released WASM bundle
         shell: bash
         env:
-          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ secrets.RELEASE_PAT }}
           ZITH_WASM_DIR: ${{ runner.temp }}/zith-wasm-install
           ZITH_RELEASE_TAG: ${{ inputs.release_tag }}
         run: |

@@ -455,7 +455,7 @@ def validate_workflows(workflow_dir: Path) -> None:
             fail(f"{smoke_workflow} persists checkout credentials in {smoke_job}")
         if "ZITH_RELEASE_TAG: ${{ inputs.release_tag }}" not in section:
             fail(f"{smoke_workflow} does not pass the release tag safely in {smoke_job}")
-        if "GITHUB_TOKEN: ${{ github.token }}" not in section:
+        if "GITHUB_TOKEN: ${{ secrets.RELEASE_PAT }}" not in section:
             fail(f"{smoke_workflow} does not authenticate draft asset downloads in {smoke_job}")
     for smoke_job, output_path in (
         ("smoke-installers-unix", "${{ runner.temp }}/zith-install"),
