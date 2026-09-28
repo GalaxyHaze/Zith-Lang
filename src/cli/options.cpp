@@ -65,17 +65,20 @@ void Options::deriveTargetStage() {
         return;
     }
     if (command == Command::Build && emitTarget == EmitTarget::None && !flags.emitHir() &&
-        !flags.emitIr() && !flags.emitAsm()) {
+        !flags.emitCst() && !flags.emitVir() && !flags.emitIr() && !flags.emitAsm()) {
         targetStage = session::Stage::Cached;
         return;
     }
 
-    // emitAst is handled inside semaStage (body expansion + print) — no short-circuit
-    if (flags.emitHir())
-        targetStage = session::Stage::HirLowered;
-    else if (flags.emitIr() || flags.emitAsm())
+    // emitAst and emitCst are handled by frontend stages; later requested
+    // representations must keep the pipeline alive through their own stage.
+    if (flags.emitIr() || flags.emitAsm())
         targetStage = session::Stage::CodegenReady;
-    else {
+    else if (flags.emitVir() || flags.emitHir())
+        targetStage = session::Stage::HirLowered;
+    else if (flags.emitCst()) {
+        targetStage = session::Stage::Imported;
+    } else {
         switch (emitTarget) {
         case EmitTarget::Ast:
             targetStage = session::Stage::Imported;
@@ -239,6 +242,16 @@ void Cli::parseArgs(int argc, char **argv) {
             continue;
         }
 
+        if (compare(argv[i], "--emit-cst")) {
+            opts.flags.emitCst(true);
+            continue;
+        }
+
+        if (compare(argv[i], "--emit-vir")) {
+            opts.flags.emitVir(true);
+            continue;
+        }
+
         if (compare(argv[i], "--emit-ast")) {
             opts.flags.emitAst(true);
             continue;
@@ -261,8 +274,10 @@ void Cli::parseArgs(int argc, char **argv) {
 
         if (compare(argv[i], "--emit-all")) {
             opts.flags.emitTokens(true);
+            opts.flags.emitCst(true);
             opts.flags.emitAst(true);
             opts.flags.emitHir(true);
+            opts.flags.emitVir(true);
             opts.flags.emitIr(true);
             opts.flags.emitAsm(true);
             continue;

@@ -1,6 +1,7 @@
 ## 20. Standard Library
 
-> **Implementation status:** `stdlib/c/io.zith`, `stdlib/std/io/console.zith`, and
+> **Implementation status:** `stdlib/c/io.zith`, `stdlib/c/stdlib.zith`,
+> `stdlib/c/string.zith`, `stdlib/std/io/console.zith`, and
 > the `std/memory` DAG are the shipped modules. `puts`, `println`, and raw allocator
 > primitives work. `stdlib/std/collections/hash_map_u64.zith` ships a concrete
 > `u64 -> u64` hash map and `stdlib/std/collections/hash_map.zith` is a checked
@@ -11,7 +12,9 @@
 > compatibility modules. All other standard library content is **spec-only**.
 > See [impl-status.md](impl-status.md).
 
-`std`/`soon` remain documentation-only in this iteration. No existing module is being rewritten.
+`std`/`soon` remain documentation-only in this iteration, except for the shipped modules listed
+above. The common C bindings used by those modules live under `c/` rather than importing host
+headers directly.
 The documented convention uses resource types with `init`/`destroy`, read-only methods with
 `view`, and mutating methods with `lend`. `defer` runs `destroy(self: lend Self)` on resource
 cleanup. `drop` remains outside the `Zith--` subset.
@@ -22,13 +25,37 @@ cleanup. `drop` remains outside the `Zith--` subset.
 |---|---|---|
 | `std` | Stable, backward-compatible | You need a guaranteed API |
 | `soon` | Experimental, may change | You're prototyping and don't mind breakage |
-| `c` | Direct C FFI bindings | You need to call C APIs |
+| `c` | Supported C/runtime surface | You need common low-level or system APIs |
 
 ```zith
 import std;
 import soon;   // use with caution — API may shift
-import c;       // raw C bindings
+import c;       // supported C/runtime surface
 ```
+
+The `c` namespace is not a request to parse a host header. It is the stable
+low-level surface maintained by the compiler/runtime. Its declarations may map
+to libc on a native LLVM target, to VM intrinsics on the no-LLVM backend, or to
+host/runtime imports on WASM. The source API stays the same while the selected
+backend chooses the concrete implementation.
+
+Use `c/...` for common C-shaped facilities that Zith supports across targets:
+
+```zith
+from c/io
+from c/stdlib
+
+fn main() {
+    puts("hello");
+    let memory = malloc(64);
+    free(memory);
+}
+```
+
+Use `import "file.h"` for a target-specific declaration set, a platform API,
+or an external C library that is not part of the supported `c` surface. Header
+imports remain an interop escape hatch, not the mechanism used to bootstrap the
+standard library.
 
 ### 20.2 Core Modules
 

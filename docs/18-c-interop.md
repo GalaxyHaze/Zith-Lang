@@ -12,6 +12,33 @@
 Zith supports manual `extern fn` bindings on every target. Native builds which find libclang also
 support a restricted, automatic C-header import path.
 
+### 18.0 Supported `c` Surface
+
+The shipped `c/...` modules provide common C-shaped functions used by the
+standard library and supported by the selected compiler/runtime backend. They
+are declarations of a Zith ABI contract, not literal inclusion of a host
+header.
+
+```zith
+from c/io
+from c/stdlib
+from c/string
+```
+
+The backend may implement the same declaration through the native libc, a VM
+intrinsic, or a WASM host/runtime import. This keeps common operations usable
+without libclang and without host headers in no-LLVM and WASM builds.
+
+The `c` surface is intentionally small and validated. Add a function there
+only when Zith can define its ABI and behavior across the supported targets.
+Platform-specific functions and third-party APIs should remain in a dedicated
+module or use an explicit header import.
+
+Functions such as `putchar`, `puts`, `printf`-style output helpers, and other
+side-effecting calls may be marked `#[discardable]` when their status return is
+normally ignored by callers. The attribute suppresses the discarded-result
+diagnostic; it does not change the C ABI or remove the call.
+
 For Zith-style binders that need normal module, overload, and method semantics,
 keep the full Zith signature on the left and put the C linker symbol on the right:
 
@@ -54,8 +81,8 @@ macros whose replacement is exactly one scalar literal are imported as constants
 and string macros, globals, bitfields, packed or anonymous records, flexible arrays, and other
 non-representable layouts are not imported. A single unsupported declaration or macro is skipped
 rather than failing the whole header. The importer records the reason in `skippedFunctions` so the
-rest of the file stays available. Use manual `extern fn` for APIs outside this surface and for all
-builds without libclang, including WASM and cross builds.
+rest of the file stays available. Prefer `c/...` for common APIs and use manual `extern fn` or
+header imports for APIs outside that surface and for external libraries.
 
 ### 18.1.1 Object-Like Macro Constants
 

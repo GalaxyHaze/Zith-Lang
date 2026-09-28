@@ -258,8 +258,8 @@ int runPlayground(const char *ptr, int len, bool is_compile, int mode = 0, int o
         setErrorMessage("invalid mode (must be 0 or 1)");
     if (is_compile && !isPlaygroundOptLevel(opt_level))
         setErrorMessage("invalid optimization level (must be 0-3)");
-    if (last_error.empty() && (emit_mask & ~31) != 0)
-        setErrorMessage("invalid emit_mask (bits 0-4 only)");
+    if (last_error.empty() && (emit_mask & ~127) != 0)
+        setErrorMessage("invalid emit_mask (bits 0-6 only)");
     if (!last_error.empty())
         return kPlaygroundStatusInvalidParam;
 
@@ -275,6 +275,7 @@ int runPlayground(const char *ptr, int len, bool is_compile, int mode = 0, int o
     zithc_session_set_emit_tokens(session, emit_mask & 1);
     zithc_session_set_emit_flags(session, emit_mask & 2, emit_mask & 4, emit_mask & 8,
                                  emit_mask & 16);
+    zithc_session_set_emit_extra_flags(session, emit_mask & 32, emit_mask & 64);
     zithc_session_add_include_dir(session, "stdlib");
     registerStdlibSources(session);
 

@@ -2017,13 +2017,19 @@ std = "bundled"
 |---|---|---|
 | `std` | Stable, backward-compatible | You need a guaranteed API |
 | `soon` | Experimental, may change | You're prototyping and don't mind breakage |
-| `c` | Direct C FFI bindings | You need to call C APIs |
+| `c` | Supported C/runtime surface | You need common low-level or system APIs |
 
 ```zith
 import std;
 import soon;   // use with caution — API may shift
-import c;       // raw C bindings
+import c;       // supported C/runtime surface
 ```
+
+The `c` namespace is a compiler/runtime contract, not an implicit host-header
+include. Common declarations under `c/...` remain source-compatible while the
+target selects their implementation through libc, VM intrinsics, or WASM host
+imports. Use `import "file.h"` for platform-specific declarations and external
+C libraries that are not part of the supported surface.
 
 ### 20.2 Core Modules
 

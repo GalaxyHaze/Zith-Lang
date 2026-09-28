@@ -94,11 +94,13 @@ int help(FILE *dest) {
     p.flag("    --no-system-includes", "Do not resolve imports from system C header dirs");
     p.flag("    --no-cache", "Do not read or write the persistent .zith-cache");
     p.flag("    --emit-tokens", "Print and emit tokens");
+    p.flag("    --emit-cst", "Print and emit the concrete syntax tree");
     p.flag("    --emit-ast", "Emit AST");
     p.flag("    --emit-hir", "Emit HIR");
+    p.flag("    --emit-vir", "Emit VM v2 IR (not LLVM IR)");
     p.flag("    --emit-ir", "Emit LLVM IR");
     p.flag("    --emit-asm", "Emit assembly");
-    p.flag("    --emit-all", "Emit tokens, AST, HIR, IR, and assembly");
+    p.flag("    --emit-all", "Emit tokens, CST, AST, HIR, VIR, IR, and assembly");
     p.flag("    --interpreted", "Execute through the HIR interpreter");
     p.flag("    --opt-level <0-3>", "Optimization level");
     p.flag("    --debug-level <0-3>", "Debug info level");

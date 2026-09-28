@@ -22,8 +22,9 @@ later work.
 
 - No changes to the current execution IR v1 (`src/ir`, `src/interp`) in this
   slice.
-The VM v2 lowering lives in `src/vm/hir-to-vm.*` and is wired into the CLI
-only on no-LLVM/WASM builds for now. LLVM builds keep the native path, so the
+The VM v2 lowering lives in `src/vm/hir-to-vm.*` and is used by the portable
+runtime on no-LLVM/WASM builds. Native CLI builds can also dump it with
+`--emit-vir`; LLVM builds keep the native path, so the
 host runtime change does not affect the shipped codegen backend.
 
 - No browser/WASM packaging in this milestone.

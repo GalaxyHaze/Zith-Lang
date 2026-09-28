@@ -10,6 +10,7 @@
 #include "symbols/symbol-visibility.hpp"
 
 #include <cstdio>
+#include <string>
 
 namespace zith::ast {
 class AstBuilder;
@@ -123,6 +124,7 @@ public:
     }
 
     void dump(FILE *out = stdout, ast::AstBuilder *bld = nullptr) const;
+    [[nodiscard]] std::string dumpText() const;
 };
 
 } // namespace zith::symbols

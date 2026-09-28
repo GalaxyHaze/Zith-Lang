@@ -257,4 +257,53 @@ void SymbolTable::dump(FILE *out, ast::AstBuilder *bld) const {
     }
 }
 
+std::string SymbolTable::dumpText() const {
+    std::string result;
+    result += "SymbolTable (" + std::to_string(symbols_.size()) + " symbols, " +
+              std::to_string(scopes_.size()) + " scopes):\n";
+    for (ScopeId s = 0; s < static_cast<ScopeId>(scopes_.size()); ++s) {
+        const auto &scope = scopes_[s];
+        if (scope.parent == kInvalidScope)
+            result += "  Scope " + std::to_string(s) + " (root)\n";
+        else
+            result += "  Scope " + std::to_string(s) + " (parent " +
+                      std::to_string(scope.parent) + ")\n";
+        for (auto sid : scope.syms) {
+            const auto &sym = symbols_[sid];
+            const auto vis = sym.visibility == SymbolVisibility::Public
+                                 ? "pub"
+                                 : sym.visibility == SymbolVisibility::Module ? "mod" : "priv";
+            const auto symName = interner_->lookup(sym.name);
+            result += "    [" + std::to_string(sid) + "] " + vis + " " +
+                      symKindName(sym.kind) + " ";
+            result.append(symName.data(), symName.size());
+            if (sym.visibility == SymbolVisibility::Module)
+                result += " (depth=" + std::to_string(sym.mod_depth) + ")";
+            switch (sym.kind) {
+            case SymKind::Fn:
+                result += " (" + std::to_string(sym.members.size()) + " arguments)";
+                break;
+            case SymKind::Variable:
+                result += " (primitivo)";
+                break;
+            case SymKind::Struct:
+            case SymKind::Enum:
+            case SymKind::Union: {
+                size_t methods = 0;
+                for (auto mid : sym.members)
+                    if (symbols_[mid].kind == SymKind::Fn)
+                        ++methods;
+                result += " (0 fields & " + std::to_string(methods) + " methods)";
+                break;
+            }
+            default:
+                result += " (" + std::to_string(sym.members.size()) + " members)";
+                break;
+            }
+            result += '\n';
+        }
+    }
+    return result;
+}
+
 } // namespace zith::symbols

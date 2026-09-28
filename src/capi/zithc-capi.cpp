@@ -198,6 +198,13 @@ void zithc_session_set_emit_flags(zithc_session *session, bool ast, bool hir, bo
     }
 }
 
+void zithc_session_set_emit_extra_flags(zithc_session *session, bool cst, bool vir) {
+    if (session) {
+        session->opts.flags.emitCst(cst);
+        session->opts.flags.emitVir(vir);
+    }
+}
+
 void zithc_session_set_target(zithc_session *session, int stage) {
     if (session)
         session->opts.targetStage = static_cast<zith::session::Stage>(stage);

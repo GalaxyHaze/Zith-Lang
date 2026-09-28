@@ -1,0 +1,10 @@
+/// Common C allocation functions used by the portable Zith library surface.
+///
+/// These declarations describe the ABI contract. The selected target runtime
+/// supplies the implementation when a native libc is not available.
+pub extern fn malloc(size: u64): raw opaque
+pub extern fn calloc(count: u64, size: u64): raw opaque
+pub extern fn realloc(ptr: raw opaque, size: u64): raw opaque
+
+#[discardable]
+pub extern fn free(ptr: raw opaque): void

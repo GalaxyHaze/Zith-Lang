@@ -1,7 +1,7 @@
 # WASM Playground ABI
 
 This document describes the stable ABI exported by `zith-playground.wasm` for the browser
-playground. The playground performs lexing, type checking, HIR lowering, and execution through
+playground. The playground performs lexing, parsing, type checking, HIR lowering, and execution through
 the portable VM v2. It does not include LLVM codegen.
 
 The module is a standalone Emscripten build with no entry function. JavaScript provides the
@@ -82,9 +82,19 @@ keeps the range consistent with the CLI and C API.
 | `4` | HIR |
 | `8` | IR |
 | `16` | ASM |
+| `32` | CST |
+| `64` | VIR, the VM v2 execution IR |
 
-IR and ASM require an LLVM backend, which is not available in this WASM build. Passing either bit
-produces a diagnostic and return code `1`; it does not silently ignore the request.
+The bits are cumulative. CST is the concrete syntax tree after parsing, AST is the frontend AST,
+HIR is the semantic high-level IR, and VIR is the result of `HIR -> vm::lowerModule` for the
+portable VM v2. VIR is not LLVM IR. IR and ASM require an LLVM backend, which is not available
+in this WASM build. Passing either bit produces a diagnostic and return code `1`; it does not
+silently ignore the request.
+
+All textual emissions use the existing `zith_last_output_ptr/len` buffer. CST and VIR are not
+serialized into the flat HIR blob returned by `zith_emit_hir`; that operation remains exclusively
+for producing the blob, while `zith_execute_hir` remains exclusively for executing it. The output
+pointer and length remain valid until the next call that replaces the output buffer.
 
 ## Diagnostics
 
@@ -94,7 +104,7 @@ produces a diagnostic and return code `1`; it does not silently ignore the reque
 severity: message
 ```
 
-The line remains valid until the next `zith_compile_source` or `zith_run_source` call. An `index`
+The line remains valid until the next call that replaces the output or diagnostic buffers. An `index`
 greater than or equal to `zith_error_count()` returns `0`. This stable line format is intended for
 the playground. Structured JSON diagnostics will be added by a future LSP-facing API.
 

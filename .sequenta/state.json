@@ -1,10 +1,10 @@
 {
   "version": 1,
-  "current_module": "sequenta-attributes",
-  "current_task": "sequenta-attributes::finalVerification",
+  "current_module": "seq-emit",
+  "current_task": "seq-emit::docs",
   "status": "done",
   "worker": null,
-  "updated_at": "2026-09-23T18:34:47Z",
+  "updated_at": "2026-09-27T11:28:39Z",
   "trace_summary": [
     {
       "task": "sequenta-attributes::lexHash",
@@ -467,6 +467,216 @@
       "worker": null,
       "at": "2026-09-23T18:34:47Z",
       "cmd": "/bin/bash -lc \"cd /home/diogo/Zith && cmake --build build -j4 2>&1 | tail -5 && ctest --test-dir build --output-on-failure 2>&1 | tail -20\""
+    },
+    {
+      "task": "seq-emit::outputSink",
+      "from": "work",
+      "to": "work",
+      "worker": null,
+      "at": "2026-09-27T11:11:50Z"
+    },
+    {
+      "task": "seq-emit::outputSink",
+      "from": "work",
+      "to": "test",
+      "worker": null,
+      "at": "2026-09-27T11:15:26Z"
+    },
+    {
+      "task": "seq-emit::outputSink",
+      "from": "test",
+      "to": "error",
+      "worker": null,
+      "at": "2026-09-27T11:16:24Z"
+    },
+    {
+      "task": "seq-emit::outputSink",
+      "from": "error",
+      "to": "work",
+      "worker": null,
+      "at": "2026-09-27T11:28:08Z"
+    },
+    {
+      "task": "seq-emit::outputSink",
+      "from": "work",
+      "to": "test",
+      "worker": null,
+      "at": "2026-09-27T11:28:08Z"
+    },
+    {
+      "task": "seq-emit::outputSink",
+      "status": "done",
+      "worker": null,
+      "at": "2026-09-27T11:28:08Z",
+      "ok": true
+    },
+    {
+      "task": "seq-emit::cstPrinter",
+      "from": "planned",
+      "to": "stub",
+      "worker": null,
+      "at": "2026-09-27T11:28:14Z"
+    },
+    {
+      "task": "seq-emit::cstPrinter",
+      "from": "stub",
+      "to": "work",
+      "worker": null,
+      "at": "2026-09-27T11:28:14Z"
+    },
+    {
+      "task": "seq-emit::cstPrinter",
+      "from": "work",
+      "to": "test",
+      "worker": null,
+      "at": "2026-09-27T11:28:15Z"
+    },
+    {
+      "task": "seq-emit::cstPrinter",
+      "status": "done",
+      "worker": null,
+      "at": "2026-09-27T11:28:15Z",
+      "ok": true
+    },
+    {
+      "task": "seq-emit::virPrinter",
+      "from": "planned",
+      "to": "stub",
+      "worker": null,
+      "at": "2026-09-27T11:28:15Z"
+    },
+    {
+      "task": "seq-emit::virPrinter",
+      "from": "stub",
+      "to": "work",
+      "worker": null,
+      "at": "2026-09-27T11:28:15Z"
+    },
+    {
+      "task": "seq-emit::virPrinter",
+      "from": "work",
+      "to": "test",
+      "worker": null,
+      "at": "2026-09-27T11:28:15Z"
+    },
+    {
+      "task": "seq-emit::virPrinter",
+      "status": "done",
+      "worker": null,
+      "at": "2026-09-27T11:28:15Z",
+      "ok": true
+    },
+    {
+      "task": "seq-emit::cliFlags",
+      "from": "planned",
+      "to": "stub",
+      "worker": null,
+      "at": "2026-09-27T11:28:21Z"
+    },
+    {
+      "task": "seq-emit::cliFlags",
+      "from": "stub",
+      "to": "work",
+      "worker": null,
+      "at": "2026-09-27T11:28:28Z"
+    },
+    {
+      "task": "seq-emit::cliFlags",
+      "from": "work",
+      "to": "test",
+      "worker": null,
+      "at": "2026-09-27T11:28:29Z"
+    },
+    {
+      "task": "seq-emit::cliFlags",
+      "status": "done",
+      "worker": null,
+      "at": "2026-09-27T11:28:29Z",
+      "ok": true
+    },
+    {
+      "task": "seq-emit::wasmAbi",
+      "from": "planned",
+      "to": "stub",
+      "worker": null,
+      "at": "2026-09-27T11:28:29Z"
+    },
+    {
+      "task": "seq-emit::wasmAbi",
+      "from": "stub",
+      "to": "work",
+      "worker": null,
+      "at": "2026-09-27T11:28:29Z"
+    },
+    {
+      "task": "seq-emit::wasmAbi",
+      "from": "work",
+      "to": "test",
+      "worker": null,
+      "at": "2026-09-27T11:28:29Z"
+    },
+    {
+      "task": "seq-emit::wasmAbi",
+      "status": "done",
+      "worker": null,
+      "at": "2026-09-27T11:28:29Z",
+      "ok": true
+    },
+    {
+      "task": "seq-emit::tests",
+      "from": "planned",
+      "to": "stub",
+      "worker": null,
+      "at": "2026-09-27T11:28:30Z"
+    },
+    {
+      "task": "seq-emit::tests",
+      "from": "stub",
+      "to": "work",
+      "worker": null,
+      "at": "2026-09-27T11:28:30Z"
+    },
+    {
+      "task": "seq-emit::tests",
+      "from": "work",
+      "to": "test",
+      "worker": null,
+      "at": "2026-09-27T11:28:30Z"
+    },
+    {
+      "task": "seq-emit::tests",
+      "status": "done",
+      "worker": null,
+      "at": "2026-09-27T11:28:30Z",
+      "ok": true
+    },
+    {
+      "task": "seq-emit::docs",
+      "from": "planned",
+      "to": "stub",
+      "worker": null,
+      "at": "2026-09-27T11:28:30Z"
+    },
+    {
+      "task": "seq-emit::docs",
+      "from": "stub",
+      "to": "work",
+      "worker": null,
+      "at": "2026-09-27T11:28:30Z"
+    },
+    {
+      "task": "seq-emit::docs",
+      "from": "work",
+      "to": "test",
+      "worker": null,
+      "at": "2026-09-27T11:28:31Z"
+    },
+    {
+      "task": "seq-emit::docs",
+      "status": "done",
+      "worker": null,
+      "at": "2026-09-27T11:28:31Z",
+      "ok": true
     }
   ]
 }

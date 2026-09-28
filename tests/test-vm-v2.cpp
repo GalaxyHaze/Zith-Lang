@@ -4,6 +4,7 @@
 #include "session/compilation-session.hpp"
 #include "wasm/abi-hir.hpp"
 #include "vm/hir-to-vm.hpp"
+#include "vm/typed-ir-dump.hpp"
 #include "vm/typed-ir.hpp"
 #include "vm/vm-v2.hpp"
 
@@ -58,6 +59,18 @@ void test_vm_v2_malloc_string() {
     CHECK(result.status == vm::RunStatus::Ok, "typed VM runs main");
     CHECK_EQ(result.exitCode, 12, "main returns the string length");
     CHECK_EQ(result.output, std::string("zith-vm-v2\n"), "extern puts writes the string");
+}
+
+void test_vm_v2_dump_is_deterministic() {
+    memory::Arena firstArena;
+    memory::Arena secondArena;
+    const auto first = vm::dump(makeModule(firstArena));
+    const auto second = vm::dump(makeModule(secondArena));
+    CHECK_EQ(first, second, "equivalent VM v2 modules have identical dumps");
+    CHECK(first.find("fn main") != std::string::npos, "VIR dump contains function name");
+    CHECK(first.find("LoadConstI32") != std::string::npos, "VIR dump contains opcode");
+    CHECK(first.find("imm=0") != std::string::npos, "VIR dump contains immediates");
+    CHECK(first.find("reg_types") != std::string::npos, "VIR dump contains register types");
 }
 
 void test_vm_v2_linear_memory_trap() {
@@ -1020,6 +1033,7 @@ void test_vm_v2_dynamic_array_index_traps() {
 
 void test_vm_v2() {
     test_vm_v2_malloc_string();
+    test_vm_v2_dump_is_deterministic();
     test_vm_v2_linear_memory_trap();
     test_vm_v2_missing_main();
     test_vm_v2_loop_and_store();

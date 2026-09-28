@@ -1,0 +1,21 @@
+# module: seq-emit
+
+1. outputSink() -> textual-session-output
+
+2. cstPrinter() -> cst-dump
+   depends_on: seq-emit::outputSink
+
+3. virPrinter() -> vir-dump
+   depends_on: seq-emit::outputSink
+
+4. cliFlags() -> cli-integration
+   depends_on: seq-emit::cstPrinter, seq-emit::virPrinter
+
+5. wasmAbi() -> wasm-emit-mask
+   depends_on: seq-emit::cliFlags
+
+6. tests() -> coverage
+   depends_on: seq-emit::wasmAbi
+
+7. docs() -> documentation
+   depends_on: seq-emit::tests

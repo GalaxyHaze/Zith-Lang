@@ -62,6 +62,7 @@ void zithc_session_set_opt_level(zithc_session *session, uint8_t level);
 void zithc_session_set_mode(zithc_session *session, uint8_t mode);
 void zithc_session_set_emit_tokens(zithc_session *session, bool tokens);
 void zithc_session_set_emit_flags(zithc_session *session, bool ast, bool hir, bool ir, bool asm_);
+void zithc_session_set_emit_extra_flags(zithc_session *session, bool cst, bool vir);
 void zithc_session_set_target(zithc_session *session, int stage);
 
 bool zithc_run(zithc_session *session);

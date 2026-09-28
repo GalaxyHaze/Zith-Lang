@@ -5,6 +5,7 @@
 
 namespace {
 constexpr const char *kValidSource = "fn main() {\n"
+                                     "    let x: i32 = 1;\n"
                                      "}\n";
 
 constexpr const char *kInvalidSource = "fn main() {\n"
@@ -23,13 +24,19 @@ void test_wasm_contract() {
     zithc_session_set_opt_level(session, 0);
     zithc_session_set_emit_tokens(session, true);
     zithc_session_set_emit_flags(session, false, true, false, false);
+    zithc_session_set_emit_extra_flags(session, true, true);
     const bool ok = zithc_run_to(session, ZITHC_STAGE_HIR_LOWERED);
     CHECK(ok, "valid source lowers to HIR");
 
     const char *output = zithc_session_flush_output(session);
     CHECK(output != nullptr, "buffered output is accessible");
-    if (output)
+    if (output) {
         CHECK(std::strlen(output) > 0, "buffered output is non-empty");
+        CHECK(std::strstr(output, "--- CST ---") != nullptr, "CST is in the text output buffer");
+        CHECK(std::strstr(output, "--- HIR ---") != nullptr, "HIR is in the text output buffer");
+        CHECK(std::strstr(output, "--- VIR ---") != nullptr, "VIR is in the text output buffer");
+        CHECK(std::strstr(output, "Token") != nullptr, "CST contains token rows");
+    }
     CHECK(zithc_diag_count(session) == 0, "valid source has no diagnostics");
     zithc_session_destroy(session);
 

@@ -1,6 +1,6 @@
-import "stdlib.h"
-import "stdio.h"
-import "string.h"
+from c/io
+from c/stdlib
+from c/string
 
 /// Feeble standard-library formatting contract. Instances append their
 /// textual representation to a reusable buffer and return a plain I/O status.

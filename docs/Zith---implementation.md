@@ -4,6 +4,23 @@
 
 Este arquivo documenta como a toolchain implementa e verifica o subconjunto Zith-- definido em `docs/Zith--.md`. A linguagem compilada pelo `main` é sempre Zith--; não há frontend separado, flag de ativação ou modo opt-in.
 
+## Pipeline de Emissão
+
+O pipeline distingue as representações por estágio:
+
+```text
+Source -> Lex -> Parse/CST -> AST -> Sema -> HIR -> VIR -> Codegen/Cache
+```
+
+`--emit-cst` imprime a Concrete Syntax Tree depois do parsing, com nós, spans e tokens.
+`--emit-ast` imprime a árvore frontend depois do lowering inicial. `--emit-hir` imprime o
+High-level IR depois do lowering semântico. `--emit-vir` baixa HIR para VM v2 através de
+`vm::lowerModule()` e imprime o Typed VM v2 IR. VIR significa VM v2 IR e não LLVM IR.
+
+As emissões são cumulativas. `--emit-all` inclui CST e VIR além de tokens, AST, HIR, LLVM IR e
+assembly. No WASM, todas as emissões textuais usam o buffer de saída da sessão, sem ficheiros
+temporários. O blob HIR da ABI WASM continua separado e não contém CST nem VIR.
+
 ## Frontend
 
 O AST modela bindings com `BindingKind`:
@@ -93,6 +110,18 @@ LLVM volatile para o slot. O cache serializa `discardable` e `volatileSlot` no
 Code/attrs sections e a ABI hash inclui `SymbolData.discardable`. O formatter
 reemite grupos `#[name, ...]` antes da declaração/binding e preserva a ordem
 original.
+
+## Superfície C/runtime da stdlib
+
+Os módulos `stdlib/c/*.zith` são bindings C comuns mantidos pela toolchain,
+não includes de headers do host. A stdlib usa `from c/io`, `from c/stdlib` e
+`from c/string` para manter o mesmo código em LLVM nativo, VM no-LLVM e WASM.
+O backend escolhe se cada declaração é resolvida por libc, intrinsic da VM ou
+import do runtime.
+
+`import "file.h"` continua no caminho de interop específico: APIs de plataforma,
+SDKs e bibliotecas externas. O binder de headers não é requisito para carregar a
+superfície comum da stdlib.
 
 ## Sema
 

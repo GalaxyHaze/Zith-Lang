@@ -1,6 +1,7 @@
 #include "frontend/frontend-printer.hpp"
 
 #include <cstdio>
+#include <string>
 #include <string_view>
 
 namespace zith::frontend {
@@ -231,6 +232,63 @@ void printExpression(ExprId id, const std::vector<Expression> &expressions,
 }
 
 } // namespace
+
+namespace {
+
+const char *syntaxKindName(SyntaxKind kind) {
+    switch (kind) {
+    case SyntaxKind::Root:
+        return "Root";
+    case SyntaxKind::Token:
+        return "Token";
+    case SyntaxKind::Error:
+        return "Error";
+    }
+    return "Unknown";
+}
+
+void appendCstNode(std::string &out, const SyntaxNode &node, const FrontendSnapshot &snapshot,
+                   size_t depth) {
+    out.append(depth * 2U, ' ');
+    const auto span = node.span();
+    out += syntaxKindName(node.kind());
+    out += " [" + std::to_string(span.start) + ".." + std::to_string(span.end) + "]\n";
+    for (uint32_t index = 0; index < node.childCount(); ++index) {
+        const auto &element = node.child(index);
+        if (element.isNode()) {
+            appendCstNode(out, SyntaxNode(*element.node, snapshot.tokens(), snapshot.source()),
+                          snapshot, depth + 1U);
+            continue;
+        }
+        const auto token      = node.token(index);
+        const auto &tokenData = token.token();
+        out.append((depth + 1U) * 2U, ' ');
+        out += "Token ";
+        out += tokenData.kind == TokenKind::Identifier    ? "Identifier"
+               : tokenData.kind == TokenKind::Keyword     ? "Keyword"
+               : tokenData.kind == TokenKind::Literal     ? "Literal"
+               : tokenData.kind == TokenKind::Operator    ? "Operator"
+               : tokenData.kind == TokenKind::Punctuation ? "Punctuation"
+               : tokenData.kind == TokenKind::Dots        ? "Dots"
+               : tokenData.kind == TokenKind::End         ? "End"
+                                                          : "Unknown";
+        out += " [";
+        out += std::to_string(tokenData.span.start) + ".." + std::to_string(tokenData.span.end);
+        out += "] \"";
+        const auto text = token.text();
+        out.append(text.data(), text.size());
+        out += "\"\n";
+    }
+}
+
+} // namespace
+
+std::string dumpCst(const FrontendSnapshot &snapshot) {
+    std::string result = "--- CST ---\n";
+    appendCstNode(result, snapshot.root(), snapshot, 0);
+    result += "---\n";
+    return result;
+}
 
 void printTokens(const FrontendSnapshot &snapshot) {
     std::fputs("--- Tokens ---\n", stdout);

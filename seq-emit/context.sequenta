@@ -1,0 +1,85 @@
+[1]
+task: seq-emit::outputSink
+status: done
+desc: Substituir a captura por ficheiro por saída textual em memória compatível com WASM.
+impl:
+  - localizar captureStdioDump e os sinks existentes
+  - preservar stderr no CLI nativo
+  - manter HirModule::toString e adicionar dump textual de símbolos
+tests:
+  | id       | dado                         | quando                    | então                                      |
+  | OS-1     | sessão com emit-ast/hir      | compilar nativamente      | saída textual sem ficheiros temporários   |
+  | OS-2     | build WASM                   | solicitar AST/HIR         | não executa operações de filesystem       |
+
+[2]
+task: seq-emit::cstPrinter
+status: done
+desc: Implementar o dump determinístico da árvore CST.
+impl:
+  - imprimir Root/Error e spans
+  - imprimir tokens com tipo e lexema
+  - emitir pelo sink da sessão após parseCst
+tests:
+  | id       | dado                  | quando             | então                         |
+  | CST-1    | delimitadores aninhados | emitir CST         | cabeçalho, spans e tokens     |
+
+[3]
+task: seq-emit::virPrinter
+status: done
+desc: Implementar o dump determinístico do VM v2 IR.
+impl:
+  - formatar módulo, pools, externs e funções
+  - formatar tipos de registos e instruções numeradas
+  - usar HIR -> lowerModule -> dump
+tests:
+  | id       | dado                    | quando             | então                         |
+  | VIR-1    | módulo VM equivalente   | emitir duas vezes  | textos idênticos              |
+
+[4]
+task: seq-emit::cliFlags
+status: done
+desc: Integrar emit-cst e emit-vir nos comandos, estágios e emit-all.
+impl:
+  - expandir Options::flags sem reutilizar bits
+  - atualizar help/info/completion
+  - ajustar estágio final e linking
+tests:
+  | id       | dado             | quando        | então                         |
+  | CLI-1    | --emit-cst       | executar CLI  | somente CST                   |
+  | CLI-2    | --emit-vir       | executar build | não linka executável          |
+
+[5]
+task: seq-emit::wasmAbi
+status: done
+desc: Expor bits 32/64 e configurar as novas flags pela C API.
+impl:
+  - validar emit_mask
+  - preservar last_output e blobs HIR
+  - manter LLVM/assembly indisponíveis em WASM
+tests:
+  | id       | dado              | quando             | então                         |
+  | ABI-1    | emit_mask 32/64   | chamar ABI WASM    | dump CST/VIR textual         |
+
+[6]
+task: seq-emit::tests
+status: done
+desc: Adicionar e executar cobertura CLI, VM v2, C API e WASM.
+impl:
+  - atualizar testes existentes
+  - adicionar integração de VIR com execução
+  - executar CTest e smoke test WASM quando disponível
+tests:
+  | id       | dado                    | quando              | então                    |
+  | TEST-1   | suite focalizada         | executar testes     | todos passam              |
+
+[7]
+task: seq-emit::docs
+status: done
+desc: Atualizar documentação dos contratos CLI, pipeline e ABI WASM.
+impl:
+  - documentar bits e buffer textual
+  - distinguir CST/AST/HIR/VIR
+  - notar que VIR não é LLVM IR
+tests:
+  | id       | dado          | quando            | então                       |
+  | DOC-1    | docs alterados | revisar contratos | sem contradições            |

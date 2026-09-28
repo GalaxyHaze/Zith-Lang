@@ -62,6 +62,39 @@ static void test_build_derives_codegen_stage() {
     emitIr.deriveTargetStage();
     CHECK(emitIr.targetStage == session::Stage::CodegenReady,
           "build --emit ir still stops at Stage::CodegenReady");
+
+    Options emitVir(arena);
+    emitVir.command = Options::Command::Build;
+    emitVir.flags.emitVir(true);
+    emitVir.deriveTargetStage();
+    CHECK(emitVir.targetStage == session::Stage::HirLowered,
+          "build --emit-vir stops at Stage::HirLowered");
+
+    Options emitCst(arena);
+    emitCst.command = Options::Command::Build;
+    emitCst.flags.emitCst(true);
+    emitCst.deriveTargetStage();
+    CHECK(emitCst.targetStage == session::Stage::Imported,
+          "build --emit-cst stops after frontend import");
+}
+
+static void test_new_emit_flags_parse_and_compose() {
+    char program[] = "zithc";
+    char command[] = "check";
+    char cst[] = "--emit-cst";
+    char vir[] = "--emit-vir";
+    char all[] = "--emit-all";
+    char *args[] = {program, command, cst, vir};
+    Cli cli;
+    cli.parseArgs(4, args);
+    CHECK(cli.opts.flags.emitCst(), "--emit-cst enables CST emission");
+    CHECK(cli.opts.flags.emitVir(), "--emit-vir enables VIR emission");
+
+    char *all_args[] = {program, command, all};
+    Cli all_cli;
+    all_cli.parseArgs(3, all_args);
+    CHECK(all_cli.opts.flags.emitCst() && all_cli.opts.flags.emitVir(),
+          "--emit-all includes CST and VIR");
 }
 
 // ── Command function signatures exist ─────────────────────────────
@@ -242,6 +275,7 @@ static void test_cli_commands() {
     test_options_defaults();
     test_options_command_enum();
     test_build_derives_codegen_stage();
+    test_new_emit_flags_parse_and_compose();
     test_command_signatures_exist();
     test_count_passed();
     test_command_names_match_contract();

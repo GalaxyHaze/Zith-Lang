@@ -77,6 +77,7 @@ Implementation work that is incomplete or needs review is tracked in
 | `raw opaque` | **Working** | Dedicated `TypeExprKind::Opaque`, lowered to pointer-to-void (untagged C-style `void*`). Castable to and from any `*T` via `as`; `raw opaque as T` reinterprets without a tag check |
 | `opaque` | **Working** | Bare opaque is a tagged open union stored as `{ *void, u32 }` (typeId) and is always a view. `T as opaque` spills the concrete value to a stable local; `opaque is T` compares the tagged typeId; `opaque as T` returns `?T` (extraction in a call or other non-optional result is handled as a checked optional). Values exported and imported across modules retain the declaring module's canonical tag, and cached artifacts hydrate `canonical_mappings` so the tag stays stable across sessions. This iteration has no heap copy, vtable or dynamic calls |
 | `[N]T` (array), `[]T` (slice) | **Working** | Arrays coerce to slices as zero-copy views; `a[lo..hi]` and `a[i]` return optionals with static/dynamic bounds checks. `raw a[lo..hi]`/`raw a[i]` emit unchecked views/indexing |
+| `|T, U|` (pack) | **Working** | Heterogeneous pack literals, named pack types, positional compile-time indexing, and `[a, b]` binding destructuring lower as concrete aggregates. Packs can coerce positionally to named pack types with matching arity and member types |
 | `[...]T` (variadic slice) | **Working** | Last parameter only. Auto-collects a homogeneous tail into a temporary slice; accepts an explicit final `[]T`/`[N]T` and an empty tail. Supported for free functions, methods, dyn trait/interface methods, generic inference, states/dock/jump and overloads; fixed-arity overloads are preferred |
 | `fn(...): R` (function value) | **Working** | Parses as a type value, type-checks non-generic function references, and lowers/calls through C function-pointer ABI. No closures or captures |
 | `dyn Trait` / `dyn Interface` | **Working (methods)** | Concrete values coerce to fat pointers (`HirMakeDyn`) with per-type vtables (`HirVTable`); method calls lower to `HirDynCall`. Zith-- exposes only methods through `dyn`; interface fields remain available on concrete types and generic bounds, and `a.x` on `dyn Interface` reports `E3001` |
@@ -151,6 +152,7 @@ Implementation work that is incomplete or needs review is tracked in
 | Feature | Status | Notes |
 |---|---|---|
 | `import`, `from`, `export` | **Working** | `import path` exposes only the full dotted namespace (`std.io.console.println`), `import path as name` exposes `name.symbol`, `from path` injects public symbols, and `export path` re-exports the namespace plus public symbols |
+| `c/...` supported runtime surface | **Working / Partial** | `c/io`, `c/stdlib`, and `c/string` provide the common declarations used by the shipped stdlib; native LLVM, no-LLVM VM, and WASM backend resolution remains target-specific |
 | `alias` | **Working** | |
 | `pub`, `mod` | **Working** | |
 | `mod(..)`, `mod(N)` | **Working** | Module-depth visibility is applied to declarations and to struct fields; `mod(..)` is unlimited and `mod(N)` allows N directory levels below the owner |

@@ -93,6 +93,13 @@ function readBuffer(ptr, len) {
   return Buffer.from(copy);
 }
 
+function readLastOutput() {
+  return readBuffer(
+    instance.exports.zith_last_output_ptr(),
+    instance.exports.zith_last_output_len(),
+  ).toString("utf8");
+}
+
 function assertEqual(actual, expected, message) {
   if (actual !== expected) {
     throw new Error(`${message}: expected ${String(expected)}, got ${String(actual)}`);
@@ -145,6 +152,28 @@ async function main() {
   const stdlibBuffer = writeBytes(stdlib);
   assertEqual(instance.exports.zith_register_stdlib_pack(stdlibBuffer.ptr, stdlibBuffer.len), 0,
               "stdlib pack registration");
+
+  const dumpSource = writeString(`fn main(): i32 {
+    1 + 2
+}
+`);
+  const dumpStatus = instance.exports.zith_compile_source(
+    dumpSource.ptr,
+    dumpSource.len,
+    0,
+    0,
+    32 | 64,
+  );
+  assertEqual(dumpStatus, 0, "CST and VIR compile emission");
+  const dumpOutput = readLastOutput();
+  if (!dumpOutput.includes("--- CST ---")) {
+    throw new Error("CST header missing from zith_last_output buffer");
+  }
+  if (!dumpOutput.includes("--- VIR ---") || !dumpOutput.includes("fn main")) {
+    throw new Error("VIR content missing from zith_last_output buffer");
+  }
+  stdoutChunks.length = 0;
+  stderrChunks.length = 0;
 
   const externHir = compileSource(externHello);
   const externStatus = runHir(externHir);

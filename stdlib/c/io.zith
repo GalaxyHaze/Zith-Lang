@@ -1,1 +1,15 @@
-pub extern fn puts(msg : *char) : i32
+/// Common C console functions exposed through the Zith C/runtime layer.
+///
+/// Targets may resolve these symbols directly through libc or through a
+/// backend-specific runtime implementation.
+#[discardable]
+pub extern fn putchar(value: i32): i32
+
+#[discardable]
+pub extern fn puts(msg: *char): i32
+
+pub extern fn getchar(): i32
+
+pub extern fn sscanf(input: ?*char, format: ?*char, ...): i32
+
+pub extern fn snprintf(buffer: ?*char, size: u64, format: ?*char, ...): i32

@@ -7,6 +7,7 @@
 #endif
 #include "comptime/solver.hpp"
 #include "diagnostics/error-codes.hpp"
+#include "frontend/frontend-printer.hpp"
 #include "formatter/fmt-visitor.hpp"
 #include "memory/source-map.hpp"
 #include "sema/heuristic-engine.hpp"
@@ -18,6 +19,8 @@
 #include "cache/cache-paths.hpp"
 #include "common/ast-ids.hpp"
 #include "support/stdlib-discovery.hpp"
+#include "vm/hir-to-vm.hpp"
+#include "vm/typed-ir-dump.hpp"
 #include <chrono>
 #include <cstdarg>
 #include <cstdio>
@@ -81,40 +84,6 @@ template <typename ArrayT>
         for (const auto &value : *values)
             if (const auto text = value.value<std::string>())
                 destination.push(*text);
-}
-
-// Runs a FILE*-based dump into an in-memory string so dump text can be routed
-// through the session's own output band instead of the process stdout. The
-// temporary file is used because the dump APIs still take a FILE*; it is
-// removed as soon as the captured bytes have been copied out.
-template <typename Fn> std::string captureStdioDump(Fn &&dump) {
-    std::string result;
-
-    const auto uniqueSuffix = std::chrono::steady_clock::now().time_since_epoch().count();
-    const std::filesystem::path tmpPath = std::filesystem::temp_directory_path() /
-                                          ("zithc-dump-" + std::to_string(uniqueSuffix) + ".tmp");
-
-    FILE *tmp = nullptr;
-#ifdef _WIN32
-    if (_wfopen_s(&tmp, tmpPath.c_str(), L"wb+") != 0)
-        return result;
-#else
-    tmp = std::fopen(tmpPath.c_str(), "wb+");
-    if (tmp == nullptr)
-        return result;
-#endif
-
-    dump(tmp);
-    std::fflush(tmp);
-    std::rewind(tmp);
-    char buffer[4096];
-    size_t bytes = 0;
-    while ((bytes = std::fread(buffer, 1, sizeof(buffer), tmp)) > 0)
-        result.append(buffer, bytes);
-    std::fclose(tmp);
-    std::error_code ignored;
-    std::filesystem::remove(tmpPath, ignored);
-    return result;
 }
 
 } // namespace
@@ -433,6 +402,11 @@ bool CompilationSession::lexStage() {
     }
     mFileId = root_file.value();
 
+    if (mOpts.get().flags.emitCst()) {
+        const auto cst_text = frontend::dumpCst(*root->frontend);
+        writeOutput("%s", cst_text.c_str());
+    }
+
     // --emit-tokens: dump tokens from the modern frontend snapshot. Dumps are
     // compiler output, so they go through writeOutput() and never touch the
     // program's stdout during `zithc run`.
@@ -493,8 +467,8 @@ bool CompilationSession::lexStage() {
             }
         }
         writeOutput("--- Symbols ---\n");
-        writeOutput("%s",
-                    captureStdioDump([this](FILE *out) { mSyms.dump(out, nullptr); }).c_str());
+        const auto symbols_text = mSyms.dumpText();
+        writeOutput("%s", symbols_text.c_str());
         writeOutput("---\n");
     }
 
@@ -527,8 +501,7 @@ bool CompilationSession::scanStage() {
             }
         }
         if (mOpts.get().flags.emitHir()) {
-            const std::string hir_text =
-                captureStdioDump([this](FILE *out) { mHirModule.dump(out, *mInterner); });
+            const std::string hir_text = mHirModule.toString(*mInterner);
             writeOutput("--- HIR ---\n%s---\n", hir_text.c_str());
         }
         return true;
@@ -657,9 +630,20 @@ bool CompilationSession::lowerStage() {
     }
 
     if (mOpts.get().flags.emitHir()) {
-        const std::string hir_text =
-            captureStdioDump([this](FILE *out) { mHirModule.dump(out, *mInterner); });
+        const std::string hir_text = mHirModule.toString(*mInterner);
         writeOutput("--- HIR ---\n%s---\n", hir_text.c_str());
+    }
+
+    if (mOpts.get().flags.emitVir()) {
+        vm::Module module(mHirArena);
+        const auto lowered = vm::lowerModule(mHirModule, *mInterner, mTypes, mHirArena, module);
+        if (!lowered.ok) {
+            writeOutput("%s[error]%s failed to lower HIR to VM v2 IR: %s\n",
+                        ansicolor("\033[31m"), ansicolor("\033[0m"), lowered.message.c_str());
+            return false;
+        }
+        const auto vir_text = vm::dump(module);
+        writeOutput("%s", vir_text.c_str());
     }
 
     auto lowerDt =

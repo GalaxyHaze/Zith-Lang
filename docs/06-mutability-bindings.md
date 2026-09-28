@@ -1,7 +1,8 @@
 ## 6. Mutability & Bindings
 
-> **Implementation status:** `let`, `var`, `const`, and `global` bindings are **working**. Binding
-> destructuring with `[ ]` and pack literals are **spec-only**, with no parser or sema support.
+> **Implementation status:** `let`, `var`, and `const` bindings are **working**. Pack literals,
+> positional indexing, and binding destructuring with `[ ]` are working in Zith--. The full
+> mutability model remains partly spec-only.
 > `lend` and `view` are implemented as the Zith-- call-annotation slice; `own`, `share`,
 > `belong`, and the full NRA state machine remain full-Zith/spec-only.
 > See [impl-status.md](impl-status.md).
@@ -54,22 +55,49 @@ let r = for ([acc, i]: i32), (i in 0..n) {
 
 ### 6.4 Pack Literals
 
-Packs group heterogeneous values into a lightweight tuple-like structure. They are declared with `| |` and can be destructured with `[ ]`:
+Packs group heterogeneous values into a tuple-like aggregate. Zith calls this
+construct a **pack**, not a tuple. A pack literal uses `| |` and keeps its
+member order and member types:
 
 ```zith
-// Pack literal
-let p = | 5, 4, 'c' |;
+let p = | 5, 4, 'c' |;       // pack<i32, i32, char>
 
-// Destructure
 let [a, b, c] = p;
 
-// Used in for loops with type annotation
-let r = for ([acc, i]: i32), (i in 0..n) {
-            acc *= i + 1
-        } or 0;
+let first: i32 = p[0];
+let letter: char = p[2];
 ```
 
-> Packs are like anonymous structs. The compiler extracts fields by order and passes them as function arguments. They have a concrete layout determined at compile time. They are primarily used for destructuring and as loop accumulators.
+Packs are heterogeneous. Each position can have a different type, and the
+compiler knows the number, order, and concrete layout of the members at
+compile time. Indexes must be compile-time integer positions, because a pack
+does not represent a homogeneous runtime array.
+
+Use destructuring when the positions need names in the current scope:
+
+```zith
+fn split(): |i32, char| {
+    |42, 'x'|
+}
+
+fn main(): i32 {
+    let [number, symbol] = split();
+    number
+}
+```
+
+Use a pack as a loop accumulator when a loop needs to carry more than one
+value. The accumulator annotation describes the pack members:
+
+```zith
+let result = for ([acc, i]: i32), (i in 0..n) {
+    acc *= i + 1
+} or 0;
+```
+
+Packs are also valid as values in aggregate contexts, including `enum:union`
+variants. They are not anonymous functions, and they do not provide named
+fields unless a named pack type supplies those fields.
 
 ---
 

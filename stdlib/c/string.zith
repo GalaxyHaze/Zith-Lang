@@ -1,0 +1,4 @@
+/// Common C string and byte-buffer functions used by the Zith library.
+pub extern fn memcpy(dest: ?*char, src: ?*char, count: u64): ?*char
+pub extern fn strlen(value: ?*char): u64
+pub extern fn strncmp(lhs: ?*char, rhs: ?*char, count: u64): i32

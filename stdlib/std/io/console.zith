@@ -1,6 +1,6 @@
-import "stdio.h"
-import "stdlib.h"
-import "string.h"
+from c/io
+from c/stdlib
+from c/string
 from std/io/format
 
 /// Parsing contract used by `InputLine.cast<T>`. Implementations parse one

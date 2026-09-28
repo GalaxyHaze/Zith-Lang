@@ -49,7 +49,7 @@ struct Options {
     // Frontend in-memory memoization still applies within the session.
     bool noCache = false;
 
-    // Bit-packed flags (std::bitset<24>):
+    // Bit-packed flags (std::bitset<26>):
     //  0-1:  optLevel      (2 bits, values 0-3)
     //  2-3:  debugLevel    (2 bits, values 0-3)
     //  4-5:  color         (2 bits, values 0-2: Off, Auto, On)
@@ -69,17 +69,19 @@ struct Options {
     //  21:   printTokens   (1 bit)
     //  22:   cacheStats    (1 bit)
     //  23:   debugSema     (1 bit)
+    //  24:   emitCst       (1 bit)
+    //  25:   emitVir       (1 bit)
     struct {
-        std::bitset<24> bits{};
+        std::bitset<26> bits{};
 
-        static uint8_t extractBits(const std::bitset<24> &b, size_t pos, size_t count) {
+        static uint8_t extractBits(const std::bitset<26> &b, size_t pos, size_t count) {
             uint8_t val = 0;
             for (size_t i = 0; i < count; ++i)
                 if (b.test(pos + i))
                     val |= static_cast<uint8_t>(1 << i);
             return val;
         }
-        static void insertBits(std::bitset<24> &b, size_t pos, size_t count, uint8_t val) {
+        static void insertBits(std::bitset<26> &b, size_t pos, size_t count, uint8_t val) {
             for (size_t i = 0; i < count; ++i)
                 b.set(pos + i, (val >> i) & 1);
         }
@@ -215,6 +217,20 @@ struct Options {
         }
         void debugSema(bool v) {
             bits.set(23, v);
+        }
+
+        bool emitCst() const {
+            return bits.test(24);
+        }
+        void emitCst(bool v) {
+            bits.set(24, v);
+        }
+
+        bool emitVir() const {
+            return bits.test(25);
+        }
+        void emitVir(bool v) {
+            bits.set(25, v);
         }
     } flags;
 

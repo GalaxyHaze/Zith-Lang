@@ -64,6 +64,27 @@ fn main(): i32 {
 
 O `=` interno à lista de parâmetros pertence ao default do parâmetro. Um alias `fn f(...): T = extern name` continua a ser parseado depois do retorno e não colide com a sintaxe de defaults.
 
+## Superfície C e Biblioteca
+
+O namespace raiz `c` contém a superfície C/runtime suportada pelo compilador:
+
+```zith
+from c/io
+from c/stdlib
+from c/string
+```
+
+Esses módulos declaram operações C comuns usadas pela stdlib, mas não incluem
+implicitamente headers do sistema. O backend pode resolvê-las através da libc
+nativa, de intrinsics da VM ou de imports do runtime WASM. `import "file.h"`
+continua reservado para APIs específicas da plataforma e bibliotecas C
+externas que não pertencem à superfície comum.
+
+`std/io/console` fornece `print` e `println` como API idiomática sobre essa
+camada. As funções de saída que devolvem um status mas são normalmente usadas
+como statements são marcadas `#[discardable]`; a chamada continua a ser
+emitida e o ABI não muda.
+
 Methods continuam com `self` implícito. `self.field` é a forma canónica e auto-derefs o receiver; `self->field` continua aceite como legacy. Um `self` simples é read-only: `self.x = 1` é rejeitado. `var self` permite mutação in-place dos campos do receiver, como `self.x += 1`.
 
 O owner de um bloco `implement` pode ser um primitivo, `?T`, `[]T` ou `*char`, além de um
@@ -721,7 +742,8 @@ entra no documento do `Zith--` depois de terminar no pipeline real, porque o
   declaration-only, `implement T as Trait {}`, conformance, bounds
   `T: A + B` e `dyn Trait`/`dyn Interface` somente-métodos; bounds de
   interface expõem fields e métodos no corpo genérico.
-- C interop comum, imports, macros normais/raw, C API/zithc, HIR/cache/LLVM.
+- Superfície C/runtime comum em `c/...`, imports, macros normais/raw, C API/zithc,
+  HIR/cache/LLVM.
 - O detalhe verificado está em `impl-status.md`; testes focados existem em
   `tests/test-trait-*.cpp`, `tests/test-interface-*.cpp` e
   `tests/test-generic-constraints.cpp`.
