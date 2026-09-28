@@ -23,6 +23,13 @@ endif()
 option(ZITH_ENABLE_C_INTEROP "Enable automatic C header bindings through libclang"
        ${_zith_c_interop_default})
 
+set(ZITH_TARGET_CROSS OFF)
+if(CMAKE_CROSSCOMPILING
+   OR CMAKE_CXX_COMPILER_TARGET MATCHES "arm64-pc-windows-msvc"
+   OR CMAKE_CXX_COMPILER_TARGET MATCHES "^(x86_64|aarch64)-linux-musl$")
+    set(ZITH_TARGET_CROSS ON)
+endif()
+
 if(ZITH_HAS_LLVM AND NOT ZITH_IS_WASM)
     find_package(ZLIB QUIET)
     if(CMAKE_CXX_COMPILER_TARGET MATCHES "musl")
@@ -96,7 +103,7 @@ if(ZITH_REQUIRE_LLVM AND NOT ZITH_HAS_LLVM)
 endif()
 
 set(ZITH_C_INTEROP_AVAILABLE OFF)
-if(ZITH_ENABLE_C_INTEROP AND NOT ZITH_IS_WASM AND NOT CMAKE_CROSSCOMPILING)
+if(ZITH_ENABLE_C_INTEROP AND NOT ZITH_IS_WASM AND NOT ZITH_TARGET_CROSS)
     find_path(ZITH_LIBCLANG_INCLUDE_DIR clang-c/Index.h
         HINTS ${LLVM_INCLUDE_DIRS}
         PATH_SUFFIXES include
@@ -127,7 +134,7 @@ endif()
 set(ZITH_C_COMPILE_AVAILABLE OFF)
 set(ZITH_LLD_AVAILABLE OFF)
 
-if(ZITH_HAS_LLVM AND NOT ZITH_IS_WASM AND NOT CMAKE_CROSSCOMPILING)
+if(ZITH_HAS_LLVM AND NOT ZITH_IS_WASM AND NOT ZITH_TARGET_CROSS)
     # lldELF/lldCommon are host libraries. Do not link them into a
     # cross-target compiler, where they can make the final link use host ABI
     # objects or host-only dependencies.
@@ -178,7 +185,7 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(tomlplusplus)
 
-if(ZITH_ENABLE_C_COMPILE AND NOT ZITH_IS_WASM)
+if(ZITH_ENABLE_C_COMPILE AND NOT ZITH_IS_WASM AND NOT ZITH_TARGET_CROSS)
     find_path(ZITH_TCC_INCLUDE_DIR libtcc.h
         HINTS ${ZITH_TCC_ROOT}
         PATH_SUFFIXES include
