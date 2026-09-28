@@ -529,7 +529,9 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   build-musl:
-    needs: create-release
+    # build-main is a matrix job; this gate waits for its Linux x64 artifact and
+    # the rest of the native artifacts before spending time on musl builds.
+    needs: [create-release, build-windows-arm64-llvm, build-main]
     name: Build ${{ matrix.target_name }}
     runs-on: ${{ matrix.os }}
     strategy:
@@ -564,7 +566,7 @@ jobs:
             alpine:3.22 \
             sh -euc '
               apk add --no-cache build-base cmake ninja python3 git \
-                clang20 llvm20-dev llvm20-static llvm20-gtest lld20
+                clang20 llvm20-dev llvm20-static llvm20-gtest lld20 zlib-static
 
               compiler_target="$(clang-20 --print-target-triple)"
               case "$ZITH_TARGET_ARCH:$compiler_target" in
@@ -589,6 +591,7 @@ jobs:
                 -DLLVM_DIR="$(llvm-config-20 --cmakedir)" \
                 -DZITH_HAS_LLVM=ON \
                 -DZITH_REQUIRE_LLVM=ON \
+                -DZLIB_USE_STATIC_LIBS=ON \
                 -DCMAKE_EXE_LINKER_FLAGS="-static -lc" \
                 -DCMAKE_CXX_FLAGS="-fno-cxx-exceptions"
 

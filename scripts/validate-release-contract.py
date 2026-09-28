@@ -218,6 +218,11 @@ def validate_workflows(workflow_dir: Path) -> None:
         if "uses: softprops/action-gh-release@v2" in section and "draft: true" not in section:
             fail(f"{artifact_workflow} may publish assets before gates pass in {job}")
     musl_section = job_section(artifact_text, "build-musl")
+    if (
+        "needs: [create-release, build-windows-arm64-llvm, build-main]" not in musl_section
+        or "target_name: zithc-linux-amd64" not in job_section(artifact_text, "build-main")
+    ):
+        fail(f"{artifact_workflow} does not gate musl on LLVM and the native Linux x64 build")
     if "alpine:3.22" not in musl_section:
         fail(f"{artifact_workflow} does not build musl artifacts in Alpine")
     if "apk add --no-cache" not in musl_section:
@@ -229,9 +234,12 @@ def validate_workflows(workflow_dir: Path) -> None:
         "llvm20-gtest",
         "lld20",
         "git",
+        "zlib-static",
     ):
         if package not in musl_section:
             fail(f"{artifact_workflow} does not install {package} for musl builds")
+    if "-DZLIB_USE_STATIC_LIBS=ON" not in musl_section:
+        fail(f"{artifact_workflow} does not select static zlib for musl builds")
     for platform in ("linux/amd64", "linux/arm64"):
         if f"container_platform: {platform}" not in musl_section:
             fail(f"{artifact_workflow} does not build musl for {platform}")
