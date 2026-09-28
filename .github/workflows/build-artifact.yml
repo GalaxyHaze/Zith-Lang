@@ -162,8 +162,19 @@ jobs:
 
       - name: Install Windows dependencies
         if: runner.os == 'Windows'
-        shell: bash
-        run: choco install llvm ninja -y
+        shell: pwsh
+        run: |
+          choco install ninja -y
+          $llvmVersion = '18.1.8'
+          $installer = Join-Path $env:RUNNER_TEMP "LLVM-$llvmVersion-win64.exe"
+          Invoke-WebRequest `
+            -Uri "https://github.com/llvm/llvm-project/releases/download/llvmorg-$llvmVersion/LLVM-$llvmVersion-win64.exe" `
+            -OutFile $installer
+          $process = Start-Process -FilePath $installer `
+            -ArgumentList '/S', '/D=C:\Program Files\LLVM' -Wait -PassThru -NoNewWindow
+          if ($process.ExitCode -ne 0) {
+            throw "LLVM installer failed with exit code $($process.ExitCode)"
+          }
 
       - name: Add Chocolatey LLVM to PATH
         if: runner.os == 'Windows'
@@ -762,8 +773,19 @@ jobs:
 
       - name: Install Windows dependencies
         if: runner.os == 'Windows'
-        shell: bash
-        run: choco install llvm ninja -y
+        shell: pwsh
+        run: |
+          choco install ninja -y
+          $llvmVersion = '18.1.8'
+          $installer = Join-Path $env:RUNNER_TEMP "LLVM-$llvmVersion-win64.exe"
+          Invoke-WebRequest `
+            -Uri "https://github.com/llvm/llvm-project/releases/download/llvmorg-$llvmVersion/LLVM-$llvmVersion-win64.exe" `
+            -OutFile $installer
+          $process = Start-Process -FilePath $installer `
+            -ArgumentList '/S', '/D=C:\Program Files\LLVM' -Wait -PassThru -NoNewWindow
+          if ($process.ExitCode -ne 0) {
+            throw "LLVM installer failed with exit code $($process.ExitCode)"
+          }
 
       - name: Add Chocolatey LLVM to PATH
         if: runner.os == 'Windows'
