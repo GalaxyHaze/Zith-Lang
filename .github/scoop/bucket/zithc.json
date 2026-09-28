@@ -1,27 +1,27 @@
 {
-  "version": "0.6.3.2",
+  "version": "0.6.3.12",
   "description": "The Zith programming language toolchain",
   "homepage": "https://github.com/GalaxyHaze/Zith-Lang",
   "license": "MIT",
   "architecture": {
     "64bit": {
       "url": [
-        "https://github.com/GalaxyHaze/Zith-Lang/releases/download/v0.6.3.2/zithc-windows-amd64.exe",
-        "https://github.com/GalaxyHaze/Zith-Lang/releases/download/v0.6.3.2/zithc-stdlib-v0.6.3.2.zip"
+        "https://github.com/GalaxyHaze/Zith-Lang/releases/download/v0.6.3.12/zithc-windows-amd64.exe",
+        "https://github.com/GalaxyHaze/Zith-Lang/releases/download/v0.6.3.12/zithc-stdlib-v0.6.3.12.zip"
       ],
       "hash": [
-        "8473c2f5078bd5c915fa7a8a77b6bcbb6d43002936af74b52cdaa3f4320ac55b",
-        "dada7f632f3d19af081dc5601ebb58b5025f9a815785b83ec59ccde474281ae1"
+        "acba929b196b82ffc907ca9a07dec5a8c960b4dd38b80f5d54f1e227faf877a5",
+        "37e1ba1636ed9ecefde87ee116da2abd49a85fdb98447355017ad8a2c7c6a33f"
       ]
     },
     "arm64": {
       "url": [
-        "https://github.com/GalaxyHaze/Zith-Lang/releases/download/v0.6.3.2/zithc-windows-arm64.exe",
-        "https://github.com/GalaxyHaze/Zith-Lang/releases/download/v0.6.3.2/zithc-stdlib-v0.6.3.2.zip"
+        "https://github.com/GalaxyHaze/Zith-Lang/releases/download/v0.6.3.12/zithc-windows-arm64.exe",
+        "https://github.com/GalaxyHaze/Zith-Lang/releases/download/v0.6.3.12/zithc-stdlib-v0.6.3.12.zip"
       ],
       "hash": [
-        "92c5fead8eb109d750de8633e451c4e73ec7a5232ab4998a028e90fee9bf83a9",
-        "dada7f632f3d19af081dc5601ebb58b5025f9a815785b83ec59ccde474281ae1"
+        "f00db54f7b52e06f0be84a022e2b38e479d3067ff26754549a30e13a8e88f507",
+        "37e1ba1636ed9ecefde87ee116da2abd49a85fdb98447355017ad8a2c7c6a33f"
       ]
     }
   },
