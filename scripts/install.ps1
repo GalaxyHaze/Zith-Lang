@@ -52,6 +52,11 @@ if ($IsArm64) {
 
 $DownloadUrl = "$ReleaseBaseUrl/$FileName"
 $TempPath = "$env:TEMP\zithc-installer.exe"
+$StdlibArchivePath = "$env:TEMP\zithc-stdlib.zip"
+$DownloadDir = Join-Path $env:TEMP "zithc-release-$PID"
+$GitHubCLI = Get-Command gh -ErrorAction SilentlyContinue
+$UseGitHubCLI = -not [string]::IsNullOrWhiteSpace($env:GITHUB_TOKEN) -and
+    [string]::IsNullOrWhiteSpace($env:ZITH_RELEASE_BASE_URL) -and $null -ne $GitHubCLI
 $ZithRoot = if ([string]::IsNullOrWhiteSpace($InstallRootOverride)) {
     Join-Path $env:LOCALAPPDATA "Zith"
 } else {
@@ -63,7 +68,32 @@ $StdlibDir = Join-Path $ZithRoot "share\zith\stdlib"
 Write-Host "Downloading from $DownloadUrl..." -ForegroundColor Cyan
 
 try {
-    Invoke-WebRequest -Uri $DownloadUrl -OutFile $TempPath -UseBasicParsing
+    if ($UseGitHubCLI) {
+        New-Item -ItemType Directory -Path $DownloadDir -Force | Out-Null
+        $PreviousGhToken = $env:GH_TOKEN
+        $env:GH_TOKEN = $env:GITHUB_TOKEN
+        try {
+            & $GitHubCLI.Source release download $Version `
+                --repo $Repo `
+                --pattern $FileName `
+                --pattern "zithc-stdlib-$Version.zip" `
+                --dir $DownloadDir
+            if ($LASTEXITCODE -ne 0) {
+                throw "GitHub CLI failed to download release assets"
+            }
+        } finally {
+            if ($null -eq $PreviousGhToken) {
+                Remove-Item Env:GH_TOKEN -ErrorAction SilentlyContinue
+            } else {
+                $env:GH_TOKEN = $PreviousGhToken
+            }
+        }
+        Copy-Item -Path (Join-Path $DownloadDir $FileName) -Destination $TempPath -Force
+        Copy-Item -Path (Join-Path $DownloadDir "zithc-stdlib-$Version.zip") `
+            -Destination $StdlibArchivePath -Force
+    } else {
+        Invoke-WebRequest -Uri $DownloadUrl -OutFile $TempPath -UseBasicParsing
+    }
 } catch {
     Write-Error "Failed to download file. The version '$Version' might not exist."
     exit 1
@@ -73,11 +103,12 @@ Write-Host "Installing Zith to $InstallDir..."
 
 try {
     # Stage and validate the stdlib before changing the installed compiler.
-    $StdlibArchivePath = "$env:TEMP\zithc-stdlib.zip"
     $StdlibStage = Join-Path $env:TEMP "zithc-stdlib-stage-$PID"
     $StdlibUrl = "$ReleaseBaseUrl/zithc-stdlib-$Version.zip"
     Write-Host "Downloading stdlib..." -ForegroundColor Cyan
-    Invoke-WebRequest -Uri $StdlibUrl -OutFile $StdlibArchivePath -UseBasicParsing
+    if (-not $UseGitHubCLI) {
+        Invoke-WebRequest -Uri $StdlibUrl -OutFile $StdlibArchivePath -UseBasicParsing
+    }
     if (Test-Path $StdlibStage) {
         Remove-Item -Path $StdlibStage -Recurse -Force
     }
@@ -113,6 +144,9 @@ try {
     New-Item -ItemType Directory -Path $StdlibParent -Force | Out-Null
     Move-Item -Path $StdlibStage -Destination $StdlibDir -Force
     Remove-Item -Path $StdlibArchivePath -Force
+    if ($UseGitHubCLI) {
+        Remove-Item -Path $DownloadDir -Recurse -Force
+    }
     Write-Host "Standard library installed to $StdlibDir" -ForegroundColor Green
 
     Write-Host "--------------------------------------------------"

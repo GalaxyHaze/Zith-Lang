@@ -4,13 +4,34 @@ set -euo pipefail
 REPO="${ZITH_REPOSITORY:-GalaxyHaze/Zith-Lang}"
 VERSION=""
 INSTALL_DIR="${ZITH_WASM_DIR:-$HOME/.zithc-wasm}"
-RELEASE_BASE_URL="${ZITH_RELEASE_BASE_URL:-}"
+CUSTOM_RELEASE_BASE_URL="${ZITH_RELEASE_BASE_URL:-}"
+RELEASE_BASE_URL="$CUSTOM_RELEASE_BASE_URL"
 
 usage() {
     echo "Usage: $0 [<version>] [--dir <path>]"
     echo "  <version>     Specific version to install (default: latest)"
     echo "  --dir <path>  Installation directory (default: \$HOME/.zithc-wasm)"
     exit 1
+}
+
+download_release_asset() {
+    local asset_name="$1"
+    local destination="$2"
+
+    if [ -n "${GITHUB_TOKEN:-}" ] && [ -z "$CUSTOM_RELEASE_BASE_URL" ] &&
+        command -v gh >/dev/null 2>&1; then
+        GH_TOKEN="$GITHUB_TOKEN" gh release download "$VERSION" \
+            --repo "$REPO" \
+            --pattern "$asset_name" \
+            --dir "$TMP_DIR"
+        local downloaded="$TMP_DIR/$asset_name"
+        if [ "$downloaded" != "$destination" ]; then
+            mv "$downloaded" "$destination"
+        fi
+        return
+    fi
+
+    curl -fsSL "$RELEASE_BASE_URL/$asset_name" -o "$destination"
 }
 
 while [ $# -gt 0 ]; do
@@ -61,7 +82,7 @@ TMP_DIR=$(mktemp -d)
 trap 'rm -rf "$TMP_DIR"' EXIT
 
 echo "Downloading $DOWNLOAD_URL..."
-curl -fsSL "$DOWNLOAD_URL" -o "$TMP_DIR/zithc-wasm.zip"
+download_release_asset "zithc-wasm.zip" "$TMP_DIR/zithc-wasm.zip"
 
 echo "Extracting to $INSTALL_DIR..."
 rm -rf "$INSTALL_DIR"

@@ -110,21 +110,31 @@ def validate_manifest(path: Path, allow_empty_hashes: bool) -> None:
 def validate_workflows(workflow_dir: Path) -> None:
     release_page = workflow_dir / "create-new-release.yml"
     artifact_workflow = workflow_dir / "build-artifact.yml"
+    maintenance_workflow = workflow_dir / "release-maintenance.yml"
+    smoke_workflow = workflow_dir / "smoke-installers.yml"
     ci_workflow = workflow_dir / "ci.yml"
     repair_workflow = workflow_dir / "update-package.yml"
+    wasm_installer = workflow_dir.parent.parent / "scripts/install-wasm.sh"
     try:
         release_text = release_page.read_text(encoding="utf-8")
         artifact_text = artifact_workflow.read_text(encoding="utf-8")
+        maintenance_text = maintenance_workflow.read_text(encoding="utf-8")
+        smoke_text = smoke_workflow.read_text(encoding="utf-8")
         ci_text = ci_workflow.read_text(encoding="utf-8")
         repair_text = repair_workflow.read_text(encoding="utf-8")
+        wasm_installer_text = wasm_installer.read_text(encoding="utf-8")
         formula_text = (workflow_dir.parent / "homebrew/zithc.rb").read_text(
             encoding="utf-8"
         )
     except OSError as error:
-        fail(f"cannot read release workflow: {error}")
+        fail(f"cannot read release workflow contract: {error}")
 
     if "/master/" in release_text:
         fail(f"{release_page} contains an obsolete master-branch installer URL")
+    if 'CUSTOM_RELEASE_BASE_URL="${ZITH_RELEASE_BASE_URL:-}"' not in wasm_installer_text:
+        fail(f"{wasm_installer} does not preserve whether the release URL was customized")
+    if '-z "$CUSTOM_RELEASE_BASE_URL"' not in wasm_installer_text:
+        fail(f"{wasm_installer} cannot select authenticated draft asset downloads")
     expected_installers = (
         "/main/scripts/install.sh",
         "/main/scripts/install.ps1",
@@ -178,10 +188,10 @@ def validate_workflows(workflow_dir: Path) -> None:
     if artifact_text.count("name: Install Windows ARM64 dependencies\n        if: false") != 2:
         fail(f"{artifact_workflow} does not disable the incomplete LLVM 18 ARM64 installers")
 
-    def job_section(text: str, job: str) -> str:
+    def job_section(text: str, job: str, workflow: Path = artifact_workflow) -> str:
         start = text.find(f"\n  {job}:")
         if start < 0:
-            fail(f"{artifact_workflow} is missing the {job} job")
+            fail(f"{workflow} is missing the {job} job")
         next_match = re.search(r"\n  [A-Za-z0-9_-]+:\n", text[start + 1 :])
         end = start + 1 + next_match.start() if next_match else len(text)
         return text[start:end]
@@ -308,22 +318,28 @@ def validate_workflows(workflow_dir: Path) -> None:
     for asset in RELEASE_ASSETS:
         if asset not in validation_section:
             fail(f"{artifact_workflow} does not validate release asset {asset}")
-    distribution_section = job_section(artifact_text, "update-distribution")
-    for smoke_job in (
-        "smoke-installers-unix",
-        "smoke-installer-windows",
-        "smoke-installer-wasm",
+    maintenance_job = job_section(artifact_text, "release-maintenance")
+    for marker in (
+        "needs: [create-release, validate-release-assets]",
+        "uses: ./.github/workflows/release-maintenance.yml",
+        "release_tag: ${{ needs.create-release.outputs.tag }}",
+        "source_ref: ${{ github.sha }}",
+        "secrets: inherit",
     ):
-        if smoke_job not in distribution_section:
-            fail(
-                f"{artifact_workflow} updates distribution before {smoke_job} passes"
-            )
+        if marker not in maintenance_job:
+            fail(f"{artifact_workflow} release maintenance call is missing {marker}")
+
+    distribution_section = job_section(
+        maintenance_text, "update-distribution", maintenance_workflow
+    )
+    if "needs: [smoke-installers]" not in distribution_section:
+        fail(f"{maintenance_workflow} updates distribution before installer smokes pass")
     if "group: zith-distribution-metadata" not in distribution_section:
-        fail(f"{artifact_workflow} does not serialize distribution metadata updates")
+        fail(f"{maintenance_workflow} does not serialize distribution metadata updates")
     for marker in (
         "scripts/update-scoop-manifest.py",
         "scripts/update-homebrew-formula.py",
-        "zithc-stdlib-${{ steps.tag.outputs.tag }}.zip",
+        "zithc-stdlib-$RELEASE_TAG.zip",
         "sha256sum source-archive.tar.gz",
         "--sha256 \"$SHA\"",
         "Sync Homebrew tap formula",
@@ -332,36 +348,128 @@ def validate_workflows(workflow_dir: Path) -> None:
         "gh api --method PUT",
     ):
         if marker not in distribution_section:
-            fail(f"{artifact_workflow} is missing distribution step {marker}")
+            fail(f"{maintenance_workflow} is missing distribution step {marker}")
 
-    for job in (
-        "smoke-installers-unix:",
-        "smoke-installer-windows:",
-        "smoke-installer-wasm:",
-        "smoke-scoop:",
+    maintenance_smoke = job_section(
+        maintenance_text, "smoke-installers", maintenance_workflow
+    )
+    for marker in (
+        "needs: [ensure-release-tag]",
+        "uses: ./.github/workflows/smoke-installers.yml",
+        "release_tag: ${{ inputs.release_tag }}",
+        "source_ref: ${{ github.sha }}",
+        "secrets: inherit",
     ):
-        if job not in artifact_text:
-            fail(f"{artifact_workflow} is missing the {job[:-1]} release smoke job")
-    if "examples/loops-simple.zith" not in artifact_text:
-        fail(f"{artifact_workflow} installer smoke uses no C-interop-free Zith program")
-    if "test-import-console.zith" in artifact_text:
-        fail(f"{artifact_workflow} installer smoke depends on optional libclang interop")
+        if marker not in maintenance_smoke:
+            fail(f"{maintenance_workflow} smoke call is missing {marker}")
+    ensure_tag = job_section(
+        maintenance_text, "ensure-release-tag", maintenance_workflow
+    )
+    for marker in (
+        "ref: ${{ inputs.source_ref }}",
+        'ref="refs/tags/$RELEASE_TAG"',
+        'sha="$SOURCE_SHA"',
+    ):
+        if marker not in ensure_tag:
+            fail(f"{maintenance_workflow} does not verify/create the release tag: {marker}")
+    for job in ("update-distribution", "sync-playground-wasm"):
+        section = job_section(maintenance_text, job, maintenance_workflow)
+        if "needs: [smoke-installers]" not in section:
+            fail(f"{maintenance_workflow} runs {job} before installer smokes pass")
+    playground_section = job_section(
+        maintenance_text, "sync-playground-wasm", maintenance_workflow
+    )
+    for marker in (
+        'gh release download "$RELEASE_TAG"',
+        "playground/zith-playground.wasm",
+        "playground/zith-stdlib.pack",
+        "playground/runtime.json",
+        "git push origin gh-pages",
+    ):
+        if marker not in playground_section:
+            fail(f"{maintenance_workflow} is missing playground sync step {marker}")
+
+    if any(
+        legacy_job in artifact_text
+        for legacy_job in (
+            "smoke-installers-unix:",
+            "smoke-installer-windows:",
+            "smoke-installer-wasm:",
+        )
+    ):
+        fail(f"{artifact_workflow} still defines inline installer smoke jobs")
+
+    if "smoke-scoop:" not in artifact_text:
+        fail(f"{artifact_workflow} is missing the Scoop release smoke job")
+    scoop_section = job_section(artifact_text, "smoke-scoop")
+    if "needs: [create-release, release-maintenance]" not in scoop_section:
+        fail(f"{artifact_workflow} runs Scoop smoke before release maintenance")
+    dispatch_start = smoke_text.find("  workflow_dispatch:")
+    call_start = smoke_text.find("  workflow_call:")
+    if dispatch_start < 0 or call_start < 0 or call_start <= dispatch_start:
+        fail(f"{smoke_workflow} must support manual and reusable invocation")
+    dispatch_inputs = smoke_text[dispatch_start:call_start]
+    call_inputs = smoke_text[call_start : smoke_text.find("\npermissions:", call_start)]
+
+    def input_section(block: str, name: str) -> str:
+        match = re.search(
+            rf"(?m)^      {re.escape(name)}:\n((?:^        .*\n)*)",
+            block,
+        )
+        if match is None:
+            fail(f"{smoke_workflow} is missing the {name} input")
+        return match.group(1)
+
+    dispatch_release_tag = input_section(dispatch_inputs, "release_tag")
+    dispatch_source_ref = input_section(dispatch_inputs, "source_ref")
+    call_release_tag = input_section(call_inputs, "release_tag")
+    call_source_ref = input_section(call_inputs, "source_ref")
+    if "required: true" not in dispatch_release_tag:
+        fail(f"{smoke_workflow} must require the release tag for manual runs")
+    if "required: false" not in dispatch_source_ref or "default: main" not in dispatch_source_ref:
+        fail(f"{smoke_workflow} must default the manual source ref to main")
+    for name, section in (
+        ("release_tag", call_release_tag),
+        ("source_ref", call_source_ref),
+    ):
+        if "required: true" not in section:
+            fail(f"{smoke_workflow} must require {name} from reusable callers")
+    validation_job = job_section(smoke_text, "validate-inputs", smoke_workflow)
+    if "v[0-9]+\\.[0-9]+\\.[0-9]+(\\.[0-9]+)?" not in validation_job:
+        fail(f"{smoke_workflow} does not validate release tags before using them")
+    for smoke_job, runner in (
+        ("smoke-installers-unix", "ubuntu-latest, macos-14"),
+        ("smoke-installer-windows", "windows-latest"),
+        ("smoke-installer-wasm", "ubuntu-latest"),
+    ):
+        section = job_section(smoke_text, smoke_job, smoke_workflow)
+        if runner not in section:
+            fail(f"{smoke_workflow} does not run {smoke_job} on {runner}")
+        if "ref: ${{ inputs.source_ref || github.ref }}" not in section:
+            fail(f"{smoke_workflow} does not checkout the requested source ref in {smoke_job}")
+        if "persist-credentials: false" not in section:
+            fail(f"{smoke_workflow} persists checkout credentials in {smoke_job}")
+        if "ZITH_RELEASE_TAG: ${{ inputs.release_tag }}" not in section:
+            fail(f"{smoke_workflow} does not pass the release tag safely in {smoke_job}")
+        if "GITHUB_TOKEN: ${{ github.token }}" not in section:
+            fail(f"{smoke_workflow} does not authenticate draft asset downloads in {smoke_job}")
+    for smoke_job, output_path in (
+        ("smoke-installers-unix", "${{ runner.temp }}/zith-install"),
+        ("smoke-installer-windows", "${{ runner.temp }}\\zith-install"),
+        ("smoke-installer-wasm", "${{ runner.temp }}/zith-wasm-install"),
+    ):
+        if output_path not in job_section(smoke_text, smoke_job, smoke_workflow):
+            fail(f"{smoke_workflow} writes outside runner.temp in {smoke_job}")
+    if "examples/loops-simple.zith" not in smoke_text:
+        fail(f"{smoke_workflow} installer smoke uses no C-interop-free Zith program")
+    if "test-import-console.zith" in smoke_text:
+        fail(f"{smoke_workflow} installer smoke depends on optional libclang interop")
     publish_section = job_section(artifact_text, "publish-release")
     if "if: needs.create-release.outputs.draft == 'false'" not in publish_section:
         fail(f"{artifact_workflow} publishes without honoring draft mode")
-    for prerequisite in ("sync-playground-wasm", "smoke-scoop"):
+    for prerequisite in ("release-maintenance", "smoke-scoop"):
         if prerequisite not in publish_section:
             fail(f"{artifact_workflow} publishes before {prerequisite} passes")
-    playground_section = job_section(artifact_text, "sync-playground-wasm")
-    for smoke_job in (
-        "smoke-installers-unix",
-        "smoke-installer-windows",
-        "smoke-installer-wasm",
-    ):
-        if smoke_job not in playground_section:
-            fail(
-                f"{artifact_workflow} syncs playground before {smoke_job} passes"
-            )
     if "build-musl" in ci_text and "-DZITH_HAS_LLVM=OFF" in ci_text:
         fail(f"{ci_workflow} disables LLVM in the musl build")
     if "-DZITH_REQUIRE_LLVM=ON" not in ci_text:

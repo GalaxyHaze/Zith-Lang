@@ -1,0 +1,135 @@
+name: Smoke Installers
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Existing release tag to test (for example, v0.6.3.12)
+        required: true
+        type: string
+      source_ref:
+        description: Git ref containing the installer scripts and smoke example
+        required: false
+        default: main
+        type: string
+  workflow_call:
+    inputs:
+      release_tag:
+        description: Existing release tag to test
+        required: true
+        type: string
+      source_ref:
+        description: Git ref containing the installer scripts and smoke example
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  validate-inputs:
+    name: Validate smoke inputs
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate release tag
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(\.[0-9]+)?$ ]]; then
+            echo "::error::Invalid release tag '$RELEASE_TAG'. Expected vMAJOR.MINOR.PATCH[.REVISION]."
+            exit 1
+          fi
+
+  smoke-installers-unix:
+    needs: [validate-inputs]
+    name: Smoke installer (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-14]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_ref || github.ref }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Install released compiler and stdlib
+        shell: bash
+        run: |
+          bash scripts/install.sh "$ZITH_RELEASE_TAG"
+          test -x "$ZITH_INSTALL_ROOT/bin/zithc"
+          test -f "$ZITH_INSTALL_ROOT/share/zith/stdlib/std/io/console.zith"
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          ZITH_INSTALL_ROOT: ${{ runner.temp }}/zith-install
+          ZITH_RELEASE_TAG: ${{ inputs.release_tag }}
+
+      - name: Check program through installed compiler
+        shell: bash
+        env:
+          ZITH_INSTALL_ROOT: ${{ runner.temp }}/zith-install
+        run: |
+          "$ZITH_INSTALL_ROOT/bin/zithc" --help >/dev/null
+          "$ZITH_INSTALL_ROOT/bin/zithc" check examples/loops-simple.zith
+
+  smoke-installer-windows:
+    needs: [validate-inputs]
+    name: Smoke installer (Windows)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_ref || github.ref }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Install released compiler and stdlib
+        shell: pwsh
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          ZITH_INSTALL_ROOT: ${{ runner.temp }}\zith-install
+          ZITH_RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          pwsh -NoProfile -File .\scripts\install.ps1 -Version "$env:ZITH_RELEASE_TAG"
+          if (-not (Test-Path "$env:ZITH_INSTALL_ROOT\bin\zithc.exe")) {
+            throw "installed compiler was not found"
+          }
+          if (-not (Test-Path "$env:ZITH_INSTALL_ROOT\share\zith\stdlib\std\io\console.zith")) {
+            throw "installed stdlib was not found"
+          }
+
+      - name: Check program through installed compiler
+        shell: pwsh
+        env:
+          ZITH_INSTALL_ROOT: ${{ runner.temp }}\zith-install
+        run: |
+          & "$env:ZITH_INSTALL_ROOT\bin\zithc.exe" --help | Out-Null
+          & "$env:ZITH_INSTALL_ROOT\bin\zithc.exe" check examples\loops-simple.zith
+          if ($LASTEXITCODE -ne 0) {
+            throw "installed compiler failed the language smoke test"
+          }
+
+  smoke-installer-wasm:
+    needs: [validate-inputs]
+    name: Smoke installer (WASM)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_ref || github.ref }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Install released WASM bundle
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          ZITH_WASM_DIR: ${{ runner.temp }}/zith-wasm-install
+          ZITH_RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          bash scripts/install-wasm.sh "$ZITH_RELEASE_TAG"
+          test -s "$ZITH_WASM_DIR/zith-playground.wasm"
+          test -s "$ZITH_WASM_DIR/zith-stdlib.pack"

@@ -1,0 +1,256 @@
+name: Release Maintenance
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Existing release tag to verify and maintain
+        required: true
+        type: string
+      source_ref:
+        description: Exact source ref used to build the release assets
+        required: true
+        type: string
+  workflow_call:
+    inputs:
+      release_tag:
+        description: Existing release tag to verify and maintain
+        required: true
+        type: string
+      source_ref:
+        description: Exact source ref used to build the release assets
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  ensure-release-tag:
+    name: Ensure release tag points at source
+    runs-on: ubuntu-latest
+    outputs:
+      source_sha: ${{ steps.source.outputs.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_ref }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Validate tag and source revision
+        id: source
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(\.[0-9]+)?$ ]]; then
+            echo "::error::Invalid release tag '$RELEASE_TAG'."
+            exit 1
+          fi
+
+          SOURCE_SHA=$(git rev-parse HEAD)
+          REF_PATH="repos/$GITHUB_REPOSITORY/git/ref/tags/$RELEASE_TAG"
+          if REF_JSON=$(gh api "$REF_PATH" 2>/dev/null); then
+            OBJECT_TYPE=$(jq -r '.object.type' <<< "$REF_JSON")
+            OBJECT_SHA=$(jq -r '.object.sha' <<< "$REF_JSON")
+            if [ "$OBJECT_TYPE" = "tag" ]; then
+              OBJECT_SHA=$(gh api "repos/$GITHUB_REPOSITORY/git/tags/$OBJECT_SHA" --jq '.object.sha')
+            fi
+            if [ "$OBJECT_SHA" != "$SOURCE_SHA" ]; then
+              echo "::error::Tag $RELEASE_TAG points to $OBJECT_SHA, not $SOURCE_SHA."
+              exit 1
+            fi
+          else
+            gh api --method POST "repos/$GITHUB_REPOSITORY/git/refs" \
+              -f ref="refs/tags/$RELEASE_TAG" \
+              -f sha="$SOURCE_SHA"
+          fi
+          echo "sha=$SOURCE_SHA" >> "$GITHUB_OUTPUT"
+
+  smoke-installers:
+    needs: [ensure-release-tag]
+    name: Smoke installers
+    uses: ./.github/workflows/smoke-installers.yml
+    with:
+      release_tag: ${{ inputs.release_tag }}
+      source_ref: ${{ github.sha }}
+    secrets: inherit
+    permissions:
+      contents: read
+
+  update-distribution:
+    needs: [smoke-installers]
+    name: Update release distribution metadata
+    runs-on: ubuntu-latest
+    concurrency:
+      group: zith-distribution-metadata
+      cancel-in-progress: false
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout main for distribution metadata
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+          token: ${{ secrets.RELEASE_PAT }}
+
+      - name: Download Windows release assets
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag }}
+          GH_TOKEN: ${{ secrets.RELEASE_PAT }}
+          RELEASE_PAT: ${{ secrets.RELEASE_PAT }}
+        run: |
+          set -euo pipefail
+          test -n "$RELEASE_PAT"
+          mkdir -p release-bins
+          gh release download "$RELEASE_TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --pattern "zithc-windows-amd64.exe" \
+            --pattern "zithc-windows-arm64.exe" \
+            --pattern "zithc-stdlib-$RELEASE_TAG.zip" \
+            --dir release-bins
+          test -s "release-bins/zithc-windows-amd64.exe"
+          test -s "release-bins/zithc-windows-arm64.exe"
+          test -s "release-bins/zithc-stdlib-$RELEASE_TAG.zip"
+
+      - name: Update and validate Scoop manifest
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          set -euo pipefail
+          VERSION="${RELEASE_TAG#v}"
+          python3 scripts/update-scoop-manifest.py \
+            --manifest .github/scoop/bucket/zithc.json \
+            --release-dir "$GITHUB_WORKSPACE/release-bins" \
+            --repository "$GITHUB_REPOSITORY" \
+            --version "$VERSION"
+          python3 scripts/validate-release-contract.py \
+            --manifest .github/scoop/bucket/zithc.json \
+            --workflow-dir .github/workflows
+
+      - name: Compute Homebrew source metadata
+        id: homebrew
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          set -euo pipefail
+          VERSION="${RELEASE_TAG#v}"
+          URL="https://github.com/${GITHUB_REPOSITORY}/archive/refs/tags/${RELEASE_TAG}.tar.gz"
+          curl --fail --silent --show-error --location --retry 3 --retry-all-errors \
+            --output source-archive.tar.gz "$URL"
+          SHA=$(sha256sum source-archive.tar.gz | cut -d' ' -f1)
+          test "${#SHA}" -eq 64
+          python3 scripts/update-homebrew-formula.py \
+            --formula .github/homebrew/zithc.rb \
+            --repository "$GITHUB_REPOSITORY" \
+            --version "$VERSION" \
+            --sha256 "$SHA"
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+          echo "sha256=$SHA" >> "$GITHUB_OUTPUT"
+
+      - name: Commit distribution metadata
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag }}
+          GH_TOKEN: ${{ secrets.RELEASE_PAT }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add .github/scoop/bucket/zithc.json .github/homebrew/zithc.rb
+          if git diff --staged --quiet; then
+            echo "Distribution metadata already matches the release"
+          else
+            git commit -m "chore: update distribution metadata to $RELEASE_TAG"
+            git push origin HEAD:main
+          fi
+
+      - name: Sync Homebrew tap formula
+        shell: bash
+        env:
+          VERSION: ${{ inputs.release_tag }}
+          GH_TOKEN: ${{ secrets.RELEASE_PAT }}
+        run: |
+          set -euo pipefail
+          VERSION="${VERSION#v}"
+          FORMULA_B64=$(base64 --wrap=0 .github/homebrew/zithc.rb)
+          REMOTE_SHA=$(gh api \
+            "repos/${GITHUB_REPOSITORY_OWNER}/homebrew-zithc/contents/Formula/zithc.rb" \
+            --jq '.sha')
+          test -n "$REMOTE_SHA"
+          gh api --method PUT \
+            "repos/${GITHUB_REPOSITORY_OWNER}/homebrew-zithc/contents/Formula/zithc.rb" \
+            -f message="chore: update formula to v$VERSION" \
+            -f branch=main \
+            -f sha="$REMOTE_SHA" \
+            -f content="$FORMULA_B64" \
+            --jq '.commit.sha'
+
+  sync-playground-wasm:
+    needs: [smoke-installers]
+    name: Sync playground WebAssembly
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Resolve release version
+        id: tag
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          set -euo pipefail
+          echo "tag=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
+          echo "version=${RELEASE_TAG#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Download and extract zithc-wasm
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag }}
+          GH_TOKEN: ${{ secrets.RELEASE_PAT }}
+        run: |
+          set -euo pipefail
+          mkdir -p wasm-sync
+          gh release download "$RELEASE_TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --pattern "zithc-wasm.zip"
+          unzip -o -d wasm-sync zithc-wasm.zip zith-playground.wasm zith-stdlib.pack
+          test -s wasm-sync/zith-playground.wasm
+          test -s wasm-sync/zith-stdlib.pack
+          WASM_SHA=$(sha256sum wasm-sync/zith-playground.wasm | cut -d' ' -f1)
+          STDLIB_SHA=$(sha256sum wasm-sync/zith-stdlib.pack | cut -d' ' -f1)
+          printf '{"version":"%s","abi":2,"stdlib":"zith-stdlib.pack","wasm_sha256":"%s","stdlib_sha256":"%s"}\n' \
+            "$RELEASE_TAG" "$WASM_SHA" "$STDLIB_SHA" > wasm-sync/runtime.json
+          ls -l wasm-sync/
+
+      - name: Sync site branch
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag }}
+          RELEASE_PAT: ${{ secrets.RELEASE_PAT }}
+        run: |
+          set -euo pipefail
+          VERSION="${RELEASE_TAG#v}"
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git clone --depth 1 --branch gh-pages \
+            "https://x-access-token:${RELEASE_PAT}@github.com/${GITHUB_REPOSITORY}.git" site
+          cd site
+          mkdir -p playground
+          cp ../wasm-sync/zith-playground.wasm playground/zith-playground.wasm
+          cp ../wasm-sync/zith-stdlib.pack playground/zith-stdlib.pack
+          cp ../wasm-sync/runtime.json playground/runtime.json
+          if ! git diff --quiet -- playground/zith-playground.wasm playground/zith-stdlib.pack playground/runtime.json; then
+            git add playground/zith-playground.wasm playground/zith-stdlib.pack playground/runtime.json
+            git commit -m "chore: sync playground wasm v$VERSION"
+            git push origin gh-pages
+          else
+            echo "playground wasm unchanged; skipping push"
+          fi

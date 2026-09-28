@@ -40,6 +40,26 @@ release_base_url() {
     fi
 }
 
+download_release_asset() {
+    local asset_name="$1"
+    local destination="$2"
+
+    if [ -n "${GITHUB_TOKEN:-}" ] && [ -z "$RELEASE_BASE_URL" ] &&
+        command -v gh >/dev/null 2>&1; then
+        GH_TOKEN="$GITHUB_TOKEN" gh release download "$VERSION" \
+            --repo "$REPO" \
+            --pattern "$asset_name" \
+            --dir "$TMP_DIR"
+        local downloaded="$TMP_DIR/$asset_name"
+        if [ "$downloaded" != "$destination" ]; then
+            mv "$downloaded" "$destination"
+        fi
+        return
+    fi
+
+    curl -fsSL "$(release_base_url)/$asset_name" -o "$destination"
+}
+
 detect_latest_version() {
     # Try authenticated request first (spares rate limit), fall back to unauthenticated
     API_URL="https://api.github.com/repos/$REPO/releases/latest"
@@ -108,7 +128,7 @@ trap 'rm -rf "$TMP_DIR"' EXIT
 TMP_FILE="$TMP_DIR/$OUTPUT_NAME"
 
 echo "Downloading $FILE_NAME..."
-if ! curl -fsSL "$DOWNLOAD_URL" -o "$TMP_FILE"; then
+if ! download_release_asset "$FILE_NAME" "$TMP_FILE"; then
     echo "Error: Failed to download binary." >&2
     echo "Please check the URL: $DOWNLOAD_URL" >&2
     exit 1
@@ -145,7 +165,8 @@ case "$OS" in
             STDLIB_STAGE="$TMP_DIR/stdlib"
             mkdir -p "$BIN_DIR" "${STDLIB_DIR%/*}" "$STDLIB_STAGE"
             STDLIB_URL="$(release_base_url)/zithc-stdlib-$VERSION.tar.gz"
-            if ! curl -fsSL "$STDLIB_URL" -o "$TMP_DIR/zithc-stdlib.tar.gz"; then
+            if ! download_release_asset "zithc-stdlib-$VERSION.tar.gz" \
+                "$TMP_DIR/zithc-stdlib.tar.gz"; then
                 echo "Error: Failed to download standard library." >&2
                 exit 1
             fi
@@ -163,7 +184,8 @@ case "$OS" in
             STDLIB_STAGE="$TMP_DIR/stdlib"
             mkdir -p "$STDLIB_STAGE"
             echo "Downloading stdlib..."
-            if ! curl -fsSL "$STDLIB_URL" -o "$TMP_DIR/zithc-stdlib.tar.gz"; then
+            if ! download_release_asset "zithc-stdlib-$VERSION.tar.gz" \
+                "$TMP_DIR/zithc-stdlib.tar.gz"; then
                 echo "Error: Failed to download standard library." >&2
                 exit 1
             fi
