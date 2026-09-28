@@ -665,7 +665,7 @@ jobs:
       - name: Checkout release sources
         uses: actions/checkout@v4
         with:
-          ref: ${{ needs.create-release.outputs.tag }}
+          ref: ${{ github.sha }}
           fetch-depth: 1
           token: ${{ secrets.GITHUB_TOKEN }}
 
