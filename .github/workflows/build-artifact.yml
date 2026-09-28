@@ -177,12 +177,20 @@ jobs:
           $roots = @(
             'C:\Program Files\LLVM',
             'C:\Program Files (x86)\LLVM',
-            'C:\Program Files\Microsoft Visual Studio'
+            'C:\Program Files\Microsoft Visual Studio',
+            'C:\ProgramData\chocolatey\lib\llvm\tools',
+            (Join-Path $env:ChocolateyInstall 'lib\llvm\tools')
           )
           $config = Get-ChildItem -Path $roots -Filter LLVMConfig.cmake -File `
             -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
           if ($null -eq $config) {
             $llvmConfig = Get-Command llvm-config.exe -ErrorAction SilentlyContinue
+            if ($null -eq $llvmConfig) {
+              $llvmConfigPath = Join-Path $env:ChocolateyInstall 'lib\llvm\tools\bin\llvm-config.exe'
+              if (Test-Path $llvmConfigPath) {
+                $llvmConfig = Get-Item $llvmConfigPath
+              }
+            }
             if ($null -ne $llvmConfig) {
               $cmakeDir = (& $llvmConfig.Source --cmakedir).Trim()
               if ($cmakeDir -and (Test-Path (Join-Path $cmakeDir 'LLVMConfig.cmake'))) {
@@ -769,12 +777,20 @@ jobs:
           $roots = @(
             'C:\Program Files\LLVM',
             'C:\Program Files (x86)\LLVM',
-            'C:\Program Files\Microsoft Visual Studio'
+            'C:\Program Files\Microsoft Visual Studio',
+            'C:\ProgramData\chocolatey\lib\llvm\tools',
+            (Join-Path $env:ChocolateyInstall 'lib\llvm\tools')
           )
           $config = Get-ChildItem -Path $roots -Filter LLVMConfig.cmake -File `
             -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
           if ($null -eq $config) {
             $llvmConfig = Get-Command llvm-config.exe -ErrorAction SilentlyContinue
+            if ($null -eq $llvmConfig) {
+              $llvmConfigPath = Join-Path $env:ChocolateyInstall 'lib\llvm\tools\bin\llvm-config.exe'
+              if (Test-Path $llvmConfigPath) {
+                $llvmConfig = Get-Item $llvmConfigPath
+              }
+            }
             if ($null -ne $llvmConfig) {
               $cmakeDir = (& $llvmConfig.Source --cmakedir).Trim()
               if ($cmakeDir -and (Test-Path (Join-Path $cmakeDir 'LLVMConfig.cmake'))) {
