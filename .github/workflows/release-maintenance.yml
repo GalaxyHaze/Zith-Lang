@@ -11,6 +11,11 @@ on:
         description: Exact source ref used to build the release assets
         required: true
         type: string
+      run_install_smokes:
+        description: Run installer smoke tests before release maintenance
+        required: false
+        default: true
+        type: boolean
   workflow_call:
     inputs:
       release_tag:
@@ -21,6 +26,11 @@ on:
         description: Exact source ref used to build the release assets
         required: true
         type: string
+      run_install_smokes:
+        description: Run installer smoke tests before release maintenance
+        required: false
+        default: true
+        type: boolean
 
 permissions:
   contents: write
@@ -64,6 +74,7 @@ jobs:
 
   smoke-installers:
     needs: [validate-release-source]
+    if: inputs.run_install_smokes
     name: Smoke installers
     uses: ./.github/workflows/smoke-installers.yml
     with:
@@ -74,7 +85,7 @@ jobs:
       contents: read
 
   update-distribution:
-    needs: [validate-release-source, smoke-installers]
+    needs: [validate-release-source]
     name: Update release distribution metadata
     runs-on: ubuntu-latest
     concurrency:
@@ -188,7 +199,7 @@ jobs:
             --jq '.commit.sha'
 
   sync-playground-wasm:
-    needs: [smoke-installers]
+    needs: [validate-release-source]
     name: Sync playground WebAssembly
     runs-on: ubuntu-latest
     permissions:

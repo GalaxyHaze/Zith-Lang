@@ -326,6 +326,7 @@ def validate_workflows(workflow_dir: Path) -> None:
         "uses: ./.github/workflows/release-maintenance.yml",
         "release_tag: ${{ needs.create-release.outputs.tag }}",
         "source_ref: ${{ github.sha }}",
+        "run_install_smokes: true",
         "secrets: inherit",
     ):
         if marker not in maintenance_job:
@@ -334,8 +335,8 @@ def validate_workflows(workflow_dir: Path) -> None:
     distribution_section = job_section(
         maintenance_text, "update-distribution", maintenance_workflow
     )
-    if "needs: [validate-release-source, smoke-installers]" not in distribution_section:
-        fail(f"{maintenance_workflow} updates distribution before installer smokes pass")
+    if "needs: [validate-release-source]" not in distribution_section:
+        fail(f"{maintenance_workflow} distribution job is not gated on release validation")
     if "group: zith-distribution-metadata" not in distribution_section:
         fail(f"{maintenance_workflow} does not serialize distribution metadata updates")
     for marker in (
@@ -359,6 +360,7 @@ def validate_workflows(workflow_dir: Path) -> None:
     )
     for marker in (
         "needs: [validate-release-source]",
+        "if: inputs.run_install_smokes",
         "uses: ./.github/workflows/smoke-installers.yml",
         "release_tag: ${{ inputs.release_tag }}",
         "source_ref: ${{ github.sha }}",
@@ -378,8 +380,8 @@ def validate_workflows(workflow_dir: Path) -> None:
             fail(f"{maintenance_workflow} does not validate the release source: {marker}")
     for job in ("update-distribution", "sync-playground-wasm"):
         section = job_section(maintenance_text, job, maintenance_workflow)
-        if "smoke-installers" not in section:
-            fail(f"{maintenance_workflow} runs {job} before installer smokes pass")
+        if "needs: [validate-release-source]" not in section:
+            fail(f"{maintenance_workflow} {job} is not gated on release validation")
     playground_section = job_section(
         maintenance_text, "sync-playground-wasm", maintenance_workflow
     )

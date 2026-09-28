@@ -708,6 +708,7 @@ jobs:
     with:
       release_tag: ${{ needs.create-release.outputs.tag }}
       source_ref: ${{ github.sha }}
+      run_install_smokes: true
     secrets: inherit
     permissions:
       contents: write
