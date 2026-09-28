@@ -236,8 +236,9 @@ jobs:
           if (-not (Test-Path (Join-Path $llvmRoot 'lib\cmake\llvm\LLVMConfig.cmake'))) {
             throw "LLVM archive did not contain LLVMConfig.cmake: $assetName"
           }
-          $clangVersion = & (Join-Path $llvmRoot 'bin\clang-cl.exe') --version
-          if ($clangVersion -notmatch 'clang version 20\.') {
+          $clangVersion = & (Join-Path $llvmRoot 'bin\clang-cl.exe') --version |
+            Select-Object -First 1
+          if ($clangVersion -notmatch '^clang version 20\.') {
             throw "Expected Clang 20 from LLVM archive; got: $clangVersion"
           }
 
@@ -397,7 +398,7 @@ jobs:
             --workdir /workspace \
             alpine:3.22 \
             sh -euc '
-              apk add --no-cache build-base cmake ninja python3 \
+              apk add --no-cache build-base cmake ninja python3 git \
                 clang20 llvm20-dev llvm20-static llvm20-gtest lld20
 
               compiler_target="$(clang-20 --print-target-triple)"
@@ -934,8 +935,9 @@ jobs:
           if (-not (Test-Path (Join-Path $llvmRoot 'lib\cmake\llvm\LLVMConfig.cmake'))) {
             throw "LLVM archive did not contain LLVMConfig.cmake: $assetName"
           }
-          $clangVersion = & (Join-Path $llvmRoot 'bin\clang-cl.exe') --version
-          if ($clangVersion -notmatch 'clang version 20\.') {
+          $clangVersion = & (Join-Path $llvmRoot 'bin\clang-cl.exe') --version |
+            Select-Object -First 1
+          if ($clangVersion -notmatch '^clang version 20\.') {
             throw "Expected Clang 20 from LLVM archive; got: $clangVersion"
           }
 

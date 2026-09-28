@@ -36,7 +36,8 @@ with the archive.
 
 The musl jobs build inside native Alpine containers and install Alpine's
 target-matched Clang 20 and static LLVM 20 packages, including the separate
-`llvm20-gtest` archive package required by LLVM's exported CMake targets. They
+`llvm20-gtest` archive package required by LLVM's exported CMake targets and
+`git`, which CMake FetchContent uses to clone `mio`. They
 verify the compiler's reported musl target and require LLVM, so they fail
 rather than publish a sema-only compiler. A successful release run is still
 required to confirm both Alpine builds end to end.

@@ -202,7 +202,14 @@ def validate_workflows(workflow_dir: Path) -> None:
         fail(f"{artifact_workflow} does not build musl artifacts in Alpine")
     if "apk add --no-cache" not in musl_section:
         fail(f"{artifact_workflow} does not install Alpine build dependencies")
-    for package in ("clang20", "llvm20-dev", "llvm20-static", "llvm20-gtest", "lld20"):
+    for package in (
+        "clang20",
+        "llvm20-dev",
+        "llvm20-static",
+        "llvm20-gtest",
+        "lld20",
+        "git",
+    ):
         if package not in musl_section:
             fail(f"{artifact_workflow} does not install {package} for musl builds")
     for platform in ("linux/amd64", "linux/arm64"):
@@ -228,6 +235,8 @@ def validate_workflows(workflow_dir: Path) -> None:
             fail(f"{artifact_workflow} does not clear stale LLVM files in {job}")
         if "Expected Clang 20" not in section:
             fail(f"{artifact_workflow} does not verify the Windows Clang version in {job}")
+        if "Select-Object -First 1" not in section:
+            fail(f"{artifact_workflow} does not isolate Clang version output in {job}")
         if "Expose DIA SDK at LLVM's configured path" not in section:
             fail(f"{artifact_workflow} does not expose the DIA SDK to LLVM in {job}")
         if "VSINSTALLDIR" not in section or "diaguids.lib" not in section:
