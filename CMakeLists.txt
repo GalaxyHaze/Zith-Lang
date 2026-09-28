@@ -127,7 +127,10 @@ endif()
 set(ZITH_C_COMPILE_AVAILABLE OFF)
 set(ZITH_LLD_AVAILABLE OFF)
 
-if(ZITH_HAS_LLVM AND NOT ZITH_IS_WASM)
+if(ZITH_HAS_LLVM AND NOT ZITH_IS_WASM AND NOT CMAKE_CROSSCOMPILING)
+    # lldELF/lldCommon are host libraries. Do not link them into a
+    # cross-target compiler, where they can make the final link use host ABI
+    # objects or host-only dependencies.
     find_path(ZITH_LLD_INCLUDE_DIR lld/Common/Driver.h
         HINTS ${LLVM_INCLUDE_DIRS}
         PATH_SUFFIXES include
