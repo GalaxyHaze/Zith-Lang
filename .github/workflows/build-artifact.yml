@@ -172,18 +172,30 @@ jobs:
 
       - name: Locate LLVM CMake package
         if: runner.os == 'Windows'
-        shell: bash
+        shell: pwsh
         run: |
-          LLVM_CMAKE_DIR="$(find \
-            'C:/Program Files/LLVM' \
-            'C:/Program Files (x86)/LLVM' \
-            'C:/Program Files/Microsoft Visual Studio' \
-            -type f -name LLVMConfig.cmake -print -quit 2>/dev/null | xargs -r dirname)"
-          if [ -z "$LLVM_CMAKE_DIR" ]; then
-            LLVM_CMAKE_DIR="$(llvm-config --cmakedir 2>/dev/null || true)"
-          fi
-          test -f "$LLVM_CMAKE_DIR/LLVMConfig.cmake"
-          echo "LLVM_DIR=$LLVM_CMAKE_DIR" >> "$GITHUB_ENV"
+          $roots = @(
+            'C:\Program Files\LLVM',
+            'C:\Program Files (x86)\LLVM',
+            'C:\Program Files\Microsoft Visual Studio'
+          )
+          $config = Get-ChildItem -Path $roots -Filter LLVMConfig.cmake -File `
+            -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+          if ($null -eq $config) {
+            $llvmConfig = Get-Command llvm-config.exe -ErrorAction SilentlyContinue
+            if ($null -ne $llvmConfig) {
+              $cmakeDir = (& $llvmConfig.Source --cmakedir).Trim()
+              if ($cmakeDir -and (Test-Path (Join-Path $cmakeDir 'LLVMConfig.cmake'))) {
+                $config = Get-Item (Join-Path $cmakeDir 'LLVMConfig.cmake')
+              }
+            }
+          }
+          if ($null -eq $config) {
+            throw 'LLVMConfig.cmake was not found on the Windows runner'
+          }
+          $llvmDir = $config.DirectoryName
+          "LLVM_DIR=$llvmDir" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          Write-Host "Using LLVM_DIR=$llvmDir"
 
       - name: Setup MSVC environment
         if: runner.os == 'Windows' && matrix.msvc_arch != ''
@@ -752,18 +764,30 @@ jobs:
 
       - name: Locate LLVM CMake package
         if: runner.os == 'Windows'
-        shell: bash
+        shell: pwsh
         run: |
-          LLVM_CMAKE_DIR="$(find \
-            'C:/Program Files/LLVM' \
-            'C:/Program Files (x86)/LLVM' \
-            'C:/Program Files/Microsoft Visual Studio' \
-            -type f -name LLVMConfig.cmake -print -quit 2>/dev/null | xargs -r dirname)"
-          if [ -z "$LLVM_CMAKE_DIR" ]; then
-            LLVM_CMAKE_DIR="$(llvm-config --cmakedir 2>/dev/null || true)"
-          fi
-          test -f "$LLVM_CMAKE_DIR/LLVMConfig.cmake"
-          echo "LLVM_DIR=$LLVM_CMAKE_DIR" >> "$GITHUB_ENV"
+          $roots = @(
+            'C:\Program Files\LLVM',
+            'C:\Program Files (x86)\LLVM',
+            'C:\Program Files\Microsoft Visual Studio'
+          )
+          $config = Get-ChildItem -Path $roots -Filter LLVMConfig.cmake -File `
+            -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+          if ($null -eq $config) {
+            $llvmConfig = Get-Command llvm-config.exe -ErrorAction SilentlyContinue
+            if ($null -ne $llvmConfig) {
+              $cmakeDir = (& $llvmConfig.Source --cmakedir).Trim()
+              if ($cmakeDir -and (Test-Path (Join-Path $cmakeDir 'LLVMConfig.cmake'))) {
+                $config = Get-Item (Join-Path $cmakeDir 'LLVMConfig.cmake')
+              }
+            }
+          }
+          if ($null -eq $config) {
+            throw 'LLVMConfig.cmake was not found on the Windows runner'
+          }
+          $llvmDir = $config.DirectoryName
+          "LLVM_DIR=$llvmDir" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          Write-Host "Using LLVM_DIR=$llvmDir"
 
       - name: Setup MSVC environment
         if: runner.os == 'Windows' && matrix.msvc_arch != ''

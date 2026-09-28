@@ -38,6 +38,11 @@ if(ZITH_HAS_LLVM AND NOT ZITH_IS_WASM)
         if(NOT TARGET zstd::libzstd_static)
             add_library(zstd::libzstd_static INTERFACE IMPORTED)
         endif()
+        if(NOT TARGET Terminfo::terminfo)
+            # The host LLVM package exports this target even though the
+            # selected musl build does not link LLVM's terminal support.
+            add_library(Terminfo::terminfo INTERFACE IMPORTED)
+        endif()
     endif()
 
     if(DEFINED LLVM_DIR AND NOT EXISTS "${LLVM_DIR}/LLVMConfig.cmake")
