@@ -131,6 +131,8 @@ def validate_workflows(workflow_dir: Path) -> None:
 
     if "/master/" in release_text:
         fail(f"{release_page} contains an obsolete master-branch installer URL")
+    if "git/refs" in maintenance_text or 'refs/tags/$RELEASE_TAG' in maintenance_text:
+        fail(f"{maintenance_workflow} must not create a tag and retrigger artifact builds")
     if 'CUSTOM_RELEASE_BASE_URL="${ZITH_RELEASE_BASE_URL:-}"' not in wasm_installer_text:
         fail(f"{wasm_installer} does not preserve whether the release URL was customized")
     if '-z "$CUSTOM_RELEASE_BASE_URL"' not in wasm_installer_text:
@@ -332,7 +334,7 @@ def validate_workflows(workflow_dir: Path) -> None:
     distribution_section = job_section(
         maintenance_text, "update-distribution", maintenance_workflow
     )
-    if "needs: [smoke-installers]" not in distribution_section:
+    if "needs: [validate-release-source, smoke-installers]" not in distribution_section:
         fail(f"{maintenance_workflow} updates distribution before installer smokes pass")
     if "group: zith-distribution-metadata" not in distribution_section:
         fail(f"{maintenance_workflow} does not serialize distribution metadata updates")
@@ -340,8 +342,10 @@ def validate_workflows(workflow_dir: Path) -> None:
         "scripts/update-scoop-manifest.py",
         "scripts/update-homebrew-formula.py",
         "zithc-stdlib-$RELEASE_TAG.zip",
+        'archive/${SOURCE_SHA}.tar.gz',
         "sha256sum source-archive.tar.gz",
         "--sha256 \"$SHA\"",
+        '--source-ref "$SOURCE_SHA"',
         "Sync Homebrew tap formula",
         "base64 --wrap=0 .github/homebrew/zithc.rb",
         "contents/Formula/zithc.rb",
@@ -354,7 +358,7 @@ def validate_workflows(workflow_dir: Path) -> None:
         maintenance_text, "smoke-installers", maintenance_workflow
     )
     for marker in (
-        "needs: [ensure-release-tag]",
+        "needs: [validate-release-source]",
         "uses: ./.github/workflows/smoke-installers.yml",
         "release_tag: ${{ inputs.release_tag }}",
         "source_ref: ${{ github.sha }}",
@@ -362,19 +366,19 @@ def validate_workflows(workflow_dir: Path) -> None:
     ):
         if marker not in maintenance_smoke:
             fail(f"{maintenance_workflow} smoke call is missing {marker}")
-    ensure_tag = job_section(
-        maintenance_text, "ensure-release-tag", maintenance_workflow
+    validate_source = job_section(
+        maintenance_text, "validate-release-source", maintenance_workflow
     )
     for marker in (
         "ref: ${{ inputs.source_ref }}",
-        'ref="refs/tags/$RELEASE_TAG"',
-        'sha="$SOURCE_SHA"',
+        'SOURCE_SHA=$(git rev-parse HEAD)',
+        'gh release view "$RELEASE_TAG"',
     ):
-        if marker not in ensure_tag:
-            fail(f"{maintenance_workflow} does not verify/create the release tag: {marker}")
+        if marker not in validate_source:
+            fail(f"{maintenance_workflow} does not validate the release source: {marker}")
     for job in ("update-distribution", "sync-playground-wasm"):
         section = job_section(maintenance_text, job, maintenance_workflow)
-        if "needs: [smoke-installers]" not in section:
+        if "smoke-installers" not in section:
             fail(f"{maintenance_workflow} runs {job} before installer smokes pass")
     playground_section = job_section(
         maintenance_text, "sync-playground-wasm", maintenance_workflow

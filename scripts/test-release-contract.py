@@ -174,6 +174,27 @@ def main() -> int:
         if 'sha256 "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"' not in formula_text:
             raise AssertionError("missing Homebrew SHA-256")
 
+        source_formula = directory / "zithc-source-ref.rb"
+        shutil.copyfile(FORMULA, source_formula)
+        source_ref = "a" * 40
+        run(
+            str(SCRIPTS / "update-homebrew-formula.py"),
+            "--formula",
+            str(source_formula),
+            "--repository",
+            REPOSITORY,
+            "--version",
+            VERSION,
+            "--sha256",
+            "0123456789abcdef" * 4,
+            "--source-ref",
+            source_ref,
+        )
+        source_formula_text = source_formula.read_text(encoding="utf-8")
+        source_ref_url = f"https://github.com/{REPOSITORY}/archive/{source_ref}.tar.gz"
+        if f'url "{source_ref_url}"' not in source_formula_text:
+            raise AssertionError("Homebrew formula did not use the supplied source commit")
+
     print("release contract integration test passed")
     return 0
 

@@ -26,8 +26,8 @@ permissions:
   contents: write
 
 jobs:
-  ensure-release-tag:
-    name: Ensure release tag points at source
+  validate-release-source:
+    name: Validate release source and draft
     runs-on: ubuntu-latest
     outputs:
       source_sha: ${{ steps.source.outputs.sha }}
@@ -52,26 +52,18 @@ jobs:
           fi
 
           SOURCE_SHA=$(git rev-parse HEAD)
-          REF_PATH="repos/$GITHUB_REPOSITORY/git/ref/tags/$RELEASE_TAG"
-          if REF_JSON=$(gh api "$REF_PATH" 2>/dev/null); then
-            OBJECT_TYPE=$(jq -r '.object.type' <<< "$REF_JSON")
-            OBJECT_SHA=$(jq -r '.object.sha' <<< "$REF_JSON")
-            if [ "$OBJECT_TYPE" = "tag" ]; then
-              OBJECT_SHA=$(gh api "repos/$GITHUB_REPOSITORY/git/tags/$OBJECT_SHA" --jq '.object.sha')
-            fi
-            if [ "$OBJECT_SHA" != "$SOURCE_SHA" ]; then
-              echo "::error::Tag $RELEASE_TAG points to $OBJECT_SHA, not $SOURCE_SHA."
-              exit 1
-            fi
-          else
-            gh api --method POST "repos/$GITHUB_REPOSITORY/git/refs" \
-              -f ref="refs/tags/$RELEASE_TAG" \
-              -f sha="$SOURCE_SHA"
+          RELEASE_JSON=$(gh release view "$RELEASE_TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --json tagName,isDraft)
+          RELEASE_NAME=$(jq -r '.tagName' <<< "$RELEASE_JSON")
+          if [ "$RELEASE_NAME" != "$RELEASE_TAG" ]; then
+            echo "::error::Release lookup returned '$RELEASE_NAME', expected '$RELEASE_TAG'."
+            exit 1
           fi
           echo "sha=$SOURCE_SHA" >> "$GITHUB_OUTPUT"
 
   smoke-installers:
-    needs: [ensure-release-tag]
+    needs: [validate-release-source]
     name: Smoke installers
     uses: ./.github/workflows/smoke-installers.yml
     with:
@@ -82,7 +74,7 @@ jobs:
       contents: read
 
   update-distribution:
-    needs: [smoke-installers]
+    needs: [validate-release-source, smoke-installers]
     name: Update release distribution metadata
     runs-on: ubuntu-latest
     concurrency:
@@ -139,10 +131,11 @@ jobs:
         shell: bash
         env:
           RELEASE_TAG: ${{ inputs.release_tag }}
+          SOURCE_SHA: ${{ needs.validate-release-source.outputs.source_sha }}
         run: |
           set -euo pipefail
           VERSION="${RELEASE_TAG#v}"
-          URL="https://github.com/${GITHUB_REPOSITORY}/archive/refs/tags/${RELEASE_TAG}.tar.gz"
+          URL="https://github.com/${GITHUB_REPOSITORY}/archive/${SOURCE_SHA}.tar.gz"
           curl --fail --silent --show-error --location --retry 3 --retry-all-errors \
             --output source-archive.tar.gz "$URL"
           SHA=$(sha256sum source-archive.tar.gz | cut -d' ' -f1)
@@ -151,7 +144,8 @@ jobs:
             --formula .github/homebrew/zithc.rb \
             --repository "$GITHUB_REPOSITORY" \
             --version "$VERSION" \
-            --sha256 "$SHA"
+            --sha256 "$SHA" \
+            --source-ref "$SOURCE_SHA"
           echo "url=$URL" >> "$GITHUB_OUTPUT"
           echo "sha256=$SHA" >> "$GITHUB_OUTPUT"
 
