@@ -1,10 +1,10 @@
 {
   "version": 1,
-  "current_module": "seq-emit",
-  "current_task": "seq-emit::docs",
+  "current_module": "seq-docs",
+  "current_task": "seq-docs::tests",
   "status": "done",
   "worker": null,
-  "updated_at": "2026-09-27T11:28:39Z",
+  "updated_at": "2026-09-29T19:29:13Z",
   "trace_summary": [
     {
       "task": "sequenta-attributes::lexHash",
@@ -676,6 +676,426 @@
       "status": "done",
       "worker": null,
       "at": "2026-09-27T11:28:31Z",
+      "ok": true
+    },
+    {
+      "task": "seq-docs::cliContract",
+      "from": "planned",
+      "to": "stub",
+      "worker": null,
+      "at": "2026-09-29T14:23:18Z"
+    },
+    {
+      "task": "seq-docs::cliContract",
+      "from": "stub",
+      "to": "work",
+      "worker": null,
+      "at": "2026-09-29T14:23:26Z"
+    },
+    {
+      "task": "seq-docs::cliContract",
+      "from": "work",
+      "to": "test",
+      "worker": null,
+      "at": "2026-09-29T14:41:49Z"
+    },
+    {
+      "task": "seq-docs::cliContract",
+      "status": "done",
+      "worker": null,
+      "at": "2026-09-29T14:42:00Z",
+      "cmd": "ctest --test-dir build -R '^test-cli-commands$' --output-on-failure"
+    },
+    {
+      "task": "seq-docs::projectGraph",
+      "from": "planned",
+      "to": "stub",
+      "worker": null,
+      "at": "2026-09-29T14:42:34Z"
+    },
+    {
+      "task": "seq-docs::projectGraph",
+      "from": "stub",
+      "to": "work",
+      "worker": null,
+      "at": "2026-09-29T14:45:06Z"
+    },
+    {
+      "task": "seq-docs::projectGraph",
+      "from": "work",
+      "to": "test",
+      "worker": null,
+      "at": "2026-09-29T14:58:46Z"
+    },
+    {
+      "task": "seq-docs::projectGraph",
+      "status": "done",
+      "worker": null,
+      "at": "2026-09-29T14:58:53Z",
+      "cmd": "ctest --test-dir build -R \"^test-docs$|^test-cli-commands$\" --output-on-failure"
+    },
+    {
+      "task": "seq-docs::symbolModel",
+      "from": "planned",
+      "to": "stub",
+      "worker": null,
+      "at": "2026-09-29T15:14:15Z"
+    },
+    {
+      "task": "seq-docs::symbolModel",
+      "from": "stub",
+      "to": "work",
+      "worker": null,
+      "at": "2026-09-29T15:14:22Z"
+    },
+    {
+      "task": "seq-docs::symbolModel",
+      "from": "work",
+      "to": "test",
+      "worker": null,
+      "at": "2026-09-29T15:32:45Z"
+    },
+    {
+      "task": "seq-docs::symbolModel",
+      "status": "done",
+      "worker": null,
+      "at": "2026-09-29T15:32:57Z",
+      "cmd": "ctest --test-dir build -R ^test-docs$ --output-on-failure"
+    },
+    {
+      "task": "seq-docs::errorPolicy",
+      "from": "planned",
+      "to": "stub",
+      "worker": null,
+      "at": "2026-09-29T15:34:06Z"
+    },
+    {
+      "task": "seq-docs::errorPolicy",
+      "from": "stub",
+      "to": "work",
+      "worker": null,
+      "at": "2026-09-29T15:34:18Z"
+    },
+    {
+      "task": "seq-docs::errorPolicy",
+      "from": "work",
+      "to": "test",
+      "worker": null,
+      "at": "2026-09-29T16:03:31Z"
+    },
+    {
+      "task": "seq-docs::errorPolicy",
+      "status": "done",
+      "worker": null,
+      "at": "2026-09-29T16:04:40Z",
+      "cmd": "ctest --test-dir build -R '^(test-cli-commands|test-docs)$' --output-on-failure"
+    },
+    {
+      "task": "seq-docs::markdownRenderer",
+      "from": "planned",
+      "to": "stub",
+      "worker": null,
+      "at": "2026-09-29T16:07:12Z"
+    },
+    {
+      "task": "seq-docs::markdownRenderer",
+      "from": "stub",
+      "to": "work",
+      "worker": null,
+      "at": "2026-09-29T16:07:53Z"
+    },
+    {
+      "task": "seq-docs::markdownRenderer",
+      "from": "work",
+      "to": "test",
+      "worker": null,
+      "at": "2026-09-29T16:18:10Z"
+    },
+    {
+      "task": "seq-docs::markdownRenderer",
+      "status": "done",
+      "worker": null,
+      "at": "2026-09-29T16:18:16Z",
+      "cmd": "ctest --test-dir build -R '^test-docs$' --output-on-failure"
+    },
+    {
+      "task": "seq-docs::outputPolicy",
+      "from": "planned",
+      "to": "stub",
+      "worker": null,
+      "at": "2026-09-29T16:20:01Z"
+    },
+    {
+      "task": "seq-docs::outputPolicy",
+      "from": "stub",
+      "to": "work",
+      "worker": null,
+      "at": "2026-09-29T16:22:20Z"
+    },
+    {
+      "task": "seq-docs::outputPolicy",
+      "from": "work",
+      "to": "test",
+      "worker": null,
+      "at": "2026-09-29T16:33:47Z"
+    },
+    {
+      "task": "seq-docs::outputPolicy",
+      "status": "done",
+      "worker": null,
+      "at": "2026-09-29T16:33:47Z",
+      "ok": true
+    },
+    {
+      "task": "seq-docs::tests",
+      "from": "planned",
+      "to": "stub",
+      "worker": null,
+      "at": "2026-09-29T16:56:44Z"
+    },
+    {
+      "task": "seq-docs::tests",
+      "from": "stub",
+      "to": "work",
+      "worker": null,
+      "at": "2026-09-29T16:56:53Z"
+    },
+    {
+      "task": "seq-docs::tests",
+      "from": "work",
+      "to": "test",
+      "worker": null,
+      "at": "2026-09-29T17:15:09Z"
+    },
+    {
+      "task": "seq-docs::tests",
+      "status": "done",
+      "worker": null,
+      "at": "2026-09-29T17:15:23Z",
+      "ok": true
+    },
+    {
+      "task": "seq-docs::userDocs",
+      "from": "planned",
+      "to": "stub",
+      "worker": null,
+      "at": "2026-09-29T17:15:46Z"
+    },
+    {
+      "task": "seq-docs::userDocs",
+      "from": "stub",
+      "to": "work",
+      "worker": null,
+      "at": "2026-09-29T17:15:56Z"
+    },
+    {
+      "task": "seq-emit::outputSink",
+      "from": "planned",
+      "to": "stub",
+      "worker": null,
+      "at": "2026-09-29T17:28:14Z"
+    },
+    {
+      "task": "seq-emit::outputSink",
+      "from": "stub",
+      "to": "work",
+      "worker": null,
+      "at": "2026-09-29T17:28:21Z"
+    },
+    {
+      "task": "seq-emit::outputSink",
+      "from": "work",
+      "to": "test",
+      "worker": null,
+      "at": "2026-09-29T17:52:15Z"
+    },
+    {
+      "task": "seq-emit::outputSink",
+      "status": "done",
+      "worker": null,
+      "at": "2026-09-29T17:52:26Z",
+      "cmd": "ctest --test-dir build -R 'wasm-contract|cli-commands' --output-on-failure"
+    },
+    {
+      "task": "seq-emit::cstPrinter",
+      "from": "planned",
+      "to": "stub",
+      "worker": null,
+      "at": "2026-09-29T17:52:47Z"
+    },
+    {
+      "task": "seq-emit::cstPrinter",
+      "from": "stub",
+      "to": "work",
+      "worker": null,
+      "at": "2026-09-29T17:53:11Z"
+    },
+    {
+      "task": "seq-emit::cstPrinter",
+      "from": "work",
+      "to": "test",
+      "worker": null,
+      "at": "2026-09-29T17:53:21Z"
+    },
+    {
+      "task": "seq-emit::cstPrinter",
+      "status": "done",
+      "worker": null,
+      "at": "2026-09-29T17:53:28Z",
+      "cmd": "ctest --test-dir build -R '^test-frontend$' --output-on-failure"
+    },
+    {
+      "task": "seq-emit::virPrinter",
+      "from": "planned",
+      "to": "stub",
+      "worker": null,
+      "at": "2026-09-29T17:53:39Z"
+    },
+    {
+      "task": "seq-emit::virPrinter",
+      "from": "stub",
+      "to": "work",
+      "worker": null,
+      "at": "2026-09-29T17:53:46Z"
+    },
+    {
+      "task": "seq-emit::virPrinter",
+      "from": "work",
+      "to": "test",
+      "worker": null,
+      "at": "2026-09-29T17:53:56Z"
+    },
+    {
+      "task": "seq-emit::virPrinter",
+      "status": "done",
+      "worker": null,
+      "at": "2026-09-29T17:54:03Z",
+      "cmd": "ctest --test-dir build -R '^test-vm-v2$' --output-on-failure"
+    },
+    {
+      "task": "seq-emit::cliFlags",
+      "from": "planned",
+      "to": "stub",
+      "worker": null,
+      "at": "2026-09-29T17:54:14Z"
+    },
+    {
+      "task": "seq-emit::cliFlags",
+      "from": "stub",
+      "to": "work",
+      "worker": null,
+      "at": "2026-09-29T17:54:22Z"
+    },
+    {
+      "task": "seq-emit::cliFlags",
+      "from": "work",
+      "to": "test",
+      "worker": null,
+      "at": "2026-09-29T17:54:28Z"
+    },
+    {
+      "task": "seq-emit::cliFlags",
+      "status": "done",
+      "worker": null,
+      "at": "2026-09-29T17:54:39Z",
+      "cmd": "ctest --test-dir build -R '^test-cli-commands$' --output-on-failure"
+    },
+    {
+      "task": "seq-emit::wasmAbi",
+      "from": "planned",
+      "to": "stub",
+      "worker": null,
+      "at": "2026-09-29T17:54:53Z"
+    },
+    {
+      "task": "seq-emit::wasmAbi",
+      "from": "stub",
+      "to": "work",
+      "worker": null,
+      "at": "2026-09-29T17:55:03Z"
+    },
+    {
+      "task": "seq-emit::wasmAbi",
+      "from": "work",
+      "to": "test",
+      "worker": null,
+      "at": "2026-09-29T17:55:14Z"
+    },
+    {
+      "task": "seq-emit::wasmAbi",
+      "status": "done",
+      "worker": null,
+      "at": "2026-09-29T17:55:24Z",
+      "cmd": "/home/diogo/emsdk/node/18.20.3_64bit/bin/node tests/test-wasm-runtime.mjs /tmp/zith-wasm-emit/zith-playground.wasm /tmp/zith-wasm-emit/zith-stdlib.pack"
+    },
+    {
+      "task": "seq-emit::tests",
+      "from": "planned",
+      "to": "stub",
+      "worker": null,
+      "at": "2026-09-29T17:55:39Z"
+    },
+    {
+      "task": "seq-emit::tests",
+      "from": "stub",
+      "to": "work",
+      "worker": null,
+      "at": "2026-09-29T17:55:49Z"
+    },
+    {
+      "task": "seq-emit::tests",
+      "from": "work",
+      "to": "test",
+      "worker": null,
+      "at": "2026-09-29T17:55:58Z"
+    },
+    {
+      "task": "seq-emit::tests",
+      "status": "done",
+      "worker": null,
+      "at": "2026-09-29T17:56:10Z",
+      "cmd": "ctest --test-dir build -R 'frontend|cli-commands|vm-v2|wasm-contract' --output-on-failure"
+    },
+    {
+      "task": "seq-emit::docs",
+      "from": "planned",
+      "to": "stub",
+      "worker": null,
+      "at": "2026-09-29T17:56:19Z"
+    },
+    {
+      "task": "seq-emit::docs",
+      "from": "stub",
+      "to": "work",
+      "worker": null,
+      "at": "2026-09-29T17:56:28Z"
+    },
+    {
+      "task": "seq-emit::docs",
+      "from": "work",
+      "to": "test",
+      "worker": null,
+      "at": "2026-09-29T17:56:35Z"
+    },
+    {
+      "task": "seq-emit::docs",
+      "status": "done",
+      "worker": null,
+      "at": "2026-09-29T17:56:45Z",
+      "cmd": "git diff --check"
+    },
+    {
+      "task": "seq-docs::userDocs",
+      "from": "work",
+      "to": "test",
+      "worker": null,
+      "at": "2026-09-29T18:45:45Z"
+    },
+    {
+      "task": "seq-docs::userDocs",
+      "status": "done",
+      "worker": null,
+      "at": "2026-09-29T18:45:54Z",
       "ok": true
     }
   ]

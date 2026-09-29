@@ -131,6 +131,11 @@ is `docs/nra-spec.md`; the current `Zith--` implementation status is in
 
 ## Open Areas
 
+- `Revokable` representation is not settled. The current preference is a
+  compiler-recognized intrinsic type because the compiler coordinates its
+  atomic access and revocation protocol. Whether it also needs a source keyword,
+  and whether its control block is always materialized or only at an unbounded
+  boundary, remain open.
 - `extern fn` effect-header attributes.
 - Custom allocator details.
 - Diagnostic catalog and examples.

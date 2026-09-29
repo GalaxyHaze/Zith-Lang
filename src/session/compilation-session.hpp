@@ -146,6 +146,9 @@ public:
     const memory::SourceMap &sourceMap() const {
         return mSourceMap;
     }
+    memory::SourceMap &sourceMap() {
+        return mSourceMap;
+    }
     [[nodiscard]] const std::shared_ptr<const CompilationSnapshot> &snapshot() const noexcept {
         return mSnapshot;
     }

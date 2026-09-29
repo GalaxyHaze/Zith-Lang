@@ -110,12 +110,22 @@ int help(FILE *dest) {
     p.flag("-c, --color <auto|on|off>", "Color output [default: auto]");
     p.flag("-v, --verbose", "Verbose output");
     p.flag("    --debug-sema", "Print semantic analysis probes");
+    p.section("DOCS OPTIONS (for 'zithc docs'):");
+    p.flag("    --interface", "Document the public interface [default]");
+    p.flag("    --spec", "Document all project symbols");
+    p.flag("    --mode=interface|spec", "Select the docs mode");
+    p.flag("    --out[=PATH]", "Write API.md under docs/ or the specified directory");
+    p.flag("    --index", "Write a multipage README and module pages (requires --out)");
+    p.flag("    --error", "Include partial documentation and an Errors section on failure");
+    p.flag("    --force", "Replace generated files that already exist");
     std::fprintf(dest, "\n");
     p.section("EXAMPLES:");
     std::fprintf(dest, "    zithc build\n"
                        "    zithc run main.zith -m release\n"
                        "    zithc run main.zith         # build + execute\n"
-                       "    zithc execute main.zith     # execute a pre-compiled binary\n");
+                       "    zithc execute main.zith     # execute a pre-compiled binary\n"
+                       "    zithc docs --spec --out\n"
+                       "    zithc docs --index --out=docs/api\n");
     return 0;
 }
 

@@ -24,7 +24,7 @@ _zithc() {
 
     cmds="build run execute check fmt create deps test docs repl clean completion"
 
-    opts="-h --help --version -m --mode -o --output -I --include --c-source-dir -L -l -D -A --assets --check -i --in-place --emit --target --sysroot --no-system-includes --no-cache --emit-tokens --emit-ast --emit-hir --emit-ir --emit-asm --emit-all --interpreted --opt-level --debug-level -s --strict --lto --strip-debug -c --color -v --verbose --debug-sema"
+    opts="-h --help --version -m --mode -o --output -I --include --c-source-dir -L -l -D -A --assets --check -i --in-place --emit --target --sysroot --no-system-includes --no-cache --emit-tokens --emit-cst --emit-ast --emit-hir --emit-vir --emit-ir --emit-asm --emit-all --interface --spec --index --error --force --out --interpreted --opt-level --debug-level -s --strict --lto --strip-debug -c --color -v --verbose --debug-sema"
 
     # Specific option completions
     case "$prev" in
@@ -95,7 +95,7 @@ _zithc() {
 
     cmds="build run execute check fmt create deps test docs repl clean completion"
 
-    opts="-h --help --version -m --mode -o --output -I --include --c-source-dir -L -l -D -A --assets --check -i --in-place --emit --target --sysroot --no-system-includes --no-cache --emit-tokens --emit-ast --emit-hir --emit-ir --emit-asm --emit-all --interpreted --opt-level --debug-level -s --strict --lto --strip-debug -c --color -v --verbose --debug-sema"
+    opts="-h --help --version -m --mode -o --output -I --include --c-source-dir -L -l -D -A --assets --check -i --in-place --emit --target --sysroot --no-system-includes --no-cache --emit-tokens --emit-cst --emit-ast --emit-hir --emit-vir --emit-ir --emit-asm --emit-all --interface --spec --index --error --force --out --interpreted --opt-level --debug-level -s --strict --lto --strip-debug -c --color -v --verbose --debug-sema"
 
     case "$prev" in
         -m|--mode)
@@ -185,6 +185,13 @@ complete -c zithc -l emit-vir -d "Emit VM v2 IR"
 complete -c zithc -l emit-ir -d "Emit LLVM IR"
 complete -c zithc -l emit-asm -d "Emit assembly"
 complete -c zithc -l emit-all -d "Emit tokens, CST, AST, HIR, VIR, IR, and assembly"
+complete -c zithc -l interface -d "Document the public interface"
+complete -c zithc -l spec -d "Document all project symbols"
+complete -c zithc -l index -d "Write a multipage docs index (requires --out)"
+complete -c zithc -l error -d "Include partial docs and an Errors section on failure"
+complete -c zithc -l force -d "Replace generated docs files"
+complete -c zithc -l out -d "Write docs under the project docs directory"
+complete -c zithc -l out= -r -F -d "Write docs to this directory"
 complete -c zithc -l interpreted -d "Execute through the HIR interpreter"
 complete -c zithc -l opt-level -r -f -a "0 1 2 3" -d "Optimization level"
 complete -c zithc -l debug-level -r -f -a "0 1 2 3" -d "Debug info level"

@@ -309,7 +309,7 @@ FrontendContext::resolveImport(const ModuleArtifact &artifact, const ImportReque
             }
         } else {
             const auto literal = root / import_path;
-            if (fs::exists(literal, error)) {
+            if (fs::is_regular_file(literal, error)) {
                 imported = literal;
                 break;
             }
@@ -327,6 +327,13 @@ FrontendContext::resolveImport(const ModuleArtifact &artifact, const ImportReque
             const auto generic = root / (import_path.string() + ".zith");
             if (fs::is_regular_file(generic, error)) {
                 imported = generic;
+                break;
+            }
+            error.clear();
+            // A sibling module file is more specific than aggregating a
+            // same-named directory of modules.
+            if (fs::is_directory(literal, error)) {
+                imported = literal;
                 break;
             }
             error.clear();

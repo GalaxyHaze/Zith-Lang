@@ -15,13 +15,15 @@ implementation contract and tests moved to the archived plan.
 
 ## Current Ground Truth
 
-`FrontendContext::resolveImport()` checks the requested path, platform suffix
-variants, the generic `path.zith`, and `path/mod.zith` per search root.
+`FrontendContext::resolveImport()` checks a regular file at the requested path,
+platform suffix variants, the generic `path.zith`, a same-named directory, and
+`path/mod.zith` per search root. The directory is a fallback, so a facade file
+such as `std/memory.zith` wins over `stdlib/std/memory/`.
 `--target` reaches `FrontendConfig::targetTriple` and participates in
 `CacheKey::identity()`, so the module cache remains separated per target.
 
 The resolver code moved with the frontend monolith split. The current home is
-`src/session/frontend-symbol-resolution.cpp`; do not point future edits at the
+`src/session/frontend-module-analysis.cpp`; do not point future edits at the
 old pre-split `frontend-context.cpp` implementation sketch.
 
 ## Decisions Locked In
@@ -38,6 +40,7 @@ old pre-split `frontend-context.cpp` implementation sketch.
 - Cache remains target-separated for now; sharing generic module artifacts across
   targets is documented future work.
 - No ambiguity error in v1; first deterministic candidate wins.
+- Regular-file candidates win before a same-named directory is aggregated.
 - Missing Zith imports mention both the generic module and platform variants
   when platform candidates were considered.
 - `export foo` re-exports the resolved platform file for the current target.
@@ -53,5 +56,7 @@ old pre-split `frontend-context.cpp` implementation sketch.
   Zith platform variants.
 - The persistent/object cache paths already use target keys, so no new top-level
   cache layout is needed.
-- The resolver uses `fs::is_regular_file` for variants and generic files, then
-  `foo/mod.zith` for directory modules; only the last path segment varies.
+- The resolver uses `fs::is_regular_file` for literal, variant, and generic
+  files. It aggregates a same-named directory only when those files do not
+  match, then checks `foo/mod.zith`.
+- Only the last path segment varies for platform-specific imports.

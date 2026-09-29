@@ -217,16 +217,21 @@ O ficheiro `impl-status.md` foi atualizado de `Cache | Partial` para
   iteram e `in` devolve falso para `[x, x)`/`(x, x]`/`(x, x)` e verdadeiro
   para `[x, x]`. Um `for` literal-range sem binding é rejeitado em sema com
   diagnóstico direcionado antes de HIR/codegen.
-- `is <type>` fora de unions/opaque não existe.
+- `is <type>` narrowing funciona para tagged unions e `opaque`; outros tipos
+  ainda não são suportados.
 - Narrowing após `is null` / `not (is null)` para aggregate optionals (`?T`
   com payload não-pointer) extrai o campo 0 no then/else correto. Para
   pointers (`?*T -> *T`) o mesmo controlo de fluxo prova non-null e usa deref,
   arrow, index e coerção; uso sem prova reporta `E3005` e `raw`/`must` são os
   opt-outs explícitos.
-- Casts numéricos estreitantes não verificam overflow.
+- Casts `int -> int` estreitantes verificam em compile time valores inteiros
+  constantes reconhecidos pelo sema. A adaptação de literais numéricos não
+  verifica a faixa; variáveis e conversões `float -> int` também não têm
+  checks de overflow em runtime.
 - Formatter reimprime `for (cond)` como `while` (`ExprKind::While` no
   round-trip).
-- `..` é lexado caractere a caractere.
+- `..` e `...` são lexados cada um como um token `Dots`, diferenciados pelo
+  lexema.
 - `realloc` no runtime VM v2/WASM foi resolvido: o allocator separa blocos
   alocados de blocos livres, preserva dados ao crescer/mover, suporta shrink e
   trata o offset zero como endereço válido. A cobertura está em
@@ -238,10 +243,13 @@ consolidada neste ficheiro; as entradas duplicadas foram removidas de
 `impl-status.md`. As dívidas partilhadas restantes são listadas abaixo com
 nota de estado:
 
-- No overflow check on narrowing conversions.
+- Narrowing permanece incompleto: casts `int -> int` verificam valores
+  constantes reconhecidos em compile time, mas a adaptação de literais não
+  verifica faixa e casts com operandos variáveis ou `float -> int` não têm
+  checks de overflow em runtime.
 - Unchecked nullable-pointer coercion foi removida: a prova flow-sensitive
   após `is null` existe, e usos sem prova reportam `E3005`.
-- `is` outside `null`/tagged-union contexts.
+- `is <type>` narrowing beyond tagged unions and `opaque`.
 - User-defined casts (novo branch em `classifyCast`).
 - C struct-by-value ABI limited to verified simple records.
 - Imported/cached bare `opaque` values: registry project-local, sem registry
@@ -319,7 +327,7 @@ Ações de follow-up recomendadas:
 
 ---
 
-### 10. Traits/interfaces importadas têm conformance instável em workdirs populados
+### 10. Conformance importada é determinística; trait defaults ainda usam scans globais
 
 Estado atual: a causa raiz da instabilidade foi removida. A resolução de
 declarações, tipos e métodos importados passou a ser feita através das
@@ -328,16 +336,15 @@ percorrer todos os módulos carregados. `tests/test-interface-satisfaction.cpp`
 agora cobre qualified calls sobre `InPlace` importado de `std/memory` num workdir
 populado com vários módulos não relacionados.
 
-Dívida real restante: trait defaults e requisitos de `dyn Trait` ainda são
-procurados em todos os módulos carregados quando o trait não está no módulo
-atual. Isso já não escolhe o trait errado para o caminho aqui reproduzido, mas
-deve ser estreitado para resolver como os restantes padrões de método quando
-houver uma definição exata de quais defaults estão visíveis a partir do módulo
-de chamada.
+Dívida residual de escopo: trait defaults e requisitos de `dyn Trait` ainda
+são procurados em todos os módulos carregados quando o trait não está no
+módulo atual. Isso já não escolhe o trait errado para o caminho aqui
+reproduzido, mas deve ser estreitado quando houver uma definição exata de quais
+defaults estão visíveis a partir do módulo de chamada.
 
-Ação futura: quando o alcance de trait defaults for formalizado, repetir a
-mesma passada e remover os restantes scans globais. O exemplo pode então migrar
-de um trait local para o trait importado sem sacrificar a cobertura.
+Ação futura: formalizar o alcance dos trait defaults e remover os restantes
+scans globais. Esta dívida é independente da resolução determinística de
+conformance importada já coberta pelos testes.
 
 ---
 
@@ -356,15 +363,14 @@ exportado; `lookupModuleAliasForPath` escolhe o alias mais longo cujo
 resolvem para os módulos reais de cada export. O teste de frontend e o
 lowering até HIR cobrem o fanout em estados limpos e cached.
 
-Ficou resolvida a dívida original de fanout com prefixo partilhado, mas a
-revisão CLI encontrou os dois limites seguintes no mesmo caminho de `export
-path`.
+Ficou resolvida a dívida original de fanout com prefixo partilhado. A revisão
+CLI encontrou dois limites adicionais no mesmo caminho de `export path`, agora
+cobertos pelos testes de pipeline em estados limpos e cached.
 
-### 11a. `export path` não expõe tipos qualificados via facade `std/memory`
+### 11a. Tipos qualificados via facade `std/memory`
 
-O re-export de símbolos funciona para funções, aliases de módulo e structs
-numa facade local, mas falha quando o consumidor importa `std/memory` e tenta
-referenciar um tipo pelo caminho qualificado da facade:
+O consumidor pode importar `std/memory` e referenciar tipos pelo caminho
+qualificado da facade:
 
 ```zith
 import std/memory
@@ -378,55 +384,33 @@ fn main(): i32 {
 }
 ```
 
-O compilador reporta:
-
-```text
-error[E2001]: qualified type 'std.memory.allocators.heap.HeapAllocator' names no public type in its module
-```
-
-O mesmo caminho direto sem a facade funciona:
+O caminho direto para o módulo folha continua válido:
 
 ```zith
 import std/memory/allocators/heap
 let a: ?std.memory.allocators.heap.HeapAllocator = null;
 ```
 
-Este é um caso de `export path` re-exportando dependências, não apenas um
-problema de módulos com hífen. O resolver cria os `ModuleAlias` corretos para o
-path qualificado, mas `lowerBareTypeExpr` ainda procura o tipo no módulo do
-alias usando apenas `lookupNamed`, sem aplicar o mesmo caminho de resolução de
-tipos importados usado para módulos diretos.
+O bloqueio era anterior ao sema: `stdlib/std/memory.zith` partilha o nome
+lógico `std/memory` com o diretório `stdlib/std/memory/`. O resolver agregava
+primeiro o diretório e escolhia `in-place` como alvo, em vez de carregar a
+facade e seguir o alias mais longo para `heap`. Agora ficheiros regulares,
+incluindo `memory.zith`, têm precedência sobre diretórios homónimos. O lowering
+consulta a declaração pública do tipo no módulo folha. O teste cobre
+`HeapAllocator` e `InPlace` em execução fria e após hidratação do cache.
 
-Ação futura: fazer `lowerBareTypeExpr` resolver `std.memory.*` através do alvo
-do `ModuleAlias` e adicionar um teste de pipeline com `import std/memory` e
-`std.memory.allocators.heap.HeapAllocator`.
+### 11b. Segmentos kebab-case em tipos qualificados
 
-### 11b. `export path` e path com segmento kebab-case em tipos qualificados
-
-Reprodutor com o caminho documentado para o módulo real:
+O parser mantém segmentos kebab-case em tipos qualificados:
 
 ```zith
 import std/memory
 let a: ?std.memory.in-place.InPlace = null;
 ```
 
-O parser interpreta o `-` do path qualificado como operador:
-
-```text
-error[E2001]: qualified type 'std.memory.in' names no public type in its module
-error[E2001]: unknown identifier 'place'
-```
-
-Na importação (`import std/memory/in-place`) o hífen é tratado como parte do
-segmento pelo parser de import/s, mas o mesmo tratamento não existe em
-`TypeExpression.segments` quando o caminho é escrito no código. Isto impede o
-uso qualificado canónico de `std.memory.in-place.InPlace` documentado em
-`memory/stdlib-allocator-ownership.md` e `docs/implementation-debt.md` secção
-11.
-
-Ação futura: normalizar os segmentos de `TypeExpression` para aceitar path
-com segmento kebab-case no corpo do código, ou decidir uma alternativa
-canónica (`in_place`) e atualizar todas as referências de docs/tests.
+O parser junta tokens de hífen contíguos dentro do segmento e preserva os
+limites indicados pelos pontos. O teste de frontend verifica os segmentos e o
+teste de pipeline verifica `std.memory.in-place.InPlace` via facade.
 
 ### 12. Receivers `dyn`/`lend` mutáveis para sinks
 

@@ -214,12 +214,17 @@ The current debt list below reflects that resolution:
   registry remains a follow-up.
 - C interop covers validated C but struct-by-value ABI is limited to simple
   records whose layout is proven; several import forms remain unported.
-- Numeric narrowing casts do not check overflow.
+- Narrowing `int -> int` checks known integer constants at compile time;
+  numeric-literal adaptation lacks range checks, and variable / `float -> int`
+  casts lack runtime overflow checks.
 - `for (cond)` is still printed as `while` by the formatter.
 - `++` and `--` do not exist.
-- `..` is lexed character by character.
-- Imported trait/interface conformance works in temp workdirs but is unstable
-  for qualified trait calls in populated workdirs (`implementation-debt.md` 10).
+- `..` and `...` each lex as one `Dots` token, distinguished by lexeme.
+- `is <type>` narrowing works for tagged unions and `opaque`; other types are
+  not supported yet.
+- Imported trait/interface conformance is deterministic in populated workdirs;
+  the remaining section 10 debt is global lookup of trait defaults and
+  `dyn Trait` requirements.
 
 The nominal `type` entry is no longer a debt: Zith-- documents the cast-based
 contract (`T as Name` / `Name as T`) and keeps `alias` transparent. A dedicated

@@ -419,12 +419,17 @@ bitcast do payload sem load. Isto permite comparar os ponteiros reais armazenado
 assets. Para importações Zith, cada search root é visitado pela mesma ordem do
 plano:
 
-1. Candidato literal.
+1. Ficheiro regular no caminho literal.
 2. `foo.<arch>.<os>.zith`.
 3. `foo.<arch>.zith`.
 4. `foo.<os>.zith`.
 5. `foo.zith`.
-6. `foo/mod.zith`.
+6. Diretório `foo`, agregado conforme a profundidade pedida.
+7. `foo/mod.zith`.
+
+Um diretório não substitui um ficheiro regular com o mesmo caminho lógico.
+Esta regra permite que `std/memory.zith` funcione como facade apesar de
+`stdlib/std/memory/` conter os módulos exportados.
 
 `targetComponents` extrai `arch` e `os` do `config_.targetTriple` com
 `llvm::Triple`; sem LLVM a função devolve componentes vazios e não são geradas

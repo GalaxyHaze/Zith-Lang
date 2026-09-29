@@ -657,9 +657,9 @@ tag macro Box(content) { <content/> }
 ## Imports Platform-Specific
 
 `import foo` continua a ser a única sintaxe de importação de módulos Zith.
-Quando o resolver encontra uma importação Zith, depois do candidato literal e
-antes do fallback genérico `foo.zith`, tenta variantes derivadas do target
-activo na mesma ordem do plano:
+Quando o resolver encontra uma importação Zith, tenta primeiro um ficheiro
+regular no caminho literal, depois as variantes derivadas do target activo,
+e por fim o ficheiro genérico `foo.zith`:
 
 ```text
 foo.<arch>.<os>.zith
@@ -668,12 +668,17 @@ foo.<os>.zith
 foo.zith
 ```
 
+Se nenhum ficheiro corresponder e existir um diretório `foo`, o resolver usa
+esse diretório como módulo antes de tentar `foo/mod.zith`. Assim, um ficheiro
+`foo.zith` tem precedência sobre um diretório homónimo `foo/`.
+
 O target activo usa o triple normalizado e nomes canónicos de `llvm::Triple`
 (por exemplo `x86_64`, `aarch64`, `linux`, `darwin`, `windows`); aliases como
 `amd64`, `arm64` ou `macos` não são mapeados em v1. Sem LLVM não há variantes
 de plataforma. Só o último segmento de um path composto varia, `foo/mod.zith`
 continua como diretório de módulo, e paths explícitos, headers C, assets e
-literais não são afectados. Se nenhuma variante nem `foo.zith` existir, a importação reporta
+literais não são afectados. Se não existir uma variante, `foo.zith`, o
+diretório `foo` nem `foo/mod.zith`, a importação reporta
 `could not resolve import 'foo'; missing generic module or matching platform
 variant`.
 

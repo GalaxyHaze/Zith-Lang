@@ -202,21 +202,33 @@ The ABI, return codes, `mode`, `emit_mask`, and buffer accessors are documented 
 | `zithc repl` | Interactive REPL | 'Zith' only |
 | `zithc deps list` | List declared dependencies | Working |
 | `zithc deps add` / `deps remove` | Dependency management | Stub |
-| `zithc docs` | Generate documentation from source | Working |
+| `zithc docs` | Generate deterministic Markdown API docs from reachable source modules | Working |
 
-**Useful flags:** `--emit-ast`, `--emit-hir`, `--emit-ir`, `--emit-asm`, `-m release`, `--include <stdlib-path>`, `--cache-stats`
+`zithc docs` prints `API.md` to the terminal by default. Use `--spec` to include
+all project symbols, `--out` to write under the project `docs/` directory,
+`--out=PATH` to select a directory, and `--index --out=PATH` for a multipage
+index. Existing generated files require `--force`. `--error` emits partial
+documentation with an `Errors` section and still returns a failing exit code.
+
+**Useful flags:** `--emit-cst`, `--emit-ast`, `--emit-hir`, `--emit-vir`, `--emit-ir`, `--emit-asm`, `-m release`, `--include <stdlib-path>`, `--cache-stats`
 
 ---
 
 ## Compilation Pipeline
 
 ```
-Source -> Lex -> Scan -> Import -> Resolve -> TypeCheck -> Comptime/Solve -> NTA/NRA -> HIR -> Codegen -> Cache
+Source -> Lex -> Parse/CST -> AST -> Scan -> Import -> Resolve -> TypeCheck -> Comptime/Solve -> NTA/NRA -> HIR -> VIR -> Codegen -> Cache
 ```
+
+CST is emitted after parsing, AST after frontend lowering, and HIR after semantic
+lowering. VIR is the optional lowering from HIR to the portable VM v2 IR. It is
+distinct from LLVM IR, which is emitted by `--emit-ir`.
 
 | Stage | Description |
 |---|---|
 | `Lex` | Tokenize source |
+| `Parse/CST` | Build the concrete syntax tree from tokens |
+| `AST` | Lower the parsed syntax tree into frontend declarations and expressions |
 | `Scan` | Register top-level declarations |
 | `Import` | Resolve module imports |
 | `Resolve` | Bind names to symbols |
@@ -224,6 +236,7 @@ Source -> Lex -> Scan -> Import -> Resolve -> TypeCheck -> Comptime/Solve -> NTA
 | `Comptime/Solve` | Generic instantiation and trait/conformance monomorphization run before NRA/HIR; macro expansion runs earlier in frontend |
 | `NTA/NRA` | Residual ownership facts are accumulated before HIR; the full Zith ownership proof remains incomplete |
 | `HIR` | Lower the typed, desugared program while attaching residual ownership facts |
+| `VIR` | Optionally lower HIR to the portable VM v2 execution IR |
 | `Codegen` | Emit LLVM IR -> native or WASM binary |
 
 ---

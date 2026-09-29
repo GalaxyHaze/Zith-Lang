@@ -259,11 +259,28 @@ TypeExprId AstLowerer::parseType() {
         // token in the lexer. Record the full path so sema can route it
         // through the import resolution graph instead of a bare name.
         std::vector<std::string> segments{type.name};
+        const auto is_name_segment = [&](const uint32_t token_index) {
+            return token_index < token_count_ &&
+                   (snapshot_.tokens_[token_index].kind == TokenKind::Identifier ||
+                    snapshot_.tokens_[token_index].kind == TokenKind::Keyword);
+        };
         while (index_ + 1U < token_count_ && punctuation(index_, '.') &&
-               (snapshot_.tokens_[index_ + 1U].kind == TokenKind::Identifier ||
-                snapshot_.tokens_[index_ + 1U].kind == TokenKind::Keyword)) {
+               is_name_segment(index_ + 1U)) {
             ++index_; // '.'
-            const auto segment = std::string(text(index_++));
+            std::string segment(text(index_));
+            uint32_t segment_end = snapshot_.tokens_[index_].span.end;
+            ++index_;
+            while (index_ + 1U < token_count_ &&
+                   snapshot_.tokens_[index_].kind == TokenKind::Operator && text(index_) == "-" &&
+                   snapshot_.tokens_[index_].span.start == segment_end &&
+                   is_name_segment(index_ + 1U) &&
+                   snapshot_.tokens_[index_].span.end ==
+                       snapshot_.tokens_[index_ + 1U].span.start) {
+                segment.push_back('-');
+                segment += text(index_ + 1U);
+                segment_end = snapshot_.tokens_[index_ + 1U].span.end;
+                index_ += 2U;
+            }
             segments.push_back(segment);
         }
         if (segments.size() > 1U) {
@@ -271,7 +288,7 @@ TypeExprId AstLowerer::parseType() {
             std::string dotted;
             for (size_t i = 0; i < type.segments.size(); ++i) {
                 if (i != 0U)
-                    dotted += ".";
+                    dotted.push_back('.');
                 dotted += type.segments[i];
             }
             type.name = std::move(dotted);

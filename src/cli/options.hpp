@@ -29,6 +29,7 @@ struct Options {
     memory::DynArray<std::string> defines;
 
     enum class Mode : uint8_t { Custom, Debug, Develop, Release, Fast, Small };
+    enum class DocsMode : uint8_t { Interface, Spec };
 
     enum class monoformLevel : uint8_t { No, Auto, High, Max };
     enum class Color : uint8_t { Off, Auto, On };
@@ -234,6 +235,16 @@ struct Options {
         }
     } flags;
 
+    DocsMode docsMode     = DocsMode::Interface;
+    bool docsModeExplicit = false;
+    bool docsModeConflict = false;
+    bool docsOut          = false;
+    std::string docsOutPath;
+    bool docsIndex         = false;
+    bool docsIncludeErrors = false;
+    bool docsForce         = false;
+    std::string docsOptionError;
+
     // Tracks which mode-dependent fields were explicitly set by CLI
     // so loadFlags() doesn't overwrite them.
     uint8_t cliFields                       = 0;
@@ -273,6 +284,7 @@ struct Options {
     memory::StringInterner *stringPool = nullptr;
 
     void deriveTargetStage();
+    [[nodiscard]] std::string docsOptionsError() const;
 };
 
 struct Cli {

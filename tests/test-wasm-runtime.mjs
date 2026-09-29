@@ -162,15 +162,36 @@ async function main() {
     dumpSource.len,
     0,
     0,
-    32 | 64,
+    4 | 32 | 64,
   );
-  assertEqual(dumpStatus, 0, "CST and VIR compile emission");
+  assertEqual(dumpStatus, 0, "HIR, CST and VIR compile emission");
   const dumpOutput = readLastOutput();
   if (!dumpOutput.includes("--- CST ---")) {
     throw new Error("CST header missing from zith_last_output buffer");
   }
+  if (!dumpOutput.includes("--- HIR ---")) {
+    throw new Error("HIR header missing from zith_last_output buffer");
+  }
   if (!dumpOutput.includes("--- VIR ---") || !dumpOutput.includes("fn main")) {
     throw new Error("VIR content missing from zith_last_output buffer");
+  }
+  stdoutChunks.length = 0;
+  stderrChunks.length = 0;
+
+  const invalidMaskSource = writeString("fn main() {}\n");
+  const invalidMaskStatus = instance.exports.zith_compile_source(
+    invalidMaskSource.ptr,
+    invalidMaskSource.len,
+    0,
+    0,
+    128,
+  );
+  assertEqual(invalidMaskStatus, 2, "unknown emit_mask bits are rejected");
+  const errorLen = instance.exports.zith_last_error_len();
+  const errorPtr = instance.exports.zith_last_error_ptr();
+  const invalidMaskError = readBuffer(errorPtr, errorLen).toString("utf8");
+  if (!invalidMaskError.includes("invalid emit_mask")) {
+    throw new Error("unknown emit_mask bit did not report a parameter error");
   }
   stdoutChunks.length = 0;
   stderrChunks.length = 0;

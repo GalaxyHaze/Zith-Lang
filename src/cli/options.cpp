@@ -100,6 +100,16 @@ void Options::deriveTargetStage() {
     }
 }
 
+std::string Options::docsOptionsError() const {
+    if (!docsOptionError.empty())
+        return docsOptionError;
+    if (docsModeConflict)
+        return "conflicting docs modes, choose either --interface or --spec";
+    if (docsIndex && !docsOut)
+        return "--index requires --out";
+    return {};
+}
+
 static bool compare(const char *a, const char *b) {
     return std::strcmp(a, b) == 0;
 }
@@ -136,9 +146,9 @@ static size_t levenshteinDistance(const char *a, const char *b) {
 }
 
 static void suggestCommand(const char *arg, term::UsagePrinter & /*err*/) {
-    static const char *suggestCmds[] = {"build", "run",  "check", "execute", "test",
-                                        "fmt",   "docs", "repl",  "create",  "clean",
-                                        "deps",  "help", nullptr};
+    static const char *suggestCmds[] = {"build", "run",        "check", "execute", "test",
+                                        "fmt",   "docs",       "repl",  "create",  "clean",
+                                        "deps",  "completion", "help",  nullptr};
     const char *best                 = nullptr;
     size_t best_dist                 = static_cast<size_t>(-1);
     for (size_t i = 0; suggestCmds[i]; ++i) {
@@ -165,8 +175,9 @@ static void suggestCommand(const char *arg, term::UsagePrinter & /*err*/) {
 }
 
 static bool isSubcommand(const char *arg) {
-    static const char *cmds[] = {"build", "run",    "check", "execute", "test", "fmt",  "docs",
-                                 "repl",  "create", "clean", "deps",    "help", nullptr};
+    static const char *cmds[] = {"build", "run",        "check", "execute", "test",
+                                 "fmt",   "docs",       "repl",  "create",  "clean",
+                                 "deps",  "completion", "help",  nullptr};
     for (auto cmd : cmds) {
         if (cmd && compare(cmd, arg))
             return true;
@@ -198,6 +209,8 @@ static Command subcommandToEnum(const char *arg) {
         return Command::Clean;
     if (compare(arg, "deps"))
         return Command::Deps;
+    if (compare(arg, "completion"))
+        return Command::Completion;
     if (compare(arg, "help"))
         return Command::Help;
     return Command::None;
@@ -206,6 +219,13 @@ static Command subcommandToEnum(const char *arg) {
 void Cli::parseArgs(int argc, char **argv) {
     this->args = std::make_pair(argc, argv);
 
+    const auto selectDocsMode = [this](const Options::DocsMode mode) {
+        if (opts.docsModeExplicit && opts.docsMode != mode)
+            opts.docsModeConflict = true;
+        opts.docsMode         = mode;
+        opts.docsModeExplicit = true;
+    };
+
     for (int &i = this->current; i < argc; ++i) {
         if (isSubcommand(argv[i]))
             // Consume next arg as subcommand_arg for commands that take one
@@ -213,6 +233,7 @@ void Cli::parseArgs(int argc, char **argv) {
             case Options::Command::Create:
             case Options::Command::Clean:
             case Options::Command::Deps:
+            case Options::Command::Completion:
                 if (i + 1 < argc && argv[i + 1][0] != '-') {
                     this->opts.subcommandArg = this->stringPool.intern(argv[i + 1]);
                     this->opts.subcommandStr = argv[i + 1];
@@ -234,6 +255,71 @@ void Cli::parseArgs(int argc, char **argv) {
 
         if (compare(argv[i], "--version")) {
             opts.command = Options::Command::Version;
+            continue;
+        }
+
+        if (compare(argv[i], "--interface")) {
+            selectDocsMode(Options::DocsMode::Interface);
+            continue;
+        }
+
+        if (compare(argv[i], "--spec")) {
+            selectDocsMode(Options::DocsMode::Spec);
+            continue;
+        }
+
+        const std::string_view argument(argv[i]);
+        constexpr std::string_view docsModePrefix = "--mode=";
+        if (argument.starts_with(docsModePrefix)) {
+            const auto value = argument.substr(docsModePrefix.size());
+            if (value == "interface") {
+                selectDocsMode(Options::DocsMode::Interface);
+                continue;
+            }
+            if (value == "spec") {
+                selectDocsMode(Options::DocsMode::Spec);
+                continue;
+            }
+            if (opts.command == Options::Command::Docs) {
+                if (opts.docsOptionError.empty())
+                    opts.docsOptionError = "invalid docs mode, expected: interface|spec";
+                continue;
+            }
+        }
+
+        constexpr std::string_view docsOutPrefix = "--out=";
+        if (argument.starts_with(docsOutPrefix)) {
+            const auto value = argument.substr(docsOutPrefix.size());
+            if (value.empty()) {
+                if (opts.docsOptionError.empty())
+                    opts.docsOptionError = "--out= requires a non-empty path";
+            } else if (!opts.docsOutPath.empty() && opts.docsOutPath != value) {
+                if (opts.docsOptionError.empty())
+                    opts.docsOptionError = "conflicting --out paths";
+            } else {
+                opts.docsOutPath = value;
+            }
+            opts.docsOut = true;
+            continue;
+        }
+
+        if (compare(argv[i], "--out")) {
+            opts.docsOut = true;
+            continue;
+        }
+
+        if (compare(argv[i], "--index")) {
+            opts.docsIndex = true;
+            continue;
+        }
+
+        if (compare(argv[i], "--error")) {
+            opts.docsIncludeErrors = true;
+            continue;
+        }
+
+        if (compare(argv[i], "--force")) {
+            opts.docsForce = true;
             continue;
         }
 
@@ -773,12 +859,21 @@ void Cli::loadProject() {
 }
 
 int Cli::dispatch() {
+    if (opts.command == Command::Docs) {
+        const std::string error = opts.docsOptionsError();
+        if (!error.empty()) {
+            std::fprintf(stderr, "[error] %s\n", error.c_str());
+            return 1;
+        }
+    }
+
     if (opts.inputFiles.empty() && !config.projectRoot.empty()) {
         switch (opts.command) {
         case Command::Build:
         case Command::Check:
         case Command::Run:
         case Command::Execute:
+        case Command::Docs:
             opts.inputFiles.push(config.projectRoot);
             break;
         default:

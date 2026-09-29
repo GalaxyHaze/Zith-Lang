@@ -290,6 +290,33 @@ void test_imported_trait_qualified_call_in_populated_workdir() {
     std::filesystem::remove_all(root);
 }
 
+void test_qualified_types_through_export_facade() {
+    const std::filesystem::path root =
+        std::filesystem::temp_directory_path() / "zith-qualified-facade-type-tests";
+    std::filesystem::remove_all(root);
+    std::filesystem::create_directories(root);
+
+    CHECK(writeFile(root / "libs/unrelated.zith", "pub struct Unrelated { value: i32 }\n"),
+          "write unrelated module to populate the workdir");
+
+    constexpr std::string_view source =
+        "import libs/unrelated\n"
+        "import std/memory\n"
+        "\n"
+        "fn acceptHeap(value: ?std.memory.allocators.heap.HeapAllocator) {}\n"
+        "fn acceptInPlace(value: dyn std.memory.in-place.InPlace) {}\n"
+        "\n"
+        "fn main(): i32 { return 0; }\n";
+
+    const auto cold = runProjectWithStdlib(root, "main.zith", source);
+    CHECK(cold.ok, "facade-qualified struct and trait types resolve in a populated workdir");
+
+    const auto warm = runProjectWithStdlib(root, "main.zith", source);
+    CHECK(warm.ok, "facade-qualified struct and trait types resolve after cache hydration");
+
+    std::filesystem::remove_all(root);
+}
+
 void test_interface_satisfaction() {
     test_structural_satisfaction();
     test_interface_bound_accepts_conforming_struct();
@@ -300,6 +327,7 @@ void test_interface_satisfaction() {
     test_method_signature_mismatch();
     test_qualified_interface_method_selection();
     test_imported_trait_qualified_call_in_populated_workdir();
+    test_qualified_types_through_export_facade();
 }
 
 } // namespace

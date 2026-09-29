@@ -750,38 +750,48 @@ TypeId PerModuleSema::lowerBareTypeExpr(const frontend::TypeExpression &type) {
     case frontend::TypeExprKind::Name: {
         if (!type.segments.empty()) {
             const auto target_module = resolveQualifiedPath(type);
-            if (target_module.empty())
+            if (target_module.empty() || owner == nullptr)
                 break;
-            if (owner == nullptr || owner->findModuleSema(target_module) == nullptr)
+            const auto *artifact = owner->findModuleSema(target_module);
+            if (artifact == nullptr)
                 break;
-            const auto *artifact               = owner->findModuleSema(target_module);
+
             const std::string_view symbol_name = type.segments.back();
             for (const auto &symbol : artifact->snapshot.declarations()) {
-                if (symbol.name != symbol_name)
+                if (symbol.name != symbol_name || symbol.visibility != frontend::Visibility::Public)
                     continue;
                 if (symbol.kind == frontend::DeclKind::Enum ||
                     symbol.kind == frontend::DeclKind::Union) {
                     if (type.arguments.empty() && !symbol.genericParams.empty())
                         continue;
-                    if (const TypeId named = type_table.lookupNamed(symbol.name))
-                        return named;
                 }
-            }
-            for (const auto &symbol : artifact->snapshot.declarations()) {
-                if (symbol.name == symbol_name && symbol.kind == frontend::DeclKind::Struct) {
+                const bool is_named_type = symbol.kind == frontend::DeclKind::Struct ||
+                                           symbol.kind == frontend::DeclKind::Enum ||
+                                           symbol.kind == frontend::DeclKind::Union ||
+                                           symbol.kind == frontend::DeclKind::Trait ||
+                                           symbol.kind == frontend::DeclKind::Interface ||
+                                           symbol.kind == frontend::DeclKind::TypeAlias;
+                if (!is_named_type || !type.arguments.empty())
+                    continue;
+                if (const TypeId declared = artifact->typeOfDecl(symbol.id))
+                    return declared;
+                if (symbol.kind != frontend::DeclKind::TypeAlias) {
                     if (const TypeId named = type_table.lookupNamed(symbol.name))
                         return named;
                 }
             }
             if (!type.arguments.empty()) {
                 for (const auto &symbol : artifact->snapshot.declarations()) {
-                    if (symbol.name != symbol_name || symbol.genericParams.empty())
+                    if (symbol.name != symbol_name ||
+                        symbol.visibility != frontend::Visibility::Public ||
+                        symbol.genericParams.empty())
                         continue;
                     if (symbol.kind == frontend::DeclKind::Struct ||
                         symbol.kind == frontend::DeclKind::Enum ||
-                        symbol.kind == frontend::DeclKind::Union) {
-                        return const_cast<PerModuleSema *>(artifact)
-                            ->instantiateTypeExpr(type.span, symbol_name, type.arguments);
+                        symbol.kind == frontend::DeclKind::Union ||
+                        symbol.kind == frontend::DeclKind::TypeAlias) {
+                        return const_cast<PerModuleSema *>(artifact)->instantiateTypeExpr(
+                            type.span, symbol_name, type.arguments);
                     }
                 }
             }

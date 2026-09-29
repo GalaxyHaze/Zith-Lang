@@ -100,6 +100,132 @@ void appendQuoted(std::ostringstream &out, std::string_view text) {
     out << '"';
 }
 
+void appendInstruction(std::ostringstream &out, const Instr &instr, size_t pc) {
+    out << "  " << std::setw(4) << pc << ": " << opName(instr.op) << ' ';
+    switch (instr.op) {
+    case Op::LoadConstI32:
+    case Op::LoadConstI64:
+        out << "dst=r" << instr.a << " value=" << instr.imm;
+        break;
+    case Op::LoadConstF32:
+    case Op::LoadConstF64:
+        out << "dst=r" << instr.a << " float_constant=#" << instr.imm;
+        break;
+    case Op::LoadString:
+        out << "dst=r" << instr.a << " string=#" << instr.imm;
+        break;
+    case Op::LoadFnRef:
+        out << "dst=r" << instr.a << " function=#" << instr.imm;
+        break;
+    case Op::LoadExternRef:
+        out << "dst=r" << instr.a << " extern=#" << instr.imm;
+        break;
+    case Op::Move:
+        out << "dst=r" << instr.a << " src=r" << instr.b;
+        break;
+    case Op::AllocBytes:
+    case Op::MallocBytes:
+        out << "dst=r" << instr.a << " size=r" << instr.b << " alignment=r" << instr.c;
+        break;
+    case Op::StoreBytes:
+        out << "address=r" << instr.a << " string=#" << instr.imm;
+        break;
+    case Op::StoreI64:
+        out << "address=r" << instr.a << " value=r" << instr.b;
+        break;
+    case Op::LoadBytes:
+        out << "dst=r" << instr.a << " address=r" << instr.b << " count=r" << instr.c;
+        break;
+    case Op::LoadI64:
+        out << "dst=r" << instr.a << " address=r" << instr.b;
+        break;
+    case Op::IndexLoad:
+        out << "dst=r" << instr.a << " base=r" << instr.b << " index=r" << instr.c
+            << " element_size=" << instr.imm << " length=" << instr.d;
+        break;
+    case Op::FieldPtr:
+        out << "dst=r" << instr.a << " base=r" << instr.b << " byte_offset=" << instr.imm;
+        break;
+    case Op::MakeSlice:
+        out << "ptr_dst=r" << instr.a << " len_dst=r" << (instr.a + 1U) << " ptr=r" << instr.b
+            << " len=r" << instr.c;
+        break;
+    case Op::SlicePtr:
+        out << "dst=r" << instr.a << " slice=r" << instr.b;
+        break;
+    case Op::SliceLen:
+        out << "dst=r" << instr.a << " slice=r" << instr.b;
+        break;
+    case Op::MemCopy:
+        out << "destination=r" << instr.a << " source=r" << instr.b << " count=r" << instr.c;
+        break;
+    case Op::Add:
+    case Op::Sub:
+    case Op::Mul:
+    case Op::Div:
+    case Op::Rem:
+    case Op::BitAnd:
+    case Op::BitOr:
+    case Op::BitXor:
+    case Op::Shl:
+    case Op::Shr:
+    case Op::Eq:
+    case Op::Ne:
+    case Op::Lt:
+    case Op::Le:
+    case Op::Gt:
+    case Op::Ge:
+        out << "dst=r" << instr.a << " lhs=r" << instr.b << " rhs=r" << instr.c;
+        break;
+    case Op::Neg:
+    case Op::Not:
+    case Op::BitNot:
+        out << "dst=r" << instr.a << " value=r" << instr.b;
+        break;
+    case Op::CallFn:
+        out << "dst=r" << instr.a << " arg0=r" << instr.b << " arg1=r" << instr.c << " function=#"
+            << instr.imm;
+        break;
+    case Op::CallRange:
+        out << "dst=r" << instr.a << " arg_base=r" << instr.b << " arg_count=" << instr.c
+            << " function=#" << instr.imm;
+        break;
+    case Op::CallExtern:
+        out << "dst=r" << instr.a << " arg0=r" << instr.b << " arg1=r" << instr.c << " arg2=r"
+            << instr.d << " arg3=r" << instr.e << " extern=#" << instr.imm;
+        break;
+    case Op::CallExternRange:
+        out << "dst=r" << instr.a << " arg_base=r" << instr.b << " arg_count=" << instr.c
+            << " extern=#" << instr.imm;
+        break;
+    case Op::CallFnRef:
+        out << "dst=r" << instr.a << " function_ref=r" << instr.b << " arg0=r" << instr.c
+            << " arg1=r" << instr.imm;
+        break;
+    case Op::CallExternRef:
+        out << "dst=r" << instr.a << " extern_ref=r" << instr.b << " arg0=r" << instr.c << " arg1=r"
+            << instr.imm << " arg2=r" << instr.d << " arg3=r" << instr.e;
+        break;
+    case Op::Ret:
+        out << "value=r" << instr.a;
+        break;
+    case Op::Branch:
+        out << "condition=r" << instr.b << " if_true=pc" << instr.imm << " if_false=pc"
+            << (pc + 1U);
+        break;
+    case Op::Branch2:
+        out << "condition=r" << instr.b << " if_true=pc" << instr.imm << " if_false=pc" << instr.d;
+        break;
+    case Op::Jump:
+        out << "target=pc" << instr.imm;
+        break;
+    case Op::Trap:
+        out << "reason=explicit";
+        break;
+    }
+    out << '\n';
+}
+
 } // namespace
 
 std::string dump(const Module &module) {
@@ -133,12 +259,8 @@ std::string dump(const Module &module) {
         for (size_t ri = 0; ri < fn.regTypes.size(); ++ri)
             out << " r" << ri << ":" << valueTypeName(fn.regTypes[ri]);
         out << '\n';
-        for (size_t pc = 0; pc < fn.body.size(); ++pc) {
-            const auto &instr = fn.body[pc];
-            out << "  " << std::setw(4) << pc << ": " << opName(instr.op) << " a=r" << instr.a
-                << " b=r" << instr.b << " c=r" << instr.c << " imm=" << instr.imm
-                << " d=" << instr.d << " e=" << instr.e << '\n';
-        }
+        for (size_t pc = 0; pc < fn.body.size(); ++pc)
+            appendInstruction(out, fn.body[pc], pc);
     }
     out << "---\n";
     return out.str();

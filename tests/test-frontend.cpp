@@ -1,4 +1,5 @@
 #include "diagnostics/error-codes.hpp"
+#include "frontend/frontend-printer.hpp"
 #include "frontend/frontend.hpp"
 #include "test-common.hpp"
 
@@ -18,6 +19,23 @@ static void test_lossless_trivia_and_spans() {
     CHECK_EQ(snapshot.root().span().end, static_cast<uint32_t>(source.size()),
              "root covers the complete source");
     CHECK(snapshot.diagnostics().empty(), "valid source has no recovery diagnostics");
+}
+
+static void test_cst_dump_is_deterministic_and_keeps_nested_tokens() {
+    const std::string source = "fn main() { foo([1]); }\n";
+    const auto first         = frontend::parse(source);
+    const auto second        = frontend::parse(source);
+    const auto dump          = frontend::dumpCst(first);
+
+    CHECK(dump.starts_with("--- CST ---\nRoot [0..24]"),
+          "CST dump includes a root node with its source span");
+    CHECK(dump.find("Token Identifier [12..15] \"foo\"") != std::string::npos,
+          "CST dump includes token kinds, spans and lexemes");
+    CHECK(dump.find("Token Punctuation [16..17] \"[\"") != std::string::npos &&
+              dump.find("Token Punctuation [18..19] \"]\"") != std::string::npos,
+          "CST dump preserves nested delimiter tokens");
+    CHECK_EQ(dump, frontend::dumpCst(second), "equivalent CSTs have identical textual dumps");
+    CHECK(dump.ends_with("---\n"), "CST dump has a deterministic closing delimiter");
 }
 
 static void test_keywords_and_module_ast() {
@@ -70,6 +88,25 @@ static void test_bare_opaque_type_expression() {
     if (raw_type != nullptr)
         CHECK_EQ(frontend::canonicalTypeString(raw_snapshot, raw_type->id),
                  std::string("raw opaque"), "canonical rendering keeps 'raw opaque'");
+}
+
+static void test_kebab_case_qualified_type_path() {
+    auto snapshot = frontend::parse("fn consume(value: std.memory.in-place.InPlace) {}\n");
+    CHECK(snapshot.diagnostics().empty(),
+          "kebab-case module segments parse in qualified type paths");
+
+    const frontend::TypeExpression *qualified = nullptr;
+    for (const auto &type : snapshot.typeExpressions()) {
+        if (type.kind == frontend::TypeExprKind::Name && type.name == "std.memory.in-place.InPlace")
+            qualified = &type;
+    }
+    CHECK(qualified != nullptr, "qualified type retains its complete kebab-case name");
+    if (qualified != nullptr) {
+        CHECK_EQ(qualified->segments.size(), 4u, "qualified type records each module/type segment");
+        if (qualified->segments.size() == 4u)
+            CHECK_EQ(qualified->segments[2], std::string("in-place"),
+                     "contiguous hyphen joins tokens within one path segment");
+    }
 }
 
 static void test_recovery_creates_error_nodes() {
@@ -1526,9 +1563,11 @@ static void test_external_symbol_aliases() {
 
 static void test_frontend() {
     test_lossless_trivia_and_spans();
+    test_cst_dump_is_deterministic_and_keeps_nested_tokens();
     test_keywords_and_module_ast();
     test_dots_lex_as_one_token();
     test_bare_opaque_type_expression();
+    test_kebab_case_qualified_type_path();
     test_recovery_creates_error_nodes();
     test_function_body_ast();
     test_control_flow_and_scopes();

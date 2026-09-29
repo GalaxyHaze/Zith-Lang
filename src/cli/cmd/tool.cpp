@@ -1,6 +1,10 @@
 #include "cache/cache-paths.hpp"
 #include "cache/cache.hpp"
 #include "cli/commands.hpp"
+#include "cli/docs/doc-errors.hpp"
+#include "cli/docs/markdown-renderer.hpp"
+#include "cli/docs/output-writer.hpp"
+#include "cli/docs/project-graph.hpp"
 #include "cli/terminal.hpp"
 #include "session/compilation-session.hpp"
 #include "session/pipeline-plan.hpp"
@@ -178,45 +182,79 @@ int docs(const Options &opts) {
         return 1;
     }
 
-    // Run pipeline through Imported stage to get a snapshot with public symbols
+    // Include semantic diagnostics before deciding whether partial output is allowed.
     session::CompilationSession session(opts, opts.inputFiles[0]);
     session.setBuffered(true);
-    bool ok = session.runTo(session::Stage::Imported);
+    const bool pipelineOk = session.runTo(session::Stage::TypeChecked);
     session.emitDiagnostics();
     std::fputs(session.flushOutput().c_str(), stderr);
-    if (!ok)
-        return 1;
 
     const auto &snapshot = session.snapshot();
     if (!snapshot) {
+        if (opts.docsIncludeErrors) {
+            const std::vector<docs::DocError> errors = {
+                {opts.inputFiles[0],
+                 {},
+                 "Compilation",
+                 "failed to build compilation snapshot",
+                 0,
+                 0},
+            };
+            const auto errorMarkdown = docs::renderDocErrors(errors);
+            if (opts.docsOut) {
+                docs::DocModel emptyModel;
+                emptyModel.entryModule = opts.inputFiles[0];
+                const auto outputDirectory =
+                    docs::resolveDocsOutputDirectory(opts.inputFiles[0], opts.docsOutPath);
+                const auto result = docs::writeDocsOutput(
+                    outputDirectory, emptyModel, opts.docsIndex, opts.docsForce, errorMarkdown);
+                if (!result.ok || !result.message.empty()) {
+                    p.err.red("[error]");
+                    std::fprintf(stderr, " %s\n", result.message.c_str());
+                }
+            } else {
+                std::fputs(errorMarkdown.c_str(), stdout);
+            }
+        }
         p.err.red("[error]");
         std::fprintf(stderr, " failed to build snapshot\n");
         return 1;
     }
 
-    for (const auto &module : snapshot->modules()) {
-        if (module->publicSymbols.empty())
-            continue;
-        p.out.bold(module->key.c_str());
-        std::printf("\n");
-        for (const auto &sym : module->publicSymbols) {
-            static const char *kindNames[] = {
-                "error", "import", "fn",        "type", "struct",  "enum",
-                "union", "trait",  "interface", "var",  "context", "word",
-            };
-            const char *kind =
-                (static_cast<size_t>(sym.kind) < sizeof(kindNames) / sizeof(kindNames[0]))
-                    ? kindNames[static_cast<size_t>(sym.kind)]
-                    : "unknown";
-            static const char *visNames[] = {"private", "pub", "mod"};
-            const char *vis =
-                (static_cast<size_t>(sym.visibility) < sizeof(visNames) / sizeof(visNames[0]))
-                    ? visNames[static_cast<size_t>(sym.visibility)]
-                    : "?";
-            std::printf("  %s %s %s\n", vis, kind, sym.name.c_str());
+    const auto graph = docs::buildProjectGraph(*snapshot);
+    const auto mode =
+        opts.docsMode == Options::DocsMode::Spec ? docs::DocsMode::Spec : docs::DocsMode::Interface;
+    const auto model = docs::buildDocModel(*snapshot, graph, mode);
+    auto errors      = docs::collectDocErrors(session, graph, model);
+    const bool hasErrors =
+        !pipelineOk || session.hasErrors() || !graph.ok() || !model.errors.empty();
+    if (hasErrors && errors.empty()) {
+        errors.push_back({opts.inputFiles[0], graph.entryModule, "Compilation",
+                          "compilation or documentation generation failed", 0, 0});
+    }
+    if (hasErrors && !opts.docsIncludeErrors)
+        return 1;
+
+    const auto errorMarkdown =
+        hasErrors && opts.docsIncludeErrors ? docs::renderDocErrors(errors) : std::string{};
+    if (opts.docsOut) {
+        const auto outputDirectory =
+            docs::resolveDocsOutputDirectory(opts.inputFiles[0], opts.docsOutPath);
+        const auto result = docs::writeDocsOutput(outputDirectory, model, opts.docsIndex,
+                                                  opts.docsForce, errorMarkdown);
+        if (!result.ok || !result.message.empty()) {
+            p.err.red("[error]");
+            std::fprintf(stderr, " %s\n", result.message.c_str());
+            return 1;
         }
+    } else {
+        const auto markdown = docs::renderMarkdown(model);
+        std::fputs(markdown.c_str(), stdout);
+        std::fputs(errorMarkdown.c_str(), stdout);
     }
 
+    if (hasErrors)
+        return 1;
     return 0;
 }
 

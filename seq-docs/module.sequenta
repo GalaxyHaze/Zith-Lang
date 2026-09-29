@@ -1,0 +1,24 @@
+# module: seq-docs
+
+1. cliContract() -> docs-cli-options
+
+2. projectGraph() -> reachable-module-set
+   depends_on: seq-docs::cliContract
+
+3. symbolModel() -> documented-api-model
+   depends_on: seq-docs::projectGraph
+
+4. errorPolicy() -> docs-diagnostics
+   depends_on: seq-docs::symbolModel
+
+5. markdownRenderer() -> deterministic-markdown
+   depends_on: seq-docs::errorPolicy
+
+6. outputPolicy() -> safe-output-files
+   depends_on: seq-docs::markdownRenderer
+
+7. tests() -> verified-docs-command
+   depends_on: seq-docs::outputPolicy
+
+8. userDocs() -> published-cli-contract
+   depends_on: seq-docs::tests

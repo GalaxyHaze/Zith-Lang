@@ -64,13 +64,45 @@ void test_vm_v2_malloc_string() {
 void test_vm_v2_dump_is_deterministic() {
     memory::Arena firstArena;
     memory::Arena secondArena;
-    const auto first = vm::dump(makeModule(firstArena));
-    const auto second = vm::dump(makeModule(secondArena));
+    auto firstModule = makeModule(firstArena);
+    firstModule.i64Constants.push(123456789);
+    firstModule.f64Constants.push(1.25);
+    firstModule.functions[0].body.push(vm::Instr{vm::Op::Branch, 0, 4, 0, 12});
+    firstModule.functions[0].body.push(vm::Instr{vm::Op::Branch2, 0, 4, 0, 12, 3});
+    firstModule.functions[0].body.push(vm::Instr{vm::Op::Jump, 0, 0, 0, 12});
+    firstModule.functions[0].body.push(vm::Instr::simple(vm::Op::Add, 1, 2, 3));
+
+    auto secondModule = makeModule(secondArena);
+    secondModule.i64Constants.push(123456789);
+    secondModule.f64Constants.push(1.25);
+    secondModule.functions[0].body.push(vm::Instr{vm::Op::Branch, 0, 4, 0, 12});
+    secondModule.functions[0].body.push(vm::Instr{vm::Op::Branch2, 0, 4, 0, 12, 3});
+    secondModule.functions[0].body.push(vm::Instr{vm::Op::Jump, 0, 0, 0, 12});
+    secondModule.functions[0].body.push(vm::Instr::simple(vm::Op::Add, 1, 2, 3));
+
+    const auto first  = vm::dump(firstModule);
+    const auto second = vm::dump(secondModule);
     CHECK_EQ(first, second, "equivalent VM v2 modules have identical dumps");
     CHECK(first.find("fn main") != std::string::npos, "VIR dump contains function name");
     CHECK(first.find("LoadConstI32") != std::string::npos, "VIR dump contains opcode");
-    CHECK(first.find("imm=0") != std::string::npos, "VIR dump contains immediates");
+    CHECK(first.find("value=0") != std::string::npos,
+          "VIR dump identifies inline integer immediates");
+    CHECK(first.find("Add dst=r1 lhs=r2 rhs=r3") != std::string::npos &&
+              first.find("Ret value=r6") != std::string::npos,
+          "VIR dump names arithmetic operands and return values");
     CHECK(first.find("reg_types") != std::string::npos, "VIR dump contains register types");
+    CHECK(first.find("i64_constants") != std::string::npos &&
+              first.find("123456789") != std::string::npos &&
+              first.find("f64_constants") != std::string::npos &&
+              first.find("1.25") != std::string::npos,
+          "VIR dump includes deterministic integer and floating-point constant pools");
+    CHECK(first.find("string=#0") != std::string::npos &&
+              first.find("extern=#0") != std::string::npos,
+          "VIR dump identifies string and extern table indices");
+    CHECK(first.find("condition=r4 if_true=pc12 if_false=pc12") != std::string::npos &&
+              first.find("condition=r4 if_true=pc12 if_false=pc3") != std::string::npos &&
+              first.find("target=pc12") != std::string::npos,
+          "VIR dump names branch conditions and program-counter destinations");
 }
 
 void test_vm_v2_linear_memory_trap() {

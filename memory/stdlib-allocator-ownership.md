@@ -32,12 +32,12 @@ go through `std.memory.allocate` and `std.memory.deallocate` for now.
 
 ## Module Resolution Quirk
 
-The legacy `std/alloc` failed with `E2001 unknown struct type` while `std/alloc3` with
-identical content imported correctly. The empty directory
+The legacy `std/alloc` failed with `E2001 unknown struct type` while `std/alloc3`
+with identical content imported correctly. The empty directory
 `stdlib/std/alloc/` was the cause: the resolver treated the import as a
-directory module. Removing the empty directory and clearing the stale
-`.zith-cache` directories restored `from std/alloc` and
-`import std/alloc as a`.
+directory module. The resolver now prefers regular-file candidates over a
+same-named directory, so the facade remains usable when leaf modules share its
+path prefix.
 
 `export` paths in a facade may share a namespace prefix (`export std/a` plus
 `export std/b`). The frontend injects each target's public symbols and keeps an
@@ -45,6 +45,12 @@ independent `ModuleAlias` for every exported namespace prefix, so `from
 std/memory` exposes the leaf contracts and `import std/memory` can resolve each
 fanout path such as `std.memory.in-place.InPlace` without a spurious `E2002
 duplicate binding`.
+
+The `std/memory` facade shares its logical path with the `stdlib/std/memory/`
+directory. Regular-file precedence selects `memory.zith` before directory
+aggregation, allowing the facade to export nested paths such as
+`std.memory.allocators.heap.HeapAllocator`. Cold and cached coverage lives in
+`tests/test-interface-satisfaction.cpp`.
 
 ## Design Intent
 

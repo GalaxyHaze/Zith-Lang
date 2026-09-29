@@ -90,6 +90,7 @@ HIR is the semantic high-level IR, and VIR is the result of `HIR -> vm::lowerMod
 portable VM v2. VIR is not LLVM IR. IR and ASM require an LLVM backend, which is not available
 in this WASM build. Passing either bit produces a diagnostic and return code `1`; it does not
 silently ignore the request.
+Bits outside `1|2|4|8|16|32|64` are invalid parameters and return code `2`.
 
 All textual emissions use the existing `zith_last_output_ptr/len` buffer. CST and VIR are not
 serialized into the flat HIR blob returned by `zith_emit_hir`; that operation remains exclusively
