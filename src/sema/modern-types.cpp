@@ -672,7 +672,7 @@ TypeId TypeTable::lookupReifiedStruct(std::string_view name,
         return kInvalidTypeId;
     const auto *entry = findEntry(*value);
     if (entry == nullptr || entry->kind != EntryKind::Struct || entry->struct_ty == nullptr)
-        return *value;
+        return kInvalidTypeId;
     if (entry->struct_args == nullptr || entry->struct_args->size() != args.size())
         return kInvalidTypeId;
     for (size_t index = 0; index < args.size(); ++index) {
