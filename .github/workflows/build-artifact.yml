@@ -591,6 +591,9 @@ jobs:
                   ;;
               esac
 
+              zlib_archive="$(find /usr/lib -name libz.a -print -quit)"
+              test -n "$zlib_archive" && test -f "$zlib_archive"
+
               cmake -S . -B build -G Ninja \
                 -DCMAKE_BUILD_TYPE=Release \
                 -DBUILD_TESTING=OFF \
@@ -606,8 +609,22 @@ jobs:
                 -DZITH_HAS_LLVM=ON \
                 -DZITH_REQUIRE_LLVM=ON \
                 -DZLIB_USE_STATIC_LIBS=ON \
+                -DZLIB_LIBRARY="$zlib_archive" \
                 -DCMAKE_EXE_LINKER_FLAGS="-static -lc" \
                 -DCMAKE_CXX_FLAGS="-fno-cxx-exceptions"
+
+              zlib_cache="$(sed -n 's/^ZLIB_LIBRARY:[^=]*=//p' build/CMakeCache.txt)"
+              if [ "$zlib_cache" != "$zlib_archive" ]; then
+                echo "CMake selected '$zlib_cache' instead of '$zlib_archive'" >&2
+                exit 1
+              fi
+              case "$zlib_cache" in
+                *.a) ;;
+                *)
+                  echo "CMake did not select a static zlib archive: $zlib_cache" >&2
+                  exit 1
+                  ;;
+              esac
 
               python3 scripts/verify-llvm-build.py \
                 --build-dir build \
@@ -700,6 +717,70 @@ jobs:
             --tag "$TAG"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  smoke-published-windows:
+    needs: [create-release, publish-release]
+    name: Smoke-test published Windows downloads
+    runs-on: windows-latest
+    steps:
+      - name: Checkout release sources
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Verify anonymous published downloads and installers
+        shell: pwsh
+        env:
+          EXPECTED_RELEASE_TAG: ${{ needs.create-release.outputs.tag }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          foreach ($name in @('GITHUB_TOKEN', 'GH_TOKEN', 'ZITH_RELEASE_BASE_URL')) {
+            Remove-Item "Env:$name" -ErrorAction SilentlyContinue
+          }
+
+          $expectedTag = $env:EXPECTED_RELEASE_TAG
+          $latest = Invoke-RestMethod `
+            -Uri 'https://api.github.com/repos/GalaxyHaze/Zith-Lang/releases/latest'
+          if ($latest.tag_name -cne $expectedTag) {
+            throw "Latest release is '$($latest.tag_name)', expected '$expectedTag'"
+          }
+
+          $directDownload = Join-Path $env:RUNNER_TEMP 'zithc-windows-amd64.exe'
+          $directUrl = "https://github.com/GalaxyHaze/Zith-Lang/releases/download/$expectedTag/zithc-windows-amd64.exe"
+          Invoke-WebRequest -Uri $directUrl -OutFile $directDownload
+          if (-not (Test-Path $directDownload) -or (Get-Item $directDownload).Length -le 0) {
+            throw 'The versioned Windows compiler download is empty'
+          }
+
+          $installer = Join-Path $env:GITHUB_WORKSPACE 'scripts/install.ps1'
+          $source = Join-Path $env:GITHUB_WORKSPACE 'examples/loops-simple.zith'
+
+          $versionedRoot = Join-Path $env:RUNNER_TEMP 'zith-versioned'
+          $env:ZITH_INSTALL_ROOT = $versionedRoot
+          & $installer -Version $expectedTag
+          $versionedCompiler = Join-Path $versionedRoot 'bin/zithc.exe'
+          $versionedStdlib = Join-Path $versionedRoot 'share/zith/stdlib/std/io/console.zith'
+          if (-not (Test-Path $versionedCompiler) -or -not (Test-Path $versionedStdlib)) {
+            throw 'The versioned installer did not install the compiler and stdlib'
+          }
+          & $versionedCompiler check $source
+          if ($LASTEXITCODE -ne 0) {
+            throw "The versioned compiler smoke check failed with exit code $LASTEXITCODE"
+          }
+
+          $latestRoot = Join-Path $env:RUNNER_TEMP 'zith-latest'
+          $env:ZITH_INSTALL_ROOT = $latestRoot
+          & $installer
+          $latestCompiler = Join-Path $latestRoot 'bin/zithc.exe'
+          $latestStdlib = Join-Path $latestRoot 'share/zith/stdlib/std/io/console.zith'
+          if (-not (Test-Path $latestCompiler) -or -not (Test-Path $latestStdlib)) {
+            throw 'The latest installer did not install the compiler and stdlib'
+          }
+          & $latestCompiler check $source
+          if ($LASTEXITCODE -ne 0) {
+            throw "The latest compiler smoke check failed with exit code $LASTEXITCODE"
+          }
 
   release-maintenance:
     needs: [create-release, validate-release-assets]

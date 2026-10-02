@@ -261,6 +261,35 @@ def validate_workflows(workflow_dir: Path) -> None:
             fail(f"{artifact_workflow} does not install {package} for musl builds")
     if "-DZLIB_USE_STATIC_LIBS=ON" not in musl_section:
         fail(f"{artifact_workflow} does not select static zlib for musl builds")
+    zlib_markers = (
+        'zlib_archive="$(find /usr/lib -name libz.a -print -quit)"',
+        'test -n "$zlib_archive" && test -f "$zlib_archive"',
+        '-DZLIB_LIBRARY="$zlib_archive"',
+        "zlib_cache=\"$(sed -n 's/^ZLIB_LIBRARY:[^=]*=//p' build/CMakeCache.txt)\"",
+        'if [ "$zlib_cache" != "$zlib_archive" ]; then',
+        "case \"$zlib_cache\" in",
+        "*.a) ;;",
+    )
+    for marker in zlib_markers:
+        if marker not in musl_section:
+            fail(f"{artifact_workflow} does not verify static zlib selection: {marker}")
+    archive_discovery = musl_section.find(zlib_markers[0])
+    cmake_configure = musl_section.find("cmake -S . -B build")
+    zlib_library_arg = musl_section.find(zlib_markers[2])
+    zlib_cache_read = musl_section.find(zlib_markers[3])
+    zlib_cache_match = musl_section.find(zlib_markers[4])
+    zlib_archive_check = musl_section.find(zlib_markers[5])
+    cmake_build = musl_section.find("cmake --build build --config Release")
+    if not (
+        0 <= archive_discovery
+        < cmake_configure
+        < zlib_library_arg
+        < zlib_cache_read
+        < zlib_cache_match
+        < zlib_archive_check
+        < cmake_build
+    ):
+        fail(f"{artifact_workflow} does not check the zlib cache before building")
     for platform in ("linux/amd64", "linux/arm64"):
         if f"container_platform: {platform}" not in musl_section:
             fail(f"{artifact_workflow} does not build musl for {platform}")
@@ -476,6 +505,36 @@ def validate_workflows(workflow_dir: Path) -> None:
     for prerequisite in ("release-maintenance", "smoke-scoop"):
         if prerequisite not in publish_section:
             fail(f"{artifact_workflow} publishes before {prerequisite} passes")
+
+    published_smoke = job_section(artifact_text, "smoke-published-windows")
+    for marker in (
+        "needs: [create-release, publish-release]",
+        "runs-on: windows-latest",
+        "persist-credentials: false",
+        "EXPECTED_RELEASE_TAG: ${{ needs.create-release.outputs.tag }}",
+        "Remove-Item \"Env:$name\" -ErrorAction SilentlyContinue",
+        "https://api.github.com/repos/GalaxyHaze/Zith-Lang/releases/latest",
+        "if ($latest.tag_name -cne $expectedTag)",
+        "https://github.com/GalaxyHaze/Zith-Lang/releases/download/$expectedTag/"
+        "zithc-windows-amd64.exe",
+        "(Get-Item $directDownload).Length -le 0",
+        "examples/loops-simple.zith",
+        "share/zith/stdlib/std/io/console.zith",
+        "check $source",
+        "$LASTEXITCODE -ne 0",
+    ):
+        if marker not in published_smoke:
+            fail(f"{artifact_workflow} published Windows smoke is missing {marker}")
+    if re.search(r"(?m)^\s*& \$installer -Version \$expectedTag\s*$", published_smoke) is None:
+        fail(f"{artifact_workflow} does not exercise the versioned Windows installer")
+    if re.search(r"(?m)^\s*& \$installer\s*$", published_smoke) is None:
+        fail(f"{artifact_workflow} does not exercise the latest Windows installer")
+    if "zith-versioned" not in published_smoke or "zith-latest" not in published_smoke:
+        fail(f"{artifact_workflow} does not isolate versioned and latest Windows installs")
+    for credential in ("GITHUB_TOKEN:", "GH_TOKEN:", "ZITH_RELEASE_BASE_URL:"):
+        if credential in published_smoke:
+            fail(f"{artifact_workflow} configures credentials for public download smoke: {credential}")
+
     if "build-musl" in ci_text and "-DZITH_HAS_LLVM=OFF" in ci_text:
         fail(f"{ci_workflow} disables LLVM in the musl build")
     if "-DZITH_REQUIRE_LLVM=ON" not in ci_text:
