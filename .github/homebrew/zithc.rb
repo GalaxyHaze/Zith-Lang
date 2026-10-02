@@ -18,9 +18,9 @@ class Zithc < Formula
   license "MIT"
 
   # build-artifact.yml updates the tagged archive URL and verified SHA-256.
-  version "0.6.3.12"
-  url "https://github.com/GalaxyHaze/Zith-Lang/archive/fbb0d5cc7ce5c4885667290b946ad791f4bf647b.tar.gz"
-  sha256 "7a1c63b38aabecbf7d5b10ec73c9fa4ccdec446d1324694678529c4df28b84ca"
+  version "0.6.3.7"
+  url "https://github.com/GalaxyHaze/Zith-Lang/archive/d24658d544bf0d7216d3a43c59b9d9b0be9dc70e.tar.gz"
+  sha256 "5f6ebf83a7673c905260a9cb9ee60fa0d63f8072037d4446d19913d8ac5fc257"
 
   depends_on "cmake" => :build
   depends_on "ninja" => :build
