@@ -64,6 +64,12 @@ _Avoid_: package path, namespace path
 A scalar object-like `#define` imported from a C header and exposed to Zith as an immutable foreign constant.
 _Avoid_: macro, define constant
 
+**Syntax continuation**:
+A parse-time construct produced by contextual syntax that consumes a following
+syntax form and resolves to an ordinary value or another continuation. It is
+not a runtime value.
+_Avoid_: returned token, runtime builder
+
 ## Architecture
 
 **Frontend context**:
