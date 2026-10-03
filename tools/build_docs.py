@@ -78,6 +78,9 @@ LEGACY_ANCHORS = {
     ("04-traits-interfaces.md", "44-capabilities--built-in-reference"): ("43-capabilities",),
     ("02-module-system.md", "23-namespace-access--scope-resolution"): (),
     ("08-error-handling.md", "83-propagation--fallback"): (),
+    ("08-error-handling.md", "83-try-local-results-and-fallback"): (
+        "83-try-propagation-and-fallback",
+    ),
     ("09-control-flow.md", "94-state-functions--state-machines"): (
         "94-state-functions-and-state-machines",
     ),
@@ -354,8 +357,8 @@ def build_tree() -> list[dict]:
            ("build", "run", "check", "fmt", "create", "clean", "execute", "test", "deps", "docs")]
     return [{
         "title": "Home", "link": "../home.html", "children": [
+            nav_item("Introduction", "getting-started-introduction"),
             nav_item("Getting Started", "getting-started-quick-start", [
-                nav_item("Introduction", "getting-started-introduction"),
                 nav_item("Installation", "getting-started-installation"),
                 nav_item("Why Zith", "getting-started-why-zith"),
             ]),
@@ -467,7 +470,7 @@ def expected_files(pages: list[Page], spec_hashes: dict[str, str]) -> tuple[dict
         protected_path = OUTPUT / protected
         if protected_path in files:
             raise ValueError(f"Output or alias would overwrite protected file: {protected}")
-    tree = {"version": 2, "navigation": build_tree(), "aliases": {
+    tree = {"version": 3, "navigation": build_tree(), "aliases": {
         f"./{alias}": f"./{target}" for alias, target in sorted(aliases.items())
     }}
     manifest = {

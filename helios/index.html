@@ -3,13 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="theme-color" content="#000000">
+    <meta name="theme-color" content="#fff8f4">
 
     <title>Helios IDE &mdash; The Official Zith Development Environment</title>
     <meta name="description" content="Helios is the official IDE for Zith, with language-aware editing, compiler diagnostics, project tooling, and integration with the zithc toolchain.">
     <link rel="canonical" href="https://zith-lang.org/helios/">
     <link rel="icon" type="image/png" href="../media/Logos/logo.png">
     <link rel="stylesheet" href="../css/helios.css">
+    <link rel="stylesheet" href="../css/ui-system.css">
 
     <meta name="keywords" content="Helios, Helios IDE, Zith IDE, Zith editor, systems programming IDE, zithc, language server, Zith-Lang">
     <meta name="author" content="GalaxyHaze">
@@ -54,13 +55,13 @@
     }
     </script>
 </head>
-<body>
+<body class="ui-page ui-helios">
     <header class="site-header">
         <a class="brand" href="../html/home.html" aria-label="Return to Zith home">
             <img src="../media/Logos/logo.svg" alt="">
             <span>.Zith</span>
         </a>
-        <a class="back-link" href="../html/documentation/D-home.html">&lt; Documentation</a>
+        <a class="back-link ui-nav-link" href="../html/documentation/D-home.html">&lt; Documentation</a>
     </header>
 
     <main>
@@ -76,8 +77,8 @@
                     <h1 id="helios-title">Helios</h1>
                     <p class="hero-copy">The official IDE for Zith, with language-aware editing, compiler diagnostics, and project tooling in one environment.</p>
                     <div class="hero-actions">
-                        <a class="button button-primary" href="https://github.com/GalaxyHaze/Zith-Studio/releases" target="_blank" rel="noopener noreferrer">Download Helios</a>
-                        <a class="button button-secondary" href="#compiler">Explore integration</a>
+                        <a class="button button-primary ui-action" href="https://github.com/GalaxyHaze/Zith-Studio/releases" target="_blank" rel="noopener noreferrer">Download Helios</a>
+                        <a class="button button-secondary ui-action" href="#compiler">Explore integration</a>
                     </div>
                 </div>
                 <div class="statusbar"><span>main.zith</span><span>zith: ready</span><span>UTF-8</span></div>
@@ -133,15 +134,15 @@
             <h2 id="install-title">Start building with Helios.</h2>
             <p>Download the latest release, open a Zith project, and let the compiler guide the next step.</p>
             <div class="hero-actions">
-                <a class="button button-primary" href="https://github.com/GalaxyHaze/Zith-Studio/releases" target="_blank" rel="noopener noreferrer">Download / Install</a>
-                <a class="button button-secondary" href="https://github.com/GalaxyHaze/Zith-Studio" target="_blank" rel="noopener noreferrer">View source</a>
+                <a class="button button-primary ui-action" href="https://github.com/GalaxyHaze/Zith-Studio/releases" target="_blank" rel="noopener noreferrer">Download / Install</a>
+                <a class="button button-secondary ui-action" href="https://github.com/GalaxyHaze/Zith-Studio" target="_blank" rel="noopener noreferrer">View source</a>
             </div>
         </section>
     </main>
 
     <footer class="site-footer">
         <span>Helios IDE</span>
-        <a href="../html/home.html">zith-lang.org</a>
+        <a class="ui-nav-link" href="../html/home.html">zith-lang.org</a>
     </footer>
 
     <div class="crt-overlay" aria-hidden="true"></div>

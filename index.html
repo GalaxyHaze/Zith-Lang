@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Zith Programming Language &mdash; Systems Programming, Reimagined</title>
-    <meta name="theme-color" content="#0e0e11">
+    <meta name="theme-color" content="#fff8f4">
     <meta name="robots" content="index, follow">
     <link rel="canonical" href="https://zith-lang.org/">
 
@@ -34,6 +34,7 @@
     <meta name="twitter:image" content="https://zith-lang.org/media/Logos/social-share.png">
 
     <link rel="stylesheet" href="./css/index.css">
+    <link rel="stylesheet" href="./css/ui-system.css">
 
     <script type="application/ld+json">
     {
@@ -58,7 +59,7 @@
     }
     </script>
 </head>
-<body class="zith-portal">
+<body class="zith-portal ui-page ui-site">
 
     <!-- Header Navigation -->
     <header class="site-header">
@@ -70,14 +71,14 @@
 
             <nav>
                 <ul class="nav-links" id="navLinks">
-                    <li><a href="./html/documentation/D-home.html">Docs</a></li>
-                    <li><a href="./playground/">Playground</a></li>
-                    <li><a href="./helios/">Helios IDE</a></li>
-                    <li><a href="./about/">Blog</a></li>
-                    <li><a href="./changelog.html">Changelog</a></li>
-                    <li><a href="./html/home.html" title="Open Retro OS Desktop Mode">Desktop OS</a></li>
-                    <li><a href="https://github.com/GalaxyHaze/Zith" target="_blank" rel="noopener noreferrer">GitHub</a></li>
-                    <li><a href="https://discord.gg/a7h4cpWHg4" target="_blank" rel="noopener noreferrer">Discord</a></li>
+                    <li><a class="ui-nav-link" href="./html/documentation/D-home.html">Docs</a></li>
+                    <li><a class="ui-nav-link" href="./playground/">Playground</a></li>
+                    <li><a class="ui-nav-link" href="./helios/">Helios IDE</a></li>
+                    <li><a class="ui-nav-link" href="./about/">Blog</a></li>
+                    <li><a class="ui-nav-link" href="./changelog.html">Changelog</a></li>
+                    <li><a class="ui-nav-link" href="./html/home.html" title="Open Retro OS Desktop Mode">Desktop OS</a></li>
+                    <li><a class="ui-nav-link" href="https://github.com/GalaxyHaze/Zith" target="_blank" rel="noopener noreferrer">GitHub</a></li>
+                    <li><a class="ui-nav-link" href="https://discord.gg/a7h4cpWHg4" target="_blank" rel="noopener noreferrer">Discord</a></li>
                 </ul>
             </nav>
 
@@ -100,10 +101,10 @@
             A statically typed, compiled systems language with compile-time memory safety powered by <strong>Node Resource Analysis (NRA)</strong>, zero runtime overhead, no garbage collector, and no borrow checker complexity.
         </p>
         <div class="hero-cta">
-            <a href="#install" class="btn btn-primary">Install Zith</a>
-            <a href="./playground/" class="btn btn-secondary">Try in Playground</a>
-            <a href="./html/documentation/D-home.html" class="btn btn-tertiary">Read Documentation</a>
-            <a href="./html/home.html" class="btn btn-outline">Desktop OS Mode</a>
+            <a href="#install" class="btn btn-primary ui-action">Install Zith</a>
+            <a href="./playground/" class="btn btn-secondary ui-action">Try in Playground</a>
+            <a href="./html/documentation/D-home.html" class="btn btn-tertiary ui-action">Read Documentation</a>
+            <a href="./html/home.html" class="btn btn-outline ui-action">Desktop OS Mode</a>
         </div>
     </section>
 
@@ -206,28 +207,28 @@
             <div class="footer-col">
                 <h4>Resources</h4>
                 <ul>
-                    <li><a href="./html/documentation/D-home.html">Documentation</a></li>
-                    <li><a href="./playground/">Playground</a></li>
-                    <li><a href="./helios/">Helios IDE</a></li>
-                    <li><a href="./changelog.html">Changelog</a></li>
+                    <li><a class="ui-nav-link" href="./html/documentation/D-home.html">Documentation</a></li>
+                    <li><a class="ui-nav-link" href="./playground/">Playground</a></li>
+                    <li><a class="ui-nav-link" href="./helios/">Helios IDE</a></li>
+                    <li><a class="ui-nav-link" href="./changelog.html">Changelog</a></li>
                 </ul>
             </div>
 
             <div class="footer-col">
                 <h4>Ecosystem</h4>
                 <ul>
-                    <li><a href="./about/">Development Diary</a></li>
-                    <li><a href="./html/home.html">Desktop OS Mode</a></li>
-                    <li><a href="https://github.com/GalaxyHaze/Zith/releases" target="_blank" rel="noopener noreferrer">Releases</a></li>
+                    <li><a class="ui-nav-link" href="./about/">Development Diary</a></li>
+                    <li><a class="ui-nav-link" href="./html/home.html">Desktop OS Mode</a></li>
+                    <li><a class="ui-nav-link" href="https://github.com/GalaxyHaze/Zith/releases" target="_blank" rel="noopener noreferrer">Releases</a></li>
                 </ul>
             </div>
 
             <div class="footer-col">
                 <h4>Community</h4>
                 <ul>
-                    <li><a href="https://github.com/GalaxyHaze/Zith" target="_blank" rel="noopener noreferrer">GitHub Source</a></li>
-                    <li><a href="https://discord.gg/a7h4cpWHg4" target="_blank" rel="noopener noreferrer">Discord Server</a></li>
-                    <li><a href="mailto:aboveHaze@gmail.com">Contact Developer</a></li>
+                    <li><a class="ui-nav-link" href="https://github.com/GalaxyHaze/Zith" target="_blank" rel="noopener noreferrer">GitHub Source</a></li>
+                    <li><a class="ui-nav-link" href="https://discord.gg/a7h4cpWHg4" target="_blank" rel="noopener noreferrer">Discord Server</a></li>
+                    <li><a class="ui-nav-link" href="mailto:aboveHaze@gmail.com">Contact Developer</a></li>
                 </ul>
             </div>
         </div>

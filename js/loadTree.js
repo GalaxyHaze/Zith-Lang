@@ -2,14 +2,110 @@ const sidebar = document.getElementById("sidebar");
 const content = document.getElementById("content");
 const filebarPath = document.getElementById("filebarPath");
 const defaultPage = "./getting-started/D-introduction.html";
-const treeVersion = 2;
-
-const sidebarCollapse = document.getElementById("sidebarCollapse");
+const treeVersion = 3;
+const sidebarResize = document.getElementById("sidebarResize");
+const sidebarWidthStorageKey = "zith-docs-sidebar-width";
+const sidebarWidthMin = 220;
+const sidebarWidthMax = 420;
+const sidebarWidthDefault = 272;
 
 let treeModel = [];
 let flatPages = [];
 let pageMeta = new Map();
 let aliasMap = new Map();
+let sidebarWidth = readSidebarWidth();
+let activeResizePointer = null;
+
+function clampSidebarWidth(width) {
+    return Math.min(sidebarWidthMax, Math.max(sidebarWidthMin, Math.round(width)));
+}
+
+function readSidebarWidth() {
+    try {
+        const storedWidth = localStorage.getItem(sidebarWidthStorageKey);
+        if (storedWidth === null || storedWidth.trim() === "") return sidebarWidthDefault;
+
+        const parsedWidth = Number(storedWidth);
+        return Number.isFinite(parsedWidth) ? clampSidebarWidth(parsedWidth) : sidebarWidthDefault;
+    } catch (_) {
+        return sidebarWidthDefault;
+    }
+}
+
+function applySidebarWidth(width) {
+    sidebarWidth = clampSidebarWidth(width);
+    document.documentElement.style.setProperty("--docs-sidebar-width", `${sidebarWidth}px`);
+
+    if (sidebarResize) {
+        sidebarResize.setAttribute("aria-valuenow", String(sidebarWidth));
+        sidebarResize.setAttribute("aria-valuetext", `${sidebarWidth} pixels`);
+    }
+}
+
+function persistSidebarWidth() {
+    try {
+        localStorage.setItem(sidebarWidthStorageKey, String(sidebarWidth));
+    } catch (_) {}
+}
+
+function isDesktopSidebarLayout() {
+    return window.matchMedia("(min-width: 1081px)").matches;
+}
+
+if (sidebar && sidebarResize) {
+    applySidebarWidth(sidebarWidth);
+
+    sidebarResize.addEventListener("pointerdown", event => {
+        if (!isDesktopSidebarLayout() || !event.isPrimary ||
+            (event.pointerType === "mouse" && event.button !== 0)) {
+            return;
+        }
+
+        event.preventDefault();
+        activeResizePointer = event.pointerId;
+        sidebarResize.setPointerCapture(event.pointerId);
+    });
+
+    sidebarResize.addEventListener("pointermove", event => {
+        if (event.pointerId !== activeResizePointer) return;
+        applySidebarWidth(event.clientX - sidebar.getBoundingClientRect().left);
+    });
+
+    const finishSidebarResize = event => {
+        if (event.pointerId !== activeResizePointer) return;
+        activeResizePointer = null;
+        persistSidebarWidth();
+    };
+
+    sidebarResize.addEventListener("pointerup", finishSidebarResize);
+    sidebarResize.addEventListener("pointercancel", finishSidebarResize);
+
+    sidebarResize.addEventListener("keydown", event => {
+        if (!isDesktopSidebarLayout()) return;
+
+        let nextWidth;
+        switch (event.key) {
+            case "ArrowLeft":
+                nextWidth = sidebarWidth - 16;
+                break;
+            case "ArrowRight":
+                nextWidth = sidebarWidth + 16;
+                break;
+            case "Home":
+                nextWidth = sidebarWidthMin;
+                break;
+            case "End":
+                nextWidth = sidebarWidthMax;
+                break;
+            default:
+                return;
+        }
+
+        event.preventDefault();
+        applySidebarWidth(nextWidth);
+        persistSidebarWidth();
+    });
+}
 
 function sectionDescription(items, trail) {
     const section = trail[0] || items.title;
@@ -26,7 +122,11 @@ function sectionDescription(items, trail) {
 }
 
 (function loadMenu() {
-    const cached = sessionStorage.getItem("tree_json");
+    let cached = null;
+    try {
+        cached = sessionStorage.getItem("tree_json");
+    } catch (_) {}
+
     if (cached) {
         try {
             const menu = JSON.parse(cached);
@@ -73,6 +173,7 @@ function renderMenu(items, parent) {
     items.forEach(item => {
         const li = document.createElement("li");
         const a = document.createElement("a");
+        a.className = "ui-nav-link";
         a.textContent = item.title;
         a.href = item.link || "#";
         a.dataset.link = item.link || "#";
@@ -91,16 +192,6 @@ function renderMenu(items, parent) {
     });
 
     parent.appendChild(ul);
-}
-
-if (sidebarCollapse && sidebar) {
-    sidebarCollapse.addEventListener("click", function() {
-        const collapsed = document.body.classList.toggle("docs-sidebar-collapsed");
-        sidebarCollapse.setAttribute("aria-expanded", collapsed ? "false" : "true");
-        sidebarCollapse.setAttribute("aria-label", collapsed ? "Expand documentation explorer" : "Collapse documentation explorer");
-        const icon = sidebarCollapse.querySelector(".sidebar-collapse-icon");
-        if (icon) icon.textContent = collapsed ? "▸" : "◂";
-    });
 }
 
 function buildPageIndex(items, trail = []) {
@@ -159,7 +250,7 @@ function createPagerLink(label, path, direction) {
     const title = meta ? meta.title : path.split("/").pop();
 
     link.href = path;
-    link.className = "doc-nav-link";
+    link.className = "doc-nav-link ui-action";
     link.innerHTML = `<span class="doc-nav-label">${label}</span><strong>${title}</strong>`;
 
     if (direction === "next") {

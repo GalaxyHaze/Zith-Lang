@@ -33,8 +33,24 @@
         <meta name="twitter:image" content="https://zith-lang.org/media/Logos/social-share.png">
 
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css">
+        <link rel="stylesheet" href="../../../css/ui-system.css">
     </head>
-    <body>
+    <body class="docs-ui">
+        <div class="lateralBar" id="sidebar">
+        </div>
+        <div
+            class="sidebar-resize"
+            id="sidebarResize"
+            role="separator"
+            aria-orientation="vertical"
+            aria-valuenow="272"
+            aria-valuemin="220"
+            aria-valuemax="420"
+            aria-valuetext="272 pixels"
+            aria-label="Resize documentation sidebar"
+            aria-controls="sidebar"
+            tabindex="0">
+        </div>
         <div class="main">
             <div class="top">
                 <div class="header-meta">
@@ -60,17 +76,11 @@
                     <span class="filebar-icon">&gt;</span>
                     <span class="filebar-path" id="filebarPath">_</span>
                 </div>
-                <a class="helios-cta" href="../../../index.html" data-native="true">Portal</a>
+                <a class="helios-cta ui-action" href="../../../index.html" data-native="true">Portal</a>
             </div>
             <div class="bottom" id="content">
             </div>
         </div>
-        <div class="lateralBar" id="sidebar">
-        </div>
-        <button class="sidebar-collapse" id="sidebarCollapse" aria-expanded="true" aria-controls="sidebar" aria-label="Collapse documentation explorer">
-            <span class="sidebar-collapse-icon">◂</span>
-            <span class="sidebar-collapse-label">Explorer</span>
-        </button>
         <div class="gear" onclick="openWindow('settings')">
             <img src="../../../media/Icons/Gear.svg">
         </div>

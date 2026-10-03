@@ -1,19 +1,19 @@
 {
-  "version": 2,
+  "version": 3,
   "navigation": [
     {
       "title": "Home",
       "link": "../home.html",
       "children": [
         {
+          "title": "Introduction",
+          "link": "./getting-started/D-introduction.html",
+          "children": []
+        },
+        {
           "title": "Getting Started",
           "link": "./getting-started/D-quick-start.html",
           "children": [
-            {
-              "title": "Introduction",
-              "link": "./getting-started/D-introduction.html",
-              "children": []
-            },
             {
               "title": "Installation",
               "link": "./getting-started/D-installation.html",

@@ -16,6 +16,12 @@
     --crt-flicker-animation: none;
     --text-glow-alpha: 0.35;
     --icon-shadow-opacity: 0.3;
+    --page-bg: var(--ui-ambient-mid);
+    --page-surface: var(--ui-surface);
+    --page-border: var(--ui-border);
+    --page-text: var(--ui-text);
+    --page-heading: var(--ui-heading);
+    --page-accent: var(--ui-accent);
 }
 
 * {
@@ -29,9 +35,9 @@ html {
 body {
     margin: 0;
     min-width: 320px;
-    background: var(--bg);
-    color: var(--text);
-    font-family: "Fira Code", ui-monospace, monospace;
+    background: var(--page-bg);
+    color: var(--page-text);
+    font-family: var(--ui-font-body, "Fira Code"), ui-monospace, monospace;
     line-height: 1.55;
 }
 
@@ -51,7 +57,8 @@ a {
     align-items: center;
     justify-content: space-between;
     gap: 20px;
-    border-bottom: 1px solid var(--line);
+    border-bottom: 1px solid var(--page-border);
+    background: rgba(255, 253, 250, 0.92);
 }
 
 .brand,
@@ -64,7 +71,7 @@ a {
     display: inline-flex;
     align-items: center;
     gap: 9px;
-    color: var(--cream);
+    color: var(--page-heading);
     font-size: 22px;
     font-weight: 700;
 }
@@ -76,14 +83,8 @@ a {
 
 .back-link {
     padding: 6px 8px;
-    color: var(--orange);
-    text-shadow: 0 0 8px rgba(255, 109, 31, 0.45);
-}
-
-.back-link:hover,
-.back-link:focus-visible {
-    color: var(--cream);
-    background: var(--hover);
+    color: var(--page-accent);
+    text-shadow: none;
 }
 
 main {
@@ -205,34 +206,15 @@ h3 {
     transition: transform 0.15s ease, background-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
 }
 
-.button:hover,
-.button:focus-visible {
-    transform: translate(-2px, -2px);
-}
-
 .button-primary {
-    background: var(--orange);
-    color: var(--bg);
-    box-shadow: 4px 4px 0 rgba(255, 255, 255, 0.25);
-}
-
-.button-primary:hover,
-.button-primary:focus-visible {
-    background: var(--cream);
-    box-shadow: 6px 6px 0 var(--orange);
+    background: linear-gradient(110deg, var(--ui-action-start), var(--ui-action-end));
+    color: var(--ui-action-ink);
 }
 
 .button-secondary {
-    border-color: var(--cyan);
-    color: var(--cyan);
-    background: rgba(0, 0, 0, 0.35);
-}
-
-.button-secondary:hover,
-.button-secondary:focus-visible {
-    background: var(--cyan);
-    color: var(--bg);
-    box-shadow: 6px 6px 0 rgba(0, 255, 255, 0.35);
+    border-color: var(--page-border);
+    color: var(--page-heading);
+    background: var(--page-surface);
 }
 
 .statusbar {
@@ -269,8 +251,8 @@ h3 {
 .feature-card {
     min-height: 260px;
     padding: 24px;
-    border: 1px solid var(--line);
-    background: linear-gradient(145deg, var(--panel-light), var(--panel));
+    border: 1px solid var(--page-border);
+    background: var(--page-surface);
     transition: border-color 0.15s ease, transform 0.15s ease;
 }
 
@@ -353,8 +335,8 @@ code {
 .install {
     margin: 0 0 96px;
     padding: clamp(32px, 6vw, 60px);
-    border: 1px solid var(--orange);
-    background: linear-gradient(120deg, rgba(255, 109, 31, 0.17), rgba(0, 0, 0, 0.65));
+    border: 1px solid var(--page-border);
+    background: linear-gradient(115deg, rgba(232, 127, 36, 0.12), rgba(214, 75, 69, 0.06)), var(--page-surface);
 }
 
 .site-footer {
@@ -362,13 +344,14 @@ code {
     justify-content: space-between;
     gap: 20px;
     padding: 22px 0 32px;
-    color: #aaaaaa;
-    border-top: 1px solid var(--line);
+    color: var(--page-text);
+    border-top: 1px solid var(--page-border);
+    background: rgba(255, 253, 250, 0.92);
     font-size: 14px;
 }
 
 .site-footer a {
-    color: var(--orange);
+    color: var(--page-accent);
 }
 
 .crt-overlay {

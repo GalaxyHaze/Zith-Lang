@@ -138,6 +138,11 @@
         }, { threshold: 0.25 });
 
         targets.forEach(function (el) {
+            if (el.hasAttribute("data-typewriter-done") ||
+                el.hasAttribute("data-typewriter-observed")) {
+                return;
+            }
+            el.setAttribute("data-typewriter-observed", "true");
             el.setAttribute("data-typewriter-html", el.innerHTML);
             el.innerHTML = "";
             observer.observe(el);

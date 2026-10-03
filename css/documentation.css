@@ -64,50 +64,6 @@ body {
         var(--color-bg);
 }
 
-body.docs-sidebar-collapsed .lateralBar {
-    width: 48px;
-    min-width: 48px;
-    padding-left: 10px;
-    padding-right: 10px;
-}
-
-body.docs-sidebar-collapsed .lateralBar::before,
-body.docs-sidebar-collapsed .lateralBar::after,
-body.docs-sidebar-collapsed .lateralBar ul {
-    display: none;
-}
-
-.sidebar-collapse {
-    position: fixed;
-    top: 12px;
-    left: 238px;
-    z-index: 10;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 7px 10px;
-    background: rgba(8, 9, 11, 0.92);
-    border: 1px solid #30353d;
-    border-radius: 5px;
-    color: var(--color-cyan);
-    font-family: "Fira Code", monospace;
-    font-size: 12px;
-    cursor: pointer;
-    transition: 0.15s;
-}
-
-.sidebar-collapse:hover,
-.sidebar-collapse:focus-visible {
-    border-color: var(--color-orange);
-    color: var(--color-orange);
-    background: rgba(0, 0, 0, 0.9);
-}
-
-.sidebar-collapse-icon {
-    font-size: 15px;
-    line-height: 1;
-}
-
 p, pre {
     margin: 0;
 }
@@ -122,9 +78,10 @@ LAYOUT PRINCIPAL
 ===================*/
 
 .lateralBar {
-    order: -1;
-    width: 272px;
-    min-width: 272px;
+    width: var(--docs-sidebar-width, 272px);
+    min-width: 220px;
+    max-width: 420px;
+    flex: 0 0 var(--docs-sidebar-width, 272px);
 
     height: 100dvh;
     overflow-y: auto;
@@ -144,16 +101,32 @@ LAYOUT PRINCIPAL
     position: relative;
 }
 
-.lateralBar::before {
-    content: "EXPLORER";
+.sidebar-resize {
+    position: relative;
+    z-index: 2;
+    flex: 0 0 6px;
+    cursor: col-resize;
+    touch-action: none;
+    user-select: none;
+}
+
+.sidebar-resize::after {
+    content: "";
     position: absolute;
-    top: 17px;
-    left: 18px;
-    color: var(--color-cyan);
-    font-size: 13px;
-    font-weight: bold;
-    letter-spacing: 0.16em;
-    text-shadow: var(--glow-cyan);
+    inset: 0 auto 0 2px;
+    width: 2px;
+    background: transparent;
+    transition: background-color 150ms ease;
+}
+
+.sidebar-resize:hover::after,
+.sidebar-resize:focus-visible::after {
+    background: var(--color-orange);
+}
+
+.sidebar-resize:focus-visible {
+    outline: 2px solid var(--color-orange);
+    outline-offset: -2px;
 }
 
 .lateralBar::after {
@@ -168,6 +141,7 @@ LAYOUT PRINCIPAL
 
 .main {
     flex: 1;
+    min-width: 0;
 
     display: flex;
     flex-direction: column;
@@ -235,15 +209,6 @@ LAYOUT PRINCIPAL
     text-decoration: none;
     text-shadow: var(--glow-orange);
     transition: 0.15s;
-}
-
-.helios-cta:hover,
-.helios-cta:focus-visible {
-    background: var(--color-orange);
-    color: var(--color-bg);
-    text-shadow: none;
-    transform: translate(-2px, -2px);
-    box-shadow: 4px 4px 0 rgba(255, 109, 31, 0.4);
 }
 
 .bottom {
@@ -691,14 +656,6 @@ EFEITOS
     background: rgba(255, 255, 255, 0.04);
     color: #f3eee3;
     text-decoration: none;
-    transition: transform 0.15s, border-color 0.15s, background 0.15s;
-}
-
-.doc-nav-link:hover,
-.doc-nav-link:focus-visible {
-    transform: translate(-2px, -2px);
-    border-color: var(--color-orange);
-    background: rgba(255, 109, 31, 0.1);
 }
 
 .doc-nav-link-next {
@@ -796,13 +753,6 @@ MOBILE
 ===================*/
 
 @media (max-width: 1080px) {
-
-    .sidebar-collapse {
-        left: auto;
-        right: 12px;
-        top: 8px;
-    }
-
     body {
         flex-direction: column;
         height: 100dvh;
@@ -812,15 +762,19 @@ MOBILE
     }
 
     .lateralBar {
-        order: -1;
         width: 100%;
-
+        min-width: 0;
+        max-width: none;
+        height: auto;
         max-height: 40vh;
-
+        flex: 0 0 auto;
         padding: 58px 14px 18px;
-
         overflow-y: auto;
         flex-shrink: 0;
+    }
+
+    .sidebar-resize {
+        display: none;
     }
 
     .lateralBar a {
@@ -889,12 +843,6 @@ MOBILE
     .lateralBar {
         max-height: 35vh;
         padding: 48px 10px 14px;
-    }
-
-    .lateralBar::before {
-        font-size: 11px;
-        top: 12px;
-        left: 12px;
     }
 
     .lateralBar::after {
@@ -1079,25 +1027,6 @@ MOBILE
 }
 
 @media (hover: none) and (pointer: coarse) {
-    .lateralBar a:hover {
-        color: #e0e0e0;
-        border-left-color: transparent;
-        background: transparent;
-        text-shadow: none;
-    }
-
-    .lateralBar a.is-active {
-        color: #faf3e1;
-        background: rgba(232, 127, 36, 0.14);
-        border-left-color: var(--color-orange);
-        text-shadow: none;
-    }
-
-    .doc-nav-link:hover,
-    .doc-nav-link:focus-visible {
-        transform: none;
-    }
-
     .helios-cta:hover,
     .helios-cta:focus-visible {
         transform: none;

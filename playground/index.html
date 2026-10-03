@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="theme-color" content="#101218">
+    <meta name="theme-color" content="#fff8f4">
     <meta name="description" content="Write, compile, and run Zith programs in the browser using the published zithc WebAssembly build.">
     <meta name="keywords" content="Zith playground, Zith online, run Zith in browser, zithc wasm, WebAssembly compiler, systems programming online IDE">
     <meta name="author" content="GalaxyHaze">
@@ -13,6 +13,7 @@
     <link rel="icon" type="image/png" href="../media/Logos/logo.png">
     <link rel="apple-touch-icon" sizes="180x180" href="../media/Logos/logo.png">
     <link rel="stylesheet" href="../css/playground.css">
+    <link rel="stylesheet" href="../css/ui-system.css">
 
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://zith-lang.org/playground/">
@@ -53,15 +54,15 @@
     }
     </script>
 </head>
-<body>
+<body class="ui-page ui-playground">
     <header class="site-header">
         <a class="brand" href="../html/home.html" aria-label="Return to Zith home">
             <img src="../media/Logos/logo.svg" alt="">
             <span>.Zith</span>
         </a>
         <nav aria-label="Playground navigation">
-            <a href="../html/documentation/getting-started/D-quick-start.html">Docs</a>
-            <a href="https://github.com/GalaxyHaze/Zith-Lang" target="_blank" rel="noopener noreferrer">Source</a>
+            <a class="ui-nav-link" href="../html/documentation/D-home.html?page=getting-started/D-introduction.html">Docs</a>
+            <a class="ui-nav-link" href="https://github.com/GalaxyHaze/Zith-Lang" target="_blank" rel="noopener noreferrer">Source</a>
         </nav>
     </header>
 
@@ -114,7 +115,7 @@ fn main() {
                     <pre id="output" class="terminal-history"></pre>
                     <div class="terminal-input-line">
                         <span class="terminal-prompt">&gt;</span>
-                        <input type="text" id="terminal-input" autocomplete="off" spellcheck="false" aria-label="Terminal input" autofocus>
+                        <input type="text" id="terminal-input" autocomplete="off" spellcheck="false" aria-label="Terminal input">
                     </div>
                 </div>
             </article>
@@ -125,7 +126,7 @@ fn main() {
 
     <footer class="site-footer">
         <span>Playground ships the published WebAssembly compiler with the site.</span>
-        <a href="../html/home.html">zith-lang.org</a>
+        <a class="ui-nav-link" href="../html/home.html">zith-lang.org</a>
     </footer>
 
     <div class="crt-overlay" aria-hidden="true"></div>
