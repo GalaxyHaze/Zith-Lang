@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="ui-wallpaper-page">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="theme-color" content="#fff8f4">
+    <meta name="theme-color" content="#168bd2">
 
     <title>Helios IDE &mdash; The Official Zith Development Environment</title>
     <meta name="description" content="Helios is the official IDE for Zith, with language-aware editing, compiler diagnostics, project tooling, and integration with the zithc toolchain.">
@@ -85,27 +85,87 @@
             </div>
         </section>
 
+        <section class="text-contrast-prototype" data-text-contrast-prototype hidden aria-labelledby="text-contrast-title">
+            <p class="eyebrow">// temporary_text_color_test</p>
+            <h2 id="text-contrast-title">Text contrast comparison</h2>
+            <h4>Same sentence and type size on three Helios surfaces. Only the text color changes.</p>
+
+            <div class="contrast-surface contrast-surface-window">
+                <h3>Dark IDE window</h3>
+                <div class="contrast-samples">
+                    <article class="contrast-sample">
+                        <span>Indigo | #3a4b73</span>
+                        <h4 class="contrast-text contrast-indigo">Build clear interfaces with Zith.</h4>
+                    </article>
+                    <article class="contrast-sample">
+                        <span>Green | #32795e</span>
+                        <h4 class="contrast-text contrast-green">Build clear interfaces with Zith.</h4>
+                    </article>
+                    <article class="contrast-sample">
+                        <span>Orange | #e87f24</span>
+                        <h4 class="contrast-text contrast-orange">Build clear interfaces with Zith.</h4>
+                    </article>
+                </div>
+            </div>
+
+            <div class="contrast-surface contrast-surface-card">
+                <h3>Light card</h3>
+                <div class="contrast-samples">
+                    <article class="contrast-sample">
+                        <span>Indigo | #3a4b73</span>
+                        <h4 class="contrast-text contrast-indigo">Build clear interfaces with Zith.</h4>
+                    </article>
+                    <article class="contrast-sample">
+                        <span>Green | #32795e</span>
+                        <h4 class="contrast-text contrast-green">Build clear interfaces with Zith.</h4>
+                    </article>
+                    <article class="contrast-sample">
+                        <span>Orange | #e87f24</span>
+                        <h4 class="contrast-text contrast-orange">Build clear interfaces with Zith.</h4>
+                    </article>
+                </div>
+            </div>
+
+            <div class="contrast-surface contrast-surface-wallpaper">
+                <h3>OS wallpaper</h3>
+                <div class="contrast-samples">
+                    <article class="contrast-sample">
+                        <span>Indigo | #3a4b73</span>
+                        <h4 class="contrast-text contrast-indigo">Build clear interfaces with Zith.</h4>
+                    </article>
+                    <article class="contrast-sample">
+                        <span>Green | #32795e</span>
+                        <h4 class="contrast-text contrast-green">Build clear interfaces with Zith.</h4>
+                    </article>
+                    <article class="contrast-sample">
+                        <span>Orange | #e87f24</span>
+                        <h4 class="contrast-text contrast-orange">Build clear interfaces with Zith.</h4>
+                    </article>
+                </div>
+            </div>
+        </section>
+
         <section class="section features" aria-labelledby="features-title">
             <div class="section-heading">
                 <p class="eyebrow">// core_features</p>
                 <h2 id="features-title">A workspace built around Zith.</h2>
-                <p>Helios keeps the editor close to the language and to the zithc toolchain, so source files and compiler feedback stay in context.</p>
+                <h4>Helios keeps the editor close to the language and to the zithc toolchain, so source files and compiler feedback stay in context.</p>
             </div>
             <div class="feature-grid">
                 <article class="feature-card">
                     <span class="feature-index">01</span>
                     <h3>Language-aware editing</h3>
-                    <p>Syntax highlighting, completions, symbol navigation, and hover information keep Zith code readable as projects grow.</p>
+                    <h4>Syntax highlighting, completions, symbol navigation, and hover information keep Zith code readable as projects grow.</p>
                 </article>
                 <article class="feature-card">
                     <span class="feature-index">02</span>
                     <h3>Diagnostics in context</h3>
-                    <p>Compiler errors and suggestions appear where you work, with source locations that take you directly to the problem.</p>
+                    <h4>Compiler errors and suggestions appear where you work, with source locations that take you directly to the problem.</p>
                 </article>
                 <article class="feature-card">
                     <span class="feature-index">03</span>
                     <h3>Project-first workflow</h3>
-                    <p>Open a Zith project, inspect its files, and use the same build, check, format, and run commands that power the CLI.</p>
+                    <h4>Open a Zith project, inspect its files, and use the same build, check, format, and run commands that power the CLI.</p>
                 </article>
             </div>
         </section>
@@ -114,7 +174,7 @@
             <div class="compiler-copy">
                 <p class="eyebrow">// compiler_bridge</p>
                 <h2 id="compiler-title">Native integration with the Zith compiler.</h2>
-                <p>Helios is designed around the Zith toolchain rather than treating it as an afterthought. It uses the language server for editor intelligence and speaks the same project configuration as the compiler.</p>
+                <h4>Helios is designed around the Zith toolchain rather than treating it as an afterthought. It uses the language server for editor intelligence and speaks the same project configuration as the compiler.</p>
                 <ul class="check-list">
                     <li>Run <code>zith check</code> and inspect diagnostics without leaving the editor.</li>
                     <li>Build, format, and run projects through the familiar Zith CLI workflow.</li>
@@ -132,7 +192,7 @@
         <section class="install" aria-labelledby="install-title">
             <p class="eyebrow">// get_started</p>
             <h2 id="install-title">Start building with Helios.</h2>
-            <p>Download the latest release, open a Zith project, and let the compiler guide the next step.</p>
+            <h4>Download the latest release, open a Zith project, and let the compiler guide the next step.</p>
             <div class="hero-actions">
                 <a class="button button-primary ui-action" href="https://github.com/GalaxyHaze/Zith-Studio/releases" target="_blank" rel="noopener noreferrer">Download / Install</a>
                 <a class="button button-secondary ui-action" href="https://github.com/GalaxyHaze/Zith-Studio" target="_blank" rel="noopener noreferrer">View source</a>
@@ -191,5 +251,10 @@
     <script src="../js/settings.js"></script>
     <script src="../js/windows.js"></script>
     <script src="../js/ambient.js"></script>
+    <script>
+        if (new URLSearchParams(window.location.search).get("prototype") === "text-contrast") {
+            document.querySelector("[data-text-contrast-prototype]").hidden = false;
+        }
+    </script>
 </body>
 </html>
