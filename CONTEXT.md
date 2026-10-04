@@ -70,6 +70,28 @@ syntax form and resolves to an ordinary value or another continuation. It is
 not a runtime value.
 _Avoid_: returned token, runtime builder
 
+**Enum**:
+A closed set of named compile-time constants. A concrete declared value type is shared by all
+constants, while `enum: union` allows heterogeneous union members.
+_Avoid_: tagged union
+
+**Union**:
+A runtime-tagged value that contains one of its declared member types, which may be
+heterogeneous.
+_Avoid_: enum
+
+**Trait**:
+A named nominal contract for behavior or capabilities that a type explicitly implements.
+_Avoid_: interface
+
+**Trait composition**:
+A relationship that combines traits' method contracts, defaults, and capabilities without inheriting or embedding type fields.
+_Avoid_: inheritance, embedding
+
+**Interface**:
+A structural static contract on a type or value, satisfied automatically when its conjunctive conditions hold.
+_Avoid_: dynamic interface, trait
+
 ## Architecture
 
 **Frontend context**:
@@ -187,8 +209,19 @@ The full-Zith core syntax `backend fork Entry(args)` that creates a thread throu
 _Avoid_: Thread capability, spawn keyword, ForkHandle
 
 **Thread merge**:
-The core keyword `merge handle` that blocks, consumes a `Thread<T>` handle once, and returns the entry result type declared by the fork.
+The core keyword `merge` consumes thread handles and collects their results.
+`and` waits for all handles and returns a tuple. `or` waits for all handles and
+returns a tagged union covering all possible result types for the first thread
+to finish. If threads finish simultaneously, the leftmost handle wins.
 _Avoid_: join, wait, release handle
+
+**Resource revocation**:
+The `revoke` keyword removes a child flow's access to a resource without
+destroying it or terminating the child. `revoke x;` revokes access to `x` from
+every unbounded thread in the statement's scope that holds revocable access to
+it. `revoke h1;` revokes all revocable resources passed to the thread
+represented by handle `h1`.
+_Avoid_: invalidation, cancellation, destruction
 
 **Thread spawn**:
 The stdlib shorthand `spawn Entry(args)` that uses the active thread backend from a context; it is not core syntactic sugar in the compiler.
@@ -327,9 +360,25 @@ _Avoid_: standard container interface, collection protocol, common container
 The stdlib requirement that values can flow through a `dyn Trait` fat pointer. `Primitive erasure` covers primitives; broader support decides whether types like `string` can join homogeneous variadic tails.
 _Avoid_: runtime type support, reflection requirement, polymorphism support
 
-**Failable surface**:
-The way a library module reports host/runtime failure without `T!` propagation, such as `IoError` in I/O. It is a named result contract, not an exception or error union.
-_Avoid_: error union, failable result, throwing API
+**Failable**:
+A Zith capability for values with valid and invalid states, distinct from ownership and from the kind of invalid state a value carries.
+_Avoid_: result wrapper, optional wrapper
+
+**Valid-state test (`@ok`)**:
+The discriminator used with `is` to narrow a `Failable` value to its valid state; the alternative branch proves that the value is invalid.
+_Avoid_: success extractor
+
+**Invalid**:
+A Zith capability that a `Failable` type may implement to expose methods callable only after flow analysis proves that its value is invalid.
+_Avoid_: null-only capability, error-only capability
+
+**Nil**:
+The compiler-defined universal absence state. `Nil` is invalid, but it is not an error value.
+_Avoid_: error, exception
+
+**Error**:
+A Zith marker capability implemented by the type of an invalid value to classify that value as an error. It is not a generic error type and does not define a failable value's state.
+_Avoid_: invalid state, absence, generic error type
 
 **Request-scoped allocation**:
 The shipped allocation model where a raw block is tied to the request/function that allocated it and must be freed by the same owner with the same `size`/`align`. It deliberately avoids global heap discovery.

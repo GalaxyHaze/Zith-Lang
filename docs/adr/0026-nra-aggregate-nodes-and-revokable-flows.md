@@ -21,8 +21,14 @@ compiler inserts the `Revokable<T>` proxy at the unbounded boundary. The proxy
 uses a control block separate from the resource, with an atomic pointer and
 atomic lease state. Direct proxy operations may return `Nil`; `acquire()`
 returns a scoped, qualifier-preserving guard with normal access and no repeated
-revocation checks. `revoke()` closes new acquisitions but does not terminate
-the worker, and `wait()` remains the only operation exposed by `Waiter`.
+revocation checks. The core keyword `revoke` accepts either a revocable
+resource or a thread handle. `revoke x;` closes new acquisitions for `x` from
+every unbounded thread in the statement's scope that holds revocable access to
+it, then waits for their active guarded operations to finish. It does not
+terminate those workers. `revoke h1;` applies this transition to every
+revocable resource passed to the thread represented by handle `h1`. Revocation
+does not destroy resources or consume thread handles; `merge` remains
+responsible for joining and consuming a handle.
 
 Automatic allocator migration is intentionally not part of ordinary unbounded
 transfer. The preferred pattern is flow-local construction: capture trivial

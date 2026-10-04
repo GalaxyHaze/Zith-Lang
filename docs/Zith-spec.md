@@ -22,10 +22,11 @@ For the exact picture of what works today, see [Implementation Status](impl-stat
 
 | Symbol | Meaning |
 |---|---|
-| `?T` | Optional type — `T` or `null`, also a Zith-- type ([§8.1](08-error-handling.md#81-failable-types)) |
-| `T!` | Result type — `T` or an error, full Zith only ([§8.1](08-error-handling.md#81-failable-types)) |
-| `try` | Errors | Short-circuit a single expression; optional fallback via `or` ([§8.3](08-error-handling.md#83-try-propagation-and-fallback)) |
-| `?` / `!` (postfix) | Errors | Propagate an optional / result out of the current scope ([§8.3](08-error-handling.md#83-try-propagation-and-fallback)) |
+| `?T` | Deprecated optional type wrapper. Still accepted by the current Zith-- compiler as legacy syntax. |
+| `T!` | Deprecated as a type wrapper. In a function return annotation, `T!` declares success type `T` and lets the compiler infer invalid states. |
+| `try` / `or` | Error handling | Short-circuit one expression and provide fallbacks for any invalid state ([§8.3](08-error-handling.md#83-try-propagation-and-fallback)). |
+| Postfix `?` | Legacy Zith-- syntax | Propagates `Nil`; its current compiler support is separate from the full-Zith model. |
+| Postfix `!` | Error handling | Propagate an operation's invalid state to the enclosing function ([§8.3](08-error-handling.md#83-try-propagation-and-fallback)). |
 | `@name` | Compiler intrinsic or macro invocation ([§11.3](11-comptime.md#113-reflection), [§15](15-macros.md)) |
 | `#name` | Variable or field attribute, e.g. `#thread_local` or `#volatile` |
 | `::` | Scope resolution — reach past a shadowed name ([§2.3](02-module-system.md#23-namespace-access--scope-resolution)) |
@@ -104,11 +105,11 @@ source -> lex -> scan -> resolve(import/symbols) -> sema -> comptime/solve -> NT
 |---|---|---|---|
 | 2 | [Module System](02-module-system.md) | `02-module-system.md` | `import`, `from`, `export`, `alias`, `use`, visibility |
 | 3 | [Type System](03-type-system.md) | `03-type-system.md` | Primitives, structs, enums, unions, generics, `when` |
-| 4 | [Traits, Interfaces & Capabilities](04-traits-interfaces.md) | `04-traits-interfaces.md` | Nominal traits, structural interfaces, capabilities, operator overloading |
+| 4 | [Traits, Interfaces & Capabilities](04-traits-interfaces.md) | `04-traits-interfaces.md` | Nominal traits and composition, static structural interface contracts, capabilities |
 | 5 | [Functions](05-functions.md) | `05-functions.md` | `fn`, `const fn`, `state`, `raw fn`, `extern fn`, return types |
 | 6 | [Mutability & Bindings](06-mutability-bindings.md) | `06-mutability-bindings.md` | `let`, `var`, `global`, `const`, deep mutability, destructuring |
 | 7 | [Memory Model (NRA)](07-memory-model.md) | `07-memory-model.md` | Ownership, `lend`/`view`/`own`/`share`/`belong`, the four rules |
-| 8 | [Error Handling](08-error-handling.md) | `08-error-handling.md` | `?T`, `T!`, `with`/`catch`, `fail` blocks, `throw` |
+| 8 | [Error Handling](08-error-handling.md) | `08-error-handling.md` | `Failable` / `Invalid`, inferred invalid states, `try` / `or`, `fail`, `must` |
 | 9 | [Control Flow](09-control-flow.md) | `09-control-flow.md` | `if`, `when`, `for`, `->`, `state`, docks, jumps |
 | 10 | [Concurrency & Runtime APIs](10-concurrency.md) | `10-concurrency.md` | stdlib/runtime concurrency surface, resource safety, no core syntax |
 | 11 | [Comptime](11-comptime.md) | `11-comptime.md` | `const`, reflection, type manipulation, intrinsics |
@@ -137,8 +138,8 @@ source -> lex -> scan -> resolve(import/symbols) -> sema -> comptime/solve -> NT
 | `type` | Types | Distinct type copy, or a compile-time constraint (with `or`). |
 | `as` | Types | Cast / coercion. Also used in `implement T as Trait`. |
 | `is` | Types | Type check / narrowing. Boolean. Supports `@struct`, `@nullable`, etc. |
-| `enum` | Types | Closed compile-time constants — C-style, struct-backed, or ADT-style. |
-| `union` | Types | Runtime tagged union; variants separated by commas. |
+| `enum` | Types | Closed compile-time constants with one declared value type, or heterogeneous values through `enum: union`. |
+| `union` | Types | Runtime-tagged value holding one of its declared member types, which may be heterogeneous. |
 | `struct` | Types | Record type. Fields may be grouped with `[]`. |
 | `component` | Types | POD / copy-by-default struct. No traits. C-compatible. |
 | `implement` | Types | `implement T {}` or `implement T as Trait {}`. |
@@ -149,24 +150,26 @@ source -> lex -> scan -> resolve(import/symbols) -> sema -> comptime/solve -> NT
 | `let` / `var` / `global` / `const` | Bindings | Immutable / mutable / static storage / compile-time constant. |
 | `default` / `lend` / `view` / `own` / `share` / `belong` | Memory | NRA memory modifiers — `default` is implicit when no keyword is written. |
 | `fn` / `const fn` / `state` / `raw fn` / `extern fn` | Functions | Five exclusive function kinds; cannot be combined. |
-| `trait` / `interface` / `extends` / `requires` / `dyn` | OOP | Nominal traits, structural interfaces, extension, constraints, dynamic dispatch. |
-| `Copy` / `Functor` / `Arithmetic` / `Error` | Capabilities | Operator and behavior capabilities. |
-| `Null` / `Fail` | Capabilities | Negative — activate only in proven-invalid states. |
+| `trait` / `interface` / `extends` / `requires` / `dyn` | OOP | Nominal traits, trait composition, static interface contracts, bounds, and trait dynamic dispatch. |
+| `Copy` / `Functor` / `Arithmetic` | Capabilities | Operator and behavior capabilities. |
+| `Failable` / `Invalid` / `Error` | Capabilities | Invalid-state analysis, methods on proven-invalid `Failable` values, and the marker capability for error values ([§8](08-error-handling.md)). |
 | `Allocator` / `Generator` / `Share` / `Lent` / `Trust` / `Unique` | Capabilities | Memory, runtime protocol, and safety capabilities. |
 | `state` / `dock` / `jump` | State machines | `state` declarations, a state entry call, and terminating transitions. |
-| `fork` / `merge` | Threads | Core full-Zith syntax: create a thread through a backend object and consume its handle once. |
+| `fork` / `merge` / `revoke` | Threads | Core full-Zith syntax: create a thread, collect results, and revoke child access to resources. |
 | `spawn` | Threads | Stdlib shorthand for an implicit fork; not a core keyword. |
 | `->` / `..` | Chain | Chain flow / placeholder for the previous value. Left-to-right. |
 | `,` (in a chain) | Chain | Sub-chain — applies but does not advance the main chain value. |
 | `operator` / `token` | Words | Custom operator definition / token word definition. Must be defined inside a `context`. |
-| `?T` / `T!` | Errors | Optional / Result types. `?T` is also a Zith-- type; `T!` is full Zith only. May be stacked. |
-| `try` | Errors | Short-circuit a single expression; unwrap with an optional `or` fallback. Does not trigger `fail`. |
-| `?` / `!` (postfix) | Errors | Propagate Option / Result. No semicolon. Propagate out of chains. Only `!` (and `throw`) trigger `fail`. |
-| `or` | Errors / Loops / Types | Fallback / collapse an optional loop return / type constraint separator. |
-| `must` | Errors | Panic in debug; guided removal in release. |
+| `?T` / `T!` | Errors | Deprecated as type wrappers. `T!` remains a function return annotation for inferred invalid states. |
+| `try` / `or` | Errors | `try` yields a local, bindable valid/invalid result; `or` evaluates a fallback only after invalidity and retains the last invalid result. |
+| Postfix `?` | Errors | Legacy Zith-- Nil propagation. |
+| Postfix `!` | Errors | Propagate an operation's invalid state to the enclosing function. |
+| `or` | Errors / Loops / Types | Invalid-state fallback / loop fallback / type constraint separator. |
+| `must` / `assert` | Errors | `must` guards a failable value; `assert` checks a boolean condition. They are distinct. |
 | `raw` | Errors / Raw | Always unchecked, in both debug and release. Compiler warns in release. |
 | `unsafe` | Raw | Stronger than `raw`; valid only inside raw contexts. |
-| `throw` / `fail` / `continue(v)` / `with` / `eager with` | Errors | Explicit throw, scoped recovery, resume, bundled fallible operations. |
+| `throw` / `fail` / `resume` | Errors | `fail` captures invalid values whose types implement `Error`; `resume x;` replaces the failed result. |
+| `with` / `catch` | Errors | `catch` captures any original invalid value from `with` initialization, not errors from its body. |
 | `::` | Operators | Scope resolution — access a shadowed outer name. |
 | `and` / `or` / `not` / `xor` | Operators | Logical (English keywords). |
 | `&.` / `\|.` / `^.` / `~` / `<<` / `>>` | Operators | Bitwise. |
@@ -194,7 +197,7 @@ source -> lex -> scan -> resolve(import/symbols) -> sema -> comptime/solve -> NT
 | `@appendMethod Type, fn ...` | Add a method to a type being constructed. |
 | `@file` / `@line` / `@fnName` | Location information. |
 | `@location` | Rich panic message source. |
-| `@ok` / `@err` | Retrieve the T or E from `catch` & `fail`. |
+| `@ok` | Used with `is` to narrow a `Failable` value to its valid state; the `else` branch proves it invalid. |
 
 ### A.3 Attributes
 

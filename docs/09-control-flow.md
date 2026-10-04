@@ -34,7 +34,7 @@ if (not (x > 0)) { ... }
 
 ```zith
 for { ... }                                     // infinite
-for (i in iterable) { @println(i); }            // user iterator with next(self): ?T
+for (i in iterable) { @println(i); }            // legacy Zith-- iterator protocol: next(self): ?T
 for (i = 0), (i < 10), (i += 1) { ... }         // init / cond / step
 for (v in range(0, 100)) { @println(v); }       // over a generator
 
@@ -57,9 +57,9 @@ outer: for (...) {                               // labeled loop
 }
 ```
 
-> If the loop body may never run, its return value is deduced as optional, unless `or` collapses it to a non-optional value.
+> If the loop body may never run, its return value may be invalid. `or` can provide a fallback.
 
-> The init/cond/step form accepts comma-separated, parenthesized expressions, such as `for (i = 0), (i < 10), (i += 1)`, or the flat alternative `for (i = 0, i < 10, i += 1)`. The iterator form expects a value whose type exposes `next(self)`. The canonical `next` returns `?T`: `null` is the iteration end and `Some(element)` is a loop value. For iterators that need to yield optional elements, `next(self): ??T` binds the loop variable as `?T`, so a `null` element is a valid iteration value and only the outer `None` ends the loop. `for` calls `next` once per iteration, exits when the result is the outer `None`, and otherwise binds the inner payload as the loop variable.
+> The init/cond/step form accepts comma-separated, parenthesized expressions, such as `for (i = 0), (i < 10), (i += 1)`, or the flat alternative `for (i = 0, i < 10, i += 1)`. The current Zith-- compiler accepts an iterator protocol whose `next(self)` returns legacy `?T`, with `null` ending iteration. The full-Zith iterator result protocol has not yet been specified.
 
 ```zith
 struct Range {

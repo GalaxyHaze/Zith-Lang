@@ -60,6 +60,21 @@ is a stdlib shorthand that uses the active thread backend. It is not a core
 keyword. NRA tracks the fork as an ownership transition and rejects unbalanced
 forks. See [the branch protocol plan](plans/branch-protocol.md).
 
+`merge h1 and h2` waits for both threads, consumes both handles, and returns a
+tuple of results in operand order. `merge h1 or h2` also waits for both and
+consumes both handles, but returns a tagged union containing the result from
+the thread that completed first. If threads finish simultaneously, the
+leftmost handle wins. The union covers every handle's declared result type,
+including failable states, and need not distinguish handles that return the
+same type. The `or` form does not cancel or skip the other thread.
+
+`revoke x;` removes access to `x` from every unbounded thread in the statement's
+scope that holds revocable access to it. `revoke h1;` revokes all revocable
+resources passed to the thread represented by handle `h1`. Both forms prevent
+new guarded accesses and wait for active guarded operations to finish. Neither
+form destroys resources or terminates a thread, and neither consumes the
+handle.
+
 ### 10.4 What the Compiler Proves
 
 Concurrency-related safety is enforced through the same pre-HIR ownership proof used everywhere

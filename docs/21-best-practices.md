@@ -12,11 +12,13 @@
 - **Use `lend` for temporary mutation:** `fn update(state: lend GameState)`
 - **Use `belong` for part-of relationships,** such as back-pointers.
 
-### 21.2 Optional & Failable Patterns
+### 21.2 Invalid-State Patterns
 
-- **Prefer `try ... or` for optionals:** `let name = try user.name or "guest";`
-- **Prefer `try ... or` for failables:** `let config = try loadPrimary() or loadBackup() or defaultConfig();`
-- **Reserve `must` for initialization:** `const API_KEY = must env("API_KEY");`
+- **Prefer `try ... or` for any invalid state:** `let config = try loadPrimary() or loadBackup() or defaultConfig();`
+- **Keep a `try` result when you need to inspect it later:** bind it to a local and test it with `is @ok`.
+- **Keep absence distinct from errors:** `Nil` is invalid, but does not implement `Error`.
+- **Use `fail` to inspect an error value:** `fail (err) { log(err); }`
+- **Reserve `must` for cases where invalidity is fatal:** `const API_KEY = must env("API_KEY");`
 
 ### 21.3 Context Patterns
 
@@ -25,8 +27,12 @@
 
 ### 21.4 Error Handling Patterns
 
-- Add context to errors using `fail` blocks and custom `throw` statements.
-- Chain fallbacks explicitly: `let data = !step1() or step2() or step3() or AllFailed;`
+- Use `or` for fallbacks across any invalid state. It evaluates a fallback only after invalidity
+  and retains the last invalid result if every alternative is invalid.
+- Bind a `try` result when later code needs to test its state with `is @ok`.
+- Use `catch` only for invalid values produced during `with` initialization.
+- Use `fail` only for invalid values whose types implement `Error`, and use `resume value;`
+  to continue with a replacement result.
 
 ### 21.5 Macro Patterns
 

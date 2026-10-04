@@ -70,8 +70,16 @@ is `docs/nra-spec.md`; the current `Zith--` implementation status is in
 - Discarding a handle is not an explicit detached operation. Compiler/runtime
   management keeps the flow protocol alive and auto-revokes parent-borrowed
   resources at scope exit.
-- `h.revoke()` revokes the resources borrowed by that child but does not kill
-  the thread. `h.wait()` waits for the worker; the two operations are separate.
+- `revoke x;` revokes access to `x` from every unbounded thread in the
+  statement's scope that holds revocable access to it. `revoke h1;` revokes all
+  revocable resources passed to the thread represented by handle `h1`. Both
+  forms close new acquisitions and wait for active guarded operations to finish.
+  Revocation does not destroy resources, terminate threads, or consume handles.
+- `merge h1 and h2` waits for and consumes both handles, returning a tuple in
+  operand order. `merge h1 or h2` waits for and consumes both, returning a
+  tagged union for the first thread to finish. Simultaneous completion favors
+  the leftmost handle. The union covers all declared result types and need not
+  distinguish handles that return the same type.
 
 ### Revokable access
 
@@ -133,9 +141,8 @@ is `docs/nra-spec.md`; the current `Zith--` implementation status is in
 
 - `Revokable` representation is not settled. The current preference is a
   compiler-recognized intrinsic type because the compiler coordinates its
-  atomic access and revocation protocol. Whether it also needs a source keyword,
-  and whether its control block is always materialized or only at an unbounded
-  boundary, remain open.
+  atomic access and revocation protocol. Whether its control block is always
+  materialized or only at an unbounded boundary remains open.
 - `extern fn` effect-header attributes.
 - Custom allocator details.
 - Diagnostic catalog and examples.

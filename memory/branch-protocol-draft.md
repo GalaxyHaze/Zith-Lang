@@ -16,8 +16,16 @@ and `docs/Zith-spec-full.md` reflect the same draft and should be edited togethe
 - `fork` is a core keyword: `pThread fork Update(share state, n)`.
 - `pThread` is an ordinary backend object implementing `ThreadBackend`.
 - `fork` returns the backend's concrete handle, not a compiler-owned handle.
-- `merge t` is a core keyword that blocks, consumes the handle once, and returns
-  the entry result type.
+- `merge t` blocks, consumes the handle once, and returns the entry result
+  type. `merge h1 and h2` waits for both and returns a tuple; `merge h1 or h2`
+  waits for both and returns a tagged union for the first to finish. Simultaneous
+  completion is resolved in favor of the leftmost handle. The union covers all
+  declared result types and need not distinguish handles with the same type.
+- `revoke x;` removes access to `x` from every unbounded thread in the
+  statement's scope that holds revocable access to it. `revoke h1;` revokes all
+  revocable resources passed to the thread represented by handle `h1`. Both
+  forms prevent new guarded accesses and wait for active guarded operations to
+  finish. Neither form terminates a thread or consumes its handle.
 - `spawn Entry(args)` is a stdlib shorthand for the active backend, activated
   through a context such as `use threading.pthread`.
 - `Thread<T>` is the minimum owned handle contract; concrete backend handles may

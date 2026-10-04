@@ -65,9 +65,22 @@ Operation boundary decision: a child operation that started before revocation
 completes with the state it captured. Revocation is only observable at an
 operation boundary, never inside an in-flight operation.
 
-Acknowledgement decision: `revoke()` requests revocation and waits for the
-child to leave the active/promoted region before returning. Without that ack,
-the parent cannot safely reuse the underlying storage.
+Acknowledgement decision: `revoke x;` revokes access to `x` from every
+unbounded thread in the statement's scope that holds revocable access to it.
+It waits for those threads to leave active/promoted regions before returning.
+Without that acknowledgement, the parent cannot safely reuse the underlying
+storage.
+
+The source operation is the core keyword `revoke`:
+
+```zith
+revoke x;  // revoke scoped unbounded-thread access to x
+revoke h1; // revoke all revocable resources passed to the thread in h1
+```
+
+Revocation does not destroy the resource, terminate the child, or consume its
+handle. It closes new acquisitions and waits for active guarded operations to
+leave their protected region.
 
 ### 2.8 Fork Syntax Draft
 

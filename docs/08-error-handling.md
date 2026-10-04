@@ -1,31 +1,52 @@
 ## 8. Error Handling
 
-> **Implementation status:** `?T` is **working in Zith--** with `?` postfix propagation, full
-> operand and return-type validation, `null → ?T` and `T → ?T` coercions, and optional extraction
-> via `must`/`raw`. `T!` and the `!` propagation family are full-Zith only. `fail`, `with`,
-> `catch`, `throw`, `try`, and `try ... or` fallback are **spec-only**.
+> **Implementation status:** The current Zith-- compiler still supports legacy `?T` optional
+> types and `?` propagation. This support is not the full-Zith failable-state design described
+> below. `T!` return annotations, `!` propagation, `Failable`, `Invalid`, `fail`, `with`,
+> `catch`, `throw`, `try`, and `try ... or` fallback are spec-only.
 > See [impl-status.md](impl-status.md).
 
 
-Error handling in Zith is fully static and return-based. There are no exceptions, and no semicolon is required after `?` or `!`.
+Error handling in Zith uses compiler-managed valid and invalid states with return-based control
+flow. A function declares its successful return type, and the compiler infers which invalid
+states can occur. Absence and error remain distinct: `Nil` is the universal absence state and is
+invalid, while types implement the marker capability `Error` to classify their values as errors.
 
 ### 8.1 Failable Types
 
-| Syntax | Meaning | Propagated by |
-|---|---|---|
-| `?T` | Optional — `T` or `null`. Also the Zith-- optional type. | `?` (postfix) |
-| `T!` | Result — `T` or an error. Full Zith only; equivalent to a `Result<T, E>` where `E` implements `Error`. The compiler infers an anonymous error union when multiple error types are possible. | `!` (postfix) |
+`Failable` is a capability for types with valid and invalid states. Its contract provides
+`check(): bool` to report whether the value is valid, `valid()` to represent its valid state,
+and `invalid()` to represent its invalid state. Users do not call these contract members
+directly. The compiler invokes them when evaluating `try`.
 
-In full Zith, failable types may be stacked, and the notation reads linearly:
+A type that implements `Failable` may also implement `Invalid` to provide methods for its
+invalid state. Flow analysis makes those methods available only after proving the value
+invalid.
+
+Use `is @ok` to test a `Failable` value. The true branch narrows the value to its valid state;
+the `else` branch proves that it is invalid, including `Nil`, values whose types implement
+`Error`, and type-defined invalid states.
+
+The compiler always provides `Nil` as the universal absence state. `Nil` is invalid, but it is
+not an error. An invalid value is an error when its type implements `Error`. `Optional` and
+`Result` may exist in the standard library as ordinary types that implement `Failable`, while an
+error value such as `Err` implements `Error`. The declaration syntax for a marker-only
+implementation remains open.
+
+The type wrappers `?T` and `T!` are deprecated. In a function return annotation, `T!` remains
+valid and means that successful return values have type `T`; the compiler infers the possible
+invalid states:
 
 ```zith
-?*?(?i32 ! IoError)
+fn loadConfig(path: string): Config!
 ```
 
-Read left to right, outer to inner: an *optional* **pointer** to an *optional* **Result**, where the Result's success type is `?i32` and its error type is `IoError`.
+Postfix `!` propagates the invalid state of an operation to the enclosing function. The
+compiler preserves the original invalid value.
 
-> **Zith-- boundary:** `?T` is part of Zith--. `T!` is a full-Zith type, and the Zith-- pipeline
-> has no failable-result syntax; error propagation remains in the full spec.
+> **Zith-- compatibility:** The current compiler still accepts legacy `?T` forms, including
+> nullable C pointers, and postfix `?` propagation of `Nil`. That implementation behavior is
+> separate from the full-Zith failable model.
 
 ### 8.1.1 C pointers are `?*T`
 
@@ -66,144 +87,100 @@ keeps the proof for code after the `if`). An unchecked use in deref, arrow, inde
 or coercion expects `*T` and reports `E3005 NullDerefUnproven`; `raw` remains the
 explicit opt-out for unchecked pointer reads.
 
-### 8.2 `must` vs. `raw`
+### 8.2 `must`, `assert`, and `raw`
 
-| | Debug mode | Release mode |
-|---|---|---|
-| `must` | Panics with file and line information. | The compiler guides you to remove it, turning it into an `if`/`else` with an early return and a custom error code. |
-| `raw` | Always unchecked. | Always unchecked. |
+`must` guards a failable value and terminates when it is invalid. `assert` checks a boolean
+condition. They are separate operations. `raw` extracts a value without checking its state.
 
 ```zith
-let cfg: ?Config = tryLoad();
-let c1 = must cfg;   // panics in debug; compiler warns/guides in release
-let c2 = raw cfg;    // always unchecked; compiler always warns
+let cfg = must loadConfig(path);
+let unchecked = raw cfg;
+assert(condition);
 ```
 
-`must` also doubles as an assertion: `must(cond)` panics with file and line info if `cond` is false (debug only). In release, the compiler guides you to replace it with proper error handling.
+When `must` terminates, DEBUG mode writes the source location, expression, and invalid-state
+category to `stderr`. RELEASE mode does not print this message. Both modes exit with the same
+category-specific status code. The numeric codes are not yet specified.
 
-### 8.3 `try`, Propagation, and Fallback
+### 8.3 `try`, Local Results, and Fallback
 
 ```zith
 fn readConfig(path: string): Config! {
-    let file = File.open(path)!
-    let data = file.read()!
+    let file = try File.open(path) or defaultFile;
+    let data = try file.read() or defaultData;
     parse(data)!
 }
 
-let name = try user.name or "guest";
-let data = try primary() or backup() or default;
-
-// Propagation inside a chain
-readFile("data.bin") -> parse(..)! -> validate(..)? -> process(..)
+let config = try loadPrimary() or loadBackup() or defaultConfig;
 ```
 
-Accessing a failable type's inner value requires one of `try`, `!`, `raw`, or `must`.
-
-- **`try`** short-circuits only the enclosed expression and keeps the failure as a local value.
-- **`!`** unwraps and propagates a failure out of the enclosing scope.
-- **`raw`** unwraps without checking the failure.
-- **`must`** unwraps and asserts that the value is valid.
-
-#### `try` and `or`
-
-`try` guards a single expression. It stops the expression at the first failure and does not
-route that failure to a `fail` scope guard. It is the local fallback form; the fix is `try expr`
-with no prefix `?`/`!`.
+For `try x`, the compiler evaluates `x` once, calls `x.check()` once, then calls exactly one of
+`x.valid()` or `x.invalid()`. Users do not call these contract members directly. The expression
+produces a local failable result that can be stored and tested later with `is @ok`:
 
 ```zith
-// Local fallback; the failure is consumed in this expression
-let x = try opt or default;
-let x = try opt or default or backup; // valid — chain of fallbacks
-
-// Short-circuit with a failure value: a, foo(), or c() may stop the chain
-let value = try a.foo().c();
+let outcome = try loadConfig(path);
+if (outcome is @ok) {
+    use(outcome);
+} else {
+    // The invalid result remains local and can still be tested here.
+}
 ```
 
-`try expr` has a union type (`T | failures`); the result is either an integral `T` or the
-failure that stopped the expression. `try expr or fallback` collapses that result to `T`.
-`or` is short-circuiting and evaluates only until an integral result is found.
+An invalid result is not automatically propagated out of the enclosing function.
 
-#### Postfix `!`
+`or` evaluates its fallback only when the preceding result is invalid. It handles any invalid
+state, including `Nil`, errors, and invalid states from user-defined `Failable` types. If the
+left side is valid, its valid value is the result and the fallback is not evaluated. If every
+alternative is invalid, the expression retains the last alternative's invalid state as its
+local result. The current invalid state is not passed to the fallback.
 
-Postfix `!` propagates a failure out of the current scope. Unlike `try`, this is the path
-that can activate a surrounding `fail` block. Postfix `?` keeps the existing optional
-propagation role for `?T`.
-
-```zith
-// Postfix — propagates from the failing segment to the enclosing scope
-let x = y.data()!fn()!process()!
-```
-
-Prefix `?`/`!` fallback forms are removed from the language surface; `try ... or` is their
-replacement.
+Postfix `!` propagates the invalid state of an operation to the enclosing function. It does
+not convert `Nil` into an error or discard the original invalid value.
 
 ### 8.4 `with` / `catch`
 
-| Form | Behavior |
-|---|---|
-| `with` | Short-circuit — the first failure jumps straight to `catch` |
-| `eager with` | Eager — every expression is evaluated; `catch` runs if any failed |
+`with` evaluates its initialization expressions in order. If one produces an invalid value,
+evaluation stops, the body is skipped, and the attached `catch` receives that original invalid
+value. `catch` handles any invalid state, including `Nil` and states from user-defined
+`Failable` types. It does not require the value's type to implement `Error`.
+
+The attached `catch` handles initialization only. It does not handle invalid states produced by
+operations in the `with` body. Use `fail` in the body to capture error values there. The block
+shape below illustrates the current proposal; exact handler grammar remains under discussion.
 
 ```zith
-// Short-circuit
-with (connectDb(), user: getUser(id)) {
+with [connection: connectDb(), user: getUser(connection)] {
     process(user);
+} catch (invalid) {
+    // invalid is the original value produced during initialization
 }
-catch (err) { log(err); }   // any name works; 'err' is convention
-
-// Eager — all expressions run, then catch if any failed
-eager with (a: fetchA(), b: fetchB()) {
-    use(b);
-} catch { log(a, b); }
 ```
-
-> In `eager with`, all expressions are evaluated before `catch`. The named bindings (`a`, `b`) remain in scope inside `catch` so you can inspect which ones failed. In short-circuit `with`, only the failing expression is known, so `catch` receives a single error parameter.
 
 ### 8.5 `fail` Blocks
 
-A `fail` block runs when an error would otherwise escape its associated scope. It is a scope
-listener, not an expression-level fallback. Only `!` propagation and `throw` activate it;
-`try` keeps failures local and does not reach `fail`. A `fail` block can follow a named block
-(external) or sit inside a block as a scope guard (nameless):
+A `fail` block listens for invalid outcomes in its lexical scope after the block is declared.
+It captures an invalid value only when that value's type implements the marker capability
+`Error`. It does not capture `Nil` or other invalid values whose types do not implement `Error`.
+The block receives the original value with its original type, not a generic `Error` value or a
+formatted diagnostic.
 
 ```zith
-// External fail
-loadConfigure {
-    let raw = readFile("config.json")!
-    parse(raw)!
-} fail loadConfigure(err) {
-    if (err is NotFound) { continue(default); }
-    throw Error{ context: "load failed", cause: err };
-}
-
-// Nameless fail -- guards the current scope
 {
-    fail (err) { log("scope error:", err); }
-    risky()!
-    another()!
+    fail (err) {
+        if (err is NotFound) {
+            resume defaultConfig;
+        }
+    }
+    let config = loadConfig()!;
 }
 ```
 
-> **Name linking:** an external `fail` block's name must match the block it guards. When there is only one failable block in scope, the name can be omitted. A nameless `fail` guards the current scope directly. The compiler passes the error the same way.
-
-Inside a `fail` block, the parameter receives the error directly. This is the difference
-from `try ... or`: `try` discards or collapses the failure, while `fail` has the original
-error available for logging, transformation, or conditional recovery. You have four options:
-
-- `continue(value)`, to resume after the block with a replacement value.
-- `return value;`, to exit the enclosing function.
-- `throw value;`, to propagate a new error (requires the `Error` capability).
-- Fall through, so the original error propagates unchanged.
-
-Use `@ok` to extract the success type from the failure node. This helps when `continue` needs to return a value of a different type than the error:
-
-```zith
-fail (err) {
-    continue(@ok err);   // extract success value from the failure node
-}
-```
-
-`@err` also exists for extracting the error type in other contexts.
+`resume x;` replaces the failed operation's result with `x` and continues after that operation.
+The replacement must match the operation's successful result type. If the error is not
+resumed, it continues propagating. `fail` is distinct from both `or` and `catch`: `or` handles
+any invalid state without passing it to the fallback, `catch` receives any invalid value from
+`with` initialization, and `fail` receives only invalid values whose types implement `Error`.
 
 ### 8.6 `throw`
 

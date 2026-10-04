@@ -25,12 +25,21 @@ documented in
 
 ## What Makes Zith Different
 
-'Zith' is designed around memory safety without lifetime annotations or a garbage collector. The
-current main implements a simplified ownership core: `lend`/`view` borrow slices, logical moves
-from `&x`, pointer-escape checks, and NRA residual facts before HIR; the full NRA is planned for
-future Zith. Zith aims to be an expressive and clear language, with specialized tools for
-domain-specific work. **Zith--** already demonstrates that direction with generics,
-traits/interfaces, `dyn` dispatch, `state` machines and rich control flow.
+**Zith is a systems language that adapts to your needs.**
+
+It brings an approachable, expressive high-level experience to systems
+development, with specialized low-level tools available when a project calls
+for them. Its features are modular: focus on the concepts that solve your
+current problems and explore more as your needs grow.
+
+Zith aims to make the straightforward path the easy one, with clear diagnostics
+that guide you toward the right fix. Safety supports this experience without
+defining the whole pitch.
+
+This is the vision for full Zith, not a claim that every feature is available
+today. The current compiler implements the `Zith--` subset. See the
+[Zith-- specification](docs/Zith--.md) and
+[implementation status](docs/impl-status.md) for what works now.
 
 ---
 
@@ -121,9 +130,10 @@ and C interop:
 
 **Error Handling**
 
-- `?T` optional values with implicit condition tests and `?` propagation where valid (Zith-- only)
+- Legacy `?T` optional values with implicit condition tests and `?` propagation where valid (Zith-- only)
 - `is null`, `must`, and `raw` optional extraction (Zith-- only)
-- `T!` result types, `fail` / `with` / `catch` / `throw` are planned for Zith and not implemented in Zith--
+- Full-Zith `Failable` / `Invalid` capabilities, inferred invalid states, `!` propagation, and
+  `fail` are specified but not implemented in Zith--; `?T` and `T!` wrappers are deprecated
 
 **Extensibility and C Interop**
 
@@ -155,8 +165,8 @@ and C interop:
 | C interop | **Working** | Manual `extern fn` plus validated C header imports through libclang |
 | `macro` / `raw macro` / `@name(...)` | **Working (Zith-- only)** | Normal and raw macros with call-site scope handling |
 | Field access, index, deref, address-of | **Working** | Optional bounds checks on array/slice indexing; `raw` skips checks |
-| `?T` (Zith-- only) | **Working** | Optional values, `?` propagation where valid, `is null`, `must`, and `raw` extraction |
-| `T!` (result) | Planned for Zith | Full Zith surface only; not implemented by the Zith-- compiler |
+| Legacy `?T` (Zith-- only) | **Working** | Optional values, `?` propagation where valid, `is null`, `must`, and `raw` extraction |
+| `Failable` / `Invalid` / `T!` return annotation | Planned for Zith | Full-Zith invalid-state model only; `?T` and `T!` type wrappers are deprecated |
 | `is` / `as` | **Working** | Casting for numeric pairs and raw pointers; tagged-union/opaque narrowing |
 | `tag` (formerly `tag macro`) | Planned for Zith | Rejected in Zith--; planned under the shorter `tag` name |
 | `word` / `context` / `use` | Planned for Zith | No working semantics in Zith-- |

@@ -22,10 +22,11 @@ For the exact picture of what works today, see [Implementation Status](impl-stat
 
 | Symbol | Meaning |
 |---|---|
-| `?T` | Optional type — `T` or `null`, also a Zith-- type ([§8.1](08-error-handling.md#81-failable-types)) |
-| `T!` | Result type — `T` or an error, full Zith only ([§8.1](08-error-handling.md#81-failable-types)) |
-| `try` | Errors | Short-circuit a single expression; optional fallback via `or` ([§8.3](08-error-handling.md#83-try-propagation-and-fallback)) |
-| `?` / `!` (postfix) | Errors | Propagate an optional / result out of the current scope ([§8.3](08-error-handling.md#83-try-propagation-and-fallback)) |
+| `?T` | Deprecated optional type wrapper. Still accepted by the current Zith-- compiler as legacy syntax. |
+| `T!` | Deprecated as a type wrapper. In a function return annotation, `T!` declares success type `T` and lets the compiler infer invalid states. |
+| `try` / `or` | Error handling | Short-circuit one expression and provide fallbacks for any invalid state ([§8.3](08-error-handling.md#83-try-propagation-and-fallback)). |
+| Postfix `?` | Legacy Zith-- syntax | Propagates `Nil`; its current compiler support is separate from the full-Zith model. |
+| Postfix `!` | Error handling | Propagate an operation's invalid state to the enclosing function ([§8.3](08-error-handling.md#83-try-propagation-and-fallback)). |
 | `@name` | Compiler intrinsic or macro invocation ([§11.3](11-comptime.md#113-reflection), [§15](15-macros.md)) |
 | `#name` | Variable or field attribute, e.g. `#thread_local` or `#volatile` |
 | `::` | Scope resolution — reach past a shadowed name ([§2.3](02-module-system.md#23-namespace-access--scope-resolution)) |
@@ -188,7 +189,7 @@ Type constraints and union variants look similar but use different separators to
 | Construct | Separator | Semantics |
 |---|---|---|
 | Type constraint | `or` (keyword) | Compile-time restriction / constraint |
-| Union body | `,` (comma) | Runtime tagged union; variants separated by commas. |
+| Union body | `,` (comma) | Runtime-tagged union of member types, which may be heterogeneous. |
 
 ```zith
 // Type constraint -- compile-time dispatch
@@ -249,7 +250,9 @@ let greeting = "hello" + " " + "world";
 
 ### 3.3 Enum
 
-A closed set of named constants. All values must be known at compile time. Zith supports three styles:
+An enum is a closed set of named compile-time constants. A concrete declared
+value type is shared by all constants. Use `enum: union` when named constants
+need heterogeneous union members.
 
 #### C-style
 ```zith
@@ -259,9 +262,10 @@ enum Status: i32 { Ok = 0, Err = 1, Pending = 2 }
 
 #### Struct-backed
 ```zith
-enum Color: rgb {
-    Red   = { r: 255, g: 50,  b: 0,   a: 255 },
-    Green = { 0, 255, 0, 255 },
+enum Colors: RGBA {
+    red   = { 255, 100, 0, 255 },
+    blue  = { 60, 80, 240, 255 },
+    green = { 80, 255, 80, 255 },
 }
 ```
 
@@ -370,16 +374,22 @@ A component must satisfy all of the following constraints:
 
 ### 3.6 Union
 
-By default, a `union` is runtime-tagged, with variants separated by commas:
+Use a `union` for a runtime-tagged value that holds one of several member types.
+Its members can be heterogeneous:
 
 ```zith
-union Value { i32, f64, bool }
+union Numbers {
+    i32, f32, u64
+}
+```
 
+Use a type hint when an expression needs to produce a union:
+
+```zith
 enum Flag { A, B, C }
 let flag = Flag.A;
 
-// Type hint forces union deduction
-let x: union = when (flag) {
+let value: union = when (flag) {
     A = 42,
     B = 3.14,
     C = true,
@@ -392,9 +402,20 @@ let x: union = when (flag) {
 
 `raw union` is an untagged C-style union, valid only inside `raw` contexts. Accessing the wrong variant is undefined behavior.
 
-#### ADT-style (Named Variants)
+Use `enum: union` for a closed set of named compile-time constants whose
+values can have different types:
 
-Unions can also have named variants, similar to Rust enums:
+```zith
+enum ADT: union {
+    One = Point{5, 5, 0},
+    Str = "lol",
+    F32 = 0.5,
+}
+```
+
+#### Named Union Variants
+
+A tagged union can name each alternative and associate it with a payload shape:
 
 ```zith
 union Shape {
@@ -409,16 +430,6 @@ fn area(s: Shape): f32 {
         Rect   = s.w * s.h,
         Point  = 0,
     }
-}
-```
-
-You can also combine `enum` with `union` for compile-time constants that carry data:
-
-```zith
-enum Constants: union {
-    pi      = 3.14f,
-    vector  = |x: -1, y: 0, z: -1, w: 1|,
-    nothing = 0,
 }
 ```
 
@@ -530,51 +541,101 @@ let f = n as f64;
 
 | | Trait | Interface |
 |---|---|---|
-| **Typing** | Nominal — must be explicitly implemented. | Structural (duck-typed) — automatically satisfied when fields match. |
-| **Extensible** | Yes — via `extends`, or as a precondition using `requires`. | No — interfaces cannot extend each other, though a trait may `requires` one. |
-| **Has implementation?** | Yes — default method bodies are allowed. | No — declaration only. |
-| **Field access** | Only through a trait that `requires` the interface. | Yes — directly, since interfaces are structural. |
+| **Typing** | Nominal. A type explicitly implements a trait. | Structural. A type satisfies an interface automatically when all its conditions hold. |
+| **Purpose** | Names behavior and capabilities a type opts into. | States a static contract that a type or value must satisfy. |
+| **Composition** | `extends` composes traits. | Bounds combine interfaces with `+`. |
+| **Methods** | Requirements and optional default bodies. | Exact-signature requirements without default bodies. |
+| **Fields** | Available through an interface required by the trait. | Guarantees field existence and type; qualifiers constrain mutability, while the memory access mode determines whether writes are permitted. |
 
 ### 4.2 Traits
 
-A `requires Cond` clause goes **before** `trait` or `interface`. It forces any implementing type to also satisfy that condition. Traits may provide default method bodies. Use `self` / `other` as the conventional instance parameters, and `Self` (capitalized) for the concrete implementing type.
+Traits are nominal contracts. A type must explicitly implement a trait. Trait
+methods may have default bodies. Trait clauses follow the name on separate
+lines, in the order `extends` then `requires`. `extends` composes traits.
+`requires Interface` requires the trait's `Self` type to satisfy that interface.
+The requirement propagates to generic bounds, so `T: Movable` also gives the
+body the interface guarantees required by `Movable`. Use `self` / `other` for
+value parameters and `Self` for the implementing type.
 
 ```zith
-trait Printable {
-    fn print(self);
-    fn println(self) { self.print(); io.writeln(""); }
+interface Positioned {
+    [x, y]: i32
 }
 
-requires Printable
-trait JsonSerializable {
-    fn print(self);
-    fn toJson(self): string;
+trait Movable
+    requires Positioned
+{
+    fn moveBy(self, dx: i32, dy: i32) {
+        self.x += dx;
+        self.y += dy;
+    }
 }
 
-// Disambiguate overlapping method names using the trait as a namespace
-Printable.print(self);
-JsonSerializable.print(self);
+fn move<T: Movable>(value: T, dx: i32, dy: i32) {
+    value.moveBy(dx, dy);
+}
 ```
 
 ### 4.3 Interfaces
 
-Interfaces are structural — if it quacks, it's a duck. Any type that has the required fields satisfies the interface automatically, without an explicit `implement` declaration. You can also add `requires` to interfaces.
+An interface is a static contract, not a behavior trait or a dynamic-dispatch type. A type satisfies
+an interface automatically when its type-level and value-level conditions hold. No `implement`
+declaration is needed. Interface conditions combine conjunctively. Repeated identical conditions
+count once, while contradictory or incompatible conditions make satisfaction invalid.
 
 ```zith
-// will only accept structs and reject components
-requires @isStruct
-interface iPositioned { [x, y, z]: f32 }
-
-requires iPositioned
-trait Movable {
-    fn translate(self, dx: f32, dy: f32, dz: f32) {
-        self.x += dx; self.y += dy; self.z += dz;
-    }
+interface SafeNormalize requires @struct {
+    [x, y]: i32,
+    @ensure(self.y is not 0)
 }
-
-// Any struct with x, y, z: f32 satisfies iPositioned automatically
-struct Enemy { [x, y, z]: f32, health: i32 }
 ```
+
+Header `requires` constraints such as `@struct` are checked when the compiler
+evaluates whether a type satisfies the interface.
+A field requirement guarantees that the field exists with the declared type.
+Code under the interface bound may read that field. Field qualifiers can
+constrain mutability, while the memory access mode still controls whether a
+write is permitted:
+
+```zith
+interface Normalize {
+    var [x, y]: i32,
+    @ensure(self.y is not 0)
+}
+```
+
+Unqualified `[x, y]` follows the mutability available through the passed value.
+With a `lend` value, it requires mutable fields and permits writes through that
+access. With `view`, access remains read-only regardless of the field
+declaration.
+`let [x, y]` promises that the fields are immutable while the contract is
+active. `var [x, y]` requires mutable fields; writing still requires a mutable
+access mode such as `lend`. In particular, `view` remains read-only, even for
+fields declared `var`; it never permits interior mutation. `var` does not add
+implicit synchronization or relax cross-thread safety requirements.
+
+A method requirement names an exact signature. Calls through an interface bound
+use static dispatch, and interfaces cannot provide method bodies.
+
+`self` conditions are checked at the call boundary and remain invariants while
+the interface contract is active. Writes and calls must preserve them. The
+compiler must prove each `@ensure`; if it cannot, compilation fails rather than
+inserting a runtime check. `@assume`, `@ensure`, and `@maybe` keep their
+existing meanings. In particular, `@assume` is diagnosed when it contradicts
+facts already known to the compiler.
+
+Combine contracts and behavior explicitly in a generic bound:
+
+```zith
+fn normalize<T: SafeNormalize + Arithmetic>(value: T): T {
+    // The interface and trait bounds are both required.
+    value
+}
+```
+
+The full-Zith model does not define `dyn Interface`. Zith-- currently supports method dispatch
+through `dyn Interface`; that implementation behavior is documented separately and is not part
+of this contract.
 
 ### 4.4 Capabilities — Built-in Reference
 
@@ -585,9 +646,9 @@ Capabilities are special traits that feed the compiler more information, unlocki
 | `Copy` | Implicit bitwise copy. Components and primitives are `Copy` by default. |
 | `Functor` | `operator()` — makes a type callable like a function. |
 | `Arithmetic` | Operators `+`, `-`, `*`, `/`, `%`, and so on. |
-| `Error` | `operator throw`, required for `throw MyError;`. |
-| `Null` | A negative capability — its traits activate only once NRA has proven a value IS `null`. Outside the proven-null branch, calling the method is a **compile error**. |
-| `Fail` | A negative capability — its traits activate only once NRA has proven a value IS an error. Cannot coexist with `Null` on the **same level**, but `?T!` can have `Null` on the outer level and `Fail` on the inner. |
+| `Error` | Marks a type as an error value. It does not define whether a value is valid or invalid. |
+| `Failable` | Defines a type's valid and invalid states. The compiler invokes its state-checking contract for `try`. |
+| `Invalid` | A `Failable` type may implement it to expose methods available only after flow analysis proves that its value is invalid. |
 | `Allocator` | To provide custom allocators |
 | `Generator` | Allows creating runtime-defined resumable or streaming protocols without introducing a dedicated core function kind. |
 | `Share` | Required for `global: share` and crossing thread boundaries |
@@ -596,34 +657,39 @@ Capabilities are special traits that feed the compiler more information, unlocki
 | `Trust` | A trait extending `Trust` may contain `raw fn` methods callable from safe contexts. |
 | `Unique` | Marks a singleton type. It cannot be instantiated — the type name itself acts as the instance. All fields must implement `Share` (thread-safe). An `own Local` variant is a singleton thread-local. |
 
-#### `Null` & `Fail` — Negative Capabilities
+#### `Failable` & `Invalid` — Invalid-State Capabilities
 
-Dispatch is based on NRA state. Inside a proven-null branch, the `Null` trait unlocks. Outside it, calling `Null` methods is a **compile error**:
+`Failable` describes a type that can hold either a valid or an invalid state. Its contract
+provides `check(): bool` to report whether the value is valid, `valid()` to represent its
+valid state, and `invalid()` to represent its invalid state. Users do not call these contract
+members directly. For `try x`, the compiler evaluates `x` once, calls `check()` once, then calls
+exactly one of `valid()` or `invalid()` based on the check result.
 
 ```zith
-implement Config as Null {
-    fn onMissing(self) { log("Config was null -- using defaults"); }
+// Config also implements Failable.
+implement Config as Invalid {
+    fn onUnavailable(self) { log("Config is unavailable"); }
 }
-implement Config! as Fail {
-    fn onError(self) { log("Config load failed"); }
-}
-
-let cfg: ?Config = loadConfig();
-if (cfg is null) {
-    cfg.onMissing();   // OK — Null trait unlocked here
-}
-// cfg.onMissing();   -- COMPILE ERROR: outside null branch
-
-// Multi-level: ?T! — Null on outer, Fail on inner
-// cfg.onError() is only valid inside a proven-error branch
 ```
 
-`Null` and `Fail` are per-level. A `?T!` value can activate `Null` (outer `?`) independently from `Fail` (inner `!`).
+`Invalid` is an optional capability for a type that implements `Failable`. It lets the type
+provide methods for its invalid state. Those methods are callable only when flow analysis
+proves the receiver invalid. For example, `cfg.onUnavailable()` is valid only in a branch
+where flow analysis proves `cfg` invalid. An invalid state may be `Nil`, an error value, or a
+state defined by the `Failable` type.
+
+`Error` is a marker capability, not a generic error type. The type of an invalid value implements
+`Error` to classify that value as an error. `fail` captures only invalid values whose types
+implement `Error`, while `catch` can capture any invalid value produced during `with`
+initialization. The exact declaration syntax for a marker-only capability implementation remains
+open. `Null` and `Fail` are deprecated capability names.
 
 #### `Trust` — Safe Sections with Raw Code
 
 ```zith
-trait Place extends Trust {
+trait Place
+    extends Trust
+{
     raw fn sample(): i32 {}
 }
 
@@ -687,20 +753,37 @@ implement Pipeline as Functor {
 let out = pipe(raw_bytes);
 ```
 
-### 4.6 Extension (`extends`)
+### 4.6 Trait Composition (`extends`)
 
-`extends` copies the base type's fields and traits into the new struct. An optional `:` after the base lists further traits to implement:
+`extends` composes one trait into another. Composition includes method requirements and defaults,
+and carries capability identity. It does not inherit or embed fields. Structs declare their own
+fields directly. A type that implements a composed trait satisfies the traits it composes without
+counting their shared capabilities more than once.
 
 ```zith
-struct Dog extends Animal {}
-struct T extends Base: Transform, Collision {}
+trait Readable {
+    fn read(self): i32;
+}
 
-// Traits may also extend capabilities or other traits
-trait SafeBuffer extends Trust {
-    raw fn readByte(self, offset: u64): u8 {}
+trait BufferedReadable
+    extends Readable
+{
+    fn bufferedRead(self): i32 { self.read(); }
 }
 ```
 
+When both clauses are present, write `extends` first and `requires` second,
+each on its own line beneath the trait name.
+
+If multiple composition paths reach the same original method or capability, that shared origin
+counts once. Methods with the same exact signature are one requirement. Different defaults for
+that signature conflict unless the composing trait resolves the conflict with `#[override]`.
+That override replaces the inherited default. Its body is optional. Without a body, implementors
+must provide the method. An override applies only to an inherited method with the same signature.
+
+Composing a capability and one of its subtraits separately is a conflict. For example, if
+`LogError extends Error`, a type must not implement both `Error` and `LogError` as separate
+implementations. Implementing only `LogError` includes the `Error` capability once.
 ---
 
 ## 5. Functions
@@ -767,7 +850,31 @@ resource usage around them.
 
 ### 6.1 Deep Mutability Model
 
-Zith uses deep mutability: a modifier on a binding flows into every nested field. Fields inside a struct inherit the mutability of the instance that holds them — no per-field `mut` annotation needed.
+Zith uses deep mutability: a modifier on a binding flows into every nested field
+unless a struct field explicitly overrides it. An unqualified field follows its
+owner's content mutability. `let field` keeps that field immutable even when its
+owner is mutable. `var field` keeps it mutable through an otherwise immutable
+owner.
+
+`var field` does not bypass a read-only memory access. A `view` cannot write
+the field, even when it is declared `var`. The qualifier also does not add
+synchronization or relax cross-thread safety requirements.
+
+```zith
+struct Counter {
+    value: i32,       // follows the owner's mutability
+    let id: u64,      // always immutable
+    var scratch: i32, // mutable through a non-view access
+}
+
+fn update(counter: lend Counter) {
+    counter.scratch += 1;
+}
+
+fn inspect(counter: view Counter) {
+    // counter.scratch += 1; // COMPILE ERROR: view is read-only
+}
+```
 
 ### 6.2 Binding Keywords
 
@@ -932,6 +1039,10 @@ Each memory modifier carries an implicit content mutability level:
 
 `default` is the only modifier where mutability is explicitly controlled via the `mut` keyword. All others carry their mutability semantics implicitly.
 
+`view` remains read-only for every field, including a struct field declared
+`var`. A field qualifier does not permit interior mutation through a `view`.
+It also does not add synchronization or relax cross-thread safety requirements.
+
 ### 7.4 The Four NRA Rules
 
 **Rule 1 — Argument Exclusivity.** In any call expression, each argument must refer to a distinct node, without exception:
@@ -1063,161 +1174,141 @@ facts that lowering still needs.
 
 ## 8. Error Handling
 
-Error handling in Zith is fully static and return-based — there are no exceptions, and no semicolon is required after `?` or `!`.
+Error handling in Zith uses compiler-managed valid and invalid states with return-based control
+flow. A function declares its successful return type, and the compiler infers which invalid
+states can occur. Absence and error remain distinct: `Nil` is the universal absence state and is
+invalid, while types implement the marker capability `Error` to classify their values as errors.
 
 ### 8.1 Failable Types
 
-| Syntax | Meaning | Propagated by |
-|---|---|---|
-| `?T` | Optional — `T` or `null`. | `?` (postfix) |
-| `T!` | Result — `T` or an error. Equivalent to a `Result<T, E>` where `E` implements `Error`. The compiler infers an anonymous error union when multiple error types are possible. | `!` (postfix) |
+`Failable` is a capability for types with valid and invalid states. Its contract provides
+`check(): bool` to report whether the value is valid, `valid()` to represent its valid state,
+and `invalid()` to represent its invalid state. Users do not call these contract members
+directly. The compiler invokes them when evaluating `try`.
 
-Failable types may be stacked, and the notation reads linearly:
+A type that implements `Failable` may also implement `Invalid` to provide methods for its
+invalid state. Flow analysis makes those methods available only after proving the value
+invalid.
+
+Use `is @ok` to test a `Failable` value. The true branch narrows the value to its valid state;
+the `else` branch proves that it is invalid, including `Nil`, values whose types implement
+`Error`, and type-defined invalid states.
+
+The compiler always provides `Nil` as the universal absence state. `Nil` is invalid, but it is
+not an error. An invalid value is an error when its type implements `Error`. `Optional` and
+`Result` may exist in the standard library as ordinary types that implement `Failable`, while an
+error value such as `Err` implements `Error`. The declaration syntax for a marker-only
+implementation remains open.
+
+The type wrappers `?T` and `T!` are deprecated. In a function return annotation, `T!` remains
+valid and means that successful return values have type `T`; the compiler infers the possible
+invalid states:
 
 ```zith
-?*?(?i32 ! IoError)
+fn loadConfig(path: string): Config!
 ```
 
-Read left to right, outer to inner: an *optional* **pointer** to an *optional* **Result**, where the Result's success type is `?i32` and its error type is `IoError`.
+Postfix `!` propagates the invalid state of an operation to the enclosing function. The
+compiler preserves the original invalid value.
 
-### 8.2 `must` vs. `raw`
+> **Zith-- compatibility:** The current compiler still accepts legacy `?T` forms, including
+> nullable C pointers, and postfix `?` propagation of `Nil`. That implementation behavior is
+> separate from the full-Zith failable model.
 
-| | Debug mode | Release mode |
-|---|---|---|
-| `must` | Panics with file and line information. | The compiler guides you to remove it, turning it into an `if`/`else` with an early return and a custom error code. |
-| `raw` | Always unchecked. | Always unchecked. |
+### 8.2 `must`, `assert`, and `raw`
+
+`must` guards a failable value and terminates when it is invalid. `assert` checks a boolean
+condition. They are separate operations. `raw` extracts a value without checking its state.
 
 ```zith
-let cfg: ?Config = tryLoad();
-let c1 = must cfg;   // panics in debug; compiler warns/guides in release
-let c2 = raw cfg;    // always unchecked; compiler always warns
+let cfg = must loadConfig(path);
+let unchecked = raw cfg;
+assert(condition);
 ```
 
-`must` also doubles as an assertion: `must(cond)` panics with file and line info if `cond` is false (debug only). In release, the compiler guides you to replace it with proper error handling.
+When `must` terminates, DEBUG mode writes the source location, expression, and invalid-state
+category to `stderr`. RELEASE mode does not print this message. Both modes exit with the same
+category-specific status code. The numeric codes are not yet specified.
 
-### 8.3 `try`, Propagation, and Fallback
+### 8.3 `try`, Local Results, and Fallback
 
 ```zith
 fn readConfig(path: string): Config! {
-    let file = File.open(path)!
-    let data = file.read()!
+    let file = try File.open(path) or defaultFile;
+    let data = try file.read() or defaultData;
     parse(data)!
 }
 
-let name = try user.name or "guest";
-let data = try primary() or backup() or default;
-
-// Propagation inside a chain
-readFile("data.bin") -> parse(..)! -> validate(..)? -> process(..)
+let config = try loadPrimary() or loadBackup() or defaultConfig;
 ```
 
-Accessing a failable type's inner value requires one of `try`, `!`, `raw`, or `must`.
-
-- **`try`** short-circuits only the enclosed expression and keeps the failure as a local value.
-- **`!`** unwraps and propagates a failure out of the enclosing scope.
-- **`raw`** unwraps without checking the failure.
-- **`must`** unwraps and asserts that the value is valid.
-
-#### `try` and `or`
-
-`try` guards a single expression. It stops the expression at the first failure and does not
-route that failure to a `fail` scope guard. It is the local fallback form; the fix is `try expr`
-with no prefix `?`/`!`.
+For `try x`, the compiler evaluates `x` once, calls `x.check()` once, then calls exactly one of
+`x.valid()` or `x.invalid()`. Users do not call these contract members directly. The expression
+produces a local failable result that can be stored and tested later with `is @ok`:
 
 ```zith
-// Local fallback; the failure is consumed in this expression
-let x = try opt or default;
-let x = try opt or default or backup; // valid — chain of fallbacks
-
-// Short-circuit with a failure value: a, foo(), or c() may stop the chain
-let value = try a.foo().c();
+let outcome = try loadConfig(path);
+if (outcome is @ok) {
+    use(outcome);
+} else {
+    // The invalid result remains local and can still be tested here.
+}
 ```
 
-`try expr` has a union type (`T | failures`); the result is either an integral `T` or the
-failure that stopped the expression. `try expr or fallback` collapses that result to `T`.
-`or` is short-circuiting and evaluates only until an integral result is found.
+An invalid result is not automatically propagated out of the enclosing function.
 
-#### Postfix `!`
+`or` evaluates its fallback only when the preceding result is invalid. It handles any invalid
+state, including `Nil`, errors, and invalid states from user-defined `Failable` types. If the
+left side is valid, its valid value is the result and the fallback is not evaluated. If every
+alternative is invalid, the expression retains the last alternative's invalid state as its
+local result. The current invalid state is not passed to the fallback.
 
-Postfix `!` propagates a failure out of the current scope. Unlike `try`, this is the path
-that can activate a surrounding `fail` block. Postfix `?` keeps the existing optional
-propagation role for `?T`.
-
-```zith
-// Postfix — propagates from the failing segment to the enclosing scope
-let x = y.data()!fn()!process()!
-```
-
-Prefix `?`/`!` fallback forms are removed from the language surface; `try ... or` is their
-replacement.
+Postfix `!` propagates the invalid state of an operation to the enclosing function. It does
+not convert `Nil` into an error or discard the original invalid value.
 
 ### 8.4 `with` / `catch`
 
-| Form | Behavior |
-|---|---|
-| `with` | Short-circuit — the first failure jumps straight to `catch` |
-| `eager with` | Eager — every expression is evaluated; `catch` runs if any failed |
+`with` evaluates its initialization expressions in order. If one produces an invalid value,
+evaluation stops, the body is skipped, and the attached `catch` receives that original invalid
+value. `catch` handles any invalid state, including `Nil` and states from user-defined
+`Failable` types. It does not require the value's type to implement `Error`.
+
+The attached `catch` handles initialization only. It does not handle invalid states produced by
+operations in the `with` body. Use `fail` in the body to capture error values there. The block
+shape below illustrates the current proposal; exact handler grammar remains under discussion.
 
 ```zith
-// Short-circuit
-with (connectDb(), user: getUser(id)) {
+with [connection: connectDb(), user: getUser(connection)] {
     process(user);
+} catch (invalid) {
+    // invalid is the original value produced during initialization
 }
-catch (err) { log(err); }   // any name works; 'err' is convention
-
-// Eager — all expressions run, then catch if any failed
-eager with (a: fetchA(), b: fetchB()) {
-    use(b);
-} catch { log(a, b); }
 ```
-
-> In `eager with`, all expressions are evaluated before `catch`. The named bindings (`a`, `b`) remain in scope inside `catch` so you can inspect which ones failed. In short-circuit `with`, only the failing expression is known, so `catch` receives a single error parameter.
 
 ### 8.5 `fail` Blocks
 
-A `fail` block runs when an error would otherwise escape its associated scope. It is a scope
-listener, not an expression-level fallback. Only `!` propagation and `throw` activate it;
-`try` keeps failures local and does not reach `fail`. A `fail` block can follow a named block
-(external) or sit inside a block as a scope guard (nameless):
+A `fail` block listens for invalid outcomes in its lexical scope after the block is declared.
+It captures an invalid value only when that value's type implements the marker capability
+`Error`. It does not capture `Nil` or other invalid values whose types do not implement `Error`.
+The block receives the original value with its original type, not a generic `Error` value or a
+formatted diagnostic.
 
 ```zith
-// External fail
-loadConfigure {
-    let raw = readFile("config.json")!
-    parse(raw)!
-} fail loadConfigure(err) {
-    if (err is NotFound) { continue(default); }
-    throw Error{ context: "load failed", cause: err };
-}
-
-// Nameless fail -- guards the current scope
 {
-    fail (err) { log("scope error:", err); }
-    risky()!
-    another()!
+    fail (err) {
+        if (err is NotFound) {
+            resume defaultConfig;
+        }
+    }
+    let config = loadConfig()!;
 }
 ```
 
-> **Name linking:** an external `fail` block's name must match the block it guards. When there is only one failable block in scope, the name can be omitted. A nameless `fail` guards the current scope directly — the compiler passes the error the same way.
-
-Inside a `fail` block, the parameter receives the error directly. This is the difference
-from `try ... or`: `try` discards or collapses the failure, while `fail` has the original
-error available for logging, transformation, or conditional recovery. You have four options:
-
-- `continue(value)` — resume after the block with a replacement value.
-- `return value;` — exit the enclosing function.
-- `throw value;` — propagate a new error (requires the `Error` capability).
-- Fall through — the original error propagates unchanged.
-
-Use `@ok` to extract the success type from the failure node — useful when `continue` needs to return a value of a different type than the error:
-
-```zith
-fail (err) {
-    continue(@ok err);   // extract success value from the failure node
-}
-```
-
-`@err` also exists for extracting the error type in other contexts.
+`resume x;` replaces the failed operation's result with `x` and continues after that operation.
+The replacement must match the operation's successful result type. If the error is not
+resumed, it continues propagating. `fail` is distinct from both `or` and `catch`: `or` handles
+any invalid state without passing it to the fallback, `catch` receives any invalid value from
+`with` initialization, and `fail` receives only invalid values whose types implement `Error`.
 
 ### 8.6 `throw`
 
@@ -1255,11 +1346,11 @@ for (v in range(0, 100)) { @println(v); }       // over a generator
 let r = for ([acc, i]: i32), (i in 0..n) { acc *= i + 1 } or 0;
 ```
 
-> If the loop body may never run, its return value is deduced as optional — unless `or` collapses it to a non-optional value.
+> If the loop body may never run, its return value may be invalid. `or` can provide a fallback.
 
-User iterators expose `next(self)`. The canonical protocol returns `?T`: `null` ends the loop
-and `Some(element)` is bound to the loop variable. Iterators that yield optional elements return
-`??T`, binding the loop variable as `?T`; only the outer `None` is the iteration end.
+The current Zith-- compiler accepts an iterator protocol whose `next(self)` returns legacy
+`?T`, with `null` ending iteration. The full-Zith iterator result protocol has not yet been
+specified.
 
 > The init/cond/step form accepts comma-separated, parenthesized expressions — `for (i = 0), (i < 10), (i += 1)` — or the flat alternative, `for (i = 0, i < 10, i += 1)`.
 
@@ -1427,6 +1518,21 @@ and returns exactly the result type declared by the entry. `spawn Entry(args)`
 is a stdlib shorthand that uses the active thread backend; it is not a core
 keyword. NRA tracks the fork as an ownership transition and rejects unbalanced
 forks.
+
+`merge h1 and h2` waits for both threads, consumes both handles, and returns a
+tuple of results in operand order. `merge h1 or h2` also waits for both and
+consumes both handles, but returns a tagged union containing the result from
+the thread that completed first. If threads finish simultaneously, the
+leftmost handle wins. The union covers every handle's declared result type,
+including failable states, and need not distinguish handles that return the
+same type. The `or` form does not cancel or skip the other thread.
+
+`revoke x;` removes access to `x` from every unbounded thread in the statement's
+scope that holds revocable access to it. `revoke h1;` revokes all revocable
+resources passed to the thread represented by handle `h1`. Both forms prevent
+new guarded accesses and wait for active guarded operations to finish. Neither
+form destroys resources or terminates a thread, and neither consumes the
+handle.
 
 ### 10.4 What the Compiler Proves
 
@@ -1645,7 +1751,9 @@ raw fn dangerous(x: opaque) {
 `Trust` bridges safe code to raw and unsafe code. A trait extending `Trust` may contain `raw fn` methods that are callable from safe contexts:
 
 ```zith
-trait Place extends Trust {
+trait Place
+    extends Trust
+{
     raw fn sample(): i32 {}
 }
 
@@ -1717,7 +1825,9 @@ fn modify(shape: lend dyn Drawable) {
 }
 ```
 
-`dyn` does **not** work with `interface` (see [§4.3](04-traits-interfaces.md#43-capabilities)) — only traits. Interfaces are structural and don't carry a vtable.
+Full Zith defines `dyn Trait`, not `dyn Interface`. An interface is a static contract and does not
+define dynamic dispatch. Zith-- currently supports method dispatch through `dyn Interface`, as
+described in [§4.3](04-traits-interfaces.md#43-interfaces) and the implementation-status docs.
 
 When you write a type that could be `dyn` or `opaque`, prefer `dyn` — it's short and clearer. Reserve `opaque` for cases where you specifically need `raw opaque` (untagged `void*`, C interop).
 
@@ -2085,11 +2195,13 @@ fn write(self: lend File, data: []u8): void!;
 - **Use `lend` for temporary mutation:** `fn update(state: lend GameState)`
 - **Use `belong` for part-of relationships,** such as back-pointers.
 
-### 21.2 Optional & Failable Patterns
+### 21.2 Invalid-State Patterns
 
-- **Prefer `try ... or` for optionals:** `let name = try user.name or "guest";`
-- **Prefer `try ... or` for failables:** `let config = try loadPrimary() or loadBackup() or defaultConfig();`
-- **Reserve `must` for initialization:** `const API_KEY = must env("API_KEY");`
+- **Prefer `try ... or` for any invalid state:** `let config = try loadPrimary() or loadBackup() or defaultConfig();`
+- **Keep a `try` result when you need to inspect it later:** bind it to a local and test it with `is @ok`.
+- **Keep absence distinct from errors:** `Nil` is invalid, but does not implement `Error`.
+- **Use `fail` to inspect an error value:** `fail (err) { log(err); }`
+- **Reserve `must` for cases where invalidity is fatal:** `const API_KEY = must env("API_KEY");`
 
 ### 21.3 Context Patterns
 
@@ -2098,8 +2210,12 @@ fn write(self: lend File, data: []u8): void!;
 
 ### 21.4 Error Handling Patterns
 
-- Add context to errors using `fail` blocks and custom `throw` statements.
-- Chain fallbacks explicitly: `let data = !step1() or step2() or step3() or AllFailed;`
+- Use `or` for fallbacks across any invalid state. It evaluates a fallback only after invalidity
+  and retains the last invalid result if every alternative is invalid.
+- Bind a `try` result when later code needs to test its state with `is @ok`.
+- Use `catch` only for invalid values produced during `with` initialization.
+- Use `fail` only for invalid values whose types implement `Error`, and use `resume value;`
+  to continue with a replacement result.
 
 ### 21.5 Macro Patterns
 
@@ -2158,8 +2274,8 @@ The Rule of Three keeps code readable. Zith gives you many tools — you don't h
 | `type` | Types | Distinct type copy, or a compile-time constraint (with `or`). |
 | `as` | Types | Cast / coercion. Also used in `implement T as Trait`. |
 | `is` | Types | Type check / narrowing. Boolean. Supports `@struct`, `@nullable`, etc. |
-| `enum` | Types | Closed compile-time constants — C-style, struct-backed, or ADT-style. |
-| `union` | Types | Runtime tagged union; variants separated by commas. |
+| `enum` | Types | Closed compile-time constants with one declared value type, or heterogeneous values through `enum: union`. |
+| `union` | Types | Runtime-tagged value holding one of its declared member types, which may be heterogeneous. |
 | `struct` | Types | Record type. Fields may be grouped with `[]`. |
 | `component` | Types | POD / copy-by-default struct. No traits. C-compatible. |
 | `implement` | Types | `implement T {}` or `implement T as Trait {}`. |
@@ -2171,23 +2287,25 @@ The Rule of Three keeps code readable. Zith gives you many tools — you don't h
 | `default` / `lend` / `view` / `own` / `share` / `belong` | Memory | NRA memory modifiers — `default` is implicit when no keyword is written ([§7](07-memory-model.md)). |
 | `fn` / `const fn` / `state` / `raw fn` / `extern fn` | Functions | Five exclusive function kinds; cannot be combined. |
 | `trait` / `interface` / `extends` / `requires` / `dyn` | OOP | Nominal traits, structural interfaces, extension, constraints, dynamic dispatch. |
-| `Copy` / `Functor` / `Arithmetic` / `Error` | Capabilities | Operator and behavior capabilities. |
-| `Null` / `Fail` | Capabilities | Negative — activate only in proven-invalid states. |
+| `Copy` / `Functor` / `Arithmetic` | Capabilities | Operator and behavior capabilities. |
+| `Failable` / `Invalid` / `Error` | Capabilities | Describe invalid-state analysis, methods available in proven-invalid states, and the marker capability for error values ([§8](08-error-handling.md)). |
 | `Allocator` / `Generator` / `Share` / `Lent` / `Trust` / `Unique` / `ThreadBackend` | Capabilities | Memory, runtime protocol, and safety capabilities. Runtime thread backends produce a concrete `Thread<T>` handle for `fork`/`merge`. |
 | `state` / `dock` / `jump` | State machines | `state` declarations, a state entry call, and terminating transitions. |
-| `fork` / `merge` | Threads | Core full-Zith syntax: create a thread through a backend object and consume its handle once. |
+| `fork` / `merge` / `revoke` | Threads | Core full-Zith syntax: create a thread, collect its result, and revoke child access to resources. |
 | `spawn` | Threads | Stdlib shorthand for an implicit fork; not a core keyword. |
 | `->` / `..` | Chain | Chain flow / placeholder for the previous value. Left-to-right. |
 | `,` (in a chain) | Chain | Sub-chain — applies but does not advance the main chain value. |
 | `operator` / `token` | Words | Custom operator definition / token word definition ([§16](16-words.md)). Must be defined inside a `context` — global operator overloading is prohibited. |
-| `?T` / `T!` | Errors | Optional / Result types. `?T` is also a Zith-- type; `T!` is full Zith only. May be stacked. |
-| `try` | Errors | Short-circuit a single expression; unwrap with an optional `or` fallback. Does not trigger `fail`. |
-| `?` / `!` (postfix) | Errors | Propagate Option / Result. No semicolon. Propagate out of chains. |
-| `or` | Errors / Loops / Types | Fallback / collapse an optional loop return / type constraint separator. |
-| `must` | Errors | Panic in debug; guided removal in release. |
+| `?T` / `T!` | Errors | Deprecated as type wrappers. `T!` remains a function return annotation for inferred invalid states. |
+| `try` / `or` | Errors | `try` yields a local, bindable valid/invalid result; `or` evaluates a fallback only after invalidity and retains the last invalid result. |
+| Postfix `?` | Errors | Legacy Zith-- Nil propagation. |
+| Postfix `!` | Errors | Propagate an operation's invalid state to the enclosing function. |
+| `or` | Errors / Loops / Types | Invalid-state fallback / loop fallback / type constraint separator. |
+| `must` / `assert` | Errors | `must` guards a failable value; `assert` checks a boolean condition. They are distinct. |
 | `raw` | Errors / Raw | Always unchecked, in both debug and release. Compiler warns in release. |
 | `unsafe` | Raw | Stronger than `raw`; valid only inside raw contexts. |
-| `throw` / `fail` / `continue(v)` / `with` / `eager with` | Errors | Explicit throw, scoped recovery, resume, bundled fallible operations. |
+| `throw` / `fail` / `resume` | Errors | `fail` captures invalid values whose types implement `Error`; `resume x;` replaces the failed result. |
+| `with` / `catch` | Errors | `catch` captures any original invalid value from `with` initialization, not errors from its body. |
 | `::` | Operators | Scope resolution — access a shadowed outer name. |
 | `and` / `or` / `not` / `xor` | Operators | Logical (English keywords). |
 | `&.` / `\|.` / `^.` / `~` / `<<` / `>>` | Operators | Bitwise. |
@@ -2216,7 +2334,7 @@ The Rule of Three keeps code readable. Zith gives you many tools — you don't h
 | `@appendMethod Type, fn ...` | Add a method to a type being constructed. |
 | `@file` / `@line` / `@fnName` | Location information. |
 | `@location` | Rich panic message source. |
-| `@ok` / `@err` | Retrieve the T or E from `catch` & `fail`. |
+| `@ok` | Used with `is` to narrow a `Failable` value to its valid state; the `else` branch proves it invalid. |
 
 ### 22.3 Attributes
 

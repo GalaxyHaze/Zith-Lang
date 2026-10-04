@@ -62,6 +62,9 @@ Vtables are generated per `(trait/interface, concrete type)` pairing. For a nomi
 trait, `implement Owner as Trait` methods (or trait defaults) fill the slots. For an
 interface, the concrete owner methods fill the slots.
 
+This describes Zith-- only. In the full-Zith specification, an interface is a static
+contract rather than a dynamic-dispatch type, so `dyn Interface` is not part of that model.
+
 The Zith-- `main` now supports `dyn Interface`, with one deliberate difference
 from the future spec beyond this file: the public surface exposes only methods.
 The fat pointer carries a concrete data pointer plus a vtable whose slots point

@@ -9,7 +9,31 @@
 
 ### 6.1 Deep Mutability Model
 
-Zith uses deep mutability: a modifier on a binding flows into every nested field. Fields inside a struct inherit the mutability of the instance that holds them. No per-field `mut` annotation is needed.
+Zith uses deep mutability: a modifier on a binding flows into every nested field
+unless a struct field explicitly overrides it. An unqualified field follows its
+owner's content mutability. `let field` keeps that field immutable even when its
+owner is mutable. `var field` keeps it mutable through an otherwise immutable
+owner.
+
+`var field` does not bypass a read-only memory access. A `view` cannot write
+the field, even when it is declared `var`. The qualifier also does not add
+synchronization or relax cross-thread safety requirements.
+
+```zith
+struct Counter {
+    value: i32,       // follows the owner's mutability
+    let id: u64,      // always immutable
+    var scratch: i32, // mutable through a non-view access
+}
+
+fn update(counter: lend Counter) {
+    counter.scratch += 1;
+}
+
+fn inspect(counter: view Counter) {
+    // counter.scratch += 1; // COMPILE ERROR: view is read-only
+}
+```
 
 ### 6.2 Binding Keywords
 

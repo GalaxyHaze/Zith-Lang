@@ -1,16 +1,12 @@
 ## 4. Traits, Interfaces & Capabilities
 
-> **Implementation status:** `trait`, `interface`, and `implement T as Trait {}` declarations are
-> **working** (parsed, resolved, and type-checked). Trait conformance is nominal: an implementation
-> is validated against every required method and the conformance edge is recorded for generic
-> bounds. Interfaces are structural: a concrete struct satisfies an interface automatically when
-> every declared field exists with the required type and every declared method requirement has a
-> compatible signature. Using an interface as a generic bound exposes the interface fields and
-> methods to the generic body. Trait defaults are resolved for concrete owners during sema,
-> method-only `dyn` dispatch through fat pointers/vtables is working, and `requires`/`extends`,
-> interface fields on `dyn`, and per-owner default-method HIR generation remain full-Zith/spec-only
-> or pending. `Self` in implementations and trait defaults resolves to the implementing type.
-> See [impl-status.md](impl-status.md).
+> **Implementation status:** In Zith--, `trait`, `interface`, and
+> `implement T as Trait {}` declarations are working. Trait conformance is nominal.
+> Interfaces are currently satisfied structurally from fields and compatible method signatures.
+> Method-only `dyn Trait` and `dyn Interface` dispatch through vtables is also working.
+> These implementation details do not define the full-Zith model below. Full Zith uses interfaces
+> as static contracts, does not support `dyn Interface`, and reserves `extends` for trait
+> composition. See [impl-status.md](impl-status.md).
 
 The `implement` owner may be a primitive, `?T`, or `[]T` in addition to a named struct/enum:
 
@@ -32,65 +28,101 @@ Traits implemented for these owners participate in nominal conformance exactly l
 
 | | Trait | Interface |
 |---|---|---|
-| **Typing** | Nominal — must be explicitly implemented. | Structural (duck-typed) — automatically satisfied when fields match. |
-| **Extensible** | Yes — via `extends`, or as a precondition using `requires`. | No — interfaces cannot extend each other, though a trait may `requires` one. |
-| **Has implementation?** | Yes — default method bodies are allowed. | No — declaration only. |
-| **Field access** | Only through a trait that `requires` the interface. | Yes — directly, since interfaces are structural. |
-| **Methods** | Default bodies and requirements. | Declaration-only requirements, no default bodies. |
+| **Typing** | Nominal. A type explicitly implements a trait. | Structural. A type satisfies an interface automatically when all its conditions hold. |
+| **Purpose** | Names behavior and capabilities a type opts into. | States a static contract that a type or value must satisfy. |
+| **Composition** | `extends` composes traits. | Bounds combine interfaces with `+`. |
+| **Methods** | Requirements and optional default bodies. | Exact-signature requirements without default bodies. |
+| **Fields** | Available through an interface required by the trait. | Guarantees field existence and type; qualifiers constrain mutability, while the memory access mode determines whether writes are permitted. |
 
 ### 4.2 Traits
 
-A `requires Cond` clause goes **before** `trait` or `interface`. It forces any implementing type to also satisfy that condition. Traits may provide default method bodies. Use `self` / `other` as the conventional instance parameters, and `Self` (capitalized) for the concrete implementing type.
+Traits are nominal contracts. A type must explicitly implement a trait. Trait
+methods may have default bodies. Trait clauses follow the name on separate
+lines, in the order `extends` then `requires`. `extends` composes traits.
+`requires Interface` requires the trait's `Self` type to satisfy that interface.
+The requirement propagates to generic bounds, so `T: Movable` also gives the
+body the interface guarantees required by `Movable`. Use `self` / `other` for
+value parameters and `Self` for the implementing type.
 
 ```zith
-trait Printable {
-    fn print(self);
-    fn println(self) { self.print(); io.writeln(""); }
+interface Positioned {
+    [x, y]: i32
 }
 
-requires Printable
-trait JsonSerializable {
-    fn print(self);
-    fn toJson(self): string;
+trait Movable
+    requires Positioned
+{
+    fn moveBy(self, dx: i32, dy: i32) {
+        self.x += dx;
+        self.y += dy;
+    }
 }
 
-// Disambiguate overlapping method names using the trait as a namespace
-Printable.print(self);
-JsonSerializable.print(self);
+fn move<T: Movable>(value: T, dx: i32, dy: i32) {
+    value.moveBy(dx, dy);
+}
 ```
 
 ### 4.3 Interfaces
 
-Interfaces are structural. If it quacks, it's a duck. Any type that has the required fields and
-compatible method signatures satisfies the interface automatically, without an explicit
-`implement` declaration. Interfaces accept declaration-only method requirements and both single
-and grouped field forms. You can also add `requires` to interfaces.
+An interface is a static contract, not a behavior trait or a dynamic-dispatch type. A type satisfies
+an interface automatically when its type-level and value-level conditions hold. No `implement`
+declaration is needed. Interface conditions combine conjunctively. Repeated identical conditions
+count once, while contradictory or incompatible conditions make satisfaction invalid.
 
 ```zith
-// will only accept structs and reject components
-requires @isStruct
-interface iPositioned {
-    x: f32,
-    [y, z]: f32,
-    fn length2(self): f32
+interface SafeNormalize requires @struct {
+    [x, y]: i32,
+    @ensure(self.y is not 0)
 }
-
-requires iPositioned
-trait Movable {
-    fn translate(self, dx: f32, dy: f32, dz: f32) {
-        self.x += dx; self.y += dy; self.z += dz;
-    }
-}
-
-// Any struct with x, y, z: f32 and length2(self): f32 satisfies iPositioned
-struct Enemy {
-    [x, y, z]: f32,
-    health: i32,
-    fn length2(self): f32 { self.x * self.x + self.y * self.y + self.z * self.z }
-}
-
-fn distance2<T: iPositioned>(p: T): f32 { p.length2() }
 ```
+
+Header `requires` constraints such as `@struct` are checked when the compiler
+evaluates whether a type satisfies the interface.
+A field requirement guarantees that the field exists with the declared type.
+Code under the interface bound may read that field. Field qualifiers can
+constrain mutability, while the memory access mode still controls whether a
+write is permitted:
+
+```zith
+interface Normalize {
+    var [x, y]: i32,
+    @ensure(self.y is not 0)
+}
+```
+
+Unqualified `[x, y]` follows the mutability available through the passed value.
+With a `lend` value, it requires mutable fields and permits writes through that
+access. With `view`, access remains read-only regardless of the field
+declaration.
+`let [x, y]` promises that the fields are immutable while the contract is
+active. `var [x, y]` requires mutable fields; writing still requires a mutable
+access mode such as `lend`. In particular, `view` remains read-only, even for
+fields declared `var`; it never permits interior mutation. `var` does not add
+implicit synchronization or relax cross-thread safety requirements.
+
+A method requirement names an exact signature. Calls through an interface bound
+use static dispatch, and interfaces cannot provide method bodies.
+
+`self` conditions are checked at the call boundary and remain invariants while
+the interface contract is active. Writes and calls must preserve them. The
+compiler must prove each `@ensure`; if it cannot, compilation fails rather than
+inserting a runtime check. `@assume`, `@ensure`, and `@maybe` keep their
+existing meanings. In particular, `@assume` is diagnosed when it contradicts
+facts already known to the compiler.
+
+Combine contracts and behavior explicitly in a generic bound:
+
+```zith
+fn normalize<T: SafeNormalize + Arithmetic>(value: T): T {
+    // The interface and trait bounds are both required.
+    value
+}
+```
+
+The full-Zith model does not define `dyn Interface`. Zith-- currently supports method dispatch
+through `dyn Interface`; that implementation behavior is documented separately and is not part
+of this contract.
 
 ### 4.4 Capabilities — Built-in Reference
 
@@ -101,9 +133,9 @@ Capabilities are special traits that feed the compiler more information, unlocki
 | `Copy` | Implicit bitwise copy. Components and primitives are `Copy` by default. |
 | `Functor` | `operator()` — makes a type callable like a function. |
 | `Arithmetic` | Operators `+`, `-`, `*`, `/`, `%`, and so on. |
-| `Error` | `operator throw`, required for `throw MyError;`. |
-| `Null` | A negative capability — its traits activate only once NRA has proven a value IS `null`. Outside the proven-null branch, calling the method is a **compile error**. |
-| `Fail` | A negative capability — its traits activate only once NRA has proven a value IS an error. Cannot coexist with `Null` on the **same level**, but `?T!` can have `Null` on the outer level and `Fail` on the inner. |
+| `Error` | Marks a type as an error value. It does not define whether a value is valid or invalid. |
+| `Failable` | Defines a type's valid and invalid states. The compiler invokes its state-checking contract for `try`. |
+| `Invalid` | A `Failable` type may implement it to expose methods available only after flow analysis proves that its value is invalid. |
 | `Allocator` | To provide custom allocators |
 | `Generator` | Allows creating runtime-defined resumable or streaming protocols without introducing a dedicated core function kind. |
 | `Share` | Required for `global: share` and crossing thread boundaries |
@@ -112,34 +144,40 @@ Capabilities are special traits that feed the compiler more information, unlocki
 | `Trust` | A trait extending `Trust` may contain `raw fn` methods callable from safe contexts. |
 | `Unique` | Marks a singleton type. It cannot be instantiated — the type name itself acts as the instance. All fields must implement `Share` (thread-safe). An `own Local` variant is a singleton thread-local. |
 
-#### `Null` & `Fail` — Negative Capabilities
+#### `Failable` & `Invalid` — Invalid-State Capabilities
 
-Dispatch is based on NRA state. Inside a proven-null branch, the `Null` trait unlocks. Outside it, calling `Null` methods is a **compile error**:
+`Failable` describes a type that can hold either a valid or an invalid state. Its contract
+provides `check(): bool` to report whether the value is valid, `valid()` to represent its
+valid state, and `invalid()` to represent its invalid state. Users do not call these contract
+members directly. For `try x`, the compiler evaluates `x` once, calls `check()` once, then calls
+exactly one of `valid()` or `invalid()` based on the check result.
 
 ```zith
-implement Config as Null {
-    fn onMissing(self) { log("Config was null -- using defaults"); }
+// Config also implements Failable.
+implement Config as Invalid {
+    fn onUnavailable(self) { log("Config is unavailable"); }
 }
-implement Config! as Fail {
-    fn onError(self) { log("Config load failed"); }
-}
-
-let cfg: ?Config = loadConfig();
-if (cfg is null) {
-    cfg.onMissing();   // OK — Null trait unlocked here
-}
-// cfg.onMissing();   -- COMPILE ERROR: outside null branch
-
-// Multi-level: ?T! — Null on outer, Fail on inner
-// cfg.onError() is only valid inside a proven-error branch
 ```
 
-`Null` and `Fail` are per-level. A `?T!` value can activate `Null` (outer `?`) independently from `Fail` (inner `!`).
+`Invalid` is an optional capability for a type that implements `Failable`. It lets the type
+provide methods for its invalid state. Those methods are callable only when flow analysis
+proves the receiver invalid. For example, `cfg.onUnavailable()` is valid only in a branch
+where flow analysis proves `cfg` invalid. An invalid state may be `Nil`, an error value, or a
+state defined by the `Failable` type.
+
+`Nil` is the universal absence state. It is invalid, but it is not an error. `Error` is a marker
+capability, not a generic error type. The type of an invalid value implements `Error` to classify
+that value as an error. `fail` captures only invalid values whose types implement `Error`, while
+`catch` can capture any invalid value produced during `with` initialization. The exact declaration
+syntax for a marker-only capability implementation remains open. `Null` and `Fail` are deprecated
+capability names.
 
 #### `Trust` — Safe Sections with Raw Code
 
 ```zith
-trait Place extends Trust {
+trait Place
+    extends Trust
+{
     raw fn sample(): i32 {}
 }
 
@@ -203,20 +241,37 @@ implement Pipeline as Functor {
 let out = pipe(raw_bytes);
 ```
 
-### 4.6 Extension (`extends`)
+### 4.6 Trait Composition (`extends`)
 
-`extends` copies the base type's fields and traits into the new struct. An optional `:` after the base lists further traits to implement:
+`extends` composes one trait into another. Composition includes method requirements and defaults,
+and carries capability identity. It does not inherit or embed fields. Structs declare their own
+fields directly. A type that implements a composed trait satisfies the traits it composes without
+counting their shared capabilities more than once.
 
 ```zith
-struct Dog extends Animal {}
-struct T extends Base: Transform, Collision {}
+trait Readable {
+    fn read(self): i32;
+}
 
-// Traits may also extend capabilities or other traits
-trait SafeBuffer extends Trust {
-    raw fn readByte(self, offset: u64): u8 {}
+trait BufferedReadable
+    extends Readable
+{
+    fn bufferedRead(self): i32 { self.read(); }
 }
 ```
 
+When both clauses are present, write `extends` first and `requires` second,
+each on its own line beneath the trait name.
+
+If multiple composition paths reach the same original method or capability, that shared origin
+counts once. Methods with the same exact signature are one requirement. Different defaults for
+that signature conflict unless the composing trait resolves the conflict with `#[override]`.
+That override replaces the inherited default. Its body is optional. Without a body, implementors
+must provide the method. An override applies only to an inherited method with the same signature.
+
+Composing a capability and one of its subtraits separately is a conflict. For example, if
+`LogError extends Error`, a type must not implement both `Error` and `LogError` as separate
+implementations. Implementing only `LogError` includes the `Error` capability once.
 ---
 
 *[Zith Language Specification](Zith-spec.md) — Draft v0.9*

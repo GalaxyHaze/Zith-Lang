@@ -2,9 +2,9 @@
 
 ## Status
 
-Draft design for the full-Zith thread protocol: `fork` as a core keyword,
-`merge` as a core keyword, backend handles such as `pThread`, and `spawn` as a
-stdlib shorthand activated by a context. Implementation is not started.
+Draft design for the full-Zith thread protocol: `fork`, `merge`, and `revoke` as
+core keywords, backend handles such as `pThread`, and `spawn` as a stdlib
+shorthand activated by a context. Implementation is not started.
 
 > This is full-Zith planning, not a Zith-- deliverable. Zith-- keeps explicit
 > thread/runtime APIs out of core syntax until the runtime/stdlib surface and
@@ -28,7 +28,8 @@ runtime scheduler. `merge` is blocking, one-shot, and consumes the handle.
 | `Fork` | The action contract implemented by a user entry point. |
 | `Branch` | The conceptual execution boundary created by `fork`; not a separate runtime type. |
 | `fork` | Core keyword: `backend fork Entry(args)` creates a thread through the backend object. |
-| `merge` | Core keyword: waits for the thread, consumes the handle once, and returns the entry result. |
+| `merge` | Core keyword: waits for one or more threads, consumes each handle once, and returns their result or results. |
+| `revoke` | Core keyword: removes a child flow's access to a resource without destroying the resource or terminating the child. |
 | `spawn` | Stdlib shorthand for the implicit fork: `spawn Entry(args)` uses the active backend context. |
 | `Thread<T>` | Minimum owned, single-consumer handle type accepted by `merge`. |
 | `ThreadBackend` | Capability/interface implemented by runtime objects such as `pThread`. |
@@ -49,9 +50,9 @@ capability ThreadBackend {
 }
 ```
 
-The compiler knows `fork`, `merge`, and the handle contract by keyword and
-capability name for ownership purposes. Concrete backend types expose extra
-methods beyond the `Thread<T>` minimum.
+The compiler recognizes the `fork`, `merge`, and `revoke` keywords. It checks
+the `Thread<T>` handle contract for ownership purposes. Concrete backend types
+expose extra methods beyond the `Thread<T>` minimum.
 
 ## Syntax
 
@@ -66,6 +67,18 @@ Initial design:
   `ThreadBackend` and `Entry` to implement `Fork`.
 - `merge t` requires `t` to implement the `Thread<T>` handle contract and
   returns exactly the `T` declared by the entry point.
+- `merge h1 and h2` waits for both threads, consumes both handles, and returns
+  a tuple of their results in operand order.
+- `merge h1 or h2` waits for both threads, consumes both handles, and returns a
+  tagged union containing the result of whichever thread finishes first. If
+  threads finish simultaneously, the leftmost handle wins. It does not cancel
+  or skip waiting for the other thread.
+- `revoke x;` revokes access to resource `x` from every unbounded thread in the
+  statement's scope that holds revocable access to it. `revoke h1;` revokes all
+  revocable resources passed to the thread represented by handle `h1`. Both
+  forms prevent new guarded accesses and wait for active guarded operations to
+  finish. Neither form destroys resources or terminates a thread, and neither
+  consumes the handle.
 - The returned handle is the concrete backend handle, not a language-owned
   generic `Thread<T>` box.
 - `spawn Entry(args)` is a stdlib shorthand that resolves the active
@@ -74,6 +87,19 @@ Initial design:
 Entry results use the normal Zith failable types. A thread creates and waits
 without speaking about whether the action produced an error. If the action can
 fail, its signature is `...: T!` and `merge t` yields `T!`.
+
+The `and` and `or` forms are blocking joins over all listed handles. `and`
+collects every result in a tuple. `or` selects the result from the first
+completed thread but still waits for all listed threads before returning. If
+multiple threads finish simultaneously, operand order breaks the tie. The
+result union covers the declared result type of every handle, including any
+failable states. When handles return the same type, the union need not preserve
+which handle produced the result.
+
+Revocation is an acknowledged access transition. It prevents new child
+acquisitions and waits for active guarded operations to leave their protected
+region before returning. The child may continue running, but access through the
+revoked resource is no longer available.
 
 ## Example
 
@@ -172,7 +198,6 @@ ownership because resources and scopes are outside the comptime value domain.
   in the same scope.
 - Whether standard backend handles should share a common concrete trait beyond
   `Thread<T>`.
-
 ## Related Roadmap Items
 
 - F-20: NRA shared-resource facts for runtime concurrency APIs.

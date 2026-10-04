@@ -71,8 +71,8 @@ Implementation work that is incomplete or needs review is tracked in
 | `bool`, `char` | **Working** | |
 | `i8`–`i128`, `u8`–`u128` | **Working** | Arithmetic between matching widths only; no implicit promotion |
 | `f32`, `f64` | **Working** | Same-width arithmetic only |
-| `?T` (optional) | **Working** | `null → ?T` and `T → ?T` coercions, including nested `??T` accepting `?T` or bare `T`; `?` postfix propagation with operand/return validation. Generic inference uses the optional coercion as a fallback, so `fn wrap<T>(x: ?T): ?T` accepts `wrap(3)` and infers `T = i32`. Any `?T` expression is implicitly boolean in conditions (`if (x)` means `x != null`). `null` is rejected for non-optional `*T` |
-| `T!` (result) | **Spec only** | Full-Zith result/error type; not part of the Zith-- type surface |
+| `?T` (legacy optional wrapper) | **Working** | Zith-- compatibility support for `null → ?T` and `T → ?T` coercions, including nested `??T` accepting `?T` or bare `T`; `?` postfix propagation with operand/return validation. Generic inference uses the optional coercion as a fallback, so `fn wrap<T>(x: ?T): ?T` accepts `wrap(3)` and infers `T = i32`. Any `?T` expression is implicitly boolean in conditions (`if (x)` means `x != null`). Full-Zith use of `?T` as a type wrapper is deprecated. `null` is rejected for non-optional `*T` |
+| `T!` wrapper / return annotation | **Spec only** | The wrapper form is deprecated. In full Zith, `fn f(): T!` declares success type `T` and lets the compiler infer invalid states; this annotation is not part of the Zith-- type surface |
 | `*T` (pointer) | **Working** | Non-nullable pointer object: `null` requires `?*T`. `*p` deref, `&x` addr-of, and `->` arrow all work. `&x` is a logical move (`E4001` on later reads, direct rebind revives) and `&x`/`@ptrOf(local)` may not escape their storage scope (`E4008`). `*void` is rejected (use `raw opaque`). Pointers imported from C are `?*T`, narrowed by `is null`/`not (is null)`; deref, arrow, index, and coercions expect proof and report `E3005` otherwise |
 | `raw opaque` | **Working** | Dedicated `TypeExprKind::Opaque`, lowered to pointer-to-void (untagged C-style `void*`). Castable to and from any `*T` via `as`; `raw opaque as T` reinterprets without a tag check |
 | `opaque` | **Working** | Bare opaque is a tagged open union stored as `{ *void, u32 }` (typeId) and is always a view. `T as opaque` spills the concrete value to a stable local; `opaque is T` compares the tagged typeId; `opaque as T` returns `?T` (extraction in a call or other non-optional result is handled as a checked optional). Values exported and imported across modules retain the declaring module's canonical tag, and cached artifacts hydrate `canonical_mappings` so the tag stays stable across sessions. This iteration has no heap copy, vtable or dynamic calls |
@@ -181,7 +181,7 @@ Implementation work that is incomplete or needs review is tracked in
 |---|---|---|
 | `async fn` | **Parse skipped** | Legacy parser affordance only. Concurrency is being documented as `stdlib`/runtime APIs, not a function kind |
 | `yield` | Reserved token | Not a core statement |
-| `fork`, `merge`, `spawn` | Spec only (full Zith) | Draft thread protocol; no frontend/HIR contract exists yet. See docs/plans/branch-protocol.md |
+| `fork`, `merge`, `revoke`, `spawn` | Spec only (full Zith) | Draft thread protocol; no frontend/HIR contract exists yet. See docs/plans/branch-protocol.md |
 | `await` | Reserved token | Not a core statement |
 
 ---

@@ -68,7 +68,7 @@ Type constraints and union variants look similar but use different separators to
 | Construct | Separator | Semantics |
 |---|---|---|
 | Type constraint | `or` (keyword) | Compile-time restriction / constraint |
-| Union body | `,` (comma) | Runtime tagged union; variants separated by commas. |
+| Union body | `,` (comma) | Runtime-tagged union of member types, which may be heterogeneous. |
 
 ```zith
 // Type constraint -- compile-time dispatch

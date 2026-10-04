@@ -1,8 +1,9 @@
 ## 3. Type System
 
-> **Implementation status:** Primitive types, structs, enums, unions, `?T`, `[N]T`, `[]T`,
-> pointers, type aliases, `implement`, and generics (`<T>`) are all **working**. `T!` is a
-> full-Zith type outside the working Zith-- surface. `as` casting is
+> **Implementation status:** Primitive types, structs, enums, unions, legacy `?T`, `[N]T`,
+> `[]T`, pointers, type aliases, `implement`, and generics (`<T>`) are all **working**. `T!`
+> return annotations belong to the full-Zith failable-state design and are outside the working
+> Zith-- surface. `as` casting is
 > **working** for numeric and nominal-wrapper conversions, and is required: there are no implicit conversions
 > between numeric types (a numeric *literal* still adapts to its annotated type). Pointers are
 > non-nullable, so `null` requires `?*T`, and `*void` is rejected in favour of `raw opaque`.
@@ -47,7 +48,9 @@ let greeting = "hello" + " " + "world";
 
 ### 3.3 Enum
 
-A closed set of named constants. All values must be known at compile time. Zith supports three styles:
+An enum is a closed set of named compile-time constants. A concrete declared
+value type is shared by all constants. Use `enum: union` when named constants
+need heterogeneous union members.
 
 #### C-style
 ```zith
@@ -57,9 +60,10 @@ enum Status: i32 { Ok = 0, Err = 1, Pending = 2 }
 
 #### Struct-backed
 ```zith
-enum Color: rgb {
-    Red   = { r: 255, g: 50,  b: 0,   a: 255 },
-    Green = { 0, 255, 0, 255 },
+enum Colors: RGBA {
+    red   = { 255, 100, 0, 255 },
+    blue  = { 60, 80, 240, 255 },
+    green = { 80, 255, 80, 255 },
 }
 ```
 
@@ -196,16 +200,22 @@ A component must satisfy all of the following constraints:
 
 ### 3.6 Union
 
-By default, a `union` is runtime-tagged, with variants separated by commas:
+Use a `union` for a runtime-tagged value that holds one of several member types.
+Its members can be heterogeneous:
 
 ```zith
-union Value { i32, f64, bool }
+union Numbers {
+    i32, f32, u64
+}
+```
 
+Use a type hint when an expression needs to produce a union:
+
+```zith
 enum Flag { A, B, C }
 let flag = Flag.A;
 
-// Type hint forces union deduction
-let x: union = when (flag) {
+let value: union = when (flag) {
     A = 42,
     B = 3.14,
     C = true,
@@ -218,9 +228,20 @@ let x: union = when (flag) {
 
 `raw union` is an untagged C-style union, valid only inside `raw` contexts. Accessing the wrong variant is undefined behavior.
 
-#### ADT-style (Named Variants)
+Use `enum: union` for a closed set of named compile-time constants whose
+values can have different types:
 
-Unions can also have named variants, similar to Rust enums:
+```zith
+enum ADT: union {
+    One = Point{5, 5, 0},
+    Str = "lol",
+    F32 = 0.5,
+}
+```
+
+#### Named Union Variants
+
+A tagged union can name each alternative and associate it with a payload shape:
 
 ```zith
 union Shape {
@@ -235,16 +256,6 @@ fn area(s: Shape): f32 {
         Rect   = s.w * s.h,
         Point  = 0,
     }
-}
-```
-
-You can also combine `enum` with `union` for compile-time constants that carry data:
-
-```zith
-enum Constants: union {
-    pi      = 3.14f,
-    vector  = |x: -1, y: 0, z: -1, w: 1|,
-    nothing = 0,
 }
 ```
 

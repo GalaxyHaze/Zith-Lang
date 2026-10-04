@@ -111,6 +111,10 @@ Each memory modifier carries an implicit content mutability level:
 
 `default` is the only modifier where mutability is explicitly controlled via the `mut` keyword. All others carry their mutability semantics implicitly.
 
+`view` remains read-only for every field, including a struct field declared
+`var`. A field qualifier does not permit interior mutation through a `view`.
+It also does not add synchronization or relax cross-thread safety requirements.
+
 ### 7.3.1 Re-binding With `:=`
 
 `=` assigns values; `:=` re-binds the reference or ownership slot itself. This
