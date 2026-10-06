@@ -92,6 +92,29 @@ binário com precedências 3, 2 e 4, em paralelo com `FmtVisitor::binaryPreceden
 
 O lexer agrupa `..` e `...` num único `TokenKind::Dots`, distinguindo-os pelo lexeme. O range literal, o placeholder de pipeline, os imports relativos, a profundidade `mod(..)` e os variadic slices consomem esse token em vez de dois pontos separados. `++` e `--` são lexados e rejeitados com `E2010 UnsupportedSyntax`; a mensagem pede atribuição explícita ao valor atualizado.
 
+## SRA (Small Resource Analysis)
+
+O Zith-- não implementa o NRA completo. O que existe é o SRA, uma análise
+deliberadamente pequena e congelada: não vai crescer para a máquina de prova
+completa, porque contracts, NRA e safety pertencem ao Zith completo. O modelo
+futuro está em `docs/nra-spec.md`.
+
+O SRA cobre exatamente:
+
+- o slice `lend`/`view` de anotações de borrow em chamadas (parâmetros
+  `lend T`/`view T`, `E4004`/`E4005`/`E4007`, hints LLVM `readonly` e
+  `nocapture`);
+- conflitos de borrow locais no sema (`E4002` BorrowConflict, `E4003`
+  DoubleBorrow);
+- use-after-move determinístico de `&local` e `@ptrOf(local)`, publicado como
+  `HirConsumedState::Consumed` em `HirAttrs`;
+- factos residuais pré-lowering acumulados em `NraFacts` e consumidos como
+  side tables, sem nós de ownership no HIR.
+
+`own`/`share`/`belong`/`mut` como prefixos de tipo ficam rejeitados ou
+legacy-only, e `:=` não existe em Zith--. Os nomes internos `NraFacts` e
+`nraStage` são históricos: referem-se ao SRA.
+
 ## Atributos
 
 O frontend parseia grupos `#[name, ...]` antes de visibilidade/declarações

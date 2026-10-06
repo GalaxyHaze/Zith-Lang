@@ -6,6 +6,44 @@ is `docs/nra-spec.md`; the current `Zith--` implementation status is in
 
 ## Decisions
 
+### Rewrite and core model (decided 2026-10-06, grilling session)
+
+- `docs/nra-spec.md` was rewritten from scratch. The earlier draft mixed the
+  legacy `lend`/`view`/`share`/`belong` surface with the ADR-0033 reference
+  model and is gone. The new spec is the only normative NRA document.
+- Zith-- does not implement NRA. It implements SRA (Small Resource Analysis),
+  a deliberately small frozen slice: `lend`/`view` call annotations, local
+  borrow conflicts (E4002/E4003), `&local`/`@ptrOf(local)` use-after-move, and
+  residual facts as HIR side tables. Contracts (`@assume`/`@ensure`/`@maybe`),
+  NRA, and safety belong to full Zith. `docs/Zith---implementation.md` has an
+  SRA section; `docs/07-memory-model.md` carries a legacy banner.
+- The core model separates three things. A binding is `bound(node)` or
+  `empty` (a name, never a resource state). A node has content state
+  `uninitialized | taken | ok`. A non-owning edge (`&`, `&mut`, `^`) has edge
+  state `active | ended | invalid(cause)`. `flow` (`neutral | reading |
+  mutating`) is derived from active edges, never stored.
+- `taken` and `uninitialized` are distinct states. `taken` means logical
+  ownership of the address was transferred and the slot is a husk until the
+  take resolves (`taken -> ok` on return of the same resource, `taken ->
+  uninitialized` when the holder consumes it). `uninitialized` is accessible
+  and accepts `=`/`:=`.
+- All edge forms are lazy. `&` and `^` differ in failure wording and in
+  region/pin, not in eagerness. Retargeting an invalid edge uses `=`; `:=` is
+  reserved for `T`/`%T` slots.
+- Mutation exclusivity is enforced at the instant of the mutation, at
+  expression end for local conflicts, and at thread frontiers. Coexisting
+  writable edges are legal; simultaneous effective access is not. In
+  `c = a + b`, `a` and `b` read and `c` mutates at that instant.
+- Threads are proven separately. There is no `forkCount` and no `MultiShare`
+  in the core model. A bounded flow is merged before the creating scope ends;
+  an unbounded flow is revoked at scope end (ADR-0026 proxy). `'own` changes
+  nothing for NRA; it is a contract required at unbounded boundaries.
+- Capabilities: `MultiWrite` (non-blocking monad `Ok<T> | Nil`, optional
+  blocking `.sync() |> { ... }` guard) and `SyncWrite` (atomics). The effect
+  header records plain `write`; the caller-side check sees a flow being
+  created and applies capability gating (NRA-11).
+- Proof rules are enumerated with stable ids NRA-1..NRA-11 in spec section 3.
+
 ### Reference model (decided 2026-10-06, supersedes view/lend/share entries below)
 
 - Surface forms fixed by ADR-0033: `&T` read reference, `&mut T` write
@@ -140,22 +178,27 @@ model wins.
   It records `Thread.job(work)`, launch-time arguments and mode selection,
   context sugar that returns a monitoring handle, and the unresolved callable
   and capture-reuse rules.
-- The revocable-access concept is now discussed as a source modifier rather
-  than a `Revokable<T>` type. Its spelling and runtime lowering remain open.
+- The revocable-access concept is a source modifier rather than a
+  `Revokable<T>` type. ADR-0026 fixes the spelling as a `'` sigil or `grant`
+  before an explicit `own` qualifier, so the surface is `'own T`. No other
+  qualifier carries the contract. A bare `'T` does not exist because a
+  revocable `default` would imply a logical move of an inline value, while the
+  contract is a reference whose access can be revoked. The runtime lowering
+  remains open.
 
 ### Revokable access (ADR-0026 accepted baseline)
 
-The following proxy contract remains the accepted baseline in ADR-0026. The
-callable-thread discussion draft proposes a source modifier instead. That
-proposal does not yet replace this contract.
+The following proxy contract remains the accepted runtime baseline in
+ADR-0026. The source surface is now the `'own` / `grant own` type qualifier,
+so no `Revokable<T>` wrapper appears in source.
 
-- `Revokable<T>` is a proxy/capability for `view T` or `lend T`. Direct proxy
-  methods may return `Nil` when the resource has been revoked.
-- `Revokable<view T>` supports multiple active readers. `Revokable<lend T>`
-  and `Revokable<own T>` use one exclusive active writer.
-- `acquire()` returns a `RevokableGuard<T>` that inherits the original
-  qualifier. The guard validates access once, permits normal method dispatch
-  without repeated revocation checks, and cannot escape its scope.
+- The runtime proxy is a capability over an owned handle. Source restricts the
+  contract to `own`, so a revocable borrowed handle is not exposed.
+- The proxy supports a read mode with multiple active readers and a write mode
+  with one exclusive active writer.
+- `acquire()` returns a scoped guard that inherits the original qualifier. The
+  guard validates access once, permits normal method dispatch without repeated
+  revocation checks, and cannot escape its scope.
 - The control block is separate from the resource. It contains the atomic
   resource pointer and atomic lease/revocation state and remains observable
   after the resource is cleaned.
@@ -164,10 +207,10 @@ proposal does not yet replace this contract.
   pointer becomes null only after active guards are released.
 - `Waiter` exposes only `wait()`. The thread implementation decides whether it
   waits for completion, merge, or revocation cleanup.
-- Type erasure does not remove NRA effects. `Revokable<dyn Trait>` is a proxy
-  around the erased object; it does not require the trait itself to implement
-  revocation. A revocable proxy adds an outer optional result layer, so a
-  method returning `?T` remains distinguishable from revocation.
+- Type erasure does not remove NRA effects. A revocable `dyn Trait` is a proxy
+  around the erased object, and it does not require the trait itself to
+  implement revocation. A revocable proxy adds an outer optional result layer,
+  so a method returning `?T` remains distinguishable from revocation.
 
 ### Transfer and allocation
 

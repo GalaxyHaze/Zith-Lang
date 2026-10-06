@@ -38,7 +38,7 @@ Implementation work that is incomplete or needs review is tracked in
 | Type checking | **Working** | All `ExprKind` nodes. Optional/null validation. Index bounds. |
 | Generic instantiation | **Working** | Generic `fn`, `struct`, `alias`, `enum`, `union`, and `implement` blocks are monomorphized before HIR. Calls and named types resolve concrete instances; reified structs keep concrete type arguments as structural metadata, so nested generics such as `Entry<K, V>` inside `HashMap<K, V>` keep the correct slots. Enum/union templates accept inline `fn` methods and generic `implement as Trait` blocks alongside their positional variants/members. Generic inference considers implicit optional coercions, so `?T`/`??T` parameters can infer `T` from a bare or partially-optional argument while non-optional parameters remain exact. `T: A + B` bounds are parsed, stored, and enforced at generic call sites; trait-bound method calls type-check through the declared trait method while `GenericBinding` remains the source of truth for bounds |
 | Comptime / Solve | **Reserved** | Macro expansion happens in frontend; the solver remains a compatibility stub. Generic monomorphization now runs before NRA/HIR in step-04 |
-| NRA / Reference Analysis | **In progress** | NRA is the full Zith reference/ownership analysis. Zith-- implements a partial simplified version: residual facts are accumulated and consumed before final lowering. The `&local`/`@ptrOf(local)` use-after-move slice now marks moved slots as consumed in `HirAttrs` without HIR ownership nodes; the full alive/dead/lent state machine and four-rule proof remain to be completed. Internal names such as `NraFacts` and `nraStage` keep the historical NRA spelling |
+| SRA / Reference Analysis | **Working (frozen)** | SRA (Small Resource Analysis) is the ownership slice Zith-- implements and will not grow beyond: residual facts are accumulated and consumed before final lowering, and the `&local`/`@ptrOf(local)` use-after-move slice marks moved slots as consumed in `HirAttrs` without HIR ownership nodes. The full ownership proof belongs to full Zith and is specified in [nra-spec.md](nra-spec.md); it is deliberately out of scope for Zith--. Internal names such as `NraFacts` and `nraStage` keep the historical NRA spelling |
 | HIR lowering | **Working** | Covers all working features; residual ownership facts attach to side tables without introducing ownership HIR nodes |
 | LLVM codegen | **Working** | x86-64 and WebAssembly targets |
 | Cache | **Working** | Object and artifact caching persist/load `.zirl` files, validate canonical mappings, and hydrate cached artifacts |
@@ -164,7 +164,7 @@ Implementation work that is incomplete or needs review is tracked in
 
 | Feature | Spec chapter |
 |---|---|
-| NRA ownership analysis (full alive/dead/lent state machine and four-rule proof; the call-annotation borrow slice is implemented) | [07-memory-model.md](07-memory-model.md) |
+| NRA ownership proof (full state machine and proof rules; Zith-- implements only the frozen SRA slice, see the pipeline table) | [nra-spec.md](nra-spec.md) |
 | `comptime` evaluation | [11-comptime.md](11-comptime.md) |
 | `const fn` evaluation | [11-comptime.md](11-comptime.md) |
 | `try` / `try ... or` / `fail` / `with` / `catch` / `must(cond)` assertion / `throw` | [08-error-handling.md](08-error-handling.md) |
@@ -216,7 +216,7 @@ Codes are grouped by pipeline stage. `E0000` remains the generic user-reported d
 | 2001-2010 | Semantic | `E2001` UndefinedIdent, `E2002` DuplicateDecl, `E2003` WrongArity, `E2004` UnusedDecl, `E2005` NotNamespace, `E2006` NoMember, `E2007` NoMatchingFn, `E2008` AmbiguousCall, `E2009` NotImplemented, `E2010` UnsupportedSyntax |
 | 2021-2025 | Frontend/interface | Trait requirement/signature checks (`E2021`/`E2022`), `E2023` NotATrait, `E2024` InterfaceNotSatisfied, `E2025` explicit `implement` for an interface, `E2027` DuplicateImplementation |
 | 3001-3009 | Types | `E3001` TypeMismatch, `E3002` CannotInfer, `E3003` InvalidCast, `E3004` CyclicType, `E3005` NullDerefUnproven, `E3006` CoercionFailure, `E3007` WidthMismatch, `E3008` OptionalViolation, `E3009` ConstraintNotSatisfied |
-| 4001-4008 | NRA / ownership | `E4001` UseAfterMove (logical receiver or `&x` move in sema), `E4002` BorrowConflict, `E4003` DoubleBorrow, `E4004` WriteThroughView, `E4005` OwnershipCoercionRequired, `E4007` InvalidCallOwnership, `E4008` PointerEscapesScope — call annotations, borrow conflicts and views are checked in sema; direct pointer-local rebinds clear the old alias state; `E4004` remains emitted for views |
+| 4001-4008 | SRA / ownership | `E4001` UseAfterMove (logical receiver or `&x` move in sema), `E4002` BorrowConflict, `E4003` DoubleBorrow, `E4004` WriteThroughView, `E4005` OwnershipCoercionRequired, `E4007` InvalidCallOwnership, `E4008` PointerEscapesScope — call annotations, borrow conflicts and views are checked in sema; direct pointer-local rebinds clear the old alias state; `E4004` remains emitted for views |
 | 5001-5002 | Lowering | `E5001` InvalidIR, `E5002` Unreachable |
 | 10001-10004 | Runtime | `R10001` IndexOutOfBounds, `R10002` DivisionByZero, `R10003` NullDeref, `R10004` Panic |
 
@@ -245,6 +245,6 @@ Recorded deliberately. Each item is a follow-up, not an unknown.
 | Imported/cached bare `opaque` values | Bare `opaque` values exported from module A and consumed in module B are accepted; the canonical tagged typeId is recorded when the value is erased and restored from cached artifacts. There is no cross-module registry object, but canonical tags are deterministic and persisted by the existing `canonical_mappings` path |
 | `..` / `...` | Intentionally one `Dots` token; `..` is the range/pipe/import token and `...` is the variadic marker. Not a debt |
 | `++` / `--` | Intentionally rejected in Zith--; update values with explicit assignment. Not a debt |
-| Ownership proof still happens after premature lowering in places | The stable order is `sema -> comptime/solve -> NTA/NRA -> HIR`; residual facts are now attached before final lowering, while some paths still need the full NRA proof before emitting their final form |
+| Ownership proof still happens after premature lowering in places | The stable order is `sema -> comptime/solve -> NTA/NRA -> HIR`; residual facts are now attached before final lowering. The remaining gap concerns the full NRA proof, which is full-Zith work specified in [nra-spec.md](nra-spec.md), not Zith-- debt |
 
 *When a feature moves from one status to another, update this table and re-verify.*

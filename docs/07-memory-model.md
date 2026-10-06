@@ -1,12 +1,21 @@
 ## 7. Memory Model (NRA)
 
+> **Document status:** this chapter describes the legacy Zith-- ownership
+> surface (`lend`, `view`, `share`, `own`, `belong`) and the earlier
+> full-Zith draft built on it. Zith-- implements only a slice of it, the
+> `lend`/`view` call-annotation analysis, which is now called SRA (Small
+> Resource Analysis) and is frozen: it will not grow into the full proof.
+> The current full-Zith model is the rewritten
+> [nra-spec.md](nra-spec.md), which supersedes sections 7.1 through 7.7
+> wherever they disagree.
+>
 > **Implementation status:** the `lend`/`view` call-annotation slice is implemented: `lend T` and
 > `view T` parameters lower to real pointers, call arguments for `default` bindings require
 > `lend x`/`view x` (or report `E4005`), invalid call annotations are rejected (`E4007`), and the
 > same binding cannot be borrowed twice in one call. `view` writes are rejected with `E4004`.
-> Residual NRA facts are accumulated and attached before HIR, and LLVM emits `readonly` for views
-> plus `nocapture` for borrows. The full alive/dead/lent state machine and the complete four-rule
-> proof of [§7.4](#74-the-four-nra-rules) are still full-Zith/spec-only (F-14). Pointer types (`*T`),
+> Residual facts are accumulated and attached before HIR, and LLVM emits `readonly` for views
+> plus `nocapture` for borrows. The full proof machine (now node state, edge state, flow, and
+> rules NRA-1..NRA-11) is full-Zith/spec-only; see [nra-spec.md](nra-spec.md). Pointer types (`*T`),
 > `*p` dereference, and `&x` address-of are **working**. `&x` is a logical move in Zith--:
 > the pointed binding is dead until directly reassigned, and pointers derived from `&x` or
 > `@ptrOf(local)` are pointer objects that must not escape to longer-lived storage.

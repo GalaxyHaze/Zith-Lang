@@ -551,8 +551,15 @@ _Avoid_: detached ownership, background task
 
 **Revokable**:
 A resource-access contract whose availability may be revoked by its parent
-flow. Accepted ADR-0026 spells it as `Revokable<T>`; the current thread draft
-explores a source modifier instead but does not replace that ADR.
+flow. It is a reference whose access can be revoked, not a revocable value.
+ADR-0026 fixes the source spelling as a type qualifier, not a wrapper type. The
+sigil `'` or the long form `grant` precedes an explicit `own` qualifier, so the
+spelling is `'own T` or `grant own T`. `own` is the qualifier that names an
+address or slot, so the contract attaches to it. No other qualifier carries the
+contract, and a bare `'T` does not exist because a revocable `default` would
+imply a logical move of an inline value. The sigil is written only in type
+position. The `unbounded` launch site marks where revocation happens, so a call
+argument carries no revocable annotation.
 _Avoid_: revocable pointer, nullable borrow, cancellable reference
 
 **Waiter**:

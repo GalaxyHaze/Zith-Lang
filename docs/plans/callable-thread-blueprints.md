@@ -83,8 +83,12 @@ compile-time syntax facility in the currently compiled subset.
 Unbounded work needs an explicit revocable-access contract for any borrowed
 resource whose parent may revoke access. The direction is to express that
 contract as a modifier, not as a source-level `Revokable<T>` wrapper type.
-The modifier's spelling is open. The apostrophe form (`'`) is a candidate, but
-its interaction with character literals needs a deliberate lexical rule.
+ADR-0026 now fixes the modifier's spelling: a `'` sigil before the type, with
+`grant` as the long form. The sigil precedes an explicit `own` qualifier, so
+the spelling is `'own T`. The sigil applies only in type position, and the
+`unbounded` launch site already marks where revocation happens, so a call
+argument carries no revocable annotation. The lexical rule that separates the
+sigil from a character literal is recorded in ADR-0026.
 
 The runtime may still lower this contract through an internal proxy or control
 block. That implementation detail does not require a wrapper type in source
@@ -96,8 +100,8 @@ syntax.
   [the branch protocol](branch-protocol.md) describe the earlier `fork` and
   `merge` surface, where a fork launches and returns a mergeable handle.
 - [ADR-0026](../adr/0026-nra-aggregate-nodes-and-revokable-flows.md) describes
-  `Thread.spawn(...).bounded/.unbounded(...)` and a source-level
-  `Revokable<T>` proxy.
+  `Thread.spawn(...).bounded/.unbounded(...)`, the runtime proxy, and the
+  accepted source spelling `'own T` / `grant own T`.
 - [ADR-0033](../adr/0033-nra-reference-model-and-bind.md) is accepted and
   defines the full-Zith reference surface `&`, `^`, and `%`.
 

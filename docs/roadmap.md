@@ -95,13 +95,15 @@ F-10 layout intrinsics (`@sizeOf`, `@offsetOf`, `@alignOf`, `@lengthOf`,
 F-16 (`const fn` evaluation), F-17 (reflection intrinsics), and F-28 (pack ops)
 remain archived full-Zith features.
 
-### Wave 05 — NRA Ownership Analysis
+### Wave 05 — SRA Ownership Analysis (Zith-- slice, frozen)
 F-14 (`lend`/`view`/`own`/`share`/`belong` analysis pass), F-27 (destructuring).
 
-The stable HIR boundary is now structural: NTA/NRA facts are accumulated before final lowering and
-HIR carries only residual side-table facts. Remaining work is the alive/dead/lent state machine,
-the four NRA rule diagnostics, and any further lowering that must preserve qualifier structure
-before the proof. Qualifier parsing/typing (F-34) is complete. Max parallelism: 1 agent (single
+The stable HIR boundary is structural: NTA/NRA facts are accumulated before final lowering and
+HIR carries only residual side-table facts. The Zith-- portion of this wave is SRA (Small
+Resource Analysis) and is frozen at the implemented `lend`/`view` call-annotation slice; it will
+not grow into the full proof. The full ownership proof is full-Zith work, specified in
+[nra-spec.md](nra-spec.md) (node state `uninitialized`/`taken`/`ok`, edge state, flow, and rules
+NRA-1..NRA-11). Qualifier parsing/typing (F-34) is complete. Max parallelism: 1 agent (single
 analysis pass with a tight contract to lowering).
 
 ### Completed outside the wave order

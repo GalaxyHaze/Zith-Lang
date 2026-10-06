@@ -136,6 +136,8 @@ engenharia para rever e gerir.
 | `const fn` | Não é pretendido em `Zith--`. O parser aceita `FunctionKind::Const`, mas o pipeline rejeita `const fn` com `UnsupportedSyntax` em [frontend-decl.cpp](/home/diogo/Zith/src/frontend/frontend-decl.cpp:406). Não documentar como dívida. |
 | `dyn Interface` sem acesso a fields | O design expõe apenas métodos em `dyn`; fields ficam disponíveis em tipos concretos e bounds genéricos. `a.x on dyn Interface` com `E3001` é comportamento pretendido, não debt. |
 | `type Name = T` cast-based | Em `Zith--`, `type Name = T` é nominal e o contrato explícito usa casts: `T as Name` constrói e `Name as T` extrai o campo subjacente. `Name` não é intercambiável com `T`; `alias Name = T` continua transparente. Sintaxe dedicada de construção/acesso é follow-up opcional, não é dívida activa. |
+| Casts de utilizador | Não são pretendidos em `Zith--`. As conversões explícitas são os casts do spec (`as`, `raw as`), a coerção `opaque`, o narrowing `is` e os casts numéricos/ponteiro. Não existe trait de conversão (tipo `From`/`Into`/`Castable`) no spec nem na stdlib. Um novo branch de conversão em [classifyCast](/home/diogo/Zith/src/sema/sema-modern-utils.cpp:45) só seria adicionado se o spec de linguagem definir uma superfície dedicada. Não documentar como dívida. |
+| `..` / `...` como um token `Dots` | O lexer produz um único `TokenKind::Dots` para uma corrida de pontos ([ast-lowerer.cpp](/home/diogo/Zith/src/frontend/ast-lowerer.cpp:226)) e o parser distingue a grafia pelo lexema: `..` é o range ([frontend-expr-operator.cpp](/home/diogo/Zith/src/frontend/frontend-expr-operator.cpp:101)) e `...` é o marcador de variadic slice `[...]T` ([frontend-types.cpp](/home/diogo/Zith/src/frontend/frontend-types.cpp:115)). É um detalhe do lexer, não um defeito de comportamento. |
 
 ---
 
@@ -150,17 +152,19 @@ usam `zirl::Reader`), e o registry `canonical-any` é serializado/validado.
 O ficheiro `impl-status.md` foi atualizado de `Cache | Partial` para
 `Cache | Working`.
 
-### 3. NRA está parcial
+### 3. NRA está parcial (reclassificado: é SRA, congelado por design)
 
-- Estado atual: facts residuais e call annotations existem e são consumidos antes
-  do lowering final. A fatia de use-after-move está resolvida: `&local` e
-  `@ptrOf(local)` marcam o slot como `knownAlive = false`, o sema continua a
-  reportar `E4001` por leituras posteriores e o lowering publica o slot como
+- Estado atual: o que o Zith-- implementa é o SRA (Small Resource Analysis),
+  uma fatia deliberadamente pequena e congelada: facts residuais e call
+  annotations consumidos antes do lowering final, e a fatia de
+  use-after-move de `&local`/`@ptrOf(local)` publicada como
   `HirConsumedState::Consumed` sem nodes de move no HIR.
-- Faltas reais: o state machine completo alive/dead/lent e a prova de quatro
-  regras não existem; não há todos os diagnósticos de ownership previstos.
-  Moves de receivers por valor por chamadas/métodos e a propagação de
-  obsolescência entre branches ainda dependem da máquina completa.
+- Reclassificação: o que aqui estava descrito como "faltas reais" (a máquina
+  de estados completa e a prova de regras) não é dívida de Zith--. É trabalho
+  de full Zith, agora especificado do zero em
+  [nra-spec.md](/home/diogo/Zith/docs/nra-spec.md) com o novo modelo de
+  estados (`uninitialized`/`taken`/`ok`, flow, edge state) e as regras
+  NRA-1..NRA-11. Zith-- fica no SRA e não vai crescer para a prova completa.
 - Referência: [impl-status.md](/home/diogo/Zith/docs/impl-status.md:41).
 
 ### 4. Bare `opaque` usa hydration estável mas ainda depende de canonização consistente
@@ -230,8 +234,6 @@ O ficheiro `impl-status.md` foi atualizado de `Cache | Partial` para
   checks de overflow em runtime.
 - Formatter reimprime `for (cond)` como `while` (`ExprKind::While` no
   round-trip).
-- `..` e `...` são lexados cada um como um token `Dots`, diferenciados pelo
-  lexema.
 - `realloc` no runtime VM v2/WASM foi resolvido: o allocator separa blocos
   alocados de blocos livres, preserva dados ao crescer/mover, suporta shrink e
   trata o offset zero como endereço válido. A cobertura está em
@@ -250,7 +252,6 @@ nota de estado:
 - Unchecked nullable-pointer coercion foi removida: a prova flow-sensitive
   após `is null` existe, e usos sem prova reportam `E3005`.
 - `is <type>` narrowing beyond tagged unions and `opaque`.
-- User-defined casts (novo branch em `classifyCast`).
 - C struct-by-value ABI limited to verified simple records.
 - Imported/cached bare `opaque` values: registry project-local, sem registry
   object em runtime e sem categorização do field que mudou.

@@ -17,21 +17,60 @@ an ancestor aggregate.
 Thread execution is explicitly selected from a `Thread.spawn` blueprint by
 `.bounded(...)` or `.unbounded(...)`. Bounded flows use normal borrow
 contracts. Unbounded workers must explicitly declare revocable borrowing; the
-compiler inserts the `Revokable<T>` proxy at the unbounded boundary. The proxy
-uses a control block separate from the resource, with an atomic pointer and
-atomic lease state. Direct proxy operations may return `Nil`; `acquire()`
+compiler inserts an internal revocable proxy at the unbounded boundary. The
+proxy uses a control block separate from the resource, with an atomic pointer
+and atomic lease state. Direct proxy operations may return `Nil`; `acquire()`
 returns a scoped, qualifier-preserving guard with normal access and no repeated
-revocation checks. The core keyword `revoke` accepts either a revocable
-resource or a thread handle. `revoke x;` closes new acquisitions for `x` from
-every unbounded thread in the statement's scope that holds revocable access to
-it, then waits for their active guarded operations to finish. It does not
-terminate those workers. `revoke h1;` applies this transition to every
-revocable resource passed to the thread represented by handle `h1`. Revocation
-does not destroy resources or consume thread handles; `merge` remains
-responsible for joining and consuming a handle.
+revocation checks. The proxy is a runtime detail with no source type name, as
+the Source Spelling section below states. The core keyword `revoke` accepts
+either a revocable resource or a thread handle. `revoke x;` closes new
+acquisitions for `x` from every unbounded thread in the statement's scope that
+holds revocable access to it, then waits for their active guarded operations to
+finish. It does not terminate those workers. `revoke h1;` applies this
+transition to every revocable resource passed to the thread represented by
+handle `h1`. Revocation does not destroy resources or consume thread handles;
+`merge` remains responsible for joining and consuming a handle.
 
 Automatic allocator migration is intentionally not part of ordinary unbounded
 transfer. The preferred pattern is flow-local construction: capture trivial
 configuration, provide a child allocator, and construct the resource in the
 child. `Transferable` remains an explicit advanced capability rather than an
 implicit deep-copy or allocator-rewrite mechanism.
+
+## Source Spelling
+
+Status: accepted. This section fixes the source surface of the revocable
+contract. It does not change the runtime proxy described above.
+
+The revocable contract is a type qualifier, not a wrapper type. It is written
+as a sigil `'` before an explicit ownership qualifier, with `grant` as the
+long spelling.
+
+| Spelling | Meaning |
+|---|---|
+| `own T` | owned, not revocable |
+| `'own T` | revocable own |
+
+The sigil always precedes a written qualifier. `'T`, `'lend T`, and `'view T`
+do not exist. A bare `'T` would be the revocable form of `default`, and a
+revocable `default` implies a logical move of an inline value. The contract is
+instead a reference whose access can be revoked, so it attaches to `own`, the
+qualifier that identifies an address or slot rather than the value itself.
+
+`grant` is the long spelling of the same prefix, so `grant own T` equals
+`'own T`.
+
+The sigil applies only in type position. A call argument does not repeat it.
+The `unbounded` launch site already marks where revocation happens, so the
+argument carries no revocable annotation. The call-argument parser keeps its
+existing `lend` / `view` surface unchanged.
+
+Lexical rule: after an opening `'`, one character or one escape followed by a
+closing `'` is a character literal. Any other body starts a revocable type
+qualifier. This is the rule Rust uses to separate the `'a` lifetime from the
+`'a'` character. The scanner must tighten character literals to exactly one
+character or one escape for this rule to hold, because the current scanner
+accepts a multi-character body.
+
+`grant` and `revoke` are the verb pair. `grant` declares the contract on a
+type, and `revoke` ends it at runtime.

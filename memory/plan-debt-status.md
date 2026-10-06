@@ -208,7 +208,9 @@ The current debt list below reflects that resolution:
 
 - Bare `opaque` cross-module/cache hydration is closed by the canonical tags
   and `opaque -> opaque` sema no-op; pack/dyn + `opaque` remains separate.
-- NRA is partial because the full alive/dead/lent proof is missing.
+- What Zith-- implements is SRA, frozen by design. The full ownership proof
+  (new node-state model, NRA-1..NRA-11) is full-Zith work specified in
+  `docs/nra-spec.md`, not Zith-- debt.
 - Bare `opaque` has stable cache-hydrated tags but the canonicalization rule
   can still invalidate old artifacts if changed; a more explicit cross-module
   registry remains a follow-up.
