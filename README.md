@@ -5,41 +5,111 @@
 [![Version](https://img.shields.io/github/v/release/GalaxyHaze/Zith-Lang)](https://github.com/GalaxyHaze/Zith-Lang/releases)
 [![Discord](https://img.shields.io/badge/Discord-Join-5865F2?logo=discord&logoColor=white)](https://discord.gg/a7h4cpWHg4)
 
-> **Status: early development.** The compiler is a working Zith-- subset: lexing/parsing,
-> type checking, generics, HIR, LLVM codegen, a growing stdlib, and an executing CLI pipeline are
-> implemented. Some spec-level language features are still unsupported or partial. See
-> [docs/impl-status.md](docs/impl-status.md) for the verified status of every feature.
+Zith is a systems language that lets you choose how you will implement a task. 
+You can follow the idiomatic Zith-style, if you already have C experience, 
+use C-style, functional & etc..., it only depends on which one you're more confortable with.
+Start with the concepts you need, and learn more of the language as your work calls for it.
 
-A statically typed, compiled, system language. 'Zith' proves memory safety at compile time
-through **Node Resource Analysis (NRA)** no garbage collector, no traditional borrow checker or annotation, no runtime
-overhead. The syntax stays clean and the compiler does the hard work.
+## Different Ways, Same output
 
-The current `main` compiles **Zith--**, a simplified subset documented in
-[`docs/Zith--.md`](docs/Zith--.md). The subset keeps the existing type system and, instead of
-**comptime**, provides normal/raw **macros** (Zith-- only). Binding semantics, pointer/borrow
-rules, generics, `dyn`, enum/union templates, `defer`, and other supported behavior are
-documented in
-[`docs/Zith---implementation.md`](docs/Zith---implementation.md).
+Each example classifies a score into a bucket and prints the result. All three
+print `bucket=1`.
+the main idea here is: you can locally use different styles,
+but everyone shall use the same API
 
----
+### Idiomatic Zith
 
-## What Makes Zith Different
+Uses `when` for classification and the standard library for output.
 
-**Zith is a systems language that adapts to your needs.**
+```zith
+from std/io/console
 
-It brings an approachable, expressive high-level experience to systems
-development, with specialized low-level tools available when a project calls
-for them. Its features are modular: focus on the concepts that solve your
-current problems and explore more as your needs grow.
+fn classify(score: i32): i32 {
+    return when (score) {
+        (0..49) 0,
+        (50..79) 1,
+        (_) 2
+    };
+}
 
-Zith aims to make the straightforward path the easy one, with clear diagnostics
-that guide you toward the right fix. Safety supports this experience without
-defining the whole pitch.
+fn main() {
+    let bucket = classify(73);
+    println("bucket=#", bucket);
+}
+```
 
-This is the vision for full Zith, not a claim that every feature is available
-today. The current compiler implements the `Zith--` subset. See the
-[Zith-- specification](docs/Zith--.md) and
-[implementation status](docs/impl-status.md) for what works now.
+Runnable file: [`examples/styles-zith.zith`](examples/styles-zith.zith)
+
+```bash
+./build/zithc --include stdlib run examples/styles-zith.zith
+```
+
+### C-style
+
+Uses C header import, conditional statements, and `printf`.
+
+```zith
+import "stdio.h"
+
+fn classify(score: i32): i32 {
+    if (score < 50) { return 0; }
+    if (score < 80) { return 1; }
+    return 2;
+}
+
+fn main(): i32 {
+    let bucket = classify(73);
+    _ = printf("bucket=%d\n", bucket);
+    return 0;
+}
+```
+> Use C-style to get habituated with the language, and gradually migrate to idiomatic Zith
+
+Runnable file: [`examples/styles-c.zith`](examples/styles-c.zith)
+
+```bash
+./build/zithc --include stdlib run examples/styles-c.zith
+```
+
+### Functional-style
+
+Uses `|>` to transform the score and `do` to print the result without changing
+the value in the pipeline. This demonstrates that you can use a functional style,
+but it doesn't mean Zith uses a complete functional programming model.
+
+```zith
+from std/io/console
+
+fn classify(score: i32): i32 {
+    when (score) {
+        (0..49) 0,
+        (50..79) 1,
+        (_) 2
+    };
+}
+
+fn main(): i32 {
+    73  |> classify(..) do println("bucket=#", ..);
+}
+```
+
+Runnable file: [`examples/styles-functional.zith`](examples/styles-functional.zith)
+
+```bash
+./build/zithc --include stdlib run examples/styles-functional.zith
+```
+
+> Zith highly depreceates to try to learn everything, you & your team shall pick a specific subset
+and only work with it, and only try to learn a new feature, when the work calls for itsim 
+
+The C-style example requires C header interop. In the current Zith-- compiler,
+header bindings are provided through libclang. This is a current implementation
+limitation, not a requirement of the full Zith design.
+
+**Status: early development.** The available compiler implements **Zith--**, a
+working subset of the full language. See the
+[Zith-- specification](docs/Zith--.md) and the
+[implementation status](docs/impl-status.md) for what works today.
 
 ---
 
@@ -76,111 +146,28 @@ fn main(){
 }
 ```
 
-Run either with:
+Run the standard-library example with:
 
 ```bash
-./build/zithc run examples/test-import-console.zith
+./build/zithc --include stdlib run examples/test-import-console.zith
 ```
 
-The suites under `examples/` cover the working Zith-- surface, including bindings, generics,
-optionals, macros, ownership, dyn interfaces, loops, `when`, `state`/`defer`, variadic slices,
-and C interop:
+The compiler currently supports functions, structs, enums and unions, generics,
+traits and interfaces, control flow, macros, and native code generation.
+Zith-- includes a simplified part of the full language's ownership analysis.
+The full Zith design also includes Node Resource Analysis (NRA) as one part of
+its broader toolbox.
+
+The full feature table, including planned and partial features, lives in
+[docs/impl-status.md](docs/impl-status.md).
+
+The `examples/` directory also contains runnable programs for the implemented
+language surface:
 
 ```bash
 ./build/zithc check examples/optionals-simple.zith
 ./build/zithc run examples/state-defer-simple.zith
 ```
-
----
-
-## Language Overview
-
-**Type System**
-
-- Primitives: `u8`-`u128`, `i8`-`i128`, `f32`, `f64`, `bool`, `char`, `void`
-- Composite: `struct`, `component` (POD), `enum`/`union` (including generic enum/union templates)
-- Generics, nominal `type`, transparent `alias`, and pattern matching with `when`
-
-**Memory Model (NRA)**
-
-- `lend` — exclusive mutable borrow for the call
-- `view` — read-only borrow
-- Logical move semantics for `&x` and for `self`/`var self` method calls
-- Pointer-escape checks for address-of and `@ptrOf(local)`
-- NRA residual facts before HIR; the full NRA proof is planned for Zith
-
-**Functions**
-
-- `fn` — regular function
-//a bit useless rigth now, since everything is a gray state
-- `raw fn` — opt out of NRA for C-interop
-- `extern fn` — fixed C ABI linkage
-- Generic functions with explicit or inferred type arguments
-- Function values `fn(...): R`
-- `state` machines with `dock` / `jump` (direct `tailcc` transitions)
-- `const fn` — planned for Zith; compile-time evaluation is not implemented
-
-**Control Flow**
-
-- `if` / `else` / `else (cond)`
-- `when` for pattern matching, including guards, ranges, and narrowing
-- `for` in conditional, infinite, 3-clause, and iterator form
-- `break` / `continue` with labels, and `defer` scope guards
-- `->` pointer arrow access (`p->field`)
-
-**Error Handling**
-
-- Legacy `?T` optional values with implicit condition tests and `?` propagation where valid (Zith-- only)
-- `is null`, `must`, and `raw` optional extraction (Zith-- only)
-- Full-Zith `Failable` / `Invalid` capabilities, inferred invalid states, `!` propagation, and
-  `fail` are specified but not implemented in Zith--; `?T` and `T!` wrappers are deprecated
-
-**Extensibility and C Interop**
-
-- `macro` / `raw macro` declarations and `@name(...)` calls (Zith-- only)
-- `tag` (formerly `tag macro`) is the full-Zith item form; it is not a Zith-- macro
-- Validated C header imports through libclang
-- `word`, `context`, and `use` are planned for Zith
-
----
-
-## Implementation Status
-
-| Feature | Status | Notes |
-|---|---|---|
-| Lexer / parser | **Working** | Hand-written lexer and recursive-descent parser |
-| Formatter (`zithc fmt`) | **Working** | Round-trip stable across the expression AST |
-| Type checking and name resolution | **Working** | Imports, generics, traits/interfaces, all expression nodes |
-| Generic instantiation | **Working** | Generic functions, structs, aliases, enum/union templates, implement blocks |
-| HIR lowering | **Working** | Covers the working Zith-- feature set |
-| LLVM codegen | **Working** | x86-64 and WebAssembly targets |
-| `fn`, `raw fn`, `extern fn` | **Working** | `extern fn` is C-ABI-only |
-| `state`, `dock`, `jump` | **Working** | Direct `tailcc` transitions |
-| `struct`, `enum`, `union`, `component` | **Working** | Includes generic enum/union templates with methods and conformance |
-| `trait`, `interface`, `implement` | **Working** | Nominal and structural conformances; `dyn` method dispatch |
-| Primitive arithmetic and comparisons | **Working** | Includes bitwise operations, ranges, `in`, and compound assignment |
-| `when` / `match` / `for` / labels / `defer` | **Working** | |
-| Module imports (`import`, `from`, `export`) | **Working** | Includes platform-specific imports and visibility controls |
-| `alias`, `type` | **Working / Partial** | `alias` works; nominal `type` needs explicit value construction/access syntax |
-| C interop | **Working** | Manual `extern fn` plus validated C header imports through libclang |
-| `macro` / `raw macro` / `@name(...)` | **Working (Zith-- only)** | Normal and raw macros with call-site scope handling |
-| Field access, index, deref, address-of | **Working** | Optional bounds checks on array/slice indexing; `raw` skips checks |
-| Legacy `?T` (Zith-- only) | **Working** | Optional values, `?` propagation where valid, `is null`, `must`, and `raw` extraction |
-| `Failable` / `Invalid` / `T!` return annotation | Planned for Zith | Full-Zith invalid-state model only; `?T` and `T!` type wrappers are deprecated |
-| `is` / `as` | **Working** | Casting for numeric pairs and raw pointers; tagged-union/opaque narrowing |
-| `tag` (formerly `tag macro`) | Planned for Zith | Rejected in Zith--; planned under the shorter `tag` name |
-| `word` / `context` / `use` | Planned for Zith | No working semantics in Zith-- |
-| `const fn` | Parse-level in progress | Parsed in the Zith-- pipeline; compile-time evaluation remains full-Zith/spec-only |
-| `comptime` | Planned for Zith | No Zith-- compile-time evaluation surface yet |
-| Full NRA proof | Planned for Zith | Zith-- currently implements `lend`/`view` slices, logical moves, and escape checks |
-| Core concurrency syntax (`async fn`, `yield`, `spawn`, `await`) | Not part of the core language contract | Concurrency is documented as stdlib/runtime APIs instead of frontend syntax |
-The single source of truth with per-feature verification notes is
-[docs/impl-status.md](docs/impl-status.md). Feature IDs, waves, and current roadmap details are in
-[docs/roadmap.md](docs/roadmap.md).
-
-This README summarizes the headline surface and is not a secondary source of
-truth; consult `docs/impl-status.md` for exact feature, pipeline, CLI, and debt
-status.
 
 ---
 

@@ -14,9 +14,10 @@ namespace fs = std::filesystem;
 namespace {
 
 struct Example {
-    const char *file;
-    int exitCode;
-    bool needsCInterop;
+    const char *file           = nullptr;
+    int exitCode               = 0;
+    bool needsCInterop         = false;
+    const char *expectedStdout = nullptr;
 };
 
 constexpr Example kExamples[] = {
@@ -56,6 +57,9 @@ constexpr Example kExamples[] = {
     {"state-defer-advanced.zith", 42, false},
     {"structs-arrays-simple.zith", 9, false},
     {"structs-arrays-advanced.zith", 7, false},
+    {"styles-zith.zith", 0, false, "bucket=1\n"},
+    {"styles-c.zith", 0, true, "bucket=1\n"},
+    {"styles-functional.zith", 0, false, "bucket=1\n"},
     {"tagged-unions-simple.zith", 0, false},
     {"tagged-unions-advanced.zith", 7, false},
     {"when-simple.zith", 14, false},
@@ -83,7 +87,12 @@ std::string stageExample(const fs::path &workdir, const char *name) {
     return staged.string();
 }
 
-int runExample(const fs::path &workdir, const char *name) {
+std::string readFile(const fs::path &path) {
+    std::ifstream in(path, std::ios::binary);
+    return std::string((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+}
+
+int runExample(const fs::path &workdir, const char *name, std::string *capturedStdout = nullptr) {
     std::error_code ec;
     fs::remove_all(workdir / "cache", ec);
     fs::remove_all(workdir / "target", ec);
@@ -92,20 +101,25 @@ int runExample(const fs::path &workdir, const char *name) {
     if (staged.empty()) {
         return -1;
     }
-    const std::string command = std::string("cd \"") + workdir.string() + "\" && \"" +
-                                ZITHC_BINARY + "\" --include \"" + ZITH_STDLIB_DIR + "\" run \"" +
-                                staged + "\"";
-    const int status          = std::system(command.c_str());
+    const fs::path stdoutPath = workdir / (std::string(name) + ".stdout");
+    if (capturedStdout != nullptr) {
+        fs::remove(stdoutPath, ec);
+    }
+    std::string command = std::string("cd \"") + workdir.string() + "\" && \"" + ZITHC_BINARY +
+                          "\" --include \"" + ZITH_STDLIB_DIR + "\" run \"" + staged + "\"";
+    if (capturedStdout != nullptr) {
+        command += " > \"" + stdoutPath.string() + "\"";
+    }
+    const int status = std::system(command.c_str());
+    if (capturedStdout != nullptr) {
+        *capturedStdout = readFile(stdoutPath);
+        fs::remove(stdoutPath, ec);
+    }
     if (status < 0) {
         return -1;
     }
     // std::system reports a wait(2) status; the exit code is the high byte.
     return (status & 0x7F) == 0 ? ((status >> 8) & 0xFF) : -1;
-}
-
-std::string readFile(const fs::path &path) {
-    std::ifstream in(path, std::ios::binary);
-    return std::string((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
 }
 
 /// `zithc run` must keep the two output bands apart: the program owns stdout,
@@ -201,10 +215,16 @@ void test_examples() {
             std::printf("  SKIP: %s requires C interop support\n", example.file);
             continue;
         }
-        const int actual = runExample(workdir, example.file);
+        std::string capturedStdout;
+        const int actual = runExample(
+            workdir, example.file, example.expectedStdout == nullptr ? nullptr : &capturedStdout);
         const std::string label =
             std::string(example.file) + " exits with " + std::to_string(example.exitCode);
         CHECK_EQ(actual, example.exitCode, label.c_str());
+        if (example.expectedStdout != nullptr) {
+            const std::string outputLabel = std::string(example.file) + " prints expected output";
+            CHECK_EQ(capturedStdout, std::string(example.expectedStdout), outputLabel.c_str());
+        }
     }
 
     test_run_separates_program_stdout_from_compiler_logs();
