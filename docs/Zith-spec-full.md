@@ -12,7 +12,13 @@
 
 Zith gives you full control with a minimal & clean syntax — you don't have to choose between verbose but safe or readable but slow. Its memory model, Node Resource Analysis (NRA), proves ownership and lifetime safety using five keywords: `lend`, `view`, `own`, `share`, and `belong` — plus a `default` (no keyword) modifier.
 
-Beyond memory safety, Zith has a general-purpose core with a much larger toolbox: state machines, contexts (DSLs), words (custom operators), comptime. You choose when to use them. Zith also follows the **Rule of Three**: "if a function needs more than three specialized tools, something went wrong."
+Beyond memory safety, Zith has a general-purpose core with a larger toolbox: state machines, contexts for domain-specific syntax, words (custom operators), and comptime. You choose when to use them. Zith also follows the **Rule of Three**: "if a function needs more than three specialized tools, something went wrong."
+
+Zith also aims for a shared public-API style that remains familiar across
+different implementation styles. A project's language identity is separate:
+it controls optional features and local diagnostic rationale for the project's
+own code, not the design of public APIs or the features used by dependencies.
+See [ADR 0032](adr/0032-universal-api-project-identity-and-contexts.md).
 
 This document is a draft of the language specification, currently v0.9.
 Not every feature described here is implemented in the compiler.
@@ -27,7 +33,8 @@ For the exact picture of what works today, see [Implementation Status](impl-stat
 | `try` / `or` | Error handling | Short-circuit one expression and provide fallbacks for any invalid state ([§8.3](08-error-handling.md#83-try-propagation-and-fallback)). |
 | Postfix `?` | Legacy Zith-- syntax | Propagates `Nil`; its current compiler support is separate from the full-Zith model. |
 | Postfix `!` | Error handling | Propagate an operation's invalid state to the enclosing function ([§8.3](08-error-handling.md#83-try-propagation-and-fallback)). |
-| `@name` | Compiler intrinsic or macro invocation ([§11.3](11-comptime.md#113-reflection), [§15](15-macros.md)) |
+| `@name` | Compiler intrinsic or compiler magic. Zith-- also uses it for macro calls. |
+| `@<Tag>` | Dedicated full-Zith tag opener, closed by `</Tag>`. |
 | `#name` | Variable or field attribute, e.g. `#thread_local` or `#volatile` |
 | `::` | Scope resolution — reach past a shadowed name ([§2.3](02-module-system.md#23-namespace-access--scope-resolution)) |
 
@@ -76,7 +83,7 @@ The compiler is a copilot: it gives you the tools, and you build the systems.
 | Everyday | Domain-specific |
 |---|---|
 | `struct`, `fn`, `lend`, `view`, `trait`, `interface` | `state`, `dock`, `jump` — for Games, State Machine, OS & embedded |
-| `?T`, `or` | `context`, `word` — for DSLs and APIs |
+| `?T`, `or` | `context`, `word` — for domain-specific syntax integration |
 | `when`, `for`, `|>`/`do` | runtime/stdlib concurrency APIs — for parallel work without special syntax |
 
 ### 1.3 Design Goals
@@ -87,20 +94,26 @@ The compiler is a copilot: it gives you the tools, and you build the systems.
 - Static, zero-overhead error handling with rich recovery semantics.
 - Compile-time computation (`comptime`) as a first-class feature.
 - Low-level control — state functions and musttail state transitions — without sacrificing safety in everyday code.
-- Extensibility through words and macros, ideally scoped inside contexts rather than polluting the global namespace.
+- Domain-specific syntax integration through contexts, tags, and words. Contexts are not general-purpose API namespaces.
 
-### 1.4 Context-Bound Extensibility (Best Practice)
+### 1.4 Domain-Specific Syntax Integration
 
-Macros and words should ideally live inside a `context` block. Activating them globally is possible but discouraged — the same code smell as `using namespace std;` in C++.
+Contexts are reserved for APIs that deliberately integrate with a domain's
+syntax, such as SQL, HTML, or Math. They are not generic containers for public
+API declarations or general-purpose syntax declarations. Prefer scoped
+activation when a domain integration only applies to one block. Full-Zith tag
+delimiters and body kinds are defined in
+[ADR 0032](adr/0032-universal-api-project-identity-and-contexts.md). Exact
+context activation and tag declaration syntax remain under design.
 
 ```zith
-// Preferred
+// Domain-specific syntax, scoped to this block
 use SQL {
-    // SQL words and macros active only here
+    // SQL-specific forms are active here
 }
 
-// Discouraged
-use SQL;   // pollutes the rest of the file
+// The current draft also permits activation in the surrounding scope
+use SQL;
 ```
 
 ### 1.5 Compilation Pipeline
@@ -119,7 +132,7 @@ source -> lex -> scan -> resolve(import/symbols) -> sema -> comptime/solve -> NT
 | `scan` | Find top-level declarations from the token stream |
 | `resolve` | Resolve imported symbols, report duplicates |
 | `sema` | Semantic analysis — name resolution, type checking, visibility |
-| `comptime/solve` | Reserved for future generic instantiation, `comptime` evaluation, and the solved semantic view. Macro expansion currently happens during frontend parsing and uses the source AST directly |
+| `comptime/solve` | Reserved for future generic instantiation, `comptime` evaluation, and the solved semantic view. In Zith--, macro expansion currently happens during frontend parsing and uses the source AST directly. |
 | `NTA/NRA` | Accumulate semantic/resource facts, prove ownership rules, emit diagnostics, and apply only internal canonicalizations that do not change public ABI |
 | `HIR` | Build High-level IR — the typed, desugared program with residual ownership facts attached when available |
 | `LLVM` | Code generation via the LLVM backend |
@@ -828,7 +841,7 @@ fn pick(flag: bool): i32 {
 > `extern raw fn`, or similar spelling. `raw fn` and `extern fn` are separate concerns: `raw fn`
 > opts out of NRA, while `extern fn` selects the C ABI.
 
-Macro calls use the `@` prefix — `@println`, `@log`, `@serialize` — while ordinary function calls use a bare name, such as `console.write`, `process`, or `save`. See [§15](15-macros.md) for the full rule.
+In Zith--, macro calls use the `@` prefix, such as `@println`, `@log`, and `@serialize`. Ordinary function calls use a bare name, such as `console.write`, `process`, or `save`. See [§15](15-macros.md) for the Zith-- rule.
 
 ### 5.3 Runtime Tasks, Coroutines, and Concurrency APIs
 
@@ -1592,7 +1605,7 @@ const fn processJson(data: []char): JsonValue { ... }
 const parsed = processJson(Data);  // runs at compile time
 ```
 
-> Some macros and functions are overloaded to run at compile time; a compile-time `throw` halts compilation and displays the error message — equivalent to `static_assert` in other languages.
+Compile-time functions can raise `throw` to halt compilation and display an error message, similar to `static_assert` in other languages.
 
 ### 11.3 Reflection
 
@@ -1874,15 +1887,18 @@ If you try to use a non-object-safe trait with `dyn`, the compiler rejects it.
 |---|---|
 | Normal (scoped) | Hygienic for bindings introduced by the macro, but template names are resolved from the call-site scope, so globals and imports remain visible when not shadowed. Requires the `@` prefix at the call site. |
 | Raw macro | Inserts code literally at the call site; not hygienic. Names resolve in the call-site scope first and fall back to globals/imports. Also requires the `@` prefix. |
-| `tag` (formerly `tag macro`) | HTML-like syntax. Tag attributes (e.g. `id=5`) are available as `attributes` when the item is the first argument; content between tags forms the remaining arguments. Uses `<>` syntax — no `@` prefix. `tag` is full Zith only; it is not a Zith-- macro. |
 
-> Best practice: define macros inside a `context` block ([§17](17-contexts.md)) rather than activating them globally.
+> **Full-Zith distinction:** tags are not macros. `@<` is a dedicated tag-opening delimiter, not
+> an intrinsic call or an `@` prefix applied to `<`. The closing delimiter is `</`. Standalone
+> `@` remains the marker for compiler intrinsics and compiler magic. See
+> [ADR 0032](adr/0032-universal-api-project-identity-and-contexts.md).
 
-- They all have special arguments that can manipulate the AST. Default and raw macros accept attributes via `[capture]` syntax; `tag` items receive attributes as `attributes`.
+> Contexts are reserved for domain-specific syntax integration, not as general-purpose
+> declaration containers ([§17](17-contexts.md)).
 
 > **Zith-- distinction:** normal `macro` and `raw macro` are the only macro forms in Zith--, the
-> subset compiled by `main`. `tag` is a full-Zith feature; Zith-- rejects the legacy `tag macro`
-> spelling with `E2010`. See [Zith--](Zith--.md).
+> subset compiled by `main`. Full-Zith tags are separate and do not change the Zith-- contract.
+> See [Zith--](Zith--.md).
 
 ```zith
 macro log(msg: expr) { @println("[LOG] ", msg); }
@@ -1894,11 +1910,7 @@ raw macro swap(a: identifier, b: identifier) {
 // Default/raw macro with capture attribute
 @closure[capture](){ ... }
 
-// Tag — attributes come from the tag syntax (full Zith only)
-<Section title="Overview"> body </Section>
-<cool id=5, name="name"> content </cool>
-
-// Macro parameter meta-types: identifier, expr, condition, body
+// Zith-- macro parameter meta-types: identifier, expr, condition, body
 ```
 
 ### Scope and Hygiene
@@ -1918,9 +1930,10 @@ block.
 The `::` scope-resolution operator remains a separate roadmap item; this
 chapter describes only the default and raw macro resolution behaviour.
 
-### 15.1 The `@` Prefix Rule
+### 15.1 Zith-- `@`-Prefixed Macro Calls
 
-The `@` prefix is what distinguishes a macro call from an ordinary function call:
+In Zith--, the `@` prefix distinguishes a macro call from an ordinary function
+call:
 
 ```zith
 // Macro call -- @ prefix
@@ -1934,12 +1947,35 @@ process(data);
 save(file);
 ```
 
-`tag` items are the one exception — they use `<>` syntax and never take the `@` prefix:
+This rule describes Zith-- macro calls only. Full Zith uses standalone `@` for
+compiler intrinsics and compiler magic. Its `@<` tag delimiter is a separate
+compound delimiter.
+
+### 15.2 Full-Zith Tags
+
+Tags provide domain-specific syntax integration in full Zith. They are not
+macros, and their bodies are not implicitly treated as Zith statements. A tag
+declaration specifies the representation of its required body argument.
 
 ```zith
-<div class="container"> content </div>
-<Section title="Overview"> body </Section>
+@<p>Se e louco, Zith full e foda</p>
 ```
+
+The `@<` opener and `</` closer are dedicated delimiters. A tag declaration
+must accept a body argument. Its body kind determines how the compiler presents
+the content to the tag:
+
+| Body kind | Contract |
+|---|---|
+| `tokens` | Exact source text as written, without Zith interpretation. |
+| `identifier` | Exactly one identifier. |
+| `ast` | Structured syntax, not necessarily evaluated. |
+| `block` | Code parsed as a Zith block. |
+
+These body kinds are not exhaustive. The exact tag declaration grammar,
+attribute grammar, and empty-body rules remain under design. This is a full-Zith
+design decision only. Zith-- behavior and its existing `macro` forms are
+unchanged.
 
 ---
 
@@ -1950,14 +1986,15 @@ Words let you define custom operators from identifiers. Each word has a fixed po
 - You must activate a word with `use`, even if you already imported its module.
 - Two words with the same name in the same scope: compile error.
 - If the compiler sees any ambiguity (even potential), it errors out.
-- Best practice: define words inside a `context` ([§17](17-contexts.md)).
+- Use a context for words when they participate in a domain-specific syntax integration.
+  Contexts are not generic namespaces for public APIs ([§17](17-contexts.md)).
 
 ### 16.1 Word Types
 
 | Type | Description | Example |
 |---|---|---|
 | `operator` | Overload a specific operator (`+`, `-`, `*`, `()`, etc.) | `implement Vec3 as Arithmetic { fn +(self, other: Self): Self { ... } }` |
-| `token` | A word with low precedence that does nothing alone. Serves as a named argument for macros and other words. | `token SELECT;` |
+| `token` | A word with low precedence that does nothing alone. Serves as a syntactic component in domain expressions. | `token SELECT;` |
 
 #### Operator Words
 
@@ -1992,7 +2029,7 @@ let value = input CHECK;
 
 #### Token Words
 
-Token words have low precedence and do nothing alone. They serve as named arguments for macros and other words — e.g., SQL keywords:
+Token words have low precedence and do nothing alone. They let a domain syntax define low-precedence terms, such as SQL keywords:
 
 ```zith
 token SELECT;
@@ -2005,34 +2042,41 @@ operator* (SELECT, list) { ... }
 
 > Tokens are useful for DSLs where keywords need to be passed as arguments without function call syntax.
 
-### 16.2 Words vs. Macros
+### 16.2 Zith-- Macro Compatibility
 
-- **Macros:** Better for heavy logic, still require `()` syntax, can't return values.
-- **Words:** Work as keywords, let you return values, and can delegate to macros. Better for lightweight tasks.
+Macros are available in the Zith-- subset, not in full Zith. The following
+distinction describes that subset only:
 
-> Words let you pass keywords, words, and macros as arguments.
+- **Zith-- macros:** Use call syntax and provide syntax-template expansion.
+- **Words:** Work as keywords and can return values.
 
 ---
 
 ## 17. Contexts
 
-A context bundles macros, constants, words, and other declarations into a reusable package. You can apply it to a single block or activate it globally — only one context may be active at a time in a given scope.
+> **Full-Zith design direction:** contexts are reserved for syntax integration with a domain-facing
+> API. A context is not an ordinary public API surface or a general-purpose container for
+> declarations. See [ADR 0032](adr/0032-universal-api-project-identity-and-contexts.md).
+
+A context provides an optional syntax integration for a domain such as Math, SQL, or HTML. A
+domain API may offer one when it deliberately participates in that domain's syntax. The current
+draft allows scoped or global activation, with only one context active at a time in a scope.
 
 ```zith
-// Scoped: macros and words active only inside this block
+// Illustrative syntax: SQL-specific forms are active inside this block
 use SQL {
     SELECT * FROM users WHERE id = :id
 }
 
-// Global: replaces any previous active context
+// Global activation is also present in the current draft
 use SQL;
 ```
 
-You can attach a context to any named block in Zith.
-
 ### Best Practice
 
-Define your macros and words inside context blocks rather than leaving them globally active. Think of it as a lightweight namespace for DSLs — keeps the rest of your code clean.
+Use a context when an API deliberately integrates with domain-specific syntax. Do not use one
+merely to group ordinary public declarations or to create a generic library namespace. Exact
+declaration, activation, and distribution rules remain open design questions.
 
 ---
 
@@ -2125,6 +2169,14 @@ std = "bundled"
 
 > `runtime = false` disables the heap, standard stack assumptions, and signal handlers. Any standard library feature that requires a runtime becomes unavailable at compile time.
 
+### 19.3 Project Language Identity
+
+> **Full-Zith design direction, not implemented:** a project identity will let a team enable or
+> disable optional language features for its own codebase and attach a reason to disabled
+> features. It does not redefine the universal public-API style or apply its choices to
+> dependencies. The configuration syntax and diagnostic presentation remain open. See
+> [ADR 0032](adr/0032-universal-api-project-identity-and-contexts.md).
+
 ---
 
 ## 20. Standard Library
@@ -2213,8 +2265,9 @@ fn write(self: lend File, data: []u8): void!;
 
 ### 21.3 Context Patterns
 
-- Group related DSL features by defining macros and words inside a single `context` block.
-- Activate at most one global context per domain to avoid pollution.
+- Reserve contexts for APIs that deliberately integrate with domain-specific syntax, such as
+  Math, SQL, or HTML.
+- Do not use contexts as generic namespaces or containers for ordinary public APIs.
 
 ### 21.4 Error Handling Patterns
 
@@ -2225,14 +2278,14 @@ fn write(self: lend File, data: []u8): void!;
 - Use `fail` only for invalid values whose types implement `Error`, and use `resume value;`
   to continue with a replacement result.
 
-### 21.5 Macro Patterns
+### 21.5 Context and Tag Patterns
 
-- Prefer macros scoped inside contexts over global activation.
-- Prefer to apply context per block for the same reason.
+- Reserve contexts for APIs that deliberately integrate with domain-specific syntax.
+- Declare a tag's body kind to match the syntax the domain API needs to consume.
 
 ### 21.6 Rule of Three
 
-If a function needs more than three specialized tools (state machines, words, contexts, macros, comptime, inline error handling), something went wrong. Split the function or reconsider your abstraction.
+If a function needs more than three specialized tools (state machines, words, contexts, tags, comptime, inline error handling), something went wrong. Split the function or reconsider your abstraction.
 
 ```
 // Good — two tools: state machine + word
@@ -2267,6 +2320,22 @@ The Rule of Three keeps code readable. Zith gives you many tools — you don't h
 | Files | kebab-case | `game-loop.zith`, `asset-manager.zith` |
 | Constants & comptime | UPPER_SNAKE_CASE | `MAX_SIZE`, `PI`, `DEFAULT_TIMEOUT` |
 | Enums | PascalCase for the type; PascalCase for variants | `enum Direction { North, South }` |
+
+### 21.8 Universal Public API Style
+
+The universal API style is the shared design convention for public Zith APIs. It is separate
+from a project's feature policy. Multiple implementation styles can expose the same API, as in
+the three `classify(score: i32): i32` examples in the README.
+
+Prefer tuples over output parameters for multiple return values. Do not return compile-time
+`type` values, raw function pointers, or `dyn fn` directly from ordinary APIs unless the domain
+requires them. Use generic trait and interface bounds rather than `dyn` dispatch in the universal
+style. Keep `@ensure`, `maybe`, and `assume` internal unless callers need them to understand a
+specific API contract. Use `camelCase` for method names.
+
+These are conventions rather than compiler restrictions. A public API may depart from them
+when its purpose justifies the added specialization. See
+[ADR 0032](adr/0032-universal-api-project-identity-and-contexts.md).
 
 ---
 
@@ -2317,7 +2386,7 @@ The Rule of Three keeps code readable. Zith gives you many tools — you don't h
 | `::` | Operators | Scope resolution — access a shadowed outer name. |
 | `and` / `or` / `not` / `xor` | Operators | Logical (English keywords). |
 | `&.` / `\|.` / `^.` / `~` / `<<` / `>>` | Operators | Bitwise. |
-| `@` / `#` | Annotations | `@` for intrinsics, reflection, and the macro prefix. `#` for variable/field attributes. |
+| `@` / `@<` / `#` | Compiler syntax | `@` for intrinsics and compiler magic, `@<` for full-Zith tags. Zith-- also uses `@` for macro calls. `#` marks variable and field attributes. |
 | `extern 'C'` | Interop | C binding — automatic via `.h`, manual, or external. |
 | `runtime` / `asm` | Config | `ZithProject` / `ZithFlags` build settings. |
 | `assets` | Config | `ZithProject.toml` asset path declarations. |

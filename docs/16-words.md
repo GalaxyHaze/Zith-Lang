@@ -10,14 +10,16 @@ Words let you define custom operators from identifiers. Each word has a fixed po
 - You must activate a word with `use`, even if you already imported its module.
 - Two words with the same name in the same scope: compile error.
 - If the compiler sees any ambiguity (even potential), it errors out.
-- Best practice: define words inside a `context` ([§17](17-contexts.md)).
+- Use a context for words when they participate in a domain-specific syntax
+  integration. Contexts are not generic namespaces for public APIs. See
+  [§17](17-contexts.md).
 
 ### 16.1 Word Types
 
 | Type | Description | Example |
 |---|---|---|
 | `operator` | Overload a specific operator (`+`, `-`, `*`, `()`, etc.) | `implement Vec3 as Arithmetic { fn +(self, other: Self): Self { ... } }` |
-| `token` | A word with low precedence that does nothing alone. Serves as a named argument for macros and other words. | `token SELECT;` |
+| `token` | A word with low precedence that does nothing alone. Serves as a syntactic component in domain expressions. | `token SELECT;` |
 
 #### Operator Words
 
@@ -52,7 +54,7 @@ let value = input CHECK;
 
 #### Token Words
 
-Token words have low precedence and do nothing alone. They serve as named arguments for macros and other words, e.g., SQL keywords:
+Token words have low precedence and do nothing alone. They let domain syntax define terms such as SQL keywords:
 
 ```zith
 token SELECT;
@@ -63,14 +65,15 @@ token WHERE;
 operator* (SELECT, list) { ... }
 ```
 
-> Tokens are useful for DSLs where keywords need to be passed as arguments without function call syntax.
+> Tokens are useful when a domain syntax needs low-precedence keywords without function-call syntax.
 
-### 16.2 Words vs. Macros
+### 16.2 Zith-- Macro Compatibility
 
-- **Macros:** Better for heavy logic, still require `()` syntax, can't return values.
-- **Words:** Work as keywords, let you return values, and can delegate to macros. Better for lightweight tasks.
+Macros are available in the Zith-- subset, not in full Zith. This comparison
+describes the subset only:
 
-> Words let you pass keywords, words, and macros as arguments.
+- **Zith-- macros:** Use call syntax and provide syntax-template expansion.
+- **Words:** Work as keywords and can return values.
 
 ---
 

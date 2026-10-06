@@ -37,6 +37,15 @@ std = "bundled"
 
 > `runtime = false` disables the heap, standard stack assumptions, and signal handlers. Any standard library feature that requires a runtime becomes unavailable at compile time.
 
+### 19.3 Project Language Identity
+
+> **Full-Zith design direction, not implemented:** a project identity will let
+> a team enable or disable optional language features for its own codebase and
+> attach a reason to disabled features. It does not redefine the universal
+> public-API style or apply its choices to dependencies. The configuration
+> syntax and diagnostic presentation remain open. See
+> [ADR 0032](adr/0032-universal-api-project-identity-and-contexts.md).
+
 ---
 
 *[Zith Language Specification](Zith-spec.md) — Draft v0.9*

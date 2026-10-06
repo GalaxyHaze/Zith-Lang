@@ -12,7 +12,13 @@
 
 Zith gives you full control with a minimal & clean syntax — you don't have to choose between verbose but safe or readable but slow. Its memory model, Node Resource Analysis (NRA), proves ownership and lifetime safety using five keywords: `lend`, `view`, `own`, `share`, and `belong` — plus a `default` (no keyword) modifier.
 
-Beyond memory safety, Zith has a general-purpose core with a much larger toolbox: state machines, contexts (DSLs), words (custom operators), comptime. You choose when to use them. Zith also follows the **Rule of Three**: "if a function needs more than three specialized tools, something went wrong."
+Beyond memory safety, Zith has a general-purpose core with a larger toolbox: state machines, contexts for domain-specific syntax, words (custom operators), and comptime. You choose when to use them. Zith also follows the **Rule of Three**: "if a function needs more than three specialized tools, something went wrong."
+
+Zith also aims for a shared public-API style that remains familiar across
+different implementation styles. A project's language identity is separate:
+it controls optional features and local diagnostic rationale for the project's
+own code, not the design of public APIs or the features used by dependencies.
+See [ADR 0032](adr/0032-universal-api-project-identity-and-contexts.md).
 
 This document is a draft of the language specification, currently v0.9.
 Not every feature described here is implemented in the compiler.
@@ -27,7 +33,8 @@ For the exact picture of what works today, see [Implementation Status](impl-stat
 | `try` / `or` | Error handling | Short-circuit one expression and provide fallbacks for any invalid state ([§8.3](08-error-handling.md#83-try-propagation-and-fallback)). |
 | Postfix `?` | Legacy Zith-- syntax | Propagates `Nil`; its current compiler support is separate from the full-Zith model. |
 | Postfix `!` | Error handling | Propagate an operation's invalid state to the enclosing function ([§8.3](08-error-handling.md#83-try-propagation-and-fallback)). |
-| `@name` | Compiler intrinsic or macro invocation ([§11.3](11-comptime.md#113-reflection), [§15](15-macros.md)) |
+| `@name` | Compiler intrinsic or compiler magic. Zith-- also uses it for macro calls. |
+| `@<Tag>` | Dedicated full-Zith tag opener, closed by `</Tag>`. |
 | `#name` | Variable or field attribute, e.g. `#thread_local` or `#volatile` |
 | `::` | Scope resolution — reach past a shadowed name ([§2.3](02-module-system.md#23-namespace-access--scope-resolution)) |
 
@@ -47,7 +54,7 @@ The compiler is a copilot: it gives you the tools, and you build the systems.
 | Everyday | Domain-specific |
 |---|---|
 | `struct`, `fn`, `lend`, `view`, `trait`, `interface` | `state`, `dock`, `jump` — for Games, State Machine, OS & embedded |
-| `?T`, `or` | `context`, `word` — for DSLs and APIs |
+| `?T`, `or` | `context`, `word` — for domain-specific syntax integration |
 | `when`, `for`, `->` | runtime/stdlib concurrency APIs — for parallel work without special syntax |
 
 ### 1.3 Design Goals
@@ -58,20 +65,26 @@ The compiler is a copilot: it gives you the tools, and you build the systems.
 - Static, zero-overhead error handling with rich recovery semantics.
 - Compile-time computation (`comptime`) as a first-class feature.
 - Low-level control, such as state functions and musttail state transitions, without sacrificing safety in everyday code.
-- Extensibility through words and macros, ideally scoped inside contexts rather than polluting the global namespace.
+- Domain-specific syntax integration through contexts, tags, and words. Contexts are not general-purpose API namespaces.
 
-### 1.4 Context-Bound Extensibility (Best Practice)
+### 1.4 Domain-Specific Syntax Integration
 
-Macros and words should ideally live inside a `context` block. Activating them globally is possible but discouraged — the same code smell as `using namespace std;` in C++.
+Contexts are reserved for APIs that deliberately integrate with a domain's
+syntax, such as SQL, HTML, or Math. They are not generic containers for public
+API declarations or general-purpose syntax declarations. Prefer scoped
+activation when a domain integration only applies to one block. Full-Zith tag
+delimiters and body kinds are defined in
+[ADR 0032](adr/0032-universal-api-project-identity-and-contexts.md). Exact
+context activation and tag declaration syntax remain under design.
 
 ```zith
-// Preferred
+// Domain-specific syntax, scoped to this block
 use SQL {
-    // SQL words and macros active only here
+    // SQL-specific forms are active here
 }
 
-// Discouraged
-use SQL;   // pollutes the rest of the file
+// The current draft also permits activation in the surrounding scope
+use SQL;
 ```
 
 ### 1.5 Compilation Pipeline
@@ -90,7 +103,7 @@ source -> lex -> scan -> resolve(import/symbols) -> sema -> comptime/solve -> NT
 | `scan` | Find top-level declarations from the token stream |
 | `resolve` | Resolve imported symbols, report duplicates |
 | `sema` | Semantic analysis — name resolution, type checking, visibility |
-| `comptime/solve` | Reserved for future generic instantiation, `comptime` evaluation, and the solved semantic view. Macro expansion currently happens during frontend parsing and uses the source AST directly |
+| `comptime/solve` | Reserved for future generic instantiation, `comptime` evaluation, and the solved semantic view. In Zith--, macro expansion currently happens during frontend parsing and uses the source AST directly. |
 | `NTA/NRA` | Accumulate semantic/resource facts, prove ownership rules, emit diagnostics, and apply only internal canonicalizations that do not change public ABI |
 | `HIR` | Build High-level IR — the typed, desugared program with residual ownership facts attached when available |
 | `LLVM` | Code generation via the LLVM backend |
@@ -116,7 +129,7 @@ source -> lex -> scan -> resolve(import/symbols) -> sema -> comptime/solve -> NT
 | 12 | [Assets](12-assets.md) | `12-assets.md` | Compile-time asset processing, `ZithProject.toml` |
 | 13 | [Raw & Unsafe](13-raw-unsafe.md) | `13-raw-unsafe.md` | `raw`, `unsafe`, `Trust` capability |
 | 14 | [Polymorphism](14-polymorphism.md) | `14-polymorphism.md` | `dyn`, static vs dynamic dispatch, object safety |
-| 15 | [Macros](15-macros.md) | `15-macros.md` | Normal and raw macros (Zith--), `tag` (full Zith), `@` prefix, call-site scope behaviour |
+| 15 | [Macros](15-macros.md) | `15-macros.md` | Zith-- normal and raw macros, full-Zith tags, and their distinct syntax |
 | 16 | [Words](16-words.md) | `16-words.md` | Custom operators, `operator`, `token`, precedence |
 | 17 | [Contexts](17-contexts.md) | `17-contexts.md` | DSL bundling, scoped activation |
 | 18 | [C Interop](18-c-interop.md) | `18-c-interop.md` | `.h` import, manual binding, `extern 'C'` |
@@ -173,7 +186,7 @@ source -> lex -> scan -> resolve(import/symbols) -> sema -> comptime/solve -> NT
 | `::` | Operators | Scope resolution — access a shadowed outer name. |
 | `and` / `or` / `not` / `xor` | Operators | Logical (English keywords). |
 | `&.` / `\|.` / `^.` / `~` / `<<` / `>>` | Operators | Bitwise. |
-| `@` / `#` | Annotations | `@` for intrinsics, reflection, and the macro prefix. `#` for variable/field attributes. |
+| `@` / `@<` / `#` | Compiler syntax | `@` for intrinsics and compiler magic, `@<` for full-Zith tags. Zith-- also uses `@` for macro calls. `#` marks variable and field attributes. |
 | `extern 'C'` | Interop | C binding — automatic via `.h`, manual, or external. |
 | `runtime` / `asm` | Config | `ZithProject` / `ZithFlags` build settings. |
 | `assets` | Config | `ZithProject.toml` asset path declarations. |

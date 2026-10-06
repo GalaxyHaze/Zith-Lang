@@ -22,8 +22,8 @@
 
 ### 21.3 Context Patterns
 
-- Group related DSL features by defining macros and words inside a single `context` block.
-- Activate at most one global context per domain to avoid pollution.
+- Reserve contexts for APIs that deliberately integrate with domain-specific syntax, such as Math, SQL, or HTML.
+- Do not use contexts as generic namespaces or containers for ordinary public APIs.
 
 ### 21.4 Error Handling Patterns
 
@@ -34,14 +34,14 @@
 - Use `fail` only for invalid values whose types implement `Error`, and use `resume value;`
   to continue with a replacement result.
 
-### 21.5 Macro Patterns
+### 21.5 Context and Tag Patterns
 
-- Prefer macros scoped inside contexts over global activation.
-- Prefer to apply context per block for the same reason.
+- Reserve contexts for APIs that deliberately integrate with domain-specific syntax.
+- Declare a tag's body kind to match the syntax the domain API needs to consume.
 
 ### 21.6 Rule of Three
 
-If a function needs more than three specialized tools (state machines, words, contexts, macros, comptime, inline error handling), something went wrong. Split the function or reconsider your abstraction.
+If a function needs more than three specialized tools (state machines, words, contexts, tags, comptime, inline error handling), something went wrong. Split the function or reconsider your abstraction.
 
 ```
 // Good — two tools: state machine + word
@@ -76,6 +76,24 @@ The Rule of Three keeps code readable. Zith gives you many tools. You don't have
 | Files | kebab-case | `game-loop.zith`, `asset-manager.zith` |
 | Constants & comptime | UPPER_SNAKE_CASE | `MAX_SIZE`, `PI`, `DEFAULT_TIMEOUT` |
 | Enums | PascalCase for the type; PascalCase for variants | `enum Direction { North, South }` |
+
+### 21.8 Universal Public API Style
+
+The universal API style is the shared design convention for public Zith APIs.
+It is separate from a project's feature policy. Multiple implementation styles
+can expose the same API, as in the three `classify(score: i32): i32` examples
+in the README.
+
+Prefer tuples over output parameters for multiple return values. Do not return
+compile-time `type` values, raw function pointers, or `dyn fn` directly from
+ordinary APIs unless the domain requires them. Use generic trait and interface
+bounds rather than `dyn` dispatch in the universal style. Keep
+`@ensure`, `maybe`, and `assume` internal unless callers need them to
+understand a specific API contract. Use `camelCase` for method names.
+
+These are conventions rather than compiler restrictions. A public API may
+depart from them when its purpose justifies the added specialization. See
+[ADR 0032](adr/0032-universal-api-project-identity-and-contexts.md).
 
 ---
 

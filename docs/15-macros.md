@@ -1,24 +1,31 @@
 ## 15. Macros
 
-> **Implementation status:** `@macro` and `raw macro` calls are implemented and expand through
-> sema/HIR. `tag` (`<Tag>`) is a full-Zith feature. Zith-- parses the call form and rejects the
-> declaration with `E2010`, so it is not part of the working subset.
+> **Implementation status:** `@macro` and `raw macro` calls are implemented in Zith-- and expand
+> through sema/HIR. Full Zith does not define user macros. Its `tag` construct is a separate
+> design feature and is not implemented. Zith-- rejects tag declarations with `E2010`.
 > See [impl-status.md](impl-status.md).
 
 | Type | Description |
 |---|---|
 | Normal (scoped) | Hygienic for bindings introduced by the macro, but template names are resolved from the call-site scope, so globals and imports remain visible when not shadowed. Requires the `@` prefix at the call site. |
 | Raw macro | Inserts code literally at the call site; not hygienic. Names resolve in the call-site scope first and fall back to globals/imports. Also requires the `@` prefix. |
-| `tag` (formerly `tag macro`) | Full Zith only. HTML-like syntax. Tag attributes must be `name: value` pairs and are available as `attributes.name` in the body. Content between tags is parsed as statements and passed as one `body` argument. Uses `<>` syntax — no `@` prefix. |
 
-> Best practice: define macros inside a `context` block ([§17](17-contexts.md)) rather than activating them globally.
+> **Full-Zith distinction:** tags are not macros. `@<` is a dedicated tag-opening delimiter, not
+> an intrinsic call or an `@` prefix applied to `<`. The closing delimiter is `</`. Standalone
+> `@` remains the marker for compiler intrinsics and compiler magic. See
+> [ADR 0032](adr/0032-universal-api-project-identity-and-contexts.md).
 
-> **Zith-- distinction:** normal `macro` and `raw macro` are the only macro forms in Zith--.
-> `tag` is a full-Zith feature and the legacy `tag macro` spelling is rejected with `E2010`.
+> **Design direction:** contexts are reserved for domain-specific syntax
+> integration, not as general-purpose namespaces for declarations. See
+> [§17](17-contexts.md) and
+> [ADR 0032](adr/0032-universal-api-project-identity-and-contexts.md).
 
-- Macros accept a special first parameter named `attributes` (with no meta-type) to receive
-  call-site attributes. `@closure|k: 1|(...)` and `<Box k: 1> ... </Box>` both expose the values
-  as `attributes.k` inside the body. A macro without that parameter rejects attribute syntax.
+> **Zith-- distinction:** normal `macro` and `raw macro` are the macro forms implemented in
+> Zith--. Full-Zith tags do not change that subset or its diagnostics.
+
+- Zith-- macros accept a special first parameter named `attributes` (with no meta-type) to
+  receive call-site attributes. `@closure|k: 1|(...)` exposes values as `attributes.k` inside
+  the macro body. A macro without that parameter rejects attribute syntax.
 
 ```zith
 macro log(msg: expr) { @println("[LOG] ", msg); }
@@ -31,10 +38,7 @@ raw macro swap(a: identifier, b: identifier) {
 macro closure(attributes, body1: block) { body1; }
 @closure|k: 1|({ ... })
 
-// Tag — attributes come from the tag syntax (full Zith only)
-<Section title: "Overview"> body </Section>
-
-// Macro parameter meta-types: identifier, expr, condition, block, body
+// Zith-- macro parameter meta-types: identifier, expr, condition, block, body
 ```
 
 ### Scope and Hygiene
@@ -54,9 +58,10 @@ block.
 The `::` scope-resolution operator remains a separate roadmap item. This
 chapter describes only the default and raw macro resolution behaviour.
 
-### 15.1 The `@` Prefix Rule
+### 15.1 Zith-- `@`-Prefixed Macro Calls
 
-The `@` prefix is what distinguishes a macro call from an ordinary function call:
+In Zith--, the `@` prefix distinguishes a macro call from an ordinary function
+call:
 
 ```zith
 // Macro call -- @ prefix
@@ -70,35 +75,35 @@ process(data);
 save(file);
 ```
 
-`tag` items are the one exception. They use `<>` syntax and never take the `@` prefix:
+This rule describes Zith-- macro calls only. Full Zith uses standalone `@` for
+compiler intrinsics and compiler magic. Its `@<` tag delimiter is a separate
+compound delimiter.
+
+### 15.2 Full-Zith Tags
+
+Tags provide domain-specific syntax integration in full Zith. They are not
+macros, and their bodies are not implicitly treated as Zith statements. A tag
+declaration specifies the representation of its required body argument.
 
 ```zith
-<Section title: "Overview"> content </Section>
+@<p>Se e louco, Zith full e foda</p>
 ```
 
-### 15.2 `tag` Declarations
+The `@<` opener and `</` closer are dedicated delimiters. A tag declaration
+must accept a body argument. Its body kind determines how the compiler presents
+the content to the tag:
 
-`tag` declares a full-Zith item invoked with HTML-like syntax, distinct from the
-Zith-- macro forms. In the full spec it is written `tag`, not `tag macro`. The
-template rule is the same as macros: only the tokens cloned at a call site are
-compiled:
+| Body kind | Contract |
+|---|---|
+| `tokens` | Exact source text as written, without Zith interpretation. |
+| `identifier` | Exactly one identifier. |
+| `ast` | Structured syntax, not necessarily evaluated. |
+| `block` | Code parsed as a Zith block. |
 
-```zith
-tag Section(attributes, content: body) {
-    let title = attributes.title;
-    content
-}
-
-<Section title: "Overview">
-    section body
-</Section>
-```
-
-Attributes are optional and must be named `attributes` as the first parameter.
-Every attribute is `name: value` (no `=` form) and is substituted wherever the
-body uses `attributes.name`. `tag` items cannot be used as expressions. Zith--
-rejects `tag macro` before lowering and keeps `<Tag> ... </Tag>` as a tag call
-that is not part of the supported Zith-- surface.
+These body kinds are not exhaustive. The exact tag declaration grammar,
+attribute grammar, and empty-body rules remain under design. This is a full-Zith
+design decision only. Zith-- behavior and its existing `macro` forms are
+unchanged.
 
 ---
 

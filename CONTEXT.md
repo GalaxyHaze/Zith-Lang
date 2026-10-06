@@ -4,27 +4,47 @@ Zith is a statically typed C++23 compiler targeting a minimal systems-language s
 
 ## Language
 
-**Zith macro**:
-A source-level `macro` declaration in a `.zith` module. It defines a reusable syntax-template expansion that runs during frontend lowering, before semantic analysis.
+**Universal Zith API**:
+The shared public-API design style intended to remain familiar across Zith implementation styles. It guides public API shape and is distinct from a project's implementation policy.
+_Avoid_: universal subset, project identity
+
+**Project language identity**:
+A project-local policy that enables or disables optional features in project-owned code and can explain those restrictions in diagnostics. It does not redefine the universal API style or apply to dependencies.
+_Avoid_: language dialect, dependency profile
+
+**Zith context**:
+A specialized syntax integration mechanism that a domain-facing API may offer for domains such as Math, SQL, or HTML. It is not an ordinary public API surface or a general-purpose API abstraction.
+_Avoid_: public API container, namespace
+
+**Zith tag**:
+A full-Zith domain-syntax construct, distinct from macros and compiler intrinsics. Its invocation is delimited by `@<` and `</`.
+_Avoid_: tag macro, intrinsic tag
+
+**Tag body kind**:
+The representation contract for a Zith tag's required body. Established kinds are `tokens` for exact source text, `identifier` for one identifier, `ast` for structured syntax, and `block` for Zith code.
+_Avoid_: macro argument kind, body meta-type
+
+**Zith-- macro**:
+A source-level `macro` declaration in the implemented Zith-- subset. It defines a reusable syntax-template expansion that runs during frontend lowering, before semantic analysis.
 _Avoid_: C macro, comptime function, inline function
 
-**Macro argument kind**:
-The declared contract for a macro parameter: `val`, `identifier`, or `ast`.
+**Zith-- macro argument kind**:
+The declared contract for a Zith-- macro parameter: `val`, `identifier`, or `ast`.
 _Avoid_: parameter meta-type, metatype, expr parameter, body parameter
 
-**Macro value argument**:
+**Zith-- macro value argument**:
 An evaluated argument produced by normal call-site expression semantics, without explicit unevaluated syntax.
 _Avoid_: expression parameter, value expression, evaluated expression
 
-**Macro identifier argument**:
+**Zith-- macro identifier argument**:
 An argument bound from a single unqualified `Name` token. Qualified names, fields, and imported members are not identifier arguments.
 _Avoid_: name parameter, identifier expression, simple name argument
 
-**Macro AST argument**:
+**Zith-- macro AST argument**:
 An unevaluated syntactic expression requested at the call site with `=expr`, where `expr` may include a block literal.
 _Avoid_: pass-by-AST, quoted expression, raw expression, unevaluated expression
 
-**Macro call attribute**:
+**Zith-- macro call attribute**:
 A named call-site attribute written in the `|name: value|` position and made visible through the macro body as `attributes.name`.
 _Avoid_: annotation, tag attribute, macro attribute list
 

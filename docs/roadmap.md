@@ -30,7 +30,7 @@
 | F-21 | `context` block semantics | 17 | Parse skipped |
 | F-22 | `use` statement semantics | 2, 17 | Parse skipped |
 | F-23 | `prefix` / `suffix` / `infix` / `nop` semantics | 16 | Parse skipped |
-| F-24 | `tag` items (`<Tag>`, formerly `tag macro`) | 15 | Full Zith only; Zith-- parses the call form and rejects the declaration with `E2010` |
+| F-24 | Full-Zith tag items (`@<Tag> ... </Tag>`) | 15 | Design direction accepted; not implemented. Zith-- parses the legacy `<Tag>` call form and rejects the declaration with `E2010` |
 | F-25 | Assets (`ZithProject.toml` asset paths) | 12 | Spec only |
 | F-26 | `::` scope resolution | 2 | Spec only (normal/raw macro scope diversification is complete; `::` remains a separate wave) |
 | F-27 | Binding destructuring (`[]`) and pack literals | 6 | Spec only |
@@ -114,16 +114,17 @@ F-29 (trait constraints `T: Trait`) is covered by generic constraints.
 F-07 now has codegen coverage for nominal traits. Interfaces use the same HIR/codegen path.
 
 ### Wave 07 — Macros, Words & Contexts
-F-08 (`@macro` calls) is implemented. Normal macros keep hygiene for template
-bindings and resolve other names through the call-site scope. Raw macros splice
-literally into the call-site scope with module/global fallback. F-24 (`tag`,
-formerly `tag macro`) is full Zith only; Zith-- parses the call form and
-rejects the declaration with `E2010`, so it is not part of the working core.
+F-08 (`@macro` calls) is implemented in Zith--. Normal macros keep hygiene for
+template bindings and resolve other names through the call-site scope. Raw
+macros splice literally into the call-site scope with module/global fallback.
+F-24 is a full-Zith-only tag feature. Its design uses `@<Tag> ... </Tag>`, and
+it is not implemented. Zith-- retains separate legacy `<Tag>` call parsing and
+rejects tag declarations with `E2010`.
 Remaining work in this wave: F-09 (word call/sequence
 expressions), F-21 (context semantics), F-22 (`use` semantics), F-23 (word decl
 semantics), and F-26 (`::` scope resolution).
 
-Dependencies: the macro expander is complete. Word/context semantics still need F-09 words parsed first.
+Dependencies: the Zith-- macro expander is complete. Word/context semantics still need F-09 words parsed first.
 
 ### Wave 08 — Runtime Concurrency Surface
 F-18 (runtime task/coroutine APIs), F-19 (runtime thread/channel APIs), F-20 (NRA facts needed by
