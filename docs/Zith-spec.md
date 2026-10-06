@@ -10,7 +10,7 @@
 
 ## Introduction
 
-Zith gives you full control with a minimal & clean syntax — you don't have to choose between verbose but safe or readable but slow. Its memory model, Node Resource Analysis (NRA), proves ownership and lifetime safety using five keywords: `lend`, `view`, `own`, `share`, and `belong` — plus a `default` (no keyword) modifier.
+Zith gives you full control with a minimal & clean syntax — you don't have to choose between verbose but safe or readable but slow. Its memory model, Node Resource Analysis (NRA), proves ownership and lifetime safety. The full-Zith direction uses `&T` and `&mut T` references, `^T` binds, and `%T` owned values, with an implicit `default` form. Zith-- currently implements a separate `lend`/`view` call-annotation subset; see [Implementation Status](impl-status.md).
 
 Beyond memory safety, Zith has a general-purpose core with a larger toolbox: state machines, contexts for domain-specific syntax, words (custom operators), and comptime. You choose when to use them. Zith also follows the **Rule of Three**: "if a function needs more than three specialized tools, something went wrong."
 
@@ -53,7 +53,7 @@ The compiler is a copilot: it gives you the tools, and you build the systems.
 
 | Everyday | Domain-specific |
 |---|---|
-| `struct`, `fn`, `lend`, `view`, `trait`, `interface` | `state`, `dock`, `jump` — for Games, State Machine, OS & embedded |
+| `struct`, `fn`, `&`, `&mut`, `trait`, `interface` | `state`, `dock`, `jump` — for Games, State Machine, OS & embedded |
 | `?T`, `or` | `context`, `word` — for domain-specific syntax integration |
 | `when`, `for`, `->` | runtime/stdlib concurrency APIs — for parallel work without special syntax |
 
@@ -121,7 +121,7 @@ source -> lex -> scan -> resolve(import/symbols) -> sema -> comptime/solve -> NT
 | 4 | [Traits, Interfaces & Capabilities](04-traits-interfaces.md) | `04-traits-interfaces.md` | Nominal traits and composition, static structural interface contracts, capabilities |
 | 5 | [Functions](05-functions.md) | `05-functions.md` | `fn`, `const fn`, `state`, `raw fn`, `extern fn`, return types |
 | 6 | [Mutability & Bindings](06-mutability-bindings.md) | `06-mutability-bindings.md` | `let`, `var`, `global`, `const`, deep mutability, destructuring |
-| 7 | [Memory Model (NRA)](07-memory-model.md) | `07-memory-model.md` | Ownership, `lend`/`view`/`own`/`share`/`belong`, the four rules |
+| 7 | [Memory Model (NRA)](07-memory-model.md) | `07-memory-model.md` | Full-Zith ownership through `&`/`&mut`, `^`, and `%`, plus the four rules. Zith-- implements the `lend`/`view` call-annotation subset. |
 | 8 | [Error Handling](08-error-handling.md) | `08-error-handling.md` | `Failable` / `Invalid`, inferred invalid states, `try` / `or`, `fail`, `must` |
 | 9 | [Control Flow](09-control-flow.md) | `09-control-flow.md` | `if`, `when`, `for`, `->`, `state`, docks, jumps |
 | 10 | [Concurrency & Runtime APIs](10-concurrency.md) | `10-concurrency.md` | stdlib/runtime concurrency surface, resource safety, no core syntax |
@@ -161,7 +161,7 @@ source -> lex -> scan -> resolve(import/symbols) -> sema -> comptime/solve -> NT
 | `\| \|` | Types | Pack — named tuple / variadic / closure capture group. |
 | `pub` / `mod` / `mod(..)` / `mod(N)` | Visibility | Public / module-local, with optional depth. |
 | `let` / `var` / `global` / `const` | Bindings | Immutable / mutable / static storage / compile-time constant. |
-| `default` / `lend` / `view` / `own` / `share` / `belong` | Memory | NRA memory modifiers — `default` is implicit when no keyword is written. |
+| `default` / `&T` / `&mut T` / `^T` / `%T` | Memory | Full-Zith reference and ownership forms. Zith-- currently implements the `lend`/`view` call-annotation subset. |
 | `fn` / `const fn` / `state` / `raw fn` / `extern fn` | Functions | Five exclusive function kinds; cannot be combined. |
 | `trait` / `interface` / `extends` / `requires` / `dyn` | OOP | Nominal traits, trait composition, static interface contracts, bounds, and trait dynamic dispatch. |
 | `Copy` / `Functor` / `Arithmetic` | Capabilities | Operator and behavior capabilities. |

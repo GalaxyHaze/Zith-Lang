@@ -12,6 +12,13 @@
 > `@ptrOf(local)` are pointer objects that must not escape to longer-lived storage.
 > See [impl-status.md](impl-status.md).
 
+The implemented Zith-- behavior above is separate from the full-Zith reference
+direction. [ADR-0033](adr/0033-nra-reference-model-and-bind.md) defines `&T`,
+`&mut T`, `^T`, and `%T`; [the future NRA spec](nra-spec.md) is its source of
+truth. Sections 7.3-7.5 below preserve an earlier full-Zith draft and are not
+the current full-Zith surface contract. The self-referential example in §7.8
+also uses that earlier surface.
+
 ### 7.1 What NRA Tracks
 
 The ownership system is split conceptually into two layers:

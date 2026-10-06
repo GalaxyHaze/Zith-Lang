@@ -10,7 +10,7 @@
 
 ## Introduction
 
-Zith gives you full control with a minimal & clean syntax — you don't have to choose between verbose but safe or readable but slow. Its memory model, Node Resource Analysis (NRA), proves ownership and lifetime safety using five keywords: `lend`, `view`, `own`, `share`, and `belong` — plus a `default` (no keyword) modifier.
+Zith gives you full control with a minimal & clean syntax — you don't have to choose between verbose but safe or readable but slow. Its memory model, Node Resource Analysis (NRA), proves ownership and lifetime safety using `&T` references, `^T` binds, `%T` own values, and the implicit `default` form.
 
 Beyond memory safety, Zith has a general-purpose core with a larger toolbox: state machines, contexts for domain-specific syntax, words (custom operators), and comptime. You choose when to use them. Zith also follows the **Rule of Three**: "if a function needs more than three specialized tools, something went wrong."
 
@@ -82,7 +82,7 @@ The compiler is a copilot: it gives you the tools, and you build the systems.
 
 | Everyday | Domain-specific |
 |---|---|
-| `struct`, `fn`, `lend`, `view`, `trait`, `interface` | `state`, `dock`, `jump` — for Games, State Machine, OS & embedded |
+| `struct`, `fn`, `&`, `&mut`, `trait`, `interface` | `state`, `dock`, `jump` — for Games, State Machine, OS & embedded |
 | `?T`, `or` | `context`, `word` — for domain-specific syntax integration |
 | `when`, `for`, `|>`/`do` | runtime/stdlib concurrency APIs — for parallel work without special syntax |
 
@@ -237,7 +237,7 @@ union AnyNumber { i32, f64, bool }
 | Other primitives | `bool`, `char`, `void` |
 | Compiler-internal | `unknown` — a valid but unresolved type, not user-instantiable. `invalid` — a dead or uninitialized state (a moved variable, a proven-null variable). Neither can be named or stored by user code. |
 | Special | `never`, `null` |
-| Opaque | `opaque` — a reference type (`view` by default), equivalent to a tagged `void*`. `raw opaque` is an untagged `void*`, used for C interop. |
+| Opaque | `opaque` — a reference type (`&` by default), equivalent to a tagged `void*`. `raw opaque` is an untagged `void*`, used for C interop. |
 
 ### 3.2 Slice & Array Types
 
@@ -304,12 +304,11 @@ struct Transform {
 ```zith
 struct Pair<T, U> { first: T, second: U }
 
-// Doubly-linked list node
+// Illustrative ownership graph. Exact optional-field spelling remains open.
 struct Node<T> {
     data: T,
-    //Self = Node<T>
-    next: ?own Self,   // owns next; null at tail
-    prev: ?belong Self,   // back-ref; lifetime tied to parent; null at head
+    next: Option<%Self>,
+    prev: Option<^Self>,
 }
 ```
 
@@ -321,8 +320,8 @@ Structs, enums, and unions can declare methods without bodies in the type defini
 // Struct — declares methods, no body
 struct Node<T> {
     data: T,
-    next: ?own Self,
-    prev: ?belong Self,
+    next: Option<%Self>,
+    prev: Option<^Self>,
     fn isHead(self): bool;   // declared, no body
     fn isTail(self): bool;   // declared, no body
 }
@@ -383,7 +382,7 @@ A component must satisfy all of the following constraints:
   - Must return a value — `void` is not allowed.
 - Copying is always bitwise (memcpy-safe).
 - Layout is C-compatible — no vtable, no fat pointers.
-- No self-referential fields (`?own Self`, `?belong Self`).
+- No self-referential ownership or bind fields. See [§7.8](#78-self-referential-types).
 
 ### 3.6 Union
 
@@ -618,12 +617,12 @@ interface Normalize {
 ```
 
 Unqualified `[x, y]` follows the mutability available through the passed value.
-With a `lend` value, it requires mutable fields and permits writes through that
-access. With `view`, access remains read-only regardless of the field
+With an `&mut` reference, it requires mutable fields and permits writes through
+that access. With an `&` reference, access remains read-only regardless of the field
 declaration.
 `let [x, y]` promises that the fields are immutable while the contract is
 active. `var [x, y]` requires mutable fields; writing still requires a mutable
-access mode such as `lend`. In particular, `view` remains read-only, even for
+access mode such as `&mut`. In particular, `&` remains read-only, even for
 fields declared `var`; it never permits interior mutation. `var` does not add
 implicit synchronization or relax cross-thread safety requirements.
 
@@ -664,11 +663,11 @@ Capabilities are special traits that feed the compiler more information, unlocki
 | `Invalid` | A `Failable` type may implement it to expose methods available only after flow analysis proves that its value is invalid. |
 | `Allocator` | To provide custom allocators |
 | `Generator` | Allows creating runtime-defined resumable or streaming protocols without introducing a dedicated core function kind. |
-| `Share` | Required for `global: share` and crossing thread boundaries |
+| `Share` | Capability for values that may cross thread boundaries. It is separate from reference and ownership forms. |
 | `ThreadBackend` | Provides a concrete thread handle for explicit `fork`/`merge`, e.g. `pThread` |
-| `Lent` | Enables `global: own`, a runtime-checked exclusive borrow. `global` bindings cannot be moved — `Lent` manages thread-safe distribution. Also allows `lend` parameters. |
+| `Lent` | Enables runtime-checked access to immovable global bindings. Also allows `&mut` parameters. |
 | `Trust` | A trait extending `Trust` may contain `raw fn` methods callable from safe contexts. |
-| `Unique` | Marks a singleton type. It cannot be instantiated — the type name itself acts as the instance. All fields must implement `Share` (thread-safe). An `own Local` variant is a singleton thread-local. |
+| `Unique` | Marks a singleton type. It cannot be instantiated — the type name itself acts as the instance. All fields must implement `Share` (thread-safe). A `%Local` variant is a singleton thread-local. |
 
 #### `Failable` & `Invalid` — Invalid-State Capabilities
 
@@ -721,16 +720,12 @@ AppConfig.port = 8080;
 // let cfg = AppConfig { ... };  -- COMPILE ERROR
 ```
 
-#### `Share` — Mutable State Across Thread Boundaries
+#### `Share` — Values Across Thread Boundaries
 
-```zith
-// Share is mutable, multiple names, multiple threads, all can write
-global counter: share Atomic<i32> = 0;
-
-// Without the Share capability, cross-thread access is a compile error
-struct LocalOnly { data: i32 }
-// global bad: share LocalOnly = ...;  -- COMPILE ERROR: lacks Share
-```
+`Share` is a capability for values that may cross thread boundaries. It is
+not a reference or ownership form. The older `global: share` spelling appears
+in the accepted thread protocol examples below and remains to be reconciled
+with the full-Zith reference model.
 
 #### `ThreadBackend` — Thread Fork/Merge
 
@@ -742,6 +737,10 @@ blocks and consumes that handle once:
 let t: PThreadHandle<i32> = pThread fork Update(share state, n);
 let result: i32 = merge t;
 ```
+
+The thread examples below retain `share` payload notation from [ADR-0015](adr/0015-full-zith-thread-fork-merge.md).
+That notation is part of the accepted thread draft and has not yet been reconciled
+with [ADR-0033](adr/0033-nra-reference-model-and-bind.md).
 
 `fork` is a core keyword that names the entry action and the backend object;
 `spawn Entry(args)` is a stdlib shorthand for the active backend. There is no
@@ -877,7 +876,7 @@ owner's content mutability. `let field` keeps that field immutable even when its
 owner is mutable. `var field` keeps it mutable through an otherwise immutable
 owner.
 
-`var field` does not bypass a read-only memory access. A `view` cannot write
+`var field` does not bypass a read-only memory access. An `&` reference cannot write
 the field, even when it is declared `var`. The qualifier also does not add
 synchronization or relax cross-thread safety requirements.
 
@@ -885,15 +884,15 @@ synchronization or relax cross-thread safety requirements.
 struct Counter {
     value: i32,       // follows the owner's mutability
     let id: u64,      // always immutable
-    var scratch: i32, // mutable through a non-view access
+    var scratch: i32, // mutable through a writable access
 }
 
-fn update(counter: lend Counter) {
+fn update(counter: &mut Counter) {
     counter.scratch += 1;
 }
 
-fn inspect(counter: view Counter) {
-    // counter.scratch += 1; // COMPILE ERROR: view is read-only
+fn inspect(counter: &Counter) {
+    // counter.scratch += 1; // COMPILE ERROR: & is read-only
 }
 ```
 
@@ -914,12 +913,9 @@ fn inspect(counter: view Counter) {
 let x: mut Point;      // cannot reassign x; Point's fields are mutable (mut)
 var y: Point;          // can reassign y; Point's fields are immutable (default, no mut)
 
-// lend, own, share, belong → imply mut
-fn update(p: lend Point) { p.x += 1; }  // p is mutable (lend implies mut)
-let r: own Resource = acquire();     // r's fields are mutable (own implies mut)
-
-// view → implies immutable
-fn read(c: view Config) { ... }         // c is read-only (view implies immutable)
+// References state their access mode.
+fn update(p: &mut Point) { p.x += 1; }
+fn read(c: &Config) { ... }
 
 const PI = 3.14159;
 const COUNT: mut = 0;
@@ -986,11 +982,11 @@ It also tracks the **origin** of each node — where the value came from:
 | `literal` | `"hello"`, `42` — zero cost, no allocation |
 | `allocator` | Heap-allocated via `new` or concatenation |
 | `local` | Stack variable |
-| `view` | Read-only reference to another node |
+| `reference` | Non-owning access to another node through `&T` or `&mut T` |
 
 With these two axes (state + origin), NRA enforces the rules in [§7.4](#74-the-four-nra-rules).
 NTA also records aliasing, branch-local facts, whether a return value is the same node received as
-an argument, and whether a `belong` or borrowed value escapes its legal region.
+an argument, and whether a bind or reference escapes its legal lifetime.
 
 ### 7.2 Move Semantics
 
@@ -1009,101 +1005,101 @@ In effect, if `a` is never reassigned, it is as though `a` never existed and `b`
 
 ### 7.3 Memory Modifiers
 
-| Modifier | Relationship | Common use |
+The accepted full-Zith surface in [ADR-0033](adr/0033-nra-reference-model-and-bind.md)
+uses `&` for references, `^` for binds, and `%` for own values. Older spellings
+such as `lend`, `view`, `share`, and `belong` are not the canonical forms.
+
+| Form | Relationship | Common use |
 |---|---|---|
 | `default` | Owned. Lifetime follows the binding. | Variables, struct fields |
-| `lend` | Exclusive mutable temporary. Cannot be stored, moved, or captured — but **can be returned**, passing the promise to the caller. `belong` fields can also be passed as `lend`. | Passing mutable references to functions |
-| `view` | Read-only, non-owning reference. Many views may coexist. | Inspecting without ownership |
-| `own` | Single-owner guarantee — only one name in the graph. | Ownership-transfer patterns |
-| `share` | Multiple names, same node, statically validated — no ref-counting. Mutable. | Compile-time-proven sharing |
-| `belong` | Part-of relationship. Node lifetime tied to its parent; cannot be stored independently. Can be passed as `lend`. | Back-pointers, hierarchies |
+| `&T` | Read-only, non-owning reference. It is region-bound and pins its source against relocation or consumption while live. | Reading without taking ownership |
+| `&mut T` | Writable reference with the same region and pinning rules as `&T`. | Temporary mutation |
+| `^T` | Non-owning bind with no region limit or pin. It is invalidated if its target is consumed or relocated. | General lifetime dependencies |
+| `%T` | Own value. It represents logical ownership of an address or slot. | Ownership transfer |
+
+In a type, `&T` and `&mut T` declare reference types. This is distinct from
+prefix `&` applied to an expression. The latter remains the Zith-- address-of
+form and keeps its documented Zith-- semantics. The accepted full-Zith model
+does not convert `&` or `^` references into raw pointers.
+
+`^` expresses a general lifetime dependency, not only a structural parent
+relationship. A bind can be a parameter or a return value. A live reference
+pins only its referenced subgraph, so a reference to one field does not block
+an unrelated sibling field from moving.
 
 ### 7.3.1 Re-binding With `:=`
 
-`=` assigns values; `:=` re-binds the reference or ownership slot itself. It
-retargets an existing `own`, `share`, `lend`, `belong`, or `view` link, and it
-installs an owner into a slot that is awaiting one.
+`=` assigns values; `:=` re-binds a reference or bind, or installs an owner
+into a slot that is awaiting one.
 
 ```zith
-var slot: own Buffer = acquireBuffer();  // OK: initialization uses `=`
-slot := acquireBuffer();      // ERROR: first owner is still live
-let slot2 = &slot;            // slot2 owns the storage; slot is dead
-slot := acquireBuffer();      // OK: install into the dead slot
+var slot: %Buffer = acquireBuffer();  // Initialization uses `=`.
+slot := acquireBuffer();              // Error while the first owner is live.
 ```
 
-`:=` never overwrites a live owner. For `lend`, the source node must be alive
-when the borrow starts and the previous borrow must end before the new one
-starts. For `belong`, the new parent must still satisfy the normal escape and
-parent-alive rules. For `view` and `share`, it only changes which node the
-link points at; it does not create or remove ownership.
+`:=` never overwrites a live owner. Rebinding `&` or `^` changes the target
+relation and does not create ownership. A bind target must satisfy the normal
+lifetime rules.
 
-`own T` is the full-Zith surface name for the former `unique T`. The NRA
-semantic stays a mutable single-owner handle. A stack-backed handle may not
-escape its storage scope.
+`%T` is the full-Zith spelling for an own value. A stack-backed owned handle
+may not escape its storage scope.
 
-> `own` provides compile-time single-owner guarantees for local bindings. In a `global` context, `own` becomes runtime-checked — the compiler enforces exclusive access at program startup. `global` bindings cannot be moved; the `Lent` capability manages thread-safe distribution.
+> `%` provides compile-time single-owner guarantees for local bindings. In a
+> `global` context, the existing `Lent` capability manages runtime-checked
+> distribution. `global` bindings cannot be moved.
 
-> In practice, most code only needs `lend` and `view`.
+> In practice, most code uses `&T` and `&mut T` for references.
 
 #### Implicit Mutability
 
-Each memory modifier carries an implicit content mutability level:
+Reference access mutability is explicit:
 
-| Modifier | Implies | Example |
+| Form | Access | Example |
 |---|---|---|
-| `lend` | Mutable | `fn update(p: lend Point) { p.x += 1; }` — `p` is mutable |
-| `own` | Mutable | `let r: own Resource = ...;` — `r`'s fields are mutable |
-| `share` | Mutable | `global counter: share i32 = 0;` — mutable across threads |
-| `belong` | Mutable | `parent: ?belong Self` — mutable back-pointer |
-| `view` | Immutable | `fn read(c: view Config) { ... }` — `c` is read-only |
-| `default` | Depends on `mut` | `let x: Point;` — immutable. `let x: mut Point;` — mutable. |
+| `&T` | Read-only | `fn read(c: &Config) { ... }` |
+| `&mut T` | Writable | `fn update(p: &mut Point) { p.x += 1; }` |
+| `default` | Depends on `mut` | `let x: Point;` is immutable; `let x: mut Point;` is mutable. |
 
-`default` is the only modifier where mutability is explicitly controlled via the `mut` keyword. All others carry their mutability semantics implicitly.
+The spelling and access mutability of writable bind and own forms are not
+fixed by ADR-0033. `default` continues to use `mut` to control content
+mutability.
 
-`view` remains read-only for every field, including a struct field declared
-`var`. A field qualifier does not permit interior mutation through a `view`.
-It also does not add synchronization or relax cross-thread safety requirements.
+`&T` remains read-only for every field, including a struct field declared
+`var`. A field qualifier does not permit interior mutation through a read
+reference. References also do not add synchronization or relax cross-thread
+safety requirements.
 
 ### 7.4 The Four NRA Rules
 
-**Rule 1 — Argument Exclusivity.** In any call expression, each argument must refer to a distinct node, without exception:
-- Duplicating a `default` / `own` / `lend` argument → **ownership error**.
-- Duplicating a `share` / `view` argument → **logic error** (passing the same resource twice is almost certainly a bug).
+**Rule 1 — Boundary Access.** At an access boundary, several readers or one
+writer may access the same resource. A read and a writer to the same resource
+cannot coexist at that boundary. `&mut T` counts as a writer.
 
-**Rule 2 — No Dead Node Access.** A symbol cannot be read while its node is `dead`.
+**Rule 2 — No Dead Node Access.** A symbol cannot be read while its node is
+`dead`.
 
-**Rule 3 — No Escaping `belong`.** A `belong` node cannot be stored anywhere whose lifetime exceeds any node in its dependency vector. At every use, all of its parents must be `alive`.
+**Rule 3 — No Escaping Bind.** A bind cannot outlive the target required by
+its lifetime dependency. If the target is consumed or relocated, NRA reports
+invalidation at the bind's next use.
 
-**Rule 4 — `lend` Behavioral Promise.** A `lend` value cannot be stored, moved, or captured. It may be passed as a call argument or returned — in the latter case, passing the promise on to the caller.
+**Rule 4 — Reference Pinning.** A live `&T` or `&mut T` prevents relocation
+or consumption of its source subgraph. The check does not cover unrelated
+sibling fields.
 
-> For details on how NRA resolves nodes and validates these rules, see [§7.9](#79-how-nra-resolves-nodes).
+For details on how NRA resolves nodes and validates these rules, see
+[§7.9](#79-how-nra-resolves-nodes).
 
 ### 7.5 NRA in Practice
 
 ```zith
-// lend -- exclusive temporary borrow
-fn scale(p: lend Point, factor: f32) { p.x *= factor; p.y *= factor; }
-let pt = mut Point { x: 3.0, y: 4.0 };
-scale(pt, 2.0);
-@println(pt.x);   // OK: borrow ended
+// Writable reference.
+fn scale(p: &mut Point, factor: f32) { ... }
 
-// view -- multiple read-only refs
-let v1: view Point = pt;
-let v2: view Point = pt;   // fine
+// Multiple read-only references may coexist.
+fn inspect(a: &Point, b: &Point) { ... }
 
-// share -- no ref-count, statically proven
-let a: share Config = load();
-let b: share Config = a;   // both point to the same node
-
-// belong -- back-pointer cannot outlive its parent
-struct Tree<T> {
-    data:     T,
-    children: []own Self,
-    parent:   ?belong Self,
-}
-
-// belong fields can be passed as lend
-fn getParent(self: view Node): lend Node { self.parent }
+// A bind can express a non-structural lifetime dependency.
+fn parentOf(node: &Node): ^Node { ... }
 ```
 
 ### 7.6 Boundary Before HIR
@@ -1112,7 +1108,7 @@ The main NRA proof runs before the final HIR is formed. That boundary exists so 
 sees:
 
 - binding identity and resource graphs;
-- the difference between `default`, `view`, `lend`, `own`, `share`, and `belong`;
+- the difference between `default`, `&`, `^`, and `%`;
 - branch facts, narrowing facts, and return-path equivalence;
 - call, capture, and escape structure before lowering erases it.
 
@@ -1140,23 +1136,11 @@ temporaries and stores.
 
 ### 7.8 Self-Referential Types
 
-```zith
-struct Node<T> {
-    data: T,
-    next: ?own Self,
-    prev: ?belong Self,
-}
-
-implement Node<T> {
-    fn append(self: lend Self, data: T) {
-        self.next := own Node { data, next: null, prev: belong self };
-    }
-}
-```
-
-- Freeing the head frees the entire chain, since `next` forms an `own` ownership chain.
-- NRA guarantees `prev` (`belong`) never outlives its owner.
-- `belong` fields may be passed as `lend` to functions.
+A self-referential structure can use an owning edge for `next` and a bind for
+`prev`. The target must have a stable address because a bind does not pin it.
+If the target is consumed or relocated, NRA reports the bind's invalidation at
+its next use. The exact optional-field spelling and initialization syntax for
+this pattern remain open.
 
 ### 7.9 How NRA Resolves Nodes
 
@@ -1507,6 +1491,10 @@ message queues, join handles, or resumable tasks. `spawn` is a stdlib shorthand
 for an implicit fork and is activated through a context; the core protocol itself
 is explicit:
 
+The following examples preserve `share` payload notation from accepted
+[ADR-0015](adr/0015-full-zith-thread-fork-merge.md). Its replacement under
+[ADR-0033](adr/0033-nra-reference-model-and-bind.md) remains unresolved.
+
 ```zith
 use threading.pthread;
 
@@ -1561,7 +1549,7 @@ Concurrency-related safety is enforced through the same pre-HIR ownership proof 
 else:
 
 - whether a call duplicates a resource illegally;
-- whether a borrowed or `belong` value escapes;
+- whether a borrowed value or bind escapes;
 - whether narrowing facts or branch facts justify later lowering decisions;
 - whether shared/runtime-managed resources are passed only through the capabilities and wrapper types
   that define the contract.
@@ -1824,16 +1812,15 @@ Inside a smart-cast branch (`is`), the type narrows to the concrete type. Mutati
 
 ### 14.3 `dyn` Traits
 
-`dyn Trait` is a `view` by default — a read-only, non-owning reference with a vtable. That means `view dyn` is redundant.
+`dyn Trait` is a read-only, non-owning reference with a vtable by default.
 
-All other memory modifiers work with `dyn`:
+The reference and ownership forms apply to `dyn` values:
 
 | Keyword | `dyn` behavior |
 |---|---|
-| `view dyn` | Redundant — `dyn` is already a view |
-| `share dyn` | Multiple names, same dynamic value |
-| `lend dyn` | Exclusive mutable borrow of a dynamic value |
-| `own dyn` | Single-owner dynamic value |
+| `&dyn Trait` | Read-only dynamic reference. This is the default form. |
+| `&mut dyn Trait` | Writable dynamic reference. |
+| `%dyn Trait` | Owned dynamic value. |
 
 ```zith
 fn draw_all(items: dyn []Drawable) {
@@ -1841,7 +1828,7 @@ fn draw_all(items: dyn []Drawable) {
 }
 
 //specific verbose, you could use an interface or alias to simplify
-fn modify(shape: lend dyn Drawable) {
+fn modify(shape: &mut dyn Drawable) {
     shape.scale(2.0);
 }
 ```
@@ -2110,8 +2097,8 @@ Override or supplement auto-generated bindings to attach Zith-specific semantics
 ```zith
 // Equivalent declarations — malloc is a C function (no namespace)
 // bindToC is subject to Zith namespace rules
-fn bindToC = extern 'C' malloc(size: u64): own opaque;
-extern 'C' malloc(size: u64): own opaque;   // same thing, no namespace alias
+fn bindToC = extern 'C' malloc(size: u64): %opaque;
+extern 'C' malloc(size: u64): %opaque;   // same thing, no namespace alias
 ```
 
 ### 18.3 External (No Header)
@@ -2218,7 +2205,7 @@ fn eprint(msg: []char): void;
 
 ```zith
 struct DynArray<T> {
-    fn push(self: lend, val: T);
+    fn push(self: &mut Self, val: T);
     fn pop(self): ?T;
     fn len(self): u64;
     fn get(self, index: u64): ?T;
@@ -2230,8 +2217,8 @@ struct DynArray<T> {
 struct File { ... }
 
 fn open(path: string): File!;
-fn read(self: view File): []u8!;
-fn write(self: lend File, data: []u8): void!;
+fn read(self: &File): []u8!;
+fn write(self: &mut File, data: []u8): void!;
 ```
 
 ### 20.3 Common Traits
@@ -2240,7 +2227,7 @@ fn write(self: lend File, data: []u8): void!;
 |---|---|
 | `Copy` | Bitwise copy — primitives and components get this by default |
 | `Clone` | `fn clone(self): Self!` |
-| `Lent` | Can appear as a `lend` parameter |
+| `Lent` | Can appear with a writable reference (`&mut`) parameter |
 | `Share` | Safe to share across threads |
 
 ---
@@ -2249,11 +2236,11 @@ fn write(self: lend File, data: []u8): void!;
 
 ### 21.1 Ownership Patterns
 
-- **Resources shall be `own`:** `let resource: own = Resource.new();`
-- **Use `share` for intentional multiple owners:** implement `Share` and `Clone` explicitly.
-- **Use `view` for reading:** `fn process(config: view Config)`
-- **Use `lend` for temporary mutation:** `fn update(state: lend GameState)`
-- **Use `belong` for part-of relationships,** such as back-pointers.
+- **Use `%T` for owned resources:** `let resource: %Resource = Resource.new();`
+- **Use `&T` for read access:** `fn process(config: &Config) { ... }`
+- **Use `&mut T` for writable access:** `fn update(state: &mut GameState) { ... }`
+- **Use `^T` for a non-owning lifetime dependency:** the target must remain stable and valid.
+- **Use the `Share` capability for values that may cross thread boundaries.**
 
 ### 21.2 Invalid-State Patterns
 
@@ -2361,7 +2348,7 @@ when its purpose justifies the added specialization. See
 | `\| \|` | Types | Pack — named tuple / variadic / closure capture group. |
 | `pub` / `mod` / `mod(..)` / `mod(N)` | Visibility | Public / module-local, with optional depth. |
 | `let` / `var` / `global` / `const` | Bindings | Immutable / mutable / static storage / compile-time constant. |
-| `default` / `lend` / `view` / `own` / `share` / `belong` | Memory | NRA memory modifiers — `default` is implicit when no keyword is written ([§7](07-memory-model.md)). |
+| `default` / `&T` / `&mut T` / `^T` / `%T` | Memory | Full-Zith ownership and reference forms. `default` is implicit when no modifier is written ([§7](07-memory-model.md), [ADR-0033](adr/0033-nra-reference-model-and-bind.md)). |
 | `fn` / `const fn` / `state` / `raw fn` / `extern fn` | Functions | Five exclusive function kinds; cannot be combined. |
 | `trait` / `interface` / `extends` / `requires` / `dyn` | OOP | Nominal traits, structural interfaces, extension, constraints, dynamic dispatch. |
 | `Copy` / `Functor` / `Arithmetic` | Capabilities | Operator and behavior capabilities. |

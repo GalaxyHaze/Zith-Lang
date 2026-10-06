@@ -22,9 +22,10 @@ The core contract deliberately keeps a small state machine:
 - `lent`: the resource is temporarily borrowed. The owner cannot use it until
   the borrow ends.
 
-`lend`, `view`, `own`, `share`, `belong`, and `MultiShare` are permissions,
-ownership groups, anchors, or transport wrappers. They are not extra states in
-the proof state machine.
+`&`, `^`, `%`, and `MultiShare` describe references, lifetime dependencies,
+ownership, or transport. They are not extra states in the proof state machine.
+The accepted surface contract for `&`, `^`, and `%` is recorded in
+[ADR-0033](adr/0033-nra-reference-model-and-bind.md).
 
 ## 2. Effect Header
 
@@ -41,7 +42,7 @@ For each argument the header records:
 | `read` | The callee reads the argument value. |
 | `write` | The callee writes through the argument. |
 | `move` | The callee consumes or transfers the argument. |
-| `borrow` | The callee obtains a temporary `lend` or `view`. |
+| `borrow` | The callee obtains a temporary `&` or `&mut` reference. |
 
 ### 2.2 Argument Origins
 
@@ -64,8 +65,8 @@ The header records how the return value relates to owned resources:
 
 - `returnsArgument(i)`
 - `returnsNewOwned`
-- `returnsBorrow(i)`
-- `returnsView(i)`
+- `returnsReference(i)`
+- `returnsBind(i)`
 
 Calls whose return can branch between several provenances use the conservative
 union of the possible return facts.
@@ -91,12 +92,11 @@ for the interop design.
 The NRA consumes effect-headers and mutates the call-site resource graph:
 
 1. Apply argument effects to the corresponding resource nodes.
-2. If the callee borrows an argument, mark the owned resource as `lent` for the
-   call duration, or create an anchor for the returned relationship.
+2. If the callee borrows an argument, apply the reference boundary rules for
+   the call duration, or record the returned reference or bind relationship.
 3. If the callee moves an argument, move the logical ownership and mark the
    original binding `dead`.
-4. Attach `returnsBorrow(i)` or `returnsView(i)` as an anchor chain from the
-   argument node.
+4. Attach `returnsReference(i)` or `returnsBind(i)` to the argument node.
 5. Record the transfer and actual result provenance for the caller.
 
 When a function has a cached effect-header, the call site uses that header. The
@@ -124,29 +124,42 @@ node:
 The exact in-memory layout is an implementation suggestion, not a mandated ABI.
 The spec fixes the semantic edges, not the data structure.
 
-## 5. Ownership Modifiers
+## 5. Reference And Ownership Surface
 
-| Modifier | Contract |
+| Form | Contract |
 |---|---|
-| `default` | Owned by the binding. Lifetime follows the resource graph. |
-| `lend` | Exclusive mutable temporary borrow. The owner cannot use the resource while it is lent. |
-| `view` | Read-only anchor. A view never owns, never destroys, and never promotes stack storage to heap. |
-| `own` | Logical ownership of an address/slot. It is the former surface name `unique`. Moving an own value marks the source binding dead. |
-| `share` | Owner group. Several static owners may coexist; cleanup happens when the last owner edge ends. |
-| `belong` | Child/parent lifetime edge. It cannot escape its parent and can be passed as `lend`. |
+| `default` | The binding owns its resource. Lifetime follows the resource graph. |
+| `&T` | Read-only reference. It is non-owning, region-bound, and pins its source against relocation or consumption while live. |
+| `&mut T` | Writable reference with the same region and pinning rules as `&T`. |
+| `^T` | Non-owning bind. It expresses a general lifetime dependency without a region limit or pin. It becomes invalid if its target is consumed or relocated. |
+| `%T` | Logical ownership of an address or slot. Moving it marks the source binding dead. |
 
-`view` is called an anchor, not a weak owner. Anchors can delay cleanup, but
-they cannot destroy and they never imply storage ownership.
+`&` and `^` represent non-owning edges. `&` adds a region limit and a pin,
+while `^` is an unpinned lifetime dependency. Neither form creates a raw
+pointer. `&` cannot be stored in a field, global, or durable capture, but it
+may be passed and returned. A returned reference to a parameter uses the
+caller's region.
+
+In a type, `&T` and `&mut T` are reference forms. They are distinct from a
+prefix `&` applied to an expression. The latter is the separate address-of
+form used by Zith-- and is not redefined by this full-Zith model. The spelling
+of writable bind and own forms remains open.
+
+`^` is a general lifetime relation, not only a structural parent link. It may
+appear as a parameter or return value. Invalidation is reported at the next
+use and includes the cause from the resource's provenance.
+
+The former `lend`, `view`, and `share` surface is absorbed into `&` and
+`&mut`. `belong` is replaced by `^`, and `own` is written `%` in this
+reference model. These forms do not change the `alive`, `dead`, and `lent`
+proof states.
 
 ## 6. Rule 1 - Argument Exclusivity
 
-In a call, mutable and immutable access to the same resource cannot be mixed.
-Passing the same binding as `lend` plus `view`, `lend` plus `lend`, or similar
-conflicting access in one call is an ownership error.
-
-Passing the same resource as several `view` arguments is allowed and emits a
-warning. It is rejected only by the policy that makes the exclusive-access rule
-uniform. It is not evidence of unsafety by itself.
+At an access boundary, several read references may coexist, or one writer may
+access a resource. A read and a writer to the same resource cannot coexist at
+that boundary. `&mut` and writable binds count as writers. `MultiWriter` is the
+explicit exception for several writer flows.
 
 ## 7. Move Semantics
 
@@ -158,17 +171,19 @@ are resourceful move with the struct and keep the same provenance.
 
 ### 7.2 Logical Move
 
-Taking an `own` field or a reference/`view` to a slot creates a logical move
-of that address. The original name may become `dead` for that slot even when
-other fields are still usable. Replacing the slot without returning the taken
-resource would overwrite another resource and is an error. The owner must
-return the original resource or replace the whole struct/binding.
+Moving an `%` field transfers logical ownership of that address or slot. The
+original name may become `dead` for that slot even when other fields remain
+usable. Replacing the slot without returning the taken resource would
+overwrite another resource and is an error. A live `&` pins its source against
+such consumption. A `^` does not pin, so consuming or relocating its target
+invalidates the bind and a later use reports the error.
 
 ### 7.3 Reassignment With Anchors
 
-If a `view` anchors an old resource, `x = newValue` does not delete the old
-resource immediately. The old resource stays alive as long as the anchor lives.
-The anchor only delays lifetime. It does not add destruction capabilities.
+If an `&` reference to an old resource is live, its pin prevents the source
+from being relocated or consumed. A `^` bind does not pin the source. If its
+target is consumed or relocated, the bind becomes invalid and the NRA reports
+that invalidation at the next use.
 
 ### 7.4 Raw And Dead State
 
@@ -229,6 +244,12 @@ verifies ownership/lifetime for those blocks without MRA pretending that the
 heap has a static total size.
 
 ## 10. MultiShare And Fork
+
+This section describes the earlier fork/merge transport draft. The current
+discussion of job blueprints, launch arguments, and monitoring handles is
+recorded in [the callable thread blueprint draft](plans/callable-thread-blueprints.md).
+Until a replacement ADR is accepted, the existing thread ADRs remain the
+accepted contract.
 
 `MultiShare<T>` is both a capability and a compiler-provided wrapper/type.
 Every type has a default conformance. Specific types may override it.

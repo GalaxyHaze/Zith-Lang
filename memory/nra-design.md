@@ -8,11 +8,10 @@ is `docs/nra-spec.md`; the current `Zith--` implementation status is in
 
 ### Reference model (decided 2026-10-06, supersedes view/lend/share entries below)
 
-- Surface forms: `&T` read reference, `&mut T` write reference, `^T`/`^mut T`
-  bind (also written `bind`, formerly `belong`), `%T`/`%mut T` own. The mutable
-  forms are the common ones. The old `lend`, `view` and `share` categories are
-  absorbed into `&`/`&mut`. Canonical spelling is `Option<own Self>` and
-  `Option<bind Self>`, `?` is sugar.
+- Surface forms fixed by ADR-0033: `&T` read reference, `&mut T` write
+  reference, `^T` bind (formerly `belong`), and `%T` own. Writable bind and
+  own spellings remain open. The old `lend`, `view`, and `share` categories
+  are absorbed into `&`/`&mut`.
 - References may coexist in one flow. Exclusivity is checked only at a
   boundary (call, return, flow crossing, closure capture): many readers or one
   writer. A closure capture is sugar for passing the captured resources in an
@@ -41,12 +40,13 @@ is `docs/nra-spec.md`; the current `Zith--` implementation status is in
 - `bind` is a general lifetime-subset edge, `lifetime(B) <= lifetime(A)`, not a
   structural part-of edge. It may be a parameter and a return value, with
   provenance `returnsBind(i)`. A bind assumes a stable address for its target,
-  so durable structures allocate their nodes. Canonical example: doubly linked
-  list with `next: Option<own Self>` and `prev: Option<bind Self>`.
-- `^mut` counts as a writer in the boundary rule. Coercions: `^ -> &` is free,
-  `& -> ^` only when the source covers the destination region, never from a
-  parameter.
-- `&` and `^` never convert to `*`. Only `T` and `own` can create pointers. At a
+  so durable structures allocate their nodes. ADR-0033 illustrates a doubly
+  linked list with owning `next` and bound `prev` edges. Exact optional-field
+  surface syntax remains to be aligned with `&`, `^`, and `%`.
+- Writable binds count as writers in the boundary rule. Coercions: `^ -> &` is
+  free, `& -> ^` only when the source covers the destination region, never
+  from a parameter.
+- `&` and `^` never convert to `*`. Only `T` and `%T` can create pointers. At a
   C boundary the signature uses the correct relation instead of a pointer, and
   the `c/` contract maps C functions to NRA effects.
 - `c/` contract vocabulary is the NRA effect-header: `read`, `write`, `borrow`,
@@ -133,31 +133,21 @@ model wins.
 
 ### Thread modes
 
-- `Thread.spawn(worker, optionally: waiter)` creates a blueprint and does not
-  execute it. `.bounded(args...)` and `.unbounded(args...)` select the
-  execution mode and start/configure the flow.
-- A bounded flow is scoped by the parent and uses ordinary `view`/`lend`
-  contracts. `merge`/`wait` restores or closes the relevant borrow state.
-- An unbounded flow may outlive its parent. Borrowed parameters must explicitly
-  declare a revocable contract; the compiler automatically inserts the
-  `Revokable` wrapper at the unbounded boundary.
-- An unbounded worker returns no value to the parent. It communicates through
-  explicitly shared/revocable resources or runtime APIs.
-- Discarding a handle is not an explicit detached operation. Compiler/runtime
-  management keeps the flow protocol alive and auto-revokes parent-borrowed
-  resources at scope exit.
-- `revoke x;` revokes access to `x` from every unbounded thread in the
-  statement's scope that holds revocable access to it. `revoke h1;` revokes all
-  revocable resources passed to the thread represented by handle `h1`. Both
-  forms close new acquisitions and wait for active guarded operations to finish.
-  Revocation does not destroy resources, terminate threads, or consume handles.
-- `merge h1 and h2` waits for and consumes both handles, returning a tuple in
-  operand order. `merge h1 or h2` waits for and consumes both, returning a
-  tagged union for the first thread to finish. Simultaneous completion favors
-  the leftmost handle. The union covers all declared result types and need not
-  distinguish handles that return the same type.
+- The current thread direction is a discussion draft, not an accepted
+  replacement for ADR-0015 or ADR-0026.
+- The current draft is
+  [`docs/plans/callable-thread-blueprints.md`](../docs/plans/callable-thread-blueprints.md).
+  It records `Thread.job(work)`, launch-time arguments and mode selection,
+  context sugar that returns a monitoring handle, and the unresolved callable
+  and capture-reuse rules.
+- The revocable-access concept is now discussed as a source modifier rather
+  than a `Revokable<T>` type. Its spelling and runtime lowering remain open.
 
-### Revokable access
+### Revokable access (ADR-0026 accepted baseline)
+
+The following proxy contract remains the accepted baseline in ADR-0026. The
+callable-thread discussion draft proposes a source modifier instead. That
+proposal does not yet replace this contract.
 
 - `Revokable<T>` is a proxy/capability for `view T` or `lend T`. Direct proxy
   methods may return `Nil` when the resource has been revoked.
@@ -221,10 +211,9 @@ model wins.
   explicit retarget. Today it only becomes invalid.
 - `async`/`await` is out of scope and expected to stay banned. `state` is the
   intended explicit alternative.
-- `Revokable` representation is not settled. The current preference is a
-  compiler-recognized intrinsic type because the compiler coordinates its
-  atomic access and revocation protocol. Whether its control block is always
-  materialized or only at an unbounded boundary remains open.
+- The representation and source spelling of revocable access are under
+  reconciliation. ADR-0026 records the proxy baseline; the thread draft
+  explores a modifier and leaves its spelling open.
 - `extern fn` effect-header attributes.
 - Custom allocator details.
 - Diagnostic catalog and examples.

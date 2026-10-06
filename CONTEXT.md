@@ -255,6 +255,17 @@ _Avoid_: Branch capability, thread allocator, fork factory
 An owned, single-consumer value satisfying the `Thread<T>` protocol. `merge` consumes it exactly once; backend concrete handles may expose extra methods such as `detach`.
 _Avoid_: ForkHandle, task, future
 
+**Job blueprint (draft)**:
+A reusable description of work. It does not contain launch arguments; bounded
+or unbounded launch supplies those separately.
+_Avoid_: thread handle, running job
+
+**Monitoring handle (draft)**:
+A value associated with a launched execution so code can track it. In the
+current thread discussion, it is distinct from the blueprint and is not
+consumed by `merge`.
+_Avoid_: job blueprint, merge handle
+
 **Playground runtime**:
 The browser-facing WASM module that checks Zith source, prepares HIR, and
 executes it through the VM v2 IR with the same language and standard-library
@@ -486,8 +497,25 @@ The NRA resource graph node for a whole value that owns or tracks storage. It is
 _Avoid_: bigNode, large node, container node
 
 **FieldNode**:
-An NRA resource graph child node created only for a field with ownership significance (`lend`, `view`, `own`, `belong`, pointer or resource type). A plain scalar field does not become a node.
+An NRA resource graph child node created only for a field with ownership significance (reference, bind, own, pointer or resource type). A plain scalar field does not become a node.
 _Avoid_: field record, member node, smallNode
+
+**Reference (`&`)**:
+A non-owning, region-bound access to a resource. `&T` permits reads, `&mut T`
+permits writes, and a live reference pins its source against relocation and
+consumption.
+_Avoid_: raw pointer, `view`, `lend`
+
+**Bind (`^`)**:
+A non-owning lifetime dependency without a region limit or pin. It becomes
+invalid when its target is consumed or relocated, and NRA reports that
+invalidation at the next use.
+_Avoid_: raw pointer, `belong`, weak reference
+
+**Own (`%`)**:
+Logical ownership of an address or slot in the full-Zith reference model.
+Moving it marks the source binding dead.
+_Avoid_: `unique`, owning pointer
 
 **Resource identity**:
 The stable NRA identity of a resource, independent of the binding/symbol that currently names it. Moving `q = p` rebinds the name `q` to the existing resource node and leaves `p` dead; it does not copy or recreate the resource graph.
@@ -509,14 +537,6 @@ _Avoid_: address move, ownership move, slot move
 Moving one field out of an aggregate consumes only that FieldNode and leaves sibling FieldNodes alive; a subsequent whole-aggregate move is then rejected until the consumed FieldNode is restored.
 _Avoid_: field extraction, partial copy, member move
 
-**Lazy view**:
-The default view policy in NRA: creating or invalidating a view does not immediately block writes or moves. The compiler reports an error when code later accesses a view whose target resource identity is no longer valid.
-_Avoid_: non-blocking borrow, weak view, deferred borrow
-
-**Strict view**:
-An optional NRA policy in which a view keeps its target access-valid for the duration of the view and conflicting writes or moves are rejected at the point they would invalidate it.
-_Avoid_: eager view, hard view
-
 **Execution flow**:
 A control-flow lineage used by NRA to distinguish ordinary sequential execution from an explicitly forked execution branch. Read/write coexistence is allowed within one flow; a thread fork creates a new flow and requires ownership/share rules to prevent conflicting cross-flow access.
 _Avoid_: thread context, runtime flow, execution path
@@ -530,7 +550,9 @@ An execution flow that may outlive its parent. Borrowed resources crossing into 
 _Avoid_: detached ownership, background task
 
 **Revokable**:
-A capability wrapper for a `view` or `lend` resource that may be invalidated by its parent flow. Direct proxy operations can yield `Nil`; `acquire()` creates a scoped guard with normal access until release.
+A resource-access contract whose availability may be revoked by its parent
+flow. Accepted ADR-0026 spells it as `Revokable<T>`; the current thread draft
+explores a source modifier instead but does not replace that ADR.
 _Avoid_: revocable pointer, nullable borrow, cancellable reference
 
 **Waiter**:

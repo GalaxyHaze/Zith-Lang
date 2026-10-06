@@ -3,8 +3,9 @@
 > **Implementation status:** `let`, `var`, and `const` bindings are **working**. Pack literals,
 > positional indexing, and binding destructuring with `[ ]` are working in Zith--. The full
 > mutability model remains partly spec-only.
-> `lend` and `view` are implemented as the Zith-- call-annotation slice; `own`, `share`,
-> `belong`, and the full NRA state machine remain full-Zith/spec-only.
+> `lend` and `view` are implemented as the Zith-- call-annotation slice. The full-Zith
+> reference and ownership forms `&T`, `&mut T`, `^T`, and `%T`, plus the full NRA state
+> machine, remain spec-only. `own`, `share`, and `belong` are older surface spellings.
 > See [impl-status.md](impl-status.md).
 
 ### 6.1 Deep Mutability Model
@@ -15,23 +16,23 @@ owner's content mutability. `let field` keeps that field immutable even when its
 owner is mutable. `var field` keeps it mutable through an otherwise immutable
 owner.
 
-`var field` does not bypass a read-only memory access. A `view` cannot write
-the field, even when it is declared `var`. The qualifier also does not add
-synchronization or relax cross-thread safety requirements.
+`var field` does not bypass a read-only access. An `&` reference cannot write
+the field, even when it is declared `var`. The qualifier adds no synchronization
+and does not relax cross-thread safety requirements.
 
 ```zith
 struct Counter {
     value: i32,       // follows the owner's mutability
     let id: u64,      // always immutable
-    var scratch: i32, // mutable through a non-view access
+    var scratch: i32, // mutable through a writable access
 }
 
-fn update(counter: lend Counter) {
+fn update(counter: &mut Counter) {
     counter.scratch += 1;
 }
 
-fn inspect(counter: view Counter) {
-    // counter.scratch += 1; // COMPILE ERROR: view is read-only
+fn inspect(counter: &Counter) {
+    // counter.scratch += 1; // COMPILE ERROR: & is read-only
 }
 ```
 
@@ -52,12 +53,9 @@ fn inspect(counter: view Counter) {
 let x: mut Point;      // cannot reassign x; Point's fields are mutable (mut)
 var y: Point;          // can reassign y; Point's fields are immutable (default, no mut)
 
-// lend, own, share, belong → imply mut
-fn update(p: lend Point) { p.x += 1; }  // p is mutable (lend implies mut)
-let r: own Resource = acquire();     // r's fields are mutable (own implies mut)
-
-// view → implies immutable
-fn read(c: view Config) { ... }         // c is read-only (view implies immutable)
+// References state their access mode explicitly.
+fn update(p: &mut Point) { p.x += 1; }
+fn read(c: &Config) { ... }
 
 const PI = 3.14159;
 const COUNT: mut = 0;

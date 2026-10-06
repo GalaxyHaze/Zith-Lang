@@ -6,11 +6,12 @@
 
 ### 21.1 Ownership Patterns
 
-- **Resources shall be `own`:** `let resource: own = Resource.new();`
-- **Use `share` for intentional multiple owners:** implement `Share` and `Clone` explicitly.
-- **Use `view` for reading:** `fn process(config: view Config)`
-- **Use `lend` for temporary mutation:** `fn update(state: lend GameState)`
-- **Use `belong` for part-of relationships,** such as back-pointers.
+- **Use `%T` for owned resources:** `let resource: %Resource = Resource.new();`
+- **Use `&T` for read access:** `fn process(config: &Config) { ... }`
+- **Use `&mut T` for writable access:** `fn update(state: &mut GameState) { ... }`
+- **Use `^T` for a non-owning lifetime dependency:** keep its target alive at
+  a stable address.
+- **Use the `Share` capability for values that may cross thread boundaries.**
 
 ### 21.2 Invalid-State Patterns
 
