@@ -90,6 +90,14 @@ channels, executors, or thread handles, but the compiler only sees ordinary
 declarations, calls, traits/capabilities, and the NRA facts needed to validate
 resource usage around them.
 
+`async`/`await` is out of scope for the current design, and a normal
+`async`/`await` model is expected to remain banned. A suspension point would
+hide ownership and lifetime effects from the NRA, so asynchronous execution is
+left to runtime APIs or `context` surfaces whose contract the compiler can
+validate. `state` is the intended alternative, because its suspension and
+resumption points are explicit and can reproduce the behaviour of an `async`
+when a program needs it.
+
 ### 5.4 Overloading
 
 Several functions in one scope may share a name as long as their parameter lists differ, either in

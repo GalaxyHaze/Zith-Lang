@@ -4,6 +4,13 @@
 > `async fn`, `yield`, `spawn`, or `await` as language constructs. Any future concurrency support is
 > expected to arrive through `stdlib` and runtime APIs built from ordinary functions, types, and
 > NRA-checked resource rules. See [impl-status.md](impl-status.md).
+>
+> **Scope:** `async`/`await` is out of scope for the current design. The project position is that a
+> normal `async`/`await` model will probably stay banned, because suspension points would spread
+> hidden ownership and lifetime effects through the NRA. The intended alternative is `state`, which
+> is explicit about where execution pauses and resumes, and can reproduce the same behaviour as an
+> `async` when the program uses it that way. If asynchronous execution is needed, it belongs in a
+> runtime API or a `context` whose contract NRA can validate.
 
 > **Full-Zith draft:** the branch protocol below is a design draft, not implemented syntax. It is
 > tracked in [docs/plans/branch-protocol.md](plans/branch-protocol.md).
@@ -12,6 +19,13 @@
 
 Zith's core language defines `fork`/`merge` as explicit thread statements, but
 does not define `async`, coroutines, schedulers, or a concurrency function kind.
+`async`/`await` is deliberately out of scope. A conventional `async`/`await`
+model is expected to remain banned, because an implicit suspension point hides
+where a resource is live, borrowed, or invalidated, and the NRA would have to
+reason about a control-flow split it cannot see in the ordinary effect-header.
+`state` is the intended alternative: the suspension and resumption points are
+explicit in the state machine, so NRA keeps the same facts it already tracks,
+and a program can still express the behaviour an `async` would express.
 There are no dedicated HIR nodes for `await` or coroutine suspension. The
 compiler understands only:
 

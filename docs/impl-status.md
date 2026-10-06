@@ -179,10 +179,10 @@ Implementation work that is incomplete or needs review is tracked in
 
 | Surface | Current behaviour | Notes |
 |---|---|---|
-| `async fn` | **Parse skipped** | Legacy parser affordance only. Concurrency is being documented as `stdlib`/runtime APIs, not a function kind |
+| `async fn` | **Parse skipped** | Legacy parser affordance only, and out of scope for the current design. A normal `async`/`await` model is expected to remain banned because suspension points hide ownership/lifetime effects from the NRA. Concurrency is documented as `stdlib`/runtime APIs, not a function kind |
 | `yield` | Reserved token | Not a core statement |
 | `fork`, `merge`, `revoke`, `spawn` | Spec only (full Zith) | Draft thread protocol; no frontend/HIR contract exists yet. See docs/plans/branch-protocol.md |
-| `await` | Reserved token | Not a core statement |
+| `await` | Reserved token | Not a core statement. `async`/`await` is out of scope and expected to remain banned |
 
 ---
 
