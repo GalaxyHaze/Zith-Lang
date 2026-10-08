@@ -823,11 +823,19 @@ llvm::Value *CodeGenEmit::emitMakeDyn(const hir::HirMakeDyn &make, const hir::Hi
     if (global == nullptr)
         return nullptr;
 
-    // `*char` (and optional pointers) carry the address itself in the dyn
-    // data slot, so the trait callback receives the concrete pointer value
-    // rather than a pointer to a local slot holding it.
-    if (make.source_type != types::kInvalidType &&
-        types_.kindOf(make.source_type) == types::TypeKind::Ptr) {
+    // Two sources are already the dyn data pointer, so they must not be spilled
+    // into a fresh slot:
+    // - `*char` (and optional pointers) carry the address itself, so the trait
+    //   callback receives the concrete pointer value, not a pointer to a slot
+    //   holding it.
+    // - A lowering-produced place address points at the original local, field
+    //   or index. Using it directly lets a mutating receiver write through to
+    //   the caller instead of mutating a copy.
+    const bool value_is_address =
+        make.value_is_place ||
+        (make.source_type != types::kInvalidType &&
+         types_.kindOf(make.source_type) == types::TypeKind::Ptr);
+    if (value_is_address) {
         auto *data_field = builder_.CreateInsertValue(llvm::UndefValue::get(dyn_type), value, {0U});
         auto *vtable =
             builder_.CreateBitCast(global, llvm::PointerType::get(builder_.getContext(), 0));

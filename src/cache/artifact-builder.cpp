@@ -470,6 +470,7 @@ CompactExpr ArtifactBuilder::convertExpr(hir::HirExprId id) {
                            out.ref_b   = internType(m.source_type);
                            out.type_id = internType(m.dyn_type);
                            out.name_id = internString(interner_.lookup(m.vtable_name));
+                           out.flags   = m.value_is_place ? 1U : 0U;
                        },
                        [&](const hir::HirDynCall &call) {
                            out.kind    = CompactExprKind::DynCall;

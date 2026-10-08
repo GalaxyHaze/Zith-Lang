@@ -416,23 +416,23 @@ teste de pipeline verifica `std.memory.in-place.InPlace` via facade.
 ### 12. Receivers `dyn`/`lend` mutáveis para sinks
 
 Estado atual: o contrato alvo de formatação é `TextSink`, com ligação de
-destino por empréstimo dinâmico (`lend dyn TextSink`), mas o compilador ainda
-bloqueia a escrita através desse caminho. `dyn TextSink` com um método mutável
-`append(var self, ...)` compila, mas o data pointer aponta para um spill/cópia
-em vez do valor original, pelo que as mutações não chegam ao caller. Receptores
-`lend dyn TextSink` falham com `E3001`/`E2007`; `self: lend Self` e `self: lend
-dyn TextSink` em traits também falham.
+destino por empréstimo dinâmico (`lend dyn TextSink`). O data pointer de
+`HirMakeDyn` já aponta para o lvalue original quando a fonte é addressable
+(ADR-0037): um `dyn Trait` construído a partir de um local, campo ou index
+propaga mutações de `var self` ao caller, e uma fonte temporária continua a
+escrever apenas na cópia spillada. `tests/test-codegen` cobre os dois casos,
+incluindo a reidratação do cache persistente. Falta ainda `lend dyn TextSink`
+como receiver: `self: lend Self` e `self: lend dyn TextSink` em traits falham
+com `E3001`/`E2007`.
 
 Por isso `stdlib/std/io/format.zith` usa `FormatBuffer` como sink real na
 primeira versão. A intent `TextSink` fica registada em
 `docs/adr/0022-stdlib-io-format-split.md`, `memory/stdlib-io-format.md` e
 `CONTEXT.md`.
 
-Ação futura: reparar `lend dyn` como receiver e fazer `emitMakeDyn` apontar
-para o lvalue original quando a fonte é addressable, em vez de spillar valores
-para uma nova `alloca`. Depois disso, migrar `Formatable.format(self, dest)` e
-as helpers de append de `lend FormatBuffer` para `lend dyn TextSink`, cobrindo
-também `[]char`/buffers fixos.
+Ação futura: reparar `lend dyn` como receiver. Depois disso, migrar
+`Formatable.format(self, dest)` e as helpers de append de `lend FormatBuffer`
+para `lend dyn TextSink`, cobrindo também `[]char`/buffers fixos.
 
 ## Dívida de estrutura: monolitos
 

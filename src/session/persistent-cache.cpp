@@ -598,11 +598,12 @@ void CompilationSession::hydrateFromArtifact(const cache::Artifact &art) {
         }
         case cache::CompactExprKind::MakeDyn: {
             hir::HirMakeDyn make;
-            make.value       = ce.ref_a;
-            make.source_type = compactType(ce.ref_b);
-            make.dyn_type    = compactType(ce.type_id);
-            make.vtable_name = mInterner->intern(art.strings[ce.name_id]);
-            expr             = std::move(make);
+            make.value          = ce.ref_a;
+            make.source_type    = compactType(ce.ref_b);
+            make.dyn_type       = compactType(ce.type_id);
+            make.vtable_name    = mInterner->intern(art.strings[ce.name_id]);
+            make.value_is_place = (ce.flags & 1U) != 0;
+            expr                = std::move(make);
             break;
         }
         case cache::CompactExprKind::DynCall: {

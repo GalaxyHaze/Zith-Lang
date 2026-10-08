@@ -341,6 +341,11 @@ struct HirMakeDyn {
     HirTypeId source_type = types::kInvalidType;
     HirTypeId dyn_type    = types::kInvalidType;
     memory::InternedId vtable_name{};
+    /// True when `value` is the address of a stable place (a local, field or
+    /// index) rather than a loaded value. Codegen then uses it directly as the
+    /// dyn data pointer instead of spilling a copy, so a mutating receiver
+    /// updates the original.
+    bool value_is_place = false;
     HirExprKind tag = HirExprKind::MakeDyn;
 };
 

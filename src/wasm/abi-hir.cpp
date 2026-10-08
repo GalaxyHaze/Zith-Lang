@@ -21,7 +21,8 @@ namespace zith::wasm {
 namespace {
 
 constexpr uint32_t kBlobMagic   = 0x5A4D4849U; // "ZMHI"
-constexpr uint32_t kBlobVersion = 1U;
+// v2: HirMakeDyn carries the value_is_place flag byte.
+constexpr uint32_t kBlobVersion = 2U;
 
 constexpr size_t kMaxArrayCount = 1U << 20;
 
@@ -553,6 +554,7 @@ void writeExpr(Writer &writer, const hir::HirModule &module, hir::HirExprId id) 
                 writer.putU32(value.source_type);
                 writer.putU32(value.dyn_type);
                 writer.putU32(value.vtable_name);
+                writer.putU8(value.value_is_place ? 1U : 0U);
             },
             [&](const hir::HirDynCall &value) {
                 writer.putU8(enumByte(hir::HirExprKind::DynCall));
@@ -945,10 +947,11 @@ auto readExpr(Reader &reader, hir::HirModule &module, memory::Arena &arena) -> b
     }
     case hir::HirExprKind::MakeDyn: {
         hir::HirMakeDyn value;
-        value.value       = reader.u32();
-        value.source_type = reader.u32();
-        value.dyn_type    = reader.u32();
-        value.vtable_name = reader.u32();
+        value.value          = reader.u32();
+        value.source_type    = reader.u32();
+        value.dyn_type       = reader.u32();
+        value.vtable_name    = reader.u32();
+        value.value_is_place = reader.u8() != 0;
         module.addExpr(std::move(value));
         return reader.ok();
     }

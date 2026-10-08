@@ -1329,6 +1329,75 @@ static void test_dyn_trait_method_dispatch_runtime() {
           "dyn Trait calls index the vtable slot before indirect invocation");
 }
 
+static void test_dyn_trait_mutating_receiver_dispatch_runtime() {
+    ModernFileCodegenTest t;
+    t.opts.flags.emitIr(true);
+    t.write("main.zith", "trait Counter {\n"
+                         "    fn get(self): i32 { return 0; }\n"
+                         "    fn bump(var self): i32 { return 0; }\n"
+                         "}\n"
+                         "struct Cell {\n"
+                         "    value: i32,\n"
+                         "    fn get(self): i32 { return self.value; }\n"
+                         "    fn bump(var self): i32 { self.value += 1; return self.value; }\n"
+                         "}\n"
+                         "implement Cell as Counter {\n"
+                         "    fn get(self): i32 { return self.value; }\n"
+                         "    fn bump(var self): i32 { self.value += 1; return self.value; }\n"
+                         "}\n"
+                         "fn main(): i32 {\n"
+                         "    var c: Cell = Cell { value: 40 };\n"
+                         "    var d: dyn Counter = c;\n"
+                         "    let r = d.bump();\n"
+                         "    if (r != 41) { return 1; }\n"
+                         "    return c.get();\n"
+                         "}\n");
+
+    auto r = t.run();
+    CHECK(r.usedModern, "mutating dyn receiver uses the modern codegen pipeline");
+    CHECK(r.ok, "mutating dyn receiver compiles, links, dispatches and executes");
+    CHECK_EQ(r.errorCount, 0u, "the mutating dyn receiver module passes LLVM verification");
+    CHECK_EQ(r.exitCode, 41,
+             "a dyn value built from a local place mutates the caller's value in place");
+
+    // The flag must survive the persistent cache round-trip: a warm run
+    // hydrates HirMakeDyn from `.zirl` and still points at the original place.
+    auto warm = t.run();
+    CHECK(warm.ok, "the warm-cache mutating dyn receiver run still executes");
+    CHECK(warm.cacheHits > 0U, "the second mutating dyn receiver run loads the persistent cache");
+    CHECK_EQ(warm.exitCode, 41,
+             "a cached dyn value built from a local place still mutates the caller");
+
+    // A dyn value built from a temporary must dispatch, but its mutation must
+    // stay on the spill copy and never touch the unrelated caller's value.
+    ModernFileCodegenTest temp;
+    temp.opts.flags.emitIr(true);
+    temp.write("main.zith", "trait Counter {\n"
+                            "    fn get(self): i32 { return 0; }\n"
+                            "    fn bump(var self): i32 { return 0; }\n"
+                            "}\n"
+                            "struct Cell {\n"
+                            "    value: i32,\n"
+                            "    fn get(self): i32 { return self.value; }\n"
+                            "    fn bump(var self): i32 { self.value += 1; return self.value; }\n"
+                            "}\n"
+                            "implement Cell as Counter {\n"
+                            "    fn get(self): i32 { return self.value; }\n"
+                            "    fn bump(var self): i32 { self.value += 1; return self.value; }\n"
+                            "}\n"
+                            "fn main(): i32 {\n"
+                            "    var c: Cell = Cell { value: 40 };\n"
+                            "    var d: dyn Counter = Cell { value: c.value };\n"
+                            "    let r = d.bump();\n"
+                            "    if (r != 41) { return 1; }\n"
+                            "    return c.get();\n"
+                            "}\n");
+    auto tr = temp.run();
+    CHECK(tr.ok, "a dyn value built from a temporary compiles, links and executes");
+    CHECK_EQ(tr.exitCode, 40,
+             "a dyn value built from a temporary dispatches without mutating the caller");
+}
+
 static void test_dyn_trait_by_value_receiver_dispatch_runtime() {
     ModernFileCodegenTest t;
     t.opts.flags.emitIr(true);
@@ -3347,6 +3416,8 @@ static void test_codegen() {
     test_dyn_interface_method_dispatch_runtime();
     printf("Running test_dyn_trait_method_dispatch_runtime\n");
     test_dyn_trait_method_dispatch_runtime();
+    printf("Running test_dyn_trait_mutating_receiver_dispatch_runtime\n");
+    test_dyn_trait_mutating_receiver_dispatch_runtime();
     printf("Running test_dyn_trait_by_value_receiver_dispatch_runtime\n");
     test_dyn_trait_by_value_receiver_dispatch_runtime();
     printf("Running test_dyn_interface_field_access_is_rejected\n");

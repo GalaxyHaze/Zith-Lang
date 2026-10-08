@@ -1562,6 +1562,17 @@ hir::HirExprId HirLowerModern::lowerCoerceToDyn(sema::modern::TypeId target,
     } else {
         make.value       = value;
         make.source_type = lowerType(concrete_sema);
+        // An aggregate source that is a stable place (a local, field or index)
+        // is passed by address so a mutating receiver updates the original.
+        // Non-place sources (literals, calls, temporaries) keep the codegen
+        // spill and `value_is_place` stays false.
+        if (expression) {
+            const auto address = lowerLValueAddr(expression);
+            if (address != hir::kInvalidHirExpr) {
+                make.value         = address;
+                make.value_is_place = true;
+            }
+        }
     }
     make.dyn_type    = target_hir;
     make.vtable_name = vtable_id;
