@@ -1,9 +1,7 @@
 ## 15. Macros
 
-> **Implementation status:** `@macro` and `raw macro` calls are implemented in Zith-- and expand
-> through sema/HIR. Full Zith does not define user macros. Its `tag` construct is a separate
-> design feature and is not implemented. Zith-- rejects tag declarations with `E2010`.
-> See [impl-status.md](impl-status.md).
+> **Status:** see [impl-status.md](impl-status.md) for the current status of macros. Zith--
+> implements `macro` and `raw macro`, and rejects full-Zith `tag` declarations with `E2010`.
 
 | Type | Description |
 |---|---|

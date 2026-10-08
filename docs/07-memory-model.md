@@ -9,17 +9,12 @@
 > [nra-spec.md](nra-spec.md), which supersedes sections 7.1 through 7.7
 > wherever they disagree.
 >
-> **Implementation status:** the `lend`/`view` call-annotation slice is implemented: `lend T` and
-> `view T` parameters lower to real pointers, call arguments for `default` bindings require
-> `lend x`/`view x` (or report `E4005`), invalid call annotations are rejected (`E4007`), and the
-> same binding cannot be borrowed twice in one call. `view` writes are rejected with `E4004`.
-> Residual facts are accumulated and attached before HIR, and LLVM emits `readonly` for views
-> plus `nocapture` for borrows. The full proof machine (now node state, edge state, flow, and
-> rules NRA-1..NRA-11) is full-Zith/spec-only; see [nra-spec.md](nra-spec.md). Pointer types (`*T`),
-> `*p` dereference, and `&x` address-of are **working**. `&x` is a logical move in Zith--:
-> the pointed binding is dead until directly reassigned, and pointers derived from `&x` or
-> `@ptrOf(local)` are pointer objects that must not escape to longer-lived storage.
-> See [impl-status.md](impl-status.md).
+> **Status:** see [impl-status.md](impl-status.md) for the current status of the ownership slice.
+> Zith-- implements the `lend`/`view` call-annotation slice (now SRA, Small Resource Analysis):
+> `lend T`/`view T` parameters lower to real pointers, call arguments for `default` bindings
+> require `lend x`/`view x` (`E4005`), invalid call annotations are rejected (`E4007`), and a
+> binding cannot be borrowed twice in one call. The full proof machine (node state, edge state,
+> flow, and rules NRA-1..NRA-11) is full-Zith work specified in [nra-spec.md](nra-spec.md).
 
 The implemented Zith-- behavior above is separate from the full-Zith reference
 direction. [ADR-0033](adr/0033-nra-reference-model-and-bind.md) defines `&T`,
@@ -182,7 +177,7 @@ scale(lend pt, 2.0);
 fn center_of(p: view Point): f64 { (p.x + p.y) / 2.0 }
 center_of(view pt);   // no caller mutation
 
-// share/belong/own remain spec-only in Zith--
+// share/belong/own are full-Zith forms, outside the Zith-- slice
 
 // belong -- back-pointer cannot outlive its parent
 struct Tree<T> {

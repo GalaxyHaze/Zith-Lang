@@ -91,7 +91,7 @@ compilador como atualmente. Um projeto não deve ter de adicionar ou instalar
 
 Antes de alterar a especificação, atualizar todos os exemplos da configuração
 do projeto, incluindo `docs/19-project-config.md` e
-`docs/Zith-spec-full.md`. Manter a versão e os metadados de compatibilidade da
+`docs/Zith-spec.md`. Manter a versão e os metadados de compatibilidade da
 biblioteca padrão separados do lockfile de dependências do projeto.
 
 ### Identidade e Instalação de Dependências

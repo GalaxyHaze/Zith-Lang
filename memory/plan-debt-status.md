@@ -34,6 +34,9 @@ The active plan homes are:
 - `docs/roadmap.md`: stable feature IDs and wave narrative.
 - `docs/plans/standalone-c-toolchain.md` / `docs/plans/tiny-c-backend.md`:
   active Zith infrastructure work for the native C toolchain.
+- `docs/plans/codebase-quality-remediation.md`: open steps for the
+  structural/hygiene findings in `docs/implementation-debt.md` section
+  "Dívida de qualidade da code base (auditoria 2026-10-07)".
 - `docs/plans/idea-lifecycle-small-scope.md` / `docs/specs/abi-lifecycle.md`:
   small-scope lifecycle setup for ideas, ABI promises, and conforming tests.
 
@@ -41,6 +44,9 @@ The archived plan homes are:
 
 - `docs/plans/archive/0.7.0-zith/`: full-Zith comptime, introspection, type
   construction, capabilities, and NRA planning.
+- `docs/plans/archive/release-artifacts.old.md` and
+  `docs/plans/archive/release-stdlib.old.md`: release/installer audit
+  snapshots, not active feature plans.
 - `docs/plans/archive/traits-interfaces-*.old.md`: prior trait/interface step
   notes.
 - `docs/plans/archive/parse-input-cast.old.md`: shipped `ParseInput` step.

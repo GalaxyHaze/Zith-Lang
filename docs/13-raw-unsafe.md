@@ -1,9 +1,7 @@
 ## 13. Raw & Unsafe
 
-> **Implementation status:** `raw fn` is **working**. `raw` on an optional is **working** as an
-> explicit unchecked payload extraction. `unsafe` blocks, `raw union`, and safety-hierarchy
-> enforcement are **spec-only**.
-> See [impl-status.md](impl-status.md).
+> **Status:** see [impl-status.md](impl-status.md) for the current status of the raw and unsafe
+> surface.
 
 ### 13.1 Safety Hierarchy
 

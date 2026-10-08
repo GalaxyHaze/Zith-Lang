@@ -152,14 +152,11 @@ Run the standard-library example with:
 ./build/zithc --include stdlib run examples/test-import-console.zith
 ```
 
-The compiler currently supports functions, structs, enums and unions, generics,
-traits and interfaces, control flow, macros, and native code generation.
-Zith-- includes a simplified part of the full language's ownership analysis.
-The full Zith design also includes Node Resource Analysis (NRA) as one part of
-its broader toolbox.
-
-The full feature table, including planned and partial features, lives in
-[docs/impl-status.md](docs/impl-status.md).
+The compiler supports functions, structs, enums and unions, generics, traits
+and interfaces, control flow, macros, and native code generation. Zith--
+includes a simplified part of the full language's ownership analysis (SRA).
+The verified status of every feature, including partial and planned ones, lives
+in [docs/impl-status.md](docs/impl-status.md).
 
 The `examples/` directory also contains runnable programs for the implemented
 language surface:
@@ -186,6 +183,9 @@ The ABI, return codes, `mode`, `emit_mask`, and buffer accessors are documented 
 
 ## CLI Reference
 
+Command status is verified in [`docs/impl-status.md`](docs/impl-status.md).
+This table lists the commands the current CLI exposes.
+
 | Command | Description | Status |
 |---|---|---|
 | `zithc build` | Compile to native binary | Working |
@@ -196,10 +196,11 @@ The ABI, return codes, `mode`, `emit_mask`, and buffer accessors are documented 
 | `zithc clean` | Remove build artifacts | Working |
 | `zithc execute <file>` | Run a pre-compiled binary | Working |
 | `zithc test <path>` | Discover and run test files under a path | Working |
-| `zithc repl` | Interactive REPL | 'Zith' only |
+| `zithc repl` | Interactive REPL | Stub (not implemented yet) |
 | `zithc deps list` | List declared dependencies | Working |
 | `zithc deps add` / `deps remove` | Dependency management | Stub |
 | `zithc docs` | Generate deterministic Markdown API docs from reachable source modules | Working |
+| `zithc completion <shell>` | Generate shell completion scripts (bash/zsh/fish) | Working |
 
 `zithc docs` prints `API.md` to the terminal by default. Use `--spec` to include
 all project symbols, `--out` to write under the project `docs/` directory,
@@ -213,28 +214,34 @@ documentation with an `Errors` section and still returns a failing exit code.
 
 ## Compilation Pipeline
 
+The stage order is defined by the **Compiler Pipeline** table in
+[`docs/impl-status.md`](docs/impl-status.md):
+
 ```
-Source -> Lex -> Parse/CST -> AST -> Scan -> Import -> Resolve -> TypeCheck -> Comptime/Solve -> NTA/NRA -> HIR -> VIR -> Codegen -> Cache
+Lexer -> Parser -> Formatter -> Import resolution -> Name resolution
+      -> Type checking -> Generic instantiation -> Comptime/Solve
+      -> SRA/Reference Analysis -> HIR lowering -> LLVM codegen -> Cache
 ```
 
 CST is emitted after parsing, AST after frontend lowering, and HIR after semantic
-lowering. VIR is the optional lowering from HIR to the portable VM v2 IR. It is
-distinct from LLVM IR, which is emitted by `--emit-ir`.
+lowering. VIR is the optional lowering from HIR to the portable VM v2 IR, not a
+separate pipeline stage. It is distinct from LLVM IR, which is emitted by
+`--emit-ir`.
 
 | Stage | Description |
 |---|---|
-| `Lex` | Tokenize source |
-| `Parse/CST` | Build the concrete syntax tree from tokens |
-| `AST` | Lower the parsed syntax tree into frontend declarations and expressions |
-| `Scan` | Register top-level declarations |
-| `Import` | Resolve module imports |
-| `Resolve` | Bind names to symbols |
-| `TypeCheck` | Infer and check types (sema) |
-| `Comptime/Solve` | Generic instantiation and trait/conformance monomorphization run before NRA/HIR; macro expansion runs earlier in frontend |
-| `NTA/NRA` | Residual ownership facts are accumulated before HIR; the full Zith ownership proof remains incomplete |
-| `HIR` | Lower the typed, desugared program while attaching residual ownership facts |
-| `VIR` | Optionally lower HIR to the portable VM v2 execution IR |
-| `Codegen` | Emit LLVM IR -> native or WASM binary |
+| `Lexer` | Tokenize source |
+| `Parser` | Recursive-descent parse into the concrete syntax tree |
+| `Formatter` | Round-trip-stable source formatter used by `zithc fmt` |
+| `Import resolution` | Resolve module imports, including platform variants |
+| `Name resolution` | Bind names to symbols |
+| `Type checking` | Infer and check types (sema) |
+| `Generic instantiation` | Monomorphize generics, methods, and `implement` blocks before NRA/HIR |
+| `Comptime/Solve` | Solver is a compatibility placeholder. Macro expansion runs earlier in the frontend |
+| `SRA/Reference Analysis` | Accumulate residual ownership facts before HIR. The full Zith ownership proof is out of scope |
+| `HIR lowering` | Lower the typed, desugared program while attaching residual ownership facts |
+| `LLVM codegen` | Emit LLVM IR -> native or WASM binary |
+| `Cache` | Persist and hydrate `.zirl` object/artifact caches |
 
 ---
 
@@ -316,8 +323,7 @@ brew install zithc
 
 | Document | Purpose |
 |---|---|
-| [Language Spec](docs/Zith-spec.md) | Overview, design goals, quick reference, appendix |
-| [Full Spec](docs/Zith-spec-full.md) | All chapters in one file |
+| [Language Spec](docs/Zith-spec.md) | Full-Zith design reference: overview, design goals, quick reference, appendix |
 | [Implementation Status](docs/impl-status.md) | Verified status of every feature stage and CLI command |
 | [Roadmap](docs/roadmap.md) | Feature IDs, dependency graph, and implementation waves |
 | [Zith--](docs/Zith--.md) | Current compiler subset specification |

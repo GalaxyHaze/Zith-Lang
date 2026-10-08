@@ -1,11 +1,8 @@
 ## 5. Functions
 
-> **Implementation status:** `fn`, `state`, `raw fn`, and `extern fn` are **working**. `const fn`
-> is **parse-level in progress**: it parses as a function declaration, but compile-time
-> evaluation remains full-Zith/spec-only. Overloading
-> ([§5.4](#54-overloading)) is **working**. Concurrency is no longer a core function kind. Any
-> runtime async/task model is expressed through ordinary library types and calls. See
-> [impl-status.md](impl-status.md).
+> **Status:** see [impl-status.md](impl-status.md) for the current status of each function kind.
+> Concurrency is not a function kind: any runtime async/task model is expressed through ordinary
+> library types and calls.
 
 ### 5.1 Return Types & Implicit Returns
 

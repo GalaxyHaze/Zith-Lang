@@ -1,10 +1,6 @@
 ## 2. Module System
 
-> **Implementation status:** `import`, `from`, `export`, `alias`, `type`, and `pub`/`mod` visibility
-> are **working**. `use` (word/context activation) is **parse skipped** — the body is accepted but
-> has no semantics. `::` scope resolution is not implemented in the modern pipeline; qualified
-> namespace access via `.` is working for imported modules, types and members. See
-> [impl-status.md](impl-status.md).
+> **Status:** see [impl-status.md](impl-status.md) for what the current compiler implements.
 
 ### 2.1 Import Keywords
 
@@ -60,6 +56,9 @@ let x = 10;
     @println(::x);   // 10, outer scope
 }
 ```
+
+The current Zith-- pipeline does not implement `::` scope resolution. Qualified namespace access
+uses `.` (see [impl-status.md](impl-status.md)). The `::` form shown above is the full-Zith design.
 
 ### 2.4 Type Constraints vs. Union Separators
 

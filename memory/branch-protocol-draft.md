@@ -8,8 +8,10 @@ This note is a durable summary of the current draft in
 ## Source Of Truth
 
 The detailed design lives in `docs/plans/branch-protocol.md`. The spec chapters
-`docs/10-concurrency.md`, `docs/04-traits-interfaces.md`, `docs/07-memory-model.md`,
-and `docs/Zith-spec-full.md` reflect the same draft and should be edited together.
+`docs/10-concurrency.md`, `docs/04-traits-interfaces.md`, and
+`docs/07-memory-model.md` reflect the same draft and should be edited together.
+The full-Zith reference is `docs/Zith-spec.md`, and the older single-file aggregate
+`docs/Zith-spec-full.md` is archived at `docs/archive/Zith-spec-full.old.md`.
 
 ## Model
 

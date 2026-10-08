@@ -1,12 +1,9 @@
 ## 6. Mutability & Bindings
 
-> **Implementation status:** `let`, `var`, and `const` bindings are **working**. Pack literals,
-> positional indexing, and binding destructuring with `[ ]` are working in Zith--. The full
-> mutability model remains partly spec-only.
-> `lend` and `view` are implemented as the Zith-- call-annotation slice. The full-Zith
-> reference and ownership forms `&T`, `&mut T`, `^T`, and `%T`, plus the full NRA state
-> machine, remain spec-only. `own`, `share`, and `belong` are older surface spellings.
-> See [impl-status.md](impl-status.md).
+> **Status:** see [impl-status.md](impl-status.md) for the current status of the binding forms.
+> Zith-- implements `lend`/`view` as a call-annotation slice. The full-Zith reference and
+> ownership forms `&T`, `&mut T`, `^T`, and `%T`, plus the full NRA state machine, remain
+> full-Zith work.
 
 ### 6.1 Deep Mutability Model
 

@@ -1,16 +1,10 @@
 ## 20. Standard Library
 
-> **Implementation status:** `stdlib/c/io.zith`, `stdlib/c/stdlib.zith`,
-> `stdlib/c/string.zith`, `stdlib/std/io/console.zith`, and
-> the `std/memory` DAG are the shipped modules. `puts`, `println`, and raw allocator
-> primitives work. `stdlib/std/collections/hash_map_u64.zith` ships a concrete
-> `u64 -> u64` hash map and `stdlib/std/collections/hash_map.zith` is a checked
-> generic `HashMap<K, V>` module. The `std/memory` layer DAG and the imported conforming
-> `implement Box as InPlace` are covered by `tests/test-generic-hashmap.cpp`.
-> The generic `new`/`delete`/`make`/`release` helpers are not usable yet, so the
-> surface is still marked proposed. `std/alloc` and `std/new` remain as legacy
-> compatibility modules. All other standard library content is **spec-only**.
-> See [impl-status.md](impl-status.md).
+> **Status:** see [impl-status.md](impl-status.md) for the current status of each module. The
+> shipped modules are `stdlib/c/io.zith`, `stdlib/c/stdlib.zith`, `stdlib/c/string.zith`,
+> `stdlib/std/io/console.zith`, the `std/memory` DAG, `stdlib/std/collections/hash_map_u64.zith`
+> (a concrete `u64 -> u64` map), and `stdlib/std/collections/hash_map.zith` (a checked generic
+> `HashMap<K, V>`). `std/alloc` and `std/new` remain as legacy compatibility modules.
 
 `std`/`soon` remain documentation-only in this iteration, except for the shipped modules listed
 above. The common C bindings used by those modules live under `c/` rather than importing host

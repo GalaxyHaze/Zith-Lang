@@ -1,8 +1,7 @@
 ## 21. Best Practices & Patterns
 
-> **Note:** Best practices in this chapter describe the intended programming model. Many underlying
-> features (NRA, `dyn`, `comptime`, `when`) are **spec-only**. Verify feature availability in
-> [impl-status.md](impl-status.md) before applying a pattern.
+> **Note:** Best practices in this chapter describe the intended programming model. Verify feature
+> availability in [impl-status.md](impl-status.md) before applying a pattern.
 
 ### 21.1 Ownership Patterns
 

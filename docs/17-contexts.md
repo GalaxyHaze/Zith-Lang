@@ -1,7 +1,7 @@
 ## 17. Contexts
 
-> **Implementation status:** `context` declarations and `use` activation are **parse skipped**.
-> declarations parse but bodies are dropped. No semantic support. See [impl-status.md](impl-status.md).
+> **Status:** see [impl-status.md](impl-status.md) for the current status of contexts.
+> `context` declarations parse but their bodies are dropped.
 
 > **Full-Zith design direction:** contexts are reserved for syntax integration
 > with a domain-facing API. A context is not an ordinary public API surface or

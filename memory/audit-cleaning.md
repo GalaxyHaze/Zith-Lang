@@ -6,12 +6,9 @@ small and updated as each queue item is finished.
 
 ## Active WIP (do not touch)
 
-- `src/ir/exec-ir.hpp`, `src/interp/ir-vm.{hpp,cpp}`, and the
-  `src/interp/hir-interpreter.cpp` path are committed. The IR VM slice is
-  still excluded from the `zithcLib` library glob, so do not promote it into
-  the library build without a conforming test update.
 - `docs/plans/abi/execution-ir.md` remains signed around the HIR interpreter.
-  Keep the IR VM plan/ADR aligned with the committed slice state.
+  The archived execution-IR slice (`archive/execution-ir-v1/`) is not in the
+  active tree; keep the plan/ADR aligned with the committed slice state.
 
 ## Finished In This Pass
 
@@ -21,31 +18,30 @@ small and updated as each queue item is finished.
   implemented.
 - `memory/execution-ir-drawing.md` now reflects the signed contract and the
   committed IR VM slice.
-- `CMakeLists.txt` removes `src/interp/ir-vm.cpp` and `src/ir/hir-to-ir.cpp`
-  from the source glob; the IR VM slice is compiled directly by
-  `test-abi-execution`.
 - `memory/plan-debt-status.md` no longer references the stale `agent5`
   worktree, and `memory/monolith-splits.md` follows the short-note convention
   instead of the old 200-300 line rule.
+- Chapter docs no longer restate feature status. Each numbered chapter points at
+  `docs/impl-status.md` (#58).
+- The full-Zith spec stack is consolidated to `docs/Zith-spec.md`, and the aggregate
+  `Zith-spec-full.md` is archived (#59).
+- `memory/` notes that duplicated plans or specs now point at the owner and
+  keep only unique facts, and `memory/README.md` reflects the set (#60).
+- The two release plans are archived audit snapshots, and the planning index
+  points at the archived locations (#61).
+- The README pipeline and CLI tables now match `docs/impl-status.md` (#62).
 
 ## Cleaning Queue
 
 Current audit findings that are still open:
 
-- Keep `docs/Zith--.md`, `docs/Zith---implementation.md`, and
-  `docs/impl-status.md` as the Zith-- source of truth; reduce duplicated
-  status callouts in `docs/` chapters.
-- Consolidate or archive the full-Zith spec stack (`Zith-spec.md`,
-  `Zith-spec-full.md`) and the full-Zith plan stack so only one active spec
-  surface remains.
-- Consolidate `memory/` notes that duplicate `docs/plans/` or `docs/specs/`.
-- Decide whether `docs/plans/release-artifacts.md` and
-  `docs/plans/release-stdlib.md` are active plans or audit notes; archive the
-  ones that are only snapshots.
-- Update README pipeline text and CLI tables so they do not contradict
-  `docs/impl-status.md`.
-- Finish codegen monolith tracking only when the IR VM slice is promoted into
-  the library build, to avoid mixing unrelated changes.
+- Guard the doc invariants with the offline consistency check tracked in #65.
+  It is not yet in the tree.
+- `src/cli/cmd/run.cpp` fixes `useIrVm` to `false` with LLVM and `true`
+  without, so the `useIrVm` block is unreachable in a normal build and no test
+  covers it. Decide whether the no-LLVM path gets a dedicated CI job or is
+  removed, then make `test-vm-v2` skip instead of fail when `src/vm/` is
+  excluded.
 
 ## Verification
 

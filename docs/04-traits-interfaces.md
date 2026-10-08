@@ -1,12 +1,9 @@
 ## 4. Traits, Interfaces & Capabilities
 
-> **Implementation status:** In Zith--, `trait`, `interface`, and
-> `implement T as Trait {}` declarations are working. Trait conformance is nominal.
-> Interfaces are currently satisfied structurally from fields and compatible method signatures.
-> Method-only `dyn Trait` and `dyn Interface` dispatch through vtables is also working.
-> These implementation details do not define the full-Zith model below. Full Zith uses interfaces
-> as static contracts, does not support `dyn Interface`, and reserves `extends` for trait
-> composition. See [impl-status.md](impl-status.md).
+> **Status:** see [impl-status.md](impl-status.md) for the current status of `trait`, `interface`,
+> and `implement` declarations. The implementation details do not define the full-Zith model
+> below: full Zith uses interfaces as static contracts and reserves `extends` for trait
+> composition.
 
 The `implement` owner may be a primitive, `?T`, or `[]T` in addition to a named struct/enum:
 

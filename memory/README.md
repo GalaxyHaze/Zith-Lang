@@ -24,9 +24,9 @@ contracts, decisions, and gotchas that are not discoverable from the source alon
 - [comptime-generics-traits.md](comptime-generics-traits.md): full-Zith 0.7.0
   comptime/traits/capability context; details live in
   `docs/plans/archive/0.7.0-zith/` and this note now points there.
-- [monolith-splits.md](monolith-splits.md): completed frontend/session split
-  layout and the remaining large compiler TUs. See
-  `docs/plans/monolith-splits.md` for the execution contract.
+- [monolith-splits.md](monolith-splits.md): short pointer to the completed
+  frontend/session split decisions. See `docs/plans/monolith-splits.md` for the
+  execution contract and line counts.
 - [nra-hir-boundary.md](nra-hir-boundary.md): stable ownership/HIR boundary and
   the pitfalls that keep the pre-HIR NRA contract intact.
 - [nra-design.md](nra-design.md): future `Zith` NRA design decisions and link to
@@ -53,19 +53,18 @@ contracts, decisions, and gotchas that are not discoverable from the source alon
 - [flat-containers-cache.md](flat-containers-cache.md): FlatMap/FlatSet API
   contracts, hot-map migrations, cache/CLI `--no-cache`, and validation checks
   landed during the consolidation pass.
-- [release-install-layout.md](release-install-layout.md): release artifact
-  conventions for `scripts/install.sh`, stdlib discovery paths, and the
-  installer fixes landed during the packaging audit.
-- [branch-protocol-draft.md](branch-protocol-draft.md): full-Zith thread-model
-  draft summary (`pThread fork`, `merge`, stdlib `spawn`); avoids treating
-  `Branch` as a capability and keeps Zith-- out of core syntax.
+- [release-install-layout.md](release-install-layout.md): stdlib discovery
+  contract and installer fixes. Release audit snapshots live in
+  `docs/plans/archive/release-*.old.md`.
+- [branch-protocol-draft.md](branch-protocol-draft.md): short pointer to the
+  full-Zith thread-model draft in `docs/plans/branch-protocol.md`.
 - [discord-mcp.md](discord-mcp.md): ByteAsk Discord MCP server registration,
   the stdio-only limitation of the v1.0.0 release JAR, and the env-var/token
   requirements to run it.
 - [idea-lifecycle.md](idea-lifecycle.md): file-backed idea lifecycle, ABI
   state map, and the struct-layout unit used for conforming contracts.
-- [execution-ir-drawing.md](execution-ir-drawing.md): current drawing status
-  and pointer for the execution IR/interpreter contract.
+- [execution-ir-drawing.md](execution-ir-drawing.md): status of the archived
+  execution IR v1 and a pointer to the VM v2 contract.
 - [stdlib-io-format.md](stdlib-io-format.md): proposed `std/io/consoleIn`/
   `consoleOut` format design, `TextSink`/`dyn` probe facts, and target access
   pattern for variadic `Formatable` values.

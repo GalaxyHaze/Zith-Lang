@@ -1,16 +1,10 @@
 ## 3. Type System
 
-> **Implementation status:** Primitive types, structs, enums, unions, legacy `?T`, `[N]T`,
-> `[]T`, pointers, type aliases, `implement`, and generics (`<T>`) are all **working**. `T!`
-> return annotations belong to the full-Zith failable-state design and are outside the working
-> Zith-- surface. `as` casting is
-> **working** for numeric and nominal-wrapper conversions, and is required: there are no implicit conversions
-> between numeric types (a numeric *literal* still adapts to its annotated type). Pointers are
-> non-nullable, so `null` requires `?*T`, and `*void` is rejected in favour of `raw opaque`.
-> `is <type>` narrowing works for tagged unions and opaque, and `when` pattern matching is
-> working. Full NRA ownership modifiers (`own`, `share`, `belong`) remain
-> full-Zith/spec-only; `dyn Trait`/`dyn Interface` method dispatch is **working** in Zith--.
-> See [impl-status.md](impl-status.md).
+> **Status:** see [impl-status.md](impl-status.md) for the verified status of each type form.
+> `as` casting is required for numeric and nominal-wrapper conversions: there are no implicit
+> conversions between numeric types, though a numeric *literal* still adapts to its annotated
+> type. Pointers are non-nullable, so `null` requires `?*T`, and `*void` is rejected in favour of
+> `raw opaque`. Full NRA ownership modifiers (`own`, `share`, `belong`) remain full-Zith work.
 
 ### 3.1 Primitive Types
 

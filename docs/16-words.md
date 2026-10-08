@@ -1,9 +1,7 @@
 ## 16. Words (Custom Operators)
 
-> **Implementation status:** `prefix`, `suffix`, `infix`, and `nop` declarations are **parse
-> skipped**. The declaration is accepted but the body is dropped via `skipDelimited`. Word call
-> expressions are a **parse error**. No semantic or HIR support.
-> See [impl-status.md](impl-status.md).
+> **Status:** see [impl-status.md](impl-status.md) for the current status of words. Declarations
+> are accepted but the body is dropped, and word call expressions are rejected.
 
 Words let you define custom operators from identifiers. Each word has a fixed position, which is **prefix**, **infix**, or **suffix**, with language-defined precedence.
 

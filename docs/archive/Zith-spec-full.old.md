@@ -1,6 +1,12 @@
 # ZITH Language Specification
 **Draft v0.9 — 2026**
 
+> **Status: archived.** This is a single-file aggregate of the numbered chapter
+> docs (`docs/02-*.md` through `docs/21-*.md`). It is kept only as history and
+> is not an active specification surface. The active compiler contract is
+> [`docs/Zith--.md`](../Zith--.md); per-feature implementation status is
+> [`docs/impl-status.md`](../impl-status.md).
+
 > Reference document for the full Zith language surface, including features
 > that are outside the Zith-- subset compiled by `main`. The active compiler
 > contract is `docs/Zith--.md`; per-feature implementation status is

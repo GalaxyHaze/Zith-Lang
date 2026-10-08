@@ -1,10 +1,8 @@
 ## 11. Comptime
 
-> **Implementation status:** `const fn` declarations are **parse-level in progress**. Parsing them
-> as functions is implemented, but compile-time evaluation is **spec-only**. `comptime` blocks,
-> compile-time reflection intrinsics, and `const fn` evaluation are not implemented. `const`
-> bindings are **working** (immutable at runtime) but are not evaluated at compile time. See
-> [impl-status.md](impl-status.md).
+> **Status:** see [impl-status.md](impl-status.md) for the current status of comptime features.
+> `const` bindings are immutable at runtime but are not evaluated at compile time. `comptime`
+> blocks, reflection intrinsics, and `const fn` evaluation are not implemented.
 
 
 Comptime covers compile-time computation: reflection, type manipulation, and `const` blocks.

@@ -7,7 +7,10 @@ Implemented: `import foo` resolves platform variants such as
 generic `foo.zith` as a required fallback. The feature belongs in the module
 resolver, not in comptime, macros, or a new conditional statement.
 
-Full design archive: `docs/plans/archive/platform-imports.old.md`.
+Full design archive: `docs/plans/archive/platform-imports.old.md`. The locked
+contract (resolution order `arch.os` -> `arch` -> `os` -> generic, last-segment
+variants, no platform directories, no v1 ambiguity error, vendor/environment
+excluded) lives there and is not restated here.
 
 Active status is `Working` in `docs/impl-status.md` and F-42 in
 `docs/roadmap.md`. This note supersedes the older "planned" wording; the
@@ -26,22 +29,14 @@ The resolver code moved with the frontend monolith split. The current home is
 `src/session/frontend-module-analysis.cpp`; do not point future edits at the
 old pre-split `frontend-context.cpp` implementation sketch.
 
-## Decisions Locked In
+## Durable Facts
 
-- Syntax remains `import foo`; no conditional import syntax.
-- File naming is `foo.<arch>.<os>.zith`.
-- Resolution order: `arch.os` -> `arch` -> `os` -> generic `foo.zith`.
-- Generic module is required; missing it with a non-matching target is an error.
-- Variants are files only; no platform-specific directories.
-- Compound imports vary only on the last segment, e.g. `foo/bar.<arch>.<os>.zith`.
-- Canonical `llvm::Triple` names are used; no aliases such as `amd64`/`arm64`.
-- Vendor and environment are excluded from v1; the candidate structure can grow
-  to `foo.<arch>.<vendor>.<os>.<env>.zith`.
-- Cache remains target-separated for now; sharing generic module artifacts across
+- Canonical `llvm::Triple` names are used, with no aliases such as
+  `amd64`/`arm64`.
+- Cache stays target-separated for now; sharing generic module artifacts across
   targets is documented future work.
-- No ambiguity error in v1; first deterministic candidate wins.
 - Regular-file candidates win before a same-named directory is aggregated.
-- Missing Zith imports mention both the generic module and platform variants
+- Missing Zith imports mention both the generic module and the platform variants
   when platform candidates were considered.
 - `export foo` re-exports the resolved platform file for the current target.
 

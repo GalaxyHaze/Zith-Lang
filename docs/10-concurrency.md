@@ -1,9 +1,9 @@
 ## 10. Concurrency & Runtime APIs
 
-> **Implementation status:** concurrency is not a core syntax feature. The compiler does not model
-> `async fn`, `yield`, `spawn`, or `await` as language constructs. Any future concurrency support is
-> expected to arrive through `stdlib` and runtime APIs built from ordinary functions, types, and
-> NRA-checked resource rules. See [impl-status.md](impl-status.md).
+> **Status:** see [impl-status.md](impl-status.md) for the current status of concurrency. The
+> compiler does not model `async fn`, `yield`, `spawn`, or `await` as language constructs. Any
+> concurrency support arrives through `stdlib` and runtime APIs built from ordinary functions,
+> types, and NRA-checked resource rules.
 >
 > **Scope:** `async`/`await` is out of scope for the current design. The project position is that a
 > normal `async`/`await` model will probably stay banned, because suspension points would spread

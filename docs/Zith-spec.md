@@ -1,6 +1,12 @@
 # ZITH Language Specification
 **Draft v0.9: 2026**
 
+> **Status:** this file is the design reference for the full Zith language, the
+> superset of the Zith-- subset that `main` compiles. It is not the compiler
+> contract. The active compiler contract is
+> [Zith--.md](Zith--.md), and per-feature implementation status is
+> [impl-status.md](impl-status.md).
+
 > Reference document for the full Zith language surface, including features
 > that are outside the Zith-- subset compiled by `main`. The active compiler
 > contract is `docs/Zith--.md`; per-feature implementation status is

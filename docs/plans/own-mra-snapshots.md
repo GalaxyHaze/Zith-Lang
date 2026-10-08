@@ -3,7 +3,7 @@
 ## Objective
 
 This draft tests the conceptual syntax and usage for the future `Zith` memory
-model before it is written into `docs/Zith-spec-full.md` or `docs/mra-spec.md`.
+model before it is written into `docs/Zith-spec.md` or `docs/mra-spec.md`.
 It deliberately keeps `Zith--` out of scope: the current compiler continues to
 implement a simpler version, and anything here is an accepted design candidate,
 not an implementation contract.
@@ -442,7 +442,7 @@ otherwise).
 Only names that map cleanly without changing the current pipeline:
 
 - `docs/Zith--.md` and `Zith--` compile behavior stay unchanged.
-- `docs/Zith-spec-full.md` and `docs/07-memory-model.md` can replace the
+- `docs/Zith-spec.md` and `docs/07-memory-model.md` can replace the
   narrative uses of `unique` with `own` where they describe the full language.
 - `src/frontend/frontend.hpp` already has `OwnershipKind::Unique`. Keeping the
   internal spelling avoids a broad rename while the surface name becomes

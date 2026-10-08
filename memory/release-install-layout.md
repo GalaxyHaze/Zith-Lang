@@ -1,88 +1,40 @@
 # Release Install Layout Memory
 
-This note records the release artifact contract and the fixes made to
-`scripts/install.sh` so the installer puts the stdlib where
-`findStdlibRoots()` discovers it. It is the durable reference for the
-package/installer audit that touched this file.
-
-## Current Behavior
-
-`build-artifact.yml` uploads a standalone `zithc` binary per platform plus
-two stdlib archives built from the repo `stdlib/` tree:
-
-| Platform family | Binary asset | Bundle format |
-|---|---|---|
-| Linux glibc amd64 | `zithc-linux-amd64` | `zithc-stdlib-<tag>.tar.gz` |
-| Linux glibc arm64 | `zithc-linux-arm64` | `zithc-stdlib-<tag>.tar.gz` |
-| Linux musl amd64 | `zithc-linux-amd64-musl` | `zithc-stdlib-<tag>.tar.gz` |
-| Linux musl arm64 | `zithc-linux-arm64-musl` | `zithc-stdlib-<tag>.tar.gz` |
-| macOS universal | `zithc-macos-universal` | `zithc-stdlib-<tag>.tar.gz` |
-| Windows amd64 | `zithc-windows-amd64.exe` | `zithc-stdlib-<tag>.zip` |
-
-Release tags are `vX.Y.Z`, and both `install.sh` and `install.ps1` build
-download URLs from the release download endpoint under the repo owner and
-version tag. The stdlib archives have no top-level directory, so extraction
-into a fresh `stdlib/` directory yields `c/`, `soon/`, and `std/` directly
-under it.
+Short operational pointer for the release/installer layout. The audit snapshot
+with the per-platform artifact matrix and stdlib destinations is archived at
+`docs/plans/archive/release-artifacts.old.md` and
+`docs/plans/archive/release-stdlib.old.md`. Current release behavior lives in
+`.github/workflows/`. This note keeps only the discovery contract and the
+installer fixes that are easy to regress.
 
 ## Discovery Contract
 
-`src/support/stdlib-discovery.cpp` exposes `findStdlibRoots()`. After the
-`ZITH_STDLIB` override, it checks these paths relative to the running binary:
+`src/support/stdlib-discovery.cpp` exposes `findStdlibRoots()`, which checks in
+order:
 
-| Path | Meaning |
-|---|---|
-| `<binary_dir>/../share/zith/stdlib` | installed release layout |
-| `<binary_dir>/../stdlib` | dev/build layout |
+1. `ZITH_STDLIB` when it points to an existing directory.
+2. `<binary_dir>/../share/zith/stdlib`.
+3. `<binary_dir>/../stdlib`.
 
 `CMakeLists.txt` installs the stdlib to
 `${CMAKE_INSTALL_DATADIR}/zith/stdlib`, which for a conventional prefix is
-`share/zith/stdlib`, the same root the release installer uses. The release
-installer uses the discovery root directly because published binaries are
-downloaded rather than installed by CMake.
-
-For a conventional Unix prefix, `CMAKE_INSTALL_DATADIR` defaults to `share`,
-so the binary at `/usr/local/bin` and stdlib at
-`/usr/local/share/zith/stdlib` match the discovery root
-`<binary_dir>/../share/zith/stdlib`.
+`share/zith/stdlib`, the same root the release installer uses.
 
 ## Installer Fixes
 
-`scripts/install.sh` now treats a user-provided version without a leading `v`
-as `v<version>` before using it in GitHub release URLs. The previous script
-only handled a raw tag, which made bare versions fail for both the binary and
-stdlib assets.
+- `scripts/install.sh` treats a version without a leading `v` as `v<version>`
+  before building GitHub release URLs.
+- The Unix path installs the stdlib under `/usr/local/share/zith/stdlib` and
+  removes the existing directory before extraction, so stale files from an
+  older stdlib bundle do not survive an upgrade.
+- MSYS/MinGW/Cygwin installs the binary to `$ZITH_PREFIX/bin` and extracts the
+  stdlib zip to `$ZITH_PREFIX/share/zith/stdlib`.
+- The stdlib tar archive has no top-level directory, so no `--strip-components`
+  flag is used. `rm -rf "$STDLIB_DIR"` before extraction is the stale-file
+  protection.
 
-The Unix path installs the stdlib under
-`/usr/local/share/zith/stdlib`. Before extraction it removes the existing
-directory and recreates it, so stale files from an older stdlib bundle do not
-survive an upgrade.
-
-Running on MINGW/MSYS/CYGWIN now installs the binary to
-`$ZITH_PREFIX/bin` (default `~/.local/bin`) and extracts the stdlib zip to
-`$ZITH_PREFIX/share/zith/stdlib`. This is the same `share/zith/stdlib` pattern
-the compiler discovers from a binary in `<prefix>/bin`, instead of leaving the
-stdlib next to a binary in the current directory where discovery cannot find
-it after the user moves the binary.
-
-No `--strip-components` flag is used for the tar archive because the stdlib
-bundle has no top-level directory. `rm -rf "$STDLIB_DIR"` before extraction is
-the stale-file protection.
-
-## Verification Smoke
-
-After installing a release, verify discovery without an environment override:
+## Smoke Check
 
 ```bash
-unset ZITH_STDLIB
-/usr/local/bin/zithc --include "" check /tmp/hello.zith
+zithc --include /usr/local/share/zith/stdlib check examples/hello-world.zith
 ```
-
-The same check applies to a `$ZITH_PREFIX` installation by using
-`$ZITH_PREFIX/bin/zithc` and `$ZITH_PREFIX/share/zith/stdlib`.
-
-## Out Of Scope
-
-This task does not change `build-artifact.yml`, `install.ps1`, Scoop, Homebrew,
-or `stdlib-discovery.cpp` semantics. Those are covered by other packaging audit
-tasks and remain separate coordination surfaces until their branches land.

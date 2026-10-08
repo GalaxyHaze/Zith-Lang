@@ -1,10 +1,8 @@
 ## 8. Error Handling
 
-> **Implementation status:** The current Zith-- compiler still supports legacy `?T` optional
-> types and `?` propagation. This support is not the full-Zith failable-state design described
-> below. `T!` return annotations, `!` propagation, `Failable`, `Invalid`, `fail`, `with`,
-> `catch`, `throw`, `try`, and `try ... or` fallback are spec-only.
-> See [impl-status.md](impl-status.md).
+> **Status:** see [impl-status.md](impl-status.md) for the current status of error handling.
+> Zith-- supports legacy `?T` optionals and `?` propagation, which is not the full-Zith
+> failable-state design described below.
 
 
 Error handling in Zith uses compiler-managed valid and invalid states with return-based control

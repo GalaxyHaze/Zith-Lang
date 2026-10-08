@@ -1,17 +1,9 @@
 ## 9. Control Flow
 
-> **Implementation status:** `if`/`else`, `break`, `continue`, `return`, and loop labels are **working**.
-> `for` is the canonical loop: `for { ... }`, `for (cond) { ... }`, the comma-based 3-clause form,
-> and duck-typed `for (x in iterable)` are **working**. Labels can target any of these forms and
-> loop bodies can lower to the same CFG machinery as the
-> old `while`. `while` still works but emits a deprecation warning (`W1008`) pointing at
-> `for (cond) { }`. Literal ranges (`0..4`, open bounds) and `when` pattern
-> matching are **working**, including equality, boolean, guard islands, range, and
-> pattern alternatives. Cases are comma-separated and the
-> canonical form writes the body immediately after the condition islands. The legacy `~>`
-> marker still compiles but emits `W1008`. `state` declarations, `dock` calls, and `jump`
-> terminating transfers are **working** and compile to direct LLVM `musttail` calls. The old
-> `flow fn`/`marker`/TLS-blob model is removed. See [impl-status.md](impl-status.md).
+> **Status:** see [impl-status.md](impl-status.md) for the current status of each control-flow
+> form. `for` is the canonical loop and `while` still works but emits a deprecation warning
+> (`W1008`). The legacy `~>` `when` marker still compiles but emits `W1008`, and the old
+> `flow fn`/`marker`/TLS-blob model is removed.
 
 ### 9.1 Syntax Rules
 
