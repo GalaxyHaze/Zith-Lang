@@ -61,13 +61,12 @@ the compiler debt for mutable dyn receivers.
 
 ## Probe Facts Recorded
 
-`TextSink` is the intended target contract for sinks. The first stdlib surface
-uses `FormatBuffer` because mutable `dyn`/`lend` receivers are still blocked:
-`lend dyn TextSink` fails with `E3001`/`E2007`, and a mutable trait receiver
-such as `append(var self, ...)` on `dyn TextSink` erases to a copy instead of
-the original storage. `FormatBuffer` is therefore the concrete sink until the
-compiler fixes qualified trait receivers and dyn erasure for mutable
-receivers.
+`TextSink` is the intended target contract for sinks. The compiler now accepts
+a `self: lend dyn TextSink` receiver and mutating it through a `dyn` value
+updates the caller's storage (ADR-0037 plus the receiver slice of issue #64).
+`FormatBuffer` remains the concrete sink in the first stdlib surface because
+the stdlib migration to `lend dyn TextSink` is a separate follow-up. A
+qualified receiver such as `self: view Self` is still rejected with `E2022`.
 
 Calling a method directly on a variadic `dyn Formatable` element does not
 compile today:

@@ -88,13 +88,25 @@ void PerModuleSema::registerNamedTypes() {
                                          module);
             break;
         case frontend::DeclKind::Trait:
-            type_table.setDefiningModule(type_table.findOrCreateNamed(decl.name, TypeKind::Trait),
-                                         module);
+        case frontend::DeclKind::Interface: {
+            // Traits and interfaces must be real `EntryKind::Trait` types before
+            // any method signature is lowered. A trait body pushes its nested
+            // methods into the declaration list before the trait declaration
+            // itself, so a receiver like `self: dyn Trait` or `self: lend dyn
+            // Trait` is lowered while the trait name would otherwise still be a
+            // placeholder `Name` entry. `dyn` target resolution then fails with
+            // "'dyn' target must be a trait or interface". Reuse an already
+            // interned real trait so a repeated pass does not mint a second id.
+            const TypeId existing = type_table.lookupNamed(decl.name);
+            const TypeId trait_id = (existing && type_table.trait(existing) != nullptr)
+                                        ? existing
+                                        : (decl.kind == frontend::DeclKind::Interface
+                                               ? type_table.internInterface(decl.name)
+                                               : type_table.internTrait(decl.name));
+            type_table.registerNamed(decl.name, trait_id);
+            type_table.setDefiningModule(trait_id, module);
             break;
-        case frontend::DeclKind::Interface:
-            type_table.setDefiningModule(type_table.findOrCreateNamed(decl.name, TypeKind::Trait),
-                                         module);
-            break;
+        }
         case frontend::DeclKind::TypeAlias:
             type_table.setDefiningModule(type_table.findOrCreateNamed(decl.name, TypeKind::Alias),
                                          module);
@@ -556,13 +568,22 @@ void PerModuleSema::lowerDeclarationTypes() {
             break;
         }
         case frontend::DeclKind::Trait: {
-            TypeId tt = type_table.internTrait(decl.name);
+            // `registerNamedTypes` already interned the real trait entry so
+            // method receivers could resolve `dyn Trait`. Reuse it instead of
+            // minting a second trait id under the same name.
+            const TypeId registered = type_table.lookupNamed(decl.name);
+            TypeId tt               = (registered && type_table.trait(registered) != nullptr)
+                                          ? registered
+                                          : type_table.internTrait(decl.name);
             setDeclType(decl.id, tt);
             type_table.registerNamed(decl.name, tt);
             break;
         }
         case frontend::DeclKind::Interface: {
-            TypeId it = type_table.internInterface(decl.name);
+            const TypeId registered = type_table.lookupNamed(decl.name);
+            TypeId it               = (registered && type_table.trait(registered) != nullptr)
+                                          ? registered
+                                          : type_table.internInterface(decl.name);
             setDeclType(decl.id, it);
             type_table.registerNamed(decl.name, it);
             break;
@@ -724,9 +745,22 @@ void PerModuleSema::checkImplementBlocks() {
                 if (impl_index < impl_type->params.size() && req_index < req_type->params.size()) {
                     const TypeId expected_first =
                         substituteSelf(req_type->params[0], owner_type, trait_type);
-                    const auto *first_ptr = type_table.pointer(resolve(expected_first));
+                    const TypeId expected_resolved = resolve(expected_first);
+                    const auto *first_ptr          = type_table.pointer(expected_resolved);
                     const bool requirement_is_owner_ptr =
                         first_ptr != nullptr && sameType(resolve(first_ptr->pointee), owner_type);
+                    // `self: dyn Trait` / `self: lend dyn Trait` lowers to the
+                    // dyn fat pointer (with an optional borrow qualifier)
+                    // rather than `*Self`. Dispatch already hands the method the
+                    // original data pointer, so an implementation that names the
+                    // concrete owner (`self`, `var self`, `lend Owner` or
+                    // `*Owner`) still satisfies that receiver slot.
+                    const TypeId expected_receiver =
+                        first_ptr != nullptr ? resolve(first_ptr->pointee) : expected_resolved;
+                    const bool requirement_is_dyn_receiver =
+                        !requirement.parameters.empty() &&
+                        requirement.parameters.front().name == "self" &&
+                        type_table.kindOf(expected_receiver) == TypeKind::Dyn;
                     const TypeId impl_first =
                         substituteSelf(impl_type->params[0], owner_type, trait_type);
                     const auto *impl_first_ptr = type_table.pointer(resolve(impl_first));
@@ -734,7 +768,8 @@ void PerModuleSema::checkImplementBlocks() {
                         sameType(impl_first, owner_type) ||
                         (impl_first_ptr != nullptr &&
                          sameType(resolve(impl_first_ptr->pointee), owner_type));
-                    if (requirement_is_owner_ptr && impl_first_is_owner) {
+                    if ((requirement_is_owner_ptr || requirement_is_dyn_receiver) &&
+                        impl_first_is_owner) {
                         ++impl_index;
                         ++req_index;
                     } else if (requirement_is_owner_ptr) {

@@ -130,6 +130,34 @@ void test_qualified_trait_receiver_is_currently_blocked() {
           "qualified receiver fails with E2022");
 }
 
+void test_lend_dyn_trait_receiver_compiles() {
+    SessionRunner t;
+    auto r = t.run("pub trait TextSink {\n"
+                   "    fn capacity(self): u64;\n"
+                   "    fn append(self: lend dyn TextSink, chars: []char): u64;\n"
+                   "    fn text(self): []char;\n"
+                   "}\n"
+                   "struct ByteBuffer {\n"
+                   "    data: []char,\n"
+                   "}\n"
+                   "implement ByteBuffer as TextSink {\n"
+                   "    fn capacity(self): u64 { return 0; }\n"
+                   "    fn append(self: lend ByteBuffer, chars: []char): u64 { return 0; }\n"
+                   "    fn text(self): []char { return self.data; }\n"
+                   "}\n"
+                   "fn write(d: dyn TextSink) {\n"
+                   "    let c = d.capacity();\n"
+                   "}\n"
+                   "fn main(): i32 {\n"
+                   "    var b = ByteBuffer { data: \"\" };\n"
+                   "    write(b);\n"
+                   "    return 0;\n"
+                   "}\n");
+    CHECK(r.ok, "a lend dyn Trait receiver compiles in sema");
+    CHECK(!r.hasErrorCode(diagnostics::err::TraitMethodSignatureMismatch),
+          "the lend dyn receiver no longer fails with the ownership receiver diagnostic");
+}
+
 void test_variadic_dyn_formatable_uses_bridge() {
     SessionRunner t;
     auto r = t.run("pub trait Formatable {\n"
@@ -226,6 +254,7 @@ int main() {
     g_test_failed = 0;
     test_dyn_textsink_simple_receiver();
     test_qualified_trait_receiver_is_currently_blocked();
+    test_lend_dyn_trait_receiver_compiles();
     test_variadic_dyn_formatable_uses_bridge();
     test_generic_union_result_helper_blocked();
     test_generic_union_direct_construction_blocked();

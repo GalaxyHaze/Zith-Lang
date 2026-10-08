@@ -415,24 +415,29 @@ teste de pipeline verifica `std.memory.in-place.InPlace` via facade.
 
 ### 12. Receivers `dyn`/`lend` mutáveis para sinks
 
-Estado atual: o contrato alvo de formatação é `TextSink`, com ligação de
+Estado atual: resolvido. O contrato alvo de formatação é `TextSink`, com ligação de
 destino por empréstimo dinâmico (`lend dyn TextSink`). O data pointer de
 `HirMakeDyn` já aponta para o lvalue original quando a fonte é addressable
 (ADR-0037): um `dyn Trait` construído a partir de um local, campo ou index
 propaga mutações de `var self` ao caller, e uma fonte temporária continua a
 escrever apenas na cópia spillada. `tests/test-codegen` cobre os dois casos,
-incluindo a reidratação do cache persistente. Falta ainda `lend dyn TextSink`
-como receiver: `self: lend Self` e `self: lend dyn TextSink` em traits falham
-com `E3001`/`E2007`.
+incluindo a reidratação do cache persistente. O receiver `self: lend dyn
+TextSink` já é aceite em sema: `registerNamedTypes` interna o trait real antes
+de as assinaturas dos métodos serem lowered, `checkImplementBlocks` trata o
+receiver `*dyn Trait` como slot de receiver (aceitando `self`, `var self`,
+`lend Owner` ou `*Owner` no impl), e o adapter de vtable reconstrói o fat
+pointer quando o impl também escreve `dyn Trait`. `tests/test-stdlib-io` cobre
+a compilação e `tests/test-codegen` cobre a mutação em execução.
 
-Por isso `stdlib/std/io/format.zith` usa `FormatBuffer` como sink real na
-primeira versão. A intent `TextSink` fica registada em
+`stdlib/std/io/format.zith` continua a usar `FormatBuffer` como sink real por
+enquanto; a migração para o sink dinâmico é um follow-up separado. A intent
+`TextSink` fica registada em
 `docs/adr/0022-stdlib-io-format-split.md`, `memory/stdlib-io-format.md` e
 `CONTEXT.md`.
 
-Ação futura: reparar `lend dyn` como receiver. Depois disso, migrar
-`Formatable.format(self, dest)` e as helpers de append de `lend FormatBuffer`
-para `lend dyn TextSink`, cobrindo também `[]char`/buffers fixos.
+Ação futura: migrar `Formatable.format(self, dest)` e as helpers de append de
+`lend FormatBuffer` para `lend dyn TextSink`, cobrindo também `[]char`/buffers
+fixos.
 
 ## Dívida de estrutura: monolitos
 

@@ -54,7 +54,10 @@ readers would misparse the new field.
 
 - The `dyn lend` receiver fix has a defined seam: the addressability flag in
   HIR and its use in `emitMakeDyn`.
-- A second slice accepts `self: lend dyn Trait` in sema, which today fails
-  before codegen.
+- A second slice accepts `self: lend dyn Trait` in sema. `registerNamedTypes`
+  interns the real trait entry before method signatures lower,
+  `checkImplementBlocks` treats a `*dyn Trait` requirement as a receiver slot,
+  and the vtable adapter rebuilds the fat pointer when the implementation
+  spells the receiver as `dyn Trait` too.
 - Migrating `stdlib/std/io/format.zith` from `lend FormatBuffer` to
   `lend dyn TextSink` is a separate follow-up once the receiver works.

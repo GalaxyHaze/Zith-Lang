@@ -353,6 +353,19 @@ void CodeGen::emitVtables(hir::HirModule &hirModule) {
                         receiver = builder.CreateLoad(original_type->getParamType(0U),
                                                       adapter->arg_begin());
                         break;
+                    case types::TypeKind::Dyn: {
+                        // The impl spelled its receiver as `dyn Trait`, so the
+                        // concrete ABI takes the two-word fat pointer. The vtable
+                        // slot only hands over the data pointer, so rebuild the
+                        // fat pointer with this vtable and the caller's data.
+                        llvm::Value *fat = llvm::UndefValue::get(original_type->getParamType(0U));
+                        fat = builder.CreateInsertValue(fat, adapter->arg_begin(), {0U});
+                        fat = builder.CreateInsertValue(
+                            fat, builder.CreateBitCast(global, llvm::PointerType::get(*ctx_, 0)),
+                            {1U});
+                        receiver = fat;
+                        break;
+                    }
                     default:
                         receiver = adapter->arg_begin();
                         break;

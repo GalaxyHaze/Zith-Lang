@@ -1423,6 +1423,59 @@ static void test_dyn_trait_by_value_receiver_dispatch_runtime() {
           "the slice vtable emits an adapter for the by-value receiver");
 }
 
+static void test_dyn_trait_lend_dyn_receiver_dispatch_runtime() {
+    ModernFileCodegenTest t;
+    t.opts.flags.emitIr(true);
+    t.write("main.zith", "trait Sink {\n"
+                         "    fn put(self: lend dyn Sink, v: i32): i32;\n"
+                         "}\n"
+                         "struct Buf {\n"
+                         "    last: i32,\n"
+                         "}\n"
+                         "implement Buf as Sink {\n"
+                         "    fn put(self: lend Buf, v: i32): i32 { self.last = v; return v; }\n"
+                         "}\n"
+                         "fn main(): i32 {\n"
+                         "    var b = Buf { last: 0 };\n"
+                         "    var d: dyn Sink = b;\n"
+                         "    let r = d.put(41);\n"
+                         "    if (r != 41) { return 1; }\n"
+                         "    return b.last;\n"
+                         "}\n");
+
+    auto r = t.run();
+    CHECK(r.usedModern, "lend dyn receiver uses the modern codegen pipeline");
+    CHECK(r.ok, "a lend dyn Trait receiver compiles, links, dispatches and executes");
+    CHECK_EQ(r.errorCount, 0u, "the lend dyn receiver module passes LLVM verification");
+    CHECK_EQ(r.exitCode, 41,
+             "calling a lend dyn Trait method mutates the caller's value in place");
+
+    // A `dyn` value built from a temporary must dispatch but keep the mutation
+    // on the spill copy instead of the unrelated caller.
+    ModernFileCodegenTest temp;
+    temp.opts.flags.emitIr(true);
+    temp.write("main.zith", "trait Sink {\n"
+                            "    fn put(self: lend dyn Sink, v: i32): i32;\n"
+                            "}\n"
+                            "struct Buf {\n"
+                            "    last: i32,\n"
+                            "}\n"
+                            "implement Buf as Sink {\n"
+                            "    fn put(self: lend Buf, v: i32): i32 { self.last = v; return v; }\n"
+                            "}\n"
+                            "fn main(): i32 {\n"
+                            "    var b = Buf { last: 40 };\n"
+                            "    var d: dyn Sink = Buf { last: b.last };\n"
+                            "    let r = d.put(41);\n"
+                            "    if (r != 41) { return 1; }\n"
+                            "    return b.last;\n"
+                            "}\n");
+    auto tr = temp.run();
+    CHECK(tr.ok, "a lend dyn receiver over a temporary compiles, links and executes");
+    CHECK_EQ(tr.exitCode, 40,
+             "a lend dyn receiver over a temporary dispatches without mutating the caller");
+}
+
 static void test_dyn_interface_field_access_is_rejected() {
     ModernFileCodegenTest t;
     t.write("main.zith", "interface Area {\n"
@@ -3420,6 +3473,8 @@ static void test_codegen() {
     test_dyn_trait_mutating_receiver_dispatch_runtime();
     printf("Running test_dyn_trait_by_value_receiver_dispatch_runtime\n");
     test_dyn_trait_by_value_receiver_dispatch_runtime();
+    printf("Running test_dyn_trait_lend_dyn_receiver_dispatch_runtime\n");
+    test_dyn_trait_lend_dyn_receiver_dispatch_runtime();
     printf("Running test_dyn_interface_field_access_is_rejected\n");
     test_dyn_interface_field_access_is_rejected();
     printf("Running test_duplicate_struct_field_names_do_not_collide_globally\n");
