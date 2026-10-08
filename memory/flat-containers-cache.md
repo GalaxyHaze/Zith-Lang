@@ -99,6 +99,16 @@ attempts the container allocation.
 
 Cache-on-disk headers are not re-parsed by this work; that is a future debt.
 
+`HirMakeDyn` IS serialized, despite older notes and ADR-0037 claiming it lives
+in memory only. Two writers emit it: `artifact-builder.cpp` (native `.zirl`
+cache, `CompactExprKind::MakeDyn`) and `wasm/abi-hir.cpp` (flat HIR blob), with
+matching readers in `persistent-cache.cpp` and `wasm/abi-hir.cpp`. Any new
+`HirMakeDyn` field must round-trip through both or the hydrated HIR feeds
+codegen with a default. The `value_is_place` flag rides the already-serialized
+`CompactExpr::flags` byte in the native cache (no version bump) and a new flag
+byte in the WASM blob (`kBlobVersion` 1 to 2, since that encoding had no spare
+byte and old readers would misparse).
+
 ## Verification Used For This Work
 
 ```text
