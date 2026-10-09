@@ -272,8 +272,8 @@ struct Options {
         Version,
         Help,
         Completion
-    } command = Command::None;
-    memory::InternedId subcommandArg;
+    } command                        = Command::None;
+    memory::InternedId subcommandArg = memory::kInvalidInternedId;
     std::string subcommandStr; // string copy for command functions
 
     explicit Options(memory::Arena &allocator)

@@ -21,10 +21,8 @@ source spelling that was used.
 ## Isolated verification
 
 A shell build with `-DZITH_HAS_LLVM=OFF` compiles `test-formatter` but cannot
-link `zithc`, because `src/cli/cmd/run.cpp` references the intentionally
-excluded `src/ir/hir-to-ir.cpp` and `src/interp/ir-vm.cpp` symbols. Use the
-`test-*` targets for focused checks and do not claim the CLI build unless LLVM
-is enabled or the ir/interp files are present.
+link `zithc` without LLVM. Use the `test-*` targets for focused checks and do
+not claim the CLI build unless LLVM is enabled.
 
 Dependencies for an offline CMake build need local source copies:
 
@@ -41,4 +39,3 @@ cmake -S /home/diogo/Zith/.awt/agent7 \
 The full `fmt-check` target reports unrelated pre-existing formatting
 violations in other test files; run `clang-format --dry-run --Werror` on the
 edited sources instead.
-

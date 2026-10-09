@@ -10,10 +10,9 @@ compile and HIR exports, but the website still treats `zith_run_source` as a
 compile-only operation, and importing the virtual `std/io/console` module can
 trap with `memory access out of bounds` before execution.
 
-The project also has two execution vocabularies in the tree. The older
-`src/ir` + `src/interp/ir-vm.*` execution IR is unfinished and is not the
-default portable runtime; VM v2 is. Keeping both in active sources makes the
-WASM integration ambiguous.
+The older execution IR (`exec-ir.hpp`, `hir-to-ir.*`, `ir-vm.*`) is archived
+under `archive/execution-ir-v1/` and is not in the active tree; VM v2 is the
+default portable runtime.
 
 ## Decision
 

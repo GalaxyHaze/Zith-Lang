@@ -128,6 +128,26 @@ body, used when turning ideas into feature plans. Header scope and body
 promises must move together.
 _Avoid_: backlog notes, orphan tasks, extract-then-forget
 
+## Debt And Curation
+
+**Implementation debt**:
+A Zith-- feature that is implemented incompletely, with a known limitation
+that is not an intended design boundary. Recorded in
+`docs/implementation-debt.md` as a real debt, never as a non-debt.
+_Avoid_: technical debt, code debt, TODO list
+
+**Codebase quality debt**:
+A structural or hygiene gap in the active tree, its docs, or its coverage
+that does not change language behavior. Examples are duplicated status text,
+untested execution paths, and contracts that depend on external services.
+_Avoid_: implementation debt, feature gap, refactor backlog
+
+**Non-debt**:
+A deliberate Zith-- design boundary that looks incomplete against the larger
+Zith spec but must be kept as-is. Recorded beside the debt inventory so it is
+not reopened as work.
+_Avoid_: accepted limitation, deferred feature, out-of-scope bug
+
 ## Pattern Matching
 
 **When case**:

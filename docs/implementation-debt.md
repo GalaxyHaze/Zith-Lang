@@ -639,6 +639,92 @@ da work-tree deste repositório.
 
 ---
 
+## Dívida de qualidade da code base (auditoria 2026-10-07)
+
+Varredura estrutural e de correção sobre `src/` (211 ficheiros, cerca de 59k
+linhas) com `cppcheck`, `clang-tidy` e inspeção manual, no baseline `935d7c00`.
+Registra apenas o que ainda não está descrito nas secções acima. Nenhum dos
+itens abaixo é uma decisão de design intencional. As secções A, B e C foram
+resolvidas em 2026-10-07; a secção D continua aberta e está registada na
+cleaning queue de [audit-cleaning.md](/home/diogo/Zith/memory/audit-cleaning.md:41).
+O plano de execução usado está em
+[codebase-quality-remediation.md](/home/diogo/Zith/docs/plans/codebase-quality-remediation.md).
+
+### A. Referências a `src/ir` que já não existe (resolvida)
+
+Estado resolvido: o slice de execução v1 está arquivado em
+`archive/execution-ir-v1/` e `src/ir/` já não existe. Os três documentos que o
+descreviam como parte da árvore ativa foram corrigidos para apontar para o
+arquivo:
+
+- [0024-wasm-vm-v2-abi.md](/home/diogo/Zith/docs/adr/0024-wasm-vm-v2-abi.md:13)
+  diz agora que o IR antigo está em `archive/execution-ir-v1/`.
+- [audit-cleaning.md](/home/diogo/Zith/memory/audit-cleaning.md:9) deixou de
+  listar `src/ir/exec-ir.hpp` e `src/interp/ir-vm.{hpp,cpp}` como ficheiros
+  committed e deixou de dizer que o CMake os remove do glob.
+- [agent7-formatter-build.md](/home/diogo/Zith/memory/agent7-formatter-build.md:23)
+  já não cita os símbolos `src/ir/hir-to-ir.cpp` e `src/interp/ir-vm.cpp`.
+
+Verificação: `rg -n "src/ir/(exec-ir|hir-to-ir)|src/interp/ir-vm"` nesses três
+ficheiros devolve zero correspondências.
+
+### B. Ficheiro de merge residual em `src/` (resolvida)
+
+Estado resolvido: `src/vm/typed-ir.hpp.orig` (um `.orig` de merge de 3520 bytes,
+ignorado pelo `.gitignore` e por isso invisível no `git status`) foi removido.
+Verificação: `find src tests -name '*.orig' -o -name '*.rej'` devolve zero
+ficheiros.
+
+### C. Membros sem default initializer que o analisador assinala (resolvida)
+
+Estado resolvido: foi adicionado `memory::kInvalidInternedId` em
+[string-interner.hpp](/home/diogo/Zith/src/memory/string-interner.hpp:15) e
+usado como default nos dois campos assinalados:
+
+- [hir-module.hpp](/home/diogo/Zith/src/hir/hir-module.hpp:22):
+  `HirFunction::name` e `return_type` têm agora default
+  (`memory::kInvalidInternedId` e `types::kInvalidType`), tal como os nodes de
+  `hir-expr.hpp`.
+- [options.hpp](/home/diogo/Zith/src/cli/options.hpp:276):
+  `Options::subcommandArg` tem agora default. Continua a ser um campo sem
+  leitor (o consumidor real é `subcommandStr`), mas já não pode ser lido com
+  valor indeterminado.
+
+Verificação: `cmake --build build -j4` limpo e `ctest --test-dir build` com
+39/39 testes a passar.
+
+### D. Duas fatias de execução por VM/IR sem teste de fronteira (triada, aberta)
+
+Triagem 2026-10-07: não é um bug nem uma decisão a tomar aqui. A lacuna de
+cobertura ficou registada na cleaning queue de
+[audit-cleaning.md](/home/diogo/Zith/memory/audit-cleaning.md:41), que decide
+entre um job de CI no-LLVM dedicado ou a remoção do caminho. Permanece aberta
+até essa decisão de produto.
+
+[src/vm/](/home/diogo/Zith/src/vm) (VM v2, ativa) e
+[src/interp/](/home/diogo/Zith/src/interp) (HIR interpreter, ativa via
+`--interpreted`) são dois caminhos de execução. Em
+[run.cpp](/home/diogo/Zith/src/cli/cmd/run.cpp:17) o `useIrVm` é fixado em
+`false` com LLVM e `true` sem LLVM, mas o bloco `useIrVm` (linhas 65-92) fica
+inalcançável no build normal e não é coberto por nenhum teste. O `test-vm-v2`
+está registado sob o gate normal de testes
+([CMakeLists.txt](/home/diogo/Zith/CMakeLists.txt:485)) sem verificação de
+disponibilidade de `src/vm/`, logo uma futura exclusão da fatia parte o teste
+em vez de o saltar. Não é bug, é dívida de cobertura do caminho sem-LLVM.
+
+### E. Falsos positivos verificados (não é dívida)
+
+- `uninitMemberVarNoCtor` em `TypePtr::pointee`, `TypeDyn::target`,
+  `TypeQualified::inner`, `Label::span`, `Trivia::kind`, `StructDef`,
+  `EnumDef`, `UnionDef`, `ErrorInfo`, `Entry`, `FieldState`, `FmtFileResult`,
+  `LineInfo` e `IntSpelling`: são structs de dados construídas por agregado em
+  cada uso, nenhum campo é lido antes de escrito.
+- [symbol-table.cpp](/home/diogo/Zith/src/symbols/symbol-table.cpp:248): o
+  `invalidPrintfArgType_uint` para `%zu` com `size_t` foi verificado com
+  `-Wformat=2 -Werror` (compila limpo), é falso positivo.
+
+---
+
 ## Próximos passos para rever
 
 1. A quebra de HIR, de `sema-modern.cpp`, de `frontend.cpp`, de

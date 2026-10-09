@@ -19,13 +19,13 @@ struct HirBasicBlock {
 };
 
 struct HirFunction {
-    memory::InternedId name;
+    memory::InternedId name = memory::kInvalidInternedId;
     memory::DynArray<HirTypeId> params;
     memory::DynArray<memory::InternedId> param_names;
     /// HIR slot allocated for each function parameter/body local. Codegen uses
     /// this to read residual ownership facts without assuming slot order.
     memory::DynArray<HirSlotId> param_slots;
-    HirTypeId return_type;
+    HirTypeId return_type = types::kInvalidType;
     /// True for `state` functions; their jumps are LLVM musttail transitions.
     bool isState = false;
     /// True for `state` functions and calls targeting them: LLVM `tailcc`.

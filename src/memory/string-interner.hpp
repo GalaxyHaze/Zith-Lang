@@ -12,6 +12,8 @@ namespace zith::memory {
 
 using InternedId = uint32_t;
 
+inline constexpr InternedId kInvalidInternedId = ~InternedId{0};
+
 class Arena;
 template <class T> class DynArray;
 
