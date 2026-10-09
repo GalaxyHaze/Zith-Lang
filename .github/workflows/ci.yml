@@ -124,6 +124,9 @@ jobs:
         if: matrix.wasm_test
         run: node tests/test-wasm-runtime.mjs build-wasm/zith-playground.wasm build-wasm/zith-stdlib.pack
 
+      - name: Check documentation consistency
+        run: python3 scripts/check-docs-consistency.py
+
       - name: Validate release contracts
         run: >-
           python3 scripts/validate-release-contract.py

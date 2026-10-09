@@ -34,13 +34,16 @@ small and updated as each queue item is finished.
   `useIrVm`; VM v2 is the WASM runtime and `--interpreted` is the HIR
   interpreter. `src/vm/` is optional via `ZITH_BUILD_VM`, `--emit-vir` errors
   when the slice is absent, and `test-vm-v2` skips with exit code 77.
+- The doc invariants are guarded by `scripts/check-docs-consistency.py` (#65),
+  registered as the `docs-consistency` CTest and a CI step. It fails when a
+  chapter doc repeats a feature-status label or when the README pipeline/CLI
+  tables drift from `docs/impl-status.md`. The status doc gained the missing
+  `zithc completion <shell>` row it was drifting on.
 
 ## Cleaning Queue
 
 Current audit findings that are still open:
 
-- Guard the doc invariants with the offline consistency check tracked in #65.
-  It is not yet in the tree.
 - Harden the `opaque` canonical tag rule so canonization and lowering share one
   rule (tracked in #57).
 

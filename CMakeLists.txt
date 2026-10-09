@@ -461,6 +461,17 @@ if(BUILD_TESTING AND NOT ZITH_IS_WASM)
         add_test(NAME ${NAME} COMMAND ${NAME})
     endfunction()
 
+    # Offline documentation invariant check (#65): chapter docs must not repeat
+    # feature-status labels, and the README pipeline/CLI tables must match
+    # docs/impl-status.md. Runs without network access, like the release checks.
+    find_package(Python3 COMPONENTS Interpreter)
+    if(Python3_Interpreter_FOUND)
+        add_test(NAME docs-consistency
+                 COMMAND ${Python3_EXECUTABLE}
+                         ${CMAKE_CURRENT_SOURCE_DIR}/scripts/check-docs-consistency.py
+                         --root ${CMAKE_CURRENT_SOURCE_DIR})
+    endif()
+
     add_zith_test(test-formatter tests/test-formatter.cpp)
     add_zith_test(test-telemetry tests/test-telemetry.cpp)
     add_zith_test(test-frontend-context tests/test-frontend-context.cpp)

@@ -202,6 +202,7 @@ Implementation work that is incomplete or needs review is tracked in
 | `zithc deps list` | **Working** | Reads `ZithProject.toml` and lists declared dependencies |
 | `zithc deps add`, `deps remove` | **Stub** | |
 | `zithc docs` | **Working** | Deterministic Markdown for reachable modules, interface/spec modes, stdout or safe `--out` output, multipage `--index`, and opt-in partial output with `--error` |
+| `zithc completion <shell>` | **Working** | Emits bash, zsh, or fish completion scripts for the current command set |
 
 ---
 
