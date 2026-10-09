@@ -30,6 +30,10 @@ small and updated as each queue item is finished.
 - The two release plans are archived audit snapshots, and the planning index
   points at the archived locations (#61).
 - The README pipeline and CLI tables now match `docs/impl-status.md` (#62).
+- The native no-LLVM execution branch is removed (#56). `run.cpp` no longer has
+  `useIrVm`; VM v2 is the WASM runtime and `--interpreted` is the HIR
+  interpreter. `src/vm/` is optional via `ZITH_BUILD_VM`, `--emit-vir` errors
+  when the slice is absent, and `test-vm-v2` skips with exit code 77.
 
 ## Cleaning Queue
 
@@ -37,11 +41,8 @@ Current audit findings that are still open:
 
 - Guard the doc invariants with the offline consistency check tracked in #65.
   It is not yet in the tree.
-- `src/cli/cmd/run.cpp` fixes `useIrVm` to `false` with LLVM and `true`
-  without, so the `useIrVm` block is unreachable in a normal build and no test
-  covers it. Decide whether the no-LLVM path gets a dedicated CI job or is
-  removed, then make `test-vm-v2` skip instead of fail when `src/vm/` is
-  excluded.
+- Harden the `opaque` canonical tag rule so canonization and lowering share one
+  rule (tracked in #57).
 
 ## Verification
 

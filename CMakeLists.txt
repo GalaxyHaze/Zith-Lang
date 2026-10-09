@@ -7,6 +7,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 option(ZITH_BUILD_CLI "Build the zithc CLI executable" ON)
 option(ZITH_BUILD_CAPI "Build the C ABI library" ON)
 option(ZITH_BUILD_BENCHMARKS "Build local benchmark executables" OFF)
+option(ZITH_BUILD_VM "Build the VM v2 runtime slice" ON)
 option(ZITH_IS_WASM "Build for WebAssembly target" OFF)
 option(ZITH_HAS_LLVM "Enable LLVM codegen backend" ON)
 option(ZITH_REQUIRE_LLVM "Fail configuration when LLVM codegen cannot be enabled" OFF)
@@ -285,6 +286,19 @@ if(NOT ZITH_HAS_LLVM OR ZITH_IS_WASM)
     list(REMOVE_ITEM ZITH_LIB_SOURCES ${CODEGEN_SOURCES})
 endif()
 
+# The VM v2 slice is the WASM execution runtime. It is optional on native
+# builds: with LLVM on, `zithc run` links and executes the program directly and
+# never touches the VM. Excluding `src/vm/` must also drop `--emit-vir`, which
+# is the only native consumer of the HIR-to-VM lowering.
+set(ZITH_HAS_VM ON)
+if(ZITH_IS_WASM)
+    set(ZITH_HAS_VM ON)
+elseif(NOT ZITH_BUILD_VM)
+    set(ZITH_HAS_VM OFF)
+    file(GLOB_RECURSE VM_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/src/vm/*.cpp")
+    list(REMOVE_ITEM ZITH_LIB_SOURCES ${VM_SOURCES})
+endif()
+
 add_library(zithcLib STATIC ${ZITH_LIB_SOURCES})
 
 target_include_directories(zithcLib PUBLIC src)
@@ -390,6 +404,11 @@ target_compile_definitions(zithcLib PUBLIC
     ZITH_LLD_AVAILABLE=$<BOOL:${ZITH_LLD_AVAILABLE}>
     ZITH_ENABLE_DEBUG_PRINT=$<BOOL:${ZITH_ENABLE_DEBUG_PRINT}>
     ZITH_C_COMPILER_PATH="${CMAKE_C_COMPILER}")
+# The VM macro follows the `ZITH_ENABLE_C_INTEROP` convention: define it only
+# when the slice is present, so `#ifdef ZITH_HAS_VM` gates real code.
+if(ZITH_HAS_VM)
+    target_compile_definitions(zithcLib PUBLIC ZITH_HAS_VM=1)
+endif()
 if(ZITH_HAS_LLVM AND NOT ZITH_IS_WASM AND LLVM_PACKAGE_VERSION)
     target_compile_definitions(zithcLib PUBLIC
         ZITH_LLVM_VERSION="${LLVM_PACKAGE_VERSION}")
@@ -486,7 +505,10 @@ if(BUILD_TESTING AND NOT ZITH_IS_WASM)
     target_compile_definitions(test-vm-v2 PRIVATE
         ZITH_STDLIB_DIR="${CMAKE_CURRENT_SOURCE_DIR}/stdlib")
     target_link_libraries(test-vm-v2 PRIVATE zithcLib)
+    # Exit code 77 is CTest's skip convention, so an excluded VM slice reports a
+    # skip instead of a failure.
     add_test(NAME test-vm-v2 COMMAND test-vm-v2)
+    set_tests_properties(test-vm-v2 PROPERTIES SKIP_RETURN_CODE 77)
     if(ZITH_HAS_LLVM)
         add_zith_test(test-codegen tests/test-codegen.cpp)
         # The example suite drives the real CLI, so it needs codegen and a linker.

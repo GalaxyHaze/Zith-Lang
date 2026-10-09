@@ -19,8 +19,10 @@
 #include "cache/cache-paths.hpp"
 #include "common/ast-ids.hpp"
 #include "support/stdlib-discovery.hpp"
+#ifdef ZITH_HAS_VM
 #include "vm/hir-to-vm.hpp"
 #include "vm/typed-ir-dump.hpp"
+#endif
 #include <chrono>
 #include <cstdarg>
 #include <cstdio>
@@ -635,6 +637,7 @@ bool CompilationSession::lowerStage() {
     }
 
     if (mOpts.get().flags.emitVir()) {
+#ifdef ZITH_HAS_VM
         vm::Module module(mHirArena);
         const auto lowered = vm::lowerModule(mHirModule, *mInterner, mTypes, mHirArena, module);
         if (!lowered.ok) {
@@ -644,6 +647,12 @@ bool CompilationSession::lowerStage() {
         }
         const auto vir_text = vm::dump(module);
         writeOutput("%s", vir_text.c_str());
+#else
+        writeOutput("%s[error]%s --emit-vir requires the VM v2 slice; this build "
+                    "excludes src/vm/\n",
+                    ansicolor("\033[31m"), ansicolor("\033[0m"));
+        return false;
+#endif
     }
 
     auto lowerDt =

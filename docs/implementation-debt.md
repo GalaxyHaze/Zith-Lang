@@ -693,24 +693,23 @@ usado como default nos dois campos assinalados:
 Verificação: `cmake --build build -j4` limpo e `ctest --test-dir build` com
 39/39 testes a passar.
 
-### D. Duas fatias de execução por VM/IR sem teste de fronteira (triada, aberta)
+### D. Duas fatias de execução por VM/IR sem teste de fronteira (resolvida)
 
-Triagem 2026-10-07: não é um bug nem uma decisão a tomar aqui. A lacuna de
-cobertura ficou registada na cleaning queue de
-[audit-cleaning.md](/home/diogo/Zith/memory/audit-cleaning.md:41), que decide
-entre um job de CI no-LLVM dedicado ou a remoção do caminho. Permanece aberta
-até essa decisão de produto.
+Estado resolvido (ADR-0036): o ramo nativo sem-LLVM foi removido. O `useIrVm`
+deixou de existir em [run.cpp](/home/diogo/Zith/src/cli/cmd/run.cpp), pelo que o
+CLI nativo tem um único caminho de execução (link e exec) e o ramo inalcançável
+deixou de estar no código. A VM v2 continua a ser o runtime de execução apenas
+no WASM, e `--interpreted` continua a ser o caminho do HIR interpreter.
 
-[src/vm/](/home/diogo/Zith/src/vm) (VM v2, ativa) e
-[src/interp/](/home/diogo/Zith/src/interp) (HIR interpreter, ativa via
-`--interpreted`) são dois caminhos de execução. Em
-[run.cpp](/home/diogo/Zith/src/cli/cmd/run.cpp:17) o `useIrVm` é fixado em
-`false` com LLVM e `true` sem LLVM, mas o bloco `useIrVm` (linhas 65-92) fica
-inalcançável no build normal e não é coberto por nenhum teste. O `test-vm-v2`
-está registado sob o gate normal de testes
-([CMakeLists.txt](/home/diogo/Zith/CMakeLists.txt:485)) sem verificação de
-disponibilidade de `src/vm/`, logo uma futura exclusão da fatia parte o teste
-em vez de o saltar. Não é bug, é dívida de cobertura do caminho sem-LLVM.
+`src/vm/` passou a ser uma fatia opcional no build nativo através da opção
+`ZITH_BUILD_VM`; sem ela o macro `ZITH_HAS_VM` não é definido e `--emit-vir`
+reporta um erro explícito em vez de baixar para a VM. O `test-vm-v2` ganhou um
+guard de build e devolve `77` (convenção de skip do CTest, registada com
+`SKIP_RETURN_CODE`), pelo que excluir a fatia o salta em vez de partir a
+compilação.
+
+Verificação: build normal com `ctest -R 'vm-v2|cli-commands'` a passar e build
+`-DZITH_BUILD_VM=OFF` a compilar sem `src/vm/` com o `test-vm-v2` a saltar.
 
 ### E. Falsos positivos verificados (não é dívida)
 

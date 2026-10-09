@@ -158,6 +158,7 @@ static void test_run_emit_vir_still_executes_program() {
         output << "fn main(): i32 { return 7; }\n";
     }
 
+#ifdef ZITH_HAS_VM
     const auto result = capture.run("run --emit-vir --no-cache \"" + source.string() + "\"");
     CHECK_EQ(result.exitCode, 7, "run --emit-vir executes main and returns its exit code");
     CHECK(result.stdoutText.empty(), "compiler VIR dump does not contaminate program stdout");
@@ -165,6 +166,11 @@ static void test_run_emit_vir_still_executes_program() {
           "run --emit-vir writes the VIR dump to compiler stderr");
     CHECK(result.stderrText.find("LoadConstI32") != std::string::npos,
           "run --emit-vir includes lowered VM v2 instructions");
+#else
+    // The VM v2 slice is optional on native builds; without it --emit-vir is a
+    // hard error, so the execution check is skipped.
+    CHECK(true, "run --emit-vir execution is skipped when the VM slice is not built");
+#endif
 #else
     CHECK(true, "CLI subprocess tests are skipped when zithc is not built");
 #endif

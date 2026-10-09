@@ -1,5 +1,7 @@
 #include "test-common.hpp"
 
+#ifdef ZITH_HAS_VM
+
 #include "cli/options.hpp"
 #include "session/compilation-session.hpp"
 #include "wasm/abi-hir.hpp"
@@ -1105,3 +1107,16 @@ void test_vm_v2() {
 } // namespace
 
 TEST_MAIN(vm_v2)
+
+#else
+
+// The VM v2 slice is optional on native builds. When `src/vm/` is excluded the
+// lowering contract cannot be exercised, so the test reports a skip instead of
+// failing to compile against a slice that is not part of the build. Exit code
+// 77 is the CTest skip convention registered in CMakeLists.txt.
+int main() {
+    std::printf("test-vm-v2 skipped: VM v2 slice is not part of this build\n");
+    return 77;
+}
+
+#endif // ZITH_HAS_VM
