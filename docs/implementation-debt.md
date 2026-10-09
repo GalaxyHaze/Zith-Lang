@@ -170,13 +170,21 @@ O ficheiro `impl-status.md` foi atualizado de `Cache | Partial` para
 ### 4. Bare `opaque` usa hydration estável mas ainda depende de canonização consistente
 
 - Estado atual: o typeId canónico é derivado do namespace do módulo, ordem
-  canónica de fields e nome do tipo. O registry é o contract explícito de
-  `canonical-any`: cada canonical id project-local recebe um runtime tag único
-  numa cold build, o mapping é persistido e os artefactos serializam a mesma
-  tabela em `canonical_mappings`. Na hydration warm, a tabela é validada contra
-  o registry antes de re-hidratar `TypeIntern`; quando diverge, o `E2010`
-  identifica a canonical id exacta e recomenda apagar `canonical-any` e os
-  artefactos `.zirl`, depois reconstruir.
+  canónica de fields e nome do tipo. A regra vive numa única função partilhada,
+  `types::canonicalTypeId` em
+  [type-canonical.cpp](/home/diogo/Zith/src/types/type-canonical.cpp), usada
+  tanto pelo lowering (`HirLowerModern::canonicalTypeId`, que apenas delega) como
+  pela canonização do cache. A ordem canónica de fields (tamanho e depois nome)
+  e o cálculo do tamanho de agregados também são partilhados
+  (`types::typeByteCount`/`types::typeAlignBytes`), pelo que uma mudança do
+  comparator deixa de ser uma lambda privada do lowering. O registry é o
+  contract explícito de `canonical-any`: cada canonical id project-local recebe
+  um runtime tag único numa cold build, o mapping é persistido e os artefactos
+  serializam a mesma tabela em `canonical_mappings`. Na hydration warm, a tabela
+  é validada contra o registry antes de re-hidratar `TypeIntern`; quando diverge,
+  o `E2010` (mensagem única `cache::canonicalDivergenceMessage`) identifica a
+  canonical id exacta e recomenda apagar `canonical-any` e os artefactos
+  `.zirl`, depois reconstruir.
 - Regra de evolução escolhida: mudanças de canonical field order alteram o
   canonical id e por isso não são re-mapeadas automaticamente. Uma build com
   canonização nova continua determinística, mas qualquer artefacto com um tag
@@ -186,7 +194,10 @@ O ficheiro `impl-status.md` foi atualizado de `Cache | Partial` para
 - Dívida real: continua sem existir um registry object no runtime do programa;
   o contract é project-local no compiler/cache. A detecção de divergência
   distingue um tag antigo desconhecido de um tag reutilizado por outro
-  canonical id, mas ainda não categoriza qual field concretamente mudou.
+  canonical id, mas ainda não categoriza qual field concretamente mudou. A
+  regra canónica já não está duplicada: o risco de divergir baixou de "duas
+  cópias que têm de concordar" para "uma função partilhada com teste de
+  field-order".
 - `coerceValue` trata `opaque -> opaque` como no-op de sema, pelo que casts
   vindos de módulos importados não são rejeitados como erro de re-tagging.
 - Referência: hydration e erro de instabilidade em
@@ -581,10 +592,16 @@ A mensagem identifica a canonical id exacta e recomenda o comando
 determinístico de apagar `canonical-any` e os artefactos `.zirl`, depois
 reconstruir.
 
-Risco residual: existem vários ramos que criam/validam tags `opaque` e a
-consistência entre a canonização nova e a persistida depende da mesma regra
-usada no lowering em [hir-lower-expr-value.cpp](/home/diogo/Zith/src/sema/hir-lower-expr-value.cpp:786).
-Uma mudança da canonical field order deve atualizar o registry/cache em conjunto.
+Estado resolvido: a regra canónica (namespace, ordem canónica de fields por
+tamanho e depois nome, e o tamanho de agregados que a alimenta) vive agora numa
+única função partilhada, `types::canonicalTypeId` em
+[type-canonical.cpp](/home/diogo/Zith/src/types/type-canonical.cpp), usada pelo
+lowering (`HirLowerModern::canonicalTypeId` delega) e pela canonização do cache.
+A mensagem `E2010` é igualmente única
+(`cache::canonicalDivergenceMessage`). Uma mudança da canonical field order passa
+a ser detetada pelo teste `test_canonical_field_order_is_shared_and_detected` em
+[test-cache.cpp](/home/diogo/Zith/tests/test-cache.cpp:480), que nomeia a
+canonical id em falta e verifica a divergência de field order.
 
 ### Split inicial por script deixou includes colados e métodos órfãos
 

@@ -217,9 +217,11 @@ The current debt list below reflects that resolution:
 - What Zith-- implements is SRA, frozen by design. The full ownership proof
   (new node-state model, NRA-1..NRA-11) is full-Zith work specified in
   `docs/nra-spec.md`, not Zith-- debt.
-- Bare `opaque` has stable cache-hydrated tags but the canonicalization rule
-  can still invalidate old artifacts if changed; a more explicit cross-module
-  registry remains a follow-up.
+- Bare `opaque` has stable cache-hydrated tags. The canonicalization rule is a
+  single shared function (`types::canonicalTypeId`), used by both lowering and
+  cache canonization, with a field-order divergence test. A canonical
+  field-order change still invalidates old artifacts, now detected and named by
+  the shared `E2010` message instead of silently re-tagging.
 - C interop covers validated C but struct-by-value ABI is limited to simple
   records whose layout is proven; several import forms remain unported.
 - Narrowing `int -> int` checks known integer constants at compile time;

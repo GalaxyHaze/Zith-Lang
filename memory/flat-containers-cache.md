@@ -88,9 +88,23 @@ that identifies the canonical id and recommends deleting `canonical-any` plus
 the cached `.zirl` artifacts, then rebuilding. Do not silently re-tag persisted
 runtime ids when canonization evolves.
 
+The canonical id rule is now a single shared function,
+`types::canonicalTypeId` in `src/types/type-canonical.cpp`, used by HIR lowering
+(`HirLowerModern::canonicalTypeId` delegates to it) and by cache canonization.
+The size-based canonical field order and the aggregate size/alignment helpers
+(`types::typeByteCount`, `types::typeAlignBytes`, `types::tagByteCount`) live
+there too, so a comparator change cannot silently desync lowering from the
+persisted registry. `cache::canonicalDivergenceMessage` is the single E2010
+wording used by both hydration paths.
+
 `Store` gained `dropInvalid`, which removes a bad artifact and manifest entry
 after validation failure. This prevents repeated parsing/checking of the same
 corrupt artifact during the session.
+
+TypeIntern accessor gotcha: `getStructDef`/`getEnumDef`/`getUnionDef` take the
+composite `TypeId`, not the internal `def_id`. Passing `structure->def_id` (the
+row index) into `getStructDef` reads the wrong row and can crash. Use
+`lookupStructDef(def_id)` when you only have the internal id.
 
 ZIRL decoders now validate `u32` counts before `resize` using
 `ByteReader::canReadU32Count`. The check is conservative: every element must

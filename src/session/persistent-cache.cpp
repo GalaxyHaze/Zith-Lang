@@ -9,9 +9,7 @@
 
 #include <filesystem>
 #include <fstream>
-#include <iomanip>
 #include <memory>
-#include <sstream>
 #include <string>
 #include <vector>
 
@@ -54,15 +52,9 @@ bool CompilationSession::tryLoadPersistentCache() {
         if (expected == mapping.runtime_id && !divergence.field_order_changed)
             continue;
 
-        std::ostringstream message;
-        message << "cached canonical opaque tag is unstable for canonical id 0x" << std::hex
-                << std::setfill('0') << std::setw(16) << canonical_id.hi << ':' << std::setw(16)
-                << canonical_id.lo << std::dec;
-        if (divergence.current_tag != 0U)
-            message << " (artifact " << mapping.runtime_id << ", registry "
-                    << divergence.current_tag << ')';
-        message << "; deterministic recovery: " << divergence.recovery_command;
-        mDiags.reportError(diagnostics::err::UnsupportedSyntax, message.str(), memory::Span{});
+        mDiags.reportError(diagnostics::err::UnsupportedSyntax,
+                           cache::canonicalDivergenceMessage(divergence, mapping.runtime_id),
+                           memory::Span{});
         mHydratedEntry.reset();
         return false;
     }

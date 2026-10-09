@@ -90,6 +90,24 @@ CanonicalDivergence Store::checkCanonicalMapping(const types::TypeCanonicalId &c
     return divergence;
 }
 
+std::string formatCanonicalId(const types::TypeCanonicalId &canonical_id) {
+    std::ostringstream stream;
+    stream << "0x" << std::hex << std::setfill('0') << std::setw(16) << canonical_id.hi << ':'
+           << std::setw(16) << canonical_id.lo;
+    return stream.str();
+}
+
+std::string canonicalDivergenceMessage(const CanonicalDivergence &divergence,
+                                       uint32_t persisted_tag) {
+    std::ostringstream message;
+    message << "cached canonical opaque tag is unstable for canonical id "
+            << formatCanonicalId(divergence.canonical_id);
+    if (divergence.current_tag != 0U)
+        message << " (artifact " << persisted_tag << ", registry " << divergence.current_tag << ')';
+    message << "; deterministic recovery: " << divergence.recovery_command;
+    return message.str();
+}
+
 std::string Store::artifactPath(std::string_view canonical_path) const {
     std::ostringstream oss;
     oss << root_ << "/modules/" << std::hex << pathHash(canonical_path) << ".zirl";

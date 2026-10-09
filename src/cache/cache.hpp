@@ -38,6 +38,17 @@ struct CanonicalDivergence {
     std::string recovery_command;
 };
 
+/// Formats the canonical id as `0x<16 hex hi>:<16 hex lo>`. Shared by every
+/// hydration diagnostic so the failing canonical id is named identically.
+[[nodiscard]] std::string formatCanonicalId(const types::TypeCanonicalId &canonical_id);
+
+/// Builds the actionable E2010 message for a persisted canonical mapping that
+/// no longer matches the project registry, naming the exact canonical id and
+/// the deterministic recovery command. This is the single shared wording used
+/// by both hydration validation paths.
+[[nodiscard]] std::string canonicalDivergenceMessage(const CanonicalDivergence &divergence,
+                                                     uint32_t persisted_tag);
+
 struct CanonicalIdLess {
     [[nodiscard]] bool operator()(const types::TypeCanonicalId &a,
                                   const types::TypeCanonicalId &b) const noexcept {

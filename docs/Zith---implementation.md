@@ -238,8 +238,10 @@ que não é literal não converte para `[]char`; a conversão implícita de `[]c
 equivale a `@ptrOf` e é marcada como escaping por `E4008` quando escapa ao storage local.
 
 `@canonicalType(T)` segue o caminho de `LayoutIntrinsic` no frontend, mas o sema tipa a
-expressão como `u128`. `HirLowerModern::canonicalTypeId` deriva o id estável a partir do
-namespace do módulo que define o tipo, do tipo e dos campos ordenados por tamanho.
+expressão como `u128`. A regra canónica é a função partilhada `types::canonicalTypeId`
+(`src/types/type-canonical.cpp`), que deriva o id estável a partir do namespace do módulo que
+define o tipo, do tipo e dos campos ordenados por tamanho; `HirLowerModern::canonicalTypeId`
+apenas delega nela, e o cache usa a mesma função para canonização.
 `lowerLayoutIntrinsic` materializa `HirCanonicalType`. Codegen emite o valor como constante
 `i128` e o cache persiste os dois `uint64_t` do id.
 

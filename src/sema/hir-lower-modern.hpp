@@ -165,10 +165,9 @@ private:
     /// Rebuilds a tagged-union local by storing a payload value after checking its tag.
     hir::HirExprId rebuildTaggedUnion(types::TypeId union_type, hir::HirExprId value,
                                       uint32_t member_index);
-    static uint32_t alignUp(uint32_t value, uint32_t align) noexcept;
-    /// Module-local deterministic id used for `opaque` tag checks and storage.
     /// Canonical 128-bit type id used by `at-canonicalType(T)` and opaque
-    /// hydration. Derived from module namespace, ordered fields, and type name.
+    /// hydration. Delegates to the shared `types::canonicalTypeId` rule derived
+    /// from module namespace, ordered fields, and type name.
     types::TypeCanonicalId canonicalTypeId(types::TypeId type) const;
     /// Project-local runtime tag assigned by the persistent cache registry for
     /// `canonical_id`. Falls back to a session-local TypeIntern tag when no

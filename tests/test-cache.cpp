@@ -8,6 +8,7 @@
 #include "session/frontend-context.hpp"
 #include "symbols/symbol-table.hpp"
 #include "test-common.hpp"
+#include "types/type-canonical.hpp"
 #include "types/type-intern.hpp"
 #include "zirl/zirl-buffer.hpp"
 #include "zirl/zirl-reader.hpp"
@@ -471,6 +472,115 @@ static void test_bare_opaque_canonical_divergence_rejects_hydration() {
     }
     CHECK(saw_deterministic_recovery,
           "hydration divergence diagnostic names the canonical id and recovery path");
+}
+
+// Proves the canonical field order is derived by the single shared rule: a
+// struct with the same fields in a different source order must hash to the same
+// canonical id, and a change to the size-based field order must be detected as a
+// divergence that names the failing canonical id.
+static void test_canonical_field_order_is_shared_and_detected() {
+    memory::Arena arena;
+    memory::StringInterner interner(arena);
+    types::TypeIntern types(arena, interner);
+
+    const auto resolve_namespace = [](std::string_view module_key) {
+        return std::string(module_key);
+    };
+
+    const auto i8  = types.internInt(types::IntWidth::I8);
+    const auto i32 = types.internInt(types::IntWidth::I32);
+    const auto i64 = types.internInt(types::IntWidth::I64);
+
+    // Same field set, two source orders. The size-based canonical order makes
+    // both spellings hash identically, so lowering cannot depend on the
+    // declaration order a given module happened to use.
+    const auto first = types.defineStruct("Ordered");
+    types.setDefiningModule(first, "mod.alpha");
+    types.addField(first, "big", i64);
+    types.addField(first, "small", i8);
+    types.addField(first, "mid", i32);
+
+    memory::Arena second_arena;
+    memory::StringInterner second_interner(second_arena);
+    types::TypeIntern second_types(second_arena, second_interner);
+    const auto i8_b   = second_types.internInt(types::IntWidth::I8);
+    const auto i32_b  = second_types.internInt(types::IntWidth::I32);
+    const auto i64_b  = second_types.internInt(types::IntWidth::I64);
+    const auto second = second_types.defineStruct("Ordered");
+    second_types.setDefiningModule(second, "mod.alpha");
+    second_types.addField(second, "small", i8_b);
+    second_types.addField(second, "mid", i32_b);
+    second_types.addField(second, "big", i64_b);
+
+    const auto canonical_first  = types::canonicalTypeId(types, first, resolve_namespace);
+    const auto canonical_second = types::canonicalTypeId(second_types, second, resolve_namespace);
+    CHECK(canonical_first == canonical_second,
+          "field order in source does not change the canonical id (shared size order)");
+
+    // Guard the comparator directly: fields must hash by size then name, not by
+    // declaration order. A flipped comparator would reorder these indices and
+    // silently change every persisted canonical id.
+    const auto order = types::canonicalFieldOrder(types, first);
+    CHECK(order == std::vector<size_t>({1, 2, 0}),
+          "canonical field order sorts by byte size then name, not source order");
+
+    // Same-size fields fall back to name order, independent of declaration.
+    const auto tie = types.defineStruct("Tie");
+    types.setDefiningModule(tie, "mod.alpha");
+    types.addField(tie, "beta", i32);
+    types.addField(tie, "alpha", i32);
+    const auto tie_order = types::canonicalFieldOrder(types, tie);
+    CHECK(tie_order == std::vector<size_t>({1, 0}), "equal-size fields fall back to name order");
+
+    // A change to the size-based canonical field order must produce a different
+    // canonical id. Here `mid` grows from 4 to 8 bytes, so the canonical order
+    // changes from (small, mid, big) to (small, big, mid).
+    memory::Arena changed_arena;
+    memory::StringInterner changed_interner(changed_arena);
+    types::TypeIntern changed_types(changed_arena, changed_interner);
+    const auto i8_c    = changed_types.internInt(types::IntWidth::I8);
+    const auto i64_c   = changed_types.internInt(types::IntWidth::I64);
+    const auto changed = changed_types.defineStruct("Ordered");
+    changed_types.setDefiningModule(changed, "mod.alpha");
+    changed_types.addField(changed, "big", i64_c);
+    changed_types.addField(changed, "mid", i64_c);
+    changed_types.addField(changed, "small", i8_c);
+    const auto canonical_changed =
+        types::canonicalTypeId(changed_types, changed, resolve_namespace);
+    CHECK(canonical_changed != canonical_first,
+          "a changed canonical field order produces a different canonical id");
+
+    // Simulate the persisted registry still holding the old canonical id while
+    // lowering now emits the changed one. The divergence must be detected and
+    // must name the exact canonical id.
+    auto root = fs::temp_directory_path() / "zith-cache-test-canonical-field-order";
+    fs::remove_all(root);
+    fs::create_directories(root);
+
+    session::CacheKey key;
+    key.compilerVersion = "field-order";
+    Store store(root.string(), key);
+    const uint32_t stale_tag = store.assignCanonicalId(canonical_first);
+    CHECK(stale_tag != 0u, "registry assigns a tag for the pre-change canonical id");
+
+    // The persisted artifact still carries the old mapping; lowering now derives
+    // a different canonical id whose tag is owned by the old canonical.
+    const uint32_t reused_tag = store.assignCanonicalId(canonical_changed);
+    const auto divergence     = store.checkCanonicalMapping(canonical_changed, stale_tag);
+    CHECK(divergence.field_order_changed,
+          "a persisted tag owned by a different canonical id is a field-order divergence");
+    CHECK(divergence.persisted_tag == stale_tag, "divergence carries the exact persisted tag");
+
+    const auto message = canonicalDivergenceMessage(divergence, stale_tag);
+    CHECK(message.find(formatCanonicalId(canonical_changed)) != std::string::npos,
+          "divergence diagnostic names the failing canonical id");
+    CHECK(message.find("canonical-any") != std::string::npos &&
+              message.find("rebuild") != std::string::npos,
+          "divergence diagnostic includes the deterministic recovery command");
+    CHECK(reused_tag != stale_tag || divergence.registry_conflicts,
+          "changed canonical id is not silently re-tagged onto the persisted tag");
+
+    fs::remove_all(root);
 }
 
 static void test_variadic_slice_param_round_trip() {
@@ -1433,6 +1543,7 @@ static void test_cache() {
     test_canonical_registry_persists_stable_tags();
     test_canonical_registry_reports_actionable_divergence();
     test_bare_opaque_canonical_divergence_rejects_hydration();
+    test_canonical_field_order_is_shared_and_detected();
     test_zero_abi_dependency_skips_validation();
     test_dep_abi_validation();
     test_manifest_load_skips_malformed_record();
