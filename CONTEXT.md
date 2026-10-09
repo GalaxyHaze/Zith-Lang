@@ -523,8 +523,8 @@ _Avoid_: field record, member node, smallNode
 **Reference (`&`)**:
 A non-owning, region-bound access to a resource. `&T` permits reads, `&mut T`
 permits writes, and a live reference pins its source against relocation and
-consumption.
-_Avoid_: raw pointer, `view`, `lend`
+consumption. `view T` and `lend T` are the equivalent keyword spellings.
+_Avoid_: raw pointer
 
 **Bind (`^`)**:
 A non-owning lifetime dependency without a region limit or pin. It becomes
