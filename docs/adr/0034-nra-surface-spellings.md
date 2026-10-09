@@ -49,10 +49,21 @@ declared, not at the call site.
   is not restricted to `own`, it applies to every qualifier except a bare
   `T`.
 - Zith-- is unaffected. It implements only the `lend`/`view` call-annotation
-  slice (SRA) and rejects the other qualifiers.
+  slice (SRA) and rejects the other qualifiers. The lexical disambiguation
+  below is a Zith-only change and must not touch the Zith-- scanner.
 
 ## Considered Options
 
 Making the keywords legacy-only and the sigils canonical was rejected: both
 spellings coexist and are equivalent, so the choice is stylistic. The read
 bind `^T` and the immutable own `%T` simply have no keyword.
+
+## Lexical Note
+
+The revocable sigil `'` shares its opening character with the character
+literal. The disambiguation rule (one character or one escape between `'`
+and `'` is a literal, anything else opens a revocable qualifier) is part of
+the Zith surface only. The Zith-- scanner in
+`src/frontend/ast-lowerer.cpp` currently accepts a multi-character literal
+body, and it must stay that way for Zith--. Tightening character literals is
+therefore a Zith-only change and is out of scope for the Zith-- slice.
