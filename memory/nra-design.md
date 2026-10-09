@@ -36,8 +36,9 @@ is `docs/nra-spec.md`; the current `Zith--` implementation status is in
   `c = a + b`, `a` and `b` read and `c` mutates at that instant.
 - Threads are proven separately. There is no `forkCount` and no `MultiShare`
   in the core model. A bounded flow is merged before the creating scope ends;
-  an unbounded flow is revoked at scope end (ADR-0026 proxy). `'own` changes
-  nothing for NRA; it is a contract required at unbounded boundaries.
+  an unbounded flow is revoked at scope end (ADR-0026 proxy). The revocable
+  prefix `'`/`grant` changes nothing for NRA; it is a contract required at
+  unbounded boundaries.
 - Capabilities: `MultiWrite` (non-blocking monad `Ok<T> | Nil`, optional
   blocking `.sync() |> { ... }` guard) and `SyncWrite` (atomics). The effect
   header records plain `write`; the caller-side check sees a flow being
@@ -203,21 +204,22 @@ model wins.
   context sugar that returns a monitoring handle, and the unresolved callable
   and capture-reuse rules.
 - The revocable-access concept is a source modifier rather than a
-  `Revokable<T>` type. ADR-0026 fixes the spelling as a `'` sigil or `grant`
-  before an explicit `own` qualifier, so the surface is `'own T`. No other
-  qualifier carries the contract. A bare `'T` does not exist because a
-  revocable `default` would imply a logical move of an inline value, while the
-  contract is a reference whose access can be revoked. The runtime lowering
-  remains open.
+  `Revokable<T>` type. ADR-0034 fixes the spelling as a `'` sigil or `grant`
+  before any ownership qualifier except a bare `T`, so `'view T`, `'lend T`,
+  `'^T`, `'^mut T`, `'%T`, and `'%mut T` all exist (`'%mut T` is the `'own T`
+  of ADR-0026). A bare `'T` does not exist because a revocable `default` would
+  imply a logical move of an inline value, while the contract is a reference
+  whose access can be revoked. The runtime lowering remains open.
 
 ### Revokable access (ADR-0026 accepted baseline)
 
 The following proxy contract remains the accepted runtime baseline in
-ADR-0026. The source surface is now the `'own` / `grant own` type qualifier,
-so no `Revokable<T>` wrapper appears in source.
+ADR-0026. The source surface is now the `'` / `grant` prefix on any ownership
+qualifier except a bare `T`, so no `Revokable<T>` wrapper appears in source.
 
-- The runtime proxy is a capability over an owned handle. Source restricts the
-  contract to `own`, so a revocable borrowed handle is not exposed.
+- The runtime proxy is a capability over an owned handle. ADR-0034 lets the
+  contract attach to any qualifier except a bare `T`, so a revocable borrowed
+  handle such as `'view T` or `'lend T` is exposed.
 - The proxy supports a read mode with multiple active readers and a write mode
   with one exclusive active writer.
 - `acquire()` returns a scoped guard that inherits the original qualifier. The
@@ -278,9 +280,10 @@ so no `Revokable<T>` wrapper appears in source.
   explicit retarget. Today it only becomes invalid.
 - `async`/`await` is out of scope and expected to stay banned. `state` is the
   intended explicit alternative.
-- The representation and source spelling of revocable access are under
-  reconciliation. ADR-0026 records the proxy baseline; the thread draft
-  explores a modifier and leaves its spelling open.
+- The representation and source spelling of revocable access are settled at
+  the surface: ADR-0034 fixes `'` / `grant` before any ownership qualifier
+  except a bare `T`. ADR-0026 records the runtime proxy baseline; the thread
+  draft still owes how revocable forms interact with launch and merge.
 - `extern fn` effect-header attributes.
 - Custom allocator details.
 - Diagnostic catalog and examples.

@@ -83,12 +83,13 @@ compile-time syntax facility in the currently compiled subset.
 Unbounded work needs an explicit revocable-access contract for any borrowed
 resource whose parent may revoke access. The direction is to express that
 contract as a modifier, not as a source-level `Revokable<T>` wrapper type.
-ADR-0026 now fixes the modifier's spelling: a `'` sigil before the type, with
-`grant` as the long form. The sigil precedes an explicit `own` qualifier, so
-the spelling is `'own T`. The sigil applies only in type position, and the
-`unbounded` launch site already marks where revocation happens, so a call
-argument carries no revocable annotation. The lexical rule that separates the
-sigil from a character literal is recorded in ADR-0026.
+ADR-0034 fixes the modifier's spelling: a `'` sigil before the type, with
+`grant` as the long form. The sigil precedes any ownership qualifier except a
+bare `T`, so `'view T`, `'lend T`, `'^T`, `'^mut T`, `'%T`, and `'%mut T` all
+exist (`'%mut T` is the `'own T` of ADR-0026). The sigil applies only in type
+position, and the `unbounded` launch site already marks where revocation
+happens, so a call argument carries no revocable annotation. The lexical rule
+that separates the sigil from a character literal is recorded in ADR-0026.
 
 The runtime may still lower this contract through an internal proxy or control
 block. That implementation detail does not require a wrapper type in source
@@ -100,14 +101,17 @@ syntax.
   [the branch protocol](branch-protocol.md) describe the earlier `fork` and
   `merge` surface, where a fork launches and returns a mergeable handle.
 - [ADR-0026](../adr/0026-nra-aggregate-nodes-and-revokable-flows.md) describes
-  `Thread.spawn(...).bounded/.unbounded(...)`, the runtime proxy, and the
-  accepted source spelling `'own T` / `grant own T`.
+  `Thread.spawn(...).bounded/.unbounded(...)` and the runtime proxy. Its
+  source-spelling section is superseded by
+  [ADR-0034](../adr/0034-nra-surface-spellings.md), which sets the accepted
+  spelling to `'` / `grant` before any ownership qualifier except a bare `T`.
 - [ADR-0033](../adr/0033-nra-reference-model-and-bind.md) is accepted and
   defines the full-Zith reference surface `&`, `^`, and `%`.
 
-This draft does not silently amend those accepted ADRs. The thread surface,
-handle lifecycle, callable contract, and exact revocable-access spelling need
-explicit reconciliation before the draft becomes an accepted contract.
+This draft does not silently amend those accepted ADRs. ADR-0034 reconciles
+the revocable-access spelling. The thread surface, handle lifecycle, and
+callable contract still need explicit reconciliation before the draft becomes
+an accepted contract.
 
 ## Open Questions
 
@@ -122,7 +126,9 @@ explicit reconciliation before the draft becomes an accepted contract.
   handle is observational and is not consumed by `merge`?
 - What can the monitoring handle observe, and can it read a completed result?
 - Is the unbounded context sugar spelled `detach` or `detached`?
-- How does the proposed revocable-access modifier compose with `&`, `&mut`,
-  `^`, and `^mut`?
+- The revocable-access modifier composes with every qualifier except a bare
+  `T` (ADR-0034), so `'view T` / `'lend T` / `'^T` / `'^mut T` / `'%T` /
+  `'%mut T` are resolved. The remaining open point is how those revocable
+  forms interact with thread launch and merge.
 - How should the accepted reference model disambiguate `&T` from expression
   forms that older drafts use for address-taking or ownership transfer?

@@ -39,16 +39,15 @@ implicit deep-copy or allocator-rewrite mechanism.
 
 ## Source Spelling
 
-Status: accepted. This section fixes the source surface of the revocable
-contract. It does not change the runtime proxy described above.
-
-> Superseded by [ADR-0034](0034-nra-surface-spellings.md). The revocable
-> prefix `'` or `grant` combines with every qualifier except a bare `T`, so
-> `'&mut T`, `'^mut T`, and `'%mut T` all exist. `'%mut T` equals the `'own T`
-> written below.
+Status: accepted, then superseded in scope by
+[ADR-0034](0034-nra-surface-spellings.md). This section introduced the
+revocable source surface. ADR-0034 keeps the spelling rule but widens the
+prefix to every qualifier except a bare `T`, so the body below is kept for
+history and the current rule lives in ADR-0034 and
+[nra-spec.md](../nra-spec.md) section 4.
 
 The revocable contract is a type qualifier, not a wrapper type. It is written
-as a sigil `'` before an explicit ownership qualifier, with `grant` as the
+as a sigil `'` before an ownership qualifier, with `grant` as the
 long spelling.
 
 | Spelling | Meaning |
@@ -56,14 +55,15 @@ long spelling.
 | `own T` | owned, not revocable |
 | `'own T` | revocable own |
 
-The sigil always precedes a written qualifier. `'T`, `'lend T`, and `'view T`
-do not exist. A bare `'T` would be the revocable form of `default`, and a
-revocable `default` implies a logical move of an inline value. The contract is
-instead a reference whose access can be revoked, so it attaches to `own`, the
-qualifier that identifies an address or slot rather than the value itself.
+ADR-0026 originally restricted the sigil to `own`, so `'lend T` and `'view T`
+did not exist. ADR-0034 supersedes that restriction: the prefix now combines
+with every qualifier except a bare `T`, so `'lend T` (revocable `&mut T`) and
+`'view T` (revocable `&T`) also exist. A bare `'T` still does not exist,
+because a revocable `default` would imply a logical move of an inline value,
+while the contract is a reference whose access can be revoked.
 
 `grant` is the long spelling of the same prefix, so `grant own T` equals
-`'own T`.
+`'own T`, and likewise for the other qualifiers.
 
 The sigil applies only in type position. A call argument does not repeat it.
 The `unbounded` launch site already marks where revocation happens, so the
