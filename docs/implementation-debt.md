@@ -167,6 +167,52 @@ O ficheiro `impl-status.md` foi atualizado de `Cache | Partial` para
   NRA-1..NRA-11. Zith-- fica no SRA e não vai crescer para a prova completa.
 - Referência: [impl-status.md](/home/diogo/Zith/docs/impl-status.md:41).
 
+### 3a. VM v2: inventário de dívidas e limitações abertas
+
+Inventário consolidado em 2026-10-10, cruzando os contratos assinados
+([vm-v2.md](/home/diogo/Zith/docs/plans/vm-v2.md),
+[0021](/home/diogo/Zith/docs/adr/0021-vm-v2-portable-execution.md),
+[0024](/home/diogo/Zith/docs/adr/0024-wasm-vm-v2-abi.md),
+[0025](/home/diogo/Zith/docs/adr/0025-vm-v2-call-convention-and-intrinsics.md))
+com o estado de `src/vm/`. O opcode set já cresceu além do slice inicial
+(bitwise, `IndexLoad`, `CallFnRef`/`CallRange`, `Branch2`). Contexto: a dívida
+"duas fatias de execução" está resolvida (ADR-0036) e `src/vm/` é opcional via
+`ZITH_BUILD_VM`; a VM v2 serve hoje o playground WASM e o harness
+`test-vm-v2`. As dívidas abertas são:
+
+1. **Superfície de linguagem incompleta no lowering.** State machines, dyn
+   dispatch, `opaque` e variadic slices são "later slices" registados nos
+   non-goals do plano e do ADR-0021. `src/vm/hir-to-vm.cpp` responde status 5
+   (`kPlaygroundStatusUnsupported`) para dynamic traits, intrinsics fora do
+   subset, call targets fora do subset, literais não primitivos, dynamic array
+   index e algumas formas de return.
+2. **Computed-goto adiado.** A decisão registada é aplicar computed-goto ao
+   dispatch loop "once the opcode set stabilizes". O opcode set ainda está a
+   crescer (ver dívida 1), pelo que o loop atual é o dispatcher simples.
+3. **Arena sem reclaim por frame.** O checkpoint por frame que `Ret` deveria
+   libertar está reservado mas não implementado ("the first milestone does not
+   reclaim arena blocks per frame"). A arena cresce monotonicamente durante a
+   execução.
+4. **FFI limitado ao subset libc validado.** `malloc`, `free`, `putchar`,
+   `snprintf` (`%u`/`%d`/`%g`), `realloc`, `memcpy`, `strlen`, `puts` e o
+   printf variádico. Qualquer extern fora desta lista faz trap (VMV2-04);
+   alargar a stdlib no caminho VM exige alargar esta lista.
+5. **Indirect calls sem teste dedicado.** ADR-0021 regista o seam: "source
+   review of `src/vm/` and a later indirect-call test". `CallFnRef` e
+   `CallExternRef` existem no IR sem esse teste de fronteira.
+6. **HIR/artifact caching não implementado no playground.** ADR-0024 prevê "a
+   later cache can compile once and replay"; o `build` do playground prepara
+   inputs mas a compilação acontece em cada execução.
+7. **Diagnósticos estruturados em falta.** O blob WASM devolve status codes
+   planos (3/4/5); os diagnósticos JSON estruturados ficaram para a futura API
+   do LSP (`docs/wasm-playground-abi.md`).
+8. **Value width fixo.** Valores primitivos executam como `int64_t`/bits e fat
+   pointers ocupam dois registos consecutivos. Decisão consciente do primeiro
+   slice, a revisitar para larguras nativas e floats.
+9. **Paridade stdlib WASM vs nativo.** A stdlib não suportada no caminho VM
+   falha com status 5 previsível (ADR-0025), mas a cobertura da stdlib via
+   VM/WASM é substancialmente menor que via LLVM. Cresce com as dívidas 1 e 4.
+
 ### 4. Bare `opaque` usa hydration estável mas ainda depende de canonização consistente
 
 - Estado atual: o typeId canónico é derivado do namespace do módulo, ordem
