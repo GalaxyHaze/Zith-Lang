@@ -284,6 +284,26 @@ void test_vm_v2_indirect_call_fn_index() {
     CHECK_EQ(result.exitCode, 14, "indirect fn call dispatches through the fn table");
 }
 
+void test_vm_v2_indirect_call_fn_invalid_index() {
+    memory::Arena arena;
+    vm::Module module(arena);
+
+    auto &main      = module.functions.emplace(arena);
+    main.name       = "main";
+    main.paramCount = 0;
+    main.returnType = vm::ValueType::I32;
+    main.regCount   = 3;
+    main.body.push(vm::Instr::withImm(vm::Op::LoadConstI32, 0, 1));
+    main.body.push(vm::Instr::withImm(vm::Op::LoadConstI32, 1, 0));
+    main.body.push(vm::Instr::callRef(vm::Op::CallFnRef, 2, 0, 1, 1));
+    main.body.push(vm::Instr{vm::Op::Ret, 2, 0, 0, 0});
+
+    vm::Vm vm;
+    const auto result = vm.runMain(module);
+    CHECK(result.status == vm::RunStatus::Trap,
+          "indirect fn call traps on an out-of-range function reference");
+}
+
 void test_vm_v2_direct_call_extern_index() {
     memory::Arena arena;
     vm::Module module(arena);
@@ -328,6 +348,27 @@ void test_vm_v2_indirect_call_extern_index() {
     auto result = vm.runMain(module);
     CHECK(result.status == vm::RunStatus::Ok, "indirect extern call succeeds");
     CHECK_EQ(result.output, std::string("via-extern-ref\n"), "indirect extern writes output");
+}
+
+void test_vm_v2_indirect_call_extern_invalid_index() {
+    memory::Arena arena;
+    vm::Module module(arena);
+    module.externs.push(std::string_view("puts"));
+
+    auto &main      = module.functions.emplace(arena);
+    main.name       = "main";
+    main.paramCount = 0;
+    main.returnType = vm::ValueType::I32;
+    main.regCount   = 3;
+    main.body.push(vm::Instr::withImm(vm::Op::LoadConstI32, 0, 1));
+    main.body.push(vm::Instr::withImm(vm::Op::LoadConstI32, 1, 0));
+    main.body.push(vm::Instr::callRef(vm::Op::CallExternRef, 2, 0, 1, 1));
+    main.body.push(vm::Instr{vm::Op::Ret, 2, 0, 0, 0});
+
+    vm::Vm vm;
+    const auto result = vm.runMain(module);
+    CHECK(result.status == vm::RunStatus::Trap,
+          "indirect extern call traps on an out-of-range extern reference");
 }
 
 void test_vm_v2_store_load_bytes() {
@@ -1077,8 +1118,10 @@ void test_vm_v2() {
     test_vm_v2_invalid_opcode_shape_trap();
     test_vm_v2_direct_call_fn_index();
     test_vm_v2_indirect_call_fn_index();
+    test_vm_v2_indirect_call_fn_invalid_index();
     test_vm_v2_direct_call_extern_index();
     test_vm_v2_indirect_call_extern_index();
+    test_vm_v2_indirect_call_extern_invalid_index();
     test_vm_v2_store_load_bytes();
     test_vm_v2_invalid_write_offset_trap();
     test_vm_v2_alloc_bump_and_heap_disjoint();
