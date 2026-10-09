@@ -132,14 +132,15 @@ Capabilities license what plain types cannot do:
 | Capability | Meaning |
 |---|---|
 | `MultiWrite` | Several flows may write the same resource. Non-blocking by default: normal access is a monad-like `Ok<T> | Nil` that tries the lock and yields `Nil` on failure. `.sync()` is the compiler-generated blocking form: it waits for the lock and gives exclusive access for a scope, intended as `data.sync() \|> { ... }`. Results never carry a reference out of the locked use. |
-| `SyncWrite` | Atomic access: single load/store operations without a lock. NRA only checks that the type is atomically capable (natural size and alignment). |
+| `SyncWrite` | Atomic access: single load/store operations without a lock. It is a capability that atomic types implement. NRA only checks that the type is atomically capable (natural size and alignment). |
 | `Allocator` | Allocation provenance. Parameterized by a comptime MRA region, heap, or pool; see section 8. |
 | `Transferable` | Explicit advanced transfer of allocator-owned structure across memory domains. Never implicit. |
 
-`'own T` (revocable own) changes nothing for NRA itself: it is a contract
-required at unbounded thread boundaries, and the analysis treats the resource
-as an ordinary owned resource within each flow. It is mentioned here so the
-reader knows where the spelling lives; the details are thread-model material
+The revocable prefix `'` or `grant` (for example `'%mut T`, the revocable
+mutable own) changes nothing for NRA itself: it is a contract required at
+unbounded thread boundaries, and the analysis treats the resource as an
+ordinary owned resource within each flow. It is mentioned here so the reader
+knows where the spelling lives; the details are thread-model material
 (ADR-0026 and `docs/plans/callable-thread-blueprints.md`).
 
 ### 2.7 Provenance
@@ -168,7 +169,7 @@ Each rule has a stable id. Diagnostics reference these ids.
 | NRA-2 | No dead access. Reading an `empty` binding or a node in `uninitialized` or `taken` state is an error, including through `raw`. `raw` opts out of other analyses, never of this rule. |
 | NRA-3 | Region containment of `&`. A `&` cannot be stored in a field, global, or durable capture. It may be passed and returned. A returned `&` of a parameter uses the caller's region. A returned `&` of a local is rejected. An immediate aggregate that does not outlive the source may hold `&`. |
 | NRA-4 | Pin of `&`. While a `&` edge is `active`, its subgraph cannot be physically relocated or consumed. The veto covers the borrowed node, its descendants, and its ancestors, not siblings: a borrow of `s.a` does not conflict with `s.b`. |
-| NRA-5 | Lazy validity of `^`. A bind is valid at use if and only if its target has not been consumed or relocated since the edge was created. Failure is reported at the next use with the cause from the provenance list. |
+| NRA-5 | Lazy validity of `^`. A bind is valid at use if and only if its target has not been consumed or relocated since the edge was created, except when the same resource is later restored or returned to the target slot, which makes the bind valid again. Failure is reported at the next use with the cause from the provenance list. |
 | NRA-6 | Acyclicity. The combined own+bind dependency graph is acyclic, checked with SCC or DFS. Object-reference cycles that add no lifetime dependency are allowed. Union-find groups nodes but is not a cycle detector. |
 | NRA-7 | Completeness at boundaries. An aggregate crossing a boundary has every ownership-relevant field in `ok` state. A field projection needs only its own subgraph. An aggregate may be locally partial, for example after a field take. |
 | NRA-8 | Revival by `:=`. `:=` is valid only on an `uninitialized` slot and installs a new resource identity. It never overwrites an `ok` slot and is never valid on a `taken` slot. On edges it does not exist; retargeting a reference or bind uses `=`. |
@@ -178,30 +179,55 @@ Each rule has a stable id. Diagnostics reference these ids.
 
 ## 4. Surface Forms
 
-| Form | Contract |
-|---|---|
-| `default` | The binding owns its resource. Lifetime follows the resource graph. |
-| `&T` | Read-only reference. Non-owning, region-bound, pins its source against relocation and consumption while live. |
-| `&mut T` | Writable reference, same region and pinning rules as `&T`. |
-| `^T` | Non-owning bind. A general lifetime dependency, `lifetime(B) <= lifetime(A)`, without region limit or pin. Invalid if its target is consumed or relocated. |
-| `%T` | Logical ownership of an address or slot. Moving it marks the source slot `taken`. |
+Each form has a sigil and, for the write and own forms, an equivalent
+keyword. The keyword and the sigil are two spellings of the same form and may
+be used interchangeably. A plain `T` is the only form with neither.
+
+| Sigil form | Keyword form | Meaning |
+|---|---|---|
+| `T` | (none) | Owned binding, lifetime follows the resource graph. |
+| `&T` | `view T` | Read reference. Non-owning, region-bound, pins its source against relocation and consumption while live. |
+| `&mut T` | `lend T` | Write reference, same region and pinning rules as `&T`. |
+| `^T` | (none) | Read bind. A general lifetime dependency, `lifetime(B) <= lifetime(A)`, without region limit or pin. Invalid if its target is consumed or relocated. |
+| `^mut T` | `bind T` | Write bind. Same as `^T`, but counts as a writer at a boundary. |
+| `%T` | (none) | Immutable own: logical ownership of an address or slot. Moving it marks the source slot `taken`. |
+| `%mut T` | `own T` | Mutable own. |
+
+The read forms `^T` and `%T` have no keyword. `belong` is the old name of the
+write bind and is removed; the current keyword is `bind`. `unique` is the old
+name of `own` and is removed. `default` is a description of the plain `T`
+case, not a keyword. See [ADR-0034](adr/0034-nra-surface-spellings.md).
+
+The revocable prefix is the sigil `'` or the long spelling `grant`. It
+combines with every form except a bare `T`, so `'&T`, `'&mut T`, `'^T`,
+`'^mut T`, `'%T`, and `'%mut T` all exist. `'%mut T` equals `grant %mut T`.
+`'T` does not exist.
+
+The prefix appears only where the argument or type is declared. A call site
+does not repeat it, because the `unbounded` launch site already marks where
+revocation happens.
+
+The `'` character is ambiguous with a character literal. Lexically, an
+opening `'` followed by one character or one escape and a closing `'` is a
+character literal; any other body starts a revocable qualifier. This is the
+same rule Rust uses to separate `'a` from `'a'`, and it requires the scanner
+to keep character literals to exactly one character or one escape.
 
 `&` and `^` are the two spellings of the single non-owning edge of the
 kernel: `&` adds a region limit and a pinning veto, `^` is the bare edge.
-Neither form creates a raw pointer, and neither converts to `*`. Only `T`
-and `%T` create pointers. At a C boundary the signature uses the correct
-relation instead of a pointer, and the `c/` contract maps C functions to NRA
-effects.
+`mut` marks the write variant of either. Neither form creates a raw pointer,
+and neither converts to `*`. Only `T` and the own forms create pointers. At a
+C boundary the signature uses the correct relation instead of a pointer, and
+the `c/` contract maps C functions to NRA effects.
 
 In a type, `&T` and `&mut T` are reference forms. A prefix `&` applied to an
 expression is the separate Zith-- address-of form and is not part of this
 model.
 
-Coercions: `^ -> &` is free. `& -> ^` only when the source covers the
-destination region, never from a parameter.
-
-The spelling of writable bind remains open. The spelling of revocable own is
-`'own T` or `grant own T` (ADR-0026).
+Coercions. `^ -> &` and `^mut -> &mut` are free. `& -> ^` and `&mut -> ^mut`
+are allowed only when the source covers the destination region, never from a
+parameter. A read form never coerces to a write form, and a write form never
+coerces to a read form.
 
 ## 5. Moves and Assignment
 
@@ -210,7 +236,7 @@ The spelling of writable bind remains open. The spelling of revocable own is
 | Alias move, `let b = a` with `a: T` or `a: %T` | `b` names the same resource identity. The binding `a` becomes `empty`. The resource is untouched. |
 | Retarget, `let b = a` with `a: &T` or `a: ^T` | The non-owning edge is copied. `a` stays `bound` and usable. |
 | Physical move | Content moves between struct fields or compatible value slots. The source slot becomes `uninitialized` and accepts `=`. |
-| Logical move | Ownership of an address or slot transfers (`T -> %T`, `%T -> %T`). The source slot becomes `taken`. |
+| Logical move | Ownership of an address or slot transfers (`T -> %mut T`, `%mut T -> %mut T`). The source slot becomes `taken`. |
 | `=` | Writes or initializes a valid or `uninitialized` slot. Also retargets edges. |
 | `:=` | Revives an `uninitialized` slot by installing a new resource identity (NRA-8). Reserved for `T` and `%T`. |
 
@@ -239,8 +265,13 @@ between several provenances use the conservative union.
 
 Internal facts (`capture`, `escape`, `alloc`, `free`, `fork`, `merge`) are
 not part of the public header. For `extern fn` and other interop boundaries
-the header may be provided through an explicit attribute; the attribute form
-is a follow-up.
+the header is provided through the `c/` contract vocabulary (ADR-0014), not a
+new attribute: `read`, `write`, `borrow`, `move`, and `retain`, plus return
+provenance. An effect alone is enough when the boundary is simple. When the
+boundary also needs to say where a value came from or went, the contract adds
+provenance (`returnsArgument(i)`, `returnsNewOwned`, `returnsReference(i)`,
+`returnsBind(i)`, and argument origins). The exact `c/` surface for effects
+and provenance is fixed with the interop design.
 
 `let y = f(x)` where the header says `returnsArgument(i)` may be represented
 in the resource graph as `y == x` after validation. This is an optimization
@@ -248,11 +279,11 @@ license granted by the proof, not a relaxation of ownership rules.
 
 ## 7. Cross-Flow and Threads
 
-Stub. The accepted baseline is ADR-0026 (aggregate nodes, revocable flows,
-`'own` spelling) and ADR-0015 (thread fork and merge). The current direction
-for job blueprints, launch arguments, and monitoring handles is
-`docs/plans/callable-thread-blueprints.md`. Until a replacement ADR is
-accepted, the thread ADRs remain the contract.
+Stub. The accepted baseline is ADR-0026 (aggregate nodes, revocable flows)
+with the spelling fixed by ADR-0034, ADR-0015 (thread fork and merge) as
+amended by ADR-0035 (no `forkCount`, no `MultiShare`), and the thread frontier
+rules NRA-10 and NRA-11. The current direction for job blueprints, launch
+arguments, and monitoring handles is `docs/plans/callable-thread-blueprints.md`.
 
 NRA's obligations here are exactly NRA-10 and NRA-11: prove each flow
 separately, enforce merge or revoke at scope end, and gate cross-flow writes
@@ -295,22 +326,19 @@ total size.
 ## 9. Diagnostics
 
 Stub. The diagnostic catalog, with accepted and rejected examples per rule,
-is a follow-up document. Each diagnostic references its proof rule id from
-section 3.
+is a follow-up document. Each diagnostic uses the existing `E4001+` range and
+references its proof rule id from section 3.
 
 ## 10. Open Areas
 
-- Explicit `extern fn` effect-header attributes.
+- The exact `c/` contract surface for `extern fn` effects and provenance.
 - Custom allocator details, region parameterization, and storage semantics.
 - The diagnostic catalog with accepted and rejected examples.
 - Precise interaction of `fail`, `defer`, `drop`, and storage free for every
   control-flow shape.
 - Lifetime rules for `^` fields on parent replacement.
-- Spelling of the writable bind form.
 - Container method families: stable (never reallocates, keeps binds valid)
   vs reallocating.
-- Whether a `^` can be re-bound automatically after relocation, or only by
-  explicit retarget. Today it only becomes invalid.
 
 ## 11. Related Documents
 
@@ -320,6 +348,10 @@ section 3.
 - `docs/mra-spec.md` for static memory regions and raw access intrinsics.
 - `docs/adr/0033-nra-reference-model-and-bind.md` for the accepted reference
   model.
+- `docs/adr/0034-nra-surface-spellings.md` for the sigil spellings and the
+  legacy keyword equivalences.
 - `docs/adr/0026-nra-aggregate-nodes-and-revokable-flows.md` for aggregate
   nodes and revocable flows.
+- `docs/adr/0035-nra-thread-separation-supersedes-forkcount.md` for the
+  per-flow thread proof that removes `forkCount` and `MultiShare`.
 - `docs/impl-status.md` for what Zith-- implements today (SRA).

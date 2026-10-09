@@ -42,6 +42,11 @@ implicit deep-copy or allocator-rewrite mechanism.
 Status: accepted. This section fixes the source surface of the revocable
 contract. It does not change the runtime proxy described above.
 
+> Superseded by [ADR-0034](0034-nra-surface-spellings.md). The revocable
+> prefix `'` or `grant` combines with every qualifier except a bare `T`, so
+> `'&mut T`, `'^mut T`, and `'%mut T` all exist. `'%mut T` equals the `'own T`
+> written below.
+
 The revocable contract is a type qualifier, not a wrapper type. It is written
 as a sigil `'` before an explicit ownership qualifier, with `grant` as the
 long spelling.

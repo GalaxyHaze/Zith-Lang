@@ -1,5 +1,10 @@
 # Full-Zith Thread Fork/Merge
 
+> Superseded in part by [ADR-0035](0035-nra-thread-separation-supersedes-forkcount.md):
+> NRA no longer keeps `forkCount` and there is no `MultiShare<T>` transport.
+> Threads are proven per flow, with merge or revoke enforced at scope end.
+> The `fork`/`merge`/`revoke` keywords and handle lifecycle below stand.
+
 Full-Zith threads use `fork`, `merge`, and `revoke` as core keywords with
 runtime backend objects, not a `Branch` capability or a stdlib-only call
 surface. `fork` selects the backend explicitly (`pThread fork Entry(args)`)

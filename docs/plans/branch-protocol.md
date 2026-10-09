@@ -6,6 +6,12 @@ Draft design for the full-Zith thread protocol: `fork`, `merge`, and `revoke` as
 core keywords, backend handles such as `pThread`, and `spawn` as a stdlib
 shorthand activated by a context. Implementation is not started.
 
+> Superseded in part by
+> [ADR-0035](../adr/0035-nra-thread-separation-supersedes-forkcount.md): the
+> `forkCount` sections below no longer apply. NRA proves each flow separately
+> and enforces merge or revoke at scope end; there is no `forkCount` and no
+> `MultiShare<T>`. The `fork`/`merge`/`revoke` surface below stands.
+
 > This is full-Zith planning, not a Zith-- deliverable. Zith-- keeps explicit
 > thread/runtime APIs out of core syntax until the runtime/stdlib surface and
 > full ownership proof are defined. See `docs/roadmap.md` F-18/F-19/F-20 and the

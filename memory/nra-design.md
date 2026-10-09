@@ -44,12 +44,36 @@ is `docs/nra-spec.md`; the current `Zith--` implementation status is in
   created and applies capability gating (NRA-11).
 - Proof rules are enumerated with stable ids NRA-1..NRA-11 in spec section 3.
 
+### Open areas resolved (decided 2026-10-07)
+
+- Thread separation supersedes `forkCount`. ADR-0035 removes the `forkCount`
+  counter and the `MultiShare<T>` transport; ADR-0015 and
+  `docs/plans/branch-protocol.md` keep `fork`/`merge`/`revoke` and their
+  handle lifecycle but their `forkCount` sections are superseded. The proof
+  is per flow with merge/revoke at scope end (NRA-10).
+- NRA-5 has one exception: a `^` invalidated by consumption or relocation
+  becomes valid again if the same resource is restored or returned to the
+  target slot. Otherwise the bind stays invalid until retargeted with `=`.
+- `extern fn` effect headers use the `c/` contract vocabulary (ADR-0014),
+  not a new attribute: `read`/`write`/`borrow`/`move`/`retain` plus return
+  provenance when the boundary needs it.
+- Diagnostics use the existing `E4001+` range and reference the NRA rule id.
+  The catalog itself is a future document; section 9 stays a stub.
+- Cleanup: one scope-cleanup mechanism for `defer` and `drop`, matching the
+  Zith-- `defer` implementation (reverse registration, per lexical block,
+  runs on every exit). OPEN: the order of `drop` vs `defer` within a scope is
+  not yet decided. The spec section 8 writes
+  `fail -> defer -> drop -> storage free` (defer before drop), which is the
+  current default, but the alternative is drop first (innermost) then defer.
+
 ### Reference model (decided 2026-10-06, supersedes view/lend/share entries below)
 
-- Surface forms fixed by ADR-0033: `&T` read reference, `&mut T` write
-  reference, `^T` bind (formerly `belong`), and `%T` own. Writable bind and
-  own spellings remain open. The old `lend`, `view`, and `share` categories
-  are absorbed into `&`/`&mut`.
+- Surface forms fixed by ADR-0033, spellings fixed by ADR-0034: `&T` read
+  reference (`view`), `&mut T` write reference (`lend`), `^T` read bind,
+  `^mut T` write bind (`bind`, formerly `belong`), `%T` immutable own, and
+  `%mut T` mutable own (`own`, formerly `unique`). The `'`/`grant` prefix
+  combines with every form except a bare `T`. The old `lend`, `view`, and
+  `share` categories are absorbed into `&`/`&mut`.
 - References may coexist in one flow. Exclusivity is checked only at a
   boundary (call, return, flow crossing, closure capture): many readers or one
   writer. A closure capture is sugar for passing the captured resources in an
@@ -103,9 +127,9 @@ is `docs/nra-spec.md`; the current `Zith--` implementation status is in
   field became invalid. It must be complete only when it crosses a boundary. A
   field projection needs only its own subgraph.
 
-### MultiWriter
+### MultiWrite
 
-- `MultiWriter` is a capability that lets several flows (threads) write the
+- `MultiWrite` is a capability that lets several flows (threads) write the
   same resource. Each boundary stays exclusive, only flows may coexist. The
   type implements `acquire()`, `lock()`, `release()`. Users never call them.
 - Normal access is a monad-like `Ok<T> | Nil`. It tries the lock, holds it
@@ -229,7 +253,7 @@ so no `Revokable<T>` wrapper appears in source.
   `free`, `fork`, and `merge` remain internal facts.
 - `view` is an anchor, not an owner. It never destroys or promotes storage.
 - Superseded: `share` is absorbed into `&mut`. Multiple writer flows are the
-  explicit `MultiWriter` capability, see the MultiWriter section.
+  explicit `MultiWrite` capability, see the MultiWrite section.
 - Cleanup order remains `fail -> defer -> drop -> storage free`.
 - The current implementation status remains separate in `docs/impl-status.md`;
   this file records future NRA design decisions, not shipped Zith-- behavior.
@@ -261,4 +285,4 @@ so no `Revokable<T>` wrapper appears in source.
 - Custom allocator details.
 - Diagnostic catalog and examples.
 - Exact cleanup ordering across every control-flow shape.
-- `belong` field lifetime rules.
+- `^mut` (bind) field lifetime rules.

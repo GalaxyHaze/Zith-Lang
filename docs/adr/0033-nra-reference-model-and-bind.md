@@ -3,6 +3,11 @@
 Status: accepted as a full-Zith design direction. Nothing in this decision is
 implemented or changes Zith--.
 
+> Spellings completed by [ADR-0034](0034-nra-surface-spellings.md): `own` is
+> the keyword for `%mut T` and `bind` the keyword for `^mut T`. Keyword and
+> sigil coexist and are equivalent, so the `own`/`bind` examples below are
+> current. `belong` is removed.
+
 ## Context
 
 The earlier NRA design had separate `lend`, `view`, `share`, and `belong`
@@ -12,11 +17,11 @@ the model harder to learn and left `belong` unclear next to `view`.
 ## Decision
 
 `&T` is a read reference and `&mut T` a write reference. `lend`, `view`, and
-`share` are absorbed into them. `^T` is a bind (formerly `belong`) and `%T` is
-an own. The mutable forms are the common ones. References may coexist in one
-flow. Exclusivity is checked at a boundary (call, return, flow crossing,
-closure capture): many readers or one writer. `MultiWriter` is the explicit
-exception for several writer flows.
+`share` are absorbed into them. `^T` is a bind and `%T` is an own. The
+mutable forms are the common ones. References may coexist in one flow.
+Exclusivity is checked at a boundary (call, return, flow crossing, closure
+capture): many readers or one writer. `MultiWrite` is the explicit exception
+for several writer flows.
 
 The NRA has two edges, owning and non-owning. A non-owning edge is a lifetime
 dependency, `lifetime(B) <= lifetime(A)`, checked lazily at use. `&` is that
