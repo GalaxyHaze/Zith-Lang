@@ -198,6 +198,16 @@ function injectPageNavigation(path) {
 
 let initialLoad = true;
 
+/* Zith code blocks carry class="language-zith"; highlight them with the same
+   engine the landing page uses (js/zith-highlight.js). Other languages stay
+   plain text so no wrong grammar is applied. */
+function highlightZithBlocks(root) {
+    if (!window.ZithHighlight) return;
+    root.querySelectorAll("pre > code.language-zith").forEach(code => {
+        code.innerHTML = window.ZithHighlight.highlight(code.textContent);
+    });
+}
+
 function loadPage(path, anchor = null, opts = {}) {
     const canonicalPath = resolveAlias(path);
     fetch(canonicalPath)
@@ -213,9 +223,7 @@ function loadPage(path, anchor = null, opts = {}) {
             setActiveLink(canonicalPath);
             injectPageNavigation(canonicalPath);
 
-            if (window.Prism) {
-                Prism.highlightAllUnder(content);
-            }
+            highlightZithBlocks(content);
 
             const filename = canonicalPath.split("/").pop() || "_";
             const titleMatch = html.match(/<h[12][^>]*>(.*?)<\/h[12]>/i);

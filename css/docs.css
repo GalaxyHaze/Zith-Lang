@@ -229,34 +229,6 @@ DOCS — documentation shell
     color: var(--brand);
 }
 
-/* Prism tokens (dark block) */
-.token.comment,
-.token.prolog,
-.token.doctype,
-.token.cdata { color: var(--code-comment); }
-.token.punctuation { color: var(--code-punct); }
-.token.property,
-.token.tag,
-.token.constant,
-.token.symbol,
-.token.deleted { color: var(--code-keyword); }
-.token.boolean,
-.token.number { color: var(--code-number); }
-.token.selector,
-.token.attr-name,
-.token.string,
-.token.char,
-.token.builtin,
-.token.inserted { color: var(--code-string); }
-.token.operator,
-.token.entity,
-.token.url { color: var(--code-function); }
-.token.atrule,
-.token.attr-value,
-.token.keyword { color: var(--code-keyword); }
-.token.function,
-.token.class-name { color: var(--code-function); }
-
 @media (max-width: 900px) {
     .docs-layout {
         grid-template-columns: 1fr;
