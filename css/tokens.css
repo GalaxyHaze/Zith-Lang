@@ -6,10 +6,10 @@ See notes/decisions/0002-paleta-flat.md.
 
 :root {
     /* Surfaces */
-    --bg: #eef4f7;
-    --bg-2: #dfeaf0;
+    --bg: #e3ebf1;
+    --bg-2: #d4e0ea;
     --surface: #ffffff;
-    --border: #cfdae2;
+    --border: #c4d2dd;
 
     /* Text */
     --text: #16232e;

@@ -14,7 +14,8 @@ próprias notas de design.
 
 Uma só paleta, clara e flat, num único `:root` em `css/tokens.css`:
 
-- Fundo azul-gelo (`--bg #eef4f7`), superfícies brancas (`--surface #ffffff`).
+- Fundo azul-aço (`--bg #e3ebf1`, secções alternadas `--bg-2 #d4e0ea`),
+  superfícies brancas (`--surface #ffffff`).
 - Texto azul-grafite (`--text #16232e`), secundário `--text-muted #4b6070`,
   títulos `--title #1b2b4d`.
 - Cromo em indigo (`--header-bg #26324f`, `--footer-bg #1a2130`).
