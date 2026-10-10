@@ -3,11 +3,72 @@
 #include "interp/hir-interpreter.hpp"
 #include "session/compilation-session.hpp"
 #include "session/pipeline-plan.hpp"
+#ifdef ZITH_HAS_VM
+#include "vm/hir-to-vm.hpp"
+#include "vm/vm-v2.hpp"
+#endif
 
 #include <cstdio>
 #include <string>
 
 namespace zith::cli::commands {
+
+namespace {
+
+// The portable VM v2 path runs the program from HIR without native codegen.
+// It is selected by --virtual-machine on any build, and automatically when the
+// build has no LLVM codegen to link against. Returns false (and reports on
+// stderr) when the program cannot be lowered or the VM traps.
+bool runThroughVirtualMachine(session::CompilationSession &session, term::UsagePrinter &err,
+                              int &exitCode) {
+#ifdef ZITH_HAS_VM
+    memory::Arena vmArena;
+    vm::Module module(vmArena);
+    const auto lowered = vm::lowerModule(session.hirModule(), session.interner(), session.types(),
+                                         vmArena, module);
+    if (!lowered.ok) {
+        err.red("[error]");
+        std::fprintf(stderr, " %s\n",
+                     lowered.message.empty() ? "VM v2 could not lower the program"
+                                             : lowered.message.c_str());
+        return false;
+    }
+
+    vm::Vm machine;
+    const auto result = machine.runMain(module);
+    if (result.status != vm::RunStatus::Ok) {
+        err.red("[error]");
+        std::fprintf(stderr, " %s\n", result.message.empty() ? "VM v2 could not execute the program"
+                                                             : result.message.c_str());
+        return false;
+    }
+    std::fputs(result.output.c_str(), stdout);
+    std::fflush(stdout);
+    exitCode = static_cast<int>(result.exitCode);
+    return true;
+#else
+    (void)session;
+    (void)exitCode;
+    err.red("[error]");
+    std::fprintf(stderr,
+                 " this build excludes the VM v2 slice; reconfigure with -DZITH_BUILD_VM=ON\n");
+    return false;
+#endif
+}
+
+// True when execution must go through the portable VM rather than native
+// codegen: an explicit --virtual-machine, or a build without LLVM.
+bool shouldUseVirtualMachine(const Options &opts) {
+    if (opts.flags.virtualMachine())
+        return true;
+#if defined(ZITH_HAS_LLVM) && !defined(ZITH_IS_WASM)
+    return false;
+#else
+    return true;
+#endif
+}
+
+} // namespace
 
 int execute(const Options &opts) {
     auto TERM = term::init(opts);
@@ -50,6 +111,13 @@ int execute(const Options &opts) {
             std::fputs(result.output.c_str(), stdout);
             std::fflush(stdout);
             exitCode = static_cast<int>(result.exitCode);
+            continue;
+        }
+
+        if (shouldUseVirtualMachine(opts)) {
+            if (!runThroughVirtualMachine(session, err, exitCode)) {
+                allPassed = false;
+            }
             continue;
         }
 

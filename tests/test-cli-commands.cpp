@@ -148,6 +148,31 @@ static void test_new_emit_flags_parse_and_compose() {
           "--emit-all includes CST and VIR");
 }
 
+static void test_virtual_machine_flag_parse_and_stage() {
+    {
+        char program[] = "zithc";
+        char command[] = "run";
+        char flag[]    = "--virtual-machine";
+        char *args[]   = {program, command, flag};
+        Cli cli;
+        cli.parseArgs(3, args);
+        CHECK(cli.opts.flags.virtualMachine(), "--virtual-machine enables the VM flag");
+        CHECK(!cli.opts.flags.interpreted(), "--virtual-machine is distinct from --interpreted");
+    }
+
+    {
+        // On a Run command the flag must stop the pipeline at HIR so the VM can
+        // execute it, regardless of whether LLVM codegen is compiled in.
+        memory::Arena arena;
+        Options opts(arena);
+        opts.command = Options::Command::Run;
+        opts.flags.virtualMachine(true);
+        opts.deriveTargetStage();
+        CHECK(opts.targetStage == session::Stage::HirLowered,
+              "run --virtual-machine stops at Stage::HirLowered");
+    }
+}
+
 static void test_run_emit_vir_still_executes_program() {
 #ifdef ZITHC_BINARY
     CliCapture capture;
@@ -170,6 +195,45 @@ static void test_run_emit_vir_still_executes_program() {
     // The VM v2 slice is optional on native builds; without it --emit-vir is a
     // hard error, so the execution check is skipped.
     CHECK(true, "run --emit-vir execution is skipped when the VM slice is not built");
+#endif
+#else
+    CHECK(true, "CLI subprocess tests are skipped when zithc is not built");
+#endif
+}
+
+static void test_run_virtual_machine_executes_program() {
+#ifdef ZITHC_BINARY
+    CliCapture capture;
+    std::filesystem::create_directories(capture.root);
+    const auto source = capture.root / "main.zith";
+    {
+        std::ofstream output(source, std::ios::binary | std::ios::trunc);
+        output << "fn main(): i32 { return 9; }\n";
+    }
+
+#ifdef ZITH_HAS_VM
+    // --no-cache keeps the run on the cold lowering path, matching the other
+    // subprocess checks; the VM must still produce the program exit code.
+    const auto result =
+        capture.run("run --virtual-machine --no-cache \"" + source.string() + "\"");
+    CHECK_EQ(result.exitCode, 9, "run --virtual-machine executes main and returns its exit code");
+    CHECK(result.stdoutText.empty(), "run --virtual-machine leaves program stdout empty");
+
+    // Regression: a prior native run writes the persistent cache. A later
+    // --virtual-machine run hydrates HIR from it, and hydration does not
+    // restore the session-local `decl_id`. The VM must still find and run
+    // `main` from the hydrated body rather than dropping it as extern.
+    const auto warmNative = capture.run("run \"" + source.string() + "\"");
+    CHECK_EQ(warmNative.exitCode, 9, "native run warms the cache with the program result");
+    const auto warmVm = capture.run("run --virtual-machine \"" + source.string() + "\"");
+    CHECK_EQ(warmVm.exitCode, 9,
+             "run --virtual-machine executes main from a hydrated cache entry");
+#else
+    // Without the VM slice the flag is a hard error instead of executing.
+    const auto result = capture.run("run --virtual-machine \"" + source.string() + "\"");
+    CHECK_EQ(result.exitCode, 1, "run --virtual-machine errors when the VM slice is absent");
+    CHECK(result.stderrText.find("excludes the VM v2 slice") != std::string::npos,
+          "the missing VM slice is reported on stderr");
 #endif
 #else
     CHECK(true, "CLI subprocess tests are skipped when zithc is not built");
@@ -661,7 +725,9 @@ static void test_cli_commands() {
     test_options_command_enum();
     test_build_derives_codegen_stage();
     test_new_emit_flags_parse_and_compose();
+    test_virtual_machine_flag_parse_and_stage();
     test_run_emit_vir_still_executes_program();
+    test_run_virtual_machine_executes_program();
     test_docs_options_parse_and_validate();
     test_docs_cli_rejects_invalid_options_before_compilation();
     test_completion_command_emits_updated_shell_options();

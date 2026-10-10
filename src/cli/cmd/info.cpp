@@ -102,6 +102,7 @@ int help(FILE *dest) {
     p.flag("    --emit-asm", "Emit assembly");
     p.flag("    --emit-all", "Emit tokens, CST, AST, HIR, VIR, IR, and assembly");
     p.flag("    --interpreted", "Execute through the HIR interpreter");
+    p.flag("    --virtual-machine", "Execute through the portable VM v2 (no native codegen)");
     p.flag("    --opt-level <0-3>", "Optimization level");
     p.flag("    --debug-level <0-3>", "Debug info level");
     p.flag("-s, --strict", "Apply stricter rules");

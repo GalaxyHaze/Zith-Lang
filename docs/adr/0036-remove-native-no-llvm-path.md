@@ -1,8 +1,13 @@
 # Remove the Native No-LLVM Execution Path
 
+> Superseded in part by the fallback rework: the native no-LLVM path is back.
+> `zithc run` now selects VM v2 automatically when the build has no LLVM, and
+> `--virtual-machine` selects it explicitly on any build. See the note at the
+> end of this file.
+
 ## Status
 
-Accepted.
+Accepted, then superseded in part (native no-LLVM execution restored).
 
 ## Context
 
@@ -48,3 +53,21 @@ part of the build instead of failing.
   the `test-vm-v2` guard is required in the same change.
 - Reintroducing a native no-LLVM runtime requires a deliberate spec change and
   a build configuration that actually ships it.
+
+## Update: the native no-LLVM path is restored
+
+The project contract no longer requires LLVM for every native build, so the
+decision above was reversed. `src/cli/cmd/run.cpp` runs the program through VM
+v2 in two cases: an explicit `--virtual-machine` flag on any build, and
+automatically when the build has no LLVM (`ZITH_HAS_LLVM` off) or targets WASM.
+Native LLVM builds keep the link-and-exec path when the flag is absent.
+
+The removal left two follow-on constraints that still hold. `src/vm/` stays
+optional through `ZITH_BUILD_VM`, and a build without the slice reports a clear
+error for `--virtual-machine` instead of linking. `test-vm-v2` keeps its
+`SKIP_RETURN_CODE` guard.
+
+The lowering has one requirement that the old branch did not face: the
+persistent cache hydrates HIR without restoring the session-local `decl_id`
+field. `vm::lowerModule` now decides whether a function has a body from
+`blocks.empty()` alone, so a hydrated `main` is still lowered and executed.

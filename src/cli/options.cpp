@@ -48,11 +48,17 @@ void Options::deriveTargetStage() {
 #if defined(ZITH_HAS_LLVM) && !defined(ZITH_IS_WASM)
     // Run/Execute need a binary; Build needs at least an object file, so all
     // three go through codegen unless an explicit --emit target says otherwise.
+    // --virtual-machine opts into the portable VM v2 path instead of codegen.
 #else
-    // Without native codegen, Run/Execute go through the portable execution
-    // IR VM. Build and --emit targets keep their usual stopping points.
+    // Without native codegen there is no object to link, so Run/Execute always
+    // go through the portable VM v2 path. Build and --emit targets keep their
+    // usual stopping points.
 #endif
     if (flags.interpreted() && command == Command::Run) {
+        targetStage = session::Stage::HirLowered;
+        return;
+    }
+    if (flags.virtualMachine() && command == Command::Run) {
         targetStage = session::Stage::HirLowered;
         return;
     }
@@ -371,6 +377,11 @@ void Cli::parseArgs(int argc, char **argv) {
 
         if (compare(argv[i], "--interpreted")) {
             opts.flags.interpreted(true);
+            continue;
+        }
+
+        if (compare(argv[i], "--virtual-machine")) {
+            opts.flags.virtualMachine(true);
             continue;
         }
 

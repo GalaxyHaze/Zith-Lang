@@ -191,7 +191,7 @@ Implementation work that is incomplete or needs review is tracked in
 | Command | Status | Notes |
 |---|---|---|
 | `zithc build` | **Working** | Links an executable into `target/` by default; `--emit obj/ir/asm/hir` stop earlier; `--cache-stats` prints object-cache hit/miss counts |
-| `zithc run` | **Working** | Compiles + executes in one step; the program's stdout/stderr is forwarded to zithc's **stdout**, compiler diagnostics stay on stderr |
+| `zithc run` | **Working** | Compiles + executes in one step; the program's stdout/stderr is forwarded to zithc's **stdout**, compiler diagnostics stay on stderr. Runs through native codegen by default, through VM v2 when `--virtual-machine` is passed or when the build has no LLVM |
 | `zithc check` | **Working** | Type-checks without emitting. Errors forwarded from frontend snapshot |
 | `zithc fmt` | **Working** | Round-trip tested for `Index` and `OptionalProp` |
 | `zithc create <name>` | **Working** | |

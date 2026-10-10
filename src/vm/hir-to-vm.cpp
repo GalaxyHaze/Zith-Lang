@@ -30,7 +30,11 @@ bool startsWith(std::string_view value, std::string_view prefix) {
 }
 
 auto isUserFunction(std::string_view linkage, const hir::HirFunction &hirFn) -> bool {
-    if (hirFn.blocks.empty() || hirFn.decl_id == ast::kInvalidDecl)
+    // A function with a body is user code to lower. `decl_id` is a
+    // session-local AST id that cache hydration does not restore, so it must
+    // not decide this: a hydrated body-bearing function still has blocks and
+    // must be lowered like a freshly parsed one.
+    if (hirFn.blocks.empty())
         return false;
     const std::string_view name = sourceName(linkage);
     if (name == "main")
@@ -384,7 +388,7 @@ auto lowerCall(LowerState &state, const hir::HirCall &call) -> std::uint16_t {
             }
             continue;
         }
-        if (name == "main" || hirFn.blocks.empty() || hirFn.decl_id == ast::kInvalidDecl) {
+        if (name == "main" || hirFn.blocks.empty()) {
             if (name == "puts" || name == "putchar" || name == "malloc" || name == "free" ||
                 name == "realloc" || name == "printf" || name == "snprintf" ||
                 name == "strlen" || name == "memcpy" || name == "calloc" ||

@@ -176,10 +176,11 @@ Inventário consolidado em 2026-10-10, cruzando os contratos assinados
 [0025](/home/diogo/Zith/docs/adr/0025-vm-v2-call-convention-and-intrinsics.md))
 com o estado de `src/vm/`. O opcode set já cresceu além do slice inicial
 (bitwise, `IndexLoad`, `CallFnRef`/`CallRange`, `Branch2`). Contexto: a dívida
-"duas fatias de execução" está resolvida (ADR-0036) e `src/vm/` é opcional via
-`ZITH_BUILD_VM`; a VM v2 serve hoje o playground WASM e o harness
-`test-vm-v2`. As dívidas e resoluções ficam numeradas para manter as
-referências estáveis:
+"duas fatias de execução" foi reaberta e resolvida de novo, o caminho nativo
+sem-LLVM voltou (ver secção D) e `src/vm/` continua opcional via
+`ZITH_BUILD_VM`; a VM v2 serve hoje o playground WASM, o harness `test-vm-v2` e
+o `zithc run` quando o LLVM está off ou quando se passa `--virtual-machine`. As
+dívidas e resoluções ficam numeradas para manter as referências estáveis:
 
 1. **Superfície de linguagem incompleta no lowering.** State machines, dyn
    dispatch e `opaque` são "later slices" registados nos non-goals do plano e
@@ -782,21 +783,33 @@ Verificação: `cmake --build build -j4` limpo e `ctest --test-dir build` com
 
 ### D. Duas fatias de execução por VM/IR sem teste de fronteira (resolvida)
 
-Estado resolvido (ADR-0036): o ramo nativo sem-LLVM foi removido. O `useIrVm`
-deixou de existir em [run.cpp](/home/diogo/Zith/src/cli/cmd/run.cpp), pelo que o
-CLI nativo tem um único caminho de execução (link e exec) e o ramo inalcançável
-deixou de estar no código. A VM v2 continua a ser o runtime de execução apenas
-no WASM, e `--interpreted` continua a ser o caminho do HIR interpreter.
+Estado resolvido (ADR-0036 revisto): o ramo nativo sem-LLVM foi removido em
+2026 e reintroduzido agora como fallback suportado. Em
+[run.cpp](/home/diogo/Zith/src/cli/cmd/run.cpp) o CLI nativo escolhe a VM v2
+quando `--virtual-machine` é passado em qualquer build, e automaticamente
+quando o build não tem LLVM (`ZITH_HAS_LLVM` off) ou tem como alvo WASM. Um
+build LLVM nativo sem a flag mantém o caminho link e exec. `--interpreted`
+continua a ser o caminho do HIR interpreter.
 
 `src/vm/` passou a ser uma fatia opcional no build nativo através da opção
 `ZITH_BUILD_VM`; sem ela o macro `ZITH_HAS_VM` não é definido e `--emit-vir`
-reporta um erro explícito em vez de baixar para a VM. O `test-vm-v2` ganhou um
-guard de build e devolve `77` (convenção de skip do CTest, registada com
-`SKIP_RETURN_CODE`), pelo que excluir a fatia o salta em vez de partir a
-compilação.
+reporta um erro explícito em vez de baixar para a VM. O mesmo vale para
+`--virtual-machine`, que falha com "this build excludes the VM v2 slice". O
+`test-vm-v2` ganhou um guard de build e devolve `77` (convenção de skip do
+CTest, registada com `SKIP_RETURN_CODE`), pelo que excluir a fatia o salta em
+vez de partir a compilação.
 
-Verificação: build normal com `ctest -R 'vm-v2|cli-commands'` a passar e build
-`-DZITH_BUILD_VM=OFF` a compilar sem `src/vm/` com o `test-vm-v2` a saltar.
+A hidratação da cache persistente não restaura o `decl_id` (é um id de AST
+local à sessão), pelo que o lowering da VM decide se uma função tem corpo
+apenas por `blocks.empty()`. Sem esta regra, um `zithc run` nativo seguido de
+`zithc run --virtual-machine` perdia o `main` hidratado e falhava com "the
+typed IR has no main function". O `test-cli-commands` cobre esta regressão com
+um run nativo seguido de um run pela VM.
+
+Verificação: build LLVM com `ctest --test-dir build` a passar 42/42, build
+`-DZITH_HAS_LLVM=OFF` a executar `zithc run` pela VM sem flag, e build
+`-DZITH_BUILD_VM=OFF` a compilar sem `src/vm/` com `--virtual-machine` a
+reportar erro explícito e o `test-vm-v2` a saltar.
 
 ### E. Falsos positivos verificados (não é dívida)
 

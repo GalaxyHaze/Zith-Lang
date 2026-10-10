@@ -50,7 +50,7 @@ struct Options {
     // Frontend in-memory memoization still applies within the session.
     bool noCache = false;
 
-    // Bit-packed flags (std::bitset<26>):
+    // Bit-packed flags (std::bitset<27>):
     //  0-1:  optLevel      (2 bits, values 0-3)
     //  2-3:  debugLevel    (2 bits, values 0-3)
     //  4-5:  color         (2 bits, values 0-2: Off, Auto, On)
@@ -72,17 +72,18 @@ struct Options {
     //  23:   debugSema     (1 bit)
     //  24:   emitCst       (1 bit)
     //  25:   emitVir       (1 bit)
+    //  26:   virtualMachine (1 bit)
     struct {
-        std::bitset<26> bits{};
+        std::bitset<27> bits{};
 
-        static uint8_t extractBits(const std::bitset<26> &b, size_t pos, size_t count) {
+        static uint8_t extractBits(const std::bitset<27> &b, size_t pos, size_t count) {
             uint8_t val = 0;
             for (size_t i = 0; i < count; ++i)
                 if (b.test(pos + i))
                     val |= static_cast<uint8_t>(1 << i);
             return val;
         }
-        static void insertBits(std::bitset<26> &b, size_t pos, size_t count, uint8_t val) {
+        static void insertBits(std::bitset<27> &b, size_t pos, size_t count, uint8_t val) {
             for (size_t i = 0; i < count; ++i)
                 b.set(pos + i, (val >> i) & 1);
         }
@@ -232,6 +233,15 @@ struct Options {
         }
         void emitVir(bool v) {
             bits.set(25, v);
+        }
+
+        // Run the program through the portable VM v2 instead of native codegen.
+        // On a build without LLVM this is selected automatically.
+        bool virtualMachine() const {
+            return bits.test(26);
+        }
+        void virtualMachine(bool v) {
+            bits.set(26, v);
         }
     } flags;
 

@@ -22,16 +22,19 @@ later work.
 
 - No changes to the current execution IR v1 (`src/ir`, `src/interp`) in this
   slice.
-The VM v2 lowering lives in `src/vm/hir-to-vm.*` and is used by the portable
-runtime on no-LLVM/WASM builds. Native CLI builds can also dump it with
-`--emit-vir`; LLVM builds keep the native path, so the
-host runtime change does not affect the shipped codegen backend.
-
 - No browser/WASM packaging in this milestone.
 - No full language surface: state machines, dyn dispatch, opaque and variadic
   slices are later slices.
 - No comptime pipeline yet: build-time functions are a separate workload on
   the same VM once the IR and runtime exist.
+
+## Runtime Selection
+
+The VM v2 lowering lives in `src/vm/hir-to-vm.*`. The portable runtime uses it
+on no-LLVM and WASM builds, and any native CLI build can select it with
+`--virtual-machine` or dump it with `--emit-vir`. A native LLVM build keeps the
+link-and-exec path unless the flag asks for the VM, so the shipped codegen
+backend is unchanged.
 
 ## Decisions
 

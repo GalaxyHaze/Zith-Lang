@@ -9,8 +9,16 @@ that are easy to get wrong when editing that plan.
 
 - VM v2 (`src/vm/`) is the typed execution IR and portable C++ VM. It is
   compiled into `zithcLib` and selected for WASM execution after HIR lowering.
-- LLVM builds keep the native code path, and `--interpreted` always selects the
-  HIR interpreter explicitly.
+- `zithc run` selects VM v2 when `--virtual-machine` is passed on any build, and
+  automatically when the build has no LLVM (`ZITH_HAS_LLVM` off) or targets
+  WASM. A native LLVM build without the flag keeps the link-and-exec path.
+- `--interpreted` always selects the HIR interpreter explicitly, independent of
+  the VM selection.
+- With `-DZITH_BUILD_VM=OFF` the slice is absent and `--virtual-machine` reports
+  "this build excludes the VM v2 slice" instead of linking.
+- Cache hydration does not restore `decl_id`, so `vm::lowerModule` treats a
+  function as user code whenever `blocks` is non-empty. Do not reintroduce a
+  `decl_id` guard there, it drops hydrated `main` on a warm cache.
 - Execution IR v1 (`src/ir/` + `src/interp/`) is archived under
   `archive/execution-ir-v1/` and is not in the active tree.
 
