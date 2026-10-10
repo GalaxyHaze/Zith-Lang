@@ -27,6 +27,11 @@ that are easy to get wrong when editing that plan.
   `zith_last_diagnostics_json_ptr/len`. Compiler diagnostics include severity,
   message, code, and byte-offset span. Runtime and ABI errors include severity
   and message while the existing numeric status codes remain stable.
+- The playground implements the compile-once HIR artifact cache. The host calls
+  `zith_compile_hir` once, replays with `zith_execute_cached`, and can persist a
+  blob and reload it with `zith_restore_cached`. Entries are keyed by source
+  bytes plus the stdlib pack fingerprint, and a cache miss or stale blob is
+  reported through the diagnostics channel instead of recompiling silently.
 - The FFI subset is validated and small: `malloc`, `free`, `putchar`, the
   `snprintf` formats the stdlib uses (`%u`, `%d`, `%g`), `realloc`, `memcpy`,
   `strlen`, and the `printf` variadic surface. Unsupported externs trap.

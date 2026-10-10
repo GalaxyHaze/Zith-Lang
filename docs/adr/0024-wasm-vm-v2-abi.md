@@ -85,7 +85,11 @@ WASM runtime path uses VM v2.
 - Compiler diagnostics, unsupported HIR, runtime traps, and invalid ABI
   parameters remain distinct status classes. User source errors must never
   surface as an uncaught WASM trap.
-- `build` prepares the inputs needed for future HIR/artifact caching. The
-  first browser integration does not persist or reuse a cache.
+- The playground implements the compile-once artifact cache the ABI promised:
+  `zith_compile_hir` stores a flat HIR blob in a module-local cache,
+  `zith_execute_cached` replays it without recompiling, and `zith_restore_cached`
+  loads a host-persisted blob. Cache misses and stale blobs are reported through
+  the structured diagnostics channel instead of triggering a silent recompile.
+  The host still owns durable storage across page sessions.
 - The old execution IR plan and ADR are historical references, not active
   contracts.

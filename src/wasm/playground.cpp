@@ -1,4 +1,5 @@
 #include <cstring>
+#include <cstddef>
 #include <cstdint>
 #include <string>
 #include <string_view>
@@ -27,6 +28,22 @@ static std::string last_diagnostics_json  = "{\"diagnostics\":[]}";
 static size_t structured_diagnostic_count = 0;
 static int64_t last_exit_code             = 0;
 static std::vector<std::pair<std::string, std::string>> stdlib_sources;
+
+// Compile-once HIR artifact cache. The browser can compile a source buffer
+// once, restore the persisted flat HIR blob, and replay it without re-entering
+// the compiler pipeline. Entries are keyed by the source bytes plus the
+// registered stdlib pack fingerprint, so a new pack invalidates stale HIR.
+struct CachedHirBlob {
+    uint64_t key = 0;
+    std::string bytes;
+};
+
+constexpr size_t kHirCacheCapacity = 32U;
+static std::vector<CachedHirBlob> hir_cache;
+static uint64_t stdlib_pack_fingerprint = 0;
+static int64_t hir_cache_hits           = 0;
+static int64_t hir_cache_misses         = 0;
+static int64_t hir_cache_stale          = 0;
 
 #ifdef ZITH_IS_WASM
 constexpr const char *kWasmStdioHeader = R"(#[discardable] pub extern fn getchar(): i32
@@ -238,6 +255,46 @@ void setErrorMessage(const std::string &message) {
     host_write(2, last_error.data(), last_error.size());
 }
 
+// FNV-1a over the source bytes and the active stdlib fingerprint. The source
+// length is mixed in explicitly so distinct buffers cannot collide through
+// trailing-zero differences.
+uint64_t hirCacheKey(const char *ptr, int len) {
+    constexpr uint64_t kOffset = 1469598103934665603ULL;
+    constexpr uint64_t kPrime  = 1099511628211ULL;
+    uint64_t hash = kOffset;
+    const auto mix = [&](uint8_t byte) {
+        hash ^= byte;
+        hash *= kPrime;
+    };
+    for (int i = 0; i < 8; ++i)
+        mix(static_cast<uint8_t>(static_cast<uint64_t>(len) >> (i * 8)));
+    for (int i = 0; i < 8; ++i)
+        mix(static_cast<uint8_t>(stdlib_pack_fingerprint >> (i * 8)));
+    for (int i = 0; i < len; ++i)
+        mix(static_cast<uint8_t>(ptr[i]));
+    return hash;
+}
+
+const std::string *lookupCachedHir(uint64_t key) {
+    for (const auto &entry : hir_cache) {
+        if (entry.key == key)
+            return &entry.bytes;
+    }
+    return nullptr;
+}
+
+void storeCachedHir(uint64_t key, const std::string &bytes) {
+    for (auto &entry : hir_cache) {
+        if (entry.key == key) {
+            entry.bytes = bytes;
+            return;
+        }
+    }
+    if (hir_cache.size() >= kHirCacheCapacity)
+        hir_cache.erase(hir_cache.begin());
+    hir_cache.push_back(CachedHirBlob{key, bytes});
+}
+
 uint32_t readU32(const uint8_t *data, size_t size, size_t &offset, bool &ok) {
     if (offset > size || size - offset < 4U) {
         ok = false;
@@ -269,6 +326,7 @@ bool isSafeStdlibPath(std::string_view path) {
 
 bool registerStdlibPack(const char *ptr, int len) {
     stdlib_sources.clear();
+    stdlib_pack_fingerprint = 0;
     if (!ptr || len < static_cast<int>(kStdlibPackMagic.size() + 8U))
         return false;
 
@@ -303,7 +361,20 @@ bool registerStdlibPack(const char *ptr, int len) {
                 return false;
         stdlib_sources.emplace_back(std::move(path), std::move(text));
     }
-    return offset == size;
+    if (offset != size)
+        return false;
+
+    // Fingerprint the whole pack so cached HIR is invalidated when the
+    // canonical stdlib changes.
+    constexpr uint64_t kOffset = 1469598103934665603ULL;
+    constexpr uint64_t kPrime  = 1099511628211ULL;
+    uint64_t hash = kOffset;
+    for (size_t i = 0; i < size; ++i) {
+        hash ^= data[i];
+        hash *= kPrime;
+    }
+    stdlib_pack_fingerprint = hash;
+    return true;
 }
 
 void registerStdlibSources(zithc_session *session) {
@@ -394,40 +465,9 @@ int runPlayground(const char *ptr, int len, bool is_compile, int mode = 0, int o
     return ok ? kPlaygroundStatusOk : kPlaygroundStatusCompileFailed;
 }
 
-} // namespace
-
-extern "C" int zith_emit_hir(const char *ptr, int len);
-extern "C" int zith_execute_hir(const char *ptr, int len);
-
-extern "C" __attribute__((export_name("zith_compile_source"))) int
-zith_compile_source(const char *ptr, int len, int mode, int opt_level, int emit_mask) {
-    return runPlayground(ptr, len, true, mode, opt_level, emit_mask);
-}
-
-extern "C" __attribute__((export_name("zith_run_source"))) int zith_run_source(const char *ptr,
-                                                                               int len) {
-    const int compile_status = zith_emit_hir(ptr, len);
-    if (compile_status != kPlaygroundStatusOk)
-        return compile_status;
-    return zith_execute_hir(last_blob.data(), static_cast<int>(last_blob.size()));
-}
-
-extern "C" __attribute__((export_name("zith_register_stdlib_pack"))) int
-zith_register_stdlib_pack(const char *ptr, int len) {
-    last_error.clear();
-    last_output.clear();
-    last_blob.clear();
-    resetDiagnostics();
-    last_exit_code = 0;
-    if (!registerStdlibPack(ptr, len)) {
-        setErrorMessage("invalid stdlib pack");
-        return kPlaygroundStatusInvalidParam;
-    }
-    return kPlaygroundStatusOk;
-}
-
-extern "C" __attribute__((export_name("zith_emit_hir"))) int zith_emit_hir(const char *ptr,
-                                                                           int len) {
+// Compile `ptr`/`len` to a flat HIR blob and store it in `last_blob`. This is
+// the shared body behind `zith_emit_hir` and the cache's compile-once path.
+int emitHir(const char *ptr, int len) {
     last_error.clear();
     last_output.clear();
     last_blob.clear();
@@ -490,8 +530,11 @@ extern "C" __attribute__((export_name("zith_emit_hir"))) int zith_emit_hir(const
     return kPlaygroundStatusOk;
 }
 
-extern "C" __attribute__((export_name("zith_execute_hir"))) int zith_execute_hir(const char *ptr,
-                                                                                 int len) {
+// Decode and execute a flat HIR blob, forwarding program output and exposing
+// the guest exit code. Shared by `zith_execute_hir` and the cache replay path.
+// `fromCache` only changes how a blob that no longer decodes is reported: a
+// cached blob is a stale artifact, while a caller-supplied blob is malformed.
+int executeHirBlob(const char *ptr, int len, bool fromCache) {
     last_error.clear();
     last_output.clear();
     resetDiagnostics();
@@ -506,7 +549,12 @@ extern "C" __attribute__((export_name("zith_execute_hir"))) int zith_execute_hir
     std::span<const uint8_t> bytes(reinterpret_cast<const uint8_t *>(ptr),
                                    static_cast<size_t>(len));
     if (!zith::wasm::decodeHir(bytes, decoded)) {
-        setErrorMessage(decoded.message.empty() ? "invalid flat HIR blob" : decoded.message);
+        if (fromCache) {
+            ++hir_cache_stale;
+            setErrorMessage("stale HIR artifact: recompile the source with zith_compile_hir");
+        } else {
+            setErrorMessage(decoded.message.empty() ? "invalid flat HIR blob" : decoded.message);
+        }
         return kPlaygroundStatusCompileFailed;
     }
 
@@ -534,4 +582,129 @@ extern "C" __attribute__((export_name("zith_execute_hir"))) int zith_execute_hir
     setErrorMessage(result.message.empty() ? "VM v2 could not execute the program"
                                            : result.message);
     return runStatusToPlaygroundStatus(result.status);
+}
+
+} // namespace
+
+extern "C" int zith_emit_hir(const char *ptr, int len);
+extern "C" int zith_execute_hir(const char *ptr, int len);
+
+extern "C" __attribute__((export_name("zith_compile_source"))) int
+zith_compile_source(const char *ptr, int len, int mode, int opt_level, int emit_mask) {
+    return runPlayground(ptr, len, true, mode, opt_level, emit_mask);
+}
+
+extern "C" __attribute__((export_name("zith_run_source"))) int zith_run_source(const char *ptr,
+                                                                               int len) {
+    const int compile_status = zith_emit_hir(ptr, len);
+    if (compile_status != kPlaygroundStatusOk)
+        return compile_status;
+    return zith_execute_hir(last_blob.data(), static_cast<int>(last_blob.size()));
+}
+
+// Compile once and store the flat HIR blob in the module-local artifact cache.
+// A replay through `zith_execute_cached` skips the compiler pipeline entirely.
+extern "C" __attribute__((export_name("zith_compile_hir"))) int zith_compile_hir(const char *ptr,
+                                                                                 int len) {
+    const int status = zith_emit_hir(ptr, len);
+    if (status == kPlaygroundStatusOk) {
+        const uint64_t key = hirCacheKey(ptr, len);
+        storeCachedHir(key, last_blob);
+    }
+    return status;
+}
+
+// Replay a cached HIR artifact. A miss is reported through the structured
+// diagnostics channel with a stable message rather than silently recompiling.
+extern "C" __attribute__((export_name("zith_execute_cached"))) int
+zith_execute_cached(const char *ptr, int len) {
+    if (!ptr || len < 0) {
+        last_error.clear();
+        last_output.clear();
+        resetDiagnostics();
+        last_exit_code = 0;
+        setErrorMessage("invalid source buffer");
+        return kPlaygroundStatusInvalidParam;
+    }
+
+    const uint64_t key         = hirCacheKey(ptr, len);
+    const std::string *cached  = lookupCachedHir(key);
+    if (cached == nullptr) {
+        ++hir_cache_misses;
+        last_error.clear();
+        last_output.clear();
+        resetDiagnostics();
+        last_exit_code = 0;
+        setErrorMessage("HIR artifact cache miss: compile the source with zith_compile_hir");
+        return kPlaygroundStatusCompileFailed;
+    }
+
+    ++hir_cache_hits;
+    return executeHirBlob(cached->data(), static_cast<int>(cached->size()), true);
+}
+
+// Restore a flat HIR blob persisted by a previous session (for example from
+// browser storage) under the cache key for `ptr`/`len`. The blob is stored
+// without validation so that an outdated artifact surfaces as a stale cache
+// entry when it is replayed instead of failing at restore time.
+extern "C" __attribute__((export_name("zith_restore_cached"))) int
+zith_restore_cached(const char *ptr, int len, const char *blob_ptr, int blob_len) {
+    last_error.clear();
+    last_output.clear();
+    resetDiagnostics();
+    last_exit_code = 0;
+    if (!ptr || len < 0 || !blob_ptr || blob_len <= 0) {
+        setErrorMessage("invalid cached HIR artifact");
+        return kPlaygroundStatusInvalidParam;
+    }
+    storeCachedHir(hirCacheKey(ptr, len),
+                   std::string(blob_ptr, static_cast<size_t>(blob_len)));
+    return kPlaygroundStatusOk;
+}
+
+extern "C" __attribute__((export_name("zith_hir_cache_hits"))) int64_t zith_hir_cache_hits() {
+    return hir_cache_hits;
+}
+
+extern "C" __attribute__((export_name("zith_hir_cache_misses"))) int64_t
+zith_hir_cache_misses() {
+    return hir_cache_misses;
+}
+
+extern "C" __attribute__((export_name("zith_hir_cache_stale"))) int64_t zith_hir_cache_stale() {
+    return hir_cache_stale;
+}
+
+extern "C" __attribute__((export_name("zith_hir_cache_size"))) int64_t zith_hir_cache_size() {
+    return static_cast<int64_t>(hir_cache.size());
+}
+
+extern "C" __attribute__((export_name("zith_register_stdlib_pack"))) int
+zith_register_stdlib_pack(const char *ptr, int len) {
+    last_error.clear();
+    last_output.clear();
+    last_blob.clear();
+    resetDiagnostics();
+    last_exit_code = 0;
+    if (!registerStdlibPack(ptr, len)) {
+        setErrorMessage("invalid stdlib pack");
+        return kPlaygroundStatusInvalidParam;
+    }
+    // A new pack changes the cache key domain, so drop entries compiled
+    // against the previous pack instead of retaining unreachable blobs.
+    hir_cache.clear();
+    hir_cache_hits   = 0;
+    hir_cache_misses = 0;
+    hir_cache_stale  = 0;
+    return kPlaygroundStatusOk;
+}
+
+extern "C" __attribute__((export_name("zith_emit_hir"))) int zith_emit_hir(const char *ptr,
+                                                                           int len) {
+    return emitHir(ptr, len);
+}
+
+extern "C" __attribute__((export_name("zith_execute_hir"))) int zith_execute_hir(const char *ptr,
+                                                                                 int len) {
+    return executeHirBlob(ptr, len, false);
 }

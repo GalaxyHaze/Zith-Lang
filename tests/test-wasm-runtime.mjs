@@ -6,6 +6,9 @@
 //
 //   zith_emit_hir(ptr, len)     -> HIR flat blob, then
 //   zith_execute_hir(ptr, len)  -> lowers HIR flat to VM v2 IR and runs it.
+//   zith_compile_hir(ptr, len)  -> compiles once and stores the flat blob in
+//                                  the artifact cache, then
+//   zith_execute_cached(ptr, len) -> replays the cached blob without recompiling.
 //   zith_register_stdlib_pack(ptr, len) -> registers host-delivered stdlib sources.
 //
 // The valid fixtures mirror the host VM v2 acceptance slice: stdlib println
@@ -354,6 +357,38 @@ fn main(): i32 {
               "run_source executes through VM v2");
   assertEqual(stdoutChunks.join(""), "run-source\n", "run_source output");
   assertEqual(instance.exports.zith_exit_code(), 9n, "run_source exit code");
+
+  stdoutChunks.length = 0;
+  stderrChunks.length = 0;
+  const cacheSource = writeString(`extern fn puts(msg: *char)
+
+fn main(): i32 {
+    _ = puts("cache-once");
+    5
+}
+`);
+  const hitsBefore = instance.exports.zith_hir_cache_hits();
+  assertEqual(instance.exports.zith_compile_hir(cacheSource.ptr, cacheSource.len), 0,
+              "compile_hir stores an artifact");
+  for (let replay = 0; replay < 2; replay++) {
+    stdoutChunks.length = 0;
+    assertEqual(instance.exports.zith_execute_cached(cacheSource.ptr, cacheSource.len), 0,
+                "cached replay succeeds");
+    assertEqual(stdoutChunks.join(""), "cache-once\n", "cached replay output");
+    assertEqual(instance.exports.zith_exit_code(), 5n, "cached replay exit code");
+  }
+  assertEqual(instance.exports.zith_hir_cache_hits() - hitsBefore, 2n,
+              "both replays hit the artifact cache");
+
+  const missSource = writeString("fn main(): i32 {\n    1\n}\n");
+  assertEqual(instance.exports.zith_execute_cached(missSource.ptr, missSource.len), 1,
+              "cache miss reports a compile failure status");
+  const missJsonLen = instance.exports.zith_last_diagnostics_json_len();
+  const missJsonPtr = instance.exports.zith_last_diagnostics_json_ptr();
+  const missJson = readBuffer(missJsonPtr, missJsonLen).toString("utf8");
+  if (!missJson.includes("HIR artifact cache miss")) {
+    throw new Error("cache miss was not reported through the diagnostics channel");
+  }
 }
 
 await main();

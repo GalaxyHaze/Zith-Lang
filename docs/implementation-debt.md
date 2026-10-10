@@ -202,9 +202,13 @@ referências estáveis:
 5. **Indirect calls — resolvido em 2026-10-10.** `test-vm-v2` cobre chamadas
    indiretas de `CallFnRef` e `CallExternRef` através das tabelas do módulo,
    incluindo referências fora dos limites que terminam com `RunStatus::Trap`.
-6. **HIR/artifact caching não implementado no playground.** ADR-0024 prevê "a
-   later cache can compile once and replay"; o `build` do playground prepara
-   inputs mas a compilação acontece em cada execução.
+6. **HIR/artifact caching — resolvido em 2026-10-10.** O playground expõe
+   `zith_compile_hir` (compila uma vez e guarda o flat HIR), `zith_execute_cached`
+   (replay sem recompilar) e `zith_restore_cached` (carrega um blob persistido
+   pelo host). As entradas são indexadas pelos bytes da fonte mais o fingerprint
+   do stdlib pack, e cache miss ou blob stale são reportados pelo canal de
+   diagnósticos estruturados em vez de recompilar em silêncio. A cobertura está
+   em `test-wasm-playground` e `tests/test-wasm-runtime.mjs`.
 7. **Diagnósticos JSON estruturados, resolvido em 2026-10-10.** O ABI do
    playground expõe `zith_last_diagnostics_json_ptr/len` para diagnósticos de
    compilação, traps e construções não suportadas, sem alterar os status codes

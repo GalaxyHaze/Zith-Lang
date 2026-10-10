@@ -5,6 +5,14 @@
 #include <string_view>
 
 extern "C" int zith_run_source(const char *ptr, int len);
+extern "C" int zith_compile_hir(const char *ptr, int len);
+extern "C" int zith_execute_cached(const char *ptr, int len);
+extern "C" int zith_restore_cached(const char *ptr, int len, const char *blob_ptr, int blob_len);
+extern "C" long long zith_hir_cache_hits();
+extern "C" long long zith_hir_cache_misses();
+extern "C" long long zith_hir_cache_stale();
+extern "C" long long zith_hir_cache_size();
+extern "C" long long zith_exit_code();
 extern "C" const char *zith_last_diagnostics_json_ptr();
 extern "C" int zith_last_diagnostics_json_len();
 
@@ -24,6 +32,13 @@ auto diagnosticsJson() -> std::string {
 auto runSource(std::string_view source) -> int {
     return zith_run_source(source.data(), static_cast<int>(source.size()));
 }
+
+constexpr std::string_view kCacheProgram = "extern fn puts(msg: *char)\n"
+                                           "\n"
+                                           "fn main(): i32 {\n"
+                                           "    _ = puts(\"cached-hir\");\n"
+                                           "    11\n"
+                                           "}\n";
 
 } // namespace
 
@@ -77,4 +92,63 @@ void test_wasm_playground_structured_diagnostics() {
           "unsupported construct includes an error severity and message");
 }
 
-TEST_MAIN(wasm_playground_structured_diagnostics)
+void test_wasm_playground_hir_cache() {
+    const auto source = kCacheProgram;
+    const auto *ptr  = source.data();
+    const auto len   = static_cast<int>(source.size());
+
+    const auto hitsBefore   = zith_hir_cache_hits();
+    const auto missesBefore = zith_hir_cache_misses();
+
+    CHECK_EQ(zith_compile_hir(ptr, len), 0, "compile_hir stores an artifact");
+    CHECK(zith_hir_cache_size() >= 1, "compile_hir populates the artifact cache");
+
+    // A fresh compile+execute is the reference behavior.
+    host_output.clear();
+    const auto referenceStatus = zith_run_source(ptr, len);
+    const auto referenceOutput = host_output;
+    const auto referenceExit   = zith_exit_code();
+    CHECK_EQ(referenceStatus, 0, "reference run succeeds");
+    CHECK_EQ(referenceOutput, std::string("cached-hir\n"),
+             "reference run writes the program output");
+
+    // Two replays from the cache must match the reference and skip compilation.
+    for (int replay = 0; replay < 2; ++replay) {
+        host_output.clear();
+        const auto replayStatus = zith_execute_cached(ptr, len);
+        CHECK_EQ(replayStatus, 0, "cached replay succeeds");
+        CHECK_EQ(host_output, referenceOutput, "cached replay reproduces stdout");
+        CHECK_EQ(zith_exit_code(), referenceExit, "cached replay reproduces the exit code");
+    }
+    CHECK_EQ(zith_hir_cache_hits() - hitsBefore, 2, "both replays hit the cache");
+    CHECK_EQ(zith_hir_cache_misses() - missesBefore, 0, "no cache miss during replay");
+
+    // A miss is reported through the structured diagnostics channel.
+    const std::string_view missing = "fn main(): i32 {\n    1\n}\n";
+    const auto missStatus = zith_execute_cached(missing.data(), static_cast<int>(missing.size()));
+    CHECK_EQ(missStatus, 1, "cache miss reports a compile failure status");
+    CHECK(diagnosticsJson().find("HIR artifact cache miss") != std::string::npos,
+          "cache miss is reported through the structured diagnostics channel");
+
+    // A restored blob that no longer decodes is reported as stale, not as a
+    // silent recompile.
+    const std::string_view garbage = "not-a-flat-hir-blob";
+    const std::string_view staleSource = "fn main(): i32 {\n    2\n}\n";
+    const auto staleBefore = zith_hir_cache_stale();
+    CHECK_EQ(zith_restore_cached(staleSource.data(), static_cast<int>(staleSource.size()),
+                                 garbage.data(), static_cast<int>(garbage.size())),
+             0, "restore_cached accepts a persisted blob");
+    const auto staleStatus =
+        zith_execute_cached(staleSource.data(), static_cast<int>(staleSource.size()));
+    CHECK_EQ(staleStatus, 1, "stale artifact reports a compile failure status");
+    CHECK_EQ(zith_hir_cache_stale() - staleBefore, 1, "stale replay increments the stale counter");
+    CHECK(diagnosticsJson().find("stale HIR artifact") != std::string::npos,
+          "stale artifact is reported through the structured diagnostics channel");
+}
+
+void test_wasm_playground() {
+    test_wasm_playground_structured_diagnostics();
+    test_wasm_playground_hir_cache();
+}
+
+TEST_MAIN(wasm_playground)

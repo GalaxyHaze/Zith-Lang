@@ -23,6 +23,13 @@ with the portable VM. The flat HIR format is versioned and self-contained; it is
 | `zith_run_source` | `(ptr: i32, len: i32) -> i32` | Compile the source to HIR, execute it through VM v2, forward output, and expose its exit code. |
 | `zith_emit_hir` | `(ptr: i32, len: i32) -> i32` | Compile source to a flat HIR blob and expose it through `zith_last_buffer_ptr/len`. |
 | `zith_execute_hir` | `(ptr: i32, len: i32) -> i32` | Decode a flat HIR blob, lower it into VM v2 IR, and run it. |
+| `zith_compile_hir` | `(ptr: i32, len: i32) -> i32` | Compile source once and store the flat HIR blob in the module-local artifact cache. |
+| `zith_execute_cached` | `(ptr: i32, len: i32) -> i32` | Replay the cached flat HIR blob for the same source bytes without recompiling. |
+| `zith_restore_cached` | `(ptr, len, blob_ptr, blob_len: i32) -> i32` | Store a persisted flat HIR blob under the cache key for the source bytes. |
+| `zith_hir_cache_hits` | `() -> i64` | Number of `zith_execute_cached` calls served from the artifact cache. |
+| `zith_hir_cache_misses` | `() -> i64` | Number of `zith_execute_cached` calls that found no artifact. |
+| `zith_hir_cache_stale` | `() -> i64` | Number of cached blobs that no longer decode and were reported as stale. |
+| `zith_hir_cache_size` | `() -> i64` | Number of flat HIR blobs currently held in the artifact cache. |
 | `zith_last_buffer_ptr` | `() -> i32` | Pointer to the flat HIR blob produced by the last `zith_emit_hir` call. |
 | `zith_last_buffer_len` | `() -> i32` | Byte length of the flat HIR blob. |
 | `zith_exit_code` | `() -> i64` | Guest `main` exit code from the last VM v2 run. |
@@ -61,6 +68,12 @@ lowering, `2` for an invalid buffer, and `0` when a blob is available. `zith_exe
 `1` for malformed flat HIR, `5` when lowering rejects the program, and `3`/`4` for runtime
 failures. `zith_run_source` combines the emit and execute operations and uses the same status
 codes.
+
+`zith_compile_hir` uses the same status codes as `zith_emit_hir` and additionally stores the
+resulting blob in the artifact cache. `zith_execute_cached` returns `1` when the source bytes have
+no cached artifact and `2` for an invalid buffer. A cached artifact that no longer decodes is
+reported as stale with return code `1`. `zith_restore_cached` returns `2` for an invalid source or
+blob buffer and `0` when the blob is stored.
 
 Invalid parameters are reported before any session is created, so callers must check
 `zith_last_error_ptr/len` instead of treating non-zero status as a compiler diagnostic.
@@ -157,6 +170,41 @@ entry count, safe relative paths, duplicate paths, length bounds, and exact end-
 exposing entries as virtual sources under `stdlib/`. The WASM-only `stdio.h`, `stdlib.h`, and
 `string.h` bindings are added as small virtual headers because the browser has no native include
 filesystem; the regular Zith stdlib remains the canonical implementation.
+
+## HIR Artifact Cache
+
+The playground can compile a source buffer once and replay the flat HIR blob
+without re-entering the compiler pipeline. The cache is module-local and lives
+only for the lifetime of the WASM instance, so the host owns any durable
+storage.
+
+The compile-once flow is:
+
+1. `zith_compile_hir(ptr, len)` compiles the source and stores the flat HIR blob
+   in the cache.
+2. `zith_execute_cached(ptr, len)` looks up the blob by the same source bytes,
+   lowers it into VM v2 IR, and runs it. Repeated calls replay the same blob and
+   never recompile.
+3. To reuse a blob across page sessions, the host reads
+   `zith_last_buffer_ptr/len` after `zith_compile_hir`, persists the bytes, and
+   later calls `zith_restore_cached(ptr, len, blob_ptr, blob_len)` before
+   `zith_execute_cached`.
+
+Cache entries are keyed by the source bytes and the registered stdlib pack
+fingerprint. Registering a new pack clears the cache, so blobs compiled against
+an older pack cannot be replayed. The cache holds at most 32 entries and evicts
+the oldest entry when full.
+
+A miss or a stale entry is never a silent recompile. `zith_execute_cached`
+reports both through the structured diagnostics channel from #68 and returns
+code `1`. A miss reports `HIR artifact cache miss: compile the source with
+zith_compile_hir`; a blob that no longer decodes reports `stale HIR artifact:
+recompile the source with zith_compile_hir`.
+
+`zith_hir_cache_hits`, `zith_hir_cache_misses`, and `zith_hir_cache_stale`
+expose monotonic counters for the instance, and `zith_hir_cache_size` reports
+the current entry count. `zith_register_stdlib_pack` resets the counters and
+clears the entries.
 
 ## JavaScript Buffer Helpers
 
