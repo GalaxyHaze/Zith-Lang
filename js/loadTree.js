@@ -80,17 +80,13 @@ function renderMenu(items, parent) {
 
     items.forEach(item => {
         const li = document.createElement("li");
-        const a = document.createElement("a");
+        // Group headers (no link) render as plain labels, not as links.
+        const a = document.createElement(item.link ? "a" : "span");
         a.className = "ui-nav-link";
         a.textContent = item.title;
-        a.href = item.link || "#";
-        a.dataset.link = item.link || "#";
-
-        if (item.link === "../home.html") {
-            // The tree's Home entry points at the removed desktop page;
-            // send it to the portal instead.
-            a.href = "../../";
-            a.dataset.native = true;
+        if (item.link) {
+            a.href = item.link;
+            a.dataset.link = item.link;
         }
 
         li.appendChild(a);
@@ -109,7 +105,7 @@ function buildPageIndex(items, trail = []) {
     items.forEach(item => {
         const nextTrail = item.title === "Home" ? trail : [...trail, item.title];
 
-        if (item.link && item.link !== "../home.html" && !pageMeta.has(item.link)) {
+        if (item.link && !pageMeta.has(item.link)) {
             flatPages.push(item.link);
             pageMeta.set(item.link, {
                 title: item.title,

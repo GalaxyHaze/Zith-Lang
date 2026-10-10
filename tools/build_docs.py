@@ -356,7 +356,7 @@ def build_tree() -> list[dict]:
     cli = [(f"zithc {command}", f"cli-{command}") for command in
            ("build", "run", "check", "fmt", "create", "clean", "execute", "test", "deps", "docs")]
     return [{
-        "title": "Home", "link": "../home.html", "children": [
+        "title": "Home", "link": "", "children": [
             nav_item("Introduction", "getting-started-introduction"),
             nav_item("Getting Started", "getting-started-quick-start", [
                 nav_item("Installation", "getting-started-installation"),
@@ -493,7 +493,7 @@ def validate(files: dict[Path, str], tree: dict) -> list[str]:
     def collect(items: list[dict]) -> None:
         for item in items:
             link = item.get("link", "")
-            if link and link != "../home.html":
+            if link:
                 nav_links.append(link.removeprefix("./"))
             collect(item.get("children", []))
     collect(tree["navigation"])

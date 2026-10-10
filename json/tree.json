@@ -3,7 +3,7 @@
   "navigation": [
     {
       "title": "Home",
-      "link": "../home.html",
+      "link": "",
       "children": [
         {
           "title": "Introduction",

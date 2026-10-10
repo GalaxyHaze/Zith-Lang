@@ -34,12 +34,18 @@ DOCS — documentation shell
     margin-block: 1px;
 }
 
-.docs-sidebar a.ui-nav-link {
+.docs-sidebar .ui-nav-link {
     display: block;
     padding: var(--space-1) var(--space-2);
     border-radius: var(--radius-sm);
     color: var(--text-muted);
     text-decoration: none;
+}
+
+/* Group label (a nav item without a link) */
+.docs-sidebar span.ui-nav-link {
+    color: var(--title);
+    font-weight: 600;
 }
 
 .docs-sidebar a.ui-nav-link:hover,
