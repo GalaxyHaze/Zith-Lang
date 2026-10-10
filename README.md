@@ -28,6 +28,19 @@ make docs-check
 `make docs-check` fails if generated fragments, navigation, or the specification manifest are out
 of date.
 
+### Site build
+
+The header and footer live in `partials/` and are expanded into `_site/` by
+`tools/build.py` (no dependencies). Preview locally with:
+
+```bash
+python3 tools/build.py
+python3 -m http.server 5501 --directory _site
+```
+
+On GitHub Pages, `.github/workflows/build.yml` builds and publishes `_site/`.
+See `GUIDE.md` for the page and documentation workflow.
+
 ---
 
 ##  Contribute
@@ -44,24 +57,10 @@ We welcome community contributions! If you'd like to support the project by prop
 
 ## ️ Tech Stack
 
-- **HTML only** — no frameworks, no preprocessors
-- **Example**:
-```html
-    <h1>Title</h1>
-    <br>
-    <h2>Overview</h2>
-    <br>
-    <p>Text example.</p>
-    <br>
-    <h2>See also</h2>
-    <br>
-    <p>To jump across files</p>
-    <a href="./D-build.html">Build Guide</a>
-    <br>
-    <p>Or jump into a section</p>
-    <a href="./D-build.html#building">Building Section</a>
-  ```
-- The site handles all logic natively on its own
+- **Static HTML + CSS + vanilla JS** — no frameworks, no client-side runtime.
+- **One small build step** (`tools/build.py`) expands the shared header/footer
+  partials; the output is plain HTML served from `_site/`.
+- **One theme** driven by CSS custom properties in `css/tokens.css`.
 
 ---
 
