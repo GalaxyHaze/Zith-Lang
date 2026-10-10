@@ -21,8 +21,8 @@ namespace zith::wasm {
 namespace {
 
 constexpr uint32_t kBlobMagic   = 0x5A4D4849U; // "ZMHI"
-// v2: HirMakeDyn carries the value_is_place flag byte.
-constexpr uint32_t kBlobVersion = 2U;
+// v2: HirMakeDyn carries value_is_place; v3: HirCall carries variadic slice plans.
+constexpr uint32_t kBlobVersion = 3U;
 
 constexpr size_t kMaxArrayCount = 1U << 20;
 
@@ -388,6 +388,9 @@ void writeExpr(Writer &writer, const hir::HirModule &module, hir::HirExprId id) 
                     writer.putU32(type);
                 writer.putU32(value.fn_type);
                 writer.putU32(value.resolved_fn);
+                writer.putU32(value.variadicSliceParam);
+                writer.putU8(value.isVariadicSlice ? 1U : 0U);
+                writer.putU8(value.autoCollectTail ? 1U : 0U);
                 writer.putU8(value.usesTailCC ? 1U : 0U);
                 writer.putU8(value.musttail ? 1U : 0U);
             },
@@ -742,6 +745,9 @@ auto readExpr(Reader &reader, hir::HirModule &module, memory::Arena &arena) -> b
             return false;
         value.fn_type      = reader.u32();
         value.resolved_fn  = reader.u32();
+        value.variadicSliceParam = reader.u32();
+        value.isVariadicSlice    = reader.u8() != 0;
+        value.autoCollectTail    = reader.u8() != 0;
         value.usesTailCC   = reader.u8() != 0;
         value.musttail     = reader.u8() != 0;
         module.addExpr(std::move(value));

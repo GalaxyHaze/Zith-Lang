@@ -1036,6 +1036,92 @@ void test_vm_v2_call_range_multi_args() {
     CHECK_EQ(result.exitCode, 100, "v2 VM returns computed sum across 4 arguments");
 }
 
+void test_vm_v2_variadic_slice_call_forms() {
+    const auto root = std::filesystem::temp_directory_path() / "zith-vm-v2-variadic-slice-tests";
+    std::filesystem::remove_all(root);
+    std::filesystem::create_directories(root);
+
+    const auto source = root / "main.zith";
+    {
+        std::ofstream output(source, std::ios::binary | std::ios::trunc);
+        output << "fn sum(rest: [...]i32): i32 {\n"
+                  "    return raw rest[0] + raw rest[1] + raw rest[2];\n"
+                  "}\n"
+                  "\n"
+                  "fn empty(rest: [...]i32): i32 {\n"
+                  "    return 4;\n"
+                  "}\n"
+                  "\n"
+                  "fn main(): i32 {\n"
+                  "    let values: []i32 = [1, 2, 3];\n"
+                  "    return sum(1, 2, 3) + sum(values) + empty();\n"
+                  "}\n";
+    }
+
+    memory::Arena arena;
+    Options options(arena);
+    options.targetStage = session::Stage::HirLowered;
+
+    session::CompilationSession session(options, source.string());
+    session.setBuffered(true);
+    CHECK(session.runTo(session::Stage::HirLowered),
+          "both variadic slice call forms compile through the modern pipeline");
+
+    const auto encoded = wasm::encodeHir(session);
+    CHECK(encoded.ok, "variadic slice HIR encodes for flat-HIR execution");
+    if (!encoded.ok)
+        return;
+
+    wasm::DecodedHir decoded;
+    CHECK(wasm::decodeHir(encoded.blob.bytes, decoded),
+          "variadic call plans survive flat-HIR decoding");
+    if (!decoded.ok)
+        return;
+
+    memory::Arena vmArena;
+    vm::Module module(vmArena);
+    const auto lowered = vm::lowerModule(decoded.module, decoded.interner, decoded.types,
+                                         vmArena, module);
+    CHECK(lowered.ok, "flat HIR variadic slice calls lower into VM v2");
+    if (!lowered.ok)
+        return;
+
+    vm::Vm vm;
+    const auto result = vm.runMain(module);
+    CHECK(result.status == vm::RunStatus::Ok,
+          "v2 VM runs collected, explicit, and empty variadic slice calls");
+    CHECK_EQ(result.exitCode, 16,
+             "flat HIR preserves both slice pairs and an empty collected tail");
+}
+
+void test_vm_v2_dynamic_slice_index_bounds() {
+    memory::Arena arena;
+    vm::Module module(arena);
+    auto &main      = module.functions.emplace(arena);
+    main.name       = "main";
+    main.returnType = vm::ValueType::I64;
+    main.regCount   = 6;
+    main.regTypes.push(vm::ValueType::I64);
+    main.regTypes.push(vm::ValueType::I64);
+    main.regTypes.push(vm::ValueType::Ptr);
+    main.regTypes.push(vm::ValueType::I64);
+    main.regTypes.push(vm::ValueType::I64);
+    main.regTypes.push(vm::ValueType::I64);
+
+    main.body.push(vm::Instr::withImm(vm::Op::LoadConstI64, 0, 8));
+    main.body.push(vm::Instr::withImm(vm::Op::LoadConstI64, 1, 8));
+    main.body.push(vm::Instr::simple(vm::Op::AllocBytes, 2, 0, 1));
+    main.body.push(vm::Instr::withImm(vm::Op::LoadConstI64, 3, 2));
+    main.body.push(vm::Instr::withImm(vm::Op::LoadConstI64, 4, 2));
+    main.body.push(vm::Instr{vm::Op::IndexLoad, 5, 2, 4, 8, 3, 1});
+    main.body.push(vm::Instr{vm::Op::Ret, 5, 0, 0, 0});
+
+    vm::Vm vm;
+    const auto result = vm.runMain(module);
+    CHECK(result.status == vm::RunStatus::Trap,
+          "dynamic slice indexing traps when index equals runtime length");
+}
+
 #ifdef ZITH_ENABLE_C_INTEROP
 void test_vm_v2_hello_stdlib_import_print() {
     const auto root = std::filesystem::temp_directory_path() / "zith-vm-v2-print-tests";
@@ -1254,6 +1340,8 @@ void test_vm_v2() {
     test_vm_v2_extern_putchar();
     test_vm_v2_extern_snprintf_subset();
     test_vm_v2_call_range_multi_args();
+    test_vm_v2_variadic_slice_call_forms();
+    test_vm_v2_dynamic_slice_index_bounds();
     test_vm_v2_bitwise_and_shifts();
     test_vm_v2_hir_control_flow_and_dynamic_array_index();
     test_vm_v2_dynamic_array_index_traps();

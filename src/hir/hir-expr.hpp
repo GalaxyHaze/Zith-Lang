@@ -133,6 +133,10 @@ struct HirCall {
     /// Direct calls resolved by symbol keep this invalid.
     types::TypeId fn_type      = types::kInvalidType;
     symbols::SymId resolved_fn = symbols::kInvalidSym;
+    /// Sema's resolved variadic-slice decision, retained for VM lowering.
+    uint32_t variadicSliceParam = ~uint32_t{0};
+    bool isVariadicSlice         = false;
+    bool autoCollectTail         = false;
     /// True when this call targets a `state` function and must use LLVM `tailcc`.
     bool usesTailCC = false;
     /// True when this call is a direct LLVM `musttail` state transition.

@@ -20,7 +20,8 @@ decisions that must not be reopened casually.
 
 - Full `printf` variadic formatting is not required by the stdlib console
   path. `snprintf` scoped to `%u`, `%d`, `%g` is the first FFI sink.
-- State machines, `dyn` calls, `opaque`, closures/captures, variadic slices,
-  and C header import remain later slices.
+- State machines, `dyn` calls, `opaque`, closures/captures, and C header
+  import remain later slices. Variadic slice tails use pointer/length register
+  pairs and are covered by the VM v2 lowering tests.
 - Browser/WASM output stays on the existing `host_write` seam, outside the
   first host VM acceptance slice.

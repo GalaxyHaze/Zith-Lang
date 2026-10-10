@@ -182,8 +182,8 @@ com o estado de `src/vm/`. O opcode set já cresceu além do slice inicial
 referências estáveis:
 
 1. **Superfície de linguagem incompleta no lowering.** State machines, dyn
-   dispatch, `opaque` e variadic slices são "later slices" registados nos
-   non-goals do plano e do ADR-0021. `src/vm/hir-to-vm.cpp` responde status 5
+   dispatch e `opaque` são "later slices" registados nos non-goals do plano e
+   do ADR-0021. `src/vm/hir-to-vm.cpp` responde status 5
    (`kPlaygroundStatusUnsupported`) para dynamic traits, intrinsics fora do
    subset, call targets fora do subset, literais não primitivos, dynamic array
    index e algumas formas de return.
@@ -216,6 +216,11 @@ referências estáveis:
 9. **Paridade stdlib WASM vs nativo.** A stdlib não suportada no caminho VM
    falha com status 5 previsível (ADR-0025), mas a cobertura da stdlib via
    VM/WASM é substancialmente menor que via LLVM. Cresce com as dívidas 1 e 4.
+10. **Variadic slice tails — resolvido em 2026-10-10.** O lowering VM consome
+    o plano de sema preservado em HIR, serializado como flat HIR v3. Os
+    argumentos recolhidos e slices explícitos são passados como pares
+    pointer/length, com bounds dinâmicos ao indexar slices. A cobertura está
+    em `test-vm-v2`.
 
 ### 4. Bare `opaque` usa hydration estável mas ainda depende de canonização consistente
 

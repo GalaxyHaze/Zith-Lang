@@ -77,7 +77,8 @@ enum class Op : uint8_t {
 
 /// One v2 instruction row. `a/b/c/d/e` hold register or immediate indices
 /// exactly as the opcode requires; `imm` holds a table index, jump target,
-/// or a second indirect-call argument.
+/// or a second indirect-call argument. For IndexLoad, `d` is a fixed length
+/// when `e` is zero and a length-register index when `e` is one.
 struct Instr {
     Op op        = Op::Trap;
     uint16_t a   = 0;

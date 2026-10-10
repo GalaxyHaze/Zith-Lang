@@ -690,6 +690,11 @@ hir::HirExprId HirLowerModern::lowerCall(const frontend::Expression &expr) {
 
     hir::HirCall call{callee, std::move(args), std::move(arg_types)};
     call.resolved_fn = symbols::kInvalidSym;
+    if (call_plan != nullptr && call_plan->isVariadicSlice) {
+        call.variadicSliceParam = static_cast<uint32_t>(call_plan->sliceParam);
+        call.isVariadicSlice    = true;
+        call.autoCollectTail    = call_plan->autoCollectTail;
+    }
     if (callee != hir::kInvalidHirExpr) {
         const auto callee_fn_type = typeOfExpr(callee_id);
         if (callee_fn_type != types::kInvalidType &&
