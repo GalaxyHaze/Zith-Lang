@@ -25,6 +25,8 @@ build/
 build-debug/
 build-wasm/
 build-nollvm/
+build-novm/
+build-vm/
 dist/
 target/
 cmake-build-*/

@@ -1,10 +1,10 @@
-extern fn puts(msg: *char)
+from std/io/console
 
-fn main(): i32{
-    puts("hello world");
+fn main() {
+    println("hello world");
     var i = 1;
-    for (v in 00..5){
-        i *= v;
+    for (v in 0..5){
+        i += v;
+        println("index is: #", i);
     }
-    return i;
 }

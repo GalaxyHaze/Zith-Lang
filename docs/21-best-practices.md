@@ -8,8 +8,9 @@
 - **Use `%T` for owned resources:** `let resource: %Resource = Resource.new();`
 - **Use `&T` for read access:** `fn process(config: &Config) { ... }`
 - **Use `&mut T` for writable access:** `fn update(state: &mut GameState) { ... }`
-- **Use `^T` for a non-owning lifetime dependency:** keep its target alive at
-  a stable address.
+- **Use `^T` for a stored non-owning lifetime dependency:** keep its target
+  alive at a stable address. Prefer `&T`/`&mut T` for parameters; a `^`
+  parameter can retain its argument, so reserve it for a domain reason.
 - **Use the `Share` capability for values that may cross thread boundaries.**
 
 ### 21.2 Invalid-State Patterns
@@ -90,6 +91,12 @@ ordinary APIs unless the domain requires them. Use generic trait and interface
 bounds rather than `dyn` dispatch in the universal style. Keep
 `@ensure`, `maybe`, and `assume` internal unless callers need them to
 understand a specific API contract. Use `camelCase` for method names.
+
+Prefer `&T` and `&mut T` for reference parameters, and reserve `^T`/`^mut T`
+for stored dependencies and return values. At a call site every argument whose
+mode is not a plain value move carries the sigil of its mode (`&x`, `&mut x`,
+`^x`, `^mut x`, or `%x`); see
+[ADR 0038](adr/0038-call-site-reference-annotations.md).
 
 These are conventions rather than compiler restrictions. A public API may
 depart from them when its purpose justifies the added specialization. See

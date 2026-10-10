@@ -27,6 +27,10 @@ The universal style favors:
 
 - Returning a tuple when an operation naturally produces multiple values,
   rather than using output parameters.
+- Preferring `&T` and `&mut T` for reference parameters, and reserving `^T` and
+  `^mut T` for stored dependencies and return values. A `^` parameter lets the
+  callee retain an argument that a `&` would pin, so it is a stronger contract
+  that a public signature should not imply without a domain reason.
 - Not returning compile-time `type` values, raw function pointers, or `dyn fn`
   directly from ordinary APIs. An API should manage the mechanism or expose a
   callable object with a meaningful contract when callers need one.
