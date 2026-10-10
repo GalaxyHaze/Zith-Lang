@@ -1,0 +1,62 @@
+/*==================
+DESIGN TOKENS — single source of truth
+Change colours and type here and the whole site follows.
+See notes/decisions/0002-paleta-flat.md.
+===================*/
+
+:root {
+    /* Surfaces */
+    --bg: #eef4f7;
+    --bg-2: #dfeaf0;
+    --surface: #ffffff;
+    --border: #cfdae2;
+
+    /* Text */
+    --text: #16232e;
+    --text-muted: #4b6070;
+    --title: #1b2b4d;
+
+    /* Brand and accent */
+    --brand: #e2662e;
+    --brand-ink: #ffffff;
+    --accent: #0f6e63;
+    --accent-hover: #0a534a;
+
+    /* Chrome (header / footer) */
+    --header-bg: #26324f;
+    --header-text: #e2e8f5;
+    --header-hover-bg: #1c2740;
+    --footer-bg: #1a2130;
+    --footer-text: #b9c2d6;
+    --footer-link: #ffb27a;
+
+    /* Code */
+    --code-bg: #10161f;
+    --code-text: #e6edf3;
+
+    /* Type */
+    --font-ui: "Space Grotesk", system-ui, sans-serif;
+    --font-mono: "Fira Code", "Cascadia Code", monospace;
+
+    /* Fluid type scale */
+    --step--1: 0.875rem;
+    --step-0: 1rem;
+    --step-1: 1.125rem;
+    --step-2: 1.375rem;
+    --step-3: 1.75rem;
+    --step-4: clamp(2rem, 1.4rem + 3vw, 3rem);
+    --step-5: clamp(2.5rem, 1.6rem + 4.5vw, 4rem);
+
+    /* Space */
+    --space-1: 0.25rem;
+    --space-2: 0.5rem;
+    --space-3: 0.75rem;
+    --space-4: 1rem;
+    --space-5: 1.5rem;
+    --space-6: 2rem;
+    --space-7: 3rem;
+    --space-8: 4rem;
+    --radius: 0.75rem;
+    --radius-sm: 0.5rem;
+    --measure: 68ch;
+}
