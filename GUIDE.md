@@ -5,7 +5,7 @@ How the site is built, and how to add documentation pages.
 ## Layout
 
 ```
-partials/                 header.html, footer.html  <- single source for the chrome
+partials/                 header.html, footer.html, head.html  <- single source for the chrome
 tools/build.py            expands the includes, writes _site/
 tools/build_docs.py       regenerates the docs fragments from docs/pages/*.md
 docs/pages/*.md           Markdown source for the documentation
@@ -20,13 +20,16 @@ Every top-level page (`index.html`, `changelog.html`, `about/`, `playground/`,
 shared chrome with an include:
 
 ```html
+<!-- include:head -->
 <!-- include:header active="docs" -->
 ...
 <!-- include:footer -->
 ```
 
-`tools/build.py` expands those into `_site/`, resolves `{{baseurl}}`, and also
-injects the chrome into the Dev Log posts under `about/posts/`.
+`head.html` holds the `<head>` metadata shared by every page (the
+`theme-color`). `tools/build.py` expands those includes into `_site/`, resolves
+`{{baseurl}}`, and also injects the chrome into the Dev Log posts under
+`about/posts/`.
 
 ## Preview
 
