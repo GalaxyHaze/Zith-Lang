@@ -302,9 +302,12 @@ function getAnchorFromURL() {
     return window.location.hash ? decodeURIComponent(window.location.hash.slice(1)) : null;
 }
 
+// Only links inside the docs content and sidebar are SPA links; the shared
+// header/footer must keep navigating normally.
 document.addEventListener("click", e => {
     const link = e.target.closest("a");
     if (!link) return;
+    if (!link.closest(".docs-main, .docs-sidebar")) return;
 
     const href = link.getAttribute("href");
     if (!href || href === "#") return;
