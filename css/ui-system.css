@@ -1,7 +1,7 @@
 :root {
-    --ui-ambient-start: #ffffff;
-    --ui-ambient-mid: #e07c5d;
-    --ui-ambient-end: #f3f3f3;
+    --ui-ambient-start: #ef8a41;
+    --ui-ambient-mid: #fff0e4;
+    --ui-ambient-end: #a22e0b;
     --ui-surface: #f3a76d;
     --ui-surface-sidebar: #facb84bb;
     --ui-product-surface: #fc9e6f;
@@ -683,7 +683,7 @@ body.ui-site .install-tab {
 body.ui-site .install-tab.active {
     color: #fffdfa;
     border-color: #06aaff;
-    background: #31936e;
+    background: #48c998ad;
 }
 
 body.ui-site .post-modal-body code {
@@ -943,6 +943,17 @@ body.ui-helios .settings-options button.active {
     color: var(--ui-action-start);
     background: var(--ui-accent);
     border-color: var(--ui-accent);
+}
+
+body.ui-page.ui-playground *,
+body.ui-page.ui-helios * {
+    text-shadow: var(--ui-text-outline-light);
+}
+
+body.ui-page.ui-helios .hero-window h1 {
+    text-shadow:
+        var(--ui-text-outline-light),
+        0 0 24px rgba(255, 255, 255, 0.25);
 }
 
 @media (max-width: 760px) {

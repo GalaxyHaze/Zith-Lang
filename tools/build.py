@@ -37,6 +37,13 @@ SKIP_FILES = {
 }
 SKIP_SUFFIXES = {".md", ".pyc"}
 
+# Posts do Dev Log: paginas de conteudo em about/posts/ que nao declaram
+# includes; o build injeta-lhes o cromo partilhado (header/footer) e o CSS.
+POSTS_DIR = ("about", "posts")
+POST_CSS = (
+    "fonts.css", "tokens.css", "base.css", "header.css", "footer.css", "devlog.css",
+)
+
 
 def expand(text: str, partials: Path, baseurl: str, meta: dict[str, str]) -> str:
     values = {**meta, "baseurl": baseurl}
@@ -60,6 +67,21 @@ def expand(text: str, partials: Path, baseurl: str, meta: dict[str, str]) -> str
     return VAR.sub(lambda v: values.get(v.group(1), v.group(0)), text)
 
 
+def inject_post_chrome(text: str, partials: Path, baseurl: str) -> str:
+    """Da o cromo partilhado aos posts do Dev Log (paginas de conteudo)."""
+    if "include:header" in text:
+        return text
+    links = "".join(
+        f'\n    <link rel="stylesheet" href="{baseurl}/css/{name}">' for name in POST_CSS
+    )
+    text = text.replace("</head>", links + "\n</head>", 1)
+    header = expand('<!-- include:header active="devlog" -->', partials, baseurl, {})
+    footer = expand("<!-- include:footer -->", partials, baseurl, {})
+    text = re.sub(r"<body[^>]*>", lambda m: m.group(0) + "\n" + header, text, count=1)
+    text = text.replace("</body>", footer + "\n</body>", 1)
+    return text
+
+
 def build(src: Path, out: Path, partials: Path, baseurl: str) -> int:
     if not partials.is_dir():
         raise SystemExit(f"build: falta a pasta de parciais: {partials}")
@@ -79,10 +101,10 @@ def build(src: Path, out: Path, partials: Path, baseurl: str) -> int:
             continue
         dst.parent.mkdir(parents=True, exist_ok=True)
         if path.suffix.lower() == ".html":
-            dst.write_text(
-                expand(path.read_text(encoding="utf-8"), partials, baseurl, {}),
-                encoding="utf-8",
-            )
+            text = expand(path.read_text(encoding="utf-8"), partials, baseurl, {})
+            if rel.parts[:2] == POSTS_DIR:
+                text = inject_post_chrome(text, partials, baseurl)
+            dst.write_text(text, encoding="utf-8")
             pages += 1
         else:
             shutil.copy2(path, dst)

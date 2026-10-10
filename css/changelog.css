@@ -1,0 +1,59 @@
+/*==================
+CHANGELOG
+===================*/
+
+.changelog {
+    flex: 1;
+    padding-block: var(--space-7);
+    max-width: 52rem;
+}
+
+.changelog-entry {
+    padding-block: var(--space-5);
+    border-bottom: 1px solid var(--border);
+}
+
+.changelog-entry h2 {
+    font-size: var(--step-3);
+}
+
+.changelog-entry .lastUpdated {
+    margin-top: var(--space-1);
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+    font-size: var(--step--1);
+}
+
+.changelog-entry h3 {
+    margin-top: var(--space-4);
+    font-size: var(--step-1);
+    color: var(--accent-hover);
+}
+
+.changelog-entry p,
+.changelog-entry li {
+    margin-top: var(--space-2);
+    color: var(--text);
+}
+
+.changelog-entry ul {
+    margin-top: var(--space-2);
+    padding-left: 1.4rem;
+}
+
+.changelog-entry li + li {
+    margin-top: var(--space-1);
+}
+
+.changelog-entry code {
+    padding: 0.1em 0.35em;
+    border-radius: 0.3rem;
+    background: var(--bg-2);
+    font-size: 0.9em;
+}
+
+.changelog-entry hr {
+    margin-block: var(--space-4);
+    border: 0;
+    border-top: 1px solid var(--border);
+}

@@ -1,114 +1,18 @@
+/* Documentation shell: loads the navigation tree and injects content
+   fragments into #content. See GUIDE.md. */
 const sidebar = document.getElementById("sidebar");
 const content = document.getElementById("content");
 const filebarPath = document.getElementById("filebarPath");
 const defaultPage = "./getting-started/D-introduction.html";
 const treeVersion = 3;
-const sidebarResize = document.getElementById("sidebarResize");
-const sidebarWidthStorageKey = "zith-docs-sidebar-width";
-const sidebarWidthMin = 220;
-const sidebarWidthMax = 420;
-const sidebarWidthDefault = 272;
 
 let treeModel = [];
 let flatPages = [];
 let pageMeta = new Map();
 let aliasMap = new Map();
-let sidebarWidth = readSidebarWidth();
-let activeResizePointer = null;
 
-function clampSidebarWidth(width) {
-    return Math.min(sidebarWidthMax, Math.max(sidebarWidthMin, Math.round(width)));
-}
-
-function readSidebarWidth() {
-    try {
-        const storedWidth = localStorage.getItem(sidebarWidthStorageKey);
-        if (storedWidth === null || storedWidth.trim() === "") return sidebarWidthDefault;
-
-        const parsedWidth = Number(storedWidth);
-        return Number.isFinite(parsedWidth) ? clampSidebarWidth(parsedWidth) : sidebarWidthDefault;
-    } catch (_) {
-        return sidebarWidthDefault;
-    }
-}
-
-function applySidebarWidth(width) {
-    sidebarWidth = clampSidebarWidth(width);
-    document.documentElement.style.setProperty("--docs-sidebar-width", `${sidebarWidth}px`);
-
-    if (sidebarResize) {
-        sidebarResize.setAttribute("aria-valuenow", String(sidebarWidth));
-        sidebarResize.setAttribute("aria-valuetext", `${sidebarWidth} pixels`);
-    }
-}
-
-function persistSidebarWidth() {
-    try {
-        localStorage.setItem(sidebarWidthStorageKey, String(sidebarWidth));
-    } catch (_) {}
-}
-
-function isDesktopSidebarLayout() {
-    return window.matchMedia("(min-width: 1081px)").matches;
-}
-
-if (sidebar && sidebarResize) {
-    applySidebarWidth(sidebarWidth);
-
-    sidebarResize.addEventListener("pointerdown", event => {
-        if (!isDesktopSidebarLayout() || !event.isPrimary ||
-            (event.pointerType === "mouse" && event.button !== 0)) {
-            return;
-        }
-
-        event.preventDefault();
-        activeResizePointer = event.pointerId;
-        sidebarResize.setPointerCapture(event.pointerId);
-    });
-
-    sidebarResize.addEventListener("pointermove", event => {
-        if (event.pointerId !== activeResizePointer) return;
-        applySidebarWidth(event.clientX - sidebar.getBoundingClientRect().left);
-    });
-
-    const finishSidebarResize = event => {
-        if (event.pointerId !== activeResizePointer) return;
-        activeResizePointer = null;
-        persistSidebarWidth();
-    };
-
-    sidebarResize.addEventListener("pointerup", finishSidebarResize);
-    sidebarResize.addEventListener("pointercancel", finishSidebarResize);
-
-    sidebarResize.addEventListener("keydown", event => {
-        if (!isDesktopSidebarLayout()) return;
-
-        let nextWidth;
-        switch (event.key) {
-            case "ArrowLeft":
-                nextWidth = sidebarWidth - 16;
-                break;
-            case "ArrowRight":
-                nextWidth = sidebarWidth + 16;
-                break;
-            case "Home":
-                nextWidth = sidebarWidthMin;
-                break;
-            case "End":
-                nextWidth = sidebarWidthMax;
-                break;
-            default:
-                return;
-        }
-
-        event.preventDefault();
-        applySidebarWidth(nextWidth);
-        persistSidebarWidth();
-    });
-}
-
-function sectionDescription(items, trail) {
-    const section = trail[0] || items.title;
+function sectionDescription(trail) {
+    const section = trail[0] || "";
     const descriptions = {
         "Getting Started": "Install Zith, write a first program, and learn how the language is positioned.",
         "Language Guide": "Practical documentation of Zith syntax, types, memory model, generics, concurrency, and systems programming.",
@@ -149,7 +53,11 @@ function sectionDescription(items, trail) {
             initialiseNavigation(menu);
         })
         .catch(() => {
-            sidebar.innerHTML = "<p style='color:#ff6d1f;padding:8px'>Failed to load navigation</p>";
+            sidebar.replaceChildren();
+            const message = document.createElement("p");
+            message.className = "docs-error";
+            message.textContent = "Failed to load navigation.";
+            sidebar.appendChild(message);
         });
 })();
 
@@ -178,7 +86,10 @@ function renderMenu(items, parent) {
         a.href = item.link || "#";
         a.dataset.link = item.link || "#";
 
-        if (item.title === "Home") {
+        if (item.link === "../home.html") {
+            // The tree's Home entry points at the removed desktop page;
+            // send it to the portal instead.
+            a.href = "../../";
             a.dataset.native = true;
         }
 
@@ -203,7 +114,7 @@ function buildPageIndex(items, trail = []) {
             pageMeta.set(item.link, {
                 title: item.title,
                 trail: nextTrail,
-                description: sectionDescription(item, nextTrail)
+                description: sectionDescription(nextTrail)
             });
         }
 
@@ -250,8 +161,17 @@ function createPagerLink(label, path, direction) {
     const title = meta ? meta.title : path.split("/").pop();
 
     link.href = path;
-    link.className = "doc-nav-link ui-action";
-    link.innerHTML = `<span class="doc-nav-label">${label}</span><strong>${title}</strong>`;
+    link.className = "doc-nav-link";
+
+    const span = document.createElement("span");
+    span.className = "doc-nav-label";
+    span.textContent = label;
+
+    const strong = document.createElement("strong");
+    strong.textContent = title;
+
+    link.appendChild(span);
+    link.appendChild(strong);
 
     if (direction === "next") {
         link.classList.add("doc-nav-link-next");
@@ -263,33 +183,6 @@ function createPagerLink(label, path, direction) {
 function injectPageNavigation(path) {
     const meta = pageMeta.get(path);
     if (!meta) return;
-
-    const existing = content.querySelector(".doc-shell");
-    if (!existing) {
-        const shell = document.createElement("div");
-        shell.className = "doc-shell";
-
-        while (content.firstChild) {
-            shell.appendChild(content.firstChild);
-        }
-
-        content.appendChild(shell);
-    }
-
-    const shell = content.querySelector(".doc-shell");
-    const existingHeader = shell.querySelector(".doc-page-header");
-    const existingNav = shell.querySelector(".doc-page-nav");
-
-    if (existingHeader) existingHeader.remove();
-    if (existingNav) existingNav.remove();
-
-    const header = document.createElement("div");
-    header.className = "doc-page-header";
-    header.innerHTML = `
-        <p class="doc-kicker">Documentation Flow</p>
-        <p class="doc-breadcrumb">${meta.trail.join(" / ")}</p>
-    `;
-    shell.prepend(header);
 
     const { previous, next } = getPagerLinks(path);
     if (!previous && !next) return;
@@ -304,7 +197,7 @@ function injectPageNavigation(path) {
     if (previousLink) nav.appendChild(previousLink);
     if (nextLink) nav.appendChild(nextLink);
 
-    shell.appendChild(nav);
+    content.appendChild(nav);
 }
 
 let initialLoad = true;
@@ -380,20 +273,19 @@ function loadPage(path, anchor = null, opts = {}) {
                     requestAnimationFrame(() => {
                         const target = content.querySelector(`#${anchor}`);
                         if (!target) return;
-
-                        const container = document.querySelector(".bottom");
-                        const offsetTop = target.offsetTop;
-
-                        container.scrollTo({
-                            top: offsetTop,
-                            behavior: "smooth"
-                        });
+                        target.scrollIntoView({ behavior: "smooth", block: "start" });
                     });
+                } else {
+                    window.scrollTo({ top: 0 });
                 }
             });
         })
         .catch(() => {
-            content.innerHTML = "<p style='color:#ff6d1f'>Failed to load page content.</p>";
+            content.replaceChildren();
+            const message = document.createElement("p");
+            message.className = "docs-error";
+            message.textContent = "Failed to load page content.";
+            content.appendChild(message);
         });
 }
 
@@ -435,7 +327,3 @@ window.addEventListener("popstate", e => {
         }
     }
 });
-
-{
-    // Initial page load is triggered once the navigation tree is ready.
-}

@@ -1,0 +1,130 @@
+/*==================
+DEV LOG — index and posts
+===================*/
+
+.devlog {
+    flex: 1;
+    padding-block: var(--space-7);
+    max-width: 52rem;
+}
+
+.eyebrow {
+    margin-bottom: var(--space-2);
+    color: var(--accent);
+    font-family: var(--font-mono);
+    font-size: var(--step--1);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.devlog-intro p {
+    margin-top: var(--space-3);
+    color: var(--text-muted);
+}
+
+/* Index */
+.devlog-list {
+    margin-top: var(--space-6);
+    padding: 0;
+    list-style: none;
+    border-top: 1px solid var(--border);
+}
+
+.devlog-item {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: var(--space-3);
+    padding-block: var(--space-3);
+    border-bottom: 1px solid var(--border);
+}
+
+.devlog-date {
+    min-width: 6.5rem;
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+    font-size: var(--step--1);
+}
+
+.devlog-link {
+    font-size: var(--step-1);
+    text-decoration: none;
+}
+
+.devlog-link:hover {
+    text-decoration: underline;
+}
+
+.devlog-loading,
+.devlog-error {
+    padding-block: var(--space-3);
+    color: var(--text-muted);
+}
+
+.devlog-error {
+    color: var(--brand);
+}
+
+/* Post pages (content injected by the build) */
+.post-date {
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+    font-size: var(--step--1);
+}
+
+body > h2 {
+    margin-top: var(--space-6);
+}
+
+body > p,
+body > ul,
+body > ol,
+body > blockquote,
+body > h2,
+body > h3,
+body > hr {
+    max-width: 52rem;
+    margin-inline: auto;
+}
+
+body > h2,
+body > h3 {
+    padding-inline: 1rem;
+}
+
+body > p,
+body > ul,
+body > ol,
+body > blockquote {
+    padding-inline: 1rem;
+    color: var(--text);
+}
+
+body > hr {
+    border: 0;
+    border-top: 1px solid var(--border);
+}
+
+body > pre {
+    max-width: 52rem;
+    margin: var(--space-4) auto;
+    padding: var(--space-5);
+    overflow-x: auto;
+    border-radius: var(--radius);
+    background: var(--code-bg);
+    color: var(--code-text);
+    font-size: var(--step--1);
+}
+
+body > pre code {
+    color: inherit;
+    background: transparent;
+}
+
+body > p code,
+body > li code {
+    padding: 0.1em 0.35em;
+    border-radius: 0.3rem;
+    background: var(--bg-2);
+    font-size: 0.9em;
+}

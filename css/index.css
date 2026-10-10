@@ -37,7 +37,7 @@ html, body {
     min-height: 100dvh;
     background-color: var(--page-bg);
     color: var(--page-text);
-    font-family: var(--ui-font-body, "Fira Code"), ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-family: var(--ui-font-body);
     line-height: 1.6;
     overflow-x: hidden;
 }
@@ -1015,7 +1015,7 @@ AMBIENT AUDIO
     border: 1px solid var(--card-border);
     border-radius: 20px;
     color: var(--text-muted);
-    font-family: "Fira Code", ui-monospace, monospace;
+    font-family: var(--ui-font-mono);
     font-size: 12px;
     cursor: pointer;
     transition: color 0.15s ease, border-color 0.15s ease, transform 0.15s ease;

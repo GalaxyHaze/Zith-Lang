@@ -2,18 +2,19 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Diary &mdash; GalaxyHaze</title>
-    <meta name="description" content="Development diary and posts from GalaxyHaze, creator of the Zith programming language.">
-    <meta name="keywords" content="GalaxyHaze, Zith, programming language, systems programming, blog, dev diary">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Dev Log &mdash; Zith</title>
+    <meta name="description" content="Development diary and posts about Zith, the systems programming language.">
+    <meta name="keywords" content="Zith, programming language, systems programming, blog, dev diary">
     <meta name="author" content="GalaxyHaze">
     <meta name="robots" content="index, follow">
     <link rel="canonical" href="https://zith-lang.org/about/">
+    <link rel="icon" type="image/png" href="{{baseurl}}/media/Logos/logo.png">
 
-    <meta property="og:type" content="profile">
+    <meta property="og:type" content="website">
     <meta property="og:url" content="https://zith-lang.org/about/">
-    <meta property="og:title" content="Diary &mdash; GalaxyHaze">
-    <meta property="og:description" content="Development diary and posts from GalaxyHaze, creator of the Zith programming language.">
+    <meta property="og:title" content="Dev Log &mdash; Zith">
+    <meta property="og:description" content="Development diary and posts about Zith, the systems programming language.">
     <meta property="og:site_name" content="Zith Programming Language">
     <meta property="og:locale" content="en_US">
     <meta property="og:image" content="https://zith-lang.org/media/Logos/social-share.png">
@@ -23,115 +24,39 @@
 
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:domain" content="zith-lang.org">
-    <meta name="twitter:url" content="https://zith-lang.org/about/">
-    <meta name="twitter:title" content="Diary &mdash; GalaxyHaze">
-    <meta name="twitter:description" content="Development diary and posts from GalaxyHaze, creator of the Zith programming language.">
+    <meta name="twitter:title" content="Dev Log &mdash; Zith">
+    <meta name="twitter:description" content="Development diary and posts about Zith, the systems programming language.">
     <meta name="twitter:image" content="https://zith-lang.org/media/Logos/social-share.png">
-    <link rel="stylesheet" href="./posts.css">
+
+    <link rel="stylesheet" href="{{baseurl}}/css/fonts.css">
+    <link rel="stylesheet" href="{{baseurl}}/css/tokens.css">
+    <link rel="stylesheet" href="{{baseurl}}/css/base.css">
+    <link rel="stylesheet" href="{{baseurl}}/css/header.css">
+    <link rel="stylesheet" href="{{baseurl}}/css/footer.css">
+    <link rel="stylesheet" href="{{baseurl}}/css/devlog.css">
 </head>
 <body>
 
-<div class="about-bio">
-    <h2>GalaxyHaze</h2>
-    <p>
-        I'm a Brazilian developer with a soft spot for systems programming and for building things
-        from scratch instead of reaching for whatever is already on the shelf. That habit turned into
-        <strong>Zith</strong>, a compiled, statically-typed systems language I'm still building.
-    </p>
-    <p>
-        This is my blog. I write here about Zith, about programming in general, and about whatever
-        else happens to be on my mind. If you want to talk about the language, tell me something is
-        broken, or just say hello, email gets to me fastest.
-    </p>
-    <a href="mailto:aboveHaze@gmail.com">Contact me</a>
-    <hr>
-</div>
+<!-- include:header active="devlog" -->
 
-<div class="about-posts">
-    <h3>Entries</h3>
-    <ul id="postList">
-        <li class="loading">Loading entries...</li>
+<main class="devlog container">
+    <header class="devlog-intro">
+        <p class="eyebrow">development diary</p>
+        <h1>Dev Log</h1>
+        <p>
+            Notes on building <strong>Zith</strong>: the compiler, the language server, and the
+            tooling around them. Written by
+            <a href="https://github.com/GalaxyHaze" target="_blank" rel="noopener noreferrer">GalaxyHaze</a>.
+        </p>
+    </header>
+
+    <ul class="devlog-list" id="postList">
+        <li class="devlog-loading">Loading entries&hellip;</li>
     </ul>
-</div>
+</main>
 
-<div id="postContent" class="about-post-content hidden"></div>
-<script src="../js/ambient.js"></script>
-<script src="./posts.js"></script>
+<!-- include:footer -->
 
-<style>
-.about-bio h2 {
-    color: #FAF3E1;
-    margin: 0 0 8px 0;
-    font-size: 18px;
-}
-.about-bio p {
-    color: #E87F24;
-    margin: 4px 0;
-    line-height: 1.5;
-}
-.about-bio hr {
-    border: none;
-    border-top: 1px solid #666;
-    margin: 12px 0;
-}
-.about-posts h3 {
-    color: #FAF3E1;
-    margin: 0 0 8px 0;
-    font-size: 16px;
-}
-.about-posts ul {
-    list-style: none;
-    padding: 0;
-    margin: 0;
-}
-.about-posts li {
-    padding: 4px 0;
-    border-bottom: 1px solid #555;
-}
-.about-posts li:last-child {
-    border-bottom: none;
-}
-.post-date {
-    color: #aaa;
-    font-size: 12px;
-    margin-right: 8px;
-}
-.about-posts a {
-    color: #79eeff;
-    text-decoration: none;
-    font-size: 14px;
-}
-.about-posts a:hover {
-    text-decoration: underline;
-}
-.about-post-content {
-    margin-top: 12px;
-    padding-top: 12px;
-    border-top: 1px solid #666;
-}
-.about-post-content h2 {
-    color: #FAF3E1;
-    font-size: 16px;
-    margin: 0 0 4px 0;
-}
-.about-post-content .post-date {
-    display: block;
-    margin-bottom: 8px;
-}
-.about-post-content p {
-    color: #E87F24;
-    margin: 6px 0;
-    line-height: 1.5;
-}
-.about-post-content hr {
-    border: none;
-    border-top: 1px solid #555;
-    margin: 12px 0;
-}
-.about-post-content .error {
-    color: #ff4444;
-}
-</style>
-
+<script defer src="{{baseurl}}/js/devlog.js"></script>
 </body>
 </html>

@@ -5,7 +5,7 @@ html, body {
 body {
     margin: 0;
     padding: 0;
-    font-family: "Fira Code", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-family: var(--ui-font-body);
     color: #FAF3E1;
     line-height: 1.7;
 }

@@ -21,7 +21,7 @@ html, body{
     height: 100%;
 }
 body {
-    font-family: ui-monospace, monospace;
+    font-family: var(--ui-font-mono);
     background-color: #000000;
     color: #E87F24;
 

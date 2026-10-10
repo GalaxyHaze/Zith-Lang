@@ -1,25 +1,22 @@
 <!DOCTYPE html>
-<html lang="en" class="ui-wallpaper-page">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="theme-color" content="#168bd2">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#26324f">
 
-    <title>Helios IDE &mdash; The Official Zith Development Environment</title>
-    <meta name="description" content="Helios is the official IDE for Zith, with language-aware editing, compiler diagnostics, project tooling, and integration with the zithc toolchain.">
-    <link rel="canonical" href="https://zith-lang.org/helios/">
-    <link rel="icon" type="image/png" href="../media/Logos/logo.png">
-    <link rel="stylesheet" href="../css/helios.css">
-    <link rel="stylesheet" href="../css/ui-system.css">
-
-    <meta name="keywords" content="Helios, Helios IDE, Zith IDE, Zith editor, systems programming IDE, zithc, language server, Zith-Lang">
+    <title>Glarea &mdash; The Official Zith IDE</title>
+    <meta name="description" content="Glarea is the official IDE for Zith, with language-aware editing, compiler diagnostics, project tooling, and integration with the zithc toolchain.">
+    <meta name="keywords" content="Glarea, Glarea IDE, Zith IDE, Zith editor, systems programming IDE, zithc, language server, Zith-Lang">
     <meta name="author" content="GalaxyHaze">
     <meta name="robots" content="index, follow">
+    <link rel="canonical" href="https://zith-lang.org/helios/">
+    <link rel="icon" type="image/png" href="{{baseurl}}/media/Logos/logo.png">
 
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://zith-lang.org/helios/">
-    <meta property="og:title" content="Helios IDE &mdash; The Official Zith Development Environment">
-    <meta property="og:description" content="Helios is the official IDE for Zith, with language-aware editing, compiler diagnostics, project tooling, and zithc integration.">
+    <meta property="og:title" content="Glarea &mdash; The Official Zith IDE">
+    <meta property="og:description" content="Glarea is the official IDE for Zith, with language-aware editing, compiler diagnostics, project tooling, and zithc integration.">
     <meta property="og:image" content="https://zith-lang.org/media/Logos/social-share.png">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
@@ -30,231 +27,107 @@
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:domain" content="zith-lang.org">
     <meta name="twitter:url" content="https://zith-lang.org/helios/">
-    <meta name="twitter:title" content="Helios IDE &mdash; The Official Zith Development Environment">
-    <meta name="twitter:description" content="Helios is the official IDE for Zith, with language-aware editing, compiler diagnostics, project tooling, and zithc integration.">
+    <meta name="twitter:title" content="Glarea &mdash; The Official Zith IDE">
+    <meta name="twitter:description" content="Glarea is the official IDE for Zith, with language-aware editing, compiler diagnostics, project tooling, and zithc integration.">
     <meta name="twitter:image" content="https://zith-lang.org/media/Logos/social-share.png">
+
+    <link rel="stylesheet" href="{{baseurl}}/css/fonts.css">
+    <link rel="stylesheet" href="{{baseurl}}/css/tokens.css">
+    <link rel="stylesheet" href="{{baseurl}}/css/base.css">
+    <link rel="stylesheet" href="{{baseurl}}/css/header.css">
+    <link rel="stylesheet" href="{{baseurl}}/css/footer.css">
+    <link rel="stylesheet" href="{{baseurl}}/css/glarea.css">
 
     <script type="application/ld+json">
     {
       "@context": "https://schema.org",
       "@type": "WebPage",
-      "name": "Helios IDE",
+      "name": "Glarea IDE",
       "url": "https://zith-lang.org/helios/",
-      "description": "Helios is the official IDE for the Zith programming language.",
-      "isPartOf": {
-        "@type": "WebSite",
-        "name": "Zith",
-        "url": "https://zith-lang.org/"
-      },
+      "description": "Glarea is the official IDE for the Zith programming language.",
+      "isPartOf": { "@type": "WebSite", "name": "Zith", "url": "https://zith-lang.org/" },
       "about": {
         "@type": "SoftwareApplication",
-        "name": "Helios IDE",
+        "name": "Glarea IDE",
         "applicationCategory": "DeveloperApplication",
         "operatingSystem": "Cross-platform"
       }
     }
     </script>
 </head>
-<body class="ui-page ui-helios">
-    <header class="site-header">
-        <a class="brand" href="../html/home.html" aria-label="Return to Zith home">
-            <img src="../media/Logos/logo.svg" alt="">
-            <span>.Zith</span>
-        </a>
-        <a class="back-link ui-nav-link" href="../html/documentation/D-home.html">&lt; Documentation</a>
-    </header>
+<body>
 
-    <main>
-        <section class="hero" aria-labelledby="helios-title">
-            <p class="eyebrow">// official_zith_ide</p>
-            <div class="hero-window">
-                <div class="titlebar">
-                    <span>helios.zith</span>
-                    <div class="window-controls" aria-hidden="true"><span>-</span><span>o</span><span>x</span></div>
-                </div>
-                <div class="hero-content">
-                    <p class="prompt">&gt; launch helios</p>
-                    <h1 id="helios-title">Helios</h1>
-                    <p class="hero-copy">The official IDE for Zith, with language-aware editing, compiler diagnostics, and project tooling in one environment.</p>
-                    <div class="hero-actions">
-                        <a class="button button-primary ui-action" href="https://github.com/GalaxyHaze/Zith-Studio/releases" target="_blank" rel="noopener noreferrer">Download Helios</a>
-                        <a class="button button-secondary ui-action" href="#compiler">Explore integration</a>
-                    </div>
-                </div>
-                <div class="statusbar"><span>main.zith</span><span>zith: ready</span><span>UTF-8</span></div>
-            </div>
-        </section>
+<!-- include:header active="glarea" -->
 
-        <section class="text-contrast-prototype" data-text-contrast-prototype hidden aria-labelledby="text-contrast-title">
-            <p class="eyebrow">// temporary_text_color_test</p>
-            <h2 id="text-contrast-title">Text contrast comparison</h2>
-            <h4>Same sentence and type size on three Helios surfaces. Only the text color changes.</p>
+<main>
+    <section class="hero container" aria-labelledby="glarea-title">
+        <p class="eyebrow">official_zith_ide</p>
+        <h1 id="glarea-title">Glarea</h1>
+        <p class="hero-subtitle">The official IDE for Zith, with language-aware editing, compiler diagnostics, and project tooling in one environment.</p>
+        <div class="hero-actions">
+            <a class="button button-primary" href="https://github.com/GalaxyHaze/Zith-Studio/releases" target="_blank" rel="noopener noreferrer">Download Glarea</a>
+            <a class="button button-secondary" href="#compiler">Explore integration</a>
+        </div>
+    </section>
 
-            <div class="contrast-surface contrast-surface-window">
-                <h3>Dark IDE window</h3>
-                <div class="contrast-samples">
-                    <article class="contrast-sample">
-                        <span>Indigo | #3a4b73</span>
-                        <h4 class="contrast-text contrast-indigo">Build clear interfaces with Zith.</h4>
-                    </article>
-                    <article class="contrast-sample">
-                        <span>Green | #32795e</span>
-                        <h4 class="contrast-text contrast-green">Build clear interfaces with Zith.</h4>
-                    </article>
-                    <article class="contrast-sample">
-                        <span>Orange | #e87f24</span>
-                        <h4 class="contrast-text contrast-orange">Build clear interfaces with Zith.</h4>
-                    </article>
-                </div>
-            </div>
+    <section class="section container" aria-labelledby="features-title">
+        <div class="section-head">
+            <p class="eyebrow">core_features</p>
+            <h2 id="features-title">A workspace built around Zith.</h2>
+            <p>Glarea keeps the editor close to the language and to the zithc toolchain, so source files and compiler feedback stay in context.</p>
+        </div>
+        <div class="feature-grid">
+            <article class="feature-card">
+                <span class="feature-index">01</span>
+                <h3>Language-aware editing</h3>
+                <p>Syntax highlighting, completions, symbol navigation, and hover information keep Zith code readable as projects grow.</p>
+            </article>
+            <article class="feature-card">
+                <span class="feature-index">02</span>
+                <h3>Diagnostics in context</h3>
+                <p>Compiler errors and suggestions appear where you work, with source locations that take you directly to the problem.</p>
+            </article>
+            <article class="feature-card">
+                <span class="feature-index">03</span>
+                <h3>Project-first workflow</h3>
+                <p>Open a Zith project, inspect its files, and use the same build, check, format, and run commands that power the CLI.</p>
+            </article>
+        </div>
+    </section>
 
-            <div class="contrast-surface contrast-surface-card">
-                <h3>Light card</h3>
-                <div class="contrast-samples">
-                    <article class="contrast-sample">
-                        <span>Indigo | #3a4b73</span>
-                        <h4 class="contrast-text contrast-indigo">Build clear interfaces with Zith.</h4>
-                    </article>
-                    <article class="contrast-sample">
-                        <span>Green | #32795e</span>
-                        <h4 class="contrast-text contrast-green">Build clear interfaces with Zith.</h4>
-                    </article>
-                    <article class="contrast-sample">
-                        <span>Orange | #e87f24</span>
-                        <h4 class="contrast-text contrast-orange">Build clear interfaces with Zith.</h4>
-                    </article>
-                </div>
-            </div>
-
-            <div class="contrast-surface contrast-surface-wallpaper">
-                <h3>OS wallpaper</h3>
-                <div class="contrast-samples">
-                    <article class="contrast-sample">
-                        <span>Indigo | #3a4b73</span>
-                        <h4 class="contrast-text contrast-indigo">Build clear interfaces with Zith.</h4>
-                    </article>
-                    <article class="contrast-sample">
-                        <span>Green | #32795e</span>
-                        <h4 class="contrast-text contrast-green">Build clear interfaces with Zith.</h4>
-                    </article>
-                    <article class="contrast-sample">
-                        <span>Orange | #e87f24</span>
-                        <h4 class="contrast-text contrast-orange">Build clear interfaces with Zith.</h4>
-                    </article>
-                </div>
-            </div>
-        </section>
-
-        <section class="section features" aria-labelledby="features-title">
-            <div class="section-heading">
-                <p class="eyebrow">// core_features</p>
-                <h2 id="features-title">A workspace built around Zith.</h2>
-                <h4>Helios keeps the editor close to the language and to the zithc toolchain, so source files and compiler feedback stay in context.</p>
-            </div>
-            <div class="feature-grid">
-                <article class="feature-card">
-                    <span class="feature-index">01</span>
-                    <h3>Language-aware editing</h3>
-                    <h4>Syntax highlighting, completions, symbol navigation, and hover information keep Zith code readable as projects grow.</p>
-                </article>
-                <article class="feature-card">
-                    <span class="feature-index">02</span>
-                    <h3>Diagnostics in context</h3>
-                    <h4>Compiler errors and suggestions appear where you work, with source locations that take you directly to the problem.</p>
-                </article>
-                <article class="feature-card">
-                    <span class="feature-index">03</span>
-                    <h3>Project-first workflow</h3>
-                    <h4>Open a Zith project, inspect its files, and use the same build, check, format, and run commands that power the CLI.</p>
-                </article>
-            </div>
-        </section>
-
-        <section class="section compiler-section" id="compiler" aria-labelledby="compiler-title">
-            <div class="compiler-copy">
-                <p class="eyebrow">// compiler_bridge</p>
-                <h2 id="compiler-title">Native integration with the Zith compiler.</h2>
-                <h4>Helios is designed around the Zith toolchain rather than treating it as an afterthought. It uses the language server for editor intelligence and speaks the same project configuration as the compiler.</p>
-                <ul class="check-list">
-                    <li>Run <code>zith check</code> and inspect diagnostics without leaving the editor.</li>
-                    <li>Build, format, and run projects through the familiar Zith CLI workflow.</li>
-                    <li>Navigate symbols using compiler-backed language-server information.</li>
-                </ul>
-            </div>
-            <pre class="terminal" aria-label="Example Zith compiler session"><code><span class="terminal-muted">$</span> zith check
+    <section class="section container compiler-section" id="compiler" aria-labelledby="compiler-title">
+        <div class="compiler-copy">
+            <p class="eyebrow">compiler_bridge</p>
+            <h2 id="compiler-title">Native integration with the Zith compiler.</h2>
+            <p>Glarea is designed around the Zith toolchain rather than treating it as an afterthought. It uses the language server for editor intelligence and speaks the same project configuration as the compiler.</p>
+            <ul class="check-list">
+                <li>Run <code>zith check</code> and inspect diagnostics without leaving the editor.</li>
+                <li>Build, format, and run projects through the familiar Zith CLI workflow.</li>
+                <li>Navigate symbols using compiler-backed language-server information.</li>
+            </ul>
+        </div>
+        <pre class="terminal" aria-label="Example Zith compiler session"><code><span class="terminal-muted">$</span> zith check
 <span class="terminal-ok">checking</span> app/main.zith
 <span class="terminal-ok">finished</span> dev profile in 0.12s
 
 <span class="terminal-muted">$</span> zith run
-<span class="terminal-output">Hello from Helios.</span></code></pre>
-        </section>
+<span class="terminal-output">Hello from Glarea.</span></code></pre>
+    </section>
 
-        <section class="install" aria-labelledby="install-title">
-            <p class="eyebrow">// get_started</p>
-            <h2 id="install-title">Start building with Helios.</h2>
-            <h4>Download the latest release, open a Zith project, and let the compiler guide the next step.</p>
+    <section class="section container" aria-labelledby="install-title">
+        <div class="install">
+            <p class="eyebrow">get_started</p>
+            <h2 id="install-title">Start building with Glarea.</h2>
+            <p>Download the latest release, open a Zith project, and let the compiler guide the next step.</p>
             <div class="hero-actions">
-                <a class="button button-primary ui-action" href="https://github.com/GalaxyHaze/Zith-Studio/releases" target="_blank" rel="noopener noreferrer">Download / Install</a>
-                <a class="button button-secondary ui-action" href="https://github.com/GalaxyHaze/Zith-Studio" target="_blank" rel="noopener noreferrer">View source</a>
-            </div>
-        </section>
-    </main>
-
-    <footer class="site-footer">
-        <span>Helios IDE</span>
-        <a class="ui-nav-link" href="../html/home.html">zith-lang.org</a>
-    </footer>
-
-    <div class="crt-overlay" aria-hidden="true"></div>
-    <div class="gear" onclick="openWindow('settings')">
-        <img src="../media/Icons/Gear.svg" alt="Settings">
-    </div>
-    <div class="window hidden" id="settings">
-        <div class="titlebar">
-            <span>settings.ini</span>
-            <div class="buttons">
-                <button>-</button>
-                <button onclick="toggleMaximize('settings')">o</button>
-                <button onclick="closeWindow('settings')">x</button>
+                <a class="button button-primary" href="https://github.com/GalaxyHaze/Zith-Studio/releases" target="_blank" rel="noopener noreferrer">Download / Install</a>
+                <a class="button button-secondary" href="https://github.com/GalaxyHaze/Zith-Studio" target="_blank" rel="noopener noreferrer">View source</a>
             </div>
         </div>
-        <div class="content">
-            <div class="settings-group" data-group="scanlines">
-                <h2>Scanlines</h2>
-                <div class="settings-options">
-                    <button data-setting="scanlines" data-level="0">Off</button>
-                    <button data-setting="scanlines" data-level="1">Low</button>
-                    <button data-setting="scanlines" data-level="2">High</button>
-                </div>
-                <p class="settings-status">Current: Low</p>
-            </div>
-            <div class="settings-group" data-group="glow">
-                <h2>Glow</h2>
-                <div class="settings-options">
-                    <button data-setting="glow" data-level="0">Off</button>
-                    <button data-setting="glow" data-level="1">Low</button>
-                    <button data-setting="glow" data-level="2">High</button>
-                </div>
-                <p class="settings-status">Current: Low</p>
-            </div>
-            <div class="settings-group" data-group="noise">
-                <h2>Noise</h2>
-                <div class="settings-options">
-                    <button data-setting="noise" data-level="0">Off</button>
-                    <button data-setting="noise" data-level="1">Low</button>
-                    <button data-setting="noise" data-level="2">High</button>
-                </div>
-                <p class="settings-status">Current: Low</p>
-            </div>
-        </div>
-    </div>
-    <script src="../js/settings.js"></script>
-    <script src="../js/windows.js"></script>
-    <script src="../js/ambient.js"></script>
-    <script>
-        if (new URLSearchParams(window.location.search).get("prototype") === "text-contrast") {
-            document.querySelector("[data-text-contrast-prototype]").hidden = false;
-        }
-    </script>
+    </section>
+</main>
+
+<!-- include:footer -->
+
 </body>
 </html>

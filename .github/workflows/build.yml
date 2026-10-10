@@ -23,7 +23,7 @@ jobs:
         with:
           python-version: "3.12"
       - name: Build static site
-        run: python3 tools/build.py
+        run: python3 tools/build.py --baseurl "/${GITHUB_REPOSITORY#*/}"
       - uses: actions/upload-pages-artifact@v3
         with:
           path: _site

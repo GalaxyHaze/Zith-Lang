@@ -1,0 +1,263 @@
+/*==================
+DOCS — documentation shell
+===================*/
+
+.docs-layout {
+    display: grid;
+    grid-template-columns: 17rem minmax(0, 1fr);
+    gap: var(--space-6);
+    align-items: start;
+    padding-block: var(--space-6);
+}
+
+/* Sidebar */
+.docs-sidebar {
+    position: sticky;
+    top: var(--space-4);
+    max-height: calc(100vh - 2rem);
+    overflow-y: auto;
+    padding-right: var(--space-2);
+    font-size: var(--step--1);
+}
+
+.docs-sidebar ul {
+    margin: 0;
+    padding-left: var(--space-3);
+    list-style: none;
+}
+
+.docs-sidebar > ul {
+    padding-left: 0;
+}
+
+.docs-sidebar li {
+    margin-block: 1px;
+}
+
+.docs-sidebar a.ui-nav-link {
+    display: block;
+    padding: var(--space-1) var(--space-2);
+    border-radius: var(--radius-sm);
+    color: var(--text-muted);
+    text-decoration: none;
+}
+
+.docs-sidebar a.ui-nav-link:hover,
+.docs-sidebar a.ui-nav-link:focus-visible {
+    background: var(--bg-2);
+    color: var(--accent);
+}
+
+.docs-sidebar a.ui-nav-link.is-active {
+    background: color-mix(in srgb, var(--accent) 10%, var(--surface));
+    color: var(--accent-hover);
+    font-weight: 600;
+}
+
+/* Main column */
+.docs-main {
+    min-width: 0;
+}
+
+.docs-filebar {
+    margin-bottom: var(--space-4);
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+    font-size: var(--step--1);
+}
+
+.docs-content {
+    max-width: 52rem;
+}
+
+.docs-content > * + * {
+    margin-top: var(--space-4);
+}
+
+.docs-content h1 {
+    font-size: var(--step-4);
+}
+
+.docs-content h2 {
+    padding-top: var(--space-3);
+    font-size: var(--step-3);
+}
+
+.docs-content h3 {
+    font-size: var(--step-2);
+}
+
+.docs-content h4 {
+    font-size: var(--step-1);
+}
+
+.docs-content p,
+.docs-content li {
+    color: var(--text);
+}
+
+.docs-content ul,
+.docs-content ol {
+    padding-left: 1.4rem;
+}
+
+.docs-content li + li {
+    margin-top: var(--space-1);
+}
+
+.docs-content code {
+    padding: 0.1em 0.35em;
+    border-radius: 0.3rem;
+    background: var(--bg-2);
+    color: var(--text);
+    font-size: 0.9em;
+}
+
+.docs-content pre {
+    overflow-x: auto;
+    padding: var(--space-5);
+    border-radius: var(--radius);
+    background: var(--code-bg);
+    color: var(--code-text);
+    font-size: var(--step--1);
+    line-height: 1.6;
+}
+
+.docs-content pre code {
+    padding: 0;
+    background: transparent;
+    color: inherit;
+}
+
+.docs-content table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: var(--step--1);
+}
+
+.docs-content th,
+.docs-content td {
+    padding: var(--space-2) var(--space-3);
+    border: 1px solid var(--border);
+    text-align: left;
+}
+
+.docs-content th {
+    background: var(--bg-2);
+    color: var(--title);
+}
+
+.docs-content blockquote {
+    padding: var(--space-3) var(--space-4);
+    border-left: 3px solid var(--accent);
+    background: var(--surface);
+    color: var(--text-muted);
+}
+
+.docs-content hr {
+    border: 0;
+    border-top: 1px solid var(--border);
+}
+
+/* Callouts */
+.callout {
+    padding: var(--space-3) var(--space-4);
+    border: 1px solid var(--border);
+    border-left-width: 4px;
+    border-radius: var(--radius-sm);
+    background: var(--surface);
+}
+
+.callout-info,
+.callout-tip {
+    border-left-color: var(--accent);
+}
+
+.callout-warning,
+.callout-caution {
+    border-left-color: var(--brand);
+}
+
+/* Pagination */
+.doc-page-nav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-3);
+    margin-top: var(--space-6);
+    padding-top: var(--space-4);
+    border-top: 1px solid var(--border);
+}
+
+.doc-nav-link {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 12rem;
+    padding: var(--space-3) var(--space-4);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--surface);
+    text-decoration: none;
+}
+
+.doc-nav-link:hover {
+    border-color: var(--accent);
+}
+
+.doc-nav-link-next {
+    margin-left: auto;
+    text-align: right;
+}
+
+.doc-nav-label {
+    color: var(--accent);
+    font-family: var(--font-mono);
+    font-size: var(--step--1);
+}
+
+.doc-nav-link strong {
+    color: var(--title);
+}
+
+.docs-error {
+    color: var(--brand);
+}
+
+/* Prism tokens (dark block) */
+.token.comment,
+.token.prolog,
+.token.doctype,
+.token.cdata { color: #7c8a99; }
+.token.punctuation { color: #c6d2de; }
+.token.property,
+.token.tag,
+.token.constant,
+.token.symbol,
+.token.deleted { color: #ff9d6b; }
+.token.boolean,
+.token.number { color: #d7b3ff; }
+.token.selector,
+.token.attr-name,
+.token.string,
+.token.char,
+.token.builtin,
+.token.inserted { color: #ffd28a; }
+.token.operator,
+.token.entity,
+.token.url { color: #7ec8ff; }
+.token.atrule,
+.token.attr-value,
+.token.keyword { color: #ff9d6b; }
+.token.function,
+.token.class-name { color: #7ec8ff; }
+
+@media (max-width: 900px) {
+    .docs-layout {
+        grid-template-columns: 1fr;
+    }
+
+    .docs-sidebar {
+        position: static;
+        max-height: none;
+    }
+}

@@ -121,7 +121,7 @@
         var style = document.createElement("style");
         style.id = "zith-ambient-style";
         style.textContent = [
-            ".audio-toggle{position:fixed;right:18px;bottom:18px;z-index:99998;display:flex;align-items:center;gap:9px;padding:9px 13px;background:rgba(14,14,17,.92);border:1px solid #2a2a36;border-radius:20px;color:#8f8fa3;font-family:'Fira Code',ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;cursor:pointer;user-select:none}",
+            ".audio-toggle{position:fixed;right:18px;bottom:18px;z-index:99998;display:flex;align-items:center;gap:9px;padding:9px 13px;background:rgba(14,14,17,.92);border:1px solid #2a2a36;border-radius:20px;color:#8f8fa3;font-family:var(--ui-font-mono);font-size:12px;cursor:pointer;user-select:none}",
             ".audio-toggle:hover,.audio-toggle.is-playing{color:#00ffff;border-color:rgba(0,255,255,.45);transform:translateY(-1px)}",
             ".audio-visualizer{display:inline-flex;align-items:flex-end;gap:3px;height:14px}",
             ".audio-visualizer i{width:3px;height:4px;border-radius:1px;background:currentColor;opacity:.55}",
