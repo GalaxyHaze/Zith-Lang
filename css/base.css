@@ -105,6 +105,23 @@ samp {
     border: 0;
 }
 
+/* Typewriter caret — shown only while js/typewriter.js is revealing text.
+   currentColor keeps it legible on both dark code blocks and light surfaces. */
+.is-typing::after {
+    content: "";
+    display: inline-block;
+    width: 2px;
+    height: 1em;
+    margin-left: 2px;
+    vertical-align: text-bottom;
+    background: currentColor;
+    animation: caret-blink 1s steps(1) infinite;
+}
+
+@keyframes caret-blink {
+    50% { opacity: 0; }
+}
+
 .hidden {
     display: none !important;
 }

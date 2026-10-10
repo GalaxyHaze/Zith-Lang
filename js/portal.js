@@ -41,12 +41,20 @@
         var copyBtn = document.getElementById("copyInstallBtn");
         if (!tabs.length || !cmd) return;
 
+        function showCommand(pm) {
+            if (window.ZithTypewriter) {
+                window.ZithTypewriter.type(cmd, installCmds[pm], { perCharMs: 12 });
+            } else {
+                cmd.textContent = installCmds[pm];
+            }
+        }
+
         tabs.forEach(function (tab) {
             tab.addEventListener("click", function () {
                 var pm = tab.dataset.pm;
                 if (!installCmds[pm]) return;
                 currentPm = pm;
-                cmd.textContent = installCmds[pm];
+                showCommand(pm);
                 tabs.forEach(function (other) {
                     other.classList.toggle("is-active", other === tab);
                 });

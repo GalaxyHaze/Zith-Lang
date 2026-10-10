@@ -20,6 +20,9 @@ passam a SVG.
 **Exceção:** o botão de música ambiente é mantido (é apreciado); `js/ambient.js`
 e `media/audio/ambient.mp3` ficam, reestilizados de forma flat e discreta.
 
+**Nota:** o efeito de máquina de escrever foi depois reintroduzido com âmbito
+restrito (só o Code Spotlight e os comandos de instalação) — ver ADR 0004.
+
 ## Consequências
 
 - O site perde uma página (`html/home.html`) e ~5 ficheiros JS/CSS retro.

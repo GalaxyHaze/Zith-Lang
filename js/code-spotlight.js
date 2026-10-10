@@ -45,7 +45,14 @@
     function renderEntry(container, entry) {
         container.__spotlight.current = entry;
         container.querySelector(".window-filename").textContent = entry.file;
-        container.querySelector("code").innerHTML = highlight(entry.code);
+        var code = container.querySelector("code");
+        if (window.ZithTypewriter) {
+            window.ZithTypewriter.type(code, entry.code, {
+                render: function (prefix) { code.innerHTML = highlight(prefix); }
+            });
+        } else {
+            code.innerHTML = highlight(entry.code);
+        }
         container.querySelector(".code-explanation").innerHTML = entry.explanation;
         container.querySelectorAll(".tab-btn").forEach(function (button) {
             button.classList.toggle("active", button.dataset.key === entry.key);
