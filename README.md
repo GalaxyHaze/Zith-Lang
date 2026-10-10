@@ -31,11 +31,12 @@ of date.
 ### Site build
 
 The header and footer live in `partials/` and are expanded into `_site/` by
-`tools/build.py` (no dependencies). Preview locally with:
+`tools/build.py` (no dependencies). The repo root holds the **sources** with
+unexpanded includes, so build before serving — never serve the root, or the
+pages render without the shared header/footer. Preview locally with:
 
 ```bash
-python3 tools/build.py
-python3 -m http.server 5501 --directory _site
+make serve          # build + serve _site/ on http://localhost:5501
 ```
 
 On GitHub Pages, `.github/workflows/build.yml` builds and publishes `_site/`.

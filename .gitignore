@@ -1,7 +1,8 @@
 .cache
 build
 .opencode
-.vscode
+.vscode/*
+!.vscode/settings.json
 _site
 __pycache__
 *.py[cod]

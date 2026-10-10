@@ -33,12 +33,24 @@ shared chrome with an include:
 
 ## Preview
 
-The site is static but the sources contain includes, so build first:
+The site is static but the sources (the repo root) contain includes that are
+**not yet expanded**. Never serve the root: it will render pages without the
+shared header/footer. Build first and serve the output:
 
 ```bash
-python3 tools/build.py
+make serve          # build + serve _site/ on http://localhost:5501
+```
+
+Or the two steps separately:
+
+```bash
+make build                       # python3 tools/build.py
 python3 -m http.server 5501 --directory _site
 ```
+
+The Live Server extension is pinned to `_site/` via `.vscode/settings.json`
+(`liveServer.settings.root`), so opening the folder and pressing *Go Live*
+serves the built site. If you edit a source page, rebuild (`make build`).
 
 On GitHub Pages the workflow (`.github/workflows/build.yml`) runs the build and
 publishes `_site/`.
