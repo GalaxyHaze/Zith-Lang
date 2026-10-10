@@ -33,7 +33,6 @@ SKIP_DIRS = {
 SKIP_FILES = {
     ".gitignore", ".DS_Store", "Thumbs.db",
     "README.md", "GUIDE.md", "CLAUDE.md", "Makefile",
-    "patch.py", "patch_css.py", "patch_js.py", "parse_wasm.js", "placeholder.png",
 }
 SKIP_SUFFIXES = {".md", ".pyc"}
 
