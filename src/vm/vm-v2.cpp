@@ -18,7 +18,18 @@ namespace {
 constexpr std::size_t allocationFailure = std::numeric_limits<std::size_t>::max();
 
 struct Frame {
-    std::size_t mark = 0;
+    LinearMemory &memory;
+    std::size_t mark;
+
+    explicit Frame(LinearMemory &frameMemory)
+        : memory(frameMemory), mark(frameMemory.arenaWatermark()) {}
+
+    Frame(const Frame &)                    = delete;
+    auto operator=(const Frame &) -> Frame & = delete;
+
+    ~Frame() {
+        memory.restoreArena(mark);
+    }
 };
 
 struct RunState {
@@ -267,8 +278,7 @@ auto validateFunctionShape(const Function &fn) -> bool {
 
 auto runFunction(RunState &state, const Function &fn, std::vector<int64_t> &regs)
     -> std::pair<bool, int64_t> {
-    Frame frame;
-    (void)frame;
+    Frame frame(*state.memory);
 
     if (regs.size() < fn.regCount)
         regs.resize(fn.regCount, 0);

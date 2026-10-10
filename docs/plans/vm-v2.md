@@ -67,10 +67,12 @@ Fat pointers use two consecutive registers: pointer guest offset and length.
 ## Memory Model
 
 `LinearMemory` owns a byte vector. The current bump and heap pointers start at
-the beginning of the same buffer. The first milestone does not reclaim arena
-blocks per frame; instead the arena checkpoint is reserved for the future
-layout that `Ret` will release. The allocation instructions already separate
-frame-local scratch from global `malloc`.
+the beginning of the same buffer. Each VM function frame checkpoints the arena
+watermark and restores it on every exit, including `Ret` and traps. Nested
+frames therefore release only their own scratch and preserve live caller
+allocations. Restoring the arena truncates the logical byte extent to the
+greater of the frame checkpoint and the global heap watermark, so
+`MallocBytes`/`malloc` allocations remain addressable.
 
 WASM moves this buffer to the module linear memory and host FFI converts guest
 offsets only at the boundary.

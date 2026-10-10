@@ -20,6 +20,9 @@ that are easy to get wrong when editing that plan.
 - `fn` and `extern fn` are typed references indexed into a module table, not
   raw C function pointers.
 - Allocators stay above VM primitives (`AllocBytes`/`MallocBytes`/`malloc`).
+- Each VM function frame restores its `AllocBytes` watermark on return or trap.
+  Nested frames preserve caller scratch, and the global heap watermark keeps
+  `MallocBytes` allocations alive across frame exits.
 - The FFI subset is validated and small: `malloc`, `free`, `putchar`, the
   `snprintf` formats the stdlib uses (`%u`, `%d`, `%g`), `realloc`, `memcpy`,
   `strlen`, and the `printf` variadic surface. Unsupported externs trap.

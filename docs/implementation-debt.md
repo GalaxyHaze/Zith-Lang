@@ -190,10 +190,11 @@ referências estáveis:
 2. **Computed-goto adiado.** A decisão registada é aplicar computed-goto ao
    dispatch loop "once the opcode set stabilizes". O opcode set ainda está a
    crescer (ver dívida 1), pelo que o loop atual é o dispatcher simples.
-3. **Arena sem reclaim por frame.** O checkpoint por frame que `Ret` deveria
-   libertar está reservado mas não implementado ("the first milestone does not
-   reclaim arena blocks per frame"). A arena cresce monotonicamente durante a
-   execução.
+3. **Arena por frame — resolvido em 2026-10-10.** Cada invocação de
+   `runFunction` guarda o watermark de `AllocBytes` e restaura-o em todos os
+   caminhos de saída, incluindo traps. Chamadas aninhadas reutilizam o scratch
+   sem corromper dados vivos do caller; o high-water global preserva
+   `MallocBytes`/`malloc`. A cobertura está em `test-vm-v2`.
 4. **FFI limitado ao subset libc validado.** `malloc`, `free`, `putchar`,
    `snprintf` (`%u`/`%d`/`%g`), `realloc`, `memcpy`, `strlen`, `puts` e o
    printf variádico. Qualquer extern fora desta lista faz trap (VMV2-04);

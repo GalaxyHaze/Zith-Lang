@@ -69,15 +69,41 @@ auto LinearMemory::copy(std::size_t dstOffset, std::size_t srcOffset, std::size_
     return true;
 }
 
+auto LinearMemory::restoreArena(std::size_t watermark) noexcept -> void {
+    if (watermark > bump_)
+        return;
+
+    bump_ = watermark;
+    bytes_.resize(std::max(bump_, heap_));
+}
+
 auto LinearMemory::allocBytes(std::size_t count, std::size_t alignment) -> std::size_t {
     if (count == 0)
         count = 1;
     if (alignment == 0)
         alignment = 1;
-    if (bump_ < heap_)
-        bump_ = heap_;
 
-    const std::size_t aligned = alignUp(bump_, alignment);
+    std::size_t aligned = alignUp(bump_, alignment);
+    while (aligned != std::numeric_limits<std::size_t>::max()) {
+        if (count > std::numeric_limits<std::size_t>::max() - aligned)
+            return std::numeric_limits<std::size_t>::max();
+        const std::size_t candidateEnd = aligned + count;
+        bool skippedHeapBlock         = false;
+        for (const auto &[blockOffset, blockSize] : allocatedBlocks_) {
+            if (blockSize > std::numeric_limits<std::size_t>::max() - blockOffset)
+                return std::numeric_limits<std::size_t>::max();
+            const std::size_t blockEnd = blockOffset + blockSize;
+            if (aligned < blockEnd && blockOffset < candidateEnd) {
+                aligned          = alignUp(blockEnd, alignment);
+                skippedHeapBlock = true;
+                break;
+            }
+        }
+        if (!skippedHeapBlock)
+            break;
+    }
+    if (aligned == std::numeric_limits<std::size_t>::max())
+        return std::numeric_limits<std::size_t>::max();
     if (count > std::numeric_limits<std::size_t>::max() - aligned)
         return std::numeric_limits<std::size_t>::max();
     const std::size_t end = aligned + count;
@@ -96,6 +122,8 @@ auto LinearMemory::mallocBytes(std::size_t count, std::size_t alignment) -> std:
     if (alignment == 0)
         alignment = 1;
     for (std::size_t i = 0; i < freeBlocks_.size(); ++i) {
+        if (freeBlocks_[i].first < bump_)
+            continue;
         if (freeBlocks_[i].second >= count) {
             const std::size_t offset = freeBlocks_[i].first;
             const std::size_t available = freeBlocks_[i].second;

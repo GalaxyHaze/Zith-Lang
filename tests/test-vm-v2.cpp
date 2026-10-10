@@ -437,6 +437,115 @@ void test_vm_v2_alloc_bump_and_heap_disjoint() {
     CHECK(result.exitCode != 0, "bump and heap offsets stay disjoint");
 }
 
+void test_vm_v2_frame_arena_reclaimed() {
+    memory::Arena arena;
+    vm::Module module(arena);
+
+    auto &main      = module.functions.emplace(arena);
+    main.name       = "main";
+    main.returnType = vm::ValueType::I32;
+    main.regCount   = 4;
+    main.body.push(vm::Instr::withImm(vm::Op::LoadConstI32, 0, 8));
+    main.body.push(vm::Instr::withImm(vm::Op::LoadConstI32, 1, 1));
+    main.body.push(vm::Instr::simple(vm::Op::AllocBytes, 2, 0, 1));
+    main.body.push(vm::Instr::withImm(vm::Op::LoadConstI32, 3, 42));
+    main.body.push(vm::Instr::simple(vm::Op::StoreI64, 2, 3));
+    main.body.push(vm::Instr{vm::Op::Ret, 3, 0, 0, 0});
+
+    vm::Vm vm;
+    const auto result = vm.runMain(module);
+    CHECK(result.status == vm::RunStatus::Ok, "frame-local allocation returns successfully");
+    CHECK_EQ(result.exitCode, 42, "frame-local allocation is usable before return");
+    CHECK_EQ(vm.memory().arenaWatermark(), 0U, "Ret restores the frame arena watermark");
+    CHECK_EQ(vm.memory().size(), 0U, "Ret truncates released frame-local memory");
+
+    memory::Arena trapArena;
+    vm::Module trapModule(trapArena);
+    auto &trapMain      = trapModule.functions.emplace(trapArena);
+    trapMain.name       = "main";
+    trapMain.returnType = vm::ValueType::I32;
+    trapMain.regCount   = 3;
+    trapMain.body.push(vm::Instr::withImm(vm::Op::LoadConstI32, 0, 8));
+    trapMain.body.push(vm::Instr::withImm(vm::Op::LoadConstI32, 1, 1));
+    trapMain.body.push(vm::Instr::simple(vm::Op::AllocBytes, 2, 0, 1));
+    trapMain.body.push(vm::Instr::trap());
+
+    vm::Vm trapVm;
+    const auto trapResult = trapVm.runMain(trapModule);
+    CHECK(trapResult.status == vm::RunStatus::Trap, "trap exits the frame");
+    CHECK_EQ(trapVm.memory().arenaWatermark(), 0U, "trap restores the frame arena watermark");
+    CHECK_EQ(trapVm.memory().size(), 0U, "trap truncates released frame-local memory");
+}
+
+void test_vm_v2_nested_frame_arena_reclaimed_without_corruption() {
+    memory::Arena arena;
+    vm::Module module(arena);
+
+    auto &callee      = module.functions.emplace(arena);
+    callee.name       = "allocate";
+    callee.paramCount = 0;
+    callee.returnType = vm::ValueType::Ptr;
+    callee.regCount   = 6;
+    callee.body.push(vm::Instr::withImm(vm::Op::LoadConstI32, 0, 8));
+    callee.body.push(vm::Instr::withImm(vm::Op::LoadConstI32, 1, 1));
+    callee.body.push(vm::Instr::simple(vm::Op::AllocBytes, 2, 0, 1));
+    callee.body.push(vm::Instr::withImm(vm::Op::LoadConstI32, 3, 99));
+    callee.body.push(vm::Instr::simple(vm::Op::StoreI64, 2, 3));
+    callee.body.push(vm::Instr::simple(vm::Op::MallocBytes, 4, 0, 1));
+    callee.body.push(vm::Instr::withImm(vm::Op::LoadConstI32, 5, 77));
+    callee.body.push(vm::Instr::simple(vm::Op::StoreI64, 4, 5));
+    callee.body.push(vm::Instr{vm::Op::Ret, 2, 0, 0, 0});
+
+    auto &main      = module.functions.emplace(arena);
+    main.name       = "main";
+    main.returnType = vm::ValueType::I32;
+    main.regCount   = 11;
+    main.body.push(vm::Instr::withImm(vm::Op::LoadConstI32, 0, 8));
+    main.body.push(vm::Instr::withImm(vm::Op::LoadConstI32, 1, 1));
+    main.body.push(vm::Instr::simple(vm::Op::AllocBytes, 2, 0, 1));
+    main.body.push(vm::Instr::withImm(vm::Op::LoadConstI32, 3, 42));
+    main.body.push(vm::Instr::simple(vm::Op::StoreI64, 2, 3));
+    main.body.push(vm::Instr::simple(vm::Op::CallFn, 4, 0, 0));
+    main.body.push(vm::Instr::simple(vm::Op::CallFn, 5, 0, 0));
+    main.body.push(vm::Instr::simple(vm::Op::Eq, 6, 4, 5));
+    main.body.push(vm::Instr::simple(vm::Op::LoadI64, 7, 2));
+    main.body.push(vm::Instr::withImm(vm::Op::LoadConstI32, 8, 42));
+    main.body.push(vm::Instr::simple(vm::Op::Eq, 9, 7, 8));
+    main.body.push(vm::Instr::simple(vm::Op::Add, 10, 6, 9));
+    main.body.push(vm::Instr{vm::Op::Ret, 10, 0, 0, 0});
+
+    vm::Vm vm;
+    const auto result = vm.runMain(module);
+    CHECK(result.status == vm::RunStatus::Ok, "nested frame allocations return successfully");
+    CHECK_EQ(result.exitCode, 2,
+             "nested frame reuses its allocation without corrupting caller memory");
+    CHECK_EQ(vm.memory().arenaWatermark(), 0U, "nested returns restore the root watermark");
+}
+
+void test_vm_v2_frame_arena_reclaim_preserves_malloc() {
+    memory::Arena arena;
+    vm::Module module(arena);
+
+    auto &main      = module.functions.emplace(arena);
+    main.name       = "main";
+    main.returnType = vm::ValueType::Ptr;
+    main.regCount   = 4;
+    main.body.push(vm::Instr::withImm(vm::Op::LoadConstI32, 0, 8));
+    main.body.push(vm::Instr::withImm(vm::Op::LoadConstI32, 1, 1));
+    main.body.push(vm::Instr::simple(vm::Op::MallocBytes, 2, 0, 1));
+    main.body.push(vm::Instr::withImm(vm::Op::LoadConstI32, 3, 42));
+    main.body.push(vm::Instr::simple(vm::Op::StoreI64, 2, 3));
+    main.body.push(vm::Instr{vm::Op::Ret, 2, 0, 0, 0});
+
+    vm::Vm vm;
+    const auto result = vm.runMain(module);
+    CHECK(result.status == vm::RunStatus::Ok, "global allocation survives frame return");
+    const auto bytes = vm.memory().read(static_cast<std::size_t>(result.exitCode), sizeof(uint64_t));
+    CHECK_EQ(bytes.size(), sizeof(uint64_t), "global heap bytes remain addressable");
+    if (!bytes.empty())
+        CHECK_EQ(bytes[0], static_cast<uint8_t>(42), "global heap contents survive frame return");
+}
+
 void test_vm_v2_field_ptr_and_copy() {
     memory::Arena arena;
     vm::Module module(arena);
@@ -1125,6 +1234,9 @@ void test_vm_v2() {
     test_vm_v2_store_load_bytes();
     test_vm_v2_invalid_write_offset_trap();
     test_vm_v2_alloc_bump_and_heap_disjoint();
+    test_vm_v2_frame_arena_reclaimed();
+    test_vm_v2_nested_frame_arena_reclaimed_without_corruption();
+    test_vm_v2_frame_arena_reclaim_preserves_malloc();
     test_vm_v2_field_ptr_and_copy();
     test_vm_v2_slice_pair();
     test_vm_v2_mem_copy_bytes();
