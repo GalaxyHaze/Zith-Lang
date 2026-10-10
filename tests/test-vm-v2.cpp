@@ -751,6 +751,100 @@ void test_vm_v2_ffi_snprintf() {
     CHECK_EQ(result.exitCode, 2, "snprintf writes the unsigned value");
 }
 
+void test_vm_v2_ffi_calloc_zeroes_and_strncmp() {
+    memory::Arena arena;
+    vm::Module module(arena);
+    module.strings.push("true");
+    module.externs.push(std::string_view("calloc"));
+    module.externs.push(std::string_view("strncmp"));
+    module.externs.push(std::string_view("malloc"));
+
+    auto &main      = module.functions.emplace(arena);
+    main.name       = "main";
+    main.paramCount = 0;
+    main.returnType = vm::ValueType::I32;
+    main.regCount   = 8;
+    // calloc(4, 8) must return a zeroed block.
+    main.body.push(vm::Instr::withImm(vm::Op::LoadConstI32, 0, 4));
+    main.body.push(vm::Instr::withImm(vm::Op::LoadConstI32, 1, 8));
+    main.body.push(vm::Instr::callExtern(vm::Op::CallExtern, 2, 0, 1, 0));
+    main.body.push(vm::Instr::simple(vm::Op::LoadI64, 3, 2));
+    // Copy "true" into a scratch block, then compare it with itself.
+    main.body.push(vm::Instr::withImm(vm::Op::LoadConstI32, 4, 8));
+    main.body.push(vm::Instr::callExtern(vm::Op::CallExtern, 5, 4, 0, 2));
+    main.body.push(vm::Instr::withImm(vm::Op::LoadString, 6, 0));
+    main.body.push(vm::Instr::callExtern(vm::Op::CallExtern, 7, 5, 6, 1, 4));
+    main.body.push(vm::Instr{vm::Op::Ret, 3, 0, 0, 0});
+
+    vm::Vm vm;
+    const auto result = vm.runMain(module);
+    CHECK(result.status == vm::RunStatus::Ok, "calloc and strncmp FFI succeed");
+    CHECK_EQ(result.exitCode, 0, "calloc returns a zero-initialized block");
+}
+
+void test_vm_v2_ffi_strncmp_ordering() {
+    memory::Arena arena;
+    vm::Module module(arena);
+    module.strings.push("abc");
+    module.strings.push("abd");
+    module.externs.push(std::string_view("strncmp"));
+
+    auto &main      = module.functions.emplace(arena);
+    main.name       = "main";
+    main.paramCount = 0;
+    main.returnType = vm::ValueType::I32;
+    main.regCount   = 4;
+    main.body.push(vm::Instr::withImm(vm::Op::LoadString, 0, 0));
+    main.body.push(vm::Instr::withImm(vm::Op::LoadString, 1, 1));
+    main.body.push(vm::Instr::withImm(vm::Op::LoadConstI32, 2, 3));
+    main.body.push(vm::Instr::callExtern(vm::Op::CallExtern, 3, 0, 1, 0, 2));
+    main.body.push(vm::Instr{vm::Op::Ret, 3, 0, 0, 0});
+
+    vm::Vm vm;
+    const auto result = vm.runMain(module);
+    CHECK(result.status == vm::RunStatus::Ok, "strncmp ordering call succeeds");
+    CHECK(result.exitCode < 0, "strncmp reports a negative ordering for 'abc' vs 'abd'");
+}
+
+void test_vm_v2_ffi_getchar_reports_eof() {
+    memory::Arena arena;
+    vm::Module module(arena);
+    module.externs.push(std::string_view("getchar"));
+
+    auto &main      = module.functions.emplace(arena);
+    main.name       = "main";
+    main.paramCount = 0;
+    main.returnType = vm::ValueType::I32;
+    main.regCount   = 2;
+    main.body.push(vm::Instr::callExtern(vm::Op::CallExtern, 0, 0, 0, 0));
+    main.body.push(vm::Instr{vm::Op::Ret, 0, 0, 0, 0});
+
+    vm::Vm vm;
+    const auto result = vm.runMain(module);
+    CHECK(result.status == vm::RunStatus::Ok, "getchar FFI succeeds without trapping");
+    CHECK_EQ(result.exitCode, -1, "getchar reports end of input in the playground");
+}
+
+void test_vm_v2_ffi_unsupported_extern_names() {
+    memory::Arena arena;
+    vm::Module module(arena);
+    module.externs.push(std::string_view("fopen"));
+
+    auto &main      = module.functions.emplace(arena);
+    main.name       = "main";
+    main.paramCount = 0;
+    main.returnType = vm::ValueType::I32;
+    main.regCount   = 2;
+    main.body.push(vm::Instr::callExtern(vm::Op::CallExtern, 0, 0, 0, 0));
+    main.body.push(vm::Instr{vm::Op::Ret, 0, 0, 0, 0});
+
+    vm::Vm vm;
+    const auto result = vm.runMain(module);
+    CHECK(result.status == vm::RunStatus::Trap, "unsupported extern traps");
+    CHECK(result.message.find("fopen") != std::string::npos,
+          "the trap message names the unsupported extern");
+}
+
 #ifdef ZITH_ENABLE_C_INTEROP
 void test_vm_v2_hello_stdlib_import_println() {
     const auto root = std::filesystem::temp_directory_path() / "zith-vm-v2-tests";
@@ -1331,6 +1425,10 @@ void test_vm_v2() {
     test_vm_v2_ffi_putchar_unknown_trap();
     test_vm_v2_ffi_memcpy_and_strlen();
     test_vm_v2_ffi_snprintf();
+    test_vm_v2_ffi_calloc_zeroes_and_strncmp();
+    test_vm_v2_ffi_strncmp_ordering();
+    test_vm_v2_ffi_getchar_reports_eof();
+    test_vm_v2_ffi_unsupported_extern_names();
 #ifdef ZITH_ENABLE_C_INTEROP
     test_vm_v2_hello_stdlib_import_println();
     test_vm_v2_hello_stdlib_import_print();

@@ -4,6 +4,7 @@
 #include <array>
 #include <cmath>
 #include <cstddef>
+#include <cstdint>
 #include <cstring>
 #include <limits>
 #include <string>
@@ -116,6 +117,190 @@ auto formatVariadic(std::string_view format, std::span<const int64_t> args,
         }
     }
     return true;
+}
+
+struct ExternCall {
+    std::int64_t arg0 = 0;
+    std::int64_t arg1 = 0;
+    std::int64_t arg2 = 0;
+    std::int64_t arg3 = 0;
+};
+
+using ExternHandler = auto (*)(RunState &, const ExternCall &, std::int64_t &) -> bool;
+
+auto externPuts(RunState &state, const ExternCall &args, std::int64_t &result) -> bool {
+    (void)result;
+    const std::string_view text = state.memory->cstring(static_cast<std::size_t>(args.arg0));
+    if (text.empty())
+        return false;
+    state.output.append(text.data(), text.size());
+    state.output.push_back('\n');
+    return true;
+}
+
+auto externPutchar(RunState &state, const ExternCall &args, std::int64_t &result) -> bool {
+    (void)result;
+    state.output.push_back(static_cast<char>(args.arg0));
+    return true;
+}
+
+auto externWriteStdout(RunState &state, const ExternCall &args, std::int64_t &result) -> bool {
+    (void)result;
+    if (args.arg1 > 0) {
+        const std::string_view text = state.memory->stringView(
+            static_cast<std::size_t>(args.arg0), static_cast<std::size_t>(args.arg1));
+        state.output.append(text.data(), text.size());
+    }
+    return true;
+}
+
+auto externMalloc(RunState &state, const ExternCall &args, std::int64_t &result) -> bool {
+    result = static_cast<std::int64_t>(
+        state.memory->mallocBytes(static_cast<std::size_t>(args.arg0), 1));
+    return true;
+}
+
+/// Zero-initializing allocation used by the stdlib hash maps. A zero or
+/// overflowing request returns null, matching the C contract instead of
+/// trapping on the multiplication.
+auto externCalloc(RunState &state, const ExternCall &args, std::int64_t &result) -> bool {
+    const auto count = static_cast<std::uint64_t>(args.arg0);
+    const auto size  = static_cast<std::uint64_t>(args.arg1);
+    if (count == 0 || size == 0 ||
+        count > std::numeric_limits<std::uint64_t>::max() / size) {
+        result = 0;
+        return true;
+    }
+    const auto total         = count * size;
+    const std::size_t offset = state.memory->mallocBytes(static_cast<std::size_t>(total), 1);
+    if (offset == allocationFailure) {
+        result = 0;
+        return true;
+    }
+    const std::vector<std::uint8_t> zeros(static_cast<std::size_t>(total), 0);
+    if (!state.memory->write(offset, zeros))
+        return false;
+    result = static_cast<std::int64_t>(offset);
+    return true;
+}
+
+auto externFree(RunState &state, const ExternCall &args, std::int64_t &result) -> bool {
+    (void)result;
+    (void)state.memory->freeBytes(static_cast<std::size_t>(args.arg0));
+    return true;
+}
+
+auto externRealloc(RunState &state, const ExternCall &args, std::int64_t &result) -> bool {
+    result = static_cast<std::int64_t>(state.memory->reallocBytes(
+        static_cast<std::size_t>(args.arg0), static_cast<std::size_t>(args.arg1), 1));
+    return true;
+}
+
+auto externSnprintf(RunState &state, const ExternCall &args, std::int64_t &result) -> bool {
+    const std::string_view text = state.memory->cstring(static_cast<std::size_t>(args.arg2));
+    if (text.empty())
+        return false;
+    std::string formatted;
+    if (text.find("%u") != std::string_view::npos) {
+        formatted = std::to_string(static_cast<std::uint64_t>(args.arg3));
+    } else if (text.find("%d") != std::string_view::npos) {
+        formatted = std::to_string(args.arg3);
+    } else if (text.find("%g") != std::string_view::npos) {
+        double floating = 0;
+        std::memcpy(&floating, &args.arg3, sizeof(floating));
+        formatted = std::to_string(floating);
+    } else {
+        formatted = std::string(text);
+    }
+    if (args.arg1 <= 0)
+        return false;
+    if (formatted.size() >= static_cast<std::size_t>(args.arg1))
+        formatted.resize(static_cast<std::size_t>(args.arg1) - 1U);
+    if (!state.memory->writeString(static_cast<std::size_t>(args.arg0), formatted))
+        return false;
+    result = static_cast<std::int64_t>(formatted.size());
+    return true;
+}
+
+auto externStrlen(RunState &state, const ExternCall &args, std::int64_t &result) -> bool {
+    const std::string_view text = state.memory->cstring(static_cast<std::size_t>(args.arg0));
+    result                      = static_cast<std::int64_t>(text.size());
+    return true;
+}
+
+auto externMemcpy(RunState &state, const ExternCall &args, std::int64_t &result) -> bool {
+    if (!state.memory->copy(static_cast<std::size_t>(args.arg0),
+                            static_cast<std::size_t>(args.arg1),
+                            static_cast<std::size_t>(args.arg2)))
+        return false;
+    result = args.arg0;
+    return true;
+}
+
+/// Byte-wise comparison used by the stdlib input parsers. The comparison stops
+/// at the first difference or at a NUL byte within `count` bytes.
+auto externStrncmp(RunState &state, const ExternCall &args, std::int64_t &result) -> bool {
+    const std::size_t lhsOffset = static_cast<std::size_t>(args.arg0);
+    const std::size_t rhsOffset = static_cast<std::size_t>(args.arg1);
+    const std::size_t count     = static_cast<std::size_t>(args.arg2);
+    for (std::size_t i = 0; i < count; ++i) {
+        const auto left  = state.memory->read(lhsOffset + i, 1);
+        const auto right = state.memory->read(rhsOffset + i, 1);
+        if (left.size() != 1 || right.size() != 1)
+            return false;
+        const auto lhs = static_cast<unsigned char>(left[0]);
+        const auto rhs = static_cast<unsigned char>(right[0]);
+        if (lhs != rhs) {
+            result = lhs < rhs ? -1 : 1;
+            return true;
+        }
+        if (lhs == 0)
+            break;
+    }
+    result = 0;
+    return true;
+}
+
+/// The playground has no stdin stream, so `getchar` reports end of input. This
+/// keeps the stdlib `input` loop deterministic instead of trapping.
+auto externGetchar(RunState &state, const ExternCall &args, std::int64_t &result) -> bool {
+    (void)state;
+    (void)args;
+    result = -1;
+    return true;
+}
+
+struct ExternEntry {
+    std::string_view name;
+    ExternHandler handler;
+};
+
+/// Validated FFI subset. Adding an extern here is the only change needed to
+/// support it on both `CallExtern` and `CallExternRef`; anything absent traps
+/// with a message naming the missing extern.
+constexpr std::array<ExternEntry, 12> kValidatedExterns{{
+    {"puts", externPuts},
+    {"putchar", externPutchar},
+    {"write_stdout", externWriteStdout},
+    {"malloc", externMalloc},
+    {"calloc", externCalloc},
+    {"free", externFree},
+    {"realloc", externRealloc},
+    {"snprintf", externSnprintf},
+    {"strlen", externStrlen},
+    {"memcpy", externMemcpy},
+    {"strncmp", externStrncmp},
+    {"getchar", externGetchar},
+}};
+
+auto dispatchScalarExtern(RunState &state, std::string_view name, const ExternCall &args,
+                          std::int64_t &result) -> bool {
+    for (const auto &entry : kValidatedExterns) {
+        if (entry.name == name)
+            return entry.handler(state, args, result);
+    }
+    state.message = "unsupported extern '" + std::string(name) + "' in VM v2";
+    return false;
 }
 
 /// Return false when the module does not satisfy v2's invariant that every
@@ -566,66 +751,11 @@ auto runFunction(RunState &state, const Function &fn, std::vector<int64_t> &regs
             if (instr.imm >= state.module->externs.size())
                 return {false, 0};
             const std::string_view name = state.module->externs[instr.imm];
-            const int64_t arg0          = getReg(regs, lhs);
-            const int64_t arg1          = getReg(regs, rhs);
-            const int64_t arg2          = getReg(regs, instr.d);
-            const int64_t arg3          = getReg(regs, instr.e);
-            int64_t result              = 0;
-            if (name == "puts") {
-                const std::string_view text = state.memory->cstring(static_cast<std::size_t>(arg0));
-                if (text.empty())
-                    return {false, 0};
-                state.output.append(text.data(), text.size());
-                state.output.push_back('\n');
-            } else if (name == "putchar") {
-                state.output.push_back(static_cast<char>(arg0));
-            } else if (name == "write_stdout") {
-                if (arg1 > 0) {
-                    const std::string_view text = state.memory->stringView(
-                        static_cast<std::size_t>(arg0), static_cast<std::size_t>(arg1));
-                    state.output.append(text.data(), text.size());
-                }
-            } else if (name == "malloc") {
-                result = static_cast<int64_t>(
-                    state.memory->mallocBytes(static_cast<std::size_t>(arg0), 1));
-            } else if (name == "free") {
-                state.memory->freeBytes(static_cast<std::size_t>(arg0));
-            } else if (name == "realloc") {
-                result = static_cast<int64_t>(state.memory->reallocBytes(
-                    static_cast<std::size_t>(arg0), static_cast<std::size_t>(arg1), 1));
-            } else if (name == "snprintf") {
-                const std::string_view text = state.memory->cstring(static_cast<std::size_t>(arg2));
-                if (text.empty())
-                    return {false, 0};
-                std::string formatted;
-                if (text.find("%u") != std::string_view::npos)
-                    formatted = std::to_string(static_cast<unsigned long>(arg3));
-                else if (text.find("%d") != std::string_view::npos)
-                    formatted = std::to_string(arg3);
-                else if (text.find("%g") != std::string_view::npos) {
-                    double value = 0;
-                    std::memcpy(&value, &arg3, sizeof(value));
-                    formatted = std::to_string(value);
-                } else
-                    formatted = std::string(text);
-                if (arg1 <= 0)
-                    return {false, 0};
-                if (formatted.size() >= static_cast<std::size_t>(arg1))
-                    formatted.resize(static_cast<std::size_t>(arg1) - 1);
-                state.memory->writeString(static_cast<std::size_t>(arg0), formatted);
-                result = static_cast<int64_t>(formatted.size());
-            } else if (name == "strlen") {
-                const std::string_view text = state.memory->cstring(static_cast<std::size_t>(arg0));
-                result                      = static_cast<int64_t>(text.size());
-            } else if (name == "memcpy") {
-                if (!state.memory->copy(static_cast<std::size_t>(arg0),
-                                        static_cast<std::size_t>(arg1),
-                                        static_cast<std::size_t>(arg2)))
-                    return {false, 0};
-                result = arg0;
-            } else {
+            const ExternCall args{getReg(regs, lhs), getReg(regs, rhs), getReg(regs, instr.d),
+                                  getReg(regs, instr.e)};
+            std::int64_t result = 0;
+            if (!dispatchScalarExtern(state, name, args, result))
                 return {false, 0};
-            }
             if (!setReg(regs, dst, result))
                 return {false, 0};
             pc++;
@@ -639,8 +769,11 @@ auto runFunction(RunState &state, const Function &fn, std::vector<int64_t> &regs
             if (base > regs.size() || count > regs.size() - base)
                 return {false, 0};
             const std::string_view name = state.module->externs[instr.imm];
-            if (name != "printf" && name != "snprintf")
+            if (name != "printf" && name != "snprintf") {
+                state.message = "unsupported extern '" + std::string(name) +
+                                "' in VM v2 variadic call";
                 return {false, 0};
+            }
             if ((name == "printf" && count < 1) || (name == "snprintf" && count < 3))
                 return {false, 0};
 
@@ -674,60 +807,11 @@ auto runFunction(RunState &state, const Function &fn, std::vector<int64_t> &regs
             if (ref < 0 || static_cast<std::size_t>(ref) >= state.module->externs.size())
                 return {false, 0};
             const std::string_view name = state.module->externs[static_cast<std::size_t>(ref)];
-            const int64_t arg0          = getReg(regs, rhs);
-            const int64_t arg1          = getReg(regs, instr.imm);
-            const int64_t arg2          = getReg(regs, instr.d);
-            const int64_t arg3          = getReg(regs, instr.e);
-            int64_t result              = 0;
-            if (name == "puts") {
-                const std::string_view text = state.memory->cstring(static_cast<std::size_t>(arg0));
-                if (text.empty())
-                    return {false, 0};
-                state.output.append(text.data(), text.size());
-                state.output.push_back('\n');
-            } else if (name == "putchar") {
-                state.output.push_back(static_cast<char>(arg0));
-            } else if (name == "write_stdout") {
-                if (arg1 > 0) {
-                    const std::string_view text = state.memory->stringView(
-                        static_cast<std::size_t>(arg0), static_cast<std::size_t>(arg1));
-                    state.output.append(text.data(), text.size());
-                }
-            } else if (name == "malloc") {
-                result = static_cast<int64_t>(
-                    state.memory->mallocBytes(static_cast<std::size_t>(arg0), 1));
-            } else if (name == "free") {
-                if (arg0 != 0)
-                    state.memory->freeBytes(static_cast<std::size_t>(arg0));
-            } else if (name == "snprintf") {
-                const std::string_view text = state.memory->cstring(static_cast<std::size_t>(arg2));
-                if (text.empty())
-                    return {false, 0};
-                std::string formatted;
-                if (text.find("%u") != std::string_view::npos)
-                    formatted = std::to_string(static_cast<unsigned long>(arg3));
-                else if (text.find("%d") != std::string_view::npos)
-                    formatted = std::to_string(arg3);
-                else if (text.find("%g") != std::string_view::npos)
-                    formatted = std::to_string(arg3);
-                else
-                    formatted = std::string(text);
-                if (arg1 > 0 && arg3 >= 0)
-                    formatted.resize(static_cast<std::size_t>(arg1));
-                state.memory->writeString(static_cast<std::size_t>(arg0), formatted);
-                result = static_cast<int64_t>(formatted.size());
-            } else if (name == "strlen") {
-                const std::string_view text = state.memory->cstring(static_cast<std::size_t>(arg0));
-                result                      = static_cast<int64_t>(text.size());
-            } else if (name == "memcpy") {
-                if (!state.memory->copy(static_cast<std::size_t>(arg0),
-                                        static_cast<std::size_t>(arg1),
-                                        static_cast<std::size_t>(arg2)))
-                    return {false, 0};
-                result = arg0;
-            } else {
+            const ExternCall args{getReg(regs, rhs), getReg(regs, instr.imm), getReg(regs, instr.d),
+                                  getReg(regs, instr.e)};
+            std::int64_t result = 0;
+            if (!dispatchScalarExtern(state, name, args, result))
                 return {false, 0};
-            }
             if (!setReg(regs, dst, result))
                 return {false, 0};
             pc++;

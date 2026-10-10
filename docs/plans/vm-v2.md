@@ -83,13 +83,20 @@ The initial host VM supports:
 
 - `puts(ptr)` writes a C string and newline.
 - `putchar(ch)` writes one byte.
+- `write_stdout(ptr, len)` writes an exact byte range without a terminator.
 - `malloc(size)` returns an offset into linear memory.
+- `calloc(count, size)` returns a zero-initialized block.
 - `free(ptr)` releases a heap slot.
+- `realloc(ptr, size)` grows or shrinks a heap block and preserves contents.
 - `snprintf(buf, size, fmt, u/d)` writes the small scoped formats.
-- `strlen(ptr)` and `memcpy` support the console path.
+- `strlen(ptr)`, `memcpy(dst, src, count)`, and `strncmp(lhs, rhs, count)`
+  support the console and string paths.
+- `getchar()` reports end of input (`-1`); the playground has no stdin stream.
+- `printf(fmt, ...)` and `snprintf(buf, size, fmt, ...)` cover the variadic
+  `%u`, `%d`, and `%g` surfaces the stdlib uses.
 
-Missing externs trap with `RunStatus::Trap`; OOM and invalid memory accesses
-also trap with a clear status.
+Unsupported externs trap with `RunStatus::Trap` and a message that names the
+missing extern. OOM and invalid memory accesses also trap with a clear status.
 
 ## Acceptance
 
@@ -110,8 +117,10 @@ also trap with a clear status.
   function pointers.
 - `VMV2-03`: allocators stay above VM primitives; `std/alloc`/`HeapAllocator`
   run through `AllocBytes`/`MallocBytes`/`malloc`.
-- `VMV2-04`: VM FFI is a validated small subset (`malloc`, `free`,
-  `putchar`, scoped `snprintf`); unsupported externs trap.
+- `VMV2-04`: VM FFI is a validated subset (`puts`, `putchar`,
+  `write_stdout`, `malloc`, `calloc`, `free`, `realloc`, `strlen`, `memcpy`,
+  `strncmp`, `getchar`, and the scoped `snprintf`/`printf` formats);
+  unsupported externs trap with a message naming the missing extern.
 - `VMV2-05`: first end-to-end acceptance runs both console and manual
   `extern fn` Hello World paths and compares observable output/exit code.
 - `VMV2-06`: VM v2 stays separate from execution IR v1, but the host slice is

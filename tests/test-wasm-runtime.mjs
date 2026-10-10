@@ -334,6 +334,24 @@ fn main(): i32 {
   assertEqual(instance.exports.zith_exit_code(), 0n,
               "realloc program returns successfully in WASM");
 
+  stdoutChunks.length = 0;
+  stderrChunks.length = 0;
+  const callocSource = writeString(`extern fn calloc(count: u64, size: u64): *char
+extern fn strncmp(left: *char, right: *char, count: u64): i32
+
+fn main(): i32 {
+    var block: *char = calloc(4, 8);
+    if (strncmp(block, block, 8) != 0) {
+        return 1;
+    }
+    0
+}
+`);
+  assertEqual(instance.exports.zith_run_source(callocSource.ptr, callocSource.len), 0,
+              "calloc and strncmp execute through the playground WASM ABI");
+  assertEqual(instance.exports.zith_exit_code(), 0n,
+              "calloc-backed block compares equal to itself in WASM");
+
   const outOfBoundsText = `fn main(): i32 {
     let values: [2]i32 = [10, 20];
     let index: i32 = 2;

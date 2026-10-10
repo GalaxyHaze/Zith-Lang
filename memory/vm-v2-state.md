@@ -32,9 +32,12 @@ that are easy to get wrong when editing that plan.
   blob and reload it with `zith_restore_cached`. Entries are keyed by source
   bytes plus the stdlib pack fingerprint, and a cache miss or stale blob is
   reported through the diagnostics channel instead of recompiling silently.
-- The FFI subset is validated and small: `malloc`, `free`, `putchar`, the
-  `snprintf` formats the stdlib uses (`%u`, `%d`, `%g`), `realloc`, `memcpy`,
-  `strlen`, and the `printf` variadic surface. Unsupported externs trap.
+- The FFI subset is validated and data-driven in `kValidatedExterns`
+  (`src/vm/vm-v2.cpp`): `puts`, `putchar`, `write_stdout`, `malloc`, `calloc`,
+  `free`, `realloc`, `snprintf` (`%u`, `%d`, `%g`), the `printf` variadic
+  surface, `strlen`, `memcpy`, `strncmp`, and `getchar`. Unsupported externs
+  trap with a message naming the missing extern. `getchar` returns -1 because
+  the playground has no stdin.
 - `realloc` preserves live allocation contents through the allocator's block
   tracking.
 

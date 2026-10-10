@@ -195,10 +195,14 @@ referências estáveis:
    caminhos de saída, incluindo traps. Chamadas aninhadas reutilizam o scratch
    sem corromper dados vivos do caller; o high-water global preserva
    `MallocBytes`/`malloc`. A cobertura está em `test-vm-v2`.
-4. **FFI limitado ao subset libc validado.** `malloc`, `free`, `putchar`,
-   `snprintf` (`%u`/`%d`/`%g`), `realloc`, `memcpy`, `strlen`, `puts` e o
-   printf variádico. Qualquer extern fora desta lista faz trap (VMV2-04);
-   alargar a stdlib no caminho VM exige alargar esta lista.
+4. **FFI validado, alargado em 2026-10-10.** O subset é data-driven
+   (`kValidatedExterns` em `src/vm/vm-v2.cpp`): `puts`, `putchar`,
+   `write_stdout`, `malloc`, `calloc`, `free`, `realloc`, `snprintf`
+   (`%u`/`%d`/`%g`), `printf` variádico, `strlen`, `memcpy`, `strncmp` e
+   `getchar`. `calloc` e `strncmp` cobrem o caminho dos hash maps e dos
+   parsers de input da stdlib. Um extern fora desta lista faz trap (VMV2-04)
+   com uma mensagem que nomeia o extern em falta, pelo que a lista pode
+   crescer com uma única entrada nova.
 5. **Indirect calls — resolvido em 2026-10-10.** `test-vm-v2` cobre chamadas
    indiretas de `CallFnRef` e `CallExternRef` através das tabelas do módulo,
    incluindo referências fora dos limites que terminam com `RunStatus::Trap`.
