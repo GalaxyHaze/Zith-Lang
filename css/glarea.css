@@ -2,18 +2,6 @@
 GLAREA — IDE page
 ===================*/
 
-.hero {
-    padding-block: var(--space-8) var(--space-6);
-    text-align: center;
-}
-
-.hero-subtitle {
-    max-width: var(--measure);
-    margin: var(--space-4) auto 0;
-    color: var(--text-muted);
-    font-size: var(--step-2);
-}
-
 .hero-actions {
     display: flex;
     flex-wrap: wrap;
@@ -43,13 +31,6 @@ GLAREA — IDE page
     grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
 }
 
-.feature-card {
-    padding: var(--space-5);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    background: var(--surface);
-}
-
 .feature-index {
     color: var(--accent);
     font-family: var(--font-mono);
@@ -58,12 +39,6 @@ GLAREA — IDE page
 
 .feature-card h3 {
     margin-top: var(--space-2);
-    font-size: var(--step-2);
-}
-
-.feature-card p {
-    margin-top: var(--space-2);
-    color: var(--text-muted);
 }
 
 /* Compiler section */

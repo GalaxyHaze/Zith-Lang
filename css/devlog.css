@@ -8,15 +8,6 @@ DEV LOG — index and posts
     max-width: 52rem;
 }
 
-.eyebrow {
-    margin-bottom: var(--space-2);
-    color: var(--accent);
-    font-family: var(--font-mono);
-    font-size: var(--step--1);
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-}
-
 .devlog-intro p {
     margin-top: var(--space-3);
     color: var(--text-muted);

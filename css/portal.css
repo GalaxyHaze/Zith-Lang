@@ -2,33 +2,6 @@
 PORTAL — landing page
 ===================*/
 
-.eyebrow {
-    margin-bottom: var(--space-2);
-    color: var(--accent);
-    font-family: var(--font-mono);
-    font-size: var(--step--1);
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-}
-
-/* Hero */
-.hero {
-    padding-block: var(--space-8) var(--space-7);
-    text-align: center;
-}
-
-.hero h1 {
-    font-size: var(--step-5);
-    letter-spacing: -0.02em;
-}
-
-.hero-subtitle {
-    max-width: var(--measure);
-    margin: var(--space-4) auto 0;
-    color: var(--text-muted);
-    font-size: var(--step-2);
-}
-
 /* Sections */
 .section {
     padding-block: var(--space-7);
@@ -118,14 +91,6 @@ PORTAL — landing page
     color: var(--text-muted);
 }
 
-/* Highlight tokens */
-.cm { color: var(--code-comment); font-style: italic; }
-.kw { color: var(--code-keyword); }
-.fn { color: var(--code-function); }
-.ty { color: var(--code-type); }
-.st { color: var(--code-string); }
-.num { color: var(--code-number); }
-
 /* Features */
 .features-grid {
     display: grid;
@@ -133,27 +98,11 @@ PORTAL — landing page
     grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
 }
 
-.feature-card {
-    padding: var(--space-5);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    background: var(--surface);
-}
-
 .feature-icon {
     width: 2rem;
     height: 2rem;
     margin-bottom: var(--space-3);
     color: var(--brand);
-}
-
-.feature-card h3 {
-    font-size: var(--step-2);
-}
-
-.feature-card p {
-    margin-top: var(--space-2);
-    color: var(--text-muted);
 }
 
 /* Install */
