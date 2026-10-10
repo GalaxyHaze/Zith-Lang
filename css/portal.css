@@ -1,0 +1,248 @@
+/*==================
+PORTAL — landing page
+===================*/
+
+.eyebrow {
+    margin-bottom: var(--space-2);
+    color: var(--accent);
+    font-family: var(--font-mono);
+    font-size: var(--step--1);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+/* Hero */
+.hero {
+    padding-block: var(--space-8) var(--space-7);
+    text-align: center;
+}
+
+.hero h1 {
+    font-size: var(--step-5);
+    letter-spacing: -0.02em;
+}
+
+.hero-subtitle {
+    max-width: var(--measure);
+    margin: var(--space-4) auto 0;
+    color: var(--text-muted);
+    font-size: var(--step-2);
+}
+
+/* Sections */
+.section {
+    padding-block: var(--space-7);
+}
+
+.section-head {
+    max-width: var(--measure);
+    margin-bottom: var(--space-5);
+}
+
+.section-head p {
+    margin-top: var(--space-2);
+    color: var(--text-muted);
+}
+
+/* Code spotlight */
+.spotlight-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    margin-bottom: var(--space-4);
+}
+
+.tab-btn {
+    padding: var(--space-2) var(--space-4);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--surface);
+    color: var(--text-muted);
+    font: inherit;
+    font-size: var(--step--1);
+    cursor: pointer;
+    transition: border-color 150ms ease, color 150ms ease;
+}
+
+.tab-btn:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+.tab-btn.active {
+    border-color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 8%, var(--surface));
+    color: var(--accent-hover);
+    font-weight: 600;
+}
+
+.code-viewer {
+    overflow: hidden;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface);
+}
+
+.code-window-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-4);
+    padding: var(--space-2) var(--space-4);
+    border-bottom: 1px solid var(--border);
+    background: var(--bg-2);
+}
+
+.window-filename {
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+    font-size: var(--step--1);
+}
+
+.code-block {
+    overflow-x: auto;
+    background: var(--code-bg);
+}
+
+.code-block pre {
+    margin: 0;
+    padding: var(--space-5);
+    color: var(--code-text);
+    font-size: var(--step--1);
+    line-height: 1.6;
+}
+
+.code-explanation {
+    padding: var(--space-4);
+    border-top: 1px solid var(--border);
+    color: var(--text-muted);
+}
+
+/* Highlight tokens */
+.cm { color: #7c8a99; font-style: italic; }
+.kw { color: #ff9d6b; }
+.fn { color: #7ec8ff; }
+.ty { color: #6ee7c8; }
+.st { color: #ffd28a; }
+.num { color: #d7b3ff; }
+
+/* Features */
+.features-grid {
+    display: grid;
+    gap: var(--space-4);
+    grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+}
+
+.feature-card {
+    padding: var(--space-5);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface);
+}
+
+.feature-icon {
+    width: 2rem;
+    height: 2rem;
+    margin-bottom: var(--space-3);
+    color: var(--brand);
+}
+
+.feature-card h3 {
+    font-size: var(--step-2);
+}
+
+.feature-card p {
+    margin-top: var(--space-2);
+    color: var(--text-muted);
+}
+
+/* Install */
+.install-box {
+    overflow: hidden;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface);
+}
+
+.install-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-1);
+    padding: var(--space-2);
+    border-bottom: 1px solid var(--border);
+    background: var(--bg-2);
+}
+
+.install-tab {
+    padding: var(--space-2) var(--space-3);
+    border: 1px solid transparent;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--text-muted);
+    font: inherit;
+    font-size: var(--step--1);
+    cursor: pointer;
+}
+
+.install-tab:hover {
+    color: var(--accent);
+}
+
+.install-tab.is-active {
+    border-color: var(--border);
+    background: var(--surface);
+    color: var(--title);
+    font-weight: 600;
+}
+
+.install-content {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+    padding: var(--space-4);
+}
+
+.install-content code {
+    overflow-wrap: anywhere;
+    color: var(--text);
+    font-size: var(--step--1);
+}
+
+/* News */
+.news-grid {
+    display: grid;
+    gap: var(--space-4);
+    grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+}
+
+.news-status {
+    color: var(--text-muted);
+}
+
+.news-card {
+    padding: var(--space-4);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface);
+}
+
+.news-date {
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+    font-size: var(--step--1);
+}
+
+.news-card h3 {
+    margin-top: var(--space-2);
+    font-size: var(--step-1);
+}
+
+.news-card a {
+    text-decoration: none;
+}
+
+.news-card a:hover {
+    text-decoration: underline;
+}

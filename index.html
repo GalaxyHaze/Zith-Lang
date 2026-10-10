@@ -2,9 +2,9 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Zith Programming Language &mdash; Systems Programming, Reimagined</title>
-    <meta name="theme-color" content="#fff0e4">
+    <meta name="theme-color" content="#26324f">
     <meta name="robots" content="index, follow">
     <link rel="canonical" href="https://zith-lang.org/">
 
@@ -33,8 +33,12 @@
     <meta name="twitter:description" content="Statically typed systems language with compile-time memory safety via Node Resource Analysis &mdash; zero runtime overhead.">
     <meta name="twitter:image" content="https://zith-lang.org/media/Logos/social-share.png">
 
-    <link rel="stylesheet" href="./css/index.css">
-    <link rel="stylesheet" href="./css/ui-system.css">
+    <link rel="stylesheet" href="./css/fonts.css">
+    <link rel="stylesheet" href="./css/tokens.css">
+    <link rel="stylesheet" href="./css/base.css">
+    <link rel="stylesheet" href="./css/header.css">
+    <link rel="stylesheet" href="./css/footer.css">
+    <link rel="stylesheet" href="./css/portal.css">
 
     <script type="application/ld+json">
     {
@@ -47,7 +51,6 @@
         "@type": "SoftwareSourceCode",
         "name": "Zith Language",
         "description": "Zith proves memory safety at compile time via Node Resource Analysis. Zero runtime overhead, no garbage collector, no borrow checker.",
-        "url": "https://zith-lang.org/html/home.html",
         "programmingLanguage": "Zith",
         "applicationCategory": "DeveloperApplication"
       },
@@ -59,243 +62,87 @@
     }
     </script>
 </head>
-<body class="zith-portal ui-page ui-site">
+<body>
 
-    <!-- Header Navigation -->
-    <header class="site-header">
-        <div class="nav-container">
-            <a href="./" class="brand">
-                <img src="./media/Logos/logo.svg" alt="Zith Logo">
-                <span>.Zith</span>
-            </a>
+<!-- include:header active="home" -->
 
-            <nav>
-                <ul class="nav-links" id="navLinks">
-                    <li><a class="ui-nav-link" href="./html/documentation/D-home.html">Docs</a></li>
-                    <li><a class="ui-nav-link" href="./playground/">Playground</a></li>
-                    <li><a class="ui-nav-link" href="./helios/">Helios IDE</a></li>
-                    <li><a class="ui-nav-link" href="./about/">Blog</a></li>
-                    <li><a class="ui-nav-link" href="./changelog.html">Changelog</a></li>
-                    <li><a class="ui-nav-link" href="./html/home.html" title="Open Retro OS Desktop Mode">Desktop OS</a></li>
-                    <li><a class="ui-nav-link" href="https://github.com/GalaxyHaze/Zith" target="_blank" rel="noopener noreferrer">GitHub</a></li>
-                    <li><a class="ui-nav-link" href="https://discord.gg/a7h4cpWHg4" target="_blank" rel="noopener noreferrer">Discord</a></li>
-                </ul>
-            </nav>
-
-            <div class="nav-actions">
-                <button class="btn-icon" id="openSettingsBtn" aria-label="Open Effects Settings">⚙</button>
-                <button class="mobile-menu-toggle" id="mobileMenuToggle" aria-label="Toggle Navigation Menu">
-                    ☰
-                </button>
-            </div>
-        </div>
-    </header>
-
-    <!-- Hero Section -->
-    <section class="hero-section">
-       
-        <h1 class="hero-title">
-            Zith
-        </h1>
-        <p class="hero-subtitle typewriter">
-            A statically typed, compiled systems language with compile-time memory safety powered by <strong>Node Resource Analysis (NRA)</strong>, zero runtime overhead, no garbage collector, and no borrow checker complexity.
+<main>
+    <section class="hero container" aria-labelledby="hero-title">
+        <p class="eyebrow">systems programming, reimagined</p>
+        <h1 id="hero-title">Zith</h1>
+        <p class="hero-subtitle">
+            A statically typed, compiled systems language with compile-time memory safety
+            powered by <strong>Node Resource Analysis (NRA)</strong> &mdash; zero runtime
+            overhead, no garbage collector, and no borrow checker complexity.
         </p>
-        <div class="hero-cta">
-            <a href="#install" class="btn btn-primary ui-action">Install Zith</a>
-            <a href="./playground/" class="btn btn-secondary ui-action">Try in Playground</a>
-            <a href="./html/documentation/D-home.html" class="btn btn-tertiary ui-action">Read Documentation</a>
-            <a href="./html/home.html" class="btn btn-outline ui-action">Desktop OS Mode</a>
-        </div>
     </section>
 
-    <!-- Code Spotlight Section -->
-    <section class="spotlight-section">
-        <div class="section-header">
-            <h2>Code Spotlight</h2>
-            <p class="typewriter">Discover Zith's expressive syntax, static ownership model, and direct C interop.</p>
+    <section class="section container" aria-labelledby="spotlight-title">
+        <div class="section-head">
+            <h2 id="spotlight-title">Code Spotlight</h2>
+            <p>Discover Zith's expressive syntax, static ownership model, and direct C interop.</p>
         </div>
-
         <div class="spotlight-grid" data-code-spotlight="./json/code-spotlight.json"></div>
     </section>
 
-    <!-- Key Features Section -->
-    <section class="features-section">
-        <div class="section-header">
-            <h2>Why Zith?</h2>
-            <p class="typewriter">Engineered for high performance, deterministic lifetimes, and clean systems architecture.</p>
+    <section class="section container" aria-labelledby="features-title">
+        <div class="section-head">
+            <h2 id="features-title">Why Zith?</h2>
+            <p>Engineered for high performance, deterministic lifetimes, and clean systems architecture.</p>
         </div>
-
         <div class="features-grid">
-            <div class="feature-card">
-                <div class="feature-icon">🛡</div>
+            <article class="feature-card">
+                <svg class="feature-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2 4 5v6c0 5 3.4 9.4 8 11 4.6-1.6 8-6 8-11V5l-8-3Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="m8.5 12 2.5 2.5L16 9" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 <h3>Compile-Time Memory Safety</h3>
                 <p>Node Resource Analysis (NRA) proves pointer lifetimes and resource ownership statically during compilation. Catch use-after-free, double-free, and dangling references before code ever runs.</p>
-            </div>
-
-            <div class="feature-card">
-                <div class="feature-icon">⚡</div>
+            </article>
+            <article class="feature-card">
+                <svg class="feature-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2 4 14h7l-1 8 9-12h-7l1-8Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg>
                 <h3>Zero Overhead Performance</h3>
                 <p>Direct memory layout, value semantics, and raw pointers when needed. Compiles down to optimized native assembly via an LLVM compiler pipeline with zero runtime GC pauses.</p>
-            </div>
-
-            <div class="feature-card">
-                <div class="feature-icon">🛠</div>
+            </article>
+            <article class="feature-card">
+                <svg class="feature-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2 3 7v10l9 5 9-5V7l-9-5Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M3 7l9 5 9-5M12 12v10" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg>
                 <h3>Complete Integrated Ecosystem</h3>
-                <p>Built alongside language server protocol tools (<code>zith-lsp</code>), browser-based IDE (<code>Helios</code>), interactive playground, and cross-platform installation scripts.</p>
-            </div>
+                <p>Built alongside language server tools (<code>zith-lsp</code>), the browser IDE (<strong>Glarea</strong>), an interactive playground, and cross-platform installation scripts.</p>
+            </article>
         </div>
     </section>
 
-    <!-- Quick Install Section -->
-    <section class="install-section" id="install">
-        <div class="section-header">
-            <h2>Quick Installation</h2>
-            <p class="typewriter">Get <code>zithc</code> installed on macOS, Linux, or Windows in one click.</p>
+    <section class="section container" id="install" aria-labelledby="install-title">
+        <div class="section-head">
+            <h2 id="install-title">Quick Installation</h2>
+            <p>Get <code>zithc</code> installed on macOS, Linux, or Windows in one click.</p>
         </div>
-
         <div class="install-box">
             <div class="install-tabs" id="installTabs">
-                <button class="install-tab active" data-pm="brew">Homebrew (macOS / Linux)</button>
-                <button class="install-tab" data-pm="scoop">Scoop (Windows)</button>
-                <button class="install-tab" data-pm="curl">curl script (Linux / macOS)</button>
-                <button class="install-tab" data-pm="ps1">PowerShell (Windows)</button>
+                <button type="button" class="install-tab is-active" data-pm="brew">Homebrew (macOS / Linux)</button>
+                <button type="button" class="install-tab" data-pm="scoop">Scoop (Windows)</button>
+                <button type="button" class="install-tab" data-pm="curl">curl (Linux / macOS)</button>
+                <button type="button" class="install-tab" data-pm="ps1">PowerShell (Windows)</button>
             </div>
             <div class="install-content">
-                <code class="install-cmd typewriter-install" id="installCmd">brew tap galaxyhaze/zithc && brew install zithc</code>
-                <button class="copy-btn" id="copyInstallBtn">Copy</button>
+                <code id="installCmd">brew tap galaxyhaze/zithc &amp;&amp; brew install zithc</code>
+                <button type="button" class="button button-secondary copy-btn" id="copyInstallBtn">Copy</button>
             </div>
         </div>
     </section>
 
-    <!-- News & Dev Log Section -->
-    <section class="news-section">
-        <div class="section-header">
-            <h2>Latest Updates &amp; Dev Log</h2>
-            <p class="typewriter">Recent progress from the Zith development diary and release changelog.</p>
+    <section class="section container" aria-labelledby="news-title">
+        <div class="section-head">
+            <h2 id="news-title">Latest Updates &amp; Dev Log</h2>
+            <p>Recent progress from the Zith development diary and release changelog.</p>
         </div>
-
         <div class="news-grid" id="newsGrid">
-            <div class="news-card is-skeleton" aria-hidden="true">
-                <span class="news-date"></span>
-                <h3></h3>
-                <p></p>
-            </div>
-            <div class="news-card is-skeleton" aria-hidden="true">
-                <span class="news-date"></span>
-                <h3></h3>
-                <p></p>
-            </div>
-            <div class="news-card is-skeleton" aria-hidden="true">
-                <span class="news-date"></span>
-                <h3></h3>
-                <p></p>
-            </div>
+            <p class="news-status">Loading entries&hellip;</p>
         </div>
     </section>
+</main>
 
-    <!-- Site Footer -->
-    <footer class="site-footer">
-        <div class="footer-container">
-            <div class="footer-brand">
-                <a href="./" class="brand">
-                    <img src="./media/Logos/logo.svg" alt="Zith Logo">
-                    <span>.Zith</span>
-                </a>
-                <p>A statically-typed systems language with compile-time memory safety via Node Resource Analysis.</p>
-            </div>
+<!-- include:footer -->
 
-            <div class="footer-col">
-                <h4>Resources</h4>
-                <ul>
-                    <li><a class="ui-nav-link" href="./html/documentation/D-home.html">Documentation</a></li>
-                    <li><a class="ui-nav-link" href="./playground/">Playground</a></li>
-                    <li><a class="ui-nav-link" href="./helios/">Helios IDE</a></li>
-                    <li><a class="ui-nav-link" href="./changelog.html">Changelog</a></li>
-                </ul>
-            </div>
-
-            <div class="footer-col">
-                <h4>Ecosystem</h4>
-                <ul>
-                    <li><a class="ui-nav-link" href="./about/">Development Diary</a></li>
-                    <li><a class="ui-nav-link" href="./html/home.html">Desktop OS Mode</a></li>
-                    <li><a class="ui-nav-link" href="https://github.com/GalaxyHaze/Zith/releases" target="_blank" rel="noopener noreferrer">Releases</a></li>
-                </ul>
-            </div>
-
-            <div class="footer-col">
-                <h4>Community</h4>
-                <ul>
-                    <li><a class="ui-nav-link" href="https://github.com/GalaxyHaze/Zith" target="_blank" rel="noopener noreferrer">GitHub Source</a></li>
-                    <li><a class="ui-nav-link" href="https://discord.gg/a7h4cpWHg4" target="_blank" rel="noopener noreferrer">Discord Server</a></li>
-                    <li><a class="ui-nav-link" href="mailto:aboveHaze@gmail.com">Contact Developer</a></li>
-                </ul>
-            </div>
-        </div>
-
-        <div class="footer-bottom">
-            <p>&copy; 2026 GalaxyHaze &amp; Zith Contributors. Open source systems programming.</p>
-        </div>
-    </footer>
-
-    <!-- CRT Settings Modal -->
-    <div class="modal hidden" id="settingsModal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
-        <div class="modal-box">
-            <div class="modal-header">
-                <h3 id="modalTitle">⚙ CRT Visual Effects</h3>
-                <button class="copy-btn modal-close-btn" id="closeSettingsBtn" aria-label="Close settings">✕</button>
-            </div>
-            <div class="modal-body">
-                <div class="settings-group" data-group="scanlines">
-                    <h4>Scanlines</h4>
-                    <div class="settings-options">
-                        <button data-setting="scanlines" data-level="0">Off</button>
-                        <button data-setting="scanlines" data-level="1">Low</button>
-                        <button data-setting="scanlines" data-level="2">High</button>
-                    </div>
-                </div>
-
-                <div class="settings-group" data-group="glow">
-                    <h4>Phosphor Glow</h4>
-                    <div class="settings-options">
-                        <button data-setting="glow" data-level="0">Off</button>
-                        <button data-setting="glow" data-level="1">Low</button>
-                        <button data-setting="glow" data-level="2">High</button>
-                    </div>
-                </div>
-
-                <div class="settings-group" data-group="noise">
-                    <h4>Noise &amp; Vignette</h4>
-                    <div class="settings-options">
-                        <button data-setting="noise" data-level="0">Off</button>
-                        <button data-setting="noise" data-level="1">Low</button>
-                        <button data-setting="noise" data-level="2">High</button>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- CRT Screen Overlay -->
-    <div class="crt-overlay"></div>
-
-    <!-- Dev Log Post Reader -->
-    <div class="post-modal hidden" id="postModal" role="dialog" aria-modal="true" aria-labelledby="postModalTitle">
-        <div class="post-modal-box">
-            <div class="post-modal-header">
-                <h3 id="postModalTitle">Dev Log Entry</h3>
-                <button class="copy-btn modal-close-btn" id="closePostBtn" aria-label="Close dev log entry">✕</button>
-            </div>
-            <div class="post-modal-body" id="postModalBody"></div>
-        </div>
-    </div>
-
-    <!-- Scripts -->
-    <script src="./js/settings.js"></script>
-    <script src="./js/zith-highlight.js"></script>
-    <script src="./js/typewriter.js"></script>
-    <script src="./js/code-spotlight.js"></script>
-    <script src="./js/ambient.js"></script>
-    <script src="./js/index.js"></script>
+<script defer src="./js/zith-highlight.js"></script>
+<script defer src="./js/code-spotlight.js"></script>
+<script defer src="./js/portal.js"></script>
 </body>
 </html>
