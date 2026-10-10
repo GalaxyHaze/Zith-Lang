@@ -119,12 +119,12 @@ PORTAL — landing page
 }
 
 /* Highlight tokens */
-.cm { color: #7c8a99; font-style: italic; }
-.kw { color: #ff9d6b; }
-.fn { color: #7ec8ff; }
-.ty { color: #6ee7c8; }
-.st { color: #ffd28a; }
-.num { color: #d7b3ff; }
+.cm { color: var(--code-comment); font-style: italic; }
+.kw { color: var(--code-keyword); }
+.fn { color: var(--code-function); }
+.ty { color: var(--code-type); }
+.st { color: var(--code-string); }
+.num { color: var(--code-number); }
 
 /* Features */
 .features-grid {

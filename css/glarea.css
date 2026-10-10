@@ -114,9 +114,9 @@ GLAREA — IDE page
     font-family: var(--font-mono);
 }
 
-.terminal-muted { color: #7c8a99; }
-.terminal-ok { color: #6ee7c8; }
-.terminal-output { color: #7ec8ff; }
+.terminal-muted { color: var(--code-comment); }
+.terminal-ok { color: var(--code-ok); }
+.terminal-output { color: var(--code-function); }
 
 /* Install callout */
 .install {

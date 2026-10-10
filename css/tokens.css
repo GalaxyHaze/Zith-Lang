@@ -30,9 +30,21 @@ See notes/decisions/0002-paleta-flat.md.
     --footer-text: #b9c2d6;
     --footer-link: #ffb27a;
 
-    /* Code */
+    /* Code surfaces */
     --code-bg: #10161f;
     --code-text: #e6edf3;
+
+    /* Code syntax palette (dark code blocks and terminals) */
+    --code-comment: #7c8a99;
+    --code-keyword: #ff9d6b;
+    --code-function: #7ec8ff;
+    --code-type: #6ee7c8;
+    --code-string: #ffd28a;
+    --code-number: #d7b3ff;
+    --code-punct: #c6d2de;
+    --code-ok: #8ee6a0;
+    --code-line-number: #68717c;
+    --code-line-border: #232c38;
 
     /* Type */
     --font-ui: "Space Grotesk", system-ui, sans-serif;

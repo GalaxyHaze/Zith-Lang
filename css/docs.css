@@ -227,29 +227,29 @@ DOCS — documentation shell
 .token.comment,
 .token.prolog,
 .token.doctype,
-.token.cdata { color: #7c8a99; }
-.token.punctuation { color: #c6d2de; }
+.token.cdata { color: var(--code-comment); }
+.token.punctuation { color: var(--code-punct); }
 .token.property,
 .token.tag,
 .token.constant,
 .token.symbol,
-.token.deleted { color: #ff9d6b; }
+.token.deleted { color: var(--code-keyword); }
 .token.boolean,
-.token.number { color: #d7b3ff; }
+.token.number { color: var(--code-number); }
 .token.selector,
 .token.attr-name,
 .token.string,
 .token.char,
 .token.builtin,
-.token.inserted { color: #ffd28a; }
+.token.inserted { color: var(--code-string); }
 .token.operator,
 .token.entity,
-.token.url { color: #7ec8ff; }
+.token.url { color: var(--code-function); }
 .token.atrule,
 .token.attr-value,
-.token.keyword { color: #ff9d6b; }
+.token.keyword { color: var(--code-keyword); }
 .token.function,
-.token.class-name { color: #7ec8ff; }
+.token.class-name { color: var(--code-function); }
 
 @media (max-width: 900px) {
     .docs-layout {

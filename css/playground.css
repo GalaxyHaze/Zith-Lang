@@ -151,10 +151,10 @@ PLAYGROUND — editor + terminal
 #line-numbers {
     padding: var(--space-4) var(--space-3);
     overflow: hidden;
-    color: #68717c;
+    color: var(--code-line-number);
     text-align: right;
     user-select: none;
-    border-right: 1px solid #232c38;
+    border-right: 1px solid var(--code-line-border);
 }
 
 .code-input {
@@ -207,12 +207,12 @@ PLAYGROUND — editor + terminal
 }
 
 /* Highlight tokens */
-.kw { color: #ff9d6b; font-weight: 600; }
-.ty { color: #6ee7c8; }
-.fn { color: #ffd166; }
-.st { color: #8ee6a0; }
-.cm { color: #7c8a99; font-style: italic; }
-.num { color: #d7b3ff; }
+.kw { color: var(--code-keyword); font-weight: 600; }
+.ty { color: var(--code-type); }
+.fn { color: var(--code-function); }
+.st { color: var(--code-string); }
+.cm { color: var(--code-comment); font-style: italic; }
+.num { color: var(--code-number); }
 
 /* Terminal */
 .output-panel {
@@ -259,11 +259,11 @@ PLAYGROUND — editor + terminal
     font: inherit;
 }
 
-.terminal-error { color: #ff9d6b; }
-.terminal-ok { color: #8ee6a0; }
-.terminal-dim { color: #7c8a99; }
-.terminal-output { color: #7ec8ff; }
-.terminal-muted { color: #7c8a99; }
+.terminal-error { color: var(--code-keyword); }
+.terminal-ok { color: var(--code-ok); }
+.terminal-dim { color: var(--code-comment); }
+.terminal-output { color: var(--code-function); }
+.terminal-muted { color: var(--code-comment); }
 
 @media (max-width: 900px) {
     .workspace {
