@@ -178,7 +178,8 @@ com o estado de `src/vm/`. O opcode set já cresceu além do slice inicial
 (bitwise, `IndexLoad`, `CallFnRef`/`CallRange`, `Branch2`). Contexto: a dívida
 "duas fatias de execução" está resolvida (ADR-0036) e `src/vm/` é opcional via
 `ZITH_BUILD_VM`; a VM v2 serve hoje o playground WASM e o harness
-`test-vm-v2`. As dívidas abertas são:
+`test-vm-v2`. As dívidas e resoluções ficam numeradas para manter as
+referências estáveis:
 
 1. **Superfície de linguagem incompleta no lowering.** State machines, dyn
    dispatch, `opaque` e variadic slices são "later slices" registados nos
@@ -197,9 +198,9 @@ com o estado de `src/vm/`. O opcode set já cresceu além do slice inicial
    `snprintf` (`%u`/`%d`/`%g`), `realloc`, `memcpy`, `strlen`, `puts` e o
    printf variádico. Qualquer extern fora desta lista faz trap (VMV2-04);
    alargar a stdlib no caminho VM exige alargar esta lista.
-5. **Indirect calls sem teste dedicado.** ADR-0021 regista o seam: "source
-   review of `src/vm/` and a later indirect-call test". `CallFnRef` e
-   `CallExternRef` existem no IR sem esse teste de fronteira.
+5. **Indirect calls — resolvido em 2026-10-10.** `test-vm-v2` cobre chamadas
+   indiretas de `CallFnRef` e `CallExternRef` através das tabelas do módulo,
+   incluindo referências fora dos limites que terminam com `RunStatus::Trap`.
 6. **HIR/artifact caching não implementado no playground.** ADR-0024 prevê "a
    later cache can compile once and replay"; o `build` do playground prepara
    inputs mas a compilação acontece em cada execução.
