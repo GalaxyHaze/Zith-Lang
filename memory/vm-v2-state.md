@@ -40,10 +40,17 @@ that are easy to get wrong when editing that plan.
   the playground has no stdin.
 - `realloc` preserves live allocation contents through the allocator's block
   tracking.
+- `tests/test-stdlib-parity.cpp` runs stdlib programs through both `zithc` and
+  the VM v2 path and diffs stdout plus exit code. A status-5-only divergence is
+  allowed only with a documented reason in the case table, so silent output
+  drift fails the suite. `vm::lowerModule` rejects a `println`/`print` call
+  whose literal message has format placeholders and carries variadic values,
+  instead of forwarding only the literal to `puts`/`write_stdout`.
 
 ## Quick Checks
 
 - `ctest --test-dir build -R vm-v2 --output-on-failure`
+- `ctest --test-dir build -R parity --output-on-failure`
 - `ctest --test-dir build -R test-abi-execution --output-on-failure`
 - `src/vm/typed-ir.hpp` for the opcodes and register model.
 - `memory/execution-ir-drawing.md` for the archived v1 contract status.

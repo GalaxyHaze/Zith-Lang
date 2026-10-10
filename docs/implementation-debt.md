@@ -224,6 +224,13 @@ referências estáveis:
 9. **Paridade stdlib WASM vs nativo.** A stdlib não suportada no caminho VM
    falha com status 5 previsível (ADR-0025), mas a cobertura da stdlib via
    VM/WASM é substancialmente menor que via LLVM. Cresce com as dívidas 1 e 4.
+   A fatia de paridade existe desde 2026-10-10: `tests/test-stdlib-parity.cpp`
+   corre os mesmos programas pelos dois caminhos e compara stdout e exit code.
+   Uma divergência que só devolva status 5 é aceite apenas com motivo na
+   tabela de casos, pelo que a lista de programas por passar está documentada
+   em [vm-v2-stdlib-parity.md](/home/diogo/Zith/docs/vm-v2-stdlib-parity.md).
+   O fast path de formatação deixou de descartar valores em silêncio: uma
+   mensagem com placeholders e valores passa a reportar status 5.
 10. **Variadic slice tails — resolvido em 2026-10-10.** O lowering VM consome
     o plano de sema preservado em HIR, serializado como flat HIR v3. Os
     argumentos recolhidos e slices explícitos são passados como pares

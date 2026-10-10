@@ -302,6 +302,30 @@ auto lowerMakeSlice(LowerState &state, const hir::HirMakeSlice &slice) -> std::u
     return makeSlicePair(state, dataPointer, length);
 }
 
+/// Counts the format placeholders in a literal message slice. A `#` followed
+/// by the unit-separator byte is the escape for a literal `#`, so it does not
+/// consume a value. This mirrors the escape handling in the stdlib
+/// `std/io/console` `writeBuffer`.
+auto slicePlaceholderCount(const LowerState &state, const hir::HirMakeSlice &slice)
+    -> std::size_t {
+    const auto &objExpr = state.hir.getExpr(slice.object);
+    const auto *lit     = std::get_if<hir::HirLiteral>(&objExpr);
+    if (lit == nullptr)
+        return 0;
+    const auto text = state.interner.lookup(lit->str_val);
+    std::size_t count = 0;
+    for (std::size_t i = 0; i < text.size(); ++i) {
+        if (text[i] != '#')
+            continue;
+        if (i + 1 < text.size() && text[i + 1] == '\x1f') {
+            ++i;
+            continue;
+        }
+        ++count;
+    }
+    return count;
+}
+
 auto lowerCall(LowerState &state, const hir::HirCall &call) -> std::uint16_t {
     if (call.resolved_fn == symbols::kInvalidSym) {
         state.result->ok      = false;
@@ -322,6 +346,19 @@ auto lowerCall(LowerState &state, const hir::HirCall &call) -> std::uint16_t {
                 return newReg(state, types::kVoidType);
             const auto &argExpr = state.hir.getExpr(call.args[0]);
             const auto *slice   = std::get_if<hir::HirMakeSlice>(&argExpr);
+            // The fast path below forwards the literal message to `puts` or
+            // `write_stdout`. It cannot render the variadic `Formatable`
+            // values, so a call whose message has placeholders and carries
+            // values must report unsupported instead of silently dropping the
+            // formatted output. A message without placeholders ignores the
+            // extra values, exactly like the native stdlib path.
+            if (call.args.size() > 1 && slice != nullptr &&
+                slicePlaceholderCount(state, *slice) > 0) {
+                state.result->ok = false;
+                state.result->message =
+                    "variadic print formatting is not in the v2 lowering subset";
+                return kUnassignedReg;
+            }
             if (slice != nullptr) {
                 const auto ptr = lowerStringSlicePointer(state, *slice);
                 if (ptr != kUnassignedReg) {

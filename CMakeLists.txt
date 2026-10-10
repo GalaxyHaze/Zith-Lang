@@ -541,6 +541,15 @@ if(BUILD_TESTING AND NOT ZITH_IS_WASM)
                 ZITHC_BINARY="$<TARGET_FILE:zithc>"
                 ZITH_EXAMPLES_WORKDIR="${CMAKE_CURRENT_BINARY_DIR}/examples-run")
             add_dependencies(test-examples zithc)
+
+            # Stdlib WASM-vs-native parity (#72): the same stdlib programs run
+            # through `zithc` and through the VM v2 path, then stdout and exit
+            # code are compared. Skips (exit 77) when the VM slice is absent.
+            add_zith_test(test-stdlib-parity tests/test-stdlib-parity.cpp)
+            target_compile_definitions(test-stdlib-parity PRIVATE
+                ZITHC_BINARY="$<TARGET_FILE:zithc>")
+            add_dependencies(test-stdlib-parity zithc)
+            set_tests_properties(test-stdlib-parity PROPERTIES SKIP_RETURN_CODE 77)
         endif()
     endif()
 
