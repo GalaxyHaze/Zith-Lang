@@ -1,0 +1,56 @@
+/*==================
+HEADER — shared chrome
+===================*/
+
+.site-header {
+    background: var(--header-bg);
+    color: var(--header-text);
+}
+
+.site-header-inner {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-2) var(--space-5);
+    padding-block: var(--space-2);
+}
+
+.site-header .brand {
+    display: inline-flex;
+    align-items: center;
+    padding: var(--space-1);
+    border-radius: var(--radius-sm);
+}
+
+.site-header .brand img {
+    width: 2.25rem;
+    height: 2.25rem;
+}
+
+.site-nav {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-1);
+}
+
+.site-nav .nav-link {
+    padding: var(--space-2) var(--space-3);
+    border-radius: var(--radius-sm);
+    color: var(--header-text);
+    font-size: var(--step--1);
+    text-decoration: none;
+    transition: background-color 150ms ease, color 150ms ease;
+}
+
+.site-nav .nav-link:hover,
+.site-nav .nav-link:focus-visible {
+    background: var(--header-hover-bg);
+    color: var(--footer-link);
+}
+
+.site-nav .nav-link.is-active {
+    color: var(--footer-link);
+    font-weight: 600;
+}

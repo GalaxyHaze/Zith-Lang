@@ -2,3 +2,6 @@
 build
 .opencode
 .vscode
+_site
+__pycache__
+*.py[cod]

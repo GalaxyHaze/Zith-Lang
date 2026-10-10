@@ -1,0 +1,36 @@
+/*==================
+FOOTER — shared chrome
+===================*/
+
+.site-footer {
+    margin-top: auto;
+    background: var(--footer-bg);
+    color: var(--footer-text);
+}
+
+.site-footer-inner {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-2) var(--space-5);
+    padding-block: var(--space-4);
+    font-size: var(--step--1);
+}
+
+.site-footer-nav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-1) var(--space-4);
+}
+
+.site-footer-nav a {
+    color: var(--footer-link);
+    text-decoration: none;
+}
+
+.site-footer-nav a:hover,
+.site-footer-nav a:focus-visible {
+    color: var(--footer-text);
+    text-decoration: underline;
+}
