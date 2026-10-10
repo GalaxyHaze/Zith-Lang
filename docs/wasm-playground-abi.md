@@ -32,6 +32,8 @@ with the portable VM. The flat HIR format is versioned and self-contained; it is
 | `zith_last_output_len` | `() -> i32` | Byte length of the last output buffer. |
 | `zith_error_count` | `() -> i32` | Number of rendered diagnostics from the last call. |
 | `zith_error_at` | `(index: i32) -> i32` | Pointer to one rendered `severity: message` line, or `0`. |
+| `zith_last_diagnostics_json_ptr` | `() -> i32` | Pointer to the structured JSON diagnostics payload from the last call. |
+| `zith_last_diagnostics_json_len` | `() -> i32` | Byte length of the structured JSON diagnostics payload. |
 | `zith_compiler_version_ptr` | `() -> i32` | Pointer to the compiler version string from `ZITH_VERSION`. |
 | `zith_compiler_version_len` | `() -> i32` | Byte length of the compiler version string. |
 
@@ -99,15 +101,37 @@ pointer and length remain valid until the next call that replaces the output buf
 
 ## Diagnostics
 
-`zith_error_at` returns one stable line per diagnostic, rendered as:
+`zith_error_at` remains available and returns one stable line per diagnostic, rendered as:
 
 ```text
 severity: message
 ```
 
 The line remains valid until the next call that replaces the output or diagnostic buffers. An `index`
-greater than or equal to `zith_error_count()` returns `0`. This stable line format is intended for
-the playground. Structured JSON diagnostics will be added by a future LSP-facing API.
+greater than or equal to `zith_error_count()` returns `0`.
+
+`zith_last_diagnostics_json_ptr/len` exposes the same call's structured diagnostic payload. Its
+top-level object always contains a `diagnostics` array. Compiler diagnostics include severity,
+message, numeric code, and a source byte-offset span. ABI errors, VM traps, out-of-memory results,
+and unsupported VM constructs include severity and message; they omit `code` and `span` when no
+compiler source location exists. Messages are JSON-escaped UTF-8 strings.
+
+```json
+{
+  "diagnostics": [
+    {
+      "severity": "error",
+      "message": "unknown type",
+      "code": 1234,
+      "span": { "start": 10, "end": 20 }
+    }
+  ]
+}
+```
+
+On success the payload is `{"diagnostics":[]}`. The JSON pointer remains valid until the next
+playground ABI call that resets or replaces diagnostics. Existing flat status codes and
+`zith_error_at` output are unchanged.
 
 ## Standard Library Pack
 

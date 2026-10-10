@@ -318,7 +318,7 @@ if(ZITH_IS_WASM)
     add_executable(zith-playground src/wasm/playground.cpp src/wasm/wasi-stubs.cpp)
     target_link_libraries(zith-playground PRIVATE zithcLib)
     set_target_properties(zith-playground PROPERTIES OUTPUT_NAME zith-playground SUFFIX ".wasm")
-    target_link_options(zith-playground PRIVATE -Wl,--no-entry -sALLOW_MEMORY_GROWTH=1 -sINITIAL_MEMORY=134217728 -sMAXIMUM_MEMORY=268435456 -sSTACK_SIZE=16777216 -Wl,--export=zith_alloc -Wl,--export=zith_free -Wl,--export=zith_run_source -Wl,--export=zith_compile_source -Wl,--export=zith_emit_hir -Wl,--export=zith_execute_hir -Wl,--export=zith_register_stdlib_pack -Wl,--export=zith_last_buffer_ptr -Wl,--export=zith_last_buffer_len -Wl,--export=zith_exit_code -Wl,--export=zith_last_error_ptr -Wl,--export=zith_last_error_len -Wl,--export=zith_last_output_ptr -Wl,--export=zith_last_output_len -Wl,--export=zith_error_count -Wl,--export=zith_error_at -Wl,--export=zith_compiler_version_ptr -Wl,--export=zith_compiler_version_len )
+    target_link_options(zith-playground PRIVATE -Wl,--no-entry -sALLOW_MEMORY_GROWTH=1 -sINITIAL_MEMORY=134217728 -sMAXIMUM_MEMORY=268435456 -sSTACK_SIZE=16777216 -Wl,--export=zith_alloc -Wl,--export=zith_free -Wl,--export=zith_run_source -Wl,--export=zith_compile_source -Wl,--export=zith_emit_hir -Wl,--export=zith_execute_hir -Wl,--export=zith_register_stdlib_pack -Wl,--export=zith_last_buffer_ptr -Wl,--export=zith_last_buffer_len -Wl,--export=zith_exit_code -Wl,--export=zith_last_error_ptr -Wl,--export=zith_last_error_len -Wl,--export=zith_last_output_ptr -Wl,--export=zith_last_output_len -Wl,--export=zith_error_count -Wl,--export=zith_error_at -Wl,--export=zith_last_diagnostics_json_ptr -Wl,--export=zith_last_diagnostics_json_len -Wl,--export=zith_compiler_version_ptr -Wl,--export=zith_compiler_version_len )
     target_compile_options(zith-playground PRIVATE -Wno-unknown-attributes -Wno-missing-prototypes)
 endif()
 
@@ -511,6 +511,17 @@ if(BUILD_TESTING AND NOT ZITH_IS_WASM)
     add_zith_test(test-compound-assign tests/test-compound-assign.cpp)
     add_zith_test(test-nominal-type-debt tests/test-nominal-type-debt.cpp)
     add_zith_test(test-wasm-contract tests/test-wasm-contract.cpp)
+    if(ZITH_HAS_VM)
+        add_executable(test-wasm-playground
+            tests/test-wasm-playground.cpp
+            src/wasm/playground.cpp)
+        target_compile_definitions(test-wasm-playground PRIVATE
+            ZITH_STDLIB_DIR="${CMAKE_CURRENT_SOURCE_DIR}/stdlib")
+        target_compile_options(test-wasm-playground PRIVATE
+            -Wno-attributes -Wno-unknown-attributes)
+        target_link_libraries(test-wasm-playground PRIVATE zithcLib)
+        add_test(NAME test-wasm-playground COMMAND test-wasm-playground)
+    endif()
     add_zith_test(test-abi-execution tests/test-abi-execution.cpp)
     add_executable(test-vm-v2 tests/test-vm-v2.cpp)
     target_compile_definitions(test-vm-v2 PRIVATE

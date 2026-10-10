@@ -23,7 +23,9 @@ static std::string last_error;
 static std::string last_output;
 static std::string last_blob;
 static std::vector<std::string> rendered_errors;
-static int64_t last_exit_code = 0;
+static std::string last_diagnostics_json  = "{\"diagnostics\":[]}";
+static size_t structured_diagnostic_count = 0;
+static int64_t last_exit_code             = 0;
 static std::vector<std::pair<std::string, std::string>> stdlib_sources;
 
 #ifdef ZITH_IS_WASM
@@ -92,6 +94,16 @@ extern "C" __attribute__((export_name("zith_error_at"))) const char *zith_error_
     return rendered_errors[index].data();
 }
 
+extern "C" __attribute__((export_name("zith_last_diagnostics_json_ptr"))) const char *
+zith_last_diagnostics_json_ptr() {
+    return last_diagnostics_json.data();
+}
+
+extern "C" __attribute__((export_name("zith_last_diagnostics_json_len"))) int
+zith_last_diagnostics_json_len() {
+    return static_cast<int>(last_diagnostics_json.size());
+}
+
 extern "C" __attribute__((export_name("zith_compiler_version_ptr"))) const char *
 zith_compiler_version_ptr() {
     return ZITH_VERSION;
@@ -135,6 +147,80 @@ const char *severityName(zithc_severity severity) {
     return "bug";
 }
 
+void appendJsonString(std::string &json, std::string_view text) {
+    constexpr char hex[] = "0123456789abcdef";
+    json.push_back('"');
+    for (const char character : text) {
+        const auto byte = static_cast<unsigned char>(character);
+        switch (byte) {
+        case '"':
+            json += "\\\"";
+            break;
+        case '\\':
+            json += "\\\\";
+            break;
+        case '\b':
+            json += "\\b";
+            break;
+        case '\f':
+            json += "\\f";
+            break;
+        case '\n':
+            json += "\\n";
+            break;
+        case '\r':
+            json += "\\r";
+            break;
+        case '\t':
+            json += "\\t";
+            break;
+        default:
+            if (byte < 0x20U) {
+                json += "\\u00";
+                json.push_back(hex[byte >> 4U]);
+                json.push_back(hex[byte & 0x0fU]);
+            } else {
+                json.push_back(character);
+            }
+            break;
+        }
+    }
+    json.push_back('"');
+}
+
+void resetStructuredDiagnostics() {
+    last_diagnostics_json       = "{\"diagnostics\":[]}";
+    structured_diagnostic_count = 0;
+}
+
+void appendStructuredDiagnostic(std::string_view severity, std::string_view message,
+                                const zithc_diagnostic *diagnostic = nullptr) {
+    last_diagnostics_json.resize(last_diagnostics_json.size() - 2U);
+    if (structured_diagnostic_count > 0U)
+        last_diagnostics_json.push_back(',');
+
+    last_diagnostics_json += "{\"severity\":";
+    appendJsonString(last_diagnostics_json, severity);
+    last_diagnostics_json += ",\"message\":";
+    appendJsonString(last_diagnostics_json, message);
+    if (diagnostic != nullptr) {
+        last_diagnostics_json += ",\"code\":";
+        last_diagnostics_json += std::to_string(diagnostic->code);
+        last_diagnostics_json += ",\"span\":{\"start\":";
+        last_diagnostics_json += std::to_string(diagnostic->span.start);
+        last_diagnostics_json += ",\"end\":";
+        last_diagnostics_json += std::to_string(diagnostic->span.end);
+        last_diagnostics_json.push_back('}');
+    }
+    last_diagnostics_json += "]}";
+    ++structured_diagnostic_count;
+}
+
+void resetDiagnostics() {
+    rendered_errors.clear();
+    resetStructuredDiagnostics();
+}
+
 std::string renderDiagnostic(const zithc_diagnostic &diag) {
     std::string line;
     line += severityName(diag.severity);
@@ -148,6 +234,7 @@ void setErrorMessage(const std::string &message) {
     last_error = message;
     if (last_error.empty() || last_error.back() != '\n')
         last_error.push_back('\n');
+    appendStructuredDiagnostic("error", message);
     host_write(2, last_error.data(), last_error.size());
 }
 
@@ -250,7 +337,7 @@ int runPlayground(const char *ptr, int len, bool is_compile, int mode = 0, int o
                   int emit_mask = 0) {
     last_error.clear();
     last_output.clear();
-    rendered_errors.clear();
+    resetDiagnostics();
 
     if (!ptr || len < 0)
         setErrorMessage("invalid source buffer");
@@ -293,6 +380,8 @@ int runPlayground(const char *ptr, int len, bool is_compile, int mode = 0, int o
         const zithc_diagnostic diag  = zithc_diag_get(session, i);
         const std::string render_str = renderDiagnostic(diag);
         rendered_errors.push_back(render_str);
+        appendStructuredDiagnostic(severityName(diag.severity),
+                                   diag.message != nullptr ? diag.message : "", &diag);
         host_write(2, render_str.data(), render_str.size());
         last_error += render_str;
     }
@@ -328,7 +417,7 @@ zith_register_stdlib_pack(const char *ptr, int len) {
     last_error.clear();
     last_output.clear();
     last_blob.clear();
-    rendered_errors.clear();
+    resetDiagnostics();
     last_exit_code = 0;
     if (!registerStdlibPack(ptr, len)) {
         setErrorMessage("invalid stdlib pack");
@@ -342,7 +431,7 @@ extern "C" __attribute__((export_name("zith_emit_hir"))) int zith_emit_hir(const
     last_error.clear();
     last_output.clear();
     last_blob.clear();
-    rendered_errors.clear();
+    resetDiagnostics();
     last_exit_code = 0;
 
     if (!ptr || len < 0)
@@ -374,6 +463,8 @@ extern "C" __attribute__((export_name("zith_emit_hir"))) int zith_emit_hir(const
         const zithc_diagnostic diag  = zithc_diag_get(session, i);
         const std::string render_str = renderDiagnostic(diag);
         rendered_errors.push_back(render_str);
+        appendStructuredDiagnostic(severityName(diag.severity),
+                                   diag.message != nullptr ? diag.message : "", &diag);
         host_write(2, render_str.data(), render_str.size());
         last_error += render_str;
     }
@@ -403,6 +494,7 @@ extern "C" __attribute__((export_name("zith_execute_hir"))) int zith_execute_hir
                                                                                  int len) {
     last_error.clear();
     last_output.clear();
+    resetDiagnostics();
     last_exit_code = 0;
 
     if (!ptr || len < 0)

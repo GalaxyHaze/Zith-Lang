@@ -205,9 +205,11 @@ referências estáveis:
 6. **HIR/artifact caching não implementado no playground.** ADR-0024 prevê "a
    later cache can compile once and replay"; o `build` do playground prepara
    inputs mas a compilação acontece em cada execução.
-7. **Diagnósticos estruturados em falta.** O blob WASM devolve status codes
-   planos (3/4/5); os diagnósticos JSON estruturados ficaram para a futura API
-   do LSP (`docs/wasm-playground-abi.md`).
+7. **Diagnósticos JSON estruturados, resolvido em 2026-10-10.** O ABI do
+   playground expõe `zith_last_diagnostics_json_ptr/len` para diagnósticos de
+   compilação, traps e construções não suportadas, sem alterar os status codes
+   existentes. O contrato está em `docs/wasm-playground-abi.md` e é exercitado
+   por `test-wasm-playground`.
 8. **Value width fixo.** Valores primitivos executam como `int64_t`/bits e fat
    pointers ocupam dois registos consecutivos. Decisão consciente do primeiro
    slice, a revisitar para larguras nativas e floats.
