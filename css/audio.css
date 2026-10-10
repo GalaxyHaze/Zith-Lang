@@ -1,0 +1,32 @@
+/*==================
+AMBIENT AUDIO — opt-in toggle
+===================*/
+
+.audio-toggle {
+    position: fixed;
+    right: var(--space-4);
+    bottom: var(--space-4);
+    z-index: 50;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.75rem;
+    height: 2.75rem;
+    border: 1px solid var(--border);
+    border-radius: 50%;
+    background: var(--surface);
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: color 150ms ease, border-color 150ms ease;
+}
+
+.audio-toggle:hover,
+.audio-toggle:focus-visible {
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+.audio-toggle.is-playing {
+    border-color: var(--brand);
+    color: var(--brand);
+}

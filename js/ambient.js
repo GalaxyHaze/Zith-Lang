@@ -1,42 +1,36 @@
-(function() {
+/* Ambient audio toggle — flat, opt-in, injected on every page.
+   Off by default; the browser only plays after a user gesture. */
+(function () {
     "use strict";
 
-    var STORAGE_KEY = "zith_ambient";
-    var script = document.currentScript || document.querySelector('script[src*="js/ambient.js"]');
-    var SRC = new URL("../media/audio/ambient.mp3", script.src).href;
+    var STORAGE_KEY = "zws:ambient";
+    var script = document.currentScript || document.querySelector('script[src*="ambient.js"]');
+    var src = new URL("../media/audio/ambient.mp3", script.src).href;
     var audio = null;
-    var lastPositionSave = 0;
-    var positionResumed = false;
+    var enabled = false;
 
-    function loadState() {
+    function readEnabled() {
         try {
-            var raw = localStorage.getItem(STORAGE_KEY);
-            if (raw) {
-                var parsed = JSON.parse(raw);
-                if (parsed && typeof parsed.enabled === "boolean") {
-                    return {
-                        enabled: parsed.enabled,
-                        currentTime: Number(parsed.currentTime) || 0,
-                        savedAt: Number(parsed.savedAt) || Date.now()
-                    };
-                }
-            }
-        } catch (e) {
+            return localStorage.getItem(STORAGE_KEY) === "on";
+        } catch (_) {
+            return false;
         }
-        return { enabled: false, currentTime: 0, savedAt: Date.now() };
     }
 
-    var state = loadState();
-
-    function saveState(enabled, currentTime) {
+    function writeEnabled(on) {
         try {
-            localStorage.setItem(STORAGE_KEY, JSON.stringify({
-                enabled: !!enabled,
-                currentTime: currentTime || 0,
-                savedAt: Date.now()
-            }));
-        } catch (e) {
-        }
+            localStorage.setItem(STORAGE_KEY, on ? "on" : "off");
+        } catch (_) {}
+    }
+
+    function ensureAudio() {
+        if (audio) return audio;
+        audio = new Audio(src);
+        audio.loop = true;
+        audio.preload = "none";
+        audio.addEventListener("play", function () { setToggle(true); });
+        audio.addEventListener("pause", function () { setToggle(false); });
+        return audio;
     }
 
     function setToggle(playing) {
@@ -47,161 +41,45 @@
         toggle.setAttribute("aria-label", playing ? "Pause ambient audio" : "Play ambient audio");
     }
 
-    function createAudio() {
-        if (audio) return audio;
-        audio = new Audio(SRC);
-        audio.loop = true;
-        audio.preload = "none";
-
-        audio.addEventListener("timeupdate", function() {
-            var now = Date.now();
-            if (now - lastPositionSave > 2000) {
-                lastPositionSave = now;
-                saveState(true, audio.currentTime);
-            }
-        });
-        audio.addEventListener("play", function() {
-            setToggle(true);
-        });
-        audio.addEventListener("pause", function() {
-            setToggle(false);
-            saveState(false, audio.currentTime);
-        });
-        return audio;
+    function play() {
+        enabled = true;
+        writeEnabled(true);
+        var promise = ensureAudio().play();
+        if (promise && promise.catch) promise.catch(function () { setToggle(false); });
     }
 
-    function resumeState() {
-        if (!audio) return;
-        if (positionResumed) return;
-        var elapsed = Math.max(0, (Date.now() - state.savedAt) / 1000);
-        var position = state.currentTime + elapsed;
-        if (audio.duration && position >= audio.duration) {
-            position %= audio.duration;
-        }
-        audio.currentTime = position;
-        positionResumed = true;
-    }
-
-    function startAmbient() {
-        if (!audio) createAudio();
-        resumeState();
-        var promise = audio.play();
-        if (promise && promise.catch) {
-            promise.catch(function() {
-                setToggle(false);
-            });
-        }
-    }
-
-    function stopAmbient() {
-        state.enabled = false;
-        if (audio) {
-            saveState(false, audio.currentTime);
-            audio.pause();
-        } else {
-            saveState(false, state.currentTime);
-        }
+    function pause() {
+        enabled = false;
+        writeEnabled(false);
+        if (audio) audio.pause();
         setToggle(false);
     }
 
-    function toggleAmbient() {
-        if (audio && !audio.paused) {
-            stopAmbient();
-            return;
-        }
-        state.enabled = true;
-        state.savedAt = Date.now();
-        positionResumed = false;
-        saveState(true, audio ? audio.currentTime : state.currentTime);
-        startAmbient();
-    }
-
-    function injectStyle() {
-        if (document.getElementById("zith-ambient-style")) return;
-        var style = document.createElement("style");
-        style.id = "zith-ambient-style";
-        style.textContent = [
-            ".audio-toggle{position:fixed;right:18px;bottom:18px;z-index:99998;display:flex;align-items:center;gap:9px;padding:9px 13px;background:rgba(14,14,17,.92);border:1px solid #2a2a36;border-radius:20px;color:#8f8fa3;font-family:var(--ui-font-mono);font-size:12px;cursor:pointer;user-select:none}",
-            ".audio-toggle:hover,.audio-toggle.is-playing{color:#00ffff;border-color:rgba(0,255,255,.45);transform:translateY(-1px)}",
-            ".audio-visualizer{display:inline-flex;align-items:flex-end;gap:3px;height:14px}",
-            ".audio-visualizer i{width:3px;height:4px;border-radius:1px;background:currentColor;opacity:.55}",
-            ".audio-toggle.is-playing .audio-visualizer i{animation:zith-audio-bar .9s ease-in-out infinite alternate}",
-            ".audio-toggle.is-playing .audio-visualizer i:nth-child(2){animation-delay:.22s}",
-            ".audio-toggle.is-playing .audio-visualizer i:nth-child(3){animation-delay:.45s}",
-            "@keyframes zith-audio-bar{from{height:4px}to{height:14px}}"
-        ].join("");
-        document.head.appendChild(style);
+    function toggle() {
+        if (audio && !audio.paused) pause();
+        else play();
     }
 
     function injectToggle() {
         if (document.getElementById("audioToggle")) return;
-        if (!document.body || !document.body.classList.contains("zith-portal")) return;
         var button = document.createElement("button");
         button.id = "audioToggle";
+        button.type = "button";
         button.className = "audio-toggle";
         button.setAttribute("aria-pressed", "false");
         button.setAttribute("aria-label", "Play ambient audio");
-        button.innerHTML = '<span class="audio-visualizer"><i></i><i></i><i></i></span><span class="audio-label">Ambient</span>';
+        button.innerHTML =
+            '<svg viewBox="0 0 24 24" aria-hidden="true" width="18" height="18">' +
+            '<path d="M9 18V6l10-2v12" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>' +
+            '<circle cx="6.5" cy="18" r="2.5" fill="none" stroke="currentColor" stroke-width="1.7"/>' +
+            '<circle cx="16.5" cy="16" r="2.5" fill="none" stroke="currentColor" stroke-width="1.7"/></svg>';
+        button.addEventListener("click", toggle);
         document.body.appendChild(button);
+        if (enabled) play();
     }
 
-    function bindToggle() {
-        var toggle = document.getElementById("audioToggle");
-        if (!toggle) return;
-        if (toggle.dataset.ambientBound === "true") return;
-        toggle.dataset.ambientBound = "true";
-        toggle.addEventListener("click", toggleAmbient);
-    }
+    enabled = readEnabled();
 
-    function tryResume() {
-        if (!state.enabled) return;
-        createAudio();
-        startAmbient();
-    }
-
-    injectStyle();
-
-    if (document.body) {
-        injectToggle();
-        bindToggle();
-    }
-
-    document.addEventListener("DOMContentLoaded", function() {
-        injectToggle();
-        bindToggle();
-        tryResume();
-    });
-
-    if (document.readyState !== "loading") {
-        injectToggle();
-        bindToggle();
-        tryResume();
-    }
-
-    document.addEventListener("click", function() {
-        if (state.enabled && audio && audio.paused) {
-            startAmbient();
-        }
-    }, true);
-
-    document.addEventListener("keydown", function() {
-        if (state.enabled && audio && audio.paused) {
-            startAmbient();
-        }
-    }, true);
-
-    window.addEventListener("pagehide", function() {
-        if (audio && !audio.paused) {
-            saveState(true, audio.currentTime);
-        }
-    });
-
-    window.ZithAmbient = {
-        play: startAmbient,
-        pause: stopAmbient,
-        toggle: toggleAmbient,
-        isPlaying: function() {
-            return !!(audio && !audio.paused);
-        }
-    };
+    if (document.body) injectToggle();
+    document.addEventListener("DOMContentLoaded", injectToggle);
 })();
