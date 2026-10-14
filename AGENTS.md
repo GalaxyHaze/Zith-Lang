@@ -2,7 +2,7 @@
 
 ### Issue tracker
 
-Issues are tracked in `GalaxyHaze/Zith` GitHub Issues. See `docs/agents/issue-tracker.md`.
+Issues are tracked in `GalaxyHaze/Zith-Lang` GitHub Issues. See `docs/agents/issue-tracker.md`.
 
 ### Triage labels
 
