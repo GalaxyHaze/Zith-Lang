@@ -1,0 +1,10 @@
+# Compiler toolchain binary (not part of the repo)
+/zithc
+
+# Build outputs and caches
+/target/
+/bin/
+/cache/
+/.zith-cache/
+/.zmodules/
+*.o
