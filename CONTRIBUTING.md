@@ -13,24 +13,29 @@ Requires C++23, CMake 3.20+, and LLVM (for codegen).
 
 ```
 src/
-  memory/       - Arena allocator, DynArray, FlatMap, utilities
-  ast/          - ID-based AST data model and builder
-  lexer/        - Tokenizer
-  parser/       - Recursive-descent + Pratt parser
-  diagnostics/  - Error reporting, diagnostic engine
-  symbols/      - Symbol table, import resolution, name resolver
-  types/        - Type intern, unification, lowering
-  sema/         - Semantic analysis, type checking, NRA preparation, HIR lowering
-  hir/          - High-level IR (typed, lowered from AST)
-  comptime/     - Compile-time evaluation, monomorphization
-  codegen/      - LLVM IR codegen
-  output/       - Binary sectioned format (.irl/.mod)
-  cache/        - Incremental compilation
-  formatter/    - Code formatter
-  cli/          - CLI argument parsing, command dispatch
-  session/      - Per-file compilation session, pipeline orchestration
+  memory/       - Arena allocator, DynArray, FlatMap, and interning
+  support/      - Shared platform and compiler utilities
+  common/       - Cross-subsystem utilities and common types
+  cli/          - CLI argument parsing and command dispatch
+  session/      - Compilation pipeline orchestration
+  diagnostics/  - Error codes, diagnostics, and reporting
+  cache/        - Incremental compilation and artifact storage
   capi/         - C ABI wrapper
-  support/      - Platform compatibility
+  codegen/      - LLVM IR code generation
+  comptime/     - Compile-time evaluation and generic instantiation
+  formatter/    - Source code formatter
+  hir/          - High-level intermediate representation
+  sema/         - Semantic analysis, NRA preparation, and HIR lowering
+  symbols/      - Symbol tables, imports, and name resolution
+  types/        - Type interning, unification, and lowering
+  wasm/         - WebAssembly playground and WASI support
+  zirl/         - Zith IR library format
+  frontend/     - Lexing, parsing, AST lowering, macros, and frontend printing
+  cinterop/     - C header bindings
+  cc/           - Companion C compilation
+  ide/          - Editor and language-server integration
+  interp/       - HIR interpreter
+  vm/           - Portable VM v2
 ```
 
 ## Code style
@@ -42,11 +47,9 @@ src/
 
 ## Pipeline
 
-```
-Source → Lex → Scan → Import → Resolve → Sema → Comptime/Solve → NTA/NRA → HIR → Codegen → Cache
-```
-
-Each stage is a method on `CompilationSession` in `src/session/`.
+`CompilationSession` in `src/session/` coordinates compilation. For the
+current stage names and supported paths, use
+[docs/impl-status.md](docs/impl-status.md) as the source of truth.
 
 ## Implementation Status
 

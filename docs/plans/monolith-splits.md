@@ -12,64 +12,79 @@ public APIs stable, and land with the same focused tests passing.
 ### `src/session/frontend-context.cpp`
 
 The frontend-context monolith was split by responsibility and merged. The
-pipeline entry point remains in `src/session/frontend-context.cpp` at
-315 lines. The extracted translation units and current line counts are:
+pipeline entry point remains in `src/session/frontend-context.cpp`. The
+current line counts, refreshed on 2026-10-15 with `wc -l`, are:
 
 | Translation unit | Lines | Responsibility |
 |---|---|---|
-| `src/session/frontend-context.cpp` | 315 | public parsing/frontend orchestration entry point |
-| `src/session/frontend-module-analysis.cpp` | 412 | module analysis state and discovery |
+| `src/session/frontend-context.cpp` | 330 | public parsing/frontend orchestration entry point |
+| `src/session/frontend-module-analysis.cpp` | 451 | module analysis state and discovery |
 | `src/session/frontend-module-cache.cpp` | 275 | module cache bookkeeping |
 | `src/session/frontend-source-catalog.cpp` | 196 | source catalog and fingerprinting helpers |
-| `src/session/frontend-symbol-resolution.cpp` | 777 | import requests and symbol/module resolution |
+| `src/session/frontend-symbol-resolution.cpp` | 902 | import requests and symbol/module resolution |
 
 ### `src/session/compilation-session.cpp`
 
 The compilation-session monolith was split by responsibility and merged.
 `CompilationSession` orchestration remains in
-`src/session/compilation-session.cpp` at 879 lines. The extracted units and
-current line counts are:
+`src/session/compilation-session.cpp`. The current line counts, refreshed on
+2026-10-15 with `wc -l`, are:
 
 | Translation unit | Lines | Responsibility |
 |---|---|---|
-| `src/session/compilation-session.cpp` | 879 | pipeline stage orchestration and session glue |
-| `src/session/native-link.cpp` | 421 | native link/run helpers |
-| `src/session/persistent-cache.cpp` | 721 | persistent/object cache helpers |
+| `src/session/compilation-session.cpp` | 882 | pipeline stage orchestration and session glue |
+| `src/session/native-link.cpp` | 403 | native link/run helpers |
+| `src/session/persistent-cache.cpp` | 788 | persistent/object cache helpers |
 | `src/session/pipeline-plan.cpp` | 13 | planned pipeline stage contract |
 
 ### `src/codegen/codegen-emit.cpp`
 
 The codegen monolith was split by responsibility and merged. The class and
-orchestration remain in `src/codegen/codegen-emit.cpp` at 9 lines; expression
-emission, statement/control-flow emission, and aggregate helpers moved to
-`codegen-emit-expr.cpp`, `codegen-emit-stmt.cpp`, and `codegen-emit-agg.cpp`
-respectively.
+orchestration remain in `src/codegen/codegen-emit.cpp`; the extracted units
+and current line counts, refreshed on 2026-10-15 with `wc -l`, are:
+
+| Translation unit | Lines | Responsibility |
+|---|---|---|
+| `src/codegen/codegen-emit.cpp` | 9 | class and orchestration |
+| `src/codegen/codegen-emit-expr.cpp` | 1029 | expression emission |
+| `src/codegen/codegen-emit-stmt.cpp` | 162 | statements and control flow |
+| `src/codegen/codegen-emit-agg.cpp` | 138 | aggregate helpers |
 
 ### `src/sema/hir-lower-expr.cpp`
 
 The HIR expression lowering monolith was split by responsibility and merged.
-The public dispatcher remains in `src/sema/hir-lower-expr.cpp` at 121 lines.
-Value lowering, access lowering, and aggregate lowering moved to dedicated
-translation units:
+The public dispatcher remains in `src/sema/hir-lower-expr.cpp`. The current
+line counts, refreshed on 2026-10-15 with `wc -l`, are:
 
 | Translation unit | Lines | Responsibility |
 |---|---|---|
 | `src/sema/hir-lower-expr.cpp` | 121 | `lowerExpr` dispatcher and public glue |
-| `src/sema/hir-lower-expr-value.cpp` | 1668 | value lowering, coercions, literals, names, casts, pipelines, optional payloads |
-| `src/sema/hir-lower-expr-access.cpp` | 379 | lvalue/address, index, slice range, field, and arrow lowering |
+| `src/sema/hir-lower-expr-value.cpp` | 1703 | value lowering, coercions, literals, names, casts, pipelines, optional payloads |
+| `src/sema/hir-lower-expr-access.cpp` | 392 | lvalue/address, index, slice range, field, and arrow lowering |
 | `src/sema/hir-lower-expr-agg.cpp` | 311 | enum variant, struct, pack, array, and field default lowering |
 
 ### `src/frontend/frontend-expr.cpp`
 
 The frontend expression parser was split by responsibility and merged. The
 expression dispatcher and call argument parsing remain in
-`src/frontend/frontend-expr.cpp` at 325 lines; primary/postfix parsing moved to
+`src/frontend/frontend-expr.cpp`; primary/postfix parsing moved to
 `src/frontend/frontend-expr-primary.cpp` and operator/precedence helpers moved
-to `src/frontend/frontend-expr-operator.cpp`.
+to `src/frontend/frontend-expr-operator.cpp`. Current line counts, refreshed
+on 2026-10-15 with `wc -l`, are:
+
+| Translation unit | Lines | Responsibility |
+|---|---|---|
+| `src/frontend/frontend-expr.cpp` | 325 | dispatcher and call arguments |
+| `src/frontend/frontend-expr-primary.cpp` | 742 | primary and postfix parsing |
+| `src/frontend/frontend-expr-operator.cpp` | 141 | operators and precedence |
 
 ## Remaining Candidates
 
-No file in the active monolith list remains above the working threshold.
+No split is approved or active. Large translation units remain, including
+`src/sema/hir-lower-expr-value.cpp` at 1703 lines. Treat file size as a review
+signal, not as sufficient justification for another split. Approve a new split
+only when a concrete cohesion, reviewability, or build-time problem is
+identified.
 
 Earlier work already split `frontend.cpp` into AST/CST lowering,
 frontend types, expressions, statements and declarations; `sema-modern.cpp`

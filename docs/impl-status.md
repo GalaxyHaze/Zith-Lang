@@ -1,6 +1,6 @@
 # Zith Implementation Status
 
-> Last updated: 2026-09-29.
+> Last updated: 2026-10-14.
 
 This document is the single source of truth for what the compiler supports today. Status reflects
 actual compiler behaviour at baseline `a5f3716`. Each feature was verified by running
@@ -92,7 +92,7 @@ Implementation work that is incomplete or needs review is tracked in
 
 | Feature | Status | Notes |
 |---|---|---|
-| literals (`42`, `0xFF`, `0c17`, `0b101`, `3.14`, `true`, `false`, `null`, strings, chars) | **Working** | Explicit radix prefixes (`0x` hex, `0c` octal, `0b` binary) are typed and lowered to their value; a literal wider than 64 bits reports E0004. Digit separators (`1_000`) are unsupported. C-like escapes decoded in string and char literals; `\#` is an accepted escape producing a literal `#`; unknown escapes report E0001 |
+| literals (`42`, `0xFF`, `0c17`, `0b101`, `3.14`, `true`, `false`, `null`, strings, chars) | **Working** | Explicit radix prefixes (`0x` hex, `0c` octal, `0b` binary) are typed and lowered to their value; a literal wider than 64 bits reports E0004. Digit separators (`1_000`) are unsupported. C-like escapes decoded in string and char literals, including octal `\NNN` (one to three digits; `\033` is ESC); `\#` is an accepted escape producing a literal `#`; a char literal must decode to exactly one character; unknown escapes report E0003 during type checking |
 | unary `-`, `not` | **Working** | `not` is the only boolean negation; prefix `!` is not recognized and stays reserved for a future postfix form |
 | unary `~` | **Working** | Bitwise NOT; integer operand only, lowers to `HirUnaryOp::BitNot` |
 | binary `+` `-` `*` `/` `%` `==` `!=` `<` `>` `<=` `>=` | **Working** | |

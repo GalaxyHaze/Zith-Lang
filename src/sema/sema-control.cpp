@@ -314,7 +314,13 @@ bool PerModuleSema::exprAlwaysTerminates(frontend::ExprId id) const noexcept {
 }
 TypeId PerModuleSema::inferBlock(frontend::ExprId id) {
     const auto &expr = snapshot.expressions()[id.value - 1U];
-    TypeId last      = void_type;
+    const bool is_macro_expansion =
+        std::any_of(snapshot.expressions().begin(), snapshot.expressions().end(),
+                    [id](const frontend::Expression &candidate) {
+                        return candidate.kind == frontend::ExprKind::MacroCall &&
+                               candidate.expansion == id && !candidate.expansionIsRaw;
+                    });
+    TypeId last = void_type;
     if (inStateBody_) {
         // A `jump` consumes the block terminator. The standalone sweep still
         // visits expressions after it, so stop inferring once we have lowered
@@ -348,8 +354,9 @@ TypeId PerModuleSema::inferBlock(frontend::ExprId id) {
                     snapshot.declarations()[currentDeclId_ - 1U].kind ==
                         frontend::DeclKind::Function;
                 const bool block_produces_value =
-                    function_tail_has_value && !inStateBody_ &&
-                    currentReturnType_ != void_type;
+                    final_expr &&
+                    (is_macro_expansion ||
+                     (function_tail_has_value && !inStateBody_ && currentReturnType_ != void_type));
                 checkExpressionStatement(stmt, block_produces_value);
             } else if (stmt.kind == frontend::StmtKind::Defer) {
                 pending_defers.push_back(stmt_id);
@@ -444,17 +451,15 @@ TypeId PerModuleSema::inferBlock(frontend::ExprId id) {
             // Blocks used as values may return their final expression; a
             // statement inside a void context must still be discarded
             // explicitly.
-            const bool final_expr =
-                !expr.statements.empty() && stmt_id == expr.statements.back();
+            const bool final_expr = !expr.statements.empty() && stmt_id == expr.statements.back();
             const bool function_tail_has_value =
                 final_expr && currentDeclId_ != 0U &&
                 currentDeclId_ <= snapshot.declarations().size() &&
                 snapshot.declarations()[currentDeclId_ - 1U].body == id &&
-                snapshot.declarations()[currentDeclId_ - 1U].kind ==
-                    frontend::DeclKind::Function;
+                snapshot.declarations()[currentDeclId_ - 1U].kind == frontend::DeclKind::Function;
             const bool block_produces_value =
-                function_tail_has_value && !inStateBody_ &&
-                currentReturnType_ != void_type;
+                final_expr && (is_macro_expansion || (function_tail_has_value && !inStateBody_ &&
+                                                      currentReturnType_ != void_type));
             checkExpressionStatement(stmt, block_produces_value);
         } else if (stmt.kind == frontend::StmtKind::Defer) {
             pending_defers.push_back(stmt_id);

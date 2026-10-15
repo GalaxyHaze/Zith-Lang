@@ -366,6 +366,12 @@ hir::HirExprId HirLowerModern::lowerWhen(const frontend::Expression &expr,
         if (has_value && body_value != hir::kInvalidHirExpr &&
             current_fn_->blocks[current_block_].terminator == hir::kInvalidHirExpr) {
             current_fn_->blocks[current_block_].insts.push(emitSlotStore(result_slot, body_value));
+        } else if (!has_value && body_value != hir::kInvalidHirExpr &&
+                   current_fn_->blocks[current_block_].terminator == hir::kInvalidHirExpr) {
+            const auto &body = current_module_->frontend->expressions()[
+                expr.operands[body_index].value - 1U];
+            if (body.kind != frontend::ExprKind::Block)
+                current_fn_->blocks[current_block_].insts.push(body_value);
         }
         if (current_fn_->blocks[current_block_].terminator == hir::kInvalidHirExpr)
             emitJump(merge_block);

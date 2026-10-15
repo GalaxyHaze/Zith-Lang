@@ -34,9 +34,11 @@ The active plan homes are:
 - `docs/roadmap.md`: stable feature IDs and wave narrative.
 - `docs/plans/standalone-c-toolchain.md` / `docs/plans/tiny-c-backend.md`:
   active Zith infrastructure work for the native C toolchain.
-- `docs/plans/codebase-quality-remediation.md`: open steps for the
-  structural/hygiene findings in `docs/implementation-debt.md` section
-  "Dívida de qualidade da code base (auditoria 2026-10-07)".
+- `docs/plans/codebase-quality-remediation.md`: parser-depth hardening and
+  ASan/UBSan CI steps based on
+  `docs/codebase-audit-2026-10-15.md`. The completed 2026-10-07 remediation
+  record is archived at
+  `docs/plans/archive/codebase-quality-remediation-2026-10-07.old.md`.
 - `docs/plans/idea-lifecycle-small-scope.md` / `docs/specs/abi-lifecycle.md`:
   small-scope lifecycle setup for ideas, ABI promises, and conforming tests.
 

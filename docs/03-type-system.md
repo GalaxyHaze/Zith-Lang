@@ -5,6 +5,10 @@
 > conversions between numeric types, though a numeric *literal* still adapts to its annotated
 > type. Pointers are non-nullable, so `null` requires `?*T`, and `*void` is rejected in favour of
 > `raw opaque`. Full NRA ownership modifiers (`own`, `share`, `belong`) remain full-Zith work.
+>
+> This chapter preserves the current Zith-- spellings in its implementation examples. Full-Zith
+> uses `pod` for the POD declaration and `extend T with Trait` for nominal trait conformance,
+> as recorded in [ADR-0040](adr/0040-full-zith-surface-names-and-keyword-limit.md).
 
 ### 3.1 Primitive Types
 

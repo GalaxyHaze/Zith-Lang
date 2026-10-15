@@ -1,48 +1,53 @@
-## 4. Traits, Interfaces & Capabilities
+## 4. Traits, Contracts & Capabilities
 
 > **Status:** see [impl-status.md](impl-status.md) for the current status of `trait`, `interface`,
-> and `implement` declarations. The implementation details do not define the full-Zith model
-> below: full Zith uses interfaces as static contracts and reserves `extends` for trait
-> composition.
+> and `implement` declarations. Full Zith calls the structural declaration `contract`, uses
+> `extend T with Trait` for nominal conformance, and reserves `extends` for trait composition.
+> References to `interface` and `implement` below describe the existing Zith-- surface. Full-Zith
+> examples use the updated spellings. See
+> [ADR-0040](adr/0040-full-zith-surface-names-and-keyword-limit.md).
 
-The `implement` owner may be a primitive, `?T`, or `[]T` in addition to a named struct/enum:
+The owner of an `extend` block may be a primitive, `?T`, or `[]T` in addition to a named struct
+or enum:
 
 ```zith
 trait Describe {
     fn describe(self): i32;
 }
 
-implement i32 as Describe {
+extend i32 with Describe {
     fn describe(self): i32 { return 1; }
 }
 ```
 
-Traits implemented for these owners participate in nominal conformance exactly like named types, so they are usable in generic bounds (`T: Describe`) and expose default methods on the receiver. Pointer and fixed-array owners remain unsupported.
+Conformance for these owners is nominal, just like conformance for named types. These traits are
+usable in generic bounds (`T: Describe`) and expose default methods on the receiver. Pointer and
+fixed-array owners remain unsupported.
 
 > See [impl-status.md](impl-status.md).
 
-### 4.1 Traits vs. Interfaces
+### 4.1 Traits vs. Contracts
 
-| | Trait | Interface |
+| | Trait | Contract |
 |---|---|---|
-| **Typing** | Nominal. A type explicitly implements a trait. | Structural. A type satisfies an interface automatically when all its conditions hold. |
+| **Typing** | Nominal. A type explicitly conforms to a trait. | Structural. A type satisfies a contract automatically when all its conditions hold. |
 | **Purpose** | Names behavior and capabilities a type opts into. | States a static contract that a type or value must satisfy. |
-| **Composition** | `extends` composes traits. | Bounds combine interfaces with `+`. |
+| **Composition** | `extends` composes traits. | Bounds combine contracts with `+`. |
 | **Methods** | Requirements and optional default bodies. | Exact-signature requirements without default bodies. |
-| **Fields** | Available through an interface required by the trait. | Guarantees field existence and type; qualifiers constrain mutability, while the memory access mode determines whether writes are permitted. |
+| **Fields** | Available through a contract required by the trait. | Guarantees field existence and type; qualifiers constrain mutability, while the memory access mode determines whether writes are permitted. |
 
 ### 4.2 Traits
 
 Traits are nominal contracts. A type must explicitly implement a trait. Trait
 methods may have default bodies. Trait clauses follow the name on separate
 lines, in the order `extends` then `requires`. `extends` composes traits.
-`requires Interface` requires the trait's `Self` type to satisfy that interface.
+`requires Contract` requires the trait's `Self` type to satisfy that contract.
 The requirement propagates to generic bounds, so `T: Movable` also gives the
-body the interface guarantees required by `Movable`. Use `self` / `other` for
+body the contract guarantees required by `Movable`. Use `self` / `other` for
 value parameters and `Self` for the implementing type.
 
 ```zith
-interface Positioned {
+contract Positioned {
     [x, y]: i32
 }
 
@@ -60,29 +65,30 @@ fn move<T: Movable>(value: T, dx: i32, dy: i32) {
 }
 ```
 
-### 4.3 Interfaces
+### 4.3 Contracts
 
-An interface is a static contract, not a behavior trait or a dynamic-dispatch type. A type satisfies
-an interface automatically when its type-level and value-level conditions hold. No `implement`
-declaration is needed. Interface conditions combine conjunctively. Repeated identical conditions
-count once, while contradictory or incompatible conditions make satisfaction invalid.
+A contract is a static structural requirement, not a behavior trait or a dynamic-dispatch type. A
+type satisfies a contract automatically when its type-level and value-level conditions hold. No
+explicit trait-conformance declaration is needed. Contract conditions combine conjunctively.
+Repeated identical conditions count once, while contradictory or incompatible conditions make
+satisfaction invalid.
 
 ```zith
-interface SafeNormalize requires @struct {
+contract SafeNormalize requires @struct {
     [x, y]: i32,
     @ensure(self.y is not 0)
 }
 ```
 
 Header `requires` constraints such as `@struct` are checked when the compiler
-evaluates whether a type satisfies the interface.
+evaluates whether a type satisfies the contract.
 A field requirement guarantees that the field exists with the declared type.
-Code under the interface bound may read that field. Field qualifiers can
+Code under the contract bound may read that field. Field qualifiers can
 constrain mutability, while the memory access mode still controls whether a
 write is permitted:
 
 ```zith
-interface Normalize {
+contract Normalize {
     var [x, y]: i32,
     @ensure(self.y is not 0)
 }
@@ -98,28 +104,36 @@ access mode such as `lend`. In particular, `view` remains read-only, even for
 fields declared `var`; it never permits interior mutation. `var` does not add
 implicit synchronization or relax cross-thread safety requirements.
 
-A method requirement names an exact signature. Calls through an interface bound
-use static dispatch, and interfaces cannot provide method bodies.
+A method requirement names an exact signature. Calls through a contract bound
+use static dispatch, and contracts cannot provide method bodies.
 
 `self` conditions are checked at the call boundary and remain invariants while
-the interface contract is active. Writes and calls must preserve them. The
+the structural contract is active. Writes and calls must preserve them. The
 compiler must prove each `@ensure`; if it cannot, compilation fails rather than
 inserting a runtime check. `@assume`, `@ensure`, and `@maybe` keep their
 existing meanings. In particular, `@assume` is diagnosed when it contradicts
 facts already known to the compiler.
 
+Capability-use annotations and purity are separate contract dimensions.
+`@using` requires a reachable use of each named capability, while `@only`
+restricts which capabilities may be used. `@pure`, `@valuePure`, and
+`@impure` describe function result behavior and side effects. All are static
+obligations with no runtime checks. See
+[ADR-0039](adr/0039-full-zith-capability-and-purity-contracts.md) for their
+semantics and the remaining syntax questions.
+
 Combine contracts and behavior explicitly in a generic bound:
 
 ```zith
 fn normalize<T: SafeNormalize + Arithmetic>(value: T): T {
-    // The interface and trait bounds are both required.
+    // The contract and trait bounds are both required.
     value
 }
 ```
 
-The full-Zith model does not define `dyn Interface`. Zith-- currently supports method dispatch
+The full-Zith model does not define `dyn contract`. Zith-- currently supports method dispatch
 through `dyn Interface`; that implementation behavior is documented separately and is not part
-of this contract.
+of the full-Zith contract model.
 
 ### 4.4 Capabilities — Built-in Reference
 
@@ -132,7 +146,7 @@ Capabilities are special traits that feed the compiler more information, unlocki
 | `Arithmetic` | Operators `+`, `-`, `*`, `/`, `%`, and so on. |
 | `Error` | Marks a type as an error value. It does not define whether a value is valid or invalid. |
 | `Failable` | Defines a type's valid and invalid states. The compiler invokes its state-checking contract for `try`. |
-| `Invalid` | A `Failable` type may implement it to expose methods available only after flow analysis proves that its value is invalid. |
+| `Invalid` | A `Failable` type may conform to it to expose methods available only after flow analysis proves that its value is invalid. |
 | `Allocator` | To provide custom allocators |
 | `Generator` | Allows creating runtime-defined resumable or streaming protocols without introducing a dedicated core function kind. |
 | `Share` | Required for `global: share` and crossing thread boundaries |
@@ -151,7 +165,7 @@ exactly one of `valid()` or `invalid()` based on the check result.
 
 ```zith
 // Config also implements Failable.
-implement Config as Invalid {
+extend Config with Invalid {
     fn onUnavailable(self) { log("Config is unavailable"); }
 }
 ```
@@ -227,12 +241,12 @@ for the full design.
 Operator overloading is capability-based and strict. You implement only the operators you need:
 
 ```zith
-implement Vec3 as Arithmetic {
+extend Vec3 with Arithmetic {
     fn +(self, other: Self): Self { ... }
     fn -(self, other: Self): Self { ... }
 }
 
-implement Pipeline as Functor {
+extend Pipeline with Functor {
     fn (self, input: []u8): []u8 { ... }
 }
 let out = pipe(raw_bytes);

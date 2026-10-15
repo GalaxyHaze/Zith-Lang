@@ -205,7 +205,9 @@ combines with every form except a bare `T`, so `'&T`, `'&mut T`, `'^T`,
 
 The prefix appears only where the argument or type is declared. A call site
 does not repeat it, because the `unbounded` launch site already marks where
-revocation happens.
+revocation happens. A revocable resource provides a scoped access guard through
+`.hold()`, as recorded in
+[ADR-0041](adr/0041-revocable-guard-hold-spelling.md).
 
 The `'` character is ambiguous with a character literal. Lexically, an
 opening `'` followed by one character or one escape and a closing `'` is a

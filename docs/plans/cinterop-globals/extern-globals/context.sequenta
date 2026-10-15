@@ -1,0 +1,98 @@
+[1]
+task: extern-globals::syntax
+status: done
+desc: Parse manual `extern var` and `extern const` declarations at module scope.
+impl:
+  - Extend declaration parsing and frontend metadata for external globals with no initializer.
+  - Accept `extern var name: T`, `extern const name: T`, and `= extern CSymbol` aliases.
+  - Keep `extern const` runtime-only and reject invalid placement or initializer combinations.
+  - Add accepted and rejected parser tests without changing ordinary local var or global const rules.
+tests:
+  | id | dado | quando | então |
+  | S-1 | extern var and extern const declarations | frontend parser runs | AST preserves kind, type, and optional C alias |
+  | S-2 | malformed extern global declaration | frontend parser runs | a specific diagnostic is reported and parsing recovers |
+  | S-3 | ordinary top-level var or const without initializer | frontend parser runs | existing Zith-- restrictions remain enforced |
+
+[2]
+task: extern-globals::importer
+status: done
+desc: Import supported C external object declarations and the typedef names needed by their types.
+impl:
+  - Extend CHeaderArtifact with external global and reachable typedef metadata.
+  - Visit VarDecl only when its declaration is written directly in the requested header and has external linkage.
+  - Exclude static and transitively declared globals.
+  - Preserve top-level object constness separately from pointee constness.
+  - Accept scalar and pointer objects, including opaque pointee records; reject unsupported by-value aggregates.
+  - Record unsupported declarations as diagnostics while continuing to collect other declarations.
+  - Import reachable typedef names such as FILE without importing unrelated declarations.
+tests:
+  | id | dado | quando | então |
+  | I-1 | direct extern scalar, pointer, and typedef declarations | C header is parsed | supported globals and required typedefs are present |
+  | I-2 | static and transitive globals | C header is parsed | neither declaration is imported |
+  | I-3 | const object and const-pointee pointer | C header is parsed | object mutability is classified independently from pointee constness |
+  | I-4 | unsupported object plus supported globals | C header is parsed | unsupported diagnostic and supported declarations are both retained |
+
+[3]
+task: extern-globals::bindings
+status: done
+desc: Resolve manual and imported globals through sema and lower referenced globals into HIR.
+impl:
+  - Add foreign-global identity to resolved names and bind imported globals in module scope.
+  - Lower C types and imported typedefs through the existing foreign type mapping.
+  - Enforce read-only access for extern const while permitting assignment to extern var.
+  - Preserve C linker symbol aliases without changing the source-level binding name.
+  - Add HIR representation for external globals and explicit load/store operations or equivalent lvalue lowering.
+  - Ensure only globals referenced by source expressions need execution lowering.
+tests:
+  | id | dado | quando | então |
+  | B-1 | imported scalar and pointer global references | sema and HIR lowering run | correct foreign symbol and type are retained |
+  | B-2 | assignment to extern var | sema runs | assignment is accepted |
+  | B-3 | assignment to extern const | sema runs | assignment is rejected |
+  | B-4 | `const T *` and `T *const` declarations | sema runs | only top-level C object constness controls binding mutability |
+
+[4]
+task: extern-globals::llvm_codegen
+status: done
+desc: Emit external LLVM global declarations and generate loads, addresses, and permitted stores.
+impl:
+  - Emit imported globals with external linkage and their exact C linkage names.
+  - Emit manual extern declarations using the source name or explicit `= extern CSymbol` alias.
+  - Lower reads and addresses to the external LLVM global.
+  - Lower writes only for mutable external globals.
+  - Avoid creating duplicate LLVM globals when multiple references resolve to one declaration.
+tests:
+  | id | dado | quando | então |
+  | L-1 | referenced external integer global | LLVM build and run execute | read observes the C-defined value |
+  | L-2 | referenced mutable C global | LLVM build and run execute | write updates the C-defined object |
+  | L-3 | `import "stdio.h"` and use of stderr/stdout | LLVM build and run execute | C stream pointer is usable through imported FILE typedef |
+
+[5]
+task: extern-globals::vm_fallback
+status: done
+desc: Keep VM checking valid and report unsupported external-global use only when the program uses one.
+impl:
+  - Preserve `check` success for supported declarations because it stops before VM execution lowering.
+  - Add a specific unsupported-resource diagnostic when VM lowering encounters a used external global.
+  - Do not fail VM lowering merely because an imported global is present but unused.
+  - Keep LLVM behavior independent from this VM-only limitation.
+tests:
+  | id | dado | quando | então |
+  | V-1 | imported global is unused | VM run/lowering executes | program continues without an unsupported-global diagnostic |
+  | V-2 | imported global is read or written | VM run/lowering executes | explicit unsupported-resource diagnostic names the feature |
+  | V-3 | program only checked with imported global | `zithc check` runs | type check succeeds when declaration use is otherwise valid |
+
+[6]
+task: extern-globals::docs_and_regression
+status: done
+desc: Document the supported surface, limitations, diagnostics, and verified status.
+impl:
+  - Update docs/Zith--.md and docs/Zith---implementation.md with declaration and const semantics.
+  - Update docs/18-c-interop.md, docs/impl-status.md, and docs/implementation-debt.md with import behavior and remaining limitations.
+  - Add end-to-end regression coverage for direct-header filtering, FILE typedefs, aliases, LLVM execution, and VM fallback.
+  - Preserve unrelated worktree changes and inspect each target diff before staging or committing.
+  - Run focused C interop, frontend, HIR, VM, and codegen tests, then the full build and CTest suite.
+tests:
+  | id | dado | quando | então |
+  | D-1 | implementation and focused regression suite complete | docs and status are reviewed | all three specification/status documents agree |
+  | D-2 | LLVM-enabled configured build | focused CTest selection runs | all focused tests pass |
+  | D-3 | full configured build | full CTest suite runs | no new failures are introduced |

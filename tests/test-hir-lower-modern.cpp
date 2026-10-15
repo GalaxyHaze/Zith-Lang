@@ -1,4 +1,5 @@
 #include "cli/options.hpp"
+#include "diagnostics/error-codes.hpp"
 #include "hir/hir-expr.hpp"
 #include "session/compilation-session.hpp"
 #include "symbols/symbol-id.hpp"
@@ -2066,6 +2067,44 @@ void test_call_with_unlowerable_argument_fails_pipeline() {
           "no incomplete HIR call survives the failure");
 }
 
+// `check` stops at TypeChecked, so an invalid escape must be reported by sema
+// itself, not only by HIR lowering.
+void test_invalid_escape_reports_at_type_check() {
+    const auto expect_invalid_escape = [](std::string_view source, std::string_view what) {
+        Workspace workspace;
+        workspace.writeFile("main.zith", source);
+
+        memory::Arena arena;
+        Options options(arena);
+        options.targetStage = session::Stage::TypeChecked;
+        session::CompilationSession session(options, (workspace.root / "main.zith").string());
+        session.setBuffered(true);
+
+        CHECK(!session.runTo(session::Stage::TypeChecked), std::string(what).c_str());
+        bool found = false;
+        for (const auto &diagnostic : session.diags().all()) {
+            if (diagnostic.code == diagnostics::err::InvalidEscape) {
+                found = true;
+                break;
+            }
+        }
+        CHECK(found, "the invalid literal reports E0003 during type checking");
+    };
+
+    expect_invalid_escape("fn main() {\n"
+                          "    _ = \"bad\\q\";\n"
+                          "}\n",
+                          "an unknown string escape fails at type check");
+    expect_invalid_escape("fn main() {\n"
+                          "    var c: char = '\\q';\n"
+                          "}\n",
+                          "an unknown char escape fails at type check");
+    expect_invalid_escape("fn main() {\n"
+                          "    var c: char = 'ab';\n"
+                          "}\n",
+                          "a multi-character char literal fails at type check");
+}
+
 void test_raw_union_lowers_members_and_casts() {
     Workspace workspace;
     workspace.writeFile("main.zith", "raw union Bits { u8, u32 }\n"
@@ -2903,6 +2942,7 @@ static void test_hir_lower_modern() {
     test_raw_slice_and_index_lower_without_optional_checks();
     test_generic_instance_deduplication();
     test_call_with_unlowerable_argument_fails_pipeline();
+    test_invalid_escape_reports_at_type_check();
     test_raw_union_lowers_members_and_casts();
     test_is_type_pointer_lowers_union_check_and_keeps_terminators();
     test_distinct_generic_instances_have_distinct_symbols();

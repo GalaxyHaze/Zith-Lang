@@ -1,7 +1,8 @@
 ## 16. Words (Custom Operators)
 
 > **Status:** see [impl-status.md](impl-status.md) for the current status of words. Declarations
-> are accepted but the body is dropped, and word call expressions are rejected.
+> are accepted but the body is dropped, and word call expressions are rejected. The examples use
+> the full-Zith `extend` spelling; Zith-- retains `implement`.
 
 Words let you define custom operators from identifiers. Each word has a fixed position, which is **prefix**, **infix**, or **suffix**, with language-defined precedence.
 
@@ -16,15 +17,15 @@ Words let you define custom operators from identifiers. Each word has a fixed po
 
 | Type | Description | Example |
 |---|---|---|
-| `operator` | Overload a specific operator (`+`, `-`, `*`, `()`, etc.) | `implement Vec3 as Arithmetic { fn +(self, other: Self): Self { ... } }` |
+| `operator` | Overload a specific operator (`+`, `-`, `*`, `()`, etc.) | `extend Vec3 with Arithmetic { fn +(self, other: Self): Self { ... } }` |
 | `token` | A word with low precedence that does nothing alone. Serves as a syntactic component in domain expressions. | `token SELECT;` |
 
 #### Operator Words
 
-Operator words overload built-in operators. Use `implement` with a capability to define the behavior:
+Operator words overload built-in operators. Use `extend` with a capability to define the behavior:
 
 ```zith
-implement Vec3 as Arithmetic {
+extend Vec3 with Arithmetic {
     fn +(self, other: Self): Self { ... }
     fn -(self, other: Self): Self { ... }
     fn *(self, scalar: f32): Self { ... }

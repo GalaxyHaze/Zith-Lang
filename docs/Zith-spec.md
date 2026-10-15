@@ -59,7 +59,7 @@ The compiler is a copilot: it gives you the tools, and you build the systems.
 
 | Everyday | Domain-specific |
 |---|---|
-| `struct`, `fn`, `&`, `&mut`, `trait`, `interface` | `state`, `dock`, `jump` — for Games, State Machine, OS & embedded |
+| `struct`, `fn`, `&`, `&mut`, `trait`, `contract` | `state`, `dock`, `jump` — for Games, State Machine, OS & embedded |
 | `?T`, `or` | `context`, `word` — for domain-specific syntax integration |
 | `when`, `for`, `->` | runtime/stdlib concurrency APIs — for parallel work without special syntax |
 
@@ -67,7 +67,7 @@ The compiler is a copilot: it gives you the tools, and you build the systems.
 
 - Expressive, minimal syntax that favors readability without sacrificing power.
 - Memory safety via Node Resource Analysis (NRA).
-- Composable behavior through traits, capabilities, and interfaces.
+- Composable behavior through traits, capabilities, and structural contracts.
 - Static, zero-overhead error handling with rich recovery semantics.
 - Compile-time computation (`comptime`) as a first-class feature.
 - Low-level control, such as state functions and musttail state transitions, without sacrificing safety in everyday code.
@@ -124,7 +124,7 @@ source -> lex -> scan -> resolve(import/symbols) -> sema -> comptime/solve -> NT
 |---|---|---|---|
 | 2 | [Module System](02-module-system.md) | `02-module-system.md` | `import`, `from`, `export`, `alias`, `use`, visibility |
 | 3 | [Type System](03-type-system.md) | `03-type-system.md` | Primitives, structs, enums, unions, generics, `when` |
-| 4 | [Traits, Interfaces & Capabilities](04-traits-interfaces.md) | `04-traits-interfaces.md` | Nominal traits and composition, static structural interface contracts, capabilities |
+| 4 | [Traits, Contracts & Capabilities](04-traits-interfaces.md) | `04-traits-interfaces.md` | Nominal traits and composition, static structural contracts, capabilities |
 | 5 | [Functions](05-functions.md) | `05-functions.md` | `fn`, `const fn`, `state`, `raw fn`, `extern fn`, return types |
 | 6 | [Mutability & Bindings](06-mutability-bindings.md) | `06-mutability-bindings.md` | `let`, `var`, `global`, `const`, deep mutability, destructuring |
 | 7 | [Memory Model (NRA)](07-memory-model.md) | `07-memory-model.md` | Full-Zith ownership through `&`/`&mut`, `^`, and `%`, plus the four rules. Zith-- implements the `lend`/`view` call-annotation subset. |
@@ -155,13 +155,13 @@ source -> lex -> scan -> resolve(import/symbols) -> sema -> comptime/solve -> NT
 | `alias` | Module | Name alias for a type, namespace, or symbol. |
 | `use` | Module | Bring a word, context, or operator into scope. |
 | `type` | Types | Distinct type copy, or a compile-time constraint (with `or`). |
-| `as` | Types | Cast / coercion. Also used in `implement T as Trait`. |
+| `as` | Types | Cast / coercion. |
 | `is` | Types | Type check / narrowing. Boolean. Supports `@struct`, `@nullable`, etc. |
 | `enum` | Types | Closed compile-time constants with one declared value type, or heterogeneous values through `enum: union`. |
 | `union` | Types | Runtime-tagged value holding one of its declared member types, which may be heterogeneous. |
 | `struct` | Types | Record type. Fields may be grouped with `[]`. |
-| `component` | Types | POD / copy-by-default struct. No traits. C-compatible. |
-| `implement` | Types | `implement T {}` or `implement T as Trait {}`. |
+| `pod` | Types | POD / copy-by-default struct. No traits. C-compatible. |
+| `extend` | Types | Declares nominal trait conformance with `extend T with Trait {}`. |
 | `when` | Types | Pattern matching — ranges, type dispatch, branch tags, `..` to ignore fields. |
 | `[]T` / `[N]T` / `[_]T` | Types | Slice / fixed array / deduced-size array. |
 | `\| \|` | Types | Pack — named tuple / variadic / closure capture group. |
@@ -169,7 +169,7 @@ source -> lex -> scan -> resolve(import/symbols) -> sema -> comptime/solve -> NT
 | `let` / `var` / `global` / `const` | Bindings | Immutable / mutable / static storage / compile-time constant. |
 | `default` / `&T` / `&mut T` / `^T` / `%T` | Memory | Full-Zith reference and ownership forms. Zith-- currently implements the `lend`/`view` call-annotation subset. |
 | `fn` / `const fn` / `state` / `raw fn` / `extern fn` | Functions | Five exclusive function kinds; cannot be combined. |
-| `trait` / `interface` / `extends` / `requires` / `dyn` | OOP | Nominal traits, trait composition, static interface contracts, bounds, and trait dynamic dispatch. |
+| `trait` / `contract` / `extends` / `requires` / `dyn` | OOP | Nominal traits, trait composition, structural contracts, bounds, and trait dynamic dispatch. |
 | `Copy` / `Functor` / `Arithmetic` | Capabilities | Operator and behavior capabilities. |
 | `Failable` / `Invalid` / `Error` | Capabilities | Invalid-state analysis, methods on proven-invalid `Failable` values, and the marker capability for error values ([§8](08-error-handling.md)). |
 | `Allocator` / `Generator` / `Share` / `Lent` / `Trust` / `Unique` | Capabilities | Memory, runtime protocol, and safety capabilities. |
@@ -218,12 +218,30 @@ source -> lex -> scan -> resolve(import/symbols) -> sema -> comptime/solve -> NT
 | `@location` | Rich panic message source. |
 | `@ok` | Used with `is` to narrow a `Failable` value to its valid state; the `else` branch proves it invalid. |
 
+The `@component` type-kind predicate remains a current spelling. Whether it
+changes to `@pod` with the full-Zith `pod` declaration is still open.
+
 ### A.3 Attributes
+
+Full-Zith capability-use and purity annotations are static contracts. Their
+semantics are recorded in
+[ADR-0039](adr/0039-full-zith-capability-and-purity-contracts.md). Their
+placement and ordering are still open. Zith-- retains its existing syntax.
 
 | Attribute | Summary |
 |---|---|
 | `#volatile` | The variable is volatile; the compiler must not optimize it away. |
 | `#thread_local` | The variable uses thread-local storage. |
+| `@using(X, Y)` | Requires at least one reachable use of each named capability. Other capabilities remain allowed. |
+| `@only(X, Y)` | Allows only the listed capabilities. `@only(not X)` prohibits `X`. |
+| `@pure` | Requires deterministic behavior with no side effects. |
+| `@valuePure` | Requires the returned value to depend only on explicit arguments. Other side effects may remain. |
+| `@impure` | Requires the function to be classified as impure. |
+
+Full-Zith keyword spellings and the eight-byte limit are recorded in
+[ADR-0040](adr/0040-full-zith-surface-names-and-keyword-limit.md). That
+decision does not change the `component`, `interface`, or `implement`
+spellings accepted by Zith--.
 
 ---
 

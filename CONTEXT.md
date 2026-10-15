@@ -108,9 +108,25 @@ _Avoid_: interface
 A relationship that combines traits' method contracts, defaults, and capabilities without inheriting or embedding type fields.
 _Avoid_: inheritance, embedding
 
-**Interface**:
-A structural static contract on a type or value, satisfied automatically when its conjunctive conditions hold.
-_Avoid_: dynamic interface, trait
+**Structural contract**:
+A full-Zith `contract` declaration whose conjunctive type and value conditions are satisfied structurally. It does not provide behavior or dynamic dispatch.
+_Avoid_: full-Zith interface, dynamic contract
+
+**Zith-- interface**:
+A structural static contract in the implemented Zith-- subset, satisfied automatically when its conditions hold.
+_Avoid_: trait, dynamic interface
+
+**Capability trait**:
+A nominal trait that names an ability, such as `Fs`, for static capability-use contracts.
+_Avoid_: runtime effect, purity classification
+
+**Capability-use annotation**:
+A full-Zith `@using` or `@only` requirement over nominal capability traits, independent of purity and the NRA effect header.
+_Avoid_: purity annotation, NRA effect header
+
+**Value-pure function**:
+A function whose returned value depends only on its explicit arguments, even when the function also performs side effects that do not affect that value.
+_Avoid_: deterministic function, side-effect-free function
 
 ## Architecture
 

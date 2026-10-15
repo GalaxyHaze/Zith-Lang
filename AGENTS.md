@@ -1,14 +1,17 @@
 #Repository Guidelines
 
-##Project Structure &Module Organization
+## Project Structure And Module Organization
 
-        Zith is a C++ 23 compiler.Compiler subsystems live under `src /`; keep code in the
-directory matching its namespace, such as `zith::parser` in `src/parser/`.
-Important areas include `ast/`, `lexer/`, `parser/`, `symbols/`, `types/`,
-`sema/`, `hir/`, `codegen/`, and `session/`. `src/session/compilation-session.*`
+Zith is a C++23 compiler. Active compiler subsystems live under `src/` and
+follow the current module layout: `memory/`, `support/`, `common/`, `cli/`,
+`session/`, `diagnostics/`, `cache/`, `capi/`, `codegen/`, `comptime/`,
+`formatter/`, `hir/`, `sema/`, `symbols/`, `types/`, `wasm/`, `zirl/`,
+`frontend/`, `cinterop/`, `cc/`, `ide/`, `interp/`, and `vm/`. The `frontend/`
+module owns lexing, parsing, AST lowering, macros, and frontend printing.
+Binary library format code lives in `zirl/`. `src/session/compilation-session.*`
 orchestrates the pipeline. Unit tests are standalone executables in `tests/`.
-The language standard library is in `stdlib/`, examples in `examples/`, and
-user-facing language documentation in `docs/`.
+The language standard library is in `stdlib/`, examples are in `examples/`,
+and user-facing language documentation is in `docs/`.
 
 ## Zith-- Source of Truth
 
@@ -296,10 +299,9 @@ markdown knowledge bases (docs, notes, project memory).
 ### Project Memory Files
 
 Persist useful discoveries about the project as Markdown files under `memory/`,
-one file per topic or area. Keep every file between 200 and 300 lines;
-if a
-topic grows beyond 300 lines, split it into more focused files and link them
-from `memory/README.md`.
+one file per topic or area. Keep each note as short as useful. Split a note
+when distinct topics need independent retrieval or when a real playbook makes
+the file unwieldy, then link the resulting notes from `memory/README.md`.
 
 Use these files as a lightweight durable memory layer, independent of code
 search indexes:

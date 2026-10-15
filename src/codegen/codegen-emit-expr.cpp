@@ -408,6 +408,18 @@ llvm::Value *CodeGenEmit::emitExpr(hir::HirExprId id, const hir::HirModule &mod)
                         return is_pointer_result ? builder_.CreateExtractValue(operand_value, {0U})
                                                  : builder_.CreateExtractValue(operand_value, {1U});
                     }
+                    if (i.operand_type != types::kInvalidType) {
+                        const auto *pointer_type =
+                            std::get_if<types::TypePtr>(&types_.lookup(i.operand_type));
+                        if (pointer_type != nullptr &&
+                            types_.kindOf(pointer_type->pointee) == types::TypeKind::Slice) {
+                            auto *slice_type  = typeGen_.lower(pointer_type->pointee);
+                            auto *slice_value = builder_.CreateLoad(slice_type, operand_value);
+                            return is_pointer_result
+                                       ? builder_.CreateExtractValue(slice_value, {0U})
+                                       : builder_.CreateExtractValue(slice_value, {1U});
+                        }
+                    }
                     if (i.operand_type != types::kInvalidType &&
                         types_.kindOf(i.operand_type) == types::TypeKind::Array) {
                         const auto *array_type =
@@ -514,8 +526,10 @@ llvm::Value *CodeGenEmit::emitLiteral(const hir::HirLiteral &lit) {
                                               static_cast<uint64_t>(lit.i), true);
             },
             [&](const types::TypePtr &) -> llvm::Value * {
+                if (module_ == nullptr)
+                    return nullptr;
                 auto str_data         = interner_.lookup(lit.str_val);
-                auto *module          = builder_.GetInsertBlock()->getParent()->getParent();
+                auto *module          = module_;
                 const std::string key = std::string(".str\0", 4U) + std::string(str_data);
                 auto *global          = module->getNamedGlobal(key);
                 if (global == nullptr) {

@@ -1008,6 +1008,9 @@ hir::HirExprId HirLowerModern::lowerLayoutIntrinsic(const frontend::Expression &
                                                          : hir::HirLayoutIntrinsic::Which::PtrOf;
         intrinsic.operand      = lowerExpr(expr.operands[0]);
         intrinsic.operand_type = typeOfExpr(expr.operands[0]);
+        if (sema_.isBorrowParameter(current_module_->key, expr.operands[0]) &&
+            types_.kindOf(intrinsic.operand_type) == types::TypeKind::Slice)
+            intrinsic.operand_type = types_.internPtr(intrinsic.operand_type);
         intrinsic.type         = typeOfExpr(expr.id);
         if (intrinsic.operand == hir::kInvalidHirExpr || intrinsic.type == types::kErrorType ||
             intrinsic.type == types::kInvalidType)

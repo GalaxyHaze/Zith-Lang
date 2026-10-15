@@ -611,17 +611,19 @@ hir::HirExprId HirLowerModern::lowerCall(const frontend::Expression &expr) {
         }
         if (argument == hir::kInvalidHirExpr)
             return hir::kInvalidHirExpr;
-        const auto argument_type = typeOfExpr(expr.operands[index]);
-        if (argument_type != types::kInvalidType)
-            arg_types.push(argument_type);
         const auto param_sema_raw = callee_fn != nullptr && call_index < callee_fn->params.size()
                                         ? callee_fn->params[call_index]
                                         : sema::modern::kInvalidTypeId;
         const auto param_type     = param_sema_raw != sema::modern::kInvalidTypeId
                                         ? lowerType(param_sema_raw)
                                         : types::kInvalidType;
+        const auto argument_type =
+            annotated && param_type != types::kInvalidType ? param_type
+                                                           : typeOfExpr(expr.operands[index]);
+        if (argument_type != types::kInvalidType)
+            arg_types.push(argument_type);
         hir::HirExprId lowered_argument =
-            lowerCoerceToTarget(param_type, expr.operands[index], argument);
+            annotated ? argument : lowerCoerceToTarget(param_type, expr.operands[index], argument);
         if (param_sema_raw != sema::modern::kInvalidTypeId) {
             const auto param_sema = param_sema_raw;
             if (sema_.typeTable().kindOf(param_sema) == sema::modern::TypeKind::Dyn ||

@@ -196,45 +196,47 @@ void MacroExpander::expandExpr(ExprId id, const std::vector<MacroInfo> &macros,
                                std::vector<std::string> &stack) {
     if (!id || id.value > snapshot_.expressions_.size())
         return;
-    auto &expr = snapshot_.expressions_[id.value - 1U];
+    const size_t exprIndex = id.value - 1U;
+    auto &expr             = snapshot_.expressions_[exprIndex];
 
     if (expr.kind == ExprKind::MacroCall && !expr.expansion) {
+        const Expression call = expr;
         // Resolve macro.
         const MacroInfo *macro = nullptr;
         for (const auto &m : macros) {
-            if (m.name == expr.text) {
+            if (m.name == call.text) {
                 macro = &m;
                 break;
             }
         }
         if (!macro) {
-            std::string msg = "unknown macro '" + expr.text + "'";
+            std::string msg = "unknown macro '" + call.text + "'";
             prependTrace(msg, stack);
             snapshot_.diagnostics_.push_back(
-                Diagnostic{expr.span, std::move(msg), false, diagnostics::err::MacroUnknown});
+                Diagnostic{call.span, std::move(msg), false, diagnostics::err::MacroUnknown});
             return;
         }
 
         // Arity (ignore the special `attributes` param if present).
         {
             const size_t expectArgs = macro->paramNames.size();
-            if (expr.operands.size() != expectArgs) {
-                std::string msg = "macro '" + expr.text + "' expects " +
+            if (call.operands.size() != expectArgs) {
+                std::string msg = "macro '" + call.text + "' expects " +
                                   std::to_string(expectArgs) + " arguments but " +
-                                  std::to_string(expr.operands.size()) + " were provided";
+                                  std::to_string(call.operands.size()) + " were provided";
                 prependTrace(msg, stack);
                 snapshot_.diagnostics_.push_back(
-                    Diagnostic{expr.span, std::move(msg), false, diagnostics::err::MacroArity});
+                    Diagnostic{call.span, std::move(msg), false, diagnostics::err::MacroArity});
                 return;
             }
         }
 
         // Recursion depth limit.
         if (stack.size() >= static_cast<size_t>(kMaxExpansionDepth)) {
-            std::string msg = "macro recursion limit exceeded at '" + expr.text + "'";
+            std::string msg = "macro recursion limit exceeded at '" + call.text + "'";
             prependTrace(msg, stack);
             snapshot_.diagnostics_.push_back(
-                Diagnostic{expr.span, std::move(msg), false, diagnostics::err::MacroRecursion});
+                Diagnostic{call.span, std::move(msg), false, diagnostics::err::MacroRecursion});
             return;
         }
 
@@ -245,7 +247,7 @@ void MacroExpander::expandExpr(ExprId id, const std::vector<MacroInfo> &macros,
                                   "': recursive macro expansion detected";
                 prependTrace(msg, stack);
                 snapshot_.diagnostics_.push_back(
-                    Diagnostic{expr.span, std::move(msg), false, diagnostics::err::MacroRecursion});
+                    Diagnostic{call.span, std::move(msg), false, diagnostics::err::MacroRecursion});
                 return;
             }
         }
@@ -253,7 +255,7 @@ void MacroExpander::expandExpr(ExprId id, const std::vector<MacroInfo> &macros,
         // Validate argument kinds.
         for (size_t i = 0; i < macro->paramNames.size(); ++i) {
             const auto &mt   = macro->paramMetaTypes[i];
-            const auto argId = expr.operands[i];
+            const auto argId = call.operands[i];
             if (!argId || argId.value > snapshot_.expressions_.size())
                 return;
             const auto &arg = snapshot_.expressions_[argId.value - 1U];
@@ -276,30 +278,30 @@ void MacroExpander::expandExpr(ExprId id, const std::vector<MacroInfo> &macros,
         }
 
         // Attributes require an `attributes` parameter on the declaration.
-        if (!expr.attributes.empty() && !macro->hasAttributes) {
+        if (!call.attributes.empty() && !macro->hasAttributes) {
             std::string msg =
                 "macro '" + macro->name + "' does not declare an 'attributes' parameter";
             prependTrace(msg, stack);
-            snapshot_.diagnostics_.push_back(Diagnostic{expr.span, std::move(msg), false,
+            snapshot_.diagnostics_.push_back(Diagnostic{call.span, std::move(msg), false,
                                                         diagnostics::err::MacroAttrNotAllowed});
             return;
         }
 
         // A tag macro produces no value; it only expands as a statement.
-        if (macro->isTag && contextIsValue(expr.id)) {
-            std::string msg = "tag macro '" + expr.text + "' cannot be used as a value";
+        if (macro->isTag && contextIsValue(call.id)) {
+            std::string msg = "tag macro '" + call.text + "' cannot be used as a value";
             prependTrace(msg, stack);
             snapshot_.diagnostics_.push_back(
-                Diagnostic{expr.span, std::move(msg), false, diagnostics::err::MacroTagValue});
+                Diagnostic{call.span, std::move(msg), false, diagnostics::err::MacroTagValue});
             return;
         }
 
         // raw macro cannot be used as a value expression.
-        if (macro->isRaw && contextIsValue(expr.id)) {
-            std::string msg = "raw macro '" + expr.text + "' cannot be used as a value";
+        if (macro->isRaw && contextIsValue(call.id)) {
+            std::string msg = "raw macro '" + call.text + "' cannot be used as a value";
             prependTrace(msg, stack);
             snapshot_.diagnostics_.push_back(
-                Diagnostic{expr.span, std::move(msg), false, diagnostics::err::MacroRawValue});
+                Diagnostic{call.span, std::move(msg), false, diagnostics::err::MacroRawValue});
             return;
         }
 
@@ -315,19 +317,17 @@ void MacroExpander::expandExpr(ExprId id, const std::vector<MacroInfo> &macros,
 
         // Clone the template body, substituting parameters.
         scopeMap_.clear();
-        const auto attrNames       = expr.attributeNames;
-        const auto attrExprs       = expr.attributes;
+        const auto attrNames       = call.attributeNames;
+        const auto attrExprs       = call.attributes;
         callAttrNames_             = &attrNames;
         callAttrExprs_             = &attrExprs;
-        callSpanForAttrs_          = expr.span;
+        callSpanForAttrs_          = call.span;
         const size_t origExprCount = snapshot_.expressions_.size();
         const size_t origStmtCount = snapshot_.statements_.size();
         ExprMap exprMap(origExprCount + 1U);
-        // Copy operands: expr is a reference into snapshot_.expressions_,
-        // and addExpression push_back can reallocate and invalidate it.
-        const std::vector<ExprId> args = expr.operands;
+        const std::vector<ExprId> args = call.operands;
         ExprId expandedBody =
-            cloneExpr(macro->body, args, expr.span, expr.scope, macro, exprMap, *source);
+            cloneExpr(macro->body, args, call.span, call.scope, macro, exprMap, *source);
 
         // Apply hygiene renaming to template-derived nodes only.
         for (size_t ei = origExprCount; ei < snapshot_.expressions_.size(); ++ei) {
@@ -352,23 +352,25 @@ void MacroExpander::expandExpr(ExprId id, const std::vector<MacroInfo> &macros,
         // Wrap in Block (normal macros) or prepare splice (raw macros).
         Expression block;
         block.kind  = ExprKind::Block;
-        block.span  = expr.span;
-        block.scope = macro->isRaw ? expr.scope : addScope(Scope{{}, expr.scope, expr.span});
+        block.span  = call.span;
+        block.scope = macro->isRaw ? call.scope : addScope(Scope{{}, call.scope, call.span});
+        ExprId result;
 
         if (expandedBody) {
             const auto &expanded = snapshot_.expressions_[expandedBody.value - 1U];
-            if (expanded.kind == ExprKind::Block) {
-                block.statements = expanded.statements;
-                if (!macro->isRaw) {
+            if (expanded.kind == ExprKind::Block && !macro->isRaw) {
+                result = expandedBody;
+                if (expanded.scope) {
                     auto &innerScope  = snapshot_.scopes_[expanded.scope.value - 1U];
-                    innerScope.parent = expr.scope;
-                    block.scope       = expanded.scope;
+                    innerScope.parent = call.scope;
                 }
+            } else if (expanded.kind == ExprKind::Block) {
+                block.statements = expanded.statements;
             } else {
                 Statement stmt;
                 stmt.kind       = StmtKind::Expression;
                 stmt.expression = expandedBody;
-                stmt.span       = expr.span;
+                stmt.span       = call.span;
                 block.statements.push_back(addStatement(std::move(stmt)));
             }
         }
@@ -376,9 +378,10 @@ void MacroExpander::expandExpr(ExprId id, const std::vector<MacroInfo> &macros,
         callAttrNames_ = nullptr;
         callAttrExprs_ = nullptr;
 
-        ExprId result                                        = addExpression(std::move(block));
-        snapshot_.expressions_[id.value - 1U].expansion      = result;
-        snapshot_.expressions_[id.value - 1U].expansionIsRaw = macro->isRaw;
+        if (!result)
+            result = addExpression(std::move(block));
+        snapshot_.expressions_[exprIndex].expansion      = result;
+        snapshot_.expressions_[exprIndex].expansionIsRaw = macro->isRaw;
 
         // Walk expansion for nested macros.
         stack.push_back(macro->name);
@@ -388,25 +391,30 @@ void MacroExpander::expandExpr(ExprId id, const std::vector<MacroInfo> &macros,
     }
 
     // Walk child expressions.
-    for (auto op : expr.operands)
+    const auto operands   = expr.operands;
+    const auto conditions = expr.conditions;
+    for (auto op : operands)
         expandExpr(op, macros, stack);
 
-    // Walk child statements by index so raw splicing can mutate the list.
-    for (size_t si = 0; si < expr.statements.size(); ++si) {
-        const auto sid = expr.statements[si];
+    // Reacquire the parent expression by index because recursive expansion can
+    // append expressions and reallocate the snapshot vectors.
+    for (size_t si = 0; si < snapshot_.expressions_[exprIndex].statements.size(); ++si) {
+        const auto sid = snapshot_.expressions_[exprIndex].statements[si];
         if (!sid || sid.value > snapshot_.statements_.size())
             continue;
-        auto &stmt = snapshot_.statements_[sid.value - 1U];
+        const Statement stmt = snapshot_.statements_[sid.value - 1U];
         if (stmt.kind == StmtKind::Expression && stmt.expression) {
             const auto eid = stmt.expression;
-            auto &es       = snapshot_.expressions_[eid.value - 1U];
+            const auto es  = snapshot_.expressions_[eid.value - 1U];
             if (es.kind == ExprKind::MacroCall && es.expansion && es.expansionIsRaw) {
                 // Splice the expansion statements directly into the parent block.
-                const auto &expBlock = snapshot_.expressions_[es.expansion.value - 1U];
-                expr.statements.erase(expr.statements.begin() + static_cast<ptrdiff_t>(si));
+                const auto expandedStatements =
+                    snapshot_.expressions_[es.expansion.value - 1U].statements;
+                auto &statements = snapshot_.expressions_[exprIndex].statements;
+                statements.erase(statements.begin() + static_cast<ptrdiff_t>(si));
                 ptrdiff_t pos = static_cast<ptrdiff_t>(si);
-                for (auto s : expBlock.statements)
-                    expr.statements.insert(expr.statements.begin() + (pos++), s);
+                for (auto s : expandedStatements)
+                    statements.insert(statements.begin() + (pos++), s);
                 --si; // re-process at current position
                 continue;
             }
@@ -419,7 +427,7 @@ void MacroExpander::expandExpr(ExprId id, const std::vector<MacroInfo> &macros,
             expandExpr(argument, macros, stack);
     }
 
-    for (auto cond : expr.conditions)
+    for (auto cond : conditions)
         expandExpr(cond, macros, stack);
 }
 
@@ -452,7 +460,7 @@ ExprId MacroExpander::cloneExpr(ExprId src, const std::vector<ExprId> &args, Tex
     if (src.value < map.size() && map[src.value])
         return map[src.value];
 
-    const auto &orig = source.expressions()[src.value - 1U];
+    const auto orig = source.expressions()[src.value - 1U];
 
     if (orig.kind == ExprKind::Field && macro && macro->hasAttributes) {
         ExprId attrClone;
@@ -540,10 +548,10 @@ StmtId MacroExpander::cloneStmt(StmtId src, const std::vector<ExprId> &args, Tex
     if (!src || src.value > source.statements().size())
         return {};
 
-    const auto &orig = source.statements()[src.value - 1U];
-    Statement copy   = orig;
-    copy.id          = {};
-    copy.span        = callSpan;
+    const auto orig = source.statements()[src.value - 1U];
+    Statement copy  = orig;
+    copy.id         = {};
+    copy.span       = callSpan;
 
     if (copy.expression)
         copy.expression = cloneExpr(
@@ -615,13 +623,13 @@ void MacroExpander::collectHygieneNames(ExprId body, std::vector<std::string> &n
 
 ExprId MacroExpander::substituteAttribute(ExprId src, const MacroInfo *macro, ExprId *outClone,
                                           const FrontendSnapshot &source) {
-    const auto &field = source.expressions()[src.value - 1U];
+    const auto field = source.expressions()[src.value - 1U];
     if (field.operands.empty())
         return {};
     const auto baseId = field.operands[0];
     if (!baseId || baseId.value > source.expressions().size())
         return {};
-    const auto &base = source.expressions()[baseId.value - 1U];
+    const auto base = source.expressions()[baseId.value - 1U];
     if (base.kind != ExprKind::Name || base.text != "attributes")
         return {};
 

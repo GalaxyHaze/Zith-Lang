@@ -1,0 +1,19 @@
+# module: extern-globals
+
+1. syntax(source: Zith--) -> AST
+   depends_on: __root__::cinterop_globals_design
+
+2. importer(header: C) -> CHeaderArtifact
+   depends_on: extern-globals::syntax
+
+3. bindings(hir: HIR) -> foreign_globals
+   depends_on: extern-globals::importer
+
+4. llvm_codegen(globals: HIR) -> LLVM
+   depends_on: extern-globals::bindings
+
+5. vm_fallback(globals: HIR) -> diagnostic
+   depends_on: extern-globals::bindings
+
+6. docs_and_regression(feature: extern_globals) -> verified
+   depends_on: extern-globals::llvm_codegen, extern-globals::vm_fallback

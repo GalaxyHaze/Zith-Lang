@@ -151,6 +151,10 @@ struct Function {
     ValueType returnType = ValueType::Void;
     uint16_t paramCount  = 0;
     uint16_t regCount    = 0;
+    /// True when the function returns an aggregate by value: register 0 is a
+    /// hidden return-slot pointer and the return register is unused. Callers
+    /// read the result out of that slot.
+    bool returnsAggregate = false;
     memory::DynArray<ValueType> regTypes;
     memory::DynArray<Instr> body;
 

@@ -13,7 +13,8 @@ memory::Optional<ErrorInfo> lookupError(ErrCode code) noexcept {
                          "Add a closing double quote to terminate the string"};
     case err::InvalidEscape:
         return ErrorInfo{code, 'E', "lexical", "Invalid escape sequence",
-                         "Use valid escapes: \\n, \\t, \\\", \\\\, \\0"};
+                         "Use valid escapes: \\n, \\r, \\t, \\\\, \\', \\\", \\0, octal "
+                         "\\NNN, or \\xHH"};
     case err::InvalidIntLiteral:
         return ErrorInfo{code, 'E', "lexical", "Invalid integer literal",
                          "Ensure digits are valid for the given base (0x, 0o, 0b)"};

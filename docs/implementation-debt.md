@@ -1,6 +1,6 @@
 # Zith Implementation Debt
 
-> Last updated: 2026-09-26 (release, CI and distribution contract audit).
+> Last updated: 2026-10-15.
 
 Documento de gestão da dívida de implementação. Distingue propositadamente:
 
@@ -188,6 +188,11 @@ dívidas e resoluções ficam numeradas para manter as referências estáveis:
    (`kPlaygroundStatusUnsupported`) para dynamic traits, intrinsics fora do
    subset, call targets fora do subset, literais não primitivos, dynamic array
    index e algumas formas de return.
+   Structs e packs são suportados desde 2026-10-10 (ver dívida 11). Optionals,
+   unions e enum values continuam sem lowering: um nó HIR não tratado falha a
+   tradução com `unsupported HIR expression in v2 lowering`, em vez de devolver
+   um registo não atribuído que o caller pudesse interpretar como "sem valor" e
+   saltar um store ou return em silêncio.
 2. **Computed-goto adiado.** A decisão registada é aplicar computed-goto ao
    dispatch loop "once the opcode set stabilizes". O opcode set ainda está a
    crescer (ver dívida 1), pelo que o loop atual é o dispatcher simples.
@@ -237,6 +242,25 @@ dívidas e resoluções ficam numeradas para manter as referências estáveis:
     argumentos recolhidos e slices explícitos são passados como pares
     pointer/length, com bounds dinâmicos ao indexar slices. A cobertura está
     em `test-vm-v2`.
+11. **Struct lowering — resolvido em 2026-10-10.** Agregados (structs e packs)
+    passam a ser address-backed: o registo de um slot agregado guarda um
+    ponteiro convidado para memória linear, um literal aloca e escreve cada
+    campo com o layout alinhado, `FieldPtr` compõe endereços de campos
+    aninhados sem copiar, e uma atribuição entre agregados é um `MemCopy`. Uma
+    função que devolve um agregado por valor reserva o registo 0 para um
+    ponteiro de resultado escondido (`Function::returnsAggregate`); o caller
+    aloca o slot e lê-o de volta, pelo que o valor de `Ret` do callee não é
+    usado. Slots escalares são igualmente address-backed, para que `&x` seja um
+    endereço real e uma escrita através do pointer resultante seja visível a
+    leituras posteriores de `x`; a storage de todos os slots memory-backed é
+    reservada uma vez num prólogo da função, para que um slot declarado dentro
+    de um loop não seja realocado a cada iteração. A cobertura está em
+    `test-vm-v2` (acesso a campo, campo aninhado, parâmetro e retorno por
+    valor, offsets de campos mistos, deref-assign de escalar, aliasing de
+    pointer, campos de array inline e hoisting da alocação de slot fora do
+    loop). Limitação conhecida: a cópia por `MemCopy` só é correta para
+    agregados sem buffers internos geridos pelo heap, e esses tipos ainda não
+    existem no subset da VM.
 
 ### 4. Bare `opaque` usa hydration estável mas ainda depende de canonização consistente
 
@@ -526,111 +550,12 @@ fixos.
 
 ## Dívida de estrutura: monolitos
 
-Os splits mecânicos de pipeline por ficheiro foram concluídos e estão fora da
-lista activa:
-`src/session/frontend-context.cpp`, `src/session/compilation-session.cpp`,
-`src/codegen/codegen-emit.cpp`, `src/sema/hir-lower-expr.cpp` e
-`src/frontend/frontend-expr.cpp`.
-
-Estado da quebra de `codegen-emit.cpp` (concluída):
-
-- `codegen-emit.cpp`: classe e orquestração (9 linhas).
-- `codegen-emit-expr.cpp`: emissão de expressões (984 linhas).
-- `codegen-emit-stmt.cpp`: emissão de statements/control flow (163 linhas).
-- `codegen-emit-agg.cpp`: emissão de agregados (133 linhas).
-
-`tests/test-codegen` corre com `396 passed, 0 failed` no estado atual.
-
-Estado da quebra de `frontend-context.cpp` (concluída):
-
-- `frontend-context.cpp`: entrada pública de parsing/frontend ou
-  orchestration (315 linhas).
-- `frontend-module-analysis.cpp`: análise e discovery de módulos
-  (412 linhas).
-- `frontend-module-cache.cpp`: bookkeeping do module cache (275 linhas).
-- `frontend-source-catalog.cpp`: source catalog e helpers de fingerprinting
-  (196 linhas).
-- `frontend-symbol-resolution.cpp`: import requests e resolução de
-  símbolos/módulos (777 linhas).
-
-Estado da quebra de `compilation-session.cpp` (concluída):
-
-- `compilation-session.cpp`: orquestração dos stages do pipeline e glue da
-  sessão (879 linhas).
-- `native-link.cpp`: helpers de native link/run (421 linhas).
-- `persistent-cache.cpp`: helpers de cache persistente/object cache
-  (721 linhas).
-- `pipeline-plan.cpp`: contrato dos stages planeados (13 linhas).
-
-Estado da quebra de `frontend.cpp`:
-
-- `frontend.cpp`: snapshot/reconstruct/parse/canonical/functionSignature e
-  orquestração pública (~199 linhas).
-- `ast-lowerer.cpp`: lexer, CST builder, helpers do lowerer, `run()` e
-  `skipMacroInvocation()` (~667 linhas).
-- `frontend-types.cpp`: `parseType`, `isIntrinsicName` (~325 linhas).
-- `frontend-expr.cpp`: call args, primary, postfix, expression/binary expression
-  precedence e associativity (~1077 linhas; atual split em baixo).
-- `frontend-stmt.cpp`: blocks, if/when, loops, condition, tag macro e statements
-  (~1027 linhas).
-- `frontend-decl.cpp`: imports, macros, implement, `lowerDeclaration`, campos de
-  struct/interface e skip helpers (~1016 linhas).
-
-O header `frontend/ast-lowerer.hpp` expõe `AstLowerer`, helpers de token e
-`lex`/`parseCst`/`lowerAst`. `FrontendSnapshot` concede `friend` a
-`lex`, `parseCst`, `lowerAst`, `AstLowerer` e `MacroExpander`.
-
-Estado da quebra de `sema-modern.cpp`:
-
-- `sema-modern.cpp`: construtor, `run()`, `prepareTypes()`, `checkExpressions()`,
-  accessors, report helpers e `SemaPipeline` (182 linhas).
-- `sema-decl.cpp`: registo de tipos, lowering de declarações, implement blocks,
-  defaults de structs/functions.
-- `sema-type.cpp`: lowering de tipos, foreign types, instanciação e resolução de
-  declarações/interfaces.
-- `sema-expr.cpp`: dispatcher de inferência e operadores unary/binary.
-- `sema-call.cpp`: overload resolution, calls, variadic tail e default args.
-- `sema-method.cpp`: métodos, `dyn`/traits/interfaces e constraints genéricas.
-- `sema-control.cpp`: blocks, controlo de fluxo, defer, loops e returns.
-- `sema-cast-coerce.cpp`: casts, coercions, narrowing e `opaque`.
-- `sema-assign.cpp`: assignments, ownership, moves e raw reads.
-- `sema-index.cpp`: index, field/arrow, enums e visibilidade.
-- `sema-literal.cpp`: struct/array/pack literals, unions e defaults.
-- `sema-state.cpp` / `sema-state-access.cpp`: state machines, dock/jump e
-  resolução de nomes/accessors.
-- `sema-zith.cpp`: const semantics, Zith-- checks e unificação.
-- Helpers partilhados em `sema-modern-utils.{hpp,cpp}`.
-
-Estado da quebra de `frontend-expr.cpp` (concluída):
-
-- `frontend-expr.cpp`: `parseCallArgument`, `parseExpression` e dispatcher
-  (325 linhas).
-- `frontend-expr-primary.cpp`: `parsePrimary`, `parsePostfix` e
-  `parseAttributeValue` (742 linhas).
-- `frontend-expr-operator.cpp`: helpers de operador, precedência,
-  `functionKindPrefix` e predicates de ranges (141 linhas).
-
-Estado da quebra de `hir-lower-expr.cpp` (concluída):
-
-- `hir-lower-modern.hpp` continua a classe principal e o estado partilhado.
-- `hir-lower-types.cpp`: `lowerType`, `lowerTypeExprConcrete`, `lowerForeignType`,
-  `lowerTypeSize`, `lowerTypeAlign`, `lowerTagType`, `taggedMemberIndex`,
-  `stableConcreteTypeId`.
-- `hir-lower-expr.cpp`: dispatcher `lowerExpr` e glue pública (121 linhas).
-- `hir-lower-expr-value.cpp`: value lowering, coercions, literals, nomes, casts,
-  pipelines e optional payloads (1668 linhas).
-- `hir-lower-expr-access.cpp`: `lowerLValueAddr`, `lowerIndex`, `lowerSliceRange`,
-  `lowerField` e `lowerArrow` (379 linhas).
-- `hir-lower-expr-agg.cpp`: `enumVariantValue`, `lowerStructLiteral`,
-  `lowerPackLiteral`, `lowerArrayLiteral` e `lowerFieldDefault` (311 linhas).
-- `hir-lower-call.cpp`: forms de call não-dyn e dyn, default args, variadic slice
-  tail, `dyn` dispatch e tail calls.
-- `hir-lower-block.cpp`: `lowerBlock`, `defer`, `if`, `when`, loops e condicoes.
-- `hir-lower-stmt.cpp`: `lowerStatement`, bindings, return/break/continue e
-  transições `state`/`jump`.
-- `hir-lower-util.cpp`: helpers anónimos partilhados (`decodeEscapes`,
-  `internFunctionKey`, `moduleNamespace`, `mapHirOwnership`,
-  `mapHirEscape`).
+Os splits mecânicos de pipeline estão concluídos e não há nenhum split
+aprovado ou ativo. A lista de unidades, responsabilidades e contagens atuais
+`wc -l` está centralizada em
+[docs/plans/monolith-splits.md](/home/diogo/Zith/docs/plans/monolith-splits.md).
+O tamanho de um ficheiro é um sinal para revisão, não uma exigência automática
+de refatoração.
 
 O glob de `src/*.cpp` no CMake recolhe os novos ficheiros automaticamente. Depois
 de criar ficheiros, é preciso reconfigurar (`cmake -S . -B build`) para o glob
@@ -732,13 +657,16 @@ da work-tree deste repositório.
 
 ## Dívida de qualidade da code base (auditoria 2026-10-07)
 
-Varredura estrutural e de correção sobre `src/` (211 ficheiros, cerca de 59k
-linhas) com `cppcheck`, `clang-tidy` e inspeção manual, no baseline `935d7c00`.
-Registra apenas o que ainda não está descrito nas secções acima. Nenhum dos
-itens abaixo é uma decisão de design intencional. As secções A, B e C foram
-resolvidas em 2026-10-07; a secção D continua aberta e está registada na
-cleaning queue de [audit-cleaning.md](/home/diogo/Zith/memory/audit-cleaning.md:41).
-O plano de execução usado está em
+Registo histórico da varredura estrutural de `src/` no baseline `935d7c00`,
+realizada em 2026-10-07 com `cppcheck`, `clang-tidy` e inspeção manual. As
+contagens pertencem a esse baseline, não à árvore atual. Nenhum dos itens era
+uma decisão de design intencional. As secções A-D estão resolvidas, incluindo
+a lacuna de execução VM descrita na secção D. O plano original foi arquivado
+em
+[codebase-quality-remediation-2026-10-07.old.md](/home/diogo/Zith/docs/plans/archive/codebase-quality-remediation-2026-10-07.old.md).
+A auditoria atual está em
+[codebase-audit-2026-10-15.md](/home/diogo/Zith/docs/codebase-audit-2026-10-15.md)
+e o respetivo plano ativo está em
 [codebase-quality-remediation.md](/home/diogo/Zith/docs/plans/codebase-quality-remediation.md).
 
 ### A. Referências a `src/ir` que já não existe (resolvida)

@@ -25,6 +25,26 @@ that are easy to get wrong when editing that plan.
 ## Durable Decisions
 
 - VM v2 is linear and typed, not SSA, with no optimizer in the first shape.
+- Aggregates are address-backed in the lowering: struct and pack values live in
+  linear memory and their slot register holds the guest address. Struct
+  literals allocate and store fields, `HirAssign` between aggregates is a
+  `MemCopy`, and a struct-returning function takes a hidden result pointer as
+  register 0 (see `Function::returnsAggregate`). The caller allocates the result
+  slot and reads it back, so an aggregate-returning callee's `Ret` value is
+  unused. Optionals and unions are deliberately not lowered yet; an unhandled
+  HIR node now fails the lowering instead of silently dropping a store or
+  return.
+- Scalar locals are memory-backed too, so `&x` is a real address and a write
+  through the resulting pointer is visible to later reads of `x`. A scalar slot
+  register holds the storage address; `HirSlotLoad` emits a load, `HirSlotStore`
+  emits a store, and `HirSlotAddr`/`HirUnary(Ref)` yield the address directly.
+  Slices keep their two-register `{ptr, len}` value and arrays keep a base
+  pointer, so both stay register-backed; an array is still pointer-valued, so
+  dereferencing a `*[N]T` yields the base pointer and indexing it reads the
+  original storage. An array field of a struct is laid out inline and copied by
+  `MemCopy` like any other address-valued field. Storage for every memory-backed
+  slot is reserved once in a function prologue (not at the HIR `slot_alloca`
+  site), so a slot declared inside a loop does not allocate on every iteration.
 - `fn` and `extern fn` are typed references indexed into a module table, not
   raw C function pointers.
 - Allocators stay above VM primitives (`AllocBytes`/`MallocBytes`/`malloc`).

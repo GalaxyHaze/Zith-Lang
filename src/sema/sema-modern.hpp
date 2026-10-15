@@ -363,6 +363,12 @@ private:
     /// implicitly as `x != null` without narrowing its payload.
     TypeId inferCondition(frontend::ExprId id, std::string_view message, frontend::TextSpan span);
     TypeId inferLiteral(frontend::ExprId id, std::string_view text);
+    /// Decodes the escape set of a string/char literal body and reports
+    /// `E0003` for an unknown or malformed escape. Runs during sema so that
+    /// `check` rejects the same literals `build`/`run` would reject, instead
+    /// of only failing later in HIR lowering. Returns true when the body is
+    /// valid.
+    bool checkLiteralEscapes(frontend::ExprId id, std::string_view text);
     TypeId inferName(frontend::ExprId id, std::string_view text);
     TypeId inferUnary(frontend::ExprId id);
     TypeId inferBinary(frontend::ExprId id);

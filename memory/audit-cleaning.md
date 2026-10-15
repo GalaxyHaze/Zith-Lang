@@ -30,10 +30,12 @@ small and updated as each queue item is finished.
 - The two release plans are archived audit snapshots, and the planning index
   points at the archived locations (#61).
 - The README pipeline and CLI tables now match `docs/impl-status.md` (#62).
-- The native no-LLVM execution branch is removed (#56). `run.cpp` no longer has
-  `useIrVm`; VM v2 is the WASM runtime and `--interpreted` is the HIR
-  interpreter. `src/vm/` is optional via `ZITH_BUILD_VM`, `--emit-vir` errors
-  when the slice is absent, and `test-vm-v2` skips with exit code 77.
+- Native `zithc run` uses VM v2 when LLVM is unavailable or the target is WASM;
+  `--virtual-machine` selects it explicitly on other builds, while
+  `--interpreted` selects the HIR interpreter. `src/vm/` remains optional via
+  `ZITH_BUILD_VM`, and `test-vm-v2` skips with exit code 77 when it is excluded.
+  The current execution contract is recorded in
+  `docs/implementation-debt.md`, section D.
 - The doc invariants are guarded by `scripts/check-docs-consistency.py` (#65),
   registered as the `docs-consistency` CTest and a CI step. It fails when a
   chapter doc repeats a feature-status label or when the README pipeline/CLI
@@ -42,10 +44,9 @@ small and updated as each queue item is finished.
 
 ## Cleaning Queue
 
-Current audit findings that are still open:
-
-- Harden the `opaque` canonical tag rule so canonization and lowering share one
-  rule (tracked in #57).
+No repo-hygiene findings are currently open in this queue. The `opaque`
+canonicalization and lowering rule is shared through `types::canonicalTypeId`;
+its resolved state is documented in `docs/implementation-debt.md`.
 
 ## Verification
 

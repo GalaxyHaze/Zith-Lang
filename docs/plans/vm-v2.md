@@ -44,6 +44,23 @@ backend is unchanged.
   pointers never leak into the IR.
 - Structs and slices live by address. The IR has `FieldPtr`, memory load/store,
   `MemCopy`, and fat pointer construction/access.
+- Aggregate values (structs and packs) are address-backed: an aggregate slot in
+  the lowering holds a guest pointer, and `FieldPtr` composes nested field
+  addresses without copying. A struct literal allocates its storage and stores
+  each field, and assigning one aggregate to another is a `MemCopy`. A
+  function that returns an aggregate by value takes a hidden result pointer as
+  register 0 ahead of its declared parameters, and its `Ret` copies the value
+  into that caller-owned slot. Optionals and unions are not lowered yet and
+  report an unsupported expression instead of producing a wrong value.
+- Scalar locals are address-backed for the same reason: a scalar slot register
+  holds the address of its storage, so `&x` is a real pointer and a store
+  through it is visible to later reads of `x`. Slices (a `{ptr, len}` pair) and
+  arrays (a base pointer) stay register-backed. All memory-backed slot storage
+  is reserved once in a function prologue rather than at the HIR `slot_alloca`
+  site, so a slot declared inside a loop is not re-allocated every iteration.
+- An array is pointer-valued: dereferencing a `*[N]T` yields the base pointer,
+  and an array field of a struct is laid out inline and copied by `MemCopy` like
+  any other address-valued field.
 - A frame creates a checkpoint in the shared arena policy; `Ret` releases the
   frame checkpoint. `AllocBytes` serves frame-local arena allocation and
   `MallocBytes`/`malloc` serves global heap allocations.

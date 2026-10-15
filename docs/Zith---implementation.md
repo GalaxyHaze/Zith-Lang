@@ -193,6 +193,10 @@ mas `var self` permite escrita in-place nos campos.
 - cada call mantém um conjunto de roots anotados; o mesmo root não pode repetir `lend` nem misturar `lend` com `view` na mesma chamada (`E4005`);
 - `OwnershipCoerce` mantém o tipo do inner para inferência/overloads; o narrowing real para `*lend T`/`*view T` só acontece depois do check.
 
+`@lengthOf` e `@ptrOf` reconhecem parâmetros borrow que referenciam slices. O HIR preserva o
+tipo ABI de ponteiro para slice; LLVM e VM leem o descritor emprestado para projetar o
+comprimento ou o ponteiro dos elementos.
+
 O probe de overload usa `coerceValue` para parâmetros borrow, para que `f(lend q)` seja compatível com `fn f(p: lend P)` mesmo quando a ABI semântica é ponteiro.
 
 O acesso `self.field` auto-derefs um receiver implícito `*Owner`: `inferField` resolve o pointee
@@ -242,6 +246,14 @@ detecciona o literal mesmo depois do retype do sema, cria o pointer literal deco
 `HirMakeSlice` com `is_pointer=true`, `lo=0` e `hi=@lengthOf` do mesmo decode. Um `*char`
 que não é literal não converte para `[]char`; a conversão implícita de `[]char` para `*char`
 equivale a `@ptrOf` e é marcada como escaping por `E4008` quando escapa ao storage local.
+
+`PerModuleSema::checkLiteralEscapes` corre em `inferLiteral` para literais de string e de
+carácter. Decodifica o corpo com `decodeEscapes` e reporta `E0003 InvalidEscape` para um
+escape desconhecido ou malformado e para um literal de carácter que não decodifique exatamente
+um carácter. Isto torna o `check` (que para em `TypeChecked`) consistente com o `build`/`run`,
+que de outra forma só falhavam no lowering. `decodeEscapes` aceita octal `\NNN` (um a três
+dígitos), pelo que `\0` é NUL de um dígito e `\033` é ESC; antes desta alteração `\0` emitia
+um único NUL e deixava os dígitos seguintes como caracteres, truncando a string no NUL.
 
 `@canonicalType(T)` segue o caminho de `LayoutIntrinsic` no frontend, mas o sema tipa a
 expressão como `u128`. A regra canónica é a função partilhada `types::canonicalTypeId`

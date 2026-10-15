@@ -394,10 +394,12 @@ enum Flag {
 
 São aceites literais inteiros (incluindo `0x`, `0b` e `0c`), `-`/`~` unários, aritmética, operadores bitwise `&.`/`|.`/`^.`, shifts `<<`/`>>`, comparações que resultem em inteiro, variantes anteriores do mesmo enum e `const` globais/locais de tipo inteiro já declarados. Chamadas, casts, literais float/string/bool, `null`, opaques e outros agregados não são aceites. O resultado é avaliado como `int64_t` e, após a avaliação, verificado contra o tipo subjacente do enum; overflow e valores negativos em `uN` são rejeitados.
 
-Strings e caracteres decodificam o conjunto de escapes estilo C (`\n`, `\r`, `\t`, `\0`,
-`\\`, `\'`, `\"` e `\xHH`). `\#` é aceite como escape adicional e produz um `#` literal; é
-útil quando o texto tem de ser preservado sem o tratamento futuro de interpolação com `#`.
-Escapes desconhecidos continuam a reportar `E0001`.
+Strings e caracteres decodificam o conjunto de escapes estilo C (`\n`, `\r`, `\t`, `\\`,
+`\'`, `\"`, `\xHH` e octal `\NNN` com um a três dígitos, onde `\0` é a forma de um dígito
+para NUL e `\033` é o byte ESC). `\#` é aceite como escape adicional e produz um `#` literal;
+é útil quando o texto tem de ser preservado sem o tratamento futuro de interpolação com `#`.
+Um literal de carácter tem de decodificar exatamente um carácter. Escapes desconhecidos
+reportam `E0003` e são detetados durante a verificação de tipos, tal como no `build`.
 
 ## Controlo de Fluxo
 
@@ -539,7 +541,10 @@ Os tipos atuais são mantidos: primitivos, `struct`, `union`, `enum`, `string`, 
 
 ### Intrinsics de slices, arrays e strings
 
-`@lengthOf(x)` e `@ptrOf(x)` aceitam slices `[]T`, arrays `[N]T` e string literals.
+`@lengthOf(x)` e `@ptrOf(x)` aceitam slices `[]T`, arrays `[N]T`, string literals e
+parâmetros `lend`/`view` cujo tipo referenciado seja um slice. Para estes parâmetros, os
+intrinsics projectam o descritor emprestado: `@lengthOf` devolve o comprimento e `@ptrOf`
+devolve o ponteiro dos elementos, não o endereço do descritor.
 `@lengthOf` devolve `u64`; `@ptrOf` devolve `*T` (ou `*char` para strings e slices `[]char`).
 Num array local, `@ptrOf` aponta para o slot local e fica sujeito às restrições de escape do
 pointer object; em slices devolve o ponteiro ao storage subjacente, sem `raw`.

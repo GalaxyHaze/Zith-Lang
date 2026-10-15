@@ -1,273 +1,170 @@
 # Codebase Quality Remediation Plan
 
-Status: steps 1-5 DONE (2026-10-07). Findings A, B and C are closed in
-`docs/implementation-debt.md`; finding D is triaged into the
-`memory/audit-cleaning.md` cleaning queue and remains open by design (it needs a
-product decision on the no-LLVM execution path).
+Objective: bound recursive parser work and add memory/undefined-behavior
+sanitizer coverage for the compiler tests, following
+[`codebase-audit-2026-10-15.md`](../codebase-audit-2026-10-15.md).
 
-Objective: close the four structural/hygiene findings registered in
-`docs/implementation-debt.md` under "Dívida de qualidade da code base
-(auditoria 2026-10-07)", so the active tree, the docs and the CMake glob stop
-contradicting each other, and the remaining coverage gap is explicitly tracked.
+Status: planned. No source-code or CI remediation in this plan has been
+implemented yet.
 
 Preconditions:
 
-- Working directory: `/home/diogo/Zith`.
-- Baseline commit: `935d7c00` (main). Confirm with `git -C /home/diogo/Zith rev-parse --short HEAD`.
-- Build tree: `/home/diogo/Zith/build` (already configured; `compile_commands.json` present).
-- Tools: `git`, `cmake`, `ctest`, `rg`, `python3` (for `scripts/rag.py`).
-- The four findings are described in `docs/implementation-debt.md` sections A, B, C, D.
+- Work from `/home/diogo/Zith`.
+- Preserve pre-existing modifications. The repository may have a dirty
+  worktree.
+- Use the configured CMake/CTest project and Clang 18+ used by
+  `.github/workflows/ci.yml`.
+- Run `git status --short` before each implementation step. If a target file
+  already has user changes, read its diff and build on it without reverting.
 
-Files modified by this plan:
+Files expected to change:
 
-- `docs/adr/0024-wasm-vm-v2-abi.md` (step 1)
-- `memory/audit-cleaning.md` (steps 1 and 4)
-- `memory/agent7-formatter-build.md` (step 1)
-- `src/vm/typed-ir.hpp.orig` (step 2, deleted)
-- `src/memory/string-interner.hpp`, `src/hir/hir-module.hpp`, `src/cli/options.hpp` (step 3)
+- `src/frontend/ast-lowerer.hpp`
+- `src/frontend/frontend-expr.cpp`
+- `src/frontend/frontend-expr-primary.cpp`
+- `src/frontend/frontend-types.cpp`
+- `src/frontend/frontend-stmt.cpp`
+- `src/diagnostics/error-codes.hpp`
+- `src/diagnostics/error-codes.cpp`
+- `tests/test-frontend.cpp`
+- `docs/impl-status.md`
+- `.github/workflows/ci.yml`
 
-Forbidden actions:
+## Steps
 
-- Never `git reset --hard`, `git checkout --`, or `git clean -fdx`.
-- Do not touch `docs/nra-spec.md`, the NRA ADRs (0033/0034/0035), or
-  `memory/nra-design.md`. Those carry unrelated in-flight edits.
-- Do not edit `docs/impl-status.md`; it is verified against compiler behaviour.
-- Do not revert the user's uncommitted changes listed by `git status`.
-- Do not reformat unrelated code; use `clang-format` only on files this plan edits.
+### 1. Bound parser recursion
 
----
-
-### Step 1 - Fix the stale `src/ir` references - DONE
-
-Goal: no tracked document claims that `src/ir/` or `src/interp/ir-vm.*` exist in
-the active tree.
+Goal: deeply nested source produces a stable parser diagnostic instead of
+recursing until process stack exhaustion.
 
 Sub-steps:
 
-1. Open `/home/diogo/Zith/docs/adr/0024-wasm-vm-v2-abi.md`.
-2. Locate the paragraph beginning "The project also has two execution
-   vocabularies in the tree." (around line 13).
-3. Replace the sentence "The older `src/ir` + `src/interp/ir-vm.*` execution IR
-   is unfinished and is not the default portable runtime; VM v2 is." with:
-   "The older execution IR (`exec-ir.hpp`, `hir-to-ir.*`, `ir-vm.*`) is
-   archived under `archive/execution-ir-v1/` and is not in the active tree; VM
-   v2 is the default portable runtime."
-4. Open `/home/diogo/Zith/memory/audit-cleaning.md`.
-5. In the "Active WIP (do not touch)" list, remove the first bullet (the one
-   naming `src/ir/exec-ir.hpp` and `src/interp/ir-vm.{hpp,cpp}`). Keep the
-   second bullet about `docs/plans/abi/execution-ir.md`.
-6. In the "Finished In This Pass" list, remove the bullet that says
-   "`CMakeLists.txt` removes `src/interp/ir-vm.cpp` and `src/ir/hir-to-ir.cpp`
-   from the source glob", because those files no longer exist.
-7. Open `/home/diogo/Zith/memory/agent7-formatter-build.md`.
-8. Find the sentence naming the excluded `src/ir/hir-to-ir.cpp` and
-   `src/interp/ir-vm.cpp` symbols (around line 25).
-9. Replace it with: "The archived execution-IR slice lives in
-   `archive/execution-ir-v1/` and is not compiled into `zithcLib`."
+1. Run `git status --short` from `/home/diogo/Zith` and inspect any existing
+   changes to the target files before editing.
+2. Inspect the recursive parsing entry points in
+   `src/frontend/frontend-expr.cpp`,
+   `src/frontend/frontend-expr-primary.cpp`,
+   `src/frontend/frontend-types.cpp` and `src/frontend/frontend-stmt.cpp`.
+   Include `parseExpression`, `parseType`, block parsing and recursive
+   conditional parsing in the depth accounting.
+3. Add a shared RAII depth guard to `AstLowerer` in
+   `src/frontend/ast-lowerer.hpp`. Set the maximum active parser depth to 128.
+   Ensure every return path decrements the depth automatically.
+4. Reserve parser diagnostic code 1010 as `ParseDepthExceeded` in
+   `src/diagnostics/error-codes.hpp`. Add its user-facing category, title and
+   suggestion in `src/diagnostics/error-codes.cpp`.
+5. At the first over-limit parser entry, emit one `E1010`, return the relevant
+   error node/id, and recover iteratively to the matching delimiter or parser
+   synchronization point. Do not recursively parse while recovering.
+6. Add deterministic tests to `tests/test-frontend.cpp` for nested parenthesized
+   expressions, nested types, and nested blocks/conditionals. Generate each
+   input in a loop so the test source remains small. Assert that depth 128 is
+   accepted where the grammar permits it, and depth 129 reports `E1010`
+   without aborting or hanging.
+7. Update the parser error-code range/table in `docs/impl-status.md` to include
+   `E1010`.
+8. Build and run the focused frontend test.
 
-Command:
+Commands:
 
-    cd /home/diogo/Zith && rg -n "src/ir|ir-vm|hir-to-ir" docs/adr/0024-wasm-vm-v2-abi.md memory/audit-cleaning.md memory/agent7-formatter-build.md
+```bash
+cd /home/diogo/Zith
+cmake --build build --target test-frontend -j4
+ctest --test-dir build -R '^test-frontend$' --output-on-failure
+```
 
-Expected output: after the edits, the command prints only lines that mention
-`archive/execution-ir-v1/` or `docs/plans/abi/execution-ir.md`. No line contains
-the literal `src/ir/exec-ir.hpp`, `src/interp/ir-vm.cpp`, or
-`src/ir/hir-to-ir.cpp`.
+Expected output: the target builds successfully and CTest reports
+`100% tests passed` for `test-frontend`.
 
 Failure checks:
 
-- If `rg` prints `src/ir/exec-ir.hpp`, the first bullet in `audit-cleaning.md`
-  was not fully removed. Re-open the file and delete the whole bullet,
-  including its continuation lines.
-- If the ADR edit breaks the sentence, re-read lines 13-17 of the ADR and
-  rewrite the single sentence only.
+- If nesting at depth 128 fails, verify whether the guard counts parser entry
+  frames or source nesting levels. Keep the documented boundary at 128 source
+  nesting levels and adjust only the guard accounting.
+- If depth 129 crashes or hangs, the guard misses a recursive entry point or
+  recovery recurses. Trace the parse call path and add that entry point to the
+  same guard; keep recovery iterative.
+- If `E1010` is already assigned when implementation begins, stop and inspect
+  `src/diagnostics/error-codes.hpp`, `error-codes.cpp` and
+  `docs/impl-status.md`; select the next unused parse code consistently rather
+  than reusing a diagnostic.
+- If the focused test fails for a syntax reason unrelated to depth, print the
+  generated source and diagnostic, correct the test fixture, and do not weaken
+  the limit assertion.
 
-Success criteria: the command above returns exit code 1 (no matches) when run
-with the pattern `src/ir/exec-ir\.hpp|src/interp/ir-vm|src/ir/hir-to-ir`.
+Success criteria: `test-frontend` exits 0; the exact over-limit cases return
+`E1010`; accepted boundary cases remain accepted; no recursive recovery path
+is introduced.
 
----
+### 2. Add an ASan/UBSan CI run
 
-### Step 2 - Remove the residual merge file - DONE
-
-Goal: `src/vm/typed-ir.hpp.orig` no longer exists on disk.
+Goal: the regular test suite runs in a Debug build instrumented with AddressSanitizer
+and UndefinedBehaviorSanitizer.
 
 Sub-steps:
 
-1. Confirm the file is the only `.orig` under `src/` and `tests/`.
+1. Read the existing `build` job in
+   `/home/diogo/Zith/.github/workflows/ci.yml`. Reuse its LLVM installation,
+   compiler selection and configure options.
+2. Add a separate `sanitizers` job on `ubuntu-latest`. Keep the existing
+   Debug/Release matrix unchanged.
+3. Configure a fresh `build-sanitized` directory with Clang 18, LLVM required,
+   Debug mode, and `-fsanitize=address,undefined -fno-omit-frame-pointer` in
+   both C and C++ compile flags and both executable and shared linker flags.
+   Do not reuse `build/` because it contains non-instrumented objects.
+4. Build all targets in `build-sanitized`.
+5. Run the full CTest suite with `--output-on-failure`. Do not mark the job
+   `continue-on-error` or `allow-failure`.
+6. Confirm that failures include sanitizer reports in the job output and fix
+   any confirmed defect before merging the CI job.
 
-Command:
+Commands for the job:
 
-    cd /home/diogo/Zith && find src tests -name '*.orig' -o -name '*.rej'
+```bash
+cmake -S . -B build-sanitized \
+  -DCMAKE_BUILD_TYPE=Debug \
+  -DCMAKE_C_COMPILER=clang-18 \
+  -DCMAKE_CXX_COMPILER=clang++-18 \
+  -DZITH_HAS_LLVM=ON \
+  -DZITH_REQUIRE_LLVM=ON \
+  -DCMAKE_C_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer" \
+  -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer" \
+  -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,undefined" \
+  -DCMAKE_SHARED_LINKER_FLAGS="-fsanitize=address,undefined"
+cmake --build build-sanitized -j"$(nproc)"
+ctest --test-dir build-sanitized --output-on-failure
+```
 
-Expected output: exactly one line, `src/vm/typed-ir.hpp.orig`.
-
-2. Delete it.
-
-Command:
-
-    rm -f /home/diogo/Zith/src/vm/typed-ir.hpp.orig
-
-3. Confirm it is gone.
-
-Command:
-
-    cd /home/diogo/Zith && find src tests -name '*.orig' -o -name '*.rej'
-
-Expected output: no lines, exit code 0.
-
-Failure checks:
-
-- If the delete command reports a read-only filesystem error, rerun it with the
-  sandbox escalation for `rm -f /home/diogo/Zith/src/vm/typed-ir.hpp.orig`.
-- If `find` still prints the file, the delete failed; report the exact error.
-
-Success criteria: `find` prints nothing and `git status --short` is unchanged
-for tracked files (the file is gitignored, so it must not appear in git output).
-
----
-
-### Step 3 - Give the two flagged members default initializers - DONE
-
-Goal: `HirFunction::return_type` and `Options::subcommandArg` have
-default-member-initializers, so a future call site cannot read an indeterminate
-value.
-
-Sub-steps:
-
-1. Open `/home/diogo/Zith/src/memory/string-interner.hpp`.
-2. Immediately after `using InternedId = uint32_t;` (line 13), add:
-   `inline constexpr InternedId kInvalidInternedId = ~InternedId{0};`
-3. Open `/home/diogo/Zith/src/hir/hir-module.hpp`.
-4. Change line 22 from `memory::InternedId name;` to
-   `memory::InternedId name = memory::kInvalidInternedId;`.
-5. Change line 28 from `HirTypeId return_type;` to
-   `HirTypeId return_type = types::kInvalidType;`.
-6. Open `/home/diogo/Zith/src/cli/options.hpp`.
-7. Change line 276 from `memory::InternedId subcommandArg;` to
-   `memory::InternedId subcommandArg = memory::kInvalidInternedId;`.
-
-Command:
-
-    cmake --build /home/diogo/Zith/build -j4
-
-Expected output: the build completes with exit code 0 and no new warnings. With
-Clang and `ZITH_ENABLE_STRICT_WARNINGS` on, `-Werror` must stay clean.
+Expected output: the sanitizer build succeeds and CTest reports all registered
+tests passing or explicitly skipped by their existing skip contract.
 
 Failure checks:
 
-- If the compiler reports `no member named 'kInvalidInternedId' in namespace
-  'memory'`, step 2 was skipped or placed in the wrong header. Confirm the line
-  exists in `src/memory/string-interner.hpp` and that the file is included.
-- If the build reports `unused variable` or a `-Werror` failure, stop and report
-  the exact diagnostic verbatim; do not add `(void)` casts.
+- If configuration cannot find LLVM, verify that the sanitizer job installs the
+  same LLVM 18 development packages as the existing native CI job. Keep
+  `ZITH_REQUIRE_LLVM=ON`.
+- If the build links but sanitizer runtimes are absent at execution, verify the
+  compiler and linker flags are present in the generated compile/link commands.
+- If CTest reports an ASan or UBSan finding, keep the sanitizer job failing,
+  reproduce it locally, and fix the underlying issue before changing the job.
+- If a pre-existing test is incompatible with sanitizers, document the exact
+  incompatibility and add a narrowly scoped test property only after confirming
+  that the test itself cannot be made sanitizer-clean.
 
-Then run the focused tests:
+Success criteria: the new CI job executes the complete CTest suite under both
+sanitizers and is a required successful job for pull requests.
 
-Command:
+## Final Acceptance
 
-    ctest --test-dir /home/diogo/Zith/build -R 'cli-commands|hir|frontend' --output-on-failure
+After both steps are implemented:
 
-Expected output: `100% tests passed, 0 tests failed out of <N>`.
+1. Run `cmake --build build --target test-frontend -j4`.
+2. Run `ctest --test-dir build --output-on-failure`.
+3. Run the sanitizer job's exact configure, build and CTest commands locally
+   when LLVM 18 is available.
+4. Run `python3 scripts/check-docs-consistency.py --root /home/diogo/Zith`.
+5. Review `git diff --check` and inspect the complete diff. Confirm unrelated
+   pre-existing changes remain untouched.
 
-Failure checks:
-
-- If a test fails, run it directly (for example
-  `/home/diogo/Zith/build/test-cli-commands`) and report the failing assertion
-  verbatim. The default values must not change any observed behaviour.
-
-Success criteria: the full build and the focused tests both exit 0.
-
----
-
-### Step 4 - Track the VM/interp coverage gap - DONE
-
-Goal: the "no LLVM builds the VM path that no test exercises" gap is recorded
-in the cleaning queue, so it is not lost.
-
-Sub-steps:
-
-1. Open `/home/diogo/Zith/memory/audit-cleaning.md`.
-2. In the "Cleaning Queue" list, append this bullet:
-   "`src/cli/cmd/run.cpp` fixes `useIrVm` to `false` with LLVM and `true`
-   without, so the `useIrVm` block is unreachable in a normal build and no test
-   covers it. Decide whether the no-LLVM path gets a dedicated CI job or is
-   removed, then make `test-vm-v2` skip instead of fail when `src/vm/` is
-   excluded."
-
-Command:
-
-    cd /home/diogo/Zith && rg -n "useIrVm" memory/audit-cleaning.md
-
-Expected output: one matching line containing `src/cli/cmd/run.cpp`.
-
-Failure checks:
-
-- If `rg` prints nothing, the bullet was not added; re-open the file and append
-  it under the "Cleaning Queue" heading.
-
-Success criteria: the bullet is present and mentions `useIrVm` and
-`test-vm-v2`.
-
----
-
-### Step 5 - Final acceptance check - DONE
-
-Goal: every finding in debt sections A-D is either fixed or explicitly tracked,
-and the tree builds and tests clean.
-
-Sub-steps:
-
-1. Confirm no stale `src/ir` path remains in the fixed files.
-
-Command:
-
-    cd /home/diogo/Zith && rg -n "src/ir/(exec-ir|hir-to-ir)|src/interp/ir-vm" docs/adr/0024-wasm-vm-v2-abi.md memory/audit-cleaning.md memory/agent7-formatter-build.md
-
-Expected output: no lines, exit code 1.
-
-2. Confirm no `.orig`/`.rej` remains.
-
-Command:
-
-    cd /home/diogo/Zith && find src tests -name '*.orig' -o -name '*.rej'
-
-Expected output: no lines.
-
-3. Rebuild and run the full suite.
-
-Command:
-
-    cmake --build /home/diogo/Zith/build -j4 && ctest --test-dir /home/diogo/Zith/build --output-on-failure
-
-Expected output: build exit code 0; `100% tests passed, 0 tests failed`.
-
-4. Reindex the docs corpus so the memory search does not return the old text.
-
-Command:
-
-    cd /home/diogo/Zith && python3 scripts/rag.py index
-
-Expected output: an index summary with a non-zero docs chunk count and exit
-code 0.
-
-5. Review the diff.
-
-Command:
-
-    cd /home/diogo/Zith && git diff --stat && git status --short
-
-Expected output: the diff touches only the files listed in this plan's header,
-plus the user's pre-existing uncommitted NRA files, which must be left
-untouched.
-
-Failure checks:
-
-- If the full suite fails on a test unrelated to these edits, run that test
-  alone, capture the output, and report it verbatim. Do not mark the plan done.
-- If `git status --short` shows edits to `docs/nra-spec.md`,
-  `docs/adr/0033-nra-reference-model-and-bind.md`, `docs/adr/0034-*`,
-  `docs/adr/0035-*`, or `memory/nra-design.md` that you did not make, stop and
-  report; those are the user's in-flight changes.
-
-Success criteria: steps 1-3 produce the expected clean output and the diff is
-limited to this plan's scope.
+The work is complete only when the focused test, full local CTest suite,
+documentation check and required CI sanitizer job all pass.

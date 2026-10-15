@@ -10,7 +10,8 @@ easy to get wrong when editing that plan or `docs/implementation-debt.md`.
 The frontend-context, compilation-session, codegen-emit, hir-lower-expr, and
 frontend-expr monoliths are merged. No source-level candidate is active. The
 exact translation units and `wc -l` counts live in
-`docs/plans/monolith-splits.md`. Do not restate them here.
+`docs/plans/monolith-splits.md`. Do not restate them here. Large files remain,
+but size alone does not approve another split.
 
 ## Durable Decisions
 

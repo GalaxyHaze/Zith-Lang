@@ -258,7 +258,10 @@ std::string dump(const Module &module) {
     for (size_t fi = 0; fi < module.functions.size(); ++fi) {
         const auto &fn = module.functions[fi];
         out << "fn " << fn.name << " -> " << valueTypeName(fn.returnType)
-            << " (params=" << fn.paramCount << ", regs=" << fn.regCount << ")\n";
+            << " (params=" << fn.paramCount << ", regs=" << fn.regCount;
+        if (fn.returnsAggregate)
+            out << ", sret=r0";
+        out << ")\n";
         out << "  reg_types:";
         for (size_t ri = 0; ri < fn.regTypes.size(); ++ri)
             out << " r" << ri << ":" << valueTypeName(fn.regTypes[ri]);

@@ -1,3 +1,4 @@
+#include "sema/hir-lower-utils.hpp"
 #include "sema/op-mapping.hpp"
 #include "sema/sema-modern-utils.hpp"
 #include "sema/sema-modern.hpp"
@@ -204,11 +205,44 @@ TypeId PerModuleSema::inferLiteral(frontend::ExprId id, std::string_view text) {
     case support::IntLiteralStatus::NotInteger:
         break;
     }
-    if (looksString(text))
+    if (looksString(text)) {
+        checkLiteralEscapes(id, text);
         return type_table.internPointer(char_type);
-    if (looksChar(text))
+    }
+    if (looksChar(text)) {
+        checkLiteralEscapes(id, text);
         return char_type;
+    }
     return error_type;
+}
+
+bool PerModuleSema::checkLiteralEscapes(frontend::ExprId id, std::string_view text) {
+    // Both `looksString` and `looksChar` require the matching delimiter, so the
+    // body is the source text between the quotes.
+    const bool is_char = text.front() == '\'';
+    const std::string_view body(text.data() + 1U, text.size() - 2U);
+    std::string decoded;
+    if (!decodeEscapes(body, decoded)) {
+        if (id && id.value <= snapshot.expressions().size()) {
+            report(snapshot.expressions()[id.value - 1U].span,
+                   is_char ? "invalid escape sequence in char literal"
+                           : "invalid escape sequence in string literal",
+                   diagnostics::err::InvalidEscape);
+        }
+        return false;
+    }
+    // A character literal must decode to exactly one character. Checking it
+    // here keeps `check` consistent with HIR lowering, which rejects a wider
+    // body such as `'ab'`.
+    if (is_char && decoded.size() != 1U) {
+        if (id && id.value <= snapshot.expressions().size()) {
+            report(snapshot.expressions()[id.value - 1U].span,
+                   "char literal must contain exactly one character or escape",
+                   diagnostics::err::InvalidEscape);
+        }
+        return false;
+    }
+    return true;
 }
 TypeId PerModuleSema::inferName(frontend::ExprId id, std::string_view text) {
     // Inside an enum discriminant, a bare name may refer to a variant declared earlier in

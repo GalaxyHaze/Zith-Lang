@@ -211,7 +211,7 @@ model wins.
   imply a logical move of an inline value, while the contract is a reference
   whose access can be revoked. The runtime lowering remains open.
 
-### Revokable access (ADR-0026 accepted baseline)
+### Revokable access (ADR-0026 runtime baseline, ADR-0041 spelling)
 
 The following proxy contract remains the accepted runtime baseline in
 ADR-0026. The source surface is now the `'` / `grant` prefix on any ownership
@@ -222,7 +222,7 @@ qualifier except a bare `T`, so no `Revokable<T>` wrapper appears in source.
   handle such as `'view T` or `'lend T` is exposed.
 - The proxy supports a read mode with multiple active readers and a write mode
   with one exclusive active writer.
-- `acquire()` returns a scoped guard that inherits the original qualifier. The
+- `hold()` returns a scoped guard that inherits the original qualifier. The
   guard validates access once, permits normal method dispatch without repeated
   revocation checks, and cannot escape its scope.
 - The control block is separate from the resource. It contains the atomic

@@ -1258,6 +1258,44 @@ void test_vm_v2_hello_stdlib_import_print() {
     CHECK_EQ(result.exitCode, 0, "v2 VM keeps the main exit code for print");
 }
 #endif // ZITH_ENABLE_C_INTEROP
+
+/// Lower a single Zith-- source file through the modern pipeline and run it on
+/// the v2 VM. The caller provides the program text and the expected exit code.
+auto runVmSource(std::string_view name, std::string_view program, std::int64_t expectedExit,
+                 const char *lowerMessage, const char *runMessage, const char *exitMessage)
+    -> void {
+    const auto root = std::filesystem::temp_directory_path() / "zith-vm-v2-struct-tests";
+    std::filesystem::create_directories(root);
+    const auto source = root / (std::string(name) + ".zith");
+    {
+        std::ofstream output(source, std::ios::binary | std::ios::trunc);
+        output << program;
+    }
+
+    memory::Arena arena;
+    Options options(arena);
+    options.targetStage = session::Stage::HirLowered;
+
+    session::CompilationSession session(options, source.string());
+    session.setBuffered(true);
+    CHECK(session.runTo(session::Stage::HirLowered), lowerMessage);
+
+    memory::Arena vmArena;
+    vm::Module module(vmArena);
+    const auto lowered = vm::lowerModule(session.hirModule(), session.interner(), session.types(),
+                                         vmArena, module);
+    CHECK(lowered.ok, lowerMessage);
+    if (!lowered.ok) {
+        std::fprintf(stderr, "lower message: %s\n", lowered.message.c_str());
+        return;
+    }
+
+    vm::Vm vm;
+    const auto result = vm.runMain(module);
+    CHECK(result.status == vm::RunStatus::Ok, runMessage);
+    CHECK_EQ(result.exitCode, expectedExit, exitMessage);
+}
+
 #ifdef ZITH_ENABLE_C_INTEROP
 void test_vm_v2_external_global_fallback() {
     const auto root =
@@ -1334,6 +1372,268 @@ void test_vm_v2_external_global_fallback() {
           "type checking does not invoke the unsupported VM lowering path");
 }
 #endif // ZITH_ENABLE_C_INTEROP
+
+void test_vm_v2_struct_field_access() {
+    runVmSource("struct-field",
+                "struct P { x: i32, y: i32 }\n"
+                "\n"
+                "fn main(): i32 {\n"
+                "    var p: P = P { x: 3, y: 4 };\n"
+                "    p.x = 8;\n"
+                "    return p.x + p.y;\n"
+                "}\n",
+                12, "struct field source lowers through the modern pipeline",
+                "v2 VM reads and writes struct fields", "v2 VM returns the struct field sum");
+}
+
+void test_vm_v2_struct_nested_field() {
+    runVmSource("struct-nested",
+                "struct Inner { a: i32, b: i32 }\n"
+                "struct Outer { inner: Inner, c: i32 }\n"
+                "\n"
+                "fn main(): i32 {\n"
+                "    var o: Outer = Outer { inner: Inner { a: 1, b: 2 }, c: 3 };\n"
+                "    o.inner.a = 10;\n"
+                "    return o.inner.a + o.inner.b + o.c;\n"
+                "}\n",
+                15, "nested struct source lowers through the modern pipeline",
+                "v2 VM addresses nested struct fields", "v2 VM returns the nested field sum");
+}
+
+void test_vm_v2_struct_param_and_return() {
+    runVmSource("struct-abi",
+                "struct P { x: i32, y: i32 }\n"
+                "\n"
+                "fn make(a: i32, b: i32): P {\n"
+                "    return P { x: a, y: b };\n"
+                "}\n"
+                "\n"
+                "fn sum(p: P): i32 {\n"
+                "    return p.x + p.y;\n"
+                "}\n"
+                "\n"
+                "fn main(): i32 {\n"
+                "    return sum(make(19, 23));\n"
+                "}\n",
+                42, "struct ABI source lowers through the modern pipeline",
+                "v2 VM passes and returns structs by value", "v2 VM returns the by-value sum");
+}
+
+void test_vm_v2_struct_mixed_field_offsets() {
+    // A char between two i32 fields forces a non-zero field offset for `z`, so
+    // the layout helper and the VM field pointer must agree.
+    runVmSource("struct-offsets",
+                "struct Mixed { a: i32, b: char, z: i32 }\n"
+                "\n"
+                "fn main(): i32 {\n"
+                "    var m: Mixed = Mixed { a: 5, b: 'q', z: 37 };\n"
+                "    return m.a + m.z;\n"
+                "}\n",
+                42, "mixed-field struct source lowers through the modern pipeline",
+                "v2 VM honors struct field offsets", "v2 VM returns the offset sum");
+}
+
+void test_vm_v2_array_index_assignment() {
+    // Index assignment must store through the element address instead of
+    // re-loading the element and dropping the write.
+    runVmSource("array-index-assign",
+                "fn main(): i32 {\n"
+                "    var a: [3]i32 = [1, 2, 3];\n"
+                "    a[1] = 40;\n"
+                "    return raw a[0] + raw a[1] + raw a[2];\n"
+                "}\n",
+                44, "array index assignment source lowers through the modern pipeline",
+                "v2 VM stores through an array element address",
+                "v2 VM returns the mutated array sum");
+}
+
+void test_vm_v2_scalar_deref_assignment() {
+    // A scalar local is memory-backed, so `&x` yields real storage and a write
+    // through the resulting pointer must be visible to later reads of `x`.
+    runVmSource("scalar-deref-assign",
+                "fn set(p: *i32): i32 {\n"
+                "    *p = 42;\n"
+                "    return *p;\n"
+                "}\n"
+                "fn main(): i32 {\n"
+                "    var x: i32 = 1;\n"
+                "    return set(&x);\n"
+                "}\n",
+                42, "scalar deref-assignment source lowers through the modern pipeline",
+                "v2 VM writes through a pointer to a scalar local",
+                "v2 VM reads back the value written through the pointer");
+}
+
+void test_vm_v2_scalar_address_aliasing() {
+    // `&x` is a logical move of the binding, so the local is revived by a
+    // direct assignment. A write through the pointer and a later direct write
+    // must both land in the same storage, matching the documented semantics.
+    runVmSource("scalar-address-aliasing",
+                "fn main(): i32 {\n"
+                "    var x: i32 = 1;\n"
+                "    let p: *i32 = &x;\n"
+                "    *p = 40;\n"
+                "    x = 2;\n"
+                "    return *p;\n"
+                "}\n",
+                2, "scalar address aliasing source lowers through the modern pipeline",
+                "v2 VM aliases a pointer and its scalar local",
+                "v2 VM observes the latest write through the pointer");
+}
+
+void test_vm_v2_pointer_param_mutation_visible() {
+    // `lend P` passes the receiver by pointer and mutation through it must be
+    // visible in the caller. This exercises a pointer argument that is not the
+    // `&x` logical-move form.
+    runVmSource("pointer-param-mutation",
+                "struct P { x: i32, y: i32 }\n"
+                "fn bump(p: lend P): i32 {\n"
+                "    p.x = p.x + 1;\n"
+                "    return p.x;\n"
+                "}\n"
+                "fn main(): i32 {\n"
+                "    var q: P = P { x: 41, y: 0 };\n"
+                "    return bump(lend q);\n"
+                "}\n",
+                42, "pointer parameter mutation source lowers through the modern pipeline",
+                "v2 VM mutates a struct through a lend parameter",
+                "v2 VM returns the mutated field");
+}
+
+void test_vm_v2_borrowed_slice_intrinsics() {
+    runVmSource("borrowed-slice-intrinsics",
+                "fn borrowedLength(str: view []char): u64 {\n"
+                "    return @lengthOf(str);\n"
+                "}\n"
+                "fn borrowedFirst(str: view []char): char {\n"
+                "    return raw @ptrOf(str)[0];\n"
+                "}\n"
+                "fn main(): i32 {\n"
+                "    let text: []char = \"zith\";\n"
+                "    if (borrowedLength(view text) != 4) { return 1; }\n"
+                "    if (borrowedFirst(view text) != 'z') { return 2; }\n"
+                "    return 0;\n"
+                "}\n",
+                0, "borrowed-slice source lowers through the modern pipeline",
+                "v2 VM runs borrowed-slice intrinsic calls",
+                "v2 VM reads the length and data pointer from the borrowed slice");
+}
+
+void test_vm_v2_struct_with_array_field() {
+    // An array field is address-valued inside an aggregate: the struct literal
+    // copies the array into the field and indexing composes through the field
+    // address. A char-free `[3]i32` field keeps the layout simple.
+    runVmSource("struct-array-field",
+                "struct S { a: [3]i32, n: i32 }\n"
+                "fn main(): i32 {\n"
+                "    var s: S = S { a: [1, 2, 3], n: 10 };\n"
+                "    s.a[1] = 20;\n"
+                "    return raw s.a[0] + raw s.a[1] + raw s.a[2] + s.n;\n"
+                "}\n",
+                34, "struct with array field source lowers through the modern pipeline",
+                "v2 VM lays out and indexes a struct array field",
+                "v2 VM returns the array field sum");
+}
+
+void test_vm_v2_struct_with_array_field_by_value() {
+    // Passing a struct with an array field by value copies the whole aggregate,
+    // including the array, into the callee's own storage.
+    runVmSource("struct-array-field-by-value",
+                "struct S { a: [3]i32, n: i32 }\n"
+                "fn sum(s: S): i32 {\n"
+                "    return raw s.a[0] + raw s.a[1] + raw s.a[2] + s.n;\n"
+                "}\n"
+                "fn main(): i32 {\n"
+                "    var s: S = S { a: [1, 2, 3], n: 10 };\n"
+                "    return sum(s);\n"
+                "}\n",
+                16, "struct with array field by value source lowers through the modern pipeline",
+                "v2 VM copies a struct array field by value",
+                "v2 VM returns the copied array field sum");
+}
+
+void test_vm_v2_pointer_to_array_element() {
+    // Dereferencing a pointer to an array yields the array base pointer, so
+    // indexing the dereferenced array must read the original storage.
+    runVmSource("pointer-to-array",
+                "fn main(): i32 {\n"
+                "    var a: [3]i32 = [1, 2, 3];\n"
+                "    let p: *[3]i32 = &a;\n"
+                "    return raw (*p)[1];\n"
+                "}\n",
+                2, "pointer to array source lowers through the modern pipeline",
+                "v2 VM dereferences a pointer to an array",
+                "v2 VM returns the indexed element");
+}
+
+void test_vm_v2_slot_alloca_hoisted_out_of_loop() {
+    // A memory-backed slot declared inside a loop body must be allocated once
+    // in the prologue, not on every iteration, or the frame arena grows without
+    // bound. Check the lowered body directly: every allocation must precede the
+    // first control-flow instruction, so no loop body re-allocates.
+    const auto root = std::filesystem::temp_directory_path() / "zith-vm-v2-slot-loop";
+    std::filesystem::create_directories(root);
+    const auto source = root / "main.zith";
+    {
+        std::ofstream output(source, std::ios::binary | std::ios::trunc);
+        output << "fn main(): i32 {\n"
+                  "    var sum: i32 = 0;\n"
+                  "    var i: i32 = 0;\n"
+                  "    for (i < 1000) {\n"
+                  "        var t: i32 = i;\n"
+                  "        sum = sum + t;\n"
+                  "        i = i + 1;\n"
+                  "    }\n"
+                  "    return sum;\n"
+                  "}\n";
+    }
+
+    memory::Arena arena;
+    Options options(arena);
+    options.targetStage = session::Stage::HirLowered;
+    session::CompilationSession session(options, source.string());
+    session.setBuffered(true);
+    CHECK(session.runTo(session::Stage::HirLowered),
+          "slot alloca loop source lowers through the modern pipeline");
+
+    memory::Arena vmArena;
+    vm::Module module(vmArena);
+    const auto lowered = vm::lowerModule(session.hirModule(), session.interner(), session.types(),
+                                         vmArena, module);
+    CHECK(lowered.ok, "slot alloca loop HIR lowers into v2");
+    if (!lowered.ok)
+        return;
+
+    const vm::Function *main = nullptr;
+    for (const auto &fn : module.functions)
+        if (fn.name == "main")
+            main = &fn;
+    CHECK(main != nullptr, "lowered module has main");
+    if (main == nullptr)
+        return;
+
+    bool sawControlFlow = false;
+    bool allocationAfterControlFlow = false;
+    std::size_t allocations = 0;
+    for (const auto &instr : main->body) {
+        if (instr.op == vm::Op::AllocBytes) {
+            ++allocations;
+            if (sawControlFlow)
+                allocationAfterControlFlow = true;
+        }
+        if (instr.op == vm::Op::Jump || instr.op == vm::Op::Branch ||
+            instr.op == vm::Op::Branch2)
+            sawControlFlow = true;
+    }
+    CHECK(allocations >= 3, "prologue allocates sum, i and the loop-local slot");
+    CHECK(!allocationAfterControlFlow,
+          "v2 lowering hoists every slot allocation out of the loop body");
+
+    vm::Vm vm;
+    const auto result = vm.runMain(module);
+    CHECK(result.status == vm::RunStatus::Ok, "v2 VM runs the hoisted-allocation loop");
+    CHECK_EQ(result.exitCode, 499500, "v2 VM returns the loop sum");
+}
 
 void test_vm_v2_bitwise_and_shifts() {
     const auto root = std::filesystem::temp_directory_path() / "zith-vm-v2-bitwise-tests";
@@ -1518,6 +1818,19 @@ void test_vm_v2() {
     test_vm_v2_call_range_multi_args();
     test_vm_v2_variadic_slice_call_forms();
     test_vm_v2_dynamic_slice_index_bounds();
+    test_vm_v2_struct_field_access();
+    test_vm_v2_struct_nested_field();
+    test_vm_v2_struct_param_and_return();
+    test_vm_v2_struct_mixed_field_offsets();
+    test_vm_v2_array_index_assignment();
+    test_vm_v2_scalar_deref_assignment();
+    test_vm_v2_scalar_address_aliasing();
+    test_vm_v2_pointer_param_mutation_visible();
+    test_vm_v2_borrowed_slice_intrinsics();
+    test_vm_v2_struct_with_array_field();
+    test_vm_v2_struct_with_array_field_by_value();
+    test_vm_v2_pointer_to_array_element();
+    test_vm_v2_slot_alloca_hoisted_out_of_loop();
     test_vm_v2_bitwise_and_shifts();
     test_vm_v2_hir_control_flow_and_dynamic_array_index();
     test_vm_v2_dynamic_array_index_traps();

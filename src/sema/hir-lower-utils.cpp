@@ -28,8 +28,28 @@ bool decodeEscapes(std::string_view text, std::string &output, bool keep_marker)
             output.push_back('\t');
             break;
         case '0':
-            output.push_back('\0');
+        case '1':
+        case '2':
+        case '3':
+        case '4':
+        case '5':
+        case '6':
+        case '7': {
+            // C-style octal escape: one to three octal digits. `\0` is the
+            // one-digit form (NUL) and `\033` is ESC. This replaces the old
+            // single-byte `\0` rule, which left the following digits as
+            // literal characters and silently truncated the string at the
+            // embedded NUL.
+            unsigned value = static_cast<unsigned>(escaped - '0');
+            int digits     = 1;
+            while (digits < 3 && index + 1 < text.size() && text[index + 1] >= '0' &&
+                   text[index + 1] <= '7') {
+                value = (value << 3U) | static_cast<unsigned>(text[++index] - '0');
+                ++digits;
+            }
+            output.push_back(static_cast<char>(value & 0xFFU));
             break;
+        }
         case '\\':
             output.push_back('\\');
             break;

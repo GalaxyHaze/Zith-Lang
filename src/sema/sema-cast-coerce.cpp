@@ -543,10 +543,22 @@ TypeId PerModuleSema::inferLayoutIntrinsic(frontend::ExprId id) {
                    diagnostics::err::TypeMismatch);
             return error_type;
         }
-        const TypeId operand     = inferExpr(expr.operands[0]);
-        const TypeId resolved    = resolve(operand);
-        const auto *slice        = type_table.slice(resolved);
-        const auto *array        = type_table.array(resolved);
+        const TypeId operand  = inferExpr(expr.operands[0]);
+        const TypeId resolved = resolve(operand);
+        TypeId value_type     = resolved;
+        if (isBorrowParamType(resolved)) {
+            TypeId borrow_type = type_table.canonical(resolved);
+            for (unsigned guard = 0; guard < 8U; ++guard) {
+                const auto *qualified = type_table.qualified(borrow_type);
+                if (qualified == nullptr)
+                    break;
+                borrow_type = type_table.canonical(qualified->inner);
+            }
+            if (const auto *pointer = type_table.pointer(borrow_type))
+                value_type = resolve(type_table.stripQualifiers(pointer->pointee));
+        }
+        const auto *slice        = type_table.slice(value_type);
+        const auto *array        = type_table.array(value_type);
         const auto &operand_expr = snapshot.expressions()[expr.operands[0].value - 1U];
         const bool is_string_literal =
             operand_expr.kind == frontend::ExprKind::Literal && looksString(operand_expr.text);

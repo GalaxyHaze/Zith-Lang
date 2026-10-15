@@ -609,12 +609,21 @@ static void test_sizeof_intrinsic_runtime() {
 static void test_slice_string_intrinsics_runtime() {
     ModernFileCodegenTest t;
     t.write("main.zith", "extern fn printf(fmt: *char, ...): i32\n"
+                         "fn borrowedLength(str: view []char): u64 {\n"
+                         "    return @lengthOf(str);\n"
+                         "}\n"
+                         "fn borrowedFirst(str: view []char): char {\n"
+                         "    return raw @ptrOf(str)[0];\n"
+                         "}\n"
                          "fn main(): i32 {\n"
                          "    var values: [3]i32 = [10, 20, 30];\n"
                          "    let slice: []i32 = raw values[0..3];\n"
                          "    if (@lengthOf(slice) != 3) { return 1; }\n"
                          "    if (raw @ptrOf(slice)[1] != 20) { return 2; }\n"
                          "    if (@lengthOf(\"zith\") != 4) { return 3; }\n"
+                         "    let text: []char = \"zith\";\n"
+                         "    if (borrowedLength(view text) != 4) { return 4; }\n"
+                         "    if (borrowedFirst(view text) != 'z') { return 5; }\n"
                          "    _ = printf(\"%s\\n\", @ptrOf(\"zith\"));\n"
                          "    return 0;\n"
                          "}\n");
@@ -642,6 +651,29 @@ static void test_when_expression_runtime() {
     CHECK(r.ok, "when with literal, range, and default cases compiles without arrows");
     printf("EXIT CODE: %d\n", r.exitCode);
     CHECK_EQ(r.exitCode, 100, "when dispatches through literal, range, and default cases");
+}
+
+static void test_when_void_expression_case_executes() {
+    CodegenTest t;
+    auto r = t.run("codegen-when-void-body.zith",
+                   "extern fn puts(msg: *char)\n"
+                   "fn main() {\n"
+                   "    when (1) {\n"
+                   "        (1) puts(\"A\"),\n"
+                   "        (_) puts(\"B\")\n"
+                   "    }\n"
+                   "    when (2) {\n"
+                   "        (1) puts(\"C\"),\n"
+                   "        (_) puts(\"D\")\n"
+                   "    }\n"
+                   "    when (3) {\n"
+                   "        (3) { puts(\"E\"); },\n"
+                   "        (_) { puts(\"F\"); }\n"
+                   "    }\n"
+                   "}\n");
+    CHECK(r.ok, "when with void expression case bodies compiles and runs");
+    CHECK(r.output == "A\nD\nE\n",
+          "when executes direct void bodies and does not duplicate block-body effects");
 }
 
 static void test_when_legacy_arrow_runtime() {
@@ -1924,6 +1956,24 @@ static void test_const_global_runtime() {
     CHECK_EQ(r.exitCode, 3, "Reading a const global returns its stored value");
 }
 
+static void test_const_global_array_of_string_pointers() {
+    ModernFileCodegenTest t;
+    t.write("main.zith", "const keywords: [4]*char = [\n"
+                         "    \"if\",\n"
+                         "    \"else\",\n"
+                         "    \"for\",\n"
+                         "    \"when\"\n"
+                         "];\n"
+                         "fn main(): i32 {\n"
+                         "    return 0;\n"
+                         "}\n");
+
+    auto r = t.run();
+    CHECK(r.usedModern, "Const string-pointer array uses the modern frontend pipeline");
+    CHECK(r.ok, "Const global array of string pointers compiles and executes");
+    CHECK_EQ(r.exitCode, 0, "Unused const string-pointer array does not affect execution");
+}
+
 static void test_modern_file_import_codegen_executes() {
     ModernFileCodegenTest t;
     t.write("math.zith", "pub fn add(a: i32, b: i32): i32 { a + b }\n");
@@ -3095,6 +3145,36 @@ static void test_dollar_escape_hatch_runtime() {
     CHECK(r.output == "cost=#5\n#\n", "\\# emits a literal hash in string and char literals");
 }
 
+// Octal escapes make ANSI color codes (`\033`) work and stop `\0` from
+// silently truncating a string at the first following digit.
+static void test_octal_escape_runtime() {
+    CodegenTest t;
+    auto r = t.run("codegen-octal-escape.zith", "extern fn printf(fmt: *char, ...): i32\n"
+                                                "fn main(): i32 {\n"
+                                                "    _ = printf(\"A\\033B\\n\");\n"
+                                                "    _ = printf(\"C\\101D\\n\");\n"
+                                                "    _ = printf(\"E\\7F\\n\");\n"
+                                                "    return 0;\n"
+                                                "}\n");
+    CHECK(r.ok, "octal escapes compile, link and run");
+    CHECK(r.output == "A\x1b" "B\nCAD\nE\x07" "F\n",
+          "\\033 is ESC, \\101 is 'A', and \\7 is BEL");
+
+    // A single `\0` stays NUL, and a following digit is a literal character
+    // rather than being swallowed into an octal run: `M\08N` has four
+    // in-memory characters. `@lengthOf` decodes escapes, so it observes the
+    // byte count even though `printf` would stop at the NUL.
+    CodegenTest t2;
+    auto r2 = t2.run("codegen-nul-then-digit.zith",
+                     "fn main(): i32 {\n"
+                     "    if (@lengthOf(\"M\\08N\") != 4) { return 1; }\n"
+                     "    return 0;\n"
+                     "}\n");
+    CHECK(r2.ok, "a NUL followed by a digit compiles and runs");
+    CHECK_EQ(r2.exitCode, 0,
+             "\\0 is one NUL byte and the following '8' is a literal character");
+}
+
 // Program output must live in takeChildOutput(), not in the compiler's
 // diagnostic buffer: `zithc run` writes the former to stdout after execution.
 static void test_child_output_is_separate_from_compiler_output() {
@@ -3477,6 +3557,7 @@ static void test_codegen() {
     printf("Running test_slice_string_intrinsics_runtime\n");
     test_slice_string_intrinsics_runtime();
     test_when_expression_runtime();
+    test_when_void_expression_case_executes();
     test_when_legacy_arrow_runtime();
     test_when_pattern_alternatives_runtime();
     test_when_default_must_be_last();
@@ -3564,6 +3645,7 @@ static void test_codegen() {
     test_modern_file_pipeline_executes_program();
     printf("Running test_const_global_runtime\n");
     test_const_global_runtime();
+    test_const_global_array_of_string_pointers();
     printf("Running test_modern_file_import_codegen_executes\n");
     test_modern_file_import_codegen_executes();
     printf("Running test_modern_file_type_alias_codegen_executes\n");
@@ -3618,6 +3700,8 @@ static void test_codegen() {
     test_c_default_arguments_and_string_escapes();
     printf("Running test_dollar_escape_hatch_runtime\n");
     test_dollar_escape_hatch_runtime();
+    printf("Running test_octal_escape_runtime\n");
+    test_octal_escape_runtime();
     printf("Running test_child_output_is_separate_from_compiler_output\n");
     test_child_output_is_separate_from_compiler_output();
     printf("Running test_direct_exec_inherits_parent_stdout\n");

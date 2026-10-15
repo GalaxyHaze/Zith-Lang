@@ -1,0 +1,199 @@
+{
+  "version": 1,
+  "current_module": "extern-globals",
+  "current_task": "extern-globals::docs_and_regression",
+  "status": "done",
+  "worker": null,
+  "updated_at": "2026-10-15T05:39:17Z",
+  "trace_summary": [
+    {
+      "task": "extern-globals::syntax",
+      "from": "planned",
+      "to": "stub",
+      "worker": null,
+      "at": "2026-10-14T20:35:57Z"
+    },
+    {
+      "task": "extern-globals::syntax",
+      "from": "stub",
+      "to": "work",
+      "worker": null,
+      "at": "2026-10-14T20:36:03Z"
+    },
+    {
+      "task": "extern-globals::syntax",
+      "from": "work",
+      "to": "test",
+      "worker": null,
+      "at": "2026-10-14T20:57:29Z"
+    },
+    {
+      "task": "extern-globals::syntax",
+      "status": "done",
+      "worker": null,
+      "at": "2026-10-14T20:57:33Z",
+      "ok": true
+    },
+    {
+      "task": "extern-globals::importer",
+      "from": "planned",
+      "to": "stub",
+      "worker": null,
+      "at": "2026-10-14T21:05:25Z"
+    },
+    {
+      "task": "extern-globals::importer",
+      "from": "stub",
+      "to": "work",
+      "worker": null,
+      "at": "2026-10-14T21:05:25Z"
+    },
+    {
+      "task": "extern-globals::importer",
+      "from": "work",
+      "to": "test",
+      "worker": null,
+      "at": "2026-10-14T21:10:03Z"
+    },
+    {
+      "task": "extern-globals::importer",
+      "status": "done",
+      "worker": null,
+      "at": "2026-10-14T21:10:09Z",
+      "ok": true
+    },
+    {
+      "task": "extern-globals::bindings",
+      "from": "planned",
+      "to": "stub",
+      "worker": null,
+      "at": "2026-10-14T21:10:28Z"
+    },
+    {
+      "task": "extern-globals::bindings",
+      "from": "stub",
+      "to": "work",
+      "worker": null,
+      "at": "2026-10-14T21:10:33Z"
+    },
+    {
+      "task": "extern-globals::bindings",
+      "from": "work",
+      "to": "test",
+      "worker": null,
+      "at": "2026-10-14T21:29:52Z"
+    },
+    {
+      "task": "extern-globals::bindings",
+      "from": "test",
+      "to": "error",
+      "worker": null,
+      "at": "2026-10-14T21:29:58Z"
+    },
+    {
+      "task": "extern-globals::bindings",
+      "from": "error",
+      "to": "work",
+      "worker": null,
+      "at": "2026-10-14T21:36:17Z"
+    },
+    {
+      "task": "extern-globals::bindings",
+      "from": "work",
+      "to": "test",
+      "worker": null,
+      "at": "2026-10-14T21:36:35Z"
+    },
+    {
+      "task": "extern-globals::bindings",
+      "status": "done",
+      "worker": null,
+      "at": "2026-10-14T21:36:41Z",
+      "cmd": "ctest --test-dir build -R '^(test-cinterop|test-frontend-modern-pipeline|test-cache)$' --output-on-failure"
+    },
+    {
+      "task": "extern-globals::llvm_codegen",
+      "from": "planned",
+      "to": "stub",
+      "worker": null,
+      "at": "2026-10-14T21:40:26Z"
+    },
+    {
+      "task": "extern-globals::llvm_codegen",
+      "from": "stub",
+      "to": "work",
+      "worker": null,
+      "at": "2026-10-14T21:40:48Z"
+    },
+    {
+      "task": "extern-globals::llvm_codegen",
+      "from": "work",
+      "to": "test",
+      "worker": null,
+      "at": "2026-10-14T21:50:46Z"
+    },
+    {
+      "task": "extern-globals::llvm_codegen",
+      "status": "done",
+      "worker": null,
+      "at": "2026-10-14T21:50:51Z",
+      "ok": true
+    },
+    {
+      "task": "extern-globals::vm_fallback",
+      "from": "planned",
+      "to": "stub",
+      "worker": null,
+      "at": "2026-10-14T21:51:18Z"
+    },
+    {
+      "task": "extern-globals::vm_fallback",
+      "from": "stub",
+      "to": "work",
+      "worker": null,
+      "at": "2026-10-14T21:52:01Z"
+    },
+    {
+      "task": "extern-globals::vm_fallback",
+      "from": "work",
+      "to": "test",
+      "worker": null,
+      "at": "2026-10-14T21:55:08Z"
+    },
+    {
+      "task": "extern-globals::docs_and_regression",
+      "from": "planned",
+      "to": "stub",
+      "worker": null,
+      "at": "2026-10-14T21:55:32Z"
+    },
+    {
+      "task": "extern-globals::vm_fallback",
+      "status": "done",
+      "worker": null,
+      "at": "2026-10-14T21:58:08Z",
+      "ok": true
+    },
+    {
+      "task": "extern-globals::docs_and_regression",
+      "from": "stub",
+      "to": "work",
+      "worker": null,
+      "at": "2026-10-14T21:58:17Z"
+    },
+    {
+      "task": "extern-globals::docs_and_regression",
+      "from": "work",
+      "to": "test",
+      "worker": null,
+      "at": "2026-10-14T23:18:48Z"
+    },
+    {
+      "task": "extern-globals::docs_and_regression",
+      "status": "done",
+      "worker": null,
+      "at": "2026-10-14T23:18:53Z",
+      "ok": true
+    }
+  ]
+}
