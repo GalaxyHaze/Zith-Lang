@@ -4,10 +4,11 @@ Objective: bound recursive parser work and add memory/undefined-behavior
 sanitizer coverage for the compiler tests, following
 [`codebase-audit-2026-10-15.md`](../codebase-audit-2026-10-15.md).
 
-Status: steps 1 and 2 are implemented and locally verified. Step 3 is pending:
-the Clang 18 sanitizer job has not run against these commits. On 2026-10-15,
-GitHub reported `main` as unprotected, and local `main` was two commits ahead
-of `origin/main`.
+Status: steps 1 and 2 are implemented and locally verified. Step 3 is complete:
+the Clang 18 sanitizer job passed remotely for the published remediation head
+SHA. The overall workflow still fails in the unrelated MUSL cross-build jobs;
+see the remote verification record below. On 2026-10-15, GitHub reported
+`main` as unprotected.
 
 Preconditions:
 
@@ -15,7 +16,7 @@ Preconditions:
 - Preserve pre-existing modifications. The repository may have a dirty
   worktree.
 - Keep step 1 in commit `266d2147` unchanged. Make step 2 a separate commit.
-- Do not push commits to `main` without explicit user authorization.
+- Do not push additional commits to `main` without explicit user authorization.
 - Use the configured CMake/CTest project. CI pins Clang 18, while the local
   sanitizer verification recorded below used Clang 21.
 - Run `git status --short` before each implementation step. If a target file
@@ -123,7 +124,7 @@ iterative. The completed change is isolated in commit `266d2147`.
 Success criteria: DONE. Do not amend or rewrite commit `266d2147` while
 completing step 2.
 
-### 2. Add an ASan/UBSan CI run (IMPLEMENTED, locally verified)
+### 2. Add an ASan/UBSan CI run (IMPLEMENTED, locally and remotely verified)
 
 Goal: the `sanitizers` GitHub Actions job runs all CTest cases in a Debug build
 instrumented with AddressSanitizer and UndefinedBehaviorSanitizer.
@@ -213,81 +214,46 @@ in changed C++ files. `cppcheck` reported existing findings outside the
 changed areas. `scripts/check-docs-consistency.py` passed. Ruby's standard YAML
 parser accepted `.github/workflows/ci.yml`; `actionlint` is not installed.
 
-Success criteria: local implementation acceptance is DONE. Remote acceptance
-remains pending until the GitHub sanitizer job passes with Clang 18. Whether
+Success criteria: local implementation acceptance is DONE. Remote sanitizer
+acceptance is DONE after the successful Clang 18 run recorded below. Whether
 branch protection requires this job is a separate repository-host setting.
 The 2026-10-15 GitHub API query returned `404 Branch not protected`, so
 `main` did not have required status checks configured at that time.
 
-### 3. Verify the remote sanitizer job (PENDING PUBLICATION)
+### 3. Verify the remote sanitizer job (COMPLETE)
 
-Goal: the Clang 18 sanitizer workflow has a successful GitHub Actions run for
-the remediation commits, and the branch-protection state is recorded.
+Goal: verify the Clang 18 sanitizer workflow against the published remediation
+commits and record the branch-protection state.
 
-Sub-steps:
+Recorded remote result on 2026-10-15:
 
-1. From `/home/diogo/Zith`, run `git status -sb` and
-   `git log -2 --oneline`. Confirm the intended remediation commits are
-   `266d2147` and `b6e55e97` and identify whether they are still ahead of
-   `origin/main`.
-2. Do not push while user authorization is absent. Ask for explicit
-   authorization to publish the commits to `main`. If authorization is denied
-   or not given, leave this step pending and do not claim remote validation.
-3. After authorization, run `git push origin main`. Stop if the push is
-   rejected. Do not force-push, rebase shared history, or bypass branch rules.
-4. Record the local tip with `git rev-parse HEAD`. List workflow runs with
-   `gh run list --repo GalaxyHaze/Zith-Lang --workflow ci.yml --limit 10 --json databaseId,headSha,status,conclusion,createdAt,event,displayTitle`.
-   Select the run whose `headSha` equals the published tip SHA. If a later
-   commit is pushed first, stop and identify the run for the correct tip.
-5. Inspect that run with
-   `gh run view <run-id> --repo GalaxyHaze/Zith-Lang --json headSha,status,conclusion,jobs`.
-   Confirm that the `sanitizers` job conclusion is `success`.
-6. If `sanitizers` fails, retrieve its failed-step log with
-   `gh run view <run-id> --repo GalaxyHaze/Zith-Lang --log-failed`. Fix the
-   sanitizer or test defect in a separate commit, push only after the same
-   authorization, and inspect the new run.
-7. Query
-   `gh api repos/GalaxyHaze/Zith-Lang/branches/main/protection/required_status_checks`.
-   Record the returned required contexts. Treat HTTP 404 with `Branch not
-   protected` as evidence that no required status checks are configured.
-8. Update this plan and `memory/sanitizer-ci.md` with the run ID, head SHA,
-   sanitizer conclusion and observed branch-protection state. Run
-   `python3 scripts/check-docs-consistency.py --root /home/diogo/Zith`,
-   validate the workflow YAML, run `git diff --check`, and commit the
-   verification record separately.
+- Run `38798317687` completed against head SHA
+  `29366f79691df1d4a20e2f23e3d82cfe890715a2`, which contains the remediation
+  commits `266d2147` and `b6e55e97`.
+- The `sanitizers` job passed. It configured with ASan and UBSan, built
+  successfully, and passed all 42 CTest tests with zero failures.
+- `build (Debug)` and `build (Release)` also passed.
+- The overall workflow conclusion was `failure`, not success.
+  `cross-builds (web, false)` failed and the MUSL step in
+  `cross-builds (wasm-runtime, true)` failed, both with undefined LLVM C++
+  link symbols. The wasm-runtime job was cancelled after its MUSL step failed.
+  This cross-link issue is separate from the sanitizer result and also
+  appeared in earlier runs.
+- The required-status-checks endpoint returned `404 Branch not protected` for
+  `main`. No required status checks were configured at this snapshot.
+- Local `main` was synchronized with `origin/main` at
+  `29366f79691df1d4a20e2f23e3d82cfe890715a2` before this verification-record
+  update.
 
-Expected output: a GitHub Actions run for the remediation head SHA has a
-`sanitizers` job with conclusion `success`. The branch-protection API returns
-the required contexts or the explicit unprotected-branch response.
-
-Failure checks:
-
-- If the newest run predates `b6e55e97`, it does not verify this workflow
-  change. Publish the commits only after explicit authorization, then inspect
-  the resulting run.
-- If the run is still in progress, poll that run ID until it is completed.
-  Do not report a pending job as passed or failed.
-- If `sanitizers` fails, preserve the failing run and logs, fix the reported
-  defect, and create a separate fix commit. Do not weaken sanitizer flags or
-  mark the job as allowed to fail.
-- If another job fails while `sanitizers` passes, record both conclusions
-  separately. Do not attribute a failure in an unrelated job to the
-  sanitizer change.
-- If the branch-protection API returns 403 or another error instead of the
-  documented unprotected response, report branch protection as unverified.
-  Do not infer that it is enabled or disabled.
-
-Recorded remote snapshot on 2026-10-15: run `38767587346` tested head SHA
+The older run `38767587346` tested SHA
 `5aaa899dac6f9ca402c1c35399037fabfc396331`, before the sanitizer workflow
-commit. Its Debug and Release jobs passed. `cross-builds (wasm-runtime)` failed
-in `Configure and Build MUSL (Static)` with undefined C++ symbols from LLVM
-archives. That run does not verify the new sanitizer job. The required-status
-checks endpoint returned `404 Branch not protected`. The remediation commits
-were still local and had not been tested remotely.
+commit. Its Debug and Release jobs passed, and its MUSL cross-build failed
+with undefined LLVM C++ symbols. It is historical context, not sanitizer
+validation.
 
-Success criteria: DONE only when a completed run for a remediation head SHA
-reports `sanitizers: success`, the branch-protection API result is recorded,
-and the verification record is committed separately.
+Success criteria: DONE. A completed run for the remediation head SHA reports
+`sanitizers: success`, the branch-protection API result is recorded, and this
+verification record is kept separately from the implementation commits.
 
 ## Final Acceptance
 
@@ -308,6 +274,8 @@ After both steps are implemented:
 
 Local acceptance requires the focused frontend test, both recorded full CTest
 suites, documentation consistency, workflow validation and a clean diff check.
-Overall CI acceptance remains open until step 3 succeeds. The current recorded
-state is that `main` is unprotected, so the sanitizer job is not enforced by a
-required branch-protection check.
+The remote sanitizer acceptance passed in run `38798317687`. The overall
+workflow is not green because both cross-builds encounter the MUSL LLVM link
+failure; the `web` job failed and the `wasm-runtime` job was cancelled after
+its MUSL step failed. The recorded state is that `main` is unprotected, so the
+sanitizer job is not enforced by a required branch-protection check.
