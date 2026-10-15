@@ -47,7 +47,8 @@ contracts, decisions, and gotchas that are not discoverable from the source alon
   iterative recovery contract, post-audit test results, and local sanitizer
   validation caveats.
 - [sanitizer-ci.md](sanitizer-ci.md): ASan/UBSan workflow contract, local
-  verification status, and remote CI/branch-protection checks still pending.
+  verification status, pending remote sanitizer run, and the recorded
+  unprotected `main` branch state.
 - [session-arena-lifetime.md](session-arena-lifetime.md): `CompilationSession`
   member lifetime dependency between `mScratchArena` and `mProjectConfig`.
 - [tests-and-defer-codegen.md](tests-and-defer-codegen.md): test binary
