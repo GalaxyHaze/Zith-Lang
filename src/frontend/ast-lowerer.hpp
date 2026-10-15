@@ -45,10 +45,31 @@ public:
     void skipMacroInvocation();
 
 private:
+    static constexpr uint32_t kMaximumParserDepth = 128U;
+
+    class ParserDepthGuard {
+    public:
+        explicit ParserDepthGuard(AstLowerer &lowerer) noexcept;
+        ~ParserDepthGuard();
+        ParserDepthGuard(const ParserDepthGuard &) = delete;
+        ParserDepthGuard &operator=(const ParserDepthGuard &) = delete;
+
+        [[nodiscard]] bool entered() const noexcept {
+            return entered_;
+        }
+
+    private:
+        AstLowerer &lowerer_;
+        bool entered_ = false;
+    };
+
     [[nodiscard]] std::string_view text(uint32_t index) const noexcept;
     [[nodiscard]] bool punctuation(uint32_t index, char character) const noexcept;
     [[nodiscard]] TextSpan tokenSpan(uint32_t index) const noexcept;
     [[nodiscard]] TextSpan range(uint32_t start, uint32_t end) const noexcept;
+    void recoverParserDepthExceeded(uint32_t start);
+    [[nodiscard]] ExprId parserDepthErrorExpression(uint32_t start);
+    [[nodiscard]] TypeExprId parserDepthErrorType(uint32_t start);
 
     [[nodiscard]] ExprId addExpression(Expression expression);
     [[nodiscard]] StmtId addStatement(Statement statement);
@@ -126,7 +147,9 @@ private:
     FrontendSnapshot &snapshot_;
     uint32_t token_count_;
     uint32_t index_      = 0;
+    uint32_t parser_depth_ = 0;
     uint32_t next_scope_ = 1;
+    bool parser_depth_error_reported_ = false;
     ScopeId root_scope_;
     ScopeId current_scope_;
     bool declaration_is_nominal_        = false;

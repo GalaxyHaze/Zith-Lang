@@ -4,8 +4,7 @@ Objective: bound recursive parser work and add memory/undefined-behavior
 sanitizer coverage for the compiler tests, following
 [`codebase-audit-2026-10-15.md`](../codebase-audit-2026-10-15.md).
 
-Status: planned. No source-code or CI remediation in this plan has been
-implemented yet.
+Status: step 1 implemented and verified; step 2 remains planned.
 
 Preconditions:
 

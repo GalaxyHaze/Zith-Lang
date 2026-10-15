@@ -55,6 +55,9 @@ memory::Optional<ErrorInfo> lookupError(ErrCode code) noexcept {
     case err::CircularImport:
         return ErrorInfo{code, 'E', "import", "Circular import",
                          "Remove one module from the cycle so the dependency graph stays a DAG"};
+    case err::ParseDepthExceeded:
+        return ErrorInfo{code, 'E', "parse", "Parser nesting limit exceeded",
+                         "Reduce the nesting depth of expressions, types, or blocks"};
 
     // Semantic
     case err::UndefinedIdent:

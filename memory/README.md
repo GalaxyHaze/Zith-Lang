@@ -43,6 +43,8 @@ contracts, decisions, and gotchas that are not discoverable from the source alon
   `E5001` lowering gap.
 - [stalin-debug.md](stalin-debug.md): strategy for narrowing compiler bugs by
   disabling reproducer/code paths step by step before deep debugging.
+- [parser-depth-limit.md](parser-depth-limit.md): recursive parser depth cap,
+  iterative recovery contract, and local sanitizer validation caveats.
 - [tests-and-defer-codegen.md](tests-and-defer-codegen.md): test binary
   locations, `defer` codegen notes, and the known modern-file alias codegen
   failure outside the defer work.

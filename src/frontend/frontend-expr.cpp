@@ -47,6 +47,10 @@ ExprId AstLowerer::parseExpression(int minimum_precedence) {
         return {};
 
     const uint32_t start = index_;
+    ParserDepthGuard depth_guard(*this);
+    if (!depth_guard.entered())
+        return parserDepthErrorExpression(start);
+
     ExprId left;
     // Prefix `?` fallback/failable propagation is not implemented yet.
     if (snapshot_.tokens_[index_].kind == TokenKind::Operator && text(index_) == "?") {

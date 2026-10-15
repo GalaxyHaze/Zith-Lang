@@ -15,6 +15,11 @@ namespace zith::frontend {
 TypeExprId AstLowerer::parseType() {
     if (index_ >= token_count_)
         return {};
+    const uint32_t start = index_;
+    ParserDepthGuard depth_guard(*this);
+    if (!depth_guard.entered())
+        return parserDepthErrorType(start);
+
     const uint32_t qualifier_start = index_;
     OwnershipKind ownership        = OwnershipKind::Default;
     bool has_ownership             = false;
@@ -66,7 +71,6 @@ TypeExprId AstLowerer::parseType() {
     }
     if (index_ >= token_count_)
         return {};
-    const uint32_t start = index_;
     TypeExpression type;
     type.kind          = TypeExprKind::Error;
     type.ownership     = ownership;

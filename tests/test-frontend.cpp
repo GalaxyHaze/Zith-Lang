@@ -308,6 +308,111 @@ static bool hasErrorCode(const frontend::FrontendSnapshot &snapshot, uint32_t co
     return false;
 }
 
+static std::size_t countErrorCode(const frontend::FrontendSnapshot &snapshot, uint32_t code) {
+    std::size_t count = 0;
+    for (const auto &diagnostic : snapshot.diagnostics())
+        if (!diagnostic.isWarning && diagnostic.code == code)
+            ++count;
+    return count;
+}
+
+static bool hasErrors(const frontend::FrontendSnapshot &snapshot) {
+    return std::any_of(snapshot.diagnostics().begin(), snapshot.diagnostics().end(),
+                       [](const frontend::Diagnostic &diagnostic) {
+                           return !diagnostic.isWarning;
+                       });
+}
+
+static bool hasErrorExpression(const frontend::FrontendSnapshot &snapshot) {
+    return std::any_of(snapshot.expressions().begin(), snapshot.expressions().end(),
+                       [](const frontend::Expression &expression) {
+                           return expression.kind == frontend::ExprKind::Error;
+                       });
+}
+
+static void test_parser_depth_limit() {
+    constexpr std::size_t maxDepth = 128U;
+
+    const auto parse_parenthesized = [](const std::size_t nesting) {
+        std::string source = "fn nested(): i32 { return ";
+        source.append(nesting, '(');
+        source += "1";
+        source.append(nesting, ')');
+        source += "; }\nfn after_depth_error() {}\n";
+        return frontend::parse(source);
+    };
+    const auto expressions_at_limit = parse_parenthesized(maxDepth - 2U);
+    CHECK(!hasErrors(expressions_at_limit),
+          "128 active parser entries accept nested parenthesized expressions");
+    const auto expressions_over_limit = parse_parenthesized(maxDepth - 1U);
+    CHECK_EQ(countErrorCode(expressions_over_limit, diagnostics::err::ParseDepthExceeded), 1U,
+             "the first over-limit expression reports exactly one E1010");
+    CHECK(hasErrorExpression(expressions_over_limit),
+          "over-limit expression recovery creates an error expression");
+    CHECK_EQ(expressions_over_limit.declarations().size(), 2U,
+             "expression recovery preserves the following declaration");
+
+    const auto parse_nested_type = [](const std::size_t nesting) {
+        std::string source = "type Nested = ";
+        for (std::size_t depth = 0; depth < nesting; ++depth)
+            source += '?';
+        source += "i32;\nfn after_depth_error() {}\n";
+        return frontend::parse(source);
+    };
+    const auto types_at_limit = parse_nested_type(maxDepth - 1U);
+    CHECK(types_at_limit.diagnostics().empty(), "128 active parser entries accept nested types");
+    const auto types_over_limit = parse_nested_type(maxDepth);
+    CHECK_EQ(countErrorCode(types_over_limit, diagnostics::err::ParseDepthExceeded), 1U,
+             "the first over-limit type reports exactly one E1010");
+    CHECK(std::any_of(types_over_limit.typeExpressions().begin(),
+                      types_over_limit.typeExpressions().end(),
+                      [](const frontend::TypeExpression &type) {
+                          return type.kind == frontend::TypeExprKind::Error;
+                      }),
+          "over-limit type recovery creates an error type");
+    CHECK_EQ(types_over_limit.declarations().size(), 2U,
+             "type recovery preserves the following declaration");
+
+    const auto parse_nested_blocks = [](const std::size_t nesting) {
+        std::string source = "fn nested() { defer {";
+        source.append(nesting, '{');
+        source.append(nesting, '}');
+        source += "} }\nfn after_depth_error() {}\n";
+        return frontend::parse(source);
+    };
+    const auto blocks_at_limit = parse_nested_blocks((maxDepth - 2U) / 2U);
+    CHECK(!hasErrors(blocks_at_limit),
+          "128 active parser entries accept nested block statements");
+    const auto blocks_over_limit = parse_nested_blocks((maxDepth - 2U) / 2U + 1U);
+    CHECK_EQ(countErrorCode(blocks_over_limit, diagnostics::err::ParseDepthExceeded), 1U,
+             "over-limit nested blocks report exactly one E1010");
+    CHECK(hasErrorExpression(blocks_over_limit),
+          "over-limit block recovery creates an error expression");
+    CHECK_EQ(blocks_over_limit.declarations().size(), 2U,
+             "block recovery preserves the following declaration");
+
+    const auto parse_nested_conditionals = [](const std::size_t nesting) {
+        std::string source = "fn nested() { ";
+        for (std::size_t depth = 0; depth < nesting; ++depth) {
+            if (depth > 0U)
+                source += " else ";
+            source += "if (true) {}";
+        }
+        source += " }\nfn after_depth_error() {}\n";
+        return frontend::parse(source);
+    };
+    const auto conditionals_at_limit = parse_nested_conditionals(maxDepth - 3U);
+    CHECK(!hasErrors(conditionals_at_limit),
+          "128 active parser entries accept nested conditionals");
+    const auto conditionals_over_limit = parse_nested_conditionals(maxDepth - 2U);
+    CHECK_EQ(countErrorCode(conditionals_over_limit, diagnostics::err::ParseDepthExceeded), 1U,
+             "the first over-limit conditional reports exactly one E1010");
+    CHECK(hasErrorExpression(conditionals_over_limit),
+          "over-limit conditional recovery creates an error expression");
+    CHECK_EQ(conditionals_over_limit.declarations().size(), 2U,
+             "conditional recovery preserves the following declaration");
+}
+
 static void test_pipe_operators_parse_as_chain() {
     auto snapshot = frontend::parse("fn addOne(x: i32): i32 { x + 1 }\n"
                                     "fn main(): i32 {\n"
@@ -1676,6 +1781,7 @@ static void test_frontend() {
     test_old_state_machine_syntax_is_rejected();
     test_while_is_deprecated();
     test_return_expression_requires_semicolon();
+    test_parser_depth_limit();
     test_multi_char_operators_are_single_tokens();
     test_binary_comparison_expression();
     test_cast_expression();

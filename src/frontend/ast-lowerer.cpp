@@ -376,6 +376,18 @@ BindingKind bindingKind(std::string_view word) noexcept {
 AstLowerer::AstLowerer(FrontendSnapshot &snapshot)
     : snapshot_(snapshot), token_count_(static_cast<uint32_t>(snapshot.tokens_.size() - 1U)) {}
 
+AstLowerer::ParserDepthGuard::ParserDepthGuard(AstLowerer &lowerer) noexcept : lowerer_(lowerer) {
+    if (lowerer_.parser_depth_ >= kMaximumParserDepth)
+        return;
+    ++lowerer_.parser_depth_;
+    entered_ = true;
+}
+
+AstLowerer::ParserDepthGuard::~ParserDepthGuard() {
+    if (entered_)
+        --lowerer_.parser_depth_;
+}
+
 std::string_view AstLowerer::text(uint32_t index) const noexcept {
     return tokenText(snapshot_, index);
 }
@@ -392,6 +404,67 @@ TextSpan AstLowerer::range(uint32_t start, uint32_t end) const noexcept {
     if (start >= token_count_)
         return {};
     return {tokenSpan(start).start, end > start ? tokenSpan(end - 1U).end : tokenSpan(start).end};
+}
+
+void AstLowerer::recoverParserDepthExceeded(uint32_t start) {
+    const bool started_with_group =
+        punctuation(index_, '(') || punctuation(index_, '[') || punctuation(index_, '{');
+    uint32_t parentheses = 0;
+    uint32_t brackets    = 0;
+    uint32_t braces      = 0;
+
+    const auto at_synchronization_point = [&]() {
+        return parentheses == 0U && brackets == 0U && braces == 0U;
+    };
+
+    while (index_ < token_count_) {
+        if (punctuation(index_, '(')) {
+            ++parentheses;
+        } else if (punctuation(index_, '[')) {
+            ++brackets;
+        } else if (punctuation(index_, '{')) {
+            ++braces;
+        } else if (punctuation(index_, ')') && parentheses > 0U) {
+            --parentheses;
+        } else if (punctuation(index_, ']') && brackets > 0U) {
+            --brackets;
+        } else if (punctuation(index_, '}') && braces > 0U) {
+            --braces;
+        } else if (at_synchronization_point() &&
+                   (punctuation(index_, ')') || punctuation(index_, ']') ||
+                    punctuation(index_, '}') || punctuation(index_, ',') ||
+                    punctuation(index_, ';'))) {
+            break;
+        }
+
+        ++index_;
+        if (started_with_group && at_synchronization_point())
+            break;
+    }
+
+    if (!parser_depth_error_reported_) {
+        snapshot_.diagnostics_.push_back({range(start, index_),
+                                          "parser nesting exceeds the maximum depth of 128", false,
+                                          diagnostics::err::ParseDepthExceeded});
+        parser_depth_error_reported_ = true;
+    }
+}
+
+ExprId AstLowerer::parserDepthErrorExpression(uint32_t start) {
+    recoverParserDepthExceeded(start);
+    Expression error;
+    error.kind  = ExprKind::Error;
+    error.scope = current_scope_;
+    error.span  = range(start, index_);
+    return addExpression(std::move(error));
+}
+
+TypeExprId AstLowerer::parserDepthErrorType(uint32_t start) {
+    recoverParserDepthExceeded(start);
+    TypeExpression error;
+    error.kind = TypeExprKind::Error;
+    error.span = range(start, index_);
+    return addType(std::move(error));
 }
 
 ExprId AstLowerer::addExpression(Expression expression) {

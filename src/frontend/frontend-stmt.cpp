@@ -15,6 +15,10 @@ namespace zith::frontend {
 
 ExprId AstLowerer::parseBlock() {
     const uint32_t start = index_;
+    ParserDepthGuard depth_guard(*this);
+    if (!depth_guard.entered())
+        return parserDepthErrorExpression(start);
+
     Expression block;
     block.kind           = ExprKind::Block;
     const ScopeId parent = current_scope_;
@@ -66,6 +70,10 @@ void AstLowerer::parseArgumentList(std::vector<ExprId> &out) {
             {range(index_ - 5, index_), "expected ')' after target arguments"});
 }
 ExprId AstLowerer::parseElseTail(uint32_t start) {
+    ParserDepthGuard depth_guard(*this);
+    if (!depth_guard.entered())
+        return parserDepthErrorExpression(start);
+
     if (punctuation(index_, '{'))
         return parseBlock();
     if (index_ < token_count_ && text(index_) == "if") {
@@ -106,7 +114,12 @@ ExprId AstLowerer::parseElseTail(uint32_t start) {
     return addExpression(std::move(tail));
 }
 ExprId AstLowerer::parseIf() {
-    const uint32_t start = index_++;
+    const uint32_t start = index_;
+    ParserDepthGuard depth_guard(*this);
+    if (!depth_guard.entered())
+        return parserDepthErrorExpression(start);
+
+    ++index_;
     if (punctuation(index_, '('))
         ++index_;
     const ExprId condition = parseConditionExpression();
