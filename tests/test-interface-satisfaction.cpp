@@ -49,7 +49,8 @@ struct SessionRunner {
         std::vector<Diag> diags;
     };
 
-    Result run(std::string_view input) {
+    Result run(std::string_view input,
+               session::Stage target = session::Stage::TypeChecked) {
         const auto path = root / "main.zith";
         std::ofstream file(path, std::ios::binary | std::ios::trunc);
         file << input;
@@ -62,7 +63,7 @@ struct SessionRunner {
         auto context              = std::make_shared<session::FrontendContext>(config);
         session::CompilationSession session(opts, path.string(), std::move(context));
         session.setBuffered(true);
-        const bool ok = session.runTo(session::Stage::TypeChecked);
+        const bool ok = session.runTo(target);
 
         std::vector<Result::Diag> copied;
         for (const auto &diag : session.diags().all()) {
@@ -317,7 +318,18 @@ void test_qualified_types_through_export_facade() {
     std::filesystem::remove_all(root);
 }
 
+void test_if_without_else_typechecks() {
+    SessionRunner t;
+    const auto result = t.run("fn main(): i32 {\n"
+                              "    if (true) { return 1; }\n"
+                              "    return 0;\n"
+                              "}\n",
+                              session::Stage::HirLowered);
+    CHECK(result.ok, "if without else lowers to HIR as a statement");
+}
+
 void test_interface_satisfaction() {
+    test_if_without_else_typechecks();
     test_structural_satisfaction();
     test_interface_bound_accepts_conforming_struct();
     test_missing_field();

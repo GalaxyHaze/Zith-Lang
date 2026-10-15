@@ -819,9 +819,11 @@ TypeId PerModuleSema::inferIf(frontend::ExprId id) {
         typed_map.provenNonNullExprs.insert(narrowed_local.value);
     // An `if` without `else` is a statement even when its body has a value; only
     // an `if/else` expression can produce a value for the surrounding expression.
+    if (expr.operands.size() < 3U)
+        return void_type;
     const frontend::ExprId else_value =
         expr.operands.size() > 3U ? expr.operands[3] : expr.operands[2];
-    if (expr.operands.size() < 3U || !else_value)
+    if (!else_value)
         return void_type;
     if (sameType(then_type, else_type))
         return then_type;

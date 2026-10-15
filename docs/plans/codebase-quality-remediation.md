@@ -4,19 +4,22 @@ Objective: bound recursive parser work and add memory/undefined-behavior
 sanitizer coverage for the compiler tests, following
 [`codebase-audit-2026-10-15.md`](../codebase-audit-2026-10-15.md).
 
-Status: step 1 implemented and verified; step 2 remains planned.
+Status: steps 1 and 2 are implemented and locally verified. The remote
+Clang 18 sanitizer workflow run and branch-protection configuration have not
+been verified.
 
 Preconditions:
 
 - Work from `/home/diogo/Zith`.
 - Preserve pre-existing modifications. The repository may have a dirty
   worktree.
-- Use the configured CMake/CTest project and Clang 18+ used by
-  `.github/workflows/ci.yml`.
+- Keep step 1 in commit `266d2147` unchanged. Make step 2 a separate commit.
+- Use the configured CMake/CTest project. CI pins Clang 18, while the local
+  sanitizer verification recorded below used Clang 21.
 - Run `git status --short` before each implementation step. If a target file
   already has user changes, read its diff and build on it without reverting.
 
-Files expected to change:
+Files changed by step 1 in commit `266d2147`:
 
 - `src/frontend/ast-lowerer.hpp`
 - `src/frontend/frontend-expr.cpp`
@@ -27,11 +30,25 @@ Files expected to change:
 - `src/diagnostics/error-codes.cpp`
 - `tests/test-frontend.cpp`
 - `docs/impl-status.md`
+
+Files changed by step 2:
+
 - `.github/workflows/ci.yml`
+- `src/sema/sema-control.cpp`
+- `src/sema/hir-lower-block.cpp`
+- `src/session/compilation-session.hpp`
+- `src/session/compilation-session.cpp`
+- `tests/test-interface-satisfaction.cpp`
+- `tests/test-vm-v2.cpp`
+- `docs/plans/codebase-quality-remediation.md`
+- `memory/README.md`
+- `memory/parser-depth-limit.md`
+- `memory/sanitizer-ci.md`
+- `memory/session-arena-lifetime.md`
 
 ## Steps
 
-### 1. Bound parser recursion
+### 1. Bound parser recursion (DONE, commit `266d2147`)
 
 Goal: deeply nested source produces a stable parser diagnostic instead of
 recursing until process stack exhaustion.
@@ -91,33 +108,54 @@ Failure checks:
   generated source and diagnostic, correct the test fixture, and do not weaken
   the limit assertion.
 
-Success criteria: `test-frontend` exits 0; the exact over-limit cases return
-`E1010`; accepted boundary cases remain accepted; no recursive recovery path
-is introduced.
+Recorded result: the focused frontend test passed, the over-limit cases return
+`E1010`, accepted boundary cases remain accepted, and recovery remains
+iterative. The completed change is isolated in commit `266d2147`.
 
-### 2. Add an ASan/UBSan CI run
+Success criteria: DONE. Do not amend or rewrite commit `266d2147` while
+completing step 2.
 
-Goal: the regular test suite runs in a Debug build instrumented with AddressSanitizer
-and UndefinedBehaviorSanitizer.
+### 2. Add an ASan/UBSan CI run (IMPLEMENTED, locally verified)
+
+Goal: the `sanitizers` GitHub Actions job runs all CTest cases in a Debug build
+instrumented with AddressSanitizer and UndefinedBehaviorSanitizer.
 
 Sub-steps:
 
-1. Read the existing `build` job in
-   `/home/diogo/Zith/.github/workflows/ci.yml`. Reuse its LLVM installation,
-   compiler selection and configure options.
-2. Add a separate `sanitizers` job on `ubuntu-latest`. Keep the existing
-   Debug/Release matrix unchanged.
-3. Configure a fresh `build-sanitized` directory with Clang 18, LLVM required,
-   Debug mode, and `-fsanitize=address,undefined -fno-omit-frame-pointer` in
-   both C and C++ compile flags and both executable and shared linker flags.
-   Do not reuse `build/` because it contains non-instrumented objects.
-4. Build all targets in `build-sanitized`.
-5. Run the full CTest suite with `--output-on-failure`. Do not mark the job
-   `continue-on-error` or `allow-failure`.
-6. Confirm that failures include sanitizer reports in the job output and fix
-   any confirmed defect before merging the CI job.
+1. Inspect the existing `build` job in
+   `/home/diogo/Zith/.github/workflows/ci.yml`. Keep the existing Debug/Release
+   matrix unchanged.
+2. Add a separate `sanitizers` job on `ubuntu-latest`. Install CMake,
+   `clang-18`, `lld-18`, `llvm-18-dev`, `libclang-18-dev` and `pkg-config`.
+3. Configure a fresh `build-sanitized` directory in Debug mode with Clang 18,
+   `ZITH_HAS_LLVM=ON`, `ZITH_REQUIRE_LLVM=ON`, ASan and UBSan compile/link
+   flags, and frame pointers. Do not reuse `build/`.
+4. Run `python3 scripts/verify-llvm-build.py --build-dir build-sanitized`.
+   Stop if it reports a sema-only or LLVM-disabled build.
+5. Build every target in `build-sanitized`.
+6. Run the full CTest suite with `--output-on-failure`. Do not set
+   `continue-on-error` or an allow-failure condition.
+7. Add a regression in `tests/test-interface-satisfaction.cpp` that compiles
+   an `if` without `else` through `session::Stage::HirLowered`.
+8. In `src/sema/sema-control.cpp`, check that the if-expression has an
+   else-operand before indexing that operand. In
+   `src/sema/hir-lower-block.cpp`, read the else-operand only when `has_else`
+   is true.
+9. Keep `mScratchArena` declared before `mProjectConfig` in
+   `src/session/compilation-session.hpp` and initialize the members in that
+   same order in `src/session/compilation-session.cpp`. This keeps the arena
+   alive while the configuration uses it.
+10. In `tests/test-vm-v2.cpp`, pass `ZITH_STDLIB_DIR` instead of the
+    CTest-working-directory-relative path `"stdlib"`.
+11. Run the normal and sanitizer full suites and the focused tests. Record
+    compiler versions, pass counts and environment limitations in
+    `memory/sanitizer-ci.md` and `memory/parser-depth-limit.md`.
+12. Record the member-lifetime dependency in
+    `memory/session-arena-lifetime.md`, link the notes from
+    `memory/README.md`, validate docs and workflow syntax, then commit step 2
+    separately from `266d2147`.
 
-Commands for the job:
+CI commands:
 
 ```bash
 cmake -S . -B build-sanitized \
@@ -139,31 +177,57 @@ tests passing or explicitly skipped by their existing skip contract.
 
 Failure checks:
 
-- If configuration cannot find LLVM, verify that the sanitizer job installs the
-  same LLVM 18 development packages as the existing native CI job. Keep
-  `ZITH_REQUIRE_LLVM=ON`.
-- If the build links but sanitizer runtimes are absent at execution, verify the
-  compiler and linker flags are present in the generated compile/link commands.
-- If CTest reports an ASan or UBSan finding, keep the sanitizer job failing,
-  reproduce it locally, and fix the underlying issue before changing the job.
-- If a pre-existing test is incompatible with sanitizers, document the exact
-  incompatibility and add a narrowly scoped test property only after confirming
-  that the test itself cannot be made sanitizer-clean.
+- If CMake cannot find LLVM, verify that all LLVM 18 development packages are
+  installed and keep `ZITH_REQUIRE_LLVM=ON`.
+- If the verifier detects LLVM disabled, stop. Do not accept a sema-only
+  sanitizer build.
+- If sanitizer runtimes are missing, inspect generated compile/link commands
+  and ensure the C and C++ compiler selections and sanitizer flags match.
+- If CTest reports ASan or UBSan, keep the job failing, reproduce the finding,
+  and fix the underlying defect. Do not add an allow-failure condition.
+- If the no-else regression fails before HIR lowering, inspect its diagnostics
+  and stage boundary. Keep `HirLowered` as the target stage.
+- If `test-vm-v2` cannot find `stdlib`, use the configured
+  `ZITH_STDLIB_DIR`. Do not rely on the test working directory.
+- If local LeakSanitizer reports that it cannot run under `ptrace`, set
+  `ASAN_OPTIONS=detect_leaks=0` only for local tests and record the limitation.
+  Keep leak detection enabled in CI.
+- If the sanitizer helper selects `/usr/bin/cc` and cannot link its sanitizer
+  runtime, configure a fresh CMake build with both C and C++ compilers set to
+  Clang. A configure/build failure is not sanitizer test coverage.
 
-Success criteria: the new CI job executes the complete CTest suite under both
-sanitizers and is a required successful job for pull requests.
+Recorded local result: the regular CTest suite passed 42/42. ASan/UBSan CTest
+also passed 42/42 in a fresh Clang 21 build with
+`ASAN_OPTIONS=detect_leaks=0`. LeakSanitizer cannot run under local `ptrace`,
+so this run does not validate leaks. The focused `test-c-compile`,
+`test-vm-v2` and `test-codegen` tests passed. `clang-tidy` reported no findings
+in changed C++ files. `cppcheck` reported existing findings outside the
+changed areas. `scripts/check-docs-consistency.py` passed. Ruby's standard YAML
+parser accepted `.github/workflows/ci.yml`; `actionlint` is not installed.
+
+Success criteria: local implementation acceptance is DONE. Remote acceptance
+remains pending until the GitHub sanitizer job passes with Clang 18. Whether
+branch protection requires this job is a separate repository-host setting and
+has not been verified.
 
 ## Final Acceptance
 
 After both steps are implemented:
 
-1. Run `cmake --build build --target test-frontend -j4`.
-2. Run `ctest --test-dir build --output-on-failure`.
-3. Run the sanitizer job's exact configure, build and CTest commands locally
-   when LLVM 18 is available.
-4. Run `python3 scripts/check-docs-consistency.py --root /home/diogo/Zith`.
-5. Review `git diff --check` and inspect the complete diff. Confirm unrelated
+1. Confirm step 1 remains in commit `266d2147`. Do not amend that commit.
+2. Run `cmake --build build --target test-frontend -j4`.
+3. Run `ctest --test-dir build --output-on-failure`.
+4. Run the sanitizer configure, build and CTest commands. The recorded local
+   run used Clang 21 because Clang 18 was unavailable. The workflow's exact
+   Clang 18 commands remain in `.github/workflows/ci.yml`.
+5. Run `python3 scripts/check-docs-consistency.py --root /home/diogo/Zith`.
+6. Validate `.github/workflows/ci.yml` with `actionlint` when available.
+   Otherwise parse it with an installed YAML parser and inspect the job's
+   trigger, compiler, flags and failure behavior.
+7. Run `git diff --check` and inspect the complete diff. Confirm unrelated
    pre-existing changes remain untouched.
 
-The work is complete only when the focused test, full local CTest suite,
-documentation check and required CI sanitizer job all pass.
+Local acceptance requires the focused frontend test, both recorded full CTest
+suites, documentation consistency, workflow validation and a clean diff check.
+Overall CI acceptance remains open until the remote Clang 18 sanitizer job
+passes. Record separately whether branch protection marks that job as required.

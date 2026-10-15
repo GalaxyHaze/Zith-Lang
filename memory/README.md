@@ -44,7 +44,12 @@ contracts, decisions, and gotchas that are not discoverable from the source alon
 - [stalin-debug.md](stalin-debug.md): strategy for narrowing compiler bugs by
   disabling reproducer/code paths step by step before deep debugging.
 - [parser-depth-limit.md](parser-depth-limit.md): recursive parser depth cap,
-  iterative recovery contract, and local sanitizer validation caveats.
+  iterative recovery contract, post-audit test results, and local sanitizer
+  validation caveats.
+- [sanitizer-ci.md](sanitizer-ci.md): ASan/UBSan workflow contract, local
+  verification status, and remote CI/branch-protection checks still pending.
+- [session-arena-lifetime.md](session-arena-lifetime.md): `CompilationSession`
+  member lifetime dependency between `mScratchArena` and `mProjectConfig`.
 - [tests-and-defer-codegen.md](tests-and-defer-codegen.md): test binary
   locations, `defer` codegen notes, and the known modern-file alias codegen
   failure outside the defer work.

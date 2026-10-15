@@ -52,6 +52,45 @@ jobs:
         working-directory: build
         run: ctest --output-on-failure
 
+  sanitizers:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: true
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake clang-18 lld-18 llvm-18-dev \
+            libclang-18-dev pkg-config
+
+      - name: Configure with ASan and UBSan
+        run: |
+          cmake -S . -B build-sanitized \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DCMAKE_C_COMPILER=clang-18 \
+            -DCMAKE_CXX_COMPILER=clang++-18 \
+            -DZITH_HAS_LLVM=ON \
+            -DZITH_REQUIRE_LLVM=ON \
+            -DCMAKE_C_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer" \
+            -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer" \
+            -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,undefined" \
+            -DCMAKE_SHARED_LINKER_FLAGS="-fsanitize=address,undefined"
+
+      - name: Verify LLVM configuration
+        run: python3 scripts/verify-llvm-build.py --build-dir build-sanitized
+
+      - name: Build
+        run: cmake --build build-sanitized -j$(nproc)
+
+      - name: Test under ASan and UBSan
+        working-directory: build-sanitized
+        run: ctest --output-on-failure
+
   cross-builds:
     runs-on: ubuntu-latest
     strategy:

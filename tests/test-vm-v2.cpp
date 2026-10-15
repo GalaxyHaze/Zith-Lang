@@ -1238,7 +1238,7 @@ void test_vm_v2_hello_stdlib_import_print() {
     memory::Arena arena;
     Options options(arena);
     options.targetStage = session::Stage::HirLowered;
-    options.includeDirs.push("stdlib");
+    options.includeDirs.push(ZITH_STDLIB_DIR);
 
     session::CompilationSession session(options, source.string());
     session.setBuffered(true);

@@ -55,11 +55,11 @@ class CompilationSession {
     std::string mProjectRoot;
     std::string mObjectPath;
     int mChildExitCode = 0;
+    memory::Arena mScratchArena;
     ProjectConfig mProjectConfig;
     PipelinePlan mPlan;
 
     memory::SourceMap mSourceMap;
-    memory::Arena mScratchArena;
     memory::Arena mSymArena;
     memory::Arena mTypeArena;
     memory::Arena mHirArena;

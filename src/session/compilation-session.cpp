@@ -92,8 +92,8 @@ template <typename ArrayT>
 
 CompilationSession::CompilationSession(const Options &options, std::string filePath,
                                        std::shared_ptr<FrontendContext> frontend_context)
-    : mOpts(options), mFilePath(std::move(filePath)), mProjectRoot(), mProjectConfig(mScratchArena),
-      mScratchArena(), mSymArena(), mTypeArena(), mHirArena(), mDiags(mScratchArena),
+    : mOpts(options), mFilePath(std::move(filePath)), mProjectRoot(), mScratchArena(),
+      mProjectConfig(mScratchArena), mSymArena(), mTypeArena(), mHirArena(), mDiags(mScratchArena),
       mInterner(std::make_unique<memory::StringInterner>(mScratchArena)),
       mSyms(mSymArena, mInterner.get()), mTypes(mTypeArena, *mInterner), mHirModule(mHirArena),
       mFrontendContext(std::move(frontend_context)) {

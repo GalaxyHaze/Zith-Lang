@@ -244,8 +244,9 @@ hir::HirExprId HirLowerModern::lowerIf(const frontend::Expression &expr, const t
     if (current_fn_->blocks[current_block_].terminator == hir::kInvalidHirExpr)
         emitJump(merge_block);
 
-    const bool has_else_condition        = expr.operands.size() > 3U;
-    const frontend::ExprId else_value_id = has_else_condition ? expr.operands[3] : expr.operands[2];
+    const bool has_else_condition = has_else && expr.operands.size() > 3U;
+    const frontend::ExprId else_value_id =
+        has_else ? (has_else_condition ? expr.operands[3] : expr.operands[2]) : frontend::ExprId{};
     if (has_else) {
         setCurrentBlock(else_block);
         current_fn_->blocks[else_block].insts = memory::DynArray<hir::HirExprId>(arena_);
