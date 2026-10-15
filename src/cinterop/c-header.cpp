@@ -340,6 +340,55 @@ struct ParseState {
     CHeaderArtifact &artifact;
 };
 
+void collectReachableTypedefs(const CXType source, ParseState &state) {
+    const auto kind = source.kind;
+    if (kind == CXType_Elaborated) {
+        collectReachableTypedefs(clang_Type_getNamedType(source), state);
+        return;
+    }
+    if (kind == CXType_Pointer) {
+        collectReachableTypedefs(clang_getPointeeType(source), state);
+        return;
+    }
+    if (kind == CXType_ConstantArray || kind == CXType_IncompleteArray ||
+        kind == CXType_VariableArray) {
+        collectReachableTypedefs(clang_getArrayElementType(source), state);
+        return;
+    }
+    if (kind != CXType_Typedef)
+        return;
+
+    const CXCursor declaration = clang_getTypeDeclaration(source);
+    const auto name            = takeString(clang_getCursorSpelling(declaration));
+    if (name.empty())
+        return;
+
+    const auto existing = std::find_if(state.artifact.typedefs.begin(),
+                                       state.artifact.typedefs.end(),
+                                       [&](const Typedef &alias) { return alias.name == name; });
+    const CXType underlying = clang_getTypedefDeclUnderlyingType(declaration);
+    if (existing == state.artifact.typedefs.end()) {
+        Type type;
+        std::string unsupported;
+        if (lowerTypeImpl(underlying, type, unsupported, false, false)) {
+            state.artifact.typedefs.push_back({name, std::move(type)});
+        } else {
+            state.artifact.skippedDeclarations.push_back(
+                {name + ": typedef skipped: unsupported type '" + unsupported + "'", 0, 0});
+        }
+    }
+    collectReachableTypedefs(underlying, state);
+}
+
+void recordSkippedGlobal(const CXCursor cursor, ParseState &state, const std::string &name,
+                         const std::string &reason) {
+    unsigned line   = 0;
+    unsigned column = 0;
+    clang_getSpellingLocation(clang_getCursorLocation(cursor), nullptr, &line, &column, nullptr);
+    state.artifact.skippedDeclarations.push_back(
+        {name + ": global skipped: " + reason, line, column});
+}
+
 struct Scalars {
     ConstantKind kind     = ConstantKind::Integer;
     bool isSigned         = true;
@@ -580,6 +629,42 @@ CXChildVisitResult visitCursor(const CXCursor cursor, const CXCursor, CXClientDa
                 state.artifact.constants.push_back(std::move(constant));
             }
         }
+        return CXChildVisit_Continue;
+    }
+    if (clang_getCursorKind(cursor) == CXCursor_VarDecl && isMainFile(cursor, state.mainFile)) {
+        const auto linkage = clang_getCursorLinkage(cursor);
+        if (linkage != CXLinkage_External && linkage != CXLinkage_UniqueExternal)
+            return CXChildVisit_Continue;
+        if (clang_Cursor_getStorageClass(cursor) == CX_SC_Static)
+            return CXChildVisit_Continue;
+
+        Global global;
+        global.name = takeString(clang_getCursorSpelling(cursor));
+        if (global.name.empty())
+            return CXChildVisit_Continue;
+        const auto duplicate =
+            std::find_if(state.artifact.globals.begin(), state.artifact.globals.end(),
+                         [&](const Global &existing) { return existing.name == global.name; });
+        if (duplicate != state.artifact.globals.end()) {
+            recordSkippedGlobal(cursor, state, global.name, "duplicate declaration");
+            return CXChildVisit_Continue;
+        }
+
+        const CXType type = clang_getCursorType(cursor);
+        global.linkageName = takeString(clang_Cursor_getMangling(cursor));
+        if (global.linkageName.empty())
+            global.linkageName = global.name;
+        global.isConst = clang_isConstQualifiedType(type) != 0;
+
+        std::string unsupported;
+        if (!lowerType(type, global.type, unsupported)) {
+            recordSkippedGlobal(cursor, state, global.name,
+                                "unsupported type '" + unsupported + "'");
+            return CXChildVisit_Continue;
+        }
+
+        collectReachableTypedefs(type, state);
+        state.artifact.globals.push_back(std::move(global));
         return CXChildVisit_Continue;
     }
     if (clang_getCursorKind(cursor) != CXCursor_FunctionDecl ||

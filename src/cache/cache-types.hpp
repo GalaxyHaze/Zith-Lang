@@ -218,6 +218,7 @@ enum class CompactExprKind : uint8_t {
     Pipe,
     PipeDo,
     PipeCurrent,
+    ExternalGlobalAddr,
 };
 
 enum class CompactBinaryOp : uint8_t {

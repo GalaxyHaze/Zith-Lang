@@ -392,6 +392,33 @@ FrontendContext::buildResolutions(const std::vector<ModuleArtifactPtr> &modules,
                     foreign_constant.foreignConstant = &constant;
                     add_binding(std::move(foreign_constant), frontend::ScopeId{});
                 }
+                for (const auto &global : edge.cHeader->globals) {
+                    ResolvedName foreign_global{global.name,
+                                                ResolutionKind::Foreign,
+                                                edge.request.pathSpan,
+                                                {},
+                                                {},
+                                                {},
+                                                {}};
+                    foreign_global.declKind    = frontend::DeclKind::Variable;
+                    foreign_global.bindingKind = global.isConst ? frontend::BindingKind::Const
+                                                                : frontend::BindingKind::Var;
+                    foreign_global.isExtern    = true;
+                    foreign_global.foreignGlobal = &global;
+                    add_binding(std::move(foreign_global), frontend::ScopeId{});
+                }
+                for (const auto &alias : edge.cHeader->typedefs) {
+                    ResolvedName foreign_typedef{alias.name,
+                                                  ResolutionKind::Foreign,
+                                                  edge.request.pathSpan,
+                                                  {},
+                                                  {},
+                                                  {},
+                                                  {}};
+                    foreign_typedef.declKind    = frontend::DeclKind::TypeAlias;
+                    foreign_typedef.foreignTypedef = &alias;
+                    add_binding(std::move(foreign_typedef), frontend::ScopeId{});
+                }
                 if (!edge.request.alias.empty()) {
                     add_binding({edge.request.alias,
                                  ResolutionKind::ModuleAlias,

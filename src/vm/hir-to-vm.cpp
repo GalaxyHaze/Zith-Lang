@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <cstdint>
 #include <limits>
+#include <string>
 #include <string_view>
 #include <vector>
 
@@ -558,6 +559,13 @@ auto lowerOperand(LowerState &state, hir::HirExprId id) -> std::uint16_t {
                     }
                 state.result->ok      = false;
                 state.result->message = "unsupported HIR variable in v2 lowering";
+                return kUnassignedReg;
+            },
+            [&](const hir::HirExternalGlobalAddr &address) -> std::uint16_t {
+                const auto name         = state.interner.lookup(address.name);
+                state.result->ok        = false;
+                state.result->message   = "unsupported external global '" + std::string(name) +
+                                          "' in v2 VM";
                 return kUnassignedReg;
             },
             [&](const hir::HirBinary &bin) -> std::uint16_t {

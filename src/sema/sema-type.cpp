@@ -866,6 +866,10 @@ TypeId PerModuleSema::lowerBareTypeExpr(const frontend::TypeExpression &type) {
         if (const TypeId named = resolvedTypeName(type.name))
             return named;
         if (const auto *resolved = findResolvedBinding(type.name, currentScopeForType(type));
+            resolved != nullptr && resolved->foreignTypedef != nullptr) {
+            return lowerForeignType(resolved->foreignTypedef->type);
+        }
+        if (const auto *resolved = findResolvedBinding(type.name, currentScopeForType(type));
             resolved != nullptr && resolved->kind == session::ResolutionKind::Import) {
             if (const TypeId imported = typeOfResolvedBinding(*resolved))
                 return imported;

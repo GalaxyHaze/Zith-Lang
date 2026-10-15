@@ -117,6 +117,20 @@ const Constant *findConstant(const CHeaderArtifact &artifact, const std::string 
     return nullptr;
 }
 
+const Global *findGlobal(const CHeaderArtifact &artifact, const std::string &name) {
+    for (const auto &global : artifact.globals)
+        if (global.name == name)
+            return &global;
+    return nullptr;
+}
+
+const Typedef *findTypedef(const CHeaderArtifact &artifact, const std::string &name) {
+    for (const auto &alias : artifact.typedefs)
+        if (alias.name == name)
+            return &alias;
+    return nullptr;
+}
+
 void test_scalar_types() {
     std::printf("=== Scalar types ===\n");
 
@@ -723,6 +737,112 @@ void test_object_like_macro_constants() {
     }
 }
 
+void test_external_globals_and_reachable_typedefs() {
+    std::printf("=== External globals ===\n");
+
+    {
+        const auto art = parseHeaderFromContent(
+            "external_globals.h", "typedef struct _zith_file FILE;\n"
+                                  "typedef FILE FileAlias;\n"
+                                  "typedef unsigned long UnusedType;\n"
+                                  "extern int counter;\n"
+                                  "extern int *pointer;\n"
+                                  "extern FileAlias *stream;\n");
+        CHECK(art->diagnostics.empty(), "supported external globals do not fail the import");
+        CHECK_EQ(art->globals.size(), 3u, "scalar and pointer globals are imported");
+        CHECK(findGlobal(*art, "counter") != nullptr, "scalar global is present");
+        if (const auto *counter = findGlobal(*art, "counter")) {
+            CHECK_EQ(counter->linkageName, std::string("counter"),
+                     "C global keeps its external linker name");
+            CHECK_EQ(counter->type.kind, TypeKind::Integer, "scalar global keeps its C type");
+            CHECK_EQ(counter->type.bits, 32, "int global keeps its target width");
+            CHECK(!counter->isConst, "mutable global is not marked const");
+        }
+        if (const auto *pointer = findGlobal(*art, "pointer")) {
+            CHECK_EQ(pointer->type.kind, TypeKind::Pointer, "pointer global keeps pointer type");
+            CHECK(pointer->type.pointee != nullptr, "pointer global has pointee metadata");
+            if (pointer->type.pointee != nullptr)
+                CHECK_EQ(pointer->type.pointee->kind, TypeKind::Integer,
+                         "pointer global retains scalar pointee type");
+        }
+        if (const auto *stream = findGlobal(*art, "stream")) {
+            CHECK_EQ(stream->type.kind, TypeKind::Pointer, "typedef pointer global is a pointer");
+            CHECK(stream->type.pointee != nullptr, "typedef pointer retains opaque pointee");
+            if (stream->type.pointee != nullptr)
+                CHECK_EQ(stream->type.pointee->kind, TypeKind::Record,
+                         "opaque typedef pointee remains a record");
+        }
+        CHECK(findTypedef(*art, "FILE") != nullptr, "reachable FILE typedef is imported");
+        CHECK(findTypedef(*art, "FileAlias") != nullptr,
+              "reachable typedef alias chain is imported");
+        CHECK(findTypedef(*art, "UnusedType") == nullptr,
+              "unreferenced typedef is not imported");
+    }
+
+    {
+        (void)writeTempHeader("globals_dependency.h", "extern int transitive_global;\n");
+        const auto art = parseHeaderFromContent(
+            "direct_globals.h", "#include \"globals_dependency.h\"\n"
+                                "extern int direct_global;\n"
+                                "static int internal_global;\n");
+        CHECK_EQ(art->globals.size(), 1u, "only the direct external global is imported");
+        CHECK(findGlobal(*art, "direct_global") != nullptr, "direct global is present");
+        CHECK(findGlobal(*art, "transitive_global") == nullptr,
+              "global declared by an included header is not imported");
+        CHECK(findGlobal(*art, "internal_global") == nullptr,
+              "file-local static global is not imported");
+    }
+
+    {
+        const auto art = parseHeaderFromContent(
+            "qualified_globals.h", "extern const int immutable_scalar;\n"
+                                   "extern const int *pointee_const;\n"
+                                   "extern int *const object_const;\n"
+                                   "extern const int *const both_const;\n");
+        CHECK_EQ(art->globals.size(), 4u, "all qualified globals are imported");
+        const auto *immutable_scalar = findGlobal(*art, "immutable_scalar");
+        CHECK(immutable_scalar != nullptr && immutable_scalar->isConst,
+              "top-level scalar constness is retained");
+        const auto *pointee_const = findGlobal(*art, "pointee_const");
+        const auto *object_const  = findGlobal(*art, "object_const");
+        const auto *both_const    = findGlobal(*art, "both_const");
+        CHECK(pointee_const != nullptr && !pointee_const->isConst,
+              "pointee constness does not make the pointer object immutable");
+        CHECK(object_const != nullptr && object_const->isConst,
+              "top-level pointer constness makes the object immutable");
+        CHECK(both_const != nullptr && both_const->isConst,
+              "both pointer and pointee constness are retained");
+        if (pointee_const != nullptr && pointee_const->type.pointee != nullptr)
+            CHECK(pointee_const->type.pointee->isConst,
+                  "const pointee qualification remains on the pointee type");
+        if (object_const != nullptr && object_const->type.pointee != nullptr)
+            CHECK(!object_const->type.pointee->isConst,
+                  "mutable pointee stays mutable for a const pointer object");
+        if (both_const != nullptr && both_const->type.pointee != nullptr)
+            CHECK(both_const->type.pointee->isConst,
+                  "const pointee qualification is independent of object constness");
+    }
+
+    {
+        const auto art = parseHeaderFromContent(
+            "unsupported_globals.h", "struct Incomplete;\n"
+                                    "extern struct Incomplete unsupported_object;\n"
+                                    "extern int supported_object;\n");
+        CHECK(findGlobal(*art, "unsupported_object") == nullptr,
+              "unsupported by-value aggregate is not imported");
+        CHECK(findGlobal(*art, "supported_object") != nullptr,
+              "supported sibling is still imported");
+        CHECK(!art->skippedDeclarations.empty(),
+              "unsupported global is retained as a non-fatal diagnostic");
+        bool names_unsupported = false;
+        for (const auto &diagnostic : art->skippedDeclarations)
+            names_unsupported =
+                names_unsupported || diagnostic.message.find("unsupported_object") !=
+                                         std::string::npos;
+        CHECK(names_unsupported, "unsupported global diagnostic identifies the declaration");
+    }
+}
+
 #endif // ZITH_ENABLE_C_INTEROP
 
 } // namespace
@@ -741,6 +861,7 @@ void test_cinterop() {
     test_parse_errors();
     test_parse_options();
     test_object_like_macro_constants();
+    test_external_globals_and_reachable_typedefs();
 #endif
 }
 TEST_MAIN(cinterop)

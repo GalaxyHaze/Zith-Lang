@@ -64,6 +64,7 @@ Artifact makeMinimalArtifact(std::string_view path, std::string_view name,
     art.module_id_hi   = art.public_abi_hi ^ 0x55AAu;
     art.module_id_lo   = art.public_abi_lo ^ 0x66BBu;
     art.strings        = {"main", "println", "i32"};
+    art.strings.push_back("foreign_counter");
     art.paths          = {std::string(path)};
     // One primitive type (i32) and one struct type.
     CompactType int_type;
@@ -97,6 +98,11 @@ Artifact makeMinimalArtifact(std::string_view path, std::string_view name,
     fn.blocks.push_back(blk);
     art.functions.push_back(fn);
     art.exprs.push_back(ret);
+    CompactExpr external_global;
+    external_global.kind    = CompactExprKind::ExternalGlobalAddr;
+    external_global.type_id = 0;
+    external_global.name_id = 3;
+    art.exprs.push_back(external_global);
     return art;
 }
 
@@ -126,6 +132,13 @@ static void test_binary_round_trip() {
     CHECK_EQ(decoded->exprs.size(), original.exprs.size(), "expression pool size preserved");
     CHECK_EQ(decoded->strings.size(), original.strings.size(), "string table size preserved");
     CHECK_EQ(decoded->types.size(), original.types.size(), "type table size preserved");
+    if (decoded->exprs.size() > 1U) {
+        CHECK(decoded->exprs[1].kind == CompactExprKind::ExternalGlobalAddr,
+              "external global expression kind preserved");
+        CHECK_EQ(decoded->strings[decoded->exprs[1].name_id], "foreign_counter",
+                 "external global symbol preserved");
+        CHECK_EQ(decoded->exprs[1].type_id, 0U, "external global object type preserved");
+    }
     if (!decoded->decls.empty()) {
         const auto &name_str = decoded->strings[decoded->decls[0].name_id];
         CHECK_EQ(name_str, "main", "first decl name preserved via string table");

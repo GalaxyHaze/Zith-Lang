@@ -13,6 +13,7 @@
 #include <filesystem>
 #include <fstream>
 #include <cstdint>
+#include <string>
 #include <string_view>
 
 using namespace zith;
@@ -1257,6 +1258,82 @@ void test_vm_v2_hello_stdlib_import_print() {
     CHECK_EQ(result.exitCode, 0, "v2 VM keeps the main exit code for print");
 }
 #endif // ZITH_ENABLE_C_INTEROP
+#ifdef ZITH_ENABLE_C_INTEROP
+void test_vm_v2_external_global_fallback() {
+    const auto root =
+        std::filesystem::temp_directory_path() / "zith-vm-v2-external-global-tests";
+    std::filesystem::create_directories(root);
+    {
+        std::ofstream header(root / "external-global.h", std::ios::binary | std::ios::trunc);
+        header << "extern int zith_vm_external_value;\n";
+    }
+
+    const auto runLowering = [&](std::string_view name, std::string_view program,
+                                 const bool expectedSuccess) {
+        const auto source = root / (std::string(name) + ".zith");
+        {
+            std::ofstream output(source, std::ios::binary | std::ios::trunc);
+            output << program;
+        }
+
+        memory::Arena arena;
+        Options options(arena);
+        options.targetStage = session::Stage::HirLowered;
+        session::CompilationSession compilation(options, source.string());
+        compilation.setBuffered(true);
+        const bool pipelineOk = compilation.runTo(session::Stage::HirLowered);
+        CHECK(pipelineOk, "external-global source lowers through the modern pipeline");
+        if (!pipelineOk || compilation.diags().hasErrors())
+            return;
+
+        memory::Arena vmArena;
+        vm::Module module(vmArena);
+        const auto lowered =
+            vm::lowerModule(compilation.hirModule(), compilation.interner(), compilation.types(),
+                            vmArena, module);
+        CHECK(lowered.ok == expectedSuccess, "external-global VM lowering matches expectation");
+        if (!expectedSuccess) {
+            CHECK(lowered.message.find("unsupported external global") != std::string::npos,
+                  "VM diagnostic identifies unsupported external-global use");
+            CHECK(lowered.message.find("zith_vm_external_value") != std::string::npos,
+                  "VM diagnostic names the external symbol");
+            return;
+        }
+
+        vm::Vm virtualMachine;
+        const auto result = virtualMachine.runMain(module);
+        CHECK(result.status == vm::RunStatus::Ok,
+              "unused external-global import does not block VM execution");
+        CHECK_EQ(result.exitCode, 7, "unused external-global import preserves program behavior");
+    };
+
+    runLowering("unused", "import \"external-global.h\"\n"
+                          "fn main(): i32 { return 7; }\n",
+                true);
+    runLowering("read", "import \"external-global.h\"\n"
+                        "fn main(): i32 { return zith_vm_external_value; }\n",
+                false);
+    runLowering("write", "import \"external-global.h\"\n"
+                         "fn main(): i32 { zith_vm_external_value = 9; return 0; }\n",
+                false);
+
+    const auto checkSource = root / "check.zith";
+    {
+        std::ofstream output(checkSource, std::ios::binary | std::ios::trunc);
+        output << "import \"external-global.h\"\n"
+                  "fn main(): i32 { return zith_vm_external_value; }\n";
+    }
+    memory::Arena checkArena;
+    Options checkOptions(checkArena);
+    checkOptions.targetStage = session::Stage::TypeChecked;
+    session::CompilationSession checkSession(checkOptions, checkSource.string());
+    checkSession.setBuffered(true);
+    CHECK(checkSession.runTo(session::Stage::TypeChecked),
+          "type checking succeeds when an imported global is referenced");
+    CHECK(!checkSession.diags().hasErrors(),
+          "type checking does not invoke the unsupported VM lowering path");
+}
+#endif // ZITH_ENABLE_C_INTEROP
 
 void test_vm_v2_bitwise_and_shifts() {
     const auto root = std::filesystem::temp_directory_path() / "zith-vm-v2-bitwise-tests";
@@ -1430,6 +1507,7 @@ void test_vm_v2() {
     test_vm_v2_ffi_getchar_reports_eof();
     test_vm_v2_ffi_unsupported_extern_names();
 #ifdef ZITH_ENABLE_C_INTEROP
+    test_vm_v2_external_global_fallback();
     test_vm_v2_hello_stdlib_import_println();
     test_vm_v2_hello_stdlib_import_print();
     test_vm_v2_hello_virtual_stdlib();

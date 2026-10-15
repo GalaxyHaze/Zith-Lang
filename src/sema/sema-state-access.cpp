@@ -33,6 +33,8 @@ TypeId PerModuleSema::typeOfResolvedName(frontend::ExprId id) {
     const auto *resolved = findResolvedExpr(id);
     if (!resolved)
         return kInvalidTypeId;
+    if (resolved->foreignGlobal != nullptr)
+        return lowerForeignType(resolved->foreignGlobal->type);
     if (resolved->foreignConstant != nullptr)
         return lowerForeignConstantType(*resolved->foreignConstant);
     if (resolved->foreignFunction != nullptr) {

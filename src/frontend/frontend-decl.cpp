@@ -477,8 +477,13 @@ DeclId AstLowerer::lowerDeclaration(uint32_t start, DeclKind kind, Visibility vi
         snapshot_.diagnostics_.push_back({tokenSpan(start), "expected a declaration name"});
         declaration.kind = DeclKind::Error;
     }
+    if (kind == DeclKind::Variable && isExtern && declaration.bindingKind == BindingKind::Let) {
+        snapshot_.diagnostics_.push_back({range(start, index_),
+                                          "external global declarations must use 'var' or 'const'",
+                                          false, diagnostics::err::UnsupportedSyntax});
+    }
     if (kind == DeclKind::Variable && declaration.bindingKind != BindingKind::Const &&
-        !suppressTopLevelBindingCheck) {
+        !suppressTopLevelBindingCheck && !isExtern) {
         snapshot_.diagnostics_.push_back(
             {range(start, index_),
              "Zith--: top-level variables must be declared with 'const NAME: T = value'; "
@@ -592,6 +597,11 @@ DeclId AstLowerer::lowerDeclaration(uint32_t start, DeclKind kind, Visibility vi
         ++index_;
         declaration.declaredType = parseType();
     }
+    if (kind == DeclKind::Variable && isExtern && !declaration.declaredType) {
+        snapshot_.diagnostics_.push_back({range(start, index_),
+                                          "external global declaration requires an explicit type",
+                                          false, diagnostics::err::UnsupportedSyntax});
+    }
     if (kind == DeclKind::Function) {
         // `fn zithName(...): T = extern CSymbol;` keeps the Zith declaration
         // as a normal overloadable function/method but links to the native
@@ -648,8 +658,36 @@ DeclId AstLowerer::lowerDeclaration(uint32_t start, DeclKind kind, Visibility vi
         current_function_body_scope_   = saved_body_scope;
     } else if (kind == DeclKind::Variable && index_ < token_count_ && text(index_) == "=") {
         ++index_;
-        declaration.initializer = parseExpression();
-    } else if (kind == DeclKind::Variable && declaration.bindingKind == BindingKind::Const) {
+        if (text(index_) == "extern") {
+            if (!isExtern) {
+                snapshot_.diagnostics_.push_back(
+                    {range(start, index_ + 1U),
+                     "C-symbol aliases are only allowed on external global declarations", false,
+                     diagnostics::err::UnsupportedSyntax});
+            }
+            ++index_;
+            if (index_ >= token_count_ || snapshot_.tokens_[index_].kind != TokenKind::Identifier) {
+                snapshot_.diagnostics_.push_back(
+                    {range(start, index_),
+                     "external symbol alias requires an identifier after '= extern'", false,
+                     diagnostics::err::ExpectedExpr});
+            } else {
+                declaration.externalSymbol     = std::string(text(index_));
+                declaration.externalSymbolSpan = tokenSpan(index_);
+                ++index_;
+            }
+        } else {
+            if (isExtern) {
+                snapshot_.diagnostics_.push_back(
+                    {range(start, index_),
+                     "external global declarations cannot have an initializer; use "
+                     "'= extern <identifier>' for a C-symbol alias",
+                     false, diagnostics::err::UnsupportedSyntax});
+            }
+            declaration.initializer = parseExpression();
+        }
+    } else if (kind == DeclKind::Variable && declaration.bindingKind == BindingKind::Const &&
+               !isExtern) {
         snapshot_.diagnostics_.push_back({range(start, index_),
                                           "Zith--: const declaration requires an initializer",
                                           false, diagnostics::err::UnsupportedSyntax});

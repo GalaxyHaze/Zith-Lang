@@ -199,6 +199,17 @@ hir::HirExprId HirLowerModern::lowerName(const frontend::Expression &expr) {
             }
             return emitSlotLoad(slot, local_ty);
         }
+        if (resolved->foreignGlobal != nullptr ||
+            (resolved->isExtern && resolved->declKind == frontend::DeclKind::Variable)) {
+            const auto address = lowerLValueAddr(expr.id);
+            if (address == hir::kInvalidHirExpr)
+                return address;
+            hir::HirUnary load;
+            load.op      = hir::HirUnaryOp::Deref;
+            load.operand = address;
+            load.type    = typeOfExpr(expr.id);
+            return addExpr(std::move(load));
+        }
         if (resolved->declKind == frontend::DeclKind::Variable &&
             resolved->bindingKind == frontend::BindingKind::Const) {
             const session::ModuleArtifact *decl_module = current_module_;
@@ -513,6 +524,20 @@ hir::HirExprId HirLowerModern::lowerAssign(const frontend::Expression &expr,
         assign.target = target;
         assign.value  = value_slice;
         return addExpr(std::move(assign));
+    }
+    if (lhs_expr.kind == frontend::ExprKind::Name) {
+        const auto *resolved = findResolvedExpr(expr.operands[0]);
+        if (resolved != nullptr &&
+            (resolved->foreignGlobal != nullptr ||
+             (resolved->isExtern && resolved->declKind == frontend::DeclKind::Variable))) {
+            const auto target = lowerLValueAddr(expr.operands[0]);
+            const auto value  = lowerExpr(expr.operands[1]);
+            if (target == hir::kInvalidHirExpr || value == hir::kInvalidHirExpr)
+                return hir::kInvalidHirExpr;
+            const auto value_slice =
+                lowerCoerceToTarget(typeOfExpr(expr.operands[0]), expr.operands[1], value);
+            return addExpr(hir::HirAssign{target, value_slice});
+        }
     }
 
     const auto target = lowerExpr(expr.operands[0]);
@@ -1676,4 +1701,3 @@ hir::HirExprId HirLowerModern::lowerCoerceToOptionalDepth(types::TypeId target,
 
 } // namespace modern
 } // namespace zith::sema
-

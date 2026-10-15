@@ -35,9 +35,10 @@ O AST modela bindings com `BindingKind`:
 - Depois do tipo de um parâmetro, reconhece `= expr` e guarda a expressão em `Parameter.defaultValue`; o `= extern name` de um alias de função só é tratado depois do tipo de retorno.
 - Aplica o default `BindingKind::Let` e corrige com a palavra-chave real.
 - Rejeita `global` antes de baixar a declaração, com recovery para `DeclKind::Variable`.
+- Parseia `extern var name: T` e `extern const name: T` como declarations externas ao nível do módulo. `= extern CSymbol` guarda um alias de linker, não um inicializador.
 - Rejeita `const fn` em `functionKindPrefix`.
 - Rejeita tag macros em `lowerMacroDeclaration`.
-- Rejeita `const name: T` (global ou local) sem inicializador.
+- Rejeita `const name: T` (global ou local) sem inicializador, exceto declarações externas `extern const`.
 - Rejeita `const name: T` sem valor em struct fields.
 - Parseia `const X: T = value` em `parseStructField` e marca `Parameter.isConstField`.
 - Parseia `pub name: T`, `mod name: T`, `mod(N) name: T` e `mod(..) name: T` antes do nome do
@@ -157,12 +158,17 @@ superfície comum da stdlib.
 
 `isConstantExpression` aceita literais, agregados de literais, struct literals constantes e referências a `const` globais/locais. Outras expressões, incluindo chamadas, são rejeitadas.
 
+`extern const` é uma referência read-only a storage de runtime. O alias `= extern CSymbol` não
+fornece um valor nem torna o binding uma expressão constante.
+
 Atribuições são verificadas em `inferAssign`:
 
 - `let` com inicializador é imutável.
 - `let` sem inicializador aceita a primeira escrita, que pode inferir ou manter o tipo anotado.
-- `const` global e `const` local nunca podem ser atribuídos.
+- `const` global/local e `extern const` nunca podem ser atribuídos. `extern var` aceita atribuição.
 - `checkConstFieldAssignments` rejeita escrita em campo marcado `isConstField`.
+- Para globals importados, apenas a constness do objeto C controla a mutabilidade do binding. A
+  constness do pointee de um pointer não torna o próprio objeto read-only.
 
 `targetFieldIsConst` percorre o caminho de uma place expression para detectar campos const, incluindo bases aninhadas e acesso por pointer.
 
@@ -352,6 +358,10 @@ para fora, ou repetido entre loops ativos reporta `E2010`. Sem label,
 
 Referências por nome a um const global produzem `HirGlobalConstLoad` no lowering. Consts locais permanecem no caminho local de slots/allocas, imutáveis e com inicializador constante obrigatório.
 
+Referências a um global externo produzem `HirExternalGlobalAddr`, que mantém o símbolo do linker e
+o tipo do objeto. O lowering usa esse endereço para leituras e, em `extern var`, escritas.
+Declarações externas não referenciadas não criam acessos HIR.
+
 `HirLowerModern::lowerExpr` descarta `OwnershipCoerce` e baixa o inner. Em calls, um argumento anotado é baixado como endereço do place: `lowerLValueAddr` para bindings/campos/índices, ou uma alloca temporária quando o operand não tem lvalue. O parâmetro `*lend T`/`*view T` já é baixado como ponteiro. Os slots de parâmetro carregam `HirOwnership::Lend`/`HirOwnership::View` via `NraFacts`, e `NraFacts::localOfArgument`/`ownershipOfArgument` descascam a anotação para continuar acumulando factas por call argument (`NraArgEscape::Borrow` por default).
 
 `HirLowerModern::lowerCall` materializa os defaults em falta como argumentos normais depois dos argumentos explícitos e antes de qualquer tail variadic/slice; o mesmo faz `HirDynCall` (com offset do receiver) e `HirStateTailCall`. Como a expressão default pertence ao snapshot do módulo declarador, `lowerVisibleDefault` troca temporariamente `current_module_`/`current_resolution_`/`current_types_` (e o contexto de instanciação genérica quando existe) para baixar a expressão no contexto certo.
@@ -426,6 +436,14 @@ de qualquer extração nominal/unaria.
 3. Se o inicializador não for um `llvm::Constant`, reporta erro de codegen.
 
 `HirGlobalConstLoad` faz load do global pelo nome. Não há armazenamento para globals const no emissor.
+
+`HirExternalGlobalAddr` resolve para um `llvm::GlobalVariable` de linkage externo com o nome C
+declarado. Leituras carregam do objeto e escritas são emitidas apenas para globals mutáveis.
+Referências repetidas ao mesmo símbolo reutilizam uma única declaração LLVM.
+
+A VM v2 não implementa storage global externo. Se o HIR contém um acesso a esse objeto, o lowering
+falha com `unsupported external global '<name>' in v2 VM`. Uma declaração importada sem referências
+não impede o lowering nem a execução VM.
 
 Parâmetros HIR com residual de slot `Lend`/`View` recebem `nocapture` no LLVM; `View` recebe também `readonly`. O valor do parâmetro em si continua a ser carregado da alloca do slot, preservando o caminho sem LLVM/legacy para o corpo.
 
@@ -598,6 +616,10 @@ para `?T`.
 Os seguintes testes cobrem a iteração:
 
 - `test-frontend`: bindings `let`/`var`/`const`, rejeição de `global`/`mut`/ownership/tags, const fields.
+- `test-frontend`/`test-frontend-modern-pipeline`: parsing de `extern var`/`extern const`, aliases,
+  tipos importados de C, endereços HIR e mutabilidade de globals.
+- `test-cinterop`: importação de objetos externos diretamente declarados no header e typedefs
+  alcançáveis, com exclusão de globals `static` ou transitivos.
 - `test-frontend`/`test-formatter`: sintaxe nova de `when` sem `~>`, guards com mais de uma ilha, alternativas `and`/`or`/`xor` no pattern e deprecation `W1008` da seta legada.
 - `test-sema`: valida const global/local, campos const, propagação de imutabilidade em structs/unions, discriminantes constantes de enum e atribuições proibidas.
 - `test-hir-lower-modern`: `HirGlobalConst`, `HirGlobalConstLoad` e valores de enum calculados a partir de expressões.
@@ -608,6 +630,9 @@ Os seguintes testes cobrem a iteração:
   reificação com type args concretos, propagação de bounds e round-trip de
   cache para structs genéricas.
 - `test-codegen`: execução runtime de um const global e de uma maquina de estados com `musttail tailcc`, incluindo parâmetros divergentes.
+- `test-codegen`: leitura/escrita de globals C e uso de `stdout` importado via `stdio.h`.
+- `test-vm-v2`: imports externos não usados continuam permitidos; acessos referenciados falham com
+  um diagnóstico que identifica o símbolo.
 - `test-cache`/`test-zirl-sections`: pool de expressões, globals e state machine metadata persistidos.
 - `test-memory-qualifiers`: lend/view aceites; anotações de call `E4005`/`E4007`, exclusividade por call e views read-only; unique/share/belong e mut rejeitados.
 - `test-sema`/`test-codegen`: `var p`/`var self`, `self.field` com auto-deref e dead-state `E4001` de receivers pós-método.

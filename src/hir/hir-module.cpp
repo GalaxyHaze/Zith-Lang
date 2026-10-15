@@ -383,6 +383,13 @@ std::string HirModule::toString(const memory::StringInterner &interner) const {
                                        buffer += " : %t";
                                        buffer += std::to_string(g.type);
                                    },
+                                   [&](const HirExternalGlobalAddr &address) {
+                                       const auto name = interner.lookup(address.name);
+                                       buffer += "external_global_addr ";
+                                       buffer.append(name.data(), name.size());
+                                       buffer += " : %t";
+                                       buffer += std::to_string(address.type);
+                                   },
                                    [&](const HirMakeDyn &m) {
                                        auto n = interner.lookup(m.vtable_name);
                                        buffer += "make_dyn %e";

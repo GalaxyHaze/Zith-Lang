@@ -1561,6 +1561,105 @@ static void test_external_symbol_aliases() {
           "external aliases are rejected in trait/interface/const/state");
 }
 
+static void test_external_global_declarations() {
+    const auto snapshot = frontend::parse("extern var counter: i32;\n"
+                                          "extern const rate: f64 = extern c_rate;\n"
+                                          "extern var stream: *FILE = extern c_stream;\n");
+    CHECK(snapshot.diagnostics().empty(),
+          "external global declarations accept optional C-symbol aliases");
+    CHECK_EQ(snapshot.declarations().size(), 3u, "all external globals are lowered");
+    if (snapshot.declarations().size() == 3U) {
+        const auto &counter = snapshot.declarations()[0];
+        CHECK_EQ(counter.kind, frontend::DeclKind::Variable, "extern var is a variable");
+        CHECK(counter.isExtern, "extern var is marked as external storage");
+        CHECK_EQ(counter.bindingKind, frontend::BindingKind::Var,
+                 "extern var preserves mutability");
+        CHECK(counter.declaredType, "extern var preserves its declared type");
+        if (counter.declaredType &&
+            counter.declaredType.value <= snapshot.typeExpressions().size()) {
+            const auto &type = snapshot.typeExpressions()[counter.declaredType.value - 1U];
+            CHECK_EQ(type.kind, frontend::TypeExprKind::Name, "scalar type remains a name");
+            CHECK_EQ(type.name, std::string("i32"), "scalar type name is preserved");
+        }
+
+        const auto &rate = snapshot.declarations()[1];
+        CHECK_EQ(rate.kind, frontend::DeclKind::Variable, "extern const is a variable");
+        CHECK(rate.isExtern, "extern const is marked as external storage");
+        CHECK_EQ(rate.bindingKind, frontend::BindingKind::Const,
+                 "extern const preserves immutability");
+        CHECK_EQ(rate.externalSymbol, std::string("c_rate"),
+                 "extern const preserves its C symbol alias");
+        CHECK(!rate.initializer, "C-symbol alias is not parsed as an initializer");
+        CHECK(rate.declaredType, "extern const preserves its declared type");
+
+        const auto &stream = snapshot.declarations()[2];
+        CHECK_EQ(stream.bindingKind, frontend::BindingKind::Var,
+                 "aliased extern var remains mutable");
+        CHECK_EQ(stream.externalSymbol, std::string("c_stream"),
+                 "extern var preserves its C symbol alias");
+        CHECK(stream.declaredType, "pointer external global preserves its declared type");
+        if (stream.declaredType && stream.declaredType.value <= snapshot.typeExpressions().size()) {
+            const auto &type = snapshot.typeExpressions()[stream.declaredType.value - 1U];
+            CHECK_EQ(type.kind, frontend::TypeExprKind::Pointer,
+                     "pointer external global keeps its pointer type");
+        }
+    }
+
+    const auto invalid = frontend::parse("var ordinary: i32;\n"
+                                         "const missing: i32;\n"
+                                         "extern var initialized: i32 = 7;\n"
+                                         "extern const initialized_const: i32 = 8;\n"
+                                         "extern let unsupported: i32;\n"
+                                         "extern var missing_type;\n"
+                                         "extern var missing_alias: i32 = extern;\n"
+                                         "fn recovered() {}\n");
+    CHECK(!invalid.diagnostics().empty(), "invalid external-global forms are diagnosed");
+    bool rejected_ordinary_var              = false;
+    bool rejected_const_without_initializer = false;
+    bool rejected_external_initializer      = false;
+    bool rejected_external_let              = false;
+    bool rejected_missing_type              = false;
+    bool rejected_missing_alias             = false;
+    for (const auto &diagnostic : invalid.diagnostics()) {
+        rejected_ordinary_var |=
+            diagnostic.message.find("top-level variables must be declared") != std::string::npos;
+        rejected_const_without_initializer |=
+            diagnostic.message.find("const declaration requires an initializer") !=
+            std::string::npos;
+        rejected_external_initializer |=
+            diagnostic.message.find("external global") != std::string::npos &&
+            diagnostic.message.find("initializer") != std::string::npos;
+        rejected_external_let |= diagnostic.message.find("extern") != std::string::npos &&
+                                 diagnostic.message.find("'var' or 'const'") != std::string::npos;
+        rejected_missing_type |=
+            diagnostic.message.find("requires an explicit type") != std::string::npos;
+        rejected_missing_alias |=
+            diagnostic.message.find("requires an identifier after '= extern'") != std::string::npos;
+    }
+    CHECK(rejected_ordinary_var, "ordinary top-level var remains rejected");
+    CHECK(rejected_const_without_initializer, "ordinary const still requires an initializer");
+    CHECK(rejected_external_initializer, "external globals reject value initializers");
+    CHECK(rejected_external_let, "external globals reject let bindings");
+    CHECK(rejected_missing_type, "external globals require an explicit type");
+    CHECK(rejected_missing_alias, "incomplete C-symbol alias has a specific diagnostic");
+    bool recovered_function = false;
+    for (const auto &decl : invalid.declarations())
+        recovered_function |= decl.kind == frontend::DeclKind::Function && decl.name == "recovered";
+    CHECK(recovered_function, "parser recovers and retains a following declaration");
+
+    const auto local = frontend::parse("fn holder() {\n"
+                                       "    extern var misplaced: i32;\n"
+                                       "    var recovered: i32 = 1;\n"
+                                       "}\n");
+    CHECK(!local.diagnostics().empty(), "external globals are rejected inside function bodies");
+    bool recovered_local = false;
+    for (const auto &statement : local.statements()) {
+        if (statement.kind == frontend::StmtKind::Binding)
+            recovered_local |= statement.binding.name == "recovered";
+    }
+    CHECK(recovered_local, "local parser recovers after a misplaced external global");
+}
+
 static void test_frontend() {
     test_lossless_trivia_and_spans();
     test_cst_dump_is_deterministic_and_keeps_nested_tokens();
@@ -1618,6 +1717,7 @@ static void test_frontend() {
     test_state_without_return_type_parses();
     test_struct_field_visibility_parses();
     test_external_symbol_aliases();
+    test_external_global_declarations();
 }
 
 TEST_MAIN(frontend)

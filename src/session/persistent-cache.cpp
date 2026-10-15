@@ -364,6 +364,13 @@ void CompilationSession::hydrateFromArtifact(const cache::Artifact &art) {
             expr      = load;
             break;
         }
+        case cache::CompactExprKind::ExternalGlobalAddr: {
+            hir::HirExternalGlobalAddr address;
+            address.name = mInterner->intern(art.strings[ce.name_id]);
+            address.type = compactType(ce.type_id);
+            expr         = address;
+            break;
+        }
         case cache::CompactExprKind::Call: {
             memory::DynArray<hir::HirExprId> args(mHirArena);
             for (auto id : ce.args)

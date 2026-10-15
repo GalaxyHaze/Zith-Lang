@@ -464,6 +464,11 @@ CompactExpr ArtifactBuilder::convertExpr(hir::HirExprId id) {
                            out.name_id = internString(interner_.lookup(load.name));
                            out.type_id = internType(load.type);
                        },
+                       [&](const hir::HirExternalGlobalAddr &address) {
+                           out.kind    = CompactExprKind::ExternalGlobalAddr;
+                           out.name_id = internString(interner_.lookup(address.name));
+                           out.type_id = internType(address.type);
+                       },
                        [&](const hir::HirMakeDyn &m) {
                            out.kind    = CompactExprKind::MakeDyn;
                            out.ref_a   = m.value;

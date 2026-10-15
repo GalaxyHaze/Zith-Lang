@@ -51,6 +51,19 @@ struct Function {
     bool isVariadic = false;
 };
 
+struct Global {
+    std::string name;
+    std::string linkageName;
+    Type type;
+    /// C object constness, distinct from const qualification within pointer types.
+    bool isConst = false;
+};
+
+struct Typedef {
+    std::string name;
+    Type type;
+};
+
 enum class ConstantKind : uint8_t { Integer, Float, Bool, Char };
 
 /// One object-like C macro that expands to an exact scalar literal importable
@@ -76,8 +89,12 @@ struct Diagnostic {
 struct CHeaderArtifact {
     std::string headerPath;
     std::vector<Function> functions;
+    std::vector<Global> globals;
+    std::vector<Typedef> typedefs;
     std::vector<std::string> dependencies;
     std::vector<Diagnostic> diagnostics;
+    /// Non-fatal diagnostics for declarations that could not be imported.
+    std::vector<Diagnostic> skippedDeclarations;
     /// Object-like scalar macros imported as module constants. They are visible
     /// to the module that imports this header, like the external functions.
     std::vector<Constant> constants;

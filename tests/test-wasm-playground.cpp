@@ -81,15 +81,18 @@ void test_wasm_playground_structured_diagnostics() {
               trapJson.find("\"message\":") != std::string::npos,
           "runtime trap includes an error severity and message");
 
-    const auto unsupportedStatus = runSource("fn main() {\n"
-                                             "    let x = 10;\n"
-                                             "    _ = *(&x);\n"
+    const auto unsupportedStatus = runSource("extern var external_value: i32;\n"
+                                             "fn main(): i32 {\n"
+                                             "    return external_value;\n"
                                              "}\n");
     CHECK_EQ(unsupportedStatus, 5, "unsupported construct keeps the existing status code");
     const auto unsupportedJson = diagnosticsJson();
     CHECK(unsupportedJson.find("\"severity\":\"error\"") != std::string::npos &&
               unsupportedJson.find("\"message\":") != std::string::npos,
           "unsupported construct includes an error severity and message");
+    CHECK(unsupportedJson.find("unsupported external global 'external_value' in v2 VM") !=
+              std::string::npos,
+          "unsupported external global diagnostic is exposed through the WASM ABI");
 }
 
 void test_wasm_playground_hir_cache() {

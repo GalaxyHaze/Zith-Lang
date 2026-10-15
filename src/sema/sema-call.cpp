@@ -17,6 +17,10 @@ void PerModuleSema::setResolvedCallTarget(frontend::ExprId callee, session::Modu
     call_targets_[callee.value] = CallTarget{std::move(target_module), decl};
 }
 TypeId PerModuleSema::typeOfResolvedBinding(const session::ResolvedName &binding) {
+    if (binding.foreignGlobal != nullptr)
+        return lowerForeignType(binding.foreignGlobal->type);
+    if (binding.foreignTypedef != nullptr)
+        return lowerForeignType(binding.foreignTypedef->type);
     if (binding.foreignConstant != nullptr)
         return lowerForeignConstantType(*binding.foreignConstant);
     if (binding.foreignFunction != nullptr) {

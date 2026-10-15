@@ -2928,6 +2928,40 @@ static void test_external_symbol_alias_runtime() {
     CHECK_EQ(r.exitCode, 42, "external symbol alias calls the C function through the alias name");
 }
 
+static void test_imported_external_globals_runtime() {
+#ifdef ZITH_ENABLE_C_INTEROP
+    ModernFileCodegenTest t;
+    t.opts.flags.emitIr(true);
+    t.write("external-globals.h",
+            "extern int zith_external_value;\n"
+            "extern int zith_mutable_value;\n");
+    t.write("c/globals.c",
+            "int zith_external_value = 27;\n"
+            "int zith_mutable_value = 5;\n");
+    t.write("ZithProject.toml", "[ffi]\n"
+                                "c_source_dirs = [\"c\"]\n");
+    t.write("main.zith", "import \"external-globals.h\"\n"
+                         "extern var manual_value: i32 = extern zith_external_value;\n"
+                         "fn main(): i32 {\n"
+                         "    zith_mutable_value = 40;\n"
+                         "    if (zith_mutable_value != 40) { return 1; }\n"
+                         "    if (manual_value != zith_external_value) { return 2; }\n"
+                         "    return manual_value + zith_mutable_value;\n"
+                         "}\n");
+
+    const auto r = t.run();
+    CHECK(r.ok, "imported C globals compile, link and run");
+    CHECK_EQ(r.exitCode, 67, "C global reads and writes reach the external objects");
+    const auto globalDecl = r.output.find("@zith_external_value = external global i32");
+    CHECK(globalDecl != std::string::npos,
+          "imported and manually aliased global use its C linkage name");
+    if (globalDecl != std::string::npos)
+        CHECK(r.output.find("@zith_external_value = external global i32", globalDecl + 1U) ==
+                  std::string::npos,
+              "repeated references and aliases emit one LLVM global declaration");
+#endif
+}
+
 static void test_external_symbol_method_receiver_runtime() {
     ModernFileCodegenTest t;
     const auto c_path   = (t.root / "external-alias-method.c").string();
@@ -3318,6 +3352,23 @@ static void test_c_pointer_is_null_uses_niche_comparison() {
 #endif
 }
 
+static void test_imported_stdout_global_runtime() {
+#ifdef ZITH_ENABLE_C_INTEROP
+    ModernFileCodegenTest t;
+    t.write("main.zith", "import \"stdio.h\"\n"
+                         "fn main(): i32 {\n"
+                         "    _ = fputs(\"stream-global-works\\n\", stdout);\n"
+                         "    return 0;\n"
+                         "}\n");
+
+    const auto r = t.run();
+    CHECK(r.ok, "stdio stdout global compiles, links and runs");
+    CHECK_EQ(r.exitCode, 0, "using stdout through its imported FILE typedef succeeds");
+    CHECK(r.output.find("stream-global-works\n") != std::string::npos,
+          "fputs receives the C-defined stdout stream pointer");
+#endif
+}
+
 /// A radix literal used to infer as `error`, emit no value, and leave `entry` without a
 /// terminator, which crashed inside LLVM's MachineBasicBlock construction. Codegen must now
 /// produce a valid module for it.
@@ -3557,6 +3608,8 @@ static void test_codegen() {
     test_extern_variadic_call_runs();
     printf("Running test_external_symbol_alias_runtime\n");
     test_external_symbol_alias_runtime();
+    printf("Running test_imported_external_globals_runtime\n");
+    test_imported_external_globals_runtime();
     printf("Running test_external_symbol_method_receiver_runtime\n");
     test_external_symbol_method_receiver_runtime();
     printf("Running test_external_symbol_optional_pointer_method_receiver_runtime\n");
@@ -3580,6 +3633,8 @@ static void test_codegen() {
     printf("Running test_c_pointer_is_null_uses_niche_comparison\n");
     test_c_pointer_cast_roundtrip_emits_no_conversion();
     test_c_pointer_is_null_uses_niche_comparison();
+    printf("Running test_imported_stdout_global_runtime\n");
+    test_imported_stdout_global_runtime();
     printf("Running test_radix_literal_return_emits_valid_module\n");
     test_radix_literal_return_emits_valid_module();
     printf("Running test_invalid_ir_refuses_object_emission\n");

@@ -3,11 +3,23 @@
 > **Status:** see [impl-status.md](impl-status.md) for the current status of C interop. Native
 > libclang import covers common libc-style declarations (including variadic functions,
 > array-decayed parameters, `va_list`, and function-pointer parameters). Object-like macros that
-> expand to an exact scalar literal are imported as constants. Simple records passed/returned by
-> value are imported only after libclang verifies their layout for the configured target triple.
+> expand to an exact scalar literal are imported as constants. Supported external scalar and
+> pointer globals, plus typedefs needed by their types, are imported from headers. Simple records
+> passed/returned by value are imported only after libclang verifies their layout for the configured
+> target triple.
 
 Zith supports manual `extern fn` bindings on every target. Native builds which find libclang also
 support a restricted, automatic C-header import path.
+
+Manual external globals use `extern var` for mutable objects and `extern const` for read-only
+bindings. Both require an explicit type and may use `= extern CSymbol` to select a different linker
+name. `extern const` refers to runtime storage, not a compile-time constant:
+
+```zith
+extern var counter: i32;
+extern const rate: f64;
+extern var local_counter: i32 = extern c_counter;
+```
 
 ### 18.0 Supported `c` Surface
 
@@ -74,12 +86,34 @@ my_function();
 ```
 
 Only C ABI headers are accepted. `.hpp` files report that C++ headers are unsupported. Object-like
-macros whose replacement is exactly one scalar literal are imported as constants. Function-like
-and string macros, globals, bitfields, packed or anonymous records, flexible arrays, and other
-non-representable layouts are not imported. A single unsupported declaration or macro is skipped
-rather than failing the whole header. The importer records the reason in `skippedFunctions` so the
-rest of the file stays available. Prefer `c/...` for common APIs and use manual `extern fn` or
-header imports for APIs outside that surface and for external libraries.
+macros whose replacement is exactly one scalar literal are imported as constants. The importer
+also exposes supported external scalar and pointer objects declared directly in the requested
+header, along with typedef names needed to express their types. It skips `static` objects and
+declarations found only in transitively included headers. The top-level C object's constness
+controls whether its Zith binding is mutable. For pointer globals, pointee constness alone does not
+make the pointer object read-only.
+
+Function-like and string macros, unsupported by-value aggregates, bitfields, packed or anonymous
+records, flexible arrays, and other non-representable layouts remain unsupported. An unsupported
+declaration does not prevent other supported declarations in the header from being imported.
+Prefer `c/...` for common APIs and use manual declarations or header imports for APIs outside that
+surface and for external libraries.
+
+Imported globals use their C names directly. For example, `stdio.h` makes `stdout` available with
+its reachable `FILE` typedef:
+
+```zith
+import "stdio.h"
+
+fn main(): i32 {
+    _ = fputs("hello\n", stdout);
+    return 0;
+}
+```
+
+The native LLVM backend emits and accesses the external object. VM v2 can type-check these
+references, but reports `unsupported external global '<name>' in v2 VM` if a referenced global
+reaches VM lowering. Unused external-global imports do not block VM execution.
 
 ### 18.1.1 Object-Like Macro Constants
 

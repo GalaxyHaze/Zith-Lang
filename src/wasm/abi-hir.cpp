@@ -551,6 +551,11 @@ void writeExpr(Writer &writer, const hir::HirModule &module, hir::HirExprId id) 
                 writer.putU32(value.name);
                 writer.putU32(value.type);
             },
+            [&](const hir::HirExternalGlobalAddr &value) {
+                writer.putU8(enumByte(hir::HirExprKind::ExternalGlobalAddr));
+                writer.putU32(value.name);
+                writer.putU32(value.type);
+            },
             [&](const hir::HirMakeDyn &value) {
                 writer.putU8(enumByte(hir::HirExprKind::MakeDyn));
                 writer.putU32(value.value);
@@ -946,6 +951,13 @@ auto readExpr(Reader &reader, hir::HirModule &module, memory::Arena &arena) -> b
     }
     case hir::HirExprKind::GlobalConstLoad: {
         hir::HirGlobalConstLoad value;
+        value.name = reader.u32();
+        value.type = reader.u32();
+        module.addExpr(std::move(value));
+        return reader.ok();
+    }
+    case hir::HirExprKind::ExternalGlobalAddr: {
+        hir::HirExternalGlobalAddr value;
         value.name = reader.u32();
         value.type = reader.u32();
         module.addExpr(std::move(value));

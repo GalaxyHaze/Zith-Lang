@@ -813,7 +813,18 @@ std::vector<StmtId> AstLowerer::parseStatements() {
         return {addStatement(std::move(statement))};
 
     const auto statement_attrs = parseAttributes();
-    const auto word = text(index_);
+    const auto word            = text(index_);
+    if (word == "extern" && index_ + 1U < token_count_ &&
+        (text(index_ + 1U) == "var" || text(index_ + 1U) == "const" ||
+         text(index_ + 1U) == "let")) {
+        snapshot_.diagnostics_.push_back(
+            {tokenSpan(index_), "external global declarations are only allowed at module scope",
+             false, diagnostics::err::UnsupportedSyntax});
+        skipNestedUnsupportedDeclaration();
+        statement.kind = StmtKind::Error;
+        statement.span = range(start, index_);
+        return {addStatement(std::move(statement))};
+    }
     // Loop labels are statement attributes, so `outer: for ...` is parsed
     // here rather than as a `name :` expression. `parseFor()` returns an
     // outer block for 3-clause forms; its final statement is the loop.

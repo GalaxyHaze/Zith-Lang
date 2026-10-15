@@ -10,6 +10,8 @@ namespace zith::codegen {
 
 llvm::Value *CodeGenEmit::emitAddrOf(hir::HirExprId id, const hir::HirModule &mod) {
     auto &operandExpr = mod.getExpr(id);
+    if (std::holds_alternative<hir::HirExternalGlobalAddr>(operandExpr))
+        return emitExpr(id, mod);
     if (auto *var = std::get_if<hir::HirVar>(&operandExpr))
         return emitVarAddr(*var);
     if (auto *slot_load = std::get_if<hir::HirSlotLoad>(&operandExpr)) {
@@ -114,6 +116,9 @@ llvm::Value *CodeGenEmit::emitLValueAddr(hir::HirExprId target_id, const hir::Hi
         expr,
         common::overloaded{
             [&](const hir::HirVar &var) -> llvm::Value * { return emitVarAddr(var); },
+            [&](const hir::HirExternalGlobalAddr &) -> llvm::Value * {
+                return emitExpr(target_id, mod);
+            },
             [&](const hir::HirSlotAddr &s) -> llvm::Value * {
                 if (s.slot >= slots_.size())
                     return nullptr;

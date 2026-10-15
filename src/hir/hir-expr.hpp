@@ -58,6 +58,7 @@ enum class HirExprKind : uint8_t {
     /// value propagation is performed.
     Pipe,
     PipeCurrent,
+    ExternalGlobalAddr,
 };
 
 enum class HirBinaryOp : uint8_t {
@@ -337,6 +338,14 @@ struct HirGlobalConstLoad {
     HirExprKind tag         = HirExprKind::GlobalConstLoad;
 };
 
+/// Address of an external global object. `type` is the object type, not the
+/// pointer type returned by this expression.
+struct HirExternalGlobalAddr {
+    memory::InternedId name = 0;
+    HirTypeId type          = types::kInvalidType;
+    HirExprKind tag         = HirExprKind::ExternalGlobalAddr;
+};
+
 /// Materialises a `dyn Trait` fat pointer from a concrete aggregate value.
 /// The vtable stores only the trait/interface method requirements; interface
 /// fields are accessed through the data pointer before the value is erased.
@@ -451,7 +460,7 @@ using HirExpr =
                  HirMakeSome, HirMakeSlice, HirCast, HirUnionCast, HirUnionCheck,
                  HirLayoutIntrinsic, HirStateTailCall, HirCleanup, HirGlobalConstLoad, HirMakeDyn,
                  HirDynCall, HirMakeOpaque, HirOpaqueCast, HirOpaqueCheck, HirRuntimePanic,
-                 HirCanonicalType, HirPipe, HirPipeCurrent>;
+                 HirCanonicalType, HirPipe, HirPipeCurrent, HirExternalGlobalAddr>;
 
 inline HirExprKind exprKind(const HirExpr &expr) {
     return std::visit([](const auto &entry) { return entry.tag; }, expr);

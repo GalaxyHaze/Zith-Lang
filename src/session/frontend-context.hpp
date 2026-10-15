@@ -325,6 +325,9 @@ struct ResolvedName {
     /// name a single-symbol import or for non-module resolutions.
     std::vector<std::string> modulePath;
     bool discardable = false;
+    /// Non-owning references into the immutable C header artifact retained by the snapshot.
+    const cinterop::Global *foreignGlobal       = nullptr;
+    const cinterop::Typedef *foreignTypedef     = nullptr;
 };
 
 struct ModuleResolution {

@@ -324,9 +324,9 @@ field, ou um bound genérico `T: Area` se o campo puder ser lido estaticamente.
 
 Funções livres e argumentos de métodos podem declarar parâmetros `lend`/`view`; nesses casos o call site precisa da anotação correspondente para bindings por valor (ver [Ownership](#ownership)).
 
-## Const Global
+## Globals
 
-O único global real/executável é declarado com:
+Um global Zith com storage próprio continua a ser declarado com `const`:
 
 ```zith
 const GLOBAL: i32 = 3;
@@ -337,6 +337,22 @@ fn main(): i32 {
 ```
 
 O HIR emite um nó de global const e o codegen produz um `llvm::GlobalVariable` com linkage `internal`, tipo const e armazenamentos escritos desativados. Referências por nome produzem um load desse global.
+
+Uma declaração `extern` referencia storage definido fora do módulo. `extern var` permite ler e
+escrever o objeto. `extern const` permite apenas lê-lo e continua a ser um valor de runtime, não
+uma constante de compilação. Ambas as formas exigem um tipo e não aceitam inicializador de valor.
+Use `= extern CSymbol` quando o nome do binding Zith diferir do símbolo do linker:
+
+```zith
+extern var counter: i32;
+extern const rate: f64;
+extern var local_name: i32 = extern c_counter;
+```
+
+Estas declarações só podem aparecer ao nível do módulo. O linker fornece o objeto externo. O
+backend LLVM emite a declaração externa quando o programa referencia o binding. A VM v2 ainda não
+suporta executar referências a globals externos e reporta um diagnóstico específico durante o
+lowering.
 
 ## Const Fields
 

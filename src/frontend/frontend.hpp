@@ -461,13 +461,12 @@ struct Declaration {
     /// True when the first parameter is named `attributes` (no type), signalling
     /// the macro accepts `|name: expr, ...|` call-site attributes.
     bool hasAttributesParam = false;
-    /// True when declared with `extern fn`: the C ABI fixes its linkage name, so it
-    /// is never name-qualified and never participates in overloading.
+    /// True for manual external declarations. Functions use the C ABI; variables
+    /// refer to storage provided outside the current module.
     bool isExtern = false;
-    /// Non-empty when the Zith declaration has no body and links to a C symbol
-    /// written after `= extern <identifier>`. The source name stays a normal
-    /// Zith name (module/overload/method semantics preserved); HIR codegen uses
-    /// this value as the C linker name.
+    /// Non-empty when a function or external variable links to a C symbol
+    /// written after `= extern <identifier>`. The source name remains the Zith
+    /// binding name; codegen uses this value as the C linker name.
     std::string externalSymbol;
     /// Source span of `externalSymbol`, used for parser diagnostics.
     TextSpan externalSymbolSpan;

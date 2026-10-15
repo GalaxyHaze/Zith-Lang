@@ -1,8 +1,10 @@
 #include "cli/options.hpp"
+#include "hir/hir-expr.hpp"
 #include "session/compilation-session.hpp"
 #include "session/frontend-context.hpp"
 #include "session/pipeline-plan.hpp"
 #include "test-common.hpp"
+#include "types/type-kind.hpp"
 
 #include <filesystem>
 #include <fstream>
@@ -546,6 +548,109 @@ void test_c_header_import_lowers_macro_constants() {
     CHECK(!ok, "C header import fails without libclang support");
     CHECK(session.snapshot() != nullptr && !session.snapshot()->diagnostics().empty(),
           "libclang-disabled C header import keeps the existing diagnostic");
+#endif
+}
+
+void test_c_header_globals_bind_and_lower_to_external_addresses() {
+#ifdef ZITH_ENABLE_C_INTEROP
+    Workspace workspace;
+    workspace.write("fixture.h", "typedef struct _zith_file FILE;\n"
+                                 "extern FILE *stream;\n"
+                                 "extern int counter;\n"
+                                 "extern const int *pointee_const;\n"
+                                 "extern int *const object_const;\n"
+                                 "extern const int immutable_value;\n");
+    workspace.write("main.zith", "import \"fixture.h\"\n"
+                                 "extern var manual: i32 = extern c_manual;\n"
+                                 "fn accepts_file(file: *FILE) {}\n"
+                                 "fn main(): i32 {\n"
+                                 "    counter = 9;\n"
+                                 "    manual = counter;\n"
+                                 "    pointee_const = pointee_const;\n"
+                                 "    return counter;\n"
+                                 "}\n");
+
+    memory::Arena arena;
+    Options options(arena);
+    options.targetStage = session::Stage::HirLowered;
+
+    session::CompilationSession session(options, (workspace.root / "main.zith").string());
+    session.setBuffered(true);
+    const bool ok = session.runTo(session::Stage::HirLowered);
+    std::string message = "C globals, aliases, and reachable typedefs lower through HIR";
+    if (!ok) {
+        for (const auto &diagnostic : session.diags().all()) {
+            if (diagnostic.severity == diagnostics::Severity::Error) {
+                message += ": " + diagnostic.message;
+                break;
+            }
+        }
+    }
+    CHECK(ok, message.c_str());
+    if (!ok)
+        return;
+
+    bool saw_counter = false;
+    bool saw_manual  = false;
+    bool saw_read    = false;
+    bool saw_address = false;
+    for (size_t index = 0; index < session.hirModule().exprCount(); ++index) {
+        const auto &expr = session.hirModule().getExpr(static_cast<hir::HirExprId>(index));
+        if (const auto *address = std::get_if<hir::HirExternalGlobalAddr>(&expr)) {
+            const auto name = session.interner().lookup(address->name);
+            saw_counter    = saw_counter || name == "counter";
+            saw_manual     = saw_manual || name == "c_manual";
+            saw_address    = true;
+            CHECK(address->type != types::kInvalidType,
+                  "external global address retains its object type");
+        }
+        if (const auto *unary = std::get_if<hir::HirUnary>(&expr);
+            unary != nullptr && unary->op == hir::HirUnaryOp::Deref &&
+            unary->operand < session.hirModule().exprCount() &&
+            std::holds_alternative<hir::HirExternalGlobalAddr>(
+                session.hirModule().getExpr(unary->operand)))
+            saw_read = true;
+    }
+    CHECK(saw_counter, "imported C global keeps its C linker symbol in HIR");
+    CHECK(saw_manual, "manual extern alias keeps its C linker symbol in HIR");
+    CHECK(saw_address, "referenced external globals lower to addressable HIR");
+    CHECK(saw_read, "external global reads lower through an address and load");
+
+    workspace.write("bad.zith", "import \"fixture.h\"\n"
+                                "fn main() {\n"
+                                "    immutable_value = 1;\n"
+                                "}\n");
+    session::CompilationSession immutable(options, (workspace.root / "bad.zith").string());
+    immutable.setBuffered(true);
+    CHECK(!immutable.runTo(session::Stage::HirLowered),
+          "assignment to an imported const C global is rejected");
+    bool found_const_error = false;
+    for (const auto &diagnostic : immutable.diags().all())
+        found_const_error =
+            found_const_error || diagnostic.message.find("const C global") != std::string::npos;
+    CHECK(found_const_error, "const global diagnostic identifies the immutable C object");
+
+    workspace.write("bad-pointer.zith", "import \"fixture.h\"\n"
+                                        "fn main() {\n"
+                                        "    object_const = null;\n"
+                                        "}\n");
+    session::CompilationSession const_pointer(options,
+                                               (workspace.root / "bad-pointer.zith").string());
+    const_pointer.setBuffered(true);
+    CHECK(!const_pointer.runTo(session::Stage::HirLowered),
+          "top-level const pointer object is immutable");
+
+    workspace.write("mutable-pointer.zith", "import \"fixture.h\"\n"
+                                            "fn main() {\n"
+                                            "    pointee_const = pointee_const;\n"
+                                            "}\n");
+    session::CompilationSession mutable_pointer(
+        options, (workspace.root / "mutable-pointer.zith").string());
+    mutable_pointer.setBuffered(true);
+    CHECK(mutable_pointer.runTo(session::Stage::HirLowered),
+          "const pointee qualification does not make the pointer object immutable");
+#else
+    CHECK(true, "C global binding tests require libclang");
 #endif
 }
 
@@ -1147,6 +1252,7 @@ static void test_frontend_modern_pipeline() {
     test_pipeline_if_else_lowers();
     test_c_header_import_lowers_external_function();
     test_c_header_import_lowers_macro_constants();
+    test_c_header_globals_bind_and_lower_to_external_addresses();
     test_c_header_constant_duplicate_diagnostic();
     test_c_header_constant_let_duplicate_diagnostic();
     test_pipeline_macro_expansion_lowers();

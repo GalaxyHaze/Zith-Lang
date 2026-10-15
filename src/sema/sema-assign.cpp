@@ -186,6 +186,10 @@ TypeId PerModuleSema::inferAssign(frontend::ExprId id) {
         if (left_resolved->foreignConstant != nullptr) {
             report(expr.span, "Zith--: cannot assign to an imported C constant",
                    diagnostics::err::UnsupportedSyntax);
+        } else if (left_resolved->foreignGlobal != nullptr &&
+                   left_resolved->foreignGlobal->isConst) {
+            report(expr.span, "Zith--: cannot assign to an imported const C global",
+                   diagnostics::err::UnsupportedSyntax);
         } else if (left_resolved->declaration &&
                    left_resolved->declKind == frontend::DeclKind::Variable &&
                    left_resolved->bindingKind == frontend::BindingKind::Const) {

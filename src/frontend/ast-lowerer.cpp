@@ -482,8 +482,9 @@ void AstLowerer::run() {
     current_scope_        = root_scope_;
     Visibility visibility = Visibility::Private;
     std::vector<Attribute> pending_attributes;
-    // Set by a preceding `extern` keyword; consumed by the next declaration.
+    // Set by a standalone `extern` prefix for a module-scope global binding.
     bool is_extern = false;
+    uint32_t extern_prefix_start = token_count_;
     // Start index of the current run of unexpected top-level tokens; the run is
     // coalesced into a single diagnostic.  token_count_ means "no active run".
     uint32_t bad_run_start = token_count_;
@@ -516,6 +517,14 @@ void AstLowerer::run() {
             visibility = Visibility::Module;
             ++index_;
             continue;
+        }
+
+        if (is_extern && word != "var" && word != "const" && word != "let") {
+            snapshot_.diagnostics_.push_back(
+                {tokenSpan(extern_prefix_start),
+                 "module-scope 'extern' must precede a 'var' or 'const' declaration", false,
+                 diagnostics::err::UnsupportedSyntax});
+            is_extern = false;
         }
 
         if (word == "export" || word == "from" || word == "import") {
@@ -674,8 +683,10 @@ void AstLowerer::run() {
                      diagnostics::err::UnsupportedSyntax});
                 pending_attributes.clear();
             }
-            if (word == "extern" && !functionKindPrefix())
+            if (word == "extern" && !functionKindPrefix()) {
                 is_extern = true;
+                extern_prefix_start = start;
+            }
             ++index_;
             continue;
         }
@@ -711,6 +722,11 @@ void AstLowerer::run() {
         snapshot_.diagnostics_.push_back({range(bad_run_start, index_),
                                           "unexpected token at top level", false,
                                           diagnostics::err::UnsupportedSyntax});
+    if (is_extern) {
+        snapshot_.diagnostics_.push_back({tokenSpan(extern_prefix_start),
+                                          "extern prefix requires a global declaration", false,
+                                          diagnostics::err::UnsupportedSyntax});
+    }
 }
 
 void AstLowerer::skipMacroInvocation() {

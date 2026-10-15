@@ -16,7 +16,21 @@ hir::HirExprId HirLowerModern::lowerLValueAddr(frontend::ExprId id) {
         return hir::kInvalidHirExpr;
     const auto &expr = current_module_->frontend->expressions()[id.value - 1U];
     if (expr.kind == frontend::ExprKind::Name) {
-        if (const auto *resolved = findResolvedExpr(id); resolved != nullptr && resolved->local) {
+        const auto *resolved = findResolvedExpr(id);
+        if (resolved != nullptr &&
+            (resolved->foreignGlobal != nullptr ||
+             (resolved->isExtern && resolved->declKind == frontend::DeclKind::Variable))) {
+            const std::string_view symbol =
+                resolved->foreignGlobal != nullptr
+                    ? std::string_view(resolved->foreignGlobal->linkageName)
+                    : resolved->externalSymbol.empty() ? std::string_view(resolved->name)
+                                                       : std::string_view(resolved->externalSymbol);
+            hir::HirExternalGlobalAddr address;
+            address.name = interner_.intern(symbol);
+            address.type = typeOfExpr(id);
+            return addExpr(std::move(address));
+        }
+        if (resolved != nullptr && resolved->local) {
             const auto slot     = localSlot(resolved->local);
             const auto local_ty = typeOfLocal(resolved->local);
             for (auto it = narrowing_stack_.rbegin(); it != narrowing_stack_.rend(); ++it) {
@@ -376,4 +390,3 @@ hir::HirExprId HirLowerModern::lowerSliceRange(const frontend::Expression &expr,
 
 } // namespace modern
 } // namespace zith::sema
-

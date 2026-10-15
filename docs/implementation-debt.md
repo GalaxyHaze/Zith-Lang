@@ -282,15 +282,18 @@ dívidas e resoluções ficam numeradas para manter as referências estáveis:
 
 - Estado atual: libclang cobre C comum, variadics, parâmetros array-decayed,
   `va_list` e function pointers. Object-like scalar macros são importadas como
-  constantes.
+  constantes. Globals externos escalares e pointers declarados diretamente no
+  header também são importados, com typedefs alcançáveis como `FILE`.
 - Dívida real: struct-by-value ABI é limitado a records simples cuja
   layout/alignment libclang prova para o target configurado; scalars, pointers
   e nested records verificados são suportados; além do slot i64 (scalar
   64-bit/pointer ou dois i32 adjacentes), um record com dois campos 64-bit
   adjacentes também é validado por valor como dois registos 64-bit, que é o
-  shape que Clang usa no x86-64 e AArch64 Linux. Bitfields, packed/anonymous
-  records, flexible arrays, mixed-width records, globals, strings,
-  function-like macros, `long double` e `__int128` não são importados.
+  shape que Clang usa no x86-64 e AArch64 Linux. O VM v2 ainda não executa
+  referências a globals externos e reporta `unsupported external global
+  '<name>' in v2 VM`; imports não usados continuam válidos. Bitfields,
+  packed/anonymous records, flexible arrays, mixed-width records, strings,
+  function-like macros, `long double` e `__int128` continuam fora do subset.
 - Referência: [impl-status.md](/home/diogo/Zith/docs/impl-status.md:153).
 
 ### 6. Outras incompletudes registadas

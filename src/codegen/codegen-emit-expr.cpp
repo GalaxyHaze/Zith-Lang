@@ -36,6 +36,13 @@ llvm::Value *CodeGenEmit::emitExpr(hir::HirExprId id, const hir::HirModule &mod)
                     return nullptr;
                 return builder_.CreateLoad(typeGen_.lower(load.type), global);
             },
+            [&](const hir::HirExternalGlobalAddr &address) -> llvm::Value * {
+                if (module_ == nullptr)
+                    return nullptr;
+                const auto name = interner_.lookup(address.name);
+                return module_->getOrInsertGlobal(llvm::StringRef(name.data(), name.size()),
+                                                  typeGen_.lower(address.type));
+            },
             [&](const hir::HirCall &call) { return emitCall(call, mod); },
             [&](const hir::HirMakeDyn &make) { return emitMakeDyn(make, mod); },
             [&](const hir::HirDynCall &call) { return emitDynCall(call, mod); },
