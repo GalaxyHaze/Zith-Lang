@@ -21,6 +21,16 @@ test or sanitizer errors.
   both with undefined LLVM C++ link symbols. The wasm-runtime job was
   cancelled after its MUSL step failed. This is separate from sanitizer
   validation; do not describe the workflow run as fully green.
+- Follow-up push run `38803716931` tested SHA
+  `066037920817b5f616beadb7103db5b20556329d`. Debug, Release and the
+  ASan/UBSan `sanitizers` job passed. `cross-builds (web, false)` failed in
+  `Configure and Build MUSL (Static)` with undefined LLVM linker symbols,
+  including `IRBuilderBase`, `TargetRegistry` and signatures using
+  `std::__1`. `cross-builds (wasm-runtime, true)` was cancelled after the
+  web matrix job failed. Its MUSL step was cancelled and later WebAssembly
+  checks were skipped. Attribute the failure to the MUSL cross-link, not
+  sanitizer validation, and do not claim the wasm-runtime build independently
+  failed in this run. The overall workflow conclusion was `failure`.
 - The required-status-checks API returned `404 Branch not protected` for
   `main` on 2026-10-15. No required status checks were configured at that
   snapshot, so the sanitizer job was not enforced by branch protection.

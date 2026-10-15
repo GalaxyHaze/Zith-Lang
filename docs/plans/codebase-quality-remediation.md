@@ -245,6 +245,23 @@ Recorded remote result on 2026-10-15:
   `29366f79691df1d4a20e2f23e3d82cfe890715a2` before this verification-record
   update.
 
+Follow-up verification after the documentation push on 2026-10-15:
+
+- Run `38803716931` completed against head SHA
+  `066037920817b5f616beadb7103db5b20556329d`.
+- `build (Debug)`, `build (Release)` and `sanitizers` all passed. The sanitizer
+  job built with ASan/UBSan and its test step passed.
+- `cross-builds (web, false)` failed during `Configure and Build MUSL
+  (Static)` with undefined LLVM linker symbols, including `IRBuilderBase`,
+  `TargetRegistry`, and `std::__1`-based signatures. This is a MUSL
+  cross-link failure, not a sanitizer failure.
+- `cross-builds (wasm-runtime, true)` was cancelled after the web matrix job
+  failed. Its MUSL build was cancelled and its later WebAssembly checks were
+  skipped. Do not record this run as evidence that the wasm-runtime MUSL
+  build independently failed.
+- The overall run conclusion was `failure`. The Debug, Release and sanitizer
+  successes do not make the full workflow green.
+
 The older run `38767587346` tested SHA
 `5aaa899dac6f9ca402c1c35399037fabfc396331`, before the sanitizer workflow
 commit. Its Debug and Release jobs passed, and its MUSL cross-build failed
@@ -274,8 +291,9 @@ After both steps are implemented:
 
 Local acceptance requires the focused frontend test, both recorded full CTest
 suites, documentation consistency, workflow validation and a clean diff check.
-The remote sanitizer acceptance passed in run `38798317687`. The overall
-workflow is not green because both cross-builds encounter the MUSL LLVM link
-failure; the `web` job failed and the `wasm-runtime` job was cancelled after
-its MUSL step failed. The recorded state is that `main` is unprotected, so the
-sanitizer job is not enforced by a required branch-protection check.
+Remote sanitizer acceptance passed in runs `38798317687` and `38803716931`.
+The latest overall workflow is not green: its web MUSL cross-build failed at
+link time and the wasm-runtime matrix job was cancelled before its later
+checks. The recorded branch-protection query on 2026-10-15 found `main`
+unprotected, so the sanitizer job was not enforced by a required check at
+that snapshot.
