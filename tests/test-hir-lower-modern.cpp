@@ -1721,6 +1721,52 @@ void test_generic_function_lowers_to_concrete_instances() {
     }
 }
 
+void test_alias_qualified_free_generic_self_is_not_receiver() {
+    Workspace workspace;
+    workspace.writeFile("dep.zith", "pub fn identity<T>(self: T): T { return self; }\n");
+    workspace.writeFile("main.zith", "import dep as da\n"
+                                     "fn main(): i32 {\n"
+                                     "    return da.identity<i32>(41);\n"
+                                     "}\n");
+
+    memory::Arena arena;
+    Options options(arena);
+    auto session = makeSession(workspace, arena, options, "main.zith");
+
+    CHECK(session.runTo(session::Stage::HirLowered),
+          "alias-qualified free generic call with a self-named parameter lowers");
+
+    const auto &hir  = session.hirModule();
+    const auto *main = findFunction(hir, session.interner(), "main");
+    CHECK(main != nullptr, "main is present after lowering the alias-qualified call");
+    if (main == nullptr)
+        return;
+
+    const hir::HirCall *call = nullptr;
+    for (const auto &block : main->blocks) {
+        for (const auto inst : block.insts) {
+            if (const auto *candidate = std::get_if<hir::HirCall>(&hir.getExpr(inst))) {
+                call = candidate;
+                break;
+            }
+        }
+        if (call == nullptr && block.terminator != hir::kInvalidHirExpr) {
+            if (const auto *ret = std::get_if<hir::HirRet>(&hir.getExpr(block.terminator))) {
+                if (ret->value != hir::kInvalidHirExpr)
+                    call = std::get_if<hir::HirCall>(&hir.getExpr(ret->value));
+            }
+        }
+        if (call != nullptr)
+            break;
+    }
+
+    CHECK(call != nullptr, "alias-qualified generic call is represented by HirCall");
+    if (call != nullptr) {
+        CHECK_EQ(call->args.size(), 1u,
+                 "the free function receives only its explicit argument, not the module alias");
+    }
+}
+
 void test_generic_bound_and_value_param_lower_to_hir() {
     Workspace workspace;
     workspace.writeFile("main.zith", "trait Foo {}\n"
@@ -2931,6 +2977,7 @@ static void test_hir_lower_modern() {
     test_diverging_state_parameters_share_machine_id();
     test_local_states_qualify_and_lower_without_collisions();
     test_generic_function_lowers_to_concrete_instances();
+    test_alias_qualified_free_generic_self_is_not_receiver();
     test_generic_bound_and_value_param_lower_to_hir();
     test_interface_method_bound_lower_to_hir();
     test_const_global_lowers_to_load();

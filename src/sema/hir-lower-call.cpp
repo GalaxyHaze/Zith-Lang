@@ -401,9 +401,13 @@ hir::HirExprId HirLowerModern::lowerCall(const frontend::Expression &expr) {
     // argument. Methods without self are static in this compiler. A bound
     // trait call through a generic parameter supplies its receiver as an
     // ordinary explicit argument, so it must not gain another implicit self.
-    const bool is_receiver_method = !static_generic_bound_call && method_decl != nullptr &&
-                                    !method_decl->parameters.empty() &&
-                                    method_decl->parameters.front().name == "self";
+    const bool has_receiver_syntax = (callee_expr.kind == frontend::ExprKind::Field ||
+                                      callee_expr.kind == frontend::ExprKind::Arrow) &&
+                                     !callee_expr.operands.empty();
+    const bool is_receiver_method  = has_receiver_syntax && !static_generic_bound_call &&
+                                     method_decl != nullptr && !method_decl->ownerName.empty() &&
+                                     !method_decl->parameters.empty() &&
+                                     method_decl->parameters.front().name == "self";
     const bool is_method_call = is_receiver_method;
 
     hir::HirExprId callee = hir::kInvalidHirExpr;
