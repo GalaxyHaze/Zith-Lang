@@ -1,5 +1,7 @@
 import std/io/console
+from std/memory
 fn main(): i32 {
-    _ = std.io.console.println("full path");
+    let heap = HeapAllocator {};
+    _ = std.io.console.println(heap, "full path");
     return 0;
 }

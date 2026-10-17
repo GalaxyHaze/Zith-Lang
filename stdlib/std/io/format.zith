@@ -2,6 +2,8 @@ from c/io
 from c/stdlib
 from c/string
 
+from std/memory/allocators/allocator
+
 /// Feeble standard-library formatting contract. Instances append their
 /// textual representation to a reusable buffer and return a plain I/O status.
 pub trait Formatable {
@@ -39,6 +41,7 @@ pub struct FormatResult {
 /// Reusable byte buffer used by `print` and `println`. It owns its heap
 /// storage and must be destroyed with `destroyBuffer` or `destroy`.
 pub struct FormatBuffer {
+    allocator: dyn Allocator,
     data: ?*char = null,
     capacity: u64 = 0,
     length: u64 = 0,
@@ -76,8 +79,8 @@ pub struct FormatBuffer {
     }
 }
 
-pub fn emptyFormatBuffer(): FormatBuffer {
-    return FormatBuffer {};
+pub fn emptyFormatBuffer(allocator: dyn Allocator): FormatBuffer {
+    return FormatBuffer { allocator };
 }
 
 fn formatNext(value: dyn Formatable, buffer: lend FormatBuffer): IoError {
@@ -117,8 +120,9 @@ pub fn format(dest: lend FormatBuffer, msg: []char, values: [...]dyn Formatable)
     return status;
 }
 
-pub fn format(msg: []char, values: [...]dyn Formatable): FormatResult {
-    var buffer = emptyFormatBuffer();
+pub fn format(allocator: dyn Allocator, msg: []char,
+              values: [...]dyn Formatable): FormatResult {
+    var buffer = emptyFormatBuffer(allocator);
     var index: u64 = 0;
     var next: u64 = 0;
     let length = @lengthOf(msg);
@@ -152,20 +156,30 @@ pub fn format(msg: []char, values: [...]dyn Formatable): FormatResult {
 }
 
 pub fn ensureBuffer(self: lend FormatBuffer, extra: u64): IoError {
+    let max = 18446744073709551615u64;
+    if (extra > max - self.length) {
+        return IoError.fAllocation;
+    }
     let needed = self.length + extra;
     if (needed <= self.capacity) {
         return IoError.Ok;
     }
+    if (self.capacity > max - 64u64 or extra > max - self.capacity - 64u64) {
+        return IoError.fAllocation;
+    }
     let desired = self.capacity + extra + 64;
-    var next: ?*char = malloc(desired as u64) as ?*char;
+    var next: ?raw opaque = allocate(self.allocator, desired as u64, 1u64);
     if (next is null) {
         return IoError.fAllocation;
     }
     if (self.length > 0 and not (self.data is null)) {
-        _ = memcpy(next, self.data, self.length);
+        _ = memcpy(next as ?*char, self.data, self.length);
     }
-    free(self.data);
-    self.data = next;
+    let old = self.data;
+    if (not (old is null)) {
+        deallocate(self.allocator, old as raw opaque, self.capacity, 1u64);
+    }
+    self.data = next as ?*char;
     self.capacity = desired;
     return IoError.Ok;
 }
@@ -213,22 +227,26 @@ pub fn appendNumberBuffer(self: lend FormatBuffer, value: u32): IoError {
     if (status != IoError.Ok) {
         return status;
     }
-    var scratch: ?*char = malloc(64) as ?*char;
+    var scratch: ?raw opaque = allocate(self.allocator, 64u64, 1u64);
     if (scratch is null) {
         return IoError.fAllocation;
     }
-    let written = snprintf(scratch, 64, "%u", value);
+    let chars: ?*char = scratch as ?*char;
+    let written = snprintf(chars, 64, "%u", value);
     if (written < 0) {
-        free(scratch);
+        deallocate(self.allocator, scratch, 64u64, 1u64);
         return IoError.fWrite;
     }
-    let status2 = appendRawBuffer(lend self, scratch, written as u64);
-    free(scratch);
+    let status2 = appendRawBuffer(lend self, raw chars, written as u64);
+    deallocate(self.allocator, scratch, 64u64, 1u64);
     return status2;
 }
 
 pub fn destroyBuffer(self: lend FormatBuffer): void {
-    free(self.data);
+    let data = self.data;
+    if (not (data is null)) {
+        deallocate(self.allocator, data as raw opaque, self.capacity, 1u64);
+    }
     self.data = null;
     self.capacity = 0;
     self.length = 0;
@@ -250,17 +268,18 @@ pub fn formatBool(self: bool, dest: lend FormatBuffer): IoError {
 }
 
 fn appendFloat(self: f64, dest: lend FormatBuffer): IoError {
-    var scratch: ?*char = malloc(64) as ?*char;
+    var scratch: ?raw opaque = allocate(dest.allocator, 64u64, 1u64);
     if (scratch is null) {
         return IoError.fAllocation;
     }
-    let written = snprintf(scratch, 64, "%g", self);
+    let chars: ?*char = scratch as ?*char;
+    let written = snprintf(chars, 64, "%g", self);
     if (written < 0) {
-        free(scratch);
+        deallocate(dest.allocator, scratch, 64u64, 1u64);
         return IoError.fWrite;
     }
-    let status = appendRawBuffer(lend dest, scratch, written as u64);
-    free(scratch);
+    let status = appendRawBuffer(lend dest, raw chars, written as u64);
+    deallocate(dest.allocator, scratch, 64u64, 1u64);
     return status;
 }
 
@@ -277,17 +296,18 @@ pub fn formatU32(self: u32, dest: lend FormatBuffer): IoError {
 }
 
 pub fn formatI32(self: i32, dest: lend FormatBuffer): IoError {
-    var scratch: ?*char = malloc(64) as ?*char;
+    var scratch: ?raw opaque = allocate(dest.allocator, 64u64, 1u64);
     if (scratch is null) {
         return IoError.fAllocation;
     }
-    let written = snprintf(scratch, 64, "%d", self);
+    let chars: ?*char = scratch as ?*char;
+    let written = snprintf(chars, 64, "%d", self);
     if (written < 0) {
-        free(scratch);
+        deallocate(dest.allocator, scratch, 64u64, 1u64);
         return IoError.fWrite;
     }
-    let status = appendRawBuffer(lend dest, scratch, written as u64);
-    free(scratch);
+    let status = appendRawBuffer(lend dest, raw chars, written as u64);
+    deallocate(dest.allocator, scratch, 64u64, 1u64);
     return status;
 }
 

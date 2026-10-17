@@ -30,6 +30,9 @@ Calling `h.alloc(...)` twice on a concrete `HeapAllocator` in the same scope
 currently fails with `E4001` even with read-only trait receivers. Users should
 go through `std.memory.allocate` and `std.memory.deallocate` for now.
 
+Zith-- bitwise operators use the `&.` spelling, and negative null checks use
+`not (value is null)`. Bare `&` and `is not null` fail during parsing.
+
 ## Module Resolution Quirk
 
 The legacy `std/alloc` failed with `E2001 unknown struct type` while `std/alloc3`

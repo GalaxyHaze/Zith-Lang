@@ -48,34 +48,45 @@ constexpr ParityCase kCases[] = {
     // Passing slice: the VM and the native path agree on stdout and exit code.
     {"console_println_literal",
      "from std/io/console\n"
+     "from std/memory\n"
      "\n"
      "fn main(): i32 {\n"
-     "    _ = println(\"hello parity\");\n"
+     "    let heap = HeapAllocator {};\n"
+     "    _ = println(heap, \"hello parity\");\n"
      "    return 0;\n"
      "}\n",
-     nullptr},
+     "dyn Allocator parameter layout is outside the VM v2 lowering subset "
+     "(allocator ownership migration)"},
     {"console_print_no_newline",
      "from std/io/console\n"
+     "from std/memory\n"
      "\n"
      "fn main(): i32 {\n"
-     "    print(\"a\");\n"
-     "    print(\"b\");\n"
+     "    let heap = HeapAllocator {};\n"
+     "    print(heap, \"a\");\n"
+     "    print(heap, \"b\");\n"
      "    return 0;\n"
      "}\n",
-     nullptr},
+     "dyn Allocator parameter layout is outside the VM v2 lowering subset "
+     "(allocator ownership migration)"},
     {"console_println_two_literals",
      "from std/io/console\n"
+     "from std/memory\n"
      "\n"
      "fn main(): i32 {\n"
-     "    _ = println(\"a\", \"b\");\n"
+     "    let heap = HeapAllocator {};\n"
+     "    _ = println(heap, \"a\", \"b\");\n"
      "    return 0;\n"
      "}\n",
-     nullptr},
+     "dyn Allocator parameter layout is outside the VM v2 lowering subset "
+     "(allocator ownership migration)"},
     {"console_println_format_int",
      "from std/io/console\n"
+     "from std/memory\n"
      "\n"
      "fn main(): i32 {\n"
-     "    _ = println(\"bucket=#\", 73);\n"
+     "    let heap = HeapAllocator {};\n"
+     "    _ = println(heap, \"bucket=#\", 73);\n"
      "    return 0;\n"
      "}\n",
      "variadic Formatable rendering is outside the VM lowering subset (debt item 1)"},
@@ -85,9 +96,11 @@ constexpr ParityCase kCases[] = {
     // divergence is visible in the parity report.
     {"hash_map_u64_put_get",
      "import std/collections/hash_map_u64 as hm\n"
+     "from std/memory\n"
      "\n"
      "fn main(): i32 {\n"
-     "    var map = hm.HashMap { count: 0u64, capacity: 0u64, table: null, head: 0u64 };\n"
+     "    let heap = HeapAllocator {};\n"
+     "    var map = hm.create(heap);\n"
      "    if not(hm.HashMap.reserve(lend map, 4u64)) {\n"
      "        return 1;\n"
      "    }\n"
@@ -107,15 +120,15 @@ constexpr ParityCase kCases[] = {
      "hash-map control flow hits a HIR branch shape the VM lowering does not handle "
      "(debt item 1)"},
     {"allocator_heap_dyn_dispatch",
-     "import std/alloc\n"
+     "from std/memory\n"
      "\n"
      "fn main(): i32 {\n"
-     "    let h = std.alloc.HeapAllocator {};\n"
-     "    let mem = std.alloc.allocate(h, 64u64, 1u64);\n"
+     "    let h = HeapAllocator {};\n"
+     "    let mem = allocate(h, 64u64, 1u64);\n"
      "    if (mem is null) {\n"
      "        return 1;\n"
      "    }\n"
-     "    std.alloc.deallocate(h, mem, 64u64, 1u64);\n"
+     "    deallocate(h, mem, 64u64, 1u64);\n"
      "    return 42;\n"
      "}\n",
      "dyn allocator dispatch is outside the VM lowering subset (debt items 1 and 4)"},

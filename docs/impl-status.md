@@ -126,7 +126,7 @@ Implementation work that is incomplete or needs review is tracked in
 | `while` | **Deprecated** | Still lowers correctly, emits `W1008` suggesting `for (cond) { }`, and accepts `?T` as an implicit non-null condition |
 | `break`, `continue` | **Working** | Unlabeled forms target the innermost active loop. Labels accept `outer: for`, `break outer;`, and `continue outer;`; unknown or duplicate active labels are rejected |
 | `return` (void and typed) | **Working** | |
-| `for (cond) { }`, `for { }` | **Working** | Conditional and infinite loop forms lower to the same CFG as `while`; labels are supported on both forms. `?T` conditions are tested implicitly as non-null |
+| `for (cond) { }`, `for { }` | **Working** | Conditional and infinite loop forms lower to the same CFG as `while`; labels are supported on both forms. The formatter preserves `for` spelling and `?T` conditions are tested implicitly as non-null |
 | `for (init, cond, step) { }` | **Working** | Flat and parenthesized clause forms are accepted. `init` and `step` are both optional; `continue` still runs the step before the next test. Labels are stored on the real `For` node |
 | `for (x in xs)` | **Working** | Duck-typed iterator over a struct with `next(self)`; the canonical `next(self): ?T` returns `null` for the iteration end and a payload for each element. `??T` iterators bind the loop variable as `?T` so `null` elements are distinguishable from the end. The legacy tagged-union `{ T, End }` protocol remains accepted during migration. Labels are supported |
 | `when` / `match` pattern match | **Working** | Arms are written `(pattern) body`, comma-separated; optional later islands are boolean guards (`(pattern) and (guard) body`). `match` is a parser synonym for `when`. Equality, boolean and range (`1..3`) patterns lower through HIR to codegen, and the first island may combine non-boolean patterns with `and`/`or`/`xor`. An `(f is Member)` arm narrows `f` for that arm's body. `(_)` must be the sole island of the last arm; a value-producing `when` without a default reports non-exhaustive. Legacy `~>` stays accepted but emits `W1008`. Covered by runtime tests |
@@ -156,7 +156,7 @@ Implementation work that is incomplete or needs review is tracked in
 | `alias` | **Working** | |
 | `pub`, `mod` | **Working** | |
 | `mod(..)`, `mod(N)` | **Working** | Module-depth visibility is applied to declarations and to struct fields; `mod(..)` is unlimited and `mod(N)` allows N directory levels below the owner |
-| C header imports | **Working (validated C)** | libclang only; variadic functions, array-decayed parameters, `va_list`, and function-pointer parameters supported. Object-like scalar macros are imported as constants. Directly declared external scalar and pointer globals, plus reachable typedefs such as `FILE`, are imported; `static` and transitively declared globals are skipped. Top-level C object constness controls binding mutability, not pointee constness. Simple records passed/returned by value are imported only after libclang proves their layout for the configured target triple; scalar, pointer, nested validated-record, two-adjacent-i32, and two-adjacent-i64 fields are supported. Function-like macros, strings, unsupported by-value aggregates, bitfields, packed/anonymous records, flexible arrays, mixed-width records, `long double`, and `__int128` remain unsupported. VM v2 reports a named unsupported-global diagnostic when code references an external global |
+| C header imports | **Working (validated C)** | libclang only; variadic functions, array-decayed parameters, `va_list`, and function-pointer parameters supported. Object-like scalar macros are imported as constants. Directly declared external scalar and pointer globals, plus reachable typedefs such as `FILE`, are imported; `static` and transitively declared globals are skipped. Top-level C object constness controls binding mutability, not pointee constness. By-value records require a verified layout and are limited to 64-bit x86-64/AArch64 Linux (GNU or musl), using libclang's effective target when no triple is specified. Supported shapes: one i64/pointer or two adjacent i32 slots in 8 bytes; two integer-class slots at offsets 0 and 8 in a 16-byte, 8-aligned record (`i64+i64`, `i32+i64`, or `i64+i32`, with pointers in i64 slots). Other target ABIs and aggregate classes remain unsupported. VM v2 reports a named unsupported-global diagnostic when code references an external global |
 
 ---
 
@@ -237,15 +237,19 @@ Recorded deliberately. Each item is a follow-up, not an unknown.
 | Item | Notes |
 |---|---|
 | Non-literal narrowing conversions need runtime checks | Compile-time `as` checks cover literal, `-` literal and integer-const operands; variable operands and numeric-literal adaptation remain unchecked |
-| Bodyless `for (literal..literal){}` | Rejected in sema before HIR/codegen with a targeted diagnostic; a literal range is not a boolean condition and requires `in` or a loop binding |
 | `?*T` pointer narrowing is local-only | Non-null proof currently follows a nullable-pointer local through `is null`/`not (is null)` branches and early-return checks; derived field/index/arrow expressions and cross-function proofs are not yet tracked |
-| Formatter re-prints `for (cond)` as `while` | `for (cond)` desugars to `ExprKind::While`; the formatter prints `while (...)`, so the spelling is not round-trip faithful |
-| `is` outside `null`/tagged-union contexts | Non-union `is Type` remains unsupported and reports a dedicated diagnostic |
-| User-defined casts | To be added as a new branch in `classifyCast` |
-| C struct-by-value ABI limited to verified simple records | `struct` parameters/results are imported only when libclang proves layout/alignment for scalars, plain pointers, nested verified records, and two adjacent 64-bit fields on the target used by the parse. Clang passes/returns that pair as two 64-bit scalars on x86-64 and AArch64 Linux; mixed-width or edge-case records are skipped before lowering |
-| Imported/cached bare `opaque` values | Bare `opaque` values exported from module A and consumed in module B are accepted; the canonical tagged typeId is recorded when the value is erased and restored from cached artifacts. There is no cross-module registry object, but canonical tags are deterministic and persisted by the existing `canonical_mappings` path |
-| `..` / `...` | Intentionally one `Dots` token; `..` is the range/pipe/import token and `...` is the variadic marker. Not a debt |
-| `++` / `--` | Intentionally rejected in Zith--; update values with explicit assignment. Not a debt |
-| Ownership proof still happens after premature lowering in places | The stable order is `sema -> comptime/solve -> NTA/NRA -> HIR`; residual facts are now attached before final lowering. The remaining gap concerns the full NRA proof, which is full-Zith work specified in [nra-spec.md](nra-spec.md), not Zith-- debt |
+| Opaque cache divergence diagnostics | Divergence identifies the canonical type id and recovery path, but does not identify which field changed |
 
 *When a feature moves from one status to another, update this table and re-verify.*
+
+## Non-debt
+
+| Surface | Deliberate Zith-- boundary |
+|---|---|
+| `is <type>` outside tagged unions and bare `opaque` | General type tests are outside the Zith-- subset |
+| C struct-by-value outside validated layouts | C interop does not promise compatibility with every aggregate ABI. By-value records remain limited to the documented 64-bit Linux target and integer-only layouts; other target ABIs and aggregate classes are deliberately rejected until validated |
+| User-defined casts | No user-defined conversion trait or cast syntax is part of the Zith-- spec |
+| Bodyless `for (literal..literal){}` | Rejected in sema with a targeted diagnostic before HIR/codegen |
+| `..` / `...` | Intentionally one `Dots` token; `..` is the range/pipe/import token and `...` is the variadic marker |
+| `++` / `--` | Intentionally rejected; update values with explicit assignment |
+| Full NRA ownership proof | Specified for full Zith; Zith-- keeps the implemented residual-fact contract |

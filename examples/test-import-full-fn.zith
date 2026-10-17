@@ -1,5 +1,7 @@
 import std/io/console
+from std/memory
 fn main(): i32 {
-    _ = std.console.println("full path one segment");
+    let heap = HeapAllocator {};
+    _ = std.console.println(heap, "full path one segment");
     return 0;
 }

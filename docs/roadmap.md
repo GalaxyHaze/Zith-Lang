@@ -12,7 +12,7 @@
 | F-03 | `for` iterator (`in`) and 3-clause | 9 | Working |
 | F-04 | `state` machine / `dock` / `jump` | 9 | Working (musttail transitions) |
 | F-05 | `const fn` | 5, 11 | Parse-level in progress |
-| F-06 | `is <type>` type narrowing | 3 | Working (tagged unions + opaque; non-union narrowing remains in debt) |
+| F-06 | `is <type>` type narrowing | 3 | Working (tagged unions + opaque; general type tests are outside the Zith-- subset) |
 | F-07 | `dyn Trait` dynamic dispatch | 14 | Working (`dyn Interface` also dispatches through vtables) |
 | F-08 | `@macro` calls | 15 | Working |
 | F-09 | Word call and sequence expressions | 16 | Parse error |

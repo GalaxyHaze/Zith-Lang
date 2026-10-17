@@ -1,4 +1,6 @@
-from c/stdlib
+from c/string
+
+from std/memory/allocators/allocator
 
 /// Concrete u64-to-u64 hash map for the current Zith-- stdlib.
 ///
@@ -17,19 +19,38 @@ pub struct HashMap {
     pub capacity: u64 = 0,
     pub table: ?*Entry = null,
     pub head: u64 = 0,
+    pub allocator: dyn Allocator,
+}
+
+pub fn create(allocator: dyn Allocator): HashMap {
+    return HashMap { allocator: allocator };
 }
 
 pub fn reserve(var self: lend HashMap, capacity: u64): bool {
-    let mem: ?raw opaque = calloc(capacity, @sizeOf(Entry));
+    if (capacity == 0u64) {
+        return true;
+    }
+    let entrySize = @sizeOf(Entry);
+    if (capacity > 18446744073709551615u64 / entrySize) {
+        return false;
+    }
+    let bytes = capacity * entrySize;
+    let entryAlign = @alignOf(Entry) as u64;
+    let mem: ?raw opaque = allocate(self.allocator, bytes, entryAlign);
     if (mem is null) {
         return false;
     }
+    _ = memset(mem as ?*char, 0, bytes);
     let table: ?*Entry = mem as ?*Entry;
     if (table is null) {
-        free(mem);
+        deallocate(self.allocator, mem, bytes, entryAlign);
         return false;
     }
-    free(self->table);
+    let old = self->table;
+    if (not (old is null)) {
+        deallocate(self.allocator, old as raw opaque,
+                   self->capacity * entrySize, entryAlign);
+    }
     self->table = table;
     self->capacity = capacity;
     self->count = 0u64;
@@ -38,7 +59,11 @@ pub fn reserve(var self: lend HashMap, capacity: u64): bool {
 }
 
 pub fn destroy(var self: lend HashMap) {
-    free(self->table);
+    let table = self->table;
+    if (not (table is null)) {
+        deallocate(self.allocator, table as raw opaque,
+                   self->capacity * @sizeOf(Entry), @alignOf(Entry) as u64);
+    }
     self->table = null;
     self->capacity = 0u64;
     self->count = 0u64;

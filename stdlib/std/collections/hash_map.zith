@@ -1,4 +1,6 @@
-from c/stdlib
+from c/string
+
+from std/memory/allocators/allocator
 
 /// Proposed owning hash-map API for the standard library.
 ///
@@ -12,6 +14,7 @@ pub struct HashMap<K, V> {
     capacity: u64 = 0,
     table: ?*Entry<K, V> = null,
     head: u64 = 0,
+    allocator: ?dyn Allocator = null,
 }
 
 /// One open-addressed slot owned by a `HashMap`.
@@ -63,16 +66,32 @@ pub fn reserve<K, V>(var self: lend HashMap<K, V>, capacity: u64): bool {
     if (capacity == 0u64 and self->table is null) {
         return true;
     }
-    let mem: ?raw opaque = calloc(capacity, @sizeOf(Entry<K, V>));
+    let storedAllocator = self.allocator;
+    if (storedAllocator is null) {
+        return false;
+    }
+    let allocator = raw storedAllocator;
+    let entrySize = @sizeOf(Entry<K, V>);
+    if (capacity > 18446744073709551615u64 / entrySize) {
+        return false;
+    }
+    let bytes = capacity * entrySize;
+    let entryAlign = @alignOf(Entry<K, V>) as u64;
+    let mem: ?raw opaque = allocate(allocator, bytes, entryAlign);
     if (mem is null) {
         return false;
     }
+    _ = memset(mem as ?*char, 0, bytes);
     let table: ?*Entry<K, V> = mem as ?*Entry<K, V>;
     if (table is null) {
-        free(mem);
+        deallocate(allocator, mem, bytes, entryAlign);
         return false;
     }
-    free(self->table);
+    let old = self->table;
+    if (not (old is null)) {
+        deallocate(allocator, old as raw opaque,
+                   self->capacity * entrySize, entryAlign);
+    }
     self->table = table;
     self->capacity = capacity;
     self->count = 0u64;
@@ -80,16 +99,33 @@ pub fn reserve<K, V>(var self: lend HashMap<K, V>, capacity: u64): bool {
     return true;
 }
 
-pub fn init<K, V>(var self: lend HashMap<K, V>): bool {
-    return reserve<K, V>(lend self, 64u64);
+pub fn init<K, V>(var self: lend HashMap<K, V>, allocator: dyn Allocator): bool {
+    if (not (self->table is null)) {
+        return false;
+    }
+    self->allocator = allocator;
+    if (reserve<K, V>(lend self, 64u64)) {
+        return true;
+    }
+    self->allocator = null;
+    return false;
 }
 
 pub fn destroy<K, V>(var self: lend HashMap<K, V>) {
-    free(self->table);
+    let table = self->table;
+    if (not (table is null)) {
+        let storedAllocator = self.allocator;
+        if (not (storedAllocator is null)) {
+            deallocate(raw storedAllocator, table as raw opaque,
+                       self->capacity * @sizeOf(Entry<K, V>),
+                       @alignOf(Entry<K, V>) as u64);
+        }
+    }
     self->table = null;
     self->capacity = 0u64;
     self->count = 0u64;
     self->head = 0u64;
+    self->allocator = null;
 }
 
 pub fn len<K, V>(self: view HashMap<K, V>): u64 {
@@ -130,9 +166,7 @@ pub fn get<K: Hashable, V>(self: view HashMap<K, V>, key: K): ?V {
 
 pub fn put<K: Hashable, V>(var self: lend HashMap<K, V>, key: K, value: V): bool {
     if (self->table is null) {
-        if not(init<K, V>(lend self)) {
-            return false;
-        }
+        return false;
     }
     if (not contains<K, V>(view self, key)) {
         if (self->count >= self->capacity) {

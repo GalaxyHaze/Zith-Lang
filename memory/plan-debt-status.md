@@ -41,6 +41,10 @@ The active plan homes are:
   `docs/plans/archive/codebase-quality-remediation-2026-10-07.old.md`.
 - `docs/plans/idea-lifecycle-small-scope.md` / `docs/specs/abi-lifecycle.md`:
   small-scope lifecycle setup for ideas, ABI promises, and conforming tests.
+- `docs/plans/stdlib/allocator-ownership.md`: explicit allocator ownership and
+  migration across stdlib allocations.
+- `docs/plans/stdlib/dynarray-result-panic.md`: `DynArray`-focused collection
+  and error-handling expansion, dependent on allocator ownership.
 
 The archived plan homes are:
 
@@ -197,7 +201,8 @@ absent.
 `i32`, and `u32`. The completed step was moved to
 `docs/plans/archive/parse-input-cast.old.md`. `*char` parsing is intentionally
 not part of that contract; strings remain available through the `text()`
-adapter. Debt entry 8 now labels that as non-debt.
+adapter. The former entry 8 was removed from the active debt inventory, and
+the `*char` exclusion remains recorded as non-debt.
 
 Real debt entries must name the implemented-but-incomplete part and a blocking
 reference. Intentional design decisions go into the non-debt table. The debt
@@ -219,21 +224,26 @@ The current debt list below reflects that resolution:
 - What Zith-- implements is SRA, frozen by design. The full ownership proof
   (new node-state model, NRA-1..NRA-11) is full-Zith work specified in
   `docs/nra-spec.md`, not Zith-- debt.
-- Bare `opaque` has stable cache-hydrated tags. The canonicalization rule is a
-  single shared function (`types::canonicalTypeId`), used by both lowering and
-  cache canonization, with a field-order divergence test. A canonical
-  field-order change still invalidates old artifacts, now detected and named by
-  the shared `E2010` message instead of silently re-tagging.
-- C interop covers validated C but struct-by-value ABI is limited to simple
-  records whose layout is proven; several import forms remain unported.
+- Bare `opaque` has stable tags across modules and cache hydration. The
+  canonicalization rule is a single shared function (`types::canonicalTypeId`),
+  used by both lowering and cache canonization, with a field-order divergence
+  test. A canonical field-order change invalidates old artifacts with `E2010`
+  instead of silently re-tagging; the diagnostic does not yet identify the
+  specific field that changed.
+- C interop imports validated C; support for struct-by-value is deliberately
+  limited to record layouts proven for the target. It accepts the single-i64,
+  two-i32, two-i64, and exact i32/i64 layouts in either field order, only for
+  64-bit x86-64/AArch64 Linux GNU or musl targets. Empty triples use libclang's
+  effective target. This boundary is not implementation debt.
 - Narrowing `int -> int` checks known integer constants at compile time;
   numeric-literal adaptation lacks range checks, and variable / `float -> int`
   casts lack runtime overflow checks.
-- `for (cond)` is still printed as `while` by the formatter.
+- The formatter preserves `for (cond)`, `for {}`, labeled loops and optional
+  conditions, while keeping source `while` as `while`.
 - `++` and `--` do not exist.
 - `..` and `...` each lex as one `Dots` token, distinguished by lexeme.
-- `is <type>` narrowing works for tagged unions and `opaque`; other types are
-  not supported yet.
+- `is <type>` narrowing is intentionally limited to tagged unions and
+  `opaque` in Zith--; general type tests are not implementation debt.
 - Imported trait/interface conformance is deterministic in populated workdirs;
   the remaining section 10 debt is global lookup of trait defaults and
   `dyn Trait` requirements.

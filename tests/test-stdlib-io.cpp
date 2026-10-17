@@ -220,8 +220,10 @@ void test_generic_union_direct_construction_blocked() {
 void test_io_format_returns_owned_result() {
     SessionRunner t;
     auto r = t.run("from std/io/format\n"
+                   "from std/memory\n"
                    "fn main(): i32 {\n"
-                   "    let result = format(\"n=#\", 7);\n"
+                   "    let heap = HeapAllocator {};\n"
+                   "    let result = format(heap, \"n=#\", 7);\n"
                    "    let status = result.error();\n"
                    "    var text = result.text();\n"
                    "    result.destroy();\n"
@@ -234,8 +236,10 @@ void test_io_format_returns_owned_result() {
 void test_io_format_into_existing_buffer() {
     SessionRunner t;
     auto r = t.run("from std/io/format\n"
+                   "from std/memory\n"
                    "fn main(): i32 {\n"
-                   "    var buffer = emptyFormatBuffer();\n"
+                   "    let heap = HeapAllocator {};\n"
+                   "    var buffer = emptyFormatBuffer(heap);\n"
                    "    let status = format(lend buffer, \"n=#\", 7);\n"
                    "    var text = buffer.text();\n"
                    "    buffer.destroy();\n"

@@ -2,10 +2,12 @@
 // Expected exit code: 0
 
 import std/collections/hash_map as hm
+from std/memory
 
 fn main(): i32 {
-    var map = hm.HashMap<i64, i64> { };
-    if not(hm.HashMap.init(lend map)) {
+    let heap = HeapAllocator {};
+    var map = hm.HashMap<i64, i64> {};
+    if not(hm.HashMap.init(lend map, heap)) {
         return 2;
     }
     hm.HashMap.destroy(lend map);

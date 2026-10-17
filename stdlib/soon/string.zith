@@ -1,9 +1,11 @@
 import "string.h"
-import "stdlib.h"
+
+from std/memory/allocators/allocator
 
 pub struct string {
     data: ?*char = null,
     length: u64 = 0,
+    allocator: dyn Allocator,
 }
 
 pub struct End {}
@@ -17,12 +19,14 @@ pub struct stringIterator {
 }
 
 implement string {
-    pub fn init(str: *char): ?Self {
+    pub fn init(allocator: dyn Allocator, str: *char): ?Self {
         let len = strlen(str)
-        var data: ?*char = malloc(len + 1) as ?*char
+        let memory = allocate(allocator, len + 1, 1u64)
+        if (memory is null) { return null; }
+        var data: ?*char = memory as ?*char
         if (data is null) { return null; }
         strcpy(data, str)
-        string { data, len }
+        string { data, len, allocator }
     }
 
     pub fn get(self: view string): view []char {
@@ -67,16 +71,21 @@ implement string {
 
     pub fn concat(self: view string, other: *char): ?Self {
         let olen = strlen(other)
-        var data: ?*char = malloc(self.length + olen + 1) as ?*char
+        let max = 18446744073709551615u64
+        if (self.length == max or olen > max - self.length - 1u64) { return null }
+        let memory = allocate(self.allocator, self.length + olen + 1u64, 1u64)
+        if (memory is null) { return null; }
+        var data: ?*char = memory as ?*char
         if (data is null) { return null }
         strcpy(data, self.data)
         strcat(data, other)
-        string { data, self.length + olen }
+        string { data, self.length + olen, self.allocator }
     }
 
     pub fn destroy(self: lend string) {
-        if (self.data is null) { return }
-        free(self.data)
+        let data = self.data
+        if (data is null) { return }
+        deallocate(self.allocator, data as raw opaque, self.length + 1u64, 1u64)
         self.data = null
         self.length = 0
     }

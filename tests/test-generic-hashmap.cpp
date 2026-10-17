@@ -34,7 +34,7 @@ struct SessionRunner {
         std::filesystem::remove_all(root);
     }
 
-    bool run(std::string_view input) {
+    bool run(std::string_view input, session::Stage target = session::Stage::TypeChecked) {
         const auto path = root / "main.zith";
         std::ofstream file(path, std::ios::binary | std::ios::trunc);
         file << input;
@@ -49,7 +49,7 @@ struct SessionRunner {
         auto context = std::make_shared<session::FrontendContext>(config);
         session::CompilationSession session(opts, path.string(), std::move(context));
         session.setBuffered(true);
-        const bool ok = session.runTo(session::Stage::TypeChecked);
+        const bool ok = session.runTo(target);
         for (const auto &d : session.diags().all()) {
             if (d.severity == diagnostics::Severity::Error) {
                 std::printf("    [Diag] Code: %u, Message: %s\n", static_cast<unsigned>(d.code),
@@ -89,6 +89,50 @@ void test_reified_struct_reuses_args_identity() {
                           "}\n"
                           "fn main(): i32 { return 0; }\n");
     CHECK(ok, "generic inference matches reified struct type args by index");
+}
+
+void test_imported_generic_functions_resolve_explicit_arguments() {
+    SessionRunner t;
+    std::ofstream module(t.root / "generic_helper.zith", std::ios::binary | std::ios::trunc);
+    module << "from std/memory\n"
+              "pub fn echo<T>(value: T): T { return value; }\n"
+              "pub fn create<T>(allocator: dyn Allocator): i32 { return 42; }\n";
+    module.close();
+
+    const bool ok = t.run("import generic_helper as helper\n"
+                          "from std/memory\n"
+                          "fn main(): i32 {\n"
+                          "    let heap = HeapAllocator {};\n"
+                          "    let value = helper.echo<i32>(42);\n"
+                          "    return helper.create<i32>(heap) - value;\n"
+                          "}\n");
+    CHECK(ok, "imported generic functions accept explicit types and coercible arguments");
+}
+
+void test_imported_generic_call_with_explicit_self_lowers() {
+    SessionRunner t;
+    std::ofstream module(t.root / "generic_helper.zith", std::ios::binary | std::ios::trunc);
+    module << "pub fn reserve<T>(self: i32, value: T): bool { return true; }\n"
+              "pub fn grow<T>(value: T): bool { return reserve<T>(0, value); }\n";
+    module.close();
+
+    const bool ok = t.run("import generic_helper as helper\n"
+                          "fn main(): i32 {\n"
+                          "    if helper.grow<i32>(1) { return 0; }\n"
+                          "    return 1;\n"
+                          "}\n",
+                          session::Stage::HirLowered);
+    CHECK(ok, "imported generic calls with an explicit self argument lower to HIR");
+}
+
+void test_explicit_generic_arguments_still_validate_runtime_arguments() {
+    SessionRunner t;
+    const bool ok = t.run("fn echo<T>(value: T): T { return value; }\n"
+                          "fn main(): i32 {\n"
+                          "    let value = echo<i32>(\"not an integer\");\n"
+                          "    return 0;\n"
+                          "}\n");
+    CHECK(!ok, "explicit generic arguments do not bypass runtime argument type checking");
 }
 
 void test_hashmap_stdlib_checks() {
@@ -176,6 +220,9 @@ void test_inplace_trait_passes_check() {
 void test_generic_hashmap() {
     test_nested_generic_calls_propagate_bounds();
     test_reified_struct_reuses_args_identity();
+    test_imported_generic_functions_resolve_explicit_arguments();
+    test_imported_generic_call_with_explicit_self_lowers();
+    test_explicit_generic_arguments_still_validate_runtime_arguments();
     test_hashmap_stdlib_checks();
     test_inplace_trait_passes_check();
 }

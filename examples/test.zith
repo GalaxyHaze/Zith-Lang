@@ -1,10 +1,12 @@
 from std/io/console
+from std/memory
 
 fn main() {
-    println("hello world");
+    let heap = HeapAllocator {};
+    println(heap, "hello world");
     var i = 1;
     for (v in 0..5){
         i += v;
-        println("index is: #", i);
+        println(heap, "index is: #", i);
     }
 }

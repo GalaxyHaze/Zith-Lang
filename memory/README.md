@@ -61,6 +61,9 @@ contracts, decisions, and gotchas that are not discoverable from the source alon
 - [flat-containers-cache.md](flat-containers-cache.md): FlatMap/FlatSet API
   contracts, hot-map migrations, cache/CLI `--no-cache`, and validation checks
   landed during the consolidation pass.
+- [hir-lowering-call-targets.md](hir-lowering-call-targets.md): distinguish a
+  resolved call target from receiver-call syntax when lowering explicit `self`
+  parameters.
 - [release-install-layout.md](release-install-layout.md): stdlib discovery
   contract and installer fixes. Release audit snapshots live in
   `docs/plans/archive/release-*.old.md`.

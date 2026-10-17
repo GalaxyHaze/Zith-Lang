@@ -46,3 +46,28 @@ test or sanitizer errors.
 
 For the CI configure, build and CTest commands, see
 [`codebase-quality-remediation.md`](../docs/plans/codebase-quality-remediation.md).
+
+## MUSL LLVM Link Failure
+
+Run `38803716931` compiled `libzithcLib.a` but failed while linking `zithc`
+in `cross-builds (web, false)`. Its log has undefined references with
+`std::__cxx11` from LLVM archive members under `/usr/lib/llvm-18/lib`, while
+Zith objects reference LLVM APIs such as `IRBuilderBase` and `TargetRegistry`
+with `std::__1` signatures. The workflow uses Zig `0.13.0`, target
+`x86_64-linux-musl`, and static linking against the host LLVM 18 package.
+
+This is consistent with a C++ ABI mismatch, but does not prove one: the
+effective Zig C++ headers/runtime and symbol definitions in the archives have
+not been inspected. The local environment did not have Zig `0.13.0`, and no
+reproduction or archive inspection was performed. Do not treat this as a
+confirmed root cause or as a separate WASM failure; the
+`cross-builds (wasm-runtime, true)` job was cancelled before its MUSL build and
+WebAssembly checks.
+
+To establish causality, reproduce the same CI build, capture the final link
+command and effective C++ headers/libraries with `zig c++ -###`, compare
+undefined and defined symbols with `llvm-nm -C`, then run a control build with
+the C++ ABI aligned to the LLVM installation. Keep the ABI explanation marked
+as a hypothesis unless that control resolves the symbols and links.
+See [`musl-llvm-link-failure.md`](../docs/research/musl-llvm-link-failure.md)
+for the investigation record and CI log.

@@ -1,6 +1,6 @@
 # Zith Implementation Debt
 
-> Last updated: 2026-10-15.
+> Last updated: 2026-10-17.
 
 Documento de gestão da dívida de implementação. Distingue propositadamente:
 
@@ -137,35 +137,37 @@ engenharia para rever e gerir.
 | `dyn Interface` sem acesso a fields | O design expõe apenas métodos em `dyn`; fields ficam disponíveis em tipos concretos e bounds genéricos. `a.x on dyn Interface` com `E3001` é comportamento pretendido, não debt. |
 | `type Name = T` cast-based | Em `Zith--`, `type Name = T` é nominal e o contrato explícito usa casts: `T as Name` constrói e `Name as T` extrai o campo subjacente. `Name` não é intercambiável com `T`; `alias Name = T` continua transparente. Sintaxe dedicada de construção/acesso é follow-up opcional, não é dívida activa. |
 | Casts de utilizador | Não são pretendidos em `Zith--`. As conversões explícitas são os casts do spec (`as`, `raw as`), a coerção `opaque`, o narrowing `is` e os casts numéricos/ponteiro. Não existe trait de conversão (tipo `From`/`Into`/`Castable`) no spec nem na stdlib. Um novo branch de conversão em [classifyCast](/home/diogo/Zith/src/sema/sema-modern-utils.cpp:45) só seria adicionado se o spec de linguagem definir uma superfície dedicada. Não documentar como dívida. |
+| `is <type>` fora de tagged unions e `opaque` | O Zith-- limita deliberadamente o narrowing de tipos a tagged unions e `opaque`. Testes gerais de tipo não fazem parte do subset. |
+| NRA completa | Zith-- mantém a fatia SRA, congelada por design. A prova completa de ownership pertence ao full Zith e está especificada em [nra-spec.md](/home/diogo/Zith/docs/nra-spec.md). |
+| C struct-by-value fora dos layouts validados | Não é dívida: a interop não promete todos os ABIs de agregados. Por valor, aceita apenas layouts integer-class documentados para x86-64/AArch64 Linux de 64 bits; outros targets e classes ficam deliberadamente fora do subset até serem validados. |
+| Agregados VM com buffers geridos pelo heap | Esses tipos ainda não existem no subset da VM; `MemCopy` cobre os agregados actualmente suportados, sem prometer cópia profunda para tipos futuros. |
+| `*char` em `InputLine.cast<T>` | Fica fora do contrato de parsing. Strings continuam disponíveis por `InputLine.text()`. |
 | `..` / `...` como um token `Dots` | O lexer produz um único `TokenKind::Dots` para uma corrida de pontos ([ast-lowerer.cpp](/home/diogo/Zith/src/frontend/ast-lowerer.cpp:226)) e o parser distingue a grafia pelo lexema: `..` é o range ([frontend-expr-operator.cpp](/home/diogo/Zith/src/frontend/frontend-expr-operator.cpp:101)) e `...` é o marcador de variadic slice `[...]T` ([frontend-types.cpp](/home/diogo/Zith/src/frontend/frontend-types.cpp:115)). É um detalhe do lexer, não um defeito de comportamento. |
 
 ---
 
+## Concluídas e reclassificadas
+
+Estas entradas saíram do inventário ativo. Os identificadores históricos ficam
+preservados para referências em planos, memória e testes.
+
+| Referência | Resultado |
+|---|---|
+| `2. Cache .zirl` | Round-trips, hydration e divergência canónica estão cobertos em `test-cache`. |
+| `3. NRA completa` | Reclassificada como trabalho de full Zith; o contrato Zith-- é SRA, congelado por design. |
+| Formatter de `for` | Round-trip preserva `for (cond)`, `for {}`, labels e condições opcionais. `test-formatter` cobre reparse e idempotência. |
+| `7. Falhas em test-codegen` | As seis falhas históricas foram corrigidas; a secção de regressões antigas foi retirada. |
+| `8. ParseInput` | `InputLine.cast<T>` está implementado para os tipos suportados. A exclusão de `*char` é uma decisão de escopo, não uma dívida. |
+| `11. Facades exportadas` | Prefixos partilhados, tipos qualificados e segmentos kebab-case estão cobertos pelo status de importação em `impl-status.md`. |
+| `VM v2 #3, #5-#7, #10-#11` | Arena por frame, chamadas indiretas, cache HIR/artifact, diagnósticos JSON, variadic slice tails e lowering dos agregados suportados foram concluídos e cobertos pelos testes da VM. |
+| Variadic tail logic | `VariadicCallPlan` é produzido em sema e consumido pelo HIR, sem rederivação local nos call sites. |
+| Merge de `ProjectConfig` e options | Os call sites usam `session::mergeStrings`; já não há uma dívida separada de concatenação. |
+| Canonicalização de `opaque` | `canonicalTypeId` e a mensagem `E2010` são partilhados. A identificação do field divergente continua no item 4. |
+| Inicialização dos HIR nodes | Os `HirExpr` alternatives têm defaults para ids, tipos, flags e valores escalares. |
+
+---
+
 ## Dívidas reais (features implementadas mas incompletas e código com risco)
-
-### 2. Cache `.zirl` (resolvida)
-
-Resolved: o cache persiste e lê artefactos `.zirl` em
-`src/cache/cache.cpp` (`Store::store` escreve com `zirl::Writer`; load/hydration
-usam `zirl::Reader`), e o registry `canonical-any` é serializado/validado.
-`tests/test-cache.cpp` cobre round-trips, hydration e divergência canónica.
-O ficheiro `impl-status.md` foi atualizado de `Cache | Partial` para
-`Cache | Working`.
-
-### 3. NRA está parcial (reclassificado: é SRA, congelado por design)
-
-- Estado atual: o que o Zith-- implementa é o SRA (Small Resource Analysis),
-  uma fatia deliberadamente pequena e congelada: facts residuais e call
-  annotations consumidos antes do lowering final, e a fatia de
-  use-after-move de `&local`/`@ptrOf(local)` publicada como
-  `HirConsumedState::Consumed` sem nodes de move no HIR.
-- Reclassificação: o que aqui estava descrito como "faltas reais" (a máquina
-  de estados completa e a prova de regras) não é dívida de Zith--. É trabalho
-  de full Zith, agora especificado do zero em
-  [nra-spec.md](/home/diogo/Zith/docs/nra-spec.md) com o novo modelo de
-  estados (`uninitialized`/`taken`/`ok`, flow, edge state) e as regras
-  NRA-1..NRA-11. Zith-- fica no SRA e não vai crescer para a prova completa.
-- Referência: [impl-status.md](/home/diogo/Zith/docs/impl-status.md:41).
 
 ### 3a. VM v2: inventário de dívidas e limitações abertas
 
@@ -179,8 +181,9 @@ com o estado de `src/vm/`. O opcode set já cresceu além do slice inicial
 "duas fatias de execução" foi reaberta e resolvida de novo, o caminho nativo
 sem-LLVM voltou (ver secção D) e `src/vm/` continua opcional via
 `ZITH_BUILD_VM`; a VM v2 serve hoje o playground WASM, o harness `test-vm-v2` e
-o `zithc run` quando o LLVM está off ou quando se passa `--virtual-machine`. As
-dívidas e resoluções ficam numeradas para manter as referências estáveis:
+o `zithc run` quando o LLVM está off ou quando se passa `--virtual-machine`.
+Os IDs numéricos são estáveis; itens concluídos ficam na tabela histórica
+acima e só os itens ainda abertos permanecem neste inventário:
 
 1. **Superfície de linguagem incompleta no lowering.** State machines, dyn
    dispatch e `opaque` são "later slices" registados nos non-goals do plano e
@@ -188,19 +191,15 @@ dívidas e resoluções ficam numeradas para manter as referências estáveis:
    (`kPlaygroundStatusUnsupported`) para dynamic traits, intrinsics fora do
    subset, call targets fora do subset, literais não primitivos, dynamic array
    index e algumas formas de return.
-   Structs e packs são suportados desde 2026-10-10 (ver dívida 11). Optionals,
-   unions e enum values continuam sem lowering: um nó HIR não tratado falha a
-   tradução com `unsupported HIR expression in v2 lowering`, em vez de devolver
-   um registo não atribuído que o caller pudesse interpretar como "sem valor" e
-   saltar um store ou return em silêncio.
+   Structs e packs suportados são cobertos pelo histórico VM v2 #11. Optionals,
+   unions e enum values continuam sem lowering: um nó
+   HIR não tratado falha a tradução com
+   `unsupported HIR expression in v2 lowering`, em vez de devolver um registo
+   não atribuído que o caller pudesse interpretar como "sem valor" e saltar um
+   store ou return em silêncio.
 2. **Computed-goto adiado.** A decisão registada é aplicar computed-goto ao
    dispatch loop "once the opcode set stabilizes". O opcode set ainda está a
    crescer (ver dívida 1), pelo que o loop atual é o dispatcher simples.
-3. **Arena por frame — resolvido em 2026-10-10.** Cada invocação de
-   `runFunction` guarda o watermark de `AllocBytes` e restaura-o em todos os
-   caminhos de saída, incluindo traps. Chamadas aninhadas reutilizam o scratch
-   sem corromper dados vivos do caller; o high-water global preserva
-   `MallocBytes`/`malloc`. A cobertura está em `test-vm-v2`.
 4. **FFI validado, alargado em 2026-10-10.** O subset é data-driven
    (`kValidatedExterns` em `src/vm/vm-v2.cpp`): `puts`, `putchar`,
    `write_stdout`, `malloc`, `calloc`, `free`, `realloc`, `snprintf`
@@ -209,21 +208,6 @@ dívidas e resoluções ficam numeradas para manter as referências estáveis:
    parsers de input da stdlib. Um extern fora desta lista faz trap (VMV2-04)
    com uma mensagem que nomeia o extern em falta, pelo que a lista pode
    crescer com uma única entrada nova.
-5. **Indirect calls — resolvido em 2026-10-10.** `test-vm-v2` cobre chamadas
-   indiretas de `CallFnRef` e `CallExternRef` através das tabelas do módulo,
-   incluindo referências fora dos limites que terminam com `RunStatus::Trap`.
-6. **HIR/artifact caching — resolvido em 2026-10-10.** O playground expõe
-   `zith_compile_hir` (compila uma vez e guarda o flat HIR), `zith_execute_cached`
-   (replay sem recompilar) e `zith_restore_cached` (carrega um blob persistido
-   pelo host). As entradas são indexadas pelos bytes da fonte mais o fingerprint
-   do stdlib pack, e cache miss ou blob stale são reportados pelo canal de
-   diagnósticos estruturados em vez de recompilar em silêncio. A cobertura está
-   em `test-wasm-playground` e `tests/test-wasm-runtime.mjs`.
-7. **Diagnósticos JSON estruturados, resolvido em 2026-10-10.** O ABI do
-   playground expõe `zith_last_diagnostics_json_ptr/len` para diagnósticos de
-   compilação, traps e construções não suportadas, sem alterar os status codes
-   existentes. O contrato está em `docs/wasm-playground-abi.md` e é exercitado
-   por `test-wasm-playground`.
 8. **Value width fixo.** Valores primitivos executam como `int64_t`/bits e fat
    pointers ocupam dois registos consecutivos. Decisão consciente do primeiro
    slice, a revisitar para larguras nativas e floats.
@@ -237,32 +221,7 @@ dívidas e resoluções ficam numeradas para manter as referências estáveis:
    em [vm-v2-stdlib-parity.md](/home/diogo/Zith/docs/vm-v2-stdlib-parity.md).
    O fast path de formatação deixou de descartar valores em silêncio: uma
    mensagem com placeholders e valores passa a reportar status 5.
-10. **Variadic slice tails — resolvido em 2026-10-10.** O lowering VM consome
-    o plano de sema preservado em HIR, serializado como flat HIR v3. Os
-    argumentos recolhidos e slices explícitos são passados como pares
-    pointer/length, com bounds dinâmicos ao indexar slices. A cobertura está
-    em `test-vm-v2`.
-11. **Struct lowering — resolvido em 2026-10-10.** Agregados (structs e packs)
-    passam a ser address-backed: o registo de um slot agregado guarda um
-    ponteiro convidado para memória linear, um literal aloca e escreve cada
-    campo com o layout alinhado, `FieldPtr` compõe endereços de campos
-    aninhados sem copiar, e uma atribuição entre agregados é um `MemCopy`. Uma
-    função que devolve um agregado por valor reserva o registo 0 para um
-    ponteiro de resultado escondido (`Function::returnsAggregate`); o caller
-    aloca o slot e lê-o de volta, pelo que o valor de `Ret` do callee não é
-    usado. Slots escalares são igualmente address-backed, para que `&x` seja um
-    endereço real e uma escrita através do pointer resultante seja visível a
-    leituras posteriores de `x`; a storage de todos os slots memory-backed é
-    reservada uma vez num prólogo da função, para que um slot declarado dentro
-    de um loop não seja realocado a cada iteração. A cobertura está em
-    `test-vm-v2` (acesso a campo, campo aninhado, parâmetro e retorno por
-    valor, offsets de campos mistos, deref-assign de escalar, aliasing de
-    pointer, campos de array inline e hoisting da alocação de slot fora do
-    loop). Limitação conhecida: a cópia por `MemCopy` só é correta para
-    agregados sem buffers internos geridos pelo heap, e esses tipos ainda não
-    existem no subset da VM.
-
-### 4. Bare `opaque` usa hydration estável mas ainda depende de canonização consistente
+### 4. Bare `opaque` mantém tags estáveis através de imports e cache
 
 - Estado atual: o typeId canónico é derivado do namespace do módulo, ordem
   canónica de fields e nome do tipo. A regra vive numa única função partilhada,
@@ -286,13 +245,10 @@ dívidas e resoluções ficam numeradas para manter as referências estáveis:
   persistido antigo é rejeitado com o caminho de recuperação acima em vez de
   ser silenciosamente re-tagado. Sem mudança de canonical id, cold build,
   hydration warm, imports e valores `opaque` reutilizam o mesmo runtime tag.
-- Dívida real: continua sem existir um registry object no runtime do programa;
-  o contract é project-local no compiler/cache. A detecção de divergência
-  distingue um tag antigo desconhecido de um tag reutilizado por outro
-  canonical id, mas ainda não categoriza qual field concretamente mudou. A
-  regra canónica já não está duplicada: o risco de divergir baixou de "duas
-  cópias que têm de concordar" para "uma função partilhada com teste de
-  field-order".
+- Dívida residual: o diagnóstico de divergência identifica a canonical id e
+  recomenda a recuperação, mas ainda não identifica qual field originou a
+  mudança. O registry project-local pertence ao compiler/cache e não exige um
+  objecto no runtime do programa.
 - `coerceValue` trata `opaque -> opaque` como no-op de sema, pelo que casts
   vindos de módulos importados não são rejeitados como erro de re-tagging.
 - Referência: hydration e erro de instabilidade em
@@ -302,138 +258,26 @@ dívidas e resoluções ficam numeradas para manter as referências estáveis:
   e testes em
   [test-cache.cpp](/home/diogo/Zith/tests/test-cache.cpp:347).
 
-### 5. C interop é `Working (validated C)`, não ABI completa
+### 6. Narrowing numérico e de pointers continua incompleto
 
-- Estado atual: libclang cobre C comum, variadics, parâmetros array-decayed,
-  `va_list` e function pointers. Object-like scalar macros são importadas como
-  constantes. Globals externos escalares e pointers declarados diretamente no
-  header também são importados, com typedefs alcançáveis como `FILE`.
-- Dívida real: struct-by-value ABI é limitado a records simples cuja
-  layout/alignment libclang prova para o target configurado; scalars, pointers
-  e nested records verificados são suportados; além do slot i64 (scalar
-  64-bit/pointer ou dois i32 adjacentes), um record com dois campos 64-bit
-  adjacentes também é validado por valor como dois registos 64-bit, que é o
-  shape que Clang usa no x86-64 e AArch64 Linux. O VM v2 ainda não executa
-  referências a globals externos e reporta `unsupported external global
-  '<name>' in v2 VM`; imports não usados continuam válidos. Bitfields,
-  packed/anonymous records, flexible arrays, mixed-width records, strings,
-  function-like macros, `long double` e `__int128` continuam fora do subset.
-- Referência: [impl-status.md](/home/diogo/Zith/docs/impl-status.md:153).
+- Os casts `int -> int` estreitantes verificam em compile time valores
+  constantes reconhecidos pelo sema. A adaptação de literais não verifica a
+  faixa, e operandos variáveis ou conversões `float -> int` não têm checks de
+  overflow em runtime.
+- Narrowing de `?*T` continua limitado a provas flow-sensitive sobre bindings
+  locais. Usos sem prova reportam `E3005`, e provas sobre expressões derivadas
+  ou entre funções não são propagadas.
 
-### 6. Outras incompletudes registadas
-- Literal range forms `1..5`, `1>..5`, `1..<5` e `1>..<5` baixam para
-  `ExprKind::Range` com bounds brutos e flags `openAtLo`/`openAtHi`; as quatro
-  grafias são provadas em `test-codegen.cpp`, `test-frontend.cpp`,
-  `test-formatter.cpp` e agora com ranges vazios e de fronteira única em
-  `tests/test-optional-slice.cpp`. `1..5` é `[lo, hi]`, `1>..5` é `(lo, hi]`,
-  `1..<5` é `[lo, hi)`, `1>..<5` é `(lo, hi)`; ranges reversed/empty não
-  iteram e `in` devolve falso para `[x, x)`/`(x, x]`/`(x, x)` e verdadeiro
-  para `[x, x]`. Um `for` literal-range sem binding é rejeitado em sema com
-  diagnóstico direcionado antes de HIR/codegen.
-- `is <type>` narrowing funciona para tagged unions e `opaque`; outros tipos
-  ainda não são suportados.
-- Narrowing após `is null` / `not (is null)` para aggregate optionals (`?T`
-  com payload não-pointer) extrai o campo 0 no then/else correto. Para
-  pointers (`?*T -> *T`) o mesmo controlo de fluxo prova non-null e usa deref,
-  arrow, index e coerção; uso sem prova reporta `E3005` e `raw`/`must` são os
-  opt-outs explícitos.
-- Casts `int -> int` estreitantes verificam em compile time valores inteiros
-  constantes reconhecidos pelo sema. A adaptação de literais numéricos não
-  verifica a faixa; variáveis e conversões `float -> int` também não têm
-  checks de overflow em runtime.
-- Formatter reimprime `for (cond)` como `while` (`ExprKind::While` no
-  round-trip).
-- `realloc` no runtime VM v2/WASM foi resolvido: o allocator separa blocos
-  alocados de blocos livres, preserva dados ao crescer/mover, suporta shrink e
-  trata o offset zero como endereço válido. A cobertura está em
-  `test-vm-v2` e no harness WASM.
+### 9. HashMap genérico implementado; deref em cadeia continua limitado
 
-Estas entradas detalham o estado real e as referências de bloqueio. A secção
-`Known Debt` de [impl-status.md](/home/diogo/Zith/docs/impl-status.md) foi
-consolidada neste ficheiro; as entradas duplicadas foram removidas de
-`impl-status.md`. As dívidas partilhadas restantes são listadas abaixo com
-nota de estado:
+`HashMap<K, V>` está implementado, com reificação estrutural, propagação de
+bounds e persistência dos argumentos concretos no cache. O probe
+`entry-table.zith`, que usa `self->table->occupied`, continua fora do caminho
+suportado pelo `hash_map.zith`, que usa `raw self->table[...]`.
 
-- Narrowing permanece incompleto: casts `int -> int` verificam valores
-  constantes reconhecidos em compile time, mas a adaptação de literais não
-  verifica faixa e casts com operandos variáveis ou `float -> int` não têm
-  checks de overflow em runtime.
-- Unchecked nullable-pointer coercion foi removida: a prova flow-sensitive
-  após `is null` existe, e usos sem prova reportam `E3005`.
-- `is <type>` narrowing beyond tagged unions and `opaque`.
-- C struct-by-value ABI limited to verified simple records.
-- Imported/cached bare `opaque` values: registry project-local, sem registry
-  object em runtime e sem categorização do field que mudou.
-- Ownership proof still happens after premature lowering in places.
-- Expression statements whose root is a non-void call require explicit
-  `_ = expr;` (`E2026`); the existing Zith-- docs now call this default
-  behavior, not an attribute.
-
-### 7. Falhas conhecidas em `test-codegen`
-
-Estado de 2026-09-04: `./build/test-codegen` reporta `370 passed, 0 failed`.
-As seis falhas conhecidas de 2026-09-01 foram resolvidas:
-
-- Pointer indexing inválido por ownership (`E4008`) foi corrigido nos dois
-  verificações reportados.
-- `return when (...)` sem ponto e vírgula passou a ser aceite apenas quando o
-  `when` fecha com `}`; parser e testes foram ajustados.
-- Qualified `lend`/`view` receivers (`E5001`) passam a gerar IR válido, e
-  receivers de optional aggregate após `is null` / `not (is null)` extraem o
-  payload antes de passar como `self`.
-- `ownership-advanced.zith` executa com exit `16`, conforme esperado pelo
-  exemplo.
-
-### 8. `ParseInput` / `InputLine.cast<T>` está implementado, com `*char` fora de âmbito
-
-- Estado: `ParseInput` e `InputLine.cast<T>` estão implementados em
-  `std/io/console` para `bool`, `f32`, `f64`, `i32` e `u32`. A chamada
-  `T.parse(self)` resolve através do bound da trait após monomorfização e
-  `line.cast<NonParsable>()` reporta `E3009`.
-- Não-dívida: `*char` fica intencionalmente fora do contrato actual. Strings
-  continuam disponíveis pelo adapter `text()` do `InputLine`. Adicionar
-  parsing de outros primitivos é uma extensão opcional aos mesmos
-  `implement ... as ParseInput`, não uma lacuna do contrato actual.
-- Referência de estado: [impl-status.md](/home/diogo/Zith/docs/impl-status.md:45)
-  na linha `Stdlib I/O` e o plano completo em
-  [parse-input-cast.old.md](/home/diogo/Zith/docs/plans/archive/parse-input-cast.old.md).
-
-### 9. Structs genéricas de primeira classe para stdlib (implementado)
-
-Resolution: **implemented** (0.7.0 generics work).
-
-O `HashMap<K, V>` genérico deixou de estar bloqueado: a reificação guarda os
-argumentos concretos como metadados estruturais no `StructType`, usa
-`GenericInstantiationPass::substituteType` como helper central de reificação,
-propaga bounds genéricos através de fields e chamadas, e persiste os type args
-no cache. `stdlib/std/collections/hash_map.zith` passa `zithc check` sem
-`E2006`, `E3001`, `E3003`, `E3011` ou `E3009`. A superfície `u64 -> u64`
-(`stdlib/std/collections/hash_map_u64.zith`) permanece inalterada.
-
-Verificação registada em 2026-09-11:
-- `./build/zithc --include stdlib check stdlib/std/collections/hash_map.zith`
-  passa.
-- `constraint-propagation.zith`, `nested-struct.zith`, `test-pair.zith` e
-  `return-optional.zith` passam como probes.
-- `tests/test-generic-hashmap.cpp` está registado com `add_zith_test` e passa.
-- CTest focado em generics/hashmap/cache passa.
-- O plano e o ADR de identidade estão em
-  [generic-hashmap-debt-09.md](/home/diogo/Zith/docs/plans/0.7.0/generic-hashmap-debt-09.md)
-  e [0019-concrete-generic-type-identity.md](/home/diogo/Zith/docs/adr/0019-concrete-generic-type-identity.md).
-
-Dívida residual conhecida: o probe `entry-table.zith` que usa deref em cadeia
-`self->table->occupied` não é o caminho do `hash_map.zith` real (que usa
-`raw self->table[...]`) e continua fora deste item. A propagação de bounds via
-`GenericBinding` é o contrato actual; `StructType.args` são metadados concretos,
-não declarações de bound.
-
-Ações de follow-up recomendadas:
-- Promover os restantes probes de `/tmp/zith-generic-probes/` para
-  `tests/test-generic-hashmap.cpp` quando o deref em cadeia de `?*T` for
-  suportado.
-- Fazer a passada de curadoria prevista para as declarações genéricas das
-  stdlib: `string.zith`, `alloc.zith`, `DynArray` planned e o próprio
-  `HashMap<K, V>`.
+Dívida residual: a cadeia de deref de `?*T` não está coberta pelo contrato atual
+nem pelos testes de `HashMap`. A curadoria de outras declarações genéricas da
+stdlib é uma tarefa separada, não um bloqueio para esta implementação.
 
 ---
 
@@ -458,95 +302,15 @@ conformance importada já coberta pelos testes.
 
 ---
 
-### 11. `export` de facades com prefixo partilhado
+### 12. Migrar o sink de formatação da stdlib para `TextSink`
 
-Estado atual: `export` re-injecta os símbolos públicos de cada alvo e
-representa cada prefixo de namespace exportado como um `ModuleAlias`
-independente com o mesmo nome de raiz. O caso de uso real é
-`stdlib/std/memory.zith`, que reexporta `in-place`, `allocator`, `heap` e
-`new` a partir de `from std/memory`.
-
-O consumidor com `import std/memory` mantém aliases para cada subcaminho
-exportado; `lookupModuleAliasForPath` escolhe o alias mais longo cujo
-`modulePath` é prefixo do caminho qualificado. Assim
-`std.memory.in-place.InPlace` e `std.memory.allocators.heap.HeapAllocator`
-resolvem para os módulos reais de cada export. O teste de frontend e o
-lowering até HIR cobrem o fanout em estados limpos e cached.
-
-Ficou resolvida a dívida original de fanout com prefixo partilhado. A revisão
-CLI encontrou dois limites adicionais no mesmo caminho de `export path`, agora
-cobertos pelos testes de pipeline em estados limpos e cached.
-
-### 11a. Tipos qualificados via facade `std/memory`
-
-O consumidor pode importar `std/memory` e referenciar tipos pelo caminho
-qualificado da facade:
-
-```zith
-import std/memory
-
-fn main(): i32 {
-    let a: ?std.memory.allocators.heap.HeapAllocator = null;
-    if (a is null) {
-        return 0;
-    }
-    return 1;
-}
-```
-
-O caminho direto para o módulo folha continua válido:
-
-```zith
-import std/memory/allocators/heap
-let a: ?std.memory.allocators.heap.HeapAllocator = null;
-```
-
-O bloqueio era anterior ao sema: `stdlib/std/memory.zith` partilha o nome
-lógico `std/memory` com o diretório `stdlib/std/memory/`. O resolver agregava
-primeiro o diretório e escolhia `in-place` como alvo, em vez de carregar a
-facade e seguir o alias mais longo para `heap`. Agora ficheiros regulares,
-incluindo `memory.zith`, têm precedência sobre diretórios homónimos. O lowering
-consulta a declaração pública do tipo no módulo folha. O teste cobre
-`HeapAllocator` e `InPlace` em execução fria e após hidratação do cache.
-
-### 11b. Segmentos kebab-case em tipos qualificados
-
-O parser mantém segmentos kebab-case em tipos qualificados:
-
-```zith
-import std/memory
-let a: ?std.memory.in-place.InPlace = null;
-```
-
-O parser junta tokens de hífen contíguos dentro do segmento e preserva os
-limites indicados pelos pontos. O teste de frontend verifica os segmentos e o
-teste de pipeline verifica `std.memory.in-place.InPlace` via facade.
-
-### 12. Receivers `dyn`/`lend` mutáveis para sinks
-
-Estado atual: resolvido. O contrato alvo de formatação é `TextSink`, com ligação de
-destino por empréstimo dinâmico (`lend dyn TextSink`). O data pointer de
-`HirMakeDyn` já aponta para o lvalue original quando a fonte é addressable
-(ADR-0037): um `dyn Trait` construído a partir de um local, campo ou index
-propaga mutações de `var self` ao caller, e uma fonte temporária continua a
-escrever apenas na cópia spillada. `tests/test-codegen` cobre os dois casos,
-incluindo a reidratação do cache persistente. O receiver `self: lend dyn
-TextSink` já é aceite em sema: `registerNamedTypes` interna o trait real antes
-de as assinaturas dos métodos serem lowered, `checkImplementBlocks` trata o
-receiver `*dyn Trait` como slot de receiver (aceitando `self`, `var self`,
-`lend Owner` ou `*Owner` no impl), e o adapter de vtable reconstrói o fat
-pointer quando o impl também escreve `dyn Trait`. `tests/test-stdlib-io` cobre
-a compilação e `tests/test-codegen` cobre a mutação em execução.
-
-`stdlib/std/io/format.zith` continua a usar `FormatBuffer` como sink real por
-enquanto; a migração para o sink dinâmico é um follow-up separado. A intent
-`TextSink` fica registada em
-`docs/adr/0022-stdlib-io-format-split.md`, `memory/stdlib-io-format.md` e
-`CONTEXT.md`.
-
-Ação futura: migrar `Formatable.format(self, dest)` e as helpers de append de
-`lend FormatBuffer` para `lend dyn TextSink`, cobrindo também `[]char`/buffers
-fixos.
+O suporte a receivers mutáveis `lend dyn TextSink` está resolvido e coberto por
+testes de sema e execução. A dívida restante é migrar
+`Formatable.format(self, dest)` e as helpers de append de `lend FormatBuffer`
+para `lend dyn TextSink`, incluindo `[]char` e buffers fixos. A intenção de
+design está registada em
+[0022-stdlib-io-format-split.md](/home/diogo/Zith/docs/adr/0022-stdlib-io-format-split.md),
+`memory/stdlib-io-format.md` e `CONTEXT.md`.
 
 ## Dívida de estrutura: monolitos
 
@@ -563,62 +327,15 @@ ver os novos `.cpp`.
 
 ---
 
-## Dívida de duplicação e padrões repetitivos
+## Dívida estrutural residual
 
-### Duplicação de variadic tail logic (resolvida)
+### Localização dos métodos extraídos em splits mecânicos
 
-A decisão de `explicit_slice_arg` vs `auto_collect_tail` é produzida em sema
-através de `VariadicCallPlan` e consumida mecanicamente pelo HIR lowering.
-Os call sites que usavam regras locais para re-derivar a decisão foram
-substituídos por leitura dos planos guardados em `TypedMap` para calls,
-`dyn` calls, métodos e transições `state`/`jump`.
-
-### Concatenação ProjectConfig + Options
-
-As concatenações de `ProjectConfig` + `Options` passaram a usar o helper
-`session::mergeStrings` em `src/session/project-options-merge.hpp`. O helper
-mantém a precedência atual de project config primeiro e CLI options segundo,
-aceita um flag `append`, e suporta um appender opcional para call sites que
-normalizam caminhos antes de inserir no destino. Os call sites cobertos são
-`includeDirs`, `cSourceDirs`, `defines`, `libraryDirs` e `libraries` em
-`src/session/compilation-session.cpp` e `src/session/native-link.cpp`.
-
-### Erro de instabilidade de tags `opaque`
-
-O `E2010` para tags canónicas instáveis é emitido durante a hydration do cache
-em [persistent-cache.cpp](/home/diogo/Zith/src/session/persistent-cache.cpp:34).
-A mensagem identifica a canonical id exacta e recomenda o comando
-determinístico de apagar `canonical-any` e os artefactos `.zirl`, depois
-reconstruir.
-
-Estado resolvido: a regra canónica (namespace, ordem canónica de fields por
-tamanho e depois nome, e o tamanho de agregados que a alimenta) vive agora numa
-única função partilhada, `types::canonicalTypeId` em
-[type-canonical.cpp](/home/diogo/Zith/src/types/type-canonical.cpp), usada pelo
-lowering (`HirLowerModern::canonicalTypeId` delega) e pela canonização do cache.
-A mensagem `E2010` é igualmente única
-(`cache::canonicalDivergenceMessage`). Uma mudança da canonical field order passa
-a ser detetada pelo teste `test_canonical_field_order_is_shared_and_detected` em
-[test-cache.cpp](/home/diogo/Zith/tests/test-cache.cpp:480), que nomeia a
-canonical id em falta e verifica a divergência de field order.
-
-### Split inicial por script deixou includes colados e métodos órfãos
-
-Estado resolvido: includes colados foram partidos, `isOpaquePointerCast` foi
-restaurado em `sema-cast-coerce.cpp`, e os helpers de interface/resolução de
-`sema-modern.cpp` foram movidos para `sema-type.cpp`.
-
-Risco residual: o split foi mecânico. A estrutura dos ficheiros é razoável, mas
-a localização de cada método deve ser revista quando se mexer na área para
-confirmar que está no ficheiro com a responsabilidade certa.
-
-### HIR nodes sem initializers completos
-
-Estado resolvido: todos os `HirExpr` alternatives em `src/hir/hir-expr.hpp` têm
-default member initializers para ids, tipos, flags e scalar values. Os nodes com
-`memory::DynArray` continuam a depender dos construtores dedicados que recebem a
-arena. O padrão mantém a construção agregada usada pelos lowers, sem exceções
-ou RTTI.
+Os includes colados foram partidos, `isOpaquePointerCast` foi restaurado em
+`sema-cast-coerce.cpp`, e os helpers de interface/resolução de `sema-modern.cpp`
+foram movidos para `sema-type.cpp`. Resta rever a localização de cada método
+quando a área voltar a ser alterada, para confirmar que corresponde à
+responsabilidade do ficheiro.
 
 ### Contrato Homebrew depende de um tap externo não verificável localmente
 
@@ -764,9 +481,8 @@ reportar erro explícito e o `test-vm-v2` a saltar.
    splits está em `docs/plans/monolith-splits.md`.
 2. Em cada extracção, compilar `zithcLib` e correr os testes da área afectada.
    Use `ctest --test-dir build --output-on-failure` para regressões gerais.
-3. Casos de incompletude que precisam de decisão de produto (sintaxe de `type`,
-   slices literais, `is <type>`) devem ser tratados como issues separados, não
-   como parte da quebra mecânica.
-4. Remover entradas `Known Debt` de `docs/impl-status.md` apenas quando a
-   dívida correspondente for realmente resolvida; neste passo a consolidação
-   uniu as listas sem alterar o comportamento do compilador.
+3. Decisões deliberadas para Zith-- ficam em “Não-dívidas”. Reabri-las exige
+   uma mudança no spec ou uma issue de produto separada.
+4. Quando uma dívida for resolvida, removê-la do inventário ativo e preservar
+   apenas uma referência curta nesta secção de conclusões, se ainda houver
+   referências a acompanhar.

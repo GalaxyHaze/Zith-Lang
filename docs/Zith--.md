@@ -625,8 +625,9 @@ Além do `raw opaque` (`void*`) para interop C, o Zith-- suporta bare `opaque`: 
 aberta guardada como `{ *void, u32 }`. `T as opaque` erradica um valor endereçável/copyable numa
 view para um slot local; `opaque is T` verifica o typeId; `opaque as T` devolve `?T`,
 produzindo `null` quando o typeId não corresponde, enquanto `raw opaque as T` reinterpreta sem
-verificação. Nesta iteração não há heap copy, vtable ou chamadas dinâmicas, e o typeId é interno
-e module-local (atravessar imports/cache de bare `opaque` reporta `E2010`).
+verificação. Nesta iteração não há heap copy, vtable ou chamadas dinâmicas. O runtime opaque tag
+é um `u32` local ao projeto, atribuído pelo registry persistente a partir do canonical type id e
+preservado por imports e cache.
 
 No call site de funções livres, métodos com argumentos por ponteiro e overloads, um binding `default` que alimenta um parâmetro `lend`/`view` exige a anotação `lend x` ou `view x`:
 
@@ -650,7 +651,14 @@ Em unions tagged, `is Tipo` estreita o local testado para o membro dentro do bra
 
 `unique`, `share` e `belong` são rejeitados com `E2010 UnsupportedSyntax` e mensagem `Zith--: unique/share/belong ownership is not supported; use lend or view`.
 
-O bare `opaque` não é implicitamente compatível com qualquer tipo. `opaque -> T` e `T -> opaque` exigem o cast explícito: `T as opaque` erradica para `opaque`, `opaque as T` devolve `?T` com verificação de typeId, e `raw opaque as T` reinterpreta sem verificação. Um binding ou argumento `let x: u32 = d` quando `d: opaque` reporta `implicit 'opaque' conversion is not allowed; use 'as' (or 'raw as' for an unchecked extraction)` e não chega a codegen. Bare `opaque` continua module-local: atravessar imports/cache reporta `E2010`.
+O bare `opaque` não é implicitamente compatível com qualquer tipo. `opaque -> T` e `T -> opaque`
+exigem o cast explícito: `T as opaque` erradica para `opaque`, `opaque as T` devolve `?T` com
+verificação de typeId, e `raw opaque as T` reinterpreta sem verificação. Um binding ou argumento
+`let x: u32 = d` quando `d: opaque` reporta
+`implicit 'opaque' conversion is not allowed; use 'as' (or 'raw as' for an unchecked extraction)`
+e não chega a codegen. Valores bare `opaque` exportados podem ser consumidos por outros módulos.
+A cache preserva `canonical_mappings`; se o registry divergir, a hydration reporta `E2010` em vez
+de reatribuir tags silenciosamente.
 
 `opaque as raw opaque` é a extração explícita e unchecked do payload como `void*`: devolve
 o ponteiro guardado no campo 0 da tagged union, sem verificar o typeId nem fazer load do

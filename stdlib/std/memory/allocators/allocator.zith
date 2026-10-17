@@ -1,8 +1,15 @@
 from std/memory/in-place
 
 pub trait Allocator {
+    /// Allocate `size` bytes aligned to `align`. `align` must be a supported,
+    /// nonzero power of two. Returns null on failure.
     fn alloc(self, size: u64, align: u64): ?raw opaque;
+
+    /// Release a block using the exact size and alignment supplied to alloc.
     fn free(self, mem: raw opaque, size: u64, align: u64);
+
+    /// Resize a block and preserve its contents up to the smaller size.
+    /// Returning null must leave the old block allocated and unchanged.
     fn realloc(self, old: raw opaque, old_size: u64, old_align: u64,
                new_size: u64, new_align: u64): ?raw opaque;
 

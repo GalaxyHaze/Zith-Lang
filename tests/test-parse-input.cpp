@@ -105,8 +105,10 @@ struct SessionRunner {
 void test_primitive_casts_type_check() {
     SessionRunner t;
     auto r = t.run("from std/io/console\n"
+                   "from std/memory\n"
                    "fn main(): i32 {\n"
-                   "    let line = input();\n"
+                   "    let heap = HeapAllocator {};\n"
+                   "    let line = input(heap);\n"
                    "    let a = line.cast<i32>();\n"
                    "    let b = line.cast<bool>();\n"
                    "    let c = line.cast<f32>();\n"
@@ -122,6 +124,7 @@ void test_primitive_casts_type_check() {
 void test_cast_does_not_consume_line() {
     SessionRunner t;
     auto r = t.run("from std/io/console\n"
+                   "from std/memory\n"
                    "fn parseDemo(line: view InputLine): i32 {\n"
                    "    let n = line.cast<i32>();\n"
                    "    if (n is null) {\n"
@@ -130,7 +133,8 @@ void test_cast_does_not_consume_line() {
                    "    return raw n;\n"
                    "}\n"
                    "fn main(): i32 {\n"
-                   "    let line = input();\n"
+                   "    let heap = HeapAllocator {};\n"
+                   "    let line = input(heap);\n"
                    "    let status = parseDemo(view line);\n"
                    "    _ = line.destroy();\n"
                    "    return status;\n"
@@ -142,11 +146,13 @@ void test_cast_does_not_consume_line() {
 void test_nonparsable_type_reports_constraint_error() {
     SessionRunner t;
     auto r = t.run("from std/io/console\n"
+                   "from std/memory\n"
                    "struct NotParsable {\n"
                    "    value: i32\n"
                    "}\n"
                    "fn main(): i32 {\n"
-                   "    let line = input();\n"
+                   "    let heap = HeapAllocator {};\n"
+                   "    let line = input(heap);\n"
                    "    let n = line.cast<NotParsable>();\n"
                    "    return 0;\n"
                    "}\n");
@@ -159,8 +165,10 @@ void test_nonparsable_type_reports_constraint_error() {
 void test_println_with_i32_lowers_to_hir() {
     SessionRunner t;
     auto r = t.run("from std/io/console\n"
+                   "from std/memory\n"
                    "fn main(): i32 {\n"
-                   "    _ = println(\"n=%#\", 7);\n"
+                   "    let heap = HeapAllocator {};\n"
+                   "    _ = println(heap, \"n=%#\", 7);\n"
                    "    return 0;\n"
                    "}\n",
                    session::Stage::HirLowered);

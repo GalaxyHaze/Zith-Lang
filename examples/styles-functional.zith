@@ -2,6 +2,7 @@
 // Expected output: bucket=1
 
 from std/io/console
+from std/memory
 
 fn classify(score: i32): i32 {
     return when (score) {
@@ -12,8 +13,9 @@ fn classify(score: i32): i32 {
 }
 
 fn main(): i32 {
+    let heap = HeapAllocator {};
     73
         |> classify(..)
-        do { println("bucket=#", ..); };
+        do { println(heap, "bucket=#", ..); };
     return 0;
 }

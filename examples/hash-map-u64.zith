@@ -1,7 +1,9 @@
 import std/collections/hash_map_u64 as hm
+from std/memory
 
 fn main(): i32 {
-    var map = hm.HashMap { count: 0u64, capacity: 0u64, table: null, head: 0u64 };
+    let heap = HeapAllocator {};
+    var map = hm.create(heap);
     if not(hm.HashMap.reserve(lend map, 4u64)) {
         return 1;
     }

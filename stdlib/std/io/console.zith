@@ -1,7 +1,7 @@
 from c/io
-from c/stdlib
 from c/string
 from std/io/format
+from std/memory/allocators/allocator
 
 /// Parsing contract used by `InputLine.cast<T>`. Implementations parse one
 /// whole primitive value from a view of the line and return `null` on failure.
@@ -12,6 +12,7 @@ pub trait ParseInput {
 /// Owned single-line input. `ok` is false only when the stream ended or a
 /// read failed; `text` is then empty.
 pub struct InputLine {
+    allocator: dyn Allocator,
     data: ?*char = null,
     length: u64 = 0,
     ok: bool = false,
@@ -33,15 +34,22 @@ pub struct InputLine {
     }
 
     fn destroy(var self) {
-        free(self.data);
+        let data = self.data;
+        if (not (data is null)) {
+            deallocate(self.allocator, data as raw opaque, 256u64, 1u64);
+        }
         self.data = null;
         self.length = 0;
         self.ok = false;
     }
 }
 
-fn inputLineAllocate(): ?*char {
-    return malloc(256) as ?*char;
+fn inputLineAllocate(allocator: dyn Allocator): ?*char {
+    let data = allocate(allocator, 256u64, 1u64);
+    if (data is null) {
+        return null;
+    }
+    return data as ?*char;
 }
 
 fn parseSliceCopy(src: ?*char, len: u64, dest: ?*char, capacity: u64): u64 {
@@ -60,23 +68,24 @@ fn parseSliceCopy(src: ?*char, len: u64, dest: ?*char, capacity: u64): u64 {
 }
 
 fn parseI32(self: view InputLine): ?i32 {
-    var scratch: ?*char = malloc(64) as ?*char;
+    var scratch: ?raw opaque = allocate(self.allocator, 64u64, 1u64);
     if (scratch is null) {
         return null;
     }
+    let chars: ?*char = scratch as ?*char;
     if (self.data is null) {
-        free(scratch);
+        deallocate(self.allocator, scratch, 64u64, 1u64);
         return null;
     }
-    let len = parseSliceCopy(self.data, self.length, scratch, 64);
+    let len = parseSliceCopy(self.data, self.length, chars, 64u64);
     if (len == 0) {
-        free(scratch);
+        deallocate(self.allocator, scratch, 64u64, 1u64);
         return null;
     }
     var value: i32 = 0;
     var count: i32 = 0;
-    let status = sscanf(scratch, "%d%n", lend value, lend count);
-    free(scratch);
+    let status = sscanf(chars, "%d%n", lend value, lend count);
+    deallocate(self.allocator, scratch, 64u64, 1u64);
     if (status == 1 and count == len as i32) {
         return value;
     }
@@ -97,23 +106,24 @@ fn parseBool(self: view InputLine): ?bool {
 }
 
 fn parseDouble(self: view InputLine): ?f64 {
-    var scratch: ?*char = malloc(64) as ?*char;
+    var scratch: ?raw opaque = allocate(self.allocator, 64u64, 1u64);
     if (scratch is null) {
         return null;
     }
+    let chars: ?*char = scratch as ?*char;
     if (self.data is null) {
-        free(scratch);
+        deallocate(self.allocator, scratch, 64u64, 1u64);
         return null;
     }
-    let len = parseSliceCopy(self.data, self.length, scratch, 64);
+    let len = parseSliceCopy(self.data, self.length, chars, 64u64);
     if (len == 0) {
-        free(scratch);
+        deallocate(self.allocator, scratch, 64u64, 1u64);
         return null;
     }
     var value: f64 = 0;
     var count: i32 = 0;
-    let status = sscanf(scratch, "%lf%n", lend value, lend count);
-    free(scratch);
+    let status = sscanf(chars, "%lf%n", lend value, lend count);
+    deallocate(self.allocator, scratch, 64u64, 1u64);
     if (status == 1 and count == len as i32) {
         return value;
     }
@@ -132,23 +142,24 @@ fn parseF32(self: view InputLine): ?f32 {
 }
 
 fn parseU32(self: view InputLine): ?u32 {
-    var scratch: ?*char = malloc(64) as ?*char;
+    var scratch: ?raw opaque = allocate(self.allocator, 64u64, 1u64);
     if (scratch is null) {
         return null;
     }
+    let chars: ?*char = scratch as ?*char;
     if (self.data is null) {
-        free(scratch);
+        deallocate(self.allocator, scratch, 64u64, 1u64);
         return null;
     }
-    let len = parseSliceCopy(self.data, self.length, scratch, 64);
+    let len = parseSliceCopy(self.data, self.length, chars, 64u64);
     if (len == 0) {
-        free(scratch);
+        deallocate(self.allocator, scratch, 64u64, 1u64);
         return null;
     }
     var value: u32 = 0;
     var count: i32 = 0;
-    let status = sscanf(scratch, "%u%n", lend value, lend count);
-    free(scratch);
+    let status = sscanf(chars, "%u%n", lend value, lend count);
+    deallocate(self.allocator, scratch, 64u64, 1u64);
     if (status == 1 and count == len as i32) {
         return value as u32;
     }
@@ -189,10 +200,10 @@ implement u32 as ParseInput {
     }
 }
 
-pub fn input(): InputLine {
-    var data: ?*char = inputLineAllocate();
+pub fn input(allocator: dyn Allocator): InputLine {
+    var data: ?*char = inputLineAllocate(allocator);
     if (data is null) {
-        return InputLine { null, 0, false };
+        return InputLine { allocator, null, 0, false };
     }
     var length: u64 = 0;
     var ch = getchar();
@@ -205,7 +216,7 @@ pub fn input(): InputLine {
         ok = next != -1;
         ch = next;
     }
-    var line = InputLine { data, length, ok };
+    var line = InputLine { allocator, data, length, ok };
     return line;
 }
 
@@ -213,8 +224,9 @@ fn formatNext(value: dyn Formatable, buffer: lend FormatBuffer): IoError {
     return value.format(lend buffer);
 }
 
-fn writeBuffer(msg: []char, newline: bool, values: [...]dyn Formatable): IoError {
-    var buffer = emptyFormatBuffer();
+fn writeBuffer(allocator: dyn Allocator, msg: []char, newline: bool,
+               values: [...]dyn Formatable): IoError {
+    var buffer = emptyFormatBuffer(allocator);
     var index: u64 = 0;
     var next: u64 = 0;
     let length = @lengthOf(msg);
@@ -261,11 +273,13 @@ fn writeBuffer(msg: []char, newline: bool, values: [...]dyn Formatable): IoError
 }
 
 #[discardable]
-pub fn print(msg: []char, values: [...]dyn Formatable): IoError {
-    return writeBuffer(msg, false, values);
+pub fn print(allocator: dyn Allocator, msg: []char,
+             values: [...]dyn Formatable): IoError {
+    return writeBuffer(allocator, msg, false, values);
 }
 
 #[discardable]
-pub fn println(msg: []char, values: [...]dyn Formatable): IoError {
-    return writeBuffer(msg, true, values);
+pub fn println(allocator: dyn Allocator, msg: []char,
+               values: [...]dyn Formatable): IoError {
+    return writeBuffer(allocator, msg, true, values);
 }

@@ -1,0 +1,49 @@
+// Exercises allocator-backed generic DynArray growth and element operations.
+// Expected exit code: 0
+
+import std/collections/dyn_array as da
+from std/memory
+
+fn main(): i32 {
+    let heap = HeapAllocator {};
+    var values = da.create<i32>(heap);
+
+    if not(da.DynArray.reserve<i32>(lend values, 2u64)) {
+        return 1;
+    }
+    if not(da.push<i32>(lend values, 10)) {
+        return 2;
+    }
+    if not(da.push<i32>(lend values, 20)) {
+        return 3;
+    }
+    if not(da.push<i32>(lend values, 30)) {
+        return 4;
+    }
+
+    let middle = da.get<i32>(view values, 1u64);
+    if (middle is null or raw middle != 20) {
+        return 5;
+    }
+    let removed = da.remove<i32>(lend values, 1u64);
+    if (removed is null or raw removed != 20) {
+        return 6;
+    }
+    let shifted = da.get<i32>(view values, 1u64);
+    if (shifted is null or raw shifted != 30) {
+        return 7;
+    }
+    let last = da.pop<i32>(lend values);
+    if (last is null or raw last != 30) {
+        return 8;
+    }
+    if (da.len<i32>(view values) != 1u64) {
+        return 9;
+    }
+
+    da.destroy<i32>(lend values);
+    if (da.len<i32>(view values) != 0u64 or da.capacity<i32>(view values) != 0u64) {
+        return 10;
+    }
+    return 0;
+}
