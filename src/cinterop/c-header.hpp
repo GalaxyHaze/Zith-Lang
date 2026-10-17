@@ -25,6 +25,8 @@ struct Type {
     /// Plain C `char` (not `signed char`/`unsigned char`), lowered to Zith `char`.
     bool isChar = false;
     std::string name;
+    /// Clang's target-resolved C spelling, used when emitting C ABI adapters.
+    std::string cSpelling;
     std::shared_ptr<const Type> pointee;
     /// Validated record ABI.  Only populated when libclang proved the layout for
     /// the target named in `ParseOptions::targetTriple`.
@@ -32,10 +34,8 @@ struct Type {
     uint64_t sizeBytes     = 0;
     uint64_t alignBytes    = 0;
     bool hasVerifiedLayout = false;
-    /// Public ABI shape proven for the parse target. Only records that lower
-    /// to a single 64-bit integer (e.g. `struct Point { int x, y; }` on
-    /// x86-64/aarch64 Linux, or a one-pointer wrapper) are marked; anything
-    /// else is skipped by value.
+    /// Legacy direct LLVM coercion metadata. Records called through generated
+    /// C ABI adapters do not depend on this classification.
     bool abiIsSingleI64 = false;
     /// Nested-only shape used while validating a larger record. A one-field
     /// `int` record has a layout but cannot yet be passed to C by value unless
@@ -46,6 +46,9 @@ struct Type {
 struct Function {
     std::string name;
     std::string linkageName;
+    std::string adapterName;
+    std::string adapterThunkName;
+    std::string adapterSource;
     std::vector<Type> parameters;
     Type result;
     bool isVariadic = false;

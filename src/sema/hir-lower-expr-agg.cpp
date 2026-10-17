@@ -75,7 +75,10 @@ hir::HirExprId HirLowerModern::lowerField(const frontend::Expression &expr,
         }
         if (resolved->foreignFunction != nullptr) {
             hir::HirVar var;
-            var.name    = interner_.intern(resolved->foreignFunction->linkageName);
+            const auto &foreign = *resolved->foreignFunction;
+            var.name             = interner_.intern(foreign.adapterThunkName.empty()
+                                                        ? foreign.linkageName
+                                                        : foreign.adapterThunkName);
             var.version = 0;
             return addExpr(std::move(var));
         }
@@ -308,4 +311,3 @@ frontend::ExprId HirLowerModern::lowerFieldDefault(std::string_view struct_name,
 
 } // namespace modern
 } // namespace zith::sema
-

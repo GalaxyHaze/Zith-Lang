@@ -265,8 +265,12 @@ bool HirLowerModern::predeclareFunctions() {
         if (header == nullptr)
             continue;
         for (const auto &foreign : header->functions) {
-            auto &hir_fn       = hir_.addFn(interner_.intern(foreign.linkageName));
-            hir_fn.isForeignC  = true;
+            const auto &function_name =
+                foreign.adapterThunkName.empty() ? foreign.linkageName : foreign.adapterThunkName;
+            auto &hir_fn      = hir_.addFn(interner_.intern(function_name));
+            hir_fn.isForeignC = true;
+            if (!foreign.adapterName.empty())
+                hir_fn.foreignAdapterName = interner_.intern(foreign.adapterName);
             hir_fn.sym_id      = static_cast<symbols::SymId>(functions_.size() + next_sym_id_);
             hir_fn.return_type = lowerForeignType(foreign.result);
             hir_fn.isVariadic  = foreign.isVariadic;

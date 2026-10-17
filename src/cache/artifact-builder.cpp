@@ -801,6 +801,7 @@ Artifact ArtifactBuilder::build(std::string_view canonical_path, std::string_vie
         for (const auto &field : sd->fields) {
             cdef.field_name_ids.push_back(internString(interner_.lookup(field.name)));
             cdef.field_type_ids.push_back(internType(field.type));
+            cdef.foreign_field_offsets.push_back(field.foreignOffsetBytes);
         }
         for (const auto &arg : sd->args)
             cdef.type_arg_ids.push_back(internType(arg));

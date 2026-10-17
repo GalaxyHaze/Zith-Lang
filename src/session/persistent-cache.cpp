@@ -285,7 +285,10 @@ void CompilationSession::hydrateFromArtifact(const cache::Artifact &art) {
         }
         for (size_t fi = 0; fi < s.field_name_ids.size() && fi < s.field_type_ids.size(); ++fi) {
             const auto &name = art.strings[s.field_name_ids[fi]];
-            mTypes.addField(tid, name, compactType(s.field_type_ids[fi]));
+            const uint64_t field_offset = fi < s.foreign_field_offsets.size()
+                                              ? s.foreign_field_offsets[fi]
+                                              : 0U;
+            mTypes.addField(tid, name, compactType(s.field_type_ids[fi]), field_offset);
         }
     }
     for (size_t ei = 0; ei < art.enum_defs.size(); ++ei) {

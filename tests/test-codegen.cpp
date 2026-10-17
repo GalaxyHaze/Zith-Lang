@@ -1156,12 +1156,14 @@ static void test_from_console_lowers_println_body() {
     CodegenTest t;
     t.opts.flags.emitIr(true);
     auto r = t.run("codegen-from-console.zith", "from std/io/console\n"
+                                                "from std/memory\n"
                                                 "fn main(): i32 {\n"
-                                                "    _ = println(\"from import\");\n"
+                                                "    let heap = HeapAllocator {};\n"
+                                                "    _ = println(heap, \"from import\");\n"
                                                 "    return 0;\n"
                                                 "}\n");
     CHECK(r.ok, "from std/io/console compiles and runs");
-    CHECK(r.output.find("define i32 @\"std.io.console.println([]char,[...]dyn Formatable)\"") !=
+    CHECK(r.output.find("define i32 @\"std.io.console.println(dyn Allocator,[]char,[...]dyn Formatable)\"") !=
               std::string::npos,
           "Imported println body is emitted into LLVM IR");
     CHECK(r.output.find("call i32 @putchar") != std::string::npos,
@@ -1172,12 +1174,14 @@ static void test_console_alias_resolves_member_without_global_import() {
     CodegenTest aliased;
     aliased.opts.flags.emitIr(true);
     auto ok = aliased.run("codegen-console-alias.zith", "import std/io/console as console\n"
+                                                        "from std/memory\n"
                                                         "fn main(): i32 {\n"
-                                                        "    _ = console.println(\"alias import\");\n"
+                                                        "    let heap = HeapAllocator {};\n"
+                                                        "    _ = console.println(heap, \"alias import\");\n"
                                                         "    return 0;\n"
                                                         "}\n");
     CHECK(ok.ok, "console.println resolves through an import alias");
-    CHECK(ok.output.find("call i32 @\"std.io.console.println([]char,[...]dyn Formatable)\"") !=
+    CHECK(ok.output.find("call i32 @\"std.io.console.println(dyn Allocator,[]char,[...]dyn Formatable)\"") !=
               std::string::npos,
           "Alias import emits a call to the imported function");
 
@@ -1359,6 +1363,37 @@ static void test_dyn_trait_method_dispatch_runtime() {
           "dyn Trait calls extract the concrete data pointer from the fat pointer");
     CHECK(r.output.find("getelementptr [1 x ptr], ptr %4, i32 0, i32 0") != std::string::npos,
           "dyn Trait calls index the vtable slot before indirect invocation");
+}
+
+static void test_dyn_trait_struct_field_runtime() {
+    ModernFileCodegenTest t;
+    t.write("main.zith", "trait Allocator {\n"
+                         "    fn value(self): i32;\n"
+                         "}\n"
+                         "struct HeapAllocator {}\n"
+                         "implement HeapAllocator as Allocator {\n"
+                         "    fn value(self): i32 { return 73; }\n"
+                         "}\n"
+                         "struct Resource {\n"
+                         "    allocator: dyn Allocator,\n"
+                         "}\n"
+                         "fn createResource(allocator: dyn Allocator): Resource {\n"
+                         "    return Resource { allocator };\n"
+                         "}\n"
+                         "fn main(): i32 {\n"
+                         "    let heap = HeapAllocator {};\n"
+                         "    let resource = createResource(heap);\n"
+                         "    return resource.allocator.value() - 73;\n"
+                         "}\n");
+
+    auto r = t.run();
+    CHECK(r.usedModern, "stored dyn Trait values use the modern codegen pipeline");
+    CHECK(r.ok, "a dyn Trait value can be stored in and loaded from a struct field");
+    CHECK(r.exitCode == 0,
+          (std::string("stored dyn Trait dispatch returns expected status 0, got ") +
+           std::to_string(r.exitCode))
+              .c_str());
+    CHECK_EQ(r.errorCount, 0u, "the stored dyn Trait module passes LLVM verification");
 }
 
 static void test_dyn_trait_mutating_receiver_dispatch_runtime() {
@@ -3366,6 +3401,128 @@ static void test_validated_c_pair64_by_value_runs() {
 #endif
 }
 
+static void test_validated_c_double_pair_by_value_runs() {
+#ifdef ZITH_ENABLE_C_INTEROP
+    ModernFileCodegenTest t;
+    t.opts.cSourceDirs.push("c");
+    t.write("c/double-pair.c",
+            "struct DoublePair { double left, right; };\n"
+            "double c_pair_weighted_sum(struct DoublePair value) {\n"
+            "    return value.left * 10.0 + value.right;\n"
+            "}\n"
+            "struct DoublePair c_make_double_pair(double left, double right) {\n"
+            "    struct DoublePair value = { left, right };\n"
+            "    return value;\n"
+            "}\n");
+    t.write("main.zith", "import \"double-pair.h\"\n"
+                         "fn main(): i32 {\n"
+                         "    let value = c_make_double_pair(2.0, 3.0);\n"
+                         "    let weighted: f64 = c_pair_weighted_sum(value);\n"
+                         "    if (weighted != 23.0) { return 1; }\n"
+                         "    return 0;\n"
+                         "}\n");
+    t.write("double-pair.h", "struct DoublePair { double left, right; };\n"
+                            "double c_pair_weighted_sum(struct DoublePair value);\n"
+                            "struct DoublePair c_make_double_pair(double left, double right);\n");
+
+    auto r = t.run();
+    CHECK(r.ok, "C double-record parameters and results compile, link, and run");
+    CHECK_EQ(r.exitCode, 0, "both double fields survive the C by-value round trip");
+#endif
+}
+
+static void test_validated_c_large_record_by_value_runs() {
+#ifdef ZITH_ENABLE_C_INTEROP
+    ModernFileCodegenTest t;
+    t.opts.cSourceDirs.push("c");
+    t.write("c/large-record.c",
+            "struct Triple64 { long long first, second, third; };\n"
+            "long long c_sum_triple64(struct Triple64 value) {\n"
+            "    return value.first + value.second * 10 + value.third * 100;\n"
+            "}\n"
+            "struct Triple64 c_make_triple64(long long first, long long second,\n"
+            "                                long long third) {\n"
+            "    struct Triple64 value = { first, second, third };\n"
+            "    return value;\n"
+            "}\n");
+    t.write("main.zith", "import \"large-record.h\"\n"
+                         "fn main(): i32 {\n"
+                         "    let value = c_make_triple64(1, 2, 3);\n"
+                         "    let weighted: i64 = c_sum_triple64(value);\n"
+                         "    if (weighted != 321) { return 1; }\n"
+                         "    return 0;\n"
+                         "}\n");
+    t.write("large-record.h", "struct Triple64 { long long first, second, third; };\n"
+                             "long long c_sum_triple64(struct Triple64 value);\n"
+                             "struct Triple64 c_make_triple64(long long first, long long second,\n"
+                             "                                long long third);\n");
+
+    auto r = t.run();
+    CHECK(r.ok, "24-byte C records compile, link, and run by value");
+    CHECK_EQ(r.exitCode, 0, "all three fields survive the 24-byte round trip");
+#endif
+}
+
+static void test_validated_c_mixed_integer_record_by_value_runs() {
+#ifdef ZITH_ENABLE_C_INTEROP
+    ModernFileCodegenTest t;
+    t.opts.cSourceDirs.push("c");
+    t.write("c/mixed-records.c", "struct Mixed32_64 { int small; long long large; };\n"
+                                 "long long c_sum_mixed32_64(struct Mixed32_64 value) {\n"
+                                 "    return (long long)value.small + value.large;\n"
+                                 "}\n"
+                                 "struct Mixed32_64 make_mixed32_64(int small, long long large) {\n"
+                                 "    struct Mixed32_64 value = { small, large };\n"
+                                 "    return value;\n"
+                                 "}\n");
+    t.write("main.zith", "import \"mixed-records.h\"\n"
+                         "fn main(): i32 {\n"
+                         "    let value = make_mixed32_64(20, 22);\n"
+                         "    let total: i64 = c_sum_mixed32_64(value);\n"
+                         "    if (total != 42) { return 1; }\n"
+                         "    return 0;\n"
+                         "}\n");
+    t.write("mixed-records.h", "struct Mixed32_64 { int small; long long large; };\n"
+                              "long long c_sum_mixed32_64(struct Mixed32_64 value);\n"
+                              "struct Mixed32_64 make_mixed32_64(int small, long long large);\n");
+
+    auto r = t.run();
+    CHECK(r.ok, "validated mixed i32/i64 record parameters and results compile, link, and run");
+    CHECK_EQ(r.exitCode, 0, "the C stub reads and returns the expected mixed-record values");
+#endif
+}
+
+static void test_validated_c_reverse_mixed_integer_record_by_value_runs() {
+#ifdef ZITH_ENABLE_C_INTEROP
+    ModernFileCodegenTest t;
+    t.opts.cSourceDirs.push("c");
+    t.write("c/mixed-reverse-records.c",
+            "struct Mixed64_32 { long long large; int small; };\n"
+            "long long c_sum_mixed64_32(struct Mixed64_32 value) {\n"
+            "    return value.large * 100 + value.small;\n"
+            "}\n"
+            "struct Mixed64_32 make_mixed64_32(long long large, int small) {\n"
+            "    struct Mixed64_32 value = { large, small };\n"
+            "    return value;\n"
+            "}\n");
+    t.write("main.zith", "import \"mixed-reverse-records.h\"\n"
+                         "fn main(): i32 {\n"
+                         "    let value = make_mixed64_32(20, 22);\n"
+                         "    let total: i64 = c_sum_mixed64_32(value);\n"
+                         "    if (total != 2022) { return 1; }\n"
+                         "    return 0;\n"
+                         "}\n");
+    t.write("mixed-reverse-records.h",
+            "struct Mixed64_32 { long long large; int small; };\n"
+            "long long c_sum_mixed64_32(struct Mixed64_32 value);\n"
+            "struct Mixed64_32 make_mixed64_32(long long large, int small);\n");
+
+    auto r = t.run();
+    CHECK(r.ok, "validated i64/i32 record parameters and results compile, link, and run");
+    CHECK_EQ(r.exitCode, 0, "the C stub preserves both i64/i32 record fields");
+#endif
+}
+
 /// `malloc` -> `as ?*i32` -> store/load -> `free`: both pointer casts are representation
 /// preserving (LLVM pointers are opaque), so no conversion instruction may appear, and the
 /// pointer must reach `free` directly.
@@ -3601,6 +3758,8 @@ static void test_codegen() {
     test_dyn_interface_method_dispatch_runtime();
     printf("Running test_dyn_trait_method_dispatch_runtime\n");
     test_dyn_trait_method_dispatch_runtime();
+    printf("Running test_dyn_trait_struct_field_runtime\n");
+    test_dyn_trait_struct_field_runtime();
     printf("Running test_dyn_trait_mutating_receiver_dispatch_runtime\n");
     test_dyn_trait_mutating_receiver_dispatch_runtime();
     printf("Running test_dyn_trait_by_value_receiver_dispatch_runtime\n");
@@ -3714,6 +3873,14 @@ static void test_codegen() {
     test_validated_c_struct_by_value_runs();
     printf("Running test_validated_c_pair64_by_value_runs\n");
     test_validated_c_pair64_by_value_runs();
+    printf("Running test_validated_c_double_pair_by_value_runs\n");
+    test_validated_c_double_pair_by_value_runs();
+    printf("Running test_validated_c_large_record_by_value_runs\n");
+    test_validated_c_large_record_by_value_runs();
+    printf("Running test_validated_c_mixed_integer_record_by_value_runs\n");
+    test_validated_c_mixed_integer_record_by_value_runs();
+    printf("Running test_validated_c_reverse_mixed_integer_record_by_value_runs\n");
+    test_validated_c_reverse_mixed_integer_record_by_value_runs();
     printf("Running test_c_pointer_is_null_uses_niche_comparison\n");
     test_c_pointer_cast_roundtrip_emits_no_conversion();
     test_c_pointer_is_null_uses_niche_comparison();

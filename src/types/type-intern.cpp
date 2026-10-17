@@ -420,9 +420,10 @@ TypeId TypeIntern::defineStruct(std::string_view name) {
     return type;
 }
 
-void TypeIntern::addField(TypeId struct_type, std::string_view field_name, TypeId field_type) {
+void TypeIntern::addField(TypeId struct_type, std::string_view field_name, TypeId field_type,
+                          const uint64_t foreign_offset_bytes) {
     auto &def = getStructDef(struct_type);
-    def.fields.push(StructField{interner_.intern(field_name), field_type});
+    def.fields.push(StructField{interner_.intern(field_name), field_type, foreign_offset_bytes});
 }
 
 void TypeIntern::setTypeArgs(TypeId struct_type, std::span<const TypeId> args) {

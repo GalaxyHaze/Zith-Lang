@@ -140,6 +140,13 @@ GenericInstantiationPass::resolveTypes(const size_t degree, const uint32_t decl_
         return GenericResolveStatus::Arity;
     if (!explicit_args.empty() && explicit_args.size() != degree)
         return GenericResolveStatus::Arity;
+    if (strict && explicit_args.size() == degree) {
+        for (const auto arg : explicit_args)
+            if (!arg)
+                return GenericResolveStatus::CannotInfer;
+        out_args = explicit_args;
+        return GenericResolveStatus::Ok;
+    }
 
     std::vector<sema::modern::TypeId> resolved(degree, sema::modern::TypeId{});
     for (size_t i = 0; i < degree; ++i)

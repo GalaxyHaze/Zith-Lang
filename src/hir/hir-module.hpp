@@ -36,10 +36,11 @@ struct HirFunction {
     bool isVariadic             = false;
     /// Index of the final `[...]T` parameter when the function declares one.
     size_t variadicSliceParam = ~static_cast<size_t>(0);
-    /// True for C-header functions declared by the cinterop layer. Their
-    /// declared LLVM signature uses the validated C ABI shape, so calls to
-    /// them must coerce arguments/results even though the HIR has no body.
+    /// True for C-header functions declared by the cinterop layer.
     bool isForeignC       = false;
+    /// C adapter called by the generated native-signature thunk, or invalid
+    /// for foreign functions that do not pass records by value.
+    memory::InternedId foreignAdapterName = memory::kInvalidInternedId;
     ast::DeclId decl_id   = ast::kInvalidDecl;
     symbols::SymId sym_id = symbols::kInvalidSym;
     /// Source span of the `fn` declaration; empty for foreign/synthesized functions.

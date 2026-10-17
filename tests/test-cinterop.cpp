@@ -306,22 +306,57 @@ void test_struct_and_enum() {
     for (const auto *triple : {"x86_64-unknown-linux-gnu", "aarch64-unknown-linux-gnu"}) {
         ParseOptions opts;
         opts.targetTriple = triple;
-        const auto art =
-            parseHeaderFromContent("validated_records.h",
-                                   "struct Point { int x, y; };\n"
-                                   "int classify(struct Point p);\n"
-                                   "struct Point get_point(void);\n"
-                                   "struct Inner { int v; };\n"
-                                   "struct Outer { struct Inner inner; int extra; };\n"
-                                   "int classify_outer(struct Outer o);\n"
-                                   "struct Outer get_outer(void);\n"
-                                   "struct Pair64 { long long lo, hi; };\n"
-                                   "int sum_pair64(struct Pair64 p);\n"
-                                   "struct Pair64 make_pair64(long long lo, long long hi);\n",
-                                   opts);
+        const auto art    = parseHeaderFromContent(
+            "validated_records.h",
+            "struct Point { int x, y; };\n"
+            "int classify(struct Point p);\n"
+            "struct Point get_point(void);\n"
+            "struct Inner { int v; };\n"
+            "struct Outer { struct Inner inner; int extra; };\n"
+            "int classify_outer(struct Outer o);\n"
+            "struct Outer get_outer(void);\n"
+            "struct FloatPair { float left, right; };\n"
+            "float sum_float_pair(struct FloatPair value);\n"
+            "struct FloatPair make_float_pair(float left, float right);\n"
+            "struct Pair64 { long long lo, hi; };\n"
+            "int sum_pair64(struct Pair64 p);\n"
+            "struct Pair64 make_pair64(long long lo, long long hi);\n"
+            "struct Triple64 { long long first, second, third; };\n"
+            "long long sum_triple64(struct Triple64 value);\n"
+            "struct Triple64 make_triple64(long long first, long long second, long long third);\n"
+            "struct Mixed32_64 { int small; long long large; };\n"
+            "long long sum_mixed32_64(struct Mixed32_64 value);\n"
+            "struct Mixed32_64 make_mixed32_64(int small, long long large);\n"
+            "struct Mixed64_32 { long long large; int small; };\n"
+            "long long sum_mixed64_32(struct Mixed64_32 value);\n"
+            "struct Mixed64_32 make_mixed64_32(long long large, int small);\n",
+            opts);
         const std::string simple_no_diag =
             std::string("simple record parse has no diagnostics: ") + triple;
         CHECK_EQ(art->diagnostics.size(), 0u, simple_no_diag.c_str());
+        const auto check_adapter = [&](const char *function_name) {
+            const auto *function = findFunction(*art, function_name);
+            const std::string found =
+                std::string(function_name) + " imports with a generated adapter on " + triple;
+            CHECK(function != nullptr, found.c_str());
+            if (function == nullptr)
+                return;
+            const std::string adapter =
+                std::string(function_name) + " has a nonempty generated adapter on " + triple;
+            const std::string call =
+                std::string(function_name) + " adapter calls the C declaration on " + triple;
+            CHECK(!function->adapterName.empty(), adapter.c_str());
+            CHECK(function->adapterSource.find(function->adapterName) != std::string::npos &&
+                      function->adapterSource.find(std::string(function_name) + "(") !=
+                          std::string::npos,
+                  call.c_str());
+        };
+        check_adapter("classify_outer");
+        check_adapter("get_outer");
+        check_adapter("sum_float_pair");
+        check_adapter("make_float_pair");
+        check_adapter("sum_triple64");
+        check_adapter("make_triple64");
         if (const auto *f = findFunction(*art, "classify")) {
             const std::string classify_param =
                 std::string("classify keeps its by-value parameter: ") + triple;
@@ -363,10 +398,46 @@ void test_struct_and_enum() {
             const std::string outer_imports = std::string("classify_outer imports on ") + triple;
             CHECK(false, outer_imports.c_str());
         }
+        if (const auto *f = findFunction(*art, "sum_float_pair")) {
+            const std::string float_pair_layout =
+                std::string("FloatPair HFA layout is verified: ") + triple;
+            CHECK(f->parameters.size() == 1U && f->parameters[0].hasVerifiedLayout &&
+                      f->parameters[0].sizeBytes == 8U && f->parameters[0].alignBytes == 4U &&
+                      f->parameters[0].recordFields.size() == 2U,
+                  float_pair_layout.c_str());
+        } else {
+            const std::string float_pair_imports =
+                std::string("sum_float_pair imports on ") + triple;
+            CHECK(false, float_pair_imports.c_str());
+        }
+        if (const auto *f = findFunction(*art, "make_float_pair")) {
+            const std::string float_pair_result =
+                std::string("FloatPair HFA return layout is verified: ") + triple;
+            CHECK(f->result.hasVerifiedLayout && f->result.sizeBytes == 8U &&
+                      f->result.alignBytes == 4U && f->result.recordFields.size() == 2U,
+                  float_pair_result.c_str());
+            const std::string float_pair_result_copy =
+                std::string("FloatPair return adapter copies the result: ") + triple;
+            CHECK(f->adapterSource.find("memcpy(result, &result_value") != std::string::npos,
+                  float_pair_result_copy.c_str());
+        } else {
+            const std::string float_pair_result_imports =
+                std::string("make_float_pair imports on ") + triple;
+            CHECK(false, float_pair_result_imports.c_str());
+        }
         if (const auto *f = findFunction(*art, "sum_pair64")) {
             const std::string pair64_param =
                 std::string("sum_pair64 keeps its by-value Pair64 parameter: ") + triple;
             CHECK_EQ(f->parameters.size(), 1u, pair64_param.c_str());
+            const std::string adapter_name =
+                std::string("sum_pair64 receives a generated C ABI adapter: ") + triple;
+            const std::string adapter_body =
+                std::string("adapter marshals the Pair64 parameter and calls C: ") + triple;
+            CHECK(!f->adapterName.empty(), adapter_name.c_str());
+            CHECK(f->adapterSource.find(f->adapterName) != std::string::npos &&
+                      f->adapterSource.find("memcpy") != std::string::npos &&
+                      f->adapterSource.find("sum_pair64(arg0)") != std::string::npos,
+                  adapter_body.c_str());
             if (!f->parameters.empty()) {
                 const auto &pair = f->parameters[0];
                 const std::string pair64_verified =
@@ -401,6 +472,118 @@ void test_struct_and_enum() {
                 std::string("make_pair64 imports on ") + triple;
             CHECK(false, pair64_result_imports.c_str());
         }
+        if (const auto *f = findFunction(*art, "sum_triple64")) {
+            const std::string triple_layout =
+                std::string("Triple64 has a verified three-field layout: ") + triple;
+            CHECK(f->parameters.size() == 1U && f->parameters[0].hasVerifiedLayout &&
+                      f->parameters[0].sizeBytes == 24U && f->parameters[0].alignBytes == 8U &&
+                      f->parameters[0].recordFields.size() == 3U,
+                  triple_layout.c_str());
+        } else {
+            const std::string triple_imports = std::string("sum_triple64 imports on ") + triple;
+            CHECK(false, triple_imports.c_str());
+        }
+        if (const auto *f = findFunction(*art, "make_triple64")) {
+            const std::string triple_result =
+                std::string("Triple64 return layout is verified: ") + triple;
+            CHECK(f->result.hasVerifiedLayout && f->result.sizeBytes == 24U &&
+                      f->result.alignBytes == 8U && f->result.recordFields.size() == 3U,
+                  triple_result.c_str());
+            const std::string triple_result_copy =
+                std::string("Triple64 return adapter copies the result: ") + triple;
+            CHECK(f->adapterSource.find("memcpy(result, &result_value") != std::string::npos,
+                  triple_result_copy.c_str());
+        } else {
+            const std::string triple_result_imports =
+                std::string("make_triple64 imports on ") + triple;
+            CHECK(false, triple_result_imports.c_str());
+        }
+        if (const auto *f = findFunction(*art, "sum_mixed32_64")) {
+            const std::string mixed_param =
+                std::string("sum_mixed32_64 keeps its by-value parameter: ") + triple;
+            CHECK_EQ(f->parameters.size(), 1u, mixed_param.c_str());
+            if (!f->parameters.empty()) {
+                const auto &value = f->parameters[0];
+                const std::string mixed_layout =
+                    std::string("Mixed32_64 has a verified 16-byte, 8-aligned layout: ") + triple;
+                const std::string mixed_fields =
+                    std::string("Mixed32_64 has two validated fields: ") + triple;
+                CHECK(value.hasVerifiedLayout && value.sizeBytes == 16U && value.alignBytes == 8U,
+                      mixed_layout.c_str());
+                CHECK_EQ(value.recordFields.size(), 2u, mixed_fields.c_str());
+                if (value.recordFields.size() == 2U) {
+                    const std::string mixed_offsets =
+                        std::string("Mixed32_64 fields are at 0 and 64 bits: ") + triple;
+                    CHECK_EQ(value.recordFields[0].offsetBits, 0u, mixed_offsets.c_str());
+                    CHECK_EQ(value.recordFields[1].offsetBits, 64u, mixed_offsets.c_str());
+                }
+            }
+        } else {
+            const std::string mixed_param_imports =
+                std::string("sum_mixed32_64 imports on ") + triple;
+            CHECK(false, mixed_param_imports.c_str());
+        }
+        if (const auto *f = findFunction(*art, "make_mixed32_64")) {
+            const std::string mixed_result =
+                std::string("make_mixed32_64 returns a verified Mixed32_64: ") + triple;
+            CHECK(f->result.hasVerifiedLayout && f->result.sizeBytes == 16U &&
+                      f->result.alignBytes == 8U && f->result.recordFields.size() == 2U,
+                  mixed_result.c_str());
+        } else {
+            const std::string mixed_result_imports =
+                std::string("make_mixed32_64 imports on ") + triple;
+            CHECK(false, mixed_result_imports.c_str());
+        }
+        if (const auto *f = findFunction(*art, "sum_mixed64_32")) {
+            const std::string mixed_reverse_param =
+                std::string("sum_mixed64_32 keeps its by-value parameter: ") + triple;
+            CHECK_EQ(f->parameters.size(), 1u, mixed_reverse_param.c_str());
+            if (!f->parameters.empty()) {
+                const auto &value = f->parameters[0];
+                const std::string mixed_reverse_layout =
+                    std::string("Mixed64_32 has a verified 16-byte, 8-aligned layout: ") + triple;
+                CHECK(value.hasVerifiedLayout && value.sizeBytes == 16U && value.alignBytes == 8U &&
+                          value.recordFields.size() == 2U,
+                      mixed_reverse_layout.c_str());
+                if (value.recordFields.size() == 2U) {
+                    const std::string mixed_reverse_offsets =
+                        std::string("Mixed64_32 fields are at 0 and 64 bits: ") + triple;
+                    CHECK_EQ(value.recordFields[0].offsetBits, 0u, mixed_reverse_offsets.c_str());
+                    CHECK_EQ(value.recordFields[1].offsetBits, 64u, mixed_reverse_offsets.c_str());
+                }
+            }
+        } else {
+            const std::string mixed_reverse_imports =
+                std::string("sum_mixed64_32 imports on ") + triple;
+            CHECK(false, mixed_reverse_imports.c_str());
+        }
+        if (const auto *f = findFunction(*art, "make_mixed64_32")) {
+            const std::string mixed_reverse_result =
+                std::string("make_mixed64_32 returns a verified Mixed64_32: ") + triple;
+            CHECK(f->result.hasVerifiedLayout && f->result.sizeBytes == 16U &&
+                      f->result.alignBytes == 8U && f->result.recordFields.size() == 2U,
+                  mixed_reverse_result.c_str());
+        } else {
+            const std::string mixed_reverse_result_imports =
+                std::string("make_mixed64_32 imports on ") + triple;
+            CHECK(false, mixed_reverse_result_imports.c_str());
+        }
+    }
+
+    // 7a. Matching layout does not imply support for an unvalidated target ABI.
+    {
+        ParseOptions opts;
+        opts.targetTriple = "x86_64-pc-windows-msvc";
+        const auto art    = parseHeaderFromContent("unvalidated_target_record.h",
+                                                   "struct Pair64 { long long lo, hi; };\n"
+                                                   "long long sum_pair64(struct Pair64 value);\n",
+                                                   opts);
+        CHECK(findFunction(*art, "sum_pair64") == nullptr,
+              "Pair64 is not imported by value for the unvalidated Windows x64 ABI");
+        bool found_skip = false;
+        for (const auto &skipped : art->skippedFunctions)
+            found_skip = found_skip || skipped.find("sum_pair64") != std::string::npos;
+        CHECK(found_skip, "the unsupported target ABI has an explicit skipped-function reason");
     }
 
     // 7b. Unsupported record layouts produce explicit skips instead of imports.
@@ -422,7 +605,9 @@ void test_struct_and_enum() {
                                    "struct Int128 { __int128 value; };\n"
                                    "int with_int128(struct Int128 i);\n"
                                    "struct Mixed { long long lo; int mid; int hi; };\n"
-                                   "int with_mixed(struct Mixed m);\n",
+                                   "int with_mixed(struct Mixed m);\n"
+                                   "struct Variadic { long long lo, hi; };\n"
+                                   "int with_variadic_record(struct Variadic value, ...);\n",
                                    opts);
         const std::string bits_skip = std::string("bitfield record function is skipped: ") + triple;
         const std::string packed_skip = std::string("packed record function is skipped: ") + triple;
@@ -434,15 +619,16 @@ void test_struct_and_enum() {
             std::string("long double record function is skipped: ") + triple;
         const std::string int128_skip =
             std::string("__int128 record function is skipped: ") + triple;
-        const std::string mixed_skip =
-            std::string("mixed 64/32 record function is skipped: ") + triple;
         CHECK(findFunction(*art, "with_bits") == nullptr, bits_skip.c_str());
         CHECK(findFunction(*art, "with_packed") == nullptr, packed_skip.c_str());
         CHECK(findFunction(*art, "with_anonymous") == nullptr, anonymous_skip.c_str());
         CHECK(findFunction(*art, "with_flexible") == nullptr, flexible_skip.c_str());
         CHECK(findFunction(*art, "with_wide") == nullptr, wide_skip.c_str());
         CHECK(findFunction(*art, "with_int128") == nullptr, int128_skip.c_str());
-        CHECK(findFunction(*art, "with_mixed") == nullptr, mixed_skip.c_str());
+        CHECK(findFunction(*art, "with_mixed") != nullptr,
+              "mixed-layout record is passed through the generated adapter");
+        CHECK(findFunction(*art, "with_variadic_record") == nullptr,
+              "variadic functions with by-value records are rejected");
 
         int explicit_skips = 0;
         for (const auto &skipped : art->skippedFunctions) {
@@ -452,7 +638,7 @@ void test_struct_and_enum() {
                 skipped.find("with_flexible") != std::string::npos ||
                 skipped.find("with_wide") != std::string::npos ||
                 skipped.find("with_int128") != std::string::npos ||
-                skipped.find("with_mixed") != std::string::npos)
+                skipped.find("with_variadic_record") != std::string::npos)
                 explicit_skips++;
         }
         const std::string skips_all = std::string("every unsupported record has a skip: ") + triple;

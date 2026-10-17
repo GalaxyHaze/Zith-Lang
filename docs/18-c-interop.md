@@ -93,9 +93,17 @@ declarations found only in transitively included headers. The top-level C object
 controls whether its Zith binding is mutable. For pointer globals, pointee constness alone does not
 make the pointer object read-only.
 
-Function-like and string macros, unsupported by-value aggregates, bitfields, packed or anonymous
-records, flexible arrays, and other non-representable layouts remain unsupported. An unsupported
-declaration does not prevent other supported declarations in the header from being imported.
+By-value records are currently validated only for 64-bit x86-64 and AArch64 Linux targets using
+GNU or musl environments. If no target triple is supplied, libclang's effective host target is
+used. Supported record shapes are:
+
+- One 64-bit integer or pointer, or two adjacent 32-bit integer fields, in an 8-byte record.
+- Two integer-class fields at byte offsets 0 and 8 in a 16-byte, 8-aligned record: `i64+i64`,
+  `i32+i64`, or `i64+i32`; 64-bit pointer fields may occupy an `i64` slot.
+
+Other targets, floating-point aggregates, bitfields, packed or anonymous records, flexible arrays,
+and other unproven layouts are not imported by value. An unsupported declaration does not prevent
+other supported declarations in the header from being imported.
 Prefer `c/...` for common APIs and use manual declarations or header imports for APIs outside that
 surface and for external libraries.
 
@@ -194,10 +202,13 @@ fn main(): i32 {
 ```
 
 Simple records passed or returned **by value** import only when libclang proves their layout for
-the configured target triple and sysroot. The supported field subset is scalar types, plain C
-pointers, and nested simple records that also pass validation. The binder records each field's
-name, offset, and type plus the record's total size and alignment, and the lowerer materialises
-the same fields as a Zith struct so the LLVM structural type matches the C ABI.
+the configured target triple and sysroot. The currently supported shapes are one 64-bit integer
+or pointer, two adjacent 32-bit integer slots, two adjacent 64-bit integer or pointer slots, and
+exactly two integer fields of 32 and 64 bits at byte offsets 0 and 8 in a 16-byte, 8-aligned
+record. A nested record counts as a slot only when its own verified ABI matches that slot. The
+binder records each field's name, offset, and type plus the record's total size and alignment, and
+the lowerer materialises the same fields as a Zith struct so the LLVM structural type matches the
+C ABI. Multi-slot records remain LLVM aggregates rather than being coerced into a single integer.
 
 Records are rejected when any of these conditions apply:
 

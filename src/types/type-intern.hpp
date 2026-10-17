@@ -18,6 +18,7 @@ namespace zith::types {
 struct StructField {
     memory::InternedId name;
     TypeId type;
+    uint64_t foreignOffsetBytes = 0;
 };
 
 struct StructDef {
@@ -26,7 +27,7 @@ struct StructDef {
     memory::DynArray<TypeId> args;
     std::string_view defining_module;
     /// Validated C-record byte layout, populated only for foreign records whose
-    /// libclang layout and public ABI shape were proven on the parse target.
+    /// libclang layout was proven on the parse target.
     bool hasForeignLayout      = false;
     bool foreignAbiIsSingleI64 = false;
     uint64_t foreignSizeBytes  = 0;
@@ -124,7 +125,8 @@ public:
 
     // ── Struct definition helpers ─────────────────────────────────
     TypeId defineStruct(std::string_view name);
-    void addField(TypeId struct_type, std::string_view field_name, TypeId field_type);
+    void addField(TypeId struct_type, std::string_view field_name, TypeId field_type,
+                  uint64_t foreign_offset_bytes = 0);
     /// Records the concrete generic arguments carried by a reified struct.
     void setTypeArgs(TypeId struct_type, std::span<const TypeId> args);
     /// Records the module that declares a named type. Non-empty first write wins.

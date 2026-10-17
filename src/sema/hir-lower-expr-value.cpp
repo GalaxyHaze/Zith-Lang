@@ -241,7 +241,10 @@ hir::HirExprId HirLowerModern::lowerName(const frontend::Expression &expr) {
         }
         if (resolved->foreignFunction != nullptr) {
             hir::HirVar var;
-            var.name    = interner_.intern(resolved->foreignFunction->linkageName);
+            const auto &foreign = *resolved->foreignFunction;
+            var.name             = interner_.intern(foreign.adapterThunkName.empty()
+                                                        ? foreign.linkageName
+                                                        : foreign.adapterThunkName);
             var.version = 0;
             return addExpr(std::move(var));
         }
@@ -276,8 +279,12 @@ hir::HirExprId HirLowerModern::lowerName(const frontend::Expression &expr) {
     var.name    = interner_.intern(expr.text);
     var.version = 0;
     if (const auto *resolved = findResolvedExpr(expr.id);
-        resolved != nullptr && resolved->foreignFunction != nullptr)
-        var.name = interner_.intern(resolved->foreignFunction->linkageName);
+        resolved != nullptr && resolved->foreignFunction != nullptr) {
+        const auto &foreign = *resolved->foreignFunction;
+        var.name            = interner_.intern(foreign.adapterThunkName.empty()
+                                                   ? foreign.linkageName
+                                                   : foreign.adapterThunkName);
+    }
     return addExpr(std::move(var));
 }
 

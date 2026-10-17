@@ -81,6 +81,9 @@ bool encodeTypes(const cache::Artifact &artifact, ByteWriter &w) {
         w.writeU32(static_cast<uint32_t>(s.field_type_ids.size()));
         for (auto id : s.field_type_ids)
             w.writeU32(id);
+        w.writeU32(static_cast<uint32_t>(s.foreign_field_offsets.size()));
+        for (auto offset : s.foreign_field_offsets)
+            w.writeU64(offset);
     }
 
     w.writeU32(static_cast<uint32_t>(artifact.enum_defs.size()));
@@ -165,6 +168,12 @@ bool decodeTypes(ByteReader &r, cache::Artifact &out) {
         s.field_type_ids.resize(k);
         for (auto &id : s.field_type_ids)
             if (!r.readU32(id))
+                return false;
+        if (!r.readU32(k) || !r.canReadU32Count(k))
+            return false;
+        s.foreign_field_offsets.resize(k);
+        for (auto &offset : s.foreign_field_offsets)
+            if (!r.readU64(offset))
                 return false;
     }
     if (!r.readU32(n))

@@ -367,9 +367,6 @@ TypeId PerModuleSema::inferCall(frontend::ExprId id) {
             else if (resolved_callee->target.localSymbol)
                 decl_id = frontend::DeclId{resolved_callee->target.localSymbol.value};
         }
-        const frontend::Declaration *generic_decl = nullptr;
-        if (decl_id && decl_id.value <= snapshot.declarations().size())
-            generic_decl = &snapshot.declarations()[decl_id.value - 1U];
         session::ModuleKey target_module = module;
         if (resolved_callee != nullptr && !resolved_callee->target.module.empty())
             target_module = resolved_callee->target.module;
@@ -377,6 +374,9 @@ TypeId PerModuleSema::inferCall(frontend::ExprId id) {
             owner != nullptr ? owner->findModuleSema(target_module) : nullptr;
         if (decl_sema == nullptr)
             decl_sema = this;
+        const frontend::Declaration *generic_decl = nullptr;
+        if (decl_id && decl_id.value <= decl_sema->snapshot.declarations().size())
+            generic_decl = &decl_sema->snapshot.declarations()[decl_id.value - 1U];
 
         std::vector<TypeId> explicit_types;
         explicit_types.reserve(expr.genericArgs.size());

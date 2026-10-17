@@ -425,7 +425,7 @@ void HirLowerModern::fillForeignStruct(types::TypeId lowered, const cinterop::Ty
         const types::TypeId field_type = lowerForeignType(*field.type);
         if (field_type == types::kErrorType)
             continue;
-        types_.addField(lowered, field.name, field_type);
+        types_.addField(lowered, field.name, field_type, field.offsetBits / 8U);
     }
 }
 

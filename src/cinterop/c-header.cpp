@@ -102,6 +102,25 @@ bool recordFieldIsSingleI64(const Type &type) {
     return type.kind == TypeKind::Record && type.abiIsSingleI64;
 }
 
+bool hasValidatedRecordTarget(const CXType record_type) {
+    const CXCursor declaration   = clang_getTypeDeclaration(record_type);
+    const CXTranslationUnit unit = clang_Cursor_getTranslationUnit(declaration);
+    if (unit == nullptr)
+        return false;
+
+    const CXTargetInfo target = clang_getTranslationUnitTargetInfo(unit);
+    if (target == nullptr)
+        return false;
+    const std::string triple = takeString(clang_TargetInfo_getTriple(target));
+    const int pointer_width  = clang_TargetInfo_getPointerWidth(target);
+    clang_TargetInfo_dispose(target);
+
+    const bool supported_arch = triple.starts_with("x86_64-") || triple.starts_with("aarch64-");
+    const bool supported_env  = triple.find("-linux-gnu") != std::string::npos ||
+                                triple.find("-linux-musl") != std::string::npos;
+    return pointer_width == 64 && supported_arch && supported_env;
+}
+
 bool lowerRecordLayout(const CXType source, Type &result, std::string &unsupported,
                        bool require_by_value_abi) {
     const CXType record_type = clang_getCanonicalType(source);
@@ -151,7 +170,7 @@ bool lowerRecordLayout(const CXType source, Type &result, std::string &unsupport
         if (isUnsupportedScalarKind(field_type)) {
             field_state->unsupported = "edge-case scalar field '" + field_name + "' in record '" +
                                        field_state->result.name + "'";
-            field_state->valid = false;
+            field_state->valid       = false;
             return CXVisit_Break;
         }
         if (clang_getCanonicalType(field_type).kind == CXType_ConstantArray) {
@@ -165,7 +184,7 @@ bool lowerRecordLayout(const CXType source, Type &result, std::string &unsupport
         if (field_offset < 0) {
             field_state->unsupported = "field layout unavailable for '" + field_state->result.name +
                                        "." + field_name + "'";
-            field_state->valid = false;
+            field_state->valid       = false;
             return CXVisit_Break;
         }
 
@@ -173,13 +192,13 @@ bool lowerRecordLayout(const CXType source, Type &result, std::string &unsupport
         if (!lowerTypeImpl(field_type, lowered, field_state->unsupported, true, true)) {
             field_state->unsupported = "unsupported field '" + field_name + "' in record '" +
                                        field_state->result.name + "': " + field_state->unsupported;
-            field_state->valid = false;
+            field_state->valid       = false;
             return CXVisit_Break;
         }
         if (lowered.kind == TypeKind::Record && !lowered.hasVerifiedLayout) {
             field_state->unsupported = "record field '" + field_name + "' in record '" +
                                        field_state->result.name + "' has no verified ABI";
-            field_state->valid = false;
+            field_state->valid       = false;
             return CXVisit_Break;
         }
         RecordField field;
@@ -198,49 +217,127 @@ bool lowerRecordLayout(const CXType source, Type &result, std::string &unsupport
         return false;
     }
 
-    result.sizeBytes      = static_cast<uint64_t>(size);
-    result.alignBytes     = static_cast<uint64_t>(align);
-    result.abiIsSingleI32 = size == 4 && align == 4 && result.recordFields.size() == 1U &&
-                            result.recordFields[0].offsetBits == 0U &&
-                            recordFieldIsSingleI32(*result.recordFields[0].type);
+    result.sizeBytes            = static_cast<uint64_t>(size);
+    result.alignBytes           = static_cast<uint64_t>(align);
+    result.abiIsSingleI32       = size == 4 && align == 4 && result.recordFields.size() == 1U &&
+                                  result.recordFields[0].offsetBits == 0U &&
+                                  recordFieldIsSingleI32(*result.recordFields[0].type);
+    const bool validated_target = hasValidatedRecordTarget(record_type);
     // The first supported public value ABI: one 64-bit integer/pointer member,
     // or two adjacent 32-bit integer/one-i32-record members, fit the single
     // 64-bit integer slot used by Clang on both x86-64 and AArch64 Linux.
     // Keep this classifier explicit instead of inferring ABI from size alone,
     // so a future record that does not lower to i64 is never accepted.
-    const bool one_i64_field = result.recordFields.size() == 1U &&
-                               result.recordFields[0].offsetBits == 0U &&
-                               recordFieldIsSingleI64(*result.recordFields[0].type);
+    const bool one_i64_field  = result.recordFields.size() == 1U &&
+                                result.recordFields[0].offsetBits == 0U &&
+                                recordFieldIsSingleI64(*result.recordFields[0].type);
     const bool two_i32_fields = result.recordFields.size() == 2U &&
                                 result.recordFields[0].offsetBits == 0U &&
                                 result.recordFields[1].offsetBits == 32U &&
                                 recordFieldIsSingleI32(*result.recordFields[0].type) &&
                                 recordFieldIsSingleI32(*result.recordFields[1].type);
     result.abiIsSingleI64 =
-        size == 8 && align > 0 &&
+        validated_target && size == 8 && align > 0 &&
         (static_cast<uint64_t>(align) == 4U || static_cast<uint64_t>(align) == 8U) &&
         (one_i64_field || two_i32_fields);
-    // Two adjacent 64-bit integer/pointer fields are also proven by value on
-    // x86-64 and AArch64 Linux.  Clang passes/returns this shape as two 64-bit
-    // scalars (`{ i64, i64 }` on x86-64, `[2 x i64]` on AArch64), so codegen
-    // keeps the aggregate storage type instead of trying to pack it into one
-    // `__int128` register.
-    const bool two_i64_fields = result.recordFields.size() == 2U &&
-                                result.recordFields[0].offsetBits == 0U &&
-                                result.recordFields[1].offsetBits == 64U &&
-                                recordFieldIsSingleI64(*result.recordFields[0].type) &&
-                                recordFieldIsSingleI64(*result.recordFields[1].type);
-    const bool two_i64_value_abi =
-        size == 16 && static_cast<uint64_t>(align) == 8U && two_i64_fields;
-    if (!result.abiIsSingleI64 && !two_i64_value_abi) {
-        if (require_by_value_abi) {
-            unsupported = "record '" + result.name +
-                          "' passes or returns a simple value shape that codegen cannot "
-                          "prove on this target";
+    if (require_by_value_abi && !validated_target) {
+        unsupported = "record '" + result.name +
+                      "' has no supported 64-bit Linux target layout for its C adapter";
+        return false;
+    }
+    result.hasVerifiedLayout = true;
+    return true;
+}
+
+uint64_t adapterHash(std::string_view text) {
+    uint64_t hash = 14695981039346656037ULL;
+    for (const char character : text) {
+        const auto byte = static_cast<unsigned char>(character);
+        hash ^= byte;
+        hash *= 1099511628211ULL;
+    }
+    return hash;
+}
+
+bool containsRecordValue(const Function &function) {
+    if (function.result.kind == TypeKind::Record)
+        return true;
+    return std::any_of(function.parameters.begin(), function.parameters.end(),
+                       [](const Type &parameter) { return parameter.kind == TypeKind::Record; });
+}
+
+std::string cQuotedPath(std::string_view path) {
+    std::string escaped;
+    escaped.reserve(path.size());
+    for (const char character : path) {
+        if (character == '\\' || character == '"')
+            escaped.push_back('\\');
+        escaped.push_back(character);
+    }
+    return escaped;
+}
+
+bool buildRecordAdapter(Function &function, std::string_view header_path, std::string &unsupported) {
+    if (!containsRecordValue(function))
+        return true;
+    if (function.isVariadic) {
+        unsupported = "variadic function with a by-value record cannot be adapted";
+        return false;
+    }
+    const auto valid_spelling = [](const Type &type) {
+        return !type.cSpelling.empty() && type.kind != TypeKind::Void;
+    };
+    for (const auto &parameter : function.parameters) {
+        if (!valid_spelling(parameter)) {
+            unsupported = "parameter type has no C spelling for ABI adapter";
             return false;
         }
     }
-    result.hasVerifiedLayout = true;
+    if (function.result.kind != TypeKind::Void && !valid_spelling(function.result)) {
+        unsupported = "return type has no C spelling for ABI adapter";
+        return false;
+    }
+
+    std::string identity(header_path);
+    identity.push_back('\0');
+    identity += function.linkageName;
+    function.adapterName = "zith_cabi_" + [&] {
+        constexpr char digits[] = "0123456789abcdef";
+        std::string hex(16U, '0');
+        uint64_t hash = adapterHash(identity);
+        for (size_t index = 0; index < hex.size(); ++index) {
+            hex[hex.size() - index - 1U] = digits[hash & 0x0fU];
+            hash >>= 4U;
+        }
+        return hex;
+    }();
+    function.adapterThunkName = function.adapterName + "_thunk";
+
+    std::string source = "#include \"" + cQuotedPath(header_path) + "\"\n"
+                         "#include <string.h>\n"
+                         "void " +
+                         function.adapterName + "(const void *const *args, void *result) {\n";
+    for (size_t index = 0; index < function.parameters.size(); ++index) {
+        source += "    " + function.parameters[index].cSpelling + " arg" +
+                  std::to_string(index) + ";\n"
+                  "    memcpy(&arg" +
+                  std::to_string(index) + ", args[" + std::to_string(index) +
+                  "], sizeof(arg" + std::to_string(index) + "));\n";
+    }
+    source += "    ";
+    if (function.result.kind != TypeKind::Void)
+        source += function.result.cSpelling + " result_value = ";
+    source += function.name + "(";
+    for (size_t index = 0; index < function.parameters.size(); ++index) {
+        if (index != 0U)
+            source += ", ";
+        source += "arg" + std::to_string(index);
+    }
+    source += ");\n";
+    if (function.result.kind != TypeKind::Void)
+        source += "    memcpy(result, &result_value, sizeof(result_value));\n";
+    source += "}\n";
+    function.adapterSource = std::move(source);
     return true;
 }
 
@@ -248,6 +345,7 @@ bool lowerTypeImpl(const CXType source, Type &result, std::string &unsupported,
                    const bool validate_record_values, const bool allow_nested_record) {
     const CXType type = clang_getCanonicalType(source);
     result.isConst    = clang_isConstQualifiedType(source) != 0;
+    result.cSpelling  = takeString(clang_getTypeSpelling(source));
     switch (type.kind) {
     case CXType_Void:
         result.kind = TypeKind::Void;
@@ -363,9 +461,9 @@ void collectReachableTypedefs(const CXType source, ParseState &state) {
     if (name.empty())
         return;
 
-    const auto existing = std::find_if(state.artifact.typedefs.begin(),
-                                       state.artifact.typedefs.end(),
-                                       [&](const Typedef &alias) { return alias.name == name; });
+    const auto existing =
+        std::find_if(state.artifact.typedefs.begin(), state.artifact.typedefs.end(),
+                     [&](const Typedef &alias) { return alias.name == name; });
     const CXType underlying = clang_getTypedefDeclUnderlyingType(declaration);
     if (existing == state.artifact.typedefs.end()) {
         Type type;
@@ -650,7 +748,7 @@ CXChildVisitResult visitCursor(const CXCursor cursor, const CXCursor, CXClientDa
             return CXChildVisit_Continue;
         }
 
-        const CXType type = clang_getCursorType(cursor);
+        const CXType type  = clang_getCursorType(cursor);
         global.linkageName = takeString(clang_Cursor_getMangling(cursor));
         if (global.linkageName.empty())
             global.linkageName = global.name;
@@ -731,6 +829,11 @@ CXChildVisitResult visitCursor(const CXCursor cursor, const CXCursor, CXClientDa
             return CXChildVisit_Continue;
         }
         function.parameters.push_back(std::move(parameter));
+    }
+    const std::string source_path = takeString(clang_getFileName(state.mainFile));
+    if (!buildRecordAdapter(function, source_path, unsupported)) {
+        state.artifact.skippedFunctions.push_back(function.name + ": " + unsupported);
+        return CXChildVisit_Continue;
     }
     state.artifact.functions.push_back(std::move(function));
     return CXChildVisit_Continue;
