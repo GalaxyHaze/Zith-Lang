@@ -96,10 +96,10 @@ void emit(LowerState &state, Instr instr) {
     state.fn->body.push(instr);
 }
 
-/// Aggregate values (structs, packs, unions, optionals) live by address in
-/// linear memory, so their register representation is a guest pointer. This is
-/// the single place that decides which HIR types are address-backed, and the
-/// width helpers below must agree with it.
+/// Aggregate values live by address in linear memory, so their register
+/// representation is a guest pointer. This is the single place that decides
+/// which HIR types are address-backed, and the width helpers below must agree
+/// with it.
 auto isAggregateKind(types::TypeKind kind) -> bool {
     switch (kind) {
     case types::TypeKind::Struct:
@@ -107,6 +107,7 @@ auto isAggregateKind(types::TypeKind kind) -> bool {
     case types::TypeKind::Union:
     case types::TypeKind::Optional:
     case types::TypeKind::Dyn:
+    case types::TypeKind::OpaqueTagged:
         return true;
     default:
         return false;
@@ -187,6 +188,7 @@ auto valueTypeOf(const types::TypeIntern &types, types::TypeId type) -> ValueTyp
     case types::TypeKind::Union:
     case types::TypeKind::Optional:
     case types::TypeKind::Dyn:
+    case types::TypeKind::OpaqueTagged:
         return ValueType::Ptr;
     case types::TypeKind::Void:
         return ValueType::Void;
@@ -260,6 +262,7 @@ auto layoutSize(const types::TypeIntern &types, types::TypeId type, std::size_t 
         return alignUp(inner_size, 1U) + 1U;
     }
     case types::TypeKind::Dyn:
+    case types::TypeKind::OpaqueTagged:
         align = 8U;
         return 16U;
     case types::TypeKind::Union: {
@@ -1159,6 +1162,96 @@ auto lowerMakeDyn(LowerState &state, const hir::HirMakeDyn &make) -> std::uint16
     return dyn;
 }
 
+auto lowerMakeOpaque(LowerState &state, const hir::HirMakeOpaque &make) -> std::uint16_t {
+    if (state.types.kindOf(make.opaque_type) != types::TypeKind::OpaqueTagged) {
+        state.result->ok      = false;
+        state.result->message = "HirMakeOpaque has a non-opaque result type in v2 lowering";
+        return kUnassignedReg;
+    }
+
+    const auto payload_value = lowerOperand(state, make.value);
+    if (payload_value == kUnassignedReg)
+        return kUnassignedReg;
+
+    const auto payload_size = typeSize(state.types, make.source_type);
+    const auto payload_data = allocateGuestBytes(state, payload_size);
+    if (payload_data == kUnassignedReg)
+        return kUnassignedReg;
+    if (isPointerValued(state.types, make.source_type)) {
+        const auto source = aggregateAddress(state, make.value);
+        if (source == kUnassignedReg) {
+            state.result->ok      = false;
+            state.result->message = "unsupported opaque aggregate payload in v2 lowering";
+            return kUnassignedReg;
+        }
+        copyBytes(state, payload_data, source, payload_size);
+    } else {
+        emit(state, Instr::simple(Op::StoreI64, payload_data, payload_value));
+    }
+
+    const auto opaque_data = allocateGuestBytes(state, typeSize(state.types, make.opaque_type));
+    if (opaque_data == kUnassignedReg)
+        return kUnassignedReg;
+
+    const auto data_field = newTypedReg(state, ValueType::Ptr);
+    emit(state, Instr{Op::FieldPtr, data_field, opaque_data, 0, 0});
+    emit(state, Instr::simple(Op::StoreI64, data_field, payload_data));
+
+    const auto tag_field = newTypedReg(state, ValueType::Ptr);
+    emit(state, Instr{Op::FieldPtr, tag_field, opaque_data, 0, 8U});
+    const auto tag = emitI64Constant(state, static_cast<std::int64_t>(make.type_id));
+    if (tag == kUnassignedReg)
+        return kUnassignedReg;
+    emit(state, Instr::simple(Op::StoreI64, tag_field, tag));
+    return opaque_data;
+}
+
+auto lowerOpaqueCheck(LowerState &state, const hir::HirOpaqueCheck &check) -> std::uint16_t {
+    if (state.types.kindOf(check.opaque_type) != types::TypeKind::OpaqueTagged) {
+        state.result->ok      = false;
+        state.result->message = "HirOpaqueCheck has a non-opaque value in v2 lowering";
+        return kUnassignedReg;
+    }
+    const auto opaque_data = aggregateAddress(state, check.value);
+    if (opaque_data == kUnassignedReg)
+        return kUnassignedReg;
+
+    const auto tag_field = newTypedReg(state, ValueType::Ptr);
+    emit(state, Instr{Op::FieldPtr, tag_field, opaque_data, 0, 8U});
+    const auto actual_tag = newTypedReg(state, ValueType::I64);
+    emit(state, Instr::simple(Op::LoadI64, actual_tag, tag_field));
+    const auto expected_tag =
+        emitI64Constant(state, static_cast<std::int64_t>(check.type_id));
+    if (expected_tag == kUnassignedReg)
+        return kUnassignedReg;
+    const auto matches = newReg(state, types::kBoolType);
+    emit(state, Instr::simple(Op::Eq, matches, actual_tag, expected_tag));
+    return matches;
+}
+
+auto lowerOpaqueCast(LowerState &state, const hir::HirOpaqueCast &cast) -> std::uint16_t {
+    if (state.types.kindOf(cast.opaque_type) != types::TypeKind::OpaqueTagged ||
+        cast.checked || cast.returns_ptr) {
+        state.result->ok      = false;
+        state.result->message = "unsupported checked or raw opaque cast in v2 lowering";
+        return kUnassignedReg;
+    }
+    const auto opaque_data = aggregateAddress(state, cast.value);
+    if (opaque_data == kUnassignedReg)
+        return kUnassignedReg;
+
+    const auto payload_field = newTypedReg(state, ValueType::Ptr);
+    emit(state, Instr{Op::FieldPtr, payload_field, opaque_data, 0, 0});
+    const auto payload_data = newTypedReg(state, ValueType::Ptr);
+    emit(state, Instr::simple(Op::LoadI64, payload_data, payload_field));
+    if (isPointerValued(state.types, cast.to))
+        return payload_data;
+
+    const auto payload_value = newReg(state, cast.to);
+    emit(state, Instr::simple(Op::LoadI64, payload_value, payload_data));
+    return payload_value;
+}
+
 auto lowerDynCall(LowerState &state, const hir::HirDynCall &call) -> std::uint16_t {
     const std::size_t argumentCount = call.args.size() + (call.has_receiver ? 1U : 0U);
     if (argumentCount > 2U || isAggregateType(state.types, call.result_type)) {
@@ -1653,6 +1746,9 @@ auto lowerOperand(LowerState &state, hir::HirExprId id) -> std::uint16_t {
             },
             [&](const hir::HirMakeDyn &make) { return lowerMakeDyn(state, make); },
             [&](const hir::HirDynCall &call) { return lowerDynCall(state, call); },
+            [&](const hir::HirMakeOpaque &make) { return lowerMakeOpaque(state, make); },
+            [&](const hir::HirOpaqueCast &cast) { return lowerOpaqueCast(state, cast); },
+            [&](const hir::HirOpaqueCheck &check) { return lowerOpaqueCheck(state, check); },
             [&](const hir::HirMakeNone &none) { return lowerMakeNone(state, none); },
             [&](const hir::HirMakeSome &some) { return lowerMakeSome(state, some); },
             [&](const hir::HirStructLiteral &literal) { return lowerStructLiteral(state, literal); },

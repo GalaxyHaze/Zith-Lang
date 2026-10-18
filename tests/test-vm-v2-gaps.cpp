@@ -35,6 +35,7 @@ void test_explicit_integer_enum();
 void test_tagged_union_checks_and_narrowed_casts();
 void test_raw_union_cast_in_raw_context();
 void test_dyn_method_dispatch();
+void test_opaque_checked_extraction();
 
 auto runVmProgram(std::string_view name, std::string_view source) -> VmOutcome {
     const auto root = std::filesystem::temp_directory_path() / "zith-vm-v2-gap-tests" / name;
@@ -120,6 +121,7 @@ void test_vm_v2_gaps() {
     test_tagged_union_checks_and_narrowed_casts();
     test_raw_union_cast_in_raw_context();
     test_dyn_method_dispatch();
+    test_opaque_checked_extraction();
 }
 
 void test_optional_some_presence_and_must() {
@@ -266,6 +268,31 @@ void test_dyn_method_dispatch() {
     CHECK(result.phase == VmPhase::Execution, failure.c_str());
     CHECK(result.status == vm::RunStatus::Ok, "D1 dynamic dispatch completes successfully");
     CHECK_EQ(result.exitCode, 73, "D1 calls the implementation selected by each dyn value");
+}
+
+void test_opaque_checked_extraction() {
+    const auto result = runVmProgram(
+        "opaque-checked-extraction",
+        "fn main(): i32 {\n"
+        "    let value: i32 = 41;\n"
+        "    let erased: opaque = value as opaque;\n"
+        "    if not (erased is i32) { return 1; }\n"
+        "    if (erased is bool) { return 2; }\n"
+        "    let matching: ?i32 = erased as i32;\n"
+        "    if not (matching is null) {\n"
+        "        let payload: i32 = matching;\n"
+        "        if (payload != 41) { return 4; }\n"
+        "    } else {\n"
+        "        return 3;\n"
+        "    }\n"
+        "    let mismatching: ?bool = erased as bool;\n"
+        "    if not (mismatching is null) { return 5; }\n"
+        "    return 0;\n"
+        "}\n");
+    const std::string failure = "D2 opaque checks reach VM execution: " + result.detail;
+    CHECK(result.phase == VmPhase::Execution, failure.c_str());
+    CHECK(result.status == vm::RunStatus::Ok, "D2 checked opaque extraction completes");
+    CHECK_EQ(result.exitCode, 0, "D2 matching and mismatching opaque tags are preserved");
 }
 
 } // namespace

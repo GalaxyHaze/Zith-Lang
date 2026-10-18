@@ -129,6 +129,24 @@ constexpr ParityCase kCases[] = {
      "    return apply(First { base: 10 }, 3) + apply(Second { base: 20 }, 3);\n"
      "}\n",
      nullptr},
+    {"opaque_checked_extraction",
+     "fn main(): i32 {\n"
+     "    let value: i32 = 41;\n"
+     "    let erased: opaque = value as opaque;\n"
+     "    if not (erased is i32) { return 1; }\n"
+     "    if (erased is bool) { return 2; }\n"
+     "    let matching: ?i32 = erased as i32;\n"
+     "    if not (matching is null) {\n"
+     "        let payload: i32 = matching;\n"
+     "        if (payload != 41) { return 4; }\n"
+     "    } else {\n"
+     "        return 3;\n"
+     "    }\n"
+     "    let mismatching: ?bool = erased as bool;\n"
+     "    if not (mismatching is null) { return 5; }\n"
+     "    return 0;\n"
+     "}\n",
+     nullptr},
     // Passing slice: the VM and the native path agree on stdout and exit code.
     {"console_println_literal",
      "from std/io/console\n"
