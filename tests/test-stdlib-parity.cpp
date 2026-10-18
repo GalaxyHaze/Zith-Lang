@@ -147,6 +147,41 @@ constexpr ParityCase kCases[] = {
      "    return 0;\n"
      "}\n",
      nullptr},
+    {"runtime_pipe_source_once",
+     "struct Counter {\n"
+     "    value: i32,\n"
+     "    fn next(self: lend Counter): i32 {\n"
+     "        self->value = self->value + 1;\n"
+     "        self->value\n"
+     "    }\n"
+     "}\n"
+     "fn addOne(value: i32): i32 { value + 1 }\n"
+     "fn main(): i32 {\n"
+     "    var counter = Counter { value: 0 };\n"
+     "    let result = counter.next() |> addOne(..);\n"
+     "    if (result == 2 and counter.value == 1) { return 0; }\n"
+     "    return 1;\n"
+     "}\n",
+     nullptr},
+    {"runtime_do_keeps_chain_value",
+     "fn main(): i32 {\n"
+     "    var observed: i32 = 0;\n"
+     "    let result = 41 do { observed = ..; };\n"
+     "    if (observed == 41 and result == 41) { return 0; }\n"
+     "    return 1;\n"
+     "}\n",
+     nullptr},
+    {"runtime_state_transition",
+     "state Done(value: i32): i32 {\n"
+     "    return value;\n"
+     "}\n"
+     "state Start(value: i32): i32 {\n"
+     "    jump Done(value + 42);\n"
+     "}\n"
+     "fn main(): i32 {\n"
+     "    return dock Start(0);\n"
+     "}\n",
+     nullptr},
     // Passing slice: the VM and the native path agree on stdout and exit code.
     {"console_println_literal",
      "from std/io/console\n"

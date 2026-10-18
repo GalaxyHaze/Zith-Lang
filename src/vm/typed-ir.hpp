@@ -67,6 +67,7 @@ enum class Op : uint8_t {
     Ge,
     CallFn,
     CallRange,
+    TailCallRange,
     CallFnRef,
     CallExtern,
     CallExternRange,
@@ -132,6 +133,16 @@ struct Instr {
         Instr row;
         row.op  = Op::CallRange;
         row.a   = dst;
+        row.b   = argBase;
+        row.c   = argCount;
+        row.imm = fnIndex;
+        return row;
+    }
+
+    [[nodiscard]] static auto tailCallRange(uint16_t argBase, uint16_t argCount, uint16_t fnIndex)
+        -> Instr {
+        Instr row;
+        row.op  = Op::TailCallRange;
         row.b   = argBase;
         row.c   = argCount;
         row.imm = fnIndex;

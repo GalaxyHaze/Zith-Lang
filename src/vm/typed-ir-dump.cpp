@@ -79,6 +79,7 @@ const char *opName(Op op) {
         ZITH_VM_OP_NAME(Ge);
         ZITH_VM_OP_NAME(CallFn);
         ZITH_VM_OP_NAME(CallRange);
+        ZITH_VM_OP_NAME(TailCallRange);
         ZITH_VM_OP_NAME(CallFnRef);
         ZITH_VM_OP_NAME(CallExtern);
         ZITH_VM_OP_NAME(CallExternRange);
@@ -202,6 +203,9 @@ void appendInstruction(std::ostringstream &out, const Instr &instr, size_t pc) {
     case Op::CallRange:
         out << "dst=r" << instr.a << " arg_base=r" << instr.b << " arg_count=" << instr.c
             << " function=#" << instr.imm;
+        break;
+    case Op::TailCallRange:
+        out << "arg_base=r" << instr.b << " arg_count=" << instr.c << " function=#" << instr.imm;
         break;
     case Op::CallExtern:
         out << "dst=r" << instr.a << " arg0=r" << instr.b << " arg1=r" << instr.c << " arg2=r"

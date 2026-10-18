@@ -7,9 +7,9 @@
 #include <cstdint>
 #include <cstring>
 #include <limits>
+#include <span>
 #include <string>
 #include <string_view>
-#include <span>
 #include <utility>
 #include <vector>
 
@@ -25,7 +25,7 @@ struct Frame {
     explicit Frame(LinearMemory &frameMemory)
         : memory(frameMemory), mark(frameMemory.arenaWatermark()) {}
 
-    Frame(const Frame &)                    = delete;
+    Frame(const Frame &)                     = delete;
     auto operator=(const Frame &) -> Frame & = delete;
 
     ~Frame() {
@@ -147,8 +147,8 @@ auto externPutchar(RunState &state, const ExternCall &args, std::int64_t &result
 auto externWriteStdout(RunState &state, const ExternCall &args, std::int64_t &result) -> bool {
     (void)result;
     if (args.arg1 > 0) {
-        const std::string_view text = state.memory->stringView(
-            static_cast<std::size_t>(args.arg0), static_cast<std::size_t>(args.arg1));
+        const std::string_view text = state.memory->stringView(static_cast<std::size_t>(args.arg0),
+                                                               static_cast<std::size_t>(args.arg1));
         state.output.append(text.data(), text.size());
     }
     return true;
@@ -166,8 +166,7 @@ auto externMalloc(RunState &state, const ExternCall &args, std::int64_t &result)
 auto externCalloc(RunState &state, const ExternCall &args, std::int64_t &result) -> bool {
     const auto count = static_cast<std::uint64_t>(args.arg0);
     const auto size  = static_cast<std::uint64_t>(args.arg1);
-    if (count == 0 || size == 0 ||
-        count > std::numeric_limits<std::uint64_t>::max() / size) {
+    if (count == 0 || size == 0 || count > std::numeric_limits<std::uint64_t>::max() / size) {
         result = 0;
         return true;
     }
@@ -417,7 +416,8 @@ auto validateFunctionShape(const Function &fn) -> bool {
                 return false;
             break;
         case Op::CallRange:
-            if (missingRegister(fn, dst, false))
+        case Op::TailCallRange:
+            if (instr.op == Op::CallRange && missingRegister(fn, dst, false))
                 return false;
             if (instr.c > 0) {
                 const auto last = static_cast<uint32_t>(instr.b) + instr.c - 1U;
@@ -471,454 +471,477 @@ auto validateFunctionShape(const Function &fn) -> bool {
 
 auto runFunction(RunState &state, const Function &fn, std::vector<int64_t> &regs)
     -> std::pair<bool, int64_t> {
-    Frame frame(*state.memory);
+    const Function *currentFunction = &fn;
+    for (;;) {
+        const Function *tailTarget = nullptr;
+        std::vector<int64_t> tailRegs;
+        {
+            Frame frame(*state.memory);
 
-    if (regs.size() < fn.regCount)
-        regs.resize(fn.regCount, 0);
+            if (regs.size() < currentFunction->regCount)
+                regs.resize(currentFunction->regCount, 0);
 
-    std::size_t pc = 0;
-    while (pc < fn.body.size()) {
-        const auto &instr  = fn.body[pc];
-        const uint16_t dst = instr.a;
-        const uint16_t lhs = instr.b;
-        const uint16_t rhs = instr.c;
+            std::size_t pc = 0;
+            while (pc < currentFunction->body.size()) {
+                const auto &instr  = currentFunction->body[pc];
+                const uint16_t dst = instr.a;
+                const uint16_t lhs = instr.b;
+                const uint16_t rhs = instr.c;
 
-        switch (instr.op) {
-        case Op::LoadConstI32:
-        case Op::LoadConstI64:
-            if (!setReg(regs, dst, instr.imm))
-                return {false, 0};
-            pc++;
-            break;
-        case Op::LoadConstI64FromPool:
-            if (instr.imm >= state.module->i64Constants.size() ||
-                !setReg(regs, dst, state.module->i64Constants[instr.imm]))
-                return {false, 0};
-            pc++;
-            break;
-        case Op::LoadConstF32:
-        case Op::LoadConstF64: {
-            if (instr.imm >= state.module->f64Constants.size())
-                return {false, 0};
-            int64_t bits = 0;
-            std::memcpy(&bits, &state.module->f64Constants[instr.imm], sizeof(bits));
-            if (!setReg(regs, dst, bits))
-                return {false, 0};
-            pc++;
-            break;
-        }
-        case Op::LoadString:
-            if (instr.imm >= state.stringAddresses.size())
-                return {false, 0};
-            if (!setReg(regs, dst, static_cast<int64_t>(state.stringAddresses[instr.imm])))
-                return {false, 0};
-            pc++;
-            break;
-        case Op::LoadFnRef:
-            if (instr.imm >= state.module->functions.size())
-                return {false, 0};
-            if (!setReg(regs, dst, instr.imm))
-                return {false, 0};
-            pc++;
-            break;
-        case Op::LoadExternRef:
-            if (instr.imm >= state.module->externs.size())
-                return {false, 0};
-            if (!setReg(regs, dst, instr.imm))
-                return {false, 0};
-            pc++;
-            break;
-        case Op::Move:
-            if (!setReg(regs, dst, getReg(regs, lhs)))
-                return {false, 0};
-            pc++;
-            break;
-        case Op::AllocBytes:
-        case Op::MallocBytes: {
-            const std::size_t count  = static_cast<std::size_t>(getReg(regs, lhs));
-            const std::size_t align  = static_cast<std::size_t>(getReg(regs, rhs));
-            const std::size_t offset = instr.op == Op::AllocBytes
-                                           ? state.memory->allocBytes(count, align)
-                                           : state.memory->mallocBytes(count, align);
-            if (offset == allocationFailure)
-                return {false, 0};
-            if (!setReg(regs, dst, static_cast<int64_t>(offset)))
-                return {false, 0};
-            pc++;
-            break;
-        }
-        case Op::StoreBytes: {
-            if (instr.imm >= state.module->strings.size())
-                return {false, 0};
-            const std::string_view text = state.module->strings[instr.imm];
-            const std::size_t offset    = static_cast<std::size_t>(getReg(regs, dst));
-            std::vector<uint8_t> bytes(text.begin(), text.end());
-            if (!state.memory->write(offset, bytes))
-                return {false, 0};
-            pc++;
-            break;
-        }
-        case Op::StoreI64: {
-            const auto offset = static_cast<std::size_t>(getReg(regs, dst));
-            const auto value  = static_cast<std::uint64_t>(getReg(regs, lhs));
-            std::array<std::uint8_t, sizeof(value)> bytes{};
-            for (std::size_t i = 0; i < bytes.size(); ++i)
-                bytes[i] = static_cast<std::uint8_t>(value >> (i * 8U));
-            if (!state.memory->write(offset, bytes))
-                return {false, 0};
-            pc++;
-            break;
-        }
-        case Op::StoreI8: {
-            const auto offset = static_cast<std::size_t>(getReg(regs, dst));
-            const std::array<std::uint8_t, 1> bytes{
-                static_cast<std::uint8_t>(getReg(regs, lhs))};
-            if (!state.memory->write(offset, bytes))
-                return {false, 0};
-            pc++;
-            break;
-        }
-        case Op::LoadBytes: {
-            const std::size_t offset = static_cast<std::size_t>(getReg(regs, lhs));
-            const std::size_t count  = static_cast<std::size_t>(getReg(regs, rhs));
-            auto bytes               = state.memory->read(offset, count);
-            if (bytes.size() != count)
-                return {false, 0};
-            int64_t value = 0;
-            for (std::size_t i = 0; i < count && i < sizeof(value); ++i)
-                value = (value << 8) | bytes[i];
-            if (!setReg(regs, dst, value))
-                return {false, 0};
-            pc++;
-            break;
-        }
-        case Op::LoadI64: {
-            const auto offset = static_cast<std::size_t>(getReg(regs, lhs));
-            const auto bytes  = state.memory->read(offset, sizeof(std::uint64_t));
-            if (bytes.size() != sizeof(std::uint64_t))
-                return {false, 0};
-            std::uint64_t value = 0;
-            for (std::size_t i = 0; i < bytes.size(); ++i)
-                value |= static_cast<std::uint64_t>(bytes[i]) << (i * 8U);
-            if (!setReg(regs, dst, static_cast<std::int64_t>(value)))
-                return {false, 0};
-            pc++;
-            break;
-        }
-        case Op::LoadI8: {
-            const auto offset = static_cast<std::size_t>(getReg(regs, lhs));
-            const auto bytes  = state.memory->read(offset, 1U);
-            if (bytes.size() != 1U || !setReg(regs, dst, bytes[0]))
-                return {false, 0};
-            pc++;
-            break;
-        }
-        case Op::IndexLoad: {
-            const auto index      = getReg(regs, rhs);
-            const auto signedSize = instr.e == 1U ? getReg(regs, instr.d) : instr.d;
-            if (signedSize < 0)
-                return {false, 0};
-            const auto length = static_cast<std::uint64_t>(signedSize);
-            if (index < 0 || static_cast<std::uint64_t>(index) >= length)
-                return {false, 0};
-            const auto base = getReg(regs, lhs);
-            if (base < 0)
-                return {false, 0};
-            const auto element       = static_cast<std::uint64_t>(instr.imm);
-            const auto unsignedIndex = static_cast<std::uint64_t>(index);
-            const auto baseOffset    = static_cast<std::uint64_t>(base);
-            if (unsignedIndex > (std::numeric_limits<std::uint64_t>::max() / element))
-                return {false, 0};
-            const auto relative = unsignedIndex * element;
-            if (baseOffset > std::numeric_limits<std::uint64_t>::max() - relative)
-                return {false, 0};
-            const auto address = baseOffset + relative;
-            const auto offset = static_cast<std::size_t>(address);
-            if (static_cast<std::uint64_t>(offset) != address)
-                return {false, 0};
-            const auto bytes  = state.memory->read(offset, sizeof(std::uint64_t));
-            if (bytes.size() != sizeof(std::uint64_t))
-                return {false, 0};
-            std::uint64_t value = 0;
-            for (std::size_t i = 0; i < bytes.size(); ++i)
-                value |= static_cast<std::uint64_t>(bytes[i]) << (i * 8U);
-            if (!setReg(regs, dst, static_cast<std::int64_t>(value)))
-                return {false, 0};
-            pc++;
-            break;
-        }
-        case Op::FieldPtr: {
-            const std::size_t base = static_cast<std::size_t>(getReg(regs, lhs));
-            if (!setReg(regs, dst, static_cast<int64_t>(base + instr.imm)))
-                return {false, 0};
-            pc++;
-            break;
-        }
-        case Op::MakeSlice:
-            if (!setReg(regs, dst, getReg(regs, lhs)))
-                return {false, 0};
-            if (!setReg(regs, static_cast<uint16_t>(dst + 1), getReg(regs, rhs)))
-                return {false, 0};
-            pc++;
-            break;
-        case Op::SlicePtr:
-            if (lhs + 1 >= regs.size())
-                return {false, 0};
-            if (!setReg(regs, dst, regs[lhs]))
-                return {false, 0};
-            pc++;
-            break;
-        case Op::SliceLen:
-            if (lhs + 1 >= regs.size())
-                return {false, 0};
-            if (!setReg(regs, dst, regs[lhs + 1]))
-                return {false, 0};
-            pc++;
-            break;
-        case Op::MemCopy: {
-            const std::size_t dstOff = static_cast<std::size_t>(getReg(regs, dst));
-            const std::size_t srcOff = static_cast<std::size_t>(getReg(regs, lhs));
-            const std::size_t count  = static_cast<std::size_t>(getReg(regs, rhs));
-            if (!state.memory->copy(dstOff, srcOff, count))
-                return {false, 0};
-            pc++;
-            break;
-        }
-        case Op::Add:
-        case Op::Sub:
-        case Op::Mul:
-        case Op::Div:
-        case Op::Rem:
-        case Op::BitAnd:
-        case Op::BitOr:
-        case Op::BitXor:
-        case Op::Shl:
-        case Op::Shr: {
-            const int64_t left  = getReg(regs, lhs);
-            const int64_t right = getReg(regs, rhs);
-            int64_t result      = 0;
-            if (instr.op == Op::Div || instr.op == Op::Rem) {
-                if (right == 0)
-                    return {false, 0};
-                result = instr.op == Op::Div ? left / right : left % right;
-            } else if (instr.op == Op::Add) {
-                result = left + right;
-            } else if (instr.op == Op::Sub) {
-                result = left - right;
-            } else if (instr.op == Op::Mul) {
-                result = left * right;
-            } else if (instr.op == Op::BitAnd) {
-                result = left & right;
-            } else if (instr.op == Op::BitOr) {
-                result = left | right;
-            } else if (instr.op == Op::BitXor) {
-                result = left ^ right;
-            } else if (instr.op == Op::Shl) {
-                result = left << (right & 63);
-            } else {
-                result = left >> (right & 63);
-            }
-            if (!setReg(regs, dst, result))
-                return {false, 0};
-            pc++;
-            break;
-        }
-        case Op::Neg:
-            if (!setReg(regs, dst, -getReg(regs, lhs)))
-                return {false, 0};
-            pc++;
-            break;
-        case Op::Not:
-            if (!setReg(regs, dst, getReg(regs, lhs) == 0 ? 1 : 0))
-                return {false, 0};
-            pc++;
-            break;
-        case Op::BitNot:
-            if (!setReg(regs, dst, ~getReg(regs, lhs)))
-                return {false, 0};
-            pc++;
-            break;
-        case Op::Eq:
-        case Op::Ne:
-        case Op::Lt:
-        case Op::Le:
-        case Op::Gt:
-        case Op::Ge: {
-            const int64_t left  = getReg(regs, lhs);
-            const int64_t right = getReg(regs, rhs);
-            bool result         = false;
-            switch (instr.op) {
-            case Op::Eq:
-                result = left == right;
-                break;
-            case Op::Ne:
-                result = left != right;
-                break;
-            case Op::Lt:
-                result = left < right;
-                break;
-            case Op::Le:
-                result = left <= right;
-                break;
-            case Op::Gt:
-                result = left > right;
-                break;
-            case Op::Ge:
-                result = left >= right;
-                break;
-            default:
-                break;
-            }
-            if (!setReg(regs, dst, result ? 1 : 0))
-                return {false, 0};
-            pc++;
-            break;
-        }
-        case Op::CallExtern: {
-            if (instr.imm >= state.module->externs.size())
-                return {false, 0};
-            const std::string_view name = state.module->externs[instr.imm];
-            const ExternCall args{getReg(regs, lhs), getReg(regs, rhs), getReg(regs, instr.d),
-                                  getReg(regs, instr.e)};
-            std::int64_t result = 0;
-            if (!dispatchScalarExtern(state, name, args, result))
-                return {false, 0};
-            if (!setReg(regs, dst, result))
-                return {false, 0};
-            pc++;
-            break;
-        }
-        case Op::CallExternRange: {
-            if (instr.imm >= state.module->externs.size())
-                return {false, 0};
-            const auto base  = static_cast<std::size_t>(instr.b);
-            const auto count = static_cast<std::size_t>(instr.c);
-            if (base > regs.size() || count > regs.size() - base)
-                return {false, 0};
-            const std::string_view name = state.module->externs[instr.imm];
-            if (name != "printf" && name != "snprintf") {
-                state.message = "unsupported extern '" + std::string(name) +
-                                "' in VM v2 variadic call";
-                return {false, 0};
-            }
-            if ((name == "printf" && count < 1) || (name == "snprintf" && count < 3))
-                return {false, 0};
+                switch (instr.op) {
+                case Op::LoadConstI32:
+                case Op::LoadConstI64:
+                    if (!setReg(regs, dst, instr.imm))
+                        return {false, 0};
+                    pc++;
+                    break;
+                case Op::LoadConstI64FromPool:
+                    if (instr.imm >= state.module->i64Constants.size() ||
+                        !setReg(regs, dst, state.module->i64Constants[instr.imm]))
+                        return {false, 0};
+                    pc++;
+                    break;
+                case Op::LoadConstF32:
+                case Op::LoadConstF64: {
+                    if (instr.imm >= state.module->f64Constants.size())
+                        return {false, 0};
+                    int64_t bits = 0;
+                    std::memcpy(&bits, &state.module->f64Constants[instr.imm], sizeof(bits));
+                    if (!setReg(regs, dst, bits))
+                        return {false, 0};
+                    pc++;
+                    break;
+                }
+                case Op::LoadString:
+                    if (instr.imm >= state.stringAddresses.size())
+                        return {false, 0};
+                    if (!setReg(regs, dst, static_cast<int64_t>(state.stringAddresses[instr.imm])))
+                        return {false, 0};
+                    pc++;
+                    break;
+                case Op::LoadFnRef:
+                    if (instr.imm >= state.module->functions.size())
+                        return {false, 0};
+                    if (!setReg(regs, dst, instr.imm))
+                        return {false, 0};
+                    pc++;
+                    break;
+                case Op::LoadExternRef:
+                    if (instr.imm >= state.module->externs.size())
+                        return {false, 0};
+                    if (!setReg(regs, dst, instr.imm))
+                        return {false, 0};
+                    pc++;
+                    break;
+                case Op::Move:
+                    if (!setReg(regs, dst, getReg(regs, lhs)))
+                        return {false, 0};
+                    pc++;
+                    break;
+                case Op::AllocBytes:
+                case Op::MallocBytes: {
+                    const std::size_t count  = static_cast<std::size_t>(getReg(regs, lhs));
+                    const std::size_t align  = static_cast<std::size_t>(getReg(regs, rhs));
+                    const std::size_t offset = instr.op == Op::AllocBytes
+                                                   ? state.memory->allocBytes(count, align)
+                                                   : state.memory->mallocBytes(count, align);
+                    if (offset == allocationFailure)
+                        return {false, 0};
+                    if (!setReg(regs, dst, static_cast<int64_t>(offset)))
+                        return {false, 0};
+                    pc++;
+                    break;
+                }
+                case Op::StoreBytes: {
+                    if (instr.imm >= state.module->strings.size())
+                        return {false, 0};
+                    const std::string_view text = state.module->strings[instr.imm];
+                    const std::size_t offset    = static_cast<std::size_t>(getReg(regs, dst));
+                    std::vector<uint8_t> bytes(text.begin(), text.end());
+                    if (!state.memory->write(offset, bytes))
+                        return {false, 0};
+                    pc++;
+                    break;
+                }
+                case Op::StoreI64: {
+                    const auto offset = static_cast<std::size_t>(getReg(regs, dst));
+                    const auto value  = static_cast<std::uint64_t>(getReg(regs, lhs));
+                    std::array<std::uint8_t, sizeof(value)> bytes{};
+                    for (std::size_t i = 0; i < bytes.size(); ++i)
+                        bytes[i] = static_cast<std::uint8_t>(value >> (i * 8U));
+                    if (!state.memory->write(offset, bytes))
+                        return {false, 0};
+                    pc++;
+                    break;
+                }
+                case Op::StoreI8: {
+                    const auto offset = static_cast<std::size_t>(getReg(regs, dst));
+                    const std::array<std::uint8_t, 1> bytes{
+                        static_cast<std::uint8_t>(getReg(regs, lhs))};
+                    if (!state.memory->write(offset, bytes))
+                        return {false, 0};
+                    pc++;
+                    break;
+                }
+                case Op::LoadBytes: {
+                    const std::size_t offset = static_cast<std::size_t>(getReg(regs, lhs));
+                    const std::size_t count  = static_cast<std::size_t>(getReg(regs, rhs));
+                    auto bytes               = state.memory->read(offset, count);
+                    if (bytes.size() != count)
+                        return {false, 0};
+                    int64_t value = 0;
+                    for (std::size_t i = 0; i < count && i < sizeof(value); ++i)
+                        value = (value << 8) | bytes[i];
+                    if (!setReg(regs, dst, value))
+                        return {false, 0};
+                    pc++;
+                    break;
+                }
+                case Op::LoadI64: {
+                    const auto offset = static_cast<std::size_t>(getReg(regs, lhs));
+                    const auto bytes  = state.memory->read(offset, sizeof(std::uint64_t));
+                    if (bytes.size() != sizeof(std::uint64_t))
+                        return {false, 0};
+                    std::uint64_t value = 0;
+                    for (std::size_t i = 0; i < bytes.size(); ++i)
+                        value |= static_cast<std::uint64_t>(bytes[i]) << (i * 8U);
+                    if (!setReg(regs, dst, static_cast<std::int64_t>(value)))
+                        return {false, 0};
+                    pc++;
+                    break;
+                }
+                case Op::LoadI8: {
+                    const auto offset = static_cast<std::size_t>(getReg(regs, lhs));
+                    const auto bytes  = state.memory->read(offset, 1U);
+                    if (bytes.size() != 1U || !setReg(regs, dst, bytes[0]))
+                        return {false, 0};
+                    pc++;
+                    break;
+                }
+                case Op::IndexLoad: {
+                    const auto index      = getReg(regs, rhs);
+                    const auto signedSize = instr.e == 1U ? getReg(regs, instr.d) : instr.d;
+                    if (signedSize < 0)
+                        return {false, 0};
+                    const auto length = static_cast<std::uint64_t>(signedSize);
+                    if (index < 0 || static_cast<std::uint64_t>(index) >= length)
+                        return {false, 0};
+                    const auto base = getReg(regs, lhs);
+                    if (base < 0)
+                        return {false, 0};
+                    const auto element       = static_cast<std::uint64_t>(instr.imm);
+                    const auto unsignedIndex = static_cast<std::uint64_t>(index);
+                    const auto baseOffset    = static_cast<std::uint64_t>(base);
+                    if (unsignedIndex > (std::numeric_limits<std::uint64_t>::max() / element))
+                        return {false, 0};
+                    const auto relative = unsignedIndex * element;
+                    if (baseOffset > std::numeric_limits<std::uint64_t>::max() - relative)
+                        return {false, 0};
+                    const auto address = baseOffset + relative;
+                    const auto offset  = static_cast<std::size_t>(address);
+                    if (static_cast<std::uint64_t>(offset) != address)
+                        return {false, 0};
+                    const auto bytes = state.memory->read(offset, sizeof(std::uint64_t));
+                    if (bytes.size() != sizeof(std::uint64_t))
+                        return {false, 0};
+                    std::uint64_t value = 0;
+                    for (std::size_t i = 0; i < bytes.size(); ++i)
+                        value |= static_cast<std::uint64_t>(bytes[i]) << (i * 8U);
+                    if (!setReg(regs, dst, static_cast<std::int64_t>(value)))
+                        return {false, 0};
+                    pc++;
+                    break;
+                }
+                case Op::FieldPtr: {
+                    const std::size_t base = static_cast<std::size_t>(getReg(regs, lhs));
+                    if (!setReg(regs, dst, static_cast<int64_t>(base + instr.imm)))
+                        return {false, 0};
+                    pc++;
+                    break;
+                }
+                case Op::MakeSlice:
+                    if (!setReg(regs, dst, getReg(regs, lhs)))
+                        return {false, 0};
+                    if (!setReg(regs, static_cast<uint16_t>(dst + 1), getReg(regs, rhs)))
+                        return {false, 0};
+                    pc++;
+                    break;
+                case Op::SlicePtr:
+                    if (lhs + 1 >= regs.size())
+                        return {false, 0};
+                    if (!setReg(regs, dst, regs[lhs]))
+                        return {false, 0};
+                    pc++;
+                    break;
+                case Op::SliceLen:
+                    if (lhs + 1 >= regs.size())
+                        return {false, 0};
+                    if (!setReg(regs, dst, regs[lhs + 1]))
+                        return {false, 0};
+                    pc++;
+                    break;
+                case Op::MemCopy: {
+                    const std::size_t dstOff = static_cast<std::size_t>(getReg(regs, dst));
+                    const std::size_t srcOff = static_cast<std::size_t>(getReg(regs, lhs));
+                    const std::size_t count  = static_cast<std::size_t>(getReg(regs, rhs));
+                    if (!state.memory->copy(dstOff, srcOff, count))
+                        return {false, 0};
+                    pc++;
+                    break;
+                }
+                case Op::Add:
+                case Op::Sub:
+                case Op::Mul:
+                case Op::Div:
+                case Op::Rem:
+                case Op::BitAnd:
+                case Op::BitOr:
+                case Op::BitXor:
+                case Op::Shl:
+                case Op::Shr: {
+                    const int64_t left  = getReg(regs, lhs);
+                    const int64_t right = getReg(regs, rhs);
+                    int64_t result      = 0;
+                    if (instr.op == Op::Div || instr.op == Op::Rem) {
+                        if (right == 0)
+                            return {false, 0};
+                        result = instr.op == Op::Div ? left / right : left % right;
+                    } else if (instr.op == Op::Add) {
+                        result = left + right;
+                    } else if (instr.op == Op::Sub) {
+                        result = left - right;
+                    } else if (instr.op == Op::Mul) {
+                        result = left * right;
+                    } else if (instr.op == Op::BitAnd) {
+                        result = left & right;
+                    } else if (instr.op == Op::BitOr) {
+                        result = left | right;
+                    } else if (instr.op == Op::BitXor) {
+                        result = left ^ right;
+                    } else if (instr.op == Op::Shl) {
+                        result = left << (right & 63);
+                    } else {
+                        result = left >> (right & 63);
+                    }
+                    if (!setReg(regs, dst, result))
+                        return {false, 0};
+                    pc++;
+                    break;
+                }
+                case Op::Neg:
+                    if (!setReg(regs, dst, -getReg(regs, lhs)))
+                        return {false, 0};
+                    pc++;
+                    break;
+                case Op::Not:
+                    if (!setReg(regs, dst, getReg(regs, lhs) == 0 ? 1 : 0))
+                        return {false, 0};
+                    pc++;
+                    break;
+                case Op::BitNot:
+                    if (!setReg(regs, dst, ~getReg(regs, lhs)))
+                        return {false, 0};
+                    pc++;
+                    break;
+                case Op::Eq:
+                case Op::Ne:
+                case Op::Lt:
+                case Op::Le:
+                case Op::Gt:
+                case Op::Ge: {
+                    const int64_t left  = getReg(regs, lhs);
+                    const int64_t right = getReg(regs, rhs);
+                    bool result         = false;
+                    switch (instr.op) {
+                    case Op::Eq:
+                        result = left == right;
+                        break;
+                    case Op::Ne:
+                        result = left != right;
+                        break;
+                    case Op::Lt:
+                        result = left < right;
+                        break;
+                    case Op::Le:
+                        result = left <= right;
+                        break;
+                    case Op::Gt:
+                        result = left > right;
+                        break;
+                    case Op::Ge:
+                        result = left >= right;
+                        break;
+                    default:
+                        break;
+                    }
+                    if (!setReg(regs, dst, result ? 1 : 0))
+                        return {false, 0};
+                    pc++;
+                    break;
+                }
+                case Op::CallExtern: {
+                    if (instr.imm >= state.module->externs.size())
+                        return {false, 0};
+                    const std::string_view name = state.module->externs[instr.imm];
+                    const ExternCall args{getReg(regs, lhs), getReg(regs, rhs),
+                                          getReg(regs, instr.d), getReg(regs, instr.e)};
+                    std::int64_t result = 0;
+                    if (!dispatchScalarExtern(state, name, args, result))
+                        return {false, 0};
+                    if (!setReg(regs, dst, result))
+                        return {false, 0};
+                    pc++;
+                    break;
+                }
+                case Op::CallExternRange: {
+                    if (instr.imm >= state.module->externs.size())
+                        return {false, 0};
+                    const auto base  = static_cast<std::size_t>(instr.b);
+                    const auto count = static_cast<std::size_t>(instr.c);
+                    if (base > regs.size() || count > regs.size() - base)
+                        return {false, 0};
+                    const std::string_view name = state.module->externs[instr.imm];
+                    if (name != "printf" && name != "snprintf") {
+                        state.message =
+                            "unsupported extern '" + std::string(name) + "' in VM v2 variadic call";
+                        return {false, 0};
+                    }
+                    if ((name == "printf" && count < 1) || (name == "snprintf" && count < 3))
+                        return {false, 0};
 
-            const auto args = std::span<const int64_t>(regs.data() + base, count);
-            std::string formatted;
-            if (name == "printf") {
-                const auto format =
-                    state.memory->cstring(static_cast<std::size_t>(args[0]));
-                if (!formatVariadic(format, args, 1, formatted))
+                    const auto args = std::span<const int64_t>(regs.data() + base, count);
+                    std::string formatted;
+                    if (name == "printf") {
+                        const auto format =
+                            state.memory->cstring(static_cast<std::size_t>(args[0]));
+                        if (!formatVariadic(format, args, 1, formatted))
+                            return {false, 0};
+                        state.output += formatted;
+                    } else {
+                        const auto buffer   = args[0];
+                        const auto capacity = args[1];
+                        const auto format =
+                            state.memory->cstring(static_cast<std::size_t>(args[2]));
+                        if (capacity <= 0 || !formatVariadic(format, args, 3, formatted))
+                            return {false, 0};
+                        if (formatted.size() >= static_cast<std::size_t>(capacity))
+                            formatted.resize(static_cast<std::size_t>(capacity) - 1U);
+                        if (!state.memory->writeString(static_cast<std::size_t>(buffer), formatted))
+                            return {false, 0};
+                    }
+                    if (!setReg(regs, dst, static_cast<int64_t>(formatted.size())))
+                        return {false, 0};
+                    pc++;
+                    break;
+                }
+                case Op::CallExternRef: {
+                    const int64_t ref = getReg(regs, lhs);
+                    if (ref < 0 || static_cast<std::size_t>(ref) >= state.module->externs.size())
+                        return {false, 0};
+                    const std::string_view name =
+                        state.module->externs[static_cast<std::size_t>(ref)];
+                    const ExternCall args{getReg(regs, rhs), getReg(regs, instr.imm),
+                                          getReg(regs, instr.d), getReg(regs, instr.e)};
+                    std::int64_t result = 0;
+                    if (!dispatchScalarExtern(state, name, args, result))
+                        return {false, 0};
+                    if (!setReg(regs, dst, result))
+                        return {false, 0};
+                    pc++;
+                    break;
+                }
+                case Op::CallFn: {
+                    if (instr.imm >= state.module->functions.size())
+                        return {false, 0};
+                    const auto *callee = &state.module->functions[instr.imm];
+                    std::vector<int64_t> calleeRegs(callee->regCount, 0);
+                    if (callee->paramCount > 0)
+                        calleeRegs[0] = getReg(regs, lhs);
+                    if (callee->paramCount > 1)
+                        calleeRegs[1] = getReg(regs, rhs);
+                    const auto [ok, ret] = runFunction(state, *callee, calleeRegs);
+                    if (!ok)
+                        return {false, 0};
+                    if (!setReg(regs, dst, ret))
+                        return {false, 0};
+                    pc++;
+                    break;
+                }
+                case Op::CallRange: {
+                    if (instr.imm >= state.module->functions.size())
+                        return {false, 0};
+                    const auto *callee = &state.module->functions[instr.imm];
+                    std::vector<int64_t> calleeRegs(callee->regCount, 0);
+                    const std::size_t count = std::min<std::size_t>(instr.c, callee->paramCount);
+                    for (std::size_t i = 0; i < count; ++i) {
+                        calleeRegs[i] = getReg(regs, static_cast<uint16_t>(instr.b + i));
+                    }
+                    const auto [ok, ret] = runFunction(state, *callee, calleeRegs);
+                    if (!ok)
+                        return {false, 0};
+                    if (!setReg(regs, dst, ret))
+                        return {false, 0};
+                    pc++;
+                    break;
+                }
+                case Op::TailCallRange: {
+                    if (instr.imm >= state.module->functions.size())
+                        return {false, 0};
+                    const auto *callee = &state.module->functions[instr.imm];
+                    if (instr.c != callee->paramCount || callee->paramCount > callee->regCount)
+                        return {false, 0};
+                    tailRegs.assign(callee->regCount, 0);
+                    for (std::size_t i = 0; i < instr.c; ++i)
+                        tailRegs[i] = getReg(regs, static_cast<uint16_t>(instr.b + i));
+                    tailTarget = callee;
+                    pc         = currentFunction->body.size();
+                    break;
+                }
+                case Op::CallFnRef: {
+                    const int64_t ref = getReg(regs, lhs);
+                    if (ref < 0 || static_cast<std::size_t>(ref) >= state.module->functions.size())
+                        return {false, 0};
+                    const auto *callee = &state.module->functions[static_cast<std::size_t>(ref)];
+                    std::vector<int64_t> calleeRegs(callee->regCount, 0);
+                    if (callee->paramCount > 0)
+                        calleeRegs[0] = getReg(regs, rhs);
+                    if (callee->paramCount > 1)
+                        calleeRegs[1] = getReg(regs, instr.imm);
+                    const auto [ok, ret] = runFunction(state, *callee, calleeRegs);
+                    if (!ok)
+                        return {false, 0};
+                    if (!setReg(regs, dst, ret))
+                        return {false, 0};
+                    pc++;
+                    break;
+                }
+                case Op::Ret:
+                    return {true, getReg(regs, dst)};
+                case Op::Branch:
+                    if (getReg(regs, lhs) != 0)
+                        pc = instr.imm;
+                    else
+                        pc++;
+                    break;
+                case Op::Branch2:
+                    pc = getReg(regs, lhs) != 0 ? instr.imm : instr.d;
+                    break;
+                case Op::Jump:
+                    pc = instr.imm;
+                    break;
+                case Op::NullDeref:
+                    state.message = "R10003: optional value is null";
                     return {false, 0};
-                state.output += formatted;
-            } else {
-                const auto buffer = args[0];
-                const auto capacity = args[1];
-                const auto format =
-                    state.memory->cstring(static_cast<std::size_t>(args[2]));
-                if (capacity <= 0 || !formatVariadic(format, args, 3, formatted))
+                case Op::Trap:
                     return {false, 0};
-                if (formatted.size() >= static_cast<std::size_t>(capacity))
-                    formatted.resize(static_cast<std::size_t>(capacity) - 1U);
-                if (!state.memory->writeString(static_cast<std::size_t>(buffer), formatted))
-                    return {false, 0};
+                }
             }
-            if (!setReg(regs, dst, static_cast<int64_t>(formatted.size())))
+            if (tailTarget == nullptr)
                 return {false, 0};
-            pc++;
-            break;
         }
-        case Op::CallExternRef: {
-            const int64_t ref = getReg(regs, lhs);
-            if (ref < 0 || static_cast<std::size_t>(ref) >= state.module->externs.size())
-                return {false, 0};
-            const std::string_view name = state.module->externs[static_cast<std::size_t>(ref)];
-            const ExternCall args{getReg(regs, rhs), getReg(regs, instr.imm), getReg(regs, instr.d),
-                                  getReg(regs, instr.e)};
-            std::int64_t result = 0;
-            if (!dispatchScalarExtern(state, name, args, result))
-                return {false, 0};
-            if (!setReg(regs, dst, result))
-                return {false, 0};
-            pc++;
-            break;
-        }
-        case Op::CallFn: {
-            if (instr.imm >= state.module->functions.size())
-                return {false, 0};
-            const auto *callee = &state.module->functions[instr.imm];
-            std::vector<int64_t> calleeRegs(callee->regCount, 0);
-            if (callee->paramCount > 0)
-                calleeRegs[0] = getReg(regs, lhs);
-            if (callee->paramCount > 1)
-                calleeRegs[1] = getReg(regs, rhs);
-            const auto [ok, ret] = runFunction(state, *callee, calleeRegs);
-            if (!ok)
-                return {false, 0};
-            if (!setReg(regs, dst, ret))
-                return {false, 0};
-            pc++;
-            break;
-        }
-        case Op::CallRange: {
-            if (instr.imm >= state.module->functions.size())
-                return {false, 0};
-            const auto *callee = &state.module->functions[instr.imm];
-            std::vector<int64_t> calleeRegs(callee->regCount, 0);
-            const std::size_t count = std::min<std::size_t>(instr.c, callee->paramCount);
-            for (std::size_t i = 0; i < count; ++i) {
-                calleeRegs[i] = getReg(regs, static_cast<uint16_t>(instr.b + i));
-            }
-            const auto [ok, ret] = runFunction(state, *callee, calleeRegs);
-            if (!ok)
-                return {false, 0};
-            if (!setReg(regs, dst, ret))
-                return {false, 0};
-            pc++;
-            break;
-        }
-        case Op::CallFnRef: {
-            const int64_t ref = getReg(regs, lhs);
-            if (ref < 0 || static_cast<std::size_t>(ref) >= state.module->functions.size())
-                return {false, 0};
-            const auto *callee = &state.module->functions[static_cast<std::size_t>(ref)];
-            std::vector<int64_t> calleeRegs(callee->regCount, 0);
-            if (callee->paramCount > 0)
-                calleeRegs[0] = getReg(regs, rhs);
-            if (callee->paramCount > 1)
-                calleeRegs[1] = getReg(regs, instr.imm);
-            const auto [ok, ret] = runFunction(state, *callee, calleeRegs);
-            if (!ok)
-                return {false, 0};
-            if (!setReg(regs, dst, ret))
-                return {false, 0};
-            pc++;
-            break;
-        }
-        case Op::Ret:
-            return {true, getReg(regs, dst)};
-        case Op::Branch:
-            if (getReg(regs, lhs) != 0)
-                pc = instr.imm;
-            else
-                pc++;
-            break;
-        case Op::Branch2:
-            pc = getReg(regs, lhs) != 0 ? instr.imm : instr.d;
-            break;
-        case Op::Jump:
-            pc = instr.imm;
-            break;
-        case Op::NullDeref:
-            state.message = "R10003: optional value is null";
-            return {false, 0};
-        case Op::Trap:
-            return {false, 0};
-        }
+        currentFunction = tailTarget;
+        regs            = std::move(tailRegs);
     }
-
-    return {false, 0};
 }
 
 } // namespace

@@ -89,7 +89,7 @@ struct LowerState {
     /// Hidden return-slot pointer for functions that return an aggregate by
     /// value. Register 0 of such a function; kUnassignedReg otherwise.
     std::uint16_t sretReg = kUnassignedReg;
-    LowerResult *result = nullptr;
+    LowerResult *result   = nullptr;
 };
 
 void emit(LowerState &state, Instr instr) {
@@ -231,9 +231,9 @@ auto layoutSize(const types::TypeIntern &types, types::TypeId type, std::size_t 
     }
     case types::TypeKind::Struct:
     case types::TypeKind::Pack: {
-        align             = 8U;
-        std::size_t size  = 0;
-        const auto count  = types.memberCount(type);
+        align            = 8U;
+        std::size_t size = 0;
+        const auto count = types.memberCount(type);
         for (std::size_t i = 0; i < count; ++i) {
             std::size_t field_align = 1U;
             const auto field_size   = layoutSize(types, types.memberAt(type, i).type, field_align);
@@ -271,8 +271,8 @@ auto layoutSize(const types::TypeIntern &types, types::TypeId type, std::size_t 
             union_type != nullptr ? types.lookupUnionDef(union_type->def_id) : nullptr;
         if (def == nullptr)
             return 0U;
-        align             = 8U;
-        std::size_t size  = 0;
+        align            = 8U;
+        std::size_t size = 0;
         for (const auto member : def->members) {
             std::size_t member_align = 1U;
             const auto member_size   = layoutSize(types, member, member_align);
@@ -302,8 +302,8 @@ auto typeSize(const types::TypeIntern &types, types::TypeId type) -> std::size_t
 }
 
 /// Byte offset of field `index` inside a struct/pack laid out by `layoutSize`.
-auto fieldByteOffset(const types::TypeIntern &types, types::TypeId struct_type,
-                     std::uint32_t index) -> std::size_t {
+auto fieldByteOffset(const types::TypeIntern &types, types::TypeId struct_type, std::uint32_t index)
+    -> std::size_t {
     if (types.kindOf(struct_type) == types::TypeKind::Optional) {
         const auto *optional = std::get_if<types::TypeOptional>(&types.lookup(struct_type));
         if (optional == nullptr)
@@ -321,7 +321,7 @@ auto fieldByteOffset(const types::TypeIntern &types, types::TypeId struct_type,
     const auto count   = types.memberCount(struct_type);
     for (std::size_t i = 0; i < count && i <= index; ++i) {
         std::size_t field_align = 1U;
-        const auto field_size   = layoutSize(types, types.memberAt(struct_type, i).type, field_align);
+        const auto field_size = layoutSize(types, types.memberAt(struct_type, i).type, field_align);
         if (field_size == 0U)
             return 0U;
         offset = alignUp(offset, field_align);
@@ -525,8 +525,7 @@ auto arrayElementSize(const types::TypeIntern &types, types::TypeId type) -> std
     return array != nullptr ? scalarElementSize(types, array->elem) : 0;
 }
 
-auto lowerArrayLiteral(LowerState &state, const hir::HirArrayLiteral &literal)
-    -> std::uint16_t {
+auto lowerArrayLiteral(LowerState &state, const hir::HirArrayLiteral &literal) -> std::uint16_t {
     const auto *array      = std::get_if<types::TypeArray>(&state.types.lookup(literal.type));
     const auto elementSize = arrayElementSize(state.types, literal.type);
     if (array == nullptr || elementSize == 0 || literal.elements.size() != array->count ||
@@ -574,8 +573,8 @@ auto lowerLiteral(LowerState &state, const hir::HirLiteral &lit) -> std::uint16_
     }
     case types::TypeKind::Ptr:
     case types::TypeKind::String: {
-        const auto index = findOrAddString(state.out, state.interner.lookup(lit.str_val),
-                                           state.result);
+        const auto index =
+            findOrAddString(state.out, state.interner.lookup(lit.str_val), state.result);
         emit(state, Instr::withImm(Op::LoadString, reg, index));
         break;
     }
@@ -587,8 +586,7 @@ auto lowerLiteral(LowerState &state, const hir::HirLiteral &lit) -> std::uint16_
     return reg;
 }
 
-auto lowerStringSlicePointer(LowerState &state, const hir::HirMakeSlice &slice)
-    -> std::uint16_t {
+auto lowerStringSlicePointer(LowerState &state, const hir::HirMakeSlice &slice) -> std::uint16_t {
     const auto &objExpr = state.hir.getExpr(slice.object);
     const auto *lit     = std::get_if<hir::HirLiteral>(&objExpr);
     if (lit != nullptr) {
@@ -647,7 +645,7 @@ auto makeSlicePair(LowerState &state, std::uint16_t pointer, std::uint16_t lengt
 
 auto lowerMakeSlice(LowerState &state, const hir::HirMakeSlice &slice) -> std::uint16_t {
     std::uint16_t literalLength = kUnassignedReg;
-    const auto literalPointer = lowerStringSlicePointerAndLength(state, slice, literalLength);
+    const auto literalPointer   = lowerStringSlicePointerAndLength(state, slice, literalLength);
     if (literalPointer != kUnassignedReg && literalLength != kUnassignedReg)
         return makeSlicePair(state, literalPointer, literalLength);
 
@@ -671,8 +669,8 @@ auto lowerMakeSlice(LowerState &state, const hir::HirMakeSlice &slice) -> std::u
     const auto *loLiteral     = std::get_if<hir::HirLiteral>(&loExpr);
     if (loLiteral == nullptr || loLiteral->i != 0) {
         const auto scale = newTypedReg(state, ValueType::I64);
-        emit(state, Instr::withImm(Op::LoadConstI64, scale,
-                                   static_cast<std::uint16_t>(elementSize)));
+        emit(state,
+             Instr::withImm(Op::LoadConstI64, scale, static_cast<std::uint16_t>(elementSize)));
         const auto byteOffset = newTypedReg(state, ValueType::I64);
         emit(state, Instr::simple(Op::Mul, byteOffset, lo, scale));
         dataPointer = newTypedReg(state, ValueType::Ptr);
@@ -688,13 +686,12 @@ auto lowerMakeSlice(LowerState &state, const hir::HirMakeSlice &slice) -> std::u
 /// by the unit-separator byte is the escape for a literal `#`, so it does not
 /// consume a value. This mirrors the escape handling in the stdlib
 /// `std/io/console` `writeBuffer`.
-auto slicePlaceholderCount(const LowerState &state, const hir::HirMakeSlice &slice)
-    -> std::size_t {
+auto slicePlaceholderCount(const LowerState &state, const hir::HirMakeSlice &slice) -> std::size_t {
     const auto &objExpr = state.hir.getExpr(slice.object);
     const auto *lit     = std::get_if<hir::HirLiteral>(&objExpr);
     if (lit == nullptr)
         return 0;
-    const auto text = state.interner.lookup(lit->str_val);
+    const auto text   = state.interner.lookup(lit->str_val);
     std::size_t count = 0;
     for (std::size_t i = 0; i < text.size(); ++i) {
         if (text[i] != '#')
@@ -713,8 +710,7 @@ auto materializeBorrowedSlice(LowerState &state, hir::HirExprId argument,
     handled = false;
     if (argumentType == types::kInvalidType)
         return kUnassignedReg;
-    const auto *pointerType =
-        std::get_if<types::TypePtr>(&state.types.lookup(argumentType));
+    const auto *pointerType = std::get_if<types::TypePtr>(&state.types.lookup(argumentType));
     if (pointerType == nullptr ||
         state.types.kindOf(pointerType->pointee) != types::TypeKind::Slice ||
         argument == hir::kInvalidHirExpr || argument >= state.regs.size())
@@ -730,7 +726,7 @@ auto materializeBorrowedSlice(LowerState &state, hir::HirExprId argument,
         state.types.kindOf(state.slotTypes[slot]) != types::TypeKind::Slice)
         return kUnassignedReg;
 
-    handled = true;
+    handled           = true;
     const auto source = slotRegister(state, slot);
     if (source == kUnassignedReg || static_cast<std::size_t>(source) + 1U >= state.fn->regCount) {
         state.result->ok      = false;
@@ -748,15 +744,21 @@ auto materializeBorrowedSlice(LowerState &state, hir::HirExprId argument,
 
     const auto lengthAddress = newTypedReg(state, ValueType::Ptr);
     emit(state, Instr{Op::FieldPtr, lengthAddress, descriptor, 0, 8U});
-    emit(state, Instr::simple(Op::StoreI64, lengthAddress,
-                              static_cast<std::uint16_t>(source + 1U)));
+    emit(state,
+         Instr::simple(Op::StoreI64, lengthAddress, static_cast<std::uint16_t>(source + 1U)));
     return descriptor;
 }
 
-auto lowerCall(LowerState &state, const hir::HirCall &call) -> std::uint16_t {
+auto lowerCall(LowerState &state, const hir::HirCall &call, bool tailTransfer = false)
+    -> std::uint16_t {
     if (call.resolved_fn == symbols::kInvalidSym) {
         state.result->ok      = false;
         state.result->message = "unsupported unresolved call target in v2 lowering";
+        return kUnassignedReg;
+    }
+    if (tailTransfer && !call.musttail) {
+        state.result->ok      = false;
+        state.result->message = "state tail transfer is missing musttail metadata in v2 lowering";
         return kUnassignedReg;
     }
 
@@ -764,11 +766,16 @@ auto lowerCall(LowerState &state, const hir::HirCall &call) -> std::uint16_t {
         const auto &hirFn = state.hir.getFn(f);
         if (hirFn.sym_id != call.resolved_fn)
             continue;
-        const auto linkage = state.interner.lookup(hirFn.name);
-        const auto name    = sourceName(linkage);
+        const auto linkage    = state.interner.lookup(hirFn.name);
+        const auto name       = sourceName(linkage);
         const bool is_println = startsWith(linkage, "std.io.console.println");
         const bool is_print   = startsWith(linkage, "std.io.console.print");
         if (is_println || is_print) {
+            if (tailTransfer) {
+                state.result->ok      = false;
+                state.result->message = "state tail transfer does not target a VM function";
+                return kUnassignedReg;
+            }
             if (call.args.empty())
                 return newReg(state, types::kVoidType);
             const auto &argExpr = state.hir.getExpr(call.args[0]);
@@ -794,7 +801,8 @@ auto lowerCall(LowerState &state, const hir::HirCall &call) -> std::uint16_t {
                     if (is_println) {
                         const auto externIndex = findOrAddExtern(state.out, "puts", state.result);
                         const auto scratch     = newReg(state, types::kVoidType);
-                        emit(state, Instr::callExtern(Op::CallExtern, scratch, ptr, 0, externIndex));
+                        emit(state,
+                             Instr::callExtern(Op::CallExtern, scratch, ptr, 0, externIndex));
                         return scratch;
                     }
                     std::uint16_t len = kUnassignedReg;
@@ -803,8 +811,8 @@ auto lowerCall(LowerState &state, const hir::HirCall &call) -> std::uint16_t {
                         const auto externIndex =
                             findOrAddExtern(state.out, "write_stdout", state.result);
                         const auto scratch = newReg(state, types::kVoidType);
-                        emit(state, Instr::callExtern(Op::CallExtern, scratch, ptr, len,
-                                                      externIndex));
+                        emit(state,
+                             Instr::callExtern(Op::CallExtern, scratch, ptr, len, externIndex));
                         return scratch;
                     }
                 }
@@ -812,10 +820,14 @@ auto lowerCall(LowerState &state, const hir::HirCall &call) -> std::uint16_t {
             continue;
         }
         if (name == "main" || hirFn.blocks.empty()) {
+            if (tailTransfer) {
+                state.result->ok      = false;
+                state.result->message = "state tail transfer does not target a VM function";
+                return kUnassignedReg;
+            }
             if (name == "puts" || name == "putchar" || name == "malloc" || name == "free" ||
-                name == "realloc" || name == "printf" || name == "snprintf" ||
-                name == "strlen" || name == "memcpy" || name == "calloc" ||
-                name == "strncmp" || name == "getchar") {
+                name == "realloc" || name == "printf" || name == "snprintf" || name == "strlen" ||
+                name == "memcpy" || name == "calloc" || name == "strncmp" || name == "getchar") {
                 if ((name == "printf" || name == "snprintf") && hirFn.isVariadic) {
                     const std::size_t fixedCount = name == "printf" ? 1U : 3U;
                     if (call.args.size() < fixedCount) {
@@ -823,7 +835,7 @@ auto lowerCall(LowerState &state, const hir::HirCall &call) -> std::uint16_t {
                         state.result->message = "variadic call has too few fixed arguments";
                         return kUnassignedReg;
                     }
-                    const auto argBase = u16(state.fn->regTypes.size(), state.result);
+                    const auto argBase  = u16(state.fn->regTypes.size(), state.result);
                     const auto argCount = u16(call.args.size(), state.result);
                     if (!state.result->ok)
                         return kUnassignedReg;
@@ -834,8 +846,8 @@ auto lowerCall(LowerState &state, const hir::HirCall &call) -> std::uint16_t {
                         const auto value = lowerOperand(state, call.args[i]);
                         if (value == kUnassignedReg)
                             return kUnassignedReg;
-                        emit(state, Instr::simple(Op::Move,
-                                                  static_cast<std::uint16_t>(argBase + i), value));
+                        emit(state, Instr::simple(Op::Move, static_cast<std::uint16_t>(argBase + i),
+                                                  value));
                     }
                     const auto externIndex = findOrAddExtern(state.out, name, state.result);
                     const auto resultReg   = newReg(state, call.fn_type);
@@ -856,14 +868,20 @@ auto lowerCall(LowerState &state, const hir::HirCall &call) -> std::uint16_t {
                     state.fn->regTypes.push(ValueType::I64);
                 const auto externIndex = findOrAddExtern(state.out, name, state.result);
                 const auto reg         = newReg(state, call.fn_type);
-                emit(state, Instr::callExtern(Op::CallExtern, reg, arg0, arg1, externIndex, arg2,
-                                              arg3));
+                emit(state,
+                     Instr::callExtern(Op::CallExtern, reg, arg0, arg1, externIndex, arg2, arg3));
                 return reg;
             }
             continue;
         }
-        if (startsWith(linkage, "std.") || startsWith(linkage, "zith."))
+        if (startsWith(linkage, "std.") || startsWith(linkage, "zith.")) {
+            if (tailTransfer) {
+                state.result->ok      = false;
+                state.result->message = "state tail transfer does not target a VM function";
+                return kUnassignedReg;
+            }
             continue;
+        }
         for (std::size_t candidate = 0; candidate < state.out.functions.size(); ++candidate) {
             if (state.out.functions[candidate].name == name) {
                 if (call.isVariadicSlice &&
@@ -878,8 +896,13 @@ auto lowerCall(LowerState &state, const hir::HirCall &call) -> std::uint16_t {
 
                 // Decide from the HIR signature, not the already-lowered row:
                 // the callee may not have been lowered yet when its caller is.
-                const bool calleeReturnsAggregate =
-                    isAggregateType(state.types, hirFn.return_type);
+                const bool calleeReturnsAggregate = isAggregateType(state.types, hirFn.return_type);
+                if (tailTransfer && state.fn->returnsAggregate != calleeReturnsAggregate) {
+                    state.result->ok = false;
+                    state.result->message =
+                        "state tail transfer has an incompatible aggregate return in v2 lowering";
+                    return kUnassignedReg;
+                }
 
                 std::vector<std::size_t> argumentWidths;
                 argumentWidths.reserve(call.args.size());
@@ -910,7 +933,7 @@ auto lowerCall(LowerState &state, const hir::HirCall &call) -> std::uint16_t {
                 if (!state.result->ok ||
                     static_cast<std::size_t>(state.fn->regCount) + windowSize > 0xFFFFU) {
                     if (state.result->ok) {
-                        state.result->ok      = false;
+                        state.result->ok = false;
                         state.result->message =
                             "v2 caller registers exceed 65535 while preparing arguments";
                     }
@@ -927,14 +950,13 @@ auto lowerCall(LowerState &state, const hir::HirCall &call) -> std::uint16_t {
                 }
 
                 for (std::size_t i = 0; i < call.args.size(); ++i) {
-                    const auto type = i < call.argument_types.size()
-                                          ? call.argument_types[i]
-                                          : types::kInvalidType;
+                    const auto type = i < call.argument_types.size() ? call.argument_types[i]
+                                                                     : types::kInvalidType;
                     state.fn->regTypes.push(argumentWidths[i] == 2U
-                                               ? ValueType::Ptr
-                                               : (type != types::kInvalidType
-                                                      ? valueTypeOf(state.types, type)
-                                                      : ValueType::I64));
+                                                ? ValueType::Ptr
+                                                : (type != types::kInvalidType
+                                                       ? valueTypeOf(state.types, type)
+                                                       : ValueType::I64));
                     if (argumentWidths[i] == 2U)
                         state.fn->regTypes.push(ValueType::I64);
                 }
@@ -944,7 +966,15 @@ auto lowerCall(LowerState &state, const hir::HirCall &call) -> std::uint16_t {
 
                 // Allocate the caller-owned result slot after the argument
                 // window so the scratch registers do not overlap it.
-                if (calleeReturnsAggregate) {
+                if (calleeReturnsAggregate && tailTransfer) {
+                    if (state.sretReg == kUnassignedReg) {
+                        state.result->ok = false;
+                        state.result->message =
+                            "state tail transfer has no return slot in v2 lowering";
+                        return kUnassignedReg;
+                    }
+                    emit(state, Instr::simple(Op::Move, sretSlot, state.sretReg));
+                } else if (calleeReturnsAggregate) {
                     const auto size = typeSize(state.types, hirFn.return_type);
                     if (size == 0U || size > 0xFFFFU) {
                         state.result->ok      = false;
@@ -953,8 +983,8 @@ auto lowerCall(LowerState &state, const hir::HirCall &call) -> std::uint16_t {
                     }
                     const auto count = newTypedReg(state, ValueType::I64);
                     const auto align = newTypedReg(state, ValueType::I64);
-                    emit(state, Instr::withImm(Op::LoadConstI64, count,
-                                               static_cast<std::uint16_t>(size)));
+                    emit(state,
+                         Instr::withImm(Op::LoadConstI64, count, static_cast<std::uint16_t>(size)));
                     emit(state, Instr::withImm(Op::LoadConstI64, align, 8));
                     emit(state, Instr::simple(Op::AllocBytes, sretSlot, count, align));
                 }
@@ -963,11 +993,11 @@ auto lowerCall(LowerState &state, const hir::HirCall &call) -> std::uint16_t {
                     std::size_t argumentOffset = calleeReturnsAggregate ? 1U : 0U;
                     for (std::size_t i = 0; i < call.args.size(); ++i) {
                         bool materializedSlice = false;
-                        auto val = materializeBorrowedSlice(
-                            state, call.args[i],
-                            i < call.argument_types.size() ? call.argument_types[i]
-                                                           : types::kInvalidType,
-                            materializedSlice);
+                        auto val = materializeBorrowedSlice(state, call.args[i],
+                                                            i < call.argument_types.size()
+                                                                ? call.argument_types[i]
+                                                                : types::kInvalidType,
+                                                            materializedSlice);
                         if (!materializedSlice)
                             val = lowerOperand(state, call.args[i]);
                         if (val == kUnassignedReg)
@@ -982,16 +1012,20 @@ auto lowerCall(LowerState &state, const hir::HirCall &call) -> std::uint16_t {
                                     "slice argument pair exceeds v2 caller registers";
                                 return kUnassignedReg;
                             }
-                            emit(state, Instr::simple(
-                                            Op::Move, static_cast<std::uint16_t>(destination + 1U),
-                                            static_cast<std::uint16_t>(val + 1U)));
+                            emit(state, Instr::simple(Op::Move,
+                                                      static_cast<std::uint16_t>(destination + 1U),
+                                                      static_cast<std::uint16_t>(val + 1U)));
                         }
                         argumentOffset += argumentWidths[i];
                     }
                 }
+                if (tailTransfer) {
+                    emit(state,
+                         Instr::tailCallRange(argBase, u16(windowSize, state.result), fnIndex));
+                    return 0;
+                }
                 const auto reg = newReg(state, call.fn_type);
-                emit(state,
-                     Instr::callRange(reg, argBase, u16(windowSize, state.result), fnIndex));
+                emit(state, Instr::callRange(reg, argBase, u16(windowSize, state.result), fnIndex));
                 if (calleeReturnsAggregate)
                     return sretSlot;
                 return reg;
@@ -1053,8 +1087,7 @@ auto aggregateAddress(LowerState &state, hir::HirExprId id) -> std::uint16_t {
 }
 
 /// Copy `size` bytes from `src` to `dst` (both guest addresses).
-auto copyBytes(LowerState &state, std::uint16_t dst, std::uint16_t src, std::size_t size)
-    -> void {
+auto copyBytes(LowerState &state, std::uint16_t dst, std::uint16_t src, std::size_t size) -> void {
     const auto count = newTypedReg(state, ValueType::I64);
     emit(state, Instr::withImm(Op::LoadConstI64, count, u16(size, state.result)));
     emit(state, Instr::simple(Op::MemCopy, dst, src, count));
@@ -1132,7 +1165,7 @@ auto lowerMakeDyn(LowerState &state, const hir::HirMakeDyn &make) -> std::uint16
     if (data == kUnassignedReg)
         return kUnassignedReg;
 
-    const auto dyn = allocateGuestBytes(state, typeSize(state.types, make.dyn_type));
+    const auto dyn        = allocateGuestBytes(state, typeSize(state.types, make.dyn_type));
     const auto vtableData = allocateGuestBytes(
         state, std::max<std::size_t>(vtable->slots.size(), 1U) * sizeof(std::uint64_t));
     if (dyn == kUnassignedReg || vtableData == kUnassignedReg)
@@ -1220,8 +1253,7 @@ auto lowerOpaqueCheck(LowerState &state, const hir::HirOpaqueCheck &check) -> st
     emit(state, Instr{Op::FieldPtr, tag_field, opaque_data, 0, 8U});
     const auto actual_tag = newTypedReg(state, ValueType::I64);
     emit(state, Instr::simple(Op::LoadI64, actual_tag, tag_field));
-    const auto expected_tag =
-        emitI64Constant(state, static_cast<std::int64_t>(check.type_id));
+    const auto expected_tag = emitI64Constant(state, static_cast<std::int64_t>(check.type_id));
     if (expected_tag == kUnassignedReg)
         return kUnassignedReg;
     const auto matches = newReg(state, types::kBoolType);
@@ -1230,8 +1262,8 @@ auto lowerOpaqueCheck(LowerState &state, const hir::HirOpaqueCheck &check) -> st
 }
 
 auto lowerOpaqueCast(LowerState &state, const hir::HirOpaqueCast &cast) -> std::uint16_t {
-    if (state.types.kindOf(cast.opaque_type) != types::TypeKind::OpaqueTagged ||
-        cast.checked || cast.returns_ptr) {
+    if (state.types.kindOf(cast.opaque_type) != types::TypeKind::OpaqueTagged || cast.checked ||
+        cast.returns_ptr) {
         state.result->ok      = false;
         state.result->message = "unsupported checked or raw opaque cast in v2 lowering";
         return kUnassignedReg;
@@ -1282,8 +1314,8 @@ auto lowerDynCall(LowerState &state, const hir::HirDynCall &call) -> std::uint16
         return kUnassignedReg;
     }
     const auto slotAddress = newTypedReg(state, ValueType::Ptr);
-    emit(state, Instr{Op::FieldPtr, slotAddress, vtable, 0,
-                      static_cast<std::uint16_t>(slotOffset)});
+    emit(state,
+         Instr{Op::FieldPtr, slotAddress, vtable, 0, static_cast<std::uint16_t>(slotOffset)});
     const auto functionRef = newTypedReg(state, ValueType::FnRef);
     emit(state, Instr::simple(Op::LoadI64, functionRef, slotAddress));
 
@@ -1302,8 +1334,8 @@ auto lowerDynCall(LowerState &state, const hir::HirDynCall &call) -> std::uint16
         zero = newTypedReg(state, ValueType::I64);
         emit(state, Instr::withImm(Op::LoadConstI64, zero, 0));
     }
-    const auto arg0 = arguments.empty() ? zero : arguments[0];
-    const auto arg1 = arguments.size() > 1U ? arguments[1] : zero;
+    const auto arg0   = arguments.empty() ? zero : arguments[0];
+    const auto arg1   = arguments.size() > 1U ? arguments[1] : zero;
     const auto result = newReg(state, call.result_type);
     emit(state, Instr::callRef(Op::CallFnRef, result, functionRef, arg0, arg1));
     return result;
@@ -1359,8 +1391,7 @@ auto lowerMakeSome(LowerState &state, const hir::HirMakeSome &some) -> std::uint
     }
 
     const auto tag = newTypedReg(state, ValueType::Ptr);
-    emit(state, Instr{Op::FieldPtr, tag, base, 0,
-                      u16(inner_size, state.result)});
+    emit(state, Instr{Op::FieldPtr, tag, base, 0, u16(inner_size, state.result)});
     const auto present = newTypedReg(state, ValueType::I64);
     emit(state, Instr::withImm(Op::LoadConstI64, present, 1U));
     emit(state, Instr::simple(Op::StoreI8, tag, present));
@@ -1369,8 +1400,7 @@ auto lowerMakeSome(LowerState &state, const hir::HirMakeSome &some) -> std::uint
 
 /// Lower a struct/pack literal into freshly allocated linear memory. Field
 /// values are stored at their laid-out offsets; nested aggregates are copied.
-auto lowerStructLiteral(LowerState &state, const hir::HirStructLiteral &literal)
-    -> std::uint16_t {
+auto lowerStructLiteral(LowerState &state, const hir::HirStructLiteral &literal) -> std::uint16_t {
     const auto size = typeSize(state.types, literal.type);
     if (size == 0U || size > 0xFFFFU) {
         state.result->ok      = false;
@@ -1388,11 +1418,12 @@ auto lowerStructLiteral(LowerState &state, const hir::HirStructLiteral &literal)
     for (std::size_t i = 0; i < literal.values.size(); ++i) {
         if (literal.values[i] == hir::kInvalidHirExpr)
             continue;
-        const auto field_type = i < field_count ? state.types.memberAt(literal.type, i).type
-                                                : types::kInvalidType;
+        const auto field_type =
+            i < field_count ? state.types.memberAt(literal.type, i).type : types::kInvalidType;
         if (field_type == types::kInvalidType)
             continue;
-        const auto offset = fieldByteOffset(state.types, literal.type, static_cast<std::uint32_t>(i));
+        const auto offset =
+            fieldByteOffset(state.types, literal.type, static_cast<std::uint32_t>(i));
         if (offset > 0xFFFFU) {
             state.result->ok      = false;
             state.result->message = "struct field offset exceeds the v2 instruction width";
@@ -1441,9 +1472,8 @@ auto lvalueAddress(LowerState &state, hir::HirExprId target) -> std::uint16_t {
             state.result->message = "unsupported pointer index assignment in v2 lowering";
             return kUnassignedReg;
         }
-        const auto elementSize = index->is_array
-                                     ? arrayElementSize(state.types, index->obj_type)
-                                     : scalarElementSize(state.types, index->type);
+        const auto elementSize = index->is_array ? arrayElementSize(state.types, index->obj_type)
+                                                 : scalarElementSize(state.types, index->type);
         if (elementSize == 0U || elementSize > 0xFFFFU) {
             state.result->ok      = false;
             state.result->message = "unsupported index assignment in v2 lowering";
@@ -1471,6 +1501,70 @@ auto lvalueAddress(LowerState &state, hir::HirExprId target) -> std::uint16_t {
     return aggregateAddress(state, target);
 }
 
+auto lowerSlotValue(LowerState &state, hir::HirSlotId slot, types::TypeId type) -> std::uint16_t {
+    const auto base = slotRegister(state, slot);
+    if (base == kUnassignedReg) {
+        state.result->ok      = false;
+        state.result->message = "unknown HIR slot in v2 lowering";
+        return kUnassignedReg;
+    }
+
+    const bool memoryScalar = slot < state.slotBacked.size() && state.slotBacked[slot] != 0U &&
+                              !isAggregateType(state.types, type);
+    if (!memoryScalar)
+        return base;
+
+    const auto value = newReg(state, type);
+    emit(state, Instr::simple(Op::LoadI64, value, base, 0));
+    return value;
+}
+
+auto lowerSlotStore(LowerState &state, const hir::HirSlotStore &store) -> std::uint16_t {
+    const auto destination = slotRegister(state, store.slot);
+    if (destination == kUnassignedReg) {
+        state.result->ok      = false;
+        state.result->message = "invalid HIR slot store in v2 lowering";
+        return kUnassignedReg;
+    }
+
+    const auto slotType =
+        store.slot < state.slotTypes.size() ? state.slotTypes[store.slot] : types::kInvalidType;
+    if (isAggregateType(state.types, slotType)) {
+        const auto source = aggregateAddress(state, store.value);
+        if (source == kUnassignedReg)
+            return kUnassignedReg;
+        if (source != destination)
+            copyBytes(state, destination, source, typeSize(state.types, slotType));
+        return source;
+    }
+
+    const auto value = lowerOperand(state, store.value);
+    if (value == kUnassignedReg)
+        return kUnassignedReg;
+    const bool memoryScalar = store.slot < state.slotBacked.size() &&
+                              state.slotBacked[store.slot] != 0U &&
+                              !isAggregateType(state.types, slotType);
+    if (memoryScalar) {
+        emit(state, Instr::simple(Op::StoreI64, destination, value));
+        return value;
+    }
+
+    const bool isSliceSlot = state.slotWidths[store.slot] == 2U;
+    if (isSliceSlot && (static_cast<std::size_t>(destination) + 1U >= state.fn->regCount ||
+                        static_cast<std::size_t>(value) + 1U >= state.fn->regCount)) {
+        state.result->ok      = false;
+        state.result->message = "slice HIR slot store exceeds v2 registers";
+        return kUnassignedReg;
+    }
+    if (destination != value)
+        emit(state, Instr::simple(Op::Move, destination, value));
+    if (isSliceSlot) {
+        emit(state, Instr::simple(Op::Move, static_cast<std::uint16_t>(destination + 1U),
+                                  static_cast<std::uint16_t>(value + 1U)));
+    }
+    return value;
+}
+
 auto lowerOperand(LowerState &state, hir::HirExprId id) -> std::uint16_t {
     if (id >= state.regs.size())
         return kUnassignedReg;
@@ -1478,7 +1572,7 @@ auto lowerOperand(LowerState &state, hir::HirExprId id) -> std::uint16_t {
         return state.regs[id];
 
     const auto &expr = state.hir.getExpr(id);
-    const auto reg = hir::visitExpr(
+    const auto reg   = hir::visitExpr(
         expr,
         common::overloaded{
             [&](const hir::HirLiteral &lit) { return lowerLiteral(state, lit); },
@@ -1512,10 +1606,10 @@ auto lowerOperand(LowerState &state, hir::HirExprId id) -> std::uint16_t {
                 return kUnassignedReg;
             },
             [&](const hir::HirExternalGlobalAddr &address) -> std::uint16_t {
-                const auto name         = state.interner.lookup(address.name);
-                state.result->ok        = false;
-                state.result->message   = "unsupported external global '" + std::string(name) +
-                                          "' in v2 VM";
+                const auto name  = state.interner.lookup(address.name);
+                state.result->ok = false;
+                state.result->message =
+                    "unsupported external global '" + std::string(name) + "' in v2 VM";
                 return kUnassignedReg;
             },
             [&](const hir::HirBinary &bin) -> std::uint16_t {
@@ -1619,24 +1713,10 @@ auto lowerOperand(LowerState &state, hir::HirExprId id) -> std::uint16_t {
                 return dst;
             },
             [&](const hir::HirSlotLoad &load) -> std::uint16_t {
-                const auto base = slotRegister(state, load.slot);
-                if (base == kUnassignedReg) {
-                    state.result->ok      = false;
-                    state.result->message = "unknown HIR slot in v2 lowering";
-                    return kUnassignedReg;
-                }
                 // A memory-backed scalar slot stores the address of its value,
                 // so a load reads it. Aggregate slots return their address
                 // (address-backed), and slice slots keep their {ptr, len} pair.
-                const bool memoryScalar =
-                    load.slot < state.slotBacked.size() && state.slotBacked[load.slot] != 0U &&
-                    !isAggregateType(state.types, load.type);
-                if (memoryScalar) {
-                    const auto dst = newReg(state, load.type);
-                    emit(state, Instr::simple(Op::LoadI64, dst, base, 0));
-                    return dst;
-                }
-                return base;
+                return lowerSlotValue(state, load.slot, load.type);
             },
             [&](const hir::HirSlotAddr &addr) -> std::uint16_t {
                 const auto base = slotRegister(state, addr.slot);
@@ -1646,6 +1726,7 @@ auto lowerOperand(LowerState &state, hir::HirExprId id) -> std::uint16_t {
                 }
                 return base;
             },
+            [&](const hir::HirSlotStore &store) { return lowerSlotStore(state, store); },
             [&](const hir::HirField &field) -> std::uint16_t {
                 if (state.types.kindOf(field.object_type) == types::TypeKind::Union &&
                     field.index == 1U) {
@@ -1660,10 +1741,11 @@ auto lowerOperand(LowerState &state, hir::HirExprId id) -> std::uint16_t {
                 if (isPointerValued(state.types, field.type))
                     return addr;
                 const auto dst = newReg(state, field.type);
-                const auto op = state.types.kindOf(field.object_type) == types::TypeKind::Optional &&
-                                        field.index == 1U
-                                    ? Op::LoadI8
-                                    : Op::LoadI64;
+                const auto op =
+                    state.types.kindOf(field.object_type) == types::TypeKind::Optional &&
+                            field.index == 1U
+                        ? Op::LoadI8
+                        : Op::LoadI64;
                 emit(state, Instr::simple(op, dst, addr, 0));
                 return dst;
             },
@@ -1674,8 +1756,8 @@ auto lowerOperand(LowerState &state, hir::HirExprId id) -> std::uint16_t {
                     const auto *union_type =
                         std::get_if<types::TypeUnion>(&state.types.lookup(cast.to));
                     const auto *def = union_type != nullptr
-                                            ? state.types.lookupUnionDef(union_type->def_id)
-                                            : nullptr;
+                                          ? state.types.lookupUnionDef(union_type->def_id)
+                                          : nullptr;
                     if (def == nullptr ||
                         (def->is_tagged && cast.member_index >= def->members.size())) {
                         state.result->ok      = false;
@@ -1751,12 +1833,14 @@ auto lowerOperand(LowerState &state, hir::HirExprId id) -> std::uint16_t {
             [&](const hir::HirOpaqueCheck &check) { return lowerOpaqueCheck(state, check); },
             [&](const hir::HirMakeNone &none) { return lowerMakeNone(state, none); },
             [&](const hir::HirMakeSome &some) { return lowerMakeSome(state, some); },
-            [&](const hir::HirStructLiteral &literal) { return lowerStructLiteral(state, literal); },
+            [&](const hir::HirStructLiteral &literal) {
+                return lowerStructLiteral(state, literal);
+            },
             [&](const hir::HirAssign &assign) -> std::uint16_t {
                 const auto addr = lvalueAddress(state, assign.target);
                 if (addr == kUnassignedReg)
                     return kUnassignedReg;
-                const auto &targetExpr = state.hir.getExpr(assign.target);
+                const auto &targetExpr  = state.hir.getExpr(assign.target);
                 const auto *targetField = std::get_if<hir::HirField>(&targetExpr);
                 const auto target_type =
                     targetField != nullptr ? targetField->type : types::kInvalidType;
@@ -1797,10 +1881,9 @@ auto lowerOperand(LowerState &state, hir::HirExprId id) -> std::uint16_t {
                     if (indexReg == kUnassignedReg)
                         return kUnassignedReg;
                     const auto dst = newReg(state, index.type);
-                    emit(state,
-                         Instr{Op::IndexLoad, dst, object, indexReg,
-                               static_cast<std::uint16_t>(elementSize),
-                               static_cast<std::uint16_t>(array->count)});
+                    emit(state, Instr{Op::IndexLoad, dst, object, indexReg,
+                                      static_cast<std::uint16_t>(elementSize),
+                                      static_cast<std::uint16_t>(array->count)});
                     return dst;
                 }
 
@@ -1811,8 +1894,7 @@ auto lowerOperand(LowerState &state, hir::HirExprId id) -> std::uint16_t {
                     const auto indexReg    = lowerOperand(state, index.index);
                     if (elementSize == 0U || elementSize > 0xFFFFU ||
                         static_cast<std::size_t>(object) + 1U >= state.fn->regCount ||
-                        indexReg == kUnassignedReg ||
-                        indexReg >= state.fn->regCount) {
+                        indexReg == kUnassignedReg || indexReg >= state.fn->regCount) {
                         state.result->ok      = false;
                         state.result->message = "unsupported slice index in v2 lowering";
                         return kUnassignedReg;
@@ -1832,8 +1914,8 @@ auto lowerOperand(LowerState &state, hir::HirExprId id) -> std::uint16_t {
                     return kUnassignedReg;
                 }
                 const auto ptr = newReg(state, index.obj_type);
-                emit(state, Instr{Op::FieldPtr, ptr, object, 0,
-                                  static_cast<std::uint16_t>(indexLit->i)});
+                emit(state,
+                     Instr{Op::FieldPtr, ptr, object, 0, static_cast<std::uint16_t>(indexLit->i)});
                 const auto count = newReg(state, types::kCharType);
                 emit(state, Instr::withImm(Op::LoadConstI32, count, 1));
                 const auto dst = newReg(state, index.type);
@@ -1873,8 +1955,8 @@ auto lowerOperand(LowerState &state, hir::HirExprId id) -> std::uint16_t {
                             return kUnassignedReg;
                         return static_cast<std::uint16_t>(operand + 1U);
                     }
-                    if (const auto *array =
-                            std::get_if<types::TypeArray>(&state.types.lookup(intrinsic.operand_type))) {
+                    if (const auto *array = std::get_if<types::TypeArray>(
+                            &state.types.lookup(intrinsic.operand_type))) {
                         const auto length = newTypedReg(state, ValueType::I64);
                         emit(state, Instr::withImm(Op::LoadConstI64, length,
                                                    static_cast<std::uint16_t>(array->count)));
@@ -1884,24 +1966,35 @@ auto lowerOperand(LowerState &state, hir::HirExprId id) -> std::uint16_t {
                 if (intrinsic.which == hir::HirLayoutIntrinsic::Which::LengthOf &&
                     intrinsic.string_length <= 0xFFFFU) {
                     const auto length = newTypedReg(state, ValueType::I64);
-                    emit(state, Instr::withImm(
-                                    Op::LoadConstI64, length,
-                                    static_cast<std::uint16_t>(intrinsic.string_length)));
+                    emit(state,
+                         Instr::withImm(Op::LoadConstI64, length,
+                                        static_cast<std::uint16_t>(intrinsic.string_length)));
                     return length;
                 }
                 return kUnassignedReg;
             },
             [&](const hir::HirMakeSlice &slice) { return lowerMakeSlice(state, slice); },
-            [&](const hir::HirArrayLiteral &literal) {
-                return lowerArrayLiteral(state, literal);
-            },
+            [&](const hir::HirArrayLiteral &literal) { return lowerArrayLiteral(state, literal); },
             [&](const hir::HirCall &call) { return lowerCall(state, call); },
+            [&](const hir::HirPipe &pipe) -> std::uint16_t {
+                const auto stage = lowerOperand(state, pipe.stage);
+                if (stage == kUnassignedReg)
+                    return kUnassignedReg;
+                if (!pipe.is_effect)
+                    return stage;
+                return lowerSlotValue(state, pipe.source_slot, pipe.source_type);
+            },
+            [&](const hir::HirPipeCurrent &current) {
+                return lowerSlotValue(state, current.slot, current.type);
+            },
             [&](const auto &) -> std::uint16_t {
                 // An unhandled HIR node must fail the lowering instead of
                 // silently producing an unassigned register, which callers
                 // could mistake for "no value" and skip a store or return.
                 state.result->ok      = false;
-                state.result->message = "unsupported HIR expression in v2 lowering";
+                state.result->message = "unsupported HIR expression kind " +
+                                        std::to_string(static_cast<unsigned>(hir::exprKind(expr))) +
+                                        " in v2 lowering";
                 return kUnassignedReg;
             },
         });
@@ -1947,7 +2040,7 @@ auto prepareFunctionRegisters(LowerState &state) -> bool {
         return false;
 
     std::size_t slotCount = 0;
-    auto includeSlot = [&](hir::HirSlotId slot) {
+    auto includeSlot      = [&](hir::HirSlotId slot) {
         if (slot == hir::kInvalidHirSlot || slot >= 0xFFFFU) {
             state.result->ok      = false;
             state.result->message = "HIR slot index exceeds v2 register limit";
@@ -1987,10 +2080,9 @@ auto prepareFunctionRegisters(LowerState &state) -> bool {
             const auto *alloca = std::get_if<hir::HirSlotAlloca>(&state.hir.getExpr(instId));
             if (alloca == nullptr || alloca->slot >= state.slotWidths.size())
                 continue;
-            const auto width = static_cast<std::uint8_t>(
-                valueRegisterWidth(state.types, alloca->type));
-            if (state.slotWidths[alloca->slot] != 0U &&
-                state.slotWidths[alloca->slot] != width) {
+            const auto width =
+                static_cast<std::uint8_t>(valueRegisterWidth(state.types, alloca->type));
+            if (state.slotWidths[alloca->slot] != 0U && state.slotWidths[alloca->slot] != width) {
                 state.result->ok      = false;
                 state.result->message = "inconsistent HIR slot widths in v2 lowering";
                 return false;
@@ -1999,8 +2091,7 @@ auto prepareFunctionRegisters(LowerState &state) -> bool {
             state.slotTypes[alloca->slot]  = alloca->type;
         }
     }
-    for (std::size_t i = 0; i < state.hirFn->param_slots.size() &&
-                            i < state.hirFn->params.size();
+    for (std::size_t i = 0; i < state.hirFn->param_slots.size() && i < state.hirFn->params.size();
          ++i) {
         const auto slot = state.hirFn->param_slots[i];
         if (slot >= state.slotRegs.size())
@@ -2065,8 +2156,7 @@ auto prepareFunctionRegisters(LowerState &state) -> bool {
 } // namespace
 
 auto lowerModule(const hir::HirModule &hir, const memory::StringInterner &interner,
-                 const types::TypeIntern &types, memory::Arena &arena, Module &out)
-    -> LowerResult {
+                 const types::TypeIntern &types, memory::Arena &arena, Module &out) -> LowerResult {
     LowerResult result{true, {}};
 
     for (std::size_t i = 0; i < hir.getFnCount(); ++i) {
@@ -2082,13 +2172,21 @@ auto lowerModule(const hir::HirModule &hir, const memory::StringInterner &intern
         fn.name       = sourceName(linkage);
         fn.returnType = valueTypeOf(types, hirFn.return_type);
 
-        LowerState state{arena, hir, interner, types, out, &hirFn, &fn,
+        LowerState state{arena,
+                         hir,
+                         interner,
+                         types,
+                         out,
+                         &hirFn,
+                         &fn,
                          memory::DynArray<std::uint16_t>(arena),
                          memory::DynArray<std::uint16_t>(arena),
                          memory::DynArray<std::uint16_t>(arena),
                          memory::DynArray<std::uint8_t>(arena),
                          memory::DynArray<types::TypeId>(arena),
-                         memory::DynArray<std::uint8_t>(arena), kUnassignedReg, &result};
+                         memory::DynArray<std::uint8_t>(arena),
+                         kUnassignedReg,
+                         &result};
         state.regs.resize(hir.exprCount(), kUnassignedReg);
         if (!prepareFunctionRegisters(state))
             return result;
@@ -2099,8 +2197,7 @@ auto lowerModule(const hir::HirModule &hir, const memory::StringInterner &intern
         for (std::size_t slot = 0; slot < state.slotBacked.size(); ++slot) {
             if (state.slotBacked[slot] == 0U || state.slotTypes[slot] == types::kInvalidType)
                 continue;
-            const auto destination =
-                slotRegister(state, static_cast<hir::HirSlotId>(slot));
+            const auto destination = slotRegister(state, static_cast<hir::HirSlotId>(slot));
             if (destination == kUnassignedReg) {
                 result.ok      = false;
                 result.message = "invalid memory HIR slot in v2 lowering";
@@ -2114,22 +2211,21 @@ auto lowerModule(const hir::HirModule &hir, const memory::StringInterner &intern
             }
             const auto count = newTypedReg(state, ValueType::I64);
             const auto align = newTypedReg(state, ValueType::I64);
-            emit(state, Instr::withImm(Op::LoadConstI64, count,
-                                       static_cast<std::uint16_t>(size)));
+            emit(state, Instr::withImm(Op::LoadConstI64, count, static_cast<std::uint16_t>(size)));
             emit(state, Instr::withImm(Op::LoadConstI64, align, 8));
             emit(state, Instr::simple(Op::AllocBytes, destination, count, align));
         }
 
         struct PendingTarget {
-            std::size_t pc = 0;
+            std::size_t pc       = 0;
             hir::HirDeclId block = hir::kInvalidHirExpr;
-            bool falseBranch = false;
+            bool falseBranch     = false;
         };
         std::vector<std::size_t> blockPcs(hirFn.blocks.size(), fn.body.size());
         std::vector<PendingTarget> pendingTargets;
 
         for (std::size_t blockIndex = 0; blockIndex < hirFn.blocks.size(); ++blockIndex) {
-            const auto &block = hirFn.blocks[blockIndex];
+            const auto &block    = hirFn.blocks[blockIndex];
             blockPcs[blockIndex] = fn.body.size();
             for (const auto instId : block.insts) {
                 const auto &expr = hir.getExpr(instId);
@@ -2140,56 +2236,8 @@ auto lowerModule(const hir::HirModule &hir, const memory::StringInterner &intern
                     continue;
                 } else if (std::holds_alternative<hir::HirSlotStore>(expr)) {
                     const auto &store = std::get<hir::HirSlotStore>(expr);
-                    const auto destination = slotRegister(state, store.slot);
-                    if (destination == kUnassignedReg) {
-                        result.ok      = false;
-                        result.message = "invalid HIR slot store in v2 lowering";
+                    if (lowerSlotStore(state, store) == kUnassignedReg && !result.ok)
                         return result;
-                    }
-                    const auto slotType = store.slot < state.slotTypes.size()
-                                              ? state.slotTypes[store.slot]
-                                              : types::kInvalidType;
-                    if (isAggregateType(state.types, slotType)) {
-                        const auto source = aggregateAddress(state, store.value);
-                        if (source == kUnassignedReg) {
-                            if (!result.ok)
-                                return result;
-                            continue;
-                        }
-                        if (source != destination)
-                            copyBytes(state, destination, source,
-                                      typeSize(state.types, slotType));
-                        continue;
-                    }
-                    const auto value = lowerOperand(state, store.value);
-                    if (value == kUnassignedReg) {
-                        if (!result.ok)
-                            return result;
-                        continue;
-                    }
-                    const bool memoryScalar =
-                        store.slot < state.slotBacked.size() &&
-                        state.slotBacked[store.slot] != 0U &&
-                        !isAggregateType(state.types, slotType);
-                    if (memoryScalar) {
-                        emit(state, Instr::simple(Op::StoreI64, destination, value));
-                        continue;
-                    }
-                    const bool isSliceSlot = state.slotWidths[store.slot] == 2U;
-                    if (isSliceSlot &&
-                        (static_cast<std::size_t>(destination) + 1U >= fn.regCount ||
-                         static_cast<std::size_t>(value) + 1U >= fn.regCount)) {
-                        result.ok      = false;
-                        result.message = "slice HIR slot store exceeds v2 registers";
-                        return result;
-                    }
-                    if (destination != value)
-                        emit(state, Instr::simple(Op::Move, destination, value));
-                    if (isSliceSlot) {
-                        emit(state, Instr::simple(
-                                        Op::Move, static_cast<std::uint16_t>(destination + 1U),
-                                        static_cast<std::uint16_t>(value + 1U)));
-                    }
                 } else {
                     (void)lowerOperand(state, instId);
                 }
@@ -2217,15 +2265,14 @@ auto lowerModule(const hir::HirModule &hir, const memory::StringInterner &intern
                     emit(state, Instr{Op::Ret, static_cast<std::uint16_t>(state.sretReg), 0, 0, 0});
                     continue;
                 }
-                const auto value = ret->value == hir::kInvalidHirExpr
-                                       ? 0
-                                       : lowerOperand(state, ret->value);
+                const auto value =
+                    ret->value == hir::kInvalidHirExpr ? 0 : lowerOperand(state, ret->value);
                 if (value == kUnassignedReg) {
                     if (!result.ok)
                         return result;
-                    result.ok      = false;
-                    result.message = "unsupported return value in v2 lowering for " +
-                                     std::string(linkage);
+                    result.ok = false;
+                    result.message =
+                        "unsupported return value in v2 lowering for " + std::string(linkage);
                     return result;
                 }
                 emit(state, Instr{Op::Ret, static_cast<std::uint16_t>(value), 0, 0, 0});
@@ -2250,6 +2297,9 @@ auto lowerModule(const hir::HirModule &hir, const memory::StringInterner &intern
                 pendingTargets.push_back({fn.body.size(), branch->then_block, false});
                 pendingTargets.push_back({fn.body.size(), branch->else_block, true});
                 emit(state, Instr{Op::Branch2, 0, cond, 0, 0, 0});
+            } else if (const auto *tail = std::get_if<hir::HirStateTailCall>(&terminator)) {
+                if (lowerCall(state, tail->call, true) == kUnassignedReg || !result.ok)
+                    return result;
             } else if (const auto *panic = std::get_if<hir::HirRuntimePanic>(&terminator)) {
                 if (panic->code != 10003U) {
                     result.ok      = false;
