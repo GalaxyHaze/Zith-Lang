@@ -37,6 +37,7 @@ const char *opName(Op op) {
     switch (op) {
         ZITH_VM_OP_NAME(LoadConstI32);
         ZITH_VM_OP_NAME(LoadConstI64);
+        ZITH_VM_OP_NAME(LoadConstI64FromPool);
         ZITH_VM_OP_NAME(LoadConstF32);
         ZITH_VM_OP_NAME(LoadConstF64);
         ZITH_VM_OP_NAME(LoadString);
@@ -46,8 +47,10 @@ const char *opName(Op op) {
         ZITH_VM_OP_NAME(AllocBytes);
         ZITH_VM_OP_NAME(MallocBytes);
         ZITH_VM_OP_NAME(StoreBytes);
+        ZITH_VM_OP_NAME(StoreI8);
         ZITH_VM_OP_NAME(StoreI64);
         ZITH_VM_OP_NAME(LoadBytes);
+        ZITH_VM_OP_NAME(LoadI8);
         ZITH_VM_OP_NAME(LoadI64);
         ZITH_VM_OP_NAME(IndexLoad);
         ZITH_VM_OP_NAME(FieldPtr);
@@ -84,6 +87,7 @@ const char *opName(Op op) {
         ZITH_VM_OP_NAME(Branch);
         ZITH_VM_OP_NAME(Branch2);
         ZITH_VM_OP_NAME(Jump);
+        ZITH_VM_OP_NAME(NullDeref);
         ZITH_VM_OP_NAME(Trap);
     }
 #undef ZITH_VM_OP_NAME
@@ -106,6 +110,9 @@ void appendInstruction(std::ostringstream &out, const Instr &instr, size_t pc) {
     case Op::LoadConstI32:
     case Op::LoadConstI64:
         out << "dst=r" << instr.a << " value=" << instr.imm;
+        break;
+    case Op::LoadConstI64FromPool:
+        out << "dst=r" << instr.a << " i64_constant=#" << instr.imm;
         break;
     case Op::LoadConstF32:
     case Op::LoadConstF64:
@@ -131,12 +138,14 @@ void appendInstruction(std::ostringstream &out, const Instr &instr, size_t pc) {
         out << "address=r" << instr.a << " string=#" << instr.imm;
         break;
     case Op::StoreI64:
+    case Op::StoreI8:
         out << "address=r" << instr.a << " value=r" << instr.b;
         break;
     case Op::LoadBytes:
         out << "dst=r" << instr.a << " address=r" << instr.b << " count=r" << instr.c;
         break;
     case Op::LoadI64:
+    case Op::LoadI8:
         out << "dst=r" << instr.a << " address=r" << instr.b;
         break;
     case Op::IndexLoad:
@@ -222,6 +231,9 @@ void appendInstruction(std::ostringstream &out, const Instr &instr, size_t pc) {
         break;
     case Op::Jump:
         out << "target=pc" << instr.imm;
+        break;
+    case Op::NullDeref:
+        out << "reason=R10003";
         break;
     case Op::Trap:
         out << "reason=explicit";

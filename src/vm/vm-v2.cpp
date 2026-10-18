@@ -318,6 +318,7 @@ auto validateFunctionShape(const Function &fn) -> bool {
         switch (instr.op) {
         case Op::LoadConstI32:
         case Op::LoadConstI64:
+        case Op::LoadConstI64FromPool:
         case Op::LoadConstF32:
         case Op::LoadConstF64:
         case Op::LoadString:
@@ -341,6 +342,7 @@ auto validateFunctionShape(const Function &fn) -> bool {
                 return false;
             break;
         case Op::StoreI64:
+        case Op::StoreI8:
             if (missingRegister(fn, dst, false) || missingRegister(fn, lhs, false))
                 return false;
             break;
@@ -350,6 +352,7 @@ auto validateFunctionShape(const Function &fn) -> bool {
                 return false;
             break;
         case Op::LoadI64:
+        case Op::LoadI8:
             if (missingRegister(fn, dst, false) || missingRegister(fn, lhs, false))
                 return false;
             break;
@@ -458,6 +461,7 @@ auto validateFunctionShape(const Function &fn) -> bool {
             if (invalidJumpTarget(fn, instr))
                 return false;
             break;
+        case Op::NullDeref:
         case Op::Trap:
             break;
         }
@@ -483,6 +487,12 @@ auto runFunction(RunState &state, const Function &fn, std::vector<int64_t> &regs
         case Op::LoadConstI32:
         case Op::LoadConstI64:
             if (!setReg(regs, dst, instr.imm))
+                return {false, 0};
+            pc++;
+            break;
+        case Op::LoadConstI64FromPool:
+            if (instr.imm >= state.module->i64Constants.size() ||
+                !setReg(regs, dst, state.module->i64Constants[instr.imm]))
                 return {false, 0};
             pc++;
             break;
@@ -559,6 +569,15 @@ auto runFunction(RunState &state, const Function &fn, std::vector<int64_t> &regs
             pc++;
             break;
         }
+        case Op::StoreI8: {
+            const auto offset = static_cast<std::size_t>(getReg(regs, dst));
+            const std::array<std::uint8_t, 1> bytes{
+                static_cast<std::uint8_t>(getReg(regs, lhs))};
+            if (!state.memory->write(offset, bytes))
+                return {false, 0};
+            pc++;
+            break;
+        }
         case Op::LoadBytes: {
             const std::size_t offset = static_cast<std::size_t>(getReg(regs, lhs));
             const std::size_t count  = static_cast<std::size_t>(getReg(regs, rhs));
@@ -582,6 +601,14 @@ auto runFunction(RunState &state, const Function &fn, std::vector<int64_t> &regs
             for (std::size_t i = 0; i < bytes.size(); ++i)
                 value |= static_cast<std::uint64_t>(bytes[i]) << (i * 8U);
             if (!setReg(regs, dst, static_cast<std::int64_t>(value)))
+                return {false, 0};
+            pc++;
+            break;
+        }
+        case Op::LoadI8: {
+            const auto offset = static_cast<std::size_t>(getReg(regs, lhs));
+            const auto bytes  = state.memory->read(offset, 1U);
+            if (bytes.size() != 1U || !setReg(regs, dst, bytes[0]))
                 return {false, 0};
             pc++;
             break;
@@ -883,6 +910,9 @@ auto runFunction(RunState &state, const Function &fn, std::vector<int64_t> &regs
         case Op::Jump:
             pc = instr.imm;
             break;
+        case Op::NullDeref:
+            state.message = "R10003: optional value is null";
+            return {false, 0};
         case Op::Trap:
             return {false, 0};
         }

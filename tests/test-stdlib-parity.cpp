@@ -45,6 +45,47 @@ struct ParityCase {
 };
 
 constexpr ParityCase kCases[] = {
+    {"optional_none_is_null",
+     "fn main(): i32 {\n"
+     "    let value: ?i32 = null;\n"
+     "    if (value is null) { return 17; }\n"
+     "    return 0;\n"
+     "}\n",
+     nullptr},
+    {"optional_some_presence_and_must",
+     "fn main(): i32 {\n"
+     "    let value: ?i32 = 41;\n"
+     "    if (value) { return must value; }\n"
+     "    return 0;\n"
+     "}\n",
+     nullptr},
+    {"optional_pointer_niche",
+     "fn main(): i32 {\n"
+     "    var target: i32 = 23;\n"
+     "    let absent: ?*i32 = null;\n"
+     "    if (absent is null) {\n"
+     "        let present: ?*i32 = &target;\n"
+     "        return *must present;\n"
+     "    }\n"
+     "    return 0;\n"
+     "}\n",
+     nullptr},
+    {"implicit_numeric_enum",
+     "enum Legacy { Base = -4, Next }\n"
+     "fn main(): i32 {\n"
+     "    let value: Legacy = Legacy.Next;\n"
+     "    if (value as i32 == -3) { return 19; }\n"
+     "    return 0;\n"
+     "}\n",
+     nullptr},
+    {"explicit_integer_enum",
+     "enum ByteFlag: u8 { Off = 2, On = 255 }\n"
+     "fn main(): i32 {\n"
+     "    let value: ByteFlag = ByteFlag.On;\n"
+     "    if (value as i32 == 255) { return 29; }\n"
+     "    return 0;\n"
+     "}\n",
+     nullptr},
     // Passing slice: the VM and the native path agree on stdout and exit code.
     {"console_println_literal",
      "from std/io/console\n"

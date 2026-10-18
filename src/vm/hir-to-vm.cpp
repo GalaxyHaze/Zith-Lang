@@ -112,8 +112,17 @@ auto isAggregateKind(types::TypeKind kind) -> bool {
     }
 }
 
+auto isNicheOptional(const types::TypeIntern &types, types::TypeId type) -> bool {
+    if (type == types::kInvalidType || types.kindOf(type) != types::TypeKind::Optional)
+        return false;
+    const auto *optional = std::get_if<types::TypeOptional>(&types.lookup(type));
+    return optional != nullptr && types.kindOf(optional->inner) == types::TypeKind::Ptr;
+}
+
 auto isAggregateType(const types::TypeIntern &types, types::TypeId type) -> bool {
     if (type == types::kInvalidType)
+        return false;
+    if (isNicheOptional(types, type))
         return false;
     return isAggregateKind(types.kindOf(type));
 }
@@ -133,9 +142,10 @@ auto isScalarSlotType(const types::TypeIntern &types, types::TypeId type) -> boo
     case types::TypeKind::Float:
     case types::TypeKind::Ptr:
     case types::TypeKind::String:
+    case types::TypeKind::Enum:
         return true;
     default:
-        return false;
+        return isNicheOptional(types, type);
     }
 }
 
@@ -201,6 +211,7 @@ auto layoutSize(const types::TypeIntern &types, types::TypeId type, std::size_t 
     case types::TypeKind::Float:
     case types::TypeKind::Ptr:
     case types::TypeKind::String:
+    case types::TypeKind::Enum:
         align = 8U;
         return 8U;
     case types::TypeKind::Array: {
@@ -285,6 +296,19 @@ auto typeSize(const types::TypeIntern &types, types::TypeId type) -> std::size_t
 /// Byte offset of field `index` inside a struct/pack laid out by `layoutSize`.
 auto fieldByteOffset(const types::TypeIntern &types, types::TypeId struct_type,
                      std::uint32_t index) -> std::size_t {
+    if (types.kindOf(struct_type) == types::TypeKind::Optional) {
+        const auto *optional = std::get_if<types::TypeOptional>(&types.lookup(struct_type));
+        if (optional == nullptr)
+            return 0U;
+        if (index == 0U)
+            return 0U;
+        if (index == 1U) {
+            std::size_t inner_align = 1U;
+            return layoutSize(types, optional->inner, inner_align);
+        }
+        return 0U;
+    }
+
     std::size_t offset = 0;
     const auto count   = types.memberCount(struct_type);
     for (std::size_t i = 0; i < count && i <= index; ++i) {
@@ -329,9 +353,10 @@ auto scalarElementSize(const types::TypeIntern &types, types::TypeId type) -> st
     case types::TypeKind::Char:
     case types::TypeKind::Ptr:
     case types::TypeKind::String:
+    case types::TypeKind::Enum:
         return sizeof(std::int64_t);
     default:
-        return 0;
+        return isNicheOptional(types, type) ? sizeof(std::int64_t) : 0U;
     }
 }
 
@@ -875,6 +900,79 @@ auto copyBytes(LowerState &state, std::uint16_t dst, std::uint16_t src, std::siz
     emit(state, Instr::simple(Op::MemCopy, dst, src, count));
 }
 
+auto allocateGuestBytes(LowerState &state, std::size_t size) -> std::uint16_t {
+    if (size == 0U || size > 0xFFFFU) {
+        state.result->ok      = false;
+        state.result->message = "unsupported aggregate size in v2 lowering";
+        return kUnassignedReg;
+    }
+    const auto base  = newTypedReg(state, ValueType::Ptr);
+    const auto count = newTypedReg(state, ValueType::I64);
+    const auto align = newTypedReg(state, ValueType::I64);
+    emit(state, Instr::withImm(Op::LoadConstI64, count, u16(size, state.result)));
+    emit(state, Instr::withImm(Op::LoadConstI64, align, 8U));
+    emit(state, Instr::simple(Op::AllocBytes, base, count, align));
+    return base;
+}
+
+auto lowerMakeNone(LowerState &state, const hir::HirMakeNone &none) -> std::uint16_t {
+    const auto *optional = std::get_if<types::TypeOptional>(&state.types.lookup(none.type));
+    if (optional == nullptr) {
+        state.result->ok      = false;
+        state.result->message = "HirMakeNone has a non-optional type in v2 lowering";
+        return kUnassignedReg;
+    }
+    if (types::TypeKind::Ptr == state.types.kindOf(optional->inner)) {
+        // Guest offset zero is valid, so reserve -1 as the optional-pointer
+        // sentinel rather than conflating a live pointer with None.
+        const auto index = u16(state.out.i64Constants.size(), state.result);
+        if (!state.result->ok)
+            return kUnassignedReg;
+        state.out.i64Constants.push(-1);
+        const auto result = newReg(state, none.type);
+        emit(state, Instr::withImm(Op::LoadConstI64FromPool, result, index));
+        return result;
+    }
+    return allocateGuestBytes(state, typeSize(state.types, none.type));
+}
+
+auto lowerMakeSome(LowerState &state, const hir::HirMakeSome &some) -> std::uint16_t {
+    const auto *optional = std::get_if<types::TypeOptional>(&state.types.lookup(some.type));
+    if (optional == nullptr) {
+        state.result->ok      = false;
+        state.result->message = "HirMakeSome has a non-optional type in v2 lowering";
+        return kUnassignedReg;
+    }
+    const auto value = lowerOperand(state, some.value);
+    if (value == kUnassignedReg)
+        return kUnassignedReg;
+    if (types::TypeKind::Ptr == state.types.kindOf(optional->inner))
+        return value;
+
+    std::size_t inner_align = 1U;
+    const auto inner_size   = layoutSize(state.types, optional->inner, inner_align);
+    const auto base         = allocateGuestBytes(state, typeSize(state.types, some.type));
+    if (base == kUnassignedReg || inner_size == 0U)
+        return kUnassignedReg;
+
+    if (isAggregateType(state.types, optional->inner)) {
+        const auto source = aggregateAddress(state, some.value);
+        if (source == kUnassignedReg)
+            return kUnassignedReg;
+        copyBytes(state, base, source, inner_size);
+    } else {
+        emit(state, Instr::simple(Op::StoreI64, base, value));
+    }
+
+    const auto tag = newTypedReg(state, ValueType::Ptr);
+    emit(state, Instr{Op::FieldPtr, tag, base, 0,
+                      u16(inner_size, state.result)});
+    const auto present = newTypedReg(state, ValueType::I64);
+    emit(state, Instr::withImm(Op::LoadConstI64, present, 1U));
+    emit(state, Instr::simple(Op::StoreI8, tag, present));
+    return base;
+}
+
 /// Lower a struct/pack literal into freshly allocated linear memory. Field
 /// values are stored at their laid-out offsets; nested aggregates are copied.
 auto lowerStructLiteral(LowerState &state, const hir::HirStructLiteral &literal)
@@ -990,6 +1088,23 @@ auto lowerOperand(LowerState &state, hir::HirExprId id) -> std::uint16_t {
         expr,
         common::overloaded{
             [&](const hir::HirLiteral &lit) { return lowerLiteral(state, lit); },
+            [&](const hir::HirEnumValue &value) -> std::uint16_t {
+                const auto *enum_type =
+                    std::get_if<types::TypeEnum>(&state.types.lookup(value.type));
+                if (enum_type == nullptr ||
+                    state.types.lookupEnumDef(enum_type->def_id) == nullptr) {
+                    state.result->ok      = false;
+                    state.result->message = "invalid HIR enum value in v2 lowering";
+                    return kUnassignedReg;
+                }
+                const auto index = u16(state.out.i64Constants.size(), state.result);
+                if (!state.result->ok)
+                    return kUnassignedReg;
+                state.out.i64Constants.push(value.value);
+                const auto result = newReg(state, value.type);
+                emit(state, Instr::withImm(Op::LoadConstI64FromPool, result, index));
+                return result;
+            },
             [&](const hir::HirVar &var) -> std::uint16_t {
                 for (std::size_t p = 0; p < state.hirFn->param_names.size(); ++p)
                     if (state.hirFn->param_names[p] == var.name) {
@@ -1144,9 +1259,15 @@ auto lowerOperand(LowerState &state, hir::HirExprId id) -> std::uint16_t {
                 if (isPointerValued(state.types, field.type))
                     return addr;
                 const auto dst = newReg(state, field.type);
-                emit(state, Instr::simple(Op::LoadI64, dst, addr, 0));
+                const auto op = state.types.kindOf(field.object_type) == types::TypeKind::Optional &&
+                                        field.index == 1U
+                                    ? Op::LoadI8
+                                    : Op::LoadI64;
+                emit(state, Instr::simple(op, dst, addr, 0));
                 return dst;
             },
+            [&](const hir::HirMakeNone &none) { return lowerMakeNone(state, none); },
+            [&](const hir::HirMakeSome &some) { return lowerMakeSome(state, some); },
             [&](const hir::HirStructLiteral &literal) { return lowerStructLiteral(state, literal); },
             [&](const hir::HirAssign &assign) -> std::uint16_t {
                 const auto addr = lvalueAddress(state, assign.target);
@@ -1646,6 +1767,13 @@ auto lowerModule(const hir::HirModule &hir, const memory::StringInterner &intern
                 pendingTargets.push_back({fn.body.size(), branch->then_block, false});
                 pendingTargets.push_back({fn.body.size(), branch->else_block, true});
                 emit(state, Instr{Op::Branch2, 0, cond, 0, 0, 0});
+            } else if (const auto *panic = std::get_if<hir::HirRuntimePanic>(&terminator)) {
+                if (panic->code != 10003U) {
+                    result.ok      = false;
+                    result.message = "unsupported runtime panic code in v2 lowering";
+                    return result;
+                }
+                emit(state, Instr{Op::NullDeref, 0, 0, 0, 0});
             }
         }
 

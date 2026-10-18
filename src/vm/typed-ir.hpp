@@ -25,6 +25,7 @@ enum class ValueType : uint8_t {
 enum class Op : uint8_t {
     LoadConstI32,
     LoadConstI64,
+    LoadConstI64FromPool,
     LoadConstF32,
     LoadConstF64,
     LoadString,
@@ -34,8 +35,10 @@ enum class Op : uint8_t {
     AllocBytes,
     MallocBytes,
     StoreBytes,
+    StoreI8,
     StoreI64,
     LoadBytes,
+    LoadI8,
     LoadI64,
     IndexLoad,
     FieldPtr,
@@ -72,6 +75,7 @@ enum class Op : uint8_t {
     Branch,
     Branch2,
     Jump,
+    NullDeref,
     Trap,
 };
 

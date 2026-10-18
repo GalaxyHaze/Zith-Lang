@@ -7,10 +7,72 @@
 #include <filesystem>
 #include <fstream>
 #include <string>
+#include <string_view>
 
 using namespace zith;
 
 namespace {
+
+enum class VmPhase {
+    HirLowering,
+    VmLowering,
+    Execution,
+};
+
+struct VmOutcome {
+    VmPhase phase = VmPhase::HirLowering;
+    vm::RunStatus status = vm::RunStatus::Unsupported;
+    int64_t exitCode = 0;
+    std::string detail;
+};
+
+void test_optional_some_presence_and_must();
+void test_optional_none_is_null();
+void test_optional_pointer_niche();
+void test_optional_must_none_traps();
+void test_implicit_numeric_enum();
+void test_explicit_integer_enum();
+
+auto runVmProgram(std::string_view name, std::string_view source) -> VmOutcome {
+    const auto root = std::filesystem::temp_directory_path() / "zith-vm-v2-gap-tests" / name;
+    std::filesystem::create_directories(root);
+    const auto sourcePath = root / "main.zith";
+    {
+        std::ofstream output(sourcePath, std::ios::binary | std::ios::trunc);
+        output << source;
+        if (!output.good())
+            return {VmPhase::HirLowering, vm::RunStatus::Unsupported, 0,
+                    "failed to write gap-test source"};
+    }
+
+    memory::Arena arena;
+    Options options(arena);
+    options.targetStage = session::Stage::HirLowered;
+    session::CompilationSession compilation(options, sourcePath.string());
+    compilation.setBuffered(true);
+    if (!compilation.runTo(session::Stage::HirLowered)) {
+        std::string detail;
+        for (const auto &diag : compilation.diags().all()) {
+            if (diag.severity != diagnostics::Severity::Error)
+                continue;
+            if (!detail.empty())
+                detail += ": ";
+            detail += diag.message;
+        }
+        return {VmPhase::HirLowering, vm::RunStatus::Unsupported, 0, std::move(detail)};
+    }
+
+    memory::Arena vmArena;
+    vm::Module module(vmArena);
+    const auto lowered = vm::lowerModule(compilation.hirModule(), compilation.interner(),
+                                         compilation.types(), vmArena, module);
+    if (!lowered.ok)
+        return {VmPhase::VmLowering, vm::RunStatus::Unsupported, 0, lowered.message};
+
+    vm::Vm machine;
+    const auto result = machine.runMain(module);
+    return {VmPhase::Execution, result.status, result.exitCode, result.message};
+}
 
 void test_vm_v2_gaps() {
     const auto root = std::filesystem::temp_directory_path() / "zith-vm-v2-gap-tests";
@@ -45,6 +107,98 @@ void test_vm_v2_gaps() {
     const auto result = machine.runMain(module);
     CHECK(result.status == vm::RunStatus::Ok, "VM v2 executes the smoke source");
     CHECK_EQ(result.exitCode, 7, "VM v2 returns the smoke source exit code");
+
+    test_optional_some_presence_and_must();
+    test_optional_none_is_null();
+    test_optional_pointer_niche();
+    test_optional_must_none_traps();
+    test_implicit_numeric_enum();
+    test_explicit_integer_enum();
+}
+
+void test_optional_some_presence_and_must() {
+    const auto result = runVmProgram(
+        "optional-some-presence",
+        "fn main(): i32 {\n"
+        "    let value: ?i32 = 41;\n"
+        "    if (value) { return must value; }\n"
+        "    return 0;\n"
+        "}\n");
+    CHECK(result.phase == VmPhase::Execution,
+          "optional Some and must lower through HIR and VM v2");
+    CHECK(result.status == vm::RunStatus::Ok, "must on Some completes successfully");
+    CHECK_EQ(result.exitCode, 41, "must on Some returns its payload");
+}
+
+void test_optional_none_is_null() {
+    const auto result = runVmProgram(
+        "optional-none-is-null",
+        "fn main(): i32 {\n"
+        "    let value: ?i32 = null;\n"
+        "    if (value is null) { return 17; }\n"
+        "    return 0;\n"
+        "}\n");
+    CHECK(result.phase == VmPhase::Execution, "optional None lowers through VM v2");
+    CHECK(result.status == vm::RunStatus::Ok, "is null on None completes successfully");
+    CHECK_EQ(result.exitCode, 17, "is null detects an absent optional payload");
+}
+
+void test_optional_pointer_niche() {
+    const auto result = runVmProgram(
+        "optional-pointer-niche",
+        "fn main(): i32 {\n"
+        "    var target: i32 = 23;\n"
+        "    let absent: ?*i32 = null;\n"
+        "    if (absent is null) {\n"
+        "        let present: ?*i32 = &target;\n"
+        "        return *must present;\n"
+        "    }\n"
+        "    return 0;\n"
+        "}\n");
+    CHECK(result.phase == VmPhase::Execution, "?*T niche values lower through VM v2");
+    CHECK(result.status == vm::RunStatus::Ok, "None and Some pointer checks complete");
+    CHECK_EQ(result.exitCode, 23, "must on a present ?*T returns its pointee value");
+}
+
+void test_optional_must_none_traps() {
+    const auto result = runVmProgram(
+        "optional-must-none",
+        "fn main(): i32 {\n"
+        "    let absent: ?i32 = null;\n"
+        "    return must absent;\n"
+        "}\n");
+    CHECK(result.phase == VmPhase::Execution, "must None reaches the VM runtime");
+    CHECK(result.status == vm::RunStatus::Trap, "must None traps instead of returning");
+    CHECK(result.detail.find("R10003") != std::string::npos,
+          "must None reports the specified R10003 failure");
+}
+
+void test_implicit_numeric_enum() {
+    const auto result = runVmProgram(
+        "implicit-numeric-enum",
+        "enum Legacy { Base = -4, Next }\n"
+        "fn main(): i32 {\n"
+        "    let value: Legacy = Legacy.Next;\n"
+        "    if (value as i32 == -3) { return 19; }\n"
+        "    return 0;\n"
+        "}\n");
+    CHECK(result.phase == VmPhase::Execution, "implicit numeric enum lowers through VM v2");
+    CHECK(result.status == vm::RunStatus::Ok, "implicit numeric enum executes");
+    CHECK_EQ(result.exitCode, 19, "implicit enum discriminants preserve signed values");
+}
+
+void test_explicit_integer_enum() {
+    const auto result = runVmProgram(
+        "explicit-integer-enum",
+        "enum ByteFlag: u8 { Off = 2, On = 255 }\n"
+        "fn main(): i32 {\n"
+        "    let value: ByteFlag = ByteFlag.On;\n"
+        "    if (value as i32 == 255) { return 29; }\n"
+        "    return 0;\n"
+        "}\n");
+    CHECK(result.phase == VmPhase::Execution, "explicit integer enum lowers through VM v2");
+    CHECK(result.status == vm::RunStatus::Ok, "explicit integer enum executes");
+    CHECK_EQ(result.exitCode, 29, "explicit u8 enum preserves its discriminant");
 }
 
 } // namespace
