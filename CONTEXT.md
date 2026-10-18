@@ -91,8 +91,8 @@ not a runtime value.
 _Avoid_: returned token, runtime builder
 
 **Enum**:
-A closed set of named compile-time constants. A concrete declared value type is shared by all
-constants, while `enum: union` allows heterogeneous union members.
+A closed set of named numeric constants in Zith--, distinct from a runtime
+union. `enum: union` is outside the Zith-- subset.
 _Avoid_: tagged union
 
 **Union**:

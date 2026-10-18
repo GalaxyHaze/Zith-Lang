@@ -1,13 +1,16 @@
 # VM v2: Typed Execution IR And Linear Memory Runtime
 
-Status: conforming (host)
+Status: conforming (host baseline); parity expansion planned
 
 This is the contract for a second runtime path, kept separate from the
 existing `src/ir` + `src/interp` execution IR v1 so the shipped `Zith--`
 fallback is not destabilized. The signed ADR is
-`docs/adr/0021-vm-v2-portable-execution.md`; the host slice is conforming and
+`docs/adr/0021-vm-v2-portable-execution.md`. Its host slice is conforming and
 the sources now live in `zithcLib`, but the browser/WASM packaging is still
-later work.
+later work. The accepted parity-scope extension is recorded in
+`docs/adr/0042-vm-v2-zith-parity-scope.md`; its specification remains a draft
+in [the local gap-map notes](../../.scratch/vm-v2-gap-map/spec.md) and is not
+implemented.
 
 ## Goals
 
@@ -23,8 +26,13 @@ later work.
 - No changes to the current execution IR v1 (`src/ir`, `src/interp`) in this
   slice.
 - No browser/WASM packaging in this milestone.
-- No full language surface: state machines, dyn dispatch, opaque and variadic
-  slices are later slices.
+- No full language surface. The proposed Zith-- parity expansion is limited to
+  optionals, numeric enums, tagged and raw unions, supported `dyn` dispatch,
+  bare `opaque`, runtime pipelines, and state-machine transfers.
+- `enum: union`, `raw opaque`, external-FFI-dependent behavior, allocator and
+  `InPlace` contracts, general runtime-panic terminators, global constants,
+  cleanup, and the full variadic-slice surface are not acceptance requirements
+  for this expansion.
 - No comptime pipeline yet: build-time functions are a separate workload on
   the same VM once the IR and runtime exist.
 
@@ -35,6 +43,26 @@ on no-LLVM and WASM builds, and any native CLI build can select it with
 `--virtual-machine` or dump it with `--emit-vir`. A native LLVM build keeps the
 link-and-exec path unless the flag asks for the VM, so the shipped codegen
 backend is unchanged.
+
+## Zith-- Parity Expansion
+
+The proposed host parity scope compares native-accepted Zith-- programs with
+VM v2, using `docs/Zith--.md` as the language contract and excluding behavior
+that requires external FFI. It covers optionals, numeric enums that preserve
+current behavior while allowing an explicit numeric type, tagged and raw
+unions, supported `dyn` dispatch, bare `opaque`, runtime `|>` and `do`
+pipelines, and state-machine transfers.
+
+Optional parity includes the specified absent-value behavior of `must`.
+General runtime-panic terminators remain outside the scope. State-machine
+transfers are in scope, but the baseline research has not established the VM
+execution outcome. The draft requires paired evidence before claiming a
+specific runtime divergence or acceptance result.
+
+The scope excludes `enum: union`, `raw opaque`, allocator/`InPlace` contracts,
+FFI mode selection or expansion, global constants, cleanup, comptime
+pipelines, WASM/browser parity, and performance work. FFI-dependent examples
+may remain as diagnostic evidence but do not define acceptance.
 
 ## Decisions
 
@@ -50,8 +78,8 @@ backend is unchanged.
   each field, and assigning one aggregate to another is a `MemCopy`. A
   function that returns an aggregate by value takes a hidden result pointer as
   register 0 ahead of its declared parameters, and its `Ret` copies the value
-  into that caller-owned slot. Optionals and unions are not lowered yet and
-  report an unsupported expression instead of producing a wrong value.
+  into that caller-owned slot. In the current baseline, optional and union
+  operations still lack VM lowering and report an unsupported expression.
 - Scalar locals are address-backed for the same reason: a scalar slot register
   holds the address of its storage, so `&x` is a real pointer and a store
   through it is visible to later reads of `x`. Slices (a `{ptr, len}` pair) and
