@@ -110,6 +110,25 @@ constexpr ParityCase kCases[] = {
      "    return value as i32;\n"
      "}\n",
      nullptr},
+    {"dyn_method_dispatch",
+     "interface Biased {\n"
+     "    fn value(self, bias: i32): i32\n"
+     "}\n"
+     "struct First {\n"
+     "    base: i32,\n"
+     "    fn value(self, bias: i32): i32 { self.base + bias }\n"
+     "}\n"
+     "struct Second {\n"
+     "    base: i32,\n"
+     "    fn value(self, bias: i32): i32 { self.base * bias }\n"
+     "}\n"
+     "fn apply(value: dyn Biased, bias: i32): i32 {\n"
+     "    return value.value(bias);\n"
+     "}\n"
+     "fn main(): i32 {\n"
+     "    return apply(First { base: 10 }, 3) + apply(Second { base: 20 }, 3);\n"
+     "}\n",
+     nullptr},
     // Passing slice: the VM and the native path agree on stdout and exit code.
     {"console_println_literal",
      "from std/io/console\n"

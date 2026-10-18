@@ -106,6 +106,7 @@ auto isAggregateKind(types::TypeKind kind) -> bool {
     case types::TypeKind::Pack:
     case types::TypeKind::Union:
     case types::TypeKind::Optional:
+    case types::TypeKind::Dyn:
         return true;
     default:
         return false;
@@ -185,6 +186,7 @@ auto valueTypeOf(const types::TypeIntern &types, types::TypeId type) -> ValueTyp
     case types::TypeKind::Pack:
     case types::TypeKind::Union:
     case types::TypeKind::Optional:
+    case types::TypeKind::Dyn:
         return ValueType::Ptr;
     case types::TypeKind::Void:
         return ValueType::Void;
@@ -257,6 +259,9 @@ auto layoutSize(const types::TypeIntern &types, types::TypeId type, std::size_t 
         align = inner_align > 1U ? inner_align : 1U;
         return alignUp(inner_size, 1U) + 1U;
     }
+    case types::TypeKind::Dyn:
+        align = 8U;
+        return 16U;
     case types::TypeKind::Union: {
         const auto *union_type = std::get_if<types::TypeUnion>(&types.lookup(type));
         const auto *def =
@@ -1067,6 +1072,150 @@ auto allocateGuestBytes(LowerState &state, std::size_t size) -> std::uint16_t {
     return base;
 }
 
+auto functionIndexForSymbol(LowerState &state, symbols::SymId symbol) -> std::uint16_t {
+    std::size_t index = 0;
+    for (std::size_t i = 0; i < state.hir.getFnCount(); ++i) {
+        const auto &hirFn = state.hir.getFn(i);
+        if (!isUserFunction(state.interner.lookup(hirFn.name), hirFn))
+            continue;
+        if (hirFn.sym_id == symbol)
+            return u16(index, state.result);
+        ++index;
+    }
+    state.result->ok      = false;
+    state.result->message = "vtable slot does not reference a VM function";
+    return kUnassignedReg;
+}
+
+auto lowerMakeDyn(LowerState &state, const hir::HirMakeDyn &make) -> std::uint16_t {
+    if (state.types.kindOf(make.dyn_type) != types::TypeKind::Dyn) {
+        state.result->ok      = false;
+        state.result->message = "HirMakeDyn has a non-dyn result type in v2 lowering";
+        return kUnassignedReg;
+    }
+
+    const hir::HirVTable *vtable = nullptr;
+    for (std::size_t i = 0; i < state.hir.getVTableCount(); ++i) {
+        const auto &candidate = state.hir.getVTable(i);
+        if (candidate.name == make.vtable_name) {
+            vtable = &candidate;
+            break;
+        }
+    }
+    if (vtable == nullptr) {
+        state.result->ok      = false;
+        state.result->message = "missing HIR vtable in v2 lowering";
+        return kUnassignedReg;
+    }
+    if (vtable->slots.size() > 0xFFFFU / sizeof(std::uint64_t)) {
+        state.result->ok      = false;
+        state.result->message = "vtable exceeds the v2 linear-memory limit";
+        return kUnassignedReg;
+    }
+
+    std::uint16_t data = kUnassignedReg;
+    if (state.types.kindOf(make.source_type) == types::TypeKind::Ptr) {
+        data = lowerOperand(state, make.value);
+    } else if (make.value_is_place || isAggregateType(state.types, make.source_type)) {
+        data = aggregateAddress(state, make.value);
+    } else {
+        const auto value = lowerOperand(state, make.value);
+        if (value == kUnassignedReg)
+            return kUnassignedReg;
+        data = allocateGuestBytes(state, typeSize(state.types, make.source_type));
+        if (data != kUnassignedReg)
+            emit(state, Instr::simple(Op::StoreI64, data, value));
+    }
+    if (data == kUnassignedReg)
+        return kUnassignedReg;
+
+    const auto dyn = allocateGuestBytes(state, typeSize(state.types, make.dyn_type));
+    const auto vtableData = allocateGuestBytes(
+        state, std::max<std::size_t>(vtable->slots.size(), 1U) * sizeof(std::uint64_t));
+    if (dyn == kUnassignedReg || vtableData == kUnassignedReg)
+        return kUnassignedReg;
+
+    const auto dataField = newTypedReg(state, ValueType::Ptr);
+    emit(state, Instr{Op::FieldPtr, dataField, dyn, 0, 0});
+    emit(state, Instr::simple(Op::StoreI64, dataField, data));
+
+    const auto vtableField = newTypedReg(state, ValueType::Ptr);
+    emit(state, Instr{Op::FieldPtr, vtableField, dyn, 0, 8});
+    emit(state, Instr::simple(Op::StoreI64, vtableField, vtableData));
+
+    for (std::size_t slot = 0; slot < vtable->slots.size(); ++slot) {
+        const auto functionIndex = functionIndexForSymbol(state, vtable->slots[slot]);
+        if (functionIndex == kUnassignedReg)
+            return kUnassignedReg;
+        const auto functionRef = newTypedReg(state, ValueType::FnRef);
+        emit(state, Instr::withImm(Op::LoadFnRef, functionRef, functionIndex));
+        const auto slotAddress = newTypedReg(state, ValueType::Ptr);
+        emit(state, Instr{Op::FieldPtr, slotAddress, vtableData, 0,
+                          u16(slot * sizeof(std::uint64_t), state.result)});
+        if (!state.result->ok)
+            return kUnassignedReg;
+        emit(state, Instr::simple(Op::StoreI64, slotAddress, functionRef));
+    }
+    return dyn;
+}
+
+auto lowerDynCall(LowerState &state, const hir::HirDynCall &call) -> std::uint16_t {
+    const std::size_t argumentCount = call.args.size() + (call.has_receiver ? 1U : 0U);
+    if (argumentCount > 2U || isAggregateType(state.types, call.result_type)) {
+        state.result->ok      = false;
+        state.result->message = "dynamic call is outside the v2 indirect-call subset";
+        return kUnassignedReg;
+    }
+
+    const auto receiver = lowerOperand(state, call.receiver);
+    if (receiver == kUnassignedReg)
+        return kUnassignedReg;
+
+    const auto dataField = newTypedReg(state, ValueType::Ptr);
+    emit(state, Instr{Op::FieldPtr, dataField, receiver, 0, 0});
+    const auto data = newTypedReg(state, ValueType::Ptr);
+    emit(state, Instr::simple(Op::LoadI64, data, dataField));
+
+    const auto vtableField = newTypedReg(state, ValueType::Ptr);
+    emit(state, Instr{Op::FieldPtr, vtableField, receiver, 0, 8});
+    const auto vtable = newTypedReg(state, ValueType::Ptr);
+    emit(state, Instr::simple(Op::LoadI64, vtable, vtableField));
+
+    const std::size_t slotOffset =
+        static_cast<std::size_t>(call.slot_index) * sizeof(std::uint64_t);
+    if (slotOffset > 0xFFFFU) {
+        state.result->ok      = false;
+        state.result->message = "dynamic call slot exceeds the v2 instruction width";
+        return kUnassignedReg;
+    }
+    const auto slotAddress = newTypedReg(state, ValueType::Ptr);
+    emit(state, Instr{Op::FieldPtr, slotAddress, vtable, 0,
+                      static_cast<std::uint16_t>(slotOffset)});
+    const auto functionRef = newTypedReg(state, ValueType::FnRef);
+    emit(state, Instr::simple(Op::LoadI64, functionRef, slotAddress));
+
+    std::vector<std::uint16_t> arguments;
+    arguments.reserve(argumentCount);
+    if (call.has_receiver)
+        arguments.push_back(data);
+    for (const auto argument : call.args) {
+        const auto value = lowerOperand(state, argument);
+        if (value == kUnassignedReg)
+            return kUnassignedReg;
+        arguments.push_back(value);
+    }
+    std::uint16_t zero = 0;
+    if (arguments.size() < 2U) {
+        zero = newTypedReg(state, ValueType::I64);
+        emit(state, Instr::withImm(Op::LoadConstI64, zero, 0));
+    }
+    const auto arg0 = arguments.empty() ? zero : arguments[0];
+    const auto arg1 = arguments.size() > 1U ? arguments[1] : zero;
+    const auto result = newReg(state, call.result_type);
+    emit(state, Instr::callRef(Op::CallFnRef, result, functionRef, arg0, arg1));
+    return result;
+}
+
 auto lowerMakeNone(LowerState &state, const hir::HirMakeNone &none) -> std::uint16_t {
     const auto *optional = std::get_if<types::TypeOptional>(&state.types.lookup(none.type));
     if (optional == nullptr) {
@@ -1502,6 +1651,8 @@ auto lowerOperand(LowerState &state, hir::HirExprId id) -> std::uint16_t {
                 emit(state, Instr::simple(Op::Eq, result, tag, expected));
                 return result;
             },
+            [&](const hir::HirMakeDyn &make) { return lowerMakeDyn(state, make); },
+            [&](const hir::HirDynCall &call) { return lowerDynCall(state, call); },
             [&](const hir::HirMakeNone &none) { return lowerMakeNone(state, none); },
             [&](const hir::HirMakeSome &some) { return lowerMakeSome(state, some); },
             [&](const hir::HirStructLiteral &literal) { return lowerStructLiteral(state, literal); },

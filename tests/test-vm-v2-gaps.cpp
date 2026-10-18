@@ -34,6 +34,7 @@ void test_implicit_numeric_enum();
 void test_explicit_integer_enum();
 void test_tagged_union_checks_and_narrowed_casts();
 void test_raw_union_cast_in_raw_context();
+void test_dyn_method_dispatch();
 
 auto runVmProgram(std::string_view name, std::string_view source) -> VmOutcome {
     const auto root = std::filesystem::temp_directory_path() / "zith-vm-v2-gap-tests" / name;
@@ -118,6 +119,7 @@ void test_vm_v2_gaps() {
     test_explicit_integer_enum();
     test_tagged_union_checks_and_narrowed_casts();
     test_raw_union_cast_in_raw_context();
+    test_dyn_method_dispatch();
 }
 
 void test_optional_some_presence_and_must() {
@@ -238,6 +240,32 @@ void test_raw_union_cast_in_raw_context() {
           "raw union construction and cast lower through VM v2");
     CHECK(result.status == vm::RunStatus::Ok, "raw union cast completes successfully");
     CHECK_EQ(result.exitCode, 42, "raw union cast preserves the member payload");
+}
+
+void test_dyn_method_dispatch() {
+    const auto result = runVmProgram(
+        "dyn-method-dispatch",
+        "interface Biased {\n"
+        "    fn value(self, bias: i32): i32\n"
+        "}\n"
+        "struct First {\n"
+        "    base: i32,\n"
+        "    fn value(self, bias: i32): i32 { self.base + bias }\n"
+        "}\n"
+        "struct Second {\n"
+        "    base: i32,\n"
+        "    fn value(self, bias: i32): i32 { self.base * bias }\n"
+        "}\n"
+        "fn apply(value: dyn Biased, bias: i32): i32 {\n"
+        "    return value.value(bias);\n"
+        "}\n"
+        "fn main(): i32 {\n"
+        "    return apply(First { base: 10 }, 3) + apply(Second { base: 20 }, 3);\n"
+        "}\n");
+    const std::string failure = "D1 dynamic dispatch reaches VM execution: " + result.detail;
+    CHECK(result.phase == VmPhase::Execution, failure.c_str());
+    CHECK(result.status == vm::RunStatus::Ok, "D1 dynamic dispatch completes successfully");
+    CHECK_EQ(result.exitCode, 73, "D1 calls the implementation selected by each dyn value");
 }
 
 } // namespace
