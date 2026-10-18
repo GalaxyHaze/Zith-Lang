@@ -86,6 +86,30 @@ constexpr ParityCase kCases[] = {
      "    return 0;\n"
      "}\n",
      nullptr},
+    {"tagged_union_checks_and_narrowed_casts",
+     "union Value { i32, bool }\n"
+     "fn main(): i32 {\n"
+     "    let number: Value = Value { 42 };\n"
+     "    if (number is bool) { return 1; }\n"
+     "    if (number is i32) {\n"
+     "        let n: i32 = number;\n"
+     "        let flag: Value = Value { true };\n"
+     "        if (flag is bool) {\n"
+     "            let yes: bool = flag;\n"
+     "            if (yes) { return n; }\n"
+     "        }\n"
+     "    }\n"
+     "    return 0;\n"
+     "}\n",
+     nullptr},
+    {"raw_union_cast_in_raw_context",
+     "raw union Bits { i32, i64 }\n"
+     "fn main(): i32 {\n"
+     "    let bits: Bits = Bits { 42 };\n"
+     "    let value: i64 = raw bits as i64;\n"
+     "    return value as i32;\n"
+     "}\n",
+     nullptr},
     // Passing slice: the VM and the native path agree on stdout and exit code.
     {"console_println_literal",
      "from std/io/console\n"

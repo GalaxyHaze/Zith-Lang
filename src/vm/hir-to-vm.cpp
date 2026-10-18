@@ -334,6 +334,158 @@ auto newReg(LowerState &state, types::TypeId type) -> std::uint16_t {
     return newTypedReg(state, valueTypeOf(state.types, type));
 }
 
+struct UnionStorageRef {
+    std::uint16_t address = kUnassignedReg;
+    types::TypeId type    = types::kInvalidType;
+};
+
+auto taggedUnionTagWidth(const types::TypeIntern &types, types::TypeId type) -> std::size_t {
+    if (types.kindOf(type) != types::TypeKind::Union)
+        return 0U;
+    const auto *union_type = std::get_if<types::TypeUnion>(&types.lookup(type));
+    const auto *def = union_type != nullptr ? types.lookupUnionDef(union_type->def_id) : nullptr;
+    if (def == nullptr || !def->is_tagged || def->members.empty())
+        return 0U;
+    return def->members.size() > 0xFFFFU ? 4U : (def->members.size() > 0xFFU ? 2U : 1U);
+}
+
+/// VM byte offset of the member-index tag, without native ABI tail padding.
+auto taggedUnionTagOffset(const types::TypeIntern &types, types::TypeId type) -> std::size_t {
+    if (taggedUnionTagWidth(types, type) == 0U)
+        return 0U;
+    const auto *union_type = std::get_if<types::TypeUnion>(&types.lookup(type));
+    const auto *def = union_type != nullptr ? types.lookupUnionDef(union_type->def_id) : nullptr;
+    if (def == nullptr)
+        return 0U;
+
+    std::size_t payload_size  = 0U;
+    std::size_t payload_align = 8U;
+    for (const auto member : def->members) {
+        std::size_t member_align = 1U;
+        const auto member_size   = layoutSize(types, member, member_align);
+        if (member_size == 0U)
+            return 0U;
+        if (member_size > payload_size)
+            payload_size = member_size;
+        if (member_align > payload_align)
+            payload_align = member_align;
+    }
+    return alignUp(payload_size, payload_align);
+}
+
+auto emitI64Constant(LowerState &state, std::int64_t value) -> std::uint16_t {
+    const auto reg = newTypedReg(state, ValueType::I64);
+    if (value >= 0 && static_cast<std::uint64_t>(value) <= 0xFFFFU) {
+        emit(state, Instr::withImm(Op::LoadConstI64, reg, static_cast<std::uint16_t>(value)));
+        return reg;
+    }
+    const auto index = u16(state.out.i64Constants.size(), state.result);
+    if (!state.result->ok)
+        return kUnassignedReg;
+    state.out.i64Constants.push(value);
+    emit(state, Instr::withImm(Op::LoadConstI64FromPool, reg, index));
+    return reg;
+}
+
+auto unionTagByteAddress(LowerState &state, UnionStorageRef storage, std::size_t byte_index)
+    -> std::uint16_t {
+    const auto offset = taggedUnionTagOffset(state.types, storage.type);
+    const auto width  = taggedUnionTagWidth(state.types, storage.type);
+    if (width == 0U || byte_index >= width || offset > 0xFFFFU - byte_index) {
+        state.result->ok      = false;
+        state.result->message = "invalid tagged-union layout in v2 lowering";
+        return kUnassignedReg;
+    }
+    const auto address = newTypedReg(state, ValueType::Ptr);
+    emit(state, Instr{Op::FieldPtr, address, storage.address, 0,
+                      static_cast<std::uint16_t>(offset + byte_index)});
+    return address;
+}
+
+auto loadUnionTag(LowerState &state, UnionStorageRef storage) -> std::uint16_t {
+    const auto width = taggedUnionTagWidth(state.types, storage.type);
+    if (width == 0U) {
+        state.result->ok      = false;
+        state.result->message = "invalid tagged-union tag in v2 lowering";
+        return kUnassignedReg;
+    }
+
+    std::uint16_t value = kUnassignedReg;
+    for (std::size_t i = 0; i < width; ++i) {
+        const auto address = unionTagByteAddress(state, storage, i);
+        if (address == kUnassignedReg)
+            return kUnassignedReg;
+        const auto byte = newTypedReg(state, ValueType::I64);
+        emit(state, Instr::simple(Op::LoadI8, byte, address, 0));
+        if (i == 0U) {
+            value = byte;
+            continue;
+        }
+
+        const auto shift = emitI64Constant(state, static_cast<std::int64_t>(i * 8U));
+        if (shift == kUnassignedReg)
+            return kUnassignedReg;
+        const auto shifted = newTypedReg(state, ValueType::I64);
+        emit(state, Instr::simple(Op::Shl, shifted, byte, shift));
+        const auto combined = newTypedReg(state, ValueType::I64);
+        emit(state, Instr::simple(Op::BitOr, combined, value, shifted));
+        value = combined;
+    }
+    return value;
+}
+
+auto storeUnionTag(LowerState &state, UnionStorageRef storage, std::uint32_t member_index) -> bool {
+    const auto width = taggedUnionTagWidth(state.types, storage.type);
+    if (width == 0U) {
+        state.result->ok      = false;
+        state.result->message = "invalid tagged-union tag in v2 lowering";
+        return false;
+    }
+    const auto value = emitI64Constant(state, static_cast<std::int64_t>(member_index));
+    if (value == kUnassignedReg)
+        return false;
+
+    for (std::size_t i = 0; i < width; ++i) {
+        const auto address = unionTagByteAddress(state, storage, i);
+        if (address == kUnassignedReg)
+            return false;
+        auto byte = value;
+        if (i != 0U) {
+            const auto shift = emitI64Constant(state, static_cast<std::int64_t>(i * 8U));
+            if (shift == kUnassignedReg)
+                return false;
+            byte = newTypedReg(state, ValueType::I64);
+            emit(state, Instr::simple(Op::Shr, byte, value, shift));
+        }
+        emit(state, Instr::simple(Op::StoreI8, address, byte, 0));
+    }
+    return true;
+}
+
+auto emitCheckedUnionCast(LowerState &state, UnionStorageRef storage, const hir::HirUnionCast &cast)
+    -> bool {
+    const auto tag = loadUnionTag(state, storage);
+    if (tag == kUnassignedReg)
+        return false;
+    const auto expected = emitI64Constant(state, static_cast<std::int64_t>(cast.member_index));
+    if (expected == kUnassignedReg)
+        return false;
+    const auto matches = newTypedReg(state, ValueType::I64);
+    emit(state, Instr::simple(Op::Eq, matches, tag, expected));
+
+    const auto branch_index = state.fn->body.size();
+    if (branch_index > std::numeric_limits<std::uint16_t>::max() - 2U) {
+        state.result->ok      = false;
+        state.result->message = "union cast branch exceeds the v2 instruction width";
+        return false;
+    }
+    const auto trap_index     = static_cast<std::uint16_t>(branch_index + 1U);
+    const auto continue_index = static_cast<std::uint16_t>(branch_index + 2U);
+    emit(state, Instr{Op::Branch2, 0, matches, 0, continue_index, trap_index});
+    emit(state, Instr::trap());
+    return true;
+}
+
 auto lowerOperand(LowerState &state, hir::HirExprId id) -> std::uint16_t;
 
 auto valueRegisterWidth(const types::TypeIntern &types, types::TypeId type) -> std::size_t {
@@ -1253,6 +1405,13 @@ auto lowerOperand(LowerState &state, hir::HirExprId id) -> std::uint16_t {
                 return base;
             },
             [&](const hir::HirField &field) -> std::uint16_t {
+                if (state.types.kindOf(field.object_type) == types::TypeKind::Union &&
+                    field.index == 1U) {
+                    const auto storage = aggregateAddress(state, field.object);
+                    if (storage == kUnassignedReg)
+                        return kUnassignedReg;
+                    return loadUnionTag(state, UnionStorageRef{storage, field.object_type});
+                }
                 const auto addr = fieldAddress(state, field);
                 if (addr == kUnassignedReg)
                     return kUnassignedReg;
@@ -1265,6 +1424,83 @@ auto lowerOperand(LowerState &state, hir::HirExprId id) -> std::uint16_t {
                                     : Op::LoadI64;
                 emit(state, Instr::simple(op, dst, addr, 0));
                 return dst;
+            },
+            [&](const hir::HirUnionCast &cast) -> std::uint16_t {
+                const auto from_kind = state.types.kindOf(cast.from);
+                const auto to_kind   = state.types.kindOf(cast.to);
+                if (to_kind == types::TypeKind::Union && from_kind != types::TypeKind::Union) {
+                    const auto *union_type =
+                        std::get_if<types::TypeUnion>(&state.types.lookup(cast.to));
+                    const auto *def = union_type != nullptr
+                                            ? state.types.lookupUnionDef(union_type->def_id)
+                                            : nullptr;
+                    if (def == nullptr ||
+                        (def->is_tagged && cast.member_index >= def->members.size())) {
+                        state.result->ok      = false;
+                        state.result->message = "invalid HIR union member in v2 lowering";
+                        return kUnassignedReg;
+                    }
+                    const auto size = typeSize(state.types, cast.to);
+                    if (size == 0U || size > 0xFFFFU) {
+                        state.result->ok      = false;
+                        state.result->message = "unsupported union size in v2 lowering";
+                        return kUnassignedReg;
+                    }
+                    const auto storage = allocateGuestBytes(state, size);
+                    const auto value   = lowerOperand(state, cast.value);
+                    if (storage == kUnassignedReg || value == kUnassignedReg)
+                        return kUnassignedReg;
+                    if (isPointerValued(state.types, cast.from)) {
+                        const auto source       = aggregateAddress(state, cast.value);
+                        const auto payload_size = typeSize(state.types, cast.from);
+                        if (source == kUnassignedReg || payload_size == 0U) {
+                            state.result->ok      = false;
+                            state.result->message = "unsupported union payload in v2 lowering";
+                            return kUnassignedReg;
+                        }
+                        copyBytes(state, storage, source, payload_size);
+                    } else {
+                        emit(state, Instr::simple(Op::StoreI64, storage, value));
+                    }
+                    if (def->is_tagged &&
+                        !storeUnionTag(state, UnionStorageRef{storage, cast.to}, cast.member_index))
+                        return kUnassignedReg;
+                    return storage;
+                }
+                if (from_kind == types::TypeKind::Union && to_kind != types::TypeKind::Union) {
+                    const auto storage = aggregateAddress(state, cast.value);
+                    if (storage == kUnassignedReg)
+                        return kUnassignedReg;
+                    const auto tag_width = taggedUnionTagWidth(state.types, cast.from);
+                    if (cast.checked && tag_width != 0U && cast.member_index != ~0U &&
+                        !emitCheckedUnionCast(state, UnionStorageRef{storage, cast.from}, cast))
+                        return kUnassignedReg;
+                    if (isPointerValued(state.types, cast.to))
+                        return storage;
+                    const auto value = newReg(state, cast.to);
+                    emit(state, Instr::simple(Op::LoadI64, value, storage, 0));
+                    return value;
+                }
+                state.result->ok      = false;
+                state.result->message = "unsupported HIR union cast in v2 lowering";
+                return kUnassignedReg;
+            },
+            [&](const hir::HirUnionCheck &check) -> std::uint16_t {
+                if (check.member_index == ~0U) {
+                    state.result->ok      = false;
+                    state.result->message = "invalid HIR union check in v2 lowering";
+                    return kUnassignedReg;
+                }
+                const auto tag = lowerOperand(state, check.value);
+                if (tag == kUnassignedReg)
+                    return kUnassignedReg;
+                const auto expected =
+                    emitI64Constant(state, static_cast<std::int64_t>(check.member_index));
+                if (expected == kUnassignedReg)
+                    return kUnassignedReg;
+                const auto result = newReg(state, types::kBoolType);
+                emit(state, Instr::simple(Op::Eq, result, tag, expected));
+                return result;
             },
             [&](const hir::HirMakeNone &none) { return lowerMakeNone(state, none); },
             [&](const hir::HirMakeSome &some) { return lowerMakeSome(state, some); },

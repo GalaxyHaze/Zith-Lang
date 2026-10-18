@@ -32,6 +32,8 @@ void test_optional_pointer_niche();
 void test_optional_must_none_traps();
 void test_implicit_numeric_enum();
 void test_explicit_integer_enum();
+void test_tagged_union_checks_and_narrowed_casts();
+void test_raw_union_cast_in_raw_context();
 
 auto runVmProgram(std::string_view name, std::string_view source) -> VmOutcome {
     const auto root = std::filesystem::temp_directory_path() / "zith-vm-v2-gap-tests" / name;
@@ -114,6 +116,8 @@ void test_vm_v2_gaps() {
     test_optional_must_none_traps();
     test_implicit_numeric_enum();
     test_explicit_integer_enum();
+    test_tagged_union_checks_and_narrowed_casts();
+    test_raw_union_cast_in_raw_context();
 }
 
 void test_optional_some_presence_and_must() {
@@ -199,6 +203,41 @@ void test_explicit_integer_enum() {
     CHECK(result.phase == VmPhase::Execution, "explicit integer enum lowers through VM v2");
     CHECK(result.status == vm::RunStatus::Ok, "explicit integer enum executes");
     CHECK_EQ(result.exitCode, 29, "explicit u8 enum preserves its discriminant");
+}
+
+void test_tagged_union_checks_and_narrowed_casts() {
+    const auto result =
+        runVmProgram("tagged-union-checks", "union Value { i32, bool }\n"
+                                            "fn main(): i32 {\n"
+                                            "    let number: Value = Value { 42 };\n"
+                                            "    if (number is bool) { return 1; }\n"
+                                            "    if (number is i32) {\n"
+                                            "        let n: i32 = number;\n"
+                                            "        let flag: Value = Value { true };\n"
+                                            "        if (flag is bool) {\n"
+                                            "            let yes: bool = flag;\n"
+                                            "            if (yes) { return n; }\n"
+                                            "        }\n"
+                                            "    }\n"
+                                            "    return 0;\n"
+                                            "}\n");
+    CHECK(result.phase == VmPhase::Execution,
+          "tagged union construction, checks, and narrowed casts lower through VM v2");
+    CHECK(result.status == vm::RunStatus::Ok, "tagged union member checks complete");
+    CHECK_EQ(result.exitCode, 42, "tagged union checks preserve both member payloads");
+}
+
+void test_raw_union_cast_in_raw_context() {
+    const auto result = runVmProgram("raw-union-cast", "raw union Bits { i32, i64 }\n"
+                                                       "fn main(): i32 {\n"
+                                                       "    let bits: Bits = Bits { 42 };\n"
+                                                       "    let value: i64 = raw bits as i64;\n"
+                                                       "    return value as i32;\n"
+                                                       "}\n");
+    CHECK(result.phase == VmPhase::Execution,
+          "raw union construction and cast lower through VM v2");
+    CHECK(result.status == vm::RunStatus::Ok, "raw union cast completes successfully");
+    CHECK_EQ(result.exitCode, 42, "raw union cast preserves the member payload");
 }
 
 } // namespace
