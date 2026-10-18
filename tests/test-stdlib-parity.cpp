@@ -39,8 +39,8 @@ constexpr int kStatusUnsupported = 5;
 struct ParityCase {
     const char *name;
     const char *source;
-    // Set for cases where the VM path legitimately reports status 5 while the
-    // native path succeeds. The reason is required and is printed on failure.
+    // Set only for excluded cases where status 5 is an accepted divergence.
+    // The observed VM phase and detail are reported separately.
     const char *allowStatus5Reason;
 };
 
@@ -182,7 +182,7 @@ constexpr ParityCase kCases[] = {
      "    return dock Start(0);\n"
      "}\n",
      nullptr},
-    // Passing slice: the VM and the native path agree on stdout and exit code.
+    // Excluded console/allocator cases remain diagnostic, not parity promises.
     {"console_println_literal",
      "from std/io/console\n"
      "from std/memory\n"
@@ -192,8 +192,8 @@ constexpr ParityCase kCases[] = {
      "    _ = println(heap, \"hello parity\");\n"
      "    return 0;\n"
      "}\n",
-     "dyn Allocator parameter layout is outside the VM v2 lowering subset "
-     "(allocator ownership migration)"},
+     "excluded: console output and dyn Allocator layout depend on external FFI "
+     "and allocator behavior"},
     {"console_print_no_newline",
      "from std/io/console\n"
      "from std/memory\n"
@@ -204,8 +204,8 @@ constexpr ParityCase kCases[] = {
      "    print(heap, \"b\");\n"
      "    return 0;\n"
      "}\n",
-     "dyn Allocator parameter layout is outside the VM v2 lowering subset "
-     "(allocator ownership migration)"},
+     "excluded: console output and dyn Allocator layout depend on external FFI "
+     "and allocator behavior"},
     {"console_println_two_literals",
      "from std/io/console\n"
      "from std/memory\n"
@@ -215,8 +215,8 @@ constexpr ParityCase kCases[] = {
      "    _ = println(heap, \"a\", \"b\");\n"
      "    return 0;\n"
      "}\n",
-     "dyn Allocator parameter layout is outside the VM v2 lowering subset "
-     "(allocator ownership migration)"},
+     "excluded: console output and dyn Allocator layout depend on external FFI "
+     "and allocator behavior"},
     {"console_println_format_int",
      "from std/io/console\n"
      "from std/memory\n"
@@ -226,11 +226,10 @@ constexpr ParityCase kCases[] = {
      "    _ = println(heap, \"bucket=#\", 73);\n"
      "    return 0;\n"
      "}\n",
-     "variadic Formatable rendering is outside the VM lowering subset (debt item 1)"},
+     "excluded: console allocator and variadic Formatable behavior are outside "
+     "this parity slice"},
 
-    // Status-5 slice: the VM lowering does not yet cover these programs. The
-    // native path runs them, so they are allow-listed with a reason and the
-    // divergence is visible in the parity report.
+    // These stdlib cases are excluded from acceptance and remain diagnostic.
     {"hash_map_u64_put_get",
      "import std/collections/hash_map_u64 as hm\n"
      "from std/memory\n"
@@ -254,8 +253,8 @@ constexpr ParityCase kCases[] = {
      "    hm.HashMap.destroy(lend map);\n"
      "    return 0;\n"
      "}\n",
-     "hash-map control flow hits a HIR branch shape the VM lowering does not handle "
-     "(debt item 1)"},
+     "excluded: stdlib hash-map behavior depends on allocator and external FFI "
+     "contracts"},
     {"allocator_heap_dyn_dispatch",
      "from std/memory\n"
      "\n"
@@ -268,7 +267,7 @@ constexpr ParityCase kCases[] = {
      "    deallocate(h, mem, 64u64, 1u64);\n"
      "    return 42;\n"
      "}\n",
-     "dyn allocator dispatch is outside the VM lowering subset (debt items 1 and 4)"},
+     "excluded: dyn Allocator behavior is outside this parity slice"},
     {"inplace_opaque_contract",
      "from std/memory\n"
      "\n"
@@ -290,7 +289,7 @@ constexpr ParityCase kCases[] = {
      "    }\n"
      "    return 42;\n"
      "}\n",
-     "the opaque InPlace contract is outside the VM lowering subset (debt item 1)"},
+     "excluded: allocator and InPlace contracts are outside this parity slice"},
 };
 
 std::string readFile(const fs::path &path) {
@@ -442,7 +441,31 @@ Observed runVm(const fs::path &source) {
 }
 
 bool sameBehavior(const Observed &native, const Observed &vmRun) {
-    return native.exitCode == vmRun.exitCode && native.output == vmRun.output;
+    return native.status == kStatusOk && vmRun.status == kStatusOk &&
+           native.exitCode == vmRun.exitCode && native.output == vmRun.output;
+}
+
+void test_parity_requires_success_status() {
+    Observed native;
+    native.status   = kStatusOk;
+    native.exitCode = 0;
+
+    Observed vmRun;
+    vmRun.exitCode = native.exitCode;
+    vmRun.output   = native.output;
+
+    vmRun.status = kStatusTrap;
+    CHECK(!sameBehavior(native, vmRun), "a VM trap cannot match native success");
+    vmRun.status = kStatusOom;
+    CHECK(!sameBehavior(native, vmRun), "VM OOM cannot match native success");
+    vmRun.status = kStatusUnsupported;
+    CHECK(!sameBehavior(native, vmRun), "VM unsupported cannot match native success");
+    CHECK(playgroundStatus(vm::RunStatus::Trap) == kStatusTrap,
+          "VM trap keeps its distinct parity status");
+    CHECK(playgroundStatus(vm::RunStatus::Oom) == kStatusOom,
+          "VM OOM keeps its distinct parity status");
+    CHECK(playgroundStatus(vm::RunStatus::Unsupported) == kStatusUnsupported,
+          "VM unsupported keeps its distinct parity status");
 }
 
 } // namespace
@@ -511,6 +534,7 @@ int main() {
     std::printf("=====================\n\n");
     g_test_passed = 0;
     g_test_failed = 0;
+    test_parity_requires_success_status();
     test_stdlib_parity();
     std::printf("\nResults: %d passed, %d failed\n", g_test_passed, g_test_failed);
     return g_test_failed > 0 ? 1 : 0;

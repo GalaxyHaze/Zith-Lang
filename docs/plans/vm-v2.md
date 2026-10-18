@@ -1,6 +1,7 @@
 # VM v2: Typed Execution IR And Linear Memory Runtime
 
-Status: conforming (host baseline); parity expansion planned
+Status: conforming (host baseline); Zith-- parity slice implemented and
+verified by host tests (2026-10-18)
 
 This is the contract for a second runtime path, kept separate from the
 existing `src/ir` + `src/interp` execution IR v1 so the shipped `Zith--`
@@ -8,9 +9,8 @@ fallback is not destabilized. The signed ADR is
 `docs/adr/0021-vm-v2-portable-execution.md`. Its host slice is conforming and
 the sources now live in `zithcLib`, but the browser/WASM packaging is still
 later work. The accepted parity-scope extension is recorded in
-`docs/adr/0042-vm-v2-zith-parity-scope.md`; its specification remains a draft
-in [the local gap-map notes](../../.scratch/vm-v2-gap-map/spec.md) and is not
-implemented.
+`docs/adr/0042-vm-v2-zith-parity-scope.md`. The local gap-map specification
+remains a draft, while this plan records the implemented host parity slice.
 
 ## Goals
 
@@ -26,7 +26,7 @@ implemented.
 - No changes to the current execution IR v1 (`src/ir`, `src/interp`) in this
   slice.
 - No browser/WASM packaging in this milestone.
-- No full language surface. The proposed Zith-- parity expansion is limited to
+- No full language surface. The Zith-- parity expansion is limited to
   optionals, numeric enums, tagged and raw unions, supported `dyn` dispatch,
   bare `opaque`, runtime pipelines, and state-machine transfers.
 - `enum: union`, `raw opaque`, external-FFI-dependent behavior, allocator and
@@ -46,18 +46,18 @@ backend is unchanged.
 
 ## Zith-- Parity Expansion
 
-The proposed host parity scope compares native-accepted Zith-- programs with
-VM v2, using `docs/Zith--.md` as the language contract and excluding behavior
-that requires external FFI. It covers optionals, numeric enums that preserve
-current behavior while allowing an explicit numeric type, tagged and raw
-unions, supported `dyn` dispatch, bare `opaque`, runtime `|>` and `do`
-pipelines, and state-machine transfers.
+The host parity scope compares native-accepted Zith-- programs with VM v2,
+using `docs/Zith--.md` as the language contract and excluding behavior that
+requires external FFI. The paired suite now covers optionals, numeric enums
+that preserve current behavior while allowing an explicit numeric type,
+tagged and raw unions, supported `dyn` dispatch, bare `opaque`, runtime `|>`
+and `do` pipelines, and state-machine transfers.
 
-Optional parity includes the specified absent-value behavior of `must`.
-General runtime-panic terminators remain outside the scope. State-machine
-transfers are in scope, but the baseline research has not established the VM
-execution outcome. The draft requires paired evidence before claiming a
-specific runtime divergence or acceptance result.
+The paired tests establish matching native and VM output and exit codes for
+the in-scope cases. The isolated VM tests also verify that `must` on an absent
+optional traps with `R10003`, and that a 100,000-step state-transition chain
+executes without growing the VM call stack. General runtime-panic terminators
+remain outside the scope.
 
 The scope excludes `enum: union`, `raw opaque`, allocator/`InPlace` contracts,
 FFI mode selection or expansion, global constants, cleanup, comptime

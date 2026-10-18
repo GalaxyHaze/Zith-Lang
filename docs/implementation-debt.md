@@ -171,7 +171,7 @@ preservados para referências em planos, memória e testes.
 
 ### 3a. VM v2: inventário de dívidas e limitações abertas
 
-Inventário consolidado em 2026-10-10, cruzando os contratos assinados
+Inventário revisto em 2026-10-18, cruzando os contratos assinados
 ([vm-v2.md](/home/diogo/Zith/docs/plans/vm-v2.md),
 [0021](/home/diogo/Zith/docs/adr/0021-vm-v2-portable-execution.md),
 [0024](/home/diogo/Zith/docs/adr/0024-wasm-vm-v2-abi.md),
@@ -185,18 +185,16 @@ o `zithc run` quando o LLVM está off ou quando se passa `--virtual-machine`.
 Os IDs numéricos são estáveis; itens concluídos ficam na tabela histórica
 acima e só os itens ainda abertos permanecem neste inventário:
 
-1. **Superfície de linguagem incompleta no lowering.** State machines, dyn
-   dispatch e `opaque` são "later slices" registados nos non-goals do plano e
-   do ADR-0021. `src/vm/hir-to-vm.cpp` responde status 5
-   (`kPlaygroundStatusUnsupported`) para dynamic traits, intrinsics fora do
-   subset, call targets fora do subset, literais não primitivos, dynamic array
-   index e algumas formas de return.
-   Structs e packs suportados são cobertos pelo histórico VM v2 #11. Optionals,
-   unions e enum values continuam sem lowering: um nó
-   HIR não tratado falha a tradução com
-   `unsupported HIR expression in v2 lowering`, em vez de devolver um registo
-   não atribuído que o caller pudesse interpretar como "sem valor" e saltar um
-   store ou return em silêncio.
+1. **Superfície de linguagem incompleta no lowering.** O slice de paridade
+   Zith-- está coberto por testes focados e por casos pareados para optionals,
+   enums numéricas, unions tagged e raw, `dyn` dispatch suportado, `opaque`
+   simples, pipelines runtime e state-machine transfers. Isto não cobre toda a
+   superfície aceita pelo compilador nativo. Dynamic traits fora do caso
+   suportado, intrinsics e call targets fora do subset, literais não
+   primitivos, índices de arrays dinâmicos e algumas formas de return ainda
+   podem resultar em status 5. Um lowering HIR sem suporte falha explicitamente
+   em vez de devolver um registo não atribuído que possa omitir stores ou
+   returns.
 2. **Computed-goto adiado.** A decisão registada é aplicar computed-goto ao
    dispatch loop "once the opcode set stabilizes". O opcode set ainda está a
    crescer (ver dívida 1), pelo que o loop atual é o dispatcher simples.
@@ -211,16 +209,17 @@ acima e só os itens ainda abertos permanecem neste inventário:
 8. **Value width fixo.** Valores primitivos executam como `int64_t`/bits e fat
    pointers ocupam dois registos consecutivos. Decisão consciente do primeiro
    slice, a revisitar para larguras nativas e floats.
-9. **Paridade stdlib WASM vs nativo.** A stdlib não suportada no caminho VM
-   falha com status 5 previsível (ADR-0025), mas a cobertura da stdlib via
-   VM/WASM é substancialmente menor que via LLVM. Cresce com as dívidas 1 e 4.
-   A fatia de paridade existe desde 2026-10-10: `tests/test-stdlib-parity.cpp`
-   corre os mesmos programas pelos dois caminhos e compara stdout e exit code.
-   Uma divergência que só devolva status 5 é aceite apenas com motivo na
-   tabela de casos, pelo que a lista de programas por passar está documentada
-   em [vm-v2-stdlib-parity.md](/home/diogo/Zith/docs/vm-v2-stdlib-parity.md).
-   O fast path de formatação deixou de descartar valores em silêncio: uma
-   mensagem com placeholders e valores passa a reportar status 5.
+9. **Paridade stdlib WASM vs nativo.** A cobertura geral da stdlib via VM/WASM
+   continua menor que via LLVM e cresce com as dívidas 1 e 4. Desde
+   2026-10-18, `tests/test-stdlib-parity.cpp` compara doze programas in-scope
+   pelos dois caminhos, incluindo stdout e exit code, e reporta fase e detalhe
+   do VM. Os casos excluídos de console, allocator e hash map permanecem
+   classificados em
+   [vm-v2-stdlib-parity.md](/home/diogo/Zith/docs/vm-v2-stdlib-parity.md).
+   Seis deles reportam atualmente status 5 durante VM lowering com
+   `unsupported slot size in v2 lowering`. O harness só permite esse status
+   com uma categoria de exclusão explícita. Trap, OOM e divergências de
+   comportamento continuam a falhar.
 ### 4. Bare `opaque` mantém tags estáveis através de imports e cache
 
 - Estado atual: o typeId canónico é derivado do namespace do módulo, ordem

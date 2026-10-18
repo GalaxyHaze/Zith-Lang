@@ -1,10 +1,10 @@
 # VM v2 Stdlib Parity
 
-Status: current (2026-10-10).
+Status: current (2026-10-18).
 
 This document records which stdlib-dependent programs behave the same through
-the native `zithc` path and the VM v2 path, and which ones the VM lowering
-still rejects. It is the human-readable companion to
+the native `zithc` path and the VM v2 path, and which ones remain excluded
+from parity acceptance. It is the human-readable companion to
 `tests/test-stdlib-parity.cpp`, which runs the same programs through both
 paths and diffs stdout plus exit code. The parity slice is registered in
 CTest as `test-stdlib-parity`.
@@ -19,11 +19,11 @@ For each program in the table the harness:
    `HirLowered`, then `vm::lowerModule` and `vm::Vm::runMain`.
 3. Compares the two observable behaviors.
 
-When the VM path reports the unsupported playground status (5) while the
-native path succeeds, the case is a documented divergence. It passes only
-when the program carries an explicit reason in the case table. Any other
-divergence, including one where the VM runs to completion but prints
-different bytes or returns a different exit code, fails the suite.
+Success requires both paths to complete with status 0, identical stdout bytes,
+and the same program exit code. When the VM reports unsupported status 5 while
+the native path succeeds, an excluded case passes only with a reason naming
+its exclusion category. The report prints the observed VM phase and detail
+separately. Traps, OOM, output differences, and exit-code differences fail.
 
 The playground status scale mirrors `src/wasm/playground.cpp`: 0 ok, 3 trap,
 4 out of memory, 5 unsupported. `vm::RunStatus::Unsupported` maps to 5.
@@ -32,29 +32,42 @@ The playground status scale mirrors `src/wasm/playground.cpp`: 0 ok, 3 trap,
 
 The VM and the native path agree on stdout and exit code for these programs.
 
-| Program | Behavior |
+| Program | Verified behavior |
 | --- | --- |
-| `console_println_literal` | `println("hello parity")` writes the literal plus newline |
-| `console_print_no_newline` | two `print` calls write continuous text without a newline |
-| `console_println_two_literals` | `println("a", "b")` writes `a` plus newline and ignores the unused value |
+| `optional_none_is_null` | None is detected by `is null` |
+| `optional_some_presence_and_must` | Some is present and `must` extracts its value |
+| `optional_pointer_niche` | None and Some pointer values preserve niche behavior |
+| `implicit_numeric_enum` | implicit discriminants preserve current numeric behavior |
+| `explicit_integer_enum` | an enum with an explicit `u8` type preserves its value |
+| `tagged_union_checks_and_narrowed_casts` | tags, checks, and narrowed casts agree |
+| `raw_union_cast_in_raw_context` | raw union construction and cast preserve the payload |
+| `dyn_method_dispatch` | dispatch selects the implementation for each dynamic value |
+| `opaque_checked_extraction` | type checks and matching/mismatching extraction agree |
+| `runtime_pipe_source_once` | the pipe source runs once and its result is preserved |
+| `runtime_do_keeps_chain_value` | the effect sees and preserves the current value |
+| `runtime_state_transition` | the state transition returns the terminal value |
 
-These cover the VM lowering fast path that forwards a literal message to
-`puts` (for `println`) or `write_stdout` (for `print`).
+## Excluded or conditional cases
 
-## Status-5 programs
+These cases are diagnostic only because their behavior depends on external
+FFI, allocator, or `InPlace` contracts excluded from this parity slice.
+Six currently report status 5 during VM lowering with the detail
+`unsupported slot size in v2 lowering`. This is the observed blocker, not a
+claim that the exclusion category caused that diagnostic.
 
-The native path runs these programs and the VM lowering rejects them with
-status 5. Each carries an allow-list reason tied to the debt inventory.
-
-| Program | Reason |
+| Program | Exclusion category | Current observation |
 | --- | --- |
-| `console_println_format_int` | `println("bucket=#", 73)` needs variadic `Formatable` rendering, which is outside the VM lowering subset (debt item 1) |
-| `hash_map_u64_put_get` | the u64 hash map hits a HIR branch shape the VM lowering does not handle (debt item 1) |
-| `allocator_heap_dyn_dispatch` | `std.alloc.allocate` goes through `dyn Allocator` dispatch, outside the VM subset (debt items 1 and 4) |
-| `inplace_opaque_contract` | the `InPlace` opaque contract is outside the VM subset (debt item 1) |
+| `console_println_literal` | console output and `dyn Allocator` layout | status 5, VM lowering |
+| `console_print_no_newline` | console output and `dyn Allocator` layout | status 5, VM lowering |
+| `console_println_two_literals` | console output and `dyn Allocator` layout | status 5, VM lowering |
+| `console_println_format_int` | console output, allocator, and variadic formatting | status 5, VM lowering |
+| `hash_map_u64_put_get` | stdlib hash-map allocator and external FFI contracts | status 5, VM lowering |
+| `allocator_heap_dyn_dispatch` | allocator and `dyn Allocator` contracts | status 5, VM lowering |
+| `inplace_opaque_contract` | allocator and `InPlace` contracts | currently passes on both paths |
 
-The list grows as the lowering surface grows. When a case starts passing,
-remove its allow-list entry so a future regression fails the suite.
+The allow-list accepts only unsupported status 5 for these excluded cases.
+Remove an allowance only when a case is in scope and has passing parity
+evidence. Keep excluded cases classified even if they currently pass.
 
 ## Guarding against silent divergence
 
