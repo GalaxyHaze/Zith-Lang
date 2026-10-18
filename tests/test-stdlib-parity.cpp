@@ -162,11 +162,33 @@ std::string readFile(const fs::path &path) {
 }
 
 struct Observed {
-    int status   = -1; // playground status: 0 ok, 3 trap, 4 oom, 5 unsupported
-    int exitCode = -1;
+    enum class VmPhase {
+        NotStarted,
+        HirLowering,
+        VmLowering,
+        VmExecution,
+    };
+
+    int status    = -1; // playground status: 0 ok, 3 trap, 4 oom, 5 unsupported
+    int exitCode  = -1;
+    VmPhase phase = VmPhase::NotStarted;
     std::string output;
     std::string detail;
 };
+
+const char *vmPhaseName(Observed::VmPhase phase) {
+    switch (phase) {
+    case Observed::VmPhase::NotStarted:
+        return "not-started";
+    case Observed::VmPhase::HirLowering:
+        return "hir-lowering";
+    case Observed::VmPhase::VmLowering:
+        return "vm-lowering";
+    case Observed::VmPhase::VmExecution:
+        return "vm-execution";
+    }
+    return "unknown";
+}
 
 int playgroundStatus(vm::RunStatus status) {
     switch (status) {
@@ -239,28 +261,46 @@ Observed runVm(const fs::path &source) {
     session::CompilationSession session(options, source.string());
     session.setBuffered(true);
     Observed observed;
+    observed.phase = Observed::VmPhase::HirLowering;
     if (!session.runTo(session::Stage::HirLowered)) {
         observed.status = kStatusUnsupported;
-        observed.detail = "HIR lowering failed";
+        for (const auto &diag : session.diags().all()) {
+            if (diag.severity != diagnostics::Severity::Error)
+                continue;
+            if (observed.detail.empty()) {
+                observed.detail = diag.message;
+            } else {
+                observed.detail += ": " + diag.message;
+            }
+        }
+        if (observed.detail.empty())
+            observed.detail = "HIR lowering failed without a diagnostic";
         return observed;
     }
 
     memory::Arena vmArena;
     vm::Module module(vmArena);
+    observed.phase = Observed::VmPhase::VmLowering;
     const auto lowered =
         vm::lowerModule(session.hirModule(), session.interner(), session.types(), vmArena, module);
     if (!lowered.ok) {
         observed.status = kStatusUnsupported;
         observed.detail = lowered.message;
+        if (observed.detail.empty())
+            observed.detail = "VM lowering failed without a diagnostic";
         return observed;
     }
 
+    observed.phase = Observed::VmPhase::VmExecution;
     vm::Vm machine;
     const auto result = machine.runMain(module);
     observed.status   = playgroundStatus(result.status);
     observed.exitCode = static_cast<int>(result.exitCode);
     observed.output   = result.output;
     observed.detail   = result.message;
+    if (result.status != vm::RunStatus::Ok && observed.detail.empty())
+        observed.detail =
+            std::string("VM execution failed with status ") + playgroundStatusName(observed.status);
     return observed;
 }
 
@@ -290,7 +330,9 @@ void test_stdlib_parity() {
         const std::string label = std::string("parity: ") + testCase.name;
 
         if (native.status != kStatusOk) {
-            const std::string message = label + " native path failed to run: " + native.detail;
+            const std::string message = label + " native path failed to run: " + native.detail +
+                                        " (VM phase=" + vmPhaseName(vmRun.phase) +
+                                        ", detail=" + vmRun.detail + ")";
             CHECK(false, message.c_str());
             continue;
         }
@@ -302,12 +344,14 @@ void test_stdlib_parity() {
 
         if (vmRun.status == kStatusUnsupported) {
             if (testCase.allowStatus5Reason != nullptr) {
-                std::printf("  ALLOW: %s (status 5: %s)\n", testCase.name,
-                            testCase.allowStatus5Reason);
+                std::printf("  ALLOW: %s (status 5: %s; VM phase=%s, detail=%s)\n", testCase.name,
+                            testCase.allowStatus5Reason, vmPhaseName(vmRun.phase),
+                            vmRun.detail.c_str());
                 CHECK(true, label.c_str());
             } else {
-                const std::string message =
-                    label + " diverges with status 5 and no allow-list reason: " + vmRun.detail;
+                const std::string message = label + " diverges with status 5 during " +
+                                            vmPhaseName(vmRun.phase) +
+                                            " and has no allow-list reason: " + vmRun.detail;
                 CHECK(false, message.c_str());
             }
             continue;
@@ -315,11 +359,12 @@ void test_stdlib_parity() {
 
         // A divergence where the VM ran but produced different behavior is
         // never acceptable, even for allow-listed programs.
-        std::printf("  native(exit=%d out=<%s>) vm(%s exit=%d out=<%s>)\n", native.exitCode,
-                    native.output.c_str(), playgroundStatusName(vmRun.status), vmRun.exitCode,
+        std::printf("  native(exit=%d out=<%s>) vm(%s phase=%s exit=%d detail=<%s> out=<%s>)\n",
+                    native.exitCode, native.output.c_str(), playgroundStatusName(vmRun.status),
+                    vmPhaseName(vmRun.phase), vmRun.exitCode, vmRun.detail.c_str(),
                     vmRun.output.c_str());
-        const std::string message =
-            label + " diverges: " + playgroundStatusName(vmRun.status) + " vs native";
+        const std::string message = label + " diverges during " + vmPhaseName(vmRun.phase) + ": " +
+                                    playgroundStatusName(vmRun.status) + " vs native";
         CHECK(false, message.c_str());
     }
 }

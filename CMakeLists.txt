@@ -531,6 +531,10 @@ if(BUILD_TESTING AND NOT ZITH_IS_WASM)
     # skip instead of a failure.
     add_test(NAME test-vm-v2 COMMAND test-vm-v2)
     set_tests_properties(test-vm-v2 PROPERTIES SKIP_RETURN_CODE 77)
+    add_executable(test-vm-v2-gaps tests/test-vm-v2-gaps.cpp)
+    target_link_libraries(test-vm-v2-gaps PRIVATE zithcLib)
+    add_test(NAME test-vm-v2-gaps COMMAND test-vm-v2-gaps)
+    set_tests_properties(test-vm-v2-gaps PROPERTIES SKIP_RETURN_CODE 77)
     if(ZITH_HAS_LLVM)
         add_zith_test(test-codegen tests/test-codegen.cpp)
         # The example suite drives the real CLI, so it needs codegen and a linker.
