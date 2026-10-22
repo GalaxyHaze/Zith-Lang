@@ -200,13 +200,14 @@ hir::HirExprId HirLowerModern::lowerIf(const frontend::Expression &expr, const t
         const auto *resolved = findResolvedExpr(condition.operands[0]);
         if (resolved != nullptr && resolved->local) {
             const sema::modern::TypeId local_sema = semaTypeOfLocal(resolved->local);
-            if (sema_.typeTable().kindOf(sema_.typeTable().stripQualifiers(local_sema)) ==
-                TypeKind::Opaque) {
+            const TypeKind local_kind =
+                sema_.typeTable().kindOf(sema_.typeTable().stripQualifiers(local_sema));
+            if (local_kind == TypeKind::Opaque || local_kind == TypeKind::Union) {
                 narrowed_local          = resolved->local;
                 narrowed_type           = lowerType(sema_.typeTable().lowerTypeExpr(
                     *current_module_->frontend, condition.cast_type));
                 narrow_then             = true;
-                narrowed_opaque_payload = true;
+                narrowed_opaque_payload = local_kind == TypeKind::Opaque;
             }
         }
     } else if (condition.kind == frontend::ExprKind::Unary && condition.text == "not" &&

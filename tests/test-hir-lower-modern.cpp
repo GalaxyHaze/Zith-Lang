@@ -871,12 +871,16 @@ void test_dot_field_read_lowers_to_hir_field() {
     if (get_x != nullptr) {
         CHECK_EQ(countInstKind(hir, *get_x, hir::HirExprKind::Field), 1u,
                  "field access lowers to one Field node");
+        bool found_intrinsic_field = false;
         for (const auto &block : get_x->blocks) {
             for (auto inst : block.insts) {
-                if (const auto *f = std::get_if<hir::HirField>(&hir.getExpr(inst)))
+                if (const auto *f = std::get_if<hir::HirField>(&hir.getExpr(inst))) {
                     CHECK_EQ(f->index, 0u, "field 'x' maps to index 0");
+                    found_intrinsic_field = f->safety == hir::HirSafetyMode::Intrinsic;
+                }
             }
         }
+        CHECK(found_intrinsic_field, "ordinary struct field access is intrinsically safe");
     }
 }
 
@@ -1986,6 +1990,8 @@ void test_slice_range_lowers_to_checked_optional_view() {
     CHECK(slice != nullptr, "slice range lowers to HirMakeSlice");
     if (slice != nullptr) {
         CHECK(slice->is_array, "array slicing marks the object as an array");
+        CHECK(slice->safety == hir::HirSafetyMode::Guarded,
+              "checked slice range marks the valid-path slice as guarded");
         CHECK(slice->lo != hir::kInvalidHirExpr && slice->hi != hir::kInvalidHirExpr,
               "slice range carries lowered bounds");
         CHECK(slice->type != types::kInvalidType, "slice range records the slice type");
@@ -2031,11 +2037,48 @@ void test_checked_index_lowers_to_optional_with_some_and_none() {
     }
     CHECK(index != nullptr, "checked index valid path lowers to HirIndex");
     if (index != nullptr) {
+        CHECK(index->safety == hir::HirSafetyMode::Guarded,
+              "checked index marks the valid-path access as guarded");
         CHECK(index->type != types::kInvalidType, "checked index carries the element type");
         CHECK(index->obj_type != types::kInvalidType, "checked index carries the object type");
     }
     CHECK(make_some_count > 0u, "dynamic checked indexes wrap the valid path in Some");
     CHECK(make_none_count > 0u, "dynamic checked indexes wrap the invalid path in None");
+}
+
+void test_optional_narrowing_marks_payload_guarded() {
+    Workspace workspace;
+    workspace.writeFile("main.zith", "fn read(value: ?i32): i32 {\n"
+                                     "    if (value is null) { return 0; } else { return value; }\n"
+                                     "}\n"
+                                     "fn main(): i32 { 0 }\n");
+
+    memory::Arena arena;
+    Options options(arena);
+    auto session = makeSession(workspace, arena, options, "main.zith");
+    CHECK(session.runTo(session::Stage::HirLowered), "optional narrowing lowers to HIR");
+
+    const auto &hir  = session.hirModule();
+    const auto *read = findFunction(hir, session.interner(), "read");
+    CHECK(read != nullptr, "read function is present after optional narrowing");
+    if (read == nullptr)
+        return;
+
+    bool found_guarded_payload = false;
+    for (const auto &block : read->blocks) {
+        if (block.terminator == hir::kInvalidHirExpr)
+            continue;
+        const auto *ret = std::get_if<hir::HirRet>(&hir.getExpr(block.terminator));
+        if (ret == nullptr || ret->value == hir::kInvalidHirExpr)
+            continue;
+        const auto *field = std::get_if<hir::HirField>(&hir.getExpr(ret->value));
+        if (field != nullptr && field->index == 0u &&
+            field->safety == hir::HirSafetyMode::Guarded) {
+            found_guarded_payload = true;
+            break;
+        }
+    }
+    CHECK(found_guarded_payload, "a proven-present optional payload is marked guarded");
 }
 
 void test_raw_slice_and_index_lower_without_optional_checks() {
@@ -2208,13 +2251,18 @@ void test_is_type_pointer_lowers_union_check_and_keeps_terminators() {
     const auto *main = findFunction(hir, session.interner(), "main");
     CHECK(main != nullptr, "main is available for is-pointer checks");
     if (main != nullptr) {
-        size_t union_checks = 0;
+        size_t union_checks        = 0;
+        size_t guarded_union_casts = 0;
         for (size_t i = 0; i < hir.exprCount(); ++i) {
-            if (std::holds_alternative<hir::HirUnionCheck>(
-                    hir.getExpr(static_cast<hir::HirExprId>(i))))
+            const auto &expr = hir.getExpr(static_cast<hir::HirExprId>(i));
+            if (std::holds_alternative<hir::HirUnionCheck>(expr))
                 ++union_checks;
+            if (const auto *cast = std::get_if<hir::HirUnionCast>(&expr);
+                cast != nullptr && cast->safety == hir::HirSafetyMode::Guarded)
+                ++guarded_union_casts;
         }
         CHECK_EQ(union_checks, 1u, "`is *char` emits one tagged-union check node");
+        CHECK(guarded_union_casts > 0u, "reading a narrowed tagged-union member is marked guarded");
         CHECK_EQ(countTerminatorKind(hir, *main, hir::HirExprKind::Branch), 1u,
                  "the if/is condition retains its branch terminator");
         CHECK(countTerminatorKind(hir, *main, hir::HirExprKind::Jump) >= 2u,
@@ -2995,6 +3043,7 @@ static void test_hir_lower_modern() {
     test_array_to_slice_coercion_lowers_to_make_slice();
     test_slice_range_lowers_to_checked_optional_view();
     test_checked_index_lowers_to_optional_with_some_and_none();
+    test_optional_narrowing_marks_payload_guarded();
     test_raw_slice_and_index_lower_without_optional_checks();
     test_generic_instance_deduplication();
     test_call_with_unlowerable_argument_fails_pipeline();
