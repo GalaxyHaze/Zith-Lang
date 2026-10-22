@@ -3362,6 +3362,7 @@ static void test_validated_c_struct_by_value_runs() {
                          "}\n");
     t.write("records.h", "struct Point { int x, y; };\n"
                          "int c_classify(struct Point p);\n"
+                         "int c_unused(struct Point p);\n"
                          "struct Point make_point(int x, int y);\n");
 
     auto r = t.run();

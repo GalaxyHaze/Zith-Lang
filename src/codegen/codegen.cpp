@@ -237,6 +237,8 @@ void CodeGen::emit(hir::HirModule &hirModule, std::string_view moduleName) {
     for (size_t i = 0; i < hirModule.getFnCount(); i++)
         declareFn(hirModule.getFn(i));
 
+    emitForeignAdapterThunks(hirModule);
+
     // Vtables reference the declared function symbols and must be emitted after
     // the first declaration pass so their constant initializers can bitcast the
     // function pointers.
@@ -387,16 +389,100 @@ void CodeGen::emitVtables(hir::HirModule &hirModule) {
     }
 }
 
+void CodeGen::emitForeignAdapterThunks(const hir::HirModule &hirModule) {
+    auto *void_type = llvm::Type::getVoidTy(*ctx_);
+    auto *ptr_type = llvm::PointerType::get(*ctx_, 0);
+    auto *adapter_type =
+        llvm::FunctionType::get(void_type, {ptr_type, ptr_type}, false);
+
+    for (size_t index = 0; index < hirModule.getFnCount(); ++index) {
+        const auto &hir_fn = hirModule.getFn(index);
+        if (!hir_fn.isForeignC ||
+            hir_fn.foreignAdapterName == memory::kInvalidInternedId)
+            continue;
+
+        bool referenced = false;
+        for (size_t expr_index = 0; expr_index < hirModule.exprCount(); ++expr_index) {
+            const auto &expr = hirModule.getExpr(static_cast<hir::HirExprId>(expr_index));
+            if (const auto *var = std::get_if<hir::HirVar>(&expr);
+                var != nullptr && var->name == hir_fn.name) {
+                referenced = true;
+                break;
+            }
+            if (const auto *call = std::get_if<hir::HirCall>(&expr);
+                call != nullptr && hir_fn.sym_id != symbols::kInvalidSym &&
+                call->resolved_fn == hir_fn.sym_id) {
+                referenced = true;
+                break;
+            }
+        }
+        if (!referenced)
+            continue;
+
+        const auto thunk_name = interner_.lookup(hir_fn.name);
+        auto *thunk = module_->getFunction(
+            llvm::StringRef(thunk_name.data(), thunk_name.size()));
+        if (thunk == nullptr || !thunk->isDeclaration()) {
+            llvmError("C ABI adapter thunk declaration is missing or already defined");
+            continue;
+        }
+
+        const auto adapter_name = interner_.lookup(hir_fn.foreignAdapterName);
+        auto *adapter = module_->getFunction(
+            llvm::StringRef(adapter_name.data(), adapter_name.size()));
+        if (adapter == nullptr) {
+            adapter = llvm::Function::Create(
+                adapter_type, llvm::GlobalValue::ExternalLinkage,
+                llvm::StringRef(adapter_name.data(), adapter_name.size()), module_.get());
+        } else if (adapter->getFunctionType() != adapter_type) {
+            llvmError("C ABI adapter has an incompatible function type");
+            continue;
+        }
+
+        auto *entry = llvm::BasicBlock::Create(*ctx_, "entry", thunk);
+        llvm::IRBuilder<> builder(entry);
+        llvm::Value *argument_array = llvm::ConstantPointerNull::get(ptr_type);
+        if (thunk->arg_size() != 0U) {
+            argument_array = builder.CreateAlloca(
+                ptr_type, builder.getInt32(static_cast<unsigned>(thunk->arg_size())));
+            size_t argument_index = 0;
+            for (auto &argument : thunk->args()) {
+                auto *storage = builder.CreateAlloca(argument.getType());
+                builder.CreateStore(&argument, storage);
+                auto *element = builder.CreateInBoundsGEP(
+                    ptr_type, argument_array,
+                    builder.getInt32(static_cast<unsigned>(argument_index)));
+                builder.CreateStore(storage, element);
+                ++argument_index;
+            }
+        }
+
+        llvm::Value *result_storage = llvm::ConstantPointerNull::get(ptr_type);
+        if (!thunk->getReturnType()->isVoidTy())
+            result_storage = builder.CreateAlloca(thunk->getReturnType());
+        builder.CreateCall(adapter, {argument_array, result_storage});
+        if (thunk->getReturnType()->isVoidTy())
+            builder.CreateRetVoid();
+        else
+            builder.CreateRet(builder.CreateLoad(thunk->getReturnType(), result_storage));
+        verifyCurrentFunction(thunk);
+    }
+}
+
 llvm::Function *CodeGen::declareFn(const hir::HirFunction &fn) {
     auto name = interner_.lookup(fn.name);
 
     CodeGenType typeGen(*ctx_, types_, &module_->getDataLayout());
     llvm::SmallVector<llvm::Type *, 8> paramTypes;
     for (auto param_type : fn.params)
-        paramTypes.push_back(fn.blocks.empty() ? typeGen.abiLower(param_type)
-                                               : typeGen.lower(param_type));
+        paramTypes.push_back(fn.blocks.empty() &&
+                                     fn.foreignAdapterName == memory::kInvalidInternedId
+                                 ? typeGen.abiLower(param_type)
+                                 : typeGen.lower(param_type));
     auto *retType =
-        fn.blocks.empty() ? typeGen.abiLower(fn.return_type) : typeGen.lower(fn.return_type);
+        fn.blocks.empty() && fn.foreignAdapterName == memory::kInvalidInternedId
+            ? typeGen.abiLower(fn.return_type)
+            : typeGen.lower(fn.return_type);
 
     auto *fnType = llvm::FunctionType::get(retType, paramTypes, fn.isVariadic);
     auto *llvmFn = llvm::Function::Create(fnType, llvm::Function::ExternalLinkage,

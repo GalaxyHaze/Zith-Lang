@@ -13,6 +13,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <filesystem>
+#include <fstream>
 #include <string>
 #include <vector>
 
@@ -145,8 +146,6 @@ bool CompilationSession::prepareNativeLinkInputs() {
 
     std::vector<std::string> configuredRoots;
     mergeStrings(mProjectConfig, mOpts.get(), "cSourceDirs", configuredRoots);
-    if (configuredRoots.empty())
-        return true;
 
     std::vector<std::string> resolvedRoots;
     memory::FlatSet<std::string> seenRoots;
@@ -167,15 +166,14 @@ bool CompilationSession::prepareNativeLinkInputs() {
             resolvedRoots.push_back(canonical);
     }
 
-    const auto discovery = cc::discoverCSources(resolvedRoots);
+    const auto discovery =
+        resolvedRoots.empty() ? cc::DiscoveryResult{} : cc::discoverCSources(resolvedRoots);
     for (const auto &diag : discovery.diagnostics) {
         writeOutput("%s[error]%s %s\n", ansicolor("\033[31m"), ansicolor("\033[0m"),
                     diag.message.c_str());
     }
     if (!discovery.ok)
         return false;
-    if (discovery.sourcePaths.empty())
-        return true;
 
     std::vector<std::string> includeDirs;
     mergeStrings(mProjectConfig, mOpts.get(), "includeDirs",
@@ -230,6 +228,89 @@ bool CompilationSession::prepareNativeLinkInputs() {
         }
 
         mExtraObjectPaths.push_back(objectPath.string());
+    }
+
+    if (mSnapshot != nullptr && mInterner != nullptr) {
+        for (size_t fn_index = 0; fn_index < mHirModule.getFnCount(); ++fn_index) {
+            const auto &hir_fn = mHirModule.getFn(fn_index);
+            if (!hir_fn.isForeignC ||
+                hir_fn.foreignAdapterName == memory::kInvalidInternedId)
+                continue;
+
+            bool referenced = false;
+            for (size_t expr_index = 0; expr_index < mHirModule.exprCount(); ++expr_index) {
+                const auto &expr = mHirModule.getExpr(static_cast<hir::HirExprId>(expr_index));
+                if (const auto *var = std::get_if<hir::HirVar>(&expr);
+                    var != nullptr && var->name == hir_fn.name) {
+                    referenced = true;
+                    break;
+                }
+                if (const auto *call = std::get_if<hir::HirCall>(&expr);
+                    call != nullptr && hir_fn.sym_id != symbols::kInvalidSym &&
+                    call->resolved_fn == hir_fn.sym_id) {
+                    referenced = true;
+                    break;
+                }
+            }
+            if (!referenced)
+                continue;
+
+            const auto adapter_name           = mInterner->lookup(hir_fn.foreignAdapterName);
+            const cinterop::Function *foreign = nullptr;
+            for (const auto &header : mSnapshot->cHeaders()) {
+                if (header == nullptr)
+                    continue;
+                const auto found =
+                    std::find_if(header->functions.begin(), header->functions.end(),
+                                 [&](const cinterop::Function &function) {
+                                     return function.adapterName == adapter_name;
+                                 });
+                if (found != header->functions.end()) {
+                    foreign = &*found;
+                    break;
+                }
+            }
+            if (foreign == nullptr || foreign->adapterSource.empty()) {
+                writeOutput("%s[error]%s missing generated C ABI adapter source for %s\n",
+                            ansicolor("\033[31m"), ansicolor("\033[0m"),
+                            std::string(adapter_name).c_str());
+                return false;
+            }
+
+            const fs::path adapter_root = objectRoot / "adapters";
+            fs::create_directories(adapter_root);
+            const fs::path source_path = adapter_root / (std::string(adapter_name) + ".c");
+            const fs::path adapter_object = adapter_root / (std::string(adapter_name) + ".o");
+            {
+                std::ofstream output(source_path, std::ios::binary | std::ios::trunc);
+                output << foreign->adapterSource;
+                if (!output) {
+                    writeOutput("%s[error]%s failed to write C ABI adapter source: %s\n",
+                                ansicolor("\033[31m"), ansicolor("\033[0m"),
+                                source_path.string().c_str());
+                    return false;
+                }
+            }
+
+            cc::CCompileRequest request;
+            request.inputPath = source_path.string();
+            request.outputPath = adapter_object.string();
+            request.targetTriple = mOpts.get().targetTriple;
+            request.sysroot = mOpts.get().sysroot;
+            request.includeDirs = includeDirs;
+            request.defines = defines;
+            request.verbose = mOpts.get().flags.verbose();
+            const auto result = cc::compileCSource(request);
+            if (!result.ok) {
+                for (const auto &diag : result.diagnostics)
+                    writeOutput("%s[error]%s %s\n", ansicolor("\033[31m"),
+                                ansicolor("\033[0m"), diag.message.c_str());
+                if (!result.toolOutput.empty())
+                    writeOutput("%s", result.toolOutput.c_str());
+                return false;
+            }
+            mExtraObjectPaths.push_back(adapter_object.string());
+        }
     }
 
     return true;

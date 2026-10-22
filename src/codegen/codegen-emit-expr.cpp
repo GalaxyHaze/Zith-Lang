@@ -760,7 +760,9 @@ llvm::Value *CodeGenEmit::emitCall(const hir::HirCall &call, const hir::HirModul
     if (is_extern_call && call.resolved_fn != symbols::kInvalidSym) {
         is_extern_call = false;
         for (size_t i = 0; i < mod.getFnCount(); ++i) {
-            if (mod.getFn(i).sym_id == call.resolved_fn && mod.getFn(i).isForeignC) {
+            const auto &hir_fn = mod.getFn(i);
+            if (hir_fn.sym_id == call.resolved_fn && hir_fn.isForeignC &&
+                hir_fn.foreignAdapterName == memory::kInvalidInternedId) {
                 is_extern_call = true;
                 break;
             }
