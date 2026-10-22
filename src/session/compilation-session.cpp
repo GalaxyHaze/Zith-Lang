@@ -10,6 +10,7 @@
 #include "frontend/frontend-printer.hpp"
 #include "formatter/fmt-visitor.hpp"
 #include "memory/source-map.hpp"
+#include "hir/hir-verify.hpp"
 #include "sema/heuristic-engine.hpp"
 #include "sema/hir-lower-modern.hpp"
 #include "sema/nra-facts.hpp"
@@ -293,6 +294,11 @@ bool CompilationSession::runTo(Stage target) {
         return !mDiags.hasErrors();
     if (!lowerStage())
         return false;
+    hir::HirVerifier hir_verifier(mHirModule, mTypes, mDiags);
+    if (!hir_verifier.verify()) {
+        mDiags.emit();
+        return false;
+    }
     mPlan.advance();
 
     if (mPlan.shouldStop())

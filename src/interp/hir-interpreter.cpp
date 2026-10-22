@@ -193,9 +193,9 @@ HirInterpreter::Value HirInterpreter::eval(hir::HirExprId id, Frame &frame,
                 return {};
             } else if constexpr (std::is_same_v<T, hir::HirCall>) {
                 const hir::HirFunction *callee = nullptr;
-                if (node.resolved_fn != symbols::kInvalidSym) {
+                if (node.resolved_fn != hir::kInvalidHirFunction) {
                     for (size_t index = 0; index < module_.getFnCount(); ++index) {
-                        if (module_.getFn(index).sym_id == node.resolved_fn) {
+                        if (static_cast<hir::HirFunctionId>(index) == node.resolved_fn) {
                             callee = &module_.getFn(index);
                             break;
                         }
@@ -218,7 +218,7 @@ HirInterpreter::Value HirInterpreter::eval(hir::HirExprId id, Frame &frame,
                     args.push(eval(arg_id, frame, result));
 
                 int64_t ret = 0;
-                if (callee->blocks.empty()) {
+                if (!callee->hasBody) {
                     if (!runExtern(*callee, args, ret)) {
                         result.status   = HirInterpStatus::MissingExtern;
                         result.exitCode = 1;

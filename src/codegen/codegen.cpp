@@ -247,7 +247,7 @@ void CodeGen::emit(hir::HirModule &hirModule, std::string_view moduleName) {
     // Second pass: emit bodies for non-extern functions
     for (size_t i = 0; i < hirModule.getFnCount(); i++) {
         auto &fn = hirModule.getFn(i);
-        if (!fn.blocks.empty())
+        if (fn.hasBody)
             emitFnBody(fn, hirModule);
     }
 
@@ -313,7 +313,7 @@ void CodeGen::emitVtables(hir::HirModule &hirModule) {
             const hir::HirFunction *hir_fn = nullptr;
             for (size_t fn_index = 0; fn_index < hirModule.getFnCount(); ++fn_index) {
                 const auto &candidate = hirModule.getFn(fn_index);
-                if (candidate.sym_id != vtable.slots[slot])
+                if (static_cast<hir::HirFunctionId>(fn_index) != vtable.slots[slot])
                     continue;
                 hir_fn             = &candidate;
                 const auto fn_name = interner_.lookup(candidate.name);
@@ -410,8 +410,8 @@ void CodeGen::emitForeignAdapterThunks(const hir::HirModule &hirModule) {
                 break;
             }
             if (const auto *call = std::get_if<hir::HirCall>(&expr);
-                call != nullptr && hir_fn.sym_id != symbols::kInvalidSym &&
-                call->resolved_fn == hir_fn.sym_id) {
+                call != nullptr &&
+                call->resolved_fn == static_cast<hir::HirFunctionId>(index)) {
                 referenced = true;
                 break;
             }
@@ -475,12 +475,12 @@ llvm::Function *CodeGen::declareFn(const hir::HirFunction &fn) {
     CodeGenType typeGen(*ctx_, types_, &module_->getDataLayout());
     llvm::SmallVector<llvm::Type *, 8> paramTypes;
     for (auto param_type : fn.params)
-        paramTypes.push_back(fn.blocks.empty() &&
+        paramTypes.push_back(!fn.hasBody &&
                                      fn.foreignAdapterName == memory::kInvalidInternedId
                                  ? typeGen.abiLower(param_type)
                                  : typeGen.lower(param_type));
     auto *retType =
-        fn.blocks.empty() && fn.foreignAdapterName == memory::kInvalidInternedId
+        !fn.hasBody && fn.foreignAdapterName == memory::kInvalidInternedId
             ? typeGen.abiLower(fn.return_type)
             : typeGen.lower(fn.return_type);
 
@@ -489,7 +489,7 @@ llvm::Function *CodeGen::declareFn(const hir::HirFunction &fn) {
                                           llvm::StringRef(name.data(), name.size()), module_.get());
     if (fn.isState)
         llvmFn->setCallingConv(llvm::CallingConv::Tail);
-    if (fn.blocks.empty())
+    if (!fn.hasBody)
         llvmFn->setDoesNotThrow();
     return llvmFn;
 }

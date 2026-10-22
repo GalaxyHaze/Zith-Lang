@@ -352,7 +352,7 @@ std::string HirModule::toString(const memory::StringInterner &interner) const {
                                        buffer += std::to_string(canonical.canonical_id.lo);
                                    },
                                    [&](const HirStateTailCall &tail) {
-                                       if (tail.call.resolved_fn != symbols::kInvalidSym)
+                                       if (tail.call.resolved_fn != kInvalidHirFunction)
                                            buffer += "state_tail_call <resolved>(";
                                        else
                                            buffer += "state_tail_call %e";
@@ -445,7 +445,20 @@ std::string HirModule::toString(const memory::StringInterner &interner) const {
                                        buffer += std::to_string(c.canonical_id.hi);
                                        buffer += ':';
                                        buffer += std::to_string(c.canonical_id.lo);
-                                       buffer += c.checked ? " checked" : " raw";
+                                       switch (c.safety) {
+                                       case HirSafetyMode::RequiredCheck:
+                                           buffer += " required-check";
+                                           break;
+                                       case HirSafetyMode::Guarded:
+                                           buffer += " guarded";
+                                           break;
+                                       case HirSafetyMode::Intrinsic:
+                                           buffer += " intrinsic";
+                                           break;
+                                       case HirSafetyMode::Raw:
+                                           buffer += " raw";
+                                           break;
+                                       }
                                    },
                                    [&](const HirOpaqueCheck &c) {
                                        buffer += "opaque_check %e";

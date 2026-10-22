@@ -242,6 +242,14 @@ enum class CompactBinaryOp : uint8_t {
 };
 enum class CompactUnaryOp : uint8_t { Neg, Not, BitNot, Ref, Deref };
 
+enum class CompactSafetyMode : uint8_t { RequiredCheck, Guarded, Intrinsic, Raw };
+enum class CompactSafetyProofKind : uint8_t {
+    BoundsValid,
+    OptionalPresent,
+    UnionMemberMatches,
+    OpaqueTypeMatches,
+};
+
 struct CompactExpr {
     CompactExprKind kind = CompactExprKind::Literal;
     uint32_t type_id     = 0;
@@ -253,6 +261,7 @@ struct CompactExpr {
     uint32_t ref_f       = 0; // LayoutIntrinsic::field_index
     uint8_t op           = 0; // binary/unary op
     uint8_t flags        = 0; // is_array / literal sub-tag
+    CompactSafetyMode safety = CompactSafetyMode::RequiredCheck;
     int64_t int_val      = 0;
     double flt_val       = 0.0;
     uint32_t name_id     = 0;        // let/var name
@@ -295,7 +304,7 @@ struct CompactGlobalConst {
 
 struct CompactVTable {
     uint32_t name_id = 0;
-    std::vector<uint32_t> slot_sym_ids;
+    std::vector<uint32_t> slot_function_ids;
 };
 
 struct HirSlotAttrsRecord {
@@ -322,14 +331,21 @@ struct HirFnAttrsRecord {
     bool discardable        = false;
 };
 
+struct HirSafetyProofRecord {
+    uint32_t expr_id = 0;
+    CompactSafetyProofKind kind = CompactSafetyProofKind::BoundsValid;
+    uint32_t operand_a = ~uint32_t{0};
+    uint32_t operand_b = ~uint32_t{0};
+    uint32_t operand_c = ~uint32_t{0};
+};
+
 // Monomorphized instances produced by the comptime pass. The HIR bodies already
 // carry the concrete names and call targets, so this record is a stable summary
 // for cache inspection and future re-instantiation without rerunning sema.
 struct InstantiationRecord {
-    std::string module;
+    std::string canonical_module;
     std::string mangled;
     std::string template_name;
-    uint32_t decl_id = 0;
     std::vector<std::string> arg_types;
 };
 
@@ -365,6 +381,7 @@ struct Artifact {
     std::vector<HirSlotAttrsRecord> attrs_slots;
     std::vector<HirCallAttrsRecord> attrs_calls;
     std::vector<HirFnAttrsRecord> attrs_fns;
+    std::vector<HirSafetyProofRecord> attrs_safety_proofs;
     std::vector<InstantiationRecord> instantiations;
 };
 

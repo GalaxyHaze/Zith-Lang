@@ -256,7 +256,8 @@ llvm::Value *CodeGenEmit::emitExpr(hir::HirExprId id, const hir::HirModule &mod)
                     const auto *from_def =
                         from_union != nullptr ? types_.lookupUnionDef(from_union->def_id) : nullptr;
                     const bool from_tagged = from_def != nullptr && from_def->is_tagged;
-                    if (from_tagged && cast.checked && cast.member_index != ~0U) {
+                    if (from_tagged && cast.safety == hir::HirSafetyMode::RequiredCheck &&
+                        cast.member_index != ~0U) {
                         auto *tag_addr = builder_.CreateStructGEP(union_ll, storage, 1U);
                         auto *tag      = builder_.CreateLoad(
                             llvm::cast<llvm::IntegerType>(union_ll->getStructElementType(1)),
@@ -712,10 +713,10 @@ llvm::Value *CodeGenEmit::emitCall(const hir::HirCall &call, const hir::HirModul
     // HIR function names are local to their source module, while call symbols
     // can be namespace-qualified by an import alias. Resolve by symbol identity.
     llvm::Function *fn = nullptr;
-    if (call.resolved_fn != symbols::kInvalidSym) {
+    if (call.resolved_fn != hir::kInvalidHirFunction) {
         for (size_t i = 0; i < mod.getFnCount(); ++i) {
             const auto &hir_fn = mod.getFn(i);
-            if (hir_fn.sym_id != call.resolved_fn)
+            if (static_cast<hir::HirFunctionId>(i) != call.resolved_fn)
                 continue;
             auto name = interner_.lookup(hir_fn.name);
             fn        = module->getFunction(llvm::StringRef(name.data(), name.size()));
@@ -757,11 +758,11 @@ llvm::Value *CodeGenEmit::emitCall(const hir::HirCall &call, const hir::HirModul
     // Plain declarations of local/mutual-recursive functions keep the native
     // HIR signature and must not be coerced here.
     bool is_extern_call = fn != nullptr && fn->isDeclaration();
-    if (is_extern_call && call.resolved_fn != symbols::kInvalidSym) {
+    if (is_extern_call && call.resolved_fn != hir::kInvalidHirFunction) {
         is_extern_call = false;
         for (size_t i = 0; i < mod.getFnCount(); ++i) {
             const auto &hir_fn = mod.getFn(i);
-            if (hir_fn.sym_id == call.resolved_fn && hir_fn.isForeignC &&
+            if (static_cast<hir::HirFunctionId>(i) == call.resolved_fn && hir_fn.isForeignC &&
                 hir_fn.foreignAdapterName == memory::kInvalidInternedId) {
                 is_extern_call = true;
                 break;
@@ -817,7 +818,7 @@ llvm::Value *CodeGenEmit::emitCall(const hir::HirCall &call, const hir::HirModul
     if (is_extern_call) {
         const hir::HirFunction *hir_fn = nullptr;
         for (size_t i = 0; i < mod.getFnCount(); ++i) {
-            if (mod.getFn(i).sym_id == call.resolved_fn) {
+            if (static_cast<hir::HirFunctionId>(i) == call.resolved_fn) {
                 hir_fn = &mod.getFn(i);
                 break;
             }
@@ -957,7 +958,7 @@ llvm::Value *CodeGenEmit::emitOpaqueCheck(const hir::HirOpaqueCheck &check,
 
 llvm::Value *CodeGenEmit::emitOpaqueCast(const hir::HirOpaqueCast &cast,
                                          const hir::HirModule &mod) {
-    if (cast.checked)
+    if (cast.safety == hir::HirSafetyMode::RequiredCheck)
         return nullptr;
     auto *opaque = emitExpr(cast.value, mod);
     if (!opaque || !opaque->getType()->isStructTy())

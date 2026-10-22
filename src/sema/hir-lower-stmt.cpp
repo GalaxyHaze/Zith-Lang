@@ -385,7 +385,7 @@ bool HirLowerModern::lowerStatement(frontend::StmtId id, hir::HirExprId &last_va
                 tail.call.args.push(argument);
             }
         }
-        tail.call.resolved_fn = functions_[*function_index].sym_id;
+        tail.call.resolved_fn = functions_[*function_index].hir_function_id;
         tail.call.musttail    = true;
         tail.call.usesTailCC  = true;
         setTerminator(addExpr(std::move(tail)));

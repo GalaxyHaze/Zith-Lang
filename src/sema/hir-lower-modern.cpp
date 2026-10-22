@@ -201,8 +201,6 @@ bool HirLowerModern::predeclareFunctions() {
             }
 
             auto &hir_fn      = hir_.addFn(interner_.intern(fn_name));
-            hir_fn.sym_id     = static_cast<symbols::SymId>(functions_.size() + next_sym_id_);
-            hir_fn.decl_id    = static_cast<ast::DeclId>(decl.id.value);
             hir_fn.fnSpan     = memory::Span{0, decl.span.start, decl.span.end};
             hir_fn.isVariadic = decl.isVariadic;
             hir_fn.isState    = decl.functionKind == frontend::FunctionKind::State;
@@ -250,8 +248,10 @@ bool HirLowerModern::predeclareFunctions() {
 
             const auto key = internFunctionKey(interner_, module.key, decl.id);
             function_index_by_key_.insert(key, hir_.getFnCount() - 1U);
-            functions_.push_back({key, module_ptr.get(), &decl, nullptr, nullptr, hir_fn.sym_id,
-                                  hir_.getFnCount() - 1U, is_main_void});
+            functions_.push_back(
+                {key, module_ptr.get(), &decl, nullptr, nullptr,
+                 static_cast<hir::HirFunctionId>(hir_.getFnCount() - 1U),
+                 hir_.getFnCount() - 1U, is_main_void});
         }
     }
     if (const auto *instantiations = sema_.instantiations(); instantiations != nullptr) {
@@ -271,7 +271,6 @@ bool HirLowerModern::predeclareFunctions() {
             hir_fn.isForeignC = true;
             if (!foreign.adapterName.empty())
                 hir_fn.foreignAdapterName = interner_.intern(foreign.adapterName);
-            hir_fn.sym_id      = static_cast<symbols::SymId>(functions_.size() + next_sym_id_);
             hir_fn.return_type = lowerForeignType(foreign.result);
             hir_fn.isVariadic  = foreign.isVariadic;
             for (const auto &parameter : foreign.parameters) {
@@ -279,7 +278,9 @@ bool HirLowerModern::predeclareFunctions() {
                 hir_fn.param_names.push({});
             }
             functions_.push_back(
-                {0, nullptr, nullptr, &foreign, nullptr, hir_fn.sym_id, hir_.getFnCount() - 1U});
+                {0, nullptr, nullptr, &foreign, nullptr,
+                 static_cast<hir::HirFunctionId>(hir_.getFnCount() - 1U),
+                 hir_.getFnCount() - 1U});
         }
     }
     return true;
@@ -306,8 +307,6 @@ void HirLowerModern::predeclareInstantiation(session::ModuleKey module_key,
     const bool has_external_symbol = !decl->externalSymbol.empty();
     auto &hir_fn =
         hir_.addFn(interner_.intern(has_external_symbol ? decl->externalSymbol : instance.mangled));
-    hir_fn.sym_id     = static_cast<symbols::SymId>(functions_.size() + next_sym_id_);
-    hir_fn.decl_id    = static_cast<ast::DeclId>(decl->id.value);
     hir_fn.fnSpan     = memory::Span{0, decl->span.start, decl->span.end};
     hir_fn.isVariadic = decl->isVariadic;
     hir_fn.isState    = decl->functionKind == frontend::FunctionKind::State;
@@ -344,7 +343,9 @@ void HirLowerModern::predeclareInstantiation(session::ModuleKey module_key,
     if (!function_index_by_key_.contains(key))
         function_index_by_key_.insert(key, hir_.getFnCount() - 1U);
     functions_.push_back(
-        {key, module, decl, nullptr, &instance, hir_fn.sym_id, hir_.getFnCount() - 1U});
+        {key, module, decl, nullptr, &instance,
+         static_cast<hir::HirFunctionId>(hir_.getFnCount() - 1U),
+         hir_.getFnCount() - 1U});
 }
 
 bool HirLowerModern::lowerFunctionBody(FunctionInfo &info) {
@@ -359,6 +360,7 @@ bool HirLowerModern::lowerFunctionBody(FunctionInfo &info) {
     }
 
     current_fn_                  = &hir_.getFn(info.hir_index);
+    current_fn_->hasBody         = true;
     current_instantiation_       = info.instance != nullptr ? sema_.instantiations() : nullptr;
     current_instance_            = info.instance;
     current_fn_return_sema_type_ = sema::modern::kInvalidTypeId;
@@ -534,23 +536,23 @@ HirLowerModern::resolvedFunctionDecl(const session::ResolvedName &resolved,
     return findDecl(*module, decl);
 }
 
-symbols::SymId
-HirLowerModern::resolvedFunctionSym(const session::ResolvedName &resolved) const noexcept {
+hir::HirFunctionId
+HirLowerModern::resolvedFunctionId(const session::ResolvedName &resolved) const noexcept {
     if (resolved.foreignFunction != nullptr) {
         for (const auto &function : functions_) {
             if (function.foreign == resolved.foreignFunction)
-                return function.sym_id;
+                return function.hir_function_id;
         }
-        return symbols::kInvalidSym;
+        return hir::kInvalidHirFunction;
     }
     const session::ModuleArtifact *module = nullptr;
     const auto *decl                      = resolvedFunctionDecl(resolved, &module);
     if (decl == nullptr || module == nullptr)
-        return symbols::kInvalidSym;
+        return hir::kInvalidHirFunction;
     const auto key = internFunctionKey(interner_, module->key, decl->id);
     if (const auto *function_index = function_index_by_key_.get(key))
-        return functions_[*function_index].sym_id;
-    return symbols::kInvalidSym;
+        return functions_[*function_index].hir_function_id;
+    return hir::kInvalidHirFunction;
 }
 
 hir::HirSlotId HirLowerModern::localSlot(frontend::LocalId id) {
@@ -609,7 +611,7 @@ void HirLowerModern::setTerminator(const hir::HirExprId term) {
 
 void HirLowerModern::emitJump(const size_t target) {
     hir::HirJump jump;
-    jump.target = static_cast<hir::HirDeclId>(target);
+    jump.target = static_cast<hir::HirBlockId>(target);
     setTerminator(addExpr(std::move(jump)));
 }
 

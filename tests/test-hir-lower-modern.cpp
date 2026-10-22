@@ -1017,7 +1017,7 @@ void test_opaque_casts_lower_to_hir_nodes() {
         for (size_t id = 0; id < hir.exprCount(); ++id) {
             const auto *cast =
                 std::get_if<hir::HirOpaqueCast>(&hir.getExpr(static_cast<hir::HirExprId>(id)));
-            if (cast != nullptr && !cast->checked)
+            if (cast != nullptr && cast->safety == hir::HirSafetyMode::Raw)
                 saw_raw = true;
         }
         CHECK(saw_raw, "raw extraction lowers to an unchecked HirOpaqueCast");
@@ -1095,7 +1095,8 @@ void test_implicit_opaque_coercion_and_narrow_lowering() {
     for (size_t id = 0; id < hir.exprCount(); ++id) {
         const auto &expr = hir.getExpr(static_cast<hir::HirExprId>(id));
         if (const auto *cast = std::get_if<hir::HirOpaqueCast>(&expr)) {
-            if (!cast->checked && cast->from == cast->opaque_type && cast->from != cast->to &&
+            if (cast->safety == hir::HirSafetyMode::Guarded && cast->from == cast->opaque_type &&
+                cast->from != cast->to &&
                 cast->to == cast->result_type)
                 saw_narrowed_cast = true;
         }
@@ -1297,11 +1298,13 @@ void test_is_null_on_value_optional_reads_tag() {
                 if (unary == nullptr || unary->op != hir::HirUnaryOp::Not)
                     continue;
                 const auto *field = std::get_if<hir::HirField>(&hir.getExpr(unary->operand));
-                if (field != nullptr && field->index == 1u)
+                if (field != nullptr && field->index == 1u &&
+                    field->safety == hir::HirSafetyMode::Intrinsic)
                     found_not_of_tag = true;
             }
         }
-        CHECK(found_not_of_tag, "'is null' on ?T negates the discriminant read at field index 1");
+        CHECK(found_not_of_tag,
+              "'is null' on ?T negates the intrinsically safe discriminant at field index 1");
     }
 }
 
@@ -1449,8 +1452,8 @@ void test_static_method_call_has_resolved_callee_only() {
                 continue;
             CHECK(call->callee == hir::kInvalidHirExpr,
                   "static method call keeps callee = kInvalidHirExpr");
-            CHECK(call->resolved_fn != symbols::kInvalidSym,
-                  "static method call carries a resolved symbol");
+            CHECK(call->resolved_fn != hir::kInvalidHirFunction,
+                  "static method call carries a resolved HIR function id");
             CHECK_EQ(call->args.size(), 0u, "static method call passes no receiver");
         }
     }
@@ -1526,8 +1529,8 @@ void test_state_tail_call_is_direct_and_musttail() {
             saw_tail_call = true;
             CHECK(tail->call.musttail, "state tail call carries the musttail bit");
             CHECK(tail->call.usesTailCC, "state tail call carries the tailcc bit");
-            CHECK(tail->call.resolved_fn != symbols::kInvalidSym,
-                  "state tail call resolves a direct callee symbol");
+            CHECK(tail->call.resolved_fn != hir::kInvalidHirFunction,
+                  "state tail call resolves a direct HIR function id");
             CHECK(tail->call.callee == hir::kInvalidHirExpr,
                   "state tail call has no indirect callee expression");
         }
@@ -1685,7 +1688,7 @@ void test_generic_function_lowers_to_concrete_instances() {
         return;
 
     size_t call_count       = 0;
-    symbols::SymId resolved = symbols::kInvalidSym;
+    hir::HirFunctionId resolved = hir::kInvalidHirFunction;
     const auto countCall    = [&](hir::HirExprId id) {
         if (id == hir::kInvalidHirExpr)
             return;
@@ -1694,7 +1697,8 @@ void test_generic_function_lowers_to_concrete_instances() {
             return;
         ++call_count;
         resolved = call->resolved_fn;
-        CHECK(call->callee == hir::kInvalidHirExpr || call->resolved_fn != symbols::kInvalidSym,
+        CHECK(call->callee == hir::kInvalidHirExpr ||
+                  call->resolved_fn != hir::kInvalidHirFunction,
                  "generic call has a resolved concrete symbol or a valid callee expr");
     };
     for (const auto &block : main->blocks) {
@@ -1706,7 +1710,8 @@ void test_generic_function_lowers_to_concrete_instances() {
         }
     }
     CHECK_EQ(call_count, 2u, "both generic calls remain in main");
-    CHECK(resolved != symbols::kInvalidSym, "at least one generic call resolves to the instance");
+    CHECK(resolved != hir::kInvalidHirFunction,
+          "at least one generic call resolves to the instance");
 
     const auto *identity = findFunction(hir, session.interner(), "identity<i32>");
     CHECK(identity != nullptr,
@@ -1829,11 +1834,11 @@ void test_interface_method_bound_lower_to_hir() {
         if (!std::holds_alternative<hir::HirCall>(expr))
             continue;
         const auto &call = std::get<hir::HirCall>(expr);
-        if (call.resolved_fn == symbols::kInvalidSym)
+        if (call.resolved_fn == hir::kInvalidHirFunction)
             continue;
         for (size_t fn_index = 0; fn_index < hir.getFnCount(); ++fn_index) {
             const auto &fn = hir.getFn(fn_index);
-            if (fn.sym_id != call.resolved_fn)
+            if (static_cast<hir::HirFunctionId>(fn_index) != call.resolved_fn)
                 continue;
             const std::string_view fn_name(session.interner().lookup(fn.name));
             if (fn_name.find("Point.getX") != std::string_view::npos ||
@@ -1894,8 +1899,8 @@ void test_indirect_function_call_has_callee_and_fn_type() {
     if (call == nullptr)
         return;
     CHECK(call->callee != hir::kInvalidHirExpr, "indirect call carries a callee expression");
-    CHECK(call->resolved_fn == symbols::kInvalidSym,
-          "indirect call does not resolve to a direct function symbol");
+    CHECK(call->resolved_fn == hir::kInvalidHirFunction,
+          "indirect call does not resolve to a direct HIR function");
     CHECK(call->fn_type != types::kInvalidType, "indirect call records the lowered function type");
 }
 
@@ -1930,7 +1935,8 @@ void test_array_to_slice_coercion_lowers_to_make_slice() {
     CHECK(slice != nullptr, "array return coercion emits HirMakeSlice");
     if (slice != nullptr) {
         CHECK(slice->is_array, "the coercion marks the object as an array");
-        CHECK(!slice->checked, "full-array coercion is statically unchecked");
+        CHECK(slice->safety == hir::HirSafetyMode::Intrinsic,
+              "full-array coercion is intrinsically safe");
         const auto &lo = hir.getExpr(slice->lo);
         const auto &hi = hir.getExpr(slice->hi);
         CHECK(std::get_if<hir::HirLiteral>(&lo) != nullptr &&
@@ -2062,7 +2068,8 @@ void test_raw_slice_and_index_lower_without_optional_checks() {
     CHECK(slice != nullptr, "raw array slicing still lowers to HirMakeSlice");
     if (slice != nullptr) {
         CHECK(slice->is_array, "raw slice marks the object as an array");
-        CHECK(!slice->checked, "raw slice skips the runtime checked path");
+        CHECK(slice->safety == hir::HirSafetyMode::Raw,
+              "raw slice preserves its explicit unchecked safety mode");
     }
 }
 
@@ -2236,23 +2243,24 @@ void test_distinct_generic_instances_have_distinct_symbols() {
     const auto &hir           = session.hirModule();
     size_t pick_i32           = 0;
     size_t pick_f64           = 0;
-    symbols::SymId first_sym  = symbols::kInvalidSym;
-    symbols::SymId second_sym = symbols::kInvalidSym;
+    hir::HirFunctionId first_function  = hir::kInvalidHirFunction;
+    hir::HirFunctionId second_function = hir::kInvalidHirFunction;
     for (size_t i = 0; i < hir.getFnCount(); ++i) {
         const auto name = internedName(session.interner(), hir.getFn(i).name);
         if (name.find("pick<i32>") != std::string_view::npos) {
             ++pick_i32;
-            first_sym = hir.getFn(i).sym_id;
+            first_function = static_cast<hir::HirFunctionId>(i);
         } else if (name.find("pick<f64>") != std::string_view::npos) {
             ++pick_f64;
-            second_sym = hir.getFn(i).sym_id;
+            second_function = static_cast<hir::HirFunctionId>(i);
         }
     }
     CHECK_EQ(pick_i32, 1u, "one pick<i32> instance is lowered");
     CHECK_EQ(pick_f64, 1u, "one pick<f64> instance is lowered");
-    CHECK(first_sym != symbols::kInvalidSym && second_sym != symbols::kInvalidSym &&
-              first_sym != second_sym,
-          "distinct type-argument tuples map to distinct HIR symbols");
+    CHECK(first_function != hir::kInvalidHirFunction &&
+              second_function != hir::kInvalidHirFunction &&
+              first_function != second_function,
+          "distinct type-argument tuples map to distinct HIR function ids");
 }
 
 void test_defer_lowers_to_cleanup_nodes() {
@@ -2374,7 +2382,8 @@ void test_variadic_slice_lowers_to_hir() {
         CHECK(slice->object_type != types::kInvalidType,
               "the variadic slice carries its temporary array type");
         CHECK(slice->is_array, "auto-collection marks the temporary array as an array");
-        CHECK(!slice->checked, "auto-collection bounds are statically known");
+        CHECK(slice->safety == hir::HirSafetyMode::Intrinsic,
+              "auto-collection has statically known bounds");
     }
 }
 
@@ -2663,8 +2672,8 @@ void test_nested_optional_for_in_loop_variable_is_optional() {
             }
         }
     }
-    CHECK_EQ(optional_allocas, 3u,
-             "??T for-in allocates the returned optional and the ?T loop variable");
+    CHECK_EQ(optional_allocas, 2u,
+             "??T for-in allocates its result and loop variable without a guard copy");
     CHECK_EQ(countUnionCasts(hir, *main), 0u, "??T for-in emits no legacy union cast");
 }
 
@@ -2715,8 +2724,8 @@ void test_state_value_dock_lowers_to_indirect_tailcc_call() {
         return;
     CHECK(call->callee != hir::kInvalidHirExpr,
           "state value dock has an indirect callee expression");
-    CHECK(call->resolved_fn == symbols::kInvalidSym,
-          "state value dock does not resolve to a direct state symbol");
+    CHECK(call->resolved_fn == hir::kInvalidHirFunction,
+          "state value dock does not resolve to a direct HIR function");
     CHECK(call->fn_type != types::kInvalidType,
           "state value dock records the lowered state function type");
     CHECK(call->usesTailCC, "state value dock keeps LLVM tailcc");

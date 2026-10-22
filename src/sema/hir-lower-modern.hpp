@@ -39,7 +39,7 @@ private:
         const frontend::Declaration *decl               = nullptr;
         const cinterop::Function *foreign               = nullptr;
         const comptime::InstantiationInstance *instance = nullptr;
-        symbols::SymId sym_id                           = symbols::kInvalidSym;
+        hir::HirFunctionId hir_function_id              = hir::kInvalidHirFunction;
         size_t hir_index                                = 0;
         /// True for the C entry `main` whose source return type was `void` but
         /// whose HIR signature was rewritten to `i32` for the linker.
@@ -119,8 +119,6 @@ private:
     /// sema instead of leaking into unrelated expressions.
     hir::HirSlotId pipe_current_slot_ = hir::kInvalidHirSlot;
     std::vector<hir::HirSlotId> local_slots_;
-    symbols::SymId next_sym_id_ = 1;
-
     bool predeclareFunctions();
     bool predeclareGlobalConsts();
     void predeclareInstantiation(session::ModuleKey module_key,
@@ -210,7 +208,8 @@ private:
     const frontend::Declaration *
     resolvedFunctionDecl(const session::ResolvedName &resolved,
                          const session::ModuleArtifact **module_out = nullptr) const noexcept;
-    symbols::SymId resolvedFunctionSym(const session::ResolvedName &resolved) const noexcept;
+    hir::HirFunctionId
+    resolvedFunctionId(const session::ResolvedName &resolved) const noexcept;
     hir::HirSlotId localSlot(frontend::LocalId id);
 
     hir::HirExprId lowerExpr(frontend::ExprId id);

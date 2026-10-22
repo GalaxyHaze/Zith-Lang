@@ -36,7 +36,8 @@ hir::HirExprId HirLowerModern::lowerLValueAddr(frontend::ExprId id) {
             for (auto it = narrowing_stack_.rbegin(); it != narrowing_stack_.rend(); ++it) {
                 if (it->local == resolved->local && it->optionalPayload) {
                     const auto payload_field = addExpr(hir::HirField{
-                        addExpr(hir::HirSlotAddr{slot, local_ty}), 0U, it->type, local_ty});
+                        addExpr(hir::HirSlotAddr{slot, local_ty}), 0U, it->type, local_ty,
+                        hir::HirSafetyMode::Guarded});
                     return addExpr(hir::HirUnary{hir::HirUnaryOp::Ref, payload_field,
                                                  types_.internPtr(it->type)});
                 }
@@ -55,7 +56,7 @@ hir::HirExprId HirLowerModern::lowerLValueAddr(frontend::ExprId id) {
                     cast.result_type  = it->type;
                     cast.canonical_id = canonicalTypeId(it->type);
                     cast.type_id      = runtimeTagForCanonicalType(cast.canonical_id);
-                    cast.checked      = false;
+                    cast.safety       = hir::HirSafetyMode::Guarded;
                     current_fn_->blocks[current_block_].insts.push(
                         emitSlotStore(temp_slot, addExpr(std::move(cast))));
                     return addExpr(hir::HirSlotAddr{temp_slot, it->type});
@@ -103,8 +104,8 @@ hir::HirExprId HirLowerModern::lowerIndex(const frontend::Expression &expr,
                 !module_sema->constantIntegerValue(expr.operands[1], index_value) ||
                 index_value < 0 || static_cast<uint64_t>(index_value) >= pack->members.size())
                 return hir::kInvalidHirExpr;
-            return addExpr(
-                hir::HirField{object, static_cast<uint32_t>(index_value), type, object_type});
+            return addExpr(hir::HirField{object, static_cast<uint32_t>(index_value), type,
+                                         object_type, hir::HirSafetyMode::Intrinsic});
         }
     }
     hir::HirIndex indexing;
@@ -113,6 +114,8 @@ hir::HirExprId HirLowerModern::lowerIndex(const frontend::Expression &expr,
     indexing.type     = type;
     indexing.obj_type = object_type;
     indexing.is_array = types_.kindOf(object_type) == types::TypeKind::Array;
+    indexing.safety =
+        expr.is_raw ? hir::HirSafetyMode::Raw : hir::HirSafetyMode::RequiredCheck;
     if (expr.is_raw)
         return addExpr(std::move(indexing));
 
@@ -147,8 +150,9 @@ hir::HirExprId HirLowerModern::lowerIndex(const frontend::Expression &expr,
         len          = addExpr(std::move(len_lit));
     } else {
         const auto loaded = emitSlotLoad(object_slot, object_type);
-        auto len_i64 =
-            addExpr(hir::HirField{loaded, 1U, types_.internInt(types::IntWidth::I64), object_type});
+        auto len_i64 = addExpr(hir::HirField{loaded, 1U,
+                                             types_.internInt(types::IntWidth::I64), object_type,
+                                             hir::HirSafetyMode::Intrinsic});
         const auto len64 = types_.internInt(types::IntWidth::I64);
         if (types_.kindOf(index_type) != types::TypeKind::Int) {
             len = hir::kInvalidHirExpr;
@@ -189,8 +193,8 @@ hir::HirExprId HirLowerModern::lowerIndex(const frontend::Expression &expr,
     const auto merge_block = newBlock();
     hir::HirBranch branch;
     branch.cond       = addExpr(std::move(all_ok));
-    branch.then_block = static_cast<hir::HirDeclId>(some_block);
-    branch.else_block = static_cast<hir::HirDeclId>(none_block);
+    branch.then_block = static_cast<hir::HirBlockId>(some_block);
+    branch.else_block = static_cast<hir::HirBlockId>(none_block);
     setTerminator(addExpr(std::move(branch)));
 
     setCurrentBlock(some_block);
@@ -202,6 +206,7 @@ hir::HirExprId HirLowerModern::lowerIndex(const frontend::Expression &expr,
         ok_index.type     = element_type;
         ok_index.obj_type = object_type;
         ok_index.is_array = indexing.is_array;
+        ok_index.safety   = hir::HirSafetyMode::Guarded;
         hir::HirMakeSome some;
         some.type  = type;
         some.value = addExpr(std::move(ok_index));
@@ -255,7 +260,8 @@ hir::HirExprId HirLowerModern::lowerSliceRange(const frontend::Expression &expr,
         types_.kindOf(object_type) == types::TypeKind::Ptr ||
         (sema_optional != nullptr && sema_.typeTable().pointer(sema_.typeTable().stripQualifiers(
                                          sema_optional->inner)) != nullptr);
-    slice.checked = false;
+    slice.safety =
+        expr.is_raw ? hir::HirSafetyMode::Raw : hir::HirSafetyMode::RequiredCheck;
     if (optional == nullptr || expr.is_raw)
         return addExpr(std::move(slice));
 
@@ -290,8 +296,9 @@ hir::HirExprId HirLowerModern::lowerSliceRange(const frontend::Expression &expr,
         len          = addExpr(std::move(len_lit));
     } else {
         const auto loaded = emitSlotLoad(object_slot, object_type);
-        auto len_i64 =
-            addExpr(hir::HirField{loaded, 1U, types_.internInt(types::IntWidth::I64), object_type});
+        auto len_i64 = addExpr(hir::HirField{loaded, 1U,
+                                             types_.internInt(types::IntWidth::I64), object_type,
+                                             hir::HirSafetyMode::Intrinsic});
         const auto len64 = types_.internInt(types::IntWidth::I64);
         if (types_.kindOf(bound_type) != types::TypeKind::Int) {
             len = hir::kInvalidHirExpr;
@@ -348,8 +355,8 @@ hir::HirExprId HirLowerModern::lowerSliceRange(const frontend::Expression &expr,
     const auto merge_block = newBlock();
     hir::HirBranch branch;
     branch.cond       = addExpr(std::move(all_ok));
-    branch.then_block = static_cast<hir::HirDeclId>(some_block);
-    branch.else_block = static_cast<hir::HirDeclId>(none_block);
+    branch.then_block = static_cast<hir::HirBlockId>(some_block);
+    branch.else_block = static_cast<hir::HirBlockId>(none_block);
     setTerminator(addExpr(std::move(branch)));
 
     setCurrentBlock(some_block);
@@ -364,7 +371,7 @@ hir::HirExprId HirLowerModern::lowerSliceRange(const frontend::Expression &expr,
         ok_slice.bound_type  = bound_type;
         ok_slice.is_array    = slice.is_array;
         ok_slice.is_pointer  = slice.is_pointer;
-        ok_slice.checked     = false;
+        ok_slice.safety      = hir::HirSafetyMode::Guarded;
         hir::HirMakeSome some;
         some.type  = type;
         some.value = addExpr(std::move(ok_slice));

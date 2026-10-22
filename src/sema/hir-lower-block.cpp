@@ -166,8 +166,8 @@ hir::HirExprId HirLowerModern::lowerIf(const frontend::Expression &expr, const t
 
     hir::HirBranch branch;
     branch.cond       = cond;
-    branch.then_block = static_cast<hir::HirDeclId>(then_block);
-    branch.else_block = static_cast<hir::HirDeclId>(has_else ? else_block : merge_block);
+    branch.then_block = static_cast<hir::HirBlockId>(then_block);
+    branch.else_block = static_cast<hir::HirBlockId>(has_else ? else_block : merge_block);
     setTerminator(addExpr(std::move(branch)));
 
     frontend::LocalId narrowed_local = {};
@@ -261,8 +261,8 @@ hir::HirExprId HirLowerModern::lowerIf(const frontend::Expression &expr, const t
                 current_fn_->blocks[current_block_].insts.push(else_cond);
                 hir::HirBranch else_branch;
                 else_branch.cond       = else_cond;
-                else_branch.then_block = static_cast<hir::HirDeclId>(merge_block);
-                else_branch.else_block = static_cast<hir::HirDeclId>(merge_block);
+                else_branch.then_block = static_cast<hir::HirBlockId>(merge_block);
+                else_branch.else_block = static_cast<hir::HirBlockId>(merge_block);
                 setTerminator(addExpr(std::move(else_branch)));
             }
         }
@@ -327,8 +327,8 @@ hir::HirExprId HirLowerModern::lowerWhen(const frontend::Expression &expr,
                 lowerWhenCondition(expr.conditions[i], subject_slot, subject_type);
             hir::HirBranch branch;
             branch.cond       = condition;
-            branch.then_block = static_cast<hir::HirDeclId>(body_block);
-            branch.else_block = static_cast<hir::HirDeclId>(else_block);
+            branch.then_block = static_cast<hir::HirBlockId>(body_block);
+            branch.else_block = static_cast<hir::HirBlockId>(else_block);
             setTerminator(addExpr(std::move(branch)));
             chain_block = else_block;
         }
@@ -564,8 +564,8 @@ hir::HirExprId HirLowerModern::lowerWhile(const frontend::Expression &expr) {
     const auto cond                         = lowerCondition(expr.operands[0]);
     hir::HirBranch branch;
     branch.cond       = cond;
-    branch.then_block = static_cast<hir::HirDeclId>(body_block);
-    branch.else_block = static_cast<hir::HirDeclId>(exit_block);
+    branch.then_block = static_cast<hir::HirBlockId>(body_block);
+    branch.else_block = static_cast<hir::HirBlockId>(exit_block);
     setTerminator(addExpr(std::move(branch)));
 
     loop_stack_.push_back({header_block, exit_block, expr.label, 0U});
@@ -604,8 +604,8 @@ hir::HirExprId HirLowerModern::lowerFor(const frontend::Expression &expr) {
     const auto cond                         = lowerCondition(expr.operands[0]);
     hir::HirBranch branch;
     branch.cond       = cond;
-    branch.then_block = static_cast<hir::HirDeclId>(body_block);
-    branch.else_block = static_cast<hir::HirDeclId>(exit_block);
+    branch.then_block = static_cast<hir::HirBlockId>(body_block);
+    branch.else_block = static_cast<hir::HirBlockId>(exit_block);
     setTerminator(addExpr(std::move(branch)));
 
     // `continue` runs the step, so the step is the continue target; `break` exits.
@@ -714,8 +714,8 @@ hir::HirExprId HirLowerModern::lowerForIn(const frontend::Expression &expr) {
         const auto cond_id = addExpr(std::move(cond));
         hir::HirBranch branch;
         branch.cond       = cond_id;
-        branch.then_block = static_cast<hir::HirDeclId>(body_block);
-        branch.else_block = static_cast<hir::HirDeclId>(exit_block);
+        branch.then_block = static_cast<hir::HirBlockId>(body_block);
+        branch.else_block = static_cast<hir::HirBlockId>(exit_block);
         setTerminator(addExpr(std::move(branch)));
 
         setCurrentBlock(body_block);
@@ -823,7 +823,7 @@ hir::HirExprId HirLowerModern::lowerForIn(const frontend::Expression &expr) {
         arg_types.push(self_type);
 
         hir::HirCall call{hir::kInvalidHirExpr, std::move(args), std::move(arg_types)};
-        call.resolved_fn = functions_[*function_index].sym_id;
+        call.resolved_fn = functions_[*function_index].hir_function_id;
         return addExpr(std::move(call));
     };
 
@@ -853,7 +853,8 @@ hir::HirExprId HirLowerModern::lowerForIn(const frontend::Expression &expr) {
             optional != nullptr && types_.kindOf(optional->inner) == types::TypeKind::Ptr;
         if (!niche) {
             const auto next_addr = addExpr(hir::HirSlotAddr{next_slot, next_type});
-            cond_expr = addExpr(hir::HirField{next_addr, 1U, types::kBoolType, next_type});
+            cond_expr = addExpr(hir::HirField{next_addr, 1U, types::kBoolType, next_type,
+                                              hir::HirSafetyMode::Intrinsic});
             cond_expr = addExpr(hir::HirUnary{hir::HirUnaryOp::Not, cond_expr, types::kBoolType});
         } else {
             const auto loaded = addExpr(hir::HirSlotLoad{next_slot, next_type});
@@ -868,8 +869,9 @@ hir::HirExprId HirLowerModern::lowerForIn(const frontend::Expression &expr) {
         if (def == nullptr || !def->is_tagged)
             return hir::kInvalidHirExpr;
         const auto tag_type = tagType(types_, static_cast<uint32_t>(def->members.size()));
-        const auto tag = addExpr(hir::HirField{addExpr(hir::HirSlotAddr{next_slot, union_type}), 1U,
-                                               tag_type, union_type});
+        const auto tag = addExpr(hir::HirField{addExpr(hir::HirSlotAddr{next_slot, union_type}),
+                                               1U, tag_type, union_type,
+                                               hir::HirSafetyMode::Intrinsic});
         hir::HirUnionCheck check;
         check.value        = tag;
         check.union_type   = union_type;
@@ -878,8 +880,8 @@ hir::HirExprId HirLowerModern::lowerForIn(const frontend::Expression &expr) {
     }
     hir::HirBranch branch;
     branch.cond       = cond_expr;
-    branch.then_block = static_cast<hir::HirDeclId>(exit_block);
-    branch.else_block = static_cast<hir::HirDeclId>(body_block);
+    branch.then_block = static_cast<hir::HirBlockId>(exit_block);
+    branch.else_block = static_cast<hir::HirBlockId>(body_block);
     setTerminator(addExpr(std::move(branch)));
 
     // Body: loop = step as Element; lower the user block.
@@ -893,7 +895,8 @@ hir::HirExprId HirLowerModern::lowerForIn(const frontend::Expression &expr) {
         const auto *optional = std::get_if<types::TypeOptional>(&types_.lookup(next_type));
         if (optional != nullptr && types_.kindOf(optional->inner) != types::TypeKind::Ptr) {
             payload = addExpr(hir::HirField{addExpr(hir::HirSlotAddr{next_slot, next_type}), 0U,
-                                            loop_type, next_type});
+                                            loop_type, next_type,
+                                            hir::HirSafetyMode::Guarded});
         }
     } else {
         hir::HirUnionCast cast;
@@ -901,7 +904,7 @@ hir::HirExprId HirLowerModern::lowerForIn(const frontend::Expression &expr) {
         cast.from         = lowerType(*union_sema_type_ptr);
         cast.to           = loop_type;
         cast.member_index = *element_index_ptr;
-        cast.checked      = false;
+        cast.safety       = hir::HirSafetyMode::Guarded;
         payload           = addExpr(std::move(cast));
     }
     const auto loop_slot = localSlot(expr.forInBinding);

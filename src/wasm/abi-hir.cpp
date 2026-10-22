@@ -21,8 +21,10 @@ namespace zith::wasm {
 namespace {
 
 constexpr uint32_t kBlobMagic   = 0x5A4D4849U; // "ZMHI"
-// v2: HirMakeDyn carries value_is_place; v3: HirCall carries variadic slice plans.
-constexpr uint32_t kBlobVersion = 3U;
+// v2: HirMakeDyn carries value_is_place; v3: HirCall carries variadic slice plans;
+// v4: function references are HIR-module indices, not symbol-table ids.
+// v5: safety modes and expression-bound proof facts are part of the HIR blob.
+constexpr uint32_t kBlobVersion = 5U;
 
 constexpr size_t kMaxArrayCount = 1U << 20;
 
@@ -426,6 +428,7 @@ void writeExpr(Writer &writer, const hir::HirModule &module, hir::HirExprId id) 
                 writer.putU32(value.type);
                 writer.putU32(value.obj_type);
                 writer.putU8(value.is_array ? 1U : 0U);
+                writer.putU8(enumByte(value.safety));
             },
             [&](const hir::HirField &value) {
                 writer.putU8(enumByte(hir::HirExprKind::Field));
@@ -433,6 +436,7 @@ void writeExpr(Writer &writer, const hir::HirModule &module, hir::HirExprId id) 
                 writer.putU32(value.index);
                 writer.putU32(value.type);
                 writer.putU32(value.object_type);
+                writer.putU8(enumByte(value.safety));
             },
             [&](const hir::HirStructLiteral &value) {
                 writer.putU8(enumByte(hir::HirExprKind::StructLiteral));
@@ -492,7 +496,7 @@ void writeExpr(Writer &writer, const hir::HirModule &module, hir::HirExprId id) 
                 writer.putU32(value.bound_type);
                 writer.putU8(value.is_array ? 1U : 0U);
                 writer.putU8(value.is_pointer ? 1U : 0U);
-                writer.putU8(value.checked ? 1U : 0U);
+                writer.putU8(enumByte(value.safety));
             },
             [&](const hir::HirCast &value) {
                 writer.putU8(enumByte(hir::HirExprKind::Cast));
@@ -508,7 +512,7 @@ void writeExpr(Writer &writer, const hir::HirModule &module, hir::HirExprId id) 
                 writer.putU32(value.from);
                 writer.putU32(value.to);
                 writer.putU32(value.member_index);
-                writer.putU8(value.checked ? 1U : 0U);
+                writer.putU8(enumByte(value.safety));
             },
             [&](const hir::HirUnionCheck &value) {
                 writer.putU8(enumByte(hir::HirExprKind::UnionCheck));
@@ -598,7 +602,7 @@ void writeExpr(Writer &writer, const hir::HirModule &module, hir::HirExprId id) 
                 writer.putU32(value.type_id);
                 writer.putI64(static_cast<int64_t>(value.canonical_id.hi));
                 writer.putI64(static_cast<int64_t>(value.canonical_id.lo));
-                writer.putU8(value.checked ? 1U : 0U);
+                writer.putU8(enumByte(value.safety));
                 writer.putU8(value.returns_ptr ? 1U : 0U);
             },
             [&](const hir::HirOpaqueCheck &value) {
@@ -661,8 +665,7 @@ void writeFunction(Writer &writer, const hir::HirFunction &function) {
     writer.putU8(function.isVariadic ? 1U : 0U);
     writer.putU32(static_cast<uint32_t>(function.variadicSliceParam));
     writer.putU8(function.isForeignC ? 1U : 0U);
-    writer.putU32(function.decl_id);
-    writer.putU32(function.sym_id);
+    writer.putU8(function.hasBody ? 1U : 0U);
     writer.putU32(function.fnSpan.file);
     writer.putU32(function.fnSpan.start);
     writer.putU32(function.fnSpan.end);
@@ -799,6 +802,10 @@ auto readExpr(Reader &reader, hir::HirModule &module, memory::Arena &arena) -> b
         value.type     = reader.u32();
         value.obj_type = reader.u32();
         value.is_array = reader.u8() != 0;
+        const auto safety = reader.u8();
+        if (safety > enumByte(hir::HirSafetyMode::Raw))
+            return false;
+        value.safety = static_cast<hir::HirSafetyMode>(safety);
         module.addExpr(std::move(value));
         return reader.ok();
     }
@@ -808,6 +815,10 @@ auto readExpr(Reader &reader, hir::HirModule &module, memory::Arena &arena) -> b
         value.index       = reader.u32();
         value.type        = reader.u32();
         value.object_type = reader.u32();
+        const auto safety = reader.u8();
+        if (safety > enumByte(hir::HirSafetyMode::Raw))
+            return false;
+        value.safety = static_cast<hir::HirSafetyMode>(safety);
         module.addExpr(std::move(value));
         return reader.ok();
     }
@@ -885,7 +896,10 @@ auto readExpr(Reader &reader, hir::HirModule &module, memory::Arena &arena) -> b
         value.bound_type  = reader.u32();
         value.is_array    = reader.u8() != 0;
         value.is_pointer  = reader.u8() != 0;
-        value.checked     = reader.u8() != 0;
+        const auto safety = reader.u8();
+        if (safety > enumByte(hir::HirSafetyMode::Raw))
+            return false;
+        value.safety = static_cast<hir::HirSafetyMode>(safety);
         module.addExpr(std::move(value));
         return reader.ok();
     }
@@ -903,7 +917,10 @@ auto readExpr(Reader &reader, hir::HirModule &module, memory::Arena &arena) -> b
             value.from        = reader.u32();
             value.to          = reader.u32();
             value.member_index = reader.u32();
-            value.checked     = reader.u8() != 0;
+            const auto safety = reader.u8();
+            if (safety > enumByte(hir::HirSafetyMode::Raw))
+                return false;
+            value.safety = static_cast<hir::HirSafetyMode>(safety);
             module.addExpr(std::move(value));
         } else {
             return false;
@@ -1007,7 +1024,10 @@ auto readExpr(Reader &reader, hir::HirModule &module, memory::Arena &arena) -> b
         value.type_id      = reader.u32();
         value.canonical_id = {static_cast<uint64_t>(reader.i64()),
                               static_cast<uint64_t>(reader.i64())};
-        value.checked      = reader.u8() != 0;
+        const auto safety = reader.u8();
+        if (safety > enumByte(hir::HirSafetyMode::Raw))
+            return false;
+        value.safety = static_cast<hir::HirSafetyMode>(safety);
         value.returns_ptr  = reader.u8() != 0;
         module.addExpr(std::move(value));
         return reader.ok();
@@ -1087,8 +1107,7 @@ auto readFunction(Reader &reader, hir::HirModule &module, memory::Arena &arena) 
     function.isVariadic      = reader.u8() != 0;
     function.variadicSliceParam = reader.u32();
     function.isForeignC      = reader.u8() != 0;
-    function.decl_id         = reader.u32();
-    function.sym_id          = reader.u32();
+    function.hasBody         = reader.u8() != 0;
     function.fnSpan.file     = reader.u32();
     function.fnSpan.start    = reader.u32();
     function.fnSpan.end      = reader.u32();
@@ -1112,9 +1131,12 @@ auto readFunction(Reader &reader, hir::HirModule &module, memory::Arena &arena) 
 } // namespace
 
 auto encodeHir(const session::CompilationSession &session) -> EncodeHirResult {
+    return encodeHir(session.hirModule(), session.interner(), session.types());
+}
+
+auto encodeHir(const hir::HirModule &module, const memory::StringInterner &interner,
+               const types::TypeIntern &types) -> EncodeHirResult {
     EncodeHirResult result;
-    const auto &module   = session.hirModule();
-    const auto &interner = session.interner();
 
     Writer writer;
     writer.putU32(kBlobMagic);
@@ -1126,7 +1148,6 @@ auto encodeHir(const session::CompilationSession &session) -> EncodeHirResult {
     for (size_t i = 0; i < interner.poolSize(); ++i)
         writer.putString(interner.lookup(static_cast<memory::InternedId>(i)));
 
-    const auto &types = session.types();
     writer.putU8(2); // explicit type-pool section marker
 
     // TypeIntern always starts with the five builtin rows (Error..Char), so
@@ -1143,6 +1164,25 @@ auto encodeHir(const session::CompilationSession &session) -> EncodeHirResult {
     writeExprs(writer, module);
     writer.putU8(4); // function-pool section marker
     writeFunctions(writer, module);
+
+    writer.putU8(5); // safety-proof attribute section marker
+    uint32_t proofCount = 0;
+    for (hir::HirExprId expr_id = 0; expr_id < module.exprCount(); ++expr_id) {
+        const auto *proof = module.attrs().trySafetyProof(expr_id);
+        if (proof != nullptr && proof->present)
+            ++proofCount;
+    }
+    writer.putU32(proofCount);
+    for (hir::HirExprId expr_id = 0; expr_id < module.exprCount(); ++expr_id) {
+        const auto *proof = module.attrs().trySafetyProof(expr_id);
+        if (proof == nullptr || !proof->present)
+            continue;
+        writer.putU32(expr_id);
+        writer.putU8(enumByte(proof->kind));
+        writer.putU32(proof->operand_a);
+        writer.putU32(proof->operand_b);
+        writer.putU32(proof->operand_c);
+    }
 
     result.blob.bytes = writer.bytes();
     result.ok         = true;
@@ -1209,6 +1249,34 @@ auto decodeHir(std::span<const uint8_t> data, DecodedHir &result) -> bool {
             result.message = "flat HIR function row invalid";
             return false;
         }
+    }
+
+    if (reader.u8() != 5) {
+        result.message = "flat HIR safety-proof section marker invalid";
+        return false;
+    }
+    const uint32_t proofCount = reader.u32();
+    if (proofCount > result.module.exprCount()) {
+        result.message = "flat HIR safety-proof count exceeds expression count";
+        return false;
+    }
+    std::vector<bool> proofSeen(result.module.exprCount(), false);
+    for (uint32_t i = 0; i < proofCount; ++i) {
+        const auto expr_id = reader.u32();
+        const auto kind = reader.u8();
+        if (expr_id >= result.module.exprCount() ||
+            kind > enumByte(hir::HirSafetyProofKind::OpaqueTypeMatches) ||
+            proofSeen[expr_id]) {
+            result.message = "flat HIR safety-proof row invalid";
+            return false;
+        }
+        proofSeen[expr_id] = true;
+        auto &proof = result.module.attrs().safetyProof(expr_id);
+        proof.kind = static_cast<hir::HirSafetyProofKind>(kind);
+        proof.operand_a = reader.u32();
+        proof.operand_b = reader.u32();
+        proof.operand_c = reader.u32();
+        proof.present = true;
     }
 
     if (!reader.ok()) {

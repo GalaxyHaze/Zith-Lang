@@ -45,7 +45,8 @@ inline constexpr uint32_t kMagic = 0x5A49524Cu; // "ZIRL"
 /// Version 16: canonical type ids use the defining module, not the consumer
 /// module, so `at-canonicalType(T)` agrees across module boundaries.
 /// Version 18: struct field offsets are persisted for validated C-record layouts.
-inline constexpr uint32_t kFormatVersion = 18;
+/// Version 19: HIR safety modes and expression-bound proof facts are persisted.
+inline constexpr uint32_t kFormatVersion = 19;
 inline constexpr uint8_t kEndianLittle   = 1;
 
 enum class SectionId : uint8_t {

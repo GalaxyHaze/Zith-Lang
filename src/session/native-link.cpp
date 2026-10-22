@@ -246,8 +246,8 @@ bool CompilationSession::prepareNativeLinkInputs() {
                     break;
                 }
                 if (const auto *call = std::get_if<hir::HirCall>(&expr);
-                    call != nullptr && hir_fn.sym_id != symbols::kInvalidSym &&
-                    call->resolved_fn == hir_fn.sym_id) {
+                    call != nullptr &&
+                    call->resolved_fn == static_cast<hir::HirFunctionId>(fn_index)) {
                     referenced = true;
                     break;
                 }

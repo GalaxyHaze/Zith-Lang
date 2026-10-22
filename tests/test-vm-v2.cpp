@@ -1199,6 +1199,62 @@ void test_vm_v2_dynamic_slice_index_bounds() {
           "dynamic slice indexing traps when index equals runtime length");
 }
 
+void test_vm_v2_raw_index_skips_logical_bounds_only() {
+    memory::Arena arena;
+    vm::Module module(arena);
+    module.i64Constants.push(16);
+    module.i64Constants.push(8);
+    module.i64Constants.push(10);
+    module.i64Constants.push(20);
+    module.i64Constants.push(1);
+    auto &main      = module.functions.emplace(arena);
+    main.name       = "main";
+    main.returnType = vm::ValueType::I64;
+    main.regCount   = 10;
+    for (std::size_t i = 0; i < main.regCount; ++i)
+        main.regTypes.push(i == 5U || i == 6U ? vm::ValueType::Ptr : vm::ValueType::I64);
+    main.body.push(vm::Instr::withImm(vm::Op::LoadConstI64FromPool, 0, 0));
+    main.body.push(vm::Instr::withImm(vm::Op::LoadConstI64FromPool, 1, 1));
+    main.body.push(vm::Instr::simple(vm::Op::AllocBytes, 5, 0, 1));
+    main.body.push(vm::Instr::withImm(vm::Op::LoadConstI64FromPool, 2, 2));
+    main.body.push(vm::Instr::simple(vm::Op::StoreI64, 5, 2));
+    main.body.push(vm::Instr{vm::Op::FieldPtr, 6, 5, 0, 8});
+    main.body.push(vm::Instr::withImm(vm::Op::LoadConstI64FromPool, 3, 3));
+    main.body.push(vm::Instr::simple(vm::Op::StoreI64, 6, 3));
+    main.body.push(vm::Instr::withImm(vm::Op::LoadConstI64FromPool, 7, 4));
+    main.body.push(vm::Instr::withImm(vm::Op::LoadConstI64FromPool, 8, 4));
+    main.body.push(vm::Instr{vm::Op::IndexLoad, 9, 5, 7, 8, 8, 3});
+    main.body.push(vm::Instr{vm::Op::Ret, 9, 0, 0, 0});
+
+    vm::Vm vm;
+    const auto result = vm.runMain(module);
+    CHECK(result.status == vm::RunStatus::Ok,
+          "raw slice indexing may read past its logical length within backing memory");
+    CHECK_EQ(result.exitCode, 20, "raw slice indexing reads the next backing element");
+
+    memory::Arena physical_arena;
+    vm::Module physical_module(physical_arena);
+    physical_module.i64Constants.push((1U << 20U) - 4U);
+    physical_module.i64Constants.push(0);
+    auto &physical_main      = physical_module.functions.emplace(physical_arena);
+    physical_main.name       = "main";
+    physical_main.returnType = vm::ValueType::I64;
+    physical_main.regCount   = 4;
+    for (std::size_t i = 0; i < physical_main.regCount; ++i)
+        physical_main.regTypes.push(vm::ValueType::I64);
+    physical_main.body.push(
+        vm::Instr::withImm(vm::Op::LoadConstI64FromPool, 1, 0));
+    physical_main.body.push(
+        vm::Instr::withImm(vm::Op::LoadConstI64FromPool, 2, 1));
+    physical_main.body.push(vm::Instr{vm::Op::IndexLoad, 3, 1, 2, 8, 1, 2});
+    physical_main.body.push(vm::Instr{vm::Op::Ret, 3, 0, 0, 0});
+
+    vm::Vm physical_vm;
+    const auto physical_result = physical_vm.runMain(physical_module);
+    CHECK(physical_result.status == vm::RunStatus::Trap,
+          "raw indexing still traps when a read crosses linear-memory bounds");
+}
+
 #ifdef ZITH_ENABLE_C_INTEROP
 void test_vm_v2_hello_stdlib_import_print() {
     const auto root = std::filesystem::temp_directory_path() / "zith-vm-v2-print-tests";
@@ -1790,6 +1846,7 @@ void test_vm_v2() {
     test_vm_v2_call_range_multi_args();
     test_vm_v2_variadic_slice_call_forms();
     test_vm_v2_dynamic_slice_index_bounds();
+    test_vm_v2_raw_index_skips_logical_bounds_only();
     test_vm_v2_struct_field_access();
     test_vm_v2_struct_nested_field();
     test_vm_v2_struct_param_and_return();

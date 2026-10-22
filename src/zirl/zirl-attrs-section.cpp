@@ -33,6 +33,14 @@ bool encodeAttrs(const cache::Artifact &artifact, ByteWriter &w) {
         w.writeU8(0);
         w.writeU8(0);
     }
+    w.writeU32(static_cast<uint32_t>(artifact.attrs_safety_proofs.size()));
+    for (const auto &proof : artifact.attrs_safety_proofs) {
+        w.writeU32(proof.expr_id);
+        w.writeU8(static_cast<uint8_t>(proof.kind));
+        w.writeU32(proof.operand_a);
+        w.writeU32(proof.operand_b);
+        w.writeU32(proof.operand_c);
+    }
     return true;
 }
 
@@ -89,6 +97,21 @@ bool decodeAttrs(ByteReader &r, cache::Artifact &out) {
         fn.readOnly        = d != 0;
         fn.noCapture       = e != 0;
         fn.discardable     = f != 0;
+    }
+
+    if (!r.readU32(n) || !r.canReadU32Count(n))
+        return false;
+    out.attrs_safety_proofs.resize(n);
+    std::vector<bool> seen(out.exprs.size(), false);
+    for (auto &proof : out.attrs_safety_proofs) {
+        uint8_t kind = 0;
+        if (!r.readU32(proof.expr_id) || !r.readU8(kind) || kind > 3U ||
+            !r.readU32(proof.operand_a) || !r.readU32(proof.operand_b) ||
+            !r.readU32(proof.operand_c) || proof.expr_id >= out.exprs.size() ||
+            seen[proof.expr_id])
+            return false;
+        proof.kind = static_cast<cache::CompactSafetyProofKind>(kind);
+        seen[proof.expr_id] = true;
     }
     return true;
 }

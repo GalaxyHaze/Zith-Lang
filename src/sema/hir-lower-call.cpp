@@ -482,7 +482,8 @@ hir::HirExprId HirLowerModern::lowerCall(const frontend::Expression &expr) {
             const auto payload_type =
                 lowerType(sema_.typeTable().stripQualifiers(base_optional->inner));
             const auto payload_field = addExpr(hir::HirField{
-                addExpr(hir::HirSlotAddr{slot, base_hir_ty}), 0U, payload_type, base_hir_ty});
+                addExpr(hir::HirSlotAddr{slot, base_hir_ty}), 0U, payload_type, base_hir_ty,
+                hir::HirSafetyMode::RequiredCheck});
             self_arg                 = addExpr(
                 hir::HirUnary{hir::HirUnaryOp::Ref, payload_field, types_.internPtr(payload_type)});
         } else if (callee_expr.kind == frontend::ExprKind::Arrow || base_is_ptr)
@@ -695,7 +696,7 @@ hir::HirExprId HirLowerModern::lowerCall(const frontend::Expression &expr) {
     }
 
     hir::HirCall call{callee, std::move(args), std::move(arg_types)};
-    call.resolved_fn = symbols::kInvalidSym;
+    call.resolved_fn = hir::kInvalidHirFunction;
     if (call_plan != nullptr && call_plan->isVariadicSlice) {
         call.variadicSliceParam = static_cast<uint32_t>(call_plan->sliceParam);
         call.isVariadicSlice    = true;
@@ -720,15 +721,15 @@ hir::HirExprId HirLowerModern::lowerCall(const frontend::Expression &expr) {
                         function.module->key == binding->module &&
                         function.instance->decl == method_decl->id && instance != nullptr &&
                         function.instance->args == instance->args) {
-                        call.resolved_fn = function.sym_id;
+                        call.resolved_fn = function.hir_function_id;
                         break;
                     }
                 }
             }
         }
-        if (call.resolved_fn == symbols::kInvalidSym) {
+        if (call.resolved_fn == hir::kInvalidHirFunction) {
             if (const auto *function_index = function_index_by_key_.get(key))
-                call.resolved_fn = functions_[*function_index].sym_id;
+                call.resolved_fn = functions_[*function_index].hir_function_id;
         }
     } else {
         const auto *target = overloadTarget(callee_id);
@@ -745,15 +746,15 @@ hir::HirExprId HirLowerModern::lowerCall(const frontend::Expression &expr) {
                             function.module->key == binding->module &&
                             function.instance->decl == target->decl && instance != nullptr &&
                             function.instance->args == instance->args) {
-                            call.resolved_fn = function.sym_id;
+                            call.resolved_fn = function.hir_function_id;
                             break;
                         }
                     }
                 }
             }
-            if (call.resolved_fn == symbols::kInvalidSym) {
+            if (call.resolved_fn == hir::kInvalidHirFunction) {
                 if (const auto *function_index = function_index_by_key_.get(key))
-                    call.resolved_fn = functions_[*function_index].sym_id;
+                    call.resolved_fn = functions_[*function_index].hir_function_id;
             }
         } else if (const auto *resolved = findResolvedExpr(callee_id)) {
             if (auto *instantiations = sema_.instantiations(); instantiations != nullptr) {
@@ -768,15 +769,15 @@ hir::HirExprId HirLowerModern::lowerCall(const frontend::Expression &expr) {
                                 function.module->key == resolved_module->key &&
                                 function.instance->decl == decl->id &&
                                 function.instance->args == instance->args) {
-                                call.resolved_fn = function.sym_id;
+                                call.resolved_fn = function.hir_function_id;
                                 break;
                             }
                         }
                     }
                 }
             }
-            if (call.resolved_fn == symbols::kInvalidSym)
-                call.resolved_fn = resolvedFunctionSym(*resolved);
+            if (call.resolved_fn == hir::kInvalidHirFunction)
+                call.resolved_fn = resolvedFunctionId(*resolved);
         }
     }
     const hir::HirExprId call_id = addExpr(std::move(call));

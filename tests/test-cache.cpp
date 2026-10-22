@@ -731,7 +731,7 @@ static void test_format_version_bump() {
     (void)Writer::write(art, writer);
 
     std::string bytes(reinterpret_cast<const char *>(writer.ptr()), writer.size());
-    CHECK_EQ(kFormatVersion, 18u, "zirl format version is bumped");
+    CHECK_EQ(kFormatVersion, 19u, "zirl format version is bumped");
 
     // Simulate an old reader by treating the version field as v3.
     bytes[4]        = 3;
@@ -764,10 +764,10 @@ static void test_artifact_builder() {
 
     // Add a concrete HIR function.
     auto &fn              = hir.addFn(interner.intern("main"));
+    fn.hasBody            = true;
     fn.return_type        = i32;
     fn.isVariadic         = true;
     fn.variadicSliceParam = 1;
-    fn.sym_id             = main_sym;
 
     hir::HirLiteral int_lit;
     int_lit.type      = i32;
@@ -821,7 +821,7 @@ static void test_artifact_builder() {
         memory::DynArray<types::TypeId> arg_types(arena);
         arg_types.push(i32);
         hir::HirCall call(var_id, std::move(args), std::move(arg_types));
-        call.resolved_fn = loop_sym;
+        call.resolved_fn = 1;
         direct_call_id   = hir.addExpr(std::move(call));
     }
 
@@ -871,7 +871,13 @@ static void test_artifact_builder() {
         idx.type     = i32;
         idx.obj_type = arr;
         idx.is_array = true;
-        hir.addExpr(idx);
+        idx.safety = hir::HirSafetyMode::RequiredCheck;
+        const auto idx_id = hir.addExpr(idx);
+        auto &proof = hir.attrs().safetyProof(idx_id);
+        proof.kind = hir::HirSafetyProofKind::BoundsValid;
+        proof.operand_a = var_id;
+        proof.operand_b = int_id;
+        proof.present = true;
     }
 
     {
@@ -953,7 +959,7 @@ static void test_artifact_builder() {
         slice.object_type = array_type;
         slice.bound_type  = i32;
         slice.is_array    = true;
-        slice.checked     = true;
+        slice.safety      = hir::HirSafetyMode::RequiredCheck;
         hir.addExpr(slice);
     }
     {
@@ -974,7 +980,7 @@ static void test_artifact_builder() {
     {
         hir::HirStateTailCall tail(arena);
         tail.call.callee      = hir::kInvalidHirExpr;
-        tail.call.resolved_fn = loop_sym;
+        tail.call.resolved_fn = 1;
         tail.call.musttail    = true;
         tail.call.usesTailCC  = true;
         tail.call.args.push(int_id);
@@ -1022,8 +1028,8 @@ static void test_artifact_builder() {
         dyn_call_id       = hir.addExpr(std::move(call));
 
         auto &vtable = hir.addVTable(interner.intern("_test.vtable.DynTarget._DynSource"));
-        vtable.slots.push(main_sym);
-        vtable.slots.push(loop_sym);
+        vtable.slots.push(0);
+        vtable.slots.push(1);
     }
     {
         hir::HirMakeOpaque make;
@@ -1042,7 +1048,7 @@ static void test_artifact_builder() {
         cast.result_type  = opaque_opt;
         cast.type_id      = 0xCAFEBABEu;
         cast.canonical_id = types::TypeCanonicalId{0x1122334455667788ULL, 0x99AABBCCDDEEFF00ULL};
-        cast.checked      = true;
+        cast.safety       = hir::HirSafetyMode::RequiredCheck;
         opaque_cast_id    = hir.addExpr(std::move(cast));
 
         hir::HirOpaqueCast raw_ptr_cast;
@@ -1080,16 +1086,18 @@ static void test_artifact_builder() {
     fn.blocks[0].terminator = state_tail_id;
 
     auto &state_fn             = hir.addFn(interner.intern("Loop"));
+    state_fn.hasBody           = true;
     state_fn.return_type       = i32;
     state_fn.isState           = true;
     state_fn.usesTailCC        = true;
     state_fn.machineId         = 77;
     state_fn.machineReturnType = i32;
-    state_fn.sym_id            = loop_sym;
     state_fn.params.push(i32);
     state_fn.param_names.push(interner.intern("n"));
     state_fn.blocks.emplace(arena);
     state_fn.blocks[0].terminator = state_tail_id;
+    auto &declaration = hir.addFn(interner.intern("external"));
+    declaration.return_type = i32;
 
     // Private composite types and explicit non-series enum discriminants must
     // survive the artifact writer so hydration does not depend on exported decl
@@ -1133,7 +1141,11 @@ static void test_artifact_builder() {
     CHECK_EQ(art.canonical_path, "/test/builder.zith", "builder sets canonical path");
     CHECK(art.decls.size() >= 1, "builder extracts exported declarations");
     CHECK_EQ(art.decls[0].name, "main", "builder extracts function name");
-    CHECK_EQ(art.functions.size(), 2u, "builder extracts HIR functions");
+    CHECK_EQ(art.functions.size(), 3u, "builder extracts HIR functions");
+    CHECK(!art.functions[0].is_extern,
+          "artifact builder reads the explicit HIR definition classification");
+    CHECK(art.functions[2].is_extern,
+          "artifact builder preserves the explicit declaration classification");
     CHECK_EQ(art.exprs.size(), hir.exprCount(), "builder serializes module expression pool");
     CHECK_EQ(art.source_fp_hi, 0u, "builder stores source fingerprint hi");
     CHECK_EQ(art.functions[0].is_variadic, true, "builder stores HIR variadic flag");
@@ -1141,7 +1153,8 @@ static void test_artifact_builder() {
              "builder stores the HIR variadic slice parameter");
     const auto indirect_call =
         std::find_if(art.exprs.begin(), art.exprs.end(), [](const cache::CompactExpr &expr) {
-            return expr.kind == cache::CompactExprKind::Call && expr.ref_b == symbols::kInvalidSym;
+            return expr.kind == cache::CompactExprKind::Call &&
+                   expr.ref_b == ~uint32_t{0};
         });
     CHECK(indirect_call != art.exprs.end(), "builder serializes an indirect call");
     if (indirect_call != art.exprs.end())
@@ -1160,7 +1173,8 @@ static void test_artifact_builder() {
                                                       static_cast<uint8_t>(types::IntWidth::I32),
               "slice range serializes an i32 bound type");
         CHECK((make_slice->flags & 1U) != 0, "slice range serializes the array flag");
-        CHECK((make_slice->flags & 2U) != 0, "slice range serializes the runtime-check flag");
+        CHECK(make_slice->safety == CompactSafetyMode::RequiredCheck,
+              "slice range serializes its required-check safety mode");
     }
     const auto point_decl = std::find_if(art.decls.begin(), art.decls.end(),
                                          [](const DeclRecord &d) { return d.name == "Point"; });
@@ -1176,6 +1190,7 @@ static void test_artifact_builder() {
     CHECK_EQ(art.attrs_slots.size(), 1u, "builder serializes slot attrs");
     CHECK_EQ(art.attrs_calls.size(), 1u, "builder serializes call attrs");
     CHECK_EQ(art.attrs_fns.size(), 1u, "builder serializes fn attrs");
+    CHECK_EQ(art.attrs_safety_proofs.size(), 1u, "builder serializes safety proof attrs");
     CHECK_EQ(art.struct_defs.size(), 2u, "builder serializes private struct defs");
     CHECK_EQ(art.enum_defs.size(), 1u, "builder serializes private enum defs");
     CHECK_EQ(art.enum_defs[0].variants.size(), 2u, "enum variants are serialized");
@@ -1255,13 +1270,13 @@ static void test_artifact_builder() {
         CHECK(art.vtables[0].name_id < art.strings.size() &&
                   art.strings[art.vtables[0].name_id] == "_test.vtable.DynTarget._DynSource",
               "vtable serializes its concrete pairing name");
-        CHECK_EQ(art.vtables[0].slot_sym_ids.size(), 2u,
+        CHECK_EQ(art.vtables[0].slot_function_ids.size(), 2u,
                  "vtable serializes one slot per interface method requirement");
-        if (art.vtables[0].slot_sym_ids.size() == 2u) {
-            CHECK_EQ(art.vtables[0].slot_sym_ids[0], static_cast<uint32_t>(main_sym),
-                     "first vtable slot points to the concrete method symbol");
-            CHECK_EQ(art.vtables[0].slot_sym_ids[1], static_cast<uint32_t>(loop_sym),
-                     "second vtable slot points to the concrete method symbol");
+        if (art.vtables[0].slot_function_ids.size() == 2u) {
+            CHECK_EQ(art.vtables[0].slot_function_ids[0], 1U,
+                     "first vtable slot points to HIR function zero");
+            CHECK_EQ(art.vtables[0].slot_function_ids[1], 2U,
+                     "second vtable slot points to HIR function one");
         }
     }
     const auto make_opaque_compact =
@@ -1310,7 +1325,8 @@ static void test_artifact_builder() {
               "OpaqueCast serializes the result type");
         CHECK_EQ(opaque_cast_compact->ref_e, 0xCAFEBABEu,
                  "OpaqueCast serializes the expected type id");
-        CHECK((opaque_cast_compact->flags & 1U) != 0, "OpaqueCast serializes the checked flag");
+        CHECK(opaque_cast_compact->safety == CompactSafetyMode::RequiredCheck,
+              "OpaqueCast serializes its required-check safety mode");
         CHECK((opaque_cast_compact->flags & 2U) == 0,
               "a checked OpaqueCast does not serialize the pointer-return flag");
         CHECK_EQ(opaque_cast_compact->ints.size(), 2u,
@@ -1388,10 +1404,24 @@ static void test_artifact_builder() {
                  "artifact round-trip preserves pack member type references");
     }
     CHECK_EQ(round->functions.size(), art.functions.size(), "round-trip preserves function count");
+    CHECK(!round->functions[0].is_extern && !round->functions[1].is_extern &&
+              round->functions[2].is_extern,
+          "ZIRL round-trip preserves definition and declaration classifications");
     CHECK_EQ(round->exprs.size(), art.exprs.size(), "round-trip preserves expression pool size");
     CHECK_EQ(round->attrs_slots.size(), art.attrs_slots.size(), "round-trip preserves slot attrs");
     CHECK_EQ(round->attrs_calls.size(), art.attrs_calls.size(), "round-trip preserves call attrs");
     CHECK_EQ(round->attrs_fns.size(), art.attrs_fns.size(), "round-trip preserves fn attrs");
+    CHECK_EQ(round->attrs_safety_proofs.size(), art.attrs_safety_proofs.size(),
+             "round-trip preserves safety proof attrs");
+    if (round->attrs_safety_proofs.size() == 1u && art.attrs_safety_proofs.size() == 1u) {
+        CHECK_EQ(round->attrs_safety_proofs[0].expr_id, art.attrs_safety_proofs[0].expr_id,
+                 "round-trip preserves the safety proof expression");
+        CHECK(round->attrs_safety_proofs[0].kind == art.attrs_safety_proofs[0].kind &&
+                  round->attrs_safety_proofs[0].operand_a == art.attrs_safety_proofs[0].operand_a &&
+                  round->attrs_safety_proofs[0].operand_b == art.attrs_safety_proofs[0].operand_b &&
+                  round->attrs_safety_proofs[0].operand_c == art.attrs_safety_proofs[0].operand_c,
+              "round-trip preserves the proof kind and exact operands");
+    }
     CHECK_EQ(round->struct_defs.size(), art.struct_defs.size(), "round-trip preserves struct defs");
     CHECK_EQ(round->enum_defs.size(), art.enum_defs.size(), "round-trip preserves enum defs");
     CHECK_EQ(round->enum_defs[0].variants[0].discriminant, -3,
@@ -1458,7 +1488,7 @@ static void test_artifact_builder() {
     }
     CHECK_EQ(round->vtables.size(), art.vtables.size(), "round-trip preserves vtable count");
     if (round->vtables.size() == art.vtables.size() && round->vtables.size() == 1u)
-        CHECK(round->vtables[0].slot_sym_ids == art.vtables[0].slot_sym_ids &&
+        CHECK(round->vtables[0].slot_function_ids == art.vtables[0].slot_function_ids &&
                   round->vtables[0].name_id == art.vtables[0].name_id,
               "round-trip preserves vtable name and concrete slot symbols");
     const auto round_make_opaque =
@@ -1497,7 +1527,9 @@ static void test_artifact_builder() {
         CHECK_EQ(round_opaque_cast->ref_e, opaque_cast_compact->ref_e,
                  "round-trip preserves OpaqueCast type id");
         CHECK_EQ(round_opaque_cast->flags, opaque_cast_compact->flags,
-                 "round-trip preserves OpaqueCast checked flag");
+                 "round-trip preserves OpaqueCast pointer-return flags");
+        CHECK(round_opaque_cast->safety == opaque_cast_compact->safety,
+              "round-trip preserves OpaqueCast safety mode");
         CHECK(round_opaque_cast->ints == opaque_cast_compact->ints,
               "round-trip preserves OpaqueCast canonical id");
     }

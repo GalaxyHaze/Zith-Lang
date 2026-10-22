@@ -1,6 +1,7 @@
 #include "codegen-emit.hpp"
 
 #include "common/overloaded.hpp"
+#include "diagnostics/error-codes.hpp"
 #include "types/type-kind.hpp"
 
 #include <llvm/IR/IRBuilder.h>
@@ -62,11 +63,35 @@ llvm::Value *CodeGenEmit::emitAddrOf(hir::HirExprId id, const hir::HirModule &mo
 }
 
 llvm::Value *CodeGenEmit::emitIndexAddr(const hir::HirIndex &idx, const hir::HirModule &mod) {
+    const auto emitBoundsCheck = [&](llvm::Value *index, llvm::Value *length) {
+        if (idx.safety != hir::HirSafetyMode::RequiredCheck)
+            return true;
+        auto *insert_block = builder_.GetInsertBlock();
+        if (insert_block == nullptr || insert_block->getParent() == nullptr)
+            return false;
+        auto *i64_type = llvm::Type::getInt64Ty(builder_.getContext());
+        auto *wide_index = builder_.CreateZExtOrTrunc(index, i64_type);
+        auto *in_bounds = builder_.CreateICmpULT(wide_index, length, "index.in.bounds");
+        auto *function = insert_block->getParent();
+        auto *valid_block = llvm::BasicBlock::Create(builder_.getContext(), "index.valid", function);
+        auto *panic_block = llvm::BasicBlock::Create(builder_.getContext(), "index.panic", function);
+        builder_.CreateCondBr(in_bounds, valid_block, panic_block);
+        builder_.SetInsertPoint(panic_block);
+        hir::HirRuntimePanic panic;
+        panic.code = diagnostics::err::IndexOutOfBounds;
+        (void)emitRuntimePanic(panic);
+        builder_.SetInsertPoint(valid_block);
+        return true;
+    };
+
     // A slice is a `{ *T, i64 }` aggregate: index through its data pointer.
     if (idx.obj_type && types_.kindOf(idx.obj_type) == types::TypeKind::Slice) {
         auto *aggregate = emitExpr(idx.object, mod);
         auto *index_val = emitExpr(idx.index, mod);
         if (!aggregate || !index_val)
+            return nullptr;
+        auto *length = builder_.CreateExtractValue(aggregate, {1U});
+        if (!emitBoundsCheck(index_val, length))
             return nullptr;
         auto *data = builder_.CreateExtractValue(aggregate, {0U});
         return builder_.CreateGEP(typeGen_.lower(idx.type), data, index_val);
@@ -87,6 +112,13 @@ llvm::Value *CodeGenEmit::emitIndexAddr(const hir::HirIndex &idx, const hir::Hir
         return nullptr;
 
     if (idx.is_array) {
+        const auto *array = std::get_if<types::TypeArray>(&types_.lookup(idx.obj_type));
+        if (array == nullptr)
+            return nullptr;
+        auto *length = llvm::ConstantInt::get(llvm::Type::getInt64Ty(builder_.getContext()),
+                                              array->count);
+        if (!emitBoundsCheck(index_val, length))
+            return nullptr;
         llvm::Value *zero = builder_.getInt32(0);
         auto *arr_type    = typeGen_.lower(idx.obj_type);
         return builder_.CreateGEP(arr_type, addr, {zero, index_val});

@@ -34,6 +34,9 @@ struct EncodeHirResult {
 
 /// Serialize the current lowered HIR module into a flat, stateless blob.
 auto encodeHir(const session::CompilationSession &session) -> EncodeHirResult;
+/// Serialize a completed HIR module with its language-neutral pools.
+auto encodeHir(const hir::HirModule &module, const memory::StringInterner &interner,
+               const types::TypeIntern &types) -> EncodeHirResult;
 
 /// Rebuilt compiler state for a decoded flat HIR blob.
 struct DecodedHir {

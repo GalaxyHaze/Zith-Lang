@@ -357,9 +357,9 @@ auto validateFunctionShape(const Function &fn) -> bool {
             break;
         case Op::IndexLoad:
             if (missingRegister(fn, dst, false) || missingRegister(fn, lhs, false) ||
-                missingRegister(fn, rhs, false) || instr.imm == 0 || instr.e > 1U ||
-                (instr.e == 0U && instr.d == 0U) ||
-                (instr.e == 1U && missingRegister(fn, instr.d, false)))
+                missingRegister(fn, rhs, false) || instr.imm == 0 || instr.e > 3U ||
+                ((instr.e & 2U) == 0U && (instr.e & 1U) == 0U && instr.d == 0U) ||
+                ((instr.e & 1U) != 0U && missingRegister(fn, instr.d, false)))
                 return false;
             break;
         case Op::FieldPtr:
@@ -620,12 +620,17 @@ auto runFunction(RunState &state, const Function &fn, std::vector<int64_t> &regs
                 }
                 case Op::IndexLoad: {
                     const auto index      = getReg(regs, rhs);
-                    const auto signedSize = instr.e == 1U ? getReg(regs, instr.d) : instr.d;
-                    if (signedSize < 0)
+                    const bool raw = (instr.e & 2U) != 0U;
+                    if (index < 0)
                         return {false, 0};
-                    const auto length = static_cast<std::uint64_t>(signedSize);
-                    if (index < 0 || static_cast<std::uint64_t>(index) >= length)
-                        return {false, 0};
+                    if (!raw) {
+                        const auto signedSize =
+                            (instr.e & 1U) != 0U ? getReg(regs, instr.d) : instr.d;
+                        if (signedSize < 0 ||
+                            static_cast<std::uint64_t>(index) >=
+                                static_cast<std::uint64_t>(signedSize))
+                            return {false, 0};
+                    }
                     const auto base = getReg(regs, lhs);
                     if (base < 0)
                         return {false, 0};

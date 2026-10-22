@@ -2217,17 +2217,21 @@ static void test_checked_index_runtime() {
                          "fn main(): i32 {\n"
                          "    var values: [3]i32 = [10, 20, 30];\n"
                          "    let slice: []i32 = raw values[0..3];\n"
+                         "    let short_slice: []i32 = raw values[0..1];\n"
                          "    var failures: i32 = 0;\n"
                          "    if (pick(values, 1) is null) { failures = failures + 1; }\n"
                          "    if (pick(values, 3) is null) { failures = failures + 1; }\n"
                          "    if (slice_pick(slice, 0) is null) { failures = failures + 1; }\n"
                          "    if (slice_pick(slice, 3) is null) { failures = failures + 1; }\n"
+                         "    if (slice_pick(short_slice, 1) is null) { failures = failures + 1; }\n"
+                         "    if (raw short_slice[1] != 20) { failures = failures + 1; }\n"
                          "    return failures;\n"
                          "}\n");
 
     auto r = t.run();
     CHECK(r.ok, "checked index expressions compile, link and execute");
-    CHECK_EQ(r.exitCode, 2, "in-range indexes are Some and out-of-range indexes are None");
+    CHECK_EQ(r.exitCode, 3,
+             "checked indexing uses the slice length while raw indexing bypasses that check");
 }
 
 /// Builds a tiny C runtime that receives a function pointer from Zith and
@@ -3632,6 +3636,7 @@ static void test_invalid_ir_refuses_object_emission() {
     // A function whose body cannot be emitted: the return operand has the error type, so
     // `emitLiteral` yields nullptr and the block's terminator never materialises.
     auto &fn       = hir.addFn(interner.intern("broken"));
+    fn.hasBody     = true;
     fn.return_type = types.internInt(types::IntWidth::I32);
     const auto bad_literal =
         hir.addExpr(hir::HirLiteral{{}, types::kErrorType, hir::HirExprKind::Literal});

@@ -1,6 +1,5 @@
 #include "vm/hir-to-vm.hpp"
 
-#include "common/ast-ids.hpp"
 #include "common/overloaded.hpp"
 #include "types/type-kind.hpp"
 
@@ -31,11 +30,9 @@ bool startsWith(std::string_view value, std::string_view prefix) {
 }
 
 auto isUserFunction(std::string_view linkage, const hir::HirFunction &hirFn) -> bool {
-    // A function with a body is user code to lower. `decl_id` is a
-    // session-local AST id that cache hydration does not restore, so it must
-    // not decide this: a hydrated body-bearing function still has blocks and
-    // must be lowered like a freshly parsed one.
-    if (hirFn.blocks.empty())
+    // A hydrated function with a body is user code too, so classify it from
+    // HIR and linkage data rather than frontend declaration metadata.
+    if (!hirFn.hasBody)
         return false;
     const std::string_view name = sourceName(linkage);
     if (name == "main")
@@ -751,7 +748,7 @@ auto materializeBorrowedSlice(LowerState &state, hir::HirExprId argument,
 
 auto lowerCall(LowerState &state, const hir::HirCall &call, bool tailTransfer = false)
     -> std::uint16_t {
-    if (call.resolved_fn == symbols::kInvalidSym) {
+    if (call.resolved_fn == hir::kInvalidHirFunction) {
         state.result->ok      = false;
         state.result->message = "unsupported unresolved call target in v2 lowering";
         return kUnassignedReg;
@@ -764,7 +761,7 @@ auto lowerCall(LowerState &state, const hir::HirCall &call, bool tailTransfer = 
 
     for (std::size_t f = 0; f < state.hir.getFnCount(); ++f) {
         const auto &hirFn = state.hir.getFn(f);
-        if (hirFn.sym_id != call.resolved_fn)
+        if (static_cast<hir::HirFunctionId>(f) != call.resolved_fn)
             continue;
         const auto linkage    = state.interner.lookup(hirFn.name);
         const auto name       = sourceName(linkage);
@@ -819,7 +816,7 @@ auto lowerCall(LowerState &state, const hir::HirCall &call, bool tailTransfer = 
             }
             continue;
         }
-        if (name == "main" || hirFn.blocks.empty()) {
+        if (name == "main" || !hirFn.hasBody) {
             if (tailTransfer) {
                 state.result->ok      = false;
                 state.result->message = "state tail transfer does not target a VM function";
@@ -1108,13 +1105,13 @@ auto allocateGuestBytes(LowerState &state, std::size_t size) -> std::uint16_t {
     return base;
 }
 
-auto functionIndexForSymbol(LowerState &state, symbols::SymId symbol) -> std::uint16_t {
+auto functionIndexForSymbol(LowerState &state, hir::HirFunctionId function_id) -> std::uint16_t {
     std::size_t index = 0;
     for (std::size_t i = 0; i < state.hir.getFnCount(); ++i) {
         const auto &hirFn = state.hir.getFn(i);
         if (!isUserFunction(state.interner.lookup(hirFn.name), hirFn))
             continue;
-        if (hirFn.sym_id == symbol)
+        if (static_cast<hir::HirFunctionId>(i) == function_id)
             return u16(index, state.result);
         ++index;
     }
@@ -1262,8 +1259,8 @@ auto lowerOpaqueCheck(LowerState &state, const hir::HirOpaqueCheck &check) -> st
 }
 
 auto lowerOpaqueCast(LowerState &state, const hir::HirOpaqueCast &cast) -> std::uint16_t {
-    if (state.types.kindOf(cast.opaque_type) != types::TypeKind::OpaqueTagged || cast.checked ||
-        cast.returns_ptr) {
+    if (state.types.kindOf(cast.opaque_type) != types::TypeKind::OpaqueTagged ||
+        cast.safety == hir::HirSafetyMode::RequiredCheck || cast.returns_ptr) {
         state.result->ok      = false;
         state.result->message = "unsupported checked or raw opaque cast in v2 lowering";
         return kUnassignedReg;
@@ -1796,7 +1793,8 @@ auto lowerOperand(LowerState &state, hir::HirExprId id) -> std::uint16_t {
                     if (storage == kUnassignedReg)
                         return kUnassignedReg;
                     const auto tag_width = taggedUnionTagWidth(state.types, cast.from);
-                    if (cast.checked && tag_width != 0U && cast.member_index != ~0U &&
+                    if (cast.safety == hir::HirSafetyMode::RequiredCheck && tag_width != 0U &&
+                        cast.member_index != ~0U &&
                         !emitCheckedUnionCast(state, UnionStorageRef{storage, cast.from}, cast))
                         return kUnassignedReg;
                     if (isPointerValued(state.types, cast.to))
@@ -1883,7 +1881,9 @@ auto lowerOperand(LowerState &state, hir::HirExprId id) -> std::uint16_t {
                     const auto dst = newReg(state, index.type);
                     emit(state, Instr{Op::IndexLoad, dst, object, indexReg,
                                       static_cast<std::uint16_t>(elementSize),
-                                      static_cast<std::uint16_t>(array->count)});
+                                      static_cast<std::uint16_t>(array->count),
+                                      static_cast<std::uint16_t>(
+                                          index.safety == hir::HirSafetyMode::Raw ? 2U : 0U)});
                     return dst;
                 }
 
@@ -1902,7 +1902,10 @@ auto lowerOperand(LowerState &state, hir::HirExprId id) -> std::uint16_t {
                     const auto dst = newReg(state, index.type);
                     emit(state, Instr{Op::IndexLoad, dst, object, indexReg,
                                       static_cast<std::uint16_t>(elementSize),
-                                      static_cast<std::uint16_t>(object + 1U), 1U});
+                                      static_cast<std::uint16_t>(object + 1U),
+                                      static_cast<std::uint16_t>(
+                                          1U | (index.safety == hir::HirSafetyMode::Raw ? 2U
+                                                                                        : 0U))});
                     return dst;
                 }
 
@@ -2163,7 +2166,7 @@ auto lowerModule(const hir::HirModule &hir, const memory::StringInterner &intern
         const auto &hirFn  = hir.getFn(i);
         const auto linkage = interner.lookup(hirFn.name);
         if (!isUserFunction(linkage, hirFn)) {
-            if (hirFn.blocks.empty() && hirFn.decl_id == ast::kInvalidDecl)
+            if (!hirFn.hasBody && hirFn.isForeignC)
                 (void)findOrAddExtern(out, sourceName(linkage), &result);
             continue;
         }
@@ -2218,7 +2221,7 @@ auto lowerModule(const hir::HirModule &hir, const memory::StringInterner &intern
 
         struct PendingTarget {
             std::size_t pc       = 0;
-            hir::HirDeclId block = hir::kInvalidHirExpr;
+            hir::HirBlockId block = hir::kInvalidHirBlock;
             bool falseBranch     = false;
         };
         std::vector<std::size_t> blockPcs(hirFn.blocks.size(), fn.body.size());

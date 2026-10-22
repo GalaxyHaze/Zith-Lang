@@ -3,7 +3,6 @@
 #include "hir/hir-types.hpp"
 #include "memory/dyn-array.hpp"
 #include "memory/string-interner.hpp"
-#include "symbols/symbol-id.hpp"
 #include "types/type-id.hpp"
 
 #include <cstdint>
@@ -12,9 +11,27 @@
 namespace zith::hir {
 
 using HirExprId = uint32_t;
-using HirDeclId = uint32_t;
+using HirFunctionId = uint32_t;
+using HirBlockId = uint32_t;
 
 inline constexpr HirExprId kInvalidHirExpr = ~HirExprId{0};
+inline constexpr HirFunctionId kInvalidHirFunction = ~HirFunctionId{0};
+inline constexpr HirBlockId kInvalidHirBlock = ~HirBlockId{0};
+
+/// Safety disposition for HIR operations whose behavior depends on a check.
+enum class HirSafetyMode : uint8_t {
+    RequiredCheck,
+    Guarded,
+    Intrinsic,
+    Raw,
+};
+
+enum class HirSafetyProofKind : uint8_t {
+    BoundsValid,
+    OptionalPresent,
+    UnionMemberMatches,
+    OpaqueTypeMatches,
+};
 
 enum class HirExprKind : uint8_t {
     Literal,
@@ -131,9 +148,9 @@ struct HirCall {
     /// Type ids for `args`, kept for ABI promotion rules such as C variadic calls.
     memory::DynArray<types::TypeId> argument_types;
     /// Lowered function type for indirect calls (`callee` is an expression).
-    /// Direct calls resolved by symbol keep this invalid.
+    /// Direct calls resolved to a module function keep this invalid.
     types::TypeId fn_type      = types::kInvalidType;
-    symbols::SymId resolved_fn = symbols::kInvalidSym;
+    HirFunctionId resolved_fn = kInvalidHirFunction;
     /// Sema's resolved variadic-slice decision, retained for VM lowering.
     uint32_t variadicSliceParam = ~uint32_t{0};
     bool isVariadicSlice         = false;
@@ -157,12 +174,12 @@ struct HirRet {
 };
 struct HirBranch {
     HirExprId cond       = kInvalidHirExpr;
-    HirDeclId then_block = kInvalidHirExpr;
-    HirDeclId else_block = kInvalidHirExpr;
+    HirBlockId then_block = kInvalidHirBlock;
+    HirBlockId else_block = kInvalidHirBlock;
     HirExprKind tag      = HirExprKind::Branch;
 };
 struct HirJump {
-    HirDeclId target = kInvalidHirExpr;
+    HirBlockId target = kInvalidHirBlock;
     HirExprKind tag  = HirExprKind::Jump;
 };
 struct HirPhi {
@@ -184,6 +201,7 @@ struct HirIndex {
     HirTypeId type     = types::kInvalidType;
     HirTypeId obj_type = types::kInvalidType;
     bool is_array      = false;
+    HirSafetyMode safety = HirSafetyMode::RequiredCheck;
     HirExprKind tag    = HirExprKind::Index;
 };
 
@@ -192,6 +210,7 @@ struct HirField {
     uint32_t index        = 0;
     HirTypeId type        = types::kInvalidType;
     HirTypeId object_type = types::kInvalidType;
+    HirSafetyMode safety  = HirSafetyMode::RequiredCheck;
     HirExprKind tag       = HirExprKind::Field;
 };
 
@@ -263,9 +282,9 @@ struct HirMakeSome {
     HirExprKind tag = HirExprKind::MakeSome;
 };
 
-/// A zero-copy view over an array or an existing slice. When `checked` is true,
-/// runtime bounds validation returns None on failure; otherwise the bounds are
-/// statically known to describe the whole array.
+/// A zero-copy view over an array or an existing slice. `safety` distinguishes
+/// required checks, checks already represented by control flow, intrinsic
+/// safety, and explicit unchecked access.
 struct HirMakeSlice {
     HirExprId object      = kInvalidHirExpr;
     HirExprId lo          = kInvalidHirExpr;
@@ -275,7 +294,7 @@ struct HirMakeSlice {
     HirTypeId bound_type  = types::kInvalidType;
     bool is_array         = false;
     bool is_pointer       = false;
-    bool checked          = false;
+    HirSafetyMode safety  = HirSafetyMode::RequiredCheck;
     HirExprKind tag       = HirExprKind::MakeSlice;
 };
 
@@ -287,8 +306,7 @@ struct HirUnionCast {
     HirTypeId to    = types::kInvalidType;
     /// Member index when `to` is a tagged union member, otherwise ~0U.
     uint32_t member_index = ~0U;
-    /// When extracting from a tagged union, verify the stored tag before reading.
-    bool checked    = false;
+    HirSafetyMode safety = HirSafetyMode::RequiredCheck;
     HirExprKind tag = HirExprKind::Cast;
 };
 /// Tagged-union member test (`x is Member`). Materialised as a separate HIR
@@ -391,18 +409,17 @@ struct HirMakeOpaque {
     HirExprKind tag = HirExprKind::MakeOpaque;
 };
 
-/// Checked (or raw reinterpreting) extraction of a concrete value from a bare
-/// `opaque`. When `checked`, codegen compares the stored type id and emits
-/// `?T` (`Some(T)` / `None`); raw extraction ignores the tag and emits `T`.
+/// Extraction of a concrete value from a bare `opaque`. Safety metadata
+/// distinguishes guarded checks from explicit unchecked reinterpretation.
 struct HirOpaqueCast {
     HirExprId value       = hir::kInvalidHirExpr;
     HirTypeId from        = types::kInvalidType;
     HirTypeId to          = types::kInvalidType;
     HirTypeId opaque_type = types::kInvalidType;
-    HirTypeId result_type = types::kInvalidType; // checked: `?to`, raw: `to`
+    HirTypeId result_type = types::kInvalidType;
     uint32_t type_id      = 0;
     types::TypeCanonicalId canonical_id{};
-    bool checked = false;
+    HirSafetyMode safety = HirSafetyMode::RequiredCheck;
     /// `as raw opaque` reinterprets the tagged payload pointer itself (field 0)
     /// as `void*`, so codegen does not load through the payload.
     bool returns_ptr = false;

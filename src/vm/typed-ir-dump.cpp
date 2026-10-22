@@ -152,10 +152,12 @@ void appendInstruction(std::ostringstream &out, const Instr &instr, size_t pc) {
     case Op::IndexLoad:
         out << "dst=r" << instr.a << " base=r" << instr.b << " index=r" << instr.c
             << " element_size=" << instr.imm;
-        if (instr.e == 1U)
+        if ((instr.e & 1U) != 0U)
             out << " length=r" << instr.d;
         else
             out << " length=" << instr.d;
+        if ((instr.e & 2U) != 0U)
+            out << " raw";
         break;
     case Op::FieldPtr:
         out << "dst=r" << instr.a << " base=r" << instr.b << " byte_offset=" << instr.imm;

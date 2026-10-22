@@ -9,7 +9,7 @@
 namespace zith::codegen {
 
 llvm::Value *CodeGenEmit::emitBody(const hir::HirFunction &fn, const hir::HirModule &mod) {
-    if (fn.blocks.empty())
+    if (!fn.hasBody)
         return nullptr;
     if (!blocks_ || blocks_->empty())
         return nullptr;
@@ -33,12 +33,13 @@ llvm::Value *CodeGenEmit::emitBody(const hir::HirFunction &fn, const hir::HirMod
 
 llvm::Value *CodeGenEmit::emitStateTailCall(const hir::HirStateTailCall &tail,
                                             const hir::HirModule &mod) {
-    if (tail.call.resolved_fn == symbols::kInvalidSym || tail.call.callee != hir::kInvalidHirExpr)
+    if (tail.call.resolved_fn == hir::kInvalidHirFunction ||
+        tail.call.callee != hir::kInvalidHirExpr)
         return nullptr;
 
     llvm::Function *fn = nullptr;
     for (size_t i = 0; i < mod.getFnCount(); ++i) {
-        if (mod.getFn(i).sym_id != tail.call.resolved_fn)
+        if (static_cast<hir::HirFunctionId>(i) != tail.call.resolved_fn)
             continue;
         const auto name = interner_.lookup(mod.getFn(i).name);
         fn              = module_->getFunction(llvm::StringRef(name.data(), name.size()));

@@ -75,7 +75,7 @@ hir::HirExprId HirLowerModern::rebuildTaggedUnion(types::TypeId union_type, hir:
     cast.from         = member_index < members.size() ? members[member_index] : types::kInvalidType;
     cast.to           = union_type;
     cast.member_index = member_index;
-    cast.checked      = false;
+    cast.safety       = hir::HirSafetyMode::Intrinsic;
     return addExpr(std::move(cast));
 }
 

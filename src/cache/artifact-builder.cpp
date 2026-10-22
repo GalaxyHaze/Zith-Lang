@@ -307,7 +307,9 @@ CompactExpr ArtifactBuilder::convertExpr(hir::HirExprId id) {
                        [&](const hir::HirCall &call) {
                            out.kind  = CompactExprKind::Call;
                            out.ref_a = call.callee;
-                           out.ref_b = call.resolved_fn;
+                           out.ref_b = call.resolved_fn == hir::kInvalidHirFunction
+                                           ? ~uint32_t{0}
+                                           : call.resolved_fn + 1U;
                            out.ref_e = internType(call.fn_type);
                            out.flags = (call.musttail ? 1U : 0U) | (call.usesTailCC ? 2U : 0U);
                            for (auto arg : call.args)
@@ -346,6 +348,7 @@ CompactExpr ArtifactBuilder::convertExpr(hir::HirExprId id) {
                            out.ref_b   = idx.index;
                            out.ref_e   = internType(idx.obj_type);
                            out.flags   = idx.is_array ? 1 : 0;
+                           out.safety  = static_cast<CompactSafetyMode>(idx.safety);
                        },
                        [&](const hir::HirField &field) {
                            out.kind    = CompactExprKind::Field;
@@ -353,6 +356,7 @@ CompactExpr ArtifactBuilder::convertExpr(hir::HirExprId id) {
                            out.ref_a   = field.object;
                            out.ref_c   = field.index;
                            out.ref_e   = internType(field.object_type);
+                           out.safety  = static_cast<CompactSafetyMode>(field.safety);
                        },
                        [&](const hir::HirStructLiteral &lit) {
                            out.kind    = CompactExprKind::StructLiteral;
@@ -408,8 +412,9 @@ CompactExpr ArtifactBuilder::convertExpr(hir::HirExprId id) {
                            out.ref_c   = slice.hi;
                            out.ref_e   = internType(slice.object_type);
                            out.ref_f   = internType(slice.bound_type);
-                           out.flags   = (slice.is_array ? 1U : 0U) | (slice.checked ? 2U : 0U) |
+                           out.flags   = (slice.is_array ? 1U : 0U) |
                                        (slice.is_pointer ? 4U : 0U);
+                           out.safety  = static_cast<CompactSafetyMode>(slice.safety);
                        },
                        [&](const hir::HirUnionCheck &check) {
                            out.kind    = CompactExprKind::UnionCheck;
@@ -424,7 +429,7 @@ CompactExpr ArtifactBuilder::convertExpr(hir::HirExprId id) {
                            out.ref_e = internType(uc.from);
                            out.ref_b = internType(uc.to);
                            out.ref_c = uc.member_index;
-                           out.flags = uc.checked ? 1U : 0U;
+                           out.safety = static_cast<CompactSafetyMode>(uc.safety);
                        },
                        [&](const hir::HirCast &cast) {
                            out.kind  = CompactExprKind::Cast;
@@ -446,7 +451,9 @@ CompactExpr ArtifactBuilder::convertExpr(hir::HirExprId id) {
                        [&](const hir::HirStateTailCall &tail) {
                            out.kind  = CompactExprKind::StateTailCall;
                            out.ref_a = tail.call.callee;
-                           out.ref_b = tail.call.resolved_fn;
+                           out.ref_b = tail.call.resolved_fn == hir::kInvalidHirFunction
+                                           ? ~uint32_t{0}
+                                           : tail.call.resolved_fn + 1U;
                            out.ref_e = internType(tail.call.fn_type);
                            out.flags = tail.call.usesTailCC ? 2U : 0U;
                            for (auto arg : tail.call.args)
@@ -506,7 +513,8 @@ CompactExpr ArtifactBuilder::convertExpr(hir::HirExprId id) {
                            out.ref_d   = internType(cast.opaque_type);
                            out.type_id = internType(cast.result_type);
                            out.ref_e   = cast.type_id;
-                           out.flags   = (cast.checked ? 1U : 0U) | (cast.returns_ptr ? 2U : 0U);
+                           out.flags   = cast.returns_ptr ? 2U : 0U;
+                           out.safety  = static_cast<CompactSafetyMode>(cast.safety);
                            out.ints    = {cast.canonical_id.hi, cast.canonical_id.lo};
                        },
                        [&](const hir::HirOpaqueCheck &check) {
@@ -677,7 +685,7 @@ Artifact ArtifactBuilder::build(std::string_view canonical_path, std::string_vie
         CompactFunction cfn;
         cfn.name                   = std::string(interner_.lookup(fn.name));
         cfn.name_id                = internString(interner_.lookup(fn.name));
-        cfn.is_extern              = fn.blocks.empty();
+        cfn.is_extern              = !fn.hasBody;
         cfn.is_foreign_c           = fn.isForeignC;
         cfn.is_variadic            = fn.isVariadic;
         cfn.is_state               = fn.isState;
@@ -695,10 +703,9 @@ Artifact ArtifactBuilder::build(std::string_view canonical_path, std::string_vie
         const auto angle           = cfn.name.find('<');
         if (angle != std::string::npos) {
             InstantiationRecord rec;
-            rec.module         = std::string(module_name);
-            rec.mangled        = cfn.name;
-            rec.template_name  = cfn.name.substr(0, angle);
-            rec.decl_id        = static_cast<uint32_t>(fn.decl_id);
+            rec.canonical_module = art.canonical_path;
+            rec.mangled          = cfn.name;
+            rec.template_name    = cfn.name.substr(0, angle);
             rec.arg_types      = genericArgsFromName(cfn.name);
             cfn.instance_index = static_cast<uint32_t>(art.instantiations.size());
             art.instantiations.push_back(std::move(rec));
@@ -740,8 +747,8 @@ Artifact ArtifactBuilder::build(std::string_view canonical_path, std::string_vie
         const auto &vtable = hir_.getVTable(vi);
         CompactVTable cv;
         cv.name_id = internString(interner_.lookup(vtable.name));
-        for (const auto sym : vtable.slots)
-            cv.slot_sym_ids.push_back(static_cast<uint32_t>(sym));
+        for (const auto function_id : vtable.slots)
+            cv.slot_function_ids.push_back(function_id + 1U);
         art.vtables.push_back(std::move(cv));
     }
 
@@ -781,6 +788,18 @@ Artifact ArtifactBuilder::build(std::string_view canonical_path, std::string_vie
         rec.noCapture       = attrs->noCapture;
         rec.discardable     = attrs->discardable;
         art.attrs_fns.push_back(std::move(rec));
+    }
+    for (hir::HirExprId expr_id = 0; expr_id < hir_.exprCount(); ++expr_id) {
+        const auto *proof = hir_.attrs().trySafetyProof(expr_id);
+        if (proof == nullptr || !proof->present)
+            continue;
+        HirSafetyProofRecord rec;
+        rec.expr_id   = expr_id;
+        rec.kind      = static_cast<CompactSafetyProofKind>(proof->kind);
+        rec.operand_a = proof->operand_a;
+        rec.operand_b = proof->operand_b;
+        rec.operand_c = proof->operand_c;
+        art.attrs_safety_proofs.push_back(std::move(rec));
     }
 
     // Composite definitions are needed to hydrate private/internal named types

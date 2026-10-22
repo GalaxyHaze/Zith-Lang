@@ -1,6 +1,5 @@
 #pragma once
 
-#include "common/ast-ids.hpp"
 #include "hir/hir-attrs.hpp"
 #include "hir/hir-expr.hpp"
 #include "hir/hir-types.hpp"
@@ -38,11 +37,11 @@ struct HirFunction {
     size_t variadicSliceParam = ~static_cast<size_t>(0);
     /// True for C-header functions declared by the cinterop layer.
     bool isForeignC       = false;
+    /// Explicit body classification; declarations remain distinct after hydration.
+    bool hasBody = false;
     /// C adapter called by the generated native-signature thunk, or invalid
     /// for foreign functions that do not pass records by value.
     memory::InternedId foreignAdapterName = memory::kInvalidInternedId;
-    ast::DeclId decl_id   = ast::kInvalidDecl;
-    symbols::SymId sym_id = symbols::kInvalidSym;
     /// Source span of the `fn` declaration; empty for foreign/synthesized functions.
     memory::Span fnSpan{};
     memory::DynArray<HirBasicBlock> blocks;
@@ -65,11 +64,10 @@ struct HirGlobalConst {
 
 /// A vtable for one `(trait/interface, concrete type)` pairing. Slot order is
 /// exactly the trait/interface method requirement order used by `HirDynCall`.
-/// `slots` holds the HIR function symbol for the implementation/default method
-/// selected at lowering time.
+/// `slots` holds the module-local HIR function id selected at lowering time.
 struct HirVTable {
     memory::InternedId name{};
-    memory::DynArray<symbols::SymId> slots;
+    memory::DynArray<HirFunctionId> slots;
 
     explicit HirVTable(memory::Arena &arena) : slots(arena) {}
 };

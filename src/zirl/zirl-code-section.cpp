@@ -8,7 +8,7 @@ void writeCompactExpr(const cache::CompactExpr &e, ByteWriter &w) {
     w.writeU8(static_cast<uint8_t>(e.kind));
     w.writeU8(e.op);
     w.writeU8(e.flags);
-    w.writeU8(0); // reserved
+    w.writeU8(static_cast<uint8_t>(e.safety));
     w.writeU32(e.type_id);
     w.writeU32(e.ref_a);
     w.writeU32(e.ref_b);
@@ -31,12 +31,14 @@ void writeCompactExpr(const cache::CompactExpr &e, ByteWriter &w) {
 }
 
 bool readCompactExpr(ByteReader &r, cache::CompactExpr &out) {
-    uint8_t kind = 0, op = 0, flags = 0, reserved = 0;
-    if (!r.readU8(kind) || !r.readU8(op) || !r.readU8(flags) || !r.readU8(reserved))
+    uint8_t kind = 0, op = 0, flags = 0, safety = 0;
+    if (!r.readU8(kind) || !r.readU8(op) || !r.readU8(flags) || !r.readU8(safety) ||
+        safety > 3U)
         return false;
     out.kind  = static_cast<cache::CompactExprKind>(kind);
     out.op    = op;
     out.flags = flags;
+    out.safety = static_cast<cache::CompactSafetyMode>(safety);
     if (!r.readU32(out.type_id) || !r.readU32(out.ref_a) || !r.readU32(out.ref_b) ||
         !r.readU32(out.ref_c) || !r.readU32(out.ref_d) || !r.readU32(out.ref_e) ||
         !r.readU32(out.ref_f) || !r.readU32(out.name_id))
@@ -117,8 +119,8 @@ bool encodeCode(const cache::Artifact &artifact, ByteWriter &w) {
     w.writeU32(static_cast<uint32_t>(artifact.vtables.size()));
     for (const auto &vtable : artifact.vtables) {
         w.writeU32(vtable.name_id);
-        w.writeU32(static_cast<uint32_t>(vtable.slot_sym_ids.size()));
-        for (auto id : vtable.slot_sym_ids)
+        w.writeU32(static_cast<uint32_t>(vtable.slot_function_ids.size()));
+        for (auto id : vtable.slot_function_ids)
             w.writeU32(id);
     }
     w.writeU32(static_cast<uint32_t>(artifact.canonical_mappings.size()));
@@ -226,8 +228,8 @@ bool decodeCode(ByteReader &r, cache::Artifact &out) {
             return false;
         if (!r.canReadU32Count(k))
             return false;
-        vtable.slot_sym_ids.resize(k);
-        for (auto &id : vtable.slot_sym_ids)
+        vtable.slot_function_ids.resize(k);
+        for (auto &id : vtable.slot_function_ids)
             if (!r.readU32(id))
                 return false;
     }

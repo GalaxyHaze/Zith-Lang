@@ -155,7 +155,8 @@ hir::HirExprId HirLowerModern::lowerName(const frontend::Expression &expr) {
                         // The slot still stores `?T`; extract field 0 so reads
                         // after `is null` use the payload type.
                         return addExpr(hir::HirField{addExpr(hir::HirSlotAddr{slot, local_ty}), 0U,
-                                                     it->type, local_ty});
+                                                     it->type, local_ty,
+                                                     hir::HirSafetyMode::Guarded});
                     }
                     if (it->opaquePayload) {
                         hir::HirOpaqueCast cast;
@@ -166,7 +167,7 @@ hir::HirExprId HirLowerModern::lowerName(const frontend::Expression &expr) {
                         cast.result_type  = it->type;
                         cast.canonical_id = canonicalTypeId(it->type);
                         cast.type_id      = runtimeTagForCanonicalType(cast.canonical_id);
-                        cast.checked      = false;
+                        cast.safety       = hir::HirSafetyMode::Guarded;
                         return addExpr(std::move(cast));
                     }
                     const auto narrowed = emitSlotLoad(slot, it->type);
@@ -177,7 +178,7 @@ hir::HirExprId HirLowerModern::lowerName(const frontend::Expression &expr) {
                         cast.from         = local_ty;
                         cast.to           = it->type;
                         cast.member_index = taggedMemberIndex(local_ty, it->type);
-                        cast.checked      = false;
+                        cast.safety       = hir::HirSafetyMode::Guarded;
                         return addExpr(std::move(cast));
                     }
                     return narrowed;
@@ -194,7 +195,7 @@ hir::HirExprId HirLowerModern::lowerName(const frontend::Expression &expr) {
                 cast.from         = local_ty;
                 cast.to           = expr_type;
                 cast.member_index = taggedMemberIndex(local_ty, expr_type);
-                cast.checked      = false;
+                cast.safety       = hir::HirSafetyMode::RequiredCheck;
                 return addExpr(std::move(cast));
             }
             return emitSlotLoad(slot, local_ty);
@@ -370,7 +371,7 @@ hir::HirExprId HirLowerModern::lowerBinary(const frontend::Expression &expr,
             arg_types.push(lowerType(value_sema));
 
             hir::HirCall call{hir::kInvalidHirExpr, std::move(args), std::move(arg_types)};
-            call.resolved_fn = functions_[*function_index].sym_id;
+            call.resolved_fn = functions_[*function_index].hir_function_id;
             return addExpr(std::move(call));
         }
 
@@ -582,15 +583,16 @@ hir::HirExprId HirLowerModern::lowerOptionalProp(const frontend::Expression &exp
     current_fn_->blocks[current_block_].insts.push(emitSlotAlloca(result_slot, type));
 
     const auto is_some = addExpr(hir::HirField{addExpr(hir::HirSlotAddr{slot, operand_type}), 1U,
-                                               types::kBoolType, operand_type});
+                                               types::kBoolType, operand_type,
+                                               hir::HirSafetyMode::Intrinsic});
 
     const auto some_block = newBlock();
     const auto none_block = newBlock();
 
     hir::HirBranch branch;
     branch.cond       = is_some;
-    branch.then_block = static_cast<hir::HirDeclId>(some_block);
-    branch.else_block = static_cast<hir::HirDeclId>(none_block);
+    branch.then_block = static_cast<hir::HirBlockId>(some_block);
+    branch.else_block = static_cast<hir::HirBlockId>(none_block);
     setTerminator(addExpr(std::move(branch)));
 
     // None: propagate by returning None from the enclosing function.
@@ -608,7 +610,8 @@ hir::HirExprId HirLowerModern::lowerOptionalProp(const frontend::Expression &exp
     setCurrentBlock(some_block);
     current_fn_->blocks[some_block].insts = memory::DynArray<hir::HirExprId>(arena_);
     const auto payload                    = addExpr(
-        hir::HirField{addExpr(hir::HirSlotAddr{slot, operand_type}), 0U, type, operand_type});
+        hir::HirField{addExpr(hir::HirSlotAddr{slot, operand_type}), 0U, type, operand_type,
+                      hir::HirSafetyMode::Guarded});
     current_fn_->blocks[some_block].insts.push(emitSlotStore(result_slot, payload));
     return emitSlotLoad(result_slot, type);
 }
@@ -646,7 +649,8 @@ hir::HirExprId HirLowerModern::lowerOptionalCondition(frontend::ExprId id) {
     current_fn_->blocks[current_block_].insts.push(emitSlotAlloca(slot, operand_type));
     current_fn_->blocks[current_block_].insts.push(emitSlotStore(slot, operand));
     return addExpr(hir::HirField{addExpr(hir::HirSlotAddr{slot, operand_type}), 1U,
-                                 types::kBoolType, operand_type});
+                                 types::kBoolType, operand_type,
+                                 hir::HirSafetyMode::Intrinsic});
 }
 
 /// Lowers extraction of an optional payload. When `checked` is true the None
@@ -667,8 +671,8 @@ hir::HirExprId HirLowerModern::lowerOptionalPayload(const frontend::Expression &
         const auto slot = next_slot_++;
         current_fn_->blocks[current_block_].insts.push(emitSlotAlloca(slot, operand_type));
         current_fn_->blocks[current_block_].insts.push(emitSlotStore(slot, operand));
-        return addExpr(
-            hir::HirField{addExpr(hir::HirSlotAddr{slot, operand_type}), 0U, type, operand_type});
+        return addExpr(hir::HirField{addExpr(hir::HirSlotAddr{slot, operand_type}), 0U, type,
+                                     operand_type, hir::HirSafetyMode::Raw});
     }
 
     const auto slot = next_slot_++;
@@ -685,15 +689,16 @@ hir::HirExprId HirLowerModern::lowerOptionalPayload(const frontend::Expression &
                                           types::kBoolType});
         }
         return addExpr(hir::HirField{addExpr(hir::HirSlotAddr{slot, operand_type}), 1U,
-                                     types::kBoolType, operand_type});
+                                     types::kBoolType, operand_type,
+                                     hir::HirSafetyMode::Intrinsic});
     };
 
     const auto some_block = newBlock();
     const auto none_block = newBlock();
     hir::HirBranch branch;
     branch.cond       = is_some();
-    branch.then_block = static_cast<hir::HirDeclId>(some_block);
-    branch.else_block = static_cast<hir::HirDeclId>(none_block);
+    branch.then_block = static_cast<hir::HirBlockId>(some_block);
+    branch.else_block = static_cast<hir::HirBlockId>(none_block);
     setTerminator(addExpr(std::move(branch)));
 
     setCurrentBlock(none_block);
@@ -707,8 +712,8 @@ hir::HirExprId HirLowerModern::lowerOptionalPayload(const frontend::Expression &
     const auto *optional = std::get_if<types::TypeOptional>(&types_.lookup(operand_type));
     if (optional != nullptr && types_.kindOf(optional->inner) == types::TypeKind::Ptr)
         return emitSlotLoad(slot, operand_type);
-    return addExpr(
-        hir::HirField{addExpr(hir::HirSlotAddr{slot, operand_type}), 0U, type, operand_type});
+    return addExpr(hir::HirField{addExpr(hir::HirSlotAddr{slot, operand_type}), 0U, type,
+                                 operand_type, hir::HirSafetyMode::Guarded});
 }
 
 hir::HirExprId HirLowerModern::lowerMust(const frontend::Expression &expr,
@@ -774,7 +779,8 @@ hir::HirExprId HirLowerModern::lowerCast(const frontend::Expression &expr,
     if (types_.kindOf(from) == types::TypeKind::Struct && from != type) {
         const auto wrapper_count = types_.fieldCount(from);
         if (wrapper_count == 1U)
-            return addExpr(hir::HirField{value, 0U, type, from});
+            return addExpr(hir::HirField{value, 0U, type, from,
+                                         hir::HirSafetyMode::Intrinsic});
     }
 
     // `opaque as T` lowers to a checked optional extraction. The HIR cast keeps
@@ -791,7 +797,7 @@ hir::HirExprId HirLowerModern::lowerCast(const frontend::Expression &expr,
                 cast.value        = value;
                 cast.from         = from;
                 cast.to           = type;
-                cast.checked      = false;
+                cast.safety       = hir::HirSafetyMode::Raw;
                 cast.canonical_id = canonicalTypeId(from);
                 cast.type_id      = runtimeTagForCanonicalType(cast.canonical_id);
                 cast.opaque_type  = from;
@@ -806,7 +812,7 @@ hir::HirExprId HirLowerModern::lowerCast(const frontend::Expression &expr,
             cast.value        = value;
             cast.from         = from;
             cast.to           = type;
-            cast.checked      = false;
+            cast.safety       = hir::HirSafetyMode::Raw;
             cast.canonical_id = canonicalTypeId(type);
             cast.type_id      = runtimeTagForCanonicalType(cast.canonical_id);
             cast.opaque_type  = from;
@@ -839,8 +845,8 @@ hir::HirExprId HirLowerModern::lowerCast(const frontend::Expression &expr,
         const auto merge_block = newBlock();
         hir::HirBranch branch;
         branch.cond       = check_id;
-        branch.then_block = static_cast<hir::HirDeclId>(some_block);
-        branch.else_block = static_cast<hir::HirDeclId>(none_block);
+        branch.then_block = static_cast<hir::HirBlockId>(some_block);
+        branch.else_block = static_cast<hir::HirBlockId>(none_block);
         setTerminator(addExpr(std::move(branch)));
 
         setCurrentBlock(some_block);
@@ -849,7 +855,7 @@ hir::HirExprId HirLowerModern::lowerCast(const frontend::Expression &expr,
         cast.value         = emitSlotLoad(value_slot, from);
         cast.from          = from;
         cast.to            = payload_type;
-        cast.checked       = false;
+        cast.safety        = hir::HirSafetyMode::Guarded;
         cast.canonical_id  = canonicalTypeId(payload_type);
         cast.type_id       = runtimeTagForCanonicalType(cast.canonical_id);
         cast.opaque_type   = from;
@@ -886,13 +892,20 @@ hir::HirExprId HirLowerModern::lowerCast(const frontend::Expression &expr,
             cast.from         = from;
             cast.to           = type;
             cast.member_index = taggedMemberIndex(from, type);
-            cast.checked      = !expr.is_raw;
+            cast.safety = expr.is_raw ? hir::HirSafetyMode::Raw
+                                      : hir::HirSafetyMode::RequiredCheck;
             return addExpr(std::move(cast));
         }
     }
     if (types_.kindOf(from) == types::TypeKind::Union ||
-        types_.kindOf(type) == types::TypeKind::Union)
-        return addExpr(hir::HirUnionCast{value, from, type});
+        types_.kindOf(type) == types::TypeKind::Union) {
+        hir::HirUnionCast cast;
+        cast.value  = value;
+        cast.from   = from;
+        cast.to     = type;
+        cast.safety = hir::HirSafetyMode::Intrinsic;
+        return addExpr(std::move(cast));
+    }
 
     return addExpr(hir::HirCast{value, from, type});
 }
@@ -918,12 +931,19 @@ hir::HirExprId HirLowerModern::lowerIsNull(const frontend::Expression &expr) {
                                       types::kBoolType});
     }
 
-    // {payload, tag} layout: spill, read the tag, and negate it.
-    const auto slot = next_slot_++;
-    current_fn_->blocks[current_block_].insts.push(emitSlotAlloca(slot, operand_type));
-    current_fn_->blocks[current_block_].insts.push(emitSlotStore(slot, operand));
-    const auto tag = addExpr(hir::HirField{addExpr(hir::HirSlotAddr{slot, operand_type}), 1U,
-                                           types::kBoolType, operand_type});
+    // Reuse a local's slot so a successful test guards reads from that same value.
+    auto slot = hir::kInvalidHirSlot;
+    if (const auto *load = std::get_if<hir::HirSlotLoad>(&hir_.getExpr(operand));
+        load != nullptr && load->type == operand_type) {
+        slot = load->slot;
+    } else {
+        slot = next_slot_++;
+        current_fn_->blocks[current_block_].insts.push(emitSlotAlloca(slot, operand_type));
+        current_fn_->blocks[current_block_].insts.push(emitSlotStore(slot, operand));
+    }
+    const auto tag =
+        addExpr(hir::HirField{addExpr(hir::HirSlotAddr{slot, operand_type}), 1U, types::kBoolType,
+                              operand_type, hir::HirSafetyMode::Intrinsic});
     return addExpr(hir::HirUnary{hir::HirUnaryOp::Not, tag, types::kBoolType});
 }
 
@@ -980,12 +1000,18 @@ hir::HirExprId HirLowerModern::lowerIsType(const frontend::Expression &expr) {
     if (member_index >= def->members.size())
         return hir::kInvalidHirExpr;
 
-    const auto slot = next_slot_++;
-    current_fn_->blocks[current_block_].insts.push(emitSlotAlloca(slot, operand_type));
-    current_fn_->blocks[current_block_].insts.push(emitSlotStore(slot, operand));
+    auto slot = hir::kInvalidHirSlot;
+    if (const auto *load = std::get_if<hir::HirSlotLoad>(&hir_.getExpr(operand));
+        load != nullptr && load->type == operand_type) {
+        slot = load->slot;
+    } else {
+        slot = next_slot_++;
+        current_fn_->blocks[current_block_].insts.push(emitSlotAlloca(slot, operand_type));
+        current_fn_->blocks[current_block_].insts.push(emitSlotStore(slot, operand));
+    }
     const auto tag_type = tagType(types_, static_cast<uint32_t>(def->members.size()));
-    const auto tag      = addExpr(
-        hir::HirField{addExpr(hir::HirSlotAddr{slot, operand_type}), 1U, tag_type, operand_type});
+    const auto tag = addExpr(hir::HirField{addExpr(hir::HirSlotAddr{slot, operand_type}), 1U,
+                                           tag_type, operand_type, hir::HirSafetyMode::Intrinsic});
     hir::HirUnionCheck check;
     check.value        = tag;
     check.union_type   = operand_type;
@@ -1133,7 +1159,7 @@ hir::HirExprId HirLowerModern::lowerCoerceToTarget(types::TypeId target,
     slice.object_type = source_type;
     slice.is_array    = true;
     slice.is_pointer  = false;
-    slice.checked     = false;
+    slice.safety      = hir::HirSafetyMode::Intrinsic;
 
     const auto array      = std::get_if<types::TypeArray>(&types_.lookup(source_type));
     const auto count      = array != nullptr ? static_cast<int64_t>(array->count) : 0;
@@ -1258,7 +1284,7 @@ HirLowerModern::lowerVariadicSliceTail(sema::modern::TypeId slice_sema_type,
     result.bound_type  = types_.internInt(types::IntWidth::I64);
     result.is_array    = true;
     result.is_pointer  = false;
-    result.checked     = false;
+    result.safety      = hir::HirSafetyMode::Intrinsic;
     hir::HirLiteral lo;
     lo.type = result.bound_type;
     lo.i    = 0;
@@ -1504,7 +1530,7 @@ hir::HirExprId HirLowerModern::lowerCoerceToDyn(sema::modern::TypeId target,
         for (const auto &info : requirements) {
             if (info.fn == nullptr)
                 continue;
-            symbols::SymId slot_sym = symbols::kInvalidSym;
+            hir::HirFunctionId slot_sym = hir::kInvalidHirFunction;
             const auto key          = internFunctionKey(interner_, info.fn_module, info.fn->id);
             if (auto *instantiations = sema_.instantiations(); instantiations != nullptr) {
                 size_t instance_index = ~size_t{0};
@@ -1553,17 +1579,17 @@ hir::HirExprId HirLowerModern::lowerCoerceToDyn(sema::modern::TypeId target,
                             function.module->key == info.fn_module &&
                             function.instance->decl == info.fn->id && instance != nullptr &&
                             function.instance->args == instance->args) {
-                            slot_sym = function.sym_id;
+                            slot_sym = function.hir_function_id;
                             break;
                         }
                     }
                 }
             }
-            if (slot_sym == symbols::kInvalidSym) {
+            if (slot_sym == hir::kInvalidHirFunction) {
                 if (const auto *fn_index = function_index_by_key_.get(key))
-                    slot_sym = functions_[*fn_index].sym_id;
+                    slot_sym = functions_[*fn_index].hir_function_id;
             }
-            if (slot_sym != symbols::kInvalidSym)
+            if (slot_sym != hir::kInvalidHirFunction)
                 added.slots.push(slot_sym);
         }
         vtable = &added;

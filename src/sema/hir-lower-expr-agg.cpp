@@ -129,15 +129,16 @@ hir::HirExprId HirLowerModern::lowerField(const frontend::Expression &expr,
     }
     const int idx = sema_.typeTable().fieldIndex(sema_type, expr.text);
     if (idx >= 0)
-        return addExpr(hir::HirField{object, static_cast<uint32_t>(idx), type, object_type});
+        return addExpr(hir::HirField{object, static_cast<uint32_t>(idx), type, object_type,
+                                     hir::HirSafetyMode::Intrinsic});
     if (sema_.typeTable().kindOf(sema_type) == sema::modern::TypeKind::Pack) {
         const auto *pack = sema_.typeTable().pack(sema_type);
         if (pack != nullptr) {
             for (size_t index = 0; index < pack->names.size(); ++index) {
                 if (pack->names[index] != expr.text)
                     continue;
-                return addExpr(
-                    hir::HirField{object, static_cast<uint32_t>(index), type, object_type});
+                return addExpr(hir::HirField{object, static_cast<uint32_t>(index), type,
+                                             object_type, hir::HirSafetyMode::Intrinsic});
             }
         }
     }
@@ -158,8 +159,8 @@ hir::HirExprId HirLowerModern::lowerField(const frontend::Expression &expr,
                 for (size_t field = 0; field < iface->parameters.size(); ++field) {
                     if (iface->parameters[field].name != expr.text)
                         continue;
-                    return addExpr(
-                        hir::HirField{object, static_cast<uint32_t>(field), type, object_type});
+                    return addExpr(hir::HirField{object, static_cast<uint32_t>(field), type,
+                                                 object_type, hir::HirSafetyMode::Intrinsic});
                 }
             }
         }
@@ -188,7 +189,8 @@ hir::HirExprId HirLowerModern::lowerArrow(const frontend::Expression &expr,
     const int idx          = sema_.typeTable().fieldIndex(sema_struct, expr.text);
     if (idx < 0)
         return hir::kInvalidHirExpr;
-    return addExpr(hir::HirField{deref, static_cast<uint32_t>(idx), type, struct_type});
+    return addExpr(hir::HirField{deref, static_cast<uint32_t>(idx), type, struct_type,
+                                 hir::HirSafetyMode::Intrinsic});
 }
 
 hir::HirExprId HirLowerModern::lowerStructLiteral(const frontend::Expression &expr,
@@ -205,7 +207,7 @@ hir::HirExprId HirLowerModern::lowerStructLiteral(const frontend::Expression &ex
         cast.from         = from;
         cast.to           = type;
         cast.member_index = taggedMemberIndex(type, from);
-        cast.checked      = false;
+        cast.safety       = hir::HirSafetyMode::Intrinsic;
         return addExpr(std::move(cast));
     }
     hir::HirStructLiteral lit(arena_);

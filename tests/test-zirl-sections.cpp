@@ -220,19 +220,17 @@ void addAttrs(Artifact &art) {
 
 void addInstantiations(Artifact &art) {
     InstantiationRecord first;
-    first.module        = "main";
-    first.mangled       = "main.id<i32>";
-    first.template_name = "id";
-    first.decl_id       = 1;
-    first.arg_types     = {"i32"};
+    first.canonical_module = "/test/main.zith";
+    first.mangled          = "main.id<i32>";
+    first.template_name    = "id";
+    first.arg_types        = {"i32"};
     art.instantiations.push_back(first);
 
     InstantiationRecord second;
-    second.module        = "main";
-    second.mangled       = "main.pair<i32,f64>";
-    second.template_name = "pair";
-    second.decl_id       = 2;
-    second.arg_types     = {"i32", "f64"};
+    second.canonical_module = "/test/main.zith";
+    second.mangled          = "main.pair<i32,f64>";
+    second.template_name    = "pair";
+    second.arg_types        = {"i32", "f64"};
     art.instantiations.push_back(second);
 }
 
@@ -420,6 +418,8 @@ static void test_instantiation_section_round_trip() {
     ByteReader r(w.ptr(), w.size());
     CHECK(decodeInstantiations(r, decoded), "decodeInstantiations succeeds after encode");
     CHECK_EQ(decoded.instantiations.size(), 2u, "instance count preserved");
+    CHECK_EQ(decoded.instantiations[0].canonical_module, std::string("/test/main.zith"),
+             "canonical module identity is preserved");
     CHECK_EQ(decoded.instantiations[0].mangled, std::string("main.id<i32>"),
              "first mangled instance name preserved");
     CHECK_EQ(decoded.instantiations[0].arg_types.size(), 1u,

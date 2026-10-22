@@ -382,7 +382,9 @@ void CompilationSession::hydrateFromArtifact(const cache::Artifact &art) {
             for (auto id : ce.arg_types)
                 arg_types.push(compactType(id));
             hir::HirCall call(ce.ref_a, std::move(args), std::move(arg_types));
-            call.resolved_fn = ce.ref_b;
+            call.resolved_fn = ce.ref_b == ~uint32_t{0}
+                                   ? hir::kInvalidHirFunction
+                                   : ce.ref_b - 1U;
             call.fn_type     = compactType(ce.ref_e);
             call.musttail    = (ce.flags & 1U) != 0U;
             call.usesTailCC  = (ce.flags & 2U) != 0U;
@@ -397,7 +399,9 @@ void CompilationSession::hydrateFromArtifact(const cache::Artifact &art) {
             for (auto id : ce.arg_types)
                 arg_types.push(compactType(id));
             hir::HirCall call(ce.ref_a, std::move(args), std::move(arg_types));
-            call.resolved_fn = ce.ref_b;
+            call.resolved_fn = ce.ref_b == ~uint32_t{0}
+                                   ? hir::kInvalidHirFunction
+                                   : ce.ref_b - 1U;
             call.fn_type     = compactType(ce.ref_e);
             call.musttail    = true;
             call.usesTailCC  = (ce.flags & 2U) != 0U;
@@ -449,6 +453,7 @@ void CompilationSession::hydrateFromArtifact(const cache::Artifact &art) {
             idx.type     = compactType(ce.type_id);
             idx.obj_type = compactType(ce.ref_e);
             idx.is_array = (ce.flags & 1U) != 0;
+            idx.safety   = static_cast<hir::HirSafetyMode>(ce.safety);
             expr         = idx;
             break;
         }
@@ -458,6 +463,7 @@ void CompilationSession::hydrateFromArtifact(const cache::Artifact &art) {
             field.index       = ce.ref_c;
             field.type        = compactType(ce.type_id);
             field.object_type = compactType(ce.ref_e);
+            field.safety      = static_cast<hir::HirSafetyMode>(ce.safety);
             expr              = field;
             break;
         }
@@ -539,7 +545,7 @@ void CompilationSession::hydrateFromArtifact(const cache::Artifact &art) {
             slice.bound_type  = compactType(ce.ref_f);
             slice.is_array    = (ce.flags & 1U) != 0;
             slice.is_pointer  = (ce.flags & 4U) != 0;
-            slice.checked     = (ce.flags & 2U) != 0;
+            slice.safety      = static_cast<hir::HirSafetyMode>(ce.safety);
             expr              = slice;
             break;
         }
@@ -567,7 +573,7 @@ void CompilationSession::hydrateFromArtifact(const cache::Artifact &art) {
                 cast.from         = from;
                 cast.to           = to;
                 cast.member_index = ce.ref_c;
-                cast.checked      = (ce.flags & 1U) != 0;
+                cast.safety       = static_cast<hir::HirSafetyMode>(ce.safety);
                 expr              = cast;
             } else {
                 hir::HirCast cast;
@@ -650,7 +656,7 @@ void CompilationSession::hydrateFromArtifact(const cache::Artifact &art) {
             cast.canonical_id = ce.ints.size() >= 2U
                                     ? types::TypeCanonicalId{ce.ints[0], ce.ints[1]}
                                     : types::kInvalidCanonicalId;
-            cast.checked      = (ce.flags & 1U) != 0;
+            cast.safety       = static_cast<hir::HirSafetyMode>(ce.safety);
             cast.returns_ptr  = (ce.flags & 2U) != 0;
             expr              = std::move(cast);
             break;
@@ -714,17 +720,19 @@ void CompilationSession::hydrateFromArtifact(const cache::Artifact &art) {
 
     for (const auto &cv : art.vtables) {
         auto &vtable = mHirModule.addVTable(mInterner->intern(art.strings[cv.name_id]));
-        for (const auto sym : cv.slot_sym_ids)
-            vtable.slots.push(static_cast<symbols::SymId>(sym));
+        for (const auto function_id : cv.slot_function_ids) {
+            if (function_id != ~uint32_t{0})
+                vtable.slots.push(function_id - 1U);
+        }
     }
 
-    symbols::SymId next_sym = 1;
     for (size_t fi = 0; fi < art.functions.size(); ++fi) {
         const auto &cfn                 = art.functions[fi];
         const std::string_view cfn_name = cfn.name.empty() && cfn.name_id < art.strings.size()
                                               ? art.strings[cfn.name_id]
                                               : cfn.name;
         auto &fn                        = mHirModule.addFn(mInterner->intern(cfn_name));
+        fn.hasBody                      = !cfn.is_extern;
         fn.return_type                  = compactType(cfn.return_type_id);
         fn.isForeignC                   = cfn.is_foreign_c;
         fn.isVariadic                   = cfn.is_variadic;
@@ -738,7 +746,6 @@ void CompilationSession::hydrateFromArtifact(const cache::Artifact &art) {
                                     : fn.return_type;
         if (cfn.discardable)
             mHirModule.attrs().fn(fi).discardable = true;
-        fn.sym_id             = next_sym++;
         for (size_t pi = 0; pi < cfn.param_type_ids.size() && pi < cfn.param_name_ids.size();
              ++pi) {
             fn.params.push(compactType(cfn.param_type_ids[pi]));
@@ -785,6 +792,14 @@ void CompilationSession::hydrateFromArtifact(const cache::Artifact &art) {
         attrs.readOnly       = fn_attrs.readOnly;
         attrs.noCapture      = fn_attrs.noCapture;
         attrs.discardable    = fn_attrs.discardable;
+    }
+    for (const auto &proof : art.attrs_safety_proofs) {
+        auto &attrs = mHirModule.attrs().safetyProof(proof.expr_id);
+        attrs.kind = static_cast<hir::HirSafetyProofKind>(proof.kind);
+        attrs.operand_a = proof.operand_a;
+        attrs.operand_b = proof.operand_b;
+        attrs.operand_c = proof.operand_c;
+        attrs.present = true;
     }
 }
 
