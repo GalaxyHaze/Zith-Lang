@@ -1,0 +1,315 @@
+from cache/zirl-buffer
+from ir/hir
+
+pub struct ZirlDeclarationRecord {
+    pub kind: HirDeclarationKind,
+    pub visibility: HirVisibility,
+    pub is_extern: bool,
+    pub module_depth: i32,
+    pub name_id: HirStringId,
+    pub type_id: HirTypeId,
+    pub template_index: u32,
+    pub body_function_index: u32,
+    pub field_name_ids: []HirStringId,
+    pub field_type_ids: []HirTypeId,
+    pub method_declaration_indices: []HirDeclarationId,
+}
+
+pub struct ZirlDeclSection {
+    pub declarations: []ZirlDeclarationRecord,
+}
+
+pub struct ZirlDeclStorage {
+    pub declarations: []ZirlDeclarationRecord,
+    pub field_name_ids: []HirStringId,
+    pub field_type_ids: []HirTypeId,
+    pub method_declaration_indices: []HirDeclarationId,
+}
+
+pub struct ZirlDeclRead {
+    pub reader: ZirlByteReader,
+    pub value: ZirlDeclSection,
+}
+
+struct ZirlDeclIdsRead {
+    reader: ZirlByteReader,
+    count: u32,
+}
+
+fn declaration_writer_failure(writer: ZirlByteWriter): ZirlByteWriter {
+    var failed = writer;
+    failed.failed = true;
+    return failed;
+}
+
+fn declaration_bool_byte(value: bool): u8 {
+    if (value) {
+        return 1u8;
+    }
+    return 0u8;
+}
+
+fn declaration_reader_failure(
+    reader: ZirlByteReader,
+    storage: *ZirlDeclStorage
+): ZirlDeclRead {
+    var failed = reader;
+    failed.failed = true;
+    return ZirlDeclRead {
+        reader: failed,
+        value: ZirlDeclSection {
+            declarations: raw storage->declarations[0u64..0u64],
+        },
+    };
+}
+
+fn declaration_hir_ids_fit(values: []HirStringId): bool {
+    return @lengthOf(values) <= 0xFFFFFFFFu64;
+}
+
+fn declaration_type_ids_fit(values: []HirTypeId): bool {
+    return @lengthOf(values) <= 0xFFFFFFFFu64;
+}
+
+fn declaration_ids_fit(values: []HirDeclarationId): bool {
+    return @lengthOf(values) <= 0xFFFFFFFFu64;
+}
+
+fn decode_declaration_kind(kind: u8): HirDeclarationKind {
+    if (kind == (HirDeclarationKind.Function as u8)) { return HirDeclarationKind.Function; }
+    if (kind == (HirDeclarationKind.Struct as u8)) { return HirDeclarationKind.Struct; }
+    if (kind == (HirDeclarationKind.Trait as u8)) { return HirDeclarationKind.Trait; }
+    if (kind == (HirDeclarationKind.Interface as u8)) { return HirDeclarationKind.Interface; }
+    if (kind == (HirDeclarationKind.Enum as u8)) { return HirDeclarationKind.Enum; }
+    if (kind == (HirDeclarationKind.Alias as u8)) { return HirDeclarationKind.Alias; }
+    if (kind == (HirDeclarationKind.Variable as u8)) { return HirDeclarationKind.Variable; }
+    if (kind == (HirDeclarationKind.Module as u8)) { return HirDeclarationKind.Module; }
+    if (kind == (HirDeclarationKind.Component as u8)) { return HirDeclarationKind.Component; }
+    if (kind == (HirDeclarationKind.Union as u8)) { return HirDeclarationKind.Union; }
+    if (kind == (HirDeclarationKind.Asset as u8)) { return HirDeclarationKind.Asset; }
+    if (kind == (HirDeclarationKind.Word as u8)) { return HirDeclarationKind.Word; }
+    return HirDeclarationKind.Context;
+}
+
+fn decode_declaration_visibility(visibility: u8): HirVisibility {
+    if (visibility == (HirVisibility.Private as u8)) { return HirVisibility.Private; }
+    if (visibility == (HirVisibility.Public as u8)) { return HirVisibility.Public; }
+    return HirVisibility.Module;
+}
+
+fn write_declaration_ids(
+    writer: ZirlByteWriter,
+    values: []u32
+): ZirlByteWriter {
+    var result = write_u32(writer, @lengthOf(values) as u32);
+    for (offset in 1u64..@lengthOf(values)) {
+        let index = offset - 1;
+        result = write_u32(result, raw values[index]);
+    }
+    return result;
+}
+
+pub fn write_decls_section(
+    writer: ZirlByteWriter,
+    section: *ZirlDeclSection
+): ZirlByteWriter {
+    if (writer.failed or @lengthOf(section->declarations) > 0xFFFFFFFFu64) {
+        return declaration_writer_failure(writer);
+    }
+    for (offset in 1u64..@lengthOf(section->declarations)) {
+        let index = offset - 1;
+        let declaration: ZirlDeclarationRecord = raw section->declarations[index];
+        if (declaration.kind > HirDeclarationKind.Context or
+            declaration.visibility > HirVisibility.Module or
+            @lengthOf(declaration.field_name_ids) !=
+                @lengthOf(declaration.field_type_ids) or
+            not declaration_hir_ids_fit(declaration.field_name_ids) or
+            not declaration_type_ids_fit(declaration.field_type_ids) or
+            not declaration_ids_fit(declaration.method_declaration_indices)) {
+            return declaration_writer_failure(writer);
+        }
+    }
+
+    var result = write_u32(writer, @lengthOf(section->declarations) as u32);
+    for (offset in 1u64..@lengthOf(section->declarations)) {
+        let index = offset - 1;
+        let declaration: ZirlDeclarationRecord = raw section->declarations[index];
+        result = write_u8(result, declaration.kind as u8);
+        result = write_u8(result, declaration.visibility as u8);
+        result = write_u8(result, declaration_bool_byte(declaration.is_extern));
+        result = write_u8(result, 0u8);
+        result = write_i32(result, declaration.module_depth);
+        result = write_u32(result, declaration.name_id);
+        result = write_u32(result, declaration.type_id);
+        result = write_u32(result, declaration.template_index);
+        result = write_u32(result, declaration.body_function_index);
+        result = write_declaration_ids(result, raw declaration.field_name_ids);
+        for (field_offset in 1u64..@lengthOf(declaration.field_type_ids)) {
+            let field_index = field_offset - 1;
+            result = write_u32(result, raw declaration.field_type_ids[field_index]);
+        }
+        result = write_declaration_ids(
+            result,
+            raw declaration.method_declaration_indices
+        );
+    }
+    return result;
+}
+
+fn read_declaration_id_values(
+    reader: ZirlByteReader,
+    output: []u32,
+    count: u32
+): ZirlDeclIdsRead {
+    if ((count as u64) > @lengthOf(output)) {
+        var failed = reader;
+        failed.failed = true;
+        return ZirlDeclIdsRead { reader: failed, count: 0u32 };
+    }
+    var cursor = reader;
+    var values = output;
+    for (offset in 1u64..(count as u64)) {
+        let index = offset - 1;
+        let value = read_u32(cursor);
+        cursor = value.reader;
+        if (cursor.failed) {
+            var failed = reader;
+            failed.failed = true;
+            return ZirlDeclIdsRead { reader: failed, count: 0u32 };
+        }
+        raw values[index] = value.value;
+    }
+    return ZirlDeclIdsRead { reader: cursor, count: count };
+}
+
+fn read_declaration_ids(
+    reader: ZirlByteReader,
+    output: []u32
+): ZirlDeclIdsRead {
+    let count = read_u32(reader);
+    if (count.reader.failed) {
+        var failed = reader;
+        failed.failed = true;
+        return ZirlDeclIdsRead { reader: failed, count: 0u32 };
+    }
+    let values = read_declaration_id_values(count.reader, output, count.value);
+    if (values.reader.failed) {
+        var failed = reader;
+        failed.failed = true;
+        return ZirlDeclIdsRead { reader: failed, count: 0u32 };
+    }
+    return values;
+}
+
+pub fn read_decls_section(
+    reader: ZirlByteReader,
+    storage: *ZirlDeclStorage
+): ZirlDeclRead {
+    let declaration_count = read_u32(reader);
+    if (declaration_count.reader.failed or
+        (declaration_count.value as u64) > @lengthOf(storage->declarations)) {
+        return declaration_reader_failure(reader, storage);
+    }
+    var cursor = declaration_count.reader;
+    var field_name_offset: u64 = 0u64;
+    var field_type_offset: u64 = 0u64;
+    var method_offset: u64 = 0u64;
+
+    for (offset in 1u64..(declaration_count.value as u64)) {
+        let index = offset - 1;
+        let kind = read_u8(cursor);
+        cursor = kind.reader;
+        let visibility = read_u8(cursor);
+        cursor = visibility.reader;
+        let is_extern = read_u8(cursor);
+        cursor = is_extern.reader;
+        let reserved = read_u8(cursor);
+        cursor = reserved.reader;
+        if (cursor.failed or kind.value > (HirDeclarationKind.Context as u8) or
+            visibility.value > (HirVisibility.Module as u8) or
+            is_extern.value > 1u8 or reserved.value != 0u8) {
+            return declaration_reader_failure(reader, storage);
+        }
+
+        let module_depth = read_i32(cursor);
+        cursor = module_depth.reader;
+        let name_id = read_u32(cursor);
+        cursor = name_id.reader;
+        let type_id = read_u32(cursor);
+        cursor = type_id.reader;
+        let template_index = read_u32(cursor);
+        cursor = template_index.reader;
+        let body_function_index = read_u32(cursor);
+        cursor = body_function_index.reader;
+        if (cursor.failed) {
+            return declaration_reader_failure(reader, storage);
+        }
+
+        let remaining_names = @lengthOf(storage->field_name_ids) - field_name_offset;
+        let names = read_declaration_ids(
+            cursor,
+            raw storage->field_name_ids[field_name_offset..@lengthOf(storage->field_name_ids)]
+        );
+        cursor = names.reader;
+        if (cursor.failed or (names.count as u64) > remaining_names) {
+            return declaration_reader_failure(reader, storage);
+        }
+        field_name_offset = field_name_offset + (names.count as u64);
+
+        let remaining_types = @lengthOf(storage->field_type_ids) - field_type_offset;
+        let types = read_declaration_id_values(
+            cursor,
+            raw storage->field_type_ids[
+                field_type_offset..@lengthOf(storage->field_type_ids)
+            ],
+            names.count
+        );
+        cursor = types.reader;
+        if (cursor.failed or types.count != names.count or
+            (types.count as u64) > remaining_types) {
+            return declaration_reader_failure(reader, storage);
+        }
+        field_type_offset = field_type_offset + (types.count as u64);
+
+        let remaining_methods =
+            @lengthOf(storage->method_declaration_indices) - method_offset;
+        let methods = read_declaration_ids(
+            cursor,
+            raw storage->method_declaration_indices[
+                method_offset..@lengthOf(storage->method_declaration_indices)
+            ]
+        );
+        cursor = methods.reader;
+        if (cursor.failed or (methods.count as u64) > remaining_methods) {
+            return declaration_reader_failure(reader, storage);
+        }
+        method_offset = method_offset + (methods.count as u64);
+
+        raw storage->declarations[index] = ZirlDeclarationRecord {
+            kind: decode_declaration_kind(kind.value),
+            visibility: decode_declaration_visibility(visibility.value),
+            is_extern: is_extern.value == 1u8,
+            module_depth: module_depth.value,
+            name_id: name_id.value,
+            type_id: type_id.value,
+            template_index: template_index.value,
+            body_function_index: body_function_index.value,
+            field_name_ids: raw storage->field_name_ids[
+                field_name_offset - (names.count as u64)..field_name_offset
+            ],
+            field_type_ids: raw storage->field_type_ids[
+                field_type_offset - (types.count as u64)..field_type_offset
+            ],
+            method_declaration_indices: raw storage->method_declaration_indices[
+                method_offset - (methods.count as u64)..method_offset
+            ],
+        };
+    }
+
+    return ZirlDeclRead {
+        reader: cursor,
+        value: ZirlDeclSection {
+            declarations: raw storage->declarations[0u64..(declaration_count.value as u64)],
+        },
+    };
+}
