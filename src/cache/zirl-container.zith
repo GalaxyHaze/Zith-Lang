@@ -1,0 +1,227 @@
+from cache/zirl-buffer
+
+pub const zirlMagic: u32 = 0x5A49524Cu32;
+pub const zirlContainerVersion: u32 = 20u32;
+pub const zirlFixedHeaderSize: u64 = 96u64;
+pub const zirlSectionEntrySize: u64 = 24u64;
+
+pub struct ZirlFileHeader {
+    pub magic: u32,
+    pub container_version: u32,
+    pub hir_schema_version: u32,
+    pub endianness: u8,
+    pub reserved: u8,
+    pub section_count: u16,
+    pub header_size: u32,
+    pub checksum: u32,
+    pub required_features: u64,
+    pub optional_features: u64,
+    pub source_fingerprint_primary: u64,
+    pub source_fingerprint_secondary: u64,
+    pub semantic_profile_version: u32,
+    pub public_abi_hi: u32,
+    pub public_abi_lo: u32,
+    pub dependency_count: u32,
+    pub declaration_count: u32,
+    pub template_count: u32,
+    pub function_count: u32,
+    pub canonical_path_length: u32,
+    pub module_name_length: u32,
+    pub semantic_profile_name_length: u32,
+}
+
+pub struct ZirlSectionEntry {
+    pub id: u16,
+    pub flags: u16,
+    pub schema_version: u16,
+    pub reserved: u16,
+    pub offset: u64,
+    pub size: u64,
+}
+
+fn put_u8(writer: *ZirlByteWriter, value: u8): bool {
+    if (writer->failed) {
+        return false;
+    }
+    let capacity = @lengthOf(writer->bytes);
+    if (writer->position >= capacity) {
+        writer->failed = true;
+        return false;
+    }
+    raw (writer->bytes)[writer->position] = value;
+    writer->position = writer->position + 1;
+    return true;
+}
+
+fn put_u16(writer: *ZirlByteWriter, value: u16): bool {
+    if (not put_u8(writer, value as u8)) {
+        return false;
+    }
+    return put_u8(writer, (value >> 8) as u8);
+}
+
+fn put_u32(writer: *ZirlByteWriter, value: u32): bool {
+    if (not put_u16(writer, value as u16)) {
+        return false;
+    }
+    return put_u16(writer, (value >> 16) as u16);
+}
+
+fn put_u64(writer: *ZirlByteWriter, value: u64): bool {
+    if (not put_u32(writer, value as u32)) {
+        return false;
+    }
+    return put_u32(writer, (value >> 32) as u32);
+}
+
+pub fn write_file_header(
+    writer: *ZirlByteWriter,
+    header: *ZirlFileHeader
+): bool {
+    if (not put_u32(writer, header->magic)) { return false; }
+    if (not put_u32(writer, header->container_version)) { return false; }
+    if (not put_u32(writer, header->hir_schema_version)) { return false; }
+    if (not put_u8(writer, header->endianness)) { return false; }
+    if (not put_u8(writer, header->reserved)) { return false; }
+    if (not put_u16(writer, header->section_count)) { return false; }
+    if (not put_u32(writer, header->header_size)) { return false; }
+    if (not put_u32(writer, header->checksum)) { return false; }
+    if (not put_u64(writer, header->required_features)) { return false; }
+    if (not put_u64(writer, header->optional_features)) { return false; }
+    if (not put_u64(writer, header->source_fingerprint_primary)) { return false; }
+    if (not put_u64(writer, header->source_fingerprint_secondary)) { return false; }
+    if (not put_u32(writer, header->semantic_profile_version)) { return false; }
+    if (not put_u32(writer, header->public_abi_hi)) { return false; }
+    if (not put_u32(writer, header->public_abi_lo)) { return false; }
+    if (not put_u32(writer, header->dependency_count)) { return false; }
+    if (not put_u32(writer, header->declaration_count)) { return false; }
+    if (not put_u32(writer, header->template_count)) { return false; }
+    if (not put_u32(writer, header->function_count)) { return false; }
+    if (not put_u32(writer, header->canonical_path_length)) { return false; }
+    if (not put_u32(writer, header->module_name_length)) { return false; }
+    return put_u32(writer, header->semantic_profile_name_length);
+}
+
+pub fn read_file_header(
+    reader: *ZirlByteReader,
+    header: *ZirlFileHeader
+): bool {
+    var cursor = ZirlByteReader {
+        bytes: reader->bytes,
+        position: reader->position,
+        failed: reader->failed,
+    };
+    let magic = read_u32(cursor);
+    cursor = magic.reader;
+    header->magic = magic.value;
+    let container_version = read_u32(cursor);
+    cursor = container_version.reader;
+    header->container_version = container_version.value;
+    let hir_schema_version = read_u32(cursor);
+    cursor = hir_schema_version.reader;
+    header->hir_schema_version = hir_schema_version.value;
+    let endianness = read_u8(cursor);
+    cursor = endianness.reader;
+    header->endianness = endianness.value;
+    let reserved = read_u8(cursor);
+    cursor = reserved.reader;
+    header->reserved = reserved.value;
+    let section_count = read_u16(cursor);
+    cursor = section_count.reader;
+    header->section_count = section_count.value;
+    let header_size = read_u32(cursor);
+    cursor = header_size.reader;
+    header->header_size = header_size.value;
+    let checksum = read_u32(cursor);
+    cursor = checksum.reader;
+    header->checksum = checksum.value;
+    let required_features = read_u64(cursor);
+    cursor = required_features.reader;
+    header->required_features = required_features.value;
+    let optional_features = read_u64(cursor);
+    cursor = optional_features.reader;
+    header->optional_features = optional_features.value;
+    let source_fingerprint_primary = read_u64(cursor);
+    cursor = source_fingerprint_primary.reader;
+    header->source_fingerprint_primary = source_fingerprint_primary.value;
+    let source_fingerprint_secondary = read_u64(cursor);
+    cursor = source_fingerprint_secondary.reader;
+    header->source_fingerprint_secondary = source_fingerprint_secondary.value;
+    let semantic_profile_version = read_u32(cursor);
+    cursor = semantic_profile_version.reader;
+    header->semantic_profile_version = semantic_profile_version.value;
+    let public_abi_hi = read_u32(cursor);
+    cursor = public_abi_hi.reader;
+    header->public_abi_hi = public_abi_hi.value;
+    let public_abi_lo = read_u32(cursor);
+    cursor = public_abi_lo.reader;
+    header->public_abi_lo = public_abi_lo.value;
+    let dependency_count = read_u32(cursor);
+    cursor = dependency_count.reader;
+    header->dependency_count = dependency_count.value;
+    let declaration_count = read_u32(cursor);
+    cursor = declaration_count.reader;
+    header->declaration_count = declaration_count.value;
+    let template_count = read_u32(cursor);
+    cursor = template_count.reader;
+    header->template_count = template_count.value;
+    let function_count = read_u32(cursor);
+    cursor = function_count.reader;
+    header->function_count = function_count.value;
+    let canonical_path_length = read_u32(cursor);
+    cursor = canonical_path_length.reader;
+    header->canonical_path_length = canonical_path_length.value;
+    let module_name_length = read_u32(cursor);
+    cursor = module_name_length.reader;
+    header->module_name_length = module_name_length.value;
+    let semantic_profile_name_length = read_u32(cursor);
+    cursor = semantic_profile_name_length.reader;
+    header->semantic_profile_name_length = semantic_profile_name_length.value;
+    reader->position = cursor.position;
+    reader->failed = cursor.failed;
+    return not cursor.failed;
+}
+
+pub fn write_section_entry(
+    writer: *ZirlByteWriter,
+    entry: *ZirlSectionEntry
+): bool {
+    if (not put_u16(writer, entry->id)) { return false; }
+    if (not put_u16(writer, entry->flags)) { return false; }
+    if (not put_u16(writer, entry->schema_version)) { return false; }
+    if (not put_u16(writer, entry->reserved)) { return false; }
+    if (not put_u64(writer, entry->offset)) { return false; }
+    return put_u64(writer, entry->size);
+}
+
+pub fn read_section_entry(
+    reader: *ZirlByteReader,
+    entry: *ZirlSectionEntry
+): bool {
+    var cursor = ZirlByteReader {
+        bytes: reader->bytes,
+        position: reader->position,
+        failed: reader->failed,
+    };
+    let id = read_u16(cursor);
+    cursor = id.reader;
+    let flags = read_u16(cursor);
+    cursor = flags.reader;
+    let schema_version = read_u16(cursor);
+    cursor = schema_version.reader;
+    let reserved = read_u16(cursor);
+    cursor = reserved.reader;
+    let offset = read_u64(cursor);
+    cursor = offset.reader;
+    let size = read_u64(cursor);
+    cursor = size.reader;
+    entry->id = id.value;
+    entry->flags = flags.value;
+    entry->schema_version = schema_version.value;
+    entry->reserved = reserved.value;
+    entry->offset = offset.value;
+    entry->size = size.value;
+    reader->position = cursor.position;
+    reader->failed = cursor.failed;
+    return not cursor.failed;
+}

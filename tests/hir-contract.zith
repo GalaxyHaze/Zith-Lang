@@ -2,6 +2,7 @@ from ir/hir
 from ir/hir-verify
 from cache/cache
 from cache/zirl-buffer
+from cache/zirl-container
 
 fn make_hir_module(
     strings: [][]char,
@@ -739,6 +740,241 @@ fn test_zirl_little_endian_primitives(): i32 {
     return 0;
 }
 
+fn test_zirl_header_golden_bytes(): i32 {
+    var output: [96]u8 = [
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+    ];
+    var writer = ZirlByteWriter {
+        bytes: raw output[0..96],
+        position: 0,
+        failed: false,
+    };
+    var header = ZirlFileHeader {
+        magic: 0x5A49524Cu32,
+        container_version: 20u32,
+        hir_schema_version: 1u32,
+        endianness: 1u8,
+        reserved: 0u8,
+        section_count: 5u16,
+        header_size: 0x12345678u32,
+        checksum: 0x89ABCDEFu32,
+        required_features: 7u64,
+        optional_features: 0x0102030405060708u64,
+        source_fingerprint_primary: 0x1112131415161718u64,
+        source_fingerprint_secondary: 0x2122232425262728u64,
+        semantic_profile_version: 2u32,
+        public_abi_hi: 3u32,
+        public_abi_lo: 4u32,
+        dependency_count: 5u32,
+        declaration_count: 6u32,
+        template_count: 7u32,
+        function_count: 8u32,
+        canonical_path_length: 9u32,
+        module_name_length: 10u32,
+        semantic_profile_name_length: 11u32,
+    };
+    if (not write_file_header(&raw writer, &raw header)) {
+        return 1;
+    }
+    if (raw output[0] != 0x4Cu8 or raw output[1] != 0x52u8 or
+        raw output[2] != 0x49u8 or raw output[3] != 0x5Au8 or
+        raw output[12] != 1u8 or raw output[14] != 5u8 or
+        raw output[15] != 0u8 or raw output[16] != 0x78u8 or
+        raw output[17] != 0x56u8 or raw output[18] != 0x34u8 or
+        raw output[19] != 0x12u8 or raw output[20] != 0xEFu8 or
+        raw output[23] != 0x89u8 or raw output[92] != 11u8) {
+        return 2;
+    }
+    return 0;
+}
+
+fn test_zirl_header_decode_and_truncation(): i32 {
+    var output: [96]u8 = [
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+    ];
+    var writer = ZirlByteWriter {
+        bytes: raw output[0..96],
+        position: 0,
+        failed: false,
+    };
+    var header = ZirlFileHeader {
+        magic: 0x5A49524Cu32,
+        container_version: 20u32,
+        hir_schema_version: 1u32,
+        endianness: 1u8,
+        reserved: 0u8,
+        section_count: 5u16,
+        header_size: 96u32,
+        checksum: 0u32,
+        required_features: 7u64,
+        optional_features: 0u64,
+        source_fingerprint_primary: 0u64,
+        source_fingerprint_secondary: 0u64,
+        semantic_profile_version: 1u32,
+        public_abi_hi: 0u32,
+        public_abi_lo: 0u32,
+        dependency_count: 0u32,
+        declaration_count: 0u32,
+        template_count: 0u32,
+        function_count: 0u32,
+        canonical_path_length: 0u32,
+        module_name_length: 0u32,
+        semantic_profile_name_length: 0u32,
+    };
+    if (not write_file_header(&raw writer, &raw header)) {
+        return 1;
+    }
+    var reader = ZirlByteReader {
+        bytes: raw output[0..96],
+        position: 0,
+        failed: false,
+    };
+    var decoded = ZirlFileHeader {
+        magic: 0u32,
+        container_version: 0u32,
+        hir_schema_version: 0u32,
+        endianness: 0u8,
+        reserved: 0u8,
+        section_count: 0u16,
+        header_size: 0u32,
+        checksum: 0u32,
+        required_features: 0u64,
+        optional_features: 0u64,
+        source_fingerprint_primary: 0u64,
+        source_fingerprint_secondary: 0u64,
+        semantic_profile_version: 0u32,
+        public_abi_hi: 0u32,
+        public_abi_lo: 0u32,
+        dependency_count: 0u32,
+        declaration_count: 0u32,
+        template_count: 0u32,
+        function_count: 0u32,
+        canonical_path_length: 0u32,
+        module_name_length: 0u32,
+        semantic_profile_name_length: 0u32,
+    };
+    if (not read_file_header(&raw reader, &raw decoded)) {
+        return 2;
+    }
+    if (decoded.magic != 0x5A49524Cu32 or decoded.container_version != 20u32 or
+        decoded.required_features != 7u64) {
+        return 3;
+    }
+    return 0;
+}
+
+fn test_zirl_header_truncation(): i32 {
+    var output: [95]u8 = [
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+        0u8, 0u8, 0u8, 0u8, 0u8,
+    ];
+    var truncated_reader = ZirlByteReader {
+        bytes: raw output[0..95],
+        position: 0,
+        failed: false,
+    };
+    var decoded = ZirlFileHeader {
+        magic: 0u32,
+        container_version: 0u32,
+        hir_schema_version: 0u32,
+        endianness: 0u8,
+        reserved: 0u8,
+        section_count: 0u16,
+        header_size: 0u32,
+        checksum: 0u32,
+        required_features: 0u64,
+        optional_features: 0u64,
+        source_fingerprint_primary: 0u64,
+        source_fingerprint_secondary: 0u64,
+        semantic_profile_version: 0u32,
+        public_abi_hi: 0u32,
+        public_abi_lo: 0u32,
+        dependency_count: 0u32,
+        declaration_count: 0u32,
+        template_count: 0u32,
+        function_count: 0u32,
+        canonical_path_length: 0u32,
+        module_name_length: 0u32,
+        semantic_profile_name_length: 0u32,
+    };
+    if (read_file_header(&raw truncated_reader, &raw decoded)) {
+        return 3;
+    }
+    return 0;
+}
+
+fn test_zirl_section_entry_roundtrip(): i32 {
+    var output: [24]u8 = [
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+    ];
+    var entry = ZirlSectionEntry {
+        id: 4u16,
+        flags: 1u16,
+        schema_version: 1u16,
+        reserved: 0u16,
+        offset: 0x0102030405060708u64,
+        size: 0x1112131415161718u64,
+    };
+    var entry_writer = ZirlByteWriter {
+        bytes: raw output[0..24],
+        position: 0,
+        failed: false,
+    };
+    if (not write_section_entry(&raw entry_writer, &raw entry)) {
+        return 1;
+    }
+    var entry_reader = ZirlByteReader {
+        bytes: raw output[0..24],
+        position: 0,
+        failed: false,
+    };
+    var decoded_entry = ZirlSectionEntry {
+        id: 0u16,
+        flags: 0u16,
+        schema_version: 0u16,
+        reserved: 0u16,
+        offset: 0u64,
+        size: 0u64,
+    };
+    if (not read_section_entry(&raw entry_reader, &raw decoded_entry)) {
+        return 2;
+    }
+    if (decoded_entry.id != 4u16 or decoded_entry.flags != 1u16 or
+        decoded_entry.offset != 0x0102030405060708u64 or
+        decoded_entry.size != 0x1112131415161718u64) {
+        return 2;
+    }
+    return 0;
+}
+
 fn main(): i32 {
     let literal_status = test_hir_literal_variant();
     if (literal_status != 0) {
@@ -795,6 +1031,18 @@ fn main(): i32 {
     }
     if (test_zirl_little_endian_primitives() != 0) {
         return 221;
+    }
+    if (test_zirl_header_golden_bytes() != 0) {
+        return 222;
+    }
+    if (test_zirl_header_decode_and_truncation() != 0) {
+        return 223;
+    }
+    if (test_zirl_header_truncation() != 0) {
+        return 224;
+    }
+    if (test_zirl_section_entry_roundtrip() != 0) {
+        return 225;
     }
     return 0;
 }
