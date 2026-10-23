@@ -38,6 +38,7 @@ point, and directory paths; it does not enumerate source files individually.
 | `src/cache/zirl-attrs-section.zith` | ZIRL Attrs section codec. | Encodes residual slot, call, function, and safety-proof facts with their original HIR indices and caller-owned decode storage. |
 | `src/cache/zirl-code-section.zith` | ZIRL Code section codec. | Encodes compact expressions, functions/blocks, globals, vtables, and canonical mappings with caller-owned decode storage. |
 | `src/cache/zirl-canonical-types.zith` | Artifact-owned canonical HIR type table and synthesized function signatures. | Remaps HIR-local type IDs and returns structured validation/capacity errors. |
+| `src/cache/zirl-hir-code.zith` | HIR-to-ZIRL Code section projection. | Verifies HIR, remaps type/function identities, and builds compact code records using caller-owned storage. |
 
 There is no project-owned C source file in the current tree. Add its entry
 here if one is introduced; do not infer that a planned directory already
@@ -50,7 +51,7 @@ exists.
 | `tests/README.md` | Documents the type-check and behavioral test commands. | Test convention. |
 | `tests/run.sh` | Runs type-check and behavioral tests in an isolated temporary project. | Test harness. |
 | `tests/run.zith` | VM behavioral test entry point. | Smoke fixture. |
-| `tests/hir-contract.zith` | Native test entry point for the shared HIR data contract. | Exercises HIR invariants and ZIRL Metadata/Decls/Templates/Attrs/Code round-trips, golden bytes, malformed records, and buffer failures. |
+| `tests/hir-contract.zith` | Native test entry point for the shared HIR data contract. | Exercises HIR invariants, ZIRL section round-trips, HIR-to-Code projection, golden bytes, malformed records, and buffer failures. |
 | `tests/canonical-types.zith` | Native test entry point for artifact-owned canonical types. | Exercises local type IDs, synthesized signature metadata, insufficient storage, and invalid function references. |
 | `tests/zirl-artifact.zith` | Native test entry point for complete ZIRL container framing. | Exercises identity/dependency round-trip, required section layout, checksum rejection, malformed sections, and short output buffers. |
 

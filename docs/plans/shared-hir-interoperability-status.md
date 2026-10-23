@@ -44,6 +44,12 @@ sections are implemented:
   synthesized with return/parameter IDs and calling-convention flags. Native
   tests cover the generated signature, storage capacity failure, and invalid
   parameter references. Full artifact orchestration is still pending.
+- HIR-to-Code projection: verified HIR expressions, functions, blocks, globals,
+  vtables, and canonical mappings project into compact Code records. Local
+  type and function identities are remapped, and nested argument, parameter,
+  block-instruction, and vtable slices are copied into caller-owned storage.
+  Native tests cover projection, Code round-trip, and source-slice mutation
+  after projection.
 - Caller-owned decode storage and failure handling for the section codecs;
   tests cover golden bytes, round-trips, truncation, invalid values, and
   short output buffers in the implemented sections.
@@ -61,8 +67,9 @@ ZITHC=/home/diogo/Zith/build/zithc TMPDIR=/tmp sh tests/run.sh
 
 The latest full harness run passed on 2026-10-23 (exit 0). It reports
 deprecated-syntax warnings from the HIR verifier. The standalone
-`src/main.zith` check remains blocked by the pre-existing undefined
-`getKeywordId` reference; that change was not part of the cache work.
+`src/main.zith` check currently fails on syntax errors in the uncommitted
+`src/main.zith` and `src/utils/keywords.zith` worktree changes; those files
+were not part of the cache work.
 
 The following work remains:
 
@@ -70,6 +77,8 @@ The following work remains:
   Function identities must use the artifact's canonical compact type table;
   local `HirTypeId` values alone are not a cross-artifact identity, and
   function-signature entries may need to be synthesized.
+- Assemble and restore a complete `HirModule` artifact from the metadata,
+  declaration, template, attribute, and Code section codecs.
 - Connect each section codec to `HirModule` and add complete-artifact
   byte-for-byte conformance fixtures. The current generic envelope accepts
   already encoded section payloads and does not serialize or hydrate HIR.

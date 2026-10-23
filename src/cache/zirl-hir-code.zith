@@ -1,0 +1,1123 @@
+from cache/zirl-canonical-types
+from cache/zirl-code-section
+from ir/hir
+from ir/hir-verify
+
+const invalid_hir_cache_id: u32 = 0xFFFFFFFFu32;
+
+pub enum ZirlHirCodeError {
+    None = 0,
+    InvalidHir = 1,
+    InvalidCanonicalTypes = 2,
+    InsufficientStorage = 3,
+    InvalidFunctionReference = 4,
+    ConflictingCanonicalMapping = 5,
+}
+
+pub struct ZirlHirCodeResult {
+    pub value: ZirlCodeSection,
+    pub error: ZirlHirCodeError,
+}
+
+struct ZirlMappedTypes {
+    values: []ZirlTypeId,
+    used: u64,
+    failed: bool,
+}
+
+struct ZirlCopiedIds {
+    values: []u32,
+    used: u64,
+    failed: bool,
+}
+
+struct ZirlProjectedExpr {
+    value: ZirlCompactExpr,
+    arguments_used: u64,
+    argument_types_used: u64,
+    integers_used: u64,
+    error: ZirlHirCodeError,
+}
+
+struct ZirlCallProjection {
+    arguments_used: u64,
+    argument_types_used: u64,
+    error: ZirlHirCodeError,
+}
+
+struct ZirlMappingAppend {
+    used: u64,
+    error: ZirlHirCodeError,
+}
+
+fn hir_code_failure(
+    storage: *ZirlCodeStorage,
+    error: ZirlHirCodeError
+): ZirlHirCodeResult {
+    return ZirlHirCodeResult {
+        value: ZirlCodeSection {
+            expressions: raw storage->expressions[0u64..0u64],
+            functions: raw storage->functions[0u64..0u64],
+            globals: raw storage->globals[0u64..0u64],
+            vtables: raw storage->vtables[0u64..0u64],
+            canonical_mappings: raw storage->canonical_mappings[0u64..0u64],
+        },
+        error: error,
+    };
+}
+
+fn canonical_type_id(
+    canonical: *ZirlCanonicalTypes,
+    local_id: HirTypeId
+): ZirlTypeId {
+    if (local_id == invalid_hir_cache_id) {
+        return invalid_hir_cache_id;
+    }
+    if ((local_id as u64) >= @lengthOf(canonical->local_type_ids)) {
+        return invalid_hir_cache_id;
+    }
+    return raw canonical->local_type_ids[local_id as u64];
+}
+
+fn map_type_values(
+    values: []HirTypeId,
+    canonical: *ZirlCanonicalTypes,
+    output: []ZirlTypeId,
+    used: u64
+): ZirlMappedTypes {
+    if (used > @lengthOf(output) or @lengthOf(values) > @lengthOf(output) - used) {
+        return ZirlMappedTypes {
+            values: raw output[0u64..0u64],
+            used: used,
+            failed: true,
+        };
+    }
+    var destination = output;
+    for (offset in 1u64..@lengthOf(values)) {
+        let index = offset - 1;
+        let local_id: HirTypeId = raw values[index];
+        if (local_id != invalid_hir_cache_id and
+            (local_id as u64) >= @lengthOf(canonical->local_type_ids)) {
+            return ZirlMappedTypes {
+                values: raw output[0u64..0u64],
+                used: used,
+                failed: true,
+            };
+        }
+        raw destination[used + index] = canonical_type_id(canonical, local_id);
+    }
+    let next = used + @lengthOf(values);
+    return ZirlMappedTypes {
+        values: raw output[used..next],
+        used: next,
+        failed: false,
+    };
+}
+
+fn copy_id_values(values: []u32, output: []u32, used: u64): ZirlCopiedIds {
+    if (used > @lengthOf(output) or
+        @lengthOf(values) > @lengthOf(output) - used) {
+        return ZirlCopiedIds {
+            values: raw output[0u64..0u64],
+            used: used,
+            failed: true,
+        };
+    }
+    var destination = output;
+    for (offset in 1u64..@lengthOf(values)) {
+        let index = offset - 1;
+        raw destination[used + index] = raw values[index];
+    }
+    let next = used + @lengthOf(values);
+    return ZirlCopiedIds {
+        values: raw output[used..next],
+        used: next,
+        failed: false,
+    };
+}
+
+fn empty_compact_expr(
+    storage: *ZirlCodeStorage,
+    module: *HirModule
+): ZirlCompactExpr {
+    return ZirlCompactExpr {
+        kind: ZirlCompactExprKind.Literal as u8,
+        op: 0u8,
+        flags: 0u8,
+        safety: ZirlCompactSafetyMode.RequiredCheck,
+        type_id: invalid_hir_cache_id,
+        ref_a: 0u32,
+        ref_b: 0u32,
+        ref_c: 0u32,
+        ref_d: 0u32,
+        ref_e: invalid_hir_cache_id,
+        ref_f: 0u32,
+        name_id: invalid_hir_cache_id,
+        resolved_function_name_id: invalid_hir_cache_id,
+        resolved_function_signature_type_id: invalid_hir_cache_id,
+        variadic_slice_param: 0xFFFFFFFFu32,
+        is_variadic_slice: false,
+        auto_collect_tail: false,
+        int_value: 0i64,
+        float_value: 0.0,
+        args: raw storage->expression_args[0u64..0u64],
+        arg_types: raw storage->expression_arg_types[0u64..0u64],
+        integers: raw storage->expression_integers[0u64..0u64],
+    };
+}
+
+fn compact_safety_mode(mode: HirSafetyMode): ZirlCompactSafetyMode {
+    if (mode == HirSafetyMode.Guarded) {
+        return ZirlCompactSafetyMode.Guarded;
+    }
+    if (mode == HirSafetyMode.Intrinsic) {
+        return ZirlCompactSafetyMode.Intrinsic;
+    }
+    if (mode == HirSafetyMode.Raw) {
+        return ZirlCompactSafetyMode.Raw;
+    }
+    return ZirlCompactSafetyMode.RequiredCheck;
+}
+
+fn find_bool_type(canonical: *ZirlCanonicalTypes): ZirlTypeId {
+    for (offset in 1u64..@lengthOf(canonical->types)) {
+        let index = offset - 1;
+        let hir_type: HirType = raw canonical->types[index];
+        if (hir_type.kind == HirTypeKind.Bool) {
+            return index as ZirlTypeId;
+        }
+    }
+    return invalid_hir_cache_id;
+}
+
+fn append_canonical_mapping(
+    storage: *ZirlCodeStorage,
+    used: u64,
+    canonical_hi: u64,
+    canonical_lo: u64,
+    runtime_id: u32
+): ZirlMappingAppend {
+    for (offset in 1u64..used) {
+        let index = offset - 1;
+        let existing: ZirlCanonicalMapping =
+            raw storage->canonical_mappings[index];
+        if (existing.canonical_hi == canonical_hi and
+            existing.canonical_lo == canonical_lo) {
+            if (existing.runtime_id != runtime_id) {
+                return ZirlMappingAppend {
+                    used: used,
+                    error: ZirlHirCodeError.ConflictingCanonicalMapping,
+                };
+            }
+            return ZirlMappingAppend {
+                used: used,
+                error: ZirlHirCodeError.None,
+            };
+        }
+    }
+    if (used >= @lengthOf(storage->canonical_mappings)) {
+        return ZirlMappingAppend {
+            used: used,
+            error: ZirlHirCodeError.InsufficientStorage,
+        };
+    }
+    raw storage->canonical_mappings[used] = ZirlCanonicalMapping {
+        canonical_hi: canonical_hi,
+        canonical_lo: canonical_lo,
+        runtime_id: runtime_id,
+    };
+    return ZirlMappingAppend {
+        used: used + 1u64,
+        error: ZirlHirCodeError.None,
+    };
+}
+
+fn project_call_fields(
+    output: *ZirlCompactExpr,
+    call: *HirCall,
+    module: *HirModule,
+    canonical: *ZirlCanonicalTypes,
+    storage: *ZirlCodeStorage,
+    signatures: []ZirlTypeId,
+    arguments_used: u64,
+    argument_types_used: u64
+): ZirlCallProjection {
+    output->kind = ZirlCompactExprKind.Call as u8;
+    output->ref_a = call->callee;
+    output->ref_e = canonical_type_id(canonical, call->function_type);
+    output->flags = 0u8;
+    if (call->must_tail) {
+        output->flags = output->flags + 1u8;
+    }
+    if (call->uses_tail_calling_convention) {
+        output->flags = output->flags + 2u8;
+    }
+    output->variadic_slice_param = call->variadic_slice_param;
+    output->is_variadic_slice = call->is_variadic_slice;
+    output->auto_collect_tail = call->auto_collect_tail;
+    let copied_args = copy_id_values(
+        call->args,
+        raw storage->expression_args,
+        arguments_used
+    );
+    if (copied_args.failed) {
+        return ZirlCallProjection {
+            arguments_used: arguments_used,
+            argument_types_used: argument_types_used,
+            error: ZirlHirCodeError.InsufficientStorage,
+        };
+    }
+    output->args = copied_args.values;
+    if (call->resolved_function != invalid_hir_cache_id) {
+        let function_index = call->resolved_function as u64;
+        if (function_index >= @lengthOf(module->functions) or
+            function_index >= @lengthOf(signatures)) {
+            return ZirlCallProjection {
+                arguments_used: copied_args.used,
+                argument_types_used: argument_types_used,
+                error: ZirlHirCodeError.InvalidFunctionReference,
+            };
+        }
+        let target: HirFunction = raw module->functions[function_index];
+        output->resolved_function_name_id = target.name_id;
+        output->resolved_function_signature_type_id =
+            raw signatures[function_index];
+    }
+    let mapped = map_type_values(
+        call->argument_types,
+        canonical,
+        raw storage->expression_arg_types,
+        argument_types_used
+    );
+    if (mapped.failed) {
+        return ZirlCallProjection {
+            arguments_used: copied_args.used,
+            argument_types_used: argument_types_used,
+            error: ZirlHirCodeError.InsufficientStorage,
+        };
+    }
+    output->arg_types = mapped.values;
+    return ZirlCallProjection {
+        arguments_used: copied_args.used,
+        argument_types_used: mapped.used,
+        error: ZirlHirCodeError.None,
+    };
+}
+
+fn project_expression(
+    module: *HirModule,
+    expression_id: u64,
+    canonical: *ZirlCanonicalTypes,
+    signatures: []ZirlTypeId,
+    storage: *ZirlCodeStorage,
+    arguments_used: u64,
+    argument_types_used: u64,
+    integers_used: u64
+): ZirlProjectedExpr {
+    var output = empty_compact_expr(storage, module);
+    let expression: HirExpr = raw module->expressions[expression_id];
+    var next_arguments = arguments_used;
+    var next_argument_types = argument_types_used;
+    var next_integers = integers_used;
+
+    if (expression is HirLiteral) {
+        output.kind = ZirlCompactExprKind.Literal as u8;
+        output.type_id = canonical_type_id(canonical, expression.type_id);
+        if (expression.value_kind == HirLiteralKind.Float) {
+            output.flags = 1u8;
+            output.float_value = expression.float;
+        } else if (expression.value_kind == HirLiteralKind.Boolean) {
+            output.flags = 2u8;
+            if (expression.boolean) {
+                output.int_value = 1i64;
+            }
+        } else if (expression.value_kind == HirLiteralKind.String) {
+            output.flags = 3u8;
+            output.name_id = expression.string_id;
+        } else {
+            output.int_value = expression.integer;
+        }
+    } else if (expression is HirBinary) {
+        output.kind = ZirlCompactExprKind.Binary as u8;
+        output.type_id = canonical_type_id(canonical, expression.type_id);
+        output.ref_a = expression.lhs;
+        output.ref_b = expression.rhs;
+        output.op = expression.op as u8;
+        output.ref_e = canonical_type_id(canonical, expression.operand_type);
+    } else if (expression is HirUnary) {
+        output.kind = ZirlCompactExprKind.Unary as u8;
+        output.type_id = canonical_type_id(canonical, expression.type_id);
+        output.ref_a = expression.operand;
+        output.op = expression.op as u8;
+    } else if (expression is HirLet) {
+        output.kind = ZirlCompactExprKind.Let as u8;
+        output.name_id = expression.name_id;
+        output.type_id = canonical_type_id(canonical, expression.type_id);
+        output.ref_a = expression.init;
+    } else if (expression is HirVar) {
+        output.kind = ZirlCompactExprKind.Var as u8;
+        output.name_id = expression.name_id;
+        output.ref_c = expression.version;
+    } else if (expression is HirCall) {
+        let projected = project_call_fields(
+            &raw output,
+            &raw expression,
+            module,
+            canonical,
+            storage,
+            signatures,
+            next_arguments,
+            next_argument_types
+        );
+        if (projected.error != ZirlHirCodeError.None) {
+            return ZirlProjectedExpr {
+                value: output,
+                arguments_used: arguments_used,
+                argument_types_used: argument_types_used,
+                integers_used: integers_used,
+                error: projected.error,
+            };
+        }
+        next_arguments = projected.arguments_used;
+        next_argument_types = projected.argument_types_used;
+    } else if (expression is HirRet) {
+        output.kind = ZirlCompactExprKind.Ret as u8;
+        output.ref_a = expression.value;
+    } else if (expression is HirBranch) {
+        output.kind = ZirlCompactExprKind.Branch as u8;
+        output.ref_a = expression.condition;
+        output.ref_c = expression.then_block;
+        output.ref_d = expression.else_block;
+    } else if (expression is HirJump) {
+        output.kind = ZirlCompactExprKind.Jump as u8;
+        output.ref_c = expression.target;
+    } else if (expression is HirPhi) {
+        output.kind = ZirlCompactExprKind.Phi as u8;
+        let copied = copy_id_values(
+            expression.incoming,
+            raw storage->expression_args,
+            next_arguments
+        );
+        if (copied.failed) {
+            return ZirlProjectedExpr {
+                value: output,
+                arguments_used: arguments_used,
+                argument_types_used: next_argument_types,
+                integers_used: next_integers,
+                error: ZirlHirCodeError.InsufficientStorage,
+            };
+        }
+        output.args = copied.values;
+        next_arguments = copied.used;
+    } else if (expression is HirAssign) {
+        output.kind = ZirlCompactExprKind.Assign as u8;
+        output.ref_a = expression.target;
+        output.ref_b = expression.value;
+    } else if (expression is HirIndex) {
+        output.kind = ZirlCompactExprKind.Index as u8;
+        output.type_id = canonical_type_id(canonical, expression.type_id);
+        output.ref_a = expression.object;
+        output.ref_b = expression.index;
+        output.ref_e = canonical_type_id(canonical, expression.object_type);
+        if (expression.is_array) {
+            output.flags = 1u8;
+        }
+        output.safety = compact_safety_mode(expression.safety);
+    } else if (expression is HirField) {
+        output.kind = ZirlCompactExprKind.Field as u8;
+        output.type_id = canonical_type_id(canonical, expression.type_id);
+        output.ref_a = expression.object;
+        output.ref_c = expression.index;
+        output.ref_e = canonical_type_id(canonical, expression.object_type);
+        output.safety = compact_safety_mode(expression.safety);
+    } else if (expression is HirStructLiteral) {
+        output.kind = ZirlCompactExprKind.StructLiteral as u8;
+        output.type_id = canonical_type_id(canonical, expression.type_id);
+        let copied = copy_id_values(
+            expression.values,
+            raw storage->expression_args,
+            next_arguments
+        );
+        if (copied.failed) {
+            return ZirlProjectedExpr {
+                value: output,
+                arguments_used: arguments_used,
+                argument_types_used: next_argument_types,
+                integers_used: next_integers,
+                error: ZirlHirCodeError.InsufficientStorage,
+            };
+        }
+        output.args = copied.values;
+        next_arguments = copied.used;
+    } else if (expression is HirArrayLiteral) {
+        output.kind = ZirlCompactExprKind.ArrayLiteral as u8;
+        output.type_id = canonical_type_id(canonical, expression.type_id);
+        let copied = copy_id_values(
+            expression.elements,
+            raw storage->expression_args,
+            next_arguments
+        );
+        if (copied.failed) {
+            return ZirlProjectedExpr {
+                value: output,
+                arguments_used: arguments_used,
+                argument_types_used: next_argument_types,
+                integers_used: next_integers,
+                error: ZirlHirCodeError.InsufficientStorage,
+            };
+        }
+        output.args = copied.values;
+        next_arguments = copied.used;
+    } else if (expression is HirEnumValue) {
+        output.kind = ZirlCompactExprKind.EnumValue as u8;
+        output.type_id = canonical_type_id(canonical, expression.type_id);
+        output.int_value = expression.value;
+    } else if (expression is HirSlotAlloca) {
+        output.kind = ZirlCompactExprKind.SlotAlloca as u8;
+        output.ref_a = expression.slot;
+        output.type_id = canonical_type_id(canonical, expression.type_id);
+    } else if (expression is HirSlotStore) {
+        output.kind = ZirlCompactExprKind.SlotStore as u8;
+        output.ref_a = expression.slot;
+        output.ref_b = expression.value;
+    } else if (expression is HirSlotLoad) {
+        output.kind = ZirlCompactExprKind.SlotLoad as u8;
+        output.ref_a = expression.slot;
+        output.type_id = canonical_type_id(canonical, expression.type_id);
+    } else if (expression is HirSlotAddr) {
+        output.kind = ZirlCompactExprKind.SlotAddr as u8;
+        output.ref_a = expression.slot;
+        output.type_id = canonical_type_id(canonical, expression.type_id);
+    } else if (expression is HirMakeNone) {
+        output.kind = ZirlCompactExprKind.MakeNone as u8;
+        output.type_id = canonical_type_id(canonical, expression.type_id);
+    } else if (expression is HirMakeSome) {
+        output.kind = ZirlCompactExprKind.MakeSome as u8;
+        output.ref_a = expression.value;
+        output.type_id = canonical_type_id(canonical, expression.type_id);
+    } else if (expression is HirMakeSlice) {
+        output.kind = ZirlCompactExprKind.MakeSlice as u8;
+        output.type_id = canonical_type_id(canonical, expression.type_id);
+        output.ref_a = expression.object;
+        output.ref_b = expression.lo;
+        output.ref_c = expression.hi;
+        output.ref_e = canonical_type_id(canonical, expression.object_type);
+        output.ref_f = canonical_type_id(canonical, expression.bound_type);
+        if (expression.is_array) {
+            output.flags = output.flags + 1u8;
+        }
+        if (expression.is_pointer) {
+            output.flags = output.flags + 4u8;
+        }
+        output.safety = compact_safety_mode(expression.safety);
+    } else if (expression is HirCast) {
+        output.kind = ZirlCompactExprKind.Cast as u8;
+        output.ref_a = expression.value;
+        output.ref_b = canonical_type_id(canonical, expression.to_type);
+        output.ref_c = invalid_hir_cache_id;
+        output.ref_e = canonical_type_id(canonical, expression.from_type);
+    } else if (expression is HirUnionCast) {
+        output.kind = ZirlCompactExprKind.Cast as u8;
+        output.ref_a = expression.value;
+        output.ref_b = canonical_type_id(canonical, expression.to_type);
+        output.ref_c = expression.member_index;
+        output.ref_e = canonical_type_id(canonical, expression.from_type);
+        output.safety = compact_safety_mode(expression.safety);
+    } else if (expression is HirUnionCheck) {
+        output.kind = ZirlCompactExprKind.UnionCheck as u8;
+        output.type_id = find_bool_type(canonical);
+        output.ref_a = expression.value;
+        output.ref_b = canonical_type_id(canonical, expression.union_type);
+        output.ref_c = expression.member_index;
+        if (output.type_id == invalid_hir_cache_id) {
+            return ZirlProjectedExpr {
+                value: output,
+                arguments_used: arguments_used,
+                argument_types_used: next_argument_types,
+                integers_used: next_integers,
+                error: ZirlHirCodeError.InvalidCanonicalTypes,
+            };
+        }
+    } else if (expression is HirLayoutIntrinsic) {
+        output.kind = ZirlCompactExprKind.LayoutIntrinsic as u8;
+        output.type_id = canonical_type_id(canonical, expression.type_id);
+        output.ref_e = expression.kind as u32;
+        output.ref_f = expression.field_index;
+        output.ref_a = expression.operand;
+        output.ref_b = canonical_type_id(canonical, expression.operand_type);
+        output.int_value = expression.string_length as i64;
+    } else if (expression is HirStateTailCall) {
+        output.kind = ZirlCompactExprKind.StateTailCall as u8;
+        output.ref_a = expression.call.callee;
+        output.ref_e =
+            canonical_type_id(canonical, expression.call.function_type);
+        if (expression.call.uses_tail_calling_convention) {
+            output.flags = 2u8;
+        }
+        output.variadic_slice_param = expression.call.variadic_slice_param;
+        output.is_variadic_slice = expression.call.is_variadic_slice;
+        output.auto_collect_tail = expression.call.auto_collect_tail;
+        let copied_args = copy_id_values(
+            expression.call.args,
+            raw storage->expression_args,
+            next_arguments
+        );
+        if (copied_args.failed) {
+            return ZirlProjectedExpr {
+                value: output,
+                arguments_used: arguments_used,
+                argument_types_used: next_argument_types,
+                integers_used: next_integers,
+                error: ZirlHirCodeError.InsufficientStorage,
+            };
+        }
+        output.args = copied_args.values;
+        next_arguments = copied_args.used;
+        if (expression.call.resolved_function != invalid_hir_cache_id) {
+            let function_index = expression.call.resolved_function as u64;
+            if (function_index >= @lengthOf(module->functions) or
+                function_index >= @lengthOf(signatures)) {
+                return ZirlProjectedExpr {
+                    value: output,
+                    arguments_used: arguments_used,
+                    argument_types_used: next_argument_types,
+                    integers_used: next_integers,
+                    error: ZirlHirCodeError.InvalidFunctionReference,
+                };
+            }
+            let target: HirFunction = raw module->functions[function_index];
+            output.resolved_function_name_id = target.name_id;
+            output.resolved_function_signature_type_id =
+                raw signatures[function_index];
+        }
+        let mapped = map_type_values(
+            expression.call.argument_types,
+            canonical,
+            raw storage->expression_arg_types,
+            next_argument_types
+        );
+        if (mapped.failed) {
+            return ZirlProjectedExpr {
+                value: output,
+                arguments_used: arguments_used,
+                argument_types_used: next_argument_types,
+                integers_used: next_integers,
+                error: ZirlHirCodeError.InsufficientStorage,
+            };
+        }
+        output.arg_types = mapped.values;
+        next_argument_types = mapped.used;
+    } else if (expression is HirCanonicalType) {
+        output.kind = ZirlCompactExprKind.CanonicalType as u8;
+        output.type_id = canonical_type_id(canonical, expression.type_id);
+        if (next_integers > @lengthOf(storage->expression_integers) or
+            2u64 > @lengthOf(storage->expression_integers) - next_integers) {
+            return ZirlProjectedExpr {
+                value: output,
+                arguments_used: arguments_used,
+                argument_types_used: next_argument_types,
+                integers_used: next_integers,
+                error: ZirlHirCodeError.InsufficientStorage,
+            };
+        }
+        raw storage->expression_integers[next_integers] = expression.canonical_hi;
+        raw storage->expression_integers[next_integers + 1u64] = expression.canonical_lo;
+        output.integers =
+            raw storage->expression_integers[next_integers..(next_integers + 2u64)];
+        next_integers = next_integers + 2u64;
+    } else if (expression is HirCleanup) {
+        output.kind = ZirlCompactExprKind.Cleanup as u8;
+        let copied = copy_id_values(
+            expression.expressions,
+            raw storage->expression_args,
+            next_arguments
+        );
+        if (copied.failed) {
+            return ZirlProjectedExpr {
+                value: output,
+                arguments_used: arguments_used,
+                argument_types_used: next_argument_types,
+                integers_used: next_integers,
+                error: ZirlHirCodeError.InsufficientStorage,
+            };
+        }
+        output.args = copied.values;
+        next_arguments = copied.used;
+    } else if (expression is HirGlobalConstLoad) {
+        output.kind = ZirlCompactExprKind.GlobalConstLoad as u8;
+        output.name_id = expression.name_id;
+        output.type_id = canonical_type_id(canonical, expression.type_id);
+    } else if (expression is HirExternalGlobalAddr) {
+        output.kind = ZirlCompactExprKind.ExternalGlobalAddr as u8;
+        output.name_id = expression.name_id;
+        output.type_id = canonical_type_id(canonical, expression.type_id);
+    } else if (expression is HirMakeDyn) {
+        output.kind = ZirlCompactExprKind.MakeDyn as u8;
+        output.ref_a = expression.value;
+        output.ref_b = canonical_type_id(canonical, expression.source_type);
+        output.type_id = canonical_type_id(canonical, expression.dyn_type);
+        output.name_id = expression.vtable_name_id;
+        if (expression.value_is_place) {
+            output.flags = 1u8;
+        }
+    } else if (expression is HirDynCall) {
+        output.kind = ZirlCompactExprKind.DynCall as u8;
+        output.ref_a = expression.receiver;
+        output.name_id = expression.vtable_name_id;
+        output.ref_c = expression.slot_index;
+        output.type_id = canonical_type_id(canonical, expression.result_type);
+        output.ref_e = canonical_type_id(canonical, expression.function_type);
+        let copied_args = copy_id_values(
+            expression.args,
+            raw storage->expression_args,
+            next_arguments
+        );
+        if (copied_args.failed) {
+            return ZirlProjectedExpr {
+                value: output,
+                arguments_used: arguments_used,
+                argument_types_used: next_argument_types,
+                integers_used: next_integers,
+                error: ZirlHirCodeError.InsufficientStorage,
+            };
+        }
+        output.args = copied_args.values;
+        next_arguments = copied_args.used;
+        if (expression.has_receiver) {
+            output.flags = 1u8;
+        }
+        let mapped = map_type_values(
+            expression.argument_types,
+            canonical,
+            raw storage->expression_arg_types,
+            next_argument_types
+        );
+        if (mapped.failed) {
+            return ZirlProjectedExpr {
+                value: output,
+                arguments_used: arguments_used,
+                argument_types_used: next_argument_types,
+                integers_used: next_integers,
+                error: ZirlHirCodeError.InsufficientStorage,
+            };
+        }
+        output.arg_types = mapped.values;
+        next_argument_types = mapped.used;
+    } else if (expression is HirMakeOpaque) {
+        output.kind = ZirlCompactExprKind.MakeOpaque as u8;
+        output.ref_a = expression.value;
+        output.ref_b = canonical_type_id(canonical, expression.source_type);
+        output.type_id = canonical_type_id(canonical, expression.opaque_type);
+        output.ref_c = expression.runtime_type_id;
+        if (next_integers > @lengthOf(storage->expression_integers) or
+            2u64 > @lengthOf(storage->expression_integers) - next_integers) {
+            return ZirlProjectedExpr {
+                value: output,
+                arguments_used: arguments_used,
+                argument_types_used: next_argument_types,
+                integers_used: next_integers,
+                error: ZirlHirCodeError.InsufficientStorage,
+            };
+        }
+        raw storage->expression_integers[next_integers] = expression.canonical_hi;
+        raw storage->expression_integers[next_integers + 1u64] = expression.canonical_lo;
+        output.integers =
+            raw storage->expression_integers[next_integers..(next_integers + 2u64)];
+        next_integers = next_integers + 2u64;
+    } else if (expression is HirOpaqueCast) {
+        output.kind = ZirlCompactExprKind.OpaqueCast as u8;
+        output.ref_a = expression.value;
+        output.ref_b = canonical_type_id(canonical, expression.from_type);
+        output.ref_c = canonical_type_id(canonical, expression.to_type);
+        output.ref_d = canonical_type_id(canonical, expression.opaque_type);
+        output.type_id = canonical_type_id(canonical, expression.result_type);
+        output.ref_e = expression.runtime_type_id;
+        if (expression.returns_pointer) {
+            output.flags = 2u8;
+        }
+        output.safety = compact_safety_mode(expression.safety);
+        if (next_integers > @lengthOf(storage->expression_integers) or
+            2u64 > @lengthOf(storage->expression_integers) - next_integers) {
+            return ZirlProjectedExpr {
+                value: output,
+                arguments_used: arguments_used,
+                argument_types_used: next_argument_types,
+                integers_used: next_integers,
+                error: ZirlHirCodeError.InsufficientStorage,
+            };
+        }
+        raw storage->expression_integers[next_integers] = expression.canonical_hi;
+        raw storage->expression_integers[next_integers + 1u64] = expression.canonical_lo;
+        output.integers =
+            raw storage->expression_integers[next_integers..(next_integers + 2u64)];
+        next_integers = next_integers + 2u64;
+    } else if (expression is HirOpaqueCheck) {
+        output.kind = ZirlCompactExprKind.OpaqueCheck as u8;
+        output.ref_a = expression.value;
+        output.type_id = canonical_type_id(canonical, expression.opaque_type);
+        output.ref_e = expression.runtime_type_id;
+        if (next_integers > @lengthOf(storage->expression_integers) or
+            2u64 > @lengthOf(storage->expression_integers) - next_integers) {
+            return ZirlProjectedExpr {
+                value: output,
+                arguments_used: arguments_used,
+                argument_types_used: next_argument_types,
+                integers_used: next_integers,
+                error: ZirlHirCodeError.InsufficientStorage,
+            };
+        }
+        raw storage->expression_integers[next_integers] = expression.canonical_hi;
+        raw storage->expression_integers[next_integers + 1u64] = expression.canonical_lo;
+        output.integers =
+            raw storage->expression_integers[next_integers..(next_integers + 2u64)];
+        next_integers = next_integers + 2u64;
+    } else if (expression is HirRuntimePanic) {
+        output.kind = ZirlCompactExprKind.RuntimePanic as u8;
+        output.int_value = expression.code as i64;
+    } else if (expression is HirPipe) {
+        if (expression.is_effect) {
+            output.kind = ZirlCompactExprKind.PipeDo as u8;
+        } else {
+            output.kind = ZirlCompactExprKind.Pipe as u8;
+        }
+        output.ref_a = expression.stage;
+        output.ref_b = expression.source_slot;
+        output.type_id = canonical_type_id(canonical, expression.type_id);
+        output.ref_e = canonical_type_id(canonical, expression.source_type);
+    } else if (expression is HirPipeCurrent) {
+        output.kind = ZirlCompactExprKind.PipeCurrent as u8;
+        output.ref_a = expression.slot;
+        output.type_id = canonical_type_id(canonical, expression.type_id);
+    } else {
+        return ZirlProjectedExpr {
+            value: output,
+            arguments_used: arguments_used,
+            argument_types_used: next_argument_types,
+            integers_used: next_integers,
+            error: ZirlHirCodeError.InvalidHir,
+        };
+    }
+
+    return ZirlProjectedExpr {
+        value: output,
+        arguments_used: next_arguments,
+        argument_types_used: next_argument_types,
+        integers_used: next_integers,
+        error: ZirlHirCodeError.None,
+    };
+}
+
+pub fn build_zirl_hir_code_section(
+    module: *HirModule,
+    canonical: *ZirlCanonicalTypes,
+    storage: *ZirlCodeStorage
+): ZirlHirCodeResult {
+    if (canonical->failed) {
+        return hir_code_failure(storage, ZirlHirCodeError.InvalidCanonicalTypes);
+    }
+    let verified = verify_hir(module);
+    if (verified.error != HirVerifyError.None) {
+        return hir_code_failure(storage, ZirlHirCodeError.InvalidHir);
+    }
+    if (@lengthOf(module->expressions) > @lengthOf(storage->expressions) or
+        @lengthOf(module->functions) > @lengthOf(storage->functions) or
+        @lengthOf(module->global_constants) > @lengthOf(storage->globals) or
+        @lengthOf(module->vtables) > @lengthOf(storage->vtables)) {
+        return hir_code_failure(storage, ZirlHirCodeError.InsufficientStorage);
+    }
+    if (@lengthOf(canonical->function_signature_type_ids) !=
+        @lengthOf(module->functions)) {
+        return hir_code_failure(storage, ZirlHirCodeError.InvalidCanonicalTypes);
+    }
+
+    var arguments_used = 0u64;
+    var argument_types_used = 0u64;
+    var integers_used = 0u64;
+    var expression_count = 0u64;
+    for (offset in 1u64..@lengthOf(module->expressions)) {
+        let index = offset - 1;
+        let projected = project_expression(
+            module,
+            index,
+            canonical,
+            canonical->function_signature_type_ids,
+            storage,
+            arguments_used,
+            argument_types_used,
+            integers_used
+        );
+        if (projected.error != ZirlHirCodeError.None) {
+            return hir_code_failure(storage, projected.error);
+        }
+        raw storage->expressions[index] = projected.value;
+        arguments_used = projected.arguments_used;
+        argument_types_used = projected.argument_types_used;
+        integers_used = projected.integers_used;
+        expression_count = expression_count + 1u64;
+    }
+
+    var parameter_types_used = 0u64;
+    var parameter_names_used = 0u64;
+    var parameter_slots_used = 0u64;
+    var block_instructions_used = 0u64;
+    var block_count = 0u64;
+    for (offset in 1u64..@lengthOf(module->functions)) {
+        let index = offset - 1;
+        let function: HirFunction = raw module->functions[index];
+        if (block_count > @lengthOf(storage->blocks) or
+            @lengthOf(function.blocks) >
+                @lengthOf(storage->blocks) - block_count) {
+            return hir_code_failure(storage, ZirlHirCodeError.InsufficientStorage);
+        }
+        if ((@lengthOf(function.parameter_name_ids) != 0u64 and
+             @lengthOf(function.parameter_name_ids) !=
+                 @lengthOf(function.parameter_types)) or
+            (@lengthOf(function.parameter_slots) != 0u64 and
+             @lengthOf(function.parameter_slots) !=
+                 @lengthOf(function.parameter_types))) {
+            return hir_code_failure(storage, ZirlHirCodeError.InvalidHir);
+        }
+        let mapped = map_type_values(
+            function.parameter_types,
+            canonical,
+            raw storage->function_parameter_type_ids,
+            parameter_types_used
+        );
+        let copied_names = copy_id_values(
+            function.parameter_name_ids,
+            raw storage->function_parameter_name_ids,
+            parameter_names_used
+        );
+        let copied_slots = copy_id_values(
+            function.parameter_slots,
+            raw storage->function_parameter_slot_ids,
+            parameter_slots_used
+        );
+        if (mapped.failed or copied_names.failed or copied_slots.failed) {
+            return hir_code_failure(storage, ZirlHirCodeError.InsufficientStorage);
+        }
+        parameter_types_used = mapped.used;
+        parameter_names_used = copied_names.used;
+        parameter_slots_used = copied_slots.used;
+        block_count = block_count + @lengthOf(function.blocks);
+        for (block_offset in 1u64..@lengthOf(function.blocks)) {
+            let block: HirBasicBlock = raw function.blocks[block_offset - 1];
+            let copied_instructions = copy_id_values(
+                block.instructions,
+                raw storage->block_instructions,
+                block_instructions_used
+            );
+            if (copied_instructions.failed) {
+                return hir_code_failure(
+                    storage,
+                    ZirlHirCodeError.InsufficientStorage
+                );
+            }
+            block_instructions_used = copied_instructions.used;
+        }
+    }
+
+    var current_block = 0u64;
+    var current_parameter_type = 0u64;
+    var current_parameter_name = 0u64;
+    var current_parameter_slot = 0u64;
+    var current_block_instruction = 0u64;
+    var function_count = 0u64;
+    for (offset in 1u64..@lengthOf(module->functions)) {
+        let index = offset - 1;
+        let function: HirFunction = raw module->functions[index];
+        if (index >= @lengthOf(canonical->function_signature_type_ids)) {
+            return hir_code_failure(storage, ZirlHirCodeError.InvalidCanonicalTypes);
+        }
+        let mapped = map_type_values(
+            function.parameter_types,
+            canonical,
+            raw storage->function_parameter_type_ids,
+            current_parameter_type
+        );
+        if (mapped.failed) {
+            return hir_code_failure(storage, ZirlHirCodeError.InsufficientStorage);
+        }
+        let params_start = current_parameter_type;
+        current_parameter_type = mapped.used;
+
+        let names = copy_id_values(
+            function.parameter_name_ids,
+            raw storage->function_parameter_name_ids,
+            current_parameter_name
+        );
+        let slots = copy_id_values(
+            function.parameter_slots,
+            raw storage->function_parameter_slot_ids,
+            current_parameter_slot
+        );
+        if (names.failed or slots.failed) {
+            return hir_code_failure(storage, ZirlHirCodeError.InsufficientStorage);
+        }
+        let names_start = current_parameter_name;
+        let slots_start = current_parameter_slot;
+        current_parameter_name = names.used;
+        current_parameter_slot = slots.used;
+
+        let blocks_start = current_block;
+        for (block_offset in 1u64..@lengthOf(function.blocks)) {
+            let block_index = block_offset - 1;
+            let block: HirBasicBlock = raw function.blocks[block_index];
+            let instructions = copy_id_values(
+                block.instructions,
+                raw storage->block_instructions,
+                current_block_instruction
+            );
+            if (instructions.failed) {
+                return hir_code_failure(storage, ZirlHirCodeError.InsufficientStorage);
+            }
+            raw storage->blocks[current_block] = ZirlCompactBasicBlock {
+                instructions: instructions.values,
+                terminator: block.terminator,
+            };
+            current_block_instruction = instructions.used;
+            current_block = current_block + 1u64;
+        }
+        var discardable = false;
+        if (index < @lengthOf(module->function_attrs)) {
+            let attrs: HirFunctionAttrs = raw module->function_attrs[index];
+            discardable = attrs.discardable;
+        }
+        var machine_return_type_id =
+            canonical_type_id(canonical, function.machine_return_type);
+        if (function.machine_return_type == invalid_hir_cache_id) {
+            machine_return_type_id =
+                canonical_type_id(canonical, function.return_type);
+        }
+        raw storage->functions[index] = ZirlCompactFunction {
+            name_id: function.name_id,
+            signature_type_id:
+                raw canonical->function_signature_type_ids[index],
+            is_extern: not function.has_body,
+            is_foreign_c: function.foreign_c,
+            is_variadic: function.variadic,
+            is_state: function.state_function,
+            uses_tail_calling_convention:
+                function.uses_tail_calling_convention,
+            discardable: discardable,
+            return_type_id:
+                canonical_type_id(canonical, function.return_type),
+            machine_return_type_id: machine_return_type_id,
+            machine_id: function.machine_id,
+            instance_index: 0xFFFFFFFFu32,
+            variadic_slice_param: function.variadic_slice_param,
+            foreign_adapter_name_id: function.foreign_adapter_name_id,
+            parameter_type_ids:
+                raw storage->function_parameter_type_ids[params_start..current_parameter_type],
+            parameter_name_ids:
+                raw storage->function_parameter_name_ids[names_start..current_parameter_name],
+            parameter_slot_ids:
+                raw storage->function_parameter_slot_ids[slots_start..current_parameter_slot],
+            blocks: raw storage->blocks[blocks_start..current_block],
+        };
+        function_count = function_count + 1u64;
+    }
+
+    var global_count = 0u64;
+    for (offset in 1u64..@lengthOf(module->global_constants)) {
+        let index = offset - 1;
+        let global_const: HirGlobalConst = raw module->global_constants[index];
+        raw storage->globals[index] = ZirlCodeGlobal {
+            name_id: global_const.name_id,
+            type_id: canonical_type_id(canonical, global_const.type_id),
+            initializer: global_const.initializer,
+        };
+        global_count = global_count + 1u64;
+    }
+
+    var vtable_slots_used = 0u64;
+    for (offset in 1u64..@lengthOf(module->vtables)) {
+        let index = offset - 1;
+        let vtable: HirVTable = raw module->vtables[index];
+        if (@lengthOf(vtable.slot_functions) >
+            @lengthOf(storage->vtable_function_name_ids) - vtable_slots_used or
+            @lengthOf(vtable.slot_functions) >
+            @lengthOf(storage->vtable_function_signature_type_ids) - vtable_slots_used) {
+            return hir_code_failure(storage, ZirlHirCodeError.InsufficientStorage);
+        }
+        let slots_start = vtable_slots_used;
+        for (slot_offset in 1u64..@lengthOf(vtable.slot_functions)) {
+            let slot = slot_offset - 1;
+            let function_id: HirFunctionId = raw vtable.slot_functions[slot];
+            let function_index = function_id as u64;
+            if (function_index >= @lengthOf(module->functions) or
+                function_index >= @lengthOf(canonical->function_signature_type_ids)) {
+                return hir_code_failure(storage, ZirlHirCodeError.InvalidFunctionReference);
+            }
+            let function: HirFunction = raw module->functions[function_index];
+            raw storage->vtable_function_name_ids[vtable_slots_used] =
+                function.name_id;
+            raw storage->vtable_function_signature_type_ids[vtable_slots_used] =
+                raw canonical->function_signature_type_ids[function_index];
+            vtable_slots_used = vtable_slots_used + 1u64;
+        }
+        raw storage->vtables[index] = ZirlCodeVTable {
+            name_id: vtable.name_id,
+            slot_function_name_ids:
+                raw storage->vtable_function_name_ids[slots_start..vtable_slots_used],
+            slot_function_signature_type_ids:
+                raw storage->vtable_function_signature_type_ids[
+                    slots_start..vtable_slots_used
+                ],
+        };
+    }
+
+    var mapping_count = 0u64;
+    for (offset in 1u64..@lengthOf(module->expressions)) {
+        let index = offset - 1;
+        let expression: HirExpr = raw module->expressions[index];
+        if (expression is HirMakeOpaque) {
+            let appended = append_canonical_mapping(
+                storage,
+                mapping_count,
+                expression.canonical_hi,
+                expression.canonical_lo,
+                expression.runtime_type_id
+            );
+            if (appended.error != ZirlHirCodeError.None) {
+                return hir_code_failure(storage, appended.error);
+            }
+            mapping_count = appended.used;
+        } else if (expression is HirOpaqueCast) {
+            let appended = append_canonical_mapping(
+                storage,
+                mapping_count,
+                expression.canonical_hi,
+                expression.canonical_lo,
+                expression.runtime_type_id
+            );
+            if (appended.error != ZirlHirCodeError.None) {
+                return hir_code_failure(storage, appended.error);
+            }
+            mapping_count = appended.used;
+        } else if (expression is HirOpaqueCheck) {
+            let appended = append_canonical_mapping(
+                storage,
+                mapping_count,
+                expression.canonical_hi,
+                expression.canonical_lo,
+                expression.runtime_type_id
+            );
+            if (appended.error != ZirlHirCodeError.None) {
+                return hir_code_failure(storage, appended.error);
+            }
+            mapping_count = appended.used;
+        }
+    }
+
+    return ZirlHirCodeResult {
+        value: ZirlCodeSection {
+            expressions: raw storage->expressions[0u64..expression_count],
+            functions: raw storage->functions[0u64..function_count],
+            globals: raw storage->globals[0u64..global_count],
+            vtables: raw storage->vtables[0u64..@lengthOf(module->vtables)],
+            canonical_mappings: raw storage->canonical_mappings[0u64..mapping_count],
+        },
+        error: ZirlHirCodeError.None,
+    };
+}

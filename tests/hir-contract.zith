@@ -9,6 +9,8 @@ from cache/zirl-attrs-section
 from cache/zirl-type-section
 from cache/zirl-metadata
 from cache/zirl-code-section
+from cache/zirl-canonical-types
+from cache/zirl-hir-code
 
 extern fn calloc(count: u64, size: u64): raw opaque
 extern fn free(ptr: raw opaque): void
@@ -2935,6 +2937,371 @@ fn test_zirl_code_tables_roundtrip(): i32 {
     return 0;
 }
 
+fn test_zirl_hir_code_projection(): i32 {
+    let no_type_args: [1]HirTypeId = [0u32];
+    let no_string_args: [1]HirStringId = [0u32];
+    var int_type = HirType {
+        kind: HirTypeKind.Int,
+        width: 32u8,
+        flags: 1u8,
+        ref0: invalidType,
+        ref1: 0u32,
+        args: raw no_type_args[0u64..0u64],
+        arg_names: raw no_string_args[0u64..0u64],
+    };
+    int_type.args = raw no_type_args[0u64..0u64];
+    int_type.arg_names = raw no_string_args[0u64..0u64];
+    let types: [1]HirType = [int_type];
+    var literal = HirLiteral {
+        value_kind: HirLiteralKind.Integer,
+        integer: 17i64,
+        float: 0.0,
+        boolean: false,
+        string_id: invalidString,
+        type_id: 0u32,
+    };
+    // The bootstrap compiler loses some aggregate-initialized fields here.
+    literal.value_kind = HirLiteralKind.Integer;
+    literal.integer = 17i64;
+    literal.float = 0.0;
+    literal.boolean = false;
+    literal.string_id = invalidString;
+    literal.type_id = 0u32;
+    let ret = HirRet { value: 0u32 };
+    var array_values: [1]HirExprId = [0u32];
+    let array_literal = HirArrayLiteral {
+        elements: raw array_values[0u64..1u64],
+        type_id: 0u32,
+    };
+    let expressions: [3]HirExpr = [
+        HirExpr { literal },
+        HirExpr { ret },
+        HirExpr { array_literal },
+    ];
+    var block_instructions: [1]HirExprId = [0u32];
+    var block = HirBasicBlock {
+        instructions: raw block_instructions[0u64..1u64],
+        terminator: 1u32,
+    };
+    block.instructions = raw block_instructions[0u64..1u64];
+    block.terminator = 1u32;
+    let blocks: [1]HirBasicBlock = [block];
+    let no_parameter_types: [1]HirTypeId = [0u32];
+    let no_parameter_names: [1]HirStringId = [0u32];
+    let no_parameter_slots: [1]HirSlotId = [0u32];
+    var function_parameter_types: [1]HirTypeId = [0u32];
+    var function_parameter_names: [1]HirStringId = [0u32];
+    let no_compact_blocks: [0]ZirlCompactBasicBlock = [];
+    var function = HirFunction {
+        name_id: 0u32,
+        parameter_types: raw no_parameter_types[0u64..0u64],
+        parameter_name_ids: raw no_parameter_names[0u64..0u64],
+        parameter_slots: raw no_parameter_slots[0u64..0u64],
+        return_type: 0u32,
+        state_function: false,
+        uses_tail_calling_convention: false,
+        machine_return_type: invalidType,
+        machine_id: 0u32,
+        variadic: false,
+        variadic_slice_param: 0xFFFFFFFFu32,
+        foreign_c: false,
+        has_body: true,
+        foreign_adapter_name_id: invalidString,
+        blocks: raw blocks[0u64..1u64],
+    };
+    function.parameter_types = raw function_parameter_types[0u64..1u64];
+    function.parameter_name_ids = raw function_parameter_names[0u64..1u64];
+    function.parameter_slots = raw no_parameter_slots[0u64..0u64];
+    function.return_type = 0u32;
+    function.blocks = raw blocks[0u64..1u64];
+    let functions: [1]HirFunction = [function];
+    let strings: [1][]char = ["main"];
+    let proofs: [0]HirSafetyProof = [];
+    let module = make_hir_module(
+        raw strings[0u64..1u64],
+        raw types[0u64..1u64],
+        raw expressions[0u64..3u64],
+        raw functions[0u64..1u64],
+        raw proofs[0u64..0u64]
+    );
+    let canonical_types_buffer: [2]HirType = [int_type, int_type];
+    let canonical_args: [1]HirTypeId = [0u32];
+    let canonical_arg_names: [0]HirStringId = [];
+    let local_type_ids: [1]ZirlTypeId = [invalidZirlType];
+    let signature_type_ids: [1]ZirlTypeId = [invalidZirlType];
+    var canonical_storage = ZirlCanonicalTypeStorage {
+        types: raw canonical_types_buffer[0u64..2u64],
+        type_args: raw canonical_args[0u64..1u64],
+        type_arg_names: raw canonical_arg_names[0u64..0u64],
+        local_type_ids: raw local_type_ids[0u64..1u64],
+        function_signature_type_ids: raw signature_type_ids[0u64..1u64],
+    };
+    canonical_storage.type_args = raw canonical_args[0u64..1u64];
+    canonical_storage.type_arg_names = raw canonical_arg_names[0u64..0u64];
+    let canonical = build_zirl_canonical_types(&raw module, &raw canonical_storage);
+    if (canonical.failed) {
+        return 10 + (canonical.error as i32);
+    }
+    if (@lengthOf(canonical.types) != 2u64) {
+        return 2;
+    }
+    let no_u64s: [0]u64 = [];
+    let output_expressions_seed: [2]ZirlCompactExpr = [
+        ZirlCompactExpr {
+            kind: ZirlCompactExprKind.Literal as u8,
+            op: 0u8,
+            flags: 0u8,
+            safety: ZirlCompactSafetyMode.RequiredCheck,
+            type_id: 0u32,
+            ref_a: 0u32,
+            ref_b: 0u32,
+            ref_c: 0u32,
+            ref_d: 0u32,
+            ref_e: 0u32,
+            ref_f: 0u32,
+            name_id: 0u32,
+            resolved_function_name_id: invalidString,
+            resolved_function_signature_type_id: invalidZirlType,
+            variadic_slice_param: 0xFFFFFFFFu32,
+            is_variadic_slice: false,
+            auto_collect_tail: false,
+            int_value: 0i64,
+            float_value: 0.0,
+            args: raw no_parameter_types[0u64..0u64],
+            arg_types: raw no_parameter_types[0u64..0u64],
+            integers: raw no_u64s[0u64..0u64],
+        },
+        ZirlCompactExpr {
+            kind: ZirlCompactExprKind.Ret as u8,
+            op: 0u8,
+            flags: 0u8,
+            safety: ZirlCompactSafetyMode.RequiredCheck,
+            type_id: 0u32,
+            ref_a: 0u32,
+            ref_b: 0u32,
+            ref_c: 0u32,
+            ref_d: 0u32,
+            ref_e: 0u32,
+            ref_f: 0u32,
+            name_id: 0u32,
+            resolved_function_name_id: invalidString,
+            resolved_function_signature_type_id: invalidZirlType,
+            variadic_slice_param: 0xFFFFFFFFu32,
+            is_variadic_slice: false,
+            auto_collect_tail: false,
+            int_value: 0i64,
+            float_value: 0.0,
+            args: raw no_parameter_types[0u64..0u64],
+            arg_types: raw no_parameter_types[0u64..0u64],
+            integers: raw no_u64s[0u64..0u64],
+        },
+    ];
+    let output_expressions: [3]ZirlCompactExpr = [
+        raw output_expressions_seed[0u64],
+        raw output_expressions_seed[1u64],
+        raw output_expressions_seed[1u64],
+    ];
+    let output_functions: [1]ZirlCompactFunction = [
+        ZirlCompactFunction {
+            name_id: 0u32,
+            signature_type_id: invalidZirlType,
+            is_extern: false,
+            is_foreign_c: false,
+            is_variadic: false,
+            is_state: false,
+            uses_tail_calling_convention: false,
+            discardable: false,
+            return_type_id: invalidZirlType,
+            machine_return_type_id: invalidZirlType,
+            machine_id: 0u32,
+            instance_index: 0xFFFFFFFFu32,
+            variadic_slice_param: 0xFFFFFFFFu32,
+            foreign_adapter_name_id: invalidString,
+            parameter_type_ids: raw no_parameter_types[0u64..0u64],
+            parameter_name_ids: raw no_parameter_names[0u64..0u64],
+            parameter_slot_ids: raw no_parameter_slots[0u64..0u64],
+            blocks: raw no_compact_blocks[0u64..0u64],
+        },
+    ];
+    let output_blocks: [1]ZirlCompactBasicBlock = [
+        ZirlCompactBasicBlock {
+            instructions: raw block_instructions[0u64..0u64],
+            terminator: invalidExpr,
+        },
+    ];
+    let expression_arg_storage: [1]u32 = [0u32];
+    let projected_block_instruction_storage: [1]u32 = [0u32];
+    let projected_parameter_type_storage: [1]u32 = [0u32];
+    let projected_parameter_name_storage: [1]u32 = [0u32];
+    let decoded_expression_arg_storage: [1]u32 = [0u32];
+    let decoded_block_instruction_storage: [1]u32 = [0u32];
+    let decoded_parameter_type_storage: [1]u32 = [0u32];
+    let decoded_parameter_name_storage: [1]u32 = [0u32];
+    let output_globals: [0]ZirlCodeGlobal = [];
+    let output_vtables: [0]ZirlCodeVTable = [];
+    let output_mappings: [0]ZirlCanonicalMapping = [];
+    var code_storage = ZirlCodeStorage {
+        expressions: raw output_expressions[0u64..3u64],
+        expression_args: raw no_parameter_types[0u64..0u64],
+        expression_arg_types: raw no_parameter_types[0u64..0u64],
+        expression_integers: raw no_u64s[0u64..0u64],
+        functions: raw output_functions[0u64..1u64],
+        function_parameter_type_ids: raw no_parameter_types[0u64..0u64],
+        function_parameter_name_ids: raw no_parameter_names[0u64..0u64],
+        function_parameter_slot_ids: raw no_parameter_slots[0u64..0u64],
+        blocks: raw output_blocks[0u64..1u64],
+        block_instructions: raw block_instructions[0u64..0u64],
+        globals: raw output_globals[0u64..0u64],
+        vtables: raw output_vtables[0u64..0u64],
+        vtable_function_name_ids: raw no_parameter_names[0u64..0u64],
+        vtable_function_signature_type_ids: raw no_parameter_types[0u64..0u64],
+        canonical_mappings: raw output_mappings[0u64..0u64],
+    };
+    code_storage.expression_args = raw expression_arg_storage[0u64..1u64];
+    code_storage.expression_arg_types = raw no_parameter_types[0u64..0u64];
+    code_storage.expression_integers = raw no_u64s[0u64..0u64];
+    code_storage.function_parameter_type_ids =
+        raw projected_parameter_type_storage[0u64..1u64];
+    code_storage.function_parameter_name_ids =
+        raw projected_parameter_name_storage[0u64..1u64];
+    code_storage.function_parameter_slot_ids = raw no_parameter_slots[0u64..0u64];
+    code_storage.block_instructions =
+        raw projected_block_instruction_storage[0u64..1u64];
+    code_storage.globals = raw output_globals[0u64..0u64];
+    code_storage.vtables = raw output_vtables[0u64..0u64];
+    code_storage.vtable_function_name_ids = raw no_parameter_names[0u64..0u64];
+    code_storage.vtable_function_signature_type_ids =
+        raw no_parameter_types[0u64..0u64];
+    code_storage.canonical_mappings = raw output_mappings[0u64..0u64];
+    let projected = build_zirl_hir_code_section(
+        &raw module,
+        &raw canonical,
+        &raw code_storage
+    );
+    if (projected.error != ZirlHirCodeError.None or
+        @lengthOf(projected.value.expressions) != 3u64 or
+        @lengthOf(projected.value.functions) != 1u64) {
+        return 2;
+    }
+    let projected_literal = must projected.value.expressions[0];
+    let projected_return = must projected.value.expressions[1];
+    let projected_array = must projected.value.expressions[2];
+    let projected_function = must projected.value.functions[0];
+    let projected_block = must projected_function.blocks[0];
+    if (projected_literal.kind != (ZirlCompactExprKind.Literal as u8) or
+        projected_literal.type_id != 0u32 or
+        projected_literal.int_value != 17i64 or
+        projected_return.kind != (ZirlCompactExprKind.Ret as u8) or
+        projected_return.ref_a != 0u32 or
+        projected_array.kind != (ZirlCompactExprKind.ArrayLiteral as u8) or
+        @lengthOf(projected_array.args) != 1u64 or
+        raw projected_array.args[0u64] != 0u32 or
+        projected_function.signature_type_id != 1u32 or
+        projected_function.return_type_id != 0u32 or
+        @lengthOf(projected_function.parameter_type_ids) != 1u64 or
+        raw projected_function.parameter_type_ids[0u64] != 0u32 or
+        @lengthOf(projected_function.parameter_name_ids) != 1u64 or
+        raw projected_function.parameter_name_ids[0u64] != 0u32 or
+        @lengthOf(projected_function.parameter_slot_ids) != 0u64 or
+        @lengthOf(projected_function.blocks) != 1u64 or
+        projected_block.terminator != 1u32) {
+        return 3;
+    }
+    raw array_values[0u64] = 1u32;
+    raw block_instructions[0u64] = 1u32;
+    raw function_parameter_names[0u64] = 99u32;
+    if (raw projected_array.args[0u64] != 0u32 or
+        raw projected_block.instructions[0u64] != 0u32 or
+        raw projected_function.parameter_name_ids[0u64] != 0u32) {
+        return 4;
+    }
+
+    let encoded_option: ?*u8 = calloc(512u64, 1u64) as ?*u8;
+    if (encoded_option is null) {
+        return 4;
+    }
+    let encoded = must encoded_option;
+    let written = write_code_section(
+        ZirlByteWriter {
+            bytes: raw encoded[0u64..512u64],
+            position: 0u64,
+            failed: false,
+        },
+        &raw projected.value
+    );
+    if (written.failed or written.position == 0u64) {
+        free(encoded);
+        return 5;
+    }
+
+    let decoded_expressions: [3]ZirlCompactExpr = output_expressions;
+    let decoded_functions: [1]ZirlCompactFunction = output_functions;
+    let decoded_blocks: [1]ZirlCompactBasicBlock = output_blocks;
+    let decoded_globals: [0]ZirlCodeGlobal = [];
+    let decoded_vtables: [0]ZirlCodeVTable = [];
+    let decoded_mappings: [0]ZirlCanonicalMapping = [];
+    var decoded_storage = ZirlCodeStorage {
+        expressions: raw decoded_expressions[0u64..3u64],
+        expression_args: raw no_parameter_types[0u64..0u64],
+        expression_arg_types: raw no_parameter_types[0u64..0u64],
+        expression_integers: raw no_u64s[0u64..0u64],
+        functions: raw decoded_functions[0u64..1u64],
+        function_parameter_type_ids: raw no_parameter_types[0u64..0u64],
+        function_parameter_name_ids: raw no_parameter_names[0u64..0u64],
+        function_parameter_slot_ids: raw no_parameter_slots[0u64..0u64],
+        blocks: raw decoded_blocks[0u64..1u64],
+        block_instructions: raw block_instructions[0u64..0u64],
+        globals: raw decoded_globals[0u64..0u64],
+        vtables: raw decoded_vtables[0u64..0u64],
+        vtable_function_name_ids: raw no_parameter_names[0u64..0u64],
+        vtable_function_signature_type_ids: raw no_parameter_types[0u64..0u64],
+        canonical_mappings: raw decoded_mappings[0u64..0u64],
+    };
+    decoded_storage.expression_args =
+        raw decoded_expression_arg_storage[0u64..1u64];
+    decoded_storage.expression_arg_types = raw no_parameter_types[0u64..0u64];
+    decoded_storage.expression_integers = raw no_u64s[0u64..0u64];
+    decoded_storage.function_parameter_type_ids =
+        raw decoded_parameter_type_storage[0u64..1u64];
+    decoded_storage.function_parameter_name_ids =
+        raw decoded_parameter_name_storage[0u64..1u64];
+    decoded_storage.function_parameter_slot_ids = raw no_parameter_slots[0u64..0u64];
+    decoded_storage.block_instructions =
+        raw decoded_block_instruction_storage[0u64..1u64];
+    decoded_storage.globals = raw decoded_globals[0u64..0u64];
+    decoded_storage.vtables = raw decoded_vtables[0u64..0u64];
+    decoded_storage.vtable_function_name_ids = raw no_parameter_names[0u64..0u64];
+    decoded_storage.vtable_function_signature_type_ids =
+        raw no_parameter_types[0u64..0u64];
+    decoded_storage.canonical_mappings = raw decoded_mappings[0u64..0u64];
+    let decoded = read_code_section(
+        ZirlByteReader {
+            bytes: raw encoded[0u64..written.position],
+            position: 0u64,
+            failed: false,
+        },
+        &raw decoded_storage
+    );
+    let decoded_array = must decoded.value.expressions[2];
+    let decoded_function = must decoded.value.functions[0];
+    let decoded_block = must decoded_function.blocks[0];
+    if (decoded.reader.failed or
+        @lengthOf(decoded.value.expressions) != 3u64 or
+        @lengthOf(decoded.value.functions) != 1u64 or
+        raw decoded.value.expressions[0].int_value != 17i64 or
+        @lengthOf(decoded_array.args) != 1u64 or
+        raw decoded_array.args[0u64] != 0u32 or
+        raw decoded_block.instructions[0u64] != 0u32 or
+        raw decoded_function.parameter_type_ids[0u64] != 0u32 or
+        raw decoded_function.parameter_name_ids[0u64] != 0u32 or
+        decoded_function.signature_type_id != 1u32) {
+        free(encoded);
+        return 6;
+    }
+    free(encoded);
+    return 0;
+}
+
 fn main(): i32 {
     let literal_status = test_hir_literal_variant();
     if (literal_status != 0) {
@@ -3044,6 +3411,10 @@ fn main(): i32 {
     let code_tables_status = test_zirl_code_tables_roundtrip();
     if (code_tables_status != 0) {
         return 290 + code_tables_status;
+    }
+    let hir_code_status = test_zirl_hir_code_projection();
+    if (hir_code_status != 0) {
+        return 300 + hir_code_status;
     }
     let section_validation_status = test_zirl_section_table_validation();
     if (section_validation_status != 0) {
