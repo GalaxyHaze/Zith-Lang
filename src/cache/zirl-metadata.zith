@@ -1,0 +1,700 @@
+from cache/zirl-buffer
+from cache/zirl-type-section
+from ir/hir
+
+pub const zirlMetadataSchemaVersion: u16 = 2u16
+
+pub struct ZirlMetadataSection {
+    pub module_name: []char,
+    pub paths: [][]char,
+    pub strings: [][]char,
+    pub types: []HirType,
+    pub struct_defs: []HirStructDef,
+    pub enum_defs: []HirEnumDef,
+    pub union_defs: []HirUnionDef,
+}
+
+pub struct ZirlMetadataStorage {
+    pub module_name: []char,
+    pub name_scratch: []char,
+    pub paths: [][]char,
+    pub path_bytes: []char,
+    pub strings: [][]char,
+    pub string_bytes: []char,
+    pub types: []HirType,
+    pub type_args: []HirTypeId,
+    pub type_arg_names: []HirStringId,
+    pub struct_defs: []HirStructDef,
+    pub struct_field_names: []HirStringId,
+    pub struct_field_types: []HirTypeId,
+    pub struct_foreign_offsets: []u64,
+    pub struct_type_args: []HirTypeId,
+    pub enum_defs: []HirEnumDef,
+    pub enum_variants: []HirEnumVariant,
+    pub union_defs: []HirUnionDef,
+    pub union_member_types: []HirTypeId,
+}
+
+pub struct ZirlMetadataRead {
+    pub reader: ZirlByteReader,
+    pub value: ZirlMetadataSection,
+}
+
+struct ZirlTextRead {
+    reader: ZirlByteReader,
+    value: []char,
+}
+
+struct ZirlTextTableRead {
+    reader: ZirlByteReader,
+    count: u32,
+}
+
+struct ZirlCountRead {
+    reader: ZirlByteReader,
+    count: u32,
+}
+
+struct ZirlU32ArrayRead {
+    reader: ZirlByteReader,
+    count: u32,
+}
+
+struct ZirlU64ArrayRead {
+    reader: ZirlByteReader,
+    count: u32,
+}
+
+struct ZirlNamedStringRead {
+    reader: ZirlByteReader,
+    name_id: HirStringId,
+}
+
+fn metadata_value(
+    storage: *ZirlMetadataStorage,
+    module_name_length: u64,
+    path_count: u64,
+    string_count: u64,
+    type_count: u64,
+    struct_count: u64,
+    enum_count: u64,
+    union_count: u64
+): ZirlMetadataSection {
+    return ZirlMetadataSection {
+        module_name: raw storage->module_name[0u64..module_name_length],
+        paths: raw storage->paths[0u64..path_count],
+        strings: raw storage->strings[0u64..string_count],
+        types: raw storage->types[0u64..type_count],
+        struct_defs: raw storage->struct_defs[0u64..struct_count],
+        enum_defs: raw storage->enum_defs[0u64..enum_count],
+        union_defs: raw storage->union_defs[0u64..union_count],
+    };
+}
+
+fn failed_metadata_read(
+    reader: ZirlByteReader,
+    storage: *ZirlMetadataStorage
+): ZirlMetadataRead {
+    var failed = reader;
+    failed.failed = true;
+    return ZirlMetadataRead {
+        reader: failed,
+        value: metadata_value(storage, 0u64, 0u64, 0u64, 0u64, 0u64, 0u64, 0u64),
+    };
+}
+
+fn writer_has_metadata_room(writer: ZirlByteWriter, count: u64): bool {
+    if (writer.failed or writer.position > @lengthOf(writer.bytes)) {
+        return false;
+    }
+    return count <= @lengthOf(writer.bytes) - writer.position;
+}
+
+fn reader_has_metadata_room(reader: ZirlByteReader, count: u64): bool {
+    if (reader.failed or reader.position > @lengthOf(reader.bytes)) {
+        return false;
+    }
+    return count <= @lengthOf(reader.bytes) - reader.position;
+}
+
+fn write_metadata_count(writer: ZirlByteWriter, count: u64): ZirlByteWriter {
+    if (count > 0xFFFFFFFFu64) {
+        var failed = writer;
+        failed.failed = true;
+        return failed;
+    }
+    return write_u32(writer, count as u32);
+}
+
+fn metadata_bool_byte(value: bool): u8 {
+    if (value) {
+        return 1u8;
+    }
+    return 0u8;
+}
+
+fn read_metadata_count(
+    reader: ZirlByteReader,
+    capacity: u64
+): ZirlCountRead {
+    let count = read_u32(reader);
+    if (count.reader.failed or (count.value as u64) > capacity) {
+        var failed = reader;
+        failed.failed = true;
+        return ZirlCountRead { reader: failed, count: 0u32 };
+    }
+    return ZirlCountRead { reader: count.reader, count: count.value };
+}
+
+fn write_text_blob(writer: ZirlByteWriter, value: []char): ZirlByteWriter {
+    let length = @lengthOf(value);
+    if (length > 0xFFFFFFFFu64 or
+        not writer_has_metadata_room(writer, 4u64 + length)) {
+        var failed = writer;
+        failed.failed = true;
+        return failed;
+    }
+    var result = write_u32(writer, length as u32);
+    for (offset in 1u64..length) {
+        let index = offset - 1;
+        result = write_u8(result, (raw value[index]) as u8);
+    }
+    return result;
+}
+
+fn read_text_blob(reader: ZirlByteReader, output: []char): ZirlTextRead {
+    if (not reader_has_metadata_room(reader, 4u64)) {
+        var failed = reader;
+        failed.failed = true;
+        let empty: [0]char = [];
+        return ZirlTextRead { reader: failed, value: raw empty[0..0] };
+    }
+    let length = read_u32(reader);
+    if (length.reader.failed or (length.value as u64) > @lengthOf(output) or
+        not reader_has_metadata_room(length.reader, length.value as u64)) {
+        var failed = reader;
+        failed.failed = true;
+        let empty: [0]char = [];
+        return ZirlTextRead { reader: failed, value: raw empty[0..0] };
+    }
+    var cursor = length.reader;
+    var target = output;
+    for (offset in 1u64..(length.value as u64)) {
+        let index = offset - 1;
+        let byte = read_u8(cursor);
+        cursor = byte.reader;
+        raw target[index] = byte.value as char;
+    }
+    if (cursor.failed) {
+        var failed = reader;
+        failed.failed = true;
+        let empty: [0]char = [];
+        return ZirlTextRead { reader: failed, value: raw empty[0..0] };
+    }
+    return ZirlTextRead {
+        reader: cursor,
+        value: raw target[0u64..(length.value as u64)],
+    };
+}
+
+fn same_text(left: []char, right: []char): bool {
+    if (@lengthOf(left) != @lengthOf(right)) {
+        return false;
+    }
+    for (offset in 1u64..@lengthOf(left)) {
+        let index = offset - 1;
+        if (raw left[index] != raw right[index]) {
+            return false;
+        }
+    }
+    return true;
+}
+
+fn read_named_string(
+    reader: ZirlByteReader,
+    scratch: []char,
+    strings: [][]char
+): ZirlNamedStringRead {
+    let text = read_text_blob(reader, scratch);
+    var cursor = text.reader;
+    var name_id = invalidString;
+    if (not cursor.failed) {
+        if (reader_has_metadata_room(cursor, 4u64)) {
+            let decoded_name = read_u32(cursor);
+            cursor = decoded_name.reader;
+            if (not cursor.failed) {
+                if ((decoded_name.value as u64) < @lengthOf(strings)) {
+                    if (same_text(text.value, raw strings[decoded_name.value])) {
+                        name_id = decoded_name.value;
+                    } else {
+                        cursor.failed = true;
+                    }
+                } else {
+                    cursor.failed = true;
+                }
+            }
+        } else {
+            cursor.failed = true;
+        }
+    }
+    return ZirlNamedStringRead {
+        reader: cursor,
+        name_id: name_id,
+    };
+}
+
+fn write_text_table(writer: ZirlByteWriter, values: [][]char): ZirlByteWriter {
+    var result = write_metadata_count(writer, @lengthOf(values));
+    for (offset in 1u64..@lengthOf(values)) {
+        let index = offset - 1;
+        result = write_text_blob(result, raw values[index]);
+    }
+    return result;
+}
+
+fn read_text_table(
+    reader: ZirlByteReader,
+    values: [][]char,
+    byte_storage: []char
+): ZirlTextTableRead {
+    let count = read_metadata_count(reader, @lengthOf(values));
+    if (count.reader.failed) {
+        return ZirlTextTableRead { reader: count.reader, count: 0u32 };
+    }
+    var cursor = count.reader;
+    var output_values = values;
+    var byte_offset: u64 = 0u64;
+    for (offset in 1u64..(count.count as u64)) {
+        let index = offset - 1;
+        if (not reader_has_metadata_room(cursor, 4u64)) {
+            var failed = reader;
+            failed.failed = true;
+            return ZirlTextTableRead { reader: failed, count: 0u32 };
+        }
+        let length = read_u32(cursor);
+        if (length.reader.failed or
+            (length.value as u64) > @lengthOf(byte_storage) - byte_offset or
+            not reader_has_metadata_room(length.reader, length.value as u64)) {
+            var failed = reader;
+            failed.failed = true;
+            return ZirlTextTableRead { reader: failed, count: 0u32 };
+        }
+        var text = raw byte_storage[byte_offset..@lengthOf(byte_storage)];
+        var text_cursor = length.reader;
+        for (char_offset in 1u64..(length.value as u64)) {
+            let char_index = char_offset - 1;
+            let byte = read_u8(text_cursor);
+            text_cursor = byte.reader;
+            raw text[char_index] = byte.value as char;
+        }
+        cursor = text_cursor;
+        raw output_values[index] = raw text[0u64..(length.value as u64)];
+        byte_offset = byte_offset + (length.value as u64);
+    }
+    return ZirlTextTableRead { reader: cursor, count: count.count };
+}
+
+fn read_u32_array(
+    reader: ZirlByteReader,
+    values: []u32
+): ZirlU32ArrayRead {
+    let count = read_metadata_count(reader, @lengthOf(values));
+    if (count.reader.failed or
+        not reader_has_metadata_room(count.reader, (count.count as u64) * 4u64)) {
+        var failed = reader;
+        failed.failed = true;
+        return ZirlU32ArrayRead { reader: failed, count: 0u32 };
+    }
+    var cursor = count.reader;
+    var output = values;
+    for (offset in 1u64..(count.count as u64)) {
+        let index = offset - 1;
+        let value = read_u32(cursor);
+        cursor = value.reader;
+        raw output[index] = value.value;
+    }
+    return ZirlU32ArrayRead { reader: cursor, count: count.count };
+}
+
+fn read_u64_array(
+    reader: ZirlByteReader,
+    values: []u64
+): ZirlU64ArrayRead {
+    let count = read_metadata_count(reader, @lengthOf(values));
+    if (count.reader.failed or
+        not reader_has_metadata_room(count.reader, (count.count as u64) * 8u64)) {
+        var failed = reader;
+        failed.failed = true;
+        return ZirlU64ArrayRead { reader: failed, count: 0u32 };
+    }
+    var cursor = count.reader;
+    var output = values;
+    for (offset in 1u64..(count.count as u64)) {
+        let index = offset - 1;
+        let value = read_u64(cursor);
+        cursor = value.reader;
+        raw output[index] = value.value;
+    }
+    return ZirlU64ArrayRead { reader: cursor, count: count.count };
+}
+
+pub fn write_metadata_section(
+    writer: ZirlByteWriter,
+    module_name: []char,
+    paths: [][]char,
+    module: *HirModule
+): ZirlByteWriter {
+    if (@lengthOf(module->strings) > 0xFFFFFFFFu64 or
+        @lengthOf(module->types) > 0xFFFFFFFFu64 or
+        @lengthOf(module->struct_defs) > 0xFFFFFFFFu64 or
+        @lengthOf(module->enum_defs) > 0xFFFFFFFFu64 or
+        @lengthOf(module->union_defs) > 0xFFFFFFFFu64) {
+        var failed = writer;
+        failed.failed = true;
+        return failed;
+    }
+    var result = write_text_blob(writer, module_name);
+    result = write_text_table(result, module->strings);
+    result = write_text_table(result, paths);
+    result = write_metadata_count(result, @lengthOf(module->types));
+    if (result.failed) {
+        return result;
+    }
+    for (offset in 1u64..@lengthOf(module->types)) {
+        let index = offset - 1;
+        var type_entry: HirType = raw module->types[index];
+        result = write_type_entry(result, &type_entry);
+        if (result.failed) {
+            return result;
+        }
+    }
+
+    result = write_metadata_count(result, @lengthOf(module->struct_defs));
+    for (offset in 1u64..@lengthOf(module->struct_defs)) {
+        let index = offset - 1;
+        let definition: HirStructDef = raw module->struct_defs[index];
+        if ((definition.name_id as u64) >= @lengthOf(module->strings) or
+            (definition.has_foreign_layout and
+             (@lengthOf(definition.foreign_field_offsets) !=
+              @lengthOf(definition.field_type_ids)))) {
+            result.failed = true;
+            return result;
+        }
+        result = write_text_blob(result, raw module->strings[definition.name_id]);
+        result = write_u32(result, definition.name_id);
+        result = write_u8(result, metadata_bool_byte(definition.has_foreign_layout));
+        result = write_u8(result, metadata_bool_byte(definition.foreign_abi_is_single_i64));
+        result = write_u64(result, definition.foreign_size_bytes);
+        result = write_u64(result, definition.foreign_align_bytes);
+        result = write_metadata_count(result, @lengthOf(definition.field_name_ids));
+        for (field_offset in 1u64..@lengthOf(definition.field_name_ids)) {
+            let field_index = field_offset - 1;
+            result = write_u32(result, raw definition.field_name_ids[field_index]);
+        }
+        result = write_metadata_count(result, @lengthOf(definition.field_type_ids));
+        for (field_offset in 1u64..@lengthOf(definition.field_type_ids)) {
+            let field_index = field_offset - 1;
+            result = write_u32(result, raw definition.field_type_ids[field_index]);
+        }
+        result = write_metadata_count(result, @lengthOf(definition.foreign_field_offsets));
+        for (field_offset in 1u64..@lengthOf(definition.foreign_field_offsets)) {
+            let field_index = field_offset - 1;
+            result = write_u64(result, raw definition.foreign_field_offsets[field_index]);
+        }
+        result = write_metadata_count(result, @lengthOf(definition.type_arg_ids));
+        for (argument_offset in 1u64..@lengthOf(definition.type_arg_ids)) {
+            let argument_index = argument_offset - 1;
+            result = write_u32(result, raw definition.type_arg_ids[argument_index]);
+        }
+    }
+
+    result = write_metadata_count(result, @lengthOf(module->enum_defs));
+    for (offset in 1u64..@lengthOf(module->enum_defs)) {
+        let index = offset - 1;
+        let definition: HirEnumDef = raw module->enum_defs[index];
+        if ((definition.name_id as u64) >= @lengthOf(module->strings)) {
+            result.failed = true;
+            return result;
+        }
+        result = write_text_blob(result, raw module->strings[definition.name_id]);
+        result = write_u32(result, definition.name_id);
+        result = write_u32(result, definition.underlying_type_id);
+        result = write_metadata_count(result, @lengthOf(definition.variants));
+        for (variant_offset in 1u64..@lengthOf(definition.variants)) {
+            let variant_index = variant_offset - 1;
+            let variant: HirEnumVariant = raw definition.variants[variant_index];
+            if ((variant.name_id as u64) >= @lengthOf(module->strings)) {
+                result.failed = true;
+                return result;
+            }
+            result = write_text_blob(result, raw module->strings[variant.name_id]);
+            result = write_u32(result, variant.name_id);
+            result = write_i64(result, variant.discriminant);
+        }
+    }
+
+    result = write_metadata_count(result, @lengthOf(module->union_defs));
+    for (offset in 1u64..@lengthOf(module->union_defs)) {
+        let index = offset - 1;
+        let definition: HirUnionDef = raw module->union_defs[index];
+        if ((definition.name_id as u64) >= @lengthOf(module->strings)) {
+            result.failed = true;
+            return result;
+        }
+        result = write_text_blob(result, raw module->strings[definition.name_id]);
+        result = write_u32(result, definition.name_id);
+        result = write_u8(result, metadata_bool_byte(definition.is_raw));
+        result = write_metadata_count(result, @lengthOf(definition.member_type_ids));
+        for (member_offset in 1u64..@lengthOf(definition.member_type_ids)) {
+            let member_index = member_offset - 1;
+            result = write_u32(result, raw definition.member_type_ids[member_index]);
+        }
+    }
+    return result;
+}
+
+pub fn read_metadata_section(
+    reader: ZirlByteReader,
+    storage: *ZirlMetadataStorage
+): ZirlMetadataRead {
+    let module_name = read_text_blob(reader, storage->module_name);
+    if (module_name.reader.failed) {
+        return failed_metadata_read(reader, storage);
+    }
+    var cursor = module_name.reader;
+    let string_table = read_text_table(cursor, storage->strings, storage->string_bytes);
+    if (string_table.reader.failed) {
+        return failed_metadata_read(reader, storage);
+    }
+    cursor = string_table.reader;
+    let string_count = string_table.count;
+
+    let path_table = read_text_table(cursor, storage->paths, storage->path_bytes);
+    if (path_table.reader.failed) {
+        return failed_metadata_read(reader, storage);
+    }
+    cursor = path_table.reader;
+
+    let type_count = read_metadata_count(cursor, @lengthOf(storage->types));
+    if (type_count.reader.failed) {
+        return failed_metadata_read(reader, storage);
+    }
+    cursor = type_count.reader;
+    var type_arg_offset: u64 = 0u64;
+    var type_name_offset: u64 = 0u64;
+    for (offset in 1u64..(type_count.count as u64)) {
+        let index = offset - 1;
+        let args = raw storage->type_args[type_arg_offset..@lengthOf(storage->type_args)];
+        let names = raw storage->type_arg_names[type_name_offset..@lengthOf(storage->type_arg_names)];
+        let decoded = read_type_entry(cursor, args, names);
+        if (decoded.reader.failed) {
+            return failed_metadata_read(reader, storage);
+        }
+        cursor = decoded.reader;
+        type_arg_offset = type_arg_offset + @lengthOf(decoded.value.args);
+        type_name_offset = type_name_offset + @lengthOf(decoded.value.arg_names);
+        raw storage->types[index] = decoded.value;
+    }
+
+    let struct_count = read_metadata_count(cursor, @lengthOf(storage->struct_defs));
+    if (struct_count.reader.failed) {
+        return failed_metadata_read(reader, storage);
+    }
+    cursor = struct_count.reader;
+    var struct_name_offset: u64 = 0u64;
+    var struct_type_offset: u64 = 0u64;
+    var struct_foreign_offset: u64 = 0u64;
+    var struct_arg_offset: u64 = 0u64;
+    for (offset in 1u64..(struct_count.count as u64)) {
+        let index = offset - 1;
+        let name = read_named_string(cursor, storage->name_scratch, storage->strings);
+        cursor = name.reader;
+        if (cursor.failed) {
+            return failed_metadata_read(reader, storage);
+        }
+        let foreign = read_u8(cursor);
+        cursor = foreign.reader;
+        let single = read_u8(cursor);
+        cursor = single.reader;
+        let size = read_u64(cursor);
+        cursor = size.reader;
+        let align = read_u64(cursor);
+        cursor = align.reader;
+        if (cursor.failed or foreign.value > 1u8 or single.value > 1u8) {
+            return failed_metadata_read(reader, storage);
+        }
+
+        let field_names = read_u32_array(
+            cursor,
+            raw storage->struct_field_names[
+                struct_name_offset..@lengthOf(storage->struct_field_names)
+            ]
+        );
+        cursor = field_names.reader;
+        if (cursor.failed) {
+            return failed_metadata_read(reader, storage);
+        }
+        struct_name_offset = struct_name_offset + (field_names.count as u64);
+        let field_types = read_u32_array(
+            cursor,
+            raw storage->struct_field_types[
+                struct_type_offset..@lengthOf(storage->struct_field_types)
+            ]
+        );
+        cursor = field_types.reader;
+        if (cursor.failed or field_types.count != field_names.count) {
+            return failed_metadata_read(reader, storage);
+        }
+        struct_type_offset = struct_type_offset + (field_types.count as u64);
+        let foreign_offsets = read_u64_array(
+            cursor,
+            raw storage->struct_foreign_offsets[
+                struct_foreign_offset..@lengthOf(storage->struct_foreign_offsets)
+            ]
+        );
+        cursor = foreign_offsets.reader;
+        if (cursor.failed or
+            (foreign.value == 1u8 and foreign_offsets.count != field_types.count)) {
+            return failed_metadata_read(reader, storage);
+        }
+        struct_foreign_offset = struct_foreign_offset + (foreign_offsets.count as u64);
+        let type_args = read_u32_array(
+            cursor,
+            raw storage->struct_type_args[
+                struct_arg_offset..@lengthOf(storage->struct_type_args)
+            ]
+        );
+        cursor = type_args.reader;
+        if (cursor.failed) {
+            return failed_metadata_read(reader, storage);
+        }
+        struct_arg_offset = struct_arg_offset + (type_args.count as u64);
+        raw storage->struct_defs[index] = HirStructDef {
+            name_id: name.name_id,
+            field_name_ids: raw storage->struct_field_names[
+                struct_name_offset - (field_names.count as u64)..struct_name_offset
+            ],
+            field_type_ids: raw storage->struct_field_types[
+                struct_type_offset - (field_types.count as u64)..struct_type_offset
+            ],
+            foreign_field_offsets: raw storage->struct_foreign_offsets[
+                struct_foreign_offset - (foreign_offsets.count as u64)..struct_foreign_offset
+            ],
+            type_arg_ids: raw storage->struct_type_args[
+                struct_arg_offset - (type_args.count as u64)..struct_arg_offset
+            ],
+            has_foreign_layout: foreign.value == 1u8,
+            foreign_abi_is_single_i64: single.value == 1u8,
+            foreign_size_bytes: size.value,
+            foreign_align_bytes: align.value,
+        };
+    }
+
+    let enum_count = read_metadata_count(cursor, @lengthOf(storage->enum_defs));
+    if (enum_count.reader.failed) {
+        return failed_metadata_read(reader, storage);
+    }
+    cursor = enum_count.reader;
+    var variant_offset: u64 = 0u64;
+    for (offset in 1u64..(enum_count.count as u64)) {
+        let index = offset - 1;
+        let name = read_named_string(cursor, storage->name_scratch, storage->strings);
+        cursor = name.reader;
+        if (cursor.failed) {
+            return failed_metadata_read(reader, storage);
+        }
+        let underlying = read_u32(cursor);
+        cursor = underlying.reader;
+        if (cursor.failed) {
+            return failed_metadata_read(reader, storage);
+        }
+        let count = read_metadata_count(cursor, @lengthOf(storage->enum_variants) - variant_offset);
+        cursor = count.reader;
+        if (cursor.failed) {
+            return failed_metadata_read(reader, storage);
+        }
+        let variants_start = variant_offset;
+        for (variant_iteration in 1u64..(count.count as u64)) {
+            let variant_name = read_named_string(
+                cursor,
+                storage->name_scratch,
+                storage->strings
+            );
+            cursor = variant_name.reader;
+            if (cursor.failed) {
+                return failed_metadata_read(reader, storage);
+            }
+            let discriminant = read_i64(cursor);
+            cursor = discriminant.reader;
+            if (cursor.failed) {
+                return failed_metadata_read(reader, storage);
+            }
+            raw storage->enum_variants[variant_offset] = HirEnumVariant {
+                name_id: variant_name.name_id,
+                discriminant: discriminant.value,
+            };
+            variant_offset = variant_offset + 1u64;
+            _ = variant_iteration;
+        }
+        raw storage->enum_defs[index] = HirEnumDef {
+            name_id: name.name_id,
+            underlying_type_id: underlying.value,
+            variants: raw storage->enum_variants[variants_start..variant_offset],
+        };
+    }
+
+    let union_count = read_metadata_count(cursor, @lengthOf(storage->union_defs));
+    if (union_count.reader.failed) {
+        return failed_metadata_read(reader, storage);
+    }
+    cursor = union_count.reader;
+    var union_member_offset: u64 = 0u64;
+    for (offset in 1u64..(union_count.count as u64)) {
+        let index = offset - 1;
+        let name = read_named_string(cursor, storage->name_scratch, storage->strings);
+        cursor = name.reader;
+        if (cursor.failed) {
+            return failed_metadata_read(reader, storage);
+        }
+        let flags = read_u8(cursor);
+        cursor = flags.reader;
+        if (flags.reader.failed or flags.value > 1u8) {
+            return failed_metadata_read(reader, storage);
+        }
+        let members = read_u32_array(
+            cursor,
+            raw storage->union_member_types[
+                union_member_offset..@lengthOf(storage->union_member_types)
+            ]
+        );
+        cursor = members.reader;
+        if (cursor.failed) {
+            return failed_metadata_read(reader, storage);
+        }
+        let members_start = union_member_offset;
+        union_member_offset = union_member_offset + (members.count as u64);
+        raw storage->union_defs[index] = HirUnionDef {
+            name_id: name.name_id,
+            member_type_ids: raw storage->union_member_types[
+                members_start..union_member_offset
+            ],
+            is_raw: flags.value == 1u8,
+        };
+    }
+
+    if (cursor.failed or cursor.position != @lengthOf(cursor.bytes)) {
+        return failed_metadata_read(reader, storage);
+    }
+    return ZirlMetadataRead {
+        reader: cursor,
+        value: ZirlMetadataSection {
+            module_name: module_name.value,
+            paths: raw storage->paths[0u64..(path_table.count as u64)],
+            strings: raw storage->strings[0u64..(string_table.count as u64)],
+            types: raw storage->types[0u64..(type_count.count as u64)],
+            struct_defs: raw storage->struct_defs[0u64..(struct_count.count as u64)],
+            enum_defs: raw storage->enum_defs[0u64..(enum_count.count as u64)],
+            union_defs: raw storage->union_defs[0u64..(union_count.count as u64)],
+        },
+    };
+}

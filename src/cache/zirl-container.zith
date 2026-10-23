@@ -6,6 +6,7 @@ pub const zirlLittleEndian: u8 = 1u8;
 pub const zirlFixedHeaderSize: u64 = 96u64;
 pub const zirlSectionEntrySize: u64 = 24u64;
 pub const zirlSectionSchemaVersion: u16 = 1u16;
+pub const zirlMetadataSectionSchemaVersion: u16 = 2u16;
 pub const zirlSectionRequiredFlag: u16 = 1u16;
 pub const zirlSupportedRequiredFeatures: u64 = 7u64;
 
@@ -125,7 +126,12 @@ pub fn validate_zirl_sections(
             return validation_error(ZirlValidationError.InvalidSection, index as u32);
         }
         if (is_required_hir_section(entry.id)) {
-            if (entry.flags != 1u16 or entry.schema_version != 1u16) {
+            let expected_schema = if entry.id == 1u16 {
+                zirlMetadataSectionSchemaVersion
+            } else {
+                zirlSectionSchemaVersion
+            };
+            if (entry.flags != 1u16 or entry.schema_version != expected_schema) {
                 return validation_error(ZirlValidationError.InvalidSection, index as u32);
             }
         } else (is_known_optional_section(entry.id)) {

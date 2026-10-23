@@ -30,7 +30,8 @@ point, and directory paths; it does not enumerate source files individually.
 | `src/cache/cache.zith` | Shared HIR identity and derived-VIR compatibility rules. | Identity checks; binary artifact codec follows. |
 | `src/cache/zirl-buffer.zith` | Bounds-checked little-endian ZIRL byte primitives. | Signed/unsigned integers, `f64`, and atomic length-prefixed blobs. |
 | `src/cache/zirl-container.zith` | ZIRL v20 header, section-table records, and compatibility checks. | Validates required HIR sections and safely skippable optional sections; payload codec follows. |
-| `src/cache/zirl-type-section.zith` | ZIRL metadata type-entry codec. | Encodes and transactionally decodes v1 compact type records; complete metadata section follows. |
+| `src/cache/zirl-type-section.zith` | ZIRL metadata type-entry codec. | Encodes and transactionally decodes compact type records for the Metadata section. |
+| `src/cache/zirl-metadata.zith` | ZIRL Metadata section codec. | Encodes and decodes schema-2 module metadata with caller-owned storage. |
 
 There is no project-owned C source file in the current tree. Add its entry
 here if one is introduced; do not infer that a planned directory already
@@ -43,7 +44,7 @@ exists.
 | `tests/README.md` | Documents the type-check and behavioral test commands. | Test convention. |
 | `tests/run.sh` | Runs type-check and behavioral tests in an isolated temporary project. | Test harness. |
 | `tests/run.zith` | VM behavioral test entry point. | Smoke fixture. |
-| `tests/hir-contract.zith` | Native test entry point for the shared HIR data contract. | Initial variant-construction fixture. |
+| `tests/hir-contract.zith` | Native test entry point for the shared HIR data contract. | Exercises HIR invariants and ZIRL metadata round-trips, malformed records, and buffer failures. |
 
 ### Documentation
 
