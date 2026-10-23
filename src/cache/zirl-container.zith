@@ -2,8 +2,30 @@ from cache/zirl-buffer
 
 pub const zirlMagic: u32 = 0x5A49524Cu32;
 pub const zirlContainerVersion: u32 = 20u32;
+pub const zirlLittleEndian: u8 = 1u8;
 pub const zirlFixedHeaderSize: u64 = 96u64;
 pub const zirlSectionEntrySize: u64 = 24u64;
+pub const zirlSectionSchemaVersion: u16 = 1u16;
+pub const zirlSectionRequiredFlag: u16 = 1u16;
+pub const zirlSupportedRequiredFeatures: u64 = 7u64;
+
+pub enum ZirlValidationError {
+    None = 0,
+    InvalidHeader = 1,
+    UnsupportedRequiredFeatures = 2,
+    InvalidSectionTable = 3,
+    InvalidSection = 4,
+    UnknownRequiredSection = 5,
+    MissingRequiredSection = 6,
+    DuplicateSection = 7,
+    SectionOutOfBounds = 8,
+    OverlappingSections = 9,
+}
+
+pub struct ZirlValidationResult {
+    pub error: ZirlValidationError,
+    pub index: u32,
+}
 
 pub struct ZirlFileHeader {
     pub magic: u32,
@@ -37,6 +59,116 @@ pub struct ZirlSectionEntry {
     pub reserved: u16,
     pub offset: u64,
     pub size: u64,
+}
+
+fn validation_error(error: ZirlValidationError, index: u32): ZirlValidationResult {
+    return ZirlValidationResult { error: error, index: index };
+}
+
+fn is_required_hir_section(id: u16): bool {
+    return id >= 1u16 and id <= 5u16;
+}
+
+fn is_known_optional_section(id: u16): bool {
+    return id >= 6u16 and id <= 9u16;
+}
+
+fn contains_section(entries: []ZirlSectionEntry, id: u16): bool {
+    for (offset in 1u64..@lengthOf(entries)) {
+        let index = offset - 1;
+        let entry: ZirlSectionEntry = raw entries[index];
+        if (entry.id == id) {
+            return true;
+        }
+    }
+    return false;
+}
+
+pub fn validate_zirl_sections(
+    header: *ZirlFileHeader,
+    entries: []ZirlSectionEntry,
+    file_size: u64
+): ZirlValidationResult {
+    if (header->magic != 0x5A49524Cu32 or
+        header->container_version != 20u32 or
+        header->hir_schema_version != 1u32 or
+        header->endianness != 1u8 or
+        header->reserved != 0u8 or
+        header->semantic_profile_version == 0u32 or
+        header->canonical_path_length == 0u32) {
+        return validation_error(ZirlValidationError.InvalidHeader, 0u32);
+    }
+    if (header->required_features != 7u64) {
+        return validation_error(ZirlValidationError.UnsupportedRequiredFeatures, 0u32);
+    }
+    if (@lengthOf(entries) != (header->section_count as u64)) {
+        return validation_error(ZirlValidationError.InvalidSectionTable, 0u32);
+    }
+
+    let identity_size = (header->canonical_path_length as u64) +
+        (header->module_name_length as u64) +
+        (header->semantic_profile_name_length as u64);
+    let dependency_size = (header->dependency_count as u64) * 16u64;
+    let table_size = (@lengthOf(entries)) * 24u64;
+    let minimum_header_size = 96u64 + identity_size +
+        dependency_size + table_size;
+    if ((header->header_size as u64) < minimum_header_size or
+        (header->header_size as u64) > file_size) {
+        return validation_error(ZirlValidationError.InvalidSectionTable, 0u32);
+    }
+
+    for (offset in 1u64..@lengthOf(entries)) {
+        let index = offset - 1;
+        let entry: ZirlSectionEntry = raw entries[index];
+        if (entry.id == 0u16 or entry.reserved != 0u16 or
+            (entry.flags != 0u16 and entry.flags != 1u16)) {
+            return validation_error(ZirlValidationError.InvalidSection, index as u32);
+        }
+        if (is_required_hir_section(entry.id)) {
+            if (entry.flags != 1u16 or entry.schema_version != 1u16) {
+                return validation_error(ZirlValidationError.InvalidSection, index as u32);
+            }
+        } else (is_known_optional_section(entry.id)) {
+            if (entry.flags != 0u16) {
+                return validation_error(ZirlValidationError.InvalidSection, index as u32);
+            }
+        } else {
+            if (entry.flags == 1u16) {
+                return validation_error(
+                    ZirlValidationError.UnknownRequiredSection,
+                    index as u32
+                );
+            }
+        }
+
+        if (entry.offset < (header->header_size as u64) or
+            entry.offset > file_size or entry.size > file_size - entry.offset) {
+            return validation_error(ZirlValidationError.SectionOutOfBounds, index as u32);
+        }
+
+        for (prior_offset in 1u64..(offset - 1)) {
+            let prior_index = prior_offset - 1;
+            let prior: ZirlSectionEntry = raw entries[prior_index];
+            if (prior.id == entry.id) {
+                return validation_error(ZirlValidationError.DuplicateSection, index as u32);
+            }
+            if (entry.size != 0u64 and prior.size != 0u64 and
+                entry.offset < prior.offset + prior.size and
+                prior.offset < entry.offset + entry.size) {
+                return validation_error(ZirlValidationError.OverlappingSections, index as u32);
+            }
+        }
+    }
+
+    for (required_id in 1u64..5u64) {
+        if (not contains_section(entries, required_id as u16)) {
+            return validation_error(
+                ZirlValidationError.MissingRequiredSection,
+                (required_id - 1) as u32
+            );
+        }
+    }
+    return validation_error(ZirlValidationError.None, 0u32);
 }
 
 fn has_record_bytes(reader: *ZirlByteReader, count: u64): bool {

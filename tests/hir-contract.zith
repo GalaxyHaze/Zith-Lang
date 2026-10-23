@@ -1030,6 +1030,116 @@ fn test_zirl_section_entry_truncation_is_atomic(): i32 {
     return 0;
 }
 
+fn make_zirl_validation_header(): ZirlFileHeader {
+    return ZirlFileHeader {
+        magic: 0x5A49524Cu32,
+        container_version: 20u32,
+        hir_schema_version: 1u32,
+        endianness: 1u8,
+        reserved: 0u8,
+        section_count: 6u16,
+        header_size: 243u32,
+        checksum: 0u32,
+        required_features: 7u64,
+        optional_features: 0u64,
+        source_fingerprint_primary: 0u64,
+        source_fingerprint_secondary: 0u64,
+        semantic_profile_version: 1u32,
+        public_abi_hi: 0u32,
+        public_abi_lo: 0u32,
+        dependency_count: 0u32,
+        declaration_count: 0u32,
+        template_count: 0u32,
+        function_count: 0u32,
+        canonical_path_length: 1u32,
+        module_name_length: 1u32,
+        semantic_profile_name_length: 1u32,
+    };
+}
+
+fn make_zirl_validation_entries(): [6]ZirlSectionEntry {
+    return [
+        ZirlSectionEntry {
+            id: 1u16, flags: 1u16, schema_version: 1u16, reserved: 0u16,
+            offset: 243u64, size: 4u64,
+        },
+        ZirlSectionEntry {
+            id: 2u16, flags: 1u16, schema_version: 1u16, reserved: 0u16,
+            offset: 247u64, size: 4u64,
+        },
+        ZirlSectionEntry {
+            id: 3u16, flags: 1u16, schema_version: 1u16, reserved: 0u16,
+            offset: 251u64, size: 4u64,
+        },
+        ZirlSectionEntry {
+            id: 4u16, flags: 1u16, schema_version: 1u16, reserved: 0u16,
+            offset: 255u64, size: 4u64,
+        },
+        ZirlSectionEntry {
+            id: 5u16, flags: 1u16, schema_version: 1u16, reserved: 0u16,
+            offset: 259u64, size: 4u64,
+        },
+        ZirlSectionEntry {
+            id: 10u16, flags: 0u16, schema_version: 99u16, reserved: 0u16,
+            offset: 263u64, size: 4u64,
+        },
+    ];
+}
+
+fn test_zirl_section_table_validation(): i32 {
+    var header = make_zirl_validation_header();
+    var entries = make_zirl_validation_entries();
+    var result = validate_zirl_sections(&raw header, raw entries[0..6], 267u64);
+    if (result.error != ZirlValidationError.None) {
+        return 1;
+    }
+
+    raw entries[5].flags = 1u16;
+    result = validate_zirl_sections(&raw header, raw entries[0..6], 267u64);
+    if (result.error != ZirlValidationError.UnknownRequiredSection) {
+        return 2;
+    }
+
+    entries = make_zirl_validation_entries();
+    raw entries[0].id = 11u16;
+    raw entries[0].flags = 0u16;
+    result = validate_zirl_sections(&raw header, raw entries[0..6], 267u64);
+    if (result.error != ZirlValidationError.MissingRequiredSection) {
+        return 3;
+    }
+
+    entries = make_zirl_validation_entries();
+    raw entries[1].offset = 245u64;
+    result = validate_zirl_sections(&raw header, raw entries[0..6], 267u64);
+    if (result.error != ZirlValidationError.OverlappingSections) {
+        return 4;
+    }
+
+    entries = make_zirl_validation_entries();
+    raw entries[4].size = 9u64;
+    result = validate_zirl_sections(&raw header, raw entries[0..6], 267u64);
+    if (result.error != ZirlValidationError.SectionOutOfBounds) {
+        return 5;
+    }
+
+    entries = make_zirl_validation_entries();
+    raw entries[5].id = 5u16;
+    raw entries[5].flags = 1u16;
+    raw entries[5].schema_version = 1u16;
+    result = validate_zirl_sections(&raw header, raw entries[0..6], 267u64);
+    if (result.error != ZirlValidationError.DuplicateSection) {
+        return 6;
+    }
+
+    entries = make_zirl_validation_entries();
+    header.required_features = 7u64 + (1u64 << 63);
+    result = validate_zirl_sections(&raw header, raw entries[0..6], 267u64);
+    if (result.error != ZirlValidationError.UnsupportedRequiredFeatures) {
+        return 7;
+    }
+    return 0;
+}
+
 fn main(): i32 {
     let literal_status = test_hir_literal_variant();
     if (literal_status != 0) {
@@ -1101,6 +1211,10 @@ fn main(): i32 {
     }
     if (test_zirl_section_entry_truncation_is_atomic() != 0) {
         return 226;
+    }
+    let section_validation_status = test_zirl_section_table_validation();
+    if (section_validation_status != 0) {
+        return 226 + section_validation_status;
     }
     return 0;
 }
