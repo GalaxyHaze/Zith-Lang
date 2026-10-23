@@ -35,6 +35,11 @@ sections are implemented:
   the variadic-slice fields `variadic_slice_param`, `is_variadic_slice`, and
   `auto_collect_tail`. Container version bumps reject incompatible older
   layouts.
+- Artifact-owned canonical type-table foundation: HIR-local type IDs are
+  mapped into caller-owned artifact storage, and function signatures are
+  synthesized with return/parameter IDs and calling-convention flags. Native
+  tests cover the generated signature, storage capacity failure, and invalid
+  parameter references. Full artifact orchestration is still pending.
 - Caller-owned decode storage and failure handling for the section codecs;
   tests cover golden bytes, round-trips, truncation, invalid values, and
   short output buffers in the implemented sections.

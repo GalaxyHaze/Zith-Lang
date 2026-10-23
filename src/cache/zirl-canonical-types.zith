@@ -1,0 +1,221 @@
+from ir/hir
+
+alias ZirlTypeId = u32
+
+pub const invalidZirlType: ZirlTypeId = 0xFFFFFFFFu32
+pub const zirlFnSignatureVariadic: u8 = 1u8
+pub const zirlFnSignatureState: u8 = 2u8
+pub const zirlFnSignatureForeignC: u8 = 4u8
+pub const zirlFnSignatureTailCC: u8 = 8u8
+
+pub enum ZirlCanonicalTypeError {
+    None = 0,
+    InvalidCounts = 1,
+    InsufficientTypeStorage = 2,
+    InvalidTypeShape = 3,
+    InvalidTypeReference = 4,
+    InvalidStringReference = 5,
+    InvalidFunctionSignature = 6,
+    InsufficientArgumentStorage = 7,
+}
+
+pub struct ZirlCanonicalTypeStorage {
+    pub types: []HirType,
+    pub type_args: []HirTypeId,
+    pub type_arg_names: []HirStringId,
+    pub local_type_ids: []ZirlTypeId,
+    pub function_signature_type_ids: []ZirlTypeId,
+}
+
+pub struct ZirlCanonicalTypes {
+    pub types: []HirType,
+    pub local_type_ids: []ZirlTypeId,
+    pub function_signature_type_ids: []ZirlTypeId,
+    pub failed: bool,
+    pub error: ZirlCanonicalTypeError,
+}
+
+fn is_type_reference_kind(kind: HirTypeKind): bool {
+    return kind == HirTypeKind.Ptr or kind == HirTypeKind.Array or
+        kind == HirTypeKind.Fn or kind == HirTypeKind.Optional or
+        kind == HirTypeKind.Failable or kind == HirTypeKind.Slice or
+        kind == HirTypeKind.Incomplete or kind == HirTypeKind.Dyn;
+}
+
+fn failed_canonical_types(
+    storage: *ZirlCanonicalTypeStorage,
+    error: ZirlCanonicalTypeError
+): ZirlCanonicalTypes {
+    return ZirlCanonicalTypes {
+        types: raw storage->types[0u64..0u64],
+        local_type_ids: raw storage->local_type_ids[0u64..0u64],
+        function_signature_type_ids:
+            raw storage->function_signature_type_ids[0u64..0u64],
+        failed: true,
+        error: error,
+    };
+}
+
+pub fn build_zirl_canonical_types(
+    module: *HirModule,
+    storage: *ZirlCanonicalTypeStorage
+): ZirlCanonicalTypes {
+    let type_count = @lengthOf(module->types);
+    let function_count = @lengthOf(module->functions);
+    if (type_count > 0xFFFFFFFFu64 or function_count > 0xFFFFFFFFu64 or
+        function_count > 0xFFFFFFFFu64 - type_count) {
+        return failed_canonical_types(storage, ZirlCanonicalTypeError.InvalidCounts);
+    }
+
+    let canonical_type_count = type_count + function_count;
+    if (canonical_type_count > @lengthOf(storage->types) or
+        type_count > @lengthOf(storage->local_type_ids) or
+        function_count > @lengthOf(storage->function_signature_type_ids)) {
+        return failed_canonical_types(storage, ZirlCanonicalTypeError.InsufficientTypeStorage);
+    }
+
+    var type_arg_count = 0u64;
+    var type_arg_name_count = 0u64;
+    for (offset in 1u64..type_count) {
+        let index = offset - 1;
+        let hir_type: HirType = raw module->types[index];
+        if (hir_type.kind > HirTypeKind.OpaqueTagged or
+            (is_type_reference_kind(hir_type.kind) and
+             (hir_type.ref0 as u64) >= type_count) or
+            (@lengthOf(hir_type.arg_names) != 0u64 and
+             @lengthOf(hir_type.arg_names) != @lengthOf(hir_type.args))) {
+            return failed_canonical_types(storage, ZirlCanonicalTypeError.InvalidTypeShape);
+        }
+        if (@lengthOf(hir_type.args) > 0xFFFFFFFFu64 - type_arg_count or
+            @lengthOf(hir_type.arg_names) > 0xFFFFFFFFu64 - type_arg_name_count) {
+            return failed_canonical_types(storage, ZirlCanonicalTypeError.InvalidCounts);
+        }
+        type_arg_count = type_arg_count + @lengthOf(hir_type.args);
+        type_arg_name_count = type_arg_name_count + @lengthOf(hir_type.arg_names);
+        for (arg_offset in 1u64..@lengthOf(hir_type.args)) {
+            let arg_index = arg_offset - 1;
+            let argument_type: HirTypeId = raw hir_type.args[arg_index];
+            if ((argument_type as u64) >= type_count) {
+                return failed_canonical_types(storage, ZirlCanonicalTypeError.InvalidTypeReference);
+            }
+        }
+        for (name_offset in 1u64..@lengthOf(hir_type.arg_names)) {
+            let name_index = name_offset - 1;
+            let argument_name: HirStringId = raw hir_type.arg_names[name_index];
+            if ((argument_name as u64) >= @lengthOf(module->strings)) {
+                return failed_canonical_types(storage, ZirlCanonicalTypeError.InvalidStringReference);
+            }
+        }
+    }
+
+    var signature_arg_count = 0u64;
+    for (offset in 1u64..function_count) {
+        let index = offset - 1;
+        let function: HirFunction = raw module->functions[index];
+        if ((function.return_type as u64) >= type_count or
+            @lengthOf(function.parameter_types) > 0xFFFFFFFFu64 - signature_arg_count) {
+            return failed_canonical_types(storage, ZirlCanonicalTypeError.InvalidFunctionSignature);
+        }
+        signature_arg_count =
+            signature_arg_count + @lengthOf(function.parameter_types);
+        for (param_offset in 1u64..@lengthOf(function.parameter_types)) {
+            let param_index = param_offset - 1;
+            let parameter_type: HirTypeId = raw function.parameter_types[param_index];
+            if ((parameter_type as u64) >= type_count) {
+                return failed_canonical_types(storage, ZirlCanonicalTypeError.InvalidFunctionSignature);
+            }
+        }
+    }
+
+    let total_arg_count = type_arg_count + signature_arg_count;
+    if (total_arg_count > @lengthOf(storage->type_args) or
+        type_arg_name_count > @lengthOf(storage->type_arg_names)) {
+        return failed_canonical_types(storage, ZirlCanonicalTypeError.InsufficientArgumentStorage);
+    }
+
+    var args_cursor = 0u64;
+    var names_cursor = 0u64;
+    for (offset in 1u64..type_count) {
+        let index = offset - 1;
+        raw storage->local_type_ids[index] = index as ZirlTypeId;
+    }
+    for (offset in 1u64..type_count) {
+        let index = offset - 1;
+        let source: HirType = raw module->types[index];
+        let args_start = args_cursor;
+        for (arg_offset in 1u64..@lengthOf(source.args)) {
+            let arg_index = arg_offset - 1;
+            let local_id: HirTypeId = raw source.args[arg_index];
+            raw storage->type_args[args_cursor] =
+                raw storage->local_type_ids[local_id as u64];
+            args_cursor = args_cursor + 1;
+        }
+        let names_start = names_cursor;
+        for (name_offset in 1u64..@lengthOf(source.arg_names)) {
+            let name_index = name_offset - 1;
+            raw storage->type_arg_names[names_cursor] =
+                raw source.arg_names[name_index];
+            names_cursor = names_cursor + 1;
+        }
+
+        var canonical = source;
+        if (is_type_reference_kind(source.kind)) {
+            canonical.ref0 = raw storage->local_type_ids[source.ref0 as u64];
+        }
+        canonical.args =
+            raw storage->type_args[args_start..args_cursor];
+        canonical.arg_names =
+            raw storage->type_arg_names[names_start..names_cursor];
+        raw storage->types[index] = canonical;
+    }
+
+    let no_signature_names: [0]HirStringId = [];
+    for (offset in 1u64..function_count) {
+        let index = offset - 1;
+        let function: HirFunction = raw module->functions[index];
+        let signature_index = type_count + index;
+        let args_start = args_cursor;
+        for (param_offset in 1u64..@lengthOf(function.parameter_types)) {
+            let param_index = param_offset - 1;
+            let local_id: HirTypeId = raw function.parameter_types[param_index];
+            raw storage->type_args[args_cursor] =
+                raw storage->local_type_ids[local_id as u64];
+            args_cursor = args_cursor + 1;
+        }
+
+        var flags = 0u8;
+        if (function.variadic) {
+            flags = flags + zirlFnSignatureVariadic;
+        }
+        if (function.state_function) {
+            flags = flags + zirlFnSignatureState;
+        }
+        if (function.foreign_c) {
+            flags = flags + zirlFnSignatureForeignC;
+        }
+        if (function.uses_tail_calling_convention) {
+            flags = flags + zirlFnSignatureTailCC;
+        }
+
+        raw storage->types[signature_index] = HirType {
+            kind: HirTypeKind.Fn,
+            width: 0u8,
+            flags: flags,
+            ref0: raw storage->local_type_ids[function.return_type as u64],
+            ref1: 0u32,
+            args: raw storage->type_args[args_start..args_cursor],
+            arg_names: raw no_signature_names[0u64..0u64],
+        };
+        raw storage->function_signature_type_ids[index] =
+            signature_index as ZirlTypeId;
+    }
+
+    return ZirlCanonicalTypes {
+        types: raw storage->types[0u64..canonical_type_count],
+        local_type_ids: raw storage->local_type_ids[0u64..type_count],
+        function_signature_type_ids:
+            raw storage->function_signature_type_ids[0u64..function_count],
+        failed: false,
+        error: ZirlCanonicalTypeError.None,
+    };
+}

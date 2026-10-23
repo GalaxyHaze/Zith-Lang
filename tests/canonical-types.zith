@@ -1,0 +1,151 @@
+from ir/hir
+from cache/zirl-canonical-types
+
+fn test_function_signatures_use_artifact_type_ids(): i32 {
+    let no_type_ids: [0]HirTypeId = [];
+    let no_string_ids: [0]HirStringId = [];
+    var int_type = HirType {
+        kind: HirTypeKind.Int,
+        width: 32u8,
+        flags: 0u8,
+        ref0: invalidType,
+        ref1: 0u32,
+        args: raw no_type_ids[0..0],
+        arg_names: raw no_string_ids[0..0],
+    };
+    int_type.kind = HirTypeKind.Int;
+    int_type.width = 32u8;
+    int_type.ref0 = invalidType;
+    int_type.args = raw no_type_ids[0..0];
+    int_type.arg_names = raw no_string_ids[0..0];
+    var bool_type = HirType {
+        kind: HirTypeKind.Bool,
+        width: 0u8,
+        flags: 0u8,
+        ref0: invalidType,
+        ref1: 0u32,
+        args: raw no_type_ids[0..0],
+        arg_names: raw no_string_ids[0..0],
+    };
+    bool_type.kind = HirTypeKind.Bool;
+    bool_type.ref0 = invalidType;
+    bool_type.args = raw no_type_ids[0..0];
+    bool_type.arg_names = raw no_string_ids[0..0];
+    let types: [2]HirType = [int_type, bool_type];
+    var parameter_types: [1]HirTypeId = [1u32];
+    let no_parameter_names: [0]HirStringId = [];
+    let no_parameter_slots: [0]HirSlotId = [];
+    let no_blocks: [0]HirBasicBlock = [];
+    var function = HirFunction {
+        name_id: 0u32,
+        parameter_types: raw parameter_types[0..1],
+        parameter_name_ids: raw no_parameter_names[0..0],
+        parameter_slots: raw no_parameter_slots[0..0],
+        return_type: 0u32,
+        state_function: true,
+        uses_tail_calling_convention: true,
+        machine_return_type: invalidType,
+        machine_id: 0u32,
+        variadic: true,
+        variadic_slice_param: 0xFFFFFFFFu32,
+        foreign_c: true,
+        has_body: false,
+        foreign_adapter_name_id: invalidString,
+        blocks: raw no_blocks[0..0],
+    };
+    function.parameter_types = raw parameter_types[0..1];
+    function.return_type = 0u32;
+    function.variadic = true;
+    function.state_function = true;
+    function.uses_tail_calling_convention = true;
+    function.foreign_c = true;
+    let functions: [1]HirFunction = [function];
+    let no_strings: [0][]char = [];
+    let no_struct_defs: [0]HirStructDef = [];
+    let no_enum_defs: [0]HirEnumDef = [];
+    let no_union_defs: [0]HirUnionDef = [];
+    let no_expressions: [0]HirExpr = [];
+    let no_declarations: [0]HirDeclaration = [];
+    let no_global_constants: [0]HirGlobalConst = [];
+    let no_vtables: [0]HirVTable = [];
+    let no_slot_attrs: [0]HirSlotAttrs = [];
+    let no_call_attrs: [0]HirCallAttrs = [];
+    let no_function_attrs: [0]HirFunctionAttrs = [];
+    let no_proofs: [0]HirSafetyProof = [];
+    let module = HirModule {
+        strings: raw no_strings[0..0],
+        types: raw types[0..2],
+        struct_defs: raw no_struct_defs[0..0],
+        enum_defs: raw no_enum_defs[0..0],
+        union_defs: raw no_union_defs[0..0],
+        expressions: raw no_expressions[0..0],
+        functions: raw functions[0..1],
+        declarations: raw no_declarations[0..0],
+        global_constants: raw no_global_constants[0..0],
+        vtables: raw no_vtables[0..0],
+        slot_attrs: raw no_slot_attrs[0..0],
+        call_attrs: raw no_call_attrs[0..0],
+        function_attrs: raw no_function_attrs[0..0],
+        safety_attrs: HirSafetyAttrs { proofs: raw no_proofs[0..0] },
+    };
+    var output_types: [3]HirType = [int_type, bool_type, int_type];
+    var output_args: [1]HirTypeId = [invalidType];
+    let no_output_arg_names: [0]HirStringId = [];
+    var local_type_ids: [2]ZirlTypeId = [invalidZirlType, invalidZirlType];
+    var signature_type_ids: [1]ZirlTypeId = [invalidZirlType];
+    var storage = ZirlCanonicalTypeStorage {
+        types: raw output_types[0..3],
+        type_args: raw output_args[0..1],
+        type_arg_names: raw no_output_arg_names[0..0],
+        local_type_ids: raw local_type_ids[0..2],
+        function_signature_type_ids: raw signature_type_ids[0..1],
+    };
+    let first_type: HirType = raw types[0];
+    if (first_type.kind != HirTypeKind.Int) { return 10; }
+    let result = build_zirl_canonical_types(&raw module, &raw storage);
+    if (result.error != ZirlCanonicalTypeError.None) { return 11; }
+    if (result.failed) { return 12; }
+    if (@lengthOf(result.types) != 3u64 or
+        @lengthOf(result.local_type_ids) != 2u64 or
+        @lengthOf(result.function_signature_type_ids) != 1u64) {
+        return 13;
+    }
+    if (raw result.local_type_ids[0] != 0u32 or
+        raw result.local_type_ids[1] != 1u32 or
+        raw result.function_signature_type_ids[0] != 2u32) {
+        return 14;
+    }
+    let signature_args: []HirTypeId = raw output_types[2].args;
+    if (raw output_types[2].kind != HirTypeKind.Fn or
+        raw output_types[2].ref0 != 0u32 or
+        raw output_types[2].flags != 15u8 or
+        @lengthOf(signature_args) != 1u64 or
+        raw signature_args[0] != 1u32) {
+        return 15;
+    }
+
+    storage.function_signature_type_ids = raw signature_type_ids[0u64..0u64];
+    let short_storage_result =
+        build_zirl_canonical_types(&raw module, &raw storage);
+    if (not short_storage_result.failed or
+        short_storage_result.error !=
+            ZirlCanonicalTypeError.InsufficientTypeStorage) {
+        return 16;
+    }
+
+    storage.function_signature_type_ids =
+        raw signature_type_ids[0u64..1u64];
+    raw parameter_types[0] = 2u32;
+    let invalid_signature_result =
+        build_zirl_canonical_types(&raw module, &raw storage);
+    if (not invalid_signature_result.failed or
+        invalid_signature_result.error !=
+            ZirlCanonicalTypeError.InvalidFunctionSignature) {
+        return 17;
+    }
+    return 0;
+}
+
+fn main(): i32 {
+    return test_function_signatures_use_artifact_type_ids();
+}

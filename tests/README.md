@@ -3,8 +3,9 @@
 `zithc test` recursively type-checks every `.zith` file under the configured
 `test_dir`; it does not execute test functions or verify runtime behavior.
 Behavioral smoke tests in `tests/run.zith` run through the VM. The HIR data
-contract test in `tests/hir-contract.zith` runs through native codegen because
-the current VM v2 lowering does not support the size of a `HirExpr` slot.
+contract test in `tests/hir-contract.zith` and canonical type-table test in
+`tests/canonical-types.zith` run through native codegen because current VM v2
+lowering does not support the size of the HIR aggregates those fixtures use.
 
 Run both checks with:
 

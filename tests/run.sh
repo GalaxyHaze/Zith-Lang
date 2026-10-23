@@ -20,4 +20,6 @@ cp -R "$repo_root/tests" "$temp_root/tests"
 "$compiler" --include "$temp_root/src" run --virtual-machine --no-cache \
     "$temp_root/tests/run.zith"
 "$compiler" --include "$temp_root/src" run --no-cache \
+    "$temp_root/tests/canonical-types.zith"
+"$compiler" --include "$temp_root/src" run --no-cache \
     "$temp_root/tests/hir-contract.zith"
