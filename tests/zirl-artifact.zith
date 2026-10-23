@@ -1,0 +1,245 @@
+from cache/zirl-artifact
+
+fn test_zirl_artifact_roundtrip_and_validation(): i32 {
+    let metadata_payload: [1]u8 = [0xA1u8];
+    let decls_payload: [1]u8 = [0xB2u8];
+    let templates_payload: [1]u8 = [0xC3u8];
+    let code_payload: [1]u8 = [0xD4u8];
+    let attrs_payload: [1]u8 = [0xE5u8];
+    var sections: [5]ZirlArtifactSection = [
+        ZirlArtifactSection {
+            id: 1u16,
+            flags: 1u16,
+            schema_version: 2u16,
+            payload: raw metadata_payload[0u64..1u64],
+        },
+        ZirlArtifactSection {
+            id: 2u16,
+            flags: 1u16,
+            schema_version: 1u16,
+            payload: raw decls_payload[0u64..1u64],
+        },
+        ZirlArtifactSection {
+            id: 3u16,
+            flags: 1u16,
+            schema_version: 1u16,
+            payload: raw templates_payload[0u64..1u64],
+        },
+        ZirlArtifactSection {
+            id: 4u16,
+            flags: 1u16,
+            schema_version: 1u16,
+            payload: raw code_payload[0u64..1u64],
+        },
+        ZirlArtifactSection {
+            id: 5u16,
+            flags: 1u16,
+            schema_version: 1u16,
+            payload: raw attrs_payload[0u64..1u64],
+        },
+    ];
+    let dependencies: [1]ZirlArtifactDependency = [
+        ZirlArtifactDependency {
+            canonical_path: "d",
+            import_key: "k",
+            public_abi_hi: 1u32,
+            public_abi_lo: 2u32,
+        },
+    ];
+    var identity = ZirlArtifactIdentity {
+        canonical_path: "p",
+        module_name: "m",
+        semantic_profile_name: "s",
+        semantic_profile_version: 3u32,
+        source_fingerprint_primary: 4u64,
+        source_fingerprint_secondary: 5u64,
+        public_abi_hi: 6u32,
+        public_abi_lo: 7u32,
+        optional_features: 8u64,
+        declaration_count: 9u32,
+        template_count: 10u32,
+        function_count: 11u32,
+        dependencies: raw dependencies[0u64..1u64],
+    };
+    var output: [256]u8 = [
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+    ];
+    let written = write_zirl_artifact(
+        &raw identity,
+        raw sections[0u64..5u64],
+        raw output[0u64..256u64]
+    );
+    if (written.error != ZirlArtifactError.None) {
+        return 1;
+    }
+    if (written.size != 242u64) {
+        return 1;
+    }
+    if (raw output[0] != 0x4Cu8 or raw output[1] != 0x52u8 or
+        raw output[2] != 0x49u8 or raw output[3] != 0x5Au8 or
+        raw output[4] != 21u8 or
+        raw output[5] != 0u8 or raw output[6] != 0u8 or raw output[7] != 0u8 or
+        raw output[12] != 1u8 or raw output[14] != 5u8 or
+        raw output[16] != 0xEDu8 or raw output[17] != 0u8 or
+        raw output[18] != 0u8 or raw output[19] != 0u8 or
+        raw output[237] != 0xA1u8 or raw output[241] != 0xE5u8) {
+        return 2;
+    }
+
+    var decoded_dependencies: [1]ZirlArtifactDependency = [
+        ZirlArtifactDependency {
+            canonical_path: "",
+            import_key: "",
+            public_abi_hi: 0u32,
+            public_abi_lo: 0u32,
+        },
+    ];
+    var decoded_entries: [5]ZirlSectionEntry = [
+        ZirlSectionEntry { id: 0u16, flags: 0u16, schema_version: 0u16, reserved: 0u16, offset: 0u64, size: 0u64 },
+        ZirlSectionEntry { id: 0u16, flags: 0u16, schema_version: 0u16, reserved: 0u16, offset: 0u64, size: 0u64 },
+        ZirlSectionEntry { id: 0u16, flags: 0u16, schema_version: 0u16, reserved: 0u16, offset: 0u64, size: 0u64 },
+        ZirlSectionEntry { id: 0u16, flags: 0u16, schema_version: 0u16, reserved: 0u16, offset: 0u64, size: 0u64 },
+        ZirlSectionEntry { id: 0u16, flags: 0u16, schema_version: 0u16, reserved: 0u16, offset: 0u64, size: 0u64 },
+    ];
+    var decoded_sections: [5]ZirlArtifactSection = [
+        ZirlArtifactSection { id: 0u16, flags: 0u16, schema_version: 0u16, payload: raw metadata_payload[0u64..0u64] },
+        ZirlArtifactSection { id: 0u16, flags: 0u16, schema_version: 0u16, payload: raw metadata_payload[0u64..0u64] },
+        ZirlArtifactSection { id: 0u16, flags: 0u16, schema_version: 0u16, payload: raw metadata_payload[0u64..0u64] },
+        ZirlArtifactSection { id: 0u16, flags: 0u16, schema_version: 0u16, payload: raw metadata_payload[0u64..0u64] },
+        ZirlArtifactSection { id: 0u16, flags: 0u16, schema_version: 0u16, payload: raw metadata_payload[0u64..0u64] },
+    ];
+    var decoded_path_chars: [1]char = ['x'];
+    var decoded_module_chars: [1]char = ['x'];
+    var decoded_profile_chars: [1]char = ['x'];
+    var decoded_dependency_chars: [2]char = ['x', 'x'];
+    var storage = ZirlArtifactStorage {
+        canonical_path: raw decoded_path_chars[0u64..1u64],
+        module_name: raw decoded_module_chars[0u64..1u64],
+        semantic_profile_name: raw decoded_profile_chars[0u64..1u64],
+        dependency_text: raw decoded_dependency_chars[0u64..2u64],
+        dependencies: raw decoded_dependencies[0u64..1u64],
+        entries: raw decoded_entries[0u64..5u64],
+        sections: raw decoded_sections[0u64..5u64],
+    };
+    let decoded = read_zirl_artifact(
+        raw output[0u64..written.size],
+        &raw storage
+    );
+    if (decoded.error != ZirlArtifactError.None or
+        decoded.header.container_version != 21u32 or
+        decoded.header.header_size != 237u32 or
+        decoded.header.checksum == 0u32 or
+        decoded.header.optional_features != 8u64 or
+        @lengthOf(decoded.dependencies) != 1u64 or
+        @lengthOf(decoded.sections) != 5u64) {
+        return 3;
+    }
+    let decoded_dependency = must decoded.dependencies[0];
+    if (raw decoded.canonical_path[0] != 'p' or
+        raw decoded.module_name[0] != 'm' or
+        raw decoded.semantic_profile_name[0] != 's' or
+        raw decoded_dependency.canonical_path[0] != 'd' or
+        raw decoded_dependency.import_key[0] != 'k' or
+        decoded_dependency.public_abi_hi != 1u32 or
+        decoded_dependency.public_abi_lo != 2u32) {
+        return 4;
+    }
+    for (offset in 1u64..5u64) {
+        let index = offset - 1;
+        let decoded_section = must decoded.sections[index];
+        let decoded_payload_byte = must decoded_section.payload[0];
+        let expected_payload_byte = raw output[237u64 + index];
+        if (decoded_section.id != offset as u16 or
+            decoded_section.flags != 1u16 or
+            decoded_payload_byte != expected_payload_byte) {
+            return 5;
+        }
+    }
+
+    var short_identity_storage = storage;
+    short_identity_storage.canonical_path =
+        raw decoded_path_chars[0u64..0u64];
+    let short_identity = read_zirl_artifact(
+        raw output[0u64..written.size],
+        &raw short_identity_storage
+    );
+    if (short_identity.error != ZirlArtifactError.InsufficientDecodeStorage) {
+        return 9;
+    }
+
+    var short_dependency_storage = storage;
+    short_dependency_storage.dependency_text =
+        raw decoded_dependency_chars[0u64..1u64];
+    let short_dependency = read_zirl_artifact(
+        raw output[0u64..written.size],
+        &raw short_dependency_storage
+    );
+    if (short_dependency.error != ZirlArtifactError.InsufficientDecodeStorage) {
+        return 10;
+    }
+
+    raw output[241] = raw output[241] xor 1u8;
+    let corrupted = read_zirl_artifact(
+        raw output[0u64..written.size],
+        &raw storage
+    );
+    if (corrupted.error != ZirlArtifactError.ChecksumMismatch) {
+        return 6;
+    }
+    raw output[241] = raw output[241] xor 1u8;
+
+    var short_output: [1]u8 = [0xAAu8];
+    let short_write = write_zirl_artifact(
+        &raw identity,
+        raw sections[0u64..5u64],
+        raw short_output[0u64..1u64]
+    );
+    if (short_write.error != ZirlArtifactError.InsufficientOutput or
+        raw short_output[0] != 0xAAu8) {
+        return 7;
+    }
+    let missing_section = write_zirl_artifact(
+        &raw identity,
+        raw sections[0u64..4u64],
+        raw output[0u64..256u64]
+    );
+    if (missing_section.error != ZirlArtifactError.InvalidSections) {
+        return 8;
+    }
+    return 0;
+}
+
+fn main(): i32 {
+    return test_zirl_artifact_roundtrip_and_validation();
+}

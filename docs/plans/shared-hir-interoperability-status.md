@@ -17,15 +17,19 @@ for the canonical plan.
 | Follow-up correctness fixes | Preserved imported generic layout types and struct type arguments in cached artifacts. | `59377508`, `8c12c9bd` |
 
 Revalidated on 2026-10-23: `/home/diogo/Zith` is clean on `main` at
-`8c12c9bd`, 21 commits ahead of `origin/main`.
+`8f313dbf`, 22 commits ahead of `origin/main`. Its ZIRL writer uses container
+version 21; the self-Zith port now uses that same version.
 
 ## In Progress in `/home/diogo/self-Zith`
 
 The port is in Step 6 of the plan. The following cache foundations and
 sections are implemented:
 
-- ZIRL v22 container framing, section validation, and little-endian byte
+- ZIRL v21 container framing, section validation, and little-endian byte
   primitives.
+- Generic artifact-envelope reader/writer for canonical identity,
+  dependencies, section tables, payloads, and checksum validation. Complete
+  `HirModule` section assembly and restoration remain pending.
 - Compact HIR type-entry encoding.
 - Metadata schema 2, including strings, paths, types, and nominal definitions.
 - Decls, Templates, and Attrs section codecs.
@@ -45,19 +49,20 @@ sections are implemented:
   short output buffers in the implemented sections.
 
 The cache-port baseline before the Code section work was `800a60a`
-(`feat(cache): add ZIRL attributes section codec`). The Code section codec and
-its golden-byte, round-trip/reserialization, truncation, insufficient-capacity,
-short-writer, and malformed-vtable tests pass with the sibling build's
-compiler:
+(`feat(cache): add ZIRL attributes section codec`). The section codecs and
+generic artifact-envelope tests pass with the sibling build's compiler. They
+cover golden bytes, round-trips, reserialization, truncation,
+insufficient-capacity, short writers, malformed records/vtables, and checksum
+rejection:
 
 ```sh
 ZITHC=/home/diogo/Zith/build/zithc TMPDIR=/tmp sh tests/run.sh
 ```
 
-The latest test run passed. It reports deprecated-syntax warnings from the HIR
-verifier. The standalone `src/main.zith` check remains blocked by the
-pre-existing undefined `getKeywordId` reference; that change was not part of
-the cache work.
+The latest full harness run passed on 2026-10-23 (exit 0). It reports
+deprecated-syntax warnings from the HIR verifier. The standalone
+`src/main.zith` check remains blocked by the pre-existing undefined
+`getKeywordId` reference; that change was not part of the cache work.
 
 The following work remains:
 
@@ -65,8 +70,9 @@ The following work remains:
   Function identities must use the artifact's canonical compact type table;
   local `HirTypeId` values alone are not a cross-artifact identity, and
   function-signature entries may need to be synthesized.
-- Add full-artifact reader/writer orchestration and automated complete-artifact
-  byte-for-byte conformance fixtures.
+- Connect each section codec to `HirModule` and add complete-artifact
+  byte-for-byte conformance fixtures. The current generic envelope accepts
+  already encoded section payloads and does not serialize or hydrate HIR.
 - Finish the shared VIR/codegen port and run the final acceptance audit.
 - Implement a real Zith frontend adapter only after the local frontend has the
   semantic pipeline needed to produce verified HIR.

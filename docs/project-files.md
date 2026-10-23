@@ -27,9 +27,10 @@ point, and directory paths; it does not enumerate source files individually.
 | `src/frontend/lexer.zith` | Reserved frontend lexer source. | Experimental implementation. |
 | `src/ir/hir.zith` | Frontend-neutral HIR nodes, nominal type definitions, functions, and residual attributes. | Shared type and definition tables aligned with the cross-dialect cache contract. |
 | `src/ir/hir-verify.zith` | Verifies HIR references, definition tables, node shapes, and residual safety metadata. | Structural verifier with CFG-dominating guard validation. |
-| `src/cache/cache.zith` | Shared HIR identity and derived-VIR compatibility rules. | Identity checks; binary artifact codec follows. |
+| `src/cache/cache.zith` | Shared HIR identity and derived-VIR compatibility rules. | Identity checks and version gates; ZIRL framing is implemented in `zirl-artifact.zith`. |
 | `src/cache/zirl-buffer.zith` | Bounds-checked little-endian ZIRL byte primitives. | Signed/unsigned integers, `f64`, and atomic length-prefixed blobs. |
-| `src/cache/zirl-container.zith` | ZIRL v20 header, section-table records, and compatibility checks. | Validates required HIR sections and safely skippable optional sections; Metadata, Decls, Templates, Attrs, and compact Code payload codecs are implemented, while the full artifact codec remains in progress. |
+| `src/cache/zirl-container.zith` | ZIRL v21 header, section-table records, and compatibility checks. | Validates required HIR sections and safely skippable optional sections. |
+| `src/cache/zirl-artifact.zith` | Complete ZIRL container envelope reader and writer. | Persists identity, dependencies, section table, and payloads with checksum validation; section payloads are supplied by the section codecs. |
 | `src/cache/zirl-type-section.zith` | ZIRL metadata type-entry codec. | Encodes and transactionally decodes compact type records for the Metadata section. |
 | `src/cache/zirl-metadata.zith` | ZIRL Metadata section codec. | Encodes and decodes schema-2 module metadata with caller-owned storage. |
 | `src/cache/zirl-decl-section.zith` | ZIRL Decls section codec. | Encodes and decodes declaration records and their field/method references with caller-owned storage. |
@@ -51,6 +52,7 @@ exists.
 | `tests/run.zith` | VM behavioral test entry point. | Smoke fixture. |
 | `tests/hir-contract.zith` | Native test entry point for the shared HIR data contract. | Exercises HIR invariants and ZIRL Metadata/Decls/Templates/Attrs/Code round-trips, golden bytes, malformed records, and buffer failures. |
 | `tests/canonical-types.zith` | Native test entry point for artifact-owned canonical types. | Exercises local type IDs, synthesized signature metadata, insufficient storage, and invalid function references. |
+| `tests/zirl-artifact.zith` | Native test entry point for complete ZIRL container framing. | Exercises identity/dependency round-trip, required section layout, checksum rejection, malformed sections, and short output buffers. |
 
 ### Documentation
 

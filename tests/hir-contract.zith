@@ -1163,7 +1163,7 @@ fn test_zirl_header_golden_bytes(): i32 {
     };
     var header = ZirlFileHeader {
         magic: 0x5A49524Cu32,
-        container_version: 22u32,
+        container_version: 21u32,
         hir_schema_version: 1u32,
         endianness: 1u8,
         reserved: 0u8,
@@ -1220,7 +1220,7 @@ fn test_zirl_header_decode_and_truncation(): i32 {
     };
     var header = ZirlFileHeader {
         magic: 0x5A49524Cu32,
-        container_version: 22u32,
+        container_version: 21u32,
         hir_schema_version: 1u32,
         endianness: 1u8,
         reserved: 0u8,
@@ -1277,7 +1277,7 @@ fn test_zirl_header_decode_and_truncation(): i32 {
     if (not read_file_header(&raw reader, &raw decoded)) {
         return 2;
     }
-    if (decoded.magic != 0x5A49524Cu32 or decoded.container_version != 22u32 or
+    if (decoded.magic != 0x5A49524Cu32 or decoded.container_version != 21u32 or
         decoded.required_features != 7u64) {
         return 3;
     }
@@ -1436,7 +1436,7 @@ fn test_zirl_section_entry_truncation_is_atomic(): i32 {
 fn make_zirl_validation_header(): ZirlFileHeader {
     return ZirlFileHeader {
         magic: 0x5A49524Cu32,
-        container_version: 22u32,
+        container_version: 21u32,
         hir_schema_version: 1u32,
         endianness: 1u8,
         reserved: 0u8,
@@ -1497,7 +1497,7 @@ fn test_zirl_section_table_validation(): i32 {
         return 1;
     }
 
-    header.container_version = 21u32;
+    header.container_version = 22u32;
     result = validate_zirl_sections(&raw header, raw entries[0..6], 267u64);
     if (result.error != ZirlValidationError.InvalidHeader) {
         return 8;

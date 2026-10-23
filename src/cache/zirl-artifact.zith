@@ -1,0 +1,767 @@
+from cache/zirl-buffer
+from cache/zirl-container
+
+pub enum ZirlArtifactError {
+    None = 0,
+    InvalidIdentity = 1,
+    InvalidSections = 2,
+    InvalidContainer = 3,
+    InsufficientOutput = 4,
+    InsufficientDecodeStorage = 5,
+    ChecksumMismatch = 6,
+}
+
+pub struct ZirlArtifactDependency {
+    pub canonical_path: []char,
+    pub import_key: []char,
+    pub public_abi_hi: u32,
+    pub public_abi_lo: u32,
+}
+
+pub struct ZirlArtifactSection {
+    pub id: u16,
+    pub flags: u16,
+    pub schema_version: u16,
+    pub payload: []u8,
+}
+
+pub struct ZirlArtifactIdentity {
+    pub canonical_path: []char,
+    pub module_name: []char,
+    pub semantic_profile_name: []char,
+    pub semantic_profile_version: u32,
+    pub source_fingerprint_primary: u64,
+    pub source_fingerprint_secondary: u64,
+    pub public_abi_hi: u32,
+    pub public_abi_lo: u32,
+    pub optional_features: u64,
+    pub declaration_count: u32,
+    pub template_count: u32,
+    pub function_count: u32,
+    pub dependencies: []ZirlArtifactDependency,
+}
+
+pub struct ZirlArtifactWriteResult {
+    pub size: u64,
+    pub error: ZirlArtifactError,
+}
+
+pub struct ZirlArtifactStorage {
+    pub canonical_path: []char,
+    pub module_name: []char,
+    pub semantic_profile_name: []char,
+    pub dependency_text: []char,
+    pub dependencies: []ZirlArtifactDependency,
+    pub entries: []ZirlSectionEntry,
+    pub sections: []ZirlArtifactSection,
+}
+
+pub struct ZirlArtifactReadResult {
+    pub header: ZirlFileHeader,
+    pub canonical_path: []char,
+    pub module_name: []char,
+    pub semantic_profile_name: []char,
+    pub dependencies: []ZirlArtifactDependency,
+    pub sections: []ZirlArtifactSection,
+    pub error: ZirlArtifactError,
+}
+
+struct ZirlArtifactSize {
+    value: u64,
+    failed: bool,
+}
+
+struct ZirlArtifactTextRead {
+    reader: ZirlByteReader,
+    value: []char,
+    insufficient_storage: bool,
+}
+
+struct ZirlArtifactBlobRead {
+    reader: ZirlByteReader,
+    value: []char,
+    insufficient_storage: bool,
+}
+
+fn artifact_add_size(left: u64, right: u64): ZirlArtifactSize {
+    if (right > 0xFFFFFFFFFFFFFFFFu64 - left) {
+        return ZirlArtifactSize { value: 0u64, failed: true };
+    }
+    return ZirlArtifactSize { value: left + right, failed: false };
+}
+
+fn artifact_fnv1a(bytes: []u8): u32 {
+    var hash = 0x811C9DC5u32;
+    for (offset in 1u64..@lengthOf(bytes)) {
+        let index = offset - 1;
+        hash = (hash xor ((raw bytes[index]) as u32)) * 0x01000193u32;
+    }
+    return hash;
+}
+
+fn artifact_text_hash(text: []char): u32 {
+    var hash = 0x811C9DC5u32;
+    for (offset in 1u64..@lengthOf(text)) {
+        let index = offset - 1;
+        let byte = (raw text[index]) as u8;
+        hash = (hash xor (byte as u32)) * 0x01000193u32;
+    }
+    return hash;
+}
+
+fn artifact_dependency_abi_hash(dependency: ZirlArtifactDependency): u32 {
+    var bytes: [8]u8 = [
+        dependency.public_abi_hi as u8,
+        (dependency.public_abi_hi >> 8) as u8,
+        (dependency.public_abi_hi >> 16) as u8,
+        (dependency.public_abi_hi >> 24) as u8,
+        dependency.public_abi_lo as u8,
+        (dependency.public_abi_lo >> 8) as u8,
+        (dependency.public_abi_lo >> 16) as u8,
+        (dependency.public_abi_lo >> 24) as u8,
+    ];
+    return artifact_fnv1a(raw bytes[0u64..8u64]);
+}
+
+fn artifact_checksum(
+    canonical_path: []char,
+    module_name: []char,
+    semantic_profile_name: []char,
+    dependencies: []ZirlArtifactDependency,
+    sections: []ZirlArtifactSection
+): u32 {
+    var checksum = artifact_text_hash(canonical_path) xor
+        artifact_text_hash(module_name) xor
+        artifact_text_hash(semantic_profile_name);
+    for (offset in 1u64..@lengthOf(dependencies)) {
+        let index = offset - 1;
+        let dependency: ZirlArtifactDependency = raw dependencies[index];
+        checksum = checksum xor artifact_text_hash(dependency.canonical_path);
+        checksum = checksum xor artifact_text_hash(dependency.import_key);
+        checksum = checksum xor artifact_dependency_abi_hash(dependency);
+    }
+    for (offset in 1u64..@lengthOf(sections)) {
+        let index = offset - 1;
+        let section: ZirlArtifactSection = raw sections[index];
+        checksum = checksum xor artifact_fnv1a(section.payload);
+    }
+    return checksum;
+}
+
+fn valid_artifact_sections(sections: []ZirlArtifactSection): bool {
+    if (@lengthOf(sections) < 5u64) {
+        return false;
+    }
+    if (@lengthOf(sections) > 0xFFFFu64) {
+        return false;
+    }
+    var previous_id = 0u16;
+    var required_id = 1u16;
+    for (offset in 1u64..@lengthOf(sections)) {
+        let index = offset - 1;
+        let section: ZirlArtifactSection = raw sections[index];
+        if (section.id == 0u16) {
+            return false;
+        }
+        if (section.id <= previous_id) {
+            return false;
+        }
+        previous_id = section.id;
+        if (section.id <= 5u16) {
+            if (section.id != required_id) {
+                return false;
+            }
+            if (section.flags != 1u16) {
+                return false;
+            }
+            if (section.id == 1u16 and section.schema_version != 2u16) {
+                return false;
+            }
+            if (section.id != 1u16 and section.schema_version != 1u16) {
+                return false;
+            }
+            required_id = required_id + 1u16;
+        } else {
+            if (section.flags != 0u16) {
+                return false;
+            }
+            if (section.schema_version == 0u16) {
+                return false;
+            }
+        }
+    }
+    return required_id == 6u16;
+}
+
+fn artifact_error_result(error: ZirlArtifactError): ZirlArtifactWriteResult {
+    return ZirlArtifactWriteResult { size: 0u64, error: error };
+}
+
+fn write_artifact_text(writer: ZirlByteWriter, text: []char): ZirlByteWriter {
+    var result = writer;
+    for (offset in 1u64..@lengthOf(text)) {
+        let index = offset - 1;
+        result = write_u8(result, (raw text[index]) as u8);
+    }
+    return result;
+}
+
+fn write_artifact_blob(writer: ZirlByteWriter, text: []char): ZirlByteWriter {
+    if (@lengthOf(text) > 0xFFFFFFFFu64) {
+        var failed = writer;
+        failed.failed = true;
+        return failed;
+    }
+    let with_length = write_u32(writer, @lengthOf(text) as u32);
+    return write_artifact_text(with_length, text);
+}
+
+fn write_artifact_dependency(
+    writer: ZirlByteWriter,
+    dependency: ZirlArtifactDependency
+): ZirlByteWriter {
+    var result = write_artifact_blob(writer, dependency.canonical_path);
+    result = write_artifact_blob(result, dependency.import_key);
+    result = write_u32(result, dependency.public_abi_hi);
+    return write_u32(result, dependency.public_abi_lo);
+}
+
+pub fn write_zirl_artifact(
+    identity: *ZirlArtifactIdentity,
+    sections: []ZirlArtifactSection,
+    output: []u8
+): ZirlArtifactWriteResult {
+    // Mirror the wire constants here: the bootstrap backend mishandles
+    // imported constant loads in this header aggregate and reader comparisons.
+    if (@lengthOf(identity->canonical_path) == 0u64) {
+        return artifact_error_result(ZirlArtifactError.InvalidIdentity);
+    }
+    if (@lengthOf(identity->semantic_profile_name) == 0u64) {
+        return artifact_error_result(ZirlArtifactError.InvalidIdentity);
+    }
+    if (identity->semantic_profile_version == 0u32) {
+        return artifact_error_result(ZirlArtifactError.InvalidIdentity);
+    }
+    if (@lengthOf(identity->canonical_path) > 0xFFFFFFFFu64) {
+        return artifact_error_result(ZirlArtifactError.InvalidIdentity);
+    }
+    if (@lengthOf(identity->module_name) > 0xFFFFFFFFu64) {
+        return artifact_error_result(ZirlArtifactError.InvalidIdentity);
+    }
+    if (@lengthOf(identity->semantic_profile_name) > 0xFFFFFFFFu64) {
+        return artifact_error_result(ZirlArtifactError.InvalidIdentity);
+    }
+    if (@lengthOf(identity->dependencies) > 0xFFFFFFFFu64) {
+        return artifact_error_result(ZirlArtifactError.InvalidIdentity);
+    }
+    if (not valid_artifact_sections(sections)) {
+        return artifact_error_result(ZirlArtifactError.InvalidSections);
+    }
+
+    var header_size = 96u64;
+    let with_path = artifact_add_size(header_size, @lengthOf(identity->canonical_path));
+    if (with_path.failed) {
+        return artifact_error_result(ZirlArtifactError.InvalidIdentity);
+    }
+    header_size = with_path.value;
+    let with_module = artifact_add_size(header_size, @lengthOf(identity->module_name));
+    if (with_module.failed) {
+        return artifact_error_result(ZirlArtifactError.InvalidIdentity);
+    }
+    header_size = with_module.value;
+    let with_profile =
+        artifact_add_size(header_size, @lengthOf(identity->semantic_profile_name));
+    if (with_profile.failed) {
+        return artifact_error_result(ZirlArtifactError.InvalidIdentity);
+    }
+    header_size = with_profile.value;
+
+    for (offset in 1u64..@lengthOf(identity->dependencies)) {
+        let index = offset - 1;
+        let dependency: ZirlArtifactDependency = raw identity->dependencies[index];
+        if (@lengthOf(dependency.canonical_path) > 0xFFFFFFFFu64) {
+            return artifact_error_result(ZirlArtifactError.InvalidIdentity);
+        }
+        if (@lengthOf(dependency.import_key) > 0xFFFFFFFFu64) {
+            return artifact_error_result(ZirlArtifactError.InvalidIdentity);
+        }
+        let with_fixed_fields = artifact_add_size(header_size, 16u64);
+        if (with_fixed_fields.failed) {
+            return artifact_error_result(ZirlArtifactError.InvalidIdentity);
+        }
+        let with_dependency_path =
+            artifact_add_size(with_fixed_fields.value, @lengthOf(dependency.canonical_path));
+        if (with_dependency_path.failed) {
+            return artifact_error_result(ZirlArtifactError.InvalidIdentity);
+        }
+        let with_import_key =
+            artifact_add_size(with_dependency_path.value, @lengthOf(dependency.import_key));
+        if (with_import_key.failed) {
+            return artifact_error_result(ZirlArtifactError.InvalidIdentity);
+        }
+        header_size = with_import_key.value;
+    }
+    let table_size = @lengthOf(sections) * 24u64;
+    let with_table = artifact_add_size(header_size, table_size);
+    if (with_table.failed) {
+        return artifact_error_result(ZirlArtifactError.InvalidIdentity);
+    }
+    if (with_table.value > 0xFFFFFFFFu64) {
+        return artifact_error_result(ZirlArtifactError.InvalidIdentity);
+    }
+    header_size = with_table.value;
+
+    var total_size = header_size;
+    for (offset in 1u64..@lengthOf(sections)) {
+        let index = offset - 1;
+        let section: ZirlArtifactSection = raw sections[index];
+        let with_payload = artifact_add_size(total_size, @lengthOf(section.payload));
+        if (with_payload.failed) {
+            return artifact_error_result(ZirlArtifactError.InvalidSections);
+        }
+        total_size = with_payload.value;
+    }
+    if (total_size > @lengthOf(output)) {
+        return artifact_error_result(ZirlArtifactError.InsufficientOutput);
+    }
+
+    let header = ZirlFileHeader {
+        magic: 0x5A49524Cu32,
+        container_version: 21u32,
+        hir_schema_version: 1u32,
+        endianness: 1u8,
+        reserved: 0u8,
+        section_count: @lengthOf(sections) as u16,
+        header_size: header_size as u32,
+        checksum: artifact_checksum(
+            identity->canonical_path,
+            identity->module_name,
+            identity->semantic_profile_name,
+            identity->dependencies,
+            sections
+        ),
+        required_features: 7u64,
+        optional_features: identity->optional_features,
+        source_fingerprint_primary: identity->source_fingerprint_primary,
+        source_fingerprint_secondary: identity->source_fingerprint_secondary,
+        semantic_profile_version: identity->semantic_profile_version,
+        public_abi_hi: identity->public_abi_hi,
+        public_abi_lo: identity->public_abi_lo,
+        dependency_count: @lengthOf(identity->dependencies) as u32,
+        declaration_count: identity->declaration_count,
+        template_count: identity->template_count,
+        function_count: identity->function_count,
+        canonical_path_length: @lengthOf(identity->canonical_path) as u32,
+        module_name_length: @lengthOf(identity->module_name) as u32,
+        semantic_profile_name_length:
+            @lengthOf(identity->semantic_profile_name) as u32,
+    };
+    var writer = ZirlByteWriter {
+        bytes: output,
+        position: 0u64,
+        failed: false,
+    };
+    if (not write_file_header(&raw writer, &raw header)) {
+        return artifact_error_result(ZirlArtifactError.InsufficientOutput);
+    }
+    writer = write_artifact_text(writer, identity->canonical_path);
+    writer = write_artifact_text(writer, identity->module_name);
+    writer = write_artifact_text(writer, identity->semantic_profile_name);
+    for (offset in 1u64..@lengthOf(identity->dependencies)) {
+        let index = offset - 1;
+        writer = write_artifact_dependency(
+            writer,
+            raw identity->dependencies[index]
+        );
+    }
+
+    var next_offset = header_size;
+    for (offset in 1u64..@lengthOf(sections)) {
+        let index = offset - 1;
+        let section: ZirlArtifactSection = raw sections[index];
+        let entry = ZirlSectionEntry {
+            id: section.id,
+            flags: section.flags,
+            schema_version: section.schema_version,
+            reserved: 0u16,
+            offset: next_offset,
+            size: @lengthOf(section.payload),
+        };
+        if (not write_section_entry(&raw writer, &raw entry)) {
+            return artifact_error_result(ZirlArtifactError.InsufficientOutput);
+        }
+        next_offset = next_offset + @lengthOf(section.payload);
+    }
+    for (offset in 1u64..@lengthOf(sections)) {
+        let index = offset - 1;
+        let section: ZirlArtifactSection = raw sections[index];
+        for (payload_offset in 1u64..@lengthOf(section.payload)) {
+            let payload_index = payload_offset - 1;
+            writer = write_u8(writer, raw section.payload[payload_index]);
+        }
+    }
+    if (writer.failed) {
+        return artifact_error_result(ZirlArtifactError.InsufficientOutput);
+    }
+    if (writer.position != total_size) {
+        return artifact_error_result(ZirlArtifactError.InsufficientOutput);
+    }
+    return ZirlArtifactWriteResult {
+        size: total_size,
+        error: ZirlArtifactError.None,
+    };
+}
+
+fn artifact_text_read(
+    reader: ZirlByteReader,
+    length: u64,
+    output: []char
+): ZirlArtifactTextRead {
+    let capacity = @lengthOf(reader.bytes);
+    if (reader.failed) {
+        var failed = reader;
+        failed.failed = true;
+        let no_text: [0]char = [];
+        return ZirlArtifactTextRead {
+            reader: failed,
+            value: raw no_text[0u64..0u64],
+            insufficient_storage: false,
+        };
+    }
+    if (reader.position > capacity) {
+        var failed = reader;
+        failed.failed = true;
+        let no_text: [0]char = [];
+        return ZirlArtifactTextRead {
+            reader: failed,
+            value: raw no_text[0u64..0u64],
+            insufficient_storage: false,
+        };
+    }
+    if (length > capacity - reader.position) {
+        var failed = reader;
+        failed.failed = true;
+        let no_text: [0]char = [];
+        return ZirlArtifactTextRead {
+            reader: failed,
+            value: raw no_text[0u64..0u64],
+            insufficient_storage: false,
+        };
+    }
+    if (length > @lengthOf(output)) {
+        var failed = reader;
+        failed.failed = true;
+        let no_text: [0]char = [];
+        return ZirlArtifactTextRead {
+            reader: failed,
+            value: raw no_text[0u64..0u64],
+            insufficient_storage: true,
+        };
+    }
+    let start = reader.position;
+    var next = reader;
+    var target = output;
+    for (offset in 1u64..length) {
+        let index = offset - 1;
+        let byte = raw reader.bytes[start + index];
+        raw target[index] = byte as char;
+    }
+    next.position = start + length;
+    return ZirlArtifactTextRead {
+        reader: next,
+        value: raw target[0u64..length],
+        insufficient_storage: false,
+    };
+}
+
+fn artifact_blob_read(
+    reader: ZirlByteReader,
+    output: []char
+): ZirlArtifactBlobRead {
+    let length = read_u32(reader);
+    if (length.reader.failed) {
+        let no_text: [0]char = [];
+        return ZirlArtifactBlobRead {
+            reader: length.reader,
+            value: raw no_text[0u64..0u64],
+            insufficient_storage: false,
+        };
+    }
+    let text = artifact_text_read(
+        length.reader,
+        length.value as u64,
+        output
+    );
+    return ZirlArtifactBlobRead {
+        reader: text.reader,
+        value: text.value,
+        insufficient_storage: text.insufficient_storage,
+    };
+}
+
+fn artifact_failed_read(
+    header: ZirlFileHeader,
+    error: ZirlArtifactError
+): ZirlArtifactReadResult {
+    let no_text: [0]char = [];
+    let no_dependencies: [0]ZirlArtifactDependency = [];
+    let no_sections: [0]ZirlArtifactSection = [];
+    return ZirlArtifactReadResult {
+        header: header,
+        canonical_path: raw no_text[0u64..0u64],
+        module_name: raw no_text[0u64..0u64],
+        semantic_profile_name: raw no_text[0u64..0u64],
+        dependencies: raw no_dependencies[0u64..0u64],
+        sections: raw no_sections[0u64..0u64],
+        error: error,
+    };
+}
+
+pub fn read_zirl_artifact(
+    bytes: []u8,
+    storage: *ZirlArtifactStorage
+): ZirlArtifactReadResult {
+    var reader = ZirlByteReader {
+        bytes: bytes,
+        position: 0u64,
+        failed: false,
+    };
+    var header = ZirlFileHeader {
+        magic: 0u32,
+        container_version: 0u32,
+        hir_schema_version: 0u32,
+        endianness: 0u8,
+        reserved: 0u8,
+        section_count: 0u16,
+        header_size: 0u32,
+        checksum: 0u32,
+        required_features: 0u64,
+        optional_features: 0u64,
+        source_fingerprint_primary: 0u64,
+        source_fingerprint_secondary: 0u64,
+        semantic_profile_version: 0u32,
+        public_abi_hi: 0u32,
+        public_abi_lo: 0u32,
+        dependency_count: 0u32,
+        declaration_count: 0u32,
+        template_count: 0u32,
+        function_count: 0u32,
+        canonical_path_length: 0u32,
+        module_name_length: 0u32,
+        semantic_profile_name_length: 0u32,
+    };
+    if (not read_file_header(&raw reader, &raw header)) {
+        return artifact_failed_read(header, ZirlArtifactError.InvalidContainer);
+    }
+    if (header.magic != 0x5A49524Cu32) {
+        return artifact_failed_read(header, ZirlArtifactError.InvalidContainer);
+    }
+    if (header.container_version != 21u32) {
+        return artifact_failed_read(header, ZirlArtifactError.InvalidContainer);
+    }
+    if (header.hir_schema_version != 1u32) {
+        return artifact_failed_read(header, ZirlArtifactError.InvalidContainer);
+    }
+    if (header.endianness != 1u8) {
+        return artifact_failed_read(header, ZirlArtifactError.InvalidContainer);
+    }
+    if (header.reserved != 0u8) {
+        return artifact_failed_read(header, ZirlArtifactError.InvalidContainer);
+    }
+    if (header.canonical_path_length == 0u32) {
+        return artifact_failed_read(header, ZirlArtifactError.InvalidContainer);
+    }
+    if (header.semantic_profile_name_length == 0u32) {
+        return artifact_failed_read(header, ZirlArtifactError.InvalidContainer);
+    }
+    if (header.semantic_profile_version == 0u32) {
+        return artifact_failed_read(header, ZirlArtifactError.InvalidContainer);
+    }
+    if ((header.dependency_count as u64) > @lengthOf(storage->dependencies)) {
+        return artifact_failed_read(
+            header,
+            ZirlArtifactError.InsufficientDecodeStorage
+        );
+    }
+    if ((header.section_count as u64) > @lengthOf(storage->entries)) {
+        return artifact_failed_read(
+            header,
+            ZirlArtifactError.InsufficientDecodeStorage
+        );
+    }
+    if ((header.section_count as u64) > @lengthOf(storage->sections)) {
+        return artifact_failed_read(
+            header,
+            ZirlArtifactError.InsufficientDecodeStorage
+        );
+    }
+
+    let path = artifact_text_read(
+        reader,
+        header.canonical_path_length as u64,
+        storage->canonical_path
+    );
+    if (path.insufficient_storage) {
+        return artifact_failed_read(
+            header,
+            ZirlArtifactError.InsufficientDecodeStorage
+        );
+    }
+    reader = path.reader;
+    let module = artifact_text_read(
+        reader,
+        header.module_name_length as u64,
+        storage->module_name
+    );
+    if (module.insufficient_storage) {
+        return artifact_failed_read(
+            header,
+            ZirlArtifactError.InsufficientDecodeStorage
+        );
+    }
+    reader = module.reader;
+    let profile = artifact_text_read(
+        reader,
+        header.semantic_profile_name_length as u64,
+        storage->semantic_profile_name
+    );
+    if (profile.insufficient_storage) {
+        return artifact_failed_read(
+            header,
+            ZirlArtifactError.InsufficientDecodeStorage
+        );
+    }
+    reader = profile.reader;
+    if (reader.failed) {
+        return artifact_failed_read(header, ZirlArtifactError.InvalidContainer);
+    }
+
+    var dependency_text_offset = 0u64;
+    for (offset in 1u64..(header.dependency_count as u64)) {
+        let index = offset - 1;
+        if (dependency_text_offset > @lengthOf(storage->dependency_text)) {
+            return artifact_failed_read(
+                header,
+                ZirlArtifactError.InsufficientDecodeStorage
+            );
+        }
+        let dependency_path = artifact_blob_read(
+            reader,
+            raw storage->dependency_text[
+                dependency_text_offset..@lengthOf(storage->dependency_text)
+            ]
+        );
+        if (dependency_path.insufficient_storage) {
+            return artifact_failed_read(
+                header,
+                ZirlArtifactError.InsufficientDecodeStorage
+            );
+        }
+        reader = dependency_path.reader;
+        dependency_text_offset =
+            dependency_text_offset + @lengthOf(dependency_path.value);
+        if (dependency_text_offset > @lengthOf(storage->dependency_text)) {
+            return artifact_failed_read(
+                header,
+                ZirlArtifactError.InsufficientDecodeStorage
+            );
+        }
+        let import_key = artifact_blob_read(
+            reader,
+            raw storage->dependency_text[
+                dependency_text_offset..@lengthOf(storage->dependency_text)
+            ]
+        );
+        if (import_key.insufficient_storage) {
+            return artifact_failed_read(
+                header,
+                ZirlArtifactError.InsufficientDecodeStorage
+            );
+        }
+        reader = import_key.reader;
+        dependency_text_offset =
+            dependency_text_offset + @lengthOf(import_key.value);
+        let abi_hi = read_u32(reader);
+        reader = abi_hi.reader;
+        let abi_lo = read_u32(reader);
+        reader = abi_lo.reader;
+        if (reader.failed) {
+            return artifact_failed_read(header, ZirlArtifactError.InvalidContainer);
+        }
+        raw storage->dependencies[index] = ZirlArtifactDependency {
+            canonical_path: dependency_path.value,
+            import_key: import_key.value,
+            public_abi_hi: abi_hi.value,
+            public_abi_lo: abi_lo.value,
+        };
+    }
+
+    let table_size = (header.section_count as u64) * 24u64;
+    if (reader.position > @lengthOf(bytes)) {
+        return artifact_failed_read(header, ZirlArtifactError.InvalidContainer);
+    }
+    if (reader.position > (header.header_size as u64)) {
+        return artifact_failed_read(header, ZirlArtifactError.InvalidContainer);
+    }
+    if (table_size != (header.header_size as u64) - reader.position) {
+        return artifact_failed_read(header, ZirlArtifactError.InvalidContainer);
+    }
+    for (offset in 1u64..(header.section_count as u64)) {
+        let index = offset - 1;
+        var entry = ZirlSectionEntry {
+            id: 0u16,
+            flags: 0u16,
+            schema_version: 0u16,
+            reserved: 0u16,
+            offset: 0u64,
+            size: 0u64,
+        };
+        if (not read_section_entry(&raw reader, &raw entry)) {
+            return artifact_failed_read(header, ZirlArtifactError.InvalidContainer);
+        }
+        raw storage->entries[index] = entry;
+    }
+    let validation = validate_zirl_sections(
+        &raw header,
+        raw storage->entries[0u64..(header.section_count as u64)],
+        @lengthOf(bytes)
+    );
+    if (validation.error != ZirlValidationError.None) {
+        return artifact_failed_read(header, ZirlArtifactError.InvalidContainer);
+    }
+    if (reader.position != (header.header_size as u64)) {
+        return artifact_failed_read(header, ZirlArtifactError.InvalidContainer);
+    }
+
+    for (offset in 1u64..(header.section_count as u64)) {
+        let index = offset - 1;
+        let entry: ZirlSectionEntry = raw storage->entries[index];
+        raw storage->sections[index] = ZirlArtifactSection {
+            id: entry.id,
+            flags: entry.flags,
+            schema_version: entry.schema_version,
+            payload: raw bytes[entry.offset..(entry.offset + entry.size)],
+        };
+    }
+    let dependencies =
+        raw storage->dependencies[0u64..(header.dependency_count as u64)];
+    let sections = raw storage->sections[0u64..(header.section_count as u64)];
+    if (artifact_checksum(
+            path.value,
+            module.value,
+            profile.value,
+            dependencies,
+            sections
+        ) != header.checksum) {
+        return artifact_failed_read(header, ZirlArtifactError.ChecksumMismatch);
+    }
+    return ZirlArtifactReadResult {
+        header: header,
+        canonical_path: path.value,
+        module_name: module.value,
+        semantic_profile_name: profile.value,
+        dependencies: dependencies,
+        sections: sections,
+        error: ZirlArtifactError.None,
+    };
+}
