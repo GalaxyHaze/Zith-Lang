@@ -1,0 +1,409 @@
+from cache/zirl-buffer
+from ir/hir
+
+pub struct ZirlGenericParamRecord {
+    pub name_id: HirStringId,
+    pub bound_type_ids: []HirTypeId,
+}
+
+pub struct ZirlTemplateRecord {
+    pub kind: HirDeclarationKind,
+    pub is_extern: bool,
+    pub name_id: HirStringId,
+    pub return_type_id: HirTypeId,
+    pub params: []ZirlGenericParamRecord,
+    pub param_type_ids: []HirTypeId,
+    pub param_name_ids: []HirStringId,
+    pub field_name_ids: []HirStringId,
+    pub field_type_ids: []HirTypeId,
+    pub canonical_field_order: []u32,
+    pub method_declaration_indices: []HirDeclarationId,
+    pub trait_type_ids: []HirTypeId,
+}
+
+pub struct ZirlTemplateSection {
+    pub templates: []ZirlTemplateRecord,
+}
+
+pub struct ZirlTemplateStorage {
+    pub templates: []ZirlTemplateRecord,
+    pub params: []ZirlGenericParamRecord,
+    pub param_bound_type_ids: []HirTypeId,
+    pub param_type_ids: []HirTypeId,
+    pub param_name_ids: []HirStringId,
+    pub field_name_ids: []HirStringId,
+    pub field_type_ids: []HirTypeId,
+    pub canonical_field_order: []u32,
+    pub method_declaration_indices: []HirDeclarationId,
+    pub trait_type_ids: []HirTypeId,
+}
+
+pub struct ZirlTemplateRead {
+    pub reader: ZirlByteReader,
+    pub value: ZirlTemplateSection,
+}
+
+struct ZirlTemplateIdsRead {
+    reader: ZirlByteReader,
+    count: u32,
+}
+
+fn template_writer_failure(writer: ZirlByteWriter): ZirlByteWriter {
+    var failed = writer;
+    failed.failed = true;
+    return failed;
+}
+
+fn template_reader_failure(
+    reader: ZirlByteReader,
+    storage: *ZirlTemplateStorage
+): ZirlTemplateRead {
+    var failed = reader;
+    failed.failed = true;
+    return ZirlTemplateRead {
+        reader: failed,
+        value: ZirlTemplateSection {
+            templates: raw storage->templates[0u64..0u64],
+        },
+    };
+}
+
+fn template_ids_fit(values: []u32): bool {
+    return @lengthOf(values) <= 0xFFFFFFFFu64;
+}
+
+fn template_hir_ids_fit(values: []HirTypeId): bool {
+    return @lengthOf(values) <= 0xFFFFFFFFu64;
+}
+
+fn template_string_ids_fit(values: []HirStringId): bool {
+    return @lengthOf(values) <= 0xFFFFFFFFu64;
+}
+
+fn template_declaration_ids_fit(values: []HirDeclarationId): bool {
+    return @lengthOf(values) <= 0xFFFFFFFFu64;
+}
+
+fn decode_template_kind(kind: u8): HirDeclarationKind {
+    if (kind == (HirDeclarationKind.Function as u8)) { return HirDeclarationKind.Function; }
+    if (kind == (HirDeclarationKind.Struct as u8)) { return HirDeclarationKind.Struct; }
+    if (kind == (HirDeclarationKind.Trait as u8)) { return HirDeclarationKind.Trait; }
+    if (kind == (HirDeclarationKind.Interface as u8)) { return HirDeclarationKind.Interface; }
+    if (kind == (HirDeclarationKind.Enum as u8)) { return HirDeclarationKind.Enum; }
+    if (kind == (HirDeclarationKind.Alias as u8)) { return HirDeclarationKind.Alias; }
+    if (kind == (HirDeclarationKind.Variable as u8)) { return HirDeclarationKind.Variable; }
+    if (kind == (HirDeclarationKind.Module as u8)) { return HirDeclarationKind.Module; }
+    if (kind == (HirDeclarationKind.Component as u8)) { return HirDeclarationKind.Component; }
+    if (kind == (HirDeclarationKind.Union as u8)) { return HirDeclarationKind.Union; }
+    if (kind == (HirDeclarationKind.Asset as u8)) { return HirDeclarationKind.Asset; }
+    if (kind == (HirDeclarationKind.Word as u8)) { return HirDeclarationKind.Word; }
+    return HirDeclarationKind.Context;
+}
+
+fn template_bool_byte(value: bool): u8 {
+    if (value) {
+        return 1u8;
+    }
+    return 0u8;
+}
+
+fn write_template_ids(writer: ZirlByteWriter, values: []u32): ZirlByteWriter {
+    var result = write_u32(writer, @lengthOf(values) as u32);
+    for (offset in 1u64..@lengthOf(values)) {
+        let index = offset - 1;
+        result = write_u32(result, raw values[index]);
+    }
+    return result;
+}
+
+fn valid_template_record(template: ZirlTemplateRecord): bool {
+    if (template.kind > HirDeclarationKind.Context or
+        not template_hir_ids_fit(template.param_type_ids) or
+        not template_string_ids_fit(template.param_name_ids) or
+        not template_string_ids_fit(template.field_name_ids) or
+        not template_hir_ids_fit(template.field_type_ids) or
+        not template_ids_fit(template.canonical_field_order) or
+        not template_declaration_ids_fit(template.method_declaration_indices) or
+        not template_hir_ids_fit(template.trait_type_ids) or
+        @lengthOf(template.params) > 0xFFFFFFFFu64) {
+        return false;
+    }
+    for (offset in 1u64..@lengthOf(template.params)) {
+        let index = offset - 1;
+        let parameter: ZirlGenericParamRecord = raw template.params[index];
+        if (not template_hir_ids_fit(parameter.bound_type_ids)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+pub fn write_templates_section(
+    writer: ZirlByteWriter,
+    section: *ZirlTemplateSection
+): ZirlByteWriter {
+    if (writer.failed or @lengthOf(section->templates) > 0xFFFFFFFFu64) {
+        return template_writer_failure(writer);
+    }
+    for (offset in 1u64..@lengthOf(section->templates)) {
+        let index = offset - 1;
+        let template: ZirlTemplateRecord = raw section->templates[index];
+        if (not valid_template_record(template)) {
+            return template_writer_failure(writer);
+        }
+    }
+
+    var result = write_u32(writer, @lengthOf(section->templates) as u32);
+    for (offset in 1u64..@lengthOf(section->templates)) {
+        let index = offset - 1;
+        let template: ZirlTemplateRecord = raw section->templates[index];
+        result = write_u8(result, template.kind as u8);
+        result = write_u8(result, template_bool_byte(template.is_extern));
+        result = write_u8(result, 0u8);
+        result = write_u8(result, 0u8);
+        result = write_u32(result, template.name_id);
+        result = write_u32(result, template.return_type_id);
+        result = write_u32(result, @lengthOf(template.params) as u32);
+        for (param_offset in 1u64..@lengthOf(template.params)) {
+            let param_index = param_offset - 1;
+            let parameter: ZirlGenericParamRecord = raw template.params[param_index];
+            result = write_u32(result, parameter.name_id);
+            result = write_u32(result, @lengthOf(parameter.bound_type_ids) as u32);
+            for (bound_offset in 1u64..@lengthOf(parameter.bound_type_ids)) {
+                let bound_index = bound_offset - 1;
+                result = write_u32(result, raw parameter.bound_type_ids[bound_index]);
+            }
+        }
+        result = write_template_ids(result, raw template.param_type_ids);
+        result = write_template_ids(result, raw template.param_name_ids);
+        result = write_template_ids(result, raw template.field_name_ids);
+        result = write_template_ids(result, raw template.field_type_ids);
+        result = write_template_ids(result, raw template.canonical_field_order);
+        result = write_template_ids(result, raw template.method_declaration_indices);
+        result = write_template_ids(result, raw template.trait_type_ids);
+    }
+    return result;
+}
+
+fn read_template_id_values(
+    reader: ZirlByteReader,
+    output: []u32,
+    offset: u64,
+    count: u32
+): ZirlTemplateIdsRead {
+    if (offset > @lengthOf(output) or
+        (count as u64) > @lengthOf(output) - offset) {
+        var failed = reader;
+        failed.failed = true;
+        return ZirlTemplateIdsRead { reader: failed, count: 0u32 };
+    }
+    var cursor = reader;
+    var values = raw output[offset..@lengthOf(output)];
+    for (iteration in 1u64..(count as u64)) {
+        let index = iteration - 1;
+        let value = read_u32(cursor);
+        cursor = value.reader;
+        if (cursor.failed) {
+            var failed = reader;
+            failed.failed = true;
+            return ZirlTemplateIdsRead { reader: failed, count: 0u32 };
+        }
+        raw values[index] = value.value;
+    }
+    return ZirlTemplateIdsRead { reader: cursor, count: count };
+}
+
+fn read_template_ids(
+    reader: ZirlByteReader,
+    output: []u32,
+    offset: u64
+): ZirlTemplateIdsRead {
+    let count = read_u32(reader);
+    if (count.reader.failed) {
+        var failed = reader;
+        failed.failed = true;
+        return ZirlTemplateIdsRead { reader: failed, count: 0u32 };
+    }
+    let values = read_template_id_values(count.reader, output, offset, count.value);
+    if (values.reader.failed) {
+        var failed = reader;
+        failed.failed = true;
+        return ZirlTemplateIdsRead { reader: failed, count: 0u32 };
+    }
+    return values;
+}
+
+pub fn read_templates_section(
+    reader: ZirlByteReader,
+    storage: *ZirlTemplateStorage
+): ZirlTemplateRead {
+    let count = read_u32(reader);
+    if (count.reader.failed or (count.value as u64) > @lengthOf(storage->templates)) {
+        return template_reader_failure(reader, storage);
+    }
+    var cursor = count.reader;
+    var parameter_offset: u64 = 0u64;
+    var bound_offset: u64 = 0u64;
+    var param_type_offset: u64 = 0u64;
+    var param_name_offset: u64 = 0u64;
+    var field_name_offset: u64 = 0u64;
+    var field_type_offset: u64 = 0u64;
+    var field_order_offset: u64 = 0u64;
+    var method_offset: u64 = 0u64;
+    var trait_offset: u64 = 0u64;
+
+    for (offset in 1u64..(count.value as u64)) {
+        let index = offset - 1;
+        let kind = read_u8(cursor);
+        cursor = kind.reader;
+        let is_extern = read_u8(cursor);
+        cursor = is_extern.reader;
+        let reserved_a = read_u8(cursor);
+        cursor = reserved_a.reader;
+        let reserved_b = read_u8(cursor);
+        cursor = reserved_b.reader;
+        if (cursor.failed or kind.value > (HirDeclarationKind.Context as u8) or
+            is_extern.value > 1u8 or reserved_a.value != 0u8 or
+            reserved_b.value != 0u8) {
+            return template_reader_failure(reader, storage);
+        }
+        let name_id = read_u32(cursor);
+        cursor = name_id.reader;
+        let return_type_id = read_u32(cursor);
+        cursor = return_type_id.reader;
+        let params_count = read_u32(cursor);
+        cursor = params_count.reader;
+        if (cursor.failed or parameter_offset > @lengthOf(storage->params) or
+            (params_count.value as u64) >
+                @lengthOf(storage->params) - parameter_offset) {
+            return template_reader_failure(reader, storage);
+        }
+        let params_start = parameter_offset;
+
+        for (param_iteration in 1u64..(params_count.value as u64)) {
+            let param_index = parameter_offset;
+            let param_name = read_u32(cursor);
+            cursor = param_name.reader;
+            let bounds_count = read_u32(cursor);
+            cursor = bounds_count.reader;
+            if (cursor.failed or bound_offset > @lengthOf(storage->param_bound_type_ids) or
+                (bounds_count.value as u64) >
+                    @lengthOf(storage->param_bound_type_ids) - bound_offset) {
+                return template_reader_failure(reader, storage);
+            }
+            let bounds_start = bound_offset;
+            let bounds = read_template_id_values(
+                cursor,
+                raw storage->param_bound_type_ids,
+                bound_offset,
+                bounds_count.value
+            );
+            cursor = bounds.reader;
+            if (cursor.failed) {
+                return template_reader_failure(reader, storage);
+            }
+            bound_offset = bound_offset + (bounds.count as u64);
+            raw storage->params[param_index] = ZirlGenericParamRecord {
+                name_id: param_name.value,
+                bound_type_ids: raw storage->param_bound_type_ids[
+                    bounds_start..bound_offset
+                ],
+            };
+            parameter_offset = parameter_offset + 1u64;
+            _ = param_iteration;
+        }
+
+        let param_types = read_template_ids(
+            cursor,
+            raw storage->param_type_ids,
+            param_type_offset
+        );
+        cursor = param_types.reader;
+        if (cursor.failed) { return template_reader_failure(reader, storage); }
+        param_type_offset = param_type_offset + (param_types.count as u64);
+        let param_names = read_template_ids(
+            cursor,
+            raw storage->param_name_ids,
+            param_name_offset
+        );
+        cursor = param_names.reader;
+        if (cursor.failed) { return template_reader_failure(reader, storage); }
+        param_name_offset = param_name_offset + (param_names.count as u64);
+        let field_names = read_template_ids(
+            cursor,
+            raw storage->field_name_ids,
+            field_name_offset
+        );
+        cursor = field_names.reader;
+        if (cursor.failed) { return template_reader_failure(reader, storage); }
+        field_name_offset = field_name_offset + (field_names.count as u64);
+        let field_types = read_template_ids(
+            cursor,
+            raw storage->field_type_ids,
+            field_type_offset
+        );
+        cursor = field_types.reader;
+        if (cursor.failed) { return template_reader_failure(reader, storage); }
+        field_type_offset = field_type_offset + (field_types.count as u64);
+        let field_order = read_template_ids(
+            cursor,
+            raw storage->canonical_field_order,
+            field_order_offset
+        );
+        cursor = field_order.reader;
+        if (cursor.failed) { return template_reader_failure(reader, storage); }
+        field_order_offset = field_order_offset + (field_order.count as u64);
+        let methods = read_template_ids(
+            cursor,
+            raw storage->method_declaration_indices,
+            method_offset
+        );
+        cursor = methods.reader;
+        if (cursor.failed) { return template_reader_failure(reader, storage); }
+        method_offset = method_offset + (methods.count as u64);
+        let traits = read_template_ids(
+            cursor,
+            raw storage->trait_type_ids,
+            trait_offset
+        );
+        cursor = traits.reader;
+        if (cursor.failed) { return template_reader_failure(reader, storage); }
+        trait_offset = trait_offset + (traits.count as u64);
+
+        raw storage->templates[index] = ZirlTemplateRecord {
+            kind: decode_template_kind(kind.value),
+            is_extern: is_extern.value == 1u8,
+            name_id: name_id.value,
+            return_type_id: return_type_id.value,
+            params: raw storage->params[params_start..parameter_offset],
+            param_type_ids: raw storage->param_type_ids[
+                param_type_offset - (param_types.count as u64)..param_type_offset
+            ],
+            param_name_ids: raw storage->param_name_ids[
+                param_name_offset - (param_names.count as u64)..param_name_offset
+            ],
+            field_name_ids: raw storage->field_name_ids[
+                field_name_offset - (field_names.count as u64)..field_name_offset
+            ],
+            field_type_ids: raw storage->field_type_ids[
+                field_type_offset - (field_types.count as u64)..field_type_offset
+            ],
+            canonical_field_order: raw storage->canonical_field_order[
+                field_order_offset - (field_order.count as u64)..field_order_offset
+            ],
+            method_declaration_indices: raw storage->method_declaration_indices[
+                method_offset - (methods.count as u64)..method_offset
+            ],
+            trait_type_ids: raw storage->trait_type_ids[
+                trait_offset - (traits.count as u64)..trait_offset
+            ],
+        };
+    }
+
+    return ZirlTemplateRead {
+        reader: cursor,
+        value: ZirlTemplateSection {
+            templates: raw storage->templates[0u64..(count.value as u64)],
+        },
+    };
+}
