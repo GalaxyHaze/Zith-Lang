@@ -1,0 +1,140 @@
+from cache/zirl-artifact
+from cache/zirl-attrs-section
+from cache/zirl-code-section
+from cache/zirl-container
+from cache/zirl-decl-section
+from cache/zirl-metadata
+from cache/zirl-template-section
+from ir/hir
+
+pub const zirlHirMetadataSectionId: u16 = 1u16
+pub const zirlHirDeclsSectionId: u16 = 2u16
+pub const zirlHirTemplatesSectionId: u16 = 3u16
+pub const zirlHirCodeSectionId: u16 = 4u16
+pub const zirlHirAttrsSectionId: u16 = 5u16
+
+pub struct ZirlHirArtifactSource {
+    pub identity: ZirlArtifactIdentity,
+    pub paths: [][]char,
+    pub module: HirModule,
+    pub declarations: ZirlDeclSection,
+    pub templates: ZirlTemplateSection,
+    pub code: ZirlCodeSection,
+    pub attrs: ZirlAttrsSection,
+}
+
+pub struct ZirlHirArtifactWriteStorage {
+    pub metadata_bytes: []u8,
+    pub decls_bytes: []u8,
+    pub templates_bytes: []u8,
+    pub code_bytes: []u8,
+    pub attrs_bytes: []u8,
+    pub sections: []ZirlArtifactSection,
+}
+
+fn failed_hir_artifact_write(): ZirlArtifactWriteResult {
+    return ZirlArtifactWriteResult {
+        size: 0u64,
+        error: ZirlArtifactError.InvalidSections,
+    };
+}
+
+pub fn write_zirl_hir_artifact(
+    source: *ZirlHirArtifactSource,
+    storage: *ZirlHirArtifactWriteStorage,
+    output: []u8
+): ZirlArtifactWriteResult {
+    if (@lengthOf(storage->sections) < 5u64 or
+        (source->identity.declaration_count as u64) !=
+            @lengthOf(source->declarations.declarations) or
+        (source->identity.template_count as u64) !=
+            @lengthOf(source->templates.templates) or
+        (source->identity.function_count as u64) !=
+            @lengthOf(source->code.functions)) {
+        return failed_hir_artifact_write();
+    }
+
+    let metadata_writer = write_metadata_section(
+        ZirlByteWriter {
+            bytes: storage->metadata_bytes,
+            position: 0u64,
+            failed: false,
+        },
+        source->identity.module_name,
+        source->paths,
+        &raw source->module
+    );
+    let decls_writer = write_decls_section(
+        ZirlByteWriter {
+            bytes: storage->decls_bytes,
+            position: 0u64,
+            failed: false,
+        },
+        &raw source->declarations
+    );
+    let templates_writer = write_templates_section(
+        ZirlByteWriter {
+            bytes: storage->templates_bytes,
+            position: 0u64,
+            failed: false,
+        },
+        &raw source->templates
+    );
+    let code_writer = write_code_section(
+        ZirlByteWriter {
+            bytes: storage->code_bytes,
+            position: 0u64,
+            failed: false,
+        },
+        &raw source->code
+    );
+    let attrs_writer = write_attrs_section(
+        ZirlByteWriter {
+            bytes: storage->attrs_bytes,
+            position: 0u64,
+            failed: false,
+        },
+        &raw source->attrs
+    );
+    if (metadata_writer.failed or decls_writer.failed or templates_writer.failed or
+        code_writer.failed or attrs_writer.failed) {
+        return failed_hir_artifact_write();
+    }
+
+    raw storage->sections[0] = ZirlArtifactSection {
+        id: zirlHirMetadataSectionId,
+        flags: 1u16,
+        schema_version: zirlMetadataSectionSchemaVersion,
+        payload: raw storage->metadata_bytes[0u64..metadata_writer.position],
+    };
+    raw storage->sections[1] = ZirlArtifactSection {
+        id: zirlHirDeclsSectionId,
+        flags: 1u16,
+        schema_version: zirlSectionSchemaVersion,
+        payload: raw storage->decls_bytes[0u64..decls_writer.position],
+    };
+    raw storage->sections[2] = ZirlArtifactSection {
+        id: zirlHirTemplatesSectionId,
+        flags: 1u16,
+        schema_version: zirlSectionSchemaVersion,
+        payload: raw storage->templates_bytes[0u64..templates_writer.position],
+    };
+    raw storage->sections[3] = ZirlArtifactSection {
+        id: zirlHirCodeSectionId,
+        flags: 1u16,
+        schema_version: zirlSectionSchemaVersion,
+        payload: raw storage->code_bytes[0u64..code_writer.position],
+    };
+    raw storage->sections[4] = ZirlArtifactSection {
+        id: zirlHirAttrsSectionId,
+        flags: 1u16,
+        schema_version: zirlSectionSchemaVersion,
+        payload: raw storage->attrs_bytes[0u64..attrs_writer.position],
+    };
+
+    return write_zirl_artifact(
+        &raw source->identity,
+        raw storage->sections[0u64..5u64],
+        output
+    );
+}

@@ -50,6 +50,13 @@ sections are implemented:
   block-instruction, and vtable slices are copied into caller-owned storage.
   Native tests cover projection, Code round-trip, and source-slice mutation
   after projection.
+- Typed section-to-container writer: Metadata, Decls, Templates, Code, and
+  Attrs payloads are encoded in the required ZIRL order with fixed section IDs
+  and schema versions, then passed to the validated artifact-envelope writer.
+  The empty-HIR fixture calls the writer, but currently receives
+  `InvalidSections`; success-path layout assertions and the undersized-buffer
+  failure test remain incomplete. Envelope reading remains covered by the
+  separate container test.
 - Caller-owned decode storage and failure handling for the section codecs;
   tests cover golden bytes, round-trips, truncation, invalid values, and
   short output buffers in the implemented sections.
@@ -65,8 +72,15 @@ rejection:
 ZITHC=/home/diogo/Zith/build/zithc TMPDIR=/tmp sh tests/run.sh
 ```
 
-The latest full harness run passed on 2026-10-23 (exit 0). It reports
-deprecated-syntax warnings from the HIR verifier. The standalone
+The full harness passed on 2026-10-23 before the typed section-to-container
+writer fixture was added. The current fixture passes `zithc check`, but its
+native run initially hit an internal compiler error when the fixture directly
+read fields through raw section-array indexing. Removing those reads lets the
+function compile, but the writer returns `ZirlArtifactError.InvalidSections`
+(exit code 2). Running the aggregate fixture through the VM fails with
+`unsupported slot size in v2 lowering`. Therefore the current full harness
+does not pass, and this writer slice is not validated. Earlier successful
+harness runs reported deprecated-syntax warnings from the HIR verifier. The standalone
 `src/main.zith` check currently fails on syntax errors in the uncommitted
 `src/main.zith` and `src/utils/keywords.zith` worktree changes; those files
 were not part of the cache work.
@@ -77,11 +91,11 @@ The following work remains:
   Function identities must use the artifact's canonical compact type table;
   local `HirTypeId` values alone are not a cross-artifact identity, and
   function-signature entries may need to be synthesized.
-- Assemble and restore a complete `HirModule` artifact from the metadata,
-  declaration, template, attribute, and Code section codecs.
-- Connect each section codec to `HirModule` and add complete-artifact
-  byte-for-byte conformance fixtures. The current generic envelope accepts
-  already encoded section payloads and does not serialize or hydrate HIR.
+- Add typed section decoding and restore a complete `HirModule` artifact from
+  the metadata, declaration, template, attribute, and Code section codecs.
+- Connect the section projections to `HirModule` and add complete-artifact
+  byte-for-byte conformance fixtures. The new writer composes typed payloads,
+  but does not yet hydrate a `HirModule`.
 - Finish the shared VIR/codegen port and run the final acceptance audit.
 - Implement a real Zith frontend adapter only after the local frontend has the
   semantic pipeline needed to produce verified HIR.

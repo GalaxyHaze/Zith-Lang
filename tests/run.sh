@@ -25,3 +25,5 @@ cp -R "$repo_root/tests" "$temp_root/tests"
     "$temp_root/tests/hir-contract.zith"
 "$compiler" --include "$temp_root/src" run --no-cache \
     "$temp_root/tests/zirl-artifact.zith"
+"$compiler" --include "$temp_root/src" run --no-cache \
+    "$temp_root/tests/zirl-hir-artifact.zith"

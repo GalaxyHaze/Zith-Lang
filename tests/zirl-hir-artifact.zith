@@ -1,0 +1,161 @@
+from cache/zirl-artifact
+from cache/zirl-attrs-section
+from cache/zirl-code-section
+from cache/zirl-container
+from cache/zirl-decl-section
+from cache/zirl-hir-artifact
+from cache/zirl-metadata
+from cache/zirl-template-section
+from ir/hir
+
+extern fn calloc(count: u64, size: u64): raw opaque
+extern fn free(ptr: raw opaque): void
+
+fn empty_hir_module(): HirModule {
+    let strings: [0][]char = [];
+    let types: [0]HirType = [];
+    let struct_defs: [0]HirStructDef = [];
+    let enum_defs: [0]HirEnumDef = [];
+    let union_defs: [0]HirUnionDef = [];
+    let expressions: [0]HirExpr = [];
+    let functions: [0]HirFunction = [];
+    let declarations: [0]HirDeclaration = [];
+    let globals: [0]HirGlobalConst = [];
+    let vtables: [0]HirVTable = [];
+    let slots: [0]HirSlotAttrs = [];
+    let calls: [0]HirCallAttrs = [];
+    let function_attrs: [0]HirFunctionAttrs = [];
+    let proofs: [0]HirSafetyProof = [];
+    return HirModule {
+        strings: raw strings[0u64..0u64],
+        types: raw types[0u64..0u64],
+        struct_defs: raw struct_defs[0u64..0u64],
+        enum_defs: raw enum_defs[0u64..0u64],
+        union_defs: raw union_defs[0u64..0u64],
+        expressions: raw expressions[0u64..0u64],
+        functions: raw functions[0u64..0u64],
+        declarations: raw declarations[0u64..0u64],
+        global_constants: raw globals[0u64..0u64],
+        vtables: raw vtables[0u64..0u64],
+        slot_attrs: raw slots[0u64..0u64],
+        call_attrs: raw calls[0u64..0u64],
+        function_attrs: raw function_attrs[0u64..0u64],
+        safety_attrs: HirSafetyAttrs { proofs: raw proofs[0u64..0u64] },
+    };
+}
+
+fn empty_declaration_section(): ZirlDeclSection {
+    let declarations: [0]ZirlDeclarationRecord = [];
+    return ZirlDeclSection { declarations: raw declarations[0u64..0u64] };
+}
+
+fn empty_template_section(): ZirlTemplateSection {
+    let templates: [0]ZirlTemplateRecord = [];
+    return ZirlTemplateSection { templates: raw templates[0u64..0u64] };
+}
+
+fn empty_code_section(): ZirlCodeSection {
+    let expressions: [0]ZirlCompactExpr = [];
+    let functions: [0]ZirlCompactFunction = [];
+    let globals: [0]ZirlCodeGlobal = [];
+    let vtables: [0]ZirlCodeVTable = [];
+    let mappings: [0]ZirlCanonicalMapping = [];
+    return ZirlCodeSection {
+        expressions: raw expressions[0u64..0u64],
+        functions: raw functions[0u64..0u64],
+        globals: raw globals[0u64..0u64],
+        vtables: raw vtables[0u64..0u64],
+        canonical_mappings: raw mappings[0u64..0u64],
+    };
+}
+
+fn empty_attrs_section(): ZirlAttrsSection {
+    let slots: [0]ZirlSlotAttrsRecord = [];
+    let calls: [0]ZirlCallAttrsRecord = [];
+    let functions: [0]ZirlFunctionAttrsRecord = [];
+    let proofs: [0]ZirlSafetyProofRecord = [];
+    return ZirlAttrsSection {
+        slots: raw slots[0u64..0u64],
+        calls: raw calls[0u64..0u64],
+        functions: raw functions[0u64..0u64],
+        safety_proofs: raw proofs[0u64..0u64],
+    };
+}
+
+fn exercise_hir_artifact_writer(memory: *u8): i32 {
+    let module = empty_hir_module();
+    let paths: [0][]char = [];
+    let declaration_section = empty_declaration_section();
+    let template_section = empty_template_section();
+    let code_section = empty_code_section();
+    let attrs_section = empty_attrs_section();
+    let dependencies: [0]ZirlArtifactDependency = [];
+    var identity = ZirlArtifactIdentity {
+        canonical_path: "/test.zith",
+        module_name: "test",
+        semantic_profile_name: "zith",
+        semantic_profile_version: 1u32,
+        source_fingerprint_primary: 10u64,
+        source_fingerprint_secondary: 20u64,
+        public_abi_hi: 0u32,
+        public_abi_lo: 0u32,
+        optional_features: 0u64,
+        declaration_count: 0u32,
+        template_count: 0u32,
+        function_count: 0u32,
+        dependencies: raw dependencies[0u64..0u64],
+    };
+    var source = ZirlHirArtifactSource {
+        identity: identity,
+        paths: raw paths[0u64..0u64],
+        module: module,
+        declarations: declaration_section,
+        templates: template_section,
+        code: code_section,
+        attrs: attrs_section,
+    };
+    let no_bytes: [0]u8 = [];
+    var sections: [5]ZirlArtifactSection = [
+        ZirlArtifactSection { id: 0u16, flags: 0u16, schema_version: 0u16, payload: raw no_bytes[0u64..0u64] },
+        ZirlArtifactSection { id: 0u16, flags: 0u16, schema_version: 0u16, payload: raw no_bytes[0u64..0u64] },
+        ZirlArtifactSection { id: 0u16, flags: 0u16, schema_version: 0u16, payload: raw no_bytes[0u64..0u64] },
+        ZirlArtifactSection { id: 0u16, flags: 0u16, schema_version: 0u16, payload: raw no_bytes[0u64..0u64] },
+        ZirlArtifactSection { id: 0u16, flags: 0u16, schema_version: 0u16, payload: raw no_bytes[0u64..0u64] },
+    ];
+    var storage = ZirlHirArtifactWriteStorage {
+        metadata_bytes: raw memory[0u64..256u64],
+        decls_bytes: raw memory[256u64..512u64],
+        templates_bytes: raw memory[512u64..768u64],
+        code_bytes: raw memory[768u64..1024u64],
+        attrs_bytes: raw memory[1024u64..1280u64],
+        sections: raw sections[0u64..5u64],
+    };
+    let output = raw memory[1280u64..2304u64];
+    let written = write_zirl_hir_artifact(
+        &raw source,
+        &raw storage,
+        output
+    );
+    if (written.error != ZirlArtifactError.None) {
+        return written.error as i32;
+    }
+    if (written.size == 0u64) {
+        return 2;
+    }
+    return 0;
+}
+
+fn test_hir_artifact_writes_required_sections(): i32 {
+    let memory_option: ?*u8 = calloc(2304u64, 1u64) as ?*u8;
+    if (memory_option is null) {
+        return 1;
+    }
+    var memory: *u8 = must memory_option;
+    let result = exercise_hir_artifact_writer(memory);
+    free(memory);
+    return result;
+}
+
+fn main(): i32 {
+    return test_hir_artifact_writes_required_sections();
+}

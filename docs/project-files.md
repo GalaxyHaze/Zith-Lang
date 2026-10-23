@@ -39,6 +39,7 @@ point, and directory paths; it does not enumerate source files individually.
 | `src/cache/zirl-code-section.zith` | ZIRL Code section codec. | Encodes compact expressions, functions/blocks, globals, vtables, and canonical mappings with caller-owned decode storage. |
 | `src/cache/zirl-canonical-types.zith` | Artifact-owned canonical HIR type table and synthesized function signatures. | Remaps HIR-local type IDs and returns structured validation/capacity errors. |
 | `src/cache/zirl-hir-code.zith` | HIR-to-ZIRL Code section projection. | Verifies HIR, remaps type/function identities, and builds compact code records using caller-owned storage. |
+| `src/cache/zirl-hir-artifact.zith` | Composition of required typed HIR sections into a ZIRL artifact. | Encodes Metadata, Decls, Templates, Code, and Attrs with fixed section IDs/schema versions before writing the artifact envelope. |
 
 There is no project-owned C source file in the current tree. Add its entry
 here if one is introduced; do not infer that a planned directory already
@@ -54,6 +55,7 @@ exists.
 | `tests/hir-contract.zith` | Native test entry point for the shared HIR data contract. | Exercises HIR invariants, ZIRL section round-trips, HIR-to-Code projection, golden bytes, malformed records, and buffer failures. |
 | `tests/canonical-types.zith` | Native test entry point for artifact-owned canonical types. | Exercises local type IDs, synthesized signature metadata, insufficient storage, and invalid function references. |
 | `tests/zirl-artifact.zith` | Native test entry point for complete ZIRL container framing. | Exercises identity/dependency round-trip, required section layout, checksum rejection, malformed sections, and short output buffers. |
+| `tests/zirl-hir-artifact.zith` | Native test entry point for typed HIR-artifact composition. | Calls the typed section writer with an empty HIR fixture; success-path layout and buffer-failure assertions remain incomplete. |
 
 ### Documentation
 
