@@ -39,6 +39,17 @@ pub struct ZirlSectionEntry {
     pub size: u64,
 }
 
+fn has_record_bytes(reader: *ZirlByteReader, count: u64): bool {
+    if (reader->failed) {
+        return false;
+    }
+    let capacity = @lengthOf(reader->bytes);
+    if (reader->position > capacity) {
+        return false;
+    }
+    return count <= capacity - reader->position;
+}
+
 fn put_u8(writer: *ZirlByteWriter, value: u8): bool {
     if (writer->failed) {
         return false;
@@ -106,6 +117,10 @@ pub fn read_file_header(
     reader: *ZirlByteReader,
     header: *ZirlFileHeader
 ): bool {
+    if (not has_record_bytes(reader, zirlFixedHeaderSize)) {
+        reader->failed = true;
+        return false;
+    }
     var cursor = ZirlByteReader {
         bytes: reader->bytes,
         position: reader->position,
@@ -198,6 +213,10 @@ pub fn read_section_entry(
     reader: *ZirlByteReader,
     entry: *ZirlSectionEntry
 ): bool {
+    if (not has_record_bytes(reader, zirlSectionEntrySize)) {
+        reader->failed = true;
+        return false;
+    }
     var cursor = ZirlByteReader {
         bytes: reader->bytes,
         position: reader->position,

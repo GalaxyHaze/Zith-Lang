@@ -900,8 +900,8 @@ fn test_zirl_header_truncation(): i32 {
         failed: false,
     };
     var decoded = ZirlFileHeader {
-        magic: 0u32,
-        container_version: 0u32,
+        magic: 0xAABBCCDDu32,
+        container_version: 0x11223344u32,
         hir_schema_version: 0u32,
         endianness: 0u8,
         reserved: 0u8,
@@ -925,6 +925,18 @@ fn test_zirl_header_truncation(): i32 {
     };
     if (read_file_header(&raw truncated_reader, &raw decoded)) {
         return 3;
+    }
+    if (not truncated_reader.failed) {
+        return 4;
+    }
+    if (truncated_reader.position != 0u64) {
+        return 5;
+    }
+    if (decoded.magic != 0xAABBCCDDu32) {
+        return 6;
+    }
+    if (decoded.container_version != 0x11223344u32) {
+        return 7;
     }
     return 0;
 }
@@ -971,6 +983,49 @@ fn test_zirl_section_entry_roundtrip(): i32 {
         decoded_entry.offset != 0x0102030405060708u64 or
         decoded_entry.size != 0x1112131415161718u64) {
         return 2;
+    }
+    return 0;
+}
+
+fn test_zirl_section_entry_truncation_is_atomic(): i32 {
+    var output: [23]u8 = [
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+    ];
+    var reader = ZirlByteReader {
+        bytes: raw output[0..23],
+        position: 0,
+        failed: false,
+    };
+    var entry = ZirlSectionEntry {
+        id: 0xAAAau16,
+        flags: 0xBBBBu16,
+        schema_version: 0xCCCCu16,
+        reserved: 0xDDDDu16,
+        offset: 0x0102030405060708u64,
+        size: 0x1112131415161718u64,
+    };
+    if (read_section_entry(&raw reader, &raw entry)) {
+        return 1;
+    }
+    if (not reader.failed) {
+        return 2;
+    }
+    if (reader.position != 0u64) {
+        return 3;
+    }
+    if (entry.id != 0xAAAau16) {
+        return 4;
+    }
+    if (entry.flags != 0xBBBBu16) {
+        return 5;
+    }
+    if (entry.offset != 0x0102030405060708u64) {
+        return 6;
+    }
+    if (entry.size != 0x1112131415161718u64) {
+        return 7;
     }
     return 0;
 }
@@ -1043,6 +1098,9 @@ fn main(): i32 {
     }
     if (test_zirl_section_entry_roundtrip() != 0) {
         return 225;
+    }
+    if (test_zirl_section_entry_truncation_is_atomic() != 0) {
+        return 226;
     }
     return 0;
 }
