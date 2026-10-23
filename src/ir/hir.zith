@@ -188,10 +188,41 @@ pub struct HirType {
     pub kind: HirTypeKind,
     pub width: u8,
     pub flags: u8,
+    // ref0 is a type id except for Struct, Enum, and Union, where it is a
+    // definition-table id shared with the cache representation.
     pub ref0: HirTypeId,
     pub ref1: u32,
     pub args: []HirTypeId,
     pub arg_names: []HirStringId,
+}
+
+pub struct HirStructDef {
+    pub name_id: HirStringId,
+    pub field_name_ids: []HirStringId,
+    pub field_type_ids: []HirTypeId,
+    pub foreign_field_offsets: []u64,
+    pub type_arg_ids: []HirTypeId,
+    pub has_foreign_layout: bool,
+    pub foreign_abi_is_single_i64: bool,
+    pub foreign_size_bytes: u64,
+    pub foreign_align_bytes: u64,
+}
+
+pub struct HirEnumVariant {
+    pub name_id: HirStringId,
+    pub discriminant: i64,
+}
+
+pub struct HirEnumDef {
+    pub name_id: HirStringId,
+    pub underlying_type_id: HirTypeId,
+    pub variants: []HirEnumVariant,
+}
+
+pub struct HirUnionDef {
+    pub name_id: HirStringId,
+    pub member_type_ids: []HirTypeId,
+    pub is_raw: bool,
 }
 
 pub struct HirSafetyProof {
@@ -583,6 +614,9 @@ pub struct HirSafetyAttrs {
 pub struct HirModule {
     pub strings: [][]char,
     pub types: []HirType,
+    pub struct_defs: []HirStructDef,
+    pub enum_defs: []HirEnumDef,
+    pub union_defs: []HirUnionDef,
     pub expressions: []HirExpr,
     pub functions: []HirFunction,
     pub declarations: []HirDeclaration,

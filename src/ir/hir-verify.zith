@@ -18,6 +18,7 @@ pub enum HirVerifyError {
     InvalidGlobal = 14,
     InvalidVTable = 15,
     AllocationFailure = 16,
+    InvalidDefinitionReference = 17,
 }
 
 pub struct HirVerificationResult {
@@ -452,11 +453,11 @@ fn match_union_guard(
         }
         let union_type: HirType = raw module_owner->types[operation.from_type];
         if (union_type.kind != HirTypeKind.Union or
-            not valid_declaration_id(module, union_type.ref1, false)) {
+            (union_type.ref0 as u64) >= @lengthOf(module_owner->union_defs)) {
             return 0;
         }
-        let declaration: HirDeclaration = raw module_owner->declarations[union_type.ref1];
-        if ((operation.member_index as u64) >= @lengthOf(declaration.members)) {
+        let union_def: HirUnionDef = raw module_owner->union_defs[union_type.ref0];
+        if ((operation.member_index as u64) >= @lengthOf(union_def.member_type_ids)) {
             return 0;
         }
         if (condition is HirUnionCheck) {
@@ -473,8 +474,8 @@ fn match_union_guard(
                 if (condition.member_index == operation.member_index) {
                     return 1;
                 }
-                if (@lengthOf(declaration.members) == 2 and
-                    (condition.member_index as u64) < @lengthOf(declaration.members)) {
+                if (@lengthOf(union_def.member_type_ids) == 2 and
+                    (condition.member_index as u64) < @lengthOf(union_def.member_type_ids)) {
                     return 2;
                 }
             }
@@ -1015,6 +1016,74 @@ fn verify_function_guards(
 
 pub fn verify_hir(module_owner: *HirModule): HirVerificationResult {
     let module: *HirModule = &*module_owner;
+    for (definition_iteration in 1u64..@lengthOf(module_owner->struct_defs)) {
+        let definition_offset = definition_iteration - 1;
+        let definition_index = definition_offset as u32;
+        let definition: HirStructDef = raw module_owner->struct_defs[definition_offset];
+        if (not valid_string_id(module, definition.name_id, false)) {
+            return verification_error(HirVerifyError.InvalidStringReference, definition_index);
+        }
+        if (@lengthOf(definition.field_name_ids) != @lengthOf(definition.field_type_ids)) {
+            return verification_error(HirVerifyError.InvalidTableShape, definition_index);
+        }
+        if (definition.has_foreign_layout and
+            (@lengthOf(definition.foreign_field_offsets) != @lengthOf(definition.field_type_ids) or
+             definition.foreign_size_bytes == 0u64 or
+             definition.foreign_align_bytes == 0u64)) {
+            return verification_error(HirVerifyError.InvalidTableShape, definition_index);
+        }
+        for (field_iteration in 1u64..@lengthOf(definition.field_type_ids)) {
+            let field_offset = field_iteration - 1;
+            let field_name: HirStringId = raw definition.field_name_ids[field_offset];
+            let field_type: HirTypeId = raw definition.field_type_ids[field_offset];
+            if (not valid_string_id(module, field_name, false)) {
+                return verification_error(HirVerifyError.InvalidStringReference, definition_index);
+            }
+            if (not valid_type_id(module, field_type, false)) {
+                return verification_error(HirVerifyError.InvalidTypeReference, definition_index);
+            }
+        }
+        for (argument_iteration in 1u64..@lengthOf(definition.type_arg_ids)) {
+            let argument_offset = argument_iteration - 1;
+            let argument_type: HirTypeId = raw definition.type_arg_ids[argument_offset];
+            if (not valid_type_id(module, argument_type, false)) {
+                return verification_error(HirVerifyError.InvalidTypeReference, definition_index);
+            }
+        }
+    }
+    for (definition_iteration in 1u64..@lengthOf(module_owner->enum_defs)) {
+        let definition_offset = definition_iteration - 1;
+        let definition_index = definition_offset as u32;
+        let definition: HirEnumDef = raw module_owner->enum_defs[definition_offset];
+        if (not valid_string_id(module, definition.name_id, false)) {
+            return verification_error(HirVerifyError.InvalidStringReference, definition_index);
+        }
+        if (not valid_type_id(module, definition.underlying_type_id, true)) {
+            return verification_error(HirVerifyError.InvalidTypeReference, definition_index);
+        }
+        for (variant_iteration in 1u64..@lengthOf(definition.variants)) {
+            let variant_offset = variant_iteration - 1;
+            let variant: HirEnumVariant = raw definition.variants[variant_offset];
+            if (not valid_string_id(module, variant.name_id, false)) {
+                return verification_error(HirVerifyError.InvalidStringReference, definition_index);
+            }
+        }
+    }
+    for (definition_iteration in 1u64..@lengthOf(module_owner->union_defs)) {
+        let definition_offset = definition_iteration - 1;
+        let definition_index = definition_offset as u32;
+        let definition: HirUnionDef = raw module_owner->union_defs[definition_offset];
+        if (not valid_string_id(module, definition.name_id, false)) {
+            return verification_error(HirVerifyError.InvalidStringReference, definition_index);
+        }
+        for (member_iteration in 1u64..@lengthOf(definition.member_type_ids)) {
+            let member_offset = member_iteration - 1;
+            let member_type: HirTypeId = raw definition.member_type_ids[member_offset];
+            if (not valid_type_id(module, member_type, false)) {
+                return verification_error(HirVerifyError.InvalidTypeReference, definition_index);
+            }
+        }
+    }
     for (type_iteration in 1u64..@lengthOf(module_owner->types)) {
         let type_offset = type_iteration - 1;
         let type_index = type_offset as u32;
@@ -1029,10 +1098,13 @@ pub fn verify_hir(module_owner: *HirModule): HirVerificationResult {
             not valid_type_id(module, hir_type.ref0, false)) {
             return verification_error(HirVerifyError.InvalidTypeReference, type_index);
         }
-        if ((hir_type.kind == HirTypeKind.Struct or hir_type.kind == HirTypeKind.Enum or
-             hir_type.kind == HirTypeKind.Union) and
-            not valid_declaration_id(module, hir_type.ref1, false)) {
-            return verification_error(HirVerifyError.InvalidDeclarationReference, type_index);
+        if ((hir_type.kind == HirTypeKind.Struct and
+             (hir_type.ref0 as u64) >= @lengthOf(module_owner->struct_defs)) or
+            (hir_type.kind == HirTypeKind.Enum and
+             (hir_type.ref0 as u64) >= @lengthOf(module_owner->enum_defs)) or
+            (hir_type.kind == HirTypeKind.Union and
+             (hir_type.ref0 as u64) >= @lengthOf(module_owner->union_defs))) {
+            return verification_error(HirVerifyError.InvalidDefinitionReference, type_index);
         }
         if (@lengthOf(hir_type.arg_names) != 0 and
             @lengthOf(hir_type.arg_names) != @lengthOf(hir_type.args)) {

@@ -25,8 +25,8 @@ point, and directory paths; it does not enumerate source files individually.
 | `src/main.zith` | Current executable entry point. | Bootstrap source; imports `utils/prints`. |
 | `src/utils/prints.zith` | Colored terminal output helpers. | Bootstrap source using C stdio interop. |
 | `src/frontend/lexer.zith` | Reserved frontend lexer source. | Experimental implementation. |
-| `src/ir/hir.zith` | Frontend-neutral HIR nodes, types, functions, and residual attributes. | Initial shared contract; verifier and cache codec follow. |
-| `src/ir/hir-verify.zith` | Verifies HIR references, node shapes, and residual safety metadata. | Structural verifier with CFG-dominating guard validation. |
+| `src/ir/hir.zith` | Frontend-neutral HIR nodes, nominal type definitions, functions, and residual attributes. | Shared type and definition tables aligned with the cross-dialect cache contract. |
+| `src/ir/hir-verify.zith` | Verifies HIR references, definition tables, node shapes, and residual safety metadata. | Structural verifier with CFG-dominating guard validation. |
 | `src/cache/cache.zith` | Shared HIR identity and derived-VIR compatibility rules. | Identity checks; binary artifact codec follows. |
 | `src/cache/zirl-buffer.zith` | Bounds-checked little-endian ZIRL byte primitives. | Signed/unsigned integers, `f64`, and atomic length-prefixed blobs. |
 | `src/cache/zirl-container.zith` | ZIRL v20 header, section-table records, and compatibility checks. | Validates required HIR sections and safely skippable optional sections; payload codec follows. |

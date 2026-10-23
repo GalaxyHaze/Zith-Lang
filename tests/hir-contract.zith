@@ -13,6 +13,9 @@ fn make_hir_module(
     proofs: []HirSafetyProof
 ): HirModule {
     let declarations: [0]HirDeclaration = [];
+    let struct_defs: [0]HirStructDef = [];
+    let enum_defs: [0]HirEnumDef = [];
+    let union_defs: [0]HirUnionDef = [];
     let global_constants: [0]HirGlobalConst = [];
     let vtables: [0]HirVTable = [];
     let slot_attrs: [0]HirSlotAttrs = [];
@@ -21,6 +24,9 @@ fn make_hir_module(
     return HirModule {
         strings: strings,
         types: types,
+        struct_defs: raw struct_defs[0..0],
+        enum_defs: raw enum_defs[0..0],
+        union_defs: raw union_defs[0..0],
         expressions: expressions,
         functions: functions,
         declarations: raw declarations[0..0],
@@ -46,6 +52,77 @@ fn empty_hir_module(): HirModule {
         raw functions[0..0],
         raw proofs[0..0]
     );
+}
+
+fn test_nominal_types_use_definition_tables(): i32 {
+    let strings: [2][]char = ["Node", "value"];
+    let no_type_ids: [1]HirTypeId = [invalidType];
+    let no_string_ids: [1]HirStringId = [invalidString];
+    var struct_type = HirType {
+        kind: HirTypeKind.Struct,
+        width: 0u8,
+        flags: 0u8,
+        ref0: 0u32,
+        ref1: 0u32,
+        args: raw no_type_ids[0..0],
+        arg_names: raw no_string_ids[0..0],
+    };
+    struct_type.kind = HirTypeKind.Struct;
+    struct_type.ref0 = 0u32;
+    struct_type.args = raw no_type_ids[0..0];
+    struct_type.arg_names = raw no_string_ids[0..0];
+    let types: [1]HirType = [struct_type];
+    let field_names: [1]HirStringId = [1u32];
+    let field_types: [1]HirTypeId = [0u32];
+    let field_offsets: [1]u64 = [0u64];
+    let type_args: [1]HirTypeId = [0u32];
+    let struct_def = HirStructDef {
+        name_id: 0u32,
+        field_name_ids: raw field_names[0..1],
+        field_type_ids: raw field_types[0..1],
+        foreign_field_offsets: raw field_offsets[0..1],
+        type_arg_ids: raw type_args[0..1],
+        has_foreign_layout: false,
+        foreign_abi_is_single_i64: false,
+        foreign_size_bytes: 0u64,
+        foreign_align_bytes: 0u64,
+    };
+    let struct_defs: [1]HirStructDef = [struct_def];
+    var valid_module = empty_hir_module();
+    valid_module.strings = raw strings[0..2];
+    valid_module.types = raw types[0..1];
+    valid_module.struct_defs = raw struct_defs[0..1];
+    let valid = verify_hir(&valid_module);
+    if (valid.error != HirVerifyError.None) {
+        return 1;
+    }
+
+    let invalid_type_args: [1]HirTypeId = [9u32];
+    var invalid_struct_def = struct_def;
+    invalid_struct_def.type_arg_ids = raw invalid_type_args[0..1];
+    let invalid_struct_defs: [1]HirStructDef = [invalid_struct_def];
+    var invalid_argument_module = empty_hir_module();
+    invalid_argument_module.strings = raw strings[0..2];
+    invalid_argument_module.types = raw types[0..1];
+    invalid_argument_module.struct_defs = raw invalid_struct_defs[0..1];
+    let invalid_argument = verify_hir(&invalid_argument_module);
+    if (invalid_argument.error != HirVerifyError.InvalidTypeReference) {
+        return 2;
+    }
+
+    var invalid_struct_type = struct_type;
+    invalid_struct_type.ref0 = 1u32;
+    let invalid_types: [1]HirType = [invalid_struct_type];
+    var invalid_definition_module = empty_hir_module();
+    invalid_definition_module.strings = raw strings[0..2];
+    invalid_definition_module.types = raw invalid_types[0..1];
+    invalid_definition_module.struct_defs = raw struct_defs[0..1];
+    let invalid_definition = verify_hir(&invalid_definition_module);
+    if (invalid_definition.error == HirVerifyError.InvalidDefinitionReference and
+        invalid_definition.index == 0u32) {
+        return 0;
+    }
+    return 3;
 }
 
 fn test_hir_literal_variant(): i32 {
@@ -1466,6 +1543,10 @@ fn main(): i32 {
     let empty_status = test_empty_hir_verifies();
     if (empty_status != 0) {
         return empty_status;
+    }
+    let nominal_status = test_nominal_types_use_definition_tables();
+    if (nominal_status != 0) {
+        return 10 + nominal_status;
     }
     let expression_status = test_nonempty_expression_table_verifies();
     if (expression_status != 0) {
