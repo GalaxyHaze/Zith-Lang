@@ -5,6 +5,7 @@
 
 #include <filesystem>
 #include <fstream>
+#include <functional>
 #include <memory>
 #include <string>
 #include <string_view>
@@ -34,7 +35,8 @@ struct SessionRunner {
         std::filesystem::remove_all(root);
     }
 
-    bool run(std::string_view input, session::Stage target = session::Stage::TypeChecked) {
+    bool run(std::string_view input, session::Stage target = session::Stage::TypeChecked,
+             const std::function<bool(const session::CompilationSession &)> &inspect = {}) {
         const auto path = root / "main.zith";
         std::ofstream file(path, std::ios::binary | std::ios::trunc);
         file << input;
@@ -56,7 +58,7 @@ struct SessionRunner {
                             d.message.c_str());
             }
         }
-        return ok && session.diags().errorCount() == 0;
+        return ok && session.diags().errorCount() == 0 && (!inspect || inspect(session));
     }
 };
 
@@ -107,6 +109,29 @@ void test_imported_generic_functions_resolve_explicit_arguments() {
                           "    return helper.create<i32>(heap) - value;\n"
                           "}\n");
     CHECK(ok, "imported generic functions accept explicit types and coercible arguments");
+}
+
+void test_imported_generic_layout_intrinsic_lowers_with_module_context() {
+    SessionRunner t;
+    const bool ok =
+        t.run("import std/collections/dyn_array as array\n"
+              "fn main(): i32 { return 0; }\n",
+              session::Stage::HirLowered, [](const session::CompilationSession &result) {
+                  bool found_template = false;
+                  bool generic_field  = false;
+                  for (uint32_t index = 0; index < result.types().structDefCount(); ++index) {
+                      const auto *def = result.types().lookupStructDef(index);
+                      if (def == nullptr || result.interner().lookup(def->name).find(
+                                                "DynArraySlot") == std::string_view::npos)
+                          continue;
+                      found_template = true;
+                      for (const auto &field : def->fields)
+                          generic_field |=
+                              result.types().kindOf(field.type) == types::TypeKind::GenericParam;
+                  }
+                  return found_template && generic_field;
+              });
+    CHECK(ok, "imported generic layout intrinsics retain their declaring module's type context");
 }
 
 void test_imported_generic_call_with_explicit_self_lowers() {
@@ -221,6 +246,7 @@ void test_generic_hashmap() {
     test_nested_generic_calls_propagate_bounds();
     test_reified_struct_reuses_args_identity();
     test_imported_generic_functions_resolve_explicit_arguments();
+    test_imported_generic_layout_intrinsic_lowers_with_module_context();
     test_imported_generic_call_with_explicit_self_lowers();
     test_explicit_generic_arguments_still_validate_runtime_arguments();
     test_hashmap_stdlib_checks();

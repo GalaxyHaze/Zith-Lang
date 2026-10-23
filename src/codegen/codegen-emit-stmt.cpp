@@ -57,7 +57,7 @@ llvm::Value *CodeGenEmit::emitStateTailCall(const hir::HirStateTailCall &tail,
     }
 
     const auto *current = builder_.GetInsertBlock();
-    if (current == nullptr || current->getTerminator() != nullptr ||
+    if (current == nullptr || (!current->empty() && current->back().isTerminator()) ||
         fn->arg_size() != args.size() || fn->isVarArg()) {
         return nullptr;
     }

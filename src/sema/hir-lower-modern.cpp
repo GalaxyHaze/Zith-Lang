@@ -424,6 +424,11 @@ void HirLowerModern::predeclareInstantiation(session::ModuleKey module_key,
                                     : kInvalidTypeId;
     const auto *fn            = sema_.typeTable().function(instance_type);
     if (fn != nullptr) {
+        const auto *saved_module = current_module_;
+        const auto saved_type_module = types_.currentModule();
+        current_module_ = module;
+        types_.setCurrentModule(module_key);
+
         hir_fn.return_type = lowerType(fn->result);
         if (hir_fn.isState) {
             hir_fn.machineId         = module_sema->stateMachineIdOf(*decl);
@@ -435,6 +440,9 @@ void HirLowerModern::predeclareInstantiation(session::ModuleKey module_key,
             hir_fn.params.push(lowerType(fn->params[index]));
             hir_fn.param_names.push(interner_.intern(decl->parameters[index].name));
         }
+
+        current_module_ = saved_module;
+        types_.setCurrentModule(saved_type_module);
     }
 
     const auto key = internFunctionKey(interner_, module_key, instance.decl);

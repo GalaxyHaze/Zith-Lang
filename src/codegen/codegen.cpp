@@ -529,7 +529,8 @@ void CodeGen::emitFnBody(const hir::HirFunction &fn, const hir::HirModule &mod) 
     // compiler error, and the unterminated block would crash LLVM codegen rather than be
     // diagnosed, so report it and mark the module unusable.
     for (size_t i = 0; i < fn.blocks.size(); i++) {
-        if (fn.blocks[i].terminator != hir::kInvalidHirExpr && !llvmBlocks[i]->getTerminator()) {
+        if (fn.blocks[i].terminator != hir::kInvalidHirExpr &&
+            (llvmBlocks[i]->empty() || !llvmBlocks[i]->back().isTerminator())) {
             invalidIR_ = true;
             llvmError("failed to emit the terminator of a block in function '" + std::string(name) +
                       "'");
@@ -540,7 +541,7 @@ void CodeGen::emitFnBody(const hir::HirFunction &fn, const hir::HirModule &mod) 
     // Terminate every block that still lacks one, so the module stays verifiable even on
     // the failure path above: no consumer may ever see an unterminated block.
     for (auto *bb : llvmBlocks) {
-        if (bb->getTerminator())
+        if (!bb->empty() && bb->back().isTerminator())
             continue;
         llvm::IRBuilder<> termBuilder(bb);
         if (retType->isVoidTy())
