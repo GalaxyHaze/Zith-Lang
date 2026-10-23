@@ -30,6 +30,7 @@ point, and directory paths; it does not enumerate source files individually.
 | `src/cache/cache.zith` | Shared HIR identity and derived-VIR compatibility rules. | Identity checks; binary artifact codec follows. |
 | `src/cache/zirl-buffer.zith` | Bounds-checked little-endian ZIRL byte primitives. | Signed/unsigned integers, `f64`, and atomic length-prefixed blobs. |
 | `src/cache/zirl-container.zith` | ZIRL v20 header, section-table records, and compatibility checks. | Validates required HIR sections and safely skippable optional sections; payload codec follows. |
+| `src/cache/zirl-type-section.zith` | ZIRL metadata type-entry codec. | Encodes and transactionally decodes v1 compact type records; complete metadata section follows. |
 
 There is no project-owned C source file in the current tree. Add its entry
 here if one is introduced; do not infer that a planned directory already

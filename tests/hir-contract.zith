@@ -3,6 +3,7 @@ from ir/hir-verify
 from cache/cache
 from cache/zirl-buffer
 from cache/zirl-container
+from cache/zirl-type-section
 
 fn make_hir_module(
     strings: [][]char,
@@ -783,6 +784,181 @@ fn test_zirl_signed_and_float_primitives(): i32 {
     return 0;
 }
 
+fn test_zirl_type_entry_roundtrip_and_validation(): i32 {
+    let type_args: [2]HirTypeId = [2u32, 0x01020304u32];
+    let type_names: [1]HirStringId = [1u32];
+    let expected: [32]u8 = [
+        5u8, 64u8, 1u8, 0u8,
+        0x78u8, 0x56u8, 0x34u8, 0x12u8,
+        0xCDu8, 0xABu8, 0u8, 0u8,
+        2u8, 0u8, 0u8, 0u8,
+        2u8, 0u8, 0u8, 0u8,
+        4u8, 3u8, 2u8, 1u8,
+        1u8, 0u8, 0u8, 0u8,
+        1u8, 0u8, 0u8, 0u8,
+    ];
+    let input = HirType {
+        kind: HirTypeKind.Int,
+        width: 64u8,
+        flags: 1u8,
+        ref0: 0x12345678u32,
+        ref1: 0xABCDu32,
+        args: raw type_args[0..2],
+        arg_names: raw type_names[0..1],
+    };
+    var output: [32]u8 = [
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+    ];
+    let writer = ZirlByteWriter {
+        bytes: raw output[0..32],
+        position: 0u64,
+        failed: false,
+    };
+    let encoded = write_type_entry(writer, &input);
+    if (encoded.failed or encoded.position != 32u64) {
+        return 1;
+    }
+    for (offset in 1u64..32u64) {
+        let index = offset - 1;
+        if (raw output[index] != raw expected[index]) {
+            return 2;
+        }
+    }
+
+    let reader = ZirlByteReader {
+        bytes: raw output[0..32],
+        position: 0u64,
+        failed: false,
+    };
+    let no_args: [0]HirTypeId = [];
+    let no_names: [0]HirStringId = [];
+    var decoded_args: [2]HirTypeId = [0u32, 0u32];
+    var decoded_names: [1]HirStringId = [0u32];
+    let decoded = read_type_entry(
+        reader,
+        raw decoded_args[0..2],
+        raw decoded_names[0..1]
+    );
+    if (decoded.reader.failed or decoded.reader.position != 32u64 or
+        decoded.value.kind != HirTypeKind.Int or decoded.value.width != 64u8 or
+        decoded.value.flags != 1u8 or decoded.value.ref0 != 0x12345678u32 or
+        decoded.value.ref1 != 0xABCDu32 or
+        @lengthOf(decoded.value.args) != 2u64 or
+        raw decoded.value.args[0] != 2u32 or
+        raw decoded.value.args[1] != 0x01020304u32 or
+        @lengthOf(decoded.value.arg_names) != 1u64 or
+        raw decoded.value.arg_names[0] != 1u32) {
+        return 3;
+    }
+
+    let scalar_expected: [20]u8 = [
+        3u8, 0u8, 0u8, 0u8,
+        0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8,
+        0u8, 0u8, 0u8, 0u8,
+        0u8, 0u8, 0u8, 0u8,
+        0u8, 0u8, 0u8, 0u8,
+    ];
+    var scalar_args: [1]HirTypeId = [0u32];
+    var scalar_names: [1]HirStringId = [0u32];
+    let scalar_source_reader = ZirlByteReader {
+        bytes: raw scalar_expected[0u64..20u64],
+        position: 0u64,
+        failed: false,
+    };
+    let scalar_decoded = read_type_entry(
+        scalar_source_reader,
+        raw scalar_args[0u64..1u64],
+        raw scalar_names[0u64..1u64]
+    );
+    if (scalar_decoded.reader.failed or scalar_decoded.reader.position != 20u64 or
+        scalar_decoded.value.kind != HirTypeKind.Bool or
+        @lengthOf(scalar_decoded.value.args) != 0u64 or
+        @lengthOf(scalar_decoded.value.arg_names) != 0u64) {
+        return 4;
+    }
+    let scalar_value = scalar_decoded.value;
+    var scalar_bytes: [20]u8 = [
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+        0u8, 0u8, 0u8, 0u8,
+    ];
+    let scalar_writer = ZirlByteWriter {
+        bytes: raw scalar_bytes[0..20],
+        position: 0u64,
+        failed: false,
+    };
+    let scalar_encoded = write_type_entry(scalar_writer, &scalar_value);
+    if (scalar_encoded.failed or scalar_encoded.position != 20u64) {
+        return 5;
+    }
+    for (offset in 1u64..20u64) {
+        let index = offset - 1;
+        if (raw scalar_bytes[index] != raw scalar_expected[index]) {
+            return 6;
+        }
+    }
+
+    let insufficient_buffers = read_type_entry(reader, raw no_args[0..0], raw no_names[0..0]);
+    if (not insufficient_buffers.reader.failed or insufficient_buffers.reader.position != 0u64) {
+        return 5;
+    }
+    let truncated_reader = ZirlByteReader {
+        bytes: raw output[0..31],
+        position: 0u64,
+        failed: false,
+    };
+    raw decoded_args[0] = 0xAAAAAAAAu32;
+    raw decoded_args[1] = 0xBBBBBBBBu32;
+    raw decoded_names[0] = 0xCCCCCCCCu32;
+    let truncated = read_type_entry(
+        truncated_reader,
+        raw decoded_args[0..2],
+        raw decoded_names[0..1]
+    );
+    if (not truncated.reader.failed or truncated.reader.position != 0u64 or
+        raw decoded_args[0] != 0xAAAAAAAAu32 or
+        raw decoded_args[1] != 0xBBBBBBBBu32 or
+        raw decoded_names[0] != 0xCCCCCCCCu32) {
+        return 6;
+    }
+
+    raw output[0] = 5u8;
+    raw output[3] = 1u8;
+    let reserved_reader = ZirlByteReader {
+        bytes: raw output[0..32],
+        position: 0u64,
+        failed: false,
+    };
+    let reserved = read_type_entry(
+        reserved_reader,
+        raw decoded_args[0..2],
+        raw decoded_names[0..1]
+    );
+    if (not reserved.reader.failed or reserved.reader.position != 0u64) {
+        return 7;
+    }
+
+    raw output[0] = 0xFFu8;
+    raw output[3] = 0u8;
+    let unknown_kind_reader = ZirlByteReader {
+        bytes: raw output[0..32],
+        position: 0u64,
+        failed: false,
+    };
+    let unknown_kind = read_type_entry(
+        unknown_kind_reader,
+        raw decoded_args[0..2],
+        raw decoded_names[0..1]
+    );
+    if (not unknown_kind.reader.failed or unknown_kind.reader.position != 0u64) {
+        return 8;
+    }
+    return 0;
+}
+
 fn test_zirl_blob_roundtrip_and_atomic_failures(): i32 {
     var output: [9]u8 = [
         0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
@@ -1341,6 +1517,10 @@ fn main(): i32 {
     }
     if (test_zirl_signed_and_float_primitives() != 0) {
         return 241;
+    }
+    let type_section_status = test_zirl_type_entry_roundtrip_and_validation();
+    if (type_section_status != 0) {
+        return 242 + type_section_status;
     }
     if (test_zirl_blob_roundtrip_and_atomic_failures() != 0) {
         return 240;

@@ -1,0 +1,195 @@
+from cache/zirl-buffer
+from ir/hir
+
+pub struct ZirlTypeRead {
+    pub reader: ZirlByteReader,
+    pub value: HirType,
+}
+
+fn known_type_kind(kind: u8): bool {
+    return kind == (HirTypeKind.Error as u8) or
+        kind == (HirTypeKind.Never as u8) or
+        kind == (HirTypeKind.Void as u8) or
+        kind == (HirTypeKind.Bool as u8) or
+        kind == (HirTypeKind.Char as u8) or
+        kind == (HirTypeKind.Int as u8) or
+        kind == (HirTypeKind.Float as u8) or
+        kind == (HirTypeKind.Ptr as u8) or
+        kind == (HirTypeKind.Array as u8) or
+        kind == (HirTypeKind.Struct as u8) or
+        kind == (HirTypeKind.Fn as u8) or
+        kind == (HirTypeKind.Optional as u8) or
+        kind == (HirTypeKind.Failable as u8) or
+        kind == (HirTypeKind.Slice as u8) or
+        kind == (HirTypeKind.Enum as u8) or
+        kind == (HirTypeKind.Union as u8) or
+        kind == (HirTypeKind.TypeVar as u8) or
+        kind == (HirTypeKind.GenericParam as u8) or
+        kind == (HirTypeKind.Incomplete as u8) or
+        kind == (HirTypeKind.Opaque as u8) or
+        kind == (HirTypeKind.Pack as u8) or
+        kind == (HirTypeKind.Dyn as u8) or
+        kind == (HirTypeKind.OpaqueTagged as u8);
+}
+
+fn decode_type_kind(kind: u8): HirTypeKind {
+    if (kind == (HirTypeKind.Error as u8)) { return HirTypeKind.Error; }
+    if (kind == (HirTypeKind.Never as u8)) { return HirTypeKind.Never; }
+    if (kind == (HirTypeKind.Void as u8)) { return HirTypeKind.Void; }
+    if (kind == (HirTypeKind.Bool as u8)) { return HirTypeKind.Bool; }
+    if (kind == (HirTypeKind.Char as u8)) { return HirTypeKind.Char; }
+    if (kind == (HirTypeKind.Int as u8)) { return HirTypeKind.Int; }
+    if (kind == (HirTypeKind.Float as u8)) { return HirTypeKind.Float; }
+    if (kind == (HirTypeKind.Ptr as u8)) { return HirTypeKind.Ptr; }
+    if (kind == (HirTypeKind.Array as u8)) { return HirTypeKind.Array; }
+    if (kind == (HirTypeKind.Struct as u8)) { return HirTypeKind.Struct; }
+    if (kind == (HirTypeKind.Fn as u8)) { return HirTypeKind.Fn; }
+    if (kind == (HirTypeKind.Optional as u8)) { return HirTypeKind.Optional; }
+    if (kind == (HirTypeKind.Failable as u8)) { return HirTypeKind.Failable; }
+    if (kind == (HirTypeKind.Slice as u8)) { return HirTypeKind.Slice; }
+    if (kind == (HirTypeKind.Enum as u8)) { return HirTypeKind.Enum; }
+    if (kind == (HirTypeKind.Union as u8)) { return HirTypeKind.Union; }
+    if (kind == (HirTypeKind.TypeVar as u8)) { return HirTypeKind.TypeVar; }
+    if (kind == (HirTypeKind.GenericParam as u8)) { return HirTypeKind.GenericParam; }
+    if (kind == (HirTypeKind.Incomplete as u8)) { return HirTypeKind.Incomplete; }
+    if (kind == (HirTypeKind.Opaque as u8)) { return HirTypeKind.Opaque; }
+    if (kind == (HirTypeKind.Pack as u8)) { return HirTypeKind.Pack; }
+    if (kind == (HirTypeKind.Dyn as u8)) { return HirTypeKind.Dyn; }
+    return HirTypeKind.OpaqueTagged;
+}
+
+fn reader_has_record_bytes(reader: ZirlByteReader, count: u64): bool {
+    if (reader.failed or reader.position > @lengthOf(reader.bytes)) {
+        return false;
+    }
+    return count <= @lengthOf(reader.bytes) - reader.position;
+}
+
+fn failed_type_read(reader: ZirlByteReader): ZirlTypeRead {
+    var failed = reader;
+    failed.failed = true;
+    let no_type_ids: [0]HirTypeId = [];
+    let no_string_ids: [0]HirStringId = [];
+    let value = HirType {
+        kind: HirTypeKind.Error,
+        width: 0u8,
+        flags: 0u8,
+        ref0: invalidType,
+        ref1: 0u32,
+        args: raw no_type_ids[0..0],
+        arg_names: raw no_string_ids[0..0],
+    };
+    return ZirlTypeRead {
+        reader: failed,
+        value: value,
+    };
+}
+
+pub fn write_type_entry(writer: ZirlByteWriter, value: *HirType): ZirlByteWriter {
+    let args_count = @lengthOf(value->args);
+    let names_count = @lengthOf(value->arg_names);
+    if (args_count > 0xFFFFFFFFu64 or names_count > 0xFFFFFFFFu64) {
+        var failed = writer;
+        failed.failed = true;
+        return failed;
+    }
+
+    var result = write_u8(writer, value->kind as u8);
+    result = write_u8(result, value->width);
+    result = write_u8(result, value->flags);
+    result = write_u8(result, 0u8);
+    result = write_u32(result, value->ref0);
+    result = write_u32(result, value->ref1);
+    result = write_u32(result, args_count as u32);
+    for (offset in 1u64..args_count) {
+        let index = offset - 1;
+        result = write_u32(result, raw value->args[index]);
+    }
+    result = write_u32(result, names_count as u32);
+    for (offset in 1u64..names_count) {
+        let index = offset - 1;
+        result = write_u32(result, raw value->arg_names[index]);
+    }
+    return result;
+}
+
+pub fn read_type_entry(
+    reader: ZirlByteReader,
+    args_output: []HirTypeId,
+    names_output: []HirStringId
+): ZirlTypeRead {
+    var cursor = reader;
+    let kind = read_u8(cursor);
+    cursor = kind.reader;
+    let width = read_u8(cursor);
+    cursor = width.reader;
+    let flags = read_u8(cursor);
+    cursor = flags.reader;
+    let reserved = read_u8(cursor);
+    cursor = reserved.reader;
+    let ref0 = read_u32(cursor);
+    cursor = ref0.reader;
+    let ref1 = read_u32(cursor);
+    cursor = ref1.reader;
+    let args_count = read_u32(cursor);
+    cursor = args_count.reader;
+
+    if (cursor.failed) { return failed_type_read(reader); }
+    if (not known_type_kind(kind.value)) { return failed_type_read(reader); }
+    if (reserved.value != 0u8) { return failed_type_read(reader); }
+    if ((args_count.value as u64) > @lengthOf(args_output)) {
+        return failed_type_read(reader);
+    }
+
+    let args_bytes = (args_count.value as u64) * 4u64;
+    if (not reader_has_record_bytes(cursor, args_bytes)) {
+        return failed_type_read(reader);
+    }
+    var probe = cursor;
+    probe.position = probe.position + args_bytes;
+    let names_count = read_u32(probe);
+    probe = names_count.reader;
+    if (probe.failed or
+        (names_count.value as u64) > @lengthOf(names_output) or
+        not reader_has_record_bytes(probe, (names_count.value as u64) * 4u64)) {
+        return failed_type_read(reader);
+    }
+
+    var args_values = args_output;
+    var names_values = names_output;
+    var args_index: u64 = 0u64;
+    for (offset in 1u64..(args_count.value as u64)) {
+        let index = offset - 1;
+        let argument = read_u32(cursor);
+        cursor = argument.reader;
+        raw args_values[index] = argument.value;
+        args_index = index + 1u64;
+    }
+    let decoded_names_count = read_u32(cursor);
+    cursor = decoded_names_count.reader;
+    if (decoded_names_count.value != names_count.value or cursor.failed) {
+        return failed_type_read(reader);
+    }
+    for (offset in 1u64..(names_count.value as u64)) {
+        let index = offset - 1;
+        let name = read_u32(cursor);
+        cursor = name.reader;
+        raw names_values[index] = name.value;
+    }
+
+    if (cursor.failed) {
+        return failed_type_read(reader);
+    }
+    return ZirlTypeRead {
+        reader: cursor,
+        value: HirType {
+            kind: decode_type_kind(kind.value),
+            width: width.value,
+            flags: flags.value,
+            ref0: ref0.value,
+            ref1: ref1.value,
+            args: raw args_values[0u64..args_index],
+            arg_names: raw names_values[0u64..(names_count.value as u64)],
+        },
+    };
+}
