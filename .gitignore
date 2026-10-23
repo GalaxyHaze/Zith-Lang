@@ -3,8 +3,10 @@
 
 # Build outputs and caches
 /target/
+/tests/target/
 /bin/
 /cache/
 /.zith-cache/
+/tests/.zith-cache/
 /.zmodules/
 *.o
