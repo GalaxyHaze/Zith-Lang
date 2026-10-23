@@ -740,6 +740,105 @@ fn test_zirl_little_endian_primitives(): i32 {
     return 0;
 }
 
+fn test_zirl_blob_roundtrip_and_atomic_failures(): i32 {
+    var output: [9]u8 = [
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+    ];
+    let payload: [5]u8 = [0x10u8, 0x20u8, 0x30u8, 0x40u8, 0x50u8];
+    let writer = ZirlByteWriter {
+        bytes: raw output[0..9],
+        position: 0,
+        failed: false,
+    };
+    let written = write_blob(writer, raw payload[0..5]);
+    if (written.failed or written.position != 9u64 or
+        raw output[0] != 5u8 or raw output[1] != 0u8 or
+        raw output[2] != 0u8 or raw output[3] != 0u8) {
+        return 1;
+    }
+
+    var decoded: [5]u8 = [0u8, 0u8, 0u8, 0u8, 0u8];
+    let reader = ZirlByteReader {
+        bytes: raw output[0..9],
+        position: 0,
+        failed: false,
+    };
+    let decoded_writer = ZirlByteWriter {
+        bytes: raw decoded[0..5],
+        position: 0,
+        failed: false,
+    };
+    let read_result = read_blob_into(reader, decoded_writer);
+    if (read_result.reader.failed or read_result.length != 5u32 or
+        read_result.reader.position != 9u64 or
+        read_result.output.failed or read_result.output.position != 5u64) {
+        return 2;
+    }
+    for (offset in 1u64..5u64) {
+        let index = offset - 1;
+        if (raw decoded[index] != raw payload[index]) {
+            return 3;
+        }
+    }
+
+    var truncated_bytes: [8]u8 = [
+        5u8, 0u8, 0u8, 0u8, 0xA1u8, 0xA2u8, 0xA3u8, 0xA4u8,
+    ];
+    var unchanged: [5]u8 = [
+        0xBBu8, 0xBBu8, 0xBBu8, 0xBBu8, 0xBBu8,
+    ];
+    let truncated_reader = ZirlByteReader {
+        bytes: raw truncated_bytes[0..8],
+        position: 0,
+        failed: false,
+    };
+    let unchanged_writer = ZirlByteWriter {
+        bytes: raw unchanged[0..5],
+        position: 0,
+        failed: false,
+    };
+    let truncated = read_blob_into(truncated_reader, unchanged_writer);
+    if (not truncated.reader.failed or truncated.reader.position != 0u64 or
+        truncated.output.position != 0u64 or
+        raw unchanged[0] != 0xBBu8) {
+        return 4;
+    }
+
+    var small_output: [8]u8 = [
+        0xCCu8, 0xCCu8, 0xCCu8, 0xCCu8,
+        0xCCu8, 0xCCu8, 0xCCu8, 0xCCu8,
+    ];
+    let small_writer = ZirlByteWriter {
+        bytes: raw small_output[0..8],
+        position: 0,
+        failed: false,
+    };
+    let rejected_write = write_blob(small_writer, raw payload[0..5]);
+    if (not rejected_write.failed or rejected_write.position != 0u64 or
+        raw small_output[0] != 0xCCu8) {
+        return 5;
+    }
+
+    var short_output: [4]u8 = [0xDDu8, 0xDDu8, 0xDDu8, 0xDDu8];
+    let complete_reader = ZirlByteReader {
+        bytes: raw output[0..9],
+        position: 0,
+        failed: false,
+    };
+    let short_writer = ZirlByteWriter {
+        bytes: raw short_output[0..4],
+        position: 0,
+        failed: false,
+    };
+    let rejected_read = read_blob_into(complete_reader, short_writer);
+    if (not rejected_read.reader.failed or rejected_read.reader.position != 0u64 or
+        not rejected_read.output.failed or rejected_read.output.position != 0u64 or
+        raw short_output[0] != 0xDDu8) {
+        return 6;
+    }
+    return 0;
+}
+
 fn test_zirl_header_golden_bytes(): i32 {
     var output: [96]u8 = [
         0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
@@ -1196,6 +1295,9 @@ fn main(): i32 {
     }
     if (test_zirl_little_endian_primitives() != 0) {
         return 221;
+    }
+    if (test_zirl_blob_roundtrip_and_atomic_failures() != 0) {
+        return 240;
     }
     if (test_zirl_header_golden_bytes() != 0) {
         return 222;

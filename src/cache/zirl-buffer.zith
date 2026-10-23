@@ -30,6 +30,12 @@ pub struct ZirlByteReadU64 {
     pub value: u64,
 }
 
+pub struct ZirlByteReadBlob {
+    pub reader: ZirlByteReader,
+    pub output: ZirlByteWriter,
+    pub length: u32,
+}
+
 fn writer_has_room(writer: ZirlByteWriter, count: u64): bool {
     if (writer.failed) {
         return false;
@@ -86,6 +92,22 @@ pub fn write_u64(writer: ZirlByteWriter, value: u64): ZirlByteWriter {
     return write_u8(byte6, (value >> 56) as u8);
 }
 
+pub fn write_blob(writer: ZirlByteWriter, bytes: []u8): ZirlByteWriter {
+    var result = writer;
+    let length = @lengthOf(bytes);
+    if (length > 0xFFFFFFFFu64 or
+        not writer_has_room(result, 4u64 + length)) {
+        result.failed = true;
+        return result;
+    }
+    result = write_u32(result, length as u32);
+    for (offset in 1u64..length) {
+        let index = offset - 1;
+        result = write_u8(result, raw bytes[index]);
+    }
+    return result;
+}
+
 pub fn read_u8(reader: ZirlByteReader): ZirlByteReadU8 {
     var result = ZirlByteReadU8 { reader: reader, value: 0u8 };
     if (not reader_has_room(result.reader, 1)) {
@@ -134,4 +156,43 @@ pub fn read_u64(reader: ZirlByteReader): ZirlByteReadU64 {
             ((byte4.value as u64) << 32) + ((byte5.value as u64) << 40) +
             ((byte6.value as u64) << 48) + ((byte7.value as u64) << 56),
     };
+}
+
+pub fn read_blob_into(
+    reader: ZirlByteReader,
+    output: ZirlByteWriter
+): ZirlByteReadBlob {
+    var result = ZirlByteReadBlob {
+        reader: reader,
+        output: output,
+        length: 0u32,
+    };
+    if (not reader_has_room(reader, 4u64)) {
+        result.reader.failed = true;
+        return result;
+    }
+
+    let length_result = read_u32(reader);
+    let length = length_result.value;
+    if (length_result.reader.failed or
+        not reader_has_room(length_result.reader, length as u64)) {
+        result.reader.failed = true;
+        return result;
+    }
+    if (not writer_has_room(output, length as u64)) {
+        result.reader.failed = true;
+        result.output.failed = true;
+        return result;
+    }
+
+    var cursor = length_result.reader;
+    for (offset in 1u64..(length as u64)) {
+        let index = offset - 1;
+        raw result.output.bytes[result.output.position] = raw cursor.bytes[cursor.position];
+        result.output.position = result.output.position + 1;
+        cursor.position = cursor.position + 1;
+    }
+    result.reader = cursor;
+    result.length = length;
+    return result;
 }
