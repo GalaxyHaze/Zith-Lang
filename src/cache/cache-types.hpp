@@ -266,6 +266,9 @@ struct CompactExpr {
     uint32_t resolved_function_name_id = ~uint32_t{0};
     // Compact signature identity disambiguates overloads with the same name.
     uint32_t resolved_function_signature_type_id = ~uint32_t{0};
+    uint32_t variadic_slice_param = ~uint32_t{0};
+    bool is_variadic_slice = false;
+    bool auto_collect_tail = false;
     uint8_t op           = 0; // binary/unary op
     uint8_t flags        = 0; // is_array / literal sub-tag
     CompactSafetyMode safety = CompactSafetyMode::RequiredCheck;
@@ -301,6 +304,7 @@ struct CompactFunction {
     uint32_t machine_id             = 0;
     uint32_t machine_return_type_id = 0;
     uint32_t variadic_slice_param   = ~uint32_t{0};
+    uint32_t foreign_adapter_name_id = ~uint32_t{0};
     bool discardable                = false;
 };
 

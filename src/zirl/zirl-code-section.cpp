@@ -19,6 +19,9 @@ void writeCompactExpr(const cache::CompactExpr &e, ByteWriter &w) {
     w.writeU32(e.name_id);
     w.writeU32(e.resolved_function_name_id);
     w.writeU32(e.resolved_function_signature_type_id);
+    w.writeU32(e.variadic_slice_param);
+    w.writeU8(e.is_variadic_slice ? 1U : 0U);
+    w.writeU8(e.auto_collect_tail ? 1U : 0U);
     w.writeI64(e.int_val);
     w.writeF64(e.flt_val);
     w.writeU32(static_cast<uint32_t>(e.args.size()));
@@ -34,6 +37,7 @@ void writeCompactExpr(const cache::CompactExpr &e, ByteWriter &w) {
 
 bool readCompactExpr(ByteReader &r, cache::CompactExpr &out) {
     uint8_t kind = 0, op = 0, flags = 0, safety = 0;
+    uint8_t is_variadic_slice = 0, auto_collect_tail = 0;
     if (!r.readU8(kind) || !r.readU8(op) || !r.readU8(flags) || !r.readU8(safety) ||
         safety > 3U)
         return false;
@@ -45,8 +49,12 @@ bool readCompactExpr(ByteReader &r, cache::CompactExpr &out) {
         !r.readU32(out.ref_c) || !r.readU32(out.ref_d) || !r.readU32(out.ref_e) ||
         !r.readU32(out.ref_f) || !r.readU32(out.name_id) ||
         !r.readU32(out.resolved_function_name_id) ||
-        !r.readU32(out.resolved_function_signature_type_id))
+        !r.readU32(out.resolved_function_signature_type_id) ||
+        !r.readU32(out.variadic_slice_param) || !r.readU8(is_variadic_slice) ||
+        !r.readU8(auto_collect_tail) || is_variadic_slice > 1U || auto_collect_tail > 1U)
         return false;
+    out.is_variadic_slice = is_variadic_slice != 0U;
+    out.auto_collect_tail = auto_collect_tail != 0U;
     if (!r.readI64(out.int_val) || !r.readF64(out.flt_val))
         return false;
     uint32_t n = 0;
@@ -104,6 +112,7 @@ bool encodeCode(const cache::Artifact &artifact, ByteWriter &w) {
         w.writeU32(fn.machine_id);
         w.writeU32(fn.instance_index);
         w.writeU32(fn.variadic_slice_param);
+        w.writeU32(fn.foreign_adapter_name_id);
         w.writeU32(static_cast<uint32_t>(fn.param_type_ids.size()));
         for (auto id : fn.param_type_ids)
             w.writeU32(id);
@@ -166,7 +175,8 @@ bool decodeCode(ByteReader &r, cache::Artifact &out) {
             !r.readU8(ext) || !r.readU8(foreign) || !r.readU8(a) ||
             !r.readU8(b) || !r.readU8(c) || !r.readU8(d) || !r.readU32(fn.return_type_id) ||
             !r.readU32(fn.machine_return_type_id) || !r.readU32(fn.machine_id) ||
-            !r.readU32(fn.instance_index) || !r.readU32(fn.variadic_slice_param))
+            !r.readU32(fn.instance_index) || !r.readU32(fn.variadic_slice_param) ||
+            !r.readU32(fn.foreign_adapter_name_id))
             return false;
         if (fn.name_id < out.strings.size())
             fn.name = out.strings[fn.name_id];

@@ -350,6 +350,9 @@ CompactExpr ArtifactBuilder::convertExpr(hir::HirExprId id) {
                            }
                            out.ref_e = internType(call.fn_type);
                            out.flags = (call.musttail ? 1U : 0U) | (call.usesTailCC ? 2U : 0U);
+                           out.variadic_slice_param = call.variadicSliceParam;
+                           out.is_variadic_slice = call.isVariadicSlice;
+                           out.auto_collect_tail = call.autoCollectTail;
                            for (auto arg : call.args)
                                out.args.push_back(arg);
                            for (auto arg_type : call.argument_types)
@@ -498,6 +501,9 @@ CompactExpr ArtifactBuilder::convertExpr(hir::HirExprId id) {
                            }
                            out.ref_e = internType(tail.call.fn_type);
                            out.flags = tail.call.usesTailCC ? 2U : 0U;
+                           out.variadic_slice_param = tail.call.variadicSliceParam;
+                           out.is_variadic_slice = tail.call.isVariadicSlice;
+                           out.auto_collect_tail = tail.call.autoCollectTail;
                            for (auto arg : tail.call.args)
                                out.args.push_back(arg);
                            for (auto arg_type : tail.call.argument_types)
@@ -730,6 +736,9 @@ Artifact ArtifactBuilder::build(std::string_view canonical_path, std::string_vie
         cfn.variadic_slice_param   = fn.variadicSliceParam == ~static_cast<size_t>(0)
                                          ? ~uint32_t{0}
                                          : static_cast<uint32_t>(fn.variadicSliceParam);
+        if (fn.foreignAdapterName != memory::kInvalidInternedId)
+            cfn.foreign_adapter_name_id =
+                internString(interner_.lookup(fn.foreignAdapterName));
         cfn.machine_id             = fn.machineId;
         cfn.return_type_id         = internType(fn.return_type);
         cfn.machine_return_type_id = fn.machineReturnType != types::kInvalidType

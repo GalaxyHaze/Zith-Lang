@@ -106,6 +106,8 @@ bool validateArtifactReferences(const cache::Artifact &artifact) {
     for (size_t index = 0; index < artifact.functions.size(); ++index) {
         const auto &function = artifact.functions[index];
         if (!validStringId(function.name_id) ||
+            (function.foreign_adapter_name_id != ~uint32_t{0} &&
+             !validStringId(function.foreign_adapter_name_id)) ||
             function.param_type_ids.size() != function.param_name_ids.size() ||
             (!function.param_slot_ids.empty() &&
              function.param_slot_ids.size() != function.param_type_ids.size()))

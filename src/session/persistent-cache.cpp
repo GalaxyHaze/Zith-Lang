@@ -506,6 +506,9 @@ void CompilationSession::hydrateFromArtifact(const cache::Artifact &art) {
             call.fn_type     = compactType(ce.ref_e);
             call.musttail    = (ce.flags & 1U) != 0U;
             call.usesTailCC  = (ce.flags & 2U) != 0U;
+            call.variadicSliceParam = ce.variadic_slice_param;
+            call.isVariadicSlice = ce.is_variadic_slice;
+            call.autoCollectTail = ce.auto_collect_tail;
             expr             = std::move(call);
             break;
         }
@@ -520,6 +523,9 @@ void CompilationSession::hydrateFromArtifact(const cache::Artifact &art) {
             call.fn_type     = compactType(ce.ref_e);
             call.musttail    = true;
             call.usesTailCC  = (ce.flags & 2U) != 0U;
+            call.variadicSliceParam = ce.variadic_slice_param;
+            call.isVariadicSlice = ce.is_variadic_slice;
+            call.autoCollectTail = ce.auto_collect_tail;
             hir::HirStateTailCall tail(mHirArena);
             tail.call = std::move(call);
             expr      = std::move(tail);
@@ -847,6 +853,9 @@ void CompilationSession::hydrateFromArtifact(const cache::Artifact &art) {
         fn.usesTailCC                   = cfn.uses_tailcc;
         fn.variadicSliceParam = cfn.variadic_slice_param != ~uint32_t{0} ? cfn.variadic_slice_param
                                                                          : ~static_cast<size_t>(0);
+        if (cfn.foreign_adapter_name_id != ~uint32_t{0})
+            fn.foreignAdapterName =
+                mInterner->intern(art.strings[cfn.foreign_adapter_name_id]);
         fn.machineId          = cfn.machine_id;
         fn.machineReturnType  = cfn.machine_return_type_id != 0
                                     ? compactType(cfn.machine_return_type_id)

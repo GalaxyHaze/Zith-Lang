@@ -2515,6 +2515,48 @@ void test_variadic_slice_explicit_vs_auto_free_function() {
              "only the auto-collected call materializes a temporary array");
 }
 
+void test_variadic_slice_call_plan_survives_cache_hydration() {
+    IsolatedWorkspace workspace;
+    workspace.writeFile("main.zith", "fn sum(rest: [...]i32): i32 {\n"
+                                     "    return raw rest[0] + raw rest[1];\n"
+                                     "}\n"
+                                     "extern fn values(): []i32\n"
+                                     "fn main(): i32 {\n"
+                                     "    return sum(values()) + sum(1, 2);\n"
+                                     "}\n");
+
+    memory::Arena first_arena;
+    Options first_options(first_arena);
+    first_options.noCache     = false;
+    first_options.targetStage = session::Stage::Cached;
+    session::CompilationSession first(first_options, (workspace.root / "main.zith").string());
+    first.setBuffered(true);
+    CHECK(first.run(), "cold variadic-slice compilation writes the persistent artifact");
+
+    memory::Arena second_arena;
+    Options second_options(second_arena);
+    second_options.noCache     = false;
+    second_options.targetStage = session::Stage::HirLowered;
+    session::CompilationSession second(second_options, (workspace.root / "main.zith").string());
+    second.setBuffered(true);
+    CHECK(second.runTo(session::Stage::HirLowered),
+          "warm variadic-slice compilation hydrates the persistent artifact");
+
+    bool saw_explicit_slice = false;
+    bool saw_auto_collected_slice = false;
+    const auto &hydrated = second.hirModule();
+    for (size_t id = 0; id < hydrated.exprCount(); ++id) {
+        const auto *call =
+            std::get_if<hir::HirCall>(&hydrated.getExpr(static_cast<hir::HirExprId>(id)));
+        if (call == nullptr || !call->isVariadicSlice)
+            continue;
+        saw_explicit_slice |= !call->autoCollectTail && call->variadicSliceParam == 0U;
+        saw_auto_collected_slice |= call->autoCollectTail && call->variadicSliceParam == 0U;
+    }
+    CHECK(saw_explicit_slice, "hydration preserves the explicit variadic-slice call plan");
+    CHECK(saw_auto_collected_slice, "hydration preserves the auto-collection call plan");
+}
+
 void test_variadic_slice_explicit_vs_auto_method() {
     Workspace workspace;
     workspace.writeFile("main.zith", "struct Agg {\n"
@@ -3057,6 +3099,7 @@ static void test_hir_lower_modern() {
     test_variadic_slice_lowers_to_hir();
     test_variadic_slice_state_lowers_to_hir();
     test_variadic_slice_explicit_vs_auto_free_function();
+    test_variadic_slice_call_plan_survives_cache_hydration();
     test_variadic_slice_explicit_vs_auto_method();
     test_variadic_slice_dyn_tail_is_sema_decided();
     test_variadic_slice_explicit_vs_auto_state();

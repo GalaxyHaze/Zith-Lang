@@ -135,9 +135,12 @@ void addCode(Artifact &art) {
 }
 
 void addModernCode(Artifact &art) {
+    art.strings.push_back("foreign_adapter");
+
     CompactFunction fn;
     fn.name                   = "modern";
     fn.name_id                = 0;
+    fn.foreign_adapter_name_id = 4;
     fn.is_extern              = false;
     fn.is_variadic            = false;
     fn.is_state               = true;
@@ -172,6 +175,9 @@ void addModernCode(Artifact &art) {
         call.ref_e     = 2;
         call.args      = {0};
         call.arg_types = {0};
+        call.variadic_slice_param = 0;
+        call.is_variadic_slice = true;
+        call.auto_collect_tail = true;
         art.exprs.push_back(call);
     }
 
@@ -391,8 +397,14 @@ static void test_modern_code_section_round_trip() {
     CHECK(decoded.functions[0].uses_tailcc, "state tailcc flag preserved");
     CHECK_EQ(decoded.functions[0].machine_id, 7u, "state machine id preserved");
     CHECK_EQ(decoded.functions[0].machine_return_type_id, 0u, "machine return type preserved");
+    CHECK_EQ(decoded.functions[0].foreign_adapter_name_id, 4u,
+             "foreign adapter string identity preserved");
     CHECK_EQ(decoded.functions[0].param_slot_ids.size(), 1u,
              "function parameter slot mapping preserved");
+    CHECK_EQ(decoded.exprs[2].variadic_slice_param, 0u,
+             "call variadic-slice parameter preserved");
+    CHECK(decoded.exprs[2].is_variadic_slice, "call variadic-slice decision preserved");
+    CHECK(decoded.exprs[2].auto_collect_tail, "call auto-collection decision preserved");
     if (!decoded.functions[0].param_slot_ids.empty())
         CHECK_EQ(decoded.functions[0].param_slot_ids[0], 1u,
                  "function parameter slot value preserved");
@@ -789,6 +801,12 @@ static void test_invalid_hydration_references_are_rejected() {
     addCode(invalid_name);
     CHECK(readerRejects(invalid_name),
           "reader rejects an invalid HIR string reference before hydration");
+
+    auto invalid_adapter = makeMinimalArtifact();
+    addCode(invalid_adapter);
+    invalid_adapter.functions[0].foreign_adapter_name_id = 99;
+    CHECK(readerRejects(invalid_adapter),
+          "reader rejects a foreign adapter outside the artifact string table");
 
     auto invalid_slot = makeMinimalArtifact();
     HirSlotAttrsRecord slot_attrs;

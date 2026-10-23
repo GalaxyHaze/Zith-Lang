@@ -733,7 +733,7 @@ static void test_format_version_bump() {
     (void)Writer::write(art, writer);
 
     std::string bytes(reinterpret_cast<const char *>(writer.ptr()), writer.size());
-    CHECK_EQ(kContainerVersion, 20u, "container version rejects legacy layouts");
+    CHECK_EQ(kContainerVersion, 21u, "container version rejects legacy layouts");
     CHECK_EQ(kHirSchemaVersion, 1u, "HIR schema has its own independent version");
 
     // Simulate an old reader by treating the container version as v3.
@@ -759,6 +759,7 @@ static void test_artifact_builder() {
     fn.return_type        = i32;
     fn.isVariadic         = true;
     fn.variadicSliceParam = 1;
+    fn.foreignAdapterName = interner.intern("main_adapter");
 
     hir::HirLiteral int_lit;
     int_lit.type      = i32;
@@ -813,6 +814,9 @@ static void test_artifact_builder() {
         arg_types.push(i32);
         hir::HirCall call(var_id, std::move(args), std::move(arg_types));
         call.resolved_fn = 1;
+        call.variadicSliceParam = 0;
+        call.isVariadicSlice = true;
+        call.autoCollectTail = true;
         direct_call_id   = hir.addExpr(std::move(call));
     }
 
@@ -974,6 +978,9 @@ static void test_artifact_builder() {
         tail.call.resolved_fn = 1;
         tail.call.musttail    = true;
         tail.call.usesTailCC  = true;
+        tail.call.variadicSliceParam = 0;
+        tail.call.isVariadicSlice = true;
+        tail.call.autoCollectTail = true;
         tail.call.args.push(int_id);
         tail.call.argument_types.push(i32);
         state_tail_id = hir.addExpr(std::move(tail));
@@ -1157,6 +1164,23 @@ static void test_artifact_builder() {
     CHECK_EQ(art.functions[0].is_variadic, true, "builder stores HIR variadic flag");
     CHECK_EQ(art.functions[0].variadic_slice_param, 1u,
              "builder stores the HIR variadic slice parameter");
+    CHECK(art.functions[0].foreign_adapter_name_id < art.strings.size() &&
+              art.strings[art.functions[0].foreign_adapter_name_id] == "main_adapter",
+          "builder stores the foreign adapter by artifact string identity");
+    const auto direct_call =
+        std::find_if(art.exprs.begin(), art.exprs.end(), [](const cache::CompactExpr &expr) {
+            return expr.kind == cache::CompactExprKind::Call &&
+                   expr.resolved_function_name_id != ~uint32_t{0};
+        });
+    CHECK(direct_call != art.exprs.end(), "builder serializes the resolved direct call");
+    if (direct_call != art.exprs.end()) {
+        CHECK_EQ(direct_call->variadic_slice_param, 0u,
+                 "builder stores the call variadic-slice parameter");
+        CHECK(direct_call->is_variadic_slice,
+              "builder stores the call's variadic-slice decision");
+        CHECK(direct_call->auto_collect_tail,
+              "builder stores the call's auto-collection decision");
+    }
     const auto indirect_call =
         std::find_if(art.exprs.begin(), art.exprs.end(), [](const cache::CompactExpr &expr) {
             return expr.kind == cache::CompactExprKind::Call &&
@@ -1223,6 +1247,14 @@ static void test_artifact_builder() {
             return expr.kind == cache::CompactExprKind::StateTailCall;
         });
     CHECK(state_tail != art.exprs.end(), "builder serializes state tail calls");
+    if (state_tail != art.exprs.end()) {
+        CHECK_EQ(state_tail->variadic_slice_param, 0u,
+                 "builder preserves the state-tail variadic-slice parameter");
+        CHECK(state_tail->is_variadic_slice,
+              "builder preserves the state-tail variadic-slice decision");
+        CHECK(state_tail->auto_collect_tail,
+              "builder preserves the state-tail auto-collection decision");
+    }
     const auto make_dyn_compact =
         std::find_if(art.exprs.begin(), art.exprs.end(), [](const cache::CompactExpr &expr) {
             return expr.kind == cache::CompactExprKind::MakeDyn;
@@ -1458,6 +1490,14 @@ static void test_artifact_builder() {
             return expr.kind == cache::CompactExprKind::StateTailCall;
         });
     CHECK(round_state_tail != round->exprs.end(), "round-trip preserves state tail calls");
+    if (round_state_tail != round->exprs.end()) {
+        CHECK_EQ(round_state_tail->variadic_slice_param, 0u,
+                 "round-trip preserves the state-tail variadic-slice parameter");
+        CHECK(round_state_tail->is_variadic_slice,
+              "round-trip preserves the state-tail variadic-slice decision");
+        CHECK(round_state_tail->auto_collect_tail,
+              "round-trip preserves the state-tail auto-collection decision");
+    }
     const auto round_make_dyn =
         std::find_if(round->exprs.begin(), round->exprs.end(), [](const cache::CompactExpr &expr) {
             return expr.kind == cache::CompactExprKind::MakeDyn;

@@ -3372,6 +3372,11 @@ static void test_validated_c_struct_by_value_runs() {
     auto r = t.run();
     CHECK(r.ok, "validated simple record by-value functions compile, link, and run");
     CHECK_EQ(r.exitCode, 0, "the C stub returns the sum read from the passed struct");
+
+    auto warm = t.run();
+    CHECK(warm.ok, "warm cache restores the C ABI adapter and still links");
+    CHECK(warm.cacheHits > 0U, "warm C ABI adapter compilation loads the cached HIR");
+    CHECK_EQ(warm.exitCode, 0, "the hydrated C ABI adapter preserves by-value behavior");
 #endif
 }
 
