@@ -1,6 +1,9 @@
 # Domain Docs
 
-This repository is the self-hosting effort: the compiler will be written in `Zith--`. Keep implementation decisions here separate from the broader full-Zith design.
+This repository is the full Zith language and compiler project. `Zith--` and C
+are bootstrap implementation substrates, not the project's destination:
+project-owned code is expected to migrate incrementally to full-Zith syntax and
+Zith implementations as the compiler gains the required capabilities.
 
 ## Before exploring
 
@@ -8,16 +11,27 @@ Read the root `CONTEXT.md`, or `CONTEXT-MAP.md` if one exists, and the relevant 
 
 ## Zith references
 
-The sibling `../Zith` checkout is the current design/reference source:
+The sibling `../Zith` checkout contains the current bootstrap toolchain and
+related design material:
 - `docs/Zith--.md` is the compiler-subset contract.
-- `docs/Zith-spec.md` describes the broader full-Zith design; it is design input, not an implementation requirement here.
-- `docs/impl-status.md` records implementation status for that compiler.
+- `docs/Zith-spec.md` describes the broader full-Zith design.
+- `docs/impl-status.md` records what the current toolchain implements; it is not
+  the full-Zith implementation status for this repository.
 
-When consulting those documents, distinguish implemented behavior from spec-only design. Do not bring a full-Zith feature into this self-hosting scope unless we explicitly decide to. Record the source and status when carrying a design note into this repository.
+When consulting those documents, distinguish implemented bootstrap behavior
+from full-Zith design. The full-Zith direction is in scope; individual imported
+proposals still need reconciliation before they become canonical local
+contracts.
 
-The full-Zith design material (ADRs, ZPK specs, branch-protocol and NRA notes)
-is also imported verbatim under `docs/reference/full-zith/`, with provenance in
-its `README.md`. Those files are design references, not decisions of this
-repository; an adopted idea still needs a local ADR or `CONTEXT.md` term.
+Full-Zith design material (ADRs, ZPK specs, branch-protocol and NRA notes) is
+imported verbatim under `docs/reference/full-zith/`, with provenance in its
+`README.md`. Treat it as the design baseline to reconcile, not as an
+automatically consistent local specification. Preserve the imported copies;
+record reconciled local decisions in the local specification or ADRs.
 
-Use the terminology established in this repository's `CONTEXT.md`. Surface conflicts with its ADRs instead of silently overriding them.
+Use the terminology established in this repository's `CONTEXT.md`. Surface
+conflicts between imported material, local ADRs and implementation status
+instead of silently overriding them. Follow `docs/plans/roadmap.md` for the
+bootstrap and migration sequence. Migrate syntax or C implementation one
+verified slice at a time, keeping a working bootstrap path until the next
+compiler generation can build and test that slice.

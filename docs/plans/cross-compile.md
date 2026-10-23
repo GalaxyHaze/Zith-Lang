@@ -1,10 +1,14 @@
-# Cross-Compile Plan
+# Bootstrap Compiler Cross-Compile Strategy
 
-Status: strategy. Nothing here is implemented; there is no code yet.
+Status: strategy. The compiler architecture and target matrix are not yet
+implemented in this repository. This plan concerns building the bootstrap
+compiler; it does not define the final source-language or C-migration state.
+Sequence target expansion after the host bootstrap is reproducible, as
+described in the [project roadmap](roadmap.md).
 
 ## Goal
 
-Produce Self-Zith binaries for several targets, preferably locally on the
+Produce Zith compiler binaries for several targets, preferably locally on the
 development host (Void Linux x86-64), without depending on CI runners for
 anything that can be done locally.
 
@@ -12,21 +16,23 @@ anything that can be done locally.
 
 Two different things, easy to conflate:
 
-- **Build the compiler** for target T: produce a `self-zith` binary that runs on T.
+- **Build the compiler** for target T: produce a Zith compiler binary that runs
+  on T.
 - **The compiler produces programs** for target T: the compiler running on the
   host emits code and objects for T.
 
 Both reduce to the same missing pieces per target: a triple, a sysroot (headers
-and libc), a linker, and compiler-rt. The compiler core is target-agnostic
-([ADR-0012](../adr/0012-os-sensitive-code-is-a-c-layer.md)); portability lives
-in the OS-C layer and the C toolchain adapter
+and libc), a linker, and compiler-rt. The initial compiler core is
+target-agnostic ([ADR-0012](../adr/0012-os-sensitive-code-is-a-c-layer.md));
+portability lives in the OS-C layer and the C toolchain adapter
 ([ADR-0013](../adr/0013-c-toolchain-is-an-adapter.md)).
 
 ## Portability Boundary
 
-All OS-sensitive calls sit in the C layer behind one interface. The Zith sources
-never call the platform directly. Adding a target means writing one adapter for
-that layer, not touching the frontend, sema, or IR. The C toolchain is a
+The initial design places OS-sensitive calls behind a C-layer interface. This
+is a bootstrap boundary to review as project-owned C code migrates to Zith;
+target support must remain isolated from frontend, sema, and IR regardless of
+the eventual implementation language. The C toolchain is a
 `ToolchainBackend` adapter (native compile, link, header import, sysroot
 discovery), chosen in a deterministic order: clang + `--target` + `lld` first,
 Zig second, a native cross-GCC third.
@@ -42,7 +48,7 @@ Zig second, a native cross-GCC third.
 | WASM/WASI | `wasm32-wasi` | `wasi-sdk`, or Zig | yes | wasmtime / node |
 | Windows GNU | `x86_64-windows-gnu` | Zig, or `cross-x86_64-w64-mingw32` | yes | wine |
 | Windows MSVC | `x86_64-pc-windows-msvc` | `xwin` + clang-cl + `lld-link` | yes (build) | wine (partial) |
-| macOS arm64/amd64 | `arm64-apple-macos` / `x86_64-apple-macos` | Apple toolchain + SDK on a Mac; osxcross with a supplied SDK | **no** (SDK not redistributable) | on a Mac |
+| macOS arm64/amd64 | `arm64-apple-macos` / `x86_64-apple-macos` | Apple toolchain + SDK on a Mac; osxcross with a supplied SDK | conditional (local SDK) | on a Mac |
 
 ## Phases
 
@@ -55,7 +61,8 @@ Zig second, a native cross-GCC third.
    is required.
 5. **WASM.** Add `wasi-sdk` or the Zig wasm targets when the playground driver
    needs it.
-6. **macOS.** Not shipped; users build on a Mac (see the
+6. **macOS.** Defer build and distribution commitments until the host compiler
+   and SDK policy have been reviewed (see
    [macOS build policy](../notes/macos-build-policy.md)).
 
 ## Notes

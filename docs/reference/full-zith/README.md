@@ -1,14 +1,16 @@
-# Full-Zith Reference (Imported)
+# Full-Zith Design Baseline (Imported)
 
-Design material for the full Zith language, imported verbatim from the sibling
-`Zith` repository (`GalaxyHaze/Zith`) so the self-hosting effort can consult it
-from this checkout.
+Design material for full Zith, imported verbatim from the sibling `Zith`
+repository (`GalaxyHaze/Zith`). This repository's target is full Zith; the
+import preserves provenance and provides a baseline for reconciling the local
+language specification and implementation decisions.
 
-**These are design references, not decisions of this repository.** Nothing here
-is implemented, required, or committed to by `self-Zith`. This repository
-implements the compiler in `Zith--`; when a full-Zith idea is adopted here it
-must become a local decision (a local ADR or `CONTEXT.md` term) with its own
-record, and this imported copy stays a reference only.
+**The project direction is full Zith, but this imported bundle is not an
+automatically reconciled local specification.** Its individual documents have
+different provenance and maturity, and known contradictions are listed below.
+Reconcile a rule before treating it as a local contract; record durable local
+decisions in the local specification or ADRs. Keep these imported copies
+unchanged apart from their provenance banners.
 
 ## Provenance
 
@@ -28,8 +30,9 @@ Content state per file (the source checkout had uncommitted work at import):
 
 ## ADRs
 
-All are accepted full-Zith design directions unless noted. Original numbering
-is kept.
+The source repository marked these as accepted full-Zith design directions
+unless noted. That status is provenance, not automatic local adoption; original
+numbering is kept.
 
 | File | Topic | State |
 |---|---|---|
@@ -93,12 +96,12 @@ byte-identical to their source.
 ## Deliberately Not Imported
 
 - `CONTEXT.md` and the chapter docs (`docs/NN-*.md`) of `../Zith`: the glossary
-  and chapters there describe the current `Zith--` compiler, not full-Zith
-  design, and would collide with this repository's own `CONTEXT.md` once one
-  exists.
+  and chapters there describe the current bootstrap compiler and its subset;
+  this repository maintains its own glossary and full-Zith specification.
 - `docs/Zith--.md` and `docs/impl-status.md`: they describe the existing
-  `Zith--` toolchain's implemented behavior, which is a separate concern from
-  the full-Zith design and from this repository's new implementation.
+  `Zith--` toolchain's implemented behavior. Consult them to understand the
+  bootstrap substrate, not as the full-Zith language contract or this
+  repository's implementation status.
 
-Consult `../Zith` directly for those; this folder is only the full-Zith design
-set.
+Consult `../Zith` directly for those files; this folder remains the imported
+full-Zith design set.

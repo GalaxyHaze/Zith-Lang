@@ -1,28 +1,34 @@
-# Self-Zith
+# Zith
 
-This repository designs a self-hosting Zith compiler written in `Zith--`. Its
-implementation is independent of the current `../Zith` toolchain; this glossary
-is the shared vocabulary for the design. It is a glossary only, not a spec.
+This repository is the home of the Zith language and compiler project. This
+file records shared vocabulary only; language rules belong in the reconciled
+Zith specification, and implementation decisions belong in ADRs.
 
 ## Language
 
-**Self-Zith**:
-The self-hosting compiler this repository designs and will implement in `Zith--`.
+**Zith**:
+The language and compiler project whose target is the full Zith design.
 _Avoid_: "the new compiler", "Zith 2".
 
 **Zith--**:
-The language subset the current `../Zith` `main` toolchain compiles; also the
-language Self-Zith is written in.
-_Avoid_: "the subset".
+A sibling language to Zith with its own frontend and semantic rules. It is
+also used as a bootstrap implementation substrate; it is not merely a subset
+of Zith.
+_Avoid_: "legacy subset".
+
+**Bootstrap compiler**:
+A compiler generation used to build and verify the next compiler generation.
+_Avoid_: "the final compiler" when referring to an intermediate generation.
 
 **HIR**:
-High-level IR, the last front-side representation, formed after semantic
+High-level IR, the shared representation produced by distinct language
+frontends for constructs whose semantics are compatible, after semantic
 analysis and, here, after the ZPK proof phase.
 _Avoid_: "middle IR".
 
 **VIR**:
-VM v2 IR, the typed execution IR between HIR and the VM/tiny backend. VIR is not
-LLVM IR.
+VM v2 IR, the typed execution IR derived from HIR for the VM/tiny backend. VIR
+is not LLVM IR; reuse requires compatible VM semantics.
 _Avoid_: "the VM IR" (VIR is the canonical name).
 
 **Backend**:
@@ -77,7 +83,13 @@ One immutable revision of a document, handed to the core as its input.
 _Avoid_: "version", "buffer".
 
 **Residual facts**:
-Proof results the ZPK phase emits into side tables (ownership, bounds,
-region-validated access), stored in the cache so callers do not reanalyze
-callee bodies.
+Proof results the ZPK phase emits alongside HIR (ownership, bounds, and
+region-validated access). Their absence never implies safety; a consumer must
+retain the required runtime check or recompute the proof.
 _Avoid_: "proof state".
+
+**HIR compatibility**:
+The claim that two frontends represent a construct with the same semantics in
+the shared HIR contract. Source syntax or matching source text alone does not
+establish compatibility.
+_Avoid_: "same-source compatibility".

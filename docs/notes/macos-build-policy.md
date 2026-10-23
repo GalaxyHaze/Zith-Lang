@@ -1,20 +1,16 @@
-# macOS Builds: Build It Yourself
+# macOS Compiler Build Policy (Proposed)
 
-We do not ship macOS binaries.
+Status: proposed distribution policy for the bootstrap compiler. Revalidate
+this policy and applicable SDK terms before making a release decision.
 
-The macOS target needs the Apple SDK, and that SDK cannot be redistributed or
-obtained legally outside Apple's own terms. We will not ship an SDK, and we will
-not ship a macOS artifact built against one we cannot legally distribute.
+This project does not currently define or ship a macOS compiler artifact. The
+proposal is to build on a Mac using the Apple toolchain and SDK, rather than
+redistribute the SDK or an artifact whose distribution terms have not been
+reviewed.
 
-If you want Self-Zith on macOS, please build it yourself:
+When a host build is available, document its actual command here. Do not use
+the sibling compiler's CMake command as a build instruction for this repository.
 
-1. On a Mac, install Xcode Command Line Tools (which provides the SDK).
-2. Build with the system toolchain: `cmake -S . -B build && cmake --build build -j`.
-
-Maintainers who want to cross-build macOS from Linux can set up `osxcross`
-against an SDK they obtained on a Mac themselves. That is a local convenience,
-not something this repository provides or distributes.
-
-This is a licensing constraint, not a technical gap: the compiler core is
-target-agnostic (see [ADR-0012](../adr/0012-os-sensitive-code-is-a-c-layer.md)),
-so porting is a matter of the SDK, not of the code.
+Cross-building from Linux is outside the current bootstrap plan. Revisit it
+after the host compiler and the C-to-Zith platform boundary are established;
+see [the cross-compile strategy](../plans/cross-compile.md).

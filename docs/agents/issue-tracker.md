@@ -1,6 +1,8 @@
 # Issue tracker: GitHub
 
-Issues for this self-hosting work are tracked in `GalaxyHaze/Zith-Lang` GitHub Issues. Use `gh --repo GalaxyHaze/Zith-Lang` so operations do not depend on this checkout having a configured remote.
+Issues for the Zith language and compiler project are tracked in
+`GalaxyHaze/Zith-Lang` GitHub Issues. Use `gh --repo GalaxyHaze/Zith-Lang` so
+operations do not depend on this checkout having a configured remote.
 
 ## Conventions
 
