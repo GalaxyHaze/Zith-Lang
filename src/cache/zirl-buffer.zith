@@ -1,0 +1,137 @@
+pub struct ZirlByteWriter {
+    pub bytes: []u8,
+    pub position: u64,
+    pub failed: bool,
+}
+
+pub struct ZirlByteReader {
+    pub bytes: []u8,
+    pub position: u64,
+    pub failed: bool,
+}
+
+pub struct ZirlByteReadU8 {
+    pub reader: ZirlByteReader,
+    pub value: u8,
+}
+
+pub struct ZirlByteReadU16 {
+    pub reader: ZirlByteReader,
+    pub value: u16,
+}
+
+pub struct ZirlByteReadU32 {
+    pub reader: ZirlByteReader,
+    pub value: u32,
+}
+
+pub struct ZirlByteReadU64 {
+    pub reader: ZirlByteReader,
+    pub value: u64,
+}
+
+fn writer_has_room(writer: ZirlByteWriter, count: u64): bool {
+    if (writer.failed) {
+        return false;
+    }
+    let capacity = @lengthOf(writer.bytes);
+    if (writer.position > capacity) {
+        return false;
+    }
+    return count <= capacity - writer.position;
+}
+
+fn reader_has_room(reader: ZirlByteReader, count: u64): bool {
+    if (reader.failed) {
+        return false;
+    }
+    let length = @lengthOf(reader.bytes);
+    if (reader.position > length) {
+        return false;
+    }
+    return count <= length - reader.position;
+}
+
+pub fn write_u8(writer: ZirlByteWriter, value: u8): ZirlByteWriter {
+    var result = writer;
+    if (not writer_has_room(result, 1)) {
+        result.failed = true;
+        return result;
+    }
+    raw result.bytes[result.position] = value;
+    result.position = result.position + 1;
+    return result;
+}
+
+pub fn write_u16(writer: ZirlByteWriter, value: u16): ZirlByteWriter {
+    let low = write_u8(writer, value as u8);
+    return write_u8(low, (value >> 8) as u8);
+}
+
+pub fn write_u32(writer: ZirlByteWriter, value: u32): ZirlByteWriter {
+    let byte0 = write_u8(writer, value as u8);
+    let byte1 = write_u8(byte0, (value >> 8) as u8);
+    let byte2 = write_u8(byte1, (value >> 16) as u8);
+    return write_u8(byte2, (value >> 24) as u8);
+}
+
+pub fn write_u64(writer: ZirlByteWriter, value: u64): ZirlByteWriter {
+    let byte0 = write_u8(writer, value as u8);
+    let byte1 = write_u8(byte0, (value >> 8) as u8);
+    let byte2 = write_u8(byte1, (value >> 16) as u8);
+    let byte3 = write_u8(byte2, (value >> 24) as u8);
+    let byte4 = write_u8(byte3, (value >> 32) as u8);
+    let byte5 = write_u8(byte4, (value >> 40) as u8);
+    let byte6 = write_u8(byte5, (value >> 48) as u8);
+    return write_u8(byte6, (value >> 56) as u8);
+}
+
+pub fn read_u8(reader: ZirlByteReader): ZirlByteReadU8 {
+    var result = ZirlByteReadU8 { reader: reader, value: 0u8 };
+    if (not reader_has_room(result.reader, 1)) {
+        result.reader.failed = true;
+        return result;
+    }
+    result.value = raw result.reader.bytes[result.reader.position];
+    result.reader.position = result.reader.position + 1;
+    return result;
+}
+
+pub fn read_u16(reader: ZirlByteReader): ZirlByteReadU16 {
+    let low = read_u8(reader);
+    let high = read_u8(low.reader);
+    return ZirlByteReadU16 {
+        reader: high.reader,
+        value: (low.value as u16) + ((high.value as u16) << 8),
+    };
+}
+
+pub fn read_u32(reader: ZirlByteReader): ZirlByteReadU32 {
+    let byte0 = read_u8(reader);
+    let byte1 = read_u8(byte0.reader);
+    let byte2 = read_u8(byte1.reader);
+    let byte3 = read_u8(byte2.reader);
+    return ZirlByteReadU32 {
+        reader: byte3.reader,
+        value: (byte0.value as u32) + ((byte1.value as u32) << 8) +
+            ((byte2.value as u32) << 16) + ((byte3.value as u32) << 24),
+    };
+}
+
+pub fn read_u64(reader: ZirlByteReader): ZirlByteReadU64 {
+    let byte0 = read_u8(reader);
+    let byte1 = read_u8(byte0.reader);
+    let byte2 = read_u8(byte1.reader);
+    let byte3 = read_u8(byte2.reader);
+    let byte4 = read_u8(byte3.reader);
+    let byte5 = read_u8(byte4.reader);
+    let byte6 = read_u8(byte5.reader);
+    let byte7 = read_u8(byte6.reader);
+    return ZirlByteReadU64 {
+        reader: byte7.reader,
+        value: (byte0.value as u64) + ((byte1.value as u64) << 8) +
+            ((byte2.value as u64) << 16) + ((byte3.value as u64) << 24) +
+            ((byte4.value as u64) << 32) + ((byte5.value as u64) << 40) +
+            ((byte6.value as u64) << 48) + ((byte7.value as u64) << 56),
+    };
+}

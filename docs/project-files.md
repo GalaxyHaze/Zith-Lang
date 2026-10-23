@@ -28,6 +28,7 @@ point, and directory paths; it does not enumerate source files individually.
 | `src/ir/hir.zith` | Frontend-neutral HIR nodes, types, functions, and residual attributes. | Initial shared contract; verifier and cache codec follow. |
 | `src/ir/hir-verify.zith` | Verifies HIR references, node shapes, and residual safety metadata. | Structural verifier with CFG-dominating guard validation. |
 | `src/cache/cache.zith` | Shared HIR identity and derived-VIR compatibility rules. | Identity checks; binary artifact codec follows. |
+| `src/cache/zirl-buffer.zith` | Bounds-checked little-endian ZIRL byte primitives. | Fixed-width integer reads/writes; container framing follows. |
 
 There is no project-owned C source file in the current tree. Add its entry
 here if one is introduced; do not infer that a planned directory already

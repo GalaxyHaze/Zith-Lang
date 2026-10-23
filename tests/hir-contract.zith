@@ -1,6 +1,7 @@
 from ir/hir
 from ir/hir-verify
 from cache/cache
+from cache/zirl-buffer
 
 fn make_hir_module(
     strings: [][]char,
@@ -669,6 +670,75 @@ fn test_vir_version_compatibility(): i32 {
     return 0;
 }
 
+fn test_zirl_little_endian_primitives(): i32 {
+    var output: [8]u8 = [0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8];
+    let writer = ZirlByteWriter {
+        bytes: raw output[0..8],
+        position: 0,
+        failed: false,
+    };
+    let after_u16 = write_u16(writer, 0x1234u16);
+    let after_u32 = write_u32(after_u16, 0x89ABCDEFu32);
+    if (after_u32.failed or after_u32.position != 6) {
+        return 1;
+    }
+    if (raw output[0] != 0x34u8 or raw output[1] != 0x12u8 or
+        raw output[2] != 0xEFu8 or raw output[3] != 0xCDu8 or
+        raw output[4] != 0xABu8 or raw output[5] != 0x89u8) {
+        return 2;
+    }
+    let reader = ZirlByteReader {
+        bytes: raw output[0..6],
+        position: 0,
+        failed: false,
+    };
+    let read_u16_result = read_u16(reader);
+    let first_value = read_u16_result.value;
+    let read_u32_result = read_u32(read_u16_result.reader);
+    if (read_u32_result.reader.failed or first_value != 0x1234u16 or
+        read_u32_result.value != 0x89ABCDEFu32 or read_u32_result.reader.position != 6) {
+        return 3;
+    }
+    let short_reader = ZirlByteReader {
+        bytes: raw output[0..5],
+        position: 0,
+        failed: false,
+    };
+    let truncated = read_u64(short_reader);
+    if (not truncated.reader.failed or truncated.reader.position != 5) {
+        return 4;
+    }
+    var short_output: [2]u8 = [0u8, 0u8];
+    let short_writer = ZirlByteWriter {
+        bytes: raw short_output[0..2],
+        position: 0,
+        failed: false,
+    };
+    let short_write = write_u32(short_writer, 0x12345678u32);
+    if (not short_write.failed or short_write.position != 2) {
+        return 5;
+    }
+    let invalid_writer = ZirlByteWriter {
+        bytes: raw short_output[0..2],
+        position: 3,
+        failed: false,
+    };
+    let invalid_write = write_u8(invalid_writer, 0xFFu8);
+    if (not invalid_write.failed or invalid_write.position != 3) {
+        return 6;
+    }
+    let invalid_reader = ZirlByteReader {
+        bytes: raw short_output[0..2],
+        position: 3,
+        failed: false,
+    };
+    let invalid_read = read_u8(invalid_reader);
+    if (not invalid_read.reader.failed or invalid_read.reader.position != 3) {
+        return 7;
+    }
+    return 0;
+}
+
 fn main(): i32 {
     let literal_status = test_hir_literal_variant();
     if (literal_status != 0) {
@@ -722,6 +792,9 @@ fn main(): i32 {
     }
     if (test_vir_version_compatibility() != 0) {
         return 220;
+    }
+    if (test_zirl_little_endian_primitives() != 0) {
+        return 221;
     }
     return 0;
 }
