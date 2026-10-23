@@ -1,0 +1,1032 @@
+from cache/zirl-buffer
+
+pub enum ZirlCompactExprKind {
+    Literal = 0,
+    Binary = 1,
+    Unary = 2,
+    Let = 3,
+    Var = 4,
+    Call = 5,
+    Ret = 6,
+    Branch = 7,
+    Jump = 8,
+    Phi = 9,
+    Assign = 10,
+    Index = 11,
+    Field = 12,
+    StructLiteral = 13,
+    ArrayLiteral = 14,
+    EnumValue = 15,
+    SlotAlloca = 16,
+    SlotStore = 17,
+    SlotLoad = 18,
+    SlotAddr = 19,
+    MakeNone = 20,
+    MakeSome = 21,
+    MakeSlice = 22,
+    Cast = 23,
+    LayoutIntrinsic = 24,
+    StateTailCall = 25,
+    UnionCheck = 26,
+    Cleanup = 27,
+    GlobalConstLoad = 28,
+    MakeDyn = 29,
+    DynCall = 30,
+    MakeOpaque = 31,
+    OpaqueCast = 32,
+    OpaqueCheck = 33,
+    RuntimePanic = 34,
+    CanonicalType = 35,
+    Pipe = 36,
+    PipeDo = 37,
+    PipeCurrent = 38,
+    ExternalGlobalAddr = 39,
+}
+
+pub enum ZirlCompactSafetyMode {
+    RequiredCheck = 0,
+    Guarded = 1,
+    Intrinsic = 2,
+    Raw = 3,
+}
+
+pub struct ZirlCompactExpr {
+    pub kind: u8,
+    pub op: u8,
+    pub flags: u8,
+    pub safety: ZirlCompactSafetyMode,
+    pub type_id: u32,
+    pub ref_a: u32,
+    pub ref_b: u32,
+    pub ref_c: u32,
+    pub ref_d: u32,
+    pub ref_e: u32,
+    pub ref_f: u32,
+    pub name_id: u32,
+    pub resolved_function_name_id: u32,
+    pub resolved_function_signature_type_id: u32,
+    pub int_value: i64,
+    pub float_value: f64,
+    pub args: []u32,
+    pub arg_types: []u32,
+    pub integers: []u64,
+}
+
+pub struct ZirlCompactBasicBlock {
+    pub instructions: []u32,
+    pub terminator: u32,
+}
+
+pub struct ZirlCompactFunction {
+    pub name_id: u32,
+    pub signature_type_id: u32,
+    pub is_extern: bool,
+    pub is_foreign_c: bool,
+    pub is_variadic: bool,
+    pub is_state: bool,
+    pub uses_tail_calling_convention: bool,
+    pub discardable: bool,
+    pub return_type_id: u32,
+    pub machine_return_type_id: u32,
+    pub machine_id: u32,
+    pub instance_index: u32,
+    pub variadic_slice_param: u32,
+    pub parameter_type_ids: []u32,
+    pub parameter_name_ids: []u32,
+    pub parameter_slot_ids: []u32,
+    pub blocks: []ZirlCompactBasicBlock,
+}
+
+pub struct ZirlCodeGlobal {
+    pub name_id: u32,
+    pub type_id: u32,
+    pub initializer: u32,
+}
+
+pub struct ZirlCodeVTable {
+    pub name_id: u32,
+    pub slot_function_name_ids: []u32,
+    pub slot_function_signature_type_ids: []u32,
+}
+
+pub struct ZirlCanonicalMapping {
+    pub canonical_hi: u64,
+    pub canonical_lo: u64,
+    pub runtime_id: u32,
+}
+
+pub struct ZirlCodeSection {
+    pub expressions: []ZirlCompactExpr,
+    pub functions: []ZirlCompactFunction,
+    pub globals: []ZirlCodeGlobal,
+    pub vtables: []ZirlCodeVTable,
+    pub canonical_mappings: []ZirlCanonicalMapping,
+}
+
+pub struct ZirlCodeStorage {
+    pub expressions: []ZirlCompactExpr,
+    pub expression_args: []u32,
+    pub expression_arg_types: []u32,
+    pub expression_integers: []u64,
+    pub functions: []ZirlCompactFunction,
+    pub function_parameter_type_ids: []u32,
+    pub function_parameter_name_ids: []u32,
+    pub function_parameter_slot_ids: []u32,
+    pub blocks: []ZirlCompactBasicBlock,
+    pub block_instructions: []u32,
+    pub globals: []ZirlCodeGlobal,
+    pub vtables: []ZirlCodeVTable,
+    pub vtable_function_name_ids: []u32,
+    pub vtable_function_signature_type_ids: []u32,
+    pub canonical_mappings: []ZirlCanonicalMapping,
+}
+
+pub struct ZirlCodeRead {
+    pub reader: ZirlByteReader,
+    pub value: ZirlCodeSection,
+}
+
+struct ZirlCodeIdsRead {
+    reader: ZirlByteReader,
+    values: []u32,
+    count: u32,
+}
+
+struct ZirlCodeU64sRead {
+    reader: ZirlByteReader,
+    values: []u64,
+    count: u32,
+}
+
+struct ZirlCodeExprRead {
+    reader: ZirlByteReader,
+    value: ZirlCompactExpr,
+    args_used: u64,
+    arg_types_used: u64,
+    integers_used: u64,
+}
+
+struct ZirlCodeFunctionRead {
+    reader: ZirlByteReader,
+    value: ZirlCompactFunction,
+    parameter_types_used: u64,
+    parameter_names_used: u64,
+    parameter_slots_used: u64,
+    blocks_used: u64,
+    instructions_used: u64,
+}
+
+fn code_writer_failure(writer: ZirlByteWriter): ZirlByteWriter {
+    var failed = writer;
+    failed.failed = true;
+    return failed;
+}
+
+fn code_count_fits(count: u64): bool {
+    return count <= 0xFFFFFFFFu64;
+}
+
+fn code_ids_fit(values: []u32): bool {
+    return code_count_fits(@lengthOf(values));
+}
+
+fn code_u64s_fit(values: []u64): bool {
+    return code_count_fits(@lengthOf(values));
+}
+
+fn code_bool_byte(value: bool): u8 {
+    if (value) {
+        return 1u8;
+    }
+    return 0u8;
+}
+
+fn code_expr_kind_valid(kind: u8): bool {
+    return kind <= (ZirlCompactExprKind.ExternalGlobalAddr as u8);
+}
+
+fn code_expr_empty(storage: *ZirlCodeStorage): ZirlCompactExpr {
+    return ZirlCompactExpr {
+        kind: ZirlCompactExprKind.Literal as u8,
+        op: 0u8,
+        flags: 0u8,
+        safety: ZirlCompactSafetyMode.RequiredCheck,
+        type_id: 0u32,
+        ref_a: 0u32,
+        ref_b: 0u32,
+        ref_c: 0u32,
+        ref_d: 0u32,
+        ref_e: 0u32,
+        ref_f: 0u32,
+        name_id: 0u32,
+        resolved_function_name_id: 0xFFFFFFFFu32,
+        resolved_function_signature_type_id: 0xFFFFFFFFu32,
+        int_value: 0i64,
+        float_value: 0.0,
+        args: raw storage->expression_args[0u64..0u64],
+        arg_types: raw storage->expression_arg_types[0u64..0u64],
+        integers: raw storage->expression_integers[0u64..0u64],
+    };
+}
+
+fn code_function_empty(storage: *ZirlCodeStorage): ZirlCompactFunction {
+    return ZirlCompactFunction {
+        name_id: 0u32,
+        signature_type_id: 0xFFFFFFFFu32,
+        is_extern: false,
+        is_foreign_c: false,
+        is_variadic: false,
+        is_state: false,
+        uses_tail_calling_convention: false,
+        discardable: false,
+        return_type_id: 0u32,
+        machine_return_type_id: 0xFFFFFFFFu32,
+        machine_id: 0u32,
+        instance_index: 0xFFFFFFFFu32,
+        variadic_slice_param: 0xFFFFFFFFu32,
+        parameter_type_ids: raw storage->function_parameter_type_ids[0u64..0u64],
+        parameter_name_ids: raw storage->function_parameter_name_ids[0u64..0u64],
+        parameter_slot_ids: raw storage->function_parameter_slot_ids[0u64..0u64],
+        blocks: raw storage->blocks[0u64..0u64],
+    };
+}
+
+fn code_section_value(
+    storage: *ZirlCodeStorage,
+    expression_count: u64,
+    function_count: u64,
+    global_count: u64,
+    vtable_count: u64,
+    mapping_count: u64
+): ZirlCodeSection {
+    return ZirlCodeSection {
+        expressions: raw storage->expressions[0u64..expression_count],
+        functions: raw storage->functions[0u64..function_count],
+        globals: raw storage->globals[0u64..global_count],
+        vtables: raw storage->vtables[0u64..vtable_count],
+        canonical_mappings: raw storage->canonical_mappings[0u64..mapping_count],
+    };
+}
+
+fn code_reader_failure(
+    reader: ZirlByteReader,
+    storage: *ZirlCodeStorage
+): ZirlCodeRead {
+    var failed = reader;
+    failed.failed = true;
+    return ZirlCodeRead {
+        reader: failed,
+        value: code_section_value(storage, 0u64, 0u64, 0u64, 0u64, 0u64),
+    };
+}
+
+fn code_expr_read_failure(
+    reader: ZirlByteReader,
+    storage: *ZirlCodeStorage
+): ZirlCodeExprRead {
+    var failed = reader;
+    failed.failed = true;
+    return ZirlCodeExprRead {
+        reader: failed,
+        value: code_expr_empty(storage),
+        args_used: 0u64,
+        arg_types_used: 0u64,
+        integers_used: 0u64,
+    };
+}
+
+fn code_can_read_count(
+    reader: ZirlByteReader,
+    count: u32,
+    element_size: u64
+): bool {
+    if (reader.failed or reader.position > @lengthOf(reader.bytes)) {
+        return false;
+    }
+    let available = @lengthOf(reader.bytes) - reader.position;
+    return (count as u64) <= available / element_size;
+}
+
+fn code_read_ids(
+    reader: ZirlByteReader,
+    output: []u32,
+    used: u64
+): ZirlCodeIdsRead {
+    var failed = reader;
+    if (used > @lengthOf(output)) {
+        failed.failed = true;
+        return ZirlCodeIdsRead {
+            reader: failed,
+            values: raw output[0u64..0u64],
+            count: 0u32,
+        };
+    }
+    let count_result = read_u32(reader);
+    failed = count_result.reader;
+    if (failed.failed or
+        (count_result.value as u64) > @lengthOf(output) - used or
+        not code_can_read_count(failed, count_result.value, 4u64)) {
+        failed.failed = true;
+        return ZirlCodeIdsRead {
+            reader: failed,
+            values: raw output[0u64..0u64],
+            count: 0u32,
+        };
+    }
+    var destination = output;
+    var cursor = failed;
+    for (offset in 1u64..(count_result.value as u64)) {
+        let index = offset - 1;
+        let item = read_u32(cursor);
+        cursor = item.reader;
+        raw destination[used + index] = item.value;
+    }
+    return ZirlCodeIdsRead {
+        reader: cursor,
+        values: raw output[used..(used + count_result.value as u64)],
+        count: count_result.value,
+    };
+}
+
+fn code_read_u64s(
+    reader: ZirlByteReader,
+    output: []u64,
+    used: u64
+): ZirlCodeU64sRead {
+    var failed = reader;
+    if (used > @lengthOf(output)) {
+        failed.failed = true;
+        return ZirlCodeU64sRead {
+            reader: failed,
+            values: raw output[0u64..0u64],
+            count: 0u32,
+        };
+    }
+    let count_result = read_u32(reader);
+    failed = count_result.reader;
+    if (failed.failed or
+        (count_result.value as u64) > @lengthOf(output) - used or
+        not code_can_read_count(failed, count_result.value, 8u64)) {
+        failed.failed = true;
+        return ZirlCodeU64sRead {
+            reader: failed,
+            values: raw output[0u64..0u64],
+            count: 0u32,
+        };
+    }
+    var destination = output;
+    var cursor = failed;
+    for (offset in 1u64..(count_result.value as u64)) {
+        let index = offset - 1;
+        let item = read_u64(cursor);
+        cursor = item.reader;
+        raw destination[used + index] = item.value;
+    }
+    return ZirlCodeU64sRead {
+        reader: cursor,
+        values: raw output[used..(used + count_result.value as u64)],
+        count: count_result.value,
+    };
+}
+
+fn write_code_ids(writer: ZirlByteWriter, values: []u32): ZirlByteWriter {
+    if (not code_ids_fit(values)) {
+        return code_writer_failure(writer);
+    }
+    var result = write_u32(writer, @lengthOf(values) as u32);
+    for (offset in 1u64..@lengthOf(values)) {
+        let index = offset - 1;
+        result = write_u32(result, raw values[index]);
+    }
+    return result;
+}
+
+fn write_code_u64s(writer: ZirlByteWriter, values: []u64): ZirlByteWriter {
+    if (not code_u64s_fit(values)) {
+        return code_writer_failure(writer);
+    }
+    var result = write_u32(writer, @lengthOf(values) as u32);
+    for (offset in 1u64..@lengthOf(values)) {
+        let index = offset - 1;
+        result = write_u64(result, raw values[index]);
+    }
+    return result;
+}
+
+fn write_code_expr(writer: ZirlByteWriter, value: *ZirlCompactExpr): ZirlByteWriter {
+    var result = write_u8(writer, value->kind);
+    result = write_u8(result, value->op);
+    result = write_u8(result, value->flags);
+    result = write_u8(result, value->safety as u8);
+    result = write_u32(result, value->type_id);
+    result = write_u32(result, value->ref_a);
+    result = write_u32(result, value->ref_b);
+    result = write_u32(result, value->ref_c);
+    result = write_u32(result, value->ref_d);
+    result = write_u32(result, value->ref_e);
+    result = write_u32(result, value->ref_f);
+    result = write_u32(result, value->name_id);
+    result = write_u32(result, value->resolved_function_name_id);
+    result = write_u32(result, value->resolved_function_signature_type_id);
+    result = write_i64(result, value->int_value);
+    result = write_f64(result, value->float_value);
+    result = write_code_ids(result, value->args);
+    result = write_code_ids(result, value->arg_types);
+    return write_code_u64s(result, value->integers);
+}
+
+fn write_code_function(
+    writer: ZirlByteWriter,
+    value: *ZirlCompactFunction
+): ZirlByteWriter {
+    var result = write_u32(writer, value->name_id);
+    result = write_u32(result, value->signature_type_id);
+    result = write_u8(result, code_bool_byte(value->is_extern));
+    result = write_u8(result, code_bool_byte(value->is_foreign_c));
+    result = write_u8(result, code_bool_byte(value->is_variadic));
+    result = write_u8(result, code_bool_byte(value->is_state));
+    result = write_u8(result, code_bool_byte(value->uses_tail_calling_convention));
+    result = write_u8(result, code_bool_byte(value->discardable));
+    result = write_u32(result, value->return_type_id);
+    result = write_u32(result, value->machine_return_type_id);
+    result = write_u32(result, value->machine_id);
+    result = write_u32(result, value->instance_index);
+    result = write_u32(result, value->variadic_slice_param);
+    result = write_code_ids(result, value->parameter_type_ids);
+    result = write_code_ids(result, value->parameter_name_ids);
+    result = write_code_ids(result, value->parameter_slot_ids);
+    if (not code_count_fits(@lengthOf(value->blocks))) {
+        return code_writer_failure(result);
+    }
+    result = write_u32(result, @lengthOf(value->blocks) as u32);
+    for (block_offset in 1u64..@lengthOf(value->blocks)) {
+        let block_index = block_offset - 1;
+        let block: *ZirlCompactBasicBlock = &raw value->blocks[block_index];
+        result = write_code_ids(result, block->instructions);
+        result = write_u32(result, block->terminator);
+    }
+    return result;
+}
+
+fn decode_code_safety(value: u8): ZirlCompactSafetyMode {
+    if (value == 1u8) { return ZirlCompactSafetyMode.Guarded; }
+    if (value == 2u8) { return ZirlCompactSafetyMode.Intrinsic; }
+    if (value == 3u8) { return ZirlCompactSafetyMode.Raw; }
+    return ZirlCompactSafetyMode.RequiredCheck;
+}
+
+fn read_code_expr(
+    reader: ZirlByteReader,
+    storage: *ZirlCodeStorage,
+    args_used: u64,
+    arg_types_used: u64,
+    integers_used: u64
+): ZirlCodeExprRead {
+    let kind_read = read_u8(reader);
+    let op_read = read_u8(kind_read.reader);
+    let flags_read = read_u8(op_read.reader);
+    let safety_read = read_u8(flags_read.reader);
+    var cursor = safety_read.reader;
+    if (cursor.failed or not code_expr_kind_valid(kind_read.value) or
+        safety_read.value > (ZirlCompactSafetyMode.Raw as u8)) {
+        return code_expr_read_failure(cursor, storage);
+    }
+
+    let type_id = read_u32(cursor);
+    cursor = type_id.reader;
+    let ref_a = read_u32(cursor);
+    cursor = ref_a.reader;
+    let ref_b = read_u32(cursor);
+    cursor = ref_b.reader;
+    let ref_c = read_u32(cursor);
+    cursor = ref_c.reader;
+    let ref_d = read_u32(cursor);
+    cursor = ref_d.reader;
+    let ref_e = read_u32(cursor);
+    cursor = ref_e.reader;
+    let ref_f = read_u32(cursor);
+    cursor = ref_f.reader;
+    let name_id = read_u32(cursor);
+    cursor = name_id.reader;
+    let resolved_name = read_u32(cursor);
+    cursor = resolved_name.reader;
+    let resolved_signature = read_u32(cursor);
+    cursor = resolved_signature.reader;
+    let int_value = read_i64(cursor);
+    cursor = int_value.reader;
+    let float_value = read_f64(cursor);
+    cursor = float_value.reader;
+    if (cursor.failed) {
+        return code_expr_read_failure(cursor, storage);
+    }
+
+    let args = code_read_ids(cursor, storage->expression_args, args_used);
+    cursor = args.reader;
+    if (cursor.failed) {
+        return code_expr_read_failure(cursor, storage);
+    }
+    let arg_types = code_read_ids(
+        cursor,
+        storage->expression_arg_types,
+        arg_types_used
+    );
+    cursor = arg_types.reader;
+    if (cursor.failed) {
+        return code_expr_read_failure(cursor, storage);
+    }
+    let integers = code_read_u64s(
+        cursor,
+        storage->expression_integers,
+        integers_used
+    );
+    cursor = integers.reader;
+    if (cursor.failed) {
+        return code_expr_read_failure(cursor, storage);
+    }
+
+    return ZirlCodeExprRead {
+        reader: cursor,
+        value: ZirlCompactExpr {
+            kind: kind_read.value,
+            op: op_read.value,
+            flags: flags_read.value,
+            safety: decode_code_safety(safety_read.value),
+            type_id: type_id.value,
+            ref_a: ref_a.value,
+            ref_b: ref_b.value,
+            ref_c: ref_c.value,
+            ref_d: ref_d.value,
+            ref_e: ref_e.value,
+            ref_f: ref_f.value,
+            name_id: name_id.value,
+            resolved_function_name_id: resolved_name.value,
+            resolved_function_signature_type_id: resolved_signature.value,
+            int_value: int_value.value,
+            float_value: float_value.value,
+            args: args.values,
+            arg_types: arg_types.values,
+            integers: integers.values,
+        },
+        args_used: args_used + (args.count as u64),
+        arg_types_used: arg_types_used + (arg_types.count as u64),
+        integers_used: integers_used + (integers.count as u64),
+    };
+}
+
+fn read_code_function(
+    reader: ZirlByteReader,
+    storage: *ZirlCodeStorage,
+    parameter_types_used: u64,
+    parameter_names_used: u64,
+    parameter_slots_used: u64,
+    blocks_used: u64,
+    instructions_used: u64
+): ZirlCodeFunctionRead {
+    let name_id = read_u32(reader);
+    let signature_type_id = read_u32(name_id.reader);
+    let external = read_u8(signature_type_id.reader);
+    let foreign_c = read_u8(external.reader);
+    let variadic = read_u8(foreign_c.reader);
+    let state_flag = read_u8(variadic.reader);
+    let tail_call = read_u8(state_flag.reader);
+    let discardable = read_u8(tail_call.reader);
+    var cursor = discardable.reader;
+    if (cursor.failed or external.value > 1u8 or foreign_c.value > 1u8 or
+        variadic.value > 1u8 or state_flag.value > 1u8 or tail_call.value > 1u8 or
+        discardable.value > 1u8) {
+        cursor.failed = true;
+        return ZirlCodeFunctionRead {
+            reader: cursor,
+            value: code_function_empty(storage),
+            parameter_types_used: parameter_types_used,
+            parameter_names_used: parameter_names_used,
+            parameter_slots_used: parameter_slots_used,
+            blocks_used: blocks_used,
+            instructions_used: instructions_used,
+        };
+    }
+
+    let return_type_id = read_u32(cursor);
+    cursor = return_type_id.reader;
+    let machine_return_type_id = read_u32(cursor);
+    cursor = machine_return_type_id.reader;
+    let machine_id = read_u32(cursor);
+    cursor = machine_id.reader;
+    let instance_index = read_u32(cursor);
+    cursor = instance_index.reader;
+    let variadic_slice_param = read_u32(cursor);
+    cursor = variadic_slice_param.reader;
+    if (cursor.failed) {
+        return ZirlCodeFunctionRead {
+            reader: cursor,
+            value: code_function_empty(storage),
+            parameter_types_used: parameter_types_used,
+            parameter_names_used: parameter_names_used,
+            parameter_slots_used: parameter_slots_used,
+            blocks_used: blocks_used,
+            instructions_used: instructions_used,
+        };
+    }
+
+    let parameter_types = code_read_ids(
+        cursor,
+        storage->function_parameter_type_ids,
+        parameter_types_used
+    );
+    cursor = parameter_types.reader;
+    if (cursor.failed) {
+        return ZirlCodeFunctionRead {
+            reader: cursor,
+            value: code_function_empty(storage),
+            parameter_types_used: parameter_types_used,
+            parameter_names_used: parameter_names_used,
+            parameter_slots_used: parameter_slots_used,
+            blocks_used: blocks_used,
+            instructions_used: instructions_used,
+        };
+    }
+    let parameter_names = code_read_ids(
+        cursor,
+        storage->function_parameter_name_ids,
+        parameter_names_used
+    );
+    cursor = parameter_names.reader;
+    if (cursor.failed) {
+        return ZirlCodeFunctionRead {
+            reader: cursor,
+            value: code_function_empty(storage),
+            parameter_types_used: parameter_types_used,
+            parameter_names_used: parameter_names_used,
+            parameter_slots_used: parameter_slots_used,
+            blocks_used: blocks_used,
+            instructions_used: instructions_used,
+        };
+    }
+    let parameter_slots = code_read_ids(
+        cursor,
+        storage->function_parameter_slot_ids,
+        parameter_slots_used
+    );
+    cursor = parameter_slots.reader;
+    if (cursor.failed) {
+        return ZirlCodeFunctionRead {
+            reader: cursor,
+            value: code_function_empty(storage),
+            parameter_types_used: parameter_types_used,
+            parameter_names_used: parameter_names_used,
+            parameter_slots_used: parameter_slots_used,
+            blocks_used: blocks_used,
+            instructions_used: instructions_used,
+        };
+    }
+
+    let block_count = read_u32(cursor);
+    cursor = block_count.reader;
+    if (cursor.failed or blocks_used > @lengthOf(storage->blocks) or
+        (block_count.value as u64) > @lengthOf(storage->blocks) - blocks_used or
+        not code_can_read_count(cursor, block_count.value, 8u64)) {
+        cursor.failed = true;
+        return ZirlCodeFunctionRead {
+            reader: cursor,
+            value: code_function_empty(storage),
+            parameter_types_used: parameter_types_used,
+            parameter_names_used: parameter_names_used,
+            parameter_slots_used: parameter_slots_used,
+            blocks_used: blocks_used,
+            instructions_used: instructions_used,
+        };
+    }
+
+    let function_blocks_start = blocks_used;
+    var block_cursor = blocks_used;
+    var instruction_cursor = instructions_used;
+    for (block_offset in 1u64..(block_count.value as u64)) {
+        let block_index = block_offset - 1;
+        let instructions = code_read_ids(
+            cursor,
+            storage->block_instructions,
+            instruction_cursor
+        );
+        cursor = instructions.reader;
+        if (cursor.failed) {
+            return ZirlCodeFunctionRead {
+                reader: cursor,
+                value: code_function_empty(storage),
+                parameter_types_used: parameter_types_used,
+                parameter_names_used: parameter_names_used,
+                parameter_slots_used: parameter_slots_used,
+                blocks_used: blocks_used,
+                instructions_used: instructions_used,
+            };
+        }
+        let terminator = read_u32(cursor);
+        cursor = terminator.reader;
+        if (cursor.failed) {
+            return ZirlCodeFunctionRead {
+                reader: cursor,
+                value: code_function_empty(storage),
+                parameter_types_used: parameter_types_used,
+                parameter_names_used: parameter_names_used,
+                parameter_slots_used: parameter_slots_used,
+                blocks_used: blocks_used,
+                instructions_used: instructions_used,
+            };
+        }
+        raw storage->blocks[block_cursor + block_index] = ZirlCompactBasicBlock {
+            instructions: instructions.values,
+            terminator: terminator.value,
+        };
+        instruction_cursor = instruction_cursor + (instructions.count as u64);
+    }
+
+    return ZirlCodeFunctionRead {
+        reader: cursor,
+        value: ZirlCompactFunction {
+            name_id: name_id.value,
+            signature_type_id: signature_type_id.value,
+            is_extern: external.value == 1u8,
+            is_foreign_c: foreign_c.value == 1u8,
+            is_variadic: variadic.value == 1u8,
+            is_state: state_flag.value == 1u8,
+            uses_tail_calling_convention: tail_call.value == 1u8,
+            discardable: discardable.value == 1u8,
+            return_type_id: return_type_id.value,
+            machine_return_type_id: machine_return_type_id.value,
+            machine_id: machine_id.value,
+            instance_index: instance_index.value,
+            variadic_slice_param: variadic_slice_param.value,
+            parameter_type_ids: parameter_types.values,
+            parameter_name_ids: parameter_names.values,
+            parameter_slot_ids: parameter_slots.values,
+            blocks: raw storage->blocks[function_blocks_start..(function_blocks_start + block_count.value as u64)],
+        },
+        parameter_types_used: parameter_types_used + (parameter_types.count as u64),
+        parameter_names_used: parameter_names_used + (parameter_names.count as u64),
+        parameter_slots_used: parameter_slots_used + (parameter_slots.count as u64),
+        blocks_used: blocks_used + (block_count.value as u64),
+        instructions_used: instruction_cursor,
+    };
+}
+
+pub fn read_code_section(
+    reader: ZirlByteReader,
+    storage: *ZirlCodeStorage
+): ZirlCodeRead {
+    var cursor = reader;
+    var expressions_used = 0u64;
+    var args_used = 0u64;
+    var arg_types_used = 0u64;
+    var integers_used = 0u64;
+    var functions_used = 0u64;
+    var parameter_types_used = 0u64;
+    var parameter_names_used = 0u64;
+    var parameter_slots_used = 0u64;
+    var blocks_used = 0u64;
+    var instructions_used = 0u64;
+    var globals_used = 0u64;
+    var vtables_used = 0u64;
+    var vtable_slots_used = 0u64;
+    var mappings_used = 0u64;
+
+    let expression_count = read_u32(cursor);
+    cursor = expression_count.reader;
+    if (cursor.failed or
+        (expression_count.value as u64) > @lengthOf(storage->expressions) or
+        not code_can_read_count(cursor, expression_count.value, 72u64)) {
+        return code_reader_failure(reader, storage);
+    }
+    for (offset in 1u64..(expression_count.value as u64)) {
+        let index = offset - 1;
+        let expression = read_code_expr(
+            cursor,
+            storage,
+            args_used,
+            arg_types_used,
+            integers_used
+        );
+        cursor = expression.reader;
+        if (cursor.failed) {
+            return code_reader_failure(reader, storage);
+        }
+        raw storage->expressions[index] = expression.value;
+        args_used = expression.args_used;
+        arg_types_used = expression.arg_types_used;
+        integers_used = expression.integers_used;
+        expressions_used = expressions_used + 1;
+    }
+
+    let function_count = read_u32(cursor);
+    cursor = function_count.reader;
+    if (cursor.failed or
+        (function_count.value as u64) > @lengthOf(storage->functions) or
+        not code_can_read_count(cursor, function_count.value, 50u64)) {
+        return code_reader_failure(reader, storage);
+    }
+    for (offset in 1u64..(function_count.value as u64)) {
+        let index = offset - 1;
+        let function = read_code_function(
+            cursor,
+            storage,
+            parameter_types_used,
+            parameter_names_used,
+            parameter_slots_used,
+            blocks_used,
+            instructions_used
+        );
+        cursor = function.reader;
+        if (cursor.failed) {
+            return code_reader_failure(reader, storage);
+        }
+        raw storage->functions[index] = function.value;
+        parameter_types_used = function.parameter_types_used;
+        parameter_names_used = function.parameter_names_used;
+        parameter_slots_used = function.parameter_slots_used;
+        blocks_used = function.blocks_used;
+        instructions_used = function.instructions_used;
+        functions_used = functions_used + 1;
+    }
+
+    let global_count = read_u32(cursor);
+    cursor = global_count.reader;
+    if (cursor.failed or
+        (global_count.value as u64) > @lengthOf(storage->globals) or
+        not code_can_read_count(cursor, global_count.value, 12u64)) {
+        return code_reader_failure(reader, storage);
+    }
+    for (offset in 1u64..(global_count.value as u64)) {
+        let index = offset - 1;
+        let name_id = read_u32(cursor);
+        cursor = name_id.reader;
+        let type_id = read_u32(cursor);
+        cursor = type_id.reader;
+        let initializer = read_u32(cursor);
+        cursor = initializer.reader;
+        if (cursor.failed) {
+            return code_reader_failure(reader, storage);
+        }
+        raw storage->globals[index] = ZirlCodeGlobal {
+            name_id: name_id.value,
+            type_id: type_id.value,
+            initializer: initializer.value,
+        };
+        globals_used = globals_used + 1;
+    }
+
+    let vtable_count = read_u32(cursor);
+    cursor = vtable_count.reader;
+    if (cursor.failed or
+        (vtable_count.value as u64) > @lengthOf(storage->vtables) or
+        not code_can_read_count(cursor, vtable_count.value, 8u64)) {
+        return code_reader_failure(reader, storage);
+    }
+    for (offset in 1u64..(vtable_count.value as u64)) {
+        let index = offset - 1;
+        let name_id = read_u32(cursor);
+        cursor = name_id.reader;
+        let slot_count = read_u32(cursor);
+        cursor = slot_count.reader;
+        if (cursor.failed or
+            vtable_slots_used > @lengthOf(storage->vtable_function_name_ids) or
+            vtable_slots_used > @lengthOf(storage->vtable_function_signature_type_ids) or
+            (slot_count.value as u64) >
+                @lengthOf(storage->vtable_function_name_ids) - vtable_slots_used or
+            (slot_count.value as u64) >
+                @lengthOf(storage->vtable_function_signature_type_ids) - vtable_slots_used or
+            not code_can_read_count(cursor, slot_count.value, 8u64)) {
+            return code_reader_failure(reader, storage);
+        }
+        let slots_start = vtable_slots_used;
+        for (slot_offset in 1u64..(slot_count.value as u64)) {
+            let slot = slot_offset - 1;
+            let function_name_id = read_u32(cursor);
+            cursor = function_name_id.reader;
+            let signature_type_id = read_u32(cursor);
+            cursor = signature_type_id.reader;
+            if (cursor.failed) {
+                return code_reader_failure(reader, storage);
+            }
+            raw storage->vtable_function_name_ids[slots_start + slot] =
+                function_name_id.value;
+            raw storage->vtable_function_signature_type_ids[slots_start + slot] =
+                signature_type_id.value;
+        }
+        raw storage->vtables[index] = ZirlCodeVTable {
+            name_id: name_id.value,
+            slot_function_name_ids: raw storage->vtable_function_name_ids[
+                slots_start..(slots_start + slot_count.value as u64)
+            ],
+            slot_function_signature_type_ids:
+                raw storage->vtable_function_signature_type_ids[
+                    slots_start..(slots_start + slot_count.value as u64)
+                ],
+        };
+        vtable_slots_used = vtable_slots_used + (slot_count.value as u64);
+        vtables_used = vtables_used + 1;
+    }
+
+    let mapping_count = read_u32(cursor);
+    cursor = mapping_count.reader;
+    if (cursor.failed or
+        (mapping_count.value as u64) > @lengthOf(storage->canonical_mappings) or
+        not code_can_read_count(cursor, mapping_count.value, 20u64)) {
+        return code_reader_failure(reader, storage);
+    }
+    for (offset in 1u64..(mapping_count.value as u64)) {
+        let index = offset - 1;
+        let canonical_hi = read_u64(cursor);
+        cursor = canonical_hi.reader;
+        let canonical_lo = read_u64(cursor);
+        cursor = canonical_lo.reader;
+        let runtime_id = read_u32(cursor);
+        cursor = runtime_id.reader;
+        if (cursor.failed) {
+            return code_reader_failure(reader, storage);
+        }
+        raw storage->canonical_mappings[index] = ZirlCanonicalMapping {
+            canonical_hi: canonical_hi.value,
+            canonical_lo: canonical_lo.value,
+            runtime_id: runtime_id.value,
+        };
+        mappings_used = mappings_used + 1;
+    }
+
+    return ZirlCodeRead {
+        reader: cursor,
+        value: code_section_value(
+            storage,
+            expressions_used,
+            functions_used,
+            globals_used,
+            vtables_used,
+            mappings_used
+        ),
+    };
+}
+
+pub fn write_code_section(
+    writer: ZirlByteWriter,
+    value: *ZirlCodeSection
+): ZirlByteWriter {
+    if (not code_count_fits(@lengthOf(value->expressions)) or
+        not code_count_fits(@lengthOf(value->functions)) or
+        not code_count_fits(@lengthOf(value->globals)) or
+        not code_count_fits(@lengthOf(value->vtables)) or
+        not code_count_fits(@lengthOf(value->canonical_mappings))) {
+        return code_writer_failure(writer);
+    }
+    for (offset in 1u64..@lengthOf(value->vtables)) {
+        let index = offset - 1;
+        let vtable: *ZirlCodeVTable = &raw value->vtables[index];
+        if (@lengthOf(vtable->slot_function_name_ids) !=
+            @lengthOf(vtable->slot_function_signature_type_ids) or
+            not code_ids_fit(vtable->slot_function_name_ids) or
+            not code_ids_fit(vtable->slot_function_signature_type_ids)) {
+            return code_writer_failure(writer);
+        }
+    }
+
+    var result = write_u32(writer, @lengthOf(value->expressions) as u32);
+    for (offset in 1u64..@lengthOf(value->expressions)) {
+        let index = offset - 1;
+        let expression: *ZirlCompactExpr = &raw value->expressions[index];
+        result = write_code_expr(result, expression);
+    }
+    result = write_u32(result, @lengthOf(value->functions) as u32);
+    for (offset in 1u64..@lengthOf(value->functions)) {
+        let index = offset - 1;
+        let function: *ZirlCompactFunction = &raw value->functions[index];
+        result = write_code_function(result, function);
+    }
+    result = write_u32(result, @lengthOf(value->globals) as u32);
+    for (offset in 1u64..@lengthOf(value->globals)) {
+        let index = offset - 1;
+        let global_record: *ZirlCodeGlobal = &raw value->globals[index];
+        result = write_u32(result, global_record->name_id);
+        result = write_u32(result, global_record->type_id);
+        result = write_u32(result, global_record->initializer);
+    }
+    result = write_u32(result, @lengthOf(value->vtables) as u32);
+    for (offset in 1u64..@lengthOf(value->vtables)) {
+        let index = offset - 1;
+        let vtable: *ZirlCodeVTable = &raw value->vtables[index];
+        result = write_u32(result, vtable->name_id);
+        result = write_u32(result, @lengthOf(vtable->slot_function_name_ids) as u32);
+        for (slot_offset in 1u64..@lengthOf(vtable->slot_function_name_ids)) {
+            let slot = slot_offset - 1;
+            result = write_u32(result, raw vtable->slot_function_name_ids[slot]);
+            result = write_u32(
+                result,
+                raw vtable->slot_function_signature_type_ids[slot]
+            );
+        }
+    }
+    result = write_u32(result, @lengthOf(value->canonical_mappings) as u32);
+    for (offset in 1u64..@lengthOf(value->canonical_mappings)) {
+        let index = offset - 1;
+        let mapping: *ZirlCanonicalMapping = &raw value->canonical_mappings[index];
+        result = write_u64(result, mapping->canonical_hi);
+        result = write_u64(result, mapping->canonical_lo);
+        result = write_u32(result, mapping->runtime_id);
+    }
+    return result;
+}
