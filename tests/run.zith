@@ -1,0 +1,10 @@
+fn test_harness_smoke(): i32 {
+    if (2 + 2 == 4) {
+        return 0;
+    }
+    return 1;
+}
+
+fn main(): i32 {
+    return test_harness_smoke();
+}
