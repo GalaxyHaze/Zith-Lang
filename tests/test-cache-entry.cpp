@@ -3,10 +3,12 @@
 #include "cache/cache.hpp"
 #include "cache/manifest.hpp"
 #include "test-common.hpp"
+#include "zirl/zirl-header.hpp"
 
 #include <filesystem>
 #include <string>
 #include <string_view>
+#include <vector>
 
 using namespace zith;
 using namespace zith::cache;
@@ -61,6 +63,42 @@ static void test_store_does_not_persist_unencodable_artifacts() {
           "unencodable artifact is not added to the cache manifest");
     CHECK(store.metrics().invalid == 1,
           "unencodable artifact increments the invalid-cache metric");
+
+    fs::remove_all(root);
+}
+
+static void test_stale_vir_section_does_not_invalidate_hir() {
+    auto root = fs::temp_directory_path() / "zith-test-stale-vir-section";
+    fs::remove_all(root);
+
+    Store store(root.string(), kSharedHirProfile);
+    Artifact artifact;
+    artifact.canonical_path = "/test/stale-vir.zith";
+    artifact.module_name = "stale-vir";
+    artifact.module_identity = {artifact.canonical_path};
+    artifact.semantic_profile = kSharedHirProfile;
+    artifact.frontend_identity = {"Zith", "zithc-tests", "test"};
+    artifact.source_fingerprint = {0x1234, 0x5678};
+    artifact.optional_sections.push_back(
+        {static_cast<uint16_t>(zirl::SectionId::Vir), 0xFFFF, {0xDE, 0xAD, 0xBE, 0xEF}});
+
+    store.store(artifact);
+    const auto loaded =
+        store.loadEntry(artifact.module_identity, artifact.source_fingerprint);
+    CHECK(loaded.has_value(), "obsolete optional VIR section does not invalidate cached HIR");
+    if (loaded) {
+        CHECK_EQ(loaded->artifact.optional_sections.size(), 1u,
+                 "opaque obsolete VIR section survives Store and Reader");
+        const auto &section = loaded->artifact.optional_sections[0];
+        CHECK_EQ(section.id, static_cast<uint16_t>(zirl::SectionId::Vir),
+                 "round-trip retains the VIR section identity");
+        CHECK_EQ(section.schema_version, 0xFFFF,
+                 "round-trip retains the obsolete VIR schema version");
+        CHECK(section.payload == std::vector<uint8_t>({0xDE, 0xAD, 0xBE, 0xEF}),
+              "round-trip retains the opaque VIR payload");
+        CHECK((loaded->artifact.optional_features & kOptionalFeatureDerivedVir) != 0,
+              "derived VIR feature bit matches the persisted section");
+    }
 
     fs::remove_all(root);
 }
@@ -256,6 +294,7 @@ static void test_store_metrics_exposed() {
 static void test_cache_entry() {
     test_artifact_validation_separates_frontend_and_semantics();
     test_store_does_not_persist_unencodable_artifacts();
+    test_stale_vir_section_does_not_invalidate_hir();
     test_transitive_invalidation();
     test_cycle_idempotence();
     test_manifest_round_trip();

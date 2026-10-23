@@ -39,6 +39,7 @@ enum class SectionId : uint16_t {
     Instantiations = 6, // optional summary; concrete bodies are in Code
     FrontendProvenance = 7, // optional producer identity, not an HIR compatibility key
     Debug     = 8, // optional, reserved
+    Vir       = 9, // optional derived VM IR; never required to hydrate HIR
 };
 
 struct SectionEntry {

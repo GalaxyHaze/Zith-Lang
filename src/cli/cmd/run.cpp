@@ -5,11 +5,14 @@
 #include "session/pipeline-plan.hpp"
 #ifdef ZITH_HAS_VM
 #include "vm/hir-to-vm.hpp"
+#include "vm/vir-cache.hpp"
 #include "vm/vm-v2.hpp"
 #endif
 
 #include <cstdio>
 #include <string>
+#include <utility>
+#include <vector>
 
 namespace zith::cli::commands {
 
@@ -24,14 +27,20 @@ bool runThroughVirtualMachine(session::CompilationSession &session, term::UsageP
 #ifdef ZITH_HAS_VM
     memory::Arena vmArena;
     vm::Module module(vmArena);
-    const auto lowered = vm::lowerModule(session.hirModule(), session.interner(), session.types(),
-                                         vmArena, module);
-    if (!lowered.ok) {
+    const auto cached = vm::loadOrLowerCachedModule(
+        session.persistentArtifact(), session.hirModule(), session.interner(), session.types(),
+        vmArena, module);
+    if (!cached.ok) {
         err.red("[error]");
         std::fprintf(stderr, " %s\n",
-                     lowered.message.empty() ? "VM v2 could not lower the program"
-                                             : lowered.message.c_str());
+                     cached.message.empty() ? "VM v2 could not lower the program"
+                                            : cached.message.c_str());
         return false;
+    }
+    if (!cached.reused) {
+        std::vector<uint8_t> payload;
+        if (vm::encodeCachedModule(module, payload))
+            session.refreshCachedVirSection(vm::kVirSchemaVersion, std::move(payload));
     }
 
     vm::Vm machine;

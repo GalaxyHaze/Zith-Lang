@@ -8,7 +8,9 @@
 #include "vm/hir-to-vm.hpp"
 #include "vm/typed-ir-dump.hpp"
 #include "vm/typed-ir.hpp"
+#include "vm/vir-cache.hpp"
 #include "vm/vm-v2.hpp"
+#include "zirl/zirl-header.hpp"
 
 #include <filesystem>
 #include <fstream>
@@ -106,6 +108,95 @@ void test_vm_v2_dump_is_deterministic() {
               first.find("condition=r4 if_true=pc12 if_false=pc3") != std::string::npos &&
               first.find("target=pc12") != std::string::npos,
           "VIR dump names branch conditions and program-counter destinations");
+}
+
+void test_vm_v2_cached_vir_compatibility() {
+    const auto root = std::filesystem::temp_directory_path() / "zith-vm-v2-vir-cache-tests";
+    std::filesystem::remove_all(root);
+    std::filesystem::create_directories(root);
+
+    const auto source = root / "main.zith";
+    {
+        std::ofstream output(source, std::ios::binary | std::ios::trunc);
+        output << "fn main(): i32 { 7 }\n";
+    }
+
+    memory::Arena sessionArena;
+    Options options(sessionArena);
+    options.targetStage = session::Stage::HirLowered;
+    session::CompilationSession session(options, source.string());
+    session.setBuffered(true);
+    const bool hirReady = session.runTo(session::Stage::HirLowered);
+    CHECK(hirReady, "cached VIR fixture lowers to HIR");
+    if (!hirReady) {
+        std::filesystem::remove_all(root);
+        return;
+    }
+
+    memory::Arena originalArena;
+    vm::Module original(originalArena);
+    const auto lowered =
+        vm::lowerModule(session.hirModule(), session.interner(), session.types(), originalArena,
+                        original);
+    CHECK(lowered.ok, "cached VIR fixture lowers to a VM module");
+    if (!lowered.ok) {
+        std::filesystem::remove_all(root);
+        return;
+    }
+
+    cache::Artifact artifact;
+    cache::Artifact::OptionalSection section;
+    section.id             = static_cast<uint16_t>(zirl::SectionId::Vir);
+    section.schema_version = vm::kVirSchemaVersion;
+    const bool encoded = vm::encodeCachedModule(original, section.payload);
+    CHECK(encoded, "VM module encodes into an optional VIR cache section");
+    if (!encoded || section.payload.size() < 8U) {
+        std::filesystem::remove_all(root);
+        return;
+    }
+    artifact.optional_sections.push_back(section);
+
+    memory::Arena hitArena;
+    vm::Module hitModule(hitArena);
+    const auto hit = vm::loadOrLowerCachedModule(&artifact, session.hirModule(), session.interner(),
+                                                 session.types(), hitArena, hitModule);
+    CHECK(hit.ok && hit.reused, "compatible cached VIR is reused");
+    vm::Vm hitVm;
+    const auto hitResult = hitVm.runMain(hitModule);
+    CHECK(hitResult.status == vm::RunStatus::Ok && hitResult.exitCode == 7,
+          "reused VIR executes with the expected result");
+
+    auto schemaMismatch = artifact;
+    schemaMismatch.optional_sections[0].schema_version =
+        static_cast<uint16_t>(vm::kVirSchemaVersion + 1U);
+    memory::Arena schemaArena;
+    vm::Module schemaModule(schemaArena);
+    const auto schemaFallback = vm::loadOrLowerCachedModule(
+        &schemaMismatch, session.hirModule(), session.interner(), session.types(), schemaArena,
+        schemaModule);
+    CHECK(schemaFallback.ok && !schemaFallback.reused,
+          "incompatible VIR schema falls back to lowering the HIR");
+    vm::Vm schemaVm;
+    const auto schemaResult = schemaVm.runMain(schemaModule);
+    CHECK(schemaResult.status == vm::RunStatus::Ok && schemaResult.exitCode == 7,
+          "schema fallback executes with the expected result");
+
+    auto semanticMismatch = artifact;
+    semanticMismatch.optional_sections[0].payload[4] =
+        static_cast<uint8_t>(vm::kVmSemanticVersion + 1U);
+    memory::Arena semanticArena;
+    vm::Module semanticModule(semanticArena);
+    const auto semanticFallback = vm::loadOrLowerCachedModule(
+        &semanticMismatch, session.hirModule(), session.interner(), session.types(), semanticArena,
+        semanticModule);
+    CHECK(semanticFallback.ok && !semanticFallback.reused,
+          "incompatible VM semantics fall back to lowering the HIR");
+    vm::Vm semanticVm;
+    const auto semanticResult = semanticVm.runMain(semanticModule);
+    CHECK(semanticResult.status == vm::RunStatus::Ok && semanticResult.exitCode == 7,
+          "semantic fallback executes with the expected result");
+
+    std::filesystem::remove_all(root);
 }
 
 void test_vm_v2_linear_memory_trap() {
@@ -1803,6 +1894,7 @@ void test_vm_v2_dynamic_array_index_traps() {
 void test_vm_v2() {
     test_vm_v2_malloc_string();
     test_vm_v2_dump_is_deterministic();
+    test_vm_v2_cached_vir_compatibility();
     test_vm_v2_linear_memory_trap();
     test_vm_v2_missing_main();
     test_vm_v2_loop_and_store();

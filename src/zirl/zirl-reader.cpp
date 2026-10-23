@@ -339,7 +339,8 @@ std::optional<cache::Artifact> Reader::read(std::string_view bytes) {
                         [&entry](SectionId id) { return entry.id == static_cast<uint16_t>(id); });
         const bool known_optional =
             entry.id == static_cast<uint16_t>(SectionId::Instantiations) ||
-            entry.id == static_cast<uint16_t>(SectionId::FrontendProvenance);
+            entry.id == static_cast<uint16_t>(SectionId::FrontendProvenance) ||
+            entry.id == static_cast<uint16_t>(SectionId::Vir);
         if (!known_required && !known_optional && (entry.flags & kSectionFlagRequired) != 0)
             return std::nullopt;
         if (known_required && (entry.flags & kSectionFlagRequired) == 0)

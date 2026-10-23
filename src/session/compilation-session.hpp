@@ -89,6 +89,7 @@ class CompilationSession {
     std::unique_ptr<cache::Store> mCacheStore;
     bool mCacheHydrated = false;
     std::optional<cache::CacheEntry> mHydratedEntry;
+    std::optional<cache::Artifact> mWrittenArtifact;
     std::string mCanonicalPath;
     session::ContentFingerprint mSourceFingerprint;
 
@@ -163,6 +164,12 @@ public:
     [[nodiscard]] cache::StoreMetrics cacheMetrics() const {
         return mCacheStore ? mCacheStore->metrics() : cache::StoreMetrics{};
     }
+    [[nodiscard]] const cache::Artifact *persistentArtifact() const noexcept {
+        if (mHydratedEntry)
+            return &mHydratedEntry->artifact;
+        return mWrittenArtifact ? &*mWrittenArtifact : nullptr;
+    }
+    void refreshCachedVirSection(uint16_t schema_version, std::vector<uint8_t> payload);
 
     void setBuffered(bool b) {
         mBufferedOutput = b;

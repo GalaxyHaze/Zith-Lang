@@ -75,8 +75,9 @@ uint32_t Writer::write(const cache::Artifact &artifact, ByteWriter &out) {
                          [&](ByteWriter &w) { return encodeInstantiations(artifact, w); }))
         return 0;
 
-    uint64_t optional_features = artifact.optional_features |
-                                cache::kOptionalFeatureInstantiationSummary;
+    uint64_t optional_features =
+        (artifact.optional_features & ~cache::kOptionalFeatureDerivedVir) |
+        cache::kOptionalFeatureInstantiationSummary;
     const bool has_frontend_identity = !artifact.frontend_identity.dialect.empty() ||
                                        !artifact.frontend_identity.implementation.empty() ||
                                        !artifact.frontend_identity.version.empty();
@@ -104,6 +105,8 @@ uint32_t Writer::write(const cache::Artifact &artifact, ByteWriter &out) {
         section.schema_version = optional.schema_version;
         section.payload.writeBytes(optional.payload.data(), optional.payload.size());
         sections.push_back(std::move(section));
+        if (optional.id == static_cast<uint16_t>(SectionId::Vir))
+            optional_features |= cache::kOptionalFeatureDerivedVir;
     }
 
     std::sort(sections.begin(), sections.end(),

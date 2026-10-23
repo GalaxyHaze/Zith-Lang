@@ -6,7 +6,15 @@
 #include "diagnostics/error-codes.hpp"
 #include "memory/flat-set.hpp"
 #include "types/type-kind.hpp"
+#include "zirl/zirl-header.hpp"
 
+#ifdef ZITH_HAS_VM
+#include "vm/hir-to-vm.hpp"
+#include "vm/typed-ir.hpp"
+#include "vm/vir-cache.hpp"
+#endif
+
+#include <algorithm>
 #include <filesystem>
 #include <fstream>
 #include <memory>
@@ -168,10 +176,48 @@ void CompilationSession::writePersistentCache() {
 
     std::string module_name = fs::path(mFilePath).stem().string();
     auto artifact           = builder.build(mCanonicalPath, module_name, deps);
+#ifdef ZITH_HAS_VM
+    memory::Arena vir_arena;
+    vm::Module vir(vir_arena);
+    const auto lowered = vm::lowerModule(mHirModule, *mInterner, mTypes, vir_arena, vir);
+    if (lowered.ok) {
+        cache::Artifact::OptionalSection section;
+        section.id = static_cast<uint16_t>(zirl::SectionId::Vir);
+        section.schema_version = vm::kVirSchemaVersion;
+        if (vm::encodeCachedModule(vir, section.payload)) {
+            artifact.optional_features |= cache::kOptionalFeatureDerivedVir;
+            artifact.optional_sections.push_back(std::move(section));
+        }
+    }
+#endif
     mCacheStore->store(artifact);
+    mWrittenArtifact = std::move(artifact);
 
     if (mOpts.get().flags.verbose())
         writeOutput("  [cache] wrote artifact for %s\n", mCanonicalPath.c_str());
+}
+
+void CompilationSession::refreshCachedVirSection(uint16_t schema_version,
+                                                 std::vector<uint8_t> payload) {
+    auto *artifact = mHydratedEntry ? &mHydratedEntry->artifact
+                                    : (mWrittenArtifact ? &*mWrittenArtifact : nullptr);
+    if (artifact == nullptr || mCacheStore == nullptr || mOpts.get().noCache)
+        return;
+
+    const auto vir_id = static_cast<uint16_t>(zirl::SectionId::Vir);
+    auto section = std::find_if(artifact->optional_sections.begin(),
+                                artifact->optional_sections.end(),
+                                [](const cache::Artifact::OptionalSection &candidate) {
+                                    return candidate.id == vir_id;
+                                });
+    if (section == artifact->optional_sections.end()) {
+        artifact->optional_sections.push_back({vir_id, schema_version, std::move(payload)});
+    } else {
+        section->schema_version = schema_version;
+        section->payload = std::move(payload);
+    }
+    artifact->optional_features |= cache::kOptionalFeatureDerivedVir;
+    mCacheStore->store(*artifact);
 }
 
 void CompilationSession::hydrateFromArtifact(const cache::Artifact &art) {
