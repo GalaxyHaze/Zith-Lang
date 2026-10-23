@@ -1,0 +1,84 @@
+pub const hirSchemaVersion: u32 = 1u32;
+pub const requiredHirFeatures: u64 = 7u64;
+pub const containerVersion: u32 = 20u32;
+pub const virSchemaVersion: u32 = 1u32;
+pub const vmSemanticVersion: u32 = 1u32;
+
+pub struct HirCacheIdentity {
+    pub canonical_module: []char,
+    pub semantic_profile: []char,
+    pub semantic_profile_version: u32,
+    pub hir_schema_version: u32,
+    pub required_features: u64,
+    pub optional_features: u64,
+    // Producer provenance is informational and does not gate shared HIR.
+    pub frontend_dialect: []char,
+    pub frontend_implementation: []char,
+    pub frontend_version: []char,
+}
+
+pub enum HirCacheDecision {
+    Compatible = 0,
+    InvalidIdentity = 1,
+    ModuleMismatch = 2,
+    SemanticProfileMismatch = 3,
+    HirSchemaMismatch = 4,
+    RequiredFeatureMismatch = 5,
+}
+
+fn same_text(left: []char, right: []char): bool {
+    let length = @lengthOf(left);
+    if (length != @lengthOf(right)) {
+        return false;
+    }
+    for (offset in 1u64..length) {
+        let index = offset - 1;
+        let left_char: char = raw left[index];
+        let right_char: char = raw right[index];
+        if (left_char != right_char) {
+            return false;
+        }
+    }
+    return true;
+}
+
+fn valid_identity(identity: *HirCacheIdentity): bool {
+    return @lengthOf(identity->canonical_module) != 0 and
+        @lengthOf(identity->semantic_profile) != 0 and
+        identity->semantic_profile_version != 0 and
+        identity->hir_schema_version != 0;
+}
+
+pub fn compare_hir_identity(
+    stored: *HirCacheIdentity,
+    expected: *HirCacheIdentity
+): HirCacheDecision {
+    if (not valid_identity(stored) or not valid_identity(expected)) {
+        return HirCacheDecision.InvalidIdentity;
+    }
+    if (stored->required_features != requiredHirFeatures or
+        expected->required_features != requiredHirFeatures) {
+        return HirCacheDecision.RequiredFeatureMismatch;
+    }
+    if (not same_text(stored->canonical_module, expected->canonical_module)) {
+        return HirCacheDecision.ModuleMismatch;
+    }
+    if (not same_text(stored->semantic_profile, expected->semantic_profile)) {
+        return HirCacheDecision.SemanticProfileMismatch;
+    }
+    if (stored->semantic_profile_version != expected->semantic_profile_version) {
+        return HirCacheDecision.SemanticProfileMismatch;
+    }
+    if (stored->hir_schema_version != expected->hir_schema_version) {
+        return HirCacheDecision.HirSchemaMismatch;
+    }
+    return HirCacheDecision.Compatible;
+}
+
+pub fn can_reuse_vir(
+    stored_schema_version: u32,
+    stored_vm_semantic_version: u32
+): bool {
+    return stored_schema_version == virSchemaVersion and
+        stored_vm_semantic_version == vmSemanticVersion;
+}

@@ -1,4 +1,49 @@
 from ir/hir
+from ir/hir-verify
+from cache/cache
+
+fn make_hir_module(
+    strings: [][]char,
+    types: []HirType,
+    expressions: []HirExpr,
+    functions: []HirFunction,
+    proofs: []HirSafetyProof
+): HirModule {
+    let declarations: [0]HirDeclaration = [];
+    let global_constants: [0]HirGlobalConst = [];
+    let vtables: [0]HirVTable = [];
+    let slot_attrs: [0]HirSlotAttrs = [];
+    let call_attrs: [0]HirCallAttrs = [];
+    let function_attrs: [0]HirFunctionAttrs = [];
+    return HirModule {
+        strings: strings,
+        types: types,
+        expressions: expressions,
+        functions: functions,
+        declarations: raw declarations[0..0],
+        global_constants: raw global_constants[0..0],
+        vtables: raw vtables[0..0],
+        slot_attrs: raw slot_attrs[0..0],
+        call_attrs: raw call_attrs[0..0],
+        function_attrs: raw function_attrs[0..0],
+        safety_attrs: HirSafetyAttrs { proofs: proofs },
+    };
+}
+
+fn empty_hir_module(): HirModule {
+    let strings: [0][]char = [];
+    let types: [0]HirType = [];
+    let expressions: [0]HirExpr = [];
+    let functions: [0]HirFunction = [];
+    let proofs: [0]HirSafetyProof = [];
+    return make_hir_module(
+        raw strings[0..0],
+        raw types[0..0],
+        raw expressions[0..0],
+        raw functions[0..0],
+        raw proofs[0..0]
+    );
+}
 
 fn test_hir_literal_variant(): i32 {
     let literal: HirLiteral = HirLiteral {
@@ -16,6 +61,667 @@ fn test_hir_literal_variant(): i32 {
     return 2;
 }
 
+fn test_empty_hir_verifies(): i32 {
+    let module = empty_hir_module();
+    let result = verify_hir(&module);
+    if (result.error == HirVerifyError.None) {
+        return 0;
+    }
+    return 3;
+}
+
+fn test_nonempty_expression_table_verifies(): i32 {
+    let jump_node = HirJump { target: 0 };
+    let expression: HirExpr = HirExpr { jump_node };
+    let expressions: [1]HirExpr = [expression];
+    let strings: [0][]char = [];
+    let types: [0]HirType = [];
+    let functions: [0]HirFunction = [];
+    let proofs: [0]HirSafetyProof = [];
+    let module = make_hir_module(
+        raw strings[0..0],
+        raw types[0..0],
+        raw expressions[0..1],
+        raw functions[0..0],
+        raw proofs[0..0]
+    );
+    let result = verify_hir(&module);
+    if (result.error == HirVerifyError.None) {
+        return 0;
+    }
+    return 4;
+}
+
+fn test_invalid_literal_type_is_rejected(): i32 {
+    let literal: HirLiteral = HirLiteral {
+        value_kind: HirLiteralKind.Integer,
+        integer: 1,
+        float: 0.0,
+        boolean: false,
+        string_id: invalidString,
+        type_id: invalidType,
+    };
+    let expressions: [1]HirExpr = [HirExpr { literal }];
+    let strings: [0][]char = [];
+    let types: [0]HirType = [];
+    let functions: [0]HirFunction = [];
+    let proofs: [0]HirSafetyProof = [];
+    let module = make_hir_module(
+        raw strings[0..0],
+        raw types[0..0],
+        raw expressions[0..1],
+        raw functions[0..0],
+        raw proofs[0..0]
+    );
+    let result = verify_hir(&module);
+    if (result.error == HirVerifyError.InvalidExpressionShape) {
+        return 0;
+    }
+    return 5;
+}
+
+fn test_required_check_without_proof(): i32 {
+    let no_arguments: [1]HirTypeId = [invalidType];
+    let no_names: [1]HirStringId = [invalidString];
+    let integer_type_id: HirTypeId = 0;
+    var integer_type = HirType {
+        kind: HirTypeKind.Int,
+        width: 32,
+        flags: 0,
+        ref0: invalidType,
+        ref1: 0,
+        args: raw no_arguments[0..0],
+        arg_names: raw no_names[0..0],
+    };
+    integer_type.kind = HirTypeKind.Int;
+    integer_type.args = raw no_arguments[0..0];
+    integer_type.arg_names = raw no_names[0..0];
+    var array_type = HirType {
+        kind: HirTypeKind.Array,
+        width: 0,
+        flags: 0,
+        ref0: 1,
+        ref1: 4,
+        args: raw no_arguments[0..0],
+        arg_names: raw no_names[0..0],
+    };
+    array_type.kind = HirTypeKind.Array;
+    array_type.ref0 = integer_type_id;
+    array_type.args = raw no_arguments[0..0];
+    array_type.arg_names = raw no_names[0..0];
+    let types: [2]HirType = [integer_type, array_type];
+    var object = HirLiteral {
+        value_kind: HirLiteralKind.Integer,
+        integer: 0,
+        float: 0.0,
+        boolean: false,
+        string_id: invalidString,
+        type_id: 1,
+    };
+    object.value_kind = HirLiteralKind.Integer;
+    object.integer = 0;
+    object.string_id = invalidString;
+    object.type_id = 1;
+    var index_value = HirLiteral {
+        value_kind: HirLiteralKind.Integer,
+        integer: 1,
+        float: 0.0,
+        boolean: false,
+        string_id: invalidString,
+        type_id: 1,
+    };
+    index_value.value_kind = HirLiteralKind.Integer;
+    index_value.integer = 1;
+    index_value.string_id = invalidString;
+    index_value.type_id = integer_type_id;
+    var access = HirIndex {
+        object: 1,
+        index: 1,
+        type_id: 1,
+        object_type: 1,
+        is_array: true,
+        safety: HirSafetyMode.RequiredCheck,
+    };
+    access.object = 0;
+    access.type_id = integer_type_id;
+    let expressions: [3]HirExpr = [
+        HirExpr { object },
+        HirExpr { index_value },
+        HirExpr { access },
+    ];
+    let strings: [0][]char = [];
+    let functions: [0]HirFunction = [];
+    let proofs: [0]HirSafetyProof = [];
+    let module = make_hir_module(
+        raw strings[0..0],
+        raw types[0..2],
+        raw expressions[0..3],
+        raw functions[0..0],
+        raw proofs[0..0]
+    );
+    let result = verify_hir(&module);
+    let checked_expression: HirExpr = raw module.expressions[2];
+    if (result.error == HirVerifyError.None) {
+        if (checked_expression is HirIndex) {
+            let checked_index: HirIndex = checked_expression;
+            if (checked_index.safety == HirSafetyMode.RequiredCheck) {
+                return 0;
+            }
+        }
+    }
+    return 1;
+}
+
+fn test_required_check_proof_operands_match(expected_operand: HirExprId): i32 {
+    let no_arguments: [1]HirTypeId = [invalidType];
+    let no_names: [1]HirStringId = [invalidString];
+    let integer_type_id: HirTypeId = 0;
+    var integer_type = HirType {
+        kind: HirTypeKind.Int,
+        width: 32,
+        flags: 0,
+        ref0: invalidType,
+        ref1: 0,
+        args: raw no_arguments[0..0],
+        arg_names: raw no_names[0..0],
+    };
+    integer_type.kind = HirTypeKind.Int;
+    integer_type.args = raw no_arguments[0..0];
+    integer_type.arg_names = raw no_names[0..0];
+    var array_type = HirType {
+        kind: HirTypeKind.Array,
+        width: 0,
+        flags: 0,
+        ref0: 1,
+        ref1: 4,
+        args: raw no_arguments[0..0],
+        arg_names: raw no_names[0..0],
+    };
+    array_type.kind = HirTypeKind.Array;
+    array_type.ref0 = integer_type_id;
+    array_type.args = raw no_arguments[0..0];
+    array_type.arg_names = raw no_names[0..0];
+    let types: [2]HirType = [integer_type, array_type];
+    var object = HirLiteral {
+        value_kind: HirLiteralKind.Integer,
+        integer: 0,
+        float: 0.0,
+        boolean: false,
+        string_id: invalidString,
+        type_id: 1,
+    };
+    object.value_kind = HirLiteralKind.Integer;
+    object.integer = 0;
+    object.string_id = invalidString;
+    object.type_id = 1;
+    var index_value = HirLiteral {
+        value_kind: HirLiteralKind.Integer,
+        integer: 1,
+        float: 0.0,
+        boolean: false,
+        string_id: invalidString,
+        type_id: 1,
+    };
+    index_value.value_kind = HirLiteralKind.Integer;
+    index_value.integer = 1;
+    index_value.string_id = invalidString;
+    index_value.type_id = integer_type_id;
+    var access = HirIndex {
+        object: 1,
+        index: 1,
+        type_id: 1,
+        object_type: 1,
+        is_array: true,
+        safety: HirSafetyMode.RequiredCheck,
+    };
+    access.object = 0;
+    access.type_id = integer_type_id;
+    let expressions: [3]HirExpr = [
+        HirExpr { object },
+        HirExpr { index_value },
+        HirExpr { access },
+    ];
+    let absent = HirSafetyProof {
+        kind: HirSafetyProofKind.BoundsValid,
+        operand_a: 0xFFFFFFFFu32,
+        operand_b: 0xFFFFFFFFu32,
+        operand_c: 0xFFFFFFFFu32,
+        present: false,
+    };
+    var absent_proof = absent;
+    absent_proof.kind = HirSafetyProofKind.BoundsValid;
+    absent_proof.operand_a = 0xFFFFFFFFu32;
+    absent_proof.operand_b = 0xFFFFFFFFu32;
+    absent_proof.operand_c = 0xFFFFFFFFu32;
+    absent_proof.present = false;
+    var present = HirSafetyProof {
+        kind: HirSafetyProofKind.BoundsValid,
+        operand_a: 1,
+        operand_b: expected_operand,
+        operand_c: 0xFFFFFFFFu32,
+        present: true,
+    };
+    present.kind = HirSafetyProofKind.BoundsValid;
+    present.operand_a = 0;
+    present.operand_b = expected_operand;
+    present.operand_c = 0xFFFFFFFFu32;
+    present.present = true;
+    let proofs: [3]HirSafetyProof = [absent_proof, absent_proof, present];
+    let strings: [0][]char = [];
+    let functions: [0]HirFunction = [];
+    let module = make_hir_module(
+        raw strings[0..0],
+        raw types[0..2],
+        raw expressions[0..3],
+        raw functions[0..0],
+        raw proofs[0..3]
+    );
+    let result = verify_hir(&module);
+    if (expected_operand == 1 and result.error == HirVerifyError.None) {
+        return 0;
+    }
+    if (expected_operand != 1 and result.error == HirVerifyError.InvalidSafetyProof) {
+        return 0;
+    }
+    if (expected_operand == 1) {
+        return 1;
+    }
+    return 1;
+}
+
+fn test_raw_index_remains_explicit(): i32 {
+    let no_arguments: [1]HirTypeId = [invalidType];
+    let no_names: [1]HirStringId = [invalidString];
+    var integer_type = HirType {
+        kind: HirTypeKind.Int,
+        width: 32,
+        flags: 0,
+        ref0: invalidType,
+        ref1: 0,
+        args: raw no_arguments[0..0],
+        arg_names: raw no_names[0..0],
+    };
+    integer_type.kind = HirTypeKind.Int;
+    integer_type.args = raw no_arguments[0..0];
+    integer_type.arg_names = raw no_names[0..0];
+    var array_type = HirType {
+        kind: HirTypeKind.Array,
+        width: 0,
+        flags: 0,
+        ref0: 1,
+        ref1: 4,
+        args: raw no_arguments[0..0],
+        arg_names: raw no_names[0..0],
+    };
+    array_type.kind = HirTypeKind.Array;
+    array_type.ref0 = 0;
+    array_type.args = raw no_arguments[0..0];
+    array_type.arg_names = raw no_names[0..0];
+    let types: [2]HirType = [integer_type, array_type];
+    var object = HirLiteral {
+        value_kind: HirLiteralKind.Integer,
+        integer: 0,
+        float: 0.0,
+        boolean: false,
+        string_id: invalidString,
+        type_id: 1,
+    };
+    object.value_kind = HirLiteralKind.Integer;
+    object.integer = 0;
+    object.string_id = invalidString;
+    object.type_id = 1;
+    var index_value = HirLiteral {
+        value_kind: HirLiteralKind.Integer,
+        integer: 1,
+        float: 0.0,
+        boolean: false,
+        string_id: invalidString,
+        type_id: 1,
+    };
+    index_value.value_kind = HirLiteralKind.Integer;
+    index_value.integer = 1;
+    index_value.string_id = invalidString;
+    index_value.type_id = 0;
+    var access = HirIndex {
+        object: 1,
+        index: 1,
+        type_id: 1,
+        object_type: 1,
+        is_array: true,
+        safety: HirSafetyMode.Raw,
+    };
+    access.object = 0;
+    access.type_id = 0;
+    let expressions: [3]HirExpr = [
+        HirExpr { object },
+        HirExpr { index_value },
+        HirExpr { access },
+    ];
+    let strings: [0][]char = [];
+    let functions: [0]HirFunction = [];
+    let proofs: [0]HirSafetyProof = [];
+    let module = make_hir_module(
+        raw strings[0..0],
+        raw types[0..2],
+        raw expressions[0..3],
+        raw functions[0..0],
+        raw proofs[0..0]
+    );
+    let result = verify_hir(&module);
+    let raw_expression: HirExpr = raw module.expressions[2];
+    if (result.error != HirVerifyError.None) {
+        return 1;
+    }
+    if (raw_expression is HirIndex) {
+        let raw_index: HirIndex = raw_expression;
+        if (raw_index.safety == HirSafetyMode.Raw) {
+            return 0;
+        }
+    }
+    return 1;
+}
+
+fn test_negated_optional_guard(wrong_branch_offset: u32): i32 {
+    let no_arguments: [1]HirTypeId = [invalidType];
+    let no_names: [1]HirStringId = [invalidString];
+    var void_type = HirType {
+        kind: HirTypeKind.Void,
+        width: 0,
+        flags: 0,
+        ref0: invalidType,
+        ref1: 0,
+        args: raw no_arguments[0..0],
+        arg_names: raw no_names[0..0],
+    };
+    void_type.kind = HirTypeKind.Void;
+    void_type.args = raw no_arguments[0..0];
+    void_type.arg_names = raw no_names[0..0];
+    var bool_type = HirType {
+        kind: HirTypeKind.Bool,
+        width: 0,
+        flags: 0,
+        ref0: invalidType,
+        ref1: 0,
+        args: raw no_arguments[0..0],
+        arg_names: raw no_names[0..0],
+    };
+    bool_type.kind = HirTypeKind.Bool;
+    bool_type.args = raw no_arguments[0..0];
+    bool_type.arg_names = raw no_names[0..0];
+    var optional_type = HirType {
+        kind: HirTypeKind.Optional,
+        width: 0,
+        flags: 0,
+        ref0: 1,
+        ref1: 0,
+        args: raw no_arguments[0..0],
+        arg_names: raw no_names[0..0],
+    };
+    optional_type.kind = HirTypeKind.Optional;
+    optional_type.args = raw no_arguments[0..0];
+    optional_type.arg_names = raw no_names[0..0];
+    let types: [3]HirType = [void_type, bool_type, optional_type];
+
+    let slot_address = HirSlotAddr { slot: 0, type_id: 2 };
+    let tag_field = HirField {
+        object: 0,
+        index: 1,
+        type_id: 1,
+        object_type: 2,
+        safety: HirSafetyMode.Intrinsic,
+    };
+    let negated_tag = HirUnary {
+        op: HirUnaryOp.Not,
+        operand: 1,
+        type_id: 1,
+    };
+    let branch = HirBranch {
+        condition: 2,
+        then_block: 1 + wrong_branch_offset,
+        else_block: 2 - wrong_branch_offset,
+    };
+    let ret = HirRet { value: 0xFFFFFFFFu32 };
+    let payload = HirField {
+        object: 0,
+        index: 0,
+        type_id: 1,
+        object_type: 2,
+        safety: HirSafetyMode.Guarded,
+    };
+    let expressions: [7]HirExpr = [
+        HirExpr { slot_address },
+        HirExpr { tag_field },
+        HirExpr { negated_tag },
+        HirExpr { branch },
+        HirExpr { ret },
+        HirExpr { payload },
+        HirExpr { ret },
+    ];
+
+    let no_instructions: [0]HirExprId = [];
+    let guarded_instruction: [1]HirExprId = [5];
+    let then_block = HirBasicBlock {
+        instructions: raw no_instructions[0..0],
+        terminator: 4,
+    };
+    let else_block = HirBasicBlock {
+        instructions: raw guarded_instruction[0..1],
+        terminator: 6,
+    };
+    let blocks: [3]HirBasicBlock = [
+        HirBasicBlock {
+            instructions: raw no_instructions[0..0],
+            terminator: 3,
+        },
+        then_block,
+        else_block,
+    ];
+    let no_parameter_types: [0]HirTypeId = [];
+    let no_parameter_names: [0]HirStringId = [];
+    let no_parameter_slots: [0]HirSlotId = [];
+    let function = HirFunction {
+        name_id: 0,
+        parameter_types: raw no_parameter_types[0..0],
+        parameter_name_ids: raw no_parameter_names[0..0],
+        parameter_slots: raw no_parameter_slots[0..0],
+        return_type: 0,
+        state_function: false,
+        uses_tail_calling_convention: false,
+        machine_return_type: 0xFFFFFFFFu32,
+        machine_id: 0,
+        variadic: false,
+        variadic_slice_param: 0,
+        foreign_c: false,
+        has_body: true,
+        foreign_adapter_name_id: 0xFFFFFFFFu32,
+        blocks: raw blocks[0..3],
+    };
+    let functions: [1]HirFunction = [function];
+    let function_name: [1][]char = ["guarded"];
+    let proofs: [0]HirSafetyProof = [];
+    let module = make_hir_module(
+        raw function_name[0..1],
+        raw types[0..3],
+        raw expressions[0..7],
+        raw functions[0..1],
+        raw proofs[0..0]
+    );
+
+    let result = verify_hir(&module);
+    if (wrong_branch_offset == 0) {
+        if (result.error == HirVerifyError.None) {
+            return 0;
+        }
+        return 1;
+    }
+    if (result.error == HirVerifyError.InvalidSafetyGuard) {
+        return 0;
+    }
+    return 1;
+}
+
+fn make_cache_identity(
+    canonical_module: []char,
+    semantic_profile: []char,
+    profile_version: u32,
+    hir_schema: u32,
+    required_features: u64,
+    optional_features: u64,
+    frontend_dialect: []char
+): HirCacheIdentity {
+    var identity = HirCacheIdentity {
+        canonical_module: "",
+        semantic_profile: "",
+        semantic_profile_version: 0u32,
+        hir_schema_version: 0u32,
+        required_features: 0u64,
+        optional_features: 0u64,
+        frontend_dialect: "",
+        frontend_implementation: "fixture",
+        frontend_version: "1",
+    };
+    identity.canonical_module = canonical_module;
+    identity.semantic_profile = semantic_profile;
+    identity.semantic_profile_version = profile_version;
+    identity.hir_schema_version = hir_schema;
+    identity.required_features = required_features;
+    identity.optional_features = optional_features;
+    identity.frontend_dialect = frontend_dialect;
+    return identity;
+}
+
+fn test_cache_identity_ignores_producer(): i32 {
+    let stored = make_cache_identity(
+        "pkg/main.zith", "zith-shared-hir", 1u32, 1u32, 7u64, 0u64, "Zith--");
+    let expected = make_cache_identity(
+        "pkg/main.zith", "zith-shared-hir", 1u32, 1u32, 7u64,
+        0xFFFFFFFFFFFFFFFFu64, "Zith");
+    if (compare_hir_identity(&stored, &expected) == HirCacheDecision.Compatible) {
+        return 0;
+    }
+    return 1;
+}
+
+fn test_cache_identity_rejects_semantic_mismatch(): i32 {
+    let stored_module = make_cache_identity(
+        "pkg/main.zith", "zith-shared-hir", 1u32, 1u32, 7u64, 0u64, "Zith--");
+    let wrong_module = make_cache_identity(
+        "pkg/other.zith", "zith-shared-hir", 1u32, 1u32, 7u64, 0u64, "Zith");
+    let stored_profile = make_cache_identity(
+        "pkg/main.zith", "zith-shared-hir", 1u32, 1u32, 7u64, 0u64, "Zith--");
+    let wrong_profile = make_cache_identity(
+        "pkg/main.zith", "zith--", 1u32, 1u32, 7u64, 0u64, "Zith");
+    let stored_profile_version = make_cache_identity(
+        "pkg/main.zith", "zith-shared-hir", 1u32, 1u32, 7u64, 0u64, "Zith--");
+    let wrong_profile_version = make_cache_identity(
+        "pkg/main.zith", "zith-shared-hir", 2u32, 1u32, 7u64, 0u64, "Zith");
+    let stored_schema = make_cache_identity(
+        "pkg/main.zith", "zith-shared-hir", 1u32, 1u32, 7u64, 0u64, "Zith--");
+    let wrong_schema = make_cache_identity(
+        "pkg/main.zith", "zith-shared-hir", 1u32, 2u32, 7u64, 0u64, "Zith");
+    if (compare_hir_identity(&stored_module, &wrong_module) != HirCacheDecision.ModuleMismatch) {
+        return 1;
+    }
+    if (compare_hir_identity(&stored_profile, &wrong_profile) !=
+        HirCacheDecision.SemanticProfileMismatch) {
+        return 2;
+    }
+    if (compare_hir_identity(&stored_profile_version, &wrong_profile_version) !=
+        HirCacheDecision.SemanticProfileMismatch) {
+        return 3;
+    }
+    if (compare_hir_identity(&stored_schema, &wrong_schema) != HirCacheDecision.HirSchemaMismatch) {
+        return 4;
+    }
+    return 0;
+}
+
+fn test_cache_rejects_invalid_required_features(): i32 {
+    let unknown_features = make_cache_identity(
+        "pkg/main.zith", "zith-shared-hir", 1u32, 1u32, 15u64, 0u64, "Zith--");
+    let missing = make_cache_identity(
+        "pkg/main.zith", "zith-shared-hir", 1u32, 1u32, 3u64, 0u64, "Zith--");
+    let expected_for_unknown = make_cache_identity(
+        "pkg/main.zith", "zith-shared-hir", 1u32, 1u32, 7u64, 0u64, "Zith");
+    if (compare_hir_identity(&unknown_features, &expected_for_unknown) !=
+        HirCacheDecision.RequiredFeatureMismatch) {
+        return 1;
+    }
+    let expected_for_missing = make_cache_identity(
+        "pkg/main.zith", "zith-shared-hir", 1u32, 1u32, 7u64, 0u64, "Zith");
+    if (compare_hir_identity(&missing, &expected_for_missing) !=
+        HirCacheDecision.RequiredFeatureMismatch) {
+        return 2;
+    }
+    return 0;
+}
+
+fn test_vir_version_compatibility(): i32 {
+    if (can_reuse_vir(1, 1) == false) {
+        return 1;
+    }
+    if (can_reuse_vir(2, 1)) {
+        return 2;
+    }
+    if (can_reuse_vir(1, 2)) {
+        return 3;
+    }
+    return 0;
+}
+
 fn main(): i32 {
-    return test_hir_literal_variant();
+    let literal_status = test_hir_literal_variant();
+    if (literal_status != 0) {
+        return literal_status;
+    }
+    let empty_status = test_empty_hir_verifies();
+    if (empty_status != 0) {
+        return empty_status;
+    }
+    let expression_status = test_nonempty_expression_table_verifies();
+    if (expression_status != 0) {
+        return expression_status;
+    }
+    let invalid_literal_status = test_invalid_literal_type_is_rejected();
+    if (invalid_literal_status != 0) {
+        return invalid_literal_status;
+    }
+    let required_check_status = test_required_check_without_proof();
+    if (required_check_status != 0) {
+        return 211;
+    }
+    let matching_proof_status = test_required_check_proof_operands_match(1);
+    if (matching_proof_status != 0) {
+        return 212;
+    }
+    let mismatched_proof_status = test_required_check_proof_operands_match(2);
+    if (mismatched_proof_status != 0) {
+        return 213;
+    }
+    let raw_status = test_raw_index_remains_explicit();
+    if (raw_status != 0) {
+        return 214;
+    }
+    let valid_guard_status = test_negated_optional_guard(0);
+    if (valid_guard_status != 0) {
+        return 215;
+    }
+    if (test_negated_optional_guard(1) != 0) {
+        return 216;
+    }
+    let cache_identity_status = test_cache_identity_ignores_producer();
+    if (cache_identity_status != 0) {
+        return 217 + cache_identity_status;
+    }
+    let semantic_mismatch_status = test_cache_identity_rejects_semantic_mismatch();
+    if (semantic_mismatch_status != 0) {
+        return 218;
+    }
+    if (test_cache_rejects_invalid_required_features() != 0) {
+        return 219;
+    }
+    if (test_vir_version_compatibility() != 0) {
+        return 220;
+    }
+    return 0;
 }
