@@ -53,17 +53,17 @@ struct CacheWorkspace {
 Artifact makeMinimalArtifact(std::string_view path, std::string_view name,
                              uint64_t source_fingerprint = 0xAABBCCDD11223344ULL) {
     Artifact art;
-    art.canonical_path = std::string(path);
+    art.canonical_path       = std::string(path);
     art.module_identity.path = art.canonical_path;
-    art.module_name    = std::string(name);
-    art.semantic_profile = kSharedHirProfile;
-    art.frontend_identity = {"Zith", "zithc-tests", "test"};
-    art.source_fingerprint = {source_fingerprint, source_fingerprint ^ 0x55AA55AA55AA55AAULL};
-    art.public_abi_hi  = 0xEEFF0011u;
-    art.public_abi_lo  = 0x22334455u;
-    art.strings        = {"main", "println", "i32"};
+    art.module_name          = std::string(name);
+    art.semantic_profile     = kSharedHirProfile;
+    art.frontend_identity    = {"Zith", "zithc-tests", "test"};
+    art.source_fingerprint   = {source_fingerprint, source_fingerprint ^ 0x55AA55AA55AA55AAULL};
+    art.public_abi_hi        = 0xEEFF0011u;
+    art.public_abi_lo        = 0x22334455u;
+    art.strings              = {"main", "println", "i32"};
     art.strings.push_back("foreign_counter");
-    art.paths          = {std::string(path)};
+    art.paths = {std::string(path)};
     // One primitive type (i32) and one struct type.
     CompactType int_type;
     int_type.kind      = CompactTypeKind::Int;
@@ -88,11 +88,11 @@ Artifact makeMinimalArtifact(std::string_view path, std::string_view name,
     art.decls.push_back(fn_decl);
     // One concrete function with a single ret-void block.
     CompactFunction fn;
-    fn.name           = "main";
-    fn.name_id        = 0;
+    fn.name              = "main";
+    fn.name_id           = 0;
     fn.signature_type_id = 2;
-    fn.is_extern      = false;
-    fn.return_type_id = 0;
+    fn.is_extern         = false;
+    fn.return_type_id    = 0;
     CompactBasicBlock blk;
     CompactExpr ret;
     ret.kind       = CompactExprKind::Ret;
@@ -126,8 +126,7 @@ static void test_binary_round_trip() {
     CHECK_EQ(decoded->module_name, original.module_name, "module name preserved");
     CHECK_EQ(decoded->module_identity, original.module_identity,
              "canonical module identity preserved");
-    CHECK_EQ(decoded->semantic_profile, original.semantic_profile,
-             "semantic profile preserved");
+    CHECK_EQ(decoded->semantic_profile, original.semantic_profile, "semantic profile preserved");
     CHECK_EQ(decoded->frontend_identity, original.frontend_identity,
              "frontend identity is retained as optional provenance");
     CHECK_EQ(decoded->source_fingerprint, original.source_fingerprint,
@@ -190,7 +189,7 @@ static void test_header_size_covered_by_writer() {
     ByteWriter writer;
     (void)Writer::write(original, writer);
 
-    uint32_t header_size = 0;
+    uint32_t header_size   = 0;
     uint16_t section_count = 0;
     zirl::ByteReader r(writer.ptr(), writer.size());
     uint32_t magic = 0, container_version = 0, hir_schema_version = 0;
@@ -201,8 +200,7 @@ static void test_header_size_covered_by_writer() {
           "reader walks the fixed ZIRL header");
     CHECK_EQ(magic, kMagic, "ZIRL magic is readable");
     CHECK_EQ(container_version, kContainerVersion, "container version is readable");
-    CHECK_EQ(hir_schema_version, kHirSchemaVersion,
-             "HIR schema version is encoded separately");
+    CHECK_EQ(hir_schema_version, kHirSchemaVersion, "HIR schema version is encoded separately");
     const size_t section_table_offset =
         static_cast<size_t>(header_size) - static_cast<size_t>(section_count) * kSectionEntrySize;
     zirl::ByteReader table(writer.ptr() + section_table_offset,
@@ -214,6 +212,8 @@ static void test_header_size_covered_by_writer() {
           "first explicit section descriptor is readable");
     CHECK_EQ(section_id, static_cast<uint16_t>(SectionId::Metadata),
              "metadata section has a stable explicit ID");
+    CHECK_EQ(schema, kMetadataSectionSchemaVersion,
+             "metadata payload has an independently versioned schema");
     CHECK_EQ(first_offset, static_cast<uint64_t>(header_size),
              "first payload starts after the identity, dependencies, and section table");
 }
@@ -278,7 +278,7 @@ static void test_store_hit_miss() {
     // Different fingerprint -> miss/invalid.
     ContentFingerprint wrong_fp;
     wrong_fp.primary = 0xDEADBEEFu;
-    auto missed = store.load(CanonicalModuleIdentity{"/test/store.zith"}, wrong_fp);
+    auto missed      = store.load(CanonicalModuleIdentity{"/test/store.zith"}, wrong_fp);
     CHECK(!missed.has_value(), "different fingerprint causes invalidation");
 
     // Nonexistent path -> miss.
@@ -294,12 +294,12 @@ static void test_frontend_provenance_does_not_gate_shared_hir() {
     fs::create_directories(root);
 
     Store store(root.string(), kSharedHirProfile);
-    auto artifact = makeMinimalArtifact("/test/shared.zith", "shared");
+    auto artifact              = makeMinimalArtifact("/test/shared.zith", "shared");
     artifact.frontend_identity = {"Zith--", "self-zithc", "0.1"};
     store.store(artifact);
 
-    const auto loaded = store.load(CanonicalModuleIdentity{artifact.canonical_path},
-                                   artifact.source_fingerprint);
+    const auto loaded =
+        store.load(CanonicalModuleIdentity{artifact.canonical_path}, artifact.source_fingerprint);
     CHECK(loaded.has_value(),
           "different frontend provenance does not prevent a matching shared-HIR cache hit");
 
@@ -307,7 +307,7 @@ static void test_frontend_provenance_does_not_gate_shared_hir() {
     fs::remove_all(incompatible_root);
     fs::create_directories(incompatible_root);
     Store incompatible_store(incompatible_root.string(), kSharedHirProfile);
-    auto incompatible = makeMinimalArtifact("/test/profile.zith", "profile");
+    auto incompatible             = makeMinimalArtifact("/test/profile.zith", "profile");
     incompatible.semantic_profile = {"zith-shared-hir", kSharedHirProfile.version + 1U};
     incompatible_store.store(incompatible);
     CHECK(!incompatible_store
@@ -342,7 +342,7 @@ static void test_store_invalidation() {
     store.store(dependent);
 
     // Both should load.
-    ContentFingerprint dep_fp = dep.source_fingerprint;
+    ContentFingerprint dep_fp  = dep.source_fingerprint;
     ContentFingerprint main_fp = dependent.source_fingerprint;
 
     auto dep_loaded = store.load(CanonicalModuleIdentity{"/test/dep.zith"}, dep_fp);
@@ -603,18 +603,18 @@ static void test_canonical_field_order_is_shared_and_detected() {
 }
 
 static void test_variadic_slice_param_round_trip() {
-    auto original                              = makeMinimalArtifact("/test/variadic.zith", "main");
+    auto original = makeMinimalArtifact("/test/variadic.zith", "main");
     CompactType slice_type;
     slice_type.kind = CompactTypeKind::Slice;
     slice_type.ref0 = 0;
     original.types.push_back(slice_type);
-    auto &signature = original.types[2];
-    signature.flags = kFunctionSignatureVariadic;
-    signature.args = {0, 3};
+    auto &signature                      = original.types[2];
+    signature.flags                      = kFunctionSignatureVariadic;
+    signature.args                       = {0, 3};
     original.functions[0].param_type_ids = {0, 3};
     original.strings.push_back("fixed");
     original.strings.push_back("args");
-    original.functions[0].param_name_ids = {4, 5};
+    original.functions[0].param_name_ids       = {4, 5};
     original.functions[0].is_variadic          = true;
     original.functions[0].variadic_slice_param = 1;
     original.functions[0].discardable          = true;
@@ -671,7 +671,7 @@ static void test_dep_abi_validation() {
     store.store(matching);
 
     ContentFingerprint match_fp = matching.source_fingerprint;
-    auto match_loaded = store.load(CanonicalModuleIdentity{"/test/match.zith"}, match_fp);
+    auto match_loaded           = store.load(CanonicalModuleIdentity{"/test/match.zith"}, match_fp);
     CHECK(match_loaded.has_value(), "dependent with matching non-zero dep ABI loads as a hit");
 
     Artifact mismatched = makeMinimalArtifact("/test/mismatch.zith", "mismatch");
@@ -679,8 +679,7 @@ static void test_dep_abi_validation() {
     store.store(mismatched);
 
     ContentFingerprint mismatch_fp = mismatched.source_fingerprint;
-    auto mismatch_loaded =
-        store.load(CanonicalModuleIdentity{"/test/mismatch.zith"}, mismatch_fp);
+    auto mismatch_loaded = store.load(CanonicalModuleIdentity{"/test/mismatch.zith"}, mismatch_fp);
     CHECK(!mismatch_loaded.has_value(), "dependent with mismatched dep ABI is invalidated");
 
     fs::remove_all(root);
@@ -858,18 +857,18 @@ static void test_artifact_builder() {
     {
         auto arr = types.internArray(i32, 4);
         hir::HirIndex idx;
-        idx.object   = var_id;
-        idx.index    = int_id;
-        idx.type     = i32;
-        idx.obj_type = arr;
-        idx.is_array = true;
-        idx.safety = hir::HirSafetyMode::RequiredCheck;
+        idx.object        = var_id;
+        idx.index         = int_id;
+        idx.type          = i32;
+        idx.obj_type      = arr;
+        idx.is_array      = true;
+        idx.safety        = hir::HirSafetyMode::RequiredCheck;
         const auto idx_id = hir.addExpr(idx);
-        auto &proof = hir.attrs().safetyProof(idx_id);
-        proof.kind = hir::HirSafetyProofKind::BoundsValid;
-        proof.operand_a = var_id;
-        proof.operand_b = int_id;
-        proof.present = true;
+        auto &proof       = hir.attrs().safetyProof(idx_id);
+        proof.kind        = hir::HirSafetyProofKind::BoundsValid;
+        proof.operand_a   = var_id;
+        proof.operand_b   = int_id;
+        proof.present     = true;
     }
 
     {
@@ -1088,8 +1087,8 @@ static void test_artifact_builder() {
     state_fn.param_names.push(interner.intern("n"));
     state_fn.blocks.emplace(arena);
     state_fn.blocks[0].terminator = state_tail_id;
-    auto &declaration = hir.addFn(interner.intern("external"));
-    declaration.return_type = i32;
+    auto &declaration             = hir.addFn(interner.intern("external"));
+    declaration.return_type       = i32;
 
     // Private composite types and explicit non-series enum discriminants must
     // survive the artifact writer so hydration does not depend on exported decl
@@ -1124,19 +1123,19 @@ static void test_artifact_builder() {
     ContentFingerprint fp;
     fp.primary = 0xCAFEBABEu;
 
-    auto &main_decl = hir.addDeclaration();
-    main_decl.name = interner.intern("main");
-    main_decl.kind = hir::HirDeclarationKind::Function;
-    main_decl.visibility = hir::HirVisibility::Public;
-    main_decl.type = i32;
-    auto &point_hir_decl = hir.addDeclaration();
-    point_hir_decl.name = interner.intern("Point");
-    point_hir_decl.kind = hir::HirDeclarationKind::Struct;
-    point_hir_decl.visibility = hir::HirVisibility::Public;
-    const auto scale_id = static_cast<hir::HirDeclarationId>(hir.declarationCount());
-    auto &method_hir_decl = hir.addDeclaration();
-    method_hir_decl.name = interner.intern("scale");
-    method_hir_decl.kind = hir::HirDeclarationKind::Function;
+    auto &main_decl            = hir.addDeclaration();
+    main_decl.name             = interner.intern("main");
+    main_decl.kind             = hir::HirDeclarationKind::Function;
+    main_decl.visibility       = hir::HirVisibility::Public;
+    main_decl.type             = i32;
+    auto &point_hir_decl       = hir.addDeclaration();
+    point_hir_decl.name        = interner.intern("Point");
+    point_hir_decl.kind        = hir::HirDeclarationKind::Struct;
+    point_hir_decl.visibility  = hir::HirVisibility::Public;
+    const auto scale_id        = static_cast<hir::HirDeclarationId>(hir.declarationCount());
+    auto &method_hir_decl      = hir.addDeclaration();
+    method_hir_decl.name       = interner.intern("scale");
+    method_hir_decl.kind       = hir::HirDeclarationKind::Function;
     method_hir_decl.visibility = hir::HirVisibility::Public;
     point_hir_decl.members.push(scale_id);
     ArtifactBuilder builder(types, hir, interner, fp, {"Zith", "cache-test", "test"},
@@ -1280,7 +1279,7 @@ static void test_artifact_builder() {
         CHECK_EQ(art.vtables[0].slot_function_name_ids.size(), 2u,
                  "vtable serializes one slot per interface method requirement");
         if (art.vtables[0].slot_function_name_ids.size() == 2u) {
-            const auto first_slot = art.vtables[0].slot_function_name_ids[0];
+            const auto first_slot  = art.vtables[0].slot_function_name_ids[0];
             const auto second_slot = art.vtables[0].slot_function_name_ids[1];
             CHECK(first_slot < art.strings.size() && !art.strings[first_slot].empty(),
                   "first vtable slot stores a canonical function name");
@@ -1497,8 +1496,7 @@ static void test_artifact_builder() {
     }
     CHECK_EQ(round->vtables.size(), art.vtables.size(), "round-trip preserves vtable count");
     if (round->vtables.size() == art.vtables.size() && round->vtables.size() == 1u)
-        CHECK(round->vtables[0].slot_function_name_ids ==
-                      art.vtables[0].slot_function_name_ids &&
+        CHECK(round->vtables[0].slot_function_name_ids == art.vtables[0].slot_function_name_ids &&
                   round->vtables[0].name_id == art.vtables[0].name_id,
               "round-trip preserves vtable name and concrete slot symbols");
     const auto round_make_opaque =

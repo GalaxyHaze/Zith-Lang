@@ -1,5 +1,5 @@
-#include "cache/cache-entry.hpp"
 #include "zirl/zirl-reader.hpp"
+#include "cache/cache-entry.hpp"
 #include "zirl/zirl-attrs-section.hpp"
 #include "zirl/zirl-buffer.hpp"
 #include "zirl/zirl-code-section.hpp"
@@ -24,11 +24,10 @@ struct SectionView {
 };
 
 constexpr std::array<SectionId, 5> kRequiredSections{
-    SectionId::Metadata, SectionId::Decls, SectionId::Templates, SectionId::Code,
-    SectionId::Attrs};
+    SectionId::Metadata, SectionId::Decls, SectionId::Templates, SectionId::Code, SectionId::Attrs};
 
-uint32_t checksumDependenciesAndSections(
-    const cache::Artifact &artifact, const std::vector<SectionView> &sections) {
+uint32_t checksumDependenciesAndSections(const cache::Artifact &artifact,
+                                         const std::vector<SectionView> &sections) {
     uint32_t checksum = fnv1a32(artifact.canonical_path) ^ fnv1a32(artifact.module_name) ^
                         fnv1a32(artifact.semantic_profile.name);
     for (const auto &dep : artifact.deps) {
@@ -45,10 +44,9 @@ uint32_t checksumDependenciesAndSections(
 
 const SectionView *findSection(const std::vector<SectionView> &sections, SectionId id) {
     const auto raw_id = static_cast<uint16_t>(id);
-    const auto it = std::find_if(sections.begin(), sections.end(),
-                                 [raw_id](const SectionView &section) {
-                                     return section.entry.id == raw_id;
-                                 });
+    const auto it =
+        std::find_if(sections.begin(), sections.end(),
+                     [raw_id](const SectionView &section) { return section.entry.id == raw_id; });
     return it == sections.end() ? nullptr : &*it;
 }
 
@@ -74,6 +72,9 @@ bool validateArtifactReferences(const cache::Artifact &artifact) {
         for (const auto name_id : definition.field_name_ids)
             if (!validStringId(name_id))
                 return false;
+        for (const auto type_id : definition.type_arg_ids)
+            if (type_id >= artifact.types.size())
+                return false;
     }
 
     for (const auto &definition : artifact.enum_defs) {
@@ -91,8 +92,7 @@ bool validateArtifactReferences(const cache::Artifact &artifact) {
     for (const auto &expr : artifact.exprs) {
         const bool needs_name =
             (expr.kind == cache::CompactExprKind::Literal && expr.flags == 3U) ||
-            expr.kind == cache::CompactExprKind::Let ||
-            expr.kind == cache::CompactExprKind::Var ||
+            expr.kind == cache::CompactExprKind::Let || expr.kind == cache::CompactExprKind::Var ||
             expr.kind == cache::CompactExprKind::GlobalConstLoad ||
             expr.kind == cache::CompactExprKind::ExternalGlobalAddr ||
             expr.kind == cache::CompactExprKind::MakeDyn ||
@@ -119,8 +119,7 @@ bool validateArtifactReferences(const cache::Artifact &artifact) {
         }
 
         const auto resolved =
-            cache::resolveFunctionReference(artifact, function.name_id,
-                                            function.signature_type_id);
+            cache::resolveFunctionReference(artifact, function.name_id, function.signature_type_id);
         if (!resolved || *resolved != index)
             return false;
     }
@@ -196,8 +195,7 @@ bool validateArtifactReferences(const cache::Artifact &artifact) {
         if (call.expr_id >= artifact.exprs.size() || seen_call_attrs[call.expr_id])
             return false;
         const auto kind = artifact.exprs[call.expr_id].kind;
-        if (kind != cache::CompactExprKind::Call &&
-            kind != cache::CompactExprKind::StateTailCall &&
+        if (kind != cache::CompactExprKind::Call && kind != cache::CompactExprKind::StateTailCall &&
             kind != cache::CompactExprKind::DynCall)
             return false;
         seen_call_attrs[call.expr_id] = true;
@@ -210,11 +208,10 @@ bool validateArtifactReferences(const cache::Artifact &artifact) {
 
     for (const auto &vtable : artifact.vtables) {
         if (!validStringId(vtable.name_id) ||
-            vtable.slot_function_name_ids.size() !=
-                vtable.slot_function_signature_type_ids.size())
+            vtable.slot_function_name_ids.size() != vtable.slot_function_signature_type_ids.size())
             return false;
         for (size_t slot = 0; slot < vtable.slot_function_name_ids.size(); ++slot) {
-            const auto name_id = vtable.slot_function_name_ids[slot];
+            const auto name_id      = vtable.slot_function_name_ids[slot];
             const auto signature_id = vtable.slot_function_signature_type_ids[slot];
             if (name_id == ~uint32_t{0} && signature_id == ~uint32_t{0})
                 continue;
@@ -271,13 +268,13 @@ std::optional<cache::Artifact> Reader::read(std::string_view bytes) {
         return std::nullopt;
 
     cache::Artifact artifact;
-    artifact.hir_schema_version = hir_schema_version;
-    artifact.required_features = required_features;
-    artifact.optional_features = optional_features;
-    artifact.source_fingerprint = {source_fp_primary, source_fp_secondary};
+    artifact.hir_schema_version       = hir_schema_version;
+    artifact.required_features        = required_features;
+    artifact.optional_features        = optional_features;
+    artifact.source_fingerprint       = {source_fp_primary, source_fp_secondary};
     artifact.semantic_profile.version = semantic_profile_version;
-    artifact.public_abi_hi = public_abi_hi;
-    artifact.public_abi_lo = public_abi_lo;
+    artifact.public_abi_hi            = public_abi_hi;
+    artifact.public_abi_lo            = public_abi_lo;
 
     const auto readRawString = [&](uint32_t length, std::string &destination) {
         if (length > reader.remaining())
@@ -318,8 +315,7 @@ std::optional<cache::Artifact> Reader::read(std::string_view bytes) {
             !reader.readU16(entry.schema_version) || !reader.readU16(entry.reserved) ||
             !reader.readU64(entry.offset) || !reader.readU64(entry.size))
             return std::nullopt;
-        if (entry.id == 0 || entry.reserved != 0 ||
-            (entry.flags & ~kKnownSectionFlags) != 0 ||
+        if (entry.id == 0 || entry.reserved != 0 || (entry.flags & ~kKnownSectionFlags) != 0 ||
             entry.offset < header_size || entry.offset > bytes.size() ||
             entry.size > bytes.size() - entry.offset || entry.schema_version == 0)
             return std::nullopt;
@@ -348,15 +344,14 @@ std::optional<cache::Artifact> Reader::read(std::string_view bytes) {
         if (known_optional && (entry.flags & kSectionFlagRequired) != 0)
             return std::nullopt;
 
-        const auto payload = bytes.substr(static_cast<size_t>(entry.offset),
-                                          static_cast<size_t>(entry.size));
+        const auto payload =
+            bytes.substr(static_cast<size_t>(entry.offset), static_cast<size_t>(entry.size));
         sections.push_back({entry, payload});
     }
 
-    std::sort(sections.begin(), sections.end(),
-              [](const SectionView &a, const SectionView &b) {
-                  return a.entry.offset < b.entry.offset;
-              });
+    std::sort(sections.begin(), sections.end(), [](const SectionView &a, const SectionView &b) {
+        return a.entry.offset < b.entry.offset;
+    });
     uint64_t previous_end = header_size;
     for (const auto &section : sections) {
         if (section.entry.offset < previous_end)
@@ -373,22 +368,22 @@ std::optional<cache::Artifact> Reader::read(std::string_view bytes) {
         if (findSection(sections, required) == nullptr)
             return std::nullopt;
 
-    const auto decodeRequired = [&](SectionId id, auto decode) {
+    const auto decodeRequired = [&](SectionId id, uint16_t schema_version, auto decode) {
         const auto *section = findSection(sections, id);
-        if (section == nullptr || section->entry.schema_version != kSectionSchemaVersion)
+        if (section == nullptr || section->entry.schema_version != schema_version)
             return false;
         ByteReader section_reader(section->payload);
         return decode(section_reader) && section_reader.empty();
     };
-    if (!decodeRequired(SectionId::Metadata,
+    if (!decodeRequired(SectionId::Metadata, kMetadataSectionSchemaVersion,
                         [&](ByteReader &r) { return decodeTypes(r, artifact); }) ||
-        !decodeRequired(SectionId::Decls,
+        !decodeRequired(SectionId::Decls, kSectionSchemaVersion,
                         [&](ByteReader &r) { return decodeDecls(r, artifact); }) ||
-        !decodeRequired(SectionId::Templates,
+        !decodeRequired(SectionId::Templates, kSectionSchemaVersion,
                         [&](ByteReader &r) { return decodeTemplates(r, artifact); }) ||
-        !decodeRequired(SectionId::Code,
+        !decodeRequired(SectionId::Code, kSectionSchemaVersion,
                         [&](ByteReader &r) { return decodeCode(r, artifact); }) ||
-        !decodeRequired(SectionId::Attrs,
+        !decodeRequired(SectionId::Attrs, kSectionSchemaVersion,
                         [&](ByteReader &r) { return decodeAttrs(r, artifact); }))
         return std::nullopt;
 
@@ -409,15 +404,13 @@ std::optional<cache::Artifact> Reader::read(std::string_view bytes) {
             ByteReader section_reader(section.payload);
             if (!readFrontendIdentity(section_reader, artifact.frontend_identity))
                 return std::nullopt;
-        } else if (section.entry.id >
-                   static_cast<uint16_t>(SectionId::FrontendProvenance)) {
+        } else if (section.entry.id > static_cast<uint16_t>(SectionId::FrontendProvenance)) {
             cache::Artifact::OptionalSection optional;
-            optional.id = section.entry.id;
+            optional.id             = section.entry.id;
             optional.schema_version = section.entry.schema_version;
-            optional.payload.assign(
-                reinterpret_cast<const uint8_t *>(section.payload.data()),
-                reinterpret_cast<const uint8_t *>(section.payload.data()) +
-                    section.payload.size());
+            optional.payload.assign(reinterpret_cast<const uint8_t *>(section.payload.data()),
+                                    reinterpret_cast<const uint8_t *>(section.payload.data()) +
+                                        section.payload.size());
             artifact.optional_sections.push_back(std::move(optional));
         }
     }

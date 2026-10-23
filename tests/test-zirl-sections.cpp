@@ -27,14 +27,14 @@ namespace {
 
 Artifact makeMinimalArtifact() {
     Artifact art;
-    art.canonical_path = "/test/main.zith";
+    art.canonical_path       = "/test/main.zith";
     art.module_identity.path = art.canonical_path;
-    art.module_name    = "main";
-    art.semantic_profile = kSharedHirProfile;
-    art.frontend_identity = {"Zith", "zithc-tests", "test"};
-    art.source_fingerprint = {0xAABBCCDD11223344ULL, 0xEEFF001122334455ULL};
-    art.public_abi_hi  = 0x99887766u;
-    art.public_abi_lo  = 0x55443322u;
+    art.module_name          = "main";
+    art.semantic_profile     = kSharedHirProfile;
+    art.frontend_identity    = {"Zith", "zithc-tests", "test"};
+    art.source_fingerprint   = {0xAABBCCDD11223344ULL, 0xEEFF001122334455ULL};
+    art.public_abi_hi        = 0x99887766u;
+    art.public_abi_lo        = 0x55443322u;
 
     // strings and paths
     art.strings = {"main", "puts", "i32", "Node"};
@@ -66,9 +66,9 @@ Artifact makeMinimalArtifact() {
 
     // Zero-argument function signature used by the `main` overload below.
     CompactType zero_arg_fn_type;
-    zero_arg_fn_type.kind = CompactTypeKind::Fn;
+    zero_arg_fn_type.kind  = CompactTypeKind::Fn;
     zero_arg_fn_type.flags = kFunctionSignatureVariadic;
-    zero_arg_fn_type.ref0 = 0;
+    zero_arg_fn_type.ref0  = 0;
     art.types.push_back(zero_arg_fn_type);
 
     // one exported fn declaration
@@ -94,12 +94,12 @@ Artifact makeMinimalArtifact() {
 
 void addCode(Artifact &art) {
     CompactFunction fn;
-    fn.name           = "main";
-    fn.name_id        = 0;
+    fn.name              = "main";
+    fn.name_id           = 0;
     fn.signature_type_id = 4;
-    fn.is_extern      = false;
-    fn.is_variadic    = true;
-    fn.return_type_id = 0;
+    fn.is_extern         = false;
+    fn.is_variadic       = true;
+    fn.return_type_id    = 0;
 
     CompactExpr lit;
     lit.kind    = CompactExprKind::Literal;
@@ -120,13 +120,13 @@ void addCode(Artifact &art) {
     // Same canonical name, distinct signature: canonical references must
     // resolve the overload rather than whichever matching name appears first.
     CompactFunction overload;
-    overload.name = "main";
-    overload.name_id = 0;
+    overload.name              = "main";
+    overload.name_id           = 0;
     overload.signature_type_id = 2;
-    overload.param_type_ids = {0};
-    overload.param_name_ids = {0};
-    overload.return_type_id = 0;
-    overload.is_extern = true;
+    overload.param_type_ids    = {0};
+    overload.param_name_ids    = {0};
+    overload.return_type_id    = 0;
+    overload.is_extern         = true;
     art.functions.push_back(overload);
 
     art.exprs.push_back(lit);
@@ -217,10 +217,10 @@ void addModernCode(Artifact &art) {
 
 void addAttrs(Artifact &art) {
     HirSlotAttrsRecord slot;
-    slot.slot      = 1;
-    slot.ownership = static_cast<uint8_t>(hir::HirOwnership::Unique);
-    slot.consumed  = static_cast<uint8_t>(hir::HirConsumedState::NonConsumed);
-    slot.nonNull   = true;
+    slot.slot         = 1;
+    slot.ownership    = static_cast<uint8_t>(hir::HirOwnership::Unique);
+    slot.consumed     = static_cast<uint8_t>(hir::HirConsumedState::NonConsumed);
+    slot.nonNull      = true;
     slot.volatileSlot = true;
     art.attrs_slots.push_back(slot);
 
@@ -260,6 +260,12 @@ void addInstantiations(Artifact &art) {
 static void test_type_section_round_trip() {
     Artifact original = makeMinimalArtifact();
 
+    CompactStructDef generic_struct;
+    generic_struct.name         = "Node";
+    generic_struct.name_id      = 3;
+    generic_struct.type_arg_ids = {0};
+    original.struct_defs.push_back(generic_struct);
+
     original.strings.push_back("x");
     original.strings.push_back("y");
     CompactType named_pack;
@@ -286,6 +292,13 @@ static void test_type_section_round_trip() {
     CHECK(ok, "decodeTypes succeeds after encodeTypes");
     CHECK(decoded.strings.size() == original.strings.size(), "decodeTypes preserves string count");
     CHECK(decoded.types.size() == original.types.size(), "decodeTypes preserves type count");
+    CHECK_EQ(decoded.struct_defs.size(), 1u, "decodeTypes preserves struct definition count");
+    if (!decoded.struct_defs.empty()) {
+        CHECK_EQ(decoded.struct_defs[0].type_arg_ids.size(), 1u,
+                 "decodeTypes preserves struct type-argument count");
+        CHECK_EQ(decoded.struct_defs[0].type_arg_ids[0], 0u,
+                 "decodeTypes preserves canonical struct type-argument reference");
+    }
     if (decoded.types.size() >= 4u) {
         CHECK(decoded.types[2].kind == CompactTypeKind::Fn, "decodeTypes preserves fn type kind");
         CHECK_EQ(decoded.types[2].args.size(), 1u, "decodeTypes preserves fn parameter count");
@@ -479,9 +492,14 @@ static void test_debug_section_round_trip() {
 static void test_full_artifact_round_trip() {
     Artifact original = makeMinimalArtifact();
     addCode(original);
+    CompactStructDef generic_struct;
+    generic_struct.name         = "Node";
+    generic_struct.name_id      = 3;
+    generic_struct.type_arg_ids = {0};
+    original.struct_defs.push_back(generic_struct);
     CompactExpr direct_call;
-    direct_call.kind = CompactExprKind::Call;
-    direct_call.resolved_function_name_id = 0;
+    direct_call.kind                                = CompactExprKind::Call;
+    direct_call.resolved_function_name_id           = 0;
     direct_call.resolved_function_signature_type_id = 4;
     original.exprs.push_back(direct_call);
     original.vtables.push_back({0, {0}, {2}});
@@ -509,14 +527,16 @@ static void test_full_artifact_round_trip() {
           "Reader::read preserves complete source fingerprint");
     CHECK(round->frontend_identity == original.frontend_identity,
           "optional provenance preserves frontend identity without gating HIR reuse");
+    CHECK(round->struct_defs.size() == 1u &&
+              round->struct_defs[0].type_arg_ids == std::vector<uint32_t>{0},
+          "Reader::read preserves generic arguments for named struct definitions");
     CHECK(round->decls.size() == original.decls.size(), "Reader::read preserves decl count");
     CHECK(round->functions.size() == original.functions.size(),
           "Reader::read preserves function count");
     if (round->functions.size() == 2u) {
         CHECK(round->functions[0].name == "main",
               "reader restores the function name from the string table");
-        CHECK(round->functions[1].name == "main",
-              "reader preserves same-name overloaded function");
+        CHECK(round->functions[1].name == "main", "reader preserves same-name overloaded function");
     }
     CHECK_EQ(round->exprs.back().resolved_function_name_id, 0u,
              "direct call stores a canonical string identity, not a function index");
@@ -603,7 +623,7 @@ static void test_checksum_validation() {
     uint32_t header_size = 0;
     ByteReader header_reader(w.ptr(), w.size());
     uint32_t ignored32 = 0;
-    uint8_t ignored8 = 0;
+    uint8_t ignored8   = 0;
     uint16_t ignored16 = 0;
     CHECK(header_reader.readU32(ignored32) && header_reader.readU32(ignored32) &&
               header_reader.readU32(ignored32) && header_reader.readU8(ignored8) &&
@@ -622,10 +642,10 @@ static void test_checksum_validation() {
 
 static void test_empty_artifact_round_trip() {
     Artifact empty_art;
-    empty_art.canonical_path = "/test/empty.zith";
+    empty_art.canonical_path       = "/test/empty.zith";
     empty_art.module_identity.path = empty_art.canonical_path;
-    empty_art.module_name    = "empty";
-    empty_art.semantic_profile = kSharedHirProfile;
+    empty_art.module_name          = "empty";
+    empty_art.semantic_profile     = kSharedHirProfile;
 
     ByteWriter w;
     (void)Writer::write(empty_art, w);
@@ -676,19 +696,44 @@ static void test_legacy_container_version_is_a_miss() {
     CHECK(!Reader::read(legacy), "legacy positional-container artifact is a clean miss");
 }
 
+static void test_legacy_metadata_schema_is_a_miss() {
+    auto artifact = makeMinimalArtifact();
+    addCode(artifact);
+    ByteWriter writer;
+    CHECK(Writer::write(artifact, writer) != 0, "metadata-schema fixture is encoded");
+
+    std::string legacy(reinterpret_cast<const char *>(writer.ptr()), writer.size());
+    ByteReader reader(legacy);
+    uint32_t ignored32     = 0;
+    uint8_t ignored8       = 0;
+    uint16_t section_count = 0;
+    uint32_t header_size   = 0;
+    CHECK(reader.readU32(ignored32) && reader.readU32(ignored32) && reader.readU32(ignored32) &&
+              reader.readU8(ignored8) && reader.readU8(ignored8) && reader.readU16(section_count) &&
+              reader.readU32(header_size),
+          "metadata-schema fixture header is readable");
+    const size_t table_offset =
+        static_cast<size_t>(header_size) - static_cast<size_t>(section_count) * kSectionEntrySize;
+    const size_t schema_offset = table_offset + sizeof(uint16_t) + sizeof(uint16_t);
+    legacy[schema_offset]      = 1;
+    legacy[schema_offset + 1]  = 0;
+    CHECK(!Reader::read(legacy),
+          "old metadata schema misses rather than dropping struct type arguments");
+}
+
 static void test_unknown_optional_section_is_skipped() {
     auto artifact = makeMinimalArtifact();
     addCode(artifact);
     cache::Artifact::OptionalSection optional;
-    optional.id = 0x8001;
+    optional.id             = 0x8001;
     optional.schema_version = 37;
-    optional.payload = {0x11, 0x22, 0x33};
+    optional.payload        = {0x11, 0x22, 0x33};
     artifact.optional_sections.push_back(optional);
 
     ByteWriter writer;
     CHECK(Writer::write(artifact, writer) != 0, "optional-section fixture is encoded");
-    auto decoded = Reader::read(
-        std::string_view(reinterpret_cast<const char *>(writer.ptr()), writer.size()));
+    auto decoded =
+        Reader::read(std::string_view(reinterpret_cast<const char *>(writer.ptr()), writer.size()));
     CHECK(decoded.has_value(), "unknown optional section does not invalidate required HIR");
     if (decoded) {
         CHECK_EQ(decoded->optional_sections.size(), 1u,
@@ -706,8 +751,8 @@ static void test_unknown_required_feature_is_rejected() {
 
     std::string bytes(reinterpret_cast<const char *>(writer.ptr()), writer.size());
     constexpr size_t kRequiredFeaturesOffset = 24;
-    bytes[kRequiredFeaturesOffset] = static_cast<char>(
-        static_cast<uint8_t>(bytes[kRequiredFeaturesOffset]) | 0x80u);
+    bytes[kRequiredFeaturesOffset] =
+        static_cast<char>(static_cast<uint8_t>(bytes[kRequiredFeaturesOffset]) | 0x80u);
     CHECK(!Reader::read(bytes), "unknown required feature bit is rejected");
 }
 
@@ -715,14 +760,14 @@ static void test_invalid_canonical_reference_is_rejected_before_hydration() {
     auto artifact = makeMinimalArtifact();
     addCode(artifact);
     CompactExpr invalid_call;
-    invalid_call.kind = CompactExprKind::Call;
+    invalid_call.kind                      = CompactExprKind::Call;
     invalid_call.resolved_function_name_id = 99;
     artifact.exprs.push_back(invalid_call);
 
     ByteWriter writer;
     CHECK(Writer::write(artifact, writer) != 0, "invalid-reference fixture is encoded");
-    auto decoded = Reader::read(
-        std::string_view(reinterpret_cast<const char *>(writer.ptr()), writer.size()));
+    auto decoded =
+        Reader::read(std::string_view(reinterpret_cast<const char *>(writer.ptr()), writer.size()));
     CHECK(!decoded,
           "reader rejects unresolved canonical references before cache hydration can begin");
 }
@@ -738,7 +783,7 @@ static void test_invalid_hydration_references_are_rejected() {
 
     auto invalid_name = makeMinimalArtifact();
     CompactExpr named_expr;
-    named_expr.kind = CompactExprKind::Let;
+    named_expr.kind    = CompactExprKind::Let;
     named_expr.name_id = 99;
     invalid_name.exprs.push_back(named_expr);
     addCode(invalid_name);
@@ -774,21 +819,31 @@ static void test_invalid_hydration_references_are_rejected() {
     invalid_param_slot.functions[1].param_slot_ids = {0xFFFFFFFEu};
     CHECK(readerRejects(invalid_param_slot),
           "reader rejects an invalid parameter slot before HIR attribute hydration");
+
+    auto invalid_type_argument = makeMinimalArtifact();
+    CompactStructDef struct_def;
+    struct_def.name         = "Node";
+    struct_def.name_id      = 3;
+    struct_def.type_arg_ids = {99};
+    invalid_type_argument.struct_defs.push_back(struct_def);
+    addCode(invalid_type_argument);
+    CHECK(readerRejects(invalid_type_argument),
+          "reader rejects a struct type argument outside the compact type table");
 }
 
 static void test_mismatched_function_signature_is_rejected() {
     auto artifact = makeMinimalArtifact();
     addCode(artifact);
     CompactExpr invalid_call;
-    invalid_call.kind = CompactExprKind::Call;
-    invalid_call.resolved_function_name_id = 0;
+    invalid_call.kind                                = CompactExprKind::Call;
+    invalid_call.resolved_function_name_id           = 0;
     invalid_call.resolved_function_signature_type_id = 3; // slice, not a function signature
     artifact.exprs.push_back(invalid_call);
 
     ByteWriter writer;
     CHECK(Writer::write(artifact, writer) != 0, "mismatched-signature fixture is encoded");
-    auto decoded = Reader::read(
-        std::string_view(reinterpret_cast<const char *>(writer.ptr()), writer.size()));
+    auto decoded =
+        Reader::read(std::string_view(reinterpret_cast<const char *>(writer.ptr()), writer.size()));
     CHECK(!decoded, "reader rejects a function reference with a non-function signature");
 }
 
@@ -809,6 +864,7 @@ static void test_zirl_sections() {
     test_checksum_validation();
     test_empty_artifact_round_trip();
     test_legacy_container_version_is_a_miss();
+    test_legacy_metadata_schema_is_a_miss();
     test_unknown_optional_section_is_skipped();
     test_unknown_required_feature_is_rejected();
     test_invalid_canonical_reference_is_rejected_before_hydration();

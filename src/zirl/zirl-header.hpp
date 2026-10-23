@@ -24,6 +24,7 @@ inline constexpr uint32_t kMagic = 0x5A49524Cu; // "ZIRL"
 inline constexpr uint32_t kContainerVersion = 20;
 inline constexpr uint8_t kEndianLittle   = 1;
 inline constexpr uint16_t kSectionSchemaVersion = 1;
+inline constexpr uint16_t kMetadataSectionSchemaVersion = 2;
 inline constexpr uint16_t kSectionFlagRequired = 1;
 inline constexpr uint16_t kKnownSectionFlags = kSectionFlagRequired;
 inline constexpr uint16_t kFixedHeaderSize = 96;

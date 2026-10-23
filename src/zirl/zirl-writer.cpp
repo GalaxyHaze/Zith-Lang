@@ -14,8 +14,8 @@ namespace zith::zirl {
 namespace {
 
 struct EncodedSection {
-    uint16_t id = 0;
-    uint16_t flags = 0;
+    uint16_t id             = 0;
+    uint16_t flags          = 0;
     uint16_t schema_version = kSectionSchemaVersion;
     ByteWriter payload;
     uint64_t offset = 0;
@@ -40,8 +40,7 @@ uint32_t Writer::write(const cache::Artifact &artifact, ByteWriter &out) {
         artifact.module_identity.path != artifact.canonical_path ||
         artifact.semantic_profile.name.empty() ||
         artifact.hir_schema_version != cache::kHirSchemaVersion ||
-        (artifact.required_features & cache::kRequiredHirFeatures) !=
-            cache::kRequiredHirFeatures ||
+        (artifact.required_features & cache::kRequiredHirFeatures) != cache::kRequiredHirFeatures ||
         (artifact.required_features & ~cache::kRequiredHirFeatures) != 0 ||
         artifact.deps.size() > std::numeric_limits<uint32_t>::max() ||
         artifact.canonical_path.size() > std::numeric_limits<uint32_t>::max() ||
@@ -51,33 +50,34 @@ uint32_t Writer::write(const cache::Artifact &artifact, ByteWriter &out) {
 
     std::vector<EncodedSection> sections;
     sections.reserve(7U + artifact.optional_sections.size());
-    const auto addKnownSection = [&](SectionId id, uint16_t flags, auto encode) {
+    const auto addKnownSection = [&](SectionId id, uint16_t flags, uint16_t schema_version,
+                                     auto encode) {
         EncodedSection section;
-        section.id = static_cast<uint16_t>(id);
-        section.flags = flags;
+        section.id             = static_cast<uint16_t>(id);
+        section.flags          = flags;
+        section.schema_version = schema_version;
         if (!encode(section.payload))
             return false;
         sections.push_back(std::move(section));
         return true;
     };
 
-    if (!addKnownSection(SectionId::Metadata, kSectionFlagRequired,
+    if (!addKnownSection(SectionId::Metadata, kSectionFlagRequired, kMetadataSectionSchemaVersion,
                          [&](ByteWriter &w) { return encodeTypes(artifact, w); }) ||
-        !addKnownSection(SectionId::Decls, kSectionFlagRequired,
+        !addKnownSection(SectionId::Decls, kSectionFlagRequired, kSectionSchemaVersion,
                          [&](ByteWriter &w) { return encodeDecls(artifact, w); }) ||
-        !addKnownSection(SectionId::Templates, kSectionFlagRequired,
+        !addKnownSection(SectionId::Templates, kSectionFlagRequired, kSectionSchemaVersion,
                          [&](ByteWriter &w) { return encodeTemplates(artifact, w); }) ||
-        !addKnownSection(SectionId::Code, kSectionFlagRequired,
+        !addKnownSection(SectionId::Code, kSectionFlagRequired, kSectionSchemaVersion,
                          [&](ByteWriter &w) { return encodeCode(artifact, w); }) ||
-        !addKnownSection(SectionId::Attrs, kSectionFlagRequired,
+        !addKnownSection(SectionId::Attrs, kSectionFlagRequired, kSectionSchemaVersion,
                          [&](ByteWriter &w) { return encodeAttrs(artifact, w); }) ||
-        !addKnownSection(SectionId::Instantiations, 0,
+        !addKnownSection(SectionId::Instantiations, 0, kSectionSchemaVersion,
                          [&](ByteWriter &w) { return encodeInstantiations(artifact, w); }))
         return 0;
 
-    uint64_t optional_features =
-        (artifact.optional_features & ~cache::kOptionalFeatureDerivedVir) |
-        cache::kOptionalFeatureInstantiationSummary;
+    uint64_t optional_features = (artifact.optional_features & ~cache::kOptionalFeatureDerivedVir) |
+                                 cache::kOptionalFeatureInstantiationSummary;
     const bool has_frontend_identity = !artifact.frontend_identity.dialect.empty() ||
                                        !artifact.frontend_identity.implementation.empty() ||
                                        !artifact.frontend_identity.version.empty();
@@ -97,11 +97,12 @@ uint32_t Writer::write(const cache::Artifact &artifact, ByteWriter &out) {
     }
 
     for (const auto &optional : artifact.optional_sections) {
-        if (optional.id == 0 || optional.id <= static_cast<uint16_t>(SectionId::FrontendProvenance) ||
+        if (optional.id == 0 ||
+            optional.id <= static_cast<uint16_t>(SectionId::FrontendProvenance) ||
             optional.payload.size() > std::numeric_limits<uint32_t>::max())
             return 0;
         EncodedSection section;
-        section.id = optional.id;
+        section.id             = optional.id;
         section.schema_version = optional.schema_version;
         section.payload.writeBytes(optional.payload.data(), optional.payload.size());
         sections.push_back(std::move(section));
@@ -122,10 +123,10 @@ uint32_t Writer::write(const cache::Artifact &artifact, ByteWriter &out) {
             return 0;
         deps_size += dependencySize(dep);
     }
-    const uint64_t header_size =
-        static_cast<uint64_t>(kFixedHeaderSize) + artifact.canonical_path.size() +
-        artifact.module_name.size() + artifact.semantic_profile.name.size() + deps_size +
-        static_cast<uint64_t>(sections.size()) * kSectionEntrySize;
+    const uint64_t header_size = static_cast<uint64_t>(kFixedHeaderSize) +
+                                 artifact.canonical_path.size() + artifact.module_name.size() +
+                                 artifact.semantic_profile.name.size() + deps_size +
+                                 static_cast<uint64_t>(sections.size()) * kSectionEntrySize;
     if (header_size > std::numeric_limits<uint32_t>::max() ||
         sections.size() > std::numeric_limits<uint16_t>::max())
         return 0;
