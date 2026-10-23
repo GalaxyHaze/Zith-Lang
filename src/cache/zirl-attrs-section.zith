@@ -1,0 +1,495 @@
+from cache/zirl-buffer
+from ir/hir
+
+pub struct ZirlSlotAttrsRecord {
+    pub slot_id: u32,
+    pub ownership: HirOwnership,
+    pub consumed: HirConsumedState,
+    pub non_null: bool,
+    pub volatile_slot: bool,
+}
+
+pub struct ZirlCallAttrsRecord {
+    pub expr_id: HirExprId,
+    pub returns_argument: u32,
+    pub arg_escapes: []HirCallEscape,
+}
+
+pub struct ZirlFunctionAttrsRecord {
+    pub function_index: u32,
+    pub return_consumed: HirConsumedState,
+    pub non_null: bool,
+    pub no_alias: bool,
+    pub read_only: bool,
+    pub no_capture: bool,
+    pub discardable: bool,
+}
+
+pub struct ZirlSafetyProofRecord {
+    pub expr_id: HirExprId,
+    pub kind: HirSafetyProofKind,
+    pub operand_a: HirExprId,
+    pub operand_b: HirExprId,
+    pub operand_c: HirExprId,
+}
+
+pub struct ZirlAttrsSection {
+    pub slots: []ZirlSlotAttrsRecord,
+    pub calls: []ZirlCallAttrsRecord,
+    pub functions: []ZirlFunctionAttrsRecord,
+    pub safety_proofs: []ZirlSafetyProofRecord,
+}
+
+pub struct ZirlAttrsStorage {
+    pub slots: []ZirlSlotAttrsRecord,
+    pub calls: []ZirlCallAttrsRecord,
+    pub call_escapes: []HirCallEscape,
+    pub functions: []ZirlFunctionAttrsRecord,
+    pub safety_proofs: []ZirlSafetyProofRecord,
+    pub proof_expr_seen: []bool,
+}
+
+pub struct ZirlAttrsRead {
+    pub reader: ZirlByteReader,
+    pub value: ZirlAttrsSection,
+}
+
+struct ZirlAttrsEscapesRead {
+    reader: ZirlByteReader,
+    count: u32,
+}
+
+fn attrs_writer_failure(writer: ZirlByteWriter): ZirlByteWriter {
+    var failed = writer;
+    failed.failed = true;
+    return failed;
+}
+
+fn attrs_value(
+    storage: *ZirlAttrsStorage,
+    slot_count: u64,
+    call_count: u64,
+    function_count: u64,
+    proof_count: u64
+): ZirlAttrsSection {
+    return ZirlAttrsSection {
+        slots: raw storage->slots[0u64..slot_count],
+        calls: raw storage->calls[0u64..call_count],
+        functions: raw storage->functions[0u64..function_count],
+        safety_proofs: raw storage->safety_proofs[0u64..proof_count],
+    };
+}
+
+fn attrs_reader_failure(
+    reader: ZirlByteReader,
+    storage: *ZirlAttrsStorage
+): ZirlAttrsRead {
+    var failed = reader;
+    failed.failed = true;
+    for (offset in 1u64..@lengthOf(storage->proof_expr_seen)) {
+        let index = offset - 1;
+        raw storage->proof_expr_seen[index] = false;
+    }
+    return ZirlAttrsRead {
+        reader: failed,
+        value: attrs_value(storage, 0u64, 0u64, 0u64, 0u64),
+    };
+}
+
+fn attrs_bool_byte(value: bool): u8 {
+    if (value) {
+        return 1u8;
+    }
+    return 0u8;
+}
+
+fn decode_attrs_ownership(value: u8): HirOwnership {
+    if (value == 0u8) { return HirOwnership.Default; }
+    if (value == 1u8) { return HirOwnership.Lend; }
+    if (value == 2u8) { return HirOwnership.View; }
+    if (value == 3u8) { return HirOwnership.Unique; }
+    if (value == 4u8) { return HirOwnership.Share; }
+    return HirOwnership.Belong;
+}
+
+fn decode_attrs_consumed(value: u8): HirConsumedState {
+    if (value == 0u8) { return HirConsumedState.Unknown; }
+    if (value == 1u8) { return HirConsumedState.Consumed; }
+    return HirConsumedState.NonConsumed;
+}
+
+fn decode_attrs_escape(value: u32): HirCallEscape {
+    if (value == 0u32) { return HirCallEscape.None; }
+    if (value == 1u32) { return HirCallEscape.Borrow; }
+    if (value == 2u32) { return HirCallEscape.Capture; }
+    if (value == 3u32) { return HirCallEscape.Escape; }
+    return HirCallEscape.Move;
+}
+
+fn decode_attrs_proof_kind(value: u8): HirSafetyProofKind {
+    if (value == 0u8) { return HirSafetyProofKind.BoundsValid; }
+    if (value == 1u8) { return HirSafetyProofKind.OptionalPresent; }
+    if (value == 2u8) { return HirSafetyProofKind.UnionMemberMatches; }
+    return HirSafetyProofKind.OpaqueTypeMatches;
+}
+
+fn attrs_slot_has_facts(slot: ZirlSlotAttrsRecord): bool {
+    return slot.ownership != HirOwnership.Default or
+        slot.consumed != HirConsumedState.Unknown or slot.non_null or
+        slot.volatile_slot;
+}
+
+fn attrs_call_has_facts(call: ZirlCallAttrsRecord): bool {
+    if (call.returns_argument != 0xFFFFFFFFu32) {
+        return true;
+    }
+    for (offset in 1u64..@lengthOf(call.arg_escapes)) {
+        let index = offset - 1;
+        let escape: HirCallEscape = raw call.arg_escapes[index];
+        if (escape != HirCallEscape.None) {
+            return true;
+        }
+    }
+    return false;
+}
+
+fn attrs_function_has_facts(function: ZirlFunctionAttrsRecord): bool {
+    return function.return_consumed != HirConsumedState.Unknown or
+        function.non_null or function.no_alias or function.read_only or
+        function.no_capture or function.discardable;
+}
+
+fn attrs_table_lengths_fit(section: *ZirlAttrsSection): bool {
+    if (@lengthOf(section->slots) > 0xFFFFFFFFu64 or
+        @lengthOf(section->calls) > 0xFFFFFFFFu64 or
+        @lengthOf(section->functions) > 0xFFFFFFFFu64 or
+        @lengthOf(section->safety_proofs) > 0xFFFFFFFFu64) {
+        return false;
+    }
+    for (offset in 1u64..@lengthOf(section->calls)) {
+        let index = offset - 1;
+        let call: ZirlCallAttrsRecord = raw section->calls[index];
+        if (@lengthOf(call.arg_escapes) > 0xFFFFFFFFu64) {
+            return false;
+        }
+    }
+    return true;
+}
+
+fn valid_attrs_slot(slot: ZirlSlotAttrsRecord): bool {
+    return slot.ownership <= HirOwnership.Belong and
+        slot.consumed <= HirConsumedState.NonConsumed and
+        attrs_slot_has_facts(slot);
+}
+
+fn valid_attrs_call(call: ZirlCallAttrsRecord): bool {
+    if (not attrs_call_has_facts(call)) {
+        return false;
+    }
+    for (offset in 1u64..@lengthOf(call.arg_escapes)) {
+        let index = offset - 1;
+        let escape: HirCallEscape = raw call.arg_escapes[index];
+        if (escape > HirCallEscape.Move) {
+            return false;
+        }
+    }
+    return true;
+}
+
+fn valid_attrs_function(function: ZirlFunctionAttrsRecord): bool {
+    return function.return_consumed <= HirConsumedState.NonConsumed and
+        attrs_function_has_facts(function);
+}
+
+pub fn write_attrs_section(
+    writer: ZirlByteWriter,
+    section: *ZirlAttrsSection
+): ZirlByteWriter {
+    if (writer.failed or not attrs_table_lengths_fit(section)) {
+        return attrs_writer_failure(writer);
+    }
+    for (offset in 1u64..@lengthOf(section->slots)) {
+        let index = offset - 1;
+        let slot: ZirlSlotAttrsRecord = raw section->slots[index];
+        if (not valid_attrs_slot(slot)) {
+            return attrs_writer_failure(writer);
+        }
+    }
+    for (offset in 1u64..@lengthOf(section->calls)) {
+        let index = offset - 1;
+        let call: ZirlCallAttrsRecord = raw section->calls[index];
+        if (not valid_attrs_call(call)) {
+            return attrs_writer_failure(writer);
+        }
+    }
+    for (offset in 1u64..@lengthOf(section->functions)) {
+        let index = offset - 1;
+        let function: ZirlFunctionAttrsRecord = raw section->functions[index];
+        if (not valid_attrs_function(function)) {
+            return attrs_writer_failure(writer);
+        }
+    }
+    for (offset in 1u64..@lengthOf(section->safety_proofs)) {
+        let index = offset - 1;
+        let proof: ZirlSafetyProofRecord = raw section->safety_proofs[index];
+        if (proof.kind > HirSafetyProofKind.OpaqueTypeMatches) {
+            return attrs_writer_failure(writer);
+        }
+    }
+
+    var result = write_u32(writer, @lengthOf(section->slots) as u32);
+    for (offset in 1u64..@lengthOf(section->slots)) {
+        let index = offset - 1;
+        let slot: ZirlSlotAttrsRecord = raw section->slots[index];
+        result = write_u32(result, slot.slot_id);
+        result = write_u8(result, slot.ownership as u8);
+        result = write_u8(result, slot.consumed as u8);
+        result = write_u8(result, attrs_bool_byte(slot.non_null));
+        result = write_u8(result, attrs_bool_byte(slot.volatile_slot));
+    }
+
+    result = write_u32(result, @lengthOf(section->calls) as u32);
+    for (offset in 1u64..@lengthOf(section->calls)) {
+        let index = offset - 1;
+        let call: ZirlCallAttrsRecord = raw section->calls[index];
+        result = write_u32(result, call.expr_id);
+        result = write_u32(result, call.returns_argument);
+        result = write_u32(result, @lengthOf(call.arg_escapes) as u32);
+        for (arg_offset in 1u64..@lengthOf(call.arg_escapes)) {
+            let arg_index = arg_offset - 1;
+            let escape: HirCallEscape = raw call.arg_escapes[arg_index];
+            result = write_u32(result, escape as u32);
+        }
+    }
+
+    result = write_u32(result, @lengthOf(section->functions) as u32);
+    for (offset in 1u64..@lengthOf(section->functions)) {
+        let index = offset - 1;
+        let function: ZirlFunctionAttrsRecord = raw section->functions[index];
+        result = write_u32(result, function.function_index);
+        result = write_u8(result, function.return_consumed as u8);
+        result = write_u8(result, attrs_bool_byte(function.non_null));
+        result = write_u8(result, attrs_bool_byte(function.no_alias));
+        result = write_u8(result, attrs_bool_byte(function.read_only));
+        result = write_u8(result, attrs_bool_byte(function.no_capture));
+        result = write_u8(result, attrs_bool_byte(function.discardable));
+        result = write_u8(result, 0u8);
+        result = write_u8(result, 0u8);
+    }
+
+    result = write_u32(result, @lengthOf(section->safety_proofs) as u32);
+    for (offset in 1u64..@lengthOf(section->safety_proofs)) {
+        let index = offset - 1;
+        let proof: ZirlSafetyProofRecord = raw section->safety_proofs[index];
+        result = write_u32(result, proof.expr_id);
+        result = write_u8(result, proof.kind as u8);
+        result = write_u32(result, proof.operand_a);
+        result = write_u32(result, proof.operand_b);
+        result = write_u32(result, proof.operand_c);
+    }
+    return result;
+}
+
+fn read_attrs_escapes(
+    reader: ZirlByteReader,
+    output: []HirCallEscape,
+    offset: u64
+): ZirlAttrsEscapesRead {
+    let count = read_u32(reader);
+    if (count.reader.failed or offset > @lengthOf(output) or
+        (count.value as u64) > @lengthOf(output) - offset) {
+        var failed = count.reader;
+        failed.failed = true;
+        return ZirlAttrsEscapesRead { reader: failed, count: 0u32 };
+    }
+    var cursor = count.reader;
+    var values = raw output[offset..@lengthOf(output)];
+    for (item_offset in 1u64..(count.value as u64)) {
+        let index = offset + item_offset - 1u64;
+        let escape = read_u32(cursor);
+        cursor = escape.reader;
+        if (cursor.failed or escape.value > (HirCallEscape.Move as u32)) {
+            cursor.failed = true;
+            return ZirlAttrsEscapesRead { reader: cursor, count: 0u32 };
+        }
+        raw values[index - offset] = decode_attrs_escape(escape.value);
+    }
+    return ZirlAttrsEscapesRead { reader: cursor, count: count.value };
+}
+
+pub fn read_attrs_section(
+    reader: ZirlByteReader,
+    storage: *ZirlAttrsStorage
+): ZirlAttrsRead {
+    for (offset in 1u64..@lengthOf(storage->proof_expr_seen)) {
+        let index = offset - 1;
+        raw storage->proof_expr_seen[index] = false;
+    }
+
+    let slot_count = read_u32(reader);
+    if (slot_count.reader.failed or
+        (slot_count.value as u64) > @lengthOf(storage->slots)) {
+        return attrs_reader_failure(reader, storage);
+    }
+    var cursor = slot_count.reader;
+    for (offset in 1u64..(slot_count.value as u64)) {
+        let index = offset - 1;
+        let slot_id = read_u32(cursor);
+        cursor = slot_id.reader;
+        let ownership = read_u8(cursor);
+        cursor = ownership.reader;
+        let consumed = read_u8(cursor);
+        cursor = consumed.reader;
+        let non_null = read_u8(cursor);
+        cursor = non_null.reader;
+        let volatile_slot = read_u8(cursor);
+        cursor = volatile_slot.reader;
+        if (cursor.failed or ownership.value > (HirOwnership.Belong as u8) or
+            consumed.value > (HirConsumedState.NonConsumed as u8) or
+            non_null.value > 1u8 or volatile_slot.value > 1u8) {
+            return attrs_reader_failure(reader, storage);
+        }
+        let record = ZirlSlotAttrsRecord {
+            slot_id: slot_id.value,
+            ownership: decode_attrs_ownership(ownership.value),
+            consumed: decode_attrs_consumed(consumed.value),
+            non_null: non_null.value == 1u8,
+            volatile_slot: volatile_slot.value == 1u8,
+        };
+        if (not valid_attrs_slot(record)) {
+            return attrs_reader_failure(reader, storage);
+        }
+        raw storage->slots[index] = record;
+    }
+
+    let call_count = read_u32(cursor);
+    cursor = call_count.reader;
+    if (cursor.failed or (call_count.value as u64) > @lengthOf(storage->calls)) {
+        return attrs_reader_failure(reader, storage);
+    }
+    var escape_offset: u64 = 0u64;
+    for (offset in 1u64..(call_count.value as u64)) {
+        let index = offset - 1;
+        let expr_id = read_u32(cursor);
+        cursor = expr_id.reader;
+        let returns_argument = read_u32(cursor);
+        cursor = returns_argument.reader;
+        if (cursor.failed) {
+            return attrs_reader_failure(reader, storage);
+        }
+        let escapes = read_attrs_escapes(
+            cursor,
+            raw storage->call_escapes,
+            escape_offset
+        );
+        cursor = escapes.reader;
+        if (cursor.failed) {
+            return attrs_reader_failure(reader, storage);
+        }
+        let call = ZirlCallAttrsRecord {
+            expr_id: expr_id.value,
+            returns_argument: returns_argument.value,
+            arg_escapes: raw storage->call_escapes[
+                escape_offset..(escape_offset + (escapes.count as u64))
+            ],
+        };
+        if (not attrs_call_has_facts(call)) {
+            return attrs_reader_failure(reader, storage);
+        }
+        raw storage->calls[index] = call;
+        escape_offset = escape_offset + (escapes.count as u64);
+    }
+
+    let function_count = read_u32(cursor);
+    cursor = function_count.reader;
+    if (cursor.failed or
+        (function_count.value as u64) > @lengthOf(storage->functions)) {
+        return attrs_reader_failure(reader, storage);
+    }
+    for (offset in 1u64..(function_count.value as u64)) {
+        let index = offset - 1;
+        let function_index = read_u32(cursor);
+        cursor = function_index.reader;
+        let return_consumed = read_u8(cursor);
+        cursor = return_consumed.reader;
+        let non_null = read_u8(cursor);
+        cursor = non_null.reader;
+        let no_alias = read_u8(cursor);
+        cursor = no_alias.reader;
+        let read_only = read_u8(cursor);
+        cursor = read_only.reader;
+        let no_capture = read_u8(cursor);
+        cursor = no_capture.reader;
+        let discardable = read_u8(cursor);
+        cursor = discardable.reader;
+        let reserved_a = read_u8(cursor);
+        cursor = reserved_a.reader;
+        let reserved_b = read_u8(cursor);
+        cursor = reserved_b.reader;
+        if (cursor.failed or
+            return_consumed.value > (HirConsumedState.NonConsumed as u8) or
+            non_null.value > 1u8 or no_alias.value > 1u8 or
+            read_only.value > 1u8 or no_capture.value > 1u8 or
+            discardable.value > 1u8 or reserved_a.value != 0u8 or
+            reserved_b.value != 0u8) {
+            return attrs_reader_failure(reader, storage);
+        }
+        let record = ZirlFunctionAttrsRecord {
+            function_index: function_index.value,
+            return_consumed: decode_attrs_consumed(return_consumed.value),
+            non_null: non_null.value == 1u8,
+            no_alias: no_alias.value == 1u8,
+            read_only: read_only.value == 1u8,
+            no_capture: no_capture.value == 1u8,
+            discardable: discardable.value == 1u8,
+        };
+        if (not valid_attrs_function(record)) {
+            return attrs_reader_failure(reader, storage);
+        }
+        raw storage->functions[index] = record;
+    }
+
+    let proof_count = read_u32(cursor);
+    cursor = proof_count.reader;
+    if (cursor.failed or
+        (proof_count.value as u64) > @lengthOf(storage->safety_proofs)) {
+        return attrs_reader_failure(reader, storage);
+    }
+    for (offset in 1u64..(proof_count.value as u64)) {
+        let index = offset - 1;
+        let expr_id = read_u32(cursor);
+        cursor = expr_id.reader;
+        let kind = read_u8(cursor);
+        cursor = kind.reader;
+        let operand_a = read_u32(cursor);
+        cursor = operand_a.reader;
+        let operand_b = read_u32(cursor);
+        cursor = operand_b.reader;
+        let operand_c = read_u32(cursor);
+        cursor = operand_c.reader;
+        if (cursor.failed or kind.value > (HirSafetyProofKind.OpaqueTypeMatches as u8) or
+            (expr_id.value as u64) >= @lengthOf(storage->proof_expr_seen) or
+            raw storage->proof_expr_seen[expr_id.value]) {
+            return attrs_reader_failure(reader, storage);
+        }
+        raw storage->proof_expr_seen[expr_id.value] = true;
+        raw storage->safety_proofs[index] = ZirlSafetyProofRecord {
+            expr_id: expr_id.value,
+            kind: decode_attrs_proof_kind(kind.value),
+            operand_a: operand_a.value,
+            operand_b: operand_b.value,
+            operand_c: operand_c.value,
+        };
+    }
+
+    return ZirlAttrsRead {
+        reader: cursor,
+        value: attrs_value(
+            storage,
+            slot_count.value as u64,
+            call_count.value as u64,
+            function_count.value as u64,
+            proof_count.value as u64
+        ),
+    };
+}

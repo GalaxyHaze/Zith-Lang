@@ -5,6 +5,7 @@ from cache/zirl-buffer
 from cache/zirl-container
 from cache/zirl-decl-section
 from cache/zirl-template-section
+from cache/zirl-attrs-section
 from cache/zirl-type-section
 from cache/zirl-metadata
 
@@ -2217,6 +2218,223 @@ fn test_zirl_templates_golden_roundtrip_and_failures(): i32 {
     return 0;
 }
 
+fn test_zirl_attrs_golden_roundtrip_and_failures(): i32 {
+    let escapes: [2]HirCallEscape = [
+        HirCallEscape.Borrow,
+        HirCallEscape.Move,
+    ];
+    let slots: [1]ZirlSlotAttrsRecord = [
+        ZirlSlotAttrsRecord {
+            slot_id: 0x12u32,
+            ownership: HirOwnership.Unique,
+            consumed: HirConsumedState.NonConsumed,
+            non_null: true,
+            volatile_slot: false,
+        },
+    ];
+    let calls: [1]ZirlCallAttrsRecord = [
+        ZirlCallAttrsRecord {
+            expr_id: 0x34u32,
+            returns_argument: 1u32,
+            arg_escapes: raw escapes[0..2],
+        },
+    ];
+    let functions: [1]ZirlFunctionAttrsRecord = [
+        ZirlFunctionAttrsRecord {
+            function_index: 0x56u32,
+            return_consumed: HirConsumedState.Consumed,
+            non_null: true,
+            no_alias: false,
+            read_only: true,
+            no_capture: false,
+            discardable: true,
+        },
+    ];
+    let proofs: [1]ZirlSafetyProofRecord = [
+        ZirlSafetyProofRecord {
+            expr_id: 0u32,
+            kind: HirSafetyProofKind.OpaqueTypeMatches,
+            operand_a: 1u32,
+            operand_b: 2u32,
+            operand_c: 3u32,
+        },
+    ];
+    let section = ZirlAttrsSection {
+        slots: raw slots[0..1],
+        calls: raw calls[0..1],
+        functions: raw functions[0..1],
+        safety_proofs: raw proofs[0..1],
+    };
+    let expected: [73]u8 = [
+        1u8, 0u8, 0u8, 0u8,
+        0x12u8, 0u8, 0u8, 0u8,
+        3u8, 2u8, 1u8, 0u8,
+        1u8, 0u8, 0u8, 0u8,
+        0x34u8, 0u8, 0u8, 0u8,
+        1u8, 0u8, 0u8, 0u8,
+        2u8, 0u8, 0u8, 0u8,
+        1u8, 0u8, 0u8, 0u8,
+        4u8, 0u8, 0u8, 0u8,
+        1u8, 0u8, 0u8, 0u8,
+        0x56u8, 0u8, 0u8, 0u8,
+        1u8, 1u8, 0u8, 1u8, 0u8, 1u8, 0u8, 0u8,
+        1u8, 0u8, 0u8, 0u8,
+        0u8, 0u8, 0u8, 0u8,
+        3u8,
+        1u8, 0u8, 0u8, 0u8,
+        2u8, 0u8, 0u8, 0u8,
+        3u8, 0u8, 0u8, 0u8,
+    ];
+    var encoded: [73]u8 = expected;
+    let writer = write_attrs_section(
+        ZirlByteWriter {
+            bytes: raw encoded[0..73],
+            position: 0u64,
+            failed: false,
+        },
+        &raw section
+    );
+    if (writer.failed or writer.position != 73u64) {
+        return 1;
+    }
+    for (offset in 1u64..73u64) {
+        let index = offset - 1;
+        if (raw encoded[index] != raw expected[index]) {
+            return 2;
+        }
+    }
+
+    let decoded_slots: [1]ZirlSlotAttrsRecord = [
+        ZirlSlotAttrsRecord {
+            slot_id: 0u32,
+            ownership: HirOwnership.Default,
+            consumed: HirConsumedState.Unknown,
+            non_null: false,
+            volatile_slot: false,
+        },
+    ];
+    let decoded_calls: [1]ZirlCallAttrsRecord = [
+        ZirlCallAttrsRecord {
+            expr_id: 0u32,
+            returns_argument: 0xFFFFFFFFu32,
+            arg_escapes: raw escapes[0..0],
+        },
+    ];
+    let decoded_escapes: [2]HirCallEscape = [
+        HirCallEscape.None,
+        HirCallEscape.None,
+    ];
+    let decoded_functions: [1]ZirlFunctionAttrsRecord = [
+        ZirlFunctionAttrsRecord {
+            function_index: 0u32,
+            return_consumed: HirConsumedState.Unknown,
+            non_null: false,
+            no_alias: false,
+            read_only: false,
+            no_capture: false,
+            discardable: false,
+        },
+    ];
+    let decoded_proofs: [1]ZirlSafetyProofRecord = [
+        ZirlSafetyProofRecord {
+            expr_id: 0u32,
+            kind: HirSafetyProofKind.BoundsValid,
+            operand_a: 0u32,
+            operand_b: 0u32,
+            operand_c: 0u32,
+        },
+    ];
+    let proof_seen: [1]bool = [false];
+    var storage = ZirlAttrsStorage {
+        slots: raw decoded_slots[0..1],
+        calls: raw decoded_calls[0..1],
+        call_escapes: raw decoded_escapes[0..2],
+        functions: raw decoded_functions[0..1],
+        safety_proofs: raw decoded_proofs[0..1],
+        proof_expr_seen: raw proof_seen[0..1],
+    };
+    let reader = ZirlByteReader {
+        bytes: raw encoded[0..73],
+        position: 0u64,
+        failed: false,
+    };
+    let decoded = read_attrs_section(reader, &raw storage);
+    if (decoded.reader.failed or decoded.reader.position != 73u64 or
+        @lengthOf(decoded.value.slots) != 1u64 or
+        @lengthOf(decoded.value.calls) != 1u64 or
+        @lengthOf(decoded.value.functions) != 1u64 or
+        @lengthOf(decoded.value.safety_proofs) != 1u64) {
+        return 3;
+    }
+    let decoded_slot = must decoded.value.slots[0];
+    let decoded_call = must decoded.value.calls[0];
+    let decoded_function = must decoded.value.functions[0];
+    let decoded_proof = must decoded.value.safety_proofs[0];
+    if (decoded_slot.slot_id != 0x12u32 or
+        decoded_slot.ownership != HirOwnership.Unique or
+        decoded_slot.consumed != HirConsumedState.NonConsumed or
+        not decoded_slot.non_null or decoded_slot.volatile_slot or
+        decoded_call.expr_id != 0x34u32 or
+        decoded_call.returns_argument != 1u32 or
+        @lengthOf(decoded_call.arg_escapes) != 2u64 or
+        raw decoded_call.arg_escapes[0] != HirCallEscape.Borrow or
+        raw decoded_call.arg_escapes[1] != HirCallEscape.Move or
+        decoded_function.function_index != 0x56u32 or
+        decoded_function.return_consumed != HirConsumedState.Consumed or
+        not decoded_function.non_null or decoded_function.no_alias or
+        not decoded_function.read_only or decoded_function.no_capture or
+        not decoded_function.discardable or
+        decoded_proof.expr_id != 0u32 or
+        decoded_proof.kind != HirSafetyProofKind.OpaqueTypeMatches or
+        decoded_proof.operand_a != 1u32 or decoded_proof.operand_b != 2u32 or
+        decoded_proof.operand_c != 3u32 or not raw proof_seen[0]) {
+        return 4;
+    }
+
+    let truncated = read_attrs_section(
+        ZirlByteReader {
+            bytes: raw encoded[0..72],
+            position: 0u64,
+            failed: false,
+        },
+        &raw storage
+    );
+    if (not truncated.reader.failed or truncated.reader.position != 0u64 or
+        @lengthOf(truncated.value.slots) != 0u64 or
+        @lengthOf(truncated.value.safety_proofs) != 0u64 or raw proof_seen[0]) {
+        return 5;
+    }
+
+    raw encoded[28u64] = 5u8;
+    let invalid_escape = read_attrs_section(reader, &raw storage);
+    if (not invalid_escape.reader.failed or invalid_escape.reader.position != 0u64) {
+        raw encoded[28u64] = 1u8;
+        return 6;
+    }
+    raw encoded[28u64] = 1u8;
+
+    raw encoded[60u64] = 4u8;
+    let invalid_proof = read_attrs_section(reader, &raw storage);
+    if (not invalid_proof.reader.failed or invalid_proof.reader.position != 0u64) {
+        raw encoded[60u64] = 3u8;
+        return 7;
+    }
+    raw encoded[60u64] = 3u8;
+
+    let short_writer = write_attrs_section(
+        ZirlByteWriter {
+            bytes: raw encoded[0..72],
+            position: 0u64,
+            failed: false,
+        },
+        &raw section
+    );
+    if (not short_writer.failed) {
+        return 8;
+    }
+    return 0;
+}
+
 fn main(): i32 {
     let literal_status = test_hir_literal_variant();
     if (literal_status != 0) {
@@ -2314,6 +2532,10 @@ fn main(): i32 {
     let templates_status = test_zirl_templates_golden_roundtrip_and_failures();
     if (templates_status != 0) {
         return 260 + templates_status;
+    }
+    let attrs_status = test_zirl_attrs_golden_roundtrip_and_failures();
+    if (attrs_status != 0) {
+        return 270 + attrs_status;
     }
     let section_validation_status = test_zirl_section_table_validation();
     if (section_validation_status != 0) {
