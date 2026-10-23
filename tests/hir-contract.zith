@@ -1163,7 +1163,7 @@ fn test_zirl_header_golden_bytes(): i32 {
     };
     var header = ZirlFileHeader {
         magic: 0x5A49524Cu32,
-        container_version: 21u32,
+        container_version: 22u32,
         hir_schema_version: 1u32,
         endianness: 1u8,
         reserved: 0u8,
@@ -1220,7 +1220,7 @@ fn test_zirl_header_decode_and_truncation(): i32 {
     };
     var header = ZirlFileHeader {
         magic: 0x5A49524Cu32,
-        container_version: 21u32,
+        container_version: 22u32,
         hir_schema_version: 1u32,
         endianness: 1u8,
         reserved: 0u8,
@@ -1277,7 +1277,7 @@ fn test_zirl_header_decode_and_truncation(): i32 {
     if (not read_file_header(&raw reader, &raw decoded)) {
         return 2;
     }
-    if (decoded.magic != 0x5A49524Cu32 or decoded.container_version != 21u32 or
+    if (decoded.magic != 0x5A49524Cu32 or decoded.container_version != 22u32 or
         decoded.required_features != 7u64) {
         return 3;
     }
@@ -1436,7 +1436,7 @@ fn test_zirl_section_entry_truncation_is_atomic(): i32 {
 fn make_zirl_validation_header(): ZirlFileHeader {
     return ZirlFileHeader {
         magic: 0x5A49524Cu32,
-        container_version: 21u32,
+        container_version: 22u32,
         hir_schema_version: 1u32,
         endianness: 1u8,
         reserved: 0u8,
@@ -1497,7 +1497,7 @@ fn test_zirl_section_table_validation(): i32 {
         return 1;
     }
 
-    header.container_version = 20u32;
+    header.container_version = 21u32;
     result = validate_zirl_sections(&raw header, raw entries[0..6], 267u64);
     if (result.error != ZirlValidationError.InvalidHeader) {
         return 8;
@@ -2461,6 +2461,9 @@ fn test_zirl_code_golden_and_failures(): i32 {
         name_id: 0x71727374u32,
         resolved_function_name_id: 0x81828384u32,
         resolved_function_signature_type_id: 0x91929394u32,
+        variadic_slice_param: 0xFFFFFFFFu32,
+        is_variadic_slice: false,
+        auto_collect_tail: false,
         int_value: -2i64,
         float_value: 1.0,
         args: raw no_ids[0..0],
@@ -2480,7 +2483,7 @@ fn test_zirl_code_golden_and_failures(): i32 {
         vtables: raw no_vtables[0..0],
         canonical_mappings: raw no_mappings[0..0],
     };
-    let expected: [92]u8 = [
+    let expected: [98]u8 = [
         1u8, 0u8, 0u8, 0u8,
         0u8, 2u8, 3u8, 3u8,
         4u8, 3u8, 2u8, 1u8,
@@ -2493,6 +2496,7 @@ fn test_zirl_code_golden_and_failures(): i32 {
         0x74u8, 0x73u8, 0x72u8, 0x71u8,
         0x84u8, 0x83u8, 0x82u8, 0x81u8,
         0x94u8, 0x93u8, 0x92u8, 0x91u8,
+        0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8, 0u8, 0u8,
         0xFEu8, 0xFFu8, 0xFFu8, 0xFFu8,
         0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8,
         0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0xF0u8, 0x3Fu8,
@@ -2504,19 +2508,19 @@ fn test_zirl_code_golden_and_failures(): i32 {
         0u8, 0u8, 0u8, 0u8,
         0u8, 0u8, 0u8, 0u8,
     ];
-    var encoded: [92]u8 = expected;
+    var encoded: [98]u8 = expected;
     let writer = write_code_section(
         ZirlByteWriter {
-            bytes: raw encoded[0..92],
+            bytes: raw encoded[0..98],
             position: 0u64,
             failed: false,
         },
         &raw section
     );
-    if (writer.failed or writer.position != 92u64) {
+    if (writer.failed or writer.position != 98u64) {
         return 1;
     }
-    for (offset in 1u64..92u64) {
+    for (offset in 1u64..98u64) {
         let index = offset - 1;
         if (raw encoded[index] != raw expected[index]) {
             return 2;
@@ -2545,12 +2549,12 @@ fn test_zirl_code_golden_and_failures(): i32 {
         canonical_mappings: raw decoded_mappings[0..0],
     };
     let full_reader = ZirlByteReader {
-        bytes: raw encoded[0..92],
+        bytes: raw encoded[0..98],
         position: 0u64,
         failed: false,
     };
     let decoded = read_code_section(full_reader, &raw storage);
-    if (decoded.reader.failed or decoded.reader.position != 92u64 or
+    if (decoded.reader.failed or decoded.reader.position != 98u64 or
         @lengthOf(decoded.value.expressions) != 1u64 or
         @lengthOf(decoded.value.functions) != 0u64 or
         @lengthOf(decoded.value.globals) != 0u64) {
@@ -2560,6 +2564,9 @@ fn test_zirl_code_golden_and_failures(): i32 {
     if (decoded_expression.kind != 0u8 or
         decoded_expression.op != 2u8 or decoded_expression.flags != 3u8 or
         decoded_expression.safety != ZirlCompactSafetyMode.Raw or
+        decoded_expression.variadic_slice_param != 0xFFFFFFFFu32 or
+        decoded_expression.is_variadic_slice or
+        decoded_expression.auto_collect_tail or
         decoded_expression.type_id != 0x01020304u32 or
         decoded_expression.ref_a != 0x11121314u32 or
         decoded_expression.ref_f != 0x61626364u32 or
@@ -2576,7 +2583,7 @@ fn test_zirl_code_golden_and_failures(): i32 {
 
     let truncated = read_code_section(
         ZirlByteReader {
-            bytes: raw encoded[0..91],
+            bytes: raw encoded[0..97],
             position: 0u64,
             failed: false,
         },
@@ -2602,9 +2609,18 @@ fn test_zirl_code_golden_and_failures(): i32 {
     }
     raw encoded[7u64] = 3u8;
 
+    raw encoded[52u64] = 2u8;
+    let invalid_variadic_flag = read_code_section(full_reader, &raw storage);
+    if (not invalid_variadic_flag.reader.failed or
+        invalid_variadic_flag.reader.position != 0u64) {
+        raw encoded[52u64] = 0u8;
+        return 9;
+    }
+    raw encoded[52u64] = 0u8;
+
     let short_writer = write_code_section(
         ZirlByteWriter {
-            bytes: raw encoded[0..91],
+            bytes: raw encoded[0..97],
             position: 0u64,
             failed: false,
         },
@@ -2635,6 +2651,9 @@ fn test_zirl_code_tables_roundtrip(): i32 {
         name_id: 14u32,
         resolved_function_name_id: 15u32,
         resolved_function_signature_type_id: 16u32,
+        variadic_slice_param: 37u32,
+        is_variadic_slice: true,
+        auto_collect_tail: true,
         int_value: -17i64,
         float_value: 2.5,
         args: raw args[0..2],
@@ -2817,6 +2836,9 @@ fn test_zirl_code_tables_roundtrip(): i32 {
         decoded_expression.name_id != 14u32 or
         decoded_expression.resolved_function_name_id != 15u32 or
         decoded_expression.resolved_function_signature_type_id != 16u32 or
+        decoded_expression.variadic_slice_param != 37u32 or
+        not decoded_expression.is_variadic_slice or
+        not decoded_expression.auto_collect_tail or
         decoded_expression.int_value != -17i64 or decoded_expression.float_value != 2.5 or
         @lengthOf(decoded_expression.args) != 2u64 or
         raw decoded_expression.args[0] != 2u32 or

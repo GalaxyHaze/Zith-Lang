@@ -1,6 +1,6 @@
 pub const hirSchemaVersion: u32 = 1u32;
 pub const requiredHirFeatures: u64 = 7u64;
-pub const containerVersion: u32 = 21u32;
+pub const containerVersion: u32 = 22u32;
 pub const virSchemaVersion: u32 = 1u32;
 pub const vmSemanticVersion: u32 = 1u32;
 

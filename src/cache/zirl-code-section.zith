@@ -65,6 +65,9 @@ pub struct ZirlCompactExpr {
     pub name_id: u32,
     pub resolved_function_name_id: u32,
     pub resolved_function_signature_type_id: u32,
+    pub variadic_slice_param: u32,
+    pub is_variadic_slice: bool,
+    pub auto_collect_tail: bool,
     pub int_value: i64,
     pub float_value: f64,
     pub args: []u32,
@@ -222,6 +225,9 @@ fn code_expr_empty(storage: *ZirlCodeStorage): ZirlCompactExpr {
         name_id: 0u32,
         resolved_function_name_id: 0xFFFFFFFFu32,
         resolved_function_signature_type_id: 0xFFFFFFFFu32,
+        variadic_slice_param: 0xFFFFFFFFu32,
+        is_variadic_slice: false,
+        auto_collect_tail: false,
         int_value: 0i64,
         float_value: 0.0,
         args: raw storage->expression_args[0u64..0u64],
@@ -430,6 +436,9 @@ fn write_code_expr(writer: ZirlByteWriter, value: *ZirlCompactExpr): ZirlByteWri
     result = write_u32(result, value->name_id);
     result = write_u32(result, value->resolved_function_name_id);
     result = write_u32(result, value->resolved_function_signature_type_id);
+    result = write_u32(result, value->variadic_slice_param);
+    result = write_u8(result, code_bool_byte(value->is_variadic_slice));
+    result = write_u8(result, code_bool_byte(value->auto_collect_tail));
     result = write_i64(result, value->int_value);
     result = write_f64(result, value->float_value);
     result = write_code_ids(result, value->args);
@@ -515,6 +524,16 @@ fn read_code_expr(
     cursor = resolved_name.reader;
     let resolved_signature = read_u32(cursor);
     cursor = resolved_signature.reader;
+    let variadic_slice_param = read_u32(cursor);
+    cursor = variadic_slice_param.reader;
+    let is_variadic_slice = read_u8(cursor);
+    cursor = is_variadic_slice.reader;
+    let auto_collect_tail = read_u8(cursor);
+    cursor = auto_collect_tail.reader;
+    if (cursor.failed or is_variadic_slice.value > 1u8 or
+        auto_collect_tail.value > 1u8) {
+        return code_expr_read_failure(cursor, storage);
+    }
     let int_value = read_i64(cursor);
     cursor = int_value.reader;
     let float_value = read_f64(cursor);
@@ -564,6 +583,9 @@ fn read_code_expr(
             name_id: name_id.value,
             resolved_function_name_id: resolved_name.value,
             resolved_function_signature_type_id: resolved_signature.value,
+            variadic_slice_param: variadic_slice_param.value,
+            is_variadic_slice: is_variadic_slice.value == 1u8,
+            auto_collect_tail: auto_collect_tail.value == 1u8,
             int_value: int_value.value,
             float_value: float_value.value,
             args: args.values,
@@ -798,7 +820,7 @@ pub fn read_code_section(
     cursor = expression_count.reader;
     if (cursor.failed or
         (expression_count.value as u64) > @lengthOf(storage->expressions) or
-        not code_can_read_count(cursor, expression_count.value, 72u64)) {
+        not code_can_read_count(cursor, expression_count.value, 78u64)) {
         return code_reader_failure(reader, storage);
     }
     for (offset in 1u64..(expression_count.value as u64)) {
