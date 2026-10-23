@@ -1,0 +1,48 @@
+import "stdio.h"
+
+pub enum tColor{
+    Black = 0,
+    Red,
+    Green,
+    Yellow,
+    Blue,
+    Magenta,
+    Cyan,
+    White
+}
+
+//extern fn printf(format: *char, ...)
+
+#[discardable]
+pub fn printerr(color: tColor, msg: *char) {
+    let color_codes: [8]*char = [
+        "\033[30m", // Black
+        "\033[31m", // Red
+        "\033[32m", // Green
+        "\033[33m", // Yellow
+        "\033[34m", // Blue
+        "\033[35m", // Magenta
+        "\033[36m", // Cyan
+        "\033[37m"  // White
+    ];
+
+    let selected_color: *char = raw color_codes[color as u32];
+    _ = fprintf(stderr, "%s%s\033[0m", selected_color, msg);
+}
+
+#[discardable]
+pub fn printout(color: tColor, msg: *char) {
+    let color_codes: [8]*char = [
+        "\033[30m", // Black
+        "\033[31m", // Red
+        "\033[32m", // Green
+        "\033[33m", // Yellow
+        "\033[34m", // Blue
+        "\033[35m", // Magenta
+        "\033[36m", // Cyan
+        "\033[37m"  // White
+    ];
+
+    let selected_color: *char = raw color_codes[color as u32];
+    _ = fprintf(stdout, "%s%s\033[0m", selected_color, msg);
+}

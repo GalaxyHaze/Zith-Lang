@@ -134,9 +134,15 @@ pub fn read_type_entry(
     let args_count = read_u32(cursor);
     cursor = args_count.reader;
 
-    if (cursor.failed) { return failed_type_read(reader); }
-    if (not known_type_kind(kind.value)) { return failed_type_read(reader); }
-    if (reserved.value != 0u8) { return failed_type_read(reader); }
+    if (cursor.failed) {
+        return failed_type_read(reader);
+    }
+    if (not known_type_kind(kind.value)) {
+        return failed_type_read(reader);
+    }
+    if (reserved.value != 0u8) {
+        return failed_type_read(reader);
+    }
     if ((args_count.value as u64) > @lengthOf(args_output)) {
         return failed_type_read(reader);
     }

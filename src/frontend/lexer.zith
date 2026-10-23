@@ -1,0 +1,18 @@
+from std/memory
+from c/stdlib
+
+//TODO: arena
+pub fn lexer(src: []char, alloc: Allocator): {
+    
+}
+
+//str must not be > 8 chars
+//len must not be 0
+pub fn getKeywordId(str: []char): u64{
+    var id: u64 = 0;
+    let len = @lengthOf(str);
+    _ = memcpy(&raw id, @ptrOf(str), 8);
+    let mask: u64 = ~0u64 >> ((8 - len) * 8);
+    id &= mask;
+    return id;
+}

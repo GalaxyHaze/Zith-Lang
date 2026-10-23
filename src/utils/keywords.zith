@@ -1,0 +1,16 @@
+extern fn memcpy(dst: raw opaque, src: raw opaque, size: u64): raw opaque
+
+pub enum TokenKind{
+    If,
+    Else,
+    For,
+    When
+}
+
+const keywords: [4]*char = [
+    "if",
+    "else",
+    "for",
+    "when"
+];
+

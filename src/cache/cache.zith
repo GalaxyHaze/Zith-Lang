@@ -30,6 +30,7 @@ fn same_text(left: []char, right: []char): bool {
     let length = @lengthOf(left);
     if (length != @lengthOf(right)) {
         return false;
+
     }
     for (offset in 1u64..length) {
         let index = offset - 1;

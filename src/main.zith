@@ -1,14 +1,16 @@
-import "stdio.h"
-//import "unistd.h"
+from utils/prints
+from utils/keywords
 
 fn main(argc: i32, argv: **char){
-    _ = printf("\033[1;31mThis text is bold red.\033[0m\n");
-    
-    // Green text
-    _ = printf("\033[0;32mThis text is normal green.\n");
-    
-    // Reset back to default
-    _ = printf("\033[0mBack to default color.\n");
-    
-    _ = fprintf(stderr, "Yoo wtf");
+    printerr(tColor.Green, "Erro: ");
+    printerr(tColor.Blue, raw argv[0]);
+
+    let id =  getKeywordId("if");
+    when (id){
+        (getKeywordId("if")) printout(tColor.Magenta, "nice! it works\n"),
+        (_) printout(tColor.Cyan, "sad...\n")
+    }
+    if (id == getKeywordId("if")){
+        printout(tColor.Cyan, "\nWorks!!!\n");
+    }
 }
