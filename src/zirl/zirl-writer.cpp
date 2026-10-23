@@ -6,113 +6,186 @@
 #include "zirl/zirl-instantiation-section.hpp"
 #include "zirl/zirl-type-section.hpp"
 
+#include <algorithm>
+#include <limits>
+
 namespace zith::zirl {
 
+namespace {
+
+struct EncodedSection {
+    uint16_t id = 0;
+    uint16_t flags = 0;
+    uint16_t schema_version = kSectionSchemaVersion;
+    ByteWriter payload;
+    uint64_t offset = 0;
+};
+
+void writeDependency(ByteWriter &out, const cache::DependencyRecord &dep) {
+    out.writeBlob(dep.canonical_path);
+    out.writeBlob(dep.import_key);
+    out.writeU32(dep.public_abi_hi);
+    out.writeU32(dep.public_abi_lo);
+}
+
+uint64_t dependencySize(const cache::DependencyRecord &dep) {
+    return 2U * sizeof(uint32_t) + dep.canonical_path.size() + dep.import_key.size() +
+           2U * sizeof(uint32_t);
+}
+
+} // namespace
+
 uint32_t Writer::write(const cache::Artifact &artifact, ByteWriter &out) {
-    ByteWriter meta, decls, templates, code, attrs, instances;
-    // Encoders only fail when a buffer cannot grow; never emit a partial artifact.
-    if (!encodeTypes(artifact, meta) || !encodeDecls(artifact, decls) ||
-        !encodeTemplates(artifact, templates) || !encodeCode(artifact, code) ||
-        !encodeAttrs(artifact, attrs) || !encodeInstantiations(artifact, instances))
+    if (artifact.canonical_path.empty() ||
+        artifact.module_identity.path != artifact.canonical_path ||
+        artifact.semantic_profile.name.empty() ||
+        artifact.hir_schema_version != cache::kHirSchemaVersion ||
+        (artifact.required_features & cache::kRequiredHirFeatures) !=
+            cache::kRequiredHirFeatures ||
+        (artifact.required_features & ~cache::kRequiredHirFeatures) != 0 ||
+        artifact.deps.size() > std::numeric_limits<uint32_t>::max() ||
+        artifact.canonical_path.size() > std::numeric_limits<uint32_t>::max() ||
+        artifact.module_name.size() > std::numeric_limits<uint32_t>::max() ||
+        artifact.semantic_profile.name.size() > std::numeric_limits<uint32_t>::max())
         return 0;
 
-    static_assert(sizeof(FileHeader) == 68,
-                  "sizeof(FileHeader) must match the field-by-field header write");
+    std::vector<EncodedSection> sections;
+    sections.reserve(7U + artifact.optional_sections.size());
+    const auto addKnownSection = [&](SectionId id, uint16_t flags, auto encode) {
+        EncodedSection section;
+        section.id = static_cast<uint16_t>(id);
+        section.flags = flags;
+        if (!encode(section.payload))
+            return false;
+        sections.push_back(std::move(section));
+        return true;
+    };
 
-    const uint32_t section_count = 6;
-    const uint32_t path_len      = static_cast<uint32_t>(artifact.canonical_path.size());
+    if (!addKnownSection(SectionId::Metadata, kSectionFlagRequired,
+                         [&](ByteWriter &w) { return encodeTypes(artifact, w); }) ||
+        !addKnownSection(SectionId::Decls, kSectionFlagRequired,
+                         [&](ByteWriter &w) { return encodeDecls(artifact, w); }) ||
+        !addKnownSection(SectionId::Templates, kSectionFlagRequired,
+                         [&](ByteWriter &w) { return encodeTemplates(artifact, w); }) ||
+        !addKnownSection(SectionId::Code, kSectionFlagRequired,
+                         [&](ByteWriter &w) { return encodeCode(artifact, w); }) ||
+        !addKnownSection(SectionId::Attrs, kSectionFlagRequired,
+                         [&](ByteWriter &w) { return encodeAttrs(artifact, w); }) ||
+        !addKnownSection(SectionId::Instantiations, 0,
+                         [&](ByteWriter &w) { return encodeInstantiations(artifact, w); }))
+        return 0;
+
+    uint64_t optional_features = artifact.optional_features |
+                                cache::kOptionalFeatureInstantiationSummary;
+    const bool has_frontend_identity = !artifact.frontend_identity.dialect.empty() ||
+                                       !artifact.frontend_identity.implementation.empty() ||
+                                       !artifact.frontend_identity.version.empty();
+    if (has_frontend_identity) {
+        if (artifact.frontend_identity.dialect.size() > std::numeric_limits<uint32_t>::max() ||
+            artifact.frontend_identity.implementation.size() >
+                std::numeric_limits<uint32_t>::max() ||
+            artifact.frontend_identity.version.size() > std::numeric_limits<uint32_t>::max())
+            return 0;
+        EncodedSection section;
+        section.id = static_cast<uint16_t>(SectionId::FrontendProvenance);
+        section.payload.writeBlob(artifact.frontend_identity.dialect);
+        section.payload.writeBlob(artifact.frontend_identity.implementation);
+        section.payload.writeBlob(artifact.frontend_identity.version);
+        sections.push_back(std::move(section));
+        optional_features |= cache::kOptionalFeatureFrontendProvenance;
+    }
+
+    for (const auto &optional : artifact.optional_sections) {
+        if (optional.id == 0 || optional.id <= static_cast<uint16_t>(SectionId::FrontendProvenance) ||
+            optional.payload.size() > std::numeric_limits<uint32_t>::max())
+            return 0;
+        EncodedSection section;
+        section.id = optional.id;
+        section.schema_version = optional.schema_version;
+        section.payload.writeBytes(optional.payload.data(), optional.payload.size());
+        sections.push_back(std::move(section));
+    }
+
+    std::sort(sections.begin(), sections.end(),
+              [](const EncodedSection &a, const EncodedSection &b) { return a.id < b.id; });
+    for (size_t i = 1; i < sections.size(); ++i)
+        if (sections[i - 1U].id == sections[i].id)
+            return 0;
 
     uint64_t deps_size = 0;
-    for (const auto &dep : artifact.deps)
-        deps_size += 2 * sizeof(uint32_t) + dep.canonical_path.size() + dep.import_key.size() +
-                     2 * sizeof(uint32_t);
+    for (const auto &dep : artifact.deps) {
+        if (dep.canonical_path.size() > std::numeric_limits<uint32_t>::max() ||
+            dep.import_key.size() > std::numeric_limits<uint32_t>::max())
+            return 0;
+        deps_size += dependencySize(dep);
+    }
+    const uint64_t header_size =
+        static_cast<uint64_t>(kFixedHeaderSize) + artifact.canonical_path.size() +
+        artifact.module_name.size() + artifact.semantic_profile.name.size() + deps_size +
+        static_cast<uint64_t>(sections.size()) * kSectionEntrySize;
+    if (header_size > std::numeric_limits<uint32_t>::max() ||
+        sections.size() > std::numeric_limits<uint16_t>::max())
+        return 0;
 
-    FileHeader hdr;
-    hdr.magic          = kMagic;
-    hdr.format_version = kFormatVersion;
-    hdr.endianness     = kEndianLittle;
-    hdr.section_count  = static_cast<uint8_t>(section_count);
-    // header = FileHeader fields + canonical path + dep records + section table
-    hdr.header_size        = static_cast<uint32_t>(sizeof(FileHeader) + path_len + deps_size +
-                                                   section_count * sizeof(SectionEntry));
-    hdr.cache_key_hash     = artifact.cache_key_hash;
-    hdr.module_id_hi       = artifact.module_id_hi;
-    hdr.module_id_lo       = artifact.module_id_lo;
-    hdr.source_fp_hi       = artifact.source_fp_hi;
-    hdr.source_fp_lo       = artifact.source_fp_lo;
-    hdr.public_abi_hi      = artifact.public_abi_hi;
-    hdr.public_abi_lo      = artifact.public_abi_lo;
-    hdr.dep_count          = static_cast<uint32_t>(artifact.deps.size());
-    hdr.decl_count         = static_cast<uint32_t>(artifact.decls.size());
-    hdr.template_count     = static_cast<uint32_t>(artifact.templates.size());
-    hdr.fn_count           = static_cast<uint32_t>(artifact.functions.size());
-    hdr.canonical_path_len = path_len;
+    uint64_t next_offset = header_size;
+    std::vector<SectionEntry> entries;
+    entries.reserve(sections.size());
+    for (auto &section : sections) {
+        section.offset = next_offset;
+        next_offset += section.payload.size();
+        entries.push_back({section.id, section.flags, section.schema_version, 0, section.offset,
+                           section.payload.size()});
+    }
 
-    uint32_t checksum = 0;
-    checksum          = fnv1a32(meta.ptr(), meta.size());
-    checksum          = fnv1a32(decls.ptr(), decls.size()) ^ checksum;
-    checksum          = fnv1a32(templates.ptr(), templates.size()) ^ checksum;
-    checksum          = fnv1a32(code.ptr(), code.size()) ^ checksum;
-    checksum          = fnv1a32(attrs.ptr(), attrs.size()) ^ checksum;
-    checksum          = fnv1a32(instances.ptr(), instances.size()) ^ checksum;
+    uint32_t checksum = fnv1a32(artifact.canonical_path) ^ fnv1a32(artifact.module_name) ^
+                        fnv1a32(artifact.semantic_profile.name);
     for (const auto &dep : artifact.deps) {
         checksum ^= fnv1a32(dep.canonical_path);
         checksum ^= fnv1a32(dep.import_key);
-        uint32_t buf[2] = {dep.public_abi_hi, dep.public_abi_lo};
-        checksum ^= fnv1a32(reinterpret_cast<const uint8_t *>(buf), sizeof(buf));
+        uint32_t abi[2] = {dep.public_abi_hi, dep.public_abi_lo};
+        checksum ^= fnv1a32(reinterpret_cast<const uint8_t *>(abi), sizeof(abi));
     }
-    hdr.checksum = checksum;
+    for (const auto &section : sections)
+        checksum ^= fnv1a32(section.payload.ptr(), section.payload.size());
 
-    uint64_t base = hdr.header_size;
-    SectionEntry entries[6];
-    entries[0] = {base, meta.size()};
-    entries[1] = {base + meta.size(), decls.size()};
-    entries[2] = {base + meta.size() + decls.size(), templates.size()};
-    entries[3] = {base + meta.size() + decls.size() + templates.size(), code.size()};
-    entries[4] = {base + meta.size() + decls.size() + templates.size() + code.size(), attrs.size()};
-    entries[5] = {base + meta.size() + decls.size() + templates.size() + code.size() + attrs.size(),
-                  instances.size()};
-
-    out.writeU32(hdr.magic);
-    out.writeU32(hdr.format_version);
-    out.writeU8(hdr.endianness);
-    out.writeU8(hdr.reserved_a);
-    out.writeU8(hdr.reserved_b);
-    out.writeU8(hdr.section_count);
-    out.writeU32(hdr.header_size);
-    out.writeU32(hdr.checksum);
-    out.writeU32(hdr.cache_key_hash);
-    out.writeU32(hdr.module_id_hi);
-    out.writeU32(hdr.module_id_lo);
-    out.writeU32(hdr.source_fp_hi);
-    out.writeU32(hdr.source_fp_lo);
-    out.writeU32(hdr.public_abi_hi);
-    out.writeU32(hdr.public_abi_lo);
-    out.writeU32(hdr.dep_count);
-    out.writeU32(hdr.decl_count);
-    out.writeU32(hdr.template_count);
-    out.writeU32(hdr.fn_count);
-    out.writeU32(hdr.canonical_path_len);
+    out.writeU32(kMagic);
+    out.writeU32(kContainerVersion);
+    out.writeU32(artifact.hir_schema_version);
+    out.writeU8(kEndianLittle);
+    out.writeU8(0);
+    out.writeU16(static_cast<uint16_t>(sections.size()));
+    out.writeU32(static_cast<uint32_t>(header_size));
+    out.writeU32(checksum);
+    out.writeU64(artifact.required_features);
+    out.writeU64(optional_features);
+    out.writeU64(artifact.source_fingerprint.primary);
+    out.writeU64(artifact.source_fingerprint.secondary);
+    out.writeU32(artifact.semantic_profile.version);
+    out.writeU32(artifact.public_abi_hi);
+    out.writeU32(artifact.public_abi_lo);
+    out.writeU32(static_cast<uint32_t>(artifact.deps.size()));
+    out.writeU32(static_cast<uint32_t>(artifact.decls.size()));
+    out.writeU32(static_cast<uint32_t>(artifact.templates.size()));
+    out.writeU32(static_cast<uint32_t>(artifact.functions.size()));
+    out.writeU32(static_cast<uint32_t>(artifact.canonical_path.size()));
+    out.writeU32(static_cast<uint32_t>(artifact.module_name.size()));
+    out.writeU32(static_cast<uint32_t>(artifact.semantic_profile.name.size()));
     out.writeRaw(artifact.canonical_path);
+    out.writeRaw(artifact.module_name);
+    out.writeRaw(artifact.semantic_profile.name);
+    for (const auto &dep : artifact.deps)
+        writeDependency(out, dep);
 
-    for (const auto &dep : artifact.deps) {
-        out.writeBlob(dep.canonical_path);
-        out.writeBlob(dep.import_key);
-        out.writeU32(dep.public_abi_hi);
-        out.writeU32(dep.public_abi_lo);
+    for (const auto &entry : entries) {
+        out.writeU16(entry.id);
+        out.writeU16(entry.flags);
+        out.writeU16(entry.schema_version);
+        out.writeU16(entry.reserved);
+        out.writeU64(entry.offset);
+        out.writeU64(entry.size);
     }
-
-    for (const auto &e : entries) {
-        out.writeU64(e.offset);
-        out.writeU64(e.size);
-    }
-
-    out.writeBytes(meta.ptr(), meta.size());
-    out.writeBytes(decls.ptr(), decls.size());
-    out.writeBytes(templates.ptr(), templates.size());
-    out.writeBytes(code.ptr(), code.size());
-    out.writeBytes(attrs.ptr(), attrs.size());
-    out.writeBytes(instances.ptr(), instances.size());
+    for (const auto &section : sections)
+        out.writeBytes(section.payload.ptr(), section.payload.size());
 
     return checksum;
 }

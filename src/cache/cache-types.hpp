@@ -1,9 +1,9 @@
 #pragma once
 
+#include "cache/cache-identity.hpp"
+#include "hir/hir-module.hpp"
 #include "memory/dyn-array.hpp"
 #include "memory/string-interner.hpp"
-#include "symbols/symbol-id.hpp"
-#include "symbols/symbol-visibility.hpp"
 #include "types/type-id.hpp"
 
 #include <cstdint>
@@ -128,18 +128,20 @@ enum class CompactSymKind : uint8_t {
     Context,
 };
 
+enum class CompactVisibility : uint8_t { Private, Public, Module };
+
 // One exported or module-visible declaration.  References metadata by compact
 // string id and references types by compact type id.  For generic declarations
 // `template_index` points into the templates section; otherwise it is invalid.
 struct DeclRecord {
     std::string name;
-    CompactSymKind kind                  = CompactSymKind::Variable;
-    symbols::SymbolVisibility visibility = symbols::SymbolVisibility::Private;
-    int32_t mod_depth                    = 0;
-    uint32_t name_id                     = 0;
-    uint32_t type_id                     = 0; // primary type (fn sig / struct type / alias target)
-    uint32_t template_index              = ~uint32_t{0};
-    uint32_t body_fn_index               = ~uint32_t{0}; // index into code section, if concrete
+    CompactSymKind kind = CompactSymKind::Variable;
+    CompactVisibility visibility = CompactVisibility::Private;
+    int32_t mod_depth = 0;
+    uint32_t name_id = 0;
+    uint32_t type_id = 0; // primary type (fn sig / struct type / alias target)
+    uint32_t template_index = ~uint32_t{0};
+    uint32_t body_fn_index = ~uint32_t{0}; // index into code section, if concrete
     std::vector<uint32_t> field_name_ids;                // struct/enum/component fields
     std::vector<uint32_t> field_type_ids;
     std::vector<uint32_t> method_decl_indices; // methods, as decl indices
@@ -259,6 +261,11 @@ struct CompactExpr {
     uint32_t ref_d       = 0; // else_block
     uint32_t ref_e       = 0; // Cast::from / LayoutIntrinsic::which / operand type / call fn_type
     uint32_t ref_f       = 0; // LayoutIntrinsic::field_index
+    // Canonical string-table identity for a direct HIR function reference.
+    // The in-memory HirFunctionId is never written to the artifact.
+    uint32_t resolved_function_name_id = ~uint32_t{0};
+    // Compact signature identity disambiguates overloads with the same name.
+    uint32_t resolved_function_signature_type_id = ~uint32_t{0};
     uint8_t op           = 0; // binary/unary op
     uint8_t flags        = 0; // is_array / literal sub-tag
     CompactSafetyMode safety = CompactSafetyMode::RequiredCheck;
@@ -278,6 +285,7 @@ struct CompactBasicBlock {
 struct CompactFunction {
     std::string name;
     uint32_t name_id = 0;
+    uint32_t signature_type_id = ~uint32_t{0};
     std::vector<uint32_t> param_type_ids;
     std::vector<uint32_t> param_name_ids;
     std::vector<uint32_t> param_slot_ids;
@@ -304,7 +312,8 @@ struct CompactGlobalConst {
 
 struct CompactVTable {
     uint32_t name_id = 0;
-    std::vector<uint32_t> slot_function_ids;
+    std::vector<uint32_t> slot_function_name_ids;
+    std::vector<uint32_t> slot_function_signature_type_ids;
 };
 
 struct HirSlotAttrsRecord {
@@ -353,13 +362,15 @@ struct InstantiationRecord {
 struct Artifact {
     std::string canonical_path;
     std::string module_name;
-    uint32_t cache_key_hash = 0;
-    uint32_t module_id_hi   = 0;
-    uint32_t module_id_lo   = 0;
-    uint32_t source_fp_hi   = 0;
-    uint32_t source_fp_lo   = 0;
+    FrontendIdentity frontend_identity;
+    SemanticCompatibilityProfile semantic_profile;
+    CanonicalModuleIdentity module_identity;
+    uint32_t hir_schema_version = kHirSchemaVersion;
+    ContentFingerprint source_fingerprint;
     uint32_t public_abi_hi  = 0;
     uint32_t public_abi_lo  = 0;
+    uint64_t required_features = kRequiredHirFeatures;
+    uint64_t optional_features = 0;
     std::vector<std::string> strings;         // sec2 string table
     std::vector<std::string> paths;           // sec2 path table
     std::vector<CompactType> types;           // sec2 type table
@@ -383,6 +394,12 @@ struct Artifact {
     std::vector<HirFnAttrsRecord> attrs_fns;
     std::vector<HirSafetyProofRecord> attrs_safety_proofs;
     std::vector<InstantiationRecord> instantiations;
+    struct OptionalSection {
+        uint16_t id = 0;
+        uint16_t schema_version = 1;
+        std::vector<uint8_t> payload;
+    };
+    std::vector<OptionalSection> optional_sections;
 };
 
 } // namespace zith::cache

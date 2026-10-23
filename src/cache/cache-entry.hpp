@@ -1,9 +1,9 @@
 #pragma once
 
 #include "cache/cache-types.hpp"
-#include "session/frontend-context.hpp"
 
 #include <cstdint>
+#include <optional>
 
 namespace zith::cache {
 
@@ -19,14 +19,22 @@ enum class CacheEntryState : uint8_t {
 // coordinate short-circuit stages.
 struct CacheEntry {
     Artifact artifact;
-    session::ContentFingerprint fingerprint;
+    ContentFingerprint fingerprint;
     CacheEntryState state = CacheEntryState::Invalid;
 };
 
-// Validate an artifact against the session cache key and source fingerprint.
+// Validate the canonical module and semantic contract of a persisted artifact.
 // Extracted from Store so CacheEntry consumers can re-validate without
 // reaching into a Store instance.
-[[nodiscard]] bool validateArtifact(const Artifact &art, uint32_t cache_key_hash,
-                                    const session::ContentFingerprint &fp);
+[[nodiscard]] bool validateArtifact(const Artifact &art,
+                                    const CanonicalModuleIdentity &module_identity,
+                                    const SemanticCompatibilityProfile &semantic_profile,
+                                    const ContentFingerprint &fingerprint);
+
+// Resolve a canonical artifact-local name/signature pair without depending on
+// a process-local HIR function index.
+[[nodiscard]] std::optional<uint32_t>
+resolveFunctionReference(const Artifact &artifact, uint32_t name_id,
+                         uint32_t signature_type_id);
 
 } // namespace zith::cache

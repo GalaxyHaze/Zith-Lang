@@ -38,7 +38,10 @@ bool decodeDecls(ByteReader &r, cache::Artifact &out) {
         if (!r.readU8(kind) || !r.readU8(vis) || !r.readU8(ext) || !r.readU8(reserved))
             return false;
         d.kind        = static_cast<cache::CompactSymKind>(kind);
-        d.visibility  = static_cast<symbols::SymbolVisibility>(vis);
+        if (kind > static_cast<uint8_t>(cache::CompactSymKind::Context) ||
+            vis > static_cast<uint8_t>(cache::CompactVisibility::Module) || ext > 1U)
+            return false;
+        d.visibility  = static_cast<cache::CompactVisibility>(vis);
         d.is_extern   = ext != 0;
         int32_t depth = 0;
         if (!r.readI32(depth))

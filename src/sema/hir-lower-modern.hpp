@@ -18,13 +18,18 @@ namespace zith::cache {
 class Store;
 }
 
+namespace zith::symbols {
+class SymbolTable;
+}
+
 namespace zith::sema::modern {
 
 class HirLowerModern {
 public:
     HirLowerModern(memory::Arena &arena, diagnostics::DiagnosticEngine &diags,
                    const session::CompilationSnapshot &snapshot, SemaPipeline &sema,
-                   types::TypeIntern &types, memory::StringInterner &interner,
+                   const symbols::SymbolTable &symbols, types::TypeIntern &types,
+                   memory::StringInterner &interner,
                    const NraFacts *nra = nullptr, cache::Store *cache_store = nullptr);
 
     bool run();
@@ -78,6 +83,7 @@ private:
     diagnostics::DiagnosticEngine &diags_;
     const session::CompilationSnapshot &snapshot_;
     SemaPipeline &sema_;
+    const symbols::SymbolTable &symbols_;
     types::TypeIntern &types_;
     memory::StringInterner &interner_;
     const NraFacts *nra_;
@@ -121,6 +127,7 @@ private:
     std::vector<hir::HirSlotId> local_slots_;
     bool predeclareFunctions();
     bool predeclareGlobalConsts();
+    void populateHirDeclarations();
     void predeclareInstantiation(session::ModuleKey module_key,
                                  const comptime::InstantiationInstance &instance);
     bool lowerFunctionBodies();

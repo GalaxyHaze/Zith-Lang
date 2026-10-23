@@ -214,7 +214,7 @@ bool Unifier::unify(TypeId a, TypeId b, memory::Span span) {
                 return true;
             },
             [&](const TypeGenericParam &ga, const TypeGenericParam &gb) -> bool {
-                if (ga.decl_id != gb.decl_id || ga.param_index != gb.param_index) {
+                if (ga.owner_name != gb.owner_name || ga.param_index != gb.param_index) {
                     diags_.report(diagnostics::Severity::Error, diagnostics::err::TypeMismatch,
                                   "type mismatch: different generic parameters", span);
                     return false;
@@ -342,7 +342,7 @@ bool Unifier::isAssignable(TypeId dst, TypeId src) const {
                 return true;
             },
             [&](const TypeGenericParam &gd, const TypeGenericParam &gs) -> bool {
-                return gd.decl_id == gs.decl_id && gd.param_index == gs.param_index;
+                return gd.owner_name == gs.owner_name && gd.param_index == gs.param_index;
             },
             [&](const TypeIncomplete &idd, const TypeIncomplete &iss) -> bool {
                 if (idd.base != iss.base || idd.arg_count != iss.arg_count)

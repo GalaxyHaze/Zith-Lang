@@ -1,7 +1,7 @@
+#include "cache/cache-entry.hpp"
 #include "cache/cache-types.hpp"
 #include "cache/cache.hpp"
 #include "cache/manifest.hpp"
-#include "session/frontend-context.hpp"
 #include "test-common.hpp"
 
 #include <filesystem>
@@ -17,14 +17,52 @@ namespace fs = std::filesystem;
 
 // ── helpers ───────────────────────────────────────────────────────
 
-session::ContentFingerprint makeFingerprint(uint64_t primary) {
-    session::ContentFingerprint fp;
+ContentFingerprint makeFingerprint(uint64_t primary) {
+    ContentFingerprint fp;
     fp.primary = primary;
     return fp;
 }
 
-std::string makeCacheKeyIdentity() {
-    return "zithc-test-cache-entry";
+static void test_artifact_validation_separates_frontend_and_semantics() {
+    Artifact artifact;
+    artifact.canonical_path = "/test/shared.zith";
+    artifact.module_identity = {artifact.canonical_path};
+    artifact.semantic_profile = kSharedHirProfile;
+    artifact.frontend_identity = {"Zith--", "legacy-frontend", "0.1"};
+    artifact.source_fingerprint = {0x1234, 0x5678};
+
+    const CanonicalModuleIdentity module{artifact.canonical_path};
+    const ContentFingerprint fingerprint = artifact.source_fingerprint;
+    CHECK(validateArtifact(artifact, module, kSharedHirProfile, fingerprint),
+          "artifact validates against its canonical module and semantic profile");
+
+    artifact.frontend_identity = {"Zith", "self-hosted-frontend", "0.2"};
+    CHECK(validateArtifact(artifact, module, kSharedHirProfile, fingerprint),
+          "different frontend provenance does not invalidate shared HIR");
+
+    const SemanticCompatibilityProfile incompatible{"zith-shared-hir", 2};
+    CHECK(!validateArtifact(artifact, module, incompatible, fingerprint),
+          "different semantic profile rejects shared HIR reuse");
+}
+
+static void test_store_does_not_persist_unencodable_artifacts() {
+    auto root = fs::temp_directory_path() / "zith-test-invalid-artifact";
+    fs::remove_all(root);
+
+    Store store(root.string(), kSharedHirProfile);
+    Artifact artifact;
+    artifact.canonical_path = "/test/invalid.zith";
+    artifact.module_identity = {artifact.canonical_path};
+    artifact.semantic_profile = kSharedHirProfile;
+    artifact.vtables.push_back({0, {0}, {}});
+
+    store.store(artifact);
+    CHECK(!store.manifestEntry(artifact.canonical_path),
+          "unencodable artifact is not added to the cache manifest");
+    CHECK(store.metrics().invalid == 1,
+          "unencodable artifact increments the invalid-cache metric");
+
+    fs::remove_all(root);
 }
 
 // ── Transitive invalidation: B depends on A, C depends on B ───────
@@ -35,9 +73,7 @@ static void test_transitive_invalidation() {
     fs::remove_all(root);
     fs::create_directories(root);
 
-    session::CacheKey key;
-    key.compilerVersion = "test";
-    Store store(root.string(), key);
+    Store store(root.string(), kSharedHirProfile);
 
     // Module A (no dependencies)
     ManifestEntry entryA;
@@ -197,9 +233,7 @@ static void test_store_metrics_exposed() {
     fs::remove_all(root);
     fs::create_directories(root);
 
-    session::CacheKey key;
-    key.compilerVersion = "test";
-    Store store(root.string(), key);
+    Store store(root.string(), kSharedHirProfile);
 
     auto m = store.metrics();
     CHECK(m.hits == 0, "metrics start at zero hits");
@@ -209,7 +243,8 @@ static void test_store_metrics_exposed() {
     CHECK(m.evictions == 0, "metrics start at zero evictions");
 
     auto fp = makeFingerprint(0xAAAA);
-    store.load("/test/nonexistent.zith", fp);
+    CHECK(!store.load(CanonicalModuleIdentity{"/test/nonexistent.zith"}, fp),
+          "missing cache entry returns no artifact");
     m = store.metrics();
     CHECK(m.misses > 0, "miss increments after failed load");
 
@@ -219,6 +254,8 @@ static void test_store_metrics_exposed() {
 // ── All test aggregation ──────────────────────────────────────────
 
 static void test_cache_entry() {
+    test_artifact_validation_separates_frontend_and_semantics();
+    test_store_does_not_persist_unencodable_artifacts();
     test_transitive_invalidation();
     test_cycle_idempotence();
     test_manifest_round_trip();

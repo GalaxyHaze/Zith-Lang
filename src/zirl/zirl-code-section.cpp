@@ -17,6 +17,8 @@ void writeCompactExpr(const cache::CompactExpr &e, ByteWriter &w) {
     w.writeU32(e.ref_e);
     w.writeU32(e.ref_f);
     w.writeU32(e.name_id);
+    w.writeU32(e.resolved_function_name_id);
+    w.writeU32(e.resolved_function_signature_type_id);
     w.writeI64(e.int_val);
     w.writeF64(e.flt_val);
     w.writeU32(static_cast<uint32_t>(e.args.size()));
@@ -41,7 +43,9 @@ bool readCompactExpr(ByteReader &r, cache::CompactExpr &out) {
     out.safety = static_cast<cache::CompactSafetyMode>(safety);
     if (!r.readU32(out.type_id) || !r.readU32(out.ref_a) || !r.readU32(out.ref_b) ||
         !r.readU32(out.ref_c) || !r.readU32(out.ref_d) || !r.readU32(out.ref_e) ||
-        !r.readU32(out.ref_f) || !r.readU32(out.name_id))
+        !r.readU32(out.ref_f) || !r.readU32(out.name_id) ||
+        !r.readU32(out.resolved_function_name_id) ||
+        !r.readU32(out.resolved_function_signature_type_id))
         return false;
     if (!r.readI64(out.int_val) || !r.readF64(out.flt_val))
         return false;
@@ -76,12 +80,19 @@ bool readCompactExpr(ByteReader &r, cache::CompactExpr &out) {
 } // namespace
 
 bool encodeCode(const cache::Artifact &artifact, ByteWriter &w) {
+    for (const auto &vtable : artifact.vtables) {
+        if (vtable.slot_function_name_ids.size() !=
+            vtable.slot_function_signature_type_ids.size())
+            return false;
+    }
+
     w.writeU32(static_cast<uint32_t>(artifact.exprs.size()));
     for (const auto &e : artifact.exprs)
         writeCompactExpr(e, w);
     w.writeU32(static_cast<uint32_t>(artifact.functions.size()));
     for (const auto &fn : artifact.functions) {
         w.writeU32(fn.name_id);
+        w.writeU32(fn.signature_type_id);
         w.writeU8(fn.is_extern ? 1 : 0);
         w.writeU8(fn.is_foreign_c ? 1 : 0);
         w.writeU8(fn.is_variadic ? 1 : 0);
@@ -119,9 +130,11 @@ bool encodeCode(const cache::Artifact &artifact, ByteWriter &w) {
     w.writeU32(static_cast<uint32_t>(artifact.vtables.size()));
     for (const auto &vtable : artifact.vtables) {
         w.writeU32(vtable.name_id);
-        w.writeU32(static_cast<uint32_t>(vtable.slot_function_ids.size()));
-        for (auto id : vtable.slot_function_ids)
-            w.writeU32(id);
+        w.writeU32(static_cast<uint32_t>(vtable.slot_function_name_ids.size()));
+        for (size_t slot = 0; slot < vtable.slot_function_name_ids.size(); ++slot) {
+            w.writeU32(vtable.slot_function_name_ids[slot]);
+            w.writeU32(vtable.slot_function_signature_type_ids[slot]);
+        }
     }
     w.writeU32(static_cast<uint32_t>(artifact.canonical_mappings.size()));
     for (const auto &mapping : artifact.canonical_mappings) {
@@ -149,7 +162,8 @@ bool decodeCode(ByteReader &r, cache::Artifact &out) {
     out.functions.resize(n);
     for (auto &fn : out.functions) {
         uint8_t ext = 0, foreign = 0, a = 0, b = 0, c = 0, d = 0;
-        if (!r.readU32(fn.name_id) || !r.readU8(ext) || !r.readU8(foreign) || !r.readU8(a) ||
+        if (!r.readU32(fn.name_id) || !r.readU32(fn.signature_type_id) ||
+            !r.readU8(ext) || !r.readU8(foreign) || !r.readU8(a) ||
             !r.readU8(b) || !r.readU8(c) || !r.readU8(d) || !r.readU32(fn.return_type_id) ||
             !r.readU32(fn.machine_return_type_id) || !r.readU32(fn.machine_id) ||
             !r.readU32(fn.instance_index) || !r.readU32(fn.variadic_slice_param))
@@ -226,11 +240,13 @@ bool decodeCode(ByteReader &r, cache::Artifact &out) {
         uint32_t k = 0;
         if (!r.readU32(k))
             return false;
-        if (!r.canReadU32Count(k))
+        if (!r.canReadU32Count(k, 8))
             return false;
-        vtable.slot_function_ids.resize(k);
-        for (auto &id : vtable.slot_function_ids)
-            if (!r.readU32(id))
+        vtable.slot_function_name_ids.resize(k);
+        vtable.slot_function_signature_type_ids.resize(k);
+        for (size_t slot = 0; slot < k; ++slot)
+            if (!r.readU32(vtable.slot_function_name_ids[slot]) ||
+                !r.readU32(vtable.slot_function_signature_type_ids[slot]))
                 return false;
     }
     if (!r.readU32(n))

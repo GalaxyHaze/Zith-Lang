@@ -1,3 +1,4 @@
+#include "cache/cache-entry.hpp"
 #include "zirl/zirl-reader.hpp"
 #include "zirl/zirl-attrs-section.hpp"
 #include "zirl/zirl-buffer.hpp"
@@ -8,143 +9,421 @@
 #include "zirl/zirl-type-section.hpp"
 
 #include <algorithm>
+#include <array>
+#include <limits>
+#include <string>
+#include <vector>
 
 namespace zith::zirl {
 
-std::optional<cache::Artifact> Reader::read(std::string_view bytes) {
-    ByteReader r(bytes);
-    // FileHeader fields.
-    uint32_t magic = 0, version = 0;
-    uint8_t endianness = 0, ra = 0, rb = 0, section_count = 0;
-    if (!r.readU32(magic) || !r.readU32(version) || !r.readU8(endianness) || !r.readU8(ra) ||
-        !r.readU8(rb) || !r.readU8(section_count))
-        return std::nullopt;
-    if (magic != kMagic || version != kFormatVersion || endianness != kEndianLittle)
-        return std::nullopt;
+namespace {
 
-    uint32_t header_size = 0, checksum = 0, cache_key_hash = 0;
-    uint32_t mod_hi = 0, mod_lo = 0, src_hi = 0, src_lo = 0, abi_hi = 0, abi_lo = 0;
-    uint32_t dep_count = 0, decl_count = 0, template_count = 0, fn_count = 0, path_len = 0;
-    if (!r.readU32(header_size) || !r.readU32(checksum) || !r.readU32(cache_key_hash) ||
-        !r.readU32(mod_hi) || !r.readU32(mod_lo) || !r.readU32(src_hi) || !r.readU32(src_lo) ||
-        !r.readU32(abi_hi) || !r.readU32(abi_lo) || !r.readU32(dep_count) ||
-        !r.readU32(decl_count) || !r.readU32(template_count) || !r.readU32(fn_count) ||
-        !r.readU32(path_len))
-        return std::nullopt;
+struct SectionView {
+    SectionEntry entry;
+    std::string_view payload;
+};
 
-    if (header_size > bytes.size() || path_len > bytes.size())
-        return std::nullopt;
+constexpr std::array<SectionId, 5> kRequiredSections{
+    SectionId::Metadata, SectionId::Decls, SectionId::Templates, SectionId::Code,
+    SectionId::Attrs};
 
-    std::string canonical_path;
-    {
-        if (r.position() + path_len > bytes.size())
-            return std::nullopt;
-        canonical_path.assign(reinterpret_cast<const char *>(bytes.data() + r.position()),
-                              path_len);
-        // Advance the reader past the path bytes.
-        for (uint32_t i = 0; i < path_len; ++i) {
-            uint8_t dummy = 0;
-            if (!r.readU8(dummy))
-                return std::nullopt;
+uint32_t checksumDependenciesAndSections(
+    const cache::Artifact &artifact, const std::vector<SectionView> &sections) {
+    uint32_t checksum = fnv1a32(artifact.canonical_path) ^ fnv1a32(artifact.module_name) ^
+                        fnv1a32(artifact.semantic_profile.name);
+    for (const auto &dep : artifact.deps) {
+        checksum ^= fnv1a32(dep.canonical_path);
+        checksum ^= fnv1a32(dep.import_key);
+        uint32_t abi[2] = {dep.public_abi_hi, dep.public_abi_lo};
+        checksum ^= fnv1a32(reinterpret_cast<const uint8_t *>(abi), sizeof(abi));
+    }
+    for (const auto &section : sections)
+        checksum ^= fnv1a32(reinterpret_cast<const uint8_t *>(section.payload.data()),
+                            section.payload.size());
+    return checksum;
+}
+
+const SectionView *findSection(const std::vector<SectionView> &sections, SectionId id) {
+    const auto raw_id = static_cast<uint16_t>(id);
+    const auto it = std::find_if(sections.begin(), sections.end(),
+                                 [raw_id](const SectionView &section) {
+                                     return section.entry.id == raw_id;
+                                 });
+    return it == sections.end() ? nullptr : &*it;
+}
+
+bool validateArtifactReferences(const cache::Artifact &artifact) {
+    const auto validStringId = [&](uint32_t id) { return id < artifact.strings.size(); };
+
+    for (const auto &type : artifact.types) {
+        if (type.kind == cache::CompactTypeKind::Pack) {
+            if (!type.arg_names.empty() && type.arg_names.size() != type.args.size())
+                return false;
+            for (const auto name_id : type.arg_names)
+                if (!validStringId(name_id))
+                    return false;
         }
     }
 
-    cache::Artifact out;
-    out.canonical_path = std::move(canonical_path);
-    out.cache_key_hash = cache_key_hash;
-    out.module_id_hi   = mod_hi;
-    out.module_id_lo   = mod_lo;
-    out.source_fp_hi   = src_hi;
-    out.source_fp_lo   = src_lo;
-    out.public_abi_hi  = abi_hi;
-    out.public_abi_lo  = abi_lo;
-
-    if (!r.canReadU32Count(dep_count))
-        return std::nullopt;
-    out.deps.resize(dep_count);
-    for (auto &dep : out.deps) {
-        if (!r.readBlob(dep.canonical_path) || !r.readBlob(dep.import_key) ||
-            !r.readU32(dep.public_abi_hi) || !r.readU32(dep.public_abi_lo))
-            return std::nullopt;
+    for (const auto &definition : artifact.struct_defs) {
+        if (!validStringId(definition.name_id) ||
+            definition.field_name_ids.size() != definition.field_type_ids.size() ||
+            (!definition.foreign_field_offsets.empty() &&
+             definition.foreign_field_offsets.size() != definition.field_type_ids.size()))
+            return false;
+        for (const auto name_id : definition.field_name_ids)
+            if (!validStringId(name_id))
+                return false;
     }
 
-    uint64_t deps_size = 0;
-    for (const auto &dep : out.deps)
-        deps_size += 2 * sizeof(uint32_t) + dep.canonical_path.size() + dep.import_key.size() +
-                     2 * sizeof(uint32_t);
-    const uint64_t recomputed_header_end =
-        static_cast<uint64_t>(sizeof(FileHeader)) + path_len + deps_size +
-        static_cast<uint64_t>(section_count) * sizeof(SectionEntry);
-    const uint64_t table_start =
-        recomputed_header_end - static_cast<uint64_t>(section_count) * sizeof(SectionEntry);
-    if (recomputed_header_end != header_size || r.position() != table_start)
-        return std::nullopt;
-
-    if (section_count != 4 && section_count != 5 && section_count != 6)
-        return std::nullopt;
-    SectionEntry entries[6];
-    const int entry_count = std::min<int>(6, section_count);
-    int i                 = 0;
-    for (; i < entry_count; ++i) {
-        uint64_t off = 0, sz = 0;
-        if (!r.readU64(off) || !r.readU64(sz))
-            return std::nullopt;
-        entries[i] = {off, sz};
+    for (const auto &definition : artifact.enum_defs) {
+        if (!validStringId(definition.name_id))
+            return false;
+        for (const auto &variant : definition.variants)
+            if (!validStringId(variant.name_id))
+                return false;
     }
 
-    const uint8_t *base = reinterpret_cast<const uint8_t *>(bytes.data());
-    const size_t total  = bytes.size();
-    for (i = 0; i < entry_count; ++i) {
-        if (entries[i].offset > total || entries[i].size > total - entries[i].offset)
-            return std::nullopt;
-    }
-    uint32_t calc = 0;
-    calc          = fnv1a32(base + entries[0].offset, static_cast<size_t>(entries[0].size));
-    calc ^= fnv1a32(base + entries[1].offset, static_cast<size_t>(entries[1].size));
-    calc ^= fnv1a32(base + entries[2].offset, static_cast<size_t>(entries[2].size));
-    calc ^= fnv1a32(base + entries[3].offset, static_cast<size_t>(entries[3].size));
-    if (entry_count > 4)
-        calc ^= fnv1a32(base + entries[4].offset, static_cast<size_t>(entries[4].size));
-    if (entry_count > 5)
-        calc ^= fnv1a32(base + entries[5].offset, static_cast<size_t>(entries[5].size));
-    for (const auto &dep : out.deps) {
-        calc ^= fnv1a32(dep.canonical_path);
-        calc ^= fnv1a32(dep.import_key);
-        uint32_t buf[2] = {dep.public_abi_hi, dep.public_abi_lo};
-        calc ^= fnv1a32(reinterpret_cast<const uint8_t *>(buf), sizeof(buf));
-    }
-    if (calc != checksum)
-        return std::nullopt;
+    for (const auto &definition : artifact.union_defs)
+        if (!validStringId(definition.name_id))
+            return false;
 
-    auto sectionView = [&](int section_index) {
-        return std::string_view(
-            reinterpret_cast<const char *>(base + entries[section_index].offset),
-            static_cast<size_t>(entries[section_index].size));
+    for (const auto &expr : artifact.exprs) {
+        const bool needs_name =
+            (expr.kind == cache::CompactExprKind::Literal && expr.flags == 3U) ||
+            expr.kind == cache::CompactExprKind::Let ||
+            expr.kind == cache::CompactExprKind::Var ||
+            expr.kind == cache::CompactExprKind::GlobalConstLoad ||
+            expr.kind == cache::CompactExprKind::ExternalGlobalAddr ||
+            expr.kind == cache::CompactExprKind::MakeDyn ||
+            expr.kind == cache::CompactExprKind::DynCall;
+        if (needs_name && !validStringId(expr.name_id))
+            return false;
+    }
+
+    std::vector<uint32_t> valid_slots;
+    size_t slot_capacity = 0;
+    for (size_t index = 0; index < artifact.functions.size(); ++index) {
+        const auto &function = artifact.functions[index];
+        if (!validStringId(function.name_id) ||
+            function.param_type_ids.size() != function.param_name_ids.size() ||
+            (!function.param_slot_ids.empty() &&
+             function.param_slot_ids.size() != function.param_type_ids.size()))
+            return false;
+        for (const auto name_id : function.param_name_ids)
+            if (!validStringId(name_id))
+                return false;
+        for (const auto slot_id : function.param_slot_ids) {
+            if (slot_id != hir::kInvalidHirSlot)
+                ++slot_capacity;
+        }
+
+        const auto resolved =
+            cache::resolveFunctionReference(artifact, function.name_id,
+                                            function.signature_type_id);
+        if (!resolved || *resolved != index)
+            return false;
+    }
+
+    for (const auto &expr : artifact.exprs)
+        if (expr.kind == cache::CompactExprKind::SlotAlloca)
+            ++slot_capacity;
+
+    const auto appendSlot = [&](uint32_t slot_id) {
+        if (slot_id == hir::kInvalidHirSlot || slot_id >= slot_capacity)
+            return false;
+        valid_slots.push_back(slot_id);
+        return true;
     };
-    ByteReader mr(sectionView(0));
-    if (!decodeTypes(mr, out))
-        return std::nullopt;
-    ByteReader dr(sectionView(1));
-    if (!decodeDecls(dr, out))
-        return std::nullopt;
-    ByteReader tr(sectionView(2));
-    if (!decodeTemplates(tr, out))
-        return std::nullopt;
-    ByteReader cr(sectionView(3));
-    if (!decodeCode(cr, out))
-        return std::nullopt;
-    if (entry_count > 4) {
-        ByteReader ar(sectionView(4));
-        if (!decodeAttrs(ar, out))
-            return std::nullopt;
+    for (const auto &function : artifact.functions)
+        for (const auto slot_id : function.param_slot_ids)
+            if (slot_id != hir::kInvalidHirSlot && !appendSlot(slot_id))
+                return false;
+
+    for (const auto &expr : artifact.exprs) {
+        switch (expr.kind) {
+        case cache::CompactExprKind::SlotAlloca:
+            if (!appendSlot(expr.ref_a))
+                return false;
+            break;
+        case cache::CompactExprKind::SlotStore:
+        case cache::CompactExprKind::SlotLoad:
+        case cache::CompactExprKind::SlotAddr:
+            if (!appendSlot(expr.ref_a))
+                return false;
+            break;
+        case cache::CompactExprKind::Pipe:
+        case cache::CompactExprKind::PipeDo:
+            if (!appendSlot(expr.ref_b))
+                return false;
+            break;
+        case cache::CompactExprKind::PipeCurrent:
+            if (!appendSlot(expr.ref_a))
+                return false;
+            break;
+        default:
+            break;
+        }
     }
-    if (entry_count > 5) {
-        ByteReader ir(sectionView(5));
-        if (!decodeInstantiations(ir, out))
-            return std::nullopt;
+    std::sort(valid_slots.begin(), valid_slots.end());
+    valid_slots.erase(std::unique(valid_slots.begin(), valid_slots.end()), valid_slots.end());
+
+    for (const auto &expr : artifact.exprs) {
+        const bool direct_call = expr.kind == cache::CompactExprKind::Call ||
+                                 expr.kind == cache::CompactExprKind::StateTailCall;
+        if (expr.resolved_function_name_id == ~uint32_t{0} &&
+            expr.resolved_function_signature_type_id == ~uint32_t{0})
+            continue;
+        if (!direct_call ||
+            !cache::resolveFunctionReference(artifact, expr.resolved_function_name_id,
+                                             expr.resolved_function_signature_type_id))
+            return false;
     }
 
-    return out;
+    std::vector<bool> seen_slots(valid_slots.size(), false);
+    std::vector<bool> seen_call_attrs(artifact.exprs.size(), false);
+    std::vector<bool> seen_fn_attrs(artifact.functions.size(), false);
+    for (const auto &slot : artifact.attrs_slots) {
+        const auto found = std::lower_bound(valid_slots.begin(), valid_slots.end(), slot.slot);
+        if (found == valid_slots.end() || *found != slot.slot)
+            return false;
+        const size_t index = static_cast<size_t>(found - valid_slots.begin());
+        if (seen_slots[index])
+            return false;
+        seen_slots[index] = true;
+    }
+    for (const auto &call : artifact.attrs_calls) {
+        if (call.expr_id >= artifact.exprs.size() || seen_call_attrs[call.expr_id])
+            return false;
+        const auto kind = artifact.exprs[call.expr_id].kind;
+        if (kind != cache::CompactExprKind::Call &&
+            kind != cache::CompactExprKind::StateTailCall &&
+            kind != cache::CompactExprKind::DynCall)
+            return false;
+        seen_call_attrs[call.expr_id] = true;
+    }
+    for (const auto &attrs : artifact.attrs_fns) {
+        if (attrs.fn_index >= artifact.functions.size() || seen_fn_attrs[attrs.fn_index])
+            return false;
+        seen_fn_attrs[attrs.fn_index] = true;
+    }
+
+    for (const auto &vtable : artifact.vtables) {
+        if (!validStringId(vtable.name_id) ||
+            vtable.slot_function_name_ids.size() !=
+                vtable.slot_function_signature_type_ids.size())
+            return false;
+        for (size_t slot = 0; slot < vtable.slot_function_name_ids.size(); ++slot) {
+            const auto name_id = vtable.slot_function_name_ids[slot];
+            const auto signature_id = vtable.slot_function_signature_type_ids[slot];
+            if (name_id == ~uint32_t{0} && signature_id == ~uint32_t{0})
+                continue;
+            if (!cache::resolveFunctionReference(artifact, name_id, signature_id))
+                return false;
+        }
+    }
+    for (const auto &global : artifact.globals)
+        if (!validStringId(global.name_id))
+            return false;
+
+    return true;
+}
+
+bool readFrontendIdentity(ByteReader &reader, cache::FrontendIdentity &identity) {
+    return reader.readBlob(identity.dialect) && reader.readBlob(identity.implementation) &&
+           reader.readBlob(identity.version) && reader.empty();
+}
+
+} // namespace
+
+std::optional<cache::Artifact> Reader::read(std::string_view bytes) {
+    if (bytes.size() < kFixedHeaderSize)
+        return std::nullopt;
+
+    ByteReader reader(bytes);
+    uint32_t magic = 0, container_version = 0, hir_schema_version = 0;
+    uint8_t endianness = 0, reserved = 0;
+    uint16_t section_count = 0;
+    uint32_t header_size = 0, checksum = 0;
+    uint64_t required_features = 0, optional_features = 0;
+    uint64_t source_fp_primary = 0, source_fp_secondary = 0;
+    uint32_t semantic_profile_version = 0, public_abi_hi = 0, public_abi_lo = 0;
+    uint32_t dep_count = 0, decl_count = 0, template_count = 0, fn_count = 0;
+    uint32_t canonical_path_len = 0, module_name_len = 0, profile_name_len = 0;
+    if (!reader.readU32(magic) || !reader.readU32(container_version) ||
+        !reader.readU32(hir_schema_version) || !reader.readU8(endianness) ||
+        !reader.readU8(reserved) || !reader.readU16(section_count) ||
+        !reader.readU32(header_size) || !reader.readU32(checksum) ||
+        !reader.readU64(required_features) || !reader.readU64(optional_features) ||
+        !reader.readU64(source_fp_primary) || !reader.readU64(source_fp_secondary) ||
+        !reader.readU32(semantic_profile_version) || !reader.readU32(public_abi_hi) ||
+        !reader.readU32(public_abi_lo) || !reader.readU32(dep_count) ||
+        !reader.readU32(decl_count) || !reader.readU32(template_count) ||
+        !reader.readU32(fn_count) || !reader.readU32(canonical_path_len) ||
+        !reader.readU32(module_name_len) || !reader.readU32(profile_name_len))
+        return std::nullopt;
+
+    if (magic != kMagic || container_version != kContainerVersion ||
+        hir_schema_version != cache::kHirSchemaVersion || endianness != kEndianLittle ||
+        reserved != 0 || header_size > bytes.size() || header_size < kFixedHeaderSize ||
+        (required_features & cache::kRequiredHirFeatures) != cache::kRequiredHirFeatures ||
+        (required_features & ~cache::kRequiredHirFeatures) != 0)
+        return std::nullopt;
+
+    cache::Artifact artifact;
+    artifact.hir_schema_version = hir_schema_version;
+    artifact.required_features = required_features;
+    artifact.optional_features = optional_features;
+    artifact.source_fingerprint = {source_fp_primary, source_fp_secondary};
+    artifact.semantic_profile.version = semantic_profile_version;
+    artifact.public_abi_hi = public_abi_hi;
+    artifact.public_abi_lo = public_abi_lo;
+
+    const auto readRawString = [&](uint32_t length, std::string &destination) {
+        if (length > reader.remaining())
+            return false;
+        destination.assign(bytes.data() + reader.position(), length);
+        for (uint32_t i = 0; i < length; ++i) {
+            uint8_t ignored = 0;
+            if (!reader.readU8(ignored))
+                return false;
+        }
+        return true;
+    };
+    if (!readRawString(canonical_path_len, artifact.canonical_path) ||
+        !readRawString(module_name_len, artifact.module_name) ||
+        !readRawString(profile_name_len, artifact.semantic_profile.name) ||
+        artifact.canonical_path.empty() || artifact.semantic_profile.name.empty())
+        return std::nullopt;
+    artifact.module_identity.path = artifact.canonical_path;
+
+    if (!reader.canReadU32Count(dep_count, 16U))
+        return std::nullopt;
+    artifact.deps.resize(dep_count);
+    for (auto &dep : artifact.deps)
+        if (!reader.readBlob(dep.canonical_path) || !reader.readBlob(dep.import_key) ||
+            !reader.readU32(dep.public_abi_hi) || !reader.readU32(dep.public_abi_lo))
+            return std::nullopt;
+
+    const uint64_t table_size = static_cast<uint64_t>(section_count) * kSectionEntrySize;
+    if (reader.position() > header_size || table_size != header_size - reader.position() ||
+        !reader.canReadU32Count(section_count, kSectionEntrySize))
+        return std::nullopt;
+
+    std::vector<SectionEntry> entries;
+    entries.reserve(section_count);
+    for (uint16_t index = 0; index < section_count; ++index) {
+        SectionEntry entry;
+        if (!reader.readU16(entry.id) || !reader.readU16(entry.flags) ||
+            !reader.readU16(entry.schema_version) || !reader.readU16(entry.reserved) ||
+            !reader.readU64(entry.offset) || !reader.readU64(entry.size))
+            return std::nullopt;
+        if (entry.id == 0 || entry.reserved != 0 ||
+            (entry.flags & ~kKnownSectionFlags) != 0 ||
+            entry.offset < header_size || entry.offset > bytes.size() ||
+            entry.size > bytes.size() - entry.offset || entry.schema_version == 0)
+            return std::nullopt;
+        if (std::any_of(entries.begin(), entries.end(),
+                        [&entry](const SectionEntry &existing) { return existing.id == entry.id; }))
+            return std::nullopt;
+        entries.push_back(entry);
+    }
+    if (reader.position() != header_size)
+        return std::nullopt;
+
+    std::vector<SectionView> sections;
+    sections.reserve(entries.size());
+    for (const auto &entry : entries) {
+        const bool known_required =
+            std::any_of(kRequiredSections.begin(), kRequiredSections.end(),
+                        [&entry](SectionId id) { return entry.id == static_cast<uint16_t>(id); });
+        const bool known_optional =
+            entry.id == static_cast<uint16_t>(SectionId::Instantiations) ||
+            entry.id == static_cast<uint16_t>(SectionId::FrontendProvenance);
+        if (!known_required && !known_optional && (entry.flags & kSectionFlagRequired) != 0)
+            return std::nullopt;
+        if (known_required && (entry.flags & kSectionFlagRequired) == 0)
+            return std::nullopt;
+        if (known_optional && (entry.flags & kSectionFlagRequired) != 0)
+            return std::nullopt;
+
+        const auto payload = bytes.substr(static_cast<size_t>(entry.offset),
+                                          static_cast<size_t>(entry.size));
+        sections.push_back({entry, payload});
+    }
+
+    std::sort(sections.begin(), sections.end(),
+              [](const SectionView &a, const SectionView &b) {
+                  return a.entry.offset < b.entry.offset;
+              });
+    uint64_t previous_end = header_size;
+    for (const auto &section : sections) {
+        if (section.entry.offset < previous_end)
+            return std::nullopt;
+        previous_end = section.entry.offset + section.entry.size;
+    }
+    if (previous_end != bytes.size())
+        return std::nullopt;
+
+    if (checksumDependenciesAndSections(artifact, sections) != checksum)
+        return std::nullopt;
+
+    for (const auto required : kRequiredSections)
+        if (findSection(sections, required) == nullptr)
+            return std::nullopt;
+
+    const auto decodeRequired = [&](SectionId id, auto decode) {
+        const auto *section = findSection(sections, id);
+        if (section == nullptr || section->entry.schema_version != kSectionSchemaVersion)
+            return false;
+        ByteReader section_reader(section->payload);
+        return decode(section_reader) && section_reader.empty();
+    };
+    if (!decodeRequired(SectionId::Metadata,
+                        [&](ByteReader &r) { return decodeTypes(r, artifact); }) ||
+        !decodeRequired(SectionId::Decls,
+                        [&](ByteReader &r) { return decodeDecls(r, artifact); }) ||
+        !decodeRequired(SectionId::Templates,
+                        [&](ByteReader &r) { return decodeTemplates(r, artifact); }) ||
+        !decodeRequired(SectionId::Code,
+                        [&](ByteReader &r) { return decodeCode(r, artifact); }) ||
+        !decodeRequired(SectionId::Attrs,
+                        [&](ByteReader &r) { return decodeAttrs(r, artifact); }))
+        return std::nullopt;
+
+    if (artifact.decls.size() != decl_count || artifact.templates.size() != template_count ||
+        artifact.functions.size() != fn_count)
+        return std::nullopt;
+
+    for (const auto &section : sections) {
+        if (section.entry.id == static_cast<uint16_t>(SectionId::Instantiations)) {
+            if (section.entry.schema_version != kSectionSchemaVersion)
+                continue;
+            ByteReader section_reader(section.payload);
+            if (!decodeInstantiations(section_reader, artifact) || !section_reader.empty())
+                return std::nullopt;
+        } else if (section.entry.id == static_cast<uint16_t>(SectionId::FrontendProvenance)) {
+            if (section.entry.schema_version != kSectionSchemaVersion)
+                continue;
+            ByteReader section_reader(section.payload);
+            if (!readFrontendIdentity(section_reader, artifact.frontend_identity))
+                return std::nullopt;
+        } else if (section.entry.id >
+                   static_cast<uint16_t>(SectionId::FrontendProvenance)) {
+            cache::Artifact::OptionalSection optional;
+            optional.id = section.entry.id;
+            optional.schema_version = section.entry.schema_version;
+            optional.payload.assign(
+                reinterpret_cast<const uint8_t *>(section.payload.data()),
+                reinterpret_cast<const uint8_t *>(section.payload.data()) +
+                    section.payload.size());
+            artifact.optional_sections.push_back(std::move(optional));
+        }
+    }
+
+    if (!validateArtifactReferences(artifact))
+        return std::nullopt;
+    return artifact;
 }
 
 } // namespace zith::zirl

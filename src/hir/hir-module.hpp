@@ -10,6 +10,41 @@
 
 namespace zith::hir {
 
+using HirDeclarationId = uint32_t;
+
+inline constexpr HirDeclarationId kInvalidHirDeclaration = ~HirDeclarationId{0};
+
+enum class HirDeclarationKind : uint8_t {
+    Function,
+    Struct,
+    Trait,
+    Interface,
+    Enum,
+    Alias,
+    Variable,
+    Module,
+    Component,
+    Union,
+    Asset,
+    Word,
+    Context,
+};
+
+enum class HirVisibility : uint8_t { Private, Public, Module };
+
+/// Frontend-neutral declaration metadata needed by cache and tooling consumers.
+struct HirDeclaration {
+    memory::InternedId name = memory::kInvalidInternedId;
+    HirDeclarationKind kind = HirDeclarationKind::Variable;
+    HirVisibility visibility = HirVisibility::Private;
+    int32_t module_depth = 0;
+    HirTypeId type = types::kInvalidType;
+    bool discardable = false;
+    memory::DynArray<HirDeclarationId> members;
+
+    explicit HirDeclaration(memory::Arena &arena) : members(arena) {}
+};
+
 struct HirBasicBlock {
     memory::DynArray<HirExprId> insts;
     HirExprId terminator = kInvalidHirExpr;
@@ -75,6 +110,7 @@ struct HirVTable {
 class HirModule {
     memory::DynArray<HirExpr> exprs_;
     memory::DynArray<HirFunction> fns_;
+    memory::DynArray<HirDeclaration> declarations_;
     memory::DynArray<HirGlobalConst> globals_;
     memory::DynArray<HirVTable> vtables_;
     HirAttrs attrs_;
@@ -86,6 +122,12 @@ public:
 
     HirExprId addExpr(HirExpr expr);
     HirFunction &addFn(memory::InternedId name);
+    HirDeclaration &addDeclaration();
+    HirDeclaration &getDeclaration(size_t idx);
+    const HirDeclaration &getDeclaration(size_t idx) const;
+    [[nodiscard]] size_t declarationCount() const noexcept {
+        return declarations_.size();
+    }
     HirFunction &getFn(size_t idx);
     HirGlobalConst &addGlobalConst();
     size_t getGlobalConstCount() const noexcept {

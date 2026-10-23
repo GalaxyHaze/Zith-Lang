@@ -7,6 +7,7 @@
 #include "sema/nra-facts.hpp"
 #include "sema/op-mapping.hpp"
 #include "support/int-literal.hpp"
+#include "symbols/symbol-table.hpp"
 
 #include "types/type-kind.hpp"
 
@@ -20,16 +21,116 @@ namespace modern {
 
 HirLowerModern::HirLowerModern(memory::Arena &arena, diagnostics::DiagnosticEngine &diags,
                                const session::CompilationSnapshot &snapshot, SemaPipeline &sema,
-                               types::TypeIntern &types, memory::StringInterner &interner,
-                               const NraFacts *nra, cache::Store *cache_store)
-    : arena_(arena), diags_(diags), snapshot_(snapshot), sema_(sema), types_(types),
-      interner_(interner), nra_(nra), hir_(arena), lowered_types_(), function_index_by_key_(),
-      cache_store_(cache_store) {}
+                               const symbols::SymbolTable &symbols, types::TypeIntern &types,
+                               memory::StringInterner &interner, const NraFacts *nra,
+                               cache::Store *cache_store)
+    : arena_(arena), diags_(diags), snapshot_(snapshot), sema_(sema), symbols_(symbols),
+      types_(types), interner_(interner), nra_(nra), hir_(arena), lowered_types_(),
+      function_index_by_key_(), cache_store_(cache_store) {}
 
 bool HirLowerModern::run() {
     registerForeignRecords();
-    return predeclareGlobalConsts() && predeclareFunctions() && lowerFunctionBodies() &&
-           !diags_.hasErrors();
+    if (!predeclareGlobalConsts() || !predeclareFunctions() || !lowerFunctionBodies() ||
+        diags_.hasErrors())
+        return false;
+    populateHirDeclarations();
+    return !diags_.hasErrors();
+}
+
+void HirLowerModern::populateHirDeclarations() {
+    memory::FlatMap<symbols::SymId, hir::HirDeclarationId> declaration_ids;
+    for (symbols::SymId symbol_id = 0;
+         symbol_id < static_cast<symbols::SymId>(symbols_.symbolCount()); ++symbol_id) {
+        const auto &symbol = symbols_.get(symbol_id);
+
+        auto &declaration = hir_.addDeclaration();
+        declaration.name = symbol.name;
+        switch (symbol.visibility) {
+        case symbols::SymbolVisibility::Private:
+            declaration.visibility = hir::HirVisibility::Private;
+            break;
+        case symbols::SymbolVisibility::Public:
+            declaration.visibility = hir::HirVisibility::Public;
+            break;
+        case symbols::SymbolVisibility::Module:
+            declaration.visibility = hir::HirVisibility::Module;
+            break;
+        }
+        declaration.module_depth = symbol.mod_depth;
+        declaration.discardable = symbol.discardable;
+        switch (symbol.kind) {
+        case symbols::SymKind::Fn:
+            declaration.kind = hir::HirDeclarationKind::Function;
+            break;
+        case symbols::SymKind::Struct:
+            declaration.kind = hir::HirDeclarationKind::Struct;
+            break;
+        case symbols::SymKind::Trait:
+            declaration.kind = hir::HirDeclarationKind::Trait;
+            break;
+        case symbols::SymKind::Interface:
+            declaration.kind = hir::HirDeclarationKind::Interface;
+            break;
+        case symbols::SymKind::Enum:
+            declaration.kind = hir::HirDeclarationKind::Enum;
+            break;
+        case symbols::SymKind::Alias:
+            declaration.kind = hir::HirDeclarationKind::Alias;
+            break;
+        case symbols::SymKind::Variable:
+            declaration.kind = hir::HirDeclarationKind::Variable;
+            break;
+        case symbols::SymKind::Module:
+            declaration.kind = hir::HirDeclarationKind::Module;
+            break;
+        case symbols::SymKind::Component:
+            declaration.kind = hir::HirDeclarationKind::Component;
+            break;
+        case symbols::SymKind::Union:
+            declaration.kind = hir::HirDeclarationKind::Union;
+            break;
+        case symbols::SymKind::Asset:
+            declaration.kind = hir::HirDeclarationKind::Asset;
+            break;
+        case symbols::SymKind::Word:
+            declaration.kind = hir::HirDeclarationKind::Word;
+            break;
+        case symbols::SymKind::Context:
+            declaration.kind = hir::HirDeclarationKind::Context;
+            break;
+        }
+
+        auto type_name = symbol.name;
+        if (symbol.kind == symbols::SymKind::Fn && symbol.target != symbols::kInvalidSym) {
+            const auto &target = symbols_.get(symbol.target);
+            if (target.kind == symbols::SymKind::Variable)
+                type_name = target.name;
+        }
+        const auto type_id = types_.lookupNamedType(interner_.lookup(type_name));
+        if (type_id != types::kErrorType)
+            declaration.type = type_id;
+
+        declaration_ids[symbol_id] =
+            static_cast<hir::HirDeclarationId>(hir_.declarationCount() - 1U);
+    }
+
+    for (symbols::SymId symbol_id = 0;
+         symbol_id < static_cast<symbols::SymId>(symbols_.symbolCount()); ++symbol_id) {
+        const auto *declaration_id = declaration_ids.get(symbol_id);
+        if (declaration_id == nullptr)
+            continue;
+        const auto &symbol = symbols_.get(symbol_id);
+        if (symbol.kind != symbols::SymKind::Struct &&
+            symbol.kind != symbols::SymKind::Union &&
+            symbol.kind != symbols::SymKind::Component)
+            continue;
+
+        auto &declaration = hir_.getDeclaration(*declaration_id);
+        for (const auto member_id : symbol.members) {
+            if (const auto *member = declaration_ids.get(member_id))
+                declaration.members.push(*member);
+        }
+    }
 }
 
 void HirLowerModern::registerForeignRecords() {

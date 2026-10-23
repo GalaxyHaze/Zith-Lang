@@ -36,46 +36,60 @@ std::vector<std::string> genericArgsFromName(std::string_view mangled) {
     return args;
 }
 
-CompactSymKind mapSymKind(symbols::SymKind k) {
-    switch (k) {
-    case symbols::SymKind::Fn:
+CompactSymKind mapDeclKind(hir::HirDeclarationKind kind) {
+    switch (kind) {
+    case hir::HirDeclarationKind::Function:
         return CompactSymKind::Fn;
-    case symbols::SymKind::Struct:
+    case hir::HirDeclarationKind::Struct:
         return CompactSymKind::Struct;
-    case symbols::SymKind::Trait:
+    case hir::HirDeclarationKind::Trait:
         return CompactSymKind::Trait;
-    case symbols::SymKind::Interface:
+    case hir::HirDeclarationKind::Interface:
         return CompactSymKind::Interface;
-    case symbols::SymKind::Enum:
+    case hir::HirDeclarationKind::Enum:
         return CompactSymKind::Enum;
-    case symbols::SymKind::Alias:
+    case hir::HirDeclarationKind::Alias:
         return CompactSymKind::Alias;
-    case symbols::SymKind::Variable:
+    case hir::HirDeclarationKind::Variable:
         return CompactSymKind::Variable;
-    case symbols::SymKind::Module:
+    case hir::HirDeclarationKind::Module:
         return CompactSymKind::Module;
-    case symbols::SymKind::Component:
+    case hir::HirDeclarationKind::Component:
         return CompactSymKind::Component;
-    case symbols::SymKind::Union:
+    case hir::HirDeclarationKind::Union:
         return CompactSymKind::Union;
-    case symbols::SymKind::Asset:
+    case hir::HirDeclarationKind::Asset:
         return CompactSymKind::Asset;
-    case symbols::SymKind::Word:
+    case hir::HirDeclarationKind::Word:
         return CompactSymKind::Word;
-    case symbols::SymKind::Context:
+    case hir::HirDeclarationKind::Context:
         return CompactSymKind::Context;
     }
     return CompactSymKind::Variable;
 }
 
+CompactVisibility mapVisibility(hir::HirVisibility visibility) {
+    switch (visibility) {
+    case hir::HirVisibility::Private:
+        return CompactVisibility::Private;
+    case hir::HirVisibility::Public:
+        return CompactVisibility::Public;
+    case hir::HirVisibility::Module:
+        return CompactVisibility::Module;
+    }
+    return CompactVisibility::Private;
+}
+
 } // namespace
 
-ArtifactBuilder::ArtifactBuilder(const symbols::SymbolTable &syms, const types::TypeIntern &types,
-                                 const hir::HirModule &hir, const memory::StringInterner &interner,
-                                 const session::ContentFingerprint &source_fp,
-                                 const session::CacheKey &cache_key)
-    : syms_(syms), types_(types), hir_(hir), interner_(interner), source_fp_(source_fp),
-      cache_key_hash_(zith::zirl::fnv1a32(cache_key.identity())) {}
+ArtifactBuilder::ArtifactBuilder(const types::TypeIntern &types, const hir::HirModule &hir,
+                                 const memory::StringInterner &interner,
+                                 ContentFingerprint source_fingerprint,
+                                 FrontendIdentity frontend_identity,
+                                 SemanticCompatibilityProfile semantic_profile)
+    : types_(types), hir_(hir), interner_(interner),
+      source_fingerprint_(source_fingerprint), frontend_identity_(std::move(frontend_identity)),
+      semantic_profile_(std::move(semantic_profile)) {}
 
 uint32_t ArtifactBuilder::internString(std::string_view s) {
     if (s.empty())
@@ -186,7 +200,7 @@ CompactType ArtifactBuilder::convertType(types::TypeId id) {
                 return CompactTypeKind::Union;
             },
             [&](const types::TypeGenericParam &t) {
-                out.ref0 = t.decl_id;
+                out.ref0 = internString(types_.genericParamOwnerName(t.owner_name));
                 out.ref1 = t.param_index;
                 return CompactTypeKind::GenericParam;
             },
@@ -250,6 +264,26 @@ uint32_t ArtifactBuilder::internType(types::TypeId id) {
     return compact_id;
 }
 
+uint32_t ArtifactBuilder::internFunctionSignature(const hir::HirFunction &function) {
+    CompactType signature;
+    signature.kind = CompactTypeKind::Fn;
+    signature.ref0 = internType(function.return_type);
+    if (function.isVariadic)
+        signature.flags |= kFunctionSignatureVariadic;
+    if (function.isState)
+        signature.flags |= kFunctionSignatureState;
+    if (function.isForeignC)
+        signature.flags |= kFunctionSignatureForeignC;
+    if (function.usesTailCC)
+        signature.flags |= kFunctionSignatureTailCC;
+    for (const auto parameter_type : function.params)
+        signature.args.push_back(internType(parameter_type));
+
+    const auto signature_id = static_cast<uint32_t>(compact_types_.size());
+    compact_types_.push_back(std::move(signature));
+    return signature_id;
+}
+
 CompactExpr ArtifactBuilder::convertExpr(hir::HirExprId id) {
     CompactExpr out;
     const auto &expr = hir_.getExpr(id);
@@ -307,9 +341,13 @@ CompactExpr ArtifactBuilder::convertExpr(hir::HirExprId id) {
                        [&](const hir::HirCall &call) {
                            out.kind  = CompactExprKind::Call;
                            out.ref_a = call.callee;
-                           out.ref_b = call.resolved_fn == hir::kInvalidHirFunction
-                                           ? ~uint32_t{0}
-                                           : call.resolved_fn + 1U;
+                           if (call.resolved_fn < hir_.getFnCount()) {
+                               out.resolved_function_name_id = internString(interner_.lookup(
+                                   hir_.getFn(call.resolved_fn).name));
+                               if (call.resolved_fn < function_signature_type_ids_.size())
+                                   out.resolved_function_signature_type_id =
+                                       function_signature_type_ids_[call.resolved_fn];
+                           }
                            out.ref_e = internType(call.fn_type);
                            out.flags = (call.musttail ? 1U : 0U) | (call.usesTailCC ? 2U : 0U);
                            for (auto arg : call.args)
@@ -451,9 +489,13 @@ CompactExpr ArtifactBuilder::convertExpr(hir::HirExprId id) {
                        [&](const hir::HirStateTailCall &tail) {
                            out.kind  = CompactExprKind::StateTailCall;
                            out.ref_a = tail.call.callee;
-                           out.ref_b = tail.call.resolved_fn == hir::kInvalidHirFunction
-                                           ? ~uint32_t{0}
-                                           : tail.call.resolved_fn + 1U;
+                           if (tail.call.resolved_fn < hir_.getFnCount()) {
+                               out.resolved_function_name_id = internString(interner_.lookup(
+                                   hir_.getFn(tail.call.resolved_fn).name));
+                               if (tail.call.resolved_fn < function_signature_type_ids_.size())
+                                   out.resolved_function_signature_type_id =
+                                       function_signature_type_ids_[tail.call.resolved_fn];
+                           }
                            out.ref_e = internType(tail.call.fn_type);
                            out.flags = tail.call.usesTailCC ? 2U : 0U;
                            for (auto arg : tail.call.args)
@@ -553,18 +595,18 @@ CompactExpr ArtifactBuilder::convertExpr(hir::HirExprId id) {
 uint64_t ArtifactBuilder::computePublicAbiHash() const {
     std::ostringstream primary;
     std::ostringstream secondary;
-    for (symbols::SymId id = 0; id < static_cast<symbols::SymId>(syms_.symbolCount()); ++id) {
-        const auto &sym = syms_.get(id);
-        if (sym.visibility != symbols::SymbolVisibility::Public &&
-            sym.visibility != symbols::SymbolVisibility::Module)
+    for (size_t id = 0; id < hir_.declarationCount(); ++id) {
+        const auto &decl = hir_.getDeclaration(id);
+        if (decl.visibility != hir::HirVisibility::Public &&
+            decl.visibility != hir::HirVisibility::Module)
             continue;
-        const auto name = interner_.lookup(sym.name);
-        primary << name << '\x1f' << static_cast<int>(sym.kind) << '\x1f'
-                << static_cast<int>(sym.visibility) << '\x1f' << sym.mod_depth << '\x1f'
-                << (sym.discardable ? 1 : 0) << '\n';
-        secondary << static_cast<int>(sym.mod_depth) << '\x1f' << static_cast<int>(sym.visibility)
-                  << '\x1f' << static_cast<int>(sym.kind) << '\x1f' << name << '\x1f'
-                  << (sym.discardable ? 1 : 0) << '\n';
+        const auto name = interner_.lookup(decl.name);
+        const auto kind = static_cast<int>(mapDeclKind(decl.kind));
+        const auto visibility = static_cast<int>(mapVisibility(decl.visibility));
+        primary << name << '\x1f' << kind << '\x1f' << visibility << '\x1f'
+                << decl.module_depth << '\x1f' << (decl.discardable ? 1 : 0) << '\n';
+        secondary << decl.module_depth << '\x1f' << visibility << '\x1f' << kind << '\x1f'
+                  << name << '\x1f' << (decl.discardable ? 1 : 0) << '\n';
     }
     const uint32_t hi = zith::zirl::fnv1a32(primary.str());
     const uint32_t lo = zith::zirl::fnv1a32(secondary.str());
@@ -575,66 +617,57 @@ Artifact ArtifactBuilder::build(std::string_view canonical_path, std::string_vie
                                 const std::vector<DependencyRecord> &deps) {
     Artifact art;
     art.canonical_path = std::string(canonical_path);
+    art.module_identity.path = art.canonical_path;
     art.module_name    = std::string(module_name);
+    art.frontend_identity = frontend_identity_;
+    art.semantic_profile = semantic_profile_;
+    art.hir_schema_version = kHirSchemaVersion;
+    art.source_fingerprint = source_fingerprint_;
     for (const auto &mapping : types_.canonicalTagSnapshot()) {
         art.canonical_mappings.push_back(
             CompactCanonicalMapping{mapping.id.hi, mapping.id.lo, mapping.tag});
     }
-    art.cache_key_hash = cache_key_hash_;
-    art.source_fp_hi   = static_cast<uint32_t>(source_fp_.primary >> 32u);
-    art.source_fp_lo   = static_cast<uint32_t>(source_fp_.primary & 0xFFFFFFFFu);
-
     const uint64_t abi = computePublicAbiHash();
     art.public_abi_hi  = static_cast<uint32_t>(abi >> 32u);
     art.public_abi_lo  = static_cast<uint32_t>(abi & 0xFFFFFFFFu);
 
-    const uint32_t name_hash = zith::zirl::fnv1a32(module_name);
-    art.module_id_hi         = name_hash ^ art.public_abi_hi;
-    art.module_id_lo         = zith::zirl::fnv1a32(canonical_path) ^ art.public_abi_lo;
-
     art.deps = deps;
 
-    // Collect exported/module-visible declarations.
-    memory::FlatMap<symbols::SymId, size_t> sym_to_decl;
-    std::vector<symbols::SymId> decl_sym_ids;
-    decl_sym_ids.reserve(syms_.symbolCount());
-    for (symbols::SymId id = 0; id < static_cast<symbols::SymId>(syms_.symbolCount()); ++id) {
-        const auto &sym = syms_.get(id);
-        if (sym.visibility != symbols::SymbolVisibility::Public &&
-            sym.visibility != symbols::SymbolVisibility::Module)
-            continue;
-        sym_to_decl[id] = art.decls.size();
-        decl_sym_ids.push_back(id);
+    // Persist all declarations so hydration rebuilds the complete HIR module;
+    // public ABI consumers still filter by visibility.
+    std::vector<uint32_t> hir_decl_to_artifact(hir_.declarationCount(), ~uint32_t{0});
+    std::vector<hir::HirDeclarationId> artifact_to_hir_decl;
+    for (hir::HirDeclarationId id = 0; id < hir_.declarationCount(); ++id) {
+        const auto &hir_decl = hir_.getDeclaration(id);
+
         DeclRecord decl;
-        decl.name       = std::string(interner_.lookup(sym.name));
-        decl.name_id    = internString(interner_.lookup(sym.name));
-        decl.kind       = mapSymKind(sym.kind);
-        decl.visibility = sym.visibility;
-        decl.mod_depth  = sym.mod_depth;
+        const auto name = interner_.lookup(hir_decl.name);
+        decl.name = std::string(name);
+        decl.name_id = internString(name);
+        decl.kind = mapDeclKind(hir_decl.kind);
+        decl.visibility = mapVisibility(hir_decl.visibility);
+        decl.mod_depth = hir_decl.module_depth;
+        decl.discardable = hir_decl.discardable;
+        hir_decl_to_artifact[id] = static_cast<uint32_t>(art.decls.size());
+        artifact_to_hir_decl.push_back(id);
         art.decls.push_back(std::move(decl));
         auto &out_decl = art.decls.back();
 
-        if (sym.kind == symbols::SymKind::Fn && sym.target != symbols::kInvalidSym) {
-            const auto &target = syms_.get(sym.target);
-            if (target.kind == symbols::SymKind::Variable) {
-                const auto fn_type = types_.lookupNamedType(interner_.lookup(target.name));
-                if (fn_type != types::kErrorType)
-                    out_decl.type_id = internType(fn_type);
-            }
-        } else {
-            const auto type_id = types_.lookupNamedType(interner_.lookup(sym.name));
-            if (type_id != types::kErrorType)
-                out_decl.type_id = internType(type_id);
-        }
+        const auto type_id = hir_decl.type != types::kInvalidType
+                                 ? hir_decl.type
+                                 : types_.lookupNamedType(name);
+        if (type_id != types::kErrorType && type_id != types::kInvalidType)
+            out_decl.type_id = internType(type_id);
 
-        const auto type_id = types_.lookupNamedType(interner_.lookup(sym.name));
-        if (sym.kind == symbols::SymKind::Struct || sym.kind == symbols::SymKind::Union ||
-            sym.kind == symbols::SymKind::Component) {
+        if (hir_decl.kind == hir::HirDeclarationKind::Struct ||
+            hir_decl.kind == hir::HirDeclarationKind::Union ||
+            hir_decl.kind == hir::HirDeclarationKind::Component) {
             uint32_t def_id = ~uint32_t{0};
-            if (const auto *td = std::get_if<types::TypeStruct>(&types_.lookup(type_id)))
-                def_id = td->def_id;
-            else if (const auto *ud = std::get_if<types::TypeUnion>(&types_.lookup(type_id))) {
-                def_id = ud->def_id;
+            if (type_id != types::kErrorType && type_id != types::kInvalidType) {
+                if (const auto *td = std::get_if<types::TypeStruct>(&types_.lookup(type_id)))
+                    def_id = td->def_id;
+                else if (const auto *ud = std::get_if<types::TypeUnion>(&types_.lookup(type_id)))
+                    def_id = ud->def_id;
             }
             if (def_id != ~uint32_t{0}) {
                 if (const auto *sd = types_.lookupStructDef(def_id)) {
@@ -650,7 +683,7 @@ Artifact ArtifactBuilder::build(std::string_view canonical_path, std::string_vie
             }
         }
 
-        if (sym.kind == symbols::SymKind::Enum) {
+        if (hir_decl.kind == hir::HirDeclarationKind::Enum) {
             const auto *ed = std::get_if<types::TypeEnum>(&types_.lookup(type_id));
             if (ed != nullptr) {
                 const auto *def = types_.lookupEnumDef(ed->def_id);
@@ -667,19 +700,21 @@ Artifact ArtifactBuilder::build(std::string_view canonical_path, std::string_vie
     // guess at session-local SymbolTable ids.
     for (size_t di = 0; di < art.decls.size(); ++di) {
         const auto &decl = art.decls[di];
-        const auto id    = decl_sym_ids[di];
-        if (decl.kind != cache::CompactSymKind::Struct &&
-            decl.kind != cache::CompactSymKind::Union &&
-            decl.kind != cache::CompactSymKind::Component)
+        if (decl.kind != CompactSymKind::Struct && decl.kind != CompactSymKind::Union &&
+            decl.kind != CompactSymKind::Component)
             continue;
         auto &out_decl = art.decls[di];
-        for (const auto member_id : syms_.get(id).members) {
-            if (const auto *decl_index = sym_to_decl.get(member_id))
-                out_decl.method_decl_indices.push_back(static_cast<uint32_t>(*decl_index));
+        const auto &hir_decl = hir_.getDeclaration(artifact_to_hir_decl[di]);
+        for (const auto member_id : hir_decl.members) {
+            if (member_id < hir_decl_to_artifact.size() &&
+                hir_decl_to_artifact[member_id] != ~uint32_t{0})
+                out_decl.method_decl_indices.push_back(hir_decl_to_artifact[member_id]);
         }
     }
 
     // Extract concrete HIR functions into the code section.
+    function_signature_type_ids_.clear();
+    function_signature_type_ids_.reserve(hir_.getFnCount());
     for (size_t fi = 0; fi < hir_.getFnCount(); ++fi) {
         const auto &fn = hir_.getFn(fi);
         CompactFunction cfn;
@@ -696,10 +731,10 @@ Artifact ArtifactBuilder::build(std::string_view canonical_path, std::string_vie
                                          ? ~uint32_t{0}
                                          : static_cast<uint32_t>(fn.variadicSliceParam);
         cfn.machine_id             = fn.machineId;
+        cfn.return_type_id         = internType(fn.return_type);
         cfn.machine_return_type_id = fn.machineReturnType != types::kInvalidType
                                          ? internType(fn.machineReturnType)
                                          : cfn.return_type_id;
-        cfn.return_type_id         = internType(fn.return_type);
         const auto angle           = cfn.name.find('<');
         if (angle != std::string::npos) {
             InstantiationRecord rec;
@@ -717,6 +752,8 @@ Artifact ArtifactBuilder::build(std::string_view canonical_path, std::string_vie
                                              ? static_cast<uint32_t>(fn.param_slots[pi])
                                              : hir::kInvalidHirSlot);
         }
+        cfn.signature_type_id = internFunctionSignature(fn);
+        function_signature_type_ids_.push_back(cfn.signature_type_id);
         for (size_t bi = 0; bi < fn.blocks.size(); ++bi) {
             const auto &blk = fn.blocks[bi];
             CompactBasicBlock cblk;
@@ -747,8 +784,17 @@ Artifact ArtifactBuilder::build(std::string_view canonical_path, std::string_vie
         const auto &vtable = hir_.getVTable(vi);
         CompactVTable cv;
         cv.name_id = internString(interner_.lookup(vtable.name));
-        for (const auto function_id : vtable.slots)
-            cv.slot_function_ids.push_back(function_id + 1U);
+        for (const auto function_id : vtable.slots) {
+            if (function_id < hir_.getFnCount()) {
+                cv.slot_function_name_ids.push_back(
+                    internString(interner_.lookup(hir_.getFn(function_id).name)));
+                cv.slot_function_signature_type_ids.push_back(
+                    function_signature_type_ids_[function_id]);
+            } else {
+                cv.slot_function_name_ids.push_back(~uint32_t{0});
+                cv.slot_function_signature_type_ids.push_back(~uint32_t{0});
+            }
+        }
         art.vtables.push_back(std::move(cv));
     }
 

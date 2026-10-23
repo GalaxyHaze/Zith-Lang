@@ -15,6 +15,58 @@
 
 namespace zith::session {
 
+namespace {
+
+cache::ContentFingerprint cacheFingerprint(const ContentFingerprint &fingerprint) {
+    return {fingerprint.primary, fingerprint.secondary};
+}
+
+symbols::SymKind symbolKind(cache::CompactSymKind kind) {
+    switch (kind) {
+    case cache::CompactSymKind::Fn:
+        return symbols::SymKind::Fn;
+    case cache::CompactSymKind::Struct:
+        return symbols::SymKind::Struct;
+    case cache::CompactSymKind::Trait:
+        return symbols::SymKind::Trait;
+    case cache::CompactSymKind::Interface:
+        return symbols::SymKind::Interface;
+    case cache::CompactSymKind::Enum:
+        return symbols::SymKind::Enum;
+    case cache::CompactSymKind::Alias:
+        return symbols::SymKind::Alias;
+    case cache::CompactSymKind::Variable:
+        return symbols::SymKind::Variable;
+    case cache::CompactSymKind::Module:
+        return symbols::SymKind::Module;
+    case cache::CompactSymKind::Component:
+        return symbols::SymKind::Component;
+    case cache::CompactSymKind::Union:
+        return symbols::SymKind::Union;
+    case cache::CompactSymKind::Asset:
+        return symbols::SymKind::Asset;
+    case cache::CompactSymKind::Word:
+        return symbols::SymKind::Word;
+    case cache::CompactSymKind::Context:
+        return symbols::SymKind::Context;
+    }
+    return symbols::SymKind::Variable;
+}
+
+symbols::SymbolVisibility symbolVisibility(cache::CompactVisibility visibility) {
+    switch (visibility) {
+    case cache::CompactVisibility::Private:
+        return symbols::SymbolVisibility::Private;
+    case cache::CompactVisibility::Public:
+        return symbols::SymbolVisibility::Public;
+    case cache::CompactVisibility::Module:
+        return symbols::SymbolVisibility::Module;
+    }
+    return symbols::SymbolVisibility::Private;
+}
+
+} // namespace
+
 bool CompilationSession::tryLoadPersistentCache() {
     if (mCacheStore == nullptr)
         return false;
@@ -32,7 +84,8 @@ bool CompilationSession::tryLoadPersistentCache() {
     }
     mSourceFingerprint = ContentFingerprint::fromText(source_text);
 
-    mHydratedEntry = mCacheStore->loadEntry(mCanonicalPath, mSourceFingerprint);
+    mHydratedEntry = mCacheStore->loadEntry(cache::CanonicalModuleIdentity{mCanonicalPath},
+                                            cacheFingerprint(mSourceFingerprint));
     if (!mHydratedEntry) {
         if (mOpts.get().flags.verbose())
             writeOutput("  [cache] miss for %s\n", mCanonicalPath.c_str());
@@ -81,14 +134,16 @@ void CompilationSession::writePersistentCache() {
     namespace fs          = std::filesystem;
     const auto cache_root = (fs::path(mProjectRoot) / cache::kPersistentCacheDirName).string();
     if (!mCacheStore || mCacheStore->root() != cache_root) {
-        mCacheStore = std::make_unique<cache::Store>(
-            cache_root,
-            mFrontendContext ? mFrontendContext->config().cacheKey() : session::CacheKey{});
+        mCacheStore =
+            std::make_unique<cache::Store>(cache_root, cache::kSharedHirProfile);
     }
 
-    cache::ArtifactBuilder builder(mSyms, mTypes, mHirModule, *mInterner, mSourceFingerprint,
-                                   mFrontendContext ? mFrontendContext->config().cacheKey()
-                                                    : session::CacheKey{});
+    cache::FrontendIdentity frontend_identity{
+        "Zith", "zithc",
+        mFrontendContext ? mFrontendContext->config().compilerVersion : std::string("dev")};
+    cache::ArtifactBuilder builder(mTypes, mHirModule, *mInterner,
+                                   cacheFingerprint(mSourceFingerprint),
+                                   std::move(frontend_identity), cache::kSharedHirProfile);
     std::vector<cache::DependencyRecord> deps;
     memory::FlatSet<std::string> seen_deps;
     auto append_dep = [&](std::string canonical_path, std::string import_key) {
@@ -129,8 +184,8 @@ void CompilationSession::hydrateFromArtifact(const cache::Artifact &art) {
     std::vector<symbols::SymId> decl_sym_ids;
     decl_sym_ids.reserve(art.decls.size());
     for (const auto &decl : art.decls) {
-        decl_sym_ids.push_back(mSyms.declare(decl.name, decl.visibility, decl.mod_depth,
-                                             static_cast<symbols::SymKind>(decl.kind),
+        decl_sym_ids.push_back(mSyms.declare(decl.name, symbolVisibility(decl.visibility),
+                                             decl.mod_depth, symbolKind(decl.kind),
                                              ast::kInvalidDecl, {}, {}, {}, decl.discardable));
     }
 
@@ -251,7 +306,10 @@ void CompilationSession::hydrateFromArtifact(const cache::Artifact &art) {
             compact_type_ids[i] = mTypes.internTypeVar();
             break;
         case cache::CompactTypeKind::GenericParam:
-            compact_type_ids[i] = mTypes.internGenericParam(ct.ref0, ct.ref1);
+            compact_type_ids[i] =
+                ct.ref0 < art.strings.size()
+                    ? mTypes.internGenericParam(art.strings[ct.ref0], ct.ref1)
+                    : types::kErrorType;
             break;
         case cache::CompactTypeKind::Incomplete: {
             std::vector<types::TypeId> args;
@@ -304,6 +362,23 @@ void CompilationSession::hydrateFromArtifact(const cache::Artifact &art) {
         const auto tid = union_tids[ui];
         for (auto member_type_id : u.member_type_ids)
             mTypes.addUnionMember(tid, compactType(member_type_id));
+    }
+
+    for (size_t di = 0; di < art.decls.size(); ++di) {
+        const auto &record = art.decls[di];
+        auto &declaration = mHirModule.addDeclaration();
+        declaration.name = record.name_id < art.strings.size()
+                               ? mInterner->intern(art.strings[record.name_id])
+                               : mInterner->intern(record.name);
+        declaration.kind = static_cast<hir::HirDeclarationKind>(record.kind);
+        declaration.visibility = static_cast<hir::HirVisibility>(record.visibility);
+        declaration.module_depth = record.mod_depth;
+        declaration.type = compactType(record.type_id);
+        declaration.discardable = record.discardable;
+        for (const auto member_index : record.method_decl_indices) {
+            if (member_index < art.decls.size())
+                declaration.members.push(static_cast<hir::HirDeclarationId>(member_index));
+        }
     }
 
     // Rebuild the module-level expression pool. Function blocks and const global
@@ -382,9 +457,6 @@ void CompilationSession::hydrateFromArtifact(const cache::Artifact &art) {
             for (auto id : ce.arg_types)
                 arg_types.push(compactType(id));
             hir::HirCall call(ce.ref_a, std::move(args), std::move(arg_types));
-            call.resolved_fn = ce.ref_b == ~uint32_t{0}
-                                   ? hir::kInvalidHirFunction
-                                   : ce.ref_b - 1U;
             call.fn_type     = compactType(ce.ref_e);
             call.musttail    = (ce.flags & 1U) != 0U;
             call.usesTailCC  = (ce.flags & 2U) != 0U;
@@ -399,9 +471,6 @@ void CompilationSession::hydrateFromArtifact(const cache::Artifact &art) {
             for (auto id : ce.arg_types)
                 arg_types.push(compactType(id));
             hir::HirCall call(ce.ref_a, std::move(args), std::move(arg_types));
-            call.resolved_fn = ce.ref_b == ~uint32_t{0}
-                                   ? hir::kInvalidHirFunction
-                                   : ce.ref_b - 1U;
             call.fn_type     = compactType(ce.ref_e);
             call.musttail    = true;
             call.usesTailCC  = (ce.flags & 2U) != 0U;
@@ -718,14 +787,6 @@ void CompilationSession::hydrateFromArtifact(const cache::Artifact &art) {
         mHirModule.addExpr(std::move(expr));
     }
 
-    for (const auto &cv : art.vtables) {
-        auto &vtable = mHirModule.addVTable(mInterner->intern(art.strings[cv.name_id]));
-        for (const auto function_id : cv.slot_function_ids) {
-            if (function_id != ~uint32_t{0})
-                vtable.slots.push(function_id - 1U);
-        }
-    }
-
     for (size_t fi = 0; fi < art.functions.size(); ++fi) {
         const auto &cfn                 = art.functions[fi];
         const std::string_view cfn_name = cfn.name.empty() && cfn.name_id < art.strings.size()
@@ -760,6 +821,35 @@ void CompilationSession::hydrateFromArtifact(const cache::Artifact &art) {
                 blk.insts.push(id);
             blk.terminator = cblk.terminator;
         }
+    }
+
+    const auto resolveFunction = [&](uint32_t name_id, uint32_t signature_type_id) {
+        const auto function_id =
+            cache::resolveFunctionReference(art, name_id, signature_type_id);
+        return function_id.has_value() ? static_cast<hir::HirFunctionId>(*function_id)
+                                       : hir::kInvalidHirFunction;
+    };
+
+    for (size_t expr_id = 0; expr_id < art.exprs.size(); ++expr_id) {
+        const auto function_id = resolveFunction(
+            art.exprs[expr_id].resolved_function_name_id,
+            art.exprs[expr_id].resolved_function_signature_type_id);
+        if (function_id == hir::kInvalidHirFunction)
+            continue;
+        auto &expr = mHirModule.getExprMut(static_cast<hir::HirExprId>(expr_id));
+        if (auto *call = std::get_if<hir::HirCall>(&expr))
+            call->resolved_fn = function_id;
+        else if (auto *tail = std::get_if<hir::HirStateTailCall>(&expr))
+            tail->call.resolved_fn = function_id;
+    }
+
+    for (const auto &cv : art.vtables) {
+        if (cv.name_id >= art.strings.size())
+            continue;
+        auto &vtable = mHirModule.addVTable(mInterner->intern(art.strings[cv.name_id]));
+        for (size_t slot = 0; slot < cv.slot_function_name_ids.size(); ++slot)
+            vtable.slots.push(resolveFunction(cv.slot_function_name_ids[slot],
+                                              cv.slot_function_signature_type_ids[slot]));
     }
 
     for (const auto &cg : art.globals) {

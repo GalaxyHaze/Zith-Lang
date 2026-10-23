@@ -347,8 +347,7 @@ bool CompilationSession::lexStage() {
 #ifndef ZITH_IS_WASM
     if (!mCacheStore && !mOpts.get().noCache) {
         const auto cache_root = (fs::path(mProjectRoot) / cache::kPersistentCacheDirName).string();
-        mCacheStore =
-            std::make_unique<cache::Store>(cache_root, mFrontendContext->config().cacheKey());
+        mCacheStore = std::make_unique<cache::Store>(cache_root, cache::kSharedHirProfile);
     }
     if (!mOpts.get().noCache)
         (void)tryLoadPersistentCache();
@@ -620,8 +619,8 @@ bool CompilationSession::lowerStage() {
         return false;
     }
 
-    sema::modern::HirLowerModern lower(mHirArena, mDiags, *mSnapshot, *mModernSemaPipeline, mTypes,
-                                       *mInterner, mNraFacts.get(), mCacheStore.get());
+    sema::modern::HirLowerModern lower(mHirArena, mDiags, *mSnapshot, *mModernSemaPipeline, mSyms,
+                                       mTypes, *mInterner, mNraFacts.get(), mCacheStore.get());
     if (!lower.run()) {
         mDiags.emit();
         return false;

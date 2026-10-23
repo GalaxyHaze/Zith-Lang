@@ -107,7 +107,7 @@ bool typeDataEqual(const TypeData &a, const TypeData &b) {
                 return true;
             },
             [](const TypeGenericParam &ga, const TypeGenericParam &gb) {
-                return ga.decl_id == gb.decl_id && ga.param_index == gb.param_index;
+                return ga.owner_name == gb.owner_name && ga.param_index == gb.param_index;
             },
             [](const TypeIncomplete &ia, const TypeIncomplete &ib) {
                 if (ia.base != ib.base || ia.arg_count != ib.arg_count)
@@ -205,7 +205,7 @@ size_t TypeIntern::computeHash(const TypeData &data) {
                           h = hashCombine(h, s.members[i]);
                   },
                   [&](const TypeGenericParam &g) {
-                      h = hashCombine(h, g.decl_id);
+                      h = hashCombine(h, g.owner_name);
                       h = hashCombine(h, g.param_index);
                   },
                   [&](const TypeIncomplete &i) {
@@ -390,8 +390,12 @@ TypeId TypeIntern::internSum(memory::DynArray<TypeId> &members) {
     return intern(TypeSum{members.data(), members.size()});
 }
 
-TypeId TypeIntern::internGenericParam(uint32_t decl_id, uint32_t param_index) {
-    return intern(TypeGenericParam{decl_id, param_index});
+TypeId TypeIntern::internGenericParam(std::string_view owner_name, uint32_t param_index) {
+    return intern(TypeGenericParam{interner_.intern(owner_name), param_index});
+}
+
+std::string_view TypeIntern::genericParamOwnerName(memory::InternedId owner_name) const {
+    return interner_.lookup(owner_name);
 }
 
 TypeId TypeIntern::internIncomplete(TypeId base, memory::DynArray<TypeId> &args) {

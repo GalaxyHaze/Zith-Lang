@@ -392,7 +392,7 @@ TypeCanonicalId canonicalTypeId(const TypeIntern &types, TypeId type,
                        },
                        [&](const TypeGenericParam &t) {
                            appendU64(28);
-                           appendU64(t.decl_id);
+                           appendName(t.owner_name);
                            appendU64(t.param_index);
                        },
                        [&](const TypeIncomplete &t) {

@@ -1,3 +1,4 @@
+#include "cache/cache-entry.hpp"
 #include "cache/cache-types.hpp"
 #include "hir/hir-attrs.hpp"
 #include "test-common.hpp"
@@ -27,12 +28,11 @@ namespace {
 Artifact makeMinimalArtifact() {
     Artifact art;
     art.canonical_path = "/test/main.zith";
+    art.module_identity.path = art.canonical_path;
     art.module_name    = "main";
-    art.cache_key_hash = 0x12345678u;
-    art.module_id_hi   = 0xAABBCCDDu;
-    art.module_id_lo   = 0x11223344u;
-    art.source_fp_hi   = 0xEEFF0011u;
-    art.source_fp_lo   = 0x22334455u;
+    art.semantic_profile = kSharedHirProfile;
+    art.frontend_identity = {"Zith", "zithc-tests", "test"};
+    art.source_fingerprint = {0xAABBCCDD11223344ULL, 0xEEFF001122334455ULL};
     art.public_abi_hi  = 0x99887766u;
     art.public_abi_lo  = 0x55443322u;
 
@@ -64,12 +64,19 @@ Artifact makeMinimalArtifact() {
     slice_type.ref0 = 0;
     art.types.push_back(slice_type);
 
+    // Zero-argument function signature used by the `main` overload below.
+    CompactType zero_arg_fn_type;
+    zero_arg_fn_type.kind = CompactTypeKind::Fn;
+    zero_arg_fn_type.flags = kFunctionSignatureVariadic;
+    zero_arg_fn_type.ref0 = 0;
+    art.types.push_back(zero_arg_fn_type);
+
     // one exported fn declaration
     DeclRecord decl;
     decl.name       = "main";
     decl.name_id    = 0;
     decl.kind       = CompactSymKind::Fn;
-    decl.visibility = symbols::SymbolVisibility::Public;
+    decl.visibility = CompactVisibility::Public;
     decl.mod_depth  = 0;
     decl.type_id    = 0;
     art.decls.push_back(decl);
@@ -89,6 +96,7 @@ void addCode(Artifact &art) {
     CompactFunction fn;
     fn.name           = "main";
     fn.name_id        = 0;
+    fn.signature_type_id = 4;
     fn.is_extern      = false;
     fn.is_variadic    = true;
     fn.return_type_id = 0;
@@ -108,6 +116,19 @@ void addCode(Artifact &art) {
 
     fn.blocks.push_back(blk);
     art.functions.push_back(fn);
+
+    // Same canonical name, distinct signature: canonical references must
+    // resolve the overload rather than whichever matching name appears first.
+    CompactFunction overload;
+    overload.name = "main";
+    overload.name_id = 0;
+    overload.signature_type_id = 2;
+    overload.param_type_ids = {0};
+    overload.param_name_ids = {0};
+    overload.return_type_id = 0;
+    overload.is_extern = true;
+    art.functions.push_back(overload);
+
     art.exprs.push_back(lit);
     art.exprs.push_back(ret);
     art.canonical_mappings.push_back({0x1122334455667788ULL, 0x99AABBCCDDEEFF00ULL, 0xCAFEBABEu});
@@ -243,7 +264,7 @@ static void test_type_section_round_trip() {
     original.strings.push_back("y");
     CompactType named_pack;
     named_pack.kind      = CompactTypeKind::Pack;
-    named_pack.args      = {0};
+    named_pack.args      = {0, 0};
     named_pack.arg_names = {2, 3};
     named_pack.ref1      = 1;
     original.types.push_back(named_pack);
@@ -272,16 +293,16 @@ static void test_type_section_round_trip() {
               "decodeTypes preserves slice type kind");
     }
     CHECK_EQ(decoded.types.size(), original.types.size(), "decodeTypes preserves pack count");
-    if (decoded.types.size() >= 6u) {
-        CHECK(decoded.types[4].kind == CompactTypeKind::Pack,
-              "decodeTypes preserves named pack kind");
-        CHECK_EQ(decoded.types[4].arg_names.size(), 2u,
-                 "decodeTypes preserves named pack member metadata");
-        CHECK_EQ(decoded.types[4].arg_names[0], 2u,
-                 "decodeTypes preserves first pack member name id");
+    if (decoded.types.size() >= 7u) {
         CHECK(decoded.types[5].kind == CompactTypeKind::Pack,
+              "decodeTypes preserves named pack kind");
+        CHECK_EQ(decoded.types[5].arg_names.size(), 2u,
+                 "decodeTypes preserves named pack member metadata");
+        CHECK_EQ(decoded.types[5].arg_names[0], 2u,
+                 "decodeTypes preserves first pack member name id");
+        CHECK(decoded.types[6].kind == CompactTypeKind::Pack,
               "decodeTypes preserves positional pack kind");
-        CHECK(decoded.types[5].arg_names.empty(),
+        CHECK(decoded.types[6].arg_names.empty(),
               "positional pack keeps empty name metadata after decode");
     }
 }
@@ -320,9 +341,14 @@ static void test_code_section_round_trip() {
     CHECK(ok, "decodeCode succeeds after encodeCode");
     CHECK(decoded.functions.size() == original.functions.size(),
           "decodeCode preserves function count");
-    if (decoded.functions.size() == 1u) {
+    if (decoded.functions.size() == 2u) {
         CHECK(decoded.functions[0].is_variadic, "decodeCode preserves the variadic flag");
         CHECK(decoded.functions[0].name_id == 0, "decodeCode preserves the function name id");
+        CHECK_EQ(decoded.functions[0].signature_type_id, 4u,
+                 "decodeCode preserves the variadic overload signature identity");
+        CHECK(decoded.functions[1].is_extern, "decodeCode preserves the overloaded declaration");
+        CHECK_EQ(decoded.functions[1].signature_type_id, 2u,
+                 "decodeCode preserves the parameterized overload signature identity");
     }
     CHECK_EQ(decoded.canonical_mappings.size(), 1u, "decodeCode preserves canonical mappings");
     if (decoded.canonical_mappings.size() == 1u) {
@@ -453,6 +479,15 @@ static void test_debug_section_round_trip() {
 static void test_full_artifact_round_trip() {
     Artifact original = makeMinimalArtifact();
     addCode(original);
+    CompactExpr direct_call;
+    direct_call.kind = CompactExprKind::Call;
+    direct_call.resolved_function_name_id = 0;
+    direct_call.resolved_function_signature_type_id = 4;
+    original.exprs.push_back(direct_call);
+    original.vtables.push_back({0, {0}, {2}});
+
+    CHECK_EQ(resolveFunctionReference(original, 0, 2).value_or(~uint32_t{0}), 1u,
+             "canonical name and signature resolve the intended overload");
 
     ByteWriter w;
     uint32_t csum1 = Writer::write(original, w);
@@ -461,15 +496,40 @@ static void test_full_artifact_round_trip() {
     std::string bytes{reinterpret_cast<const char *>(w.ptr()), w.size()};
     auto round = Reader::read(bytes);
     CHECK(round.has_value(), "Reader::read decodes full artifact");
+    if (!round)
+        return;
     CHECK(round->module_name == original.module_name, "Reader::read preserves module_name");
     CHECK(round->canonical_path == original.canonical_path,
           "Reader::read preserves canonical_path");
+    CHECK(round->module_identity == original.module_identity,
+          "Reader::read preserves canonical module identity");
+    CHECK(round->semantic_profile == original.semantic_profile,
+          "Reader::read preserves semantic compatibility profile");
+    CHECK(round->source_fingerprint == original.source_fingerprint,
+          "Reader::read preserves complete source fingerprint");
+    CHECK(round->frontend_identity == original.frontend_identity,
+          "optional provenance preserves frontend identity without gating HIR reuse");
     CHECK(round->decls.size() == original.decls.size(), "Reader::read preserves decl count");
     CHECK(round->functions.size() == original.functions.size(),
           "Reader::read preserves function count");
-    if (round->functions.size() == 1u)
+    if (round->functions.size() == 2u) {
         CHECK(round->functions[0].name == "main",
               "reader restores the function name from the string table");
+        CHECK(round->functions[1].name == "main",
+              "reader preserves same-name overloaded function");
+    }
+    CHECK_EQ(round->exprs.back().resolved_function_name_id, 0u,
+             "direct call stores a canonical string identity, not a function index");
+    CHECK_EQ(round->exprs.back().resolved_function_signature_type_id, 4u,
+             "direct call preserves its canonical signature identity");
+    CHECK(round->vtables.size() == 1u &&
+              round->vtables[0].slot_function_name_ids == std::vector<uint32_t>{0} &&
+              round->vtables[0].slot_function_signature_type_ids == std::vector<uint32_t>{2},
+          "vtable slots round-trip as canonical name/signature identities");
+    CHECK_EQ(resolveFunctionReference(*round, 0, 2).value_or(~uint32_t{0}), 1u,
+             "round-tripped overloaded reference resolves by its signature");
+    CHECK_EQ(resolveFunctionReference(*round, 0, 4).value_or(~uint32_t{0}), 0u,
+             "round-tripped variadic reference resolves to its distinct overload");
 
     // deterministic: same input → same output
     ByteWriter w2;
@@ -540,7 +600,16 @@ static void test_checksum_validation() {
 
     // corrupt a section payload byte (skip the header)
     std::vector<uint8_t> corrupted(w.data());
-    size_t header_size = sizeof(FileHeader) + original.canonical_path.size();
+    uint32_t header_size = 0;
+    ByteReader header_reader(w.ptr(), w.size());
+    uint32_t ignored32 = 0;
+    uint8_t ignored8 = 0;
+    uint16_t ignored16 = 0;
+    CHECK(header_reader.readU32(ignored32) && header_reader.readU32(ignored32) &&
+              header_reader.readU32(ignored32) && header_reader.readU8(ignored8) &&
+              header_reader.readU8(ignored8) && header_reader.readU16(ignored16) &&
+              header_reader.readU32(header_size),
+          "checksum test reads the explicit header size");
     if (corrupted.size() > header_size) {
         corrupted[header_size] ^= 0xFFu; // flip bits in first section
         std::string bad{reinterpret_cast<const char *>(corrupted.data()), corrupted.size()};
@@ -554,8 +623,9 @@ static void test_checksum_validation() {
 static void test_empty_artifact_round_trip() {
     Artifact empty_art;
     empty_art.canonical_path = "/test/empty.zith";
+    empty_art.module_identity.path = empty_art.canonical_path;
     empty_art.module_name    = "empty";
-    empty_art.cache_key_hash = 0;
+    empty_art.semantic_profile = kSharedHirProfile;
 
     ByteWriter w;
     (void)Writer::write(empty_art, w);
@@ -564,6 +634,162 @@ static void test_empty_artifact_round_trip() {
     std::string bytes{reinterpret_cast<const char *>(w.ptr()), w.size()};
     auto result = Reader::read(bytes);
     CHECK(result.has_value(), "Reader::read decodes empty artifact");
+}
+
+static void test_encode_rejects_mismatched_vtable_signatures() {
+    Artifact artifact = makeMinimalArtifact();
+    artifact.vtables.push_back({0, {0}, {}});
+
+    ByteWriter writer;
+    CHECK(!encodeCode(artifact, writer),
+          "code encoder rejects vtable name/signature vectors with different lengths");
+    CHECK_EQ(writer.size(), 0u, "invalid code artifact writes no partial section");
+}
+
+static void test_decode_rejects_truncated_vtable_signature_pair() {
+    ByteWriter writer;
+    writer.writeU32(0); // expressions
+    writer.writeU32(0); // functions
+    writer.writeU32(0); // globals
+    writer.writeU32(1); // vtables
+    writer.writeU32(0); // vtable name
+    writer.writeU32(1); // one slot
+    writer.writeU32(0); // slot function name, but no signature follows
+
+    Artifact artifact;
+    ByteReader reader(writer.ptr(), writer.size());
+    CHECK(!decodeCode(reader, artifact),
+          "code decoder rejects a truncated vtable name/signature pair");
+}
+
+static void test_legacy_container_version_is_a_miss() {
+    auto artifact = makeMinimalArtifact();
+    addCode(artifact);
+    ByteWriter writer;
+    CHECK(Writer::write(artifact, writer) != 0, "legacy-version fixture is encoded");
+
+    std::string legacy(reinterpret_cast<const char *>(writer.ptr()), writer.size());
+    legacy[4] = 19;
+    legacy[5] = 0;
+    legacy[6] = 0;
+    legacy[7] = 0;
+    CHECK(!Reader::read(legacy), "legacy positional-container artifact is a clean miss");
+}
+
+static void test_unknown_optional_section_is_skipped() {
+    auto artifact = makeMinimalArtifact();
+    addCode(artifact);
+    cache::Artifact::OptionalSection optional;
+    optional.id = 0x8001;
+    optional.schema_version = 37;
+    optional.payload = {0x11, 0x22, 0x33};
+    artifact.optional_sections.push_back(optional);
+
+    ByteWriter writer;
+    CHECK(Writer::write(artifact, writer) != 0, "optional-section fixture is encoded");
+    auto decoded = Reader::read(
+        std::string_view(reinterpret_cast<const char *>(writer.ptr()), writer.size()));
+    CHECK(decoded.has_value(), "unknown optional section does not invalidate required HIR");
+    if (decoded) {
+        CHECK_EQ(decoded->optional_sections.size(), 1u,
+                 "unknown optional section is retained as opaque metadata");
+        CHECK(decoded->optional_sections[0].payload == optional.payload,
+              "unknown optional payload is not interpreted or lost");
+    }
+}
+
+static void test_unknown_required_feature_is_rejected() {
+    auto artifact = makeMinimalArtifact();
+    addCode(artifact);
+    ByteWriter writer;
+    CHECK(Writer::write(artifact, writer) != 0, "required-feature fixture is encoded");
+
+    std::string bytes(reinterpret_cast<const char *>(writer.ptr()), writer.size());
+    constexpr size_t kRequiredFeaturesOffset = 24;
+    bytes[kRequiredFeaturesOffset] = static_cast<char>(
+        static_cast<uint8_t>(bytes[kRequiredFeaturesOffset]) | 0x80u);
+    CHECK(!Reader::read(bytes), "unknown required feature bit is rejected");
+}
+
+static void test_invalid_canonical_reference_is_rejected_before_hydration() {
+    auto artifact = makeMinimalArtifact();
+    addCode(artifact);
+    CompactExpr invalid_call;
+    invalid_call.kind = CompactExprKind::Call;
+    invalid_call.resolved_function_name_id = 99;
+    artifact.exprs.push_back(invalid_call);
+
+    ByteWriter writer;
+    CHECK(Writer::write(artifact, writer) != 0, "invalid-reference fixture is encoded");
+    auto decoded = Reader::read(
+        std::string_view(reinterpret_cast<const char *>(writer.ptr()), writer.size()));
+    CHECK(!decoded,
+          "reader rejects unresolved canonical references before cache hydration can begin");
+}
+
+static void test_invalid_hydration_references_are_rejected() {
+    const auto readerRejects = [](const Artifact &artifact) {
+        ByteWriter writer;
+        if (Writer::write(artifact, writer) == 0)
+            return false;
+        return !Reader::read(
+            std::string_view(reinterpret_cast<const char *>(writer.ptr()), writer.size()));
+    };
+
+    auto invalid_name = makeMinimalArtifact();
+    CompactExpr named_expr;
+    named_expr.kind = CompactExprKind::Let;
+    named_expr.name_id = 99;
+    invalid_name.exprs.push_back(named_expr);
+    addCode(invalid_name);
+    CHECK(readerRejects(invalid_name),
+          "reader rejects an invalid HIR string reference before hydration");
+
+    auto invalid_slot = makeMinimalArtifact();
+    HirSlotAttrsRecord slot_attrs;
+    slot_attrs.slot = 0xFFFFFFFEu;
+    invalid_slot.attrs_slots.push_back(slot_attrs);
+    addCode(invalid_slot);
+    CHECK(readerRejects(invalid_slot),
+          "reader rejects an invalid slot attribute before it can grow the HIR table");
+
+    auto invalid_call_attrs = makeMinimalArtifact();
+    HirCallAttrsRecord call_attrs;
+    call_attrs.expr_id = 99;
+    invalid_call_attrs.attrs_calls.push_back(call_attrs);
+    addCode(invalid_call_attrs);
+    CHECK(readerRejects(invalid_call_attrs),
+          "reader rejects call attributes outside the HIR expression table");
+
+    auto invalid_fn_attrs = makeMinimalArtifact();
+    HirFnAttrsRecord fn_attrs;
+    fn_attrs.fn_index = 99;
+    invalid_fn_attrs.attrs_fns.push_back(fn_attrs);
+    addCode(invalid_fn_attrs);
+    CHECK(readerRejects(invalid_fn_attrs),
+          "reader rejects function attributes outside the HIR function table");
+
+    auto invalid_param_slot = makeMinimalArtifact();
+    addCode(invalid_param_slot);
+    invalid_param_slot.functions[1].param_slot_ids = {0xFFFFFFFEu};
+    CHECK(readerRejects(invalid_param_slot),
+          "reader rejects an invalid parameter slot before HIR attribute hydration");
+}
+
+static void test_mismatched_function_signature_is_rejected() {
+    auto artifact = makeMinimalArtifact();
+    addCode(artifact);
+    CompactExpr invalid_call;
+    invalid_call.kind = CompactExprKind::Call;
+    invalid_call.resolved_function_name_id = 0;
+    invalid_call.resolved_function_signature_type_id = 3; // slice, not a function signature
+    artifact.exprs.push_back(invalid_call);
+
+    ByteWriter writer;
+    CHECK(Writer::write(artifact, writer) != 0, "mismatched-signature fixture is encoded");
+    auto decoded = Reader::read(
+        std::string_view(reinterpret_cast<const char *>(writer.ptr()), writer.size()));
+    CHECK(!decoded, "reader rejects a function reference with a non-function signature");
 }
 
 // ── All test aggregation ──────────────────────────────────────────
@@ -582,6 +808,14 @@ static void test_zirl_sections() {
     test_corrupt_count_rejected();
     test_checksum_validation();
     test_empty_artifact_round_trip();
+    test_legacy_container_version_is_a_miss();
+    test_unknown_optional_section_is_skipped();
+    test_unknown_required_feature_is_rejected();
+    test_invalid_canonical_reference_is_rejected_before_hydration();
+    test_invalid_hydration_references_are_rejected();
+    test_mismatched_function_signature_is_rejected();
+    test_encode_rejects_mismatched_vtable_signatures();
+    test_decode_rejects_truncated_vtable_signature_pair();
 }
 
 } // namespace

@@ -238,7 +238,22 @@ types::TypeId HirLowerModern::lowerType(sema::modern::TypeId type) {
         uint32_t decl_id   = 0;
         uint32_t param_idx = 0;
         sema_.typeTable().genericParamOrigin(type, &decl_id, &param_idx);
-        lowered = types_.internGenericParam(decl_id, param_idx);
+        if (current_module_ == nullptr || current_module_->frontend == nullptr ||
+            current_module_->source == nullptr || decl_id == 0U ||
+            decl_id > current_module_->frontend->declarations().size()) {
+            lowered = types::kErrorType;
+            break;
+        }
+        const auto &owner = current_module_->frontend->declarations()[decl_id - 1U];
+        std::string owner_identity = current_module_->source->canonicalPath + "::";
+        if (!owner.ownerName.empty())
+            owner_identity += owner.ownerName + ".";
+        if (!owner.parentName.empty())
+            owner_identity += owner.parentName + "$local.";
+        owner_identity += owner.name;
+        if (owner.kind == frontend::DeclKind::Function)
+            owner_identity += frontend::functionSignature(*current_module_->frontend, owner);
+        lowered = types_.internGenericParam(owner_identity, param_idx);
         break;
     }
     case TypeKind::Incomplete: {

@@ -44,6 +44,8 @@ public:
         writeU64(bits);
     }
     void writeBytes(const uint8_t *data, size_t len) {
+        if (len == 0)
+            return;
         buf_.insert(buf_.end(), data, data + len);
     }
     // Length-prefixed (u32) UTF-8 blob.

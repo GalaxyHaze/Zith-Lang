@@ -135,7 +135,7 @@ struct TypeSum {
     size_t count;
 };
 struct TypeGenericParam {
-    uint32_t decl_id;
+    memory::InternedId owner_name;
     uint32_t param_index;
 };
 struct TypeIncomplete {

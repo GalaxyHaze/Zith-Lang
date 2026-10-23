@@ -39,8 +39,8 @@ bool parseDecimalU32(std::string_view text, uint32_t &out) {
 
 } // namespace
 
-Store::Store(std::string cache_root, const session::CacheKey &cache_key)
-    : root_(std::move(cache_root)), cache_key_hash_(zith::zirl::fnv1a32(cache_key.identity())),
+Store::Store(std::string cache_root, SemanticCompatibilityProfile semantic_profile)
+    : root_(std::move(cache_root)), semantic_profile_(std::move(semantic_profile)),
       manifest_(root_ + "/modules") {
     std::error_code ec;
     fs::create_directories(root_ + "/modules", ec);
@@ -173,9 +173,9 @@ void Store::dropInvalid(std::string_view canonical_path) {
     bumpInvalid();
 }
 
-std::optional<Artifact> Store::load(std::string_view canonical_path,
-                                    const session::ContentFingerprint &fp) {
-    const auto path = artifactPath(canonical_path);
+std::optional<Artifact> Store::load(const CanonicalModuleIdentity &module_identity,
+                                    const ContentFingerprint &fingerprint) {
+    const auto path = artifactPath(module_identity.path);
     std::ifstream input(path, std::ios::binary);
     if (!input) {
         bumpMisses();
@@ -184,25 +184,25 @@ std::optional<Artifact> Store::load(std::string_view canonical_path,
     std::string bytes{std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>()};
     auto artifact = zith::zirl::Reader::read(bytes);
     if (!artifact) {
-        dropInvalid(canonical_path);
+        dropInvalid(module_identity.path);
         return std::nullopt;
     }
-    if (!validateArtifact(*artifact, cache_key_hash_, fp)) {
-        dropInvalid(canonical_path);
+    if (!validateArtifact(*artifact, module_identity, semantic_profile_, fingerprint)) {
+        dropInvalid(module_identity.path);
         return std::nullopt;
     }
     // Validate dependencies against the manifest.
     for (const auto &dep : artifact->deps) {
         const auto dep_entry = manifest_.find(dep.canonical_path);
         if (!dep_entry) {
-            dropInvalid(canonical_path);
+            dropInvalid(module_identity.path);
             return std::nullopt;
         }
         if (dep.public_abi_hi == 0 && dep.public_abi_lo == 0)
             continue;
         if (dep_entry->public_abi_hi != dep.public_abi_hi ||
             dep_entry->public_abi_lo != dep.public_abi_lo) {
-            dropInvalid(canonical_path);
+            dropInvalid(module_identity.path);
             return std::nullopt;
         }
     }
@@ -210,25 +210,29 @@ std::optional<Artifact> Store::load(std::string_view canonical_path,
     return std::optional<Artifact>{std::in_place, std::move(*artifact)};
 }
 
-std::optional<CacheEntry> Store::loadEntry(std::string_view canonical_path,
-                                           const session::ContentFingerprint &fp) {
-    auto art = load(canonical_path, fp);
+std::optional<CacheEntry> Store::loadEntry(const CanonicalModuleIdentity &module_identity,
+                                           const ContentFingerprint &fingerprint) {
+    auto art = load(module_identity, fingerprint);
     if (!art)
         return std::nullopt;
     CacheEntry entry;
     entry.artifact    = std::move(*art);
-    entry.fingerprint = fp;
+    entry.fingerprint = fingerprint;
     entry.state       = CacheEntryState::Hydrated;
     return std::optional<CacheEntry>{std::in_place, std::move(entry)};
 }
 
 void Store::store(const Artifact &artifact) {
-    const auto path = artifactPath(artifact.canonical_path);
-    std::error_code ec;
-    fs::create_directories(fs::path(path).parent_path(), ec);
-
+    const auto path = artifactPath(artifact.module_identity.path);
     zith::zirl::ByteWriter writer;
     (void)zith::zirl::Writer::write(artifact, writer);
+    if (writer.size() == 0) {
+        bumpInvalid();
+        return;
+    }
+
+    std::error_code ec;
+    fs::create_directories(fs::path(path).parent_path(), ec);
 
     std::ofstream out(path, std::ios::binary | std::ios::trunc);
     if (!out) {
@@ -244,12 +248,12 @@ void Store::store(const Artifact &artifact) {
     }
 
     ManifestEntry entry;
-    entry.canonical_path = artifact.canonical_path;
+    entry.canonical_path = artifact.module_identity.path;
     entry.artifact_path  = path;
     entry.public_abi_hi  = artifact.public_abi_hi;
     entry.public_abi_lo  = artifact.public_abi_lo;
-    entry.source_fp_hi   = artifact.source_fp_hi;
-    entry.source_fp_lo   = artifact.source_fp_lo;
+    entry.source_fp_hi = static_cast<uint32_t>(artifact.source_fingerprint.primary >> 32U);
+    entry.source_fp_lo = static_cast<uint32_t>(artifact.source_fingerprint.primary);
     for (const auto &dep : artifact.deps) {
         entry.dependencies.push_back(dep.canonical_path);
     }

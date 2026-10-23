@@ -3,7 +3,6 @@
 #include "cache/cache-entry.hpp"
 #include "cache/cache-types.hpp"
 #include "cache/manifest.hpp"
-#include "session/frontend-context.hpp" // session::CacheKey, session::ContentFingerprint
 #include "types/type-id.hpp"
 #include "zirl/zirl-header.hpp"
 
@@ -60,7 +59,7 @@ struct CanonicalIdLess {
 // Manifest for reverse-dependency invalidation.  Thread-safe.
 class Store {
 public:
-    Store(std::string cache_root, const session::CacheKey &cache_key);
+    Store(std::string cache_root, SemanticCompatibilityProfile semantic_profile);
 
     /// Return the project-local opaque tag for `canonical_id`, assigning a new
     /// stable tag when the id is seen for the first time and persisting it to
@@ -81,14 +80,15 @@ public:
     // Try to load and validate the artifact for `canonical_path` whose source
     // fingerprint is `fp`.  Returns the artifact on a full hit, or std::nullopt
     // on any miss/invalidation/corruption.  Increments metrics accordingly.
-    [[nodiscard]] std::optional<Artifact> load(std::string_view canonical_path,
-                                               const session::ContentFingerprint &fp);
+    [[nodiscard]] std::optional<Artifact> load(const CanonicalModuleIdentity &module_identity,
+                                               const ContentFingerprint &fingerprint);
 
     // Try to load and validate the artifact for `canonical_path` whose source
     // fingerprint is `fp`.  Returns a fully validated CacheEntry on a full hit,
     // or std::nullopt on any miss/invalidation/corruption.
-    [[nodiscard]] std::optional<CacheEntry> loadEntry(std::string_view canonical_path,
-                                                      const session::ContentFingerprint &fp);
+    [[nodiscard]] std::optional<CacheEntry>
+    loadEntry(const CanonicalModuleIdentity &module_identity,
+              const ContentFingerprint &fingerprint);
 
     // Remove an artifact that failed validation so later loads do not repeat
     // the same parse/check work. Best-effort and reflected in metrics.
@@ -110,7 +110,7 @@ public:
 
 private:
     std::string root_;
-    uint32_t cache_key_hash_ = 0;
+    SemanticCompatibilityProfile semantic_profile_;
     Manifest manifest_;
     mutable std::mutex canonical_mutex_;
     std::map<types::TypeCanonicalId, uint32_t, CanonicalIdLess> canonical_registry_;

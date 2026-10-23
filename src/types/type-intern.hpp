@@ -111,7 +111,8 @@ public:
     TypeId internSum(std::span<const TypeId> members);
     TypeId internSum(memory::DynArray<TypeId> &members);
     TypeId internDyn(TypeId target, size_t method_count = 0);
-    TypeId internGenericParam(uint32_t decl_id, uint32_t param_index);
+    TypeId internGenericParam(std::string_view owner_name, uint32_t param_index);
+    [[nodiscard]] std::string_view genericParamOwnerName(memory::InternedId owner_name) const;
     TypeId internIncomplete(TypeId base, memory::DynArray<TypeId> &args);
     TypeId internIncomplete(TypeId base, std::span<const TypeId> args);
 

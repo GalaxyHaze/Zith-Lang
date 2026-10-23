@@ -24,7 +24,8 @@ constexpr uint32_t kBlobMagic   = 0x5A4D4849U; // "ZMHI"
 // v2: HirMakeDyn carries value_is_place; v3: HirCall carries variadic slice plans;
 // v4: function references are HIR-module indices, not symbol-table ids.
 // v5: safety modes and expression-bound proof facts are part of the HIR blob.
-constexpr uint32_t kBlobVersion = 5U;
+// v6: generic parameter owners are canonical names, not frontend-local IDs.
+constexpr uint32_t kBlobVersion = 6U;
 
 constexpr size_t kMaxArrayCount = 1U << 20;
 
@@ -113,7 +114,8 @@ template <typename E> E readEnum(Reader &reader) {
     return static_cast<E>(reader.u8());
 }
 
-void writeTypeData(Writer &writer, const types::TypeData &data) {
+void writeTypeData(Writer &writer, const types::TypeData &data,
+                   const memory::StringInterner &interner) {
     std::visit(
         common::overloaded{
             [&](const types::TypeError &) { writer.putU8(enumByte(types::TypeKind::Error)); },
@@ -220,7 +222,7 @@ void writeTypeData(Writer &writer, const types::TypeData &data) {
             },
             [&](const types::TypeGenericParam &value) {
                 writer.putU8(enumByte(types::TypeKind::GenericParam));
-                writer.putU32(value.decl_id);
+                writer.putString(interner.lookup(value.owner_name));
                 writer.putU32(value.param_index);
             },
             [&](const types::TypeIncomplete &value) {
@@ -238,7 +240,8 @@ void writeTypeData(Writer &writer, const types::TypeData &data) {
 /// structurally equal rows, which would shift canonical type ids and break the
 /// expression/function tables that reference them. The decoded table must keep
 /// the same positional identity as the encoded table.
-[[nodiscard]] types::TypeData readTypeData(Reader &reader, memory::Arena &arena) {
+[[nodiscard]] types::TypeData readTypeData(Reader &reader, memory::Arena &arena,
+                                           memory::StringInterner &interner) {
     const auto kind = readEnum<types::TypeKind>(reader);
     switch (kind) {
     case types::TypeKind::Error:
@@ -325,8 +328,12 @@ void writeTypeData(Writer &writer, const types::TypeData &data) {
             members[i] = reader.u32();
         return types::TypeSum{members, count};
     }
-    case types::TypeKind::GenericParam:
-        return types::TypeGenericParam{reader.u32(), reader.u32()};
+    case types::TypeKind::GenericParam: {
+        const auto owner_name = reader.string();
+        const auto owner_id = reader.ok() ? interner.intern(owner_name)
+                                          : memory::kInvalidInternedId;
+        return types::TypeGenericParam{owner_id, reader.u32()};
+    }
     case types::TypeKind::Incomplete: {
         const uint32_t count = reader.u32();
         if (count > kMaxArrayCount)
@@ -1157,7 +1164,7 @@ auto encodeHir(const hir::HirModule &module, const memory::StringInterner &inter
     const size_t customCount = types.count() > customStart ? types.count() - customStart : 0;
     writer.putU32(static_cast<uint32_t>(customCount));
     for (size_t i = customStart; i < types.count(); ++i) {
-        writeTypeData(writer, types.lookup(static_cast<types::TypeId>(i)));
+        writeTypeData(writer, types.lookup(static_cast<types::TypeId>(i)), interner);
     }
 
     writer.putU8(3); // expression-pool section marker
@@ -1221,7 +1228,7 @@ auto decodeHir(std::span<const uint8_t> data, DecodedHir &result) -> bool {
         return false;
     }
     for (uint32_t i = 0; i < typeCount; ++i)
-        result.types.appendPositional(readTypeData(reader, result.arena));
+        result.types.appendPositional(readTypeData(reader, result.arena, result.interner));
 
     if (reader.u8() != 3)
         return false;

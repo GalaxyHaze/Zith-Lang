@@ -21,6 +21,7 @@ void test_hir_safety_round_trip() {
 
     const auto i32 = types.internInt(zith::types::IntWidth::I32);
     const auto array_type = types.internArray(i32, 4);
+    const auto generic_type = types.internGenericParam("module::Owner", 2);
     auto &fn = module.addFn(interner.intern("main"));
     fn.hasBody = true;
     fn.return_type = i32;
@@ -88,6 +89,12 @@ void test_hir_safety_round_trip() {
           "WASM round-trip preserves proof kind and exact operand identities");
     CHECK(decoded.module.getFn(0).hasBody,
           "WASM HIR round-trip preserves the function definition classification");
+    const auto *decoded_generic =
+        std::get_if<zith::types::TypeGenericParam>(&decoded.types.lookup(generic_type));
+    CHECK(decoded_generic != nullptr &&
+              decoded.interner.lookup(decoded_generic->owner_name) == "module::Owner" &&
+              decoded_generic->param_index == 2,
+          "WASM HIR round-trip preserves canonical generic parameter owner identity");
     CHECK(!decoded.module.getFn(1).hasBody,
           "WASM HIR round-trip preserves the function declaration classification");
 }
