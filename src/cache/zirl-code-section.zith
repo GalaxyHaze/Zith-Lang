@@ -91,6 +91,7 @@ pub struct ZirlCompactFunction {
     pub machine_id: u32,
     pub instance_index: u32,
     pub variadic_slice_param: u32,
+    pub foreign_adapter_name_id: u32,
     pub parameter_type_ids: []u32,
     pub parameter_name_ids: []u32,
     pub parameter_slot_ids: []u32,
@@ -244,6 +245,7 @@ fn code_function_empty(storage: *ZirlCodeStorage): ZirlCompactFunction {
         machine_id: 0u32,
         instance_index: 0xFFFFFFFFu32,
         variadic_slice_param: 0xFFFFFFFFu32,
+        foreign_adapter_name_id: 0xFFFFFFFFu32,
         parameter_type_ids: raw storage->function_parameter_type_ids[0u64..0u64],
         parameter_name_ids: raw storage->function_parameter_name_ids[0u64..0u64],
         parameter_slot_ids: raw storage->function_parameter_slot_ids[0u64..0u64],
@@ -452,6 +454,7 @@ fn write_code_function(
     result = write_u32(result, value->machine_id);
     result = write_u32(result, value->instance_index);
     result = write_u32(result, value->variadic_slice_param);
+    result = write_u32(result, value->foreign_adapter_name_id);
     result = write_code_ids(result, value->parameter_type_ids);
     result = write_code_ids(result, value->parameter_name_ids);
     result = write_code_ids(result, value->parameter_slot_ids);
@@ -616,6 +619,8 @@ fn read_code_function(
     cursor = instance_index.reader;
     let variadic_slice_param = read_u32(cursor);
     cursor = variadic_slice_param.reader;
+    let foreign_adapter_name_id = read_u32(cursor);
+    cursor = foreign_adapter_name_id.reader;
     if (cursor.failed) {
         return ZirlCodeFunctionRead {
             reader: cursor,
@@ -755,6 +760,7 @@ fn read_code_function(
             machine_id: machine_id.value,
             instance_index: instance_index.value,
             variadic_slice_param: variadic_slice_param.value,
+            foreign_adapter_name_id: foreign_adapter_name_id.value,
             parameter_type_ids: parameter_types.values,
             parameter_name_ids: parameter_names.values,
             parameter_slot_ids: parameter_slots.values,
@@ -819,7 +825,7 @@ pub fn read_code_section(
     cursor = function_count.reader;
     if (cursor.failed or
         (function_count.value as u64) > @lengthOf(storage->functions) or
-        not code_can_read_count(cursor, function_count.value, 50u64)) {
+        not code_can_read_count(cursor, function_count.value, 54u64)) {
         return code_reader_failure(reader, storage);
     }
     for (offset in 1u64..(function_count.value as u64)) {

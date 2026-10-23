@@ -1,7 +1,7 @@
 from cache/zirl-buffer
 
 pub const zirlMagic: u32 = 0x5A49524Cu32;
-pub const zirlContainerVersion: u32 = 20u32;
+pub const zirlContainerVersion: u32 = 21u32;
 pub const zirlLittleEndian: u8 = 1u8;
 pub const zirlFixedHeaderSize: u64 = 96u64;
 pub const zirlSectionEntrySize: u64 = 24u64;
@@ -91,7 +91,7 @@ pub fn validate_zirl_sections(
     file_size: u64
 ): ZirlValidationResult {
     if (header->magic != 0x5A49524Cu32 or
-        header->container_version != 20u32 or
+        header->container_version != zirlContainerVersion or
         header->hir_schema_version != 1u32 or
         header->endianness != 1u8 or
         header->reserved != 0u8 or

@@ -24,13 +24,15 @@ Revalidated on 2026-10-23: `/home/diogo/Zith` is clean on `main` at
 The port is in Step 6 of the plan. The following cache foundations and
 sections are implemented:
 
-- ZIRL v20 container framing, section validation, and little-endian byte
+- ZIRL v21 container framing, section validation, and little-endian byte
   primitives.
 - Compact HIR type-entry encoding.
 - Metadata schema 2, including strings, paths, types, and nominal definitions.
 - Decls, Templates, and Attrs section codecs.
 - Compact Code section codec for expressions, functions/blocks, globals,
-  vtables, and canonical mappings, using caller-owned decode storage.
+  vtables, and canonical mappings, using caller-owned decode storage. Function
+  records preserve `foreign_adapter_name_id`; the container version bump
+  rejects the incompatible v20 layout.
 - Caller-owned decode storage and failure handling for the section codecs;
   tests cover golden bytes, round-trips, truncation, invalid values, and
   short output buffers in the implemented sections.
@@ -53,6 +55,13 @@ the cache work.
 The following work remains:
 
 - Connect compact section records to the local `HirModule` representation.
+  Function identities must use the artifact's canonical compact type table;
+  local `HirTypeId` values alone are not a cross-artifact identity, and
+  function-signature entries may need to be synthesized. The compact record
+  format still omits the call-level variadic-slice fields
+  (`variadic_slice_param`, `is_variadic_slice`, and `auto_collect_tail`);
+  artifacts containing those semantics cannot yet claim lossless
+  cross-dialect round-trips.
 - Add full-artifact reader/writer orchestration and automated complete-artifact
   byte-for-byte conformance fixtures.
 - Finish the shared VIR/codegen port and run the final acceptance audit.
