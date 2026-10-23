@@ -1,3 +1,7 @@
+from c/stdlib
+
+extern fn memcpy(destination: raw opaque, source: raw opaque, size: u64): raw opaque
+
 pub struct ZirlByteWriter {
     pub bytes: []u8,
     pub position: u64,
@@ -25,9 +29,24 @@ pub struct ZirlByteReadU32 {
     pub value: u32,
 }
 
+pub struct ZirlByteReadI32 {
+    pub reader: ZirlByteReader,
+    pub value: i32,
+}
+
 pub struct ZirlByteReadU64 {
     pub reader: ZirlByteReader,
     pub value: u64,
+}
+
+pub struct ZirlByteReadI64 {
+    pub reader: ZirlByteReader,
+    pub value: i64,
+}
+
+pub struct ZirlByteReadF64 {
+    pub reader: ZirlByteReader,
+    pub value: f64,
 }
 
 pub struct ZirlByteReadBlob {
@@ -90,6 +109,21 @@ pub fn write_u64(writer: ZirlByteWriter, value: u64): ZirlByteWriter {
     let byte5 = write_u8(byte4, (value >> 40) as u8);
     let byte6 = write_u8(byte5, (value >> 48) as u8);
     return write_u8(byte6, (value >> 56) as u8);
+}
+
+pub fn write_i32(writer: ZirlByteWriter, value: i32): ZirlByteWriter {
+    return write_u32(writer, value as u32);
+}
+
+pub fn write_i64(writer: ZirlByteWriter, value: i64): ZirlByteWriter {
+    return write_u64(writer, value as u64);
+}
+
+pub fn write_f64(writer: ZirlByteWriter, value: f64): ZirlByteWriter {
+    var source = value;
+    var bits: u64 = 0u64;
+    _ = memcpy(&raw bits, &raw source, 8u64);
+    return write_u64(writer, bits);
 }
 
 pub fn write_blob(writer: ZirlByteWriter, bytes: []u8): ZirlByteWriter {
@@ -156,6 +190,36 @@ pub fn read_u64(reader: ZirlByteReader): ZirlByteReadU64 {
             ((byte4.value as u64) << 32) + ((byte5.value as u64) << 40) +
             ((byte6.value as u64) << 48) + ((byte7.value as u64) << 56),
     };
+}
+
+pub fn read_i32(reader: ZirlByteReader): ZirlByteReadI32 {
+    let unsigned = read_u32(reader);
+    return ZirlByteReadI32 {
+        reader: unsigned.reader,
+        value: unsigned.value as i32,
+    };
+}
+
+pub fn read_i64(reader: ZirlByteReader): ZirlByteReadI64 {
+    let unsigned = read_u64(reader);
+    return ZirlByteReadI64 {
+        reader: unsigned.reader,
+        value: unsigned.value as i64,
+    };
+}
+
+pub fn read_f64(reader: ZirlByteReader): ZirlByteReadF64 {
+    let unsigned = read_u64(reader);
+    var result = ZirlByteReadF64 {
+        reader: unsigned.reader,
+        value: 0.0,
+    };
+    if (unsigned.reader.failed) {
+        return result;
+    }
+    var bits = unsigned.value;
+    _ = memcpy(&raw result.value, &raw bits, 8u64);
+    return result;
 }
 
 pub fn read_blob_into(

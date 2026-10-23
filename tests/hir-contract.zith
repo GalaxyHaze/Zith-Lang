@@ -740,6 +740,49 @@ fn test_zirl_little_endian_primitives(): i32 {
     return 0;
 }
 
+fn test_zirl_signed_and_float_primitives(): i32 {
+    var output: [20]u8 = [
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+    ];
+    let writer = ZirlByteWriter {
+        bytes: raw output[0..20],
+        position: 0,
+        failed: false,
+    };
+    let after_i32 = write_i32(writer, -2i32);
+    let after_i64 = write_i64(after_i32, -3i64);
+    let after_f64 = write_f64(after_i64, 1.0);
+    if (after_f64.failed or after_f64.position != 20u64) {
+        return 1;
+    }
+    if (raw output[0] != 0xFEu8 or raw output[1] != 0xFFu8 or
+        raw output[2] != 0xFFu8 or raw output[3] != 0xFFu8 or
+        raw output[4] != 0xFDu8 or raw output[11] != 0xFFu8 or
+        raw output[12] != 0u8 or raw output[13] != 0u8 or
+        raw output[14] != 0u8 or raw output[15] != 0u8 or
+        raw output[16] != 0u8 or raw output[17] != 0u8 or
+        raw output[18] != 0xF0u8 or
+        raw output[19] != 0x3Fu8) {
+        return 2;
+    }
+
+    let reader = ZirlByteReader {
+        bytes: raw output[0..20],
+        position: 0,
+        failed: false,
+    };
+    let decoded_i32 = read_i32(reader);
+    let decoded_i64 = read_i64(decoded_i32.reader);
+    let decoded_f64 = read_f64(decoded_i64.reader);
+    if (decoded_f64.reader.failed or decoded_i32.value != -2i32 or
+        decoded_i64.value != -3i64 or decoded_f64.value != 1.0 or
+        decoded_f64.reader.position != 20u64) {
+        return 3;
+    }
+    return 0;
+}
+
 fn test_zirl_blob_roundtrip_and_atomic_failures(): i32 {
     var output: [9]u8 = [
         0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
@@ -1295,6 +1338,9 @@ fn main(): i32 {
     }
     if (test_zirl_little_endian_primitives() != 0) {
         return 221;
+    }
+    if (test_zirl_signed_and_float_primitives() != 0) {
+        return 241;
     }
     if (test_zirl_blob_roundtrip_and_atomic_failures() != 0) {
         return 240;
