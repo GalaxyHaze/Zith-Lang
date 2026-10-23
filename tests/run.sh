@@ -16,5 +16,8 @@ cp "$repo_root/ZithProject.toml" "$temp_root/"
 cp -R "$repo_root/src" "$temp_root/src"
 cp -R "$repo_root/tests" "$temp_root/tests"
 
-"$compiler" test "$temp_root"
-"$compiler" run --virtual-machine --no-cache "$temp_root/tests/run.zith"
+"$compiler" --include "$temp_root/src" test "$temp_root"
+"$compiler" --include "$temp_root/src" run --virtual-machine --no-cache \
+    "$temp_root/tests/run.zith"
+"$compiler" --include "$temp_root/src" run --no-cache \
+    "$temp_root/tests/hir-contract.zith"

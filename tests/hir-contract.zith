@@ -1,0 +1,21 @@
+from ir/hir
+
+fn test_hir_literal_variant(): i32 {
+    let literal: HirLiteral = HirLiteral {
+        value_kind: HirLiteralKind.Integer,
+        integer: 17,
+        float: 0.0,
+        boolean: false,
+        string_id: invalidString,
+        type_id: invalidType,
+    };
+    let payload: HirExpr = HirExpr { literal };
+    if (payload is HirLiteral) {
+        return 0;
+    }
+    return 2;
+}
+
+fn main(): i32 {
+    return test_hir_literal_variant();
+}

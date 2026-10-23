@@ -1,0 +1,595 @@
+alias HirExprId = u32
+alias HirTypeId = u32
+alias HirFunctionId = u32
+alias HirBlockId = u32
+alias HirSlotId = u32
+alias HirDeclarationId = u32
+alias HirStringId = u32
+
+pub const invalidExpr: HirExprId = 0xFFFFFFFFu32
+pub const invalidType: HirTypeId = 0xFFFFFFFFu32
+pub const invalidFunction: HirFunctionId = 0xFFFFFFFFu32
+pub const invalidBlock: HirBlockId = 0xFFFFFFFFu32
+pub const invalidSlot: HirSlotId = 0xFFFFFFFFu32
+pub const invalidDeclaration: HirDeclarationId = 0xFFFFFFFFu32
+pub const invalidString: HirStringId = 0xFFFFFFFFu32
+
+pub enum HirSafetyMode {
+    RequiredCheck = 0,
+    Guarded = 1,
+    Intrinsic = 2,
+    Raw = 3,
+}
+
+pub enum HirSafetyProofKind {
+    BoundsValid = 0,
+    OptionalPresent = 1,
+    UnionMemberMatches = 2,
+    OpaqueTypeMatches = 3,
+}
+
+pub enum HirExprKind {
+    Literal = 0,
+    Binary = 1,
+    Unary = 2,
+    Let = 3,
+    Var = 4,
+    Call = 5,
+    Ret = 6,
+    Branch = 7,
+    Jump = 8,
+    Phi = 9,
+    Assign = 10,
+    Index = 11,
+    Field = 12,
+    StructLiteral = 13,
+    ArrayLiteral = 14,
+    EnumValue = 15,
+    SlotAlloca = 16,
+    SlotStore = 17,
+    SlotLoad = 18,
+    SlotAddr = 19,
+    MakeNone = 20,
+    MakeSome = 21,
+    MakeSlice = 22,
+    Cast = 23,
+    UnionCast = 24,
+    UnionCheck = 25,
+    LayoutIntrinsic = 26,
+    StateTailCall = 27,
+    CanonicalType = 28,
+    Cleanup = 29,
+    GlobalConstLoad = 30,
+    MakeDyn = 31,
+    DynCall = 32,
+    MakeOpaque = 33,
+    OpaqueCast = 34,
+    OpaqueCheck = 35,
+    RuntimePanic = 36,
+    Pipe = 37,
+    PipeCurrent = 38,
+    ExternalGlobalAddr = 39,
+}
+
+pub enum HirBinaryOp {
+    Add = 0,
+    Sub = 1,
+    Mul = 2,
+    Div = 3,
+    Rem = 4,
+    Eq = 5,
+    Ne = 6,
+    Lt = 7,
+    Le = 8,
+    Gt = 9,
+    Ge = 10,
+    And = 11,
+    Or = 12,
+    Xor = 13,
+    Shl = 14,
+    Shr = 15,
+}
+
+pub enum HirUnaryOp {
+    Neg = 0,
+    Not = 1,
+    BitNot = 2,
+    Ref = 3,
+    Deref = 4,
+}
+
+pub enum HirLiteralKind {
+    Integer = 0,
+    Float = 1,
+    Boolean = 2,
+    String = 3,
+}
+
+pub enum HirLayoutIntrinsicKind {
+    OffsetOf = 0,
+    AlignOf = 1,
+    SizeOf = 2,
+    LengthOf = 3,
+    PtrOf = 4,
+}
+
+pub enum HirTypeKind {
+    Error = 0,
+    Never = 1,
+    Void = 2,
+    Bool = 3,
+    Char = 4,
+    Int = 5,
+    Float = 6,
+    Ptr = 7,
+    Array = 8,
+    Struct = 9,
+    Fn = 10,
+    Optional = 11,
+    Failable = 12,
+    Slice = 13,
+    Enum = 14,
+    Union = 15,
+    TypeVar = 16,
+    GenericParam = 17,
+    Incomplete = 18,
+    Opaque = 19,
+    Pack = 20,
+    Dyn = 21,
+    OpaqueTagged = 22,
+}
+
+pub enum HirDeclarationKind {
+    Function = 0,
+    Struct = 1,
+    Trait = 2,
+    Interface = 3,
+    Enum = 4,
+    Alias = 5,
+    Variable = 6,
+    Module = 7,
+    Component = 8,
+    Union = 9,
+    Asset = 10,
+    Word = 11,
+    Context = 12,
+}
+
+pub enum HirVisibility {
+    Private = 0,
+    Public = 1,
+    Module = 2,
+}
+
+pub enum HirOwnership {
+    Default = 0,
+    Lend = 1,
+    View = 2,
+    Unique = 3,
+    Share = 4,
+    Belong = 5,
+}
+
+pub enum HirConsumedState {
+    Unknown = 0,
+    Consumed = 1,
+    NonConsumed = 2,
+}
+
+pub enum HirCallEscape {
+    None = 0,
+    Borrow = 1,
+    Capture = 2,
+    Escape = 3,
+    Move = 4,
+}
+
+pub struct HirType {
+    pub kind: HirTypeKind,
+    pub width: u8,
+    pub flags: u8,
+    pub ref0: HirTypeId,
+    pub ref1: u32,
+    pub args: []HirTypeId,
+    pub arg_names: []HirStringId,
+}
+
+pub struct HirSafetyProof {
+    pub kind: HirSafetyProofKind,
+    pub operand_a: HirExprId,
+    pub operand_b: HirExprId,
+    pub operand_c: HirExprId,
+    pub present: bool,
+}
+
+pub struct HirLiteral {
+    pub value_kind: HirLiteralKind,
+    pub integer: i64,
+    pub float: f64,
+    pub boolean: bool,
+    pub string_id: HirStringId,
+    pub type_id: HirTypeId,
+}
+
+pub struct HirBinary {
+    pub lhs: HirExprId,
+    pub rhs: HirExprId,
+    pub op: HirBinaryOp,
+    pub type_id: HirTypeId,
+    pub operand_type: HirTypeId,
+}
+
+pub struct HirUnary {
+    pub op: HirUnaryOp,
+    pub operand: HirExprId,
+    pub type_id: HirTypeId,
+}
+
+pub struct HirLet {
+    pub name_id: HirStringId,
+    pub type_id: HirTypeId,
+    pub init: HirExprId,
+}
+
+pub struct HirVar {
+    pub name_id: HirStringId,
+    pub version: u32,
+}
+
+pub struct HirCall {
+    pub callee: HirExprId,
+    pub args: []HirExprId,
+    pub argument_types: []HirTypeId,
+    pub function_type: HirTypeId,
+    pub resolved_function: HirFunctionId,
+    pub variadic_slice_param: u32,
+    pub is_variadic_slice: bool,
+    pub auto_collect_tail: bool,
+    pub uses_tail_calling_convention: bool,
+    pub must_tail: bool,
+}
+
+pub struct HirRet {
+    pub value: HirExprId,
+}
+
+pub struct HirBranch {
+    pub condition: HirExprId,
+    pub then_block: HirBlockId,
+    pub else_block: HirBlockId,
+}
+
+pub struct HirJump {
+    pub target: HirBlockId,
+}
+
+pub struct HirPhi {
+    pub incoming: []HirExprId,
+}
+
+pub struct HirAssign {
+    pub target: HirExprId,
+    pub value: HirExprId,
+}
+
+pub struct HirIndex {
+    pub object: HirExprId,
+    pub index: HirExprId,
+    pub type_id: HirTypeId,
+    pub object_type: HirTypeId,
+    pub is_array: bool,
+    pub safety: HirSafetyMode,
+}
+
+pub struct HirField {
+    pub object: HirExprId,
+    pub index: u32,
+    pub type_id: HirTypeId,
+    pub object_type: HirTypeId,
+    pub safety: HirSafetyMode,
+}
+
+pub struct HirStructLiteral {
+    pub values: []HirExprId,
+    pub type_id: HirTypeId,
+}
+
+pub struct HirArrayLiteral {
+    pub elements: []HirExprId,
+    pub type_id: HirTypeId,
+}
+
+pub struct HirEnumValue {
+    pub value: i64,
+    pub type_id: HirTypeId,
+}
+
+pub struct HirSlotAlloca {
+    pub slot: HirSlotId,
+    pub type_id: HirTypeId,
+}
+
+pub struct HirSlotStore {
+    pub slot: HirSlotId,
+    pub value: HirExprId,
+}
+
+pub struct HirSlotLoad {
+    pub slot: HirSlotId,
+    pub type_id: HirTypeId,
+}
+
+pub struct HirSlotAddr {
+    pub slot: HirSlotId,
+    pub type_id: HirTypeId,
+}
+
+pub struct HirMakeNone {
+    pub type_id: HirTypeId,
+}
+
+pub struct HirMakeSome {
+    pub value: HirExprId,
+    pub type_id: HirTypeId,
+}
+
+pub struct HirMakeSlice {
+    pub object: HirExprId,
+    pub lo: HirExprId,
+    pub hi: HirExprId,
+    pub type_id: HirTypeId,
+    pub object_type: HirTypeId,
+    pub bound_type: HirTypeId,
+    pub is_array: bool,
+    pub is_pointer: bool,
+    pub safety: HirSafetyMode,
+}
+
+pub struct HirCast {
+    pub value: HirExprId,
+    pub from_type: HirTypeId,
+    pub to_type: HirTypeId,
+}
+
+pub struct HirUnionCast {
+    pub value: HirExprId,
+    pub from_type: HirTypeId,
+    pub to_type: HirTypeId,
+    pub member_index: u32,
+    pub safety: HirSafetyMode,
+}
+
+pub struct HirUnionCheck {
+    pub value: HirExprId,
+    pub union_type: HirTypeId,
+    pub member_index: u32,
+}
+
+pub struct HirLayoutIntrinsic {
+    pub kind: HirLayoutIntrinsicKind,
+    pub type_id: HirTypeId,
+    pub field_index: u32,
+    pub operand: HirExprId,
+    pub operand_type: HirTypeId,
+    pub string_length: u64,
+}
+
+pub struct HirStateTailCall {
+    pub call: HirCall,
+}
+
+pub struct HirCanonicalType {
+    pub canonical_hi: u64,
+    pub canonical_lo: u64,
+    pub type_id: HirTypeId,
+}
+
+pub struct HirCleanup {
+    pub expressions: []HirExprId,
+}
+
+pub struct HirGlobalConstLoad {
+    pub name_id: HirStringId,
+    pub type_id: HirTypeId,
+}
+
+pub struct HirExternalGlobalAddr {
+    pub name_id: HirStringId,
+    pub type_id: HirTypeId,
+}
+
+pub struct HirMakeDyn {
+    pub value: HirExprId,
+    pub source_type: HirTypeId,
+    pub dyn_type: HirTypeId,
+    pub vtable_name_id: HirStringId,
+    pub value_is_place: bool,
+}
+
+pub struct HirDynCall {
+    pub receiver: HirExprId,
+    pub vtable_name_id: HirStringId,
+    pub slot_index: u32,
+    pub has_receiver: bool,
+    pub result_type: HirTypeId,
+    pub function_type: HirTypeId,
+    pub args: []HirExprId,
+    pub argument_types: []HirTypeId,
+}
+
+pub struct HirMakeOpaque {
+    pub value: HirExprId,
+    pub source_type: HirTypeId,
+    pub opaque_type: HirTypeId,
+    pub runtime_type_id: u32,
+    pub canonical_hi: u64,
+    pub canonical_lo: u64,
+}
+
+pub struct HirOpaqueCast {
+    pub value: HirExprId,
+    pub from_type: HirTypeId,
+    pub to_type: HirTypeId,
+    pub opaque_type: HirTypeId,
+    pub result_type: HirTypeId,
+    pub runtime_type_id: u32,
+    pub canonical_hi: u64,
+    pub canonical_lo: u64,
+    pub safety: HirSafetyMode,
+    pub returns_pointer: bool,
+}
+
+pub struct HirOpaqueCheck {
+    pub value: HirExprId,
+    pub opaque_type: HirTypeId,
+    pub runtime_type_id: u32,
+    pub canonical_hi: u64,
+    pub canonical_lo: u64,
+}
+
+pub struct HirRuntimePanic {
+    pub code: u32,
+}
+
+pub struct HirPipe {
+    pub source_slot: HirSlotId,
+    pub source_type: HirTypeId,
+    pub stage: HirExprId,
+    pub type_id: HirTypeId,
+    pub is_effect: bool,
+}
+
+pub struct HirPipeCurrent {
+    pub slot: HirSlotId,
+    pub type_id: HirTypeId,
+}
+
+pub union HirExpr {
+    HirLiteral,
+    HirBinary,
+    HirUnary,
+    HirLet,
+    HirVar,
+    HirCall,
+    HirRet,
+    HirBranch,
+    HirJump,
+    HirPhi,
+    HirAssign,
+    HirIndex,
+    HirField,
+    HirStructLiteral,
+    HirArrayLiteral,
+    HirEnumValue,
+    HirSlotAlloca,
+    HirSlotStore,
+    HirSlotLoad,
+    HirSlotAddr,
+    HirMakeNone,
+    HirMakeSome,
+    HirMakeSlice,
+    HirCast,
+    HirUnionCast,
+    HirUnionCheck,
+    HirLayoutIntrinsic,
+    HirStateTailCall,
+    HirCanonicalType,
+    HirCleanup,
+    HirGlobalConstLoad,
+    HirExternalGlobalAddr,
+    HirMakeDyn,
+    HirDynCall,
+    HirMakeOpaque,
+    HirOpaqueCast,
+    HirOpaqueCheck,
+    HirRuntimePanic,
+    HirPipe,
+    HirPipeCurrent,
+}
+
+pub struct HirBasicBlock {
+    pub instructions: []HirExprId,
+    pub terminator: HirExprId,
+}
+
+pub struct HirFunction {
+    pub name_id: HirStringId,
+    pub parameter_types: []HirTypeId,
+    pub parameter_name_ids: []HirStringId,
+    pub parameter_slots: []HirSlotId,
+    pub return_type: HirTypeId,
+    pub state_function: bool,
+    pub uses_tail_calling_convention: bool,
+    pub machine_return_type: HirTypeId,
+    pub machine_id: u32,
+    pub variadic: bool,
+    pub variadic_slice_param: u32,
+    pub foreign_c: bool,
+    pub has_body: bool,
+    pub foreign_adapter_name_id: HirStringId,
+    pub blocks: []HirBasicBlock,
+}
+
+pub struct HirDeclaration {
+    pub name_id: HirStringId,
+    pub kind: HirDeclarationKind,
+    pub visibility: HirVisibility,
+    pub module_depth: i32,
+    pub type_id: HirTypeId,
+    pub discardable: bool,
+    pub members: []HirDeclarationId,
+}
+
+pub struct HirGlobalConst {
+    pub name_id: HirStringId,
+    pub type_id: HirTypeId,
+    pub initializer: HirExprId,
+}
+
+pub struct HirVTable {
+    pub name_id: HirStringId,
+    pub slot_functions: []HirFunctionId,
+}
+
+pub struct HirSlotAttrs {
+    pub ownership: HirOwnership,
+    pub consumed: HirConsumedState,
+    pub non_null: bool,
+    pub volatile_slot: bool,
+}
+
+pub struct HirCallArgAttrs {
+    pub escape: HirCallEscape,
+}
+
+pub struct HirCallAttrs {
+    pub args: []HirCallArgAttrs,
+    pub returns_argument: u32,
+}
+
+pub struct HirFunctionAttrs {
+    pub return_consumed: HirConsumedState,
+    pub non_null: bool,
+    pub no_alias: bool,
+    pub read_only: bool,
+    pub no_capture: bool,
+    pub discardable: bool,
+}
+
+pub struct HirSafetyAttrs {
+    pub proofs: []HirSafetyProof,
+}
+
+pub struct HirModule {
+    pub strings: [][]char,
+    pub types: []HirType,
+    pub expressions: []HirExpr,
+    pub functions: []HirFunction,
+    pub declarations: []HirDeclaration,
+    pub global_constants: []HirGlobalConst,
+    pub vtables: []HirVTable,
+    pub slot_attrs: []HirSlotAttrs,
+    pub call_attrs: []HirCallAttrs,
+    pub function_attrs: []HirFunctionAttrs,
+    pub safety_attrs: HirSafetyAttrs,
+}
