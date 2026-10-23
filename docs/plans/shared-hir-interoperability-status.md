@@ -126,20 +126,19 @@ envelope accepts a literal five-entry section array via
 the checks identify. Do not weaken `valid_artifact_sections()` or omit a
 required section to make the fixture pass.
 
-The standalone `src/main.zith` check fails because of the uncommitted
-experimental `src/main.zith` / `src/frontend/lexer.zith` worktree changes
-described below; those files are not part of the cache work and were not
-rewritten.
+The standalone `src/main.zith` check fails because of the experimental
+`src/main.zith` / `src/frontend/lexer.zith` files described below; those files
+are not part of the cache work and were not rewritten.
 
 Earlier successful harness runs reported deprecated-syntax warnings
 (`W1008`, `else if`) from the HIR verifier and Code projection; those warnings
 are pre-existing and do not fail the run.
 
-## Uncommitted worktree inventory (as of this snapshot)
+## Worktree inventory (as of this snapshot)
 
-These paths were present in the worktree but are unrelated to the cache port.
-They were preserved, not absorbed into the implementation commits. `src/main.zith`
-and `src/frontend/lexer.zith` do not pass `zithc check` and are experimental.
+These paths are unrelated to the cache port. They were preserved and committed
+separately, not absorbed into the implementation commits. `src/main.zith` and
+`src/frontend/lexer.zith` do not pass `zithc check` and are experimental.
 
 | Path | Kind | State |
 |---|---|---|
