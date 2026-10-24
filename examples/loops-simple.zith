@@ -3,26 +3,26 @@
 // Expected exit code: 12
 
 fn main(): i32 {
-    var total: i32 = 0;
-    for (var i: i32 = 0), (i < 4), (i = i + 1) {
+    var total = 0;
+    for (var i = 0), (i < 4), (i = i + 1) {
         if (i == 2) {
-            continue;
+            continue
         }
-        total = total + i;
+        total = total + i
     }
 
-    var countdown: i32 = 3;
+    var countdown = 3;
     for (countdown > 0) {
-        countdown = countdown - 1;
+        countdown = countdown - 1
     }
 
-    var doubled: i32 = 1;
+    var doubled = 1;
     for {
         doubled = doubled * 2;
         if (doubled >= 8) {
-            break;
+            break
         }
     }
 
-    return total + countdown + doubled;
+    total + countdown + doubled
 }

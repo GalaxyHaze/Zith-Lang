@@ -5,14 +5,14 @@ fn main(): i32 {
     var sum: i32 = 0;
 
     if (2 < 3 and true) {
-        sum = sum + 1;
+        sum = sum + 1
     }
     if ((false or false) xor true) {
-        sum = sum + 2;
+        sum = sum + 2
     }
     if (not false) {
-        sum = sum + 4;
+        sum = sum + 4
     }
 
-    return sum;
+    sum
 }

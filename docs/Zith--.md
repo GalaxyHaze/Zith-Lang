@@ -417,6 +417,11 @@ preferida `else (cond) { ... }`; a forma legada `else if (cond) { ... }`
 continua aceite, mas emite `W1008` DeprecatedSyntax com a sugestão de
 substituição.
 
+`while` continua a compilar, mas emite `W1008` DeprecatedSyntax. Prefira
+`for (cond) { ... }`.
+
+`match` é um synonym de `when`; aceita a mesma sintaxe e baixa da mesma forma.
+
 As armas de `when` escrevem-se na forma canónica sem seta: a primeira ilha
 parentizada é sempre um pattern contra o subject e o token seguinte é o corpo.
 Casos separam-se por vírgula obrigatória (omitida no último) e `(_)` continua a
@@ -504,8 +509,14 @@ Extração explícita de payload usa `must x` (termina com `R10003` em `null`) o
 Os loops aceitam labels na forma `outer: for ...` e `outer: while ...` para
 permitir sair ou continuar a partir de loops aninhados:
 
-Os exemplos de `for` com três cláusulas escrevem-se sempre na forma
-`for (init), (cond), (step)`.
+Os exemplos de `for` com três cláusulas escrevem-se na forma canónica
+`for (init), (cond), (step)`. A forma flat `for (init, cond, step)` também é
+aceite e baixa da mesma forma.
+
+`dock State(args)` é uma expressão: chama um state e devolve o valor produzido
+pelo `return` no state final. `jump Next(args);` termina o state atual e faz
+tail-call direta ao próximo state; a transição valida aridade e tipos contra o
+alvo.
 
 ```zith
 fn scan(xs: []i32): i32 {
@@ -537,9 +548,44 @@ initialized`.
 
 ## Tipos
 
-Os tipos atuais são mantidos: primitivos, `struct`, `union`, `enum`, `string`, genéricos, function types e as formas compostas existentes. `ptr`, `array`, `slice` e `optional` são modificadores/compostos já existentes, não uma lista excludente de tipos.
+Os tipos atuais são mantidos: primitivos, `struct`, `union`, `enum`, genéricos, function types e as formas compostas existentes. `ptr`, `array`, `slice` e `optional` são modificadores/compostos já existentes, não uma lista excludente de tipos.
 
-### Intrinsics de slices, arrays e strings
+### Component
+
+`component` define um tipo POD copyable por defeito. Campos são primitivos, arrays/slices desses tipos, ou outros components. Não participa em traits, não permite auto-referência e o layout é C-compatível:
+
+```zith
+component Vec2 {
+    [x, y]: f32,
+    fn sum(self): f32 { self.x + self.y }
+}
+```
+
+### `type` wrapper e `alias`
+
+`type Name = T` cria um wrapper nominal distinto de `T`. A construção e extração usam casts explícitos:
+
+```zith
+type UserId = i32;
+alias Answer = i32;
+
+fn makeId(n: i32): UserId { n as UserId }
+fn readId(id: UserId): i32 { id as i32 }
+```
+
+`alias` continua transparente: `alias Name = T` mantém o tipo subjacente.
+
+### `raw fn`
+
+`raw fn` marca uma função como fronteira não-checada. O corpo pode usar operações `raw` e o compilador não aplica as restrições normais dentro desse limite.
+
+```zith
+raw fn readByte(buffer: *u8, index: u64): u8 {
+    raw buffer[index]
+}
+```
+
+### Intrinsics de slices, arrays, strings e layout
 
 `@lengthOf(x)` e `@ptrOf(x)` aceitam slices `[]T`, arrays `[N]T`, string literals e
 parâmetros `lend`/`view` cujo tipo referenciado seja um slice. Para estes parâmetros, os
@@ -549,6 +595,12 @@ devolve o ponteiro dos elementos, não o endereço do descritor.
 Num array local, `@ptrOf` aponta para o slot local e fica sujeito às restrições de escape do
 pointer object; em slices devolve o ponteiro ao storage subjacente, sem `raw`.
 
+`@sizeOf(T)` devolve o tamanho de qualquer tipo completo como `u64`. `@offsetOf(S, field)`
+e `@alignOf(S)` aplicam-se apenas a structs e devolvem `i32`.
+
+`@canonicalType(T)` devolve um `u128` estável para o tipo, derivado do módulo, nome e campos
+ordenados. Útil para comparar tipos ou usar como chave estável.
+
 ```zith
 fn main(): i32 {
     var values: [3]i32 = [10, 20, 30];
@@ -556,7 +608,8 @@ fn main(): i32 {
     if (@lengthOf(slice) != 3) { return 1; }
     if (raw @ptrOf(slice)[1] != 20) { return 2; }
     if (@lengthOf("zith") != 4) { return 3; }
-    return 0;
+    if (@sizeOf(i32) != 4) { return 4; }
+    0
 }
 ```
 
@@ -612,12 +665,11 @@ let ready: bool;
 
 ## Ownership
 
-`lend` e `view` são o ownership implementado no Zith--. Um parâmetro `p: lend T` ou `p: view T` tem ABI de ponteiro para `T`; no corpo, `p.x` auto-derefs o ponteiro. `lend` continua mutável e `view` bloqueia escrita com `E4004`. Factas NRA residuais continuam a ser emitidas, e codegen aplica `readonly` para `view` e `nocapture` para ambos.
+`lend` e `view` são o ownership implementado no Zith--. Um parâmetro `p: lend T` ou `p: view T` recebe o valor por referência: `lend` permite escrita no referente e `view` não. Escrever através de um parâmetro `view` reporta `E4004`.
 
-Em toda a documentação, NRA é a análise completa de referências/ownership do Zith
-(Reference Analysis). O `main` compila o Zith--, que implementa uma versão parcial e
-simplificada dessa análise. Quando o texto precisar de nomear esse subconjunto, usa
-`Reference Analysis (simplified)`.
+Em toda a documentação, SRA é a análise de referências/ownership implementada no Zith--
+(Small Resource Analysis). O `main` compila o Zith--, que usa exactamente esse subconjunto
+congelado. Quando o texto precisar de nomear a análise completa de full Zith, usa `NRA`.
 
 ## Opaque tagged
 
@@ -632,13 +684,15 @@ preservado por imports e cache.
 No call site de funções livres, métodos com argumentos por ponteiro e overloads, um binding `default` que alimenta um parâmetro `lend`/`view` exige a anotação `lend x` ou `view x`:
 
 ```zith
+struct P { x: i32 }
+
 fn bump(p: lend P): i32 { p.x = p.x + 1; p.x }
 fn read(p: view P): i32 { p.x }
 
 fn main(): i32 {
-    var q: P = P { x: 41 };
-    bump(lend q);   // OK: mutação visível no chamador
-    read(view q);   // OK: leitura read-only
+    var q = P { x: 41 };
+    _ = bump(lend q);   // OK: mutação visível no chamador
+    _ = read(view q);   // OK: leitura read-only
     q.x
 }
 ```
@@ -682,6 +736,24 @@ tag Box(content) { <content/> }
 // Rejeitado no Zith--: forma legada de `tag`
 tag macro Box(content) { <content/> }
 ```
+
+## Diagnósticos e warnings
+
+Atributos desconhecidos emitem `W2028 UnknownAttribute`; atributos conhecidos usados
+em local ilegal emitem `W2029 AttributeNotApplicable`.
+
+Alguns diagnósticos relevantes não referidos no corpo do documento:
+
+- `E2007` — nenhuma assinatura compatível em overload.
+- `E2008` — chamada ambígua.
+- `E2024` — interface não satisfeita.
+- `E2027` — implementação duplicada.
+- `E3005` — dereference de nullable não provado.
+- `E3009` — bound de trait não satisfeito.
+- `E5001` — IR inválido.
+- `E5002` — código inatingível.
+- `unsupported external global '<name>' in v2 VM` — a VM v2 não suporta storage
+  global externo.
 
 ## Imports Platform-Specific
 
@@ -736,7 +808,7 @@ O cache continua separado por target, porque `CacheKey` já inclui
 
 ## Não É Desta Iteração
 
-Novos checks de ownership/borrow, heurísticas novas de NRA, `Result` e similares, flag de ativação ou modo separado. O `main` é o Zith--.
+Novos checks de ownership/borrow, heurísticas novas de SRA, `Result` e similares, flag de ativação ou modo separado. O `main` é o Zith--.
 
 O move de receiver é lógico e conservador: invalida usos no sema sem alterar ABI, storage ou chamadas. A exclusividade de `lend`/`view` no call site está implementada; o borrow-checker completo, lifetimes, `unique`, `share`, `belong` e move real de valores ficam para iterações futuras.
 
@@ -797,8 +869,8 @@ completa e `docs/09-control-flow.md` para a semântica de escopo.
 
 ### Fora do núcleo até prova em contrário
 
-Ficam fora do `Zith--` e do roadmap de `defer`/`drop`: superfícies `dyn` ainda
-spec-only (`view dyn`, slices dyn, etc.), capabilities activadas, `comptime`
+Ficam fora do `Zith--` e do roadmap de `defer`/`drop`: as superfícies `dyn` não-método
+(`view dyn`, slices `dyn`, etc.), capabilities activadas, `comptime`
 completo, reflexão de mutação de tipos,
 ownership full NRA, `fail`/`with`/`catch`/`throw`, `use`/contexts/words, assets
 e `::` scope resolution. A spec `Zith-spec.md` pode continuar a descrevê-las

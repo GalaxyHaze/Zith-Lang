@@ -246,6 +246,9 @@ struct LocalSymbolInfo {
     /// True when the function's final parameter is written `[...]T`.
     bool isVariadicSlice = false;
     bool discardable = false;
+    /// Source binding kind for `DeclKind::Variable` symbols.  Preserved across
+    /// a module boundary so importers can tell a `const` from a `let`/`var`.
+    frontend::BindingKind bindingKind = frontend::BindingKind::Let;
 };
 
 struct ModuleTimings {

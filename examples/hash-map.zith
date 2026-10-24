@@ -11,5 +11,5 @@ fn main(): i32 {
         return 2;
     }
     hm.HashMap.destroy(lend map);
-    return 0;
+    0
 }

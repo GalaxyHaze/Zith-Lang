@@ -7,11 +7,11 @@ import "stdio.h"
 fn classify(score: i32): i32 {
     if (score < 50) { return 0; }
     if (score < 80) { return 1; }
-    return 2;
+    2
 }
 
 fn main(): i32 {
     let bucket = classify(73);
     _ = printf("bucket=%d\n", bucket);
-    return 0;
+    0
 }

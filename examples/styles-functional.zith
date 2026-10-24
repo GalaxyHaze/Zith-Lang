@@ -16,6 +16,6 @@ fn main(): i32 {
     let heap = HeapAllocator {};
     73
         |> classify(..)
-        do { println(heap, "bucket=#", ..); };
-    return 0;
+        do { println(heap, "bucket=#", ..) };
+    0
 }

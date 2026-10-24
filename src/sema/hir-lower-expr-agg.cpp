@@ -66,6 +66,29 @@ hir::HirExprId HirLowerModern::lowerField(const frontend::Expression &expr,
     // lower the alias base (which would fail to resolve 'console').
     if (const auto *resolved = findResolvedExpr(expr.id);
         resolved != nullptr && resolved->kind == session::ResolutionKind::Import) {
+        // `ns.CONST` resolves the member as an import; emit the same global
+        // constant load a bare name would produce instead of treating the
+        // alias base as a struct receiver.
+        if (resolved->declKind == frontend::DeclKind::Variable &&
+            resolved->bindingKind == frontend::BindingKind::Const) {
+            const session::ModuleArtifact *decl_module = current_module_;
+            frontend::DeclId decl_id                   = resolved->declaration;
+            if (!resolved->target.module.empty()) {
+                decl_module = snapshot_.findModule(resolved->target.module);
+                if (!decl_id && resolved->target.localSymbol)
+                    decl_id = frontend::DeclId{resolved->target.localSymbol.value};
+            }
+            if (decl_module != nullptr && decl_module->frontend != nullptr && decl_id &&
+                decl_id.value <= decl_module->frontend->declarations().size()) {
+                const auto key = internFunctionKey(interner_, decl_module->key, decl_id);
+                if (const auto *global_name = global_const_by_key_.get(key)) {
+                    hir::HirGlobalConstLoad load;
+                    load.name = *global_name;
+                    load.type = type;
+                    return addExpr(std::move(load));
+                }
+            }
+        }
         const frontend::Declaration *decl = resolvedFunctionDecl(*resolved);
         if (decl != nullptr) {
             hir::HirVar var;

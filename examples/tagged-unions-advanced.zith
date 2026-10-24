@@ -14,16 +14,16 @@ fn handle(v: Value): i32 {
         return 2;
     }
 
-    var total: i32 = 1;
+    var total = 1;
     when (v) {
-        (v is i32) { total = total + 5; },
-        (_) { total = 0; },
+        (v is i32) { total = total + 5 },
+        (_) { total = 0 }
     }
 
     if (v is bool) {
         return 3;
     }
-    return total;
+    total
 }
 
 fn main(): i32 {
@@ -36,5 +36,5 @@ fn main(): i32 {
     if not (flag is bool) {
         return 5;
     }
-    return 7;
+    7
 }

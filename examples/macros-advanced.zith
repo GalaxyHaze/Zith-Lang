@@ -6,9 +6,9 @@ raw macro sum(a: identifier, b: identifier, out: identifier) {
 }
 
 fn main(): i32 {
-    var left: i32 = 4;
-    var right: i32 = 5;
-    var result: i32 = 0;
+    var left = 4;
+    var right = 5;
+    var result = 0;
     @sum(left, right, result);
-    return result;
+    result
 }

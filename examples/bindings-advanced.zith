@@ -13,10 +13,10 @@ fn main(): i32 {
     let q: i32;
     q = 42;
 
-    const LOCAL: i32 = 42;
+    const LOCAL = 42;
 
     // `p` is `var`, so writing a field is legal.
     p.x = p.x + 0;
 
-    return LOCAL;
+    LOCAL
 }

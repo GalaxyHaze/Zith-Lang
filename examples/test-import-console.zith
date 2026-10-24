@@ -3,5 +3,5 @@ from std/memory
 fn main(): i32 {
     let heap = HeapAllocator {};
     _ = std.io.console.println(heap, "full path");
-    return 0;
+    0
 }

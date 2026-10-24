@@ -185,6 +185,10 @@ capability names.
 
 #### `Trust` — Safe Sections with Raw Code
 
+> **Full-Zith direction:** the `trust fn` safety level supersedes this
+> capability as the way safe code reaches raw and hazard work. See
+> [ADR-0043](adr/0043-full-zith-safety-levels-safe-trust-hazard.md).
+
 ```zith
 trait Place
     extends Trust

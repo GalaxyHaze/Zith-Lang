@@ -4,5 +4,5 @@
 macro answer() { 42; }
 
 fn main(): i32 {
-    return @answer();
+    @answer()
 }

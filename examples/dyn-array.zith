@@ -45,5 +45,5 @@ fn main(): i32 {
     if (da.len<i32>(view values) != 0u64 or da.capacity<i32>(view values) != 0u64) {
         return 10;
     }
-    return 0;
+    0
 }

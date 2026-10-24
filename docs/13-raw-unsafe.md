@@ -3,6 +3,11 @@
 > **Status:** see [impl-status.md](impl-status.md) for the current status of the raw and unsafe
 > surface.
 
+> **Full-Zith direction:** this chapter describes the Zith-- surface. Full Zith
+> replaces the `raw`/`unsafe` function kinds with the `safe`, `trust`, and
+> `hazard` levels and the `hazard { }` and `safe { }` blocks. See
+> [ADR-0043](adr/0043-full-zith-safety-levels-safe-trust-hazard.md).
+
 ### 13.1 Safety Hierarchy
 
 ```
@@ -47,6 +52,10 @@ raw fn dangerous(x: opaque) {
 ```
 
 ### 13.4 `Trust` as a Bridge
+
+> **Removed in full Zith:** the `Trust` capability is replaced by the `trust fn`
+> level. See [ADR-0043](adr/0043-full-zith-safety-levels-safe-trust-hazard.md).
+> This section describes the Zith-- bridge.
 
 `Trust` bridges safe code to raw and unsafe code. A trait extending `Trust` may contain `raw fn` methods that are callable from safe contexts:
 

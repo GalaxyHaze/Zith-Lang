@@ -6,7 +6,7 @@ fn pick(flag: bool): ?i32 {
     if (flag == false) {
         return null;
     }
-    return 6;
+    6
 }
 
 fn main(): i32 {
@@ -22,5 +22,5 @@ fn main(): i32 {
     if not (none is null) {
         return 5;
     }
-    return 4;
+    4
 }

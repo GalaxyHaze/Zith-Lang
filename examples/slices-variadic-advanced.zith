@@ -7,9 +7,9 @@ fn sum(rest: [...]i32): i32 {
     total = total + raw rest[1];
     total = total + raw rest[2];
     total = total + raw rest[3];
-    return total;
+    total
 }
 
 fn main(): i32 {
-    return sum(1, 2, 3, 6);
+    sum(1, 2, 3, 6)
 }

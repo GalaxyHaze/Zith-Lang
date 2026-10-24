@@ -25,5 +25,5 @@ fn main(): i32 {
         return 6;
     }
 
-    return 7;
+    7
 }

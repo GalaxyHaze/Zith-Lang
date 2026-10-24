@@ -3,7 +3,7 @@
 // Expected exit code: 14
 
 trait Drawable {
-    fn area(self): i32 { return 0; }
+    fn area(self): i32 { 0 }
 }
 
 struct Square {
@@ -25,9 +25,9 @@ implement Circle as Drawable {
 }
 
 fn total(a: dyn Drawable): i32 {
-    return a.area();
+    a.area()
 }
 
 fn main(): i32 {
-    return total(Square { side: 3 }) + total(Circle { radius: 5 });
+    total(Square { side: 3 }) + total(Circle { radius: 5 })
 }

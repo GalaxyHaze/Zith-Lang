@@ -16,6 +16,8 @@ state Done(n: i32, value: i32): i32 {
 }
 
 extern fn putchar(c: i32): i32
+
+// putchar is an extern C function available in the standard environment.
 fn mark(kind: i32) {
     _ = putchar(64 + kind);
 }

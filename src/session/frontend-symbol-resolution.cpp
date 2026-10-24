@@ -462,6 +462,7 @@ FrontendContext::buildResolutions(const std::vector<ModuleArtifactPtr> &modules,
                                                   {},
                                                   {}};
                             imported.declKind        = symbol.kind;
+                            imported.bindingKind     = symbol.bindingKind;
                             imported.signature       = symbol.signature;
                             imported.isExtern        = symbol.isExtern;
                             imported.externalSymbol  = symbol.externalSymbol;
@@ -500,6 +501,7 @@ FrontendContext::buildResolutions(const std::vector<ModuleArtifactPtr> &modules,
                                               {},
                                               {}};
                         imported.declKind        = symbol.kind;
+                        imported.bindingKind     = symbol.bindingKind;
                         imported.signature       = symbol.signature;
                         imported.isExtern        = symbol.isExtern;
                         imported.externalSymbol  = symbol.externalSymbol;
@@ -606,6 +608,7 @@ FrontendContext::buildResolutions(const std::vector<ModuleArtifactPtr> &modules,
                     member.target          = {target, symbol.id};
                     member.expr            = expression.id;
                     member.declKind        = symbol.kind;
+                    member.bindingKind     = symbol.bindingKind;
                     member.signature       = symbol.signature;
                     member.isExtern        = symbol.isExtern;
                     member.externalSymbol  = symbol.externalSymbol;
@@ -728,6 +731,7 @@ FrontendContext::buildResolutions(const std::vector<ModuleArtifactPtr> &modules,
                         member.target          = {target_module, symbol.id};
                         member.expr            = node.id;
                         member.declKind        = symbol.kind;
+                        member.bindingKind     = symbol.bindingKind;
                         member.signature       = symbol.signature;
                         member.isExtern        = symbol.isExtern;
                         member.externalSymbol  = symbol.externalSymbol;

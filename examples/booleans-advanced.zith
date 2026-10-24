@@ -6,15 +6,15 @@ fn score(ok: bool, present: bool): i32 {
     var total: i32 = 0;
     for (ok and present) {
         total = total + 3;
-        break;
+        break
     }
     if (ok or not present) {
-        total = total + 3;
+        total = total + 3
     }
-    for (var i: i32 = 0), (i < 2 and ok), (i = i + 1) {
-        total = total + 2;
+    for (var i = 0), (i < 2 and ok), (i = i + 1) {
+        total = total + 2
     }
-    return total;
+    total
 }
 
 fn main(): i32 {

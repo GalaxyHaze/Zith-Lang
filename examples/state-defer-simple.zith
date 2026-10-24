@@ -3,11 +3,11 @@
 
 state CountDown(n: i32): i32 {
     if (n > 0) {
-        jump CountDown(n - 1);
+        jump CountDown(n - 1)
     }
-    return 42;
+    42
 }
 
 fn main(): i32 {
-    return dock CountDown(1000);
+    dock CountDown(1000)
 }

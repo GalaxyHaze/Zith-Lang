@@ -2,15 +2,15 @@
 // consts, shifts, and bitwise expressions.
 // Expected exit code: 12
 
-const BASE: i32 = 8;
+const BASE = 8;
 
 enum Flag {
     SHIFT = 1 << 4,
     OR = 1 |. 4,
     PREV = SHIFT + 1,
-    FROM_GLOBAL = BASE,
+    FROM_GLOBAL = BASE
 }
 
 fn main(): i32 {
-    return Flag.SHIFT as i32 + Flag.OR as i32 - Flag.PREV as i32 + Flag.FROM_GLOBAL as i32;
+    Flag.SHIFT as i32 + Flag.OR as i32 - Flag.PREV as i32 + Flag.FROM_GLOBAL as i32
 }

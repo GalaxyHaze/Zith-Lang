@@ -1,7 +1,11 @@
 ## 21. Best Practices & Patterns
 
-> **Note:** Best practices in this chapter describe the intended programming model. Verify feature
-> availability in [impl-status.md](impl-status.md) before applying a pattern.
+> **Scope:** this chapter describes the **full Zith** design, not the Zith--
+> subset. The patterns below use `%T`, `&T`, `&mut T`, `^T`, `try ... or`,
+> `fail`, `catch`, `resume`, `use`, `risky()!`, and `assert AS CHECK`, none of
+> which compile in Zith-- today. Verify each pattern in
+> [impl-status.md](impl-status.md) before applying it, and read
+> [`Zith--.md`](Zith--.md) for the supported subset.
 
 ### 21.1 Ownership Patterns
 

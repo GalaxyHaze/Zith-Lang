@@ -2,7 +2,7 @@
 // Expected exit code: 42
 
 struct Sample {
-    x: i32,
+    x: i32
 }
 
 fn bump(p: lend Sample): i32 {
@@ -15,7 +15,7 @@ fn read(p: view Sample): i32 {
 }
 
 fn main(): i32 {
-    var q: Sample = Sample { x: 41 };
+    var q = Sample { x: 41 };
     if (bump(lend q) != 42) {
         return 1;
     }

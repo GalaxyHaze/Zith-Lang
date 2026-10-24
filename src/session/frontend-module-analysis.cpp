@@ -439,7 +439,10 @@ ModuleArtifactPtr FrontendContext::buildModule(
                                declaration.isVariadic,
                                !declaration.parameters.empty() &&
                                    declaration.parameters.back().isVariadicSlice,
-                               declaration.discardable()};
+                               declaration.discardable(),
+                               declaration.kind == frontend::DeclKind::Variable
+                                   ? declaration.bindingKind
+                                   : frontend::BindingKind::Let};
         if (symbol.visibility == frontend::Visibility::Public)
             artifact->publicSymbols.push_back(std::move(symbol));
         else

@@ -3,7 +3,7 @@
 // Expected exit code: 42
 
 struct Box {
-    value: i32,
+    value: i32
 }
 
 fn main(): i32 {
@@ -20,7 +20,8 @@ fn main(): i32 {
     }
     if (b is Box) {
         let payload: Box = b;
-        return payload.value;
+        payload.value
+    } else {
+        3
     }
-    return 3;
 }

@@ -2,11 +2,11 @@
 // Expected exit code: 6
 
 fn sumSlice(values: []i32): i32 {
-    return raw values[0] + raw values[1] + raw values[2];
+    raw values[0] + raw values[1] + raw values[2]
 }
 
 fn main(): i32 {
     var numbers: [3]i32 = [1, 2, 3];
     let slice: []i32 = raw numbers[0..3];
-    return sumSlice(slice);
+    sumSlice(slice)
 }

@@ -60,7 +60,7 @@ Implementation work that is incomplete or needs review is tracked in
 | `state` machine | **Working** | `state` declarations, `dock State(args)` expressions, and `jump Next(args)` terminating transitions are parsed, typed, and lowered. States in one machine share a return type but may have different parameter lists; a state without a written return type is `void` and is not inferred from the body. State functions and calls use LLVM `tailcc`; transitions emit direct `musttail tailcc` calls followed by `ret`; old `flow fn`/`marker` syntax is rejected. `state(params): ret` is a value type that accepts a real matching `state` declaration and supports `dock S(args)` indirect calls |
 | Function return termination | **Working** | Non-void functions reject paths that can fall through without a value. Implicit final-value bodies, complete `if`/`else` or `when` with a default, state `jump`, and unbounded `for` loops without a direct `break` are accepted; otherwise the body reports a missing-return diagnostic |
 | `raw fn` | **Working** | Parsed and lowers |
-| `const fn` | **Parse-level in progress** | Parsed as a function declaration with `FunctionKind::Const`; compile-time evaluation is not implemented |
+| `const fn` | **Parse error** | Rejected by the parser; compile-time evaluation is not part of Zith-- |
 | `extern fn` | **Working** | C ABI interop |
 | `let`, `var`, `const`, `global` | **Working** | All binding forms. `const` means immutable, not comptime |
 
@@ -166,12 +166,10 @@ Implementation work that is incomplete or needs review is tracked in
 |---|---|
 | NRA ownership proof (full state machine and proof rules; Zith-- implements only the frozen SRA slice, see the pipeline table) | [nra-spec.md](nra-spec.md) |
 | `comptime` evaluation | [11-comptime.md](11-comptime.md) |
-| `const fn` evaluation | [11-comptime.md](11-comptime.md) |
 | `try` / `try ... or` / `fail` / `with` / `catch` / `must(cond)` assertion / `throw` | [08-error-handling.md](08-error-handling.md) |
 | Assets (`ZithProject.toml` asset paths) | [12-assets.md](12-assets.md) |
 | `.zirl` binary format | [01-overview (§1.5)](Zith-spec.md) |
 | `@appendField`, `@removeField`, `@appendMethod` | [11-comptime.md](11-comptime.md) |
-| `dyn` dispatch | [14-polymorphism.md](14-polymorphism.md) |
 
 ---
 

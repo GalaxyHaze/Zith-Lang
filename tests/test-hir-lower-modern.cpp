@@ -407,6 +407,92 @@ void test_untyped_const_global_type_comes_from_initializer() {
           "untyped const global gets the type inferred from its initializer");
 }
 
+void test_selective_imported_const_lowers_to_global_const_load() {
+    Workspace workspace;
+    workspace.writeFile("dep.zith", "pub const VALUE: i32 = 7;\n");
+    workspace.writeFile("main.zith", "from dep { VALUE as selected }\n"
+                                     "const COPY: i32 = selected;\n"
+                                     "fn main(): i32 {\n"
+                                     "    return selected;\n"
+                                     "}\n");
+
+    memory::Arena arena;
+    Options options(arena);
+    auto session = makeSession(workspace, arena, options, "main.zith");
+
+    CHECK(session.runTo(session::Stage::HirLowered),
+          "selectively imported const lowers to HIR");
+
+    const auto &hir = session.hirModule();
+    CHECK(hir.getGlobalConstCount() >= 1u,
+          "imported const is represented as a global const");
+
+    bool saw_load = false;
+    for (size_t i = 0; i < hir.exprCount(); ++i) {
+        if (std::holds_alternative<hir::HirGlobalConstLoad>(
+                hir.getExpr(static_cast<hir::HirExprId>(i))))
+            saw_load = true;
+    }
+    CHECK(saw_load, "referencing the selectively imported const lowers to a global const load");
+}
+
+void test_from_imported_const_lowers_to_global_const_load() {
+    Workspace workspace;
+    workspace.writeFile("dep.zith", "pub const VALUE: i32 = 7;\n");
+    workspace.writeFile("main.zith", "from dep\n"
+                                     "fn main(): i32 {\n"
+                                     "    return VALUE;\n"
+                                     "}\n");
+
+    memory::Arena arena;
+    Options options(arena);
+    auto session = makeSession(workspace, arena, options, "main.zith");
+
+    CHECK(session.runTo(session::Stage::HirLowered),
+          "`from`-injected const lowers to HIR");
+
+    const auto &hir = session.hirModule();
+    CHECK(hir.getGlobalConstCount() >= 1u,
+          "`from`-injected const is represented as a global const");
+
+    bool saw_load = false;
+    for (size_t i = 0; i < hir.exprCount(); ++i) {
+        if (std::holds_alternative<hir::HirGlobalConstLoad>(
+                hir.getExpr(static_cast<hir::HirExprId>(i))))
+            saw_load = true;
+    }
+    CHECK(saw_load, "referencing the `from`-injected const lowers to a global const load");
+}
+
+void test_qualified_imported_const_lowers_to_global_const_load() {
+    Workspace workspace;
+    workspace.writeFile("dep.zith", "pub const VALUE: i32 = 7;\n");
+    workspace.writeFile("main.zith", "import dep as ns\n"
+                                     "fn main(): i32 {\n"
+                                     "    return ns.VALUE;\n"
+                                     "}\n");
+
+    memory::Arena arena;
+    Options options(arena);
+    auto session = makeSession(workspace, arena, options, "main.zith");
+
+    CHECK(session.runTo(session::Stage::HirLowered),
+          "namespace-qualified imported const lowers to HIR");
+
+    const auto &hir = session.hirModule();
+    CHECK(hir.getGlobalConstCount() >= 1u,
+          "namespace-qualified imported const is represented as a global const");
+
+    bool saw_load = false;
+    for (size_t i = 0; i < hir.exprCount(); ++i) {
+        if (std::holds_alternative<hir::HirGlobalConstLoad>(
+                hir.getExpr(static_cast<hir::HirExprId>(i))))
+            saw_load = true;
+    }
+    CHECK(saw_load,
+          "referencing the namespace-qualified imported const lowers to a global const load");
+}
+
 void test_if_else_lowers_to_branch_and_merge() {
     Workspace workspace;
     workspace.writeFile("main.zith", "fn pick(flag: bool): i32 {\n"
@@ -1728,6 +1814,50 @@ void test_generic_function_lowers_to_concrete_instances() {
         CHECK_EQ(countTerminatorKind(hir, *identity, hir::HirExprKind::Ret), 1u,
                  "identity<i32> returns from its concrete body");
     }
+}
+
+void test_generic_template_survives_persistent_cache() {
+    IsolatedWorkspace workspace;
+    workspace.writeFile("main.zith", "pub fn identity<T>(value: T): T { return value; }\n"
+                                     "fn main(): i32 { return identity(9); }\n");
+
+    memory::Arena first_arena;
+    Options first_options(first_arena);
+    first_options.noCache     = false;
+    first_options.targetStage = session::Stage::Cached;
+    session::CompilationSession first(first_options, (workspace.root / "main.zith").string());
+    first.setBuffered(true);
+    CHECK(first.run(), "cold generic compilation writes a persistent artifact");
+
+    const auto *written = first.persistentArtifact();
+    CHECK(written != nullptr, "cold generic compilation exposes its artifact");
+    if (written == nullptr)
+        return;
+    CHECK_EQ(written->templates.size(), 1u,
+             "artifact stores the generic function blueprint");
+    if (written->templates.size() != 1u)
+        return;
+    CHECK_EQ(written->templates[0].name, "identity",
+             "artifact stores the generic function's canonical name");
+    CHECK_EQ(written->templates[0].params.size(), 1u,
+             "artifact stores the generic parameter list");
+    CHECK_EQ(written->templates[0].params[0].name, "T",
+             "artifact stores the generic parameter name");
+
+    memory::Arena second_arena;
+    Options second_options(second_arena);
+    second_options.noCache     = false;
+    second_options.targetStage = session::Stage::HirLowered;
+    session::CompilationSession second(second_options, (workspace.root / "main.zith").string());
+    second.setBuffered(true);
+    CHECK(second.runTo(session::Stage::HirLowered),
+          "warm generic compilation reads the persistent artifact");
+
+    const auto *hydrated = second.persistentArtifact();
+    CHECK(hydrated != nullptr, "warm generic compilation exposes its artifact");
+    if (hydrated != nullptr)
+        CHECK_EQ(hydrated->templates.size(), 1u,
+                 "cache reader preserves the generic function blueprint");
 }
 
 void test_alias_qualified_free_generic_self_is_not_receiver() {
@@ -3076,11 +3206,15 @@ static void test_hir_lower_modern() {
     test_diverging_state_parameters_share_machine_id();
     test_local_states_qualify_and_lower_without_collisions();
     test_generic_function_lowers_to_concrete_instances();
+    test_generic_template_survives_persistent_cache();
     test_alias_qualified_free_generic_self_is_not_receiver();
     test_generic_bound_and_value_param_lower_to_hir();
     test_interface_method_bound_lower_to_hir();
     test_const_global_lowers_to_load();
     test_untyped_const_global_type_comes_from_initializer();
+    test_selective_imported_const_lowers_to_global_const_load();
+    test_from_imported_const_lowers_to_global_const_load();
+    test_qualified_imported_const_lowers_to_global_const_load();
     test_indirect_function_call_has_callee_and_fn_type();
     test_array_to_slice_coercion_lowers_to_make_slice();
     test_slice_range_lowers_to_checked_optional_view();

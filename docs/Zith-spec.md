@@ -120,6 +120,13 @@ source -> lex -> scan -> resolve(import/symbols) -> sema -> comptime/solve -> NT
 
 ## Specification
 
+The chapters below describe the **full Zith** design. They are the intended
+language, not the subset the `main` compiler builds. `string`, `T!` failable
+values, `&T`/`&mut T`, `^T`, `%T`, `try`/`fail`/`catch`, `use`/contexts/words,
+and `tag` items appear here as design material. For what compiles today, read
+[`Zith--.md`](Zith--.md) and [`impl-status.md`](impl-status.md); each chapter
+carries a status banner pointing at `impl-status.md`.
+
 | # | Topic | File | Summary |
 |---|---|---|---|
 | 2 | [Module System](02-module-system.md) | `02-module-system.md` | `import`, `from`, `export`, `alias`, `use`, visibility |
@@ -133,7 +140,7 @@ source -> lex -> scan -> resolve(import/symbols) -> sema -> comptime/solve -> NT
 | 10 | [Concurrency & Runtime APIs](10-concurrency.md) | `10-concurrency.md` | stdlib/runtime concurrency surface, resource safety, no core syntax |
 | 11 | [Comptime](11-comptime.md) | `11-comptime.md` | `const`, reflection, type manipulation, intrinsics |
 | 12 | [Assets](12-assets.md) | `12-assets.md` | Compile-time asset processing, `ZithProject.toml` |
-| 13 | [Raw & Unsafe](13-raw-unsafe.md) | `13-raw-unsafe.md` | `raw`, `unsafe`, `Trust` capability |
+| 13 | [Raw & Unsafe](13-raw-unsafe.md) | `13-raw-unsafe.md` | `raw`, `unsafe`; full Zith uses `safe`/`trust`/`hazard` ([ADR-0043](adr/0043-full-zith-safety-levels-safe-trust-hazard.md)) |
 | 14 | [Polymorphism](14-polymorphism.md) | `14-polymorphism.md` | `dyn`, static vs dynamic dispatch, object safety |
 | 15 | [Macros](15-macros.md) | `15-macros.md` | Zith-- normal and raw macros, full-Zith tags, and their distinct syntax |
 | 16 | [Words](16-words.md) | `16-words.md` | Custom operators, `operator`, `token`, precedence |
@@ -168,11 +175,11 @@ source -> lex -> scan -> resolve(import/symbols) -> sema -> comptime/solve -> NT
 | `pub` / `mod` / `mod(..)` / `mod(N)` | Visibility | Public / module-local, with optional depth. |
 | `let` / `var` / `global` / `const` | Bindings | Immutable / mutable / static storage / compile-time constant. |
 | `default` / `&T` / `&mut T` / `^T` / `%T` | Memory | Full-Zith reference and ownership forms. Zith-- currently implements the `lend`/`view` call-annotation subset. |
-| `fn` / `const fn` / `state` / `raw fn` / `extern fn` | Functions | Five exclusive function kinds; cannot be combined. |
+| `fn` / `const fn` / `state` / `extern fn` | Functions | Exclusive function kinds; cannot be combined. Safety is a separate level (`safe`/`trust`/`hazard`, [ADR-0043](adr/0043-full-zith-safety-levels-safe-trust-hazard.md)), not a function kind. |
 | `trait` / `contract` / `extends` / `requires` / `dyn` | OOP | Nominal traits, trait composition, structural contracts, bounds, and trait dynamic dispatch. |
 | `Copy` / `Functor` / `Arithmetic` | Capabilities | Operator and behavior capabilities. |
 | `Failable` / `Invalid` / `Error` | Capabilities | Invalid-state analysis, methods on proven-invalid `Failable` values, and the marker capability for error values ([§8](08-error-handling.md)). |
-| `Allocator` / `Generator` / `Share` / `Lent` / `Trust` / `Unique` | Capabilities | Memory, runtime protocol, and safety capabilities. |
+| `Allocator` / `Generator` / `Share` / `Lent` / `Unique` | Capabilities | Memory and runtime-protocol capabilities. The `Trust` capability is removed in full Zith and replaced by the `trust fn` safety level ([ADR-0043](adr/0043-full-zith-safety-levels-safe-trust-hazard.md)). |
 | `state` / `dock` / `jump` | State machines | `state` declarations, a state entry call, and terminating transitions. |
 | `fork` / `merge` / `revoke` | Threads | Core full-Zith syntax: create a thread, collect results, and revoke child access to resources. |
 | `spawn` | Threads | Stdlib shorthand for an implicit fork; not a core keyword. |

@@ -4,22 +4,22 @@
 
 struct Point {
     x: i32,
-    y: i32,
+    y: i32
 }
 
 struct Rect {
     origin: Point,
-    size: Point,
+    size: Point
 }
 
 fn width(r: *Rect): i32 {
-    return r->size.x;
+    r->size.x
 }
 
 fn main(): i32 {
     var box: Rect = Rect {
         origin: Point { x: 1, y: 2 },
-        size: Point { x: 4, y: 6 },
+        size: Point { x: 4, y: 6 }
     };
 
     let p: *Rect = &box;
@@ -30,5 +30,5 @@ fn main(): i32 {
     if (width(p) != 4) {
         return 2;
     }
-    return copy.size.x + raw box.origin.x + 2;
+    copy.size.x + raw box.origin.x + 2
 }

@@ -26,23 +26,21 @@
 
 | Syntax | Meaning |
 |---|---|
-| `[]T` | Slice — a fat pointer (pointer + length). String literals are `[]char`. |
+| `[]T` | Slice — a fat pointer (pointer + length). String literals are `*char` and adapt to `[]char`. |
 | `[N]T` | Fixed-size array, stack-allocated. |
-| `[_]T` | Deduced-size array — the compiler infers `N` from the initializer. |
 
-#### Strings & Origin Tracking
+#### Strings
 
-`char` is a UTF-8 code unit. `string` is a built-in library type backed by `[]char` with UTF-8 encoding.
-
-NRA tracks the **origin** of every string node, which is `literal`, `allocator`, or `local` (see [§7.1](07-memory-model.md#71-what-nra-tracks) for the complete set):
+`char` is a UTF-8 code unit. A string literal has type `*char` and adapts
+implicitly to `[]char` where a slice is expected. There is no built-in `string`
+type in Zith--; use `[]char` or `*char`. The origin-tracking rules in
+[§7.1](07-memory-model.md#71-what-nra-tracks) describe the full-Zith design.
 
 ```zith
-// []char implicitly casts to string, zero-cost (literal origin)
-let s: string = "hello";
-
-// Concatenation changes origin to allocator -- triggers allocation
-let greeting = "hello" + " " + "world";
+let text: []char = "hello";
 ```
+
+String literals concatenate with `+`, which produces an allocator-origin value.
 
 ### 3.3 Enum
 
@@ -72,7 +70,7 @@ enum Colors: RGBA {
 Use individual fields for unrelated fields, and `[]` groups for semantically related fields that share a type:
 
 ```zith
-struct Sample { name: string, age: i32 }
+struct Sample { name: *char, age: i32 }
 
 struct Point { [x, y, z]: f32 }
 
@@ -314,7 +312,7 @@ let isStruct = (T is @struct);
 
 ```zith
 // Explicit constraints
-fn serialize<T: Serializable + Printable, U: Clone>(val: T, ctx: U): string { ... }
+fn serialize<T: Serializable + Printable, U: Clone>(val: T, ctx: U): *char { ... }
 
 // Implicit constraints inferred from usage at the call site
 fn add(a, b) { a + b }   // Arithmetic is implicitly required

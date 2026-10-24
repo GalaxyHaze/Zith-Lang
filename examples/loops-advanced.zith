@@ -11,29 +11,29 @@ struct Counter {
         }
         let value = self->current;
         self->current = self->current + 1;
-        return value;
+        value
     }
 }
 
 fn main(): i32 {
-    var total: i32 = 0;
-    let counter: Counter = Counter { current: 0, limit: 5 };
+    var total = 0;
+    let counter = Counter { current: 0, limit: 5 };
     for (n in counter) {
-        total = total + n;
+        total = total + n
     }
 
-    var outer_hits: i32 = 0;
-    outer: for (var i: i32 = 0), (i < 3), (i += 1) {
-        for (var j: i32 = 0), (j < 3), (j += 1) {
+    var outer_hits = 0;
+    outer: for (var i = 0), (i < 3), (i += 1) {
+        for (var j = 0), (j < 3), (j += 1) {
             if (j == 1) {
-                continue outer;
+                continue outer
             }
             if (i == 2) {
-                break outer;
+                break outer
             }
         }
-        outer_hits = outer_hits + 1;
+        outer_hits = outer_hits + 1
     }
 
-    return total;
+    total
 }

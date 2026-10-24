@@ -4,12 +4,12 @@
 from std/memory
 
 struct Box {
-    value: i64,
+    value: i64
 }
 
 implement Box as InPlace {
     fn inplace(var self, args: opaque): bool {
-        return true;
+        true
     }
     fn clean(var self) {}
 }
@@ -19,5 +19,5 @@ fn main(): i32 {
     if not box.inplace(0) {
         return 1;
     }
-    return 42;
+    42
 }

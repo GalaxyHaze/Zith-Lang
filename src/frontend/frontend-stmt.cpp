@@ -650,7 +650,8 @@ ExprId AstLowerer::parseFor() {
 ExprId AstLowerer::parseWhile() {
     const uint32_t start = index_++;
     snapshot_.diagnostics_.push_back(
-        {tokenSpan(start), "'while' is deprecated; use 'for (cond) { }'", true});
+        {tokenSpan(start), "'while' is deprecated; use 'for (cond) { }'", true,
+         diagnostics::err::DeprecatedSyntax});
     Expression expression;
     expression.kind  = ExprKind::While;
     expression.scope = current_scope_;

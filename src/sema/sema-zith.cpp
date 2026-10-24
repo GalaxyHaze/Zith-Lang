@@ -30,16 +30,12 @@ bool PerModuleSema::isConstantExpression(frontend::ExprId id) const {
             return resolved->bindingKind == frontend::BindingKind::Const;
         if (resolved->local)
             return resolved->bindingKind == frontend::BindingKind::Const;
-        if (resolved->kind == session::ResolutionKind::Import) {
-            if (!resolved->target.localSymbol)
-                return false;
-            const auto *decl =
-                resolved->target.localSymbol.value <= snapshot.declarations().size()
-                    ? &snapshot.declarations()[resolved->target.localSymbol.value - 1U]
-                    : nullptr;
-            return decl != nullptr && decl->kind == frontend::DeclKind::Variable &&
-                   decl->bindingKind == frontend::BindingKind::Const;
-        }
+        // An imported name carries its source binding metadata in the
+        // resolution; the provider's symbol id is not an index into this
+        // module's declaration snapshot.
+        if (resolved->kind == session::ResolutionKind::Import)
+            return resolved->declKind == frontend::DeclKind::Variable &&
+                   resolved->bindingKind == frontend::BindingKind::Const;
         if (resolved->declaration) {
             const auto *decl = resolved->declaration.value <= snapshot.declarations().size()
                                    ? &snapshot.declarations()[resolved->declaration.value - 1U]

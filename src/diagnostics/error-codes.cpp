@@ -17,7 +17,7 @@ memory::Optional<ErrorInfo> lookupError(ErrCode code) noexcept {
                          "\\NNN, or \\xHH"};
     case err::InvalidIntLiteral:
         return ErrorInfo{code, 'E', "lexical", "Invalid integer literal",
-                         "Ensure digits are valid for the given base (0x, 0o, 0b)"};
+                         "Ensure digits are valid for the given base (0x, 0c, 0b)"};
     case err::UnclosedComment:
         return ErrorInfo{code, 'E', "lexical", "Unclosed comment",
                          "Add a closing '*/' to terminate the comment block"};

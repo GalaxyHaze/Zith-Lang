@@ -128,6 +128,34 @@ _Avoid_: purity annotation, NRA effect header
 A function whose returned value depends only on its explicit arguments, even when the function also performs side effects that do not affect that value.
 _Avoid_: deterministic function, side-effect-free function
 
+**Raw operation**:
+A full-Zith operation that bypasses a compiler check, split by blast radius. Light raw operations (`raw`) break only when misused, so their damage is contained by correct input. Heavy raw operations (`hazard`) break assumptions the compiler relies on, so they can corrupt or miscompile even when written correctly and their risk is not bounded by the operation itself.
+_Avoid_: unsafe operation, raw fn, hazard operation
+
+**Safety level**:
+The static classification of a callable by the raw operations its reachable body uses and whether it seals them. It is inferred when the callable is unannotated and pinned when written.
+_Avoid_: purity classification, capability requirement, trust level
+
+**Safe function**:
+A full-Zith callable whose body reaches no raw operation and opens no hazard block. It is written `safe` to pin the guarantee. A body that reaches a raw operation is a compile error.
+_Avoid_: pure function, trusted function
+
+**Trust function**:
+A full-Zith callable that uses light raw operations directly and heavy ones only inside a hazard block, and whose call site is sealed to the safe level. It is written `trust`, is the audited boundary that vouches for the raw work it contains, and may mark proven raw-free regions with a safe block.
+_Avoid_: unsafe function, sealed function
+
+**Hazard function**:
+A full-Zith callable that uses any raw operation and calls other hazard functions directly, and whose call site propagates the hazard level to its caller. It is written `hazard` and does not vouch for its own safety.
+_Avoid_: untrust fn, unsafe fn, raw fn, trusted function
+
+**Hazard block**:
+A full-Zith block that grants access to heavy raw operations and to hazard calls inside an otherwise-restricted body, and seals that access locally. It is the only place a trust function may use heavy raw operations.
+_Avoid_: unsafe block, raw block
+
+**Safe block**:
+A full-Zith block that revokes access to every raw operation and hazard call inside it. The compiler verifies the revocation, so a safe block is a proven raw-free region rather than an asserted one.
+_Avoid_: unsafe-off block, pure block
+
 ## Architecture
 
 **Frontend context**:

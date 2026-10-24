@@ -6,12 +6,12 @@ fn halfIfEven(n: i32): ?i32 {
     if (n - ((n / 2) * 2) != 0) {
         return null;
     }
-    return n / 2;
+    n / 2
 }
 
 fn quarter(n: i32): ?i32 {
     let half: i32 = halfIfEven(n)?;
-    return halfIfEven(half);
+    halfIfEven(half)
 }
 
 fn main(): i32 {
@@ -32,5 +32,5 @@ fn main(): i32 {
         return 3;
     }
 
-    return 14;
+    14
 }

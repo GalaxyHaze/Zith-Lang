@@ -28,5 +28,5 @@ fn main(): i32 {
         return 4;
     }
     deallocate(heap, resized, 128u64, 64u64);
-    return 42;
+    42
 }

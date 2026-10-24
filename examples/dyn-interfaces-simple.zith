@@ -17,9 +17,9 @@ struct Dog {
 }
 
 fn call(a: dyn Speak): i32 {
-    return a.value();
+    a.value()
 }
 
 fn main(): i32 {
-    return call(Cat { n: 2 }) + call(Dog { n: 2 });
+    call(Cat { n: 2 }) + call(Dog { n: 2 })
 }
