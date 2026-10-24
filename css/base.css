@@ -185,10 +185,28 @@ samp {
     text-transform: uppercase;
 }
 
+.hero .eyebrow {
+    color: var(--accent);
+    font-family: var(--font-ui);
+    font-size: var(--step-2);
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    text-transform: none;
+}
+
 /* Hero */
 .hero {
+    position: relative;
     padding-block: var(--space-8) var(--space-7);
     text-align: center;
+}
+
+.hero::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(circle at 50% 0%, rgba(226, 102, 46, 0.07), transparent 55%);
+    pointer-events: none;
 }
 
 .hero h1 {

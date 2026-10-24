@@ -35,7 +35,7 @@ and `raw macro`, `raw opaque` handles, `lend`/`view`, modules, and C header
 imports. All of it lowers through HIR to LLVM code generation for x86-64 and
 WebAssembly. Tag macros parse, but are rejected in the `Zith--` pipeline.
 
-Ownership analysis (NRA) has the `lend`/`view` call-annotation slice but not the
+Ownership analysis (SRA) has the `lend`/`view` call-annotation slice but not the
 full state machine. Comptime evaluation, `const fn`, async execution, and
 context-based extensions remain specification-only. `const fn` and `global`
 report `E2010`.

@@ -8,7 +8,8 @@
         {
           "title": "Introduction",
           "link": "./getting-started/D-introduction.html",
-          "children": []
+          "children": [],
+          "description": "Project overview, stability note, and how to read these docs."
         },
         {
           "title": "Getting Started",
@@ -24,7 +25,8 @@
               "link": "./getting-started/D-why-zith.html",
               "children": []
             }
-          ]
+          ],
+          "description": "Install Zith, write a first program, and learn how the language is positioned."
         },
         {
           "title": "Zith--",
@@ -121,7 +123,9 @@
               "link": "./zith--/D-reference.html",
               "children": []
             }
-          ]
+          ],
+          "description": "Implemented subset of Zith supported by zithc today.",
+          "badge": "Implemented"
         },
         {
           "title": "Zith",
@@ -248,7 +252,9 @@
                 }
               ]
             }
-          ]
+          ],
+          "description": "Full language design and future specifications.",
+          "badge": "Specification"
         },
         {
           "title": "CLI Reference",
@@ -304,22 +310,26 @@
               "link": "./cli/D-docs.html",
               "children": []
             }
-          ]
+          ],
+          "description": "Reference for zithc commands: build, run, check, format, create, test, and project tooling."
         },
         {
           "title": "Project",
           "link": "./project/D-overview.html",
-          "children": []
+          "children": [],
+          "description": "Project overview and current direction for the Zith programming language."
         },
         {
           "title": "FAQ",
           "link": "./faq/D-overview.html",
-          "children": []
+          "children": [],
+          "description": "Frequently asked questions about Zith stability, scope, and relationship to other languages."
         },
         {
           "title": "Community",
           "link": "./community/D-overview.html",
-          "children": []
+          "children": [],
+          "description": "Community resources for reporting issues and contributing to Zith documentation."
         }
       ]
     }

@@ -43,13 +43,13 @@ let point = | 10, 20, 'x' |;
 
 let x: i32 = point[0];
 let y: i32 = point[1];
-let marker: char = point[2];
+let flag: char = point[2];
 ```
 
 Use binding destructuring when each position needs a local name:
 
 ```zith
-let [x, y, marker] = point;
+let [x, y, flag] = point;
 ```
 
 Pack positions are known at compile time. A pack is not a homogeneous array,
@@ -57,8 +57,8 @@ so use `[N]T` or `[]T` when the program needs runtime indexing over values of
 one type. Named pack types can describe the member types and names explicitly:
 
 ```zith
-fn sample(): |x: i32, y: i32, marker: char| {
-    |x: 10, y: 20, marker: 'x'|
+fn sample(): |x: i32, y: i32, flag: char| {
+    |10, 20, 'x'|
 }
 ```
 

@@ -7,6 +7,10 @@ PORTAL — landing page
     padding-block: var(--space-7);
 }
 
+.section + .section {
+    border-top: 1px solid var(--border);
+}
+
 .section-head {
     max-width: var(--measure);
     margin-bottom: var(--space-5);
@@ -34,7 +38,7 @@ PORTAL — landing page
     font: inherit;
     font-size: var(--step--1);
     cursor: pointer;
-    transition: border-color 150ms ease, color 150ms ease;
+    transition: border-color 150ms ease, color 150ms ease, background-color 150ms ease;
 }
 
 .tab-btn:hover {
@@ -44,7 +48,7 @@ PORTAL — landing page
 
 .tab-btn.active {
     border-color: var(--accent);
-    background: color-mix(in srgb, var(--accent) 8%, var(--surface));
+    background: color-mix(in srgb, var(--accent) 12%, var(--surface));
     color: var(--accent-hover);
     font-weight: 600;
 }
@@ -54,6 +58,11 @@ PORTAL — landing page
     border: 1px solid var(--border);
     border-radius: var(--radius);
     background: var(--surface);
+    transition: box-shadow 150ms ease;
+}
+
+.code-viewer:hover {
+    box-shadow: 0 12px 32px rgba(22, 35, 46, 0.1);
 }
 
 .code-window-bar {
@@ -98,11 +107,29 @@ PORTAL — landing page
     grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
 }
 
+.feature-card {
+    padding: var(--space-5);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface);
+    transition: transform 150ms ease, box-shadow 150ms ease;
+}
+
+.feature-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(22, 35, 46, 0.08);
+}
+
 .feature-icon {
     width: 2rem;
     height: 2rem;
     margin-bottom: var(--space-3);
     color: var(--brand);
+    transition: transform 150ms ease;
+}
+
+.feature-card:hover .feature-icon {
+    transform: scale(1.08);
 }
 
 /* Install */
@@ -131,6 +158,7 @@ PORTAL — landing page
     font: inherit;
     font-size: var(--step--1);
     cursor: pointer;
+    transition: color 150ms ease, background-color 150ms ease;
 }
 
 .install-tab:hover {
@@ -142,6 +170,7 @@ PORTAL — landing page
     background: var(--surface);
     color: var(--title);
     font-weight: 600;
+    box-shadow: 0 1px 2px rgba(22, 35, 46, 0.06);
 }
 
 .install-content {
@@ -175,6 +204,12 @@ PORTAL — landing page
     border: 1px solid var(--border);
     border-radius: var(--radius);
     background: var(--surface);
+    transition: transform 150ms ease, box-shadow 150ms ease;
+}
+
+.news-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(22, 35, 46, 0.08);
 }
 
 .news-date {
@@ -194,4 +229,5 @@ PORTAL — landing page
 
 .news-card a:hover {
     text-decoration: underline;
+    color: var(--accent);
 }

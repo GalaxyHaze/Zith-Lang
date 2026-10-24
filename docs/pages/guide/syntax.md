@@ -39,7 +39,7 @@ There are no increment or decrement operators; write `i += 1`.
 
 ## Literals
 
-Integer literals accept explicit radix prefixes: `0x` hexadecimal, `0c` octal, and `0b` binary. Digit separators such as `1_000` are not supported, and a literal wider than 64 bits reports `E0004`. String and character literals decode the usual C-style escapes; an unknown escape reports `E0001`.
+Integer literals accept explicit radix prefixes: `0x` hexadecimal, `0c` octal, and `0b` binary. Digit separators such as `1_000` are not supported, and a literal wider than 64 bits reports `E0004`. String and character literals decode the usual C-style escapes; an unknown escape reports `E0003`.
 
 ```zith
 fn radix(): i32 {

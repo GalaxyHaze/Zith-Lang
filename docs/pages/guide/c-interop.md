@@ -22,7 +22,7 @@ Header imports are driven by libclang and handle ordinary C headers.
 import "stdio.h";
 
 fn main(): i32 {
-    printf("v=%d\n", 42);
+    _ = printf("v=%d\n", 42);
     0
 }
 ```

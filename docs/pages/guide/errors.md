@@ -8,7 +8,10 @@ kind: editorial
 ---
 # Optional Values and Errors
 
-Optional (`?T`) and failable (`T!`) types are working declared types. `null` coerces to `?T`, a plain `T` coerces to `?T`, and the postfix `?` operator propagates an optional operand inside a function that itself returns an optional.
+Optional (`?T`) types are a working declared type. `null` coerces to `?T`, a
+plain `T` coerces to `?T`, and the postfix `?` operator propagates an optional
+operand inside a function that itself returns an optional. Failable `T!` types
+are not part of Zith--.
 
 ```zith
 fn halve(value: ?i32): ?i32 {
@@ -30,7 +33,7 @@ The clearest Zith-- pattern is an explicit branch:
 ```zith
 fn portOrDefault(port: ?i32): i32 {
     if (port) {
-        return port;
+        return raw port;
     }
 
     return 8080;

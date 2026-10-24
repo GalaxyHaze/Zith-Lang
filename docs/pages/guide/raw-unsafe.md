@@ -21,7 +21,7 @@ An optional value must normally be checked before its payload is used:
 ```zith
 fn valueOrZero(value: ?i32): i32 {
     if (value) {
-        return value;
+        return raw value;
     }
 
     return 0;
@@ -33,7 +33,7 @@ check:
 
 ```zith
 fn valueAfterCheck(value: ?i32): i32 {
-    if (!value) {
+    if (value is null) {
         return 0;
     }
 
@@ -121,14 +121,16 @@ runtime trap can still occur when the operation cannot be executed.
 An expression-level `raw` applies to one operation:
 
 ```zith
-return raw value;
+fn unchecked(value: ?i32): i32 {
+    raw value
+}
 ```
 
 `raw fn` marks a whole function as a low-level boundary:
 
 ```zith
 raw fn readByte(buffer: *u8, index: u64): u8 {
-    buffer[index]
+    raw buffer[index]
 }
 ```
 

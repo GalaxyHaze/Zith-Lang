@@ -56,7 +56,7 @@ values with a fixed member order:
 let response = | 200, "ok", true |;
 
 let status: i32 = response[0];
-let message: []char = response[1];
+let message: *char = response[1];
 let accepted: bool = response[2];
 ```
 
@@ -71,8 +71,8 @@ homogeneous data that needs runtime indexing. Named pack types can describe
 the member names and types explicitly:
 
 ```zith
-fn response(): |status: i32, message: []char, accepted: bool| {
-    |status: 200, message: "ok", accepted: true|
+fn response(): |status: i32, message: *char, accepted: bool| {
+    |200, "ok", true|
 }
 ```
 

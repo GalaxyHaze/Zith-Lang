@@ -10,7 +10,7 @@ kind: editorial
 
 This guide is the practical entry point to Zith--. The `main` compiler builds
 the subset documented in the [English Zith-- reference](doc:zith-subset-reference).
-the larger language design is separated into the [Zith reference](doc:zith-overview).
+The larger language design is separated into the [Zith reference](doc:zith-overview).
 
 ## Learn the working language
 

@@ -8,7 +8,7 @@ kind: editorial
 ---
 # Control Flow
 
-`if`, `else if`, and `else` are working control-flow constructs, together with `break`, `continue`, and `return`.
+`if`, `else (cond)`, and `else` are working control-flow constructs, together with `break`, `continue`, and `return`. The legacy `else if (cond)` spelling still compiles but emits `W1008` and suggests `else (cond)`.
 
 ```zith
 fn sign(value: i32): i32 {
@@ -38,14 +38,14 @@ fn sum(n: i32): i32 {
 
 ## Pattern matching
 
-`when` matches a value against comma-separated arms written `(pattern) ~> body`. `match` is a synonym for the same construct. Equality, boolean, and range patterns lower through HIR to code generation.
+`when` matches a value against comma-separated arms written `(pattern) body`. `match` is a synonym for the same construct. The legacy `(pattern) ~> body` spelling still compiles but emits `W1008`. Equality, boolean, and range patterns lower through HIR to code generation.
 
 ```zith
 fn classify(x: i32): i32 {
     when (x) {
-        (0) ~> 100,
-        (1..3) ~> 200,
-        (_) ~> 300,
+        (0) 100,
+        (1..3) 200,
+        (_) 300,
     }
 }
 ```

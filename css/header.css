@@ -20,7 +20,15 @@ HEADER — shared chrome
     display: inline-flex;
     align-items: center;
     padding: var(--space-1);
-    border-radius: var(--radius-sm);
+    border: 1px solid var(--header-brand-border);
+    border-radius: 10px;
+    background: var(--header-brand-bg);
+    transition: background-color 150ms ease;
+}
+
+.site-header .brand:hover,
+.site-header .brand:focus-visible {
+    background: var(--header-brand-hover-bg);
 }
 
 .site-header .brand img {

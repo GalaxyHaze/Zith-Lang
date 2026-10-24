@@ -331,8 +331,13 @@ def markdown_html(page: Page, outputs: dict[str, str], source_map: dict[str, str
     return "\n".join(result) + "\n"
 
 
-def nav_item(title: str, page_id: str, children: Iterable[dict] = ()) -> dict:
-    return {"title": title, "link": f"./{PAGES_BY_ID[page_id].output}", "children": list(children)}
+def nav_item(title: str, page_id: str, children: Iterable[dict] = (), *, description: str = "", badge: str = "") -> dict:
+    item: dict[str, object] = {"title": title, "link": f"./{PAGES_BY_ID[page_id].output}", "children": list(children)}
+    if description:
+        item["description"] = description
+    if badge:
+        item["badge"] = badge
+    return item
 
 
 PAGES_BY_ID: dict[str, Page] = {}
@@ -357,27 +362,32 @@ def build_tree() -> list[dict]:
            ("build", "run", "check", "fmt", "create", "clean", "execute", "test", "deps", "docs")]
     return [{
         "title": "Home", "link": "", "children": [
-            nav_item("Introduction", "getting-started-introduction"),
+            nav_item("Introduction", "getting-started-introduction",
+                     description="Project overview, stability note, and how to read these docs."),
             nav_item("Getting Started", "getting-started-quick-start", [
                 nav_item("Installation", "getting-started-installation"),
                 nav_item("Why Zith", "getting-started-why-zith"),
-            ]),
+            ], description="Install Zith, write a first program, and learn how the language is positioned."),
             nav_item("Zith--", "zith-subset-overview", [
                 nav_item("Overview", "zith-subset-overview"),
                 nav_item("Language Guide", "guide-overview",
                          [nav_item(title, page_id) for title, page_id in guide]),
                 nav_item("Reference", "zith-subset-reference"),
-            ]),
+            ], description="Implemented subset of Zith supported by zithc today.", badge="Implemented"),
             nav_item("Zith", "zith-overview", [
                 nav_item("Overview", "zith-overview"),
                 nav_item("Language Reference",
                          "reference-specification",
                          [nav_item(title, page_id) for title, page_id in zith_reference]),
-            ]),
-            nav_item("CLI Reference", "cli-overview", [nav_item(title, page_id) for title, page_id in cli]),
-            nav_item("Project", "project-overview"),
-            nav_item("FAQ", "faq-overview"),
-            nav_item("Community", "community-overview"),
+            ], description="Full language design and future specifications.", badge="Specification"),
+            nav_item("CLI Reference", "cli-overview", [nav_item(title, page_id) for title, page_id in cli],
+                     description="Reference for zithc commands: build, run, check, format, create, test, and project tooling."),
+            nav_item("Project", "project-overview",
+                     description="Project overview and current direction for the Zith programming language."),
+            nav_item("FAQ", "faq-overview",
+                     description="Frequently asked questions about Zith stability, scope, and relationship to other languages."),
+            nav_item("Community", "community-overview",
+                     description="Community resources for reporting issues and contributing to Zith documentation."),
         ],
     }]
 

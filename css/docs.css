@@ -42,6 +42,33 @@ DOCS — documentation shell
     text-decoration: none;
 }
 
+.docs-sidebar .ui-nav-title {
+    display: inline;
+}
+
+.docs-sidebar .ui-nav-badge {
+    display: inline-block;
+    margin-left: var(--space-2);
+    padding: 0.1em 0.55em;
+    border-radius: 999px;
+    background: var(--accent);
+    color: var(--brand-ink);
+    font-size: 0.65rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    line-height: 1.4;
+}
+
+.docs-sidebar .ui-nav-description {
+    display: block;
+    margin-top: var(--space-1);
+    padding-left: var(--space-2);
+    color: var(--text-muted);
+    font-size: 0.8rem;
+    line-height: 1.4;
+}
+
 /* Group label (a nav item without a link) */
 .docs-sidebar span.ui-nav-link {
     color: var(--title);

@@ -83,13 +83,31 @@ function renderMenu(items, parent) {
         // Group headers (no link) render as plain labels, not as links.
         const a = document.createElement(item.link ? "a" : "span");
         a.className = "ui-nav-link";
-        a.textContent = item.title;
+        const title = document.createElement("span");
+        title.className = "ui-nav-title";
+        title.textContent = item.title;
+        a.appendChild(title);
+
+        if (item.badge) {
+            const badge = document.createElement("span");
+            badge.className = "ui-nav-badge";
+            badge.textContent = item.badge;
+            a.appendChild(badge);
+        }
+
         if (item.link) {
             a.href = item.link;
             a.dataset.link = item.link;
         }
 
         li.appendChild(a);
+
+        if (item.description) {
+            const desc = document.createElement("span");
+            desc.className = "ui-nav-description";
+            desc.textContent = item.description;
+            li.appendChild(desc);
+        }
 
         if (item.children) {
             renderMenu(item.children, li);

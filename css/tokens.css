@@ -26,6 +26,9 @@ See notes/decisions/0002-paleta-flat.md.
     --header-bg: #26324f;
     --header-text: #e2e8f5;
     --header-hover-bg: #1c2740;
+    --header-brand-border: #8fc8eb;
+    --header-brand-bg: #e3f3fc;
+    --header-brand-hover-bg: #cde8f8;
     --footer-bg: #1a2130;
     --footer-text: #b9c2d6;
     --footer-link: #ffb27a;
