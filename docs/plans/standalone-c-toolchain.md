@@ -407,7 +407,8 @@ Sub-steps:
 2. Keep `ZITH_TCC_ROOT` and `libtcc` detection for experimental builds.
 3. Add CMake option `ZITH_EXPERIMENTAL_TINYCC` defaulting to `OFF`; when ON, keep the existing fetch/ExternalProject path.
 4. In `ToolchainRegistry`, register `LibTcc` only when `ZITH_EXPERIMENTAL_TINYCC=ON` and the library is found.
-5. Update `docs/18-c-interop.md`, `memory/build-c-compile.md`, and `README.md` to describe TinyCC as optional/experimental.
+5. Update `docs/18-c-interop.md`, local build notes, and `README.md` to
+   describe TinyCC as optional/experimental.
 6. Keep `compileWithTcc` code under the experiment gate so it can be compared later with the tiny C backend.
 
 Commands:

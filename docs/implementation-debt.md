@@ -308,8 +308,8 @@ testes de sema e execução. A dívida restante é migrar
 `Formatable.format(self, dest)` e as helpers de append de `lend FormatBuffer`
 para `lend dyn TextSink`, incluindo `[]char` e buffers fixos. A intenção de
 design está registada em
-[0022-stdlib-io-format-split.md](/home/diogo/Zith/docs/adr/0022-stdlib-io-format-split.md),
-`memory/stdlib-io-format.md` e `CONTEXT.md`.
+[0022-stdlib-io-format-split.md](/home/diogo/Zith/docs/adr/0022-stdlib-io-format-split.md)
+e `CONTEXT.md`.
 
 ## Dívida de estrutura: monolitos
 
@@ -388,20 +388,13 @@ e o respetivo plano ativo está em
 ### A. Referências a `src/ir` que já não existe (resolvida)
 
 Estado resolvido: o slice de execução v1 está arquivado em
-`archive/execution-ir-v1/` e `src/ir/` já não existe. Os três documentos que o
-descreviam como parte da árvore ativa foram corrigidos para apontar para o
-arquivo:
+`archive/execution-ir-v1/` e `src/ir/` já não existe. O ADR público que o
+descrevia como parte da árvore ativa foi corrigido para apontar para o arquivo:
 
 - [0024-wasm-vm-v2-abi.md](/home/diogo/Zith/docs/adr/0024-wasm-vm-v2-abi.md:13)
   diz agora que o IR antigo está em `archive/execution-ir-v1/`.
-- [audit-cleaning.md](/home/diogo/Zith/memory/audit-cleaning.md:9) deixou de
-  listar `src/ir/exec-ir.hpp` e `src/interp/ir-vm.{hpp,cpp}` como ficheiros
-  committed e deixou de dizer que o CMake os remove do glob.
-- [agent7-formatter-build.md](/home/diogo/Zith/memory/agent7-formatter-build.md:23)
-  já não cita os símbolos `src/ir/hir-to-ir.cpp` e `src/interp/ir-vm.cpp`.
-
-Verificação: `rg -n "src/ir/(exec-ir|hir-to-ir)|src/interp/ir-vm"` nesses três
-ficheiros devolve zero correspondências.
+Verificação: `rg -n "src/ir/(exec-ir|hir-to-ir)|src/interp/ir-vm"` nos
+documentos públicos relevantes devolve zero correspondências.
 
 ### B. Ficheiro de merge residual em `src/` (resolvida)
 

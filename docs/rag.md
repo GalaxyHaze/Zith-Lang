@@ -43,8 +43,8 @@ embedding model exists, pass both to the search command:
 
 ```bash
 python3 scripts/rag.py search "semantic parser" \
-  --embedder /home/diogo/llama.cpp/build/bin/llama-embedding \
-  --model /home/diogo/.ollama/models/blobs/sha256-06507c7b42688469c4e7298b0a1e16deff06caf291cf0a5b278c308249c3e439
+  --embedder /path/to/llama-embedding \
+  --model /path/to/embedding-model.gguf
 ```
 
 Embeddings are a hybrid re-rank layer on top of BM25. If the binary or model
@@ -63,8 +63,8 @@ Standard byteask registration command, run from the repository root:
 
 ```bash
 byteask mcp add rag \
-  --env RAG_PROJECT_DIR=/home/diogo/Zith \
-  -- python3 /home/diogo/Zith/scripts/rag-mcp.py
+  --env RAG_PROJECT_DIR=/path/to/Zith \
+  -- python3 /path/to/Zith/scripts/rag-mcp.py
 ```
 
 The tools are `rag_search`, `rag_show`, and `rag_stats`. They only spawn the

@@ -28,7 +28,7 @@ iteration, `format.zith` owns `Formatable`, `FormatBuffer`, `FormatResult`,
 `IoError`, and the owned free `format`. `console.zith` remains the real module
 for `InputLine`, `ParseInput`, `input()`, and the existing `print`/`println`.
 The future split into `consoleIn`/`consoleOut` plus a qualified facade is
-recorded in `docs/implementation-debt.md` and `memory/stdlib-io-format.md`.
+recorded in `docs/implementation-debt.md` and `CONTEXT.md`.
 
 The adopted owned result replaces a speculative `Result<T, E>` plan because
 tuple returns are unsupported and generic `Ok`/`Err` helper inference is

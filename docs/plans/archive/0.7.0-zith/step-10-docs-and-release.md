@@ -37,8 +37,8 @@ All steps in this directory must be done. This step must be run last.
 5. Update `docs/11-comptime.md` and `docs/14-polymorphism.md` status headers:
    comptime eval/introspection Working, `dyn` not implemented.
 6. Add a `CHANGELOG.md` `0.7.0` section listing the feature areas.
-7. Update `memory/comptime-generics-traits.md` if the implementation changed any
-   locked decision.
+7. Update local implementation notes if the implementation changed a locked
+   decision.
 
 ## Verification
 

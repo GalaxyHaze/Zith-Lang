@@ -10,8 +10,8 @@ ownership rules, severity, and the LLVM reference direction agreed so far.
 Add explicit ownership annotations on function-call arguments (`f(lend x)`,
 `f(view x)`, `f(share x)`), validate ownership coercions in sema, and restrict
 `belong` to struct fields. Literals do not require annotations. The changes must
-keep the stable pre-HIR NRA boundary from `memory/nra-hir-boundary.md`; this step
-does not implement the full NRA proof state machine.
+keep the stable pre-HIR NRA boundary; this step does not implement the full
+NRA proof state machine.
 
 ## Syntax
 
@@ -135,7 +135,7 @@ the formatter round-trip check on the touched files.
 - `docs/07-memory-model.md`: document call-site annotation syntax and the
   ownership coercion matrix.
 - `docs/roadmap.md`: update F-14 status to reflect the implemented slice.
-- `memory/README.md`: add a durable memory note for the migration branch.
+- Keep any migration-branch implementation notes local to maintainers.
 
 ## Assumptions
 

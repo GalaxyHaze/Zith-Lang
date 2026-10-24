@@ -99,6 +99,6 @@ State the decision and the evidence, then leave open questions at the end.
 
 ## Where each genre lives
 
-Put specs in `docs/`, user-facing docs in the site repo, and logs in
-`memory/` or the nearest dated file. If a file serves two genres, say so at
-the top and separate the sections rather than mixing them.
+Put specs in `docs/`, user-facing docs in the site repo, and logs in the
+appropriate dated project record. If a file serves two genres, say so at the
+top and separate the sections rather than mixing them.

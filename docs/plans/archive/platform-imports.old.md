@@ -130,7 +130,7 @@ Minimum coverage in `tests/test-frontend-context.cpp` and
 
 - `docs/plans/0.7.0/README.md`
 - `docs/roadmap.md`
-- `memory/platform-imports.md`
+- local platform-import implementation notes
 
 After implementation, also update:
 

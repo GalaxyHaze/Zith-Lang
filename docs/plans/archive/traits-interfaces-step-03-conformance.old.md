@@ -134,5 +134,5 @@ ctest --test-dir build --output-on-failure
 - `docs/04-traits-interfaces.md`: mark the trait/interface body and conformance
   section Working; `dyn` remains spec-only.
 - `docs/roadmap.md`: F-37 complete; F-29 dependency satisfied.
-- `memory/nra-hir-boundary.md`: verify the method-dispatch notes still match after
-  auto-deref/conformance changes.
+- Local NRA boundary notes: verify the method-dispatch description still
+  matches after auto-deref/conformance changes.

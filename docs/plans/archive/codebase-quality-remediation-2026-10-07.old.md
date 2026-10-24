@@ -23,16 +23,15 @@ Preconditions:
 Files modified by this plan:
 
 - `docs/adr/0024-wasm-vm-v2-abi.md` (step 1)
-- `memory/audit-cleaning.md` (steps 1 and 4)
-- `memory/agent7-formatter-build.md` (step 1)
+- private audit and formatter notes (steps 1 and 4)
 - `src/vm/typed-ir.hpp.orig` (step 2, deleted)
 - `src/memory/string-interner.hpp`, `src/hir/hir-module.hpp`, `src/cli/options.hpp` (step 3)
 
 Forbidden actions:
 
 - Never `git reset --hard`, `git checkout --`, or `git clean -fdx`.
-- Do not touch `docs/nra-spec.md`, the NRA ADRs (0033/0034/0035), or
-  `memory/nra-design.md`. Those carry unrelated in-flight edits.
+- Do not touch `docs/nra-spec.md` or the NRA ADRs (0033/0034/0035). They carry
+  unrelated in-flight edits.
 - Do not edit `docs/impl-status.md`; it is verified against compiler behaviour.
 - Do not revert the user's uncommitted changes listed by `git status`.
 - Do not reformat unrelated code; use `clang-format` only on files this plan edits.
@@ -54,14 +53,14 @@ Sub-steps:
    "The older execution IR (`exec-ir.hpp`, `hir-to-ir.*`, `ir-vm.*`) is
    archived under `archive/execution-ir-v1/` and is not in the active tree; VM
    v2 is the default portable runtime."
-4. Open `/home/diogo/Zith/memory/audit-cleaning.md`.
+4. Review the local audit notes.
 5. In the "Active WIP (do not touch)" list, remove the first bullet (the one
    naming `src/ir/exec-ir.hpp` and `src/interp/ir-vm.{hpp,cpp}`). Keep the
    second bullet about `docs/plans/abi/execution-ir.md`.
 6. In the "Finished In This Pass" list, remove the bullet that says
    "`CMakeLists.txt` removes `src/interp/ir-vm.cpp` and `src/ir/hir-to-ir.cpp`
    from the source glob", because those files no longer exist.
-7. Open `/home/diogo/Zith/memory/agent7-formatter-build.md`.
+7. Review the local formatter notes.
 8. Find the sentence naming the excluded `src/ir/hir-to-ir.cpp` and
    `src/interp/ir-vm.cpp` symbols (around line 25).
 9. Replace it with: "The archived execution-IR slice lives in
@@ -69,7 +68,7 @@ Sub-steps:
 
 Command:
 
-    cd /home/diogo/Zith && rg -n "src/ir|ir-vm|hir-to-ir" docs/adr/0024-wasm-vm-v2-abi.md memory/audit-cleaning.md memory/agent7-formatter-build.md
+    rg -n "src/ir|ir-vm|hir-to-ir" docs/adr/0024-wasm-vm-v2-abi.md
 
 Expected output: after the edits, the command prints only lines that mention
 `archive/execution-ir-v1/` or `docs/plans/abi/execution-ir.md`. No line contains
@@ -188,7 +187,7 @@ in the cleaning queue, so it is not lost.
 
 Sub-steps:
 
-1. Open `/home/diogo/Zith/memory/audit-cleaning.md`.
+1. Review the local audit notes.
 2. In the "Cleaning Queue" list, append this bullet:
    "`src/cli/cmd/run.cpp` fixes `useIrVm` to `false` with LLVM and `true`
    without, so the `useIrVm` block is unreachable in a normal build and no test
@@ -198,7 +197,7 @@ Sub-steps:
 
 Command:
 
-    cd /home/diogo/Zith && rg -n "useIrVm" memory/audit-cleaning.md
+    rg -n "useIrVm" docs/adr/0024-wasm-vm-v2-abi.md
 
 Expected output: one matching line containing `src/cli/cmd/run.cpp`.
 
@@ -223,7 +222,7 @@ Sub-steps:
 
 Command:
 
-    cd /home/diogo/Zith && rg -n "src/ir/(exec-ir|hir-to-ir)|src/interp/ir-vm" docs/adr/0024-wasm-vm-v2-abi.md memory/audit-cleaning.md memory/agent7-formatter-build.md
+    rg -n "src/ir/(exec-ir|hir-to-ir)|src/interp/ir-vm" docs/adr/0024-wasm-vm-v2-abi.md
 
 Expected output: no lines, exit code 1.
 
@@ -268,8 +267,8 @@ Failure checks:
   alone, capture the output, and report it verbatim. Do not mark the plan done.
 - If `git status --short` shows edits to `docs/nra-spec.md`,
   `docs/adr/0033-nra-reference-model-and-bind.md`, `docs/adr/0034-*`,
-  `docs/adr/0035-*`, or `memory/nra-design.md` that you did not make, stop and
-  report; those are the user's in-flight changes.
+  or `docs/adr/0035-*` that you did not make, stop and report; those are the
+  user's in-flight changes.
 
 Success criteria: steps 1-3 produce the expected clean output and the diff is
 limited to this plan's scope.

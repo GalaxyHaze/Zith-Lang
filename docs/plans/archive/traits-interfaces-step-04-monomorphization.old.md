@@ -118,4 +118,4 @@ ctest --test-dir build --output-on-failure
 
 - `impl-status.md`: generic instantiation moves to Working.
 - `docs/roadmap.md`: F-38 complete.
-- `memory/nra-hir-boundary.md`: update the “current execution order” paragraph.
+- Local NRA boundary notes: update the current execution-order description.

@@ -5,9 +5,8 @@ Traits, and the Capability Base**. Each file is a self-contained guide for a
 separate agent session. A session should read this README and its own step file,
 then implement only that step, verify it, and stop.
 
-The durable memory version of this contract is
-`memory/comptime-generics-traits.md`; the step files are the source of truth for
-implementation detail.
+The private maintainer notes record this contract; the step files are the
+source of truth for implementation detail.
 
 ## Feature IDs
 

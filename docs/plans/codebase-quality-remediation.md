@@ -44,16 +44,12 @@ Files changed by step 2:
 - `tests/test-interface-satisfaction.cpp`
 - `tests/test-vm-v2.cpp`
 - `docs/plans/codebase-quality-remediation.md`
-- `memory/README.md`
-- `memory/parser-depth-limit.md`
-- `memory/sanitizer-ci.md`
-- `memory/session-arena-lifetime.md`
+- local parser, sanitizer, and lifetime notes
 
 Files updated by step 3:
 
 - `docs/plans/codebase-quality-remediation.md`
-- `memory/README.md`
-- `memory/sanitizer-ci.md`
+- local sanitizer notes
 
 ## Steps
 
@@ -157,12 +153,11 @@ Sub-steps:
 10. In `tests/test-vm-v2.cpp`, pass `ZITH_STDLIB_DIR` instead of the
     CTest-working-directory-relative path `"stdlib"`.
 11. Run the normal and sanitizer full suites and the focused tests. Record
-    compiler versions, pass counts and environment limitations in
-    `memory/sanitizer-ci.md` and `memory/parser-depth-limit.md`.
-12. Record the member-lifetime dependency in
-    `memory/session-arena-lifetime.md`, link the notes from
-    `memory/README.md`, validate docs and workflow syntax, then commit step 2
-    separately from `266d2147`.
+    compiler versions, pass counts and environment limitations in the local
+    test notes.
+12. Record the member-lifetime dependency in the local implementation notes,
+    validate docs and workflow syntax, then commit step 2 separately from
+    `266d2147`.
 
 CI commands:
 
