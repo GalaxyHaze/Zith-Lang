@@ -15,10 +15,14 @@
 __pycache__/
 *.py[cod]
 squashfs-root
+.hermes/
 
 # Core dumps
 core
 core.*
+
+# Generated WebAssembly test artifacts
+/tests/*.wasm
 
 # Build directories
 build/
@@ -47,8 +51,14 @@ _deps/
 
 # Editors
 .vscode/
+.vscode-test/
 .idea/
 .cache
+
+# Local scratch and agent state
+.scratch/
+.sequenta/
+.awt/
 
 # Scripts
 notify.sh
