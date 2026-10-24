@@ -233,7 +233,9 @@ changes to `@pod` with the full-Zith `pod` declaration is still open.
 Full-Zith capability-use and purity annotations are static contracts. Their
 semantics are recorded in
 [ADR-0039](adr/0039-full-zith-capability-and-purity-contracts.md). Their
-placement and ordering are still open. Zith-- retains its existing syntax.
+canonical placement and ordering are fixed by
+[ADR-0044](adr/0044-full-zith-annotation-order-and-purity-rename.md). Zith--
+retains its existing syntax.
 
 | Attribute | Summary |
 |---|---|
@@ -242,8 +244,9 @@ placement and ordering are still open. Zith-- retains its existing syntax.
 | `@using(X, Y)` | Requires at least one reachable use of each named capability. Other capabilities remain allowed. |
 | `@only(X, Y)` | Allows only the listed capabilities. `@only(not X)` prohibits `X`. |
 | `@pure` | Requires deterministic behavior with no side effects. |
-| `@valuePure` | Requires the returned value to depend only on explicit arguments. Other side effects may remain. |
+| `@honest` | Requires the returned value to depend only on explicit arguments. Other side effects may remain. Formerly `@valuePure`. |
 | `@impure` | Requires the function to be classified as impure. |
+| `safe` / `trust` / `hazard` | Safety level of a callable. See [ADR-0043](adr/0043-full-zith-safety-levels-safe-trust-hazard.md). |
 
 Full-Zith keyword spellings and the eight-byte limit are recorded in
 [ADR-0040](adr/0040-full-zith-surface-names-and-keyword-limit.md). That

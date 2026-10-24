@@ -124,9 +124,19 @@ _Avoid_: runtime effect, purity classification
 A full-Zith `@using` or `@only` requirement over nominal capability traits, independent of purity and the NRA effect header.
 _Avoid_: purity annotation, NRA effect header
 
-**Value-pure function**:
-A function whose returned value depends only on its explicit arguments, even when the function also performs side effects that do not affect that value.
-_Avoid_: deterministic function, side-effect-free function
+**Honest function**:
+A full-Zith callable whose returned value depends only on its explicit
+arguments, even when it also performs side effects that do not affect that
+value. It is written `@honest`, sits between `@pure` and `@impure` on the
+purity ladder, and replaces the former `@valuePure` spelling.
+_Avoid_: value-pure function, side-effect-free function, deterministic function
+
+**Impure function**:
+A full-Zith callable whose returned value may depend on operations outside its
+explicit arguments. It is written `@impure` and is the bottom rung of the
+purity ladder. The contract sense is about the value, not about whether the
+callable has side effects.
+_Avoid_: effectful function, side-effecting function
 
 **Raw operation**:
 A full-Zith operation that bypasses a compiler check, split by blast radius. Light raw operations (`raw`) break only when misused, so their damage is contained by correct input. Heavy raw operations (`hazard`) break assumptions the compiler relies on, so they can corrupt or miscompile even when written correctly and their risk is not bounded by the operation itself.

@@ -29,8 +29,12 @@ Full Zith distinguishes three purity classifications:
 | Annotation | Requirement |
 |---|---|
 | `@pure` | The function is deterministic and has no side effects. |
-| `@valuePure` | The returned value depends only on explicit arguments. Side effects are permitted when they do not affect that value. |
+| `@honest` | The returned value depends only on explicit arguments. Side effects are permitted when they do not affect that value. |
 | `@impure` | The function is classified as impure. |
+
+The three form a ladder of strength over the returned value. The middle
+classification was called `@valuePure` here and is renamed to `@honest` by
+[ADR-0044](0044-full-zith-annotation-order-and-purity-rename.md).
 
 An unannotated function is analyzed and classified from its reachable body. It
 is not presumed impure, and a context that requires purity accepts it only when
@@ -50,9 +54,11 @@ and raw declarations supply trusted contracts rather than body proofs.
 Recursive call groups are classified to a least fixed point, so a recursive
 group remains pure when it has no impure operation. A dedicated compile-time
 diagnostic family reports violations; its numeric code range is not assigned
-here. The position and ordering of annotations, including `@pure` on callback
-types, remain open. The compatibility ordering between the three annotated
-callable types also remains open.
+here. The canonical position and ordering of annotations, including `@pure` on
+callback types, are fixed by
+[ADR-0044](0044-full-zith-annotation-order-and-purity-rename.md). The
+compatibility ordering between the three annotated callable types remains
+open.
 
 This decision does not redefine the `pure` fact in NIA or the effect vocabulary
 in the NRA header. It adds full-Zith source contracts over capability use and

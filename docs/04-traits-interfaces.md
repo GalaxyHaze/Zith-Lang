@@ -116,11 +116,12 @@ facts already known to the compiler.
 
 Capability-use annotations and purity are separate contract dimensions.
 `@using` requires a reachable use of each named capability, while `@only`
-restricts which capabilities may be used. `@pure`, `@valuePure`, and
-`@impure` describe function result behavior and side effects. All are static
-obligations with no runtime checks. See
+restricts which capabilities may be used. `@pure`, `@honest`, and `@impure`
+describe function result behavior and side effects. All are static obligations
+with no runtime checks. See
 [ADR-0039](adr/0039-full-zith-capability-and-purity-contracts.md) for their
-semantics and the remaining syntax questions.
+semantics and [ADR-0044](adr/0044-full-zith-annotation-order-and-purity-rename.md)
+for the canonical annotation order and the `@honest` rename.
 
 Combine contracts and behavior explicitly in a generic bound:
 
