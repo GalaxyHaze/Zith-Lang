@@ -1,4 +1,5 @@
 from cache/zirl-artifact
+from cache/zirl-container
 
 fn test_zirl_artifact_roundtrip_and_validation(): i32 {
     let metadata_payload: [1]u8 = [0xA1u8];
@@ -10,19 +11,19 @@ fn test_zirl_artifact_roundtrip_and_validation(): i32 {
         ZirlArtifactSection {
             id: 1u16,
             flags: 1u16,
-            schema_version: 2u16,
+            schema_version: zirlMetadataSectionSchemaVersion,
             payload: raw metadata_payload[0u64..1u64],
         },
         ZirlArtifactSection {
             id: 2u16,
             flags: 1u16,
-            schema_version: 1u16,
+            schema_version: zirlDeclsSectionSchemaVersion,
             payload: raw decls_payload[0u64..1u64],
         },
         ZirlArtifactSection {
             id: 3u16,
             flags: 1u16,
-            schema_version: 1u16,
+            schema_version: zirlTemplatesSectionSchemaVersion,
             payload: raw templates_payload[0u64..1u64],
         },
         ZirlArtifactSection {
@@ -34,7 +35,7 @@ fn test_zirl_artifact_roundtrip_and_validation(): i32 {
         ZirlArtifactSection {
             id: 5u16,
             flags: 1u16,
-            schema_version: 1u16,
+            schema_version: 2u16,
             payload: raw attrs_payload[0u64..1u64],
         },
     ];
@@ -186,6 +187,14 @@ fn test_zirl_artifact_roundtrip_and_validation(): i32 {
             return 5;
         }
     }
+    let decoded_attrs = must decoded.sections[4u64];
+    if (decoded_attrs.schema_version != zirlAttrsSectionSchemaVersion) {
+        return 12;
+    }
+    let decoded_decls = must decoded.sections[1u64];
+    if (decoded_decls.schema_version != zirlDeclsSectionSchemaVersion) {
+        return 14;
+    }
 
     var short_identity_storage = storage;
     short_identity_storage.canonical_path =
@@ -236,6 +245,26 @@ fn test_zirl_artifact_roundtrip_and_validation(): i32 {
     );
     if (missing_section.error != ZirlArtifactError.InvalidSections) {
         return 8;
+    }
+    raw sections[1].schema_version = 1u16;
+    let old_decls_schema = write_zirl_artifact(
+        &raw identity,
+        raw sections[0u64..5u64],
+        raw output[0u64..256u64]
+    );
+    if (old_decls_schema.error != ZirlArtifactError.InvalidSections) {
+        return 13;
+    }
+    raw sections[1].schema_version = zirlDeclsSectionSchemaVersion;
+
+    raw sections[4].schema_version = 1u16;
+    let old_attrs_schema = write_zirl_artifact(
+        &raw identity,
+        raw sections[0u64..5u64],
+        raw output[0u64..256u64]
+    );
+    if (old_attrs_schema.error != ZirlArtifactError.InvalidSections) {
+        return 11;
     }
     return 0;
 }

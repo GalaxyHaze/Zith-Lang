@@ -6,19 +6,18 @@ consume where semantics match, persist it through the cache, and reuse derived
 VIR only when its schema and VM semantics match. Then port the stable contract
 into `/home/diogo/self-Zith`.
 
-**Preconditions:** This is a design and execution plan, not permission to edit
-`/home/diogo/Zith`. That checkout is outside the writable roots; obtain
-explicit approval before any build or write there. Re-run
-`git -C /home/diogo/Zith status --short --branch` immediately before work.
-The latest recorded status on 2026-10-23 reports a clean `main` at
-`8f313dbf`, 22 commits ahead of `origin/main`; this is not a live status
-claim, so revalidate before any sibling-repository operation. Preserve
-existing worktree changes in both repositories. `/home/diogo/Zith/build`
-already has a CMake build; its CTest config includes the focused targets named
-below, and `test-vm-v2` uses skip return code 77. `/home/diogo/self-Zith` has
-no CMake build, but now has the repository-owned test harness
-`tests/run.sh`, documented in `tests/README.md`. It invokes
-`/home/diogo/Zith/build/zithc`; `zithc test` type-checks fixtures, while the
+**Preconditions:** This is a design and execution plan. The user has explicitly
+authorized the narrow Step 6.1 imported-constant correction described below in
+`/home/diogo/Zith`; this does not authorize unrelated sibling-repository work
+or the separate codegen follow-up. Re-run
+`git -C /home/diogo/Zith status --short --branch` and inspect the target-file
+diffs immediately before work. The sibling checkout is currently dirty, so
+preserve all existing changes. The filesystem sandbox may still require
+separate approval for builds and writes in `/home/diogo/Zith`. Its existing
+`build` directory has a CMake build and CTest entries for the focused targets
+named below. `/home/diogo/self-Zith` has the repository-owned test harness
+`tests/run.sh`, documented in `tests/README.md`; it invokes
+`/home/diogo/Zith/build/zithc`. `zithc test` type-checks fixtures, while the
 harness separately runs VM and native behavioral fixtures.
 
 **Scope boundary:** HIR is the canonical shared contract. Cache work in this
@@ -28,14 +27,14 @@ VIR-schema and VM-semantic versions. Codegen is a consumer: change its inputs
 only where required to consume the stable HIR contract, and do not undertake a
 separate codegen-module redesign in this workstream.
 
-**Execution authorization:** This document is a plan, not approval to edit,
-stage, commit, build, or test in `/home/diogo/Zith`. Each such operation needs
-separate explicit approval. The 2026-10-23 status document reports that
-Steps 1-5 were implemented and the sibling worktree was clean at `8f313dbf`;
-this remains a recorded result, not live authorization. Before any sibling
-operation, revalidate its status and diff. If the worktree is dirty, stop and
-obtain an explicit disposition; do not stage, commit, stash, reset, clean, or
-overwrite it.
+**Current execution boundary:** Step 6.1's targeted imported-constant fix is
+complete. The current authorized work is the remaining cache/HIR/VIR
+preparation in `/home/diogo/self-Zith`, without a large structural redesign.
+Do not extend the shared HIR contract or implement the codegen follow-up
+without separate approval. Do not implement a frontend adapter or frontend
+pipeline in Step 6.6. Preserve all pre-existing worktree changes; do not
+stage, commit, stash, reset, clean, or overwrite unrelated work. This
+execution does not modify `/home/diogo/Zith`.
 
 **Files already changed by this design task:** `/home/diogo/self-Zith/CONTEXT.md`,
 `/home/diogo/self-Zith/docs/architecture.md`,
@@ -729,134 +728,127 @@ tests/run.sh` exits 2 because the native `tests/zirl-hir-artifact.zith`
 fixture receives `ZirlArtifactError.InvalidSections`. The harness is
 documented in `/home/diogo/self-Zith/tests/README.md` and implemented by
 `/home/diogo/self-Zith/tests/run.sh`; `zithc test` type-checks fixtures and
-does not execute their functions. The worktree has unrelated modified and
-untracked files; preserve them.
+does not execute their functions. Investigation confirmed that the invalid
+section data originates upstream: Zith-- loses `BindingKind::Const` while
+recording and resolving imported symbols, so HIR lowering treats an imported
+constant as a local binding instead of a global constant load. The importer
+also checks the provider's declaration ID against the consumer snapshot when
+deciding whether an imported name is constant. The worktree has unrelated
+modified and untracked files; preserve them.
 
 **Authorization boundary:** Work in `/home/diogo/self-Zith` only. The sibling
-`/home/diogo/Zith` checkout was last reported clean at `8f313dbf` on `main`
-on 2026-10-23, but revalidate it before any future work. This plan does not
-authorize writes, builds, tests, staging, or commits in that checkout. If a
-missing shared semantic field requires changing the sibling contract, stop
-and obtain explicit authorization before changing either the sibling
-implementation or its tests. Do not use `git clean`, `git reset`, broad
-staging, or generated-output cleanup.
+`/home/diogo/Zith` checkout is dirty and must be revalidated before work.
+The user has approved only the targeted Step 6.1 edits in the sibling
+implementation and regression tests; sandbox approval may still be needed
+for builds and writes. Do not change the shared HIR contract, undertake a
+frontend refactor, implement the codegen follow-up, use `git clean` or
+`git reset`, stage broadly, or remove generated output.
 
-#### 6.1 Diagnose and repair the failing typed writer
+#### 6.1 Repair imported-constant resolution blocking the typed writer
 
-**Goal:** The existing empty-HIR fixture identifies whether failure occurs in
-the typed codecs, five-section assembly, or envelope, and the native writer
-test exits 0.
+**Goal:** Imported constants retain their binding semantics through Zith--
+analysis and HIR lowering, and the native writer fixture exits 0.
 
-**Sub-steps:**
-1. Read `write_zirl_hir_artifact()` in
-   `/home/diogo/self-Zith/src/cache/zirl-hir-artifact.zith`,
-   `valid_artifact_sections()` and `write_zirl_artifact()` in
-   `/home/diogo/self-Zith/src/cache/zirl-artifact.zith`, and
-   `exercise_hir_artifact_writer()` in
-   `/home/diogo/self-Zith/tests/zirl-hir-artifact.zith`.
-2. Add fixture assertions for the writer's count preconditions and each
-   section codec's `failed` state. Do not dereference
-   `storage.sections[index]` in the fixture: direct raw indexing of that
-   section array previously triggered a compiler ICE.
-3. In the same fixture, construct a literal five-entry section array with
-   required IDs `1, 2, 3, 4, 5`, each `flags == 1`, Metadata schema `2`, and
-   other required schemas `1`. Pass it to `write_zirl_artifact()` and then
-   `read_zirl_artifact()`. A successful read proves the envelope accepts the
-   section order/schema without the problematic raw-index reads.
-4. Correct only the boundary shown by the checks. Do not weaken
-   `valid_artifact_sections()`, omit a required section, or turn the failure
-   into a nominal success without satisfying the envelope contract.
-5. After the typed writer succeeds, pass its output to `read_zirl_artifact()`
-   and assert successful validation; use this public behavior to verify its
-   generated required section table without indexing `storage.sections`.
-6. Run:
-
-   ```sh
-   ZITHC=/home/diogo/Zith/build/zithc TMPDIR=/tmp \
-     sh /home/diogo/self-Zith/tests/run.sh
-   ```
-
-7. If the section assertions pass but the harness still fails, preserve the
-   exact failing test, command, and exit status. Do not infer behavioral
-   success from `zithc test`.
-
-**Expected output:** The fixture pinpoints the previous failure; the empty
-artifact has five valid required sections; the full harness exits 0.
-
-**Failure checks:** If a section writer fails, inspect its `write_*_section()`
-validation and fixture input, then repair that input or codec defect. If the
-literal envelope round-trip fails, compare the literal entries with
-`valid_artifact_sections()` and `validate_zirl_sections()`. If the literal
-envelope round-trip succeeds but the typed writer still returns
-`InvalidSections`, check its count preconditions and codec results; add a
-structured failure-stage result to the typed writer if needed to distinguish
-its remaining branches. Do not read the section array through raw indexing
-in the fixture. If the compiler ICEs or fails to lower another assertion,
-stop and report the diagnostic; do not replace the fixture with a weaker
-check.
-
-**Success criteria:** The exact harness command exits 0 and the fixture
-checks the literal five-entry envelope, reads the typed writer's output
-successfully, and observes a nonzero artifact size without indexing the
-writer's internal section array.
-
-**Commit:** Commit only the writer fix, its assertions in
-`tests/zirl-hir-artifact.zith`, and any corresponding
-`docs/project-files.md` entry as
-`fix(cache): validate typed HIR artifact composition`.
+The confirmed cause and exact implementation/test sequence are recorded in
+[`step-6-1-imported-const-fix.md`](step-6-1-imported-const-fix.md). Follow that
+document rather than the superseded codec/envelope investigation. Preserve
+the section validation contract; do not weaken `valid_artifact_sections()`
+or omit a required section to make the fixture pass.
 
 #### 6.2 Reconcile HIR fields with declaration and template records
 
-**Goal:** Every serialized declaration/template field has a lossless source in
-the shared HIR contract or an explicitly approved contract extension.
+**Goal:** Every Decls and Templates record field has a verified, lossless
+source in the frontend-neutral HIR contract, and both artifact projection and
+hydration preserve those fields without inference.
+
+**Accepted contract (2026-10-24):** `HirDeclaration` owns explicit
+`is_extern`, optional `body_function_id: HirFunctionId`, optional
+`template_id: HirTemplateId`, and ordered `method_declaration_ids`.
+`invalidFunction` and `invalidTemplate` are the only absent-reference values.
+General `members`, function names, `foreign_c`, and `has_body` are not
+substitutes for those semantic facts. `HirModule.templates` owns records;
+each `HirTemplate` has a required owner declaration, directly owns generic
+parameters/bounds, signature facts, fields/order, methods, and trait type
+references, and may additionally identify a function. A linked function must
+agree with the template-owned signature. `HirTypeKind.Trait` preserves trait
+references instead of collapsing them to `Unknown`.
+
+HIR schema becomes 2. Metadata schema becomes 3 for the added Trait type
+kind. Decls schema 2, Templates schema 1, Code schema 1, Attrs schema 2, and
+container version 21 stay unchanged because their encoded payload/envelope
+layouts do not change.
 
 **Sub-steps:**
-1. Compare `HirDeclaration` and `HirModule` in
-   `/home/diogo/self-Zith/src/ir/hir.zith` with
-   `ZirlDeclarationRecord` in `src/cache/zirl-decl-section.zith` and
-   `ZirlTemplateRecord` / `ZirlGenericParamRecord` in
-   `src/cache/zirl-template-section.zith`.
-2. Create a field-by-field mapping table in this plan or a focused contract
-   document. Name the exact HIR source and conversion for every field; mark
-   any field with no source as unresolved. Explicitly audit `is_extern`,
-   `template_index`, `body_function_index`, `field_name_ids`,
-   `field_type_ids`, `method_declaration_indices`, generic-parameter bounds,
-   `canonical_field_order`, and `trait_type_ids`.
-3. Do not infer `is_extern`, template membership, body indices, field order,
-   trait relationships, or empty/default records from absent data.
-   `HirDeclaration.members` may populate a cache field only after its meaning
-   and ordering are proven to match that field.
-4. For every unresolved field, stop implementation and prepare a contract
-   proposal naming its semantic meaning, HIR owner, HIR schema impact, ZIRL
-   section schema impact, and a fixture proving the mapping. Obtain user
-   authorization before changing `/home/diogo/Zith`.
-5. After an approved contract change is implemented and committed upstream,
-   port only the corresponding shared field into self-Zith and update
-   `docs/adr/0015-shared-hir-and-cross-dialect-cache.md`,
-   `docs/project-files.md`, and affected schema versions in that same slice.
+1. Read `/home/diogo/self-Zith/docs/plans/step-6-2-contract-gaps.md` as the
+   detailed execution plan. Preserve the unrelated dirty documentation paths
+   already present in `/home/diogo/Zith`; only edit the producer source/test
+   allowlist stated there.
+2. Extend the Zith-- HIR producer in
+   `/home/diogo/Zith/src/hir/hir-module.hpp`,
+   `/home/diogo/Zith/src/sema/hir-lower-modern.cpp`, and
+   `/home/diogo/Zith/src/sema/hir-lower-types.cpp`. Populate every relation
+   from semantic IDs and source declaration facts; never match names or use
+   generic `members` as the method list.
+3. Add producer conformance tests to
+   `/home/diogo/Zith/tests/test-hir-lower-modern.cpp`. Obtain separate
+   sandbox approval for the build and CTest commands under `/home/diogo/Zith`.
+4. Port the accepted HIR fields and verifier rules to
+   `/home/diogo/self-Zith/src/ir/hir.zith` and
+   `/home/diogo/self-Zith/src/ir/hir-verify.zith`; update both independent HIR
+   schema constants and the Metadata schema map. Keep container version 21.
+5. In `/home/diogo/self-Zith/src/cache/zirl-hir-artifact.zith`, implement
+   caller-owned, all-or-nothing HIR-to-Decls/Templates projection, including
+   canonical type mapping and identity-count checks. Do not change section
+   record layouts or the section schema versions listed above.
+6. Implement Decls/Templates hydration in the same module, preflight every
+   nested storage capacity before populating output, reverse canonical type
+   mappings, and invoke `verify_hir()` before publishing the module.
+7. Add the 11 named positive/negative projection and round-trip fixtures from
+   `step-6-2-contract-gaps.md` to
+   `/home/diogo/self-Zith/tests/hir-contract.zith`. Add malformed Trait
+   type-entry coverage to `tests/canonical-types.zith` and artifact hydration
+   cases to `tests/zirl-hir-artifact.zith`.
+8. Update `/home/diogo/self-Zith/docs/adr/0015-shared-hir-and-cross-dialect-cache.md`,
+   `/home/diogo/self-Zith/docs/plans/shared-hir-interoperability-status.md`,
+   and `/home/diogo/self-Zith/docs/project-files.md` with implemented facts
+   only; leave Step 6.6 deferred.
+9. Run the upstream focused test only after command approval, then run:
 
-**Expected output:** The mapping has no unresolved fields before projection
-starts, or this sub-step stops with a concrete contract proposal and no
-lossy serialization code.
+   ```sh
+   ZITHC=/home/diogo/Zith/build/zithc TMPDIR=/tmp sh /home/diogo/self-Zith/tests/run.sh
+   git -C /home/diogo/self-Zith diff --check -- <explicit Step 6.2 paths>
+   ```
 
-**Failure checks:** If a proposed mapping depends on a Zith-- AST, resolver,
-session, or process-local index not represented in HIR, reject it and stop for
-a shared-contract change. If changing the contract requires writing to
-`/home/diogo/Zith` without approval, do not edit it; report the needed
-authorization and paths.
+**Expected output:** the upstream lowering fixture passes; the self-Zith
+harness passes all five programs; each successful artifact preserves exact
+declaration/template fields and ordering; every rejected projection/read
+returns an error with empty public output slices.
 
-**Success criteria:** Every declaration/template record field has a
-documented, tested HIR source; no projection assigns guessed values.
+**Failure checks:**
+- If a producer relation is unavailable except by matching names or process
+  state, stop and add an explicit HIR source instead of inferring it.
+- If a Trait type loses its identity during lowering or canonicalization,
+  stop before emitting Metadata; do not serialize `Unknown`.
+- If any capacity, reference, ownership, or count validation fails, verify
+  that no partial section or module escapes.
+- If the focused producer test, the full harness, or path-scoped diff check
+  fails, preserve the first exact diagnostic and do not mark Step 6.2 done.
 
-**Commit:** Commit a resolved mapping note only with implementation/tests
-that exercise it. Do not assert the mapping is complete while any field is
-unresolved.
+**Success criteria:** producer conformance tests, HIR verifier fixtures,
+every positive/negative projection fixture, field-by-field hydration
+round-trips, full self-Zith harness, and path-scoped diff check all pass.
+
+**Exact contract inspection command:**
+
+```sh
+rg -n 'pub struct Hir(Declaration|Module|Function|StructDef)|pub struct Zirl(DeclarationRecord|TemplateRecord|GenericParamRecord)' /home/diogo/self-Zith/src/ir/hir.zith /home/diogo/self-Zith/src/cache/zirl-decl-section.zith /home/diogo/self-Zith/src/cache/zirl-template-section.zith
+```
 
 #### 6.3 Build the complete HIR-to-section projection
 
-**Goal:** A verified `HirModule`, together with explicit artifact identity and
-path metadata, deterministically produces all five typed HIR sections using
-caller-owned storage.
+**Goal:** A verified `HirModule`, explicit artifact identity, and explicit
+path metadata deterministically produce the five typed HIR sections in
+caller-owned storage; unresolved Step 6.2 mappings block affected records.
 
 **Sub-steps:**
 1. Treat `ZirlArtifactIdentity` as envelope input, not as a `HirModule` field.
@@ -893,11 +885,54 @@ caller-owned storage.
    deterministic bytes across two writes from equivalent HIR. Mutate source
    HIR after the first projection and confirm output bytes do not alias
    caller-owned HIR slices.
-10. Run the exact harness command from Step 6.1.
+10. Treat the exact harness command from Step 6.1 as the final gate after all
+    projection and schema changes below.
+11. Extend `ZirlSafetyProofRecord` in
+    `/home/diogo/self-Zith/src/cache/zirl-attrs-section.zith` with `present:
+    bool`. Append one canonical boolean byte after each proof's existing
+    `operand_c` in the Attrs payload. Accept only byte values 0 and 1. The
+    decoded `present` value must match the HIR record exactly.
+12. Keep independent schema constants in
+    `/home/diogo/self-Zith/src/cache/zirl-container.zith`: Metadata ID 1 is
+    schema 2, Decls ID 2 is schema 2 when declaration `discardable` is
+    persisted, Templates ID 3 and Code ID 4 are schema 1, and Attrs ID 5 is
+    schema 2 for proof `present`. Update
+    `valid_artifact_sections()` in `src/cache/zirl-artifact.zith`,
+    `validate_zirl_sections()` in `src/cache/zirl-container.zith`, and
+    `write_zirl_hir_artifact()` in `src/cache/zirl-hir-artifact.zith` to
+    accept/emit that exact per-ID schema map. Reject ID 2/schema 1 and
+    ID 5/schema 1 instead of decoding old payloads as the new layouts.
+13. Do not bump `zirlContainerVersion` for this section-only layout change.
+    Bump it only if implementation proves that the envelope/header contract
+    itself changed; if so, document the exact changed header/table invariant
+    and add old/new container fixtures before making the bump.
+14. Extend
+    `test_zirl_attrs_golden_roundtrip_and_failures()` in
+    `/home/diogo/self-Zith/tests/hir-contract.zith`: make the golden payload
+    include a `present == true` proof; assert its exact final byte and updated
+    payload length; add a second record with `present == false`; round-trip
+    and assert both values. Add malformed boolean-byte and truncated-v2
+    payload cases. Update offsets/expected lengths from the actual encoded
+    record layout, not from the old hard-coded schema-1 offsets.
+15. Add section-table and typed-writer fixtures proving the schema map
+    `(2, 2, 1, 1, 2)` for IDs `(1, 2, 3, 4, 5)`, and reject ID 2/schema 1
+    and ID 5/schema 1. Keep unknown required-section and missing-required-
+    section checks intact.
+16. Verify a false proof cannot satisfy a required-check proof lookup and
+    cannot justify removing the runtime check. Test this at the HIR
+    verification/consumer boundary; serializing a false record is not proof
+    validation.
+17. Before closing the slice, run:
+
+    ```sh
+    ZITHC=/home/diogo/Zith/build/zithc TMPDIR=/tmp sh /home/diogo/self-Zith/tests/run.sh
+    git -C /home/diogo/self-Zith diff --check
+    ```
 
 **Expected output:** Empty and non-empty HIR fixtures produce a complete
 five-section envelope; equivalent inputs produce identical bytes and all
-fixture assertions pass.
+fixture assertions pass. The five sections use schemas 2, 2, 1, 1, and 2
+respectively; both true and false proof-presence values round-trip.
 
 **Failure checks:** If canonical type IDs differ between local HIR and
 serialized Code/Metadata/Decls/Templates, stop at the first mismatching
@@ -905,6 +940,14 @@ reference and fix the remapping path; do not compare counts alone. If a
 section requires data absent from HIR, return to Step 6.2. If storage capacity
 is insufficient, return the structured capacity error without exposing a
 successful partial result.
+
+- If Attrs schema 2 is rejected by either validator, update the per-section
+  dispatch in both validators; do not weaken validation or emit Attrs schema
+  1 for the new proof layout.
+- If `present == false` changes required-check behavior, stop and repair the
+  proof-consumer semantics before claiming the artifact projection complete.
+- If a proof boolean byte is outside `{0, 1}`, reject the section and expose
+  no partially decoded Attrs.
 
 **Success criteria:** The complete projection fixture passes, every HIR
 reference is valid in its section's identifier space, and the full harness
@@ -920,44 +963,82 @@ exits 0.
 an equivalent, verified `HirModule`.
 
 **Sub-steps:**
-1. Call `read_zirl_artifact()` in `src/cache/zirl-artifact.zith` to validate
+1. Add a typed artifact-read result and storage API in
+   `/home/diogo/self-Zith/src/cache/zirl-hir-artifact.zith`. Keep all
+   top-level and nested decoded arrays in caller-owned storage. Return
+   artifact identity and paths beside, not inside, `HirModule`.
+2. Call `read_zirl_artifact()` in
+   `/home/diogo/self-Zith/src/cache/zirl-artifact.zith` to validate header,
    identity, checksum, section table, and required sections before decoding
-   payloads.
-2. Decode with `read_metadata_section()` in `src/cache/zirl-metadata.zith`,
-   `read_decls_section()` in `src/cache/zirl-decl-section.zith`,
-   `read_templates_section()` in `src/cache/zirl-template-section.zith`,
-   `read_code_section()` in `src/cache/zirl-code-section.zith`, and
-   `read_attrs_section()` in `src/cache/zirl-attrs-section.zith`.
-3. Add one typed artifact-read result/storage API to
-   `src/cache/zirl-hir-artifact.zith`. Keep decoded arrays and nested slices
-   in caller-owned storage. On any failure, return a structured error and
-   empty result slices.
-4. Reconstruct HIR tables without changing identifier meaning. Reverse
-   canonical type remapping for Code, Decls, Templates, and Attrs references;
-   preserve function/expression/declaration index identity; restore safety
-   proofs separately from required checks.
-5. Return artifact identity and paths beside `HirModule`, not inside it.
-   Compare identity/path values separately from semantic HIR equality.
-6. Add typed comparison helpers to `tests/zirl-hir-artifact.zith` covering
-   strings; types, arguments and names; nominal definitions; expression
-   variants and payloads; function parameters and blocks; declarations;
-   globals; vtables; attributes; and proof operands. Do not compare raw
-   struct memory or padding.
-7. Add round-trips for empty and non-empty fixtures. Add negative tests for
-   truncated payload, checksum mismatch, missing required section, unknown
-   required section, incompatible HIR schema, and insufficient decode storage.
-8. Run the exact harness command from Step 6.1.
+   any payload.
+3. Dispatch required sections by ID and schema, then call
+   `read_metadata_section()` in
+   `/home/diogo/self-Zith/src/cache/zirl-metadata.zith`,
+   `read_decls_section()` in
+   `/home/diogo/self-Zith/src/cache/zirl-decl-section.zith`,
+   `read_templates_section()` in
+   `/home/diogo/self-Zith/src/cache/zirl-template-section.zith`,
+   `read_code_section()` in
+   `/home/diogo/self-Zith/src/cache/zirl-code-section.zith`, and
+   `read_attrs_section()` in
+   `/home/diogo/self-Zith/src/cache/zirl-attrs-section.zith`.
+4. Reject Attrs section ID 5/schema 1 before calling
+   `read_attrs_section()`. Decode only schema 2 and require the appended
+   `present` byte to be exactly 0 or 1. Do not synthesize `present == true`
+   for old artifacts or infer proof facts from Code.
+5. Reconstruct HIR tables without changing string, type, expression,
+   function, declaration, global, vtable, slot, or proof-operand index
+   meaning. Reverse canonical type mappings only when the reverse mapping is
+   unique; otherwise return an explicit structured error.
+6. On any decode failure, return an error and empty public HIR result slices.
+   Do not expose partially decoded tables, even if earlier sections decoded
+   successfully.
+7. Add semantic equality helpers in
+   `/home/diogo/self-Zith/tests/zirl-hir-artifact.zith`. Compare fields, not
+   raw struct memory. Cover:
+   - strings and every type field, argument ID, and argument name;
+   - struct, enum, and union names, members, layouts, flags, and variants;
+   - expression kind, operator, flags, type/reference IDs, and variant
+     payload;
+   - function signatures, parameters, names, slots, flags, and block
+     terminators/instructions;
+   - declarations, global constants, vtables, every Attrs field, and proof
+     kind/operands/`present`.
+   Compare artifact identity and paths in separate helpers.
+8. Round-trip empty and non-empty fixtures through the public writer and
+   reader. Assert `verify_hir()` returns `HirVerifyError.None` and all
+   applicable semantic equality helpers pass.
+9. Add negative fixtures for truncated payload, checksum mismatch, missing
+   required section, unknown required section, incompatible HIR schema,
+   Decls schema 1, Attrs schema 1, invalid Attrs-v2 `present` byte, and
+   insufficient storage for each nested-storage family. Assert the exact
+   error and empty public HIR slices in every case.
+10. Include true and false safety-proof records in the non-empty fixture.
+    Assert exact `present` equality, and separately verify false proof does
+    not satisfy proof lookup or justify removing a required runtime check.
+11. Run the exact harness command from Step 6.1, then run
+    `git -C /home/diogo/self-Zith diff --check` and inspect only reader,
+    comparator, fixture, schema-dispatch, and file-map diffs.
 
 **Expected output:** Valid fixtures read successfully, reconstructed HIR
 passes `verify_hir()`, and field-by-field comparison equals the source. Each
 malformed/incompatible fixture returns its expected error without exposing
-partial HIR.
+partial HIR. Decls and Attrs schema 1 are rejected, and schema 2 preserves
+both declaration `discardable` and proof `present` values.
 
 **Failure checks:** If canonical IDs cannot be reversed uniquely, stop and
 revise the canonical-table contract before implementing hydration. If proof
 metadata is absent, retain required runtime checks; never infer a proof from
 cached code. If the compiler cannot compile the comparator, split it into
 typed helpers rather than comparing raw struct bytes.
+
+- If a comparison fails, report the first differing semantic path (for
+  example `functions[0].parameter_types[1]`) and fix the mapping; do not
+  weaken the equality helper.
+- If a failure case returns partial public HIR, fix the failure boundary
+  before adding more negative fixtures.
+- If a schema mismatch reaches the payload decoder, move the rejection into
+  the validated section-dispatch stage.
 
 **Success criteria:** Native tests prove complete round-trip equivalence,
 malformed-input rejection, and non-partial failure behavior; the full harness
@@ -978,38 +1059,60 @@ versions match; it does not claim to have ported absent VIR/codegen modules.
    rg --files /home/diogo/self-Zith/src
    ```
 
-   The 2026-10-23 status reports that `src/backends/` and `src/codegen/` do
-   not exist. Do not create an unused facade or placeholder.
-2. Keep the gates in `src/cache/cache.zith` as the cache-decision contract.
-   Add a VIR module only when there is a concrete HIR-to-VIR consumer and a
-   runnable fixture; version VIR separately from HIR and container formats.
-3. Test matching VIR schema + VM semantic versions, each individual
-   mismatch, and invalid zero versions. A mismatch regenerates VIR from
-   verified HIR and does not invalidate the HIR artifact.
-4. Keep LLVM IR, object files, assembly, and target-specific codegen products
-   outside the shared HIR/VIR artifact.
-5. Port only codegen input fields required by an actual self-Zith consumer.
-   If no consumer exists, record codegen as deferred and do not create
-   `src/backends/llvm/codegen.zith`.
-6. Run the exact harness command from Step 6.1 and inspect `cache.zith` for
-   independent HIR, VIR, and VM semantic version checks.
+   The inventory confirmed on 2026-10-24 contains `src/frontend/lexer.zith`
+   and no `src/backends/` or `src/codegen/`. If this changes before
+   implementation, identify a concrete runnable consumer before changing
+   scope. Do not create an unused facade or placeholder.
+2. Keep `virSchemaVersion`, `vmSemanticVersion`, and `can_reuse_vir()` in
+   `/home/diogo/self-Zith/src/cache/cache.zith` as independent decision
+   gates. Do not change HIR or container version checks in this substep.
+3. Extend `test_vir_version_compatibility()` in
+   `/home/diogo/self-Zith/tests/hir-contract.zith` to assert five cases:
+   current/current is reusable; VIR-schema mismatch is not; VM-semantic
+   mismatch is not; `(0, current)` is not; and `(current, 0)` is not. Use
+   distinct failure codes and confirm the test is called from the program's
+   main dispatch.
+4. Add a readiness contract to
+   `/home/diogo/self-Zith/docs/adr/0015-shared-hir-and-cross-dialect-cache.md`:
 
-**Expected output:** Version tests show reuse only when both gates match and
-regeneration for every mismatch. The source inventory and file map accurately
-state when VIR/codegen modules remain absent.
+   | Future consumer | Required before implementation |
+   | --- | --- |
+   | VIR | Executable HIR-to-VIR consumer; verified HIR input; independent nonzero VIR-schema and VM-semantic versions; future mismatch behavior regenerates VIR without invalidating compatible HIR; runnable reuse/miss fixture. |
+   | Codegen | Concrete self-Zith backend consumer; inputs available from shared HIR or an explicitly approved contract extension; target/backend outputs remain outside shared HIR/VIR artifacts; runnable output fixture. |
 
-**Failure checks:** If a VIR version mismatch invalidates HIR, fix that
-decision boundary before adding serialization. If no executable VIR consumer
-exists, stop after policy tests and report VIR generation as deferred. If
-codegen needs frontend-owned data, revise the shared HIR contract instead of
-adding a frontend dependency.
+   Mark both entries `prepared, not implemented` while no consumer exists.
+5. Keep LLVM IR, object files, assembly, and target-specific codegen products
+   outside shared HIR/VIR serialization. Do not add placeholder VIR/codegen
+   modules or claim that the policy gate itself performs regeneration.
+6. Do not port codegen fields to populate a future facade. When a real
+   consumer exists, map only the exact fields it reads and test their
+   semantics against HIR. If required data is absent, return to Step 6.2 for
+   a contract proposal.
+7. Run the exact harness command from Step 6.1. Confirm all five
+   `test_vir_version_compatibility()` assertions execute; then run
+   `git -C /home/diogo/self-Zith diff --check`.
 
-**Success criteria:** Version-gate fixtures pass and shared HIR/cache/VIR
+**Expected output:** Version tests prove reuse only for exact current,
+nonzero versions and reject either zero or mismatch. The ADR records VIR and
+codegen prerequisites as `prepared, not implemented`; no generator/backend
+module is claimed.
+
+**Failure checks:** If a VIR version mismatch invalidates HIR, fix the
+decision boundary before adding serialization. If no executable VIR
+consumer exists, finish only gate tests/readiness documentation; do not
+create VIR data structures or claim regeneration. If codegen requires
+frontend-owned data, prepare a contract proposal instead of adding a
+frontend dependency.
+
+**Success criteria:** Version-gate fixtures prove exact-match-only reuse,
+including zero rejection. Both consumer-readiness rows are documented as
+not implemented, no placeholder module exists, and shared HIR/cache/VIR
 interfaces contain no frontend AST, semantic-analysis, or session types.
 
-**Commit:** Commit only tested VIR policy/consumer changes and their tests as
-`feat(ir): gate derived VIR reuse by semantic version`. Do not commit empty
-placeholder modules.
+**Commit:** If only gate tests/documentation changed, commit only those
+verified paths as `test(cache): cover VIR reuse version gates`. Commit a
+future executable consumer separately with its runnable fixture. Never
+commit empty placeholder modules.
 
 #### 6.6 Gate frontend interoperability on a real semantic pipeline
 
@@ -1023,35 +1126,48 @@ self-Zith frontend can produce and test.
    rg --files /home/diogo/self-Zith/src/frontend
    ```
 
-2. If the inventory still contains only `src/frontend/lexer.zith` and no
-   parser, name resolver, semantic analysis, or proof producer, do not add a
-   HIR adapter and do not claim bidirectional interoperability.
-3. Once those stages exist, add the narrow adapter that lowers semantically
-   checked frontend results to the same shared `HirModule`; keep frontend
-   types out of `src/ir/` and `src/cache/`.
-4. Add paired fixtures that compile equivalent source constructs through each
-   real frontend, compare verified HIR semantically, write an artifact with
-   each compiler, and read it with the other compiler in both directions.
-5. Run both repositories' documented focused test commands only after
-   validating their worktrees and obtaining any required authorization for
-   `/home/diogo/Zith`.
+2. If the inventory still contains only `src/frontend/lexer.zith`, mark this
+   step **DEFERRED**. Do not add an adapter, parser, resolver, semantic
+   analysis, proof producer, fake records, or interoperability fixture to
+   this workstream.
+3. When implementation resumes, first verify that parser, name resolver,
+   semantic-analysis stage, and required safety/check metadata producer all
+   exist and are exercised by documented runnable tests. If any stage is
+   missing, retain **DEFERRED** status.
+4. Only after all stages exist, add a narrow adapter that lowers semantically
+   checked frontend results to shared `HirModule`. Keep frontend-owned types
+   out of `/home/diogo/self-Zith/src/ir/` and
+   `/home/diogo/self-Zith/src/cache/`.
+5. Add paired fixtures that compile equivalent constructs through each real
+   frontend, verify semantic HIR, write an artifact with each compiler, and
+   read it with the other compiler in both directions.
+6. Before tests in both repositories, validate each worktree status and
+   target-file diff. Obtain explicit authorization for any operation outside
+   the authorized `/home/diogo/self-Zith` paths.
+7. If required proof/check metadata cannot be produced, preserve runtime
+   checks and stop the affected fixture; never manufacture proof facts.
+8. Do not claim interoperability from shared codecs alone. Require passing
+   common semantic fixtures and bidirectional cache-read fixtures before
+   changing the status from **DEFERRED**.
 
-**Expected output:** If semantic frontend stages are absent, report
-“shared HIR/cache port only; frontend interoperability deferred.” If both
-adapters exist, the same fixtures pass in both directions.
+**Expected output:** With the current lexer-only inventory, report “shared
+HIR/cache port only; frontend interoperability deferred” and perform no
+adapter work. If both adapters are implemented later, the same paired
+fixtures pass in both directions.
 
-**Failure checks:** If a frontend cannot produce required proof/check
-metadata, preserve runtime checks and stop the affected fixture; do not
-manufacture proof facts. If either cache reader rejects the other's artifact,
-report the first section/schema/reference mismatch and do not claim
-interoperability.
+**Failure checks:** If proof/check metadata is unavailable, keep required
+runtime checks and stop that fixture. If either reader rejects the other
+compiler's artifact, report the first section/schema/reference mismatch and
+do not claim interoperability. If any frontend stage is absent, leave this
+step deferred rather than scaffolding a fake pipeline.
 
-**Success criteria:** Claim full interoperability only when both frontends
-pass common semantic fixtures and bidirectional cache-read tests.
+**Success criteria:** The step remains explicitly **DEFERRED** until both
+real frontends pass common semantic fixtures and bidirectional cache-read
+tests.
 
-**Commit:** Commit adapter and paired-conformance changes separately from the
-shared cache implementation, staging only the relevant frontend, test, and
-file-map paths.
+**Commit:** Create no implementation commit while deferred. When resumed,
+commit adapter and paired-conformance changes separately from shared cache
+implementation, staging only frontend, test, and file-map paths in scope.
 
 #### Step 6 final verification and commit hygiene
 
@@ -1059,33 +1175,45 @@ file-map paths.
 unrelated worktree edits.
 
 **Sub-steps:**
-1. Before each implementation commit, run
-   `git -C /home/diogo/self-Zith status --short` and inspect the exact diff
-   with `git -C /home/diogo/self-Zith diff -- <explicit paths>`.
-2. Stage only paths named by that slice. Never use `git add -A`,
-   `git add .`, `git clean`, or reset/checkout to discard unrelated work.
-3. Run
-   `ZITHC=/home/diogo/Zith/build/zithc TMPDIR=/tmp sh
-   /home/diogo/self-Zith/tests/run.sh` after each cache/VIR slice.
+1. Before implementing each slice, run
+   `git -C /home/diogo/self-Zith status --short --branch`. Record
+   pre-existing modified/untracked paths and preserve them.
+2. Before staging, run
+   `git -C /home/diogo/self-Zith diff --check` and inspect
+   `git -C /home/diogo/self-Zith diff -- <explicit paths>` for that slice.
+   If a touched file contains unrelated hunks, stage only intended hunks; if
+   that cannot be done safely, stop without committing.
+3. After every cache/HIR/VIR behavior change, run:
+
+   ```sh
+   ZITHC=/home/diogo/Zith/build/zithc TMPDIR=/tmp sh /home/diogo/self-Zith/tests/run.sh
+   ```
+
+   Require exit status 0. This harness runs typecheck, VM smoke, and native
+   HIR/cache fixtures; typecheck alone is not behavioral verification.
 4. Run
-   `/home/diogo/Zith/build/zithc --include
-   /home/diogo/self-Zith/src check
-   /home/diogo/self-Zith/src/main.zith` only after confirming
-   `src/main.zith` and imported files are not blocked by unrelated
-   pre-existing syntax changes. If blocked, report that check as blocked;
-   do not rewrite unrelated files as part of this work.
-5. After each successful slice, inspect `git show --stat --oneline HEAD` and
-   confirm the commit contains only that slice's implementation, tests, and
-   `docs/project-files.md` updates.
+   `/home/diogo/Zith/build/zithc --include /home/diogo/self-Zith/src check /home/diogo/self-Zith/src/main.zith`
+   only after confirming the entry point and imports are not blocked by
+   unrelated pre-existing syntax changes. If blocked, report the exact
+   diagnostic and do not edit unrelated files.
+5. Stage only reviewed paths belonging to the current slice. Never use
+   `git add -A`, `git add .`, `git clean`, `git reset`, or checkout commands
+   to discard unrelated edits.
+6. After each commit, run
+   `git -C /home/diogo/self-Zith show --stat --oneline HEAD` and verify every
+   listed path belongs to that slice. Do not amend an existing commit.
+7. Keep the Step 6.1 codegen follow-up separate; it is neither a cause nor a
+   prerequisite of the imported-constant fix.
 
 **Expected output:** Each applicable harness run exits 0; the project check
 either exits 0 or is explicitly identified as blocked by pre-existing syntax
 errors; each commit contains only its declared scope.
 
-**Failure checks:** On any failing test, stop before the next slice, preserve
-the failure output, and repair or revise the current slice. If an unrelated
-worktree file changes during implementation, leave it untouched and exclude
-it from staging.
+**Failure checks:** On a failing test, stop before the next slice and preserve
+the exact command, exit code, and first relevant diagnostic. Repair only the
+current slice. Leave unrelated worktree changes untouched and exclude them
+from staging. If the sibling compiler/build is unavailable, report the check
+as blocked instead of substituting a weaker test.
 
 **Success criteria:** All completed cache/VIR slices have passing focused
 tests, every commit is scope-limited, and deferred frontend/codegen work is
@@ -1093,28 +1221,31 @@ explicitly recorded rather than counted complete.
 
 ## Final Acceptance Check
 
-1. After sibling implementation Steps 2-5, run the focused CTest command from
-   Step 1 and then
-   `ctest --test-dir /home/diogo/Zith/build --output-on-failure`. Require every
-   non-optional test to pass. Confirm required checks survive absent proof
-   metadata, `raw` remains explicitly unchecked, valid proof facts alone can
-   justify check elision, unknown required semantics are rejected, legacy
-   versions miss cleanly, VIR reuse requires matching versions, and no
-   backend-specific output is cross-shared.
-2. After the self-Zith port, run
-   `ZITHC=/home/diogo/Zith/build/zithc TMPDIR=/tmp sh
-   /home/diogo/self-Zith/tests/run.sh`. Run
-   `/home/diogo/Zith/build/zithc --include
-   /home/diogo/self-Zith/src check
-   /home/diogo/self-Zith/src/main.zith` only when unrelated pre-existing
-   syntax changes do not block it. Confirm every ported shared module is
-   exercised and existing unrelated worktree changes remain untouched.
-3. Claim full cross-dialect interoperability only after a real adapter exists
-   in each compiler, both adapters pass the same common/safety conformance
-   fixtures, and bidirectional cache-read tests pass. If the self-Zith frontend
-   still lacks semantic analysis, report the shared-module port as complete
-   only to the tested extent and leave cross-dialect interoperability
-   explicitly deferred.
+1. Require `git -C /home/diogo/self-Zith diff --check` to exit 0 before each
+   implementation commit, and inspect only explicit paths for that slice.
+2. Require
+   `ZITHC=/home/diogo/Zith/build/zithc TMPDIR=/tmp sh /home/diogo/self-Zith/tests/run.sh`
+   to exit 0 after each cache/HIR/VIR implementation slice. If the sibling
+   compiler is unavailable, report this as blocked, not passed.
+3. For each artifact fixture, assert exactly five required IDs in order
+   (`1, 2, 3, 4, 5`), schemas (`2, 2, 1, 1, 2`), valid identity counts,
+   checksum acceptance, and field-by-field semantic equality after readback.
+4. Assert Decls schema 2 preserves both `discardable` values and Attrs schema
+   2 preserves `present == true` and `present == false`; reject schema 1 for
+   either section before payload decoding; and prove a false/absent proof
+   record never removes a required runtime check.
+5. Assert every malformed-artifact case returns its specified error and no
+   partial HIR; insufficient caller-owned storage never yields a successful
+   partial artifact.
+6. Assert VIR reuse requires exact, nonzero VIR-schema and VM-semantic
+   versions. A VIR miss must leave a compatible HIR artifact reusable; do not
+   claim a generator exists without an executable consumer.
+7. Keep frontend interoperability **DEFERRED** while the frontend inventory
+   lacks parser, resolver, semantic analysis, and proof production. Claim
+   bidirectional interoperability only after real adapters and paired
+   cross-reader fixtures pass in both directions.
+8. Confirm the Step 6.1 codegen follow-up remains separately tracked and no
+   unrelated worktree modifications were staged, committed, or reverted.
 
 If any applicable acceptance check fails, stop and report the exact failing
 test and output. Do not weaken compatibility checks to make the suite pass.

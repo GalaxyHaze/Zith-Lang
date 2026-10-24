@@ -1,6 +1,6 @@
 # Shared HIR Interoperability: Implemented Work
 
-Status snapshot: 2026-10-23 (end of session)
+Status snapshot: 2026-10-24 (Step 6.2 projection in progress; full hydration partial)
 
 This document records implementation reported for the plan
 `shared-hir-interoperability.md`. It is a progress summary, not a replacement
@@ -23,18 +23,22 @@ version 21; the self-Zith port now uses that same version.
 
 ## In Progress in `/home/diogo/self-Zith`
 
-The port is in Step 6 of the plan, specifically at Step 6.1 (diagnose and
-repair the failing typed writer). The following cache foundations and sections
-are implemented and committed:
+The port has completed Step 6.1 and is progressing through the Step 6 cache
+contract, projection, and reader work. The following cache foundations and
+sections are implemented and committed:
 
 - ZIRL v21 container framing, section validation, and little-endian byte
   primitives.
 - Generic artifact-envelope reader/writer for canonical identity,
-  dependencies, section tables, payloads, and checksum validation. Complete
-  `HirModule` section assembly and restoration remain pending.
+  dependencies, section tables, payloads, and checksum validation. A typed
+  aggregate reader now hydrates the currently supported HIR subset into
+  caller-owned storage; non-empty Decls/Templates remain explicitly rejected.
 - Compact HIR type-entry encoding.
-- Metadata schema 2, including strings, paths, types, and nominal definitions.
-- Decls, Templates, and Attrs section codecs.
+- Metadata schema 3, including strings, paths, types, nominal definitions, and
+  the shared Trait type kind.
+- Decls schema 2 preserves declaration-level `discardable` in its former
+  reserved byte; malformed booleans and schema-1 payloads are rejected.
+- Templates and Attrs section codecs.
 - Compact Code section codec for expressions, functions/blocks, globals,
   vtables, and canonical mappings, using caller-owned decode storage. Function
   records preserve `foreign_adapter_name_id`, and Call expressions preserve
@@ -52,13 +56,26 @@ are implemented and committed:
   block-instruction, and vtable slices are copied into caller-owned storage.
   Native tests cover projection, Code round-trip, and source-slice mutation
   after projection.
+- HIR-to-Attrs projection: `build_zirl_hir_attrs_section()` verifies the HIR,
+  preflights caller-owned capacities, preserves source slot/expression/
+  function indices, flattens call escapes, omits entries with no residual
+  facts, and persists every safety proof including `present == false`.
+  Capacity and invalid-HIR failures return empty section slices. The focused
+  fixture and full self-Zith harness pass.
 - Typed section-to-container writer: Metadata, Decls, Templates, Code, and
   Attrs payloads are encoded in the required ZIRL order with fixed section IDs
   and schema versions, then passed to the validated artifact-envelope writer.
-  This slice is committed (`9d56fe2`) but **not validated**: see
-  "Blocked: Step 6.1" below. Success-path layout assertions and the
-  undersized-buffer failure test remain incomplete. Envelope reading remains
-  covered by the separate container test.
+  This slice is committed (`9d56fe2`) and is exercised end to end by the
+  self-Zith harness after the Step 6.1 fix below.
+- The typed HIR artifact writer now accepts identity, paths, and `HirModule`
+  rather than caller-prebuilt section records. It verifies HIR, projects
+  canonical types, Decls, Templates, Code, and Attrs using caller-owned
+  storage, and serializes Metadata directly from HIR. Focused tests for the
+  new Decls/Templates projections and non-empty aggregate output remain
+  pending.
+- The HIR verifier now accepts `HirRuntimePanic` expressions, which were
+  previously rejected by the fallback expression-shape branch despite being
+  part of the HIR/Code contract. A focused verifier regression covers it.
 - Caller-owned decode storage and failure handling for the section codecs;
   tests cover golden bytes, round-trips, truncation, invalid values, and
   short output buffers in the implemented sections.
@@ -74,11 +91,11 @@ rejection:
 ZITHC=/home/diogo/Zith/build/zithc TMPDIR=/tmp sh tests/run.sh
 ```
 
-## Blocked: Step 6.1 (typed writer returns `InvalidSections`)
+## Resolved: Step 6.1 (imported constant loses binding semantics)
 
-Re-run on 2026-10-23 with `ZITHC=/home/diogo/Zith/build/zithc`:
-`tests/run.sh` exits 2. Isolating the harness steps shows that five of the six
-steps pass and only the last one fails:
+The baseline harness run on 2026-10-23 with
+`ZITHC=/home/diogo/Zith/build/zithc` exited 2. Isolating its steps showed that
+five of the six passed and only the final fixture failed:
 
 | Step | Result |
 |---|---|
@@ -89,42 +106,46 @@ steps pass and only the last one fails:
 | `run --no-cache tests/zirl-artifact.zith` | 0 |
 | `run --no-cache tests/zirl-hir-artifact.zith` | **2** |
 
-The failing fixture returns `2`, which is the value of
-`ZirlArtifactError.InvalidSections`. `write_zirl_hir_artifact()` in
-`src/cache/zirl-hir-artifact.zith` returns `InvalidSections` from two distinct
-boundaries without distinguishing them:
+The root cause is upstream of the cache codecs: `LocalSymbolInfo` does not
+preserve `BindingKind`, and the import-resolution paths do not copy it into
+`ResolvedName`. The default binding classification makes HIR lowering treat
+an imported constant as a local binding instead of producing
+`HirGlobalConstLoad`; this causes the typed writer's `InvalidSections` result.
+There is a related semantic bug: `isConstantExpression()` looks up a
+provider-module declaration ID in the consumer module's snapshot.
 
-1. Its count/`sections`-length preconditions.
-2. Any of the five section codecs reporting `failed`.
+The fix and its regression tests are implemented in `/home/diogo/Zith`
+(uncommitted working-tree changes; no staging, commit, or push). The bounded
+implementation is recorded in
+[`step-6-1-imported-const-fix.md`](step-6-1-imported-const-fix.md). It:
 
-Facts established so far:
+- adds `frontend::BindingKind bindingKind` to `LocalSymbolInfo` and copies it
+  when building module symbols;
+- copies `symbol.bindingKind` into `ResolvedName` in all four import-copy
+  paths in `frontend-symbol-resolution.cpp` (selector import, `from`/`export`
+  injection, qualified struct literal, qualified field chain);
+- classifies imported constants in `PerModuleSema::isConstantExpression()`
+  from `resolved->declKind`/`resolved->bindingKind` instead of indexing the
+  consumer snapshot with the provider's symbol id;
+- adds the missing `HirGlobalConstLoad` path for `ns.CONST` in
+  `lowerField()` in `hir-lower-expr-agg.cpp`, which previously returned
+  `kInvalidHirExpr` because the import branch only handled functions.
 
-- The fixture's preconditions appear satisfied: `sections` has 5 entries,
-  `declaration_count`, `template_count`, and `function_count` are all `0`, and
-  each corresponding array is empty.
-- `valid_artifact_sections()` in `src/cache/zirl-artifact.zith` requires
-  length >= 5, strictly increasing IDs starting at 1, `flags == 1` on the five
-  required sections, schema `2` for ID 1 and schema `1` for IDs 2..5, and
-  `required_id == 6` at the end. The values written by the typed writer appear
-  to satisfy this.
-- Therefore the failure is most likely inside one of the section codecs (for
-  example Metadata on an empty module) or in the `raw storage->sections[i] =`
-  writes, not in the envelope's section validation. This is **not yet
-  isolated**.
-- Known compiler limitation: reading the writer's internal section array via
-  direct raw indexing (`storage.sections[index]`) in the fixture triggers an
-  internal compiler error. The fixture must observe section layout through the
-  public envelope read path instead of raw indexing.
-- Running the aggregate fixture through the VM fails with
-  `unsupported slot size in v2 lowering`; `zithc test` only type-checks
-  fixtures and does not execute their functions.
+Validation on 2026-10-24:
 
-Step 6.1's sub-steps (see the canonical plan) are the exact procedure to
-isolate and repair this: add structured per-codec `failed` assertions, prove the
-envelope accepts a literal five-entry section array via
-`write_zirl_artifact()` + `read_zirl_artifact()`, then correct only the boundary
-the checks identify. Do not weaken `valid_artifact_sections()` or omit a
-required section to make the fixture pass.
+| Check | Result |
+|---|---|
+| Three new regressions in `test-hir-lower-modern` | pass (selective, `from`, qualified) |
+| Focused CTest (`test-frontend-context`, `test-frontend-modern-pipeline`, `test-hir-lower-modern`, `test-codegen`) | pass except the pre-existing unrelated `test_generic_template_survives_persistent_cache` failure |
+| `ZITHC=/home/diogo/Zith/build/zithc TMPDIR=/tmp sh tests/run.sh` | exit 0; `zirl-hir-artifact` no longer returns `InvalidSections` |
+| Full CTest suite | 43/44 pass; only the pre-existing unrelated `test-hir-lower-modern` cache test fails |
+
+The envelope validation contract was not weakened and no ZIRL section was
+omitted.
+
+The silent codegen behavior that omits stores when `emitVar` returns
+`nullptr` is an independent follow-up, registered as its own issue and
+outside this fix's implementation scope.
 
 The standalone `src/main.zith` check fails because of the experimental
 `src/main.zith` / `src/frontend/lexer.zith` files described below; those files
@@ -152,47 +173,95 @@ separately, not absorbed into the implementation commits. `src/main.zith` and
 
 The following work remains:
 
-- **Step 6.1 (blocked):** isolate and repair the typed writer's
-  `InvalidSections` failure and make the `zirl-hir-artifact` fixture exit 0
-  without weakening the envelope contract or using raw section-array indexing.
-- Connect compact section records to the local `HirModule` representation.
-  Function identities must use the artifact's canonical compact type table;
-  local `HirTypeId` values alone are not a cross-artifact identity, and
-  function-signature entries may need to be synthesized.
-- **Step 6.2:** reconcile every serialized declaration/template field with a
-  lossless HIR source (or an approved contract extension); audit `is_extern`,
-  `template_index`, `body_function_index`, `field_name_ids`, `field_type_ids`,
-  `method_declaration_indices`, generic-parameter bounds,
-  `canonical_field_order`, and `trait_type_ids`.
-- **Step 6.3:** build the complete HIR-to-section projection from a verified
-  `HirModule` plus explicit artifact identity and paths.
-- Add typed section decoding and restore a complete `HirModule` artifact from
-  the metadata, declaration, template, attribute, and Code section codecs.
-- **Step 6.4:** decode typed sections and hydrate a complete, verified
-  `HirModule` artifact, with round-trip and malformed-input fixtures.
-- Connect the section projections to `HirModule` and add complete-artifact
-  byte-for-byte conformance fixtures. The new writer composes typed payloads,
-  but does not yet hydrate a `HirModule`.
-- **Step 6.5:** gate derived VIR and codegen on real consumers; keep VIR/codegen
-  modules absent while no executable consumer exists, and run the final
-  acceptance audit.
-- Implement a real Zith frontend adapter only after the local frontend has the
-  semantic pipeline needed to produce verified HIR.
+- **Step 6.1 (done):** the typed writer's `InvalidSections` failure was caused
+  by imported constants losing their binding semantics; the bounded fix is
+  implemented and the `zirl-hir-artifact` fixture exits 0 without weakening
+  envelope validation.
+- **Step 6.2 (partial):** the HIR contract decisions are approved, and
+  self-Zith now has the declaration/template HIR fields, verifier checks,
+  schema updates, and HIR-to-Decls/Templates projection. The full per-relation
+  positive/negative fixture matrix remains pending, as do producer population
+  in `/home/diogo/Zith` and aggregate-reader hydration. Details and acceptance
+  criteria are in [`step-6-2-contract-gaps.md`](step-6-2-contract-gaps.md).
+- **Step 6.3 (partial):** the typed writer projects Metadata, Decls,
+  Templates, Code, and Attrs from verified HIR with caller-owned storage.
+  Existing empty-artifact and Code/Attrs non-empty fixtures pass; dedicated
+  non-empty Decls/Templates projection and aggregate serialization fixtures
+  remain pending.
+- **Step 6.4 (partial):** the aggregate reader and atomic failure behavior
+  hydrate and verify the representable Metadata/Code/Attrs subset. Complete
+  artifact hydration depends on resolving the Step 6.2 Decls/Templates gaps.
+- **Step 6.5 (gate audit passed 2026-10-24):** the source inventory still has
+  no executable VIR consumer or codegen backend; the five exact-version gate
+  cases are present and called by the test dispatch; ADR-0015 marks both
+  consumers `prepared, not implemented`. No placeholder modules were added.
+  The overall Step 6 acceptance audit remains open.
+- **Step 6.6 (deferred):** add a real Zith frontend adapter only when the
+  local frontend has the semantic pipeline needed to produce verified HIR.
 
-- **Step 6.6:** gate frontend interoperability on a real semantic pipeline;
-  until a parser, resolver, and proof producer exist, report only the shared
-  HIR/cache port and defer the interoperability claim.
+## Step 6 Progress (2026-10-24)
+
+- Attrs now has an independent schema version 2. Its proof records preserve
+  `present` as a canonical trailing boolean byte; schema 1 is rejected, and
+  the container version remains 21 because the envelope did not change.
+- Declaration-level `discardable` now round-trips as a canonical `0/1`
+  boolean in Decls schema 2. The HIR schema is unchanged because the source
+  field already exists on `HirDeclaration`.
+- Regression fixtures cover true/false proof round-trips, truncated and
+  invalid boolean bytes, and prove that an absent proof does not remove a
+  `RequiredCheck`. VIR reuse tests cover exact-match, mismatches, and zero
+  versions.
+- Step 6.3 remains partial: the HIR artifact source now contains only identity,
+  paths, and `HirModule`; the writer verifies HIR, builds the canonical type
+  table in caller-owned storage, projects Decls/Templates/Code/Attrs, and
+  serializes Metadata directly from HIR. The non-empty
+  fixture exercises strings, Int/Ptr/Array types, a function with a parameter
+  and block, a global, a vtable, slot attrs, and present/absent safety proofs.
+  It checks projection and serialization, section IDs/schemas, Code/Attrs
+  decoding, source-slice independence, and deterministic bytes across repeated
+  writes. Dedicated positive/negative projection fixtures and non-empty
+  aggregate serialization are not yet present.
+- Step 6.2's approved HIR relationships and semantic fields are implemented
+  through projection in self-Zith; the upstream Zith-- producer and the
+  focused projection fixture matrix remain outstanding.
+- Step 6.4 is partial. The aggregate reader validates the envelope and typed
+  sections, hydrates Metadata/Code/Attrs into caller-owned HIR storage,
+  reverses canonical type IDs, and runs `verify_hir()` before returning.
+  Field-by-field comparison covers every `HirModule` field; identity and paths
+  are compared separately, including dependency ABI fields. The non-empty
+  round-trip exercises a global, vtable, slot attrs, call attrs, function
+  attrs, and present/absent proofs. Negative cases cover malformed artifacts
+  and insufficient capacity across the populated hydration-storage families;
+  every tested failure asserts empty public HIR slices. Empty artifacts now
+  round-trip through the public writer and aggregate reader and pass
+  `verify_hir()`. Separate valid-envelope fixtures encode one non-empty Decls
+  record and one non-empty Templates record through their public section
+  writers; each reaches the aggregate reader's
+  `UnsupportedDeclarationsOrTemplates` rejection and exposes empty public HIR
+  slices. The focused fixture and full harness pass. This is not
+  complete-artifact hydration: non-empty Decls/Templates cannot be projected
+  or restored until their HIR contract sources are resolved and approved
+  under Step 6.2.
+- Step 6.5's five VIR version-gate cases and ADR-0015 readiness requirements
+  were revalidated: the full harness passes and the test dispatch executes the
+  five-case gate. They establish exact-match reuse policy only; no VIR
+  consumer, generator, or codegen backend is implemented, and the final Step
+  6 acceptance audit remains pending. The whole-worktree `git diff --check`
+  still reports pre-existing trailing whitespace at
+  `src/cache/zirl-buffer.zith:85`; the standalone `src/main.zith` check remains
+  blocked by unresolved names in the experimental entry point.
+- Step 6.6 remains **DEFERRED** because the frontend inventory contains only
+  the experimental lexer.
 
 ## Interoperability Status
 
 Bidirectional cross-frontend cache interoperability is not implemented or
-claimed. The local implementation does not yet serialize and restore a
-complete `HirModule` artifact (its typed writer is unvalidated and its reader
-does not hydrate HIR), and it has no real Zith frontend adapter. The compact
-Code section codec alone is not a complete HIR cache reader/writer.
-Interoperability requires complete artifacts, real adapters in both compilers,
-and conformance tests proving that each can read artifacts produced by the
-other.
+claimed. The local writer now projects the five typed sections from shared HIR,
+but dedicated non-empty Decls/Templates fixtures and aggregate-reader
+hydration remain outstanding; the reader still rejects non-empty
+Decls/Templates. There is no real Zith frontend adapter. Interoperability
+requires complete artifacts, real adapters in both compilers, and conformance
+tests proving that each can read artifacts produced by the other.
 
 ## Other Plan Documents
 

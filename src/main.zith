@@ -1,4 +1,4 @@
-from utils/prints
+//from utils/prints
 from utils/keywords
 
 fn main(argc: i32, argv: **char){
@@ -6,6 +6,7 @@ fn main(argc: i32, argv: **char){
     printerr(tColor.Blue, raw argv[0]);
 
     let id =  getKeywordId("if");
+
     when (id){
         (getKeywordId("if")) printout(tColor.Magenta, "nice! it works\n"),
         (_) printout(tColor.Cyan, "sad...\n")

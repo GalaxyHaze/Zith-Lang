@@ -2,7 +2,7 @@ from cache/zirl-buffer
 from cache/zirl-type-section
 from ir/hir
 
-pub const zirlMetadataSchemaVersion: u16 = 2u16
+pub const zirlMetadataSchemaVersion: u16 = 3u16
 
 pub struct ZirlMetadataSection {
     pub module_name: []char,

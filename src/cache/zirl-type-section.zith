@@ -29,7 +29,8 @@ fn known_type_kind(kind: u8): bool {
         kind == (HirTypeKind.Opaque as u8) or
         kind == (HirTypeKind.Pack as u8) or
         kind == (HirTypeKind.Dyn as u8) or
-        kind == (HirTypeKind.OpaqueTagged as u8);
+        kind == (HirTypeKind.OpaqueTagged as u8) or
+        kind == (HirTypeKind.Trait as u8);
 }
 
 fn decode_type_kind(kind: u8): HirTypeKind {
@@ -55,7 +56,8 @@ fn decode_type_kind(kind: u8): HirTypeKind {
     if (kind == (HirTypeKind.Opaque as u8)) { return HirTypeKind.Opaque; }
     if (kind == (HirTypeKind.Pack as u8)) { return HirTypeKind.Pack; }
     if (kind == (HirTypeKind.Dyn as u8)) { return HirTypeKind.Dyn; }
-    return HirTypeKind.OpaqueTagged;
+    if (kind == (HirTypeKind.OpaqueTagged as u8)) { return HirTypeKind.OpaqueTagged; }
+    return HirTypeKind.Trait;
 }
 
 fn reader_has_record_bytes(reader: ZirlByteReader, count: u64): bool {

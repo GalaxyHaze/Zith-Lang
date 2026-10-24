@@ -59,6 +59,7 @@ fn writer_has_room(writer: ZirlByteWriter, count: u64): bool {
     if (writer.failed) {
         return false;
     }
+
     let capacity = @lengthOf(writer.bytes);
     if (writer.position > capacity) {
         return false;
@@ -81,7 +82,7 @@ pub fn write_u8(writer: ZirlByteWriter, value: u8): ZirlByteWriter {
     var result = writer;
     if (not writer_has_room(result, 1)) {
         result.failed = true;
-        return result;
+        return result;            
     }
     raw result.bytes[result.position] = value;
     result.position = result.position + 1;
@@ -248,7 +249,7 @@ pub fn read_blob_into(
         result.output.failed = true;
         return result;
     }
-
+    length
     var cursor = length_result.reader;
     for (offset in 1u64..(length as u64)) {
         let index = offset - 1;

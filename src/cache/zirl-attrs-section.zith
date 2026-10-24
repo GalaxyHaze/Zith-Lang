@@ -1,5 +1,18 @@
 from cache/zirl-buffer
 from ir/hir
+from ir/hir-verify
+
+pub enum ZirlHirAttrsError {
+    None = 0,
+    InvalidHir = 1,
+    InsufficientStorage = 2,
+    UnsupportedSize = 3,
+}
+
+pub struct ZirlHirAttrsResult {
+    pub value: ZirlAttrsSection,
+    pub error: ZirlHirAttrsError,
+}
 
 pub struct ZirlSlotAttrsRecord {
     pub slot_id: u32,
@@ -31,6 +44,7 @@ pub struct ZirlSafetyProofRecord {
     pub operand_a: HirExprId,
     pub operand_b: HirExprId,
     pub operand_c: HirExprId,
+    pub present: bool,
 }
 
 pub struct ZirlAttrsSection {
@@ -286,6 +300,7 @@ pub fn write_attrs_section(
         result = write_u32(result, proof.operand_a);
         result = write_u32(result, proof.operand_b);
         result = write_u32(result, proof.operand_c);
+        result = write_u8(result, attrs_bool_byte(proof.present));
     }
     return result;
 }
@@ -467,7 +482,10 @@ pub fn read_attrs_section(
         cursor = operand_b.reader;
         let operand_c = read_u32(cursor);
         cursor = operand_c.reader;
+        let present = read_u8(cursor);
+        cursor = present.reader;
         if (cursor.failed or kind.value > (HirSafetyProofKind.OpaqueTypeMatches as u8) or
+            present.value > 1u8 or
             (expr_id.value as u64) >= @lengthOf(storage->proof_expr_seen) or
             raw storage->proof_expr_seen[expr_id.value]) {
             return attrs_reader_failure(reader, storage);
@@ -479,6 +497,7 @@ pub fn read_attrs_section(
             operand_a: operand_a.value,
             operand_b: operand_b.value,
             operand_c: operand_c.value,
+            present: present.value == 1u8,
         };
     }
 
@@ -491,5 +510,199 @@ pub fn read_attrs_section(
             function_count.value as u64,
             proof_count.value as u64
         ),
+    };
+}
+
+fn hir_attrs_failure(
+    storage: *ZirlAttrsStorage,
+    error: ZirlHirAttrsError
+): ZirlHirAttrsResult {
+    return ZirlHirAttrsResult {
+        value: attrs_value(storage, 0u64, 0u64, 0u64, 0u64),
+        error: error,
+    };
+}
+
+fn hir_slot_attrs_have_facts(attributes: HirSlotAttrs): bool {
+    return attributes.ownership != HirOwnership.Default or
+        attributes.consumed != HirConsumedState.Unknown or
+        attributes.non_null or attributes.volatile_slot;
+}
+
+fn hir_call_attrs_have_facts(attributes: HirCallAttrs): bool {
+    if (attributes.returns_argument != 0xFFFFFFFFu32) {
+        return true;
+    }
+    for (offset in 1u64..@lengthOf(attributes.args)) {
+        let index = offset - 1u64;
+        let argument: HirCallArgAttrs = raw attributes.args[index];
+        if (argument.escape != HirCallEscape.None) {
+            return true;
+        }
+    }
+    return false;
+}
+
+fn hir_function_attrs_have_facts(attributes: HirFunctionAttrs): bool {
+    return attributes.return_consumed != HirConsumedState.Unknown or
+        attributes.non_null or attributes.no_alias or attributes.read_only or
+        attributes.no_capture or attributes.discardable;
+}
+
+pub fn build_zirl_hir_attrs_section(
+    module: *HirModule,
+    storage: *ZirlAttrsStorage
+): ZirlHirAttrsResult {
+    let verified = verify_hir(module);
+    if (verified.error != HirVerifyError.None) {
+        return hir_attrs_failure(storage, ZirlHirAttrsError.InvalidHir);
+    }
+
+    if (@lengthOf(module->slot_attrs) > 0xFFFFFFFFu64 or
+        @lengthOf(module->call_attrs) > 0xFFFFFFFFu64 or
+        @lengthOf(module->function_attrs) > 0xFFFFFFFFu64 or
+        @lengthOf(module->safety_attrs.proofs) > 0xFFFFFFFFu64) {
+        return hir_attrs_failure(storage, ZirlHirAttrsError.UnsupportedSize);
+    }
+
+    var slot_count = 0u64;
+    for (offset in 1u64..@lengthOf(module->slot_attrs)) {
+        let index = offset - 1u64;
+        let attributes: HirSlotAttrs = raw module->slot_attrs[index];
+        if (hir_slot_attrs_have_facts(attributes)) {
+            slot_count = slot_count + 1u64;
+        }
+    }
+
+    var call_count = 0u64;
+    var escape_count = 0u64;
+    for (offset in 1u64..@lengthOf(module->call_attrs)) {
+        let index = offset - 1u64;
+        let attributes: HirCallAttrs = raw module->call_attrs[index];
+        if (hir_call_attrs_have_facts(attributes)) {
+            if (@lengthOf(attributes.args) > 0xFFFFFFFFu64) {
+                return hir_attrs_failure(storage, ZirlHirAttrsError.UnsupportedSize);
+            }
+            if (escape_count > @lengthOf(storage->call_escapes) or
+                @lengthOf(attributes.args) >
+                    @lengthOf(storage->call_escapes) - escape_count) {
+                return hir_attrs_failure(
+                    storage,
+                    ZirlHirAttrsError.InsufficientStorage
+                );
+            }
+            call_count = call_count + 1u64;
+            escape_count = escape_count + @lengthOf(attributes.args);
+        }
+    }
+
+    var function_count = 0u64;
+    for (offset in 1u64..@lengthOf(module->function_attrs)) {
+        let index = offset - 1u64;
+        let attributes: HirFunctionAttrs = raw module->function_attrs[index];
+        if (hir_function_attrs_have_facts(attributes)) {
+            function_count = function_count + 1u64;
+        }
+    }
+    let proof_count = @lengthOf(module->safety_attrs.proofs);
+    for (offset in 1u64..proof_count) {
+        let index = offset - 1u64;
+        let proof: HirSafetyProof = raw module->safety_attrs.proofs[index];
+        if (proof.kind > HirSafetyProofKind.OpaqueTypeMatches) {
+            return hir_attrs_failure(storage, ZirlHirAttrsError.InvalidHir);
+        }
+    }
+
+    if (slot_count > @lengthOf(storage->slots) or
+        call_count > @lengthOf(storage->calls) or
+        function_count > @lengthOf(storage->functions) or
+        proof_count > @lengthOf(storage->safety_proofs)) {
+        return hir_attrs_failure(storage, ZirlHirAttrsError.InsufficientStorage);
+    }
+
+    var projected_slot_count = 0u64;
+    for (offset in 1u64..@lengthOf(module->slot_attrs)) {
+        let index = offset - 1u64;
+        let attributes: HirSlotAttrs = raw module->slot_attrs[index];
+        if (hir_slot_attrs_have_facts(attributes)) {
+            raw storage->slots[projected_slot_count] = ZirlSlotAttrsRecord {
+                slot_id: index as u32,
+                ownership: attributes.ownership,
+                consumed: attributes.consumed,
+                non_null: attributes.non_null,
+                volatile_slot: attributes.volatile_slot,
+            };
+            projected_slot_count = projected_slot_count + 1u64;
+        }
+    }
+
+    var projected_call_count = 0u64;
+    var projected_escape_count = 0u64;
+    for (offset in 1u64..@lengthOf(module->call_attrs)) {
+        let index = offset - 1u64;
+        let attributes: HirCallAttrs = raw module->call_attrs[index];
+        if (hir_call_attrs_have_facts(attributes)) {
+            for (argument_offset in 1u64..@lengthOf(attributes.args)) {
+                let argument_index = argument_offset - 1u64;
+                let argument: HirCallArgAttrs = raw attributes.args[argument_index];
+                raw storage->call_escapes[
+                    projected_escape_count + argument_index
+                ] = argument.escape;
+            }
+            let next_escape_count =
+                projected_escape_count + @lengthOf(attributes.args);
+            raw storage->calls[projected_call_count] = ZirlCallAttrsRecord {
+                expr_id: index as HirExprId,
+                returns_argument: attributes.returns_argument,
+                arg_escapes: raw storage->call_escapes[
+                    projected_escape_count..next_escape_count
+                ],
+            };
+            projected_escape_count = next_escape_count;
+            projected_call_count = projected_call_count + 1u64;
+        }
+    }
+
+    var projected_function_count = 0u64;
+    for (offset in 1u64..@lengthOf(module->function_attrs)) {
+        let index = offset - 1u64;
+        let attributes: HirFunctionAttrs = raw module->function_attrs[index];
+        if (hir_function_attrs_have_facts(attributes)) {
+            raw storage->functions[projected_function_count] =
+                ZirlFunctionAttrsRecord {
+                    function_index: index as u32,
+                    return_consumed: attributes.return_consumed,
+                    non_null: attributes.non_null,
+                    no_alias: attributes.no_alias,
+                    read_only: attributes.read_only,
+                    no_capture: attributes.no_capture,
+                    discardable: attributes.discardable,
+                };
+            projected_function_count = projected_function_count + 1u64;
+        }
+    }
+
+    for (offset in 1u64..proof_count) {
+        let index = offset - 1u64;
+        let proof: HirSafetyProof = raw module->safety_attrs.proofs[index];
+        raw storage->safety_proofs[index] = ZirlSafetyProofRecord {
+            expr_id: index as HirExprId,
+            kind: proof.kind,
+            operand_a: proof.operand_a,
+            operand_b: proof.operand_b,
+            operand_c: proof.operand_c,
+            present: proof.present,
+        };
+    }
+
+    return ZirlHirAttrsResult {
+        value: attrs_value(
+            storage,
+            projected_slot_count,
+            projected_call_count,
+            projected_function_count,
+            proof_count
+        ),
+        error: ZirlHirAttrsError.None,
     };
 }

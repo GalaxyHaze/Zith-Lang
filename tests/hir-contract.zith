@@ -23,6 +23,7 @@ fn make_hir_module(
     proofs: []HirSafetyProof
 ): HirModule {
     let declarations: [0]HirDeclaration = [];
+    let templates: [0]HirTemplate = [];
     let struct_defs: [0]HirStructDef = [];
     let enum_defs: [0]HirEnumDef = [];
     let union_defs: [0]HirUnionDef = [];
@@ -40,6 +41,7 @@ fn make_hir_module(
         expressions: expressions,
         functions: functions,
         declarations: raw declarations[0..0],
+        templates: raw templates[0..0],
         global_constants: raw global_constants[0..0],
         vtables: raw vtables[0..0],
         slot_attrs: raw slot_attrs[0..0],
@@ -62,6 +64,261 @@ fn empty_hir_module(): HirModule {
         raw functions[0..0],
         raw proofs[0..0]
     );
+}
+
+fn verify_declaration_template_fixture(
+    strings: [][]char,
+    types: []HirType,
+    declarations: []HirDeclaration,
+    templates: []HirTemplate
+): HirVerificationResult {
+    var module = empty_hir_module();
+    module.strings = strings;
+    module.types = types;
+    module.declarations = declarations;
+    module.templates = templates;
+    return verify_hir(&module);
+}
+
+fn test_hir_declaration_template_contract(): i32 {
+    let strings: [5][]char = ["Container", "T", "Readable", "value", "method"];
+    let no_type_ids: [0]HirTypeId = [];
+    let no_string_ids: [0]HirStringId = [];
+    let types: [2]HirType = [
+        HirType {
+            kind: HirTypeKind.Void,
+            width: 0u8,
+            flags: 0u8,
+            ref0: 0u32,
+            ref1: 0u32,
+            args: raw no_type_ids[0..0],
+            arg_names: raw no_string_ids[0..0],
+        },
+        HirType {
+            kind: HirTypeKind.Trait,
+            width: 0u8,
+            flags: 0u8,
+            ref0: 2u32,
+            ref1: 0u32,
+            args: raw no_type_ids[0..0],
+            arg_names: raw no_string_ids[0..0],
+        },
+    ];
+    let no_members: [0]HirDeclarationId = [];
+    var declaration_methods: [1]HirDeclarationId = [1u32];
+    var declarations: [2]HirDeclaration = [
+        HirDeclaration {
+            name_id: 0u32,
+            kind: HirDeclarationKind.Struct,
+            visibility: HirVisibility.Public,
+            module_depth: 0i32,
+            type_id: invalidType,
+            is_extern: false,
+            discardable: false,
+            body_function_id: invalidFunction,
+            template_id: 0u32,
+            members: raw no_members[0..0],
+            method_declaration_ids: raw declaration_methods[0..1],
+        },
+        HirDeclaration {
+            name_id: 4u32,
+            kind: HirDeclarationKind.Function,
+            visibility: HirVisibility.Private,
+            module_depth: 1i32,
+            type_id: invalidType,
+            is_extern: false,
+            discardable: false,
+            body_function_id: invalidFunction,
+            template_id: invalidTemplate,
+            members: raw no_members[0..0],
+            method_declaration_ids: raw no_members[0..0],
+        },
+    ];
+    let trait_bounds: [1]HirTypeId = [1u32];
+    let params: [1]HirGenericParam = [
+        HirGenericParam {
+            name_id: 1u32,
+            bound_type_ids: raw trait_bounds[0..1],
+        },
+    ];
+    let no_signature_types: [0]HirTypeId = [];
+    let no_signature_names: [0]HirStringId = [];
+    let field_names: [1]HirStringId = [3u32];
+    let field_types: [1]HirTypeId = [0u32];
+    var field_order: [1]u32 = [0u32];
+    var template_methods: [1]HirDeclarationId = [1u32];
+    var trait_types: [1]HirTypeId = [1u32];
+    var templates: [1]HirTemplate = [
+        HirTemplate {
+            declaration_id: 0u32,
+            function_id: invalidFunction,
+            kind: HirDeclarationKind.Struct,
+            is_extern: false,
+            name_id: 0u32,
+            return_type_id: invalidType,
+            params: raw params[0..1],
+            param_type_ids: raw no_signature_types[0..0],
+            param_name_ids: raw no_signature_names[0..0],
+            field_name_ids: raw field_names[0..1],
+            field_type_ids: raw field_types[0..1],
+            canonical_field_order: raw field_order[0..1],
+            method_declaration_indices: raw template_methods[0..1],
+            trait_type_ids: raw trait_types[0..1],
+        },
+    ];
+    let valid = verify_declaration_template_fixture(
+        raw strings[0..5],
+        raw types[0..2],
+        raw declarations[0..2],
+        raw templates[0..1]
+    );
+    if (valid.error != HirVerifyError.None) {
+        return 1;
+    }
+
+    var declaration_value: HirDeclaration = raw declarations[0];
+    declaration_value.body_function_id = 9u32;
+    let invalid_function_declarations: [2]HirDeclaration = [
+        declaration_value,
+        raw declarations[1],
+    ];
+    let invalid_function_link = verify_declaration_template_fixture(
+        raw strings[0..5], raw types[0..2],
+        raw invalid_function_declarations[0..2], raw templates[0..1]
+    );
+    if (invalid_function_link.error != HirVerifyError.InvalidDeclarationReference) {
+        return 2;
+    }
+
+    var template_value: HirTemplate = raw templates[0];
+    template_value.function_id = 9u32;
+    let invalid_function_templates: [1]HirTemplate = [template_value];
+    let invalid_template_function = verify_declaration_template_fixture(
+        raw strings[0..5], raw types[0..2],
+        raw declarations[0..2], raw invalid_function_templates[0..1]
+    );
+    if (invalid_template_function.error != HirVerifyError.InvalidTemplateShape) {
+        return 3;
+    }
+
+    let invalid_template_id_declarations: [2]HirDeclaration = [
+        HirDeclaration {
+            name_id: 0u32,
+            kind: HirDeclarationKind.Struct,
+            visibility: HirVisibility.Public,
+            module_depth: 0i32,
+            type_id: invalidType,
+            is_extern: false,
+            discardable: false,
+            body_function_id: invalidFunction,
+            template_id: 9u32,
+            members: raw no_members[0..0],
+            method_declaration_ids: raw declaration_methods[0..1],
+        },
+        raw declarations[1],
+    ];
+    let invalid_template_id = verify_declaration_template_fixture(
+        raw strings[0..5], raw types[0..2],
+        raw invalid_template_id_declarations[0..2], raw templates[0..1]
+    );
+    if (invalid_template_id.error != HirVerifyError.InvalidDeclarationReference) {
+        return 4;
+    }
+
+    let broken_owner_declarations: [2]HirDeclaration = [
+        HirDeclaration {
+            name_id: 0u32,
+            kind: HirDeclarationKind.Struct,
+            visibility: HirVisibility.Public,
+            module_depth: 0i32,
+            type_id: invalidType,
+            is_extern: false,
+            discardable: false,
+            body_function_id: invalidFunction,
+            template_id: invalidTemplate,
+            members: raw no_members[0..0],
+            method_declaration_ids: raw declaration_methods[0..1],
+        },
+        raw declarations[1],
+    ];
+    let broken_owner = verify_declaration_template_fixture(
+        raw strings[0..5], raw types[0..2],
+        raw broken_owner_declarations[0..2], raw templates[0..1]
+    );
+    if (broken_owner.error != HirVerifyError.InvalidTemplateReference) {
+        return 5;
+    }
+
+    template_value = raw templates[0];
+    template_value.field_type_ids = raw no_type_ids[0..0];
+    let mismatched_templates: [1]HirTemplate = [template_value];
+    let mismatch_probe: HirTemplate = raw mismatched_templates[0];
+    if (@lengthOf(mismatch_probe.field_type_ids) != 0u64 or
+        @lengthOf(mismatch_probe.field_name_ids) != 1u64) {
+        return 91;
+    }
+    var mismatched_module = empty_hir_module();
+    mismatched_module.strings = raw strings[0..5];
+    mismatched_module.types = raw types[0..2];
+    mismatched_module.declarations = raw declarations[0..2];
+    mismatched_module.templates = raw mismatched_templates[0..1];
+    let mismatched_fields = verify_hir(&mismatched_module);
+    if (mismatched_fields.error != HirVerifyError.InvalidTemplateShape) {
+        return 6;
+    }
+
+    let invalid_order: [1]u32 = [1u32];
+    template_value = raw templates[0];
+    template_value.canonical_field_order = raw invalid_order[0..1];
+    let invalid_order_templates: [1]HirTemplate = [template_value];
+    let invalid_field_order = verify_declaration_template_fixture(
+        raw strings[0..5], raw types[0..2],
+        raw declarations[0..2], raw invalid_order_templates[0..1]
+    );
+    if (invalid_field_order.error != HirVerifyError.InvalidTemplateShape) {
+        return 7;
+    }
+
+    let invalid_method_ids: [1]HirDeclarationId = [9u32];
+    declaration_value = raw declarations[0];
+    declaration_value.method_declaration_ids = raw invalid_method_ids[0..1];
+    let invalid_method_declarations: [2]HirDeclaration = [
+        declaration_value,
+        raw declarations[1],
+    ];
+    let invalid_declaration_method = verify_declaration_template_fixture(
+        raw strings[0..5], raw types[0..2],
+        raw invalid_method_declarations[0..2], raw templates[0..1]
+    );
+    if (invalid_declaration_method.error != HirVerifyError.InvalidDeclarationReference) {
+        return 8;
+    }
+
+    let inconsistent_method_ids: [1]HirDeclarationId = [0u32];
+    template_value = raw templates[0];
+    template_value.method_declaration_indices =
+        raw inconsistent_method_ids[0..1];
+    let inconsistent_templates: [1]HirTemplate = [template_value];
+    let invalid_template_method = verify_declaration_template_fixture(
+        raw strings[0..5], raw types[0..2],
+        raw declarations[0..2], raw inconsistent_templates[0..1]
+    );
+    if (invalid_template_method.error != HirVerifyError.InvalidTemplateReference) {
+        return 9;
+    }
+
+    let non_trait_types: [1]HirTypeId = [0u32];
+    template_value = raw templates[0];
+    template_value.trait_type_ids = raw non_trait_types[0..1];
+    let non_trait_templates: [1]HirTemplate = [template_value];
+    let non_trait_reference = verify_declaration_template_fixture(
+        raw strings[0..5], raw types[0..2],
+        raw declarations[0..2], raw non_trait_templates[0..1]
+    );
+    if (non_trait_reference.error != HirVerifyError.InvalidTypeReference) {
+        return 10;
+    }
+    return 0;
 }
 
 fn test_nominal_types_use_definition_tables(): i32 {
@@ -180,6 +437,27 @@ fn test_nonempty_expression_table_verifies(): i32 {
         return 0;
     }
     return 4;
+}
+
+fn test_runtime_panic_expression_verifies(): i32 {
+    let runtime_panic = HirRuntimePanic { code: 7u32 };
+    let expressions: [1]HirExpr = [HirExpr { runtime_panic }];
+    let strings: [0][]char = [];
+    let types: [0]HirType = [];
+    let functions: [0]HirFunction = [];
+    let proofs: [0]HirSafetyProof = [];
+    let module = make_hir_module(
+        raw strings[0u64..0u64],
+        raw types[0u64..0u64],
+        raw expressions[0u64..1u64],
+        raw functions[0u64..0u64],
+        raw proofs[0u64..0u64]
+    );
+    let result = verify_hir(&module);
+    if (result.error == HirVerifyError.None) {
+        return 0;
+    }
+    return 7;
 }
 
 fn test_invalid_literal_type_is_rejected(): i32 {
@@ -396,7 +674,7 @@ fn test_required_check_proof_operands_match(expected_operand: HirExprId): i32 {
     present.operand_b = expected_operand;
     present.operand_c = 0xFFFFFFFFu32;
     present.present = true;
-    let proofs: [3]HirSafetyProof = [absent_proof, absent_proof, present];
+    var proofs: [3]HirSafetyProof = [absent_proof, absent_proof, present];
     let strings: [0][]char = [];
     let functions: [0]HirFunction = [];
     let module = make_hir_module(
@@ -406,9 +684,21 @@ fn test_required_check_proof_operands_match(expected_operand: HirExprId): i32 {
         raw functions[0..0],
         raw proofs[0..3]
     );
-    let result = verify_hir(&module);
+    let result = verify_hir(&raw module);
     if (expected_operand == 1 and result.error == HirVerifyError.None) {
-        return 0;
+        raw proofs[2].present = false;
+        let absent_result = verify_hir(&raw module);
+        if (absent_result.error != HirVerifyError.None) {
+            return 2;
+        }
+        let checked_expression: HirExpr = raw module.expressions[2];
+        if (checked_expression is HirIndex) {
+            let checked_index: HirIndex = checked_expression;
+            if (checked_index.safety == HirSafetyMode.RequiredCheck) {
+                return 0;
+            }
+        }
+        return 3;
     }
     if (expected_operand != 1 and result.error == HirVerifyError.InvalidSafetyProof) {
         return 0;
@@ -682,9 +972,9 @@ fn make_cache_identity(
 
 fn test_cache_identity_ignores_producer(): i32 {
     let stored = make_cache_identity(
-        "pkg/main.zith", "zith-shared-hir", 1u32, 1u32, 7u64, 0u64, "Zith--");
+        "pkg/main.zith", "zith-shared-hir", 1u32, hirSchemaVersion, 7u64, 0u64, "Zith--");
     let expected = make_cache_identity(
-        "pkg/main.zith", "zith-shared-hir", 1u32, 1u32, 7u64,
+        "pkg/main.zith", "zith-shared-hir", 1u32, hirSchemaVersion, 7u64,
         0xFFFFFFFFFFFFFFFFu64, "Zith");
     if (compare_hir_identity(&stored, &expected) == HirCacheDecision.Compatible) {
         return 0;
@@ -694,21 +984,21 @@ fn test_cache_identity_ignores_producer(): i32 {
 
 fn test_cache_identity_rejects_semantic_mismatch(): i32 {
     let stored_module = make_cache_identity(
-        "pkg/main.zith", "zith-shared-hir", 1u32, 1u32, 7u64, 0u64, "Zith--");
+        "pkg/main.zith", "zith-shared-hir", 1u32, hirSchemaVersion, 7u64, 0u64, "Zith--");
     let wrong_module = make_cache_identity(
-        "pkg/other.zith", "zith-shared-hir", 1u32, 1u32, 7u64, 0u64, "Zith");
+        "pkg/other.zith", "zith-shared-hir", 1u32, hirSchemaVersion, 7u64, 0u64, "Zith");
     let stored_profile = make_cache_identity(
-        "pkg/main.zith", "zith-shared-hir", 1u32, 1u32, 7u64, 0u64, "Zith--");
+        "pkg/main.zith", "zith-shared-hir", 1u32, hirSchemaVersion, 7u64, 0u64, "Zith--");
     let wrong_profile = make_cache_identity(
-        "pkg/main.zith", "zith--", 1u32, 1u32, 7u64, 0u64, "Zith");
+        "pkg/main.zith", "zith--", 1u32, hirSchemaVersion, 7u64, 0u64, "Zith");
     let stored_profile_version = make_cache_identity(
-        "pkg/main.zith", "zith-shared-hir", 1u32, 1u32, 7u64, 0u64, "Zith--");
+        "pkg/main.zith", "zith-shared-hir", 1u32, hirSchemaVersion, 7u64, 0u64, "Zith--");
     let wrong_profile_version = make_cache_identity(
-        "pkg/main.zith", "zith-shared-hir", 2u32, 1u32, 7u64, 0u64, "Zith");
+        "pkg/main.zith", "zith-shared-hir", 2u32, hirSchemaVersion, 7u64, 0u64, "Zith");
     let stored_schema = make_cache_identity(
-        "pkg/main.zith", "zith-shared-hir", 1u32, 1u32, 7u64, 0u64, "Zith--");
+        "pkg/main.zith", "zith-shared-hir", 1u32, hirSchemaVersion, 7u64, 0u64, "Zith--");
     let wrong_schema = make_cache_identity(
-        "pkg/main.zith", "zith-shared-hir", 1u32, 2u32, 7u64, 0u64, "Zith");
+        "pkg/main.zith", "zith-shared-hir", 1u32, hirSchemaVersion + 1u32, 7u64, 0u64, "Zith");
     if (compare_hir_identity(&stored_module, &wrong_module) != HirCacheDecision.ModuleMismatch) {
         return 1;
     }
@@ -747,14 +1037,20 @@ fn test_cache_rejects_invalid_required_features(): i32 {
 }
 
 fn test_vir_version_compatibility(): i32 {
-    if (can_reuse_vir(1, 1) == false) {
+    if (can_reuse_vir(virSchemaVersion, vmSemanticVersion) == false) {
         return 1;
     }
-    if (can_reuse_vir(2, 1)) {
+    if (can_reuse_vir(virSchemaVersion + 1u32, vmSemanticVersion)) {
         return 2;
     }
-    if (can_reuse_vir(1, 2)) {
+    if (can_reuse_vir(virSchemaVersion, vmSemanticVersion + 1u32)) {
         return 3;
+    }
+    if (can_reuse_vir(0u32, vmSemanticVersion)) {
+        return 4;
+    }
+    if (can_reuse_vir(virSchemaVersion, 0u32)) {
+        return 5;
     }
     return 0;
 }
@@ -1043,6 +1339,43 @@ fn test_zirl_type_entry_roundtrip_and_validation(): i32 {
     if (not unknown_kind.reader.failed or unknown_kind.reader.position != 0u64) {
         return 8;
     }
+
+    let trait_type = HirType {
+        kind: HirTypeKind.Trait,
+        width: 0u8,
+        flags: 0u8,
+        ref0: 7u32,
+        ref1: 0u32,
+        args: raw no_args[0..0],
+        arg_names: raw no_names[0..0],
+    };
+    var trait_bytes: [20]u8 = [
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+    ];
+    let trait_writer = write_type_entry(
+        ZirlByteWriter {
+            bytes: raw trait_bytes[0..20],
+            position: 0u64,
+            failed: false,
+        },
+        &trait_type
+    );
+    let trait_reader = read_type_entry(
+        ZirlByteReader {
+            bytes: raw trait_bytes[0..20],
+            position: 0u64,
+            failed: false,
+        },
+        raw no_args[0..0],
+        raw no_names[0..0]
+    );
+    if (trait_writer.failed or trait_writer.position != 20u64 or
+        trait_reader.reader.failed or trait_reader.reader.position != 20u64 or
+        trait_reader.value.kind != HirTypeKind.Trait or
+        trait_reader.value.ref0 != 7u32) {
+        return 9;
+    }
     return 0;
 }
 
@@ -1166,7 +1499,7 @@ fn test_zirl_header_golden_bytes(): i32 {
     var header = ZirlFileHeader {
         magic: 0x5A49524Cu32,
         container_version: 21u32,
-        hir_schema_version: 1u32,
+        hir_schema_version: zirlHirSchemaVersion,
         endianness: 1u8,
         reserved: 0u8,
         section_count: 5u16,
@@ -1192,7 +1525,8 @@ fn test_zirl_header_golden_bytes(): i32 {
     }
     if (raw output[0] != 0x4Cu8 or raw output[1] != 0x52u8 or
         raw output[2] != 0x49u8 or raw output[3] != 0x5Au8 or
-        raw output[12] != 1u8 or raw output[14] != 5u8 or
+        raw output[8] != 2u8 or raw output[12] != 1u8 or
+        raw output[14] != 5u8 or
         raw output[15] != 0u8 or raw output[16] != 0x78u8 or
         raw output[17] != 0x56u8 or raw output[18] != 0x34u8 or
         raw output[19] != 0x12u8 or raw output[20] != 0xEFu8 or
@@ -1223,7 +1557,7 @@ fn test_zirl_header_decode_and_truncation(): i32 {
     var header = ZirlFileHeader {
         magic: 0x5A49524Cu32,
         container_version: 21u32,
-        hir_schema_version: 1u32,
+        hir_schema_version: zirlHirSchemaVersion,
         endianness: 1u8,
         reserved: 0u8,
         section_count: 5u16,
@@ -1439,7 +1773,7 @@ fn make_zirl_validation_header(): ZirlFileHeader {
     return ZirlFileHeader {
         magic: 0x5A49524Cu32,
         container_version: 21u32,
-        hir_schema_version: 1u32,
+        hir_schema_version: zirlHirSchemaVersion,
         endianness: 1u8,
         reserved: 0u8,
         section_count: 6u16,
@@ -1465,15 +1799,15 @@ fn make_zirl_validation_header(): ZirlFileHeader {
 fn make_zirl_validation_entries(): [6]ZirlSectionEntry {
     return [
         ZirlSectionEntry {
-            id: 1u16, flags: 1u16, schema_version: 2u16, reserved: 0u16,
+            id: 1u16, flags: 1u16, schema_version: zirlMetadataSectionSchemaVersion, reserved: 0u16,
             offset: 243u64, size: 4u64,
         },
         ZirlSectionEntry {
-            id: 2u16, flags: 1u16, schema_version: 1u16, reserved: 0u16,
+            id: 2u16, flags: 1u16, schema_version: 2u16, reserved: 0u16,
             offset: 247u64, size: 4u64,
         },
         ZirlSectionEntry {
-            id: 3u16, flags: 1u16, schema_version: 1u16, reserved: 0u16,
+            id: 3u16, flags: 1u16, schema_version: zirlTemplatesSectionSchemaVersion, reserved: 0u16,
             offset: 251u64, size: 4u64,
         },
         ZirlSectionEntry {
@@ -1481,7 +1815,7 @@ fn make_zirl_validation_entries(): [6]ZirlSectionEntry {
             offset: 255u64, size: 4u64,
         },
         ZirlSectionEntry {
-            id: 5u16, flags: 1u16, schema_version: 1u16, reserved: 0u16,
+            id: 5u16, flags: 1u16, schema_version: 2u16, reserved: 0u16,
             offset: 259u64, size: 4u64,
         },
         ZirlSectionEntry {
@@ -1498,6 +1832,27 @@ fn test_zirl_section_table_validation(): i32 {
     if (result.error != ZirlValidationError.None) {
         return 1;
     }
+
+    raw entries[1].schema_version = 1u16;
+    result = validate_zirl_sections(&raw header, raw entries[0..6], 267u64);
+    if (result.error != ZirlValidationError.InvalidSection) {
+        return 10;
+    }
+    raw entries[1].schema_version = zirlDeclsSectionSchemaVersion;
+    raw entries[2].schema_version = 1u16;
+    result = validate_zirl_sections(&raw header, raw entries[0..6], 267u64);
+    if (result.error != ZirlValidationError.InvalidSection) {
+        return 11;
+    }
+    raw entries[1].schema_version = zirlDeclsSectionSchemaVersion;
+    raw entries[2].schema_version = zirlTemplatesSectionSchemaVersion;
+
+    raw entries[4].schema_version = 1u16;
+    result = validate_zirl_sections(&raw header, raw entries[0..6], 267u64);
+    if (result.error != ZirlValidationError.InvalidSection) {
+        return 9;
+    }
+    raw entries[4].schema_version = 2u16;
 
     header.container_version = 22u32;
     result = validate_zirl_sections(&raw header, raw entries[0..6], 267u64);
@@ -1537,7 +1892,7 @@ fn test_zirl_section_table_validation(): i32 {
     entries = make_zirl_validation_entries();
     raw entries[5].id = 5u16;
     raw entries[5].flags = 1u16;
-    raw entries[5].schema_version = 1u16;
+    raw entries[5].schema_version = 2u16;
     result = validate_zirl_sections(&raw header, raw entries[0..6], 267u64);
     if (result.error != ZirlValidationError.DuplicateSection) {
         return 6;
@@ -1920,11 +2275,12 @@ fn test_zirl_decls_golden_roundtrip_and_failures(): i32 {
     let field_names: [1]HirStringId = [5u32];
     let field_types: [1]HirTypeId = [6u32];
     let method_indices: [2]HirDeclarationId = [7u32, 9u32];
-    let declarations: [1]ZirlDeclarationRecord = [
+    let declarations: [2]ZirlDeclarationRecord = [
         ZirlDeclarationRecord {
             kind: HirDeclarationKind.Struct,
             visibility: HirVisibility.Module,
             is_extern: true,
+            discardable: true,
             module_depth: -2i32,
             name_id: 3u32,
             type_id: 4u32,
@@ -1934,13 +2290,27 @@ fn test_zirl_decls_golden_roundtrip_and_failures(): i32 {
             field_type_ids: raw field_types[0..1],
             method_declaration_indices: raw method_indices[0..2],
         },
+        ZirlDeclarationRecord {
+            kind: HirDeclarationKind.Function,
+            visibility: HirVisibility.Private,
+            is_extern: false,
+            discardable: false,
+            module_depth: 0i32,
+            name_id: 10u32,
+            type_id: 11u32,
+            template_index: 0xFFFFFFFFu32,
+            body_function_index: 12u32,
+            field_name_ids: raw field_names[0..0],
+            field_type_ids: raw field_types[0..0],
+            method_declaration_indices: raw method_indices[0..0],
+        },
     ];
     let section = ZirlDeclSection {
-        declarations: raw declarations[0..1],
+        declarations: raw declarations[0..2],
     };
-    let expected: [52]u8 = [
-        1u8, 0u8, 0u8, 0u8,
-        1u8, 2u8, 1u8, 0u8,
+    let expected: [84]u8 = [
+        2u8, 0u8, 0u8, 0u8,
+        1u8, 2u8, 1u8, 1u8,
         254u8, 255u8, 255u8, 255u8,
         3u8, 0u8, 0u8, 0u8,
         4u8, 0u8, 0u8, 0u8,
@@ -1952,29 +2322,52 @@ fn test_zirl_decls_golden_roundtrip_and_failures(): i32 {
         2u8, 0u8, 0u8, 0u8,
         7u8, 0u8, 0u8, 0u8,
         9u8, 0u8, 0u8, 0u8,
+        0u8, 0u8, 0u8, 0u8,
+        0u8, 0u8, 0u8, 0u8,
+        10u8, 0u8, 0u8, 0u8,
+        11u8, 0u8, 0u8, 0u8,
+        255u8, 255u8, 255u8, 255u8,
+        12u8, 0u8, 0u8, 0u8,
+        0u8, 0u8, 0u8, 0u8,
+        0u8, 0u8, 0u8, 0u8,
     ];
-    var encoded_bytes: [52]u8 = expected;
+    var encoded_bytes: [84]u8 = expected;
     var writer = ZirlByteWriter {
-        bytes: raw encoded_bytes[0..52],
+        bytes: raw encoded_bytes[0..84],
         position: 0u64,
         failed: false,
     };
     writer = write_decls_section(writer, &raw section);
-    if (writer.failed or writer.position != 52u64) {
+    if (writer.failed or writer.position != 84u64) {
         return 1;
     }
-    for (offset in 1u64..52u64) {
+    for (offset in 1u64..84u64) {
         let index = offset - 1;
         if (raw encoded_bytes[index] != raw expected[index]) {
             return 2;
         }
     }
 
-    let decoded_records: [1]ZirlDeclarationRecord = [
+    let decoded_records: [2]ZirlDeclarationRecord = [
         ZirlDeclarationRecord {
             kind: HirDeclarationKind.Function,
             visibility: HirVisibility.Private,
             is_extern: false,
+            discardable: false,
+            module_depth: 0i32,
+            name_id: 0u32,
+            type_id: 0u32,
+            template_index: 0u32,
+            body_function_index: 0u32,
+            field_name_ids: raw field_names[0..0],
+            field_type_ids: raw field_types[0..0],
+            method_declaration_indices: raw method_indices[0..0],
+        },
+        ZirlDeclarationRecord {
+            kind: HirDeclarationKind.Function,
+            visibility: HirVisibility.Private,
+            is_extern: false,
+            discardable: true,
             module_depth: 0i32,
             name_id: 0u32,
             type_id: 0u32,
@@ -1989,24 +2382,26 @@ fn test_zirl_decls_golden_roundtrip_and_failures(): i32 {
     let decoded_types: [1]HirTypeId = [0u32];
     let decoded_methods: [2]HirDeclarationId = [0u32, 0u32];
     var storage = ZirlDeclStorage {
-        declarations: raw decoded_records[0..1],
+        declarations: raw decoded_records[0..2],
         field_name_ids: raw decoded_names[0..1],
         field_type_ids: raw decoded_types[0..1],
         method_declaration_indices: raw decoded_methods[0..2],
     };
     let reader = ZirlByteReader {
-        bytes: raw encoded_bytes[0..52],
+        bytes: raw encoded_bytes[0..84],
         position: 0u64,
         failed: false,
     };
     let decoded = read_decls_section(reader, &raw storage);
-    if (decoded.reader.failed or decoded.reader.position != 52u64 or
-        @lengthOf(decoded.value.declarations) != 1u64) {
+    if (decoded.reader.failed or decoded.reader.position != 84u64 or
+        @lengthOf(decoded.value.declarations) != 2u64) {
         return 3;
     }
     let item = must decoded.value.declarations[0];
+    let second_item = must decoded.value.declarations[1];
     if (item.kind != HirDeclarationKind.Struct or
         item.visibility != HirVisibility.Module or not item.is_extern or
+        not item.discardable or
         item.module_depth != -2i32 or item.name_id != 3u32 or
         item.type_id != 4u32 or item.template_index != 0xFFFFFFFFu32 or
         item.body_function_index != 8u32 or
@@ -2016,13 +2411,15 @@ fn test_zirl_decls_golden_roundtrip_and_failures(): i32 {
         raw item.field_type_ids[0] != 6u32 or
         @lengthOf(item.method_declaration_indices) != 2u64 or
         raw item.method_declaration_indices[0] != 7u32 or
-        raw item.method_declaration_indices[1] != 9u32) {
+        raw item.method_declaration_indices[1] != 9u32 or
+        second_item.name_id != 10u32 or second_item.type_id != 11u32 or
+        second_item.body_function_index != 12u32 or second_item.discardable) {
         return 4;
     }
 
     let truncated = read_decls_section(
         ZirlByteReader {
-            bytes: raw encoded_bytes[0..51],
+            bytes: raw encoded_bytes[0..83],
             position: 0u64,
             failed: false,
         },
@@ -2041,9 +2438,18 @@ fn test_zirl_decls_golden_roundtrip_and_failures(): i32 {
     }
     raw encoded_bytes[4u64] = 1u8;
 
+    raw encoded_bytes[7u64] = 2u8;
+    let invalid_discardable = read_decls_section(reader, &raw storage);
+    if (not invalid_discardable.reader.failed or
+        invalid_discardable.reader.position != 0u64) {
+        raw encoded_bytes[7u64] = 1u8;
+        return 12;
+    }
+    raw encoded_bytes[7u64] = 1u8;
+
     let short_writer = write_decls_section(
         ZirlByteWriter {
-            bytes: raw encoded_bytes[0..51],
+            bytes: raw encoded_bytes[0..83],
             position: 0u64,
             failed: false,
         },
@@ -2075,6 +2481,8 @@ fn test_zirl_templates_golden_roundtrip_and_failures(): i32 {
             kind: HirDeclarationKind.Function,
             is_extern: true,
             name_id: 1u32,
+            declaration_index: 11u32,
+            function_index: invalidFunction,
             return_type_id: 2u32,
             params: raw params[0..1],
             param_type_ids: raw param_types[0..1],
@@ -2087,10 +2495,12 @@ fn test_zirl_templates_golden_roundtrip_and_failures(): i32 {
         },
     ];
     let section = ZirlTemplateSection { templates: raw templates[0..1] };
-    let expected: [88]u8 = [
+    let expected: [96]u8 = [
         1u8, 0u8, 0u8, 0u8,
         0u8, 1u8, 0u8, 0u8,
         1u8, 0u8, 0u8, 0u8,
+        11u8, 0u8, 0u8, 0u8,
+        255u8, 255u8, 255u8, 255u8,
         2u8, 0u8, 0u8, 0u8,
         1u8, 0u8, 0u8, 0u8,
         3u8, 0u8, 0u8, 0u8,
@@ -2111,19 +2521,19 @@ fn test_zirl_templates_golden_roundtrip_and_failures(): i32 {
         1u8, 0u8, 0u8, 0u8,
         10u8, 0u8, 0u8, 0u8,
     ];
-    var encoded: [88]u8 = expected;
+    var encoded: [96]u8 = expected;
     let writer = write_templates_section(
         ZirlByteWriter {
-            bytes: raw encoded[0..88],
+            bytes: raw encoded[0..96],
             position: 0u64,
             failed: false,
         },
         &raw section
     );
-    if (writer.failed or writer.position != 88u64) {
+    if (writer.failed or writer.position != 96u64) {
         return 1;
     }
-    for (offset in 1u64..88u64) {
+    for (offset in 1u64..96u64) {
         let index = offset - 1;
         if (raw encoded[index] != raw expected[index]) {
             return 2;
@@ -2141,6 +2551,8 @@ fn test_zirl_templates_golden_roundtrip_and_failures(): i32 {
             kind: HirDeclarationKind.Struct,
             is_extern: false,
             name_id: 0u32,
+            declaration_index: 0u32,
+            function_index: invalidFunction,
             return_type_id: 0u32,
             params: raw empty_params[0..0],
             param_type_ids: raw param_types[0..0],
@@ -2179,12 +2591,12 @@ fn test_zirl_templates_golden_roundtrip_and_failures(): i32 {
         trait_type_ids: raw decoded_traits[0..1],
     };
     let reader = ZirlByteReader {
-        bytes: raw encoded[0..88],
+        bytes: raw encoded[0..96],
         position: 0u64,
         failed: false,
     };
     let decoded = read_templates_section(reader, &raw storage);
-    if (decoded.reader.failed or decoded.reader.position != 88u64 or
+    if (decoded.reader.failed or decoded.reader.position != 96u64 or
         @lengthOf(decoded.value.templates) != 1u64) {
         return 3;
     }
@@ -2192,6 +2604,8 @@ fn test_zirl_templates_golden_roundtrip_and_failures(): i32 {
     let param = must item.params[0];
     if (item.kind != HirDeclarationKind.Function or not item.is_extern or
         item.name_id != 1u32 or item.return_type_id != 2u32 or
+        item.declaration_index != 11u32 or
+        item.function_index != invalidFunction or
         @lengthOf(item.params) != 1u64 or param.name_id != 3u32 or
         @lengthOf(param.bound_type_ids) != 1u64 or
         raw param.bound_type_ids[0] != 4u32 or
@@ -2207,7 +2621,7 @@ fn test_zirl_templates_golden_roundtrip_and_failures(): i32 {
 
     let truncated = read_templates_section(
         ZirlByteReader {
-            bytes: raw encoded[0..87],
+            bytes: raw encoded[0..95],
             position: 0u64,
             failed: false,
         },
@@ -2260,22 +2674,31 @@ fn test_zirl_attrs_golden_roundtrip_and_failures(): i32 {
             discardable: true,
         },
     ];
-    let proofs: [1]ZirlSafetyProofRecord = [
+    let proofs: [2]ZirlSafetyProofRecord = [
         ZirlSafetyProofRecord {
             expr_id: 0u32,
             kind: HirSafetyProofKind.OpaqueTypeMatches,
             operand_a: 1u32,
             operand_b: 2u32,
             operand_c: 3u32,
+            present: true,
+        },
+        ZirlSafetyProofRecord {
+            expr_id: 1u32,
+            kind: HirSafetyProofKind.BoundsValid,
+            operand_a: 4u32,
+            operand_b: 5u32,
+            operand_c: 6u32,
+            present: false,
         },
     ];
     let section = ZirlAttrsSection {
         slots: raw slots[0..1],
         calls: raw calls[0..1],
         functions: raw functions[0..1],
-        safety_proofs: raw proofs[0..1],
+        safety_proofs: raw proofs[0..2],
     };
-    let expected: [73]u8 = [
+    let expected: [92]u8 = [
         1u8, 0u8, 0u8, 0u8,
         0x12u8, 0u8, 0u8, 0u8,
         3u8, 2u8, 1u8, 0u8,
@@ -2288,26 +2711,33 @@ fn test_zirl_attrs_golden_roundtrip_and_failures(): i32 {
         1u8, 0u8, 0u8, 0u8,
         0x56u8, 0u8, 0u8, 0u8,
         1u8, 1u8, 0u8, 1u8, 0u8, 1u8, 0u8, 0u8,
-        1u8, 0u8, 0u8, 0u8,
+        2u8, 0u8, 0u8, 0u8,
         0u8, 0u8, 0u8, 0u8,
         3u8,
         1u8, 0u8, 0u8, 0u8,
         2u8, 0u8, 0u8, 0u8,
         3u8, 0u8, 0u8, 0u8,
+        1u8,
+        1u8, 0u8, 0u8, 0u8,
+        0u8,
+        4u8, 0u8, 0u8, 0u8,
+        5u8, 0u8, 0u8, 0u8,
+        6u8, 0u8, 0u8, 0u8,
+        0u8,
     ];
-    var encoded: [73]u8 = expected;
+    var encoded: [92]u8 = expected;
     let writer = write_attrs_section(
         ZirlByteWriter {
-            bytes: raw encoded[0..73],
+            bytes: raw encoded[0..92],
             position: 0u64,
             failed: false,
         },
         &raw section
     );
-    if (writer.failed or writer.position != 73u64) {
+    if (writer.failed or writer.position != 92u64) {
         return 1;
     }
-    for (offset in 1u64..73u64) {
+    for (offset in 1u64..92u64) {
         let index = offset - 1;
         if (raw encoded[index] != raw expected[index]) {
             return 2;
@@ -2345,41 +2775,51 @@ fn test_zirl_attrs_golden_roundtrip_and_failures(): i32 {
             discardable: false,
         },
     ];
-    let decoded_proofs: [1]ZirlSafetyProofRecord = [
+    let decoded_proofs: [2]ZirlSafetyProofRecord = [
         ZirlSafetyProofRecord {
             expr_id: 0u32,
             kind: HirSafetyProofKind.BoundsValid,
             operand_a: 0u32,
             operand_b: 0u32,
             operand_c: 0u32,
+            present: false,
+        },
+        ZirlSafetyProofRecord {
+            expr_id: 0u32,
+            kind: HirSafetyProofKind.BoundsValid,
+            operand_a: 0u32,
+            operand_b: 0u32,
+            operand_c: 0u32,
+            present: true,
         },
     ];
-    let proof_seen: [1]bool = [false];
+    let proof_seen: [2]bool = [false, false];
     var storage = ZirlAttrsStorage {
         slots: raw decoded_slots[0..1],
         calls: raw decoded_calls[0..1],
         call_escapes: raw decoded_escapes[0..2],
         functions: raw decoded_functions[0..1],
-        safety_proofs: raw decoded_proofs[0..1],
-        proof_expr_seen: raw proof_seen[0..1],
+        safety_proofs: raw decoded_proofs[0..2],
+        proof_expr_seen: raw proof_seen[0..2],
     };
     let reader = ZirlByteReader {
-        bytes: raw encoded[0..73],
+        bytes: raw encoded[0..92],
         position: 0u64,
         failed: false,
     };
     let decoded = read_attrs_section(reader, &raw storage);
-    if (decoded.reader.failed or decoded.reader.position != 73u64 or
+    if (decoded.reader.failed or decoded.reader.position != 92u64 or
         @lengthOf(decoded.value.slots) != 1u64 or
         @lengthOf(decoded.value.calls) != 1u64 or
         @lengthOf(decoded.value.functions) != 1u64 or
-        @lengthOf(decoded.value.safety_proofs) != 1u64) {
+        @lengthOf(decoded.value.safety_proofs) != 2u64) {
         return 3;
     }
     let decoded_slot = must decoded.value.slots[0];
     let decoded_call = must decoded.value.calls[0];
     let decoded_function = must decoded.value.functions[0];
     let decoded_proof = must decoded.value.safety_proofs[0];
+    let decoded_absent_proof = must decoded.value.safety_proofs[1];
     if (decoded_slot.slot_id != 0x12u32 or
         decoded_slot.ownership != HirOwnership.Unique or
         decoded_slot.consumed != HirConsumedState.NonConsumed or
@@ -2397,13 +2837,19 @@ fn test_zirl_attrs_golden_roundtrip_and_failures(): i32 {
         decoded_proof.expr_id != 0u32 or
         decoded_proof.kind != HirSafetyProofKind.OpaqueTypeMatches or
         decoded_proof.operand_a != 1u32 or decoded_proof.operand_b != 2u32 or
-        decoded_proof.operand_c != 3u32 or not raw proof_seen[0]) {
+        decoded_proof.operand_c != 3u32 or not decoded_proof.present or
+        not raw proof_seen[0] or decoded_absent_proof.expr_id != 1u32 or
+        decoded_absent_proof.kind != HirSafetyProofKind.BoundsValid or
+        decoded_absent_proof.operand_a != 4u32 or
+        decoded_absent_proof.operand_b != 5u32 or
+        decoded_absent_proof.operand_c != 6u32 or
+        decoded_absent_proof.present or not raw proof_seen[1]) {
         return 4;
     }
 
     let truncated = read_attrs_section(
         ZirlByteReader {
-            bytes: raw encoded[0..72],
+            bytes: raw encoded[0..91],
             position: 0u64,
             failed: false,
         },
@@ -2414,6 +2860,14 @@ fn test_zirl_attrs_golden_roundtrip_and_failures(): i32 {
         @lengthOf(truncated.value.safety_proofs) != 0u64 or raw proof_seen[0]) {
         return 5;
     }
+
+    raw encoded[73u64] = 2u8;
+    let invalid_present = read_attrs_section(reader, &raw storage);
+    if (not invalid_present.reader.failed or invalid_present.reader.position != 0u64) {
+        raw encoded[73u64] = 1u8;
+        return 9;
+    }
+    raw encoded[73u64] = 1u8;
 
     raw encoded[28u64] = 5u8;
     let invalid_escape = read_attrs_section(reader, &raw storage);
@@ -2433,7 +2887,7 @@ fn test_zirl_attrs_golden_roundtrip_and_failures(): i32 {
 
     let short_writer = write_attrs_section(
         ZirlByteWriter {
-            bytes: raw encoded[0..72],
+            bytes: raw encoded[0..91],
             position: 0u64,
             failed: false,
         },
@@ -3198,6 +3652,7 @@ fn test_zirl_hir_code_projection(): i32 {
         raw projected_array.args[0u64] != 0u32 or
         projected_function.signature_type_id != 1u32 or
         projected_function.return_type_id != 0u32 or
+        projected_function.machine_return_type_id != invalidZirlType or
         @lengthOf(projected_function.parameter_type_ids) != 1u64 or
         raw projected_function.parameter_type_ids[0u64] != 0u32 or
         @lengthOf(projected_function.parameter_name_ids) != 1u64 or
@@ -3302,6 +3757,250 @@ fn test_zirl_hir_code_projection(): i32 {
     return 0;
 }
 
+fn test_zirl_hir_attrs_projection(): i32 {
+    let names: [1][]char = ["worker"];
+    let no_type_args: [1]HirTypeId = [invalidType];
+    let no_string_args: [1]HirStringId = [invalidString];
+    var integer_type = HirType {
+        kind: HirTypeKind.Int,
+        width: 32u8,
+        flags: 1u8,
+        ref0: invalidType,
+        ref1: 0u32,
+        args: raw no_type_args[0u64..0u64],
+        arg_names: raw no_string_args[0u64..0u64],
+    };
+    integer_type.kind = HirTypeKind.Int;
+    integer_type.width = 32u8;
+    integer_type.args = raw no_type_args[0u64..0u64];
+    integer_type.arg_names = raw no_string_args[0u64..0u64];
+    let types: [1]HirType = [integer_type];
+    let literal = HirLiteral {
+        value_kind: HirLiteralKind.Integer,
+        integer: 7i64,
+        float: 0.0,
+        boolean: false,
+        string_id: invalidString,
+        type_id: 0u32,
+    };
+    let call_arguments: [1]HirExprId = [0u32];
+    let call_argument_types: [1]HirTypeId = [0u32];
+    let call = HirCall {
+        callee: invalidExpr,
+        args: raw call_arguments[0u64..1u64],
+        argument_types: raw call_argument_types[0u64..1u64],
+        function_type: invalidType,
+        resolved_function: invalidFunction,
+        variadic_slice_param: 0xFFFFFFFFu32,
+        is_variadic_slice: false,
+        auto_collect_tail: false,
+        uses_tail_calling_convention: false,
+        must_tail: false,
+    };
+    let expressions: [2]HirExpr = [
+        HirExpr { literal },
+        HirExpr { call },
+    ];
+    let no_parameters: [0]HirTypeId = [];
+    let no_parameter_names: [0]HirStringId = [];
+    let no_parameter_slots: [0]HirSlotId = [];
+    let no_blocks: [0]HirBasicBlock = [];
+    let function = HirFunction {
+        name_id: 0u32,
+        parameter_types: raw no_parameters[0u64..0u64],
+        parameter_name_ids: raw no_parameter_names[0u64..0u64],
+        parameter_slots: raw no_parameter_slots[0u64..0u64],
+        return_type: 0u32,
+        state_function: false,
+        uses_tail_calling_convention: false,
+        machine_return_type: invalidType,
+        machine_id: 0u32,
+        variadic: false,
+        variadic_slice_param: 0xFFFFFFFFu32,
+        foreign_c: false,
+        has_body: false,
+        foreign_adapter_name_id: invalidString,
+        blocks: raw no_blocks[0u64..0u64],
+    };
+    let functions: [1]HirFunction = [function];
+    let no_arguments: [0]HirCallArgAttrs = [];
+    let call_argument_attributes: [1]HirCallArgAttrs = [
+        HirCallArgAttrs { escape: HirCallEscape.Borrow },
+    ];
+    let call_attributes: [2]HirCallAttrs = [
+        HirCallAttrs {
+            args: raw no_arguments[0u64..0u64],
+            returns_argument: 0xFFFFFFFFu32,
+        },
+        HirCallAttrs {
+            args: raw call_argument_attributes[0u64..1u64],
+            returns_argument: 0u32,
+        },
+    ];
+    let slot_attributes: [2]HirSlotAttrs = [
+        HirSlotAttrs {
+            ownership: HirOwnership.Default,
+            consumed: HirConsumedState.Unknown,
+            non_null: false,
+            volatile_slot: false,
+        },
+        HirSlotAttrs {
+            ownership: HirOwnership.Unique,
+            consumed: HirConsumedState.NonConsumed,
+            non_null: true,
+            volatile_slot: true,
+        },
+    ];
+    let function_attributes: [1]HirFunctionAttrs = [
+        HirFunctionAttrs {
+            return_consumed: HirConsumedState.Consumed,
+            non_null: true,
+            no_alias: false,
+            read_only: true,
+            no_capture: false,
+            discardable: true,
+        },
+    ];
+    let proofs: [2]HirSafetyProof = [
+        HirSafetyProof {
+            kind: HirSafetyProofKind.BoundsValid,
+            operand_a: invalidExpr,
+            operand_b: invalidExpr,
+            operand_c: invalidExpr,
+            present: false,
+        },
+        HirSafetyProof {
+            kind: HirSafetyProofKind.OptionalPresent,
+            operand_a: invalidExpr,
+            operand_b: invalidExpr,
+            operand_c: invalidExpr,
+            present: false,
+        },
+    ];
+    var module = make_hir_module(
+        raw names[0u64..1u64],
+        raw types[0u64..1u64],
+        raw expressions[0u64..2u64],
+        raw functions[0u64..1u64],
+        raw proofs[0u64..2u64]
+    );
+    module.slot_attrs = raw slot_attributes[0u64..2u64];
+    module.call_attrs = raw call_attributes[0u64..2u64];
+    module.function_attrs = raw function_attributes[0u64..1u64];
+    let verification = verify_hir(&raw module);
+    if (verification.error != HirVerifyError.None) {
+        return 40 + (verification.error as i32);
+    }
+
+    let output_slots: [1]ZirlSlotAttrsRecord = [
+        ZirlSlotAttrsRecord {
+            slot_id: 0u32,
+            ownership: HirOwnership.Default,
+            consumed: HirConsumedState.Unknown,
+            non_null: false,
+            volatile_slot: false,
+        },
+    ];
+    let no_escapes: [0]HirCallEscape = [];
+    let output_calls: [1]ZirlCallAttrsRecord = [
+        ZirlCallAttrsRecord {
+            expr_id: 0u32,
+            returns_argument: 0xFFFFFFFFu32,
+            arg_escapes: raw no_escapes[0u64..0u64],
+        },
+    ];
+    let output_escapes: [1]HirCallEscape = [HirCallEscape.None];
+    let output_functions: [1]ZirlFunctionAttrsRecord = [
+        ZirlFunctionAttrsRecord {
+            function_index: 0u32,
+            return_consumed: HirConsumedState.Unknown,
+            non_null: false,
+            no_alias: false,
+            read_only: false,
+            no_capture: false,
+            discardable: false,
+        },
+    ];
+    let output_proofs: [2]ZirlSafetyProofRecord = [
+        ZirlSafetyProofRecord {
+            expr_id: 0u32,
+            kind: HirSafetyProofKind.BoundsValid,
+            operand_a: 0u32,
+            operand_b: 0u32,
+            operand_c: 0u32,
+            present: true,
+        },
+        ZirlSafetyProofRecord {
+            expr_id: 0u32,
+            kind: HirSafetyProofKind.BoundsValid,
+            operand_a: 0u32,
+            operand_b: 0u32,
+            operand_c: 0u32,
+            present: true,
+        },
+    ];
+    let proof_seen: [2]bool = [false, false];
+    var storage = ZirlAttrsStorage {
+        slots: raw output_slots[0u64..1u64],
+        calls: raw output_calls[0u64..1u64],
+        call_escapes: raw output_escapes[0u64..1u64],
+        functions: raw output_functions[0u64..1u64],
+        safety_proofs: raw output_proofs[0u64..2u64],
+        proof_expr_seen: raw proof_seen[0u64..2u64],
+    };
+    let projected = build_zirl_hir_attrs_section(&raw module, &raw storage);
+    if (projected.error != ZirlHirAttrsError.None) {
+        return 10 + (projected.error as i32);
+    }
+    if (@lengthOf(projected.value.slots) != 1u64 or
+        @lengthOf(projected.value.calls) != 1u64 or
+        @lengthOf(projected.value.functions) != 1u64 or
+        @lengthOf(projected.value.safety_proofs) != 2u64) {
+        return 20;
+    }
+    let slot = must projected.value.slots[0u64];
+    let projected_call = must projected.value.calls[0u64];
+    let projected_function = must projected.value.functions[0u64];
+    let first_proof = must projected.value.safety_proofs[0u64];
+    let second_proof = must projected.value.safety_proofs[1u64];
+    if (slot.slot_id != 1u32 or
+        slot.ownership != HirOwnership.Unique or
+        slot.consumed != HirConsumedState.NonConsumed or
+        not slot.non_null or not slot.volatile_slot or
+        projected_call.expr_id != 1u32 or
+        projected_call.returns_argument != 0u32 or
+        @lengthOf(projected_call.arg_escapes) != 1u64 or
+        raw projected_call.arg_escapes[0u64] != HirCallEscape.Borrow or
+        projected_function.function_index != 0u32 or
+        projected_function.return_consumed != HirConsumedState.Consumed or
+        not projected_function.non_null or not projected_function.read_only or
+        not projected_function.discardable or
+        first_proof.expr_id != 0u32 or first_proof.present or
+        second_proof.expr_id != 1u32 or second_proof.present or
+        second_proof.kind != HirSafetyProofKind.OptionalPresent) {
+        return 2;
+    }
+
+    let no_call_storage: [0]ZirlCallAttrsRecord = [];
+    var insufficient = ZirlAttrsStorage {
+        slots: raw output_slots[0u64..1u64],
+        calls: raw no_call_storage[0u64..0u64],
+        call_escapes: raw output_escapes[0u64..1u64],
+        functions: raw output_functions[0u64..1u64],
+        safety_proofs: raw output_proofs[0u64..2u64],
+        proof_expr_seen: raw proof_seen[0u64..2u64],
+    };
+    let rejected = build_zirl_hir_attrs_section(&raw module, &raw insufficient);
+    if (rejected.error != ZirlHirAttrsError.InsufficientStorage or
+        @lengthOf(rejected.value.slots) != 0u64 or
+        @lengthOf(rejected.value.calls) != 0u64 or
+        @lengthOf(rejected.value.functions) != 0u64 or
+        @lengthOf(rejected.value.safety_proofs) != 0u64) {
+        return 3;
+    }
+    return 0;
+}
+
 fn main(): i32 {
     let literal_status = test_hir_literal_variant();
     if (literal_status != 0) {
@@ -3311,6 +4010,10 @@ fn main(): i32 {
     if (empty_status != 0) {
         return empty_status;
     }
+    let declaration_template_status = test_hir_declaration_template_contract();
+    if (declaration_template_status != 0) {
+        return 20 + declaration_template_status;
+    }
     let nominal_status = test_nominal_types_use_definition_tables();
     if (nominal_status != 0) {
         return 10 + nominal_status;
@@ -3318,6 +4021,10 @@ fn main(): i32 {
     let expression_status = test_nonempty_expression_table_verifies();
     if (expression_status != 0) {
         return expression_status;
+    }
+    let runtime_panic_status = test_runtime_panic_expression_verifies();
+    if (runtime_panic_status != 0) {
+        return runtime_panic_status;
     }
     let invalid_literal_status = test_invalid_literal_type_is_rejected();
     if (invalid_literal_status != 0) {
@@ -3403,6 +4110,10 @@ fn main(): i32 {
     let attrs_status = test_zirl_attrs_golden_roundtrip_and_failures();
     if (attrs_status != 0) {
         return 270 + attrs_status;
+    }
+    let hir_attrs_status = test_zirl_hir_attrs_projection();
+    if (hir_attrs_status != 0) {
+        return hir_attrs_status;
     }
     let code_golden_status = test_zirl_code_golden_and_failures();
     if (code_golden_status != 0) {

@@ -10,6 +10,8 @@ pub struct ZirlTemplateRecord {
     pub kind: HirDeclarationKind,
     pub is_extern: bool,
     pub name_id: HirStringId,
+    pub declaration_index: HirDeclarationId,
+    pub function_index: HirFunctionId,
     pub return_type_id: HirTypeId,
     pub params: []ZirlGenericParamRecord,
     pub param_type_ids: []HirTypeId,
@@ -162,6 +164,8 @@ pub fn write_templates_section(
         result = write_u8(result, 0u8);
         result = write_u8(result, 0u8);
         result = write_u32(result, template.name_id);
+        result = write_u32(result, template.declaration_index);
+        result = write_u32(result, template.function_index);
         result = write_u32(result, template.return_type_id);
         result = write_u32(result, @lengthOf(template.params) as u32);
         for (param_offset in 1u64..@lengthOf(template.params)) {
@@ -269,6 +273,10 @@ pub fn read_templates_section(
         }
         let name_id = read_u32(cursor);
         cursor = name_id.reader;
+        let declaration_index = read_u32(cursor);
+        cursor = declaration_index.reader;
+        let function_index = read_u32(cursor);
+        cursor = function_index.reader;
         let return_type_id = read_u32(cursor);
         cursor = return_type_id.reader;
         let params_count = read_u32(cursor);
@@ -374,6 +382,8 @@ pub fn read_templates_section(
             kind: decode_template_kind(kind.value),
             is_extern: is_extern.value == 1u8,
             name_id: name_id.value,
+            declaration_index: declaration_index.value,
+            function_index: function_index.value,
             return_type_id: return_type_id.value,
             params: raw storage->params[params_start..parameter_offset],
             param_type_ids: raw storage->param_type_ids[

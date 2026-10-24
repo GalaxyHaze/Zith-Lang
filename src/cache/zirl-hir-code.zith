@@ -39,12 +39,6 @@ struct ZirlProjectedExpr {
     error: ZirlHirCodeError,
 }
 
-struct ZirlCallProjection {
-    arguments_used: u64,
-    argument_types_used: u64,
-    error: ZirlHirCodeError,
-}
-
 struct ZirlMappingAppend {
     used: u64,
     error: ZirlHirCodeError,
@@ -232,78 +226,6 @@ fn append_canonical_mapping(
     };
 }
 
-fn project_call_fields(
-    output: *ZirlCompactExpr,
-    call: *HirCall,
-    module: *HirModule,
-    canonical: *ZirlCanonicalTypes,
-    storage: *ZirlCodeStorage,
-    signatures: []ZirlTypeId,
-    arguments_used: u64,
-    argument_types_used: u64
-): ZirlCallProjection {
-    output->kind = ZirlCompactExprKind.Call as u8;
-    output->ref_a = call->callee;
-    output->ref_e = canonical_type_id(canonical, call->function_type);
-    output->flags = 0u8;
-    if (call->must_tail) {
-        output->flags = output->flags + 1u8;
-    }
-    if (call->uses_tail_calling_convention) {
-        output->flags = output->flags + 2u8;
-    }
-    output->variadic_slice_param = call->variadic_slice_param;
-    output->is_variadic_slice = call->is_variadic_slice;
-    output->auto_collect_tail = call->auto_collect_tail;
-    let copied_args = copy_id_values(
-        call->args,
-        raw storage->expression_args,
-        arguments_used
-    );
-    if (copied_args.failed) {
-        return ZirlCallProjection {
-            arguments_used: arguments_used,
-            argument_types_used: argument_types_used,
-            error: ZirlHirCodeError.InsufficientStorage,
-        };
-    }
-    output->args = copied_args.values;
-    if (call->resolved_function != invalid_hir_cache_id) {
-        let function_index = call->resolved_function as u64;
-        if (function_index >= @lengthOf(module->functions) or
-            function_index >= @lengthOf(signatures)) {
-            return ZirlCallProjection {
-                arguments_used: copied_args.used,
-                argument_types_used: argument_types_used,
-                error: ZirlHirCodeError.InvalidFunctionReference,
-            };
-        }
-        let target: HirFunction = raw module->functions[function_index];
-        output->resolved_function_name_id = target.name_id;
-        output->resolved_function_signature_type_id =
-            raw signatures[function_index];
-    }
-    let mapped = map_type_values(
-        call->argument_types,
-        canonical,
-        raw storage->expression_arg_types,
-        argument_types_used
-    );
-    if (mapped.failed) {
-        return ZirlCallProjection {
-            arguments_used: copied_args.used,
-            argument_types_used: argument_types_used,
-            error: ZirlHirCodeError.InsufficientStorage,
-        };
-    }
-    output->arg_types = mapped.values;
-    return ZirlCallProjection {
-        arguments_used: copied_args.used,
-        argument_types_used: mapped.used,
-        error: ZirlHirCodeError.None,
-    };
-}
-
 fn project_expression(
     module: *HirModule,
     expression_id: u64,
@@ -320,7 +242,70 @@ fn project_expression(
     var next_argument_types = argument_types_used;
     var next_integers = integers_used;
 
-    if (expression is HirLiteral) {
+    if (expression is HirCall) {
+        output.kind = ZirlCompactExprKind.Call as u8;
+        output.ref_a = expression.callee;
+        output.ref_e = canonical_type_id(canonical, expression.function_type);
+        if (expression.must_tail) {
+            output.flags = output.flags + 1u8;
+        }
+        if (expression.uses_tail_calling_convention) {
+            output.flags = output.flags + 2u8;
+        }
+        output.variadic_slice_param = expression.variadic_slice_param;
+        output.is_variadic_slice = expression.is_variadic_slice;
+        output.auto_collect_tail = expression.auto_collect_tail;
+        let copied_args = copy_id_values(
+            expression.args,
+            raw storage->expression_args,
+            next_arguments
+        );
+        if (copied_args.failed) {
+            return ZirlProjectedExpr {
+                value: output,
+                arguments_used: arguments_used,
+                argument_types_used: argument_types_used,
+                integers_used: integers_used,
+                error: ZirlHirCodeError.InsufficientStorage,
+            };
+        }
+        output.args = copied_args.values;
+        if (expression.resolved_function != invalid_hir_cache_id) {
+            let function_index = expression.resolved_function as u64;
+            if (function_index >= @lengthOf(module->functions) or
+                function_index >= @lengthOf(signatures)) {
+                return ZirlProjectedExpr {
+                    value: output,
+                    arguments_used: arguments_used,
+                    argument_types_used: argument_types_used,
+                    integers_used: integers_used,
+                    error: ZirlHirCodeError.InvalidFunctionReference,
+                };
+            }
+            let target: HirFunction = raw module->functions[function_index];
+            output.resolved_function_name_id = target.name_id;
+            output.resolved_function_signature_type_id =
+                raw signatures[function_index];
+        }
+        let mapped = map_type_values(
+            expression.argument_types,
+            canonical,
+            raw storage->expression_arg_types,
+            next_argument_types
+        );
+        if (mapped.failed) {
+            return ZirlProjectedExpr {
+                value: output,
+                arguments_used: arguments_used,
+                argument_types_used: argument_types_used,
+                integers_used: integers_used,
+                error: ZirlHirCodeError.InsufficientStorage,
+            };
+        }
+        next_arguments = copied_args.used;
+        output.arg_types = mapped.values;
+        next_argument_types = mapped.used;
+    } else if (expression is HirLiteral) {
         output.kind = ZirlCompactExprKind.Literal as u8;
         output.type_id = canonical_type_id(canonical, expression.type_id);
         if (expression.value_kind == HirLiteralKind.Float) {
@@ -358,28 +343,6 @@ fn project_expression(
         output.kind = ZirlCompactExprKind.Var as u8;
         output.name_id = expression.name_id;
         output.ref_c = expression.version;
-    } else if (expression is HirCall) {
-        let projected = project_call_fields(
-            &raw output,
-            &raw expression,
-            module,
-            canonical,
-            storage,
-            signatures,
-            next_arguments,
-            next_argument_types
-        );
-        if (projected.error != ZirlHirCodeError.None) {
-            return ZirlProjectedExpr {
-                value: output,
-                arguments_used: arguments_used,
-                argument_types_used: argument_types_used,
-                integers_used: integers_used,
-                error: projected.error,
-            };
-        }
-        next_arguments = projected.arguments_used;
-        next_argument_types = projected.argument_types_used;
     } else if (expression is HirRet) {
         output.kind = ZirlCompactExprKind.Ret as u8;
         output.ref_a = expression.value;
@@ -518,6 +481,7 @@ fn project_expression(
         output.ref_e = canonical_type_id(canonical, expression.from_type);
     } else if (expression is HirUnionCast) {
         output.kind = ZirlCompactExprKind.Cast as u8;
+        output.flags = 1u8;
         output.ref_a = expression.value;
         output.ref_b = canonical_type_id(canonical, expression.to_type);
         output.ref_c = expression.member_index;
@@ -551,8 +515,11 @@ fn project_expression(
         output.ref_a = expression.call.callee;
         output.ref_e =
             canonical_type_id(canonical, expression.call.function_type);
+        if (expression.call.must_tail) {
+            output.flags = 1u8;
+        }
         if (expression.call.uses_tail_calling_convention) {
-            output.flags = 2u8;
+            output.flags = output.flags + 2u8;
         }
         output.variadic_slice_param = expression.call.variadic_slice_param;
         output.is_variadic_slice = expression.call.is_variadic_slice;
@@ -983,12 +950,6 @@ pub fn build_zirl_hir_code_section(
             let attrs: HirFunctionAttrs = raw module->function_attrs[index];
             discardable = attrs.discardable;
         }
-        var machine_return_type_id =
-            canonical_type_id(canonical, function.machine_return_type);
-        if (function.machine_return_type == invalid_hir_cache_id) {
-            machine_return_type_id =
-                canonical_type_id(canonical, function.return_type);
-        }
         raw storage->functions[index] = ZirlCompactFunction {
             name_id: function.name_id,
             signature_type_id:
@@ -1002,7 +963,8 @@ pub fn build_zirl_hir_code_section(
             discardable: discardable,
             return_type_id:
                 canonical_type_id(canonical, function.return_type),
-            machine_return_type_id: machine_return_type_id,
+            machine_return_type_id:
+                canonical_type_id(canonical, function.machine_return_type),
             machine_id: function.machine_id,
             instance_index: 0xFFFFFFFFu32,
             variadic_slice_param: function.variadic_slice_param,

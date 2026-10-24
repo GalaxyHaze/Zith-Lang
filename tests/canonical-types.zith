@@ -66,6 +66,7 @@ fn test_function_signatures_use_artifact_type_ids(): i32 {
     let no_union_defs: [0]HirUnionDef = [];
     let no_expressions: [0]HirExpr = [];
     let no_declarations: [0]HirDeclaration = [];
+    let no_templates: [0]HirTemplate = [];
     let no_global_constants: [0]HirGlobalConst = [];
     let no_vtables: [0]HirVTable = [];
     let no_slot_attrs: [0]HirSlotAttrs = [];
@@ -81,6 +82,7 @@ fn test_function_signatures_use_artifact_type_ids(): i32 {
         expressions: raw no_expressions[0..0],
         functions: raw functions[0..1],
         declarations: raw no_declarations[0..0],
+        templates: raw no_templates[0..0],
         global_constants: raw no_global_constants[0..0],
         vtables: raw no_vtables[0..0],
         slot_attrs: raw no_slot_attrs[0..0],

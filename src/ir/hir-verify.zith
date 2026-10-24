@@ -19,6 +19,8 @@ pub enum HirVerifyError {
     InvalidVTable = 15,
     AllocationFailure = 16,
     InvalidDefinitionReference = 17,
+    InvalidTemplateReference = 18,
+    InvalidTemplateShape = 19,
 }
 
 pub struct HirVerificationResult {
@@ -58,6 +60,20 @@ fn valid_declaration_id(module_owner: *HirModule, id: HirDeclarationId, allow_in
     let is_invalid = (id as u64) == 0xFFFFFFFFu64;
     let in_range = (id as u64) < @lengthOf(module_owner->declarations);
     return (is_invalid and allow_invalid) or ((not is_invalid) and in_range);
+}
+
+fn valid_template_id(module_owner: *HirModule, id: HirTemplateId, allow_invalid: bool): bool {
+    let is_invalid = (id as u64) == 0xFFFFFFFFu64;
+    let in_range = (id as u64) < @lengthOf(module_owner->templates);
+    return (is_invalid and allow_invalid) or ((not is_invalid) and in_range);
+}
+
+fn is_trait_type(module_owner: *HirModule, id: HirTypeId): bool {
+    if (not valid_type_id(module_owner, id, false)) {
+        return false;
+    }
+    let hir_type: HirType = raw module_owner->types[id as u64];
+    return hir_type.kind == HirTypeKind.Trait;
 }
 
 fn known_safety_mode(mode: HirSafetyMode): bool {
@@ -1088,7 +1104,7 @@ pub fn verify_hir(module_owner: *HirModule): HirVerificationResult {
         let type_offset = type_iteration - 1;
         let type_index = type_offset as u32;
         let hir_type: HirType = raw module_owner->types[type_offset];
-        if (hir_type.kind > HirTypeKind.OpaqueTagged) {
+        if (hir_type.kind > HirTypeKind.Trait) {
             return verification_error(HirVerifyError.InvalidTableShape, type_index);
         }
         if ((hir_type.kind == HirTypeKind.Ptr or hir_type.kind == HirTypeKind.Array or
@@ -1105,6 +1121,10 @@ pub fn verify_hir(module_owner: *HirModule): HirVerificationResult {
             (hir_type.kind == HirTypeKind.Union and
              (hir_type.ref0 as u64) >= @lengthOf(module_owner->union_defs))) {
             return verification_error(HirVerifyError.InvalidDefinitionReference, type_index);
+        }
+        if (hir_type.kind == HirTypeKind.Trait and
+            not valid_string_id(module, hir_type.ref0, false)) {
+            return verification_error(HirVerifyError.InvalidStringReference, type_index);
         }
         if (@lengthOf(hir_type.arg_names) != 0 and
             @lengthOf(hir_type.arg_names) != @lengthOf(hir_type.args)) {
@@ -1370,6 +1390,7 @@ pub fn verify_hir(module_owner: *HirModule): HirVerificationResult {
                 not valid_type_id(module, expression.opaque_type, false)) {
                 return verification_error(HirVerifyError.InvalidExpressionShape, expression_index);
             }
+        } else if (expression is HirRuntimePanic) {
         } else if (expression is HirPipe) {
             if ((expression.source_slot as u64) == 0xFFFFFFFFu64 or
                 not valid_type_id(module, expression.source_type, false) or
@@ -1436,10 +1457,22 @@ pub fn verify_hir(module_owner: *HirModule): HirVerificationResult {
     for (declaration_iteration in 1u64..@lengthOf(module_owner->declarations)) {
         let declaration_offset = declaration_iteration - 1;
         let declaration: HirDeclaration = raw module_owner->declarations[declaration_offset];
+        if (declaration.template_id != invalidTemplate) {
+            let template_id = declaration.template_id as u64;
+            let template_count = @lengthOf(module_owner->templates);
+            if (not (template_id < template_count)) {
+                return verification_error(HirVerifyError.InvalidDeclarationReference, declaration_index);
+            }
+        }
         if (not valid_string_id(module, declaration.name_id, false) or
             not valid_type_id(module, declaration.type_id, true) or
             declaration.kind > HirDeclarationKind.Context or
-            declaration.visibility > HirVisibility.Module) {
+            declaration.visibility > HirVisibility.Module or
+            not valid_function_id(module, declaration.body_function_id, true)) {
+            return verification_error(HirVerifyError.InvalidDeclarationReference, declaration_index);
+        }
+        if (declaration.body_function_id != invalidFunction and
+            declaration.kind != HirDeclarationKind.Function) {
             return verification_error(HirVerifyError.InvalidDeclarationReference, declaration_index);
         }
         for (member_offset in 1u64..@lengthOf(declaration.members)) {
@@ -1449,7 +1482,155 @@ pub fn verify_hir(module_owner: *HirModule): HirVerificationResult {
                 return verification_error(HirVerifyError.InvalidDeclarationReference, declaration_index);
             }
         }
+        for (method_offset in 1u64..@lengthOf(declaration.method_declaration_ids)) {
+            let method_index = method_offset - 1;
+            let method_id: HirDeclarationId =
+                raw declaration.method_declaration_ids[method_index];
+            if (not valid_declaration_id(module, method_id, false)) {
+                return verification_error(HirVerifyError.InvalidDeclarationReference, declaration_index);
+            }
+            let method: HirDeclaration = raw module_owner->declarations[method_id as u64];
+            if (method.kind != HirDeclarationKind.Function) {
+                return verification_error(HirVerifyError.InvalidDeclarationReference, declaration_index);
+            }
+        }
+        if (declaration.template_id != invalidTemplate) {
+            let template: HirTemplate =
+                raw module_owner->templates[declaration.template_id as u64];
+            if (template.declaration_id != declaration_index) {
+                return verification_error(HirVerifyError.InvalidTemplateReference, declaration_index);
+            }
+        }
         declaration_index = declaration_index + 1;
+    }
+
+    var template_index: u32 = 0;
+    for (template_iteration in 1u64..@lengthOf(module_owner->templates)) {
+        let template_offset = template_iteration - 1;
+        let template: HirTemplate = raw module_owner->templates[template_offset];
+        if (@lengthOf(template.param_type_ids) !=
+                @lengthOf(template.param_name_ids) or
+            @lengthOf(template.field_name_ids) !=
+                @lengthOf(template.field_type_ids) or
+            @lengthOf(template.canonical_field_order) !=
+                @lengthOf(template.field_name_ids)) {
+            return verification_error(HirVerifyError.InvalidTemplateShape, template_index);
+        }
+        if (not valid_declaration_id(module, template.declaration_id, false) or
+            not valid_function_id(module, template.function_id, true) or
+            template.kind > HirDeclarationKind.Context or
+            not valid_string_id(module, template.name_id, false) or
+            not valid_type_id(module, template.return_type_id,
+                template.kind != HirDeclarationKind.Function)) {
+            return verification_error(HirVerifyError.InvalidTemplateShape, template_index);
+        }
+        let owner: HirDeclaration =
+            raw module_owner->declarations[template.declaration_id as u64];
+        if (owner.template_id != template_index or owner.kind != template.kind or
+            owner.name_id != template.name_id or owner.is_extern != template.is_extern or
+            @lengthOf(owner.method_declaration_ids) !=
+                @lengthOf(template.method_declaration_indices) or
+            (owner.body_function_id != invalidFunction and
+             template.function_id != invalidFunction and
+             owner.body_function_id != template.function_id)) {
+            return verification_error(HirVerifyError.InvalidTemplateReference, template_index);
+        }
+        for (method_offset in 1u64..@lengthOf(owner.method_declaration_ids)) {
+            let method_index = method_offset - 1;
+            if (raw owner.method_declaration_ids[method_index] !=
+                raw template.method_declaration_indices[method_index]) {
+                return verification_error(HirVerifyError.InvalidTemplateReference, template_index);
+            }
+        }
+
+        for (parameter_offset in 1u64..@lengthOf(template.params)) {
+            let parameter_index = parameter_offset - 1;
+            let parameter: HirGenericParam = raw template.params[parameter_index];
+            if (not valid_string_id(module, parameter.name_id, false)) {
+                return verification_error(HirVerifyError.InvalidStringReference, template_index);
+            }
+            for (bound_offset in 1u64..@lengthOf(parameter.bound_type_ids)) {
+                let bound_index = bound_offset - 1;
+                let bound_type: HirTypeId = raw parameter.bound_type_ids[bound_index];
+                if (not valid_type_id(module, bound_type, false)) {
+                    return verification_error(HirVerifyError.InvalidTypeReference, template_index);
+                }
+            }
+        }
+        for (parameter_offset in 1u64..@lengthOf(template.param_type_ids)) {
+            let parameter_index = parameter_offset - 1;
+            let parameter_type: HirTypeId = raw template.param_type_ids[parameter_index];
+            let parameter_name: HirStringId = raw template.param_name_ids[parameter_index];
+            if (not valid_type_id(module, parameter_type, false)) {
+                return verification_error(HirVerifyError.InvalidTypeReference, template_index);
+            }
+            if (not valid_string_id(module, parameter_name, false)) {
+                return verification_error(HirVerifyError.InvalidStringReference, template_index);
+            }
+        }
+        for (field_offset in 1u64..@lengthOf(template.field_name_ids)) {
+            let field_index = field_offset - 1;
+            let field_name: HirStringId = raw template.field_name_ids[field_index];
+            let field_type: HirTypeId = raw template.field_type_ids[field_index];
+            if (not valid_string_id(module, field_name, false)) {
+                return verification_error(HirVerifyError.InvalidStringReference, template_index);
+            }
+            if (not valid_type_id(module, field_type, false)) {
+                return verification_error(HirVerifyError.InvalidTypeReference, template_index);
+            }
+            let canonical_index: u32 =
+                raw template.canonical_field_order[field_index];
+            if ((canonical_index as u64) >= @lengthOf(template.field_name_ids)) {
+                return verification_error(HirVerifyError.InvalidTemplateShape, template_index);
+            }
+            for (prior_offset in 1u64..(field_offset - 1u64)) {
+                let prior_index = prior_offset - 1;
+                if (raw template.canonical_field_order[prior_index] == canonical_index) {
+                    return verification_error(HirVerifyError.InvalidTemplateShape, template_index);
+                }
+            }
+        }
+        for (method_offset in 1u64..@lengthOf(template.method_declaration_indices)) {
+            let method_index = method_offset - 1;
+            let method_id: HirDeclarationId =
+                raw template.method_declaration_indices[method_index];
+            if (not valid_declaration_id(module, method_id, false)) {
+                return verification_error(HirVerifyError.InvalidDeclarationReference, template_index);
+            }
+            let method: HirDeclaration = raw module_owner->declarations[method_id as u64];
+            if (method.kind != HirDeclarationKind.Function) {
+                return verification_error(HirVerifyError.InvalidDeclarationReference, template_index);
+            }
+        }
+        for (trait_offset in 1u64..@lengthOf(template.trait_type_ids)) {
+            let trait_index = trait_offset - 1;
+            let trait_type: HirTypeId = raw template.trait_type_ids[trait_index];
+            if (not is_trait_type(module_owner, trait_type)) {
+                return verification_error(HirVerifyError.InvalidTypeReference, template_index);
+            }
+        }
+
+        if (template.function_id != invalidFunction) {
+            let function: HirFunction =
+                raw module_owner->functions[template.function_id as u64];
+            if (function.return_type != template.return_type_id or
+                @lengthOf(function.parameter_types) !=
+                    @lengthOf(template.param_type_ids) or
+                @lengthOf(function.parameter_name_ids) !=
+                    @lengthOf(template.param_name_ids)) {
+                return verification_error(HirVerifyError.InvalidTemplateShape, template_index);
+            }
+            for (parameter_offset in 1u64..@lengthOf(template.param_type_ids)) {
+                let parameter_index = parameter_offset - 1;
+                if (raw function.parameter_types[parameter_index] !=
+                        raw template.param_type_ids[parameter_index] or
+                    raw function.parameter_name_ids[parameter_index] !=
+                        raw template.param_name_ids[parameter_index]) {
+                    return verification_error(HirVerifyError.InvalidTemplateShape, template_index);
+                }
+            }
+        }
+        template_index = template_index + 1;
     }
 
     var function_index: u32 = 0;

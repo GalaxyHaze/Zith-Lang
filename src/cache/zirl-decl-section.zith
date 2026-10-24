@@ -5,6 +5,7 @@ pub struct ZirlDeclarationRecord {
     pub kind: HirDeclarationKind,
     pub visibility: HirVisibility,
     pub is_extern: bool,
+    pub discardable: bool,
     pub module_depth: i32,
     pub name_id: HirStringId,
     pub type_id: HirTypeId,
@@ -137,7 +138,7 @@ pub fn write_decls_section(
         result = write_u8(result, declaration.kind as u8);
         result = write_u8(result, declaration.visibility as u8);
         result = write_u8(result, declaration_bool_byte(declaration.is_extern));
-        result = write_u8(result, 0u8);
+        result = write_u8(result, declaration_bool_byte(declaration.discardable));
         result = write_i32(result, declaration.module_depth);
         result = write_u32(result, declaration.name_id);
         result = write_u32(result, declaration.type_id);
@@ -223,11 +224,11 @@ pub fn read_decls_section(
         cursor = visibility.reader;
         let is_extern = read_u8(cursor);
         cursor = is_extern.reader;
-        let reserved = read_u8(cursor);
-        cursor = reserved.reader;
+        let discardable = read_u8(cursor);
+        cursor = discardable.reader;
         if (cursor.failed or kind.value > (HirDeclarationKind.Context as u8) or
             visibility.value > (HirVisibility.Module as u8) or
-            is_extern.value > 1u8 or reserved.value != 0u8) {
+            is_extern.value > 1u8 or discardable.value > 1u8) {
             return declaration_reader_failure(reader, storage);
         }
 
@@ -289,6 +290,7 @@ pub fn read_decls_section(
             kind: decode_declaration_kind(kind.value),
             visibility: decode_declaration_visibility(visibility.value),
             is_extern: is_extern.value == 1u8,
+            discardable: discardable.value == 1u8,
             module_depth: module_depth.value,
             name_id: name_id.value,
             type_id: type_id.value,

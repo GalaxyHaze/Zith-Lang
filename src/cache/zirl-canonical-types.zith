@@ -79,9 +79,11 @@ pub fn build_zirl_canonical_types(
     for (offset in 1u64..type_count) {
         let index = offset - 1;
         let hir_type: HirType = raw module->types[index];
-        if (hir_type.kind > HirTypeKind.OpaqueTagged or
+        if (hir_type.kind > HirTypeKind.Trait or
             (is_type_reference_kind(hir_type.kind) and
              (hir_type.ref0 as u64) >= type_count) or
+            (hir_type.kind == HirTypeKind.Trait and
+             (hir_type.ref0 as u64) >= @lengthOf(module->strings)) or
             (@lengthOf(hir_type.arg_names) != 0u64 and
              @lengthOf(hir_type.arg_names) != @lengthOf(hir_type.args))) {
             return failed_canonical_types(storage, ZirlCanonicalTypeError.InvalidTypeShape);

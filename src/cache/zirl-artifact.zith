@@ -174,10 +174,24 @@ fn valid_artifact_sections(sections: []ZirlArtifactSection): bool {
             if (section.flags != 1u16) {
                 return false;
             }
-            if (section.id == 1u16 and section.schema_version != 2u16) {
+            if (section.id == 1u16 and
+                section.schema_version != zirlMetadataSectionSchemaVersion) {
                 return false;
             }
-            if (section.id != 1u16 and section.schema_version != 1u16) {
+            if (section.id == 2u16 and
+                section.schema_version != zirlDeclsSectionSchemaVersion) {
+                return false;
+            }
+            if (section.id == 3u16 and
+                section.schema_version != zirlTemplatesSectionSchemaVersion) {
+                return false;
+            }
+            if (section.id == 5u16 and
+                section.schema_version != zirlAttrsSectionSchemaVersion) {
+                return false;
+            }
+            if (section.id == 4u16 and
+                section.schema_version != zirlSectionSchemaVersion) {
                 return false;
             }
             required_id = required_id + 1u16;
@@ -328,7 +342,7 @@ pub fn write_zirl_artifact(
     let header = ZirlFileHeader {
         magic: 0x5A49524Cu32,
         container_version: 21u32,
-        hir_schema_version: 1u32,
+        hir_schema_version: zirlHirSchemaVersion,
         endianness: 1u8,
         reserved: 0u8,
         section_count: @lengthOf(sections) as u16,
@@ -559,7 +573,7 @@ pub fn read_zirl_artifact(
     if (header.container_version != 21u32) {
         return artifact_failed_read(header, ZirlArtifactError.InvalidContainer);
     }
-    if (header.hir_schema_version != 1u32) {
+    if (header.hir_schema_version != 2u32) {
         return artifact_failed_read(header, ZirlArtifactError.InvalidContainer);
     }
     if (header.endianness != 1u8) {

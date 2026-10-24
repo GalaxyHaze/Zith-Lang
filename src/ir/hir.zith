@@ -4,6 +4,7 @@ alias HirFunctionId = u32
 alias HirBlockId = u32
 alias HirSlotId = u32
 alias HirDeclarationId = u32
+alias HirTemplateId = u32
 alias HirStringId = u32
 
 pub const invalidExpr: HirExprId = 0xFFFFFFFFu32
@@ -12,6 +13,7 @@ pub const invalidFunction: HirFunctionId = 0xFFFFFFFFu32
 pub const invalidBlock: HirBlockId = 0xFFFFFFFFu32
 pub const invalidSlot: HirSlotId = 0xFFFFFFFFu32
 pub const invalidDeclaration: HirDeclarationId = 0xFFFFFFFFu32
+pub const invalidTemplate: HirTemplateId = 0xFFFFFFFFu32
 pub const invalidString: HirStringId = 0xFFFFFFFFu32
 
 pub enum HirSafetyMode {
@@ -137,6 +139,7 @@ pub enum HirTypeKind {
     Pack = 20,
     Dyn = 21,
     OpaqueTagged = 22,
+    Trait = 23,
 }
 
 pub enum HirDeclarationKind {
@@ -567,8 +570,34 @@ pub struct HirDeclaration {
     pub visibility: HirVisibility,
     pub module_depth: i32,
     pub type_id: HirTypeId,
+    pub is_extern: bool,
     pub discardable: bool,
+    pub body_function_id: HirFunctionId,
+    pub template_id: HirTemplateId,
     pub members: []HirDeclarationId,
+    pub method_declaration_ids: []HirDeclarationId,
+}
+
+pub struct HirGenericParam {
+    pub name_id: HirStringId,
+    pub bound_type_ids: []HirTypeId,
+}
+
+pub struct HirTemplate {
+    pub declaration_id: HirDeclarationId,
+    pub function_id: HirFunctionId,
+    pub kind: HirDeclarationKind,
+    pub is_extern: bool,
+    pub name_id: HirStringId,
+    pub return_type_id: HirTypeId,
+    pub params: []HirGenericParam,
+    pub param_type_ids: []HirTypeId,
+    pub param_name_ids: []HirStringId,
+    pub field_name_ids: []HirStringId,
+    pub field_type_ids: []HirTypeId,
+    pub canonical_field_order: []u32,
+    pub method_declaration_indices: []HirDeclarationId,
+    pub trait_type_ids: []HirTypeId,
 }
 
 pub struct HirGlobalConst {
@@ -620,6 +649,7 @@ pub struct HirModule {
     pub expressions: []HirExpr,
     pub functions: []HirFunction,
     pub declarations: []HirDeclaration,
+    pub templates: []HirTemplate,
     pub global_constants: []HirGlobalConst,
     pub vtables: []HirVTable,
     pub slot_attrs: []HirSlotAttrs,
