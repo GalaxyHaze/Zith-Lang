@@ -500,6 +500,12 @@ struct Declaration {
     /// (e.g. "Counter" for `fn inc(self: *Counter)` inside `struct Counter`).
     /// Used to mangle the symbol name and to supply the implicit self parameter.
     std::string ownerName;
+    /// Ordered declaration ids of the methods written inside this declaration's
+    /// own body (struct/interface/enum/union/trait). This is the stable
+    /// frontend-owned identity of the owner's method list: consumers must not
+    /// reconstruct it by comparing names. Empty for declarations without an
+    /// inline method body and for methods themselves.
+    std::vector<DeclId> methodDeclarations;
     /// Non-empty for `state` declarations written inside a function body. The
     /// binding lives in `parentScope`, not the module scope.
     ScopeId parentScope;
@@ -519,6 +525,14 @@ struct ImplementRecord {
     /// named-owner path keeps this zero because `owner` is a declaration name.
     TypeExprId ownerType;
     std::string traitName;
+    /// Frontend-resolved declaration ids for the owner type and the trait. The
+    /// parser binds the written names to the declarations it has already seen in
+    /// this module, so consumers carry an explicit identity instead of comparing
+    /// `owner`/`traitName`. Zero when the name is not a local declaration (a
+    /// primitive, forward, or imported owner/trait); such records yield no
+    /// relation rather than an inferred one.
+    DeclId ownerDeclaration;
+    DeclId traitDeclaration;
     TextSpan span;
 };
 

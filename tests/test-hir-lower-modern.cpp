@@ -80,6 +80,33 @@ const hir::HirFunction *findFunction(const hir::HirModule &hir, memory::StringIn
     return nullptr;
 }
 
+/// Finds the single HIR declaration whose source name matches `name` and whose
+/// kind is `kind`. Test fixtures use unique names per kind, so the first match
+/// is the intended declaration.
+const hir::HirDeclaration *findDeclaration(const hir::HirModule &hir,
+                                           memory::StringInterner &interner,
+                                           std::string_view name,
+                                           hir::HirDeclarationKind kind) {
+    for (size_t i = 0; i < hir.declarationCount(); ++i) {
+        const auto &decl = hir.getDeclaration(static_cast<hir::HirDeclarationId>(i));
+        if (decl.kind == kind && interner.lookup(decl.name) == name)
+            return &decl;
+    }
+    return nullptr;
+}
+
+hir::HirDeclarationId findDeclarationId(const hir::HirModule &hir,
+                                        memory::StringInterner &interner,
+                                        std::string_view name,
+                                        hir::HirDeclarationKind kind) {
+    for (size_t i = 0; i < hir.declarationCount(); ++i) {
+        const auto &decl = hir.getDeclaration(static_cast<hir::HirDeclarationId>(i));
+        if (decl.kind == kind && interner.lookup(decl.name) == name)
+            return static_cast<hir::HirDeclarationId>(i);
+    }
+    return hir::kInvalidHirDeclaration;
+}
+
 size_t countExprKind(const hir::HirModule &hir, hir::HirExprKind kind) {
     size_t count = 0;
     for (size_t i = 0; i < hir.exprCount(); ++i) {
@@ -2014,6 +2041,302 @@ void test_interface_method_bound_lower_to_hir() {
     CHECK(calls_point_getx, "generic transform call resolves to the concrete Point.getX");
 }
 
+// The owner's ordered method list is the frontend-owned `DeclId` sequence; the
+// producer must translate it into HIR declaration ids in source order without
+// ever comparing names. This fixture writes two methods on a struct and one on
+// a trait, then checks the exact ids and their order.
+void test_owner_declaration_method_list_is_ordered_and_explicit() {
+    Workspace workspace;
+    workspace.writeFile("main.zith", "struct Counter {\n"
+                                     "    value: i32,\n"
+                                     "    fn increment(self): i32 { return self.value + 1; }\n"
+                                     "    fn reset(self): i32 { return 0; }\n"
+                                     "}\n"
+                                     "trait Named {\n"
+                                     "    fn name(self): i32\n"
+                                     "}\n"
+                                     "struct Box<T> {\n"
+                                     "    value: T,\n"
+                                     "    fn get(self): T { return self->value; }\n"
+                                     "}\n"
+                                     "fn main(): i32 { return 0; }\n");
+
+    memory::Arena arena;
+    Options options(arena);
+    auto session = makeSession(workspace, arena, options, "main.zith");
+
+    CHECK(session.runTo(session::Stage::HirLowered),
+          "struct and trait method bodies lower to HIR");
+
+    const auto &hir       = session.hirModule();
+    const auto *counter   = findDeclaration(hir, session.interner(), "Counter",
+                                            hir::HirDeclarationKind::Struct);
+    CHECK(counter != nullptr, "the Counter struct declaration is present in HIR");
+    if (counter != nullptr) {
+        CHECK_EQ(counter->method_declarations.size(), 2u,
+                 "the struct declaration carries exactly its two inline methods");
+        if (counter->method_declarations.size() == 2u) {
+            const auto increment_id =
+                findDeclarationId(hir, session.interner(), "increment",
+                                  hir::HirDeclarationKind::Function);
+            const auto reset_id =
+                findDeclarationId(hir, session.interner(), "reset",
+                                  hir::HirDeclarationKind::Function);
+            CHECK_EQ(counter->method_declarations[0], increment_id,
+                     "the first method relation contains the exact HIR declaration id");
+            CHECK_EQ(counter->method_declarations[1], reset_id,
+                     "the second method relation contains the exact HIR declaration id");
+            const auto &first = hir.getDeclaration(counter->method_declarations[0]);
+            const auto &second = hir.getDeclaration(counter->method_declarations[1]);
+            CHECK_EQ(session.interner().lookup(first.name), "increment",
+                     "the first method in the owner's list is the first written");
+            CHECK_EQ(session.interner().lookup(second.name), "reset",
+                     "the second method in the owner's list is the second written");
+            CHECK(first.kind == hir::HirDeclarationKind::Function &&
+                      second.kind == hir::HirDeclarationKind::Function,
+                  "owner method lists reference function declarations");
+            CHECK(counter->method_declarations[0] != counter->method_declarations[1],
+                  "the two method ids are distinct");
+        }
+    }
+
+    const auto *named = findDeclaration(hir, session.interner(), "Named",
+                                        hir::HirDeclarationKind::Trait);
+    CHECK(named != nullptr, "the Named trait declaration is present in HIR");
+    if (named != nullptr) {
+        CHECK_EQ(named->method_declarations.size(), 1u,
+                 "the trait declaration carries its single requirement method");
+        if (named->method_declarations.size() == 1u) {
+            const auto &method = hir.getDeclaration(named->method_declarations[0]);
+            CHECK_EQ(session.interner().lookup(method.name), "name",
+                     "the trait's method list names the declared requirement");
+        }
+    }
+
+    const auto *box = findDeclaration(hir, session.interner(), "Box",
+                                      hir::HirDeclarationKind::Struct);
+    CHECK(box != nullptr, "the generic Box declaration is present in HIR");
+    if (box != nullptr) {
+        CHECK(box->template_id != hir::kInvalidHirTemplate,
+              "the generic Box declaration links to its template record");
+        CHECK_EQ(box->method_declarations.size(), 1u,
+                 "the generic owner carries its inline method declaration id");
+        if (box->method_declarations.size() == 1u &&
+            box->template_id != hir::kInvalidHirTemplate) {
+            const auto method_id = findDeclarationId(hir, session.interner(), "get",
+                                                     hir::HirDeclarationKind::Function);
+            CHECK_EQ(box->method_declarations[0], method_id,
+                     "the generic owner's method relation is an exact HIR declaration id");
+            const auto &template_record = hir.getTemplate(box->template_id);
+            CHECK_EQ(template_record.method_declarations.size(), 1u,
+                     "the template preserves its owner's ordered inline methods");
+            if (template_record.method_declarations.size() == 1u)
+                CHECK_EQ(template_record.method_declarations[0], method_id,
+                         "the template method list preserves the exact declaration id");
+        }
+    }
+
+    // A declaration with no inline method body must keep an empty method list;
+    // `main` is a free function and never an owner.
+    const auto *main_decl = findDeclaration(hir, session.interner(), "main",
+                                            hir::HirDeclarationKind::Function);
+    CHECK(main_decl != nullptr, "the main declaration is present in HIR");
+    if (main_decl != nullptr)
+        CHECK(main_decl->method_declarations.empty(),
+              "a declaration with no inline method body has an empty method list");
+}
+
+// Every owner kind that can carry an inline method body records its ordered
+// method `DeclId` list, not only structs and traits. This fixture gives the
+// interface requirement list and the non-generic enum/union inline methods
+// dedicated assertions so each supported owner kind is covered explicitly.
+void test_owner_method_lists_cover_interface_enum_and_union() {
+    Workspace workspace;
+    workspace.writeFile("main.zith", "interface Shape {\n"
+                                     "    fn area(self): i32\n"
+                                     "}\n"
+                                     "enum Mode {\n"
+                                     "    Off = 0,\n"
+                                     "    On = 1,\n"
+                                     "    fn code(self): i32 { return 3; }\n"
+                                     "}\n"
+                                     "union Slot {\n"
+                                     "    i32,\n"
+                                     "    f64,\n"
+                                     "    fn pick(self): i32 { return 7; }\n"
+                                     "}\n"
+                                     "fn main(): i32 { return 0; }\n");
+
+    memory::Arena arena;
+    Options options(arena);
+    auto session = makeSession(workspace, arena, options, "main.zith");
+
+    CHECK(session.runTo(session::Stage::HirLowered),
+          "interface, enum, and union inline methods lower to HIR");
+
+    const auto &hir = session.hirModule();
+
+    const auto *shape = findDeclaration(hir, session.interner(), "Shape",
+                                        hir::HirDeclarationKind::Interface);
+    CHECK(shape != nullptr, "the Shape interface declaration is present in HIR");
+    if (shape != nullptr) {
+        CHECK_EQ(shape->method_declarations.size(), 1u,
+                 "the interface carries its single requirement method");
+        if (shape->method_declarations.size() == 1u)
+            CHECK_EQ(session.interner().lookup(
+                         hir.getDeclaration(shape->method_declarations[0]).name),
+                     "area", "the interface method list names the declared requirement");
+    }
+
+    const auto *mode = findDeclaration(hir, session.interner(), "Mode",
+                                       hir::HirDeclarationKind::Enum);
+    CHECK(mode != nullptr, "the Mode enum declaration is present in HIR");
+    if (mode != nullptr) {
+        CHECK_EQ(mode->method_declarations.size(), 1u,
+                 "the enum carries its single inline method");
+        if (mode->method_declarations.size() == 1u)
+            CHECK_EQ(session.interner().lookup(
+                         hir.getDeclaration(mode->method_declarations[0]).name),
+                     "code", "the enum method list names the inline method");
+    }
+
+    const auto *slot = findDeclaration(hir, session.interner(), "Slot",
+                                       hir::HirDeclarationKind::Union);
+    CHECK(slot != nullptr, "the Slot union declaration is present in HIR");
+    if (slot != nullptr) {
+        CHECK_EQ(slot->method_declarations.size(), 1u,
+                 "the union carries its single inline method");
+        if (slot->method_declarations.size() == 1u)
+            CHECK_EQ(session.interner().lookup(
+                         hir.getDeclaration(slot->method_declarations[0]).name),
+                     "pick", "the union method list names the inline method");
+    }
+}
+
+// A generic owner that implements a trait records the trait's explicit HIR
+// type on its template. The relation comes from the frontend-resolved
+// implement-record declaration ids, so a name match is never involved, and the
+// stored type is a real `HirTypeKind.Trait`, not `Unknown`.
+void test_generic_owner_template_records_trait_types() {
+    Workspace workspace;
+    workspace.writeFile("main.zith", "trait Value {\n"
+                                     "    fn value(self): i32\n"
+                                     "}\n"
+                                     "trait Named {\n"
+                                     "    fn name(self): i32\n"
+                                     "}\n"
+                                     "struct Box<T> {\n"
+                                     "    value: T,\n"
+                                     "}\n"
+                                     "implement Box<T> as Value {\n"
+                                     "    fn value(self): i32 { return 1; }\n"
+                                     "}\n"
+                                     "fn main(): i32 { return 0; }\n");
+
+    memory::Arena arena;
+    Options options(arena);
+    auto session = makeSession(workspace, arena, options, "main.zith");
+
+    CHECK(session.runTo(session::Stage::HirLowered),
+          "generic owner with an implement block lowers to HIR");
+
+    const auto &hir = session.hirModule();
+    const auto *box = findDeclaration(hir, session.interner(), "Box",
+                                      hir::HirDeclarationKind::Struct);
+    CHECK(box != nullptr, "the generic Box declaration is present in HIR");
+    if (box == nullptr)
+        return;
+    CHECK(box->template_id != hir::kInvalidHirTemplate,
+          "the generic Box declaration links to its template record");
+    if (box->template_id == hir::kInvalidHirTemplate)
+        return;
+
+    const auto &template_record = hir.getTemplate(box->template_id);
+    CHECK_EQ(template_record.trait_types.size(), 1u,
+             "the template records exactly the implemented trait");
+    if (template_record.trait_types.size() != 1u)
+        return;
+
+    const auto &types = session.types();
+    const auto trait_type = template_record.trait_types[0];
+    const auto *trait = std::get_if<types::TypeTrait>(&types.lookup(trait_type));
+    CHECK(trait != nullptr,
+          "the recorded trait reference is a real HIR trait type, not Unknown");
+    if (trait != nullptr)
+        CHECK_EQ(types.interner().lookup(trait->name), "Value",
+                 "the recorded trait reference names the implemented trait");
+}
+
+void test_inline_method_ids_reach_cache_artifact_writer() {
+    IsolatedWorkspace workspace;
+    workspace.writeFile("main.zith", "trait Value {\n"
+                                     "    fn value(self): i32\n"
+                                     "}\n"
+                                     "struct Box<T> {\n"
+                                     "    value: T,\n"
+                                     "    fn get(self): T { return self->value; }\n"
+                                     "}\n"
+                                     "implement Box<T> as Value {\n"
+                                     "    fn value(self): i32 { return 1; }\n"
+                                     "}\n"
+                                     "fn main(): i32 { return 0; }\n");
+
+    memory::Arena arena;
+    Options options(arena);
+    options.noCache = false;
+    options.targetStage = session::Stage::Cached;
+    session::CompilationSession compiled(options, (workspace.root / "main.zith").string());
+    compiled.setBuffered(true);
+    CHECK(compiled.run(), "compilation writes an artifact through the cache writer");
+
+    const auto *artifact = compiled.persistentArtifact();
+    CHECK(artifact != nullptr, "the cache writer exposes its completed artifact");
+    if (artifact == nullptr)
+        return;
+
+    const auto findArtifactDecl = [&](std::string_view name) -> uint32_t {
+        for (size_t index = 0; index < artifact->decls.size(); ++index) {
+            if (artifact->decls[index].name == name)
+                return static_cast<uint32_t>(index);
+        }
+        return ~uint32_t{0};
+    };
+    const auto box_id = findArtifactDecl("Box");
+    const auto get_id = findArtifactDecl("get");
+    CHECK(box_id != ~uint32_t{0}, "the artifact contains the Box declaration");
+    CHECK(get_id != ~uint32_t{0}, "the artifact contains the get method");
+    if (box_id != ~uint32_t{0}) {
+        const auto &box = artifact->decls[box_id];
+        CHECK_EQ(box.method_decl_indices.size(), 1u,
+                 "the cache writer preserves the generic owner's method index");
+        if (box.method_decl_indices.size() == 1u)
+            CHECK_EQ(box.method_decl_indices[0], get_id,
+                     "the cache writer preserves the exact owner method index");
+    }
+    const auto template_it = std::find_if(
+        artifact->templates.begin(), artifact->templates.end(),
+        [](const cache::TemplateBlueprint &record) { return record.name == "Box"; });
+    CHECK(template_it != artifact->templates.end(),
+          "the artifact contains the generic Box template");
+    if (template_it != artifact->templates.end()) {
+        CHECK_EQ(template_it->method_decl_indices.size(), 1u,
+                 "the cache writer preserves the template's method list");
+        if (template_it->method_decl_indices.size() == 1u)
+            CHECK_EQ(template_it->method_decl_indices[0], get_id,
+                     "the template method relation preserves the exact artifact index");
+        CHECK_EQ(template_it->trait_type_ids.size(), 1u,
+                 "the cache writer preserves the template's trait reference");
+        if (template_it->trait_type_ids.size() == 1u) {
+            const auto trait_index = template_it->trait_type_ids[0];
+            CHECK(trait_index < artifact->types.size(),
+                  "the template trait reference is a valid artifact type index");
+            if (trait_index < artifact->types.size())
+                CHECK(artifact->types[trait_index].kind == cache::CompactTypeKind::Trait,
+                      "the persisted trait reference keeps its Trait type kind");
+        }
+    }
+}
+
 void test_indirect_function_call_has_callee_and_fn_type() {
     Workspace workspace;
     workspace.writeFile("main.zith", "extern fn apply(f: fn(i32): i32, x: i32): i32\n"
@@ -3237,6 +3560,10 @@ static void test_hir_lower_modern() {
     test_alias_qualified_free_generic_self_is_not_receiver();
     test_generic_bound_and_value_param_lower_to_hir();
     test_interface_method_bound_lower_to_hir();
+    test_owner_declaration_method_list_is_ordered_and_explicit();
+    test_owner_method_lists_cover_interface_enum_and_union();
+    test_generic_owner_template_records_trait_types();
+    test_inline_method_ids_reach_cache_artifact_writer();
     test_const_global_lowers_to_load();
     test_untyped_const_global_type_comes_from_initializer();
     test_selective_imported_const_lowers_to_global_const_load();

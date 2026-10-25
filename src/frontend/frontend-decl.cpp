@@ -401,7 +401,8 @@ void AstLowerer::lowerImplementBlock(const uint32_t start, const Visibility visi
                                               diagnostics::err::NotATrait});
         }
         snapshot_.implement_records_.push_back(
-            ImplementRecord{owner_name, owner_type, trait_name, range(start, index_)});
+            ImplementRecord{owner_name, owner_type, trait_name, DeclId{},
+                            DeclId{}, range(start, index_)});
     }
     ++index_;
     Visibility method_visibility = visibility;
@@ -712,6 +713,8 @@ DeclId AstLowerer::lowerDeclaration(uint32_t start, DeclKind kind, Visibility vi
                     kind == DeclKind::Interface ? declaration.name : std::string{}, false,
                     *function_kind, declaration.genericParams, false, false, {}, {},
                     method_attributes);
+                if (method_id)
+                    declaration.methodDeclarations.push_back(method_id);
                 if (kind == DeclKind::Interface && method_id &&
                     method_id.value <= snapshot_.declarations_.size()) {
                     const auto &method = snapshot_.declarations_[method_id.value - 1U];
@@ -776,10 +779,12 @@ DeclId AstLowerer::lowerDeclaration(uint32_t start, DeclKind kind, Visibility vi
             const auto method_attributes = parseAttributes();
             if (const auto function_kind = functionKindPrefix()) {
                 const auto method_start = index_;
-                lowerDeclaration(method_start, DeclKind::Function, Visibility::Private,
-                                 declaration.name, declaration.name, false, *function_kind,
-                                 declaration.genericParams, false, false, {}, {},
-                                 method_attributes);
+                const auto method_id    = lowerDeclaration(
+                    method_start, DeclKind::Function, Visibility::Private, declaration.name,
+                    declaration.name, false, *function_kind, declaration.genericParams, false,
+                    false, {}, {}, method_attributes);
+                if (method_id)
+                    declaration.methodDeclarations.push_back(method_id);
                 continue;
             }
             snapshot_.diagnostics_.push_back(

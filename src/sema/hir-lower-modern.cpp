@@ -40,6 +40,11 @@ bool HirLowerModern::run() {
 
 void HirLowerModern::populateHirDeclarations() {
     memory::FlatMap<symbols::SymId, hir::HirDeclarationId> declaration_ids;
+    // Maps the stable `(interned module id, frontend declaration id)` key of a
+    // symbol to the HIR declaration it produced. Method lists reference the
+    // nested frontend declarations by `DeclId`, so this key lets the producer
+    // translate them into HIR declaration ids without ever comparing names.
+    memory::FlatMap<uint64_t, hir::HirDeclarationId> declaration_id_by_key;
     for (symbols::SymId symbol_id = 0;
          symbol_id < static_cast<symbols::SymId>(symbols_.symbolCount()); ++symbol_id) {
         const auto &symbol = symbols_.get(symbol_id);
@@ -251,6 +256,15 @@ void HirLowerModern::populateHirDeclarations() {
 
         declaration_ids[symbol_id] =
             static_cast<hir::HirDeclarationId>(hir_.declarationCount() - 1U);
+        if (symbol.source_module_id != memory::kInvalidInternedId &&
+            symbol.source_decl_id != 0U) {
+            const auto module_key = interner_.lookup(symbol.source_module_id);
+            const auto key = internFunctionKey(interner_, module_key,
+                                               frontend::DeclId{symbol.source_decl_id});
+            declaration_id_by_key.insert(key,
+                                         static_cast<hir::HirDeclarationId>(
+                                             hir_.declarationCount() - 1U));
+        }
     }
 
     for (symbols::SymId symbol_id = 0;
@@ -268,6 +282,94 @@ void HirLowerModern::populateHirDeclarations() {
         for (const auto member_id : symbol.members) {
             if (const auto *member = declaration_ids.get(member_id))
                 declaration.members.push(*member);
+        }
+    }
+
+    // Populate ordered method lists from the frontend-owned `DeclId` list. The
+    // frontend records the ids of the methods written directly inside an
+    // owner's own body, so this is an explicit relation, not a name match.
+    for (symbols::SymId symbol_id = 0;
+         symbol_id < static_cast<symbols::SymId>(symbols_.symbolCount()); ++symbol_id) {
+        const auto *declaration_id = declaration_ids.get(symbol_id);
+        if (declaration_id == nullptr)
+            continue;
+        const auto &symbol = symbols_.get(symbol_id);
+        if (symbol.source_module_id == memory::kInvalidInternedId ||
+            symbol.source_decl_id == 0U)
+            continue;
+        const auto module_key = interner_.lookup(symbol.source_module_id);
+        const auto *module = snapshot_.findModule(module_key);
+        if (module == nullptr)
+            continue;
+        const auto *source_decl =
+            findDecl(*module, frontend::DeclId{symbol.source_decl_id});
+        if (source_decl == nullptr || source_decl->methodDeclarations.empty())
+            continue;
+
+        auto &declaration = hir_.getDeclaration(*declaration_id);
+        for (const auto method_decl : source_decl->methodDeclarations) {
+            const auto key = internFunctionKey(interner_, module_key, method_decl);
+            if (const auto *method_id = declaration_id_by_key.get(key))
+                declaration.method_declarations.push(*method_id);
+        }
+        if (declaration.template_id != hir::kInvalidHirTemplate) {
+            auto &template_record = hir_.getTemplate(declaration.template_id);
+            for (const auto method_id : declaration.method_declarations)
+                template_record.method_declarations.push(method_id);
+        }
+    }
+
+    // Populate a generic owner's trait references from the frontend-owned
+    // declaration ids on each implement record. Both the owner and the trait
+    // were resolved by the parser to the module's own declarations, so this is
+    // an explicit identity relation: never a `traitName`/`ownerName` comparison
+    // and never general symbol membership. Only generic owners carry a template
+    // record, so non-generic owners contribute no trait reference here.
+    for (const auto &module_ptr : snapshot_.modules()) {
+        const auto &module = *module_ptr;
+        if (module.frontend == nullptr)
+            continue;
+        auto *module_sema = sema_.findModuleSema(module.key);
+        if (module_sema == nullptr)
+            continue;
+        for (const auto &record : module.frontend->implementRecords()) {
+            if (record.ownerDeclaration.value == 0U || record.traitDeclaration.value == 0U)
+                continue;
+            const auto owner_key = internFunctionKey(interner_, module.key,
+                                                     record.ownerDeclaration);
+            const auto *owner_id = declaration_id_by_key.get(owner_key);
+            if (owner_id == nullptr)
+                continue;
+            const auto template_id = hir_.getDeclaration(*owner_id).template_id;
+            if (template_id == hir::kInvalidHirTemplate)
+                continue;
+            const auto trait_sema = module_sema->typeOfDecl(record.traitDeclaration);
+            if (!trait_sema) {
+                diags_.reportError(
+                    diagnostics::err::InvalidIR,
+                    "implement record trait declaration has no semantic type",
+                    {});
+                continue;
+            }
+            const auto trait_type = lowerType(trait_sema);
+            if (trait_type == types::kErrorType || trait_type == types::kInvalidType ||
+                std::get_if<types::TypeTrait>(&types_.lookup(trait_type)) == nullptr) {
+                diags_.reportError(
+                    diagnostics::err::InvalidIR,
+                    "implement record trait could not be represented as a shared HIR trait",
+                    {});
+                continue;
+            }
+            auto &template_record = hir_.getTemplate(template_id);
+            bool already_present  = false;
+            for (const auto existing : template_record.trait_types) {
+                if (existing == trait_type) {
+                    already_present = true;
+                    break;
+                }
+            }
+            if (!already_present)
+                template_record.trait_types.push(trait_type);
         }
     }
 }

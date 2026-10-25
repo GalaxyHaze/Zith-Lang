@@ -800,6 +800,24 @@ void AstLowerer::run() {
                                           "extern prefix requires a global declaration", false,
                                           diagnostics::err::UnsupportedSyntax});
     }
+
+    // Bind each implement record's written owner/trait names to the module's
+    // own declarations. Only local declarations are resolvable here, so a
+    // primitive or imported owner/trait keeps a zero id and yields no relation
+    // downstream instead of an inferred one.
+    for (auto &record : snapshot_.implement_records_) {
+        for (const auto &decl : snapshot_.declarations_) {
+            if (record.ownerDeclaration.value == 0U && decl.name == record.owner &&
+                (decl.kind == DeclKind::Struct || decl.kind == DeclKind::Enum ||
+                 decl.kind == DeclKind::Union || decl.kind == DeclKind::TypeAlias)) {
+                record.ownerDeclaration = decl.id;
+            }
+            if (record.traitDeclaration.value == 0U && decl.name == record.traitName &&
+                (decl.kind == DeclKind::Trait || decl.kind == DeclKind::Interface)) {
+                record.traitDeclaration = decl.id;
+            }
+        }
+    }
 }
 
 void AstLowerer::skipMacroInvocation() {
