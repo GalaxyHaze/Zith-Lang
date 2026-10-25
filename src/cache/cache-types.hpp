@@ -369,6 +369,17 @@ struct InstantiationRecord {
     std::vector<std::string> arg_types;
 };
 
+// One assert site inside a `#[test]` function. The runner resolves a failing
+// result slot (test name plus 1-based assert id) back to a source location so
+// `zithc test` can point at the assert that failed.
+struct TestAssertLocation {
+    std::string test_name;
+    uint32_t assert_id = 0;
+    std::string path;
+    uint32_t line = 0;
+    uint32_t column = 0;
+};
+
 // The full decoded artifact.  Built by the reader and consumed by the hydrator.
 struct Artifact {
     std::string canonical_path;
@@ -405,6 +416,8 @@ struct Artifact {
     std::vector<HirFnAttrsRecord> attrs_fns;
     std::vector<HirSafetyProofRecord> attrs_safety_proofs;
     std::vector<InstantiationRecord> instantiations;
+    // sec8 debug: assert-site locations for the native test runner.
+    std::vector<TestAssertLocation> test_assert_locations;
     struct OptionalSection {
         uint16_t id = 0;
         uint16_t schema_version = 1;

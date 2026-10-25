@@ -598,7 +598,7 @@ static void test_instantiation_section_round_trip() {
              "second instance second type argument preserved");
 }
 
-// ── Debug section round-trip (payload empty, reader ignores) ──────
+// ── Debug section round-trip (empty table is a valid zero count) ──
 
 static void test_debug_section_round_trip() {
     Artifact art = makeMinimalArtifact();
@@ -606,12 +606,47 @@ static void test_debug_section_round_trip() {
     ByteWriter w;
     bool encoded = encodeDebug(art, w);
     CHECK(encoded, "encodeDebug succeeds");
-    CHECK(w.size() == 0, "encodeDebug writes empty payload");
+    CHECK_EQ(w.size(), 4u, "encodeDebug writes just the count for an empty table");
 
     Artifact decoded;
     ByteReader r(w.ptr(), w.size());
     bool ok = decodeDebug(r, decoded);
     CHECK(ok, "decodeDebug succeeds on empty payload");
+    CHECK(decoded.test_assert_locations.empty(), "empty table decodes to no assert sites");
+}
+
+// ── Debug section round-trip (assert-site table preserved) ────────
+
+static void test_debug_section_assert_sites_round_trip() {
+    Artifact art = makeMinimalArtifact();
+    art.test_assert_locations.push_back({"passes", 1u, "/src/passes.zith", 3u, 5u});
+    art.test_assert_locations.push_back({"fails", 1u, "/src/fails.zith", 9u, 5u});
+    art.test_assert_locations.push_back({"fails", 2u, "/src/fails.zith", 10u, 5u});
+    art.test_assert_locations.push_back({"multi", 12u, "/src/nested/multi.zith", 128u, 41u});
+
+    ByteWriter w;
+    bool encoded = encodeDebug(art, w);
+    CHECK(encoded, "encodeDebug succeeds for a non-empty table");
+    CHECK(w.size() > 0, "encodeDebug writes a payload for a non-empty table");
+
+    Artifact decoded;
+    ByteReader r(w.ptr(), w.size());
+    bool ok = decodeDebug(r, decoded);
+    CHECK(ok, "decodeDebug succeeds on a non-empty payload");
+    CHECK_EQ(decoded.test_assert_locations.size(), 4u, "all assert sites round-trip");
+    CHECK_EQ(decoded.test_assert_locations[0].test_name, std::string("passes"),
+             "first test name preserved");
+    CHECK_EQ(decoded.test_assert_locations[0].assert_id, 1u, "first assert id preserved");
+    CHECK_EQ(decoded.test_assert_locations[0].path, std::string("/src/passes.zith"),
+             "first path preserved");
+    CHECK_EQ(decoded.test_assert_locations[0].line, 3u, "first line preserved");
+    CHECK_EQ(decoded.test_assert_locations[0].column, 5u, "first column preserved");
+    CHECK_EQ(decoded.test_assert_locations[2].test_name, std::string("fails"),
+             "third test name preserved");
+    CHECK_EQ(decoded.test_assert_locations[2].assert_id, 2u, "third assert id preserved");
+    CHECK_EQ(decoded.test_assert_locations[3].assert_id, 12u, "multi-digit assert id preserved");
+    CHECK_EQ(decoded.test_assert_locations[3].line, 128u, "multi-digit line preserved");
+    CHECK_EQ(decoded.test_assert_locations[3].column, 41u, "multi-digit column preserved");
 }
 
 // ── Full artifact round-trip (bytes stable) ───────────────────────
@@ -1037,6 +1072,7 @@ static void test_zirl_sections() {
     test_attrs_section_round_trip();
     test_instantiation_section_round_trip();
     test_debug_section_round_trip();
+    test_debug_section_assert_sites_round_trip();
     test_full_artifact_round_trip();
     test_truncated_artifact_rejected();
     test_reader_truncation();

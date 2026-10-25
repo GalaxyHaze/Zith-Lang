@@ -37,6 +37,22 @@ public:
         return std::move(hir_);
     }
 
+    /// One assert site inside a `#[test]` function, for the runner's Debug
+    /// location table. `assert_id` is 1-based and matches the value a failing
+    /// test returns; `span` locates the assert in its source file.
+    struct TestAssertSite {
+        std::string test_name;
+        uint32_t assert_id = 0;
+        memory::Span span{};
+    };
+    /// Root-module test functions in declaration order.
+    [[nodiscard]] const std::vector<std::string> &testNames() const noexcept {
+        return test_names_;
+    }
+    [[nodiscard]] const std::vector<TestAssertSite> &testAssertSites() const noexcept {
+        return test_assert_sites_;
+    }
+
 private:
     struct FunctionInfo {
         uint64_t key                                    = 0;
@@ -49,6 +65,10 @@ private:
         /// True for the C entry `main` whose source return type was `void` but
         /// whose HIR signature was rewritten to `i32` for the linker.
         bool forced_main_return_i32 = false;
+        /// True for a `#[test]` whose source return type was `void` but whose
+        /// HIR signature was rewritten to `i32` so the driver can read the
+        /// result slot (0 = pass, N = the Nth assert failed).
+        bool forced_test_return_i32 = false;
     };
 
     struct LoopTarget {
@@ -95,6 +115,9 @@ private:
     memory::FlatMap<uint64_t, memory::InternedId> global_const_by_key_;
     /// Maps an imported C constant name to its predeclared HIR global name.
     memory::FlatMap<memory::InternedId, memory::InternedId> global_const_by_name_;
+    /// Maps a C runtime symbol name to the HIR function declared for it by
+    /// `ensureForeignFunction`, so repeated uses share one declaration.
+    memory::FlatMap<memory::InternedId, hir::HirFunctionId> foreign_fn_by_name_;
     std::vector<FunctionInfo> functions_;
     std::vector<LoopTarget> loop_stack_;
     std::vector<Narrowing> narrowing_stack_;
@@ -113,6 +136,9 @@ private:
     const comptime::GenericInstantiationPass *current_instantiation_ = nullptr;
     const comptime::InstantiationInstance *current_instance_         = nullptr;
     hir::HirFunction *current_fn_                                    = nullptr;
+    /// Index of `current_fn_` in the module. Kept alongside the pointer so
+    /// re-reading the function after a possible `addFn` reallocation is safe.
+    size_t current_fn_index_                                         = 0;
     const frontend::Declaration *current_fn_decl_                    = nullptr;
     frontend::ScopeId info_decl_parent_scope_;
     sema::modern::TypeId current_fn_return_sema_type_ = sema::modern::kInvalidTypeId;
@@ -155,6 +181,22 @@ private:
     /// sema return type is void.  The HIR signature is promoted to i32 so the
     /// C runtime sees a well-defined success code.
     bool current_main_void_ = false;
+    /// True while lowering a test function body. An assert inside a test
+    /// records a failing assert id and returns instead of trapping.
+    bool current_fn_is_test_ = false;
+    /// Name of the test currently being lowered (empty outside a test).
+    std::string current_test_name_;
+    /// Next assert id inside the current test (1-based).
+    uint32_t current_test_assert_id_ = 0;
+    /// Test functions in declaration order, discovered in `predeclareFunctions`.
+    std::vector<std::string> test_names_;
+    /// HIR function id of each entry in `test_names_`, in the same order. The
+    /// driver calls these to fill the result table.
+    std::vector<hir::HirFunctionId> test_fn_ids_;
+    /// `(test, assert id) -> source location` for the runner's Debug section.
+    std::vector<TestAssertSite> test_assert_sites_;
+    /// True once the synthesized `main` driver has been built for this module.
+    bool test_driver_built_ = false;
 
     uint32_t lowerTypeSize(types::TypeId type) const noexcept;
     uint32_t lowerTypeAlign(types::TypeId type) const noexcept;
@@ -312,6 +354,27 @@ private:
     hir::HirExprId lowerIsNull(const frontend::Expression &expr);
     hir::HirExprId lowerIsType(const frontend::Expression &expr);
     hir::HirExprId lowerLayoutIntrinsic(const frontend::Expression &expr);
+    /// Lowers the assert/log intrinsics. Inside a `#[test]` an assert records
+    /// its static id and returns from the test; outside it lowers to a panic.
+    hir::HirExprId lowerTestAssert(const frontend::Expression &expr);
+    hir::HirExprId lowerTestLog(const frontend::Expression &expr);
+    /// Returns the module-local HIR id of a foreign C function `name` with the
+    /// given signature, declaring it once on first use. Used by the test
+    /// driver and the log intrinsic for `puts`/`putchar`/`write_stdout`.
+    hir::HirFunctionId ensureForeignFunction(std::string_view name,
+                                             const std::vector<types::TypeId> &params,
+                                             types::TypeId result, bool variadic = false);
+    /// Synthesizes the test `main` driver as HIR: it calls each `#[test]`
+    /// function in declaration order and prints one `zith-test <name> <slot>`
+    /// result line per test. Returns true when no driver was needed.
+    bool buildTestDriver();
+    /// Emits an `i32` literal into the current block.
+    hir::HirExprId emitI32Literal(int64_t value);
+    /// Appends a `putchar(byte)` call to the current block.
+    void emitPutcharLiteral(std::string_view text);
+    /// Appends code that prints a non-negative `i32` in decimal via `putchar`,
+    /// creating the digit-scaling and digit-emission blocks it needs.
+    void emitPrintI32(hir::HirExprId value);
     hir::HirExprId lowerCoerceToOptional(types::TypeId target, hir::HirExprId value);
     /// Builds `None` for an optional aggregate, recursively zeroing nested
     /// optionals so `??T` keeps its inner `{payload, tag}` layout intact.

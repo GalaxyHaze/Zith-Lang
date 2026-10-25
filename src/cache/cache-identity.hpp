@@ -17,6 +17,7 @@ inline constexpr uint64_t kRequiredHirFeatures = kFeatureCanonicalReferences |
 inline constexpr uint64_t kOptionalFeatureInstantiationSummary = uint64_t{1} << 0u;
 inline constexpr uint64_t kOptionalFeatureFrontendProvenance = uint64_t{1} << 1u;
 inline constexpr uint64_t kOptionalFeatureDerivedVir = uint64_t{1} << 2u;
+inline constexpr uint64_t kOptionalFeatureTestDebug = uint64_t{1} << 3u;
 inline constexpr uint8_t kFunctionSignatureVariadic = 1U << 0U;
 inline constexpr uint8_t kFunctionSignatureState = 1U << 1U;
 inline constexpr uint8_t kFunctionSignatureForeignC = 1U << 2U;

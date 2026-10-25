@@ -2,6 +2,7 @@
 #include "zirl/zirl-attrs-section.hpp"
 #include "zirl/zirl-code-section.hpp"
 #include "zirl/zirl-decl-section.hpp"
+#include "zirl/zirl-debug-section.hpp"
 #include "zirl/zirl-header.hpp"
 #include "zirl/zirl-instantiation-section.hpp"
 #include "zirl/zirl-type-section.hpp"
@@ -95,6 +96,19 @@ uint32_t Writer::write(const cache::Artifact &artifact, ByteWriter &out) {
         section.payload.writeBlob(artifact.frontend_identity.version);
         sections.push_back(std::move(section));
         optional_features |= cache::kOptionalFeatureFrontendProvenance;
+    }
+
+    // Debug section: assert-site locations for the native test runner. Emitted
+    // only when there is something to resolve, so non-test artifacts stay
+    // byte-identical to the pre-debug format.
+    if (!artifact.test_assert_locations.empty()) {
+        EncodedSection section;
+        section.id             = static_cast<uint16_t>(SectionId::Debug);
+        section.schema_version = kDebugSectionSchemaVersion;
+        if (!encodeDebug(artifact, section.payload))
+            return 0;
+        sections.push_back(std::move(section));
+        optional_features |= cache::kOptionalFeatureTestDebug;
     }
 
     for (const auto &optional : artifact.optional_sections) {

@@ -74,6 +74,10 @@ class CompilationSession {
     std::unique_ptr<sema::modern::SemaPipeline> mModernSemaPipeline;
     std::unique_ptr<comptime::GenericInstantiationPass> mGenericInstantiations;
     std::unique_ptr<sema::modern::NraFacts> mNraFacts;
+    /// Assert sites discovered while lowering `#[test]` functions. Captured
+    /// here so the persistent cache can persist their source locations in the
+    /// ZIRL Debug section for the native test runner.
+    std::vector<sema::modern::HirLowerModern::TestAssertSite> mTestAssertSites;
 
     std::string mOutputBuffer;
     std::string mChildOutput;

@@ -32,7 +32,7 @@ HirLowerModern::HirLowerModern(memory::Arena &arena, diagnostics::DiagnosticEngi
 bool HirLowerModern::run() {
     registerForeignRecords();
     if (!predeclareGlobalConsts() || !predeclareFunctions() || !lowerFunctionBodies() ||
-        diags_.hasErrors())
+        !buildTestDriver() || diags_.hasErrors())
         return false;
     populateHirDeclarations();
     return !diags_.hasErrors();
@@ -552,6 +552,7 @@ bool HirLowerModern::predeclareFunctions() {
                 hir_fn.variadicSliceParam = decl.parameters.size() - 1U;
 
             bool is_main_void  = false;
+            bool is_test_void  = false;
             const auto fn_type = module_sema->typeOfDecl(decl.id);
             if (const auto *fn = sema_.typeTable().function(fn_type)) {
                 hir_fn.return_type = lowerType(fn->result);
@@ -560,6 +561,11 @@ bool HirLowerModern::predeclareFunctions() {
                                module.key == snapshot_.rootModuleKey() &&
                                hir_fn.return_type == types::kVoidType;
                 if (is_main_void)
+                    hir_fn.return_type = types_.internInt(types::IntWidth::I32);
+                is_test_void = decl.isTest() && !decl.isExtern && decl.ownerName.empty() &&
+                               module.key == snapshot_.rootModuleKey() &&
+                               hir_fn.return_type == types::kVoidType;
+                if (is_test_void)
                     hir_fn.return_type = types_.internInt(types::IntWidth::I32);
                 if (hir_fn.isState) {
                     hir_fn.machineId  = decl.parentScope ? module_sema->stateMachineIdOf(decl)
@@ -590,10 +596,15 @@ bool HirLowerModern::predeclareFunctions() {
 
             const auto key = internFunctionKey(interner_, module.key, decl.id);
             function_index_by_key_.insert(key, hir_.getFnCount() - 1U);
+            if (is_test_void) {
+                test_names_.push_back(decl.name);
+                test_fn_ids_.push_back(
+                    static_cast<hir::HirFunctionId>(hir_.getFnCount() - 1U));
+            }
             functions_.push_back(
                 {key, module_ptr.get(), &decl, nullptr, nullptr,
                  static_cast<hir::HirFunctionId>(hir_.getFnCount() - 1U),
-                 hir_.getFnCount() - 1U, is_main_void});
+                 hir_.getFnCount() - 1U, is_main_void, is_test_void});
         }
     }
     if (const auto *instantiations = sema_.instantiations(); instantiations != nullptr) {
@@ -710,6 +721,7 @@ bool HirLowerModern::lowerFunctionBody(FunctionInfo &info) {
     }
 
     current_fn_                  = &hir_.getFn(info.hir_index);
+    current_fn_index_            = info.hir_index;
     current_fn_->hasBody         = true;
     current_instantiation_       = info.instance != nullptr ? sema_.instantiations() : nullptr;
     current_instance_            = info.instance;
@@ -748,6 +760,9 @@ bool HirLowerModern::lowerFunctionBody(FunctionInfo &info) {
                               info.module != nullptr &&
                               info.module->key == snapshot_.rootModuleKey();
     current_main_void_ = is_main_void;
+    current_fn_is_test_ = info.forced_test_return_i32;
+    current_test_name_  = current_fn_is_test_ ? info.decl->name : std::string{};
+    current_test_assert_id_ = 0;
 
     current_fn_->blocks.emplace(arena_);
     current_fn_->blocks[0].insts = memory::DynArray<hir::HirExprId>(arena_);
@@ -784,6 +799,9 @@ bool HirLowerModern::lowerFunctionBody(FunctionInfo &info) {
             zero.type = types_.internInt(types::IntWidth::I32);
             zero.i    = 0;
             ret.value = addExpr(std::move(zero));
+        } else if (current_fn_is_test_) {
+            // A test with no failing assert returns the pass slot 0.
+            ret.value = emitI32Literal(0);
         } else if (current_fn_->return_type != types::kVoidType &&
                    body_expr != hir::kInvalidHirExpr) {
             if (types_.kindOf(current_fn_->return_type) == types::TypeKind::Optional &&
@@ -825,6 +843,9 @@ bool HirLowerModern::lowerFunctionBody(FunctionInfo &info) {
     current_fn_is_state_         = false;
     current_state_machine_id_    = 0;
     current_main_void_           = false;
+    current_fn_is_test_          = false;
+    current_test_name_.clear();
+    current_test_assert_id_      = 0;
     return true;
 }
 

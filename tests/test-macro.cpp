@@ -10,10 +10,10 @@ using namespace zith;
 static void test_macro() {
     // 1. macro declaration
     {
-        auto snap = frontend::parse("macro log(msg: expr) { @println(msg); }");
+        auto snap = frontend::parse("macro mylog(msg: expr) { @println(msg); }");
         CHECK(snap.declarations().size() >= 1, "macro declaration is parsed");
         CHECK(snap.declarations()[0].kind == frontend::DeclKind::Macro, "decl kind is Macro");
-        CHECK_EQ(snap.declarations()[0].name, std::string("log"), "macro name is 'log'");
+        CHECK_EQ(snap.declarations()[0].name, std::string("mylog"), "macro name is 'mylog'");
         CHECK(!snap.declarations()[0].isRawMacro, "not raw by default");
         CHECK_EQ(snap.declarations()[0].parameters.size(), 1U, "one parameter");
         CHECK(static_cast<bool>(snap.declarations()[0].body), "macro has a body");
@@ -36,7 +36,7 @@ static void test_macro() {
     // 4. Macro call expands
     {
         auto snap = frontend::parse(
-            "macro log(msg: expr) { @println(msg); }\nfn main() { @log(\"hello\"); }");
+            "macro mylog(msg: expr) { @println(msg); }\nfn main() { @mylog(\"hello\"); }");
         CHECK(snap.declarations().size() >= 2, "module has macro + fn declarations");
         const auto &fnDecl = snap.declarations()[1];
         CHECK_EQ(fnDecl.kind, frontend::DeclKind::Function, "second decl is a function");
@@ -55,7 +55,7 @@ static void test_macro() {
             const auto &expr = snap.expressions()[stmt.expression.value - 1U];
             if (expr.kind == frontend::ExprKind::MacroCall) {
                 found = true;
-                CHECK_EQ(expr.text, std::string("log"), "MacroCall text is 'log'");
+                CHECK_EQ(expr.text, std::string("mylog"), "MacroCall text is 'mylog'");
                 CHECK(static_cast<bool>(expr.expansion), "MacroCall has expansion set");
                 const auto &exp = snap.expressions()[expr.expansion.value - 1U];
                 CHECK_EQ(exp.kind, frontend::ExprKind::Block, "expansion is a Block");
@@ -217,11 +217,11 @@ static void test_macro() {
     }
     // 18. `=expr` stores uneval flag and arg span
     {
-        auto snap  = frontend::parse("macro log(msg: expr) { @println(msg); }\n"
-                                      "fn main() { @log(=5 + 5); }");
+        auto snap  = frontend::parse("macro mylog(msg: expr) { @println(msg); }\n"
+                                      "fn main() { @mylog(=5 + 5); }");
         bool found = false;
         for (const auto &expr_ : snap.expressions()) {
-            if (expr_.kind != frontend::ExprKind::MacroCall || expr_.text != "log")
+            if (expr_.kind != frontend::ExprKind::MacroCall || expr_.text != "mylog")
                 continue;
             const auto &expr = expr_;
             found            = true;

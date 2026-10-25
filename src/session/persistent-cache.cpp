@@ -176,6 +176,28 @@ void CompilationSession::writePersistentCache() {
 
     std::string module_name = fs::path(mFilePath).stem().string();
     auto artifact           = builder.build(mCanonicalPath, module_name, deps);
+    // Persist the assert-site locations the native test runner needs. The
+    // span file ids are session-local, so each one is translated back to the
+    // module path and a 1-based line/column before it is written.
+    for (const auto &site : mTestAssertSites) {
+        cache::TestAssertLocation location;
+        location.test_name = site.test_name;
+        location.assert_id = site.assert_id;
+        // site.span.file is a frontend file id, so it must be translated to
+        // the session-local SourceMap id before it can be resolved.
+        memory::FileId source_file = site.span.file;
+        if (const auto *mapped = mSnapshotDiagnosticFiles.get(site.span.file)) {
+            source_file = *mapped;
+        }
+        if (const auto source = mSourceMap.get(source_file)) {
+            location.path = std::string(source->get().path);
+            const memory::Span span{source_file, site.span.start, site.span.end};
+            const auto loc = mSourceMap.loc(span);
+            location.line   = loc.line;
+            location.column = loc.col;
+        }
+        artifact.test_assert_locations.push_back(std::move(location));
+    }
 #ifdef ZITH_HAS_VM
     memory::Arena vir_arena;
     vm::Module vir(vir_arena);

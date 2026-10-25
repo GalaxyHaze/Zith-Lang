@@ -4,6 +4,7 @@
 #include "zirl/zirl-buffer.hpp"
 #include "zirl/zirl-code-section.hpp"
 #include "zirl/zirl-decl-section.hpp"
+#include "zirl/zirl-debug-section.hpp"
 #include "zirl/zirl-header.hpp"
 #include "zirl/zirl-instantiation-section.hpp"
 #include "zirl/zirl-type-section.hpp"
@@ -499,6 +500,12 @@ std::optional<cache::Artifact> Reader::read(std::string_view bytes) {
                 continue;
             ByteReader section_reader(section.payload);
             if (!readFrontendIdentity(section_reader, artifact.frontend_identity))
+                return std::nullopt;
+        } else if (section.entry.id == static_cast<uint16_t>(SectionId::Debug)) {
+            if (section.entry.schema_version != kDebugSectionSchemaVersion)
+                continue;
+            ByteReader section_reader(section.payload);
+            if (!decodeDebug(section_reader, artifact) || !section_reader.empty())
                 return std::nullopt;
         } else if (section.entry.id > static_cast<uint16_t>(SectionId::FrontendProvenance)) {
             cache::Artifact::OptionalSection optional;
