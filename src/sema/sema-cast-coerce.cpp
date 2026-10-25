@@ -537,6 +537,46 @@ TypeId PerModuleSema::inferWhen(frontend::ExprId id) {
 }
 TypeId PerModuleSema::inferLayoutIntrinsic(frontend::ExprId id) {
     const auto &expr = snapshot.expressions()[id.value - 1U];
+    if (expr.text == "assert") {
+        if (expr.operands.empty()) {
+            report(expr.span, "'@assert' requires a boolean argument",
+                   diagnostics::err::TypeMismatch);
+            return error_type;
+        }
+        const TypeId operand  = inferExpr(expr.operands[0]);
+        const TypeId resolved = resolve(operand);
+        if (type_table.kindOf(resolved) != TypeKind::Bool) {
+            report(expr.span, "'@assert' requires a boolean argument",
+                   diagnostics::err::TypeMismatch);
+            return error_type;
+        }
+        return void_type;
+    }
+    if (expr.text == "log") {
+        if (expr.operands.empty()) {
+            report(expr.span, "'@log' requires a '[]char' argument",
+                   diagnostics::err::TypeMismatch);
+            return error_type;
+        }
+        const TypeId operand  = inferExpr(expr.operands[0]);
+        const TypeId resolved = resolve(operand);
+        const auto *slice     = type_table.slice(resolved);
+        const bool slice_ok =
+            slice != nullptr && sameType(type_table.stripQualifiers(slice->element), char_type);
+        const auto &operand_expr = snapshot.expressions()[expr.operands[0].value - 1U];
+        const bool is_string_literal =
+            operand_expr.kind == frontend::ExprKind::Literal && looksString(operand_expr.text);
+        if (!slice_ok && !is_string_literal) {
+            report(expr.span, "'@log' requires a '[]char' argument",
+                   diagnostics::err::TypeMismatch);
+            return error_type;
+        }
+        // A string literal adapts to `[]char` so lowering emits a slice over
+        // its compile-time-known payload.
+        if (is_string_literal && !slice_ok)
+            setExprType(expr.operands[0], type_table.internSlice(char_type));
+        return void_type;
+    }
     if (expr.text == "lengthOf" || expr.text == "ptrOf") {
         if (expr.operands.empty()) {
             report(expr.span, "'@" + expr.text + "' requires a value argument",
