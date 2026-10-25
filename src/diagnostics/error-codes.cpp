@@ -156,6 +156,12 @@ memory::Optional<ErrorInfo> lookupError(ErrCode code) noexcept {
     case err::InterfaceMethodNotAllowed:
         return ErrorInfo{code, 'E', "parse", "Interface method not allowed",
                          "Interfaces declare fields, not methods; use a trait for methods"};
+    case err::UnknownAttribute:
+        return ErrorInfo{code, 'W', "semantic", "Unknown attribute",
+                         "Remove the attribute or use a known one (test, discardable, volatile)"};
+    case err::AttributeNotApplicable:
+        return ErrorInfo{code, 'W', "semantic", "Attribute not applicable",
+                         "Use the attribute only on a supported declaration or shape"};
     // Types
     case err::TypeMismatch:
         return ErrorInfo{code, 'E', "types", "Type mismatch",

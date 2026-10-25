@@ -106,6 +106,10 @@ void PerModuleSema::reportNote(frontend::TextSpan span, std::string message) {
                         static_cast<uint32_t>(0));
 }
 
+void PerModuleSema::reportWarning(frontend::TextSpan span, std::string message, uint32_t code) {
+    diagnostics.emplace(arena, span, std::move(message), diagnostics::Severity::Warning, code);
+}
+
 void PerModuleSema::semaProbe(const char *fmt, ...) const {
     if (!debugSema)
         return;

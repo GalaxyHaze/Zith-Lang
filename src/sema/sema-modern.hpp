@@ -162,6 +162,7 @@ struct PerModuleSema {
 
     void report(frontend::TextSpan span, std::string message, uint32_t code = 0);
     void reportNote(frontend::TextSpan span, std::string message);
+    void reportWarning(frontend::TextSpan span, std::string message, uint32_t code = 0);
     void semaProbe(const char *fmt, ...) const;
 
     std::string_view sourceText(frontend::TextSpan span) const noexcept;
@@ -181,6 +182,9 @@ private:
     void checkFunctionDefaults();
     void checkZithDeclarations();
     void checkConstFieldAssignments();
+    /// Validates `#[test]` declarations: a test is a free `void` function with
+    /// no parameters, and a module cannot declare both `main` and a test.
+    void checkTestDeclarations();
     /// Registers generic implementation methods needed by a `dyn Trait` /
     /// `dyn Interface` coercion of `source` into `target`. The methods inherit
     /// the concrete enum/union owner's type arguments and must exist before HIR

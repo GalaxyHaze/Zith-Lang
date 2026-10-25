@@ -96,7 +96,43 @@ bool PerModuleSema::findConstField(std::string_view struct_name, size_t index) c
     }
     return false;
 }
+void PerModuleSema::checkTestDeclarations() {
+    frontend::TextSpan first_test_span{};
+    bool has_test = false;
+    for (const auto &decl : snapshot.declarations()) {
+        if (decl.kind != frontend::DeclKind::Function || !decl.isTest())
+            continue;
+        if (!has_test)
+            first_test_span = decl.span;
+        has_test = true;
+        // A test is a free function: no owner, no parent, no generics.
+        if (!decl.parameters.empty()) {
+            reportWarning(decl.span, "a #[test] function cannot declare parameters",
+                          diagnostics::err::AttributeNotApplicable);
+        }
+        const TypeId fn_type = typeOfDecl(decl.id);
+        if (const auto *fn = type_table.function(fn_type);
+            fn != nullptr && fn->result &&
+            type_table.kindOf(resolve(fn->result)) != TypeKind::Void &&
+            type_table.kindOf(resolve(fn->result)) != TypeKind::Error) {
+            reportWarning(decl.span, "a #[test] function must return void",
+                          diagnostics::err::AttributeNotApplicable);
+        }
+    }
+    if (!has_test)
+        return;
+    for (const auto &decl : snapshot.declarations()) {
+        if (decl.kind == frontend::DeclKind::Function && decl.name == "main" &&
+            decl.ownerName.empty() && decl.parentName.empty()) {
+            report(first_test_span, "a test module cannot declare both 'main' and #[test]",
+                   diagnostics::err::UnsupportedSyntax);
+            return;
+        }
+    }
+}
+
 void PerModuleSema::checkZithDeclarations() {
+    checkTestDeclarations();
     // Unknown `as`/`for` targets are deferred from the parser to sema so the
     // frontend can still represent cross-module implementations before imports
     // are resolved. Unknown targets are not nominal traits or interfaces.

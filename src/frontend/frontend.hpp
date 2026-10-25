@@ -483,6 +483,14 @@ struct Declaration {
                 return true;
         return false;
     }
+    /// True when annotated `#[test]`; the function is a runner-discovered test
+    /// unit rather than an ordinary callable.
+    [[nodiscard]] bool isTest() const noexcept {
+        for (const auto &attr : attributes)
+            if (attr.kind == AttributeKind::Test)
+                return true;
+        return false;
+    }
     /// True when declared with `raw union`: untagged C-style union storage.
     bool isRawUnion = false;
     /// Non-empty only for methods lowered from `implement Type as Trait`: the
