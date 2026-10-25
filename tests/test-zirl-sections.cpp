@@ -287,6 +287,12 @@ static void test_type_section_round_trip() {
     positional_pack.ref1 = 1;
     original.types.push_back(positional_pack);
 
+    original.strings.push_back("Display");
+    CompactType trait_type;
+    trait_type.kind = CompactTypeKind::Trait;
+    trait_type.ref0 = 6;
+    original.types.push_back(trait_type);
+
     ByteWriter w;
     bool encoded = encodeTypes(original, w);
     CHECK(encoded, "encodeTypes succeeds");
@@ -324,12 +330,32 @@ static void test_type_section_round_trip() {
         CHECK(decoded.types[6].arg_names.empty(),
               "positional pack keeps empty name metadata after decode");
     }
+    CHECK_EQ(decoded.types.back().kind, CompactTypeKind::Trait,
+             "decodeTypes preserves the Trait compact type kind");
+    CHECK_EQ(decoded.types.back().ref0, 6u,
+             "decodeTypes preserves the Trait name string reference");
 }
 
 // ── Declarations section round-trip ───────────────────────────────
 
 static void test_decl_section_round_trip() {
     Artifact original = makeMinimalArtifact();
+    auto &owner = original.decls[0];
+    owner.kind = CompactSymKind::Struct;
+    owner.is_extern = true;
+    owner.discardable = true;
+    owner.template_index = 0;
+    owner.body_fn_index = 1;
+    owner.field_name_ids = {3};
+    owner.field_type_ids = {0};
+    owner.method_decl_indices = {1};
+
+    DeclRecord method;
+    method.name = "puts";
+    method.name_id = 1;
+    method.kind = CompactSymKind::Fn;
+    method.type_id = 0;
+    original.decls.push_back(method);
 
     ByteWriter w;
     bool encoded = encodeDecls(original, w);
@@ -341,6 +367,95 @@ static void test_decl_section_round_trip() {
     bool ok = decodeDecls(r, decoded);
     CHECK(ok, "decodeDecls succeeds after encodeDecls");
     CHECK(decoded.decls.size() == original.decls.size(), "decodeDecls preserves decl count");
+    if (decoded.decls.size() == 2u) {
+        const auto &decoded_owner = decoded.decls[0];
+        CHECK(decoded_owner.is_extern, "decodeDecls preserves declaration linkage");
+        CHECK(decoded_owner.discardable, "decodeDecls preserves declaration discardability");
+        CHECK_EQ(decoded_owner.template_index, 0u,
+                 "decodeDecls preserves the explicit template index");
+        CHECK_EQ(decoded_owner.body_fn_index, 1u,
+                 "decodeDecls preserves the explicit body function index");
+        CHECK_EQ(decoded_owner.field_name_ids, std::vector<uint32_t>{3},
+                 "decodeDecls preserves ordered field names");
+        CHECK_EQ(decoded_owner.field_type_ids, std::vector<uint32_t>{0},
+                 "decodeDecls preserves ordered field types");
+        CHECK_EQ(decoded_owner.method_decl_indices, std::vector<uint32_t>{1},
+                 "decodeDecls preserves ordered method declaration indices");
+    }
+}
+
+static void test_template_section_round_trip() {
+    Artifact original = makeMinimalArtifact();
+    original.strings.push_back("T");
+    original.strings.push_back("value");
+    original.strings.push_back("Display");
+
+    CompactType trait_type;
+    trait_type.kind = CompactTypeKind::Trait;
+    trait_type.ref0 = 6;
+    original.types.push_back(trait_type);
+
+    TemplateBlueprint blueprint;
+    blueprint.name = "main";
+    blueprint.name_id = 0;
+    blueprint.kind = CompactSymKind::Fn;
+    blueprint.declaration_index = 0;
+    blueprint.function_index = 1;
+    blueprint.return_type_id = 0;
+    blueprint.is_extern = true;
+    blueprint.is_variadic = true;
+    blueprint.is_state = true;
+    blueprint.is_foreign_c = true;
+    blueprint.uses_tailcc = true;
+    blueprint.params.push_back({"T", 4, {5}});
+    blueprint.param_type_ids = {0};
+    blueprint.param_name_ids = {5};
+    blueprint.field_name_ids = {5};
+    blueprint.field_type_ids = {0};
+    blueprint.canonical_field_order = {0};
+    blueprint.method_decl_indices = {1};
+    blueprint.trait_type_ids = {5};
+    original.templates.push_back(blueprint);
+
+    ByteWriter writer;
+    CHECK(encodeTemplates(original, writer), "encodeTemplates succeeds");
+    Artifact decoded;
+    ByteReader reader(writer.ptr(), writer.size());
+    CHECK(decodeTemplates(reader, decoded), "decodeTemplates succeeds after encodeTemplates");
+    CHECK_EQ(decoded.templates.size(), 1u, "decodeTemplates preserves template count");
+    if (decoded.templates.size() != 1u)
+        return;
+
+    const auto &round_trip = decoded.templates[0];
+    CHECK_EQ(round_trip.declaration_index, 0u,
+             "decodeTemplates preserves the explicit declaration index");
+    CHECK_EQ(round_trip.function_index, 1u,
+             "decodeTemplates preserves the explicit function index");
+    CHECK(round_trip.is_extern && round_trip.is_variadic && round_trip.is_state &&
+              round_trip.is_foreign_c && round_trip.uses_tailcc,
+          "decodeTemplates preserves all signature and linkage flags");
+    CHECK_EQ(round_trip.params.size(), 1u,
+             "decodeTemplates preserves generic parameters");
+    if (!round_trip.params.empty()) {
+        CHECK_EQ(round_trip.params[0].name_id, 4u,
+                 "decodeTemplates preserves generic parameter names");
+        CHECK_EQ(round_trip.params[0].bound_type_ids, std::vector<uint32_t>{5},
+                 "decodeTemplates preserves generic parameter bounds");
+    }
+    CHECK_EQ(round_trip.param_type_ids, std::vector<uint32_t>{0},
+             "decodeTemplates preserves owned parameter types");
+    CHECK_EQ(round_trip.param_name_ids, std::vector<uint32_t>{5},
+             "decodeTemplates preserves owned parameter names");
+    CHECK_EQ(round_trip.field_name_ids, std::vector<uint32_t>{5},
+             "decodeTemplates preserves ordered fields");
+    CHECK_EQ(round_trip.field_type_ids, std::vector<uint32_t>{0},
+             "decodeTemplates preserves ordered field types");
+    CHECK_EQ(round_trip.canonical_field_order, std::vector<uint32_t>{0},
+             "decodeTemplates preserves canonical field order");
+    CHECK_EQ(round_trip.method_decl_indices, std::vector<uint32_t>{1},
+             "decodeTemplates preserves ordered method indices");
+    CHECK_EQ(round_trip.trait_type_ids, std::vector<uint32_t>{5},
+             "decodeTemplates preserves trait type references");
 }
 
 // ── Code section round-trip ───────────────────────────────────────
@@ -504,6 +619,24 @@ static void test_debug_section_round_trip() {
 static void test_full_artifact_round_trip() {
     Artifact original = makeMinimalArtifact();
     addCode(original);
+    original.strings.push_back("T");
+    original.strings.push_back("Display");
+    CompactType trait_type;
+    trait_type.kind = CompactTypeKind::Trait;
+    trait_type.ref0 = 5;
+    original.types.push_back(trait_type);
+    original.decls[0].template_index = 0;
+    TemplateBlueprint blueprint;
+    blueprint.name = "main";
+    blueprint.name_id = 0;
+    blueprint.kind = CompactSymKind::Fn;
+    blueprint.declaration_index = 0;
+    blueprint.function_index = 0;
+    blueprint.return_type_id = original.functions[0].return_type_id;
+    blueprint.is_variadic = original.functions[0].is_variadic;
+    blueprint.params.push_back({"T", 4, {5}});
+    blueprint.trait_type_ids = {5};
+    original.templates.push_back(blueprint);
     CompactStructDef generic_struct;
     generic_struct.name         = "Node";
     generic_struct.name_id      = 3;
@@ -543,6 +676,17 @@ static void test_full_artifact_round_trip() {
               round->struct_defs[0].type_arg_ids == std::vector<uint32_t>{0},
           "Reader::read preserves generic arguments for named struct definitions");
     CHECK(round->decls.size() == original.decls.size(), "Reader::read preserves decl count");
+    CHECK_EQ(round->templates.size(), 1u, "Reader::read preserves template count");
+    if (round->templates.size() == 1u) {
+        CHECK_EQ(round->templates[0].declaration_index, 0u,
+                 "Reader::read preserves explicit template ownership");
+        CHECK_EQ(round->templates[0].function_index, 0u,
+                 "Reader::read preserves explicit template function identity");
+        CHECK_EQ(round->templates[0].trait_type_ids, std::vector<uint32_t>{5},
+                 "Reader::read preserves template trait type references");
+    }
+    CHECK_EQ(round->types.back().kind, CompactTypeKind::Trait,
+             "Reader::read preserves Trait compact types");
     CHECK(round->functions.size() == original.functions.size(),
           "Reader::read preserves function count");
     if (round->functions.size() == 2u) {
@@ -847,6 +991,23 @@ static void test_invalid_hydration_references_are_rejected() {
     addCode(invalid_type_argument);
     CHECK(readerRejects(invalid_type_argument),
           "reader rejects a struct type argument outside the compact type table");
+
+    auto duplicate_template_owner = makeMinimalArtifact();
+    addCode(duplicate_template_owner);
+    duplicate_template_owner.decls[0].template_index = 0;
+    DeclRecord second_owner;
+    second_owner.name = "second";
+    second_owner.name_id = 0;
+    second_owner.kind = CompactSymKind::Fn;
+    second_owner.template_index = 0;
+    duplicate_template_owner.decls.push_back(second_owner);
+    TemplateBlueprint blueprint;
+    blueprint.name = "main";
+    blueprint.name_id = 0;
+    blueprint.declaration_index = 0;
+    duplicate_template_owner.templates.push_back(blueprint);
+    CHECK(readerRejects(duplicate_template_owner),
+          "reader rejects a second declaration pointing at another declaration's template");
 }
 
 static void test_mismatched_function_signature_is_rejected() {
@@ -870,6 +1031,7 @@ static void test_mismatched_function_signature_is_rejected() {
 static void test_zirl_sections() {
     test_type_section_round_trip();
     test_decl_section_round_trip();
+    test_template_section_round_trip();
     test_code_section_round_trip();
     test_modern_code_section_round_trip();
     test_attrs_section_round_trip();

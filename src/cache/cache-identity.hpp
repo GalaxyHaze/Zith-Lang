@@ -5,7 +5,7 @@
 
 namespace zith::cache {
 
-inline constexpr uint32_t kHirSchemaVersion = 1;
+inline constexpr uint32_t kHirSchemaVersion = 2;
 
 inline constexpr uint64_t kFeatureCanonicalReferences = uint64_t{1} << 0u;
 inline constexpr uint64_t kFeatureHirDeclarations = uint64_t{1} << 1u;

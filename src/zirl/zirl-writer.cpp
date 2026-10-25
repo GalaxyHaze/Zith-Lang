@@ -64,13 +64,14 @@ uint32_t Writer::write(const cache::Artifact &artifact, ByteWriter &out) {
 
     if (!addKnownSection(SectionId::Metadata, kSectionFlagRequired, kMetadataSectionSchemaVersion,
                          [&](ByteWriter &w) { return encodeTypes(artifact, w); }) ||
-        !addKnownSection(SectionId::Decls, kSectionFlagRequired, kSectionSchemaVersion,
+        !addKnownSection(SectionId::Decls, kSectionFlagRequired, kDeclsSectionSchemaVersion,
                          [&](ByteWriter &w) { return encodeDecls(artifact, w); }) ||
-        !addKnownSection(SectionId::Templates, kSectionFlagRequired, kSectionSchemaVersion,
+        !addKnownSection(SectionId::Templates, kSectionFlagRequired,
+                         kTemplatesSectionSchemaVersion,
                          [&](ByteWriter &w) { return encodeTemplates(artifact, w); }) ||
         !addKnownSection(SectionId::Code, kSectionFlagRequired, kSectionSchemaVersion,
                          [&](ByteWriter &w) { return encodeCode(artifact, w); }) ||
-        !addKnownSection(SectionId::Attrs, kSectionFlagRequired, kSectionSchemaVersion,
+        !addKnownSection(SectionId::Attrs, kSectionFlagRequired, kAttrsSectionSchemaVersion,
                          [&](ByteWriter &w) { return encodeAttrs(artifact, w); }) ||
         !addKnownSection(SectionId::Instantiations, 0, kSectionSchemaVersion,
                          [&](ByteWriter &w) { return encodeInstantiations(artifact, w); }))

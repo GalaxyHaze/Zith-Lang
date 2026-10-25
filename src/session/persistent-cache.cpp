@@ -368,6 +368,11 @@ void CompilationSession::hydrateFromArtifact(const cache::Artifact &art) {
         case cache::CompactTypeKind::Opaque:
             compact_type_ids[i] = mTypes.internUnknown();
             break;
+        case cache::CompactTypeKind::Trait:
+            compact_type_ids[i] =
+                ct.ref0 < art.strings.size() ? mTypes.internTrait(art.strings[ct.ref0])
+                                             : types::kErrorType;
+            break;
         case cache::CompactTypeKind::OpaqueTagged:
             compact_type_ids[i] = mTypes.internOpaqueTagged();
             break;
@@ -420,11 +425,69 @@ void CompilationSession::hydrateFromArtifact(const cache::Artifact &art) {
         declaration.visibility = static_cast<hir::HirVisibility>(record.visibility);
         declaration.module_depth = record.mod_depth;
         declaration.type = compactType(record.type_id);
+        declaration.is_extern = record.is_extern;
         declaration.discardable = record.discardable;
+        declaration.body_function =
+            record.body_fn_index < art.functions.size()
+                ? static_cast<hir::HirFunctionId>(record.body_fn_index)
+                : hir::kInvalidHirFunction;
+        declaration.template_id =
+            record.template_index < art.templates.size()
+                ? static_cast<hir::HirTemplateId>(record.template_index)
+                : hir::kInvalidHirTemplate;
         for (const auto member_index : record.method_decl_indices) {
-            if (member_index < art.decls.size())
-                declaration.members.push(static_cast<hir::HirDeclarationId>(member_index));
+            if (member_index < art.decls.size()) {
+                declaration.method_declarations.push(
+                    static_cast<hir::HirDeclarationId>(member_index));
+            }
         }
+    }
+
+    for (const auto &record : art.templates) {
+        auto &template_record = mHirModule.addTemplate();
+        template_record.kind = static_cast<hir::HirDeclarationKind>(record.kind);
+        template_record.is_extern = record.is_extern;
+        template_record.declaration_id =
+            record.declaration_index < art.decls.size()
+                ? static_cast<hir::HirDeclarationId>(record.declaration_index)
+                : hir::kInvalidHirDeclaration;
+        template_record.function_id =
+            record.function_index < art.functions.size()
+                ? static_cast<hir::HirFunctionId>(record.function_index)
+                : hir::kInvalidHirFunction;
+        template_record.name = record.name_id < art.strings.size()
+                                   ? mInterner->intern(art.strings[record.name_id])
+                                   : mInterner->intern(record.name);
+        template_record.return_type =
+            record.return_type_id == ~uint32_t{0} ? types::kInvalidType
+                                                  : compactType(record.return_type_id);
+        template_record.variadic = record.is_variadic;
+        template_record.is_state = record.is_state;
+        template_record.is_foreign_c = record.is_foreign_c;
+        template_record.uses_tail_cc = record.uses_tailcc;
+        for (const auto &param : record.params) {
+            auto &out_param = template_record.params.emplace(mHirArena);
+            out_param.name = param.name_id < art.strings.size()
+                                 ? mInterner->intern(art.strings[param.name_id])
+                                 : mInterner->intern(param.name);
+            for (const auto bound_id : param.bound_type_ids)
+                out_param.bounds.push(compactType(bound_id));
+        }
+        for (const auto type_id : record.param_type_ids)
+            template_record.parameter_types.push(compactType(type_id));
+        for (const auto name_id : record.param_name_ids)
+            template_record.parameter_names.push(mInterner->intern(art.strings[name_id]));
+        for (const auto name_id : record.field_name_ids)
+            template_record.field_names.push(mInterner->intern(art.strings[name_id]));
+        for (const auto type_id : record.field_type_ids)
+            template_record.field_types.push(compactType(type_id));
+        for (const auto field_index : record.canonical_field_order)
+            template_record.canonical_field_order.push(field_index);
+        for (const auto declaration_id : record.method_decl_indices)
+            template_record.method_declarations.push(
+                static_cast<hir::HirDeclarationId>(declaration_id));
+        for (const auto type_id : record.trait_type_ids)
+            template_record.trait_types.push(compactType(type_id));
     }
 
     // Rebuild the module-level expression pool. Function blocks and const global

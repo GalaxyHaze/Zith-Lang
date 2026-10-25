@@ -46,6 +46,8 @@ struct SymbolData {
     SymId target = kInvalidSym;
     memory::DynArray<SymId> members;
     bool discardable = false;
+    memory::InternedId source_module_id = memory::kInvalidInternedId;
+    uint32_t source_decl_id = 0;
 
     SymbolData(memory::InternedId name_, ScopeId scope_, SymbolVisibility vis, int32_t depth,
                SymKind ikind, ast::DeclId did, memory::Span ispan, memory::Span idoc, SymId itarget,
@@ -81,6 +83,9 @@ public:
                   ast::DeclId decl_id = ast::kInvalidDecl, memory::Span span = {},
                   SymId target = kInvalidSym, memory::Span doc_span = {},
                   bool discardable = false);
+    SymId declareFrontend(memory::InternedId name, SymbolVisibility vis, int32_t depth,
+                          SymKind kind, bool discardable,
+                          memory::InternedId source_module_id, uint32_t source_decl_id);
 
     /// Copy all non-root symbols from `other` into the current scope of `this`.
     void emplace(const SymbolTable &other);

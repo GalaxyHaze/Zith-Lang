@@ -734,7 +734,7 @@ static void test_format_version_bump() {
 
     std::string bytes(reinterpret_cast<const char *>(writer.ptr()), writer.size());
     CHECK_EQ(kContainerVersion, 21u, "container version rejects legacy layouts");
-    CHECK_EQ(kHirSchemaVersion, 1u, "HIR schema has its own independent version");
+    CHECK_EQ(kHirSchemaVersion, 2u, "HIR schema has its own independent version");
 
     // Simulate an old reader by treating the container version as v3.
     bytes[4]        = 3;
@@ -1144,7 +1144,7 @@ static void test_artifact_builder() {
     method_hir_decl.name       = interner.intern("scale");
     method_hir_decl.kind       = hir::HirDeclarationKind::Function;
     method_hir_decl.visibility = hir::HirVisibility::Public;
-    point_hir_decl.members.push(scale_id);
+    point_hir_decl.method_declarations.push(scale_id);
     ArtifactBuilder builder(types, hir, interner, fp, {"Zith", "cache-test", "test"},
                             kSharedHirProfile);
     std::vector<DependencyRecord> deps;

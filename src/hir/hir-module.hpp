@@ -11,8 +11,10 @@
 namespace zith::hir {
 
 using HirDeclarationId = uint32_t;
+using HirTemplateId = uint32_t;
 
 inline constexpr HirDeclarationId kInvalidHirDeclaration = ~HirDeclarationId{0};
+inline constexpr HirTemplateId kInvalidHirTemplate = ~HirTemplateId{0};
 
 enum class HirDeclarationKind : uint8_t {
     Function,
@@ -34,15 +36,53 @@ enum class HirVisibility : uint8_t { Private, Public, Module };
 
 /// Frontend-neutral declaration metadata needed by cache and tooling consumers.
 struct HirDeclaration {
+    bool is_extern = false;
     memory::InternedId name = memory::kInvalidInternedId;
     HirDeclarationKind kind = HirDeclarationKind::Variable;
     HirVisibility visibility = HirVisibility::Private;
     int32_t module_depth = 0;
     HirTypeId type = types::kInvalidType;
     bool discardable = false;
+    HirFunctionId body_function = kInvalidHirFunction;
+    HirTemplateId template_id = kInvalidHirTemplate;
     memory::DynArray<HirDeclarationId> members;
+    memory::DynArray<HirDeclarationId> method_declarations;
 
-    explicit HirDeclaration(memory::Arena &arena) : members(arena) {}
+    explicit HirDeclaration(memory::Arena &arena)
+        : members(arena), method_declarations(arena) {}
+};
+
+struct HirGenericParam {
+    memory::InternedId name = memory::kInvalidInternedId;
+    memory::DynArray<HirTypeId> bounds;
+
+    explicit HirGenericParam(memory::Arena &arena) : bounds(arena) {}
+};
+
+struct HirTemplate {
+    HirDeclarationId declaration_id = kInvalidHirDeclaration;
+    HirFunctionId function_id = kInvalidHirFunction;
+    HirDeclarationKind kind = HirDeclarationKind::Function;
+    bool is_extern = false;
+    memory::InternedId name = memory::kInvalidInternedId;
+    HirTypeId return_type = types::kInvalidType;
+    bool variadic = false;
+    bool is_state = false;
+    bool is_foreign_c = false;
+    bool uses_tail_cc = false;
+    memory::DynArray<HirGenericParam> params;
+    memory::DynArray<HirTypeId> parameter_types;
+    memory::DynArray<memory::InternedId> parameter_names;
+    memory::DynArray<memory::InternedId> field_names;
+    memory::DynArray<HirTypeId> field_types;
+    memory::DynArray<uint32_t> canonical_field_order;
+    memory::DynArray<HirDeclarationId> method_declarations;
+    memory::DynArray<HirTypeId> trait_types;
+
+    explicit HirTemplate(memory::Arena &arena)
+        : params(arena), parameter_types(arena), parameter_names(arena),
+          field_names(arena), field_types(arena), canonical_field_order(arena),
+          method_declarations(arena), trait_types(arena) {}
 };
 
 struct HirBasicBlock {
@@ -111,6 +151,7 @@ class HirModule {
     memory::DynArray<HirExpr> exprs_;
     memory::DynArray<HirFunction> fns_;
     memory::DynArray<HirDeclaration> declarations_;
+    memory::DynArray<HirTemplate> templates_;
     memory::DynArray<HirGlobalConst> globals_;
     memory::DynArray<HirVTable> vtables_;
     HirAttrs attrs_;
@@ -125,6 +166,12 @@ public:
     HirDeclaration &addDeclaration();
     HirDeclaration &getDeclaration(size_t idx);
     const HirDeclaration &getDeclaration(size_t idx) const;
+    HirTemplate &addTemplate();
+    HirTemplate &getTemplate(size_t idx);
+    const HirTemplate &getTemplate(size_t idx) const;
+    [[nodiscard]] size_t templateCount() const noexcept {
+        return templates_.size();
+    }
     [[nodiscard]] size_t declarationCount() const noexcept {
         return declarations_.size();
     }

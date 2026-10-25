@@ -10,6 +10,7 @@
 #include "symbols/symbol-table.hpp"
 
 #include "types/type-kind.hpp"
+#include "types/type-canonical.hpp"
 
 #include <algorithm>
 #include <cstdlib>
@@ -109,6 +110,144 @@ void HirLowerModern::populateHirDeclarations() {
         const auto type_id = types_.lookupNamedType(interner_.lookup(type_name));
         if (type_id != types::kErrorType)
             declaration.type = type_id;
+
+        if (symbol.source_module_id != memory::kInvalidInternedId &&
+            symbol.source_decl_id != 0U) {
+            const auto module_key = interner_.lookup(symbol.source_module_id);
+            const auto *module = snapshot_.findModule(module_key);
+            const frontend::DeclId source_id{symbol.source_decl_id};
+            const auto *source_decl =
+                module != nullptr ? findDecl(*module, source_id) : nullptr;
+            const auto *module_sema =
+                module != nullptr ? sema_.findModuleSema(module->key) : nullptr;
+            if (module != nullptr && source_decl != nullptr && module_sema != nullptr) {
+                declaration.is_extern = source_decl->isExtern;
+
+                const auto *saved_module = current_module_;
+                const auto saved_type_module = types_.currentModule();
+                current_module_ = module;
+                types_.setCurrentModule(module->key);
+
+                const auto sema_type = module_sema->typeOfDecl(source_id);
+                if (sema_type) {
+                    const auto source_type = lowerType(sema_type);
+                    if (source_type != types::kErrorType &&
+                        source_type != types::kInvalidType)
+                        declaration.type = source_type;
+                }
+
+                if (source_decl->kind == frontend::DeclKind::Function &&
+                    source_decl->genericParams.empty()) {
+                    const auto key = internFunctionKey(interner_, module->key, source_id);
+                    if (const auto *function_index = function_index_by_key_.get(key)) {
+                        const auto function_id =
+                            functions_[*function_index].hir_function_id;
+                        if (hir_.getFn(function_id).hasBody)
+                            declaration.body_function = function_id;
+                    }
+                }
+
+                if (!source_decl->genericParams.empty()) {
+                    auto &template_record = hir_.addTemplate();
+                    template_record.declaration_id =
+                        static_cast<hir::HirDeclarationId>(hir_.declarationCount() - 1U);
+                    template_record.kind = declaration.kind;
+                    template_record.is_extern = source_decl->isExtern;
+                    template_record.name = declaration.name;
+                    declaration.template_id =
+                        static_cast<hir::HirTemplateId>(hir_.templateCount() - 1U);
+
+                    for (const auto &generic_param : source_decl->genericParams) {
+                        auto &param = template_record.params.emplace(arena_);
+                        param.name = interner_.intern(generic_param.name);
+                        for (const auto constraint : generic_param.constraints) {
+                            const auto bound =
+                                sema_.typeTable().lowerTypeExpr(*module->frontend, constraint);
+                            const auto lowered_bound = lowerType(bound);
+                            if (lowered_bound == types::kErrorType ||
+                                lowered_bound == types::kInvalidType) {
+                                diags_.reportError(
+                                    diagnostics::err::InvalidIR,
+                                    "generic bound could not be represented in shared HIR",
+                                    {});
+                                continue;
+                            }
+                            param.bounds.push(lowered_bound);
+                        }
+                    }
+
+                    if (source_decl->kind == frontend::DeclKind::Function) {
+                        if (const auto *function_type =
+                                sema_.typeTable().function(sema_type)) {
+                            template_record.return_type = lowerType(function_type->result);
+                            template_record.variadic = source_decl->isVariadic;
+                            template_record.is_state =
+                                source_decl->functionKind == frontend::FunctionKind::State;
+                            template_record.is_foreign_c = source_decl->isExtern;
+                            template_record.uses_tail_cc = template_record.is_state;
+                            if (source_decl->parameters.size() !=
+                                function_type->params.size()) {
+                                diags_.reportError(
+                                    diagnostics::err::InvalidIR,
+                                    "generic function parameter names and types have "
+                                    "different lengths",
+                                    {});
+                            }
+                            for (size_t index = 0;
+                                 index < function_type->params.size(); ++index) {
+                                if (index >= source_decl->parameters.size()) {
+                                    break;
+                                }
+                                template_record.parameter_types.push(
+                                    lowerType(function_type->params[index]));
+                                template_record.parameter_names.push(interner_.intern(
+                                    source_decl->parameters[index].name));
+                            }
+                        } else {
+                            diags_.reportError(
+                                diagnostics::err::InvalidIR,
+                                "generic function has no semantic function type",
+                                {});
+                        }
+                    } else if (source_decl->kind == frontend::DeclKind::Struct) {
+                        if (const auto *struct_type =
+                                sema_.typeTable().struct_type(sema_type)) {
+                            if (struct_type->fields.size() !=
+                                struct_type->field_names.size()) {
+                                diags_.reportError(
+                                    diagnostics::err::InvalidIR,
+                                    "generic struct field names and types have different "
+                                    "lengths",
+                                    {});
+                            }
+                            for (size_t index = 0; index < struct_type->fields.size(); ++index) {
+                                const auto field_name =
+                                    index < struct_type->field_names.size()
+                                        ? struct_type->field_names[index]
+                                        : std::string_view{};
+                                template_record.field_names.push(
+                                    interner_.intern(field_name));
+                                template_record.field_types.push(
+                                    lowerType(struct_type->fields[index]));
+                            }
+                            const auto order =
+                                types::canonicalFieldOrder(types_, declaration.type);
+                            for (const auto index : order)
+                                template_record.canonical_field_order.push(
+                                    static_cast<uint32_t>(index));
+                        } else {
+                            diags_.reportError(
+                                diagnostics::err::InvalidIR,
+                                "generic struct has no semantic struct type",
+                                {});
+                        }
+                    }
+                }
+
+                current_module_ = saved_module;
+                types_.setCurrentModule(saved_type_module);
+            }
+        }
 
         declaration_ids[symbol_id] =
             static_cast<hir::HirDeclarationId>(hir_.declarationCount() - 1U);

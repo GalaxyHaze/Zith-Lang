@@ -47,6 +47,18 @@ SymId SymbolTable::declare(memory::InternedId name, SymbolVisibility vis, int32_
     return id;
 }
 
+SymId SymbolTable::declareFrontend(memory::InternedId name, SymbolVisibility vis, int32_t depth,
+                                   SymKind kind, bool discardable,
+                                   memory::InternedId source_module_id,
+                                   uint32_t source_decl_id) {
+    const SymId id = declare(name, vis, depth, kind, ast::kInvalidDecl, {}, kInvalidSym, {},
+                             discardable);
+    auto &symbol = get(id);
+    symbol.source_module_id = source_module_id;
+    symbol.source_decl_id = source_decl_id;
+    return id;
+}
+
 SymId SymbolTable::declareInScope(ScopeId scope, memory::InternedId name, SymbolVisibility vis,
                                   int32_t depth, SymKind kind, ast::DeclId decl_id,
                                   memory::Span span, SymId target, memory::Span doc_span,
@@ -83,8 +95,11 @@ void SymbolTable::emplace(const SymbolTable &other) {
         auto &data = other.symbols_[i];
         if (data.scope == kRootScope)
             continue;
-        declare(data.name, data.visibility, 0, data.kind, data.decl_id, data.span, data.target,
-                data.doc_span, data.discardable);
+        const auto copied_id = declare(data.name, data.visibility, 0, data.kind, data.decl_id,
+                                       data.span, data.target, data.doc_span, data.discardable);
+        auto &copied = get(copied_id);
+        copied.source_module_id = data.source_module_id;
+        copied.source_decl_id = data.source_decl_id;
     }
 }
 

@@ -10,8 +10,8 @@ namespace zith::hir {
 namespace {} // namespace
 
 HirModule::HirModule(memory::Arena &arena)
-    : exprs_(arena), fns_(arena), declarations_(arena), globals_(arena), vtables_(arena),
-      attrs_(arena) {}
+    : exprs_(arena), fns_(arena), declarations_(arena), templates_(arena), globals_(arena),
+      vtables_(arena), attrs_(arena) {}
 
 HirExprId HirModule::addExpr(HirExpr expr) {
     HirExprId id = static_cast<HirExprId>(exprs_.size());
@@ -36,6 +36,19 @@ HirDeclaration &HirModule::getDeclaration(size_t idx) {
 
 const HirDeclaration &HirModule::getDeclaration(size_t idx) const {
     return declarations_[idx];
+}
+
+HirTemplate &HirModule::addTemplate() {
+    templates_.emplace(exprs_.arena());
+    return templates_.back();
+}
+
+HirTemplate &HirModule::getTemplate(size_t idx) {
+    return templates_[idx];
+}
+
+const HirTemplate &HirModule::getTemplate(size_t idx) const {
+    return templates_[idx];
 }
 
 HirFunction &HirModule::getFn(size_t idx) {

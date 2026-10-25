@@ -8,7 +8,7 @@ bool encodeDecls(const cache::Artifact &artifact, ByteWriter &w) {
         w.writeU8(static_cast<uint8_t>(d.kind));
         w.writeU8(static_cast<uint8_t>(d.visibility));
         w.writeU8(d.is_extern ? 1 : 0);
-        w.writeU8(0); // reserved
+        w.writeU8(d.discardable ? 1 : 0);
         w.writeI32(d.mod_depth);
         w.writeU32(d.name_id);
         w.writeU32(d.type_id);
@@ -34,15 +34,18 @@ bool decodeDecls(ByteReader &r, cache::Artifact &out) {
         return false;
     out.decls.resize(n);
     for (auto &d : out.decls) {
-        uint8_t kind = 0, vis = 0, ext = 0, reserved = 0;
-        if (!r.readU8(kind) || !r.readU8(vis) || !r.readU8(ext) || !r.readU8(reserved))
+        uint8_t kind = 0, vis = 0, ext = 0, discardable = 0;
+        if (!r.readU8(kind) || !r.readU8(vis) || !r.readU8(ext) ||
+            !r.readU8(discardable))
             return false;
         d.kind        = static_cast<cache::CompactSymKind>(kind);
         if (kind > static_cast<uint8_t>(cache::CompactSymKind::Context) ||
-            vis > static_cast<uint8_t>(cache::CompactVisibility::Module) || ext > 1U)
+            vis > static_cast<uint8_t>(cache::CompactVisibility::Module) || ext > 1U ||
+            discardable > 1U)
             return false;
         d.visibility  = static_cast<cache::CompactVisibility>(vis);
         d.is_extern   = ext != 0;
+        d.discardable = discardable != 0;
         int32_t depth = 0;
         if (!r.readI32(depth))
             return false;
@@ -80,9 +83,14 @@ bool encodeTemplates(const cache::Artifact &artifact, ByteWriter &w) {
     for (const auto &t : artifact.templates) {
         w.writeU8(static_cast<uint8_t>(t.kind));
         w.writeU8(t.is_extern ? 1 : 0);
-        w.writeU8(0); // reserved
+        const uint8_t signature_flags =
+            (t.is_variadic ? 1U : 0U) | (t.is_state ? 2U : 0U) |
+            (t.is_foreign_c ? 4U : 0U) | (t.uses_tailcc ? 8U : 0U);
+        w.writeU8(signature_flags);
         w.writeU8(0);
         w.writeU32(t.name_id);
+        w.writeU32(t.declaration_index);
+        w.writeU32(t.function_index);
         w.writeU32(t.return_type_id);
         w.writeU32(static_cast<uint32_t>(t.params.size()));
         for (const auto &p : t.params) {
@@ -124,12 +132,21 @@ bool decodeTemplates(ByteReader &r, cache::Artifact &out) {
         return false;
     out.templates.resize(n);
     for (auto &t : out.templates) {
-        uint8_t kind = 0, ext = 0, a = 0, b = 0;
-        if (!r.readU8(kind) || !r.readU8(ext) || !r.readU8(a) || !r.readU8(b))
+        uint8_t kind = 0, ext = 0, a = 0, reserved = 0;
+        if (!r.readU8(kind) || !r.readU8(ext) || !r.readU8(a) ||
+            !r.readU8(reserved))
+            return false;
+        if (kind > static_cast<uint8_t>(cache::CompactSymKind::Context) || ext > 1U ||
+            (a & 0xF0U) != 0 || reserved != 0)
             return false;
         t.kind      = static_cast<cache::CompactSymKind>(kind);
         t.is_extern = ext != 0;
-        if (!r.readU32(t.name_id) || !r.readU32(t.return_type_id))
+        t.is_variadic = (a & 1U) != 0;
+        t.is_state = (a & 2U) != 0;
+        t.is_foreign_c = (a & 4U) != 0;
+        t.uses_tailcc = (a & 8U) != 0;
+        if (!r.readU32(t.name_id) || !r.readU32(t.declaration_index) ||
+            !r.readU32(t.function_index) || !r.readU32(t.return_type_id))
             return false;
         uint32_t c = 0;
         if (!r.readU32(c))

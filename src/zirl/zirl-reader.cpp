@@ -54,6 +54,11 @@ bool validateArtifactReferences(const cache::Artifact &artifact) {
     const auto validStringId = [&](uint32_t id) { return id < artifact.strings.size(); };
 
     for (const auto &type : artifact.types) {
+        if (static_cast<uint8_t>(type.kind) >
+            static_cast<uint8_t>(cache::CompactTypeKind::Trait))
+            return false;
+        if (type.kind == cache::CompactTypeKind::Trait && !validStringId(type.ref0))
+            return false;
         if (type.kind == cache::CompactTypeKind::Pack) {
             if (!type.arg_names.empty() && type.arg_names.size() != type.args.size())
                 return false;
@@ -225,6 +230,95 @@ bool validateArtifactReferences(const cache::Artifact &artifact) {
         if (!validStringId(global.name_id))
             return false;
 
+    for (size_t index = 0; index < artifact.decls.size(); ++index) {
+        const auto &decl = artifact.decls[index];
+        if (!validStringId(decl.name_id) ||
+            (decl.type_id != ~uint32_t{0} && decl.type_id >= artifact.types.size()) ||
+            (decl.template_index != ~uint32_t{0} &&
+             decl.template_index >= artifact.templates.size()) ||
+            (decl.body_fn_index != ~uint32_t{0} &&
+             decl.body_fn_index >= artifact.functions.size()) ||
+            ((decl.kind == cache::CompactSymKind::Struct ||
+              decl.kind == cache::CompactSymKind::Component) &&
+             decl.field_name_ids.size() != decl.field_type_ids.size()))
+            return false;
+        if (decl.template_index != ~uint32_t{0} &&
+            artifact.templates[decl.template_index].declaration_index != index)
+            return false;
+        for (const auto name_id : decl.field_name_ids)
+            if (!validStringId(name_id))
+                return false;
+        for (const auto type_id : decl.field_type_ids)
+            if (type_id >= artifact.types.size())
+                return false;
+        for (const auto method_index : decl.method_decl_indices)
+            if (method_index >= artifact.decls.size())
+                return false;
+    }
+
+    for (size_t index = 0; index < artifact.templates.size(); ++index) {
+        const auto &blueprint = artifact.templates[index];
+        if (!validStringId(blueprint.name_id) ||
+            blueprint.declaration_index >= artifact.decls.size() ||
+            (blueprint.function_index != ~uint32_t{0} &&
+             blueprint.function_index >= artifact.functions.size()) ||
+            (blueprint.return_type_id != ~uint32_t{0} &&
+             blueprint.return_type_id >= artifact.types.size()) ||
+            blueprint.param_type_ids.size() != blueprint.param_name_ids.size() ||
+            blueprint.field_name_ids.size() != blueprint.field_type_ids.size())
+            return false;
+        const auto &owner = artifact.decls[blueprint.declaration_index];
+        if (owner.template_index != index)
+            return false;
+        for (const auto &param : blueprint.params) {
+            if (!validStringId(param.name_id))
+                return false;
+            for (const auto bound_id : param.bound_type_ids)
+                if (bound_id >= artifact.types.size())
+                    return false;
+        }
+        for (const auto type_id : blueprint.param_type_ids)
+            if (type_id >= artifact.types.size())
+                return false;
+        for (const auto name_id : blueprint.param_name_ids)
+            if (!validStringId(name_id))
+                return false;
+        for (const auto name_id : blueprint.field_name_ids)
+            if (!validStringId(name_id))
+                return false;
+        for (const auto type_id : blueprint.field_type_ids)
+            if (type_id >= artifact.types.size())
+                return false;
+        std::vector<bool> seen_fields(blueprint.field_name_ids.size(), false);
+        for (const auto field_index : blueprint.canonical_field_order) {
+            if (field_index >= seen_fields.size() || seen_fields[field_index])
+                return false;
+            seen_fields[field_index] = true;
+        }
+        if (!blueprint.canonical_field_order.empty() &&
+            blueprint.canonical_field_order.size() != seen_fields.size())
+            return false;
+        for (const auto method_index : blueprint.method_decl_indices)
+            if (method_index >= artifact.decls.size())
+                return false;
+        for (const auto trait_id : blueprint.trait_type_ids) {
+            if (trait_id >= artifact.types.size() ||
+                artifact.types[trait_id].kind != cache::CompactTypeKind::Trait)
+                return false;
+        }
+        if (blueprint.function_index != ~uint32_t{0}) {
+            const auto &function = artifact.functions[blueprint.function_index];
+            if (blueprint.return_type_id != function.return_type_id ||
+                blueprint.param_type_ids != function.param_type_ids ||
+                blueprint.param_name_ids != function.param_name_ids ||
+                blueprint.is_variadic != function.is_variadic ||
+                blueprint.is_state != function.is_state ||
+                blueprint.is_foreign_c != function.is_foreign_c ||
+                blueprint.uses_tailcc != function.uses_tailcc)
+                return false;
+        }
+    }
+
     return true;
 }
 
@@ -379,13 +473,13 @@ std::optional<cache::Artifact> Reader::read(std::string_view bytes) {
     };
     if (!decodeRequired(SectionId::Metadata, kMetadataSectionSchemaVersion,
                         [&](ByteReader &r) { return decodeTypes(r, artifact); }) ||
-        !decodeRequired(SectionId::Decls, kSectionSchemaVersion,
+        !decodeRequired(SectionId::Decls, kDeclsSectionSchemaVersion,
                         [&](ByteReader &r) { return decodeDecls(r, artifact); }) ||
-        !decodeRequired(SectionId::Templates, kSectionSchemaVersion,
+        !decodeRequired(SectionId::Templates, kTemplatesSectionSchemaVersion,
                         [&](ByteReader &r) { return decodeTemplates(r, artifact); }) ||
         !decodeRequired(SectionId::Code, kSectionSchemaVersion,
                         [&](ByteReader &r) { return decodeCode(r, artifact); }) ||
-        !decodeRequired(SectionId::Attrs, kSectionSchemaVersion,
+        !decodeRequired(SectionId::Attrs, kAttrsSectionSchemaVersion,
                         [&](ByteReader &r) { return decodeAttrs(r, artifact); }))
         return std::nullopt;
 

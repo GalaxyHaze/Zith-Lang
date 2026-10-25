@@ -1843,6 +1843,21 @@ void test_generic_template_survives_persistent_cache() {
              "artifact stores the generic parameter list");
     CHECK_EQ(written->templates[0].params[0].name, "T",
              "artifact stores the generic parameter name");
+    CHECK(written->templates[0].declaration_index < written->decls.size(),
+          "template stores an explicit declaration index");
+    CHECK_EQ(written->templates[0].function_index, ~uint32_t{0},
+             "template without a shared HIR body stores the invalid function sentinel");
+    CHECK(written->templates[0].return_type_id < written->types.size(),
+          "template stores its owned return type");
+    CHECK_EQ(written->templates[0].param_type_ids.size(), 1u,
+             "template stores its owned function parameter type");
+    CHECK_EQ(written->templates[0].param_name_ids.size(), 1u,
+             "template stores its owned function parameter name");
+    if (written->templates[0].declaration_index < written->decls.size()) {
+        const auto &owner = written->decls[written->templates[0].declaration_index];
+        CHECK_EQ(owner.template_index, 0u,
+                 "declaration and template retain their reciprocal explicit relation");
+    }
 
     memory::Arena second_arena;
     Options second_options(second_arena);
@@ -1858,6 +1873,18 @@ void test_generic_template_survives_persistent_cache() {
     if (hydrated != nullptr)
         CHECK_EQ(hydrated->templates.size(), 1u,
                  "cache reader preserves the generic function blueprint");
+    CHECK_EQ(second.hirModule().templateCount(), 1u,
+             "cache hydration reconstructs the HIR template table");
+    if (second.hirModule().templateCount() == 1u) {
+        const auto &template_record = second.hirModule().getTemplate(0);
+        CHECK_EQ(template_record.declaration_id,
+                 written->templates[0].declaration_index,
+                 "hydrated HIR preserves the explicit template declaration ID");
+        CHECK_EQ(template_record.params.size(), 1u,
+                 "hydrated HIR preserves generic parameters");
+        CHECK_EQ(template_record.parameter_types.size(), 1u,
+                 "hydrated HIR preserves the owned function signature");
+    }
 }
 
 void test_alias_qualified_free_generic_self_is_not_receiver() {

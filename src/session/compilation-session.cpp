@@ -228,9 +228,10 @@ bool CompilationSession::materializeFrontendSymbols() {
                 decl.kind == frontend::DeclKind::Macro || decl.name.empty()) {
                 continue;
             }
-            mSyms.declare(decl.name, mapFrontendVisibility(decl.visibility), 0,
-                          mapFrontendDeclKind(decl.kind), ast::kInvalidDecl, {}, {}, {},
-                          decl.discardable());
+            mSyms.declareFrontend(
+                mInterner->intern(decl.name), mapFrontendVisibility(decl.visibility), 0,
+                mapFrontendDeclKind(decl.kind), decl.discardable(),
+                mInterner->intern(module->key), decl.id.value);
         }
     }
     return true;

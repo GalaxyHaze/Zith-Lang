@@ -44,6 +44,7 @@ enum class CompactTypeKind : uint8_t {
     OpaqueTagged = 22,
     Pack         = 20,
     Dyn          = 21,
+    Trait        = 23,
 };
 
 struct CompactType {
@@ -163,9 +164,11 @@ struct TemplateBlueprint {
     std::string name;
     uint32_t name_id    = 0;
     CompactSymKind kind = CompactSymKind::Fn;
+    uint32_t declaration_index = ~uint32_t{0};
+    uint32_t function_index = ~uint32_t{0};
     std::vector<GenericParamRecord> params;
     std::vector<GenericParamRecord> method_params; // for implement blocks
-    uint32_t return_type_id = 0;                   // fn return type
+    uint32_t return_type_id = ~uint32_t{0};        // fn return type, if present
     std::vector<uint32_t> param_type_ids;          // fn param types
     std::vector<uint32_t> param_name_ids;          // fn param names
     std::vector<uint32_t> field_name_ids;          // struct/component fields
@@ -177,6 +180,10 @@ struct TemplateBlueprint {
     std::vector<uint32_t> method_decl_indices; // methods, as decl indices
     std::vector<uint32_t> trait_type_ids;      // implemented traits / extends
     bool is_extern = false;
+    bool is_variadic = false;
+    bool is_state = false;
+    bool is_foreign_c = false;
+    bool uses_tailcc = false;
 };
 
 // HIR expression in compact form.  Mirrors hir::HirExpr but uses compact ids

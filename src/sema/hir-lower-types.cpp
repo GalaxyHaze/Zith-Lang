@@ -229,7 +229,11 @@ types::TypeId HirLowerModern::lowerType(sema::modern::TypeId type) {
         }
         break;
     }
-    case TypeKind::Trait:
+    case TypeKind::Trait: {
+        const auto *trait = sema_.typeTable().trait(type);
+        lowered = trait != nullptr ? types_.internTrait(trait->name) : types::kErrorType;
+        break;
+    }
     case TypeKind::TypeVar:
     case TypeKind::Unknown:
         lowered = types_.internUnknown();

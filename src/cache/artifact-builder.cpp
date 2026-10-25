@@ -162,7 +162,10 @@ CompactType ArtifactBuilder::convertType(types::TypeId id) {
                 out = convertType(t.target);
                 return out.kind;
             },
-            [&](const types::TypeTrait &) { return CompactTypeKind::Opaque; },
+            [&](const types::TypeTrait &t) {
+                out.ref0 = internString(interner_.lookup(t.name));
+                return CompactTypeKind::Trait;
+            },
             [&](const types::TypeOpaque &) { return CompactTypeKind::Opaque; },
             [&](const types::TypeOpaqueTagged &) { return CompactTypeKind::OpaqueTagged; },
             [&](const types::TypeUnknown &) { return CompactTypeKind::Error; },
@@ -653,7 +656,11 @@ Artifact ArtifactBuilder::build(std::string_view canonical_path, std::string_vie
         decl.kind = mapDeclKind(hir_decl.kind);
         decl.visibility = mapVisibility(hir_decl.visibility);
         decl.mod_depth = hir_decl.module_depth;
+        decl.is_extern = hir_decl.is_extern;
         decl.discardable = hir_decl.discardable;
+        decl.template_index = hir_decl.template_id;
+        if (hir_decl.body_function != hir::kInvalidHirFunction)
+            decl.body_fn_index = hir_decl.body_function;
         hir_decl_to_artifact[id] = static_cast<uint32_t>(art.decls.size());
         artifact_to_hir_decl.push_back(id);
         art.decls.push_back(std::move(decl));
@@ -701,6 +708,55 @@ Artifact ArtifactBuilder::build(std::string_view canonical_path, std::string_vie
         }
     }
 
+    // Template and function relations are persisted as explicit module-local
+    // indices; neither is reconstructed from declaration names.
+    for (hir::HirTemplateId id = 0; id < hir_.templateCount(); ++id) {
+        const auto &hir_template = hir_.getTemplate(id);
+        TemplateBlueprint blueprint;
+        blueprint.kind = mapDeclKind(hir_template.kind);
+        blueprint.is_extern = hir_template.is_extern;
+        blueprint.is_variadic = hir_template.variadic;
+        blueprint.is_state = hir_template.is_state;
+        blueprint.is_foreign_c = hir_template.is_foreign_c;
+        blueprint.uses_tailcc = hir_template.uses_tail_cc;
+        blueprint.name = std::string(interner_.lookup(hir_template.name));
+        blueprint.name_id = internString(blueprint.name);
+        blueprint.declaration_index =
+            hir_template.declaration_id < hir_decl_to_artifact.size()
+                ? hir_decl_to_artifact[hir_template.declaration_id]
+                : ~uint32_t{0};
+        if (hir_template.function_id != hir::kInvalidHirFunction)
+            blueprint.function_index = hir_template.function_id;
+        if (hir_template.return_type != types::kInvalidType)
+            blueprint.return_type_id = internType(hir_template.return_type);
+        for (const auto &param : hir_template.params) {
+            GenericParamRecord out_param;
+            out_param.name_id = internString(interner_.lookup(param.name));
+            out_param.name = std::string(interner_.lookup(param.name));
+            for (const auto bound : param.bounds)
+                out_param.bound_type_ids.push_back(internType(bound));
+            blueprint.params.push_back(std::move(out_param));
+        }
+        for (size_t index = 0; index < hir_template.parameter_types.size(); ++index)
+            blueprint.param_type_ids.push_back(internType(hir_template.parameter_types[index]));
+        for (const auto name : hir_template.parameter_names)
+            blueprint.param_name_ids.push_back(internString(interner_.lookup(name)));
+        for (const auto name : hir_template.field_names)
+            blueprint.field_name_ids.push_back(internString(interner_.lookup(name)));
+        for (const auto type : hir_template.field_types)
+            blueprint.field_type_ids.push_back(internType(type));
+        for (const auto index : hir_template.canonical_field_order)
+            blueprint.canonical_field_order.push_back(index);
+        for (const auto method : hir_template.method_declarations) {
+            if (method < hir_decl_to_artifact.size() &&
+                hir_decl_to_artifact[method] != ~uint32_t{0})
+                blueprint.method_decl_indices.push_back(hir_decl_to_artifact[method]);
+        }
+        for (const auto trait : hir_template.trait_types)
+            blueprint.trait_type_ids.push_back(internType(trait));
+        art.templates.push_back(std::move(blueprint));
+    }
+
     // Resolve method references to artifact declaration indices after the full
     // declaration table has been collected, so cache consumers never have to
     // guess at session-local SymbolTable ids.
@@ -711,7 +767,7 @@ Artifact ArtifactBuilder::build(std::string_view canonical_path, std::string_vie
             continue;
         auto &out_decl = art.decls[di];
         const auto &hir_decl = hir_.getDeclaration(artifact_to_hir_decl[di]);
-        for (const auto member_id : hir_decl.members) {
+        for (const auto member_id : hir_decl.method_declarations) {
             if (member_id < hir_decl_to_artifact.size() &&
                 hir_decl_to_artifact[member_id] != ~uint32_t{0})
                 out_decl.method_decl_indices.push_back(hir_decl_to_artifact[member_id]);
