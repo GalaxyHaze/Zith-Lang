@@ -55,7 +55,28 @@ Worktrees live at `.awt/hermes1` (branch `awt/hermes1`) and `.awt/hermes2`
 (branch `awt/hermes2`), both created from `d3978d54`. Each has a `TASK.md` and
 an `agent-id`. `.awt/` is git-ignored, so checkin never commits them.
 
+hermes1 (frontend surface) is merged into `main` as `84303dba`. Its branch
+was rebased on `9e71b8ce` before the fast-forward merge. The merged commit adds
+`AttributeKind::Test`, the `test` classify branch, the `assert`/`log` intrinsic
+names, and the one-operand parse branch. Gate 0 to 1 passed: `zithc check`
+accepts `#[test] fn f(): void { @assert(true); @log("x"); }`, `#[test]` on a
+non-function is `W2029`, an unknown attribute is `W2028`, and `test-frontend`
+is 402 passed / 0 failed. hermes2 (`std/test`) is not started yet.
+
 There is older, unrelated `agent-scheduler` state under `.awt/` (manifest,
 board, scheduler-status, and the merged `awt/agent1`..`awt/agent9` branches).
 Those branches are all merged into `main`. Leave that state alone; the hermes
 worktrees use distinct names on purpose.
+
+## clang-format version gotcha
+
+The repo is formatted with the CI's clang-format-18, but the local Homebrew
+`clang-format` is 23.1.1. The two disagree on several baseline lines (for
+example `ParserDepthGuard(const ParserDepthGuard &) = delete;`, the
+`index_`/`parser_depth_` alignment block in `ast-lowerer.hpp`, and the two
+`TokenKind::Dots` conditions in `frontend-expr-primary.cpp`). The baseline
+`main` therefore already fails a local `clang-format --dry-run --Werror`, and
+reformatting those lines with 23.1.1 makes the diff diverge from the repo
+style. Do not reformat unrelated lines to satisfy the local binary; keep the
+diff limited to the intended hunks. `fmt-check` is a local-only CMake target
+and is not part of `.github/workflows/ci.yml`.
