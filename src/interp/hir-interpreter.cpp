@@ -120,11 +120,41 @@ HirInterpreter::Value HirInterpreter::eval(hir::HirExprId id, Frame &frame,
                 case hir::HirBinaryOp::Div:
                     value.i = lhs.i / rhs.i;
                     break;
+                case hir::HirBinaryOp::Rem:
+                    value.i = lhs.i % rhs.i;
+                    break;
                 case hir::HirBinaryOp::Eq:
                     value.i = lhs.i == rhs.i;
                     break;
                 case hir::HirBinaryOp::Ne:
                     value.i = lhs.i != rhs.i;
+                    break;
+                case hir::HirBinaryOp::Lt:
+                    value.i = lhs.i < rhs.i;
+                    break;
+                case hir::HirBinaryOp::Le:
+                    value.i = lhs.i <= rhs.i;
+                    break;
+                case hir::HirBinaryOp::Gt:
+                    value.i = lhs.i > rhs.i;
+                    break;
+                case hir::HirBinaryOp::Ge:
+                    value.i = lhs.i >= rhs.i;
+                    break;
+                case hir::HirBinaryOp::And:
+                    value.i = lhs.i & rhs.i;
+                    break;
+                case hir::HirBinaryOp::Or:
+                    value.i = lhs.i | rhs.i;
+                    break;
+                case hir::HirBinaryOp::Xor:
+                    value.i = lhs.i ^ rhs.i;
+                    break;
+                case hir::HirBinaryOp::Shl:
+                    value.i = lhs.i << rhs.i;
+                    break;
+                case hir::HirBinaryOp::Shr:
+                    value.i = lhs.i >> rhs.i;
                     break;
                 default:
                     result.status   = HirInterpStatus::UnsupportedExpr;
@@ -303,10 +333,14 @@ bool HirInterpreter::runFunction(const hir::HirFunction &fn, memory::DynArray<Va
             continue;
         }
         if (std::get_if<hir::HirBranch>(&terminator) != nullptr) {
-            if (frame.block != static_cast<size_t>(-1)) {
-                block = frame.block;
-                continue;
-            }
+            // A branch terminator must be evaluated: `eval` writes the chosen
+            // successor into `frame.block`.  Skipping it leaves `frame.block`
+            // at its initial 0 and loops on the entry block forever.
+            (void)eval(hir_block.terminator, frame, result);
+            if (result.status != HirInterpStatus::Ok)
+                return false;
+            block = frame.block;
+            continue;
         }
 
         result.status   = HirInterpStatus::UnsupportedExpr;

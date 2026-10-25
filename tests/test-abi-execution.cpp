@@ -52,6 +52,42 @@ void test_abi_exec_09_hello_world() {
     CHECK_EQ(result.exitCode, 5, "main returns the computed sum");
 }
 
+void test_abi_exec_10_control_flow() {
+    // Regression: the interpreter must evaluate a `HirBranch` terminator and
+    // the comparison binary ops, otherwise any `if` loops on the entry block.
+    const fs::path root = fs::temp_directory_path() / "zith-abi-execution-flow";
+    fs::remove_all(root);
+    fs::create_directories(root);
+
+    const fs::path source = root / "main.zith";
+    std::ofstream output(source, std::ios::binary | std::ios::trunc);
+    output << "fn pick(v: i32): i32 {\n"
+              "    if (v > 3) { return 7; }\n"
+              "    return 1;\n"
+              "}\n"
+              "\n"
+              "fn main(): i32 {\n"
+              "    pick(5)\n"
+              "}\n";
+    output.close();
+
+    memory::Arena arena;
+    Options options(arena);
+    options.targetStage = session::Stage::HirLowered;
+
+    session::CompilationSession session(options, source.string());
+    session.setBuffered(true);
+    CHECK(session.runTo(session::Stage::HirLowered),
+          "control-flow source lowers through the modern pipeline");
+
+    interp::HirInterpreter interpreter(session.hirModule(), session.interner(), session.types());
+    const auto result = interpreter.runMain();
+
+    CHECK(result.status == interp::HirInterpStatus::Ok,
+          "interpreter runs a program with an if and a comparison");
+    CHECK_EQ(result.exitCode, 7, "the taken if branch drives the returned value");
+}
+
 void test_abi_exec_02_cli_interpreted() {
 #ifdef ZITHC_BINARY
     const fs::path root = fs::temp_directory_path() / "zith-abi-execution-cli";
@@ -90,6 +126,7 @@ void test_abi_exec_02_cli_interpreted() {
 
 void test_abi_execution() {
     test_abi_exec_09_hello_world();
+    test_abi_exec_10_control_flow();
     test_abi_exec_02_cli_interpreted();
 }
 
