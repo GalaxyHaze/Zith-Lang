@@ -195,7 +195,7 @@ Implementation work that is incomplete or needs review is tracked in
 | `zithc create <name>` | **Working** | |
 | `zithc clean` | **Working** | |
 | `zithc execute <file>` | **Working** | |
-| `zithc test <path>` | **Working** | Discovers and runs test files under the given path |
+| `zithc test <path>` | **Working (type-check only)** | Type-checks `.zith` files under `test_dir`. It does not execute and has no assertions. The native runner (`#[test]`, `@assert`, `@log`) is designed in [plans/test-command.md](plans/test-command.md) and [ADR-0045](adr/0045-native-test-command-and-driver.md) and is not implemented |
 | `zithc repl` | **Stub** | |
 | `zithc deps list` | **Working** | Reads `ZithProject.toml` and lists declared dependencies |
 | `zithc deps add`, `deps remove` | **Stub** | |

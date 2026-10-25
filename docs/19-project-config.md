@@ -18,9 +18,16 @@ asm     = "x86_64_intel"  # required if using inline assembly
 [assets]
 paths = ["assets/"]       # compile-time-validated asset paths
 
+[paths]
+test_dir = "tests"        # default: tests; root for `zithc test` discovery
+
 [dependencies]
 std = "bundled"
 ```
+
+`test_dir` is the root that `zithc test` walks to discover `*.zith` files and
+their `#[test]` functions. It defaults to `tests` when the key is absent, and
+`zithc create` writes it into the generated `ZithProject.toml`.
 
 ### 19.2 `ZithFlags` (compiler / global)
 

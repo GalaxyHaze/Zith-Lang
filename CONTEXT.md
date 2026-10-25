@@ -525,6 +525,28 @@ _Avoid_: destructor, drop, free method
 Erasing a primitive value to a `dyn Trait` fat pointer so it can be handled through the same dynamic-dispatch surface as structs.
 _Avoid_: boxing, wrapping, vtbl primitive
 
+## Testing
+
+**Zith test function**:
+A free function annotated `#[test]` that the `zithc test` runner discovers and executes as one test. It takes no parameters and needs no `main`.
+_Avoid_: test case, test method, spec
+
+**Test driver**:
+The entry point synthesized by the compiler for a test module, which calls each discovered Zith test function in turn and reports per-test results.
+_Avoid_: test main, harness entry, generated runner
+
+**Test result table**:
+The compiler-synthesized table with one slot per discovered Zith test function. A slot holds `0` when that test passed, or `N` when it failed at its `N`th assertion. It is runner infrastructure, not a user-writable global.
+_Avoid_: results array, error table, global accumulator
+
+**Assertion intrinsic**:
+The compiler primitive `@assert(cond)` used inside a Zith test function to record a runtime failure. It is the single primitive failure surface; richer helpers are built on it in the standard library.
+_Avoid_: assert macro, check function, expect
+
+**Test log intrinsic**:
+The compiler primitive `@log(msg)` that appends `[]char` to the current test's log buffer. The driver prints a test's log only when it fails, or for every test under verbose output.
+_Avoid_: print, debug print, test output
+
 ## Generics
 
 **Reified generic type**:

@@ -862,10 +862,17 @@ avaliadas juntas, por ordem de afinidade com o núcleo:
 | Feature | Razão | Dependência mais provável |
 | --- | --- | --- |
 | `drop` funcional | limpeza determinística de recursos ao sair do binding/escopo, reutilizando o cleanup de `defer` | ownership residual + HIR |
+| Teste nativo (`#[test]`, `@assert`, `@log`) | superfície de teste própria do Zith--, para o `zithc test` deixar de ser um type-check em lote | atributos + intrínsecos + driver HIR sintetizado |
 
 A prioridade recomendada é `drop`, reutilizando a infraestrutura de escopo de
 `defer` já implementada. Ver `docs/plans/defer-drop.md` para a proposta
 completa e `docs/09-control-flow.md` para a semântica de escopo.
+
+O teste nativo é a segunda candidata e está desenhado em
+`docs/plans/test-command.md`. Introduz um atributo `#[test]` para funções livres
+`void` sem parâmetros e dois intrínsecos: `@assert(cond)`, a única primitiva de
+falha, e `@log(msg)`, que acumula `[]char` no buffer de log do teste. O desenho
+está registado em `docs/adr/0045-native-test-command-and-driver.md`.
 
 ### Fora do núcleo até prova em contrário
 
