@@ -26,20 +26,26 @@ point, and directory paths; it does not enumerate source files individually.
 | `src/utils/prints.zith` | Colored terminal output helpers. | Bootstrap source using C stdio interop. |
 | `src/frontend/lexer.zith` | Reserved frontend lexer source. | Experimental implementation. |
 | `src/ir/hir.zith` | Frontend-neutral HIR nodes, nominal type definitions, functions, and residual attributes. | Shared type and definition tables aligned with the cross-dialect cache contract. |
-| `src/ir/hir-verify.zith` | Verifies HIR references, definition tables, node shapes, and residual safety metadata. | Structural verifier with CFG-dominating guard validation. |
+| `src/ir/hir-verify-common.zith` | Shared HIR verification errors, results, and reference/safety helpers. | Common contract consumed by the structural and CFG guard verifiers. |
+| `src/ir/hir-verify-guards.zith` | Validates guarded operations against control-flow dominance. | Isolates guard matching, CFG analysis, and guarded-expression traversal. |
+| `src/ir/hir-verify.zith` | Verifies HIR references, definition tables, node shapes, and residual safety metadata. | Structural verifier; delegates CFG-dominating guard validation to `hir-verify-guards.zith`. |
 | `src/cache/cache.zith` | Shared HIR identity and derived-VIR compatibility rules. | Identity checks and version gates; ZIRL framing is implemented in `zirl-artifact.zith`. |
 | `src/cache/zirl-buffer.zith` | Bounds-checked little-endian ZIRL byte primitives. | Signed/unsigned integers, `f64`, and atomic length-prefixed blobs. |
 | `src/cache/zirl-container.zith` | ZIRL v21 header, section-table records, and compatibility checks. | Validates per-section HIR schemas and safely skippable optional sections. |
 | `src/cache/zirl-artifact.zith` | Complete ZIRL container envelope reader and writer. | Persists identity, dependencies, section table, and payloads with checksum validation; section payloads are supplied by the section codecs. |
 | `src/cache/zirl-type-section.zith` | ZIRL metadata type-entry codec. | Encodes and transactionally decodes compact type records for the Metadata section. |
-| `src/cache/zirl-metadata.zith` | ZIRL Metadata section codec. | Encodes and decodes schema-2 module metadata with caller-owned storage. |
+| `src/cache/zirl-metadata.zith` | ZIRL Metadata section codec. | Encodes and decodes schema-3 module metadata, including the shared Trait type kind, with caller-owned storage. |
 | `src/cache/zirl-decl-section.zith` | ZIRL Decls section codec. | Encodes and decodes declaration records and their field/method references with caller-owned storage. |
-| `src/cache/zirl-template-section.zith` | ZIRL Templates section codec. | Encodes and decodes generic parameter bounds and blueprint type/name/reference tables with caller-owned storage. |
+| `src/cache/zirl-template-section.zith` | ZIRL Templates section codec. | Encodes and decodes schema-2 generic parameter bounds and blueprint type/name/reference tables with caller-owned storage. |
 | `src/cache/zirl-attrs-section.zith` | ZIRL Attrs schema-2 codec. | Encodes residual slot, call, function, and safety-proof facts with their original HIR indices and caller-owned decode storage. |
 | `src/cache/zirl-code-section.zith` | ZIRL Code section codec. | Encodes compact expressions, functions/blocks, globals, vtables, and canonical mappings with caller-owned decode storage. |
 | `src/cache/zirl-canonical-types.zith` | Artifact-owned canonical HIR type table and synthesized function signatures. | Remaps HIR-local type IDs and returns structured validation/capacity errors. |
 | `src/cache/zirl-hir-code.zith` | HIR-to-ZIRL Code section projection. | Verifies HIR, remaps type/function identities, and builds compact code records using caller-owned storage. |
-| `src/cache/zirl-hir-artifact.zith` | Partial typed writer and reader for verified HIR artifacts. | Writes Metadata, Code, and Attrs from HIR and hydrates that representable subset; rejects non-empty Decls/Templates pending approved lossless HIR mappings. |
+| `src/cache/zirl-hir-artifact-contract.zith` | Public records and section identifiers shared by typed HIR-artifact modules. | Keeps read, write, projection, and hydration result/storage types in one contract module. |
+| `src/cache/zirl-hir-artifact-decode.zith` | Decodes compact artifact expressions and their HIR references. | Supplies expression-level decoding to artifact hydration. |
+| `src/cache/zirl-hir-artifact-reader.zith` | Reads and validates typed artifact sections. | Decodes Metadata, Decls, Templates, Code, and Attrs payloads. |
+| `src/cache/zirl-hir-artifact-hydrate.zith` | Hydrates typed artifact sections into caller-owned HIR storage. | Verifies the reconstructed module atomically before returning it. |
+| `src/cache/zirl-hir-artifact.zith` | Projects and writes verified HIR artifacts. | Projects Metadata, Decls, Templates, Code, and Attrs from HIR and serializes the typed container. |
 
 There is no project-owned C source file in the current tree. Add its entry
 here if one is introduced; do not infer that a planned directory already
@@ -52,10 +58,21 @@ exists.
 | `tests/README.md` | Documents the type-check and behavioral test commands. | Test convention. |
 | `tests/run.sh` | Runs type-check and behavioral tests in an isolated temporary project. | Test harness. |
 | `tests/run.zith` | VM behavioral test entry point. | Smoke fixture. |
-| `tests/hir-contract.zith` | Native test entry point for the shared HIR data contract. | Exercises HIR invariants, ZIRL section round-trips, HIR-to-Code projection, golden bytes, malformed records, and buffer failures. |
+| `tests/hir-contract.zith` | Native test runner for the shared HIR data contract. | Calls the HIR, cache, primitive, section, code, and projection test modules in their existing order. |
+| `tests/hir-contract-fixtures.zith` | Shared fixtures for HIR contract tests. | Provides the common HIR module constructors and verification fixture. |
+| `tests/hir-contract-hir.zith` | HIR verifier and safety-guard tests. | Exercises HIR invariants, declaration/template relationships, and safety proofs/guards. |
+| `tests/hir-contract-cache.zith` | Cache identity/version tests. | Exercises semantic identity and VIR compatibility. |
+| `tests/hir-contract-primitives.zith` | ZIRL primitive/container tests. | Exercises byte order, numeric primitives, headers, sections, and truncation behavior. |
+| `tests/hir-contract-sections.zith` | Metadata, Decls, Templates, and Attrs tests. | Covers golden round-trips, validation failures, and atomic decoding. |
+| `tests/hir-contract-code.zith` | ZIRL Code section tests. | Covers golden encoding, malformed tables, and round-trips. |
+| `tests/hir-contract-projections.zith` | HIR-to-ZIRL projection tests. | Covers Code and Attrs projection using caller-owned storage. |
 | `tests/canonical-types.zith` | Native test entry point for artifact-owned canonical types. | Exercises local type IDs, synthesized signature metadata, insufficient storage, and invalid function references. |
 | `tests/zirl-artifact.zith` | Native test entry point for complete ZIRL container framing. | Exercises identity/dependency round-trip, required section layout, checksum rejection, malformed sections, and short output buffers. |
-| `tests/zirl-hir-artifact.zith` | Native test entry point for typed HIR-artifact writing and reading. | Exercises empty and non-empty round-trips, required section IDs/schemas, Code/Attrs decoding, atomic malformed-input failures, and valid-envelope rejection of non-empty Decls/Templates; complete Decls/Templates hydration remains blocked on approved HIR mappings. |
+| `tests/zirl-hir-artifact.zith` | Native test runner for typed HIR-artifact writing and reading. | Calls the artifact reader, projection, and writer test modules. |
+| `tests/zirl-hir-artifact-support.zith` | Shared typed HIR-artifact test fixtures and comparison helpers. | Keeps artifact construction and structural equality helpers outside the runner. |
+| `tests/zirl-hir-artifact-reader-tests.zith` | Typed artifact reader/hydration tests. | Exercises round-trips, per-buffer capacity failures, and atomic rejection of malformed artifacts. |
+| `tests/zirl-hir-artifact-projection-tests.zith` | Typed artifact projection tests. | Covers identity counts and preservation of declarations/templates relationships. |
+| `tests/zirl-hir-artifact-writer-tests.zith` | Typed artifact writer integration tests. | Exercises empty and non-empty writes across the five typed sections. |
 
 ### Documentation
 

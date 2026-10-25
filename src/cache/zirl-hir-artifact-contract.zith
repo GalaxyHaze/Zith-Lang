@@ -1,0 +1,126 @@
+from cache/zirl-artifact
+from cache/zirl-attrs-section
+from cache/zirl-code-section
+from cache/zirl-canonical-types
+from cache/zirl-container
+from cache/zirl-decl-section
+from cache/zirl-hir-code
+from cache/zirl-metadata
+from cache/zirl-template-section
+from cache/zirl-buffer
+from ir/hir
+from ir/hir-verify
+
+
+pub const zirlHirMetadataSectionId: u16 = 1u16
+pub const zirlHirDeclsSectionId: u16 = 2u16
+pub const zirlHirTemplatesSectionId: u16 = 3u16
+pub const zirlHirCodeSectionId: u16 = 4u16
+pub const zirlHirAttrsSectionId: u16 = 5u16
+
+pub struct ZirlHirArtifactSource {
+    pub identity: ZirlArtifactIdentity,
+    pub paths: [][]char,
+    pub module: HirModule,
+}
+
+pub struct ZirlHirArtifactWriteStorage {
+    pub metadata_bytes: []u8,
+    pub decls_bytes: []u8,
+    pub templates_bytes: []u8,
+    pub code_bytes: []u8,
+    pub attrs_bytes: []u8,
+    pub sections: []ZirlArtifactSection,
+    pub canonical_types: ZirlCanonicalTypeStorage,
+    pub declarations: ZirlDeclStorage,
+    pub templates: ZirlTemplateStorage,
+    pub code: ZirlCodeStorage,
+    pub attrs: ZirlAttrsStorage,
+}
+
+pub enum ZirlHirArtifactProjectionError {
+    None = 0,
+    InvalidHir = 1,
+    UnsupportedDeclarationsOrTemplates = 2,
+    InvalidCanonicalTypes = 3,
+    CodeProjectionFailed = 4,
+    AttrsProjectionFailed = 5,
+    InvalidIdentity = 6,
+    InsufficientDeclarationStorage = 7,
+    InsufficientTemplateStorage = 8,
+    InvalidDeclarationProjection = 9,
+    InvalidTemplateProjection = 10,
+}
+
+pub struct ZirlHirArtifactSections {
+    pub declarations: ZirlDeclSection,
+    pub templates: ZirlTemplateSection,
+    pub code: ZirlCodeSection,
+    pub attrs: ZirlAttrsSection,
+}
+
+pub struct ZirlHirArtifactProjectionResult {
+    pub value: ZirlHirArtifactSections,
+    pub error: ZirlHirArtifactProjectionError,
+    pub canonical_error: ZirlCanonicalTypeError,
+    pub code_error: ZirlHirCodeError,
+    pub attrs_error: ZirlHirAttrsError,
+}
+
+
+pub enum ZirlHirArtifactReadError {
+    None = 0,
+    InvalidArtifact = 1,
+    InvalidSectionPayload = 2,
+    TrailingSectionPayload = 3,
+    IdentityMismatch = 4,
+    UnsupportedDeclarationsOrTemplates = 5,
+    InvalidCanonicalReference = 6,
+    InsufficientHydrationStorage = 7,
+    InvalidHydratedHir = 8,
+}
+
+pub struct ZirlHirArtifactReadStorage {
+    pub artifact: ZirlArtifactStorage,
+    pub metadata: ZirlMetadataStorage,
+    pub declarations: ZirlDeclStorage,
+    pub templates: ZirlTemplateStorage,
+    pub code: ZirlCodeStorage,
+    pub attrs: ZirlAttrsStorage,
+}
+
+pub struct ZirlHirArtifactReadResult {
+    pub identity: ZirlArtifactIdentity,
+    pub metadata: ZirlMetadataSection,
+    pub declarations: ZirlDeclSection,
+    pub templates: ZirlTemplateSection,
+    pub code: ZirlCodeSection,
+    pub attrs: ZirlAttrsSection,
+    pub error: ZirlHirArtifactReadError,
+}
+
+pub struct ZirlHirArtifactHydrationStorage {
+    pub module: HirModule,
+    pub expression_argument_types: []HirTypeId,
+    pub function_parameter_types: []HirTypeId,
+    pub blocks: []HirBasicBlock,
+    pub vtable_slot_functions: []HirFunctionId,
+    pub call_attr_arguments: []HirCallArgAttrs,
+    pub declaration_method_ids: []HirDeclarationId,
+    pub template_params: []HirGenericParam,
+    pub template_bound_type_ids: []HirTypeId,
+    pub template_param_type_ids: []HirTypeId,
+    pub template_param_name_ids: []HirStringId,
+    pub template_field_name_ids: []HirStringId,
+    pub template_field_type_ids: []HirTypeId,
+    pub template_field_order: []u32,
+    pub template_method_ids: []HirDeclarationId,
+    pub template_trait_type_ids: []HirTypeId,
+}
+
+pub struct ZirlHirArtifactModuleReadResult {
+    pub identity: ZirlArtifactIdentity,
+    pub paths: [][]char,
+    pub module: HirModule,
+    pub error: ZirlHirArtifactReadError,
+}

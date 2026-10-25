@@ -5,16 +5,33 @@ verified, frontend-neutral HIR and preserve it losslessly in the self-Zith
 artifact projection and reader.
 
 **Status:** Contract decisions accepted on 2026-10-24. The self-Zith HIR
-contract, verifier checks, schema updates, and Decls/Templates projection are
-partially implemented. The full positive/negative projection fixture matrix
-and aggregate-reader hydration are not complete. The Zith-- producer still
-needs to populate the approved shared-HIR facts.
+contract, verifier checks, schema updates, Decls/Templates projection, and
+non-empty aggregate-reader hydration are implemented. The separately named
+positive/negative projection matrix is implemented and called by the artifact
+fixture; each caller-owned Decls/Templates projection buffer now has an
+insufficient-capacity regression. On 2026-10-25, a bounded producer/cache
+patch was applied in `/home/diogo/Zith`: declarations now carry explicit
+external/body/template facts, generic declarations produce template records
+with generic bounds, owned signatures or fields/order, Trait types are
+preserved, and cache projection/hydration handles those records. The focused
+CTest targets `test-cache`, `test-zirl-sections`, and
+`test-hir-lower-modern` pass (3/3), and the self-Zith harness passes (5/5).
+The producer acceptance audit remains partial: method lists and template
+trait relations are not populated because the available owner field is
+textual (`ownerName`) and this path does not populate `SymbolData.members`.
+No relation may be inferred from names, and frontend changes are outside the
+authorization. Keep these relations and their conformance cases open.
 
-**Preconditions:** Work in `/home/diogo/self-Zith` for the port. The sibling
-`/home/diogo/Zith` worktree is on `main` and has unrelated dirty documentation
-paths. Preserve those paths; change only the producer source/test allowlist
-below. Obtain sandbox approval separately for every write and build/test
-command under `/home/diogo/Zith`. Do not stage or commit unrelated changes.
+**Preconditions:** The user authorized bounded changes in `/home/diogo/Zith`
+for this plan, excluding frontend edits, large structural redesigns, and the
+separate codegen follow-up. The sibling is on `main`, one commit ahead of
+`origin/main`, with an uncommitted 18-file producer/cache patch. Before
+continuing, run `git -C /home/diogo/Zith status --short --branch` and
+`git -C /home/diogo/Zith diff --name-only`; compare the output against the
+current status record and preserve all changes. If files or hunks are
+unexpected, stop and report them. Obtain sandbox approval separately for
+build/test commands and writes under `/home/diogo/Zith`. Do not stage or
+commit.
 
 **Approved contract:**
 
@@ -55,63 +72,105 @@ command under `/home/diogo/Zith`. Do not stage or commit unrelated changes.
 
 ### 1. Extend the Zith-- producer contract
 
-**Goal:** `/home/diogo/Zith` emits explicit declaration links and template
-records without interpreting general symbol membership as methods.
+**Goal:** `/home/diogo/Zith` emits every accepted declaration/template fact
+that can be sourced without frontend changes or name-based inference, and
+tests all emitted facts.
 
 **Sub-steps:**
-1. Re-read `git -C /home/diogo/Zith status --short --branch` and confirm the
-   only dirty paths are the already observed documentation paths. If any
-   source/test path is dirty, stop and report it before editing.
-2. In `/home/diogo/Zith/src/hir/hir-module.hpp`, add the declaration linkage
-   fields, explicit method declaration array, generic-parameter/template
-   records, and module template table. Use the existing invalid-ID constants
-   for optional links and preserve arena ownership for nested arrays.
-3. In `/home/diogo/Zith/src/sema/hir-lower-modern.cpp`, populate
-   `is_extern` from the exact source declaration associated with the symbol,
-   `body_function_id` from the existing module/declaration function key,
-   and method lists by filtering symbol members to function declarations.
-   Do not use matching names to recover declaration/function/template links.
-4. Populate one template record for each generic declaration. Copy generic
-   parameter order and constraints, function signature facts from the
-   semantic function type, struct fields from the semantic struct type,
-   canonical field order from source field order, and the explicit method
-   references. Use `invalidFunction` only when no HIR function represents the
-   template declaration; retain the directly owned signature either way.
-5. In `/home/diogo/Zith/src/sema/hir-lower-types.cpp`, preserve semantic
-   `TypeKind::Trait` as the shared Trait type rather than mapping it to
-   Unknown. Keep trait identity in the type representation; do not recover it
-   by matching a declaration name.
-6. Add producer conformance fixtures in
-   `/home/diogo/Zith/tests/test-hir-lower-modern.cpp` for explicit external
-   state, declaration/function links, template identity, two ordered generic
-   parameters and bounds, owned function signature, fields/order, methods,
-   and trait references. Add negative fixtures for an absent/out-of-range
-   relation and a template whose signature disagrees with its linked
-   function.
-7. Request sandbox approval before running:
+1. Audit the actual dirty patch. Run:
 
    ```sh
-   cmake --build /home/diogo/Zith/build --target test-hir-lower-modern
-   ctest --test-dir /home/diogo/Zith/build -R '^test-hir-lower-modern$' --output-on-failure
+   git -C /home/diogo/Zith status --short --branch
+   git -C /home/diogo/Zith diff --name-only
+   git -C /home/diogo/Zith diff --check
    ```
 
-**Expected output:** the targeted build exits 0 and CTest reports the
-`test-hir-lower-modern` test passed. Only the approved producer source/test
-paths are changed; the pre-existing documentation diff remains untouched.
+   Expected: branch `main`, one commit ahead of `origin/main`, and exactly
+   these 18 modified paths: `src/cache/artifact-builder.cpp`,
+   `src/cache/cache-identity.hpp`, `src/cache/cache-types.hpp`,
+   `src/hir/hir-module.cpp`, `src/hir/hir-module.hpp`,
+   `src/sema/hir-lower-modern.cpp`, `src/sema/hir-lower-types.cpp`,
+   `src/session/compilation-session.cpp`,
+   `src/session/persistent-cache.cpp`, `src/symbols/symbol-table.cpp`,
+   `src/symbols/symbol-table.hpp`, `src/zirl/zirl-decl-section.cpp`,
+   `src/zirl/zirl-header.hpp`, `src/zirl/zirl-reader.cpp`,
+   `src/zirl/zirl-writer.cpp`, `tests/test-cache.cpp`,
+   `tests/test-hir-lower-modern.cpp`, and `tests/test-zirl-sections.cpp`.
+   If the branch, path set, or purpose differs, stop and report it. Do not
+   stage, commit, stash, reset, clean, or overwrite any path.
+2. Inspect the existing producer changes in
+   `/home/diogo/Zith/src/hir/hir-module.hpp`,
+   `/home/diogo/Zith/src/hir/hir-module.cpp`, and
+   `/home/diogo/Zith/src/sema/hir-lower-modern.cpp`. Confirm explicit
+   `is_extern`, optional `body_function`, reciprocal declaration/template
+   IDs, generic parameter/bound order, owned function signatures, struct
+   fields/canonical order, and the invalid-function sentinel when no HIR
+   function represents the generic declaration. Do not recreate already
+   present fields.
+3. Inspect
+   `/home/diogo/Zith/src/sema/hir-lower-types.cpp`,
+   `/home/diogo/Zith/src/cache/artifact-builder.cpp`,
+   `/home/diogo/Zith/src/session/persistent-cache.cpp`,
+   `/home/diogo/Zith/src/zirl/zirl-decl-section.cpp`,
+   `/home/diogo/Zith/src/zirl/zirl-reader.cpp`, and
+   `/home/diogo/Zith/src/zirl/zirl-writer.cpp`. Confirm Trait type identity,
+   template signature flags, explicit declaration/function indices,
+   independent schema versions, bounds checks before indexed access, and
+   atomic hydration behavior.
+4. Inspect the exact relation sources in
+   `/home/diogo/Zith/src/frontend/frontend.hpp`,
+   `/home/diogo/Zith/src/symbols/symbol-table.hpp`, and
+   `/home/diogo/Zith/src/sema/hir-lower-modern.cpp`. The current producer
+   exposes textual `ownerName`, and `SymbolData.members` is not populated for
+   this path. If no non-frontend semantic owner/type ID already exists, stop
+   without filling method or template-trait relations. Do not edit
+   `src/frontend/*`, compare declaration names, or use general `members` as
+   an ordered method list.
+5. Add conformance tests only for available stable facts in
+   `/home/diogo/Zith/tests/test-hir-lower-modern.cpp`. Assert exact relation
+   IDs, values, and ordering; add malformed-link and signature-mismatch
+   tests only where a linked function is actually emitted. Keep method and
+   template-trait producer tests explicitly pending when their owner identity
+   is unavailable.
+6. Request sandbox approval, then build the exact focused targets:
+
+   ```sh
+   cmake --build /home/diogo/Zith/build --target \
+     test-cache test-zirl-sections test-hir-lower-modern -j2
+   ```
+
+7. Request sandbox approval separately, then run:
+
+   ```sh
+   ctest --test-dir /home/diogo/Zith/build \
+     -R '^(test-cache|test-zirl-sections|test-hir-lower-modern)$' \
+     --output-on-failure
+   ```
+
+**Expected output:** build exits 0 and CTest reports all three named targets
+passed. `git diff --check` exits 0. The producer tests cover every emitted
+fact; unavailable method/trait ownership remains an explicit open acceptance
+item rather than a fabricated relation.
 
 **Failure checks:**
-- If an exact AST declaration cannot be associated without name matching,
-  stop and report the missing producer identity; do not fabricate a relation.
+- If the live dirty path set or diff differs from the recorded patch, stop and
+  report the exact output before editing.
+- If any required relation can only be recovered by `ownerName`, a declaration
+  name, or general symbol membership, stop that relation and leave its test
+  pending. Do not change frontend files under this plan.
 - If a generic bound cannot be lowered to a representable HIR type, preserve
   the failure as an explicit producer error and do not emit an empty bound
   list.
 - If the linked function's signature differs from the template-owned
   signature, return a producer/test failure; do not pick one silently.
-- If the existing worktree status contains additional dirty source/test
-  paths, stop and ask for their disposition before editing.
+- If any bounds check happens after indexing a type/function/declaration
+  table, correct the ordering and add an invalid-index regression before
+  accepting the producer patch.
 
-**Success criteria:** targeted producer tests pass and inspect exact IDs,
-booleans, type references, and list order for every field listed above.
+**Success criteria:** the three focused CTest targets pass; every populated
+field is asserted using exact IDs and values; `git diff --check` passes; and
+all unavailable owner-based relations remain explicitly open without
+front-end changes or name-based inference.
 
 ### 2. Verify the HIR contract and version it
 
@@ -202,7 +261,11 @@ and no inferred values.
 6. If `function_id` is present, compare the linked `HirFunction` against the
    template-owned return type, parameter types and names, variadic/state/
    foreign-C/tail-calling-convention flags. Reject any mismatch. Do not
-   populate template-owned signature facts from the linked function.
+   populate template-owned signature facts from the linked function. Persist
+   those four booleans in Templates schema 2 by assigning bits 0 through 3 of
+   the first former reserved prefix byte (variadic, state, foreign-C, and
+   tail-calling-convention); require the second prefix byte and all unknown
+   flag bits to be zero.
 7. Before writing nested slices, count declarations, templates, struct fields,
    declaration methods, generic parameters, generic bounds, template
    parameters, template fields, canonical-order entries, template methods,
@@ -229,11 +292,11 @@ and no inferred values.
     `/home/diogo/self-Zith/tests/zirl-hir-artifact.zith` and
     `/home/diogo/self-Zith/tests/zirl-artifact.zith` to the new constant.
 12. Add every fixture named in the projection fixture matrix below to
-    `/home/diogo/self-Zith/tests/hir-contract.zith` and call each from its
-    `main()` dispatch. Add an aggregate writer fixture to
-    `/home/diogo/self-Zith/tests/zirl-hir-artifact.zith` that checks non-empty
-    declarations/templates, exact declaration/function IDs, and section 3
-    schema 2.
+    `/home/diogo/self-Zith/tests/zirl-hir-artifact.zith` and call each from its
+    test dispatch. Keep the verifier fixtures in
+    `/home/diogo/self-Zith/tests/hir-contract.zith`. The aggregate writer
+    fixture must check non-empty declarations/templates, exact
+    declaration/function IDs, and section 3 schema 2.
 13. Run:
 
    ```sh
@@ -319,9 +382,9 @@ and every failure-path fixture proves atomic empty output.
 
 ## Fixture Matrix
 
-Add these separately named test functions in
-`/home/diogo/self-Zith/tests/hir-contract.zith`; call every function from its
-main dispatch:
+Add these separately named projection test functions in
+`/home/diogo/self-Zith/tests/zirl-hir-artifact.zith`; call every function from
+its test dispatch:
 
 | Test function | Required assertions |
 |---|---|

@@ -1,0 +1,294 @@
+from cache/zirl-artifact
+from cache/zirl-attrs-section
+from cache/zirl-code-section
+from cache/zirl-container
+from cache/zirl-canonical-types
+from cache/zirl-decl-section
+from cache/zirl-hir-artifact
+from cache/zirl-hir-artifact-contract
+from cache/zirl-hir-artifact-hydrate
+from cache/zirl-hir-artifact-reader
+from cache/zirl-hir-code
+from cache/zirl-metadata
+from cache/zirl-template-section
+from ir/hir
+from ir/hir-verify
+from ir/hir-verify-common
+from zirl-hir-artifact-support
+
+extern fn calloc(count: u64, size: u64): raw opaque
+extern fn free(ptr: raw opaque): void
+
+pub fn hir_artifact_projection_failure_is_atomic(
+    result: ZirlHirArtifactProjectionResult
+): bool {
+    return result.error != ZirlHirArtifactProjectionError.None and
+        @lengthOf(result.value.declarations.declarations) == 0u64 and
+        @lengthOf(result.value.templates.templates) == 0u64 and
+        @lengthOf(result.value.code.expressions) == 0u64 and
+        @lengthOf(result.value.attrs.safety_proofs) == 0u64;
+}
+
+pub fn test_hir_artifact_projection_validates_identity_counts(
+    source: *ZirlHirArtifactSource,
+    canonical_storage: *ZirlCanonicalTypeStorage,
+    declaration_storage: *ZirlDeclStorage,
+    template_storage: *ZirlTemplateStorage,
+    code_storage: *ZirlCodeStorage,
+    attrs_storage: *ZirlAttrsStorage
+): bool {
+    let original_identity = source->identity;
+    source->identity.declaration_count = original_identity.declaration_count + 1u32;
+    let invalid_declaration_count = project_zirl_hir_artifact_sections(
+        source,
+        canonical_storage,
+        declaration_storage,
+        template_storage,
+        code_storage,
+        attrs_storage
+    );
+    source->identity = original_identity;
+
+    source->identity.template_count = original_identity.template_count + 1u32;
+    let invalid_template_count = project_zirl_hir_artifact_sections(
+        source,
+        canonical_storage,
+        declaration_storage,
+        template_storage,
+        code_storage,
+        attrs_storage
+    );
+    source->identity = original_identity;
+
+    source->identity.function_count = original_identity.function_count + 1u32;
+    let invalid_function_count = project_zirl_hir_artifact_sections(
+        source,
+        canonical_storage,
+        declaration_storage,
+        template_storage,
+        code_storage,
+        attrs_storage
+    );
+    source->identity = original_identity;
+
+    return invalid_declaration_count.error ==
+            ZirlHirArtifactProjectionError.InvalidIdentity and
+        hir_artifact_projection_failure_is_atomic(invalid_declaration_count) and
+        invalid_template_count.error ==
+            ZirlHirArtifactProjectionError.InvalidIdentity and
+        hir_artifact_projection_failure_is_atomic(invalid_template_count) and
+        invalid_function_count.error ==
+            ZirlHirArtifactProjectionError.InvalidIdentity and
+        hir_artifact_projection_failure_is_atomic(invalid_function_count);
+}
+
+pub fn test_hir_decl_projection_preserves_extern(
+    projected: ZirlHirArtifactProjectionResult,
+    external: ZirlHirArtifactProjectionResult
+): bool {
+    if (projected.error != ZirlHirArtifactProjectionError.None or
+        external.error != ZirlHirArtifactProjectionError.None or
+        @lengthOf(projected.value.declarations.declarations) < 3u64 or
+        @lengthOf(projected.value.code.functions) != 1u64 or
+        @lengthOf(external.value.declarations.declarations) < 3u64) {
+        return false;
+    }
+    let declaration =
+        must projected.value.declarations.declarations[0u64];
+    let function = must projected.value.code.functions[0u64];
+    let external_declaration =
+        must external.value.declarations.declarations[2u64];
+    return not declaration.is_extern and function.is_foreign_c and
+        external_declaration.is_extern;
+}
+
+pub fn test_hir_decl_projection_preserves_body_link(
+    projected: ZirlHirArtifactProjectionResult,
+    external: ZirlHirArtifactProjectionResult,
+    invalid_link: ZirlHirArtifactProjectionResult
+): bool {
+    if (projected.error != ZirlHirArtifactProjectionError.None or
+        external.error != ZirlHirArtifactProjectionError.None or
+        @lengthOf(projected.value.declarations.declarations) < 1u64 or
+        @lengthOf(external.value.declarations.declarations) < 3u64) {
+        return false;
+    }
+    let linked_declaration =
+        must projected.value.declarations.declarations[0u64];
+    let external_declaration =
+        must external.value.declarations.declarations[2u64];
+    return linked_declaration.body_function_index == 0u32 and
+        external_declaration.body_function_index == 0u32 and
+        hir_artifact_projection_failure_is_atomic(invalid_link);
+}
+
+pub fn test_hir_decl_projection_preserves_template_membership(
+    projected: ZirlHirArtifactProjectionResult,
+    same_name: ZirlHirArtifactProjectionResult,
+    invalid_link: ZirlHirArtifactProjectionResult
+): bool {
+    if (projected.error != ZirlHirArtifactProjectionError.None or
+        same_name.error != ZirlHirArtifactProjectionError.None or
+        @lengthOf(projected.value.declarations.declarations) < 1u64 or
+        @lengthOf(same_name.value.declarations.declarations) < 3u64) {
+        return false;
+    }
+    let declaration =
+        must projected.value.declarations.declarations[0u64];
+    let second_owner =
+        must same_name.value.declarations.declarations[2u64];
+    return declaration.template_index == 0u32 and
+        second_owner.template_index == 1u32 and
+        hir_artifact_projection_failure_is_atomic(invalid_link);
+}
+
+pub fn test_hir_decl_projection_preserves_method_indices(
+    projected: ZirlHirArtifactProjectionResult,
+    invalid_method: ZirlHirArtifactProjectionResult,
+    non_function_method: ZirlHirArtifactProjectionResult
+): bool {
+    if (projected.error != ZirlHirArtifactProjectionError.None or
+        @lengthOf(projected.value.declarations.declarations) < 1u64) {
+        return false;
+    }
+    let declaration =
+        must projected.value.declarations.declarations[0u64];
+    return @lengthOf(declaration.method_declaration_indices) == 2u64 and
+        raw declaration.method_declaration_indices[0u64] == 1u32 and
+        raw declaration.method_declaration_indices[1u64] == 2u32 and
+        hir_artifact_projection_failure_is_atomic(invalid_method) and
+        hir_artifact_projection_failure_is_atomic(non_function_method);
+}
+
+pub fn test_hir_template_projection_preserves_identity(
+    same_name: ZirlHirArtifactProjectionResult
+): bool {
+    if (same_name.error != ZirlHirArtifactProjectionError.None or
+        @lengthOf(same_name.value.templates.templates) != 2u64) {
+        return false;
+    }
+    let first = must same_name.value.templates.templates[0u64];
+    let second = must same_name.value.templates.templates[1u64];
+    return first.name_id == second.name_id and
+        first.declaration_index == 0u32 and
+        second.declaration_index == 2u32;
+}
+
+pub fn test_hir_template_projection_preserves_generic_parameters(
+    single: ZirlHirArtifactProjectionResult,
+    multiple: ZirlHirArtifactProjectionResult,
+    expected_bounds: []ZirlTypeId,
+    invalid_bounds: ZirlHirArtifactProjectionResult
+): bool {
+    if (single.error != ZirlHirArtifactProjectionError.None or
+        multiple.error != ZirlHirArtifactProjectionError.None or
+        @lengthOf(single.value.templates.templates) != 1u64 or
+        @lengthOf(multiple.value.templates.templates) != 1u64 or
+        @lengthOf(expected_bounds) < 5u64) {
+        return false;
+    }
+    let one_template = must single.value.templates.templates[0u64];
+    let two_template = must multiple.value.templates.templates[0u64];
+    if (@lengthOf(one_template.params) != 1u64 or
+        @lengthOf(two_template.params) != 2u64) {
+        return false;
+    }
+    let first = must two_template.params[0u64];
+    let second = must two_template.params[1u64];
+    return first.name_id == 1u32 and second.name_id == 4u32 and
+        @lengthOf(first.bound_type_ids) == 1u64 and
+        @lengthOf(second.bound_type_ids) == 1u64 and
+        raw first.bound_type_ids[0u64] == raw expected_bounds[0u64] and
+        raw second.bound_type_ids[0u64] == raw expected_bounds[4u64] and
+        hir_artifact_projection_failure_is_atomic(invalid_bounds);
+}
+
+pub fn test_hir_template_projection_preserves_function_signature(
+    projected: ZirlHirArtifactProjectionResult,
+    mismatch: ZirlHirArtifactProjectionResult
+): bool {
+    if (projected.error != ZirlHirArtifactProjectionError.None or
+        @lengthOf(projected.value.templates.templates) != 1u64) {
+        return false;
+    }
+    let template = must projected.value.templates.templates[0u64];
+    return template.return_type_id == 0u32 and
+        @lengthOf(template.param_type_ids) == 1u64 and
+        raw template.param_type_ids[0u64] == 0u32 and
+        @lengthOf(template.param_name_ids) == 1u64 and
+        raw template.param_name_ids[0u64] == 1u32 and
+        template.variadic and template.state_function and
+        template.foreign_c and template.uses_tail_calling_convention and
+        hir_artifact_projection_failure_is_atomic(mismatch);
+}
+
+pub fn test_hir_template_projection_preserves_fields(
+    projected: ZirlHirArtifactProjectionResult,
+    local_type_ids: []ZirlTypeId,
+    invalid_type: ZirlHirArtifactProjectionResult,
+    mismatched_count: ZirlHirArtifactProjectionResult
+): bool {
+    if (projected.error != ZirlHirArtifactProjectionError.None or
+        @lengthOf(projected.value.templates.templates) != 1u64 or
+        @lengthOf(local_type_ids) < 3u64) {
+        return false;
+    }
+    let template = must projected.value.templates.templates[0u64];
+    return @lengthOf(template.field_name_ids) == 2u64 and
+        raw template.field_name_ids[0u64] == 0u32 and
+        raw template.field_name_ids[1u64] == 1u32 and
+        @lengthOf(template.field_type_ids) == 2u64 and
+        raw template.field_type_ids[0u64] == raw local_type_ids[1u64] and
+        raw template.field_type_ids[1u64] == raw local_type_ids[2u64] and
+        hir_artifact_projection_failure_is_atomic(invalid_type) and
+        hir_artifact_projection_failure_is_atomic(mismatched_count);
+}
+
+pub fn test_hir_template_projection_preserves_field_order(
+    projected: ZirlHirArtifactProjectionResult,
+    invalid_order: ZirlHirArtifactProjectionResult
+): bool {
+    if (projected.error != ZirlHirArtifactProjectionError.None or
+        @lengthOf(projected.value.templates.templates) != 1u64) {
+        return false;
+    }
+    let template = must projected.value.templates.templates[0u64];
+    return @lengthOf(template.canonical_field_order) == 2u64 and
+        raw template.canonical_field_order[0u64] == 1u32 and
+        raw template.canonical_field_order[1u64] == 0u32 and
+        hir_artifact_projection_failure_is_atomic(invalid_order);
+}
+
+pub fn test_hir_template_projection_preserves_methods(
+    projected: ZirlHirArtifactProjectionResult,
+    invalid_method: ZirlHirArtifactProjectionResult
+): bool {
+    if (projected.error != ZirlHirArtifactProjectionError.None or
+        @lengthOf(projected.value.templates.templates) != 1u64) {
+        return false;
+    }
+    let template = must projected.value.templates.templates[0u64];
+    return @lengthOf(template.method_declaration_indices) == 2u64 and
+        raw template.method_declaration_indices[0u64] == 1u32 and
+        raw template.method_declaration_indices[1u64] == 2u32 and
+        hir_artifact_projection_failure_is_atomic(invalid_method);
+}
+
+pub fn test_hir_template_projection_preserves_traits(
+    two_traits: ZirlHirArtifactProjectionResult,
+    local_type_ids: []ZirlTypeId,
+    invalid_trait: ZirlHirArtifactProjectionResult
+): bool {
+    if (two_traits.error != ZirlHirArtifactProjectionError.None or
+        @lengthOf(two_traits.value.templates.templates) != 1u64 or
+        @lengthOf(local_type_ids) < 6u64) {
+        return false;
+    }
+    let template = must two_traits.value.templates.templates[0u64];
+    return @lengthOf(template.trait_type_ids) == 2u64 and
+        raw template.trait_type_ids[0u64] == raw local_type_ids[4u64] and
+        raw template.trait_type_ids[1u64] == raw local_type_ids[5u64] and
+        raw template.trait_type_ids[0u64] !=
+            raw template.trait_type_ids[1u64] and
+        hir_artifact_projection_failure_is_atomic(invalid_trait);
+}

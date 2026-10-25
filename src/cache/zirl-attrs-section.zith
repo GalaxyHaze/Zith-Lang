@@ -1,6 +1,7 @@
 from cache/zirl-buffer
 from ir/hir
 from ir/hir-verify
+from ir/hir-verify-common
 
 pub enum ZirlHirAttrsError {
     None = 0,

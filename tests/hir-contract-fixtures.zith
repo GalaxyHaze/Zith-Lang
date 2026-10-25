@@ -1,0 +1,82 @@
+from ir/hir
+from ir/hir-verify
+from ir/hir-verify-common
+from cache/cache
+from cache/zirl-buffer
+from cache/zirl-container
+from cache/zirl-decl-section
+from cache/zirl-template-section
+from cache/zirl-attrs-section
+from cache/zirl-type-section
+from cache/zirl-metadata
+from cache/zirl-code-section
+from cache/zirl-canonical-types
+from cache/zirl-hir-code
+
+extern fn calloc(count: u64, size: u64): raw opaque
+extern fn free(ptr: raw opaque): void
+
+pub fn make_hir_module(
+    strings: [][]char,
+    types: []HirType,
+    expressions: []HirExpr,
+    functions: []HirFunction,
+    proofs: []HirSafetyProof
+): HirModule {
+    let declarations: [0]HirDeclaration = [];
+    let templates: [0]HirTemplate = [];
+    let struct_defs: [0]HirStructDef = [];
+    let enum_defs: [0]HirEnumDef = [];
+    let union_defs: [0]HirUnionDef = [];
+    let global_constants: [0]HirGlobalConst = [];
+    let vtables: [0]HirVTable = [];
+    let slot_attrs: [0]HirSlotAttrs = [];
+    let call_attrs: [0]HirCallAttrs = [];
+    let function_attrs: [0]HirFunctionAttrs = [];
+    return HirModule {
+        strings: strings,
+        types: types,
+        struct_defs: raw struct_defs[0..0],
+        enum_defs: raw enum_defs[0..0],
+        union_defs: raw union_defs[0..0],
+        expressions: expressions,
+        functions: functions,
+        declarations: raw declarations[0..0],
+        templates: raw templates[0..0],
+        global_constants: raw global_constants[0..0],
+        vtables: raw vtables[0..0],
+        slot_attrs: raw slot_attrs[0..0],
+        call_attrs: raw call_attrs[0..0],
+        function_attrs: raw function_attrs[0..0],
+        safety_attrs: HirSafetyAttrs { proofs: proofs },
+    };
+}
+
+pub fn empty_hir_module(): HirModule {
+    let strings: [0][]char = [];
+    let types: [0]HirType = [];
+    let expressions: [0]HirExpr = [];
+    let functions: [0]HirFunction = [];
+    let proofs: [0]HirSafetyProof = [];
+    return make_hir_module(
+        raw strings[0..0],
+        raw types[0..0],
+        raw expressions[0..0],
+        raw functions[0..0],
+        raw proofs[0..0]
+    );
+}
+
+pub fn verify_declaration_template_fixture(
+    strings: [][]char,
+    types: []HirType,
+    declarations: []HirDeclaration,
+    templates: []HirTemplate
+): HirVerificationResult {
+    var module = empty_hir_module();
+    module.strings = strings;
+    module.types = types;
+    module.declarations = declarations;
+    module.templates = templates;
+    return verify_hir(&module);
+}

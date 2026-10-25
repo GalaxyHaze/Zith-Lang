@@ -16,14 +16,14 @@ cp "$repo_root/ZithProject.toml" "$temp_root/"
 cp -R "$repo_root/src" "$temp_root/src"
 cp -R "$repo_root/tests" "$temp_root/tests"
 
-"$compiler" --include "$temp_root/src" test "$temp_root"
-"$compiler" --include "$temp_root/src" run --virtual-machine --no-cache \
+"$compiler" --include "$temp_root/src" --include "$temp_root/tests" test "$temp_root"
+"$compiler" --include "$temp_root/src" --include "$temp_root/tests" run --virtual-machine --no-cache \
     "$temp_root/tests/run.zith"
-"$compiler" --include "$temp_root/src" run --no-cache \
+"$compiler" --include "$temp_root/src" --include "$temp_root/tests" run --no-cache \
     "$temp_root/tests/canonical-types.zith"
-"$compiler" --include "$temp_root/src" run --no-cache \
+"$compiler" --include "$temp_root/src" --include "$temp_root/tests" run --no-cache \
     "$temp_root/tests/hir-contract.zith"
-"$compiler" --include "$temp_root/src" run --no-cache \
+"$compiler" --include "$temp_root/src" --include "$temp_root/tests" run --no-cache \
     "$temp_root/tests/zirl-artifact.zith"
-"$compiler" --include "$temp_root/src" run --no-cache \
+"$compiler" --include "$temp_root/src" --include "$temp_root/tests" run --no-cache \
     "$temp_root/tests/zirl-hir-artifact.zith"

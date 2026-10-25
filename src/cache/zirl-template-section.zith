@@ -13,6 +13,10 @@ pub struct ZirlTemplateRecord {
     pub declaration_index: HirDeclarationId,
     pub function_index: HirFunctionId,
     pub return_type_id: HirTypeId,
+    pub variadic: bool,
+    pub state_function: bool,
+    pub foreign_c: bool,
+    pub uses_tail_calling_convention: bool,
     pub params: []ZirlGenericParamRecord,
     pub param_type_ids: []HirTypeId,
     pub param_name_ids: []HirStringId,
@@ -109,6 +113,19 @@ fn template_bool_byte(value: bool): u8 {
     return 0u8;
 }
 
+fn template_signature_flags(template: ZirlTemplateRecord): u8 {
+    var flags = 0u8;
+    if (template.variadic) { flags = flags + 1u8; }
+    if (template.state_function) { flags = flags + 2u8; }
+    if (template.foreign_c) { flags = flags + 4u8; }
+    if (template.uses_tail_calling_convention) { flags = flags + 8u8; }
+    return flags;
+}
+
+fn template_signature_flag(flags: u8, mask: u8): bool {
+    return ((flags / mask) % 2u8) == 1u8;
+}
+
 fn write_template_ids(writer: ZirlByteWriter, values: []u32): ZirlByteWriter {
     var result = write_u32(writer, @lengthOf(values) as u32);
     for (offset in 1u64..@lengthOf(values)) {
@@ -161,7 +178,7 @@ pub fn write_templates_section(
         let template: ZirlTemplateRecord = raw section->templates[index];
         result = write_u8(result, template.kind as u8);
         result = write_u8(result, template_bool_byte(template.is_extern));
-        result = write_u8(result, 0u8);
+        result = write_u8(result, template_signature_flags(template));
         result = write_u8(result, 0u8);
         result = write_u32(result, template.name_id);
         result = write_u32(result, template.declaration_index);
@@ -267,7 +284,7 @@ pub fn read_templates_section(
         let reserved_b = read_u8(cursor);
         cursor = reserved_b.reader;
         if (cursor.failed or kind.value > (HirDeclarationKind.Context as u8) or
-            is_extern.value > 1u8 or reserved_a.value != 0u8 or
+            is_extern.value > 1u8 or reserved_a.value > 15u8 or
             reserved_b.value != 0u8) {
             return template_reader_failure(reader, storage);
         }
@@ -385,6 +402,11 @@ pub fn read_templates_section(
             declaration_index: declaration_index.value,
             function_index: function_index.value,
             return_type_id: return_type_id.value,
+            variadic: template_signature_flag(reserved_a.value, 1u8),
+            state_function: template_signature_flag(reserved_a.value, 2u8),
+            foreign_c: template_signature_flag(reserved_a.value, 4u8),
+            uses_tail_calling_convention:
+                template_signature_flag(reserved_a.value, 8u8),
             params: raw storage->params[params_start..parameter_offset],
             param_type_ids: raw storage->param_type_ids[
                 param_type_offset - (param_types.count as u64)..param_type_offset

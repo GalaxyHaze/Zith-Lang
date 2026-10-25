@@ -1,0 +1,1023 @@
+from ir/hir
+from ir/hir-verify
+from ir/hir-verify-common
+from cache/cache
+from cache/zirl-buffer
+from cache/zirl-container
+from cache/zirl-decl-section
+from cache/zirl-template-section
+from cache/zirl-attrs-section
+from cache/zirl-type-section
+from cache/zirl-metadata
+from cache/zirl-code-section
+from cache/zirl-canonical-types
+from cache/zirl-hir-code
+from hir-contract-fixtures
+
+extern fn calloc(count: u64, size: u64): raw opaque
+extern fn free(ptr: raw opaque): void
+
+pub fn test_zirl_metadata_roundtrip_and_failures(): i32 {
+    let no_type_ids: [2]HirTypeId = [0u32, 0u32];
+    let no_string_ids: [1]HirStringId = [0u32];
+    let no_offsets: [1]u64 = [0u64];
+    let strings: [4][]char = ["Record", "State", "Ready", "Value"];
+    let paths: [1][]char = ["src/mod.zith"];
+    let generic_args: [2]HirTypeId = [0u32, 1u32];
+    let generic_names: [1]HirStringId = [3u32];
+    var scalar_type = HirType {
+        kind: HirTypeKind.Bool,
+        width: 0u8,
+        flags: 0u8,
+        ref0: invalidType,
+        ref1: 0u32,
+        args: raw no_type_ids[0..0],
+        arg_names: raw no_string_ids[0..0],
+    };
+    scalar_type.kind = HirTypeKind.Bool;
+    scalar_type.width = 0u8;
+    scalar_type.flags = 0u8;
+    scalar_type.ref0 = invalidType;
+    scalar_type.ref1 = 0u32;
+    scalar_type.args = raw no_type_ids[0..0];
+    scalar_type.arg_names = raw no_string_ids[0..0];
+    var generic_type = HirType {
+        kind: HirTypeKind.Fn,
+        width: 0u8,
+        flags: 0u8,
+        ref0: invalidType,
+        ref1: 0u32,
+        args: raw generic_args[0..2],
+        arg_names: raw generic_names[0..1],
+    };
+    generic_type.kind = HirTypeKind.Fn;
+    generic_type.width = 0u8;
+    generic_type.flags = 0u8;
+    generic_type.ref0 = invalidType;
+    generic_type.ref1 = 0u32;
+    generic_type.args = raw generic_args[0..2];
+    generic_type.arg_names = raw generic_names[0..1];
+    let types: [2]HirType = [scalar_type, generic_type];
+    let struct_def = HirStructDef {
+        name_id: 0u32,
+        field_name_ids: raw no_string_ids[0..1],
+        field_type_ids: raw no_type_ids[0..1],
+        foreign_field_offsets: raw no_offsets[0..1],
+        type_arg_ids: raw no_type_ids[0..1],
+        has_foreign_layout: false,
+        foreign_abi_is_single_i64: false,
+        foreign_size_bytes: 0u64,
+        foreign_align_bytes: 0u64,
+    };
+    let struct_defs: [1]HirStructDef = [struct_def];
+    let variants: [1]HirEnumVariant = [
+        HirEnumVariant { name_id: 2u32, discriminant: 7i64 },
+    ];
+    let enum_def = HirEnumDef {
+        name_id: 1u32,
+        underlying_type_id: 0u32,
+        variants: raw variants[0..1],
+    };
+    let enum_defs: [1]HirEnumDef = [enum_def];
+    let union_members: [1]HirTypeId = [0u32];
+    let union_def = HirUnionDef {
+        name_id: 3u32,
+        member_type_ids: raw union_members[0..1],
+        is_raw: true,
+    };
+    let union_defs: [1]HirUnionDef = [union_def];
+
+    var module = empty_hir_module();
+    module.strings = raw strings[0..4];
+    module.types = raw types[0..2];
+    module.struct_defs = raw struct_defs[0..1];
+    module.enum_defs = raw enum_defs[0..1];
+    module.union_defs = raw union_defs[0..1];
+
+    let encoded_bytes_option: ?*u8 = calloc(512u64, 1u64) as ?*u8;
+    if (encoded_bytes_option is null) {
+        return 7;
+    }
+    var encoded_bytes: *u8 = must encoded_bytes_option;
+    let writer = ZirlByteWriter {
+        bytes: raw encoded_bytes[0u64..512u64],
+        position: 0u64,
+        failed: false,
+    };
+    let encoded = write_metadata_section(writer, "demo", raw paths[0..1], &module);
+    if (encoded.failed) {
+        free(encoded_bytes);
+        return 1;
+    }
+    if (encoded.position == 0u64) {
+        free(encoded_bytes);
+        return 2;
+    }
+    let empty_chars: [1]char = [0 as char];
+    let empty_type_ids: [2]HirTypeId = [0u32, 0u32];
+    let empty_string_ids: [1]HirStringId = [0u32];
+    let output_type_args: [2]HirTypeId = [0u32, 0u32];
+    let output_type_arg_names: [1]HirStringId = [0u32];
+    let empty_offsets: [1]u64 = [0u64];
+    var module_name_buffer: [16]char = [
+        0 as char, 0 as char, 0 as char, 0 as char,
+        0 as char, 0 as char, 0 as char, 0 as char,
+        0 as char, 0 as char, 0 as char, 0 as char,
+        0 as char, 0 as char, 0 as char, 0 as char,
+    ];
+    var name_scratch: [16]char = [
+        0 as char, 0 as char, 0 as char, 0 as char,
+        0 as char, 0 as char, 0 as char, 0 as char,
+        0 as char, 0 as char, 0 as char, 0 as char,
+        0 as char, 0 as char, 0 as char, 0 as char,
+    ];
+    var path_values: [1][]char = [raw empty_chars[0..0]];
+    var path_bytes: [32]char = [
+        0 as char, 0 as char, 0 as char, 0 as char,
+        0 as char, 0 as char, 0 as char, 0 as char,
+        0 as char, 0 as char, 0 as char, 0 as char,
+        0 as char, 0 as char, 0 as char, 0 as char,
+        0 as char, 0 as char, 0 as char, 0 as char,
+        0 as char, 0 as char, 0 as char, 0 as char,
+        0 as char, 0 as char, 0 as char, 0 as char,
+        0 as char, 0 as char, 0 as char, 0 as char,
+    ];
+    var string_values: [4][]char = [
+        raw empty_chars[0..0], raw empty_chars[0..0],
+        raw empty_chars[0..0], raw empty_chars[0..0],
+    ];
+    var string_bytes: [32]char = [
+        0 as char, 0 as char, 0 as char, 0 as char,
+        0 as char, 0 as char, 0 as char, 0 as char,
+        0 as char, 0 as char, 0 as char, 0 as char,
+        0 as char, 0 as char, 0 as char, 0 as char,
+        0 as char, 0 as char, 0 as char, 0 as char,
+        0 as char, 0 as char, 0 as char, 0 as char,
+        0 as char, 0 as char, 0 as char, 0 as char,
+        0 as char, 0 as char, 0 as char, 0 as char,
+    ];
+    var output_types: [2]HirType = [scalar_type, generic_type];
+    var output_struct_defs: [1]HirStructDef = [struct_def];
+    var output_enum_defs: [1]HirEnumDef = [enum_def];
+    let first_variant = HirEnumVariant { name_id: 2u32, discriminant: 7i64 };
+    var output_enum_variants: [1]HirEnumVariant = [first_variant];
+    var output_union_defs: [1]HirUnionDef = [union_def];
+    var storage = ZirlMetadataStorage {
+        module_name: raw module_name_buffer[0..16],
+        name_scratch: raw name_scratch[0..16],
+        paths: raw path_values[0..1],
+        path_bytes: raw path_bytes[0..32],
+        strings: raw string_values[0..4],
+        string_bytes: raw string_bytes[0..32],
+        types: raw output_types[0..2],
+        type_args: raw output_type_args[0..2],
+        type_arg_names: raw output_type_arg_names[0..1],
+        struct_defs: raw output_struct_defs[0..1],
+        struct_field_names: raw empty_string_ids[0..1],
+        struct_field_types: raw empty_type_ids[0..1],
+        struct_foreign_offsets: raw empty_offsets[0..1],
+        struct_type_args: raw empty_type_ids[0..1],
+        enum_defs: raw output_enum_defs[0..1],
+        enum_variants: raw output_enum_variants[0..1],
+        union_defs: raw output_union_defs[0..1],
+        union_member_types: raw union_members[0..1],
+    };
+    var truncated_storage = ZirlMetadataStorage {
+        module_name: raw module_name_buffer[0..16],
+        name_scratch: raw name_scratch[0..16],
+        paths: raw path_values[0..1],
+        path_bytes: raw path_bytes[0..32],
+        strings: raw string_values[0..4],
+        string_bytes: raw string_bytes[0..32],
+        types: raw output_types[0..2],
+        type_args: raw output_type_args[0..2],
+        type_arg_names: raw output_type_arg_names[0..1],
+        struct_defs: raw output_struct_defs[0..1],
+        struct_field_names: raw empty_string_ids[0..1],
+        struct_field_types: raw empty_type_ids[0..1],
+        struct_foreign_offsets: raw empty_offsets[0..1],
+        struct_type_args: raw empty_type_ids[0..1],
+        enum_defs: raw output_enum_defs[0..1],
+        enum_variants: raw output_enum_variants[0..1],
+        union_defs: raw output_union_defs[0..1],
+        union_member_types: raw union_members[0..1],
+    };
+    var name_storage = ZirlMetadataStorage {
+        module_name: raw module_name_buffer[0..16],
+        name_scratch: raw name_scratch[0..16],
+        paths: raw path_values[0..1],
+        path_bytes: raw path_bytes[0..32],
+        strings: raw string_values[0..4],
+        string_bytes: raw string_bytes[0..32],
+        types: raw output_types[0..2],
+        type_args: raw output_type_args[0..2],
+        type_arg_names: raw output_type_arg_names[0..1],
+        struct_defs: raw output_struct_defs[0..1],
+        struct_field_names: raw empty_string_ids[0..1],
+        struct_field_types: raw empty_type_ids[0..1],
+        struct_foreign_offsets: raw empty_offsets[0..1],
+        struct_type_args: raw empty_type_ids[0..1],
+        enum_defs: raw output_enum_defs[0..1],
+        enum_variants: raw output_enum_variants[0..1],
+        union_defs: raw output_union_defs[0..1],
+        union_member_types: raw union_members[0..1],
+    };
+    var flags_storage = ZirlMetadataStorage {
+        module_name: raw module_name_buffer[0..16],
+        name_scratch: raw name_scratch[0..16],
+        paths: raw path_values[0..1],
+        path_bytes: raw path_bytes[0..32],
+        strings: raw string_values[0..4],
+        string_bytes: raw string_bytes[0..32],
+        types: raw output_types[0..2],
+        type_args: raw output_type_args[0..2],
+        type_arg_names: raw output_type_arg_names[0..1],
+        struct_defs: raw output_struct_defs[0..1],
+        struct_field_names: raw empty_string_ids[0..1],
+        struct_field_types: raw empty_type_ids[0..1],
+        struct_foreign_offsets: raw empty_offsets[0..1],
+        struct_type_args: raw empty_type_ids[0..1],
+        enum_defs: raw output_enum_defs[0..1],
+        enum_variants: raw output_enum_variants[0..1],
+        union_defs: raw output_union_defs[0..1],
+        union_member_types: raw union_members[0..1],
+    };
+    let reader = ZirlByteReader {
+        bytes: raw encoded_bytes[0u64..encoded.position],
+        position: 0u64,
+        failed: false,
+    };
+    let decoded = read_metadata_section(reader, &storage);
+    if (decoded.reader.failed or decoded.reader.position != encoded.position) {
+        free(encoded_bytes);
+        return 2;
+    }
+    let decoded_path = must decoded.value.paths[0];
+    let first_string = must decoded.value.strings[0];
+    let decoded_type = must decoded.value.types[0];
+    let decoded_generic_type = must decoded.value.types[1];
+    if (@lengthOf(decoded.value.module_name) != 4u64 or
+        raw decoded.value.module_name[0] != raw "demo"[0] or
+        @lengthOf(decoded.value.paths) != 1u64 or
+        @lengthOf(decoded_path) != 12u64 or
+        @lengthOf(decoded.value.strings) != 4u64 or
+        @lengthOf(first_string) != 6u64 or
+        @lengthOf(decoded.value.types) != 2u64 or
+        decoded_type.kind != HirTypeKind.Bool) {
+        free(encoded_bytes);
+        return 3;
+    }
+    if (decoded_generic_type.kind != HirTypeKind.Fn) {
+        free(encoded_bytes);
+        return 9;
+    }
+    if (@lengthOf(decoded_generic_type.args) != 2u64) {
+        free(encoded_bytes);
+        return 10;
+    }
+    if (raw decoded_generic_type.args[0] != 0u32 or
+        raw decoded_generic_type.args[1] != 1u32) {
+        free(encoded_bytes);
+        return 11;
+    }
+    if (@lengthOf(decoded_generic_type.arg_names) != 1u64) {
+        free(encoded_bytes);
+        return 12;
+    }
+    if (raw decoded_generic_type.arg_names[0] != 3u32) {
+        free(encoded_bytes);
+        return 13;
+    }
+    let decoded_struct = must decoded.value.struct_defs[0];
+    let decoded_field_name = must decoded_struct.field_name_ids[0];
+    let decoded_field_type = must decoded_struct.field_type_ids[0];
+    let decoded_field_offset = must decoded_struct.foreign_field_offsets[0];
+    let decoded_type_arg = must decoded_struct.type_arg_ids[0];
+    let decoded_enum = must decoded.value.enum_defs[0];
+    let decoded_variant = must decoded_enum.variants[0];
+    let decoded_union = must decoded.value.union_defs[0];
+    let decoded_member = must decoded_union.member_type_ids[0];
+    if (@lengthOf(decoded.value.struct_defs) != 1u64 or
+        decoded_struct.name_id != 0u32 or
+        @lengthOf(decoded_struct.field_name_ids) != 1u64 or
+        decoded_field_name != 0u32 or
+        @lengthOf(decoded_struct.field_type_ids) != 1u64 or
+        decoded_field_type != 0u32 or
+        @lengthOf(decoded_struct.foreign_field_offsets) != 1u64 or
+        decoded_field_offset != 0u64 or
+        @lengthOf(decoded_struct.type_arg_ids) != 1u64 or
+        decoded_type_arg != 0u32 or
+        decoded_struct.has_foreign_layout or
+        decoded_struct.foreign_abi_is_single_i64 or
+        @lengthOf(decoded.value.enum_defs) != 1u64 or
+        decoded_enum.name_id != 1u32 or
+        decoded_enum.underlying_type_id != 0u32 or
+        @lengthOf(decoded_enum.variants) != 1u64 or
+        decoded_variant.name_id != 2u32 or
+        decoded_variant.discriminant != 7i64 or
+        @lengthOf(decoded.value.union_defs) != 1u64 or
+        decoded_union.name_id != 3u32 or
+        not decoded_union.is_raw or
+        @lengthOf(decoded_union.member_type_ids) != 1u64 or
+        decoded_member != 0u32) {
+        free(encoded_bytes);
+        return 4;
+    }
+
+    let truncated_reader = ZirlByteReader {
+        bytes: raw encoded_bytes[0u64..(encoded.position - 1u64)],
+        position: 0u64,
+        failed: false,
+    };
+    let truncated = read_metadata_section(truncated_reader, &truncated_storage);
+    if (not truncated.reader.failed or truncated.reader.position != 0u64 or
+        @lengthOf(truncated.value.types) != 0u64 or
+        @lengthOf(truncated.value.struct_defs) != 0u64) {
+        free(encoded_bytes);
+        return 5;
+    }
+
+    raw encoded_bytes[139u64] = 1u8;
+    let mismatched_name = read_metadata_section(reader, &name_storage);
+    if (not mismatched_name.reader.failed or
+        mismatched_name.reader.position != 0u64 or
+        @lengthOf(mismatched_name.value.types) != 0u64 or
+        @lengthOf(mismatched_name.value.struct_defs) != 0u64) {
+        raw encoded_bytes[139u64] = 0u8;
+        free(encoded_bytes);
+        return 6;
+    }
+    raw encoded_bytes[139u64] = 0u8;
+
+    raw encoded_bytes[260u64] = 2u8;
+    let invalid_flags = read_metadata_section(reader, &flags_storage);
+    if (not invalid_flags.reader.failed or invalid_flags.reader.position != 0u64 or
+        @lengthOf(invalid_flags.value.types) != 0u64 or
+        @lengthOf(invalid_flags.value.union_defs) != 0u64) {
+        raw encoded_bytes[260u64] = 1u8;
+        free(encoded_bytes);
+        return 7;
+    }
+    raw encoded_bytes[260u64] = 1u8;
+
+    let short_writer = ZirlByteWriter {
+        bytes: raw encoded_bytes[0u64..(encoded.position - 1u64)],
+        position: 0u64,
+        failed: false,
+    };
+    var short_module = empty_hir_module();
+    short_module.strings = raw strings[0..4];
+    short_module.types = raw types[0..2];
+    short_module.struct_defs = raw struct_defs[0..1];
+    short_module.enum_defs = raw enum_defs[0..1];
+    short_module.union_defs = raw union_defs[0..1];
+    let short_write = write_metadata_section(short_writer, "demo", raw paths[0..1], &short_module);
+    if (not short_write.failed) {
+        free(encoded_bytes);
+        return 8;
+    }
+
+    free(encoded_bytes);
+    return 0;
+}
+
+pub fn test_zirl_decls_golden_roundtrip_and_failures(): i32 {
+    if (zirlDeclsSectionSchemaVersion != 2u16) {
+        return 13;
+    }
+    let field_names: [1]HirStringId = [5u32];
+    let field_types: [1]HirTypeId = [6u32];
+    let method_indices: [2]HirDeclarationId = [7u32, 9u32];
+    let declarations: [2]ZirlDeclarationRecord = [
+        ZirlDeclarationRecord {
+            kind: HirDeclarationKind.Struct,
+            visibility: HirVisibility.Module,
+            is_extern: true,
+            discardable: true,
+            module_depth: -2i32,
+            name_id: 3u32,
+            type_id: 4u32,
+            template_index: 0xFFFFFFFFu32,
+            body_function_index: 8u32,
+            field_name_ids: raw field_names[0..1],
+            field_type_ids: raw field_types[0..1],
+            method_declaration_indices: raw method_indices[0..2],
+        },
+        ZirlDeclarationRecord {
+            kind: HirDeclarationKind.Function,
+            visibility: HirVisibility.Private,
+            is_extern: false,
+            discardable: false,
+            module_depth: 0i32,
+            name_id: 10u32,
+            type_id: 11u32,
+            template_index: 0xFFFFFFFFu32,
+            body_function_index: 12u32,
+            field_name_ids: raw field_names[0..0],
+            field_type_ids: raw field_types[0..0],
+            method_declaration_indices: raw method_indices[0..0],
+        },
+    ];
+    let section = ZirlDeclSection {
+        declarations: raw declarations[0..2],
+    };
+    let expected: [84]u8 = [
+        2u8, 0u8, 0u8, 0u8,
+        1u8, 2u8, 1u8, 1u8,
+        254u8, 255u8, 255u8, 255u8,
+        3u8, 0u8, 0u8, 0u8,
+        4u8, 0u8, 0u8, 0u8,
+        255u8, 255u8, 255u8, 255u8,
+        8u8, 0u8, 0u8, 0u8,
+        1u8, 0u8, 0u8, 0u8,
+        5u8, 0u8, 0u8, 0u8,
+        6u8, 0u8, 0u8, 0u8,
+        2u8, 0u8, 0u8, 0u8,
+        7u8, 0u8, 0u8, 0u8,
+        9u8, 0u8, 0u8, 0u8,
+        0u8, 0u8, 0u8, 0u8,
+        0u8, 0u8, 0u8, 0u8,
+        10u8, 0u8, 0u8, 0u8,
+        11u8, 0u8, 0u8, 0u8,
+        255u8, 255u8, 255u8, 255u8,
+        12u8, 0u8, 0u8, 0u8,
+        0u8, 0u8, 0u8, 0u8,
+        0u8, 0u8, 0u8, 0u8,
+    ];
+    var encoded_bytes: [84]u8 = expected;
+    var writer = ZirlByteWriter {
+        bytes: raw encoded_bytes[0..84],
+        position: 0u64,
+        failed: false,
+    };
+    writer = write_decls_section(writer, &raw section);
+    if (writer.failed or writer.position != 84u64) {
+        return 1;
+    }
+    for (offset in 1u64..84u64) {
+        let index = offset - 1;
+        if (raw encoded_bytes[index] != raw expected[index]) {
+            return 2;
+        }
+    }
+
+    let decoded_records: [2]ZirlDeclarationRecord = [
+        ZirlDeclarationRecord {
+            kind: HirDeclarationKind.Function,
+            visibility: HirVisibility.Private,
+            is_extern: false,
+            discardable: false,
+            module_depth: 0i32,
+            name_id: 0u32,
+            type_id: 0u32,
+            template_index: 0u32,
+            body_function_index: 0u32,
+            field_name_ids: raw field_names[0..0],
+            field_type_ids: raw field_types[0..0],
+            method_declaration_indices: raw method_indices[0..0],
+        },
+        ZirlDeclarationRecord {
+            kind: HirDeclarationKind.Function,
+            visibility: HirVisibility.Private,
+            is_extern: false,
+            discardable: true,
+            module_depth: 0i32,
+            name_id: 0u32,
+            type_id: 0u32,
+            template_index: 0u32,
+            body_function_index: 0u32,
+            field_name_ids: raw field_names[0..0],
+            field_type_ids: raw field_types[0..0],
+            method_declaration_indices: raw method_indices[0..0],
+        },
+    ];
+    let decoded_names: [1]HirStringId = [0u32];
+    let decoded_types: [1]HirTypeId = [0u32];
+    let decoded_methods: [2]HirDeclarationId = [0u32, 0u32];
+    var storage = ZirlDeclStorage {
+        declarations: raw decoded_records[0..2],
+        field_name_ids: raw decoded_names[0..1],
+        field_type_ids: raw decoded_types[0..1],
+        method_declaration_indices: raw decoded_methods[0..2],
+    };
+    let reader = ZirlByteReader {
+        bytes: raw encoded_bytes[0..84],
+        position: 0u64,
+        failed: false,
+    };
+    let decoded = read_decls_section(reader, &raw storage);
+    if (decoded.reader.failed or decoded.reader.position != 84u64 or
+        @lengthOf(decoded.value.declarations) != 2u64) {
+        return 3;
+    }
+    let item = must decoded.value.declarations[0];
+    let second_item = must decoded.value.declarations[1];
+    if (item.kind != HirDeclarationKind.Struct or
+        item.visibility != HirVisibility.Module or not item.is_extern or
+        not item.discardable or
+        item.module_depth != -2i32 or item.name_id != 3u32 or
+        item.type_id != 4u32 or item.template_index != 0xFFFFFFFFu32 or
+        item.body_function_index != 8u32 or
+        @lengthOf(item.field_name_ids) != 1u64 or
+        raw item.field_name_ids[0] != 5u32 or
+        @lengthOf(item.field_type_ids) != 1u64 or
+        raw item.field_type_ids[0] != 6u32 or
+        @lengthOf(item.method_declaration_indices) != 2u64 or
+        raw item.method_declaration_indices[0] != 7u32 or
+        raw item.method_declaration_indices[1] != 9u32 or
+        second_item.name_id != 10u32 or second_item.type_id != 11u32 or
+        second_item.body_function_index != 12u32 or second_item.discardable) {
+        return 4;
+    }
+
+    let truncated = read_decls_section(
+        ZirlByteReader {
+            bytes: raw encoded_bytes[0..83],
+            position: 0u64,
+            failed: false,
+        },
+        &raw storage
+    );
+    if (not truncated.reader.failed or truncated.reader.position != 0u64 or
+        @lengthOf(truncated.value.declarations) != 0u64) {
+        return 5;
+    }
+
+    raw encoded_bytes[4u64] = 13u8;
+    let invalid_kind = read_decls_section(reader, &raw storage);
+    if (not invalid_kind.reader.failed or invalid_kind.reader.position != 0u64) {
+        raw encoded_bytes[4u64] = 1u8;
+        return 6;
+    }
+    raw encoded_bytes[4u64] = 1u8;
+
+    raw encoded_bytes[7u64] = 2u8;
+    let invalid_discardable = read_decls_section(reader, &raw storage);
+    if (not invalid_discardable.reader.failed or
+        invalid_discardable.reader.position != 0u64) {
+        raw encoded_bytes[7u64] = 1u8;
+        return 12;
+    }
+    raw encoded_bytes[7u64] = 1u8;
+
+    let short_writer = write_decls_section(
+        ZirlByteWriter {
+            bytes: raw encoded_bytes[0..83],
+            position: 0u64,
+            failed: false,
+        },
+        &raw section
+    );
+    if (not short_writer.failed) {
+        return 7;
+    }
+    return 0;
+}
+
+pub fn test_zirl_templates_golden_roundtrip_and_failures(): i32 {
+    let bound_types: [1]HirTypeId = [4u32];
+    let params: [1]ZirlGenericParamRecord = [
+        ZirlGenericParamRecord {
+            name_id: 3u32,
+            bound_type_ids: raw bound_types[0..1],
+        },
+    ];
+    let param_types: [1]HirTypeId = [5u32];
+    let param_names: [1]HirStringId = [6u32];
+    let field_names: [1]HirStringId = [7u32];
+    let field_types: [1]HirTypeId = [8u32];
+    let field_order: [1]u32 = [0u32];
+    let methods: [1]HirDeclarationId = [9u32];
+    let traits: [1]HirTypeId = [10u32];
+    let templates: [1]ZirlTemplateRecord = [
+        ZirlTemplateRecord {
+            kind: HirDeclarationKind.Function,
+            is_extern: true,
+            name_id: 1u32,
+            declaration_index: 11u32,
+            function_index: invalidFunction,
+            return_type_id: 2u32,
+            variadic: true,
+            state_function: true,
+            foreign_c: true,
+            uses_tail_calling_convention: true,
+            params: raw params[0..1],
+            param_type_ids: raw param_types[0..1],
+            param_name_ids: raw param_names[0..1],
+            field_name_ids: raw field_names[0..1],
+            field_type_ids: raw field_types[0..1],
+            canonical_field_order: raw field_order[0..1],
+            method_declaration_indices: raw methods[0..1],
+            trait_type_ids: raw traits[0..1],
+        },
+    ];
+    let section = ZirlTemplateSection { templates: raw templates[0..1] };
+    let expected: [96]u8 = [
+        1u8, 0u8, 0u8, 0u8,
+        0u8, 1u8, 15u8, 0u8,
+        1u8, 0u8, 0u8, 0u8,
+        11u8, 0u8, 0u8, 0u8,
+        255u8, 255u8, 255u8, 255u8,
+        2u8, 0u8, 0u8, 0u8,
+        1u8, 0u8, 0u8, 0u8,
+        3u8, 0u8, 0u8, 0u8,
+        1u8, 0u8, 0u8, 0u8,
+        4u8, 0u8, 0u8, 0u8,
+        1u8, 0u8, 0u8, 0u8,
+        5u8, 0u8, 0u8, 0u8,
+        1u8, 0u8, 0u8, 0u8,
+        6u8, 0u8, 0u8, 0u8,
+        1u8, 0u8, 0u8, 0u8,
+        7u8, 0u8, 0u8, 0u8,
+        1u8, 0u8, 0u8, 0u8,
+        8u8, 0u8, 0u8, 0u8,
+        1u8, 0u8, 0u8, 0u8,
+        0u8, 0u8, 0u8, 0u8,
+        1u8, 0u8, 0u8, 0u8,
+        9u8, 0u8, 0u8, 0u8,
+        1u8, 0u8, 0u8, 0u8,
+        10u8, 0u8, 0u8, 0u8,
+    ];
+    var encoded: [96]u8 = expected;
+    let writer = write_templates_section(
+        ZirlByteWriter {
+            bytes: raw encoded[0..96],
+            position: 0u64,
+            failed: false,
+        },
+        &raw section
+    );
+    if (writer.failed or writer.position != 96u64) {
+        return 1;
+    }
+    for (offset in 1u64..96u64) {
+        let index = offset - 1;
+        if (raw encoded[index] != raw expected[index]) {
+            return 2;
+        }
+    }
+
+    let empty_params: [1]ZirlGenericParamRecord = [
+        ZirlGenericParamRecord {
+            name_id: 0u32,
+            bound_type_ids: raw bound_types[0..0],
+        },
+    ];
+    let decoded_templates: [1]ZirlTemplateRecord = [
+        ZirlTemplateRecord {
+            kind: HirDeclarationKind.Struct,
+            is_extern: false,
+            name_id: 0u32,
+            declaration_index: 0u32,
+            function_index: invalidFunction,
+            return_type_id: 0u32,
+            variadic: false,
+            state_function: false,
+            foreign_c: false,
+            uses_tail_calling_convention: false,
+            params: raw empty_params[0..0],
+            param_type_ids: raw param_types[0..0],
+            param_name_ids: raw param_names[0..0],
+            field_name_ids: raw field_names[0..0],
+            field_type_ids: raw field_types[0..0],
+            canonical_field_order: raw field_order[0..0],
+            method_declaration_indices: raw methods[0..0],
+            trait_type_ids: raw traits[0..0],
+        },
+    ];
+    let decoded_params: [1]ZirlGenericParamRecord = [
+        ZirlGenericParamRecord {
+            name_id: 0u32,
+            bound_type_ids: raw bound_types[0..0],
+        },
+    ];
+    let decoded_bounds: [1]HirTypeId = [0u32];
+    let decoded_param_types: [1]HirTypeId = [0u32];
+    let decoded_param_names: [1]HirStringId = [0u32];
+    let decoded_field_names: [1]HirStringId = [0u32];
+    let decoded_field_types: [1]HirTypeId = [0u32];
+    let decoded_field_order: [1]u32 = [0u32];
+    let decoded_methods: [1]HirDeclarationId = [0u32];
+    let decoded_traits: [1]HirTypeId = [0u32];
+    var storage = ZirlTemplateStorage {
+        templates: raw decoded_templates[0..1],
+        params: raw decoded_params[0..1],
+        param_bound_type_ids: raw decoded_bounds[0..1],
+        param_type_ids: raw decoded_param_types[0..1],
+        param_name_ids: raw decoded_param_names[0..1],
+        field_name_ids: raw decoded_field_names[0..1],
+        field_type_ids: raw decoded_field_types[0..1],
+        canonical_field_order: raw decoded_field_order[0..1],
+        method_declaration_indices: raw decoded_methods[0..1],
+        trait_type_ids: raw decoded_traits[0..1],
+    };
+    let reader = ZirlByteReader {
+        bytes: raw encoded[0..96],
+        position: 0u64,
+        failed: false,
+    };
+    let decoded = read_templates_section(reader, &raw storage);
+    if (decoded.reader.failed or decoded.reader.position != 96u64 or
+        @lengthOf(decoded.value.templates) != 1u64) {
+        return 3;
+    }
+    let item = must decoded.value.templates[0];
+    let param = must item.params[0];
+    if (item.kind != HirDeclarationKind.Function or not item.is_extern or
+        item.name_id != 1u32 or item.return_type_id != 2u32 or
+        item.declaration_index != 11u32 or
+        item.function_index != invalidFunction or not item.variadic or
+        not item.state_function or not item.foreign_c or
+        not item.uses_tail_calling_convention or
+        @lengthOf(item.params) != 1u64 or param.name_id != 3u32 or
+        @lengthOf(param.bound_type_ids) != 1u64 or
+        raw param.bound_type_ids[0] != 4u32 or
+        raw item.param_type_ids[0] != 5u32 or
+        raw item.param_name_ids[0] != 6u32 or
+        raw item.field_name_ids[0] != 7u32 or
+        raw item.field_type_ids[0] != 8u32 or
+        raw item.canonical_field_order[0] != 0u32 or
+        raw item.method_declaration_indices[0] != 9u32 or
+        raw item.trait_type_ids[0] != 10u32) {
+        return 4;
+    }
+
+    let truncated = read_templates_section(
+        ZirlByteReader {
+            bytes: raw encoded[0..95],
+            position: 0u64,
+            failed: false,
+        },
+        &raw storage
+    );
+    if (not truncated.reader.failed or truncated.reader.position != 0u64 or
+        @lengthOf(truncated.value.templates) != 0u64) {
+        return 5;
+    }
+
+    raw encoded[6u64] = 16u8;
+    let invalid_reserved = read_templates_section(reader, &raw storage);
+    if (not invalid_reserved.reader.failed or invalid_reserved.reader.position != 0u64) {
+        raw encoded[6u64] = 15u8;
+        return 6;
+    }
+    raw encoded[6u64] = 15u8;
+    return 0;
+}
+
+pub fn test_zirl_attrs_golden_roundtrip_and_failures(): i32 {
+    let escapes: [2]HirCallEscape = [
+        HirCallEscape.Borrow,
+        HirCallEscape.Move,
+    ];
+    let slots: [1]ZirlSlotAttrsRecord = [
+        ZirlSlotAttrsRecord {
+            slot_id: 0x12u32,
+            ownership: HirOwnership.Unique,
+            consumed: HirConsumedState.NonConsumed,
+            non_null: true,
+            volatile_slot: false,
+        },
+    ];
+    let calls: [1]ZirlCallAttrsRecord = [
+        ZirlCallAttrsRecord {
+            expr_id: 0x34u32,
+            returns_argument: 1u32,
+            arg_escapes: raw escapes[0..2],
+        },
+    ];
+    let functions: [1]ZirlFunctionAttrsRecord = [
+        ZirlFunctionAttrsRecord {
+            function_index: 0x56u32,
+            return_consumed: HirConsumedState.Consumed,
+            non_null: true,
+            no_alias: false,
+            read_only: true,
+            no_capture: false,
+            discardable: true,
+        },
+    ];
+    let proofs: [2]ZirlSafetyProofRecord = [
+        ZirlSafetyProofRecord {
+            expr_id: 0u32,
+            kind: HirSafetyProofKind.OpaqueTypeMatches,
+            operand_a: 1u32,
+            operand_b: 2u32,
+            operand_c: 3u32,
+            present: true,
+        },
+        ZirlSafetyProofRecord {
+            expr_id: 1u32,
+            kind: HirSafetyProofKind.BoundsValid,
+            operand_a: 4u32,
+            operand_b: 5u32,
+            operand_c: 6u32,
+            present: false,
+        },
+    ];
+    let section = ZirlAttrsSection {
+        slots: raw slots[0..1],
+        calls: raw calls[0..1],
+        functions: raw functions[0..1],
+        safety_proofs: raw proofs[0..2],
+    };
+    let expected: [92]u8 = [
+        1u8, 0u8, 0u8, 0u8,
+        0x12u8, 0u8, 0u8, 0u8,
+        3u8, 2u8, 1u8, 0u8,
+        1u8, 0u8, 0u8, 0u8,
+        0x34u8, 0u8, 0u8, 0u8,
+        1u8, 0u8, 0u8, 0u8,
+        2u8, 0u8, 0u8, 0u8,
+        1u8, 0u8, 0u8, 0u8,
+        4u8, 0u8, 0u8, 0u8,
+        1u8, 0u8, 0u8, 0u8,
+        0x56u8, 0u8, 0u8, 0u8,
+        1u8, 1u8, 0u8, 1u8, 0u8, 1u8, 0u8, 0u8,
+        2u8, 0u8, 0u8, 0u8,
+        0u8, 0u8, 0u8, 0u8,
+        3u8,
+        1u8, 0u8, 0u8, 0u8,
+        2u8, 0u8, 0u8, 0u8,
+        3u8, 0u8, 0u8, 0u8,
+        1u8,
+        1u8, 0u8, 0u8, 0u8,
+        0u8,
+        4u8, 0u8, 0u8, 0u8,
+        5u8, 0u8, 0u8, 0u8,
+        6u8, 0u8, 0u8, 0u8,
+        0u8,
+    ];
+    var encoded: [92]u8 = expected;
+    let writer = write_attrs_section(
+        ZirlByteWriter {
+            bytes: raw encoded[0..92],
+            position: 0u64,
+            failed: false,
+        },
+        &raw section
+    );
+    if (writer.failed or writer.position != 92u64) {
+        return 1;
+    }
+    for (offset in 1u64..92u64) {
+        let index = offset - 1;
+        if (raw encoded[index] != raw expected[index]) {
+            return 2;
+        }
+    }
+
+    let decoded_slots: [1]ZirlSlotAttrsRecord = [
+        ZirlSlotAttrsRecord {
+            slot_id: 0u32,
+            ownership: HirOwnership.Default,
+            consumed: HirConsumedState.Unknown,
+            non_null: false,
+            volatile_slot: false,
+        },
+    ];
+    let decoded_calls: [1]ZirlCallAttrsRecord = [
+        ZirlCallAttrsRecord {
+            expr_id: 0u32,
+            returns_argument: 0xFFFFFFFFu32,
+            arg_escapes: raw escapes[0..0],
+        },
+    ];
+    let decoded_escapes: [2]HirCallEscape = [
+        HirCallEscape.None,
+        HirCallEscape.None,
+    ];
+    let decoded_functions: [1]ZirlFunctionAttrsRecord = [
+        ZirlFunctionAttrsRecord {
+            function_index: 0u32,
+            return_consumed: HirConsumedState.Unknown,
+            non_null: false,
+            no_alias: false,
+            read_only: false,
+            no_capture: false,
+            discardable: false,
+        },
+    ];
+    let decoded_proofs: [2]ZirlSafetyProofRecord = [
+        ZirlSafetyProofRecord {
+            expr_id: 0u32,
+            kind: HirSafetyProofKind.BoundsValid,
+            operand_a: 0u32,
+            operand_b: 0u32,
+            operand_c: 0u32,
+            present: false,
+        },
+        ZirlSafetyProofRecord {
+            expr_id: 0u32,
+            kind: HirSafetyProofKind.BoundsValid,
+            operand_a: 0u32,
+            operand_b: 0u32,
+            operand_c: 0u32,
+            present: true,
+        },
+    ];
+    let proof_seen: [2]bool = [false, false];
+    var storage = ZirlAttrsStorage {
+        slots: raw decoded_slots[0..1],
+        calls: raw decoded_calls[0..1],
+        call_escapes: raw decoded_escapes[0..2],
+        functions: raw decoded_functions[0..1],
+        safety_proofs: raw decoded_proofs[0..2],
+        proof_expr_seen: raw proof_seen[0..2],
+    };
+    let reader = ZirlByteReader {
+        bytes: raw encoded[0..92],
+        position: 0u64,
+        failed: false,
+    };
+    let decoded = read_attrs_section(reader, &raw storage);
+    if (decoded.reader.failed or decoded.reader.position != 92u64 or
+        @lengthOf(decoded.value.slots) != 1u64 or
+        @lengthOf(decoded.value.calls) != 1u64 or
+        @lengthOf(decoded.value.functions) != 1u64 or
+        @lengthOf(decoded.value.safety_proofs) != 2u64) {
+        return 3;
+    }
+    let decoded_slot = must decoded.value.slots[0];
+    let decoded_call = must decoded.value.calls[0];
+    let decoded_function = must decoded.value.functions[0];
+    let decoded_proof = must decoded.value.safety_proofs[0];
+    let decoded_absent_proof = must decoded.value.safety_proofs[1];
+    if (decoded_slot.slot_id != 0x12u32 or
+        decoded_slot.ownership != HirOwnership.Unique or
+        decoded_slot.consumed != HirConsumedState.NonConsumed or
+        not decoded_slot.non_null or decoded_slot.volatile_slot or
+        decoded_call.expr_id != 0x34u32 or
+        decoded_call.returns_argument != 1u32 or
+        @lengthOf(decoded_call.arg_escapes) != 2u64 or
+        raw decoded_call.arg_escapes[0] != HirCallEscape.Borrow or
+        raw decoded_call.arg_escapes[1] != HirCallEscape.Move or
+        decoded_function.function_index != 0x56u32 or
+        decoded_function.return_consumed != HirConsumedState.Consumed or
+        not decoded_function.non_null or decoded_function.no_alias or
+        not decoded_function.read_only or decoded_function.no_capture or
+        not decoded_function.discardable or
+        decoded_proof.expr_id != 0u32 or
+        decoded_proof.kind != HirSafetyProofKind.OpaqueTypeMatches or
+        decoded_proof.operand_a != 1u32 or decoded_proof.operand_b != 2u32 or
+        decoded_proof.operand_c != 3u32 or not decoded_proof.present or
+        not raw proof_seen[0] or decoded_absent_proof.expr_id != 1u32 or
+        decoded_absent_proof.kind != HirSafetyProofKind.BoundsValid or
+        decoded_absent_proof.operand_a != 4u32 or
+        decoded_absent_proof.operand_b != 5u32 or
+        decoded_absent_proof.operand_c != 6u32 or
+        decoded_absent_proof.present or not raw proof_seen[1]) {
+        return 4;
+    }
+
+    let truncated = read_attrs_section(
+        ZirlByteReader {
+            bytes: raw encoded[0..91],
+            position: 0u64,
+            failed: false,
+        },
+        &raw storage
+    );
+    if (not truncated.reader.failed or truncated.reader.position != 0u64 or
+        @lengthOf(truncated.value.slots) != 0u64 or
+        @lengthOf(truncated.value.safety_proofs) != 0u64 or raw proof_seen[0]) {
+        return 5;
+    }
+
+    raw encoded[73u64] = 2u8;
+    let invalid_present = read_attrs_section(reader, &raw storage);
+    if (not invalid_present.reader.failed or invalid_present.reader.position != 0u64) {
+        raw encoded[73u64] = 1u8;
+        return 9;
+    }
+    raw encoded[73u64] = 1u8;
+
+    raw encoded[28u64] = 5u8;
+    let invalid_escape = read_attrs_section(reader, &raw storage);
+    if (not invalid_escape.reader.failed or invalid_escape.reader.position != 0u64) {
+        raw encoded[28u64] = 1u8;
+        return 6;
+    }
+    raw encoded[28u64] = 1u8;
+
+    raw encoded[60u64] = 4u8;
+    let invalid_proof = read_attrs_section(reader, &raw storage);
+    if (not invalid_proof.reader.failed or invalid_proof.reader.position != 0u64) {
+        raw encoded[60u64] = 3u8;
+        return 7;
+    }
+    raw encoded[60u64] = 3u8;
+
+    let short_writer = write_attrs_section(
+        ZirlByteWriter {
+            bytes: raw encoded[0..91],
+            position: 0u64,
+            failed: false,
+        },
+        &raw section
+    );
+    if (not short_writer.failed) {
+        return 8;
+    }
+    return 0;
+}

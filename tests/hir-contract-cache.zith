@@ -1,0 +1,133 @@
+from ir/hir
+from ir/hir-verify
+from ir/hir-verify-common
+from cache/cache
+from cache/zirl-buffer
+from cache/zirl-container
+from cache/zirl-decl-section
+from cache/zirl-template-section
+from cache/zirl-attrs-section
+from cache/zirl-type-section
+from cache/zirl-metadata
+from cache/zirl-code-section
+from cache/zirl-canonical-types
+from cache/zirl-hir-code
+from hir-contract-fixtures
+
+extern fn calloc(count: u64, size: u64): raw opaque
+extern fn free(ptr: raw opaque): void
+
+fn make_cache_identity(
+    canonical_module: []char,
+    semantic_profile: []char,
+    profile_version: u32,
+    hir_schema: u32,
+    required_features: u64,
+    optional_features: u64,
+    frontend_dialect: []char
+): HirCacheIdentity {
+    var identity = HirCacheIdentity {
+        canonical_module: "",
+        semantic_profile: "",
+        semantic_profile_version: 0u32,
+        hir_schema_version: 0u32,
+        required_features: 0u64,
+        optional_features: 0u64,
+        frontend_dialect: "",
+        frontend_implementation: "fixture",
+        frontend_version: "1",
+    };
+    identity.canonical_module = canonical_module;
+    identity.semantic_profile = semantic_profile;
+    identity.semantic_profile_version = profile_version;
+    identity.hir_schema_version = hir_schema;
+    identity.required_features = required_features;
+    identity.optional_features = optional_features;
+    identity.frontend_dialect = frontend_dialect;
+    return identity;
+}
+
+pub fn test_cache_identity_ignores_producer(): i32 {
+    let stored = make_cache_identity(
+        "pkg/main.zith", "zith-shared-hir", 1u32, hirSchemaVersion, 7u64, 0u64, "Zith--");
+    let expected = make_cache_identity(
+        "pkg/main.zith", "zith-shared-hir", 1u32, hirSchemaVersion, 7u64,
+        0xFFFFFFFFFFFFFFFFu64, "Zith");
+    if (compare_hir_identity(&stored, &expected) == HirCacheDecision.Compatible) {
+        return 0;
+    }
+    return 1;
+}
+
+pub fn test_cache_identity_rejects_semantic_mismatch(): i32 {
+    let stored_module = make_cache_identity(
+        "pkg/main.zith", "zith-shared-hir", 1u32, hirSchemaVersion, 7u64, 0u64, "Zith--");
+    let wrong_module = make_cache_identity(
+        "pkg/other.zith", "zith-shared-hir", 1u32, hirSchemaVersion, 7u64, 0u64, "Zith");
+    let stored_profile = make_cache_identity(
+        "pkg/main.zith", "zith-shared-hir", 1u32, hirSchemaVersion, 7u64, 0u64, "Zith--");
+    let wrong_profile = make_cache_identity(
+        "pkg/main.zith", "zith--", 1u32, hirSchemaVersion, 7u64, 0u64, "Zith");
+    let stored_profile_version = make_cache_identity(
+        "pkg/main.zith", "zith-shared-hir", 1u32, hirSchemaVersion, 7u64, 0u64, "Zith--");
+    let wrong_profile_version = make_cache_identity(
+        "pkg/main.zith", "zith-shared-hir", 2u32, hirSchemaVersion, 7u64, 0u64, "Zith");
+    let stored_schema = make_cache_identity(
+        "pkg/main.zith", "zith-shared-hir", 1u32, hirSchemaVersion, 7u64, 0u64, "Zith--");
+    let wrong_schema = make_cache_identity(
+        "pkg/main.zith", "zith-shared-hir", 1u32, hirSchemaVersion + 1u32, 7u64, 0u64, "Zith");
+    if (compare_hir_identity(&stored_module, &wrong_module) != HirCacheDecision.ModuleMismatch) {
+        return 1;
+    }
+    if (compare_hir_identity(&stored_profile, &wrong_profile) !=
+        HirCacheDecision.SemanticProfileMismatch) {
+        return 2;
+    }
+    if (compare_hir_identity(&stored_profile_version, &wrong_profile_version) !=
+        HirCacheDecision.SemanticProfileMismatch) {
+        return 3;
+    }
+    if (compare_hir_identity(&stored_schema, &wrong_schema) != HirCacheDecision.HirSchemaMismatch) {
+        return 4;
+    }
+    return 0;
+}
+
+pub fn test_cache_rejects_invalid_required_features(): i32 {
+    let unknown_features = make_cache_identity(
+        "pkg/main.zith", "zith-shared-hir", 1u32, 1u32, 15u64, 0u64, "Zith--");
+    let missing = make_cache_identity(
+        "pkg/main.zith", "zith-shared-hir", 1u32, 1u32, 3u64, 0u64, "Zith--");
+    let expected_for_unknown = make_cache_identity(
+        "pkg/main.zith", "zith-shared-hir", 1u32, 1u32, 7u64, 0u64, "Zith");
+    if (compare_hir_identity(&unknown_features, &expected_for_unknown) !=
+        HirCacheDecision.RequiredFeatureMismatch) {
+        return 1;
+    }
+    let expected_for_missing = make_cache_identity(
+        "pkg/main.zith", "zith-shared-hir", 1u32, 1u32, 7u64, 0u64, "Zith");
+    if (compare_hir_identity(&missing, &expected_for_missing) !=
+        HirCacheDecision.RequiredFeatureMismatch) {
+        return 2;
+    }
+    return 0;
+}
+
+pub fn test_vir_version_compatibility(): i32 {
+    if (can_reuse_vir(virSchemaVersion, vmSemanticVersion) == false) {
+        return 1;
+    }
+    if (can_reuse_vir(virSchemaVersion + 1u32, vmSemanticVersion)) {
+        return 2;
+    }
+    if (can_reuse_vir(virSchemaVersion, vmSemanticVersion + 1u32)) {
+        return 3;
+    }
+    if (can_reuse_vir(0u32, vmSemanticVersion)) {
+        return 4;
+    }
+    if (can_reuse_vir(virSchemaVersion, 0u32)) {
+        return 5;
+    }
+    return 0;
+}

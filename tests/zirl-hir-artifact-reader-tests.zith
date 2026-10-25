@@ -1,0 +1,1528 @@
+from cache/zirl-artifact
+from cache/zirl-attrs-section
+from cache/zirl-code-section
+from cache/zirl-container
+from cache/zirl-canonical-types
+from cache/zirl-decl-section
+from cache/zirl-hir-artifact
+from cache/zirl-hir-artifact-contract
+from cache/zirl-hir-artifact-hydrate
+from cache/zirl-hir-artifact-reader
+from cache/zirl-hir-code
+from cache/zirl-metadata
+from cache/zirl-template-section
+from ir/hir
+from ir/hir-verify
+from ir/hir-verify-common
+from zirl-hir-artifact-support
+
+extern fn calloc(count: u64, size: u64): raw opaque
+extern fn free(ptr: raw opaque): void
+
+
+fn hir_artifact_read_fails_atomically(
+    bytes: []u8,
+    read_storage: *ZirlHirArtifactReadStorage,
+    hydration_storage: *ZirlHirArtifactHydrationStorage,
+    expected_error: ZirlHirArtifactReadError
+): bool {
+    let result = read_zirl_hir_artifact_module(
+        bytes,
+        read_storage,
+        hydration_storage
+    );
+    return result.error == expected_error and
+        hir_artifact_module_is_empty(result.module);
+}
+
+fn hir_artifact_mutated_reference_fails_atomically(
+    bytes: []u8,
+    identity: *ZirlArtifactIdentity,
+    section_id: u16,
+    byte_offset: u64,
+    replacement: u8,
+    read_storage: *ZirlHirArtifactReadStorage,
+    hydration_storage: *ZirlHirArtifactHydrationStorage,
+    output: []u8,
+    expected_error: ZirlHirArtifactReadError
+): bool {
+    let original = read_zirl_artifact(bytes, &raw read_storage->artifact);
+    if (original.error != ZirlArtifactError.None) {
+        return false;
+    }
+    let no_payload: [0]u8 = [];
+    var payload = raw no_payload[0u64..0u64];
+    var found = false;
+    for (offset in 1u64..@lengthOf(original.sections)) {
+        let index = offset - 1u64;
+        let section: ZirlArtifactSection = raw original.sections[index];
+        if (section.id == section_id) {
+            payload = section.payload;
+            found = true;
+            break;
+        }
+    }
+    if (not found or byte_offset >= @lengthOf(payload)) {
+        return false;
+    }
+
+    let previous = raw payload[byte_offset];
+    raw payload[byte_offset] = replacement;
+    var writable_identity = *identity;
+    let rewritten = write_zirl_artifact(
+        &raw writable_identity,
+        original.sections,
+        output
+    );
+    raw payload[byte_offset] = previous;
+    if (rewritten.error != ZirlArtifactError.None or rewritten.size == 0u64) {
+        return false;
+    }
+    return hir_artifact_read_fails_atomically(
+        raw output[0u64..rewritten.size],
+        read_storage,
+        hydration_storage,
+        expected_error
+    );
+}
+
+fn hir_artifact_identity_count_mismatch_fails_atomically(
+    bytes: []u8,
+    identity: *ZirlArtifactIdentity,
+    count_kind: u8,
+    read_storage: *ZirlHirArtifactReadStorage,
+    hydration_storage: *ZirlHirArtifactHydrationStorage,
+    output: []u8
+): bool {
+    let original = read_zirl_artifact(bytes, &raw read_storage->artifact);
+    if (original.error != ZirlArtifactError.None) {
+        return false;
+    }
+    let original_typed = read_zirl_hir_artifact_sections(bytes, read_storage);
+    if (original_typed.error != ZirlHirArtifactReadError.None) {
+        return false;
+    }
+    let original_declaration_count =
+        @lengthOf(original_typed.declarations.declarations);
+    let original_template_count =
+        @lengthOf(original_typed.templates.templates);
+    let original_function_count =
+        @lengthOf(original_typed.code.functions);
+
+    var mismatched_identity = *identity;
+    if (count_kind == 0u8) {
+        if (original_declaration_count == 0xFFFFFFFFu64) {
+            return false;
+        }
+        mismatched_identity.declaration_count =
+            (original_declaration_count + 1u64) as u32;
+    } else if (count_kind == 1u8) {
+        if (original_template_count == 0xFFFFFFFFu64) {
+            return false;
+        }
+        mismatched_identity.template_count =
+            (original_template_count + 1u64) as u32;
+    } else if (count_kind == 2u8) {
+        if (original_function_count == 0xFFFFFFFFu64) {
+            return false;
+        }
+        mismatched_identity.function_count =
+            (original_function_count + 1u64) as u32;
+    } else {
+        return false;
+    }
+    let rewritten = write_zirl_artifact(
+        &raw mismatched_identity,
+        original.sections,
+        output
+    );
+    if (rewritten.error != ZirlArtifactError.None or rewritten.size == 0u64) {
+        return false;
+    }
+    return hir_artifact_read_fails_atomically(
+        raw output[0u64..rewritten.size],
+        read_storage,
+        hydration_storage,
+        ZirlHirArtifactReadError.IdentityMismatch
+    );
+}
+
+fn hir_artifact_nonempty_section_fails_without_storage(
+    bytes: []u8,
+    expected_identity: *ZirlArtifactIdentity,
+    section_id: u16,
+    payload: []u8,
+    read_storage: *ZirlHirArtifactReadStorage,
+    hydration_storage: *ZirlHirArtifactHydrationStorage,
+    output: []u8
+): bool {
+    let original = read_zirl_artifact(bytes, &raw read_storage->artifact);
+    if (original.error != ZirlArtifactError.None or
+        @lengthOf(original.sections) != 5u64) {
+        return false;
+    }
+
+    var section_index = 0u64;
+    if (section_id == zirlHirDeclsSectionId) {
+        section_index = 1u64;
+    } else (section_id == zirlHirTemplatesSectionId) {
+        section_index = 2u64;
+    } else {
+        return false;
+    }
+    raw read_storage->artifact.sections[section_index].payload = payload;
+
+    var identity = *expected_identity;
+    if (section_id == zirlHirDeclsSectionId) {
+        identity.declaration_count = 1u32;
+    } else {
+        identity.declaration_count = original.header.declaration_count;
+    }
+    identity.template_count = 1u32;
+    let written = write_zirl_artifact(
+        &raw identity,
+        read_storage->artifact.sections,
+        output
+    );
+    if (written.error != ZirlArtifactError.None or written.size == 0u64) {
+        return false;
+    }
+    return hir_artifact_read_fails_atomically(
+        raw output[0u64..written.size],
+        read_storage,
+        hydration_storage,
+        ZirlHirArtifactReadError.InvalidHydratedHir
+    );
+}
+
+pub fn test_nonempty_hir_artifact_reader_hydrates(
+    bytes: []u8,
+    expected: *HirModule,
+    expected_identity: *ZirlArtifactIdentity,
+    expected_paths: [][]char,
+    scratch: *char
+): i32 {
+    var writable_bytes = bytes;
+    let no_chars: [0]char = [];
+    let artifact_path = raw scratch[0u64..64u64];
+    let artifact_module_name = raw scratch[64u64..80u64];
+    let artifact_profile_name = raw scratch[80u64..96u64];
+    let dependency_text = raw scratch[192u64..320u64];
+    var artifact_dependencies: [1]ZirlArtifactDependency = [
+        ZirlArtifactDependency {
+            canonical_path: raw no_chars[0u64..0u64],
+            import_key: raw no_chars[0u64..0u64],
+            public_abi_hi: 0u32,
+            public_abi_lo: 0u32,
+        },
+    ];
+    var artifact_entries: [5]ZirlSectionEntry = [
+        ZirlSectionEntry { id: 0u16, flags: 0u16, schema_version: 0u16, reserved: 0u16, offset: 0u64, size: 0u64 },
+        ZirlSectionEntry { id: 0u16, flags: 0u16, schema_version: 0u16, reserved: 0u16, offset: 0u64, size: 0u64 },
+        ZirlSectionEntry { id: 0u16, flags: 0u16, schema_version: 0u16, reserved: 0u16, offset: 0u64, size: 0u64 },
+        ZirlSectionEntry { id: 0u16, flags: 0u16, schema_version: 0u16, reserved: 0u16, offset: 0u64, size: 0u64 },
+        ZirlSectionEntry { id: 0u16, flags: 0u16, schema_version: 0u16, reserved: 0u16, offset: 0u64, size: 0u64 },
+    ];
+    let no_payload: [0]u8 = [];
+    var artifact_sections: [5]ZirlArtifactSection = [
+        ZirlArtifactSection { id: 0u16, flags: 0u16, schema_version: 0u16, payload: raw no_payload[0u64..0u64] },
+        ZirlArtifactSection { id: 0u16, flags: 0u16, schema_version: 0u16, payload: raw no_payload[0u64..0u64] },
+        ZirlArtifactSection { id: 0u16, flags: 0u16, schema_version: 0u16, payload: raw no_payload[0u64..0u64] },
+        ZirlArtifactSection { id: 0u16, flags: 0u16, schema_version: 0u16, payload: raw no_payload[0u64..0u64] },
+        ZirlArtifactSection { id: 0u16, flags: 0u16, schema_version: 0u16, payload: raw no_payload[0u64..0u64] },
+    ];
+    var artifact_storage = ZirlArtifactStorage {
+        canonical_path: raw artifact_path[0u64..64u64],
+        module_name: raw artifact_module_name[0u64..16u64],
+        semantic_profile_name: raw artifact_profile_name[0u64..16u64],
+        dependency_text: dependency_text,
+        dependencies: raw artifact_dependencies[0u64..1u64],
+        entries: raw artifact_entries[0u64..5u64],
+        sections: raw artifact_sections[0u64..5u64],
+    };
+
+    let metadata_module_name = raw scratch[96u64..112u64];
+    let metadata_name_scratch = raw scratch[112u64..128u64];
+    let metadata_string_bytes = raw scratch[128u64..160u64];
+    let metadata_path_bytes = raw scratch[160u64..192u64];
+    var metadata_strings: [5][]char = [
+        raw metadata_string_bytes[0u64..6u64],
+        raw metadata_string_bytes[6u64..12u64],
+        raw metadata_string_bytes[12u64..20u64],
+        raw metadata_string_bytes[20u64..25u64],
+        raw metadata_string_bytes[25u64..32u64],
+    ];
+    var metadata_paths: [1][]char = [
+        raw metadata_path_bytes[0u64..32u64],
+    ];
+    let metadata_type_0 = must expected->types[0u64];
+    let metadata_type_1 = must expected->types[1u64];
+    let metadata_type_2 = must expected->types[2u64];
+    let metadata_type_3 = must expected->types[3u64];
+    let metadata_type_4 = must expected->types[4u64];
+    let metadata_types: [5]HirType = [
+        metadata_type_0,
+        metadata_type_1,
+        metadata_type_2,
+        metadata_type_3,
+        metadata_type_4,
+    ];
+    let no_type_ids: [0]HirTypeId = [];
+    let metadata_type_args: [1]HirTypeId = [0u32];
+    let no_string_ids: [0]HirStringId = [];
+    let no_structs: [0]HirStructDef = [];
+    let no_struct_offsets: [0]u64 = [];
+    let no_enums: [0]HirEnumDef = [];
+    let no_enum_variants: [0]HirEnumVariant = [];
+    let no_unions: [0]HirUnionDef = [];
+    var metadata_storage = ZirlMetadataStorage {
+        module_name: raw metadata_module_name[0u64..16u64],
+        name_scratch: raw metadata_name_scratch[0u64..16u64],
+        paths: raw metadata_paths[0u64..1u64],
+        path_bytes: raw metadata_path_bytes[0u64..32u64],
+        strings: raw metadata_strings[0u64..5u64],
+        string_bytes: raw metadata_string_bytes[0u64..32u64],
+        types: raw metadata_types[0u64..5u64],
+        type_args: raw metadata_type_args[0u64..1u64],
+        type_arg_names: raw no_string_ids[0u64..0u64],
+        struct_defs: raw no_structs[0u64..0u64],
+        struct_field_names: raw no_string_ids[0u64..0u64],
+        struct_field_types: raw no_type_ids[0u64..0u64],
+        struct_foreign_offsets: raw no_struct_offsets[0u64..0u64],
+        struct_type_args: raw no_type_ids[0u64..0u64],
+        enum_defs: raw no_enums[0u64..0u64],
+        enum_variants: raw no_enum_variants[0u64..0u64],
+        union_defs: raw no_unions[0u64..0u64],
+        union_member_types: raw no_type_ids[0u64..0u64],
+    };
+
+    let no_methods: [0]HirDeclarationId = [];
+    var reader_declaration_methods: [2]HirDeclarationId =
+        [invalidDeclaration, invalidDeclaration];
+    var reader_template_methods: [2]HirDeclarationId =
+        [invalidDeclaration, invalidDeclaration];
+    let reader_template_bounds: [1]HirTypeId = [invalidType];
+    let reader_template_params: [1]ZirlGenericParamRecord = [
+        ZirlGenericParamRecord {
+            name_id: 1u32,
+            bound_type_ids: raw reader_template_bounds[0u64..1u64],
+        },
+    ];
+    let no_order: [0]u32 = [];
+    var reader_template_parameter_types: [1]HirTypeId = [invalidType];
+    var reader_template_parameter_names: [1]HirStringId = [invalidString];
+    var reader_template_field_names: [2]HirStringId =
+        [invalidString, invalidString];
+    var reader_template_field_types: [2]HirTypeId = [invalidType, invalidType];
+    var reader_template_field_order: [2]u32 = [0u32, 0u32];
+    var reader_template_traits: [1]HirTypeId = [invalidType];
+    var declaration_records: [3]ZirlDeclarationRecord = [
+        ZirlDeclarationRecord {
+            kind: HirDeclarationKind.Variable,
+            visibility: HirVisibility.Public,
+            is_extern: false,
+            discardable: false,
+            module_depth: 1,
+            name_id: 1u32,
+            type_id: 0u32,
+            template_index: 0xFFFFFFFFu32,
+            body_function_index: 0xFFFFFFFFu32,
+            field_name_ids: raw no_string_ids[0u64..0u64],
+            field_type_ids: raw no_type_ids[0u64..0u64],
+            method_declaration_indices:
+                raw reader_declaration_methods[0u64..2u64],
+        },
+        ZirlDeclarationRecord {
+            kind: HirDeclarationKind.Function,
+            visibility: HirVisibility.Private,
+            is_extern: true,
+            discardable: false,
+            module_depth: 0,
+            name_id: invalidString,
+            type_id: invalidType,
+            template_index: invalidTemplate,
+            body_function_index: invalidFunction,
+            field_name_ids: raw no_string_ids[0u64..0u64],
+            field_type_ids: raw no_type_ids[0u64..0u64],
+            method_declaration_indices: raw reader_declaration_methods[0u64..0u64],
+        },
+        ZirlDeclarationRecord {
+            kind: HirDeclarationKind.Function,
+            visibility: HirVisibility.Private,
+            is_extern: true,
+            discardable: false,
+            module_depth: 0,
+            name_id: invalidString,
+            type_id: invalidType,
+            template_index: invalidTemplate,
+            body_function_index: invalidFunction,
+            field_name_ids: raw no_string_ids[0u64..0u64],
+            field_type_ids: raw no_type_ids[0u64..0u64],
+            method_declaration_indices: raw reader_declaration_methods[0u64..0u64],
+        },
+    ];
+    var declaration_storage = ZirlDeclStorage {
+        declarations: raw declaration_records[0u64..3u64],
+        field_name_ids: raw no_string_ids[0u64..0u64],
+        field_type_ids: raw no_type_ids[0u64..0u64],
+        method_declaration_indices:
+            raw reader_declaration_methods[0u64..2u64],
+    };
+    var template_records: [1]ZirlTemplateRecord = [
+        ZirlTemplateRecord {
+            kind: HirDeclarationKind.Struct,
+            is_extern: false,
+            name_id: 1u32,
+            declaration_index: 0u32,
+            function_index: invalidFunction,
+            return_type_id: 0u32,
+            variadic: false,
+            state_function: false,
+            foreign_c: false,
+            uses_tail_calling_convention: false,
+            params: raw reader_template_params[0u64..1u64],
+            param_type_ids:
+                raw reader_template_parameter_types[0u64..1u64],
+            param_name_ids:
+                raw reader_template_parameter_names[0u64..1u64],
+            field_name_ids: raw reader_template_field_names[0u64..2u64],
+            field_type_ids: raw reader_template_field_types[0u64..2u64],
+            canonical_field_order:
+                raw reader_template_field_order[0u64..2u64],
+            method_declaration_indices:
+                raw reader_template_methods[0u64..2u64],
+            trait_type_ids: raw reader_template_traits[0u64..1u64],
+        },
+    ];
+    var template_storage = ZirlTemplateStorage {
+        templates: raw template_records[0u64..1u64],
+        params: raw reader_template_params[0u64..1u64],
+        param_bound_type_ids: raw reader_template_bounds[0u64..1u64],
+        param_type_ids:
+            raw reader_template_parameter_types[0u64..1u64],
+        param_name_ids:
+            raw reader_template_parameter_names[0u64..1u64],
+        field_name_ids: raw reader_template_field_names[0u64..2u64],
+        field_type_ids: raw reader_template_field_types[0u64..2u64],
+        canonical_field_order:
+            raw reader_template_field_order[0u64..2u64],
+        method_declaration_indices:
+            raw reader_template_methods[0u64..2u64],
+        trait_type_ids: raw reader_template_traits[0u64..1u64],
+    };
+
+    var compact_expressions: [7]ZirlCompactExpr = [
+        empty_compact_expr(),
+        empty_compact_expr(),
+        empty_compact_expr(),
+        empty_compact_expr(),
+        empty_compact_expr(),
+        empty_compact_expr(),
+        empty_compact_expr(),
+    ];
+    let no_u32s: [0]u32 = [];
+    let no_u64s: [0]u64 = [];
+    var compact_expression_args: [1]u32 = [0u32];
+    var compact_expression_arg_types: [1]u32 = [0u32];
+    var compact_functions: [1]ZirlCompactFunction = [
+        empty_compact_function(),
+    ];
+    var parameter_type_ids: [1]u32 = [0u32];
+    var parameter_name_ids: [1]u32 = [0u32];
+    let no_parameter_slots: [0]u32 = [];
+    var compact_blocks: [1]ZirlCompactBasicBlock = [
+        ZirlCompactBasicBlock {
+            instructions: raw no_u32s[0u64..0u64],
+            terminator: 0u32,
+        },
+    ];
+    var block_instructions: [2]u32 = [0u32, 0u32];
+    let code_globals: [1]ZirlCodeGlobal = [
+        ZirlCodeGlobal {
+            name_id: invalidString,
+            type_id: invalidZirlType,
+            initializer: invalidExpr,
+        },
+    ];
+    let no_vtable_args: [0]u32 = [];
+    var compact_vtables: [1]ZirlCodeVTable = [
+        ZirlCodeVTable {
+            name_id: invalidString,
+            slot_function_name_ids: raw no_vtable_args[0u64..0u64],
+            slot_function_signature_type_ids:
+                raw no_vtable_args[0u64..0u64],
+        },
+    ];
+    var vtable_function_names: [1]u32 = [0u32];
+    var vtable_function_signatures: [1]u32 = [0u32];
+    let no_mappings: [0]ZirlCanonicalMapping = [];
+    var code_storage = ZirlCodeStorage {
+        expressions: raw compact_expressions[0u64..7u64],
+        expression_args: raw compact_expression_args[0u64..1u64],
+        expression_arg_types: raw compact_expression_arg_types[0u64..1u64],
+        expression_integers: raw no_u64s[0u64..0u64],
+        functions: raw compact_functions[0u64..1u64],
+        function_parameter_type_ids: raw parameter_type_ids[0u64..1u64],
+        function_parameter_name_ids: raw parameter_name_ids[0u64..1u64],
+        function_parameter_slot_ids: raw no_parameter_slots[0u64..0u64],
+        blocks: raw compact_blocks[0u64..1u64],
+        block_instructions: raw block_instructions[0u64..2u64],
+        globals: raw code_globals[0u64..1u64],
+        vtables: raw compact_vtables[0u64..1u64],
+        vtable_function_name_ids: raw vtable_function_names[0u64..1u64],
+        vtable_function_signature_type_ids:
+            raw vtable_function_signatures[0u64..1u64],
+        canonical_mappings: raw no_mappings[0u64..0u64],
+    };
+
+    var slot_records: [1]ZirlSlotAttrsRecord = [
+        ZirlSlotAttrsRecord {
+            slot_id: invalidSlot,
+            ownership: HirOwnership.Default,
+            consumed: HirConsumedState.Unknown,
+            non_null: false,
+            volatile_slot: false,
+        },
+    ];
+    let call_escapes: [1]HirCallEscape = [HirCallEscape.Borrow];
+    var call_records: [1]ZirlCallAttrsRecord = [
+        ZirlCallAttrsRecord {
+            expr_id: 6u32,
+            returns_argument: 0xFFFFFFFFu32,
+            arg_escapes: raw call_escapes[0u64..1u64],
+        },
+    ];
+    var function_attributes: [1]ZirlFunctionAttrsRecord = [
+        ZirlFunctionAttrsRecord {
+            function_index: 0u32,
+            return_consumed: HirConsumedState.Unknown,
+            non_null: false,
+            no_alias: false,
+            read_only: false,
+            no_capture: false,
+            discardable: false,
+        },
+    ];
+    var safety_proofs: [6]ZirlSafetyProofRecord = [
+        ZirlSafetyProofRecord { expr_id: 0u32, kind: HirSafetyProofKind.BoundsValid, operand_a: invalidExpr, operand_b: invalidExpr, operand_c: invalidExpr, present: false },
+        ZirlSafetyProofRecord { expr_id: 0u32, kind: HirSafetyProofKind.BoundsValid, operand_a: invalidExpr, operand_b: invalidExpr, operand_c: invalidExpr, present: false },
+        ZirlSafetyProofRecord { expr_id: 0u32, kind: HirSafetyProofKind.BoundsValid, operand_a: invalidExpr, operand_b: invalidExpr, operand_c: invalidExpr, present: false },
+        ZirlSafetyProofRecord { expr_id: 0u32, kind: HirSafetyProofKind.BoundsValid, operand_a: invalidExpr, operand_b: invalidExpr, operand_c: invalidExpr, present: false },
+        ZirlSafetyProofRecord { expr_id: 0u32, kind: HirSafetyProofKind.BoundsValid, operand_a: invalidExpr, operand_b: invalidExpr, operand_c: invalidExpr, present: false },
+        ZirlSafetyProofRecord { expr_id: 0u32, kind: HirSafetyProofKind.BoundsValid, operand_a: invalidExpr, operand_b: invalidExpr, operand_c: invalidExpr, present: false },
+    ];
+    var proof_seen: [6]bool = [false, false, false, false, false, false];
+    var attrs_storage = ZirlAttrsStorage {
+        slots: raw slot_records[0u64..1u64],
+        calls: raw call_records[0u64..1u64],
+        call_escapes: raw call_escapes[0u64..1u64],
+        functions: raw function_attributes[0u64..1u64],
+        safety_proofs: raw safety_proofs[0u64..6u64],
+        proof_expr_seen: raw proof_seen[0u64..6u64],
+    };
+    var read_storage = ZirlHirArtifactReadStorage {
+        artifact: artifact_storage,
+        metadata: metadata_storage,
+        declarations: declaration_storage,
+        templates: template_storage,
+        code: code_storage,
+        attrs: attrs_storage,
+    };
+
+    let no_expressions: [0]HirExprId = [];
+    let no_hir_blocks: [0]HirBasicBlock = [];
+    let empty_literal = HirLiteral {
+        value_kind: HirLiteralKind.Integer,
+        integer: 0i64,
+        float: 0.0,
+        boolean: false,
+        string_id: invalidString,
+        type_id: invalidType,
+    };
+    var hydrated_expressions: [7]HirExpr = [
+        HirExpr { empty_literal },
+        HirExpr { empty_literal },
+        HirExpr { empty_literal },
+        HirExpr { empty_literal },
+        HirExpr { empty_literal },
+        HirExpr { empty_literal },
+        HirExpr { empty_literal },
+    ];
+    let empty_function = HirFunction {
+        name_id: invalidString,
+        parameter_types: raw no_type_ids[0u64..0u64],
+        parameter_name_ids: raw no_string_ids[0u64..0u64],
+        parameter_slots: raw no_type_ids[0u64..0u64],
+        return_type: invalidType,
+        state_function: false,
+        uses_tail_calling_convention: false,
+        machine_return_type: invalidType,
+        machine_id: 0u32,
+        variadic: false,
+        variadic_slice_param: 0xFFFFFFFFu32,
+        foreign_c: false,
+        has_body: false,
+        foreign_adapter_name_id: invalidString,
+        blocks: raw no_hir_blocks[0u64..0u64],
+    };
+    var hydrated_functions: [1]HirFunction = [empty_function];
+    var hydrated_blocks: [1]HirBasicBlock = [
+        HirBasicBlock {
+            instructions: raw no_expressions[0u64..0u64],
+            terminator: invalidExpr,
+        },
+    ];
+    var hydrated_parameter_types: [1]HirTypeId = [invalidType];
+    var hydrated_template_bounds: [1]HirTypeId = [invalidType];
+    var hydrated_template_params: [1]HirGenericParam = [
+        HirGenericParam {
+            name_id: invalidString,
+            bound_type_ids: raw no_type_ids[0u64..0u64],
+        },
+    ];
+    var hydrated_template_parameter_types: [1]HirTypeId = [invalidType];
+    var hydrated_template_parameter_names: [1]HirStringId = [invalidString];
+    var hydrated_template_field_names: [2]HirStringId =
+        [invalidString, invalidString];
+    var hydrated_template_field_types: [2]HirTypeId = [invalidType, invalidType];
+    var hydrated_template_field_order: [2]u32 = [0u32, 0u32];
+    var hydrated_template_traits: [1]HirTypeId = [invalidType];
+    var hydrated_expression_argument_types: [1]HirTypeId = [invalidType];
+    var hydrated_vtable_functions: [1]HirFunctionId = [invalidFunction];
+    var hydrated_call_arguments: [1]HirCallArgAttrs = [
+        HirCallArgAttrs { escape: HirCallEscape.None },
+    ];
+    var hydrated_globals: [1]HirGlobalConst = [
+        HirGlobalConst {
+            name_id: invalidString,
+            type_id: invalidType,
+            initializer: invalidExpr,
+        },
+    ];
+    var hydrated_vtables: [1]HirVTable = [
+        HirVTable {
+            name_id: invalidString,
+            slot_functions:
+                raw hydrated_vtable_functions[0u64..0u64],
+        },
+    ];
+    var hydrated_slots: [1]HirSlotAttrs = [
+        HirSlotAttrs {
+            ownership: HirOwnership.Default,
+            consumed: HirConsumedState.Unknown,
+            non_null: false,
+            volatile_slot: false,
+        },
+    ];
+    let no_call_arguments: [0]HirCallArgAttrs = [];
+    var hydrated_call_attrs: [7]HirCallAttrs = [
+        HirCallAttrs { args: raw no_call_arguments[0u64..0u64], returns_argument: 0xFFFFFFFFu32 },
+        HirCallAttrs { args: raw no_call_arguments[0u64..0u64], returns_argument: 0xFFFFFFFFu32 },
+        HirCallAttrs { args: raw no_call_arguments[0u64..0u64], returns_argument: 0xFFFFFFFFu32 },
+        HirCallAttrs { args: raw no_call_arguments[0u64..0u64], returns_argument: 0xFFFFFFFFu32 },
+        HirCallAttrs { args: raw no_call_arguments[0u64..0u64], returns_argument: 0xFFFFFFFFu32 },
+        HirCallAttrs { args: raw no_call_arguments[0u64..0u64], returns_argument: 0xFFFFFFFFu32 },
+        HirCallAttrs { args: raw no_call_arguments[0u64..0u64], returns_argument: 0xFFFFFFFFu32 },
+    ];
+    var hydrated_function_attrs: [1]HirFunctionAttrs = [
+        HirFunctionAttrs {
+            return_consumed: HirConsumedState.Unknown,
+            non_null: false,
+            no_alias: false,
+            read_only: false,
+            no_capture: false,
+            discardable: false,
+        },
+    ];
+    var hydrated_proofs: [6]HirSafetyProof = [
+        HirSafetyProof { kind: HirSafetyProofKind.BoundsValid, operand_a: invalidExpr, operand_b: invalidExpr, operand_c: invalidExpr, present: false },
+        HirSafetyProof { kind: HirSafetyProofKind.BoundsValid, operand_a: invalidExpr, operand_b: invalidExpr, operand_c: invalidExpr, present: false },
+        HirSafetyProof { kind: HirSafetyProofKind.BoundsValid, operand_a: invalidExpr, operand_b: invalidExpr, operand_c: invalidExpr, present: false },
+        HirSafetyProof { kind: HirSafetyProofKind.BoundsValid, operand_a: invalidExpr, operand_b: invalidExpr, operand_c: invalidExpr, present: false },
+        HirSafetyProof { kind: HirSafetyProofKind.BoundsValid, operand_a: invalidExpr, operand_b: invalidExpr, operand_c: invalidExpr, present: false },
+        HirSafetyProof { kind: HirSafetyProofKind.BoundsValid, operand_a: invalidExpr, operand_b: invalidExpr, operand_c: invalidExpr, present: false },
+    ];
+    let no_declaration_members: [0]HirDeclarationId = [];
+    let no_hydration_declaration_ids: [0]HirDeclarationId = [];
+    let no_hydration_templates: [0]HirGenericParam = [];
+    let no_hydration_string_ids: [0]HirStringId = [];
+    let no_hydration_u32s: [0]u32 = [];
+    var hydrated_declaration_methods: [2]HirDeclarationId =
+        [invalidDeclaration, invalidDeclaration];
+    var hydrated_template_methods: [2]HirDeclarationId =
+        [invalidDeclaration, invalidDeclaration];
+    var hydrated_declarations: [3]HirDeclaration = [
+        HirDeclaration {
+            name_id: invalidString,
+            kind: HirDeclarationKind.Context,
+            visibility: HirVisibility.Private,
+            module_depth: 0i32,
+            type_id: invalidType,
+            is_extern: false,
+            discardable: false,
+            body_function_id: invalidFunction,
+            template_id: invalidTemplate,
+            members: raw no_declaration_members[0u64..0u64],
+            method_declaration_ids:
+                raw hydrated_declaration_methods[0u64..2u64],
+        },
+        HirDeclaration {
+            name_id: invalidString,
+            kind: HirDeclarationKind.Function,
+            visibility: HirVisibility.Private,
+            module_depth: 0i32,
+            type_id: invalidType,
+            is_extern: true,
+            discardable: false,
+            body_function_id: invalidFunction,
+            template_id: invalidTemplate,
+            members: raw no_declaration_members[0u64..0u64],
+            method_declaration_ids:
+                raw hydrated_declaration_methods[0u64..0u64],
+        },
+        HirDeclaration {
+            name_id: invalidString,
+            kind: HirDeclarationKind.Function,
+            visibility: HirVisibility.Private,
+            module_depth: 0i32,
+            type_id: invalidType,
+            is_extern: true,
+            discardable: false,
+            body_function_id: invalidFunction,
+            template_id: invalidTemplate,
+            members: raw no_declaration_members[0u64..0u64],
+            method_declaration_ids:
+                raw hydrated_declaration_methods[0u64..0u64],
+        },
+    ];
+    var hydrated_templates: [1]HirTemplate = [
+        HirTemplate {
+            declaration_id: invalidDeclaration,
+            function_id: invalidFunction,
+            kind: HirDeclarationKind.Context,
+            is_extern: false,
+            name_id: invalidString,
+            return_type_id: invalidType,
+            variadic: false,
+            state_function: false,
+            foreign_c: false,
+            uses_tail_calling_convention: false,
+            params: raw no_hydration_templates[0u64..0u64],
+            param_type_ids: raw no_type_ids[0u64..0u64],
+            param_name_ids: raw no_hydration_string_ids[0u64..0u64],
+            field_name_ids: raw no_hydration_string_ids[0u64..0u64],
+            field_type_ids: raw no_type_ids[0u64..0u64],
+            canonical_field_order: raw no_hydration_u32s[0u64..0u64],
+            method_declaration_indices:
+                raw hydrated_template_methods[0u64..2u64],
+            trait_type_ids: raw no_type_ids[0u64..0u64],
+        },
+    ];
+    var module_storage = empty_hir_module();
+    module_storage.expressions = raw hydrated_expressions[0u64..7u64];
+    module_storage.functions = raw hydrated_functions[0u64..1u64];
+    module_storage.global_constants = raw hydrated_globals[0u64..1u64];
+    module_storage.vtables = raw hydrated_vtables[0u64..1u64];
+    module_storage.slot_attrs = raw hydrated_slots[0u64..1u64];
+    module_storage.call_attrs = raw hydrated_call_attrs[0u64..7u64];
+    module_storage.function_attrs = raw hydrated_function_attrs[0u64..1u64];
+    module_storage.safety_attrs = HirSafetyAttrs {
+        proofs: raw hydrated_proofs[0u64..6u64],
+    };
+    module_storage.declarations = raw hydrated_declarations[0u64..3u64];
+    module_storage.templates = raw hydrated_templates[0u64..1u64];
+    var hydration_storage = ZirlHirArtifactHydrationStorage {
+        module: module_storage,
+        expression_argument_types:
+            raw hydrated_expression_argument_types[0u64..1u64],
+        function_parameter_types:
+            raw hydrated_parameter_types[0u64..1u64],
+        blocks: raw hydrated_blocks[0u64..1u64],
+        vtable_slot_functions:
+            raw hydrated_vtable_functions[0u64..1u64],
+        call_attr_arguments:
+            raw hydrated_call_arguments[0u64..1u64],
+        declaration_method_ids:
+            raw hydrated_declaration_methods[0u64..2u64],
+        template_params: raw hydrated_template_params[0u64..1u64],
+        template_bound_type_ids:
+            raw hydrated_template_bounds[0u64..1u64],
+        template_param_type_ids:
+            raw hydrated_template_parameter_types[0u64..1u64],
+        template_param_name_ids:
+            raw hydrated_template_parameter_names[0u64..1u64],
+        template_field_name_ids:
+            raw hydrated_template_field_names[0u64..2u64],
+        template_field_type_ids:
+            raw hydrated_template_field_types[0u64..2u64],
+        template_field_order:
+            raw hydrated_template_field_order[0u64..2u64],
+        template_method_ids:
+            raw hydrated_template_methods[0u64..2u64],
+        template_trait_type_ids:
+            raw hydrated_template_traits[0u64..1u64],
+    };
+
+    let hydrated = read_zirl_hir_artifact_module(
+        bytes,
+        &raw read_storage,
+        &raw hydration_storage
+    );
+    if (hydrated.error != ZirlHirArtifactReadError.None) {
+        return 1;
+    }
+    let verified = verify_hir(&raw hydrated.module);
+    if (verified.error != HirVerifyError.None) {
+        return 2;
+    }
+    if (not hir_artifact_modules_equal(hydrated.module, *expected)) {
+        return 8;
+    }
+    if (not hir_artifact_identities_equal(
+            hydrated.identity,
+            *expected_identity
+        ) or
+        not hir_artifact_paths_equal(hydrated.paths, expected_paths)) {
+        return 4;
+    }
+    if (@lengthOf(hydrated.module.strings) != @lengthOf(expected->strings) or
+        @lengthOf(hydrated.module.types) != @lengthOf(expected->types) or
+        @lengthOf(hydrated.module.expressions) !=
+            @lengthOf(expected->expressions) or
+        @lengthOf(hydrated.module.functions) !=
+            @lengthOf(expected->functions) or
+        @lengthOf(hydrated.module.safety_attrs.proofs) !=
+            @lengthOf(expected->safety_attrs.proofs)) {
+        return 3;
+    }
+    if (not hir_artifact_test_text_matches(
+            hydrated.identity.canonical_path,
+            "/project/src/main.zith"
+        ) or
+        not hir_artifact_test_text_matches(
+            hydrated.identity.module_name,
+            "main"
+        ) or
+        not hir_artifact_test_text_matches(
+            raw hydrated.paths[0u64],
+            "src/main.zith"
+        )) {
+        return 4;
+    }
+    let truncated_size = @lengthOf(bytes) - 1u64;
+    if (not hir_artifact_read_fails_atomically(
+            raw bytes[0u64..truncated_size],
+            &raw read_storage,
+            &raw hydration_storage,
+            ZirlHirArtifactReadError.InvalidArtifact
+        )) {
+        return 9;
+    }
+    let last_byte = @lengthOf(bytes) - 1u64;
+    raw writable_bytes[last_byte] = raw writable_bytes[last_byte] xor 1u8;
+    let checksum_failure = hir_artifact_read_fails_atomically(
+        bytes,
+        &raw read_storage,
+        &raw hydration_storage,
+        ZirlHirArtifactReadError.InvalidArtifact
+    );
+    raw writable_bytes[last_byte] = raw writable_bytes[last_byte] xor 1u8;
+    if (not checksum_failure) {
+        return 10;
+    }
+
+    let decoded_artifact = read_zirl_artifact(
+        bytes,
+        &raw read_storage.artifact
+    );
+    if (decoded_artifact.error != ZirlArtifactError.None) {
+        return 20;
+    }
+    let section_table_offset =
+        (decoded_artifact.header.header_size as u64) - 120u64;
+    let attrs_entry_offset = section_table_offset + 96u64;
+    hir_artifact_write_u16(writable_bytes, attrs_entry_offset, 6u16);
+    hir_artifact_write_u16(writable_bytes, attrs_entry_offset + 2u64, 0u16);
+    let missing_required = hir_artifact_read_fails_atomically(
+        bytes,
+        &raw read_storage,
+        &raw hydration_storage,
+        ZirlHirArtifactReadError.InvalidArtifact
+    );
+    hir_artifact_write_u16(
+        writable_bytes,
+        attrs_entry_offset,
+        zirlHirAttrsSectionId
+    );
+    hir_artifact_write_u16(writable_bytes, attrs_entry_offset + 2u64, 1u16);
+    if (not missing_required) {
+        return 11;
+    }
+
+    hir_artifact_write_u16(writable_bytes, attrs_entry_offset, 6u16);
+    let unknown_required = hir_artifact_read_fails_atomically(
+        bytes,
+        &raw read_storage,
+        &raw hydration_storage,
+        ZirlHirArtifactReadError.InvalidArtifact
+    );
+    hir_artifact_write_u16(
+        writable_bytes,
+        attrs_entry_offset,
+        zirlHirAttrsSectionId
+    );
+    if (not unknown_required) {
+        return 12;
+    }
+
+    let original_hir_schema = raw bytes[8u64];
+    raw writable_bytes[8u64] = 0u8;
+    let incompatible_hir_schema = hir_artifact_read_fails_atomically(
+        bytes,
+        &raw read_storage,
+        &raw hydration_storage,
+        ZirlHirArtifactReadError.InvalidArtifact
+    );
+    raw writable_bytes[8u64] = original_hir_schema;
+    if (not incompatible_hir_schema) {
+        return 13;
+    }
+
+    let decls_schema_offset = section_table_offset + 24u64 + 4u64;
+    let attrs_schema_offset = attrs_entry_offset + 4u64;
+    let original_decls_schema = raw bytes[decls_schema_offset];
+    raw writable_bytes[decls_schema_offset] = 1u8;
+    let old_decls_schema = hir_artifact_read_fails_atomically(
+        bytes,
+        &raw read_storage,
+        &raw hydration_storage,
+        ZirlHirArtifactReadError.InvalidArtifact
+    );
+    raw writable_bytes[decls_schema_offset] = original_decls_schema;
+    if (not old_decls_schema) {
+        return 14;
+    }
+    let original_attrs_schema = raw bytes[attrs_schema_offset];
+    raw writable_bytes[attrs_schema_offset] = 1u8;
+    let old_attrs_schema = hir_artifact_read_fails_atomically(
+        bytes,
+        &raw read_storage,
+        &raw hydration_storage,
+        ZirlHirArtifactReadError.InvalidArtifact
+    );
+    raw writable_bytes[attrs_schema_offset] = original_attrs_schema;
+    if (not old_attrs_schema) {
+        return 15;
+    }
+
+    let valid_sections = read_zirl_hir_artifact_sections(
+        bytes,
+        &raw read_storage
+    );
+    if (valid_sections.error != ZirlHirArtifactReadError.None) {
+        return 16;
+    }
+    let attrs_entry: ZirlSectionEntry =
+        raw read_storage.artifact.entries[4u64];
+    let invalid_present_offset = attrs_entry.offset + attrs_entry.size - 1u64;
+    let original_present = raw bytes[invalid_present_offset];
+    raw writable_bytes[invalid_present_offset] = 2u8;
+    let rewritten_option: ?*u8 = calloc(8192u64, 1u64) as ?*u8;
+    if (rewritten_option is null) {
+        raw writable_bytes[invalid_present_offset] = original_present;
+        return 17;
+    }
+    let rewritten_bytes = must rewritten_option;
+    let rewritten_output = raw rewritten_bytes[0u64..8192u64];
+    let rewritten = write_zirl_artifact(
+        &raw valid_sections.identity,
+        raw read_storage.artifact.sections[0u64..5u64],
+        rewritten_output
+    );
+    if (rewritten.error != ZirlArtifactError.None) {
+        raw writable_bytes[invalid_present_offset] = original_present;
+        free(rewritten_bytes);
+        return 18;
+    }
+    let invalid_present_is_atomic = hir_artifact_read_fails_atomically(
+        raw rewritten_bytes[0u64..rewritten.size],
+        &raw read_storage,
+        &raw hydration_storage,
+        ZirlHirArtifactReadError.InvalidSectionPayload
+    );
+    raw writable_bytes[invalid_present_offset] = original_present;
+    free(rewritten_bytes);
+    if (not invalid_present_is_atomic) {
+        return 19;
+    }
+
+    let hydrated_literal: HirExpr =
+        raw hydrated.module.expressions[0u64];
+    let hydrated_index: HirExpr =
+        raw hydrated.module.expressions[2u64];
+    let hydrated_function = must hydrated.module.functions[0u64];
+    let hydrated_template = must hydrated.module.templates[0u64];
+    let hydrated_owner = must hydrated.module.declarations[0u64];
+    let hydrated_first_method = must hydrated.module.declarations[1u64];
+    let hydrated_second_method = must hydrated.module.declarations[2u64];
+    if (@lengthOf(hydrated_template.params) != 1u64) {
+        return 5;
+    }
+    let hydrated_generic_param = must hydrated_template.params[0u64];
+    let hydrated_proof = must hydrated.module.safety_attrs.proofs[2u64];
+    let hydrated_absent_proof =
+        must hydrated.module.safety_attrs.proofs[3u64];
+    if (not (hydrated_literal is HirLiteral) or
+        not (hydrated_index is HirIndex)) {
+        return 5;
+    }
+    if (hydrated_literal is HirLiteral) {
+        if (hydrated_literal.integer != 0i64) {
+            return 5;
+        }
+    }
+    if (hydrated_index is HirIndex) {
+        if (hydrated_index.type_id != 0u32 or
+            hydrated_index.object_type != 2u32 or
+            not hydrated_index.is_array or
+            hydrated_index.safety != HirSafetyMode.RequiredCheck) {
+            return 5;
+        }
+    }
+    if (hydrated_function.name_id != 0u32 or
+        hydrated_function.return_type != 0u32 or
+        @lengthOf(hydrated_function.parameter_types) != 1u64 or
+        raw hydrated_function.parameter_types[0u64] != 0u32 or
+        not hydrated_function.has_body or
+        not hydrated_function.variadic or
+        not hydrated_function.state_function or
+        not hydrated_function.foreign_c or
+        not hydrated_function.uses_tail_calling_convention or
+        hydrated_template.declaration_id != 0u32 or
+        hydrated_template.function_id != 0u32 or
+        hydrated_owner.template_id != 0u32 or
+        @lengthOf(hydrated_owner.method_declaration_ids) != 2u64 or
+        raw hydrated_owner.method_declaration_ids[0u64] != 1u32 or
+        raw hydrated_owner.method_declaration_ids[1u64] != 2u32 or
+        not hydrated_first_method.is_extern or
+        hydrated_first_method.name_id != 3u32 or
+        not hydrated_second_method.is_extern or
+        hydrated_second_method.name_id != 4u32 or
+        @lengthOf(hydrated_template.method_declaration_indices) != 2u64 or
+        raw hydrated_template.method_declaration_indices[0u64] != 1u32 or
+        raw hydrated_template.method_declaration_indices[1u64] != 2u32 or
+        not hydrated_template.variadic or
+        not hydrated_template.state_function or
+        not hydrated_template.foreign_c or
+        not hydrated_template.uses_tail_calling_convention or
+        @lengthOf(hydrated_template.field_name_ids) != 2u64 or
+        raw hydrated_template.field_name_ids[0u64] != 0u32 or
+        raw hydrated_template.field_name_ids[1u64] != 1u32 or
+        @lengthOf(hydrated_template.field_type_ids) != 2u64 or
+        raw hydrated_template.field_type_ids[0u64] != 1u32 or
+        raw hydrated_template.field_type_ids[1u64] != 2u32 or
+        @lengthOf(hydrated_template.canonical_field_order) != 2u64 or
+        raw hydrated_template.canonical_field_order[0u64] != 1u32 or
+        raw hydrated_template.canonical_field_order[1u64] != 0u32 or
+        @lengthOf(hydrated_template.trait_type_ids) != 1u64 or
+        raw hydrated_template.trait_type_ids[0u64] != 4u32 or
+        hydrated_generic_param.name_id != 1u32 or
+        @lengthOf(hydrated_generic_param.bound_type_ids) != 1u64 or
+        raw hydrated_generic_param.bound_type_ids[0u64] != 0u32 or
+        not hydrated_proof.present or hydrated_absent_proof.present) {
+        return 5;
+    }
+    if (@lengthOf(hydrated.module.function_attrs) != 1u64 or
+        not raw hydrated.module.function_attrs[0u64].read_only or
+        not raw hydrated.module.function_attrs[0u64].discardable) {
+        return 6;
+    }
+    let no_hydrated_expressions: [0]HirExpr = [];
+    let no_hydrated_functions: [0]HirFunction = [];
+    let no_hydrated_globals: [0]HirGlobalConst = [];
+    let no_hydrated_vtables: [0]HirVTable = [];
+    let no_hydrated_slots: [0]HirSlotAttrs = [];
+    let no_hydrated_call_attrs: [0]HirCallAttrs = [];
+    let no_hydrated_function_attrs: [0]HirFunctionAttrs = [];
+    let no_hydrated_proofs: [0]HirSafetyProof = [];
+    let no_hydrated_blocks: [0]HirBasicBlock = [];
+    let no_hydrated_parameter_types: [0]HirTypeId = [];
+    let no_hydrated_expression_argument_types: [0]HirTypeId = [];
+    let no_hydrated_vtable_functions: [0]HirFunctionId = [];
+    let no_hydrated_call_arguments: [0]HirCallArgAttrs = [];
+    let no_hydrated_declarations: [0]HirDeclaration = [];
+    let no_hydrated_templates: [0]HirTemplate = [];
+    let no_hydrated_template_types: [0]HirTypeId = [];
+    let no_hydrated_template_names: [0]HirStringId = [];
+    let no_hydrated_template_order: [0]u32 = [];
+    let no_hydrated_template_params: [0]HirGenericParam = [];
+    var short_hydration_storage = hydration_storage;
+    short_hydration_storage.module.expressions =
+        raw no_hydrated_expressions[0u64..0u64];
+    if (not hir_artifact_read_fails_atomically(
+            bytes,
+            &raw read_storage,
+            &raw short_hydration_storage,
+            ZirlHirArtifactReadError.InsufficientHydrationStorage
+        )) {
+        return 9;
+    }
+    short_hydration_storage = hydration_storage;
+    short_hydration_storage.module.functions =
+        raw no_hydrated_functions[0u64..0u64];
+    if (not hir_artifact_read_fails_atomically(
+            bytes,
+            &raw read_storage,
+            &raw short_hydration_storage,
+            ZirlHirArtifactReadError.InsufficientHydrationStorage
+        )) {
+        return 10;
+    }
+    short_hydration_storage = hydration_storage;
+    short_hydration_storage.module.global_constants =
+        raw no_hydrated_globals[0u64..0u64];
+    if (not hir_artifact_read_fails_atomically(
+            bytes,
+            &raw read_storage,
+            &raw short_hydration_storage,
+            ZirlHirArtifactReadError.InsufficientHydrationStorage
+        )) {
+        return 11;
+    }
+    short_hydration_storage = hydration_storage;
+    short_hydration_storage.module.vtables =
+        raw no_hydrated_vtables[0u64..0u64];
+    if (not hir_artifact_read_fails_atomically(
+            bytes,
+            &raw read_storage,
+            &raw short_hydration_storage,
+            ZirlHirArtifactReadError.InsufficientHydrationStorage
+        )) {
+        return 12;
+    }
+    short_hydration_storage = hydration_storage;
+    short_hydration_storage.module.slot_attrs =
+        raw no_hydrated_slots[0u64..0u64];
+    if (not hir_artifact_read_fails_atomically(
+            bytes,
+            &raw read_storage,
+            &raw short_hydration_storage,
+            ZirlHirArtifactReadError.InsufficientHydrationStorage
+        )) {
+        return 13;
+    }
+    short_hydration_storage = hydration_storage;
+    short_hydration_storage.module.call_attrs =
+        raw no_hydrated_call_attrs[0u64..0u64];
+    if (not hir_artifact_read_fails_atomically(
+            bytes,
+            &raw read_storage,
+            &raw short_hydration_storage,
+            ZirlHirArtifactReadError.InsufficientHydrationStorage
+        )) {
+        return 11;
+    }
+    short_hydration_storage = hydration_storage;
+    short_hydration_storage.module.function_attrs =
+        raw no_hydrated_function_attrs[0u64..0u64];
+    if (not hir_artifact_read_fails_atomically(
+            bytes,
+            &raw read_storage,
+            &raw short_hydration_storage,
+            ZirlHirArtifactReadError.InsufficientHydrationStorage
+        )) {
+        return 12;
+    }
+    short_hydration_storage = hydration_storage;
+    short_hydration_storage.module.safety_attrs.proofs =
+        raw no_hydrated_proofs[0u64..0u64];
+    if (not hir_artifact_read_fails_atomically(
+            bytes,
+            &raw read_storage,
+            &raw short_hydration_storage,
+            ZirlHirArtifactReadError.InsufficientHydrationStorage
+        )) {
+        return 13;
+    }
+    short_hydration_storage = hydration_storage;
+    short_hydration_storage.blocks =
+        raw no_hydrated_blocks[0u64..0u64];
+    if (not hir_artifact_read_fails_atomically(
+            bytes,
+            &raw read_storage,
+            &raw short_hydration_storage,
+            ZirlHirArtifactReadError.InsufficientHydrationStorage
+        )) {
+        return 14;
+    }
+    short_hydration_storage = hydration_storage;
+    short_hydration_storage.function_parameter_types =
+        raw no_hydrated_parameter_types[0u64..0u64];
+    if (not hir_artifact_read_fails_atomically(
+            bytes,
+            &raw read_storage,
+            &raw short_hydration_storage,
+            ZirlHirArtifactReadError.InsufficientHydrationStorage
+        )) {
+        return 15;
+    }
+    short_hydration_storage = hydration_storage;
+    short_hydration_storage.expression_argument_types =
+        raw no_hydrated_expression_argument_types[0u64..0u64];
+    if (not hir_artifact_read_fails_atomically(
+            bytes,
+            &raw read_storage,
+            &raw short_hydration_storage,
+            ZirlHirArtifactReadError.InsufficientHydrationStorage
+        )) {
+        return 16;
+    }
+    short_hydration_storage = hydration_storage;
+    short_hydration_storage.vtable_slot_functions =
+        raw no_hydrated_vtable_functions[0u64..0u64];
+    if (not hir_artifact_read_fails_atomically(
+            bytes,
+            &raw read_storage,
+            &raw short_hydration_storage,
+            ZirlHirArtifactReadError.InsufficientHydrationStorage
+        )) {
+        return 17;
+    }
+    short_hydration_storage = hydration_storage;
+    short_hydration_storage.call_attr_arguments =
+        raw no_hydrated_call_arguments[0u64..0u64];
+    if (not hir_artifact_read_fails_atomically(
+            bytes,
+            &raw read_storage,
+            &raw short_hydration_storage,
+            ZirlHirArtifactReadError.InsufficientHydrationStorage
+        )) {
+        return 18;
+    }
+    short_hydration_storage = hydration_storage;
+    short_hydration_storage.module.declarations =
+        raw no_hydrated_declarations[0u64..0u64];
+    if (not hir_artifact_read_fails_atomically(
+            bytes,
+            &raw read_storage,
+            &raw short_hydration_storage,
+            ZirlHirArtifactReadError.InsufficientHydrationStorage
+        )) {
+        return 24;
+    }
+    short_hydration_storage = hydration_storage;
+    short_hydration_storage.module.templates =
+        raw no_hydrated_templates[0u64..0u64];
+    if (not hir_artifact_read_fails_atomically(
+            bytes,
+            &raw read_storage,
+            &raw short_hydration_storage,
+            ZirlHirArtifactReadError.InsufficientHydrationStorage
+        )) {
+        return 25;
+    }
+    short_hydration_storage = hydration_storage;
+    short_hydration_storage.template_params =
+        raw no_hydrated_template_params[0u64..0u64];
+    if (not hir_artifact_read_fails_atomically(
+            bytes,
+            &raw read_storage,
+            &raw short_hydration_storage,
+            ZirlHirArtifactReadError.InsufficientHydrationStorage
+        )) {
+        return 28;
+    }
+    short_hydration_storage = hydration_storage;
+    short_hydration_storage.template_bound_type_ids =
+        raw no_hydrated_template_types[0u64..0u64];
+    if (not hir_artifact_read_fails_atomically(
+            bytes,
+            &raw read_storage,
+            &raw short_hydration_storage,
+            ZirlHirArtifactReadError.InsufficientHydrationStorage
+        )) {
+        return 29;
+    }
+    short_hydration_storage = hydration_storage;
+    short_hydration_storage.declaration_method_ids =
+        raw no_hydration_declaration_ids[0u64..0u64];
+    if (not hir_artifact_read_fails_atomically(
+            bytes,
+            &raw read_storage,
+            &raw short_hydration_storage,
+            ZirlHirArtifactReadError.InsufficientHydrationStorage
+        )) {
+        return 34;
+    }
+    short_hydration_storage = hydration_storage;
+    short_hydration_storage.template_method_ids =
+        raw no_hydration_declaration_ids[0u64..0u64];
+    if (not hir_artifact_read_fails_atomically(
+            bytes,
+            &raw read_storage,
+            &raw short_hydration_storage,
+            ZirlHirArtifactReadError.InsufficientHydrationStorage
+        )) {
+        return 35;
+    }
+    short_hydration_storage = hydration_storage;
+    short_hydration_storage.template_param_type_ids =
+        raw no_hydrated_template_types[0u64..0u64];
+    if (not hir_artifact_read_fails_atomically(
+            bytes,
+            &raw read_storage,
+            &raw short_hydration_storage,
+            ZirlHirArtifactReadError.InsufficientHydrationStorage
+        )) {
+        return 26;
+    }
+    short_hydration_storage = hydration_storage;
+    short_hydration_storage.template_param_name_ids =
+        raw no_hydrated_template_names[0u64..0u64];
+    if (not hir_artifact_read_fails_atomically(
+            bytes,
+            &raw read_storage,
+            &raw short_hydration_storage,
+            ZirlHirArtifactReadError.InsufficientHydrationStorage
+        )) {
+        return 27;
+    }
+    short_hydration_storage = hydration_storage;
+    short_hydration_storage.template_field_name_ids =
+        raw no_hydrated_template_names[0u64..0u64];
+    if (not hir_artifact_read_fails_atomically(
+            bytes,
+            &raw read_storage,
+            &raw short_hydration_storage,
+            ZirlHirArtifactReadError.InsufficientHydrationStorage
+        )) {
+        return 30;
+    }
+    short_hydration_storage = hydration_storage;
+    short_hydration_storage.template_field_type_ids =
+        raw no_hydrated_template_types[0u64..0u64];
+    if (not hir_artifact_read_fails_atomically(
+            bytes,
+            &raw read_storage,
+            &raw short_hydration_storage,
+            ZirlHirArtifactReadError.InsufficientHydrationStorage
+        )) {
+        return 31;
+    }
+    short_hydration_storage = hydration_storage;
+    short_hydration_storage.template_field_order =
+        raw no_hydrated_template_order[0u64..0u64];
+    if (not hir_artifact_read_fails_atomically(
+            bytes,
+            &raw read_storage,
+            &raw short_hydration_storage,
+            ZirlHirArtifactReadError.InsufficientHydrationStorage
+        )) {
+        return 32;
+    }
+    short_hydration_storage = hydration_storage;
+    short_hydration_storage.template_trait_type_ids =
+        raw no_hydrated_template_types[0u64..0u64];
+    if (not hir_artifact_read_fails_atomically(
+            bytes,
+            &raw read_storage,
+            &raw short_hydration_storage,
+            ZirlHirArtifactReadError.InsufficientHydrationStorage
+        )) {
+        return 33;
+    }
+
+    let no_declaration_names: [0]HirStringId = [];
+    let no_declaration_types: [0]HirTypeId = [];
+    let no_declaration_methods: [0]HirDeclarationId = [];
+    var declaration_records_for_write: [1]ZirlDeclarationRecord = [
+        ZirlDeclarationRecord {
+            kind: HirDeclarationKind.Variable,
+            visibility: HirVisibility.Public,
+            is_extern: false,
+            discardable: true,
+            module_depth: 2,
+            name_id: 1u32,
+            type_id: 0u32,
+            template_index: 0xFFFFFFFFu32,
+            body_function_index: 0xFFFFFFFFu32,
+            field_name_ids: raw no_declaration_names[0u64..0u64],
+            field_type_ids: raw no_declaration_types[0u64..0u64],
+            method_declaration_indices:
+                raw no_declaration_methods[0u64..0u64],
+        },
+    ];
+    var declaration_section = ZirlDeclSection {
+        declarations: raw declaration_records_for_write[0u64..1u64],
+    };
+    let envelope_option: ?*u8 = calloc(8192u64, 1u64) as ?*u8;
+    if (envelope_option is null) {
+        return 19;
+    }
+    let envelope_memory = must envelope_option;
+    let declaration_payload_bytes = raw envelope_memory[0u64..128u64];
+    let declaration_payload_writer = write_decls_section(
+        ZirlByteWriter {
+            bytes: declaration_payload_bytes,
+            position: 0u64,
+            failed: false,
+        },
+        &raw declaration_section
+    );
+    if (declaration_payload_writer.failed) {
+        free(envelope_memory as raw opaque);
+        return 20;
+    }
+
+    let no_template_params: [0]ZirlGenericParamRecord = [];
+    let no_template_names: [0]HirStringId = [];
+    let no_template_types: [0]HirTypeId = [];
+    let no_template_methods: [0]HirDeclarationId = [];
+    let no_template_order: [0]u32 = [];
+    var template_records_for_write: [1]ZirlTemplateRecord = [
+        ZirlTemplateRecord {
+            kind: HirDeclarationKind.Struct,
+            is_extern: false,
+            name_id: 1u32,
+            declaration_index: 0u32,
+            function_index: invalidFunction,
+            return_type_id: 0u32,
+            variadic: false,
+            state_function: false,
+            foreign_c: false,
+            uses_tail_calling_convention: false,
+            params: raw no_template_params[0u64..0u64],
+            param_type_ids: raw no_template_types[0u64..0u64],
+            param_name_ids: raw no_template_names[0u64..0u64],
+            field_name_ids: raw no_template_names[0u64..0u64],
+            field_type_ids: raw no_template_types[0u64..0u64],
+            canonical_field_order: raw no_template_order[0u64..0u64],
+            method_declaration_indices: raw no_template_methods[0u64..0u64],
+            trait_type_ids: raw no_template_types[0u64..0u64],
+        },
+    ];
+    var template_section = ZirlTemplateSection {
+        templates: raw template_records_for_write[0u64..1u64],
+    };
+    let template_payload_bytes = raw envelope_memory[128u64..256u64];
+    let template_payload_writer = write_templates_section(
+        ZirlByteWriter {
+            bytes: template_payload_bytes,
+            position: 0u64,
+            failed: false,
+        },
+        &raw template_section
+    );
+    if (template_payload_writer.failed) {
+        free(envelope_memory as raw opaque);
+        return 21;
+    }
+    let envelope_output = raw envelope_memory[256u64..8192u64];
+    if (not hir_artifact_identity_count_mismatch_fails_atomically(
+            bytes,
+            expected_identity,
+            0u8,
+            &raw read_storage,
+            &raw hydration_storage,
+            envelope_output
+        )) {
+        free(envelope_memory as raw opaque);
+        return 39;
+    }
+    if (not hir_artifact_identity_count_mismatch_fails_atomically(
+            bytes,
+            expected_identity,
+            1u8,
+            &raw read_storage,
+            &raw hydration_storage,
+            envelope_output
+        )) {
+        free(envelope_memory as raw opaque);
+        return 40;
+    }
+    if (not hir_artifact_identity_count_mismatch_fails_atomically(
+            bytes,
+            expected_identity,
+            2u8,
+            &raw read_storage,
+            &raw hydration_storage,
+            envelope_output
+        )) {
+        free(envelope_memory as raw opaque);
+        return 41;
+    }
+    if (not hir_artifact_mutated_reference_fails_atomically(
+            bytes,
+            expected_identity,
+            zirlHirDeclsSectionId,
+            20u64,
+            0xFFu8,
+            &raw read_storage,
+            &raw hydration_storage,
+            envelope_output,
+            ZirlHirArtifactReadError.InvalidCanonicalReference
+        )) {
+        free(envelope_memory as raw opaque);
+        return 36;
+    }
+    if (not hir_artifact_mutated_reference_fails_atomically(
+            bytes,
+            expected_identity,
+            zirlHirDeclsSectionId,
+            24u64,
+            1u8,
+            &raw read_storage,
+            &raw hydration_storage,
+            envelope_output,
+            ZirlHirArtifactReadError.InvalidCanonicalReference
+        )) {
+        free(envelope_memory as raw opaque);
+        return 37;
+    }
+    if (not hir_artifact_mutated_reference_fails_atomically(
+            bytes,
+            expected_identity,
+            zirlHirTemplatesSectionId,
+            12u64,
+            1u8,
+            &raw read_storage,
+            &raw hydration_storage,
+            envelope_output,
+            ZirlHirArtifactReadError.InvalidHydratedHir
+        )) {
+        free(envelope_memory as raw opaque);
+        return 38;
+    }
+    let decls_rejected = hir_artifact_nonempty_section_fails_without_storage(
+        bytes,
+        expected_identity,
+        zirlHirDeclsSectionId,
+        raw declaration_payload_bytes[
+            0u64..declaration_payload_writer.position
+        ],
+        &raw read_storage,
+        &raw hydration_storage,
+        envelope_output
+    );
+    if (not decls_rejected) {
+        free(envelope_memory as raw opaque);
+        return 22;
+    }
+    let templates_rejected = hir_artifact_nonempty_section_fails_without_storage(
+        bytes,
+        expected_identity,
+        zirlHirTemplatesSectionId,
+        raw template_payload_bytes[
+            0u64..template_payload_writer.position
+        ],
+        &raw read_storage,
+        &raw hydration_storage,
+        envelope_output
+    );
+    free(envelope_memory as raw opaque);
+    if (not templates_rejected) {
+        return 23;
+    }
+    return 0;
+}
+

@@ -1,0 +1,1302 @@
+from cache/zirl-artifact
+from cache/zirl-attrs-section
+from cache/zirl-code-section
+from cache/zirl-canonical-types
+from cache/zirl-container
+from cache/zirl-decl-section
+from cache/zirl-hir-code
+from cache/zirl-metadata
+from cache/zirl-template-section
+from cache/zirl-buffer
+from ir/hir
+from ir/hir-verify
+from ir/hir-verify-common
+
+from cache/zirl-hir-artifact-contract
+from cache/zirl-hir-artifact-reader
+from cache/zirl-hir-artifact-decode
+
+fn empty_hir_artifact_module_result(
+    error: ZirlHirArtifactReadError,
+    read_storage: *ZirlHirArtifactReadStorage,
+    hydration_storage: *ZirlHirArtifactHydrationStorage
+): ZirlHirArtifactModuleReadResult {
+    let empty = empty_hir_artifact_read(error, read_storage);
+    return ZirlHirArtifactModuleReadResult {
+        identity: empty.identity,
+        paths: empty.metadata.paths,
+        module: HirModule {
+            strings: raw read_storage->metadata.strings[0u64..0u64],
+            types: raw read_storage->metadata.types[0u64..0u64],
+            struct_defs: raw read_storage->metadata.struct_defs[0u64..0u64],
+            enum_defs: raw read_storage->metadata.enum_defs[0u64..0u64],
+            union_defs: raw read_storage->metadata.union_defs[0u64..0u64],
+            expressions:
+                raw hydration_storage->module.expressions[0u64..0u64],
+            functions: raw hydration_storage->module.functions[0u64..0u64],
+            declarations:
+                raw hydration_storage->module.declarations[0u64..0u64],
+            templates:
+                raw hydration_storage->module.templates[0u64..0u64],
+            global_constants:
+                raw hydration_storage->module.global_constants[0u64..0u64],
+            vtables: raw hydration_storage->module.vtables[0u64..0u64],
+            slot_attrs: raw hydration_storage->module.slot_attrs[0u64..0u64],
+            call_attrs: raw hydration_storage->module.call_attrs[0u64..0u64],
+            function_attrs:
+                raw hydration_storage->module.function_attrs[0u64..0u64],
+            safety_attrs: HirSafetyAttrs {
+                proofs: raw hydration_storage->module.safety_attrs.proofs[
+                    0u64..0u64
+                ],
+            },
+        },
+        error: error,
+    };
+}
+
+
+fn artifact_type_reference_valid(type_id: HirTypeId, type_count: u64): bool {
+    return type_id == invalidType or (type_id as u64) < type_count;
+}
+
+fn artifact_local_type_id(type_id: HirTypeId, type_count: u64): HirTypeId {
+    if (type_id == invalidType or (type_id as u64) >= type_count) {
+        return invalidType;
+    }
+    // Metadata preserves local type-table order, so persisted IDs invert
+    // through the identity mapping.
+    return type_id;
+}
+
+fn artifact_type_values_valid(
+    type_ids: []HirTypeId,
+    type_count: u64
+): bool {
+    for (offset in 1u64..@lengthOf(type_ids)) {
+        let index = offset - 1u64;
+        if (not artifact_type_reference_valid(raw type_ids[index], type_count)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+fn artifact_call_types_valid(call: HirCall, type_count: u64): bool {
+    return artifact_type_reference_valid(call.function_type, type_count) and
+        artifact_type_values_valid(call.argument_types, type_count);
+}
+
+fn artifact_expression_types_valid(
+    expression: HirExpr,
+    type_count: u64
+): bool {
+    if (expression is HirLiteral) {
+        return artifact_type_reference_valid(expression.type_id, type_count);
+    } else if (expression is HirBinary) {
+        return artifact_type_reference_valid(expression.type_id, type_count) and
+            artifact_type_reference_valid(expression.operand_type, type_count);
+    } else if (expression is HirUnary) {
+        return artifact_type_reference_valid(expression.type_id, type_count);
+    } else if (expression is HirLet) {
+        return artifact_type_reference_valid(expression.type_id, type_count);
+    } else if (expression is HirCall) {
+        return artifact_call_types_valid(expression, type_count);
+    } else if (expression is HirIndex) {
+        return artifact_type_reference_valid(expression.type_id, type_count) and
+            artifact_type_reference_valid(expression.object_type, type_count);
+    } else if (expression is HirField) {
+        return artifact_type_reference_valid(expression.type_id, type_count) and
+            artifact_type_reference_valid(expression.object_type, type_count);
+    } else if (expression is HirStructLiteral) {
+        return artifact_type_reference_valid(expression.type_id, type_count);
+    } else if (expression is HirArrayLiteral) {
+        return artifact_type_reference_valid(expression.type_id, type_count);
+    } else if (expression is HirEnumValue) {
+        return artifact_type_reference_valid(expression.type_id, type_count);
+    } else if (expression is HirSlotAlloca) {
+        return artifact_type_reference_valid(expression.type_id, type_count);
+    } else if (expression is HirSlotLoad) {
+        return artifact_type_reference_valid(expression.type_id, type_count);
+    } else if (expression is HirSlotAddr) {
+        return artifact_type_reference_valid(expression.type_id, type_count);
+    } else if (expression is HirMakeNone) {
+        return artifact_type_reference_valid(expression.type_id, type_count);
+    } else if (expression is HirMakeSome) {
+        return artifact_type_reference_valid(expression.type_id, type_count);
+    } else if (expression is HirMakeSlice) {
+        return artifact_type_reference_valid(expression.type_id, type_count) and
+            artifact_type_reference_valid(expression.object_type, type_count) and
+            artifact_type_reference_valid(expression.bound_type, type_count);
+    } else if (expression is HirCast) {
+        return artifact_type_reference_valid(expression.from_type, type_count) and
+            artifact_type_reference_valid(expression.to_type, type_count);
+    } else if (expression is HirUnionCast) {
+        return artifact_type_reference_valid(expression.from_type, type_count) and
+            artifact_type_reference_valid(expression.to_type, type_count);
+    } else if (expression is HirUnionCheck) {
+        return artifact_type_reference_valid(expression.union_type, type_count);
+    } else if (expression is HirLayoutIntrinsic) {
+        return artifact_type_reference_valid(expression.type_id, type_count) and
+            artifact_type_reference_valid(expression.operand_type, type_count);
+    } else if (expression is HirStateTailCall) {
+        return artifact_call_types_valid(expression.call, type_count);
+    } else if (expression is HirCanonicalType) {
+        return artifact_type_reference_valid(expression.type_id, type_count);
+    } else if (expression is HirGlobalConstLoad) {
+        return artifact_type_reference_valid(expression.type_id, type_count);
+    } else if (expression is HirExternalGlobalAddr) {
+        return artifact_type_reference_valid(expression.type_id, type_count);
+    } else if (expression is HirMakeDyn) {
+        return artifact_type_reference_valid(expression.source_type, type_count) and
+            artifact_type_reference_valid(expression.dyn_type, type_count);
+    } else if (expression is HirDynCall) {
+        return artifact_type_reference_valid(expression.result_type, type_count) and
+            artifact_type_reference_valid(expression.function_type, type_count) and
+            artifact_type_values_valid(expression.argument_types, type_count);
+    } else if (expression is HirMakeOpaque) {
+        return artifact_type_reference_valid(expression.source_type, type_count) and
+            artifact_type_reference_valid(expression.opaque_type, type_count);
+    } else if (expression is HirOpaqueCast) {
+        return artifact_type_reference_valid(expression.from_type, type_count) and
+            artifact_type_reference_valid(expression.to_type, type_count) and
+            artifact_type_reference_valid(expression.opaque_type, type_count) and
+            artifact_type_reference_valid(expression.result_type, type_count);
+    } else if (expression is HirOpaqueCheck) {
+        return artifact_type_reference_valid(expression.opaque_type, type_count);
+    } else if (expression is HirPipe) {
+        return artifact_type_reference_valid(expression.source_type, type_count) and
+            artifact_type_reference_valid(expression.type_id, type_count);
+    } else if (expression is HirPipeCurrent) {
+        return artifact_type_reference_valid(expression.type_id, type_count);
+    }
+    return true;
+}
+
+struct ZirlHirArtifactSlotExtent {
+    count: u64,
+    valid: bool,
+}
+
+fn artifact_include_slot(
+    slot: u32,
+    current_count: u64
+): ZirlHirArtifactSlotExtent {
+    if (slot == invalidSlot) {
+        return ZirlHirArtifactSlotExtent {
+            count: current_count,
+            valid: false,
+        };
+    }
+    let count = (slot as u64) + 1u64;
+    if (count > current_count) {
+        return ZirlHirArtifactSlotExtent { count: count, valid: true };
+    }
+    return ZirlHirArtifactSlotExtent {
+        count: current_count,
+        valid: true,
+    };
+}
+
+fn artifact_expression_slots(
+    expression: HirExpr,
+    current_count: u64
+): ZirlHirArtifactSlotExtent {
+    if (expression is HirSlotAlloca) {
+        return artifact_include_slot(expression.slot, current_count);
+    } else if (expression is HirSlotStore) {
+        return artifact_include_slot(expression.slot, current_count);
+    } else if (expression is HirSlotLoad) {
+        return artifact_include_slot(expression.slot, current_count);
+    } else if (expression is HirSlotAddr) {
+        return artifact_include_slot(expression.slot, current_count);
+    } else if (expression is HirPipe) {
+        return artifact_include_slot(expression.source_slot, current_count);
+    } else if (expression is HirPipeCurrent) {
+        return artifact_include_slot(expression.slot, current_count);
+    }
+    return ZirlHirArtifactSlotExtent {
+        count: current_count,
+        valid: true,
+    };
+}
+
+fn artifact_compact_expr_is_opaque(expression: ZirlCompactExpr): bool {
+    return expression.kind == (ZirlCompactExprKind.MakeOpaque as u8) or
+        expression.kind == (ZirlCompactExprKind.OpaqueCast as u8) or
+        expression.kind == (ZirlCompactExprKind.OpaqueCheck as u8);
+}
+
+fn artifact_compact_expr_runtime_id(expression: ZirlCompactExpr): u32 {
+    if (expression.kind == (ZirlCompactExprKind.MakeOpaque as u8)) {
+        return expression.ref_c;
+    }
+    return expression.ref_e;
+}
+
+fn artifact_compact_expr_mapping_equal(
+    left: ZirlCompactExpr,
+    right: ZirlCompactExpr
+): bool {
+    if (not artifact_compact_expr_is_opaque(left) or
+        not artifact_compact_expr_is_opaque(right) or
+        @lengthOf(left.integers) != 2u64 or
+        @lengthOf(right.integers) != 2u64) {
+        return false;
+    }
+    return raw left.integers[0u64] == raw right.integers[0u64] and
+        raw left.integers[1u64] == raw right.integers[1u64];
+}
+
+fn artifact_canonical_mappings_match(code: *ZirlCodeSection): bool {
+    var expected_mapping = 0u64;
+    for (offset in 1u64..@lengthOf(code->expressions)) {
+        let expression_index = offset - 1u64;
+        let expression: ZirlCompactExpr =
+            raw code->expressions[expression_index];
+        if (not artifact_compact_expr_is_opaque(expression)) {
+            continue;
+        }
+        if (@lengthOf(expression.integers) != 2u64) {
+            return false;
+        }
+        var already_seen = false;
+        for (prior_offset in 1u64..expression_index) {
+            let prior_index = prior_offset - 1u64;
+            let prior: ZirlCompactExpr = raw code->expressions[prior_index];
+            if (artifact_compact_expr_mapping_equal(expression, prior)) {
+                if (artifact_compact_expr_runtime_id(expression) !=
+                    artifact_compact_expr_runtime_id(prior)) {
+                    return false;
+                }
+                already_seen = true;
+                break;
+            }
+        }
+        if (not already_seen) {
+            if (expected_mapping >= @lengthOf(code->canonical_mappings)) {
+                return false;
+            }
+            let mapping: ZirlCanonicalMapping =
+                raw code->canonical_mappings[expected_mapping];
+            if (mapping.canonical_hi != raw expression.integers[0u64] or
+                mapping.canonical_lo != raw expression.integers[1u64] or
+                mapping.runtime_id != artifact_compact_expr_runtime_id(expression)) {
+                return false;
+            }
+            expected_mapping = expected_mapping + 1u64;
+        }
+    }
+    return expected_mapping == @lengthOf(code->canonical_mappings);
+}
+
+fn artifact_function_attrs_default(
+    discardable: bool
+): HirFunctionAttrs {
+    return HirFunctionAttrs {
+        return_consumed: HirConsumedState.Unknown,
+        non_null: false,
+        no_alias: false,
+        read_only: false,
+        no_capture: false,
+        discardable: discardable,
+    };
+}
+
+pub fn read_zirl_hir_artifact_module(
+    bytes: []u8,
+    read_storage: *ZirlHirArtifactReadStorage,
+    hydration_storage: *ZirlHirArtifactHydrationStorage
+): ZirlHirArtifactModuleReadResult {
+    let sections = read_zirl_hir_artifact_sections(bytes, read_storage);
+    if (sections.error != ZirlHirArtifactReadError.None) {
+        return empty_hir_artifact_module_result(
+            sections.error,
+            read_storage,
+            hydration_storage
+        );
+    }
+    let type_count = @lengthOf(sections.metadata.types);
+    let expression_count = @lengthOf(sections.code.expressions);
+    let function_count = @lengthOf(sections.code.functions);
+    let declaration_count = @lengthOf(sections.declarations.declarations);
+    let template_count = @lengthOf(sections.templates.templates);
+    var total_blocks = 0u64;
+    var total_parameter_types = 0u64;
+    var total_expression_argument_types = 0u64;
+    var total_vtable_functions = 0u64;
+    var total_call_attr_arguments = 0u64;
+    var total_declaration_methods = 0u64;
+    var total_template_params = 0u64;
+    var total_template_bounds = 0u64;
+    var total_template_param_types = 0u64;
+    var total_template_param_names = 0u64;
+    var total_template_fields = 0u64;
+    var total_template_field_order = 0u64;
+    var total_template_methods = 0u64;
+    var total_template_traits = 0u64;
+    for (offset in 1u64..expression_count) {
+        let index = offset - 1u64;
+        let expression: ZirlCompactExpr = raw sections.code.expressions[index];
+        if (@lengthOf(expression.arg_types) >
+            0xFFFFFFFFFFFFFFFFu64 - total_expression_argument_types) {
+            return empty_hir_artifact_module_result(
+                ZirlHirArtifactReadError.InsufficientHydrationStorage,
+                read_storage,
+                hydration_storage
+            );
+        }
+        total_expression_argument_types =
+            total_expression_argument_types + @lengthOf(expression.arg_types);
+    }
+    for (offset in 1u64..function_count) {
+        let index = offset - 1u64;
+        let function: ZirlCompactFunction = raw sections.code.functions[index];
+        if (@lengthOf(function.blocks) > 0xFFFFFFFFFFFFFFFFu64 - total_blocks or
+            @lengthOf(function.parameter_type_ids) >
+                0xFFFFFFFFFFFFFFFFu64 - total_parameter_types) {
+            return empty_hir_artifact_module_result(
+                ZirlHirArtifactReadError.InsufficientHydrationStorage,
+                read_storage,
+                hydration_storage
+            );
+        }
+        total_blocks = total_blocks + @lengthOf(function.blocks);
+        total_parameter_types =
+            total_parameter_types + @lengthOf(function.parameter_type_ids);
+    }
+    for (offset in 1u64..@lengthOf(sections.code.vtables)) {
+        let index = offset - 1u64;
+        let vtable: ZirlCodeVTable = raw sections.code.vtables[index];
+        if (@lengthOf(vtable.slot_function_name_ids) >
+            0xFFFFFFFFFFFFFFFFu64 - total_vtable_functions) {
+            return empty_hir_artifact_module_result(
+                ZirlHirArtifactReadError.InsufficientHydrationStorage,
+                read_storage,
+                hydration_storage
+            );
+        }
+        total_vtable_functions =
+            total_vtable_functions + @lengthOf(vtable.slot_function_name_ids);
+    }
+    for (offset in 1u64..@lengthOf(sections.attrs.calls)) {
+        let index = offset - 1u64;
+        let call: ZirlCallAttrsRecord = raw sections.attrs.calls[index];
+        if (@lengthOf(call.arg_escapes) >
+            0xFFFFFFFFFFFFFFFFu64 - total_call_attr_arguments) {
+            return empty_hir_artifact_module_result(
+                ZirlHirArtifactReadError.InsufficientHydrationStorage,
+                read_storage,
+                hydration_storage
+            );
+        }
+        total_call_attr_arguments =
+            total_call_attr_arguments + @lengthOf(call.arg_escapes);
+    }
+    for (offset in 1u64..declaration_count) {
+        let index = offset - 1u64;
+        let declaration: ZirlDeclarationRecord =
+            raw sections.declarations.declarations[index];
+        if (@lengthOf(declaration.field_name_ids) !=
+            @lengthOf(declaration.field_type_ids)) {
+            return empty_hir_artifact_module_result(
+                ZirlHirArtifactReadError.InvalidHydratedHir,
+                read_storage,
+                hydration_storage
+            );
+        }
+        if (@lengthOf(declaration.method_declaration_indices) >
+            0xFFFFFFFFFFFFFFFFu64 - total_declaration_methods) {
+            return empty_hir_artifact_module_result(
+                ZirlHirArtifactReadError.InsufficientHydrationStorage,
+                read_storage,
+                hydration_storage
+            );
+        }
+        total_declaration_methods =
+            total_declaration_methods +
+            @lengthOf(declaration.method_declaration_indices);
+    }
+    for (offset in 1u64..template_count) {
+        let index = offset - 1u64;
+        let template: ZirlTemplateRecord =
+            raw sections.templates.templates[index];
+        if (@lengthOf(template.param_type_ids) !=
+                @lengthOf(template.param_name_ids) or
+            @lengthOf(template.field_name_ids) !=
+                @lengthOf(template.field_type_ids) or
+            @lengthOf(template.canonical_field_order) !=
+                @lengthOf(template.field_name_ids)) {
+            return empty_hir_artifact_module_result(
+                ZirlHirArtifactReadError.InvalidHydratedHir,
+                read_storage,
+                hydration_storage
+            );
+        }
+        if (@lengthOf(template.params) >
+                0xFFFFFFFFFFFFFFFFu64 - total_template_params or
+            @lengthOf(template.param_type_ids) >
+                0xFFFFFFFFFFFFFFFFu64 - total_template_param_types or
+            @lengthOf(template.param_name_ids) >
+                0xFFFFFFFFFFFFFFFFu64 - total_template_param_names or
+            @lengthOf(template.field_name_ids) >
+                0xFFFFFFFFFFFFFFFFu64 - total_template_fields or
+            @lengthOf(template.field_type_ids) >
+                0xFFFFFFFFFFFFFFFFu64 - total_template_fields or
+            @lengthOf(template.canonical_field_order) >
+                0xFFFFFFFFFFFFFFFFu64 - total_template_field_order or
+            @lengthOf(template.method_declaration_indices) >
+                0xFFFFFFFFFFFFFFFFu64 - total_template_methods or
+            @lengthOf(template.trait_type_ids) >
+                0xFFFFFFFFFFFFFFFFu64 - total_template_traits) {
+            return empty_hir_artifact_module_result(
+                ZirlHirArtifactReadError.InsufficientHydrationStorage,
+                read_storage,
+                hydration_storage
+            );
+        }
+        total_template_params =
+            total_template_params + @lengthOf(template.params);
+        total_template_param_types =
+            total_template_param_types + @lengthOf(template.param_type_ids);
+        total_template_param_names =
+            total_template_param_names + @lengthOf(template.param_name_ids);
+        total_template_fields =
+            total_template_fields + @lengthOf(template.field_name_ids);
+        total_template_field_order =
+            total_template_field_order +
+            @lengthOf(template.canonical_field_order);
+        total_template_methods =
+            total_template_methods +
+            @lengthOf(template.method_declaration_indices);
+        total_template_traits =
+            total_template_traits + @lengthOf(template.trait_type_ids);
+        for (param_offset in 1u64..@lengthOf(template.params)) {
+            let param_index = param_offset - 1u64;
+            let parameter: ZirlGenericParamRecord =
+                raw template.params[param_index];
+            if (@lengthOf(parameter.bound_type_ids) >
+                0xFFFFFFFFFFFFFFFFu64 - total_template_bounds) {
+                return empty_hir_artifact_module_result(
+                    ZirlHirArtifactReadError.InsufficientHydrationStorage,
+                    read_storage,
+                    hydration_storage
+                );
+            }
+            total_template_bounds =
+                total_template_bounds +
+                @lengthOf(parameter.bound_type_ids);
+        }
+    }
+
+    if (declaration_count >
+            @lengthOf(hydration_storage->module.declarations) or
+        template_count > @lengthOf(hydration_storage->module.templates) or
+        total_declaration_methods >
+            @lengthOf(hydration_storage->declaration_method_ids) or
+        total_template_params >
+            @lengthOf(hydration_storage->template_params) or
+        total_template_bounds >
+            @lengthOf(hydration_storage->template_bound_type_ids) or
+        total_template_param_types >
+            @lengthOf(hydration_storage->template_param_type_ids) or
+        total_template_param_names >
+            @lengthOf(hydration_storage->template_param_name_ids) or
+        total_template_fields >
+            @lengthOf(hydration_storage->template_field_name_ids) or
+        total_template_fields >
+            @lengthOf(hydration_storage->template_field_type_ids) or
+        total_template_field_order >
+            @lengthOf(hydration_storage->template_field_order) or
+        total_template_methods >
+            @lengthOf(hydration_storage->template_method_ids) or
+        total_template_traits >
+            @lengthOf(hydration_storage->template_trait_type_ids) or
+        expression_count > @lengthOf(hydration_storage->module.expressions) or
+        function_count > @lengthOf(hydration_storage->module.functions) or
+        @lengthOf(sections.code.globals) >
+            @lengthOf(hydration_storage->module.global_constants) or
+        @lengthOf(sections.code.vtables) >
+            @lengthOf(hydration_storage->module.vtables) or
+        expression_count > @lengthOf(hydration_storage->module.call_attrs) or
+        function_count > @lengthOf(hydration_storage->module.function_attrs) or
+        @lengthOf(sections.attrs.safety_proofs) >
+            @lengthOf(hydration_storage->module.safety_attrs.proofs) or
+        total_blocks > @lengthOf(hydration_storage->blocks) or
+        total_parameter_types >
+            @lengthOf(hydration_storage->function_parameter_types) or
+        total_expression_argument_types >
+            @lengthOf(hydration_storage->expression_argument_types) or
+        total_vtable_functions >
+            @lengthOf(hydration_storage->vtable_slot_functions) or
+        total_call_attr_arguments >
+            @lengthOf(hydration_storage->call_attr_arguments)) {
+        return empty_hir_artifact_module_result(
+            ZirlHirArtifactReadError.InsufficientHydrationStorage,
+            read_storage,
+            hydration_storage
+        );
+    }
+    if (type_count > 0xFFFFFFFFu64 - function_count) {
+        return empty_hir_artifact_module_result(
+            ZirlHirArtifactReadError.InvalidCanonicalReference,
+            read_storage,
+            hydration_storage
+        );
+    }
+    if (not artifact_canonical_mappings_match(&raw sections.code)) {
+        return empty_hir_artifact_module_result(
+            ZirlHirArtifactReadError.InvalidCanonicalReference,
+            read_storage,
+            hydration_storage
+        );
+    }
+
+    var expression_argument_type_offset = 0u64;
+    var module = hydration_storage->module;
+    for (offset in 1u64..expression_count) {
+        let index = offset - 1u64;
+        let compact: ZirlCompactExpr = raw sections.code.expressions[index];
+        let argument_types_start = expression_argument_type_offset;
+        for (arg_offset in 1u64..@lengthOf(compact.arg_types)) {
+            let arg_index = arg_offset - 1u64;
+            let type_id: HirTypeId = raw compact.arg_types[arg_index];
+            if (not artifact_type_reference_valid(type_id, type_count)) {
+                return empty_hir_artifact_module_result(
+                    ZirlHirArtifactReadError.InvalidCanonicalReference,
+                    read_storage,
+                    hydration_storage
+                );
+            }
+            raw hydration_storage->expression_argument_types[
+                expression_argument_type_offset
+            ] = type_id;
+            expression_argument_type_offset =
+                expression_argument_type_offset + 1u64;
+        }
+        let argument_types = raw hydration_storage->expression_argument_types[
+            argument_types_start..expression_argument_type_offset
+        ];
+        let decoded = decode_hir_artifact_expression(
+            &raw compact,
+            argument_types,
+            type_count,
+            sections.code.functions
+        );
+        if (decoded.error != ZirlHirArtifactReadError.None) {
+            return empty_hir_artifact_module_result(
+                decoded.error,
+                read_storage,
+                hydration_storage
+            );
+        }
+        if (not artifact_expression_types_valid(decoded.value, type_count)) {
+            return empty_hir_artifact_module_result(
+                ZirlHirArtifactReadError.InvalidCanonicalReference,
+                read_storage,
+                hydration_storage
+            );
+        }
+        raw module.expressions[index] = decoded.value;
+    }
+    module.expressions = raw hydration_storage->module.expressions[
+        0u64..expression_count
+    ];
+
+    var required_slot_count = 0u64;
+    var parameter_type_offset = 0u64;
+    var block_offset = 0u64;
+    for (offset in 1u64..function_count) {
+        let index = offset - 1u64;
+        let compact: ZirlCompactFunction = raw sections.code.functions[index];
+        if (compact.signature_type_id !=
+                (type_count + index) as u32 or
+            compact.instance_index != 0xFFFFFFFFu32 or
+            not artifact_type_reference_valid(
+                compact.return_type_id,
+                type_count
+            ) or
+            not artifact_type_reference_valid(
+                compact.machine_return_type_id,
+                type_count
+            ) or
+            (@lengthOf(compact.parameter_name_ids) != 0u64 and
+             @lengthOf(compact.parameter_name_ids) !=
+                @lengthOf(compact.parameter_type_ids)) or
+            (@lengthOf(compact.parameter_slot_ids) != 0u64 and
+             @lengthOf(compact.parameter_slot_ids) !=
+                @lengthOf(compact.parameter_type_ids))) {
+            return empty_hir_artifact_module_result(
+                ZirlHirArtifactReadError.InvalidCanonicalReference,
+                read_storage,
+                hydration_storage
+            );
+        }
+        let parameter_type_start = parameter_type_offset;
+        for (param_offset in 1u64..@lengthOf(compact.parameter_type_ids)) {
+            let param_index = param_offset - 1u64;
+            let type_id: HirTypeId =
+                raw compact.parameter_type_ids[param_index];
+            if (not artifact_type_reference_valid(type_id, type_count)) {
+                return empty_hir_artifact_module_result(
+                    ZirlHirArtifactReadError.InvalidCanonicalReference,
+                    read_storage,
+                    hydration_storage
+                );
+            }
+            raw hydration_storage->function_parameter_types[
+                parameter_type_offset
+            ] = type_id;
+            parameter_type_offset = parameter_type_offset + 1u64;
+        }
+        for (param_offset in 1u64..@lengthOf(compact.parameter_slot_ids)) {
+            let param_index = param_offset - 1u64;
+            let slot: HirSlotId = raw compact.parameter_slot_ids[param_index];
+            if (slot != invalidSlot) {
+                let slot_extent =
+                    artifact_include_slot(slot, required_slot_count);
+                if (not slot_extent.valid) {
+                    return empty_hir_artifact_module_result(
+                        ZirlHirArtifactReadError.InvalidHydratedHir,
+                        read_storage,
+                        hydration_storage
+                    );
+                }
+                required_slot_count = slot_extent.count;
+            }
+        }
+        let blocks_start = block_offset;
+        for (block_iteration in 1u64..@lengthOf(compact.blocks)) {
+            let compact_block_index = block_iteration - 1u64;
+            let compact_block: ZirlCompactBasicBlock =
+                raw compact.blocks[compact_block_index];
+            raw hydration_storage->blocks[block_offset] = HirBasicBlock {
+                instructions: compact_block.instructions,
+                terminator: compact_block.terminator,
+            };
+            block_offset = block_offset + 1u64;
+        }
+        raw module.functions[index] = HirFunction {
+            name_id: compact.name_id,
+            parameter_types: raw hydration_storage->function_parameter_types[
+                parameter_type_start..parameter_type_offset
+            ],
+            parameter_name_ids: compact.parameter_name_ids,
+            parameter_slots: compact.parameter_slot_ids,
+            return_type: compact.return_type_id,
+            state_function: compact.is_state,
+            uses_tail_calling_convention:
+                compact.uses_tail_calling_convention,
+            machine_return_type: compact.machine_return_type_id,
+            machine_id: compact.machine_id,
+            variadic: compact.is_variadic,
+            variadic_slice_param: compact.variadic_slice_param,
+            foreign_c: compact.is_foreign_c,
+            has_body: not compact.is_extern,
+            foreign_adapter_name_id: compact.foreign_adapter_name_id,
+            blocks: raw hydration_storage->blocks[blocks_start..block_offset],
+        };
+    }
+    module.functions = raw hydration_storage->module.functions[
+        0u64..function_count
+    ];
+
+    for (offset in 1u64..expression_count) {
+        let index = offset - 1u64;
+        let expression: HirExpr = raw module.expressions[index];
+        let slot_extent = artifact_expression_slots(
+            expression,
+            required_slot_count
+        );
+        if (not slot_extent.valid) {
+            return empty_hir_artifact_module_result(
+                ZirlHirArtifactReadError.InvalidHydratedHir,
+                read_storage,
+                hydration_storage
+            );
+        }
+        required_slot_count = slot_extent.count;
+    }
+    for (offset in 1u64..@lengthOf(sections.attrs.slots)) {
+        let index = offset - 1u64;
+        let record: ZirlSlotAttrsRecord = raw sections.attrs.slots[index];
+        if (record.slot_id == invalidSlot) {
+            return empty_hir_artifact_module_result(
+                ZirlHirArtifactReadError.InvalidCanonicalReference,
+                read_storage,
+                hydration_storage
+            );
+        }
+        let next_slot_count = (record.slot_id as u64) + 1u64;
+        if (next_slot_count > required_slot_count) {
+            required_slot_count = next_slot_count;
+        }
+        for (prior_offset in 1u64..index) {
+            let prior_index = prior_offset - 1u64;
+            let prior: ZirlSlotAttrsRecord =
+                raw sections.attrs.slots[prior_index];
+            if (prior.slot_id == record.slot_id) {
+                return empty_hir_artifact_module_result(
+                    ZirlHirArtifactReadError.InvalidSectionPayload,
+                    read_storage,
+                    hydration_storage
+                );
+            }
+        }
+    }
+    if (required_slot_count > @lengthOf(hydration_storage->module.slot_attrs)) {
+        return empty_hir_artifact_module_result(
+            ZirlHirArtifactReadError.InsufficientHydrationStorage,
+            read_storage,
+            hydration_storage
+        );
+    }
+
+    for (offset in 1u64..@lengthOf(sections.attrs.calls)) {
+        let index = offset - 1u64;
+        let record: ZirlCallAttrsRecord = raw sections.attrs.calls[index];
+        if ((record.expr_id as u64) >= expression_count) {
+            return empty_hir_artifact_module_result(
+                ZirlHirArtifactReadError.InvalidCanonicalReference,
+                read_storage,
+                hydration_storage
+            );
+        }
+        for (prior_offset in 1u64..index) {
+            let prior_index = prior_offset - 1u64;
+            let prior: ZirlCallAttrsRecord = raw sections.attrs.calls[prior_index];
+            if (prior.expr_id == record.expr_id) {
+                return empty_hir_artifact_module_result(
+                    ZirlHirArtifactReadError.InvalidSectionPayload,
+                    read_storage,
+                    hydration_storage
+                );
+            }
+        }
+    }
+    for (offset in 1u64..@lengthOf(sections.attrs.functions)) {
+        let index = offset - 1u64;
+        let record: ZirlFunctionAttrsRecord =
+            raw sections.attrs.functions[index];
+        if ((record.function_index as u64) >= function_count) {
+            return empty_hir_artifact_module_result(
+                ZirlHirArtifactReadError.InvalidCanonicalReference,
+                read_storage,
+                hydration_storage
+            );
+        }
+        let compact: ZirlCompactFunction =
+            raw sections.code.functions[record.function_index as u64];
+        if (record.discardable != compact.discardable) {
+            return empty_hir_artifact_module_result(
+                ZirlHirArtifactReadError.InvalidSectionPayload,
+                read_storage,
+                hydration_storage
+            );
+        }
+        for (prior_offset in 1u64..index) {
+            let prior_index = prior_offset - 1u64;
+            let prior: ZirlFunctionAttrsRecord =
+                raw sections.attrs.functions[prior_index];
+            if (prior.function_index == record.function_index) {
+                return empty_hir_artifact_module_result(
+                    ZirlHirArtifactReadError.InvalidSectionPayload,
+                    read_storage,
+                    hydration_storage
+                );
+            }
+        }
+    }
+    for (offset in 1u64..@lengthOf(sections.attrs.safety_proofs)) {
+        let index = offset - 1u64;
+        let record: ZirlSafetyProofRecord =
+            raw sections.attrs.safety_proofs[index];
+        if (record.expr_id != index as u32 or
+            (record.expr_id as u64) >= expression_count) {
+            return empty_hir_artifact_module_result(
+                ZirlHirArtifactReadError.InvalidCanonicalReference,
+                read_storage,
+                hydration_storage
+            );
+        }
+    }
+
+    let no_call_attr_arguments: [0]HirCallArgAttrs = [];
+    let default_slot_attrs = HirSlotAttrs {
+        ownership: HirOwnership.Default,
+        consumed: HirConsumedState.Unknown,
+        non_null: false,
+        volatile_slot: false,
+    };
+    for (offset in 1u64..required_slot_count) {
+        let index = offset - 1u64;
+        raw module.slot_attrs[index] = default_slot_attrs;
+    }
+    module.slot_attrs = raw hydration_storage->module.slot_attrs[
+        0u64..required_slot_count
+    ];
+    for (offset in 1u64..@lengthOf(sections.attrs.slots)) {
+        let index = offset - 1u64;
+        let record: ZirlSlotAttrsRecord = raw sections.attrs.slots[index];
+        raw module.slot_attrs[record.slot_id as u64] = HirSlotAttrs {
+            ownership: record.ownership,
+            consumed: record.consumed,
+            non_null: record.non_null,
+            volatile_slot: record.volatile_slot,
+        };
+    }
+
+    var call_attr_argument_offset = 0u64;
+    for (offset in 1u64..expression_count) {
+        let index = offset - 1u64;
+        raw module.call_attrs[index] = HirCallAttrs {
+            args: raw no_call_attr_arguments[0u64..0u64],
+            returns_argument: 0xFFFFFFFFu32,
+        };
+    }
+    for (offset in 1u64..@lengthOf(sections.attrs.calls)) {
+        let index = offset - 1u64;
+        let record: ZirlCallAttrsRecord = raw sections.attrs.calls[index];
+        let args_start = call_attr_argument_offset;
+        for (arg_offset in 1u64..@lengthOf(record.arg_escapes)) {
+            let arg_index = arg_offset - 1u64;
+            raw hydration_storage->call_attr_arguments[
+                call_attr_argument_offset
+            ] = HirCallArgAttrs {
+                escape: raw record.arg_escapes[arg_index],
+            };
+            call_attr_argument_offset = call_attr_argument_offset + 1u64;
+        }
+        module.call_attrs[record.expr_id as u64] = HirCallAttrs {
+            args: raw hydration_storage->call_attr_arguments[
+                args_start..call_attr_argument_offset
+            ],
+            returns_argument: record.returns_argument,
+        };
+    }
+    module.call_attrs = raw hydration_storage->module.call_attrs[
+        0u64..expression_count
+    ];
+
+    for (offset in 1u64..function_count) {
+        let index = offset - 1u64;
+        let compact: ZirlCompactFunction = raw sections.code.functions[index];
+        raw module.function_attrs[index] =
+            artifact_function_attrs_default(compact.discardable);
+    }
+    for (offset in 1u64..@lengthOf(sections.attrs.functions)) {
+        let index = offset - 1u64;
+        let record: ZirlFunctionAttrsRecord =
+            raw sections.attrs.functions[index];
+        raw module.function_attrs[record.function_index as u64] =
+            HirFunctionAttrs {
+                return_consumed: record.return_consumed,
+                non_null: record.non_null,
+                no_alias: record.no_alias,
+                read_only: record.read_only,
+                no_capture: record.no_capture,
+                discardable: record.discardable,
+            };
+    }
+    module.function_attrs = raw hydration_storage->module.function_attrs[
+        0u64..function_count
+    ];
+
+    for (offset in 1u64..@lengthOf(sections.attrs.safety_proofs)) {
+        let index = offset - 1u64;
+        let record: ZirlSafetyProofRecord =
+            raw sections.attrs.safety_proofs[index];
+        raw module.safety_attrs.proofs[index] = HirSafetyProof {
+            kind: record.kind,
+            operand_a: record.operand_a,
+            operand_b: record.operand_b,
+            operand_c: record.operand_c,
+            present: record.present,
+        };
+    }
+    module.safety_attrs = HirSafetyAttrs {
+        proofs: raw hydration_storage->module.safety_attrs.proofs[
+            0u64..@lengthOf(sections.attrs.safety_proofs)
+        ],
+    };
+
+    var global_index = 0u64;
+    for (offset in 1u64..@lengthOf(sections.code.globals)) {
+        let index = offset - 1u64;
+        let global_record: ZirlCodeGlobal =
+            raw sections.code.globals[index];
+        if (not artifact_type_reference_valid(
+                global_record.type_id,
+                type_count
+            )) {
+            return empty_hir_artifact_module_result(
+                ZirlHirArtifactReadError.InvalidCanonicalReference,
+                read_storage,
+                hydration_storage
+            );
+        }
+        raw module.global_constants[global_index] = HirGlobalConst {
+            name_id: global_record.name_id,
+            type_id: global_record.type_id,
+            initializer: global_record.initializer,
+        };
+        global_index = global_index + 1u64;
+    }
+    module.global_constants = raw hydration_storage->module.global_constants[
+        0u64..global_index
+    ];
+
+    var vtable_slot_offset = 0u64;
+    for (offset in 1u64..@lengthOf(sections.code.vtables)) {
+        let index = offset - 1u64;
+        let compact: ZirlCodeVTable = raw sections.code.vtables[index];
+        let slots_start = vtable_slot_offset;
+        for (slot_offset in 1u64..@lengthOf(compact.slot_function_name_ids)) {
+            let slot_index = slot_offset - 1u64;
+            let function = artifact_function_reference(
+                raw compact.slot_function_signature_type_ids[slot_index],
+                raw compact.slot_function_name_ids[slot_index],
+                type_count,
+                sections.code.functions
+            );
+            if (function.failed) {
+                return empty_hir_artifact_module_result(
+                    ZirlHirArtifactReadError.InvalidCanonicalReference,
+                    read_storage,
+                    hydration_storage
+                );
+            }
+            raw hydration_storage->vtable_slot_functions[vtable_slot_offset] =
+                function.value;
+            vtable_slot_offset = vtable_slot_offset + 1u64;
+        }
+        raw module.vtables[index] = HirVTable {
+            name_id: compact.name_id,
+            slot_functions: raw hydration_storage->vtable_slot_functions[
+                slots_start..vtable_slot_offset
+            ],
+        };
+    }
+    module.vtables = raw hydration_storage->module.vtables[
+        0u64..@lengthOf(sections.code.vtables)
+    ];
+
+    var declaration_method_offset = 0u64;
+    for (offset in 1u64..declaration_count) {
+        let index = offset - 1u64;
+        let source: ZirlDeclarationRecord =
+            raw sections.declarations.declarations[index];
+        if (not artifact_type_reference_valid(source.type_id, type_count) or
+            (source.template_index != invalidTemplate and
+             (source.template_index as u64) >= template_count) or
+            (source.body_function_index != invalidFunction and
+             (source.body_function_index as u64) >= function_count)) {
+            return empty_hir_artifact_module_result(
+                ZirlHirArtifactReadError.InvalidCanonicalReference,
+                read_storage,
+                hydration_storage
+            );
+        }
+        if (source.kind == HirDeclarationKind.Struct) {
+            if (source.type_id == invalidType) {
+                return empty_hir_artifact_module_result(
+                    ZirlHirArtifactReadError.InvalidCanonicalReference,
+                    read_storage,
+                    hydration_storage
+                );
+            }
+            let struct_type: HirType =
+                raw sections.metadata.types[source.type_id as u64];
+            if (struct_type.kind != HirTypeKind.Struct or
+                (struct_type.ref0 as u64) >=
+                    @lengthOf(sections.metadata.struct_defs)) {
+                return empty_hir_artifact_module_result(
+                    ZirlHirArtifactReadError.InvalidCanonicalReference,
+                    read_storage,
+                    hydration_storage
+                );
+            }
+            let definition: HirStructDef =
+                raw sections.metadata.struct_defs[struct_type.ref0 as u64];
+            if (@lengthOf(source.field_name_ids) !=
+                    @lengthOf(definition.field_name_ids) or
+                @lengthOf(source.field_type_ids) !=
+                    @lengthOf(definition.field_type_ids)) {
+                return empty_hir_artifact_module_result(
+                    ZirlHirArtifactReadError.InvalidHydratedHir,
+                    read_storage,
+                    hydration_storage
+                );
+            }
+            for (field_offset in 1u64..@lengthOf(source.field_name_ids)) {
+                let field_index = field_offset - 1u64;
+                if (raw source.field_name_ids[field_index] !=
+                        raw definition.field_name_ids[field_index] or
+                    raw source.field_type_ids[field_index] !=
+                        raw definition.field_type_ids[field_index] or
+                    not artifact_type_reference_valid(
+                        raw source.field_type_ids[field_index],
+                        type_count
+                    )) {
+                    return empty_hir_artifact_module_result(
+                        ZirlHirArtifactReadError.InvalidHydratedHir,
+                        read_storage,
+                        hydration_storage
+                    );
+                }
+            }
+        } else if (@lengthOf(source.field_name_ids) != 0u64 or
+                   @lengthOf(source.field_type_ids) != 0u64) {
+            return empty_hir_artifact_module_result(
+                ZirlHirArtifactReadError.InvalidHydratedHir,
+                read_storage,
+                hydration_storage
+            );
+        }
+
+        let method_start = declaration_method_offset;
+        for (method_offset in
+            1u64..@lengthOf(source.method_declaration_indices)) {
+            let method_index = method_offset - 1u64;
+            raw hydration_storage->declaration_method_ids[
+                declaration_method_offset
+            ] = raw source.method_declaration_indices[method_index];
+            declaration_method_offset = declaration_method_offset + 1u64;
+        }
+        raw module.declarations[index] = HirDeclaration {
+            name_id: source.name_id,
+            kind: source.kind,
+            visibility: source.visibility,
+            module_depth: source.module_depth,
+            type_id: artifact_local_type_id(source.type_id, type_count),
+            is_extern: source.is_extern,
+            discardable: source.discardable,
+            body_function_id: source.body_function_index,
+            template_id: source.template_index,
+            members:
+                raw hydration_storage->declaration_method_ids[0u64..0u64],
+            method_declaration_ids:
+                raw hydration_storage->declaration_method_ids[
+                    method_start..declaration_method_offset
+                ],
+        };
+    }
+    module.declarations =
+        raw hydration_storage->module.declarations[0u64..declaration_count];
+
+    var template_param_offset = 0u64;
+    var template_bound_offset = 0u64;
+    var template_param_type_offset = 0u64;
+    var template_param_name_offset = 0u64;
+    var template_field_offset = 0u64;
+    var template_field_order_offset = 0u64;
+    var template_method_offset = 0u64;
+    var template_trait_offset = 0u64;
+    for (offset in 1u64..template_count) {
+        let index = offset - 1u64;
+        let source: ZirlTemplateRecord =
+            raw sections.templates.templates[index];
+        if ((source.declaration_index as u64) >= declaration_count or
+            (source.function_index != invalidFunction and
+             (source.function_index as u64) >= function_count) or
+            not artifact_type_reference_valid(source.return_type_id, type_count)) {
+            return empty_hir_artifact_module_result(
+                ZirlHirArtifactReadError.InvalidCanonicalReference,
+                read_storage,
+                hydration_storage
+            );
+        }
+
+        let params_start = template_param_offset;
+        for (param_offset in 1u64..@lengthOf(source.params)) {
+            let param_index = param_offset - 1u64;
+            let source_param: ZirlGenericParamRecord =
+                raw source.params[param_index];
+            let bounds_start = template_bound_offset;
+            for (bound_offset in
+                1u64..@lengthOf(source_param.bound_type_ids)) {
+                let bound_index = bound_offset - 1u64;
+                let canonical_id: HirTypeId =
+                    raw source_param.bound_type_ids[bound_index];
+                let local_id = artifact_local_type_id(canonical_id, type_count);
+                if (local_id == invalidType) {
+                    return empty_hir_artifact_module_result(
+                        ZirlHirArtifactReadError.InvalidCanonicalReference,
+                        read_storage,
+                        hydration_storage
+                    );
+                }
+                raw hydration_storage->template_bound_type_ids[
+                    template_bound_offset
+                ] = local_id;
+                template_bound_offset = template_bound_offset + 1u64;
+            }
+            raw hydration_storage->template_params[template_param_offset] =
+                HirGenericParam {
+                    name_id: source_param.name_id,
+                    bound_type_ids:
+                        raw hydration_storage->template_bound_type_ids[
+                            bounds_start..template_bound_offset
+                        ],
+                };
+            template_param_offset = template_param_offset + 1u64;
+        }
+
+        let param_types_start = template_param_type_offset;
+        for (param_offset in 1u64..@lengthOf(source.param_type_ids)) {
+            let param_index = param_offset - 1u64;
+            let canonical_id: HirTypeId =
+                raw source.param_type_ids[param_index];
+            let local_id = artifact_local_type_id(canonical_id, type_count);
+            if (local_id == invalidType) {
+                return empty_hir_artifact_module_result(
+                    ZirlHirArtifactReadError.InvalidCanonicalReference,
+                    read_storage,
+                    hydration_storage
+                );
+            }
+            raw hydration_storage->template_param_type_ids[
+                template_param_type_offset
+            ] = local_id;
+            template_param_type_offset = template_param_type_offset + 1u64;
+        }
+        let param_names_start = template_param_name_offset;
+        for (param_offset in 1u64..@lengthOf(source.param_name_ids)) {
+            let param_index = param_offset - 1u64;
+            raw hydration_storage->template_param_name_ids[
+                template_param_name_offset
+            ] = raw source.param_name_ids[param_index];
+            template_param_name_offset = template_param_name_offset + 1u64;
+        }
+
+        let fields_start = template_field_offset;
+        for (field_offset in 1u64..@lengthOf(source.field_name_ids)) {
+            let field_index = field_offset - 1u64;
+            raw hydration_storage->template_field_name_ids[
+                template_field_offset
+            ] = raw source.field_name_ids[field_index];
+            template_field_offset = template_field_offset + 1u64;
+        }
+        for (field_offset in 1u64..@lengthOf(source.field_type_ids)) {
+            let field_index = field_offset - 1u64;
+            let canonical_id: HirTypeId =
+                raw source.field_type_ids[field_index];
+            let local_id = artifact_local_type_id(canonical_id, type_count);
+            if (local_id == invalidType) {
+                return empty_hir_artifact_module_result(
+                    ZirlHirArtifactReadError.InvalidCanonicalReference,
+                    read_storage,
+                    hydration_storage
+                );
+            }
+            raw hydration_storage->template_field_type_ids[
+                fields_start + field_index
+            ] = local_id;
+        }
+
+        let field_order_start = template_field_order_offset;
+        for (field_offset in 1u64..@lengthOf(source.canonical_field_order)) {
+            let field_index = field_offset - 1u64;
+            raw hydration_storage->template_field_order[
+                template_field_order_offset
+            ] = raw source.canonical_field_order[field_index];
+            template_field_order_offset = template_field_order_offset + 1u64;
+        }
+        let methods_start = template_method_offset;
+        for (method_offset in
+            1u64..@lengthOf(source.method_declaration_indices)) {
+            let method_index = method_offset - 1u64;
+            raw hydration_storage->template_method_ids[template_method_offset] =
+                raw source.method_declaration_indices[method_index];
+            template_method_offset = template_method_offset + 1u64;
+        }
+        let traits_start = template_trait_offset;
+        for (trait_offset in 1u64..@lengthOf(source.trait_type_ids)) {
+            let trait_index = trait_offset - 1u64;
+            let canonical_id: HirTypeId =
+                raw source.trait_type_ids[trait_index];
+            let local_id = artifact_local_type_id(canonical_id, type_count);
+            if (local_id == invalidType) {
+                return empty_hir_artifact_module_result(
+                    ZirlHirArtifactReadError.InvalidCanonicalReference,
+                    read_storage,
+                    hydration_storage
+                );
+            }
+            raw hydration_storage->template_trait_type_ids[
+                template_trait_offset
+            ] = local_id;
+            template_trait_offset = template_trait_offset + 1u64;
+        }
+
+        raw module.templates[index] = HirTemplate {
+            declaration_id: source.declaration_index,
+            function_id: source.function_index,
+            kind: source.kind,
+            is_extern: source.is_extern,
+            name_id: source.name_id,
+            return_type_id:
+                artifact_local_type_id(source.return_type_id, type_count),
+            variadic: source.variadic,
+            state_function: source.state_function,
+            foreign_c: source.foreign_c,
+            uses_tail_calling_convention:
+                source.uses_tail_calling_convention,
+            params: raw hydration_storage->template_params[
+                params_start..template_param_offset
+            ],
+            param_type_ids:
+                raw hydration_storage->template_param_type_ids[
+                    param_types_start..template_param_type_offset
+                ],
+            param_name_ids:
+                raw hydration_storage->template_param_name_ids[
+                    param_names_start..template_param_name_offset
+                ],
+            field_name_ids:
+                raw hydration_storage->template_field_name_ids[
+                    fields_start..template_field_offset
+                ],
+            field_type_ids:
+                raw hydration_storage->template_field_type_ids[
+                    fields_start..template_field_offset
+                ],
+            canonical_field_order:
+                raw hydration_storage->template_field_order[
+                    field_order_start..template_field_order_offset
+                ],
+            method_declaration_indices:
+                raw hydration_storage->template_method_ids[
+                    methods_start..template_method_offset
+                ],
+            trait_type_ids:
+                raw hydration_storage->template_trait_type_ids[
+                    traits_start..template_trait_offset
+                ],
+        };
+    }
+    module.templates =
+        raw hydration_storage->module.templates[0u64..template_count];
+
+    module.strings = sections.metadata.strings;
+    module.types = sections.metadata.types;
+    module.struct_defs = sections.metadata.struct_defs;
+    module.enum_defs = sections.metadata.enum_defs;
+    module.union_defs = sections.metadata.union_defs;
+
+    let verified = verify_hir(&raw module);
+    if (verified.error != HirVerifyError.None) {
+        return empty_hir_artifact_module_result(
+            ZirlHirArtifactReadError.InvalidHydratedHir,
+            read_storage,
+            hydration_storage
+        );
+    }
+    hydration_storage->module = module;
+    return ZirlHirArtifactModuleReadResult {
+        identity: sections.identity,
+        paths: sections.metadata.paths,
+        module: module,
+        error: ZirlHirArtifactReadError.None,
+    };
+}

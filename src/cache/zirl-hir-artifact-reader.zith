@@ -1,0 +1,322 @@
+from cache/zirl-artifact
+from cache/zirl-attrs-section
+from cache/zirl-code-section
+from cache/zirl-canonical-types
+from cache/zirl-container
+from cache/zirl-decl-section
+from cache/zirl-hir-code
+from cache/zirl-metadata
+from cache/zirl-template-section
+from cache/zirl-buffer
+from ir/hir
+from ir/hir-verify
+
+from cache/zirl-hir-artifact-contract
+
+pub fn empty_hir_artifact_read(
+    error: ZirlHirArtifactReadError,
+    storage: *ZirlHirArtifactReadStorage
+): ZirlHirArtifactReadResult {
+    let no_text: [0]char = [];
+    let no_dependencies: [0]ZirlArtifactDependency = [];
+    return ZirlHirArtifactReadResult {
+        identity: ZirlArtifactIdentity {
+            canonical_path: raw no_text[0u64..0u64],
+            module_name: raw no_text[0u64..0u64],
+            semantic_profile_name: raw no_text[0u64..0u64],
+            semantic_profile_version: 0u32,
+            source_fingerprint_primary: 0u64,
+            source_fingerprint_secondary: 0u64,
+            public_abi_hi: 0u32,
+            public_abi_lo: 0u32,
+            optional_features: 0u64,
+            declaration_count: 0u32,
+            template_count: 0u32,
+            function_count: 0u32,
+            dependencies: raw no_dependencies[0u64..0u64],
+        },
+        metadata: ZirlMetadataSection {
+            module_name: raw storage->metadata.module_name[0u64..0u64],
+            paths: raw storage->metadata.paths[0u64..0u64],
+            strings: raw storage->metadata.strings[0u64..0u64],
+            types: raw storage->metadata.types[0u64..0u64],
+            struct_defs: raw storage->metadata.struct_defs[0u64..0u64],
+            enum_defs: raw storage->metadata.enum_defs[0u64..0u64],
+            union_defs: raw storage->metadata.union_defs[0u64..0u64],
+        },
+        declarations: ZirlDeclSection {
+            declarations: raw storage->declarations.declarations[0u64..0u64],
+        },
+        templates: ZirlTemplateSection {
+            templates: raw storage->templates.templates[0u64..0u64],
+        },
+        code: ZirlCodeSection {
+            expressions: raw storage->code.expressions[0u64..0u64],
+            functions: raw storage->code.functions[0u64..0u64],
+            globals: raw storage->code.globals[0u64..0u64],
+            vtables: raw storage->code.vtables[0u64..0u64],
+            canonical_mappings:
+                raw storage->code.canonical_mappings[0u64..0u64],
+        },
+        attrs: ZirlAttrsSection {
+            slots: raw storage->attrs.slots[0u64..0u64],
+            calls: raw storage->attrs.calls[0u64..0u64],
+            functions: raw storage->attrs.functions[0u64..0u64],
+            safety_proofs:
+                raw storage->attrs.safety_proofs[0u64..0u64],
+        },
+        error: error,
+    };
+}
+
+fn hir_artifact_find_section(
+    sections: []ZirlArtifactSection,
+    section_id: u16
+): ZirlArtifactSection {
+    let no_bytes: [0]u8 = [];
+    for (offset in 1u64..@lengthOf(sections)) {
+        let index = offset - 1;
+        let section: ZirlArtifactSection = raw sections[index];
+        if (section.id == section_id) {
+            return section;
+        }
+    }
+    return ZirlArtifactSection {
+        id: section_id,
+        flags: 0u16,
+        schema_version: 0u16,
+        payload: raw no_bytes[0u64..0u64],
+    };
+}
+
+fn hir_artifact_text_matches(left: []char, right: []char): bool {
+    if (@lengthOf(left) != @lengthOf(right)) {
+        return false;
+    }
+    for (offset in 1u64..@lengthOf(left)) {
+        let index = offset - 1;
+        if (raw left[index] != raw right[index]) {
+            return false;
+        }
+    }
+    return true;
+}
+
+pub fn read_zirl_hir_artifact_sections(
+    bytes: []u8,
+    storage: *ZirlHirArtifactReadStorage
+): ZirlHirArtifactReadResult {
+    let artifact = read_zirl_artifact(bytes, &raw storage->artifact);
+    if (artifact.error != ZirlArtifactError.None) {
+        return empty_hir_artifact_read(
+            ZirlHirArtifactReadError.InvalidArtifact,
+            storage
+        );
+    }
+
+    let metadata_section =
+        hir_artifact_find_section(artifact.sections, zirlHirMetadataSectionId);
+    let declarations_section =
+        hir_artifact_find_section(artifact.sections, zirlHirDeclsSectionId);
+    let templates_section =
+        hir_artifact_find_section(artifact.sections, zirlHirTemplatesSectionId);
+    let code_section =
+        hir_artifact_find_section(artifact.sections, zirlHirCodeSectionId);
+    let attrs_section =
+        hir_artifact_find_section(artifact.sections, zirlHirAttrsSectionId);
+
+    let metadata = read_metadata_section(
+        ZirlByteReader {
+            bytes: metadata_section.payload,
+            position: 0u64,
+            failed: false,
+        },
+        &raw storage->metadata
+    );
+    if (metadata.reader.failed) {
+        return empty_hir_artifact_read(
+            ZirlHirArtifactReadError.InvalidSectionPayload,
+            storage
+        );
+    }
+    if (metadata.reader.position != @lengthOf(metadata_section.payload)) {
+        return empty_hir_artifact_read(
+            ZirlHirArtifactReadError.TrailingSectionPayload,
+            storage
+        );
+    }
+
+    let declarations = read_decls_section(
+        ZirlByteReader {
+            bytes: declarations_section.payload,
+            position: 0u64,
+            failed: false,
+        },
+        &raw storage->declarations
+    );
+    if (declarations.reader.failed) {
+        return empty_hir_artifact_read(
+            ZirlHirArtifactReadError.InvalidSectionPayload,
+            storage
+        );
+    }
+    if (declarations.reader.position !=
+        @lengthOf(declarations_section.payload)) {
+        return empty_hir_artifact_read(
+            ZirlHirArtifactReadError.TrailingSectionPayload,
+            storage
+        );
+    }
+
+    let templates = read_templates_section(
+        ZirlByteReader {
+            bytes: templates_section.payload,
+            position: 0u64,
+            failed: false,
+        },
+        &raw storage->templates
+    );
+    if (templates.reader.failed) {
+        return empty_hir_artifact_read(
+            ZirlHirArtifactReadError.InvalidSectionPayload,
+            storage
+        );
+    }
+    if (templates.reader.position != @lengthOf(templates_section.payload)) {
+        return empty_hir_artifact_read(
+            ZirlHirArtifactReadError.TrailingSectionPayload,
+            storage
+        );
+    }
+
+    let code = read_code_section(
+        ZirlByteReader {
+            bytes: code_section.payload,
+            position: 0u64,
+            failed: false,
+        },
+        &raw storage->code
+    );
+    if (code.reader.failed) {
+        return empty_hir_artifact_read(
+            ZirlHirArtifactReadError.InvalidSectionPayload,
+            storage
+        );
+    }
+    if (code.reader.position != @lengthOf(code_section.payload)) {
+        return empty_hir_artifact_read(
+            ZirlHirArtifactReadError.TrailingSectionPayload,
+            storage
+        );
+    }
+
+    let attrs = read_attrs_section(
+        ZirlByteReader {
+            bytes: attrs_section.payload,
+            position: 0u64,
+            failed: false,
+        },
+        &raw storage->attrs
+    );
+    if (attrs.reader.failed) {
+        return empty_hir_artifact_read(
+            ZirlHirArtifactReadError.InvalidSectionPayload,
+            storage
+        );
+    }
+    if (attrs.reader.position != @lengthOf(attrs_section.payload)) {
+        return empty_hir_artifact_read(
+            ZirlHirArtifactReadError.TrailingSectionPayload,
+            storage
+        );
+    }
+
+    for (offset in 1u64..@lengthOf(declarations.value.declarations)) {
+        let index = offset - 1u64;
+        let declaration: ZirlDeclarationRecord =
+            raw declarations.value.declarations[index];
+        if ((declaration.template_index != invalidTemplate and
+             (declaration.template_index as u64) >=
+                @lengthOf(templates.value.templates)) or
+            (declaration.body_function_index != invalidFunction and
+             (declaration.body_function_index as u64) >=
+                @lengthOf(code.value.functions))) {
+            return empty_hir_artifact_read(
+                ZirlHirArtifactReadError.InvalidCanonicalReference,
+                storage
+            );
+        }
+    }
+    for (offset in 1u64..@lengthOf(templates.value.templates)) {
+        let index = offset - 1u64;
+        let template: ZirlTemplateRecord =
+            raw templates.value.templates[index];
+        if ((template.declaration_index as u64) >=
+                @lengthOf(declarations.value.declarations) or
+            (template.function_index != invalidFunction and
+             (template.function_index as u64) >=
+                @lengthOf(code.value.functions))) {
+            return empty_hir_artifact_read(
+                ZirlHirArtifactReadError.InvalidCanonicalReference,
+                storage
+            );
+        }
+    }
+
+    if (not hir_artifact_text_matches(
+            artifact.module_name,
+            metadata.value.module_name
+        )) {
+        return empty_hir_artifact_read(
+            ZirlHirArtifactReadError.IdentityMismatch,
+            storage
+        );
+    }
+    if ((artifact.header.declaration_count as u64) !=
+            @lengthOf(declarations.value.declarations)) {
+        return empty_hir_artifact_read(
+            ZirlHirArtifactReadError.IdentityMismatch,
+            storage
+        );
+    }
+    if ((artifact.header.template_count as u64) !=
+            @lengthOf(templates.value.templates)) {
+        return empty_hir_artifact_read(
+            ZirlHirArtifactReadError.IdentityMismatch,
+            storage
+        );
+    }
+    if ((artifact.header.function_count as u64) !=
+            @lengthOf(code.value.functions)) {
+        return empty_hir_artifact_read(
+            ZirlHirArtifactReadError.IdentityMismatch,
+            storage
+        );
+    }
+
+    return ZirlHirArtifactReadResult {
+        identity: ZirlArtifactIdentity {
+            canonical_path: artifact.canonical_path,
+            module_name: artifact.module_name,
+            semantic_profile_name: artifact.semantic_profile_name,
+            semantic_profile_version: artifact.header.semantic_profile_version,
+            source_fingerprint_primary:
+                artifact.header.source_fingerprint_primary,
+            source_fingerprint_secondary:
+                artifact.header.source_fingerprint_secondary,
+            public_abi_hi: artifact.header.public_abi_hi,
+            public_abi_lo: artifact.header.public_abi_lo,
+            optional_features: artifact.header.optional_features,
+            declaration_count: artifact.header.declaration_count,
+            template_count: artifact.header.template_count,
+            function_count: artifact.header.function_count,
+            dependencies: artifact.dependencies,
+        },
+        metadata: metadata.value,
+        declarations: declarations.value,
+        templates: templates.value,
+        code: code.value,
+        attrs: attrs.value,
+        error: ZirlHirArtifactReadError.None,
+    };
+}

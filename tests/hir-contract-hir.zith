@@ -1,0 +1,1001 @@
+from ir/hir
+from ir/hir-verify
+from ir/hir-verify-common
+from cache/cache
+from cache/zirl-buffer
+from cache/zirl-container
+from cache/zirl-decl-section
+from cache/zirl-template-section
+from cache/zirl-attrs-section
+from cache/zirl-type-section
+from cache/zirl-metadata
+from cache/zirl-code-section
+from cache/zirl-canonical-types
+from cache/zirl-hir-code
+from hir-contract-fixtures
+
+extern fn calloc(count: u64, size: u64): raw opaque
+extern fn free(ptr: raw opaque): void
+
+
+pub fn test_hir_declaration_template_contract(): i32 {
+    let strings: [5][]char = ["Container", "T", "Readable", "value", "method"];
+    let no_type_ids: [0]HirTypeId = [];
+    let no_string_ids: [0]HirStringId = [];
+    let types: [2]HirType = [
+        HirType {
+            kind: HirTypeKind.Void,
+            width: 0u8,
+            flags: 0u8,
+            ref0: 0u32,
+            ref1: 0u32,
+            args: raw no_type_ids[0..0],
+            arg_names: raw no_string_ids[0..0],
+        },
+        HirType {
+            kind: HirTypeKind.Trait,
+            width: 0u8,
+            flags: 0u8,
+            ref0: 2u32,
+            ref1: 0u32,
+            args: raw no_type_ids[0..0],
+            arg_names: raw no_string_ids[0..0],
+        },
+    ];
+    let no_members: [0]HirDeclarationId = [];
+    var declaration_methods: [1]HirDeclarationId = [1u32];
+    var declarations: [2]HirDeclaration = [
+        HirDeclaration {
+            name_id: 0u32,
+            kind: HirDeclarationKind.Struct,
+            visibility: HirVisibility.Public,
+            module_depth: 0i32,
+            type_id: invalidType,
+            is_extern: false,
+            discardable: false,
+            body_function_id: invalidFunction,
+            template_id: 0u32,
+            members: raw no_members[0..0],
+            method_declaration_ids: raw declaration_methods[0..1],
+        },
+        HirDeclaration {
+            name_id: 4u32,
+            kind: HirDeclarationKind.Function,
+            visibility: HirVisibility.Private,
+            module_depth: 1i32,
+            type_id: invalidType,
+            is_extern: false,
+            discardable: false,
+            body_function_id: invalidFunction,
+            template_id: invalidTemplate,
+            members: raw no_members[0..0],
+            method_declaration_ids: raw no_members[0..0],
+        },
+    ];
+    let trait_bounds: [1]HirTypeId = [1u32];
+    let params: [1]HirGenericParam = [
+        HirGenericParam {
+            name_id: 1u32,
+            bound_type_ids: raw trait_bounds[0..1],
+        },
+    ];
+    let no_signature_types: [0]HirTypeId = [];
+    let no_signature_names: [0]HirStringId = [];
+    let field_names: [1]HirStringId = [3u32];
+    let field_types: [1]HirTypeId = [0u32];
+    var field_order: [1]u32 = [0u32];
+    var template_methods: [1]HirDeclarationId = [1u32];
+    var trait_types: [1]HirTypeId = [1u32];
+    var templates: [1]HirTemplate = [
+        HirTemplate {
+            declaration_id: 0u32,
+            function_id: invalidFunction,
+            kind: HirDeclarationKind.Struct,
+            is_extern: false,
+            name_id: 0u32,
+            return_type_id: invalidType,
+            variadic: false,
+            state_function: false,
+            foreign_c: false,
+            uses_tail_calling_convention: false,
+            params: raw params[0..1],
+            param_type_ids: raw no_signature_types[0..0],
+            param_name_ids: raw no_signature_names[0..0],
+            field_name_ids: raw field_names[0..1],
+            field_type_ids: raw field_types[0..1],
+            canonical_field_order: raw field_order[0..1],
+            method_declaration_indices: raw template_methods[0..1],
+            trait_type_ids: raw trait_types[0..1],
+        },
+    ];
+    let valid = verify_declaration_template_fixture(
+        raw strings[0..5],
+        raw types[0..2],
+        raw declarations[0..2],
+        raw templates[0..1]
+    );
+    if (valid.error != HirVerifyError.None) {
+        return 1;
+    }
+
+    let no_signature_slots: [0]HirSlotId = [];
+    let no_signature_blocks: [0]HirBasicBlock = [];
+    let no_signature_params: [0]HirGenericParam = [];
+    let no_signature_order: [0]u32 = [];
+    let signature_functions: [1]HirFunction = [
+        HirFunction {
+            name_id: 0u32,
+            parameter_types: raw no_signature_types[0..0],
+            parameter_name_ids: raw no_signature_names[0..0],
+            parameter_slots: raw no_signature_slots[0..0],
+            return_type: 0u32,
+            state_function: false,
+            uses_tail_calling_convention: false,
+            machine_return_type: invalidType,
+            machine_id: 0u32,
+            variadic: false,
+            variadic_slice_param: invalidSlot,
+            foreign_c: false,
+            has_body: false,
+            foreign_adapter_name_id: invalidString,
+            blocks: raw no_signature_blocks[0..0],
+        },
+    ];
+    let signature_declarations: [1]HirDeclaration = [
+        HirDeclaration {
+            name_id: 0u32,
+            kind: HirDeclarationKind.Function,
+            visibility: HirVisibility.Public,
+            module_depth: 0i32,
+            type_id: invalidType,
+            is_extern: false,
+            discardable: false,
+            body_function_id: invalidFunction,
+            template_id: 0u32,
+            members: raw no_members[0..0],
+            method_declaration_ids: raw no_members[0..0],
+        },
+    ];
+    let signature_templates: [1]HirTemplate = [
+        HirTemplate {
+            declaration_id: 0u32,
+            function_id: 0u32,
+            kind: HirDeclarationKind.Function,
+            is_extern: false,
+            name_id: 0u32,
+            return_type_id: 0u32,
+            variadic: false,
+            state_function: false,
+            foreign_c: false,
+            uses_tail_calling_convention: false,
+            params: raw no_signature_params[0..0],
+            param_type_ids: raw no_signature_types[0..0],
+            param_name_ids: raw no_signature_names[0..0],
+            field_name_ids: raw no_signature_names[0..0],
+            field_type_ids: raw no_signature_types[0..0],
+            canonical_field_order: raw no_signature_order[0..0],
+            method_declaration_indices: raw no_members[0..0],
+            trait_type_ids: raw no_signature_types[0..0],
+        },
+    ];
+    var signature_module = empty_hir_module();
+    signature_module.strings = raw strings[0..5];
+    signature_module.types = raw types[0..2];
+    signature_module.functions = raw signature_functions[0..1];
+    signature_module.declarations = raw signature_declarations[0..1];
+    signature_module.templates = raw signature_templates[0..1];
+    let signature_valid = verify_hir(&raw signature_module);
+    if (signature_valid.error != HirVerifyError.None) {
+        return 20;
+    }
+    var signature_mismatch_template: HirTemplate =
+        raw signature_templates[0];
+    signature_mismatch_template.variadic = true;
+    let signature_mismatch_templates: [1]HirTemplate = [
+        signature_mismatch_template,
+    ];
+    signature_module.templates =
+        raw signature_mismatch_templates[0..1];
+    let signature_mismatch = verify_hir(&raw signature_module);
+    if (signature_mismatch.error != HirVerifyError.InvalidTemplateShape) {
+        return 21;
+    }
+
+    var declaration_value: HirDeclaration = raw declarations[0];
+    declaration_value.body_function_id = 9u32;
+    let invalid_function_declarations: [2]HirDeclaration = [
+        declaration_value,
+        raw declarations[1],
+    ];
+    let invalid_function_link = verify_declaration_template_fixture(
+        raw strings[0..5], raw types[0..2],
+        raw invalid_function_declarations[0..2], raw templates[0..1]
+    );
+    if (invalid_function_link.error != HirVerifyError.InvalidDeclarationReference) {
+        return 2;
+    }
+
+    var invalid_second_function_declaration: HirDeclaration =
+        raw declarations[1];
+    invalid_second_function_declaration.body_function_id = 9u32;
+    let invalid_second_function_declarations: [2]HirDeclaration = [
+        raw declarations[0],
+        invalid_second_function_declaration,
+    ];
+    let invalid_second_function_link = verify_declaration_template_fixture(
+        raw strings[0..5],
+        raw types[0..2],
+        raw invalid_second_function_declarations[0..2],
+        raw templates[0..1]
+    );
+    if (invalid_second_function_link.error !=
+        HirVerifyError.InvalidDeclarationReference) {
+        return 22;
+    }
+
+    var invalid_second_name_declaration: HirDeclaration =
+        raw declarations[1];
+    invalid_second_name_declaration.name_id = 9u32;
+    let invalid_second_name_declarations: [2]HirDeclaration = [
+        raw declarations[0],
+        invalid_second_name_declaration,
+    ];
+    let invalid_second_name = verify_declaration_template_fixture(
+        raw strings[0..5],
+        raw types[0..2],
+        raw invalid_second_name_declarations[0..2],
+        raw templates[0..1]
+    );
+    if (invalid_second_name.error != HirVerifyError.InvalidDeclarationReference) {
+        return 23;
+    }
+
+    var template_value: HirTemplate = raw templates[0];
+    template_value.function_id = 9u32;
+    let invalid_function_templates: [1]HirTemplate = [template_value];
+    let invalid_template_function = verify_declaration_template_fixture(
+        raw strings[0..5], raw types[0..2],
+        raw declarations[0..2], raw invalid_function_templates[0..1]
+    );
+    if (invalid_template_function.error != HirVerifyError.InvalidTemplateShape) {
+        return 3;
+    }
+
+    let invalid_template_id_declarations: [2]HirDeclaration = [
+        HirDeclaration {
+            name_id: 0u32,
+            kind: HirDeclarationKind.Struct,
+            visibility: HirVisibility.Public,
+            module_depth: 0i32,
+            type_id: invalidType,
+            is_extern: false,
+            discardable: false,
+            body_function_id: invalidFunction,
+            template_id: 9u32,
+            members: raw no_members[0..0],
+            method_declaration_ids: raw declaration_methods[0..1],
+        },
+        raw declarations[1],
+    ];
+    let invalid_template_id = verify_declaration_template_fixture(
+        raw strings[0..5], raw types[0..2],
+        raw invalid_template_id_declarations[0..2], raw templates[0..1]
+    );
+    if (invalid_template_id.error != HirVerifyError.InvalidDeclarationReference) {
+        return 4;
+    }
+
+    let broken_owner_declarations: [2]HirDeclaration = [
+        HirDeclaration {
+            name_id: 0u32,
+            kind: HirDeclarationKind.Struct,
+            visibility: HirVisibility.Public,
+            module_depth: 0i32,
+            type_id: invalidType,
+            is_extern: false,
+            discardable: false,
+            body_function_id: invalidFunction,
+            template_id: invalidTemplate,
+            members: raw no_members[0..0],
+            method_declaration_ids: raw declaration_methods[0..1],
+        },
+        raw declarations[1],
+    ];
+    let broken_owner = verify_declaration_template_fixture(
+        raw strings[0..5], raw types[0..2],
+        raw broken_owner_declarations[0..2], raw templates[0..1]
+    );
+    if (broken_owner.error != HirVerifyError.InvalidTemplateReference) {
+        return 5;
+    }
+
+    template_value = raw templates[0];
+    template_value.field_type_ids = raw no_type_ids[0..0];
+    let mismatched_templates: [1]HirTemplate = [template_value];
+    let mismatch_probe: HirTemplate = raw mismatched_templates[0];
+    if (@lengthOf(mismatch_probe.field_type_ids) != 0u64 or
+        @lengthOf(mismatch_probe.field_name_ids) != 1u64) {
+        return 91;
+    }
+    var mismatched_module = empty_hir_module();
+    mismatched_module.strings = raw strings[0..5];
+    mismatched_module.types = raw types[0..2];
+    mismatched_module.declarations = raw declarations[0..2];
+    mismatched_module.templates = raw mismatched_templates[0..1];
+    let mismatched_fields = verify_hir(&mismatched_module);
+    if (mismatched_fields.error != HirVerifyError.InvalidTemplateShape) {
+        return 6;
+    }
+
+    let invalid_order: [1]u32 = [1u32];
+    template_value = raw templates[0];
+    template_value.canonical_field_order = raw invalid_order[0..1];
+    let invalid_order_templates: [1]HirTemplate = [template_value];
+    let invalid_field_order = verify_declaration_template_fixture(
+        raw strings[0..5], raw types[0..2],
+        raw declarations[0..2], raw invalid_order_templates[0..1]
+    );
+    if (invalid_field_order.error != HirVerifyError.InvalidTemplateShape) {
+        return 7;
+    }
+
+    let invalid_method_ids: [1]HirDeclarationId = [9u32];
+    declaration_value = raw declarations[0];
+    declaration_value.method_declaration_ids = raw invalid_method_ids[0..1];
+    let invalid_method_declarations: [2]HirDeclaration = [
+        declaration_value,
+        raw declarations[1],
+    ];
+    let invalid_declaration_method = verify_declaration_template_fixture(
+        raw strings[0..5], raw types[0..2],
+        raw invalid_method_declarations[0..2], raw templates[0..1]
+    );
+    if (invalid_declaration_method.error != HirVerifyError.InvalidDeclarationReference) {
+        return 8;
+    }
+
+    let inconsistent_method_ids: [1]HirDeclarationId = [0u32];
+    template_value = raw templates[0];
+    template_value.method_declaration_indices =
+        raw inconsistent_method_ids[0..1];
+    let inconsistent_templates: [1]HirTemplate = [template_value];
+    let invalid_template_method = verify_declaration_template_fixture(
+        raw strings[0..5], raw types[0..2],
+        raw declarations[0..2], raw inconsistent_templates[0..1]
+    );
+    if (invalid_template_method.error != HirVerifyError.InvalidTemplateReference) {
+        return 9;
+    }
+
+    let non_trait_types: [1]HirTypeId = [0u32];
+    template_value = raw templates[0];
+    template_value.trait_type_ids = raw non_trait_types[0..1];
+    let non_trait_templates: [1]HirTemplate = [template_value];
+    let non_trait_reference = verify_declaration_template_fixture(
+        raw strings[0..5], raw types[0..2],
+        raw declarations[0..2], raw non_trait_templates[0..1]
+    );
+    if (non_trait_reference.error != HirVerifyError.InvalidTypeReference) {
+        return 10;
+    }
+    return 0;
+}
+
+pub fn test_nominal_types_use_definition_tables(): i32 {
+    let strings: [2][]char = ["Node", "value"];
+    let no_type_ids: [1]HirTypeId = [invalidType];
+    let no_string_ids: [1]HirStringId = [invalidString];
+    var struct_type = HirType {
+        kind: HirTypeKind.Struct,
+        width: 0u8,
+        flags: 0u8,
+        ref0: 0u32,
+        ref1: 0u32,
+        args: raw no_type_ids[0..0],
+        arg_names: raw no_string_ids[0..0],
+    };
+    struct_type.kind = HirTypeKind.Struct;
+    struct_type.ref0 = 0u32;
+    struct_type.args = raw no_type_ids[0..0];
+    struct_type.arg_names = raw no_string_ids[0..0];
+    let types: [1]HirType = [struct_type];
+    let field_names: [1]HirStringId = [1u32];
+    let field_types: [1]HirTypeId = [0u32];
+    let field_offsets: [1]u64 = [0u64];
+    let type_args: [1]HirTypeId = [0u32];
+    let struct_def = HirStructDef {
+        name_id: 0u32,
+        field_name_ids: raw field_names[0..1],
+        field_type_ids: raw field_types[0..1],
+        foreign_field_offsets: raw field_offsets[0..1],
+        type_arg_ids: raw type_args[0..1],
+        has_foreign_layout: false,
+        foreign_abi_is_single_i64: false,
+        foreign_size_bytes: 0u64,
+        foreign_align_bytes: 0u64,
+    };
+    let struct_defs: [1]HirStructDef = [struct_def];
+    var valid_module = empty_hir_module();
+    valid_module.strings = raw strings[0..2];
+    valid_module.types = raw types[0..1];
+    valid_module.struct_defs = raw struct_defs[0..1];
+    let valid = verify_hir(&valid_module);
+    if (valid.error != HirVerifyError.None) {
+        return 1;
+    }
+
+    let invalid_type_args: [1]HirTypeId = [9u32];
+    var invalid_struct_def = struct_def;
+    invalid_struct_def.type_arg_ids = raw invalid_type_args[0..1];
+    let invalid_struct_defs: [1]HirStructDef = [invalid_struct_def];
+    var invalid_argument_module = empty_hir_module();
+    invalid_argument_module.strings = raw strings[0..2];
+    invalid_argument_module.types = raw types[0..1];
+    invalid_argument_module.struct_defs = raw invalid_struct_defs[0..1];
+    let invalid_argument = verify_hir(&invalid_argument_module);
+    if (invalid_argument.error != HirVerifyError.InvalidTypeReference) {
+        return 2;
+    }
+
+    var invalid_struct_type = struct_type;
+    invalid_struct_type.ref0 = 1u32;
+    let invalid_types: [1]HirType = [invalid_struct_type];
+    var invalid_definition_module = empty_hir_module();
+    invalid_definition_module.strings = raw strings[0..2];
+    invalid_definition_module.types = raw invalid_types[0..1];
+    invalid_definition_module.struct_defs = raw struct_defs[0..1];
+    let invalid_definition = verify_hir(&invalid_definition_module);
+    if (invalid_definition.error == HirVerifyError.InvalidDefinitionReference and
+        invalid_definition.index == 0u32) {
+        return 0;
+    }
+    return 3;
+}
+
+pub fn test_hir_literal_variant(): i32 {
+    let literal: HirLiteral = HirLiteral {
+        value_kind: HirLiteralKind.Integer,
+        integer: 17,
+        float: 0.0,
+        boolean: false,
+        string_id: invalidString,
+        type_id: invalidType,
+    };
+    let payload: HirExpr = HirExpr { literal };
+    if (payload is HirLiteral) {
+        return 0;
+    }
+    return 2;
+}
+
+pub fn test_empty_hir_verifies(): i32 {
+    let module = empty_hir_module();
+    let result = verify_hir(&module);
+    if (result.error == HirVerifyError.None) {
+        return 0;
+    }
+    return 3;
+}
+
+pub fn test_nonempty_expression_table_verifies(): i32 {
+    let jump_node = HirJump { target: 0 };
+    let expression: HirExpr = HirExpr { jump_node };
+    let expressions: [1]HirExpr = [expression];
+    let strings: [0][]char = [];
+    let types: [0]HirType = [];
+    let functions: [0]HirFunction = [];
+    let proofs: [0]HirSafetyProof = [];
+    let module = make_hir_module(
+        raw strings[0..0],
+        raw types[0..0],
+        raw expressions[0..1],
+        raw functions[0..0],
+        raw proofs[0..0]
+    );
+    let result = verify_hir(&module);
+    if (result.error == HirVerifyError.None) {
+        return 0;
+    }
+    return 4;
+}
+
+pub fn test_runtime_panic_expression_verifies(): i32 {
+    let runtime_panic = HirRuntimePanic { code: 7u32 };
+    let expressions: [1]HirExpr = [HirExpr { runtime_panic }];
+    let strings: [0][]char = [];
+    let types: [0]HirType = [];
+    let functions: [0]HirFunction = [];
+    let proofs: [0]HirSafetyProof = [];
+    let module = make_hir_module(
+        raw strings[0u64..0u64],
+        raw types[0u64..0u64],
+        raw expressions[0u64..1u64],
+        raw functions[0u64..0u64],
+        raw proofs[0u64..0u64]
+    );
+    let result = verify_hir(&module);
+    if (result.error == HirVerifyError.None) {
+        return 0;
+    }
+    return 7;
+}
+
+pub fn test_invalid_literal_type_is_rejected(): i32 {
+    let literal: HirLiteral = HirLiteral {
+        value_kind: HirLiteralKind.Integer,
+        integer: 1,
+        float: 0.0,
+        boolean: false,
+        string_id: invalidString,
+        type_id: invalidType,
+    };
+    let expressions: [1]HirExpr = [HirExpr { literal }];
+    let strings: [0][]char = [];
+    let types: [0]HirType = [];
+    let functions: [0]HirFunction = [];
+    let proofs: [0]HirSafetyProof = [];
+    let module = make_hir_module(
+        raw strings[0..0],
+        raw types[0..0],
+        raw expressions[0..1],
+        raw functions[0..0],
+        raw proofs[0..0]
+    );
+    let result = verify_hir(&module);
+    if (result.error == HirVerifyError.InvalidExpressionShape) {
+        return 0;
+    }
+    return 5;
+}
+
+pub fn test_required_check_without_proof(): i32 {
+    let no_arguments: [1]HirTypeId = [invalidType];
+    let no_names: [1]HirStringId = [invalidString];
+    let integer_type_id: HirTypeId = 0;
+    var integer_type = HirType {
+        kind: HirTypeKind.Int,
+        width: 32,
+        flags: 0,
+        ref0: invalidType,
+        ref1: 0,
+        args: raw no_arguments[0..0],
+        arg_names: raw no_names[0..0],
+    };
+    integer_type.kind = HirTypeKind.Int;
+    integer_type.args = raw no_arguments[0..0];
+    integer_type.arg_names = raw no_names[0..0];
+    var array_type = HirType {
+        kind: HirTypeKind.Array,
+        width: 0,
+        flags: 0,
+        ref0: 1,
+        ref1: 4,
+        args: raw no_arguments[0..0],
+        arg_names: raw no_names[0..0],
+    };
+    array_type.kind = HirTypeKind.Array;
+    array_type.ref0 = integer_type_id;
+    array_type.args = raw no_arguments[0..0];
+    array_type.arg_names = raw no_names[0..0];
+    let types: [2]HirType = [integer_type, array_type];
+    var object = HirLiteral {
+        value_kind: HirLiteralKind.Integer,
+        integer: 0,
+        float: 0.0,
+        boolean: false,
+        string_id: invalidString,
+        type_id: 1,
+    };
+    object.value_kind = HirLiteralKind.Integer;
+    object.integer = 0;
+    object.string_id = invalidString;
+    object.type_id = 1;
+    var index_value = HirLiteral {
+        value_kind: HirLiteralKind.Integer,
+        integer: 1,
+        float: 0.0,
+        boolean: false,
+        string_id: invalidString,
+        type_id: 1,
+    };
+    index_value.value_kind = HirLiteralKind.Integer;
+    index_value.integer = 1;
+    index_value.string_id = invalidString;
+    index_value.type_id = integer_type_id;
+    var access = HirIndex {
+        object: 1,
+        index: 1,
+        type_id: 1,
+        object_type: 1,
+        is_array: true,
+        safety: HirSafetyMode.RequiredCheck,
+    };
+    access.object = 0;
+    access.type_id = integer_type_id;
+    let expressions: [3]HirExpr = [
+        HirExpr { object },
+        HirExpr { index_value },
+        HirExpr { access },
+    ];
+    let strings: [0][]char = [];
+    let functions: [0]HirFunction = [];
+    let proofs: [0]HirSafetyProof = [];
+    let module = make_hir_module(
+        raw strings[0..0],
+        raw types[0..2],
+        raw expressions[0..3],
+        raw functions[0..0],
+        raw proofs[0..0]
+    );
+    let result = verify_hir(&module);
+    let checked_expression: HirExpr = raw module.expressions[2];
+    if (result.error == HirVerifyError.None) {
+        if (checked_expression is HirIndex) {
+            let checked_index: HirIndex = checked_expression;
+            if (checked_index.safety == HirSafetyMode.RequiredCheck) {
+                return 0;
+            }
+        }
+    }
+    return 1;
+}
+
+pub fn test_required_check_proof_operands_match(expected_operand: HirExprId): i32 {
+    let no_arguments: [1]HirTypeId = [invalidType];
+    let no_names: [1]HirStringId = [invalidString];
+    let integer_type_id: HirTypeId = 0;
+    var integer_type = HirType {
+        kind: HirTypeKind.Int,
+        width: 32,
+        flags: 0,
+        ref0: invalidType,
+        ref1: 0,
+        args: raw no_arguments[0..0],
+        arg_names: raw no_names[0..0],
+    };
+    integer_type.kind = HirTypeKind.Int;
+    integer_type.args = raw no_arguments[0..0];
+    integer_type.arg_names = raw no_names[0..0];
+    var array_type = HirType {
+        kind: HirTypeKind.Array,
+        width: 0,
+        flags: 0,
+        ref0: 1,
+        ref1: 4,
+        args: raw no_arguments[0..0],
+        arg_names: raw no_names[0..0],
+    };
+    array_type.kind = HirTypeKind.Array;
+    array_type.ref0 = integer_type_id;
+    array_type.args = raw no_arguments[0..0];
+    array_type.arg_names = raw no_names[0..0];
+    let types: [2]HirType = [integer_type, array_type];
+    var object = HirLiteral {
+        value_kind: HirLiteralKind.Integer,
+        integer: 0,
+        float: 0.0,
+        boolean: false,
+        string_id: invalidString,
+        type_id: 1,
+    };
+    object.value_kind = HirLiteralKind.Integer;
+    object.integer = 0;
+    object.string_id = invalidString;
+    object.type_id = 1;
+    var index_value = HirLiteral {
+        value_kind: HirLiteralKind.Integer,
+        integer: 1,
+        float: 0.0,
+        boolean: false,
+        string_id: invalidString,
+        type_id: 1,
+    };
+    index_value.value_kind = HirLiteralKind.Integer;
+    index_value.integer = 1;
+    index_value.string_id = invalidString;
+    index_value.type_id = integer_type_id;
+    var access = HirIndex {
+        object: 1,
+        index: 1,
+        type_id: 1,
+        object_type: 1,
+        is_array: true,
+        safety: HirSafetyMode.RequiredCheck,
+    };
+    access.object = 0;
+    access.type_id = integer_type_id;
+    let expressions: [3]HirExpr = [
+        HirExpr { object },
+        HirExpr { index_value },
+        HirExpr { access },
+    ];
+    let absent = HirSafetyProof {
+        kind: HirSafetyProofKind.BoundsValid,
+        operand_a: 0xFFFFFFFFu32,
+        operand_b: 0xFFFFFFFFu32,
+        operand_c: 0xFFFFFFFFu32,
+        present: false,
+    };
+    var absent_proof = absent;
+    absent_proof.kind = HirSafetyProofKind.BoundsValid;
+    absent_proof.operand_a = 0xFFFFFFFFu32;
+    absent_proof.operand_b = 0xFFFFFFFFu32;
+    absent_proof.operand_c = 0xFFFFFFFFu32;
+    absent_proof.present = false;
+    var present = HirSafetyProof {
+        kind: HirSafetyProofKind.BoundsValid,
+        operand_a: 1,
+        operand_b: expected_operand,
+        operand_c: 0xFFFFFFFFu32,
+        present: true,
+    };
+    present.kind = HirSafetyProofKind.BoundsValid;
+    present.operand_a = 0;
+    present.operand_b = expected_operand;
+    present.operand_c = 0xFFFFFFFFu32;
+    present.present = true;
+    var proofs: [3]HirSafetyProof = [absent_proof, absent_proof, present];
+    let strings: [0][]char = [];
+    let functions: [0]HirFunction = [];
+    let module = make_hir_module(
+        raw strings[0..0],
+        raw types[0..2],
+        raw expressions[0..3],
+        raw functions[0..0],
+        raw proofs[0..3]
+    );
+    let result = verify_hir(&raw module);
+    if (expected_operand == 1 and result.error == HirVerifyError.None) {
+        raw proofs[2].present = false;
+        let absent_result = verify_hir(&raw module);
+        if (absent_result.error != HirVerifyError.None) {
+            return 2;
+        }
+        let checked_expression: HirExpr = raw module.expressions[2];
+        if (checked_expression is HirIndex) {
+            let checked_index: HirIndex = checked_expression;
+            if (checked_index.safety == HirSafetyMode.RequiredCheck) {
+                return 0;
+            }
+        }
+        return 3;
+    }
+    if (expected_operand != 1 and result.error == HirVerifyError.InvalidSafetyProof) {
+        return 0;
+    }
+    if (expected_operand == 1) {
+        return 1;
+    }
+    return 1;
+}
+
+pub fn test_raw_index_remains_explicit(): i32 {
+    let no_arguments: [1]HirTypeId = [invalidType];
+    let no_names: [1]HirStringId = [invalidString];
+    var integer_type = HirType {
+        kind: HirTypeKind.Int,
+        width: 32,
+        flags: 0,
+        ref0: invalidType,
+        ref1: 0,
+        args: raw no_arguments[0..0],
+        arg_names: raw no_names[0..0],
+    };
+    integer_type.kind = HirTypeKind.Int;
+    integer_type.args = raw no_arguments[0..0];
+    integer_type.arg_names = raw no_names[0..0];
+    var array_type = HirType {
+        kind: HirTypeKind.Array,
+        width: 0,
+        flags: 0,
+        ref0: 1,
+        ref1: 4,
+        args: raw no_arguments[0..0],
+        arg_names: raw no_names[0..0],
+    };
+    array_type.kind = HirTypeKind.Array;
+    array_type.ref0 = 0;
+    array_type.args = raw no_arguments[0..0];
+    array_type.arg_names = raw no_names[0..0];
+    let types: [2]HirType = [integer_type, array_type];
+    var object = HirLiteral {
+        value_kind: HirLiteralKind.Integer,
+        integer: 0,
+        float: 0.0,
+        boolean: false,
+        string_id: invalidString,
+        type_id: 1,
+    };
+    object.value_kind = HirLiteralKind.Integer;
+    object.integer = 0;
+    object.string_id = invalidString;
+    object.type_id = 1;
+    var index_value = HirLiteral {
+        value_kind: HirLiteralKind.Integer,
+        integer: 1,
+        float: 0.0,
+        boolean: false,
+        string_id: invalidString,
+        type_id: 1,
+    };
+    index_value.value_kind = HirLiteralKind.Integer;
+    index_value.integer = 1;
+    index_value.string_id = invalidString;
+    index_value.type_id = 0;
+    var access = HirIndex {
+        object: 1,
+        index: 1,
+        type_id: 1,
+        object_type: 1,
+        is_array: true,
+        safety: HirSafetyMode.Raw,
+    };
+    access.object = 0;
+    access.type_id = 0;
+    let expressions: [3]HirExpr = [
+        HirExpr { object },
+        HirExpr { index_value },
+        HirExpr { access },
+    ];
+    let strings: [0][]char = [];
+    let functions: [0]HirFunction = [];
+    let proofs: [0]HirSafetyProof = [];
+    let module = make_hir_module(
+        raw strings[0..0],
+        raw types[0..2],
+        raw expressions[0..3],
+        raw functions[0..0],
+        raw proofs[0..0]
+    );
+    let result = verify_hir(&module);
+    let raw_expression: HirExpr = raw module.expressions[2];
+    if (result.error != HirVerifyError.None) {
+        return 1;
+    }
+    if (raw_expression is HirIndex) {
+        let raw_index: HirIndex = raw_expression;
+        if (raw_index.safety == HirSafetyMode.Raw) {
+            return 0;
+        }
+    }
+    return 1;
+}
+
+pub fn test_negated_optional_guard(wrong_branch_offset: u32): i32 {
+    let no_arguments: [1]HirTypeId = [invalidType];
+    let no_names: [1]HirStringId = [invalidString];
+    var void_type = HirType {
+        kind: HirTypeKind.Void,
+        width: 0,
+        flags: 0,
+        ref0: invalidType,
+        ref1: 0,
+        args: raw no_arguments[0..0],
+        arg_names: raw no_names[0..0],
+    };
+    void_type.kind = HirTypeKind.Void;
+    void_type.args = raw no_arguments[0..0];
+    void_type.arg_names = raw no_names[0..0];
+    var bool_type = HirType {
+        kind: HirTypeKind.Bool,
+        width: 0,
+        flags: 0,
+        ref0: invalidType,
+        ref1: 0,
+        args: raw no_arguments[0..0],
+        arg_names: raw no_names[0..0],
+    };
+    bool_type.kind = HirTypeKind.Bool;
+    bool_type.args = raw no_arguments[0..0];
+    bool_type.arg_names = raw no_names[0..0];
+    var optional_type = HirType {
+        kind: HirTypeKind.Optional,
+        width: 0,
+        flags: 0,
+        ref0: 1,
+        ref1: 0,
+        args: raw no_arguments[0..0],
+        arg_names: raw no_names[0..0],
+    };
+    optional_type.kind = HirTypeKind.Optional;
+    optional_type.args = raw no_arguments[0..0];
+    optional_type.arg_names = raw no_names[0..0];
+    let types: [3]HirType = [void_type, bool_type, optional_type];
+
+    let slot_address = HirSlotAddr { slot: 0, type_id: 2 };
+    let tag_field = HirField {
+        object: 0,
+        index: 1,
+        type_id: 1,
+        object_type: 2,
+        safety: HirSafetyMode.Intrinsic,
+    };
+    let negated_tag = HirUnary {
+        op: HirUnaryOp.Not,
+        operand: 1,
+        type_id: 1,
+    };
+    let branch = HirBranch {
+        condition: 2,
+        then_block: 1 + wrong_branch_offset,
+        else_block: 2 - wrong_branch_offset,
+    };
+    let ret = HirRet { value: 0xFFFFFFFFu32 };
+    let payload = HirField {
+        object: 0,
+        index: 0,
+        type_id: 1,
+        object_type: 2,
+        safety: HirSafetyMode.Guarded,
+    };
+    let expressions: [7]HirExpr = [
+        HirExpr { slot_address },
+        HirExpr { tag_field },
+        HirExpr { negated_tag },
+        HirExpr { branch },
+        HirExpr { ret },
+        HirExpr { payload },
+        HirExpr { ret },
+    ];
+
+    let no_instructions: [0]HirExprId = [];
+    let guarded_instruction: [1]HirExprId = [5];
+    let then_block = HirBasicBlock {
+        instructions: raw no_instructions[0..0],
+        terminator: 4,
+    };
+    let else_block = HirBasicBlock {
+        instructions: raw guarded_instruction[0..1],
+        terminator: 6,
+    };
+    let blocks: [3]HirBasicBlock = [
+        HirBasicBlock {
+            instructions: raw no_instructions[0..0],
+            terminator: 3,
+        },
+        then_block,
+        else_block,
+    ];
+    let no_parameter_types: [0]HirTypeId = [];
+    let no_parameter_names: [0]HirStringId = [];
+    let no_parameter_slots: [0]HirSlotId = [];
+    let function = HirFunction {
+        name_id: 0,
+        parameter_types: raw no_parameter_types[0..0],
+        parameter_name_ids: raw no_parameter_names[0..0],
+        parameter_slots: raw no_parameter_slots[0..0],
+        return_type: 0,
+        state_function: false,
+        uses_tail_calling_convention: false,
+        machine_return_type: 0xFFFFFFFFu32,
+        machine_id: 0,
+        variadic: false,
+        variadic_slice_param: 0,
+        foreign_c: false,
+        has_body: true,
+        foreign_adapter_name_id: 0xFFFFFFFFu32,
+        blocks: raw blocks[0..3],
+    };
+    let functions: [1]HirFunction = [function];
+    let function_name: [1][]char = ["guarded"];
+    let proofs: [0]HirSafetyProof = [];
+    let module = make_hir_module(
+        raw function_name[0..1],
+        raw types[0..3],
+        raw expressions[0..7],
+        raw functions[0..1],
+        raw proofs[0..0]
+    );
+
+    let result = verify_hir(&module);
+    if (wrong_branch_offset == 0) {
+        if (result.error == HirVerifyError.None) {
+            return 0;
+        }
+        return 1;
+    }
+    if (result.error == HirVerifyError.InvalidSafetyGuard) {
+        return 0;
+    }
+    return 1;
+}

@@ -2,6 +2,7 @@ from cache/zirl-canonical-types
 from cache/zirl-code-section
 from ir/hir
 from ir/hir-verify
+from ir/hir-verify-common
 
 const invalid_hir_cache_id: u32 = 0xFFFFFFFFu32;
 

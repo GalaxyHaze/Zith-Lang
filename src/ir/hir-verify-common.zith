@@ -1,0 +1,97 @@
+from ir/hir
+
+pub enum HirVerifyError {
+    None = 0,
+    InvalidStringReference = 1,
+    InvalidTypeReference = 2,
+    InvalidExpressionReference = 3,
+    InvalidFunctionReference = 4,
+    InvalidDeclarationReference = 5,
+    InvalidBlockTarget = 6,
+    InvalidSlotReference = 7,
+    InvalidTableShape = 8,
+    InvalidExpressionShape = 9,
+    InvalidSafetyMode = 10,
+    InvalidSafetyProof = 11,
+    InvalidSafetyGuard = 12,
+    InvalidAttributeOwner = 13,
+    InvalidGlobal = 14,
+    InvalidVTable = 15,
+    AllocationFailure = 16,
+    InvalidDefinitionReference = 17,
+    InvalidTemplateReference = 18,
+    InvalidTemplateShape = 19,
+}
+
+pub struct HirVerificationResult {
+    pub error: HirVerifyError,
+    pub index: u32,
+}
+
+pub fn verification_error(error: HirVerifyError, index: u32): HirVerificationResult {
+    return HirVerificationResult { error: error, index: index };
+}
+
+pub fn valid_string_id(module_owner: *HirModule, id: HirStringId, allow_invalid: bool): bool {
+    let is_invalid = (id as u64) == 0xFFFFFFFFu64;
+    let in_range = (id as u64) < @lengthOf(module_owner->strings);
+    return (is_invalid and allow_invalid) or ((not is_invalid) and in_range);
+}
+
+pub fn valid_type_id(module_owner: *HirModule, id: HirTypeId, allow_invalid: bool): bool {
+    let is_invalid = (id as u64) == 0xFFFFFFFFu64;
+    let in_range = (id as u64) < @lengthOf(module_owner->types);
+    return (is_invalid and allow_invalid) or ((not is_invalid) and in_range);
+}
+
+pub fn valid_expr_id(module_owner: *HirModule, id: HirExprId, allow_invalid: bool): bool {
+    let is_invalid = (id as u64) == 0xFFFFFFFFu64;
+    let in_range = (id as u64) < @lengthOf(module_owner->expressions);
+    return (is_invalid and allow_invalid) or ((not is_invalid) and in_range);
+}
+
+pub fn valid_function_id(module_owner: *HirModule, id: HirFunctionId, allow_invalid: bool): bool {
+    let is_invalid = (id as u64) == 0xFFFFFFFFu64;
+    let in_range = (id as u64) < @lengthOf(module_owner->functions);
+    return (is_invalid and allow_invalid) or ((not is_invalid) and in_range);
+}
+
+pub fn valid_declaration_id(module_owner: *HirModule, id: HirDeclarationId, allow_invalid: bool): bool {
+    let is_invalid = (id as u64) == 0xFFFFFFFFu64;
+    let in_range = (id as u64) < @lengthOf(module_owner->declarations);
+    return (is_invalid and allow_invalid) or ((not is_invalid) and in_range);
+}
+
+pub fn valid_template_id(module_owner: *HirModule, id: HirTemplateId, allow_invalid: bool): bool {
+    let is_invalid = (id as u64) == 0xFFFFFFFFu64;
+    let in_range = (id as u64) < @lengthOf(module_owner->templates);
+    return (is_invalid and allow_invalid) or ((not is_invalid) and in_range);
+}
+
+pub fn is_trait_type(module_owner: *HirModule, id: HirTypeId): bool {
+    if (not valid_type_id(module_owner, id, false)) {
+        return false;
+    }
+    let hir_type: HirType = raw module_owner->types[id as u64];
+    return hir_type.kind == HirTypeKind.Trait;
+}
+
+pub fn safety_mode_of(module_owner: *HirModule, expression_id: HirExprId): HirSafetyMode {
+    let expression: HirExpr = raw module_owner->expressions[expression_id];
+    if (expression is HirIndex) {
+        return expression.safety;
+    }
+    if (expression is HirField) {
+        return expression.safety;
+    }
+    if (expression is HirMakeSlice) {
+        return expression.safety;
+    }
+    if (expression is HirUnionCast) {
+        return expression.safety;
+    }
+    if (expression is HirOpaqueCast) {
+        return expression.safety;
+    }
+    return HirSafetyMode.RequiredCheck;
+}

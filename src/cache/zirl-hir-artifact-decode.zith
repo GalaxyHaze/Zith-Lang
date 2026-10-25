@@ -1,0 +1,900 @@
+from cache/zirl-artifact
+from cache/zirl-attrs-section
+from cache/zirl-code-section
+from cache/zirl-canonical-types
+from cache/zirl-container
+from cache/zirl-decl-section
+from cache/zirl-hir-code
+from cache/zirl-metadata
+from cache/zirl-template-section
+from cache/zirl-buffer
+from ir/hir
+from ir/hir-verify
+
+from cache/zirl-hir-artifact-contract
+
+pub struct ZirlHirArtifactFunctionReference {
+    pub value: HirFunctionId,
+    pub failed: bool,
+}
+
+pub struct ZirlHirArtifactExpressionDecode {
+    pub value: HirExpr,
+    pub error: ZirlHirArtifactReadError,
+}
+
+struct ZirlHirArtifactCallDecode {
+    value: HirCall,
+    error: ZirlHirArtifactReadError,
+}
+
+struct ZirlHirArtifactBinaryOpDecode {
+    value: HirBinaryOp,
+    valid: bool,
+}
+
+struct ZirlHirArtifactUnaryOpDecode {
+    value: HirUnaryOp,
+    valid: bool,
+}
+
+struct ZirlHirArtifactSafetyDecode {
+    value: HirSafetyMode,
+    valid: bool,
+}
+
+struct ZirlHirArtifactLayoutDecode {
+    value: HirLayoutIntrinsicKind,
+    valid: bool,
+}
+
+fn artifact_hir_binary_op(value: u8): ZirlHirArtifactBinaryOpDecode {
+    if (value == 0u8) {
+        return ZirlHirArtifactBinaryOpDecode { value: HirBinaryOp.Add, valid: true };
+    }
+    if (value == 1u8) {
+        return ZirlHirArtifactBinaryOpDecode { value: HirBinaryOp.Sub, valid: true };
+    }
+    if (value == 2u8) {
+        return ZirlHirArtifactBinaryOpDecode { value: HirBinaryOp.Mul, valid: true };
+    }
+    if (value == 3u8) {
+        return ZirlHirArtifactBinaryOpDecode { value: HirBinaryOp.Div, valid: true };
+    }
+    if (value == 4u8) {
+        return ZirlHirArtifactBinaryOpDecode { value: HirBinaryOp.Rem, valid: true };
+    }
+    if (value == 5u8) {
+        return ZirlHirArtifactBinaryOpDecode { value: HirBinaryOp.Eq, valid: true };
+    }
+    if (value == 6u8) {
+        return ZirlHirArtifactBinaryOpDecode { value: HirBinaryOp.Ne, valid: true };
+    }
+    if (value == 7u8) {
+        return ZirlHirArtifactBinaryOpDecode { value: HirBinaryOp.Lt, valid: true };
+    }
+    if (value == 8u8) {
+        return ZirlHirArtifactBinaryOpDecode { value: HirBinaryOp.Le, valid: true };
+    }
+    if (value == 9u8) {
+        return ZirlHirArtifactBinaryOpDecode { value: HirBinaryOp.Gt, valid: true };
+    }
+    if (value == 10u8) {
+        return ZirlHirArtifactBinaryOpDecode { value: HirBinaryOp.Ge, valid: true };
+    }
+    if (value == 11u8) {
+        return ZirlHirArtifactBinaryOpDecode { value: HirBinaryOp.And, valid: true };
+    }
+    if (value == 12u8) {
+        return ZirlHirArtifactBinaryOpDecode { value: HirBinaryOp.Or, valid: true };
+    }
+    if (value == 13u8) {
+        return ZirlHirArtifactBinaryOpDecode { value: HirBinaryOp.Xor, valid: true };
+    }
+    if (value == 14u8) {
+        return ZirlHirArtifactBinaryOpDecode { value: HirBinaryOp.Shl, valid: true };
+    }
+    if (value == 15u8) {
+        return ZirlHirArtifactBinaryOpDecode { value: HirBinaryOp.Shr, valid: true };
+    }
+    return ZirlHirArtifactBinaryOpDecode { value: HirBinaryOp.Add, valid: false };
+}
+
+fn artifact_hir_unary_op(value: u8): ZirlHirArtifactUnaryOpDecode {
+    if (value == 0u8) {
+        return ZirlHirArtifactUnaryOpDecode { value: HirUnaryOp.Neg, valid: true };
+    }
+    if (value == 1u8) {
+        return ZirlHirArtifactUnaryOpDecode { value: HirUnaryOp.Not, valid: true };
+    }
+    if (value == 2u8) {
+        return ZirlHirArtifactUnaryOpDecode { value: HirUnaryOp.BitNot, valid: true };
+    }
+    if (value == 3u8) {
+        return ZirlHirArtifactUnaryOpDecode { value: HirUnaryOp.Ref, valid: true };
+    }
+    if (value == 4u8) {
+        return ZirlHirArtifactUnaryOpDecode { value: HirUnaryOp.Deref, valid: true };
+    }
+    return ZirlHirArtifactUnaryOpDecode { value: HirUnaryOp.Neg, valid: false };
+}
+
+fn artifact_hir_safety_mode(
+    value: ZirlCompactSafetyMode
+): ZirlHirArtifactSafetyDecode {
+    if (value == ZirlCompactSafetyMode.RequiredCheck) {
+        return ZirlHirArtifactSafetyDecode {
+            value: HirSafetyMode.RequiredCheck,
+            valid: true,
+        };
+    }
+    if (value == ZirlCompactSafetyMode.Guarded) {
+        return ZirlHirArtifactSafetyDecode {
+            value: HirSafetyMode.Guarded,
+            valid: true,
+        };
+    }
+    if (value == ZirlCompactSafetyMode.Intrinsic) {
+        return ZirlHirArtifactSafetyDecode {
+            value: HirSafetyMode.Intrinsic,
+            valid: true,
+        };
+    }
+    if (value == ZirlCompactSafetyMode.Raw) {
+        return ZirlHirArtifactSafetyDecode {
+            value: HirSafetyMode.Raw,
+            valid: true,
+        };
+    }
+    return ZirlHirArtifactSafetyDecode {
+        value: HirSafetyMode.RequiredCheck,
+        valid: false,
+    };
+}
+
+fn artifact_hir_layout_intrinsic(
+    value: u32
+): ZirlHirArtifactLayoutDecode {
+    if (value == 0u32) {
+        return ZirlHirArtifactLayoutDecode {
+            value: HirLayoutIntrinsicKind.OffsetOf,
+            valid: true,
+        };
+    }
+    if (value == 1u32) {
+        return ZirlHirArtifactLayoutDecode {
+            value: HirLayoutIntrinsicKind.AlignOf,
+            valid: true,
+        };
+    }
+    if (value == 2u32) {
+        return ZirlHirArtifactLayoutDecode {
+            value: HirLayoutIntrinsicKind.SizeOf,
+            valid: true,
+        };
+    }
+    if (value == 3u32) {
+        return ZirlHirArtifactLayoutDecode {
+            value: HirLayoutIntrinsicKind.LengthOf,
+            valid: true,
+        };
+    }
+    if (value == 4u32) {
+        return ZirlHirArtifactLayoutDecode {
+            value: HirLayoutIntrinsicKind.PtrOf,
+            valid: true,
+        };
+    }
+    return ZirlHirArtifactLayoutDecode {
+        value: HirLayoutIntrinsicKind.OffsetOf,
+        valid: false,
+    };
+}
+
+
+pub fn artifact_function_reference(
+    signature_type_id: u32,
+    function_name_id: u32,
+    type_count: u64,
+    functions: []ZirlCompactFunction
+): ZirlHirArtifactFunctionReference {
+    if (signature_type_id == invalidZirlType and
+        function_name_id == invalidString) {
+        return ZirlHirArtifactFunctionReference {
+            value: invalidFunction,
+            failed: false,
+        };
+    }
+    if (signature_type_id == invalidZirlType or
+        function_name_id == invalidString or
+        (signature_type_id as u64) < type_count) {
+        return ZirlHirArtifactFunctionReference {
+            value: invalidFunction,
+            failed: true,
+        };
+    }
+    let function_index = (signature_type_id as u64) - type_count;
+    if (function_index >= @lengthOf(functions)) {
+        return ZirlHirArtifactFunctionReference {
+            value: invalidFunction,
+            failed: true,
+        };
+    }
+    let function: ZirlCompactFunction = raw functions[function_index];
+    if (function.signature_type_id != signature_type_id or
+        function.name_id != function_name_id) {
+        return ZirlHirArtifactFunctionReference {
+            value: invalidFunction,
+            failed: true,
+        };
+    }
+    return ZirlHirArtifactFunctionReference {
+        value: function_index as HirFunctionId,
+        failed: false,
+    };
+}
+
+fn artifact_hir_call(
+    expression: *ZirlCompactExpr,
+    argument_types: []HirTypeId,
+    type_count: u64,
+    functions: []ZirlCompactFunction
+): ZirlHirArtifactCallDecode {
+    let resolved = artifact_function_reference(
+        expression->resolved_function_signature_type_id,
+        expression->resolved_function_name_id,
+        type_count,
+        functions
+    );
+    if (expression->flags > 3u8) {
+        return ZirlHirArtifactCallDecode {
+            value: HirCall {
+                callee: invalidExpr,
+                args: raw expression->args[0u64..0u64],
+                argument_types: raw argument_types[0u64..0u64],
+                function_type: invalidType,
+                resolved_function: invalidFunction,
+                variadic_slice_param: 0xFFFFFFFFu32,
+                is_variadic_slice: false,
+                auto_collect_tail: false,
+                uses_tail_calling_convention: false,
+                must_tail: false,
+            },
+            error: ZirlHirArtifactReadError.InvalidSectionPayload,
+        };
+    }
+    if (resolved.failed) {
+        return ZirlHirArtifactCallDecode {
+            value: HirCall {
+                callee: invalidExpr,
+                args: raw expression->args[0u64..0u64],
+                argument_types: raw argument_types[0u64..0u64],
+                function_type: invalidType,
+                resolved_function: invalidFunction,
+                variadic_slice_param: 0xFFFFFFFFu32,
+                is_variadic_slice: false,
+                auto_collect_tail: false,
+                uses_tail_calling_convention: false,
+                must_tail: false,
+            },
+            error: ZirlHirArtifactReadError.InvalidCanonicalReference,
+        };
+    }
+    return ZirlHirArtifactCallDecode {
+        value: HirCall {
+            callee: expression->ref_a,
+            args: expression->args,
+            argument_types: argument_types,
+            function_type: expression->ref_e,
+            resolved_function: resolved.value,
+            variadic_slice_param: expression->variadic_slice_param,
+            is_variadic_slice: expression->is_variadic_slice,
+            auto_collect_tail: expression->auto_collect_tail,
+            uses_tail_calling_convention:
+                expression->flags == 2u8 or expression->flags == 3u8,
+            must_tail:
+                expression->flags == 1u8 or expression->flags == 3u8,
+        },
+        error: ZirlHirArtifactReadError.None,
+    };
+}
+
+fn failed_hir_artifact_expression(
+    error: ZirlHirArtifactReadError
+): ZirlHirArtifactExpressionDecode {
+    return ZirlHirArtifactExpressionDecode {
+        value: HirExpr { HirRuntimePanic { code: 0u32 } },
+        error: error,
+    };
+}
+
+pub fn decode_hir_artifact_expression(
+    expression: *ZirlCompactExpr,
+    argument_types: []HirTypeId,
+    type_count: u64,
+    functions: []ZirlCompactFunction
+): ZirlHirArtifactExpressionDecode {
+    if (expression->kind == (ZirlCompactExprKind.Literal as u8)) {
+        if (expression->flags > 3u8) {
+            return failed_hir_artifact_expression(
+                ZirlHirArtifactReadError.InvalidSectionPayload
+            );
+        }
+        var literal = HirLiteral {
+            value_kind: HirLiteralKind.Integer,
+            integer: expression->int_value,
+            float: expression->float_value,
+            boolean: expression->int_value != 0i64,
+            string_id: expression->name_id,
+            type_id: expression->type_id,
+        };
+        if (expression->flags == 1u8) {
+            literal.value_kind = HirLiteralKind.Float;
+        } else if (expression->flags == 2u8) {
+            if (expression->int_value != 0i64 and
+                expression->int_value != 1i64) {
+                return failed_hir_artifact_expression(
+                    ZirlHirArtifactReadError.InvalidSectionPayload
+                );
+            }
+            literal.value_kind = HirLiteralKind.Boolean;
+            literal.boolean = expression->int_value == 1i64;
+        } else if (expression->flags == 3u8) {
+            literal.value_kind = HirLiteralKind.String;
+        }
+        return ZirlHirArtifactExpressionDecode {
+            value: HirExpr { literal },
+            error: ZirlHirArtifactReadError.None,
+        };
+    }
+    if (expression->kind == (ZirlCompactExprKind.Binary as u8)) {
+        let op = artifact_hir_binary_op(expression->op);
+        if (not op.valid) {
+            return failed_hir_artifact_expression(
+                ZirlHirArtifactReadError.InvalidSectionPayload
+            );
+        }
+        return ZirlHirArtifactExpressionDecode {
+            value: HirExpr {
+                HirBinary {
+                    lhs: expression->ref_a,
+                    rhs: expression->ref_b,
+                    op: op.value,
+                    type_id: expression->type_id,
+                    operand_type: expression->ref_e,
+                }
+            },
+            error: ZirlHirArtifactReadError.None,
+        };
+    }
+    if (expression->kind == (ZirlCompactExprKind.Unary as u8)) {
+        let op = artifact_hir_unary_op(expression->op);
+        if (not op.valid) {
+            return failed_hir_artifact_expression(
+                ZirlHirArtifactReadError.InvalidSectionPayload
+            );
+        }
+        return ZirlHirArtifactExpressionDecode {
+            value: HirExpr {
+                HirUnary {
+                    op: op.value,
+                    operand: expression->ref_a,
+                    type_id: expression->type_id,
+                }
+            },
+            error: ZirlHirArtifactReadError.None,
+        };
+    }
+    if (expression->kind == (ZirlCompactExprKind.Let as u8)) {
+        return ZirlHirArtifactExpressionDecode {
+            value: HirExpr {
+                HirLet {
+                    name_id: expression->name_id,
+                    type_id: expression->type_id,
+                    init: expression->ref_a,
+                }
+            },
+            error: ZirlHirArtifactReadError.None,
+        };
+    }
+    if (expression->kind == (ZirlCompactExprKind.Var as u8)) {
+        return ZirlHirArtifactExpressionDecode {
+            value: HirExpr {
+                HirVar {
+                    name_id: expression->name_id,
+                    version: expression->ref_c,
+                }
+            },
+            error: ZirlHirArtifactReadError.None,
+        };
+    }
+    if (expression->kind == (ZirlCompactExprKind.Call as u8) or
+        expression->kind == (ZirlCompactExprKind.StateTailCall as u8)) {
+        let call = artifact_hir_call(
+            expression,
+            argument_types,
+            type_count,
+            functions
+        );
+        if (call.error != ZirlHirArtifactReadError.None) {
+            return failed_hir_artifact_expression(call.error);
+        }
+        if (expression->kind == (ZirlCompactExprKind.StateTailCall as u8)) {
+            return ZirlHirArtifactExpressionDecode {
+                value: HirExpr { HirStateTailCall { call: call.value } },
+                error: ZirlHirArtifactReadError.None,
+            };
+        }
+        return ZirlHirArtifactExpressionDecode {
+            value: HirExpr { call.value },
+            error: ZirlHirArtifactReadError.None,
+        };
+    }
+    if (expression->kind == (ZirlCompactExprKind.Ret as u8)) {
+        return ZirlHirArtifactExpressionDecode {
+            value: HirExpr { HirRet { value: expression->ref_a } },
+            error: ZirlHirArtifactReadError.None,
+        };
+    }
+    if (expression->kind == (ZirlCompactExprKind.Branch as u8)) {
+        return ZirlHirArtifactExpressionDecode {
+            value: HirExpr {
+                HirBranch {
+                    condition: expression->ref_a,
+                    then_block: expression->ref_c,
+                    else_block: expression->ref_d,
+                }
+            },
+            error: ZirlHirArtifactReadError.None,
+        };
+    }
+    if (expression->kind == (ZirlCompactExprKind.Jump as u8)) {
+        return ZirlHirArtifactExpressionDecode {
+            value: HirExpr { HirJump { target: expression->ref_c } },
+            error: ZirlHirArtifactReadError.None,
+        };
+    }
+    if (expression->kind == (ZirlCompactExprKind.Phi as u8)) {
+        return ZirlHirArtifactExpressionDecode {
+            value: HirExpr { HirPhi { incoming: expression->args } },
+            error: ZirlHirArtifactReadError.None,
+        };
+    }
+    if (expression->kind == (ZirlCompactExprKind.Assign as u8)) {
+        return ZirlHirArtifactExpressionDecode {
+            value: HirExpr {
+                HirAssign {
+                    target: expression->ref_a,
+                    value: expression->ref_b,
+                }
+            },
+            error: ZirlHirArtifactReadError.None,
+        };
+    }
+    if (expression->kind == (ZirlCompactExprKind.Index as u8)) {
+        let safety = artifact_hir_safety_mode(expression->safety);
+        if (expression->flags > 1u8 or not safety.valid) {
+            return failed_hir_artifact_expression(
+                ZirlHirArtifactReadError.InvalidSectionPayload
+            );
+        }
+        return ZirlHirArtifactExpressionDecode {
+            value: HirExpr {
+                HirIndex {
+                    object: expression->ref_a,
+                    index: expression->ref_b,
+                    type_id: expression->type_id,
+                    object_type: expression->ref_e,
+                    is_array: expression->flags == 1u8,
+                    safety: safety.value,
+                }
+            },
+            error: ZirlHirArtifactReadError.None,
+        };
+    }
+    if (expression->kind == (ZirlCompactExprKind.Field as u8)) {
+        let safety = artifact_hir_safety_mode(expression->safety);
+        if (not safety.valid) {
+            return failed_hir_artifact_expression(
+                ZirlHirArtifactReadError.InvalidSectionPayload
+            );
+        }
+        return ZirlHirArtifactExpressionDecode {
+            value: HirExpr {
+                HirField {
+                    object: expression->ref_a,
+                    index: expression->ref_c,
+                    type_id: expression->type_id,
+                    object_type: expression->ref_e,
+                    safety: safety.value,
+                }
+            },
+            error: ZirlHirArtifactReadError.None,
+        };
+    }
+    if (expression->kind == (ZirlCompactExprKind.StructLiteral as u8)) {
+        return ZirlHirArtifactExpressionDecode {
+            value: HirExpr {
+                HirStructLiteral {
+                    values: expression->args,
+                    type_id: expression->type_id,
+                }
+            },
+            error: ZirlHirArtifactReadError.None,
+        };
+    }
+    if (expression->kind == (ZirlCompactExprKind.ArrayLiteral as u8)) {
+        return ZirlHirArtifactExpressionDecode {
+            value: HirExpr {
+                HirArrayLiteral {
+                    elements: expression->args,
+                    type_id: expression->type_id,
+                }
+            },
+            error: ZirlHirArtifactReadError.None,
+        };
+    }
+    if (expression->kind == (ZirlCompactExprKind.EnumValue as u8)) {
+        return ZirlHirArtifactExpressionDecode {
+            value: HirExpr {
+                HirEnumValue {
+                    value: expression->int_value,
+                    type_id: expression->type_id,
+                }
+            },
+            error: ZirlHirArtifactReadError.None,
+        };
+    }
+    if (expression->kind == (ZirlCompactExprKind.SlotAlloca as u8)) {
+        return ZirlHirArtifactExpressionDecode {
+            value: HirExpr {
+                HirSlotAlloca {
+                    slot: expression->ref_a,
+                    type_id: expression->type_id,
+                }
+            },
+            error: ZirlHirArtifactReadError.None,
+        };
+    }
+    if (expression->kind == (ZirlCompactExprKind.SlotStore as u8)) {
+        return ZirlHirArtifactExpressionDecode {
+            value: HirExpr {
+                HirSlotStore {
+                    slot: expression->ref_a,
+                    value: expression->ref_b,
+                }
+            },
+            error: ZirlHirArtifactReadError.None,
+        };
+    }
+    if (expression->kind == (ZirlCompactExprKind.SlotLoad as u8)) {
+        return ZirlHirArtifactExpressionDecode {
+            value: HirExpr {
+                HirSlotLoad {
+                    slot: expression->ref_a,
+                    type_id: expression->type_id,
+                }
+            },
+            error: ZirlHirArtifactReadError.None,
+        };
+    }
+    if (expression->kind == (ZirlCompactExprKind.SlotAddr as u8)) {
+        return ZirlHirArtifactExpressionDecode {
+            value: HirExpr {
+                HirSlotAddr {
+                    slot: expression->ref_a,
+                    type_id: expression->type_id,
+                }
+            },
+            error: ZirlHirArtifactReadError.None,
+        };
+    }
+    if (expression->kind == (ZirlCompactExprKind.MakeNone as u8)) {
+        return ZirlHirArtifactExpressionDecode {
+            value: HirExpr { HirMakeNone { type_id: expression->type_id } },
+            error: ZirlHirArtifactReadError.None,
+        };
+    }
+    if (expression->kind == (ZirlCompactExprKind.MakeSome as u8)) {
+        return ZirlHirArtifactExpressionDecode {
+            value: HirExpr {
+                HirMakeSome {
+                    value: expression->ref_a,
+                    type_id: expression->type_id,
+                }
+            },
+            error: ZirlHirArtifactReadError.None,
+        };
+    }
+    if (expression->kind == (ZirlCompactExprKind.MakeSlice as u8)) {
+        let safety = artifact_hir_safety_mode(expression->safety);
+        if ((expression->flags != 0u8 and expression->flags != 1u8 and
+             expression->flags != 4u8 and expression->flags != 5u8) or
+            not safety.valid) {
+            return failed_hir_artifact_expression(
+                ZirlHirArtifactReadError.InvalidSectionPayload
+            );
+        }
+        return ZirlHirArtifactExpressionDecode {
+            value: HirExpr {
+                HirMakeSlice {
+                    object: expression->ref_a,
+                    lo: expression->ref_b,
+                    hi: expression->ref_c,
+                    type_id: expression->type_id,
+                    object_type: expression->ref_e,
+                    bound_type: expression->ref_f,
+                    is_array: expression->flags == 1u8 or
+                        expression->flags == 5u8,
+                    is_pointer: expression->flags == 4u8 or
+                        expression->flags == 5u8,
+                    safety: safety.value,
+                }
+            },
+            error: ZirlHirArtifactReadError.None,
+        };
+    }
+    if (expression->kind == (ZirlCompactExprKind.Cast as u8)) {
+        if (expression->flags > 1u8) {
+            return failed_hir_artifact_expression(
+                ZirlHirArtifactReadError.InvalidSectionPayload
+            );
+        }
+        if (expression->flags == 1u8 or
+            expression->ref_c != invalidZirlType) {
+            let safety = artifact_hir_safety_mode(expression->safety);
+            if (not safety.valid) {
+                return failed_hir_artifact_expression(
+                    ZirlHirArtifactReadError.InvalidSectionPayload
+                );
+            }
+            return ZirlHirArtifactExpressionDecode {
+                value: HirExpr {
+                    HirUnionCast {
+                        value: expression->ref_a,
+                        from_type: expression->ref_e,
+                        to_type: expression->ref_b,
+                        member_index: expression->ref_c,
+                        safety: safety.value,
+                    }
+                },
+                error: ZirlHirArtifactReadError.None,
+            };
+        }
+        return ZirlHirArtifactExpressionDecode {
+            value: HirExpr {
+                HirCast {
+                    value: expression->ref_a,
+                    from_type: expression->ref_e,
+                    to_type: expression->ref_b,
+                }
+            },
+            error: ZirlHirArtifactReadError.None,
+        };
+    }
+    if (expression->kind == (ZirlCompactExprKind.UnionCheck as u8)) {
+        return ZirlHirArtifactExpressionDecode {
+            value: HirExpr {
+                HirUnionCheck {
+                    value: expression->ref_a,
+                    union_type: expression->ref_b,
+                    member_index: expression->ref_c,
+                }
+            },
+            error: ZirlHirArtifactReadError.None,
+        };
+    }
+    if (expression->kind == (ZirlCompactExprKind.LayoutIntrinsic as u8)) {
+        let intrinsic = artifact_hir_layout_intrinsic(expression->ref_e);
+        if (not intrinsic.valid) {
+            return failed_hir_artifact_expression(
+                ZirlHirArtifactReadError.InvalidSectionPayload
+            );
+        }
+        return ZirlHirArtifactExpressionDecode {
+            value: HirExpr {
+                HirLayoutIntrinsic {
+                    kind: intrinsic.value,
+                    type_id: expression->type_id,
+                    field_index: expression->ref_f,
+                    operand: expression->ref_a,
+                    operand_type: expression->ref_b,
+                    string_length: expression->int_value as u64,
+                }
+            },
+            error: ZirlHirArtifactReadError.None,
+        };
+    }
+    if (expression->kind == (ZirlCompactExprKind.CanonicalType as u8)) {
+        if (@lengthOf(expression->integers) != 2u64) {
+            return failed_hir_artifact_expression(
+                ZirlHirArtifactReadError.InvalidSectionPayload
+            );
+        }
+        return ZirlHirArtifactExpressionDecode {
+            value: HirExpr {
+                HirCanonicalType {
+                    canonical_hi: must expression->integers[0u64],
+                    canonical_lo: must expression->integers[1u64],
+                    type_id: expression->type_id,
+                }
+            },
+            error: ZirlHirArtifactReadError.None,
+        };
+    }
+    if (expression->kind == (ZirlCompactExprKind.Cleanup as u8)) {
+        return ZirlHirArtifactExpressionDecode {
+            value: HirExpr {
+                HirCleanup { expressions: expression->args }
+            },
+            error: ZirlHirArtifactReadError.None,
+        };
+    }
+    if (expression->kind == (ZirlCompactExprKind.GlobalConstLoad as u8)) {
+        return ZirlHirArtifactExpressionDecode {
+            value: HirExpr {
+                HirGlobalConstLoad {
+                    name_id: expression->name_id,
+                    type_id: expression->type_id,
+                }
+            },
+            error: ZirlHirArtifactReadError.None,
+        };
+    }
+    if (expression->kind == (ZirlCompactExprKind.ExternalGlobalAddr as u8)) {
+        return ZirlHirArtifactExpressionDecode {
+            value: HirExpr {
+                HirExternalGlobalAddr {
+                    name_id: expression->name_id,
+                    type_id: expression->type_id,
+                }
+            },
+            error: ZirlHirArtifactReadError.None,
+        };
+    }
+    if (expression->kind == (ZirlCompactExprKind.MakeDyn as u8)) {
+        if (expression->flags > 1u8) {
+            return failed_hir_artifact_expression(
+                ZirlHirArtifactReadError.InvalidSectionPayload
+            );
+        }
+        return ZirlHirArtifactExpressionDecode {
+            value: HirExpr {
+                HirMakeDyn {
+                    value: expression->ref_a,
+                    source_type: expression->ref_b,
+                    dyn_type: expression->type_id,
+                    vtable_name_id: expression->name_id,
+                    value_is_place: expression->flags == 1u8,
+                }
+            },
+            error: ZirlHirArtifactReadError.None,
+        };
+    }
+    if (expression->kind == (ZirlCompactExprKind.DynCall as u8)) {
+        if (expression->flags > 1u8) {
+            return failed_hir_artifact_expression(
+                ZirlHirArtifactReadError.InvalidSectionPayload
+            );
+        }
+        return ZirlHirArtifactExpressionDecode {
+            value: HirExpr {
+                HirDynCall {
+                    receiver: expression->ref_a,
+                    vtable_name_id: expression->name_id,
+                    slot_index: expression->ref_c,
+                    has_receiver: expression->flags == 1u8,
+                    result_type: expression->type_id,
+                    function_type: expression->ref_e,
+                    args: expression->args,
+                    argument_types: argument_types,
+                }
+            },
+            error: ZirlHirArtifactReadError.None,
+        };
+    }
+    if (expression->kind == (ZirlCompactExprKind.MakeOpaque as u8)) {
+        if (@lengthOf(expression->integers) != 2u64) {
+            return failed_hir_artifact_expression(
+                ZirlHirArtifactReadError.InvalidSectionPayload
+            );
+        }
+        return ZirlHirArtifactExpressionDecode {
+            value: HirExpr {
+                HirMakeOpaque {
+                    value: expression->ref_a,
+                    source_type: expression->ref_b,
+                    opaque_type: expression->type_id,
+                    runtime_type_id: expression->ref_c,
+                    canonical_hi: must expression->integers[0u64],
+                    canonical_lo: must expression->integers[1u64],
+                }
+            },
+            error: ZirlHirArtifactReadError.None,
+        };
+    }
+    if (expression->kind == (ZirlCompactExprKind.OpaqueCast as u8)) {
+        let safety = artifact_hir_safety_mode(expression->safety);
+        if ((expression->flags != 0u8 and expression->flags != 2u8) or
+            not safety.valid or
+            @lengthOf(expression->integers) != 2u64) {
+            return failed_hir_artifact_expression(
+                ZirlHirArtifactReadError.InvalidSectionPayload
+            );
+        }
+        return ZirlHirArtifactExpressionDecode {
+            value: HirExpr {
+                HirOpaqueCast {
+                    value: expression->ref_a,
+                    from_type: expression->ref_b,
+                    to_type: expression->ref_c,
+                    opaque_type: expression->ref_d,
+                    result_type: expression->type_id,
+                    runtime_type_id: expression->ref_e,
+                    canonical_hi: must expression->integers[0u64],
+                    canonical_lo: must expression->integers[1u64],
+                    safety: safety.value,
+                    returns_pointer: expression->flags == 2u8,
+                }
+            },
+            error: ZirlHirArtifactReadError.None,
+        };
+    }
+    if (expression->kind == (ZirlCompactExprKind.OpaqueCheck as u8)) {
+        if (@lengthOf(expression->integers) != 2u64) {
+            return failed_hir_artifact_expression(
+                ZirlHirArtifactReadError.InvalidSectionPayload
+            );
+        }
+        return ZirlHirArtifactExpressionDecode {
+            value: HirExpr {
+                HirOpaqueCheck {
+                    value: expression->ref_a,
+                    opaque_type: expression->type_id,
+                    runtime_type_id: expression->ref_e,
+                    canonical_hi: must expression->integers[0u64],
+                    canonical_lo: must expression->integers[1u64],
+                }
+            },
+            error: ZirlHirArtifactReadError.None,
+        };
+    }
+    if (expression->kind == (ZirlCompactExprKind.RuntimePanic as u8)) {
+        return ZirlHirArtifactExpressionDecode {
+            value: HirExpr {
+                HirRuntimePanic { code: expression->int_value as u32 }
+            },
+            error: ZirlHirArtifactReadError.None,
+        };
+    }
+    if (expression->kind == (ZirlCompactExprKind.Pipe as u8) or
+        expression->kind == (ZirlCompactExprKind.PipeDo as u8)) {
+        return ZirlHirArtifactExpressionDecode {
+            value: HirExpr {
+                HirPipe {
+                    source_slot: expression->ref_b,
+                    source_type: expression->ref_e,
+                    stage: expression->ref_a,
+                    type_id: expression->type_id,
+                    is_effect:
+                        expression->kind == (ZirlCompactExprKind.PipeDo as u8),
+                }
+            },
+            error: ZirlHirArtifactReadError.None,
+        };
+    }
+    if (expression->kind == (ZirlCompactExprKind.PipeCurrent as u8)) {
+        return ZirlHirArtifactExpressionDecode {
+            value: HirExpr {
+                HirPipeCurrent {
+                    slot: expression->ref_a,
+                    type_id: expression->type_id,
+                }
+            },
+            error: ZirlHirArtifactReadError.None,
+        };
+    }
+    return failed_hir_artifact_expression(
+        ZirlHirArtifactReadError.InvalidSectionPayload
+    );
+}

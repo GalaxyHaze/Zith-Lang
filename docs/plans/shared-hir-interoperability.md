@@ -6,17 +6,21 @@ consume where semantics match, persist it through the cache, and reuse derived
 VIR only when its schema and VM semantics match. Then port the stable contract
 into `/home/diogo/self-Zith`.
 
-**Preconditions:** This is a design and execution plan. The user has explicitly
-authorized the narrow Step 6.1 imported-constant correction described below in
-`/home/diogo/Zith`; this does not authorize unrelated sibling-repository work
-or the separate codegen follow-up. Re-run
+**Preconditions:** This is a design and execution plan. On 2026-10-25, the
+user authorized bounded Zith changes needed by this plan, while explicitly
+excluding frontend changes, large structural redesigns, and the separate
+codegen follow-up. Re-run
 `git -C /home/diogo/Zith status --short --branch` and inspect the target-file
-diffs immediately before work. The sibling checkout is currently dirty, so
-preserve all existing changes. The filesystem sandbox may still require
-separate approval for builds and writes in `/home/diogo/Zith`. Its existing
-`build` directory has a CMake build and CTest entries for the focused targets
-named below. `/home/diogo/self-Zith` has the repository-owned test harness
-`tests/run.sh`, documented in `tests/README.md`; it invokes
+diffs immediately before further work. The sibling checkout is on `main`,
+one commit ahead of `origin/main`, with the uncommitted 18-file Step 6.2
+producer/cache patch recorded in
+`/home/diogo/self-Zith/docs/plans/shared-hir-interoperability-status.md`.
+Preserve that patch and stop if its live file set or purpose differs from the
+record. The filesystem sandbox may still require separate approval for
+builds and writes in `/home/diogo/Zith`. Its existing `build` directory has a
+CMake build and CTest entries for the focused targets named below.
+`/home/diogo/self-Zith` has the repository-owned test harness `tests/run.sh`,
+documented in `tests/README.md`; it invokes
 `/home/diogo/Zith/build/zithc`. `zithc test` type-checks fixtures, while the
 harness separately runs VM and native behavioral fixtures.
 
@@ -28,13 +32,14 @@ only where required to consume the stable HIR contract, and do not undertake a
 separate codegen-module redesign in this workstream.
 
 **Current execution boundary:** Step 6.1's targeted imported-constant fix is
-complete. The current authorized work is the remaining cache/HIR/VIR
-preparation in `/home/diogo/self-Zith`, without a large structural redesign.
-Do not extend the shared HIR contract or implement the codegen follow-up
-without separate approval. Do not implement a frontend adapter or frontend
-pipeline in Step 6.6. Preserve all pre-existing worktree changes; do not
-stage, commit, stash, reset, clean, or overwrite unrelated work. This
-execution does not modify `/home/diogo/Zith`.
+complete. The user also authorized the bounded Step 6.2 producer/cache work in
+`/home/diogo/Zith`; do not modify frontend files, introduce a large structural
+redesign, or infer semantic links by comparing names. Continue the port and
+cache/HIR/VIR preparation in `/home/diogo/self-Zith`. Do not extend the shared
+HIR contract or implement the separate codegen follow-up without further
+approval. Do not implement a frontend adapter or frontend pipeline in Step
+6.6. Preserve all existing worktree changes; do not stage, commit, stash,
+reset, clean, or overwrite unrelated work.
 
 **Files already changed by this design task:** `/home/diogo/self-Zith/CONTEXT.md`,
 `/home/diogo/self-Zith/docs/architecture.md`,
@@ -774,59 +779,93 @@ agree with the template-owned signature. `HirTypeKind.Trait` preserves trait
 references instead of collapsing them to `Unknown`.
 
 HIR schema becomes 2. Metadata schema becomes 3 for the added Trait type
-kind. Decls schema 2, Templates schema 1, Code schema 1, Attrs schema 2, and
-container version 21 stay unchanged because their encoded payload/envelope
-layouts do not change.
+kind. Decls stays schema 2, Templates becomes schema 2 for explicit
+declaration/function IDs, Code stays schema 1, Attrs stays schema 2, and the
+container stays version 21.
 
 **Sub-steps:**
-1. Read `/home/diogo/self-Zith/docs/plans/step-6-2-contract-gaps.md` as the
-   detailed execution plan. Preserve the unrelated dirty documentation paths
-   already present in `/home/diogo/Zith`; only edit the producer source/test
-   allowlist stated there.
-2. Extend the Zith-- HIR producer in
+1. Read `/home/diogo/self-Zith/docs/plans/step-6-2-contract-gaps.md`.
+   Re-run `git -C /home/diogo/Zith status --short --branch` and
+   `git -C /home/diogo/Zith diff --name-only`. Compare the result with the
+   18-file Step 6.2 patch recorded in the status document. Preserve every
+   existing change. If the file set or a changed hunk is unexpected, stop and
+   report it without editing, staging, or reverting anything.
+2. Audit the existing producer patch in
    `/home/diogo/Zith/src/hir/hir-module.hpp`,
-   `/home/diogo/Zith/src/sema/hir-lower-modern.cpp`, and
-   `/home/diogo/Zith/src/sema/hir-lower-types.cpp`. Populate every relation
-   from semantic IDs and source declaration facts; never match names or use
-   generic `members` as the method list.
-3. Add producer conformance tests to
-   `/home/diogo/Zith/tests/test-hir-lower-modern.cpp`. Obtain separate
-   sandbox approval for the build and CTest commands under `/home/diogo/Zith`.
-4. Port the accepted HIR fields and verifier rules to
+   `/home/diogo/Zith/src/hir/hir-module.cpp`,
+   `/home/diogo/Zith/src/sema/hir-lower-modern.cpp`,
+   `/home/diogo/Zith/src/sema/hir-lower-types.cpp`,
+   `/home/diogo/Zith/src/cache/artifact-builder.cpp`,
+   `/home/diogo/Zith/src/session/persistent-cache.cpp`, and the related cache
+   codecs. Confirm that declaration linkage, template identity, generic
+   parameters/bounds, owned signatures, struct fields/order, and Trait type
+   conversion are projected and hydrated from explicit IDs. Do not duplicate
+   fields or overwrite existing edits.
+3. Resolve method and template-trait relations only from an explicit semantic
+   owner/type identity already available to the producer. The current
+   `frontend::Declaration::ownerName` is textual and
+   `symbols::SymbolData::members` is not populated for this path. Do not use
+   either as a lookup key. Do not edit frontend files. If no stable owner/type
+   identity exists outside those fields, stop this sub-step, leave the
+   relations empty rather than inventing them, and record Step 6.2 as partial.
+4. Extend
+   `/home/diogo/Zith/tests/test-hir-lower-modern.cpp` only for producer facts
+   that can be established from existing semantic identities. Include exact
+   ID and ordering assertions, plus malformed-relation rejection. Keep the
+   fixture gap for unavailable method/trait ownership explicit; do not make a
+   passing test by matching names.
+5. Build the focused producer/cache targets after sandbox approval:
+
+   ```sh
+   cmake --build /home/diogo/Zith/build --target \
+     test-cache test-zirl-sections test-hir-lower-modern -j2
+   ```
+
+   Then run:
+
+   ```sh
+   ctest --test-dir /home/diogo/Zith/build \
+     -R '^(test-cache|test-zirl-sections|test-hir-lower-modern)$' \
+     --output-on-failure
+   ```
+6. Port the accepted HIR fields and verifier rules to
    `/home/diogo/self-Zith/src/ir/hir.zith` and
    `/home/diogo/self-Zith/src/ir/hir-verify.zith`; update both independent HIR
    schema constants and the Metadata schema map. Keep container version 21.
-5. In `/home/diogo/self-Zith/src/cache/zirl-hir-artifact.zith`, implement
+7. In `/home/diogo/self-Zith/src/cache/zirl-hir-artifact.zith`, implement
    caller-owned, all-or-nothing HIR-to-Decls/Templates projection, including
    canonical type mapping and identity-count checks. Do not change section
    record layouts or the section schema versions listed above.
-6. Implement Decls/Templates hydration in the same module, preflight every
+8. Implement Decls/Templates hydration in the same module, preflight every
    nested storage capacity before populating output, reverse canonical type
    mappings, and invoke `verify_hir()` before publishing the module.
-7. Add the 11 named positive/negative projection and round-trip fixtures from
+9. Add the 11 named positive/negative projection and round-trip fixtures from
    `step-6-2-contract-gaps.md` to
    `/home/diogo/self-Zith/tests/hir-contract.zith`. Add malformed Trait
    type-entry coverage to `tests/canonical-types.zith` and artifact hydration
    cases to `tests/zirl-hir-artifact.zith`.
-8. Update `/home/diogo/self-Zith/docs/adr/0015-shared-hir-and-cross-dialect-cache.md`,
+10. Update `/home/diogo/self-Zith/docs/adr/0015-shared-hir-and-cross-dialect-cache.md`,
    `/home/diogo/self-Zith/docs/plans/shared-hir-interoperability-status.md`,
    and `/home/diogo/self-Zith/docs/project-files.md` with implemented facts
    only; leave Step 6.6 deferred.
-9. Run the upstream focused test only after command approval, then run:
+11. Run the upstream focused test only after command approval, then run:
 
    ```sh
    ZITHC=/home/diogo/Zith/build/zithc TMPDIR=/tmp sh /home/diogo/self-Zith/tests/run.sh
    git -C /home/diogo/self-Zith diff --check -- <explicit Step 6.2 paths>
    ```
 
-**Expected output:** the upstream lowering fixture passes; the self-Zith
-harness passes all five programs; each successful artifact preserves exact
-declaration/template fields and ordering; every rejected projection/read
-returns an error with empty public output slices.
+**Expected output:** the three focused CTest targets pass; the self-Zith
+harness passes all five programs; supported producer facts preserve exact
+declaration/template IDs and ordering; every rejected projection/read
+returns an error with empty public output slices. Any relation blocked by the
+absence of a stable producer identity remains explicitly unimplemented.
 
 **Failure checks:**
 - If a producer relation is unavailable except by matching names or process
-  state, stop and add an explicit HIR source instead of inferring it.
+  state, stop that relation's implementation. Do not add a frontend field
+  under this authorization; report the missing stable identity and keep the
+  relevant acceptance criterion open.
 - If a Trait type loses its identity during lowering or canonicalization,
   stop before emitting Metadata; do not serialize `Unknown`.
 - If any capacity, reference, ownership, or count validation fails, verify
@@ -894,9 +933,9 @@ caller-owned storage; unresolved Step 6.2 mappings block affected records.
     decoded `present` value must match the HIR record exactly.
 12. Keep independent schema constants in
     `/home/diogo/self-Zith/src/cache/zirl-container.zith`: Metadata ID 1 is
-    schema 2, Decls ID 2 is schema 2 when declaration `discardable` is
-    persisted, Templates ID 3 and Code ID 4 are schema 1, and Attrs ID 5 is
-    schema 2 for proof `present`. Update
+    schema 3, Decls ID 2 is schema 2 when declaration `discardable` is
+    persisted, Templates ID 3 is schema 2, Code ID 4 is schema 1, and Attrs ID 5
+    is schema 2 for proof `present`. Update
     `valid_artifact_sections()` in `src/cache/zirl-artifact.zith`,
     `validate_zirl_sections()` in `src/cache/zirl-container.zith`, and
     `write_zirl_hir_artifact()` in `src/cache/zirl-hir-artifact.zith` to

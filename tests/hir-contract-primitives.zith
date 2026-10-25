@@ -1,0 +1,870 @@
+from ir/hir
+from ir/hir-verify
+from ir/hir-verify-common
+from cache/cache
+from cache/zirl-buffer
+from cache/zirl-container
+from cache/zirl-decl-section
+from cache/zirl-template-section
+from cache/zirl-attrs-section
+from cache/zirl-type-section
+from cache/zirl-metadata
+from cache/zirl-code-section
+from cache/zirl-canonical-types
+from cache/zirl-hir-code
+from hir-contract-fixtures
+
+extern fn calloc(count: u64, size: u64): raw opaque
+extern fn free(ptr: raw opaque): void
+
+pub fn test_zirl_little_endian_primitives(): i32 {
+    var output: [8]u8 = [0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8];
+    let writer = ZirlByteWriter {
+        bytes: raw output[0..8],
+        position: 0,
+        failed: false,
+    };
+    let after_u16 = write_u16(writer, 0x1234u16);
+    let after_u32 = write_u32(after_u16, 0x89ABCDEFu32);
+    if (after_u32.failed or after_u32.position != 6) {
+        return 1;
+    }
+    if (raw output[0] != 0x34u8 or raw output[1] != 0x12u8 or
+        raw output[2] != 0xEFu8 or raw output[3] != 0xCDu8 or
+        raw output[4] != 0xABu8 or raw output[5] != 0x89u8) {
+        return 2;
+    }
+    let reader = ZirlByteReader {
+        bytes: raw output[0..6],
+        position: 0,
+        failed: false,
+    };
+    let read_u16_result = read_u16(reader);
+    let first_value = read_u16_result.value;
+    let read_u32_result = read_u32(read_u16_result.reader);
+    if (read_u32_result.reader.failed or first_value != 0x1234u16 or
+        read_u32_result.value != 0x89ABCDEFu32 or read_u32_result.reader.position != 6) {
+        return 3;
+    }
+    let short_reader = ZirlByteReader {
+        bytes: raw output[0..5],
+        position: 0,
+        failed: false,
+    };
+    let truncated = read_u64(short_reader);
+    if (not truncated.reader.failed or truncated.reader.position != 5) {
+        return 4;
+    }
+    var short_output: [2]u8 = [0u8, 0u8];
+    let short_writer = ZirlByteWriter {
+        bytes: raw short_output[0..2],
+        position: 0,
+        failed: false,
+    };
+    let short_write = write_u32(short_writer, 0x12345678u32);
+    if (not short_write.failed or short_write.position != 2) {
+        return 5;
+    }
+    let invalid_writer = ZirlByteWriter {
+        bytes: raw short_output[0..2],
+        position: 3,
+        failed: false,
+    };
+    let invalid_write = write_u8(invalid_writer, 0xFFu8);
+    if (not invalid_write.failed or invalid_write.position != 3) {
+        return 6;
+    }
+    let invalid_reader = ZirlByteReader {
+        bytes: raw short_output[0..2],
+        position: 3,
+        failed: false,
+    };
+    let invalid_read = read_u8(invalid_reader);
+    if (not invalid_read.reader.failed or invalid_read.reader.position != 3) {
+        return 7;
+    }
+    return 0;
+}
+
+pub fn test_zirl_signed_and_float_primitives(): i32 {
+    var output: [20]u8 = [
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+    ];
+    let writer = ZirlByteWriter {
+        bytes: raw output[0..20],
+        position: 0,
+        failed: false,
+    };
+    let after_i32 = write_i32(writer, -2i32);
+    let after_i64 = write_i64(after_i32, -3i64);
+    let after_f64 = write_f64(after_i64, 1.0);
+    if (after_f64.failed or after_f64.position != 20u64) {
+        return 1;
+    }
+    if (raw output[0] != 0xFEu8 or raw output[1] != 0xFFu8 or
+        raw output[2] != 0xFFu8 or raw output[3] != 0xFFu8 or
+        raw output[4] != 0xFDu8 or raw output[11] != 0xFFu8 or
+        raw output[12] != 0u8 or raw output[13] != 0u8 or
+        raw output[14] != 0u8 or raw output[15] != 0u8 or
+        raw output[16] != 0u8 or raw output[17] != 0u8 or
+        raw output[18] != 0xF0u8 or
+        raw output[19] != 0x3Fu8) {
+        return 2;
+    }
+
+    let reader = ZirlByteReader {
+        bytes: raw output[0..20],
+        position: 0,
+        failed: false,
+    };
+    let decoded_i32 = read_i32(reader);
+    let decoded_i64 = read_i64(decoded_i32.reader);
+    let decoded_f64 = read_f64(decoded_i64.reader);
+    if (decoded_f64.reader.failed or decoded_i32.value != -2i32 or
+        decoded_i64.value != -3i64 or decoded_f64.value != 1.0 or
+        decoded_f64.reader.position != 20u64) {
+        return 3;
+    }
+    return 0;
+}
+
+pub fn test_zirl_type_entry_roundtrip_and_validation(): i32 {
+    let type_args: [2]HirTypeId = [2u32, 0x01020304u32];
+    let type_names: [1]HirStringId = [1u32];
+    let expected: [32]u8 = [
+        5u8, 64u8, 1u8, 0u8,
+        0x78u8, 0x56u8, 0x34u8, 0x12u8,
+        0xCDu8, 0xABu8, 0u8, 0u8,
+        2u8, 0u8, 0u8, 0u8,
+        2u8, 0u8, 0u8, 0u8,
+        4u8, 3u8, 2u8, 1u8,
+        1u8, 0u8, 0u8, 0u8,
+        1u8, 0u8, 0u8, 0u8,
+    ];
+    let input = HirType {
+        kind: HirTypeKind.Int,
+        width: 64u8,
+        flags: 1u8,
+        ref0: 0x12345678u32,
+        ref1: 0xABCDu32,
+        args: raw type_args[0..2],
+        arg_names: raw type_names[0..1],
+    };
+    var output: [32]u8 = [
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+    ];
+    let writer = ZirlByteWriter {
+        bytes: raw output[0..32],
+        position: 0u64,
+        failed: false,
+    };
+    let encoded = write_type_entry(writer, &input);
+    if (encoded.failed or encoded.position != 32u64) {
+        return 1;
+    }
+    for (offset in 1u64..32u64) {
+        let index = offset - 1;
+        if (raw output[index] != raw expected[index]) {
+            return 2;
+        }
+    }
+
+    let reader = ZirlByteReader {
+        bytes: raw output[0..32],
+        position: 0u64,
+        failed: false,
+    };
+    let no_args: [0]HirTypeId = [];
+    let no_names: [0]HirStringId = [];
+    var decoded_args: [2]HirTypeId = [0u32, 0u32];
+    var decoded_names: [1]HirStringId = [0u32];
+    let decoded = read_type_entry(
+        reader,
+        raw decoded_args[0..2],
+        raw decoded_names[0..1]
+    );
+    if (decoded.reader.failed or decoded.reader.position != 32u64 or
+        decoded.value.kind != HirTypeKind.Int or decoded.value.width != 64u8 or
+        decoded.value.flags != 1u8 or decoded.value.ref0 != 0x12345678u32 or
+        decoded.value.ref1 != 0xABCDu32 or
+        @lengthOf(decoded.value.args) != 2u64 or
+        raw decoded.value.args[0] != 2u32 or
+        raw decoded.value.args[1] != 0x01020304u32 or
+        @lengthOf(decoded.value.arg_names) != 1u64 or
+        raw decoded.value.arg_names[0] != 1u32) {
+        return 3;
+    }
+
+    let scalar_expected: [20]u8 = [
+        3u8, 0u8, 0u8, 0u8,
+        0xFFu8, 0xFFu8, 0xFFu8, 0xFFu8,
+        0u8, 0u8, 0u8, 0u8,
+        0u8, 0u8, 0u8, 0u8,
+        0u8, 0u8, 0u8, 0u8,
+    ];
+    var scalar_args: [1]HirTypeId = [0u32];
+    var scalar_names: [1]HirStringId = [0u32];
+    let scalar_source_reader = ZirlByteReader {
+        bytes: raw scalar_expected[0u64..20u64],
+        position: 0u64,
+        failed: false,
+    };
+    let scalar_decoded = read_type_entry(
+        scalar_source_reader,
+        raw scalar_args[0u64..1u64],
+        raw scalar_names[0u64..1u64]
+    );
+    if (scalar_decoded.reader.failed or scalar_decoded.reader.position != 20u64 or
+        scalar_decoded.value.kind != HirTypeKind.Bool or
+        @lengthOf(scalar_decoded.value.args) != 0u64 or
+        @lengthOf(scalar_decoded.value.arg_names) != 0u64) {
+        return 4;
+    }
+    let scalar_value = scalar_decoded.value;
+    var scalar_bytes: [20]u8 = [
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+        0u8, 0u8, 0u8, 0u8,
+    ];
+    let scalar_writer = ZirlByteWriter {
+        bytes: raw scalar_bytes[0..20],
+        position: 0u64,
+        failed: false,
+    };
+    let scalar_encoded = write_type_entry(scalar_writer, &scalar_value);
+    if (scalar_encoded.failed or scalar_encoded.position != 20u64) {
+        return 5;
+    }
+    for (offset in 1u64..20u64) {
+        let index = offset - 1;
+        if (raw scalar_bytes[index] != raw scalar_expected[index]) {
+            return 6;
+        }
+    }
+
+    let insufficient_buffers = read_type_entry(reader, raw no_args[0..0], raw no_names[0..0]);
+    if (not insufficient_buffers.reader.failed or insufficient_buffers.reader.position != 0u64) {
+        return 5;
+    }
+    let truncated_reader = ZirlByteReader {
+        bytes: raw output[0..31],
+        position: 0u64,
+        failed: false,
+    };
+    raw decoded_args[0] = 0xAAAAAAAAu32;
+    raw decoded_args[1] = 0xBBBBBBBBu32;
+    raw decoded_names[0] = 0xCCCCCCCCu32;
+    let truncated = read_type_entry(
+        truncated_reader,
+        raw decoded_args[0..2],
+        raw decoded_names[0..1]
+    );
+    if (not truncated.reader.failed or truncated.reader.position != 0u64 or
+        raw decoded_args[0] != 0xAAAAAAAAu32 or
+        raw decoded_args[1] != 0xBBBBBBBBu32 or
+        raw decoded_names[0] != 0xCCCCCCCCu32) {
+        return 6;
+    }
+
+    raw output[0] = 5u8;
+    raw output[3] = 1u8;
+    let reserved_reader = ZirlByteReader {
+        bytes: raw output[0..32],
+        position: 0u64,
+        failed: false,
+    };
+    let reserved = read_type_entry(
+        reserved_reader,
+        raw decoded_args[0..2],
+        raw decoded_names[0..1]
+    );
+    if (not reserved.reader.failed or reserved.reader.position != 0u64) {
+        return 7;
+    }
+
+    raw output[0] = 0xFFu8;
+    raw output[3] = 0u8;
+    let unknown_kind_reader = ZirlByteReader {
+        bytes: raw output[0..32],
+        position: 0u64,
+        failed: false,
+    };
+    let unknown_kind = read_type_entry(
+        unknown_kind_reader,
+        raw decoded_args[0..2],
+        raw decoded_names[0..1]
+    );
+    if (not unknown_kind.reader.failed or unknown_kind.reader.position != 0u64) {
+        return 8;
+    }
+
+    let trait_type = HirType {
+        kind: HirTypeKind.Trait,
+        width: 0u8,
+        flags: 0u8,
+        ref0: 7u32,
+        ref1: 0u32,
+        args: raw no_args[0..0],
+        arg_names: raw no_names[0..0],
+    };
+    var trait_bytes: [20]u8 = [
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+    ];
+    let trait_writer = write_type_entry(
+        ZirlByteWriter {
+            bytes: raw trait_bytes[0..20],
+            position: 0u64,
+            failed: false,
+        },
+        &trait_type
+    );
+    let trait_reader = read_type_entry(
+        ZirlByteReader {
+            bytes: raw trait_bytes[0..20],
+            position: 0u64,
+            failed: false,
+        },
+        raw no_args[0..0],
+        raw no_names[0..0]
+    );
+    if (trait_writer.failed or trait_writer.position != 20u64 or
+        trait_reader.reader.failed or trait_reader.reader.position != 20u64 or
+        trait_reader.value.kind != HirTypeKind.Trait or
+        trait_reader.value.ref0 != 7u32) {
+        return 9;
+    }
+    return 0;
+}
+
+pub fn test_zirl_blob_roundtrip_and_atomic_failures(): i32 {
+    var output: [9]u8 = [
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+    ];
+    let payload: [5]u8 = [0x10u8, 0x20u8, 0x30u8, 0x40u8, 0x50u8];
+    let writer = ZirlByteWriter {
+        bytes: raw output[0..9],
+        position: 0,
+        failed: false,
+    };
+    let written = write_blob(writer, raw payload[0..5]);
+    if (written.failed or written.position != 9u64 or
+        raw output[0] != 5u8 or raw output[1] != 0u8 or
+        raw output[2] != 0u8 or raw output[3] != 0u8) {
+        return 1;
+    }
+
+    var decoded: [5]u8 = [0u8, 0u8, 0u8, 0u8, 0u8];
+    let reader = ZirlByteReader {
+        bytes: raw output[0..9],
+        position: 0,
+        failed: false,
+    };
+    let decoded_writer = ZirlByteWriter {
+        bytes: raw decoded[0..5],
+        position: 0,
+        failed: false,
+    };
+    let read_result = read_blob_into(reader, decoded_writer);
+    if (read_result.reader.failed or read_result.length != 5u32 or
+        read_result.reader.position != 9u64 or
+        read_result.output.failed or read_result.output.position != 5u64) {
+        return 2;
+    }
+    for (offset in 1u64..5u64) {
+        let index = offset - 1;
+        if (raw decoded[index] != raw payload[index]) {
+            return 3;
+        }
+    }
+
+    var truncated_bytes: [8]u8 = [
+        5u8, 0u8, 0u8, 0u8, 0xA1u8, 0xA2u8, 0xA3u8, 0xA4u8,
+    ];
+    var unchanged: [5]u8 = [
+        0xBBu8, 0xBBu8, 0xBBu8, 0xBBu8, 0xBBu8,
+    ];
+    let truncated_reader = ZirlByteReader {
+        bytes: raw truncated_bytes[0..8],
+        position: 0,
+        failed: false,
+    };
+    let unchanged_writer = ZirlByteWriter {
+        bytes: raw unchanged[0..5],
+        position: 0,
+        failed: false,
+    };
+    let truncated = read_blob_into(truncated_reader, unchanged_writer);
+    if (not truncated.reader.failed or truncated.reader.position != 0u64 or
+        truncated.output.position != 0u64 or
+        raw unchanged[0] != 0xBBu8) {
+        return 4;
+    }
+
+    var small_output: [8]u8 = [
+        0xCCu8, 0xCCu8, 0xCCu8, 0xCCu8,
+        0xCCu8, 0xCCu8, 0xCCu8, 0xCCu8,
+    ];
+    let small_writer = ZirlByteWriter {
+        bytes: raw small_output[0..8],
+        position: 0,
+        failed: false,
+    };
+    let rejected_write = write_blob(small_writer, raw payload[0..5]);
+    if (not rejected_write.failed or rejected_write.position != 0u64 or
+        raw small_output[0] != 0xCCu8) {
+        return 5;
+    }
+
+    var short_output: [4]u8 = [0xDDu8, 0xDDu8, 0xDDu8, 0xDDu8];
+    let complete_reader = ZirlByteReader {
+        bytes: raw output[0..9],
+        position: 0,
+        failed: false,
+    };
+    let short_writer = ZirlByteWriter {
+        bytes: raw short_output[0..4],
+        position: 0,
+        failed: false,
+    };
+    let rejected_read = read_blob_into(complete_reader, short_writer);
+    if (not rejected_read.reader.failed or rejected_read.reader.position != 0u64 or
+        not rejected_read.output.failed or rejected_read.output.position != 0u64 or
+        raw short_output[0] != 0xDDu8) {
+        return 6;
+    }
+    return 0;
+}
+
+pub fn test_zirl_header_golden_bytes(): i32 {
+    var output: [96]u8 = [
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+    ];
+    var writer = ZirlByteWriter {
+        bytes: raw output[0..96],
+        position: 0,
+        failed: false,
+    };
+    var header = ZirlFileHeader {
+        magic: 0x5A49524Cu32,
+        container_version: 21u32,
+        hir_schema_version: zirlHirSchemaVersion,
+        endianness: 1u8,
+        reserved: 0u8,
+        section_count: 5u16,
+        header_size: 0x12345678u32,
+        checksum: 0x89ABCDEFu32,
+        required_features: 7u64,
+        optional_features: 0x0102030405060708u64,
+        source_fingerprint_primary: 0x1112131415161718u64,
+        source_fingerprint_secondary: 0x2122232425262728u64,
+        semantic_profile_version: 2u32,
+        public_abi_hi: 3u32,
+        public_abi_lo: 4u32,
+        dependency_count: 5u32,
+        declaration_count: 6u32,
+        template_count: 7u32,
+        function_count: 8u32,
+        canonical_path_length: 9u32,
+        module_name_length: 10u32,
+        semantic_profile_name_length: 11u32,
+    };
+    if (not write_file_header(&raw writer, &raw header)) {
+        return 1;
+    }
+    if (raw output[0] != 0x4Cu8 or raw output[1] != 0x52u8 or
+        raw output[2] != 0x49u8 or raw output[3] != 0x5Au8 or
+        raw output[8] != 2u8 or raw output[12] != 1u8 or
+        raw output[14] != 5u8 or
+        raw output[15] != 0u8 or raw output[16] != 0x78u8 or
+        raw output[17] != 0x56u8 or raw output[18] != 0x34u8 or
+        raw output[19] != 0x12u8 or raw output[20] != 0xEFu8 or
+        raw output[23] != 0x89u8 or raw output[92] != 11u8) {
+        return 2;
+    }
+    return 0;
+}
+
+pub fn test_zirl_header_decode_and_truncation(): i32 {
+    var output: [96]u8 = [
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+    ];
+    var writer = ZirlByteWriter {
+        bytes: raw output[0..96],
+        position: 0,
+        failed: false,
+    };
+    var header = ZirlFileHeader {
+        magic: 0x5A49524Cu32,
+        container_version: 21u32,
+        hir_schema_version: zirlHirSchemaVersion,
+        endianness: 1u8,
+        reserved: 0u8,
+        section_count: 5u16,
+        header_size: 96u32,
+        checksum: 0u32,
+        required_features: 7u64,
+        optional_features: 0u64,
+        source_fingerprint_primary: 0u64,
+        source_fingerprint_secondary: 0u64,
+        semantic_profile_version: 1u32,
+        public_abi_hi: 0u32,
+        public_abi_lo: 0u32,
+        dependency_count: 0u32,
+        declaration_count: 0u32,
+        template_count: 0u32,
+        function_count: 0u32,
+        canonical_path_length: 0u32,
+        module_name_length: 0u32,
+        semantic_profile_name_length: 0u32,
+    };
+    if (not write_file_header(&raw writer, &raw header)) {
+        return 1;
+    }
+    var reader = ZirlByteReader {
+        bytes: raw output[0..96],
+        position: 0,
+        failed: false,
+    };
+    var decoded = ZirlFileHeader {
+        magic: 0u32,
+        container_version: 0u32,
+        hir_schema_version: 0u32,
+        endianness: 0u8,
+        reserved: 0u8,
+        section_count: 0u16,
+        header_size: 0u32,
+        checksum: 0u32,
+        required_features: 0u64,
+        optional_features: 0u64,
+        source_fingerprint_primary: 0u64,
+        source_fingerprint_secondary: 0u64,
+        semantic_profile_version: 0u32,
+        public_abi_hi: 0u32,
+        public_abi_lo: 0u32,
+        dependency_count: 0u32,
+        declaration_count: 0u32,
+        template_count: 0u32,
+        function_count: 0u32,
+        canonical_path_length: 0u32,
+        module_name_length: 0u32,
+        semantic_profile_name_length: 0u32,
+    };
+    if (not read_file_header(&raw reader, &raw decoded)) {
+        return 2;
+    }
+    if (decoded.magic != 0x5A49524Cu32 or decoded.container_version != 21u32 or
+        decoded.required_features != 7u64) {
+        return 3;
+    }
+    return 0;
+}
+
+pub fn test_zirl_header_truncation(): i32 {
+    var output: [95]u8 = [
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+        0u8, 0u8, 0u8, 0u8, 0u8,
+    ];
+    var truncated_reader = ZirlByteReader {
+        bytes: raw output[0..95],
+        position: 0,
+        failed: false,
+    };
+    var decoded = ZirlFileHeader {
+        magic: 0xAABBCCDDu32,
+        container_version: 0x11223344u32,
+        hir_schema_version: 0u32,
+        endianness: 0u8,
+        reserved: 0u8,
+        section_count: 0u16,
+        header_size: 0u32,
+        checksum: 0u32,
+        required_features: 0u64,
+        optional_features: 0u64,
+        source_fingerprint_primary: 0u64,
+        source_fingerprint_secondary: 0u64,
+        semantic_profile_version: 0u32,
+        public_abi_hi: 0u32,
+        public_abi_lo: 0u32,
+        dependency_count: 0u32,
+        declaration_count: 0u32,
+        template_count: 0u32,
+        function_count: 0u32,
+        canonical_path_length: 0u32,
+        module_name_length: 0u32,
+        semantic_profile_name_length: 0u32,
+    };
+    if (read_file_header(&raw truncated_reader, &raw decoded)) {
+        return 3;
+    }
+    if (not truncated_reader.failed) {
+        return 4;
+    }
+    if (truncated_reader.position != 0u64) {
+        return 5;
+    }
+    if (decoded.magic != 0xAABBCCDDu32) {
+        return 6;
+    }
+    if (decoded.container_version != 0x11223344u32) {
+        return 7;
+    }
+    return 0;
+}
+
+pub fn test_zirl_section_entry_roundtrip(): i32 {
+    var output: [24]u8 = [
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+    ];
+    var entry = ZirlSectionEntry {
+        id: 4u16,
+        flags: 1u16,
+        schema_version: 1u16,
+        reserved: 0u16,
+        offset: 0x0102030405060708u64,
+        size: 0x1112131415161718u64,
+    };
+    var entry_writer = ZirlByteWriter {
+        bytes: raw output[0..24],
+        position: 0,
+        failed: false,
+    };
+    if (not write_section_entry(&raw entry_writer, &raw entry)) {
+        return 1;
+    }
+    var entry_reader = ZirlByteReader {
+        bytes: raw output[0..24],
+        position: 0,
+        failed: false,
+    };
+    var decoded_entry = ZirlSectionEntry {
+        id: 0u16,
+        flags: 0u16,
+        schema_version: 0u16,
+        reserved: 0u16,
+        offset: 0u64,
+        size: 0u64,
+    };
+    if (not read_section_entry(&raw entry_reader, &raw decoded_entry)) {
+        return 2;
+    }
+    if (decoded_entry.id != 4u16 or decoded_entry.flags != 1u16 or
+        decoded_entry.offset != 0x0102030405060708u64 or
+        decoded_entry.size != 0x1112131415161718u64) {
+        return 2;
+    }
+    return 0;
+}
+
+pub fn test_zirl_section_entry_truncation_is_atomic(): i32 {
+    var output: [23]u8 = [
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+        0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8,
+    ];
+    var reader = ZirlByteReader {
+        bytes: raw output[0..23],
+        position: 0,
+        failed: false,
+    };
+    var entry = ZirlSectionEntry {
+        id: 0xAAAau16,
+        flags: 0xBBBBu16,
+        schema_version: 0xCCCCu16,
+        reserved: 0xDDDDu16,
+        offset: 0x0102030405060708u64,
+        size: 0x1112131415161718u64,
+    };
+    if (read_section_entry(&raw reader, &raw entry)) {
+        return 1;
+    }
+    if (not reader.failed) {
+        return 2;
+    }
+    if (reader.position != 0u64) {
+        return 3;
+    }
+    if (entry.id != 0xAAAau16) {
+        return 4;
+    }
+    if (entry.flags != 0xBBBBu16) {
+        return 5;
+    }
+    if (entry.offset != 0x0102030405060708u64) {
+        return 6;
+    }
+    if (entry.size != 0x1112131415161718u64) {
+        return 7;
+    }
+    return 0;
+}
+
+fn make_zirl_validation_header(): ZirlFileHeader {
+    return ZirlFileHeader {
+        magic: 0x5A49524Cu32,
+        container_version: 21u32,
+        hir_schema_version: zirlHirSchemaVersion,
+        endianness: 1u8,
+        reserved: 0u8,
+        section_count: 6u16,
+        header_size: 243u32,
+        checksum: 0u32,
+        required_features: 7u64,
+        optional_features: 0u64,
+        source_fingerprint_primary: 0u64,
+        source_fingerprint_secondary: 0u64,
+        semantic_profile_version: 1u32,
+        public_abi_hi: 0u32,
+        public_abi_lo: 0u32,
+        dependency_count: 0u32,
+        declaration_count: 0u32,
+        template_count: 0u32,
+        function_count: 0u32,
+        canonical_path_length: 1u32,
+        module_name_length: 1u32,
+        semantic_profile_name_length: 1u32,
+    };
+}
+
+fn make_zirl_validation_entries(): [6]ZirlSectionEntry {
+    return [
+        ZirlSectionEntry {
+            id: 1u16, flags: 1u16, schema_version: zirlMetadataSectionSchemaVersion, reserved: 0u16,
+            offset: 243u64, size: 4u64,
+        },
+        ZirlSectionEntry {
+            id: 2u16, flags: 1u16, schema_version: 2u16, reserved: 0u16,
+            offset: 247u64, size: 4u64,
+        },
+        ZirlSectionEntry {
+            id: 3u16, flags: 1u16, schema_version: zirlTemplatesSectionSchemaVersion, reserved: 0u16,
+            offset: 251u64, size: 4u64,
+        },
+        ZirlSectionEntry {
+            id: 4u16, flags: 1u16, schema_version: 1u16, reserved: 0u16,
+            offset: 255u64, size: 4u64,
+        },
+        ZirlSectionEntry {
+            id: 5u16, flags: 1u16, schema_version: 2u16, reserved: 0u16,
+            offset: 259u64, size: 4u64,
+        },
+        ZirlSectionEntry {
+            id: 10u16, flags: 0u16, schema_version: 99u16, reserved: 0u16,
+            offset: 263u64, size: 4u64,
+        },
+    ];
+}
+
+pub fn test_zirl_section_table_validation(): i32 {
+    var header = make_zirl_validation_header();
+    var entries = make_zirl_validation_entries();
+    var result = validate_zirl_sections(&raw header, raw entries[0..6], 267u64);
+    if (result.error != ZirlValidationError.None) {
+        return 1;
+    }
+
+    raw entries[1].schema_version = 1u16;
+    result = validate_zirl_sections(&raw header, raw entries[0..6], 267u64);
+    if (result.error != ZirlValidationError.InvalidSection) {
+        return 10;
+    }
+    raw entries[1].schema_version = zirlDeclsSectionSchemaVersion;
+    raw entries[2].schema_version = 1u16;
+    result = validate_zirl_sections(&raw header, raw entries[0..6], 267u64);
+    if (result.error != ZirlValidationError.InvalidSection) {
+        return 11;
+    }
+    raw entries[1].schema_version = zirlDeclsSectionSchemaVersion;
+    raw entries[2].schema_version = zirlTemplatesSectionSchemaVersion;
+
+    raw entries[4].schema_version = 1u16;
+    result = validate_zirl_sections(&raw header, raw entries[0..6], 267u64);
+    if (result.error != ZirlValidationError.InvalidSection) {
+        return 9;
+    }
+    raw entries[4].schema_version = 2u16;
+
+    header.container_version = 22u32;
+    result = validate_zirl_sections(&raw header, raw entries[0..6], 267u64);
+    if (result.error != ZirlValidationError.InvalidHeader) {
+        return 8;
+    }
+
+    header = make_zirl_validation_header();
+    raw entries[5].flags = 1u16;
+    result = validate_zirl_sections(&raw header, raw entries[0..6], 267u64);
+    if (result.error != ZirlValidationError.UnknownRequiredSection) {
+        return 2;
+    }
+
+    entries = make_zirl_validation_entries();
+    raw entries[0].id = 11u16;
+    raw entries[0].flags = 0u16;
+    result = validate_zirl_sections(&raw header, raw entries[0..6], 267u64);
+    if (result.error != ZirlValidationError.MissingRequiredSection) {
+        return 3;
+    }
+
+    entries = make_zirl_validation_entries();
+    raw entries[1].offset = 245u64;
+    result = validate_zirl_sections(&raw header, raw entries[0..6], 267u64);
+    if (result.error != ZirlValidationError.OverlappingSections) {
+        return 4;
+    }
+
+    entries = make_zirl_validation_entries();
+    raw entries[4].size = 9u64;
+    result = validate_zirl_sections(&raw header, raw entries[0..6], 267u64);
+    if (result.error != ZirlValidationError.SectionOutOfBounds) {
+        return 5;
+    }
+
+    entries = make_zirl_validation_entries();
+    raw entries[5].id = 5u16;
+    raw entries[5].flags = 1u16;
+    raw entries[5].schema_version = 2u16;
+    result = validate_zirl_sections(&raw header, raw entries[0..6], 267u64);
+    if (result.error != ZirlValidationError.DuplicateSection) {
+        return 6;
+    }
+
+    entries = make_zirl_validation_entries();
+    header.required_features = 7u64 + (1u64 << 63);
+    result = validate_zirl_sections(&raw header, raw entries[0..6], 267u64);
+    if (result.error != ZirlValidationError.UnsupportedRequiredFeatures) {
+        return 7;
+    }
+    return 0;
+}
