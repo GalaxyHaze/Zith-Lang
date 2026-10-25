@@ -115,7 +115,7 @@ enum class DeclKind : uint8_t {
 enum class BindingKind : uint8_t { Let, Var, Const };
 
 /// Source attributes written as `#[name]` or `#[a, b]`.
-enum class AttributeKind : uint8_t { Unknown, Discardable, Volatile };
+enum class AttributeKind : uint8_t { Unknown, Discardable, Volatile, Test };
 
 enum class AttributeTarget : uint8_t { Function, Variable, Other };
 

@@ -8,11 +8,13 @@ namespace zith::frontend {
 inline AttributeKind classifyAttribute(Attribute &attr, AttributeTarget target,
                                        std::vector<Diagnostic> &diagnostics) {
     AttributeKind classified = AttributeKind::Unknown;
+    if (attr.text == "test" && target == AttributeTarget::Function)
+        classified = AttributeKind::Test;
     if (attr.text == "discardable" && target == AttributeTarget::Function)
         classified = AttributeKind::Discardable;
     if (attr.text == "volatile" && target == AttributeTarget::Variable)
         classified = AttributeKind::Volatile;
-    if (classified == AttributeKind::Unknown && attr.text != "discardable" &&
+    if (classified == AttributeKind::Unknown && attr.text != "test" && attr.text != "discardable" &&
         attr.text != "volatile") {
         diagnostics.push_back({attr.span, "unknown attribute '" + attr.text + "'", true,
                                diagnostics::err::UnknownAttribute});

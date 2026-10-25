@@ -164,7 +164,8 @@ ExprId AstLowerer::parsePrimary() {
                 expr.text = name;
                 // @lengthOf/@ptrOf take a value operand; layout intrinsics
                 // take a type and optionally a field name.
-                if ((name == "lengthOf" || name == "ptrOf") && punctuation(index_, '(')) {
+                if ((name == "lengthOf" || name == "ptrOf" || name == "assert" || name == "log") &&
+                    punctuation(index_, '(')) {
                     ++index_;
                     expr.operands.push_back(parseExpression());
                     if (punctuation(index_, ')'))
