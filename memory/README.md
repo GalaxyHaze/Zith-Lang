@@ -83,3 +83,6 @@ contracts, decisions, and gotchas that are not discoverable from the source alon
   and the current compiler blockers for generic `Ok`/`Err` helpers.
 - [lsp-vscode-folding.md](lsp-vscode-folding.md): LSP/VS Code brace folding
   flow, local VSIX rebuild loop, and read-only sandbox gotchas.
+- [test-command-coordination.md](test-command-coordination.md): how the native
+  `zithc test` work is split between the master and the hermes worktrees, the
+  file-ownership boundary, and the verification gates.
