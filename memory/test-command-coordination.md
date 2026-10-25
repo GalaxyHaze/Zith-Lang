@@ -63,6 +63,34 @@ accepts `#[test] fn f(): void { @assert(true); @log("x"); }`, `#[test]` on a
 non-function is `W2029`, an unknown attribute is `W2028`, and `test-frontend`
 is 402 passed / 0 failed. hermes2 (`std/test`) is not started yet.
 
+## Wave 1 (plan steps 3-5) is closed
+
+Master commit `b112620a` lands steps 3-5:
+
+- Step 3: `@assert`/`@log` lowering in `src/sema/hir-lower-test.cpp`, dispatched
+  from `lowerLayoutIntrinsic`. `@assert` outside a test lowers to a panic.
+- Step 4: `buildTestDriver` synthesizes the `main` driver in HIR.
+- Step 5: the `Debug` ZIRL section carries `(test, assert id) -> path:line:col`.
+
+Gate 1 to 2 passed: a failing `@assert` writes the correct result slot and the
+`Debug` section resolves the location, identical on native LLVM, VM v2, and the
+interpreter, and the C++ suite is green except the pre-existing
+`docs-consistency` failure (the `README.md` in `HEAD` has no `## Compilation
+Pipeline` section, unrelated to this work).
+
+Two things to know when resuming:
+
+- `site.span.file` in `TestAssertSite` is a frontend file id, so
+  `persistent-cache.cpp` maps it through `mSnapshotDiagnosticFiles` before
+  resolving it against the session `SourceMap`. Without that the location is
+  only correct for single-module builds.
+- The `@log` string-literal fast path (a `*char` literal instead of a slice)
+  exists because the VM and interpreter cannot lower a slice-typed literal.
+  Keep it when extending `@log`.
+
+Next: Wave 2 (steps 6-7, rewrite `test()` and the report modes) stays with the
+master; hermes2 owns `std/test` and the example suite.
+
 There is older, unrelated `agent-scheduler` state under `.awt/` (manifest,
 board, scheduler-status, and the merged `awt/agent1`..`awt/agent9` branches).
 Those branches are all merged into `main`. Leave that state alone; the hermes
