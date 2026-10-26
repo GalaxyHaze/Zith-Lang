@@ -60,6 +60,10 @@ struct SessionRunner {
     };
 
     Result run(std::string_view input, session::Stage target = session::Stage::HirLowered) {
+        return run(input, target, std::string{});
+    }
+
+    Result run(std::string_view input, session::Stage target, std::string targetTriple) {
         const auto path = root / "main.zith";
         std::ofstream file(path, std::ios::binary | std::ios::trunc);
         file << input;
@@ -69,6 +73,7 @@ struct SessionRunner {
         config.workspaceRoot      = root.string();
         config.maxFrontendWorkers = 1;
         config.compilerVersion    = "test";
+        config.targetTriple       = std::move(targetTriple);
         for (const auto &dir : opts.includeDirs)
             config.includeRoots.push_back(dir);
         auto context = std::make_shared<session::FrontendContext>(config);
@@ -249,6 +254,83 @@ void test_io_format_into_existing_buffer() {
     CHECK(r.ok, "format can append into an existing FormatBuffer");
 }
 
+void test_c_fs_portable_surface_checks() {
+    SessionRunner t;
+    auto r = t.run("from c/fs\n"
+                   "from c/stdlib\n"
+                   "fn main(): i32 {\n"
+                   "    let stream = fopen(\"/tmp/zith-fs-test.txt\", \"wb\");\n"
+                   "    if (stream is null) { return 1; }\n"
+                   "    defer fclose(stream);\n"
+                   "    let msg: *char = \"data\";\n"
+                   "    let written = fwrite(msg, 1u64, 4u64, stream);\n"
+                   "    let pos = ftell(stream);\n"
+                   "    _ = fflush(stream);\n"
+                   "    if (written != 4u64 or pos < 0i64) { return 2; }\n"
+                   "    _ = fseek(stream, 0i64, SEEK_SET);\n"
+                   "    var buf: ?raw opaque = malloc(8u64);\n"
+                   "    if (buf is null) { return 3; }\n"
+                   "    defer free(buf);\n"
+                   "    let read_count = fread(buf, 1u64, 4u64, stream);\n"
+                   "    if (read_count != 4u64) { return 4; }\n"
+                   "    _ = feof(stream);\n"
+                   "    _ = ferror(stream);\n"
+                   "    _ = remove(\"/tmp/zith-fs-test.txt\");\n"
+                   "    _ = rename(\"/tmp/zith-fs-a.txt\", \"/tmp/zith-fs-b.txt\");\n"
+                   "    0\n"
+                   "}\n");
+    CHECK(r.ok, "c/fs portable stdio surface type-checks");
+}
+
+void test_c_fs_resolves_on_a_non_linux_target() {
+    SessionRunner t;
+    auto r = t.run("from c/fs\n"
+                   "fn main(): i32 { return 0; }\n",
+                   session::Stage::HirLowered, "x86_64-pc-windows-msvc");
+    CHECK(r.ok, "c/fs has no platform variant and resolves on every target");
+}
+
+void test_c_posix_variant_resolves_on_linux() {
+    SessionRunner t;
+    auto r = t.run("from c/posix\n"
+                   "from c/fs\n"
+                   "from c/stdlib\n"
+                   "fn main(): i32 {\n"
+                   "    let fd = open(\"/tmp/zith-fs-test.txt\", O_RDONLY);\n"
+                   "    if (fd < 0) { return 1; }\n"
+                   "    defer close(fd);\n"
+                   "    var buf: ?raw opaque = malloc(8u64);\n"
+                   "    if (buf is null) { return 2; }\n"
+                   "    defer free(buf);\n"
+                   "    let got = read(fd, buf, 8u64);\n"
+                   "    let mapped = mmap(null, 8u64, PROT_READ, MAP_PRIVATE, fd, 0i64);\n"
+                   "    if (mapped is null) { return 3; }\n"
+                   "    defer munmap(raw mapped, 8u64);\n"
+                   "    _ = lseek(fd, 0i64, SEEK_SET);\n"
+                   "    let present = access(\"/tmp\", F_OK);\n"
+                   "    _ = unlink(\"/tmp/zith-fs-none.txt\");\n"
+                   "    var info: ?raw opaque = malloc(STAT_BUFFER_SIZE);\n"
+                   "    if (info is null) { return 4; }\n"
+                   "    defer free(info);\n"
+                   "    _ = stat(\"/tmp\", info);\n"
+                   "    _ = fstat(fd, info);\n"
+                   "    if (got < -1i64 or present < -1) { return 5; }\n"
+                   "    0\n"
+                   "}\n",
+                   session::Stage::HirLowered, "x86_64-unknown-linux-gnu");
+    CHECK(r.ok, "c/posix resolves and type-checks on the linux platform variant");
+}
+
+void test_c_posix_missing_variant_reports_import_error() {
+    SessionRunner t;
+    auto r = t.run("from c/posix\n"
+                   "fn main(): i32 { return 0; }\n",
+                   session::Stage::HirLowered, "x86_64-pc-windows-msvc");
+    CHECK(!r.ok, "c/posix does not resolve on a target without a matching variant");
+    CHECK(r.hasErrorCode(diagnostics::err::ImportError),
+          "the missing platform variant reports E1006");
+}
+
 } // namespace
 
 int main() {
@@ -264,6 +346,10 @@ int main() {
     test_generic_union_direct_construction_blocked();
     test_io_format_returns_owned_result();
     test_io_format_into_existing_buffer();
+    test_c_fs_portable_surface_checks();
+    test_c_fs_resolves_on_a_non_linux_target();
+    test_c_posix_variant_resolves_on_linux();
+    test_c_posix_missing_variant_reports_import_error();
     std::printf("\nResults: %d passed, %d failed\n", g_test_passed, g_test_failed);
     return g_test_failed > 0 ? 1 : 0;
 }

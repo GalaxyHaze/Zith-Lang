@@ -32,6 +32,8 @@ header.
 from c/io
 from c/stdlib
 from c/string
+from c/fs
+from c/posix
 ```
 
 The backend may implement the same declaration through the native libc, a VM
@@ -42,6 +44,12 @@ The `c` surface is intentionally small and validated. Add a function there
 only when Zith can define its ABI and behavior across the supported targets.
 Platform-specific functions and third-party APIs should remain in a dedicated
 module or use an explicit header import.
+
+`c/fs` is the portable C stdio file surface and resolves on every target.
+`c/posix` is the POSIX file and memory-mapping surface and ships only as a
+platform variant, currently `c/posix.linux.zith`, so `import c/posix` resolves
+on Linux and reports the missing-platform-variant diagnostic elsewhere. See
+[ADR-0046](adr/0046-c-file-surface-and-deferred-safe-std-fs.md).
 
 Functions such as `putchar`, `puts`, `printf`-style output helpers, and other
 side-effecting calls may be marked `#[discardable]` when their status return is

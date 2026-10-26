@@ -81,6 +81,9 @@ contracts, decisions, and gotchas that are not discoverable from the source alon
   pattern for variadic `Formatable` values.
 - [stdlib-io-result.md](stdlib-io-result.md): proposed `Result<T, E>` surface
   and the current compiler blockers for generic `Ok`/`Err` helpers.
+- [stdlib-c-fs.md](stdlib-c-fs.md): raw file access under `c/fs` and the
+  Linux-only `c/posix` platform variant, with the `raw opaque` and
+  duplicate-`SEEK_*` gotchas and the deferred safe `std/fs` blockers.
 - [lsp-vscode-folding.md](lsp-vscode-folding.md): LSP/VS Code brace folding
   flow, local VSIX rebuild loop, and read-only sandbox gotchas.
 - [test-command-coordination.md](test-command-coordination.md): how the native

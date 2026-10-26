@@ -1,0 +1,72 @@
+/// Linux POSIX file and memory-mapping surface.
+///
+/// This is the `.<os>` platform variant of `c/posix`, so `import c/posix`
+/// resolves here only on a Linux target. A host without a matching variant
+/// reports the resolver's missing-platform-variant diagnostic instead of
+/// silently binding the wrong ABI. Windows and other hosts add their own
+/// `c/posix.<os>.zith` variant when they are supported.
+///
+/// Values are the Linux definitions from `fcntl.h`, `mman-common.h`, and
+/// `unistd.h`. `stat` and `fstat` write into a caller-provided opaque buffer
+/// because the `struct stat` layout is not part of the validated surface yet.
+pub extern fn open(path: *char, flags: i32, ...): i32
+pub extern fn close(fd: i32): i32
+pub extern fn read(fd: i32, buffer: raw opaque, count: u64): i64
+pub extern fn write(fd: i32, buffer: raw opaque, count: u64): i64
+
+/// Seek `fd` to `offset` relative to `whence`. Use the `SEEK_*` constants
+/// from `c/fs`, which are shared with the C stdio surface. Returns the new
+/// offset, or `-1` on failure.
+pub extern fn lseek(fd: i32, offset: i64, whence: i32): i64
+
+/// Fill the opaque `buffer` with a `struct stat` for `path`. Returns `0` on
+/// success. The buffer must be at least `STAT_BUFFER_SIZE` bytes.
+pub extern fn stat(path: *char, buffer: raw opaque): i32
+
+/// Fill the opaque `buffer` with a `struct stat` for `fd`. Returns `0` on
+/// success. The buffer must be at least `STAT_BUFFER_SIZE` bytes.
+pub extern fn fstat(fd: i32, buffer: raw opaque): i32
+
+/// Test accessibility of `path` with the `*_OK` access modes. Returns `0`
+/// when the requested access is allowed.
+pub extern fn access(path: *char, mode: i32): i32
+
+/// Remove the file at `path`. Returns `0` on success.
+pub extern fn unlink(path: *char): i32
+
+/// Map `length` bytes of `fd` starting at `offset`. Returns null on failure.
+/// The returned handle and its length are passed to `munmap`.
+pub extern fn mmap(addr: ?raw opaque, length: u64, prot: i32, flags: i32, fd: i32,
+                   offset: i64): ?raw opaque
+
+/// Release a mapping returned by `mmap`. Returns `0` on success.
+pub extern fn munmap(addr: raw opaque, length: u64): i32
+
+/// Conservative size for a caller-provided `stat` buffer on Linux.
+pub const STAT_BUFFER_SIZE: u64 = 256u64;
+
+/// Open flags for `open`. Values are the Linux octal definitions.
+pub const O_RDONLY: i32 = 0;
+pub const O_WRONLY: i32 = 1;
+pub const O_RDWR: i32 = 2;
+pub const O_CREAT: i32 = 0x40;
+pub const O_EXCL: i32 = 0x80;
+pub const O_TRUNC: i32 = 0x200;
+pub const O_APPEND: i32 = 0x400;
+pub const O_CLOEXEC: i32 = 0x80000;
+
+/// Access modes for `access`.
+pub const F_OK: i32 = 0;
+pub const X_OK: i32 = 1;
+pub const W_OK: i32 = 2;
+pub const R_OK: i32 = 4;
+
+/// Protection flags for `mmap`.
+pub const PROT_READ: i32 = 0x1;
+pub const PROT_WRITE: i32 = 0x2;
+pub const PROT_EXEC: i32 = 0x4;
+
+/// Mapping flags for `mmap`.
+pub const MAP_SHARED: i32 = 0x1;
+pub const MAP_PRIVATE: i32 = 0x2;
+pub const MAP_ANONYMOUS: i32 = 0x20;

@@ -152,7 +152,7 @@ Implementation work that is incomplete or needs review is tracked in
 | Feature | Status | Notes |
 |---|---|---|
 | `import`, `from`, `export` | **Working** | `import path` exposes only the full dotted namespace (`std.io.console.println`), `import path as name` exposes `name.symbol`, `from path` injects public symbols, and `export path` re-exports the namespace plus public symbols |
-| `c/...` supported runtime surface | **Working / Partial** | `c/io`, `c/stdlib`, and `c/string` provide the common declarations used by the shipped stdlib; native LLVM, no-LLVM VM, and WASM backend resolution remains target-specific |
+| `c/...` supported runtime surface | **Working / Partial** | `c/io`, `c/stdlib`, `c/string`, and `c/fs` provide the common declarations used by the shipped stdlib; `c/fs` is the portable C stdio file surface. `c/posix` ships only as the platform variant `c/posix.linux.zith` (POSIX file and `mmap`), so it resolves on Linux and reports the missing-platform-variant diagnostic elsewhere. Native LLVM, no-LLVM VM, and WASM backend resolution remains target-specific; the safe `std/fs` wrapper stays deferred ([ADR-0046](adr/0046-c-file-surface-and-deferred-safe-std-fs.md)) |
 | `alias` | **Working** | |
 | `pub`, `mod` | **Working** | |
 | `mod(..)`, `mod(N)` | **Working** | Module-depth visibility is applied to declarations and to struct fields; `mod(..)` is unlimited and `mod(N)` allows N directory levels below the owner |

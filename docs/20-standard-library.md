@@ -2,6 +2,7 @@
 
 > **Status:** see [impl-status.md](impl-status.md) for the current status of each module. The
 > shipped modules are `stdlib/c/io.zith`, `stdlib/c/stdlib.zith`, `stdlib/c/string.zith`,
+> `stdlib/c/fs.zith`, `stdlib/c/posix.linux.zith`,
 > `stdlib/std/io/console.zith`, the `std/memory` DAG, `stdlib/std/collections/hash_map_u64.zith`
 > (a concrete `u64 -> u64` map), and `stdlib/std/collections/hash_map.zith` (a checked generic
 > `HashMap<K, V>`). `std/alloc` and `std/new` remain as legacy compatibility modules.
@@ -191,14 +192,28 @@ keep the correct `K`/`V` mapping and `current.key.hash()` resolves through the
 `tests/test-generic-hashmap.cpp`. For a concrete shipped runtime example,
 prefer the `u64 -> u64` module above.
 
-#### `std/fs`
-```zith
-struct File { ... }
+#### `c/fs` and `c/posix`
 
-fn open(path: string): File!;
-fn read(self: view File): []u8!;
-fn write(self: lend File, data: []u8): void!;
+Raw file access ships under `c/` now, not `std/fs`. `c/fs` is the portable C
+stdio surface (`FILE`, `fopen`, `fclose`, `fread`, `fwrite`, `fseek`, `ftell`,
+`fflush`, `feof`, `ferror`, `remove`, `rename`, and the `SEEK_*` constants).
+`c/posix` is the Linux POSIX file and memory-mapping surface (`open`, `close`,
+`read`, `write`, `lseek`, `stat`, `fstat`, `access`, `unlink`, `mmap`,
+`munmap`, and the `O_*`, `PROT_*`, `MAP_*`, and access-mode constants); it
+ships as the `.<os>` platform variant `c/posix.linux.zith`, so the import
+resolves only on Linux.
+
+```zith
+from c/fs
+from c/posix
 ```
+
+These are raw bindings, not a safe wrapper. A `?*FILE` from `fopen` is null on
+failure and must be closed on every path with `defer fclose(stream);`.
+The safe `std/fs` wrapper (an owning `File` with `init`/`destroy` and a named
+error enum) remains deferred behind the allocator-ownership, `DynArray`/
+`Result`/`panic`, and mutable `lend`/`dyn` receiver work. See
+[ADR-0046](adr/0046-c-file-surface-and-deferred-safe-std-fs.md).
 
 ### 20.3 Common Traits
 

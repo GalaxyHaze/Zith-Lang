@@ -1,0 +1,53 @@
+/// Portable C stdio file surface exposed through the Zith C/runtime layer.
+///
+/// These declarations describe the ABI contract for stream-oriented file
+/// access. The selected target runtime supplies the implementation: a native
+/// libc, a VM intrinsic, or a WASM host import. For POSIX syscalls and memory
+/// mapping, import `c/posix`, which resolves only on a supported host.
+///
+/// `FILE` is an opaque handle. A `?*FILE` returned by `fopen` is null on
+/// failure and must be released with `fclose` on every path, normally through
+/// `defer fclose(stream);`.
+pub struct FILE {}
+
+/// Open a stream at `path` with a C `mode` string such as `"rb"` or `"wb"`.
+/// Returns null on failure.
+pub extern fn fopen(path: *char, mode: *char): ?*FILE
+
+/// Flush and close a stream. Returns `0` on success.
+pub extern fn fclose(stream: *FILE): i32
+
+/// Read up to `count` elements of `size` bytes into `buffer`.
+/// Returns the number of elements read.
+pub extern fn fread(buffer: raw opaque, size: u64, count: u64, stream: *FILE): u64
+
+/// Write `count` elements of `size` bytes from `buffer`.
+/// Returns the number of elements written.
+pub extern fn fwrite(buffer: raw opaque, size: u64, count: u64, stream: *FILE): u64
+
+/// Seek `stream` to `offset` relative to `whence` (`SEEK_*`).
+/// Returns `0` on success.
+pub extern fn fseek(stream: *FILE, offset: i64, whence: i32): i32
+
+/// Return the current byte offset, or `-1` on failure.
+pub extern fn ftell(stream: *FILE): i64
+
+/// Flush buffered output for `stream`. Returns `0` on success.
+pub extern fn fflush(stream: *FILE): i32
+
+/// Return non-zero when the end-of-file indicator is set for `stream`.
+pub extern fn feof(stream: *FILE): i32
+
+/// Return non-zero when the error indicator is set for `stream`.
+pub extern fn ferror(stream: *FILE): i32
+
+/// Remove the file at `path`. Returns `0` on success.
+pub extern fn remove(path: *char): i32
+
+/// Rename `old_path` to `new_path`. Returns `0` on success.
+pub extern fn rename(old_path: *char, new_path: *char): i32
+
+/// Seek origin for `fseek` and `ftell` offsets.
+pub const SEEK_SET: i32 = 0;
+pub const SEEK_CUR: i32 = 1;
+pub const SEEK_END: i32 = 2;
