@@ -1,6 +1,6 @@
 # Zith Implementation Debt
 
-> Last updated: 2026-10-17.
+> Last updated: 2026-10-26.
 
 Documento de gestão da dívida de implementação. Distingue propositadamente:
 
@@ -260,9 +260,9 @@ acima e só os itens ainda abertos permanecem neste inventário:
 ### 6. Narrowing numérico e de pointers continua incompleto
 
 - Os casts `int -> int` estreitantes verificam em compile time valores
-  constantes reconhecidos pelo sema. A adaptação de literais não verifica a
-  faixa, e operandos variáveis ou conversões `float -> int` não têm checks de
-  overflow em runtime.
+  constantes reconhecidos pelo sema. A adaptação implícita de literais (sem
+  `as`) não verifica a faixa, e operandos variáveis ou conversões `float -> int`
+  não têm checks de overflow em runtime.
 - Narrowing de `?*T` continua limitado a provas flow-sensitive sobre bindings
   locais. Usos sem prova reportam `E3005`, e provas sobre expressões derivadas
   ou entre funções não são propagadas.
