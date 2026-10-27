@@ -1,0 +1,128 @@
+from std/io/format
+from std/memory/allocators/allocator
+from std/memory/allocators/heap
+
+struct Ticket {
+    value: u32,
+}
+
+struct NoopTicket {
+    value: u32,
+}
+
+struct AllocatorHolder {
+    allocator: dyn Allocator,
+}
+
+fn allocateFromHolder(self: lend AllocatorHolder): bool {
+    let memory = allocate(self.allocator, 16u64, 1u64);
+    if (memory is null) {
+        return false;
+    }
+    deallocate(self.allocator, raw memory, 16u64, 1u64);
+    return true;
+}
+
+implement Ticket as Formatable {
+    fn format(self, dest: lend FormatBuffer): IoError {
+        if (self.value != 42u32) {
+            return IoError.fWrite;
+        }
+        return appendRawBuffer(lend dest, "ticket", 6u64);
+    }
+}
+
+implement NoopTicket as Formatable {
+    fn format(self, dest: lend FormatBuffer): IoError {
+        if (self.value != 42u32) {
+            return IoError.fWrite;
+        }
+        return IoError.Ok;
+    }
+}
+
+#[test]
+fn direct_allocator_call() {
+    let allocator = HeapAllocator {};
+    let memory = allocate(allocator, 16u64, 1u64);
+    @assert(not (memory is null));
+    deallocate(allocator, raw memory, 16u64, 1u64);
+}
+
+#[test]
+fn allocator_dyn_local() {
+    let allocator = HeapAllocator {};
+    let dynamicAllocator: dyn Allocator = allocator;
+    let memory = allocate(dynamicAllocator, 16u64, 1u64);
+    @assert(not (memory is null));
+    deallocate(dynamicAllocator, raw memory, 16u64, 1u64);
+}
+
+#[test]
+fn allocator_field_via_lend_receiver() {
+    let allocator = HeapAllocator {};
+    var holder = AllocatorHolder { allocator };
+    @assert(allocateFromHolder(lend holder));
+}
+
+#[test]
+fn allocator_field_direct() {
+    let allocator = HeapAllocator {};
+    let holder = AllocatorHolder { allocator };
+    let memory = allocate(holder.allocator, 16u64, 1u64);
+    @assert(not (memory is null));
+    deallocate(holder.allocator, raw memory, 16u64, 1u64);
+}
+
+#[test]
+fn append_without_dyn_formatter() {
+    let allocator = HeapAllocator {};
+    var buffer = emptyFormatBuffer(allocator);
+    let status = appendRawBuffer(lend buffer, "plain", 5u64);
+    @assert(status == IoError.Ok);
+    @assert(buffer.len() == 5u64);
+    @log(buffer.text());
+    destroyBuffer(lend buffer);
+}
+
+#[test]
+fn ensure_buffer_only() {
+    let allocator = HeapAllocator {};
+    var buffer = emptyFormatBuffer(allocator);
+    let status = ensureBuffer(lend buffer, 8u64);
+    @assert(status == IoError.Ok);
+    destroyBuffer(lend buffer);
+}
+
+#[test]
+fn dyn_formatter_checks_receiver_without_writing() {
+    let allocator = HeapAllocator {};
+    var buffer = emptyFormatBuffer(allocator);
+    let value = NoopTicket { value: 42u32 };
+    let status = format(lend buffer, "#", value);
+    @assert(status == IoError.Ok);
+    @assert(buffer.len() == 0u64);
+    destroyBuffer(lend buffer);
+}
+
+#[test]
+fn dyn_formatter_noop_checks_receiver() {
+    let allocator = HeapAllocator {};
+    var buffer = emptyFormatBuffer(allocator);
+    let value = Ticket { value: 42u32 };
+    let status = format(lend buffer, "#", value);
+    @assert(status == IoError.Ok);
+    destroyBuffer(lend buffer);
+}
+
+#[test]
+fn dyn_formatter_appends() {
+    let allocator = HeapAllocator {};
+    var buffer = emptyFormatBuffer(allocator);
+    let value = Ticket { value: 42u32 };
+    let status = format(lend buffer, "#", value);
+    @assert(status == IoError.Ok);
+    @assert(buffer.len() == 6u64);
+    @log(buffer.text());
+    destroyBuffer(lend buffer);
+}
