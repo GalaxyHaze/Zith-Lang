@@ -1,0 +1,87 @@
+from std/io/format
+from std/memory/allocators/heap
+
+fn logBuffer(var buffer: lend FormatBuffer): void {
+    let status = appendCharBuffer(lend buffer, 0 as char);
+    if (status != IoError.Ok) {
+        @log("assertion failed (message allocation failed)");
+        return;
+    }
+    @log(buffer.text());
+}
+
+pub fn reportAssertionFailure(message: []char): void {
+    let allocator = HeapAllocator {};
+    var buffer = emptyFormatBuffer(allocator);
+    let status = format(lend buffer, "#", message);
+    if (status == IoError.Ok) {
+        logBuffer(lend buffer);
+    } else {
+        @log("assertion failed (message formatting failed)");
+    }
+    destroyBuffer(lend buffer);
+}
+
+pub fn reportEqualityFailure(actual: dyn Formatable, expected: dyn Formatable): void {
+    let allocator = HeapAllocator {};
+    var buffer = emptyFormatBuffer(allocator);
+    let status = format(lend buffer, "assertEq failed: actual #, expected #", actual, expected);
+    if (status == IoError.Ok) {
+        logBuffer(lend buffer);
+    } else {
+        @log("assertEq failed (message formatting failed)");
+    }
+    destroyBuffer(lend buffer);
+}
+
+pub fn reportInequalityFailure(actual: dyn Formatable, unexpected: dyn Formatable): void {
+    let allocator = HeapAllocator {};
+    var buffer = emptyFormatBuffer(allocator);
+    let status =
+        format(lend buffer, "assertNe failed: actual # equals unexpected #", actual, unexpected);
+    if (status == IoError.Ok) {
+        logBuffer(lend buffer);
+    } else {
+        @log("assertNe failed (message formatting failed)");
+    }
+    destroyBuffer(lend buffer);
+}
+
+pub macro assertTrue(condition: expr) {
+    let testCondition = condition;
+    if (not testCondition) {
+        reportAssertionFailure("assertTrue failed");
+    }
+    @assert(testCondition);
+}
+
+pub macro assertFalse(condition: expr) {
+    let testCondition = condition;
+    if (testCondition) {
+        reportAssertionFailure("assertFalse failed");
+    }
+    @assert(not testCondition);
+}
+
+pub macro assertEq(actual: expr, expected: expr) {
+    let actualValue = actual;
+    let expectedValue = expected;
+    if (actualValue != expectedValue) {
+        reportEqualityFailure(actualValue, expectedValue);
+    }
+    @assert(actualValue == expectedValue);
+}
+
+pub macro assertNe(actual: expr, unexpected: expr) {
+    let actualValue = actual;
+    let unexpectedValue = unexpected;
+    if (actualValue == unexpectedValue) {
+        reportInequalityFailure(actualValue, unexpectedValue);
+    }
+    @assert(actualValue != unexpectedValue);
+}
+
+pub macro fail(message: expr) {
+    reportAssertionFailure(message);
+    @assert(false);
+}

@@ -93,6 +93,7 @@ int help(FILE *dest) {
     p.flag("    --sysroot <DIR>", "Sysroot for cross-compilation linking");
     p.flag("    --no-system-includes", "Do not resolve imports from system C header dirs");
     p.flag("    --no-cache", "Do not read or write the persistent .zith-cache");
+    p.flag("    --filter <SUBSTRING>", "Run test names containing module::function substring");
     p.flag("    --emit-tokens", "Print and emit tokens");
     p.flag("    --emit-cst", "Print and emit the concrete syntax tree");
     p.flag("    --emit-ast", "Emit AST");
@@ -109,7 +110,7 @@ int help(FILE *dest) {
     p.flag("    --lto", "Enable LTO");
     p.flag("    --strip-debug", "Strip debug symbols");
     p.flag("-c, --color <auto|on|off>", "Color output [default: auto]");
-    p.flag("-v, --verbose", "Verbose output");
+    p.flag("-v, --verbose", "Verbose output, including test runner progress");
     p.flag("    --debug-sema", "Print semantic analysis probes");
     p.section("DOCS OPTIONS (for 'zithc docs'):");
     p.flag("    --interface", "Document the public interface [default]");

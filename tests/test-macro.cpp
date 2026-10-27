@@ -33,7 +33,25 @@ static void test_macro() {
         CHECK_EQ(snap.declarations()[0].visibility, frontend::Visibility::Public,
                  "pub macro visibility is public");
     }
-    // 4. Macro call expands
+    // 4. reserved `fail` can be used as a macro name without changing its token kind
+    {
+        auto snap = frontend::parse("pub macro fail(message: expr) { @assert(false); }\n"
+                                    "fn main() { @fail(\"intentional\"); }\n");
+        CHECK_EQ(snap.tokens()[2].kind, frontend::TokenKind::Keyword,
+                 "`fail` remains a reserved keyword");
+        CHECK(snap.diagnostics().empty(), "reserved `fail` macro declaration parses and expands");
+        CHECK_EQ(snap.declarations()[0].name, std::string("fail"),
+                 "reserved `fail` is retained as the macro name");
+        bool expanded = false;
+        for (const auto &expr : snap.expressions()) {
+            if (expr.kind == frontend::ExprKind::MacroCall && expr.text == "fail") {
+                expanded = static_cast<bool>(expr.expansion);
+                break;
+            }
+        }
+        CHECK(expanded, "`@fail` expands as a user macro");
+    }
+    // 5. Macro call expands
     {
         auto snap = frontend::parse(
             "macro mylog(msg: expr) { @println(msg); }\nfn main() { @mylog(\"hello\"); }");

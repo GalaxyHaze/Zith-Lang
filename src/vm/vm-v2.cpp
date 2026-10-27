@@ -1,5 +1,7 @@
 #include "vm/vm-v2.hpp"
 
+#include "common/test-output-buffer.hpp"
+
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -37,8 +39,10 @@ struct RunState {
     const Module *module = nullptr;
     LinearMemory *memory = nullptr;
     std::vector<std::size_t> stringAddresses;
-    std::string output;
+    common::TestOutputBuffer output;
     std::string message;
+    std::string_view lastFunction;
+    std::size_t lastInstruction = 0;
     RunStatus status = RunStatus::Ok;
 };
 
@@ -133,14 +137,15 @@ auto externPuts(RunState &state, const ExternCall &args, std::int64_t &result) -
     const std::string_view text = state.memory->cstring(static_cast<std::size_t>(args.arg0));
     if (text.empty())
         return false;
-    state.output.append(text.data(), text.size());
-    state.output.push_back('\n');
+    state.output.append(text);
+    state.output.append("\n");
     return true;
 }
 
 auto externPutchar(RunState &state, const ExternCall &args, std::int64_t &result) -> bool {
     (void)result;
-    state.output.push_back(static_cast<char>(args.arg0));
+    const char value = static_cast<char>(args.arg0);
+    state.output.append(std::string_view(&value, 1U));
     return true;
 }
 
@@ -149,7 +154,7 @@ auto externWriteStdout(RunState &state, const ExternCall &args, std::int64_t &re
     if (args.arg1 > 0) {
         const std::string_view text = state.memory->stringView(static_cast<std::size_t>(args.arg0),
                                                                static_cast<std::size_t>(args.arg1));
-        state.output.append(text.data(), text.size());
+        state.output.append(text);
     }
     return true;
 }
@@ -157,6 +162,29 @@ auto externWriteStdout(RunState &state, const ExternCall &args, std::int64_t &re
 auto externMalloc(RunState &state, const ExternCall &args, std::int64_t &result) -> bool {
     result = static_cast<std::int64_t>(
         state.memory->mallocBytes(static_cast<std::size_t>(args.arg0), 1));
+    return true;
+}
+
+auto externAlignedAlloc(RunState &state, const ExternCall &args, std::int64_t &result) -> bool {
+    result = 0;
+    if (args.arg0 <= 0 || args.arg1 <= 0)
+        return true;
+
+    const auto alignment = static_cast<std::uint64_t>(args.arg0);
+    const auto size      = static_cast<std::uint64_t>(args.arg1);
+    if (!std::in_range<std::size_t>(alignment) || !std::in_range<std::size_t>(size) ||
+        (alignment & (alignment - 1U)) != 0U || size % alignment != 0U)
+        return true;
+
+    const auto offset = state.memory->mallocBytes(static_cast<std::size_t>(size),
+                                                  static_cast<std::size_t>(alignment));
+    if (offset == allocationFailure)
+        return true;
+    if (offset > static_cast<std::size_t>(std::numeric_limits<std::int64_t>::max())) {
+        (void)state.memory->freeBytes(offset);
+        return true;
+    }
+    result = static_cast<std::int64_t>(offset);
     return true;
 }
 
@@ -277,11 +305,12 @@ struct ExternEntry {
 /// Validated FFI subset. Adding an extern here is the only change needed to
 /// support it on both `CallExtern` and `CallExternRef`; anything absent traps
 /// with a message naming the missing extern.
-constexpr std::array<ExternEntry, 12> kValidatedExterns{{
+constexpr std::array<ExternEntry, 13> kValidatedExterns{{
     {"puts", externPuts},
     {"putchar", externPutchar},
     {"write_stdout", externWriteStdout},
     {"malloc", externMalloc},
+    {"aligned_alloc", externAlignedAlloc},
     {"calloc", externCalloc},
     {"free", externFree},
     {"realloc", externRealloc},
@@ -357,7 +386,7 @@ auto validateFunctionShape(const Function &fn) -> bool {
             break;
         case Op::IndexLoad:
             if (missingRegister(fn, dst, false) || missingRegister(fn, lhs, false) ||
-                missingRegister(fn, rhs, false) || instr.imm == 0 || instr.e > 3U ||
+                missingRegister(fn, rhs, false) || instr.imm == 0 || instr.e > 7U ||
                 ((instr.e & 2U) == 0U && (instr.e & 1U) == 0U && instr.d == 0U) ||
                 ((instr.e & 1U) != 0U && missingRegister(fn, instr.d, false)))
                 return false;
@@ -438,6 +467,17 @@ auto validateFunctionShape(const Function &fn) -> bool {
                     return false;
             }
             break;
+        case Op::CallRangeFnRef:
+            if (missingRegister(fn, dst, false) || missingRegister(fn, lhs, false))
+                return false;
+            if (instr.d > 0) {
+                const auto last = static_cast<uint32_t>(instr.c) + instr.d - 1U;
+                if (last > std::numeric_limits<uint16_t>::max() ||
+                    missingRegister(fn, instr.c, false) ||
+                    missingRegister(fn, static_cast<uint16_t>(last), false))
+                    return false;
+            }
+            break;
         case Op::CallExternRef:
         case Op::CallFnRef:
             if (missingRegister(fn, dst, false) || missingRegister(fn, lhs, false) ||
@@ -483,6 +523,8 @@ auto runFunction(RunState &state, const Function &fn, std::vector<int64_t> &regs
 
             std::size_t pc = 0;
             while (pc < currentFunction->body.size()) {
+                state.lastFunction   = currentFunction->name;
+                state.lastInstruction = pc;
                 const auto &instr  = currentFunction->body[pc];
                 const uint16_t dst = instr.a;
                 const uint16_t lhs = instr.b;
@@ -620,7 +662,8 @@ auto runFunction(RunState &state, const Function &fn, std::vector<int64_t> &regs
                 }
                 case Op::IndexLoad: {
                     const auto index      = getReg(regs, rhs);
-                    const bool raw = (instr.e & 2U) != 0U;
+                    const bool raw            = (instr.e & 2U) != 0U;
+                    const bool addressResult  = (instr.e & 4U) != 0U;
                     if (index < 0)
                         return {false, 0};
                     if (!raw) {
@@ -646,6 +689,12 @@ auto runFunction(RunState &state, const Function &fn, std::vector<int64_t> &regs
                     const auto offset  = static_cast<std::size_t>(address);
                     if (static_cast<std::uint64_t>(offset) != address)
                         return {false, 0};
+                    if (addressResult) {
+                        if (!setReg(regs, dst, static_cast<std::int64_t>(address)))
+                            return {false, 0};
+                        pc++;
+                        break;
+                    }
                     const auto bytes = state.memory->read(offset, sizeof(std::uint64_t));
                     if (bytes.size() != sizeof(std::uint64_t))
                         return {false, 0};
@@ -821,7 +870,7 @@ auto runFunction(RunState &state, const Function &fn, std::vector<int64_t> &regs
                             state.memory->cstring(static_cast<std::size_t>(args[0]));
                         if (!formatVariadic(format, args, 1, formatted))
                             return {false, 0};
-                        state.output += formatted;
+                        state.output.append(formatted);
                     } else {
                         const auto buffer   = args[0];
                         const auto capacity = args[1];
@@ -920,6 +969,25 @@ auto runFunction(RunState &state, const Function &fn, std::vector<int64_t> &regs
                     pc++;
                     break;
                 }
+                case Op::CallRangeFnRef: {
+                    const int64_t ref = getReg(regs, lhs);
+                    if (ref < 0 || static_cast<std::size_t>(ref) >= state.module->functions.size())
+                        return {false, 0};
+                    const auto *callee = &state.module->functions[static_cast<std::size_t>(ref)];
+                    if (instr.d != callee->paramCount || callee->paramCount > callee->regCount)
+                        return {false, 0};
+                    std::vector<int64_t> calleeRegs(callee->regCount, 0);
+                    for (std::size_t i = 0; i < instr.d; ++i) {
+                        calleeRegs[i] = getReg(regs, static_cast<uint16_t>(instr.c + i));
+                    }
+                    const auto [ok, ret] = runFunction(state, *callee, calleeRegs);
+                    if (!ok)
+                        return {false, 0};
+                    if (!setReg(regs, dst, ret))
+                        return {false, 0};
+                    pc++;
+                    break;
+                }
                 case Op::Ret:
                     return {true, getReg(regs, dst)};
                 case Op::Branch:
@@ -994,13 +1062,17 @@ auto Vm::runMain(const Module &module) -> RunResult {
     const auto [ok, ret] = runFunction(state, *main, regs);
     if (!ok) {
         result.status  = RunStatus::Trap;
-        result.message = state.message.empty() ? statusText(RunStatus::Trap) : state.message;
+        result.message = state.message.empty()
+                             ? std::string(statusText(RunStatus::Trap)) + " in " +
+                                   std::string(state.lastFunction) + " at instruction " +
+                                   std::to_string(state.lastInstruction)
+                             : state.message;
         return result;
     }
 
     result.status   = RunStatus::Ok;
     result.exitCode = ret;
-    result.output   = std::move(state.output);
+    result.output   = state.output.take();
     return result;
 }
 

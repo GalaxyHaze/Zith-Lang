@@ -329,6 +329,18 @@ void Cli::parseArgs(int argc, char **argv) {
             continue;
         }
 
+        if (compare(argv[i], "--filter")) {
+            requireValue(i, "--filter");
+            opts.testFilter = argv[++i];
+            continue;
+        }
+
+        constexpr std::string_view testFilterPrefix = "--filter=";
+        if (argument.starts_with(testFilterPrefix)) {
+            opts.testFilter = std::string(argument.substr(testFilterPrefix.size()));
+            continue;
+        }
+
         if (compare(argv[i], "--emit-tokens")) {
             opts.flags.emitTokens(true);
             continue;
@@ -387,6 +399,7 @@ void Cli::parseArgs(int argc, char **argv) {
 
         if (compare(argv[i], "--verbose", "-v")) {
             opts.flags.verbose(true);
+            opts.cliFields |= Options::kCliVerbose;
             continue;
         }
 
@@ -683,7 +696,8 @@ void Cli::loadFlags() {
             if (*v >= 0 && *v <= 3)
                 opts.flags.debugLevel(static_cast<uint8_t>(*v));
         if (auto v = tbl["verbose"].value<bool>())
-            opts.flags.verbose(*v);
+            if (!(opts.cliFields & Options::kCliVerbose))
+                opts.flags.verbose(*v);
         if (auto v = tbl["strict"].value<bool>())
             opts.flags.strict(*v);
         if (auto v = tbl["strip_debug"].value<bool>())

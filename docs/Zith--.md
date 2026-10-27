@@ -16,7 +16,7 @@ Esta iteração mantém os tipos e features existentes, mas restringe bindings, 
 - `?T` continua activo como o único tipo de valor ausente/nulável.
 - `T!`/result failable fica fora; erros continuam no escopo da espec full Zith.
 - Macros normais e `raw macro` continuam activas e são exclusivas do Zith--; `tag` (antigo `tag macro`) fica como item full Zith.
-- Atributos `#[...]` ficam activos no MVP restrito a `discardable` em funções e `volatile` em variáveis/bindings.
+- Atributos `#[...]` ficam activos no MVP restrito a `discardable` em funções, `volatile` em variáveis/bindings e `test` em funções livres.
 
 As restrições devem ser aplicadas pela própria toolchain, não apenas documentadas.
 
@@ -844,6 +844,19 @@ entra no documento do `Zith--` depois de terminar no pipeline real, porque o
   `unique`/`share`/`belong` são rejeitados; `view` bloqueia escrita; receiver move é lógico.
 - `defer expr;` e `defer { ... }` como cleanup reverse-order do bloco lexical;
   `state` sem return type explicito é `void`.
+- Superfície de teste nativa: `#[test]` em funções livres `void` sem parâmetros,
+  os intrínsecos `@assert(cond)` e `@log(msg)`, e o driver `main` sintetizado
+  pelo compilador que corre cada `#[test]` e imprime `zith-test <nome> <slot>`.
+  A tabela `(teste, id de assert) -> ficheiro:linha:coluna` é gravada na secção
+  `Debug` do ZIRL. `zithc test` executa os testes descobertos sob `test_dir`,
+  aceita `--filter <substring>` sobre `modulo::funcao` e reporta cada resultado.
+  `@log` escreve directamente em stdout e o runner encaminha essa saída sem
+  filtragem por teste.
+- `std/test` oferece as macros `assertTrue`, `assertFalse`, `assertEq`,
+  `assertNe` e `fail`. As macros avaliam cada argumento uma vez e terminam
+  pelo `@assert` no ponto de chamada. `assertEq` e `assertNe` formatam os dois
+  valores com `Formatable`, actualmente disponível para `[]char`, `bool`,
+  `f32`, `f64`, `u32`, `i32` e `*char`.
 - Traits nominais, interfaces estruturais com fields e method requirements
   declaration-only, `implement T as Trait {}`, conformance, bounds
   `T: A + B` e `dyn Trait`/`dyn Interface` somente-métodos; bounds de
@@ -862,17 +875,10 @@ avaliadas juntas, por ordem de afinidade com o núcleo:
 | Feature | Razão | Dependência mais provável |
 | --- | --- | --- |
 | `drop` funcional | limpeza determinística de recursos ao sair do binding/escopo, reutilizando o cleanup de `defer` | ownership residual + HIR |
-| Teste nativo (`#[test]`, `@assert`, `@log`) | superfície de teste própria do Zith--, para o `zithc test` deixar de ser um type-check em lote | atributos + intrínsecos + driver HIR sintetizado |
 
 A prioridade recomendada é `drop`, reutilizando a infraestrutura de escopo de
 `defer` já implementada. Ver `docs/plans/defer-drop.md` para a proposta
 completa e `docs/09-control-flow.md` para a semântica de escopo.
-
-O teste nativo é a segunda candidata e está desenhado em
-`docs/plans/test-command.md`. Introduz um atributo `#[test]` para funções livres
-`void` sem parâmetros e dois intrínsecos: `@assert(cond)`, a única primitiva de
-falha, e `@log(msg)`, que acumula `[]char` no buffer de log do teste. O desenho
-está registado em `docs/adr/0045-native-test-command-and-driver.md`.
 
 ### Fora do núcleo até prova em contrário
 

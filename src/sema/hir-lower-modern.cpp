@@ -24,10 +24,12 @@ HirLowerModern::HirLowerModern(memory::Arena &arena, diagnostics::DiagnosticEngi
                                const session::CompilationSnapshot &snapshot, SemaPipeline &sema,
                                const symbols::SymbolTable &symbols, types::TypeIntern &types,
                                memory::StringInterner &interner, const NraFacts *nra,
-                               cache::Store *cache_store)
+                               cache::Store *cache_store, const std::string_view test_module,
+                               const std::string_view test_filter)
     : arena_(arena), diags_(diags), snapshot_(snapshot), sema_(sema), symbols_(symbols),
       types_(types), interner_(interner), nra_(nra), hir_(arena), lowered_types_(),
-      function_index_by_key_(), cache_store_(cache_store) {}
+      function_index_by_key_(), cache_store_(cache_store), test_module_(test_module),
+      test_filter_(test_filter) {}
 
 bool HirLowerModern::run() {
     registerForeignRecords();

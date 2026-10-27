@@ -1,5 +1,6 @@
 #include "sema/hir-lower-modern.hpp"
 
+#include "common/test-log-protocol.hpp"
 #include "diagnostics/error-codes.hpp"
 #include "sema/hir-lower-utils.hpp"
 #include "types/type-kind.hpp"
@@ -279,6 +280,13 @@ hir::HirExprId HirLowerModern::lowerTestLog(const frontend::Expression &expr) {
 
     const auto puts_id  = ensureForeignFunction("puts", {char_ptr},
                                                 types_.internInt(types::IntWidth::I32));
+    if (!test_module_.empty()) {
+        const std::string report_name =
+            current_test_name_.empty() ? std::string{}
+                                       : test_module_ + "::" + current_test_name_;
+        emitPutcharLiteral(std::string(common::kTestLogBeginPrefix) + report_name + "\n");
+    }
+
     memory::DynArray<hir::HirExprId> args(arena_);
     memory::DynArray<types::TypeId> arg_types(arena_);
     args.push(pointer);
@@ -286,6 +294,8 @@ hir::HirExprId HirLowerModern::lowerTestLog(const frontend::Expression &expr) {
     hir::HirCall call{hir::kInvalidHirExpr, std::move(args), std::move(arg_types)};
     call.resolved_fn = puts_id;
     current_fn_->blocks[current_block_].insts.push(addExpr(std::move(call)));
+    if (!test_module_.empty())
+        emitPutcharLiteral(common::kTestLogEndMarker);
     return hir::kInvalidHirExpr;
 }
 
@@ -293,6 +303,17 @@ bool HirLowerModern::buildTestDriver() {
     if (test_driver_built_ || test_fn_ids_.empty())
         return true;
     test_driver_built_ = true;
+
+    std::vector<size_t> selected_tests;
+    for (size_t index = 0; index < test_fn_ids_.size(); ++index) {
+        std::string report_name = test_names_[index];
+        if (!test_module_.empty())
+            report_name = test_module_ + "::" + report_name;
+        if (!test_filter_.empty() && report_name.find(test_filter_) == std::string::npos)
+            continue;
+        selected_tests.push_back(index);
+        test_report_names_.push_back(std::move(report_name));
+    }
 
     auto &fn       = hir_.addFn(interner_.intern("main"));
     fn.return_type = types_.internInt(types::IntWidth::I32);
@@ -310,7 +331,14 @@ bool HirLowerModern::buildTestDriver() {
     fn.blocks[0].insts = memory::DynArray<hir::HirExprId>(arena_);
 
     const auto i32 = types_.internInt(types::IntWidth::I32);
-    for (size_t index = 0; index < test_fn_ids_.size(); ++index) {
+    std::vector<hir::HirSlotId> result_slots;
+    result_slots.reserve(selected_tests.size());
+    for (size_t selected_index = 0; selected_index < selected_tests.size(); ++selected_index) {
+        const size_t index = selected_tests[selected_index];
+        if (!test_module_.empty()) {
+            emitPutcharLiteral(std::string(common::kTestLogContextPrefix) +
+                               test_report_names_[selected_index] + "\n");
+        }
         // Call the test function and capture its result slot: 0 on success or
         // the id of the first failing assert.
         memory::DynArray<hir::HirExprId> args(arena_);
@@ -321,13 +349,19 @@ bool HirLowerModern::buildTestDriver() {
         current_fn_->blocks[current_block_].insts.push(emitSlotAlloca(result, i32));
         current_fn_->blocks[current_block_].insts.push(
             emitSlotStore(result, addExpr(std::move(call))));
+        result_slots.push_back(result);
+    }
 
+    emitPutcharLiteral("zith-test-results-begin\n");
+    for (size_t selected_index = 0; selected_index < selected_tests.size(); ++selected_index) {
+        const auto result = result_slots[selected_index];
         emitPutcharLiteral("zith-test ");
-        emitPutcharLiteral(test_names_[index]);
+        emitPutcharLiteral(test_report_names_[selected_index]);
         emitPutcharLiteral(" ");
         emitPrintI32(emitSlotLoad(result, i32));
         emitPutcharLiteral("\n");
     }
+    emitPutcharLiteral("zith-test-results-end\n");
 
     hir::HirRet ret;
     ret.value = emitI32Literal(0);

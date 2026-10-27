@@ -254,14 +254,15 @@ struct Options {
     bool docsIncludeErrors = false;
     bool docsForce         = false;
     std::string docsOptionError;
+    std::string testFilter;
 
-    // Tracks which mode-dependent fields were explicitly set by CLI
-    // so loadFlags() doesn't overwrite them.
+    // Tracks fields explicitly set by CLI so loadFlags() doesn't overwrite them.
     uint8_t cliFields                       = 0;
     static constexpr uint8_t kCliOptLevel   = 1 << 0;
     static constexpr uint8_t kCliDebugLevel = 1 << 1;
     static constexpr uint8_t kCliStripDebug = 1 << 2;
     static constexpr uint8_t kCliLto        = 1 << 3;
+    static constexpr uint8_t kCliVerbose    = 1 << 4;
 
     EmitTarget emitTarget      = EmitTarget::None;
     session::Stage targetStage = session::Stage::Cached;

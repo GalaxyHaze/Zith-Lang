@@ -24,7 +24,7 @@ _zithc() {
 
     cmds="build run execute check fmt create deps test docs repl clean completion"
 
-    opts="-h --help --version -m --mode -o --output -I --include --c-source-dir -L -l -D -A --assets --check -i --in-place --emit --target --sysroot --no-system-includes --no-cache --emit-tokens --emit-cst --emit-ast --emit-hir --emit-vir --emit-ir --emit-asm --emit-all --interface --spec --index --error --force --out --interpreted --virtual-machine --opt-level --debug-level -s --strict --lto --strip-debug -c --color -v --verbose --debug-sema"
+    opts="-h --help --version -m --mode -o --output -I --include --c-source-dir -L -l -D -A --assets --check -i --in-place --emit --target --sysroot --no-system-includes --no-cache --filter --emit-tokens --emit-cst --emit-ast --emit-hir --emit-vir --emit-ir --emit-asm --emit-all --interface --spec --index --error --force --out --interpreted --virtual-machine --opt-level --debug-level -s --strict --lto --strip-debug -c --color -v --verbose --debug-sema"
 
     # Specific option completions
     case "$prev" in
@@ -95,7 +95,7 @@ _zithc() {
 
     cmds="build run execute check fmt create deps test docs repl clean completion"
 
-    opts="-h --help --version -m --mode -o --output -I --include --c-source-dir -L -l -D -A --assets --check -i --in-place --emit --target --sysroot --no-system-includes --no-cache --emit-tokens --emit-cst --emit-ast --emit-hir --emit-vir --emit-ir --emit-asm --emit-all --interface --spec --index --error --force --out --interpreted --virtual-machine --opt-level --debug-level -s --strict --lto --strip-debug -c --color -v --verbose --debug-sema"
+    opts="-h --help --version -m --mode -o --output -I --include --c-source-dir -L -l -D -A --assets --check -i --in-place --emit --target --sysroot --no-system-includes --no-cache --filter --emit-tokens --emit-cst --emit-ast --emit-hir --emit-vir --emit-ir --emit-asm --emit-all --interface --spec --index --error --force --out --interpreted --virtual-machine --opt-level --debug-level -s --strict --lto --strip-debug -c --color -v --verbose --debug-sema"
 
     case "$prev" in
         -m|--mode)
@@ -177,6 +177,7 @@ complete -c zithc -l target -r -d "Target triple for cross-compilation"
 complete -c zithc -l sysroot -r -d "Sysroot for cross-compilation linking"
 complete -c zithc -l no-system-includes -d "Do not resolve imports from system C header dirs"
 complete -c zithc -l no-cache -d "Do not read or write the persistent .zith-cache"
+complete -c zithc -l filter -r -d "Run test names containing module::function substring"
 complete -c zithc -l emit-tokens -d "Print and emit tokens"
 complete -c zithc -l emit-cst -d "Print and emit CST"
 complete -c zithc -l emit-ast -d "Emit AST"
@@ -200,7 +201,7 @@ complete -c zithc -s s -l strict -d "Apply stricter rules"
 complete -c zithc -l lto -d "Enable LTO"
 complete -c zithc -l strip-debug -d "Strip debug symbols"
 complete -c zithc -s c -l color -r -f -a "auto on off" -d "Color output"
-complete -c zithc -s v -l verbose -d "Verbose output"
+complete -c zithc -s v -l verbose -d "Verbose output, including test runner progress"
 complete -c zithc -l debug-sema -d "Print semantic analysis probes"
 )###");
         return 0;

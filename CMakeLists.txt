@@ -499,9 +499,16 @@ if(BUILD_TESTING AND NOT ZITH_IS_WASM)
     add_zith_test(test-zirl-sections tests/test-zirl-sections.cpp)
     add_zith_test(test-cache-entry tests/test-cache-entry.cpp)
     add_zith_test(test-cli-commands tests/test-cli-commands.cpp)
+    add_zith_test(test-test-output-buffer tests/test-test-output-buffer.cpp)
     if(TARGET zithc)
         target_compile_definitions(test-cli-commands PRIVATE ZITHC_BINARY="$<TARGET_FILE:zithc>")
         add_dependencies(test-cli-commands zithc)
+
+        add_zith_test(test-zith-test-suite tests/test-zith-test-suite.cpp)
+        target_compile_definitions(test-zith-test-suite PRIVATE
+            ZITHC_BINARY="$<TARGET_FILE:zithc>"
+            ZITH_TEST_SUITE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/tests/zith")
+        add_dependencies(test-zith-test-suite zithc)
     endif()
     add_zith_test(test-docs tests/test-docs.cpp)
     add_zith_test(test-diagnostics-render tests/test-diagnostics-render.cpp)

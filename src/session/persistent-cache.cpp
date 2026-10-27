@@ -76,7 +76,7 @@ symbols::SymbolVisibility symbolVisibility(cache::CompactVisibility visibility) 
 } // namespace
 
 bool CompilationSession::tryLoadPersistentCache() {
-    if (mCacheStore == nullptr)
+    if (mCacheStore == nullptr || mOpts.get().command == Options::Command::Test)
         return false;
 
     mCanonicalPath = SourceCatalog::canonicalPath(mFilePath);
@@ -132,7 +132,7 @@ bool CompilationSession::tryLoadPersistentCache() {
 }
 
 void CompilationSession::writePersistentCache() {
-    if (mOpts.get().noCache)
+    if (mOpts.get().noCache || mOpts.get().command == Options::Command::Test)
         return;
     if (mCacheStore == nullptr || mCacheHydrated)
         return;

@@ -81,6 +81,7 @@ const char *opName(Op op) {
         ZITH_VM_OP_NAME(CallRange);
         ZITH_VM_OP_NAME(TailCallRange);
         ZITH_VM_OP_NAME(CallFnRef);
+        ZITH_VM_OP_NAME(CallRangeFnRef);
         ZITH_VM_OP_NAME(CallExtern);
         ZITH_VM_OP_NAME(CallExternRange);
         ZITH_VM_OP_NAME(CallExternRef);
@@ -158,6 +159,8 @@ void appendInstruction(std::ostringstream &out, const Instr &instr, size_t pc) {
             out << " length=" << instr.d;
         if ((instr.e & 2U) != 0U)
             out << " raw";
+        if ((instr.e & 4U) != 0U)
+            out << " address";
         break;
     case Op::FieldPtr:
         out << "dst=r" << instr.a << " base=r" << instr.b << " byte_offset=" << instr.imm;
@@ -220,6 +223,10 @@ void appendInstruction(std::ostringstream &out, const Instr &instr, size_t pc) {
     case Op::CallFnRef:
         out << "dst=r" << instr.a << " function_ref=r" << instr.b << " arg0=r" << instr.c
             << " arg1=r" << instr.imm;
+        break;
+    case Op::CallRangeFnRef:
+        out << "dst=r" << instr.a << " function_ref=r" << instr.b << " arg_base=r" << instr.c
+            << " arg_count=" << instr.d;
         break;
     case Op::CallExternRef:
         out << "dst=r" << instr.a << " extern_ref=r" << instr.b << " arg0=r" << instr.c << " arg1=r"

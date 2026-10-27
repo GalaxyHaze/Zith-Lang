@@ -621,7 +621,8 @@ bool CompilationSession::lowerStage() {
     }
 
     sema::modern::HirLowerModern lower(mHirArena, mDiags, *mSnapshot, *mModernSemaPipeline, mSyms,
-                                       mTypes, *mInterner, mNraFacts.get(), mCacheStore.get());
+                                       mTypes, *mInterner, mNraFacts.get(), mCacheStore.get(),
+                                       mTestModuleName, mOpts.get().testFilter);
     if (!lower.run()) {
         mDiags.emit();
         return false;
@@ -629,6 +630,7 @@ bool CompilationSession::lowerStage() {
 
     mHirModule = lower.takeHir();
     mTestAssertSites = lower.testAssertSites();
+    mTestNames = lower.testNames();
     // The solver only needs to run on cold builds. Warm builds restore the HIR
     // artifact directly and the generic pass already ran before HIR lowering.
 

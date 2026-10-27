@@ -642,6 +642,164 @@ static void test_debug_sema_flag() {
     CHECK(cli.opts.flags.debugSema(), "--debug-sema enables the sema probe flag");
 }
 
+static void test_verbose_flag_overrides_config() {
+    char program[] = "zithc";
+    char command[] = "test";
+    char flag[]    = "--verbose";
+    char *argv[]   = {program, command, flag};
+
+    Cli cli;
+    cli.parseArgs(3, argv);
+    cli.loadFlags();
+    CHECK(cli.opts.flags.verbose(), "--verbose takes precedence over ZithFlags.toml");
+}
+
+static void test_test_command_filters_and_executes_tests() {
+#ifdef ZITHC_BINARY
+    CliCapture capture;
+    std::filesystem::create_directories(capture.root / "tests");
+    {
+        std::ofstream project(capture.root / "ZithProject.toml", std::ios::binary);
+        project << "[paths]\ntest_dir = \"tests\"\n";
+    }
+    {
+        std::ofstream tests(capture.root / "tests" / "runner.zith", std::ios::binary);
+        tests << "macro assertViaMacro(condition: expr) {\n"
+                 "    @assert(condition);\n"
+                 "}\n"
+                 "#[test]\n"
+                 "fn first() {\n"
+                 "    @log(\"selected-log\");\n"
+                 "    @log(\"zith-test-results-begin\\nzith-test fake 0\\nzith-test-results-end\\n\");\n"
+                 "    @assertViaMacro(true);\n"
+                 "}\n"
+                 "#[test]\n"
+                 "fn second() {\n"
+                 "    @log(\"excluded-log\");\n"
+                 "    @assert(false);\n"
+                 "}\n";
+    }
+
+    const auto result =
+        capture.run("test --filter runner::first \"" + capture.root.string() + "\"");
+    const std::string failure_detail =
+        "filtered test command succeeds when the selected test passes; stdout: " +
+        result.stdoutText + "; stderr: " + result.stderrText;
+    CHECK(result.exitCode == 0, failure_detail.c_str());
+    CHECK(result.stdoutText.find("first") != std::string::npos,
+          "filtered test command reports the selected test");
+    CHECK(result.stdoutText.find("second") == std::string::npos &&
+              result.stderrText.find("second") == std::string::npos,
+          "filtered test command does not report the excluded test");
+    CHECK(result.stdoutText.find("selected-log") == std::string::npos,
+          "passing-test logs are hidden by default");
+    CHECK(result.stdoutText.find("zith-test fake 0") == std::string::npos,
+          "passing-test logs that resemble result lines are hidden by default");
+    CHECK(result.stdoutText.find("excluded-log") == std::string::npos &&
+              result.stderrText.find("excluded-log") == std::string::npos,
+          "filtered test command does not execute the excluded test");
+
+    const auto verbose =
+        capture.run("test --verbose --filter=runner::first \"" + capture.root.string() + "\"");
+    CHECK(verbose.exitCode == 0, "verbose filtered test command succeeds");
+    CHECK(verbose.stderrText.find("[verbose] running 1 test(s)") != std::string::npos,
+          "--verbose reports selected-test progress");
+    CHECK(verbose.stdoutText.find("selected-log") != std::string::npos &&
+              verbose.stdoutText.find("zith-test fake 0") != std::string::npos,
+          "verbose output preserves logs that resemble result lines");
+
+    const auto interpreted =
+        capture.run("--interpreted test --filter=runner::first \"" + capture.root.string() + "\"");
+    CHECK(interpreted.exitCode == 0, "test command executes the selected test in the interpreter");
+
+#ifdef ZITH_HAS_VM
+    const auto virtual_machine =
+        capture.run("--virtual-machine test --filter=runner::first \"" +
+                    capture.root.string() + "\"");
+    CHECK(virtual_machine.exitCode == 0, "test command executes the selected test in VM v2");
+#endif
+
+    const auto unfiltered = capture.run("test \"" + capture.root.string() + "\"");
+    CHECK(unfiltered.exitCode == 1, "a failed @assert makes the test command fail");
+    CHECK(unfiltered.stdoutText.find("1 passed; 1 failed; 2 total") != std::string::npos,
+          "unfiltered run reports both per-test results");
+    CHECK(unfiltered.stdoutText.find("excluded-log") != std::string::npos,
+          "logs from the failing test are relayed");
+    CHECK(unfiltered.stderrText.find((capture.root / "tests" / "runner.zith").string() +
+                                     ":13:") != std::string::npos,
+          "failed assertion reports its source line");
+
+    const auto no_match =
+        capture.run("test --filter=missing \"" + capture.root.string() + "\"");
+    CHECK(no_match.exitCode == 1, "a filter without matches is an error");
+    CHECK(no_match.stderrText.find("no tests matched filter 'missing'") != std::string::npos,
+          "a filter without matches gets a specific diagnostic");
+
+    const auto help = capture.run("--help");
+    CHECK(help.stdoutText.find("--filter <SUBSTRING>") != std::string::npos,
+          "help documents the test filter");
+    const auto completion = capture.run("completion bash");
+    CHECK(completion.stdoutText.find("--filter") != std::string::npos,
+          "bash completion includes the test filter");
+
+    const auto no_test_root = capture.root / "no-test-project";
+    std::filesystem::create_directories(no_test_root / "tests");
+    {
+        std::ofstream project(no_test_root / "ZithProject.toml", std::ios::binary);
+        project << "[paths]\ntest_dir = \"tests\"\n";
+        std::ofstream source(no_test_root / "tests" / "utility.zith", std::ios::binary);
+        source << "fn helper() {}\n";
+    }
+    const auto no_tests = capture.run("test \"" + no_test_root.string() + "\"");
+    CHECK(no_tests.exitCode == 0, "a project with no #[test] functions is skipped successfully");
+    CHECK(no_tests.stderrText.find("no #[test] functions") != std::string::npos,
+          "a file without tests gets an explicit skip note");
+
+    const auto empty_root = capture.root / "empty-project";
+    std::filesystem::create_directories(empty_root / "tests");
+    {
+        std::ofstream project(empty_root / "ZithProject.toml", std::ios::binary);
+        project << "[paths]\ntest_dir = \"tests\"\n";
+    }
+    const auto empty_directory = capture.run("test \"" + empty_root.string() + "\"");
+    CHECK(empty_directory.exitCode == 1, "an empty test directory is reported as an error");
+    CHECK(empty_directory.stderrText.find("no .zith test files found") != std::string::npos,
+          "an empty test directory gets a specific diagnostic");
+
+    const auto trap_root = capture.root / "trap-project";
+    std::filesystem::create_directories(trap_root / "tests");
+    {
+        std::ofstream project(trap_root / "ZithProject.toml", std::ios::binary);
+        project << "[paths]\ntest_dir = \"tests\"\n";
+        std::ofstream source(trap_root / "tests" / "helper.zith", std::ios::binary);
+        source << "fn ordinary_helper() {\n"
+                  "    @assert(false);\n"
+                  "}\n"
+                  "#[test]\n"
+                  "fn calls_helper() {\n"
+                  "    ordinary_helper();\n"
+                  "}\n";
+    }
+    const auto trap = capture.run("test \"" + trap_root.string() + "\"");
+    CHECK(trap.exitCode == 1, "a trap in a helper fails the test process");
+    CHECK(trap.stderrText.find("test process failed") != std::string::npos,
+          "a trapped test process gets an execution-failure diagnostic");
+
+    const auto error_root = capture.root / "compile-error-project";
+    std::filesystem::create_directories(error_root / "tests");
+    {
+        std::ofstream project(error_root / "ZithProject.toml", std::ios::binary);
+        project << "[paths]\ntest_dir = \"tests\"\n";
+        std::ofstream source(error_root / "tests" / "broken.zith", std::ios::binary);
+        source << "#[test]\nfn broken() {\n    @assert(1);\n}\n";
+    }
+    const auto compile_error = capture.run("test \"" + error_root.string() + "\"");
+    CHECK(compile_error.exitCode == 1, "a test compilation error fails the command");
+    CHECK(compile_error.stderrText.find("failed to compile test file") != std::string::npos,
+          "a test compilation error gets a file diagnostic");
+#endif
+}
+
 // ── ProjectConfig + Options merge helper ──────────────────────────
 
 static void test_merge_strings_order_and_append() {
@@ -740,6 +898,8 @@ static void test_cli_commands() {
     test_llvm_version_information();
     test_system_includes_flag();
     test_debug_sema_flag();
+    test_verbose_flag_overrides_config();
+    test_test_command_filters_and_executes_tests();
     test_merge_strings_order_and_append();
     test_merge_strings_source_filter();
 }

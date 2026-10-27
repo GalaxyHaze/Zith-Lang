@@ -238,7 +238,9 @@ void AstLowerer::lowerMacroDeclaration(uint32_t start, Visibility visibility, bo
              false, diagnostics::err::UnsupportedSyntax});
     }
 
-    if (index_ < token_count_ && snapshot_.tokens_[index_].kind == TokenKind::Identifier) {
+    if (index_ < token_count_ &&
+        (snapshot_.tokens_[index_].kind == TokenKind::Identifier ||
+         (snapshot_.tokens_[index_].kind == TokenKind::Keyword && text(index_) == "fail"))) {
         declaration.name = std::string(text(index_++));
     } else {
         snapshot_.diagnostics_.push_back({tokenSpan(index_), "expected a macro name"});

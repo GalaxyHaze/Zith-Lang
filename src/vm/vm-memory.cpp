@@ -121,18 +121,28 @@ auto LinearMemory::mallocBytes(std::size_t count, std::size_t alignment) -> std:
         count = 1;
     if (alignment == 0)
         alignment = 1;
+    if ((alignment & (alignment - 1U)) != 0U)
+        return std::numeric_limits<std::size_t>::max();
+
     for (std::size_t i = 0; i < freeBlocks_.size(); ++i) {
         if (freeBlocks_[i].first < bump_)
             continue;
-        if (freeBlocks_[i].second >= count) {
-            const std::size_t offset = freeBlocks_[i].first;
-            const std::size_t available = freeBlocks_[i].second;
-            freeBlocks_.erase(freeBlocks_.begin() + static_cast<std::ptrdiff_t>(i));
-            if (available > count)
-                freeBlocks_.push_back({offset + count, available - count});
-            allocatedBlocks_.push_back({offset, count});
-            return offset;
-        }
+        const auto [offset, available] = freeBlocks_[i];
+        const std::size_t aligned       = alignUp(offset, alignment);
+        if (aligned == std::numeric_limits<std::size_t>::max() || aligned < offset)
+            continue;
+        const std::size_t prefix = aligned - offset;
+        if (prefix > available || count > available - prefix)
+            continue;
+
+        freeBlocks_.erase(freeBlocks_.begin() + static_cast<std::ptrdiff_t>(i));
+        if (prefix > 0U)
+            freeBlocks_.push_back({offset, prefix});
+        const std::size_t suffix = available - prefix - count;
+        if (suffix > 0U)
+            freeBlocks_.push_back({aligned + count, suffix});
+        allocatedBlocks_.push_back({aligned, count});
+        return aligned;
     }
     if (heap_ < bump_)
         heap_ = bump_;

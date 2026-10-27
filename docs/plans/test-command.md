@@ -22,40 +22,68 @@ intrínsecos `@assert` e `@log` ao Zith--.
   ficheiros sem relação com esta tarefa. Usar `fmt-check`.
 - Não executar `git reset --hard`, `git checkout --` ou comandos que apaguem
   ficheiros do utilizador.
-- A implementação atual de `test()` está em
-  `/home/diogo/Zith/src/cli/cmd/tool.cpp`. Descobre `*.zith` sob `test_dir` e
-  corre-os até `session::Stage::TypeChecked` com `runOnFiles`/`countPassed` de
-  `/home/diogo/Zith/src/cli/cmd/build.cpp`.
+- A implementação de `test()` está em
+  `/home/diogo/Zith/src/cli/cmd/tool.cpp`. O runner executa o driver sintetizado
+  para cada ficheiro com testes e suporta codegen nativo, VM v2 e interpretador.
 - A skill de execução é Sequenta apenas se o utilizador aprovar explicitamente
   antes do trabalho começar. Sem aprovação, executar de forma linear normal.
 
 ## Estado atual
 
-- `zithc test` faz apenas type-check em lote. Não executa nada e não existe
-  qualquer mecanismo de asserção. A linha em `docs/impl-status.md` diz
-  `Working` com a nota "Discovers and runs test files under the given path",
-  que descreve o comportamento atual e não o desenho pretendido.
-- O `zithc create` já gera `tests/` e escreve `test_dir = "tests"` em
-  `[paths]` do `ZithProject.toml` (`src/cli/cmd/project.cpp`), mas
-  `docs/19-project-config.md` não documenta a chave.
-- Existe maquinaria de atributos `#[...]`: `AttributeKind` e `AttributeTarget`
-  em `src/frontend/frontend.hpp`, resolvidos por `classifyAttribute` em
-  `src/frontend/attribute-classify.hpp`. Atributos conhecidos atuais são
-  `discardable` (funções) e `volatile` (variáveis).
-- Existe maquinaria de intrínsecos `@`: parseados em
-  `src/frontend/frontend-expr-primary.cpp`, tipados em
-  `src/sema/sema-cast-coerce.cpp` e lowered em
-  `src/sema/hir-lower-expr-value.cpp`.
-- `HirRuntimePanic` existe no HIR (`src/hir/hir-expr.hpp`) e o codegen nativo
-  baixa-o para `trap` (`src/codegen/codegen-emit-expr.cpp`). A VM v2 só suporta
-  o código de panic `10003` e o interpretador HIR não trata panics.
-- A secção `Debug` do ZIRL (`SectionId::Debug = 8`) está reservada e vazia.
-  `encodeDebug`/`decodeDebug` em `src/zirl/zirl-debug-section.cpp` ignoram o
-  payload.
-- O compilador já tem os dois modos de execução do filho:
-  `linkAndExec()` captura stdout e stderr num pipe e `linkAndExecDirect()` herda
-  os descritores (`src/session/native-link.cpp`). A função `captureProgram`
-  junta stdout e stderr no mesmo pipe.
+- `zithc test` descobre ficheiros `.zith` sob `test_dir`, executa os testes
+  pelo driver sintetizado, aplica `--filter <substring>` e reporta cada
+  resultado com a localização do primeiro assert falhado. Ficheiros sem testes
+  são saltados; diretórios vazios e filtros sem correspondência são erros.
+- O runner suporta codegen nativo, VM v2 e interpretador HIR. O CTest
+  `test-zith-test-suite` verifica a fixture completa em native e VM v2. No HIR,
+  verifica os limites de log e uma fixture portátil com `@assert` e `@log`.
+- `std/test` fornece `assertTrue`, `assertFalse`, `assertEq`, `assertNe` e
+  `fail`. As macros avaliam os argumentos uma vez e deixam `@assert` expandido
+  no contexto da função de teste. As mensagens formatadas usam `FormatBuffer`
+  e `@log`.
+- `@log` emite blocos delimitados em stdout. O runner captura o output do
+  processo, analisa os blocos, oculta logs de testes aprovados por omissão,
+  mostra-os em `--verbose` e limita o corpo acumulado a 4 KiB por teste. O
+  `TestOutputBuffer` usa um único array fixo de 4 KiB para o corpo do log ativo
+  e aplica o limite incrementalmente durante a captura.
+- `test_dir` já está documentado em `docs/19-project-config.md`, sob
+  `[paths]`, com o valor por omissão `tests`.
+- `docs/Zith--.md` documenta `#[test]`, `@assert`, `@log` e os helpers
+  disponíveis em `std/test`.
+- A secção `Debug` do ZIRL regista `(teste, id de assert) -> ficheiro:linha:coluna`
+  para o relatório do runner.
+
+## Bloqueios de aceitação
+
+Verificação em 2026-10-27:
+
+- `test-zith-test-suite` passa e verifica a fixture completa de `std/test` em
+  native e VM v2. No HIR, verifica truncagem de logs e uma fixture portátil
+  com `@assert` e `@log`; a fixture rica não é executada nesse backend por
+  enquanto.
+- `./build/zithc --include stdlib test tests/zith --no-cache --verbose` e
+  `./build/zithc --include stdlib --virtual-machine test tests/zith --no-cache
+  --verbose` produzem `2 passed; 2 failed; 4 total`, com exit code `1` pelas
+  duas falhas intencionais. Ambos incluem as mensagens `assertEq` e `fail`,
+  a implementação `Formatable` definida pelo utilizador e a localização do
+  assert. O teste de integração compara stdout e stderr completos entre os
+  dois backends.
+- A tentativa de `./build/zithc --include stdlib --interpreted test tests/zith`
+  falha no caminho rico de formatação: `user_defined_formatable` falha e as
+  falhas de `assertEq`/`fail` não preservam o texto formatado. O diagnóstico
+  adicional desse backend foi adiado a pedido do utilizador em 2026-10-27.
+- Os testes cobrem filtragem, logs ocultos/visíveis, texto de log que imita o
+  protocolo de resultados, diretórios vazios, filtros sem correspondência,
+  ficheiros ignorados, localizações, traps e a truncagem do buffer de logs.
+- A aceitação integral nos três backends permanece em aberto. A fixture
+  completa não foi reduzida; native e VM exercitam-na, enquanto HIR conserva
+  cobertura portátil e de logs até o caminho rico de formatação ser suportado.
+- **Concluído, com implementação no runner.** O `TestOutputBuffer` mantém um
+  array fixo de 4 KiB para o corpo ativo e um contador agregado por teste, que
+  limita também várias chamadas `@log` no mesmo teste. A mesma implementação é
+  usada na captura nativa, no VM e no interpretador HIR. Os testes cobrem
+  truncagem entre chamadas e reinício da capacidade no teste seguinte. O buffer
+  não é sintetizado como armazenamento HIR no driver.
 
 ## Decisões de produto
 
@@ -170,52 +198,65 @@ slot lendo essa secção do artefacto que já tem em memória.
 
 ## Passos
 
-1. Registar `AttributeKind::Test` e o reconhecimento de `test` em
-   `classifyAttribute`, com `W2029` para alvos ilegais. Cobrir o caso de
+1. **Concluído.** Registar `AttributeKind::Test` e o reconhecimento de `test`
+   em `classifyAttribute`, com `W2029` para alvos ilegais. Cobrir o caso de
    `#[test]` sobre função com parâmetros ou retorno não-void.
 
-2. Adicionar `@assert(cond)` e `@log(msg)` como nomes de intrínsecos
-   reconhecidos pelo frontend, com os tipos `bool` e `[]char`.
+2. **Concluído.** Adicionar `@assert(cond)` e `@log(msg)` como nomes de
+   intrínsecos reconhecidos pelo frontend, com os tipos `bool` e `[]char`.
 
-3. Baixar `@assert` e `@log` para HIR. Fora de teste, `@assert` baixa para um
-   `HirRuntimePanic`. Dentro de teste, `@assert` baixa para escrita no slot e
-   fim do teste, e `@log` baixa para um append no buffer do teste.
+3. **Concluído.** `@assert` baixa para panic fora de teste e para escrita no
+   slot dentro de teste. `@log` emite blocos delimitados em stdout; o sink
+   partilhado do runner limita o corpo acumulado a 4 KiB por teste.
 
-4. Sintetizar, por ficheiro de teste, a tabela de resultados, o buffer de log
-   por teste e o `main` driver que chama as funções `#[test]` por ordem.
+4. **Concluído, com buffer no runner.** A tabela de resultados e o `main`
+   driver por ficheiro estão sintetizados. O sink usa um array fixo de 4 KiB
+   para o corpo ativo e um contador agregado por teste, em vez de armazenamento
+   HIR sintetizado no driver.
 
-5. Gravar a tabela de localizações `(teste, id estático) -> localização` na
-   secção `Debug` do ZIRL e implementar a leitura correspondente.
+5. **Concluído.** Gravar a tabela de localizações
+   `(teste, id estático) -> localização` na secção `Debug` do ZIRL e
+   implementar a leitura correspondente.
 
-6. Reimplementar `test()` em `src/cli/cmd/tool.cpp` para compilar e executar
-   cada ficheiro com o driver, capturar o output com o caminho `capture=true`,
-   separar o bloco de resultados e imprimir o relatório por teste. Manter o
-   `--filter <substring>` a casar contra o nome `modulo::fn`.
+6. **Concluído.** Reimplementar `test()` em `src/cli/cmd/tool.cpp` para
+   compilar e executar cada ficheiro com o driver, capturar o output com o
+   caminho `capture=true`, separar o bloco de resultados e imprimir o
+   relatório por teste. Manter o `--filter <substring>` a casar contra o nome
+   `modulo::fn`.
 
-7. Reportar por omissão uma linha por teste, com o nome, e um resumo final.
-   Com `--verbose`, mostrar o log de todos os testes e o detalhe extra.
+7. **Concluído.** Reportar por omissão uma linha por teste, com o nome, e um
+   resumo final. Com `--verbose`, mostrar o log de todos os testes e o detalhe
+   extra.
 
-8. Criar `std/test` com `assertEq`, `assertNe`, `assertTrue`, `assertFalse` e
-   `fail` sobre `@assert`, usando o `FormatBuffer` existente para as mensagens.
+8. **Concluído.** Criar `std/test` com `assertEq`, `assertNe`, `assertTrue`,
+   `assertFalse` e `fail` sobre `@assert`, usando o `FormatBuffer` existente
+   para as mensagens.
 
-9. Atualizar `docs/19-project-config.md` com `test_dir`, `docs/Zith--.md` com
-   `#[test]`, `@assert` e `@log`, e a linha de estado em `docs/impl-status.md`.
+9. **Concluído.** Atualizar `docs/19-project-config.md` com `test_dir`,
+   `docs/Zith--.md` com `#[test]`, `@assert` e `@log`, e a linha de estado em
+   `docs/impl-status.md`.
 
-10. Registar o desenho no ADR `docs/adr/0045-*`.
+10. **Concluído.** Registar o desenho no ADR `docs/adr/0045-*`.
 
 ## Testes e critérios de sucesso
 
-- Novo caso CTest que corre `zithc test` sobre a suite de exemplo em
-  `tests/zith/`, com ficheiros que passam e ficheiros que falham de propósito,
-  e verifica o exit code e as linhas do relatório.
-- `zithc test` sobre um ficheiro com um assert falhado reporta o nome do teste
-  e a localização correta do assert.
-- `zithc test` sobre a suite toda passa nos três backends.
-- `zithc test` sobre um ficheiro sem `#[test]` imprime a nota de salto e não
-  falha.
-- `#[test]` sobre função com parâmetros reporta `W2029`.
-- `@assert(false)` fora de teste faz trap.
-- A suite C++ e `fmt-check` continuam verdes.
+- **Parcial.** `test-zith-test-suite` verifica a suite completa de `tests/zith/`
+  em native e VM v2, além de cobertura portátil e de logs no HIR interpreter.
+- **Concluído.** Um assert falhado reporta o nome do teste e a localização
+  correta; o caso nativo também valida as mensagens de `assertEq` e `fail`.
+- **Concluído.** `test-test-output-buffer` verifica o limite agregado entre
+  várias chamadas `@log` e a reposição da capacidade no teste seguinte.
+- **Em aberto.** A suite completa ainda não produz o relatório esperado no HIR
+  interpreter. Consultar os bloqueios acima.
+- **Concluído.** Um ficheiro sem `#[test]` imprime a nota de salto e não falha.
+- **Concluído.** `#[test]` sobre função com parâmetros ou retorno não-void
+  reporta `W2029`.
+- **Concluído.** `@assert(false)` fora de teste causa trap quando chamado por
+  uma função de teste.
+- **Parcial.** O build completo passou e o CTest passou 46/46. `fmt-check`
+  continua a falhar em muitos ficheiros por divergências do clang-format local
+  23.1.1; não há clang-format-18 instalado. O novo
+  `tests/test-zith-test-suite.cpp` está formatado pelo formatter disponível.
 
 ## Fora de âmbito
 

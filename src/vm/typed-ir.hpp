@@ -11,7 +11,7 @@ namespace zith::vm {
 // VIR and VM semantics evolve independently from the persisted HIR schema.
 // Bump the semantic version whenever VM execution/lowering semantics change.
 inline constexpr uint16_t kVirSchemaVersion = 1;
-inline constexpr uint32_t kVmSemanticVersion = 1;
+inline constexpr uint32_t kVmSemanticVersion = 2;
 
 /// Typed value categories used by the v2 execution IR.
 enum class ValueType : uint8_t {
@@ -74,6 +74,7 @@ enum class Op : uint8_t {
     CallRange,
     TailCallRange,
     CallFnRef,
+    CallRangeFnRef,
     CallExtern,
     CallExternRange,
     CallExternRef,
@@ -87,9 +88,11 @@ enum class Op : uint8_t {
 
 /// One v2 instruction row. `a/b/c/d/e` hold register or immediate indices
 /// exactly as the opcode requires; `imm` holds a table index, jump target,
-/// or a second indirect-call argument. For IndexLoad, `d` is a fixed length
+/// or a second indirect-call argument. For CallRangeFnRef, `d` is the argument
+/// count. For IndexLoad, `d` is a fixed length
 /// when bit 0 of `e` is clear and a length-register index when it is set; bit 1
-/// marks an explicitly raw access that skips the logical length check.
+/// marks an explicitly raw access that skips the logical length check, and bit
+/// 2 returns the element address instead of loading its first 64-bit word.
 struct Instr {
     Op op        = Op::Trap;
     uint16_t a   = 0;
@@ -118,6 +121,17 @@ struct Instr {
     [[nodiscard]] static auto callRef(Op value, uint16_t dst, uint16_t fnRef, uint16_t arg0,
                                       uint16_t arg1) -> Instr {
         return Instr{value, dst, fnRef, arg0, arg1};
+    }
+
+    [[nodiscard]] static auto callRangeRef(Op value, uint16_t dst, uint16_t fnRef,
+                                           uint16_t argBase, uint16_t argCount) -> Instr {
+        Instr row;
+        row.op  = value;
+        row.a   = dst;
+        row.b   = fnRef;
+        row.c   = argBase;
+        row.d   = argCount;
+        return row;
     }
 
     [[nodiscard]] static auto callExtern(Op value, uint16_t dst, uint16_t arg0, uint16_t arg1,

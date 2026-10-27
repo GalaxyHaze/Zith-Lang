@@ -25,6 +25,29 @@ cmake --build build -j
 
 Requires **CMake 3.20+**, a **C++23** compiler, and LLVM 18+ for native codegen.
 
+## Compilation Pipeline
+
+The compiler moves source through these stages:
+
+```text
+Lexer -> Parser -> Formatter -> Import resolution -> Name resolution -> Type checking -> Generic instantiation -> Comptime / Solve -> SRA / Reference Analysis -> HIR lowering -> LLVM codegen -> Cache
+```
+
+| Stage | Purpose |
+|---|---|
+| Lexer | Converts source characters into tokens |
+| Parser | Builds frontend declarations and expressions |
+| Formatter | Produces stable source formatting |
+| Import resolution | Loads imported modules |
+| Name resolution | Resolves symbols and scopes |
+| Type checking | Validates expression and declaration types |
+| Generic instantiation | Monomorphizes generic declarations |
+| Comptime / Solve | Runs compile-time work |
+| SRA / Reference Analysis | Tracks the implemented ownership facts |
+| HIR lowering | Lowers checked programs into HIR |
+| LLVM codegen | Emits native or WebAssembly code |
+| Cache | Persists and reuses compiled artifacts |
+
 ## Documentation
 
 | Document | Purpose |
@@ -33,6 +56,24 @@ Requires **CMake 3.20+**, a **C++23** compiler, and LLVM 18+ for native codegen.
 | [impl-status.md](docs/impl-status.md) | Verified status of every feature and command |
 | [CHANGELOG.md](CHANGELOG.md) | What changed and what is planned |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Build instructions, code style, and pipeline overview |
+
+## CLI Reference
+
+| Command | Status | Notes |
+|---|---|---|
+| `zithc build` | **Working** | Compiles a project or source file |
+| `zithc run` | **Working** | Compiles and runs a program |
+| `zithc check` | **Working** | Type-checks without emitting |
+| `zithc fmt` | **Working** | Formats source code |
+| `zithc create <name>` | **Working** | Creates a project |
+| `zithc clean` | **Working** | Removes build artifacts |
+| `zithc execute <file>` | **Working** | Executes a compiled artifact |
+| `zithc test <path>` | **Working** | Runs discovered `#[test]` functions |
+| `zithc repl` | **Stub** | |
+| `zithc deps list` | **Working** | Lists project dependencies |
+| `zithc deps add`, `deps remove` | **Stub** | |
+| `zithc docs` | **Working** | Generates Markdown documentation |
+| `zithc completion <shell>` | **Working** | Emits shell completion scripts |
 
 ## Contributing
 

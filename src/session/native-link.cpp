@@ -1,6 +1,7 @@
 #include "compilation-session.hpp"
 
 #include "cc/driver.hpp"
+#include "common/test-output-buffer.hpp"
 #include "memory/flat-set.hpp"
 #include "session/project-options-merge.hpp"
 
@@ -65,10 +66,11 @@ namespace {
 }
 
 [[maybe_unused]] int captureProgram(const std::vector<std::string> &arguments,
-                                    std::string &output) {
+                                    std::string &output, const bool limitTestLogs) {
 #if defined(_WIN32) || defined(ZITH_IS_WASM)
     (void)arguments;
     (void)output;
+    (void)limitTestLogs;
     return -1;
 #else
     if (arguments.empty())
@@ -100,6 +102,7 @@ namespace {
     }
 
     close(pipefd[1]);
+    common::TestOutputBuffer boundedOutput;
     char buffer[4096];
     ssize_t bytes = 0;
     while ((bytes = read(pipefd[0], buffer, sizeof(buffer))) != 0) {
@@ -108,9 +111,15 @@ namespace {
                 continue;
             break;
         }
-        output.append(buffer, static_cast<size_t>(bytes));
+        const std::string_view chunk(buffer, static_cast<size_t>(bytes));
+        if (limitTestLogs)
+            boundedOutput.append(chunk);
+        else
+            output.append(chunk);
     }
     close(pipefd[0]);
+    if (limitTestLogs)
+        output.append(boundedOutput.take());
 
     int status = 0;
     while (waitpid(child, &status, 0) < 0) {
@@ -455,8 +464,8 @@ bool CompilationSession::execAfterLink(const bool capture) {
 
     // Avoid duplicating any pending parent stdio buffers into the forked child.
     std::fflush(nullptr);
-    const int execResult =
-        capture ? captureProgram({exePath}, mChildOutput) : runProgram({exePath});
+    const int execResult = capture ? captureProgram({exePath}, mChildOutput, mTestOutputCapture)
+                                   : runProgram({exePath});
     if (execResult == -1) {
         writeOutput("%s[error]%s failed to launch executable\n", ansicolor("\033[31m"),
                     ansicolor("\033[0m"));

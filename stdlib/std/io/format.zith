@@ -95,10 +95,12 @@ pub fn format(dest: lend FormatBuffer, msg: []char, values: [...]dyn Formatable)
     for (index < length) {
         let ch = raw msg[index];
         if (ch == '#') {
-            if (index + 1 < length and raw msg[index + 1] == '\x1f') {
-                status = appendCharBuffer(lend dest, '#');
-                index = index + 2;
-                continue;
+            if (index + 1 < length) {
+                if (raw msg[index + 1] == '\x1f') {
+                    status = appendCharBuffer(lend dest, '#');
+                    index = index + 2;
+                    continue;
+                }
             }
             if (next < @lengthOf(values)) {
                 status = formatNext(raw values[next], lend dest);
@@ -130,10 +132,12 @@ pub fn format(allocator: dyn Allocator, msg: []char,
     for (index < length) {
         let ch = raw msg[index];
         if (ch == '#') {
-            if (index + 1 < length and raw msg[index + 1] == '\x1f') {
-                status = appendCharBuffer(lend buffer, '#');
-                index = index + 2;
-                continue;
+            if (index + 1 < length) {
+                if (raw msg[index + 1] == '\x1f') {
+                    status = appendCharBuffer(lend buffer, '#');
+                    index = index + 2;
+                    continue;
+                }
             }
             if (next < @lengthOf(values)) {
                 status = formatNext(raw values[next], lend buffer);

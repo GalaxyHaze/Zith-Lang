@@ -376,6 +376,42 @@ void test_vm_v2_indirect_call_fn_index() {
     CHECK_EQ(result.exitCode, 14, "indirect fn call dispatches through the fn table");
 }
 
+void test_vm_v2_indirect_call_fn_range() {
+    memory::Arena arena;
+    vm::Module module(arena);
+
+    auto &sum      = module.functions.emplace(arena);
+    sum.name       = "sum";
+    sum.paramCount = 3;
+    sum.returnType = vm::ValueType::I64;
+    sum.regCount   = 3;
+    sum.body.push(vm::Instr{vm::Op::Add, 0, 0, 1, 0});
+    sum.body.push(vm::Instr{vm::Op::Add, 0, 0, 2, 0});
+    sum.body.push(vm::Instr{vm::Op::Ret, 0, 0, 0, 0});
+
+    auto &main      = module.functions.emplace(arena);
+    main.name       = "main";
+    main.returnType = vm::ValueType::I64;
+    main.regCount   = 5;
+    main.regTypes.push(vm::ValueType::FnRef);
+    main.regTypes.push(vm::ValueType::I64);
+    main.regTypes.push(vm::ValueType::I64);
+    main.regTypes.push(vm::ValueType::I64);
+    main.regTypes.push(vm::ValueType::I64);
+    main.body.push(vm::Instr::withImm(vm::Op::LoadFnRef, 0, 0));
+    main.body.push(vm::Instr::withImm(vm::Op::LoadConstI64, 1, 10));
+    main.body.push(vm::Instr::withImm(vm::Op::LoadConstI64, 2, 20));
+    main.body.push(vm::Instr::withImm(vm::Op::LoadConstI64, 3, 12));
+    main.body.push(vm::Instr::callRangeRef(vm::Op::CallRangeFnRef, 4, 0, 1, 3));
+    main.body.push(vm::Instr{vm::Op::Ret, 4, 0, 0, 0});
+
+    vm::Vm vm;
+    const auto result = vm.runMain(module);
+    CHECK(result.status == vm::RunStatus::Ok,
+          "indirect range call dispatches through the function table");
+    CHECK_EQ(result.exitCode, 42, "indirect range call forwards every argument");
+}
+
 void test_vm_v2_indirect_call_fn_invalid_index() {
     memory::Arena arena;
     vm::Module module(arena);
@@ -735,6 +771,35 @@ void test_vm_v2_ffi_malloc_free_reuse() {
     auto result = vm.runMain(module);
     CHECK(result.status == vm::RunStatus::Ok, "malloc/free FFI returns host offsets");
     CHECK_EQ(result.exitCode, 0, "free reuses the same heap slot");
+}
+
+void test_vm_v2_ffi_aligned_alloc_reuses_aligned_region() {
+    memory::Arena arena;
+    vm::Module module(arena);
+    module.externs.push(std::string_view("malloc"));
+    module.externs.push(std::string_view("free"));
+    module.externs.push(std::string_view("aligned_alloc"));
+
+    auto &main      = module.functions.emplace(arena);
+    main.name       = "main";
+    main.returnType = vm::ValueType::I64;
+    main.regCount   = 10;
+    main.body.push(vm::Instr::withImm(vm::Op::LoadConstI64, 0, 1));
+    main.body.push(vm::Instr::withImm(vm::Op::LoadConstI64, 1, 128));
+    main.body.push(vm::Instr::withImm(vm::Op::LoadConstI64, 2, 64));
+    main.body.push(vm::Instr::withImm(vm::Op::LoadConstI64, 3, 64));
+    main.body.push(vm::Instr::callExtern(vm::Op::CallExtern, 5, 0, 0, 0));
+    main.body.push(vm::Instr::callExtern(vm::Op::CallExtern, 6, 1, 0, 0));
+    main.body.push(vm::Instr::callExtern(vm::Op::CallExtern, 0, 6, 0, 1));
+    main.body.push(vm::Instr::callExtern(vm::Op::CallExtern, 7, 2, 3, 2));
+    main.body.push(vm::Instr::withImm(vm::Op::LoadConstI64, 8, 63));
+    main.body.push(vm::Instr::simple(vm::Op::BitAnd, 9, 7, 8));
+    main.body.push(vm::Instr{vm::Op::Ret, 9, 0, 0, 0});
+
+    vm::Vm vm;
+    const auto result = vm.runMain(module);
+    CHECK(result.status == vm::RunStatus::Ok, "aligned_alloc is available in the v2 VM");
+    CHECK_EQ(result.exitCode, 0, "aligned_alloc honors alignment when reusing a free block");
 }
 
 void test_vm_v2_ffi_realloc_preserves_data() {
@@ -1290,6 +1355,43 @@ void test_vm_v2_dynamic_slice_index_bounds() {
           "dynamic slice indexing traps when index equals runtime length");
 }
 
+void test_vm_v2_slice_index_returns_aggregate_address() {
+    memory::Arena arena;
+    vm::Module module(arena);
+    auto &main      = module.functions.emplace(arena);
+    main.name       = "main";
+    main.returnType = vm::ValueType::I64;
+    main.regCount   = 11;
+    for (std::size_t i = 0; i < main.regCount; ++i)
+        main.regTypes.push(i == 2U || i == 4U || i == 6U || i == 9U
+                               ? vm::ValueType::Ptr
+                               : vm::ValueType::I64);
+
+    main.body.push(vm::Instr::withImm(vm::Op::LoadConstI64, 0, 32));
+    main.body.push(vm::Instr::withImm(vm::Op::LoadConstI64, 1, 8));
+    main.body.push(vm::Instr::simple(vm::Op::AllocBytes, 2, 0, 1));
+    main.body.push(vm::Instr::withImm(vm::Op::LoadConstI64, 3, 546));
+    main.body.push(vm::Instr{vm::Op::FieldPtr, 4, 2, 0, 16});
+    main.body.push(vm::Instr::simple(vm::Op::StoreI64, 4, 3));
+    main.body.push(vm::Instr::withImm(vm::Op::LoadConstI64, 7, 1));
+    main.body.push(vm::Instr::withImm(vm::Op::LoadConstI64, 8, 2));
+    main.body.push(vm::Instr{vm::Op::IndexLoad, 9, 2, 7, 16, 8, 5});
+    main.body.push(vm::Instr::simple(vm::Op::LoadI64, 10, 9));
+    main.body.push(vm::Instr{vm::Op::Ret, 10, 0, 0, 0});
+
+    vm::Vm vm;
+    const auto result = vm.runMain(module);
+    CHECK(result.status == vm::RunStatus::Ok,
+          "slice indexing returns an address for an aggregate element");
+    CHECK_EQ(result.exitCode, 546,
+             "aggregate slice indexing uses the element's full stride");
+
+    main.body[6] = vm::Instr::withImm(vm::Op::LoadConstI64, 7, 2);
+    const auto outOfBounds = vm.runMain(module);
+    CHECK(outOfBounds.status == vm::RunStatus::Trap,
+          "aggregate slice address indexing still enforces the logical length");
+}
+
 void test_vm_v2_raw_index_skips_logical_bounds_only() {
     memory::Arena arena;
     vm::Module module(arena);
@@ -1505,6 +1607,18 @@ void test_vm_v2_struct_field_access() {
                 "v2 VM reads and writes struct fields", "v2 VM returns the struct field sum");
 }
 
+void test_vm_v2_empty_struct_storage() {
+    runVmSource("struct-empty",
+                "struct Empty {}\n"
+                "\n"
+                "fn main(): i32 {\n"
+                "    var empty: Empty = Empty {};\n"
+                "    return 0;\n"
+                "}\n",
+                0, "empty struct source lowers through the modern pipeline",
+                "v2 VM allocates storage for an empty struct", "v2 VM returns after empty struct use");
+}
+
 void test_vm_v2_struct_nested_field() {
     runVmSource("struct-nested",
                 "struct Inner { a: i32, b: i32 }\n"
@@ -1564,6 +1678,29 @@ void test_vm_v2_array_index_assignment() {
                 44, "array index assignment source lowers through the modern pipeline",
                 "v2 VM stores through an array element address",
                 "v2 VM returns the mutated array sum");
+}
+
+void test_vm_v2_char_slice_indexing() {
+    runVmSource("char-slice-index",
+                "fn main(): i32 {\n"
+                "    let text: []char = \"zith\";\n"
+                "    return (raw text[3]) as i32;\n"
+                "}\n",
+                104, "char slice source lowers through the modern pipeline",
+                "v2 VM indexes char slices by byte", "v2 VM reads the last string byte");
+}
+
+void test_vm_v2_aggregate_array_slice() {
+    runVmSource("aggregate-array-slice",
+                "struct Pair { value: i32 }\n"
+                "fn main(): i32 {\n"
+                "    let pairs: [2]Pair = [Pair { value: 20 }, Pair { value: 22 }];\n"
+                "    let itemsView: []Pair = pairs;\n"
+                "    return (raw itemsView[1]).value;\n"
+                "}\n",
+                22, "aggregate array slice source lowers through the modern pipeline",
+                "v2 VM copies aggregate array elements and indexes the slice",
+                "v2 VM reads the selected aggregate field");
 }
 
 void test_vm_v2_scalar_deref_assignment() {
@@ -1904,6 +2041,7 @@ void test_vm_v2() {
     test_vm_v2_invalid_opcode_shape_trap();
     test_vm_v2_direct_call_fn_index();
     test_vm_v2_indirect_call_fn_index();
+    test_vm_v2_indirect_call_fn_range();
     test_vm_v2_indirect_call_fn_invalid_index();
     test_vm_v2_direct_call_extern_index();
     test_vm_v2_indirect_call_extern_index();
@@ -1918,6 +2056,7 @@ void test_vm_v2() {
     test_vm_v2_slice_pair();
     test_vm_v2_mem_copy_bytes();
     test_vm_v2_ffi_malloc_free_reuse();
+    test_vm_v2_ffi_aligned_alloc_reuses_aligned_region();
     test_vm_v2_ffi_realloc_preserves_data();
     test_vm_v2_ffi_putchar_unknown_trap();
     test_vm_v2_ffi_memcpy_and_strlen();
@@ -1938,12 +2077,16 @@ void test_vm_v2() {
     test_vm_v2_call_range_multi_args();
     test_vm_v2_variadic_slice_call_forms();
     test_vm_v2_dynamic_slice_index_bounds();
+    test_vm_v2_slice_index_returns_aggregate_address();
     test_vm_v2_raw_index_skips_logical_bounds_only();
     test_vm_v2_struct_field_access();
+    test_vm_v2_empty_struct_storage();
     test_vm_v2_struct_nested_field();
     test_vm_v2_struct_param_and_return();
     test_vm_v2_struct_mixed_field_offsets();
     test_vm_v2_array_index_assignment();
+    test_vm_v2_char_slice_indexing();
+    test_vm_v2_aggregate_array_slice();
     test_vm_v2_scalar_deref_assignment();
     test_vm_v2_scalar_address_aliasing();
     test_vm_v2_pointer_param_mutation_visible();

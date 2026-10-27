@@ -30,7 +30,8 @@ public:
                    const session::CompilationSnapshot &snapshot, SemaPipeline &sema,
                    const symbols::SymbolTable &symbols, types::TypeIntern &types,
                    memory::StringInterner &interner,
-                   const NraFacts *nra = nullptr, cache::Store *cache_store = nullptr);
+                   const NraFacts *nra = nullptr, cache::Store *cache_store = nullptr,
+                   std::string_view test_module = {}, std::string_view test_filter = {});
 
     bool run();
     hir::HirModule takeHir() {
@@ -47,7 +48,7 @@ public:
     };
     /// Root-module test functions in declaration order.
     [[nodiscard]] const std::vector<std::string> &testNames() const noexcept {
-        return test_names_;
+        return test_report_names_;
     }
     [[nodiscard]] const std::vector<TestAssertSite> &testAssertSites() const noexcept {
         return test_assert_sites_;
@@ -131,6 +132,8 @@ private:
     std::vector<std::vector<frontend::StmtId>> pending_defers_;
     const session::ModuleArtifact *current_module_                   = nullptr;
     cache::Store *cache_store_                                       = nullptr;
+    std::string test_module_;
+    std::string test_filter_;
     const session::ModuleResolution *current_resolution_             = nullptr;
     const TypedMap *current_types_                                   = nullptr;
     const comptime::GenericInstantiationPass *current_instantiation_ = nullptr;
@@ -190,6 +193,7 @@ private:
     uint32_t current_test_assert_id_ = 0;
     /// Test functions in declaration order, discovered in `predeclareFunctions`.
     std::vector<std::string> test_names_;
+    std::vector<std::string> test_report_names_;
     /// HIR function id of each entry in `test_names_`, in the same order. The
     /// driver calls these to fill the result table.
     std::vector<hir::HirFunctionId> test_fn_ids_;

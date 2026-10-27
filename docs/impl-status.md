@@ -1,11 +1,13 @@
 # Zith Implementation Status
 
-> Last updated: 2026-10-14.
+> Last updated: 2026-10-27.
 
 This document is the single source of truth for what the compiler supports today. Status reflects
-actual compiler behaviour at baseline `a5f3716`. Each feature was verified by running
-`build/zithc check` against a standalone test file, with source inspection where a status depends
-on internal structure. Status reflects actual compiler behaviour, not spec intent.
+actual compiler behaviour, not spec intent. The complete feature inventory was last broadly
+audited at baseline `a5f3716`; entries changed on 2026-10-26 were rechecked against the compiler
+built from `7595e541`, with source inspection where status depends on internal structure. The test
+command entries changed on 2026-10-27 were checked by native and VM v2 integration runs plus the
+full CTest suite.
 
 Implementation work that is incomplete or needs review is tracked in
 [implementation-debt.md](implementation-debt.md).
@@ -56,6 +58,7 @@ Implementation work that is incomplete or needs review is tracked in
 |---|---|---|
 | `fn` | **Working** | Parameters, return type, body. The return type is written `fn f(x: T): R` or `fn f(x: T) -> R`; both spellings parse. Overloading by parameter count and types (F-33); linkage names are qualified as `<module>.<Owner>.<name>(<params>)`, except `extern fn` and `main` |
 | Call-result statements | **Working** | Non-void call/dock results used as expression statements must be consumed or explicitly discarded with `_ = expr;` (`E2026`). Void calls and value-producing uses (binding, assignment, return, argument, condition, binary operand, field/index operand, method dispatch) remain legal |
+| `#[test]`, `@assert`, `@log` | **Working** | `#[test]` marks a free `void` function with no parameters. `@assert(cond)` records the static assert id and returns from that test on false, and traps outside a test function. A macro that expands `@assert` at a test call site uses the test context; an ordinary helper function does not. `@log(msg)` writes directly to stdout via `puts`. The synthesized driver runs tests in declaration order and prints `zith-test <name> <slot>`, where the slot is `0` on success or the failing assert id. Assert locations are encoded in the ZIRL `Debug` section. `#[test]` with parameters or a non-void return reports `W2029`; a module declaring both `main` and `#[test]` reports `E2010`. `std/test` provides `assertTrue`, `assertFalse`, `assertEq`, `assertNe`, and `fail` with formatted messages on native and VM v2; rich formatting still has an HIR interpreter gap. |
 | generic parameter lists `<T, U>` | **Working (step 04/05)** | Accepted on `fn`, `struct`, `type` alias, `enum`, `union` and `trait` declarations. Generic calls and concrete type uses instantiate monomorphically, including inferred type arguments and generic methods. Cache artifacts carry an instantiation summary. `T: A + B` bounds are parsed and enforced with `E3009` (trait) or `E2024` (interface) when an argument does not satisfy a bound |
 | `state` machine | **Working** | `state` declarations, `dock State(args)` expressions, and `jump Next(args)` terminating transitions are parsed, typed, and lowered. States in one machine share a return type but may have different parameter lists; a state without a written return type is `void` and is not inferred from the body. State functions and calls use LLVM `tailcc`; transitions emit direct `musttail tailcc` calls followed by `ret`; old `flow fn`/`marker` syntax is rejected. `state(params): ret` is a value type that accepts a real matching `state` declaration and supports `dock S(args)` indirect calls |
 | Function return termination | **Working** | Non-void functions reject paths that can fall through without a value. Implicit final-value bodies, complete `if`/`else` or `when` with a default, state `jump`, and unbounded `for` loops without a direct `break` are accepted; otherwise the body reports a missing-return diagnostic |
@@ -195,7 +198,7 @@ Implementation work that is incomplete or needs review is tracked in
 | `zithc create <name>` | **Working** | |
 | `zithc clean` | **Working** | |
 | `zithc execute <file>` | **Working** | |
-| `zithc test <path>` | **Working (type-check only)** | Type-checks `.zith` files under `test_dir`. It does not execute and has no assertions. The native runner (`#[test]`, `@assert`, `@log`) is designed in [plans/test-command.md](plans/test-command.md) and [ADR-0045](adr/0045-native-test-command-and-driver.md) and is not implemented |
+| `zithc test <path>` | **Working** | Discovers `.zith` files under `test_dir`, executes selected `#[test]` functions through the native backend, VM v2, or HIR interpreter, and reports per-test results plus failing assert locations. `--filter <substring>` matches case-sensitively against `module::function`. Files without tests are skipped successfully. An empty test directory and a filter with no matches are errors. `--verbose` reports compilation and test-run progress. The runner captures child output to parse result and log frames, suppresses passing-test logs by default, shows all test logs with `--verbose`, and caps displayed log bytes at 4 KiB per test. Rich `std/test` formatting is covered in native and VM v2; the HIR interpreter currently has a gap in that path. |
 | `zithc repl` | **Stub** | |
 | `zithc deps list` | **Working** | Reads `ZithProject.toml` and lists declared dependencies |
 | `zithc deps add`, `deps remove` | **Stub** | |
@@ -213,7 +216,7 @@ Codes are grouped by pipeline stage. `E0000` remains the generic user-reported d
 | 0001-0005 | Lexical | `E0001` UnknownToken, `E0002` UnclosedString, `E0003` InvalidEscape, `E0004` InvalidIntLiteral, `E0005` UnclosedComment |
 | 1001-1010 | Import/parse | `E1001` ExpectedExpr, `E1002` ExpectedSemicolon, `E1003` UnclosedParen, `E1004` ExpectedIdent, `E1005` InvalidImportDepth, `E1006` ImportError, `E1007` TopLevelLetNotAllowed, `W1008` DeprecatedSyntax (`while` -> `for (cond)`; `else if` -> `else (cond)`; `~>` in `when` arms), `E1009` CircularImport, `E1010` ParseDepthExceeded |
 | 2001-2010 | Semantic | `E2001` UndefinedIdent, `E2002` DuplicateDecl, `E2003` WrongArity, `E2004` UnusedDecl, `E2005` NotNamespace, `E2006` NoMember, `E2007` NoMatchingFn, `E2008` AmbiguousCall, `E2009` NotImplemented, `E2010` UnsupportedSyntax |
-| 2021-2025 | Frontend/interface | Trait requirement/signature checks (`E2021`/`E2022`), `E2023` NotATrait, `E2024` InterfaceNotSatisfied, `E2025` explicit `implement` for an interface, `E2027` DuplicateImplementation |
+| 2021-2029 | Frontend/interface | Trait requirement/signature checks (`E2021`/`E2022`), `E2023` NotATrait, `E2024` InterfaceNotSatisfied, `E2025` InterfaceMethodNotAllowed, `E2026` DiscardedResult, `E2027` DuplicateImplementation, `W2028` UnknownAttribute, `W2029` AttributeNotApplicable (`#[test]` with parameters or a non-void return) |
 | 3001-3009 | Types | `E3001` TypeMismatch, `E3002` CannotInfer, `E3003` InvalidCast, `E3004` CyclicType, `E3005` NullDerefUnproven, `E3006` CoercionFailure, `E3007` WidthMismatch, `E3008` OptionalViolation, `E3009` ConstraintNotSatisfied |
 | 4001-4008 | SRA / ownership | `E4001` UseAfterMove (logical receiver or `&x` move in sema), `E4002` BorrowConflict, `E4003` DoubleBorrow, `E4004` WriteThroughView, `E4005` OwnershipCoercionRequired, `E4007` InvalidCallOwnership, `E4008` PointerEscapesScope — call annotations, borrow conflicts and views are checked in sema; direct pointer-local rebinds clear the old alias state; `E4004` remains emitted for views |
 | 5001-5002 | Lowering | `E5001` InvalidIR, `E5002` Unreachable |
@@ -222,9 +225,14 @@ Codes are grouped by pipeline stage. `E0000` remains the generic user-reported d
 ---
 
 ## Verification
-All statuses above were verified against the binary built from commit `a5f3716`, by running
-`zithc check` on standalone files per feature and by inspecting the source where a status depends
-on internal structure (pipeline boundaries, linkage naming, diagnostic ranges).
+The full inventory retains the evidence from the previous audit at `a5f3716`. On 2026-10-26, the
+native test compiler surface was rechecked against the build from `7595e541`: `zithc check`
+accepted a valid `#[test]`, `W2029` was emitted for parameterized and non-void tests, `E2010` was
+emitted when a module combined `main` with `#[test]`, and `@assert(false)` outside a test trapped.
+On 2026-10-27, the local runner build was checked through native, interpreter, and VM v2 execution,
+including filtered macro assertions, failing assertions with source locations, helper-function
+traps, compilation errors, testless files, and empty test directories. The CLI tests also verify
+the filter help/completion entries and verbose progress output.
 
 ---
 
@@ -234,7 +242,7 @@ Recorded deliberately. Each item is a follow-up, not an unknown.
 
 | Item | Notes |
 |---|---|
-| Non-literal narrowing conversions need runtime checks | Compile-time `as` checks cover literal, `-` literal and integer-const operands; variable operands and numeric-literal adaptation remain unchecked |
+| Non-literal narrowing conversions need runtime checks | Compile-time `as` checks cover literal, `-` literal and integer-const operands; variable operands and implicit numeric-literal adaptation (without `as`) remain unchecked |
 | `?*T` pointer narrowing is local-only | Non-null proof currently follows a nullable-pointer local through `is null`/`not (is null)` branches and early-return checks; derived field/index/arrow expressions and cross-function proofs are not yet tracked |
 | Opaque cache divergence diagnostics | Divergence identifies the canonical type id and recovery path, but does not identify which field changed |
 

@@ -82,9 +82,12 @@ class CompilationSession {
     std::string mOutputBuffer;
     std::string mChildOutput;
     std::string mExecutablePath;
+    std::string mTestModuleName;
+    std::vector<std::string> mTestNames;
     std::vector<std::string> mExtraObjectPaths;
     bool mBufferedOutput           = false;
     bool mAlwaysEmitObject         = false;
+    bool mTestOutputCapture        = false;
     bool mPreparedNativeLinkInputs = false;
     std::string mContentOverride;
     std::shared_ptr<FrontendContext> mFrontendContext;
@@ -184,6 +187,19 @@ public:
     }
     void setAlwaysEmitObject(bool v) {
         mAlwaysEmitObject = v;
+    }
+    void setTestOutputCapture(bool value) {
+        mTestOutputCapture = value;
+    }
+    void setTestModuleName(std::string name) {
+        mTestModuleName = std::move(name);
+    }
+    [[nodiscard]] const std::vector<std::string> &testNames() const noexcept {
+        return mTestNames;
+    }
+    [[nodiscard]] const std::vector<sema::modern::HirLowerModern::TestAssertSite> &
+    testAssertSites() const noexcept {
+        return mTestAssertSites;
     }
     std::string flushOutput();
     // Moves out the captured stdout+stderr of the last executed child program.
