@@ -81,7 +81,7 @@ void PerModuleSema::inferExpressionTypesForDecls() {
     // in the loop body must be typed by the iterable before a body read is
     // visited as an independent expression.
     for (const auto &expr : snapshot.expressions()) {
-        if (snapshot.isMacroTemplateExpr(expr.id))
+        if (snapshot.isMacroTemplateExpr(expr.id) || expr.isAttributeValue)
             continue;
         if (expr.kind == frontend::ExprKind::ForIn) {
             setExprType(expr.id, inferForIn(expr.id));
@@ -92,7 +92,7 @@ void PerModuleSema::inferExpressionTypesForDecls() {
     // own module context, so a detached clone re-validated out of order does
     // not carry this module's state-machine grouping.
     for (const auto &expr : snapshot.expressions()) {
-        if (snapshot.isMacroTemplateExpr(expr.id))
+        if (snapshot.isMacroTemplateExpr(expr.id) || expr.isAttributeValue)
             continue;
         if (!typeOfExpr(expr.id))
             (void)inferExpr(expr.id);

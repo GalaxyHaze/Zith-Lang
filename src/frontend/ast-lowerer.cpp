@@ -56,8 +56,7 @@ namespace {
         "when",    "match",  "return", "break",   "continue",  "jump",     "while",     "marker",
         "spawn",   "await",  "with",   "catch",   "must",      "throw",    "fail",      "drop",
         "require", "is",     "prefix", "suffix",  "infix",     "nop",      "and",       "or",
-        "not",     "xor",    "tag",    "defer",   "opaque",    "optional",
-        "do",
+        "not",     "xor",    "tag",    "defer",   "opaque",    "optional", "do",
     };
     return std::any_of(std::begin(keywords), std::end(keywords),
                        [&](const std::string_view keyword) { return word == keyword; });
@@ -189,9 +188,8 @@ void lex(FrontendSnapshot &snapshot) {
         if (isOperator(source[start])) {
             static constexpr std::string_view kThreeChar[] = {"<<=", ">>="};
             static constexpr std::string_view kTwoChar[]   = {
-                "==", "!=", "<=", ">=", "->", "~>", "<<", ">>", "+=", "-=", "*=",
-                "/=", "%=", "&=", "|=", "^=", "&.", "|.", "^.", "&&", "||", "??",
-                "|>", "++", "--"};
+                "==", "!=", "<=", ">=", "->", "~>", "<<", ">>", "+=", "-=", "*=", "/=", "%=",
+                "&=", "|=", "^=", "&.", "|.", "^.", "&&", "||", "??", "|>", "++", "--"};
             bool munched = false;
             if (start + 3U <= source.size()) {
                 const std::string_view triple = source.substr(start, 3);
@@ -513,9 +511,8 @@ std::vector<Attribute> AstLowerer::parseAttributes() {
         const uint32_t hash_start = index_;
         ++index_; // consume '#'
         if (!punctuation(index_, '[')) {
-            snapshot_.diagnostics_.push_back(
-                {tokenSpan(hash_start), "expected '[' after '#'", false,
-                 diagnostics::err::ExpectedExpr});
+            snapshot_.diagnostics_.push_back({tokenSpan(hash_start), "expected '[' after '#'",
+                                              false, diagnostics::err::ExpectedExpr});
             return result;
         }
         ++index_; // consume '['
@@ -527,25 +524,40 @@ std::vector<Attribute> AstLowerer::parseAttributes() {
             const auto token_kind = snapshot_.tokens_[index_].kind;
             if (token_kind == TokenKind::Identifier ||
                 (token_kind == TokenKind::Keyword && !isKeywordToken("mod"))) {
+                const uint32_t attribute_start = index_;
                 Attribute attribute;
                 attribute.kind = AttributeKind::Unknown;
                 attribute.text = std::string(text(index_));
-                attribute.span = tokenSpan(index_);
-                result.push_back(std::move(attribute));
                 ++index_;
+                if (punctuation(index_, '(')) {
+                    ++index_;
+                    const auto expression_start = snapshot_.expressions_.size();
+                    attribute.argument          = parseExpression();
+                    for (size_t expression_index = expression_start;
+                         expression_index < snapshot_.expressions_.size(); ++expression_index)
+                        snapshot_.expressions_[expression_index].isAttributeValue = true;
+                    if (punctuation(index_, ')')) {
+                        ++index_;
+                    } else {
+                        snapshot_.diagnostics_.push_back({range(attribute_start, index_),
+                                                          "expected ')' after attribute argument",
+                                                          false, diagnostics::err::ExpectedExpr});
+                    }
+                }
+                attribute.span = range(attribute_start, index_);
+                result.push_back(std::move(attribute));
                 continue;
             }
-            snapshot_.diagnostics_.push_back(
-                {tokenSpan(index_), "expected attribute name", false,
-                 diagnostics::err::ExpectedExpr});
+            snapshot_.diagnostics_.push_back({tokenSpan(index_), "expected attribute name", false,
+                                              diagnostics::err::ExpectedExpr});
             ++index_;
         }
         if (index_ < token_count_ && punctuation(index_, ']'))
             ++index_;
         else
-            snapshot_.diagnostics_.push_back(
-                {tokenSpan(hash_start), "expected ']' after attribute list", false,
-                 diagnostics::err::ExpectedExpr});
+            snapshot_.diagnostics_.push_back({tokenSpan(hash_start),
+                                              "expected ']' after attribute list", false,
+                                              diagnostics::err::ExpectedExpr});
     }
     return result;
 }
@@ -556,7 +568,7 @@ void AstLowerer::run() {
     Visibility visibility = Visibility::Private;
     std::vector<Attribute> pending_attributes;
     // Set by a standalone `extern` prefix for a module-scope global binding.
-    bool is_extern = false;
+    bool is_extern               = false;
     uint32_t extern_prefix_start = token_count_;
     // Start index of the current run of unexpected top-level tokens; the run is
     // coalesced into a single diagnostic.  token_count_ means "no active run".
@@ -577,7 +589,7 @@ void AstLowerer::run() {
             pending_attributes = parseAttributes();
         if (!pending_attributes.empty())
             flushBadRun();
-        const auto word      = text(index_);
+        const auto word = text(index_);
 
         if (word == "pub") {
             flushBadRun();
@@ -625,8 +637,8 @@ void AstLowerer::run() {
                              function_kind, {}, false, false, {}, {}, pending_attributes);
             declaration_is_nominal_ = false;
             pending_attributes.clear();
-            visibility              = Visibility::Private;
-            is_extern               = false;
+            visibility = Visibility::Private;
+            is_extern  = false;
             continue;
         }
 
@@ -636,8 +648,8 @@ void AstLowerer::run() {
                              FunctionKind::State, {}, false, false, {}, {}, pending_attributes);
             declaration_is_nominal_ = false;
             pending_attributes.clear();
-            visibility              = Visibility::Private;
-            is_extern               = false;
+            visibility = Visibility::Private;
+            is_extern  = false;
             continue;
         }
 
@@ -649,11 +661,10 @@ void AstLowerer::run() {
                  diagnostics::err::UnsupportedSyntax});
             ++index_;
             lowerDeclaration(start, DeclKind::Function, visibility, {}, {}, is_extern,
-                             FunctionKind::Standard, {}, false, false, {}, {},
-                             pending_attributes);
+                             FunctionKind::Standard, {}, false, false, {}, {}, pending_attributes);
             visibility = Visibility::Private;
             pending_attributes.clear();
-            is_extern  = false;
+            is_extern = false;
             continue;
         }
 
@@ -671,8 +682,8 @@ void AstLowerer::run() {
                              FunctionKind::Standard, {}, false, false, {}, {}, pending_attributes);
             declaration_is_nominal_ = false;
             pending_attributes.clear();
-            visibility              = Visibility::Private;
-            is_extern               = false;
+            visibility = Visibility::Private;
+            is_extern  = false;
             continue;
         }
 
@@ -696,8 +707,8 @@ void AstLowerer::run() {
                              {}, false, false, {}, {}, pending_attributes);
             declaration_is_nominal_ = false;
             pending_attributes.clear();
-            visibility              = Visibility::Private;
-            is_extern               = false;
+            visibility = Visibility::Private;
+            is_extern  = false;
             continue;
         }
 
@@ -734,7 +745,7 @@ void AstLowerer::run() {
                              FunctionKind::Standard, {}, false, true, {}, {}, pending_attributes);
             visibility = Visibility::Private;
             pending_attributes.clear();
-            is_extern  = false;
+            is_extern = false;
             continue;
         }
 
@@ -749,7 +760,11 @@ void AstLowerer::run() {
 
         if (word == "extern" || word == "use" || word == "unsafe" || word == ";") {
             flushBadRun();
-            if (!pending_attributes.empty()) {
+            const bool extern_global_prefix =
+                word == "extern" && !functionKindPrefix() && index_ + 1U < token_count_ &&
+                (text(index_ + 1U) == "var" || text(index_ + 1U) == "const" ||
+                 text(index_ + 1U) == "let");
+            if (!pending_attributes.empty() && !extern_global_prefix) {
                 snapshot_.diagnostics_.push_back(
                     {pending_attributes.front().span,
                      "attributes are not applicable to this top-level construct", true,
@@ -757,7 +772,7 @@ void AstLowerer::run() {
                 pending_attributes.clear();
             }
             if (word == "extern" && !functionKindPrefix()) {
-                is_extern = true;
+                is_extern           = true;
                 extern_prefix_start = start;
             }
             ++index_;

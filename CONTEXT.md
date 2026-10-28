@@ -48,6 +48,11 @@ _Avoid_: pass-by-AST, quoted expression, raw expression, unevaluated expression
 A named call-site attribute written in the `|name: value|` position and made visible through the macro body as `attributes.name`.
 _Avoid_: annotation, tag attribute, macro attribute list
 
+**Zith-- explicit alignment**:
+An explicit request to strengthen a struct type's alignment or one binding's
+storage alignment beyond its natural alignment.
+_Avoid_: `@alignas`
+
 **Module**:
 A `.zith` source unit that owns a set of public and module-local symbols and can be imported by other units.
 _Avoid_: File, script, package

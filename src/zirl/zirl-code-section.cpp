@@ -22,6 +22,7 @@ void writeCompactExpr(const cache::CompactExpr &e, ByteWriter &w) {
     w.writeU32(e.variadic_slice_param);
     w.writeU8(e.is_variadic_slice ? 1U : 0U);
     w.writeU8(e.auto_collect_tail ? 1U : 0U);
+    w.writeU32(e.alignmentBytes);
     w.writeI64(e.int_val);
     w.writeF64(e.flt_val);
     w.writeU32(static_cast<uint32_t>(e.args.size()));
@@ -51,7 +52,8 @@ bool readCompactExpr(ByteReader &r, cache::CompactExpr &out) {
         !r.readU32(out.resolved_function_name_id) ||
         !r.readU32(out.resolved_function_signature_type_id) ||
         !r.readU32(out.variadic_slice_param) || !r.readU8(is_variadic_slice) ||
-        !r.readU8(auto_collect_tail) || is_variadic_slice > 1U || auto_collect_tail > 1U)
+        !r.readU8(auto_collect_tail) || is_variadic_slice > 1U || auto_collect_tail > 1U ||
+        !r.readU32(out.alignmentBytes))
         return false;
     out.is_variadic_slice = is_variadic_slice != 0U;
     out.auto_collect_tail = auto_collect_tail != 0U;
@@ -135,6 +137,7 @@ bool encodeCode(const cache::Artifact &artifact, ByteWriter &w) {
         w.writeU32(global.name_id);
         w.writeU32(global.type_id);
         w.writeU32(global.init_expr);
+        w.writeU32(global.alignmentBytes);
     }
     w.writeU32(static_cast<uint32_t>(artifact.vtables.size()));
     for (const auto &vtable : artifact.vtables) {
@@ -237,7 +240,7 @@ bool decodeCode(ByteReader &r, cache::Artifact &out) {
     out.globals.resize(n);
     for (auto &global : out.globals)
         if (!r.readU32(global.name_id) || !r.readU32(global.type_id) ||
-            !r.readU32(global.init_expr))
+            !r.readU32(global.init_expr) || !r.readU32(global.alignmentBytes))
             return false;
     if (!r.readU32(n))
         return false;

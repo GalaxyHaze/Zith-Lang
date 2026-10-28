@@ -119,7 +119,8 @@ TypeId TypeTable::internStateFunction(memory::DynArray<TypeId> &params, TypeId r
 TypeId TypeTable::internStruct(std::string_view name, memory::DynArray<TypeId> &fields,
                                memory::DynArray<std::string_view> *field_names,
                                memory::DynArray<FieldMeta> *field_meta,
-                               const std::vector<TypeId> *struct_args) {
+                               const std::vector<TypeId> *struct_args,
+                               const uint32_t explicit_alignment) {
     auto &entry         = pushEntry(EntryKind::Struct);
     entry.reported_kind = TypeKind::Struct;
     entry.name_view     = persistString(name);
@@ -142,7 +143,8 @@ TypeId TypeTable::internStruct(std::string_view name, memory::DynArray<TypeId> &
             args_storage.push(arg);
     entry.struct_args = &args_storage;
     entry.struct_ty   = arena_->make<StructType>(
-        StructType{entry.name_view, storage, name_storage, meta_storage, args_storage});
+        StructType{entry.name_view, storage, name_storage, meta_storage, args_storage,
+                   explicit_alignment});
     entry.storage      = &storage;
     entry.name_storage = &name_storage;
     entry.meta_storage = &meta_storage;

@@ -40,6 +40,9 @@ public:
     uint64_t alignOf(types::TypeId id) const;
     uint64_t fieldOffset(types::TypeId struct_type, size_t field_index) const;
     uint64_t fieldOffset(types::TypeId struct_type, std::string_view field_name) const;
+    bool supportsRequestedAlignment(uint32_t alignment_bytes,
+                                    uint64_t natural_alignment = 1U) const;
+    bool supportsExplicitAlignment(types::TypeId struct_type) const;
     bool hasLayout() const noexcept {
         return layout_ != nullptr;
     }

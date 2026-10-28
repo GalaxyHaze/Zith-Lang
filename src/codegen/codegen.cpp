@@ -208,6 +208,46 @@ void CodeGen::emit(hir::HirModule &hirModule, std::string_view moduleName) {
                                              *ctx_);
     ensureTargetInfo();
 
+    CodeGenType typeGen(*ctx_, types_, &module_->getDataLayout());
+    for (types::TypeId type = 0U; type < types_.count(); ++type) {
+        if (types_.kindOf(type) != types::TypeKind::Struct ||
+            typeGen.supportsExplicitAlignment(type))
+            continue;
+        const auto &def = types_.getStructDef(type);
+        const auto name = interner_.lookup(def.name);
+        invalidIR_      = true;
+        llvmError("target '" + effectiveTriple() +
+                  "' cannot represent requested alignment " +
+                  std::to_string(def.explicitAlignmentBytes) + " for struct '" +
+                  std::string(name.data(), name.size()) + "'");
+        return;
+    }
+
+    for (size_t index = 0; index < hirModule.getGlobalConstCount(); ++index) {
+        const auto &global = hirModule.getGlobalConst(index);
+        if (typeGen.supportsRequestedAlignment(global.alignmentBytes,
+                                               typeGen.alignOf(global.type)))
+            continue;
+        invalidIR_ = true;
+        llvmError("target '" + effectiveTriple() +
+                  "' cannot represent requested alignment " +
+                  std::to_string(global.alignmentBytes) + " for global storage");
+        return;
+    }
+
+    for (hir::HirExprId id = 0; id < hirModule.exprCount(); ++id) {
+        const auto *alloca = std::get_if<hir::HirSlotAlloca>(&hirModule.getExpr(id));
+        if (alloca == nullptr ||
+            typeGen.supportsRequestedAlignment(alloca->alignmentBytes,
+                                               typeGen.alignOf(alloca->type)))
+            continue;
+        invalidIR_ = true;
+        llvmError("target '" + effectiveTriple() +
+                  "' cannot represent requested alignment " +
+                  std::to_string(alloca->alignmentBytes) + " for local storage");
+        return;
+    }
+
     const bool has_states = [&] {
         for (size_t index = 0; index < hirModule.getFnCount(); ++index)
             if (hirModule.getFn(index).isState)
@@ -267,6 +307,12 @@ void CodeGen::emitConstGlobals(hir::HirModule &hirModule) {
         auto *variable =
             new llvm::GlobalVariable(*module_, llvmType, true, llvm::GlobalValue::InternalLinkage,
                                      nullptr, llvm::StringRef(name.data(), name.size()));
+        if (global.alignmentBytes != 0U) {
+            auto alignment = typeGen.alignOf(global.type);
+            if (alignment < global.alignmentBytes)
+                alignment = global.alignmentBytes;
+            variable->setAlignment(llvm::Align(alignment));
+        }
         llvmGlobals.push_back(variable);
     }
 

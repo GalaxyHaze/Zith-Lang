@@ -385,9 +385,11 @@ private:
     hir::HirExprId lowerMakeNone(types::TypeId target);
     sema::modern::TypeId semaTypeOfExpr(frontend::ExprId id);
     bool lowerStatement(frontend::StmtId id, hir::HirExprId &last_value);
+    uint32_t requestedBindingAlignment(frontend::StmtId id);
 
     hir::HirExprId addExpr(hir::HirExpr expr);
-    hir::HirExprId emitSlotAlloca(hir::HirSlotId slot, types::TypeId type);
+    hir::HirExprId emitSlotAlloca(hir::HirSlotId slot, types::TypeId type,
+                                  uint32_t alignmentBytes = 0U);
     hir::HirExprId emitSlotStore(hir::HirSlotId slot, hir::HirExprId value);
     hir::HirExprId emitSlotLoad(hir::HirSlotId slot, types::TypeId type);
     size_t newBlock();

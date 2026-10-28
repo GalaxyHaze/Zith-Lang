@@ -1,0 +1,36 @@
+#!/bin/sh
+set -eu
+
+usage() {
+    printf '%s\n' "usage: ttyd-session-command tab-<32-hex-digits>|legacy-<id>|legacy-remote" >&2
+    exit 64
+}
+
+[ "$#" -eq 1 ] || usage
+identifier=$1
+
+case "$identifier" in
+    tab-*)
+        token=${identifier#tab-}
+        [ "${#token}" -eq 32 ] || usage
+        case "$token" in
+            *[!0123456789abcdef]*) usage ;;
+        esac
+        session="web-$token"
+        ;;
+    legacy-remote)
+        session=remote
+        ;;
+    legacy-*)
+        session=${identifier#legacy-}
+        case "$session" in
+            ''|*[!0123456789]*|0*) usage ;;
+        esac
+        [ "${#session}" -le 6 ] || usage
+        ;;
+    *)
+        usage
+        ;;
+esac
+
+exec tmux new-session -A -s "$session"

@@ -23,6 +23,9 @@ bool HirVerifier::verify() {
         valid = false;
         diags_.reportError(diagnostics::err::InvalidIR, std::move(message), {});
     };
+    const auto validAlignment = [](const std::uint32_t alignment) {
+        return alignment == 0U || (alignment & (alignment - 1U)) == 0U;
+    };
     const auto checkExpr = [&](const HirExprId id, const char *role,
                                const bool allow_invalid = false) {
         if (id == kInvalidHirExpr && allow_invalid)
@@ -170,6 +173,8 @@ bool HirVerifier::verify() {
                 checkType(node.type, "enum value");
             } else if constexpr (std::is_same_v<Node, HirSlotAlloca>) {
                 checkType(node.type, "slot allocation");
+                if (!validAlignment(node.alignmentBytes))
+                    report("HIR slot allocation has an invalid alignment");
             } else if constexpr (std::is_same_v<Node, HirSlotStore>) {
                 checkExpr(node.value, "slot store value");
             } else if constexpr (std::is_same_v<Node, HirSlotLoad> ||
@@ -747,6 +752,8 @@ bool HirVerifier::verify() {
         const auto &global = module_.getGlobalConst(global_index);
         checkType(global.type, "global constant");
         checkExpr(global.init, "global constant initializer");
+        if (!validAlignment(global.alignmentBytes))
+            report("HIR global constant has an invalid alignment");
     }
     for (size_t vtable_index = 0; vtable_index < module_.getVTableCount(); ++vtable_index) {
         const auto &vtable = module_.getVTable(vtable_index);

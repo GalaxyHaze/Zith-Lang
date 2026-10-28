@@ -571,6 +571,19 @@ static void test_canonical_field_order_is_shared_and_detected() {
     CHECK(canonical_changed != canonical_first,
           "a changed canonical field order produces a different canonical id");
 
+    memory::Arena aligned_arena;
+    memory::StringInterner aligned_interner(aligned_arena);
+    types::TypeIntern aligned_types(aligned_arena, aligned_interner);
+    const auto aligned_i8 = aligned_types.internInt(types::IntWidth::I8);
+    const auto aligned    = aligned_types.defineStruct("Ordered");
+    aligned_types.setDefiningModule(aligned, "mod.alpha");
+    aligned_types.setExplicitAlignment(aligned, 64U);
+    aligned_types.addField(aligned, "big", aligned_types.internInt(types::IntWidth::I64));
+    aligned_types.addField(aligned, "small", aligned_i8);
+    aligned_types.addField(aligned, "mid", aligned_types.internInt(types::IntWidth::I32));
+    CHECK(types::canonicalTypeId(aligned_types, aligned, resolve_namespace) != canonical_first,
+          "a different explicit alignment produces a different canonical id");
+
     // Simulate the persisted registry still holding the old canonical id while
     // lowering now emits the changed one. The divergence must be detected and
     // must name the exact canonical id.
@@ -733,8 +746,8 @@ static void test_format_version_bump() {
     (void)Writer::write(art, writer);
 
     std::string bytes(reinterpret_cast<const char *>(writer.ptr()), writer.size());
-    CHECK_EQ(kContainerVersion, 21u, "container version rejects legacy layouts");
-    CHECK_EQ(kHirSchemaVersion, 2u, "HIR schema has its own independent version");
+    CHECK_EQ(kContainerVersion, 22u, "container version rejects legacy layouts");
+    CHECK_EQ(kHirSchemaVersion, 3u, "HIR schema has its own independent version");
 
     // Simulate an old reader by treating the container version as v3.
     bytes[4]        = 3;
@@ -910,8 +923,9 @@ static void test_artifact_builder() {
 
     {
         hir::HirSlotAlloca alloca;
-        alloca.slot = 0;
-        alloca.type = i32;
+        alloca.slot          = 0;
+        alloca.type          = i32;
+        alloca.alignmentBytes = 64;
         hir.addExpr(alloca);
     }
     {
@@ -1101,6 +1115,7 @@ static void test_artifact_builder() {
     // survive the artifact writer so hydration does not depend on exported decl
     // surface or rederive discriminants from variant position.
     const auto private_struct = types.defineStruct("_CachePrivate");
+    types.setExplicitAlignment(private_struct, 64U);
     types.addField(private_struct, "n", i32);
     const auto private_enum = types.defineEnum("_CacheEnum", i32);
     types.addEnumVariant(private_enum, "First", -3);
@@ -1108,6 +1123,12 @@ static void test_artifact_builder() {
     const auto private_union = types.defineUnion("_CacheUnion", false);
     types.addUnionMember(private_union, i32);
     types.addUnionMember(private_union, f64);
+
+    auto &aligned_global = hir.addGlobalConst();
+    aligned_global.name = interner.intern("aligned_global");
+    aligned_global.type = i32;
+    aligned_global.init = int_id;
+    aligned_global.alignmentBytes = 64;
 
     memory::DynArray<types::TypeId> pack_members(arena);
     pack_members.push(i32);
@@ -1218,10 +1239,30 @@ static void test_artifact_builder() {
                       static_cast<uint32_t>(std::distance(art.decls.begin(), method_decl)),
               "method refs use artifact decl indices");
     CHECK_EQ(art.attrs_slots.size(), 1u, "builder serializes slot attrs");
+    const auto aligned_alloca =
+        std::find_if(art.exprs.begin(), art.exprs.end(), [](const cache::CompactExpr &expr) {
+            return expr.kind == cache::CompactExprKind::SlotAlloca;
+        });
+    CHECK(aligned_alloca != art.exprs.end(), "builder serializes a slot alloca");
+    if (aligned_alloca != art.exprs.end())
+        CHECK_EQ(aligned_alloca->alignmentBytes, 64u, "builder serializes slot alignment");
     CHECK_EQ(art.attrs_calls.size(), 1u, "builder serializes call attrs");
     CHECK_EQ(art.attrs_fns.size(), 1u, "builder serializes fn attrs");
     CHECK_EQ(art.attrs_safety_proofs.size(), 1u, "builder serializes safety proof attrs");
     CHECK_EQ(art.struct_defs.size(), 2u, "builder serializes private struct defs");
+    const auto aligned_struct =
+        std::find_if(art.struct_defs.begin(), art.struct_defs.end(),
+                     [](const CompactStructDef &definition) {
+                         return definition.name == "_CachePrivate";
+                     });
+    CHECK(aligned_struct != art.struct_defs.end(),
+          "builder serializes the explicitly aligned private struct");
+    if (aligned_struct != art.struct_defs.end())
+        CHECK_EQ(aligned_struct->explicitAlignmentBytes, 64u,
+                 "builder preserves explicit struct alignment");
+    CHECK_EQ(art.globals.size(), 1u, "builder serializes module globals");
+    if (art.globals.size() == 1u)
+        CHECK_EQ(art.globals[0].alignmentBytes, 64u, "builder serializes global alignment");
     CHECK_EQ(art.enum_defs.size(), 1u, "builder serializes private enum defs");
     CHECK_EQ(art.enum_defs[0].variants.size(), 2u, "enum variants are serialized");
     CHECK_EQ(art.enum_defs[0].variants[0].discriminant, -3, "enum discriminants are not reindexed");
@@ -1449,6 +1490,16 @@ static void test_artifact_builder() {
           "ZIRL round-trip preserves definition and declaration classifications");
     CHECK_EQ(round->exprs.size(), art.exprs.size(), "round-trip preserves expression pool size");
     CHECK_EQ(round->attrs_slots.size(), art.attrs_slots.size(), "round-trip preserves slot attrs");
+    const auto round_aligned_alloca =
+        std::find_if(round->exprs.begin(), round->exprs.end(),
+                     [](const cache::CompactExpr &expr) {
+                         return expr.kind == cache::CompactExprKind::SlotAlloca;
+                     });
+    CHECK(round_aligned_alloca != round->exprs.end(),
+          "round-trip preserves the slot alloca");
+    if (round_aligned_alloca != round->exprs.end())
+        CHECK_EQ(round_aligned_alloca->alignmentBytes, 64u,
+                 "round-trip preserves slot alignment");
     CHECK_EQ(round->attrs_calls.size(), art.attrs_calls.size(), "round-trip preserves call attrs");
     CHECK_EQ(round->attrs_fns.size(), art.attrs_fns.size(), "round-trip preserves fn attrs");
     CHECK_EQ(round->attrs_safety_proofs.size(), art.attrs_safety_proofs.size(),
@@ -1463,6 +1514,18 @@ static void test_artifact_builder() {
               "round-trip preserves the proof kind and exact operands");
     }
     CHECK_EQ(round->struct_defs.size(), art.struct_defs.size(), "round-trip preserves struct defs");
+    const auto round_aligned_struct =
+        std::find_if(round->struct_defs.begin(), round->struct_defs.end(),
+                     [](const CompactStructDef &definition) {
+                         return definition.name == "_CachePrivate";
+                     });
+    if (round_aligned_struct != round->struct_defs.end())
+        CHECK_EQ(round_aligned_struct->explicitAlignmentBytes, 64u,
+                 "round-trip preserves explicit struct alignment");
+    CHECK_EQ(round->globals.size(), art.globals.size(), "round-trip preserves globals");
+    if (round->globals.size() == 1u)
+        CHECK_EQ(round->globals[0].alignmentBytes, 64u,
+                 "round-trip preserves global alignment");
     CHECK_EQ(round->enum_defs.size(), art.enum_defs.size(), "round-trip preserves enum defs");
     CHECK_EQ(round->enum_defs[0].variants[0].discriminant, -3,
              "round-trip preserves explicit enum discriminants");

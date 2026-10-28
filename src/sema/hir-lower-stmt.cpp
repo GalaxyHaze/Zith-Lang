@@ -7,6 +7,26 @@
 namespace zith::sema {
 namespace modern {
 
+uint32_t HirLowerModern::requestedBindingAlignment(const frontend::StmtId id) {
+    if (!id || current_module_ == nullptr ||
+        id.value > current_module_->frontend->statements().size())
+        return 0U;
+    const auto &statement = current_module_->frontend->statements()[id.value - 1U];
+    if (statement.kind != frontend::StmtKind::Binding)
+        return 0U;
+    auto *module_sema = sema_.findModuleSema(current_module_->key);
+    if (module_sema == nullptr)
+        return 0U;
+    for (const auto &attribute : statement.binding.attributes) {
+        if (attribute.kind != frontend::AttributeKind::AlignAs)
+            continue;
+        uint32_t alignment = 0;
+        if (module_sema->getRequestedAlignment(attribute.argument, alignment))
+            return alignment;
+    }
+    return 0U;
+}
+
 bool HirLowerModern::lowerStatement(frontend::StmtId id, hir::HirExprId &last_value) {
     if (!id || current_module_ == nullptr ||
         id.value > current_module_->frontend->statements().size())
@@ -66,9 +86,10 @@ bool HirLowerModern::lowerStatement(frontend::StmtId id, hir::HirExprId &last_va
             last_value = hir::kInvalidHirExpr;
             return true;
         }
-        const auto slot   = localSlot(statement.binding.id);
-        const auto type   = typeOfLocal(statement.binding.id);
-        const auto alloca = emitSlotAlloca(slot, type);
+        const auto slot      = localSlot(statement.binding.id);
+        const auto type      = typeOfLocal(statement.binding.id);
+        const auto alignment = requestedBindingAlignment(id);
+        const auto alloca    = emitSlotAlloca(slot, type, alignment);
         if (defer_body_sink_ != nullptr)
             defer_body_sink_->push(alloca);
         else

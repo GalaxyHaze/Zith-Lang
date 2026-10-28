@@ -74,6 +74,7 @@ struct CompactStructDef {
     bool foreignAbiIsSingleI64 = false;
     uint64_t foreignSizeBytes  = 0;
     uint64_t foreignAlignBytes = 0;
+    uint32_t explicitAlignmentBytes = 0;
 };
 
 struct CompactEnumVariant {
@@ -276,6 +277,7 @@ struct CompactExpr {
     uint32_t variadic_slice_param = ~uint32_t{0};
     bool is_variadic_slice = false;
     bool auto_collect_tail = false;
+    uint32_t alignmentBytes = 0;
     uint8_t op           = 0; // binary/unary op
     uint8_t flags        = 0; // is_array / literal sub-tag
     CompactSafetyMode safety = CompactSafetyMode::RequiredCheck;
@@ -316,9 +318,10 @@ struct CompactFunction {
 };
 
 struct CompactGlobalConst {
-    uint32_t name_id   = 0;
-    uint32_t type_id   = 0;
-    uint32_t init_expr = ~uint32_t{0};
+    uint32_t name_id        = 0;
+    uint32_t type_id        = 0;
+    uint32_t init_expr      = ~uint32_t{0};
+    uint32_t alignmentBytes = 0;
 };
 
 struct CompactVTable {

@@ -94,9 +94,7 @@ void AstLowerer::parseImportPath(ImportDecl &import) {
             snapshot_.tokens_[index_ + 1U].kind == TokenKind::Operator &&
             text(index_ + 1U) == "-" &&
             snapshot_.tokens_[index_].span.end == snapshot_.tokens_[index_ + 1U].span.start;
-        const auto is_path_segment =
-            kind == TokenKind::Identifier ||
-            keyword_is_kebab_part;
+        const auto is_path_segment = kind == TokenKind::Identifier || keyword_is_kebab_part;
         if (is_path_segment) {
             const bool kebab_continuation =
                 !import.path.empty() && index_ >= 1U &&
@@ -122,8 +120,8 @@ void AstLowerer::parseImportPath(ImportDecl &import) {
         // A hyphen binds to the preceding and following identifier segments in
         // an import path (kebab-case module names), but only when it is
         // adjacent to both. Outside imports it remains the subtraction token.
-        if (kind == TokenKind::Operator && segment == "-" && !expect_segment &&
-            index_ >= 1U && index_ + 1U < token_count_ &&
+        if (kind == TokenKind::Operator && segment == "-" && !expect_segment && index_ >= 1U &&
+            index_ + 1U < token_count_ &&
             (snapshot_.tokens_[index_ - 1U].kind == TokenKind::Identifier ||
              snapshot_.tokens_[index_ - 1U].kind == TokenKind::Keyword) &&
             (snapshot_.tokens_[index_ + 1U].kind == TokenKind::Identifier ||
@@ -221,8 +219,7 @@ void AstLowerer::parseImportSelectors(ImportDecl &import) {
         snapshot_.diagnostics_.push_back({import.pathSpan, "expected '}' after import selectors"});
 }
 void AstLowerer::lowerMacroDeclaration(uint32_t start, Visibility visibility, bool isRaw,
-                                       const bool isTag,
-                                       const std::vector<Attribute> &attributes) {
+                                       const bool isTag, const std::vector<Attribute> &attributes) {
     ++index_; // consume `macro`
     Declaration declaration;
     declaration.kind       = DeclKind::Macro;
@@ -326,9 +323,9 @@ void AstLowerer::lowerMacroDeclaration(uint32_t start, Visibility visibility, bo
 void AstLowerer::lowerImplementBlock(const uint32_t start, const Visibility visibility,
                                      const std::vector<Attribute> &attributes) {
     if (!attributes.empty()) {
-        snapshot_.diagnostics_.push_back(
-            {attributes.front().span, "attributes are not applicable to an implement block",
-             true, diagnostics::err::UnsupportedSyntax});
+        snapshot_.diagnostics_.push_back({attributes.front().span,
+                                          "attributes are not applicable to an implement block",
+                                          true, diagnostics::err::UnsupportedSyntax});
     }
     ++index_; // consume `implement` or `impl`
 
@@ -402,9 +399,8 @@ void AstLowerer::lowerImplementBlock(const uint32_t start, const Visibility visi
                                               "'" + trait_name + "' is not a trait", false,
                                               diagnostics::err::NotATrait});
         }
-        snapshot_.implement_records_.push_back(
-            ImplementRecord{owner_name, owner_type, trait_name, DeclId{},
-                            DeclId{}, range(start, index_)});
+        snapshot_.implement_records_.push_back(ImplementRecord{
+            owner_name, owner_type, trait_name, DeclId{}, DeclId{}, range(start, index_)});
     }
     ++index_;
     Visibility method_visibility = visibility;
@@ -441,10 +437,11 @@ void AstLowerer::lowerImplementBlock(const uint32_t start, const Visibility visi
 DeclId AstLowerer::lowerDeclaration(uint32_t start, DeclKind kind, Visibility visibility,
                                     std::string ownerName, std::string traitName, bool isExtern,
                                     FunctionKind functionKind,
-    const std::vector<GenericParam> &inheritedParams,
+                                    const std::vector<GenericParam> &inheritedParams,
                                     bool isRawUnion, bool suppressTopLevelBindingCheck,
                                     ScopeId parentScope, const std::string &parentName,
                                     const std::vector<Attribute> &attributes) {
+    const std::string_view declaration_keyword = text(index_);
     Declaration declaration;
     declaration.id            = DeclId{static_cast<uint32_t>(snapshot_.declarations_.size() + 1U)};
     declaration.kind          = kind;
@@ -454,14 +451,17 @@ DeclId AstLowerer::lowerDeclaration(uint32_t start, DeclKind kind, Visibility vi
     declaration.traitName     = std::move(traitName);
     declaration.isExtern      = isExtern;
     declaration.isRawUnion    = isRawUnion;
+    declaration.isComponent   = kind == DeclKind::Struct && declaration_keyword == "component";
     declaration.isNominalType = declaration_is_nominal_;
     declaration.parentScope   = parentScope;
     declaration.parentName    = parentName;
     declaration.attributes    = attributes;
-    for (auto &attr : declaration.attributes)
-        classifyAttribute(attr, kind == DeclKind::Function ? AttributeTarget::Function
-                                                           : AttributeTarget::Other,
-                          snapshot_.diagnostics_);
+    const AttributeTarget attribute_target =
+        kind == DeclKind::Function                             ? AttributeTarget::Function
+        : kind == DeclKind::Variable                           ? AttributeTarget::Variable
+        : kind == DeclKind::Struct && !declaration.isComponent ? AttributeTarget::Struct
+                                                               : AttributeTarget::Other;
+    classifyAttributes(declaration.attributes, attribute_target, snapshot_.diagnostics_);
     if (kind == DeclKind::Variable)
         declaration.bindingKind = BindingKind::Let;
     if (kind == DeclKind::Function && functionKind == FunctionKind::Extern)
@@ -535,6 +535,9 @@ DeclId AstLowerer::lowerDeclaration(uint32_t start, DeclKind kind, Visibility vi
     if (kind == DeclKind::Function && punctuation(index_, '(')) {
         ++index_;
         while (index_ < token_count_ && !punctuation(index_, ')')) {
+            auto parameter_attributes = parseAttributes();
+            classifyAttributes(parameter_attributes, AttributeTarget::Other,
+                               snapshot_.diagnostics_);
             if (matchesToken(snapshot_, index_, "...")) {
                 if (!isExtern && functionKind != FunctionKind::Extern) {
                     snapshot_.diagnostics_.push_back(
@@ -707,7 +710,7 @@ DeclId AstLowerer::lowerDeclaration(uint32_t start, DeclKind kind, Visibility vi
                 ++index_;
                 continue;
             }
-            const auto method_attributes = parseAttributes();
+            auto method_attributes = parseAttributes();
             if (const auto function_kind = functionKindPrefix()) {
                 const auto method_start = index_;
                 const auto method_id    = lowerDeclaration(
@@ -729,6 +732,7 @@ DeclId AstLowerer::lowerDeclaration(uint32_t start, DeclKind kind, Visibility vi
                 }
                 continue;
             }
+            classifyAttributes(method_attributes, AttributeTarget::Other, snapshot_.diagnostics_);
             if (kind == DeclKind::Enum) {
                 if (snapshot_.tokens_[index_].kind != TokenKind::Identifier) {
                     snapshot_.diagnostics_.push_back(
@@ -826,8 +830,8 @@ bool AstLowerer::parseStructField(std::vector<Parameter> &out) {
         ++index_;
         if (field_visibility == Visibility::Module && punctuation(index_, '(')) {
             const uint32_t depth_start = index_++;
-            if (snapshot_.tokens_[index_].kind == TokenKind::Dots &&
-                text(index_) == ".." && punctuation(index_ + 1U, ')')) {
+            if (snapshot_.tokens_[index_].kind == TokenKind::Dots && text(index_) == ".." &&
+                punctuation(index_ + 1U, ')')) {
                 field_mod_depth = -1;
                 index_ += 2;
             } else {

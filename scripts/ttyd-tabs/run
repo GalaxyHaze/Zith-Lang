@@ -1,0 +1,8 @@
+#!/bin/sh
+set -eu
+
+exec chpst -u "diogo:diogo" env \
+    HOME="/home/diogo" USER="diogo" LOGNAME="diogo" \
+    ttyd --interface lo --port 7683 --check-origin --writable \
+    --cwd "/home/diogo" --url-arg \
+    "/home/diogo/.local/bin/ttyd-session-command"

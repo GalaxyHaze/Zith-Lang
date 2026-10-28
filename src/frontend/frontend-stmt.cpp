@@ -226,8 +226,7 @@ ExprId AstLowerer::parseWhen() {
                              "expected '(' before when case condition island"});
                     ExprId island = parseExpression();
                     if (!punctuation(index_, ')') &&
-                        snapshot_.tokens_[index_].kind == TokenKind::Dots &&
-                        text(index_) == "..") {
+                        snapshot_.tokens_[index_].kind == TokenKind::Dots && text(index_) == "..") {
                         const auto lower_span = snapshot_.expressions_[island.value - 1U].span;
                         ++index_; // `..`
                         Expression range;
@@ -350,7 +349,7 @@ ExprId AstLowerer::parseFor() {
     } else if (punctuation(index_, '(')) {
         ++index_;
         const uint32_t clause_start = index_;
-        const auto loop_attrs       = parseAttributes();
+        auto loop_attrs             = parseAttributes();
         StmtId init_stmt;
         ExprId init_expr;
         const bool has_var = index_ < token_count_ && text(index_) == "var";
@@ -366,12 +365,11 @@ ExprId AstLowerer::parseFor() {
             Statement stmt;
             stmt.kind                = StmtKind::Binding;
             stmt.binding.bindingKind = has_var ? BindingKind::Var : BindingKind::Let;
-            stmt.binding.attributes  = loop_attrs;
-            for (auto &attr : stmt.binding.attributes)
-                classifyAttribute(attr, AttributeTarget::Variable, snapshot_.diagnostics_);
-            stmt.binding.id          = LocalId{statementCountLocals_++};
-            stmt.binding.name        = std::string(text(index_));
-            stmt.binding.span        = tokenSpan(index_++);
+            classifyAttributes(loop_attrs, AttributeTarget::Variable, snapshot_.diagnostics_);
+            stmt.binding.attributes = loop_attrs;
+            stmt.binding.id   = LocalId{statementCountLocals_++};
+            stmt.binding.name = std::string(text(index_));
+            stmt.binding.span = tokenSpan(index_++);
             if (punctuation(index_, ':')) {
                 ++index_;
                 stmt.binding.type = parseType();
@@ -413,6 +411,8 @@ ExprId AstLowerer::parseFor() {
                 // `for (name in iterable)` is the iterator form; the name is
                 // synthesized below as a loop binding, so do not parse it as
                 // an expression (which would treat `in` as a binary operator).
+                classifyAttributes(loop_attrs, AttributeTarget::Variable,
+                                   snapshot_.diagnostics_);
                 init_expr = parsePrimary();
             } else {
                 init_expr = parseConditionExpression();
@@ -537,9 +537,9 @@ ExprId AstLowerer::parseFor() {
             binding.binding.attributes  = loop_attrs;
             binding.binding.id          = local;
             binding.binding.name        = for_in.text;
-            binding.binding.span        = init_stmt
-                                              ? snapshot_.statements_[init_stmt.value - 1U].binding.span
-                                              : tokenSpan(clause_start);
+            binding.binding.span = init_stmt
+                                       ? snapshot_.statements_[init_stmt.value - 1U].binding.span
+                                       : tokenSpan(clause_start);
             binding.binding.type =
                 init_stmt ? snapshot_.statements_[init_stmt.value - 1U].binding.type : TypeExprId{};
             binding.span              = binding.binding.span;
@@ -649,9 +649,9 @@ ExprId AstLowerer::parseFor() {
 }
 ExprId AstLowerer::parseWhile() {
     const uint32_t start = index_++;
-    snapshot_.diagnostics_.push_back(
-        {tokenSpan(start), "'while' is deprecated; use 'for (cond) { }'", true,
-         diagnostics::err::DeprecatedSyntax});
+    snapshot_.diagnostics_.push_back({tokenSpan(start),
+                                      "'while' is deprecated; use 'for (cond) { }'", true,
+                                      diagnostics::err::DeprecatedSyntax});
     Expression expression;
     expression.kind  = ExprKind::While;
     expression.scope = current_scope_;
@@ -826,8 +826,11 @@ std::vector<StmtId> AstLowerer::parseStatements() {
     if (index_ >= token_count_)
         return {addStatement(std::move(statement))};
 
-    const auto statement_attrs = parseAttributes();
-    const auto word            = text(index_);
+    auto statement_attrs = parseAttributes();
+    const auto word      = text(index_);
+    if (word != "let" && word != "var" && word != "const") {
+        classifyAttributes(statement_attrs, AttributeTarget::Other, snapshot_.diagnostics_);
+    }
     if (word == "extern" && index_ + 1U < token_count_ &&
         (text(index_ + 1U) == "var" || text(index_ + 1U) == "const" ||
          text(index_ + 1U) == "let")) {
@@ -866,8 +869,8 @@ std::vector<StmtId> AstLowerer::parseStatements() {
         statement.binding.bindingKind = bindingKind(word);
         statement.binding.attributes  = statement_attrs;
         statement.attributes          = statement_attrs;
-        for (auto &attr : statement.binding.attributes)
-            classifyAttribute(attr, AttributeTarget::Variable, snapshot_.diagnostics_);
+        classifyAttributes(statement.binding.attributes, AttributeTarget::Variable,
+                           snapshot_.diagnostics_);
         ++index_;
         if (punctuation(index_, '[')) {
             // `let [x, y] = pack;` desugars to a temporary pack binding

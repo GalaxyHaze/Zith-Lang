@@ -420,9 +420,10 @@ CompactExpr ArtifactBuilder::convertExpr(hir::HirExprId id) {
                            out.int_val = ev.value;
                        },
                        [&](const hir::HirSlotAlloca &sa) {
-                           out.kind    = CompactExprKind::SlotAlloca;
-                           out.ref_a   = sa.slot;
-                           out.type_id = internType(sa.type);
+                           out.kind          = CompactExprKind::SlotAlloca;
+                           out.ref_a         = sa.slot;
+                           out.type_id       = internType(sa.type);
+                           out.alignmentBytes = sa.alignmentBytes;
                        },
                        [&](const hir::HirSlotStore &ss) {
                            out.kind  = CompactExprKind::SlotStore;
@@ -840,9 +841,10 @@ Artifact ArtifactBuilder::build(std::string_view canonical_path, std::string_vie
     for (size_t gi = 0; gi < hir_.getGlobalConstCount(); ++gi) {
         const auto &global = hir_.getGlobalConst(gi);
         CompactGlobalConst cg;
-        cg.name_id   = internString(interner_.lookup(global.name));
-        cg.type_id   = internType(global.type);
-        cg.init_expr = global.init;
+        cg.name_id        = internString(interner_.lookup(global.name));
+        cg.type_id        = internType(global.type);
+        cg.init_expr      = global.init;
+        cg.alignmentBytes = global.alignmentBytes;
         art.globals.push_back(std::move(cg));
     }
     for (size_t vi = 0; vi < hir_.getVTableCount(); ++vi) {
@@ -868,10 +870,10 @@ Artifact ArtifactBuilder::build(std::string_view canonical_path, std::string_vie
         if (attrs == nullptr || !attrs->hasResidualFacts())
             continue;
         HirSlotAttrsRecord rec;
-        rec.slot      = static_cast<uint32_t>(slot);
-        rec.ownership = static_cast<uint8_t>(attrs->ownership);
-        rec.consumed  = static_cast<uint8_t>(attrs->consumed);
-        rec.nonNull   = attrs->nonNull;
+        rec.slot          = static_cast<uint32_t>(slot);
+        rec.ownership     = static_cast<uint8_t>(attrs->ownership);
+        rec.consumed      = static_cast<uint8_t>(attrs->consumed);
+        rec.nonNull       = attrs->nonNull;
         rec.volatileSlot = attrs->volatileSlot;
         art.attrs_slots.push_back(std::move(rec));
     }
@@ -924,10 +926,11 @@ Artifact ArtifactBuilder::build(std::string_view canonical_path, std::string_vie
         const auto name            = interner_.lookup(sd->name);
         cdef.name                  = std::string(name);
         cdef.name_id               = internString(name);
-        cdef.hasForeignLayout      = sd->hasForeignLayout;
-        cdef.foreignAbiIsSingleI64 = sd->foreignAbiIsSingleI64;
-        cdef.foreignSizeBytes      = sd->foreignSizeBytes;
-        cdef.foreignAlignBytes     = sd->foreignAlignBytes;
+        cdef.hasForeignLayout       = sd->hasForeignLayout;
+        cdef.foreignAbiIsSingleI64  = sd->foreignAbiIsSingleI64;
+        cdef.foreignSizeBytes       = sd->foreignSizeBytes;
+        cdef.foreignAlignBytes      = sd->foreignAlignBytes;
+        cdef.explicitAlignmentBytes = sd->explicitAlignmentBytes;
         for (const auto &field : sd->fields) {
             cdef.field_name_ids.push_back(internString(interner_.lookup(field.name)));
             cdef.field_type_ids.push_back(internType(field.type));

@@ -135,6 +135,26 @@ Code/attrs sections e a ABI hash inclui `SymbolData.discardable`. O formatter
 reemite grupos `#[name, ...]` antes da declaração/binding e preserva a ordem
 original.
 
+`alignas(N)` aceita structs comuns e bindings `let`, `var` ou `const` permitidos.
+Sema exige uma constante positiva, potência de dois, independente de parâmetros
+genéricos, e rejeita alinhamentos que o target não suporta. Em structs, o tipo
+guarda o alinhamento explícito e o layout deriva offsets, tamanho e stride de
+arrays desse alinhamento. Em bindings, o HIR guarda o alinhamento no slot local
+ou no global, sem o propagar ao tipo nem a cópias. O codegen LLVM aplica-o ao
+`alloca` ou global correspondente.
+
+O cache serializa o alinhamento do tipo, dos slots e dos globals. Os schemas
+que mudaram rejeitam explicitamente artefactos antigos incompatíveis. A VM v2
+baixa arrays locais explicitamente alinhados para storage próprio e solicita o
+alinhamento ao alocador da memória linear. O HIR interpreter representa locais
+com células e objetos abstractos, sem expor endereços nativos. A fronteira C
+rejeita structs alinhadas por valor enquanto o compilador não provar o layout
+exacto para o target.
+
+`noalias` só é aceite em funções com retorno por ponteiro. `likely` e
+`unlikely` são reconhecidos, mas não prometem comportamento específico do
+optimizador.
+
 ## Superfície C/runtime da stdlib
 
 Os módulos `stdlib/c/*.zith` são bindings C comuns mantidos pela toolchain,

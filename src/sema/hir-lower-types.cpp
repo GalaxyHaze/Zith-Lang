@@ -160,6 +160,7 @@ types::TypeId HirLowerModern::lowerType(sema::modern::TypeId type) {
             // Register the name (done by the named-type not found path).
             lowered = types_.registerNamedType(structure->name, types::TypeKind::Struct);
             types_.setDefiningModule(lowered, sema_.typeTable().definingModule(type));
+            types_.setExplicitAlignment(lowered, structure->explicit_alignment);
             if (!structure->args.empty()) {
                 memory::DynArray<types::TypeId> lowered_args(arena_);
                 lowered_args.reserve(structure->args.size());

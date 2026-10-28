@@ -52,14 +52,14 @@ bool decodeAttrs(ByteReader &r, cache::Artifact &out) {
         return false;
     out.attrs_slots.resize(n);
     for (auto &slot : out.attrs_slots) {
-        uint8_t a = 0, b = 0, c = 0, reserved = 0;
+        uint8_t a = 0, b = 0, c = 0, d = 0;
         if (!r.readU32(slot.slot) || !r.readU8(a) || !r.readU8(b) || !r.readU8(c) ||
-            !r.readU8(reserved))
+            !r.readU8(d))
             return false;
         slot.ownership = a;
         slot.consumed  = b;
         slot.nonNull   = c != 0;
-        slot.volatileSlot = reserved != 0;
+        slot.volatileSlot = d != 0;
     }
 
     if (!r.readU32(n))

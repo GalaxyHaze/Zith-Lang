@@ -293,7 +293,8 @@ void PerModuleSema::lowerDeclarationTypes() {
                 std::memcpy(buf, param.name.data(), param.name.size());
                 fld_names.push(std::string_view(buf, param.name.size()));
             }
-            TypeId st = type_table.internStruct(decl.name, fields, &fld_names, &field_meta);
+            TypeId st = type_table.internStruct(decl.name, fields, &fld_names, &field_meta,
+                                                nullptr, requestedStructAlignment(decl));
             setDeclType(decl.id, st);
             type_table.registerNamed(decl.name, st);
             break;

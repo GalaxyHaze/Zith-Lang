@@ -114,15 +114,25 @@ enum class DeclKind : uint8_t {
 /// Storage and rebinding semantics of a `let`/`var`/`const` binding.
 enum class BindingKind : uint8_t { Let, Var, Const };
 
-/// Source attributes written as `#[name]` or `#[a, b]`.
-enum class AttributeKind : uint8_t { Unknown, Discardable, Volatile, Test };
+/// Source attributes written as `#[name]` or `#[name(value)]`.
+enum class AttributeKind : uint8_t {
+    Unknown,
+    AlignAs,
+    Discardable,
+    Likely,
+    NoAlias,
+    Unlikely,
+    Volatile,
+    Test,
+};
 
-enum class AttributeTarget : uint8_t { Function, Variable, Other };
+enum class AttributeTarget : uint8_t { Function, Struct, Variable, Other };
 
 struct Attribute {
     AttributeKind kind = AttributeKind::Unknown;
     std::string text;
     TextSpan span;
+    ExprId argument;
 };
 
 /// Parse-level function kind for `fn`, `const fn`, `raw fn`, `extern fn`, and
@@ -359,6 +369,9 @@ struct Expression {
     /// allow an explicit unchecked read of a binding that has not yet been
     /// initialized.
     bool isRawName = false;
+    /// Attribute arguments are compile-time metadata, not standalone runtime
+    /// expressions. Sema validates them through their owning Attribute.
+    bool isAttributeValue = false;
     /// True when a Range literal excludes its lower bound (`lo>..hi`).
     bool openAtLo = false;
     /// True when a Range literal excludes its upper bound (`lo..<hi`).
@@ -464,6 +477,8 @@ struct Declaration {
     /// True for manual external declarations. Functions use the C ABI; variables
     /// refer to storage provided outside the current module.
     bool isExtern = false;
+    /// True when the source used `component`, which shares the struct AST shape.
+    bool isComponent = false;
     /// Non-empty when a function or external variable links to a C symbol
     /// written after `= extern <identifier>`. The source name remains the Zith
     /// binding name; codegen uses this value as the C linker name.

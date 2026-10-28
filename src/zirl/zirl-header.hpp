@@ -20,14 +20,15 @@ namespace zith::zirl {
 
 inline constexpr uint32_t kMagic = 0x5A49524Cu; // "ZIRL"
 // Version 20 introduced the canonical HIR compatibility header.
-// Version 21 persists variadic-slice call plans and foreign adapter identities.
-inline constexpr uint32_t kContainerVersion = 21;
+// Version 22 stores binding alignment on each alloca expression.
+inline constexpr uint32_t kContainerVersion = 22;
 inline constexpr uint8_t kEndianLittle   = 1;
 inline constexpr uint16_t kSectionSchemaVersion = 1;
-inline constexpr uint16_t kMetadataSectionSchemaVersion = 3;
+inline constexpr uint16_t kMetadataSectionSchemaVersion = 4;
 inline constexpr uint16_t kDeclsSectionSchemaVersion = 2;
 inline constexpr uint16_t kTemplatesSectionSchemaVersion = 2;
-inline constexpr uint16_t kAttrsSectionSchemaVersion = 2;
+inline constexpr uint16_t kCodeSectionSchemaVersion = 3;
+inline constexpr uint16_t kAttrsSectionSchemaVersion = 4;
 inline constexpr uint16_t kSectionFlagRequired = 1;
 inline constexpr uint16_t kKnownSectionFlags = kSectionFlagRequired;
 inline constexpr uint16_t kFixedHeaderSize = 96;

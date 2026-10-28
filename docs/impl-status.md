@@ -1,13 +1,14 @@
 # Zith Implementation Status
 
-> Last updated: 2026-10-27.
+> Last updated: 2026-10-28.
 
 This document is the single source of truth for what the compiler supports today. Status reflects
 actual compiler behaviour, not spec intent. The complete feature inventory was last broadly
 audited at baseline `a5f3716`; entries changed on 2026-10-26 were rechecked against the compiler
 built from `7595e541`, with source inspection where status depends on internal structure. The test
 command entries changed on 2026-10-27 were checked by native and VM v2 integration runs plus the
-full CTest suite.
+full CTest suite. Explicit-alignment behavior was checked by the native, VM v2, cache, ZIRL, and
+full CTest suites on 2026-10-28.
 
 Implementation work that is incomplete or needs review is tracked in
 [implementation-debt.md](implementation-debt.md).
@@ -19,6 +20,7 @@ Implementation work that is incomplete or needs review is tracked in
 | Label | Meaning |
 |---|---|
 | **Working**       | Accepted by parser and sema. Lowers through HIR to LLVM codegen. |
+| **Recognized only** | Parser and sema recognize or validate the syntax, but it has no emitted or runtime behavior. |
 | **Check only**    | Passes `zithc check` but semantics are incidental (parsed as Name / Binary). No dedicated AST node, HIR, or codegen. |
 | **Parse skipped** | Declaration accepted; body entirely skipped by `skipDelimited('{', '}')`. No semantics. |
 | **Parse error**   | The parser itself rejects this construct. Does not reach sema. |
@@ -66,6 +68,8 @@ Implementation work that is incomplete or needs review is tracked in
 | `const fn` | **Parse error** | Rejected by the parser; compile-time evaluation is not part of Zith-- |
 | `extern fn` | **Working** | C ABI interop |
 | `let`, `var`, `const`, `global` | **Working** | All binding forms. `const` means immutable, not comptime |
+| `#[alignas(N)]` on bindings | **Working** | Applies to supported `let`, `var`, or `const` storage. `N` is a positive power-of-two constant supported by the target. It aligns only that binding, not its type, copies, or individual array elements. |
+| `#[noalias]`, `#[likely]`, `#[unlikely]` | **Recognized only** | `noalias` is restricted to functions returning pointers. `likely` and `unlikely` do not promise optimizer behavior. |
 
 ### Types
 
@@ -84,7 +88,7 @@ Implementation work that is incomplete or needs review is tracked in
 | `[...]T` (variadic slice) | **Working** | Last parameter only. Auto-collects a homogeneous tail into a temporary slice; accepts an explicit final `[]T`/`[N]T` and an empty tail. Supported for free functions, methods, dyn trait/interface methods, generic inference, states/dock/jump and overloads; fixed-arity overloads are preferred |
 | `fn(...): R` (function value) | **Working** | Parses as a type value, type-checks non-generic function references, and lowers/calls through C function-pointer ABI. No closures or captures |
 | `dyn Trait` / `dyn Interface` | **Working (methods)** | Concrete values coerce to fat pointers (`HirMakeDyn`) with per-type vtables (`HirVTable`); method calls lower to `HirDynCall`. Zith-- exposes only methods through `dyn`; interface fields remain available on concrete types and generic bounds, and `a.x` on `dyn Interface` reports `E3001` |
-| `struct`, `component`, `enum`, `union` | **Working** | Declarations parse and resolve. Generic `enum`/`union` templates support inline methods, concrete instantiation for HIR/codegen, and trait conformance (`implement Enum<T> as Trait` / `implement Union<T> as Trait`) |
+| `struct`, `component`, `enum`, `union` | **Working** | Declarations parse and resolve. Ordinary structs support `#[alignas(N)]`, which affects field offsets, aggregate size, containing layouts, and array stride. Unverified aligned records are rejected at C by-value boundaries. Generic `enum`/`union` templates support inline methods, concrete instantiation for HIR/codegen, and trait conformance (`implement Enum<T> as Trait` / `implement Union<T> as Trait`) |
 | `trait`, `interface` | **Working (conformance)** | Declaration bodies store trait method requirements/default methods and interface fields plus declaration-only method requirements. Single (`x: T`) and grouped (`[x, y]: T`) interface fields are equivalent. Trait implementations are verified against required signatures with `Self` substitution; duplicate implementations are rejected (`E2027`). Interfaces satisfy structurally by checking fields and compatible method signatures, generic interface bounds expose those members, and explicit interface implementation is rejected (`E2025`) |
 | `implement T as Trait {}` | **Working** | Records a verified nominal conformance edge and resolves calls to concrete trait defaults. The canonical syntax is `implement T as Trait`; the legacy `for Trait` spelling remains parsed |
 | `type` | **Working (Zith-- cast-based)** | `type Name = T` creates a nominal one-field wrapper distinct from `T`; `T as Name` constructs it and `Name as T` extracts the underlying value. `alias` stays transparent |

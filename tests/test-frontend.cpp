@@ -244,25 +244,80 @@ static void test_explicit_discard_statement() {
 }
 
 static void test_attributes_parse_and_classify() {
-    auto snapshot = frontend::parse("#[discardable] #[volatile] fn make(): i32 {\n"
-                                    "    #[volatile] let reg: i32 = 0;\n"
-                                    "    return reg;\n"
-                                    "}\n");
+    auto snapshot      = frontend::parse("#[discardable] #[volatile] fn make(): i32 {\n"
+                                         "    #[volatile] let reg: i32 = 0;\n"
+                                         "    return reg;\n"
+                                         "}\n");
     bool saw_misplaced = false;
     for (const auto &diagnostic : snapshot.diagnostics()) {
         if (diagnostic.code == diagnostics::err::AttributeNotApplicable)
             saw_misplaced = true;
     }
     CHECK(saw_misplaced, "attribute source reports the misplaced volatile fn warning");
-    const auto decl_it = std::find_if(snapshot.declarations().begin(),
-                                      snapshot.declarations().end(), [](const auto &decl) {
-                                          return decl.kind == frontend::DeclKind::Function;
-                                      });
+    const auto decl_it =
+        std::find_if(snapshot.declarations().begin(), snapshot.declarations().end(),
+                     [](const auto &decl) { return decl.kind == frontend::DeclKind::Function; });
     CHECK(decl_it != snapshot.declarations().end(), "attribute fn exists");
     if (decl_it != snapshot.declarations().end()) {
         CHECK(decl_it->attributes.size() == 2u, "fn carries both attributes");
         CHECK(decl_it->discardable(), "fn is discardable after classification");
     }
+}
+
+static void test_alignment_and_branch_attributes_parse() {
+    auto snapshot = frontend::parse("#[alignas(64)] struct Aligned { value: u8 }\n"
+                                    "#[noalias] fn make(): *i32 { return null; }\n"
+                                    "#[likely] #[unlikely] fn branch() {}\n"
+                                    "fn main() {\n"
+                                    "    #[alignas(64)] let bytes: [2]u8 = [0, 0];\n"
+                                    "}\n");
+    CHECK(snapshot.diagnostics().empty(),
+          "alignment and companion attributes parse without diagnostics");
+
+    const auto struct_it =
+        std::find_if(snapshot.declarations().begin(), snapshot.declarations().end(),
+                     [](const auto &decl) { return decl.kind == frontend::DeclKind::Struct; });
+    CHECK(struct_it != snapshot.declarations().end(), "aligned struct declaration is retained");
+    if (struct_it != snapshot.declarations().end()) {
+        CHECK_EQ(struct_it->attributes.size(), 1u, "struct retains its alignment attribute");
+        if (!struct_it->attributes.empty()) {
+            CHECK_EQ(struct_it->attributes.front().text, std::string("alignas"),
+                     "struct attribute name is alignas");
+            CHECK(struct_it->attributes.front().span.size() >
+                      struct_it->attributes.front().text.size(),
+                  "alignment attribute span includes its argument syntax");
+        }
+    }
+
+    bool found_aligned_binding = false;
+    for (const auto &statement : snapshot.statements()) {
+        if (statement.kind != frontend::StmtKind::Binding || statement.binding.name != "bytes")
+            continue;
+        found_aligned_binding = true;
+        CHECK_EQ(statement.binding.attributes.size(), 1u,
+                 "array binding retains its alignment attribute");
+        if (!statement.binding.attributes.empty()) {
+            CHECK_EQ(statement.binding.attributes.front().text, std::string("alignas"),
+                     "binding attribute name is alignas");
+            CHECK(statement.binding.attributes.front().span.size() >
+                      statement.binding.attributes.front().text.size(),
+                  "binding alignment span includes its argument syntax");
+            CHECK(static_cast<bool>(statement.binding.attributes.front().argument),
+                  "binding alignment retains its argument expression");
+        }
+    }
+    CHECK(found_aligned_binding, "aligned array binding is retained");
+
+    const auto has_attribute = [&](const std::string_view name) {
+        for (const auto &decl : snapshot.declarations())
+            for (const auto &attribute : decl.attributes)
+                if (attribute.text == name)
+                    return true;
+        return false;
+    };
+    CHECK(has_attribute("noalias"), "noalias is recognized on a function");
+    CHECK(has_attribute("likely"), "likely is recognized on a declaration");
+    CHECK(has_attribute("unlikely"), "unlikely is recognized on a declaration");
 }
 
 static void test_old_state_machine_syntax_is_rejected() {
@@ -317,10 +372,9 @@ static std::size_t countErrorCode(const frontend::FrontendSnapshot &snapshot, ui
 }
 
 static bool hasErrors(const frontend::FrontendSnapshot &snapshot) {
-    return std::any_of(snapshot.diagnostics().begin(), snapshot.diagnostics().end(),
-                       [](const frontend::Diagnostic &diagnostic) {
-                           return !diagnostic.isWarning;
-                       });
+    return std::any_of(
+        snapshot.diagnostics().begin(), snapshot.diagnostics().end(),
+        [](const frontend::Diagnostic &diagnostic) { return !diagnostic.isWarning; });
 }
 
 static bool hasErrorExpression(const frontend::FrontendSnapshot &snapshot) {
@@ -381,8 +435,7 @@ static void test_parser_depth_limit() {
         return frontend::parse(source);
     };
     const auto blocks_at_limit = parse_nested_blocks((maxDepth - 2U) / 2U);
-    CHECK(!hasErrors(blocks_at_limit),
-          "128 active parser entries accept nested block statements");
+    CHECK(!hasErrors(blocks_at_limit), "128 active parser entries accept nested block statements");
     const auto blocks_over_limit = parse_nested_blocks((maxDepth - 2U) / 2U + 1U);
     CHECK_EQ(countErrorCode(blocks_over_limit, diagnostics::err::ParseDepthExceeded), 1U,
              "over-limit nested blocks report exactly one E1010");
@@ -554,10 +607,10 @@ static void test_multi_char_operators_are_single_tokens() {
 }
 
 static void test_dots_lex_as_one_token() {
-    auto range = frontend::parse("fn main(): i32 {\n"
-                                 "    for (i in 0..<3) { }\n"
-                                 "    return 0;\n"
-                                 "}\n");
+    auto range        = frontend::parse("fn main(): i32 {\n"
+                                        "    for (i in 0..<3) { }\n"
+                                        "    return 0;\n"
+                                        "}\n");
     bool saw_two_dots = false;
     for (const auto &token : range.tokens()) {
         if (token.kind == frontend::TokenKind::Dots && tokenText(range, token) == "..")
@@ -565,7 +618,7 @@ static void test_dots_lex_as_one_token() {
     }
     CHECK(saw_two_dots, "'..' lexes as a single Dots token");
 
-    auto variadic = frontend::parse("extern fn printf(fmt: *char, ...): i32;\n");
+    auto variadic       = frontend::parse("extern fn printf(fmt: *char, ...): i32;\n");
     bool saw_three_dots = false;
     for (const auto &token : variadic.tokens()) {
         if (token.kind == frontend::TokenKind::Dots && tokenText(variadic, token) == "...")
@@ -742,15 +795,15 @@ static void test_default_parameters_and_condition_syntax() {
               "the '=' expression is recorded as the parameter default");
     }
 
-    auto conditions         = frontend::parse("fn run(ok: bool, done: bool, keep: bool): i32 {\n"
-                                                      "    if (not ok) { return 0; }\n"
-                                                      "    while (not done) { break; }\n"
-                                                      "    for (var i: i32 = 0), (not done), (i = i + 1) {\n"
-                                                      "        for (var j: i32 = 0), (not (done)), (j = j + 1) {\n"
-                                                      "        }\n"
-                                                      "    }\n"
-                                                      "    return 1;\n"
-                                                      "}\n");
+    auto conditions = frontend::parse("fn run(ok: bool, done: bool, keep: bool): i32 {\n"
+                                      "    if (not ok) { return 0; }\n"
+                                      "    while (not done) { break; }\n"
+                                      "    for (var i: i32 = 0), (not done), (i = i + 1) {\n"
+                                      "        for (var j: i32 = 0), (not (done)), (j = j + 1) {\n"
+                                      "        }\n"
+                                      "    }\n"
+                                      "    return 1;\n"
+                                      "}\n");
     bool only_while_warning = true;
     for (const auto &diagnostic : conditions.diagnostics()) {
         if (diagnostic.isWarning)
@@ -761,14 +814,14 @@ static void test_default_parameters_and_condition_syntax() {
           "'not' conditions in if/while/flat and parenthesized for clauses parse cleanly");
 
     auto bare_conditions            = frontend::parse("fn run(x: ?i32, ok: bool): i32 {\n"
-                                                                 "    if not ok { return 0; }\n"
-                                                                 "    while not ok { break; }\n"
-                                                                 "    for not ok { break; }\n"
-                                                                 "    if optional x { return 1; }\n"
-                                                                 "    while optional x { break; }\n"
-                                                                 "    for optional x { return 2; }\n"
-                                                                 "    return 3;\n"
-                                                                 "}\n");
+                                                      "    if not ok { return 0; }\n"
+                                                      "    while not ok { break; }\n"
+                                                      "    for not ok { break; }\n"
+                                                      "    if optional x { return 1; }\n"
+                                                      "    while optional x { break; }\n"
+                                                      "    for optional x { return 2; }\n"
+                                                      "    return 3;\n"
+                                                      "}\n");
     size_t optional_condition_diags = 0;
     for (const auto &diagnostic : bare_conditions.diagnostics()) {
         if (!diagnostic.isWarning)
@@ -780,8 +833,8 @@ static void test_default_parameters_and_condition_syntax() {
 
 static void test_for_var_var_reports_specific_diagnostic() {
     auto snapshot     = frontend::parse("fn main() {\n"
-                                            "    for (var one: i32, var two: i32) { }\n"
-                                            "}\n");
+                                        "    for (var one: i32, var two: i32) { }\n"
+                                        "}\n");
     bool has_specific = false;
     int body_errors   = 0;
     for (const auto &diag : snapshot.diagnostics()) {
@@ -1800,6 +1853,7 @@ static void test_frontend() {
     test_type_alias_and_struct_enum_union();
     test_unary_and_nested_expressions();
     test_attributes_parse_and_classify();
+    test_alignment_and_branch_attributes_parse();
     test_multiple_top_level_decls_with_visibility();
     test_import_form_with_depth_and_export();
     test_error_diagnostic_span_preserved();

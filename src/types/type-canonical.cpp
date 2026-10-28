@@ -19,7 +19,9 @@ uint32_t alignUp(uint32_t value, uint32_t align) noexcept {
     if (align == 0)
         return value;
     const uint32_t remainder = value % align;
-    return remainder == 0 ? value : value + (align - remainder);
+    const uint64_t aligned =
+        remainder == 0 ? value : static_cast<uint64_t>(value) + (align - remainder);
+    return aligned <= UINT32_MAX ? static_cast<uint32_t>(aligned) : 0U;
 }
 
 } // namespace
@@ -71,7 +73,13 @@ uint32_t typeByteCount(const TypeIntern &types, TypeId type) noexcept {
         return 8U;
     case TypeKind::Array: {
         const auto *array = std::get_if<TypeArray>(&types.lookup(type));
-        return array != nullptr ? typeByteCount(types, array->elem) * array->count : 0U;
+        if (array == nullptr)
+            return 0U;
+        const auto element_size  = typeByteCount(types, array->elem);
+        const auto element_align = typeAlignBytes(types, array->elem);
+        const auto stride        = alignUp(element_size, element_align);
+        const uint64_t total     = static_cast<uint64_t>(stride) * array->count;
+        return stride != 0U && total <= UINT32_MAX ? static_cast<uint32_t>(total) : 0U;
     }
     case TypeKind::Slice:
         return 16U;
@@ -106,16 +114,26 @@ uint32_t typeByteCount(const TypeIntern &types, TypeId type) noexcept {
         const auto *structure = std::get_if<TypeStruct>(&types.lookup(type));
         if (structure == nullptr)
             return 0U;
-        const auto &def = types.getStructDef(structure->def_id);
+        const auto &def = types.getStructDef(type);
+        if (def.hasForeignLayout)
+            return def.foreignSizeBytes <= UINT32_MAX
+                       ? static_cast<uint32_t>(def.foreignSizeBytes)
+                       : 0U;
         uint32_t offset = 0U;
         for (const auto &field : def.fields) {
             const auto align = typeAlignBytes(types, field.type);
             if (align == 0U)
                 continue;
             offset = alignUp(offset, align);
-            offset += typeByteCount(types, field.type);
+            const uint32_t field_size = typeByteCount(types, field.type);
+            if (offset == 0U && field_size == 0U)
+                return 0U;
+            const uint64_t next = static_cast<uint64_t>(offset) + field_size;
+            if (next > UINT32_MAX)
+                return 0U;
+            offset = static_cast<uint32_t>(next);
         }
-        return offset;
+        return alignUp(offset, typeAlignBytes(types, type));
     }
     case TypeKind::Qualified: {
         const auto *qualified = std::get_if<TypeQualified>(&types.lookup(type));
@@ -196,8 +214,13 @@ uint32_t typeAlignBytes(const TypeIntern &types, TypeId type) noexcept {
         const auto *structure = std::get_if<TypeStruct>(&types.lookup(type));
         if (structure == nullptr)
             return 0U;
-        uint32_t max_align = 1U;
-        for (const auto &field : types.getStructDef(structure->def_id).fields)
+        const auto &def = types.getStructDef(type);
+        if (def.hasForeignLayout)
+            return def.foreignAlignBytes <= UINT32_MAX
+                       ? static_cast<uint32_t>(def.foreignAlignBytes)
+                       : 0U;
+        uint32_t max_align = std::max(def.explicitAlignmentBytes, 1U);
+        for (const auto &field : def.fields)
             max_align = std::max(max_align, typeAlignBytes(types, field.type));
         return max_align;
     }
@@ -303,6 +326,7 @@ TypeCanonicalId canonicalTypeId(const TypeIntern &types, TypeId type,
                            appendDefiningModule();
                            const auto &def = types.getStructDef(current);
                            appendName(def.name);
+                           appendU64(def.explicitAlignmentBytes);
                            for (const size_t index : canonicalFieldOrder(types, current)) {
                                appendName(def.fields[index].name);
                                self(self, def.fields[index].type);

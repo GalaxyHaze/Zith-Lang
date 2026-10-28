@@ -1,6 +1,7 @@
 #include "vm/hir-to-vm.hpp"
 
 #include "common/overloaded.hpp"
+#include "types/type-canonical.hpp"
 #include "types/type-kind.hpp"
 
 #include <algorithm>
@@ -82,8 +83,10 @@ struct LowerState {
     memory::DynArray<std::uint8_t> slotWidths;
     /// HIR type of every slot, needed to lay out aggregate slots in memory.
     memory::DynArray<types::TypeId> slotTypes;
-    /// 1 when the slot owns linear-memory storage (scalars and aggregates), 0
-    /// when its value lives in the slot register(s) alone (slices, arrays).
+    /// Alignment requested by each function-local slot allocation.
+    memory::DynArray<std::uint32_t> slotAlignments;
+    /// 1 when the slot owns linear-memory storage (scalars, aggregates, or an
+    /// explicitly aligned register-backed value), otherwise 0.
     memory::DynArray<std::uint8_t> slotBacked;
     /// Hidden return-slot pointer for functions that return an aggregate by
     /// value. Register 0 of such a function; kUnassignedReg otherwise.
@@ -150,10 +153,8 @@ auto isScalarSlotType(const types::TypeIntern &types, types::TypeId type) -> boo
     }
 }
 
-/// Slots backed by linear-memory storage rather than a bare register. Scalars
-/// join aggregates here so that `&x` is a real address and a write through the
-/// resulting pointer reaches later reads of `x`. Slices (a {ptr, len} register
-/// pair) and arrays (a base-pointer register) stay register-backed.
+/// Slot types that always require memory-backed storage. Explicitly aligned
+/// local arrays are backed separately from this type classification.
 auto isMemorySlotType(const types::TypeIntern &types, types::TypeId type) -> bool {
     return isScalarSlotType(types, type) || isAggregateType(types, type);
 }
@@ -250,6 +251,7 @@ auto layoutSize(const types::TypeIntern &types, types::TypeId type, std::size_t 
             if (field_align > align)
                 align = field_align;
         }
+        align = std::max(align, static_cast<std::size_t>(types::typeAlignBytes(types, type)));
         // Empty aggregates still need a distinct, non-null address when stored
         // in a VM slot even though they contain no fields.
         return size == 0U ? 1U : alignUp(size, align);
@@ -515,6 +517,9 @@ auto slotRegister(const LowerState &state, hir::HirSlotId slot) -> std::uint16_t
     return state.slotRegs[slot];
 }
 
+auto lowerSlotValue(LowerState &state, hir::HirSlotId slot, types::TypeId type)
+    -> std::uint16_t;
+
 /// Guest address of storage backing an aggregate- or array-valued operand.
 auto aggregateAddress(LowerState &state, hir::HirExprId id) -> std::uint16_t;
 
@@ -759,7 +764,7 @@ auto materializeBorrowedSlice(LowerState &state, hir::HirExprId argument,
         return kUnassignedReg;
 
     handled           = true;
-    const auto source = slotRegister(state, slot);
+    const auto source = lowerSlotValue(state, slot, state.slotTypes[slot]);
     if (source == kUnassignedReg || static_cast<std::size_t>(source) + 1U >= state.fn->regCount) {
         state.result->ok      = false;
         state.result->message = "invalid slice slot in borrowed v2 call argument";
@@ -1604,8 +1609,20 @@ auto lowerSlotValue(LowerState &state, hir::HirSlotId slot, types::TypeId type) 
         return kUnassignedReg;
     }
 
+    if (slot < state.slotBacked.size() && state.slotBacked[slot] != 0U &&
+        state.types.kindOf(type) == types::TypeKind::Slice) {
+        const auto value = newTypedReg(state, ValueType::Ptr);
+        (void)newTypedReg(state, ValueType::I64);
+        emit(state, Instr::simple(Op::LoadI64, value, base));
+        const auto lengthAddress = newTypedReg(state, ValueType::Ptr);
+        emit(state, Instr{Op::FieldPtr, lengthAddress, base, 0, 8U});
+        emit(state, Instr::simple(Op::LoadI64, static_cast<std::uint16_t>(value + 1U),
+                                  lengthAddress));
+        return value;
+    }
+
     const bool memoryScalar = slot < state.slotBacked.size() && state.slotBacked[slot] != 0U &&
-                              !isAggregateType(state.types, type);
+                              !isPointerValued(state.types, type);
     if (!memoryScalar)
         return base;
 
@@ -1624,7 +1641,32 @@ auto lowerSlotStore(LowerState &state, const hir::HirSlotStore &store) -> std::u
 
     const auto slotType =
         store.slot < state.slotTypes.size() ? state.slotTypes[store.slot] : types::kInvalidType;
+    if (store.slot < state.slotBacked.size() && state.slotBacked[store.slot] != 0U &&
+        state.types.kindOf(slotType) == types::TypeKind::Slice) {
+        const auto value = lowerOperand(state, store.value);
+        if (value == kUnassignedReg ||
+            static_cast<std::size_t>(value) + 1U >= state.fn->regCount) {
+            state.result->ok      = false;
+            state.result->message = "invalid slice value in v2 slot store";
+            return kUnassignedReg;
+        }
+        emit(state, Instr::simple(Op::StoreI64, destination, value));
+        const auto lengthAddress = newTypedReg(state, ValueType::Ptr);
+        emit(state, Instr{Op::FieldPtr, lengthAddress, destination, 0, 8U});
+        emit(state, Instr::simple(Op::StoreI64, lengthAddress,
+                                  static_cast<std::uint16_t>(value + 1U)));
+        return value;
+    }
     if (isAggregateType(state.types, slotType)) {
+        const auto source = aggregateAddress(state, store.value);
+        if (source == kUnassignedReg)
+            return kUnassignedReg;
+        if (source != destination)
+            copyBytes(state, destination, source, typeSize(state.types, slotType));
+        return source;
+    }
+    if (store.slot < state.slotBacked.size() && state.slotBacked[store.slot] != 0U &&
+        state.types.kindOf(slotType) == types::TypeKind::Array) {
         const auto source = aggregateAddress(state, store.value);
         if (source == kUnassignedReg)
             return kUnassignedReg;
@@ -2202,6 +2244,7 @@ auto prepareFunctionRegisters(LowerState &state) -> bool {
     state.slotRegs.resize(slotCount, kUnassignedReg);
     state.slotWidths.resize(slotCount, 0U);
     state.slotTypes.resize(slotCount, types::kInvalidType);
+    state.slotAlignments.resize(slotCount, 0U);
     state.slotBacked.resize(slotCount, 0U);
 
     for (const auto &block : state.hirFn->blocks) {
@@ -2218,6 +2261,8 @@ auto prepareFunctionRegisters(LowerState &state) -> bool {
             }
             state.slotWidths[alloca->slot] = width;
             state.slotTypes[alloca->slot]  = alloca->type;
+            state.slotAlignments[alloca->slot] =
+                std::max(state.slotAlignments[alloca->slot], alloca->alignmentBytes);
         }
     }
     for (std::size_t i = 0; i < state.hirFn->param_slots.size() && i < state.hirFn->params.size();
@@ -2243,10 +2288,11 @@ auto prepareFunctionRegisters(LowerState &state) -> bool {
             state.slotRegs[slot] = state.paramRegs[i];
     }
 
-    // Scalars join aggregates as memory-backed so that `&x` is a real address
-    // and writes through a pointer are visible to later reads of `x`.
+    // Register-backed values need storage when their binding has an explicit
+    // alignment request.
     for (std::size_t slot = 0; slot < state.slotTypes.size(); ++slot) {
-        if (isMemorySlotType(state.types, state.slotTypes[slot]))
+        const bool alignedRegisterValue = state.slotAlignments[slot] != 0U;
+        if (isMemorySlotType(state.types, state.slotTypes[slot]) || alignedRegisterValue)
             state.slotBacked[slot] = 1U;
     }
 
@@ -2255,7 +2301,9 @@ auto prepareFunctionRegisters(LowerState &state) -> bool {
             state.slotWidths[slot] = 1U;
         if (state.slotRegs[slot] != kUnassignedReg)
             continue;
-        const auto width = static_cast<std::size_t>(state.slotWidths[slot]);
+        const auto width = state.slotBacked[slot] != 0U
+                               ? std::size_t{1}
+                               : static_cast<std::size_t>(state.slotWidths[slot]);
         if (nextRegister + width > 0xFFFFU) {
             state.result->ok      = false;
             state.result->message = "v2 function local registers exceed 65535";
@@ -2485,6 +2533,7 @@ auto lowerModule(const hir::HirModule &hir, const memory::StringInterner &intern
                          memory::DynArray<std::uint16_t>(arena),
                          memory::DynArray<std::uint8_t>(arena),
                          memory::DynArray<types::TypeId>(arena),
+                         memory::DynArray<std::uint32_t>(arena),
                          memory::DynArray<std::uint8_t>(arena),
                          kUnassignedReg,
                          &result};
@@ -2511,9 +2560,13 @@ auto lowerModule(const hir::HirModule &hir, const memory::StringInterner &intern
                 return result;
             }
             const auto count = newTypedReg(state, ValueType::I64);
-            const auto align = newTypedReg(state, ValueType::I64);
             emit(state, Instr::withImm(Op::LoadConstI64, count, static_cast<std::uint16_t>(size)));
-            emit(state, Instr::withImm(Op::LoadConstI64, align, 8));
+            std::size_t slotAlignment = 1U;
+            (void)layoutSize(state.types, state.slotTypes[slot], slotAlignment);
+            slotAlignment =
+                std::max(slotAlignment, static_cast<std::size_t>(state.slotAlignments[slot]));
+            slotAlignment = std::max(slotAlignment, std::size_t{8});
+            const auto align = emitI64Constant(state, static_cast<std::int64_t>(slotAlignment));
             emit(state, Instr::simple(Op::AllocBytes, destination, count, align));
         }
 

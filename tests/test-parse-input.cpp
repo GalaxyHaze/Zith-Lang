@@ -49,6 +49,14 @@ struct SessionRunner {
             return false;
         }
 
+        [[nodiscard]] bool hasMessage(std::string_view needle) const {
+            for (const auto &diag : diags) {
+                if (diag.message.find(needle) != std::string::npos)
+                    return true;
+            }
+            return false;
+        }
+
         [[nodiscard]] size_t errorCount() const {
             return diags.size();
         }
@@ -181,11 +189,69 @@ void test_println_with_i32_lowers_to_hir() {
     CHECK(has_i32_vtable, "println HIR contains the Formatable vtable for i32");
 }
 
+void test_invalid_alignment_attributes_report_diagnostics() {
+    SessionRunner t;
+    const std::string invalid_cases[] = {
+        "#[alignas(0)] struct Invalid { value: u8 }\n",
+        "#[alignas(3)] struct Invalid { value: u8 }\n",
+        "#[alignas(value)] struct Invalid { value: u8 }\n",
+        "#[alignas(T)] struct Invalid<T> { value: T }\n",
+        "#[alignas(8)] #[alignas(16)] struct Invalid { value: u8 }\n",
+        "struct Invalid { #[alignas(8)] value: u8 }\n",
+        "fn bad(#[alignas(8)] value: u8) {}\n",
+        "#[alignas(8)] component Invalid { value: u8 }\n",
+        "#[alignas(8)] union Invalid { u8 }\n",
+        "#[alignas(8)] enum Invalid { Value }\n",
+        "#[alignas(8)] extern var external: u8;\n",
+    };
+
+    for (const auto &source : invalid_cases) {
+        auto r = t.run(source + "fn main(): i32 { return 0; }\n");
+        CHECK(!r.ok, "invalid alignas value or placement is rejected");
+        CHECK(r.hasMessage("alignas"),
+              "invalid alignas request has an alignment-specific diagnostic");
+    }
+}
+
+void test_constant_alignment_arguments_are_accepted() {
+    SessionRunner t;
+    auto r = t.run("#[alignas(64)] const MODULE_CACHE_LINE: i32 = 64;\n"
+                   "const CACHE_LINE: i32 = MODULE_CACHE_LINE;\n"
+                   "#[alignas(32 * 2)] struct Computed { value: u8 }\n"
+                   "#[alignas(CACHE_LINE)] struct Named { value: u8 }\n"
+                   "#[noalias] extern fn address(): *i32;\n"
+                   "fn main(): i32 { return 0; }\n");
+    CHECK(r.ok, "constant alignment and pointer-return noalias attributes are accepted");
+}
+
+void test_invalid_local_alignment_reports_once() {
+    SessionRunner t;
+    auto r = t.run("fn main(): i32 {\n"
+                   "    #[alignas(3)] let bytes: [2]u8 = [0, 0];\n"
+                   "    return 0;\n"
+                   "}\n");
+    CHECK(!r.ok, "invalid local alignas value is rejected");
+    CHECK(r.hasMessage("alignas"), "invalid local alignas reports an alignment diagnostic");
+    CHECK_EQ(r.errorCount(), 1u, "an invalid local alignment is diagnosed only once");
+}
+
+void test_noalias_requires_pointer_return() {
+    SessionRunner t;
+    auto r = t.run("#[noalias] fn bad(): i32 { return 0; }\n"
+                   "fn main(): i32 { return 0; }\n");
+    CHECK(!r.ok, "noalias on a non-pointer return type is rejected");
+    CHECK(r.hasMessage("noalias"), "noalias rejection identifies the attribute");
+}
+
 void test_parse_input() {
     test_primitive_casts_type_check();
     test_cast_does_not_consume_line();
     test_nonparsable_type_reports_constraint_error();
     test_println_with_i32_lowers_to_hir();
+    test_invalid_alignment_attributes_report_diagnostics();
+    test_constant_alignment_arguments_are_accepted();
+    test_invalid_local_alignment_reports_once();
+    test_noalias_requires_pointer_return();
 }
 
 } // namespace

@@ -643,14 +643,22 @@ TypeId PerModuleSema::inferLayoutIntrinsic(frontend::ExprId id) {
         }
         return type_table.lookupNamed("u128");
     }
-    // @sizeOf applies to any complete type (primitives and structs alike) and
-    // reports its size in bytes as u64; offsetOf/alignOf stay struct-only.
+    // @sizeOf and @alignOf apply to complete object types; offsetOf is
+    // restricted to structs because it requires a named field.
     if (expr.text == "sizeOf") {
         if (type_table.kindOf(resolved) == TypeKind::Void) {
             report(expr.span, "'@sizeOf' requires a complete type", diagnostics::err::TypeMismatch);
             return error_type;
         }
         return type_table.lookupNamed("u64");
+    }
+    if (expr.text == "alignOf") {
+        if (type_table.kindOf(resolved) == TypeKind::Void) {
+            report(expr.span, "'@alignOf' requires a complete type",
+                   diagnostics::err::TypeMismatch);
+            return error_type;
+        }
+        return i32_type;
     }
     if (type_table.kindOf(resolved) != TypeKind::Struct) {
         report(expr.span, "'@" + expr.text + "' requires a struct type",

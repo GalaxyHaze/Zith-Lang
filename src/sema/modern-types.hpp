@@ -103,6 +103,7 @@ struct StructType {
     memory::DynArray<std::string_view> &field_names;
     memory::DynArray<FieldMeta> &field_meta;
     memory::DynArray<TypeId> &args;
+    uint32_t explicit_alignment = 0;
 };
 struct EnumType {
     std::string_view name;
@@ -206,7 +207,8 @@ public:
     [[nodiscard]] TypeId internStruct(std::string_view name, memory::DynArray<TypeId> &fields,
                                       memory::DynArray<std::string_view> *field_names = nullptr,
                                       memory::DynArray<FieldMeta> *field_meta         = nullptr,
-                                      const std::vector<TypeId> *struct_args          = nullptr);
+                                      const std::vector<TypeId> *struct_args          = nullptr,
+                                      uint32_t explicit_alignment                    = 0);
     [[nodiscard]] int fieldIndex(TypeId struct_type, std::string_view name) const noexcept;
     [[nodiscard]] TypeId internEnum(std::string_view name, TypeId underlying,
                                     memory::DynArray<std::string_view> &variant_names,

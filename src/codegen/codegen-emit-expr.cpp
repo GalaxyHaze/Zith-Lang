@@ -129,7 +129,13 @@ llvm::Value *CodeGenEmit::emitExpr(hir::HirExprId id, const hir::HirModule &mod)
             [&](const hir::HirSlotAlloca &s) -> llvm::Value * {
                 if (s.slot >= slots_.size())
                     slots_.resize(s.slot + 1);
-                auto *alloc    = builder_.CreateAlloca(typeGen_.lower(s.type));
+                auto *alloc = builder_.CreateAlloca(typeGen_.lower(s.type));
+                if (s.alignmentBytes != 0U) {
+                    auto alignment = typeGen_.alignOf(s.type);
+                    if (alignment < s.alignmentBytes)
+                        alignment = s.alignmentBytes;
+                    alloc->setAlignment(llvm::Align(alignment));
+                }
                 slots_[s.slot] = alloc;
                 return alloc;
             },

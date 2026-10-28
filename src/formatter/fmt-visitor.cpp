@@ -268,6 +268,11 @@ void FmtVisitor::emitAttributes(const frontend::Attribute *attributes, std::size
         if (index != 0U)
             emit(", ");
         emit(attributes[index].text);
+        if (attributes[index].argument) {
+            emit("(");
+            visitExpr(attributes[index].argument);
+            emit(")");
+        }
     }
     emit("]");
     newline();

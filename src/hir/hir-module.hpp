@@ -8,6 +8,8 @@
 #include "memory/span.hpp"
 #include "memory/string-interner.hpp"
 
+#include <cstdint>
+
 namespace zith::hir {
 
 using HirDeclarationId = uint32_t;
@@ -131,6 +133,7 @@ struct HirGlobalConst {
     memory::InternedId name{};
     HirTypeId type = types::kInvalidType;
     HirExprId init = kInvalidHirExpr;
+    uint32_t alignmentBytes = 0;
 
     explicit HirGlobalConst(memory::Arena &arena) {
         (void)arena;

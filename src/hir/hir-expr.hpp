@@ -240,9 +240,10 @@ using HirSlotId                            = uint32_t;
 inline constexpr HirSlotId kInvalidHirSlot = ~HirSlotId{0};
 
 struct HirSlotAlloca {
-    HirSlotId slot  = kInvalidHirSlot;
-    HirTypeId type  = types::kInvalidType;
-    HirExprKind tag = HirExprKind::SlotAlloca;
+    HirSlotId slot          = kInvalidHirSlot;
+    HirTypeId type          = types::kInvalidType;
+    uint32_t alignmentBytes = 0;
+    HirExprKind tag         = HirExprKind::SlotAlloca;
 };
 
 struct HirSlotStore {

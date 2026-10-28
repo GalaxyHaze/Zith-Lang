@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="pt">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Terminal remoto</title>
+    <style>
+        :root {
+            color-scheme: light;
+            font-family: Georgia, "Times New Roman", serif;
+            color: #173c3b;
+            background: #f2efe5;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            min-height: 100vh;
+            margin: 0;
+            display: grid;
+            place-items: center;
+            padding: 2rem 1rem;
+            background:
+                radial-gradient(ellipse at 85% 15%, #d8e3d6 0, transparent 35%),
+                linear-gradient(145deg, #f6f3e9, #e9eee5);
+        }
+
+        main {
+            width: min(100%, 34rem);
+            padding: clamp(1.5rem, 6vw, 3rem);
+            border: 1px solid #c5d1c7;
+            border-radius: 1.25rem;
+            background: rgba(255, 255, 250, 0.86);
+            box-shadow: 0 1.5rem 4rem rgba(23, 60, 59, 0.12);
+        }
+
+        .eyebrow {
+            margin: 0 0 0.7rem;
+            color: #ad542f;
+            font: 700 0.72rem/1.2 ui-monospace, monospace;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+        }
+
+        h1 {
+            margin: 0;
+            font-size: clamp(2rem, 8vw, 3.4rem);
+            font-weight: 500;
+            letter-spacing: -0.045em;
+        }
+
+        .intro {
+            margin: 1rem 0 2rem;
+            color: #496160;
+            font: 1rem/1.65 ui-sans-serif, system-ui, sans-serif;
+        }
+
+        button {
+            min-height: 3.2rem;
+            padding: 0.8rem 1.1rem;
+            border: 0;
+            border-radius: 0.55rem;
+            color: #fffdf4;
+            background: #17605b;
+            font: 700 0.95rem/1.2 ui-sans-serif, system-ui, sans-serif;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background: #104b47;
+        }
+
+        button:focus-visible,
+        input:focus-visible {
+            outline: 3px solid #bd6842;
+            outline-offset: 3px;
+        }
+
+        section {
+            margin-top: 2.3rem;
+            padding-top: 1.5rem;
+            border-top: 1px solid #d6dfd5;
+        }
+
+        h2 {
+            margin: 0 0 0.75rem;
+            font-size: 1.25rem;
+            font-weight: 500;
+        }
+
+        label,
+        .note {
+            color: #496160;
+            font: 0.88rem/1.5 ui-sans-serif, system-ui, sans-serif;
+        }
+
+        .resume-row {
+            display: flex;
+            gap: 0.65rem;
+            margin-top: 0.45rem;
+        }
+
+        input {
+            flex: 1;
+            min-width: 0;
+            min-height: 3.2rem;
+            padding: 0.7rem 0.8rem;
+            border: 1px solid #aabbb0;
+            border-radius: 0.55rem;
+            color: #173c3b;
+            background: #fffefa;
+            font: 1rem ui-monospace, monospace;
+        }
+
+        .note {
+            margin: 1.3rem 0 0;
+            font-size: 0.78rem;
+        }
+
+        @media (max-width: 28rem) {
+            .resume-row {
+                align-items: stretch;
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+<body>
+    <main>
+        <p class="eyebrow">Acesso privado pela tailnet</p>
+        <h1>Terminal remoto</h1>
+        <p class="intro">
+            Cada terminal novo recebe uma sess&atilde;o tmux pr&oacute;pria.
+            Atualiza a p&aacute;gina do terminal ou volta a abrir o mesmo URL para retomar.
+        </p>
+        <button id="new-session" type="button">Abrir terminal novo</button>
+
+        <section aria-labelledby="resume-title">
+            <h2 id="resume-title">Retomar sess&atilde;o antiga</h2>
+            <label for="legacy-id">ID num&eacute;rico antigo ou <code>remote</code></label>
+            <form id="resume-form" class="resume-row">
+                <input id="legacy-id" name="legacy-id" autocomplete="off"
+                       placeholder="1, 16 ou remote" required>
+                <button type="submit">Retomar</button>
+            </form>
+        </section>
+
+        <p class="note">As sess&otilde;es antigas n&atilde;o s&atilde;o apagadas.</p>
+    </main>
+    <script>
+        "use strict";
+
+        function openTerminal(argument) {
+            const terminalUrl = new URL("/", window.location.href);
+            terminalUrl.searchParams.set("arg", argument);
+
+            const link = document.createElement("a");
+            link.href = terminalUrl.href;
+            link.target = "_blank";
+            link.rel = "noopener noreferrer";
+            document.body.append(link);
+            link.click();
+            link.remove();
+        }
+
+        document.querySelector("#new-session").addEventListener("click", () => {
+            const bytes = crypto.getRandomValues(new Uint8Array(16));
+            const token = Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0"))
+                .join("");
+            openTerminal(`tab-${token}`);
+        });
+
+        document.querySelector("#resume-form").addEventListener("submit", (event) => {
+            event.preventDefault();
+            const value = document.querySelector("#legacy-id").value.trim().toLowerCase();
+            if (value !== "remote" && !/^[1-9][0-9]{0,5}$/.test(value)) {
+                return;
+            }
+            openTerminal(`legacy-${value}`);
+        });
+    </script>
+</body>
+</html>

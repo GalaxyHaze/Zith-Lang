@@ -21,6 +21,22 @@ namespace zith::codegen {
 
 namespace {
 
+constexpr unsigned kMaxAlignmentMarkerBytes = 4096U;
+
+llvm::Type *alignmentMarkerType(llvm::LLVMContext &ctx, const llvm::DataLayout &layout,
+                                const uint32_t alignment_bytes) {
+    if (alignment_bytes == 0U || alignment_bytes > kMaxAlignmentMarkerBytes)
+        return nullptr;
+    for (unsigned lanes = 1U; lanes <= alignment_bytes; lanes *= 2U) {
+        auto *vector_type = llvm::FixedVectorType::get(llvm::Type::getInt8Ty(ctx), lanes);
+        auto *marker      = llvm::ArrayType::get(vector_type, 0U);
+        if (layout.getABITypeAlign(marker).value() == alignment_bytes &&
+            layout.getTypeAllocSize(marker).getFixedValue() == 0U)
+            return marker;
+    }
+    return nullptr;
+}
+
 void initializeCodeGenTargets() {
     static const bool initialized = [] {
         LLVMInitializeX86TargetInfo();
@@ -90,6 +106,19 @@ llvm::Type *CodeGenType::lower(types::TypeId id) {
                     llvm::SmallVector<llvm::Type *, 8> fields;
                     for (const auto &field : def.fields)
                         fields.push_back(lower(field.type));
+                    if (!def.hasForeignLayout && def.explicitAlignmentBytes != 0U &&
+                        layout_ != nullptr) {
+                        uint64_t natural_alignment = 1U;
+                        for (const auto &field : def.fields)
+                            natural_alignment =
+                                std::max(natural_alignment,
+                                         layout_->getABITypeAlign(lower(field.type)).value());
+                        if (natural_alignment < def.explicitAlignmentBytes) {
+                            if (auto *marker = alignmentMarkerType(
+                                    ctx_, *layout_, def.explicitAlignmentBytes))
+                                fields.push_back(marker);
+                        }
+                    }
                     result->setBody(fields, false);
                 }
                 return result;
@@ -253,6 +282,33 @@ uint64_t CodeGenType::fieldOffset(types::TypeId struct_type, std::string_view fi
     if (index == static_cast<size_t>(-1))
         return 0;
     return fieldOffset(struct_type, index);
+}
+
+bool CodeGenType::supportsExplicitAlignment(const types::TypeId struct_type) const {
+    if (types_.kindOf(struct_type) != types::TypeKind::Struct)
+        return true;
+    const auto &def = types_.getStructDef(struct_type);
+    if (def.hasForeignLayout || def.explicitAlignmentBytes == 0U)
+        return true;
+    if (layout_ == nullptr)
+        return false;
+
+    uint64_t natural_alignment = 1U;
+    for (const auto &field : def.fields) {
+        auto *field_type = const_cast<CodeGenType *>(this)->lower(field.type);
+        natural_alignment =
+            std::max(natural_alignment, layout_->getABITypeAlign(field_type).value());
+    }
+
+    return supportsRequestedAlignment(def.explicitAlignmentBytes, natural_alignment);
+}
+
+bool CodeGenType::supportsRequestedAlignment(const uint32_t alignment_bytes,
+                                             const uint64_t natural_alignment) const {
+    if (alignment_bytes == 0U || natural_alignment >= alignment_bytes)
+        return true;
+    return layout_ != nullptr &&
+           alignmentMarkerType(ctx_, *layout_, alignment_bytes) != nullptr;
 }
 
 std::optional<llvm::DataLayout> makeTargetDataLayout(const std::string_view target_triple) {

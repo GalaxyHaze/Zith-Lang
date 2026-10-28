@@ -1,0 +1,147 @@
+[1]
+task: explicit-alignment::drawing
+status: done
+desc: Record the aligned-struct and aligned-binding problem, scope, and resolved design decisions.
+impl:
+  - Keep the source drawing at /home/diogo/Zith/docs/plans/abi/explicit-alignment.md.
+  - State that the feature is not implemented and do not edit compiler source or implementation status.
+  - Record the resolved answers Q1-Q18, including struct-only type attributes and binding-only instance attributes.
+  - Preserve the Zith-- syntax `#[alignas(N)]` and distinguish it from `@alignas`.
+tests:
+  | id | dado | quando | então |
+  | D-1 | drawing markdown | read after creation | status, problem, size, non-goals, decisions, and review gate are present |
+  | D-2 | tracked worktree | inspect changed paths | no compiler source or implemented-feature table changed |
+
+[2]
+task: explicit-alignment::promises
+status: done
+desc: Define observable ABI promises, concrete layout rows, seams, and reversals.
+impl:
+  - Add ABI-ALIGN-01 for type-level struct layout with target x86_64-unknown-linux-gnu and exact fixture rows.
+  - Add ABI-ALIGN-02 for one binding's storage alignment without changing type layout or copy semantics.
+  - Add ABI-ALIGN-03 for diagnostics, supported declaration sites, target capability, and C ABI validation.
+  - Treat cpp_layout output as a reference fixture only; conforming Zith tests must prove these promises before implementation is complete.
+  - Do not sign the ADR until the idea owner reviews the drawing and promises.
+tests:
+  | id | dado | quando | então |
+  | P-1 | ABI-ALIGN-01 | inspect promise | target, field offsets, size, alignment, seam, and reversal are explicit |
+  | P-2 | ABI-ALIGN-02 | inspect promise | array base alignment and unchanged type size are explicit |
+  | P-3 | ABI-ALIGN-03 | inspect promise | invalid requests and unverified C layouts are rejected |
+
+[3]
+task: explicit-alignment::owner_review
+status: done
+desc: Sign the alignment contract only after explicit owner approval.
+impl:
+  - Record the explicit approval already given for unchanged Q1-Q18 promises.
+  - Confirm /home/diogo/Zith/docs/adr/0047-explicit-alignment-and-parser-attributes.md cites ABI-ALIGN-01 through ABI-ALIGN-03 and links the plan.
+  - Confirm the plan status is signed and links ADR-0047.
+  - Do not implement the compiler or mark the feature working in this task.
+tests:
+  | id | dado | quando | então |
+  | R-1 | owner review | no explicit approval received | task remains planned and no ADR is created |
+  | R-2 | owner approves unchanged promises | signing begins | next numbered ADR cites the plan and all three promise ids |
+
+[4]
+task: explicit-alignment::conformance_tests
+status: test
+desc: Draft deterministic frontend, semantic, layout, binding-storage, and C ABI tests from the signed contract before implementation.
+impl:
+  - Add frontend coverage for #[alignas(N)] argument parsing and recognized noalias/likely/unlikely names in /home/diogo/Zith/tests/test-frontend.cpp.
+  - Add TypeChecked diagnostics for invalid or duplicate alignas values, unsupported placements, generic-dependent values, and non-pointer noalias in /home/diogo/Zith/tests/test-parse-input.cpp.
+  - Add the x86_64-unknown-linux-gnu layout fixture from ABI-ALIGN-01 to /home/diogo/Zith/tests/test-codegen.cpp.
+  - Add an aligned [128]u8 binding check proving storage alignment changes while the type size remains 128, plus a C ABI rejection check for an unverified aligned record, in /home/diogo/Zith/tests/test-codegen.cpp.
+  - Reserve cache and ZIRL round-trip assertions for explicit-alignment::runtime_and_cache, after the persistent metadata fields exist.
+  - Keep tests deterministic and assert diagnostics by code or stable message text.
+  - Run tests before production changes and record the expected red failures without marking this task done.
+  - Baseline on 2026-10-28: the three test targets compile; test-frontend reports 3 expected failures, test-parse-input 11, and test-codegen 5 because alignment syntax and validation are not implemented yet.
+tests:
+  | id | dado | quando | então |
+  | T-1 | signed alignment promises | test design is inspected | each ABI promise has a named deterministic test seam |
+  | T-2 | attribute parser scope | frontend tests are inspected | accepted names and invalid placements are covered |
+  | T-3 | unverified aligned record at a C ABI boundary | codegen conformance runs | compilation is rejected with an alignment/layout diagnostic |
+
+[5]
+task: explicit-alignment::frontend_sema
+status: done
+desc: Parse alignment arguments and recognized companion attributes, then validate all declaration sites and values.
+impl:
+  - Extend /home/diogo/Zith/src/frontend/frontend.hpp Attribute with an optional expression id for attribute arguments and AttributeKind values for AlignAs, NoAlias, Likely, and Unlikely.
+  - Update AstLowerer::parseAttributes in /home/diogo/Zith/src/frontend/ast-lowerer.cpp to parse parenthesized attribute expressions while preserving the full span.
+  - Update /home/diogo/Zith/src/frontend/attribute-classify.hpp so alignas is limited to ordinary structs and permitted bindings, noalias to functions, and likely/unlikely are recognized names.
+  - Validate alignas duplicates and unsupported fields, parameters, components, unions, and enums with errors rather than warnings.
+  - In sema, require alignas to evaluate to a positive power-of-two integer constant independent of generic parameters and reject target-unsupported values.
+  - Require noalias functions to return a pointer; do not add optimizer or branch-likelihood behavior for these parser attributes.
+  - Preserve accepted module-scope const bindings without introducing new global declaration forms.
+tests:
+  | id | dado | quando | então |
+  | F-1 | #[alignas(N)] attribute syntax | frontend parses a struct or binding | one argument expression and its source span are retained |
+  | F-2 | unsupported placement or invalid N | TypeChecked runs | compilation fails with an error diagnostic |
+  | F-3 | companion attribute | noalias targets a non-pointer return | compilation fails with an error diagnostic |
+  | F-4 | likely/unlikely attributes | frontend parses a declaration | neither spelling is diagnosed as unknown |
+
+[6]
+task: explicit-alignment::type_layout
+status: done
+desc: Carry struct alignment through canonical types and compute padded field offsets, size, and array stride consistently.
+impl:
+  - Add requested struct alignment to /home/diogo/Zith/src/sema/modern-types.hpp and every ordinary and generic struct construction path.
+  - Carry the effective alignment into /home/diogo/Zith/src/types/type-intern.hpp StructDef and its definition helpers.
+  - Update /home/diogo/Zith/src/types/type-canonical.cpp so field offsets use aligned offsets, aggregate size is tail-padded to aggregate alignment, and array size uses aligned element stride.
+  - Include explicit alignment in canonical type identity and preserve foreign C layout behavior.
+  - Update /home/diogo/Zith/src/codegen/codegen-type.cpp with an LLVM representation that preserves field indexes while matching the promised explicit alignment and padded size.
+  - Confirm target support against the configured LLVM DataLayout and return a semantic diagnostic rather than emitting unsupported layouts.
+tests:
+  | id | dado | quando | então |
+  | L-1 | ABI-ALIGN-01 fixture | layout tests compile on x86_64-unknown-linux-gnu | offsets are 0 and 0/64 as specified; sizes and alignments are 64, 128, and 64 |
+  | L-2 | aligned struct array | layout is queried | element stride is 64 and [2] size is 128 |
+  | L-3 | canonical identity | otherwise-identical struct definitions request different alignments | their canonical identities differ |
+
+[7]
+task: explicit-alignment::binding_storage
+status: done
+desc: Propagate binding-only alignment through HIR to native and VM storage allocation.
+impl:
+  - Add alignment bytes to /home/diogo/Zith/src/hir/hir-attrs.hpp HirSlotAttrs and module-scope HirGlobalConst metadata.
+  - In /home/diogo/Zith/src/sema/hir-lower-stmt.cpp, attach validated alignment to each annotated local binding slot.
+  - In /home/diogo/Zith/src/sema/hir-lower-modern.cpp, attach alignment to permitted module-scope const storage.
+  - Apply the requested LLVM alignment to allocas in /home/diogo/Zith/src/codegen/codegen-emit-expr.cpp and globals in the global emission path.
+  - Use per-slot alignment in /home/diogo/Zith/src/vm/hir-to-vm.cpp rather than the fixed alignment immediate.
+  - Keep the declared type and array element stride unchanged for binding-level alignment.
+tests:
+  | id | dado | quando | então |
+  | B-1 | #[alignas(64)] local [128]u8 | native codegen runs | base storage is 64-byte aligned while type size remains 128 |
+  | B-2 | copy from aligned binding to ordinary binding | both bindings are emitted | only the annotated destination receives the stronger alignment |
+  | B-3 | aligned local in VM | VM runs the test fixture | the slot address satisfies the requested alignment |
+
+[8]
+task: explicit-alignment::runtime_and_cache
+status: done
+desc: Persist aligned type and storage metadata and enforce safe C ABI boundaries across supported execution paths.
+impl:
+  - Extend compact struct definitions and HIR slot/global records in /home/diogo/Zith/src/cache/cache-types.hpp and /home/diogo/Zith/src/cache/artifact-builder.cpp.
+  - Encode and decode the new metadata in /home/diogo/Zith/src/zirl/zirl-type-section.cpp, /home/diogo/Zith/src/zirl/zirl-attrs-section.cpp, and /home/diogo/Zith/src/session/persistent-cache.cpp.
+  - Bump only the necessary schema or container versions and preserve explicit compatibility rejection for old artifacts.
+  - Reject aligned C by-value records unless foreign layout metadata proves the exact type layout and alignment; preserve existing unsupported-record diagnostics.
+  - Verify HIR interpreter and VM allocation paths do not silently lose binding alignment guarantees.
+tests:
+  | id | dado | quando | então |
+  | C-1 | aligned type and slot metadata | cache encode/decode round-trips | requested type and storage alignments are unchanged |
+  | C-2 | aligned value at unverified C ABI boundary | semantic/codegen boundary is checked | a diagnostic prevents emission |
+  | C-3 | old artifact schema | cache reader loads artifact | stale incompatible metadata is rejected or invalidated explicitly |
+
+[9]
+task: explicit-alignment::docs_and_conformance
+status: error
+desc: Document the shipped alignment and attribute rules and run the complete conformance suite.
+impl:
+  - Update /home/diogo/Zith/docs/Zith--.md with #[alignas(N)] type and binding forms, validation, and layout effects.
+  - Update /home/diogo/Zith/docs/Zith---implementation.md with parser, sema, HIR, codegen, VM, cache, and C ABI behavior.
+  - Update /home/diogo/Zith/docs/18-c-interop.md only if the supported/rejected aligned-record boundary changes.
+  - Run focused frontend, sema, codegen, cache/ZIRL, and VM tests.
+  - Run ctest --test-dir /home/diogo/Zith/build --output-on-failure and the repository fmt-check target.
+  - Update /home/diogo/Zith/docs/impl-status.md only after every contract test passes.
+tests:
+  | id | dado | quando | então |
+  | DOC-1 | implementation and docs | full CTest and fmt-check run | all tests pass and status matches verified behavior |
+  | DOC-2 | C ABI docs | aligned-record support remains unproven | docs continue to state such records are rejected |

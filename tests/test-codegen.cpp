@@ -106,6 +106,15 @@ struct ModernFileCodegenTest {
         size_t cacheHits  = 0;
         int exitCode      = 0;
         std::string output;
+        std::vector<std::string> messages;
+
+        [[nodiscard]] bool hasMessage(std::string_view needle) const {
+            for (const auto &message : messages) {
+                if (message.find(needle) != std::string::npos)
+                    return true;
+            }
+            return false;
+        }
     };
 
     Result run(std::string_view main_name = "main.zith") {
@@ -115,9 +124,11 @@ struct ModernFileCodegenTest {
 
         bool ok     = session.run();
         size_t errs = 0;
+        std::vector<std::string> messages;
         for (const auto &d : session.diags().all()) {
             if (d.severity == diagnostics::Severity::Error) {
                 errs++;
+                messages.push_back(d.message);
                 std::printf("    [ModernCodegenDiag] Code: %u, Message: %s\n", d.code,
                             d.message.c_str());
             }
@@ -133,7 +144,8 @@ struct ModernFileCodegenTest {
                 errs,
                 session.cacheMetrics().hits,
                 session.childExitCode(),
-                std::move(output)};
+                std::move(output),
+                std::move(messages)};
     }
 };
 
@@ -606,6 +618,193 @@ static void test_sizeof_intrinsic_runtime() {
     CHECK_EQ(r.exitCode, 1, "@sizeOf folds to the target-ABI size in bytes");
 }
 
+static void test_explicit_struct_alignment_layout() {
+    ModernFileCodegenTest t;
+    t.opts.targetTriple = "x86_64-unknown-linux-gnu";
+    t.write("main.zith", "#[alignas(64)] struct AlignedSmall { value: u8 }\n"
+                         "struct ContainsAligned { leading: u8, value: AlignedSmall }\n"
+                         "fn main(): i32 {\n"
+                         "    if (@alignOf(AlignedSmall) != 64) { return 1; }\n"
+                         "    if (@sizeOf(AlignedSmall) != 64) { return 2; }\n"
+                         "    if (@offsetOf(AlignedSmall, value) != 0) { return 3; }\n"
+                         "    if (@offsetOf(ContainsAligned, leading) != 0) { return 4; }\n"
+                         "    if (@offsetOf(ContainsAligned, value) != 64) { return 5; }\n"
+                         "    if (@alignOf(ContainsAligned) != 64) { return 6; }\n"
+                         "    if (@sizeOf(ContainsAligned) != 128) { return 7; }\n"
+                         "    if (@alignOf([2]AlignedSmall) != 64) { return 8; }\n"
+                         "    if (@sizeOf([2]AlignedSmall) != 128) { return 9; }\n"
+                         "    return 0;\n"
+                         "}\n");
+    auto r = t.run();
+    CHECK(r.ok, "explicit struct alignment compiles for the contract target");
+    if (r.ok)
+        CHECK_EQ(r.exitCode, 0,
+                 "struct fields, aggregate padding, and array stride follow the alignment "
+                 "contract");
+
+    auto warm = t.run();
+    CHECK(warm.ok, "the aligned struct still compiles and runs from the persistent cache");
+    CHECK(warm.cacheHits > 0U, "the aligned struct test exercises a warm-cache hit");
+    CHECK_EQ(warm.exitCode, 0, "cached type layout preserves explicit struct alignment");
+}
+
+static void test_unsupported_struct_alignment_is_rejected() {
+    ModernFileCodegenTest t;
+    t.opts.targetTriple = "x86_64-unknown-linux-gnu";
+    t.write("main.zith", "#[alignas(8192)] struct TooAligned { value: u8 }\n"
+                         "fn main(): i32 { return 0; }\n");
+
+    const auto result = t.run();
+    CHECK(!result.ok, "a struct alignment the backend cannot represent is rejected");
+    CHECK(result.hasMessage("cannot represent requested alignment 8192"),
+          "unsupported struct alignment produces a compiler diagnostic");
+}
+
+static void test_explicit_array_binding_alignment() {
+    ModernFileCodegenTest t;
+    t.opts.targetTriple = "x86_64-unknown-linux-gnu";
+    t.opts.flags.emitIr(true);
+
+#ifdef ZITH_ENABLE_C_INTEROP
+    t.opts.cSourceDirs.push("c");
+    t.write("c/alignment-check.c", "#include <stdint.h>\n"
+                                   "int c_is_aligned_64(unsigned char *value) {\n"
+                                   "    return ((uintptr_t)value % 64U) == 0U;\n"
+                                   "}\n");
+    t.write("alignment-check.h", "int c_is_aligned_64(unsigned char *value);\n");
+    std::string source = "import \"alignment-check.h\"\n";
+#else
+    std::string source;
+#endif
+    source += "fn main(): i32 {\n"
+              "    #[alignas(64)] var bytes: [128]u8 = [";
+    for (size_t index = 0; index < 128U; ++index) {
+        if (index != 0U)
+            source += ", ";
+        source += "0";
+    }
+    source += "];\n"
+              "    var copied: [128]u8 = bytes;\n"
+              "    copied[0] = 9;\n"
+              "    bytes[0] = 17;\n"
+              "    if (@sizeOf([128]u8) != 128) { return 1; }\n"
+#ifdef ZITH_ENABLE_C_INTEROP
+              "    if (c_is_aligned_64(@ptrOf(bytes)) == 0) { return 2; }\n"
+#endif
+              "    return 17;\n"
+              "}\n";
+    t.write("main.zith", source);
+
+    auto r = t.run();
+    CHECK(r.ok, "an aligned array binding compiles and executes");
+    CHECK_EQ(r.exitCode, 17, "the array type retains its 128-byte size");
+    constexpr std::string_view aligned_alloca = "alloca [128 x i8], align 64";
+    const auto aligned_alloca_pos             = r.output.find(aligned_alloca);
+    CHECK(aligned_alloca_pos != std::string::npos,
+          "the binding's LLVM stack storage has 64-byte alignment");
+    if (aligned_alloca_pos != std::string::npos) {
+        CHECK(r.output.find(aligned_alloca, aligned_alloca_pos + aligned_alloca.size()) ==
+                  std::string::npos,
+              "copying an aligned array does not propagate alignment to the destination");
+        CHECK(r.output.find("alloca [128 x i8]", aligned_alloca_pos + aligned_alloca.size()) !=
+                  std::string::npos,
+              "the ordinary copy still has independent array storage");
+    }
+
+    auto warm = t.run();
+    CHECK(warm.ok, "the aligned array still compiles and runs from the persistent cache");
+    CHECK(warm.cacheHits > 0U, "the aligned array test exercises a warm-cache hit");
+    CHECK_EQ(warm.exitCode, 17, "cached slot metadata preserves the aligned binding");
+    CHECK(warm.output.find(aligned_alloca) != std::string::npos,
+          "warm-cache LLVM keeps the binding's requested alignment");
+}
+
+static void test_explicit_global_binding_alignment() {
+    ModernFileCodegenTest t;
+    t.opts.targetTriple = "x86_64-unknown-linux-gnu";
+    t.opts.flags.emitIr(true);
+    t.write("main.zith", "#[alignas(64)] const aligned_value: i32 = 7;\n"
+                         "fn main(): i32 { return aligned_value as i32; }\n");
+
+    auto r = t.run();
+    CHECK(r.ok, "an explicitly aligned module-scope const compiles and executes");
+    CHECK_EQ(r.exitCode, 7, "the aligned module-scope const retains its value");
+    CHECK(r.output.find("constant i32 7, align 64") != std::string::npos,
+          "the LLVM global uses the binding's requested alignment");
+
+    auto warm = t.run();
+    CHECK(warm.ok, "the aligned global still compiles and runs from the persistent cache");
+    CHECK(warm.cacheHits > 0U, "the aligned global test exercises a warm-cache hit");
+    CHECK_EQ(warm.exitCode, 7, "cached global metadata preserves its value");
+    CHECK(warm.output.find("constant i32 7, align 64") != std::string::npos,
+          "warm-cache LLVM keeps the global's requested alignment");
+}
+
+static void test_explicit_for_in_binding_alignment() {
+    ModernFileCodegenTest t;
+    t.opts.targetTriple = "x86_64-unknown-linux-gnu";
+    t.opts.flags.emitIr(true);
+    t.write("main.zith", "fn main(): i32 {\n"
+                         "    var total: i32 = 0;\n"
+                         "    for (#[alignas(64)] value in 0..<1) {\n"
+                         "        total = total + value;\n"
+                         "    }\n"
+                         "    return total;\n"
+                         "}\n");
+
+    const auto result = t.run();
+    CHECK(result.ok, "an explicitly aligned for-in binding compiles and executes");
+    CHECK_EQ(result.exitCode, 0, "the aligned for-in binding preserves loop behavior");
+    CHECK(result.output.find("alloca i32, align 64") != std::string::npos,
+          "the synthetic loop binding's LLVM storage has 64-byte alignment");
+}
+
+static void test_unsupported_binding_alignment_is_rejected() {
+    ModernFileCodegenTest local;
+    local.opts.targetTriple = "x86_64-unknown-linux-gnu";
+    local.write("main.zith", "fn main(): i32 {\n"
+                             "    #[alignas(8192)] var value: i32 = 7;\n"
+                             "    return value;\n"
+                             "}\n");
+
+    const auto local_result = local.run();
+    CHECK(!local_result.ok, "an unsupported local binding alignment is rejected");
+    CHECK(local_result.hasMessage("cannot represent requested alignment 8192"),
+          "unsupported local alignment produces a compiler diagnostic");
+
+    ModernFileCodegenTest global;
+    global.opts.targetTriple = "x86_64-unknown-linux-gnu";
+    global.write("main.zith", "#[alignas(8192)] const value: i32 = 7;\n"
+                              "fn main(): i32 { return value; }\n");
+
+    const auto global_result = global.run();
+    CHECK(!global_result.ok, "an unsupported global binding alignment is rejected");
+    CHECK(global_result.hasMessage("cannot represent requested alignment 8192"),
+          "unsupported global alignment produces a compiler diagnostic");
+}
+
+static void test_unverified_aligned_record_is_rejected_at_c_abi() {
+    ModernFileCodegenTest t;
+    t.opts.targetTriple = "x86_64-unknown-linux-gnu";
+    t.opts.targetStage  = session::Stage::TypeChecked;
+    t.write("main.zith", "#[alignas(64)] struct Aligned { value: i32 }\n"
+                         "struct Wrapper { value: Aligned }\n"
+                         "extern fn consume(value: Aligned): i32\n"
+                         "extern fn consume_wrapper(value: Wrapper): i32\n"
+                         "extern fn produce(): Aligned\n"
+                         "fn main(): i32 {\n"
+                         "    let value: Aligned = Aligned { value: 1 };\n"
+                         "    return consume(value);\n"
+                         "}\n");
+
+    auto r = t.run();
+    CHECK(!r.ok, "an unverified aligned record is rejected at the C ABI boundary");
+    CHECK(r.hasMessage("unsupported C ABI"),
+          "the C ABI rejection is a compiler diagnostic, not a linker failure");
+    CHECK_EQ(r.errorCount, 3u,
+             "direct parameters, nested parameters, and by-value returns are all rejected");
+}
+
 static void test_slice_string_intrinsics_runtime() {
     ModernFileCodegenTest t;
     t.write("main.zith", "extern fn printf(fmt: *char, ...): i32\n"
@@ -655,22 +854,21 @@ static void test_when_expression_runtime() {
 
 static void test_when_void_expression_case_executes() {
     CodegenTest t;
-    auto r = t.run("codegen-when-void-body.zith",
-                   "extern fn puts(msg: *char)\n"
-                   "fn main() {\n"
-                   "    when (1) {\n"
-                   "        (1) puts(\"A\"),\n"
-                   "        (_) puts(\"B\")\n"
-                   "    }\n"
-                   "    when (2) {\n"
-                   "        (1) puts(\"C\"),\n"
-                   "        (_) puts(\"D\")\n"
-                   "    }\n"
-                   "    when (3) {\n"
-                   "        (3) { puts(\"E\"); },\n"
-                   "        (_) { puts(\"F\"); }\n"
-                   "    }\n"
-                   "}\n");
+    auto r = t.run("codegen-when-void-body.zith", "extern fn puts(msg: *char)\n"
+                                                  "fn main() {\n"
+                                                  "    when (1) {\n"
+                                                  "        (1) puts(\"A\"),\n"
+                                                  "        (_) puts(\"B\")\n"
+                                                  "    }\n"
+                                                  "    when (2) {\n"
+                                                  "        (1) puts(\"C\"),\n"
+                                                  "        (_) puts(\"D\")\n"
+                                                  "    }\n"
+                                                  "    when (3) {\n"
+                                                  "        (3) { puts(\"E\"); },\n"
+                                                  "        (_) { puts(\"F\"); }\n"
+                                                  "    }\n"
+                                                  "}\n");
     CHECK(r.ok, "when with void expression case bodies compiles and runs");
     CHECK(r.output == "A\nD\nE\n",
           "when executes direct void bodies and does not duplicate block-body effects");
@@ -1163,7 +1361,8 @@ static void test_from_console_lowers_println_body() {
                                                 "    return 0;\n"
                                                 "}\n");
     CHECK(r.ok, "from std/io/console compiles and runs");
-    CHECK(r.output.find("define i32 @\"std.io.console.println(dyn Allocator,[]char,[...]dyn Formatable)\"") !=
+    CHECK(r.output.find(
+              "define i32 @\"std.io.console.println(dyn Allocator,[]char,[...]dyn Formatable)\"") !=
               std::string::npos,
           "Imported println body is emitted into LLVM IR");
     CHECK(r.output.find("call i32 @putchar") != std::string::npos,
@@ -1173,15 +1372,17 @@ static void test_from_console_lowers_println_body() {
 static void test_console_alias_resolves_member_without_global_import() {
     CodegenTest aliased;
     aliased.opts.flags.emitIr(true);
-    auto ok = aliased.run("codegen-console-alias.zith", "import std/io/console as console\n"
-                                                        "from std/memory\n"
-                                                        "fn main(): i32 {\n"
-                                                        "    let heap = HeapAllocator {};\n"
-                                                        "    _ = console.println(heap, \"alias import\");\n"
-                                                        "    return 0;\n"
-                                                        "}\n");
+    auto ok = aliased.run("codegen-console-alias.zith",
+                          "import std/io/console as console\n"
+                          "from std/memory\n"
+                          "fn main(): i32 {\n"
+                          "    let heap = HeapAllocator {};\n"
+                          "    _ = console.println(heap, \"alias import\");\n"
+                          "    return 0;\n"
+                          "}\n");
     CHECK(ok.ok, "console.println resolves through an import alias");
-    CHECK(ok.output.find("call i32 @\"std.io.console.println(dyn Allocator,[]char,[...]dyn Formatable)\"") !=
+    CHECK(ok.output.find(
+              "call i32 @\"std.io.console.println(dyn Allocator,[]char,[...]dyn Formatable)\"") !=
               std::string::npos,
           "Alias import emits a call to the imported function");
 
@@ -1514,8 +1715,7 @@ static void test_dyn_trait_lend_dyn_receiver_dispatch_runtime() {
     CHECK(r.usedModern, "lend dyn receiver uses the modern codegen pipeline");
     CHECK(r.ok, "a lend dyn Trait receiver compiles, links, dispatches and executes");
     CHECK_EQ(r.errorCount, 0u, "the lend dyn receiver module passes LLVM verification");
-    CHECK_EQ(r.exitCode, 41,
-             "calling a lend dyn Trait method mutates the caller's value in place");
+    CHECK_EQ(r.exitCode, 41, "calling a lend dyn Trait method mutates the caller's value in place");
 
     // A `dyn` value built from a temporary must dispatch but keep the mutation
     // on the spill copy instead of the unrelated caller.
@@ -1899,15 +2099,16 @@ static void test_defer_in_if_and_loop() {
     CHECK(if_test.ok, "defer inside if compiles, links and runs");
     CHECK_EQ(if_test.output, "0BZ", "defer runs when the innermost if block exits");
 
-    auto loop_test = t.run("codegen-defer-loop.zith", "#[discardable] extern fn putchar(c: i32): i32\n"
-                                                      "fn main() {\n"
-                                                      "    for (true) {\n"
-                                                      "        defer putchar(66);\n"
-                                                      "        _ = putchar(65);\n"
-                                                      "        break;\n"
-                                                      "    }\n"
-                                                      "    putchar(90);\n"
-                                                      "}\n");
+    auto loop_test =
+        t.run("codegen-defer-loop.zith", "#[discardable] extern fn putchar(c: i32): i32\n"
+                                         "fn main() {\n"
+                                         "    for (true) {\n"
+                                         "        defer putchar(66);\n"
+                                         "        _ = putchar(65);\n"
+                                         "        break;\n"
+                                         "    }\n"
+                                         "    putchar(90);\n"
+                                         "}\n");
     CHECK(loop_test.ok, "defer in loop with break compiles, links and runs");
     CHECK_EQ(loop_test.output, "ABZ", "defer runs before break leaves the loop/block");
 }
@@ -2212,21 +2413,22 @@ static void test_raw_slice_and_index_runtime() {
 /// Runtime checks wrap valid checked indexes in Some and invalid ones in None.
 static void test_checked_index_runtime() {
     ModernFileCodegenTest t;
-    t.write("main.zith", "fn pick(values: [3]i32, i: i32): ?i32 { values[i] }\n"
-                         "fn slice_pick(values: []i32, i: i32): ?i32 { values[i] }\n"
-                         "fn main(): i32 {\n"
-                         "    var values: [3]i32 = [10, 20, 30];\n"
-                         "    let slice: []i32 = raw values[0..3];\n"
-                         "    let short_slice: []i32 = raw values[0..1];\n"
-                         "    var failures: i32 = 0;\n"
-                         "    if (pick(values, 1) is null) { failures = failures + 1; }\n"
-                         "    if (pick(values, 3) is null) { failures = failures + 1; }\n"
-                         "    if (slice_pick(slice, 0) is null) { failures = failures + 1; }\n"
-                         "    if (slice_pick(slice, 3) is null) { failures = failures + 1; }\n"
-                         "    if (slice_pick(short_slice, 1) is null) { failures = failures + 1; }\n"
-                         "    if (raw short_slice[1] != 20) { failures = failures + 1; }\n"
-                         "    return failures;\n"
-                         "}\n");
+    t.write("main.zith",
+            "fn pick(values: [3]i32, i: i32): ?i32 { values[i] }\n"
+            "fn slice_pick(values: []i32, i: i32): ?i32 { values[i] }\n"
+            "fn main(): i32 {\n"
+            "    var values: [3]i32 = [10, 20, 30];\n"
+            "    let slice: []i32 = raw values[0..3];\n"
+            "    let short_slice: []i32 = raw values[0..1];\n"
+            "    var failures: i32 = 0;\n"
+            "    if (pick(values, 1) is null) { failures = failures + 1; }\n"
+            "    if (pick(values, 3) is null) { failures = failures + 1; }\n"
+            "    if (slice_pick(slice, 0) is null) { failures = failures + 1; }\n"
+            "    if (slice_pick(slice, 3) is null) { failures = failures + 1; }\n"
+            "    if (slice_pick(short_slice, 1) is null) { failures = failures + 1; }\n"
+            "    if (raw short_slice[1] != 20) { failures = failures + 1; }\n"
+            "    return failures;\n"
+            "}\n");
 
     auto r = t.run();
     CHECK(r.ok, "checked index expressions compile, link and execute");
@@ -3021,12 +3223,10 @@ static void test_imported_external_globals_runtime() {
 #ifdef ZITH_ENABLE_C_INTEROP
     ModernFileCodegenTest t;
     t.opts.flags.emitIr(true);
-    t.write("external-globals.h",
-            "extern int zith_external_value;\n"
-            "extern int zith_mutable_value;\n");
-    t.write("c/globals.c",
-            "int zith_external_value = 27;\n"
-            "int zith_mutable_value = 5;\n");
+    t.write("external-globals.h", "extern int zith_external_value;\n"
+                                  "extern int zith_mutable_value;\n");
+    t.write("c/globals.c", "int zith_external_value = 27;\n"
+                           "int zith_mutable_value = 5;\n");
     t.write("ZithProject.toml", "[ffi]\n"
                                 "c_source_dirs = [\"c\"]\n");
     t.write("main.zith", "import \"external-globals.h\"\n"
@@ -3161,11 +3361,12 @@ static void test_c_default_arguments_and_string_escapes() {
 
     {
         CodegenTest t;
-        auto r = t.run("codegen-escapes-char.zith", "extern fn printf(fmt: *char, ...): i32\n"
-                                                    "fn main(): i32 {\n"
-                                                    "    _ = printf(\"v=%d\\n[%f]%c\", 42, 1.5, 'B');\n"
-                                                    "    return 0;\n"
-                                                    "}\n");
+        auto r =
+            t.run("codegen-escapes-char.zith", "extern fn printf(fmt: *char, ...): i32\n"
+                                               "fn main(): i32 {\n"
+                                               "    _ = printf(\"v=%d\\n[%f]%c\", 42, 1.5, 'B');\n"
+                                               "    return 0;\n"
+                                               "}\n");
         CHECK(r.ok, "escaped strings, char literal args and promoted variadic args run");
         CHECK(r.output == "v=42\n[1.500000]B",
               "escaped newline decodes, char literals pass through %c, and variadic args print");
@@ -3196,7 +3397,9 @@ static void test_octal_escape_runtime() {
                                                 "    return 0;\n"
                                                 "}\n");
     CHECK(r.ok, "octal escapes compile, link and run");
-    CHECK(r.output == "A\x1b" "B\nCAD\nE\x07" "F\n",
+    CHECK(r.output == "A\x1b"
+                      "B\nCAD\nE\x07"
+                      "F\n",
           "\\033 is ESC, \\101 is 'A', and \\7 is BEL");
 
     // A single `\0` stays NUL, and a following digit is a literal character
@@ -3204,14 +3407,13 @@ static void test_octal_escape_runtime() {
     // in-memory characters. `@lengthOf` decodes escapes, so it observes the
     // byte count even though `printf` would stop at the NUL.
     CodegenTest t2;
-    auto r2 = t2.run("codegen-nul-then-digit.zith",
-                     "fn main(): i32 {\n"
-                     "    if (@lengthOf(\"M\\08N\") != 4) { return 1; }\n"
-                     "    return 0;\n"
-                     "}\n");
+    auto r2 =
+        t2.run("codegen-nul-then-digit.zith", "fn main(): i32 {\n"
+                                              "    if (@lengthOf(\"M\\08N\") != 4) { return 1; }\n"
+                                              "    return 0;\n"
+                                              "}\n");
     CHECK(r2.ok, "a NUL followed by a digit compiles and runs");
-    CHECK_EQ(r2.exitCode, 0,
-             "\\0 is one NUL byte and the following '8' is a literal character");
+    CHECK_EQ(r2.exitCode, 0, "\\0 is one NUL byte and the following '8' is a literal character");
 }
 
 // Program output must live in takeChildOutput(), not in the compiler's
@@ -3415,15 +3617,14 @@ static void test_validated_c_double_pair_by_value_runs() {
 #ifdef ZITH_ENABLE_C_INTEROP
     ModernFileCodegenTest t;
     t.opts.cSourceDirs.push("c");
-    t.write("c/double-pair.c",
-            "struct DoublePair { double left, right; };\n"
-            "double c_pair_weighted_sum(struct DoublePair value) {\n"
-            "    return value.left * 10.0 + value.right;\n"
-            "}\n"
-            "struct DoublePair c_make_double_pair(double left, double right) {\n"
-            "    struct DoublePair value = { left, right };\n"
-            "    return value;\n"
-            "}\n");
+    t.write("c/double-pair.c", "struct DoublePair { double left, right; };\n"
+                               "double c_pair_weighted_sum(struct DoublePair value) {\n"
+                               "    return value.left * 10.0 + value.right;\n"
+                               "}\n"
+                               "struct DoublePair c_make_double_pair(double left, double right) {\n"
+                               "    struct DoublePair value = { left, right };\n"
+                               "    return value;\n"
+                               "}\n");
     t.write("main.zith", "import \"double-pair.h\"\n"
                          "fn main(): i32 {\n"
                          "    let value = c_make_double_pair(2.0, 3.0);\n"
@@ -3432,8 +3633,8 @@ static void test_validated_c_double_pair_by_value_runs() {
                          "    return 0;\n"
                          "}\n");
     t.write("double-pair.h", "struct DoublePair { double left, right; };\n"
-                            "double c_pair_weighted_sum(struct DoublePair value);\n"
-                            "struct DoublePair c_make_double_pair(double left, double right);\n");
+                             "double c_pair_weighted_sum(struct DoublePair value);\n"
+                             "struct DoublePair c_make_double_pair(double left, double right);\n");
 
     auto r = t.run();
     CHECK(r.ok, "C double-record parameters and results compile, link, and run");
@@ -3463,9 +3664,9 @@ static void test_validated_c_large_record_by_value_runs() {
                          "    return 0;\n"
                          "}\n");
     t.write("large-record.h", "struct Triple64 { long long first, second, third; };\n"
-                             "long long c_sum_triple64(struct Triple64 value);\n"
-                             "struct Triple64 c_make_triple64(long long first, long long second,\n"
-                             "                                long long third);\n");
+                              "long long c_sum_triple64(struct Triple64 value);\n"
+                              "struct Triple64 c_make_triple64(long long first, long long second,\n"
+                              "                                long long third);\n");
 
     auto r = t.run();
     CHECK(r.ok, "24-byte C records compile, link, and run by value");
@@ -3493,8 +3694,8 @@ static void test_validated_c_mixed_integer_record_by_value_runs() {
                          "    return 0;\n"
                          "}\n");
     t.write("mixed-records.h", "struct Mixed32_64 { int small; long long large; };\n"
-                              "long long c_sum_mixed32_64(struct Mixed32_64 value);\n"
-                              "struct Mixed32_64 make_mixed32_64(int small, long long large);\n");
+                               "long long c_sum_mixed32_64(struct Mixed32_64 value);\n"
+                               "struct Mixed32_64 make_mixed32_64(int small, long long large);\n");
 
     auto r = t.run();
     CHECK(r.ok, "validated mixed i32/i64 record parameters and results compile, link, and run");
@@ -3722,6 +3923,20 @@ static void test_codegen() {
     printf("Running test_offsetof_and_alignof_runtime\n");
     test_offsetof_and_alignof_runtime();
     test_sizeof_intrinsic_runtime();
+    printf("Running test_explicit_struct_alignment_layout\n");
+    test_explicit_struct_alignment_layout();
+    printf("Running test_unsupported_struct_alignment_is_rejected\n");
+    test_unsupported_struct_alignment_is_rejected();
+    printf("Running test_explicit_array_binding_alignment\n");
+    test_explicit_array_binding_alignment();
+    printf("Running test_explicit_global_binding_alignment\n");
+    test_explicit_global_binding_alignment();
+    printf("Running test_explicit_for_in_binding_alignment\n");
+    test_explicit_for_in_binding_alignment();
+    printf("Running test_unsupported_binding_alignment_is_rejected\n");
+    test_unsupported_binding_alignment_is_rejected();
+    printf("Running test_unverified_aligned_record_is_rejected_at_c_abi\n");
+    test_unverified_aligned_record_is_rejected_at_c_abi();
     printf("Running test_slice_string_intrinsics_runtime\n");
     test_slice_string_intrinsics_runtime();
     test_when_expression_runtime();

@@ -601,7 +601,8 @@ TypeId PerModuleSema::instantiateTypeExpr(frontend::TextSpan span, std::string_v
             fld_names.push(std::string_view(buf, param.name.size()));
         }
         activeTemplateArgs_ = std::move(saved_active);
-        TypeId st = type_table.internStruct(concrete_name, fields, &fld_names, &field_meta, &args);
+        TypeId st = type_table.internStruct(concrete_name, fields, &fld_names, &field_meta, &args,
+                                            requestedStructAlignment(*template_decl));
         type_table.setDefiningModule(st, type_table.definingModule(type_table.lookupNamed(name)));
         type_table.registerNamed(concrete_name, st);
         return st;
@@ -737,8 +738,9 @@ TypeId PerModuleSema::instantiateStructFromArgs(frontend::TextSpan span,
     for (auto &binding : saved_active)
         active_storage.push_back(std::move(binding));
 
-    const TypeId st =
-        type_table.internStruct(concrete_name, fields, &field_names, &field_meta, &args);
+    const TypeId st = type_table.internStruct(concrete_name, fields, &field_names, &field_meta,
+                                              &args,
+                                              field_sema->requestedStructAlignment(template_decl));
     const std::string_view defining_module =
         type_table.definingModule(type_table.lookupNamed(template_decl.name));
     type_table.setDefiningModule(st, defining_module);

@@ -113,8 +113,8 @@ struct TypedMap {
     explicit TypedMap(memory::Arena &)
         : exprTypes(), declTypes(), localTypes(), forInRangeLiteral(), forInNext(), containsCall(),
           forInElementIndex(), forInEndIndex(), forInUnionType(), forInOptionalType(),
-          traitQualifiedReceiverBase(), opaqueSourceTypes(), dynSourceTypes(),
-          provenNonNullExprs(), variadicCallPlans(), variadicStmtPlans() {}
+          traitQualifiedReceiverBase(), opaqueSourceTypes(), dynSourceTypes(), provenNonNullExprs(),
+          variadicCallPlans(), variadicStmtPlans() {}
 };
 
 class SemaPipeline;
@@ -156,6 +156,7 @@ struct PerModuleSema {
     TypeId typeOfExpr(frontend::ExprId id) const noexcept;
     TypeId typeOfDecl(frontend::DeclId id) const noexcept;
     TypeId typeOfLocal(frontend::LocalId id) const noexcept;
+    bool getRequestedAlignment(frontend::ExprId id, uint32_t &out);
     void setExprType(frontend::ExprId id, TypeId type);
     void setDeclType(frontend::DeclId id, TypeId type);
     void setLocalType(frontend::LocalId id, TypeId type);
@@ -181,6 +182,9 @@ private:
     void checkStructFieldDefaults();
     void checkFunctionDefaults();
     void checkZithDeclarations();
+    void checkAlignmentAttributes();
+    bool alignmentIntegerValue(frontend::ExprId id, std::int64_t &out, unsigned depth = 0U);
+    uint32_t requestedStructAlignment(const frontend::Declaration &decl);
     void checkConstFieldAssignments();
     /// Validates `#[test]` declarations: a test is a free `void` function with
     /// no parameters, and a module cannot declare both `main` and a test.

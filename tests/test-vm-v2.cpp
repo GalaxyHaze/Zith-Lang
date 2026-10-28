@@ -1891,6 +1891,95 @@ void test_vm_v2_slot_alloca_hoisted_out_of_loop() {
     CHECK_EQ(result.exitCode, 499500, "v2 VM returns the loop sum");
 }
 
+void test_vm_v2_explicit_array_binding_alignment() {
+    const auto root =
+        std::filesystem::temp_directory_path() / "zith-vm-v2-explicit-alignment";
+    std::filesystem::create_directories(root);
+    const auto source = root / "main.zith";
+    {
+        std::ofstream output(source, std::ios::binary | std::ios::trunc);
+        output << "fn plain(): i32 {\n"
+                  "    var other: [2]i32 = [3, 4];\n"
+                  "    return raw other[1];\n"
+                  "}\n"
+                  "fn main(): i32 {\n"
+                  "    #[alignas(64)] var values: [2]i32 = [1, 2];\n"
+                  "    values[0] = 19;\n"
+                  "    return raw values[0] + plain();\n"
+                  "}\n";
+    }
+
+    memory::Arena arena;
+    Options options(arena);
+    options.targetStage = session::Stage::HirLowered;
+
+    session::CompilationSession session(options, source.string());
+    session.setBuffered(true);
+    CHECK(session.runTo(session::Stage::HirLowered),
+          "explicitly aligned array binding lowers through the modern pipeline");
+
+    memory::Arena vmArena;
+    vm::Module module(vmArena);
+    const auto lowered = vm::lowerModule(session.hirModule(), session.interner(), session.types(),
+                                         vmArena, module);
+    CHECK(lowered.ok, "explicitly aligned array binding lowers into v2");
+    if (!lowered.ok)
+        return;
+
+    const vm::Function *main = nullptr;
+    for (const auto &function : module.functions) {
+        if (function.name == "main") {
+            main = &function;
+            break;
+        }
+    }
+    CHECK(main != nullptr, "v2 module contains main");
+    const vm::Function *plain = nullptr;
+    for (const auto &function : module.functions) {
+        if (function.name == "plain") {
+            plain = &function;
+            break;
+        }
+    }
+    CHECK(plain != nullptr, "v2 module contains plain");
+    bool sawAlignedAllocation = false;
+    bool plainHasAlignedAllocation = false;
+    if (main != nullptr) {
+        for (const auto &allocation : main->body) {
+            if (allocation.op != vm::Op::AllocBytes)
+                continue;
+            for (const auto &constant : main->body) {
+                if (constant.op == vm::Op::LoadConstI64 && constant.a == allocation.c &&
+                    constant.imm == 64U) {
+                    sawAlignedAllocation = true;
+                    break;
+                }
+            }
+        }
+    }
+    if (plain != nullptr) {
+        for (const auto &allocation : plain->body) {
+            if (allocation.op != vm::Op::AllocBytes)
+                continue;
+            for (const auto &constant : plain->body) {
+                if (constant.op == vm::Op::LoadConstI64 && constant.a == allocation.c &&
+                    constant.imm == 64U) {
+                    plainHasAlignedAllocation = true;
+                    break;
+                }
+            }
+        }
+    }
+    CHECK(sawAlignedAllocation, "v2 reserves the aligned array base with alignment 64");
+    CHECK(!plainHasAlignedAllocation,
+          "an aligned local slot does not affect the same slot id in another function");
+
+    vm::Vm vm;
+    const auto result = vm.runMain(module);
+    CHECK(result.status == vm::RunStatus::Ok, "v2 VM runs the explicitly aligned array");
+    CHECK_EQ(result.exitCode, 23, "the aligned array remains writable and readable");
+}
+
 void test_vm_v2_bitwise_and_shifts() {
     const auto root = std::filesystem::temp_directory_path() / "zith-vm-v2-bitwise-tests";
     std::filesystem::remove_all(root);
@@ -2095,6 +2184,7 @@ void test_vm_v2() {
     test_vm_v2_struct_with_array_field_by_value();
     test_vm_v2_pointer_to_array_element();
     test_vm_v2_slot_alloca_hoisted_out_of_loop();
+    test_vm_v2_explicit_array_binding_alignment();
     test_vm_v2_bitwise_and_shifts();
     test_vm_v2_hir_control_flow_and_dynamic_array_index();
     test_vm_v2_dynamic_array_index_traps();

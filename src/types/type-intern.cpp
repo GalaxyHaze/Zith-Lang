@@ -439,6 +439,10 @@ void TypeIntern::setTypeArgs(TypeId struct_type, std::span<const TypeId> args) {
         def.args.push(arg);
 }
 
+void TypeIntern::setExplicitAlignment(const TypeId struct_type, const uint32_t alignment_bytes) {
+    getStructDef(struct_type).explicitAlignmentBytes = alignment_bytes;
+}
+
 void TypeIntern::setDefiningModule(TypeId type, std::string_view module) {
     if (module.empty())
         return;

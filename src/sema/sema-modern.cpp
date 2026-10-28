@@ -46,6 +46,7 @@ bool PerModuleSema::prepareTypes() {
 
 bool PerModuleSema::checkExpressions() {
     inferExpressionTypes();
+    checkAlignmentAttributes();
     checkStructFieldDefaults();
     checkFunctionDefaults();
     checkConstFieldAssignments();

@@ -404,6 +404,8 @@ void CompilationSession::hydrateFromArtifact(const cache::Artifact &art) {
     for (size_t si = 0; si < art.struct_defs.size(); ++si) {
         const auto &s  = art.struct_defs[si];
         const auto tid = struct_tids[si];
+        if (s.explicitAlignmentBytes != 0U)
+            mTypes.setExplicitAlignment(tid, s.explicitAlignmentBytes);
         if (s.hasForeignLayout)
             mTypes.setForeignLayout(tid, s.foreignSizeBytes, s.foreignAlignBytes,
                                     s.foreignAbiIsSingleI64);
@@ -702,9 +704,10 @@ void CompilationSession::hydrateFromArtifact(const cache::Artifact &art) {
         }
         case cache::CompactExprKind::SlotAlloca: {
             hir::HirSlotAlloca sa;
-            sa.slot = ce.ref_a;
-            sa.type = compactType(ce.type_id);
-            expr    = sa;
+            sa.slot          = ce.ref_a;
+            sa.type          = compactType(ce.type_id);
+            sa.alignmentBytes = ce.alignmentBytes;
+            expr             = sa;
             break;
         }
         case cache::CompactExprKind::SlotStore: {
@@ -999,6 +1002,7 @@ void CompilationSession::hydrateFromArtifact(const cache::Artifact &art) {
         global.name  = mInterner->intern(art.strings[cg.name_id]);
         global.type  = compactType(cg.type_id);
         global.init  = cg.init_expr;
+        global.alignmentBytes = cg.alignmentBytes;
     }
 
     for (const auto &slot : art.attrs_slots) {

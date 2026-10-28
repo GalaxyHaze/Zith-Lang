@@ -16,7 +16,10 @@ Esta iteração mantém os tipos e features existentes, mas restringe bindings, 
 - `?T` continua activo como o único tipo de valor ausente/nulável.
 - `T!`/result failable fica fora; erros continuam no escopo da espec full Zith.
 - Macros normais e `raw macro` continuam activas e são exclusivas do Zith--; `tag` (antigo `tag macro`) fica como item full Zith.
-- Atributos `#[...]` ficam activos no MVP restrito a `discardable` em funções, `volatile` em variáveis/bindings e `test` em funções livres.
+- Atributos `#[...]` incluem `discardable` em funções, `volatile` em variáveis/bindings,
+  `test` em funções livres e `alignas(N)` em structs ou bindings suportados.
+- `noalias` aplica-se a funções com retorno por ponteiro; `likely` e `unlikely` são reconhecidos
+  sem promessa de optimização.
 
 As restrições devem ser aplicadas pela própria toolchain, não apenas documentadas.
 
@@ -600,6 +603,32 @@ e `@alignOf(S)` aplicam-se apenas a structs e devolvem `i32`.
 
 `@canonicalType(T)` devolve um `u128` estável para o tipo, derivado do módulo, nome e campos
 ordenados. Útil para comparar tipos ou usar como chave estável.
+
+### Alinhamento explícito
+
+Use `#[alignas(N)]` para reforçar o alinhamento de uma `struct` ou do storage de um binding
+`let`, `var` ou `const` permitido. `N` tem de ser uma expressão constante positiva que resulte
+numa potência de dois, e o target tem de suportar esse alinhamento.
+
+```zith
+#[alignas(64)] struct TokenBlock { tag: u8 }
+#[alignas(64)] const lexerPage: [2]u8 = [0, 0];
+
+fn main(): i32 {
+    #[alignas(64)] var scratch: [2]u8 = [0, 0];
+    return @alignOf(TokenBlock);
+}
+```
+
+No tipo, o alinhamento efectivo é o maior entre o alinhamento natural e `N`. O tamanho, os
+offsets dos campos, os tipos que contêm a struct e o stride dos seus arrays seguem esse layout.
+No binding, apenas o endereço do seu storage é alinhado. O tipo, `@sizeOf`, `@alignOf` e outros
+bindings não mudam. Uma cópia usa o alinhamento declarado no binding de destino. Para arrays, a
+garantia aplica-se à base do array, não a cada elemento.
+
+O atributo não se aplica a campos nem a parâmetros. Não altera alinhamentos fornecidos por
+alocadores para storage dinâmico. A toolchain rejeita valores inválidos ou não suportados e
+rejeita a passagem pela ABI C quando não consegue provar o layout exacto do tipo.
 
 ```zith
 fn main(): i32 {

@@ -1,9 +1,270 @@
 #include "sema/sema-modern-utils.hpp"
 #include "sema/sema-modern.hpp"
+#include "support/int-literal.hpp"
+
 #include <algorithm>
+#include <limits>
 #include <string>
+#include <vector>
 
 namespace zith::sema::modern {
+
+namespace {
+
+bool containsExplicitAlignmentByValue(const TypeTable &types, const TypeId root) {
+    std::vector<TypeId> pending{root};
+    std::vector<bool> visited(types.size(), false);
+
+    while (!pending.empty()) {
+        const TypeId type = types.stripQualifiers(types.canonical(pending.back()));
+        pending.pop_back();
+        if (!type || type.intern_seq > types.size())
+            continue;
+        const size_t index = static_cast<size_t>(type.intern_seq - 1U);
+        if (visited[index])
+            continue;
+        visited[index] = true;
+
+        switch (types.kindOf(type)) {
+        case TypeKind::Array:
+            if (const auto *array = types.array(type); array != nullptr)
+                pending.push_back(array->element);
+            break;
+        case TypeKind::Optional:
+            if (const auto *optional = types.optional(type); optional != nullptr)
+                pending.push_back(optional->inner);
+            break;
+        case TypeKind::Failable:
+            if (const auto *failable = types.failable(type); failable != nullptr)
+                pending.push_back(failable->inner);
+            break;
+        case TypeKind::Struct:
+            if (const auto *structure = types.struct_type(type); structure != nullptr) {
+                if (structure->explicit_alignment != 0U)
+                    return true;
+                for (const TypeId field : structure->fields)
+                    pending.push_back(field);
+            }
+            break;
+        case TypeKind::Union:
+            if (const auto *union_type = types.union_type(type); union_type != nullptr)
+                for (const TypeId member : union_type->members)
+                    pending.push_back(member);
+            break;
+        case TypeKind::Sum:
+            if (const auto *sum = types.sum(type); sum != nullptr)
+                for (const TypeId member : sum->members)
+                    pending.push_back(member);
+            break;
+        case TypeKind::Pack:
+            if (const auto *pack = types.pack(type); pack != nullptr)
+                for (const TypeId member : pack->members)
+                    pending.push_back(member);
+            break;
+        default:
+            break;
+        }
+    }
+    return false;
+}
+
+} // namespace
+
+bool PerModuleSema::alignmentIntegerValue(const frontend::ExprId id, std::int64_t &out,
+                                          const unsigned depth) {
+    if (!id || id.value > snapshot.expressions().size() || depth > 64U)
+        return false;
+    const auto &expr = snapshot.expressions()[id.value - 1U];
+    if (expr.kind == frontend::ExprKind::Literal)
+        return support::parseIntegerLiteral(expr.text, out) == support::IntLiteralStatus::Ok;
+    if (expr.kind == frontend::ExprKind::Unary && expr.operands.size() == 1U) {
+        std::int64_t operand = 0;
+        if (!alignmentIntegerValue(expr.operands.front(), operand, depth + 1U))
+            return false;
+        if (expr.text == "+") {
+            out = operand;
+            return true;
+        }
+        if (expr.text == "-" && operand != std::numeric_limits<std::int64_t>::min()) {
+            out = -operand;
+            return true;
+        }
+        if (expr.text == "~") {
+            out = ~operand;
+            return true;
+        }
+        return false;
+    }
+    if (expr.kind == frontend::ExprKind::Binary && expr.operands.size() == 2U) {
+        std::int64_t left  = 0;
+        std::int64_t right = 0;
+        if (!alignmentIntegerValue(expr.operands[0], left, depth + 1U) ||
+            !alignmentIntegerValue(expr.operands[1], right, depth + 1U))
+            return false;
+        constexpr auto min = std::numeric_limits<std::int64_t>::min();
+        constexpr auto max = std::numeric_limits<std::int64_t>::max();
+        if (expr.text == "+") {
+            if ((right > 0 && left > max - right) || (right < 0 && left < min - right))
+                return false;
+            out = left + right;
+            return true;
+        }
+        if (expr.text == "-") {
+            if ((right < 0 && left > max + right) || (right > 0 && left < min + right))
+                return false;
+            out = left - right;
+            return true;
+        }
+        if (expr.text == "*") {
+            if (left == 0 || right == 0) {
+                out = 0;
+                return true;
+            }
+            if ((left > 0 && right > 0 && left > max / right) ||
+                (left > 0 && right < 0 && right < min / left) ||
+                (left < 0 && right > 0 && left < min / right) ||
+                (left < 0 && right < 0 && left < max / right))
+                return false;
+            out = left * right;
+            return true;
+        }
+        if ((expr.text == "/" || expr.text == "%") && right != 0 && !(left == min && right == -1)) {
+            out = expr.text == "/" ? left / right : left % right;
+            return true;
+        }
+        if ((expr.text == "<<" || expr.text == ">>") && right >= 0 && right < 63) {
+            if (expr.text == ">>") {
+                out = left >> static_cast<unsigned>(right);
+                return true;
+            }
+            if (left >= 0 && left <= (max >> static_cast<unsigned>(right))) {
+                out = left << static_cast<unsigned>(right);
+                return true;
+            }
+            return false;
+        }
+        if (expr.text == "&" || expr.text == "|") {
+            out = expr.text == "&" ? left & right : left | right;
+            return true;
+        }
+        if (expr.text == "^") {
+            out = left ^ right;
+            return true;
+        }
+    }
+    if (expr.kind == frontend::ExprKind::Name && isConstantExpression(id)) {
+        const auto *resolved = findResolvedExpr(id);
+        if (resolved == nullptr || resolved->bindingKind != frontend::BindingKind::Const)
+            return false;
+        const TypeId const_type = typeOfResolvedName(id);
+        if (!const_type || type_table.integer(type_table.stripQualifiers(const_type)) == nullptr)
+            return false;
+        if (resolved->declaration &&
+            resolved->declaration.value <= snapshot.declarations().size()) {
+            const auto &decl = snapshot.declarations()[resolved->declaration.value - 1U];
+            return alignmentIntegerValue(decl.initializer, out, depth + 1U);
+        }
+        for (const auto &statement : snapshot.statements()) {
+            if (statement.kind == frontend::StmtKind::Binding &&
+                statement.binding.id == resolved->local)
+                return alignmentIntegerValue(statement.binding.initializer, out, depth + 1U);
+        }
+    }
+    return false;
+}
+
+bool PerModuleSema::getRequestedAlignment(const frontend::ExprId id, uint32_t &out) {
+    std::int64_t value = 0;
+    if (!id || !alignmentIntegerValue(id, value) || value <= 0 ||
+        value > std::numeric_limits<uint32_t>::max())
+        return false;
+
+    const auto alignment = static_cast<uint32_t>(value);
+    if ((alignment & (alignment - 1U)) != 0U)
+        return false;
+    out = alignment;
+    return true;
+}
+
+uint32_t PerModuleSema::requestedStructAlignment(const frontend::Declaration &decl) {
+    for (const auto &attribute : decl.attributes) {
+        if (attribute.kind != frontend::AttributeKind::AlignAs)
+            continue;
+        uint32_t alignment = 0;
+        if (getRequestedAlignment(attribute.argument, alignment))
+            return alignment;
+    }
+    return 0U;
+}
+
+void PerModuleSema::checkAlignmentAttributes() {
+    const auto validate = [&](const frontend::Attribute &attribute) {
+        if (attribute.kind != frontend::AttributeKind::AlignAs)
+            return;
+        uint32_t alignment = 0;
+        if (!attribute.argument || !getRequestedAlignment(attribute.argument, alignment)) {
+            report(attribute.span,
+                   "attribute 'alignas' requires a positive power-of-two integer constant "
+                   "independent of generic parameters and representable by the compiler",
+                   diagnostics::err::UnsupportedSyntax);
+        }
+    };
+
+    for (const auto &decl : snapshot.declarations()) {
+        for (const auto &attribute : decl.attributes)
+            validate(attribute);
+        if (decl.kind == frontend::DeclKind::Variable && decl.isExtern) {
+            for (const auto &attribute : decl.attributes) {
+                if (attribute.kind == frontend::AttributeKind::AlignAs) {
+                    report(attribute.span,
+                           "attribute 'alignas' cannot guarantee alignment for external global "
+                           "storage",
+                           diagnostics::err::UnsupportedSyntax);
+                }
+            }
+        }
+        if (decl.kind == frontend::DeclKind::Function &&
+            (decl.isExtern || !decl.externalSymbol.empty())) {
+            const auto *function = type_table.function(typeOfDecl(decl.id));
+            if (function != nullptr) {
+                bool has_unverified_aligned_value =
+                    containsExplicitAlignmentByValue(type_table, function->result);
+                for (const TypeId parameter : function->params)
+                    has_unverified_aligned_value |=
+                        containsExplicitAlignmentByValue(type_table, parameter);
+                if (has_unverified_aligned_value) {
+                    report(decl.span,
+                           "unsupported C ABI: explicitly aligned values by value require a "
+                           "verified target layout",
+                           diagnostics::err::UnsupportedSyntax);
+                }
+            }
+        }
+        if (decl.kind != frontend::DeclKind::Function)
+            continue;
+        const auto has_noalias =
+            std::find_if(decl.attributes.begin(), decl.attributes.end(), [](const auto &attribute) {
+                return attribute.kind == frontend::AttributeKind::NoAlias;
+            });
+        if (has_noalias == decl.attributes.end())
+            continue;
+        const auto *function = type_table.function(typeOfDecl(decl.id));
+        if (function == nullptr || type_table.kindOf(type_table.stripQualifiers(
+                                       resolve(function->result))) != TypeKind::Pointer) {
+            report(has_noalias->span, "attribute 'noalias' requires a pointer return type",
+                   diagnostics::err::UnsupportedSyntax);
+        }
+    }
+
+    for (const auto &statement : snapshot.statements()) {
+        for (const auto &attribute : statement.binding.attributes)
+            validate(attribute);
+        if (statement.kind != frontend::StmtKind::Binding) {
+            for (const auto &attribute : statement.attributes)
+                validate(attribute);
+        }
+    }
+}
 
 bool PerModuleSema::isConstantExpression(frontend::ExprId id) const {
     if (!id || id.value > snapshot.expressions().size())

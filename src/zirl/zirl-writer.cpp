@@ -70,7 +70,7 @@ uint32_t Writer::write(const cache::Artifact &artifact, ByteWriter &out) {
         !addKnownSection(SectionId::Templates, kSectionFlagRequired,
                          kTemplatesSectionSchemaVersion,
                          [&](ByteWriter &w) { return encodeTemplates(artifact, w); }) ||
-        !addKnownSection(SectionId::Code, kSectionFlagRequired, kSectionSchemaVersion,
+        !addKnownSection(SectionId::Code, kSectionFlagRequired, kCodeSectionSchemaVersion,
                          [&](ByteWriter &w) { return encodeCode(artifact, w); }) ||
         !addKnownSection(SectionId::Attrs, kSectionFlagRequired, kAttrsSectionSchemaVersion,
                          [&](ByteWriter &w) { return encodeAttrs(artifact, w); }) ||

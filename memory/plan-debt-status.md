@@ -41,6 +41,8 @@ The active plan homes are:
   `docs/plans/archive/codebase-quality-remediation-2026-10-07.old.md`.
 - `docs/plans/idea-lifecycle-small-scope.md` / `docs/specs/abi-lifecycle.md`:
   small-scope lifecycle setup for ideas, ABI promises, and conforming tests.
+- `docs/plans/abi/explicit-alignment.md`: Zith-- type and binding alignment,
+  currently promising and pending idea-owner review.
 - `docs/plans/stdlib/allocator-ownership.md`: explicit allocator ownership and
   migration across stdlib allocations.
 - `docs/plans/stdlib/dynarray-result-panic.md`: `DynArray`-focused collection

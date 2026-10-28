@@ -642,6 +642,7 @@ hir::HirExprId HirLowerModern::lowerFor(const frontend::Expression &expr) {
 hir::HirExprId HirLowerModern::lowerForIn(const frontend::Expression &expr) {
     if (expr.operands.size() < 2U)
         return hir::kInvalidHirExpr;
+    const uint32_t loop_alignment = requestedBindingAlignment(expr.forInBindingStmt);
 
     if (current_types_ != nullptr && current_types_->forInRangeLiteral.contains(expr.id.value)) {
         if (expr.operands[0].value > current_module_->frontend->expressions().size())
@@ -722,7 +723,8 @@ hir::HirExprId HirLowerModern::lowerForIn(const frontend::Expression &expr) {
         setCurrentBlock(body_block);
         current_fn_->blocks[body_block].insts = memory::DynArray<hir::HirExprId>(arena_);
         const auto loop_slot                  = localSlot(expr.forInBinding);
-        current_fn_->blocks[body_block].insts.push(emitSlotAlloca(loop_slot, loop_type));
+        current_fn_->blocks[body_block].insts.push(
+            emitSlotAlloca(loop_slot, loop_type, loop_alignment));
         current_fn_->blocks[body_block].insts.push(
             emitSlotStore(loop_slot, emitSlotLoad(counter_slot, loop_type)));
 
@@ -909,7 +911,8 @@ hir::HirExprId HirLowerModern::lowerForIn(const frontend::Expression &expr) {
         payload           = addExpr(std::move(cast));
     }
     const auto loop_slot = localSlot(expr.forInBinding);
-    current_fn_->blocks[body_block].insts.push(emitSlotAlloca(loop_slot, loop_type));
+    current_fn_->blocks[body_block].insts.push(
+        emitSlotAlloca(loop_slot, loop_type, loop_alignment));
     current_fn_->blocks[body_block].insts.push(emitSlotStore(loop_slot, payload));
 
     // `continue` re-tests by jumping to the header, which calls `next` again.

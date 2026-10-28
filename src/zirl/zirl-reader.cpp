@@ -53,6 +53,9 @@ const SectionView *findSection(const std::vector<SectionView> &sections, Section
 
 bool validateArtifactReferences(const cache::Artifact &artifact) {
     const auto validStringId = [&](uint32_t id) { return id < artifact.strings.size(); };
+    const auto validAlignment = [](uint32_t alignment) {
+        return alignment == 0U || (alignment & (alignment - 1U)) == 0U;
+    };
 
     for (const auto &type : artifact.types) {
         if (static_cast<uint8_t>(type.kind) >
@@ -71,6 +74,7 @@ bool validateArtifactReferences(const cache::Artifact &artifact) {
 
     for (const auto &definition : artifact.struct_defs) {
         if (!validStringId(definition.name_id) ||
+            !validAlignment(definition.explicitAlignmentBytes) ||
             definition.field_name_ids.size() != definition.field_type_ids.size() ||
             (!definition.foreign_field_offsets.empty() &&
              definition.foreign_field_offsets.size() != definition.field_type_ids.size()))
@@ -96,6 +100,8 @@ bool validateArtifactReferences(const cache::Artifact &artifact) {
             return false;
 
     for (const auto &expr : artifact.exprs) {
+        if (!validAlignment(expr.alignmentBytes))
+            return false;
         const bool needs_name =
             (expr.kind == cache::CompactExprKind::Literal && expr.flags == 3U) ||
             expr.kind == cache::CompactExprKind::Let || expr.kind == cache::CompactExprKind::Var ||
@@ -228,7 +234,7 @@ bool validateArtifactReferences(const cache::Artifact &artifact) {
         }
     }
     for (const auto &global : artifact.globals)
-        if (!validStringId(global.name_id))
+        if (!validStringId(global.name_id) || !validAlignment(global.alignmentBytes))
             return false;
 
     for (size_t index = 0; index < artifact.decls.size(); ++index) {
@@ -478,7 +484,7 @@ std::optional<cache::Artifact> Reader::read(std::string_view bytes) {
                         [&](ByteReader &r) { return decodeDecls(r, artifact); }) ||
         !decodeRequired(SectionId::Templates, kTemplatesSectionSchemaVersion,
                         [&](ByteReader &r) { return decodeTemplates(r, artifact); }) ||
-        !decodeRequired(SectionId::Code, kSectionSchemaVersion,
+        !decodeRequired(SectionId::Code, kCodeSectionSchemaVersion,
                         [&](ByteReader &r) { return decodeCode(r, artifact); }) ||
         !decodeRequired(SectionId::Attrs, kAttrsSectionSchemaVersion,
                         [&](ByteReader &r) { return decodeAttrs(r, artifact); }))

@@ -32,6 +32,7 @@ struct StructDef {
     bool foreignAbiIsSingleI64 = false;
     uint64_t foreignSizeBytes  = 0;
     uint64_t foreignAlignBytes = 0;
+    uint32_t explicitAlignmentBytes = 0;
 };
 
 struct EnumVariantDef {
@@ -130,6 +131,7 @@ public:
                   uint64_t foreign_offset_bytes = 0);
     /// Records the concrete generic arguments carried by a reified struct.
     void setTypeArgs(TypeId struct_type, std::span<const TypeId> args);
+    void setExplicitAlignment(TypeId struct_type, uint32_t alignment_bytes);
     /// Records the module that declares a named type. Non-empty first write wins.
     void setDefiningModule(TypeId type, std::string_view module);
     [[nodiscard]] std::string_view definingModuleOf(TypeId type) const;

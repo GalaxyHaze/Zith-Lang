@@ -111,6 +111,12 @@ void addCode(Artifact &art) {
     ret.type_id = 0;
     ret.ref_a   = 0;
 
+    CompactExpr alloca;
+    alloca.kind           = CompactExprKind::SlotAlloca;
+    alloca.type_id        = 0;
+    alloca.ref_a          = 0;
+    alloca.alignmentBytes = 64;
+
     CompactBasicBlock blk;
     blk.terminator = 1;
 
@@ -131,6 +137,14 @@ void addCode(Artifact &art) {
 
     art.exprs.push_back(lit);
     art.exprs.push_back(ret);
+    art.exprs.push_back(alloca);
+
+    CompactGlobalConst global;
+    global.name_id        = 0;
+    global.type_id        = 0;
+    global.init_expr      = 0;
+    global.alignmentBytes = 64;
+    art.globals.push_back(global);
     art.canonical_mappings.push_back({0x1122334455667788ULL, 0x99AABBCCDDEEFF00ULL, 0xCAFEBABEu});
 }
 
@@ -270,6 +284,7 @@ static void test_type_section_round_trip() {
     generic_struct.name         = "Node";
     generic_struct.name_id      = 3;
     generic_struct.type_arg_ids = {0};
+    generic_struct.explicitAlignmentBytes = 64;
     original.struct_defs.push_back(generic_struct);
 
     original.strings.push_back("x");
@@ -310,6 +325,8 @@ static void test_type_section_round_trip() {
                  "decodeTypes preserves struct type-argument count");
         CHECK_EQ(decoded.struct_defs[0].type_arg_ids[0], 0u,
                  "decodeTypes preserves canonical struct type-argument reference");
+        CHECK_EQ(decoded.struct_defs[0].explicitAlignmentBytes, 64u,
+                 "decodeTypes preserves explicit struct alignment");
     }
     if (decoded.types.size() >= 4u) {
         CHECK(decoded.types[2].kind == CompactTypeKind::Fn, "decodeTypes preserves fn type kind");
@@ -485,6 +502,18 @@ static void test_code_section_round_trip() {
                  "decodeCode preserves the parameterized overload signature identity");
     }
     CHECK_EQ(decoded.canonical_mappings.size(), 1u, "decodeCode preserves canonical mappings");
+    CHECK_EQ(decoded.globals.size(), 1u, "decodeCode preserves globals");
+    if (decoded.globals.size() == 1u)
+        CHECK_EQ(decoded.globals[0].alignmentBytes, 64u,
+                 "decodeCode preserves global storage alignment");
+    const auto decoded_alloca =
+        std::find_if(decoded.exprs.begin(), decoded.exprs.end(), [](const CompactExpr &expr) {
+            return expr.kind == CompactExprKind::SlotAlloca;
+        });
+    CHECK(decoded_alloca != decoded.exprs.end(), "decodeCode preserves slot allocas");
+    if (decoded_alloca != decoded.exprs.end())
+        CHECK_EQ(decoded_alloca->alignmentBytes, 64u,
+                 "decodeCode preserves slot alignment");
     if (decoded.canonical_mappings.size() == 1u) {
         CHECK_EQ(decoded.canonical_mappings[0].hi, 0x1122334455667788ULL,
                  "canonical mapping hi preserved");
@@ -676,6 +705,7 @@ static void test_full_artifact_round_trip() {
     generic_struct.name         = "Node";
     generic_struct.name_id      = 3;
     generic_struct.type_arg_ids = {0};
+    generic_struct.explicitAlignmentBytes = 64;
     original.struct_defs.push_back(generic_struct);
     CompactExpr direct_call;
     direct_call.kind                                = CompactExprKind::Call;
@@ -710,6 +740,13 @@ static void test_full_artifact_round_trip() {
     CHECK(round->struct_defs.size() == 1u &&
               round->struct_defs[0].type_arg_ids == std::vector<uint32_t>{0},
           "Reader::read preserves generic arguments for named struct definitions");
+    if (round->struct_defs.size() == 1u)
+        CHECK_EQ(round->struct_defs[0].explicitAlignmentBytes, 64u,
+                 "Reader::read preserves explicit struct alignment");
+    CHECK_EQ(round->globals.size(), 1u, "Reader::read preserves globals");
+    if (round->globals.size() == 1u)
+        CHECK_EQ(round->globals[0].alignmentBytes, 64u,
+                 "Reader::read preserves global storage alignment");
     CHECK(round->decls.size() == original.decls.size(), "Reader::read preserves decl count");
     CHECK_EQ(round->templates.size(), 1u, "Reader::read preserves template count");
     if (round->templates.size() == 1u) {
@@ -906,10 +943,64 @@ static void test_legacy_metadata_schema_is_a_miss() {
     const size_t table_offset =
         static_cast<size_t>(header_size) - static_cast<size_t>(section_count) * kSectionEntrySize;
     const size_t schema_offset = table_offset + sizeof(uint16_t) + sizeof(uint16_t);
-    legacy[schema_offset]      = 1;
-    legacy[schema_offset + 1]  = 0;
+    const uint16_t old_schema = kMetadataSectionSchemaVersion - 1U;
+    legacy[schema_offset]     = static_cast<char>(old_schema & 0xFFU);
+    legacy[schema_offset + 1] = static_cast<char>(old_schema >> 8U);
     CHECK(!Reader::read(legacy),
-          "old metadata schema misses rather than dropping struct type arguments");
+          "old metadata schema misses rather than dropping explicit type alignment");
+}
+
+static bool rewriteSectionSchema(std::string &bytes, const uint16_t target_id,
+                                 const uint16_t schema_version) {
+    ByteReader reader(bytes);
+    uint32_t ignored32 = 0;
+    uint8_t ignored8 = 0;
+    uint16_t section_count = 0;
+    uint32_t header_size = 0;
+    if (!reader.readU32(ignored32) || !reader.readU32(ignored32) || !reader.readU32(ignored32) ||
+        !reader.readU8(ignored8) || !reader.readU8(ignored8) || !reader.readU16(section_count) ||
+        !reader.readU32(header_size))
+        return false;
+
+    const size_t table_offset =
+        static_cast<size_t>(header_size) - static_cast<size_t>(section_count) * kSectionEntrySize;
+    ByteReader table(std::string_view(bytes).substr(
+        table_offset, static_cast<size_t>(section_count) * kSectionEntrySize));
+    for (size_t index = 0; index < section_count; ++index) {
+        uint16_t section_id = 0, flags = 0, current_schema = 0, reserved = 0;
+        uint64_t offset = 0, size = 0;
+        if (!table.readU16(section_id) || !table.readU16(flags) ||
+            !table.readU16(current_schema) || !table.readU16(reserved) ||
+            !table.readU64(offset) || !table.readU64(size))
+            return false;
+        if (section_id != target_id)
+            continue;
+        const size_t schema_offset = table_offset + index * kSectionEntrySize + 4U;
+        bytes[schema_offset] = static_cast<char>(schema_version & 0xFFU);
+        bytes[schema_offset + 1U] = static_cast<char>(schema_version >> 8U);
+        return true;
+    }
+    return false;
+}
+
+static void test_legacy_code_and_attrs_schemas_are_misses() {
+    auto artifact = makeMinimalArtifact();
+    addCode(artifact);
+    ByteWriter writer;
+    CHECK(Writer::write(artifact, writer) != 0, "alignment-schema fixture is encoded");
+    const std::string current(reinterpret_cast<const char *>(writer.ptr()), writer.size());
+
+    std::string old_code = current;
+    CHECK(rewriteSectionSchema(old_code, static_cast<uint16_t>(SectionId::Code),
+                               kCodeSectionSchemaVersion - 1U),
+          "code section schema can be downgraded in the fixture");
+    CHECK(!Reader::read(old_code), "old code schema misses rather than losing global alignment");
+
+    std::string old_attrs = current;
+    CHECK(rewriteSectionSchema(old_attrs, static_cast<uint16_t>(SectionId::Attrs),
+                               kAttrsSectionSchemaVersion - 1U),
+          "attrs section schema can be downgraded in the fixture");
+    CHECK(!Reader::read(old_attrs), "old attrs schema is rejected after residual layout changes");
 }
 
 static void test_unknown_optional_section_is_skipped() {
@@ -1081,6 +1172,7 @@ static void test_zirl_sections() {
     test_empty_artifact_round_trip();
     test_legacy_container_version_is_a_miss();
     test_legacy_metadata_schema_is_a_miss();
+    test_legacy_code_and_attrs_schemas_are_misses();
     test_unknown_optional_section_is_skipped();
     test_unknown_required_feature_is_rejected();
     test_invalid_canonical_reference_is_rejected_before_hydration();

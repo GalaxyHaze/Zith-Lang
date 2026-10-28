@@ -1,0 +1,36 @@
+# module: explicit-alignment
+
+1. drawing() -> AlignmentDrawing
+   use: __root__::abi_lifecycle
+
+2. promises(drawing: AlignmentDrawing) -> AlignmentPromises
+   use: __root__::abi_lifecycle
+   depends_on: explicit-alignment::drawing
+
+3. owner_review(promises: AlignmentPromises) -> SignedAlignmentADR
+   use: __root__::abi_lifecycle
+   depends_on: explicit-alignment::promises
+
+4. conformance_tests(signed: SignedAlignmentADR) -> AlignmentTests
+   use: __root__::abi_lifecycle
+   depends_on: explicit-alignment::owner_review
+
+5. frontend_sema(tests: AlignmentTests) -> ValidatedAlignmentSyntax
+   use: __root__::abi_lifecycle
+   depends_on: explicit-alignment::owner_review
+
+6. type_layout(syntax: ValidatedAlignmentSyntax) -> ExplicitTypeLayout
+   use: __root__::abi_lifecycle
+   depends_on: explicit-alignment::frontend_sema
+
+7. binding_storage(layout: ExplicitTypeLayout) -> AlignedBindingStorage
+   use: __root__::abi_lifecycle
+   depends_on: explicit-alignment::type_layout
+
+8. runtime_and_cache(storage: AlignedBindingStorage) -> EndToEndAlignment
+   use: __root__::abi_lifecycle
+   depends_on: explicit-alignment::binding_storage
+
+9. docs_and_conformance(runtime: EndToEndAlignment) -> SignedAlignmentADR
+   use: __root__::abi_lifecycle
+   depends_on: explicit-alignment::runtime_and_cache

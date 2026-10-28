@@ -490,6 +490,13 @@ bool HirLowerModern::predeclareGlobalConsts() {
             auto &global = hir_.addGlobalConst();
             global.name  = interner_.intern(global_name);
             global.type  = lowerType(module_sema->typeOfDecl(decl.id));
+            for (const auto &attribute : decl.attributes) {
+                if (attribute.kind != frontend::AttributeKind::AlignAs)
+                    continue;
+                uint32_t alignment = 0;
+                if (module_sema->getRequestedAlignment(attribute.argument, alignment))
+                    global.alignmentBytes = alignment;
+            }
             if (decl.initializer) {
                 current_module_     = &module;
                 current_resolution_ = snapshot_.findResolution(module.key);
@@ -955,8 +962,9 @@ hir::HirExprId HirLowerModern::addExpr(hir::HirExpr expr) {
     return hir_.addExpr(std::move(expr));
 }
 
-hir::HirExprId HirLowerModern::emitSlotAlloca(const hir::HirSlotId slot, const types::TypeId type) {
-    return addExpr(hir::HirSlotAlloca{slot, type});
+hir::HirExprId HirLowerModern::emitSlotAlloca(const hir::HirSlotId slot, const types::TypeId type,
+                                              const uint32_t alignment_bytes) {
+    return addExpr(hir::HirSlotAlloca{slot, type, alignment_bytes});
 }
 
 hir::HirExprId HirLowerModern::emitSlotStore(const hir::HirSlotId slot,
