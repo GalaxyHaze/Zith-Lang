@@ -154,18 +154,45 @@ CliResult test_backend(const TestWorkspace &workspace, const std::string &backen
           (label + " returns failure for intentional assertion failures").c_str());
     CHECK(all.stdoutText.find("assert_eq_reports_mismatch") != std::string::npos,
           (label + " reports the assertEq failure").c_str());
+    CHECK(all.stdoutText.find("assert_in_reports_missing_value") != std::string::npos,
+          (label + " reports the assertIn failure").c_str());
+    CHECK(all.stdoutText.find("assert_not_in_reports_present_value") != std::string::npos,
+          (label + " reports the assertNotIn failure").c_str());
+    CHECK(all.stdoutText.find("assert_some_reports_none") != std::string::npos,
+          (label + " reports the assertSome failure").c_str());
+    CHECK(all.stdoutText.find("assert_none_reports_some") != std::string::npos,
+          (label + " reports the assertNone failure").c_str());
+    CHECK(all.stdoutText.find("near_helpers_pass") != std::string::npos,
+          (label + " reports the passing float assertion test").c_str());
+    CHECK(all.stdoutText.find("assert_near_reports_outside_tolerance") != std::string::npos,
+          (label + " reports an assertNear failure outside tolerance").c_str());
+    CHECK(all.stdoutText.find("assert_near_rejects_negative_tolerance") != std::string::npos,
+          (label + " reports an assertNear failure for negative tolerance").c_str());
     CHECK(all.stdoutText.find("fail_reports_message") != std::string::npos,
           (label + " reports the fail helper failure").c_str());
     CHECK(all.stdoutText.find("assertEq failed: actual 5, expected 4") != std::string::npos,
           (label + " formats actual and expected values").c_str());
+    CHECK(all.stdoutText.find("assertIn failed: value is not contained") != std::string::npos,
+          (label + " explains a missing membership value").c_str());
+    CHECK(all.stdoutText.find("assertNotIn failed: value is contained") != std::string::npos,
+          (label + " explains an unexpected membership value").c_str());
+    CHECK(all.stdoutText.find("assertSome failed: value is null") != std::string::npos,
+          (label + " explains an absent optional").c_str());
+    CHECK(all.stdoutText.find("assertNone failed: value is present") != std::string::npos,
+          (label + " explains a present optional").c_str());
+    CHECK(all.stdoutText.find("assertNear failed: values are outside tolerance") !=
+              std::string::npos,
+          (label + " explains an assertNear failure").c_str());
     CHECK(all.stdoutText.find("intentional failure") != std::string::npos,
           (label + " includes the fail message").c_str());
-    CHECK(all.stdoutText.find("2 passed; 2 failed; 4 total") != std::string::npos,
+    CHECK(all.stdoutText.find("5 passed; 8 failed; 13 total") != std::string::npos,
           (label + " reports all test results").c_str());
     CHECK(all.stderrText.find("no #[test] functions") != std::string::npos,
           (label + " notes the file with no tests as skipped").c_str());
     CHECK(all.stderrText.find("assertions.zith:16:") != std::string::npos,
           (label + " reports the failing assert source location").c_str());
+    CHECK(all.stderrText.find("floating.zith:") != std::string::npos,
+          (label + " reports the failing float assertion source location").c_str());
     return all;
 }
 

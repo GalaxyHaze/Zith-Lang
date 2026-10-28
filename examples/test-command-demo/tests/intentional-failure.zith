@@ -1,0 +1,5 @@
+#[test]
+fn reports_a_failed_assertion() {
+    @log("This log is shown because the test fails.");
+    @assert(2 + 2 == 5);
+}

@@ -37,10 +37,12 @@ intrínsecos `@assert` e `@log` ao Zith--.
 - O runner suporta codegen nativo, VM v2 e interpretador HIR. O CTest
   `test-zith-test-suite` verifica a fixture completa em native e VM v2. No HIR,
   verifica os limites de log e uma fixture portátil com `@assert` e `@log`.
-- `std/test` fornece `assertTrue`, `assertFalse`, `assertEq`, `assertNe` e
+- `std/test` fornece `assertTrue`, `assertFalse`, `assertEq`, `assertNe`,
+  `assertNear`, `assertIn`, `assertNotIn`, `assertSome`, `assertNone` e
   `fail`. As macros avaliam os argumentos uma vez e deixam `@assert` expandido
   no contexto da função de teste. As mensagens formatadas usam `FormatBuffer`
-  e `@log`.
+  e `@log`; `assertNear` compara distância absoluta sem formatar floats e
+  converte `actual`, `expected` e `tolerance` para `f64` antes da comparação.
 - `@log` emite blocos delimitados em stdout. O runner captura o output do
   processo, analisa os blocos, oculta logs de testes aprovados por omissão,
   mostra-os em `--verbose` e limita o corpo acumulado a 4 KiB por teste. O
@@ -55,7 +57,7 @@ intrínsecos `@assert` e `@log` ao Zith--.
 
 ## Bloqueios de aceitação
 
-Verificação em 2026-10-27:
+Verificação em 2026-10-28:
 
 - `test-zith-test-suite` passa e verifica a fixture completa de `std/test` em
   native e VM v2. No HIR, verifica truncagem de logs e uma fixture portátil
@@ -63,11 +65,10 @@ Verificação em 2026-10-27:
   enquanto.
 - `./build/zithc --include stdlib test tests/zith --no-cache --verbose` e
   `./build/zithc --include stdlib --virtual-machine test tests/zith --no-cache
-  --verbose` produzem `2 passed; 2 failed; 4 total`, com exit code `1` pelas
-  duas falhas intencionais. Ambos incluem as mensagens `assertEq` e `fail`,
-  a implementação `Formatable` definida pelo utilizador e a localização do
-  assert. O teste de integração compara stdout e stderr completos entre os
-  dois backends.
+  --verbose` produzem `5 passed; 8 failed; 13 total`, com exit code `1` pelas
+  oito falhas intencionais. A fixture inclui os helpers de igualdade,
+  pertença, opcionais e tolerância float. O teste de integração compara stdout
+  e stderr completos entre os dois backends.
 - A tentativa de `./build/zithc --include stdlib --interpreted test tests/zith`
   falha no caminho rico de formatação: `user_defined_formatable` falha e as
   falhas de `assertEq`/`fail` não preservam o texto formatado. O diagnóstico

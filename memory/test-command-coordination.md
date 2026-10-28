@@ -94,7 +94,9 @@ Two things to know when resuming:
 The runner in `src/cli/cmd/tool.cpp` executes each test file through the
 synthesized driver, supports filtering, reports assertion locations, and skips
 files without tests. `std/test` exposes assertion macros that preserve the
-`#[test]` context and format failure details through `FormatBuffer`.
+`#[test]` context and format failure details through `FormatBuffer`. It now
+also provides membership, optional-presence, and floating-point tolerance
+helpers.
 `test-zith-test-suite` runs the full `tests/zith/` assertion fixture on native
 and VM v2. It also checks bounded logs and a minimal `@assert`/`@log` fixture
 on the HIR interpreter. The rich fixture is not run on HIR because its current
@@ -109,6 +111,11 @@ of the rich fixture still fails: `user_defined_formatable` is reported as a
 failed assertion, and `assertEq`/`fail` output does not preserve the formatted
 message. Per the user's direction, further HIR interpreter diagnosis is
 deferred. The all-backend acceptance criterion remains open.
+
+On 2026-10-28, the expanded fixture contains 13 tests: native and VM v2
+produce `5 passed; 8 failed; 13 total`, where the failures are intentional
+assertion cases. The full fixture now covers membership, optional presence,
+and float tolerance helpers in addition to equality and explicit failure.
 
 The accepted `@log` design calls for a fixed 4 KiB per-test buffer synthesized
 in the driver. The current lowering emits framed stdout blocks instead. The
@@ -144,6 +151,14 @@ existing warnings from unrelated project sources; `clang-tidy` reports no
 findings in the test file. ASan/UBSan could not configure because `/usr/bin/cc`
 lacks `libasan` and `libubsan`; Valgrind is not installed, so runtime
 instrumentation was unavailable.
+
+## std/test float helper gotcha
+
+`assertNear(actual, expected, tolerance)` binds each macro argument once,
+converts all three values to `f64`, then checks absolute distance and rejects
+negative tolerances. It does not require identical argument types. Its failure
+message does not format float values, avoiding a dependency on backend-specific
+float formatting.
 
 ## clang-format version gotcha
 

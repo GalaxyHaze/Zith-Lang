@@ -11,7 +11,7 @@ namespace zith::vm {
 // VIR and VM semantics evolve independently from the persisted HIR schema.
 // Bump the semantic version whenever VM execution/lowering semantics change.
 inline constexpr uint16_t kVirSchemaVersion = 1;
-inline constexpr uint32_t kVmSemanticVersion = 2;
+inline constexpr uint32_t kVmSemanticVersion = 3;
 
 /// Typed value categories used by the v2 execution IR.
 enum class ValueType : uint8_t {

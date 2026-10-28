@@ -1,0 +1,11 @@
+#[test]
+fn adds_positive_numbers() {
+    @assert(2 + 3 == 5);
+}
+
+#[test]
+fn compares_values() {
+    @assert(8 > 3);
+    @assert(4 != 9);
+    @log("comparison checks passed");
+}

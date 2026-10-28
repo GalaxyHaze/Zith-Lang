@@ -76,6 +76,8 @@ contracts, decisions, and gotchas that are not discoverable from the source alon
   state map, and the struct-layout unit used for conforming contracts.
 - [execution-ir-drawing.md](execution-ir-drawing.md): status of the archived
   execution IR v1 and a pointer to the VM v2 contract.
+- [vm-v2-drawing.md](vm-v2-drawing.md): VM v2 boundaries and the typed
+  register semantics required for floating-point execution.
 - [stdlib-io-format.md](stdlib-io-format.md): proposed `std/io/consoleIn`/
   `consoleOut` format design, `TextSink`/`dyn` probe facts, and target access
   pattern for variadic `Formatable` values.

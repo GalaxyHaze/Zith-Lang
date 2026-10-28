@@ -882,10 +882,14 @@ entra no documento do `Zith--` depois de terminar no pipeline real, porque o
   `@log` escreve directamente em stdout e o runner encaminha essa saída sem
   filtragem por teste.
 - `std/test` oferece as macros `assertTrue`, `assertFalse`, `assertEq`,
-  `assertNe` e `fail`. As macros avaliam cada argumento uma vez e terminam
-  pelo `@assert` no ponto de chamada. `assertEq` e `assertNe` formatam os dois
-  valores com `Formatable`, actualmente disponível para `[]char`, `bool`,
-  `f32`, `f64`, `u32`, `i32` e `*char`.
+  `assertNe`, `assertNear`, `assertIn`, `assertNotIn`, `assertSome`,
+  `assertNone` e `fail`. As macros avaliam cada argumento uma vez e terminam
+  pelo `@assert` no ponto de chamada. `assertNear(actual, expected, tolerance)`
+  converte os três argumentos para `f64`, compara a distância absoluta com
+  uma tolerância não negativa e usa uma mensagem que não depende da formatação
+  dos floats. `assertEq` e `assertNe` formatam os dois valores com `Formatable`,
+  actualmente disponível para `[]char`, `bool`, `f32`, `f64`, `u32`, `i32` e
+  `*char`.
 - Traits nominais, interfaces estruturais com fields e method requirements
   declaration-only, `implement T as Trait {}`, conformance, bounds
   `T: A + B` e `dyn Trait`/`dyn Interface` somente-métodos; bounds de

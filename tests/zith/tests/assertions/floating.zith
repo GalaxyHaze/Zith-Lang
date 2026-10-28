@@ -1,0 +1,33 @@
+from std/test
+
+#[test]
+fn near_helpers_pass() {
+    let actual64: f64 = 2.5;
+    let expected64: f64 = 2.375;
+    let tolerance64: f64 = 0.125;
+    @assertNear(actual64, expected64, tolerance64);
+
+    let actual32: f32 = 1.5;
+    let expected32: f32 = 1.25;
+    let tolerance32: f32 = 0.25;
+    let zeroTolerance32: f32 = 0.0;
+    @assertNear(actual32, expected32, tolerance32);
+    @assertNear(actual32, actual32, zeroTolerance32);
+}
+
+#[test]
+fn assert_near_reports_outside_tolerance() {
+    let actual: f64 = 1.5;
+    let expected: f64 = 1.25;
+    let tolerance: f64 = 0.125;
+    @assertNear(actual, expected, tolerance);
+}
+
+#[test]
+fn assert_near_rejects_negative_tolerance() {
+    let value: f64 = 1.0;
+    let tolerance: f64 = -0.125;
+    @assertFalse(tolerance >= 0);
+    @assertFalse(valuesAreNear(value, value, tolerance));
+    @assertNear(value, value, tolerance);
+}

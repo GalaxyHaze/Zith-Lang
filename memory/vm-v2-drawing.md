@@ -16,6 +16,15 @@ decisions that must not be reopened casually.
   (`AllocBytes`/`MallocBytes` and `malloc`), not IR operators.
 - `extern fn` FFI is a small validated subset, not full libc.
 
+## Floating-Point Register Semantics
+
+VM v2 stores register payloads in `int64_t` slots. An `f64` payload is its bit
+representation, copied with `memcpy`; arithmetic, negation, and comparisons
+must dispatch using the register's `ValueType`, not perform integer
+operations on that payload. The VM semantic version is 3, and
+`tests/test-vm-v2.cpp` covers `f64` addition, subtraction, multiplication,
+division, negation, and comparisons.
+
 ## Backlog Surface
 
 - Full `printf` variadic formatting is not required by the stdlib console

@@ -4,17 +4,17 @@
 
 #include "cli/options.hpp"
 #include "session/compilation-session.hpp"
-#include "wasm/abi-hir.hpp"
 #include "vm/hir-to-vm.hpp"
 #include "vm/typed-ir-dump.hpp"
 #include "vm/typed-ir.hpp"
 #include "vm/vir-cache.hpp"
 #include "vm/vm-v2.hpp"
+#include "wasm/abi-hir.hpp"
 #include "zirl/zirl-header.hpp"
 
+#include <cstdint>
 #include <filesystem>
 #include <fstream>
-#include <cstdint>
 #include <string>
 #include <string_view>
 
@@ -135,9 +135,8 @@ void test_vm_v2_cached_vir_compatibility() {
 
     memory::Arena originalArena;
     vm::Module original(originalArena);
-    const auto lowered =
-        vm::lowerModule(session.hirModule(), session.interner(), session.types(), originalArena,
-                        original);
+    const auto lowered = vm::lowerModule(session.hirModule(), session.interner(), session.types(),
+                                         originalArena, original);
     CHECK(lowered.ok, "cached VIR fixture lowers to a VM module");
     if (!lowered.ok) {
         std::filesystem::remove_all(root);
@@ -148,7 +147,7 @@ void test_vm_v2_cached_vir_compatibility() {
     cache::Artifact::OptionalSection section;
     section.id             = static_cast<uint16_t>(zirl::SectionId::Vir);
     section.schema_version = vm::kVirSchemaVersion;
-    const bool encoded = vm::encodeCachedModule(original, section.payload);
+    const bool encoded     = vm::encodeCachedModule(original, section.payload);
     CHECK(encoded, "VM module encodes into an optional VIR cache section");
     if (!encoded || section.payload.size() < 8U) {
         std::filesystem::remove_all(root);
@@ -171,9 +170,9 @@ void test_vm_v2_cached_vir_compatibility() {
         static_cast<uint16_t>(vm::kVirSchemaVersion + 1U);
     memory::Arena schemaArena;
     vm::Module schemaModule(schemaArena);
-    const auto schemaFallback = vm::loadOrLowerCachedModule(
-        &schemaMismatch, session.hirModule(), session.interner(), session.types(), schemaArena,
-        schemaModule);
+    const auto schemaFallback =
+        vm::loadOrLowerCachedModule(&schemaMismatch, session.hirModule(), session.interner(),
+                                    session.types(), schemaArena, schemaModule);
     CHECK(schemaFallback.ok && !schemaFallback.reused,
           "incompatible VIR schema falls back to lowering the HIR");
     vm::Vm schemaVm;
@@ -186,9 +185,9 @@ void test_vm_v2_cached_vir_compatibility() {
         static_cast<uint8_t>(vm::kVmSemanticVersion + 1U);
     memory::Arena semanticArena;
     vm::Module semanticModule(semanticArena);
-    const auto semanticFallback = vm::loadOrLowerCachedModule(
-        &semanticMismatch, session.hirModule(), session.interner(), session.types(), semanticArena,
-        semanticModule);
+    const auto semanticFallback =
+        vm::loadOrLowerCachedModule(&semanticMismatch, session.hirModule(), session.interner(),
+                                    session.types(), semanticArena, semanticModule);
     CHECK(semanticFallback.ok && !semanticFallback.reused,
           "incompatible VM semantics fall back to lowering the HIR");
     vm::Vm semanticVm;
@@ -668,7 +667,8 @@ void test_vm_v2_frame_arena_reclaim_preserves_malloc() {
     vm::Vm vm;
     const auto result = vm.runMain(module);
     CHECK(result.status == vm::RunStatus::Ok, "global allocation survives frame return");
-    const auto bytes = vm.memory().read(static_cast<std::size_t>(result.exitCode), sizeof(uint64_t));
+    const auto bytes =
+        vm.memory().read(static_cast<std::size_t>(result.exitCode), sizeof(uint64_t));
     CHECK_EQ(bytes.size(), sizeof(uint64_t), "global heap bytes remain addressable");
     if (!bytes.empty())
         CHECK_EQ(bytes[0], static_cast<uint8_t>(42), "global heap contents survive frame return");
@@ -1100,8 +1100,8 @@ pub fn println(msg: []char, values: [...]dyn Formatable): IoError {
 
     memory::Arena vmArena;
     vm::Module module(vmArena);
-    const auto lowered = vm::lowerModule(decoded.module, decoded.interner, decoded.types, vmArena,
-                                         module);
+    const auto lowered =
+        vm::lowerModule(decoded.module, decoded.interner, decoded.types, vmArena, module);
     CHECK(lowered.ok, "virtual stdlib HIR lowers into the v2 module");
     if (!lowered.ok)
         std::fprintf(stderr, "lower message: %s\n", lowered.message.c_str());
@@ -1175,8 +1175,8 @@ void test_vm_v2_extern_putchar() {
 
     memory::Arena vmArena;
     vm::Module module(vmArena);
-    const auto lowered = vm::lowerModule(session.hirModule(), session.interner(), session.types(),
-                                         vmArena, module);
+    const auto lowered =
+        vm::lowerModule(session.hirModule(), session.interner(), session.types(), vmArena, module);
     CHECK(lowered.ok, "HIR with putchar lowers into v2");
 
     vm::Vm vm;
@@ -1219,8 +1219,8 @@ void test_vm_v2_extern_snprintf_subset() {
 
     memory::Arena vmArena;
     vm::Module module(vmArena);
-    const auto lowered = vm::lowerModule(session.hirModule(), session.interner(), session.types(),
-                                         vmArena, module);
+    const auto lowered =
+        vm::lowerModule(session.hirModule(), session.interner(), session.types(), vmArena, module);
     CHECK(lowered.ok, "HIR with snprintf lowers into v2");
 
     vm::Vm vm;
@@ -1259,8 +1259,8 @@ void test_vm_v2_call_range_multi_args() {
 
     memory::Arena vmArena;
     vm::Module module(vmArena);
-    const auto lowered = vm::lowerModule(session.hirModule(), session.interner(), session.types(),
-                                         vmArena, module);
+    const auto lowered =
+        vm::lowerModule(session.hirModule(), session.interner(), session.types(), vmArena, module);
     CHECK(lowered.ok, "HIR with 4-arg function lowers into v2");
 
     vm::Vm vm;
@@ -1313,8 +1313,8 @@ void test_vm_v2_variadic_slice_call_forms() {
 
     memory::Arena vmArena;
     vm::Module module(vmArena);
-    const auto lowered = vm::lowerModule(decoded.module, decoded.interner, decoded.types,
-                                         vmArena, module);
+    const auto lowered =
+        vm::lowerModule(decoded.module, decoded.interner, decoded.types, vmArena, module);
     CHECK(lowered.ok, "flat HIR variadic slice calls lower into VM v2");
     if (!lowered.ok)
         return;
@@ -1363,9 +1363,8 @@ void test_vm_v2_slice_index_returns_aggregate_address() {
     main.returnType = vm::ValueType::I64;
     main.regCount   = 11;
     for (std::size_t i = 0; i < main.regCount; ++i)
-        main.regTypes.push(i == 2U || i == 4U || i == 6U || i == 9U
-                               ? vm::ValueType::Ptr
-                               : vm::ValueType::I64);
+        main.regTypes.push(i == 2U || i == 4U || i == 6U || i == 9U ? vm::ValueType::Ptr
+                                                                    : vm::ValueType::I64);
 
     main.body.push(vm::Instr::withImm(vm::Op::LoadConstI64, 0, 32));
     main.body.push(vm::Instr::withImm(vm::Op::LoadConstI64, 1, 8));
@@ -1383,10 +1382,9 @@ void test_vm_v2_slice_index_returns_aggregate_address() {
     const auto result = vm.runMain(module);
     CHECK(result.status == vm::RunStatus::Ok,
           "slice indexing returns an address for an aggregate element");
-    CHECK_EQ(result.exitCode, 546,
-             "aggregate slice indexing uses the element's full stride");
+    CHECK_EQ(result.exitCode, 546, "aggregate slice indexing uses the element's full stride");
 
-    main.body[6] = vm::Instr::withImm(vm::Op::LoadConstI64, 7, 2);
+    main.body[6]           = vm::Instr::withImm(vm::Op::LoadConstI64, 7, 2);
     const auto outOfBounds = vm.runMain(module);
     CHECK(outOfBounds.status == vm::RunStatus::Trap,
           "aggregate slice address indexing still enforces the logical length");
@@ -1435,10 +1433,8 @@ void test_vm_v2_raw_index_skips_logical_bounds_only() {
     physical_main.regCount   = 4;
     for (std::size_t i = 0; i < physical_main.regCount; ++i)
         physical_main.regTypes.push(vm::ValueType::I64);
-    physical_main.body.push(
-        vm::Instr::withImm(vm::Op::LoadConstI64FromPool, 1, 0));
-    physical_main.body.push(
-        vm::Instr::withImm(vm::Op::LoadConstI64FromPool, 2, 1));
+    physical_main.body.push(vm::Instr::withImm(vm::Op::LoadConstI64FromPool, 1, 0));
+    physical_main.body.push(vm::Instr::withImm(vm::Op::LoadConstI64FromPool, 2, 1));
     physical_main.body.push(vm::Instr{vm::Op::IndexLoad, 3, 1, 2, 8, 1, 2});
     physical_main.body.push(vm::Instr{vm::Op::Ret, 3, 0, 0, 0});
 
@@ -1503,8 +1499,8 @@ auto runVmSource(std::string_view name, std::string_view program, std::int64_t e
 
     memory::Arena vmArena;
     vm::Module module(vmArena);
-    const auto lowered = vm::lowerModule(session.hirModule(), session.interner(), session.types(),
-                                         vmArena, module);
+    const auto lowered =
+        vm::lowerModule(session.hirModule(), session.interner(), session.types(), vmArena, module);
     CHECK(lowered.ok, lowerMessage);
     if (!lowered.ok) {
         std::fprintf(stderr, "lower message: %s\n", lowered.message.c_str());
@@ -1519,8 +1515,7 @@ auto runVmSource(std::string_view name, std::string_view program, std::int64_t e
 
 #ifdef ZITH_ENABLE_C_INTEROP
 void test_vm_v2_external_global_fallback() {
-    const auto root =
-        std::filesystem::temp_directory_path() / "zith-vm-v2-external-global-tests";
+    const auto root = std::filesystem::temp_directory_path() / "zith-vm-v2-external-global-tests";
     std::filesystem::create_directories(root);
     {
         std::ofstream header(root / "external-global.h", std::ios::binary | std::ios::trunc);
@@ -1547,9 +1542,8 @@ void test_vm_v2_external_global_fallback() {
 
         memory::Arena vmArena;
         vm::Module module(vmArena);
-        const auto lowered =
-            vm::lowerModule(compilation.hirModule(), compilation.interner(), compilation.types(),
-                            vmArena, module);
+        const auto lowered = vm::lowerModule(compilation.hirModule(), compilation.interner(),
+                                             compilation.types(), vmArena, module);
         CHECK(lowered.ok == expectedSuccess, "external-global VM lowering matches expectation");
         if (!expectedSuccess) {
             CHECK(lowered.message.find("unsupported external global") != std::string::npos,
@@ -1566,14 +1560,17 @@ void test_vm_v2_external_global_fallback() {
         CHECK_EQ(result.exitCode, 7, "unused external-global import preserves program behavior");
     };
 
-    runLowering("unused", "import \"external-global.h\"\n"
-                          "fn main(): i32 { return 7; }\n",
+    runLowering("unused",
+                "import \"external-global.h\"\n"
+                "fn main(): i32 { return 7; }\n",
                 true);
-    runLowering("read", "import \"external-global.h\"\n"
-                        "fn main(): i32 { return zith_vm_external_value; }\n",
+    runLowering("read",
+                "import \"external-global.h\"\n"
+                "fn main(): i32 { return zith_vm_external_value; }\n",
                 false);
-    runLowering("write", "import \"external-global.h\"\n"
-                         "fn main(): i32 { zith_vm_external_value = 9; return 0; }\n",
+    runLowering("write",
+                "import \"external-global.h\"\n"
+                "fn main(): i32 { zith_vm_external_value = 9; return 0; }\n",
                 false);
 
     const auto checkSource = root / "check.zith";
@@ -1616,7 +1613,8 @@ void test_vm_v2_empty_struct_storage() {
                 "    return 0;\n"
                 "}\n",
                 0, "empty struct source lowers through the modern pipeline",
-                "v2 VM allocates storage for an empty struct", "v2 VM returns after empty struct use");
+                "v2 VM allocates storage for an empty struct",
+                "v2 VM returns after empty struct use");
 }
 
 void test_vm_v2_struct_nested_field() {
@@ -1818,8 +1816,7 @@ void test_vm_v2_pointer_to_array_element() {
                 "    return raw (*p)[1];\n"
                 "}\n",
                 2, "pointer to array source lowers through the modern pipeline",
-                "v2 VM dereferences a pointer to an array",
-                "v2 VM returns the indexed element");
+                "v2 VM dereferences a pointer to an array", "v2 VM returns the indexed element");
 }
 
 void test_vm_v2_slot_alloca_hoisted_out_of_loop() {
@@ -1854,8 +1851,8 @@ void test_vm_v2_slot_alloca_hoisted_out_of_loop() {
 
     memory::Arena vmArena;
     vm::Module module(vmArena);
-    const auto lowered = vm::lowerModule(session.hirModule(), session.interner(), session.types(),
-                                         vmArena, module);
+    const auto lowered =
+        vm::lowerModule(session.hirModule(), session.interner(), session.types(), vmArena, module);
     CHECK(lowered.ok, "slot alloca loop HIR lowers into v2");
     if (!lowered.ok)
         return;
@@ -1868,17 +1865,16 @@ void test_vm_v2_slot_alloca_hoisted_out_of_loop() {
     if (main == nullptr)
         return;
 
-    bool sawControlFlow = false;
+    bool sawControlFlow             = false;
     bool allocationAfterControlFlow = false;
-    std::size_t allocations = 0;
+    std::size_t allocations         = 0;
     for (const auto &instr : main->body) {
         if (instr.op == vm::Op::AllocBytes) {
             ++allocations;
             if (sawControlFlow)
                 allocationAfterControlFlow = true;
         }
-        if (instr.op == vm::Op::Jump || instr.op == vm::Op::Branch ||
-            instr.op == vm::Op::Branch2)
+        if (instr.op == vm::Op::Jump || instr.op == vm::Op::Branch || instr.op == vm::Op::Branch2)
             sawControlFlow = true;
     }
     CHECK(allocations >= 3, "prologue allocates sum, i and the loop-local slot");
@@ -1892,8 +1888,7 @@ void test_vm_v2_slot_alloca_hoisted_out_of_loop() {
 }
 
 void test_vm_v2_explicit_array_binding_alignment() {
-    const auto root =
-        std::filesystem::temp_directory_path() / "zith-vm-v2-explicit-alignment";
+    const auto root = std::filesystem::temp_directory_path() / "zith-vm-v2-explicit-alignment";
     std::filesystem::create_directories(root);
     const auto source = root / "main.zith";
     {
@@ -1920,8 +1915,8 @@ void test_vm_v2_explicit_array_binding_alignment() {
 
     memory::Arena vmArena;
     vm::Module module(vmArena);
-    const auto lowered = vm::lowerModule(session.hirModule(), session.interner(), session.types(),
-                                         vmArena, module);
+    const auto lowered =
+        vm::lowerModule(session.hirModule(), session.interner(), session.types(), vmArena, module);
     CHECK(lowered.ok, "explicitly aligned array binding lowers into v2");
     if (!lowered.ok)
         return;
@@ -1942,7 +1937,7 @@ void test_vm_v2_explicit_array_binding_alignment() {
         }
     }
     CHECK(plain != nullptr, "v2 module contains plain");
-    bool sawAlignedAllocation = false;
+    bool sawAlignedAllocation      = false;
     bool plainHasAlignedAllocation = false;
     if (main != nullptr) {
         for (const auto &allocation : main->body) {
@@ -1989,12 +1984,12 @@ void test_vm_v2_bitwise_and_shifts() {
     {
         std::ofstream output(source, std::ios::binary | std::ios::trunc);
         output << "fn main(): i32 {\n"
-                  "    let a = 5 &. 3;\n"     // 1
-                  "    let b = 4 |. 2;\n"     // 6
-                  "    let c = 7 ^. 3;\n"     // 4
-                  "    let d = 1 << 3;\n"    // 8
-                  "    let e = 16 >> 2;\n"   // 4
-                  "    let f = ~0 &. 15;\n"    // 15
+                  "    let a = 5 &. 3;\n"       // 1
+                  "    let b = 4 |. 2;\n"       // 6
+                  "    let c = 7 ^. 3;\n"       // 4
+                  "    let d = 1 << 3;\n"       // 8
+                  "    let e = 16 >> 2;\n"      // 4
+                  "    let f = ~0 &. 15;\n"     // 15
                   "    a + b + c + d + e + f\n" // 1 + 6 + 4 + 8 + 4 + 15 = 38
                   "}\n";
     }
@@ -2010,14 +2005,37 @@ void test_vm_v2_bitwise_and_shifts() {
 
     memory::Arena vmArena;
     vm::Module module(vmArena);
-    const auto lowered = vm::lowerModule(session.hirModule(), session.interner(), session.types(),
-                                         vmArena, module);
+    const auto lowered =
+        vm::lowerModule(session.hirModule(), session.interner(), session.types(), vmArena, module);
     CHECK(lowered.ok, "HIR with bitwise operators lowers into v2");
 
     vm::Vm vm;
     const auto result = vm.runMain(module);
     CHECK(result.status == vm::RunStatus::Ok, "v2 VM runs bitwise and shift operators");
     CHECK_EQ(result.exitCode, 38, "v2 VM computes correct bitwise result");
+}
+
+void test_vm_v2_float_arithmetic() {
+    runVmSource("float-arithmetic",
+                "fn main(): i32 {\n"
+                "    let left: f64 = 1.5;\n"
+                "    let right: f64 = 1.25;\n"
+                "    let sum = left + right;\n"
+                "    let difference = left - right;\n"
+                "    let product = left * right;\n"
+                "    let quotient = product / right;\n"
+                "    let negative = -right;\n"
+                "    if ((sum == 2.75) and (difference == 0.25) and (product == 1.875) and\n"
+                "        (quotient == left) and (negative == -1.25) and (negative < 0) and\n"
+                "        (negative <= -1.25) and (left > right) and (right >= right) and\n"
+                "        (left != right)) {\n"
+                "        return 0;\n"
+                "    }\n"
+                "    return 1;\n"
+                "}\n",
+                0, "floating-point source lowers into the v2 VM",
+                "v2 VM executes floating-point arithmetic and comparisons",
+                "v2 VM preserves floating-point arithmetic and comparison results");
 }
 
 void test_vm_v2_hir_control_flow_and_dynamic_array_index() {
@@ -2053,8 +2071,8 @@ void test_vm_v2_hir_control_flow_and_dynamic_array_index() {
 
     memory::Arena vmArena;
     vm::Module module(vmArena);
-    const auto lowered = vm::lowerModule(session.hirModule(), session.interner(), session.types(),
-                                         vmArena, module);
+    const auto lowered =
+        vm::lowerModule(session.hirModule(), session.interner(), session.types(), vmArena, module);
     CHECK(lowered.ok, "HIR control flow and array index lower into v2");
 
     vm::Vm vm;
@@ -2088,8 +2106,8 @@ void test_vm_v2_dynamic_array_index_traps() {
 
     memory::Arena vmArena;
     vm::Module module(vmArena);
-    const auto lowered = vm::lowerModule(session.hirModule(), session.interner(), session.types(),
-                                         vmArena, module);
+    const auto lowered =
+        vm::lowerModule(session.hirModule(), session.interner(), session.types(), vmArena, module);
     CHECK(lowered.ok, "out-of-bounds array index lowers into v2");
 
     vm::Vm vm;
@@ -2186,6 +2204,7 @@ void test_vm_v2() {
     test_vm_v2_slot_alloca_hoisted_out_of_loop();
     test_vm_v2_explicit_array_binding_alignment();
     test_vm_v2_bitwise_and_shifts();
+    test_vm_v2_float_arithmetic();
     test_vm_v2_hir_control_flow_and_dynamic_array_index();
     test_vm_v2_dynamic_array_index_traps();
 }

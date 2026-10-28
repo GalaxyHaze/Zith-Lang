@@ -1,0 +1,52 @@
+from std/test
+
+struct AssertionSet {
+    first: i32,
+    second: i32,
+    fn contains(self, value: i32): bool {
+        return (value == self->first) or (value == self->second);
+    }
+}
+
+#[test]
+fn membership_helpers_pass() {
+    @assertIn(5, 1..10);
+    @assertIn(1, 1..10);
+    @assertIn(10, 1..10);
+    @assertNotIn(1, 1>..10);
+    @assertNotIn(10, 1..<10);
+
+    let values = AssertionSet { first: 3, second: 7 };
+    @assertIn(7, values);
+    @assertNotIn(4, values);
+}
+
+#[test]
+fn assert_in_reports_missing_value() {
+    @assertIn(11, 1..10);
+}
+
+#[test]
+fn assert_not_in_reports_present_value() {
+    @assertNotIn(5, 1..10);
+}
+
+#[test]
+fn optional_helpers_pass() {
+    let presentValue: ?i32 = 42;
+    let absentValue: ?i32 = null;
+    @assertSome(presentValue);
+    @assertNone(absentValue);
+}
+
+#[test]
+fn assert_some_reports_none() {
+    let value: ?i32 = null;
+    @assertSome(value);
+}
+
+#[test]
+fn assert_none_reports_some() {
+    let value: ?i32 = 42;
+    @assertNone(value);
+}

@@ -47,6 +47,19 @@ pub fn reportInequalityFailure(actual: dyn Formatable, unexpected: dyn Formatabl
     destroyBuffer(lend buffer);
 }
 
+pub fn valuesAreNear(actual: f64, expected: f64, tolerance: f64): bool {
+    if (not (tolerance >= 0)) {
+        return false;
+    }
+    if (actual == expected) {
+        return true;
+    }
+    if (actual > expected) {
+        return actual - expected <= tolerance;
+    }
+    return expected - actual <= tolerance;
+}
+
 pub macro assertTrue(condition: expr) {
     let testCondition = condition;
     if (not testCondition) {
@@ -79,6 +92,54 @@ pub macro assertNe(actual: expr, unexpected: expr) {
         reportInequalityFailure(actualValue, unexpectedValue);
     }
     @assert(actualValue != unexpectedValue);
+}
+
+pub macro assertNear(actual: expr, expected: expr, tolerance: expr) {
+    let actualValue = actual;
+    let expectedValue = expected;
+    let toleranceValue = tolerance;
+    let testCondition =
+        valuesAreNear(actualValue as f64, expectedValue as f64, toleranceValue as f64);
+    if (not testCondition) {
+        reportAssertionFailure("assertNear failed: values are outside tolerance");
+    }
+    @assert(testCondition);
+}
+
+pub macro assertIn(value: expr, container: expr) {
+    if (value in container) {
+        @assert(true);
+    } else {
+        reportAssertionFailure("assertIn failed: value is not contained");
+        @assert(false);
+    }
+}
+
+pub macro assertNotIn(value: expr, container: expr) {
+    if (value in container) {
+        reportAssertionFailure("assertNotIn failed: value is contained");
+        @assert(false);
+    } else {
+        @assert(true);
+    }
+}
+
+pub macro assertSome(value: expr) {
+    if (value is null) {
+        reportAssertionFailure("assertSome failed: value is null");
+        @assert(false);
+    } else {
+        @assert(true);
+    }
+}
+
+pub macro assertNone(value: expr) {
+    if (value is null) {
+        @assert(true);
+    } else {
+        reportAssertionFailure("assertNone failed: value is present");
+        @assert(false);
+    }
 }
 
 pub macro fail(message: expr) {

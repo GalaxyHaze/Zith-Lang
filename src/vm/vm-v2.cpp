@@ -43,7 +43,7 @@ struct RunState {
     std::string message;
     std::string_view lastFunction;
     std::size_t lastInstruction = 0;
-    RunStatus status = RunStatus::Ok;
+    RunStatus status            = RunStatus::Ok;
 };
 
 auto statusText(RunStatus status) -> std::string_view {
@@ -66,6 +66,23 @@ auto getReg(const std::vector<int64_t> &regs, uint16_t index) -> int64_t {
     if (index < regs.size())
         return regs[index];
     return 0;
+}
+
+auto isF64Register(const Function &fn, uint16_t index) -> bool {
+    return index < fn.regTypes.size() && fn.regTypes[index] == ValueType::F64;
+}
+
+auto getF64Register(const std::vector<int64_t> &regs, uint16_t index) -> double {
+    const int64_t bits = getReg(regs, index);
+    double value       = 0;
+    std::memcpy(&value, &bits, sizeof(value));
+    return value;
+}
+
+auto f64RegisterBits(double value) -> int64_t {
+    int64_t bits = 0;
+    std::memcpy(&bits, &value, sizeof(bits));
+    return bits;
 }
 
 auto setReg(std::vector<int64_t> &regs, uint16_t index, int64_t value) -> bool {
@@ -523,12 +540,12 @@ auto runFunction(RunState &state, const Function &fn, std::vector<int64_t> &regs
 
             std::size_t pc = 0;
             while (pc < currentFunction->body.size()) {
-                state.lastFunction   = currentFunction->name;
+                state.lastFunction    = currentFunction->name;
                 state.lastInstruction = pc;
-                const auto &instr  = currentFunction->body[pc];
-                const uint16_t dst = instr.a;
-                const uint16_t lhs = instr.b;
-                const uint16_t rhs = instr.c;
+                const auto &instr     = currentFunction->body[pc];
+                const uint16_t dst    = instr.a;
+                const uint16_t lhs    = instr.b;
+                const uint16_t rhs    = instr.c;
 
                 switch (instr.op) {
                 case Op::LoadConstI32:
@@ -661,17 +678,16 @@ auto runFunction(RunState &state, const Function &fn, std::vector<int64_t> &regs
                     break;
                 }
                 case Op::IndexLoad: {
-                    const auto index      = getReg(regs, rhs);
-                    const bool raw            = (instr.e & 2U) != 0U;
-                    const bool addressResult  = (instr.e & 4U) != 0U;
+                    const auto index         = getReg(regs, rhs);
+                    const bool raw           = (instr.e & 2U) != 0U;
+                    const bool addressResult = (instr.e & 4U) != 0U;
                     if (index < 0)
                         return {false, 0};
                     if (!raw) {
                         const auto signedSize =
                             (instr.e & 1U) != 0U ? getReg(regs, instr.d) : instr.d;
-                        if (signedSize < 0 ||
-                            static_cast<std::uint64_t>(index) >=
-                                static_cast<std::uint64_t>(signedSize))
+                        if (signedSize < 0 || static_cast<std::uint64_t>(index) >=
+                                                  static_cast<std::uint64_t>(signedSize))
                             return {false, 0};
                     }
                     const auto base = getReg(regs, lhs);
@@ -753,40 +769,64 @@ auto runFunction(RunState &state, const Function &fn, std::vector<int64_t> &regs
                 case Op::BitXor:
                 case Op::Shl:
                 case Op::Shr: {
-                    const int64_t left  = getReg(regs, lhs);
-                    const int64_t right = getReg(regs, rhs);
-                    int64_t result      = 0;
-                    if (instr.op == Op::Div || instr.op == Op::Rem) {
-                        if (right == 0)
+                    if (isF64Register(fn, lhs) &&
+                        (instr.op == Op::Add || instr.op == Op::Sub || instr.op == Op::Mul ||
+                         instr.op == Op::Div || instr.op == Op::Rem)) {
+                        const double left  = getF64Register(regs, lhs);
+                        const double right = getF64Register(regs, rhs);
+                        double result      = 0;
+                        if (instr.op == Op::Add)
+                            result = left + right;
+                        else if (instr.op == Op::Sub)
+                            result = left - right;
+                        else if (instr.op == Op::Mul)
+                            result = left * right;
+                        else if (instr.op == Op::Div)
+                            result = left / right;
+                        else
+                            result = std::fmod(left, right);
+                        if (!setReg(regs, dst, f64RegisterBits(result)))
                             return {false, 0};
-                        result = instr.op == Op::Div ? left / right : left % right;
-                    } else if (instr.op == Op::Add) {
-                        result = left + right;
-                    } else if (instr.op == Op::Sub) {
-                        result = left - right;
-                    } else if (instr.op == Op::Mul) {
-                        result = left * right;
-                    } else if (instr.op == Op::BitAnd) {
-                        result = left & right;
-                    } else if (instr.op == Op::BitOr) {
-                        result = left | right;
-                    } else if (instr.op == Op::BitXor) {
-                        result = left ^ right;
-                    } else if (instr.op == Op::Shl) {
-                        result = left << (right & 63);
                     } else {
-                        result = left >> (right & 63);
+                        const int64_t left  = getReg(regs, lhs);
+                        const int64_t right = getReg(regs, rhs);
+                        int64_t result      = 0;
+                        if (instr.op == Op::Div || instr.op == Op::Rem) {
+                            if (right == 0)
+                                return {false, 0};
+                            result = instr.op == Op::Div ? left / right : left % right;
+                        } else if (instr.op == Op::Add) {
+                            result = left + right;
+                        } else if (instr.op == Op::Sub) {
+                            result = left - right;
+                        } else if (instr.op == Op::Mul) {
+                            result = left * right;
+                        } else if (instr.op == Op::BitAnd) {
+                            result = left & right;
+                        } else if (instr.op == Op::BitOr) {
+                            result = left | right;
+                        } else if (instr.op == Op::BitXor) {
+                            result = left ^ right;
+                        } else if (instr.op == Op::Shl) {
+                            result = left << (right & 63);
+                        } else {
+                            result = left >> (right & 63);
+                        }
+                        if (!setReg(regs, dst, result))
+                            return {false, 0};
                     }
+                    pc++;
+                    break;
+                }
+                case Op::Neg: {
+                    const int64_t result = isF64Register(fn, lhs)
+                                               ? f64RegisterBits(-getF64Register(regs, lhs))
+                                               : -getReg(regs, lhs);
                     if (!setReg(regs, dst, result))
                         return {false, 0};
                     pc++;
                     break;
                 }
-                case Op::Neg:
-                    if (!setReg(regs, dst, -getReg(regs, lhs)))
-                        return {false, 0};
-                    pc++;
-                    break;
                 case Op::Not:
                     if (!setReg(regs, dst, getReg(regs, lhs) == 0 ? 1 : 0))
                         return {false, 0};
@@ -803,30 +843,57 @@ auto runFunction(RunState &state, const Function &fn, std::vector<int64_t> &regs
                 case Op::Le:
                 case Op::Gt:
                 case Op::Ge: {
-                    const int64_t left  = getReg(regs, lhs);
-                    const int64_t right = getReg(regs, rhs);
-                    bool result         = false;
-                    switch (instr.op) {
-                    case Op::Eq:
-                        result = left == right;
-                        break;
-                    case Op::Ne:
-                        result = left != right;
-                        break;
-                    case Op::Lt:
-                        result = left < right;
-                        break;
-                    case Op::Le:
-                        result = left <= right;
-                        break;
-                    case Op::Gt:
-                        result = left > right;
-                        break;
-                    case Op::Ge:
-                        result = left >= right;
-                        break;
-                    default:
-                        break;
+                    bool result = false;
+                    if (isF64Register(fn, lhs) && isF64Register(fn, rhs)) {
+                        const double left  = getF64Register(regs, lhs);
+                        const double right = getF64Register(regs, rhs);
+                        switch (instr.op) {
+                        case Op::Eq:
+                            result = left <= right && left >= right;
+                            break;
+                        case Op::Ne:
+                            result = !(left <= right && left >= right);
+                            break;
+                        case Op::Lt:
+                            result = left < right;
+                            break;
+                        case Op::Le:
+                            result = left <= right;
+                            break;
+                        case Op::Gt:
+                            result = left > right;
+                            break;
+                        case Op::Ge:
+                            result = left >= right;
+                            break;
+                        default:
+                            break;
+                        }
+                    } else {
+                        const int64_t left  = getReg(regs, lhs);
+                        const int64_t right = getReg(regs, rhs);
+                        switch (instr.op) {
+                        case Op::Eq:
+                            result = left == right;
+                            break;
+                        case Op::Ne:
+                            result = left != right;
+                            break;
+                        case Op::Lt:
+                            result = left < right;
+                            break;
+                        case Op::Le:
+                            result = left <= right;
+                            break;
+                        case Op::Gt:
+                            result = left > right;
+                            break;
+                        case Op::Ge:
+                            result = left >= right;
+                            break;
+                        default:
+                            break;
+                        }
                     }
                     if (!setReg(regs, dst, result ? 1 : 0))
                         return {false, 0};
