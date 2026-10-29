@@ -4,6 +4,13 @@
 The published HTML stays in version control so the site can be served as
 static files. Editorial content lives in docs/pages; specification content is
 imported from the adjacent compiler checkout during every synchronization.
+
+URL scheme:
+    docs/D-home.html                   documentation shell
+    docs/<neutral-page>.html           neutral / general docs
+    docs/zith--/guide/<page>.html      Zith-- language guide
+    docs/zith--/reference/<page>.html  Zith-- reference
+    docs/zith/reference/<page>.html    full Zith specification
 """
 
 from __future__ import annotations
@@ -22,10 +29,11 @@ from typing import Iterable
 
 ROOT = Path(__file__).resolve().parents[1]
 PAGES = ROOT / "docs" / "pages"
-OUTPUT = ROOT / "html" / "documentation"
-TREE = ROOT / "json" / "tree.json"
-MANIFEST = ROOT / "json" / "spec-manifest.json"
+OUTPUT = ROOT / "_site" / "docs"
+TREE = ROOT / "_site" / "json" / "tree.json"
+MANIFEST = ROOT / "_site" / "json" / "spec-manifest.json"
 SPEC_DIR = ROOT.parent / "Zith" / "docs"
+DOCS_HOME = ROOT / "docs" / "D-home.html"
 
 PROTECTED_PATHS = [
     "D-home.html",
@@ -69,9 +77,9 @@ SPEC_CHAPTERS = [
 SUBSET_CHAPTER = ("Zith--.md", "Zith--")
 
 IMPORTED_LINK_ALIASES = {
-    "implementation-debt.md": "reference/D-implementation-status.html",
-    "plans/branch-protocol.md": "reference/D-concurrency.html",
-    "adr/0010-allocator-inplace-drop.md": "reference/D-standard-library.html",
+    "implementation-debt.md": "zith/reference/D-implementation-status.html",
+    "plans/branch-protocol.md": "zith/reference/D-concurrency.html",
+    "adr/0010-allocator-inplace-drop.md": "zith/reference/D-standard-library.html",
 }
 
 LEGACY_ANCHORS = {
@@ -136,11 +144,13 @@ def imported_pages() -> tuple[list[Page], dict[str, str]]:
         )
     pages: list[Page] = []
     hashes: dict[str, str] = {}
-    imports = [("Zith-spec.md", "Specification", "reference/D-specification.html")]
-    imports.append(("impl-status.md", "Implementation Status", "reference/D-implementation-status.html"))
-    imports.append(SUBSET_CHAPTER + ("reference/D-zith-subset.html",))
+    imports = [
+        ("Zith-spec.md", "Specification", "zith/reference/D-specification.html"),
+        ("impl-status.md", "Implementation Status", "zith/reference/D-implementation-status.html"),
+        (SUBSET_CHAPTER[0], "Zith--", "zith--/reference/D-zith-subset.html"),
+    ]
     imports.extend(
-        (filename, title, f"reference/D-{filename[3:-3]}.html")
+        (filename, title, f"zith/reference/D-{filename[3:-3]}.html")
         for filename, title in SPEC_CHAPTERS
     )
     for filename, title, output in imports:
@@ -200,10 +210,22 @@ def inline(text: str, page: Page, outputs: dict[str, str], source_map: dict[str,
 
 
 def relative_href(source_output: str, target_output: str) -> str:
-    # The documentation app loads fragments into html/documentation/D-home.html,
-    # so generated links must be relative to the documentation root, not to the
-    # fragment's own guide/spec subdirectory.
-    return "./" + target_output.replace("\\", "/")
+    source = source_output.replace("\\", "/")
+    target = target_output.replace("\\", "/")
+    source_parts = source.split("/")
+    target_parts = target.split("/")
+    common = 0
+    for s, t in zip(source_parts, target_parts):
+        if s == t:
+            common += 1
+        else:
+            break
+    up = max(0, len(source_parts) - common - 1)
+    prefix = ("../" * up) if up > 0 else "./"
+    suffix = "/".join(target_parts[common:])
+    if not suffix:
+        suffix = posixpath.basename(target)
+    return prefix + suffix
 
 
 def reldir(target: Path, source_dir: Path) -> Path:
@@ -230,7 +252,7 @@ def table_html(lines: list[str], page: Page, outputs: dict[str, str], source_map
             rendered.append("    <tr>")
             rendered.extend(f"      <td>{inline(cell, page, outputs, source_map)}</td>" for cell in row)
             rendered.append("    </tr>")
-        rendered += ["  </tbody>"]
+        rendered.append("  </tbody>")
     rendered.append("</table>")
     return "\n".join(rendered)
 
@@ -401,24 +423,24 @@ def legacy_aliases(pages: list[Page]) -> dict[str, str]:
     extra = {
         "D-project-overview.html": "project/D-overview.html",
         "D-roadmap.html": "project/D-overview.html",
-        "D-reference-stdlib.html": "reference/D-standard-library.html",
-        "D-language-spec-core-topics.html": "reference/D-specification.html",
+        "D-reference-stdlib.html": "zith/reference/D-standard-library.html",
+        "D-language-spec-core-topics.html": "zith/reference/D-specification.html",
         "D-dev-wasm-build.html": "cli/D-build.html",
-        "language/D-ecs.html": "guide/D-overview.html",
-        "language/D-intrinsics.html": "guide/D-comptime.html",
-        "language/D-packs.html": "guide/D-bindings.html",
-        "language/D-ownership.html": "guide/D-memory-model.html",
-        "language/D-memory.html": "guide/D-memory-model.html",
-        "language/D-best-practices.html": "reference/D-best-practices.html",
-        "advanced/D-overview.html": "guide/D-overview.html",
-        "advanced/D-how-to-use.html": "guide/D-overview.html",
-        "advanced/D-traits.html": "guide/D-traits-interfaces.html",
-        "advanced/D-generics-deep.html": "guide/D-generics.html",
-        "advanced/D-metaprogramming.html": "guide/D-comptime.html",
-        "advanced/D-macros.html": "guide/D-contexts-words-macros.html",
-        "advanced/D-data-structures.html": "guide/D-types.html",
-        "advanced/D-unsafe.html": "guide/D-raw-unsafe.html",
-        "advanced/D-raw-pointers.html": "guide/D-raw-unsafe.html",
+        "language/D-ecs.html": "zith--/guide/D-overview.html",
+        "language/D-intrinsics.html": "zith--/guide/D-comptime.html",
+        "language/D-packs.html": "zith--/guide/D-bindings.html",
+        "language/D-ownership.html": "zith--/guide/D-memory-model.html",
+        "language/D-memory.html": "zith--/guide/D-memory-model.html",
+        "language/D-best-practices.html": "zith/reference/D-best-practices.html",
+        "advanced/D-overview.html": "zith--/guide/D-overview.html",
+        "advanced/D-how-to-use.html": "zith--/guide/D-overview.html",
+        "advanced/D-traits.html": "zith--/guide/D-traits-interfaces.html",
+        "advanced/D-generics-deep.html": "zith--/guide/D-generics.html",
+        "advanced/D-metaprogramming.html": "zith--/guide/D-comptime.html",
+        "advanced/D-macros.html": "zith--/guide/D-contexts-words-macros.html",
+        "advanced/D-data-structures.html": "zith--/guide/D-types.html",
+        "advanced/D-unsafe.html": "zith--/guide/D-raw-unsafe.html",
+        "advanced/D-raw-pointers.html": "zith--/guide/D-raw-unsafe.html",
         "cli/D-compile.html": "cli/D-build.html",
         "cli/D-new.html": "cli/D-create.html",
         "cli/D-flags.html": "cli/D-overview.html",
@@ -430,6 +452,7 @@ def legacy_aliases(pages: list[Page]) -> dict[str, str]:
         "community/D-chat.html": "community/D-overview.html",
         "community/D-contributing.html": "community/D-overview.html",
         "community/D-code-of-conduct.html": "community/D-overview.html",
+        "reference/D-zith-subset.html": "zith--/reference/D-zith-subset.html",
     }
     aliases.update(extra)
     return aliases
@@ -446,7 +469,7 @@ def alias_html(alias: str, target: str) -> str:
 
 
 def status_notice(page: Page) -> str:
-    href = relative_href(page.output, "reference/D-implementation-status.html")
+    href = relative_href(page.output, "zith/reference/D-implementation-status.html")
     return (
         '<div class="callout callout-warning"><p><strong>Draft / Experimental:</strong> '
         'Zith documentation describes a language under active development. Check '
@@ -529,13 +552,15 @@ def validate(files: dict[Path, str], tree: dict) -> list[str]:
                 if anchor and anchor not in output_ids[output]:
                     errors.append(f"{output}: missing local anchor #{anchor}")
                 continue
-            # Generated fragments are fetched from D-home.html and injected into
-            # the documentation document, so their links are relative to the
-            # documentation root rather than to the fragment's subdirectory.
-            normalized = posixpath.normpath(file_part.removeprefix("./"))
-            if normalized not in outputs:
+            if file_part.endswith(".md"):
+                continue
+            # Generated fragments are loaded into docs/D-home.html, so links
+            # must resolve correctly from the fragment's own subdirectory.
+            source_dir = posixpath.dirname(output)
+            resolved = posixpath.normpath(posixpath.join(source_dir, file_part))
+            if resolved not in outputs:
                 errors.append(f"{output}: broken internal link {href}")
-            elif anchor and anchor not in output_ids[normalized]:
+            elif anchor and anchor not in output_ids[resolved]:
                 errors.append(f"{output}: {href} points to a missing anchor")
     return errors
 
@@ -569,6 +594,10 @@ def run(check: bool) -> int:
     for path, content in files.items():
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(content, encoding="utf-8")
+    if DOCS_HOME.is_file():
+        home_dst = OUTPUT / "D-home.html"
+        home_dst.parent.mkdir(parents=True, exist_ok=True)
+        home_dst.write_text(DOCS_HOME.read_text(encoding="utf-8"), encoding="utf-8")
     for path in orphaned:
         path.unlink()
     print(f"Built {len(expected_html)} documentation fragments.")

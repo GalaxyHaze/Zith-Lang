@@ -251,7 +251,7 @@ function loadPage(path, anchor = null, opts = {}) {
             const fullTitle = pageTitle + " — Zith Documentation";
             const meta = pageMeta.get(canonicalPath);
             const description = meta && meta.description ? meta.description : "Documentation for the Zith programming language.";
-            const pageURL = "https://zith-lang.org/html/documentation/D-home.html?page=" + encodeURIComponent(path.replace("./", ""));
+            const pageURL = "https://zith-lang.org/docs/D-home.html?page=" + encodeURIComponent(path.replace("./", ""));
 
             document.title = fullTitle;
 

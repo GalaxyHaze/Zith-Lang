@@ -8,78 +8,334 @@ kind: editorial
 ---
 # Zith-- Reference
 
-This is the English reference entry point for the language subset compiled by
-the current `main` compiler. It describes the public surface that the
-Zith-- guide teaches. The [Implementation Status](doc:reference-implementation-status)
-page remains authoritative when a feature is partial.
+This page documents the Zith-- subset compiled by the current `main` compiler.
+The [Implementation Status](doc:reference-implementation-status) page is
+authoritative when a feature is partial.
 
-## Declarations and functions
+## Bindings and parameters
 
-Functions use a colon before the return type:
+Bindings use `let`, `var`, and `const`. A `let` binding is immutable and
+cannot be reassigned. A `var` binding is mutable and rebindable. A `const`
+binding has static storage when declared at module scope and always requires
+an initializer.
 
 ```zith
-fn add(left: i32, right: i32): i32 {
+fn main(): i32 {
+    let a: i32 = 1;
+    var b: i32 = 2;
+    const LOCAL: i32 = 4;
+    b = 3;
+    return a + b + LOCAL;
+}
+```
+
+Immutability propagates through paths. Assigning to a field, arrow member, or
+index of a `let` or `const` binding is rejected. A `var` binding allows nested
+writes.
+
+Function parameters are immutable by default. Use `var p: T` to allow mutation
+inside the function body.
+
+Parameters may declare a default value after the type: `right: i32 = 5`. The
+default applies when the call site omits that argument and all following
+arguments. A parameter without a default cannot follow one with a default.
+
+```zith
+fn add(left: i32, right: i32 = 5): i32 {
     left + right
 }
-```
-
-Function declarations also accept the arrow spelling `-> ReturnType`, but the
-colon form is the canonical spelling in this reference. Function types use
-the colon form only: `fn(parameters): ReturnType`.
-
-Function types are first-class values and lower to C-compatible function
-pointers:
-
-```zith
-fn double(value: i32): i32 {
-    value * 2
-}
-
-extern fn apply(operation: fn(i32): i32, value: i32): i32
 
 fn main(): i32 {
-    var operation: fn(i32): i32 = double;
-    apply(operation, 21)
+    add(7) + add(1, 2)
 }
 ```
 
-Function references, function-type parameters, and calls through those values
-are implemented. Anonymous functions and closures are not implemented yet.
-Use a named function and pass its function value instead.
-
-## Packs and tuples
-
-Zith calls its tuple-like aggregate a **pack**. Packs are heterogeneous
-values with a fixed member order:
+`extern var` and `extern const` declare externally defined storage. Both
+require a type and cannot have an initializer. Use `= extern CSymbol` when the
+Zith name differs from the linker symbol.
 
 ```zith
-let response = | 200, "ok", true |;
-
-let status: i32 = response[0];
-let message: *char = response[1];
-let accepted: bool = response[2];
+extern var counter: i32;
+extern const rate: f64;
+extern var local_name: i32 = extern c_counter;
 ```
 
-Destructure a pack into local bindings with `[ ... ]`:
+## Control flow
+
+Conditions are parenthesized. Boolean negation is `not`; `not (cond)` is the
+idiomatic form. `if` accepts an optional `else`. The chained form writes
+`else (cond) { ... }`; the legacy `else if` form still compiles but emits
+`W1008 DeprecatedSyntax`.
+
+`while` compiles and emits `W1008 DeprecatedSyntax`. Prefer `for (cond) { ... }`.
+
+`match` is a synonym for `when` and accepts the same syntax.
+
+`when` arms use parenthesized patterns followed by the body, separated by
+commas. The wildcard arm `(_)` must be last. A pattern operand that is not a
+boolean desugars to equality with the subject.
 
 ```zith
-let [status, message, accepted] = response;
-```
-
-Pack indexes must be compile-time integer positions. Use an array or slice for
-homogeneous data that needs runtime indexing. Named pack types can describe
-the member names and types explicitly:
-
-```zith
-fn response(): |status: i32, message: *char, accepted: bool| {
-    |200, "ok", true|
+when (status) {
+    (Status.Ok or Status.Error) 10,
+    (Status.Queued) and (retries < 5) 20,
+    (_) 0
 }
 ```
 
-Packs are implemented in Zith-- as concrete aggregates. The current subset
-supports pack literals, named pack types, positional indexing, and binding
-destructuring. Tuple methods, runtime pack indexing, and tuple-specific library
-conventions are not part of the subset.
+`in` tests whether a value is contained in a right-hand side. A range literal
+is a built-in right-hand side.
+
+```zith
+if (x in 0.0>..<1.0) { ... }
+```
+
+Boolean operators have fixed precedence: `a or b and c` parses as `a or (b and c)`,
+and `a and b or c` as `(a and b) or c`. `xor` accepts `bool` or two equal-width
+integers.
+
+`for` supports labeled loops: `outer: for ...`. `break outer;` and `continue
+outer;` target the labeled loop. Unlabeled `break;` and `continue;` apply to
+the innermost loop. `defer expr;` and `defer { ... }` run cleanup in reverse
+registration order on fallthrough, `return`, `break`, `continue`, and `jump`.
+
+`dock State(args)` is an expression that calls a state machine and returns its
+final value. `jump Next(args);` ends the current state and tail-calls the next
+one.
+
+## Types and layout
+
+Struct fields are private by default. `pub name: T = default` opens a field to
+other modules. `mod name: T = default` and `mod(N) name: T = default` use the
+existing module-visibility rules.
+
+```zith
+struct Box {
+    data: i32,
+    pub open: i32,
+    mod sibling: i32,
+    mod(2) deep: i32,
+}
+```
+
+A local binding without an initializer may be declared before its first write.
+Reading it before that first write reports `E3001`. The explicit opt-out is
+`raw <name>`.
+
+`component` defines a copyable POD type. Fields are primitives, arrays or
+slices of those, or other components. Components cannot implement traits and
+inline functions are restricted to pure transformations.
+
+```zith
+component Vec2 {
+    [x, y]: f32,
+    fn sum(self): f32 { self.x + self.y }
+}
+```
+
+`type Name = T` creates a distinct nominal wrapper. `alias Name = T` is
+transparent. Both require explicit casts for construction and extraction.
+
+`raw fn` marks a function as an unchecked boundary. The body may use `raw`
+operations and the compiler does not apply normal restrictions inside it.
+
+### Layout intrinsics
+
+`@sizeOf(T)` returns the size of any complete type as `u64`. `@offsetOf(S,
+field)` and `@alignOf(S)` apply to structs and return `i32`. `@lengthOf(x)` and
+`@ptrOf(x)` accept slices, arrays, string literals, and `lend`/`view` slice
+parameters. For borrowed slices, `@ptrOf` returns the element pointer, not the
+descriptor address. `@canonicalType(T)` returns a stable `u128` for the type.
+
+### Explicit alignment
+
+`#[alignas(N)]` reinforces the alignment of a struct or a `let`/`var`/`const`
+binding. `N` must be a positive constant power of two supported by the target.
+
+```zith
+#[alignas(64)] struct TokenBlock { tag: u8 }
+```
+
+### Strings and characters
+
+`char` is a UTF-8 code unit. A string literal has type `*char` and adapts
+implicitly to `[]char`. There is no built-in `string` type in Zith--; use
+`[]char` or `*char`. String literals concatenate with `+`, which produces an
+allocator-origin value.
+
+Escape sequences follow the C-style set (`\n`, `\r`, `\t`, `\\`, `\'`, `\"`,
+`\xHH`, octal `\NNN`). `\#` produces a literal `#`.
+
+## Ownership
+
+`lend` and `view` are the ownership annotations implemented in Zith--. A
+`lend T` or `view T` parameter receives the value by reference. Writing through
+a `view` parameter reports `E4004`.
+
+A `default` binding passed to a `lend` or `view` parameter requires `lend x`
+or `view x` at the call site. Omitting the annotation or using the wrong mode
+reports `E4005 OwnershipCoercionRequired`. The same binding cannot be passed
+twice as `lend`, nor as both `lend` and `view`, within the same call.
+
+```zith
+struct P { x: i32 }
+
+fn bump(p: lend P): i32 { p.x = p.x + 1; p.x }
+fn read(p: view P): i32 { p.x }
+
+fn main(): i32 {
+    var q = P { x: 41 };
+    _ = bump(lend q);
+    _ = read(view q);
+    q.x
+}
+```
+
+Literals, temporaries, and call results do not require an annotation. A
+binding already qualified as `lend` or `view` may also be passed without a new
+annotation.
+
+`unique`, `share`, `belong`, and `mut` in call position are rejected with
+`E2007`/`E4007`. The full Zith model uses `&T`, `&mut T`, `^T`, and `%T`;
+those spellings are not part of Zith--.
+
+### Opaque tagged values
+
+`raw opaque` is an untagged `void*` for C interop. Zith-- also supports bare
+`opaque`: a tagged open union stored as `{ *void, u32 }`. `T as opaque`
+eradicates an addressable value into a local slot. `opaque is T` checks the
+type id. `opaque as T` returns `?T`, producing `null` when the type id does not
+match. `raw opaque as T` reinterprets without verification.
+
+## Macros
+
+Normal macros and `raw macro` are the only macro forms in Zith--. `tag` is a
+full Zith language item; the legacy `tag macro` spelling is rejected.
+
+```zith
+macro add(a, b) { a + b }
+raw macro dbg(x) { @println(x) }
+```
+
+## Platform-specific imports
+
+The resolver checks variants derived from the active target triple, using
+canonical LLVM triple names such as `x86_64`, `aarch64`, `linux`, `darwin`,
+and `windows`:
+
+```text
+foo.<arch>.<os>.zith
+foo.<arch>.zith
+foo.<os>.zith
+foo.zith
+```
+
+A directory `foo/` is used as a module only when no matching file variant
+exists. `foo.zith` takes precedence over a same-named directory.
+
+## Implement blocks on primitives and common types
+
+`implement` blocks may own primitives, `?T`, `[]T`, and `*char` in addition to
+named types. Methods on these owners use the same implicit `self` receiver and
+can be called with normal `.method()` syntax.
+
+```zith
+trait Value { fn value(self): i32; }
+
+implement i32 as Value { fn value(self): i32 { 7 } }
+implement ?char as Present {}
+implement []char as SliceLen { fn len(self): i32 { 3 } }
+```
+
+Pointer and fixed-array owners (`*T`, `[N]T`) are rejected. Interface fields
+are readable on concrete types and generic bounds, but not through a `dyn
+Interface` value.
+
+## Qualified method calls
+
+A method call can be qualified with a trait or interface satisfied by the
+receiver: `p.Trait.method()` or `p.Interface.method()`. The qualification
+resolves only the method visible on that trait or interface, avoiding ambiguity
+`E2008` when two conforming traits expose the same name.
+
+```zith
+trait A { fn pick(self): i32 { 1 } }
+trait B { fn pick(self): i32 { 2 } }
+
+struct P { x: i32 }
+implement P as A {}
+implement P as B {}
+
+fn main(): i32 {
+    let p = P { x: 0 };
+    p.A.pick() + p.B.pick()
+}
+```
+
+## Variadic slices
+
+The last parameter of a function or method may be a variadic slice `[...]T`.
+At the call site, all trailing homogeneous arguments are collected into a
+temporary slice. An explicit `[]T` or `[N]T` may also be passed as the final
+argument.
+
+```zith
+fn sum(rest: [...]i32): i32 { ... }
+
+fn main(): i32 {
+    sum();                  // empty tail
+    let values: []i32 = [1, 2, 3];
+    sum(values);            // explicit slice
+    sum(1, 2, 3);           // auto-collected tail
+}
+```
+
+## Diagnostics
+
+Relevant diagnostics include:
+
+- `E2007` — no compatible overload signature.
+- `E2008` — ambiguous call.
+- `E2024` — interface not satisfied.
+- `E2027` — duplicate implementation.
+- `E3005` — unproven nullable dereference.
+- `E3009` — trait bound not satisfied.
+- `E4004` — write through `view`.
+- `E4005` — ownership coercion required at call site.
+- `E4007` — invalid call ownership annotation.
+- `E4008` — pointer escapes local scope.
+- `E5001` — invalid IR.
+- `E5002` — unreachable code.
+
+## Removed restrictions
+
+| Syntax or feature | Reason | Behavior |
+|---|---|---|
+| `global name: T = value` | globals use `const` | `E2010` with `const` suggestion |
+| `mut` qualifier | bindings use `var` | `E2010` |
+| `const fn` | ordinary functions fit the subset | `E2010` |
+| `unique` / `share` / `belong` | ownership outside this iteration | `E2010` |
+| `tag` / `tag macro` | `tag` is full Zith; Zith-- accepts only normal/raw macros | `E2010` |
+| Assignment to `let` / `const` | immutability | `E2010` |
+| Field / arrow / index write through `let` / `const` root | immutability propagates | `E2010` |
+| Assignment to `const` field | const storage | `E2010` |
+| `const` without initializer | constant needs a value | `E2010` |
+| Non-constant enum discriminant | variant needs an integer constant | `E3001` |
+| Prefix `!` | negation uses `not`; `!` is reserved for postfix | parse error |
+| `break label;` / `continue label;` with no active label | missing or ambiguous target | `E2010` |
+| `++` / `--` | use explicit assignment | `E2010` |
+
+## What is not in this iteration
+
+Zith-- does not include comptime evaluation, the full NRA ownership model,
+contexts, words, tag macros, anonymous functions, closures, the stronger
+`unsafe` hierarchy, or the `fail` / `with` / `catch` / `throw` error workflow.
+Those topics remain full Zith work until implementation status moves them into
+the subset.
+
+New ownership checks, SRA heuristics, `Result`-style types, feature flags, and
+separate safety modes are not planned for this iteration. The `main` compiler
+builds Zith-- as the default surface.
 
 ## Working language surface
 
@@ -87,17 +343,19 @@ Zith-- currently includes:
 
 - `let`, `var`, and `const` bindings.
 - structs, enums, unions, arrays, slices, packs, pointers, and `?T` optionals.
-- `if`, `for`, `when`, `defer`, and `state`/`dock`/`jump`.
-- modules, aliases, visibility, generic declarations, and overloads.
-- traits, interfaces, `dyn` method dispatch, and `implement` blocks.
+- `if`, `for`, `when`, `defer`, and `state` / `dock` / `jump`.
+- modules, aliases, visibility, generic declarations, overloads, and variadic slices.
+- traits, interfaces, `dyn` method dispatch, qualified method calls, and `implement` blocks on named types, primitives, `?T`, `[]T`, and `*char`.
 - normal macros and `raw macro`.
-- `extern fn`, C header imports, and `raw opaque`.
+- `extern fn`, C header imports, `raw opaque`, and bare `opaque`.
 - `lend` and `view` ownership annotations.
+- platform-specific module resolution and `#[alignas(N)]`.
+- layout intrinsics: `@sizeOf`, `@offsetOf`, `@alignOf`, `@lengthOf`, `@ptrOf`, and `@canonicalType`.
 
 ## Deliberately outside Zith--
 
 The full Zith design also describes comptime evaluation, the complete NRA
-ownership model, contexts, words, tag macros, anonymous functions, closures,
+ownership model, contexts, words, `tag` macros, anonymous functions, closures,
 and the stronger `unsafe` hierarchy. Those topics belong to the [Zith
 reference](doc:zith-overview) until the implementation status says otherwise.
 

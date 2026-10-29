@@ -9,14 +9,15 @@ partials/                 header.html, footer.html, head.html  <- single source 
 tools/build.py            expands the includes, writes _site/
 tools/build_docs.py       regenerates the docs fragments from docs/pages/*.md
 docs/pages/*.md           Markdown source for the documentation
-html/documentation/       generated fragments (D-*.html) + the shell D-home.html
+docs/D-home.html          documentation shell (SPA loader)
+docs/                     generated fragments and shell live here after build
 json/tree.json            generated navigation tree (sidebar structure)
 css/                      tokens + per-area styles
 js/                       per-page scripts
 ```
 
 Every top-level page (`index.html`, `changelog.html`, `about/`, `playground/`,
-`helios/`, `html/documentation/D-home.html`) is a **source** that declares the
+`helios/`, `docs/D-home.html`) is a **source** that declares the
 shared chrome with an include:
 
 ```html
@@ -57,9 +58,9 @@ publishes `_site/`.
 
 ## Documentation
 
-Each `D-*.html` file under `html/documentation/` is a **content fragment** — the
+Each `D-*.html` file under `docs/` is a **content fragment** — the
 inner HTML of a page, with no `<html>`, `<head>`, or `<body>`. The shell
-(`D-home.html`) loads them with `fetch()` when you click a sidebar link.
+(`docs/D-home.html`) loads them with `fetch()` when you click a sidebar link.
 
 ### Write a page
 

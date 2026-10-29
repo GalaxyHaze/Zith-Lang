@@ -28,7 +28,8 @@ VAR = re.compile(r"\{\{\s*([\w-]+)\s*\}\}")
 # Nunca publicados: ferramentas, parciais, notas internas e fontes dos docs.
 SKIP_DIRS = {
     ".git", ".github", ".vscode", ".idea", ".agents", ".codex",
-    "tools", "partials", "notes", "docs", "_site", "node_modules", "__pycache__",
+    "tools", "partials", "notes", "_site", "node_modules", "__pycache__",
+    "agents", "pages",
 }
 SKIP_FILES = {
     ".gitignore", ".DS_Store", "Thumbs.db",
