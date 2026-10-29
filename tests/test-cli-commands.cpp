@@ -10,6 +10,7 @@
 #include <iterator>
 #include <string>
 #include <vector>
+#include <toml++/toml.hpp>
 
 #ifndef _WIN32
 #include <sys/wait.h>
@@ -214,8 +215,7 @@ static void test_run_virtual_machine_executes_program() {
 #ifdef ZITH_HAS_VM
     // --no-cache keeps the run on the cold lowering path, matching the other
     // subprocess checks; the VM must still produce the program exit code.
-    const auto result =
-        capture.run("run --virtual-machine --no-cache \"" + source.string() + "\"");
+    const auto result = capture.run("run --virtual-machine --no-cache \"" + source.string() + "\"");
     CHECK_EQ(result.exitCode, 9, "run --virtual-machine executes main and returns its exit code");
     CHECK(result.stdoutText.empty(), "run --virtual-machine leaves program stdout empty");
 
@@ -226,8 +226,7 @@ static void test_run_virtual_machine_executes_program() {
     const auto warmNative = capture.run("run \"" + source.string() + "\"");
     CHECK_EQ(warmNative.exitCode, 9, "native run warms the cache with the program result");
     const auto warmVm = capture.run("run --virtual-machine \"" + source.string() + "\"");
-    CHECK_EQ(warmVm.exitCode, 9,
-             "run --virtual-machine executes main from a hydrated cache entry");
+    CHECK_EQ(warmVm.exitCode, 9, "run --virtual-machine executes main from a hydrated cache entry");
 #else
     // Without the VM slice the flag is a hard error instead of executing.
     const auto result = capture.run("run --virtual-machine \"" + source.string() + "\"");
@@ -546,6 +545,100 @@ static void test_docs_stdout_file_and_index_outputs() {
 #endif
 }
 
+static void test_deps_resolve_writes_deterministic_lockfile() {
+#ifdef ZITHC_BINARY
+    namespace fs = std::filesystem;
+
+    CliCapture capture;
+    const auto projectRoot = capture.root / "project";
+    fs::create_directories(projectRoot / "vendor" / "logging" / "src");
+    {
+        std::ofstream manifest(projectRoot / "ZithProject.toml", std::ios::binary);
+        manifest << "[project]\n"
+                    "name = \"application\"\n"
+                    "version = \"0.1.0\"\n"
+                    "\n[dependencies]\n"
+                    "logging = \"vendor/logging\"\n";
+        CHECK(manifest.good(), "project manifest fixture is written");
+    }
+    {
+        std::ofstream manifest(projectRoot / "vendor" / "logging" / "ZithProject.toml",
+                               std::ios::binary);
+        manifest << "[project]\n"
+                    "name = \"logging\"\n"
+                    "version = \"1\"\n";
+        CHECK(manifest.good(), "dependency manifest fixture is written");
+    }
+    {
+        std::ofstream source(projectRoot / "vendor" / "logging" / "src" / "logging.zith",
+                             std::ios::binary);
+        source << "pub fn log() {}\n";
+        CHECK(source.good(), "dependency module fixture is written");
+    }
+
+    struct CurrentDirectory {
+        fs::path previous = fs::current_path();
+
+        explicit CurrentDirectory(const fs::path &path) {
+            fs::current_path(path);
+        }
+
+        ~CurrentDirectory() {
+            std::error_code error;
+            fs::current_path(previous, error);
+        }
+    } currentDirectory(projectRoot);
+
+    const auto first = capture.run("deps resolve");
+    CHECK_EQ(first.exitCode, 0, "deps resolve succeeds for a valid local package graph");
+
+    const auto lockfilePath = projectRoot / "Zith.lock";
+    std::ifstream firstLockfile(lockfilePath, std::ios::binary);
+    const std::string firstText((std::istreambuf_iterator<char>(firstLockfile)),
+                                std::istreambuf_iterator<char>());
+    CHECK(firstLockfile.good() || firstLockfile.eof(), "deps resolve creates Zith.lock");
+    const auto parsedLockfile = toml::parse(firstText);
+    const auto *packages       = parsedLockfile["package"].as_array();
+    bool hasLoggingPackage     = false;
+    if (packages != nullptr) {
+        for (const auto &record : *packages) {
+            const auto *package = record.as_table();
+            const auto *nameNode = package == nullptr ? nullptr : package->get("name");
+            const auto name      = nameNode == nullptr ? std::nullopt
+                                                       : nameNode->value<std::string>();
+            hasLoggingPackage = hasLoggingPackage || (name && *name == "logging");
+        }
+    }
+    CHECK(hasLoggingPackage, "Zith.lock records the resolved local package");
+
+    const auto second = capture.run("deps resolve");
+    CHECK_EQ(second.exitCode, 0, "deps resolve succeeds when run repeatedly");
+    std::ifstream secondLockfile(lockfilePath, std::ios::binary);
+    const std::string secondText((std::istreambuf_iterator<char>(secondLockfile)),
+                                 std::istreambuf_iterator<char>());
+    CHECK_EQ(secondText, firstText, "repeated deps resolve preserves deterministic lockfile text");
+
+    {
+        std::ofstream manifest(projectRoot / "ZithProject.toml",
+                               std::ios::binary | std::ios::trunc);
+        manifest << "[project]\n"
+                    "name = \"application\"\n"
+                    "version = \"0.1.0\"\n"
+                    "\n[dependencies]\n"
+                    "missing = \"vendor/missing\"\n";
+    }
+    const auto failed = capture.run("deps resolve");
+    CHECK_EQ(failed.exitCode, 1, "deps resolve reports a missing local dependency");
+
+    std::ifstream preservedLockfile(lockfilePath, std::ios::binary);
+    const std::string preservedText((std::istreambuf_iterator<char>(preservedLockfile)),
+                                    std::istreambuf_iterator<char>());
+    CHECK_EQ(preservedText, firstText, "failed resolution leaves the previous lockfile untouched");
+#else
+    CHECK(true, "deps resolve subprocess test is skipped when zithc is not built");
+#endif
+}
+
 // ── Command function signatures exist ─────────────────────────────
 
 static void test_command_signatures_exist() {
@@ -670,7 +763,8 @@ static void test_test_command_filters_and_executes_tests() {
                  "#[test]\n"
                  "fn first() {\n"
                  "    @log(\"selected-log\");\n"
-                 "    @log(\"zith-test-results-begin\\nzith-test fake 0\\nzith-test-results-end\\n\");\n"
+                 "    @log(\"zith-test-results-begin\\nzith-test fake "
+                 "0\\nzith-test-results-end\\n\");\n"
                  "    @assertViaMacro(true);\n"
                  "}\n"
                  "#[test]\n"
@@ -713,9 +807,8 @@ static void test_test_command_filters_and_executes_tests() {
     CHECK(interpreted.exitCode == 0, "test command executes the selected test in the interpreter");
 
 #ifdef ZITH_HAS_VM
-    const auto virtual_machine =
-        capture.run("--virtual-machine test --filter=runner::first \"" +
-                    capture.root.string() + "\"");
+    const auto virtual_machine = capture.run("--virtual-machine test --filter=runner::first \"" +
+                                             capture.root.string() + "\"");
     CHECK(virtual_machine.exitCode == 0, "test command executes the selected test in VM v2");
 #endif
 
@@ -725,12 +818,11 @@ static void test_test_command_filters_and_executes_tests() {
           "unfiltered run reports both per-test results");
     CHECK(unfiltered.stdoutText.find("excluded-log") != std::string::npos,
           "logs from the failing test are relayed");
-    CHECK(unfiltered.stderrText.find((capture.root / "tests" / "runner.zith").string() +
-                                     ":13:") != std::string::npos,
+    CHECK(unfiltered.stderrText.find((capture.root / "tests" / "runner.zith").string() + ":13:") !=
+              std::string::npos,
           "failed assertion reports its source line");
 
-    const auto no_match =
-        capture.run("test --filter=missing \"" + capture.root.string() + "\"");
+    const auto no_match = capture.run("test --filter=missing \"" + capture.root.string() + "\"");
     CHECK(no_match.exitCode == 1, "a filter without matches is an error");
     CHECK(no_match.stderrText.find("no tests matched filter 'missing'") != std::string::npos,
           "a filter without matches gets a specific diagnostic");
@@ -907,6 +999,7 @@ static void test_cli_commands() {
     test_docs_error_policy();
     test_docs_parse_and_import_error_policy();
     test_docs_stdout_file_and_index_outputs();
+    test_deps_resolve_writes_deterministic_lockfile();
     test_command_signatures_exist();
     test_count_passed();
     test_command_names_match_contract();

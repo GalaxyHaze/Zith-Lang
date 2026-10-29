@@ -8,6 +8,8 @@
 #include "cli/terminal.hpp"
 #include "common/test-log-protocol.hpp"
 #include "interp/hir-interpreter.hpp"
+#include "packages/lockfile.hpp"
+#include "packages/resolver.hpp"
 #include "session/compilation-session.hpp"
 #include "session/pipeline-plan.hpp"
 #ifdef ZITH_HAS_VM
@@ -20,6 +22,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <filesystem>
+#include <fstream>
 #include <string>
 #include <string_view>
 #include <toml++/toml.hpp>
@@ -167,21 +170,19 @@ bool parseTestProtocol(std::string_view output, const std::vector<std::string> &
         if (!line.starts_with(result_prefix))
             return false;
         const size_t value_separator = line.rfind(' ');
-        if (value_separator == std::string_view::npos ||
-            value_separator <= result_prefix.size() ||
+        if (value_separator == std::string_view::npos || value_separator <= result_prefix.size() ||
             line.substr(result_prefix.size(), value_separator - result_prefix.size()) !=
                 expected_names[index - 1U])
             return false;
         uint32_t failed_assert = 0;
-        const auto value_text = line.substr(value_separator + 1U);
-        const auto parsed =
-            std::from_chars(value_text.data(), value_text.data() + value_text.size(),
-                            failed_assert);
+        const auto value_text  = line.substr(value_separator + 1U);
+        const auto parsed = std::from_chars(value_text.data(),
+                                            value_text.data() + value_text.size(), failed_assert);
         if (parsed.ec != std::errc{} || parsed.ptr != value_text.data() + value_text.size())
             return false;
         tests[index - 1U].name         = expected_names[index - 1U];
         tests[index - 1U].failedAssert = failed_assert;
-        cursor = line_start;
+        cursor                         = line_start;
     }
 
     if (cursor < kTestResultsBegin.size())
@@ -296,14 +297,14 @@ std::string filterTestLogs(std::string_view output, const std::vector<TestResult
         }
 
         if (test_index == tests.size()) {
-            filtered.append(output.substr(begin, log_end + common::kTestLogEndMarker.size() - begin));
+            filtered.append(
+                output.substr(begin, log_end + common::kTestLogEndMarker.size() - begin));
         } else if (verbose || tests[test_index].failedAssert != 0U ||
                    !tests[test_index].failedChecks.empty()) {
-            const size_t log_start = header_end + 1U;
-            const size_t log_size  = log_end - log_start;
-            const size_t remaining =
-                common::kTestLogCapacity - std::min(logged_bytes[test_index],
-                                                    common::kTestLogCapacity);
+            const size_t log_start   = header_end + 1U;
+            const size_t log_size    = log_end - log_start;
+            const size_t remaining   = common::kTestLogCapacity -
+                                       std::min(logged_bytes[test_index], common::kTestLogCapacity);
             const size_t append_size = std::min(log_size, remaining);
             filtered.append(output.data() + log_start, append_size);
             logged_bytes[test_index] += append_size;
@@ -357,8 +358,8 @@ int test(const Options &opts) {
         return 1;
     }
 
-    size_t passed = 0;
-    size_t failed = 0;
+    size_t passed  = 0;
+    size_t failed  = 0;
     size_t skipped = 0;
     for (const auto &file : testFiles) {
         if (opts.flags.verbose())
@@ -371,11 +372,11 @@ int test(const Options &opts) {
         compilation.setTestModuleName(testModuleName(file, testDir));
 
         const bool useInterpreter = opts.flags.interpreted();
-        bool useVm               = opts.flags.virtualMachine() || useInterpreter;
+        bool useVm                = opts.flags.virtualMachine() || useInterpreter;
 #if !defined(ZITH_HAS_LLVM) || defined(ZITH_IS_WASM)
         useVm = true;
 #endif
-        const auto target = useVm ? session::Stage::HirLowered : session::Stage::Cached;
+        const auto target   = useVm ? session::Stage::HirLowered : session::Stage::Cached;
         const bool compiled = compilation.runTo(target);
         compilation.emitDiagnostics();
         std::fputs(compilation.flushOutput().c_str(), stderr);
@@ -405,14 +406,14 @@ int test(const Options &opts) {
         std::string child_output;
         std::string execution_error;
         int child_exit = 0;
-        bool executed = true;
+        bool executed  = true;
         if (useInterpreter) {
             interp::HirInterpreter interpreter(compilation.hirModule(), compilation.interner(),
                                                compilation.types());
-            auto run = interpreter.runMain();
-            child_output = std::move(run.output);
-            child_exit   = static_cast<int>(run.exitCode);
-            executed     = run.status == interp::HirInterpStatus::Ok;
+            auto run        = interpreter.runMain();
+            child_output    = std::move(run.output);
+            child_exit      = static_cast<int>(run.exitCode);
+            executed        = run.status == interp::HirInterpStatus::Ok;
             execution_error = std::move(run.message);
         } else if (useVm) {
 #ifdef ZITH_HAS_VM
@@ -428,10 +429,10 @@ int test(const Options &opts) {
                 continue;
             }
             vm::Vm machine;
-            auto run = machine.runMain(module);
-            child_output = std::move(run.output);
-            child_exit   = static_cast<int>(run.exitCode);
-            executed     = run.status == vm::RunStatus::Ok;
+            auto run        = machine.runMain(module);
+            child_output    = std::move(run.output);
+            child_exit      = static_cast<int>(run.exitCode);
+            executed        = run.status == vm::RunStatus::Ok;
             execution_error = std::move(run.message);
 #else
             p.err.red("[error]");
@@ -440,7 +441,7 @@ int test(const Options &opts) {
             continue;
 #endif
         } else {
-            executed = compilation.linkAndExec();
+            executed     = compilation.linkAndExec();
             child_output = compilation.takeChildOutput();
             child_exit   = compilation.childExitCode();
             if (!executed) {
@@ -666,8 +667,9 @@ int deps(const Options &opts) {
     if (opts.subcommandStr.empty()) {
         p.err.red("[error]");
         std::fprintf(stderr, " no deps subcommand\n");
-        std::fprintf(stderr,
-                     "usage: zithc deps (list|add|remove|publish|unpublish|update) [args]\n");
+        std::fprintf(
+            stderr,
+            "usage: zithc deps (list|add|remove|resolve|publish|unpublish|update) [args]\n");
         return 1;
     }
 
@@ -697,6 +699,46 @@ int deps(const Options &opts) {
         return 0;
     }
 
+    if (sub == "resolve") {
+        const auto projectRoot  = fs::path(findProjectRoot(""));
+        const auto manifestPath = projectRoot / "ZithProject.toml";
+        auto lockfile           = packages::resolveLocalPackages(manifestPath);
+        if (!lockfile) {
+            p.err.red("[error]");
+            std::fprintf(stderr, " %s\n", lockfile.error().msg.c_str());
+            return 1;
+        }
+
+        auto serialized = packages::serializeLockfile(lockfile.value());
+        if (!serialized) {
+            p.err.red("[error]");
+            std::fprintf(stderr, " %s\n", serialized.error().msg.c_str());
+            return 1;
+        }
+
+        const auto lockfilePath = projectRoot / "Zith.lock";
+        std::ofstream output(lockfilePath, std::ios::binary | std::ios::trunc);
+        if (!output) {
+            p.err.red("[error]");
+            std::fprintf(stderr, " cannot write lockfile '%s'\n", lockfilePath.string().c_str());
+            return 1;
+        }
+
+        output << serialized.value();
+        output.close();
+        if (!output) {
+            p.err.red("[error]");
+            std::fprintf(stderr, " failed while writing lockfile '%s'\n",
+                         lockfilePath.string().c_str());
+            return 1;
+        }
+
+        p.out.green("[ok]");
+        std::printf(" resolved %zu packages into '%s'\n", lockfile.value().packages.size(),
+                    lockfilePath.string().c_str());
+        return 0;
+    }
+
     if (sub == "add") {
         return stubCommand(opts, "deps add");
     }
@@ -709,7 +751,8 @@ int deps(const Options &opts) {
 
     p.err.red("[error]");
     std::fprintf(stderr, " unknown deps subcommand '%s'\n", sub.c_str());
-    std::fprintf(stderr, "usage: zithc deps (list|add|remove|publish|unpublish|update) [args]\n");
+    std::fprintf(stderr,
+                 "usage: zithc deps (list|add|remove|resolve|publish|unpublish|update) [args]\n");
     return 1;
 }
 
