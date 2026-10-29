@@ -71,7 +71,8 @@ Lexer -> Parser -> Formatter -> Import resolution -> Name resolution -> Type che
 | `zithc test <path>` | **Working** | Runs discovered `#[test]` functions |
 | `zithc repl` | **Stub** | |
 | `zithc deps list` | **Working** | Lists project dependencies |
-| `zithc deps add`, `deps remove` | **Stub** | |
+| `zithc deps add <name> <relative-path>` | **Working** | Adds a local path dependency |
+| `zithc deps remove <name>` | **Working** | Removes a dependency declaration |
 | `zithc docs` | **Working** | Generates Markdown documentation |
 | `zithc completion <shell>` | **Working** | Emits shell completion scripts |
 

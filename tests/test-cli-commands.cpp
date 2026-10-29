@@ -641,6 +641,102 @@ static void test_deps_resolve_writes_deterministic_lockfile() {
 #endif
 }
 
+static void test_deps_add_remove_edit_only_the_manifest() {
+#ifdef ZITHC_BINARY
+    namespace fs = std::filesystem;
+
+    CliCapture capture;
+    const auto projectRoot = capture.root / "deps-edit-project";
+    fs::create_directories(projectRoot);
+    const auto manifestPath = projectRoot / "ZithProject.toml";
+    const auto lockfilePath = projectRoot / "Zith.lock";
+    {
+        std::ofstream manifest(manifestPath, std::ios::binary);
+        manifest << "[project]\n"
+                    "name = \"application\"\n"
+                    "version = \"0.1.0\"\n"
+                    "\n[paths]\n"
+                    "src_dir = \"source\"\n";
+        CHECK(manifest.good(), "dependency edit project manifest is written");
+    }
+    {
+        std::ofstream lockfile(lockfilePath, std::ios::binary);
+        lockfile << "keep this lockfile unchanged\n";
+        CHECK(lockfile.good(), "dependency edit lockfile sentinel is written");
+    }
+
+    CurrentDirectory currentDirectory(projectRoot);
+    const auto added = capture.run("deps add logging ../vendor/logging");
+    CHECK_EQ(added.exitCode, 0, "deps add accepts a package name and relative local path");
+    CHECK(added.stdoutText.find("added dependency 'logging'") != std::string::npos,
+          "deps add reports the declared dependency");
+
+    auto parsedManifest      = toml::parse_file(manifestPath.string());
+    const auto *dependencies = parsedManifest["dependencies"].as_table();
+    CHECK(dependencies != nullptr, "deps add creates the dependencies table");
+    if (dependencies != nullptr) {
+        CHECK(dependencies->get("logging") != nullptr,
+              "deps add inserts the requested package name");
+        CHECK_EQ(dependencies->get("logging")->value<std::string>().value_or(""),
+                 std::string("../vendor/logging"), "deps add stores the relative path");
+    }
+    CHECK_EQ(parsedManifest["paths"]["src_dir"].value<std::string>().value_or(""),
+             std::string("source"), "deps add preserves unrelated manifest settings");
+
+    const auto readManifest = [&] {
+        std::ifstream input(manifestPath, std::ios::binary);
+        return std::string((std::istreambuf_iterator<char>(input)),
+                           std::istreambuf_iterator<char>());
+    };
+    const auto manifestAfterAdd = readManifest();
+    const auto duplicate = capture.run("deps add logging ../another/logging");
+    CHECK_EQ(duplicate.exitCode, 1, "deps add rejects an already declared package");
+    const auto absolutePath = capture.run("deps add absolute \"/tmp/external-package\"");
+    CHECK_EQ(absolutePath.exitCode, 1, "deps add rejects an absolute package path");
+    const auto standardLibrary = capture.run("deps add std ../stdlib");
+    CHECK_EQ(standardLibrary.exitCode, 1, "deps add rejects std as a package dependency");
+    const auto emptyName = capture.run("deps add \"\" ../vendor/empty");
+    CHECK_EQ(emptyName.exitCode, 1, "deps add rejects an empty package name");
+    const auto wrongAddArguments = capture.run("deps add only-name");
+    CHECK_EQ(wrongAddArguments.exitCode, 1, "deps add rejects the wrong argument count");
+    const auto missingRemove = capture.run("deps remove absent");
+    CHECK_EQ(missingRemove.exitCode, 1, "deps remove rejects an undeclared package");
+    const auto wrongRemoveArguments = capture.run("deps remove logging extra");
+    CHECK_EQ(wrongRemoveArguments.exitCode, 1, "deps remove rejects extra arguments");
+    CHECK_EQ(readManifest(), manifestAfterAdd,
+             "invalid dependency commands leave ZithProject.toml unchanged");
+
+    const auto removed = capture.run("deps remove logging");
+    CHECK_EQ(removed.exitCode, 0, "deps remove removes an existing package declaration");
+    parsedManifest = toml::parse_file(manifestPath.string());
+    dependencies  = parsedManifest["dependencies"].as_table();
+    CHECK(dependencies == nullptr || dependencies->get("logging") == nullptr,
+          "deps remove deletes the requested package declaration");
+    CHECK_EQ(parsedManifest["paths"]["src_dir"].value<std::string>().value_or(""),
+             std::string("source"), "deps remove preserves unrelated manifest settings");
+
+    {
+        std::ofstream manifest(manifestPath, std::ios::binary | std::ios::trunc);
+        manifest << "[project]\n"
+                    "name = \"application\"\n"
+                    "version = \"0.1.0\"\n"
+                    "\n[dependencies]\n"
+                    "broken = 42\n";
+    }
+    const auto removedInvalid = capture.run("deps remove broken");
+    CHECK_EQ(removedInvalid.exitCode, 0,
+             "deps remove can delete a malformed dependency value for recovery");
+
+    std::ifstream lockfile(lockfilePath, std::ios::binary);
+    const std::string lockfileContents((std::istreambuf_iterator<char>(lockfile)),
+                                       std::istreambuf_iterator<char>());
+    CHECK_EQ(lockfileContents, std::string("keep this lockfile unchanged\n"),
+             "deps add and remove leave Zith.lock untouched");
+#else
+    CHECK(true, "dependency edit subprocess test is skipped when zithc is not built");
+#endif
+}
+
 static void test_check_build_require_explicit_lockfile() {
 #ifdef ZITHC_BINARY
     namespace fs = std::filesystem;
@@ -1102,6 +1198,7 @@ static void test_cli_commands() {
     test_docs_parse_and_import_error_policy();
     test_docs_stdout_file_and_index_outputs();
     test_deps_resolve_writes_deterministic_lockfile();
+    test_deps_add_remove_edit_only_the_manifest();
     test_check_build_require_explicit_lockfile();
     test_legacy_and_malformed_project_manifest_gate_behavior();
     test_command_signatures_exist();

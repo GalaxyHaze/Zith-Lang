@@ -205,7 +205,8 @@ Implementation work that is incomplete or needs review is tracked in
 | `zithc test <path>` | **Working** | Discovers `.zith` files under `test_dir`, executes selected `#[test]` functions through the native backend, VM v2, or HIR interpreter, and reports per-test results plus failing assert locations. `--filter <substring>` matches case-sensitively against `module::function`. Files without tests are skipped successfully. An empty test directory and a filter with no matches are errors. `--verbose` reports compilation and test-run progress. The runner captures child output to parse result and log frames, suppresses passing-test logs by default, shows all test logs with `--verbose`, and caps displayed log bytes at 4 KiB per test. Rich `std/test` formatting is covered in native and VM v2; the HIR interpreter currently has a gap in that path. |
 | `zithc repl` | **Stub** | |
 | `zithc deps list` | **Working** | Reads `ZithProject.toml` and lists declared dependencies |
-| `zithc deps add`, `deps remove` | **Stub** | |
+| `zithc deps add <name> <relative-path>` | **Working** | Adds a local path dependency to `ZithProject.toml`; resolution remains explicit |
+| `zithc deps remove <name>` | **Working** | Removes a dependency declaration without changing `Zith.lock` |
 | `zithc docs` | **Working** | Deterministic Markdown for reachable modules, interface/spec modes, stdout or safe `--out` output, multipage `--index`, and opt-in partial output with `--error` |
 | `zithc completion <shell>` | **Working** | Emits bash, zsh, or fish completion scripts for the current command set |
 

@@ -1,6 +1,6 @@
 # Gestor de Pacotes: Decisões do MVP e Plano de Implementação
 
-Estado: desenho do MVP confirmado em 2026-10-29. Ainda não implementado.
+Estado: desenho do MVP confirmado em 2026-10-29. Implementação em curso.
 
 Atualizado: 2026-10-29
 
@@ -26,9 +26,9 @@ O contrato arquitetural está registado no
   `std = "bundled"`. O desenho confirmado trata `std` como parte da
   distribuição do compilador, não como dependência normal. A documentação de
   configuração será alinhada quando a implementação do gestor for integrada.
-- `zithc deps list` lê valores string de `ZithProject.toml`.
-  `deps add`, `deps remove`, `deps publish`, `deps unpublish` e `deps update`
-  são stubs.
+- `zithc deps list`, `deps add`, `deps remove` e `deps resolve` estão
+  implementados. `add` e `remove` alteram apenas `ZithProject.toml`.
+  `deps publish`, `deps unpublish` e `deps update` continuam stubs.
 - `zithc create` cria `.zmodules` e escreve `paths.mod_dir = ".zmodules"`.
   O frontend não usa atualmente esse diretório como armazenamento de
   dependências.

@@ -9,6 +9,7 @@
 #include "common/test-log-protocol.hpp"
 #include "interp/hir-interpreter.hpp"
 #include "packages/lockfile.hpp"
+#include "packages/manifest.hpp"
 #include "packages/resolver.hpp"
 #include "session/compilation-session.hpp"
 #include "session/pipeline-plan.hpp"
@@ -23,6 +24,8 @@
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
+#include <iterator>
+#include <sstream>
 #include <string>
 #include <string_view>
 #include <toml++/toml.hpp>
@@ -84,6 +87,86 @@ readDependencies(const std::string &tomlPath) {
         }
     }
     return deps;
+}
+
+memory::Result<void> updateDependencyManifest(const std::filesystem::path &manifestPath,
+                                              const std::string &name,
+                                              const std::string &dependencyPath, const bool add) {
+    namespace fs = std::filesystem;
+
+    std::ifstream input(manifestPath, std::ios::binary);
+    if (!input)
+        return memory::Error{"cannot read ZithProject.toml"};
+
+    const std::string contents{std::istreambuf_iterator<char>{input},
+                               std::istreambuf_iterator<char>{}};
+    if (input.bad())
+        return memory::Error{"failed while reading ZithProject.toml"};
+
+    const auto updateTable = [&](toml::table &manifest) -> memory::Result<void> {
+        auto *dependencyNode = manifest.get("dependencies");
+        if (dependencyNode != nullptr && dependencyNode->as_table() == nullptr)
+            return memory::Error{"[dependencies] must be a table"};
+
+        if (add) {
+            auto current = packages::parseManifest(manifest, manifestPath);
+            if (!current)
+                return current.error();
+
+            if (name.empty())
+                return memory::Error{"dependency name must not be empty"};
+            if (name == "std")
+                return memory::Error{"std is bundled with the compiler and cannot be a dependency"};
+            const fs::path relativePath(dependencyPath);
+            if (dependencyPath.empty() || relativePath.has_root_name() ||
+                relativePath.has_root_directory())
+                return memory::Error{"dependency path must be a non-empty relative path"};
+
+            if (dependencyNode == nullptr) {
+                manifest.insert("dependencies", toml::table{});
+                dependencyNode = manifest.get("dependencies");
+            }
+            auto *dependencies = dependencyNode->as_table();
+            if (dependencies->get(name) != nullptr)
+                return memory::Error{"dependency '" + name + "' is already declared"};
+            dependencies->insert(name, dependencyPath);
+        } else {
+            if (name.empty())
+                return memory::Error{"dependency name must not be empty"};
+            auto *dependencies = dependencyNode == nullptr ? nullptr : dependencyNode->as_table();
+            if (dependencies == nullptr || dependencies->get(name) == nullptr)
+                return memory::Error{"dependency '" + name + "' is not declared"};
+            dependencies->erase(name);
+        }
+
+        std::ostringstream serialized;
+        serialized << manifest;
+        if (!serialized)
+            return memory::Error{"failed to serialize ZithProject.toml"};
+
+        std::ofstream output(manifestPath, std::ios::binary | std::ios::trunc);
+        if (!output)
+            return memory::Error{"cannot write ZithProject.toml"};
+        output << serialized.str();
+        output.close();
+        if (!output)
+            return memory::Error{"failed while writing ZithProject.toml"};
+        return {};
+    };
+
+#if TOML_EXCEPTIONS
+    try {
+        auto manifest = toml::parse(contents, manifestPath.string());
+        return updateTable(manifest);
+    } catch (const toml::parse_error &error) {
+        return memory::Error{"invalid TOML in ZithProject.toml: " + std::string(error.what())};
+    }
+#else
+    auto manifest = toml::parse(contents, manifestPath.string());
+    if (!manifest)
+        return memory::Error{"invalid TOML in ZithProject.toml"};
+    return updateTable(manifest);
+#endif
 }
 
 int stubCommand(const Options &opts, const char *name) {
@@ -740,10 +823,43 @@ int deps(const Options &opts) {
     }
 
     if (sub == "add") {
-        return stubCommand(opts, "deps add");
+        if (opts.inputFiles.size() != 2U) {
+            p.err.red("[error]");
+            std::fprintf(stderr, " usage: zithc deps add <name> <relative-path>\n");
+            return 1;
+        }
+        const auto projectRoot  = fs::path(findProjectRoot(""));
+        const auto manifestPath = projectRoot / "ZithProject.toml";
+        const auto result = updateDependencyManifest(manifestPath, opts.inputFiles[0],
+                                                      opts.inputFiles[1], true);
+        if (!result) {
+            p.err.red("[error]");
+            std::fprintf(stderr, " %s\n", result.error().msg.c_str());
+            return 1;
+        }
+        p.out.green("[ok]");
+        std::printf(" added dependency '%s' = \"%s\"\n", opts.inputFiles[0].c_str(),
+                    opts.inputFiles[1].c_str());
+        return 0;
     }
     if (sub == "remove") {
-        return stubCommand(opts, "deps remove");
+        if (opts.inputFiles.size() != 1U) {
+            p.err.red("[error]");
+            std::fprintf(stderr, " usage: zithc deps remove <name>\n");
+            return 1;
+        }
+        const auto projectRoot  = fs::path(findProjectRoot(""));
+        const auto manifestPath = projectRoot / "ZithProject.toml";
+        const auto result =
+            updateDependencyManifest(manifestPath, opts.inputFiles[0], {}, false);
+        if (!result) {
+            p.err.red("[error]");
+            std::fprintf(stderr, " %s\n", result.error().msg.c_str());
+            return 1;
+        }
+        p.out.green("[ok]");
+        std::printf(" removed dependency '%s'\n", opts.inputFiles[0].c_str());
+        return 0;
     }
     if (sub == "publish" || sub == "unpublish" || sub == "update") {
         return stubCommand(opts, ("deps " + sub).c_str());
