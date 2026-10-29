@@ -7,6 +7,10 @@ const test = require("node:test");
 
 const { resolveDocsRoute } = require("../js/docs-routing.js");
 const root = path.resolve(__dirname, "..");
+const specDir = [
+    path.join(root, "Zith", "docs"),
+    path.resolve(root, "..", "Zith", "docs")
+].find(candidate => fs.existsSync(candidate));
 
 test("the docs root is the neutral comparison page", () => {
     assert.deepEqual(resolveDocsRoute("/docs/"), {
@@ -51,6 +55,7 @@ test("the language routes open their own overview, with or without a trailing sl
 });
 
 test("the static build emits an index shell for each docs route", () => {
+    assert.ok(specDir, "the canonical Zith specification should be checked out");
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "zith-doc-routes-"));
     const output = path.join(tempDir, "site");
 
@@ -61,12 +66,14 @@ test("the static build emits an index shell for each docs route", () => {
             cwd: root,
             stdio: "inherit"
         });
-        execFileSync("python3", ["tools/build_docs.py", "--site-dir", output], {
+        execFileSync("python3", [
+            "tools/build_docs.py", "--site-dir", output, "--spec-dir", specDir
+        ], {
             cwd: root,
             stdio: "inherit"
         });
         execFileSync("python3", [
-            "tools/build_docs.py", "--check", "--site-dir", output
+            "tools/build_docs.py", "--check", "--site-dir", output, "--spec-dir", specDir
         ], {
             cwd: root,
             stdio: "inherit"
@@ -104,4 +111,21 @@ test("the static build emits an index shell for each docs route", () => {
     } finally {
         fs.rmSync(tempDir, { recursive: true, force: true });
     }
+});
+
+test("the Pages workflow generates documentation fragments before deployment", () => {
+    const workflow = fs.readFileSync(
+        path.join(root, ".github/workflows/build.yml"),
+        "utf8"
+    );
+
+    assert.match(workflow, /repository:\s*GalaxyHaze\/Zith/);
+    assert.match(
+        workflow,
+        /python3 tools\/build_docs\.py --site-dir _site --spec-dir Zith\/docs/
+    );
+    assert.match(
+        workflow,
+        /python3 tools\/build_docs\.py --check --site-dir _site --spec-dir Zith\/docs/
+    );
 });

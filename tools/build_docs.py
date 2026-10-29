@@ -136,10 +136,10 @@ def parse_front_matter(path: Path) -> Page:
     )
 
 
-def imported_pages() -> tuple[list[Page], dict[str, str]]:
-    if not SPEC_DIR.is_dir():
+def imported_pages(spec_dir: Path = SPEC_DIR) -> tuple[list[Page], dict[str, str]]:
+    if not spec_dir.is_dir():
         raise FileNotFoundError(
-            f"Specification directory is unavailable: {SPEC_DIR}. "
+            f"Specification directory is unavailable: {spec_dir}. "
             "A documentation synchronization requires ../Zith/docs."
         )
     pages: list[Page] = []
@@ -154,7 +154,7 @@ def imported_pages() -> tuple[list[Page], dict[str, str]]:
         for filename, title in SPEC_CHAPTERS
     )
     for filename, title, output in imports:
-        source = SPEC_DIR / filename
+        source = spec_dir / filename
         if not source.is_file():
             raise FileNotFoundError(f"Missing canonical specification source: {source}")
         body = source.read_text(encoding="utf-8")
@@ -578,13 +578,17 @@ def validate(files: dict[Path, str], tree: dict) -> list[str]:
     return errors
 
 
-def run(check: bool, site_dir: Path = DEFAULT_SITE) -> int:
+def run(
+    check: bool,
+    site_dir: Path = DEFAULT_SITE,
+    spec_dir: Path = SPEC_DIR,
+) -> int:
     global OUTPUT, TREE, MANIFEST
     OUTPUT = site_dir / "docs"
     TREE = site_dir / "json" / "tree.json"
     MANIFEST = site_dir / "json" / "spec-manifest.json"
     local_pages = [parse_front_matter(path) for path in sorted(PAGES.rglob("*.md"))]
-    spec_pages, hashes = imported_pages()
+    spec_pages, hashes = imported_pages(spec_dir)
     files, tree = expected_files(local_pages + spec_pages, hashes)
     errors = validate(files, tree)
     if errors:
@@ -630,9 +634,15 @@ def main() -> int:
         default=DEFAULT_SITE,
         help="site build directory containing docs/ and json/",
     )
+    parser.add_argument(
+        "--spec-dir",
+        type=Path,
+        default=SPEC_DIR,
+        help="directory containing the canonical Zith specification Markdown",
+    )
     args = parser.parse_args()
     try:
-        return run(args.check, args.site_dir.resolve())
+        return run(args.check, args.site_dir.resolve(), args.spec_dir.resolve())
     except (OSError, ValueError) as error:
         print(f"error: {error}", file=sys.stderr)
         return 1

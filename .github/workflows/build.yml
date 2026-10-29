@@ -19,11 +19,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: GalaxyHaze/Zith
+          path: Zith
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
       - name: Build static site
         run: python3 tools/build.py
+      - name: Build documentation fragments
+        run: python3 tools/build_docs.py --site-dir _site --spec-dir Zith/docs
+      - name: Verify documentation output
+        run: python3 tools/build_docs.py --check --site-dir _site --spec-dir Zith/docs
       - uses: actions/upload-pages-artifact@v3
         with:
           path: _site
