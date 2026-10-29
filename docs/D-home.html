@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <base href="{{baseurl}}/docs/">
     <!-- include:head -->
     <title>Zith Documentation &mdash; Guide, Reference &amp; CLI</title>
     <link rel="icon" type="image/png" href="{{baseurl}}/media/Logos/logo.png">
@@ -38,7 +39,7 @@
     <link rel="stylesheet" href="{{baseurl}}/css/footer.css">
     <link rel="stylesheet" href="{{baseurl}}/css/docs.css">
 </head>
-<body class="docs">
+<body class="docs" data-docs-scope="neutral" data-docs-base="{{baseurl}}/docs/" data-tree-url="{{baseurl}}/json/tree.json">
 
 <!-- include:header active="docs" -->
 
@@ -53,6 +54,7 @@
 <!-- include:footer -->
 
 <script defer src="{{baseurl}}/js/zith-highlight.js"></script>
+<script defer src="{{baseurl}}/js/docs-routing.js"></script>
 <script defer src="{{baseurl}}/js/loadTree.js"></script>
 </body>
 </html>

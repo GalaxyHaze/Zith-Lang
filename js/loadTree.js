@@ -3,13 +3,17 @@
 const sidebar = document.getElementById("sidebar");
 const content = document.getElementById("content");
 const filebarPath = document.getElementById("filebarPath");
-const defaultPage = "./getting-started/D-introduction.html";
-const treeVersion = 3;
+const docsBase = new URL(document.body.dataset.docsBase, document.baseURI);
+const route = window.DocsRouting.resolveDocsRoute(window.location.pathname);
+const docsScope = document.body.dataset.docsScope || route.scope;
+const defaultPage = route.page;
+const treeVersion = 4;
 
 let treeModel = [];
 let flatPages = [];
 let pageMeta = new Map();
 let aliasMap = new Map();
+let currentPage = defaultPage;
 
 function sectionDescription(trail) {
     const section = trail[0] || "";
@@ -41,7 +45,7 @@ function sectionDescription(trail) {
         } catch (_) {}
     }
 
-    fetch("../../json/tree.json")
+    fetch(document.body.dataset.treeUrl)
         .then(response => {
             if (!response.ok) throw new Error("Failed to load navigation");
             return response.json();
@@ -63,7 +67,15 @@ function sectionDescription(trail) {
 
 function initialiseNavigation(menuData) {
     const generatedTree = !Array.isArray(menuData) && Array.isArray(menuData.navigation);
-    treeModel = generatedTree ? menuData.navigation : menuData;
+    const navigation = generatedTree ? menuData.navigation : menuData;
+    const section = docsScope === "zith" ? "Zith" :
+        docsScope === "zith--" ? "Zith--" : null;
+    treeModel = section
+        ? navigation.map(group => ({
+            ...group,
+            children: (group.children || []).filter(item => item.title === section)
+        }))
+        : navigation;
     flatPages = [];
     pageMeta = new Map();
     aliasMap = new Map(Object.entries(generatedTree ? menuData.aliases || {} : {}));
@@ -175,6 +187,7 @@ function createPagerLink(label, path, direction) {
     const title = meta ? meta.title : path.split("/").pop();
 
     link.href = path;
+    link.dataset.link = path;
     link.className = "doc-nav-link";
 
     const span = document.createElement("span");
@@ -228,13 +241,14 @@ function highlightZithBlocks(root) {
 
 function loadPage(path, anchor = null, opts = {}) {
     const canonicalPath = resolveAlias(path);
-    fetch(canonicalPath)
+    fetch(new URL(canonicalPath, docsBase))
         .then(res => {
             if (!res.ok) throw new Error("Page not found");
             return res.text();
         })
         .then(html => {
             const wasInitialLoad = initialLoad;
+            currentPage = canonicalPath;
             content.innerHTML = html;
 
             updateFilebar(canonicalPath);
@@ -251,7 +265,10 @@ function loadPage(path, anchor = null, opts = {}) {
             const fullTitle = pageTitle + " — Zith Documentation";
             const meta = pageMeta.get(canonicalPath);
             const description = meta && meta.description ? meta.description : "Documentation for the Zith programming language.";
-            const pageURL = "https://zith-lang.org/docs/D-home.html?page=" + encodeURIComponent(path.replace("./", ""));
+            const pageURL = new URL(window.location.href);
+            pageURL.search = "?page=" + encodeURIComponent(path.replace("./", ""));
+            pageURL.hash = "";
+            const canonicalURL = pageURL.toString();
 
             document.title = fullTitle;
 
@@ -267,11 +284,11 @@ function loadPage(path, anchor = null, opts = {}) {
             if (descriptionMeta) descriptionMeta.setAttribute("content", description);
             if (ogTitle) ogTitle.setAttribute("content", fullTitle);
             if (ogDescription) ogDescription.setAttribute("content", description);
-            if (ogURL) ogURL.setAttribute("content", pageURL);
+            if (ogURL) ogURL.setAttribute("content", canonicalURL);
             if (twitterTitle) twitterTitle.setAttribute("content", fullTitle);
             if (twitterDescription) twitterDescription.setAttribute("content", description);
-            if (twitterURL) twitterURL.setAttribute("content", pageURL);
-            if (canonical) canonical.setAttribute("href", pageURL);
+            if (twitterURL) twitterURL.setAttribute("content", canonicalURL);
+            if (canonical) canonical.setAttribute("href", canonicalURL);
 
             if (initialLoad) {
                 initialLoad = false;
@@ -331,6 +348,13 @@ document.addEventListener("click", e => {
     if (!link) return;
     if (!link.closest(".docs-main, .docs-sidebar")) return;
 
+    if (link.dataset.docsRoute) return;
+    if (link.dataset.link) {
+        e.preventDefault();
+        loadPage(link.dataset.link);
+        return;
+    }
+
     const href = link.getAttribute("href");
     if (!href || href === "#") return;
     if (href.startsWith("http")) return;
@@ -338,8 +362,23 @@ document.addEventListener("click", e => {
 
     e.preventDefault();
 
-    const [file, anchor] = href.split("#");
-    loadPage(file, anchor || null);
+    const sourceURL = new URL(currentPage, docsBase);
+    const targetURL = new URL(href, sourceURL);
+    if (targetURL.origin !== window.location.origin ||
+        !targetURL.pathname.startsWith(docsBase.pathname)) {
+        window.location.assign(targetURL.href);
+        return;
+    }
+
+    const routePath = targetURL.pathname.slice(docsBase.pathname.length);
+    if (routePath === "zith/" || routePath === "zith--/") {
+        window.location.assign(targetURL.href);
+        return;
+    }
+
+    const pagePath = "./" + routePath;
+    const anchor = targetURL.hash ? decodeURIComponent(targetURL.hash.slice(1)) : null;
+    loadPage(pagePath, anchor);
 });
 
 window.addEventListener("popstate", e => {

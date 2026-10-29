@@ -29,11 +29,11 @@ from typing import Iterable
 
 ROOT = Path(__file__).resolve().parents[1]
 PAGES = ROOT / "docs" / "pages"
-OUTPUT = ROOT / "_site" / "docs"
-TREE = ROOT / "_site" / "json" / "tree.json"
-MANIFEST = ROOT / "_site" / "json" / "spec-manifest.json"
+DEFAULT_SITE = ROOT / "_site"
+OUTPUT = DEFAULT_SITE / "docs"
+TREE = DEFAULT_SITE / "json" / "tree.json"
+MANIFEST = DEFAULT_SITE / "json" / "spec-manifest.json"
 SPEC_DIR = ROOT.parent / "Zith" / "docs"
-DOCS_HOME = ROOT / "docs" / "D-home.html"
 
 PROTECTED_PATHS = [
     "D-home.html",
@@ -187,6 +187,15 @@ def inline(text: str, page: Page, outputs: dict[str, str], source_map: dict[str,
             return f'<a href="{html.escape(target, quote=True)}">{label}</a>'
         if target.startswith("#"):
             return f'<a href="{html.escape(target, quote=True)}">{label}</a>'
+        if target.startswith("route:"):
+            route = target[6:]
+            route_paths = {"zith": "./zith/", "zith--": "./zith--/"}
+            if route not in route_paths:
+                raise ValueError(f"{page.source}: unknown documentation route '{route}'")
+            return (
+                f'<a href="{route_paths[route]}" '
+                f'data-docs-route="{route}">{label}</a>'
+            )
         if target.startswith("doc:"):
             target_id, _, anchor = target[4:].partition("#")
             if target_id not in outputs:
@@ -384,6 +393,8 @@ def build_tree() -> list[dict]:
            ("build", "run", "check", "fmt", "create", "clean", "execute", "test", "deps", "docs")]
     return [{
         "title": "Home", "link": "", "children": [
+            nav_item("Documentation", "docs-overview",
+                     description="Compare Zith and Zith--, then choose the documentation set you need."),
             nav_item("Introduction", "getting-started-introduction",
                      description="Project overview, stability note, and how to read these docs."),
             nav_item("Getting Started", "getting-started-quick-start", [
@@ -503,7 +514,7 @@ def expected_files(pages: list[Page], spec_hashes: dict[str, str]) -> tuple[dict
         protected_path = OUTPUT / protected
         if protected_path in files:
             raise ValueError(f"Output or alias would overwrite protected file: {protected}")
-    tree = {"version": 3, "navigation": build_tree(), "aliases": {
+    tree = {"version": 4, "navigation": build_tree(), "aliases": {
         f"./{alias}": f"./{target}" for alias, target in sorted(aliases.items())
     }}
     manifest = {
@@ -547,6 +558,8 @@ def validate(files: dict[Path, str], tree: dict) -> list[str]:
         for href in re.findall(r'href="([^"]+)"', body):
             if href.startswith(("http://", "https://", "mailto:")):
                 continue
+            if href in {"./zith/", "./zith--/"}:
+                continue
             file_part, _, anchor = href.partition("#")
             if not file_part:
                 if anchor and anchor not in output_ids[output]:
@@ -565,7 +578,11 @@ def validate(files: dict[Path, str], tree: dict) -> list[str]:
     return errors
 
 
-def run(check: bool) -> int:
+def run(check: bool, site_dir: Path = DEFAULT_SITE) -> int:
+    global OUTPUT, TREE, MANIFEST
+    OUTPUT = site_dir / "docs"
+    TREE = site_dir / "json" / "tree.json"
+    MANIFEST = site_dir / "json" / "spec-manifest.json"
     local_pages = [parse_front_matter(path) for path in sorted(PAGES.rglob("*.md"))]
     spec_pages, hashes = imported_pages()
     files, tree = expected_files(local_pages + spec_pages, hashes)
@@ -583,21 +600,21 @@ def run(check: bool) -> int:
     orphaned = [p for p in orphaned if p.resolve() not in protected_set]
     if check:
         if stale or orphaned:
-            print("Documentation output is stale. Run: python3 tools/build_docs.py", file=sys.stderr)
+            print(
+                "Documentation output is stale. Run: "
+                f"python3 tools/build_docs.py --site-dir {site_dir}",
+                file=sys.stderr,
+            )
             for path in stale:
-                print(f"  stale: {path.relative_to(ROOT)}", file=sys.stderr)
+                print(f"  stale: {path.relative_to(site_dir)}", file=sys.stderr)
             for path in orphaned:
-                print(f"  orphaned: {path.relative_to(ROOT)}", file=sys.stderr)
+                print(f"  orphaned: {path.relative_to(site_dir)}", file=sys.stderr)
             return 1
         print(f"Documentation is current ({len(expected_html)} fragments).")
         return 0
     for path, content in files.items():
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(content, encoding="utf-8")
-    if DOCS_HOME.is_file():
-        home_dst = OUTPUT / "D-home.html"
-        home_dst.parent.mkdir(parents=True, exist_ok=True)
-        home_dst.write_text(DOCS_HOME.read_text(encoding="utf-8"), encoding="utf-8")
     for path in orphaned:
         path.unlink()
     print(f"Built {len(expected_html)} documentation fragments.")
@@ -607,9 +624,15 @@ def run(check: bool) -> int:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--check", action="store_true", help="fail when generated output is stale")
+    parser.add_argument(
+        "--site-dir",
+        type=Path,
+        default=DEFAULT_SITE,
+        help="site build directory containing docs/ and json/",
+    )
     args = parser.parse_args()
     try:
-        return run(args.check)
+        return run(args.check, args.site_dir.resolve())
     except (OSError, ValueError) as error:
         print(f"error: {error}", file=sys.stderr)
         return 1

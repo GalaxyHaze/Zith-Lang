@@ -62,6 +62,11 @@ Each `D-*.html` file under `docs/` is a **content fragment** — the
 inner HTML of a page, with no `<html>`, `<head>`, or `<body>`. The shell
 (`docs/D-home.html`) loads them with `fetch()` when you click a sidebar link.
 
+The build creates three entry routes from that shared shell: `/docs/` is the
+neutral comparison of Zith and Zith--, `/docs/zith/` opens the full Zith
+documentation, and `/docs/zith--/` opens the implemented-subset documentation.
+The previous `/docs/D-home.html` URL remains available.
+
 ### Write a page
 
 1. Write the Markdown under `docs/pages/` (frontmatter with `id` and `title`).
@@ -78,3 +83,6 @@ links (`.md` links are remapped to `./D-*.html`), blockquotes, lists, tables,
 `:::danger`).
 
 Callout and content styles live in `css/docs.css`.
+
+Run `node --test tests/docs-routing.test.js` to verify the route selection and
+the generated static documentation output.

@@ -43,6 +43,11 @@ POSTS_DIR = ("about", "posts")
 POST_CSS = (
     "fonts.css", "tokens.css", "base.css", "header.css", "footer.css", "devlog.css",
 )
+DOCS_ROUTES = {
+    "index.html": "neutral",
+    "zith/index.html": "zith",
+    "zith--/index.html": "zith--",
+}
 
 
 def expand(text: str, partials: Path, baseurl: str, meta: dict[str, str]) -> str:
@@ -109,6 +114,19 @@ def build(src: Path, out: Path, partials: Path, baseurl: str) -> int:
             pages += 1
         else:
             shutil.copy2(path, dst)
+
+    docs_shell = out / "docs" / "D-home.html"
+    if docs_shell.is_file():
+        shell = docs_shell.read_text(encoding="utf-8")
+        for route, scope in DOCS_ROUTES.items():
+            route_shell = shell.replace(
+                'data-docs-scope="neutral"',
+                f'data-docs-scope="{scope}"',
+                1,
+            )
+            destination = out / "docs" / route
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            destination.write_text(route_shell, encoding="utf-8")
     return pages
 
 
