@@ -58,8 +58,10 @@ test("the static build emits an index shell for each docs route", () => {
     assert.ok(specDir, "the canonical Zith specification should be checked out");
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "zith-doc-routes-"));
     const output = path.join(tempDir, "site");
+    const buildSpecDir = path.join(tempDir, "Zith", "docs");
 
     try {
+        fs.cpSync(specDir, buildSpecDir, { recursive: true });
         execFileSync("python3", [
             "tools/build.py", "--out", output, "--baseurl", "/preview"
         ], {
@@ -67,13 +69,13 @@ test("the static build emits an index shell for each docs route", () => {
             stdio: "inherit"
         });
         execFileSync("python3", [
-            "tools/build_docs.py", "--site-dir", output, "--spec-dir", specDir
+            "tools/build_docs.py", "--site-dir", output, "--spec-dir", buildSpecDir
         ], {
             cwd: root,
             stdio: "inherit"
         });
         execFileSync("python3", [
-            "tools/build_docs.py", "--check", "--site-dir", output, "--spec-dir", specDir
+            "tools/build_docs.py", "--check", "--site-dir", output, "--spec-dir", buildSpecDir
         ], {
             cwd: root,
             stdio: "inherit"

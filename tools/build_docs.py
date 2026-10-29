@@ -488,7 +488,11 @@ def status_notice(page: Page) -> str:
     )
 
 
-def expected_files(pages: list[Page], spec_hashes: dict[str, str]) -> tuple[dict[Path, str], dict]:
+def expected_files(
+    pages: list[Page],
+    spec_hashes: dict[str, str],
+    spec_dir: Path,
+) -> tuple[dict[Path, str], dict]:
     global PAGES_BY_ID
     PAGES_BY_ID = {page.id: page for page in pages}
     if len(PAGES_BY_ID) != len(pages):
@@ -519,9 +523,12 @@ def expected_files(pages: list[Page], spec_hashes: dict[str, str]) -> tuple[dict
     }}
     manifest = {
         "version": 1,
-        "spec_directory": "../Zith/docs",
+        "spec_directory": posixpath.relpath(spec_dir.as_posix(), ROOT.as_posix()),
         "sources": spec_hashes,
-        "outputs": {page.output: str(page.source.relative_to(SPEC_DIR)) for page in pages if page.kind == "spec"},
+        "outputs": {
+            page.output: page.source.relative_to(spec_dir).as_posix()
+            for page in pages if page.kind == "spec"
+        },
     }
     files[TREE] = json.dumps(tree, indent=2) + "\n"
     files[MANIFEST] = json.dumps(manifest, indent=2, sort_keys=True) + "\n"
@@ -584,12 +591,13 @@ def run(
     spec_dir: Path = SPEC_DIR,
 ) -> int:
     global OUTPUT, TREE, MANIFEST
+    spec_dir = spec_dir.resolve()
     OUTPUT = site_dir / "docs"
     TREE = site_dir / "json" / "tree.json"
     MANIFEST = site_dir / "json" / "spec-manifest.json"
     local_pages = [parse_front_matter(path) for path in sorted(PAGES.rglob("*.md"))]
     spec_pages, hashes = imported_pages(spec_dir)
-    files, tree = expected_files(local_pages + spec_pages, hashes)
+    files, tree = expected_files(local_pages + spec_pages, hashes, spec_dir)
     errors = validate(files, tree)
     if errors:
         for error in errors:
