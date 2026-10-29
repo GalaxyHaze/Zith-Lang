@@ -1,5 +1,6 @@
 #include "packages/lockfile.hpp"
 #include "packages/manifest.hpp"
+#include "packages/sha256.hpp"
 #include "test-common.hpp"
 
 #include <algorithm>
@@ -337,11 +338,31 @@ void test_lockfile_rejects_invalid_metadata_and_edges() {
           "manifest fingerprints must use lowercase SHA-256 hex");
 }
 
+void test_sha256_known_vectors() {
+    CHECK_EQ(zith::packages::sha256Hex(""),
+             std::string("e3b0c44298fc1c149afbf4c8996fb924"
+                         "27ae41e4649b934ca495991b7852b855"),
+             "SHA-256 hashes empty input");
+    CHECK_EQ(zith::packages::sha256Hex("abc"),
+             std::string("ba7816bf8f01cfea414140de5dae2223"
+                         "b00361a396177a9cb410ff61f20015ad"),
+             "SHA-256 hashes a short input");
+    CHECK_EQ(zith::packages::sha256Hex("abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq"),
+             std::string("248d6a61d20638b8e5c026930c3e6039"
+                         "a33ce45964ff2167f6ecedd419db06c1"),
+             "SHA-256 hashes input crossing the one-block padding boundary");
+    CHECK_EQ(zith::packages::sha256Hex(std::string(1'000'000U, 'a')),
+             std::string("cdc76e5c9914fb9281a1c7e284d73e67"
+                         "f1809a48a497200e046d39ccc7112cd0"),
+             "SHA-256 hashes a long multi-block input");
+}
+
 void test_packages() {
     test_manifest_parses_local_package_declaration();
     test_manifest_defaults_module_root_to_src();
     test_manifest_requires_non_empty_identity();
     test_manifest_rejects_invalid_package_fields();
+    test_sha256_known_vectors();
     test_lockfile_serialization_is_deterministic();
     test_lockfile_round_trips_versioned_graph();
     test_lockfile_rejects_invalid_metadata_and_edges();
