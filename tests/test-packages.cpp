@@ -425,6 +425,56 @@ void test_local_resolver_builds_deterministic_transitive_graph() {
     }
 }
 
+void test_local_lockfile_validation_is_read_only() {
+    TemporaryManifest temporary;
+    const auto projectPath = temporary.write("[project]\n"
+                                             "name = \"application\"\n"
+                                             "version = \"0.1.0\"\n"
+                                             "\n[dependencies]\n"
+                                             "logging = \"vendor/logging\"\n");
+    temporary.writeAt("vendor/logging/ZithProject.toml",
+                      "[project]\nname = \"logging\"\nversion = \"1\"\n");
+    temporary.writeAt("vendor/logging/src/logging.zith", "");
+
+    const auto resolved = zith::packages::resolveLocalPackages(projectPath);
+    CHECK(resolved.isOk(), "fixture package graph resolves before lockfile validation");
+    if (!resolved)
+        return;
+    const auto serialized = zith::packages::serializeLockfile(resolved.value());
+    CHECK(serialized.isOk(), "fixture lockfile serializes before validation");
+    if (!serialized)
+        return;
+
+    const auto lockfilePath = temporary.writeAt("Zith.lock", serialized.value());
+    const auto valid        = zith::packages::validateLocalLockfile(projectPath);
+    CHECK(valid.isOk(), "current project and package manifests validate against Zith.lock");
+
+    temporary.writeAt("vendor/logging/ZithProject.toml",
+                      "[project]\nname = \"logging\"\nversion = \"2\"\n");
+    const auto stale = zith::packages::validateLocalLockfile(projectPath);
+    CHECK(stale.isError(), "changed transitive package manifest invalidates Zith.lock");
+    if (stale)
+        return;
+    CHECK(stale.error().msg.find("zithc deps resolve") != std::string::npos,
+          "stale lockfile diagnostic recommends explicit resolution");
+
+    std::ifstream lockfileInput(lockfilePath, std::ios::binary);
+    const std::string currentLockfile((std::istreambuf_iterator<char>(lockfileInput)),
+                                      std::istreambuf_iterator<char>());
+    CHECK_EQ(currentLockfile, serialized.value(),
+             "lockfile validation leaves the existing lockfile unchanged");
+
+    std::error_code error;
+    fs::remove(lockfilePath, error);
+    CHECK(!error, "lockfile fixture can be removed for the missing-file case");
+    const auto missing = zith::packages::validateLocalLockfile(projectPath);
+    CHECK(missing.isError(), "missing Zith.lock is rejected");
+    if (missing)
+        return;
+    CHECK(missing.error().msg.find("zithc deps resolve") != std::string::npos,
+          "missing lockfile diagnostic recommends explicit resolution");
+}
+
 void test_local_resolver_survives_recursive_node_map_growth() {
     constexpr size_t packageCount = 40U;
     TemporaryManifest temporary;
@@ -568,6 +618,7 @@ void test_packages() {
     test_manifest_rejects_invalid_package_fields();
     test_sha256_known_vectors();
     test_local_resolver_builds_deterministic_transitive_graph();
+    test_local_lockfile_validation_is_read_only();
     test_local_resolver_survives_recursive_node_map_growth();
     test_local_resolver_rejects_missing_and_invalid_manifests();
     test_local_resolver_rejects_cycles_and_path_conflicts();

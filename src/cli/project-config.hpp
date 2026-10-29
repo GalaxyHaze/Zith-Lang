@@ -1,6 +1,9 @@
 #pragma once
 
 #include "memory/dyn-array.hpp"
+#include "packages/manifest.hpp"
+
+#include <optional>
 #include <string>
 
 namespace zith {
@@ -36,6 +39,9 @@ struct ProjectConfig {
     std::string authors;
     std::string license;
     std::string homepage;
+
+    std::optional<packages::PackageManifest> packageManifest;
+    std::string packageManifestError;
 
     explicit ProjectConfig(memory::Arena &arena)
         : srcDirs(arena), includeDirs(arena), cSourceDirs(arena), libraryDirs(arena),

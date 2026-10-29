@@ -2,6 +2,7 @@
 #include "cli/commands.hpp"
 #include "cli/terminal.hpp"
 #include "cli/zith-flags.hpp"
+#include "packages/resolver.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -860,18 +861,31 @@ void Cli::loadProject() {
                         if (auto s = v->value<std::string>())
                             config.homepage = *s;
                 }
+                if (tbl.get("project") != nullptr || tbl.get("dependencies") != nullptr ||
+                    tbl.get("package") != nullptr) {
+                    auto manifest = packages::parseManifest(tbl, tomlPath);
+                    if (manifest) {
+                        config.packageManifest = std::move(manifest).value();
+                        config.packageManifestError.clear();
+                    } else {
+                        config.packageManifestError = manifest.error().msg;
+                    }
+                }
             };
 
 #if TOML_EXCEPTIONS
             try {
                 process(toml::parse_file(tomlPath.string()));
             } catch (const toml::parse_error &) {
+                config.packageManifestError = "invalid TOML";
                 return;
             }
 #else
             auto result = toml::parse_file(tomlPath.string());
-            if (!result)
+            if (!result) {
+                config.packageManifestError = "invalid TOML";
                 return;
+            }
             process(result);
 #endif
             return;
@@ -888,6 +902,22 @@ int Cli::dispatch() {
         const std::string error = opts.docsOptionsError();
         if (!error.empty()) {
             std::fprintf(stderr, "[error] %s\n", error.c_str());
+            return 1;
+        }
+    }
+
+    if ((opts.command == Command::Build || opts.command == Command::Check) &&
+        (config.packageManifest.has_value() || !config.packageManifestError.empty())) {
+        if (!config.packageManifestError.empty()) {
+            std::fprintf(stderr, "[error] invalid package manifest: %s\n",
+                         config.packageManifestError.c_str());
+            return 1;
+        }
+
+        const auto manifestPath = std::filesystem::path(config.projectRoot) / "ZithProject.toml";
+        auto lockfile = packages::validateLocalLockfile(manifestPath);
+        if (!lockfile) {
+            std::fprintf(stderr, "[error] %s\n", lockfile.error().msg.c_str());
             return 1;
         }
     }

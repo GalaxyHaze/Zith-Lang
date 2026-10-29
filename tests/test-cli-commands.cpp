@@ -9,8 +9,8 @@
 #include <fstream>
 #include <iterator>
 #include <string>
-#include <vector>
 #include <toml++/toml.hpp>
+#include <vector>
 
 #ifndef _WIN32
 #include <sys/wait.h>
@@ -20,6 +20,19 @@ using namespace zith;
 using namespace zith::cli::commands;
 
 namespace {
+
+struct CurrentDirectory {
+    std::filesystem::path previous = std::filesystem::current_path();
+
+    explicit CurrentDirectory(const std::filesystem::path &path) {
+        std::filesystem::current_path(path);
+    }
+
+    ~CurrentDirectory() {
+        std::error_code error;
+        std::filesystem::current_path(previous, error);
+    }
+};
 
 struct CliCapture {
     struct Result {
@@ -576,18 +589,7 @@ static void test_deps_resolve_writes_deterministic_lockfile() {
         CHECK(source.good(), "dependency module fixture is written");
     }
 
-    struct CurrentDirectory {
-        fs::path previous = fs::current_path();
-
-        explicit CurrentDirectory(const fs::path &path) {
-            fs::current_path(path);
-        }
-
-        ~CurrentDirectory() {
-            std::error_code error;
-            fs::current_path(previous, error);
-        }
-    } currentDirectory(projectRoot);
+    CurrentDirectory currentDirectory(projectRoot);
 
     const auto first = capture.run("deps resolve");
     CHECK_EQ(first.exitCode, 0, "deps resolve succeeds for a valid local package graph");
@@ -636,6 +638,106 @@ static void test_deps_resolve_writes_deterministic_lockfile() {
     CHECK_EQ(preservedText, firstText, "failed resolution leaves the previous lockfile untouched");
 #else
     CHECK(true, "deps resolve subprocess test is skipped when zithc is not built");
+#endif
+}
+
+static void test_check_build_require_explicit_lockfile() {
+#ifdef ZITHC_BINARY
+    namespace fs = std::filesystem;
+
+    CliCapture capture;
+    const auto projectRoot = capture.root / "lock-gate";
+    fs::create_directories(projectRoot);
+    const auto writeManifest = [&](const std::string &version) {
+        std::ofstream manifest(projectRoot / "ZithProject.toml",
+                               std::ios::binary | std::ios::trunc);
+        manifest << "[project]\n"
+                    "name = \"application\"\n"
+                    "version = \""
+                 << version << "\"\n";
+        CHECK(manifest.good(), "project manifest fixture is written");
+    };
+    writeManifest("0.1.0");
+
+    CurrentDirectory currentDirectory(projectRoot);
+    for (const auto *command : {"check", "build"}) {
+        const auto result = capture.run(command);
+        CHECK_EQ(result.exitCode, 1, "check/build reject a package project without Zith.lock");
+        CHECK(result.stderrText.find("zithc deps resolve") != std::string::npos,
+              "missing lockfile diagnostic recommends explicit resolution");
+        CHECK(!fs::exists(projectRoot / "Zith.lock"),
+              "check/build do not create a missing lockfile implicitly");
+    }
+
+    const auto resolved = capture.run("deps resolve");
+    CHECK_EQ(resolved.exitCode, 0, "deps resolve creates a lockfile for the gate fixture");
+    const auto lockfilePath = projectRoot / "Zith.lock";
+    std::ifstream lockfileInput(lockfilePath, std::ios::binary);
+    const std::string originalLockfile((std::istreambuf_iterator<char>(lockfileInput)),
+                                       std::istreambuf_iterator<char>());
+    CHECK(!originalLockfile.empty(), "resolved lockfile fixture is available");
+
+    writeManifest("0.2.0");
+    for (const auto *command : {"check", "build"}) {
+        const auto result = capture.run(command);
+        CHECK_EQ(result.exitCode, 1, "check/build reject a stale project lockfile");
+        CHECK(result.stderrText.find("zithc deps resolve") != std::string::npos,
+              "stale lockfile diagnostic recommends explicit resolution");
+
+        std::ifstream currentLockfile(lockfilePath, std::ios::binary);
+        const std::string currentText((std::istreambuf_iterator<char>(currentLockfile)),
+                                      std::istreambuf_iterator<char>());
+        CHECK_EQ(currentText, originalLockfile, "check/build leave a stale lockfile unchanged");
+    }
+#else
+    CHECK(true, "lockfile gate subprocess tests are skipped when zithc is not built");
+#endif
+}
+
+static void test_legacy_and_malformed_project_manifest_gate_behavior() {
+#ifdef ZITHC_BINARY
+    namespace fs = std::filesystem;
+
+    {
+        CliCapture capture;
+        const auto projectRoot = capture.root / "legacy-project";
+        fs::create_directories(projectRoot / "src");
+        {
+            std::ofstream manifest(projectRoot / "ZithProject.toml", std::ios::binary);
+            manifest << "[build]\nentry = \"src/main.zith\"\n";
+        }
+        {
+            std::ofstream source(projectRoot / "src" / "main.zith", std::ios::binary);
+            source << "fn main(): i32 { return 0; }\n";
+        }
+
+        CurrentDirectory currentDirectory(projectRoot);
+        const auto result = capture.run("check src/main.zith");
+        CHECK_EQ(result.exitCode, 0,
+                 "legacy project without package metadata remains usable without Zith.lock");
+        CHECK(!fs::exists(projectRoot / "Zith.lock"),
+              "legacy check does not create a lockfile implicitly");
+    }
+
+    {
+        CliCapture capture;
+        const auto projectRoot = capture.root / "malformed-project";
+        fs::create_directories(projectRoot);
+        {
+            std::ofstream manifest(projectRoot / "ZithProject.toml", std::ios::binary);
+            manifest << "[project\nname = \"application\"\nversion = \"0.1.0\"\n";
+        }
+
+        CurrentDirectory currentDirectory(projectRoot);
+        const auto result = capture.run("check");
+        CHECK_EQ(result.exitCode, 1, "check rejects malformed project TOML");
+        CHECK(result.stderrText.find("invalid package manifest: invalid TOML") != std::string::npos,
+              "malformed manifest is reported instead of bypassing the lockfile gate");
+        CHECK(!fs::exists(projectRoot / "Zith.lock"),
+              "malformed project check does not create a lockfile");
+    }
+#else
+    CHECK(true, "project manifest gate subprocess tests are skipped when zithc is not built");
 #endif
 }
 
@@ -1000,6 +1102,8 @@ static void test_cli_commands() {
     test_docs_parse_and_import_error_policy();
     test_docs_stdout_file_and_index_outputs();
     test_deps_resolve_writes_deterministic_lockfile();
+    test_check_build_require_explicit_lockfile();
+    test_legacy_and_malformed_project_manifest_gate_behavior();
     test_command_signatures_exist();
     test_count_passed();
     test_command_names_match_contract();

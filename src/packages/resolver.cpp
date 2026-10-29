@@ -9,6 +9,7 @@
 #include <sstream>
 #include <system_error>
 #include <unordered_map>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -89,6 +90,35 @@ memory::Result<ManifestDocument> loadManifest(const fs::path &path) {
         return manifest.error();
     return ManifestDocument{std::move(manifest).value(), sha256Hex(contents)};
 #endif
+}
+
+memory::Result<Lockfile> loadLockfile(const fs::path &path) {
+    std::ifstream input(path, std::ios::binary);
+    if (!input)
+        return resolverError("cannot read lockfile '" + path.string() + "'");
+
+    std::string contents{std::istreambuf_iterator<char>{input}, std::istreambuf_iterator<char>{}};
+    if (input.bad())
+        return resolverError("failed while reading lockfile '" + path.string() + "'");
+
+#if TOML_EXCEPTIONS
+    try {
+        const auto table = toml::parse(contents, path.string());
+        return parseLockfile(table);
+    } catch (const toml::parse_error &error) {
+        return resolverError("invalid TOML in lockfile '" + path.string() + "': " + error.what());
+    }
+#else
+    auto table = toml::parse(contents, path.string());
+    if (!table)
+        return resolverError("invalid TOML in lockfile '" + path.string() + "'");
+    return parseLockfile(table);
+#endif
+}
+
+memory::Error staleLockfile(std::string reason) {
+    return resolverError("Zith.lock is stale (" + std::move(reason) +
+                         "); run 'zithc deps resolve'");
 }
 
 enum class VisitState { Visiting, Complete };
@@ -281,6 +311,119 @@ memory::Result<Lockfile> resolveLocalPackages(const fs::path &projectManifestPat
     if (auto serialized = serializeLockfile(lockfile); !serialized)
         return serialized.error();
     return lockfile;
+}
+
+memory::Result<void> validateLocalLockfile(const fs::path &projectManifestPath) {
+    std::error_code error;
+    const auto absoluteManifest = fs::absolute(projectManifestPath, error);
+    if (error)
+        return resolverError("cannot resolve project manifest path '" +
+                             projectManifestPath.string() + "': " + error.message());
+
+    const auto canonicalManifest = fs::weakly_canonical(absoluteManifest, error);
+    if (error)
+        return resolverError("cannot resolve project manifest '" + absoluteManifest.string() +
+                             "': " + error.message());
+    if (!fs::is_regular_file(canonicalManifest, error) || error)
+        return resolverError("project manifest is not a regular file: '" +
+                             canonicalManifest.string() + "'");
+
+    auto projectDocument = loadManifest(canonicalManifest);
+    if (!projectDocument)
+        return projectDocument.error();
+
+    const auto projectRoot = canonicalManifest.parent_path();
+    auto lockfile          = loadLockfile(projectRoot / "Zith.lock");
+    if (!lockfile)
+        return resolverError(lockfile.error().msg + "; run 'zithc deps resolve'");
+
+    const auto &project = projectDocument.value().manifest;
+    const auto &locked  = lockfile.value();
+    if (locked.projectName != project.name || locked.projectVersion != project.version ||
+        locked.projectManifestSha256 != projectDocument.value().sha256)
+        return staleLockfile("project identity or manifest fingerprint changed");
+
+    std::unordered_map<std::string, const LockedPackage *> packagesByName;
+    for (const auto &package : locked.packages)
+        packagesByName.emplace(package.name, &package);
+
+    const auto dependencyNames = [](const auto &dependencies) {
+        std::vector<std::string> names;
+        names.reserve(dependencies.size());
+        for (const auto &dependency : dependencies)
+            names.push_back(dependency.name);
+        std::sort(names.begin(), names.end());
+        return names;
+    };
+    auto lockedProjectDependencies = locked.dependencies;
+    std::sort(lockedProjectDependencies.begin(), lockedProjectDependencies.end());
+    if (dependencyNames(project.dependencies) != lockedProjectDependencies)
+        return staleLockfile("project dependencies changed");
+
+    const auto verifyDependencyPath =
+        [&](const DependencyDeclaration &dependency) -> memory::Result<void> {
+        const auto package = packagesByName.find(dependency.name);
+        if (package == packagesByName.end())
+            return staleLockfile("dependency '" + dependency.name + "' is not locked");
+        auto declaredRoot = canonicalDirectory(dependency.path, "dependency path");
+        if (!declaredRoot)
+            return staleLockfile(declaredRoot.error().msg);
+        auto lockedRoot = canonicalDirectory(projectRoot / package->second->path, "locked package");
+        if (!lockedRoot)
+            return staleLockfile(lockedRoot.error().msg);
+        if (declaredRoot.value() != lockedRoot.value())
+            return staleLockfile("dependency path changed for '" + dependency.name + "'");
+        return {};
+    };
+
+    for (const auto &dependency : project.dependencies) {
+        if (auto result = verifyDependencyPath(dependency); !result)
+            return result.error();
+    }
+
+    for (const auto &package : locked.packages) {
+        const auto packageRoot = projectRoot / package.path;
+        auto document          = loadManifest(packageRoot / "ZithProject.toml");
+        if (!document)
+            return staleLockfile(document.error().msg);
+
+        const auto &manifest = document.value().manifest;
+        auto moduleRoot = relativePath(manifest.moduleRoot, manifest.root, "package module root");
+        if (!moduleRoot)
+            return staleLockfile(moduleRoot.error().msg);
+        if (manifest.name != package.name || manifest.version != package.version ||
+            document.value().sha256 != package.manifestSha256 ||
+            moduleRoot.value() != package.moduleRoot)
+            return staleLockfile("package identity or manifest fingerprint changed for '" +
+                                 package.name + "'");
+
+        auto lockedDependencies = package.dependencies;
+        std::sort(lockedDependencies.begin(), lockedDependencies.end());
+        if (dependencyNames(manifest.dependencies) != lockedDependencies)
+            return staleLockfile("dependencies changed for package '" + package.name + "'");
+        for (const auto &dependency : manifest.dependencies) {
+            if (auto result = verifyDependencyPath(dependency); !result)
+                return result.error();
+        }
+    }
+
+    std::unordered_set<std::string> reachablePackages;
+    std::vector<std::string> pending = locked.dependencies;
+    while (!pending.empty()) {
+        auto name = std::move(pending.back());
+        pending.pop_back();
+        if (!reachablePackages.insert(name).second)
+            continue;
+        const auto package = packagesByName.find(name);
+        if (package == packagesByName.end())
+            return staleLockfile("dependency '" + name + "' is not locked");
+        pending.insert(pending.end(), package->second->dependencies.begin(),
+                       package->second->dependencies.end());
+    }
+    if (reachablePackages.size() != locked.packages.size())
+        return staleLockfile("lockfile contains packages outside the dependency graph");
+
+    return {};
 }
 
 } // namespace zith::packages
