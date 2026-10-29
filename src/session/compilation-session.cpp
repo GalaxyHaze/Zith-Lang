@@ -629,7 +629,7 @@ bool CompilationSession::lowerStage() {
     }
 
     mHirModule = lower.takeHir();
-    mTestAssertSites = lower.testAssertSites();
+    mTestFailureSites = lower.testFailureSites();
     mTestNames = lower.testNames();
     // The solver only needs to run on cold builds. Warm builds restore the HIR
     // artifact directly and the generic pass already ran before HIR lowering.

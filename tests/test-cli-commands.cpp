@@ -780,10 +780,22 @@ static void test_test_command_filters_and_executes_tests() {
                   "    ordinary_helper();\n"
                   "}\n";
     }
+    {
+        std::ofstream source(trap_root / "tests" / "check-helper.zith", std::ios::binary);
+        source << "fn ordinary_helper() {\n"
+                  "    @check(false);\n"
+                  "}\n"
+                  "#[test]\n"
+                  "fn calls_helper() {\n"
+                  "    ordinary_helper();\n"
+                  "}\n";
+    }
     const auto trap = capture.run("test \"" + trap_root.string() + "\"");
     CHECK(trap.exitCode == 1, "a trap in a helper fails the test process");
     CHECK(trap.stderrText.find("test process failed") != std::string::npos,
           "a trapped test process gets an execution-failure diagnostic");
+    CHECK(trap.stderrText.find("check-helper.zith") != std::string::npos,
+          "@check in an ordinary helper traps outside lexical test context");
 
     const auto error_root = capture.root / "compile-error-project";
     std::filesystem::create_directories(error_root / "tests");
@@ -791,12 +803,15 @@ static void test_test_command_filters_and_executes_tests() {
         std::ofstream project(error_root / "ZithProject.toml", std::ios::binary);
         project << "[paths]\ntest_dir = \"tests\"\n";
         std::ofstream source(error_root / "tests" / "broken.zith", std::ios::binary);
-        source << "#[test]\nfn broken() {\n    @assert(1);\n}\n";
+        source << "#[test]\nfn broken() {\n    @assert(1);\n}\n"
+                  "#[test]\nfn broken_check() {\n    @check(1);\n}\n";
     }
     const auto compile_error = capture.run("test \"" + error_root.string() + "\"");
     CHECK(compile_error.exitCode == 1, "a test compilation error fails the command");
     CHECK(compile_error.stderrText.find("failed to compile test file") != std::string::npos,
           "a test compilation error gets a file diagnostic");
+    CHECK(compile_error.stderrText.find("@check") != std::string::npos,
+          "a non-boolean @check argument is rejected during semantic analysis");
 #endif
 }
 

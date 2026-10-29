@@ -537,16 +537,17 @@ TypeId PerModuleSema::inferWhen(frontend::ExprId id) {
 }
 TypeId PerModuleSema::inferLayoutIntrinsic(frontend::ExprId id) {
     const auto &expr = snapshot.expressions()[id.value - 1U];
-    if (expr.text == "assert") {
+    if (expr.text == "assert" || expr.text == "check") {
+        const std::string_view intrinsic = expr.text == "assert" ? "@assert" : "@check";
         if (expr.operands.empty()) {
-            report(expr.span, "'@assert' requires a boolean argument",
+            report(expr.span, "'" + std::string(intrinsic) + "' requires a boolean argument",
                    diagnostics::err::TypeMismatch);
             return error_type;
         }
         const TypeId operand  = inferExpr(expr.operands[0]);
         const TypeId resolved = resolve(operand);
         if (type_table.kindOf(resolved) != TypeKind::Bool) {
-            report(expr.span, "'@assert' requires a boolean argument",
+            report(expr.span, "'" + std::string(intrinsic) + "' requires a boolean argument",
                    diagnostics::err::TypeMismatch);
             return error_type;
         }

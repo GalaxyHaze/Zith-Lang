@@ -38,20 +38,19 @@ public:
         return std::move(hir_);
     }
 
-    /// One assert site inside a `#[test]` function, for the runner's Debug
-    /// location table. `assert_id` is 1-based and matches the value a failing
-    /// test returns; `span` locates the assert in its source file.
-    struct TestAssertSite {
+    /// One assert/check site inside a `#[test]` function, for the runner's
+    /// Debug location table. `failure_id` is 1-based within its test.
+    struct TestFailureSite {
         std::string test_name;
-        uint32_t assert_id = 0;
+        uint32_t failure_id = 0;
         memory::Span span{};
     };
     /// Root-module test functions in declaration order.
     [[nodiscard]] const std::vector<std::string> &testNames() const noexcept {
         return test_report_names_;
     }
-    [[nodiscard]] const std::vector<TestAssertSite> &testAssertSites() const noexcept {
-        return test_assert_sites_;
+    [[nodiscard]] const std::vector<TestFailureSite> &testFailureSites() const noexcept {
+        return test_failure_sites_;
     }
 
 private:
@@ -184,21 +183,21 @@ private:
     /// sema return type is void.  The HIR signature is promoted to i32 so the
     /// C runtime sees a well-defined success code.
     bool current_main_void_ = false;
-    /// True while lowering a test function body. An assert inside a test
-    /// records a failing assert id and returns instead of trapping.
+    /// True while lowering a test function body. Asserts return a positive
+    /// failure id, while checks emit failure events and continue.
     bool current_fn_is_test_ = false;
     /// Name of the test currently being lowered (empty outside a test).
     std::string current_test_name_;
-    /// Next assert id inside the current test (1-based).
-    uint32_t current_test_assert_id_ = 0;
+    /// Next assert/check failure id inside the current test (1-based).
+    uint32_t current_test_failure_id_ = 0;
     /// Test functions in declaration order, discovered in `predeclareFunctions`.
     std::vector<std::string> test_names_;
     std::vector<std::string> test_report_names_;
     /// HIR function id of each entry in `test_names_`, in the same order. The
     /// driver calls these to fill the result table.
     std::vector<hir::HirFunctionId> test_fn_ids_;
-    /// `(test, assert id) -> source location` for the runner's Debug section.
-    std::vector<TestAssertSite> test_assert_sites_;
+    /// `(test, failure id) -> source location` for the runner's Debug section.
+    std::vector<TestFailureSite> test_failure_sites_;
     /// True once the synthesized `main` driver has been built for this module.
     bool test_driver_built_ = false;
 
@@ -358,9 +357,10 @@ private:
     hir::HirExprId lowerIsNull(const frontend::Expression &expr);
     hir::HirExprId lowerIsType(const frontend::Expression &expr);
     hir::HirExprId lowerLayoutIntrinsic(const frontend::Expression &expr);
-    /// Lowers the assert/log intrinsics. Inside a `#[test]` an assert records
-    /// its static id and returns from the test; outside it lowers to a panic.
+    /// Lowers the assert, check, and log intrinsics. Asserts return on failure, checks
+    /// accumulate failures and continue, and both panic outside a test.
     hir::HirExprId lowerTestAssert(const frontend::Expression &expr);
+    hir::HirExprId lowerTestCheck(const frontend::Expression &expr);
     hir::HirExprId lowerTestLog(const frontend::Expression &expr);
     /// Returns the module-local HIR id of a foreign C function `name` with the
     /// given signature, declaring it once on first use. Used by the test

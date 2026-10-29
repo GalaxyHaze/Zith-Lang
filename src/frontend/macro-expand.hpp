@@ -27,12 +27,15 @@ private:
         const FrontendSnapshot *source = nullptr;
     };
 
-    using ExprMap = std::vector<ExprId>;
+    using ExprMap  = std::vector<ExprId>;
+    using StmtMap  = std::vector<StmtId>;
+    using LocalMap = std::vector<LocalId>;
 
     ExprId addExpression(Expression expr);
     StmtId addStatement(Statement stmt);
     ScopeId addScope(Scope scope);
     TypeExprId addTypeExpression(TypeExpression te);
+    LocalId cloneLocal(LocalId src, LocalMap &map);
 
     /// Maps a template scope id to the scope cloned for the current expansion.
     ScopeId mappedScope(ScopeId templateScope, ScopeId callScope) const;
@@ -42,16 +45,16 @@ private:
     [[nodiscard]] bool isNonHygienicStmt(size_t idValue) const;
 
     ExprId cloneExpr(ExprId src, const std::vector<ExprId> &args, TextSpan callSpan,
-                     ScopeId callScope, const MacroInfo *macro, ExprMap &map,
-                     const FrontendSnapshot &source);
+                     ScopeId callScope, const MacroInfo *macro, ExprMap &map, StmtMap &stmtMap,
+                     LocalMap &localMap, const FrontendSnapshot &source);
     /// Resolves `attributes.name` inside a macro body to the call-site
     /// attribute expression, or reports MacroAttrUnknown.  Returns an empty id
     /// when `src` is not an attribute access.
     ExprId substituteAttribute(ExprId src, const MacroInfo *macro, ExprId *outClone,
                                const FrontendSnapshot &source);
     StmtId cloneStmt(StmtId src, const std::vector<ExprId> &args, TextSpan callSpan,
-                     ScopeId callScope, const MacroInfo *macro, ExprMap &map,
-                     const FrontendSnapshot &source);
+                     ScopeId callScope, const MacroInfo *macro, ExprMap &map, StmtMap &stmtMap,
+                     LocalMap &localMap, const FrontendSnapshot &source);
     TypeExprId cloneTypeExpr(TypeExprId src, const FrontendSnapshot &source);
 
     void collectHygieneNames(ExprId body, std::vector<std::string> &names,
@@ -79,6 +82,7 @@ private:
 
     FrontendSnapshot &snapshot_;
     uint32_t hygieneCounter_                = 1;
+    uint32_t nextLocalId_                   = 1;
     static constexpr int kMaxExpansionDepth = 64;
 };
 

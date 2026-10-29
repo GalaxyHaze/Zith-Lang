@@ -98,10 +98,10 @@ uint32_t Writer::write(const cache::Artifact &artifact, ByteWriter &out) {
         optional_features |= cache::kOptionalFeatureFrontendProvenance;
     }
 
-    // Debug section: assert-site locations for the native test runner. Emitted
+    // Debug section: assert/check locations for the native test runner. Emitted
     // only when there is something to resolve, so non-test artifacts stay
     // byte-identical to the pre-debug format.
-    if (!artifact.test_assert_locations.empty()) {
+    if (!artifact.test_failure_locations.empty()) {
         EncodedSection section;
         section.id             = static_cast<uint16_t>(SectionId::Debug);
         section.schema_version = kDebugSectionSchemaVersion;

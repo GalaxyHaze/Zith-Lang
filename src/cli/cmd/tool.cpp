@@ -17,6 +17,7 @@
 
 #include <algorithm>
 #include <charconv>
+#include <cstdint>
 #include <cstdio>
 #include <filesystem>
 #include <string>
@@ -123,6 +124,7 @@ std::string findBuildDir(const Options &opts) {
 struct TestResult {
     std::string name;
     uint32_t failedAssert = 0;
+    std::vector<uint32_t> failedChecks;
 };
 
 constexpr std::string_view kTestResultsBegin = "zith-test-results-begin\n";
@@ -177,7 +179,8 @@ bool parseTestProtocol(std::string_view output, const std::vector<std::string> &
                             failed_assert);
         if (parsed.ec != std::errc{} || parsed.ptr != value_text.data() + value_text.size())
             return false;
-        tests[index - 1U] = {expected_names[index - 1U], failed_assert};
+        tests[index - 1U].name         = expected_names[index - 1U];
+        tests[index - 1U].failedAssert = failed_assert;
         cursor = line_start;
     }
 
@@ -190,6 +193,70 @@ bool parseTestProtocol(std::string_view output, const std::vector<std::string> &
     user_output.assign(output.substr(0, block_begin));
     user_output.append(output.substr(block_end + kTestResultsEnd.size()));
     return true;
+}
+
+void parseTestCheckFailures(std::string_view output, std::vector<TestResult> &tests,
+                            std::string &user_output) {
+    user_output.clear();
+    user_output.reserve(output.size());
+    size_t cursor = 0;
+    while (cursor < output.size()) {
+        const size_t begin     = output.find(common::kTestCheckFailurePrefix, cursor);
+        const size_t log_begin = output.find(common::kTestLogBeginPrefix, cursor);
+        if (log_begin != std::string_view::npos &&
+            (begin == std::string_view::npos || log_begin < begin)) {
+            const size_t header_end =
+                output.find('\n', log_begin + common::kTestLogBeginPrefix.size());
+            if (header_end == std::string_view::npos) {
+                user_output.append(output.substr(cursor));
+                return;
+            }
+            const size_t log_end = output.find(common::kTestLogEndMarker, header_end + 1U);
+            if (log_end == std::string_view::npos) {
+                user_output.append(output.substr(cursor));
+                return;
+            }
+            const size_t block_end = log_end + common::kTestLogEndMarker.size();
+            user_output.append(output.substr(cursor, block_end - cursor));
+            cursor = block_end;
+            continue;
+        }
+        if (begin == std::string_view::npos) {
+            user_output.append(output.substr(cursor));
+            return;
+        }
+        user_output.append(output.substr(cursor, begin - cursor));
+        const size_t line_end = output.find('\n', begin);
+        if (line_end == std::string_view::npos) {
+            user_output.append(output.substr(begin));
+            return;
+        }
+
+        const size_t record_start = begin + common::kTestCheckFailurePrefix.size();
+        const std::string_view record(output.data() + record_start, line_end - record_start);
+        const size_t separator = record.rfind(' ');
+        uint32_t failure_id    = 0;
+        bool consumed          = false;
+        if (separator != std::string_view::npos && separator > 0U) {
+            const auto id_text = record.substr(separator + 1U);
+            const auto parsed =
+                std::from_chars(id_text.data(), id_text.data() + id_text.size(), failure_id);
+            if (parsed.ec == std::errc{} && parsed.ptr == id_text.data() + id_text.size() &&
+                failure_id != 0U) {
+                const std::string_view test_name = record.substr(0U, separator);
+                for (auto &test : tests) {
+                    if (test.name == test_name) {
+                        test.failedChecks.push_back(failure_id);
+                        consumed = true;
+                        break;
+                    }
+                }
+            }
+        }
+        if (!consumed)
+            user_output.append(output.substr(begin, line_end + 1U - begin));
+        cursor = line_end + 1U;
+    }
 }
 
 std::string filterTestLogs(std::string_view output, const std::vector<TestResult> &tests,
@@ -230,7 +297,8 @@ std::string filterTestLogs(std::string_view output, const std::vector<TestResult
 
         if (test_index == tests.size()) {
             filtered.append(output.substr(begin, log_end + common::kTestLogEndMarker.size() - begin));
-        } else if (verbose || tests[test_index].failedAssert != 0U) {
+        } else if (verbose || tests[test_index].failedAssert != 0U ||
+                   !tests[test_index].failedChecks.empty()) {
             const size_t log_start = header_end + 1U;
             const size_t log_size  = log_end - log_start;
             const size_t remaining =
@@ -390,6 +458,9 @@ int test(const Options &opts) {
         if (!has_protocol) {
             user_output = child_output;
         } else {
+            std::string without_check_events;
+            parseTestCheckFailures(user_output, results, without_check_events);
+            user_output = std::move(without_check_events);
             user_output = filterTestLogs(user_output, results, opts.flags.verbose());
         }
         if (!user_output.empty())
@@ -405,7 +476,7 @@ int test(const Options &opts) {
         }
 
         for (const auto &result : results) {
-            const bool passed_test = result.failedAssert == 0;
+            const bool passed_test = result.failedAssert == 0U && result.failedChecks.empty();
             if (passed_test) {
                 ++passed;
                 p.out.green("  PASS");
@@ -414,14 +485,25 @@ int test(const Options &opts) {
                 p.out.red("  FAIL");
             }
             std::printf(" %s\n", result.name.c_str());
-            if (!passed_test) {
-                for (const auto &site : compilation.testAssertSites()) {
-                    const auto separator = result.name.rfind("::");
-                    const std::string_view bare_name =
-                        separator == std::string::npos
-                            ? std::string_view(result.name)
-                            : std::string_view(result.name).substr(separator + 2U);
-                    if (site.test_name != bare_name || site.assert_id != result.failedAssert)
+            const auto separator = result.name.rfind("::");
+            const std::string_view bare_name =
+                separator == std::string::npos
+                    ? std::string_view(result.name)
+                    : std::string_view(result.name).substr(separator + 2U);
+            for (const auto failed_check : result.failedChecks) {
+                for (const auto &site : compilation.testFailureSites()) {
+                    if (site.test_name != bare_name || site.failure_id != failed_check)
+                        continue;
+                    const auto location = compilation.sourceMap().loc(site.span);
+                    if (location.line != 0)
+                        std::fprintf(stderr, "    %s:%u:%u: check failed\n", file.c_str(),
+                                     location.line, location.col);
+                    break;
+                }
+            }
+            if (result.failedAssert != 0U) {
+                for (const auto &site : compilation.testFailureSites()) {
+                    if (site.test_name != bare_name || site.failure_id != result.failedAssert)
                         continue;
                     const auto location = compilation.sourceMap().loc(site.span);
                     if (location.line != 0)

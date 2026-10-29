@@ -112,10 +112,20 @@ failed assertion, and `assertEq`/`fail` output does not preserve the formatted
 message. Per the user's direction, further HIR interpreter diagnosis is
 deferred. The all-backend acceptance criterion remains open.
 
-On 2026-10-28, the expanded fixture contains 13 tests: native and VM v2
-produce `5 passed; 8 failed; 13 total`, where the failures are intentional
-assertion cases. The full fixture now covers membership, optional presence,
-and float tolerance helpers in addition to equality and explicit failure.
+On 2026-10-28, the expanded fixture contains 16 tests: native and VM v2
+produce `6 passed; 10 failed; 16 total`, where the failures are intentional
+assertion cases. The fixture covers equality, membership, one-of selection
+over arrays and slices, optional presence, float tolerance, and explicit
+failure.
+
+On 2026-10-29, `@check(cond)` was added as an accumulating failure primitive.
+Inside `#[test]`, each false check emits a failure event and execution
+continues. `@assert` remains fail-fast, while prior checks are retained if a
+later assert ends the test. Check and assert sites share per-test failure IDs
+and the ZIRL `Debug` location table. Outside a test's lexical body, `@check`
+uses the same panic behavior as `@assert`; standard-library helpers therefore
+remain macros expanded at the caller. Native, VM v2, and HIR integration
+coverage verifies these semantics.
 
 The accepted `@log` design calls for a fixed 4 KiB per-test buffer synthesized
 in the driver. The current lowering emits framed stdout blocks instead. The

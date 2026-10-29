@@ -874,22 +874,29 @@ entra no documento do `Zith--` depois de terminar no pipeline real, porque o
 - `defer expr;` e `defer { ... }` como cleanup reverse-order do bloco lexical;
   `state` sem return type explicito é `void`.
 - Superfície de teste nativa: `#[test]` em funções livres `void` sem parâmetros,
-  os intrínsecos `@assert(cond)` e `@log(msg)`, e o driver `main` sintetizado
-  pelo compilador que corre cada `#[test]` e imprime `zith-test <nome> <slot>`.
-  A tabela `(teste, id de assert) -> ficheiro:linha:coluna` é gravada na secção
+  os intrínsecos `@assert(cond)`, `@check(cond)` e `@log(msg)`, e o driver
+  `main` sintetizado pelo compilador que corre cada `#[test]` e imprime
+  `zith-test <nome> <slot>`. `@assert` termina o teste na primeira condição
+  falsa. `@check` regista cada condição falsa e continua; fora do contexto
+  lexical de um teste, comporta-se como `@assert`. Os IDs de falha e as
+  localizações `(teste, id) -> ficheiro:linha:coluna` são gravados na secção
   `Debug` do ZIRL. `zithc test` executa os testes descobertos sob `test_dir`,
   aceita `--filter <substring>` sobre `modulo::funcao` e reporta cada resultado.
-  `@log` escreve directamente em stdout e o runner encaminha essa saída sem
-  filtragem por teste.
+  `@log` emite blocos delimitados; o runner oculta logs de testes aprovados,
+  excepto com `--verbose`, e mostra os logs de testes falhados.
 - `std/test` oferece as macros `assertTrue`, `assertFalse`, `assertEq`,
-  `assertNe`, `assertNear`, `assertIn`, `assertNotIn`, `assertSome`,
-  `assertNone` e `fail`. As macros avaliam cada argumento uma vez e terminam
-  pelo `@assert` no ponto de chamada. `assertNear(actual, expected, tolerance)`
-  converte os três argumentos para `f64`, compara a distância absoluta com
-  uma tolerância não negativa e usa uma mensagem que não depende da formatação
-  dos floats. `assertEq` e `assertNe` formatam os dois valores com `Formatable`,
-  actualmente disponível para `[]char`, `bool`, `f32`, `f64`, `u32`, `i32` e
-  `*char`.
+  `assertNe`, `assertNear`, `assertIn`, `assertNotIn`, `assertOneOf`,
+  `assertSome`, `assertNone`, `fail` e os helpers `checkTrue`, `checkFalse`,
+  `checkEq`, `checkNe`, `checkNear`, `checkIn`, `checkNotIn`, `checkOneOf`,
+  `checkSome`, `checkNone` e `checkFail`. Os helpers `assert*` terminam no
+  primeiro resultado falso; os `check*` acumulam falhas e continuam o teste.
+  Ambos avaliam cada argumento uma vez e expandem a primitiva no ponto de
+  chamada. `assertOneOf` e `checkOneOf` percorrem um array ou slice e passam se
+  encontrarem um elemento igual ao valor. `assertNear` e `checkNear` convertem
+  os três argumentos para `f64` e comparam a distância absoluta com uma
+  tolerância não negativa. `assertEq` e `assertNe` formatam os dois valores com
+  `Formatable`, actualmente disponível para `[]char`, `bool`, `f32`, `f64`,
+  `u32`, `i32` e `*char`.
 - Traits nominais, interfaces estruturais com fields e method requirements
   declaration-only, `implement T as Trait {}`, conformance, bounds
   `T: A + B` e `dyn Trait`/`dyn Interface` somente-métodos; bounds de

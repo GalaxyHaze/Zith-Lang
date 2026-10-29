@@ -57,6 +57,106 @@ struct TestWorkspace {
                  "}\n";
         CHECK(smoke.good(), "portable backend fixture is written");
 
+        const auto checksProject = root / "checks-project";
+        fs::create_directories(checksProject / "tests");
+        std::ofstream checksManifest(checksProject / "ZithProject.toml", std::ios::binary);
+        checksManifest << "[paths]\n"
+                          "test_dir = \"tests\"\n";
+        CHECK(checksManifest.good(), "check intrinsic project manifest is written");
+
+        std::ofstream checks(checksProject / "tests" / "checks.zith", std::ios::binary);
+        checks << "from std/test\n"
+                  "\n"
+                  "#[test]\n"
+                  "fn accumulated_checks() {\n"
+                  "    @check(true);\n"
+                  "    @check(false);\n"
+                  "    @check(false);\n"
+                  "    @log(\"continued after checks\");\n"
+                  "}\n"
+                  "\n"
+                  "#[test]\n"
+                  "fn check_helpers_accumulate() {\n"
+                  "    @checkEq(2, 3);\n"
+                  "    @checkTrue(false);\n"
+                  "    @log(\"continued after helper checks\");\n"
+                  "}\n"
+                  "\n"
+                  "#[test]\n"
+                  "fn assert_remains_fail_fast() {\n"
+                  "    @assert(false);\n"
+                  "    @log(\"after assert must not run\");\n"
+                  "    @check(false);\n"
+                  "}\n"
+                  "\n"
+                  "#[test]\n"
+                  "fn check_helpers_pass() {\n"
+                  "    @log(\"\\x1eZITH-TEST-CHECK-FAIL:checks::check_helpers_pass 1\");\n"
+                  "    @checkTrue(true);\n"
+                  "    @checkEq(3, 3);\n"
+                  "}\n"
+                  "\n"
+                  "#[test]\n"
+                  "fn check_before_assert_reports_both() {\n"
+                  "    @check(false);\n"
+                  "    @assert(false);\n"
+                  "    @log(\"after later assert must not run\");\n"
+                  "}\n"
+                  "\n"
+                  "#[test]\n"
+                  "fn check_each_one_of_accumulates() {\n"
+                  "    let actuals: [3]i32 = [1, 4, 6];\n"
+                  "    let expected: [2]i32 = [1, 3];\n"
+                  "    @checkEachOneOf(actuals, expected);\n"
+                  "    @log(\"continued after each-one-of checks\");\n"
+                  "}\n";
+        CHECK(checks.good(), "check intrinsic fixture is written");
+
+        const auto sequenceProject = root / "sequence-project";
+        fs::create_directories(sequenceProject / "tests");
+        std::ofstream sequenceManifest(sequenceProject / "ZithProject.toml", std::ios::binary);
+        sequenceManifest << "[paths]\n"
+                            "test_dir = \"tests\"\n";
+        CHECK(sequenceManifest.good(), "sequential test project manifest is written");
+
+        std::ofstream assertSequence(sequenceProject / "tests" / "assert-sequence.zith",
+                                     std::ios::binary);
+        assertSequence << "from std/test\n"
+                          "\n"
+                          "#[test]\n"
+                          "fn sequence_assert_fails() {\n"
+                          "    @assert(false);\n"
+                          "}\n"
+                          "\n"
+                          "#[test]\n"
+                          "fn sequence_optional_passes() {\n"
+                          "    let present: ?i32 = 42;\n"
+                          "    let absent: ?i32 = null;\n"
+                          "    @assertSome(present);\n"
+                          "    @assertNone(absent);\n"
+                          "}\n";
+        CHECK(assertSequence.good(), "sequential assert fixture is written");
+
+        std::ofstream oneOfSequence(sequenceProject / "tests" / "one-of-sequence.zith",
+                                    std::ios::binary);
+        oneOfSequence << "from std/test\n"
+                         "\n"
+                         "#[test]\n"
+                         "fn sequence_one_of_fails() {\n"
+                         "    let missing: i32 = 4;\n"
+                         "    let values: [3]i32 = [1, 3, 5];\n"
+                         "    @assertOneOf(missing, values);\n"
+                         "}\n"
+                         "\n"
+                         "#[test]\n"
+                         "fn sequence_optional_passes() {\n"
+                         "    let present: ?i32 = 42;\n"
+                         "    let absent: ?i32 = null;\n"
+                         "    @assertSome(present);\n"
+                         "    @assertNone(absent);\n"
+                         "}\n";
+        CHECK(oneOfSequence.good(), "sequential one-of fixture is written");
+
         const auto logsProject = root / "logs-project";
         fs::create_directories(logsProject / "tests");
         std::ofstream logsManifest(logsProject / "ZithProject.toml", std::ios::binary);
@@ -156,6 +256,12 @@ CliResult test_backend(const TestWorkspace &workspace, const std::string &backen
           (label + " reports the assertEq failure").c_str());
     CHECK(all.stdoutText.find("assert_in_reports_missing_value") != std::string::npos,
           (label + " reports the assertIn failure").c_str());
+    CHECK(all.stdoutText.find("one_of_helpers_pass") != std::string::npos,
+          (label + " reports passing assertOneOf cases").c_str());
+    CHECK(all.stdoutText.find("assert_one_of_reports_missing_value") != std::string::npos,
+          (label + " reports an assertOneOf failure for a missing value").c_str());
+    CHECK(all.stdoutText.find("assert_one_of_rejects_empty_values") != std::string::npos,
+          (label + " reports an assertOneOf failure for an empty list").c_str());
     CHECK(all.stdoutText.find("assert_not_in_reports_present_value") != std::string::npos,
           (label + " reports the assertNotIn failure").c_str());
     CHECK(all.stdoutText.find("assert_some_reports_none") != std::string::npos,
@@ -174,6 +280,9 @@ CliResult test_backend(const TestWorkspace &workspace, const std::string &backen
           (label + " formats actual and expected values").c_str());
     CHECK(all.stdoutText.find("assertIn failed: value is not contained") != std::string::npos,
           (label + " explains a missing membership value").c_str());
+    CHECK(all.stdoutText.find("assertOneOf failed: value is not in the expected values") !=
+              std::string::npos,
+          (label + " explains a missing expected value").c_str());
     CHECK(all.stdoutText.find("assertNotIn failed: value is contained") != std::string::npos,
           (label + " explains an unexpected membership value").c_str());
     CHECK(all.stdoutText.find("assertSome failed: value is null") != std::string::npos,
@@ -185,7 +294,7 @@ CliResult test_backend(const TestWorkspace &workspace, const std::string &backen
           (label + " explains an assertNear failure").c_str());
     CHECK(all.stdoutText.find("intentional failure") != std::string::npos,
           (label + " includes the fail message").c_str());
-    CHECK(all.stdoutText.find("5 passed; 8 failed; 13 total") != std::string::npos,
+    CHECK(all.stdoutText.find("6 passed; 10 failed; 16 total") != std::string::npos,
           (label + " reports all test results").c_str());
     CHECK(all.stderrText.find("no #[test] functions") != std::string::npos,
           (label + " notes the file with no tests as skipped").c_str());
@@ -193,6 +302,8 @@ CliResult test_backend(const TestWorkspace &workspace, const std::string &backen
           (label + " reports the failing assert source location").c_str());
     CHECK(all.stderrText.find("floating.zith:") != std::string::npos,
           (label + " reports the failing float assertion source location").c_str());
+    CHECK(all.stderrText.find("collection_optional.zith:") != std::string::npos,
+          (label + " reports the failing collection assertion source location").c_str());
     return all;
 }
 
@@ -224,6 +335,94 @@ void test_portable_backend(const TestWorkspace &workspace, const std::string &ba
           (label + " shows failed-test logs by default").c_str());
     CHECK(all.stderrText.find("smoke.zith:9:") != std::string::npos,
           (label + " reports the backend-compatible assert location").c_str());
+}
+
+void test_check_backend(const TestWorkspace &workspace, const std::string &backend,
+                        const std::string &label) {
+    const auto testRoot = workspace.root / "checks-project";
+    const auto result   = workspace.run(backend, "", label + "-checks", testRoot);
+    CHECK(result.exitCode == 1,
+          (label + " reports accumulated check failures\n" + describeResult(result)).c_str());
+    CHECK(result.stderrText.find("unknown macro") == std::string::npos,
+          (label + " recognizes check intrinsics and std/test macros").c_str());
+    CHECK(result.stdoutText.find("1 passed; 5 failed; 6 total") != std::string::npos,
+          (label + " counts failed checks as one failed test").c_str());
+    CHECK(result.stdoutText.find("continued after checks") != std::string::npos,
+          (label + " continues after direct check failures").c_str());
+    CHECK(result.stdoutText.find("continued after helper checks") != std::string::npos,
+          (label + " continues after check helper failures").c_str());
+    CHECK(result.stdoutText.find("continued after each-one-of checks") != std::string::npos,
+          (label + " continues after each-one-of failures").c_str());
+    CHECK(result.stdoutText.find("after assert must not run") == std::string::npos,
+          (label + " keeps assert fail-fast behavior").c_str());
+    CHECK(result.stdoutText.find("after later assert must not run") == std::string::npos,
+          (label + " stops the test after an assert following a check").c_str());
+    CHECK(result.stdoutText.find("ZITH-TEST-CHECK-FAIL") == std::string::npos,
+          (label + " removes internal check records from test output").c_str());
+    CHECK(result.stdoutText.find("checkEq failed: actual 2, expected 3") != std::string::npos,
+          (label + " preserves checkEq diagnostics").c_str());
+    CHECK(result.stdoutText.find("checkTrue failed") != std::string::npos,
+          (label + " preserves checkTrue diagnostics").c_str());
+    CHECK(result.stdoutText.find(
+              "checkEachOneOf failed at index 1: actual 4; expected one of:") !=
+              std::string::npos,
+          (label + " reports the first mismatching value with its index and allowed values")
+              .c_str());
+    CHECK(result.stdoutText.find(
+              "checkEachOneOf failed at index 2: actual 6; expected one of:") !=
+              std::string::npos,
+          (label + " accumulates later mismatches with their context").c_str());
+    CHECK(result.stdoutText.find("  allowed value: 1") != std::string::npos &&
+              result.stdoutText.find("  allowed value: 3") != std::string::npos,
+          (label + " lists the allowed values for each mismatch").c_str());
+    CHECK(result.stderrText.find("checks.zith:6:") != std::string::npos,
+          (label + " reports the first failed check location").c_str());
+    CHECK(result.stderrText.find("checks.zith:7:") != std::string::npos,
+          (label + " reports the second failed check location").c_str());
+    CHECK(result.stderrText.find("checks.zith:13:") != std::string::npos,
+          (label + " reports the failed checkEq location").c_str());
+    CHECK(result.stderrText.find("checks.zith:14:") != std::string::npos,
+          (label + " reports the failed checkTrue location").c_str());
+    CHECK(result.stderrText.find("checks.zith:20:") != std::string::npos,
+          (label + " preserves the assert failure location").c_str());
+    CHECK(result.stderrText.find("checks.zith:34:") != std::string::npos,
+          (label + " reports a check before a later assert").c_str());
+    CHECK(result.stderrText.find("checks.zith:35:") != std::string::npos,
+          (label + " reports the assert after a failed check").c_str());
+    const auto earlierCheck = result.stderrText.find("checks.zith:34:");
+    const auto laterAssert  = result.stderrText.find("checks.zith:35:");
+    CHECK(earlierCheck != std::string::npos && laterAssert != std::string::npos &&
+              earlierCheck < laterAssert,
+          (label + " reports failures in execution order").c_str());
+}
+
+void test_interpreted_check_backend(const TestWorkspace &workspace) {
+    const auto testRoot = workspace.root / "checks-project";
+    const auto result   = workspace.run("--interpreted", "--filter=checks::accumulated_checks",
+                                        "hir-checks", testRoot);
+    CHECK(result.exitCode == 1,
+          ("HIR interpreter runs accumulated checks\n" + describeResult(result)).c_str());
+    CHECK(result.stderrText.find("unknown macro") == std::string::npos,
+          "HIR interpreter recognizes the check intrinsic");
+    CHECK(result.stdoutText.find("continued after checks") != std::string::npos,
+          "HIR interpreter continues after a failed check");
+    CHECK(result.stderrText.find("checks.zith:6:") != std::string::npos,
+          "HIR interpreter reports the failed check location");
+}
+
+void test_vm_sequential_test_state(const TestWorkspace &workspace) {
+    const auto testRoot = workspace.root / "sequence-project";
+    const auto result =
+        workspace.run("--virtual-machine", "--filter=sequence", "vm-sequence", testRoot);
+    CHECK(result.exitCode == 1,
+          ("VM isolates sequential test results\n" + describeResult(result)).c_str());
+    CHECK(
+        result.stdoutText.find("2 passed; 2 failed; 4 total") != std::string::npos,
+        ("VM preserves passing tests after failed assertions\n" + describeResult(result)).c_str());
+    CHECK(result.stdoutText.find("assert-sequence::sequence_optional_passes") != std::string::npos,
+          "VM reports the optional test after a failed assert");
+    CHECK(result.stdoutText.find("one-of-sequence::sequence_optional_passes") != std::string::npos,
+          "VM reports the optional test after a failed assertOneOf");
 }
 
 void test_bounded_logs(const TestWorkspace &workspace, const std::string &backend,
@@ -266,8 +465,11 @@ void test_zith_test_suite() {
     test_backend(workspace, "", "default backend");
 #endif
     test_bounded_logs(workspace, "", "default backend");
+    test_check_backend(workspace, "", "default backend");
+    test_vm_sequential_test_state(workspace);
     // Rich std/test formatting is not yet supported by the HIR interpreter.
     test_bounded_logs(workspace, "--interpreted", "HIR interpreter");
+    test_interpreted_check_backend(workspace);
     test_portable_backend(workspace, "--interpreted", "HIR interpreter");
 #ifdef ZITH_HAS_VM
     const auto vmReport = test_backend(workspace, "--virtual-machine", "VM v2");
@@ -276,6 +478,7 @@ void test_zith_test_suite() {
     CHECK(nativeReport.stderrText == vmReport.stderrText,
           "native and VM v2 produce identical failure locations");
     test_bounded_logs(workspace, "--virtual-machine", "VM v2");
+    test_check_backend(workspace, "--virtual-machine", "VM v2");
     test_portable_backend(workspace, "--virtual-machine", "VM v2");
 #endif
 #else

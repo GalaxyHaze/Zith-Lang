@@ -46,7 +46,7 @@
 | F-40 | Scope-guard `defer` statements | 9, Zith-- | Working |
 | F-41 | Deterministic `drop` cleanup hooks | 9, Zith-- | Planned for Zith--; depends on F-40 |
 | F-42 | Platform-specific imports (`foo.<arch>.<os>.zith`) | 2, Zith-- | Working; resolver checks `arch.os`, `arch`, `os`, then generic `foo.zith` |
-| F-43 | Native test surface (`#[test]`, `@assert`, `@log`, synthesized driver) | 9, Zith-- | Partial: rich `std/test` formatting passes on native and VM v2; HIR covers portable tests and logs, but rich formatting remains unsupported |
+| F-43 | Native test surface (`#[test]`, `@assert`, `@check`, `@log`, synthesized driver) | 9, Zith-- | Partial: accumulating checks and rich `std/test` formatting pass on native and VM v2; HIR covers checks, portable assertions, and logs, but rich formatting remains unsupported |
 
 ## Dependency Graph
 
@@ -165,10 +165,11 @@ monolith splits and debt closure.
 Comptime/introspection/type construction remain full-Zith features and are
 archived under `docs/plans/archive/0.7.0-zith/`.
 
-The test surface (F-43: `#[test]`, `@assert`, `@log`, the compiler-synthesized
-HIR driver, the `zithc test` runner, and `std/test`) runs its rich formatting
-fixture on native and VM v2. The HIR interpreter has portable assertion and log
-coverage, while the rich formatting fixture remains an open backend gap.
+The test surface (F-43: `#[test]`, `@assert`, `@check`, `@log`, the
+compiler-synthesized HIR driver, the `zithc test` runner, and `std/test`) runs
+its rich formatting and accumulating-check fixtures on native and VM v2. The
+HIR interpreter has check, portable assertion, and log coverage, while the
+rich formatting fixture remains an open backend gap.
 
 Infrastructure: ZIRL sections, cache hydration, CLI commands (`test`, `deps`, `docs`), diagnostics quality, roadmap, and infra tests.  See [impl-status.md](impl-status.md), [docs/plans/0.7.0/README.md](0.7.0/README.md), and [docs/plans/monolith-splits.md](plans/monolith-splits.md).
 

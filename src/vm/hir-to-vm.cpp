@@ -1461,7 +1461,22 @@ auto lowerMakeNone(LowerState &state, const hir::HirMakeNone &none) -> std::uint
         emit(state, Instr::withImm(Op::LoadConstI64FromPool, result, index));
         return result;
     }
-    return allocateGuestBytes(state, typeSize(state.types, none.type));
+    const auto base = allocateGuestBytes(state, typeSize(state.types, none.type));
+    if (base == kUnassignedReg)
+        return base;
+
+    std::size_t inner_align = 1U;
+    const auto inner_size   = layoutSize(state.types, optional->inner, inner_align);
+    const auto tag_offset   = u16(inner_size, state.result);
+    if (!state.result->ok || inner_size == 0U)
+        return kUnassignedReg;
+
+    const auto tag = newTypedReg(state, ValueType::Ptr);
+    emit(state, Instr{Op::FieldPtr, tag, base, 0, tag_offset});
+    const auto absent = newTypedReg(state, ValueType::I64);
+    emit(state, Instr::withImm(Op::LoadConstI64, absent, 0));
+    emit(state, Instr::simple(Op::StoreI8, tag, absent));
+    return base;
 }
 
 auto lowerMakeSome(LowerState &state, const hir::HirMakeSome &some) -> std::uint16_t {

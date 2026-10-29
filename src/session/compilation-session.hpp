@@ -74,10 +74,10 @@ class CompilationSession {
     std::unique_ptr<sema::modern::SemaPipeline> mModernSemaPipeline;
     std::unique_ptr<comptime::GenericInstantiationPass> mGenericInstantiations;
     std::unique_ptr<sema::modern::NraFacts> mNraFacts;
-    /// Assert sites discovered while lowering `#[test]` functions. Captured
-    /// here so the persistent cache can persist their source locations in the
-    /// ZIRL Debug section for the native test runner.
-    std::vector<sema::modern::HirLowerModern::TestAssertSite> mTestAssertSites;
+    /// Assert/check sites discovered while lowering `#[test]` functions.
+    /// Captured here so the persistent cache can persist their source
+    /// locations in the ZIRL Debug section for the test runner.
+    std::vector<sema::modern::HirLowerModern::TestFailureSite> mTestFailureSites;
 
     std::string mOutputBuffer;
     std::string mChildOutput;
@@ -197,9 +197,9 @@ public:
     [[nodiscard]] const std::vector<std::string> &testNames() const noexcept {
         return mTestNames;
     }
-    [[nodiscard]] const std::vector<sema::modern::HirLowerModern::TestAssertSite> &
-    testAssertSites() const noexcept {
-        return mTestAssertSites;
+    [[nodiscard]] const std::vector<sema::modern::HirLowerModern::TestFailureSite> &
+    testFailureSites() const noexcept {
+        return mTestFailureSites;
     }
     std::string flushOutput();
     // Moves out the captured stdout+stderr of the last executed child program.

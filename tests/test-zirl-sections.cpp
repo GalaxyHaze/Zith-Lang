@@ -641,17 +641,17 @@ static void test_debug_section_round_trip() {
     ByteReader r(w.ptr(), w.size());
     bool ok = decodeDebug(r, decoded);
     CHECK(ok, "decodeDebug succeeds on empty payload");
-    CHECK(decoded.test_assert_locations.empty(), "empty table decodes to no assert sites");
+    CHECK(decoded.test_failure_locations.empty(), "empty table decodes to no failure sites");
 }
 
-// ── Debug section round-trip (assert-site table preserved) ────────
+// ── Debug section round-trip (assert/check failure sites preserved) ─
 
-static void test_debug_section_assert_sites_round_trip() {
+static void test_debug_section_failure_sites_round_trip() {
     Artifact art = makeMinimalArtifact();
-    art.test_assert_locations.push_back({"passes", 1u, "/src/passes.zith", 3u, 5u});
-    art.test_assert_locations.push_back({"fails", 1u, "/src/fails.zith", 9u, 5u});
-    art.test_assert_locations.push_back({"fails", 2u, "/src/fails.zith", 10u, 5u});
-    art.test_assert_locations.push_back({"multi", 12u, "/src/nested/multi.zith", 128u, 41u});
+    art.test_failure_locations.push_back({"passes", 1u, "/src/passes.zith", 3u, 5u});
+    art.test_failure_locations.push_back({"fails", 1u, "/src/fails.zith", 9u, 5u});
+    art.test_failure_locations.push_back({"fails", 2u, "/src/fails.zith", 10u, 5u});
+    art.test_failure_locations.push_back({"multi", 12u, "/src/nested/multi.zith", 128u, 41u});
 
     ByteWriter w;
     bool encoded = encodeDebug(art, w);
@@ -662,20 +662,20 @@ static void test_debug_section_assert_sites_round_trip() {
     ByteReader r(w.ptr(), w.size());
     bool ok = decodeDebug(r, decoded);
     CHECK(ok, "decodeDebug succeeds on a non-empty payload");
-    CHECK_EQ(decoded.test_assert_locations.size(), 4u, "all assert sites round-trip");
-    CHECK_EQ(decoded.test_assert_locations[0].test_name, std::string("passes"),
+    CHECK_EQ(decoded.test_failure_locations.size(), 4u, "all failure sites round-trip");
+    CHECK_EQ(decoded.test_failure_locations[0].test_name, std::string("passes"),
              "first test name preserved");
-    CHECK_EQ(decoded.test_assert_locations[0].assert_id, 1u, "first assert id preserved");
-    CHECK_EQ(decoded.test_assert_locations[0].path, std::string("/src/passes.zith"),
+    CHECK_EQ(decoded.test_failure_locations[0].failure_id, 1u, "first failure id preserved");
+    CHECK_EQ(decoded.test_failure_locations[0].path, std::string("/src/passes.zith"),
              "first path preserved");
-    CHECK_EQ(decoded.test_assert_locations[0].line, 3u, "first line preserved");
-    CHECK_EQ(decoded.test_assert_locations[0].column, 5u, "first column preserved");
-    CHECK_EQ(decoded.test_assert_locations[2].test_name, std::string("fails"),
+    CHECK_EQ(decoded.test_failure_locations[0].line, 3u, "first line preserved");
+    CHECK_EQ(decoded.test_failure_locations[0].column, 5u, "first column preserved");
+    CHECK_EQ(decoded.test_failure_locations[2].test_name, std::string("fails"),
              "third test name preserved");
-    CHECK_EQ(decoded.test_assert_locations[2].assert_id, 2u, "third assert id preserved");
-    CHECK_EQ(decoded.test_assert_locations[3].assert_id, 12u, "multi-digit assert id preserved");
-    CHECK_EQ(decoded.test_assert_locations[3].line, 128u, "multi-digit line preserved");
-    CHECK_EQ(decoded.test_assert_locations[3].column, 41u, "multi-digit column preserved");
+    CHECK_EQ(decoded.test_failure_locations[2].failure_id, 2u, "third failure id preserved");
+    CHECK_EQ(decoded.test_failure_locations[3].failure_id, 12u, "multi-digit failure id preserved");
+    CHECK_EQ(decoded.test_failure_locations[3].line, 128u, "multi-digit line preserved");
+    CHECK_EQ(decoded.test_failure_locations[3].column, 41u, "multi-digit column preserved");
 }
 
 // ── Full artifact round-trip (bytes stable) ───────────────────────
@@ -1163,7 +1163,7 @@ static void test_zirl_sections() {
     test_attrs_section_round_trip();
     test_instantiation_section_round_trip();
     test_debug_section_round_trip();
-    test_debug_section_assert_sites_round_trip();
+    test_debug_section_failure_sites_round_trip();
     test_full_artifact_round_trip();
     test_truncated_artifact_rejected();
     test_reader_truncation();

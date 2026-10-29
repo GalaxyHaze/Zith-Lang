@@ -5,9 +5,9 @@
 Transformar `zithc test` de um type-check em lote de ficheiros `.zith` num
 runner de testes nativo. O comando descobre funções `#[test]` sob `test_dir`,
 compila cada ficheiro com um driver sintetizado pelo compilador, executa-o em
-qualquer backend e reporta o resultado por teste, incluindo a localização do
-assert que falhou. A iteração adiciona o atributo `#[test]` e os dois
-intrínsecos `@assert` e `@log` ao Zith--.
+qualquer backend e reporta o resultado por teste, incluindo as localizações
+das falhas. A iteração adiciona o atributo `#[test]` e os intrínsecos
+`@assert`, `@check` e `@log` ao Zith--.
 
 ## Pré-condições
 
@@ -32,17 +32,18 @@ intrínsecos `@assert` e `@log` ao Zith--.
 
 - `zithc test` descobre ficheiros `.zith` sob `test_dir`, executa os testes
   pelo driver sintetizado, aplica `--filter <substring>` e reporta cada
-  resultado com a localização do primeiro assert falhado. Ficheiros sem testes
-  são saltados; diretórios vazios e filtros sem correspondência são erros.
+  resultado com as localizações das falhas de check e do primeiro assert
+  falhado. Ficheiros sem testes são saltados; diretórios vazios e filtros sem
+  correspondência são erros.
 - O runner suporta codegen nativo, VM v2 e interpretador HIR. O CTest
   `test-zith-test-suite` verifica a fixture completa em native e VM v2. No HIR,
-  verifica os limites de log e uma fixture portátil com `@assert` e `@log`.
-- `std/test` fornece `assertTrue`, `assertFalse`, `assertEq`, `assertNe`,
-  `assertNear`, `assertIn`, `assertNotIn`, `assertSome`, `assertNone` e
-  `fail`. As macros avaliam os argumentos uma vez e deixam `@assert` expandido
-  no contexto da função de teste. As mensagens formatadas usam `FormatBuffer`
-  e `@log`; `assertNear` compara distância absoluta sem formatar floats e
-  converte `actual`, `expected` e `tolerance` para `f64` antes da comparação.
+  verifica os limites de log e fixtures com `@assert`, `@check` e `@log`.
+- `std/test` fornece helpers `assert*`, `fail` e helpers acumuláveis `check*`.
+  As macros avaliam os argumentos uma vez e expandem `@assert` ou `@check` no
+  contexto da função de teste. `assertOneOf` e `checkOneOf` percorrem arrays e
+  slices de valores esperados. As mensagens formatadas usam
+  `FormatBuffer` e `@log`; `assertNear` compara distância absoluta sem formatar
+  floats e converte `actual`, `expected` e `tolerance` para `f64`.
 - `@log` emite blocos delimitados em stdout. O runner captura o output do
   processo, analisa os blocos, oculta logs de testes aprovados por omissão,
   mostra-os em `--verbose` e limita o corpo acumulado a 4 KiB por teste. O
@@ -65,14 +66,17 @@ Verificação em 2026-10-28:
   enquanto.
 - `./build/zithc --include stdlib test tests/zith --no-cache --verbose` e
   `./build/zithc --include stdlib --virtual-machine test tests/zith --no-cache
-  --verbose` produzem `5 passed; 8 failed; 13 total`, com exit code `1` pelas
-  oito falhas intencionais. A fixture inclui os helpers de igualdade,
-  pertença, opcionais e tolerância float. O teste de integração compara stdout
-  e stderr completos entre os dois backends.
+  --verbose` produzem `6 passed; 10 failed; 16 total`, com exit code `1` pelas
+  dez falhas intencionais. A fixture inclui os helpers de igualdade, pertença,
+  seleção entre valores, opcionais e tolerância float. O teste de integração
+  compara stdout e stderr completos entre os dois backends.
 - A tentativa de `./build/zithc --include stdlib --interpreted test tests/zith`
   falha no caminho rico de formatação: `user_defined_formatable` falha e as
   falhas de `assertEq`/`fail` não preservam o texto formatado. O diagnóstico
   adicional desse backend foi adiado a pedido do utilizador em 2026-10-27.
+- Em 2026-10-29, `@check` passou no teste focado e na suite completa em
+  native, VM v2 e HIR: falhas acumulam, o corpo continua e `@assert` posterior
+  continua fail-fast.
 - Os testes cobrem filtragem, logs ocultos/visíveis, texto de log que imita o
   protocolo de resultados, diretórios vazios, filtros sem correspondência,
   ficheiros ignorados, localizações, traps e a truncagem do buffer de logs.
@@ -99,19 +103,22 @@ Verificação em 2026-10-28:
 - O driver é sintetizado como HIR pelo compilador, depois do sema, para servir
   codegen nativo, VM v2 e interpretador pelo mesmo caminho.
 - O resultado de cada teste vive numa tabela sintetizada pelo compilador com
-  uma entrada por função `#[test]`. O valor da entrada é `0` quando o teste
-  passa e `N` quando falha no assert de id estático `N` desse teste. A tabela
-  é infraestrutura do runner e não um global que o código de utilizador possa
+  uma entrada por função `#[test]`. O valor é `0` quando nenhum `@assert`
+  terminou o teste e `N` quando ele retornou no site de falha de id `N`.
+  Falhas de `@check` são eventos separados e não terminam o teste. A tabela é
+  infraestrutura do runner e não um global que o código de utilizador possa
   escrever.
 - O driver continua depois de um teste falhar e preenche todos os slots. Um
   trap duro (segfault, divisão por zero) mata o processo e o runner reporta
   crash para esse ficheiro.
-- A única primitiva de falha é `@assert(cond)`, sem mensagem. Mensagens ricas
-  pertencem à stdlib.
-- `@assert` fora de uma função `#[test]` comporta-se como panic. Dentro de um
-  teste, `@assert` regista o id estático da falha no slot e termina o teste.
-- Um teste que falha num assert retorna de imediato. O resto do corpo não
-  corre.
+- `@assert(cond)` é fail-fast e `@check(cond)` acumula falhas dentro de
+  `#[test]`. Ambos recebem uma condição booleana e não têm mensagem própria.
+  Mensagens ricas pertencem à stdlib.
+- Fora do contexto lexical de `#[test]`, ambos comportam-se como panic. Os
+  helpers `check*` têm de expandir no ponto de chamada para herdarem esse
+  contexto; funções comuns não o herdam.
+- Um teste que falha num assert retorna de imediato. Os checks anteriores são
+  preservados e o resto do corpo não corre.
 - As funções `#[test]` são `void` e sem parâmetros. `#[test]` sobre uma função
   com parâmetros ou retorno não-void reporta `W2029 AttributeNotApplicable`.
 - Um módulo de teste não pode declarar `main` e `#[test]` ao mesmo tempo. A
@@ -144,16 +151,26 @@ construído como HIR, por isso o mesmo desenho serve os três backends.
 
 ### Test result table
 
-Uma tabela com uma entrada por função `#[test]`. O valor `0` significa que o
-teste passou. O valor `N` significa que o teste falhou no assert de id estático
-`N`. A tabela é sintetizada pelo compilador, equivalente a um global mutável
-privado, que a linguagem não permite escrever ao utilizador.
+Uma tabela com uma entrada por função `#[test]`. O valor `0` significa que
+nenhum assert terminou o teste. O valor `N` significa que o teste retornou no
+site de falha de id estático `N`. Falhas de `@check` são eventos separados e
+não alteram o slot. A tabela é sintetizada pelo compilador, equivalente a um
+global mutável privado, que a linguagem não permite escrever ao utilizador.
 
 ### Assertion intrinsic
 
-`@assert(cond)` é a única primitiva de falha. Dentro de um teste, baixa para
-`if (!cond) { table[i] = N; <fim do teste>; }`, onde `N` é o id estático do
-site do assert. Fora de um teste, baixa para um panic.
+`@assert(cond)` termina o teste na primeira condição falsa. Dentro de um teste,
+baixa para `if (!cond) { table[i] = N; <fim do teste>; }`, onde `N` é o id
+estático do site de falha. Fora de um teste, baixa para um panic.
+
+### Check intrinsic
+
+`@check(cond)` regista um evento com o ID do site quando a condição é falsa e
+continua no bloco seguinte. O ID partilha a sequência estática dos sites de
+`@assert`, permitindo localizar ambos com uma única tabela no `Debug` do ZIRL.
+Fora de uma função `#[test]`, baixa para o mesmo panic que `@assert`. Os helpers
+`check*` são macros para que o intrínseco expandido herde o contexto lexical
+do teste chamador.
 
 ### Test log intrinsic
 
@@ -164,7 +181,7 @@ formatação rica é construída em `std/test` sobre o `FormatBuffer` existente.
 
 ### Location table
 
-O compilador grava uma tabela `(teste, id estático) -> ficheiro:linha:coluna`
+O compilador grava uma tabela `(teste, id de falha) -> ficheiro:linha:coluna`
 na secção `Debug` do ZIRL, que hoje está reservada e vazia. O runner resolve o
 slot lendo essa secção do artefacto que já tem em memória.
 
@@ -174,7 +191,7 @@ slot lendo essa secção do artefacto que já tem em memória.
   apenas no alvo `AttributeTarget::Function`.
 - `classifyAttribute` em `src/frontend/attribute-classify.hpp` reconhece
   `test`. Os alvos ilegais continuam a usar `W2029`.
-- `@assert` e `@log` entram na lista de nomes de intrínsecos reconhecidos pelo
+- `@assert`, `@check` e `@log` entram na lista de nomes de intrínsecos reconhecidos pelo
   frontend e no caminho de sema/HIR como os intrínsecos de layout atuais.
 - `#[test]` sobre uma função com parâmetros ou retorno não-void é `W2029`.
 - Um módulo com `main` e `#[test]` em simultâneo é erro de sema.
@@ -189,7 +206,8 @@ slot lendo essa secção do artefacto que já tem em memória.
 - O driver imprime o output do programa e os logs durante a execução, e só no
   fim imprime um bloco delimitado com a tabela de resultados. Cada linha do
   bloco tem a forma `zith-test <nome> <slot>`, onde `<slot>` é `0` ou o id do
-  assert falhado.
+  `@assert` que terminou o teste. Cada check falhado produz ainda um evento
+  interno separado, removido pelo runner da saída visível.
 - O runner lê o último bloco delimitado e faz relay do resto. O delimitador
   tem de ser improvável de colidir com texto do teste. O texto de log é
   impresso pelo driver e nunca é interpretado pelo runner, por isso não há
@@ -203,11 +221,12 @@ slot lendo essa secção do artefacto que já tem em memória.
    em `classifyAttribute`, com `W2029` para alvos ilegais. Cobrir o caso de
    `#[test]` sobre função com parâmetros ou retorno não-void.
 
-2. **Concluído.** Adicionar `@assert(cond)` e `@log(msg)` como nomes de
+2. **Concluído.** Adicionar `@assert(cond)`, `@check(cond)` e `@log(msg)` como nomes de
    intrínsecos reconhecidos pelo frontend, com os tipos `bool` e `[]char`.
 
 3. **Concluído.** `@assert` baixa para panic fora de teste e para escrita no
-   slot dentro de teste. `@log` emite blocos delimitados em stdout; o sink
+   slot dentro de teste. `@check` acumula falhas em eventos e continua dentro
+   do teste, ou baixa para panic fora dele. `@log` emite blocos delimitados em stdout; o sink
    partilhado do runner limita o corpo acumulado a 4 KiB por teste.
 
 4. **Concluído, com buffer no runner.** A tabela de resultados e o `main`
@@ -216,7 +235,7 @@ slot lendo essa secção do artefacto que já tem em memória.
    HIR sintetizado no driver.
 
 5. **Concluído.** Gravar a tabela de localizações
-   `(teste, id estático) -> localização` na secção `Debug` do ZIRL e
+   `(teste, id de falha) -> localização` na secção `Debug` do ZIRL e
    implementar a leitura correspondente.
 
 6. **Concluído.** Reimplementar `test()` em `src/cli/cmd/tool.cpp` para
@@ -229,13 +248,13 @@ slot lendo essa secção do artefacto que já tem em memória.
    resumo final. Com `--verbose`, mostrar o log de todos os testes e o detalhe
    extra.
 
-8. **Concluído.** Criar `std/test` com `assertEq`, `assertNe`, `assertTrue`,
-   `assertFalse` e `fail` sobre `@assert`, usando o `FormatBuffer` existente
-   para as mensagens.
+8. **Concluído.** Criar `std/test` com helpers fail-fast `assert*` e
+   acumuláveis `check*`, todos macros no ponto de chamada. Usar o
+   `FormatBuffer` existente para as mensagens.
 
 9. **Concluído.** Atualizar `docs/19-project-config.md` com `test_dir`,
-   `docs/Zith--.md` com `#[test]`, `@assert` e `@log`, e a linha de estado em
-   `docs/impl-status.md`.
+   `docs/Zith--.md` com `#[test]`, `@assert`, `@check` e `@log`, e a linha de
+   estado em `docs/impl-status.md`.
 
 10. **Concluído.** Registar o desenho no ADR `docs/adr/0045-*`.
 
@@ -243,8 +262,8 @@ slot lendo essa secção do artefacto que já tem em memória.
 
 - **Parcial.** `test-zith-test-suite` verifica a suite completa de `tests/zith/`
   em native e VM v2, além de cobertura portátil e de logs no HIR interpreter.
-- **Concluído.** Um assert falhado reporta o nome do teste e a localização
-  correta; o caso nativo também valida as mensagens de `assertEq` e `fail`.
+- **Concluído.** Falhas de check e assert reportam o nome do teste e as
+  localizações corretas; o caso nativo também valida mensagens formatadas.
 - **Concluído.** `test-test-output-buffer` verifica o limite agregado entre
   várias chamadas `@log` e a reposição da capacidade no teste seguinte.
 - **Em aberto.** A suite completa ainda não produz o relatório esperado no HIR
@@ -254,6 +273,8 @@ slot lendo essa secção do artefacto que já tem em memória.
   reporta `W2029`.
 - **Concluído.** `@assert(false)` fora de teste causa trap quando chamado por
   uma função de teste.
+- **Concluído.** `@check(false)` fora do contexto lexical de teste causa trap
+  quando chamado por uma função helper normal; `@check(1)` é rejeitado.
 - **Parcial.** O build completo passou e o CTest passou 46/46. `fmt-check`
   continua a falhar em muitos ficheiros por divergências do clang-format local
   23.1.1; não há clang-format-18 instalado. O novo

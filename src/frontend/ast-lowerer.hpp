@@ -97,7 +97,7 @@ private:
         "component", "union",    "enum",          "nullable",    "primitive",   "allocate",
         "pack",      "toStruct", "toPack",        "appendField", "removeField", "appendMethod",
         "file",      "line",     "fnName",        "location",    "ok",          "err",
-        "lengthOf",  "ptrOf",    "canonicalType", "assert",      "log",
+        "lengthOf",  "ptrOf",    "canonicalType", "assert",      "check",       "log",
     };
 
     static bool isIntrinsicName(std::string_view name) noexcept;

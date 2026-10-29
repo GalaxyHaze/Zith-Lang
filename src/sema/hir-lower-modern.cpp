@@ -771,7 +771,7 @@ bool HirLowerModern::lowerFunctionBody(FunctionInfo &info) {
     current_main_void_ = is_main_void;
     current_fn_is_test_ = info.forced_test_return_i32;
     current_test_name_  = current_fn_is_test_ ? info.decl->name : std::string{};
-    current_test_assert_id_ = 0;
+    current_test_failure_id_ = 0;
 
     current_fn_->blocks.emplace(arena_);
     current_fn_->blocks[0].insts = memory::DynArray<hir::HirExprId>(arena_);
@@ -809,7 +809,7 @@ bool HirLowerModern::lowerFunctionBody(FunctionInfo &info) {
             zero.i    = 0;
             ret.value = addExpr(std::move(zero));
         } else if (current_fn_is_test_) {
-            // A test with no failing assert returns the pass slot 0.
+            // Check failures are reported through the test failure-event stream.
             ret.value = emitI32Literal(0);
         } else if (current_fn_->return_type != types::kVoidType &&
                    body_expr != hir::kInvalidHirExpr) {
@@ -854,7 +854,7 @@ bool HirLowerModern::lowerFunctionBody(FunctionInfo &info) {
     current_main_void_           = false;
     current_fn_is_test_          = false;
     current_test_name_.clear();
-    current_test_assert_id_      = 0;
+    current_test_failure_id_ = 0;
     return true;
 }
 

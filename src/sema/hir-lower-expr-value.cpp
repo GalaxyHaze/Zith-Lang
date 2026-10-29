@@ -1022,6 +1022,8 @@ hir::HirExprId HirLowerModern::lowerIsType(const frontend::Expression &expr) {
 hir::HirExprId HirLowerModern::lowerLayoutIntrinsic(const frontend::Expression &expr) {
     if (expr.text == "assert")
         return lowerTestAssert(expr);
+    if (expr.text == "check")
+        return lowerTestCheck(expr);
     if (expr.text == "log")
         return lowerTestLog(expr);
     hir::HirLayoutIntrinsic intrinsic;

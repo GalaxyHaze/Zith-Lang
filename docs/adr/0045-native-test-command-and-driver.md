@@ -1,7 +1,7 @@
 # Native `zithc test` and the compiler-synthesized test driver
 
-Status: accepted for the Zith-- iteration. It adds `#[test]`, `@assert`, and
-`@log` to the subset and reworks the `zithc test` command.
+Status: accepted for the Zith-- iteration. It adds `#[test]`, `@assert`,
+`@check`, and `@log` to the subset and reworks the `zithc test` command.
 
 `zithc test` was shipped as a batch type-check of the `.zith` files under
 `test_dir`, with no execution and no way for a test to fail at runtime. That
@@ -28,10 +28,15 @@ code. The design sidesteps all three constraints with one mechanism: the
 compiler synthesizes a table with one slot per `#[test]` function, writes the
 assert id into a slot on failure, and the driver prints the table at the end.
 
-`@assert(cond)` is the only failure primitive. Inside a test it lowers to a
-slot write followed by an early return from that test, so the driver continues
-and fills every slot. Outside a test it lowers to a panic. The slot value is
-`0` for a passing test and `N` for a failure at the `N`th assert site.
+`@assert(cond)` is fail-fast. Inside a test, a false condition records its
+failure ID in the result slot and returns from that test, so the driver
+continues and fills every slot. Outside a test it lowers to a panic.
+`@check(cond)` is non-fatal inside a test: each false condition emits a
+failure event and execution continues. Outside the lexical body of a test it
+has the same panic behavior as `@assert`. Check helper macros expand at their
+call site so they inherit the test context; ordinary helper functions do not.
+The result slot is `0` when no assert failed and `N` when the test returned at
+the `N`th failure site. Check failures are reported separately from that slot.
 
 The table is runner infrastructure, not a language feature. The user cannot
 name or write it.
@@ -53,9 +58,9 @@ runner reads only that last block and relays the rest. Log text is printed by
 the driver and never parsed by the runner, so arbitrary test output cannot be
 mistaken for a result line. The command exit code stays `0` or `1`.
 
-The assert-to-location mapping lives in the reserved `Debug` section of the
-ZIRL artifact. The runner already holds the artifact, so resolving a failing
-slot to a source location is a local lookup.
+The assert/check failure-ID-to-location mapping lives in the `Debug` section
+of the ZIRL artifact. The runner already holds the artifact, so resolving a
+reported failure to a source location is a local lookup.
 
 ## `@log` gives per-test output without per-process isolation
 
@@ -72,8 +77,9 @@ synthesized dynamic allocation.
 - The `zithc test` command changes behavior. The `docs/impl-status.md` note
   "Discovers and runs test files under the given path" no longer describes it
   and must be rewritten.
-- Only the first failing assert is reported per test, because the test returns
-  at that point. Later asserts in the same test do not run.
+- `@assert` reports only its first failure per test because it returns at that
+  point. Earlier `@check` failures are preserved, while later checks do not
+  run after a failing assert.
 - A hard trap (segfault, division by zero) kills the file's process and the
   runner reports a crash for that file, losing the remaining tests in it.
 - `test_dir` becomes documented project configuration, defaulting to `tests`.

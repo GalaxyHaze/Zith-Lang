@@ -176,7 +176,7 @@ hir::HirExprId HirLowerModern::lowerTestAssert(const frontend::Expression &expr)
         return hir::kInvalidHirExpr;
 
     if (!current_fn_is_test_) {
-        // Outside a test, `@assert(false)` is a hard runtime failure.
+        // Outside a test, `@assert` and `@check` are hard runtime failures.
         const auto cond = lowerCondition(expr.operands[0]);
         if (cond == hir::kInvalidHirExpr)
             return hir::kInvalidHirExpr;
@@ -199,14 +199,14 @@ hir::HirExprId HirLowerModern::lowerTestAssert(const frontend::Expression &expr)
         return hir::kInvalidHirExpr;
     }
 
-    // Inside a test: on failure record the static assert id and return it.
-    const auto assert_id = ++current_test_assert_id_;
-    TestAssertSite site;
+    // Inside a test: on failure record the static failure id and return it.
+    const auto failure_id = ++current_test_failure_id_;
+    TestFailureSite site;
     site.test_name = current_test_name_;
-    site.assert_id = assert_id;
+    site.failure_id = failure_id;
     site.span      = memory::Span{current_module_ != nullptr ? current_module_->fileId : 0U,
                                   expr.span.start, expr.span.end};
-    test_assert_sites_.push_back(site);
+    test_failure_sites_.push_back(site);
 
     const auto cond = lowerCondition(expr.operands[0]);
     if (cond == hir::kInvalidHirExpr)
@@ -224,11 +224,57 @@ hir::HirExprId HirLowerModern::lowerTestAssert(const frontend::Expression &expr)
     current_fn_->blocks[fail_block].insts = memory::DynArray<hir::HirExprId>(arena_);
     emitCleanupFrom(0);
     hir::HirRet fail_ret;
-    fail_ret.value = emitI32Literal(static_cast<int64_t>(assert_id));
+    fail_ret.value = emitI32Literal(static_cast<int64_t>(failure_id));
     setTerminator(addExpr(std::move(fail_ret)));
 
     setCurrentBlock(pass_block);
     current_fn_->blocks[pass_block].insts = memory::DynArray<hir::HirExprId>(arena_);
+    return hir::kInvalidHirExpr;
+}
+
+hir::HirExprId HirLowerModern::lowerTestCheck(const frontend::Expression &expr) {
+    if (expr.operands.empty())
+        return hir::kInvalidHirExpr;
+
+    if (!current_fn_is_test_)
+        return lowerTestAssert(expr);
+
+    const auto failure_id = ++current_test_failure_id_;
+    TestFailureSite site;
+    site.test_name  = current_test_name_;
+    site.failure_id = failure_id;
+    site.span       = memory::Span{current_module_ != nullptr ? current_module_->fileId : 0U,
+                                   expr.span.start, expr.span.end};
+    test_failure_sites_.push_back(site);
+
+    const auto cond = lowerCondition(expr.operands[0]);
+    if (cond == hir::kInvalidHirExpr)
+        return hir::kInvalidHirExpr;
+
+    const auto pass_block  = newBlock();
+    const auto fail_block  = newBlock();
+    const auto merge_block = newBlock();
+    hir::HirBranch branch;
+    branch.cond       = cond;
+    branch.then_block = static_cast<hir::HirBlockId>(pass_block);
+    branch.else_block = static_cast<hir::HirBlockId>(fail_block);
+    setTerminator(addExpr(std::move(branch)));
+
+    setCurrentBlock(fail_block);
+    current_fn_->blocks[fail_block].insts = memory::DynArray<hir::HirExprId>(arena_);
+    const std::string report_name =
+        test_module_.empty() ? current_test_name_ : test_module_ + "::" + current_test_name_;
+    emitPutcharLiteral(std::string(common::kTestCheckFailurePrefix) + report_name + " ");
+    emitPrintI32(emitI32Literal(static_cast<int64_t>(failure_id)));
+    emitPutcharLiteral("\n");
+    emitJump(merge_block);
+
+    setCurrentBlock(pass_block);
+    current_fn_->blocks[pass_block].insts = memory::DynArray<hir::HirExprId>(arena_);
+    emitJump(merge_block);
+
+    setCurrentBlock(merge_block);
+    current_fn_->blocks[merge_block].insts = memory::DynArray<hir::HirExprId>(arena_);
     return hir::kInvalidHirExpr;
 }
 
@@ -325,7 +371,7 @@ bool HirLowerModern::buildTestDriver() {
     next_slot_              = 0;
     current_fn_is_test_     = false;
     current_test_name_.clear();
-    current_test_assert_id_ = 0;
+    current_test_failure_id_ = 0;
 
     fn.blocks.emplace(arena_);
     fn.blocks[0].insts = memory::DynArray<hir::HirExprId>(arena_);
@@ -340,7 +386,8 @@ bool HirLowerModern::buildTestDriver() {
                                test_report_names_[selected_index] + "\n");
         }
         // Call the test function and capture its result slot: 0 on success or
-        // the id of the first failing assert.
+        // the positive ID of the first failing assert. Failed checks use
+        // separate output events so they can accumulate without stopping it.
         memory::DynArray<hir::HirExprId> args(arena_);
         memory::DynArray<types::TypeId> arg_types(arena_);
         hir::HirCall call{hir::kInvalidHirExpr, std::move(args), std::move(arg_types)};

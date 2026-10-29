@@ -4,6 +4,7 @@
 #include "test-common.hpp"
 
 #include <string>
+#include <vector>
 
 using namespace zith;
 
@@ -236,7 +237,7 @@ static void test_macro() {
     // 18. `=expr` stores uneval flag and arg span
     {
         auto snap  = frontend::parse("macro mylog(msg: expr) { @println(msg); }\n"
-                                      "fn main() { @mylog(=5 + 5); }");
+                                     "fn main() { @mylog(=5 + 5); }");
         bool found = false;
         for (const auto &expr_ : snap.expressions()) {
             if (expr_.kind != frontend::ExprKind::MacroCall || expr_.text != "mylog")
@@ -322,7 +323,7 @@ static void test_macro() {
     // 25. tag macro call parses attributes and body
     {
         auto snap  = frontend::parse("tag macro Section(attributes, content: body) { content }\n"
-                                      "fn main() { <Section title: 7> let x = 1; </Section> }");
+                                     "fn main() { <Section title: 7> let x = 1; </Section> }");
         bool found = false;
         for (const auto &expr : snap.expressions()) {
             if (expr.kind != frontend::ExprKind::MacroCall || expr.text != "Section")
@@ -394,8 +395,8 @@ static void test_macro() {
     // 30. `<` comparisons and generics remain non-tag syntax
     {
         auto snap     = frontend::parse("fn f(a: i32, b: i32) -> bool { a < b }\n"
-                                            "fn g<T>(x: T) -> T { x }\n"
-                                            "fn main() -> i32 { g<i32>(1) }");
+                                        "fn g<T>(x: T) -> T { x }\n"
+                                        "fn main() -> i32 { g<i32>(1) }");
         bool foundTag = false;
         for (const auto &expr : snap.expressions())
             if (expr.kind == frontend::ExprKind::MacroCall && expr.text == "T")
@@ -406,9 +407,9 @@ static void test_macro() {
     // 31. macro body with dock/jump arguments does not diagnose arguments as code
     {
         auto snap             = frontend::parse("state target(v: i32): i32 { return v; }\n"
-                                                            "macro jump_to(v: expr) { jump target(v); }\n"
-                                                            "macro dock_to(v: expr) { dock target(v); }\n"
-                                                            "fn main(): i32 { return @dock_to(2); }");
+                                                "macro jump_to(v: expr) { jump target(v); }\n"
+                                                "macro dock_to(v: expr) { dock target(v); }\n"
+                                                "fn main(): i32 { return @dock_to(2); }");
         bool macro_unknown    = false;
         bool template_unknown = false;
         for (const auto &d : snap.diagnostics()) {
@@ -433,6 +434,31 @@ static void test_macro() {
 
         auto snap = frontend::parseWithImports("fn main(): i32 { @twice(21) }", {imported});
         CHECK(snap.diagnostics().empty(), "imported macro expansion produces no diagnostics");
+    }
+    // 33. separate macro expansions receive distinct local identities
+    {
+        auto snap = frontend::parse("macro capture(value: expr) { let captured = value; }\n"
+                                    "fn main() { @capture(1); @capture(2); }");
+        std::vector<frontend::LocalId> locals;
+        for (const auto &expr : snap.expressions()) {
+            if (expr.kind != frontend::ExprKind::MacroCall || expr.text != "capture" ||
+                !expr.expansion)
+                continue;
+            const auto &block = snap.expressions()[expr.expansion.value - 1U];
+            for (const auto stmt_id : block.statements) {
+                if (!stmt_id)
+                    continue;
+                const auto &stmt = snap.statements()[stmt_id.value - 1U];
+                if (stmt.kind == frontend::StmtKind::Binding)
+                    locals.push_back(stmt.binding.id);
+            }
+        }
+        CHECK_EQ(locals.size(), 2U, "both macro expansions retain their local binding");
+        if (locals.size() == 2U) {
+            CHECK(locals[0], "first expansion receives a valid local identity");
+            CHECK(locals[1], "second expansion receives a valid local identity");
+            CHECK(locals[0] != locals[1], "macro expansions do not share local identities");
+        }
     }
 }
 

@@ -91,3 +91,5 @@ contracts, decisions, and gotchas that are not discoverable from the source alon
 - [test-command-coordination.md](test-command-coordination.md): how the native
   `zithc test` work is split between the master and the hermes worktrees, the
   file-ownership boundary, and the verification gates.
+- [test-stdlib-check-macros.md](test-stdlib-check-macros.md): macro expansion
+  scope and VM formatting constraints for accumulated std/test diagnostics.

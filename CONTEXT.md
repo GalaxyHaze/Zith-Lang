@@ -57,6 +57,10 @@ _Avoid_: `@alignas`
 A `.zith` source unit that owns a set of public and module-local symbols and can be imported by other units.
 _Avoid_: File, script, package
 
+**Zith package**:
+A named, versioned distribution unit that provides one or more Zith modules.
+_Avoid_: module, library namespace, std package
+
 **Import**:
 Load another module and bind it under a namespace or explicit alias without injecting its symbols into the current scope.
 _Avoid_: include
@@ -541,12 +545,16 @@ The entry point synthesized by the compiler for a test module, which calls each 
 _Avoid_: test main, harness entry, generated runner
 
 **Test result table**:
-The compiler-synthesized table with one slot per discovered Zith test function. A slot holds `0` when that test passed, or `N` when it failed at its `N`th assertion. It is runner infrastructure, not a user-writable global.
+The compiler-synthesized table with one slot per discovered Zith test function. A slot holds `0` when no fail-fast assertion ended the test, or `N` when it returned at its `N`th failure site. Accumulated `@check` failures are reported as separate events. The table is runner infrastructure, not a user-writable global.
 _Avoid_: results array, error table, global accumulator
 
 **Assertion intrinsic**:
-The compiler primitive `@assert(cond)` used inside a Zith test function to record a runtime failure. It is the single primitive failure surface; richer helpers are built on it in the standard library.
-_Avoid_: assert macro, check function, expect
+The compiler primitive `@assert(cond)` that ends the current test when its condition is false. Outside a test it panics.
+_Avoid_: assert macro, expect
+
+**Check intrinsic**:
+The compiler primitive `@check(cond)` that records a false condition and continues within a Zith test. Outside the lexical test body it panics. Standard-library check macros expand at the call site so they inherit this context.
+_Avoid_: check function, soft assertion
 
 **Test log intrinsic**:
 The compiler primitive `@log(msg)` that appends `[]char` to the current test's log buffer. The driver prints a test's log only when it fails, or for every test under verbose output.
