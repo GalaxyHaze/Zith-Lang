@@ -88,6 +88,35 @@ dependências e uma única raiz de módulos, `src/` por omissão, configurável 
 manifesto. Caminhos relativos resolvem a partir do manifesto que os declara,
 incluindo dependências transitivas.
 
+### Sintaxe do Manifesto
+
+O manifesto reutiliza `[project].name` e `[project].version` para a identidade
+do pacote. Ambos são strings não vazias. A versão é uma identidade opaca no
+MVP, sem interpretação de SemVer ou intervalos.
+
+`[dependencies]` associa o nome declarado pelo pacote a um caminho local
+relativo ao manifesto:
+
+```toml
+[dependencies]
+logging = "../logging"
+```
+
+O nome da chave tem de corresponder a `[project].name` no manifesto do pacote
+referenciado. A declaração não contém alias nem requisito de versão. O caminho
+é interpretado relativamente ao manifesto que declara a dependência.
+
+`[package].module_root` define a única raiz de módulos do pacote, relativamente
+ao seu manifesto. O campo é opcional e tem por omissão `src`:
+
+```toml
+[package]
+module_root = "modules"
+```
+
+Não se reutiliza `[paths].src_dir`, que continua a configurar as raízes de
+origem do projeto consumidor e pode conter vários diretórios.
+
 O projeto mantém a sua própria seleção no lockfile, que deve ser incluído no
 controlo de versões. O lockfile regista o grafo, os nomes, versões e caminhos
 resolvidos e as impressões digitais do manifesto do projeto e de cada pacote
@@ -159,7 +188,7 @@ implícita de scripts arbitrários.
   A coexistência continua uma direção possível para versões futuras de Zith,
   mas não para Zith-- inicial.
 - Pacotes C, adaptadores de build, CMake e execução de scripts de pacote.
-- A sintaxe exata do campo de versão, do lockfile e da raiz configurável.
+- O formato versionado exato do lockfile.
 - O conjunto exato de metadados que define compatibilidade de ZIRL, incluindo
   compilador, ABI, alvo e opções de build aplicáveis.
 - Política de retenção e limpeza da cache.
