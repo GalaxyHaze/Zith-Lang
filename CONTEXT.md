@@ -61,6 +61,11 @@ _Avoid_: File, script, package
 A named, versioned distribution unit that provides one or more Zith modules.
 _Avoid_: module, library namespace, std package
 
+**Package cache**:
+A reusable store of compiled package artifacts, separate from the dependencies
+selected by a project.
+_Avoid_: package installation, dependency selection
+
 **Import**:
 Load another module and bind it under a namespace or explicit alias without injecting its symbols into the current scope.
 _Avoid_: include
