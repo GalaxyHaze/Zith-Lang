@@ -1,5 +1,6 @@
 #include "packages/lockfile.hpp"
 #include "packages/manifest.hpp"
+#include "packages/resolver.hpp"
 #include "packages/sha256.hpp"
 #include "test-common.hpp"
 
@@ -28,11 +29,16 @@ struct TemporaryManifest {
         fs::remove_all(root);
     }
 
-    fs::path write(std::string_view contents) const {
-        const auto path = root / "ZithProject.toml";
+    fs::path writeAt(std::string_view relativePath, std::string_view contents) const {
+        const auto path = root / relativePath;
+        fs::create_directories(path.parent_path());
         std::ofstream output(path, std::ios::binary | std::ios::trunc);
         output << contents;
         return path;
+    }
+
+    fs::path write(std::string_view contents) const {
+        return writeAt("ZithProject.toml", contents);
     }
 };
 
@@ -357,12 +363,214 @@ void test_sha256_known_vectors() {
              "SHA-256 hashes a long multi-block input");
 }
 
+void test_local_resolver_builds_deterministic_transitive_graph() {
+    TemporaryManifest temporary;
+    const std::string projectText  = "[project]\n"
+                                     "name = \"application\"\n"
+                                     "version = \"0.1.0\"\n"
+                                     "\n"
+                                     "[dependencies]\n"
+                                     "logging = \"vendor/logging\"\n";
+    const std::string loggingText  = "[project]\n"
+                                     "name = \"logging\"\n"
+                                     "version = \"2\"\n"
+                                     "\n"
+                                     "[dependencies]\n"
+                                     "terminal = \"../terminal\"\n";
+    const std::string terminalText = "[project]\nname = \"terminal\"\nversion = \"1\"\n";
+    const auto projectPath         = temporary.write(projectText);
+    temporary.writeAt("vendor/logging/ZithProject.toml", loggingText);
+    temporary.writeAt("vendor/logging/src/logging.zith", "");
+    temporary.writeAt("vendor/terminal/ZithProject.toml", terminalText);
+    temporary.writeAt("vendor/terminal/src/terminal.zith", "");
+
+    const auto first = zith::packages::resolveLocalPackages(projectPath);
+    CHECK(first.isOk(), "local dependency manifests resolve into a lockfile graph");
+    if (!first)
+        return;
+
+    const auto &lockfile = first.value();
+    CHECK_EQ(lockfile.projectName, std::string("application"),
+             "resolved lockfile keeps the project identity");
+    CHECK_EQ(lockfile.projectManifestSha256, zith::packages::sha256Hex(projectText),
+             "project fingerprint hashes the exact manifest bytes");
+    CHECK_EQ(lockfile.dependencies, std::vector<std::string>{"logging"},
+             "direct dependency names are recorded");
+    CHECK_EQ(lockfile.packages.size(), 2U, "transitive dependencies are included");
+    if (lockfile.packages.size() == 2U) {
+        CHECK_EQ(lockfile.packages[0].name, std::string("logging"),
+                 "resolved package records are sorted by name");
+        CHECK_EQ(lockfile.packages[0].path, fs::path("vendor/logging"),
+                 "package paths are relative to the project root");
+        CHECK_EQ(lockfile.packages[0].moduleRoot, fs::path("src"),
+                 "module roots are relative to each package root");
+        CHECK_EQ(lockfile.packages[0].manifestSha256, zith::packages::sha256Hex(loggingText),
+                 "transitive package fingerprint hashes its exact manifest bytes");
+        CHECK_EQ(lockfile.packages[0].dependencies, std::vector<std::string>{"terminal"},
+                 "transitive package edges are recorded");
+        CHECK_EQ(lockfile.packages[1].name, std::string("terminal"),
+                 "transitive package records are sorted by name");
+        CHECK_EQ(lockfile.packages[1].path, fs::path("vendor/terminal"),
+                 "transitive paths resolve relative to the declaring package");
+    }
+
+    const auto firstText = zith::packages::serializeLockfile(lockfile);
+    const auto second    = zith::packages::resolveLocalPackages(projectPath);
+    CHECK(firstText.isOk() && second.isOk(),
+          "the same local dependency graph can be resolved repeatedly");
+    if (firstText && second) {
+        const auto secondText = zith::packages::serializeLockfile(second.value());
+        CHECK(secondText.isOk() && firstText.value() == secondText.value(),
+              "repeated resolution serializes to deterministic lockfile text");
+    }
+}
+
+void test_local_resolver_survives_recursive_node_map_growth() {
+    constexpr size_t packageCount = 40U;
+    TemporaryManifest temporary;
+    const auto projectPath = temporary.write("[project]\n"
+                                             "name = \"application\"\n"
+                                             "version = \"1\"\n"
+                                             "\n[dependencies]\n"
+                                             "package0 = \"vendor/package0\"\n");
+
+    for (size_t index = 0; index < packageCount; ++index) {
+        const auto packageName = "package" + std::to_string(index);
+        std::string manifest   = "[project]\nname = \"" + packageName + "\"\nversion = \"1\"\n";
+        if (index + 1U < packageCount) {
+            manifest += "\n[dependencies]\npackage" + std::to_string(index + 1U) +
+                        " = \"../package" + std::to_string(index + 1U) + "\"\n";
+        }
+        temporary.writeAt("vendor/" + packageName + "/ZithProject.toml", manifest);
+        temporary.writeAt("vendor/" + packageName + "/src/" + packageName + ".zith", "");
+    }
+
+    const auto result = zith::packages::resolveLocalPackages(projectPath);
+    CHECK(result.isOk(), "deep dependency chains resolve while the node map grows");
+    if (result)
+        CHECK_EQ(result.value().packages.size(), packageCount,
+                 "every package in a deep dependency chain is locked");
+}
+
+void test_local_resolver_rejects_missing_and_invalid_manifests() {
+    {
+        TemporaryManifest temporary;
+        const auto projectPath = temporary.write("[project]\n"
+                                                 "name = \"application\"\n"
+                                                 "version = \"1\"\n"
+                                                 "\n"
+                                                 "[dependencies]\n"
+                                                 "missing = \"vendor/missing\"\n");
+        const auto result      = zith::packages::resolveLocalPackages(projectPath);
+        CHECK(result.isError(), "missing local dependency paths are rejected");
+    }
+    {
+        TemporaryManifest temporary;
+        const auto projectPath = temporary.write("[project]\n"
+                                                 "name = \"application\"\n"
+                                                 "version = \"1\"\n"
+                                                 "\n"
+                                                 "[dependencies]\n"
+                                                 "expected = \"vendor/actual\"\n");
+        temporary.writeAt("vendor/actual/ZithProject.toml",
+                          "[project]\nname = \"actual\"\nversion = \"1\"\n");
+        const auto result = zith::packages::resolveLocalPackages(projectPath);
+        CHECK(result.isError(), "dependency keys must match the package manifest identity");
+    }
+    {
+        TemporaryManifest temporary;
+        const auto projectPath = temporary.write("[project]\n"
+                                                 "name = \"application\"\n"
+                                                 "version = \"1\"\n"
+                                                 "\n"
+                                                 "[dependencies]\n"
+                                                 "broken = \"vendor/broken\"\n");
+        temporary.writeAt("vendor/broken/ZithProject.toml", "[project\n");
+        const auto result = zith::packages::resolveLocalPackages(projectPath);
+        CHECK(result.isError(), "malformed package TOML is rejected");
+    }
+}
+
+void test_local_resolver_rejects_cycles_and_path_conflicts() {
+    {
+        TemporaryManifest temporary;
+        const auto projectPath = temporary.write("[project]\n"
+                                                 "name = \"application\"\n"
+                                                 "version = \"1\"\n"
+                                                 "\n"
+                                                 "[dependencies]\n"
+                                                 "alpha = \"vendor/alpha\"\n");
+        temporary.writeAt("vendor/alpha/ZithProject.toml",
+                          "[project]\nname = \"alpha\"\nversion = \"1\"\n"
+                          "\n[dependencies]\nbeta = \"../beta\"\n");
+        temporary.writeAt("vendor/alpha/src/alpha.zith", "");
+        temporary.writeAt("vendor/beta/ZithProject.toml",
+                          "[project]\nname = \"beta\"\nversion = \"1\"\n"
+                          "\n[dependencies]\nalpha = \"../alpha\"\n");
+        temporary.writeAt("vendor/beta/src/beta.zith", "");
+        const auto result = zith::packages::resolveLocalPackages(projectPath);
+        CHECK(result.isError(), "dependency cycles are rejected");
+    }
+    {
+        TemporaryManifest temporary;
+        const auto projectPath = temporary.write("[project]\n"
+                                                 "name = \"application\"\n"
+                                                 "version = \"1\"\n"
+                                                 "\n"
+                                                 "[dependencies]\n"
+                                                 "left = \"vendor/left\"\n"
+                                                 "right = \"vendor/right\"\n");
+        temporary.writeAt("vendor/left/ZithProject.toml",
+                          "[project]\nname = \"left\"\nversion = \"1\"\n"
+                          "\n[dependencies]\nshared = \"../shared-a\"\n");
+        temporary.writeAt("vendor/left/src/left.zith", "");
+        temporary.writeAt("vendor/right/ZithProject.toml",
+                          "[project]\nname = \"right\"\nversion = \"1\"\n"
+                          "\n[dependencies]\nshared = \"../shared-b\"\n");
+        temporary.writeAt("vendor/right/src/right.zith", "");
+        temporary.writeAt("vendor/shared-a/ZithProject.toml",
+                          "[project]\nname = \"shared\"\nversion = \"1\"\n");
+        temporary.writeAt("vendor/shared-a/src/shared.zith", "");
+        temporary.writeAt("vendor/shared-b/ZithProject.toml",
+                          "[project]\nname = \"shared\"\nversion = \"2\"\n");
+        temporary.writeAt("vendor/shared-b/src/shared.zith", "");
+        const auto result = zith::packages::resolveLocalPackages(projectPath);
+        CHECK(result.isError(), "one package name cannot resolve to multiple local paths");
+    }
+    {
+        TemporaryManifest temporary;
+        const auto projectPath       = temporary.write("[project]\n"
+                                                       "name = \"application\"\n"
+                                                       "version = \"1\"\n"
+                                                       "\n"
+                                                       "[dependencies]\n"
+                                                       "alpha = \"vendor/alpha\"\n"
+                                                       "beta = \"vendor/beta\"\n");
+        const std::string sharedRoot = "../../shared/modules";
+        temporary.writeAt("vendor/alpha/ZithProject.toml",
+                          "[project]\nname = \"alpha\"\nversion = \"1\"\n"
+                          "\n[package]\nmodule_root = \"" +
+                              sharedRoot + "\"\n");
+        temporary.writeAt("vendor/beta/ZithProject.toml",
+                          "[project]\nname = \"beta\"\nversion = \"1\"\n"
+                          "\n[package]\nmodule_root = \"" +
+                              sharedRoot + "\"\n");
+        temporary.writeAt("shared/modules/shared.zith", "");
+        const auto result = zith::packages::resolveLocalPackages(projectPath);
+        CHECK(result.isError(), "distinct packages cannot claim the same module root");
+    }
+}
+
 void test_packages() {
     test_manifest_parses_local_package_declaration();
     test_manifest_defaults_module_root_to_src();
     test_manifest_requires_non_empty_identity();
     test_manifest_rejects_invalid_package_fields();
     test_sha256_known_vectors();
+    test_local_resolver_builds_deterministic_transitive_graph();
+    test_local_resolver_survives_recursive_node_map_growth();
+    test_local_resolver_rejects_missing_and_invalid_manifests();
+    test_local_resolver_rejects_cycles_and_path_conflicts();
     test_lockfile_serialization_is_deterministic();
     test_lockfile_round_trips_versioned_graph();
     test_lockfile_rejects_invalid_metadata_and_edges();
