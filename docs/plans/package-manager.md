@@ -123,6 +123,16 @@ resolvidos e as impressões digitais do manifesto do projeto e de cada pacote
 transitivo. Não fixa o conteúdo dos ficheiros fonte locais. Alterações à fonte
 são vivas. Alterações a qualquer manifesto tornam o lockfile desatualizado.
 
+O ficheiro chama-se `Zith.lock` e usa TOML determinístico, com versão de formato
+em `[lock].version`. A versão 1 guarda a identidade do projeto e o SHA-256 do
+seu manifesto em `[project]`; as dependências diretas ficam numa lista ordenada
+por nome. Cada pacote transitivo tem um `[[package]]` com nome, versão, caminho,
+raiz de módulos, SHA-256 do manifesto e dependências por nome. Os registos de
+pacote também são ordenados por nome. Os caminhos são relativos ao projeto
+consumidor para que o lockfile continue válido ao mover o checkout; a raiz de
+módulos é relativa ao pacote. Ambos usam separadores `/` e forma lexical
+normalizada.
+
 `resolve` preserva seleções ainda válidas. Intervalos de versão, aliases,
 coexistência de versões e `update` ficam fora do MVP. O manifesto identifica a
 dependência pelo nome declarado pelo pacote. `deps add` e `deps remove`

@@ -1,6 +1,8 @@
+#include "packages/lockfile.hpp"
 #include "packages/manifest.hpp"
 #include "test-common.hpp"
 
+#include <algorithm>
 #include <chrono>
 #include <filesystem>
 #include <fstream>
@@ -163,11 +165,186 @@ void test_manifest_rejects_invalid_package_fields() {
           "module root must be relative");
 }
 
+zith::packages::Lockfile sampleLockfile() {
+    constexpr std::string_view fingerprint =
+        "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+    return {
+        "application",
+        "0.1.0",
+        std::string(fingerprint),
+        {"logging"},
+        {{"terminal", "2", "../vendor/terminal", "src", std::string(fingerprint), {}},
+         {"logging", "1", "vendor/logging", "modules", std::string(fingerprint), {"terminal"}}}};
+}
+
+void test_lockfile_serialization_is_deterministic() {
+    auto lockfile = sampleLockfile();
+    auto first    = zith::packages::serializeLockfile(lockfile);
+    std::reverse(lockfile.packages.begin(), lockfile.packages.end());
+    std::reverse(lockfile.dependencies.begin(), lockfile.dependencies.end());
+    auto second = zith::packages::serializeLockfile(lockfile);
+
+    CHECK(first.isOk(), "valid lockfile serializes");
+    CHECK(second.isOk(), "permuted valid lockfile serializes");
+    if (first && second)
+        CHECK_EQ(first.value(), second.value(),
+                 "lockfile records are serialized in canonical order");
+}
+
+void test_lockfile_round_trips_versioned_graph() {
+    const auto serialized = zith::packages::serializeLockfile(sampleLockfile());
+    CHECK(serialized.isOk(), "sample lockfile serializes");
+    if (!serialized)
+        return;
+
+    const auto parsed = toml::parse(serialized.value());
+    const auto result = zith::packages::parseLockfile(parsed);
+    CHECK(result.isOk(), "serialized lockfile parses and validates");
+    if (!result)
+        return;
+
+    CHECK_EQ(result.value().projectName, std::string("application"),
+             "project identity survives the round trip");
+    CHECK_EQ(result.value().packages.size(), 2U, "the transitive graph is preserved");
+    CHECK_EQ(result.value().packages[0].name, std::string("logging"),
+             "serialized package records are sorted by name");
+    CHECK_EQ(result.value().packages[0].dependencies[0], std::string("terminal"),
+             "package dependency edges are preserved");
+
+    auto emptyGraph = sampleLockfile();
+    emptyGraph.dependencies.clear();
+    emptyGraph.packages.clear();
+    const auto emptySerialized = zith::packages::serializeLockfile(emptyGraph);
+    CHECK(emptySerialized.isOk(), "an empty dependency graph serializes");
+    if (emptySerialized) {
+        const auto emptyParsed =
+            zith::packages::parseLockfile(toml::parse(emptySerialized.value()));
+        CHECK(emptyParsed.isOk(), "an empty dependency graph round-trips");
+        if (emptyParsed)
+            CHECK(emptyParsed.value().packages.empty(), "empty package records remain empty");
+    }
+}
+
+void test_lockfile_rejects_invalid_metadata_and_edges() {
+    constexpr std::string_view fingerprint =
+        "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+    const auto unsupportedVersion  = toml::parse(std::string("[lock]\n"
+                                                             "version = 2\n"
+                                                             "\n"
+                                                             "[project]\n"
+                                                             "name = \"application\"\n"
+                                                             "version = \"1\"\n"
+                                                             "manifest_sha256 = \"") +
+                                                 std::string(fingerprint) +
+                                                 "\"\n"
+                                                 "dependencies = []\n"
+                                                 "package = []\n");
+    const auto missingDependencies = toml::parse(std::string("[lock]\n"
+                                                             "version = 1\n"
+                                                             "\n"
+                                                             "[project]\n"
+                                                             "name = \"application\"\n"
+                                                             "version = \"1\"\n"
+                                                             "manifest_sha256 = \"") +
+                                                 std::string(fingerprint) +
+                                                 "\"\n"
+                                                 "package = []\n");
+    const auto absolutePackagePath = toml::parse(std::string("[lock]\n"
+                                                             "version = 1\n"
+                                                             "\n"
+                                                             "[project]\n"
+                                                             "name = \"application\"\n"
+                                                             "version = \"1\"\n"
+                                                             "manifest_sha256 = \"") +
+                                                 std::string(fingerprint) +
+                                                 "\"\n"
+                                                 "dependencies = [\"logging\"]\n"
+                                                 "\n"
+                                                 "[[package]]\n"
+                                                 "name = \"logging\"\n"
+                                                 "version = \"1\"\n"
+                                                 "path = \"/vendor/logging\"\n"
+                                                 "module_root = \"src\"\n"
+                                                 "manifest_sha256 = \"" +
+                                                 std::string(fingerprint) +
+                                                 "\"\n"
+                                                 "dependencies = []\n");
+
+    CHECK(zith::packages::parseLockfile(unsupportedVersion).isError(),
+          "unsupported lockfile versions are rejected");
+    CHECK(zith::packages::parseLockfile(missingDependencies).isError(),
+          "required lockfile dependency arrays cannot be omitted");
+    CHECK(zith::packages::parseLockfile(absolutePackagePath).isError(),
+          "package paths in a lockfile must be project-relative");
+
+    auto windowsAbsolutePath             = sampleLockfile();
+    windowsAbsolutePath.packages[0].path = "C:/vendor/terminal";
+    CHECK(zith::packages::serializeLockfile(windowsAbsolutePath).isError(),
+          "Windows drive-prefixed paths are rejected on every host");
+
+    const auto validLockfile = zith::packages::serializeLockfile(sampleLockfile());
+    if (validLockfile) {
+        auto nonNormalizedText = validLockfile.value();
+        const auto pathOffset  = nonNormalizedText.find("vendor/logging");
+        CHECK(pathOffset != std::string::npos, "serialized fixture contains the package path");
+        if (pathOffset != std::string::npos) {
+            nonNormalizedText.replace(pathOffset, std::string("vendor/logging").size(),
+                                      "vendor//logging");
+            CHECK(zith::packages::parseLockfile(toml::parse(nonNormalizedText)).isError(),
+                  "lockfile paths must use normalized separators");
+        }
+    }
+
+    auto duplicateName             = sampleLockfile();
+    duplicateName.packages[1].name = duplicateName.packages[0].name;
+    CHECK(zith::packages::serializeLockfile(duplicateName).isError(),
+          "a package name cannot refer to multiple package records");
+
+    auto duplicatePath             = sampleLockfile();
+    duplicatePath.packages[1].path = duplicatePath.packages[0].path;
+    CHECK(zith::packages::serializeLockfile(duplicatePath).isError(),
+          "a package path cannot refer to multiple package records");
+
+    auto projectNameCollision             = sampleLockfile();
+    projectNameCollision.packages[1].name = projectNameCollision.projectName;
+    CHECK(zith::packages::serializeLockfile(projectNameCollision).isError(),
+          "a dependency cannot reuse the consumer project name");
+
+    auto repeatedEdge = sampleLockfile();
+    repeatedEdge.dependencies.push_back("logging");
+    CHECK(zith::packages::serializeLockfile(repeatedEdge).isError(),
+          "dependency edges cannot be duplicated");
+
+    auto danglingEdge                     = sampleLockfile();
+    danglingEdge.packages[0].dependencies = {"missing"};
+    CHECK(zith::packages::serializeLockfile(danglingEdge).isError(),
+          "lockfiles cannot refer to packages absent from the graph");
+
+    auto cyclicGraph                     = sampleLockfile();
+    cyclicGraph.packages[0].dependencies = {"logging"};
+    CHECK(zith::packages::serializeLockfile(cyclicGraph).isError(),
+          "lockfiles cannot contain dependency cycles");
+
+    auto duplicateModuleRoot                   = sampleLockfile();
+    duplicateModuleRoot.packages[0].path       = "vendor/logging/modules";
+    duplicateModuleRoot.packages[0].moduleRoot = ".";
+    CHECK(zith::packages::serializeLockfile(duplicateModuleRoot).isError(),
+          "lockfiles cannot assign the same module root to multiple packages");
+
+    auto invalidFingerprint                  = sampleLockfile();
+    invalidFingerprint.projectManifestSha256 = "not-a-sha256";
+    CHECK(zith::packages::serializeLockfile(invalidFingerprint).isError(),
+          "manifest fingerprints must use lowercase SHA-256 hex");
+}
+
 void test_packages() {
     test_manifest_parses_local_package_declaration();
     test_manifest_defaults_module_root_to_src();
     test_manifest_requires_non_empty_identity();
     test_manifest_rejects_invalid_package_fields();
+    test_lockfile_serialization_is_deterministic();
+    test_lockfile_round_trips_versioned_graph();
+    test_lockfile_rejects_invalid_metadata_and_edges();
 }
 
 } // namespace

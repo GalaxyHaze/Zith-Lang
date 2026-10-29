@@ -17,3 +17,12 @@ keeps transitive dependencies private unless re-exported, rejects cycles and
 conflicts involving package names or module paths, and excludes remote
 registries, version ranges, aliases, multiple versions, package build scripts,
 and C/CMake packages.
+
+The project lockfile is `Zith.lock`, encoded as deterministic TOML so users can
+inspect it and the compiler can reject unsupported schema versions. Format
+version 1 stores the project identity and lowercase SHA-256 manifest
+fingerprint, followed by sorted direct dependency names and sorted package
+records. Each package record stores its identity, project-relative normalized
+path, package-relative normalized module root, manifest fingerprint, and
+dependency names. Relative paths keep the committed lockfile portable across
+checkout locations.

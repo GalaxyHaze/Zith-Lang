@@ -46,6 +46,8 @@ contracts, decisions, and gotchas that are not discoverable from the source alon
 - [parser-depth-limit.md](parser-depth-limit.md): recursive parser depth cap,
   iterative recovery contract, post-audit test results, and local sanitizer
   validation caveats.
+- [packages-lockfile.md](packages-lockfile.md): lockfile path identity gotchas
+  and the CMake reconfiguration requirement for new package sources.
 - [sanitizer-ci.md](sanitizer-ci.md): ASan/UBSan workflow contract, local
   and successful remote sanitizer verification, cross-build failure
   attribution, and the recorded unprotected `main` branch state.
