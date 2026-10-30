@@ -92,6 +92,37 @@ DOCS — documentation shell
     min-width: 0;
 }
 
+.docs-language-switcher {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    margin-bottom: var(--space-4);
+}
+
+.docs-language-switcher a {
+    padding: var(--space-2) var(--space-4);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    color: var(--text-muted);
+    font-size: var(--step--1);
+    font-weight: 600;
+    text-decoration: none;
+}
+
+.docs-language-switcher a:hover,
+.docs-language-switcher a:focus-visible,
+.docs-language-switcher a[aria-current="page"] {
+    border-color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 10%, var(--surface));
+    color: var(--accent-hover);
+}
+
+.docs-switch-notice {
+    margin: calc(-1 * var(--space-2)) 0 var(--space-3);
+    color: var(--text-muted);
+    font-size: var(--step--1);
+}
+
 .docs-filebar {
     margin-bottom: var(--space-4);
     color: var(--text-muted);

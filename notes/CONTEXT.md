@@ -33,10 +33,22 @@ A landing page (`index.html`) — entrada do site.
 _Avoid_: home, homepage.
 
 **Docs**:
-Área de documentação, montada num shell único que injeta fragmentos.
+Área de documentação com uma entrada neutra e áreas próprias para Zith e
+Zith--, entre as quais se pode alternar.
 
-**Fragmento (docs)**:
-Ficheiro HTML sem `html/head/body`, carregado para dentro do shell dos Docs.
+**Docs neutros**:
+Área própria de documentação que apresenta Zith e Zith--, explica a relação
+entre ambas e reúne tópicos gerais como FAQ, instalação, CLI e estado de
+implementação.
+
+**Documentação Zith**:
+Explica a linguagem completa, incluindo o seu desenho, especificação e
+perguntas específicas dessa linguagem. Funcionalidades ainda não suportadas
+por `zithc` são descritas como parte do desenho, não como capacidades atuais.
+
+**Documentação Zith--**:
+Explica o subconjunto de Zith suportado pelo compilador `zithc`, incluindo
+o primeiro programa, guias práticos e perguntas específicas desse subconjunto.
 
 **Dev Log**:
 O blog de desenvolvimento (`about/`). _Avoid_: blog, diário.

@@ -5,7 +5,11 @@ const os = require("node:os");
 const path = require("node:path");
 const test = require("node:test");
 
-const { resolveDocsRoute } = require("../js/docs-routing.js");
+const {
+    resolveDocsRoute,
+    resolveLanguageSwitch,
+    filterDocsNavigation
+} = require("../js/docs-routing.js");
 const root = path.resolve(__dirname, "..");
 const specDir = [
     path.join(root, "Zith", "docs"),
@@ -54,6 +58,55 @@ test("the language routes open their own overview, with or without a trailing sl
     });
 });
 
+test("language switching preserves equivalent topics and falls back to the target overview", () => {
+    const equivalents = {
+        "zith--/guide/D-types.html": {
+            zith: "zith/reference/D-03-type-system.html"
+        },
+        "D-overview.html": {
+            zith: "zith/D-overview.html",
+            "zith--": "zith--/D-overview.html"
+        }
+    };
+
+    assert.deepEqual(
+        resolveLanguageSwitch("./zith--/guide/D-types.html", "zith", equivalents),
+        { page: "./zith/reference/D-03-type-system.html", equivalent: true }
+    );
+    assert.deepEqual(
+        resolveLanguageSwitch("./cli/D-overview.html", "zith--", equivalents),
+        { page: "./zith--/D-overview.html", equivalent: false }
+    );
+    assert.deepEqual(
+        resolveLanguageSwitch("./D-overview.html", "zith", equivalents),
+        { page: "./zith/D-overview.html", equivalent: true }
+    );
+});
+
+test("each documentation shell exposes only its own navigation scope", () => {
+    const navigation = [{
+        title: "Home",
+        children: [
+            { title: "FAQ" },
+            { title: "Zith" },
+            { title: "Zith--" }
+        ]
+    }];
+
+    assert.deepEqual(
+        filterDocsNavigation(navigation, "neutral")[0].children.map(item => item.title),
+        ["FAQ"]
+    );
+    assert.deepEqual(
+        filterDocsNavigation(navigation, "zith")[0].children.map(item => item.title),
+        ["Zith"]
+    );
+    assert.deepEqual(
+        filterDocsNavigation(navigation, "zith--")[0].children.map(item => item.title),
+        ["Zith--"]
+    );
+});
+
 test("the static build emits an index shell for each docs route", () => {
     assert.ok(specDir, "the canonical Zith specification should be checked out");
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "zith-doc-routes-"));
@@ -98,6 +151,10 @@ test("the static build emits an index shell for each docs route", () => {
             "docs/D-overview.html",
             "docs/zith/D-overview.html",
             "docs/zith--/D-overview.html",
+            "docs/reference/D-implementation-status.html",
+            "docs/zith--/guide/D-first-program.html",
+            "docs/zith/D-faq.html",
+            "docs/zith--/D-faq.html",
             "json/tree.json",
             "js/docs-routing.js",
             "js/loadTree.js"
@@ -105,11 +162,45 @@ test("the static build emits an index shell for each docs route", () => {
             assert.ok(fs.existsSync(path.join(output, target)), `${target} should be published`);
         }
 
+        const shell = fs.readFileSync(path.join(output, "docs/D-home.html"), "utf8");
+        assert.match(shell, /data-docs-language="zith"/);
+        assert.match(shell, /data-docs-language="zith--"/);
         const landing = fs.readFileSync(path.join(output, "docs/D-overview.html"), "utf8");
         assert.match(landing, /data-docs-route="zith"/);
         assert.match(landing, /data-docs-route="zith--"/);
+        assert.match(landing, /data-docs-route="neutral"/);
         const tree = JSON.parse(fs.readFileSync(path.join(output, "json/tree.json"), "utf8"));
-        assert.equal(tree.version, 4);
+        assert.equal(tree.version, 5);
+        assert.equal(
+            tree.topicEquivalents["zith--/guide/D-types.html"].zith,
+            "zith/reference/D-type-system.html"
+        );
+        const neutralTitles = tree.navigation[0].children.map(item => item.title);
+        assert.ok(neutralTitles.includes("Implementation Status"));
+        assert.ok(neutralTitles.includes("CLI Reference"));
+        assert.ok(neutralTitles.includes("Zith"));
+        assert.ok(neutralTitles.includes("Zith--"));
+        const scopedNeutralTitles = filterDocsNavigation(tree.navigation, "neutral")[0]
+            .children.map(item => item.title);
+        assert.ok(scopedNeutralTitles.includes("Implementation Status"));
+        assert.ok(!scopedNeutralTitles.includes("Zith"));
+        assert.ok(!scopedNeutralTitles.includes("Zith--"));
+        const firstProgram = fs.readFileSync(
+            path.join(output, "docs/zith--/guide/D-first-program.html"),
+            "utf8"
+        );
+        assert.match(firstProgram, /<h1 id="first-program">First Program<\/h1>/);
+        assert.match(firstProgram, /href="\.\/\?page=reference\/D-implementation-status\.html" data-docs-route="neutral"/);
+        const whyZith = fs.readFileSync(
+            path.join(output, "docs/getting-started/D-why-zith.html"),
+            "utf8"
+        );
+        assert.match(whyZith, /data-docs-route="zith--"/);
+        const status = fs.readFileSync(
+            path.join(output, "docs/reference/D-implementation-status.html"),
+            "utf8"
+        );
+        assert.match(status, /Zith Implementation Status/);
     } finally {
         fs.rmSync(tempDir, { recursive: true, force: true });
     }

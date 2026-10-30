@@ -20,5 +20,37 @@
             : { scope: "neutral", page: "./D-overview.html" };
     }
 
-    return { resolveDocsRoute };
+    function resolveLanguageSwitch(page, targetScope, topicEquivalents) {
+        const normalizedPage = page.replace(/^\.\//, "");
+        const equivalent = topicEquivalents[normalizedPage]?.[targetScope];
+        const overview = targetScope === "zith"
+            ? "zith/D-overview.html"
+            : targetScope === "zith--"
+                ? "zith--/D-overview.html"
+                : null;
+
+        if (!overview) {
+            throw new Error(`Unknown documentation scope: ${targetScope}`);
+        }
+
+        return {
+            page: `./${equivalent || overview}`,
+            equivalent: Boolean(equivalent)
+        };
+    }
+
+    function filterDocsNavigation(navigation, scope) {
+        const home = navigation.find(group => group.title === "Home");
+        if (!home) return navigation;
+
+        const children = home.children || [];
+        const languageTitle = scope === "zith" ? "Zith" :
+            scope === "zith--" ? "Zith--" : null;
+        const visible = languageTitle
+            ? children.filter(item => item.title === languageTitle)
+            : children.filter(item => item.title !== "Zith" && item.title !== "Zith--");
+        return [{ ...home, children: visible }];
+    }
+
+    return { resolveDocsRoute, resolveLanguageSwitch, filterDocsNavigation };
 }));

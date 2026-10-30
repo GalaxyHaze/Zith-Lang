@@ -58,4 +58,4 @@ cmake --build build
 
 Run `./build/zithc --help` after the build finishes, or add the build directory to `PATH`.
 LLVM 18+ is optional but required for LLVM code generation; without it, `zithc check` remains
-available. Use [Quick Start](doc:getting-started-quick-start) once the compiler is available.
+available. Use [First Program](doc:getting-started-quick-start) once the compiler is available.

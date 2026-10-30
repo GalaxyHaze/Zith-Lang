@@ -77,7 +77,7 @@ SPEC_CHAPTERS = [
 SUBSET_CHAPTER = ("Zith--.md", "Zith--")
 
 IMPORTED_LINK_ALIASES = {
-    "implementation-debt.md": "zith/reference/D-implementation-status.html",
+    "implementation-debt.md": "reference/D-implementation-status.html",
     "plans/branch-protocol.md": "zith/reference/D-concurrency.html",
     "adr/0010-allocator-inplace-drop.md": "zith/reference/D-standard-library.html",
 }
@@ -146,7 +146,7 @@ def imported_pages(spec_dir: Path = SPEC_DIR) -> tuple[list[Page], dict[str, str
     hashes: dict[str, str] = {}
     imports = [
         ("Zith-spec.md", "Specification", "zith/reference/D-specification.html"),
-        ("impl-status.md", "Implementation Status", "zith/reference/D-implementation-status.html"),
+        ("impl-status.md", "Implementation Status", "reference/D-implementation-status.html"),
         (SUBSET_CHAPTER[0], "Zith--", "zith--/reference/D-zith-subset.html"),
     ]
     imports.extend(
@@ -196,20 +196,29 @@ def inline(text: str, page: Page, outputs: dict[str, str], source_map: dict[str,
                 f'<a href="{route_paths[route]}" '
                 f'data-docs-route="{route}">{label}</a>'
             )
+        if target.startswith("neutral:"):
+            target_id, _, anchor = target[8:].partition("#")
+            if target_id not in outputs:
+                raise ValueError(f"{page.source}: unknown document id '{target_id}'")
+            href = f"./?page={outputs[target_id]}" + (f"#{anchor}" if anchor else "")
+            return f'<a href="{href}" data-docs-route="neutral">{label}</a>'
         if target.startswith("doc:"):
             target_id, _, anchor = target[4:].partition("#")
             if target_id not in outputs:
                 raise ValueError(f"{page.source}: unknown document id '{target_id}'")
-            href = relative_href(page.output, outputs[target_id]) + (f"#{anchor}" if anchor else "")
-            return f'<a href="{href}">{label}</a>'
+            return documentation_link(page.output, outputs[target_id], label, anchor)
         file_part, sep, anchor = target.partition("#")
         resolved = (page.source.parent / file_part).resolve()
         if resolved in source_map:
-            href = relative_href(page.output, source_map[resolved])
-            return f'<a href="{href}{sep}{anchor if sep else ""}">{label}</a>'
+            return documentation_link(
+                page.output, source_map[resolved], label,
+                anchor if sep else ""
+            )
         if page.kind == "spec" and file_part in IMPORTED_LINK_ALIASES:
-            href = relative_href(page.output, IMPORTED_LINK_ALIASES[file_part])
-            return f'<a href="{href}{sep}{anchor if sep else ""}">{label}</a>'
+            return documentation_link(
+                page.output, IMPORTED_LINK_ALIASES[file_part], label,
+                anchor if sep else ""
+            )
         return f'<a href="{html.escape(target, quote=True)}">{label}</a>'
 
     escaped = re.sub(r"\[([^\]]+)\]\(([^)]+)\)", link, escaped)
@@ -235,6 +244,34 @@ def relative_href(source_output: str, target_output: str) -> str:
     if not suffix:
         suffix = posixpath.basename(target)
     return prefix + suffix
+
+
+def documentation_link(
+    source_output: str,
+    target_output: str,
+    label: str,
+    anchor: str = "",
+) -> str:
+    source_scope = ("zith--" if source_output.startswith("zith--/") else
+                    "zith" if source_output.startswith("zith/") else "neutral")
+    target_scope = ("zith--" if target_output.startswith("zith--/") else
+                    "zith" if target_output.startswith("zith/") else "neutral")
+
+    if source_scope != target_scope:
+        if target_scope == "neutral":
+            href = f"./?page={target_output}"
+        elif target_output == f"{target_scope}/D-overview.html":
+            href = f"./{target_scope}/"
+        else:
+            href = f"./{target_scope}/?page={target_output}"
+        if anchor:
+            href += f"#{anchor}"
+        return f'<a href="{href}" data-docs-route="{target_scope}">{label}</a>'
+
+    href = relative_href(source_output, target_output)
+    if anchor:
+        href += f"#{anchor}"
+    return f'<a href="{href}">{label}</a>'
 
 
 def reldir(target: Path, source_dir: Path) -> Path:
@@ -385,8 +422,7 @@ def build_tree() -> list[dict]:
         ("Concurrency", "guide-concurrency"), ("C Interop", "guide-c-interop"),
         ("Raw & Unsafe", "guide-raw-unsafe"),
     ]
-    zith_reference = [("Specification", "reference-specification"),
-                      ("Implementation Status", "reference-implementation-status")]
+    zith_reference = [("Specification", "reference-specification")]
     zith_reference += [(title, "reference-" + filename[:-3])
                        for filename, title in SPEC_CHAPTERS]
     cli = [(f"zithc {command}", f"cli-{command}") for command in
@@ -395,34 +431,74 @@ def build_tree() -> list[dict]:
         "title": "Home", "link": "", "children": [
             nav_item("Documentation", "docs-overview",
                      description="Compare Zith and Zith--, then choose the documentation set you need."),
-            nav_item("Introduction", "getting-started-introduction",
-                     description="Project overview, stability note, and how to read these docs."),
-            nav_item("Getting Started", "getting-started-quick-start", [
+            nav_item("Getting Started", "getting-started-introduction", [
+                nav_item("Introduction", "getting-started-introduction"),
                 nav_item("Installation", "getting-started-installation"),
                 nav_item("Why Zith", "getting-started-why-zith"),
-            ], description="Install Zith, write a first program, and learn how the language is positioned."),
-            nav_item("Zith--", "zith-subset-overview", [
-                nav_item("Overview", "zith-subset-overview"),
-                nav_item("Language Guide", "guide-overview",
-                         [nav_item(title, page_id) for title, page_id in guide]),
-                nav_item("Reference", "zith-subset-reference"),
-            ], description="Implemented subset of Zith supported by zithc today.", badge="Implemented"),
-            nav_item("Zith", "zith-overview", [
-                nav_item("Overview", "zith-overview"),
-                nav_item("Language Reference",
-                         "reference-specification",
-                         [nav_item(title, page_id) for title, page_id in zith_reference]),
-            ], description="Full language design and future specifications.", badge="Specification"),
+            ], description="Introduction to the project and general setup."),
             nav_item("CLI Reference", "cli-overview", [nav_item(title, page_id) for title, page_id in cli],
                      description="Reference for zithc commands: build, run, check, format, create, test, and project tooling."),
             nav_item("Project", "project-overview",
                      description="Project overview and current direction for the Zith programming language."),
             nav_item("FAQ", "faq-overview",
                      description="Frequently asked questions about Zith stability, scope, and relationship to other languages."),
+            nav_item("Implementation Status", "reference-implementation-status",
+                     description="Current compiler support, known restrictions, and specification-only features."),
             nav_item("Community", "community-overview",
                      description="Community resources for reporting issues and contributing to Zith documentation."),
+            nav_item("Zith", "zith-overview", [
+                nav_item("Overview", "zith-overview"),
+                nav_item("FAQ", "zith-faq"),
+                nav_item("Language Reference",
+                         "reference-specification",
+                         [nav_item(title, page_id) for title, page_id in zith_reference]),
+            ], description="Full language design and specification."),
+            nav_item("Zith--", "zith-subset-overview", [
+                nav_item("Overview", "zith-subset-overview"),
+                nav_item("First Program", "getting-started-quick-start"),
+                nav_item("Language Guide", "guide-overview",
+                         [nav_item(title, page_id) for title, page_id in guide]),
+                nav_item("Reference", "zith-subset-reference"),
+                nav_item("FAQ", "zith-subset-faq"),
+            ], description="Implemented subset of Zith supported by zithc today."),
         ],
     }]
+
+
+def build_topic_equivalents() -> dict[str, dict[str, str]]:
+    pairs = [
+        ("zith-overview", "zith-subset-overview"),
+        ("reference-specification", "zith-subset-reference"),
+        ("reference-06-mutability-bindings", "guide-bindings"),
+        ("reference-03-type-system", "guide-types"),
+        ("reference-05-functions", "guide-functions"),
+        ("reference-02-module-system", "guide-modules"),
+        ("reference-09-control-flow", "guide-control-flow"),
+        ("reference-14-polymorphism", "guide-generics"),
+        ("reference-07-memory-model", "guide-memory-model"),
+        ("reference-08-error-handling", "guide-errors"),
+        ("reference-04-traits-interfaces", "guide-traits-interfaces"),
+        ("reference-11-comptime", "guide-comptime"),
+        ("reference-15-macros", "guide-contexts-words-macros"),
+        ("reference-10-concurrency", "guide-concurrency"),
+        ("reference-18-c-interop", "guide-c-interop"),
+        ("reference-13-raw-unsafe", "guide-raw-unsafe"),
+    ]
+    equivalents: dict[str, dict[str, str]] = {
+        PAGES_BY_ID["docs-overview"].output: {
+            "zith": PAGES_BY_ID["zith-overview"].output,
+            "zith--": PAGES_BY_ID["zith-subset-overview"].output,
+        }
+    }
+    for zith_id, subset_id in pairs:
+        zith_page = PAGES_BY_ID[zith_id].output
+        subset_page = PAGES_BY_ID[subset_id].output
+        equivalents.setdefault(zith_page, {})["zith--"] = subset_page
+        equivalents.setdefault(subset_page, {})["zith"] = zith_page
+    equivalents.setdefault(
+        PAGES_BY_ID["guide-syntax"].output, {}
+    )["zith"] = PAGES_BY_ID["reference-specification"].output
+    return equivalents
 
 
 def legacy_aliases(pages: list[Page]) -> dict[str, str]:
@@ -464,6 +540,7 @@ def legacy_aliases(pages: list[Page]) -> dict[str, str]:
         "community/D-contributing.html": "community/D-overview.html",
         "community/D-code-of-conduct.html": "community/D-overview.html",
         "reference/D-zith-subset.html": "zith--/reference/D-zith-subset.html",
+        "zith/reference/D-implementation-status.html": "reference/D-implementation-status.html",
     }
     aliases.update(extra)
     return aliases
@@ -479,12 +556,12 @@ def alias_html(alias: str, target: str) -> str:
     )
 
 
-def status_notice(page: Page) -> str:
-    href = relative_href(page.output, "zith/reference/D-implementation-status.html")
+def status_notice() -> str:
     return (
         '<div class="callout callout-warning"><p><strong>Draft / Experimental:</strong> '
         'Zith documentation describes a language under active development. Check '
-        f'<a href="{href}">Implementation Status</a> before relying on a feature.</p></div>'
+        '<a href="./?page=reference/D-implementation-status.html" '
+        'data-docs-route="neutral">Implementation Status</a> before relying on a feature.</p></div>'
     )
 
 
@@ -504,7 +581,8 @@ def expected_files(
     files: dict[Path, str] = {}
     for page in pages:
         fragment = markdown_html(page, outputs, source_map)
-        fragment = status_notice(page) + "\n" + fragment
+        if page.output.startswith(("zith/", "zith--/")):
+            fragment = status_notice() + "\n" + fragment
         files[OUTPUT / page.output] = fragment
     aliases = legacy_aliases(pages)
     for alias, target in aliases.items():
@@ -518,9 +596,12 @@ def expected_files(
         protected_path = OUTPUT / protected
         if protected_path in files:
             raise ValueError(f"Output or alias would overwrite protected file: {protected}")
-    tree = {"version": 4, "navigation": build_tree(), "aliases": {
-        f"./{alias}": f"./{target}" for alias, target in sorted(aliases.items())
-    }}
+    tree = {
+        "version": 5,
+        "navigation": build_tree(),
+        "aliases": {f"./{alias}": f"./{target}" for alias, target in sorted(aliases.items())},
+        "topicEquivalents": build_topic_equivalents(),
+    }
     manifest = {
         "version": 1,
         "spec_directory": posixpath.relpath(spec_dir.as_posix(), ROOT.as_posix()),
@@ -566,6 +647,21 @@ def validate(files: dict[Path, str], tree: dict) -> list[str]:
             if href.startswith(("http://", "https://", "mailto:")):
                 continue
             if href in {"./zith/", "./zith--/"}:
+                continue
+            if href.startswith("./?page="):
+                routed_page = href[len("./?page="):].partition("#")[0]
+                if routed_page not in outputs:
+                    errors.append(f"{output}: broken neutral route {href}")
+                continue
+            language_route = re.fullmatch(
+                r"\./(zith|zith--)/\?page=([^#]+)(?:#(.*))?", href
+            )
+            if language_route:
+                routed_page = language_route.group(2)
+                if routed_page not in outputs:
+                    errors.append(f"{output}: broken language route {href}")
+                elif language_route.group(3) and language_route.group(3) not in output_ids[routed_page]:
+                    errors.append(f"{output}: {href} points to a missing anchor")
                 continue
             file_part, _, anchor = href.partition("#")
             if not file_part:

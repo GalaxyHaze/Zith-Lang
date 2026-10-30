@@ -23,7 +23,7 @@ records the boundary feature by feature.
 
 ## A practical starting point
 
-Use Zith-- when you want:
+Use Zith-- when you want to write programs with the current compiler:
 
 - explicit types and predictable conversions;
 - low-level access through pointers, `raw opaque`, and C interop;
@@ -31,6 +31,6 @@ Use Zith-- when you want:
 - traits and interfaces for shared behaviour;
 - a compiler pipeline that can target native code or WebAssembly.
 
-Start with the [Quick Start](doc:getting-started-quick-start), then read the
-[Zith-- Language Guide](doc:guide-overview). Move to the full specification
+Start with the [First Program](doc:getting-started-quick-start) and the
+[Zith-- Language Guide](doc:guide-overview). Read the full Zith specification
 when you need to understand a feature that the current subset does not expose.

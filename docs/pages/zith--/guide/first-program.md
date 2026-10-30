@@ -1,12 +1,12 @@
 ---
 id: getting-started-quick-start
-title: Quick Start
-section: Getting Started
-output: getting-started/D-quick-start.html
+title: First Program
+section: Zith--
+output: zith--/guide/D-first-program.html
 aliases: D-quickstart.html
 kind: editorial
 ---
-# Quick Start
+# First Program
 
 Zith is experimental. This guide uses the working `zithc create`, `build`, and `run` commands described in [Implementation Status](doc:reference-implementation-status).
 

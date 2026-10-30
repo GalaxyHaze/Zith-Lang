@@ -8,34 +8,14 @@ kind: editorial
 ---
 # Introduction
 
-Zith is a statically typed, compiled systems language with a specification that
-is ahead of its implementation. The language and compiler are under active
-development. Documentation should be treated as draft material, not as a
-stability guarantee.
+Zith is a statically typed, compiled systems language under active development.
+Its complete design is documented as **Zith**; the currently supported subset
+is documented as **Zith--**.
 
-The `main` compiler builds `Zith--`, the implemented subset of the language.
-The [English Zith-- reference](doc:zith-subset-reference) is the operational
-language for `zithc`. The [Specification](doc:reference-specification)
-describes the larger intended language.
+The [Zith documentation](route:zith) explains the full language and its
+specification. The [Zith-- documentation](route:zith--) is for people writing
+programs supported by `zithc`.
 
-## Read the right document
-
-- Start with [Quick Start](doc:getting-started-quick-start) to create and run a project.
-- Use the [Language Guide](doc:guide-overview) for short practical explanations.
-- Use the [Language Reference](doc:reference-specification) for the canonical specification.
-- Use the [English Zith-- reference](doc:zith-subset-reference) for the implemented subset.
-- Check [Implementation Status](doc:reference-implementation-status) before relying on a feature.
-
-The `Zith--` compiler currently supports core declarations, bindings, structs
-and pointers, the full operator set including compound assignment and bitwise
-operators, `when` pattern matching, the `for` family including iterators,
-`state`/`dock`/`jump`, generic instantiation, function overloading,
-function-pointer values, traits/interfaces and `dyn` method dispatch, macros
-and `raw macro`, `raw opaque` handles, `lend`/`view`, modules, and C header
-imports. All of it lowers through HIR to LLVM code generation for x86-64 and
-WebAssembly. Tag macros parse, but are rejected in the `Zith--` pipeline.
-
-Ownership analysis (SRA) has the `lend`/`view` call-annotation slice but not the
-full state machine. Comptime evaluation, `const fn`, async execution, and
-context-based extensions remain specification-only. `const fn` and `global`
-report `E2010`.
+General topics such as installation, command-line usage, and the relationship
+between the two language layers live here. See [Implementation Status](neutral:reference-implementation-status)
+for the current boundary between design and compiler support.

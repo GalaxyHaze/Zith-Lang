@@ -10,15 +10,9 @@ kind: editorial
 
 ## Is Zith stable?
 
-No. Zith language documentation is draft and experimental. The `main` compiler
-builds the `Zith--` subset documented in the [English Zith-- reference](doc:zith-subset-reference).
-The [Implementation Status](doc:reference-implementation-status) page separates
-working compiler functionality from check-only, parse-skipped, parse-error,
-stub, and specification-only features.
-
-## What actually compiles today?
-
-Structs and pointers, the full operator set (including compound assignment and the `&.` `|.` `^.` bitwise family), `when` / `match` pattern matching, `for` loops including iterators, `state`/`dock`/`jump`, generic instantiation and bounds, function overloading, traits/interfaces and `dyn` method dispatch, macros and `raw macro`, `raw opaque`, `lend`/`view`, modules, and C header imports. Tag macros, comptime, `const fn`, async execution, contexts/words, and the full NRA ownership analysis are not implemented in `Zith--`.
+No. Zith and its compiler are under active development, and the specification
+is not a stability guarantee. The neutral [Implementation Status](neutral:reference-implementation-status)
+page distinguishes the language design from current compiler support.
 
 ## Is this a Rust replacement?
 

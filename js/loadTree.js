@@ -7,23 +7,25 @@ const docsBase = new URL(document.body.dataset.docsBase, document.baseURI);
 const route = window.DocsRouting.resolveDocsRoute(window.location.pathname);
 const docsScope = document.body.dataset.docsScope || route.scope;
 const defaultPage = route.page;
-const treeVersion = 4;
+const treeVersion = 5;
 
 let treeModel = [];
 let flatPages = [];
 let pageMeta = new Map();
 let aliasMap = new Map();
+let topicEquivalents = {};
 let currentPage = defaultPage;
 
 function sectionDescription(trail) {
     const section = trail[0] || "";
     const descriptions = {
-        "Getting Started": "Install Zith, write a first program, and learn how the language is positioned.",
+        "Getting Started": "Learn about both language layers, install Zith, and find the project context.",
         "Language Guide": "Practical documentation of Zith syntax, types, memory model, generics, concurrency, and systems programming.",
-        "Language Reference": "Canonical Zith language reference, specification chapters, and implementation status.",
+        "Language Reference": "Canonical Zith language specification and reference chapters.",
         "CLI Reference": "Reference for zithc commands: build, run, check, format, create, test, and project tooling.",
         "Project": "Project overview and current direction for the Zith programming language.",
         "FAQ": "Frequently asked questions about Zith stability, scope, and relationship to other languages.",
+        "Implementation Status": "Current compiler support, restrictions, and specification-only features.",
         "Community": "Community resources for reporting issues and contributing to Zith documentation.",
     };
     return descriptions[section] || "Official documentation for the Zith programming language.";
@@ -68,24 +70,67 @@ function sectionDescription(trail) {
 function initialiseNavigation(menuData) {
     const generatedTree = !Array.isArray(menuData) && Array.isArray(menuData.navigation);
     const navigation = generatedTree ? menuData.navigation : menuData;
-    const section = docsScope === "zith" ? "Zith" :
-        docsScope === "zith--" ? "Zith--" : null;
-    treeModel = section
-        ? navigation.map(group => ({
-            ...group,
-            children: (group.children || []).filter(item => item.title === section)
-        }))
-        : navigation;
+    topicEquivalents = generatedTree ? menuData.topicEquivalents || {} : {};
+    treeModel = window.DocsRouting.filterDocsNavigation(navigation, docsScope);
     flatPages = [];
     pageMeta = new Map();
     aliasMap = new Map(Object.entries(generatedTree ? menuData.aliases || {} : {}));
 
     buildPageIndex(treeModel);
     renderMenu(treeModel, sidebar);
+    renderLanguageSwitcher();
+    showLanguageSwitchNotice();
 
     const page = getPageFromURL() || defaultPage;
     loadPage(page, getAnchorFromURL(), { replaceHistory: !getPageFromURL() });
 }
+
+function renderLanguageSwitcher() {
+    document.querySelectorAll("[data-docs-language]").forEach(link => {
+        if (link.dataset.docsLanguage === docsScope) {
+            link.setAttribute("aria-current", "page");
+        } else {
+            link.removeAttribute("aria-current");
+        }
+    });
+}
+
+function showLanguageSwitchNotice() {
+    const notice = document.getElementById("docsSwitchNotice");
+    if (!notice || new URLSearchParams(window.location.search).get("switch") !== "overview") {
+        return;
+    }
+
+    const label = docsScope === "zith" ? "Zith" : "Zith--";
+    notice.textContent = `No equivalent topic was found in ${label}; showing its overview.`;
+    notice.hidden = false;
+}
+
+document.addEventListener("click", event => {
+    const link = event.target.closest("[data-docs-language]");
+    if (!link) return;
+    event.preventDefault();
+
+    const targetScope = link.dataset.docsLanguage;
+    if (targetScope === docsScope) return;
+
+    const result = window.DocsRouting.resolveLanguageSwitch(
+        currentPage,
+        targetScope,
+        topicEquivalents
+    );
+    const url = new URL(`${targetScope}/`, docsBase);
+    const overview = targetScope === "zith"
+        ? "./zith/D-overview.html"
+        : "./zith--/D-overview.html";
+    if (result.page !== overview) {
+        url.searchParams.set("page", result.page.replace(/^\.\//, ""));
+    }
+    if (!result.equivalent) {
+        url.searchParams.set("switch", "overview");
+    }
+    window.location.assign(url.href);
+});
 
 function renderMenu(items, parent) {
     const ul = document.createElement("ul");
@@ -250,6 +295,10 @@ function loadPage(path, anchor = null, opts = {}) {
             const wasInitialLoad = initialLoad;
             currentPage = canonicalPath;
             content.innerHTML = html;
+            if (!wasInitialLoad) {
+                const notice = document.getElementById("docsSwitchNotice");
+                if (notice) notice.hidden = true;
+            }
 
             updateFilebar(canonicalPath);
             setActiveLink(canonicalPath);
