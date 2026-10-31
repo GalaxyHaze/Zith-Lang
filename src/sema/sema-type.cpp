@@ -875,6 +875,18 @@ TypeId PerModuleSema::lowerBareTypeExpr(const frontend::TypeExpression &type) {
                 return error_type;
             }
         }
+        // When instantiating a template, template parameter names resolve to
+        // the concrete arguments before anything else is considered. This must
+        // win over `genericParams_` below: reification runs on the declaring
+        // module's sema, whose `currentDeclId_` may still point at the template
+        // declaration, so the stale `T -> GenericParam` binding would otherwise
+        // shadow the concrete argument and leave the reified field as `T`.
+        if (!activeTemplateArgs_.empty()) {
+            for (const auto &binding : activeTemplateArgs_) {
+                if (binding.name == type.name)
+                    return binding.type;
+            }
+        }
         // A generic parameter name inside its own declaration resolves to an opaque
         // GenericParam type; the comptime solver rejects its use at instantiation.
         if (currentDeclId_ != 0U) {
@@ -883,14 +895,6 @@ TypeId PerModuleSema::lowerBareTypeExpr(const frontend::TypeExpression &type) {
                     if (binding.name == type.name)
                         return binding.type;
                 }
-            }
-        }
-        // When instantiating a template, template parameter names resolve to
-        // the concrete arguments before anything else is considered.
-        if (!activeTemplateArgs_.empty()) {
-            for (const auto &binding : activeTemplateArgs_) {
-                if (binding.name == type.name)
-                    return binding.type;
             }
         }
         // A generic named type must either be instantiated explicitly here or
