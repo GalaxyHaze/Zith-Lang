@@ -523,6 +523,20 @@ hir::HirExprId HirLowerModern::lowerAssign(const frontend::Expression &expr,
             return value;
         if (types_.kindOf(target_type) == types::TypeKind::Optional) {
             const auto source_sema = semaTypeOfExpr(rhs);
+            // A concrete value stored into a `?dyn` or `?opaque` slot must erase
+            // the payload before the `Some` wrap, exactly as the binding and
+            // struct-literal paths do. Otherwise the raw aggregate lands in a
+            // fat-pointer slot and aborts LLVM.
+            if (target_sema != kInvalidTypeId) {
+                const auto erased =
+                    lowerCoerceToOptionalErased(target_type, target_sema, rhs, value);
+                if (erased != hir::kInvalidHirExpr) {
+                    value = erased;
+                    // The payload was erased and wrapped in `Some` already, so
+                    // the depth wrap below must not add another layer.
+                    target_sema = sema::modern::kInvalidTypeId;
+                }
+            }
             if (target_sema != kInvalidTypeId && source_sema != kInvalidTypeId)
                 value = lowerCoerceToOptionalDepth(target_type, target_sema, source_sema, value);
         }
