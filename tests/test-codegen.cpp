@@ -1388,6 +1388,29 @@ static void test_imported_result_runtime() {
     CHECK_EQ(r.exitCode, 0, "Ok/Err/isOk/isErr/unwrap/unwrapErr round-trip on Result");
 }
 
+static void test_imported_panic_runtime() {
+    // A program that does not panic must run normally after importing the
+    // module, and one that panics must write its message and abort.
+    CodegenTest ok;
+    auto safe = ok.run("codegen-panic-safe.zith",
+                       "import std/panic as pn\n"
+                       "fn main(): i32 { return 5; }\n");
+    CHECK(safe.ok, "importing std/panic does not break a program that never panics");
+    CHECK_EQ(safe.exitCode, 5, "a program importing std/panic still returns its value");
+
+    CodegenTest t;
+    auto r = t.run("codegen-panic-abort.zith",
+                   "import std/panic as pn\n"
+                   "fn main(): i32 {\n"
+                   "    pn.panic(\"fatal: bad state\");\n"
+                   "    return 0;\n"
+                   "}\n");
+    CHECK(r.ok, "a program calling std/panic still compiles and links");
+    CHECK(r.output.find("fatal: bad state") != std::string::npos,
+          "std/panic writes its message before aborting");
+    CHECK(r.exitCode != 0, "std/panic aborts the process");
+}
+
 static void test_imported_memory_new_delete_runtime() {
     CodegenTest t;
     auto r = t.run("codegen-memory-new.zith",
@@ -4288,6 +4311,8 @@ static void test_codegen() {
     test_imported_generic_dynarray_runtime();
     printf("Running test_imported_result_runtime\n");
     test_imported_result_runtime();
+    printf("Running test_imported_panic_runtime\n");
+    test_imported_panic_runtime();
     printf("Running test_imported_memory_new_delete_runtime\n");
     test_imported_memory_new_delete_runtime();
     printf("Running test_imported_memory_make_release_runtime\n");
