@@ -2749,12 +2749,19 @@ auto lowerModule(const hir::HirModule &hir, const memory::StringInterner &intern
                 if (lowerCall(state, tail->call, true) == kUnassignedReg || !result.ok)
                     return result;
             } else if (const auto *panic = std::get_if<hir::HirRuntimePanic>(&terminator)) {
-                if (panic->code != 10003U) {
+                if (panic->code > 0xFFFFU) {
                     result.ok      = false;
-                    result.message = "unsupported runtime panic code in v2 lowering";
+                    result.message = "runtime panic code does not fit the v2 opcode immediate";
                     return result;
                 }
-                emit(state, Instr{Op::NullDeref, 0, 0, 0, 0});
+                // `R10003` keeps its dedicated op for readability; every other
+                // runtime code lowers to the generic `Panic` op, whose `imm`
+                // carries the code.
+                if (panic->code == 10003U)
+                    emit(state, Instr{Op::NullDeref, 0, 0, 0, 0});
+                else
+                    emit(state, Instr{Op::Panic, 0, 0, 0,
+                                      static_cast<uint16_t>(panic->code)});
             }
         }
 

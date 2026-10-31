@@ -85,6 +85,11 @@ enum class Op : uint8_t {
     Jump,
     NullDeref,
     Trap,
+    /// Terminating runtime failure. `imm` carries the `R10001+` runtime error
+    /// code, so any `HirRuntimePanic` (not just the optional-extraction
+    /// `R10003`) lowers to a single op. Appended last so existing op byte
+    /// values stay stable; an older reader rejects it and re-lowers.
+    Panic,
 };
 
 /// One v2 instruction row. `a/b/c/d/e` hold register or immediate indices

@@ -91,6 +91,7 @@ const char *opName(Op op) {
         ZITH_VM_OP_NAME(Jump);
         ZITH_VM_OP_NAME(NullDeref);
         ZITH_VM_OP_NAME(Trap);
+        ZITH_VM_OP_NAME(Panic);
     }
 #undef ZITH_VM_OP_NAME
     return "Unknown";
@@ -247,6 +248,9 @@ void appendInstruction(std::ostringstream &out, const Instr &instr, size_t pc) {
         break;
     case Op::NullDeref:
         out << "reason=R10003";
+        break;
+    case Op::Panic:
+        out << "reason=R" << instr.imm;
         break;
     case Op::Trap:
         out << "reason=explicit";

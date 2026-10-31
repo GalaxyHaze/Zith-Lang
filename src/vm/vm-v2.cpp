@@ -417,7 +417,7 @@ auto validateFunctionShape(const Function &fn) -> bool {
         const uint16_t lhs = instr.b;
         const uint16_t rhs = instr.c;
 
-        if (instr.op > Op::Trap)
+        if (instr.op > Op::Panic)
             return false;
         switch (instr.op) {
         case Op::LoadConstI32:
@@ -579,6 +579,7 @@ auto validateFunctionShape(const Function &fn) -> bool {
             break;
         case Op::NullDeref:
         case Op::Trap:
+        case Op::Panic:
             break;
         }
     }
@@ -1152,6 +1153,9 @@ auto runFunction(RunState &state, const Function &fn, std::vector<int64_t> &regs
                     break;
                 case Op::NullDeref:
                     state.message = "R10003: optional value is null";
+                    return {false, 0};
+                case Op::Panic:
+                    state.message = "R" + std::to_string(instr.imm);
                     return {false, 0};
                 case Op::Trap:
                     return {false, 0};

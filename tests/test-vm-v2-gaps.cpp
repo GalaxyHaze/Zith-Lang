@@ -30,6 +30,7 @@ void test_optional_some_presence_and_must();
 void test_optional_none_is_null();
 void test_optional_pointer_niche();
 void test_optional_must_none_traps();
+void test_generic_runtime_panic_code();
 void test_implicit_numeric_enum();
 void test_explicit_integer_enum();
 void test_tagged_union_checks_and_narrowed_casts();
@@ -120,6 +121,7 @@ void test_vm_v2_gaps() {
     test_optional_none_is_null();
     test_optional_pointer_niche();
     test_optional_must_none_traps();
+    test_generic_runtime_panic_code();
     test_implicit_numeric_enum();
     test_explicit_integer_enum();
     test_tagged_union_checks_and_narrowed_casts();
@@ -181,6 +183,21 @@ void test_optional_must_none_traps() {
     CHECK(result.status == vm::RunStatus::Trap, "must None traps instead of returning");
     CHECK(result.detail.find("R10003") != std::string::npos,
           "must None reports the specified R10003 failure");
+}
+
+void test_generic_runtime_panic_code() {
+    // `@assert(false)` outside a test lowers to a `HirRuntimePanic` with the
+    // generic `R10004` code. The v2 lowering used to accept only the
+    // optional-extraction `R10003` and reported the panic as unsupported; it
+    // must now lower any runtime code and report it as a trap.
+    const auto result = runVmProgram("generic-runtime-panic", "fn main(): i32 {\n"
+                                                              "    @assert(false);\n"
+                                                              "    return 0;\n"
+                                                              "}\n");
+    CHECK(result.phase == VmPhase::Execution, "a generic runtime panic reaches the VM runtime");
+    CHECK(result.status == vm::RunStatus::Trap, "a generic runtime panic traps");
+    CHECK(result.detail.find("R10004") != std::string::npos,
+          "a generic runtime panic reports its R10004 code");
 }
 
 void test_implicit_numeric_enum() {

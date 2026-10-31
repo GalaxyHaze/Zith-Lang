@@ -170,7 +170,7 @@ bool decodeCachedModule(std::span<const uint8_t> payload, uint16_t section_schem
         for (uint32_t item = 0; item < item_count; ++item) {
             Instr instruction;
             uint8_t op = 0;
-            if (!reader.readU8(op) || op > static_cast<uint8_t>(Op::Trap) ||
+            if (!reader.readU8(op) || op > static_cast<uint8_t>(Op::Panic) ||
                 !reader.readU16(instruction.a) || !reader.readU16(instruction.b) ||
                 !reader.readU16(instruction.c) || !reader.readU16(instruction.imm) ||
                 !reader.readU16(instruction.d) || !reader.readU16(instruction.e))
