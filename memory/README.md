@@ -105,6 +105,11 @@ contracts, decisions, and gotchas that are not discoverable from the source alon
   extension, aggregate literals coerced to `opaque`, the resolved `null`
   pack-member inference (`null as ?T` and the annotation path), and the
   remaining local-only narrowing debt.
+- [sema-generic-union-void.md](sema-generic-union-void.md): a generic union
+  instantiated with `void`/`never` (for example `Pair<void>`, `Result<void, E>`)
+  is rejected with `E3001` at the use site instead of hanging LLVM codegen in
+  `getTypeAllocSize`; the fix mirrors the declaration-path rule and
+  `Result<void, E>` support stays a separate, larger item.
 - [lsp-vscode-folding.md](lsp-vscode-folding.md): LSP/VS Code brace folding
   flow, local VSIX rebuild loop, and read-only sandbox gotchas.
 - [test-command-coordination.md](test-command-coordination.md): how the native

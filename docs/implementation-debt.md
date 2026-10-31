@@ -280,6 +280,15 @@ acima e só os itens ainda abertos permanecem neste inventário:
   `opaque`, e um binding direto (`let t = |null, 7u64|;`) chegava ao codegen com
   um membro `void` e pendurava o LLVM a 100% de CPU. Ver
   `memory/sema-nonnull-narrowing.md`.
+- Resolvido: uma union genérica instanciada com `void`. O caminho de declaração
+  já rejeitava um membro `void` ("union member cannot be 'void'"), mas a
+  instanciação substituía `void` por um parâmetro de tipo (`union Pair<T> { T,
+  i32 }` usado como `Pair<void>`, ou `Result<void, E>`), e esse membro chegava
+  ao codegen e pendurava o LLVM em `getTypeAllocSize`. `instantiateTemplateFromArgs`
+  (`src/sema/sema-type.cpp`, caso `DeclKind::Union`) passou a rejeitar um membro
+  `void`/`never` com `E3001` no local de uso, com uma nota no membro genérico.
+  `Result<void, E>` completo (uma representação unit para um membro) continua um
+  item separado e maior. Ver `memory/sema-generic-union-void.md`.
 
 ### 9. HashMap genérico implementado e consumível entre módulos
 
