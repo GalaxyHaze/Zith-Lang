@@ -315,6 +315,128 @@ static void test_optional_pointer_narrowing_runtime() {
     CHECK_EQ(r.exitCode, 0, "proven nullable pointer reads return the pointed values");
 }
 
+static void test_optional_aggregate_narrowing_runtime() {
+    ModernFileCodegenTest t;
+    t.write("main.zith", "struct S { n: i32 }\n"
+                         "fn field(x: ?S): i32 {\n"
+                         "    if (x is null) { return 0; }\n"
+                         "    return x.n;\n"
+                         "}\n"
+                         "fn scalar(x: ?i32): i32 {\n"
+                         "    if (x is null) { return 0; }\n"
+                         "    return x;\n"
+                         "}\n"
+                         "fn pack_len(x: ?|bytes: u64, len: u64|): u64 {\n"
+                         "    if (x is null) { return 0u64; }\n"
+                         "    return x.len;\n"
+                         "}\n"
+                         "fn main(): i32 {\n"
+                         "    let s = S { n: 7 };\n"
+                         "    let o: ?S = s;\n"
+                         "    if (field(o) != 7) { return 1; }\n"
+                         "    if (scalar(11) != 11) { return 2; }\n"
+                         "    let p: |bytes: u64, len: u64| = |3u64, 5u64|;\n"
+                         "    if (pack_len(p) != 5u64) { return 3; }\n"
+                         "    return 0;\n"
+                         "}\n");
+
+    auto r = t.run();
+    CHECK(r.usedModern, "optional aggregate narrowing uses the modern codegen pipeline");
+    CHECK(r.ok, "field, scalar and pack reads after 'if (x is null) { return }' compile and run");
+    CHECK_EQ(r.exitCode, 0, "proven optional aggregate reads return the payload value");
+}
+
+// An aggregate literal passed straight into an `opaque` parameter is erased in
+// place. The HIR lowering must keep the literal's concrete type while wrapping
+// it in `make_opaque`; otherwise the literal is emitted with the opaque
+// `{ *void, u32 }` layout and the callee reads a corrupted payload. The
+// single-field struct is the discriminating case: a two-field struct happens to
+// match the opaque wrapper's 16-byte size, but a one-field struct stores the
+// wrong width and segfaults.
+static void test_pack_literal_erased_into_opaque_runtime() {
+    ModernFileCodegenTest t;
+    t.write("main.zith", "struct Pair { a: u64, b: u64 }\n"
+                         "struct One { a: u64 }\n"
+                         "fn readStruct(x: opaque): u64 {\n"
+                         "    let p = x as Pair;\n"
+                         "    if (p is null) { return 0u64; }\n"
+                         "    return p.b;\n"
+                         "}\n"
+                         "fn readPack(x: opaque): u64 {\n"
+                         "    let p = x as |a: u64, b: u64|;\n"
+                         "    if (p is null) { return 0u64; }\n"
+                         "    return p.b;\n"
+                         "}\n"
+                         "fn readOne(x: opaque): u64 {\n"
+                         "    let p = x as One;\n"
+                         "    if (p is null) { return 0u64; }\n"
+                         "    return p.a;\n"
+                         "}\n"
+                         "fn main(): i32 {\n"
+                         "    if (readStruct(Pair { a: 3u64, b: 7u64 }) != 7u64) { return 1; }\n"
+                         "    if (readPack(|3u64, 7u64|) != 7u64) { return 2; }\n"
+                         "    if (readOne(One { a: 7u64 }) != 7u64) { return 3; }\n"
+                         "    return 0;\n"
+                         "}\n");
+
+    auto r = t.run();
+    CHECK(r.usedModern, "aggregate literal erased into opaque uses the modern codegen pipeline");
+    CHECK(r.ok, "struct and pack literals passed to an opaque parameter compile, link and run");
+    CHECK_EQ(r.exitCode, 0, "the erased aggregate payload round-trips through the opaque value");
+}
+
+// A bare `null` member in a pack literal must take its declared member type
+// from the surrounding annotation (`let p: |bytes: ?*u8, len: u64| = |null, ...|`).
+// Without it the member stays `never`, the aggregate carries a void member, and
+// erasing it into an `opaque` parameter corrupted the payload. The explicit
+// `null as ?T` spelling covers the unannotated call-site case.
+static void test_null_member_in_pack_literal_runtime() {
+    ModernFileCodegenTest t;
+    t.write("main.zith",
+            "fn readAnnotated(x: opaque): u64 {\n"
+            "    let p = x as |bytes: ?*u8, len: u64|;\n"
+            "    if (p is null) { return 0u64; }\n"
+            "    return p.len;\n"
+            "}\n"
+            "fn readExplicit(x: opaque): u64 {\n"
+            "    let p = x as |bytes: ?*u8, len: u64|;\n"
+            "    if (p is null) { return 0u64; }\n"
+            "    return p.len;\n"
+            "}\n"
+            "fn main(): i32 {\n"
+            "    let a: |bytes: ?*u8, len: u64| = |null, 7u64|;\n"
+            "    if (readAnnotated(a) != 7u64) { return 1; }\n"
+            "    if (readExplicit(|null as ?*u8, 9u64|) != 9u64) { return 2; }\n"
+            "    let n: ?*u8 = null as ?*u8;\n"
+            "    if not (n is null) { return 3; }\n"
+            "    return 0;\n"
+            "}\n");
+
+    auto r = t.run();
+    CHECK(r.usedModern, "pack literals with a null member use the modern codegen pipeline");
+    CHECK(r.ok, "an annotated or explicitly typed null pack member compiles, links and runs");
+    CHECK_EQ(r.exitCode, 0,
+             "the null member takes its declared optional type and the pack round-trips");
+
+    // Without any annotation the member has no type; the compiler must report a
+    // diagnostic instead of emitting a malformed aggregate or an ICE.
+    ModernFileCodegenTest rejected;
+    rejected.write("main.zith", "fn g(x: opaque): i32 { return 0; }\n"
+                                "fn main(): i32 { return g(|null, 7u64|); }\n");
+    auto bad = rejected.run();
+    CHECK(!bad.ok && bad.errorCount > 0,
+          "a bare null in an untyped pack literal is rejected with a diagnostic");
+
+    // A bare null pack literal bound directly (no erasure into `opaque`) used to
+    // reach LLVM codegen with a `void` member and hang at 100% CPU. It must be
+    // rejected during sema instead.
+    ModernFileCodegenTest direct;
+    direct.write("main.zith", "fn main(): i32 { let t = |null, 7u64|; return 5; }\n");
+    auto hung = direct.run();
+    CHECK(!hung.ok && hung.errorCount > 0,
+          "a directly bound bare null pack literal is rejected without hanging codegen");
+}
+
 static void test_shifts() {
     CodegenTest t;
     auto r = t.run("codegen-shifts.zith", "fn arithmetic(): i32 {\n"
@@ -1160,6 +1282,164 @@ static void test_nested_optional_for_in_runtime() {
     CHECK_EQ(r.exitCode, 42, "??T exposes null elements without treating them as end");
 }
 
+// Exercises the imported generic `HashMap<K, V>` from the standard library
+// end-to-end: the optional-typed `allocator`/`table` fields must accept bare
+// `T` assignments (wrapped as `Some`), and `get<K, V>` must return the reified
+// `?V` aggregate rather than a bare `V`.
+static void test_imported_generic_hashmap_runtime() {
+    CodegenTest t;
+    auto r = t.run("codegen-generic-hashmap.zith",
+                   "import std/collections/hash_map as hm\n"
+                   "from std/memory\n"
+                   "fn main(): i32 {\n"
+                   "    let heap = HeapAllocator {};\n"
+                   "    var map = hm.HashMap<i64, i64> {};\n"
+                   "    if not (hm.HashMap.init(lend map, heap)) { return 2; }\n"
+                   "    if not (hm.HashMap.put(lend map, 1i64, 42i64)) { return 3; }\n"
+                   "    if not (hm.HashMap.contains(view map, 1i64)) { return 4; }\n"
+                   "    if (hm.HashMap.contains(view map, 2i64)) { return 5; }\n"
+                   "    let value = hm.HashMap.get(view map, 1i64);\n"
+                   "    if (value is null or raw value != 42i64) { return 6; }\n"
+                   "    if (hm.HashMap.len(view map) != 1u64) { return 7; }\n"
+                   "    hm.HashMap.destroy(lend map);\n"
+                   "    return 0;\n"
+                   "}\n");
+    CHECK(r.ok, "imported generic HashMap<i64,i64> compiles, links, and executes");
+    CHECK_EQ(r.exitCode, 0, "init/put/contains/get/len/destroy round-trip on the stdlib HashMap");
+}
+
+// Exercises the imported generic `DynArray<T>` from the standard library
+// end-to-end. `DynArray` shares the ADR 0020 path with `HashMap`, so this
+// guards the second imported-generic consumer against regressions: growth via
+// `reserve`/`push`, element access through `get`, removal through `remove`/
+// `pop`, and `destroy` returning the array to an empty state.
+static void test_imported_generic_dynarray_runtime() {
+    CodegenTest t;
+    auto r = t.run("codegen-generic-dynarray.zith",
+                   "import std/collections/dyn_array as da\n"
+                   "from std/memory\n"
+                   "fn main(): i32 {\n"
+                   "    let heap = HeapAllocator {};\n"
+                   "    var values = da.create<i32>(heap);\n"
+                   "    if not (da.DynArray.reserve<i32>(lend values, 2u64)) { return 1; }\n"
+                   "    if not (da.push<i32>(lend values, 10)) { return 2; }\n"
+                   "    if not (da.push<i32>(lend values, 20)) { return 3; }\n"
+                   "    if not (da.push<i32>(lend values, 30)) { return 4; }\n"
+                   "    let middle = da.get<i32>(view values, 1u64);\n"
+                   "    if (middle is null or raw middle != 20) { return 5; }\n"
+                   "    let removed = da.remove<i32>(lend values, 1u64);\n"
+                   "    if (removed is null or raw removed != 20) { return 6; }\n"
+                   "    let shifted = da.get<i32>(view values, 1u64);\n"
+                   "    if (shifted is null or raw shifted != 30) { return 7; }\n"
+                   "    let last = da.pop<i32>(lend values);\n"
+                   "    if (last is null or raw last != 30) { return 8; }\n"
+                   "    if (da.len<i32>(view values) != 1u64) { return 9; }\n"
+                   "    da.destroy<i32>(lend values);\n"
+                   "    if (da.len<i32>(view values) != 0u64) { return 10; }\n"
+                   "    return 0;\n"
+                   "}\n");
+    CHECK(r.ok, "imported generic DynArray<i32> compiles, links, and executes");
+    CHECK_EQ(r.exitCode, 0, "reserve/push/get/remove/pop/len/destroy round-trip on DynArray");
+}
+
+// Exercises the imported generic `Result<T, E>` helpers from the standard
+// library end-to-end. `Ok`/`Err` bind their type arguments from the expected
+// result type, so this also guards contextual generic inference: the helpers
+// are called without an explicit `<T, E>` list.
+static void test_imported_result_runtime() {
+    CodegenTest t;
+    auto r = t.run("codegen-generic-result.zith",
+                   "import std/result as res\n"
+                   "fn main(): i32 {\n"
+                   "    let ok: res.Result<u32, bool> = res.Ok(7);\n"
+                   "    let err: res.Result<u32, bool> = res.Err(true);\n"
+                   "    if not (res.isOk(ok)) { return 1; }\n"
+                   "    if (res.isOk(err)) { return 2; }\n"
+                   "    if not (res.isErr(err)) { return 3; }\n"
+                   "    if (res.isErr(ok)) { return 4; }\n"
+                   "    let v: u32 = res.unwrap(ok);\n"
+                   "    if (v != 7u32) { return 5; }\n"
+                   "    let e: bool = res.unwrapErr(err);\n"
+                   "    if (not e) { return 6; }\n"
+                   "    return 0;\n"
+                   "}\n");
+    CHECK(r.ok, "imported generic Result<T,E> helpers compile, link, and execute");
+    CHECK_EQ(r.exitCode, 0, "Ok/Err/isOk/isErr/unwrap/unwrapErr round-trip on Result");
+}
+
+static void test_imported_memory_new_delete_runtime() {
+    CodegenTest t;
+    auto r = t.run("codegen-memory-new.zith",
+                   "from std/memory\n"
+                   "struct Box { value: i32 = 0 }\n"
+                   "implement Box as InPlace {\n"
+                   "    fn inplace(var self, args: opaque): bool {\n"
+                   "        self->value = raw args as i32;\n"
+                   "        return true;\n"
+                   "    }\n"
+                   "    fn clean(var self) { self->value = 0; }\n"
+                   "}\n"
+                   "fn main(): i32 {\n"
+                   "    let b: ?*Box = new(42 as opaque);\n"
+                   "    if (b is null) { return 1; }\n"
+                   "    let q = raw b;\n"
+                   "    let got = q->value;\n"
+                   "    delete<Box>(q);\n"
+                   "    return got;\n"
+                   "}\n");
+    CHECK(r.ok, "stdlib new/delete allocate, construct, clean, and free a generic T");
+    CHECK_EQ(r.exitCode, 42, "new writes through the in-place constructor and delete frees the block");
+}
+
+static void test_imported_memory_make_release_runtime() {
+    CodegenTest t;
+    auto r = t.run("codegen-memory-make.zith",
+                   "from std/memory\n"
+                   "struct Box { value: i32 = 0 }\n"
+                   "implement Box as InPlace {\n"
+                   "    fn inplace(var self, args: opaque): bool {\n"
+                   "        self->value = raw args as i32;\n"
+                   "        return true;\n"
+                   "    }\n"
+                   "    fn clean(var self) { self->value = 0; }\n"
+                   "}\n"
+                   "fn main(): i32 {\n"
+                   "    let b: ?*Box = make(HeapAllocator{}, 42 as opaque);\n"
+                   "    if (b is null) { return 1; }\n"
+                   "    let q = raw b;\n"
+                   "    let got = q->value;\n"
+                   "    release(HeapAllocator{}, q);\n"
+                   "    return got;\n"
+                   "}\n");
+    CHECK(r.ok, "stdlib make/release over dyn Allocator allocate, construct, clean, and free");
+    CHECK_EQ(r.exitCode, 42, "make writes through the in-place constructor and release frees the block");
+}
+
+// A tagged-union `is Member` test whose target is a qualified type from an
+// imported module (`lib.End`). The HIR lowerer must resolve the qualified name
+// through the import binding; a raw TypeTable lookup cannot, which previously
+// made the test silently lower to an always-false check.
+static void test_imported_tagged_union_is_member_runtime() {
+    ModernFileCodegenTest t;
+    t.write("lib.zith", "pub struct End {}\n"
+                        "pub union Step { End, char }\n"
+                        "pub fn end(): Step { return Step { End {} }; }\n"
+                        "pub fn chr(c: char): Step { return Step { c }; }\n");
+    t.write("main.zith", "import lib as s\n"
+                         "fn main(): i32 {\n"
+                         "    var a: s.Step = s.end();\n"
+                         "    var b: s.Step = s.chr('x');\n"
+                         "    if not (a is s.End) { return 1; }\n"
+                         "    if (b is s.End) { return 2; }\n"
+                         "    return 0;\n"
+                         "}\n");
+
+    auto r = t.run();
+    CHECK(r.usedModern, "cross-module tagged-union 'is' uses the modern codegen pipeline");
+    CHECK(r.ok, "qualified 'is Member' on an imported tagged union compiles and runs");
+    CHECK_EQ(r.exitCode, 0, "the imported payload member is detected and non-members rejected");
+}
+
 static void test_integer_range_for_runtime() {
     CodegenTest t;
     auto r =
@@ -1595,6 +1875,35 @@ static void test_dyn_trait_struct_field_runtime() {
            std::to_string(r.exitCode))
               .c_str());
     CHECK_EQ(r.errorCount, 0u, "the stored dyn Trait module passes LLVM verification");
+}
+
+// A struct literal whose `dyn` field is initialized directly from a concrete
+// value (not through a helper parameter) must materialize the vtable at the
+// literal site. Regression for the `E5001 Invalid InsertValueInst` that hit a
+// stored `dyn Allocator` field.
+static void test_dyn_trait_struct_literal_field_runtime() {
+    ModernFileCodegenTest t;
+    t.write("main.zith", "trait Allocator {\n"
+                         "    fn value(self): i32;\n"
+                         "}\n"
+                         "struct HeapAllocator {}\n"
+                         "implement HeapAllocator as Allocator {\n"
+                         "    fn value(self): i32 { return 73; }\n"
+                         "}\n"
+                         "struct Resource {\n"
+                         "    allocator: dyn Allocator,\n"
+                         "}\n"
+                         "fn main(): i32 {\n"
+                         "    let heap = HeapAllocator {};\n"
+                         "    let resource = Resource { allocator: heap };\n"
+                         "    return resource.allocator.value() - 73;\n"
+                         "}\n");
+
+    auto r = t.run();
+    CHECK(r.usedModern, "a struct-literal dyn field uses the modern codegen pipeline");
+    CHECK(r.ok, "a concrete value can initialize a dyn struct field directly in a literal");
+    CHECK_EQ(r.exitCode, 0, "the stored dyn field dispatches to the concrete method");
+    CHECK_EQ(r.errorCount, 0u, "the struct-literal dyn field passes LLVM verification");
 }
 
 static void test_dyn_trait_mutating_receiver_dispatch_runtime() {
@@ -3952,6 +4261,24 @@ static void test_codegen() {
     test_labeled_loop_controls_runtime();
     test_for_in_runtime();
     test_nested_optional_for_in_runtime();
+    printf("Running test_imported_generic_hashmap_runtime\n");
+    test_imported_generic_hashmap_runtime();
+    printf("Running test_imported_generic_dynarray_runtime\n");
+    test_imported_generic_dynarray_runtime();
+    printf("Running test_imported_result_runtime\n");
+    test_imported_result_runtime();
+    printf("Running test_imported_memory_new_delete_runtime\n");
+    test_imported_memory_new_delete_runtime();
+    printf("Running test_imported_memory_make_release_runtime\n");
+    test_imported_memory_make_release_runtime();
+    printf("Running test_imported_tagged_union_is_member_runtime\n");
+    test_imported_tagged_union_is_member_runtime();
+    printf("Running test_optional_aggregate_narrowing_runtime\n");
+    test_optional_aggregate_narrowing_runtime();
+    printf("Running test_pack_literal_erased_into_opaque_runtime\n");
+    test_pack_literal_erased_into_opaque_runtime();
+    printf("Running test_null_member_in_pack_literal_runtime\n");
+    test_null_member_in_pack_literal_runtime();
     printf("Running test_integer_range_for_runtime\n");
     test_integer_range_for_runtime();
     printf("Running test_range_in_operator_and_when_runtime\n");
@@ -3986,6 +4313,8 @@ static void test_codegen() {
     test_dyn_trait_method_dispatch_runtime();
     printf("Running test_dyn_trait_struct_field_runtime\n");
     test_dyn_trait_struct_field_runtime();
+    printf("Running test_dyn_trait_struct_literal_field_runtime\n");
+    test_dyn_trait_struct_literal_field_runtime();
     printf("Running test_dyn_trait_mutating_receiver_dispatch_runtime\n");
     test_dyn_trait_mutating_receiver_dispatch_runtime();
     printf("Running test_dyn_trait_by_value_receiver_dispatch_runtime\n");

@@ -7,9 +7,28 @@
 
 namespace zith::sema::modern {
 
+TypeId PerModuleSema::inferExprExpected(frontend::ExprId id, TypeId expected) {
+    if (!expected)
+        return inferExpr(id);
+    // Only a direct call carries a result-only generic parameter worth
+    // contextual inference. Other expression kinds keep the plain path so the
+    // expectation cannot perturb an unrelated inference. A nested call reached
+    // through the call's own operands must not inherit this expectation.
+    const TypeId saved = expectedResultType_;
+    expectedResultType_ = expected;
+    const TypeId result = inferExpr(id);
+    expectedResultType_ = saved;
+    return result;
+}
+
 TypeId PerModuleSema::inferExpr(frontend::ExprId id) {
     if (!id)
         return error_type;
+    // Capture the expected result type a surrounding context recorded for this
+    // expression, then clear it so it is consumed exactly once and never leaks
+    // into a nested callee's own inference.
+    const TypeId expected_result = expectedResultType_;
+    expectedResultType_          = kInvalidTypeId;
     if (TypeId existing = typeOfExpr(id); existing)
         return existing;
     if (id.value > snapshot.expressions().size())
@@ -73,7 +92,7 @@ TypeId PerModuleSema::inferExpr(frontend::ExprId id) {
         result = inferPipeCurrent(id);
         break;
     case frontend::ExprKind::Call:
-        result = inferCall(id);
+        result = inferCall(id, expected_result);
         break;
     case frontend::ExprKind::Block:
         result = inferBlock(id);
@@ -115,7 +134,7 @@ TypeId PerModuleSema::inferExpr(frontend::ExprId id) {
         result = inferStructLiteral(id);
         break;
     case frontend::ExprKind::PackLiteral:
-        result = inferPackLiteral(id);
+        result = inferPackLiteral(id, expected_result);
         break;
     case frontend::ExprKind::ArrayLiteral:
         result = inferArrayLiteral(id);

@@ -363,8 +363,9 @@ TypeId PerModuleSema::inferBlock(frontend::ExprId id) {
                 last = void_type;
             } else if (stmt.kind == frontend::StmtKind::Binding) {
                 TypeId ann_type = lowerTypeExpr(stmt.binding.type);
-                TypeId init_type =
-                    stmt.binding.initializer ? inferExpr(stmt.binding.initializer) : invalid_type;
+                TypeId init_type = stmt.binding.initializer
+                                       ? inferExprExpected(stmt.binding.initializer, ann_type)
+                                       : invalid_type;
                 if (ann_type && stmt.binding.initializer &&
                     !coerceValue(stmt.binding.initializer, ann_type, init_type)) {
                     reportCoercionFailure(stmt.span, ann_type, init_type,
@@ -466,8 +467,9 @@ TypeId PerModuleSema::inferBlock(frontend::ExprId id) {
             last = void_type;
         } else if (stmt.kind == frontend::StmtKind::Binding) {
             TypeId ann_type = lowerTypeExpr(stmt.binding.type);
-            TypeId init_type =
-                stmt.binding.initializer ? inferExpr(stmt.binding.initializer) : invalid_type;
+            TypeId init_type = stmt.binding.initializer
+                                   ? inferExprExpected(stmt.binding.initializer, ann_type)
+                                   : invalid_type;
             if (ann_type && stmt.binding.initializer &&
                 !coerceValue(stmt.binding.initializer, ann_type, init_type)) {
                 reportCoercionFailure(stmt.span, ann_type, init_type,

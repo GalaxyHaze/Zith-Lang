@@ -322,6 +322,18 @@ TypeId PerModuleSema::inferField(frontend::ExprId id) {
     }
     TypeId object_type = inferExpr(expr.operands[0]);
     TypeId resolved    = resolve(object_type);
+    // An optional aggregate (`?S`, `?pack`) proven present by an early-return
+    // `if (x is null)` is read as its payload for field access. The local keeps
+    // its `?T` type (so `x?` still works); the read is recorded so HIR extracts
+    // field 0 instead of loading the whole optional.
+    if (type_table.kindOf(resolved) == TypeKind::Optional) {
+        if (const TypeId payload = provenOptionalAggregatePayload(expr.operands[0])) {
+            typed_map.optionalPayloadReads.insert(expr.operands[0].value, payload);
+            setExprType(expr.operands[0], payload);
+            object_type = payload;
+            resolved    = resolve(payload);
+        }
+    }
     // `self.field` is canonical for an implicit `*Owner` receiver. Sema treats
     // it like the legacy `self->field`; lowering still emits a deref/HirField.
     if (type_table.kindOf(resolved) == TypeKind::Pointer &&

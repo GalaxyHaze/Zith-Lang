@@ -65,6 +65,7 @@ bool encodeCachedModule(const Module &module, std::vector<uint8_t> &payload) {
         writer.writeU16(function.paramCount);
         writer.writeU16(function.regCount);
         writer.writeU8(function.returnsAggregate ? 1U : 0U);
+        writer.writeU8(function.returnsSlice ? 1U : 0U);
         writer.writeU32(static_cast<uint32_t>(function.regTypes.size()));
         for (const auto type : function.regTypes)
             writer.writeU8(static_cast<uint8_t>(type));
@@ -135,21 +136,24 @@ bool decodeCachedModule(std::span<const uint8_t> payload, uint16_t section_schem
         decoded.externs.push(interner.lookup(interner.intern(value)));
     }
 
-    if (!reader.readU32(count) || !reader.canReadU32Count(count, 18U))
+    if (!reader.readU32(count) || !reader.canReadU32Count(count, 19U))
         return false;
     for (uint32_t index = 0; index < count; ++index) {
         auto &function = decoded.functions.emplace(arena);
         std::string_view name;
         uint8_t return_type       = 0;
         uint8_t returns_aggregate = 0;
+        uint8_t returns_slice     = 0;
         if (!reader.readBlob(name) || !reader.readU8(return_type) ||
             return_type > static_cast<uint8_t>(ValueType::Void) ||
             !reader.readU16(function.paramCount) || !reader.readU16(function.regCount) ||
-            !reader.readU8(returns_aggregate) || returns_aggregate > 1U)
+            !reader.readU8(returns_aggregate) || returns_aggregate > 1U ||
+            !reader.readU8(returns_slice) || returns_slice > 1U)
             return false;
         function.name             = interner.lookup(interner.intern(name));
         function.returnType       = static_cast<ValueType>(return_type);
         function.returnsAggregate = returns_aggregate != 0;
+        function.returnsSlice     = returns_slice != 0;
 
         uint32_t item_count = 0;
         if (!reader.readU32(item_count) || !reader.canReadU32Count(item_count, 1U))

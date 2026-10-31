@@ -392,6 +392,39 @@ void addressOfMovesAndAssignRevives() {
     CHECK(nullable_rebind.ok, "nulling an optional pointer local replaces its alias");
 }
 
+void nonNullNarrowingIsInvalidatedByReassignment() {
+    // A `?*T` proven non-null by a guard must be re-narrowed after the binding
+    // is written again, because the new value may be null. A stale proof would
+    // let `p->field` compile and then fault at runtime.
+    auto reassigned_to_param = check("struct Entry { occupied: bool = false }\n"
+                                     "fn probe(var p: ?*Entry, q: ?*Entry): bool {\n"
+                                     "    if (p is null) {\n"
+                                     "        return false;\n"
+                                     "    }\n"
+                                     "    p = q;\n"
+                                     "    return p->occupied;\n"
+                                     "}\n");
+    CHECK(!reassigned_to_param.ok,
+          "a non-null proof does not survive a reassignment of the pointer local");
+    CHECK(reassigned_to_param.hasErrorCode(diagnostics::err::NullDerefUnproven),
+          "dereferencing a reassigned nullable pointer reports E3005");
+
+    // Re-narrowing after the write is still accepted, so the fix rejects only
+    // the unsound use.
+    auto renarrowed = check("struct Entry { occupied: bool = false }\n"
+                            "fn probe(var p: ?*Entry, q: ?*Entry): bool {\n"
+                            "    if (p is null) {\n"
+                            "        return false;\n"
+                            "    }\n"
+                            "    p = q;\n"
+                            "    if (p is null) {\n"
+                            "        return false;\n"
+                            "    }\n"
+                            "    return p->occupied;\n"
+                            "}\n");
+    CHECK(renarrowed.ok, "re-narrowing a nullable pointer after a write is accepted");
+}
+
 void addressOfEscapeIsRejected() {
     auto ret = check("fn main(): *i32 {\n"
                      "    var x: i32 = 1;\n"
@@ -557,6 +590,7 @@ void test_memory_qualifiers() {
     invalidCallOwnershipAnnotationsAreRejected();
     nonNullNarrowingSurvivesAsSlotFact();
     addressOfMovesAndAssignRevives();
+    nonNullNarrowingIsInvalidatedByReassignment();
     addressOfEscapeIsRejected();
     sliceToPointerEscapeIsRejected();
     valueIntrinsicSema();

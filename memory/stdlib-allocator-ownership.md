@@ -30,6 +30,12 @@ Calling `h.alloc(...)` twice on a concrete `HeapAllocator` in the same scope
 currently fails with `E4001` even with read-only trait receivers. Users should
 go through `std.memory.allocate` and `std.memory.deallocate` for now.
 
+An owning type can now retain its allocator in a `dyn Allocator` field: a
+struct literal coerces a concrete field value to `dyn` at the literal site, so
+`Resource { allocator: heap }` passes `check` and `run`. This previously
+failed under `zithc run` with `E5001 Invalid InsertValueInst`; see
+`test-codegen`'s `test_dyn_trait_struct_literal_field_runtime`.
+
 Zith-- bitwise operators use the `&.` spelling, and negative null checks use
 `not (value is null)`. Bare `&` and `is not null` fail during parsing.
 
@@ -65,26 +71,52 @@ The target proposal in `docs/adr/0010-allocator-inplace-drop.md` separates:
   imported `implement Box as InPlace` with qualified trait calls is covered by
   `tests/test-generic-hashmap.cpp`.
 - `new<T>`/`delete<T>` and `make<T>`/`release<T>`: heap and generic allocator
-  convenience pairs. `stdlib/std/memory/new.zith` carries the target helper
-  signatures as a proposed draft because the helpers still cannot be
-  instantiated. `stdlib/std/new.zith` remains as compatibility.
+  convenience pairs. `stdlib/std/memory/new.zith` now carries real bodies:
+  `new<T>` queries `@sizeOf`/`@alignOf`, allocates through the `HeapAllocator`
+  bridge, calls `(*p).inplace(args)`, and returns `?*T`; `delete<T>` calls
+  `(*p).clean()` and frees the block. `stdlib/std/new.zith` remains as
+  compatibility. The allocator-owned pair ships as free functions
+  `make`/`release` over `dyn Allocator` in `allocators/allocator` (the
+  `Allocator.make`/`release` defaults are const-failing until a trait default
+  body can dispatch to another trait method on `self`).
 - `W10xx DiscardedValue` and `W11xx DiscardedOwner`: future compiler warnings;
   no codegen changes are shipped in the first stdlib-only step.
 
 ## `std/memory/new.zith` Compiler Gaps
 
-The API draft in `stdlib/std/memory/new.zith` is the target single source for
-the `InPlace`/`new`/`delete` contract. The module and the `InPlace` trait itself
-now pass `zithc check`; the helper generics remain blocked. Confirmed blockers:
+`stdlib/std/memory/new.zith` is the single source for the `InPlace`/`new`/
+`delete` contract. The module, the `InPlace` trait, and the `new<T>`/`delete<T>`
+bodies all pass `zithc check`, link, and run (`test-codegen`
+`test_imported_memory_new_delete_runtime`). The remaining gap is the
+allocator-owned `make<T>`/`release<T>` default methods, not the heap pair.
 
-- Generic inference only unifies function parameters, not results. A helper
-  such as `fn new<T>(args: opaque): ?*T` fails with `E3011 cannot infer
-  generic argument; provide explicit type arguments inside an importing
-  module`, and even an explicit `new<Box>(...)` call cannot force resolution
-  once `opaque` packs and `dyn Allocator` are involved.
-- Opaque pack values cannot be destructured/field-accessed in the current
-  subset, so `args as |cap: u64|` compiles for matching but assigning
-  `self.cap = raw tuple` fails with `E3001 expected 'i32', has type 'pack'`.
+Resolved blockers:
+
+- Contextual (expected-result) inference now binds a result-only parameter such
+  as `T` in `fn new<T>(args: opaque): ?*T` from a binding annotation or
+  `return`, so `let p: ?*Box = new(0 as opaque);` resolves without explicit
+  `<...>`. See `memory/comptime-contextual-inference.md`.
+- The in-place constructor is reached with `(*p).inplace(args)` on the raw
+  pointer (the `p.InPlace.inplace(...)` and `p->InPlace.inplace(...)` spellings
+  are not accepted for a pointer receiver).
+
+Still open:
+
+- `make<T>`/`release<T>` are trait **default methods** on `Allocator`. A trait
+  default body cannot yet dispatch to another trait method on `self`
+  (`self.alloc(...)` reports `E3001 field access on non-struct type`), so the
+  generic pair stays a const-failing default until that lands.
+- Resolved: opaque pack values can now be destructured and field-accessed.
+  `let tuple = args as |cap: u64|;` followed by `if (tuple is null) { return; }`
+  and `tuple.cap` (or `self.cap = tuple.cap`) compile and run. The early-return
+  guard narrows the optional aggregate, and `x.cap` extracts the payload field.
+  Aggregate literals erased into an `opaque` parameter also keep their concrete
+  type now (a one-field struct no longer corrupts the erased payload).
+  A bare `null` member in a pack literal is resolved too: the surrounding
+  annotation supplies the member type, and `null as ?T` is a valid explicit
+  spelling. The canonical `new<Buffer>(|null as ?*u8, 0u64|)` call runs, and an
+  untyped `|null, 0u64|` reports `E3001` instead of corrupting the aggregate.
+  See `memory/sema-nonnull-narrowing.md`.
 - The order-dependent global snapshot scans that made imported trait
   conformance unstable in populated workdirs are gone. Sema now resolves
   imported traits, type names, and owner methods through the current module's
@@ -94,9 +126,11 @@ now pass `zithc check`; the helper generics remain blocked. Confirmed blockers:
   all loaded modules where the default/requirement was defined, so a future
   compatibility change to method-scope resolution can narrow those scans
   further.
-- `@alignOf` only accepts structs in the current subset, so heap
-  `new<T>`/`make<T>` cannot query alignment for primitive-layout `T` without
-  compiler work.
+- `@alignOf` now accepts any complete type (primitives and generic `T`
+  included) and types as `i32`, so heap `new<T>`/`make<T>` can query alignment
+  for primitive-layout `T`; `@sizeOf` still types as `u64`. `@alignOf(T)`
+  therefore needs an explicit `as u64` when combined with `@sizeOf(T)` in the
+  same `u64` expression.
 
 `destroy` remains object-owned for the legacy I/O types. The allocator owns
 only raw storage. `HeapAllocator` uses C `malloc`/`free`/`realloc` and ignores

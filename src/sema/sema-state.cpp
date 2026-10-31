@@ -214,7 +214,7 @@ void PerModuleSema::checkReturnStatement(const frontend::Statement &stmt) {
         }
         return;
     }
-    const TypeId value = inferExpr(stmt.expression);
+    const TypeId value = inferExprExpected(stmt.expression, currentReturnType_);
     if (stmt.expression && stmt.expression.value <= snapshot.expressions().size() &&
         snapshot.expressions()[stmt.expression.value - 1U].kind == frontend::ExprKind::Index) {
         // Returning `p[0]` returns the pointee value, not the local pointer.
@@ -241,7 +241,9 @@ void PerModuleSema::checkReturnStatement(const frontend::Statement &stmt) {
 }
 TypeId PerModuleSema::inferReturn(frontend::ExprId id) {
     const auto &expr = snapshot.expressions()[id.value - 1U];
-    TypeId value     = expr.operands.empty() ? void_type : inferExpr(expr.operands[0]);
+    TypeId value     = expr.operands.empty()
+                           ? void_type
+                           : inferExprExpected(expr.operands[0], currentReturnType_);
     if (currentReturnType_ && value && value != error_type && !expr.operands.empty() &&
         !coerceValue(expr.operands[0], currentReturnType_, value)) {
         reportCoercionFailure(expr.span, currentReturnType_, value,

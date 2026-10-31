@@ -471,7 +471,7 @@ Um range literal guarda os bounds brutos e a condição de cada bound:
 ```zith
 fn main(x: f64): bool {
     if (x in 0.0>..<1.0) { return true; }
-    return x in 2..<4;
+    return x in 2.0..<4.0;
 }
 ```
 
@@ -528,7 +528,7 @@ fn scan(xs: []i32): i32 {
         for (var j: i32 = 0), (j < 10), (j = j + 1) {
             if (j == 3) { continue outer; }
             if (i == 5) { break outer; }
-            total = total + xs[i * 10 + j];
+            total = total + must xs[i * 10 + j];
         }
     }
     return total;
@@ -598,8 +598,9 @@ devolve o ponteiro dos elementos, não o endereço do descritor.
 Num array local, `@ptrOf` aponta para o slot local e fica sujeito às restrições de escape do
 pointer object; em slices devolve o ponteiro ao storage subjacente, sem `raw`.
 
-`@sizeOf(T)` devolve o tamanho de qualquer tipo completo como `u64`. `@offsetOf(S, field)`
-e `@alignOf(S)` aplicam-se apenas a structs e devolvem `i32`.
+`@sizeOf(T)` devolve o tamanho de qualquer tipo completo como `u64`. `@alignOf(T)` devolve o
+alinhamento natural de qualquer tipo completo como `i32`. `@offsetOf(S, field)` aplica-se
+apenas a structs e devolve `i32`.
 
 `@canonicalType(T)` devolve um `u128` estável para o tipo, derivado do módulo, nome e campos
 ordenados. Útil para comparar tipos ou usar como chave estável.
@@ -611,7 +612,7 @@ Use `#[alignas(N)]` para reforçar o alinhamento de uma `struct` ou do storage d
 numa potência de dois, e o target tem de suportar esse alinhamento.
 
 ```zith
-#[alignas(64)] struct TokenBlock { tag: u8 }
+#[alignas(64)] struct TokenBlock { kind: u8 }
 #[alignas(64)] const lexerPage: [2]u8 = [0, 0];
 
 fn main(): i32 {

@@ -154,7 +154,9 @@ if(ZITH_HAS_LLVM AND NOT ZITH_IS_WASM AND NOT ZITH_TARGET_CROSS)
     endif()
 endif()
 
-set(ZITH_VERSION "v0.0.1" CACHE STRING "Project version")
+# Development default. Release builds override this with the release tag via
+# -DZITH_VERSION=<tag>, so only a plain local build reports this value.
+set(ZITH_VERSION "v0.6.4.0" CACHE STRING "Project version")
 
 include(GNUInstallDirs)
 include(FetchContent)
@@ -482,6 +484,7 @@ if(BUILD_TESTING AND NOT ZITH_IS_WASM)
     add_zith_test(test-generic-constraints tests/test-generic-constraints.cpp)
     add_zith_test(test-parse-input tests/test-parse-input.cpp)
     add_zith_test(test-stdlib-io tests/test-stdlib-io.cpp)
+    add_zith_test(test-stdlib-modules tests/test-stdlib-modules.cpp)
     add_zith_test(test-macro tests/test-macro.cpp)
     add_zith_test(test-memory tests/test-memory.cpp)
     add_zith_test(test-cache tests/test-cache.cpp)

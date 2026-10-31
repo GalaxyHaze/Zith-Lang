@@ -19,7 +19,7 @@ them pending.
   a later release, but the dedicated "dynamic dispatch is not implemented yet"
   diagnostic is part of 0.7.0.
 - Real generic monomorphization before HIR, restoring the documented pipeline
-  `sema -> comptime/solve -> NTA/NRA -> HIR`.
+  `sema -> comptime/solve -> SRA -> HIR`.
 - Traits and interfaces become semantically real: trait bodies, default methods,
   `requires`, `extends`, structural interfaces, and conformance checking.
 - Static introspection: `@fields`, `@hasTrait`, kind predicates, comptime

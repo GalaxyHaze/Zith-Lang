@@ -982,6 +982,70 @@ void test_vm_v2_ffi_getchar_reports_eof() {
     CHECK_EQ(result.exitCode, -1, "getchar reports end of input in the playground");
 }
 
+void test_vm_v2_ffi_strcpy_strcat_strcmp_memcmp() {
+    // Positive path: strcpy then strcat builds "abc", which strcmp and memcmp
+    // (over four bytes, including the terminator) both report as equal.
+    {
+        memory::Arena arena;
+        vm::Module module(arena);
+        module.strings.push("abc");
+        module.strings.push("ab");
+        module.strings.push("c");
+        module.externs.push(std::string_view("strcpy"));
+        module.externs.push(std::string_view("strcat"));
+        module.externs.push(std::string_view("strcmp"));
+        module.externs.push(std::string_view("memcmp"));
+
+        auto &main      = module.functions.emplace(arena);
+        main.name       = "main";
+        main.paramCount = 0;
+        main.returnType = vm::ValueType::I32;
+        main.regCount   = 12;
+        main.body.push(vm::Instr::withImm(vm::Op::LoadConstI32, 0, 8));
+        main.body.push(vm::Instr::withImm(vm::Op::LoadConstI32, 1, 1));
+        main.body.push(vm::Instr::simple(vm::Op::AllocBytes, 2, 0, 1));
+        main.body.push(vm::Instr::withImm(vm::Op::LoadString, 3, 1));
+        main.body.push(vm::Instr::withImm(vm::Op::LoadString, 4, 2));
+        main.body.push(vm::Instr::withImm(vm::Op::LoadString, 5, 0));
+        main.body.push(vm::Instr::callExtern(vm::Op::CallExtern, 6, 2, 3, 0));
+        main.body.push(vm::Instr::callExtern(vm::Op::CallExtern, 7, 2, 4, 1));
+        main.body.push(vm::Instr::callExtern(vm::Op::CallExtern, 8, 2, 5, 2));
+        main.body.push(vm::Instr::withImm(vm::Op::LoadConstI32, 9, 4));
+        main.body.push(vm::Instr::callExtern(vm::Op::CallExtern, 10, 2, 5, 3, 9));
+        main.body.push(vm::Instr::simple(vm::Op::Add, 11, 8, 10));
+        main.body.push(vm::Instr{vm::Op::Ret, 11, 0, 0, 0});
+
+        vm::Vm vm;
+        const auto result = vm.runMain(module);
+        CHECK(result.status == vm::RunStatus::Ok, "strcpy/strcat/strcmp/memcmp FFI succeed");
+        CHECK_EQ(result.exitCode, 0, "built string compares equal to the expected literal");
+    }
+
+    // Ordering path: strcmp reports a negative result for "abc" vs "abd".
+    {
+        memory::Arena arena;
+        vm::Module module(arena);
+        module.strings.push("abc");
+        module.strings.push("abd");
+        module.externs.push(std::string_view("strcmp"));
+
+        auto &main      = module.functions.emplace(arena);
+        main.name       = "main";
+        main.paramCount = 0;
+        main.returnType = vm::ValueType::I32;
+        main.regCount   = 4;
+        main.body.push(vm::Instr::withImm(vm::Op::LoadString, 0, 0));
+        main.body.push(vm::Instr::withImm(vm::Op::LoadString, 1, 1));
+        main.body.push(vm::Instr::callExtern(vm::Op::CallExtern, 2, 0, 1, 0));
+        main.body.push(vm::Instr{vm::Op::Ret, 2, 0, 0, 0});
+
+        vm::Vm vm;
+        const auto result = vm.runMain(module);
+        CHECK(result.status == vm::RunStatus::Ok, "strcmp ordering call succeeds");
+        CHECK(result.exitCode < 0, "strcmp reports a negative ordering for 'abc' vs 'abd'");
+    }
+}
+
 void test_vm_v2_ffi_unsupported_extern_names() {
     memory::Arena arena;
     vm::Module module(arena);
@@ -2038,6 +2102,54 @@ void test_vm_v2_float_arithmetic() {
                 "v2 VM preserves floating-point arithmetic and comparison results");
 }
 
+void test_vm_v2_slice_return_by_value() {
+    // A function that returns a slice by value must carry the length half in
+    // the register after the return register; otherwise `@lengthOf` reads a
+    // stale value.
+    runVmSource("slice-return",
+                "fn head(a: *char, n: u64): []char {\n"
+                "    raw a[0u64..n]\n"
+                "}\n"
+                "\n"
+                "fn main(): i32 {\n"
+                "    var s = head(\"hello\", 3u64);\n"
+                "    if @lengthOf(s) != 3u64 {\n"
+                "        return 1;\n"
+                "    }\n"
+                "    if raw s[0u64] != 'h' {\n"
+                "        return 2;\n"
+                "    }\n"
+                "    if raw s[2u64] != 'l' {\n"
+                "        return 3;\n"
+                "    }\n"
+                "    return 0;\n"
+                "}\n",
+                0, "slice-returning source lowers into the v2 VM",
+                "v2 VM runs a slice-returning function",
+                "v2 VM preserves the returned slice pointer and length");
+}
+
+void test_vm_v2_pointer_dynamic_index() {
+    runVmSource("pointer-dynamic-index",
+                "fn nth(a: *char, i: u64): char {\n"
+                "    a[i]\n"
+                "}\n"
+                "\n"
+                "fn main(): i32 {\n"
+                "    var buf: [3]char = ['a', 'b', 'c'];\n"
+                "    var p: *char = @ptrOf(buf);\n"
+                "    if nth(p, 0u64) != 'a' {\n"
+                "        return 1;\n"
+                "    }\n"
+                "    if nth(p, 2u64) != 'c' {\n"
+                "        return 2;\n"
+                "    }\n"
+                "    return 0;\n"
+                "}\n",
+                0, "pointer-indexing source lowers into the v2 VM",
+                "v2 VM runs dynamic pointer indexing", "v2 VM reads the selected pointer element");
+}
+
 void test_vm_v2_hir_control_flow_and_dynamic_array_index() {
     const auto root = std::filesystem::temp_directory_path() / "zith-vm-v2-cfg-array-tests";
     std::filesystem::remove_all(root);
@@ -2171,6 +2283,7 @@ void test_vm_v2() {
     test_vm_v2_ffi_calloc_zeroes_and_strncmp();
     test_vm_v2_ffi_strncmp_ordering();
     test_vm_v2_ffi_getchar_reports_eof();
+    test_vm_v2_ffi_strcpy_strcat_strcmp_memcmp();
     test_vm_v2_ffi_unsupported_extern_names();
 #ifdef ZITH_ENABLE_C_INTEROP
     test_vm_v2_external_global_fallback();
@@ -2205,6 +2318,8 @@ void test_vm_v2() {
     test_vm_v2_explicit_array_binding_alignment();
     test_vm_v2_bitwise_and_shifts();
     test_vm_v2_float_arithmetic();
+    test_vm_v2_slice_return_by_value();
+    test_vm_v2_pointer_dynamic_index();
     test_vm_v2_hir_control_flow_and_dynamic_array_index();
     test_vm_v2_dynamic_array_index_traps();
 }

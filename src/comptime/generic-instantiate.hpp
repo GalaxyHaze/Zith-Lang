@@ -49,6 +49,8 @@ public:
     resolveArgs(const sema::modern::FunctionType &fn, size_t degree, uint32_t decl_id,
                 const std::vector<sema::modern::TypeId> &explicit_args,
                 const std::vector<sema::modern::TypeId> &argument_types,
+                sema::modern::TypeId expected_result,
+                const std::vector<bool> &weak_args,
                 std::vector<sema::modern::TypeId> &out_args) const;
 
     /// Deduces struct-literal generic arguments from the declared field types
@@ -66,8 +68,40 @@ public:
                     const session::ModuleKey &target_module, frontend::DeclId decl,
                     std::vector<sema::modern::TypeId> args);
 
+    /// Ensures a concrete instance exists without touching any call-site
+    /// binding. HIR lowering uses this to concretize a nested generic call
+    /// whose template arguments are the enclosing function's type parameters.
+    /// Returns the instance index, or `~size_t{0}` on explosion.
+    size_t ensureInstance(const session::ModuleKey &target_module, frontend::DeclId decl,
+                          std::vector<sema::modern::TypeId> args);
+
+    /// Walks every concrete instance body and ensures the concrete instances
+    /// its nested generic calls need, running to a fixpoint. A call bound inside
+    /// `HashMap<K, V>` as `reserve<K, V>` therefore materializes
+    /// `reserve<i64, i64>` before HIR lowering emits symbols. Without this the
+    /// abstract `reserve<T, T>` template would be emitted and fail to link.
+    void concretizeNestedInstances();
+
+    /// True when `instance.args` still mentions a generic parameter. Such an
+    /// instance is a template artifact, not a callable symbol, and must not be
+    /// emitted as a standalone HIR function.
+    [[nodiscard]] bool instanceIsAbstract(const InstantiationInstance &instance) const;
+
     [[nodiscard]] sema::modern::TypeId
     substituteType(sema::modern::TypeId type, const std::vector<sema::modern::TypeId> &args) const;
+
+    /// True when `type` mentions any generic parameter, directly or through a
+    /// nested struct/union/function shape. Used to decide whether a nested
+    /// call's recorded arguments still need concretization.
+    [[nodiscard]] bool typeMentionsGeneric(sema::modern::TypeId type) const;
+
+    /// Substitutes the concrete arguments of an enclosing generic instance into
+    /// the recorded type arguments of a nested call. This is what turns a call
+    /// bound as `reserve<K, V>` inside `HashMap<K, V>` into `reserve<i64, i64>`
+    /// once the enclosing function is instantiated.
+    [[nodiscard]] std::vector<sema::modern::TypeId>
+    substituteArgs(const std::vector<sema::modern::TypeId> &args,
+                   const std::vector<sema::modern::TypeId> &enclosing) const;
 
     [[nodiscard]] sema::modern::TypeId
     substituteFunction(const sema::modern::FunctionType &fn,
@@ -92,6 +126,8 @@ private:
                  const std::vector<sema::modern::TypeId> &explicit_args,
                  const std::vector<sema::modern::TypeId> &declared_types,
                  const std::vector<sema::modern::TypeId> &argument_types, bool strict,
+                 sema::modern::TypeId declared_result, sema::modern::TypeId expected_result,
+                 const std::vector<bool> &weak_args,
                  std::vector<sema::modern::TypeId> &out_args) const;
 
     const session::CompilationSnapshot &snapshot_;

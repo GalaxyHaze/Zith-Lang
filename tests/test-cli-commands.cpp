@@ -1,6 +1,7 @@
 #include "cli/commands.hpp"
 #include "cli/options.hpp"
 #include "session/project-options-merge.hpp"
+#include "support/project-root.hpp"
 #include "test-common.hpp"
 
 #include <cstdlib>
@@ -600,14 +601,13 @@ static void test_deps_resolve_writes_deterministic_lockfile() {
                                 std::istreambuf_iterator<char>());
     CHECK(firstLockfile.good() || firstLockfile.eof(), "deps resolve creates Zith.lock");
     const auto parsedLockfile = toml::parse(firstText);
-    const auto *packages       = parsedLockfile["package"].as_array();
-    bool hasLoggingPackage     = false;
+    const auto *packages      = parsedLockfile["package"].as_array();
+    bool hasLoggingPackage    = false;
     if (packages != nullptr) {
         for (const auto &record : *packages) {
-            const auto *package = record.as_table();
+            const auto *package  = record.as_table();
             const auto *nameNode = package == nullptr ? nullptr : package->get("name");
-            const auto name      = nameNode == nullptr ? std::nullopt
-                                                       : nameNode->value<std::string>();
+            const auto name   = nameNode == nullptr ? std::nullopt : nameNode->value<std::string>();
             hasLoggingPackage = hasLoggingPackage || (name && *name == "logging");
         }
     }
@@ -689,7 +689,7 @@ static void test_deps_add_remove_edit_only_the_manifest() {
                            std::istreambuf_iterator<char>());
     };
     const auto manifestAfterAdd = readManifest();
-    const auto duplicate = capture.run("deps add logging ../another/logging");
+    const auto duplicate        = capture.run("deps add logging ../another/logging");
     CHECK_EQ(duplicate.exitCode, 1, "deps add rejects an already declared package");
     const auto absolutePath = capture.run("deps add absolute \"/tmp/external-package\"");
     CHECK_EQ(absolutePath.exitCode, 1, "deps add rejects an absolute package path");
@@ -709,7 +709,7 @@ static void test_deps_add_remove_edit_only_the_manifest() {
     const auto removed = capture.run("deps remove logging");
     CHECK_EQ(removed.exitCode, 0, "deps remove removes an existing package declaration");
     parsedManifest = toml::parse_file(manifestPath.string());
-    dependencies  = parsedManifest["dependencies"].as_table();
+    dependencies   = parsedManifest["dependencies"].as_table();
     CHECK(dependencies == nullptr || dependencies->get("logging") == nullptr,
           "deps remove deletes the requested package declaration");
     CHECK_EQ(parsedManifest["paths"]["src_dir"].value<std::string>().value_or(""),
@@ -790,6 +790,34 @@ static void test_check_build_require_explicit_lockfile() {
 #endif
 }
 
+static void test_create_writes_lockfile_for_generated_project() {
+#ifdef ZITHC_BINARY
+    namespace fs = std::filesystem;
+
+    CliCapture capture;
+    fs::create_directories(capture.root);
+
+    CurrentDirectory currentDirectory(capture.root);
+    const auto created = capture.run("create demo");
+    CHECK_EQ(created.exitCode, 0, "create succeeds for a new project");
+
+    const auto projectRoot = capture.root / "demo";
+    CHECK(fs::exists(projectRoot / "ZithProject.toml"),
+          "create writes the generated project manifest");
+    CHECK(fs::exists(projectRoot / "Zith.lock"),
+          "create resolves and writes Zith.lock for the empty dependency graph");
+
+    CurrentDirectory projectDirectory(projectRoot);
+    for (const auto *command : {"check", "build"}) {
+        const auto result = capture.run(command);
+        CHECK_EQ(result.exitCode, 0,
+                 "a freshly created project passes the lockfile gate for check/build");
+    }
+#else
+    CHECK(true, "create lockfile tests are skipped when zithc is not built");
+#endif
+}
+
 static void test_legacy_and_malformed_project_manifest_gate_behavior() {
 #ifdef ZITHC_BINARY
     namespace fs = std::filesystem;
@@ -834,6 +862,86 @@ static void test_legacy_and_malformed_project_manifest_gate_behavior() {
     }
 #else
     CHECK(true, "project manifest gate subprocess tests are skipped when zithc is not built");
+#endif
+}
+
+static void test_project_root_stops_at_vcs_boundary() {
+    namespace fs = std::filesystem;
+    CliCapture capture;
+
+    // Layout: <root>/ZithProject.toml is a *foreign* project above a checkout
+    // marked with a `.git` entry. A lookup from inside the checkout must not
+    // adopt the foreign manifest.
+    const auto root = capture.root / "boundary";
+    const auto repo = root / "checkout";
+    fs::create_directories(repo / "src");
+    fs::create_directories(repo / ".git");
+    {
+        std::ofstream foreign(root / "ZithProject.toml", std::ios::binary);
+        foreign << "[project]\nname = \"foreign\"\n";
+    }
+
+    const auto located = support::findProjectRoot(repo / "src");
+    CHECK(!located.has_value(),
+          "project lookup stops at the checkout boundary and ignores the foreign manifest");
+
+    // Once the checkout itself owns a manifest, it is found from any depth.
+    {
+        std::ofstream own(repo / "ZithProject.toml", std::ios::binary);
+        own << "[project]\nname = \"checkout\"\nversion = \"0.1.0\"\n";
+    }
+    const auto ownRoot = support::findProjectRoot(repo / "src");
+    CHECK(ownRoot.has_value() && *ownRoot == fs::weakly_canonical(repo),
+          "project lookup finds the nearest manifest inside the checkout");
+
+    // Without a `.git` boundary, a plain ancestor manifest is still discovered.
+    const auto plain = capture.root / "plain";
+    fs::create_directories(plain / "nested" / "deep");
+    {
+        std::ofstream manifest(plain / "ZithProject.toml", std::ios::binary);
+        manifest << "[project]\nname = \"plain\"\n";
+    }
+    const auto plainRoot = support::findProjectRoot(plain / "nested" / "deep");
+    CHECK(plainRoot.has_value() && *plainRoot == fs::weakly_canonical(plain),
+          "project lookup walks up to a manifest when no VCS boundary intervenes");
+}
+
+static void test_clean_preserves_artifacts_without_confirmation() {
+#ifdef ZITHC_BINARY
+    namespace fs = std::filesystem;
+    CliCapture capture;
+
+    const auto projectRoot = capture.root / "clean-project";
+    fs::create_directories(projectRoot / "src");
+    fs::create_directories(projectRoot / "target");
+    fs::create_directories(projectRoot / ".zith-cache");
+    {
+        std::ofstream manifest(projectRoot / "ZithProject.toml", std::ios::binary);
+        manifest << "[project]\nname = \"clean\"\nversion = \"0.1.0\"\n";
+    }
+    {
+        std::ofstream binary(projectRoot / "target" / "clean", std::ios::binary);
+        binary << "artifact\n";
+    }
+    {
+        std::ofstream cacheEntry(projectRoot / ".zith-cache" / "entry", std::ios::binary);
+        cacheEntry << "cache\n";
+    }
+
+    CurrentDirectory currentDirectory(projectRoot);
+    const auto result = capture.run("clean");
+    CHECK_EQ(result.exitCode, 0, "clean succeeds after clearing the cache");
+    CHECK(!fs::exists(projectRoot / ".zith-cache"), "clean removes the persistent cache");
+    CHECK(fs::exists(projectRoot / "target"),
+          "clean keeps build artifacts when stdin is not an interactive terminal");
+    CHECK(result.stderrText.find("--yes") != std::string::npos,
+          "clean explains how to remove artifacts non-interactively");
+
+    const auto forced = capture.run("clean -y");
+    CHECK_EQ(forced.exitCode, 0, "clean -y succeeds");
+    CHECK(!fs::exists(projectRoot / "target"), "clean -y removes the build artifacts");
+#else
+    CHECK(true, "CLI clean subprocess tests are skipped when zithc is not built");
 #endif
 }
 
@@ -1200,7 +1308,10 @@ static void test_cli_commands() {
     test_deps_resolve_writes_deterministic_lockfile();
     test_deps_add_remove_edit_only_the_manifest();
     test_check_build_require_explicit_lockfile();
+    test_create_writes_lockfile_for_generated_project();
     test_legacy_and_malformed_project_manifest_gate_behavior();
+    test_project_root_stops_at_vcs_boundary();
+    test_clean_preserves_artifacts_without_confirmation();
     test_command_signatures_exist();
     test_count_passed();
     test_command_names_match_contract();

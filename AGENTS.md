@@ -32,7 +32,8 @@ ctest --test-dir build --output-on-failure
 ```
 
 Use `./build/zithc --help` to inspect the local CLI. A useful compiler smoke
-test is `./build/zithc --include stdlib check examples/hello-world.zith`.
+test is `./build/zithc check examples/loops-simple.zith` (run from the repo
+root, so project discovery stops at the checkout).
 LLVM remains optional for parser/sema-only local builds, but every native
 release artifact and the native CI jobs must configure `ZITH_REQUIRE_LLVM=ON`
 with LLVM 18+; those release paths fail instead of publishing a sema-only
@@ -123,7 +124,7 @@ Common language/codebase organization:
 The current documented pipeline is:
 
 ```
-Source → Lex → Scan → Import → Resolve → Sema → Comptime/Solve → NTA/NRA → HIR → Codegen → Cache
+Source → Lex → Scan → Import → Resolve → Sema → Comptime/Solve → SRA → HIR → Codegen → Cache
 ```
 
 `CompilationSession` in `src/session/compilation-session.*` orchestrates these

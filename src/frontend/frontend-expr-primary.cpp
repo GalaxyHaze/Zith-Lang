@@ -317,14 +317,59 @@ ExprId AstLowerer::parsePrimary() {
                 qualified_name += std::string(text(probe + 1U));
                 probe += 2U;
             }
-            ends_at_brace = punctuation(probe, '{');
+            // Qualified generic struct literal `ns.Box<i64, i64>{ ... }`: the
+            // dotted name may be followed by a `<...>` type-argument list before
+            // the opening brace.
+            uint32_t generic_open  = 0;
+            uint32_t generic_close = 0;
+            if (qualified_name != expression.text && probe < token_count_ &&
+                snapshot_.tokens_[probe].kind == TokenKind::Operator && text(probe) == "<") {
+                int depth = 0;
+                for (uint32_t scan = probe; scan < token_count_; ++scan) {
+                    const auto &tok = snapshot_.tokens_[scan];
+                    if (tok.kind == TokenKind::End)
+                        break;
+                    if (tok.kind != TokenKind::Operator)
+                        continue;
+                    const auto op = text(scan);
+                    if (op == "<") {
+                        ++depth;
+                    } else if (op == ">") {
+                        --depth;
+                        if (depth == 0) {
+                            generic_open  = probe;
+                            generic_close = scan;
+                            break;
+                        }
+                    }
+                }
+                ends_at_brace = generic_close != 0 && punctuation(generic_close + 1U, '{');
+            } else {
+                ends_at_brace = punctuation(probe, '{');
+            }
             if (ends_at_brace && qualified_name != expression.text) {
-                index_ = probe;
-                ++index_; // '{'
                 Expression struct_lit;
                 struct_lit.kind            = ExprKind::StructLiteral;
                 struct_lit.scope           = current_scope_;
                 struct_lit.text            = std::move(qualified_name);
+                if (generic_close != 0) {
+                    index_ = generic_open;
+                    ++index_; // '<'
+                    while (index_ < token_count_ && !isOperatorToken(">")) {
+                        struct_lit.genericArgs.push_back(parseType());
+                        if (!punctuation(index_, ','))
+                            break;
+                        ++index_;
+                    }
+                    if (isOperatorToken(">"))
+                        ++index_;
+                    else
+                        snapshot_.diagnostics_.push_back(
+                            {range(start, index_), "expected '>' after generic arguments"});
+                } else {
+                    index_ = probe;
+                }
+                ++index_; // '{'
                 bool saw_named             = false;
                 bool saw_positional        = false;
                 const auto parseFieldValue = [&]() -> ExprId {

@@ -266,17 +266,40 @@ acima e só os itens ainda abertos permanecem neste inventário:
 - Narrowing de `?*T` continua limitado a provas flow-sensitive sobre bindings
   locais. Usos sem prova reportam `E3005`, e provas sobre expressões derivadas
   ou entre funções não são propagadas.
+- O narrowing de optionais agregados (`?S`, `?pack`, `?i32`) passou a
+  funcionar: depois de `if (x is null) { return ...; }`, os acessos `x.field` /
+  `x.len` e `return x;` são aceites, como no nicho de `?*T`. O payload é
+  extraído no local de uso (`TypedMap::optionalPayloadReads`), não no nome, para
+  que `x?` continue a propagar. Ver `memory/sema-nonnull-narrowing.md`.
+- Resolvido: um membro `null` num literal de pack. `inferPackLiteral` recebe o
+  tipo de pack esperado da anotação (`let a: |bytes: ?*u8, len: u64| = |null,
+  7u64|;`), e `null as ?T` fixa o tipo opcional de um `null` nu no call site
+  (`new<Buffer>(|null as ?*u8, 0u64|)`). Um `null` sem contexto de tipo é
+  rejeitado no próprio `inferPackLiteral` com `E3001`, pelo que o pack malformado
+  nunca é internado. Antes a rejeição só existia no ramo de erradicação para
+  `opaque`, e um binding direto (`let t = |null, 7u64|;`) chegava ao codegen com
+  um membro `void` e pendurava o LLVM a 100% de CPU. Ver
+  `memory/sema-nonnull-narrowing.md`.
 
-### 9. HashMap genérico implementado; deref em cadeia continua limitado
+### 9. HashMap genérico implementado e consumível entre módulos
 
 `HashMap<K, V>` está implementado, com reificação estrutural, propagação de
-bounds e persistência dos argumentos concretos no cache. O probe
-`entry-table.zith`, que usa `self->table->occupied`, continua fora do caminho
-suportado pelo `hash_map.zith`, que usa `raw self->table[...]`.
+bounds e persistência dos argumentos concretos no cache. O caminho de generics
+importados (ADR 0020) também está fechado: `hm.HashMap<i64, i64>{}` reifica a
+partir do template do módulo declarante, os defaults de campo são abaixados
+nesse módulo, os métodos genéricos herdam os argumentos do recetor concreto, e
+as chamadas genéricas aninhadas são concretizadas transitivamente
+(`init<i64,i64>` chama `reserve<i64,i64>`). `examples/hash-map.zith` passa
+`zithc check` e corre até código de saída 0, e o caminho é coberto por
+`tests/test-generic-hashmap.cpp` e `test-codegen`. O segundo consumidor,
+`DynArray<T>`, está promovido: `examples/dyn-array.zith` passa `zithc check` e
+corre até código de saída 0, e `test-codegen` exercita um `DynArray<i32>`
+importado de ponta a ponta.
 
-Dívida residual: a cadeia de deref de `?*T` não está coberta pelo contrato atual
-nem pelos testes de `HashMap`. A curadoria de outras declarações genéricas da
-stdlib é uma tarefa separada, não um bloqueio para esta implementação.
+Dívida residual: a cadeia de deref de `?*T` (o probe `entry-table.zith`, que usa
+`self->table->occupied`) continua fora do caminho suportado pelo
+`hash_map.zith`, que usa `raw self->table[...]`. Isto é um endurecimento do
+sema de narrowing, não um bloqueio para a std-lib.
 
 ---
 

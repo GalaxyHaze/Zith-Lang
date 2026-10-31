@@ -142,7 +142,7 @@ TypeId PerModuleSema::resolveGenericStructLiteral(frontend::TextSpan span,
         break;
     }
 
-    const TypeId concrete = instantiateStructFromArgs(span, template_decl, resolved_args);
+    const TypeId concrete = instantiateTemplateFromArgs(span, template_decl, resolved_args);
     if (!concrete)
         return error_type;
     const TypeId concrete_resolved = type_table.stripQualifiers(concrete);
@@ -358,12 +358,53 @@ TypeId PerModuleSema::inferStructLiteral(frontend::ExprId id) {
     importedTemplateModule_ = saved_imported_template_module;
     return TypeId{resolved.intern_seq};
 }
-TypeId PerModuleSema::inferPackLiteral(frontend::ExprId id) {
+TypeId PerModuleSema::inferPackLiteral(frontend::ExprId id, TypeId expected) {
     const auto &expr = snapshot.expressions()[id.value - 1U];
     auto &members    = type_table.makeTypeStorage();
     auto &names      = type_table.makeStringStorage();
-    for (const auto operand : expr.operands)
-        members.push(inferExpr(operand));
+    // A surrounding annotation may fix the member types: `let a: |bytes: ?*u8,
+    // len: u64| = |null, 7u64|;` must type the bare `null` as `?*u8`, not as
+    // `null`/`never`. Without the declared member type the literal would carry
+    // a void member and corrupt the aggregate when it is erased into `opaque`.
+    // One optional layer is looked through so `?|...|` also supplies members.
+    const PackType *target_pack = nullptr;
+    if (expected) {
+        TypeId cursor = resolve(expected);
+        if (type_table.kindOf(cursor) == TypeKind::Optional) {
+            if (const auto *opt = type_table.optional(cursor))
+                cursor = resolve(opt->inner);
+        }
+        if (type_table.kindOf(cursor) == TypeKind::Pack)
+            target_pack = type_table.pack(cursor);
+    }
+    for (size_t index = 0; index < expr.operands.size(); ++index) {
+        const auto operand    = expr.operands[index];
+        const TypeId inferred = inferExpr(operand);
+        if (target_pack != nullptr && index < target_pack->members.size() && operand &&
+            operand.value <= snapshot.expressions().size() &&
+            snapshot.expressions()[operand.value - 1U].kind == frontend::ExprKind::Literal &&
+            snapshot.expressions()[operand.value - 1U].text == "null" &&
+            resolve(inferred) == null_type) {
+            const TypeId member_type = type_table.stripQualifiers(target_pack->members[index]);
+            setExprType(operand, member_type);
+            members.push(member_type);
+            continue;
+        }
+        // A bare `null` with no declared member type would leave a `void`
+        // member in the pack, which corrupts the aggregate and hangs LLVM
+        // codegen. Reject it here so the malformed pack is never interned.
+        if (operand && operand.value <= snapshot.expressions().size() &&
+            snapshot.expressions()[operand.value - 1U].kind == frontend::ExprKind::Literal &&
+            snapshot.expressions()[operand.value - 1U].text == "null" &&
+            resolve(inferred) == null_type) {
+            report(expr.span,
+                   "a bare 'null' in an untyped pack literal has no member type; "
+                   "annotate the pack or write the 'null' with its optional type",
+                   diagnostics::err::TypeMismatch);
+            return error_type;
+        }
+        members.push(inferred);
+    }
     return type_table.internPack(members, names);
 }
 TypeId PerModuleSema::inferUnionLiteral(frontend::ExprId id, TypeId union_tid,

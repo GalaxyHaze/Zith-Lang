@@ -14,7 +14,7 @@ Aligned".
 The documented compiler pipeline is:
 
 ```text
-source -> lex -> scan -> resolve(import/symbols) -> sema -> comptime/solve -> NTA/NRA -> HIR -> LLVM
+source -> lex -> scan -> resolve(import/symbols) -> sema -> comptime/solve -> SRA -> HIR -> LLVM
 ```
 
 The current `CompilationSession::runTo` execution order is:
@@ -28,7 +28,7 @@ conservative stub. `nra` accumulates `NraFacts` before lowering. `lower` runs `H
 then runs the current HIR-based `comptime::Solver` as a compatibility pass after lowering. `codegen`
 and `cache` run only for stages that require them.
 
-The stable boundary is: the pre-HIR `NTA/NRA` pass accumulates residual ownership facts, and the
+The stable boundary is: the pre-HIR `SRA` pass accumulates residual ownership facts, and the
 final HIR is ownership-free except for those residual side-table facts. Do not move the ownership
 proof behind final lowering or invent HIR ownership nodes.
 

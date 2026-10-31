@@ -72,6 +72,11 @@ may remain as diagnostic evidence but do not define acceptance.
   pointers never leak into the IR.
 - Structs and slices live by address. The IR has `FieldPtr`, memory load/store,
   `MemCopy`, and fat pointer construction/access.
+- A function that returns a slice by value carries the fat pointer in two
+  registers: the pointer half in its result register and the length half in the
+  next register (`Function::returnsSlice`). A call site reserves both registers,
+  and `@lengthOf`, `slice.length`, and bounds checks read the length half back
+  through the slice `HirField` case instead of going through `FieldPtr`.
 - Aggregate values (structs and packs) are address-backed: an aggregate slot in
   the lowering holds a guest pointer, and `FieldPtr` composes nested field
   addresses without copying. A struct literal allocates its storage and stores

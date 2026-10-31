@@ -25,7 +25,7 @@ implement string {
         if (memory is null) { return null; }
         var data: ?*char = memory as ?*char
         if (data is null) { return null; }
-        strcpy(data, str)
+        _ = strcpy(data, str);
         string { data, len, allocator }
     }
 
@@ -46,7 +46,7 @@ implement string {
     }
 
     pub fn iter(self: view string): stringIterator {
-        stringIterator { self.data, self.length, 0u64 }
+        stringIterator { raw self.data, self.length, 0u64 }
     }
 
     pub fn at(self: view string, index: u64): ?char {
@@ -65,27 +65,28 @@ implement string {
 
     pub fn startsWith(self: view string, other: *char): bool {
         let plen = strlen(other)
-        if (plen > self.length) { return false }
+        if (plen > self.length) { return false; }
         memcmp(self.data, other, plen) == 0
     }
 
     pub fn concat(self: view string, other: *char): ?Self {
         let olen = strlen(other)
         let max = 18446744073709551615u64
-        if (self.length == max or olen > max - self.length - 1u64) { return null }
+        if (self.length == max or olen > max - self.length - 1u64) { return null; }
         let memory = allocate(self.allocator, self.length + olen + 1u64, 1u64)
         if (memory is null) { return null; }
         var data: ?*char = memory as ?*char
-        if (data is null) { return null }
-        strcpy(data, self.data)
-        strcat(data, other)
+        if (data is null) { return null; }
+        _ = strcpy(data, self.data);
+        _ = strcat(data, other);
         string { data, self.length + olen, self.allocator }
     }
 
     pub fn destroy(self: lend string) {
         let data = self.data
-        if (data is null) { return }
-        deallocate(self.allocator, data as raw opaque, self.length + 1u64, 1u64)
+        if (not (data is null)) {
+            deallocate(self.allocator, data as raw opaque, self.length + 1u64, 1u64)
+        }
         self.data = null
         self.length = 0
     }

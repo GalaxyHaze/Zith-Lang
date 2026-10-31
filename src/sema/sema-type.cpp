@@ -530,30 +530,23 @@ TypeId PerModuleSema::lowerForeignConstantType(const cinterop::Constant &constan
 }
 TypeId PerModuleSema::instantiateTypeExpr(frontend::TextSpan span, std::string_view name,
                                           const std::vector<frontend::TypeExprId> &arguments) {
-    if (!importedTemplateModule_.empty() && importedTemplateModule_ != module &&
-        owner != nullptr) {
-        if (PerModuleSema *declaring_sema = owner->findModuleSema(importedTemplateModule_))
-            return declaring_sema->instantiateTypeExpr(span, name, arguments);
-    }
     if (name == "Self") {
         report(span, "'Self' cannot be used with generic type arguments",
                diagnostics::err::UndefinedIdent);
         return error_type;
     }
-    const frontend::Declaration *template_decl = nullptr;
-    for (const auto &decl : snapshot.declarations()) {
-        if (decl.name == name && !decl.genericParams.empty()) {
-            template_decl = &decl;
-            break;
-        }
-    }
+    // The generic arguments are written in this (caller) module, so they are
+    // lowered here against this module's snapshot. The template body itself is
+    // reified in its declaring module below.
+    session::ModuleKey declaring_module{};
+    const frontend::Declaration *template_decl =
+        findGenericTypeTemplate(name, &declaring_module);
     if (template_decl == nullptr) {
         report(span, "unknown generic type template '" + std::string(name) + "'",
                diagnostics::err::UndefinedIdent);
         return error_type;
     }
-    const size_t arity = template_decl->genericParams.size();
-    if (arguments.size() != arity) {
+    if (arguments.size() != template_decl->genericParams.size()) {
         report(span, "wrong generic argument count for '" + std::string(name) + "'",
                diagnostics::err::GenericArity);
         return error_type;
@@ -569,124 +562,26 @@ TypeId PerModuleSema::instantiateTypeExpr(frontend::TextSpan span, std::string_v
         }
         args.push_back(lowered);
     }
-    std::string concrete_name = std::string(name) + "<";
-    for (size_t i = 0; i < args.size(); ++i) {
-        if (i != 0)
-            concrete_name += ",";
-        concrete_name += typeArgumentName(args[i]);
+    // Reify the concrete type in the module that declares the template, so the
+    // template body's own type expressions and name lookups resolve there. A
+    // local template keeps using `this`.
+    if (declaring_module != module && owner != nullptr) {
+        if (PerModuleSema *declaring_sema = owner->findModuleSema(declaring_module))
+            return declaring_sema->instantiateTemplateFromArgs(span, *template_decl, args);
     }
-    concrete_name += ">";
-    if (const TypeId existing = type_table.lookupReifiedStruct(concrete_name, args))
-        return existing;
-
-    switch (template_decl->kind) {
-    case frontend::DeclKind::Struct: {
-        auto &fields                             = type_table.makeTypeStorage();
-        auto &fld_names                          = type_table.makeStringStorage();
-        auto &field_meta                         = type_table.makeFieldMetaStorage();
-        std::vector<GenericBinding> saved_active = std::move(activeTemplateArgs_);
-        activeTemplateArgs_.clear();
-        for (size_t i = 0; i < template_decl->genericParams.size(); ++i) {
-            GenericBinding active_binding;
-            active_binding.name = template_decl->genericParams[i].name;
-            active_binding.type = args[i];
-            activeTemplateArgs_.push_back(std::move(active_binding));
-        }
-        for (const auto &param : template_decl->parameters) {
-            TypeId ftype = lowerTypeExpr(param.type);
-            fields.push(ftype ? ftype : error_type);
-            field_meta.push(FieldMeta{param.visibility, param.modDepth, module});
-            char *buf = static_cast<char *>(arena.alloc(param.name.size(), 1));
-            std::memcpy(buf, param.name.data(), param.name.size());
-            fld_names.push(std::string_view(buf, param.name.size()));
-        }
-        activeTemplateArgs_ = std::move(saved_active);
-        TypeId st = type_table.internStruct(concrete_name, fields, &fld_names, &field_meta, &args,
-                                            requestedStructAlignment(*template_decl));
-        type_table.setDefiningModule(st, type_table.definingModule(type_table.lookupNamed(name)));
-        type_table.registerNamed(concrete_name, st);
-        return st;
-    }
-    case frontend::DeclKind::Enum: {
-        std::vector<GenericBinding> saved_active = std::move(activeTemplateArgs_);
-        activeTemplateArgs_.clear();
-        for (size_t i = 0; i < template_decl->genericParams.size(); ++i) {
-            GenericBinding active_binding;
-            active_binding.name = template_decl->genericParams[i].name;
-            active_binding.type = args[i];
-            activeTemplateArgs_.push_back(std::move(active_binding));
-        }
-        auto &variant_names = type_table.makeStringStorage();
-        auto &discs         = type_table.makeDiscStorage();
-        int64_t next        = 0;
-        for (const auto &variant : template_decl->parameters) {
-            char *buf = static_cast<char *>(arena.alloc(variant.name.size(), 1));
-            std::memcpy(buf, variant.name.data(), variant.name.size());
-            variant_names.push(std::string_view(buf, variant.name.size()));
-            discs.push(next++);
-        }
-        TypeId underlying =
-            template_decl->declaredType ? lowerTypeExpr(template_decl->declaredType) : i32_type;
-        activeTemplateArgs_ = std::move(saved_active);
-        if (type_table.kindOf(resolve(underlying)) != TypeKind::Integer)
-            underlying = i32_type;
-        TypeId et = type_table.internEnum(concrete_name, underlying, variant_names, discs);
-        type_table.setDefiningModule(et, type_table.definingModule(type_table.lookupNamed(name)));
-        type_table.registerNamed(concrete_name, et);
-        return et;
-    }
-    case frontend::DeclKind::Union: {
-        std::vector<GenericBinding> saved_active = std::move(activeTemplateArgs_);
-        activeTemplateArgs_.clear();
-        for (size_t i = 0; i < template_decl->genericParams.size(); ++i) {
-            GenericBinding active_binding;
-            active_binding.name = template_decl->genericParams[i].name;
-            active_binding.type = args[i];
-            activeTemplateArgs_.push_back(std::move(active_binding));
-        }
-        auto &members = type_table.makeTypeStorage();
-        for (const auto &member_param : template_decl->parameters) {
-            TypeId member = lowerTypeExpr(member_param.type);
-            members.push(member ? member : error_type);
-        }
-        activeTemplateArgs_ = std::move(saved_active);
-        TypeId ut = type_table.internUnion(concrete_name, members, !template_decl->isRawUnion);
-        type_table.setDefiningModule(ut, type_table.definingModule(type_table.lookupNamed(name)));
-        type_table.registerNamed(concrete_name, ut);
-        return ut;
-    }
-    case frontend::DeclKind::TypeAlias: {
-        std::vector<GenericBinding> saved_active = std::move(activeTemplateArgs_);
-        activeTemplateArgs_.clear();
-        for (size_t i = 0; i < template_decl->genericParams.size(); ++i) {
-            GenericBinding active_binding;
-            active_binding.name = template_decl->genericParams[i].name;
-            active_binding.type = args[i];
-            activeTemplateArgs_.push_back(std::move(active_binding));
-        }
-        TypeId target       = lowerTypeExpr(template_decl->declaredType);
-        activeTemplateArgs_ = std::move(saved_active);
-        if (!target)
-            return error_type;
-        const TypeId substituted =
-            instantiations != nullptr ? instantiations->substituteType(target, args) : target;
-        TypeId alias = template_decl->isNominalType
-                           ? type_table.internNominal(concrete_name, substituted)
-                           : type_table.internAlias(concrete_name, substituted);
-        type_table.registerNamed(concrete_name, alias);
-        return alias;
-    }
-    default:
-        report(span, "'" + std::string(name) + "' is not a generic type that can be used here",
+    return instantiateTemplateFromArgs(span, *template_decl, args);
+}
+TypeId PerModuleSema::instantiateTemplateFromArgs(frontend::TextSpan span,
+                                                  const frontend::Declaration &template_decl,
+                                                  const std::vector<TypeId> &args) {
+    if (template_decl.kind != frontend::DeclKind::Struct &&
+        template_decl.kind != frontend::DeclKind::Enum &&
+        template_decl.kind != frontend::DeclKind::Union &&
+        template_decl.kind != frontend::DeclKind::TypeAlias) {
+        report(span, "'" + template_decl.name + "' is not a generic type that can be used here",
                diagnostics::err::GenericCannotInfer);
         return error_type;
     }
-}
-TypeId PerModuleSema::instantiateStructFromArgs(frontend::TextSpan span,
-                                                const frontend::Declaration &template_decl,
-                                                const std::vector<TypeId> &args) {
-    if (template_decl.kind != frontend::DeclKind::Struct)
-        return error_type;
     const size_t arity = template_decl.genericParams.size();
     if (args.size() != arity) {
         report(span, "wrong generic argument count for '" + template_decl.name + "'",
@@ -706,9 +601,10 @@ TypeId PerModuleSema::instantiateStructFromArgs(frontend::TextSpan span,
     if (const TypeId existing = type_table.lookupReifiedStruct(concrete_name, args))
         return existing;
 
-    auto &fields      = type_table.makeTypeStorage();
-    auto &field_names = type_table.makeStringStorage();
-    auto &field_meta  = type_table.makeFieldMetaStorage();
+    // The template body is lowered in the module that declares the template.
+    // `importedTemplateModule_` is set by the qualified struct-literal path; when
+    // the caller routed here through `instantiateTypeExpr` this sema is already
+    // the declaring module.
     PerModuleSema *field_sema = this;
     if (!importedTemplateModule_.empty() && importedTemplateModule_ != module &&
         owner != nullptr) {
@@ -725,27 +621,144 @@ TypeId PerModuleSema::instantiateStructFromArgs(frontend::TextSpan span,
         active_binding.type = args[i];
         active_storage.push_back(std::move(active_binding));
     }
-    for (const auto &param : template_decl.parameters) {
-        const TypeId field_type =
-            imported_body ? field_sema->lowerTypeExpr(param.type) : lowerTypeExpr(param.type);
-        fields.push(field_type ? field_type : error_type);
-        field_meta.push(FieldMeta{param.visibility, param.modDepth, module});
-        char *buf = static_cast<char *>(field_sema->arena.alloc(param.name.size(), 1));
-        std::memcpy(buf, param.name.data(), param.name.size());
-        field_names.push(std::string_view(buf, param.name.size()));
+    const auto lower_body_type = [&](frontend::TypeExprId id) -> TypeId {
+        return imported_body ? field_sema->lowerTypeExpr(id) : lowerTypeExpr(id);
+    };
+
+    TypeId concrete = error_type;
+    switch (template_decl.kind) {
+    case frontend::DeclKind::Struct: {
+        auto &fields      = type_table.makeTypeStorage();
+        auto &field_names = type_table.makeStringStorage();
+        auto &field_meta  = type_table.makeFieldMetaStorage();
+        for (const auto &param : template_decl.parameters) {
+            const TypeId field_type = lower_body_type(param.type);
+            fields.push(field_type ? field_type : error_type);
+            field_meta.push(FieldMeta{param.visibility, param.modDepth, field_sema->module});
+            char *buf = static_cast<char *>(field_sema->arena.alloc(param.name.size(), 1));
+            std::memcpy(buf, param.name.data(), param.name.size());
+            field_names.push(std::string_view(buf, param.name.size()));
+        }
+        const TypeId st =
+            type_table.internStruct(concrete_name, fields, &field_names, &field_meta, &args,
+                                    field_sema->requestedStructAlignment(template_decl));
+        const std::string_view defining_module =
+            type_table.definingModule(type_table.lookupNamed(template_decl.name));
+        type_table.setDefiningModule(st, defining_module);
+        type_table.registerNamed(concrete_name, st);
+        concrete = st;
+        break;
     }
+    case frontend::DeclKind::Enum: {
+        auto &variant_names = type_table.makeStringStorage();
+        auto &discs         = type_table.makeDiscStorage();
+        int64_t next        = 0;
+        for (const auto &variant : template_decl.parameters) {
+            char *buf = static_cast<char *>(field_sema->arena.alloc(variant.name.size(), 1));
+            std::memcpy(buf, variant.name.data(), variant.name.size());
+            variant_names.push(std::string_view(buf, variant.name.size()));
+            discs.push(next++);
+        }
+        TypeId underlying =
+            template_decl.declaredType ? lower_body_type(template_decl.declaredType) : i32_type;
+        if (type_table.kindOf(resolve(underlying)) != TypeKind::Integer)
+            underlying = i32_type;
+        TypeId et = type_table.internEnum(concrete_name, underlying, variant_names, discs);
+        type_table.setDefiningModule(et, type_table.definingModule(type_table.lookupNamed(
+                                             template_decl.name)));
+        type_table.registerNamed(concrete_name, et);
+        concrete = et;
+        break;
+    }
+    case frontend::DeclKind::Union: {
+        auto &members = type_table.makeTypeStorage();
+        for (const auto &member_param : template_decl.parameters) {
+            TypeId member = lower_body_type(member_param.type);
+            members.push(member ? member : error_type);
+        }
+        TypeId ut = type_table.internUnion(concrete_name, members, !template_decl.isRawUnion);
+        type_table.setDefiningModule(ut, type_table.definingModule(type_table.lookupNamed(
+                                             template_decl.name)));
+        type_table.registerNamed(concrete_name, ut);
+        concrete = ut;
+        break;
+    }
+    case frontend::DeclKind::TypeAlias: {
+        TypeId target = lower_body_type(template_decl.declaredType);
+        if (!target) {
+            concrete = error_type;
+            break;
+        }
+        const TypeId substituted =
+            instantiations != nullptr ? instantiations->substituteType(target, args) : target;
+        TypeId alias = template_decl.isNominalType
+                           ? type_table.internNominal(concrete_name, substituted)
+                           : type_table.internAlias(concrete_name, substituted);
+        type_table.registerNamed(concrete_name, alias);
+        concrete = alias;
+        break;
+    }
+    default:
+        break;
+    }
+
     active_storage.clear();
     for (auto &binding : saved_active)
         active_storage.push_back(std::move(binding));
+    return concrete;
+}
 
-    const TypeId st = type_table.internStruct(concrete_name, fields, &field_names, &field_meta,
-                                              &args,
-                                              field_sema->requestedStructAlignment(template_decl));
-    const std::string_view defining_module =
-        type_table.definingModule(type_table.lookupNamed(template_decl.name));
-    type_table.setDefiningModule(st, defining_module);
-    type_table.registerNamed(concrete_name, st);
-    return st;
+const frontend::Declaration *
+PerModuleSema::findGenericTypeTemplate(std::string_view name,
+                                       session::ModuleKey *out_module) const {
+    if (out_module != nullptr)
+        *out_module = {};
+    const auto matches = [&](const frontend::Declaration &decl) {
+        return decl.name == name && !decl.genericParams.empty() &&
+               (decl.kind == frontend::DeclKind::Struct ||
+                decl.kind == frontend::DeclKind::Enum ||
+                decl.kind == frontend::DeclKind::Union ||
+                decl.kind == frontend::DeclKind::TypeAlias);
+    };
+    // Local templates win so a module's own declaration is never shadowed by an
+    // import of the same name.
+    for (const auto &decl : snapshot.declarations()) {
+        if (matches(decl)) {
+            if (out_module != nullptr)
+                *out_module = module;
+            return &decl;
+        }
+    }
+    if (owner == nullptr)
+        return nullptr;
+    // A qualified struct literal records its target module before instantiating.
+    if (!importedTemplateModule_.empty() && importedTemplateModule_ != module) {
+        if (const PerModuleSema *declaring = owner->findModuleSema(importedTemplateModule_)) {
+            for (const auto &decl : declaring->snapshot.declarations()) {
+                if (matches(decl)) {
+                    if (out_module != nullptr)
+                        *out_module = importedTemplateModule_;
+                    return &decl;
+                }
+            }
+        }
+    }
+    // `from module` imports bind each public symbol as an Import resolution.
+    const auto *binding =
+        session::lookupBinding(resolution, name, frontend::ScopeId{}, snapshot.scopes());
+    if (binding != nullptr && binding->kind == session::ResolutionKind::Import &&
+        !binding->target.module.empty()) {
+        if (const PerModuleSema *target = owner->findModuleSema(binding->target.module)) {
+            for (const auto &decl : target->snapshot.declarations()) {
+                if (matches(decl)) {
+                    if (out_module != nullptr)
+                        *out_module = binding->target.module;
+                    return &decl;
+                }
+            }
+        }
+    }
+    return nullptr;
 }
 TypeId PerModuleSema::lowerBareTypeExpr(const frontend::TypeExpression &type) {
     switch (type.kind) {
@@ -792,8 +805,22 @@ TypeId PerModuleSema::lowerBareTypeExpr(const frontend::TypeExpression &type) {
                         symbol.kind == frontend::DeclKind::Enum ||
                         symbol.kind == frontend::DeclKind::Union ||
                         symbol.kind == frontend::DeclKind::TypeAlias) {
-                        return const_cast<PerModuleSema *>(artifact)->instantiateTypeExpr(
-                            type.span, symbol_name, type.arguments);
+                        // The generic arguments are written here (caller module),
+                        // so lower them against this snapshot; reify the concrete
+                        // type in the declaring module.
+                        std::vector<TypeId> lowered;
+                        lowered.reserve(type.arguments.size());
+                        for (const auto arg : type.arguments) {
+                            const TypeId arg_type = lowerTypeExpr(arg);
+                            if (!arg_type) {
+                                report(type.span, "generic argument is not a concrete type",
+                                       diagnostics::err::GenericCannotInfer);
+                                return error_type;
+                            }
+                            lowered.push_back(arg_type);
+                        }
+                        return const_cast<PerModuleSema *>(artifact)->instantiateTemplateFromArgs(
+                            type.span, symbol, lowered);
                     }
                 }
             }

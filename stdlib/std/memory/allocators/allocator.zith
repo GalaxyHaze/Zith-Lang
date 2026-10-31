@@ -36,3 +36,35 @@ pub fn reallocate(self: dyn Allocator, old: raw opaque, old_size: u64, old_align
                   new_size: u64, new_align: u64): ?raw opaque {
     return self.realloc(old, old_size, old_align, new_size, new_align);
 }
+
+// Allocator-owned layout convenience pair. The trait-default `make`/`release`
+// cannot yet call `alloc`/`free` on `self` (a trait default body does not
+// dispatch to another trait method), so the repeatable call path is these free
+// functions over `dyn Allocator`. `make<T>` reserves the layout for `T`, calls
+// `(*p).inplace(args)`, and returns `?*T`; `release<T>` calls `(*p).clean()` and
+// frees the block. Both bind `T` from the expected result type.
+pub fn make<T: InPlace>(self: dyn Allocator, args: opaque): ?*T {
+    let size: u64 = @sizeOf(T) as u64;
+    let align: u64 = @alignOf(T) as u64;
+    let mem = allocate(self, size, align);
+    if (mem is null) {
+        return null;
+    }
+    let p: ?*T = mem as ?*T;
+    if (p is null) {
+        return null;
+    }
+    let q = raw p;
+    if not (*q).inplace(args) {
+        deallocate(self, mem, size, align);
+        return null;
+    }
+    return p;
+}
+
+pub fn release<T: InPlace>(self: dyn Allocator, ptr: *T) {
+    let size: u64 = @sizeOf(T) as u64;
+    let align: u64 = @alignOf(T) as u64;
+    (*ptr).clean();
+    deallocate(self, raw ptr as raw opaque, size, align);
+}

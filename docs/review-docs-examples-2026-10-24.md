@@ -24,7 +24,7 @@ compilador (`./build/zithc --include stdlib check`), não apenas por leitura.
 - `else if` era apresentado sem reserva; emite `W1008`. Corrigido.
 
 ### 1.3 Website — `guide/memory-model.md`
-- A ordem do pipeline usava `NTA/NRA`; no Zith-- é `NTA/SRA`. Corrigido.
+- A ordem do pipeline usava `NTA/NRA`; no Zith-- é `SRA`. Corrigido.
 
 ### 1.4 Website — `guide/types.md`
 - `marker` é keyword reservada do Zith-- e não pode ser nome de binding.

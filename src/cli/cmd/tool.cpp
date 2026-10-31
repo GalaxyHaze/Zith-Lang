@@ -13,6 +13,7 @@
 #include "packages/resolver.hpp"
 #include "session/compilation-session.hpp"
 #include "session/pipeline-plan.hpp"
+#include "support/project-root.hpp"
 #ifdef ZITH_HAS_VM
 #include "vm/hir-to-vm.hpp"
 #include "vm/vm-v2.hpp"
@@ -31,6 +32,12 @@
 #include <toml++/toml.hpp>
 #include <vector>
 
+#ifdef _WIN32
+#include <io.h>
+#elif !defined(ZITH_IS_WASM)
+#include <unistd.h>
+#endif
+
 namespace zith::cli::commands {
 
 namespace {
@@ -45,32 +52,43 @@ Printers initPrinters(const Options &opts) {
     return {{stdout, TERM.coutOn}, {stderr, TERM.cerrOn}};
 }
 
+// True when stdin is an interactive terminal, so a confirmation prompt makes
+// sense. Non-interactive callers (CI, pipes) must opt in with -y/--yes.
+bool isInteractiveTerminal() {
+#ifdef ZITH_IS_WASM
+    return false;
+#elif defined(_WIN32)
+    return _isatty(_fileno(stdin)) != 0;
+#else
+    return isatty(fileno(stdin)) != 0;
+#endif
+}
+
+// Read one confirmation line and accept it only when it starts with 'y'/'Y'.
+bool readConfirmation() {
+    char buffer[64] = {};
+    if (std::fgets(buffer, sizeof(buffer), stdin) == nullptr)
+        return false;
+    for (const char *c = buffer; *c != '\0'; ++c) {
+        if (*c == ' ' || *c == '\t')
+            continue;
+        return *c == 'y' || *c == 'Y';
+    }
+    return false;
+}
+
 // Determine project root from a path argument or current dir (walk up for ZithProject.toml)
 static std::string findProjectRoot(const std::string &pathArg) {
     namespace fs = std::filesystem;
     if (pathArg.empty()) {
-        auto cwd    = fs::current_path();
-        auto search = cwd;
-        while (true) {
-            if (fs::exists(search / "ZithProject.toml"))
-                return search.string();
-            if (search == search.root_path())
-                break;
-            search = search.parent_path();
-        }
-        return cwd.string();
+        auto cwd     = fs::current_path();
+        auto located = support::findProjectRoot(cwd);
+        return located ? located->string() : cwd.string();
     }
     auto p = fs::weakly_canonical(fs::path(pathArg));
     if (fs::is_directory(p)) {
-        auto search = p;
-        while (true) {
-            if (fs::exists(search / "ZithProject.toml"))
-                return search.string();
-            if (search == search.root_path())
-                break;
-            search = search.parent_path();
-        }
-        return p.string();
+        auto located = support::findProjectRoot(p);
+        return located ? located->string() : p.string();
     }
     return p.parent_path().string();
 }
@@ -204,7 +222,10 @@ std::string findBuildDir(const Options &opts) {
         }
     }
 
-    return (fs::path(projectRoot) / "build").string();
+    // The compiler emits linked binaries into `target/` (see
+    // CompilationSession::performLink), so that is the artifact directory
+    // `clean` must target when the project does not configure `paths.bin_dir`.
+    return (fs::path(projectRoot) / "target").string();
 }
 
 struct TestResult {
@@ -713,34 +734,58 @@ int clean(const Options &opts) {
     term::UsagePrinter err{stderr, TERM.cerrOn};
     namespace fs = std::filesystem;
 
-    std::string projectRoot = findProjectRoot(opts.subcommandStr);
+    const std::string projectRoot = findProjectRoot(opts.subcommandStr);
 
-    // Compute build dir and cache dir
-    std::string buildDir = findBuildDir(opts);
-    auto cacheDir        = fs::path(projectRoot) / cache::kPersistentCacheDirName;
+    // The build/bin directory holds compiled artifacts and binaries. It is the
+    // expensive, potentially user-facing output, so its removal is confirmed.
+    const std::string buildDir = findBuildDir(opts);
+    // The persistent cache is regenerable scratch data; it is always cleared.
+    const auto cacheDir = fs::path(projectRoot) / cache::kPersistentCacheDirName;
 
-    bool cleaned = false;
-
-    if (fs::exists(buildDir)) {
-        fs::remove_all(buildDir);
-        out.green("[ok]");
-        std::printf(" removed '%s'\n", buildDir.c_str());
-        cleaned = true;
-    }
-
+    bool removedCache = false;
     if (fs::exists(cacheDir)) {
         fs::remove_all(cacheDir);
         out.green("[ok]");
-        std::printf(" removed '%s'\n", cacheDir.string().c_str());
-        cleaned = true;
+        std::printf(" removed cache '%s'\n", cacheDir.string().c_str());
+        removedCache = true;
     }
 
-    if (!cleaned) {
+    bool removedArtifacts = false;
+    if (fs::exists(buildDir)) {
+        bool confirmed = opts.assumeYes;
+        if (!confirmed) {
+            // Without an interactive terminal, or without an explicit -y/--yes,
+            // refuse to delete artifacts instead of silently removing them.
+            if (!isInteractiveTerminal()) {
+                err.yellow("[info]");
+                std::fprintf(stderr,
+                             " skipped '%s' (no terminal); pass -y/--yes to remove build "
+                             "artifacts\n",
+                             buildDir.c_str());
+                return removedCache ? 0 : 1;
+            }
+            std::fprintf(stderr, "remove build artifacts in '%s'? [y/N] ", buildDir.c_str());
+            std::fflush(stderr);
+            confirmed = readConfirmation();
+        }
+        if (!confirmed) {
+            err.yellow("[info]");
+            std::fprintf(stderr, " kept '%s'\n", buildDir.c_str());
+            return removedCache ? 0 : 1;
+        }
+        fs::remove_all(buildDir);
+        out.green("[ok]");
+        std::printf(" removed artifacts '%s'\n", buildDir.c_str());
+        removedArtifacts = true;
+    }
+
+    if (!removedCache && !removedArtifacts) {
         err.yellow("[info]");
         std::fprintf(stderr, " nothing to clean\n");
+        return 1;
     }
 
-    return cleaned ? 0 : 1;
+    return 0;
 }
 
 int deps(const Options &opts) {
@@ -830,8 +875,8 @@ int deps(const Options &opts) {
         }
         const auto projectRoot  = fs::path(findProjectRoot(""));
         const auto manifestPath = projectRoot / "ZithProject.toml";
-        const auto result = updateDependencyManifest(manifestPath, opts.inputFiles[0],
-                                                      opts.inputFiles[1], true);
+        const auto result =
+            updateDependencyManifest(manifestPath, opts.inputFiles[0], opts.inputFiles[1], true);
         if (!result) {
             p.err.red("[error]");
             std::fprintf(stderr, " %s\n", result.error().msg.c_str());
@@ -850,8 +895,7 @@ int deps(const Options &opts) {
         }
         const auto projectRoot  = fs::path(findProjectRoot(""));
         const auto manifestPath = projectRoot / "ZithProject.toml";
-        const auto result =
-            updateDependencyManifest(manifestPath, opts.inputFiles[0], {}, false);
+        const auto result = updateDependencyManifest(manifestPath, opts.inputFiles[0], {}, false);
         if (!result) {
             p.err.red("[error]");
             std::fprintf(stderr, " %s\n", result.error().msg.c_str());

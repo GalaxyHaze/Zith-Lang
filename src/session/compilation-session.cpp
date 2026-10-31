@@ -7,10 +7,10 @@
 #endif
 #include "comptime/solver.hpp"
 #include "diagnostics/error-codes.hpp"
-#include "frontend/frontend-printer.hpp"
 #include "formatter/fmt-visitor.hpp"
-#include "memory/source-map.hpp"
+#include "frontend/frontend-printer.hpp"
 #include "hir/hir-verify.hpp"
+#include "memory/source-map.hpp"
 #include "sema/heuristic-engine.hpp"
 #include "sema/hir-lower-modern.hpp"
 #include "sema/nra-facts.hpp"
@@ -24,11 +24,11 @@
 #include "vm/hir-to-vm.hpp"
 #include "vm/typed-ir-dump.hpp"
 #endif
+#include <algorithm>
 #include <chrono>
 #include <cstdarg>
 #include <cstdio>
 #include <cstdlib>
-#include <algorithm>
 #include <filesystem>
 #include <toml++/toml.hpp>
 #include <vector>
@@ -111,6 +111,19 @@ CompilationSession::CompilationSession(const Options &options, std::string fileP
 
     auto toml_path = fs::path(mProjectRoot) / "ZithProject.toml";
     if (fs::exists(toml_path)) {
+        const auto loadPackageManifest = [&](const toml::table &table) {
+            if (table.get("project") == nullptr && table.get("dependencies") == nullptr &&
+                table.get("package") == nullptr)
+                return;
+
+            auto manifest = packages::parseManifest(table, toml_path);
+            if (manifest) {
+                mProjectConfig.packageManifest = std::move(manifest).value();
+                mProjectConfig.packageManifestError.clear();
+            } else {
+                mProjectConfig.packageManifestError = manifest.error().msg;
+            }
+        };
 #if TOML_EXCEPTIONS
         try {
             auto tbl = toml::parse_file(toml_path.string());
@@ -139,6 +152,7 @@ CompilationSession::CompilationSession(const Options &options, std::string fileP
                     if (auto s = v->value<std::string>())
                         mProjectConfig.name = *s;
             }
+            loadPackageManifest(tbl);
         } catch (...) {
         }
 #else
@@ -169,6 +183,7 @@ CompilationSession::CompilationSession(const Options &options, std::string fileP
                     if (auto s = v->value<std::string>())
                         mProjectConfig.name = *s;
             }
+            loadPackageManifest(result);
         }
 #endif
     }
@@ -228,10 +243,10 @@ bool CompilationSession::materializeFrontendSymbols() {
                 decl.kind == frontend::DeclKind::Macro || decl.name.empty()) {
                 continue;
             }
-            mSyms.declareFrontend(
-                mInterner->intern(decl.name), mapFrontendVisibility(decl.visibility), 0,
-                mapFrontendDeclKind(decl.kind), decl.discardable(),
-                mInterner->intern(module->key), decl.id.value);
+            mSyms.declareFrontend(mInterner->intern(decl.name),
+                                  mapFrontendVisibility(decl.visibility), 0,
+                                  mapFrontendDeclKind(decl.kind), decl.discardable(),
+                                  mInterner->intern(module->key), decl.id.value);
         }
     }
     return true;
@@ -432,7 +447,7 @@ bool CompilationSession::lexStage() {
                         : tok.kind == frontend::TokenKind::Literal     ? "literal"
                         : tok.kind == frontend::TokenKind::Operator    ? "operator"
                         : tok.kind == frontend::TokenKind::Punctuation ? "punctuation"
-                        : tok.kind == frontend::TokenKind::Dots         ? "dots"
+                        : tok.kind == frontend::TokenKind::Dots        ? "dots"
                         : tok.kind == frontend::TokenKind::End         ? "end"
                                                                        : "unknown",
                         static_cast<int>(text.size()), text.data());
@@ -628,9 +643,9 @@ bool CompilationSession::lowerStage() {
         return false;
     }
 
-    mHirModule = lower.takeHir();
+    mHirModule        = lower.takeHir();
     mTestFailureSites = lower.testFailureSites();
-    mTestNames = lower.testNames();
+    mTestNames        = lower.testNames();
     // The solver only needs to run on cold builds. Warm builds restore the HIR
     // artifact directly and the generic pass already ran before HIR lowering.
 
@@ -650,8 +665,8 @@ bool CompilationSession::lowerStage() {
         vm::Module module(mHirArena);
         const auto lowered = vm::lowerModule(mHirModule, *mInterner, mTypes, mHirArena, module);
         if (!lowered.ok) {
-            writeOutput("%s[error]%s failed to lower HIR to VM v2 IR: %s\n",
-                        ansicolor("\033[31m"), ansicolor("\033[0m"), lowered.message.c_str());
+            writeOutput("%s[error]%s failed to lower HIR to VM v2 IR: %s\n", ansicolor("\033[31m"),
+                        ansicolor("\033[0m"), lowered.message.c_str());
             return false;
         }
         const auto vir_text = vm::dump(module);

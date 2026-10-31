@@ -98,7 +98,7 @@ use SQL;
 The `zithc` compiler follows a multi-stage pipeline:
 
 ```
-source -> lex -> scan -> resolve(import/symbols) -> sema -> comptime/solve -> NTA/NRA -> HIR -> LLVM
+source -> lex -> scan -> resolve(import/symbols) -> sema -> comptime/solve -> SRA -> HIR -> LLVM
 ```
 > Note: when you compile a library, after LLVM it outputs `.zirl` (Zith Intermediate Representation Library).
 
@@ -110,7 +110,7 @@ source -> lex -> scan -> resolve(import/symbols) -> sema -> comptime/solve -> NT
 | `resolve` | Resolve imported symbols, report duplicates |
 | `sema` | Semantic analysis — name resolution, type checking, visibility |
 | `comptime/solve` | Reserved for future generic instantiation, `comptime` evaluation, and the solved semantic view. In Zith--, macro expansion currently happens during frontend parsing and uses the source AST directly. |
-| `NTA/NRA` | Accumulate semantic/resource facts, prove ownership rules, emit diagnostics, and apply only internal canonicalizations that do not change public ABI |
+| `SRA` | Accumulate residual resource facts, prove the ownership slice, emit diagnostics, and apply only internal canonicalizations that do not change public ABI |
 | `HIR` | Build High-level IR — the typed, desugared program with residual ownership facts attached when available |
 | `LLVM` | Code generation via the LLVM backend |
 

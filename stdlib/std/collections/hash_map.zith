@@ -2,13 +2,14 @@ from c/string
 
 from std/memory/allocators/allocator
 
-/// Proposed owning hash-map API for the standard library.
+/// Owning generic hash-map API for the standard library.
 ///
-/// This module is a draft and is not part of the checked stdlib surface yet.
-/// Zith-- can type-check `Hashable` bounds and primitive implementations, but
-/// nested generic structs still need compiler work before `Entry<K, V>` is
-/// reified correctly inside `HashMap<K, V>` and trait bounds propagate through
-/// those fields. Keep this public API as the target once those gaps close.
+/// Checked generic owning hash-map API for the standard library. The generic
+/// `HashMap<K, V>` and its nested `Entry<K, V>` field reify from another
+/// module, `Hashable` bounds propagate through the generic fields, and the
+/// imported instantiation path is covered by `tests/test-generic-hashmap.cpp`
+/// and `examples/hash-map.zith`. See
+/// `docs/adr/0020-imported-generic-instantiation.md`.
 pub struct HashMap<K, V> {
     count: u64 = 0,
     capacity: u64 = 0,

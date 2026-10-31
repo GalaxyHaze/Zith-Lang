@@ -189,6 +189,80 @@ void test_union_template_raw_casts_lower() {
     CHECK(r.ok, "a generic union raw cast to a member lowers after instantiation");
 }
 
+void test_generic_union_instances_stay_distinct() {
+    GenericEnumUnionTest t;
+    // A helper that returns a generic union must produce the caller's concrete
+    // instance (`Pair<u32, f64>`), not the template spellings (`Pair<T, T>`).
+    auto r = t.run("union Pair<A, B> { A, B }\n"
+                  "fn mk<A, B>(a: A): Pair<A, B> {\n"
+                  "    var r: Pair<A, B> = Pair<A, B>{ a };\n"
+                  "    return r;\n"
+                  "}\n"
+                  "fn main(): i32 {\n"
+                  "    let p: Pair<u32, f64> = mk<u32, f64>(7u32);\n"
+                  "    let v: u32 = raw p as u32;\n"
+                  "    return v as i32 - 7;\n"
+                  "}\n");
+    CHECK(r.ok, "a generic union returned from a helper keeps its concrete type arguments");
+}
+
+void test_result_only_generic_infers_from_context() {
+    GenericEnumUnionTest t;
+    // `Ok` binds `T`/`E` only through its declared result. A binding annotation
+    // and a declared return type are expected-type contexts, so `Ok(...)` need
+    // not spell `<u32, u32>`; the union instance must still be the concrete one.
+    auto r = t.run("union Result<T, E> { T, E }\n"
+                   "fn Ok<T, E>(value: T): Result<T, E> {\n"
+                   "    var r: Result<T, E> = Result<T, E>{ value };\n"
+                   "    return r;\n"
+                   "}\n"
+                   "fn make(): Result<u32, u32> { return Ok(7); }\n"
+                   "fn main(): i32 {\n"
+                   "    let a: Result<u32, u32> = Ok(7);\n"
+                   "    let b: Result<u32, u32> = make();\n"
+                   "    let v: u32 = raw a as u32;\n"
+                   "    return v as i32 - 7;\n"
+                   "}\n");
+    CHECK(r.ok, "a result-only generic helper infers its arguments from the expected type");
+}
+
+void test_strong_argument_overrides_weak_literal() {
+    GenericEnumUnionTest t;
+    // The unsuffixed literal `7` is a weak binding for `T` (it would coerce to
+    // the annotation anyway); the expected `Result<u32, u32>` must win. A named
+    // binding is strong and keeps its own type instead.
+    auto r = t.run("union Result<T, E> { T, E }\n"
+                   "fn Ok<T, E>(value: T): Result<T, E> {\n"
+                   "    var r: Result<T, E> = Result<T, E>{ value };\n"
+                   "    return r;\n"
+                   "}\n"
+                   "fn main(): i32 {\n"
+                   "    let a: Result<u32, u32> = Ok(7);\n"
+                   "    let v: u32 = raw a as u32;\n"
+                   "    return v as i32 - 7;\n"
+                   "}\n");
+    CHECK(r.ok, "a weak literal argument does not outvote the contextual result type");
+}
+
+void test_method_result_only_generic_infers_from_context() {
+    GenericEnumUnionTest t;
+    // A generic *method* with a result-only parameter must also bind from the
+    // expected result type; the method-call path forwards the expected result
+    // to generic resolution just like a free-function call.
+    auto r = t.run("struct Factory {}\n"
+                   "impl Factory {\n"
+                   "    fn make<T>(self): ?*T { return null; }\n"
+                   "}\n"
+                   "struct Box { value: i32 = 0 }\n"
+                   "fn main(): i32 {\n"
+                   "    var f = Factory {};\n"
+                   "    let b: ?*Box = f.make();\n"
+                   "    if (b is null) { return 1; }\n"
+                   "    return 0;\n"
+                   "}\n");
+    CHECK(r.ok, "a result-only generic method infers its argument from the expected type");
+}
+
 } // namespace
 
 int main() {
@@ -204,6 +278,10 @@ int main() {
     test_self_generic_parameter_rejected();
     test_non_constant_enum_discriminant_rejected();
     test_union_template_raw_casts_lower();
+    test_generic_union_instances_stay_distinct();
+    test_result_only_generic_infers_from_context();
+    test_strong_argument_overrides_weak_literal();
+    test_method_result_only_generic_infers_from_context();
     std::printf("\nResults: %d passed, %d failed\n", g_test_passed, g_test_failed);
     return g_test_failed > 0 ? 1 : 0;
 }

@@ -3,6 +3,7 @@
 #include "cli/terminal.hpp"
 #include "cli/zith-flags.hpp"
 #include "packages/resolver.hpp"
+#include "support/project-root.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -327,6 +328,11 @@ void Cli::parseArgs(int argc, char **argv) {
 
         if (compare(argv[i], "--force")) {
             opts.docsForce = true;
+            continue;
+        }
+
+        if (compare(argv[i], "-y", "--yes")) {
+            opts.assumeYes = true;
             continue;
         }
 
@@ -771,128 +777,123 @@ void Cli::loadProject() {
 #else
     namespace fs = std::filesystem;
 
-    fs::path search = fs::current_path();
-    while (true) {
-        auto tomlPath = search / "ZithProject.toml";
-        if (fs::exists(tomlPath)) {
-            config.projectRoot = fs::weakly_canonical(search).string();
-            auto process       = [&](const toml::table &tbl) {
-                if (auto *build = tbl["build"].as_table()) {
-                    if (auto v = build->get("entry"))
-                        if (auto s = v->value<std::string>())
-                            config.entry = *s;
-                    if (auto v = build->get("output"))
-                        if (auto s = v->value<std::string>())
-                            config.output = *s;
-                    if (auto v = build->get("mode"))
-                        if (auto s = v->value<std::string>()) {
-                            if (*s == "debug")
-                                config.mode = "debug";
-                            else if (*s == "dev")
-                                config.mode = "dev";
-                            else if (*s == "release")
-                                config.mode = "release";
-                            else if (*s == "fast")
-                                config.mode = "fast";
-                            else if (*s == "small")
-                                config.mode = "small";
-                        }
-                    if (auto v = build->get("opt_level"))
-                        if (auto i = v->value<int>())
-                            config.opt_level = *i;
-                }
-                if (auto *paths = tbl["paths"].as_table()) {
-                    if (auto *src = paths->get("src_dir")) {
-                        if (auto *arr = src->as_array()) {
-                            for (auto &elem : *arr)
-                                if (auto s = elem.value<std::string>())
-                                    config.srcDirs.push(*s);
-                        } else if (auto s = src->value<std::string>()) {
-                            config.srcDirs.push(*s);
-                        }
+    const auto projectRoot = support::findProjectRoot(fs::current_path());
+    if (projectRoot) {
+        auto tomlPath      = *projectRoot / "ZithProject.toml";
+        config.projectRoot = projectRoot->string();
+        auto process       = [&](const toml::table &tbl) {
+            if (auto *build = tbl["build"].as_table()) {
+                if (auto v = build->get("entry"))
+                    if (auto s = v->value<std::string>())
+                        config.entry = *s;
+                if (auto v = build->get("output"))
+                    if (auto s = v->value<std::string>())
+                        config.output = *s;
+                if (auto v = build->get("mode"))
+                    if (auto s = v->value<std::string>()) {
+                        if (*s == "debug")
+                            config.mode = "debug";
+                        else if (*s == "dev")
+                            config.mode = "dev";
+                        else if (*s == "release")
+                            config.mode = "release";
+                        else if (*s == "fast")
+                            config.mode = "fast";
+                        else if (*s == "small")
+                            config.mode = "small";
                     }
-                    if (auto v = paths->get("bin_dir"))
-                        if (auto s = v->value<std::string>())
-                            config.binDir = *s;
-                    if (auto v = paths->get("mod_dir"))
-                        if (auto s = v->value<std::string>())
-                            config.modDir = *s;
-                    if (auto v = paths->get("docs_dir"))
-                        if (auto s = v->value<std::string>())
-                            config.docsDir = *s;
-                    if (auto v = paths->get("test_dir"))
-                        if (auto s = v->value<std::string>())
-                            config.testDir = *s;
-                    if (auto v = paths->get("asset_dir"))
-                        if (auto s = v->value<std::string>())
-                            config.assetDir = *s;
-                }
-                if (auto *ffi = tbl["ffi"].as_table()) {
-                    const auto loadArray = [](const toml::table &table, const char *key,
-                                              memory::DynArray<std::string> &destination) {
-                        if (const auto *values = table[key].as_array())
-                            for (const auto &value : *values)
-                                if (const auto text = value.value<std::string>())
-                                    destination.push(*text);
-                    };
-                    loadArray(*ffi, "include_dirs", config.includeDirs);
-                    loadArray(*ffi, "c_source_dirs", config.cSourceDirs);
-                    loadArray(*ffi, "library_dirs", config.libraryDirs);
-                    loadArray(*ffi, "libraries", config.libraries);
-                    loadArray(*ffi, "defines", config.defines);
-                }
-                if (auto *proj = tbl["project"].as_table()) {
-                    if (auto v = proj->get("name"))
-                        if (auto s = v->value<std::string>())
-                            config.name = *s;
-                    if (auto v = proj->get("version"))
-                        if (auto s = v->value<std::string>())
-                            config.version = *s;
-                    if (auto v = proj->get("description"))
-                        if (auto s = v->value<std::string>())
-                            config.description = *s;
-                    if (auto v = proj->get("authors"))
-                        if (auto s = v->value<std::string>())
-                            config.authors = *s;
-                    if (auto v = proj->get("license"))
-                        if (auto s = v->value<std::string>())
-                            config.license = *s;
-                    if (auto v = proj->get("homepage"))
-                        if (auto s = v->value<std::string>())
-                            config.homepage = *s;
-                }
-                if (tbl.get("project") != nullptr || tbl.get("dependencies") != nullptr ||
-                    tbl.get("package") != nullptr) {
-                    auto manifest = packages::parseManifest(tbl, tomlPath);
-                    if (manifest) {
-                        config.packageManifest = std::move(manifest).value();
-                        config.packageManifestError.clear();
-                    } else {
-                        config.packageManifestError = manifest.error().msg;
+                if (auto v = build->get("opt_level"))
+                    if (auto i = v->value<int>())
+                        config.opt_level = *i;
+            }
+            if (auto *paths = tbl["paths"].as_table()) {
+                if (auto *src = paths->get("src_dir")) {
+                    if (auto *arr = src->as_array()) {
+                        for (auto &elem : *arr)
+                            if (auto s = elem.value<std::string>())
+                                config.srcDirs.push(*s);
+                    } else if (auto s = src->value<std::string>()) {
+                        config.srcDirs.push(*s);
                     }
                 }
-            };
+                if (auto v = paths->get("bin_dir"))
+                    if (auto s = v->value<std::string>())
+                        config.binDir = *s;
+                if (auto v = paths->get("mod_dir"))
+                    if (auto s = v->value<std::string>())
+                        config.modDir = *s;
+                if (auto v = paths->get("docs_dir"))
+                    if (auto s = v->value<std::string>())
+                        config.docsDir = *s;
+                if (auto v = paths->get("test_dir"))
+                    if (auto s = v->value<std::string>())
+                        config.testDir = *s;
+                if (auto v = paths->get("asset_dir"))
+                    if (auto s = v->value<std::string>())
+                        config.assetDir = *s;
+            }
+            if (auto *ffi = tbl["ffi"].as_table()) {
+                const auto loadArray = [](const toml::table &table, const char *key,
+                                          memory::DynArray<std::string> &destination) {
+                    if (const auto *values = table[key].as_array())
+                        for (const auto &value : *values)
+                            if (const auto text = value.value<std::string>())
+                                destination.push(*text);
+                };
+                loadArray(*ffi, "include_dirs", config.includeDirs);
+                loadArray(*ffi, "c_source_dirs", config.cSourceDirs);
+                loadArray(*ffi, "library_dirs", config.libraryDirs);
+                loadArray(*ffi, "libraries", config.libraries);
+                loadArray(*ffi, "defines", config.defines);
+            }
+            if (auto *proj = tbl["project"].as_table()) {
+                if (auto v = proj->get("name"))
+                    if (auto s = v->value<std::string>())
+                        config.name = *s;
+                if (auto v = proj->get("version"))
+                    if (auto s = v->value<std::string>())
+                        config.version = *s;
+                if (auto v = proj->get("description"))
+                    if (auto s = v->value<std::string>())
+                        config.description = *s;
+                if (auto v = proj->get("authors"))
+                    if (auto s = v->value<std::string>())
+                        config.authors = *s;
+                if (auto v = proj->get("license"))
+                    if (auto s = v->value<std::string>())
+                        config.license = *s;
+                if (auto v = proj->get("homepage"))
+                    if (auto s = v->value<std::string>())
+                        config.homepage = *s;
+            }
+            if (tbl.get("project") != nullptr || tbl.get("dependencies") != nullptr ||
+                tbl.get("package") != nullptr) {
+                auto manifest = packages::parseManifest(tbl, tomlPath);
+                if (manifest) {
+                    config.packageManifest = std::move(manifest).value();
+                    config.packageManifestError.clear();
+                } else {
+                    config.packageManifestError = manifest.error().msg;
+                }
+            }
+        };
 
 #if TOML_EXCEPTIONS
-            try {
-                process(toml::parse_file(tomlPath.string()));
-            } catch (const toml::parse_error &) {
-                config.packageManifestError = "invalid TOML";
-                return;
-            }
-#else
-            auto result = toml::parse_file(tomlPath.string());
-            if (!result) {
-                config.packageManifestError = "invalid TOML";
-                return;
-            }
-            process(result);
-#endif
+        try {
+            process(toml::parse_file(tomlPath.string()));
+        } catch (const toml::parse_error &) {
+            config.packageManifestError = "invalid TOML";
             return;
         }
-        if (search == search.root_path())
-            break;
-        search = search.parent_path();
+#else
+        auto result = toml::parse_file(tomlPath.string());
+        if (!result) {
+            config.packageManifestError = "invalid TOML";
+            return;
+        }
+        process(result);
+#endif
+        return;
     }
 #endif
 }
@@ -906,7 +907,11 @@ int Cli::dispatch() {
         }
     }
 
-    if ((opts.command == Command::Build || opts.command == Command::Check) &&
+    // `run` performs the same native build as `build` (and then executes the
+    // artifact), so it must enforce the same lockfile gate. `execute` runs an
+    // already-built binary and does not read the package graph.
+    if ((opts.command == Command::Build || opts.command == Command::Check ||
+         opts.command == Command::Run) &&
         (config.packageManifest.has_value() || !config.packageManifestError.empty())) {
         if (!config.packageManifestError.empty()) {
             std::fprintf(stderr, "[error] invalid package manifest: %s\n",
@@ -915,7 +920,7 @@ int Cli::dispatch() {
         }
 
         const auto manifestPath = std::filesystem::path(config.projectRoot) / "ZithProject.toml";
-        auto lockfile = packages::validateLocalLockfile(manifestPath);
+        auto lockfile           = packages::validateLocalLockfile(manifestPath);
         if (!lockfile) {
             std::fprintf(stderr, "[error] %s\n", lockfile.error().msg.c_str());
             return 1;

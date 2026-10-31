@@ -33,6 +33,10 @@ HirLowerModern::HirLowerModern(memory::Arena &arena, diagnostics::DiagnosticEngi
 
 bool HirLowerModern::run() {
     registerForeignRecords();
+    // Close the nested-generic instantiation set before predeclaring functions
+    // so every concrete callee a generic body needs already exists.
+    if (auto *instantiations = sema_.instantiations(); instantiations != nullptr)
+        instantiations->concretizeNestedInstances();
     if (!predeclareGlobalConsts() || !predeclareFunctions() || !lowerFunctionBodies() ||
         !buildTestDriver() || diags_.hasErrors())
         return false;
@@ -472,7 +476,8 @@ bool HirLowerModern::predeclareGlobalConsts() {
 
         for (const auto &decl : module.frontend->declarations()) {
             if (decl.kind != frontend::DeclKind::Variable ||
-                decl.bindingKind != frontend::BindingKind::Const || decl.name.empty())
+                decl.bindingKind != frontend::BindingKind::Const || decl.isExtern ||
+                decl.name.empty())
                 continue;
 
             const auto key = internFunctionKey(interner_, module.key, decl.id);
@@ -619,7 +624,10 @@ bool HirLowerModern::predeclareFunctions() {
     if (const auto *instantiations = sema_.instantiations(); instantiations != nullptr) {
         for (size_t index = 0; index < instantiations->instanceCount(); ++index) {
             const auto *instance = instantiations->at(index);
-            if (instance != nullptr)
+            // Abstract instances (`reserve<T, T>`) are template artifacts left
+            // over from the reified generic body. They have no concrete
+            // signature to emit; only the concretized variants are callable.
+            if (instance != nullptr && !instantiations->instanceIsAbstract(*instance))
                 predeclareInstantiation(instance->module, *instance);
         }
     }
@@ -650,6 +658,13 @@ bool HirLowerModern::predeclareFunctions() {
 
 bool HirLowerModern::lowerFunctionBodies() {
     for (auto &function : functions_) {
+        // Skip abstract instances: their bodies call other abstract symbols and
+        // cannot be lowered without a concrete argument tuple.
+        if (function.instance != nullptr) {
+            const auto *instantiations = sema_.instantiations();
+            if (instantiations != nullptr && instantiations->instanceIsAbstract(*function.instance))
+                continue;
+        }
         if (function.decl != nullptr && function.decl->body && !lowerFunctionBody(function))
             return false;
     }
@@ -718,6 +733,36 @@ void HirLowerModern::predeclareInstantiation(session::ModuleKey module_key,
          hir_.getFnCount() - 1U});
 }
 
+std::vector<sema::modern::TypeId>
+HirLowerModern::concreteInstanceArgs(const comptime::InstantiationInstance &instance) const {
+    const auto *instantiations = sema_.instantiations();
+    if (instantiations == nullptr || current_instance_ == nullptr)
+        return instance.args;
+    return instantiations->substituteArgs(instance.args, current_instance_->args);
+}
+
+hir::HirFunctionId HirLowerModern::findInstanceFunction(
+    const session::ModuleKey &module, const frontend::DeclId decl,
+    const std::vector<sema::modern::TypeId> &args) const noexcept {
+    for (const auto &function : functions_) {
+        if (function.instance != nullptr && function.module != nullptr &&
+            function.module->key == module && function.instance->decl == decl &&
+            function.instance->args == args)
+            return function.hir_function_id;
+    }
+    return hir::kInvalidHirFunction;
+}
+
+hir::HirFunctionId
+HirLowerModern::concretizeCallTarget(const comptime::InstantiationInstance &bound_instance) {
+    // A call bound inside a generic body records the enclosing function's type
+    // parameters (`reserve<K, V>` inside `HashMap<K, V>`). Substitute the
+    // concrete arguments of the instance currently being lowered so the call
+    // resolves to `reserve<i64, i64>` instead of the abstract template symbol.
+    const std::vector<sema::modern::TypeId> concrete = concreteInstanceArgs(bound_instance);
+    return findInstanceFunction(bound_instance.module, bound_instance.decl, concrete);
+}
+
 bool HirLowerModern::lowerFunctionBody(FunctionInfo &info) {
     current_module_     = info.module;
     current_resolution_ = snapshot_.findResolution(info.module->key);
@@ -740,7 +785,14 @@ bool HirLowerModern::lowerFunctionBody(FunctionInfo &info) {
         module_sema != nullptr && info.decl != nullptr) {
         sema::modern::TypeId fn_sema_type = module_sema->typeOfDecl(info.decl->id);
         if (const auto *fn = sema_.typeTable().function(fn_sema_type))
-            current_fn_return_sema_type_ = fn->result;
+            // The declared result carries the generic parameters (`?V`); the
+            // instance body must coerce against the reified result (`?i64`),
+            // otherwise optional-return wrapping never fires and the bare
+            // value fails IR verification against the aggregate return type.
+            current_fn_return_sema_type_ =
+                current_instantiation_ != nullptr && current_instance_ != nullptr
+                    ? current_instantiation_->substituteType(fn->result, current_instance_->args)
+                    : fn->result;
     }
     info_decl_parent_scope_ = info.decl != nullptr ? info.decl->parentScope : frontend::ScopeId{};
     current_fn_is_state_ =

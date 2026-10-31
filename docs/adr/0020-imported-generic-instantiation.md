@@ -2,7 +2,7 @@
 
 Generic declarations imported through a module alias must be reified from the declaring module's template, not from the current module snapshot. Qualified struct literals, type annotations, field defaults, and generic methods on imported concrete receivers use the same `StructType.args` and generic instantiation machinery as local generics; missing method type arguments are inherited from the concrete receiver. This is required before `DynArray<T>` or an expanded `HashMap<K, V>` becomes a consumable stdlib surface.
 
-Status: proposed
+Status: accepted
 
 Considered options:
 
@@ -11,6 +11,6 @@ Considered options:
 
 Consequences:
 
-- `import std/collections/hash_map` should support `hm.HashMap<i64,i64>{}`, defaults from the declaring module, and `hm.HashMap.init(lend map)` without repeating type args.
-- `stdlib/std/collections/hash_map.zith` should be promoted to a consumable checked generic map only after this path is proven by tests.
-- `DynArray<T>` remains after this fix, not before it.
+- `import std/collections/hash_map` supports `hm.HashMap<i64,i64>{}`, field defaults from the declaring module, and `hm.HashMap.init(lend map)` without repeating type args. Nested generic calls inside a generic body are concretized transitively, so `init<i64,i64>` calls `reserve<i64,i64>` rather than the abstract `reserve<T,T>`.
+- `stdlib/std/collections/hash_map.zith` is now a consumable checked generic map: `examples/hash-map.zith` passes `zithc check` and runs to exit 0, and both `tests/test-generic-hashmap.cpp` and `test-codegen` exercise an imported `HashMap<i64,i64>`.
+- `DynArray<T>` shares the same path and is promoted: `examples/dyn-array.zith` passes `zithc check` and runs to exit 0, and `test-codegen` exercises an imported `DynArray<i32>` end-to-end.

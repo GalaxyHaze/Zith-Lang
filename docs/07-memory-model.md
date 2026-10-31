@@ -27,10 +27,12 @@ also uses that earlier surface.
 
 The ownership system is split conceptually into two layers:
 
-- `NTA` accumulates semantic facts over a representation that still preserves resource identity,
-  qualifier distinctions, captures, escapes, branch facts, and return-path structure.
-- `NRA` consumes those facts, applies the four ownership rules, emits diagnostics, and performs
-  only the internal canonicalizations that are safe to materialize after the proof boundary.
+- `NIA` accumulates numeric facts (ranges, versions, control-flow joins) over a representation
+  that still preserves resource identity.
+- `NRA` consumes those numeric facts together with the residual ownership facts (resource
+  identity, qualifier distinctions, captures, escapes, branch facts, and return-path structure),
+  applies the ownership rules, emits diagnostics, and performs only the internal
+  canonicalizations that are safe to materialize after the proof boundary.
 
 NRA watches every value in your program and classifies it into one of three states:
 
@@ -39,6 +41,10 @@ NRA watches every value in your program and classifies it into one of three stat
 | `alive` | Ready to read or use |
 | `dead` | Moved away — you cannot read it, only reassign |
 | `lent` | Temporarily borrowed — exclusive while the borrow lasts |
+
+> These three state names are the legacy draft vocabulary. The current full-Zith model
+> ([nra-spec.md](nra-spec.md)) uses `uninitialized` / `taken` / `ok` and enumerates rules
+> NRA-1..NRA-11; it supersedes this table wherever they disagree.
 
 It also tracks the **origin** of each node, which says where the value came from:
 
@@ -50,7 +56,7 @@ It also tracks the **origin** of each node, which says where the value came from
 | `view` | Read-only reference to another node |
 
 With these two axes (state + origin), NRA enforces the rules in [§7.4](#74-the-four-nra-rules).
-NTA also records aliasing, branch-local facts, whether a return value is the same node received as
+NRA also records aliasing, branch-local facts, whether a return value is the same node received as
 an argument, and whether a `belong` or borrowed value escapes its legal region.
 
 ### 7.2 Move Semantics
@@ -246,7 +252,7 @@ implement Node<T> {
 
 > *This section is relevant for tooling authors and compiler contributors.*
 
-Every symbol gets a **resource node** before final HIR lowering. NTA and NRA are lazy in the sense
+Every symbol gets a **resource node** before final HIR lowering. NIA and NRA are lazy in the sense
 that they validate nodes when use, view, move, return, capture, or escape facts make the proof
 relevant.
 

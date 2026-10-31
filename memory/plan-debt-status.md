@@ -41,12 +41,21 @@ The active plan homes are:
   `docs/plans/archive/codebase-quality-remediation-2026-10-07.old.md`.
 - `docs/plans/idea-lifecycle-small-scope.md` / `docs/specs/abi-lifecycle.md`:
   small-scope lifecycle setup for ideas, ABI promises, and conforming tests.
+- `docs/plans/forward-dispatch.md`: Zith-- call-site overload selection from a
+  union or `opaque` tag, drawing stage. The enum level is deferred to a
+  separate full-Zith unit.
 - `docs/plans/abi/explicit-alignment.md`: Zith-- type and binding alignment,
   currently promising and pending idea-owner review.
 - `docs/plans/stdlib/allocator-ownership.md`: explicit allocator ownership and
   migration across stdlib allocations.
 - `docs/plans/stdlib/dynarray-result-panic.md`: `DynArray`-focused collection
   and error-handling expansion, dependent on allocator ownership.
+- `docs/plans/stdlib/soon-promotion.md`: `soon`-first delivery policy and the
+  promotion gate from `soon/` to `std/`.
+- `docs/plans/stdlib/soon-string.md`: owning byte-string contract for
+  `stdlib/soon/string.zith`.
+- `docs/plans/stdlib/soon-json.md`: JSON value model and text boundary for the
+  `stdlib/soon/json.zith` stub.
 
 The archived plan homes are:
 

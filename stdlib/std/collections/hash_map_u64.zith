@@ -4,9 +4,9 @@ from std/memory/allocators/allocator
 
 /// Concrete u64-to-u64 hash map for the current Zith-- stdlib.
 ///
-/// The generic `HashMap<K, V>` target is documented separately as a draft
-/// because nested generic struct reification and trait-bound propagation
-/// through generic fields still need compiler work.
+/// The generic `HashMap<K, V>` is now consumable across modules; this module
+/// remains the concrete `u64 -> u64` variant. See
+/// `std/collections/hash_map.zith`.
 pub struct Entry {
     pub key: u64,
     pub value: u64,

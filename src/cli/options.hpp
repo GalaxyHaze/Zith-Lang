@@ -253,6 +253,8 @@ struct Options {
     bool docsIndex         = false;
     bool docsIncludeErrors = false;
     bool docsForce         = false;
+    // Skip interactive confirmation for destructive commands (e.g. `clean`).
+    bool assumeYes = false;
     std::string docsOptionError;
     std::string testFilter;
 

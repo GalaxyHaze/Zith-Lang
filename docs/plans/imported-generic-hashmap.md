@@ -1,5 +1,11 @@
 # Imported Generic Hash Map Instantiation Plan
 
+Status: complete. The imported generic `HashMap<K, V>` is consumable from a
+consumer module, and `examples/hash-map.zith` passes `zithc check` and runs to
+exit 0. `DynArray<T>` shares the same path and is promoted: `examples/dyn-array.zith`
+passes `zithc check` and runs to exit 0, and `test-codegen` exercises an imported
+`DynArray<i32>` end-to-end.
+
 Objective: make generic declarations importable and usable from another module:
 `hm.HashMap<i64, i64>{}`, field defaults from the declaring module, and generic methods such as `hm.HashMap.init(lend map)` without repeating type arguments. Validate with `examples/hash-map.zith` and `tests/test-generic-hashmap.cpp`. `DynArray<T>` is out of scope.
 

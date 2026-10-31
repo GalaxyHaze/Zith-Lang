@@ -1,9 +1,17 @@
 # Stdlib I/O Result Contract And Generic Union Limits
 
-This note records the proposed `Result<T, E>` surface for stdlib I/O and the
-compiler facts that currently block convenient generic `Ok`/`Err` helpers.
-It is deliberately separate from `memory/stdlib-io-format.md`, which records
-the `format`/`FormatBuffer` design.
+This note records the `Result<T, E>` surface for stdlib I/O and the compiler
+facts behind convenient generic `Ok`/`Err` helpers. It is deliberately separate
+from `memory/stdlib-io-format.md`, which records the `format`/`FormatBuffer`
+design.
+
+The canonical surface now ships as `stdlib/std/result.zith`: the positional
+`pub union Result<T, E> { T, E }` plus `Ok`/`Err`/`isOk`/`isErr`/`unwrap`/
+`unwrapErr` generic helpers. Result-only parameters infer from the expected
+result type (a binding annotation or a declared return type), so `Ok(7)` and
+`new(3)` bind `T`/`E` without an explicit `<...>` list. `test-stdlib-modules`
+type-checks the module and `test-codegen` (`test_imported_result_runtime`) runs
+an imported `Result<T, E>` end-to-end.
 
 ## Current Compiler Facts
 
@@ -23,13 +31,14 @@ access:
 let n: u32 = raw result as u32;
 ```
 
-Free generic helpers that construct and return a generic union do not compile
-today. The repro below reports `E3001 raw union member type mismatch` and
-`E3011 cannot infer generic argument`; it is the exact blocker that led the
-design to direct union construction instead of `Ok<T>(value)`/`Err<E>(value)`.
-The C++ test checks for `err::TypeMismatch` (`E3001`) or
-`err::GenericCannotInfer` (`E3011`), matching the currently observed
-diagnostics:
+Free generic helpers that construct and return a generic union now compile.
+The earlier blocker was in generic-union monomorphization: `substituteType`
+built the concrete instance name from the template's unsubstituted members
+(`T`/`E`), so every instance collapsed to `Result<T,T>`. It now names the
+instance from the substituted members, so the helper below checks and runs.
+`Ok`/`Err` remain plain generic helpers; they are not named union cases
+(named cases are not part of the language). The C++ regression lives in
+`test-enum-union-generics` (`test_generic_union_instances_stay_distinct`):
 
 ```zith
 union Result<T, E> {
@@ -80,6 +89,7 @@ Result<FormatBuffer, IoError>{ buffer }
 Result<FormatBuffer, IoError>{ IoError.fWrite }
 ```
 
-Those helpers can be introduced when generic union helper inference works.
-Convenient `Ok`/`Err` helpers remain a future compiler work item, not part of
-this stdlib change.
+Generic union helper inference now works (see the `Ok`/`Err` example above), so
+`Result<T, E>` helpers are shipped in `stdlib/std/result.zith`. The first I/O
+version still keeps the plain `FormatResult` struct, so the I/O surface is
+unchanged; `std/result` is available to new callers.

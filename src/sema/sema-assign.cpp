@@ -226,6 +226,15 @@ TypeId PerModuleSema::inferAssign(frontend::ExprId id) {
         isPointerStorageType(left_type);
     if (direct_pointer_rebind && left_resolved != nullptr && left_resolved->local)
         escapingPointerLocals_.erase(left_resolved->local.value);
+    // A write to a binding invalidates an earlier `is null` narrowing proof:
+    // the assigned value may be null again, so a later dereference must be
+    // re-narrowed. Without this the proof survives the store and a `?*T` that
+    // was reassigned to null still passes the non-null check.
+    const bool lhs_is_binding_name =
+        expr.operands[0] && expr.operands[0].value <= snapshot.expressions().size() &&
+        snapshot.expressions()[expr.operands[0].value - 1U].kind == frontend::ExprKind::Name;
+    if (lhs_is_binding_name && left_resolved != nullptr && left_resolved->local)
+        typed_map.provenNonNullExprs.erase(left_resolved->local.value);
     // A successful `[]char -> *char` coercion makes the assignment an explicit
     // pointer store. Re-check escapes after the coercion so a slice stored
     // through `p: *char = s` reports E4008 even though the source expression

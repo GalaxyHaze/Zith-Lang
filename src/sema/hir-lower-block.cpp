@@ -204,8 +204,7 @@ hir::HirExprId HirLowerModern::lowerIf(const frontend::Expression &expr, const t
                 sema_.typeTable().kindOf(sema_.typeTable().stripQualifiers(local_sema));
             if (local_kind == TypeKind::Opaque || local_kind == TypeKind::Union) {
                 narrowed_local          = resolved->local;
-                narrowed_type           = lowerType(sema_.typeTable().lowerTypeExpr(
-                    *current_module_->frontend, condition.cast_type));
+                narrowed_type           = lowerType(lowerTypeExprConcrete(condition.cast_type));
                 narrow_then             = true;
                 narrowed_opaque_payload = local_kind == TypeKind::Opaque;
             }
@@ -348,8 +347,7 @@ hir::HirExprId HirLowerModern::lowerWhen(const frontend::Expression &expr,
                 const auto *resolved = findResolvedExpr(condition.operands[0]);
                 if (resolved != nullptr && resolved->local) {
                     narrowed_local = resolved->local;
-                    narrowed_type  = lowerType(sema_.typeTable().lowerTypeExpr(
-                        *current_module_->frontend, condition.cast_type));
+                    narrowed_type  = lowerType(lowerTypeExprConcrete(condition.cast_type));
                     const sema::modern::TypeId local_sema = semaTypeOfLocal(resolved->local);
                     narrowed_opaque_payload =
                         sema_.typeTable().kindOf(sema_.typeTable().stripQualifiers(local_sema)) ==

@@ -103,6 +103,10 @@ struct TypedMap {
     /// control-flow narrowing, keyed by `frontend::LocalId`. Deref, arrow,
     /// index, and nullable-pointer coercion consume this proof.
     memory::FlatSet<uint32_t> provenNonNullExprs;
+    /// Read expressions that are the payload of a narrowed optional aggregate
+    /// (`?S`, `?pack`), keyed by `frontend::ExprId`. Field access records the
+    /// base read here; HIR extracts field 0 instead of loading the whole `?T`.
+    memory::FlatMap<uint32_t, TypeId> optionalPayloadReads;
     /// Variadic-slice lowering decisions produced by sema for calls, keyed by
     /// the call expression id.
     memory::FlatMap<uint32_t, VariadicCallPlan> variadicCallPlans;
@@ -114,7 +118,7 @@ struct TypedMap {
         : exprTypes(), declTypes(), localTypes(), forInRangeLiteral(), forInNext(), containsCall(),
           forInElementIndex(), forInEndIndex(), forInUnionType(), forInOptionalType(),
           traitQualifiedReceiverBase(), opaqueSourceTypes(), dynSourceTypes(), provenNonNullExprs(),
-          variadicCallPlans(), variadicStmtPlans() {}
+          optionalPayloadReads(), variadicCallPlans(), variadicStmtPlans() {}
 };
 
 class SemaPipeline;
@@ -202,6 +206,13 @@ private:
     /// Local ids whose uninitialized `let` was typed by its first assignment.
     std::vector<uint32_t> typeInferredByAssignment_;
     TypeId currentReturnType_ = kInvalidTypeId;
+    /// Expected result type for the next expression inferred in a context that
+    /// has a known target type (a binding annotation, a declared return type,
+    /// or a typed call argument). It feeds contextual generic inference so a
+    /// result-only parameter can bind from the surrounding context. It is
+    /// consumed (reset) by the first call that reads it, so it never leaks into
+    /// a nested callee's own inference.
+    TypeId expectedResultType_ = kInvalidTypeId;
     /// Logical move/address state for parameter/local bindings while inferring
     /// a body. A move (address-of, receiver borrow, or ptrOf of a local)
     /// invalidates reads and field writes, while a direct assignment to the
@@ -350,14 +361,23 @@ private:
     /// (a pointer whose pointee keeps a Lend/View qualifier).
     [[nodiscard]] bool isBorrowParamType(TypeId type) const noexcept;
     /// Builds/returns the named concrete type for a template application. Shared
-    /// by type expressions and generic struct literals.
+    /// by type expressions and generic struct literals. The generic arguments
+    /// are written in the caller module and are lowered against this snapshot;
+    /// the template body is lowered in its declaring module.
     TypeId instantiateTypeExpr(frontend::TextSpan span, std::string_view name,
                                const std::vector<frontend::TypeExprId> &arguments);
-    /// Builds/returns the named concrete struct type when the arguments are already
-    /// lowered, including arguments inferred from a struct literal.
-    TypeId instantiateStructFromArgs(frontend::TextSpan span,
-                                     const frontend::Declaration &template_decl,
-                                     const std::vector<TypeId> &args);
+    /// Builds/returns the named concrete type (struct/enum/union/alias) when the
+    /// arguments are already lowered, including arguments inferred from a struct
+    /// literal. The template body is lowered in the module that declares it.
+    TypeId instantiateTemplateFromArgs(frontend::TextSpan span,
+                                       const frontend::Declaration &template_decl,
+                                       const std::vector<TypeId> &args);
+    /// Locates a generic type template named `name` that is visible from this
+    /// module: a local declaration first, then the imported module hinted by
+    /// `importedTemplateModule_` or a `from`-import binding. `out_module` receives
+    /// the declaring module. Returns nullptr when no template is visible.
+    const frontend::Declaration *findGenericTypeTemplate(std::string_view name,
+                                                         session::ModuleKey *out_module) const;
     /// Deduces missing struct literal generic arguments from provided fields,
     /// materializes the concrete struct, then validates values and defaults.
     TypeId resolveGenericStructLiteral(frontend::TextSpan span, const frontend::Expression &expr,
@@ -366,6 +386,11 @@ private:
     TypeId lowerForeignType(const cinterop::Type &type);
     TypeId lowerForeignConstantType(const cinterop::Constant &constant);
     TypeId inferExpr(frontend::ExprId id);
+    /// Infers `id` under a known expected result type. The expectation feeds
+    /// contextual generic inference (a result-only parameter such as
+    /// `fn Ok<T,E>(): Result<T,E>` binds from the annotation) and is consumed
+    /// by the first call it reaches. A missing expectation is a plain infer.
+    TypeId inferExprExpected(frontend::ExprId id, TypeId expected);
     /// Infers an expression used directly as a control-flow condition. The
     /// expression must be `bool` or an optional `?T`; an optional is tested
     /// implicitly as `x != null` without narrowing its payload.
@@ -391,7 +416,7 @@ private:
     /// without a user-defined method; the HIR lowers it to bound comparisons.
     TypeId inferContains(frontend::ExprId binary_id, frontend::ExprId value, frontend::ExprId rhs,
                          frontend::TextSpan span);
-    TypeId inferCall(frontend::ExprId id);
+    TypeId inferCall(frontend::ExprId id, TypeId expected_result = kInvalidTypeId);
     /// Resolves a generic parameter name bound in the current declaration.
     /// Used to identify `T.method(...)` static trait calls over a generic
     /// parameter during method-call inferencing.
@@ -403,7 +428,8 @@ private:
     /// Try to resolve a Field/Arrow callee as a method call.
     /// Returns the result type, or kInvalidTypeId (with a diagnostic)
     /// when the field is not a method.
-    TypeId inferMethodCall(const frontend::Expression &call, const frontend::Expression &callee);
+    TypeId inferMethodCall(const frontend::Expression &call, const frontend::Expression &callee,
+                           TypeId expected_result = kInvalidTypeId);
     TypeId inferBlock(frontend::ExprId id);
     [[nodiscard]] bool calleeIsDiscardable(frontend::ExprId call_id) const noexcept;
     /// Validates a `defer expr;` / `defer { ... }` statement: infers the body
@@ -493,7 +519,10 @@ private:
     memory::Optional<TypeId> enumVariantType(frontend::ExprId operand, std::string_view variant,
                                              frontend::TextSpan span);
     TypeId inferStructLiteral(frontend::ExprId id);
-    TypeId inferPackLiteral(frontend::ExprId id);
+    /// `expected` is the annotated pack type of the surrounding binding or
+    /// return when one is available, so a bare `null` member can take its
+    /// declared member type instead of the `null`/`never` type.
+    TypeId inferPackLiteral(frontend::ExprId id, TypeId expected = kInvalidTypeId);
     /// Infers `Union { member }`, the positional construction syntax for a
     /// raw union's first/selected member storage.
     TypeId inferUnionLiteral(frontend::ExprId id, TypeId union_tid, const UnionType &union_data);
@@ -519,6 +548,11 @@ private:
     /// True when a nullable-pointer expression was narrowed by the enclosing
     /// control-flow check, so `*T` expects it may be used directly.
     [[nodiscard]] bool exprHasNonNullPointerProof(frontend::ExprId id) const noexcept;
+    /// When `id` names a local of an optional aggregate type (`?T` whose
+    /// payload is not a pointer) and the enclosing control flow proved the
+    /// payload present, returns that payload type. `kInvalidTypeId` otherwise.
+    /// `?*T` is excluded: it uses the pointer niche and unwraps in `inferArrow`.
+    [[nodiscard]] TypeId provenOptionalAggregatePayload(frontend::ExprId id) const noexcept;
     /// Local proven non-null by a `not (x is null)` condition, if the
     /// condition directly names a local and the local is a nullable pointer.
     [[nodiscard]] frontend::LocalId
@@ -579,7 +613,8 @@ private:
     TypeId resolveStructMethodCall(const frontend::Expression &call,
                                    const frontend::Expression &callee,
                                    const std::vector<ResolvedMethod> &methods, TypeId base_type,
-                                   TypeId pointee, bool is_pointer);
+                                   TypeId pointee, bool is_pointer,
+                                   TypeId expected_result = kInvalidTypeId);
 
     /// True when `type` satisfies `trait_or_interface`. Traits are nominal and
     /// must be registered; interfaces are structural and compared field-by-field

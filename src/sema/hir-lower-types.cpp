@@ -360,7 +360,18 @@ types::TypeId HirLowerModern::lowerType(sema::modern::TypeId type) {
 sema::modern::TypeId HirLowerModern::lowerTypeExprConcrete(frontend::TypeExprId id) {
     if (!id || current_module_ == nullptr || current_module_->frontend == nullptr)
         return sema::modern::kInvalidTypeId;
-    sema::modern::TypeId lowered = sema_.typeTable().lowerTypeExpr(*current_module_->frontend, id);
+    sema::modern::TypeId lowered = sema::modern::kInvalidTypeId;
+    // Qualified names (`mod.Type`) resolve through import bindings, which the
+    // raw TypeTable lowering cannot see; defer to the module sema for those.
+    if (id.value <= current_module_->frontend->typeExpressions().size()) {
+        const auto &type_expr = current_module_->frontend->typeExpressions()[id.value - 1U];
+        if (type_expr.kind == frontend::TypeExprKind::Name && !type_expr.segments.empty()) {
+            if (PerModuleSema *module_sema = sema_.findModuleSema(current_module_->key))
+                lowered = module_sema->lowerTypeExpr(id);
+        }
+    }
+    if (!lowered)
+        lowered = sema_.typeTable().lowerTypeExpr(*current_module_->frontend, id);
     if (!lowered && current_fn_decl_ != nullptr &&
         id.value <= current_module_->frontend->typeExpressions().size()) {
         const auto &type_expr = current_module_->frontend->typeExpressions()[id.value - 1U];

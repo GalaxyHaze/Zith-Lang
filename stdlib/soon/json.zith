@@ -4,4 +4,4 @@ pub fn stringify()
 
 pub fn isValid()
 
-mod(2) fn test()
+mod fn test()

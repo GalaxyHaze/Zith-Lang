@@ -656,6 +656,34 @@ void test_c_header_globals_bind_and_lower_to_external_addresses() {
 #endif
 }
 
+void test_external_const_declaration_needs_no_initializer() {
+    // `extern const name: T;` references read-only storage defined outside the
+    // module, so it must not be treated like a module-scope `const`, which
+    // requires a constant initializer. Regression for the sema check that
+    // rejected the documented form.
+    Workspace workspace;
+    workspace.write("main.zith", "extern const rate: f64;\n"
+                                 "extern var counter: i32;\n"
+                                 "fn read_rate(): f64 { return rate; }\n"
+                                 "fn bump(): i32 { counter = counter + 1; return counter; }\n"
+                                 "fn main(): i32 { return 0; }\n");
+
+    memory::Arena arena;
+    Options options(arena);
+    options.targetStage = session::Stage::HirLowered;
+
+    session::CompilationSession session(options, (workspace.root / "main.zith").string());
+    session.setBuffered(true);
+    const bool ok = session.runTo(session::Stage::HirLowered);
+    if (!ok) {
+        for (const auto &diagnostic : session.diags().all()) {
+            if (diagnostic.severity == diagnostics::Severity::Error)
+                std::printf("    [ExternConstDiag] %s\n", diagnostic.message.c_str());
+        }
+    }
+    CHECK(ok, "extern const declarations without an initializer lower");
+}
+
 void test_c_header_constant_duplicate_diagnostic() {
     Workspace workspace;
     workspace.write("fixture.h", "#define ANSWER 42\n");
@@ -1255,6 +1283,7 @@ static void test_frontend_modern_pipeline() {
     test_c_header_import_lowers_external_function();
     test_c_header_import_lowers_macro_constants();
     test_c_header_globals_bind_and_lower_to_external_addresses();
+    test_external_const_declaration_needs_no_initializer();
     test_c_header_constant_duplicate_diagnostic();
     test_c_header_constant_let_duplicate_diagnostic();
     test_pipeline_macro_expansion_lowers();

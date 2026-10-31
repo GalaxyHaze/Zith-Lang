@@ -188,7 +188,7 @@ void test_variadic_dyn_formatable_uses_bridge() {
     CHECK(r.ok, "variadic dyn Formatable call through a bridge compiles");
 }
 
-void test_generic_union_result_helper_blocked() {
+void test_generic_union_result_helper() {
     SessionRunner t;
     auto r = t.run("union Result<T, E> {\n"
                    "    T,\n"
@@ -202,10 +202,7 @@ void test_generic_union_result_helper_blocked() {
                    "    let a: Result<u32, u32> = Ok<u32, u32>(7);\n"
                    "    return 0;\n"
                    "}\n");
-    CHECK(!r.ok, "generic Ok helper is currently blocked");
-    CHECK(r.hasErrorCode(diagnostics::err::TypeMismatch) ||
-              r.hasErrorCode(diagnostics::err::GenericCannotInfer),
-          "blocked generic helper reports type/inference error");
+    CHECK(r.ok, "a generic Ok helper returning a positional union now compiles");
 }
 
 void test_generic_union_direct_construction_blocked() {
@@ -342,7 +339,7 @@ int main() {
     test_qualified_trait_receiver_is_currently_blocked();
     test_lend_dyn_trait_receiver_compiles();
     test_variadic_dyn_formatable_uses_bridge();
-    test_generic_union_result_helper_blocked();
+    test_generic_union_result_helper();
     test_generic_union_direct_construction_blocked();
     test_io_format_returns_owned_result();
     test_io_format_into_existing_buffer();

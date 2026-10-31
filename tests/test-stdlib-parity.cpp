@@ -290,6 +290,97 @@ constexpr ParityCase kCases[] = {
      "    return 42;\n"
      "}\n",
      "excluded: allocator and InPlace contracts are outside this parity slice"},
+    {"slice_return_by_value",
+     "fn head(a: *char, n: u64): []char {\n"
+     "    raw a[0u64..n]\n"
+     "}\n"
+     "\n"
+     "fn main(): i32 {\n"
+     "    var s = head(\"hello\", 3u64);\n"
+     "    if @lengthOf(s) != 3u64 {\n"
+     "        return 1;\n"
+     "    }\n"
+     "    if raw s[0u64] != 'h' {\n"
+     "        return 2;\n"
+     "    }\n"
+     "    if raw s[2u64] != 'l' {\n"
+     "        return 3;\n"
+     "    }\n"
+     "    return 0;\n"
+     "}\n",
+     nullptr},
+    {"pointer_dynamic_index",
+     "fn nth(a: *char, i: u64): char {\n"
+     "    a[i]\n"
+     "}\n"
+     "\n"
+     "fn main(): i32 {\n"
+     "    var buf: [3]char = ['a', 'b', 'c'];\n"
+     "    var p: *char = @ptrOf(buf);\n"
+     "    if nth(p, 0u64) != 'a' {\n"
+     "        return 1;\n"
+     "    }\n"
+     "    if nth(p, 2u64) != 'c' {\n"
+     "        return 2;\n"
+     "    }\n"
+     "    return 0;\n"
+     "}\n",
+     nullptr},
+    // `soon/string`'s iterator returns a tagged union (`stringCharStep`) whose
+    // `End` payload is tested with a qualified `is` from the importing module.
+    // This guards the cross-module tagged-union member check on both backends.
+    {"soon_string_iterator_end_member",
+     "import soon/string as s\n"
+     "from std/memory\n"
+     "\n"
+     "fn main(): i32 {\n"
+     "    let heap = HeapAllocator {};\n"
+     "    let a = s.string.init(heap, \"abc\");\n"
+     "    var str = raw a;\n"
+     "    var it = str.iter();\n"
+     "    var seen: i32 = 0;\n"
+     "    for (var i = 0), (i < 10), (i = i + 1) {\n"
+     "        var step = it.next();\n"
+     "        if (step is s.End) { break; }\n"
+     "        seen = seen + 1;\n"
+     "    }\n"
+     "    str.destroy();\n"
+     "    return seen;\n"
+     "}\n",
+     nullptr},
+    // An optional aggregate (`?S`) proven present by an early-return
+    // `if (x is null) { return ...; }` is read as its payload. Native and VM
+    // must agree on the extracted field value.
+    {"optional_aggregate_early_return_field",
+     "struct Pair { first: i32, second: i32 }\n"
+     "\n"
+     "fn sum(x: ?Pair): i32 {\n"
+     "    if (x is null) { return 0; }\n"
+     "    return x.first + x.second;\n"
+     "}\n"
+     "\n"
+     "fn main(): i32 {\n"
+     "    let p = Pair { first: 4, second: 5 };\n"
+     "    let o: ?Pair = p;\n"
+     "    return sum(o);\n"
+     "}\n",
+     nullptr},
+    // A `null` member in an annotated pack literal is retyped from the pack's
+    // declared member type, then erased into `opaque` and read back. Native and
+    // VM must agree on the surviving `len` member.
+    {"null_pack_member_roundtrip",
+     "fn readAnnotated(x: opaque): u64 {\n"
+     "    let p = x as |bytes: ?*u8, len: u64|;\n"
+     "    if (p is null) { return 0u64; }\n"
+     "    return p.len;\n"
+     "}\n"
+     "\n"
+     "fn main(): i32 {\n"
+     "    let a: |bytes: ?*u8, len: u64| = |null, 7u64|;\n"
+     "    if (readAnnotated(a) != 7u64) { return 1; }\n"
+     "    return 0;\n"
+     "}\n",
+     nullptr},
 };
 
 std::string readFile(const fs::path &path) {

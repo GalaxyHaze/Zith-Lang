@@ -234,6 +234,19 @@ _Avoid_: secondary pattern, multi-pattern, following guard
 The mandatory comma between when cases, omitted for the final case.
 _Avoid_: arrow delimiter, comma terminator, case delimiter
 
+## Forward Dispatch
+
+**Forward dispatch**:
+A call-site construct that selects an overload from the runtime tag of one
+marked argument and calls it with that argument. In Zith-- the subject is a
+tagged union or an `opaque` value.
+_Avoid_: forward overload, forward deduction, tag dispatch
+
+**Forward dispatch subject**:
+The single argument that carries the dispatch marker. Its type is the tagged
+union or `opaque` value the construct dispatches over.
+_Avoid_: dispatch target, dispatch receiver
+
 ## Ranges, `Contains` e `Iterator`
 
 **Range**:

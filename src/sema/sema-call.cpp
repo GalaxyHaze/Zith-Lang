@@ -1,6 +1,8 @@
 #include "sema/sema-modern-utils.hpp"
 #include "sema/sema-modern.hpp"
+#include "support/int-literal.hpp"
 #include <algorithm>
+#include <functional>
 #include <string>
 
 namespace zith::sema::modern {
@@ -217,7 +219,7 @@ PerModuleSema::selectOverload(const frontend::Expression &call,
     reported = true;
     return nullptr;
 }
-TypeId PerModuleSema::inferCall(frontend::ExprId id) {
+TypeId PerModuleSema::inferCall(frontend::ExprId id, TypeId expected_result) {
     const auto &expr = snapshot.expressions()[id.value - 1U];
     if (expr.operands.empty())
         return error_type;
@@ -232,7 +234,7 @@ TypeId PerModuleSema::inferCall(frontend::ExprId id) {
     if ((callee.kind == frontend::ExprKind::Field || callee.kind == frontend::ExprKind::Arrow) &&
         !callee.operands.empty()) {
         semaProbe("[probe] inferCall trying method for callee '%s'\n", callee.text.c_str());
-        if (const TypeId mt = inferMethodCall(expr, callee))
+        if (const TypeId mt = inferMethodCall(expr, callee, expected_result))
             return mt;
         semaProbe("[probe] inferCall method failed for callee '%s'\n", callee.text.c_str());
     }
@@ -392,12 +394,32 @@ TypeId PerModuleSema::inferCall(frontend::ExprId id) {
 
         std::vector<TypeId> argument_types;
         argument_types.reserve(fn->params.size());
+        std::vector<bool> weak_args;
+        weak_args.reserve(fn->params.size());
+        // An unsuffixed numeric literal is a weak inference source: its default
+        // type (`i32`/`f64`) must not outvote a contextual expected type, since
+        // the call-site coercion would adapt the literal anyway. A suffixed
+        // literal or a named binding is a strong source and keeps priority.
+        std::function<bool(frontend::ExprId)> weakLiteral = [&](frontend::ExprId arg_id) -> bool {
+            if (!arg_id || arg_id.value > snapshot.expressions().size())
+                return false;
+            const auto &arg_expr = snapshot.expressions()[arg_id.value - 1U];
+            if (arg_expr.kind == frontend::ExprKind::Unary && arg_expr.text == "-" &&
+                !arg_expr.operands.empty())
+                return weakLiteral(arg_expr.operands[0]);
+            if (arg_expr.kind != frontend::ExprKind::Literal)
+                return false;
+            if (!looksInteger(arg_expr.text) && !looksFloat(arg_expr.text))
+                return false;
+            return support::integerSuffix(arg_expr.text).empty();
+        };
         for (size_t index = 0; index < fn->params.size(); ++index) {
             if (is_variadic_slice && index == slice_index) {
                 // If the caller passes a single explicit slice value, keep it
                 // so `f([]T)` still instantiates `T`; otherwise infer `[]T`
                 // from the first auto-collected element.
                 if (arg_count == slice_index + 1U && index + 1U < expr.operands.size()) {
+                    weak_args.push_back(false);
                     const TypeId last_arg =
                         inferExpr(expr.operands[static_cast<size_t>(index + 1U)]);
                     if (const auto *arg_slice = type_table.slice(resolve(last_arg))) {
@@ -407,18 +429,23 @@ TypeId PerModuleSema::inferCall(frontend::ExprId id) {
                         argument_types.push_back(type_table.internSlice(last_arg));
                     }
                 } else if (arg_count > slice_index + 1U && index + 1U < expr.operands.size()) {
+                    weak_args.push_back(weakLiteral(expr.operands[static_cast<size_t>(index + 1U)]));
                     const TypeId element_sample =
                         inferExpr(expr.operands[static_cast<size_t>(index + 1U)]);
                     argument_types.push_back(type_table.internSlice(element_sample));
                 } else {
+                    weak_args.push_back(false);
                     argument_types.push_back(kInvalidTypeId);
                 }
             } else if (index + 1U < expr.operands.size()) {
+                weak_args.push_back(weakLiteral(expr.operands[static_cast<size_t>(index + 1U)]));
                 argument_types.push_back(inferExpr(expr.operands[static_cast<size_t>(index + 1U)]));
             } else if (callee_decl != nullptr && index < callee_decl->parameters.size() &&
                        callee_decl->parameters[index].defaultValue) {
+                weak_args.push_back(false);
                 argument_types.push_back(functionDefaultType(*callee_decl, index, *decl_sema));
             } else {
+                weak_args.push_back(false);
                 argument_types.push_back(kInvalidTypeId);
             }
         }
@@ -426,7 +453,7 @@ TypeId PerModuleSema::inferCall(frontend::ExprId id) {
         std::vector<TypeId> args;
         const comptime::GenericResolveStatus resolved = instantiations->resolveArgs(
             *fn, generic_decl != nullptr ? generic_decl->genericParams.size() : 0U, decl_id.value,
-            explicit_types, argument_types, args);
+            explicit_types, argument_types, expected_result, weak_args, args);
         switch (resolved) {
         case comptime::GenericResolveStatus::Arity:
             report(expr.span, "wrong generic argument count", diagnostics::err::GenericArity);
@@ -648,6 +675,14 @@ bool PerModuleSema::typeContainsGeneric(const FunctionType *fn) const noexcept {
         if (const auto *st = type_table.struct_type(type)) {
             for (const auto field : st->fields)
                 if (self(self, field, depth + 1U))
+                    return true;
+            // A reified generic struct carries its concrete arguments in
+            // `args` even when the parameters do not appear in any field
+            // (for example `HashMap<K, V>` whose only field is a counter).
+            // Without this scan such a struct would be classified as
+            // non-generic and generic argument inference would never run.
+            for (const auto arg : st->args)
+                if (self(self, arg, depth + 1U))
                     return true;
             return false;
         }

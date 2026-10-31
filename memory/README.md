@@ -84,10 +84,27 @@ contracts, decisions, and gotchas that are not discoverable from the source alon
   `consoleOut` format design, `TextSink`/`dyn` probe facts, and target access
   pattern for variadic `Formatable` values.
 - [stdlib-io-result.md](stdlib-io-result.md): proposed `Result<T, E>` surface
-  and the current compiler blockers for generic `Ok`/`Err` helpers.
+  and the compiler facts behind generic `Ok`/`Err` helpers; now shipped as
+  `stdlib/std/result.zith`.
+- [comptime-contextual-inference.md](comptime-contextual-inference.md):
+  expected-result generic inference (weak literal vs strong expected-result
+  binding) and where it lives, enabling `Ok(7)`/`new(3)` without `<...>`.
 - [stdlib-c-fs.md](stdlib-c-fs.md): raw file access under `c/fs` and the
   Linux-only `c/posix` platform variant, with the `raw opaque` and
   duplicate-`SEEK_*` gotchas and the deferred safe `std/fs` blockers.
+- [stdlib-soon-modules.md](stdlib-soon-modules.md): the `soon/` modules, the
+  `test-stdlib-modules` guard that type-checks every `stdlib/**.zith`, and the
+  `return expr;` / narrowing gotchas that broke `soon/string.zith`.
+- [stdlib-imported-generics.md](stdlib-imported-generics.md): imported generic
+  structs (`HashMap<K,V>`, `DynArray<T>`) are now consumable from another
+  module; the qualified struct-literal, imported field-default, transitive
+  concretization, and optional-coercion fixes behind ADR 0020.
+- [sema-nonnull-narrowing.md](sema-nonnull-narrowing.md): how `?*T` non-null
+  proofs are stored/consumed, why a write to the binding invalidates them
+  (soundness fix), the optional-aggregate (`?S`/`?pack`/`?i32`) narrowing
+  extension, aggregate literals coerced to `opaque`, the resolved `null`
+  pack-member inference (`null as ?T` and the annotation path), and the
+  remaining local-only narrowing debt.
 - [lsp-vscode-folding.md](lsp-vscode-folding.md): LSP/VS Code brace folding
   flow, local VSIX rebuild loop, and read-only sandbox gotchas.
 - [test-command-coordination.md](test-command-coordination.md): how the native

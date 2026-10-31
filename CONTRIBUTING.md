@@ -25,7 +25,7 @@ src/
   comptime/     - Compile-time evaluation and generic instantiation
   formatter/    - Source code formatter
   hir/          - High-level intermediate representation
-  sema/         - Semantic analysis, NRA preparation, and HIR lowering
+  sema/         - Semantic analysis, SRA fact preparation, and HIR lowering
   symbols/      - Symbol tables, imports, and name resolution
   types/        - Type interning, unification, and lowering
   wasm/         - WebAssembly playground and WASI support

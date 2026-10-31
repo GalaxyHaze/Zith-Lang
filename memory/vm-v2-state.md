@@ -45,6 +45,22 @@ that are easy to get wrong when editing that plan.
   `MemCopy` like any other address-valued field. Storage for every memory-backed
   slot is reserved once in a function prologue (not at the HIR `slot_alloca`
   site), so a slot declared inside a loop does not allocate on every iteration.
+- A function that returns a slice by value carries the fat pointer in two
+  registers: `Function::returnsSlice` marks it, the pointer half is the result
+  register, and the length half is the next register. A call site reserves both
+  registers, and the slice `HirField` case reads the length half (index 1) back
+  as a `Move` of `base+1` instead of going through `FieldPtr`, because a slice
+  is a register pair and not memory-backed. `@lengthOf`, `slice.length`, and
+  bounds checks all read the length through that field. The `Op::Ret` handler
+  propagates the second half through `FunctionReturn::hasAux`/`aux`, and every
+  call handler forwards it to the caller. `test-vm-v2` covers it in
+  `test_vm_v2_slice_return_by_value`; `vir-cache` bumps the schema to v2 to
+  serialize the flag.
+- Indexing a `*T` pointer with a runtime index lowers to `IndexLoad` with the
+  raw bit (2) set and the element size taken from the pointee, so `p[i]` reads
+  `elementSize` bytes at `p + i*elementSize`. This is separate from slice
+  indexing, which carries its own length. Covered by
+  `test_vm_v2_pointer_dynamic_index`.
 - `fn` and `extern fn` are typed references indexed into a module table, not
   raw C function pointers.
 - Allocators stay above VM primitives (`AllocBytes`/`MallocBytes`/`malloc`).
@@ -63,9 +79,12 @@ that are easy to get wrong when editing that plan.
 - The FFI subset is validated and data-driven in `kValidatedExterns`
   (`src/vm/vm-v2.cpp`): `puts`, `putchar`, `write_stdout`, `malloc`, `calloc`,
   `free`, `realloc`, `snprintf` (`%u`, `%d`, `%g`), the `printf` variadic
-  surface, `strlen`, `memcpy`, `strncmp`, and `getchar`. Unsupported externs
-  trap with a message naming the missing extern. `getchar` returns -1 because
-  the playground has no stdin.
+  surface, `strlen`, `memcpy`, `strncmp`, `strcpy`, `strcat`, `strcmp`,
+  `memcmp`, and `getchar`. Unsupported externs trap with a message naming the
+  missing extern. `getchar` returns -1 because the playground has no stdin.
+  The name allow-list in `src/vm/hir-to-vm.cpp` (`lowerCall`) must list every
+  validated extern, or lowering rejects the call before dispatch. `strcpy`,
+  `strcat`, `strcmp`, and `memcmp` were added so `soon/string` lowers on v2.
 - `realloc` preserves live allocation contents through the allocator's block
   tracking.
 - `tests/test-stdlib-parity.cpp` runs stdlib programs through both `zithc` and

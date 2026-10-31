@@ -117,7 +117,7 @@ PerModuleSema::findMethodsForOwner(std::string_view owner_name,
     return methods;
 }
 TypeId PerModuleSema::inferMethodCall(const frontend::Expression &call,
-                                      const frontend::Expression &callee) {
+                                      const frontend::Expression &callee, TypeId expected_result) {
     // `p.Trait.method()` is parsed as `Call(Field(Field(p, Trait), method))`.
     // The intermediate `p.Trait` is not a real field; it names a trait or
     // interface that the receiver type satisfies, so resolve the method within
@@ -392,7 +392,7 @@ TypeId PerModuleSema::inferMethodCall(const frontend::Expression &call,
             pointee_kind == TypeKind::Slice || pointee_kind == TypeKind::Pointer) {
             return resolveStructMethodCall(call, callee,
                                            findMethodsForOwner(ownerNameOf(pointee), callee.text),
-                                           base_type, pointee, is_pointer);
+                                           base_type, pointee, is_pointer, expected_result);
         }
         return kInvalidTypeId; // not a struct receiver: let normal call resolution run
     }
@@ -400,7 +400,7 @@ TypeId PerModuleSema::inferMethodCall(const frontend::Expression &call,
     if (qualifying_trait.empty())
         return resolveStructMethodCall(call, callee,
                                        findMethodsForOwner(ownerNameOf(pointee), callee.text),
-                                       base_type, pointee, is_pointer);
+                                       base_type, pointee, is_pointer, expected_result);
 
     // `p.Trait.method()` selects only declarations owned by that trait. For a
     // declaration-only requirement, the concrete owner method that satisfies it
@@ -433,7 +433,8 @@ TypeId PerModuleSema::inferMethodCall(const frontend::Expression &call,
                diagnostics::err::NoMember);
         return error_type;
     }
-    return resolveStructMethodCall(call, callee, qualified, base_type, pointee, is_pointer);
+    return resolveStructMethodCall(call, callee, qualified, base_type, pointee, is_pointer,
+                                   expected_result);
 }
 TypeId PerModuleSema::inferDynMethodCall(const frontend::Expression &call,
                                          const frontend::Expression &callee, TypeId dyn_type) {
@@ -789,7 +790,8 @@ TypeId PerModuleSema::ownerTypeFromName(std::string_view owner_name) const {
 TypeId PerModuleSema::resolveStructMethodCall(const frontend::Expression &call,
                                               const frontend::Expression &callee,
                                               const std::vector<ResolvedMethod> &resolved_methods,
-                                              TypeId base_type, TypeId pointee, bool is_pointer) {
+                                              TypeId base_type, TypeId pointee, bool is_pointer,
+                                              TypeId expected_result) {
     // Collect every method of this owner with the callee's name: methods take part
     // in the same overload resolution as free functions.
     std::vector<const frontend::Declaration *> method_decls;
@@ -1029,9 +1031,9 @@ TypeId PerModuleSema::resolveStructMethodCall(const frontend::Expression &call,
         if (method_fn != nullptr) {
             resolved = inherited_resolved ? comptime::GenericResolveStatus::Ok
                        : instantiations != nullptr
-                           ? instantiations->resolveArgs(*method_fn, call_generic_degree,
-                                                         method_decl->id.value, explicit_types,
-                                                         argument_types, inferred_args)
+                           ? instantiations->resolveArgs(
+                                 *method_fn, call_generic_degree, method_decl->id.value,
+                                 explicit_types, argument_types, expected_result, {}, inferred_args)
                            : comptime::GenericResolveStatus::CannotInfer;
         }
         if (inherited_resolved)

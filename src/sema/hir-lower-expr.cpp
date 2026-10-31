@@ -17,28 +17,29 @@ hir::HirExprId HirLowerModern::lowerExpr(frontend::ExprId id) {
 
     const auto &expr = current_module_->frontend->expressions()[id.value - 1U];
     const auto type  = typeOfExpr(id);
+    // An implicit `T -> opaque` coercion records the concrete source type but
+    // sema also types the whole value expression as `opaque`. A literal or
+    // aggregate literal must keep the concrete type so it can be spilled into
+    // the erased payload before wrapping, otherwise the value is emitted with
+    // the opaque `{ *void, u32 }` layout and the payload is corrupted.
+    const auto concreteLiteralType = [&](types::TypeId fallback) -> types::TypeId {
+        if (current_types_ == nullptr)
+            return fallback;
+        const auto *source = current_types_->opaqueSourceTypes.get(id.value);
+        if (source == nullptr)
+            return fallback;
+        const sema::modern::TypeId source_sema =
+            current_instantiation_ != nullptr && current_instance_ != nullptr
+                ? current_instantiation_->substituteType(*source, current_instance_->args)
+                : *source;
+        const types::TypeId lowered = lowerType(source_sema);
+        return lowered != types::kErrorType && lowered != types::kInvalidType ? lowered : fallback;
+    };
     switch (expr.kind) {
     case frontend::ExprKind::OwnershipCoerce:
         return expr.operands.empty() ? hir::kInvalidHirExpr : lowerExpr(expr.operands[0]);
-    case frontend::ExprKind::Literal: {
-        // Implicit `T -> opaque` coercions record the concrete source type but
-        // sema also types the whole value expression as `opaque`. The HIR
-        // literal must keep the concrete type so it can be spilled into the
-        // erased payload before wrapping.
-        types::TypeId literal_type = type;
-        if (current_types_ != nullptr) {
-            if (const auto *source = current_types_->opaqueSourceTypes.get(id.value)) {
-                const sema::modern::TypeId source_sema =
-                    current_instantiation_ != nullptr && current_instance_ != nullptr
-                        ? current_instantiation_->substituteType(*source, current_instance_->args)
-                        : *source;
-                const types::TypeId lowered = lowerType(source_sema);
-                if (lowered != types::kErrorType && lowered != types::kInvalidType)
-                    literal_type = lowered;
-            }
-        }
-        return lowerLiteral(expr, literal_type);
-    }
+    case frontend::ExprKind::Literal:
+        return lowerLiteral(expr, concreteLiteralType(type));
     case frontend::ExprKind::Name:
         return lowerName(expr);
     case frontend::ExprKind::Unary:
@@ -89,11 +90,11 @@ hir::HirExprId HirLowerModern::lowerExpr(frontend::ExprId id) {
     case frontend::ExprKind::Arrow:
         return lowerArrow(expr, type);
     case frontend::ExprKind::StructLiteral:
-        return lowerStructLiteral(expr, type);
+        return lowerStructLiteral(expr, concreteLiteralType(type));
     case frontend::ExprKind::PackLiteral:
-        return lowerPackLiteral(expr, type);
+        return lowerPackLiteral(expr, concreteLiteralType(type));
     case frontend::ExprKind::ArrayLiteral:
-        return lowerArrayLiteral(expr, type);
+        return lowerArrayLiteral(expr, concreteLiteralType(type));
     case frontend::ExprKind::Cast:
         return lowerCast(expr, type);
     case frontend::ExprKind::IsNull:
@@ -118,4 +119,3 @@ hir::HirExprId HirLowerModern::lowerExpr(frontend::ExprId id) {
 
 } // namespace modern
 } // namespace zith::sema
-

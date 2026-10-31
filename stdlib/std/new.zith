@@ -8,5 +8,5 @@ pub trait InPlace {
 pub fn new<T: InPlace>(args: opaque): ?*T;
 pub fn delete<T: InPlace>(ptr: *T);
 
-pub fn make<T: InPlace>(allocator: dyn Allocator, args: opaque): ?*T;
-pub fn release<T: InPlace>(allocator: dyn Allocator, ptr: *T);
+// `make`/`release` are provided by the imported allocator module
+// (`std/alloc` re-exports `std/memory/allocators/allocator`).

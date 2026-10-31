@@ -10,7 +10,8 @@ namespace zith::vm {
 
 // VIR and VM semantics evolve independently from the persisted HIR schema.
 // Bump the semantic version whenever VM execution/lowering semantics change.
-inline constexpr uint16_t kVirSchemaVersion = 1;
+// v2 added the `returnsSlice` function flag to the cached VIR layout.
+inline constexpr uint16_t kVirSchemaVersion = 2;
 inline constexpr uint32_t kVmSemanticVersion = 3;
 
 /// Typed value categories used by the v2 execution IR.
@@ -190,6 +191,11 @@ struct Function {
     /// hidden return-slot pointer and the return register is unused. Callers
     /// read the result out of that slot.
     bool returnsAggregate = false;
+    /// True when the function returns a slice by value. The `{ptr, len}` pair
+    /// is returned in two consecutive registers, the first of which is the
+    /// value `Ret` names and the second its length. Callers read the length
+    /// from the register immediately after the return register.
+    bool returnsSlice = false;
     memory::DynArray<ValueType> regTypes;
     memory::DynArray<Instr> body;
 

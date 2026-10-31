@@ -20,7 +20,7 @@
 | F-11 | `fail` / `with` / `catch` / `throw` / `must` | 8 | Spec only |
 | F-12 | `T!` failable propagation (`!` postfix) | 8 | Full Zith only: `T!` and `!` propagation remain outside Zith-- |
 | F-13 | `raw` unwrap operator | 13 | Working for optional extraction; `unsafe`/raw-block surface remains full-Zith |
-| F-14 | NRA/NTA ownership proof before stable HIR (`lend`, `view`, `own`, `share`, `belong`) | 7 | In progress (residual-fact contract implemented in Wave 05; full rule diagnostics remain) |
+| F-14 | NRA ownership proof before stable HIR (`lend`, `view`, `own`, `share`, `belong`) | 7 | In progress (residual-fact contract implemented in Wave 05; full rule diagnostics remain) |
 | F-15 | `comptime` blocks | 11 | Spec only |
 | F-16 | `const fn` compile-time evaluation | 11 | Spec only |
 | F-17 | Reflection intrinsics (`@fields`, `@hasTrait`, `@appendField`, ...) | 11 | Spec only |
@@ -59,20 +59,20 @@ F-43 test surface ────────────────────�
 F-05 (const fn parse) ─────────────────────┐
 F-11 (fail/with/catch)                     ├─ needs T! propagation (full Zith)
 F-12 (failable propagation)                │
-F-14 (NRA/NTA full proof)                  │
+F-14 (NRA full proof)                      │
 F-15-F-17, F-20, F-28 ────────────────── full-Zith only
 F-21 (context semantics) ──┬── F-22 (use) ├─ needs words
 F-23 (word semantics) ─────┘              │
 F-24 (`tag`) ────────────────────────────── full Zith only; Zith-- rejects E2010
 F-25 (assets), F-30, F-31 ─────────────── remaining spec/debt work
 F-18/F-19, F-27, F-26, F-09 ────────────── full-Zith/spec-only
-F-34 (qualifier parse/types) ── F-14 (NRA/NTA) ── stable HIR contract
+F-34 (qualifier parse/types) ── F-14 (NRA) ── stable HIR contract
 F-33 (overloading)                        ┼─ done (name resolution + linkage names)
 F-42 (platform imports)                   ┼─ done (resolver-only; independent of comptime)
                                           │
 F-30 (stdlib) ─────────────┬─ F-18 (runtime tasks/coroutines)
                            ├─ F-19 (runtime threads/channels)
-F-14 (NRA/NTA) ────────────┘
+F-14 (NRA) ─────────────────┘
                            └─ F-20 (shared-resource facts for runtime concurrency APIs)
 F-25 (assets) ───────────────────────────────────│
 F-31 (union runtime) ────────────────────────────│
@@ -101,10 +101,11 @@ remain archived full-Zith features.
 ### Wave 05 — SRA Ownership Analysis (Zith-- slice, frozen)
 F-14 (`lend`/`view`/`own`/`share`/`belong` analysis pass), F-27 (destructuring).
 
-The stable HIR boundary is structural: NTA/NRA facts are accumulated before final lowering and
-HIR carries only residual side-table facts. The Zith-- portion of this wave is SRA (Small
-Resource Analysis) and is frozen at the implemented `lend`/`view` call-annotation slice; it will
-not grow into the full proof. The full ownership proof is full-Zith work, specified in
+The stable HIR boundary is structural: NIA numeric facts and NRA ownership facts are accumulated
+before final lowering and HIR carries only residual side-table facts. The Zith-- portion of this
+wave is SRA (Small Resource Analysis) and is frozen at the implemented `lend`/`view`
+call-annotation slice; it will not grow into the full proof. The full ownership proof is
+full-Zith work, specified in
 [nra-spec.md](nra-spec.md) (node state `uninitialized`/`taken`/`ok`, edge state, flow, and rules
 NRA-1..NRA-11). Qualifier parsing/typing (F-34) is complete. Max parallelism: 1 agent (single
 analysis pass with a tight contract to lowering).

@@ -4,8 +4,10 @@
 > shipped modules are `stdlib/c/io.zith`, `stdlib/c/stdlib.zith`, `stdlib/c/string.zith`,
 > `stdlib/c/fs.zith`, `stdlib/c/posix.linux.zith`,
 > `stdlib/std/io/console.zith`, the `std/memory` DAG, `stdlib/std/collections/hash_map_u64.zith`
-> (a concrete `u64 -> u64` map), and `stdlib/std/collections/hash_map.zith` (a checked generic
-> `HashMap<K, V>`). `std/alloc` and `std/new` remain as legacy compatibility modules.
+> (a concrete `u64 -> u64` map), `stdlib/std/collections/hash_map.zith` (a checked generic
+> `HashMap<K, V>`), and `stdlib/std/result.zith` (the canonical positional
+> `Result<T, E>` union with `Ok`/`Err`/`isOk`/`isErr`/`unwrap`/`unwrapErr` helpers). `std/alloc`
+> and `std/new` remain as legacy compatibility modules.
 
 `std`/`soon` remain documentation-only in this iteration, except for the shipped modules listed
 above. The common C bindings used by those modules live under `c/` rather than importing host
@@ -114,13 +116,15 @@ pub fn reallocate(self: dyn Allocator, old: raw opaque, old_size: u64,
 `allocate` returns `null` when the underlying `malloc`/`realloc` call fails.
 The caller owns the storage and must pass the same `size`/`align` to
 `deallocate`. The larger `InPlace`/`new`/`delete`/`make`/`release` contract is
-recorded in [ADR 0010](adr/0010-allocator-inplace-drop.md). A draft module at
-`stdlib/std/memory/new.zith` carries the target helper signatures, and
-`stdlib/std/new.zith` remains as legacy compatibility. The helpers are marked
-proposed because the compiler cannot yet instantiate generics that only appear
-in the return type or dispatch opaque packs during construction. The `InPlace`
-trait itself is checked and covered by a conforming type in
-`tests/test-generic-hashmap.cpp`.
+recorded in [ADR 0010](adr/0010-allocator-inplace-drop.md). `stdlib/std/memory/new.zith`
+ships real `new<T>`/`delete<T>` bodies, and `stdlib/std/new.zith` remains as
+legacy compatibility. `new<T>` binds its result-only `T` from the expected
+result type, so `let p: ?*Box = new(0 as opaque);` needs no explicit `<...>`;
+it allocates through the `HeapAllocator` bridge, calls `(*p).inplace(args)`, and
+`delete<T>` calls `(*p).clean()` and frees the block. The `InPlace` trait is
+checked and covered by a conforming type in `tests/test-generic-hashmap.cpp`,
+and the heap pair runs end-to-end in `test-codegen`
+(`test_imported_memory_new_delete_runtime`).
 
 #### `std/memory` (target DAG)
 
@@ -132,15 +136,20 @@ pub trait InPlace {
 
 pub fn new<T: InPlace>(args: opaque): ?*T;
 pub fn delete<T: InPlace>(ptr: *T);
+
+pub fn make<T: InPlace>(self: dyn Allocator, args: opaque): ?*T;
+pub fn release<T: InPlace>(self: dyn Allocator, ptr: *T);
 ```
 
-`make`/`release` live on `Allocator` as default methods so the convenient
-pair follows the allocator model: `allocator.make<T>(args)` and
-`allocator.release<T>(ptr)`. They are declared as defaults until layout
-queries and opaque pack dispatch are usable inside trait methods. The module
-is intentionally not wired into `test-examples` until the generic helper API
-is usable; `examples/inplace-simple.zith` continues to demonstrate the local
-`InPlace` shape.
+The allocator-owned `make<T>`/`release<T>` pair ships as free functions over
+`dyn Allocator` (`make(heap, args)` / `release(heap, ptr)`) rather than as
+trait default methods, because a trait default body cannot yet dispatch to
+another trait method on `self`. `make<T>` reserves the layout for `T`, calls
+`(*p).inplace(args)`, and returns `?*T`; `release<T>` calls `(*p).clean()` and
+frees the block through the same allocator. `Allocator.make`/`release` remain
+const-failing defaults that custom allocators may override. The module is
+intentionally not wired into `test-examples`; `examples/inplace-simple.zith`
+continues to demonstrate the local `InPlace` shape.
 
 The layer DAG is kept strict: `in-place` defines `InPlace` only,
 `allocators/allocator` depends on `in-place` and owns `Allocator`,
@@ -166,6 +175,13 @@ struct DynArray<T> {
 }
 ```
 
+The generic `DynArray<T>` is consumable from another module through the same
+imported-instantiation path as `HashMap<K, V>` (ADR 0020): `da.create<i32>(heap)`
+constructs an array, `da.DynArray.reserve<i32>`/`da.push<i32>` grow it, and
+`da.get<i32>`/`da.remove<i32>`/`da.pop<i32>` return `?T`. `examples/dyn-array.zith`
+passes `zithc check` and runs to exit 0, and `test-codegen` exercises an imported
+`DynArray<i32>` end-to-end.
+
 #### `std/collections/hash_map_u64` (concrete)
 
 The shipped concrete map stores `u64` keys and `u64` values. It uses an
@@ -188,9 +204,43 @@ hm.HashMap.destroy(lend map);
 module. Concrete generic instances are reified with their type arguments
 stored as structural metadata on `StructType`, so nested `Entry<K, V>` slots
 keep the correct `K`/`V` mapping and `current.key.hash()` resolves through the
-`K: Hashable` bound. The module passes `zithc check` and is covered by
-`tests/test-generic-hashmap.cpp`. For a concrete shipped runtime example,
-prefer the `u64 -> u64` module above.
+`K: Hashable` bound.
+
+The module is consumable from another module. `hm.HashMap<i64, i64>{}` reifies
+from the declaring module's template, field defaults (`count = 0`,
+`table = null`, ...) lower in the declaring module, and
+`hm.HashMap.init(lend map)` inherits the receiver's type arguments. Nested
+generic calls inside the body are concretized transitively, so
+`init<i64,i64>` calls `reserve<i64,i64>`. `examples/hash-map.zith` passes
+`zithc check` and runs to exit 0, and both `tests/test-generic-hashmap.cpp` and
+`test-codegen` exercise an imported `HashMap<i64,i64>`. See
+[ADR 0020](adr/0020-imported-generic-instantiation.md) for the design. For a
+concrete shipped runtime example, the `u64 -> u64` module above remains
+available.
+
+#### `std/result`
+
+The canonical error-handling foundation is a single positional generic union
+plus generic helpers:
+
+```zith
+pub union Result<T, E> { T, E }
+
+pub fn Ok<T, E>(value: T): Result<T, E>;
+pub fn Err<T, E>(value: E): Result<T, E>;
+pub fn isOk<T, E>(r: Result<T, E>): bool;
+pub fn isErr<T, E>(r: Result<T, E>): bool;
+pub fn unwrap<T, E>(r: Result<T, E>): T;
+pub fn unwrapErr<T, E>(r: Result<T, E>): E;
+```
+
+The union must be `pub` for cross-module consumers; a non-public union fails
+the importing module with `E2001`. Result-only parameters bind from the
+expected result type, so `let r: Result<u32, u32> = Ok(7);` and
+`return Ok(value);` need no explicit `<...>`. `unwrap`/`unwrapErr` perform no
+tag check, so the caller must establish `isOk`/`isErr` first. The module is
+type-checked by `test-stdlib-modules` and exercised end-to-end by `test-codegen`
+(`test_imported_result_runtime`).
 
 #### `c/fs` and `c/posix`
 

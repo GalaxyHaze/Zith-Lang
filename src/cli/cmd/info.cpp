@@ -112,6 +112,7 @@ int help(FILE *dest) {
     p.flag("-c, --color <auto|on|off>", "Color output [default: auto]");
     p.flag("-v, --verbose", "Verbose output, including test runner progress");
     p.flag("    --debug-sema", "Print semantic analysis probes");
+    p.flag("-y, --yes", "Assume yes for destructive confirmations (e.g. 'clean')");
     p.section("DOCS OPTIONS (for 'zithc docs'):");
     p.flag("    --interface", "Document the public interface [default]");
     p.flag("    --spec", "Document all project symbols");

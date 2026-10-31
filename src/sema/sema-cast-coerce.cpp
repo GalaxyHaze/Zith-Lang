@@ -99,6 +99,24 @@ bool PerModuleSema::exprHasNonNullPointerProof(frontend::ExprId id) const noexce
         return false;
     return typed_map.provenNonNullExprs.contains(resolved->local.value);
 }
+TypeId PerModuleSema::provenOptionalAggregatePayload(frontend::ExprId id) const noexcept {
+    if (!id)
+        return kInvalidTypeId;
+    const auto *resolved = findResolvedExpr(id);
+    if (resolved == nullptr || !resolved->local)
+        return kInvalidTypeId;
+    if (!typed_map.provenNonNullExprs.contains(resolved->local.value))
+        return kInvalidTypeId;
+    const TypeId local_type = resolve(typeOfLocal(resolved->local));
+    const auto *opt         = type_table.optional(local_type);
+    if (opt == nullptr)
+        return kInvalidTypeId;
+    // `?*T` unwraps through the pointer niche in `inferArrow`; only aggregate
+    // payloads (`?S`, `?pack`, `?i32`) need the field-extraction path.
+    if (type_table.kindOf(resolve(opt->inner)) == TypeKind::Pointer)
+        return kInvalidTypeId;
+    return type_table.stripQualifiers(opt->inner);
+}
 frontend::LocalId
 PerModuleSema::nonNullPointerLocalFromCondition(frontend::ExprId condition) const noexcept {
     if (!condition || condition.value > snapshot.expressions().size())
@@ -204,6 +222,12 @@ TypeId PerModuleSema::inferCast(frontend::ExprId id) {
         }
         const TypeId from_resolved = resolve(source);
         const TypeId to_resolved   = resolve(target);
+        // `null as ?T` fixes the optional type of a bare `null`. It is a no-op
+        // at run time (None is None for any optional) but it lets a `null`
+        // written inside a pack literal or array literal name its member type.
+        if (from_resolved == null_type &&
+            type_table.kindOf(to_resolved) == TypeKind::Optional)
+            return result;
         // Bare `opaque` is tagged: any concrete value erases into it, and
         // checked extraction returns `?T` so the tag-match/none path is visible.
         if (type_table.kindOf(to_resolved) == TypeKind::Opaque) {
@@ -713,6 +737,15 @@ bool PerModuleSema::adaptNumericLiteral(frontend::ExprId value, TypeId target) {
     return true;
 }
 bool PerModuleSema::coerceValue(frontend::ExprId value, TypeId target, TypeId source) {
+    // A read of an optional aggregate (`?S`, `?pack`, `?i32`) proven present by
+    // an early-return `if (x is null)` coerces as its payload when the target is
+    // not optional. `?*T` keeps the pointer niche and unwraps in `inferArrow`.
+    if (value && source && type_table.kindOf(resolve(target)) != TypeKind::Optional) {
+        if (const TypeId payload = provenOptionalAggregatePayload(value)) {
+            typed_map.optionalPayloadReads.insert(value.value, payload);
+            source = payload;
+        }
+    }
     // Re-tagging an opaque value is a no-op at run time: the underlying
     // { *void, u32 } payload already carries the tag from the module that
     // created it. Both module-local interns of bare `opaque` must unify, so
@@ -725,6 +758,24 @@ bool PerModuleSema::coerceValue(frontend::ExprId value, TypeId target, TypeId so
     // payload layout the opaque value stores.
     if (value && source && type_table.kindOf(resolve(target)) == TypeKind::Opaque &&
         type_table.kindOf(resolve(source)) != TypeKind::Opaque) {
+        // A pack literal with a member that stayed `null`/`never` (a bare
+        // `null` written without a surrounding annotation) has a void member
+        // and no concrete layout to erase. Report it instead of emitting a
+        // malformed aggregate; annotate the binding or cast the `null`.
+        if (value.value <= snapshot.expressions().size() &&
+            snapshot.expressions()[value.value - 1U].kind == frontend::ExprKind::PackLiteral) {
+            const auto &literal = snapshot.expressions()[value.value - 1U];
+            for (const auto element : literal.operands) {
+                if (element && element.value <= snapshot.expressions().size() &&
+                    resolve(typeOfExpr(element)) == null_type) {
+                    report(literal.span,
+                           "a bare 'null' in an untyped pack literal has no member type; "
+                           "annotate the pack or write the 'null' with its optional type",
+                           diagnostics::err::TypeMismatch);
+                    return false;
+                }
+            }
+        }
         setExprType(value, target);
         typed_map.opaqueSourceTypes.insert(value.value, source);
         return true;
@@ -806,7 +857,30 @@ bool PerModuleSema::coerceValue(frontend::ExprId value, TypeId target, TypeId so
                        frontend::ExprKind::PackLiteral &&
                    type_table.kindOf(resolve(target)) == TypeKind::Pack) {
             // A pack literal gets the annotated pack type so HIR can inherit
-            // the declared member names for later field access.
+            // the declared member names for later field access. Each element is
+            // also retyped to its declared member type so `null` in a `?*T`
+            // slot lowers to None and a bare `T` in a `?T` slot lowers to Some.
+            const auto &literal = snapshot.expressions()[value.value - 1U];
+            const auto *target_pack = type_table.pack(resolve(target));
+            if (target_pack != nullptr &&
+                target_pack->members.size() == literal.operands.size()) {
+                for (size_t index = 0; index < literal.operands.size(); ++index) {
+                    const frontend::ExprId element = literal.operands[index];
+                    if (!element || element.value > snapshot.expressions().size())
+                        continue;
+                    const TypeId member_type =
+                        type_table.stripQualifiers(target_pack->members[index]);
+                    const TypeId element_type = typeOfExpr(element);
+                    if (resolve(element_type) == null_type &&
+                        type_table.kindOf(resolve(member_type)) == TypeKind::Optional) {
+                        setExprType(element, member_type);
+                    } else if (type_table.kindOf(resolve(member_type)) == TypeKind::Optional &&
+                               element_type &&
+                               type_table.kindOf(resolve(element_type)) != TypeKind::Optional) {
+                        setExprType(element, member_type);
+                    }
+                }
+            }
             setExprType(value, target);
         }
         // `[]char -> *char` has the same lifetime implications as

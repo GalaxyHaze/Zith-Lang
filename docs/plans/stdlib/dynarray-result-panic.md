@@ -10,13 +10,14 @@ optional value. `cleanElements` explicitly cleans `InPlace` elements, clears
 the length, and keeps capacity; call it before `destroy` when elements own
 resources. `destroy` frees only the backing buffer.
 
-The same expansion adds a single generic `Result<T, E>` union with named
-`Ok`/`Err` construction, contextual inference, `Result<void, E>`,
-`isOk`/`isErr`, and `unwrap`/`unwrapErr`. Unwrapping the wrong case panics.
-`E` is unrestricted, payload formatting is not part of panic, and payload
-cleanup remains the caller's responsibility. No `?` integration is included.
-A public fatal `panic(message)` reports through the backend's diagnostic
-channel and does not recover.
+The same expansion adds a single positional generic `Result<T, E>` union
+(`union Result<T, E> { T, E }`, the canonical form) with generic `Ok`/`Err`
+helpers, contextual inference, `Result<void, E>`, `isOk`/`isErr`, and
+`unwrap`/`unwrapErr`. Unwrapping the wrong case panics. `E` is unrestricted,
+payload formatting is not part of panic, and payload cleanup remains the
+caller's responsibility. No `?` integration is included. A public fatal
+`panic(message)` reports through the backend's diagnostic channel and does not
+recover.
 
 Size: module, the standard-library collections and error-handling surface.
 
@@ -32,8 +33,15 @@ Open decisions:
 
 - Validate `DynArray` layout, growth overflow, alignment, and failure behavior
   against the allocator contract.
-- Probe the compiler support needed for named generic union cases, contextual
-  inference, and `Result<void, E>`. Existing notes record blockers for generic
-  `Ok`/`Err` helpers.
+- Probe the compiler support needed for contextual inference and
+  `Result<void, E>`. Named union cases are not part of the language; `Ok`/`Err`
+  are plain generic helpers over the positional union. Generic union helper
+  monomorphization now keeps concrete type arguments (see
+  `test-enum-union-generics`), so the earlier `Ok`/`Err` blocker is cleared.
+  Contextual (expected-result) inference now lands in
+  `GenericInstantiationPass`: a binding annotation or `return` unifies the
+  declared result against the expected type, so `Ok(7)`/`Err(e)` bind their
+  result-only parameters without explicit `<...>`. The shipped surface is
+  `stdlib/std/result.zith`. `Result<void, E>` remains open.
 - Choose the portable backend mechanism that makes `panic` fatal while
   preserving its message in the available diagnostic channel.

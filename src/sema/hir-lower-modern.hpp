@@ -158,6 +158,24 @@ private:
     void populateHirDeclarations();
     void predeclareInstantiation(session::ModuleKey module_key,
                                  const comptime::InstantiationInstance &instance);
+    /// Resolves the concrete HIR symbol for a nested generic call whose
+    /// call-site binding still carries the enclosing instance's type
+    /// parameters. Substitutes `current_instance_->args`, creates (or reuses)
+    /// the concrete instance, predeclares it, and returns its HIR function id.
+    /// Returns `hir::kInvalidHirFunction` when the binding is already concrete
+    /// or cannot be resolved yet (its arguments still mention a parameter).
+    hir::HirFunctionId
+    concretizeCallTarget(const comptime::InstantiationInstance &bound_instance);
+    /// HIR function for a concrete instantiation `(module, decl, args)`, or
+    /// `hir::kInvalidHirFunction` when no matching instance was predeclared.
+    [[nodiscard]] hir::HirFunctionId
+    findInstanceFunction(const session::ModuleKey &module, frontend::DeclId decl,
+                         const std::vector<sema::modern::TypeId> &args) const noexcept;
+    /// Substitutes the enclosing instance's type arguments into a bound
+    /// instance's arguments. A no-op outside a generic body or when the bound
+    /// instance is already concrete.
+    [[nodiscard]] std::vector<sema::modern::TypeId>
+    concreteInstanceArgs(const comptime::InstantiationInstance &instance) const;
     bool lowerFunctionBodies();
     bool lowerFunctionBody(FunctionInfo &info);
     /// Adds the deferred expressions from `first` to the current block before
@@ -351,8 +369,14 @@ private:
     hir::HirExprId lowerStructLiteral(const frontend::Expression &expr, types::TypeId type);
     hir::HirExprId lowerPackLiteral(const frontend::Expression &expr, types::TypeId type);
     hir::HirExprId lowerArrayLiteral(const frontend::Expression &expr, types::TypeId type);
-    frontend::ExprId lowerFieldDefault(std::string_view struct_name,
-                                       size_t field_index) const noexcept;
+    /// Resolves the `field_index`-th field default of the struct named
+    /// `struct_name` in the module that declares the concrete type. The name
+    /// may be qualified (`hm.HashMap`) or reified (`HashMap<i64,i64>`); the
+    /// search falls back to the current module when no declaring module is
+    /// recorded.
+    frontend::ExprId lowerFieldDefault(std::string_view struct_name, size_t field_index,
+                                       const session::ModuleArtifact *declaring_module) const
+        noexcept;
     hir::HirExprId lowerCast(const frontend::Expression &expr, types::TypeId type);
     hir::HirExprId lowerIsNull(const frontend::Expression &expr);
     hir::HirExprId lowerIsType(const frontend::Expression &expr);

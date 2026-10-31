@@ -20,8 +20,11 @@ Non-goals:
 Open decisions:
 
 - Validate how an owning value can retain and repeatedly use its allocator.
-  A stored `dyn Allocator` passed `zithc check` but failed under `zithc run`
-  with `E5001 Invalid InsertValueInst`.
+  A stored `dyn Allocator` field now passes `zithc check` and runs: struct
+  literals coerce a concrete field value to `dyn` at the literal site
+  (`HirMakeDyn`). This previously failed under `zithc run` with `E5001 Invalid
+  InsertValueInst` and is covered by `test-codegen`'s
+  `test_dyn_trait_struct_literal_field_runtime`.
 - Audit allocation call sites and settle the migration order after the
   allocator representation is proven.
 - Verify the allocator growth mechanism can preserve the owner's prior state

@@ -305,6 +305,61 @@ auto externStrncmp(RunState &state, const ExternCall &args, std::int64_t &result
     return true;
 }
 
+/// Copy the NUL-terminated string at `src` (arg1) into `dst` (arg0), including
+/// the terminator. The caller owns `dst`; the handler assumes it has room for
+/// the source bytes plus the terminator, matching the C contract.
+auto externStrcpy(RunState &state, const ExternCall &args, std::int64_t &result) -> bool {
+    const std::string_view text = state.memory->cstring(static_cast<std::size_t>(args.arg1));
+    if (!state.memory->writeString(static_cast<std::size_t>(args.arg0), text))
+        return false;
+    result = args.arg0;
+    return true;
+}
+
+/// Append the NUL-terminated string at `src` (arg1) to the string at `dst`
+/// (arg0). The caller owns `dst`; the handler assumes it has room for the
+/// combined bytes plus the terminator, matching the C contract.
+auto externStrcat(RunState &state, const ExternCall &args, std::int64_t &result) -> bool {
+    std::string combined(state.memory->cstring(static_cast<std::size_t>(args.arg0)));
+    combined.append(state.memory->cstring(static_cast<std::size_t>(args.arg1)));
+    if (!state.memory->writeString(static_cast<std::size_t>(args.arg0), combined))
+        return false;
+    result = args.arg0;
+    return true;
+}
+
+/// Lexicographic comparison of two NUL-terminated strings, returning a
+/// negative, zero, or positive value. Used by `soon/string` equality helpers.
+auto externStrcmp(RunState &state, const ExternCall &args, std::int64_t &result) -> bool {
+    const std::string_view lhs = state.memory->cstring(static_cast<std::size_t>(args.arg0));
+    const std::string_view rhs = state.memory->cstring(static_cast<std::size_t>(args.arg1));
+    const int comparison       = lhs.compare(rhs);
+    result                     = comparison < 0 ? -1 : (comparison > 0 ? 1 : 0);
+    return true;
+}
+
+/// Byte-wise comparison of two buffers over `count` (arg2) bytes. Unlike
+/// `strncmp` this never stops at a NUL byte, matching `memcmp`.
+auto externMemcmp(RunState &state, const ExternCall &args, std::int64_t &result) -> bool {
+    const std::size_t lhsOffset = static_cast<std::size_t>(args.arg0);
+    const std::size_t rhsOffset = static_cast<std::size_t>(args.arg1);
+    const std::size_t count     = static_cast<std::size_t>(args.arg2);
+    for (std::size_t i = 0; i < count; ++i) {
+        const auto left  = state.memory->read(lhsOffset + i, 1);
+        const auto right = state.memory->read(rhsOffset + i, 1);
+        if (left.size() != 1 || right.size() != 1)
+            return false;
+        const auto lhs = static_cast<unsigned char>(left[0]);
+        const auto rhs = static_cast<unsigned char>(right[0]);
+        if (lhs != rhs) {
+            result = lhs < rhs ? -1 : 1;
+            return true;
+        }
+    }
+    result = 0;
+    return true;
+}
+
 /// The playground has no stdin stream, so `getchar` reports end of input. This
 /// keeps the stdlib `input` loop deterministic instead of trapping.
 auto externGetchar(RunState &state, const ExternCall &args, std::int64_t &result) -> bool {
@@ -322,7 +377,7 @@ struct ExternEntry {
 /// Validated FFI subset. Adding an extern here is the only change needed to
 /// support it on both `CallExtern` and `CallExternRef`; anything absent traps
 /// with a message naming the missing extern.
-constexpr std::array<ExternEntry, 13> kValidatedExterns{{
+constexpr std::array<ExternEntry, 17> kValidatedExterns{{
     {"puts", externPuts},
     {"putchar", externPutchar},
     {"write_stdout", externWriteStdout},
@@ -335,6 +390,10 @@ constexpr std::array<ExternEntry, 13> kValidatedExterns{{
     {"strlen", externStrlen},
     {"memcpy", externMemcpy},
     {"strncmp", externStrncmp},
+    {"strcpy", externStrcpy},
+    {"strcat", externStrcat},
+    {"strcmp", externStrcmp},
+    {"memcmp", externMemcmp},
     {"getchar", externGetchar},
 }};
 
@@ -526,8 +585,18 @@ auto validateFunctionShape(const Function &fn) -> bool {
     return true;
 }
 
+/// Result of running one function frame. `hasAux` is set when the callee
+/// returns a slice by value, in which case `aux` carries the length half that
+/// lives in the register immediately after the return register.
+struct FunctionReturn {
+    bool ok       = false;
+    int64_t value = 0;
+    bool hasAux   = false;
+    int64_t aux   = 0;
+};
+
 auto runFunction(RunState &state, const Function &fn, std::vector<int64_t> &regs)
-    -> std::pair<bool, int64_t> {
+    -> FunctionReturn {
     const Function *currentFunction = &fn;
     for (;;) {
         const Function *tailTarget = nullptr;
@@ -980,10 +1049,12 @@ auto runFunction(RunState &state, const Function &fn, std::vector<int64_t> &regs
                         calleeRegs[0] = getReg(regs, lhs);
                     if (callee->paramCount > 1)
                         calleeRegs[1] = getReg(regs, rhs);
-                    const auto [ok, ret] = runFunction(state, *callee, calleeRegs);
-                    if (!ok)
+                    const auto result = runFunction(state, *callee, calleeRegs);
+                    if (!result.ok)
                         return {false, 0};
-                    if (!setReg(regs, dst, ret))
+                    if (!setReg(regs, dst, result.value))
+                        return {false, 0};
+                    if (result.hasAux && !setReg(regs, static_cast<uint16_t>(dst + 1), result.aux))
                         return {false, 0};
                     pc++;
                     break;
@@ -997,10 +1068,12 @@ auto runFunction(RunState &state, const Function &fn, std::vector<int64_t> &regs
                     for (std::size_t i = 0; i < count; ++i) {
                         calleeRegs[i] = getReg(regs, static_cast<uint16_t>(instr.b + i));
                     }
-                    const auto [ok, ret] = runFunction(state, *callee, calleeRegs);
-                    if (!ok)
+                    const auto result = runFunction(state, *callee, calleeRegs);
+                    if (!result.ok)
                         return {false, 0};
-                    if (!setReg(regs, dst, ret))
+                    if (!setReg(regs, dst, result.value))
+                        return {false, 0};
+                    if (result.hasAux && !setReg(regs, static_cast<uint16_t>(dst + 1), result.aux))
                         return {false, 0};
                     pc++;
                     break;
@@ -1028,10 +1101,12 @@ auto runFunction(RunState &state, const Function &fn, std::vector<int64_t> &regs
                         calleeRegs[0] = getReg(regs, rhs);
                     if (callee->paramCount > 1)
                         calleeRegs[1] = getReg(regs, instr.imm);
-                    const auto [ok, ret] = runFunction(state, *callee, calleeRegs);
-                    if (!ok)
+                    const auto result = runFunction(state, *callee, calleeRegs);
+                    if (!result.ok)
                         return {false, 0};
-                    if (!setReg(regs, dst, ret))
+                    if (!setReg(regs, dst, result.value))
+                        return {false, 0};
+                    if (result.hasAux && !setReg(regs, static_cast<uint16_t>(dst + 1), result.aux))
                         return {false, 0};
                     pc++;
                     break;
@@ -1047,16 +1122,22 @@ auto runFunction(RunState &state, const Function &fn, std::vector<int64_t> &regs
                     for (std::size_t i = 0; i < instr.d; ++i) {
                         calleeRegs[i] = getReg(regs, static_cast<uint16_t>(instr.c + i));
                     }
-                    const auto [ok, ret] = runFunction(state, *callee, calleeRegs);
-                    if (!ok)
+                    const auto result = runFunction(state, *callee, calleeRegs);
+                    if (!result.ok)
                         return {false, 0};
-                    if (!setReg(regs, dst, ret))
+                    if (!setReg(regs, dst, result.value))
+                        return {false, 0};
+                    if (result.hasAux && !setReg(regs, static_cast<uint16_t>(dst + 1), result.aux))
                         return {false, 0};
                     pc++;
                     break;
                 }
-                case Op::Ret:
-                    return {true, getReg(regs, dst)};
+                case Op::Ret: {
+                    const int64_t value = getReg(regs, dst);
+                    if (currentFunction->returnsSlice)
+                        return {true, value, true, getReg(regs, static_cast<uint16_t>(dst + 1))};
+                    return {true, value};
+                }
                 case Op::Branch:
                     if (getReg(regs, lhs) != 0)
                         pc = instr.imm;
@@ -1126,8 +1207,8 @@ auto Vm::runMain(const Module &module) -> RunResult {
         state.stringAddresses.push_back(offset);
     }
     std::vector<int64_t> regs(main->regCount, 0);
-    const auto [ok, ret] = runFunction(state, *main, regs);
-    if (!ok) {
+    const auto outcome = runFunction(state, *main, regs);
+    if (!outcome.ok) {
         result.status  = RunStatus::Trap;
         result.message = state.message.empty()
                              ? std::string(statusText(RunStatus::Trap)) + " in " +
@@ -1138,7 +1219,7 @@ auto Vm::runMain(const Module &module) -> RunResult {
     }
 
     result.status   = RunStatus::Ok;
-    result.exitCode = ret;
+    result.exitCode = outcome.value;
     result.output   = state.output.take();
     return result;
 }

@@ -81,12 +81,45 @@ std::string concreteTypeName(std::string_view base, const std::vector<sema::mode
     return result;
 }
 
+/// Collects the callee expression of every `Call` reachable from `root`. The
+/// generic call-binding map is keyed by the callee `ExprId`, not the call
+/// `ExprId`, so the walker records `operands[0]` for each call it finds.
+void collectCallCallees(const frontend::FrontendSnapshot &frontend, const frontend::ExprId root,
+                        std::vector<frontend::ExprId> &out, std::vector<uint8_t> &visited) {
+    if (!root || root.value > frontend.expressions().size())
+        return;
+    if (visited[root.value] != 0U)
+        return;
+    visited[root.value] = 1U;
+    const auto &expr    = frontend.expressions()[root.value - 1U];
+    if (expr.kind == frontend::ExprKind::Call && !expr.operands.empty())
+        out.push_back(expr.operands[0]);
+    for (const auto operand : expr.operands)
+        collectCallCallees(frontend, operand, out, visited);
+    for (const auto condition : expr.conditions)
+        collectCallCallees(frontend, condition, out, visited);
+    if (expr.expansion)
+        collectCallCallees(frontend, expr.expansion, out, visited);
+    for (const auto stmt_id : expr.statements) {
+        if (!stmt_id || stmt_id.value > frontend.statements().size())
+            continue;
+        const auto &stmt = frontend.statements()[stmt_id.value - 1U];
+        collectCallCallees(frontend, stmt.expression, out, visited);
+        collectCallCallees(frontend, stmt.binding.initializer, out, visited);
+        for (const auto arg : stmt.arguments)
+            collectCallCallees(frontend, arg, out, visited);
+    }
+}
+
 } // namespace
 
 GenericInstantiationPass::GenericInstantiationPass(const session::CompilationSnapshot &snapshot,
                                                    sema::modern::TypeTable &type_table)
     : snapshot_(snapshot), type_table_(type_table) {
-    instances_.reserve(16);
+    // Reserve the full cap up front so `InstantiationInstance *` returned by
+    // `at()` stays valid even as nested calls append new instances while HIR
+    // lowering walks a body. kMaxInstances is small enough that this is cheap.
+    instances_.reserve(kMaxInstances);
 }
 
 const GenericCallBinding *
@@ -110,13 +143,15 @@ GenericInstantiationPass::resolveArgs(const sema::modern::FunctionType &fn, cons
                                       const uint32_t decl_id,
                                       const std::vector<sema::modern::TypeId> &explicit_args,
                                       const std::vector<sema::modern::TypeId> &argument_types,
+                                      const sema::modern::TypeId expected_result,
+                                      const std::vector<bool> &weak_args,
                                       std::vector<sema::modern::TypeId> &out_args) const {
     std::vector<sema::modern::TypeId> declared_types;
     declared_types.reserve(fn.params.size());
     for (const auto param : fn.params)
         declared_types.push_back(param);
     return resolveTypes(degree, decl_id, explicit_args, declared_types, argument_types, true,
-                        out_args);
+                        fn.result, expected_result, weak_args, out_args);
 }
 
 GenericResolveStatus GenericInstantiationPass::resolveStruct(
@@ -126,7 +161,8 @@ GenericResolveStatus GenericInstantiationPass::resolveStruct(
     const std::vector<sema::modern::TypeId> &argument_types,
     std::vector<sema::modern::TypeId> &out_args) const {
     return resolveTypes(degree, template_decl_id, explicit_args, declared_field_types,
-                        argument_types, false, out_args);
+                        argument_types, false, sema::modern::TypeId{}, sema::modern::TypeId{},
+                        {}, out_args);
 }
 
 GenericResolveStatus
@@ -135,6 +171,9 @@ GenericInstantiationPass::resolveTypes(const size_t degree, const uint32_t decl_
                                        const std::vector<sema::modern::TypeId> &declared_types,
                                        const std::vector<sema::modern::TypeId> &argument_types,
                                        const bool strict,
+                                       const sema::modern::TypeId declared_result,
+                                       const sema::modern::TypeId expected_result,
+                                       const std::vector<bool> &weak_args,
                                        std::vector<sema::modern::TypeId> &out_args) const {
     if (degree == 0)
         return GenericResolveStatus::Arity;
@@ -174,9 +213,74 @@ GenericInstantiationPass::resolveTypes(const size_t degree, const uint32_t decl_
     };
 
     bool failed      = false;
-    const auto unify = [&](auto &&self, sema::modern::TypeId param,
-                           sema::modern::TypeId arg) -> void {
+    // Only parameters that mention a generic parameter carry inference
+    // information. A concrete parameter such as `n: i64` or `a: dyn Allocator`
+    // must not fail inference just because the argument widens or coerces to
+    // it (an `i32` literal for an `i64`, a struct for a `dyn` interface); that
+    // coercion is validated separately at the call site.
+    const auto mentionsGeneric = [&](auto &&self, sema::modern::TypeId type,
+                                     unsigned depth = 0U) -> bool {
+        if (!type || depth >= 16U)
+            return false;
+        type = type_table_.stripQualifiers(type);
+        if (type_table_.kindOf(type) == sema::modern::TypeKind::GenericParam)
+            return true;
+        if (const auto *alias = type_table_.alias(type))
+            return self(self, alias->target, depth + 1U);
+        if (const auto *nominal = type_table_.nominal(type))
+            return self(self, nominal->target, depth + 1U);
+        if (const auto *opt = type_table_.optional(type))
+            return self(self, opt->inner, depth + 1U);
+        if (const auto *ptr = type_table_.pointer(type))
+            return self(self, ptr->pointee, depth + 1U);
+        if (const auto *slice = type_table_.slice(type))
+            return self(self, slice->element, depth + 1U);
+        if (const auto *array = type_table_.array(type))
+            return self(self, array->element, depth + 1U);
+        if (const auto *nested = type_table_.function(type)) {
+            for (const auto param : nested->params)
+                if (self(self, param, depth + 1U))
+                    return true;
+            return self(self, nested->result, depth + 1U);
+        }
+        if (const auto *failable = type_table_.failable(type))
+            return self(self, failable->inner, depth + 1U);
+        if (const auto *dyn = type_table_.dyn_type(type))
+            return self(self, dyn->target, depth + 1U);
+        if (const auto *st = type_table_.struct_type(type)) {
+            for (const auto arg : st->args)
+                if (self(self, arg, depth + 1U))
+                    return true;
+            for (const auto field : st->fields)
+                if (self(self, field, depth + 1U))
+                    return true;
+            return false;
+        }
+        if (const auto *ut = type_table_.union_type(type)) {
+            for (const auto member : ut->members)
+                if (self(self, member, depth + 1U))
+                    return true;
+            return false;
+        }
+        if (const auto *sum = type_table_.sum(type)) {
+            for (const auto member : sum->members)
+                if (self(self, member, depth + 1U))
+                    return true;
+            return false;
+        }
+        return false;
+    };
+    // Parameters bound from a weak argument (an unsuffixed numeric literal that
+    // the call-site coercion would adapt anyway) may be overridden by a later
+    // strong binding, such as the expected result type of a contextual call.
+    std::vector<bool> weak_resolved(degree, false);
+    const auto unify = [&](auto &&self, sema::modern::TypeId param, sema::modern::TypeId arg,
+                           const bool weak) -> void {
         if ((strict && failed) || !param || !arg)
+            return;
+        // A parameter with no generic occurrence cannot bind anything; leave
+        // its type checking to the ordinary call-site coercion.
+        if (!mentionsGeneric(mentionsGeneric, param))
             return;
         // A borrow parameter is represented as `*lend T` in the sema ABI. For
         // generic inference the call-site annotation carries the pointee type,
@@ -216,14 +320,24 @@ GenericInstantiationPass::resolveTypes(const size_t degree, const uint32_t decl_
                 return;
             }
             if (resolved[target]) {
-                if (resolved[target] != arg && type_table_.stripQualifiers(resolved[target]) !=
-                                                   type_table_.stripQualifiers(arg)) {
-                    if (strict)
-                        failed = true;
+                const bool same =
+                    resolved[target] == arg ||
+                    type_table_.stripQualifiers(resolved[target]) ==
+                        type_table_.stripQualifiers(arg);
+                if (same)
+                    return;
+                if (!weak && weak_resolved[target]) {
+                    // A strong binding replaces an earlier weak literal binding.
+                    resolved[target]      = arg;
+                    weak_resolved[target] = false;
+                    return;
                 }
+                if (strict && !weak)
+                    failed = true;
                 return;
             }
-            resolved[target] = arg;
+            resolved[target]      = arg;
+            weak_resolved[target] = weak;
             return;
         }
 
@@ -231,15 +345,15 @@ GenericInstantiationPass::resolveTypes(const size_t degree, const uint32_t decl_
             return;
 
         if (const auto *alias = type_table_.alias(param)) {
-            self(self, alias->target, arg);
+            self(self, alias->target, arg, weak);
             return;
         }
         if (const auto *nominal = type_table_.nominal(param)) {
             if (const auto *arg_nominal = type_table_.nominal(arg)) {
-                self(self, nominal->target, arg_nominal->target);
+                self(self, nominal->target, arg_nominal->target, weak);
                 return;
             }
-            self(self, nominal->target, arg);
+            self(self, nominal->target, arg, weak);
             return;
         }
 
@@ -409,14 +523,14 @@ GenericInstantiationPass::resolveTypes(const size_t degree, const uint32_t decl_
         case sema::modern::TypeKind::Pointer:
             if (const auto *pp = type_table_.pointer(param);
                 pp != nullptr && type_table_.pointer(arg) != nullptr)
-                self(self, pp->pointee, type_table_.pointer(arg)->pointee);
+                self(self, pp->pointee, type_table_.pointer(arg)->pointee, weak);
             else if (strict)
                 failed = true;
             break;
         case sema::modern::TypeKind::Optional:
             if (const auto *po = type_table_.optional(param);
                 po != nullptr && type_table_.optional(arg) != nullptr)
-                self(self, po->inner, type_table_.optional(arg)->inner);
+                self(self, po->inner, type_table_.optional(arg)->inner, weak);
             else if (strict)
                 failed = true;
             break;
@@ -427,7 +541,7 @@ GenericInstantiationPass::resolveTypes(const size_t degree, const uint32_t decl_
                 if (pa->size != aa->size && strict)
                     failed = true;
                 else if (pa->size == aa->size)
-                    self(self, pa->element, aa->element);
+                    self(self, pa->element, aa->element, weak);
             } else {
                 if (strict)
                     failed = true;
@@ -436,14 +550,14 @@ GenericInstantiationPass::resolveTypes(const size_t degree, const uint32_t decl_
         case sema::modern::TypeKind::Slice:
             if (const auto *ps = type_table_.slice(param);
                 ps != nullptr && type_table_.slice(arg) != nullptr)
-                self(self, ps->element, type_table_.slice(arg)->element);
+                self(self, ps->element, type_table_.slice(arg)->element, weak);
             else if (strict)
                 failed = true;
             break;
         case sema::modern::TypeKind::Failable:
             if (const auto *pf = type_table_.failable(param);
                 pf != nullptr && type_table_.failable(arg) != nullptr)
-                self(self, pf->inner, type_table_.failable(arg)->inner);
+                self(self, pf->inner, type_table_.failable(arg)->inner, weak);
             else if (strict)
                 failed = true;
             break;
@@ -452,8 +566,8 @@ GenericInstantiationPass::resolveTypes(const size_t degree, const uint32_t decl_
             const auto *af = type_table_.function(arg);
             if (pf != nullptr && af != nullptr && pf->params.size() == af->params.size()) {
                 for (size_t i = 0; i < pf->params.size(); ++i)
-                    self(self, pf->params[i], af->params[i]);
-                self(self, pf->result, af->result);
+                    self(self, pf->params[i], af->params[i], weak);
+                self(self, pf->result, af->result, weak);
             } else {
                 if (strict)
                     failed = true;
@@ -465,7 +579,7 @@ GenericInstantiationPass::resolveTypes(const size_t degree, const uint32_t decl_
             const auto *as_ = type_table_.sum(arg);
             if (ps != nullptr && as_ != nullptr && ps->members.size() == as_->members.size()) {
                 for (size_t i = 0; i < ps->members.size(); ++i)
-                    self(self, ps->members[i], as_->members[i]);
+                    self(self, ps->members[i], as_->members[i], weak);
             } else {
                 if (strict)
                     failed = true;
@@ -480,10 +594,10 @@ GenericInstantiationPass::resolveTypes(const size_t degree, const uint32_t decl_
                 ps->fields.size() == as_->fields.size()) {
                 if (ps->args.size() == as_->args.size() && !ps->args.empty()) {
                     for (size_t i = 0; i < ps->args.size(); ++i)
-                        self(self, ps->args[i], as_->args[i]);
+                        self(self, ps->args[i], as_->args[i], weak);
                 } else {
                     for (size_t i = 0; i < ps->fields.size(); ++i)
-                        self(self, ps->fields[i], as_->fields[i]);
+                        self(self, ps->fields[i], as_->fields[i], weak);
                 }
             } else {
                 if (strict)
@@ -498,7 +612,7 @@ GenericInstantiationPass::resolveTypes(const size_t degree, const uint32_t decl_
                 baseTypeName(pu->name) == baseTypeName(au->name) &&
                 pu->members.size() == au->members.size()) {
                 for (size_t i = 0; i < pu->members.size(); ++i)
-                    self(self, pu->members[i], au->members[i]);
+                    self(self, pu->members[i], au->members[i], weak);
             } else {
                 if (strict)
                     failed = true;
@@ -521,7 +635,20 @@ GenericInstantiationPass::resolveTypes(const size_t degree, const uint32_t decl_
     };
 
     for (size_t p = 0; p < declared_types.size() && p < argument_types.size(); ++p)
-        unify(unify, declared_types[p], argument_types[p]);
+        unify(unify, declared_types[p], argument_types[p],
+              p < weak_args.size() && weak_args[p]);
+    if (strict && failed)
+        return GenericResolveStatus::CannotInfer;
+
+    // Contextual inference: when the call's result type is used in a position
+    // with a known expected type (a binding annotation, a declared return
+    // type, or a typed argument), unify the declared result shape against that
+    // expectation so result-only parameters such as `fn Ok<T,E>(): Result<T,E>`
+    // or `fn new<T>(): ?*T` bind from the context instead of requiring explicit
+    // type arguments. Arguments that already bound a parameter keep priority:
+    // the unify below only fills parameters still unbound or checks agreement.
+    if (declared_result && expected_result)
+        unify(unify, declared_result, expected_result, false);
     if (strict && failed)
         return GenericResolveStatus::CannotInfer;
 
@@ -537,10 +664,20 @@ size_t GenericInstantiationPass::bindCall(const session::ModuleKey &module, fron
                                           const session::ModuleKey &target_module,
                                           frontend::DeclId decl,
                                           std::vector<sema::modern::TypeId> args) {
+    const size_t index = ensureInstance(target_module, decl, std::move(args));
+    if (index == ~size_t{0})
+        return index;
+    calls_.insert(callKey(module, callee),
+                  GenericCallBinding{module, callee, index});
+    return index;
+}
+
+size_t GenericInstantiationPass::ensureInstance(const session::ModuleKey &target_module,
+                                                frontend::DeclId decl,
+                                                std::vector<sema::modern::TypeId> args) {
     for (size_t i = 0; i < instances_.size(); ++i) {
         const auto &existing = instances_[i];
         if (existing.module == target_module && existing.decl == decl && existing.args == args) {
-            calls_.insert(callKey(module, callee), GenericCallBinding{module, callee, i});
             return i;
         }
     }
@@ -552,8 +689,6 @@ size_t GenericInstantiationPass::bindCall(const session::ModuleKey &module, fron
     instance.args    = std::move(args);
     instance.mangled = mangledName(target_module, decl, instance.args);
     instances_.push_back(std::move(instance));
-    calls_.insert(callKey(module, callee),
-                  GenericCallBinding{module, callee, instances_.size() - 1U});
     return instances_.size() - 1U;
 }
 
@@ -689,13 +824,16 @@ GenericInstantiationPass::substituteType(const sema::modern::TypeId type,
     }
     case sema::modern::TypeKind::Union: {
         if (const auto *ut = type_table_.union_type(resolved)) {
-            const std::string concrete =
-                concreteStructName(baseTypeName(ut->name), ut->members, type_table_);
-            if (const sema::modern::TypeId existing = type_table_.lookupNamed(concrete))
-                return existing;
             auto &members = type_table_.makeTypeStorage();
             for (const auto member : ut->members)
                 members.push(substituteType(member, args));
+            // The concrete name must come from the substituted members, not the
+            // template's `T`/`E` spellings, or every instance would collapse to
+            // `Result<T,E>` and share one (wrong) concrete union.
+            const std::string concrete =
+                concreteStructName(baseTypeName(ut->name), members, type_table_);
+            if (const sema::modern::TypeId existing = type_table_.lookupNamed(concrete))
+                return existing;
             const sema::modern::TypeId reified =
                 type_table_.internUnion(concrete, members, ut->is_tagged);
             type_table_.setDefiningModule(reified, type_table_.definingModule(resolved));
@@ -721,6 +859,129 @@ GenericInstantiationPass::substituteFunction(const sema::modern::FunctionType &f
     for (const auto param : fn.params)
         params.push(substituteType(param, args));
     return type_table_.internFunction(params, substituteType(fn.result, args));
+}
+
+bool GenericInstantiationPass::typeMentionsGeneric(const sema::modern::TypeId type) const {
+    const auto visit = [&](auto &&self, sema::modern::TypeId current,
+                           unsigned depth) -> bool {
+        if (!current || depth >= 16U)
+            return false;
+        current = type_table_.stripQualifiers(current);
+        if (type_table_.kindOf(current) == sema::modern::TypeKind::GenericParam)
+            return true;
+        if (const auto *alias = type_table_.alias(current))
+            return self(self, alias->target, depth + 1U);
+        if (const auto *nominal = type_table_.nominal(current))
+            return self(self, nominal->target, depth + 1U);
+        if (const auto *opt = type_table_.optional(current))
+            return self(self, opt->inner, depth + 1U);
+        if (const auto *ptr = type_table_.pointer(current))
+            return self(self, ptr->pointee, depth + 1U);
+        if (const auto *slice = type_table_.slice(current))
+            return self(self, slice->element, depth + 1U);
+        if (const auto *array = type_table_.array(current))
+            return self(self, array->element, depth + 1U);
+        if (const auto *nested = type_table_.function(current)) {
+            for (const auto param : nested->params)
+                if (self(self, param, depth + 1U))
+                    return true;
+            return self(self, nested->result, depth + 1U);
+        }
+        if (const auto *failable = type_table_.failable(current))
+            return self(self, failable->inner, depth + 1U);
+        if (const auto *dyn = type_table_.dyn_type(current))
+            return self(self, dyn->target, depth + 1U);
+        if (const auto *st = type_table_.struct_type(current)) {
+            for (const auto arg : st->args)
+                if (self(self, arg, depth + 1U))
+                    return true;
+            for (const auto field : st->fields)
+                if (self(self, field, depth + 1U))
+                    return true;
+            return false;
+        }
+        if (const auto *ut = type_table_.union_type(current)) {
+            for (const auto member : ut->members)
+                if (self(self, member, depth + 1U))
+                    return true;
+            return false;
+        }
+        if (const auto *sum = type_table_.sum(current)) {
+            for (const auto member : sum->members)
+                if (self(self, member, depth + 1U))
+                    return true;
+            return false;
+        }
+        return false;
+    };
+    return visit(visit, type, 0U);
+}
+
+std::vector<sema::modern::TypeId>
+GenericInstantiationPass::substituteArgs(const std::vector<sema::modern::TypeId> &args,
+                                         const std::vector<sema::modern::TypeId> &enclosing) const {
+    std::vector<sema::modern::TypeId> result;
+    result.reserve(args.size());
+    for (const auto arg : args)
+        result.push_back(substituteType(arg, enclosing));
+    return result;
+}
+
+bool GenericInstantiationPass::instanceIsAbstract(
+    const InstantiationInstance &instance) const {
+    for (const auto arg : instance.args)
+        if (typeMentionsGeneric(arg))
+            return true;
+    return false;
+}
+
+void GenericInstantiationPass::concretizeNestedInstances() {
+    // A generic body's nested generic calls are recorded once, against the
+    // template's own type parameters (for example `reserve<K, V>` inside
+    // `HashMap<K, V>`). Those bindings never mention the concrete arguments,
+    // so each concrete instance of the enclosing function needs its own
+    // concrete instances of the callees. Walk every concrete instance's body,
+    // substitute the enclosing arguments into each bound call, and materialize
+    // the result. Repeat until no new instance appears so transitive chains
+    // (`outer<T>` -> `mid<T>` -> `inner<T>`) are fully closed.
+    std::vector<uint8_t> visited;
+    std::vector<frontend::ExprId> callees;
+    for (size_t cursor = 0; cursor < instances_.size(); ++cursor) {
+        const InstantiationInstance source = instances_[cursor];
+        if (instanceIsAbstract(source))
+            continue;
+        const auto *module = snapshot_.findModule(source.module);
+        if (module == nullptr || module->frontend == nullptr)
+            continue;
+        const auto *decl = declarationFor(snapshot_, source.module, source.decl);
+        if (decl == nullptr || !decl->body)
+            continue;
+
+        const auto &frontend = *module->frontend;
+        visited.assign(frontend.expressions().size() + 1U, 0U);
+        callees.clear();
+        collectCallCallees(frontend, decl->body, callees, visited);
+        for (const auto callee : callees) {
+            const auto *binding = calls_.get(callKey(source.module, callee));
+            if (binding == nullptr)
+                continue;
+            const auto *bound = at(binding->instance);
+            if (bound == nullptr || !instanceIsAbstract(*bound))
+                continue;
+            std::vector<sema::modern::TypeId> concrete =
+                substituteArgs(bound->args, source.args);
+            bool still_abstract = false;
+            for (const auto arg : concrete) {
+                if (typeMentionsGeneric(arg)) {
+                    still_abstract = true;
+                    break;
+                }
+            }
+            if (still_abstract)
+                continue;
+            (void)ensureInstance(bound->module, bound->decl, std::move(concrete));
+        }
+    }
 }
 
 std::string

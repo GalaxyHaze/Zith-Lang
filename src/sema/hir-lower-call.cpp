@@ -90,6 +90,15 @@ hir::HirExprId HirLowerModern::lowerCall(const frontend::Expression &expr) {
     // (and module) that type-checked the call. This is also the only path that
     // accepts trait methods, which sema has already filtered by conformance.
     bool static_generic_bound_call = false;
+    // True once a bound trait requirement was rewritten to the concrete
+    // `implement Owner as Trait` declaration, regardless of receiver form.
+    bool bound_impl_concrete = false;
+    // `T.parse(x)` names the type parameter directly: the receiver is a type,
+    // so the bound method is called static-style and the concrete
+    // implementation's receiver comes from the explicit argument list. A value
+    // receiver (`k.hash()`, `b.v.hash()`) is an ordinary instance call that
+    // still injects the implicit `self` pointer.
+    bool static_type_receiver = false;
     if (const auto *decl = methodDeclFromTarget(callee_id, &owner_artifact); decl != nullptr) {
         method_decl                        = decl;
         const std::string bound_trait_name = decl->traitName;
@@ -109,8 +118,36 @@ hir::HirExprId HirLowerModern::lowerCall(const frontend::Expression &expr) {
                         index < current_instance_->args.size()) {
                         concrete_owner = sema_.typeTable().typeToString(
                             sema_.typeTable().stripQualifiers(current_instance_->args[index]));
+                        static_type_receiver = true;
                         break;
                     }
+                }
+            }
+            if (concrete_owner.empty() && current_instance_ != nullptr) {
+                // The receiver is a value (for example `self->key` inside
+                // `HashMap<K, V>`) rather than the bare type-parameter name,
+                // but its recorded type may be a generic parameter that the
+                // instance substitutes to a concrete owner. A trait
+                // requirement on such a receiver must lower to the concrete
+                // `implement Owner as Trait` method for the instantiated `T`.
+                const sema::modern::TypeId base_sema = semaTypeOfExpr(callee_expr.operands[0]);
+                const sema::modern::TypeKind base_kind =
+                    base_sema != sema::modern::kInvalidTypeId
+                        ? sema_.typeTable().kindOf(base_sema)
+                        : sema::modern::TypeKind::Invalid;
+                if (base_kind == sema::modern::TypeKind::Struct ||
+                    base_kind == sema::modern::TypeKind::Enum ||
+                    base_kind == sema::modern::TypeKind::Union ||
+                    base_kind == sema::modern::TypeKind::Integer ||
+                    base_kind == sema::modern::TypeKind::Float ||
+                    base_kind == sema::modern::TypeKind::Bool ||
+                    base_kind == sema::modern::TypeKind::Char ||
+                    base_kind == sema::modern::TypeKind::String) {
+                    concrete_owner =
+                        sema_.typeTable().typeToString(sema_.typeTable().stripQualifiers(base_sema));
+                    if (const size_t angle = concrete_owner.find('<');
+                        angle != std::string::npos)
+                        concrete_owner.resize(angle);
                 }
             }
         }
@@ -186,8 +223,14 @@ hir::HirExprId HirLowerModern::lowerCall(const frontend::Expression &expr) {
                 }
             }
             static_generic_bound_call = concrete != nullptr;
-            if (!static_generic_bound_call)
+            if (concrete == nullptr)
                 return hir::kInvalidHirExpr;
+            bound_impl_concrete = true;
+            // A value receiver keeps the ordinary instance-call lowering so the
+            // implicit `self` pointer is still injected; only the static
+            // `T.parse(...)` form suppresses it.
+            if (!static_type_receiver)
+                static_generic_bound_call = false;
         } else if (!method_decl->body && callee_expr.kind == frontend::ExprKind::Field &&
                    !callee_expr.operands.empty()) {
             // Interface requirements are declaration-only. After monomorphization
@@ -514,7 +557,7 @@ hir::HirExprId HirLowerModern::lowerCall(const frontend::Expression &expr) {
     // Resolve the callee signature once so variadic-slice auto-collection can
     // be computed from the same declaration used by sema/overload selection.
     sema::modern::TypeId callee_sema_type = semaTypeOfExpr(callee_id);
-    if (static_generic_bound_call && owner_artifact != nullptr) {
+    if (bound_impl_concrete && owner_artifact != nullptr) {
         const auto *concrete_sema = sema_.findModuleSema(owner_artifact->key);
         if (concrete_sema != nullptr)
             callee_sema_type = concrete_sema->typeOfDecl(method_decl->id);
@@ -725,6 +768,11 @@ hir::HirExprId HirLowerModern::lowerCall(const frontend::Expression &expr) {
                         break;
                     }
                 }
+                // A method bound inside a generic body records the enclosing
+                // type parameters; resolve the concrete instance for the
+                // enclosing instantiation instead of the abstract symbol.
+                if (call.resolved_fn == hir::kInvalidHirFunction && instance != nullptr)
+                    call.resolved_fn = concretizeCallTarget(*instance);
             }
         }
         if (call.resolved_fn == hir::kInvalidHirFunction) {
@@ -750,6 +798,8 @@ hir::HirExprId HirLowerModern::lowerCall(const frontend::Expression &expr) {
                             break;
                         }
                     }
+                    if (call.resolved_fn == hir::kInvalidHirFunction && instance != nullptr)
+                        call.resolved_fn = concretizeCallTarget(*instance);
                 }
             }
             if (call.resolved_fn == hir::kInvalidHirFunction) {
@@ -773,6 +823,8 @@ hir::HirExprId HirLowerModern::lowerCall(const frontend::Expression &expr) {
                                 break;
                             }
                         }
+                        if (call.resolved_fn == hir::kInvalidHirFunction)
+                            call.resolved_fn = concretizeCallTarget(*instance);
                     }
                 }
             }

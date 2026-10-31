@@ -184,6 +184,17 @@ hir::HirExprId HirLowerModern::lowerName(const frontend::Expression &expr) {
                     return narrowed;
                 }
             }
+            // A read recorded by sema as the payload of a narrowed optional
+            // aggregate (`?S`, `?pack`). The local still stores `?T`, so load
+            // field 0 to produce the payload value.
+            if (current_types_ != nullptr) {
+                if (const auto *payload = current_types_->optionalPayloadReads.get(expr.id.value)) {
+                    const auto payload_hir = lowerType(*payload);
+                    return addExpr(hir::HirField{addExpr(hir::HirSlotAddr{slot, local_ty}), 0U,
+                                                 payload_hir, local_ty,
+                                                 hir::HirSafetyMode::Guarded});
+                }
+            }
             const auto *local_union = types_.kindOf(local_ty) == types::TypeKind::Union
                                           ? std::get_if<types::TypeUnion>(&types_.lookup(local_ty))
                                           : nullptr;
@@ -504,15 +515,31 @@ hir::HirExprId HirLowerModern::lowerAssign(const frontend::Expression &expr,
     if (expr.operands.size() != 2U)
         return hir::kInvalidHirExpr;
 
+    // Sema accepts `T -> ?T` for assignment targets just as it does for
+    // bindings and returns. Reproduce the missing optional layers here so a
+    // bare value stored into a `?T` slot becomes `Some`, matching the binding
+    // path (`?dyn Allocator` fields, `?*T` fields, ...).
+    const auto coerceAssignValue = [&](types::TypeId target_type, sema::modern::TypeId target_sema,
+                                       frontend::ExprId rhs) -> hir::HirExprId {
+        auto value = lowerExpr(rhs);
+        if (value == hir::kInvalidHirExpr)
+            return value;
+        if (types_.kindOf(target_type) == types::TypeKind::Optional) {
+            const auto source_sema = semaTypeOfExpr(rhs);
+            if (target_sema != kInvalidTypeId && source_sema != kInvalidTypeId)
+                value = lowerCoerceToOptionalDepth(target_type, target_sema, source_sema, value);
+        }
+        return lowerCoerceToTarget(target_type, rhs, value);
+    };
+
     const auto &lhs_expr = current_module_->frontend->expressions()[expr.operands[0].value - 1U];
     if (lhs_expr.kind == frontend::ExprKind::Name) {
         if (const auto *resolved = findResolvedExpr(expr.operands[0]);
             resolved != nullptr && resolved->local) {
-            const auto value = lowerExpr(expr.operands[1]);
-            if (value == hir::kInvalidHirExpr)
+            const auto value_slice = coerceAssignValue(
+                typeOfLocal(resolved->local), semaTypeOfLocal(resolved->local), expr.operands[1]);
+            if (value_slice == hir::kInvalidHirExpr)
                 return hir::kInvalidHirExpr;
-            const auto value_slice =
-                lowerCoerceToTarget(typeOfLocal(resolved->local), expr.operands[1], value);
             return emitSlotStore(localSlot(resolved->local), value_slice);
         }
     }
@@ -524,10 +551,10 @@ hir::HirExprId HirLowerModern::lowerAssign(const frontend::Expression &expr,
             lhs_expr.kind == frontend::ExprKind::Field   ? lowerField(lhs_expr, target_type)
             : lhs_expr.kind == frontend::ExprKind::Arrow ? lowerArrow(lhs_expr, target_type)
                                                          : lowerIndex(lhs_expr, target_type);
-        const auto value = lowerExpr(expr.operands[1]);
-        if (target == hir::kInvalidHirExpr || value == hir::kInvalidHirExpr)
+        const auto value_slice =
+            coerceAssignValue(target_type, semaTypeOfExpr(expr.operands[0]), expr.operands[1]);
+        if (target == hir::kInvalidHirExpr || value_slice == hir::kInvalidHirExpr)
             return hir::kInvalidHirExpr;
-        const auto value_slice = lowerCoerceToTarget(target_type, expr.operands[1], value);
         hir::HirAssign assign;
         assign.target = target;
         assign.value  = value_slice;
@@ -538,22 +565,20 @@ hir::HirExprId HirLowerModern::lowerAssign(const frontend::Expression &expr,
         if (resolved != nullptr &&
             (resolved->foreignGlobal != nullptr ||
              (resolved->isExtern && resolved->declKind == frontend::DeclKind::Variable))) {
-            const auto target = lowerLValueAddr(expr.operands[0]);
-            const auto value  = lowerExpr(expr.operands[1]);
-            if (target == hir::kInvalidHirExpr || value == hir::kInvalidHirExpr)
+            const auto target      = lowerLValueAddr(expr.operands[0]);
+            const auto value_slice = coerceAssignValue(
+                typeOfExpr(expr.operands[0]), semaTypeOfExpr(expr.operands[0]), expr.operands[1]);
+            if (target == hir::kInvalidHirExpr || value_slice == hir::kInvalidHirExpr)
                 return hir::kInvalidHirExpr;
-            const auto value_slice =
-                lowerCoerceToTarget(typeOfExpr(expr.operands[0]), expr.operands[1], value);
             return addExpr(hir::HirAssign{target, value_slice});
         }
     }
 
-    const auto target = lowerExpr(expr.operands[0]);
-    const auto value  = lowerExpr(expr.operands[1]);
-    if (target == hir::kInvalidHirExpr || value == hir::kInvalidHirExpr)
+    const auto target      = lowerExpr(expr.operands[0]);
+    const auto value_slice = coerceAssignValue(typeOfExpr(expr.operands[0]),
+                                               semaTypeOfExpr(expr.operands[0]), expr.operands[1]);
+    if (target == hir::kInvalidHirExpr || value_slice == hir::kInvalidHirExpr)
         return hir::kInvalidHirExpr;
-    const auto value_slice =
-        lowerCoerceToTarget(typeOfExpr(expr.operands[0]), expr.operands[1], value);
 
     hir::HirAssign assign;
     assign.target = target;
@@ -750,6 +775,12 @@ hir::HirExprId HirLowerModern::lowerCast(const frontend::Expression &expr,
     }
     if (from == type)
         return value;
+    // `null as ?T` fixes the optional type of a bare `null`. The operand
+    // lowers to a `never`-typed literal, so replace it with a None of the
+    // target optional type instead of casting a void value.
+    if (types_.kindOf(from) == types::TypeKind::Never &&
+        types_.kindOf(type) == types::TypeKind::Optional)
+        return lowerMakeNone(type);
     const bool from_opaque = types_.kindOf(from) == types::TypeKind::OpaqueTagged;
     const bool to_opaque   = types_.kindOf(type) == types::TypeKind::OpaqueTagged;
 

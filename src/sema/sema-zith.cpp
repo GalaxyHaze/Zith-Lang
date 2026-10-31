@@ -423,7 +423,7 @@ void PerModuleSema::checkZithDeclarations() {
         TypeId declared = typeOfDecl(decl.id);
         if (!declared)
             declared = error_type;
-        if (decl.bindingKind == frontend::BindingKind::Const) {
+        if (decl.bindingKind == frontend::BindingKind::Const && !decl.isExtern) {
             if (!decl.initializer) {
                 report(decl.span, "Zith--: const declaration requires an initializer",
                        diagnostics::err::UnsupportedSyntax);

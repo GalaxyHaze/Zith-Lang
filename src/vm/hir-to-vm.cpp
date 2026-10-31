@@ -867,7 +867,8 @@ auto lowerCall(LowerState &state, const hir::HirCall &call, bool tailTransfer = 
             if (name == "puts" || name == "putchar" || name == "malloc" ||
                 name == "aligned_alloc" || name == "free" || name == "realloc" ||
                 name == "printf" || name == "snprintf" || name == "strlen" ||
-                name == "memcpy" || name == "calloc" || name == "strncmp" || name == "getchar") {
+                name == "memcpy" || name == "calloc" || name == "strncmp" || name == "strcpy" ||
+                name == "strcat" || name == "strcmp" || name == "memcmp" || name == "getchar") {
                 if ((name == "printf" || name == "snprintf") && hirFn.isVariadic) {
                     const std::size_t fixedCount = name == "printf" ? 1U : 3U;
                     if (call.args.size() < fixedCount) {
@@ -1068,7 +1069,16 @@ auto lowerCall(LowerState &state, const hir::HirCall &call, bool tailTransfer = 
                          Instr::tailCallRange(argBase, u16(windowSize, state.result), fnIndex));
                     return 0;
                 }
-                const auto reg = newReg(state, call.fn_type);
+                // A slice-returning callee hands back a `{ptr, len}` pair in
+                // two consecutive registers. Reserve both and copy the length
+                // half next to the pointer half so callers can read it.
+                const bool calleeReturnsSlice =
+                    state.types.kindOf(hirFn.return_type) == types::TypeKind::Slice;
+                const auto reg = newTypedReg(state, calleeReturnsSlice ? ValueType::Ptr
+                                                                       : valueTypeOf(state.types,
+                                                                                     call.fn_type));
+                if (calleeReturnsSlice)
+                    (void)newTypedReg(state, ValueType::I64);
                 emit(state, Instr::callRange(reg, argBase, u16(windowSize, state.result), fnIndex));
                 if (calleeReturnsAggregate)
                     return sretSlot;
@@ -1435,9 +1445,15 @@ auto lowerDynCall(LowerState &state, const hir::HirDynCall &call) -> std::uint16
         argumentOffset += argumentWidths[i];
     }
 
+    // A slice-returning dyn call hands back a `{ptr, len}` pair; reserve both
+    // registers so the length half is not clobbered by a later value.
+    const bool returnsSlice =
+        state.types.kindOf(call.result_type) == types::TypeKind::Slice;
     const auto result = newReg(state, call.result_type);
     if (!state.result->ok)
         return kUnassignedReg;
+    if (returnsSlice)
+        (void)newTypedReg(state, ValueType::I64);
     emit(state, Instr::callRangeRef(Op::CallRangeFnRef, result, functionRef, argBase,
                                     u16(flattenedTypes.size(), state.result)));
     return result;
@@ -1887,6 +1903,32 @@ auto lowerOperand(LowerState &state, hir::HirExprId id) -> std::uint16_t {
                         return kUnassignedReg;
                     return loadUnionTag(state, UnionStorageRef{storage, field.object_type});
                 }
+                // A slice is a `{ptr, len}` register pair, not address-backed
+                // memory, so its `data` (index 0) and `length` (index 1) fields
+                // read the pair directly. The HIR bounds-check lowering reaches
+                // a slice length through `HirField`, so this must not go through
+                // `fieldAddress`.
+                if (state.types.kindOf(field.object_type) == types::TypeKind::Slice) {
+                    const auto base = lowerOperand(state, field.object);
+                    if (base == kUnassignedReg)
+                        return kUnassignedReg;
+                    if (field.index == 0U)
+                        return base;
+                    if (field.index == 1U) {
+                        if (static_cast<std::size_t>(base) + 1U >= state.fn->regCount) {
+                            state.result->ok      = false;
+                            state.result->message = "slice length field exceeds v2 registers";
+                            return kUnassignedReg;
+                        }
+                        const auto length = newTypedReg(state, ValueType::I64);
+                        emit(state, Instr::simple(Op::Move, length,
+                                                  static_cast<std::uint16_t>(base + 1U)));
+                        return length;
+                    }
+                    state.result->ok      = false;
+                    state.result->message = "unsupported slice field index in v2 lowering";
+                    return kUnassignedReg;
+                }
                 const auto addr = fieldAddress(state, field);
                 if (addr == kUnassignedReg)
                     return kUnassignedReg;
@@ -2092,6 +2134,39 @@ auto lowerOperand(LowerState &state, hir::HirExprId id) -> std::uint16_t {
                     return value;
                 }
 
+                // Pointer indexing: the base register already holds the data
+                // pointer. Pointers carry no length, so the access is raw.
+                if (const auto *pointer =
+                        std::get_if<types::TypePtr>(&state.types.lookup(index.obj_type));
+                    pointer != nullptr) {
+                    const auto pointee     = pointer->pointee;
+                    const bool byteElement = state.types.kindOf(pointee) == types::TypeKind::Char;
+                    const bool aggregateResult = isPointerValued(state.types, index.type);
+                    const bool addressResult   = byteElement || aggregateResult;
+                    const auto elementSize =
+                        byteElement ? 1U
+                                    : (aggregateResult ? typeSize(state.types, index.type)
+                                                       : scalarElementSize(state.types, pointee));
+                    // Element sizes that do not resolve (for example a pointer
+                    // to an aggregate) fall through to the literal-index path.
+                    if (elementSize != 0U && elementSize <= 0xFFFFU) {
+                        const auto indexReg = lowerOperand(state, index.index);
+                        if (indexReg == kUnassignedReg)
+                            return kUnassignedReg;
+                        const auto address = addressResult ? newTypedReg(state, ValueType::Ptr)
+                                                           : newReg(state, index.type);
+                        emit(state,
+                             Instr{Op::IndexLoad, address, object, indexReg,
+                                   static_cast<std::uint16_t>(elementSize), 0U,
+                                   static_cast<std::uint16_t>(2U | (addressResult ? 4U : 0U))});
+                        if (!byteElement)
+                            return address;
+                        const auto value = newReg(state, index.type);
+                        emit(state, Instr::simple(Op::LoadI8, value, address));
+                        return value;
+                    }
+                }
+
                 const auto &indexExpr = state.hir.getExpr(index.index);
                 const auto *indexLit  = std::get_if<hir::HirLiteral>(&indexExpr);
                 if (indexLit == nullptr) {
@@ -2204,6 +2279,10 @@ auto prepareFunctionRegisters(LowerState &state) -> bool {
         state.sretReg              = 0;
         state.fn->regTypes.push(ValueType::Ptr);
         nextRegister = 1;
+    } else if (state.types.kindOf(state.hirFn->return_type) == types::TypeKind::Slice) {
+        // A slice-returning function hands back its `{ptr, len}` pair in the
+        // return register and the one right after it.
+        state.fn->returnsSlice = true;
     }
 
     state.paramRegs.resize(state.hirFn->params.size(), kUnassignedReg);
@@ -2708,6 +2787,9 @@ auto lowerModule(const hir::HirModule &hir, const memory::StringInterner &intern
         auto &adapter      = out.functions[adapterIndex];
         adapter.name       = sourceName(interner.lookup(target.name));
         adapter.returnType = valueTypeOf(types, target.return_type);
+        const bool returnsSlice =
+            types.kindOf(target.return_type) == types::TypeKind::Slice;
+        adapter.returnsSlice = returnsSlice;
 
         std::size_t explicitArgCount = 0U;
         for (std::size_t param = 1U; param < target.params.size(); ++param)
@@ -2720,7 +2802,9 @@ auto lowerModule(const hir::HirModule &hir, const memory::StringInterner &intern
         const auto scratchCount = receiverIsSlice ? 1U : 0U;
         const auto argBase      = paramCount;
         const auto returnReg    = argBase + callArgCount + scratchCount;
-        const auto regCount     = returnReg + 1U;
+        // A slice-returning method returns a `{ptr, len}` pair, so reserve the
+        // register after the return register for the length half.
+        const auto regCount     = returnReg + (returnsSlice ? 2U : 1U);
         if (paramCount > 0xFFFFU || regCount > 0xFFFFU || callArgCount > 0xFFFFU) {
             result.ok      = false;
             result.message = "dynamic adapter register range exceeds v2 limits";
@@ -2750,6 +2834,8 @@ auto lowerModule(const hir::HirModule &hir, const memory::StringInterner &intern
         if (receiverIsSlice)
             adapter.regTypes.push(ValueType::Ptr);
         adapter.regTypes.push(adapter.returnType);
+        if (returnsSlice)
+            adapter.regTypes.push(ValueType::I64);
         adapter.regCount = static_cast<std::uint16_t>(regCount);
 
         if (receiverIsSlice) {

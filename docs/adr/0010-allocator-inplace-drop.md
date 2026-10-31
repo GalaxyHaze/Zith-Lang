@@ -39,16 +39,24 @@ storage surface plus `HeapAllocator` and the free-function bridge
 to `allocators/heap`, and keeps `new`/`delete` in `new`. The facade
 re-exports `in-place`, `allocator`, `heap`, and `new`. `stdlib/std/new.zith`
 remains as legacy compatibility. The target modules pass `zithc check` and are
-covered by `tests/test-generic-hashmap.cpp`, but the helper surface remains
-marked proposed because the compiler cannot yet instantiate generic helpers
-that mention `T` only in the return type, and opaque pack fields cannot be
-extracted/destructured for in-place construction.
+covered by `tests/test-generic-hashmap.cpp`. The heap pair is now implemented:
+contextual (expected-result) inference instantiates `new<T>` from `?*T`, so
+`stdlib/std/memory/new.zith` carries real `new`/`delete` bodies that run in
+`test-codegen` (`test_imported_memory_new_delete_runtime`). The
+allocator-owned `make`/`release` defaults and opaque pack destructuring remain
+open.
 
 `make`/`release` are default methods of the `Allocator` trait. They keep the
 convenient pair next to the allocator that owns the block: `make<T>` reserves
 the layout for `T`, calls `T.inplace`, and returns `?*T`; `release<T>` calls
 `T.clean` and then asks the allocator to free the block. Custom allocators
 can override both when their layout or block metadata differs.
+
+The shipped repeatable call path is the free-function pair
+`make(self: dyn Allocator, args)` / `release(self: dyn Allocator, ptr)` in
+`allocators/allocator`, because a trait default body cannot yet dispatch to
+another trait method on `self`. The `Allocator.make`/`release` defaults stay as
+const-failing overrides.
 
 `new<T>` is sugar over a default heap allocator: it allocates the size and
 alignment from the compiler-provided layout query for `T`, calls `T.inplace`,
@@ -100,7 +108,7 @@ implement Buffer as InPlace {
 }
 
 fn main(): i32 {
-    let buffer = new<Buffer>(|null, 0u64|);
+    let buffer = new<Buffer>(|null as ?*u8, 0u64|);
     if (buffer is null) {
         return 1;
     }
@@ -155,11 +163,21 @@ cleanup call is correct.
    and add shape validation for `inplace`/`clean`/`alloc`/`free`.
 2. Shipped: implement `HeapAllocator` and the `dyn Allocator` free-function
    bridge (`allocate`/`deallocate`/`reallocate`).
-3. Teach generic inference to use return types so `new<T>`/`make<T>` can be
-   instantiated from `?*T`; then enable `stdlib/std/memory/new.zith` in the
-   checked stdlib surface.
+3. Shipped: contextual (expected-result) inference instantiates `new<T>` from
+   `?*T`, and `stdlib/std/memory/new.zith` carries real `new`/`delete` bodies
+   in the checked stdlib surface. `make<T>`/`release<T>` still need a trait
+   default body to dispatch to another trait method on `self`.
 4. Implement opaque pack matching/destructuring for `make` argument dispatch
    and define the "no matching method" path as `null`.
+   Shipped: the `args as |bytes: ?*u8, len: u64|` destructuring and the
+   `if (tuple is null) { ... }` guard now compile and run for both struct and
+   pack payloads, including the early-return narrowing of optional aggregates.
+   Aggregate literals erased into an `opaque` parameter keep their concrete
+   type (a one-field struct no longer corrupts the erased payload). A `null`
+   member in a pack literal takes its declared member type from the surrounding
+   annotation, and `null as ?T` names it at a call site, so the canonical
+   `new<Buffer>(|null as ?*u8, 0u64|)` runs. A `null` with no type context
+   reports `E3001` instead of corrupting the aggregate.
 5. Add `W10xx DiscardedValue` and `W11xx DiscardedOwner` in sema.
 6. Keep `InputLine.destroy` working as a compatibility path and migrate it to
    `InPlace.clean` when the conventional `new`/`delete` surface is ready.
