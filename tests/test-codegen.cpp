@@ -437,6 +437,27 @@ static void test_null_member_in_pack_literal_runtime() {
           "a directly bound bare null pack literal is rejected without hanging codegen");
 }
 
+// A runtime panic aborts through `llvm.trap`, which does not flush the C
+// streams. When the program's stdout is a pipe (the captured `zithc run`
+// path), `puts` output is fully buffered, so a message written just before the
+// trap was lost. The runtime panic helper must flush stdout/stderr before
+// trapping so a `panic(message)` keeps its text.
+static void test_runtime_panic_flushes_buffered_output() {
+    ModernFileCodegenTest t;
+    t.write("main.zith",
+            "fn main(): i32 {\n"
+            "    @log(\"panic: boom\");\n"
+            "    @assert(false);\n"
+            "    return 0;\n"
+            "}\n");
+
+    auto r = t.run();
+    CHECK(r.ok, "a program that logs then panics still compiles, links and runs");
+    CHECK(r.output.find("panic: boom") != std::string::npos,
+          "the message written before the panic survives the abort");
+    CHECK(r.exitCode != 0, "the panic aborts the process");
+}
+
 static void test_shifts() {
     CodegenTest t;
     auto r = t.run("codegen-shifts.zith", "fn arithmetic(): i32 {\n"
@@ -4279,6 +4300,8 @@ static void test_codegen() {
     test_pack_literal_erased_into_opaque_runtime();
     printf("Running test_null_member_in_pack_literal_runtime\n");
     test_null_member_in_pack_literal_runtime();
+    printf("Running test_runtime_panic_flushes_buffered_output\n");
+    test_runtime_panic_flushes_buffered_output();
     printf("Running test_integer_range_for_runtime\n");
     test_integer_range_for_runtime();
     printf("Running test_range_in_operator_and_when_runtime\n");

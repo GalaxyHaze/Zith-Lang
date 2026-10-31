@@ -1000,6 +1000,17 @@ llvm::Value *CodeGenEmit::emitRuntimePanic(const hir::HirRuntimePanic &panic) {
             llvm::GlobalValue::InternalLinkage, "__zith_runtime_panic", module_);
         auto *entry = llvm::BasicBlock::Create(builder_.getContext(), "entry", panic_fn);
         llvm::IRBuilder<> body_builder(entry);
+        // Flush any buffered stdout/stderr before trapping. `puts`/`putchar`
+        // output is fully buffered when it is a pipe (the captured `zithc run`
+        // path), and `llvm.trap` aborts without unwinding the C streams, so a
+        // `panic(message)` printed just before the trap would otherwise be
+        // lost. `fflush(nullptr)` flushes every open output stream.
+        auto *fflush_type = llvm::FunctionType::get(
+            llvm::Type::getInt32Ty(builder_.getContext()),
+            {llvm::PointerType::get(builder_.getContext(), 0)}, false);
+        auto fflush_fn = module_->getOrInsertFunction("fflush", fflush_type);
+        body_builder.CreateCall(fflush_fn, llvm::ConstantPointerNull::get(
+                                               llvm::PointerType::get(builder_.getContext(), 0)));
 #if LLVM_VERSION_MAJOR >= 19
         body_builder.CreateCall(
             llvm::Intrinsic::getOrInsertDeclaration(module_, llvm::Intrinsic::trap));
