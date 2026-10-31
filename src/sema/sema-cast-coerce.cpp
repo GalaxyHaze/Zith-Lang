@@ -816,6 +816,18 @@ bool PerModuleSema::coerceValue(frontend::ExprId value, TypeId target, TypeId so
         typed_map.opaqueSourceTypes.insert(value.value, source);
         return true;
     }
+    // `T -> ?opaque`: the payload is erased into the opaque payload and then
+    // wrapped in `Some`. Record the concrete source against the value
+    // expression so HIR can build the tagged payload before the wrap.
+    if (value && source && type_table.kindOf(resolve(target)) == TypeKind::Optional) {
+        if (const auto *opt = type_table.optional(resolve(target));
+            opt != nullptr && type_table.kindOf(resolve(opt->inner)) == TypeKind::Opaque &&
+            type_table.kindOf(resolve(source)) != TypeKind::Opaque &&
+            resolve(source) != null_type) {
+            typed_map.opaqueSourceTypes.insert(value.value, source);
+            return true;
+        }
+    }
     // A borrowed parameter's ABI is a pointer, but the call-site argument is
     // the borrowed value. `lend q` / `view q` check the value against the
     // pointee after the ownership-annotation check has run.

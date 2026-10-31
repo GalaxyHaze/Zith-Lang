@@ -532,6 +532,13 @@ bool PerModuleSema::coercesTo(TypeId target, TypeId source) const noexcept {
                 // unwrap and is not accepted here.
                 result = sameType(opt->inner, source) || coercesTo(opt->inner, source);
             }
+        } else if (type_table.kindOf(resolved_target) == TypeKind::Opaque) {
+            // Any concrete value erases into bare `opaque`. `coerceValue`
+            // records the concrete source so HIR can build the tagged payload,
+            // and the `?opaque` target reaches here through the recursive
+            // optional case above.
+            result = type_table.kindOf(resolved_source) != TypeKind::Opaque &&
+                     resolved_source != null_type && resolved_source != void_type;
         } else {
             result = allowsUncheckedNullablePointer(target, source);
         }
