@@ -10,6 +10,16 @@ fn main(): i32 {
     if not(hm.HashMap.init(lend map, heap)) {
         return 2;
     }
+    if not(hm.HashMap.put<i64, i64>(lend map, 3i64, 30i64)) {
+        return 3;
+    }
+    let value = hm.HashMap.get<i64, i64>(view map, 3i64);
+    if (value is null) {
+        return 4;
+    }
+    if (must value != 30i64) {
+        return 5;
+    }
     hm.HashMap.destroy(lend map);
     0
 }
