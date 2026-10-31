@@ -43,11 +43,12 @@ Open decisions:
   declared result against the expected type, so `Ok(7)`/`Err(e)` bind their
   result-only parameters without explicit `<...>`. The shipped surface is
   `stdlib/std/result.zith`. `Result<void, E>` remains open.
-- Choose the portable backend mechanism that makes `panic` fatal while
-  preserving its message in the available diagnostic channel. Partly resolved:
-  the VM v2 lowering now accepts any `R10001+` runtime panic code (the generic
-  `Op::Panic` carries the code), so a panic no longer has to be the
-  optional-extraction `R10003`. The remaining decision is how a
-  `panic(message)` preserves its text: native codegen traps through
-  `llvm.trap` before stdout is flushed, so the message is not visible on the
-  abort path yet.
+- Resolved: `panic(message)` ships as `stdlib/std/panic.zith`. It writes the
+  message and a trailing newline one byte at a time through `putchar`, then
+  terminates through the runtime panic code `R10004` (`@assert(false)` outside a
+  test). The native `__zith_runtime_panic` helper now flushes the C streams
+  (`fflush(nullptr)`) before `llvm.trap`, so the message survives the abort even
+  when the program's output is a pipe. The VM v2 lowering accepts any `R10001+`
+  code (the generic `Op::Panic` carries it), so the same source runs on both
+  backends. `test-codegen` (`test_imported_panic_runtime`) and
+  `test-stdlib-modules` cover it.

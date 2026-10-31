@@ -242,6 +242,21 @@ tag check, so the caller must establish `isOk`/`isErr` first. The module is
 type-checked by `test-stdlib-modules` and exercised end-to-end by `test-codegen`
 (`test_imported_result_runtime`).
 
+#### `std/panic`
+
+`panic(message)` reports a fatal message and does not recover. It writes
+`message` and a trailing newline, then terminates through the runtime panic
+code `R10004` (`@assert(false)` outside a test). It is the standard-library
+counterpart to the `@assert`/`@check` intrinsics and the building block for
+unwrapping the wrong `Result` case. There is no catch and no cleanup, so it is
+only for unrecoverable states.
+
+The message is written one byte at a time through `putchar`, so the same path
+works on native and VM v2. The native runtime panic helper flushes the C
+streams before trapping, so the message survives even when the program's
+output is a pipe. The module is type-checked by `test-stdlib-modules` and
+exercised end-to-end by `test-codegen` (`test_imported_panic_runtime`).
+
 #### `c/fs` and `c/posix`
 
 Raw file access ships under `c/` now, not `std/fs`. `c/fs` is the portable C

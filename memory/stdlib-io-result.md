@@ -60,6 +60,20 @@ fn main(): i32 {
 `Result<void, E>` is intentionally out of scope for the first stdlib I/O
 version. There is no validated `()` generic argument and `null` to `void`
 would be speculative. The sink overload returns `IoError` instead.
+Instantiating a generic union with `void` (for example `Result<void, E>`) is
+now rejected with `E3001` at the use site instead of hanging LLVM codegen; see
+`memory/sema-generic-union-void.md`.
+
+## Fatal `panic`
+
+`stdlib/std/panic.zith` ships the fatal `panic(message)`. It writes the message
+and a trailing newline one byte at a time through `putchar`, then terminates
+through the runtime panic code `R10004` (`@assert(false)` outside a test). The
+native `__zith_runtime_panic` helper flushes the C streams (`fflush(nullptr)`)
+before `llvm.trap`, so the message survives the abort even when the program's
+output is a pipe. The VM v2 lowering accepts any `R10001+` code, so the same
+source runs on both backends. `test-codegen` (`test_imported_panic_runtime`)
+and `test-stdlib-modules` cover it.
 
 ## Adopted Surface
 
