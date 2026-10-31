@@ -116,8 +116,20 @@ void CodeGenEmit::registerParams(const hir::HirFunction &fn, llvm::Function *llv
 }
 
 llvm::Value *CodeGenEmit::emitRet(const hir::HirRet &ret, const hir::HirModule &mod) {
-    if (ret.value == hir::kInvalidHirExpr)
+    if (ret.value == hir::kInvalidHirExpr) {
+        // A value-less return in a non-void function can only appear in an
+        // unreachable block: sema rejects a genuine fall-through, so the
+        // implicit-return path only produces this shape after every path in
+        // the trailing block has already terminated. Emit `unreachable`
+        // instead of `ret void`, which the LLVM verifier rejects in a
+        // value-returning function. This matches the unterminated-block
+        // fallback in `CodeGen::emitFunction`.
+        llvm::BasicBlock *block = builder_.GetInsertBlock();
+        llvm::Function *fn     = block != nullptr ? block->getParent() : nullptr;
+        if (fn != nullptr && !fn->getReturnType()->isVoidTy())
+            return builder_.CreateUnreachable();
         return builder_.CreateRetVoid();
+    }
     // The implicit-return path lowers the trailing expression both as an
     // instruction and as the Ret value. Reuse the value produced earlier in the
     // same block when available; the block-scoped cache avoids re-evaluating

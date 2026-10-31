@@ -3404,6 +3404,39 @@ static void test_optional_raw_extraction_runtime() {
     CHECK_EQ(r.exitCode, 2, "raw on None reads uninitialized payload without panicking");
 }
 
+static void test_if_else_both_return_runtime() {
+    // Regression: `if (c) { return A; } else { return B; }` as the trailing
+    // statement of a value-returning function used to emit an unreachable
+    // merge block terminated by `ret void`, which the LLVM verifier rejects
+    // (E5001). The dead block must lower to `unreachable` instead.
+    ModernFileCodegenTest t;
+    t.write("main.zith", "fn classify(x: i32): i32 {\n"
+                         "    if (x == 0) { return 1; } else { return 2; }\n"
+                         "}\n"
+                         "fn main(): i32 {\n"
+                         "    return classify(3);\n"
+                         "}\n");
+    auto r = t.run();
+    CHECK(r.usedModern, "if/else both-return uses the modern codegen pipeline");
+    CHECK(r.ok, "if/else both-return compiles, links and runs");
+    CHECK_EQ(r.exitCode, 2, "the else branch value is returned");
+}
+
+static void test_for_loop_return_runtime() {
+    // Regression: a loop whose body always returns leaves the exit block
+    // unreachable, hitting the same dead-block terminator path.
+    ModernFileCodegenTest t;
+    t.write("main.zith", "fn first(): i32 {\n"
+                         "    for (i in 0..3) { return i + 5; }\n"
+                         "}\n"
+                         "fn main(): i32 {\n"
+                         "    return first();\n"
+                         "}\n");
+    auto r = t.run();
+    CHECK(r.ok, "a loop that always returns compiles, links and runs");
+    CHECK_EQ(r.exitCode, 5, "the loop body return value is returned");
+}
+
 static void test_function_default_arguments_runtime() {
     ModernFileCodegenTest t;
     t.write("main.zith", "fn add(left: i32, right: i32 = 5): i32 {\n"
@@ -4440,6 +4473,10 @@ static void test_codegen() {
     test_optional_must_none_runtime();
     printf("Running test_optional_raw_extraction_runtime\n");
     test_optional_raw_extraction_runtime();
+    printf("Running test_if_else_both_return_runtime\n");
+    test_if_else_both_return_runtime();
+    printf("Running test_for_loop_return_runtime\n");
+    test_for_loop_return_runtime();
     printf("Running test_function_default_arguments_runtime\n");
     test_function_default_arguments_runtime();
     printf("Running test_nested_optional_argument_runtime\n");
