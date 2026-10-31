@@ -1,0 +1,21 @@
+// Language corpus: optional types, null, and `is null` checks.
+fn pick(flag: bool): ?i32 {
+    if (flag == false) {
+        return null;
+    }
+    6
+}
+
+#[test]
+fn optional_present_and_absent() {
+    let some: ?i32 = pick(true);
+    @assert(not (some is null));
+    let none: ?i32 = pick(false);
+    @assert(none is null);
+}
+
+#[test]
+fn must_unwraps_present_value() {
+    let some: ?i32 = 42;
+    @assert(must some == 42);
+}

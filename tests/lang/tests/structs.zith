@@ -1,0 +1,34 @@
+// Language corpus: struct definition, literals, field access and @sizeOf.
+struct Point {
+    x: i32,
+    y: i32
+}
+
+struct Pair<T, U> {
+    first: T,
+    second: U
+}
+
+#[test]
+fn struct_literal_and_fields() {
+    let p = Point { x: 3, y: 4 };
+    @assert(p.x == 3);
+    @assert(p.y == 4);
+    @assert(@sizeOf(Point) >= 8);
+}
+
+#[test]
+fn mutable_struct_fields() {
+    var p = Point { x: 1, y: 2 };
+    p.x = 10;
+    p.y = 20;
+    @assert(p.x == 10);
+    @assert(p.y == 20);
+}
+
+#[test]
+fn generic_struct_instantiation() {
+    let pair = Pair<i32, f64> { first: 20, second: 2.5 };
+    @assert(pair.first == 20);
+    @assert(pair.second == 2.5);
+}

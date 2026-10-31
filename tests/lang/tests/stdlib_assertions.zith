@@ -1,0 +1,24 @@
+// Language corpus: std/test helper macros on the native backend.
+from std/test
+
+#[test]
+fn helper_macros_pass() {
+    @assertTrue(2 + 2 == 4);
+    @assertFalse(2 + 2 == 5);
+    @assertEq(2 + 2, 4);
+    @assertNe(2 + 2, 5);
+}
+
+#[test]
+fn membership_helpers_pass() {
+    @assertIn(5, 1..10);
+    @assertNotIn(11, 1..10);
+}
+
+#[test]
+fn optional_helpers_pass() {
+    let present: ?i32 = 42;
+    let absent: ?i32 = null;
+    @assertSome(present);
+    @assertNone(absent);
+}

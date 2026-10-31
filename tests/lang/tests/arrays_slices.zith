@@ -1,0 +1,26 @@
+// Language corpus: fixed arrays, slice views and raw indexed reads.
+fn sumSlice(values: []i32): i32 {
+    raw values[0] + raw values[1] + raw values[2]
+}
+
+#[test]
+fn fixed_array_indexing() {
+    let numbers: [3]i32 = [1, 2, 3];
+    @assert(raw numbers[0] == 1);
+    @assert(raw numbers[2] == 3);
+}
+
+#[test]
+fn slice_view_reads() {
+    var numbers: [3]i32 = [1, 2, 3];
+    let slice: []i32 = raw numbers[0..3];
+    @assert(sumSlice(slice) == 6);
+}
+
+#[test]
+fn mutable_array_elements() {
+    var points: [2]i32 = [10, 20];
+    points[0] = 5;
+    @assert(raw points[0] == 5);
+    @assert(raw points[1] == 20);
+}
