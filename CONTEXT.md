@@ -468,6 +468,18 @@ _Avoid_: caller, responsible scope, lifetime owner
 The explicit consuming operation that releases a resource. The current default is `destroy`; the target convention is the `new`/`delete` and `make`/`release` pairs.
 _Avoid_: destructor, drop, teardown method
 
+**Cleanup obligation**:
+The open duty that a resource owner's scope must discharge by running its cleanup path. SRA tracks it as a residual fact, not as a type identity, so it is independent of how the owner was declared.
+_Avoid_: ownership flag, destructor slot, pending resource
+
+**Holder**:
+A binding that gives an owner a scope, so its cleanup obligation is reachable by a `defer` or `destroy` path. An owner that appears only as an unnamed temporary has no holder.
+_Avoid_: owner name, cleanup site, lifetime scope
+
+**Ephemeral owner**:
+An owner whose storage ends before a handle taken from it, such as an arena created for a single call. The holder heuristic rejects the unnamed form of an ephemeral owner.
+_Avoid_: temporary allocator, stack resource, short-lived value
+
 **Storage block**:
 The untyped byte region returned by an `Allocator` primitive. A storage block becomes typed only when `InPlace` construction or a collection reserves it for a concrete layout.
 _Avoid_: raw allocation, memory chunk, buffer memory
