@@ -13,7 +13,7 @@
 #include "memory/source-map.hpp"
 #include "sema/heuristic-engine.hpp"
 #include "sema/hir-lower-modern.hpp"
-#include "sema/nra-facts.hpp"
+#include "sema/sra-facts.hpp"
 #include "sema/sema-modern.hpp"
 #include "types/type-kind.hpp"
 
@@ -302,7 +302,7 @@ bool CompilationSession::runTo(Stage target) {
 
     if (mPlan.shouldStop())
         return !mDiags.hasErrors();
-    if (!nraStage())
+    if (!sraStage())
         return false;
     mPlan.advance();
 
@@ -636,7 +636,7 @@ bool CompilationSession::lowerStage() {
     }
 
     sema::modern::HirLowerModern lower(mHirArena, mDiags, *mSnapshot, *mModernSemaPipeline, mSyms,
-                                       mTypes, *mInterner, mNraFacts.get(), mCacheStore.get(),
+                                       mTypes, *mInterner, mSraFacts.get(), mCacheStore.get(),
                                        mTestModuleName, mOpts.get().testFilter);
     if (!lower.run()) {
         mDiags.emit();
@@ -707,7 +707,7 @@ bool CompilationSession::solveStage() {
     return true;
 }
 
-bool CompilationSession::nraStage() {
+bool CompilationSession::sraStage() {
     auto t0 = std::chrono::steady_clock::now();
     if (mCacheHydrated)
         return true;
@@ -717,19 +717,19 @@ bool CompilationSession::nraStage() {
         return false;
     }
 
-    sema::modern::NraFacts nra(mHirArena, mDiags, *mSnapshot, *mModernSemaPipeline, *mInterner);
-    if (!nra.run()) {
+    sema::modern::SraFacts sra(mHirArena, mDiags, *mSnapshot, *mModernSemaPipeline, *mInterner);
+    if (!sra.run()) {
         mDiags.emit();
         return false;
     }
-    mNraFacts = std::make_unique<sema::modern::NraFacts>(std::move(nra));
+    mSraFacts = std::make_unique<sema::modern::SraFacts>(std::move(sra));
 
-    auto nraDt =
+    auto sraDt =
         std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
-    mStageDurations[static_cast<size_t>(StageIndex::Nra)] = nraDt;
+    mStageDurations[static_cast<size_t>(StageIndex::Sra)] = sraDt;
     if (mOpts.get().flags.verbose()) {
-        writeOutput("  [nra] residual facts: %zu locals, %zu calls  (%5.1fms)\n",
-                    mNraFacts->localCount(), mNraFacts->callCount(), nraDt);
+        writeOutput("  [sra] residual facts: %zu locals, %zu calls  (%5.1fms)\n",
+                    mSraFacts->localCount(), mSraFacts->callCount(), sraDt);
     }
     return true;
 }
@@ -826,7 +826,7 @@ bool CompilationSession::cacheStage() {
 
 std::unordered_map<std::string, double> CompilationSession::getStageDurationsMs() const {
     static constexpr const char *names[] = {
-        "lex", "scan", "import", "resolve", "sema", "lower", "solve", "nra", "codegen", "cache",
+        "lex", "scan", "import", "resolve", "sema", "lower", "solve", "sra", "codegen", "cache",
     };
     std::unordered_map<std::string, double> result;
     for (size_t i = 0; i < static_cast<size_t>(StageIndex::Count); ++i)

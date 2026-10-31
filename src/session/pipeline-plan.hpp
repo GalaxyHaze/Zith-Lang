@@ -12,10 +12,15 @@ enum class Stage : uint8_t {
     Resolved,
     TypeChecked,
     Solved,
-    NraResolved,
+    SraResolved,
     HirLowered,
     CodegenReady,
-    Cached
+    Cached,
+
+    /// Compatibility alias for the pre-rename spelling. The Zith-- slice is
+    /// SRA, but external consumers (for example zith-lsp) still reference the
+    /// historical NRA name. The numeric value is unchanged.
+    NraResolved = SraResolved
 };
 
 struct PipelinePlan {

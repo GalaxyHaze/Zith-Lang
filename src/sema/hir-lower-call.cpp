@@ -850,8 +850,8 @@ hir::HirExprId HirLowerModern::lowerCall(const frontend::Expression &expr) {
                 current_fn_->usesTailCC = true;
         }
     }
-    if (nra_ != nullptr) {
-        const auto *call_fact = nra_->callFact(expr.id);
+    if (sra_ != nullptr) {
+        const auto *call_fact = sra_->callFact(expr.id);
         if (call_fact != nullptr && call_fact->hasResidual()) {
             auto &attrs = hir_.attrs().call(call_id);
             if (call_fact->returnsArgument != ~0U)

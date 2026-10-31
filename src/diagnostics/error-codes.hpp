@@ -78,7 +78,7 @@ inline constexpr ErrCode const GenericCannotInfer     = 3011;
 inline constexpr ErrCode const GenericExplosion       = 3012;
 inline constexpr ErrCode const GenericStructInfer     = 3013;
 
-// NRA / Ownership (4001-4999)
+// SRA / Ownership (4001-4999)
 inline constexpr ErrCode const UseAfterMove              = 4001;
 inline constexpr ErrCode const BorrowConflict            = 4002;
 inline constexpr ErrCode const DoubleBorrow              = 4003;

@@ -159,17 +159,17 @@ hir::HirOwnership mapHirOwnership(types::OwnershipKind kind) noexcept {
     return hir::HirOwnership::Default;
 }
 
-hir::HirCallEscape mapHirEscape(NraArgEscape escape) noexcept {
+hir::HirCallEscape mapHirEscape(SraArgEscape escape) noexcept {
     switch (escape) {
-    case NraArgEscape::Borrow:
+    case SraArgEscape::Borrow:
         return hir::HirCallEscape::Borrow;
-    case NraArgEscape::Capture:
+    case SraArgEscape::Capture:
         return hir::HirCallEscape::Capture;
-    case NraArgEscape::Escape:
+    case SraArgEscape::Escape:
         return hir::HirCallEscape::Escape;
-    case NraArgEscape::Move:
+    case SraArgEscape::Move:
         return hir::HirCallEscape::Move;
-    case NraArgEscape::None:
+    case SraArgEscape::None:
         break;
     }
     return hir::HirCallEscape::None;

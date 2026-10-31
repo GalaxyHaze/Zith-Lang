@@ -1,4 +1,4 @@
-#include "sema/nra-facts.hpp"
+#include "sema/sra-facts.hpp"
 
 #include "diagnostics/error-codes.hpp"
 
@@ -6,14 +6,14 @@
 
 namespace zith::sema::modern {
 
-NraFacts::NraFacts(memory::Arena &, diagnostics::DiagnosticEngine &diagnostics,
+SraFacts::SraFacts(memory::Arena &, diagnostics::DiagnosticEngine &diagnostics,
                    const session::CompilationSnapshot &snapshot, const SemaPipeline &sema,
                    memory::StringInterner &interner)
     : diagnostics_(diagnostics), snapshot_(snapshot), sema_(sema), interner_(&interner),
       local_facts_(), call_facts_(), narrowing_facts_(), current_condition_(), any_return_(false),
       all_returns_same_parameter(true), returned_parameter_(~0U), has_errors_(false) {}
 
-bool NraFacts::run() {
+bool SraFacts::run() {
     for (const auto &module_ptr : snapshot_.modules()) {
         const auto &module      = *module_ptr;
         const auto *module_sema = sema_.findModuleSema(module.key);
@@ -25,7 +25,7 @@ bool NraFacts::run() {
     return !hasErrors();
 }
 
-void NraFacts::analyzeModule(const session::ModuleArtifact &module,
+void SraFacts::analyzeModule(const session::ModuleArtifact &module,
                              const PerModuleSema &module_sema, const TypedMap &typed) {
     const auto *frontend = module.frontend.get();
     if (frontend == nullptr)
@@ -44,7 +44,7 @@ void NraFacts::analyzeModule(const session::ModuleArtifact &module,
         current_params_.clear();
         for (const auto &parameter : decl.parameters) {
             current_params_.push_back(parameter.id);
-            NraLocalFact fact;
+            SraLocalFact fact;
             const auto *type = typed.localTypes.get(parameter.id.value);
             if (type != nullptr) {
                 fact.declaredType = *type;
@@ -74,7 +74,7 @@ void NraFacts::analyzeModule(const session::ModuleArtifact &module,
     current_key_    = 0;
 }
 
-void NraFacts::resolveCallsInFunction(const frontend::Declaration &decl) {
+void SraFacts::resolveCallsInFunction(const frontend::Declaration &decl) {
     current_key_ = internFunctionKey(*interner_, current_module_->key, decl.id);
     current_params_.clear();
     for (const auto &parameter : decl.parameters)
@@ -84,16 +84,16 @@ void NraFacts::resolveCallsInFunction(const frontend::Declaration &decl) {
         walkBody(*body);
 }
 
-void NraFacts::collectFunctionFact() {
+void SraFacts::collectFunctionFact() {
     if (!any_return_)
         return;
-    NraFunctionFact fact;
+    SraFunctionFact fact;
     fact.allReturnsParameter = all_returns_same_parameter;
     fact.parameterIndex      = returned_parameter_;
     function_facts_.insert(current_key_, fact);
 }
 
-void NraFacts::collectNarrowing(const frontend::FrontendSnapshot &frontend) {
+void SraFacts::collectNarrowing(const frontend::FrontendSnapshot &frontend) {
     for (const auto &statement : frontend.statements()) {
         for (const auto &attr : statement.binding.attributes)
             if (attr.kind == frontend::AttributeKind::Volatile && statement.binding.id)
@@ -101,13 +101,13 @@ void NraFacts::collectNarrowing(const frontend::FrontendSnapshot &frontend) {
     }
 }
 
-void NraFacts::walkExpr(frontend::ExprId id) {
+void SraFacts::walkExpr(frontend::ExprId id) {
     const auto *expression = expr(id);
     if (expression == nullptr)
         return;
     if (expression->kind == frontend::ExprKind::Unary && expression->text == "&") {
         // Address-of logically moves the storage into the pointer value. Sema
-        // already reports later reads as E4001; NRA records the same fact as a
+        // already reports later reads as E4001; SRA records the same fact as a
         // residual consumed slot without inventing HIR move nodes.
         if (!expression->operands.empty()) {
             const frontend::LocalId local = localOfName(*expr(expression->operands[0]));
@@ -184,7 +184,7 @@ void NraFacts::walkExpr(frontend::ExprId id) {
         walkExpr(expression->expansion);
 }
 
-void NraFacts::walkConditionExpression(frontend::ExprId id,
+void SraFacts::walkConditionExpression(frontend::ExprId id,
                                        std::optional<frontend::ExprId> negative) {
     const auto *expression = expr(id);
     if (expression == nullptr)
@@ -214,7 +214,7 @@ void NraFacts::walkConditionExpression(frontend::ExprId id,
     }
 }
 
-void NraFacts::applyCurrentNarrowing() {
+void SraFacts::applyCurrentNarrowing() {
     if (!current_condition_)
         return;
     const auto *condition = expr(current_condition_);
@@ -238,7 +238,7 @@ void NraFacts::applyCurrentNarrowing() {
     }
 }
 
-void NraFacts::walkStatement(frontend::StmtId id) {
+void SraFacts::walkStatement(frontend::StmtId id) {
     if (!id || current_module_ == nullptr || current_module_->frontend == nullptr ||
         id.value > current_module_->frontend->statements().size())
         return;
@@ -255,7 +255,7 @@ void NraFacts::walkStatement(frontend::StmtId id) {
     if (statement.binding.id) {
         if (volatile_locals_.get(statement.binding.id.value) != nullptr)
             return;
-        NraLocalFact fact;
+        SraLocalFact fact;
         const auto *type = current_typed_ != nullptr
                                ? current_typed_->localTypes.get(statement.binding.id.value)
                                : nullptr;
@@ -267,7 +267,7 @@ void NraFacts::walkStatement(frontend::StmtId id) {
     }
 }
 
-void NraFacts::walkAssign(const frontend::Expression &assign) {
+void SraFacts::walkAssign(const frontend::Expression &assign) {
     if (assign.operands.size() < 2U)
         return;
     const frontend::LocalId root = localOfName(*expr(assign.operands[0]));
@@ -283,7 +283,7 @@ void NraFacts::walkAssign(const frontend::Expression &assign) {
     local_facts_[root.value].knownAlive = true;
 }
 
-void NraFacts::walkFunction(const frontend::Declaration &decl) {
+void SraFacts::walkFunction(const frontend::Declaration &decl) {
     if (!decl.body)
         return;
 
@@ -299,14 +299,14 @@ void NraFacts::walkFunction(const frontend::Declaration &decl) {
     current_condition_ = {};
 }
 
-void NraFacts::walkBody(const frontend::Expression &body) {
+void SraFacts::walkBody(const frontend::Expression &body) {
     for (const auto statement : body.statements)
         walkStatement(statement);
     for (const auto operand : body.operands)
         walkExpr(operand);
 }
 
-void NraFacts::analyzeReturn(const frontend::Expression &ret) {
+void SraFacts::analyzeReturn(const frontend::Expression &ret) {
     any_return_ = true;
     if (ret.operands.empty())
         return;
@@ -326,7 +326,7 @@ void NraFacts::analyzeReturn(const frontend::Expression &ret) {
         all_returns_same_parameter = false;
 }
 
-void NraFacts::analyzeImplicitReturn(const frontend::Expression &body) {
+void SraFacts::analyzeImplicitReturn(const frontend::Expression &body) {
     if (!body.statements.empty()) {
         const auto &last =
             current_module_->frontend->statements()[body.statements.back().value - 1U];
@@ -374,13 +374,13 @@ void NraFacts::analyzeImplicitReturn(const frontend::Expression &body) {
         analyzeReturn(body);
 }
 
-void NraFacts::analyzeCall(const frontend::Expression &call) {
+void SraFacts::analyzeCall(const frontend::Expression &call) {
     if (!call.id || current_module_ == nullptr || current_module_->frontend == nullptr ||
         call.operands.size() < 2U)
         return;
 
-    NraCallFact fact;
-    fact.argEscapes.resize(call.operands.size() - 1U, NraArgEscape::Borrow);
+    SraCallFact fact;
+    fact.argEscapes.resize(call.operands.size() - 1U, SraArgEscape::Borrow);
     fact.argRepeated.resize(call.operands.size() - 1U, 0U);
     std::vector<frontend::LocalId> argument_locals;
     argument_locals.reserve(call.operands.size() - 1U);
@@ -394,7 +394,7 @@ void NraFacts::analyzeCall(const frontend::Expression &call) {
         if (ownership == types::OwnershipKind::Belong) {
             const auto arg_slot = index - 1U;
             if (fact.argEscapes.size() > arg_slot)
-                fact.argEscapes[arg_slot] = NraArgEscape::Escape;
+                fact.argEscapes[arg_slot] = SraArgEscape::Escape;
         }
     }
 
@@ -407,10 +407,10 @@ void NraFacts::analyzeCall(const frontend::Expression &call) {
             if (argument_locals[a] != argument_locals[b])
                 continue;
             const auto ownership = ownershipOfLocal(argument_locals[a]);
-            NraArgEscape escape  = NraArgEscape::Borrow;
+            SraArgEscape escape  = SraArgEscape::Borrow;
             if (ownership != types::OwnershipKind::Share &&
                 ownership != types::OwnershipKind::View) {
-                escape = NraArgEscape::Move;
+                escape = SraArgEscape::Move;
             } else {
                 fact.duplicatedShareOrView = true;
             }
@@ -458,14 +458,14 @@ void NraFacts::analyzeCall(const frontend::Expression &call) {
     call_facts_.insert(call.id.value, std::move(fact));
 }
 
-const frontend::Expression *NraFacts::expr(frontend::ExprId id) const noexcept {
+const frontend::Expression *SraFacts::expr(frontend::ExprId id) const noexcept {
     if (!id || current_module_ == nullptr || current_module_->frontend == nullptr ||
         id.value > current_module_->frontend->expressions().size())
         return nullptr;
     return &current_module_->frontend->expressions()[id.value - 1U];
 }
 
-frontend::LocalId NraFacts::localOfName(const frontend::Expression &name) const noexcept {
+frontend::LocalId SraFacts::localOfName(const frontend::Expression &name) const noexcept {
     if (name.kind != frontend::ExprKind::Name)
         return {};
     if (current_module_ == nullptr)
@@ -484,7 +484,7 @@ frontend::LocalId NraFacts::localOfName(const frontend::Expression &name) const 
     return resolved->local;
 }
 
-frontend::LocalId NraFacts::localOfArgument(const frontend::Expression &arg) const noexcept {
+frontend::LocalId SraFacts::localOfArgument(const frontend::Expression &arg) const noexcept {
     if (arg.kind == frontend::ExprKind::OwnershipCoerce && !arg.operands.empty()) {
         const auto *inner = expr(arg.operands[0]);
         if (inner != nullptr)
@@ -503,7 +503,7 @@ frontend::LocalId NraFacts::localOfArgument(const frontend::Expression &arg) con
     return {};
 }
 
-types::OwnershipKind NraFacts::ownershipOfArgument(const frontend::Expression &arg) const noexcept {
+types::OwnershipKind SraFacts::ownershipOfArgument(const frontend::Expression &arg) const noexcept {
     if (arg.kind == frontend::ExprKind::OwnershipCoerce) {
         if (arg.operands.empty())
             return types::OwnershipKind::Default;
@@ -551,7 +551,7 @@ types::OwnershipKind NraFacts::ownershipOfArgument(const frontend::Expression &a
     return types::OwnershipKind::Default;
 }
 
-types::OwnershipKind NraFacts::ownershipOfLocal(frontend::LocalId id) const noexcept {
+types::OwnershipKind SraFacts::ownershipOfLocal(frontend::LocalId id) const noexcept {
     const auto *fact = local_facts_.get(id.value);
     if (fact != nullptr && id.value != 0)
         return fact->ownership;
@@ -571,7 +571,7 @@ types::OwnershipKind NraFacts::ownershipOfLocal(frontend::LocalId id) const noex
     return qualified != nullptr ? qualified->ownership : types::OwnershipKind::Default;
 }
 
-const session::ResolvedName *NraFacts::resolved(frontend::ExprId id) const noexcept {
+const session::ResolvedName *SraFacts::resolved(frontend::ExprId id) const noexcept {
     if (!id || current_module_ == nullptr)
         return nullptr;
     const auto *resolution = snapshot_.findResolution(current_module_->key);

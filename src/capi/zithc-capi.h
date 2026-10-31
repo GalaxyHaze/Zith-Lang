@@ -26,11 +26,15 @@ typedef enum {
     ZITHC_STAGE_RESOLVED      = 4,
     ZITHC_STAGE_TYPE_CHECKED  = 5,
     ZITHC_STAGE_SOLVED        = 6,
-    ZITHC_STAGE_NRA_RESOLVED  = 7,
+    ZITHC_STAGE_SRA_RESOLVED  = 7,
     ZITHC_STAGE_HIR_LOWERED   = 8,
     ZITHC_STAGE_CODEGEN_READY = 9,
     ZITHC_STAGE_CACHED        = 10
 } zithc_stage;
+
+/* Compatibility alias: this stage was named NRA before the Zith-- SRA rename.
+   The numeric value is unchanged, so existing callers keep working. */
+#define ZITHC_STAGE_NRA_RESOLVED ZITHC_STAGE_SRA_RESOLVED
 
 typedef struct {
     uint32_t line;

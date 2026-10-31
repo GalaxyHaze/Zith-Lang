@@ -43,7 +43,7 @@ static void test_stage_durations_keys() {
     auto r = h.run(Stage::Scanned, "fn hello() { }");
 
     static const char *expected_keys[] = {
-        "lex", "scan", "import", "resolve", "sema", "lower", "solve", "nra", "codegen", "cache",
+        "lex", "scan", "import", "resolve", "sema", "lower", "solve", "sra", "codegen", "cache",
     };
     for (auto *k : expected_keys) {
         bool found      = r.durations.count(k) > 0;

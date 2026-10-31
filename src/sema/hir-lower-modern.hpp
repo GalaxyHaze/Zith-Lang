@@ -6,7 +6,7 @@
 #include "memory/dyn-array.hpp"
 #include "memory/flat-map.hpp"
 #include "memory/string-interner.hpp"
-#include "sema/nra-facts.hpp"
+#include "sema/sra-facts.hpp"
 #include "sema/sema-modern.hpp"
 #include "session/frontend-context.hpp"
 #include "types/type-intern.hpp"
@@ -30,7 +30,7 @@ public:
                    const session::CompilationSnapshot &snapshot, SemaPipeline &sema,
                    const symbols::SymbolTable &symbols, types::TypeIntern &types,
                    memory::StringInterner &interner,
-                   const NraFacts *nra = nullptr, cache::Store *cache_store = nullptr,
+                   const SraFacts *sra = nullptr, cache::Store *cache_store = nullptr,
                    std::string_view test_module = {}, std::string_view test_filter = {});
 
     bool run();
@@ -106,7 +106,7 @@ private:
     const symbols::SymbolTable &symbols_;
     types::TypeIntern &types_;
     memory::StringInterner &interner_;
-    const NraFacts *nra_;
+    const SraFacts *sra_;
     hir::HirModule hir_;
     memory::FlatMap<uint32_t, types::TypeId> lowered_types_;
     /// Maps `(interned module id, decl id)` to the predeclared HIR function index.

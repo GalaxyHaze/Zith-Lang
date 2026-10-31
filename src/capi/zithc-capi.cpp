@@ -38,7 +38,7 @@ static_assert(static_cast<int>(zith::diagnostics::Severity::Note) == ZITHC_SEVER
               "severity enum mismatch");
 static_assert(static_cast<int>(zith::session::Stage::Source) == ZITHC_STAGE_SOURCE,
               "stage enum mismatch");
-static_assert(static_cast<int>(zith::session::Stage::NraResolved) == ZITHC_STAGE_NRA_RESOLVED,
+static_assert(static_cast<int>(zith::session::Stage::SraResolved) == ZITHC_STAGE_SRA_RESOLVED,
               "stage enum mismatch");
 static_assert(static_cast<int>(zith::session::Stage::CodegenReady) == ZITHC_STAGE_CODEGEN_READY,
               "stage enum mismatch");

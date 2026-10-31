@@ -4,7 +4,7 @@
 #include "common/overloaded.hpp"
 #include "diagnostics/error-codes.hpp"
 #include "sema/hir-lower-utils.hpp"
-#include "sema/nra-facts.hpp"
+#include "sema/sra-facts.hpp"
 #include "sema/op-mapping.hpp"
 #include "support/int-literal.hpp"
 #include "symbols/symbol-table.hpp"
@@ -23,11 +23,11 @@ namespace modern {
 HirLowerModern::HirLowerModern(memory::Arena &arena, diagnostics::DiagnosticEngine &diags,
                                const session::CompilationSnapshot &snapshot, SemaPipeline &sema,
                                const symbols::SymbolTable &symbols, types::TypeIntern &types,
-                               memory::StringInterner &interner, const NraFacts *nra,
+                               memory::StringInterner &interner, const SraFacts *sra,
                                cache::Store *cache_store, const std::string_view test_module,
                                const std::string_view test_filter)
     : arena_(arena), diags_(diags), snapshot_(snapshot), sema_(sema), symbols_(symbols),
-      types_(types), interner_(interner), nra_(nra), hir_(arena), lowered_types_(),
+      types_(types), interner_(interner), sra_(sra), hir_(arena), lowered_types_(),
       function_index_by_key_(), cache_store_(cache_store), test_module_(test_module),
       test_filter_(test_filter) {}
 
@@ -799,8 +799,8 @@ bool HirLowerModern::lowerFunctionBody(FunctionInfo &info) {
         info.decl != nullptr && info.decl->functionKind == frontend::FunctionKind::State;
     current_state_machine_id_ = current_fn_is_state_ ? current_fn_->machineId : 0;
 
-    if (nra_ != nullptr && info.module != nullptr && info.decl != nullptr) {
-        const auto *fn_fact = nra_->functionFact(info.module->key, info.decl->id);
+    if (sra_ != nullptr && info.module != nullptr && info.decl != nullptr) {
+        const auto *fn_fact = sra_->functionFact(info.module->key, info.decl->id);
         if (fn_fact != nullptr && fn_fact->hasResidual() && fn_fact->allReturnsParameter &&
             fn_fact->parameterIndex != ~0U) {
             auto &attrs          = hir_.attrs().fn(info.hir_index);
@@ -835,8 +835,8 @@ bool HirLowerModern::lowerFunctionBody(FunctionInfo &info) {
         // The slot id is read by codegen from param_slots; publish attrs for
         // parameters even when the function body never names them, because the
         // ABI-level ownership decision depends on the parameter itself.
-        if (nra_ != nullptr) {
-            const auto *fact = nra_->localFact(parameter.id);
+        if (sra_ != nullptr) {
+            const auto *fact = sra_->localFact(parameter.id);
             if (fact != nullptr && fact->hasResidual()) {
                 auto &attrs     = hir_.attrs().slot(slot);
                 attrs.ownership = mapHirOwnership(fact->ownership);
@@ -994,10 +994,10 @@ hir::HirSlotId HirLowerModern::localSlot(frontend::LocalId id) {
         local_slots_.resize(id.value + 1U, hir::kInvalidHirSlot);
     if (local_slots_[id.value] == hir::kInvalidHirSlot) {
         local_slots_[id.value] = next_slot_++;
-        if (nra_ != nullptr && nra_->localIsVolatile(id))
+        if (sra_ != nullptr && sra_->localIsVolatile(id))
             hir_.attrs().slot(local_slots_[id.value]).volatileSlot = true;
-        if (nra_ != nullptr) {
-            const auto *fact = nra_->localFact(id);
+        if (sra_ != nullptr) {
+            const auto *fact = sra_->localFact(id);
             if (fact != nullptr && fact->hasResidual()) {
                 auto &attrs     = hir_.attrs().slot(local_slots_[id.value]);
                 attrs.ownership = mapHirOwnership(fact->ownership);

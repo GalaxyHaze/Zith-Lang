@@ -16,7 +16,7 @@
 
 namespace zith::sema::modern {
 
-enum class NraArgEscape : uint8_t {
+enum class SraArgEscape : uint8_t {
     None,
     Borrow,
     Capture,
@@ -24,7 +24,7 @@ enum class NraArgEscape : uint8_t {
     Move,
 };
 
-struct NraLocalFact {
+struct SraLocalFact {
     TypeId declaredType            = kInvalidTypeId;
     types::OwnershipKind ownership = types::OwnershipKind::Default;
     bool knownAlive                = true;
@@ -35,9 +35,9 @@ struct NraLocalFact {
     }
 };
 
-struct NraCallFact {
+struct SraCallFact {
     uint32_t returnsArgument = ~0U;
-    std::vector<NraArgEscape> argEscapes;
+    std::vector<SraArgEscape> argEscapes;
     std::vector<uint8_t> argRepeated;
     bool duplicatedShareOrView = false;
     bool returnsNonNull        = false;
@@ -46,14 +46,14 @@ struct NraCallFact {
         if (returnsArgument != ~0U || returnsNonNull || duplicatedShareOrView)
             return true;
         for (const auto escape : argEscapes) {
-            if (escape != NraArgEscape::Borrow)
+            if (escape != SraArgEscape::Borrow)
                 return true;
         }
         return false;
     }
 };
 
-struct NraFunctionFact {
+struct SraFunctionFact {
     bool allReturnsParameter = false;
     uint32_t parameterIndex  = ~0U;
 
@@ -62,7 +62,7 @@ struct NraFunctionFact {
     }
 };
 
-struct NraNarrowingFact {
+struct SraNarrowingFact {
     bool isNullChecked = false;
     bool nonNull       = false;
     bool knownNull     = false;
@@ -74,25 +74,25 @@ struct NraNarrowingFact {
 /// the facts that the stable HIR boundary promises to carry and reports the
 /// qualifier shapes that are already semantically representable before lowering.
 /// Lowering turns these facts into `hir::HirAttrs` side tables only.
-class NraFacts {
+class SraFacts {
 public:
-    NraFacts(memory::Arena &arena, diagnostics::DiagnosticEngine &diagnostics,
+    SraFacts(memory::Arena &arena, diagnostics::DiagnosticEngine &diagnostics,
              const session::CompilationSnapshot &snapshot, const SemaPipeline &sema,
              memory::StringInterner &interner);
 
     bool run();
 
-    [[nodiscard]] const NraLocalFact *localFact(frontend::LocalId id) const noexcept {
+    [[nodiscard]] const SraLocalFact *localFact(frontend::LocalId id) const noexcept {
         return local_facts_.get(id.value);
     }
-    [[nodiscard]] const NraCallFact *callFact(frontend::ExprId id) const noexcept {
+    [[nodiscard]] const SraCallFact *callFact(frontend::ExprId id) const noexcept {
         return call_facts_.get(id.value);
     }
-    [[nodiscard]] const NraFunctionFact *functionFact(session::ModuleKey module,
+    [[nodiscard]] const SraFunctionFact *functionFact(session::ModuleKey module,
                                                       frontend::DeclId id) const noexcept {
         return function_facts_.get(internFunctionKey(*interner_, module, id));
     }
-    [[nodiscard]] const NraNarrowingFact *narrowingFact(frontend::LocalId id) const noexcept {
+    [[nodiscard]] const SraNarrowingFact *narrowingFact(frontend::LocalId id) const noexcept {
         const auto *found = narrowing_facts_.get(id.value);
         return found;
     }
@@ -144,11 +144,11 @@ private:
     const session::CompilationSnapshot &snapshot_;
     const SemaPipeline &sema_;
     memory::StringInterner *interner_;
-    memory::FlatMap<uint32_t, NraLocalFact> local_facts_;
-    memory::FlatMap<uint32_t, NraCallFact> call_facts_;
-    memory::FlatMap<uint32_t, NraNarrowingFact> narrowing_facts_;
+    memory::FlatMap<uint32_t, SraLocalFact> local_facts_;
+    memory::FlatMap<uint32_t, SraCallFact> call_facts_;
+    memory::FlatMap<uint32_t, SraNarrowingFact> narrowing_facts_;
     memory::FlatMap<uint32_t, uint8_t> volatile_locals_;
-    memory::FlatMap<uint64_t, NraFunctionFact> function_facts_;
+    memory::FlatMap<uint64_t, SraFunctionFact> function_facts_;
 
     const session::ModuleArtifact *current_module_ = nullptr;
     const PerModuleSema *current_sema_             = nullptr;

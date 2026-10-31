@@ -3,7 +3,7 @@
 #include "frontend/frontend.hpp"
 #include "hir/hir-attrs.hpp"
 #include "memory/string-interner.hpp"
-#include "sema/nra-facts.hpp"
+#include "sema/sra-facts.hpp"
 #include "session/frontend-context.hpp"
 #include "types/type-kind.hpp"
 
@@ -35,6 +35,6 @@ std::string moduleNamespace(std::string_view module_key, const session::CacheKey
 
 hir::HirOwnership mapHirOwnership(types::OwnershipKind kind) noexcept;
 
-hir::HirCallEscape mapHirEscape(NraArgEscape escape) noexcept;
+hir::HirCallEscape mapHirEscape(SraArgEscape escape) noexcept;
 
 } // namespace zith::sema::modern

@@ -7,7 +7,7 @@
 #include "memory/source-map.hpp"
 #include "memory/string-interner.hpp"
 #include "sema/hir-lower-modern.hpp"
-#include "sema/nra-facts.hpp"
+#include "sema/sra-facts.hpp"
 #include "sema/sema-modern.hpp"
 #include "session/frontend-context.hpp"
 #include "session/pipeline-plan.hpp"
@@ -35,7 +35,7 @@ enum class StageIndex : uint8_t {
     Sema,
     Lower,
     Solve,
-    Nra,
+    Sra,
     Codegen,
     Cache,
     Count,
@@ -73,7 +73,7 @@ class CompilationSession {
     memory::FileId mFileId = 0;
     std::unique_ptr<sema::modern::SemaPipeline> mModernSemaPipeline;
     std::unique_ptr<comptime::GenericInstantiationPass> mGenericInstantiations;
-    std::unique_ptr<sema::modern::NraFacts> mNraFacts;
+    std::unique_ptr<sema::modern::SraFacts> mSraFacts;
     /// Assert/check sites discovered while lowering `#[test]` functions.
     /// Captured here so the persistent cache can persist their source
     /// locations in the ZIRL Debug section for the test runner.
@@ -230,8 +230,8 @@ public:
     const hir::HirModule &hirModule() const {
         return mHirModule;
     }
-    [[nodiscard]] const sema::modern::NraFacts *nraFacts() const noexcept {
-        return mNraFacts.get();
+    [[nodiscard]] const sema::modern::SraFacts *sraFacts() const noexcept {
+        return mSraFacts.get();
     }
     [[nodiscard]] sema::modern::SemaPipeline *semaPipeline() noexcept {
         return mModernSemaPipeline.get();
@@ -262,7 +262,7 @@ private:
     bool semaStage();
     bool lowerStage();
     bool solveStage();
-    bool nraStage();
+    bool sraStage();
     bool codegenStage();
     bool cacheStage();
     void forwardSnapshotDiagnostics();

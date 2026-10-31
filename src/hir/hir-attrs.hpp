@@ -19,7 +19,7 @@ enum class HirOwnership : uint8_t {
     Belong,
 };
 
-/// State of a slot after the NRA proof boundary.
+/// State of a slot after the SRA proof boundary.
 enum class HirConsumedState : uint8_t {
     Unknown,
     Consumed,
