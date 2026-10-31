@@ -1,6 +1,11 @@
 # Optional `dyn Trait` Receivers and Fields
 
-Status: drawing
+Status: complete. W1 (payload erasure before the `Some` wrap, including the
+assignment site), W2 (optional receiver unwrap plus the narrowing proof), W3
+(no `ret void` in a dead value block) and W4 (`?opaque` slots) are implemented
+and locally verified. The niche representation (decision 3) landed as ADR
+0049, so `?dyn T` is layout-identical to `dyn T`. Acceptance 1-6 hold; the
+only red CTest case is the unrelated in-progress `soon` scalar-math test.
 
 Size: one compiler unit that spans sema method lookup, HIR lowering of the
 optional coercion, and codegen. It unblocks the stdlib allocator-ownership work

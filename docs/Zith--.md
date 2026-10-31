@@ -203,6 +203,31 @@ fn main(): i32 {
 }
 ```
 
+`?dyn Trait` (e `?dyn Interface`) representa a ausência com o mesmo fat pointer de
+`dyn Trait`, usando um data pointer nulo como `null`. Como a representação e o layout são
+idênticos aos de `dyn Trait`, `@sizeOf(?dyn Trait)` é igual a `@sizeOf(dyn Trait)`. Um valor
+concreto pode ser guardado diretamente num slot `?dyn Trait` (campo, binding, parâmetro,
+retorno ou atribuição) e o payload é erguido para o fat pointer antes do wrap. O dispatch de
+métodos sobre um recetor `?dyn Trait` só é permitido depois de uma prova de não-nulo, por
+exemplo com `if (c is null) { ... }` seguido do uso no ramo restante:
+
+```zith
+trait Counter {
+    fn get(self): i32
+}
+
+struct Cell { v: i32 }
+
+implement Cell as Counter {
+    fn get(self): i32 { self.v }
+}
+
+fn read(c: ?dyn Counter): i32 {
+    if (c is null) { return 0; }
+    return c.get();
+}
+```
+
 Enums e unions também são tipos nomeados genéricos completos. Podem declarar
 métodos inline no próprio corpo, participar em `implement Trait`, e os seus
 tipos concretos são monomorphizados como `Status<i32>` ou `Any<i32, f64>`:

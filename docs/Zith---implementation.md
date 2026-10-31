@@ -301,6 +301,17 @@ type". Este comportamento é intencional no Zith-- e a superfície pública de `
 métodos. Para ler fields, use um tipo concreto ou um bound genérico `T: Interface` (que continua
 a expor fields e methods no corpo).
 
+`?dyn Trait`/`?dyn Interface` usa uma representação niche: o slot guarda o próprio fat pointer
+de `dyn` e um data pointer nulo marca `null`, sem tag adicional (`codegen-type.cpp` devolve o
+fat pointer para o `TypeOptional` cujo `inner` é `Dyn`). `HirLowerModern::isNicheOptional`
+classifica tanto `?*T` como `?dyn T`, e todos os caminhos opcionais de HIR (condição `is null`,
+payload, loop `for-in` e narrowing) tratam ambos como niche em vez de extrair o field 0. Nos
+slots de escrita (`lowerCoerceToOptionalErased`) o payload concreto é erguido com
+`lowerCoerceToDyn`/`lowerCoerceToOpaque` antes do `HirMakeSome`, e o codegen devolve o valor
+inalterado quando o tipo do slot coincide com o do payload. Dispatch sobre um recetor `?dyn`
+exige prova de não-nulo em `inferMethodCall`, que caso contrário reporta o diagnóstico dedicado
+"narrow it after 'is null'" e tipa o callee como `error` para suprimir a cascata de field access.
+
 `enum` e `union` são tratados como `struct` para efeitos de generics e métodos:
 o parser aceita métodos `fn` inline no corpo, `lowerDeclarationTypes` regista os
 templates com `GenericParam`, e `instantiateTypeExpr` reifica `Enum<T>`/`Union<T>`
