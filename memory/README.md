@@ -27,8 +27,8 @@ contracts, decisions, and gotchas that are not discoverable from the source alon
 - [monolith-splits.md](monolith-splits.md): short pointer to the completed
   frontend/session split decisions. See `docs/plans/monolith-splits.md` for the
   execution contract and line counts.
-- [nra-hir-boundary.md](nra-hir-boundary.md): stable ownership/HIR boundary and
-  the pitfalls that keep the pre-HIR NRA contract intact.
+- [sra-hir-boundary.md](sra-hir-boundary.md): stable ownership/HIR boundary and
+  the pitfalls that keep the pre-HIR SRA contract intact.
 - [nra-design.md](nra-design.md): future `Zith` NRA design decisions and link to
   the full `docs/nra-spec.md` contract.
 - [platform-imports.md](platform-imports.md): implemented `Zith--` platform

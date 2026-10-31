@@ -66,7 +66,7 @@ left unchanged.
   transparent for strings; for integer keys with narrowing constants, keep the
   key type explicit (`const uint32_t key`) to avoid `-Wsign-conversion` in
   `operator[]`.
-- `NraFacts::narrowing_facts_` is copyable but not pointer-stable after
+- `SraFacts::narrowing_facts_` is copyable but not pointer-stable after
   insertion/rehash. Code that needs both old and new facts copies the values
   before writing through the map.
 - `ModuleCache::invalidateLocked` first collects eviction keys, then erases, so

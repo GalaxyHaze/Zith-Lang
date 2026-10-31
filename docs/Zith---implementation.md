@@ -109,12 +109,11 @@ O SRA cobre exatamente:
   DoubleBorrow);
 - use-after-move determinístico de `&local` e `@ptrOf(local)`, publicado como
   `HirConsumedState::Consumed` em `HirAttrs`;
-- factos residuais pré-lowering acumulados em `NraFacts` e consumidos como
+- factos residuais pré-lowering acumulados em `SraFacts` e consumidos como
   side tables, sem nós de ownership no HIR.
 
 `own`/`share`/`belong`/`mut` como prefixos de tipo ficam rejeitados ou
-legacy-only, e `:=` não existe em Zith--. Os nomes internos `NraFacts` e
-`nraStage` são históricos: referem-se ao SRA.
+legacy-only, e `:=` não existe em Zith--.
 
 ## Atributos
 
@@ -394,7 +393,7 @@ Referências a um global externo produzem `HirExternalGlobalAddr`, que mantém o
 o tipo do objeto. O lowering usa esse endereço para leituras e, em `extern var`, escritas.
 Declarações externas não referenciadas não criam acessos HIR.
 
-`HirLowerModern::lowerExpr` descarta `OwnershipCoerce` e baixa o inner. Em calls, um argumento anotado é baixado como endereço do place: `lowerLValueAddr` para bindings/campos/índices, ou uma alloca temporária quando o operand não tem lvalue. O parâmetro `*lend T`/`*view T` já é baixado como ponteiro. Os slots de parâmetro carregam `HirOwnership::Lend`/`HirOwnership::View` via `NraFacts`, e `NraFacts::localOfArgument`/`ownershipOfArgument` descascam a anotação para continuar acumulando factas por call argument (`NraArgEscape::Borrow` por default).
+`HirLowerModern::lowerExpr` descarta `OwnershipCoerce` e baixa o inner. Em calls, um argumento anotado é baixado como endereço do place: `lowerLValueAddr` para bindings/campos/índices, ou uma alloca temporária quando o operand não tem lvalue. O parâmetro `*lend T`/`*view T` já é baixado como ponteiro. Os slots de parâmetro carregam `HirOwnership::Lend`/`HirOwnership::View` via `SraFacts`, e `SraFacts::localOfArgument`/`ownershipOfArgument` descascam a anotação para continuar acumulando factas por call argument (`SraArgEscape::Borrow` por default).
 
 `HirLowerModern::lowerCall` materializa os defaults em falta como argumentos normais depois dos argumentos explícitos e antes de qualquer tail variadic/slice; o mesmo faz `HirDynCall` (com offset do receiver) e `HirStateTailCall`. Como a expressão default pertence ao snapshot do módulo declarador, `lowerVisibleDefault` troca temporariamente `current_module_`/`current_resolution_`/`current_types_` (e o contexto de instanciação genérica quando existe) para baixar a expressão no contexto certo.
 

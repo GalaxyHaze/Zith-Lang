@@ -17,12 +17,12 @@ Dependencies: none. Owns nominal parser/sema/lowering; must not touch sema-cast-
 ## agent2 - Debt: NRA slice
 
 Plan
-- Make one NRA/ownership slice deterministic and document the residual boundary
+- Make one SRA/ownership slice deterministic and document the residual boundary
 
 Task files
 - scripts/agent-scheduler/templates/task-18-debt-nra-partial.md
 
-Dependencies: none. Owns NRA facts, HirAttrs, narrowing helpers, and pipeline glue; must not touch formatter or trait resolver.
+Dependencies: none. Owns SRA facts, HirAttrs, narrowing helpers, and pipeline glue; must not touch formatter or trait resolver.
 
 ## agent3 - Debt: opaque canonical registry
 

@@ -2,27 +2,27 @@
 
 ## Goal
 
-Make a concrete, small NRA/ownership slice deterministic and documented, rather
+Make a concrete, small SRA/ownership slice deterministic and documented, rather
 than re-attempting the full alive/dead/lent proof machine.
 
 ## Context
 
-- Plan: debt, partial NRA and stable pre-HIR boundary.
+- Plan: debt, partial SRA and stable pre-HIR boundary.
 - Worktree: {REPO}/.awt/{AGENT} (branch awt/{AGENT}).
-- Follow `docs/implementation-debt.md`, section "NRA está parcial";
-  `docs/impl-status.md` under `NRA / Reference Analysis`; and
-  `memory/nra-hir-boundary.md` as the operational contract.
-- NRA currently accumulates residual local/call/narrowing facts before HIR and
+- Follow `docs/implementation-debt.md`, section "NRA completa";
+  `docs/impl-status.md` under `SRA / Reference Analysis`; and
+  `memory/sra-hir-boundary.md` as the operational contract.
+- SRA currently accumulates residual local/call/narrowing facts before HIR and
   lowers them into `HirAttrs` side tables only. It is not the full four-rule
   proof machine.
 
 ## Scope
 
-1. Pick and implement exactly one missing NRA/ownership slice that can be
+1. Pick and implement exactly one missing SRA/ownership slice that can be
    proven end-to-end for Zith--. Recommended candidate: model a missing
    use-after-move or double-borrow case with ownership diagnostics and residual
    facts.
-2. Keep the stable pipeline order `sema -> solve -> nra -> lower -> codegen`
+2. Keep the stable pipeline order `sema -> solve -> sra -> lower -> codegen`
    and do not introduce HIR ownership nodes.
 3. Add focused negative and positive tests proving accepted and rejected
    programs, and keep no-ownership programs producing empty residual attrs.
@@ -31,14 +31,14 @@ than re-attempting the full alive/dead/lent proof machine.
 
 Owned files for implementation:
 
-- NRA accumulator: `src/sema/nra-facts.cpp`, `src/sema/nra-facts.hpp`.
+- SRA accumulator: `src/sema/sra-facts.cpp`, `src/sema/sra-facts.hpp`.
 - HIR boundary side tables: `src/hir/hir-attrs.hpp`.
 - Sema ownership/narrowing helpers used by this slice:
   `src/sema/narrowing.cpp`, `src/sema/narrowing.hpp`, `src/sema/sema-assign.cpp`.
 - Tests: `tests/test-memory-qualifiers.cpp`; do not edit
   `tests/test-hir-lower-modern.cpp` or add new executables.
 - Docs: `docs/implementation-debt.md`, `docs/impl-status.md`,
-  `memory/nra-hir-boundary.md`.
+  `memory/sra-hir-boundary.md`.
   Edit only the section/line for this item in each shared file.
 
 Out of scope:
@@ -47,7 +47,7 @@ Out of scope:
   ownership diagnostic.
 - Moving ownership proof behind final lowering.
 - Editing pipeline orchestration in `src/session/compilation-session.cpp`; the
-  required `nraStage()` already exists and the project-config merge task owns
+  required `sraStage()` already exists and the project-config merge task owns
   that file in this wave.
 - Formatter behavior; do not edit `src/formatter/*`.
 - Trait/interface import conformance; do not edit
@@ -65,7 +65,7 @@ Out of scope:
 
 ```bash
 cmake --build {REPO}/build -j4
-ctest --test-dir {REPO}/build -R 'memory|hir-lower|nra' --output-on-failure
+ctest --test-dir {REPO}/build -R 'memory|hir-lower|sra' --output-on-failure
 cmake --build {REPO}/build --target fmt-check
 ctest --test-dir {REPO}/build --output-on-failure
 ```

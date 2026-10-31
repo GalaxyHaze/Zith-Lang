@@ -155,7 +155,7 @@ Source → Lex → Scan → Import → Resolve → Sema → Comptime/Solve → S
 stages. `src/session/frontend-context.*` prepares parser/frontend state, and
 `src/session/pipeline-plan.*` records the planned stages for a session.
 `GenericInstantiationPass` in `src/comptime/generic-instantiate.*` runs between
-`semaStage()` and `nraStage()`, monomorphizing generic functions, structs,
+`semaStage()` and `sraStage()`, monomorphizing generic functions, structs,
 aliases, methods, and `implement` blocks.
 
 When reading or modifying a compiler subsystem, start with the corresponding

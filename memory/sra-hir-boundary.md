@@ -1,6 +1,6 @@
-# HIR/NRA Implementation Playbook
+# HIR/SRA Implementation Playbook
 
-Operational guide for future ByteAsk agents working on the HIR and NRA boundary in Zith. This
+Operational guide for future ByteAsk agents working on the HIR and SRA boundary in Zith. This
 document describes the current source-tree contract: the pipeline order, where residual ownership
 facts are stored, the pitfalls discovered in this session, the debugging workflow, and the
 validation checklist that keeps the contract stable.
@@ -20,11 +20,11 @@ source -> lex -> scan -> resolve(import/symbols) -> sema -> comptime/solve -> SR
 The current `CompilationSession::runTo` execution order is:
 
 ```text
-sema -> solve -> nra -> lower -> codegen/cache
+sema -> solve -> sra -> lower -> codegen/cache
 ```
 
 `sema` builds the modern sema pipeline. `solve` currently creates the modern type table as a
-conservative stub. `nra` accumulates `NraFacts` before lowering. `lower` runs `HirLowerModern`,
+conservative stub. `sra` accumulates `SraFacts` before lowering. `lower` runs `HirLowerModern`,
 then runs the current HIR-based `comptime::Solver` as a compatibility pass after lowering. `codegen`
 and `cache` run only for stages that require them.
 
@@ -36,19 +36,19 @@ The `Stage` enum is explicit about the target order:
 
 ```cpp
 Source, Lexed, Scanned, Imported, Resolved, TypeChecked,
-Solved, NraResolved, HirLowered, CodegenReady, Cached
+Solved, SraResolved, HirLowered, CodegenReady, Cached
 ```
 
 ## Where Ownership Facts Live
 
-- `NraFacts` is the pre-lowering residual ownership accumulator defined in
-  `src/sema/nra-facts.hpp` and implemented in `src/sema/nra-facts.cpp`. It is created in
-  `CompilationSession::nraStage()` before HIR lowering.
+- `SraFacts` is the pre-lowering residual ownership accumulator defined in
+  `src/sema/sra-facts.hpp` and implemented in `src/sema/sra-facts.cpp`. It is created in
+  `CompilationSession::sraStage()` before HIR lowering.
 - `HirAttrs` is the parallel side-table owner defined in `src/hir/hir-attrs.hpp`. It attaches
   per-slot, per-call, and per-function facts to otherwise ownership-free HIR.
-- `HirLowerModern` receives the facts as `const NraFacts *` through its constructor in
+- `HirLowerModern` receives the facts as `const SraFacts *` through its constructor in
   `src/sema/hir-lower-modern.hpp`.
-- `CompilationSession` keeps the facts in `mNraFacts` and exposes them through `nraFacts()`;
+- `CompilationSession` keeps the facts in `mSraFacts` and exposes them through `sraFacts()`;
   do not replace that accessor without updating callers that inspect residual facts after HIR
   lowering.
 - HIR expressions and function records stay free of ownership fields. No `HirMove`, `HirBorrow`, or
@@ -56,7 +56,7 @@ Solved, NraResolved, HirLowered, CodegenReady, Cached
   attribute tables.
 
 The deterministic use-after-move slice currently implemented is `&local` and `@ptrOf(local)`:
-`NraFacts::walkExpr` marks the resolved local as `knownAlive = false` when it sees those forms,
+`SraFacts::walkExpr` marks the resolved local as `knownAlive = false` when it sees those forms,
 and `HirLowerModern::localSlot` publishes that as `HirConsumedState::Consumed`. Sema still owns the
 `E4001` diagnostic; lowering only carries the residual fact. Receiver-by-value moves, call-site
 move facts, and branch-sensitive alive/dead state are still outside this slice because the compact
@@ -67,7 +67,7 @@ move facts, and branch-sensitive alive/dead state are still outside this slice b
 - **Implicit return**: the implicit return value lives in the last `Expression` statement of the
   function body, not in `body.operands`. Treating the body node as `Return` or trusting empty
   `operands` misses forwarding facts and return equivalence.
-- **Use-after-move facts are sema-side first**: `NraFacts` must not invent new diagnostics or move
+- **Use-after-move facts are sema-side first**: `SraFacts` must not invent new diagnostics or move
   state. It echoes the logical moves already represented by `PerModuleSema::movedLocals_` into
   residual slot facts; otherwise the pass and sema can disagree about what a clean program contains.
 - **Field/Arrow ownership**: for `Field` and `Arrow`, resolve ownership in this order: direct local
@@ -77,7 +77,7 @@ move facts, and branch-sensitive alive/dead state are still outside this slice b
   escape facts. Use the zero-based argument slot `index - 1U` and validate against
   `fact.argEscapes.size()`.
 - **Sema lifetime**: keep `SemaPipeline` alive through lowering. Do not reset the semantic pipeline
-  before NRA/HIR consume it.
+  before SRA/HIR consume it.
 - **No ownership HIR nodes**: HIR carries only lazy residual facts. Programs without ownership must
   have empty `HirAttrs` tables.
 - **Build constraints**: the project compiles with `-Weverything -Werror` on Clang. Respect
@@ -103,7 +103,7 @@ cmake --build build -j
 ctest --test-dir build --output-on-failure
 ```
 
-Reproduce ownership diagnostics with `zithc check` because some NRA facts are
+Reproduce ownership diagnostics with `zithc check` because some SRA facts are
 diagnosed during sema even though the residual table is constructed before HIR.
 
 ## Validation Checklist
@@ -114,7 +114,7 @@ diagnosed during sema even though the residual table is constructed before HIR.
 - Verify HIR emission no longer contains ownership fields after lowering:
   `zithc build --emit hir` on a file with qualifiers.
 - Verify programs without ownership still produce empty `HirAttrs`.
-- Do not reset the semantic pipeline before NRA and HIR have consumed it.
+- Do not reset the semantic pipeline before SRA and HIR have consumed it.
 
 ## Docs That Must Stay Aligned
 

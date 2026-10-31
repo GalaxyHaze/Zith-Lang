@@ -34,7 +34,7 @@ them pending.
 ## Durable Architecture Facts
 
 `GenericInstantiationPass` in `src/comptime/generic-instantiate.*` runs in
-`semaStage()` before `nraStage()` and monomorphizes generic functions, structs,
+`semaStage()` before `sraStage()` and monomorphizes generic functions, structs,
 aliases, methods, and `implement` blocks via
 `src/session/compilation-session.cpp`. The pass owns `E3010` (wrong generic
 arity), `E3011` (uninferable generic parameter), and `E3012` (instantiation

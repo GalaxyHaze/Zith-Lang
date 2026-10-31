@@ -27,7 +27,7 @@ Adicionar ao compilador Zith-- o parsing e o semantic MVP de atributos `#[a, b]`
 - `/home/diogo/Zith/src/frontend/frontend.cpp`
 - `/home/diogo/Zith/src/sema/sema-modern.hpp`
 - `/home/diogo/Zith/src/sema/sema-control.cpp`
-- `/home/diogo/Zith/src/sema/nra-facts.cpp`
+- `/home/diogo/Zith/src/sema/sra-facts.cpp`
 - `/home/diogo/Zith/src/sema/hir-lower-modern.cpp`
 - `/home/diogo/Zith/src/hir/hir-module.hpp`
 - `/home/diogo/Zith/src/hir/hir-attrs.hpp`
@@ -65,7 +65,7 @@ Adicionar ao compilador Zith-- o parsing e o semantic MVP de atributos `#[a, b]`
 - `discardable` permite chamada não-void como `Expression` sem `_ = call();`.
 - `discardable` cobre `Call` e `DockCall`, incluindo methods/overloads e módulos importados.
 - `volatile` no MVP só marca o slot direto para LLVM.
-- `volatile` não acumula factos NRA e não participa em narrowing; o utilizador deve copiar o valor ou usar `raw`.
+- `volatile` não acumula factos SRA e não participa em narrowing; o utilizador deve copiar o valor ou usar `raw`.
 - `assume`, `ensure`, `maybe` e afins ficam para Zith completo, fora do Zith--.
 - Formatter e `reconstruct()` preservam texto original dos atributos e a ordem.
 - Cache/ZIRL faz version bump e `discardable` entra no public ABI hash.
@@ -491,13 +491,13 @@ cmake --build build -j4 --target zithc 2>&1 | tail -80
 
 **Success criteria:** `rg -n "kFormatVersion = 17" /home/diogo/Zith/src/zirl/zirl-header.hpp` e um smoke test de cache com `#[discardable]` passa duas vezes (build e cache hit).
 
-### Step 10 - Semântica volatile no NRA
+### Step 10 - Semântica volatile no SRA
 
-**Goal:** Bindings `volatile` não geram factos NRA nem narrowing residual.
+**Goal:** Bindings `volatile` não geram factos SRA nem narrowing residual.
 
 **Sub-steps:**
-1. Abrir `/home/diogo/Zith/src/sema/nra-facts.cpp`.
-2. Em `walkStatement`, depois de criar `NraLocalFact fact;`, adicionar:
+1. Abrir `/home/diogo/Zith/src/sema/sra-facts.cpp`.
+2. Em `walkStatement`, depois de criar `SraLocalFact fact;`, adicionar:
 ```cpp
 bool is_volatile = false;
 for (const auto &attr : statement.binding.attributes)
@@ -508,7 +508,7 @@ if (is_volatile)
 ```
    Este `return` deve acontecer depois de `walkExpr(statement.binding.initializer)` para não impedir a validação do inicializador, mas antes de inserir em `local_facts_`.
 3. Em `walkExpr`, nas ramificações de `Unary &`, `LayoutIntrinsic ptrOf`, `IsNull` e `walkConditionExpression`, ignorar locals volatile:
-   - Criar helper `bool localIsVolatile(frontend::LocalId id) const noexcept` em `nra-facts.hpp`.
+   - Criar helper `bool localIsVolatile(frontend::LocalId id) const noexcept` em `sra-facts.hpp`.
    - Implementar procurando em `current_module_->frontend->statements()` e `declarations_` por `binding.attributes` com `AttributeKind::Volatile`.
    - Nos pontos de narrowing, antes de escrever em `narrowing_facts_`, verificar `!localIsVolatile(local)`.
 4. Não mudar factos para funções.
@@ -523,7 +523,7 @@ cmake --build build -j4 --target zithc 2>&1 | tail -80
 **Failure checks:**
 - Se `current_module_` pode ser null em `localIsVolatile`, retornar false primeiro.
 
-**Success criteria:** Teste de NRA/pipeline confirma que não há `HirSlotAttrs` residual para um slot volatile.
+**Success criteria:** Teste de SRA/pipeline confirma que não há `HirSlotAttrs` residual para um slot volatile.
 
 ### Step 11 - `volatile` no codegen LLVM
 
@@ -605,7 +605,7 @@ cmake --build build -j4 --target test-formatter 2>&1 | tail -80
 
 ### Step 13 - Testes
 
-**Goal:** Testes cobrem parse, sema, NRA/codegen, cache/ZIRL e formatter.
+**Goal:** Testes cobrem parse, sema, SRA/codegen, cache/ZIRL e formatter.
 
 **Sub-steps:**
 1. Em `/home/diogo/Zith/tests/test-frontend.cpp`, adicionar `test_attribute_lex_and_parse()`:
@@ -664,7 +664,7 @@ cmake --build build -j4 --target test-frontend test-frontend-modern-pipeline tes
    - `ResolvedName.discardable`.
    - `HirFnAttrs.discardable`.
    - `volatile` marca `HirSlotAttrs.volatileSlot`, não viaja cross-module.
-   - NRA ignora narrowing para slots volatile.
+   - SRA ignora narrowing para slots volatile.
    - ZIRL version 17.
 5. Não editar as linhas relacionadas com `let erro: Foo;` que já existem em docs.
 

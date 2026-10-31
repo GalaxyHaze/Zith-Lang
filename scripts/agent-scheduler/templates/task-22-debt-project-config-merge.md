@@ -42,8 +42,8 @@ Out of scope:
 - Changing TOML parsing or CLI flag definitions.
 - Changing merge precedence of unrelated options such as `targetTriple`,
   `sysroot`, gating flags, or output paths.
-- Cache/opaque/NRA work; do not edit `src/cache/*`,
-  `src/session/persistent-cache.cpp`, `src/sema/nra-facts.*`,
+- Cache/opaque/SRA work; do not edit `src/cache/*`,
+  `src/session/persistent-cache.cpp`, `src/sema/sra-facts.*`,
   `src/hir/hir-attrs.hpp`.
 
 ## Acceptance Criteria
