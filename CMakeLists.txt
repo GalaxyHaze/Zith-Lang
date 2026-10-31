@@ -569,7 +569,8 @@ if(BUILD_TESTING AND NOT ZITH_IS_WASM)
             add_zith_test(test-lang-corpus tests/test-lang-corpus.cpp)
             target_compile_definitions(test-lang-corpus PRIVATE
                 ZITHC_BINARY="$<TARGET_FILE:zithc>"
-                ZITH_LANG_CORPUS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/tests/lang")
+                ZITH_LANG_CORPUS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/tests/lang"
+                ZITH_LANG_CORPUS_WORKDIR="${CMAKE_CURRENT_BINARY_DIR}/lang-corpus-run")
             add_dependencies(test-lang-corpus zithc)
         endif()
     endif()
