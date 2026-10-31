@@ -51,6 +51,26 @@ fn main(): i32 { var b: lb.Box<u64> {}; return 0; }
   rather than `?V`), so `get<K, V>: ?V` returns the optional aggregate
   (`src/sema/hir-lower-modern.cpp`).
 
+## Gotcha: stale `genericParams_` shadowed `activeTemplateArgs_`
+
+Reification runs `instantiateTemplateFromArgs` on the declaring module's sema,
+but `currentDeclId_` can still point at the template declaration. In
+`PerModuleSema::lowerBareTypeExpr` (Name case, `src/sema/sema-type.cpp`) the
+`genericParams_[currentDeclId_]` lookup therefore held a stale
+`T -> GenericParam` binding. When that lookup ran before `activeTemplateArgs_`,
+it shadowed the concrete argument and left a reified struct field as `T`.
+
+The visible symptom was `E3010 wrong generic argument count` at a call site
+that returns the reified struct by value, because `typeContainsGeneric()`
+reported the concrete struct as still generic and generic argument inference
+ran on a type with no arguments. The trigger was an imported module whose file
+stem equals the struct name (for example `Pair.zith` defining `Pair<T>`), where
+the declaring module's sema is reused for the caller's instantiation.
+
+`activeTemplateArgs_` is now checked first and falls through to
+`genericParams_` when empty. Regression:
+`test-generics-mono.cpp::test_imported_generic_struct_returned_by_value`.
+
 ## Stdlib impact
 
 - `std/collections/hash_map.zith` (`HashMap<K, V>`, `Entry<K, V>`) is a
