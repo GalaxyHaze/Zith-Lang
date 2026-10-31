@@ -452,6 +452,29 @@ _Avoid_: module group, feature area, std package
 The trait/API surface a library module promises to consumers, for example formatting, parsing, hashing, or allocation. A `std` library contract is stable; a `soon` contract is provisional.
 _Avoid_: interface, capability set, behavior contract
 
+**Random generator**:
+A stateful value that produces a pseudorandom sequence, advancing that
+sequence as it produces values.
+_Avoid_: random device, global random source
+
+**Random algorithm**:
+A named rule a random generator uses to produce pseudorandom values. It is
+distinct from the source used to initialize the generator.
+_Avoid_: device, seed source
+
+**Seed**:
+An initial value used to determine a random generator's starting sequence. An
+explicit seed supports repeatable output.
+_Avoid_: entropy source, random state
+
+**Random stream**:
+The ordered pseudorandom sequence associated with a generator as it advances.
+_Avoid_: global sequence
+
+**Uniform distribution**:
+A sampling contract that gives every value in a finite discrete range equal probability.
+_Avoid_: random range
+
 **Primitive trait**:
 A stdlib contract implemented for primitives, `?T`, or `[]T`, such as `Hashable`, `ParseInput`, or `Formatable`, so built-in values participate in the same traits as structs.
 _Avoid_: primitive interface, builtin capability, intrinsic trait
