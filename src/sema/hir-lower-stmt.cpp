@@ -102,8 +102,25 @@ bool HirLowerModern::lowerStatement(frontend::StmtId id, hir::HirExprId &last_va
             // wrap according to the sema source type instead of forcing a
             // `?T` value into a `??T` slot.
             if (init != hir::kInvalidHirExpr && types_.kindOf(type) == types::TypeKind::Optional) {
-                const auto binding_sema_type = semaTypeOfLocal(statement.binding.id);
-                const auto init_sema_type    = semaTypeOfExpr(statement.binding.initializer);
+                auto binding_sema_type    = semaTypeOfLocal(statement.binding.id);
+                const auto init_sema_type = semaTypeOfExpr(statement.binding.initializer);
+                const bool payload_optional =
+                    binding_sema_type != sema::modern::kInvalidTypeId &&
+                    init_sema_type != sema::modern::kInvalidTypeId &&
+                    sema_.typeTable().kindOf(sema_.typeTable().stripQualifiers(
+                        binding_sema_type)) == sema::modern::TypeKind::Optional &&
+                    sema_.typeTable().kindOf(sema_.typeTable().stripQualifiers(init_sema_type)) !=
+                        sema::modern::TypeKind::Optional;
+                if (payload_optional) {
+                    const auto erased = lowerCoerceToOptionalErased(
+                        type, binding_sema_type, statement.binding.initializer, init);
+                    if (erased != hir::kInvalidHirExpr) {
+                        init = erased;
+                        // The payload was erased and wrapped in `Some` already, so
+                        // the depth wrap below must not add another layer.
+                        binding_sema_type = sema::modern::kInvalidTypeId;
+                    }
+                }
                 if (binding_sema_type != sema::modern::kInvalidTypeId &&
                     init_sema_type != sema::modern::kInvalidTypeId)
                     init =
@@ -152,8 +169,19 @@ bool HirLowerModern::lowerStatement(frontend::StmtId id, hir::HirExprId &last_va
             if (value != hir::kInvalidHirExpr &&
                 types_.kindOf(current_fn_->return_type) == types::TypeKind::Optional) {
                 const auto val_sema_type = semaTypeOfExpr(statement.expression);
+                // A `T -> ?dyn`/`?opaque` return erases the payload before the
+                // `Some` wrap. When it applies, the depth wrap below is skipped
+                // so the erased payload is not wrapped a second time.
+                hir::HirExprId erased = hir::kInvalidHirExpr;
                 if (current_fn_return_sema_type_ != sema::modern::kInvalidTypeId &&
                     val_sema_type != sema::modern::kInvalidTypeId)
+                    erased = lowerCoerceToOptionalErased(current_fn_->return_type,
+                                                         current_fn_return_sema_type_,
+                                                         statement.expression, value);
+                if (erased != hir::kInvalidHirExpr)
+                    value = erased;
+                else if (current_fn_return_sema_type_ != sema::modern::kInvalidTypeId &&
+                         val_sema_type != sema::modern::kInvalidTypeId)
                     value = lowerCoerceToOptionalDepth(current_fn_->return_type,
                                                        current_fn_return_sema_type_, val_sema_type,
                                                        value);

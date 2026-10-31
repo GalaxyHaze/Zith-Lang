@@ -99,9 +99,8 @@ hir::HirExprId HirLowerModern::lowerField(const frontend::Expression &expr,
         if (resolved->foreignFunction != nullptr) {
             hir::HirVar var;
             const auto &foreign = *resolved->foreignFunction;
-            var.name             = interner_.intern(foreign.adapterThunkName.empty()
-                                                        ? foreign.linkageName
-                                                        : foreign.adapterThunkName);
+            var.name            = interner_.intern(
+                foreign.adapterThunkName.empty() ? foreign.linkageName : foreign.adapterThunkName);
             var.version = 0;
             return addExpr(std::move(var));
         }
@@ -245,6 +244,11 @@ hir::HirExprId HirLowerModern::lowerStructLiteral(const frontend::Expression &ex
         sema_.typeTable().kindOf(sema_struct) == sema::modern::TypeKind::Struct
             ? sema_.typeTable().struct_type(sema_struct)
             : nullptr;
+    const auto semaFieldType = [&](size_t slot_index) -> sema::modern::TypeId {
+        if (sema_struct_def == nullptr || slot_index >= sema_struct_def->fields.size())
+            return sema::modern::kInvalidTypeId;
+        return sema_struct_def->fields[slot_index];
+    };
     const auto coerceFieldValue = [&](size_t slot_index, frontend::ExprId operand,
                                       hir::HirExprId value) -> hir::HirExprId {
         if (sema_struct_def == nullptr || slot_index >= sema_struct_def->fields.size())
@@ -276,7 +280,10 @@ hir::HirExprId HirLowerModern::lowerStructLiteral(const frontend::Expression &ex
             const auto value_type = typeOfExpr(expr.operands[i]);
             if (types_.kindOf(field_type) == types::TypeKind::Optional &&
                 types_.kindOf(value_type) != types::TypeKind::Optional) {
-                value = lowerCoerceToOptional(field_type, value);
+                const auto erased = lowerCoerceToOptionalErased(
+                    field_type, semaFieldType(slot_index), expr.operands[i], value);
+                value = erased != hir::kInvalidHirExpr ? erased
+                                                       : lowerCoerceToOptional(field_type, value);
             }
             value = lowerCoerceToTarget(field_type, expr.operands[i], value);
             value = coerceFieldValue(slot_index, expr.operands[i], value);
@@ -308,19 +315,18 @@ hir::HirExprId HirLowerModern::lowerStructLiteral(const frontend::Expression &ex
             // context. The target coercion still runs against the caller's
             // types because the value is materialized for the caller's slot.
             const auto *default_module = declaring_module;
-            const bool foreign_default =
-                default_module != nullptr && current_module_ != nullptr &&
-                default_module->key != current_module_->key;
-            const bool optional_field = types_.kindOf(field_type) == types::TypeKind::Optional;
+            const bool foreign_default = default_module != nullptr && current_module_ != nullptr &&
+                                         default_module->key != current_module_->key;
+            const bool optional_field  = types_.kindOf(field_type) == types::TypeKind::Optional;
             if (foreign_default) {
-                const session::ModuleArtifact *saved_module     = current_module_;
-                const session::ModuleResolution *saved_res     = current_resolution_;
-                const TypedMap *saved_types                    = current_types_;
-                const comptime::GenericInstantiationPass *saved_inst = current_instantiation_;
+                const session::ModuleArtifact *saved_module           = current_module_;
+                const session::ModuleResolution *saved_res            = current_resolution_;
+                const TypedMap *saved_types                           = current_types_;
+                const comptime::GenericInstantiationPass *saved_inst  = current_instantiation_;
                 const comptime::InstantiationInstance *saved_inst_ptr = current_instance_;
-                current_module_       = default_module;
-                current_resolution_   = snapshot_.findResolution(default_module->key);
-                current_types_        = sema_.findTypedMap(default_module->key);
+                current_module_                                       = default_module;
+                current_resolution_ = snapshot_.findResolution(default_module->key);
+                current_types_      = sema_.findTypedMap(default_module->key);
                 types_.setCurrentModule(default_module->key);
                 current_instantiation_ = nullptr;
                 current_instance_      = nullptr;
@@ -328,28 +334,42 @@ hir::HirExprId HirLowerModern::lowerStructLiteral(const frontend::Expression &ex
                 const bool default_optional =
                     default_value != hir::kInvalidHirExpr &&
                     types_.kindOf(typeOfExpr(default_id)) == types::TypeKind::Optional;
-                current_module_       = saved_module;
-                current_resolution_   = saved_res;
-                current_types_        = saved_types;
+                current_module_     = saved_module;
+                current_resolution_ = saved_res;
+                current_types_      = saved_types;
                 types_.setCurrentModule(saved_module != nullptr ? saved_module->key
                                                                 : std::string_view{});
                 current_instantiation_ = saved_inst;
                 current_instance_      = saved_inst_ptr;
                 if (default_value == hir::kInvalidHirExpr)
                     continue;
-                auto coerced = optional_field && !default_optional
-                                   ? lowerCoerceToOptional(field_type, default_value)
-                                   : lowerCoerceToTarget(field_type, default_id, default_value);
+                auto coerced = default_value;
+                if (optional_field && !default_optional) {
+                    const auto erased = lowerCoerceToOptionalErased(
+                        field_type, semaFieldType(slot_index), default_id, default_value);
+                    coerced = erased != hir::kInvalidHirExpr
+                                  ? erased
+                                  : lowerCoerceToOptional(field_type, default_value);
+                } else {
+                    coerced = lowerCoerceToTarget(field_type, default_id, default_value);
+                }
                 ordered[slot_index] = coerceFieldValue(slot_index, default_id, coerced);
                 continue;
             }
             const auto default_value = lowerExpr(default_id);
             if (default_value == hir::kInvalidHirExpr)
                 continue;
-            auto coerced = optional_field &&
-                                   types_.kindOf(typeOfExpr(default_id)) != types::TypeKind::Optional
-                               ? lowerCoerceToOptional(field_type, default_value)
-                               : lowerCoerceToTarget(field_type, default_id, default_value);
+            auto coerced = default_value;
+            if (optional_field &&
+                types_.kindOf(typeOfExpr(default_id)) != types::TypeKind::Optional) {
+                const auto erased = lowerCoerceToOptionalErased(
+                    field_type, semaFieldType(slot_index), default_id, default_value);
+                coerced = erased != hir::kInvalidHirExpr
+                              ? erased
+                              : lowerCoerceToOptional(field_type, default_value);
+            } else {
+                coerced = lowerCoerceToTarget(field_type, default_id, default_value);
+            }
             ordered[slot_index] = coerceFieldValue(slot_index, default_id, coerced);
         }
     }
@@ -389,10 +409,9 @@ hir::HirExprId HirLowerModern::lowerArrayLiteral(const frontend::Expression &exp
     return addExpr(std::move(lit));
 }
 
-frontend::ExprId HirLowerModern::lowerFieldDefault(std::string_view struct_name,
-                                                   size_t field_index,
-                                                   const session::ModuleArtifact *declaring_module)
-    const noexcept {
+frontend::ExprId
+HirLowerModern::lowerFieldDefault(std::string_view struct_name, size_t field_index,
+                                  const session::ModuleArtifact *declaring_module) const noexcept {
     // `struct_name` may be qualified (`hm.HashMap`) or reified
     // (`HashMap<i64,i64>`); the declaration carries the bare name.
     std::string_view name = struct_name;

@@ -63,12 +63,12 @@ hir::HirExprId HirLowerModern::lowerDefaultWithTarget(
     types_.setCurrentModule(module.key);
     current_instantiation_ = instance != nullptr ? sema_.instantiations() : nullptr;
     current_instance_      = instance;
-    const auto value       = current_types_ != nullptr
-                                 ? lowerCoerceToOpaque(target_sema, default_id, lowerExpr(default_id))
-                                 : hir::kInvalidHirExpr;
-    current_module_        = saved_module;
-    current_resolution_    = saved_resolution;
-    current_types_         = saved_types;
+    const auto value    = current_types_ != nullptr
+                              ? lowerCoerceToOpaque(target_sema, default_id, lowerExpr(default_id))
+                              : hir::kInvalidHirExpr;
+    current_module_     = saved_module;
+    current_resolution_ = saved_resolution;
+    current_types_      = saved_types;
     types_.setCurrentModule(saved_module != nullptr ? saved_module->key : std::string_view{});
     current_instantiation_ = saved_inst;
     current_instance_      = saved_instance;
@@ -254,9 +254,8 @@ hir::HirExprId HirLowerModern::lowerName(const frontend::Expression &expr) {
         if (resolved->foreignFunction != nullptr) {
             hir::HirVar var;
             const auto &foreign = *resolved->foreignFunction;
-            var.name             = interner_.intern(foreign.adapterThunkName.empty()
-                                                        ? foreign.linkageName
-                                                        : foreign.adapterThunkName);
+            var.name            = interner_.intern(
+                foreign.adapterThunkName.empty() ? foreign.linkageName : foreign.adapterThunkName);
             var.version = 0;
             return addExpr(std::move(var));
         }
@@ -293,9 +292,8 @@ hir::HirExprId HirLowerModern::lowerName(const frontend::Expression &expr) {
     if (const auto *resolved = findResolvedExpr(expr.id);
         resolved != nullptr && resolved->foreignFunction != nullptr) {
         const auto &foreign = *resolved->foreignFunction;
-        var.name            = interner_.intern(foreign.adapterThunkName.empty()
-                                                   ? foreign.linkageName
-                                                   : foreign.adapterThunkName);
+        var.name = interner_.intern(foreign.adapterThunkName.empty() ? foreign.linkageName
+                                                                     : foreign.adapterThunkName);
     }
     return addExpr(std::move(var));
 }
@@ -462,17 +460,16 @@ hir::HirExprId HirLowerModern::lowerPipe(const frontend::Expression &expr,
     if (source == hir::kInvalidHirExpr)
         return hir::kInvalidHirExpr;
 
-    const auto source_type   = lowerType(semaTypeOfExpr(expr.operands[0]));
-    const auto slot          = next_slot_++;
-    const auto saved_slot    = pipe_current_slot_;
-    pipe_current_slot_       = slot;
+    const auto source_type = lowerType(semaTypeOfExpr(expr.operands[0]));
+    const auto slot        = next_slot_++;
+    const auto saved_slot  = pipe_current_slot_;
+    pipe_current_slot_     = slot;
     current_fn_->blocks[current_block_].insts.push(emitSlotAlloca(slot, source_type));
     current_fn_->blocks[current_block_].insts.push(emitSlotStore(slot, source));
-    const auto stage = lowerExpr(expr.operands[1]);
-    pipe_current_slot_ = saved_slot;
+    const auto stage     = lowerExpr(expr.operands[1]);
+    pipe_current_slot_   = saved_slot;
     auto effective_stage = stage;
-    if (effective_stage == hir::kInvalidHirExpr &&
-        expr.kind == frontend::ExprKind::PipeDo &&
+    if (effective_stage == hir::kInvalidHirExpr && expr.kind == frontend::ExprKind::PipeDo &&
         expr.operands[1].value <= current_module_->frontend->expressions().size()) {
         const auto &stage_expr =
             current_module_->frontend->expressions()[expr.operands[1].value - 1U];
@@ -488,13 +485,13 @@ hir::HirExprId HirLowerModern::lowerPipe(const frontend::Expression &expr,
         return hir::kInvalidHirExpr;
 
     if (expr.kind == frontend::ExprKind::Pipe) {
-    hir::HirPipe pipe;
-    pipe.source_slot = slot;
-    pipe.source_type = source_type;
-    pipe.stage       = effective_stage;
-    pipe.type        = type;
-    pipe.is_effect   = false;
-    return addExpr(std::move(pipe));
+        hir::HirPipe pipe;
+        pipe.source_slot = slot;
+        pipe.source_type = source_type;
+        pipe.stage       = effective_stage;
+        pipe.type        = type;
+        pipe.is_effect   = false;
+        return addExpr(std::move(pipe));
     }
 
     // `do` keeps the pipeline result at the source slot. The stage is part of
@@ -607,9 +604,9 @@ hir::HirExprId HirLowerModern::lowerOptionalProp(const frontend::Expression &exp
     const auto result_slot = next_slot_++;
     current_fn_->blocks[current_block_].insts.push(emitSlotAlloca(result_slot, type));
 
-    const auto is_some = addExpr(hir::HirField{addExpr(hir::HirSlotAddr{slot, operand_type}), 1U,
-                                               types::kBoolType, operand_type,
-                                               hir::HirSafetyMode::Intrinsic});
+    const auto is_some =
+        addExpr(hir::HirField{addExpr(hir::HirSlotAddr{slot, operand_type}), 1U, types::kBoolType,
+                              operand_type, hir::HirSafetyMode::Intrinsic});
 
     const auto some_block = newBlock();
     const auto none_block = newBlock();
@@ -634,9 +631,8 @@ hir::HirExprId HirLowerModern::lowerOptionalProp(const frontend::Expression &exp
     // Some: unwrap the payload into the result slot and carry on.
     setCurrentBlock(some_block);
     current_fn_->blocks[some_block].insts = memory::DynArray<hir::HirExprId>(arena_);
-    const auto payload                    = addExpr(
-        hir::HirField{addExpr(hir::HirSlotAddr{slot, operand_type}), 0U, type, operand_type,
-                      hir::HirSafetyMode::Guarded});
+    const auto payload = addExpr(hir::HirField{addExpr(hir::HirSlotAddr{slot, operand_type}), 0U,
+                                               type, operand_type, hir::HirSafetyMode::Guarded});
     current_fn_->blocks[some_block].insts.push(emitSlotStore(result_slot, payload));
     return emitSlotLoad(result_slot, type);
 }
@@ -674,8 +670,7 @@ hir::HirExprId HirLowerModern::lowerOptionalCondition(frontend::ExprId id) {
     current_fn_->blocks[current_block_].insts.push(emitSlotAlloca(slot, operand_type));
     current_fn_->blocks[current_block_].insts.push(emitSlotStore(slot, operand));
     return addExpr(hir::HirField{addExpr(hir::HirSlotAddr{slot, operand_type}), 1U,
-                                 types::kBoolType, operand_type,
-                                 hir::HirSafetyMode::Intrinsic});
+                                 types::kBoolType, operand_type, hir::HirSafetyMode::Intrinsic});
 }
 
 /// Lowers extraction of an optional payload. When `checked` is true the None
@@ -810,8 +805,7 @@ hir::HirExprId HirLowerModern::lowerCast(const frontend::Expression &expr,
     if (types_.kindOf(from) == types::TypeKind::Struct && from != type) {
         const auto wrapper_count = types_.fieldCount(from);
         if (wrapper_count == 1U)
-            return addExpr(hir::HirField{value, 0U, type, from,
-                                         hir::HirSafetyMode::Intrinsic});
+            return addExpr(hir::HirField{value, 0U, type, from, hir::HirSafetyMode::Intrinsic});
     }
 
     // `opaque as T` lowers to a checked optional extraction. The HIR cast keeps
@@ -923,8 +917,7 @@ hir::HirExprId HirLowerModern::lowerCast(const frontend::Expression &expr,
             cast.from         = from;
             cast.to           = type;
             cast.member_index = taggedMemberIndex(from, type);
-            cast.safety = expr.is_raw ? hir::HirSafetyMode::Raw
-                                      : hir::HirSafetyMode::RequiredCheck;
+            cast.safety = expr.is_raw ? hir::HirSafetyMode::Raw : hir::HirSafetyMode::RequiredCheck;
             return addExpr(std::move(cast));
         }
     }
@@ -1081,7 +1074,7 @@ hir::HirExprId HirLowerModern::lowerLayoutIntrinsic(const frontend::Expression &
         if (sema_.isBorrowParameter(current_module_->key, expr.operands[0]) &&
             types_.kindOf(intrinsic.operand_type) == types::TypeKind::Slice)
             intrinsic.operand_type = types_.internPtr(intrinsic.operand_type);
-        intrinsic.type         = typeOfExpr(expr.id);
+        intrinsic.type = typeOfExpr(expr.id);
         if (intrinsic.operand == hir::kInvalidHirExpr || intrinsic.type == types::kErrorType ||
             intrinsic.type == types::kInvalidType)
             return hir::kInvalidHirExpr;
@@ -1568,7 +1561,7 @@ hir::HirExprId HirLowerModern::lowerCoerceToDyn(sema::modern::TypeId target,
             if (info.fn == nullptr)
                 continue;
             hir::HirFunctionId slot_sym = hir::kInvalidHirFunction;
-            const auto key          = internFunctionKey(interner_, info.fn_module, info.fn->id);
+            const auto key              = internFunctionKey(interner_, info.fn_module, info.fn->id);
             if (auto *instantiations = sema_.instantiations(); instantiations != nullptr) {
                 size_t instance_index = ~size_t{0};
                 for (size_t index = 0; index < instantiations->instanceCount(); ++index) {
@@ -1667,7 +1660,7 @@ hir::HirExprId HirLowerModern::lowerCoerceToDyn(sema::modern::TypeId target,
         if (expression) {
             const auto address = lowerLValueAddr(expression);
             if (address != hir::kInvalidHirExpr) {
-                make.value         = address;
+                make.value          = address;
                 make.value_is_place = true;
             }
         }
@@ -1770,6 +1763,46 @@ hir::HirExprId HirLowerModern::lowerCoerceToOptionalDepth(types::TypeId target,
             target_sema = target_opt->inner;
     }
     return current;
+}
+
+hir::HirExprId HirLowerModern::lowerCoerceToOptionalErased(types::TypeId target_opt_hir,
+                                                           sema::modern::TypeId target_opt_sema,
+                                                           frontend::ExprId expression,
+                                                           hir::HirExprId value) {
+    if (value == hir::kInvalidHirExpr)
+        return value;
+    if (target_opt_sema == sema::modern::kInvalidTypeId)
+        return hir::kInvalidHirExpr;
+    // Only a bare payload needs erasure. When the source is already optional
+    // the caller's depth wrap owns the coercion, and erasing here would add a
+    // second `Some` layer around an already-optional value.
+    if (expression) {
+        const sema::modern::TypeId source_sema =
+            sema_.typeTable().stripQualifiers(semaTypeOfExpr(expression));
+        if (source_sema != sema::modern::kInvalidTypeId &&
+            sema_.typeTable().kindOf(source_sema) == sema::modern::TypeKind::Optional)
+            return hir::kInvalidHirExpr;
+    }
+    const auto *optional =
+        sema_.typeTable().optional(sema_.typeTable().stripQualifiers(target_opt_sema));
+    if (optional == nullptr)
+        return hir::kInvalidHirExpr;
+    const sema::modern::TypeId inner_sema = sema_.typeTable().stripQualifiers(optional->inner);
+    const TypeKind inner_kind             = sema_.typeTable().kindOf(inner_sema);
+    if (inner_kind == TypeKind::Dyn) {
+        value = lowerCoerceToDyn(inner_sema, expression, value, inner_sema);
+    } else if (inner_kind == TypeKind::Opaque) {
+        value = lowerCoerceToOpaque(inner_sema, expression, value);
+    } else {
+        // The payload needs no erasure; let the caller use the plain wrap.
+        return hir::kInvalidHirExpr;
+    }
+    if (value == hir::kInvalidHirExpr)
+        return hir::kInvalidHirExpr;
+    hir::HirMakeSome some;
+    some.type  = target_opt_hir;
+    some.value = value;
+    return addExpr(std::move(some));
 }
 
 } // namespace modern

@@ -130,11 +130,10 @@ hir::HirExprId HirLowerModern::lowerCall(const frontend::Expression &expr) {
                 // instance substitutes to a concrete owner. A trait
                 // requirement on such a receiver must lower to the concrete
                 // `implement Owner as Trait` method for the instantiated `T`.
-                const sema::modern::TypeId base_sema = semaTypeOfExpr(callee_expr.operands[0]);
-                const sema::modern::TypeKind base_kind =
-                    base_sema != sema::modern::kInvalidTypeId
-                        ? sema_.typeTable().kindOf(base_sema)
-                        : sema::modern::TypeKind::Invalid;
+                const sema::modern::TypeId base_sema   = semaTypeOfExpr(callee_expr.operands[0]);
+                const sema::modern::TypeKind base_kind = base_sema != sema::modern::kInvalidTypeId
+                                                             ? sema_.typeTable().kindOf(base_sema)
+                                                             : sema::modern::TypeKind::Invalid;
                 if (base_kind == sema::modern::TypeKind::Struct ||
                     base_kind == sema::modern::TypeKind::Enum ||
                     base_kind == sema::modern::TypeKind::Union ||
@@ -143,10 +142,9 @@ hir::HirExprId HirLowerModern::lowerCall(const frontend::Expression &expr) {
                     base_kind == sema::modern::TypeKind::Bool ||
                     base_kind == sema::modern::TypeKind::Char ||
                     base_kind == sema::modern::TypeKind::String) {
-                    concrete_owner =
-                        sema_.typeTable().typeToString(sema_.typeTable().stripQualifiers(base_sema));
-                    if (const size_t angle = concrete_owner.find('<');
-                        angle != std::string::npos)
+                    concrete_owner = sema_.typeTable().typeToString(
+                        sema_.typeTable().stripQualifiers(base_sema));
+                    if (const size_t angle = concrete_owner.find('<'); angle != std::string::npos)
                         concrete_owner.resize(angle);
                 }
             }
@@ -174,7 +172,7 @@ hir::HirExprId HirLowerModern::lowerCall(const frontend::Expression &expr) {
             // `implement Owner as Trait` method for the instantiated `T`.
             const std::string owner_name = concrete_owner;
             const auto findConcrete      = [&](const session::ModuleArtifact &module,
-                                          const frontend::Declaration **out) {
+                                               const frontend::Declaration **out) {
                 for (const auto &candidate : module.frontend->declarations()) {
                     if (candidate.kind != frontend::DeclKind::Function ||
                         candidate.ownerName != owner_name || candidate.name != callee_expr.text ||
@@ -184,10 +182,10 @@ hir::HirExprId HirLowerModern::lowerCall(const frontend::Expression &expr) {
                         continue;
                     const bool candidate_has_receiver = !candidate.parameters.empty() &&
                                                         candidate.parameters.front().name == "self";
-                    const size_t declared_fixed = candidate.parameters.size();
-                    const size_t min_fixed      = candidate.parameters.empty() ? 0U : [&]() {
+                    const size_t declared_fixed       = candidate.parameters.size();
+                    const size_t min_fixed            = candidate.parameters.empty() ? 0U : [&]() {
                         size_t count = candidate_has_receiver ? candidate.parameters.size() - 1U
-                                                                        : candidate.parameters.size();
+                                                              : candidate.parameters.size();
                         for (size_t index = candidate.parameters.size(); index > 0U; --index) {
                             const auto &parameter = candidate.parameters[index - 1U];
                             if (!parameter.defaultValue)
@@ -198,7 +196,7 @@ hir::HirExprId HirLowerModern::lowerCall(const frontend::Expression &expr) {
                         }
                         return count;
                     }();
-                    const size_t provided_args  = expr.operands.size() - 1U;
+                    const size_t provided_args        = expr.operands.size() - 1U;
                     if (provided_args < min_fixed || provided_args > declared_fixed)
                         continue;
                     *out = &candidate;
@@ -394,9 +392,15 @@ hir::HirExprId HirLowerModern::lowerCall(const frontend::Expression &expr) {
                         lowerCoerceToOpaque(fn->params[call_index], expr.operands[index], argument);
                     if (types_.kindOf(lowerType(fn->params[call_index])) ==
                             types::TypeKind::Optional &&
-                        types_.kindOf(lowerType(param_sema)) != types::TypeKind::Optional)
-                        argument =
-                            lowerCoerceToOptional(lowerType(fn->params[call_index]), argument);
+                        types_.kindOf(lowerType(param_sema)) != types::TypeKind::Optional) {
+                        const auto erased = lowerCoerceToOptionalErased(
+                            lowerType(fn->params[call_index]), fn->params[call_index],
+                            expr.operands[index], argument);
+                        argument = erased != hir::kInvalidHirExpr
+                                       ? erased
+                                       : lowerCoerceToOptional(lowerType(fn->params[call_index]),
+                                                               argument);
+                    }
                     dyncall.args.back() = argument;
                 }
             }
@@ -451,7 +455,7 @@ hir::HirExprId HirLowerModern::lowerCall(const frontend::Expression &expr) {
                                      method_decl != nullptr && !method_decl->ownerName.empty() &&
                                      !method_decl->parameters.empty() &&
                                      method_decl->parameters.front().name == "self";
-    const bool is_method_call = is_receiver_method;
+    const bool is_method_call      = is_receiver_method;
 
     hir::HirExprId callee = hir::kInvalidHirExpr;
     if (!is_method_call) {
@@ -524,10 +528,10 @@ hir::HirExprId HirLowerModern::lowerCall(const frontend::Expression &expr) {
             current_fn_->blocks[current_block_].insts.push(emitSlotStore(slot, base_value));
             const auto payload_type =
                 lowerType(sema_.typeTable().stripQualifiers(base_optional->inner));
-            const auto payload_field = addExpr(hir::HirField{
-                addExpr(hir::HirSlotAddr{slot, base_hir_ty}), 0U, payload_type, base_hir_ty,
-                hir::HirSafetyMode::RequiredCheck});
-            self_arg                 = addExpr(
+            const auto payload_field = addExpr(
+                hir::HirField{addExpr(hir::HirSlotAddr{slot, base_hir_ty}), 0U, payload_type,
+                              base_hir_ty, hir::HirSafetyMode::RequiredCheck});
+            self_arg = addExpr(
                 hir::HirUnary{hir::HirUnaryOp::Ref, payload_field, types_.internPtr(payload_type)});
         } else if (callee_expr.kind == frontend::ExprKind::Arrow || base_is_ptr)
             self_arg = lowerExpr(base_id);
@@ -547,9 +551,9 @@ hir::HirExprId HirLowerModern::lowerCall(const frontend::Expression &expr) {
         const auto *callee_fn0 = callee_sema_type0 != sema::modern::kInvalidTypeId
                                      ? sema_.typeTable().function(callee_sema_type0)
                                      : nullptr;
-        const auto self_type   = callee_fn0 != nullptr && !callee_fn0->params.empty()
-                                     ? lowerType(callee_fn0->params[0])
-                                     : (base_sema_ty ? lowerType(base_sema_ty) : types::kInvalidType);
+        const auto self_type = callee_fn0 != nullptr && !callee_fn0->params.empty()
+                                   ? lowerType(callee_fn0->params[0])
+                                   : (base_sema_ty ? lowerType(base_sema_ty) : types::kInvalidType);
         if (self_type != types::kInvalidType)
             arg_types.push(self_type);
     }
@@ -665,9 +669,9 @@ hir::HirExprId HirLowerModern::lowerCall(const frontend::Expression &expr) {
         const auto param_type     = param_sema_raw != sema::modern::kInvalidTypeId
                                         ? lowerType(param_sema_raw)
                                         : types::kInvalidType;
-        const auto argument_type =
-            annotated && param_type != types::kInvalidType ? param_type
-                                                           : typeOfExpr(expr.operands[index]);
+        const auto argument_type  = annotated && param_type != types::kInvalidType
+                                        ? param_type
+                                        : typeOfExpr(expr.operands[index]);
         if (argument_type != types::kInvalidType)
             arg_types.push(argument_type);
         hir::HirExprId lowered_argument =
@@ -683,9 +687,15 @@ hir::HirExprId HirLowerModern::lowerCall(const frontend::Expression &expr) {
                 lowered_argument =
                     lowerCoerceToOpaque(param_sema, expr.operands[index], lowered_argument);
             const auto arg_sema = semaTypeOfExpr(expr.operands[index]);
-            if (types_.kindOf(param_type) == types::TypeKind::Optional)
-                lowered_argument =
-                    lowerCoerceToOptionalDepth(param_type, param_sema, arg_sema, lowered_argument);
+            if (types_.kindOf(param_type) == types::TypeKind::Optional) {
+                const auto erased = lowerCoerceToOptionalErased(
+                    param_type, param_sema, expr.operands[index], lowered_argument);
+                if (erased != hir::kInvalidHirExpr)
+                    lowered_argument = erased;
+                else
+                    lowered_argument = lowerCoerceToOptionalDepth(param_type, param_sema, arg_sema,
+                                                                  lowered_argument);
+            }
         }
         args.push(lowered_argument);
     }

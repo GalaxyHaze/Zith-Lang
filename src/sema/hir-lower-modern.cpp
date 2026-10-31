@@ -4,13 +4,13 @@
 #include "common/overloaded.hpp"
 #include "diagnostics/error-codes.hpp"
 #include "sema/hir-lower-utils.hpp"
-#include "sema/sra-facts.hpp"
 #include "sema/op-mapping.hpp"
+#include "sema/sra-facts.hpp"
 #include "support/int-literal.hpp"
 #include "symbols/symbol-table.hpp"
 
-#include "types/type-kind.hpp"
 #include "types/type-canonical.hpp"
+#include "types/type-kind.hpp"
 
 #include <algorithm>
 #include <cstdlib>
@@ -56,7 +56,7 @@ void HirLowerModern::populateHirDeclarations() {
         const auto &symbol = symbols_.get(symbol_id);
 
         auto &declaration = hir_.addDeclaration();
-        declaration.name = symbol.name;
+        declaration.name  = symbol.name;
         switch (symbol.visibility) {
         case symbols::SymbolVisibility::Private:
             declaration.visibility = hir::HirVisibility::Private;
@@ -69,7 +69,7 @@ void HirLowerModern::populateHirDeclarations() {
             break;
         }
         declaration.module_depth = symbol.mod_depth;
-        declaration.discardable = symbol.discardable;
+        declaration.discardable  = symbol.discardable;
         switch (symbol.kind) {
         case symbols::SymKind::Fn:
             declaration.kind = hir::HirDeclarationKind::Function;
@@ -122,28 +122,25 @@ void HirLowerModern::populateHirDeclarations() {
         if (type_id != types::kErrorType)
             declaration.type = type_id;
 
-        if (symbol.source_module_id != memory::kInvalidInternedId &&
-            symbol.source_decl_id != 0U) {
+        if (symbol.source_module_id != memory::kInvalidInternedId && symbol.source_decl_id != 0U) {
             const auto module_key = interner_.lookup(symbol.source_module_id);
-            const auto *module = snapshot_.findModule(module_key);
+            const auto *module    = snapshot_.findModule(module_key);
             const frontend::DeclId source_id{symbol.source_decl_id};
-            const auto *source_decl =
-                module != nullptr ? findDecl(*module, source_id) : nullptr;
+            const auto *source_decl = module != nullptr ? findDecl(*module, source_id) : nullptr;
             const auto *module_sema =
                 module != nullptr ? sema_.findModuleSema(module->key) : nullptr;
             if (module != nullptr && source_decl != nullptr && module_sema != nullptr) {
                 declaration.is_extern = source_decl->isExtern;
 
-                const auto *saved_module = current_module_;
+                const auto *saved_module     = current_module_;
                 const auto saved_type_module = types_.currentModule();
-                current_module_ = module;
+                current_module_              = module;
                 types_.setCurrentModule(module->key);
 
                 const auto sema_type = module_sema->typeOfDecl(source_id);
                 if (sema_type) {
                     const auto source_type = lowerType(sema_type);
-                    if (source_type != types::kErrorType &&
-                        source_type != types::kInvalidType)
+                    if (source_type != types::kErrorType && source_type != types::kInvalidType)
                         declaration.type = source_type;
                 }
 
@@ -151,8 +148,7 @@ void HirLowerModern::populateHirDeclarations() {
                     source_decl->genericParams.empty()) {
                     const auto key = internFunctionKey(interner_, module->key, source_id);
                     if (const auto *function_index = function_index_by_key_.get(key)) {
-                        const auto function_id =
-                            functions_[*function_index].hir_function_id;
+                        const auto function_id = functions_[*function_index].hir_function_id;
                         if (hir_.getFn(function_id).hasBody)
                             declaration.body_function = function_id;
                     }
@@ -162,15 +158,15 @@ void HirLowerModern::populateHirDeclarations() {
                     auto &template_record = hir_.addTemplate();
                     template_record.declaration_id =
                         static_cast<hir::HirDeclarationId>(hir_.declarationCount() - 1U);
-                    template_record.kind = declaration.kind;
+                    template_record.kind      = declaration.kind;
                     template_record.is_extern = source_decl->isExtern;
-                    template_record.name = declaration.name;
+                    template_record.name      = declaration.name;
                     declaration.template_id =
                         static_cast<hir::HirTemplateId>(hir_.templateCount() - 1U);
 
                     for (const auto &generic_param : source_decl->genericParams) {
                         auto &param = template_record.params.emplace(arena_);
-                        param.name = interner_.intern(generic_param.name);
+                        param.name  = interner_.intern(generic_param.name);
                         for (const auto constraint : generic_param.constraints) {
                             const auto bound =
                                 sema_.typeTable().lowerTypeExpr(*module->frontend, constraint);
@@ -179,8 +175,7 @@ void HirLowerModern::populateHirDeclarations() {
                                 lowered_bound == types::kInvalidType) {
                                 diags_.reportError(
                                     diagnostics::err::InvalidIR,
-                                    "generic bound could not be represented in shared HIR",
-                                    {});
+                                    "generic bound could not be represented in shared HIR", {});
                                 continue;
                             }
                             param.bounds.push(lowered_bound);
@@ -188,43 +183,37 @@ void HirLowerModern::populateHirDeclarations() {
                     }
 
                     if (source_decl->kind == frontend::DeclKind::Function) {
-                        if (const auto *function_type =
-                                sema_.typeTable().function(sema_type)) {
+                        if (const auto *function_type = sema_.typeTable().function(sema_type)) {
                             template_record.return_type = lowerType(function_type->result);
-                            template_record.variadic = source_decl->isVariadic;
+                            template_record.variadic    = source_decl->isVariadic;
                             template_record.is_state =
                                 source_decl->functionKind == frontend::FunctionKind::State;
                             template_record.is_foreign_c = source_decl->isExtern;
                             template_record.uses_tail_cc = template_record.is_state;
-                            if (source_decl->parameters.size() !=
-                                function_type->params.size()) {
+                            if (source_decl->parameters.size() != function_type->params.size()) {
                                 diags_.reportError(
                                     diagnostics::err::InvalidIR,
                                     "generic function parameter names and types have "
                                     "different lengths",
                                     {});
                             }
-                            for (size_t index = 0;
-                                 index < function_type->params.size(); ++index) {
+                            for (size_t index = 0; index < function_type->params.size(); ++index) {
                                 if (index >= source_decl->parameters.size()) {
                                     break;
                                 }
                                 template_record.parameter_types.push(
                                     lowerType(function_type->params[index]));
-                                template_record.parameter_names.push(interner_.intern(
-                                    source_decl->parameters[index].name));
+                                template_record.parameter_names.push(
+                                    interner_.intern(source_decl->parameters[index].name));
                             }
                         } else {
-                            diags_.reportError(
-                                diagnostics::err::InvalidIR,
-                                "generic function has no semantic function type",
-                                {});
+                            diags_.reportError(diagnostics::err::InvalidIR,
+                                               "generic function has no semantic function type",
+                                               {});
                         }
                     } else if (source_decl->kind == frontend::DeclKind::Struct) {
-                        if (const auto *struct_type =
-                                sema_.typeTable().struct_type(sema_type)) {
-                            if (struct_type->fields.size() !=
-                                struct_type->field_names.size()) {
+                        if (const auto *struct_type = sema_.typeTable().struct_type(sema_type)) {
+                            if (struct_type->fields.size() != struct_type->field_names.size()) {
                                 diags_.reportError(
                                     diagnostics::err::InvalidIR,
                                     "generic struct field names and types have different "
@@ -232,25 +221,20 @@ void HirLowerModern::populateHirDeclarations() {
                                     {});
                             }
                             for (size_t index = 0; index < struct_type->fields.size(); ++index) {
-                                const auto field_name =
-                                    index < struct_type->field_names.size()
-                                        ? struct_type->field_names[index]
-                                        : std::string_view{};
-                                template_record.field_names.push(
-                                    interner_.intern(field_name));
+                                const auto field_name = index < struct_type->field_names.size()
+                                                            ? struct_type->field_names[index]
+                                                            : std::string_view{};
+                                template_record.field_names.push(interner_.intern(field_name));
                                 template_record.field_types.push(
                                     lowerType(struct_type->fields[index]));
                             }
-                            const auto order =
-                                types::canonicalFieldOrder(types_, declaration.type);
+                            const auto order = types::canonicalFieldOrder(types_, declaration.type);
                             for (const auto index : order)
                                 template_record.canonical_field_order.push(
                                     static_cast<uint32_t>(index));
                         } else {
-                            diags_.reportError(
-                                diagnostics::err::InvalidIR,
-                                "generic struct has no semantic struct type",
-                                {});
+                            diags_.reportError(diagnostics::err::InvalidIR,
+                                               "generic struct has no semantic struct type", {});
                         }
                     }
                 }
@@ -262,14 +246,12 @@ void HirLowerModern::populateHirDeclarations() {
 
         declaration_ids[symbol_id] =
             static_cast<hir::HirDeclarationId>(hir_.declarationCount() - 1U);
-        if (symbol.source_module_id != memory::kInvalidInternedId &&
-            symbol.source_decl_id != 0U) {
+        if (symbol.source_module_id != memory::kInvalidInternedId && symbol.source_decl_id != 0U) {
             const auto module_key = interner_.lookup(symbol.source_module_id);
-            const auto key = internFunctionKey(interner_, module_key,
-                                               frontend::DeclId{symbol.source_decl_id});
-            declaration_id_by_key.insert(key,
-                                         static_cast<hir::HirDeclarationId>(
-                                             hir_.declarationCount() - 1U));
+            const auto key =
+                internFunctionKey(interner_, module_key, frontend::DeclId{symbol.source_decl_id});
+            declaration_id_by_key.insert(
+                key, static_cast<hir::HirDeclarationId>(hir_.declarationCount() - 1U));
         }
     }
 
@@ -279,8 +261,7 @@ void HirLowerModern::populateHirDeclarations() {
         if (declaration_id == nullptr)
             continue;
         const auto &symbol = symbols_.get(symbol_id);
-        if (symbol.kind != symbols::SymKind::Struct &&
-            symbol.kind != symbols::SymKind::Union &&
+        if (symbol.kind != symbols::SymKind::Struct && symbol.kind != symbols::SymKind::Union &&
             symbol.kind != symbols::SymKind::Component)
             continue;
 
@@ -300,15 +281,13 @@ void HirLowerModern::populateHirDeclarations() {
         if (declaration_id == nullptr)
             continue;
         const auto &symbol = symbols_.get(symbol_id);
-        if (symbol.source_module_id == memory::kInvalidInternedId ||
-            symbol.source_decl_id == 0U)
+        if (symbol.source_module_id == memory::kInvalidInternedId || symbol.source_decl_id == 0U)
             continue;
         const auto module_key = interner_.lookup(symbol.source_module_id);
-        const auto *module = snapshot_.findModule(module_key);
+        const auto *module    = snapshot_.findModule(module_key);
         if (module == nullptr)
             continue;
-        const auto *source_decl =
-            findDecl(*module, frontend::DeclId{symbol.source_decl_id});
+        const auto *source_decl = findDecl(*module, frontend::DeclId{symbol.source_decl_id});
         if (source_decl == nullptr || source_decl->methodDeclarations.empty())
             continue;
 
@@ -341,8 +320,8 @@ void HirLowerModern::populateHirDeclarations() {
         for (const auto &record : module.frontend->implementRecords()) {
             if (record.ownerDeclaration.value == 0U || record.traitDeclaration.value == 0U)
                 continue;
-            const auto owner_key = internFunctionKey(interner_, module.key,
-                                                     record.ownerDeclaration);
+            const auto owner_key =
+                internFunctionKey(interner_, module.key, record.ownerDeclaration);
             const auto *owner_id = declaration_id_by_key.get(owner_key);
             if (owner_id == nullptr)
                 continue;
@@ -351,10 +330,8 @@ void HirLowerModern::populateHirDeclarations() {
                 continue;
             const auto trait_sema = module_sema->typeOfDecl(record.traitDeclaration);
             if (!trait_sema) {
-                diags_.reportError(
-                    diagnostics::err::InvalidIR,
-                    "implement record trait declaration has no semantic type",
-                    {});
+                diags_.reportError(diagnostics::err::InvalidIR,
+                                   "implement record trait declaration has no semantic type", {});
                 continue;
             }
             const auto trait_type = lowerType(trait_sema);
@@ -362,8 +339,7 @@ void HirLowerModern::populateHirDeclarations() {
                 std::get_if<types::TypeTrait>(&types_.lookup(trait_type)) == nullptr) {
                 diags_.reportError(
                     diagnostics::err::InvalidIR,
-                    "implement record trait could not be represented as a shared HIR trait",
-                    {});
+                    "implement record trait could not be represented as a shared HIR trait", {});
                 continue;
             }
             auto &template_record = hir_.getTemplate(template_id);
@@ -612,13 +588,11 @@ bool HirLowerModern::predeclareFunctions() {
             function_index_by_key_.insert(key, hir_.getFnCount() - 1U);
             if (is_test_void) {
                 test_names_.push_back(decl.name);
-                test_fn_ids_.push_back(
-                    static_cast<hir::HirFunctionId>(hir_.getFnCount() - 1U));
+                test_fn_ids_.push_back(static_cast<hir::HirFunctionId>(hir_.getFnCount() - 1U));
             }
-            functions_.push_back(
-                {key, module_ptr.get(), &decl, nullptr, nullptr,
-                 static_cast<hir::HirFunctionId>(hir_.getFnCount() - 1U),
-                 hir_.getFnCount() - 1U, is_main_void, is_test_void});
+            functions_.push_back({key, module_ptr.get(), &decl, nullptr, nullptr,
+                                  static_cast<hir::HirFunctionId>(hir_.getFnCount() - 1U),
+                                  hir_.getFnCount() - 1U, is_main_void, is_test_void});
         }
     }
     if (const auto *instantiations = sema_.instantiations(); instantiations != nullptr) {
@@ -647,10 +621,9 @@ bool HirLowerModern::predeclareFunctions() {
                 hir_fn.params.push(lowerForeignType(parameter));
                 hir_fn.param_names.push({});
             }
-            functions_.push_back(
-                {0, nullptr, nullptr, &foreign, nullptr,
-                 static_cast<hir::HirFunctionId>(hir_.getFnCount() - 1U),
-                 hir_.getFnCount() - 1U});
+            functions_.push_back({0, nullptr, nullptr, &foreign, nullptr,
+                                  static_cast<hir::HirFunctionId>(hir_.getFnCount() - 1U),
+                                  hir_.getFnCount() - 1U});
         }
     }
     return true;
@@ -700,9 +673,9 @@ void HirLowerModern::predeclareInstantiation(session::ModuleKey module_key,
                                     : kInvalidTypeId;
     const auto *fn            = sema_.typeTable().function(instance_type);
     if (fn != nullptr) {
-        const auto *saved_module = current_module_;
+        const auto *saved_module     = current_module_;
         const auto saved_type_module = types_.currentModule();
-        current_module_ = module;
+        current_module_              = module;
         types_.setCurrentModule(module_key);
 
         hir_fn.return_type = lowerType(fn->result);
@@ -727,10 +700,9 @@ void HirLowerModern::predeclareInstantiation(session::ModuleKey module_key,
     // needs to encode the type-argument tuple when multiple instances exist.
     if (!function_index_by_key_.contains(key))
         function_index_by_key_.insert(key, hir_.getFnCount() - 1U);
-    functions_.push_back(
-        {key, module, decl, nullptr, &instance,
-         static_cast<hir::HirFunctionId>(hir_.getFnCount() - 1U),
-         hir_.getFnCount() - 1U});
+    functions_.push_back({key, module, decl, nullptr, &instance,
+                          static_cast<hir::HirFunctionId>(hir_.getFnCount() - 1U),
+                          hir_.getFnCount() - 1U});
 }
 
 std::vector<sema::modern::TypeId>
@@ -741,9 +713,9 @@ HirLowerModern::concreteInstanceArgs(const comptime::InstantiationInstance &inst
     return instantiations->substituteArgs(instance.args, current_instance_->args);
 }
 
-hir::HirFunctionId HirLowerModern::findInstanceFunction(
-    const session::ModuleKey &module, const frontend::DeclId decl,
-    const std::vector<sema::modern::TypeId> &args) const noexcept {
+hir::HirFunctionId
+HirLowerModern::findInstanceFunction(const session::ModuleKey &module, const frontend::DeclId decl,
+                                     const std::vector<sema::modern::TypeId> &args) const noexcept {
     for (const auto &function : functions_) {
         if (function.instance != nullptr && function.module != nullptr &&
             function.module->key == module && function.instance->decl == decl &&
@@ -818,12 +790,12 @@ bool HirLowerModern::lowerFunctionBody(FunctionInfo &info) {
     current_for_in_binding_stmt_  = {};
     current_for_in_binding_local_ = {};
     const bool is_main_void       = info.decl->name == "main" && info.forced_main_return_i32 &&
-                              info.module != nullptr &&
-                              info.module->key == snapshot_.rootModuleKey();
-    current_main_void_ = is_main_void;
-    current_fn_is_test_ = info.forced_test_return_i32;
-    current_test_name_  = current_fn_is_test_ ? info.decl->name : std::string{};
-    current_test_failure_id_ = 0;
+                                    info.module != nullptr &&
+                                    info.module->key == snapshot_.rootModuleKey();
+    current_main_void_            = is_main_void;
+    current_fn_is_test_           = info.forced_test_return_i32;
+    current_test_name_            = current_fn_is_test_ ? info.decl->name : std::string{};
+    current_test_failure_id_      = 0;
 
     current_fn_->blocks.emplace(arena_);
     current_fn_->blocks[0].insts = memory::DynArray<hir::HirExprId>(arena_);
@@ -868,14 +840,24 @@ bool HirLowerModern::lowerFunctionBody(FunctionInfo &info) {
             if (types_.kindOf(current_fn_->return_type) == types::TypeKind::Optional &&
                 info.decl->body) {
                 const auto val_sema_type = semaTypeOfExpr(info.decl->body);
+                // A `T -> ?dyn`/`?opaque` return erases the payload before the
+                // `Some` wrap. When it applies, the depth wrap below is skipped
+                // so the erased payload is not wrapped a second time.
                 if (current_fn_return_sema_type_ != sema::modern::kInvalidTypeId &&
+                    val_sema_type != sema::modern::kInvalidTypeId)
+                    ret.value = lowerCoerceToOptionalErased(current_fn_->return_type,
+                                                            current_fn_return_sema_type_,
+                                                            info.decl->body, body_expr);
+                if (ret.value == hir::kInvalidHirExpr &&
+                    current_fn_return_sema_type_ != sema::modern::kInvalidTypeId &&
                     val_sema_type != sema::modern::kInvalidTypeId)
                     ret.value = lowerCoerceToOptionalDepth(current_fn_->return_type,
                                                            current_fn_return_sema_type_,
                                                            val_sema_type, body_expr);
-                else if (sema_.typeTable().kindOf(val_sema_type) != TypeKind::Optional)
+                else if (ret.value == hir::kInvalidHirExpr &&
+                         sema_.typeTable().kindOf(val_sema_type) != TypeKind::Optional)
                     ret.value = lowerCoerceToOptional(current_fn_->return_type, body_expr);
-                else {
+                else if (ret.value == hir::kInvalidHirExpr) {
                     ret.value = body_expr;
                 }
             } else {

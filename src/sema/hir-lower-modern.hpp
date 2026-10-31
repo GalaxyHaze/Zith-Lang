@@ -6,8 +6,8 @@
 #include "memory/dyn-array.hpp"
 #include "memory/flat-map.hpp"
 #include "memory/string-interner.hpp"
-#include "sema/sra-facts.hpp"
 #include "sema/sema-modern.hpp"
+#include "sema/sra-facts.hpp"
 #include "session/frontend-context.hpp"
 #include "types/type-intern.hpp"
 
@@ -29,9 +29,9 @@ public:
     HirLowerModern(memory::Arena &arena, diagnostics::DiagnosticEngine &diags,
                    const session::CompilationSnapshot &snapshot, SemaPipeline &sema,
                    const symbols::SymbolTable &symbols, types::TypeIntern &types,
-                   memory::StringInterner &interner,
-                   const SraFacts *sra = nullptr, cache::Store *cache_store = nullptr,
-                   std::string_view test_module = {}, std::string_view test_filter = {});
+                   memory::StringInterner &interner, const SraFacts *sra = nullptr,
+                   cache::Store *cache_store = nullptr, std::string_view test_module = {},
+                   std::string_view test_filter = {});
 
     bool run();
     hir::HirModule takeHir() {
@@ -129,8 +129,8 @@ private:
     /// only after every binding in that block has emitted its slot setup, so a
     /// deferred body can safely read a binding declared later in the block.
     std::vector<std::vector<frontend::StmtId>> pending_defers_;
-    const session::ModuleArtifact *current_module_                   = nullptr;
-    cache::Store *cache_store_                                       = nullptr;
+    const session::ModuleArtifact *current_module_ = nullptr;
+    cache::Store *cache_store_                     = nullptr;
     std::string test_module_;
     std::string test_filter_;
     const session::ModuleResolution *current_resolution_             = nullptr;
@@ -140,8 +140,8 @@ private:
     hir::HirFunction *current_fn_                                    = nullptr;
     /// Index of `current_fn_` in the module. Kept alongside the pointer so
     /// re-reading the function after a possible `addFn` reallocation is safe.
-    size_t current_fn_index_                                         = 0;
-    const frontend::Declaration *current_fn_decl_                    = nullptr;
+    size_t current_fn_index_                      = 0;
+    const frontend::Declaration *current_fn_decl_ = nullptr;
     frontend::ScopeId info_decl_parent_scope_;
     sema::modern::TypeId current_fn_return_sema_type_ = sema::modern::kInvalidTypeId;
     bool current_fn_is_state_                         = false;
@@ -164,8 +164,7 @@ private:
     /// the concrete instance, predeclares it, and returns its HIR function id.
     /// Returns `hir::kInvalidHirFunction` when the binding is already concrete
     /// or cannot be resolved yet (its arguments still mention a parameter).
-    hir::HirFunctionId
-    concretizeCallTarget(const comptime::InstantiationInstance &bound_instance);
+    hir::HirFunctionId concretizeCallTarget(const comptime::InstantiationInstance &bound_instance);
     /// HIR function for a concrete instantiation `(module, decl, args)`, or
     /// `hir::kInvalidHirFunction` when no matching instance was predeclared.
     [[nodiscard]] hir::HirFunctionId
@@ -278,8 +277,7 @@ private:
     const frontend::Declaration *
     resolvedFunctionDecl(const session::ResolvedName &resolved,
                          const session::ModuleArtifact **module_out = nullptr) const noexcept;
-    hir::HirFunctionId
-    resolvedFunctionId(const session::ResolvedName &resolved) const noexcept;
+    hir::HirFunctionId resolvedFunctionId(const session::ResolvedName &resolved) const noexcept;
     hir::HirSlotId localSlot(frontend::LocalId id);
 
     hir::HirExprId lowerExpr(frontend::ExprId id);
@@ -361,6 +359,14 @@ private:
     /// unchanged when this coercion was not registered for `expression`.
     hir::HirExprId lowerCoerceToOpaque(sema::modern::TypeId target, frontend::ExprId expression,
                                        hir::HirExprId value);
+    /// Wraps a concrete value into `?T` where `T` is `dyn` or `opaque`, erasing
+    /// the payload first so the `Some` stores the fat pointer or tagged opaque
+    /// rather than the raw concrete aggregate. Returns `kInvalidHirExpr` when
+    /// the optional payload needs no erasure, so the caller falls back to the
+    /// plain `lowerCoerceToOptional` wrap.
+    hir::HirExprId lowerCoerceToOptionalErased(types::TypeId target_opt_hir,
+                                               sema::modern::TypeId target_opt_sema,
+                                               frontend::ExprId expression, hir::HirExprId value);
     hir::HirExprId lowerField(const frontend::Expression &expr, types::TypeId type);
     hir::HirExprId lowerArrow(const frontend::Expression &expr, types::TypeId type);
     /// When `operand` is a Name that resolves to an enum declaration and `variant` is a
@@ -374,9 +380,9 @@ private:
     /// may be qualified (`hm.HashMap`) or reified (`HashMap<i64,i64>`); the
     /// search falls back to the current module when no declaring module is
     /// recorded.
-    frontend::ExprId lowerFieldDefault(std::string_view struct_name, size_t field_index,
-                                       const session::ModuleArtifact *declaring_module) const
-        noexcept;
+    frontend::ExprId
+    lowerFieldDefault(std::string_view struct_name, size_t field_index,
+                      const session::ModuleArtifact *declaring_module) const noexcept;
     hir::HirExprId lowerCast(const frontend::Expression &expr, types::TypeId type);
     hir::HirExprId lowerIsNull(const frontend::Expression &expr);
     hir::HirExprId lowerIsType(const frontend::Expression &expr);
