@@ -197,6 +197,21 @@ void test_nullable_pointer_narrowing() {
                    "    if (x is null) { return 0; } else { return raw x[0]; }\n"
                    "}\n",
                    "aggregate optional payloads keep narrowing after 'is null'");
+    expectAccepted("trait Counter { fn get(self): i32; }\n"
+                   "struct Cell { v: i32 }\n"
+                   "implement Cell as Counter { fn get(self): i32 { return self.v; } }\n"
+                   "fn early(c: ?dyn Counter): i32 {\n"
+                   "    if (c is null) { return 0; }\n"
+                   "    return c.get();\n"
+                   "}\n",
+                   "a narrowed ?dyn receiver dispatches after an early-return 'is null'");
+    expectAccepted("trait Counter { fn get(self): i32; }\n"
+                   "struct Cell { v: i32 }\n"
+                   "implement Cell as Counter { fn get(self): i32 { return self.v; } }\n"
+                   "fn via_else(c: ?dyn Counter): i32 {\n"
+                   "    if (c is null) { return 0; } else { return c.get(); }\n"
+                   "}\n",
+                   "a narrowed ?dyn receiver dispatches in the else branch of 'is null'");
 
     expectNullDerefRejected("fn f(p: ?*i32): i32 { return *p; }\n",
                             "cannot dereference a possibly-null pointer",

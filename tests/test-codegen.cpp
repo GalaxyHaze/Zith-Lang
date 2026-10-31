@@ -3611,6 +3611,30 @@ static void test_optional_opaque_slot_runtime() {
     CHECK_EQ(r.exitCode, 0, "the erased ?opaque payload is present, not null");
 }
 
+// The niche representation makes `?dyn T` layout-identical to `dyn T` and
+// keeps `?*T` identical to `*T`.
+static void test_optional_dyn_niche_size_runtime() {
+    ModernFileCodegenTest t;
+    t.write("main.zith",
+            "trait Counter { fn get(self): i32; }\n"
+            "struct Cell { v: i32 }\n"
+            "implement Cell as Counter { fn get(self): i32 { return self.v; } }\n"
+            "fn main(): i32 {\n"
+            "    let a: u64 = @sizeOf(?dyn Counter) as u64;\n"
+            "    let b: u64 = @sizeOf(dyn Counter) as u64;\n"
+            "    let c: u64 = @sizeOf(?*Cell) as u64;\n"
+            "    let d: u64 = @sizeOf(*Cell) as u64;\n"
+            "    if (a != b) { return 1; }\n"
+            "    if (c != d) { return 2; }\n"
+            "    return 0;\n"
+            "}\n");
+    auto r = t.run();
+    CHECK(r.usedModern, "?dyn niche size uses the modern codegen pipeline");
+    CHECK(r.ok, "a @sizeOf query over ?dyn and ?*T compiles");
+    CHECK_EQ(r.errorCount, 0u, "the niche size module passes LLVM verification");
+    CHECK_EQ(r.exitCode, 0, "?dyn is layout-identical to dyn and ?*T to *T");
+}
+
 static void test_function_default_arguments_runtime() {
     ModernFileCodegenTest t;
     t.write("main.zith", "fn add(left: i32, right: i32 = 5): i32 {\n"
@@ -4665,6 +4689,8 @@ static void test_codegen() {
     test_optional_dyn_without_narrowing_diagnostic();
     printf("Running test_optional_opaque_slot_runtime\n");
     test_optional_opaque_slot_runtime();
+    printf("Running test_optional_dyn_niche_size_runtime\n");
+    test_optional_dyn_niche_size_runtime();
     printf("Running test_function_default_arguments_runtime\n");
     test_function_default_arguments_runtime();
     printf("Running test_nested_optional_argument_runtime\n");
