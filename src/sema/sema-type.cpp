@@ -672,9 +672,31 @@ TypeId PerModuleSema::instantiateTemplateFromArgs(frontend::TextSpan span,
     }
     case frontend::DeclKind::Union: {
         auto &members = type_table.makeTypeStorage();
-        for (const auto &member_param : template_decl.parameters) {
+        for (size_t index = 0; index < template_decl.parameters.size(); ++index) {
+            const auto &member_param = template_decl.parameters[index];
             TypeId member = lower_body_type(member_param.type);
-            members.push(member ? member : error_type);
+            if (!member) {
+                members.push(error_type);
+                continue;
+            }
+            // A substituted member can be `void`/`never` even though the
+            // template's own member is a generic parameter. A `void` member
+            // gives the union no layout and makes LLVM codegen loop in
+            // `getTypeAllocSize`; reject it here like the declaration path.
+            const TypeKind member_kind = type_table.kindOf(resolve(member));
+            if (member_kind == TypeKind::Void || member_kind == TypeKind::Never) {
+                report(span,
+                       "union member cannot be '" +
+                           std::string(member_kind == TypeKind::Void ? "void" : "never") + "'",
+                       diagnostics::err::TypeMismatch);
+                reportNote(member_param.span,
+                           "this generic member resolves to '" +
+                               std::string(member_kind == TypeKind::Void ? "void" : "never") +
+                               "' for these type arguments");
+                members.push(error_type);
+                continue;
+            }
+            members.push(member);
         }
         TypeId ut = type_table.internUnion(concrete_name, members, !template_decl.isRawUnion);
         type_table.setDefiningModule(ut, type_table.definingModule(type_table.lookupNamed(

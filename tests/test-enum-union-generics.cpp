@@ -263,6 +263,22 @@ void test_method_result_only_generic_infers_from_context() {
     CHECK(r.ok, "a result-only generic method infers its argument from the expected type");
 }
 
+void test_generic_union_void_member_rejected() {
+    GenericEnumUnionTest t;
+    // Instantiating a generic union with `void` substitutes a `void` member,
+    // which the declaration path already rejects ("union member cannot be
+    // 'void'"). The instantiation path must reject it too, otherwise a `void`
+    // member reaches codegen and makes LLVM loop in `getTypeAllocSize`.
+    auto r = t.run("union Pair<T> { T, i32 }\n"
+                   "fn main(): i32 {\n"
+                   "    var p: Pair<void> = Pair<void>{ 0 };\n"
+                   "    return 0;\n"
+                   "}\n");
+    CHECK(!r.ok, "a generic union instantiated with void is rejected");
+    CHECK(r.hasErrorCode(diagnostics::err::TypeMismatch),
+          "the void union member reports E3001");
+}
+
 } // namespace
 
 int main() {
@@ -282,6 +298,7 @@ int main() {
     test_result_only_generic_infers_from_context();
     test_strong_argument_overrides_weak_literal();
     test_method_result_only_generic_infers_from_context();
+    test_generic_union_void_member_rejected();
     std::printf("\nResults: %d passed, %d failed\n", g_test_passed, g_test_failed);
     return g_test_failed > 0 ? 1 : 0;
 }
