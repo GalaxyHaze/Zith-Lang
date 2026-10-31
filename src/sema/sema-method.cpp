@@ -202,6 +202,37 @@ TypeId PerModuleSema::inferMethodCall(const frontend::Expression &call,
     const TypeId resolved_base = resolve(base_type);
     if (type_table.kindOf(resolved_base) == TypeKind::Dyn)
         return inferDynMethodCall(call, callee, resolved_base);
+    // A `?dyn T` receiver keeps its optional type after a non-null proof, so
+    // the dispatch test above sees `Optional` and never reaches the vtable
+    // path. Unwrap the optional payload once the receiver is proven present.
+    if (type_table.kindOf(resolved_base) == TypeKind::Optional) {
+        if (const auto *opt = type_table.optional(resolved_base)) {
+            const TypeId inner = resolve(opt->inner);
+            if (type_table.kindOf(inner) == TypeKind::Dyn) {
+                bool proven = false;
+                if (const auto *resolved = findResolvedExpr(receiver_id);
+                    resolved != nullptr && resolved->local)
+                    proven = typed_map.provenNonNullExprs.contains(resolved->local.value);
+                else if (const std::string key = optionalReadPathKey(receiver_id); !key.empty())
+                    proven = typed_map.provenNonNullOptionalExprs.contains(key);
+                if (proven) {
+                    setExprType(receiver_id, inner);
+                    // HIR loads a local by its declared slot type, so record the
+                    // payload read to make it extract field 0 of the optional.
+                    typed_map.optionalPayloadReads.insert(receiver_id.value, inner);
+                    return inferDynMethodCall(call, callee, inner);
+                }
+                // A `?dyn T` receiver that is not proven non-null cannot
+                // dispatch: report one dedicated diagnostic instead of the
+                // generic field-access cascade.
+                report(call.span,
+                       "cannot call '" + callee.text + "' on a possibly-null '" +
+                           type_table.typeToString(resolved_base) + "'; narrow it after 'is null'",
+                       diagnostics::err::TypeMismatch);
+                return error_type;
+            }
+        }
+    }
 
     const StructType *st = type_table.struct_type(pointee);
     if (st == nullptr && type_table.kindOf(pointee) == TypeKind::GenericParam) {

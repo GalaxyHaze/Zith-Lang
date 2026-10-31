@@ -362,7 +362,7 @@ TypeId PerModuleSema::inferBlock(frontend::ExprId id) {
                 pending_defers.push_back(stmt_id);
                 last = void_type;
             } else if (stmt.kind == frontend::StmtKind::Binding) {
-                TypeId ann_type = lowerTypeExpr(stmt.binding.type);
+                TypeId ann_type  = lowerTypeExpr(stmt.binding.type);
                 TypeId init_type = stmt.binding.initializer
                                        ? inferExprExpected(stmt.binding.initializer, ann_type)
                                        : invalid_type;
@@ -466,7 +466,7 @@ TypeId PerModuleSema::inferBlock(frontend::ExprId id) {
             pending_defers.push_back(stmt_id);
             last = void_type;
         } else if (stmt.kind == frontend::StmtKind::Binding) {
-            TypeId ann_type = lowerTypeExpr(stmt.binding.type);
+            TypeId ann_type  = lowerTypeExpr(stmt.binding.type);
             TypeId init_type = stmt.binding.initializer
                                    ? inferExprExpected(stmt.binding.initializer, ann_type)
                                    : invalid_type;
@@ -706,6 +706,10 @@ TypeId PerModuleSema::inferIf(frontend::ExprId id) {
     bool narrow_then             = false;
     bool narrowed_opaque_payload = false;
     bool narrowed_optional       = false;
+    // Field reads (`h.c`) have no `LocalId`, so the same `is null` proof is
+    // also recorded against the expression id in `provenNonNullOptionalExprs`.
+    frontend::ExprId narrowed_expr;
+    TypeId narrowed_expr_inner = kInvalidTypeId;
     if (condition.kind == frontend::ExprKind::IsType && !condition.operands.empty() &&
         condition.cast_type) {
         const auto *resolved = findResolvedExpr(condition.operands[0]);
@@ -735,6 +739,13 @@ TypeId PerModuleSema::inferIf(frontend::ExprId id) {
                 narrowed_optional   = true;
                 // `x is null` proves the payload type in the `else` branch.
             }
+        } else if (condition.operands[0]) {
+            // A field or other non-local read: prove the expression itself.
+            const TypeId optional = resolve(typeOfExpr(condition.operands[0]));
+            if (const auto *opt = type_table.optional(optional)) {
+                narrowed_expr       = condition.operands[0];
+                narrowed_expr_inner = type_table.stripQualifiers(opt->inner);
+            }
         }
     } else if (condition.kind == frontend::ExprKind::Unary && condition.text == "not" &&
                !condition.operands.empty()) {
@@ -750,12 +761,24 @@ TypeId PerModuleSema::inferIf(frontend::ExprId id) {
                     narrow_then         = true;
                     narrowed_optional   = true;
                 }
+            } else if (inner.operands[0]) {
+                const TypeId optional = resolve(typeOfExpr(inner.operands[0]));
+                if (const auto *opt = type_table.optional(optional)) {
+                    narrowed_expr       = inner.operands[0];
+                    narrowed_expr_inner = type_table.stripQualifiers(opt->inner);
+                    narrow_then         = true;
+                }
             }
         }
     }
 
     const bool narrowed_proof_was_present =
         narrowed_local && typed_map.provenNonNullExprs.contains(narrowed_local.value);
+    const std::string narrowed_expr_key =
+        narrowed_expr ? optionalReadPathKey(narrowed_expr) : std::string{};
+    const bool narrowed_expr_proof_was_present =
+        !narrowed_expr_key.empty() &&
+        typed_map.provenNonNullOptionalExprs.contains(narrowed_expr_key);
 
     if (narrowed_local && narrowed_type && narrow_then) {
         setLocalType(narrowed_local, narrowed_type);
@@ -779,15 +802,21 @@ TypeId PerModuleSema::inferIf(frontend::ExprId id) {
             }
         }
     }
+    if (!narrowed_expr_key.empty() && narrow_then)
+        typed_map.provenNonNullOptionalExprs.insert(narrowed_expr_key);
     TypeId then_type = inferExpr(expr.operands[1]);
     if (narrowed_local && narrowed_type)
         setLocalType(narrowed_local, original_local_type);
     if (narrowed_local && narrowed_optional)
         typed_map.provenNonNullExprs.erase(narrowed_local.value);
+    if (!narrowed_expr_key.empty() && narrow_then)
+        typed_map.provenNonNullOptionalExprs.erase(narrowed_expr_key);
     if (narrowed_local && narrowed_type && !narrow_then)
         setLocalType(narrowed_local, narrowed_type);
     if (narrowed_local && narrowed_optional && !narrow_then)
         typed_map.provenNonNullExprs.insert(narrowed_local.value);
+    if (!narrowed_expr_key.empty() && !narrow_then)
+        typed_map.provenNonNullOptionalExprs.insert(narrowed_expr_key);
     TypeId else_cond_type = void_type;
     TypeId else_type      = void_type;
     if (expr.operands.size() >= 3U)
@@ -806,6 +835,12 @@ TypeId PerModuleSema::inferIf(frontend::ExprId id) {
         else
             typed_map.provenNonNullExprs.erase(narrowed_local.value);
     }
+    if (!narrowed_expr_key.empty()) {
+        if (narrowed_expr_proof_was_present)
+            typed_map.provenNonNullOptionalExprs.insert(narrowed_expr_key);
+        else
+            typed_map.provenNonNullOptionalExprs.erase(narrowed_expr_key);
+    }
     // Flow-sensitive narrowing survives an `if` when the branch that could
     // take the opposite nullability fact terminates unconditionally. The
     // stdlib idiom `if (p is null) { return ...; }` is therefore safe for the
@@ -819,6 +854,16 @@ TypeId PerModuleSema::inferIf(frontend::ExprId id) {
                                                                   : expr.operands[2]));
     if (keep_non_null_proof)
         typed_map.provenNonNullExprs.insert(narrowed_local.value);
+    // The same early-return survival rule applies to a proven field read.
+    const bool keep_expr_proof =
+        !narrowed_expr_key.empty() &&
+        (condition.kind == frontend::ExprKind::IsNull
+             ? exprAlwaysTerminates(expr.operands[1])
+             : expr.operands.size() >= 3U && expr.operands[2] &&
+                   exprAlwaysTerminates(expr.operands.size() > 3U ? expr.operands[3]
+                                                                  : expr.operands[2]));
+    if (keep_expr_proof)
+        typed_map.provenNonNullOptionalExprs.insert(narrowed_expr_key);
     // An `if` without `else` is a statement even when its body has a value; only
     // an `if/else` expression can produce a value for the surrounding expression.
     if (expr.operands.size() < 3U)

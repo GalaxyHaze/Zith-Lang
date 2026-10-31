@@ -103,6 +103,10 @@ struct TypedMap {
     /// control-flow narrowing, keyed by `frontend::LocalId`. Deref, arrow,
     /// index, and nullable-pointer coercion consume this proof.
     memory::FlatSet<uint32_t> provenNonNullExprs;
+    /// Optional field reads (`h.c`) proven non-null by the enclosing
+    /// control-flow narrowing, keyed by a canonical path string (root local
+    /// plus field names). This covers receivers that have no `LocalId`.
+    memory::FlatSet<std::string> provenNonNullOptionalExprs;
     /// Read expressions that are the payload of a narrowed optional aggregate
     /// (`?S`, `?pack`), keyed by `frontend::ExprId`. Field access records the
     /// base read here; HIR extracts field 0 instead of loading the whole `?T`.
@@ -118,7 +122,8 @@ struct TypedMap {
         : exprTypes(), declTypes(), localTypes(), forInRangeLiteral(), forInNext(), containsCall(),
           forInElementIndex(), forInEndIndex(), forInUnionType(), forInOptionalType(),
           traitQualifiedReceiverBase(), opaqueSourceTypes(), dynSourceTypes(), provenNonNullExprs(),
-          optionalPayloadReads(), variadicCallPlans(), variadicStmtPlans() {}
+          provenNonNullOptionalExprs(), optionalPayloadReads(), variadicCallPlans(),
+          variadicStmtPlans() {}
 };
 
 class SemaPipeline;
@@ -553,6 +558,10 @@ private:
     /// payload present, returns that payload type. `kInvalidTypeId` otherwise.
     /// `?*T` is excluded: it uses the pointer niche and unwraps in `inferArrow`.
     [[nodiscard]] TypeId provenOptionalAggregatePayload(frontend::ExprId id) const noexcept;
+    /// Canonical path key for an optional read (`L12.c.value`), or empty when
+    /// the expression is not a local rooted in a field chain. Used to prove a
+    /// field read non-null across an `is null` narrowing.
+    [[nodiscard]] std::string optionalReadPathKey(frontend::ExprId id) const;
     /// Local proven non-null by a `not (x is null)` condition, if the
     /// condition directly names a local and the local is a nullable pointer.
     [[nodiscard]] frontend::LocalId

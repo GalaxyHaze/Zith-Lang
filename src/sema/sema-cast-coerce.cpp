@@ -102,13 +102,20 @@ bool PerModuleSema::exprHasNonNullPointerProof(frontend::ExprId id) const noexce
 TypeId PerModuleSema::provenOptionalAggregatePayload(frontend::ExprId id) const noexcept {
     if (!id)
         return kInvalidTypeId;
-    const auto *resolved = findResolvedExpr(id);
-    if (resolved == nullptr || !resolved->local)
-        return kInvalidTypeId;
-    if (!typed_map.provenNonNullExprs.contains(resolved->local.value))
-        return kInvalidTypeId;
-    const TypeId local_type = resolve(typeOfLocal(resolved->local));
-    const auto *opt         = type_table.optional(local_type);
+    TypeId optional = kInvalidTypeId;
+    if (const auto *resolved = findResolvedExpr(id); resolved != nullptr && resolved->local) {
+        if (!typed_map.provenNonNullExprs.contains(resolved->local.value))
+            return kInvalidTypeId;
+        optional = resolve(typeOfLocal(resolved->local));
+    } else {
+        // A field read (`h.c`) is proven through its path key instead of a
+        // local, so the same early-return and `else` shapes cover it.
+        const std::string key = optionalReadPathKey(id);
+        if (key.empty() || !typed_map.provenNonNullOptionalExprs.contains(key))
+            return kInvalidTypeId;
+        optional = resolve(typeOfExpr(id));
+    }
+    const auto *opt = type_table.optional(optional);
     if (opt == nullptr)
         return kInvalidTypeId;
     // `?*T` unwraps through the pointer niche in `inferArrow`; only aggregate
@@ -116,6 +123,36 @@ TypeId PerModuleSema::provenOptionalAggregatePayload(frontend::ExprId id) const 
     if (type_table.kindOf(resolve(opt->inner)) == TypeKind::Pointer)
         return kInvalidTypeId;
     return type_table.stripQualifiers(opt->inner);
+}
+std::string PerModuleSema::optionalReadPathKey(frontend::ExprId id) const {
+    if (!id || id.value > snapshot.expressions().size())
+        return {};
+    // Walk a `Field`/`Arrow` chain down to its root, collecting field names.
+    std::vector<std::string> fields;
+    frontend::ExprId cursor = id;
+    while (cursor && cursor.value <= snapshot.expressions().size()) {
+        const auto &node = snapshot.expressions()[cursor.value - 1U];
+        if (node.kind == frontend::ExprKind::Field || node.kind == frontend::ExprKind::Arrow) {
+            if (node.operands.empty())
+                return {};
+            fields.push_back(node.text);
+            cursor = node.operands[0];
+            continue;
+        }
+        if (node.kind == frontend::ExprKind::Name) {
+            const auto *resolved = findResolvedExpr(cursor);
+            if (resolved == nullptr || !resolved->local)
+                return {};
+            std::string key = "L" + std::to_string(resolved->local.value);
+            for (auto it = fields.rbegin(); it != fields.rend(); ++it) {
+                key += ".";
+                key += *it;
+            }
+            return key;
+        }
+        return {};
+    }
+    return {};
 }
 frontend::LocalId
 PerModuleSema::nonNullPointerLocalFromCondition(frontend::ExprId condition) const noexcept {
@@ -225,8 +262,7 @@ TypeId PerModuleSema::inferCast(frontend::ExprId id) {
         // `null as ?T` fixes the optional type of a bare `null`. It is a no-op
         // at run time (None is None for any optional) but it lets a `null`
         // written inside a pack literal or array literal name its member type.
-        if (from_resolved == null_type &&
-            type_table.kindOf(to_resolved) == TypeKind::Optional)
+        if (from_resolved == null_type && type_table.kindOf(to_resolved) == TypeKind::Optional)
             return result;
         // Bare `opaque` is tagged: any concrete value erases into it, and
         // checked extraction returns `?T` so the tag-match/none path is visible.
@@ -860,10 +896,9 @@ bool PerModuleSema::coerceValue(frontend::ExprId value, TypeId target, TypeId so
             // the declared member names for later field access. Each element is
             // also retyped to its declared member type so `null` in a `?*T`
             // slot lowers to None and a bare `T` in a `?T` slot lowers to Some.
-            const auto &literal = snapshot.expressions()[value.value - 1U];
+            const auto &literal     = snapshot.expressions()[value.value - 1U];
             const auto *target_pack = type_table.pack(resolve(target));
-            if (target_pack != nullptr &&
-                target_pack->members.size() == literal.operands.size()) {
+            if (target_pack != nullptr && target_pack->members.size() == literal.operands.size()) {
                 for (size_t index = 0; index < literal.operands.size(); ++index) {
                     const frontend::ExprId element = literal.operands[index];
                     if (!element || element.value > snapshot.expressions().size())
